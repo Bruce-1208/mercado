@@ -1,0 +1,55 @@
+id:8820539028080485
+pwd:7jkMtY3ghAgIkuq3XdgbmrOwaXOlMRnA
+long-TG:TG-671cac06db89a60001666fa7-1742669993
+https://brucezhang.mynatapp.cc
+
+
+curl -X POST -H 'accept: application/json' -H 'content-type: application/x-www-form-urlencoded' https://api.mercadolibre.com/oauth/token?grant_type=authorization_code&client_id=8820539028080485&client_secret=7jkMtY3ghAgIkuq3XdgbmrOwaXOlMRnA&code=TG-671cac06db89a60001666fa7-1742669993&redirect_uri=https://brucezhang.mynatapp.cc
+
+
+{
+    "access_token": "APP_USR-8820539028080485-102604-be60a7550d9c45ac272c242ca176deed-1742669993",
+    "token_type": "Bearer",
+    "expires_in": 21600,
+    "scope": "offline_access read write",
+    "user_id": 1742669993,
+    "refresh_token": "TG-671cacd90bffb0000121dced-1742669993"
+}
+
+
+curl -X GET -H 'Authorization: Bearer APP_USR-8820539028080485-102604-be60a7550d9c45ac272c242ca176deed-1742669993' https://api.mercadolibre.com/users/me
+
+
+curl -X POST https://api.mercadolibre.com/oauth/token?grant_type=refresh_token&client_id=8820539028080485&client_secret=7jkMtY3ghAgIkuq3XdgbmrOwaXOlMRnA&refresh_token=TG-671cacd90bffb0000121dced-1742669993
+
+
+{
+    "access_token": "APP_USR-8820539028080485-102604-df0e52c2abc4411ea687771fdeca994c-1742669993",
+    "token_type": "Bearer",
+    "expires_in": 21600,
+    "scope": "offline_access read write",
+    "user_id": 1742669993,
+    "refresh_token": "TG-671cad77db89a600016681da-1742669993"
+}
+
+
+curl -X GET -H 'Authorization: Bearer APP_USR-8820539028080485-102604-df0e52c2abc4411ea687771fdeca994c-1742669993' https://api.mercadolibre.com/users/me
+
+Bearer APP_USR-8820539028080485-102604-df0e52c2abc4411ea687771fdeca994c-1742669993
+
+{
+    "access_token": "APP_USR-8820539028080485-102703-123c08a5256ecc80b037f3879312b6bf-1742669993",
+    "token_type": "Bearer",
+    "expires_in": 21600,
+    "scope": "offline_access read write",
+    "user_id": 1742669993,
+    "refresh_token": "TG-671dea5857039a00011066c7-1742669993"
+}
+{
+    "access_token": "APP_USR-8820539028080485-103106-b8908f9109894588755e0be77df27bc5-1742669993",
+    "token_type": "Bearer",
+    "expires_in": 21600,
+    "scope": "offline_access read write",
+    "user_id": 1742669993,
+    "refresh_token": "TG-672355e16b6ec300019fb696-1742669993"
+}

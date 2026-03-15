@@ -1,0 +1,575 @@
+{
+   "No": {
+      "message": "序号"
+   },
+   "NoValue": {
+      "message": "无"
+   },
+   "OZON_self_operation": {
+      "message": "OZON自营"
+   },
+   "Price": {
+      "message": "价格"
+   },
+   "Zying": {
+      "message": "智赢"
+   },
+   "advertising": {
+      "message": "SP广告"
+   },
+   "amzAbaKeywordFrequencyRank": {
+      "message": "亚马逊后台ABA提供的关键词搜索频率排名"
+   },
+   "analyze": {
+      "message": "分析"
+   },
+   "analyzing": {
+      "message": "正在分析"
+   },
+   "asinInput": {
+      "message": "请输入ASIN"
+   },
+   "asinQuantity": {
+      "message": "ASIN数量"
+   },
+   "asinVariable": {
+      "message": "请输入Asin"
+   },
+   "averageBSR": {
+      "message": "平均BSR"
+   },
+   "averageDaysOnShelf": {
+      "message": "平均上架天数"
+   },
+   "averageOrderValue": {
+      "message": "订单均价"
+   },
+   "averagePrice": {
+      "message": "平均价格"
+   },
+   "averageRating": {
+      "message": "该卖家商品平均评分"
+   },
+   "averageRatingNumber": {
+      "message": "平均评分数"
+   },
+   "batchProductAnalysis": {
+      "message": "批量产品分析"
+   },
+   "batchProductCollection": {
+      "message": "批量采集"
+   },
+   "brand": {
+      "message": "品牌"
+   },
+   "brandAdvertisement": {
+      "message": "品牌广告"
+   },
+   "bsrMissing": {
+      "message": "BSR缺失"
+   },
+   "captureToZhiyingErp": {
+      "message": "采集到智赢erp"
+   },
+   "category": {
+      "message": "类目"
+   },
+   "cheapestLogisticsChannel": {
+      "message": "使用最低价物流渠道"
+   },
+   "clearConditions": {
+      "message": "清空条件"
+   },
+   "clickToGoBrandProductList": {
+      "message": "点击跳转品牌商品列表"
+   },
+   "collected": {
+      "message": "已采集"
+   },
+   "collecting": {
+      "message": "正在采集中"
+   },
+   "collectingThe": {
+      "message": "正在采集第"
+   },
+   "collection": {
+      "message": "采集"
+   },
+   "collectionToZhiyingErp": {
+      "message": "一键采集到智赢ERP，采集成功可在智赢ERP-产品-产品采集"
+   },
+   "collectionToZhiyingErp2": {
+      "message": "-采集列表中查看和编辑，并可刊登到美客多等平台"
+   },
+   "comment": {
+      "message": "评分"
+   },
+   "commissionOutput": {
+      "message": "佣金"
+   },
+   "commissionRate": {
+      "message": "当前商品平台抽取卖家的佣金比例"
+   },
+   "contactUs": {
+      "message": "联系我们"
+   },
+   "conversionEffect": {
+      "message": "转化效果"
+   },
+   "copy": {
+      "message": "复制"
+   },
+   "copySuccess": {
+      "message": "复制成功"
+   },
+   "copyText": {
+      "message": "点击复制"
+   },
+   "correspondingKeywords": {
+      "message": "对应的关键词"
+   },
+   "currentSalesRanking": {
+      "message": "当前商品在全站的销量排名"
+   },
+   "currentSite": {
+      "message": "当前站点"
+   },
+   "currentlyNotInAmazonNoData": {
+      "message": "当前不在亚马逊列表页，或暂无数据，"
+   },
+   "currentlyNotInAmazonNoData2": {
+      "message": "无法自动查询产品"
+   },
+   "dataNotRetrievedOrDataException": {
+      "message": "数据未获取到，或数据异常，请稍后再试"
+   },
+   "dataSource": {
+      "message": "数据来源"
+   },
+   "day": {
+      "message": "天"
+   },
+   "delivery": {
+      "message": "配送"
+   },
+   "dollar": {
+      "message": "美元"
+   },
+   "errorRetrievingImage": {
+      "message": "获取图片异常，请联系我们"
+   },
+   "exportToXlsxData": {
+      "message": "导出xlsx"
+   },
+   "extDescription": {
+      "message": "智赢选品-亚马逊品牌侵权检测，支持亚马逊，OZON，1688，美客多，完全免费；提供快速预览，关键词反查，以图搜图，1688批量采集，亚马逊品牌侵权检测，品牌备案查询(数据来源WIPO)"
+   },
+   "extName": {
+      "message": "智赢选品-免费的侵权检测和关键词工具"
+   },
+   "extNameDev": {
+      "message": "智赢选品-开发版"
+   },
+   "extSimpleName": {
+      "message": "智赢选品"
+   },
+   "failedToGetImageMessage": {
+      "message": "图片获取失败，请联系我们"
+   },
+   "failedToObtainSKUID": {
+      "message": "SKUID获取失败"
+   },
+   "freight": {
+      "message": "运费"
+   },
+   "getImageUrl": {
+      "message": "主图下载"
+   },
+   "gold": {
+      "message": "领导黄金"
+   },
+   "goods": {
+      "message": "商品"
+   },
+   "goods1688": {
+      "message": "去1688找货"
+   },
+   "goodsList": {
+      "message": "找货"
+   },
+   "historicalRankingTrend": {
+      "message": "历史排名趋势"
+   },
+   "image": {
+      "message": "图片"
+   },
+   "inputSkuIdTips": {
+      "message": "请输入SKUID"
+   },
+   "inventory": {
+      "message": "库存"
+   },
+   "jumpText": {
+      "message": "点击跳转"
+   },
+   "keyword": {
+      "message": "请输入关键字"
+   },
+   "keywordRanking": {
+      "message": "关键词排名"
+   },
+   "keywords": {
+      "message": "关键词"
+   },
+   "loading": {
+      "message": "正在加载"
+   },
+   "loadingMessage": {
+      "message": "正在载入数据，请稍等再试"
+   },
+   "localWarehouse": {
+      "message": "本土仓"
+   },
+   "login": {
+      "message": "登录"
+   },
+   "loginPrompt": {
+      "message": "请先登录"
+   },
+   "logistics": {
+      "message": "物流"
+   },
+   "logout": {
+      "message": "退出登录"
+   },
+   "marketLeadership": {
+      "message": "市场领导"
+   },
+   "meliCollectTips": {
+      "message": "请在智赢ERP-产品-产品采集-采集列表"
+   },
+   "meliCollectTips2": {
+      "message": "中查看和编辑，并可刊登到美客多等平台"
+   },
+   "monthlyPageViews": {
+      "message": "月访问量"
+   },
+   "monthlySalesComparison": {
+      "message": "当前商品月销量同比上个月销量"
+   },
+   "monthlySalesVolume": {
+      "message": "月销售量"
+   },
+   "monthlySalesVolumeOfCurrent": {
+      "message": "当前商品的月销量"
+   },
+   "monthlyVisitRateOfCurrent": {
+      "message": "当前商品的月访问量"
+   },
+   "newProduct": {
+      "message": "新品"
+   },
+   "nextPage": {
+      "message": "下一页"
+   },
+   "noDataAvailableForExport": {
+      "message": "暂无数据导出"
+   },
+   "noListingsForCurrently": {
+      "message": "当前商品禁止跟卖"
+   },
+   "noResellingAllowed": {
+      "message": "禁止跟卖"
+   },
+   "notFound": {
+      "message": "未查到"
+   },
+   "notFoundContent": {
+      "message": "未查到(仅供参考)"
+   },
+   "notYetIncluded": {
+      "message": "暂未收录"
+   },
+   "notfound": {
+      "message": "未能找到"
+   },
+   "numberOfCompetitors": {
+      "message": "竞品数量"
+   },
+   "officialOverseasWarehouse": {
+      "message": "Full海外仓"
+   },
+   "officialStore": {
+      "message": "官方店铺"
+   },
+   "oncollect": {
+      "message": "采集中"
+   },
+   "oneClickCopy": {
+      "message": "一键复制"
+   },
+   "oneKeywordForANewLine": {
+      "message": "一行一个关键词，回车换行"
+   },
+   "operation": {
+      "message": "操作"
+   },
+   "organicRanking": {
+      "message": "自然排名"
+   },
+   "organicSearch": {
+      "message": "自然搜索"
+   },
+   "overweightCannotBeDelivered": {
+      "message": "超重，无法配送"
+   },
+   "per": {
+      "message": "个"
+   },
+   "platformCommissionRatio": {
+      "message": "平台佣金比"
+   },
+   "platinumLeadership": {
+      "message": "领导铂金"
+   },
+   "price": {
+      "message": "售价"
+   },
+   "procurement": {
+      "message": "采购"
+   },
+   "productInformation": {
+      "message": "产品信息"
+   },
+   "productInquiry": {
+      "message": "产品查询"
+   },
+   "productOverview": {
+      "message": "产品概要"
+   },
+   "productSelectionBigData": {
+      "message": "选品大数据"
+   },
+   "product_name": {
+      "message": "商品名称"
+   },
+   "profitCalculation": {
+      "message": "利润计算"
+   },
+   "profitCalculator": {
+      "message": "利润计算器"
+   },
+   "profitMarginResults": {
+      "message": "跳转1688，以图搜图，并对搜索结果做利润计算，备注每个结果的产品利润率"
+   },
+   "profitValue": {
+      "message": "利润"
+   },
+   "putOnShelves": {
+      "message": "上架"
+   },
+   "ranking": {
+      "message": "排名"
+   },
+   "rankingResult": {
+      "message": "销量排名"
+   },
+   "rating": {
+      "message": "评分"
+   },
+   "registerTrademark": {
+      "message": "个注册商标"
+   },
+   "registerTrademarks": {
+      "message": "注册商标"
+   },
+   "registeredCountries": {
+      "message": "已在如下国家注册"
+   },
+   "relatedProductsData": {
+      "message": "相关产品"
+   },
+   "resellersProductNotAllowed": {
+      "message": "当前商品禁止跟卖"
+   },
+   "retryMessage": {
+      "message": "暂无数据，点击重试"
+   },
+   "ruble": {
+      "message": "卢布"
+   },
+   "sales": {
+      "message": "销量"
+   },
+   "salesDataUnavailable": {
+      "message": "暂无销量或正在采集中"
+   },
+   "salesInThePast30Days": {
+      "message": "近30天销量"
+   },
+   "salesLoading": {
+      "message": "销量加载中"
+   },
+   "salesRanking": {
+      "message": "销量排名"
+   },
+   "salesTrend": {
+      "message": "销量趋势"
+   },
+   "scoreNumber": {
+      "message": "评分数"
+   },
+   "score_count": {
+      "message": "评分数"
+   },
+   "scrollOnPageTurnPause": {
+      "message": "如遇翻页停顿，请滑动鼠标滚轮"
+   },
+   "search": {
+      "message": "开始检索"
+   },
+   "searchByImage1688": {
+      "message": "跳转1688，以图搜图"
+   },
+   "searchKeywords": {
+      "message": "关键词反查"
+   },
+   "searchRanking": {
+      "message": "搜索排名"
+   },
+   "searchVolume": {
+      "message": "搜索量"
+   },
+   "searchVolumeLastMonth": {
+      "message": "该关键词上个月的搜索量"
+   },
+   "seller": {
+      "message": "卖家"
+   },
+   "sellerName": {
+      "message": "卖家"
+   },
+   "sellerProductListJump": {
+      "message": "点击跳转卖家商品列表"
+   },
+   "sellingPoint": {
+      "message": "卖点"
+   },
+   "sellingPointsVarName": {
+      "message": "产品卖点"
+   },
+   "shadowSelling": {
+      "message": "跟卖"
+   },
+   "shelfTime": {
+      "message": "上架时间"
+   },
+   "shippingFromOneself": {
+      "message": "自发货"
+   },
+   "shopProductListPage": {
+      "message": "店铺商品列表页"
+   },
+   "shoppingCartConversionRate": {
+      "message": "购物车转化率"
+   },
+   "signInNow": {
+      "message": "立即登录"
+   },
+   "size": {
+      "message": "尺寸"
+   },
+   "startCollecting": {
+      "message": "开始采集"
+   },
+   "stopCollecting": {
+      "message": "停止采集"
+   },
+   "storageType": {
+      "message": "仓储类型"
+   },
+   "storeMessage": {
+      "message": "去店铺"
+   },
+   "storeSalesTren": {
+      "message": "点击跳转智赢选品后台，查看店铺销量趋势"
+   },
+   "storeSalesTren2": {
+      "message": "，一键采集热销爆款"
+   },
+   "successfulCollectionTips": {
+      "message": "采集成功，请在智赢ERP 产品/产品采集/采集列表中查看"
+   },
+   "summaryContent": {
+      "message": "概要"
+   },
+   "supportsBatchCollection": {
+      "message": "当前页支持批量采集"
+   },
+   "switchIpOrTryAgainLater": {
+      "message": "被屏蔽，请切换IP，或稍后再试"
+   },
+   "times": {
+      "message": "次"
+   },
+   "titleFrequencyAnalysis": {
+      "message": "标题词频分析"
+   },
+   "topSeller": {
+      "message": "高级卖家"
+   },
+   "totalHistoricalSalesVolume": {
+      "message": "当前商品的历史总销售额(销售额在全站的排名)"
+   },
+   "totalProductsFound": {
+      "message": "该关键词，搜索到的产品总量"
+   },
+   "totalSales": {
+      "message": "总销售额"
+   },
+   "trafficContribution": {
+      "message": "流量贡献"
+   },
+   "trialAccountMessage": {
+      "message": "您的账号为试用账号，暂不支持采集，"
+   },
+   "trialAccountMessage2": {
+      "message": "请访问zying.net升级后采集"
+   },
+   "unavailableDataInOzonListPage": {
+      "message": "当前不在列表页，或无数据，无法自动查询产品"
+   },
+   "unfoundContent": {
+      "message": "未能找到"
+   },
+   "unknown": {
+      "message": "未知"
+   },
+   "validSKUId": {
+      "message": "请输入正确的SKUId"
+   },
+   "variantValue": {
+      "message": "变体"
+   },
+   "viewAssociatedKeywords": {
+      "message": "查看该商品关联关键词"
+   },
+   "visibleAfterLoggingIn": {
+      "message": "登录后可见"
+   },
+   "waitingText": {
+      "message": "信息读取中请稍后再试"
+   },
+   "wbSameStyle": {
+      "message": "WB同款"
+   },
+   "websiteTraffic": {
+      "message": "月访问量"
+   },
+   "weightValue": {
+      "message": "重量"
+   },
+   "wisdomWin": {
+      "message": "采集到智赢"
+   }
+}
