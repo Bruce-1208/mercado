@@ -14,6 +14,8 @@ from typing import Literal
 
 import requests
 import subprocess
+
+from pyexpat.errors import messages
 from selenium import webdriver
 from selenium.common import NoSuchElementException
 from selenium.webdriver.chrome.service import Service
@@ -406,12 +408,13 @@ def use_one_browser_run_task(browser):
             while True:
                 print("ip检测通过，打开店铺平台主页")
                 #找客服页面
-                url="https://global-selling.mercadolibre.com/help/chat/v3?parent_skill=MLCX"
+                url="https://global-selling.mercadolibre.com"
                 open_launcher_page(driver, url)
                 # 打开店铺平台主页后进行后续自动化操作
                 # todo 后续的自动化操作y
                 try:
-                    shensu(browser,driver)
+                    shensu_ai(browser,driver)
+                    # shensu(browser,driver)
                     time.sleep(1800)
                 except Exception as e:
                     print("申诉执行异常",e)
@@ -428,9 +431,15 @@ def use_one_browser_run_task(browser):
         print(f"=====关闭店铺：{store_name}=====")
         close_store(store_id)
 
-    #申诉
-def shensu(browser,driver):
+def shensu_ai(browser,driver):
+    driver.get("https://global-selling.mercadolibre.com/help/v2")
+    driver.switch_to.frame("Meli AI Chat")
+    messages=driver.find_elements(By.CLASS_NAME,"mlc-scroll-paginate_item")
+    print(messages)
 
+#申诉
+def shensu(browser,driver):
+    driver.get("https://global-selling.mercadolibre.com/help/chat/v3?parent_skill=MLCX")
     isFull=browser.get("isFull")
     site=browser.get("site")
     words=[
@@ -631,7 +640,8 @@ if __name__ == "__main__":
 
 
 
-    browser_name=['龙（张泽文）','跃马扬鞭腾讯云（张泽文）']
+    # browser_name=['龙（张泽文）','跃马扬鞭腾讯云（张泽文）']
+    browser_name=['zzw(张泽文)']
     browser_dict={
          '泽腾1（张泽文）': ['墨西哥',1]
         ,'泽腾2（张泽文）': ['巴西', 1]
@@ -641,6 +651,7 @@ if __name__ == "__main__":
         ,'跃马扬鞭腾讯云（张泽文）':['巴西',1]
         ,'zzw(张泽文)':['墨西哥',0]
         ,'龙（张泽文）':['墨西哥',0]
+        ,'龙（张泽文）-本地IP':['墨西哥',0]
     }
 
     browser_list2=[]
@@ -653,9 +664,12 @@ if __name__ == "__main__":
             browser_list2.append(i)
     print(browser_list2)
 
+    """简单测试"""
+
+
 
     """打开第一个店铺运行脚本"""
-    # use_one_browser_run_task(browser_list2[0])
+    use_one_browser_run_task(browser_list2[0])
 
 
 
@@ -664,7 +678,7 @@ if __name__ == "__main__":
     # use_all_browser_run_task(browser_list2)
 
     """多线程并发打开所有店铺运行脚本，max_threads设置最大线程数"""
-    use_all_browser_run_task_with_thread_pool(browser_list2, max_threads=3)
+    # use_all_browser_run_task_with_thread_pool(browser_list2, max_threads=3)
 
     """关闭客户端"""
     get_exit()
