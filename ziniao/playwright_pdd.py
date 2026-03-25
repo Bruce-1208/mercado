@@ -1,79 +1,74 @@
 import asyncio
+import time
+
 from playwright.async_api import async_playwright
+import playwright_stealth
+from playwright_stealth import Stealth
 
 
-async def run():
+async def scrape_pinduoduo(url):
     async with async_playwright() as p:
-        # 1. 模拟更真实的 iPhone 13 环境
-        iphone = p.devices['iPhone 13']
-        browser = await p.chromium.launch(headless=False)  # 必须设为 False 观察验证码
-        context = await browser.new_context(**iphone)
-
-        # 2. 注入反检测脚本
-        await context.add_init_script("""
-            Object.defineProperty(navigator, 'webdriver', {get: () => undefined});
-        """)
-
+        browser = await p.chromium.launch(headless=False)  # 必须设为 False
+        context = await browser.new_context(
+            viewport={'width': 390, 'height': 844},
+            user_agent="Mozilla/5.0 (iPhone; CPU iPhone OS 16_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.0 Mobile/15E148 Safari/604.1"
+        )
         page = await context.new_page()
 
-        # 3. 拦截网络请求 (最硬核的方法：直接拿接口数据，不看 HTML)
-        # 拼多多的数据通常在 goods_detail 或类似接口里
-        product_json = {}
+        # 访问拼多多首页，先建立“合法”身份
+        print("🔗 正在访问首页，请手动滑动可能出现的验证码...")
+        await page.goto("https://mobile.yangkeduo.com")
+        await page.wait_for_timeout(3000)
 
-        async def handle_response(response):
-            if "api/pdd_order/goods_detail" in response.url:
-                try:
-                    data = await response.json()
-                    nonlocal product_json
-                    product_json = data
-                    print("✨ 拦截到后台接口数据！")
-                except:
-                    pass
+        # 启用 stealth 插件避开基本检测
 
-        page.on("response", handle_response)
+        # 3. 手动注入 Stealth 脚本 (绕过浏览器检测的关键)
+        await page.add_init_script("""
+                    Object.defineProperty(navigator, 'webdriver', {
+                        get: () => undefined
+                    });
+                    window.chrome = { runtime: {} };
+                    Object.defineProperty(navigator, 'languages', {
+                        get: () => ['zh-CN', 'zh']
+                    });
+                    Object.defineProperty(navigator, 'plugins', {
+                        get: () => [1, 2, 3, 4, 5]
+                    });
+                """)
 
-        # 4. 访问页面
-        url = "https://mobile.yangkeduo.com/goods2.html?ps=COwIIqIDFL"
-        await page.goto(url, wait_until="networkidle", timeout=60000)
+        stealth=Stealth()
+        await stealth.apply_stealth_async(page)
 
-        # 5. 如果出现了验证码，给人工 30 秒时间去手动滑一下
-        if await page.query_selector("text=验证"):
-            print("🚨 触发验证码！请在浏览器窗口手动滑动验证...")
-            await page.wait_for_timeout(30000)
+        print(f"正在访问: {url}")
 
-            # 6. 使用 XPath 兜底提取（不依赖变动的 class 名）
         try:
-            # 寻找包含商品标题特征的元素
-            title_xpath = "//div[';contains(@class, 'goods-name')] | //span[contains(@class, 'Title')]"
+            # 访问商品页面
+            await page.goto(url, wait_until="networkidle")
 
+            # 等待关键元素加载（例如商品标题或价格）
+            # 注意：拼多多的类名通常是混淆过的，建议使用文字内容或相对路径定位
+            await page.wait_for_timeout(3000)  # 等待渲染
 
+            # 获取数据示例
+            data = {
+                "title": await page.locator('xpath=/html/body/div[2]/div/div[2]/div[3]/div/span/span[2]/span').inner_text(),
+                "price": await page.locator('xpath=/html/body/div[2]/div/div[2]/div[1]/div/div[1]/div/span[1]/span[2]/span[1]').first.inner_text(),
 
+            }
 
-
-
-
-
-            price_xpath = "//*[contains(text(), '¥')]/following-sibling::*[1] | //span[contains(@class, 'Price')]"
-
-            await page.wait_for_selector(title_xpath, timeout=5000)
-
-            title = await page.locator(title_xpath).first.inner_text()
-            price = await page.locator(price_xpath).first.inner_text()
-
-            print("\n--- 最终提取结果 ---")
-            print(f"商品标题: {title.strip()}")
-            print(f"价格: {price.strip()}")
+            print("爬取结果:", data)
+            time.sleep(1000000)
+            return data
 
         except Exception as e:
-            print(f"❌ 仍然无法提取: {e}")
-            # 保存当前源码分析原因
-            content = await page.content()
-            with open("debug.html", "w", encoding="utf-8") as f:
-                f.write(content)
-            print("已保存当前页面源码到 debug.html，请检查是否变成了登录页。")
+            print(f"发生错误: {e}")
+            # 如果触发验证码，可以在此处进行手动处理或提示
+            await page.pause()
 
-        await asyncio.sleep(5)
-        await browser.close()
+        finally:
+            await browser.close()
 
 
-asyncio.run(run())
+# 目标链接
+target_url = "https://mobile.yangkeduo.com/goods2.html?ps=N1AYjb3pFz"
+asyncio.run(scrape_pinduoduo(target_url))
