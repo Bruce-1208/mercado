@@ -94,9 +94,12 @@ def get_visits_info(window_id, site):
             EC.element_to_be_clickable((By.XPATH,
                                         "/html/body/main/div/div/div[3]/div/div/div[3]/section/div[2]/div[2]/div[2]/div[1]/div/div/div/div[4]"))).click()
     except Exception as e:
+        print(e)
 
 
 
-    # 其他邮件/html/body/div[1]/div/div[3]/div/div[2]/div[2]/div/div[1]/div[1]/div/div/div[1]/div/div/div/div/div[1]/div[2]/div/div[2]/div/div/div[2]/div/span[1]
+    #其他邮件/html/body/div[1]/div/div[3]/div/div[2]/div[2]/div/div[1]/div[1]/div/div/div[1]/div/div/div/div/div[1]/div[2]/div/div[2]/div/div/div[2]/div/span[1]
     closeBrowser(window_id)
 
+if __name__ == '__main__':
+    get_visits_info('','')

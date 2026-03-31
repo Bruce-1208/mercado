@@ -1,58 +1,59 @@
-import time
-from selenium import webdriver
-from selenium.webdriver.common.by import By
-
-
 def force_select_country(driver, country_name):
-    """
-    最强力版：全量扫描页面所有 Shadow DOM 和普通 DOM，寻找并点击指定文本。
-    :param country_name: 目标文本，如 'Argentina'
-    """
+    # 基础 Class
+    base_class = "andes-list__item andes-list__item--size-medium"
 
-    # 这一段 JS 会递归遍历所有可能的角落
     heavy_duty_script = f"""
-    function deepSearchAndClick(root, targetText) {{
-        // 1. 获取当前层级所有元素
-        const walkers = document.createTreeWalker(root, NodeFilter.SHOW_ELEMENT, null, false);
-        let node = walkers.nextNode();
+    function deepSearchAndClick(root, targetText, baseClass) {{
+        // 1. 查找所有 li 元素
+        const items = root.querySelectorAll('li');
 
-        while (node) {{
-            // 检查元素是否包含目标文本，且是可见的（宽度高度大于0）
-            // 使用 trim() 处理可能的空格，使用 includes 增加容错
-            if (node.textContent.trim() === targetText && node.offsetWidth > 0) {{
-                node.click();
-                return true;
-            }}
+        for (let item of items) {{
+            // 检查 A: class 是否包含基础类名
+            const currentClass = item.getAttribute('class') || "";
+            if (currentClass.includes(baseClass)) {{
 
-            // 2. 如果节点有 Shadow DOM，递归进入
-            if (node.shadowRoot) {{
-                if (deepSearchAndClick(node.shadowRoot, targetText)) {{
+                // 检查 B: 查找内部存放标题的 span (data-andes-listbox-title)
+                const titleSpan = item.querySelector('[data-andes-listbox-title="true"]');
+                const hasSvg = item.querySelector('svg') !== null; // 是否包含 Full 图标
+
+                if (titleSpan && titleSpan.textContent.trim() === targetText) {{
+
+                    // 【核心逻辑】：如果你要找的是普通 Mexico，而这个 item 带有 svg (Full 图标)，则跳过
+                    if (hasSvg) {{
+                        console.log("跳过 Mexico Full 选项");
+                        continue; 
+                    }}
+
+                    // 找到纯净的 Mexico
+                    item.scrollIntoView({{block: "center"}});
+                    item.click();
                     return true;
                 }}
             }}
-            node = walkers.nextNode();
+        }}
+
+        // 2. 递归 Shadow DOM
+        const all = root.querySelectorAll('*');
+        for (let node of all) {{
+            if (node.shadowRoot) {{
+                if (deepSearchAndClick(node.shadowRoot, targetText, baseClass)) {{
+                    return true;
+                }}
+            }}
         }}
         return false;
     }}
 
-    // 从 document 开始全局搜索
-    return deepSearchAndClick(document, "{country_name}");
+    return deepSearchAndClick(document, "{country_name}", "{base_class}");
     """
 
     try:
-        # 执行点击动作
         success = driver.execute_script(heavy_duty_script)
         if success:
-            print(f"🎯 强力穿透成功：已选中 {country_name}")
+            print(f"🎯 成功排除干扰，选中了纯净的 {country_name}")
         else:
-            print(f"❌ 全局搜索完毕，仍未找到文本: {country_name}")
-            print("💡 建议检查：1. 文本是否完全匹配？ 2. 列表是否真的弹出来了？")
+            print(f"❌ 未找到符合条件的 {country_name}")
         return success
     except Exception as e:
         print(f"⚠️ 脚本执行异常: {e}")
         return False
-
-# --- 实际调用示例 ---
-# 假设你的 driver 已经打开了 Mercado Libre 页面
-# switch_mermado_libre_country(driver, "Argentina")
-# switch_mermado_libre_country(driver, "Mexico")
