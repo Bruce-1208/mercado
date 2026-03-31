@@ -13,6 +13,8 @@ from selenium.webdriver.common.by import By
 from selenium.webdriver.support import expected_conditions as EC
 import pyautogui
 from switch_country import *
+from openpyxl import load_workbook
+from send_mail import *
 
 
 def get_reputation_info(window_id, site):
@@ -20,7 +22,11 @@ def get_reputation_info(window_id, site):
     # vngbjkk
     # window_id="1495e31cb630406bb690ba187f264fe7"
     # 龙
-    window_id = '9812f185f7ab49d98f3988994d9e8ebf'
+    # window_id = '9812f185f7ab49d98f3988994d9e8ebf'
+    #一跃千里
+    # window_id='b2323ff45855401689ab16ed11d4ed20'
+    #龙争虎斗
+    # window_id='df2d33b20d0b4d72949fc490f7ff075a'
     res = openBrowser(window_id)  # 窗口ID从窗口配置界面中复制，或者api创建后返回
 
     print(res)
@@ -43,7 +49,6 @@ def get_reputation_info(window_id, site):
     driver.refresh()
     time.sleep(5)
 
-    site = '阿根廷'
     # 这段 JS 脚本会自动寻找页面上所有隐藏的 Shadow DOM 并在其中搜索目标
     deep_click_script = """
     function findAndClick(root, selector) {
@@ -85,58 +90,89 @@ def get_reputation_info(window_id, site):
         name = 'Uruguay'
     #
     force_select_country(driver, name)
-    print('成功选择站点')
+    print('成功选择站点:',site)
 
-    # 点击下载邮件/html/body/main/div/div[3]/div/div[1]/div/div[5]/div[3]/div[4]/div[3]/div/a
-    try:
-        WebDriverWait(driver, 10).until(
-            EC.element_to_be_clickable((By.XPATH,
-                                        "/html/body/main/div/div[3]/div/div[1]/div/div[5]/div[2]/div[4]/div[3]/div/a"))).click()
-    except Exception as e:
-        WebDriverWait(driver, 10).until(
-            EC.element_to_be_clickable((By.XPATH,
-                                        "/html/body/main/div/div[3]/div/div[1]/div/div[5]/div[3]/div[4]/div[3]/div/a"))).click()
-    # 投诉率/html/body/main/div/div[3]/div/div[1]/div/div[5]/div[2]/div[1]/div[2]/h3
-    # 或者/html/body/main/div/div[3]/div/div[1]/div/div[5]/div[3]/div[1]/div[2]/h3
-    data_complain = ''
-    try:
-        data_complain = driver.find_element(By.XPATH,
-                                            '/html/body/main/div/div[3]/div/div[1]/div/div[5]/div[2]/div[1]/div[2]/h3').text
-    except Exception as e:
-        data_complain = driver.find_element(By.XPATH,
-                                            '/html/body/main/div/div[3]/div/div[1]/div/div[5]/div[3]/div[1]/div[2]/h3').text
+    time.sleep(3)
 
-    # 延误率/html/body/main/div/div[3]/div/div[1]/div/div[5]/div[2]/div[4]/div[2]/h3
-    data_delay = ''
-    try:
-        data_delay = driver.find_element(By.XPATH,
-                                         '/html/body/main/div/div[3]/div/div[1]/div/div[5]/div[2]/div[4]/div[2]/h3').text
-    except Exception as e:
-        data_delay = driver.find_element(By.XPATH,
-                                         '/html/body/main/div/div[3]/div/div[1]/div/div[5]/div[3]/div[4]/div[2]/h3').text
+    # 1. 先定位包含 "Complaints" 文本的父级卡片元素
+    # 这里使用 XPath 寻找：包含 h2 且 h2 文本为 Complaints 的那个 div
+    card_element = driver.find_element(By.XPATH, "//div[contains(@class, 'andes-card')][.//h2[text()='Complaints']]")
 
-    # 声誉/html/body/main/div/div[3]/div/div[1]/div/div[4]/div/div[1]/p
-    data_color = ''
-    try:
-        data_color = driver.find_element(By.XPATH, '/html/body/main/div/div[3]/div/div[1]/div/div[4]/div/div[1]/p').text
-    except Exception as e:
-        print(e)
+    # 2. 在这个卡片范围内，寻找类名为 variable__percentage 的元素
+    # 注意：使用 card_element.find_element 是在当前节点下查找
+    data_complain= card_element.find_element(By.CLASS_NAME, "variable__percentage").text
 
-    # 总单数/html/body/main/div/div[3]/div/div[1]/div/div[4]/div/div[2]/div/div[1]/p[1]
-    data_orders = ''
-    try:
-        data_orders = driver.find_element(By.XPATH,
-                                          '/html/body/main/div/div[3]/div/div[1]/div/div[4]/div/div[2]/div/div[1]/p[1]').text
-    except Exception as e:
-        print(e)
 
-    # 邮件搜索/html/body/div[1]/div/div[1]/div/div[1]/div[2]/div/div/div/div/div/div[1]/div[2]/div/div/div/div/div[1]/div/div[2]/div/input
+    print(f"提取到的投诉率为: {data_complain}")
 
-    print(data_complain)
-    print(data_color)
-    print(data_delay)
-    print(data_orders)
+    # 1. 先定位包含 "Complaints" 文本的父级卡片元素
+    # 这里使用 XPath 寻找：包含 h2 且 h2 文本为 Complaints 的那个 div
+    card_element = driver.find_element(By.XPATH, "//div[contains(@class, 'andes-card')][.//h2[text()='Delayed handling time']]")
+
+    # 2. 在这个卡片范围内，寻找类名为 variable__percentage 的元素
+    # 注意：使用 card_element.find_element 是在当前节点下查找
+    data_delay = card_element.find_element(By.CLASS_NAME, "variable__percentage").text
+
+    print(f"提取到的延误率为: {data_delay}")
+    data_color=driver.find_element(By.CLASS_NAME,'thermometer__level').text
+    print("账号的声誉为:",data_color)
+
+    data_orders=driver.find_element(By.CLASS_NAME,'value__sales').text
+    print("总单数为：",data_orders)
+
+    list=[]
+    list.append(data_color)
+    list.append(data_orders)
+    list.append(data_complain)
+    list.append(data_delay)
+
+    return list
+
+    # closeBrowser(window_id)
+
+
 
 if __name__ == '__main__':
-    get_reputation_info('','')
+
+    wb = load_workbook(r'C:\Users\vngbj\Desktop\比特配置文件.xlsx')
+    sheet = wb.active
+    reputation_info_sum=[]
+    # 使用 min_row=2 跳过第一行
+    for row in sheet.iter_rows(min_row=2, values_only=True):
+        print(row)  # row 是一个元组，包含该行所有数据
+        id=row[0]
+        name = row[1]
+        remark= row[2]
+        if remark=='忽略':
+            continue
+        print("开始打开窗口:",name)
+        site_list=row[3].split("，")
+        for site in site_list:
+            try:
+                reputation_info=get_reputation_info(id,site)
+                reputation_info.append(name)
+                reputation_info.append(site)
+                print(reputation_info)
+                reputation_info_sum.append(reputation_info)
+            except Exception as e:
+                print("窗口"+name+"执行失败")
+                print(e)
+                time.sleep(300)
+                reputation_info = get_reputation_info(id, site)
+                reputation_info.append(name)
+                reputation_info.append(site)
+                print(reputation_info)
+                reputation_info_sum.append(reputation_info)
+                print("窗口" + name + "重试成功")
+            time.sleep(5)
+        print("结束，正在关闭窗口")
+        # closeBrowser(id)
+        print("已经关闭窗口")
+        time.sleep(5)
+    # for info in reputation_info_sum:
+    #     print(info)
+    result = "\n".join(map(str, reputation_info_sum))
+    print(result)
+
+    send_reputation_info('美客多所有店铺声誉汇总',result)
 
