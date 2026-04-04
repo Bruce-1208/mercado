@@ -1,38 +1,66 @@
 import smtplib
+import os
+import mimetypes
+from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
-from email.header import Header
-def send_reputation_info(subject,body):
-    # --- 配置部分 ---
-    smtp_server = "smtp.qq.com"  # QQ 邮箱 SMTP 服务器
-    smtp_port = 465  # SSL 专用端口
-    sender_email = "1013459852@qq.com"  # 你的 QQ 邮箱
-    password = "cfocdnqwmauxbdec"  # 刚刚获取的授权码
-    receiver_email = "1013459852@qq.com"  # 收件人邮箱
+from email.mime.base import MIMEBase
+from email import encoders
+from email.header import Header  # 用于处理中文文件名编码
 
-    # # --- 邮件内容 ---
-    # subject = '来自 Python 的测试邮件'
-    # body = '这是一封通过 QQ 邮箱 SMTP 发送的自动化测试邮件。'
-    receiver_list = ["1013459852@qq.com", "1435718341@qq.com","1035523110@qq.com"]
-    # 构建邮件
-    message = MIMEText(body, 'plain', 'utf-8')
-    message['From'] = sender_email
-    message['To'] = ",".join(receiver_list)
-    message['Subject'] = Header(subject, 'utf-8')
+
+def send_reputation_info(subject,body,local_file_path,display_filename):
+    # --- 1. 配置信息 ---
+    smtp_server = "smtp.qq.com"
+    smtp_port = 465
+    sender_email = "1013459852@qq.com"
+    password = "cfocdnqwmauxbdec"
+    receiver_email = "1013459852@qq.com"
+
+    # --- 3. 构建邮件对象 ---
+    message = MIMEMultipart()
+    message["From"] = sender_email
+    message["To"] = receiver_email
+    message["Subject"] = Header(subject, "utf-8").encode()
+
+    message.attach(MIMEText(body, "plain", "utf-8"))
+
+    # --- 4. 处理附件并修复文件名显示错误 ---
+    if not os.path.exists(local_file_path):
+        print("本地文件不存在")
+        return
+
+    ctype, encoding = mimetypes.guess_type(local_file_path)
+    if ctype is None or encoding is not None:
+        ctype = "application/octet-stream"
+    maintype, subtype = ctype.split("/", 1)
 
     try:
-        # 1. 使用 SSL 连接到服务器
+        with open(local_file_path, "rb") as attachment:
+            part = MIMEBase(maintype, subtype)
+            part.set_payload(attachment.read())
+
+        encoders.encode_base64(part)
+
+        # 【关键修复点】：使用 Header 解决 .bin 乱码问题
+        # 这种写法符合 RFC 2047 标准，能让大多数邮件客户端正确解析
+        part.add_header(
+            "Content-Disposition",
+            "attachment",
+            filename=("utf-8", "", display_filename)
+        )
+
+        message.attach(part)
+
+        # --- 5. 发送 ---
         server = smtplib.SMTP_SSL(smtp_server, smtp_port)
-
-        # 2. 登录（使用授权码）
         server.login(sender_email, password)
-
-        # 3. 发送邮件
-        server.sendmail(sender_email, [receiver_email], message.as_string())
-        print("✅ 邮件发送成功！")
+        server.sendmail(sender_email, receiver_email, message.as_string())
+        server.quit()
+        print("邮件已发送")
 
     except Exception as e:
-        print(f"❌ 发送失败，原因: {e}")
+        print(f"发送失败: {e}")
 
-    finally:
-        # 4. 退出
-        server.quit()
+
+if __name__ == "__main__":
+    send_reputation_info('测试','测试',r'D:\比特配置文件.xlsx',r'比特配置文件.xlsx')

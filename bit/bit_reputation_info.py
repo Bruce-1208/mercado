@@ -1,4 +1,4 @@
-import time
+
 
 from selenium import webdriver
 from selenium.common.exceptions import TimeoutException
@@ -15,6 +15,9 @@ import pyautogui
 from switch_country import *
 from openpyxl import load_workbook
 from send_mail import *
+import pandas as pd
+
+from datetime import datetime
 
 
 def get_reputation_info(window_id, site):
@@ -134,7 +137,10 @@ def get_reputation_info(window_id, site):
 
 if __name__ == '__main__':
 
-    wb = load_workbook(r'C:\Users\vngbj\Desktop\比特配置文件.xlsx')
+    # get_reputation_info('1f22b75033a84d64bff59c3a41ea6047','墨西哥')
+    start=int(time.time())
+    print(start)
+    wb = load_workbook(r'D:\比特配置文件.xlsx')
     sheet = wb.active
     reputation_info_sum=[]
     # 使用 min_row=2 跳过第一行
@@ -174,5 +180,11 @@ if __name__ == '__main__':
     result = "\n".join(map(str, reputation_info_sum))
     print(result)
 
-    send_reputation_info('美客多所有店铺声誉汇总',result)
+    end=int(time.time())
+    print("总花费",end-start)
+    df = pd.DataFrame(reputation_info_sum, columns=['声誉', '总胆量', '投诉率', '延误率', '店铺名', '站点'])
+    now=datetime.now()
+    date_str=datetime.now().strftime("%Y-%m-%d-%H")
+    df.to_excel(r"D:\武汉泽顺店铺声誉信息汇总"+date_str+".xlsx", index=False)
 
+    send_reputation_info('美客多所有店铺声誉汇总',result,r"D:\武汉泽顺店铺声誉信息汇总"+date_str+".xlsx",r"武汉泽顺店铺声誉信息汇总"+date_str+".xlsx")
