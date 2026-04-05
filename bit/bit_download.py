@@ -16,10 +16,6 @@ from switch_country import *
 
 def download_relay_mail(window_id,site):
     # /browser/open 接口会返回 selenium使用的http地址，以及webdriver的path，直接使用即可
-    #vngbjkk
-    # window_id="1495e31cb630406bb690ba187f264fe7"
-    #龙
-    window_id='9812f185f7ab49d98f3988994d9e8ebf'
     res = openBrowser(window_id) # 窗口ID从窗口配置界面中复制，或者api创建后返回
 
     print(res)
@@ -42,9 +38,6 @@ def download_relay_mail(window_id,site):
     driver.refresh()
     time.sleep(5)
 
-
-
-    site='阿根廷'
     # 这段 JS 脚本会自动寻找页面上所有隐藏的 Shadow DOM 并在其中搜索目标
     deep_click_script = """
     function findAndClick(root, selector) {
@@ -91,52 +84,12 @@ def download_relay_mail(window_id,site):
     #点击下载邮件/html/body/main/div/div[3]/div/div[1]/div/div[5]/div[3]/div[4]/div[3]/div/a
     try:
         WebDriverWait(driver, 10).until(
-        EC.element_to_be_clickable((By.XPATH,
-                                    "/html/body/main/div/div[3]/div/div[1]/div/div[5]/div[2]/div[4]/div[3]/div/a"))).click()
+            EC.element_to_be_clickable("link text", "Download affected orders")).click()
     except Exception as e:
-        WebDriverWait(driver, 10).until(
-            EC.element_to_be_clickable((By.XPATH,
-                                        "/html/body/main/div/div[3]/div/div[1]/div/div[5]/div[3]/div[4]/div[3]/div/a"))).click()
-    #投诉率/html/body/main/div/div[3]/div/div[1]/div/div[5]/div[2]/div[1]/div[2]/h3
-    #或者/html/body/main/div/div[3]/div/div[1]/div/div[5]/div[3]/div[1]/div[2]/h3
-    data_complain=''
-    try:
-        data_complain=driver.find_element(By.XPATH, '/html/body/main/div/div[3]/div/div[1]/div/div[5]/div[2]/div[1]/div[2]/h3').text
-    except Exception as e:
-        data_complain=driver.find_element(By.XPATH, '/html/body/main/div/div[3]/div/div[1]/div/div[5]/div[3]/div[1]/div[2]/h3').text
-
-    #延误率/html/body/main/div/div[3]/div/div[1]/div/div[5]/div[2]/div[4]/div[2]/h3
-    data_delay=''
-    try:
-        data_delay=driver.find_element(By.XPATH,'/html/body/main/div/div[3]/div/div[1]/div/div[5]/div[2]/div[4]/div[2]/h3').text
-    except Exception as e:
-        data_delay = driver.find_element(By.XPATH,'/html/body/main/div/div[3]/div/div[1]/div/div[5]/div[3]/div[4]/div[2]/h3').text
-
-    #声誉/html/body/main/div/div[3]/div/div[1]/div/div[4]/div/div[1]/p
-    data_color=''
-    try:
-        data_color=driver.find_element(By.XPATH,'/html/body/main/div/div[3]/div/div[1]/div/div[4]/div/div[1]/p').text
-    except Exception as e:
-        print(e)
-
-    #总单数/html/body/main/div/div[3]/div/div[1]/div/div[4]/div/div[2]/div/div[1]/p[1]
-    data_orders=''
-    try:
-        data_orders=driver.find_element(By.XPATH,'/html/body/main/div/div[3]/div/div[1]/div/div[4]/div/div[2]/div/div[1]/p[1]').text
-    except Exception as e:
-        print(e)
-
-    #邮件搜索/html/body/div[1]/div/div[1]/div/div[1]/div[2]/div/div/div/div/div/div[1]/div[2]/div/div/div/div/div[1]/div/div[2]/div/input
+        print("声誉界面下载邮箱失败",e)
 
 
-    print(data_complain)
-    print(data_color)
-    print(data_delay)
-    print(data_orders)
-
-
-
-    time.sleep(60)
+    time.sleep(180)
 
 
     driver.execute_script("window.open('https://outlook.live.com/mail/0/', '_blank');")
@@ -144,17 +97,6 @@ def download_relay_mail(window_id,site):
     # 3. 关键步骤：切换窗口句柄 (Handles)
     # driver.window_handles 是一个列表，[-1] 表示最新打开的窗口
     driver.switch_to.window(driver.window_handles[-1])
-
-    #邮件搜索/html/body/div[1]/div/div[1]/div/div[1]/div[2]/div/div/div/div/div/div[1]/div[2]/div/div/div/div/div[1]/div/div[2]/div/input
-
-    # # 找到所有符合条件的元素
-    # elements = driver.find_elements(By.CSS_SELECTOR, '[style*="overflow-anchor: none"]')
-    #
-    # print(f"共找到 {len(elements)} 个匹配元素")
-    #
-    # # 遍历并打印这些元素的标签名或文本
-    # for index, el in enumerate(elements):
-    #     print(f"元素 {index}: 标签={el.tag_name}, ID={el.get_attribute('id')}")
 
 
     # 找到当前页面所有 class 为 TtcXM 的元素
@@ -209,3 +151,5 @@ def download_relay_mail(window_id,site):
     #其他邮件/html/body/div[1]/div/div[3]/div/div[2]/div[2]/div/div[1]/div[1]/div/div/div[1]/div/div/div/div/div[1]/div[2]/div/div[2]/div/div/div[2]/div/span[1]
     closeBrowser(window_id)
 
+if __name__ == '__main__':
+    download_relay_mail('9812f185f7ab49d98f3988994d9e8ebf','墨西哥')
