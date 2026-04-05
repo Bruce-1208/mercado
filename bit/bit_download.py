@@ -19,7 +19,6 @@ def download_relay_mail(window_id,site):
     #vngbjkk
     # window_id="1495e31cb630406bb690ba187f264fe7"
     #龙
-    window_id='9812f185f7ab49d98f3988994d9e8ebf'
     res = openBrowser(window_id) # 窗口ID从窗口配置界面中复制，或者api创建后返回
 
     print(res)
@@ -42,9 +41,6 @@ def download_relay_mail(window_id,site):
     driver.refresh()
     time.sleep(5)
 
-
-
-    site='阿根廷'
     # 这段 JS 脚本会自动寻找页面上所有隐藏的 Shadow DOM 并在其中搜索目标
     deep_click_script = """
     function findAndClick(root, selector) {
@@ -209,3 +205,5 @@ def download_relay_mail(window_id,site):
     #其他邮件/html/body/div[1]/div/div[3]/div/div[2]/div[2]/div/div[1]/div[1]/div/div/div[1]/div/div/div/div/div[1]/div[2]/div/div[2]/div/div/div[2]/div/span[1]
     closeBrowser(window_id)
 
+if __name__ == '__main__':
+    download_relay_mail('6190adcc6a3543a8b5fdb7189dfc3802','墨西哥')

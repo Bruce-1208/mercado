@@ -164,12 +164,15 @@ if __name__ == '__main__':
                 print("窗口"+name+"执行失败")
                 print(e)
                 time.sleep(300)
-                reputation_info = get_reputation_info(id, site)
-                reputation_info.append(name)
-                reputation_info.append(site)
-                print(reputation_info)
-                reputation_info_sum.append(reputation_info)
-                print("窗口" + name + "重试成功")
+                try:
+                    reputation_info = get_reputation_info(id, site)
+                    reputation_info.append(name)
+                    reputation_info.append(site)
+                    print(reputation_info)
+                    reputation_info_sum.append(reputation_info)
+                    print("窗口" + name + site+"重试成功")
+                except Exception as e:
+                    print("窗口" + name + site+"重试失败")
             time.sleep(5)
         print("结束，正在关闭窗口")
         # closeBrowser(id)
@@ -188,3 +191,4 @@ if __name__ == '__main__':
     df.to_excel(r"D:\武汉泽顺店铺声誉信息汇总"+date_str+".xlsx", index=False)
 
     send_reputation_info('美客多所有店铺声誉汇总',result,r"D:\武汉泽顺店铺声誉信息汇总"+date_str+".xlsx",r"武汉泽顺店铺声誉信息汇总"+date_str+".xlsx")
+
