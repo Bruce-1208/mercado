@@ -88,6 +88,9 @@ def print_orders(window_id, site):
     #
     force_select_country(driver, name)
     print('成功选择站点')
+    driver.get(
+        "https://global-selling.mercadolibre.com/orders/omni/list?filters=&subFilters=&search=&limit=50&offset=0&startPeriod=WITH_DATE_CLOSED_2M_OLD&selectedTab=TAB_TODAY_CBT")
+    driver.refresh()
     time.sleep(5)
     WebDriverWait(driver, 10).until(
         EC.element_to_be_clickable((By.XPATH,
