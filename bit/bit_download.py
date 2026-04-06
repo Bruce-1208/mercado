@@ -1,5 +1,6 @@
 import time
 
+from pandas.io.formats.format import return_docstring
 from selenium import webdriver
 from selenium.common.exceptions import TimeoutException
 from selenium.webdriver.common.keys import Keys
@@ -13,6 +14,8 @@ from selenium.webdriver.common.by import By
 from selenium.webdriver.support import expected_conditions as EC
 import  pyautogui
 from switch_country import *
+from openpyxl import load_workbook
+
 
 def download_relay_mail(window_id,site):
     # /browser/open 接口会返回 selenium使用的http地址，以及webdriver的path，直接使用即可
@@ -33,12 +36,36 @@ def download_relay_mail(window_id,site):
     driver.implicitly_wait(10)
     # 设置最长等待时间为 10 秒
     wait = WebDriverWait(driver, 10)
+    ## 进入声誉页面点击下载
+    click=click_download(driver,site)
+    if(click==True):
 
+        ##循环扫描邮箱
+        while(1==1):
+            time.sleep(60)
+            mail_items=scan_email(driver)
+            flag=False
+            ##下载文件
+            try:
+                flag=download_excel(driver,mail_items)
+            except Exception as e:
+                print("下载文件失败",e)
+            if(flag==True):
+                return "下载文件成功"
+                break
+    else:
+        return "没有需要下载的文件"
+
+
+
+
+def click_download(driver,site):
     driver.get("https://global-selling.mercadolibre.com/reputation")
     driver.refresh()
-    time.sleep(5)
+    time.sleep(10)
 
     # 这段 JS 脚本会自动寻找页面上所有隐藏的 Shadow DOM 并在其中搜索目标
+
     deep_click_script = """
     function findAndClick(root, selector) {
         // 1. 在当前层级寻找
@@ -47,7 +74,7 @@ def download_relay_mail(window_id,site):
             node.click();
             return true;
         }
-    
+
         // 2. 递归寻找所有子节点的 Shadow DOM
         const allNodes = root.querySelectorAll('*');
         for (let i = 0; i < allNodes.length; i++) {
@@ -61,71 +88,90 @@ def download_relay_mail(window_id,site):
     }
     return findAndClick(document, 'button[aria-label="Select country"]');
     """
-    #打开选择器
+
+    # 打开选择器
     success = driver.execute_script(deep_click_script)
-    #选择站点
-    name=''
-    if site=='墨西哥':
-        name='Mexico'
-    if site=='巴西':
-        name='Brazil'
-    if site=='哥伦比亚':
-        name='Colombia'
-    if site=='智利':
-        name='Chile'
-    if site=='阿根廷':
-        name='Argentina'
-    if site=='乌拉圭':
-        name='Uruguay'
+    # 选择站点
+    name = ''
+    if site == '墨西哥':
+        name = 'Mexico'
+    if site == '巴西':
+        name = 'Brazil'
+    if site == '哥伦比亚':
+        name = 'Colombia'
+    if site == '智利':
+        name = 'Chile'
+    if site == '阿根廷':
+        name = 'Argentina'
+    if site == '乌拉圭':
+        name = 'Uruguay'
     #
-    force_select_country(driver,name)
+    force_select_country(driver, name)
     print('成功选择站点')
+    time.sleep(3)
 
-    #点击下载邮件/html/body/main/div/div[3]/div/div[1]/div/div[5]/div[3]/div[4]/div[3]/div/a
+    # 点击下载邮件/html/body/main/div/div[3]/div/div[1]/div/div[5]/div[3]/div[4]/div[3]/div/a
     try:
-        WebDriverWait(driver, 10).until(
-            EC.element_to_be_clickable("link text", "Download affected orders")).click()
+        elements = driver.find_elements("link text", "Download affected orders")
+
+        if len(elements) == 0:
+            print("没有需要下载的延误")
+            return False
+        if len(elements) == 1:
+            elements[0].click()
+        if len(elements) == 2:
+            elements[1].click()
+        print("点击下载成功")
+        return True
+
+
     except Exception as e:
-        print("声誉界面下载邮箱失败",e)
+        print("声誉界面下载邮箱失败", e)
 
-
-    time.sleep(180)
-
-
+def scan_email(driver):
     driver.execute_script("window.open('https://outlook.live.com/mail/0/', '_blank');")
 
     # 3. 关键步骤：切换窗口句柄 (Handles)
     # driver.window_handles 是一个列表，[-1] 表示最新打开的窗口
     driver.switch_to.window(driver.window_handles[-1])
 
-
     # 找到当前页面所有 class 为 TtcXM 的元素
     mail_items1 = driver.find_elements(By.CLASS_NAME, "TtcXM")
     print(f"当前可见邮件数量: {len(mail_items1)}")
 
-    #点击垃圾邮件/html/body/div[1]/div/div[3]/div/div[2]/div[2]/div/div[1]/div[1]/div/div/div[1]/div/div/div/div/div[1]/div[2]/div/div[2]/div/div/div[2]/div/span[1]
-    driver.find_element(By.XPATH,'/html/body/div[1]/div/div[3]/div/div[2]/div[2]/div/div[1]/div[1]/div/div/div[1]/div/div/div/div/div[1]/div[2]/div/div[2]/div/div/div[2]/div/span[1]').click()
+    # 点击垃圾邮件gtcPn _8g73 LPIso wk4Sg  gtcPn _8g73 LPIso
+    driver.find_element(By.CSS_SELECTOR,'.gtcPn._8g73.LPIso').click()
     mail_items2 = driver.find_elements(By.CLASS_NAME, "TtcXM")
     print(f"当前可见垃圾邮件数量: {len(mail_items2)}")
 
-    mail_items=mail_items2+mail_items1
-
+    mail_items = mail_items2 + mail_items1
 
     print(f"当前可见所有邮件数量: {len(mail_items)}")
 
+    for item in mail_items:
+        try:
+            print(item.text)
+        except Exception as e:
+            print(item)
 
+    return mail_items
 
+def download_excel(driver,mail_items):
     # 遍历并处理
     for item in mail_items:
         # 可以在这里进一步查找标题或点击
-        print(item.text)
+        try:
+            subject = item.text
+        except Exception as e:
+            print(e)
+            continue
 
-        if item.text=='Your orders that you shipped with delay report is ready':
+        if subject == 'Your orders that you shipped with delay report is ready':
+
             item.click()
-            #Go to download report
-            # driver.find_element(By.XPATH,'/html/body/div[1]/div/div[2]/div/div[2]/div[2]/div/div[1]/div[1]/div/div/div[3]/div/div/div[3]/div/div/div/div[1]/div/div/div[2]/div/div[2]/div[1]/div/div/div/div/div/div[3]/div[1]/div/div/div/div/div/div/table/tbody/tr/td/table[2]/tbody/tr/td/table/tbody/tr[2]/td/table/tbody/tr[1]/td[2]/table/tbody/tr/td/table/tbody/tr/td/table/tbody/tr[2]/td/table/tbody/tr/td/table/tbody/tr/td/a').click()
-
-            downlod_url=driver.find_element("link text", "Go to download report").get_attribute("href")
+            # Go to download report
+            contain = driver.find_element(By.CLASS_NAME, 'wide-content-host')
+            downlod_url = contain.find_element("link text", "Go to download report").get_attribute("href")
 
             print(downlod_url)
             driver.get(downlod_url)
@@ -136,23 +182,56 @@ def download_relay_mail(window_id,site):
             ##下载文件
             driver.find_element(By.XPATH,
                                 '/html/body/main/div/div[3]/div/div[1]/div/div[5]/div[2]/div[2]/div/div/button/span/span').click()
-
-            # # 或者：直接用 JS 点击包含特定文本的 Andes 按钮
-            # target_text = "Download"
-            # # JS 逻辑：找到所有类名为 TtcXM 或 andes-button__content 的元素，匹配文本并点击
-            # js_script = "document.querySelectorAll('.andes-button__content')[1].click();"
-            # driver.execute_script(js_script)
             print("已下载延误文件")
-            time.sleep(100)
+            return True
+    return False
 
-
-            break
-
-    #其他邮件/html/body/div[1]/div/div[3]/div/div[2]/div[2]/div/div[1]/div[1]/div/div/div[1]/div/div/div/div/div[1]/div[2]/div/div[2]/div/div/div[2]/div/span[1]
-    closeBrowser(window_id)
 
 if __name__ == '__main__':
-    
-    
-    
-    download_relay_mail('9812f185f7ab49d98f3988994d9e8ebf','墨西哥')
+
+        # 龙吟虎啸
+        # download_relay_mail('1f22b75033a84d64bff59c3a41ea6047','墨西哥')
+
+        #龙争虎斗
+        # download_relay_mail('df2d33b20d0b4d72949fc490f7ff075a','巴西')
+
+
+        download_relay_mail('187700d9c3424c0eb6d8a75d92bf3b9c','墨西哥')
+        download_relay_mail('187700d9c3424c0eb6d8a75d92bf3b9c', '巴西')
+        download_relay_mail('187700d9c3424c0eb6d8a75d92bf3b9c', '阿根廷')
+        download_relay_mail('187700d9c3424c0eb6d8a75d92bf3b9c', '智利')
+
+        time.sleep(360000)
+
+
+        start = int(time.time())
+        print(start)
+        wb = load_workbook(r'D:\比特配置文件.xlsx')
+        sheet = wb.active
+        reputation_info_sum = []
+        # 使用 min_row=2 跳过第一行
+        for row in sheet.iter_rows(min_row=2, values_only=True):
+            print(row)  # row 是一个元组，包含该行所有数据
+            id = row[0]
+            name = row[1]
+            remark = row[2]
+            if remark == '忽略':
+                continue
+            print("开始打开窗口:", name)
+            site_list = row[3].split("，")
+            for site in site_list:
+                try:
+                    message=download_relay_mail(id,site)
+                    print(name+site+message)
+                except Exception as e:
+                    print(name+site+"执行失败",e)
+
+            print("结束，正在关闭窗口")
+            # closeBrowser(id)
+            print("已经关闭窗口")
+            time.sleep(5)
+        # for info in reputation_info_sum:
+        #     print(info)
+
+        end = int(time.time())
+        print("总花费", end - start)
