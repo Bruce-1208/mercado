@@ -34,6 +34,7 @@ def download_relay_mail(window_id,site):
     # 设置最长等待时间为 10 秒
     wait = WebDriverWait(driver, 10)
 
+
     driver.get("https://global-selling.mercadolibre.com/reputation")
     driver.refresh()
     time.sleep(5)
@@ -62,34 +63,42 @@ def download_relay_mail(window_id,site):
     return findAndClick(document, 'button[aria-label="Select country"]');
     """
     #打开选择器
-    success = driver.execute_script(deep_click_script)
-    #选择站点
-    name=''
-    if site=='墨西哥':
-        name='Mexico'
-    if site=='巴西':
-        name='Brazil'
-    if site=='哥伦比亚':
-        name='Colombia'
-    if site=='智利':
-        name='Chile'
-    if site=='阿根廷':
-        name='Argentina'
-    if site=='乌拉圭':
-        name='Uruguay'
+    # success = driver.execute_script(deep_click_script)
+    # #选择站点
+    # name=''
+    # if site=='墨西哥':
+    #     name='Mexico'
+    # if site=='巴西':
+    #     name='Brazil'
+    # if site=='哥伦比亚':
+    #     name='Colombia'
+    # if site=='智利':
+    #     name='Chile'
+    # if site=='阿根廷':
+    #     name='Argentina'
+    # if site=='乌拉圭':
+    #     name='Uruguay'
+    # #
+    # force_select_country(driver,name)
+    # print('成功选择站点')
+    # time.sleep(3)
     #
-    force_select_country(driver,name)
-    print('成功选择站点')
+    # #点击下载邮件/html/body/main/div/div[3]/div/div[1]/div/div[5]/div[3]/div[4]/div[3]/div/a
+    # try:
+    #     elements = driver.find_elements("link text", "Download affected orders")
+    #     print(len(elements))
+    #     if len(elements)==1:
+    #         elements[0].click()
+    #     else:
+    #         elements[1].click()
+    #
+    #     # WebDriverWait(driver, 10).until(
+    #     #     EC.element_to_be_clickable(By.XPATH, "//*[text()='Delayed handling time']/following::a[text()='Go to download report'][1]")).click()
+    # except Exception as e:
+    #     print("声誉界面下载邮箱失败",e)
+    #
+    # time.sleep(30)
 
-    #点击下载邮件/html/body/main/div/div[3]/div/div[1]/div/div[5]/div[3]/div[4]/div[3]/div/a
-    try:
-        WebDriverWait(driver, 10).until(
-            EC.element_to_be_clickable("link text", "Download affected orders")).click()
-    except Exception as e:
-        print("声誉界面下载邮箱失败",e)
-
-
-    time.sleep(180)
 
 
     driver.execute_script("window.open('https://outlook.live.com/mail/0/', '_blank');")
@@ -103,6 +112,9 @@ def download_relay_mail(window_id,site):
     mail_items1 = driver.find_elements(By.CLASS_NAME, "TtcXM")
     print(f"当前可见邮件数量: {len(mail_items1)}")
 
+    for item in mail_items1:
+        print(item.text)
+
     #点击垃圾邮件/html/body/div[1]/div/div[3]/div/div[2]/div[2]/div/div[1]/div[1]/div/div/div[1]/div/div/div/div/div[1]/div[2]/div/div[2]/div/div/div[2]/div/span[1]
     driver.find_element(By.XPATH,'/html/body/div[1]/div/div[3]/div/div[2]/div[2]/div/div[1]/div[1]/div/div/div[1]/div/div/div/div/div[1]/div[2]/div/div[2]/div/div/div[2]/div/span[1]').click()
     mail_items2 = driver.find_elements(By.CLASS_NAME, "TtcXM")
@@ -113,6 +125,11 @@ def download_relay_mail(window_id,site):
 
     print(f"当前可见所有邮件数量: {len(mail_items)}")
 
+    for item in mail_items:
+        try:
+            print(item.text)
+        except Exception as e:
+            print(item)
 
 
     # 遍历并处理
@@ -124,7 +141,7 @@ def download_relay_mail(window_id,site):
             item.click()
             #Go to download report
             # driver.find_element(By.XPATH,'/html/body/div[1]/div/div[2]/div/div[2]/div[2]/div/div[1]/div[1]/div/div/div[3]/div/div/div[3]/div/div/div/div[1]/div/div/div[2]/div/div[2]/div[1]/div/div/div/div/div/div[3]/div[1]/div/div/div/div/div/div/table/tbody/tr/td/table[2]/tbody/tr/td/table/tbody/tr[2]/td/table/tbody/tr[1]/td[2]/table/tbody/tr/td/table/tbody/tr/td/table/tbody/tr[2]/td/table/tbody/tr/td/table/tbody/tr/td/a').click()
-
+            driver.find_element()
             downlod_url=driver.find_element("link text", "Go to download report").get_attribute("href")
 
             print(downlod_url)
@@ -151,4 +168,7 @@ def download_relay_mail(window_id,site):
     #其他邮件/html/body/div[1]/div/div[3]/div/div[2]/div[2]/div/div[1]/div[1]/div/div/div[1]/div/div/div/div/div[1]/div[2]/div/div[2]/div/div/div[2]/div/span[1]
     closeBrowser(window_id)
 
+
+
 if __name__ == '__main__':
+    download_relay_mail('55655ec7c5db43149f5640810197f35c','墨西哥')
