@@ -105,7 +105,7 @@ def print_orders(window_id, site):
 if __name__ == '__main__':
     start = int(time.time())
     print(start)
-    wb = load_workbook(r'D:\比特配置文件.xlsx')
+    wb = load_workbook(r'/Users/a11/mercado/比特配置文件.xlsx')
     sheet = wb.active
     reputation_info_sum = []
     # 使用 min_row=2 跳过第一行
