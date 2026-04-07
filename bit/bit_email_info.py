@@ -17,6 +17,8 @@ from switch_country import *
 from openpyxl import load_workbook
 from datetime import datetime
 
+from utils import *
+
 
 def read_email_info_all(driver):
 
@@ -51,8 +53,6 @@ def read_email_info_all(driver):
     scraped_data_all=scraped_data2.union(scraped_data)
     sorted_data = sorted(list(scraped_data_all), key=lambda x: x[1],reverse=True)
     # 打印结果
-    for a,b,c in sorted_data:
-        print(a+b+c)
     return  sorted_data
 
 def get_mail_info(driver):
@@ -63,19 +63,25 @@ def get_mail_info(driver):
     for email in emails:
         try:
             # 1. 提取标题 (根据你的 HTML，标题在 .IjzWp 容器下的 span 中)
-            title_element = email.find_element(By.CSS_SELECTOR, 'div.IjzWp span')
+            title_element = email.find_element(By.CSS_SELECTOR, '.TtcXM')
             title = title_element.get_attribute('title') or title_element.text
+
+            print(title)
 
             # 2. 提取时间 (根据你的 HTML，时间在 ._rWRU 类名下)
             time_element = email.find_element(By.CSS_SELECTOR, 'span._rWRU')
             email_time = time_element.get_attribute('title')  # 包含具体日期：周三 2026-04-01 21:11
 
+            print(email_time)
+
             # 将数据存入集合
             entry = (title, parse_chinese_date(email_time),email)
+            print("------------",entry)
             if entry not in scraped_data:
                 scraped_data.add(entry)
 
         except Exception as e:
+            print(e)
             # 忽略广告节点或未加载完全的节点
             continue
     print("scraped_data数量为",len(scraped_data))
@@ -83,20 +89,26 @@ def get_mail_info(driver):
 
 
 def parse_chinese_date(date_str):
-    parts = date_str.split()
-    date_part = parts[1]  # 2026/4/6
-    period = parts[2]  # 下午
-    time_part = parts[3]  # 03:06
+    date_str=convert_text(date_str)
+    if(date_str.__contains__('上午') or date_str.__contains__('下午')):
+        parts = date_str.split()
+        date_part = parts[1]  # 2026/4/6
+        period = parts[2]  # 下午
+        time_part = parts[3]  # 03:06]
 
-    # 2. 初步解析为 datetime 对象 (使用 %I 处理 12 小时制)
-    dt = datetime.strptime(f"{date_part} {time_part}", "%Y/%m/%d %I:%M")
+        # 2. 初步解析为 datetime 对象 (使用 %I 处理 12 小时制)
+        dt = datetime.strptime(f"{date_part} {time_part}", "%Y/%m/%d %I:%M")
 
-    # 3. 核心逻辑：根据“上午/下午”转换 24 小时制
-    if period == "下午" and dt.hour < 12:
-        dt = dt.replace(hour=dt.hour + 12)
-    elif period == "上午" and dt.hour == 12:
-        dt = dt.replace(hour=0)
-
+        # 3. 核心逻辑：根据“上午/下午”转换 24 小时制
+        if period == "下午" and dt.hour < 12:
+            dt = dt.replace(hour=dt.hour + 12)
+        elif period == "上午" and dt.hour == 12:
+            dt = dt.replace(hour=0)
+    else:
+        parts = date_str.split()
+        date_part = parts[1]  # 2026/4/6
+        time_part = parts[2]  # 03:06]
+        dt = datetime.strptime(f"{date_part} {time_part}", "%Y/%m/%d %H:%M")
     return dt
 
 if __name__ == '__main__':
