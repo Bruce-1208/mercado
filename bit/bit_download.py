@@ -15,6 +15,7 @@ from selenium.webdriver.support import expected_conditions as EC
 import  pyautogui
 from switch_country import *
 from openpyxl import load_workbook
+from bit_email_info import *
 
 
 def download_relay_mail(window_id,site):
@@ -42,17 +43,18 @@ def download_relay_mail(window_id,site):
 
         ##循环扫描邮箱
         while(1==1):
-            time.sleep(60)
-            mail_items=scan_email(driver)
+            time.sleep(30)
+            mail_item=scan_email(driver)
             flag=False
             ##下载文件
-            try:
-                flag=download_excel(driver,mail_items)
-            except Exception as e:
-                print("下载文件失败",e)
-            if(flag==True):
-                return "下载文件成功"
-                break
+            if(mail_item!=None):
+
+                 flag=download_excel(driver,mail_item)
+
+                 # print("下载文件失败")
+                 if(flag==True):
+                    return "下载文件成功"
+                    break
     else:
         return "没有需要下载的文件"
 
@@ -128,63 +130,60 @@ def click_download(driver,site):
     except Exception as e:
         print("声誉界面下载邮箱失败", e)
 
+##判断最近五分钟是否下载邮件
 def scan_email(driver):
-    driver.execute_script("window.open('https://outlook.live.com/mail/0/', '_blank');")
+   email_infos=read_email_info_all(driver)
+   for subject,time,element in email_infos:
 
-    # 3. 关键步骤：切换窗口句柄 (Handles)
-    # driver.window_handles 是一个列表，[-1] 表示最新打开的窗口
-    driver.switch_to.window(driver.window_handles[-1])
+       print(time)
+       print(subject)
+       print(element)
+       if subject != 'Your orders that you shipped with delay report is ready':
+           continue
+       else:
+           now=datetime.now()
+           diff=now-time
+           print("相差时间为:",diff)
+           if(diff.total_seconds()>3600.0):
+               return None
+           else:
+               return (subject,time,element)
 
-    # 找到当前页面所有 class 为 TtcXM 的元素
-    mail_items1 = driver.find_elements(By.CLASS_NAME, "TtcXM")
-    print(f"当前可见邮件数量: {len(mail_items1)}")
 
-    # 点击垃圾邮件gtcPn _8g73 LPIso wk4Sg  gtcPn _8g73 LPIso
-    driver.find_element(By.CSS_SELECTOR,'.gtcPn._8g73.LPIso').click()
-    mail_items2 = driver.find_elements(By.CLASS_NAME, "TtcXM")
-    print(f"当前可见垃圾邮件数量: {len(mail_items2)}")
+def download_excel(driver,mail_item):
+    wait = WebDriverWait(driver, 10)
+    subject=mail_item[0]
+    mail_time=mail_item[1]
+    element=mail_item[2]
+    try:
+        element.click()
+        print("在垃圾邮箱里找到")
+    except Exception as e:
+        driver.get("https://outlook.live.com/mail/0/")
+        element.click()
+        print("在普通邮件里找到")
 
-    mail_items = mail_items2 + mail_items1
 
-    print(f"当前可见所有邮件数量: {len(mail_items)}")
+    print("点击时间为的邮件:",str(mail_time))
+    # Go to download report
+    time.sleep(10)
+    contain = wait.until(EC.presence_of_element_located((By.CLASS_NAME, 'wide-content-host')))
 
-    for item in mail_items:
-        try:
-            print(item.text)
-        except Exception as e:
-            print(item)
+    element_download=wait.until(EC.presence_of_element_located(("link text", "Go to download report")))
+    downlod_url = contain.find_element("link text", "Go to download report").get_attribute("href")
 
-    return mail_items
+    print(downlod_url)
+    driver.get(downlod_url)
 
-def download_excel(driver,mail_items):
-    # 遍历并处理
-    for item in mail_items:
-        # 可以在这里进一步查找标题或点击
-        try:
-            subject = item.text
-        except Exception as e:
-            print(e)
-            continue
+    driver.switch_to.window(driver.window_handles[-1]) #切换窗口
+    ##下载文件
+    wait.until(EC.element_to_be_clickable((By.XPATH, "//span[text()='Download']/ancestor::button"))).click()
+    # wait.until(EC.element_to_be_clickable((By.XPATH, "//a[contains(text(), 'download report')]")))
 
-        if subject == 'Your orders that you shipped with delay report is ready':
 
-            item.click()
-            # Go to download report
-            contain = driver.find_element(By.CLASS_NAME, 'wide-content-host')
-            downlod_url = contain.find_element("link text", "Go to download report").get_attribute("href")
+    print("已下载延误文件")
+    return True
 
-            print(downlod_url)
-            driver.get(downlod_url)
-            # wait.until(EC.element_to_be_clickable((By.XPATH, "//a[contains(text(), 'download report')]")))
-
-            # driver.switch_to.window(driver.window_handles[-1]) #切换窗口
-            time.sleep(5)
-            ##下载文件
-            driver.find_element(By.XPATH,
-                                '/html/body/main/div/div[3]/div/div[1]/div/div[5]/div[2]/div[2]/div/div/button/span/span').click()
-            print("已下载延误文件")
-            return True
-    return False
 
 
 if __name__ == '__main__':
@@ -195,12 +194,8 @@ if __name__ == '__main__':
         #龙争虎斗
         # download_relay_mail('df2d33b20d0b4d72949fc490f7ff075a','巴西')
 
-
+        #一跃千里
         download_relay_mail('187700d9c3424c0eb6d8a75d92bf3b9c','墨西哥')
-        download_relay_mail('187700d9c3424c0eb6d8a75d92bf3b9c', '巴西')
-        download_relay_mail('187700d9c3424c0eb6d8a75d92bf3b9c', '阿根廷')
-        download_relay_mail('187700d9c3424c0eb6d8a75d92bf3b9c', '智利')
-
         time.sleep(360000)
 
 
