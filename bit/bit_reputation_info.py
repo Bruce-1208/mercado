@@ -124,6 +124,17 @@ def get_reputation_info(window_id, site):
     print("总单数为：",data_orders)
 
     list=[]
+    if(data_color.__contains__("green")):
+        data_color='绿色'
+    if (data_color.__contains__("yellow")):
+        data_color = '黄色'
+    if (data_color.__contains__("orange")):
+        data_color = '橘色'
+    if (data_color.__contains__("red")):
+        data_color = '红色'
+    if(data_color.__contains__("You still have no color")):
+        data_color = '无色'
+
     list.append(data_color)
     list.append(data_orders)
     list.append(data_complain)
@@ -137,8 +148,8 @@ def get_reputation_info(window_id, site):
 
 if __name__ == '__main__':
 
-    get_reputation_info('df2d33b20d0b4d72949fc490f7ff075a','墨西哥')
-    time.sleep(10000)
+    # get_reputation_info('df2d33b20d0b4d72949fc490f7ff075a','墨西哥')
+    # time.sleep(10000)
 
     start=int(time.time())
     print(start)
@@ -188,7 +199,7 @@ if __name__ == '__main__':
 
     end=int(time.time())
     print("总花费",end-start)
-    df = pd.DataFrame(reputation_info_sum, columns=['声誉', '总胆量', '投诉率', '延误率', '店铺名', '站点'])
+    df = pd.DataFrame(reputation_info_sum, columns=['声誉颜色', '总单量', '投诉率', '延误率', '店铺名', '站点'])
     now=datetime.now()
     date_str=datetime.now().strftime("%Y-%m-%d-%H")
     df.to_excel(r"D:\美客多声誉\武汉泽顺店铺声誉信息汇总"+date_str+".xlsx", index=False)
