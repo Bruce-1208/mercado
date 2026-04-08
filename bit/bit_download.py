@@ -1,26 +1,11 @@
 import time
 
-from pandas.io.formats.format import return_docstring
-from selenium import webdriver
-from selenium.common.exceptions import TimeoutException
-from selenium.webdriver.common.keys import Keys
-from selenium.webdriver.chrome.options import Options
-from selenium.webdriver.support.wait import WebDriverWait
-
-from bit_api import *
-from selenium.webdriver.common.desired_capabilities import DesiredCapabilities
-from selenium.webdriver.chrome.service import Service
-from selenium.webdriver.common.by import By
-from selenium.webdriver.support import expected_conditions as EC
-import  pyautogui
-from switch_country import *
-from openpyxl import load_workbook
 from bit_email_info import *
 
 
-def download_relay_mail(window_id,site):
+def download_relay_mail(window_id, site):
     # /browser/open 接口会返回 selenium使用的http地址，以及webdriver的path，直接使用即可
-    res = openBrowser(window_id) # 窗口ID从窗口配置界面中复制，或者api创建后返回
+    res = openBrowser(window_id)  # 窗口ID从窗口配置界面中复制，或者api创建后返回
 
     print(res)
 
@@ -38,30 +23,39 @@ def download_relay_mail(window_id,site):
     # 设置最长等待时间为 10 秒
     wait = WebDriverWait(driver, 30)
     ## 进入声誉页面点击下载
-    click=click_download(driver,site)
-    if(click==True):
+    try:
+        click = click_download(driver, site)
+    except Exception as e:
+        print("点击下载失败", e)
+    if (click == True):
 
         ##循环扫描邮箱
-        while(1==1):
+        while (1 == 1):
             time.sleep(30)
-            mail_item=scan_email(driver,1)
-            flag=False
+            mail_item=()
+            try:
+                mail_item = scan_email(driver, 1)
+            except Exception as e:
+                print("扫描邮件信息失败", e)
+            flag = False
             ##下载文件
-            if(mail_item!=None):
+            if (mail_item != None):
 
-                 flag=download_excel(driver,mail_item)
+                try:
 
-                 # print("下载文件失败")
-                 if(flag==True):
+                    flag = download_excel(driver, mail_item)
+                except Exception as e:
+                    print("下载延误邮件失败", e)
+
+                # print("下载文件失败")
+                if (flag == True):
                     return "下载文件成功"
                     break
     else:
         return "没有需要下载的文件"
 
 
-
-
-def click_download(driver,site):
+def click_download(driver, site):
     driver.get("https://global-selling.mercadolibre.com/reputation")
     driver.refresh()
     time.sleep(10)
@@ -132,40 +126,42 @@ def click_download(driver,site):
     except Exception as e:
         print("声誉界面下载邮箱失败", e)
 
+
 ##判断最近五分钟是否下载邮件
-#isAll判断是读取全部还是当前的邮箱
-def scan_email(driver,isAll):
-   if isAll==1:
-        email_infos=read_email_info_all(driver)
-   else:
-        email_infos=get_mail_info(driver,'普通邮件')
-
-   email_infos_sorted = sorted(list(email_infos), key=lambda x: x[1], reverse=True)
-
-   for subject,time,element,text in email_infos_sorted:
-
-       print(time)
-       print(subject)
-       print(element)
-       if subject != 'Your orders that you shipped with delay report is ready':
-           continue
-       else:
-           now=datetime.now()
-           diff=now-time
-           print("相差时间为:",diff)
-           if(diff.total_seconds()>3600.0):
-               return None
-           else:
-               return (subject,time,element,text)
+# isAll判断是读取全部还是当前的邮箱
+def scan_email(driver, isAll):
+    email_infos = []
 
 
-def download_excel(driver,mail_item):
+    if isAll == 1:
+        email_infos = read_email_info_all(driver)
+    else:
+        email_infos = get_mail_info(driver, '普通邮件')
+    if (len(email_infos) == 0):
+        return None
+
+    email_infos_sorted = sorted(list(email_infos), key=lambda x: x[1], reverse=True)
+
+    for subject, time, element, text in email_infos_sorted:
+        if subject != 'Your orders that you shipped with delay report is ready':
+            continue
+        else:
+            now = datetime.now()
+            diff = now - time
+            print("相差时间为:", diff)
+            if (diff.total_seconds() > 3600.0):
+                return None
+            else:
+                return (subject, time, element, text)
+
+
+def download_excel(driver, mail_item):
     wait = WebDriverWait(driver, 30)
-    subject=mail_item[0]
-    mail_time=mail_item[1]
-    element=mail_item[2]
-    text=mail_item[3]
-    if(text=='垃圾邮件'):
+    subject = mail_item[0]
+    mail_time = mail_item[1]
+    element = mail_item[2]
+    text = mail_item[3]
+    if (text == '垃圾邮件'):
         element.click()
         print("在垃圾邮件里找到")
     else:
@@ -174,77 +170,75 @@ def download_excel(driver,mail_item):
              "//div[contains(@title, '收件箱') or contains(@title, '收件匣')]")
         ))
         folder.click()
-        mail_item_2=scan_email(driver,0)
+        mail_item_2 = scan_email(driver, 0)
         mail_item_2[2].click()
         print("在普通邮件里找到")
 
-
-
-    print("点击时间为的邮件:",str(mail_time))
+    print("点击时间为的邮件:", str(mail_time))
     # Go to download report
     time.sleep(10)
     contain = wait.until(EC.presence_of_element_located((By.CLASS_NAME, 'wide-content-host')))
 
-    element_download=wait.until(EC.presence_of_element_located(("link text", "Go to download report")))
+    element_download = wait.until(EC.presence_of_element_located(("link text", "Go to download report")))
     downlod_url = contain.find_element("link text", "Go to download report").get_attribute("href")
 
     print(downlod_url)
     driver.get(downlod_url)
 
-    driver.switch_to.window(driver.window_handles[-1]) #切换窗口
+    driver.switch_to.window(driver.window_handles[-1])  # 切换窗口
     ##下载文件
     wait.until(EC.element_to_be_clickable((By.XPATH, "//span[text()='Download']/ancestor::button"))).click()
     # wait.until(EC.element_to_be_clickable((By.XPATH, "//a[contains(text(), 'download report')]")))
-
 
     print("已下载延误文件")
     return True
 
 
-
 if __name__ == '__main__':
 
-        # 龙吟虎啸
-        # download_relay_mail('1f22b75033a84d64bff59c3a41ea6047','墨西哥')
+    # 龙吟虎啸
+    download_relay_mail('1f22b75033a84d64bff59c3a41ea6047','墨西哥')
 
-        #龙争虎斗
-        # download_relay_mail('df2d33b20d0b4d72949fc490f7ff075a','巴西')
+    time.sleep(36000)
 
-        #跃马扬鞭
-        # download_relay_mail('187700d9c3424c0eb6d8a75d92bf3b9c','巴西')
+    # 龙争虎斗
+    # download_relay_mail('df2d33b20d0b4d72949fc490f7ff075a','巴西')
 
-        #龙凤呈祥
-        # download_relay_mail('38fcac77fbf641ed8b6cbc1c2aedc5b2','墨西哥')
+    # 跃马扬鞭
+    # download_relay_mail('187700d9c3424c0eb6d8a75d92bf3b9c','巴西')
 
-        # time.sleep(360000)
-        start = int(time.time())
-        print(start)
-        wb = load_workbook(r'D:\比特配置文件.xlsx')
-        sheet = wb.active
-        reputation_info_sum = []
-        # 使用 min_row=2 跳过第一行
-        for row in sheet.iter_rows(min_row=2, values_only=True):
-            print(row)  # row 是一个元组，包含该行所有数据
-            id = row[0]
-            name = row[1]
-            remark = row[2]
-            if remark == '忽略':
-                continue
-            print("开始打开窗口:", name)
-            site_list = row[3].split("，")
-            for site in site_list:
-                try:
-                    message=download_relay_mail(id,site)
-                    print(name+site+message)
-                except Exception as e:
-                    print(name+site+"执行失败",e)
+    # 龙凤呈祥
+    # download_relay_mail('38fcac77fbf641ed8b6cbc1c2aedc5b2','墨西哥')
 
-            print("结束，正在关闭窗口")
-            # closeBrowser(id)
-            print("已经关闭窗口")
-            time.sleep(5)
-        # for info in reputation_info_sum:
-        #     print(info)
+    # time.sleep(360000)
+    start = int(time.time())
+    print(start)
+    wb = load_workbook(r'D:\比特配置文件.xlsx')
+    sheet = wb.active
+    reputation_info_sum = []
+    # 使用 min_row=2 跳过第一行
+    for row in sheet.iter_rows(min_row=2, values_only=True):
+        print(row)  # row 是一个元组，包含该行所有数据
+        id = row[0]
+        name = row[1]
+        remark = row[2]
+        if remark == '忽略':
+            continue
+        print("开始打开窗口:", name)
+        site_list = row[3].split("，")
+        for site in site_list:
+            try:
+                message = download_relay_mail(id, site)
+                print(name + site + message)
+            except Exception as e:
+                print(name + site + "执行失败", e)
 
-        end = int(time.time())
-        print("总花费", end - start)
+        print("结束，正在关闭窗口")
+        # closeBrowser(id)
+        print("已经关闭窗口")
+        time.sleep(5)
+    # for info in reputation_info_sum:
+    #     print(info)
+
+    end = int(time.time())
+    print("总花费", end - start)
