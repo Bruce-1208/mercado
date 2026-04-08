@@ -9,3 +9,4 @@ def convert_text(text):
     # cc = OpenCC('s2t')  # 简体转繁体
     converted_text = cc.convert(text)
     return converted_text # 输出简体化的文本
+
