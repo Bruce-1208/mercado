@@ -110,7 +110,7 @@ def get_reputation_info(window_id, site):
 
     # 1. 先定位包含 "Complaints" 文本的父级卡片元素
     # 这里使用 XPath 寻找：包含 h2 且 h2 文本为 Complaints 的那个 div
-    card_element = driver.find_element(By.XPATH, "//div[contains(@class, 'andes-card')][.//h2[text()='Delayed handling time']]")
+    card_element = driver.find_element(By.XPATH, "//div[contains(@class, 'andes-card')][.//h2[text()='Non-compliant shipments']]")
 
     # 2. 在这个卡片范围内，寻找类名为 variable__percentage 的元素
     # 注意：使用 card_element.find_element 是在当前节点下查找
@@ -175,6 +175,7 @@ if __name__ == '__main__':
                     print("窗口" + name + site+"重试成功")
                 except Exception as e:
                     print("窗口" + name + site+"重试失败")
+                    reputation_info_sum.append([name,site,"读取窗口失败"])
             time.sleep(5)
         print("结束，正在关闭窗口")
         # closeBrowser(id)
@@ -190,7 +191,7 @@ if __name__ == '__main__':
     df = pd.DataFrame(reputation_info_sum, columns=['声誉', '总胆量', '投诉率', '延误率', '店铺名', '站点'])
     now=datetime.now()
     date_str=datetime.now().strftime("%Y-%m-%d-%H")
-    df.to_excel(r"D:\武汉泽顺店铺声誉信息汇总"+date_str+".xlsx", index=False)
+    df.to_excel(r"D:\美客多声誉\武汉泽顺店铺声誉信息汇总"+date_str+".xlsx", index=False)
 
-    send_reputation_info('美客多所有店铺声誉汇总',result,r"D:\武汉泽顺店铺声誉信息汇总"+date_str+".xlsx",r"武汉泽顺店铺声誉信息汇总"+date_str+".xlsx")
+    send_reputation_info('美客多所有店铺声誉汇总',result,r"D:\美客多声誉\武汉泽顺店铺声誉信息汇总"+date_str+".xlsx",r"武汉泽顺店铺声誉信息汇总"+date_str+".xlsx")
 
