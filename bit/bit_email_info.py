@@ -78,6 +78,8 @@ def get_mail_info(driver,text):
             # 忽略广告节点或未加载完全的节点
             continue
     print(text+"抓取邮件数量为",len(scraped_data))
+    for i in scraped_data:
+        print("text",i)
     return scraped_data
 
 
@@ -106,66 +108,67 @@ def parse_chinese_date(date_str):
         date_part = parts[1]  # 2026/4/6
         time_part = parts[2]  # 03:06]
         if (int(date_part.split('/')[0]) > 2025):
-            dt = datetime.strptime(f"{date_part} {time_part}", "%Y/%m/%d %I:%M")
+            dt = datetime.strptime(f"{date_part} {time_part}", "%Y/%m/%d %H:%M")
         else:
-            dt = datetime.strptime(f"{date_part} {time_part}", "%d/%m/%Y %I:%M")
+            dt = datetime.strptime(f"{date_part} {time_part}", "%d/%m/%Y %H:%M")
     return dt
 
 if __name__ == '__main__':
     # /browser/open 接口会返回 selenium使用的http地址，以及webdriver的path，直接使用即可
     # res = openBrowser('b2323ff45855401689ab16ed11d4ed20')  # 窗口ID从窗口配置界面中复制，或者api创建后返回
     #跃马扬鞭
+    print(parse_chinese_date('周三 2026/4/8 22:32'))
 
-    #龙凤呈祥
-    # res=openBrowser('1f22b75033a84d64bff59c3a41ea6047')
+    res=openBrowser('b2f7baeb363346af8d81dd20dd945ef4')
+
+    print(res)
+
+    driverPath = res['data']['driver']
+    debuggerAddress = res['data']['http']
+
+    # selenium 连接代码
+    chrome_options = webdriver.ChromeOptions()
+    chrome_options.add_experimental_option("debuggerAddress", debuggerAddress)
+
+    chrome_service = Service(driverPath)
+    driver = webdriver.Chrome(service=chrome_service, options=chrome_options)
+
+    driver.implicitly_wait(10)
+    # 设置最长等待时间为 10 秒
+    wait = WebDriverWait(driver, 30)
+    email_infos=read_email_info_all(driver)
+    for i in email_infos:
+        print(i)
+
+
+    # wb = load_workbook(r'D:\比特配置文件.xlsx')
+    # sheet = wb.active
+    # reputation_info_sum=[]
+    # # 使用 min_row=2 跳过第一行
+    # for row in sheet.iter_rows(min_row=2, values_only=True):
+    #     print(row)  # row 是一个元组，包含该行所有数据
+    #     id=row[0]
+    #     name = row[1]
+    #     remark= row[2]
+    #     res = openBrowser(id)
     #
-    # print(res)
+    #     if(remark=='忽略'):
+    #         continue
+    #     print(res)
     #
-    # driverPath = res['data']['driver']
-    # debuggerAddress = res['data']['http']
+    #     driverPath = res['data']['driver']
+    #     debuggerAddress = res['data']['http']
     #
-    # # selenium 连接代码
-    # chrome_options = webdriver.ChromeOptions()
-    # chrome_options.add_experimental_option("debuggerAddress", debuggerAddress)
+    #     # selenium 连接代码
+    #     chrome_options = webdriver.ChromeOptions()
+    #     chrome_options.add_experimental_option("debuggerAddress", debuggerAddress)
     #
-    # chrome_service = Service(driverPath)
-    # driver = webdriver.Chrome(service=chrome_service, options=chrome_options)
+    #     chrome_service = Service(driverPath)
+    #     driver = webdriver.Chrome(service=chrome_service, options=chrome_options)
     #
-    # driver.implicitly_wait(10)
-    # # 设置最长等待时间为 10 秒
-    # wait = WebDriverWait(driver, 30)
-    # email_infos=read_email_info_all(driver)
-    # print(email_infos)
-
-
-    wb = load_workbook(r'D:\比特配置文件.xlsx')
-    sheet = wb.active
-    reputation_info_sum=[]
-    # 使用 min_row=2 跳过第一行
-    for row in sheet.iter_rows(min_row=2, values_only=True):
-        print(row)  # row 是一个元组，包含该行所有数据
-        id=row[0]
-        name = row[1]
-        remark= row[2]
-        res = openBrowser(id)
-
-        if(remark=='忽略'):
-            continue
-        print(res)
-
-        driverPath = res['data']['driver']
-        debuggerAddress = res['data']['http']
-
-        # selenium 连接代码
-        chrome_options = webdriver.ChromeOptions()
-        chrome_options.add_experimental_option("debuggerAddress", debuggerAddress)
-
-        chrome_service = Service(driverPath)
-        driver = webdriver.Chrome(service=chrome_service, options=chrome_options)
-
-        driver.implicitly_wait(10)
-        # 设置最长等待时间为 10 秒
-        wait = WebDriverWait(driver, 30)
-
-        read_email_info_all(driver)
+    #     driver.implicitly_wait(10)
+    #     # 设置最长等待时间为 10 秒
+    #     wait = WebDriverWait(driver, 30)
+    #
+    #     read_email_info_all(driver)
 
