@@ -36,7 +36,7 @@ def download_relay_mail(window_id,site):
 
     driver.implicitly_wait(10)
     # 设置最长等待时间为 10 秒
-    wait = WebDriverWait(driver, 10)
+    wait = WebDriverWait(driver, 30)
     ## 进入声誉页面点击下载
     click=click_download(driver,site)
     if(click==True):
@@ -44,7 +44,7 @@ def download_relay_mail(window_id,site):
         ##循环扫描邮箱
         while(1==1):
             time.sleep(30)
-            mail_item=scan_email(driver)
+            mail_item=scan_email(driver,1)
             flag=False
             ##下载文件
             if(mail_item!=None):
@@ -123,6 +123,8 @@ def click_download(driver,site):
             elements[0].click()
         if len(elements) == 2:
             elements[1].click()
+        if len(elements) == 3:
+            elements[2].click()
         print("点击下载成功")
         return True
 
@@ -131,9 +133,16 @@ def click_download(driver,site):
         print("声誉界面下载邮箱失败", e)
 
 ##判断最近五分钟是否下载邮件
-def scan_email(driver):
-   email_infos=read_email_info_all(driver)
-   for subject,time,element in email_infos:
+#isAll判断是读取全部还是当前的邮箱
+def scan_email(driver,isAll):
+   if isAll==1:
+        email_infos=read_email_info_all(driver)
+   else:
+        email_infos=get_mail_info(driver,'普通邮件')
+
+   email_infos_sorted = sorted(list(email_infos), key=lambda x: x[1], reverse=True)
+
+   for subject,time,element,text in email_infos_sorted:
 
        print(time)
        print(subject)
@@ -147,21 +156,28 @@ def scan_email(driver):
            if(diff.total_seconds()>3600.0):
                return None
            else:
-               return (subject,time,element)
+               return (subject,time,element,text)
 
 
 def download_excel(driver,mail_item):
-    wait = WebDriverWait(driver, 10)
+    wait = WebDriverWait(driver, 30)
     subject=mail_item[0]
     mail_time=mail_item[1]
     element=mail_item[2]
-    try:
+    text=mail_item[3]
+    if(text=='垃圾邮件'):
         element.click()
-        print("在垃圾邮箱里找到")
-    except Exception as e:
-        driver.get("https://outlook.live.com/mail/0/")
-        element.click()
+        print("在垃圾邮件里找到")
+    else:
+        folder = wait.until(EC.element_to_be_clickable(
+            (By.XPATH,
+             "//div[contains(@title, '收件箱') or contains(@title, '收件匣')]")
+        ))
+        folder.click()
+        mail_item_2=scan_email(driver,0)
+        mail_item_2[2].click()
         print("在普通邮件里找到")
+
 
 
     print("点击时间为的邮件:",str(mail_time))
@@ -194,11 +210,13 @@ if __name__ == '__main__':
         #龙争虎斗
         # download_relay_mail('df2d33b20d0b4d72949fc490f7ff075a','巴西')
 
-        #一跃千里
-        download_relay_mail('187700d9c3424c0eb6d8a75d92bf3b9c','墨西哥')
-        time.sleep(360000)
+        #跃马扬鞭
+        # download_relay_mail('187700d9c3424c0eb6d8a75d92bf3b9c','巴西')
 
+        #龙凤呈祥
+        # download_relay_mail('38fcac77fbf641ed8b6cbc1c2aedc5b2','墨西哥')
 
+        # time.sleep(360000)
         start = int(time.time())
         print(start)
         wb = load_workbook(r'D:\比特配置文件.xlsx')
