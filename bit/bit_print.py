@@ -128,8 +128,8 @@ if __name__ == '__main__':
                 print("窗口" + name + site + "重试成功")
 
             time.sleep(5)
-        print("结束，正在关闭窗口")
-        # closeBrowser(id)
+        print("结束，正在å关闭窗口")
+        closeBrowser(id)
         print("已经关闭窗口")
         time.sleep(5)
     end = int(time.time())

@@ -153,7 +153,7 @@ if __name__ == '__main__':
 
     start=int(time.time())
     print(start)
-    wb = load_workbook(r'D:\比特配置文件.xlsx')
+    wb = load_workbook(r'/Users/a11/mercado/比特配置文件.xlsx')
     sheet = wb.active
     reputation_info_sum=[]
     # 使用 min_row=2 跳过第一行
@@ -189,7 +189,7 @@ if __name__ == '__main__':
                     reputation_info_sum.append([name,site,"读取窗口失败"])
             time.sleep(5)
         print("结束，正在关闭窗口")
-        # closeBrowser(id)
+        closeBrowser(id)
         print("已经关闭窗口")
         time.sleep(5)
     # for info in reputation_info_sum:
@@ -202,7 +202,7 @@ if __name__ == '__main__':
     df = pd.DataFrame(reputation_info_sum, columns=['声誉颜色', '总单量', '投诉率', '延误率', '店铺名', '站点'])
     now=datetime.now()
     date_str=datetime.now().strftime("%Y-%m-%d-%H")
-    df.to_excel(r"D:\美客多声誉\武汉泽顺店铺声誉信息汇总"+date_str+".xlsx", index=False)
+    df.to_excel(r"/Users/a11/mercado/武汉泽顺店铺声誉信息汇总"+date_str+".xlsx", index=False)
 
-    send_reputation_info('美客多所有店铺声誉汇总',result,r"D:\美客多声誉\武汉泽顺店铺声誉信息汇总"+date_str+".xlsx",r"武汉泽顺店铺声誉信息汇总"+date_str+".xlsx")
+    send_reputation_info('美客多所有店铺声誉汇总',result,r"/Users/a11/mercado/武汉泽顺店铺声誉信息汇总"+date_str+".xlsx",r"武汉泽顺店铺声誉信息汇总"+date_str+".xlsx")
 
