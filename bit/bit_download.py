@@ -127,24 +127,6 @@ def click_download(driver, site):
     except Exception as e:
         return False
 
-    # try:
-    #     elements = driver.find_elements("link text", "Download affected orders")
-    #
-    #     if len(elements) == 0:
-    #         print("没有需要下载的延误")
-    #         return False
-    #     if len(elements) == 1:
-    #         elements[0].click()
-    #     if len(elements) == 2:
-    #         elements[1].click()
-    #     if len(elements) == 3:
-    #         elements[2].click()
-    #     print("点击下载成功")
-    #     return True
-    #
-    #
-    # except Exception as e:
-    #     print("声誉界面下载邮箱失败", e)
 
 
 ##判断最近五分钟是否下载邮件
