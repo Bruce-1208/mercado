@@ -1,4 +1,5 @@
 import time
+import traceback
 
 from pandas.io.formats.format import return_docstring
 from selenium import webdriver
@@ -35,6 +36,9 @@ def read_email_info_all(driver):
     # 获取当前所有邮件条目节点
     # 根据你提供的 class: jGG6V 是邮件条目的外层容器
     scraped_data=get_mail_info(driver,'普通邮件')
+    if(scraped_data==None):
+        return None
+
     ##读取垃圾邮箱
     junk_folder = wait.until(EC.element_to_be_clickable(
         (By.XPATH,
@@ -56,8 +60,13 @@ def get_mail_info(driver,text):
     wait = WebDriverWait(driver, 30)
     scraped_data = set()
     time.sleep(5)
-
-    emails=wait.until(EC.presence_of_all_elements_located((By.CSS_SELECTOR, '[data-item-index]')))
+    emails=[]
+    try:
+        emails=wait.until(EC.presence_of_all_elements_located((By.CSS_SELECTOR, '[data-item-index]')))
+    except Exception as e:
+        print("无法正常读取邮件，检查是否登录邮箱")
+        traceback.print_exc()
+        return None
     for email in emails:
         try:
             # 1. 提取标题 (根据你的 HTML，标题在 .IjzWp 容器下的 span 中)

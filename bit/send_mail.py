@@ -8,7 +8,7 @@ from email import encoders
 from email.header import Header  # 用于处理中文文件名编码
 
 
-def send_reputation_info(subject,body,local_file_path,display_filename):
+def send_info(subject,body,local_file_path,display_filename):
     # --- 1. 配置信息 ---
     smtp_server = "smtp.qq.com"
     smtp_port = 465
@@ -63,4 +63,4 @@ def send_reputation_info(subject,body,local_file_path,display_filename):
 
 
 if __name__ == "__main__":
-    send_reputation_info('测试','测试',r'D:\比特配置文件.xlsx',r'比特配置文件.xlsx')
+    send_info('测试','测试',r'D:\比特配置文件.xlsx',r'比特配置文件.xlsx')
