@@ -19,7 +19,6 @@ debuggerAddress = res['data']['http']
 # selenium 连接代码
 chrome_options = webdriver.ChromeOptions()
 chrome_options.add_experimental_option("debuggerAddress", debuggerAddress)
-¡
 chrome_service = Service(driverPath)
 driver = webdriver.Chrome(service=chrome_service, options=chrome_options)
 
