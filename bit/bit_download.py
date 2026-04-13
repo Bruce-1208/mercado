@@ -1,6 +1,7 @@
 import time
 
 from bit_email_info import *
+import traceback
 
 
 def download_relay_mail(window_id, site):
@@ -46,6 +47,7 @@ def download_relay_mail(window_id, site):
                     flag = download_excel(driver, mail_item)
                 except Exception as e:
                     print("下载延误邮件失败", e)
+                    traceback.print_exc()
 
                 # print("下载文件失败")
                 if (flag == True):
@@ -107,24 +109,35 @@ def click_download(driver, site):
     time.sleep(3)
 
     # 点击下载邮件/html/body/main/div/div[3]/div/div[1]/div/div[5]/div[3]/div[4]/div[3]/div/a
-    try:
-        elements = driver.find_elements("link text", "Download affected orders")
+    xpath = "//a[contains(text(), 'Download affected orders') and not(../descendant::*[contains(text(), 'Review in Metrics') or contains(text(), 'Review')])]"
+    # xpath = "//*[contains(text(), 'Non-compliant shipments')]/following-sibling::*[2][self::a]"
+    # 逻辑：先精准找到那个文本 span/div，再找它后面的同级链接 a
 
-        if len(elements) == 0:
-            print("没有需要下载的延误")
-            return False
-        if len(elements) == 1:
-            elements[0].click()
-        if len(elements) == 2:
-            elements[1].click()
-        if len(elements) == 3:
-            elements[2].click()
+    try:
+        driver.find_element(By.XPATH,xpath).click()
         print("点击下载成功")
         return True
-
-
     except Exception as e:
-        print("声誉界面下载邮箱失败", e)
+        return False
+
+    # try:
+    #     elements = driver.find_elements("link text", "Download affected orders")
+    #
+    #     if len(elements) == 0:
+    #         print("没有需要下载的延误")
+    #         return False
+    #     if len(elements) == 1:
+    #         elements[0].click()
+    #     if len(elements) == 2:
+    #         elements[1].click()
+    #     if len(elements) == 3:
+    #         elements[2].click()
+    #     print("点击下载成功")
+    #     return True
+    #
+    #
+    # except Exception as e:
+    #     print("声誉界面下载邮箱失败", e)
 
 
 ##判断最近五分钟是否下载邮件
@@ -157,6 +170,7 @@ def scan_email(driver, isAll):
 
 def download_excel(driver, mail_item):
     wait = WebDriverWait(driver, 30)
+    print("扫描到的邮件为",mail_item)
     subject = mail_item[0]
     mail_time = mail_item[1]
     element = mail_item[2]
@@ -197,9 +211,9 @@ def download_excel(driver, mail_item):
 if __name__ == '__main__':
 
     # 龙吟虎啸
-    download_relay_mail('1f22b75033a84d64bff59c3a41ea6047','墨西哥')
+    # download_relay_mail('1f22b75033a84d64bff59c3a41ea6047','墨西哥')
 
-    time.sleep(36000)
+    # time.sleep(36000)
 
     # 龙争虎斗
     # download_relay_mail('df2d33b20d0b4d72949fc490f7ff075a','巴西')
@@ -209,8 +223,6 @@ if __name__ == '__main__':
 
     # 龙凤呈祥
     # download_relay_mail('38fcac77fbf641ed8b6cbc1c2aedc5b2','墨西哥')
-
-    # time.sleep(360000)
     start = int(time.time())
     print(start)
     wb = load_workbook(r'D:\比特配置文件.xlsx')
@@ -228,6 +240,7 @@ if __name__ == '__main__':
         site_list = row[3].split("，")
         for site in site_list:
             try:
+                print("执行任务:",name+site)
                 message = download_relay_mail(id, site)
                 print(name + site + message)
             except Exception as e:
