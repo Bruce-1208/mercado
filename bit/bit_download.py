@@ -33,7 +33,9 @@ def download_relay_mail(window_id, site):
     if (click == True):
 
         ##循环扫描邮箱
-        while (1 == 1):
+        i=0
+        while (i<3):
+            i=i+1
             time.sleep(60)
             mail_item=()
             try:
