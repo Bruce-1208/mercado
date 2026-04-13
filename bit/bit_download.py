@@ -2,7 +2,7 @@ import time
 
 from bit_email_info import *
 import traceback
-
+from pathlib import Path
 
 def download_relay_mail(window_id, site):
     # /browser/open 接口会返回 selenium使用的http地址，以及webdriver的path，直接使用即可
@@ -24,20 +24,25 @@ def download_relay_mail(window_id, site):
     # 设置最长等待时间为 10 秒
     wait = WebDriverWait(driver, 30)
     ## 进入声誉页面点击下载
+    click=False
     try:
         click = click_download(driver, site)
     except Exception as e:
         print("点击下载失败", e)
+        traceback.print_exc()
     if (click == True):
 
         ##循环扫描邮箱
         while (1 == 1):
-            time.sleep(30)
+            time.sleep(60)
             mail_item=()
             try:
                 mail_item = scan_email(driver, 1)
+                if(mail_item=="读取邮件失败"):
+                    break
             except Exception as e:
                 print("扫描邮件信息失败", e)
+                traceback.print_exc()
             flag = False
             ##下载文件
             if (mail_item != None):
@@ -148,10 +153,12 @@ def scan_email(driver, isAll):
 
     if isAll == 1:
         email_infos = read_email_info_all(driver)
+
     else:
         email_infos = get_mail_info(driver, '普通邮件')
-    if (len(email_infos) == 0):
-        return None
+    if (email_infos==None):
+        print("读取邮件失败")
+        return "读取邮件失败"
 
     email_infos_sorted = sorted(list(email_infos), key=lambda x: x[1], reverse=True)
 
@@ -212,7 +219,7 @@ if __name__ == '__main__':
 
     # 龙吟虎啸
     # download_relay_mail('1f22b75033a84d64bff59c3a41ea6047','墨西哥')
-
+    #
     # time.sleep(36000)
 
     # 龙争虎斗
@@ -223,9 +230,15 @@ if __name__ == '__main__':
 
     # 龙凤呈祥
     # download_relay_mail('38fcac77fbf641ed8b6cbc1c2aedc5b2','墨西哥')
+
+
+    # download_relay_mail('df2d33b20d0b4d72949fc490f7ff075a','墨西哥')
+    #
+    # time.sleep(100000)
+
     start = int(time.time())
     print(start)
-    wb = load_workbook(r'D:\比特配置文件.xlsx')
+    wb = load_workbook(r'比特配置文件.xlsx')
     sheet = wb.active
     reputation_info_sum = []
     # 使用 min_row=2 跳过第一行
@@ -247,7 +260,10 @@ if __name__ == '__main__':
                 print(name + site + "执行失败", e)
 
         print("结束，正在关闭窗口")
-        # closeBrowser(id)
+        try:
+            closeBrowser(str(id))
+        except Exception as e:
+            print("关闭窗口失败",e)
         print("已经关闭窗口")
         time.sleep(5)
     # for info in reputation_info_sum:
