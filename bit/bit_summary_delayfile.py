@@ -2,32 +2,19 @@ import time
 from ctypes.wintypes import DOUBLE
 
 import pandas as pd
-from pandas.io.formats.format import return_docstring
-from selenium import webdriver
-from selenium.common.exceptions import TimeoutException
-from selenium.webdriver.common.keys import Keys
-from selenium.webdriver.chrome.options import Options
-from selenium.webdriver.support.wait import WebDriverWait
-
 from bit_api import *
-from selenium.webdriver.common.desired_capabilities import DesiredCapabilities
-from selenium.webdriver.chrome.service import Service
-from selenium.webdriver.common.by import By
-from selenium.webdriver.support import expected_conditions as EC
-import  pyautogui
-from switch_country import *
 from openpyxl import load_workbook
-from datetime import datetime
-
-from utils import *
 from pathlib import Path
 from datetime import datetime
 import  pandas
+from send_mail import *
+
 
 
 start = int(time.time())
 print(start)
-wb = load_workbook(r'D:\比特配置文件.xlsx')
+file_path = Path(__file__).resolve().parent /"比特配置文件.xlsx"
+wb = load_workbook(file_path)
 sheet = wb.active
 reputation_info_sum = []
 
@@ -39,7 +26,6 @@ for row in sheet.iter_rows(min_row=2, values_only=True):
     name = row[1]
     remark = row[2]
     seq=str(row[4])
-    seq="48"
 
     if(remark=='忽略'):
         continue
@@ -55,10 +41,14 @@ for row in sheet.iter_rows(min_row=2, values_only=True):
         if(filename==None):
             file_dict[name+"-"+country]=str(file.absolute())
         else:
+            part=filename.split("_")
             filename_time=float((part[12].replace('.csv','')).split(" (")[0])
             if(file_time>filename_time):
                 file_dict[name+"-"+country]=str(file.absolute())
 print(file_dict)
+
+for key,value in file_dict.items():
+    print(key+"|||"+value)
 
 line=[]
 for key,filepath in file_dict.items():
@@ -83,4 +73,10 @@ for key,filepath in file_dict.items():
 
 
 print(line)
+df = pd.DataFrame(line, columns=['店铺', '站点', '下单时间', '销售单号', '订单标题', '截止延误时间','实际揽收时间'])
+now=datetime.now()
+date_str=datetime.now().strftime("%Y-%m-%d-%H")
+df.to_excel(r"D:\美客多声誉\武汉泽顺店铺延误信息汇总"+date_str+".xlsx", index=False)
+
+send_info('美客多所有店铺延误信息汇总',"美客多所有店铺延误信息汇总",r"D:\美客多声誉\武汉泽顺店铺延误信息汇总"+date_str+".xlsx",r"武汉泽顺店铺延误信息汇总"+date_str+".xlsx")
 

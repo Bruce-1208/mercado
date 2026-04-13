@@ -51,7 +51,7 @@ def openBrowser(id):  # 直接指定ID打开窗口，也可以使用 createBrows
 def closeBrowser(id):  # 关闭窗口
     json_data = {'id': f'{id}'}
     requests.post(f"{url}/browser/close",
-                  data=json.dumps(json_data), headers=headers).json()
+                  data=json.dumps(json_data), headers=headers,timeout=10).json()
 
 
 def deleteBrowser(id):  # 删除窗口
@@ -61,7 +61,8 @@ def deleteBrowser(id):  # 删除窗口
 
 
 if __name__ == '__main__':
-    browser_id = createBrowser()
+    browser_id='fd3f4b699b4447b2a0eb2db1bf66b1aa'
+    # browser_id = createBrowser()
     openBrowser(browser_id)
 
     time.sleep(10)  # 等待10秒自动关闭窗口
