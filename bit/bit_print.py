@@ -18,6 +18,7 @@ from send_mail import *
 import pandas as pd
 
 from datetime import datetime
+from pathlib import Path
 
 def print_orders(window_id, site):
     # /browser/open 接口会返回 selenium使用的http地址，以及webdriver的path，直接使用即可
@@ -92,6 +93,7 @@ def print_orders(window_id, site):
         "https://global-selling.mercadolibre.com/orders/omni/list?filters=&subFilters=&search=&limit=50&offset=0&startPeriod=WITH_DATE_CLOSED_2M_OLD&selectedTab=TAB_TODAY_CBT")
     driver.refresh()
     time.sleep(5)
+
     WebDriverWait(driver, 10).until(
         EC.element_to_be_clickable((By.XPATH,
                                     "/html/body/main/div/div[3]/div/div/div[3]/div/div[2]/div/div/section/div/div[1]/div/div/div[1]/div[1]/div/div/span/input"))).click()
@@ -104,8 +106,10 @@ def print_orders(window_id, site):
 
 if __name__ == '__main__':
     start = int(time.time())
+
+    file_path = Path(__file__).resolve().parent/"比特配置文件.xlsx"
     print(start)
-    wb = load_workbook(r'D:\比特配置文件.xlsx')
+    wb = load_workbook(file_path)
     sheet = wb.active
     reputation_info_sum = []
     # 使用 min_row=2 跳过第一行
@@ -129,7 +133,10 @@ if __name__ == '__main__':
 
             time.sleep(5)
         print("结束，正在关闭窗口")
-        # closeBrowser(id)
+        try:
+            closeBrowser(str(id))
+        except Exception as e:
+            print("关闭窗口失败", e)
         print("已经关闭窗口")
         time.sleep(5)
     end = int(time.time())

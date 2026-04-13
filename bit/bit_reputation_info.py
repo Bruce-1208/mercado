@@ -18,6 +18,7 @@ from send_mail import *
 import pandas as pd
 
 from datetime import datetime
+from pathlib import Path
 
 
 def get_reputation_info(window_id, site):
@@ -153,7 +154,8 @@ if __name__ == '__main__':
 
     start=int(time.time())
     print(start)
-    wb = load_workbook(r'D:\比特配置文件.xlsx')
+    file_path = Path(__file__).resolve().parent /"比特配置文件.xlsx"
+    wb = load_workbook(file_path)
     sheet = wb.active
     reputation_info_sum=[]
     # 使用 min_row=2 跳过第一行
@@ -189,7 +191,10 @@ if __name__ == '__main__':
                     reputation_info_sum.append([name,site,"读取窗口失败"])
             time.sleep(5)
         print("结束，正在关闭窗口")
-        # closeBrowser(id)
+        try:
+            closeBrowser(id)
+        except:
+            print("关闭窗口失败",e)
         print("已经关闭窗口")
         time.sleep(5)
     # for info in reputation_info_sum:
@@ -204,5 +209,5 @@ if __name__ == '__main__':
     date_str=datetime.now().strftime("%Y-%m-%d-%H")
     df.to_excel(r"D:\美客多声誉\武汉泽顺店铺声誉信息汇总"+date_str+".xlsx", index=False)
 
-    send_reputation_info('美客多所有店铺声誉汇总',result,r"D:\美客多声誉\武汉泽顺店铺声誉信息汇总"+date_str+".xlsx",r"武汉泽顺店铺声誉信息汇总"+date_str+".xlsx")
+    send_info('美客多所有店铺声誉汇总',result,r"D:\美客多声誉\武汉泽顺店铺声誉信息汇总"+date_str+".xlsx",r"武汉泽顺店铺声誉信息汇总"+date_str+".xlsx")
 
