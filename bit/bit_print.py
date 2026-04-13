@@ -92,6 +92,7 @@ def print_orders(window_id, site):
         "https://global-selling.mercadolibre.com/orders/omni/list?filters=&subFilters=&search=&limit=50&offset=0&startPeriod=WITH_DATE_CLOSED_2M_OLD&selectedTab=TAB_TODAY_CBT")
     driver.refresh()
     time.sleep(5)
+
     WebDriverWait(driver, 10).until(
         EC.element_to_be_clickable((By.XPATH,
                                     "/html/body/main/div/div[3]/div/div/div[3]/div/div[2]/div/div/section/div/div[1]/div/div/div[1]/div[1]/div/div/span/input"))).click()
