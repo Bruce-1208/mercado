@@ -195,7 +195,7 @@ if __name__ == '__main__':
 
         try:
             closeBrowser(id)
-        except:
+        except Exception as e:
             print("关闭窗口失败",e)
         print("已经关闭窗口")
         time.sleep(5)
