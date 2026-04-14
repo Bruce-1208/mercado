@@ -154,7 +154,8 @@ if __name__ == '__main__':
 
     start=int(time.time())
     print(start)
-    file_path = Path(__file__).resolve().parent /"比特配置文件.xlsx"
+    root_path=Path(__file__).resolve().parent
+    file_path = root_path /"比特配置文件.xlsx"
     wb = load_workbook(file_path)
     sheet = wb.active
     reputation_info_sum=[]
@@ -207,7 +208,7 @@ if __name__ == '__main__':
     df = pd.DataFrame(reputation_info_sum, columns=['声誉颜色', '总单量', '投诉率', '延误率', '店铺名', '站点'])
     now=datetime.now()
     date_str=datetime.now().strftime("%Y-%m-%d-%H")
-    df.to_excel(r"D:\美客多声誉\武汉泽顺店铺声誉信息汇总"+date_str+".xlsx", index=False)
+    df.to_excel(root_path/("美客多声誉\武汉泽顺店铺声誉信息汇总"+date_str+".xlsx"), index=False)
 
-    send_info('美客多所有店铺声誉汇总',result,r"D:\美客多声誉\武汉泽顺店铺声誉信息汇总"+date_str+".xlsx",r"武汉泽顺店铺声誉信息汇总"+date_str+".xlsx")
+    send_info('美客多所有店铺声誉汇总',result,root_path/("美客多声誉\武汉泽顺店铺声誉信息汇总"+date_str+".xlsx"),r"武汉泽顺店铺声誉信息汇总"+date_str+".xlsx")
 
