@@ -20,6 +20,7 @@ import pandas as pd
 from datetime import datetime
 from pathlib import Path
 
+
 def print_orders(window_id, site):
     # /browser/open 接口会返回 selenium使用的http地址，以及webdriver的path，直接使用即可
     # 龙
@@ -93,21 +94,25 @@ def print_orders(window_id, site):
         "https://global-selling.mercadolibre.com/orders/omni/list?filters=&subFilters=&search=&limit=50&offset=0&startPeriod=WITH_DATE_CLOSED_2M_OLD&selectedTab=TAB_TODAY_CBT")
     driver.refresh()
     time.sleep(5)
-
-    WebDriverWait(driver, 10).until(
-        EC.element_to_be_clickable((By.XPATH,
-                                    "/html/body/main/div/div[3]/div/div/div[3]/div/div[2]/div/div/section/div/div[1]/div/div/div[1]/div[1]/div/div/span/input"))).click()
+    try:
+        WebDriverWait(driver, 10).until(
+            EC.element_to_be_clickable((By.XPATH,
+                                        "/html/body/main/div/div[3]/div/div/div[3]/div/div[2]/div/div/section/div/div[1]/div/div/div[1]/div[1]/div/div/span/input"))).click()
+    except Exception as e:
+        print("无法勾选打印", e)
     try:
         WebDriverWait(driver, 10).until(
             EC.element_to_be_clickable((By.XPATH,
                                         "/html/body/main/div/div[3]/div/div/div[3]/div/div[2]/div/div/section/div/div[1]/div/div/div[2]/div/button"))).click()
     except Exception as e:
-        print("没有可以打印的订单")
+        print("没有可以打印的订单", e)
+    return True
+
 
 if __name__ == '__main__':
     start = int(time.time())
 
-    file_path = Path(__file__).resolve().parent/"比特配置文件.xlsx"
+    file_path = Path(__file__).resolve().parent / "比特配置文件.xlsx"
     print(start)
 
     wb = load_workbook(file_path)
@@ -125,17 +130,20 @@ if __name__ == '__main__':
         print("开始打开窗口:", name)
         site_list = row[3].split("，")
         for site in site_list:
-            try:
-              print_orders(id,site)
-            except Exception as e:
-                print("窗口" + name +site+ "执行失败")
+            i = 0
+            while (i < 3):
+                try:
+                    success=print_orders(id, site)
+                    if(success==True):
+                        break
+                except Exception as e:
+                    print("窗口" + name + site + "执行失败",e)
                 time.sleep(300)
-                print(print_orders(id,site))
-                print("窗口" + name + site + "重试成功")
 
             time.sleep(5)
 
         print("结束，正在å关闭窗口")
+
         print("结束，正在关闭窗口")
         try:
             closeBrowser(str(id))

@@ -55,10 +55,13 @@ for key,filepath in file_dict.items():
 
     name=key.split("-")[0]
     site=key.split("-")[1]
+    part = filepath.split("_")
+    filename_time = float((part[12].replace('.csv', '')).split(" (")[0])
     try:
      df = pd.read_csv(filepath, header=None, skiprows=1)
      for index, row in df.iterrows():
          # 假设第一列是订单号，第三列是金额（转化为浮点数）
+
 
          try:
 
