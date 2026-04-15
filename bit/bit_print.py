@@ -109,7 +109,8 @@ def print_orders(window_id, site):
     return True
 
 
-if __name__ == '__main__':
+
+def print_orders_all():
     start = int(time.time())
 
     file_path = Path(__file__).resolve().parent / "比特配置文件.xlsx"
@@ -118,6 +119,7 @@ if __name__ == '__main__':
     sheet = wb.active
     reputation_info_sum = []
     # 使用 min_row=2 跳过第一行
+    result=[]
     for row in sheet.iter_rows(min_row=2, values_only=True):
         print(row)  # row 是一个元组，包含该行所有数据
         id = row[0]
@@ -131,11 +133,14 @@ if __name__ == '__main__':
             i = 0
             while (i < 3):
                 try:
-                    success=print_orders(id, site)
-                    if(success==True):
+                    success = print_orders(id, site)
+                    if (success == True):
+                        result.append(name+site+"打印订单任务执行成功")
                         break
                 except Exception as e:
-                    print("窗口" + name + site + "执行失败",e)
+                    print("窗口" + name + site + "执行失败", e)
+                    if(i==2):
+                        result.append(name + site + "打印订单任务执行失败")
                 time.sleep(300)
         print("结束，正在关闭窗口")
         try:
@@ -146,3 +151,6 @@ if __name__ == '__main__':
         time.sleep(5)
     end = int(time.time())
     print("总花费", end - start)
+
+if __name__ == '__main__':
+    print_orders_all()
