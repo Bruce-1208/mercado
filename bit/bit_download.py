@@ -201,28 +201,15 @@ def download_excel(driver, mail_item):
 
 if __name__ == '__main__':
 
-    # 龙吟虎啸
-    # download_relay_mail('1f22b75033a84d64bff59c3a41ea6047','墨西哥')
-    #
-    # time.sleep(36000)
-
-    # 龙争虎斗
-    # download_relay_mail('df2d33b20d0b4d72949fc490f7ff075a','巴西')
-
-    # 跃马扬鞭
-    # download_relay_mail('187700d9c3424c0eb6d8a75d92bf3b9c','巴西')
-
-    # 龙凤呈祥
-    # download_relay_mail('38fcac77fbf641ed8b6cbc1c2aedc5b2','墨西哥')
-
 
     # download_relay_mail('df2d33b20d0b4d72949fc490f7ff075a','墨西哥')
     #
     # time.sleep(100000)
-
+    root_path = Path(__file__).resolve().parent
+    file_path = root_path / "比特配置文件.xlsx"
     start = int(time.time())
     print(start)
-    wb = load_workbook(r'比特配置文件.xlsx')
+    wb = load_workbook(file_path)
     sheet = wb.active
     reputation_info_sum = []
     # 使用 min_row=2 跳过第一行
