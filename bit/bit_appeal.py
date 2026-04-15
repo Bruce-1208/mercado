@@ -15,7 +15,7 @@ from bit_api import *
 
 
 
-def use_one_browser_run_task(window_id):
+def use_one_browser_run_task(window_id,site):
     # /browser/open 接口会返回 selenium使用的http地址，以及webdriver的path，直接使用即可
     res = openBrowser(window_id)  # 窗口ID从窗口配置界面中复制，或者api创建后返回
 
@@ -43,13 +43,11 @@ def use_one_browser_run_task(window_id):
             while True:
                 print("ip检测通过，打开店铺平台主页")
                 #找客服页面
-                url="https://global-selling.mercadolibre.com"
-                open_launcher_page(driver, url)
                 # 打开店铺平台主页后进行后续自动化操作
                 # todo 后续的自动化操作y
                 try:
-                    shensu_ai(driver)
-                    # shensu(browser,driver)
+                    # shensu_ai(driver)
+                    shensu(driver,site)
                     time.sleep(1800)
                 except Exception as e:
                     print("申诉执行异常",e)
@@ -64,7 +62,7 @@ def use_one_browser_run_task(window_id):
     finally:
         driver.quit()
         print(f"=====关闭店铺：{store_name}=====")
-        close_store(store_id)
+        closeBrowser(window_id)
 
 def shensu_ai(driver):
     driver.get("https://global-selling.mercadolibre.com/help/v2")
@@ -73,7 +71,7 @@ def shensu_ai(driver):
     print(messages)
 
 #申诉
-def shensu(driver):
+def shensu(driver,site):
     driver.get("https://global-selling.mercadolibre.com/help/chat/v3?parent_skill=MLCX")
 
     words=[
@@ -83,12 +81,11 @@ def shensu(driver):
         '亲爱的客服，我叫Bruce！这些订单因合作物流车辆临时出现故障，导致未能及时揽收，并非我这边发货延误，麻烦您帮忙处理一下，消除对店铺声誉的影响，非常感谢！'
 
     ]
-    sheet_name = browser.get("browserName")
 
 
-    print("sheet_name--------------------------",sheet_name)
-    order_list=get_orders.get_order_number_excel(sheet_name,r'C:\Users\Admin\PycharmProjects\MercadoApp\订单延误.xlsx')
+    # order_list=get_orders.get_order_number_excel(sheet_name,r'C:\Users\Admin\PycharmProjects\MercadoApp\订单延误.xlsx')
     order_random=""
+    order_list=[]
     if len(order_list) >= 10:
         order_random = str(random.sample(order_list, 10))
     else:
@@ -103,6 +100,8 @@ def shensu(driver):
                                         "/html/body/header/div/div/div[2]/div[1]/span"))).click()
     time.sleep(3)
     #选择站点/html/body/header/div/div/div[2]/div[2]/div/div[1]
+
+    isFull=0
     site_xpth=""
     if site == "墨西哥":
         id=str(1+isFull)
@@ -214,3 +213,7 @@ def use_all_browser_run_task_with_thread_pool(browser_list, max_threads=3):
     """
     with ThreadPoolExecutor(max_workers=max_threads) as executor:
         executor.map(use_one_browser_run_task, browser_list)
+
+
+if __name__ == '__main__':
+    use_one_browser_run_task('1495e31cb630406bb690ba187f264fe7','墨西哥')
