@@ -226,6 +226,7 @@ if __name__ == '__main__':
     sheet = wb.active
     reputation_info_sum = []
     # 使用 min_row=2 跳过第一行
+    result=[]
     for row in sheet.iter_rows(min_row=2, values_only=True):
         print(row)  # row 是一个元组，包含该行所有数据
         id = row[0]
@@ -240,14 +241,17 @@ if __name__ == '__main__':
                 print("执行任务:",name+site)
                 message = download_relay_mail(id, site)
                 print(name + site + message)
+                result.append(name + site + message)
             except Exception as e:
                 print(name + site + "执行失败", e)
+                result.append(name + site + "执行失败")
 
         print("结束，正在关闭窗口")
         try:
             closeBrowser(str(id))
         except Exception as e:
-            print("关闭窗口失败",e)
+            continue
+            # print("关闭窗口失败",e)
         print("已经关闭窗口")
         time.sleep(5)
     # for info in reputation_info_sum:
@@ -255,3 +259,5 @@ if __name__ == '__main__':
 
     end = int(time.time())
     print("总花费", end - start)
+    for i in result:
+        print(i)

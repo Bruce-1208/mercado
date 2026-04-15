@@ -194,7 +194,7 @@ if __name__ == '__main__':
         print("结束，正在关闭窗口")
         try:
             closeBrowser(id)
-        except:
+        except Exception as e:
             print("关闭窗口失败",e)
         print("已经关闭窗口")
         time.sleep(5)
@@ -211,4 +211,5 @@ if __name__ == '__main__':
     df.to_excel(root_path/("美客多声誉\武汉泽顺店铺声誉信息汇总"+date_str+".xlsx"), index=False)
 
     send_info('美客多所有店铺声誉汇总',result,root_path/("美客多声誉\武汉泽顺店铺声誉信息汇总"+date_str+".xlsx"),r"武汉泽顺店铺声誉信息汇总"+date_str+".xlsx")
+
 
