@@ -215,3 +215,4 @@ if __name__ == '__main__':
 
     send_info('美客多所有店铺声誉汇总',result,root_path/("美客多声誉\武汉泽顺店铺声誉信息汇总"+date_str+".xlsx"),r"武汉泽顺店铺声誉信息汇总"+date_str+".xlsx")
 
+
