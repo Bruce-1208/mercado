@@ -143,8 +143,6 @@ if __name__ == '__main__':
             time.sleep(5)
 
         print("结束，正在å关闭窗口")
-
-        print("结束，正在关闭窗口")
         try:
             closeBrowser(str(id))
         except Exception as e:
