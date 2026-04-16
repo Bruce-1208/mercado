@@ -1,4 +1,3 @@
-from DataAnalysis import results
 from bit_download import *
 from bit_reputation_info import *
 from bit_print import *
@@ -22,8 +21,10 @@ def download_summary():
 scheduler = BlockingScheduler()
 
 # 间隔任务
-scheduler.add_job(print_orders, 'interval', hour=5)
+scheduler.add_job(print_orders, 'interval', hours=6)
 # Cron 格式任务（每天凌晨 2 点执行）
-scheduler.add_job(download_summary(), 'cron', hour=2, minute=0)
+scheduler.add_job(download_summary, 'cron', hour=7, minute=0)
+scheduler.add_job(download_summary, 'cron', hour=12, minute=9)
+
 
 scheduler.start()
