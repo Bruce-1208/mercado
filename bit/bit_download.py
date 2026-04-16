@@ -199,7 +199,7 @@ def download_excel(driver, mail_item):
     return True
 
 
-if __name__ == '__main__':
+def download_relay_mail_all():
 
 
     # download_relay_mail('df2d33b20d0b4d72949fc490f7ff075a','墨西哥')
@@ -207,13 +207,14 @@ if __name__ == '__main__':
     # time.sleep(100000)
     root_path = Path(__file__).resolve().parent
     file_path = root_path / "比特配置文件.xlsx"
+
     start = int(time.time())
     print(start)
     wb = load_workbook(file_path)
     sheet = wb.active
     reputation_info_sum = []
     # 使用 min_row=2 跳过第一行
-    result=[]
+    result = []
     for row in sheet.iter_rows(min_row=2, values_only=True):
         print(row)  # row 是一个元组，包含该行所有数据
         id = row[0]
@@ -225,13 +226,13 @@ if __name__ == '__main__':
         site_list = row[3].split("，")
         for site in site_list:
             try:
-                print("执行任务:",name+site)
+                print("执行任务:", name + site)
                 message = download_relay_mail(id, site)
                 print(name + site + message)
-                result.append(name + site + message)
+                result.append(name + site + "下载延误文件执行成功")
             except Exception as e:
                 print(name + site + "执行失败", e)
-                result.append(name + site + "执行失败")
+                result.append(name + site + "下载延误文件执行失败")
 
         print("结束，正在关闭窗口")
         try:
@@ -248,3 +249,6 @@ if __name__ == '__main__':
     print("总花费", end - start)
     for i in result:
         print(i)
+
+if __name__ == '__main__':
+    download_relay_mail_all()

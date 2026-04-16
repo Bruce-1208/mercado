@@ -1,10 +1,10 @@
-from contextlib import nullcontext
+
 import requests
 import pandas as pd
 import time
-from webbrowser import Error
+
 from openpyxl import load_workbook
-from concurrent.futures import ThreadPoolExecutor
+
 
 
 start_time=time.time()
