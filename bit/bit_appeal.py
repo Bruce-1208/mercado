@@ -48,8 +48,8 @@ def use_one_browser_run_task(window_id,site):
                 try:
                     # shensu_ai(driver)
                     shensu(driver,site)
-                    time.sleep(1800)
                 except Exception as e:
+                    traceback.print_exc()
                     print("申诉执行异常",e)
                 finally:
                     time.sleep(1800)
@@ -61,7 +61,7 @@ def use_one_browser_run_task(window_id,site):
         print("脚本运行异常:" + traceback.format_exc())
     finally:
         driver.quit()
-        print(f"=====关闭店铺：{store_name}=====")
+        print(f"=====关闭店铺=====")
         closeBrowser(window_id)
 
 def shensu_ai(driver):
@@ -150,6 +150,14 @@ def shensu(driver,site):
 
 
     except Exception as  e:
+
+
+        messages=driver.find_elements(By.CLASS_NAME,'chat-ui-message-bubble__textcontent')
+
+        for message in messages:
+            print(message.text)
+
+
         print(e,"进入客服对话异常")
     try:
         # 发消息
@@ -216,4 +224,7 @@ def use_all_browser_run_task_with_thread_pool(browser_list, max_threads=3):
 
 
 if __name__ == '__main__':
-    use_one_browser_run_task('1495e31cb630406bb690ba187f264fe7','墨西哥')
+    #long
+    # use_one_browser_run_task('9812f185f7ab49d98f3988994d9e8ebf','墨西哥')
+    #跃马扬鞭
+    use_one_browser_run_task('187700d9c3424c0eb6d8a75d92bf3b9c','巴西')
