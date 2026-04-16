@@ -153,4 +153,6 @@ def print_orders_all():
     print("总花费", end - start)
 
 if __name__ == '__main__':
-    print_orders_all()
+    while(1==1):
+        print_orders_all()
+        time.sleep(3600*6)
