@@ -19,14 +19,13 @@ debuggerAddress = res['data']['http']
 # selenium 连接代码
 chrome_options = webdriver.ChromeOptions()
 chrome_options.add_experimental_option("debuggerAddress", debuggerAddress)
-
 chrome_service = Service(driverPath)
 driver = webdriver.Chrome(service=chrome_service, options=chrome_options)
 
 # # 以下为PC模式下，打开baidu，输入 BitBrowser，点击搜索的案例
 # driver.get('https://www.baidu.com/')
 #
-# input = driver.find_element(By.CLASS_NAME, 's_ipt')
+# input = driver.find_element(By.CLASS_NAME, 's_ipt')¡
 # input.send_keys('BitBrowser')
 #
 # print('before click...')

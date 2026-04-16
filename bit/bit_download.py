@@ -198,10 +198,19 @@ def download_excel(driver, mail_item):
     print("已下载延误文件")
     return True
 
+
 def download_relay_mail_all():
+
+
+    # download_relay_mail('df2d33b20d0b4d72949fc490f7ff075a','墨西哥')
+    #
+    # time.sleep(100000)
+    root_path = Path(__file__).resolve().parent
+    file_path = root_path / "比特配置文件.xlsx"
+
     start = int(time.time())
     print(start)
-    wb = load_workbook(r'比特配置文件.xlsx')
+    wb = load_workbook(file_path)
     sheet = wb.active
     reputation_info_sum = []
     # 使用 min_row=2 跳过第一行
