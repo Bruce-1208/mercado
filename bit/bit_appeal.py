@@ -12,10 +12,10 @@ from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 import random
 from bit_api import *
+from AI_Agent.qianwen import *
 
 
-
-def use_one_browser_run_task(window_id,site):
+def use_one_browser_run_task(window_id, site):
     # /browser/open 接口会返回 selenium使用的http地址，以及webdriver的path，直接使用即可
     res = openBrowser(window_id)  # 窗口ID从窗口配置界面中复制，或者api创建后返回
 
@@ -37,20 +37,20 @@ def use_one_browser_run_task(window_id,site):
 
     try:
         # 设置元素查找等待时间-全局隐式等待
-        driver.implicitly_wait(60)
+        driver.implicitly_wait(20)
         ip_usable = True
         if ip_usable:
             while True:
                 print("ip检测通过，打开店铺平台主页")
-                #找客服页面
+                # 找客服页面
                 # 打开店铺平台主页后进行后续自动化操作
                 # todo 后续的自动化操作y
                 try:
                     # shensu_ai(driver)
-                    shensu(driver,site)
+                    shensu(driver, site)
                 except Exception as e:
                     traceback.print_exc()
-                    print("申诉执行异常",e)
+                    print("申诉执行异常", e)
                 finally:
                     time.sleep(1800)
                     continue
@@ -64,17 +64,19 @@ def use_one_browser_run_task(window_id,site):
         print(f"=====关闭店铺=====")
         closeBrowser(window_id)
 
+
 def shensu_ai(driver):
     driver.get("https://global-selling.mercadolibre.com/help/v2")
     driver.switch_to.frame("Meli AI Chat")
-    messages=driver.find_elements(By.CLASS_NAME,"mlc-scroll-paginate_item")
+    messages = driver.find_elements(By.CLASS_NAME, "mlc-scroll-paginate_item")
     print(messages)
 
-#申诉
-def shensu(driver,site):
+
+# 申诉
+def shensu(driver, site):
     driver.get("https://global-selling.mercadolibre.com/help/chat/v3?parent_skill=MLCX")
 
-    words=[
+    words = [
         '亲爱的客服，我叫Jack，因为菜鸟没有及时揽收我的物流，对我店铺声誉造成了影响，我总结了下面这些订单，你能帮我消除对我声誉的影响吗？',
 
         '亲爱的客服，我叫Mike，因为菜鸟没有及时揽收我的物流，对我店铺声誉造成了影响，我总结了下面这些订单，你能帮我消除对我声誉的影响吗？',
@@ -82,83 +84,95 @@ def shensu(driver,site):
 
     ]
 
-
     # order_list=get_orders.get_order_number_excel(sheet_name,r'C:\Users\Admin\PycharmProjects\MercadoApp\订单延误.xlsx')
-    order_random=""
-    order_list=[]
+    order_random = ""
+    order_list = []
     if len(order_list) >= 10:
         order_random = str(random.sample(order_list, 10))
     else:
-        order_random=str(order_list)
+        order_random = str(order_list)
 
-    words_random=random.choice(words)
+    words_random = random.choice(words)
 
-
-    #打开站点选择/html/body/header/div/div/div[2]/div[1]/spany
+    # 打开站点选择器
     WebDriverWait(driver, 10).until(
-        EC.element_to_be_clickable((By.XPATH,
-                                        "/html/body/header/div/div/div[2]/div[1]/span"))).click()
-    time.sleep(3)
-    #选择站点/html/body/header/div/div/div[2]/div[2]/div/div[1]
+        EC.element_to_be_clickable((By.CLASS_NAME, "nav-header-cbt__site-switcher"))).click()
 
-    isFull=0
-    site_xpth=""
+    print("打开站点选择器")
+    time.sleep(5)
+    path = 'div[data-value="MLM-remote"]'
     if site == "墨西哥":
-        id=str(1+isFull)
-        site_xpth="/html/body/header/div/div/div[2]/div[2]/div/div["+id+"]"
+        path = 'div[data-value="MLM-remote"]'
     if site == "巴西":
-        id = str(2 + isFull)
-        site_xpth = "/html/body/header/div/div/div[2]/div[2]/div/div[" + id + "]"
-    if site == "阿根廷":
-        id = str(3 + isFull)
-        site_xpth = "/html/body/header/div/div/div[2]/div[2]/div/div[" + id + "]"
-    if site == "智利":
-        id = str(4 + isFull)
-        site_xpth = "/html/body/header/div/div/div[2]/div[2]/div/div[" + id + "]"
+        path = 'div[data-value="MLB-remote"]'
     if site == "哥伦比亚":
-        id = str(5 + isFull)
-        site_xpth = "/html/body/header/div/div/div[2]/div[2]/div/div[" + id + "]"
+        path = 'div[data-value="MCO-remote"]'
+    if site == "智利":
+        path = 'div[data-value="MLC-remote"]'
+    if site == "阿根廷":
+        path = 'div[data-value="MLA-remote"]'
     if site == "乌拉圭":
-        id = str(6 + isFull)
-        site_xpth = "/html/body/header/div/div/div[2]/div[2]/div/div[" + id + "]"
+        path = 'div[data-value="MLU-remote"]'
 
     WebDriverWait(driver, 30).until(
-        EC.element_to_be_clickable((By.XPATH,
-                                        site_xpth))).click()
-    time.sleep(3)
+        EC.element_to_be_clickable((By.CSS_SELECTOR, path))).click()
+
     driver.refresh()
     time.sleep(3)
-    print("选择站点：",site)
+    print("选择站点：", site)
     try:
-        #跳转listing
-        WebDriverWait(driver, 30).until(
-            EC.element_to_be_clickable((By.XPATH, "/html/body/main/div/div[2]/div/div/div/div[4]/div/div/div/div/div/div/div[2]/div/div[1]/div[3]/div/div/div[2]/div[1]/div/div/div[2]/ul/li[1]/button"))).click()
+        # # 跳转listing
+        # WebDriverWait(driver, 30).until(
+        #     EC.element_to_be_clickable((By.XPATH,
+        #                                 "/html/body/main/div/div[2]/div/div/div/div[4]/div/div/div/div/div/div/div[2]/div/div[1]/div[3]/div/div/div[2]/div[1]/div/div/div[2]/ul/li[1]/button"))).click()
+        #
+        # WebDriverWait(driver, 30).until(
+        #     EC.element_to_be_clickable((By.XPATH,
+        #                                 "/html/body/main/div/div[2]/div/div/div/div[4]/div/div/div/div/div/div/div[2]/div/div[1]/div[5]/div/div/div[2]/div[1]/div/div/div[2]/ul/li[1]/button/p"))).click()
+        #
+        # WebDriverWait(driver, 30).until(
+        #     EC.element_to_be_clickable((By.XPATH,
+        #                                 "/html/body/main/div/div[2]/div/div/div/div[4]/div/div/div/div/div/div/div[2]/div/div[1]/div[7]/div/div/div[2]/div[1]/div/div/div[2]/ul/li/button/p"))).click()
+        #
+        # WebDriverWait(driver, 30).until(
+        #     EC.element_to_be_clickable((By.XPATH,
+        #                                 "/html/body/div[2]/div/div/div[2]/div/div/div/div/section/div/div/div/main/button[1]"))).click()
 
-        time.sleep(3)
+        # element = driver.find_element(By.XPATH, "//p[text()='Issues while listing or modifying a product']")
+        # 跳转listing
         WebDriverWait(driver, 30).until(
             EC.element_to_be_clickable((By.XPATH,
-                                            "/html/body/main/div/div[2]/div/div/div/div[4]/div/div/div/div/div/div/div[2]/div/div[1]/div[5]/div/div/div[2]/div[1]/div/div/div[2]/ul/li[1]/button/p"))).click()
-        time.sleep(3)
+                                        "//p[text()='Listings']"))).click()
+
         WebDriverWait(driver, 30).until(
             EC.element_to_be_clickable((By.XPATH,
-                                            "/html/body/main/div/div[2]/div/div/div/div[4]/div/div/div/div/div/div/div[2]/div/div[1]/div[7]/div/div/div[2]/div[1]/div/div/div[2]/ul/li/button/p"))).click()
-        time.sleep(3)
+                                        "//p[text()='Issues while listing or modifying a product']"))).click()
+
         WebDriverWait(driver, 30).until(
             EC.element_to_be_clickable((By.XPATH,
-                                            "/html/body/div[2]/div/div/div[2]/div/div/div/div/section/div/div/div/main/button[1]"))).click()
-        time.sleep(3)
+                                        "//p[text()='Choose how to stay in contact']"))).click()
 
+        # 包含We will send you a message in less than
+        try:
+            WebDriverWait(driver, 30).until(
+                EC.element_to_be_clickable((By.XPATH, "//button[contains(., 'We will send you a message in less than')]"))).click()
+        except Exception as e:
+            print("没有人工客服")
+            return None
 
-    except Exception as  e:
-
-
-        messages=driver.find_elements(By.CLASS_NAME,'chat-ui-message-bubble__textcontent')
-
+    except Exception as e:
+        print("正在客服对话中")
+        #全部聊天记录
+        # messages = driver.find_elements(By.CLASS_NAME, 'chat-ui-message-bubble__textcontent')
+        #客服的回复
+        messages = driver.find_elements(By.CLASS_NAME, 'chat-ui-message-bubble.chat-ui-message-bubble--from-agent')
+        lines = ""
         for message in messages:
             print(message.text)
-
-
-        print(e,"进入客服对话异常")
+            lines = lines + message.text + "\n"
+        words = "这是我跟美客多客服的对话，帮我继续回答他的话，如果他表达拒绝的态度，你回复 no 即可"
+        print(get_ai_response(lines))
+        # print(e, "进入客服对话异常")
     try:
         # 发消息
         WebDriverWait(driver, 30).until(
@@ -168,8 +182,8 @@ def shensu(driver,site):
         time.sleep(3)
         WebDriverWait(driver, 30).until(
             EC.element_to_be_clickable((By.XPATH,
-                                            "/html/body/main/div/div[2]/div/div/div/div[4]/div/div/div/div/div/div/div[2]/div/div[2]/div/div/div[2]/div[3]/div/button/span"))).click()
-        print("!!!!!"+time.strftime("%Y-%m-%d %H:%M:%S", time.localtime()),words_random)
+                                        "/html/body/main/div/div[2]/div/div/div/div[4]/div/div/div/div/div/div/div[2]/div/div[2]/div/div/div[2]/div[3]/div/button/span"))).click()
+        print("!!!!!" + time.strftime("%Y-%m-%d %H:%M:%S", time.localtime()), words_random)
         time.sleep(3)
         WebDriverWait(driver, 30).until(
             EC.presence_of_element_located((By.XPATH,
@@ -181,7 +195,7 @@ def shensu(driver,site):
                                         "/html/body/main/div/div[2]/div/div/div/div[4]/div/div/div/div/div/div/div[2]/div/div[2]/div/div/div[2]/div[3]/div/button/span"))).click()
 
         time.sleep(60)
-        print("!!!!!"+time.strftime("%Y-%m-%d %H:%M:%S", time.localtime()),order_random)
+        print("!!!!!" + time.strftime("%Y-%m-%d %H:%M:%S", time.localtime()), order_random)
 
         WebDriverWait(driver, 30).until(
             EC.presence_of_element_located((By.XPATH,
@@ -192,17 +206,19 @@ def shensu(driver,site):
             EC.element_to_be_clickable((By.XPATH,
                                         "/html/body/main/div/div[2]/div/div/div/div[4]/div/div/div/div/div/div/div[2]/div/div[2]/div/div/div[2]/div[3]/div/button/span"))).click()
         time.sleep(1200)
-        print("!!!!!"+time.strftime("%Y-%m-%d %H:%M:%S", time.localtime()),"亲爱的客服，没关系，我会耐心等您的，希望你能带来给我好运")
+        print("!!!!!" + time.strftime("%Y-%m-%d %H:%M:%S", time.localtime()),
+              "亲爱的客服，没关系，我会耐心等您的，希望你能带来给我好运")
         # 关闭页面
         WebDriverWait(driver, 30).until(
             EC.element_to_be_clickable((By.XPATH,
-                                            "/html/body/main/div/div[2]/div/div/div/div[4]/div/div/div/div/div/div/header/div/div[2]/button"))).click()
+                                        "/html/body/main/div/div[2]/div/div/div/div[4]/div/div/div/div/div/div/header/div/div[2]/button"))).click()
 
         WebDriverWait(driver, 30).until(
             EC.element_to_be_clickable((By.XPATH,
-                                            "/html/body/div[2]/div/div/div[2]/div[3]/div/button/span"))).click()
+                                        "/html/body/div[2]/div/div/div[2]/div[3]/div/button/span"))).click()
     except Exception as e:
-        print(e,"=====发送消息异常=====")
+        print(e, "=====发送消息异常=====")
+
 
 def use_all_browser_run_task(browser_list):
     """
@@ -224,7 +240,7 @@ def use_all_browser_run_task_with_thread_pool(browser_list, max_threads=3):
 
 
 if __name__ == '__main__':
-    #long
+    # long
     # use_one_browser_run_task('9812f185f7ab49d98f3988994d9e8ebf','墨西哥')
-    #跃马扬鞭
-    use_one_browser_run_task('187700d9c3424c0eb6d8a75d92bf3b9c','巴西')
+    # 跃马扬鞭
+    use_one_browser_run_task('187700d9c3424c0eb6d8a75d92bf3b9c', '墨西哥')
