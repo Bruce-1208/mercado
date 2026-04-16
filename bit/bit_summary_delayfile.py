@@ -21,6 +21,7 @@ def summary_delayFile():
     reputation_info_sum = []
 
     save_fold = r"D:/BitDownload/"
+    save_fold="/Users/a11/Downloads/"
     # 使用 min_row=2 跳过第一行
     file_dict = {}
     for row in sheet.iter_rows(min_row=2, values_only=True):
@@ -60,8 +61,10 @@ def summary_delayFile():
     print(filepath)
     dict_delay = {}
     df = pd.read_excel(filepath, engine='openpyxl')
+    df.head()
     for index, row in df.iterrows():
-        if (len(row) > 3):
+        print(row[0])
+        if (len(row) > 6):
             delayrate = row[3]
             name = row[4]
             site = row[5]

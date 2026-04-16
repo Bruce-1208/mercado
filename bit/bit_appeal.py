@@ -1,25 +1,11 @@
 """
 # 适用环境python3
 """
-import hashlib
-import os
-import shutil
-import time
+
 import traceback
-import uuid
-import json
-import platform
 from concurrent.futures import ThreadPoolExecutor
-from typing import Literal
-
-import requests
-import subprocess
-
-from pyexpat.errors import messages
-from selenium import webdriver
-from selenium.common import NoSuchElementException
 from selenium.webdriver.chrome.service import Service
-from selenium.webdriver.common.by import By
+
 from selenium import webdriver
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait

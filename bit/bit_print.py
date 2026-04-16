@@ -115,7 +115,9 @@ def print_orders_all():
 
     file_path = Path(__file__).resolve().parent / "比特配置文件.xlsx"
     print(start)
+
     wb = load_workbook(file_path)
+
     sheet = wb.active
     reputation_info_sum = []
     # 使用 min_row=2 跳过第一行
@@ -142,7 +144,10 @@ def print_orders_all():
                     if(i==2):
                         result.append(name + site + "打印订单任务执行失败")
                 time.sleep(300)
-        print("结束，正在关闭窗口")
+
+            time.sleep(5)
+
+        print("结束，正在å关闭窗口")
         try:
             closeBrowser(str(id))
         except Exception as e:
