@@ -10,6 +10,7 @@ import pandas
 from send_mail import *
 import csv
 import io
+from utils import *
 
 
 def summary_delayFile():
@@ -21,7 +22,7 @@ def summary_delayFile():
     reputation_info_sum = []
 
     save_fold = r"D:/BitDownload/"
-    save_fold="/Users/a11/Downloads/"
+    save_fold="/Users/active11/Downloads/"
     # 使用 min_row=2 跳过第一行
     file_dict = {}
     for row in sheet.iter_rows(min_row=2, values_only=True):
@@ -61,7 +62,6 @@ def summary_delayFile():
     print(filepath)
     dict_delay = {}
     df = pd.read_excel(filepath, engine='openpyxl')
-    df.head()
     for index, row in df.iterrows():
         print(row[0])
         if (len(row) > 6):
@@ -125,24 +125,8 @@ def summary_delayFile():
               r"武汉泽顺店铺延误信息汇总" + date_str + ".xlsx")
 
 
-def get_latest_modified_file(folder_path):
-    # 获取文件夹内所有文件的Path对象列表
-    files = Path(folder_path).glob('*.xlsx')
-    latest_file = None
-    latest_modified_time = 0
-
-    for file in files:
-        # 确保是文件而不是文件夹
-        if file.is_file():
-            # 获取文件的修改时间戳
-            modified_time = file.stat().st_mtime
-            # 如果找到更晚修改的文件，更新变量
-            if modified_time > latest_modified_time:
-                latest_modified_time = modified_time
-                latest_file = file
-
-    return latest_file.name if latest_file else None
 
 
 if __name__ == '__main__':
    summary_delayFile()
+
