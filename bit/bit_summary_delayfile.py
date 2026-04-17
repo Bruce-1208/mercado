@@ -20,8 +20,8 @@ def summary_delayFile():
     sheet = wb.active
     reputation_info_sum = []
 
-    save_fold = r"D:/BitDownload/"
-    save_fold="/Users/a11/Downloads/"
+    save_fold = r"C:/BitDownload/"
+    # save_fold="/Users/a11/Downloads/"
     # 使用 min_row=2 跳过第一行
     file_dict = {}
     for row in sheet.iter_rows(min_row=2, values_only=True):
