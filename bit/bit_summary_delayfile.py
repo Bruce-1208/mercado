@@ -11,6 +11,7 @@ from send_mail import *
 import csv
 import io
 from utils import *
+import sys
 
 
 def summary_delayFile():
@@ -20,9 +21,15 @@ def summary_delayFile():
     wb = load_workbook(file_path)
     sheet = wb.active
     reputation_info_sum = []
+    save_fold=""
 
-    save_fold = r"D:/BitDownload/"
-    save_fold="/Users/active11/Downloads/"
+    if sys.platform == "win32":
+        print("当前环境是 Windows")
+        save_fold = r"C:/BitDownload/"
+    elif sys.platform == "darwin":
+        print("当前环境是 macOS")
+        save_fold = "/Users/active11/Downloads/"
+
     # 使用 min_row=2 跳过第一行
     file_dict = {}
     for row in sheet.iter_rows(min_row=2, values_only=True):
