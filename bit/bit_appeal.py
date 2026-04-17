@@ -92,13 +92,6 @@ def shensu(driver, name, site):
 
     ]
 
-    # order_list=get_orders.get_order_number_excel(sheet_name,r'C:\Users\Admin\PycharmProjects\MercadoApp\订单延误.xlsx')
-    order_random = ""
-    order_list = []
-    if len(order_list) >= 10:
-        order_random = str(random.sample(order_list, 10))
-    else:
-        order_random = str(order_list)
 
     words_random = random.choice(words)
 
@@ -167,13 +160,13 @@ def shensu(driver, name, site):
         WebDriverWait(driver, 30).until(
             EC.presence_of_element_located((By.XPATH,
                                             "/html/body/main/div/div[2]/div/div/div/div[4]/div/div/div/div/div/div/div[2]/div/div[2]/div/div/div[1]/div[1]/p"))).send_keys(
-            order_random)
+            orders_random)
         time.sleep(3)
         WebDriverWait(driver, 30).until(
             EC.element_to_be_clickable((By.CSS_SELECTOR, 'button[title="Send"]'))).click()
 
         time.sleep(60)
-        print("自动发送:" + time.strftime("%Y-%m-%d %H:%M:%S", time.localtime()), order_random)
+        print("自动发送:" + time.strftime("%Y-%m-%d %H:%M:%S", time.localtime()), orders_random)
 
 
     except Exception as e:
@@ -226,14 +219,20 @@ def get_delay_orders_random(name, site, nums):
     delay_folder_path = get_bit_path() / "美客多延误"
     delay_file = get_latest_modified_file(delay_folder_path)
     delay_file_path = delay_folder_path / delay_file
-    df = pd.read_excel(delay_file_path, engine='openpyxl')
     fifteen_days_ago = datetime.now() - timedelta(days=15)
     order_list = []
+    df = pd.read_excel(delay_file_path, engine='openpyxl')
     for index, row in df.iterrows():
-        if (row[0] == name and row[1] == site and row[7] != "Not yet dispatched"):
-            order_date = parser_delay_date(row[3])
+        # print(row)
+        line_name=row['店铺']
+        line_site=row['站点']
+        order_date=row['下单时间']
+        order_num = row['销售单号']
+        dispatch_date=row['实际揽收时间']
+        if (line_name == name and line_site == site and dispatch_date != "Not yet dispatched"):
+            order_date = parser_delay_date(order_date)
             if (order_date > fifteen_days_ago):
-                order_list.append(row[4])
+                order_list.append(order_num)
     print(name + site + "最近15天的延误个数:", len(order_list))
     if len(order_list) >= nums:
         order_random = str(random.sample(order_list, nums))
@@ -264,8 +263,7 @@ def chat_ai(driver):
             response)
         time.sleep(3)
         WebDriverWait(driver, 30).until(
-            EC.element_to_be_clickable((By.XPATH,
-                                        "/html/body/main/div/div[2]/div/div/div/div[4]/div/div/div/div/div/div/div[2]/div/div[2]/div/div/div[2]/div[3]/div/button/span"))).click()
+            EC.element_to_be_clickable((By.CSS_SELECTOR, 'button[title="Send"]'))).click()
         print("自动发送:" + time.strftime("%Y-%m-%d %H:%M:%S", time.localtime()), response)
         if (response == "好的，我明白了,感谢您的回复" or i==5):
             print("结束当前聊天窗口")
