@@ -50,6 +50,13 @@ def get_bit_path():
     return Path(__file__).resolve().parent
 
 
+def get_now_time():
+    now = datetime.now()
+
+    # 自定义格式: 年-月-日 时:分:秒
+    formatted_time = now.strftime("%Y-%m-%d %H:%M:%S")
+    return formatted_time
+
+
 if __name__ == '__main__':
-    date="Monday 6 Apr 2026 - 21:31 hs"
-    print(parser_date(date))
+    print(get_now_time())
