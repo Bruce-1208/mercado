@@ -222,31 +222,30 @@ def download_relay_mail_all():
         remark = row[2]
         if remark == '忽略':
             continue
-        print("开始打开窗口:", name)
+        print(get_now_time()+"开始打开窗口:", name)
         site_list = row[3].split("，")
         for site in site_list:
             try:
-                print("执行任务:", name + site)
+                print(get_now_time()+"执行任务:", name + site)
                 message = download_relay_mail(id, site)
-                print(name + site + message)
+                print(get_now_time()+name + site + message)
                 result.append(name + site + "下载延误文件执行成功")
             except Exception as e:
-                print(name + site + "执行失败", e)
+                print(get_now_time()+name + site + "执行失败", e)
                 result.append(name + site + "下载延误文件执行失败")
 
-        print("结束，正在关闭窗口")
+        print(get_now_time()+"结束，正在关闭窗口",name)
         try:
             closeBrowser(str(id))
         except Exception as e:
             continue
             # print("关闭窗口失败",e)
-        print("已经关闭窗口")
+        print(get_now_time()+"已经关闭窗口")
         time.sleep(5)
-    # for info in reputation_info_sum:
-    #     print(info)
+
 
     end = int(time.time())
-    print("总花费", end - start)
+    print(get_now_time()+"总花费", end - start)
     for i in result:
         print(i)
 
