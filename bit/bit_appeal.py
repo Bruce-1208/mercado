@@ -1,9 +1,11 @@
 """
 # 适用环境python3
 """
-
+import time
 import traceback
 from concurrent.futures import ThreadPoolExecutor
+
+from pydantic.v1.datetime_parse import parse_date
 from selenium.webdriver.chrome.service import Service
 
 from selenium import webdriver
@@ -11,8 +13,13 @@ from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 import random
+
+from bit.utils import get_latest_modified_file, get_bit_path, parser_delay_date
 from bit_api import *
 from AI_Agent.qianwen import *
+import pandas as pd
+from datetime import datetime, timedelta
+from datetime import datetime
 
 
 def use_one_browser_run_task(window_id, site):
@@ -20,6 +27,7 @@ def use_one_browser_run_task(window_id, site):
     res = openBrowser(window_id)  # 窗口ID从窗口配置界面中复制，或者api创建后返回
 
     print(res)
+    name = res["data"]["name"]
 
     driverPath = res['data']['driver']
     debuggerAddress = res['data']['http']
@@ -47,7 +55,7 @@ def use_one_browser_run_task(window_id, site):
                 # todo 后续的自动化操作y
                 try:
                     # shensu_ai(driver)
-                    shensu(driver, site)
+                    shensu(driver, name, site)
                 except Exception as e:
                     traceback.print_exc()
                     print("申诉执行异常", e)
@@ -73,7 +81,7 @@ def shensu_ai(driver):
 
 
 # 申诉
-def shensu(driver, site):
+def shensu(driver, name, site):
     driver.get("https://global-selling.mercadolibre.com/help/chat/v3?parent_skill=MLCX")
 
     words = [
@@ -84,13 +92,6 @@ def shensu(driver, site):
 
     ]
 
-    # order_list=get_orders.get_order_number_excel(sheet_name,r'C:\Users\Admin\PycharmProjects\MercadoApp\订单延误.xlsx')
-    order_random = ""
-    order_list = []
-    if len(order_list) >= 10:
-        order_random = str(random.sample(order_list, 10))
-    else:
-        order_random = str(order_list)
 
     words_random = random.choice(words)
 
@@ -120,25 +121,11 @@ def shensu(driver, site):
     driver.refresh()
     time.sleep(3)
     print("选择站点：", site)
-    try:
-        # # 跳转listing
-        # WebDriverWait(driver, 30).until(
-        #     EC.element_to_be_clickable((By.XPATH,
-        #                                 "/html/body/main/div/div[2]/div/div/div/div[4]/div/div/div/div/div/div/div[2]/div/div[1]/div[3]/div/div/div[2]/div[1]/div/div/div[2]/ul/li[1]/button"))).click()
-        #
-        # WebDriverWait(driver, 30).until(
-        #     EC.element_to_be_clickable((By.XPATH,
-        #                                 "/html/body/main/div/div[2]/div/div/div/div[4]/div/div/div/div/div/div/div[2]/div/div[1]/div[5]/div/div/div[2]/div[1]/div/div/div[2]/ul/li[1]/button/p"))).click()
-        #
-        # WebDriverWait(driver, 30).until(
-        #     EC.element_to_be_clickable((By.XPATH,
-        #                                 "/html/body/main/div/div[2]/div/div/div/div[4]/div/div/div/div/div/div/div[2]/div/div[1]/div[7]/div/div/div[2]/div[1]/div/div/div[2]/ul/li/button/p"))).click()
-        #
-        # WebDriverWait(driver, 30).until(
-        #     EC.element_to_be_clickable((By.XPATH,
-        #                                 "/html/body/div[2]/div/div/div[2]/div/div/div/div/section/div/div/div/main/button[1]"))).click()
 
-        # element = driver.find_element(By.XPATH, "//p[text()='Issues while listing or modifying a product']")
+    orders_random = get_delay_orders_random(name, site, 10)
+
+    try:
+
         # 跳转listing
         WebDriverWait(driver, 30).until(
             EC.element_to_be_clickable((By.XPATH,
@@ -152,27 +139,42 @@ def shensu(driver, site):
             EC.element_to_be_clickable((By.XPATH,
                                         "//p[text()='Choose how to stay in contact']"))).click()
 
-        # 包含We will send you a message in less than
+        # 包含We will send you a message in less than 进入人工客服
         try:
             WebDriverWait(driver, 30).until(
-                EC.element_to_be_clickable((By.XPATH, "//button[contains(., 'We will send you a message in less than')]"))).click()
+                EC.element_to_be_clickable(
+                    (By.XPATH, "//button[contains(., 'We will send you a message in less than')]"))).click()
         except Exception as e:
             print("没有人工客服")
-            return None
+            chat_ai(driver)
+        # 发消息
+        WebDriverWait(driver, 30).until(
+            EC.presence_of_element_located((By.XPATH,
+                                            "/html/body/main/div/div[2]/div/div/div/div[4]/div/div/div/div/div/div/div[2]/div/div[2]/div/div/div[1]/div[1]/p"))).send_keys(
+            words_random)
+        time.sleep(3)
+        WebDriverWait(driver, 30).until(
+            EC.element_to_be_clickable((By.CSS_SELECTOR, 'button[title="Send"]'))).click()
+        print("自动发送:" + time.strftime("%Y-%m-%d %H:%M:%S", time.localtime()), words_random)
+        time.sleep(3)
+        WebDriverWait(driver, 30).until(
+            EC.presence_of_element_located((By.XPATH,
+                                            "/html/body/main/div/div[2]/div/div/div/div[4]/div/div/div/div/div/div/div[2]/div/div[2]/div/div/div[1]/div[1]/p"))).send_keys(
+            orders_random)
+        time.sleep(3)
+        WebDriverWait(driver, 30).until(
+            EC.element_to_be_clickable((By.CSS_SELECTOR, 'button[title="Send"]'))).click()
+
+        time.sleep(60)
+        print("自动发送:" + time.strftime("%Y-%m-%d %H:%M:%S", time.localtime()), orders_random)
+
 
     except Exception as e:
         print("正在客服对话中")
-        #全部聊天记录
-        # messages = driver.find_elements(By.CLASS_NAME, 'chat-ui-message-bubble__textcontent')
-        #客服的回复
-        messages = driver.find_elements(By.CLASS_NAME, 'chat-ui-message-bubble.chat-ui-message-bubble--from-agent')
-        lines = ""
-        for message in messages:
-            print(message.text)
-            lines = lines + message.text + "\n"
-        words = "这是我跟美客多客服的对话，帮我继续回答他的话，如果他表达拒绝的态度，你回复 no 即可"
-        print(get_ai_response(lines))
-        # print(e, "进入客服对话异常")
+        # 全部聊天记录
+        chat_ai(driver)
+
+    chat_ai(driver)
     try:
         # 发消息
         WebDriverWait(driver, 30).until(
@@ -181,9 +183,8 @@ def shensu(driver, site):
             words_random)
         time.sleep(3)
         WebDriverWait(driver, 30).until(
-            EC.element_to_be_clickable((By.XPATH,
-                                        "/html/body/main/div/div[2]/div/div/div/div[4]/div/div/div/div/div/div/div[2]/div/div[2]/div/div/div[2]/div[3]/div/button/span"))).click()
-        print("!!!!!" + time.strftime("%Y-%m-%d %H:%M:%S", time.localtime()), words_random)
+            EC.element_to_be_clickable((By.CSS_SELECTOR, 'button[title="Send"]'))).click()
+        print("自动发送:" + time.strftime("%Y-%m-%d %H:%M:%S", time.localtime()), words_random)
         time.sleep(3)
         WebDriverWait(driver, 30).until(
             EC.presence_of_element_located((By.XPATH,
@@ -191,33 +192,95 @@ def shensu(driver, site):
             order_random)
         time.sleep(3)
         WebDriverWait(driver, 30).until(
-            EC.element_to_be_clickable((By.XPATH,
-                                        "/html/body/main/div/div[2]/div/div/div/div[4]/div/div/div/div/div/div/div[2]/div/div[2]/div/div/div[2]/div[3]/div/button/span"))).click()
+            EC.element_to_be_clickable((By.CSS_SELECTOR, 'button[title="Send"]'))).click()
 
-        time.sleep(60)
-        print("!!!!!" + time.strftime("%Y-%m-%d %H:%M:%S", time.localtime()), order_random)
+        chat_ai(driver)
 
+        # time.sleep(60)
+        # print("自动发送:" + time.strftime("%Y-%m-%d %H:%M:%S", time.localtime()), order_random)
+        #
+        # WebDriverWait(driver, 30).until(
+        #     EC.presence_of_element_located((By.XPATH,
+        #                                     "/html/body/main/div/div[2]/div/div/div/div[4]/div/div/div/div/div/div/div[2]/div/div[2]/div/div/div[1]/div[1]/p"))).send_keys(
+        #     "亲爱的客服，没关系，我会耐心等您的，希望你能带来给我好运")
+        # time.sleep(3)
+        # WebDriverWait(driver, 30).until(
+        #     EC.element_to_be_clickable((By.XPATH,
+        #                                 "/html/body/main/div/div[2]/div/div/div/div[4]/div/div/div/div/div/div/div[2]/div/div[2]/div/div/div[2]/div[3]/div/button/span"))).click()
+        # time.sleep(1200)
+        # print("自动发送:" + time.strftime("%Y-%m-%d %H:%M:%S", time.localtime()),
+        #       "亲爱的客服，没关系，我会耐心等您的，希望你能带来给我好运")
+
+    except Exception as e:
+        print(e, "=====发送消息异常=====")
+
+
+def get_delay_orders_random(name, site, nums):
+    delay_folder_path = get_bit_path() / "美客多延误"
+    delay_file = get_latest_modified_file(delay_folder_path)
+    delay_file_path = delay_folder_path / delay_file
+    fifteen_days_ago = datetime.now() - timedelta(days=15)
+    order_list = []
+    df = pd.read_excel(delay_file_path, engine='openpyxl')
+    for index, row in df.iterrows():
+        # print(row)
+        line_name=row['店铺']
+        line_site=row['站点']
+        order_date=row['下单时间']
+        order_num = row['销售单号']
+        dispatch_date=row['实际揽收时间']
+        if (line_name == name and line_site == site and dispatch_date != "Not yet dispatched"):
+            order_date = parser_delay_date(order_date)
+            if (order_date > fifteen_days_ago):
+                order_list.append(order_num)
+    print(name + site + "最近15天的延误个数:", len(order_list))
+    if len(order_list) >= nums:
+        order_random = str(random.sample(order_list, nums))
+    else:
+        order_random = str(order_list)
+    order_random_line = ""
+    for i in order_random:
+        order_random_line = order_random_line + i + ","
+    return order_random_line
+
+
+def chat_ai(driver):
+    i = 0
+    while (i < 5):
+        i = i + 1
+        messages = driver.find_elements(By.CLASS_NAME, 'chat-ui-message-bubble.chat-ui-message-bubble--from-agent')
+        lines = ""
+        for message in messages:
+            print(message.text)
+            lines = lines + message.text + "\n"
+        words = "|这是我跟美客多客服的对话，帮我继续回答他的话，如果他表达拒绝的态度，你回复 '好的，我明白了,感谢您的回复' 即可"
+        response = get_ai_response(words)
+        print("AI客服回复", response)
+        # 发消息
         WebDriverWait(driver, 30).until(
             EC.presence_of_element_located((By.XPATH,
                                             "/html/body/main/div/div[2]/div/div/div/div[4]/div/div/div/div/div/div/div[2]/div/div[2]/div/div/div[1]/div[1]/p"))).send_keys(
-            "亲爱的客服，没关系，我会耐心等您的，希望你能带来给我好运")
+            response)
         time.sleep(3)
         WebDriverWait(driver, 30).until(
-            EC.element_to_be_clickable((By.XPATH,
-                                        "/html/body/main/div/div[2]/div/div/div/div[4]/div/div/div/div/div/div/div[2]/div/div[2]/div/div/div[2]/div[3]/div/button/span"))).click()
-        time.sleep(1200)
-        print("!!!!!" + time.strftime("%Y-%m-%d %H:%M:%S", time.localtime()),
-              "亲爱的客服，没关系，我会耐心等您的，希望你能带来给我好运")
-        # 关闭页面
-        WebDriverWait(driver, 30).until(
-            EC.element_to_be_clickable((By.XPATH,
-                                        "/html/body/main/div/div[2]/div/div/div/div[4]/div/div/div/div/div/div/header/div/div[2]/button"))).click()
+            EC.element_to_be_clickable((By.CSS_SELECTOR, 'button[title="Send"]'))).click()
+        print("自动发送:" + time.strftime("%Y-%m-%d %H:%M:%S", time.localtime()), response)
+        if (response == "好的，我明白了,感谢您的回复" or i==5):
+            print("结束当前聊天窗口")
+            # 关闭页面
+            WebDriverWait(driver, 30).until(
+                EC.element_to_be_clickable((By.XPATH,
+                                            "/html/body/main/div/div[2]/div/div/div/div[4]/div/div/div/div/div/div/header/div/div[2]/button"))).click()
 
-        WebDriverWait(driver, 30).until(
-            EC.element_to_be_clickable((By.XPATH,
-                                        "/html/body/div[2]/div/div/div[2]/div[3]/div/button/span"))).click()
-    except Exception as e:
-        print(e, "=====发送消息异常=====")
+            WebDriverWait(driver, 30).until(
+                EC.element_to_be_clickable((By.CSS_SELECTOR, 'button[title="Send"]'))).click()
+            break
+
+        time.sleep(180)
+
+
+def chat_script(driver):
+    return None
 
 
 def use_all_browser_run_task(browser_list):
