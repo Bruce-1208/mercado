@@ -57,3 +57,30 @@ def force_select_country(driver, country_name):
     except Exception as e:
         print(f"⚠️ 脚本执行异常: {e}")
         return False
+
+def oepn_country_switch(driver):
+    # 这段 JS 脚本会自动寻找页面上所有隐藏的 Shadow DOM 并在其中搜索目标
+    deep_click_script = """
+            function findAndClick(root, selector) {
+                // 1. 在当前层级寻找
+                const node = root.querySelector(selector);
+                if (node) {
+                    node.click();
+                    return true;
+                }
+
+                // 2. 递归寻找所有子节点的 Shadow DOM
+                const allNodes = root.querySelectorAll('*');
+                for (let i = 0; i < allNodes.length; i++) {
+                    if (allNodes[i].shadowRoot) {
+                        if (findAndClick(allNodes[i].shadowRoot, selector)) {
+                            return true;
+                        }
+                    }
+                }
+                return false;
+            }
+            return findAndClick(document, 'button[aria-label="Select country"]');
+            """
+    # 打开选择器
+    return driver.execute_script(deep_click_script)
