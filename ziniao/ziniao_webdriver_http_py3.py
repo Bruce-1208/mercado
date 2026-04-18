@@ -678,7 +678,7 @@ if __name__ == "__main__":
     # use_all_browser_run_task(browser_list2)
 
     """多线程并发打开所有店铺运行脚本，max_threads设置最大线程数"""
-    # use_all_browser_run_task_with_thread_pool(browser_list2, max_threads=3)
+    use_all_browser_run_task_with_thread_pool(browser_list2, max_threads=3)
 
     """关闭客户端"""
     get_exit()
