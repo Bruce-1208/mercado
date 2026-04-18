@@ -82,7 +82,7 @@ def inset_reputation_info(reputation_list):
         with connection.cursor() as cursor:
             # --- 增 (Create) ---
             sql_insert = """
-    INSERT INTO shop_stats (
+    INSERT INTO reputation (
          店铺名, 站点, 声誉颜色, 总单量, 
         投诉率, 延误率, 增加或减少, 近七天变化率, 
         系统告警, 更新时间
