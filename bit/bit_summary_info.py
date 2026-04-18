@@ -41,15 +41,15 @@ def get_reputation_info(window_id, site):
     # 设置最长等待时间为 10 秒
     wait = WebDriverWait(driver, 10)
 
-    driver.get("https://global-selling.mercadolibre.com/reputation")
+    driver.get("https://global-selling.mercadolibre.com/sales-summary")
     driver.refresh()
     time.sleep(10)
-    i=0
-    while(i<3):
-        i=i+1
+    i = 0
+    while (i < 3):
+        i = i + 1
         try:
 
-            #打开站点选择器
+            # 打开站点选择器
             oepn_country_switch(driver)
             # 选择站点
             name = ''
@@ -67,56 +67,46 @@ def get_reputation_info(window_id, site):
                 name = 'Uruguay'
             #
             force_select_country(driver, name)
-            print(get_now_time()+name+'成功选择站点:', site)
+            print(get_now_time() + name + '成功选择站点:', site)
             break
         except Exception as e:
-            print(get_now_time()+name+'选择站点失败:', site)
+            print(get_now_time() + name + '选择站点失败:', site)
 
-    # 1. 先定位包含 "Complaints" 文本的父级卡片元素
-    # 这里使用 XPath 寻找：包含 h2 且 h2 文本为 Complaints 的那个 div
-    card_element =WebDriverWait(driver, 10).until(
-        EC.visibility_of_element_located((By.XPATH, "//div[contains(@class, 'andes-card')][.//h2[text()='Complaints']]"))
-    )
+    data_delay=""
+    data_complain=""
+    data_cancel=""
+    try:
 
-    # 2. 在这个卡片范围内，寻找类名为 variable__percentage 的元素
-    # 注意：使用 card_element.find_element 是在当前节点下查找
-    data_complain =WebDriverWait(card_element, 10).until(
-        EC.visibility_of_element_located(
-            (By.CLASS_NAME, "variable__percentage"))
-    ).text
-    print("提取到的投诉率为:",data_complain)
+        xpath_selector = "//p[text()='Non-compliant shipments']/ancestor::div[@class='metric']//div[contains(@class, 'metric__title')]"
+        data_delay = target_element = WebDriverWait(driver, 10).until(
+            EC.visibility_of_element_located((By.XPATH, xpath_selector))
+        ).text
+        xpath_selector = "//p[text()='Complaints']/ancestor::div[@class='metric']//div[contains(@class, 'metric__title')]"
+        data_complain = target_element = WebDriverWait(driver, 10).until(
+            EC.visibility_of_element_located((By.XPATH, xpath_selector))
+        ).text
+        xpath_selector = "//p[text()='Canceled by you']/ancestor::div[@class='metric']//div[contains(@class, 'metric__title')]"
+        data_cancel = target_element = WebDriverWait(driver, 10).until(
+            EC.visibility_of_element_located((By.XPATH, xpath_selector))
+        ).text
+    except Exception as e:
+        print(get_now_time()+name+site+"获取声誉数据失败")
 
-    # 1. 先定位包含 "Complaints" 文本的父级卡片元素
-    # 这里使用 XPath 寻找：包含 h2 且 h2 文本为 Complaints 的那个 div
-    card_element = WebDriverWait(driver, 10).until(
-        EC.visibility_of_element_located(
-            (By.XPATH, "//div[contains(@class, 'andes-card')][.//h2[text()='Non-compliant shipments']]"))
-    )
-
-    # 2. 在这个卡片范围内，寻找类名为 variable__percentage 的元素
-    # 注意：使用 card_element.find_element 是在当前节点下查找
-    data_delay = WebDriverWait(card_element, 10).until(
-        EC.visibility_of_element_located(
-            (By.CLASS_NAME, "variable__percentage"))
-    ).text
-
-
-    print("提取到的延误率为:",data_delay)
-
-    data_color = driver.find_element(By.CLASS_NAME, 'thermometer__level').text
+    print("提取到的延误率为:", data_delay)
+    data_color = driver.find_element(By.CLASS_NAME, 'panel-segment__focus-item-title-container').text
     print("账号的声誉为:", data_color)
 
     data_orders = driver.find_element(By.CLASS_NAME, 'value__sales').text
     print("总单数为：", data_orders)
 
     list = []
-    if (data_color.__contains__("green")):
+    if (data_color.__contains__("Green")):
         data_color = '绿色'
-    if (data_color.__contains__("yellow")):
+    if (data_color.__contains__("Yellow")):
         data_color = '黄色'
-    if (data_color.__contains__("orange")):
+    if (data_color.__contains__("Orange")):
         data_color = '橘色'
-    if (data_color.__contains__("red")):
+    if (data_color.__contains__("Red")):
         data_color = '红色'
     if (data_color.__contains__("You still have no color")):
         data_color = '无色'
@@ -126,29 +116,8 @@ def get_reputation_info(window_id, site):
     list.append(data_complain)
     list.append(data_delay)
 
-    driver.get("https://global-selling.mercadolibre.com/sales-summary")
-    time.sleep(10)
-    data_warn=""
-    try:
-        data_warn = WebDriverWait(driver, 10).until(
-            EC.visibility_of_element_located(
-                (By.CLASS_NAME, "andes-message__content"))
-        ).text
-    except Exception as e:
-        data_warn="正常"
-    print("系统提示为:",data_warn)
+    driver.get("")
 
-    data_gradient = driver.find_element(By.CSS_SELECTOR, ".andes-badge .andes-visually-hidden").text
-    if(data_gradient.__contains__("Decreased")):
-        data_gradient=data_gradient.replace("Decreased","下滑")
-    else:
-        data_gradient=data_gradient.replace("Increased","增长")
-    print("近七天变化情况为:",data_gradient)
-    list.append(data_gradient)
-    list.append(data_warn)
-
-
-    
     return list
 
 
@@ -170,7 +139,7 @@ def get_reputation_info_all():
         remark = row[2]
         if remark == '忽略':
             continue
-        print(get_now_time()+"开始打开窗口:"+name)
+        print(get_now_time() + "开始打开窗口:" + name)
         site_list = row[3].split("，")
         for site in site_list:
             i = 0
@@ -181,30 +150,30 @@ def get_reputation_info_all():
                     reputation_info.append(name)
                     reputation_info.append(site)
                     reputation_info_sum.append(reputation_info)
-                    print(get_now_time()+name + site + "成功")
+                    print(get_now_time() + name + site + "成功")
                     reuslt.append(name + site + "获取声誉信息执行成功")
                     break
                 except Exception as e:
-                    print(get_now_time()+name + site + "执行失败", e)
+                    print(get_now_time() + name + site + "执行失败", e)
                     reuslt.append(name + site + "获取声誉信息执行失败")
                     time.sleep(180)
 
             time.sleep(10)
-        print(get_now_time()+"结束，正在关闭窗口")
+        print(get_now_time() + "结束，正在关闭窗口")
 
         try:
             closeBrowser(id)
         except Exception as e:
             continue
-        print(get_now_time()+"已经关闭窗口")
+        print(get_now_time() + "已经关闭窗口")
         time.sleep(5)
 
     result = "\n".join(map(str, reputation_info_sum))
     print(result)
 
     end = int(time.time())
-    print(get_now_time()+"总花费", end - start)
-    df = pd.DataFrame(reputation_info_sum, columns=['声誉颜色', '总单量', '投诉率', '延误率', '店铺名', '站点','近七天销售额变化率','系统告警'])
+    print(get_now_time() + "总花费", end - start)
+    df = pd.DataFrame(reputation_info_sum, columns=['声誉颜色', '总单量', '投诉率', '延误率', '店铺名', '站点'])
 
     now = datetime.now()
     date_str = datetime.now().strftime("%Y-%m-%d-%H")
@@ -214,7 +183,7 @@ def get_reputation_info_all():
     send_info('美客多所有店铺声誉汇总', result,
               root_path / ("美客多声誉/武汉泽顺店铺声誉信息汇总" + date_str + ".xlsx"),
               r"武汉泽顺店铺声誉信息汇总" + date_str + ".xlsx")
-    print(get_now_time()+"发送邮件成功")
+    print(get_now_time() + "发送邮件成功")
 
 
 if __name__ == '__main__':
