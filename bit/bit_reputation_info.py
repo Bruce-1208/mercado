@@ -21,6 +21,7 @@ import pandas as pd
 from datetime import datetime
 from pathlib import Path
 from bit_mysql import *
+from bit_clash import *
 
 
 def get_reputation_info(window_id, name, site):
@@ -41,8 +42,12 @@ def get_reputation_info(window_id, name, site):
     driver.implicitly_wait(10)
     # 设置最长等待时间为 10 秒
     wait = WebDriverWait(driver, 10)
-
-    driver.get("https://global-selling.mercadolibre.com/reputation")
+    try:
+        driver.get("https://global-selling.mercadolibre.com/reputation")
+    except Exception as e:
+        print("正在切换网络")
+        switch_random_hongkong_node()
+        get_public_ip()
     driver.refresh()
     time.sleep(10)
     i = 0
@@ -160,8 +165,8 @@ def get_reputation_info_all():
     start = int(time.time())
     print(start)
     root_path = Path(__file__).resolve().parent
-    # file_path = root_path / "比特配置文件.xlsx"
-    file_path = root_path / "比特配置文件测试.xlsx"
+    file_path = root_path / "比特配置文件.xlsx"
+    # file_path = root_path / "比特配置文件测试.xlsx"
 
     wb = load_workbook(file_path)
     sheet = wb.active
@@ -184,14 +189,15 @@ def get_reputation_info_all():
                 try:
                     reputation_info = get_reputation_info(id, name, site)
                     reputation_info_sum.append(reputation_info)
-                    print(get_now_time() + name + site + "成功")
+                    print(get_now_time() + name + site + "获取声誉信息成功")
                     reuslt.append(('获取声誉信息',name,site,"成功",get_now_time()))
                     break
                 except Exception as e:
                     print(get_now_time() + name + site + "执行失败", e)
                     if(i==3):
                         reuslt.append(('获取声誉信息',name,site,"失败",get_now_time()))
-                    time.sleep(180)
+
+
 
             time.sleep(10)
         print(get_now_time() + "结束，正在关闭窗口")
