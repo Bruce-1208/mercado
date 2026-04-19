@@ -11,6 +11,7 @@ from send_mail import *
 
 from utils import *
 import sys
+from bit_mysql import *
 
 
 def summary_delayFile():
@@ -132,7 +133,7 @@ def summary_delayFile():
 
     send_info('美客多所有店铺延误信息汇总', "美客多所有店铺延误信息汇总",Path(__file__).resolve().parent/("美客多延误\武汉泽顺店铺延误信息汇总" + date_str + ".xlsx"),
               r"武汉泽顺店铺延误信息汇总" + date_str + ".xlsx")
-
+    inset_delay_info(line)
 
 
 

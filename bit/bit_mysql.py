@@ -156,5 +156,40 @@ def insert_orders(line):
         # 关闭连接
         connection.close()
 
+def inset_delay_info(delay_list):
+    connection = pymysql.connect(**config)
+
+    try:
+        with connection.cursor() as cursor:
+            # --- 增 (Create) ---
+            sql_insert = """
+            INSERT INTO `delay` (
+    `店铺`, 
+    `站点`, 
+    `延误率`, 
+    `下单时间`, 
+    `销售单号`, 
+    `订单标题`, 
+    `截止延误时间`, 
+    `实际揽收时间`, 
+    `更新时间`, 
+    `文件路径`
+) VALUES (
+    %s, %s, %s, %s, %s, %s, %s, %s, %s, %s
+);    
+    """
+            cursor.executemany(sql_insert, delay_list)
+            print("执行sql成功", sql_insert)
+
+        # 核心：涉及写操作（增删改）必须提交事务
+        connection.commit()
+
+    except Exception as e:
+        # 发生错误则回滚
+        connection.rollback()
+        print(f"操作失败，已回滚: {e}")
+    finally:
+        # 关闭连接
+        connection.close()
 if __name__ == "__main__":
     mysql_demo()
