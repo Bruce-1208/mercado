@@ -8,8 +8,7 @@ from pathlib import Path
 from datetime import datetime
 import pandas
 from send_mail import *
-import csv
-import io
+
 from utils import *
 import sys
 

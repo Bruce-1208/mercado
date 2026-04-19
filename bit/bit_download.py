@@ -3,6 +3,9 @@ import time
 from bit_email_info import *
 import traceback
 from pathlib import Path
+from bit_mysql import *
+from bit_clash import *
+
 
 def download_relay_mail(window_id, site):
     # /browser/open 接口会返回 selenium使用的http地址，以及webdriver的path，直接使用即可
@@ -25,11 +28,17 @@ def download_relay_mail(window_id, site):
     wait = WebDriverWait(driver, 30)
     ## 进入声誉页面点击下载
     click=False
-    try:
-        click = click_download(driver, site)
-    except Exception as e:
-        print("点击下载失败", e)
-        traceback.print_exc()
+    i=0
+    while (i<3):
+        i=i+1
+        try:
+            click = click_download(driver, site)
+        except Exception as e:
+            print("点击下载失败", e)
+            traceback.print_exc()
+            switch_random_hongkong_node()
+            get_public_ip()
+
     if (click == True):
 
         ##循环扫描邮箱
@@ -207,7 +216,7 @@ def download_relay_mail_all():
     # time.sleep(100000)
     root_path = Path(__file__).resolve().parent
     # file_path = root_path / "比特配置文件.xlsx"
-    file_path = root_path / "比特配置文件测试.xlsx"
+    file_path = root_path / "比特配置文件.xlsx"
 
 
     start = int(time.time())
@@ -231,10 +240,10 @@ def download_relay_mail_all():
                 print(get_now_time()+"执行任务:", name + site)
                 message = download_relay_mail(id, site)
                 print(get_now_time()+name + site + message)
-                result.append(name + site + "下载延误文件执行成功")
+                result.append(('获取声誉信息', name, site, "成功", get_now_time()))
             except Exception as e:
                 print(get_now_time()+name + site + "执行失败", e)
-                result.append(name + site + "下载延误文件执行失败")
+                result.append(('获取声誉信息', name, site, "失败", get_now_time()))
 
         print(get_now_time()+"结束，正在关闭窗口",name)
         try:
@@ -250,6 +259,8 @@ def download_relay_mail_all():
     print(get_now_time()+"总花费", end - start)
     for i in result:
         print(i)
+    insert_task_record(result)
+
 
 if __name__ == '__main__':
     download_relay_mail_all()

@@ -48,9 +48,8 @@ def get_reputation_info(window_id, name, site):
         print("正在切换网络")
         switch_random_hongkong_node()
         get_public_ip()
-    driver.refresh()
-    time.sleep(10)
     i = 0
+    time.sleep(10)
     while (i < 3):
         i = i + 1
         try:
@@ -137,7 +136,6 @@ def get_reputation_info(window_id, name, site):
 
 
     driver.get("https://global-selling.mercadolibre.com/sales-summary")
-    time.sleep(10)
     data_warn = ""
     try:
         data_warn = WebDriverWait(driver, 10).until(
@@ -174,7 +172,7 @@ def get_reputation_info_all():
     wb = load_workbook(file_path)
     sheet = wb.active
     reputation_info_sum = []
-    reuslt = []
+    result = []
     # 使用 min_row=2 跳过第一行
     for row in sheet.iter_rows(min_row=2, values_only=True):
         print(row)  # row 是一个元组，包含该行所有数据
@@ -193,16 +191,18 @@ def get_reputation_info_all():
                     reputation_info = get_reputation_info(id, name, site)
                     reputation_info_sum.append(reputation_info)
                     print(get_now_time() + name + site + "获取声誉信息成功")
-                    reuslt.append(('获取声誉信息',name,site,"成功",get_now_time()))
+                    result.append(('获取声誉信息',name,site,"成功",get_now_time()))
                     break
                 except Exception as e:
                     print(get_now_time() + name + site + "执行失败", e)
                     if(i==3):
-                        reuslt.append(('获取声誉信息',name,site,"失败",get_now_time()))
+                        result.append(('获取声誉信息',name,site,"失败",get_now_time()))
+                        reputation_info=[name,site,"执行失败","","","","","","",get_now_time()]
+                        reputation_info_sum.append(reputation_info)
+                    # 随机切换香港IP节点
+                    switch_random_hongkong_node()
+                    get_public_ip()
 
-
-
-            time.sleep(10)
         print(get_now_time() + "结束，正在关闭窗口")
 
         try:
@@ -210,10 +210,9 @@ def get_reputation_info_all():
         except Exception as e:
             continue
         print(get_now_time() + "已经关闭窗口")
-        time.sleep(5)
 
-    result = "\n".join(map(str, reputation_info_sum))
-    print(result)
+    reputation_info_sum_str = "\n".join(map(str, reputation_info_sum))
+    print(reputation_info_sum_str)
 
     end = int(time.time())
     print(get_now_time() + "总花费", end - start)
@@ -226,13 +225,13 @@ def get_reputation_info_all():
 
     df.to_excel(root_path / ("美客多声誉/武汉泽顺店铺声誉信息汇总" + date_str + ".xlsx"), index=False)
 
-    send_info('美客多所有店铺声誉汇总', result,
+    send_info('美客多所有店铺声誉汇总', reputation_info_sum_str,
               root_path / ("美客多声誉/武汉泽顺店铺声誉信息汇总" + date_str + ".xlsx"),
               r"武汉泽顺店铺声誉信息汇总" + date_str + ".xlsx")
     print(get_now_time() + "发送邮件成功")
 
     inset_reputation_info(reputation_info_sum)
-    insert_task_record(reuslt)
+    insert_task_record(result)
 
 if __name__ == '__main__':
     get_reputation_info_all()
