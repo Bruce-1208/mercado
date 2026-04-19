@@ -21,6 +21,8 @@ import pandas as pd
 
 from datetime import datetime
 from pathlib import Path
+from bit_clash import *
+from bit_mysql import *
 
 
 def get_infractions_info(window_id, name, site):
@@ -42,7 +44,6 @@ def get_infractions_info(window_id, name, site):
     wait = WebDriverWait(driver, 10)
 
     driver.get("https://global-selling.mercadolibre.com/noindex/pppi/infractions?tab=detections&offset=0")
-    driver.refresh()
     time.sleep(10)
     i = 0
     while (i < 3):
@@ -77,7 +78,8 @@ def get_infractions_info(window_id, name, site):
             break
         except Exception as e:
             print(get_now_time() + name + site + "重新执行选择站点")
-            time.sleep(10)
+            switch_random_hongkong_node()
+            get_public_ip()
             continue
 
     # 使用 presence_of_all_elements_located 等待所有匹配的元素出现在 DOM 中
@@ -138,7 +140,7 @@ def get_infractions_info_all():
     wb = load_workbook(file_path)
     sheet = wb.active
     infraction_info_sum = []
-    reuslt = []
+    result = []
     # 使用 min_row=2 跳过第一行
     for row in sheet.iter_rows(min_row=2, values_only=True):
         print(row)  # row 是一个元组，包含该行所有数据
@@ -157,14 +159,13 @@ def get_infractions_info_all():
                     infraction_info = get_infractions_info(id, name, site)
                     infraction_info_sum = infraction_info_sum + infraction_info
                     print(get_now_time() + name + site + "成功")
-                    reuslt.append(name + site + "获取侵权信息执行成功")
+                    result.append(('获取侵权信息', name, site, "成功", get_now_time()))
                     break
                 except Exception as e:
                     print(get_now_time() + name + site + "执行失败", e)
-                    reuslt.append(name + site + "获取侵权信息执行失败")
-                    time.sleep(180)
+                    if(i==3):
+                        result.append(('获取声誉信息', name, site, "失败", get_now_time()))
 
-            time.sleep(10)
         print(get_now_time() + "结束，正在关闭窗口")
 
         try:
@@ -172,10 +173,9 @@ def get_infractions_info_all():
         except Exception as e:
             continue
         print(get_now_time() + "已经关闭窗口")
-        time.sleep(5)
 
-    result = "\n".join(map(str, infraction_info_sum))
-    print(result)
+    infraction_info_sum_str = "\n".join(map(str, infraction_info_sum))
+    print(infraction_info_sum_str)
 
     end = int(time.time())
     print(get_now_time() + "总花费", end - start)
@@ -187,10 +187,14 @@ def get_infractions_info_all():
 
     df.to_excel(root_path / ("美客多侵权/武汉泽顺店铺侵权信息汇总" + date_str + ".xlsx"), index=False)
 
-    send_info('美客多所有店铺侵权汇总', result,
+    send_info('美客多所有店铺侵权汇总', infraction_info_sum_str,
               root_path / ("美客多侵权/武汉泽顺店铺侵权信息汇总" + date_str + ".xlsx"),
               r"武汉泽顺店铺侵权信息汇总" + date_str + ".xlsx")
     print(get_now_time() + "发送邮件成功")
+
+    insert_task_record(result)
+    inset_infraction_info(infraction_info_sum)
+
 
 
 if __name__ == '__main__':

@@ -101,7 +101,60 @@ def inset_reputation_info(reputation_list):
     finally:
         # 关闭连接
         connection.close()
+def inset_infraction_info(infraction_list):
+    connection = pymysql.connect(**config)
 
+    try:
+        with connection.cursor() as cursor:
+            # --- 增 (Create) ---
+            sql_insert = """
+    INSERT INTO infraction (
+         店铺名,站点,编号,标题,侵权时间,执行时间
+
+    ) VALUES (%s, %s, %s, %s, %s, %s)
+    """
+            cursor.executemany(sql_insert, infraction_list)
+            print("执行sql成功", sql_insert)
+
+        # 核心：涉及写操作（增删改）必须提交事务
+        connection.commit()
+
+    except Exception as e:
+        # 发生错误则回滚
+        connection.rollback()
+        print(f"操作失败，已回滚: {e}")
+    finally:
+        # 关闭连接
+        connection.close()
+
+
+def insert_orders(line):
+    connection = pymysql.connect(**config)
+
+    try:
+        with connection.cursor() as cursor:
+            # --- 增 (Create) ---
+            sql_insert = """
+            INSERT INTO orders (
+                `id`, `编号`, `时间`, `业务员`, `来源`, `状态`, 
+                `金额`, `费用`, `退款`, `人民币收入`, `采购成本`, `采购单号`, 
+                `采购追踪`, `利润`, `产品id`, `产品分类`, `标题`, 
+                `图片`, `数量`, `订单运费`,`订单备注`, `地区`, `买家姓名`
+            ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            """
+            cursor.executemany(sql_insert, line)
+            print("执行sql成功", sql_insert)
+
+        # 核心：涉及写操作（增删改）必须提交事务
+        connection.commit()
+
+    except Exception as e:
+        # 发生错误则回滚
+        connection.rollback()
+        print(f"操作失败，已回滚: {e}")
+    finally:
+        # 关闭连接
+        connection.close()
 
 if __name__ == "__main__":
     mysql_demo()
