@@ -77,7 +77,7 @@ def get_reputation_info(window_id, name, site):
         except Exception as e:
             print(get_now_time()+name+'选择站点失败:', site)
 
-
+    driver.refresh()
 
     # 1. 先定位包含 "Complaints" 文本的父级卡片元素
     # 这里使用 XPath 寻找：包含 h2 且 h2 文本为 Complaints 的那个 div
@@ -153,8 +153,13 @@ def get_reputation_info(window_id, name, site):
         data_gradient = data_gradient.replace("Increased", "增长")
     print("近七天变化情况为:", data_gradient)
 
-    list.append(data_gradient.split(" ")[0])
-    list.append(data_gradient.split(" ")[1])
+    list_gradient=data_gradient.split(" ")
+    if(len(list_gradient)==2):
+        list.append(list[0])
+        list.append(list[1])
+    else:
+        list.append(data_gradient)
+        list.append(data_gradient)
 
     list.append(data_warn)
     list.append(get_now_time())
@@ -234,4 +239,6 @@ def get_reputation_info_all():
     insert_task_record(result)
 
 if __name__ == '__main__':
+
+    # get_reputation_info('22139511815a4bf588fe96d5fdafded6','四季如春','墨西哥')
     get_reputation_info_all()
