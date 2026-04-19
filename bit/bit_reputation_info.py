@@ -44,6 +44,7 @@ def get_reputation_info(window_id, name, site):
     wait = WebDriverWait(driver, 10)
 
     driver.get("https://global-selling.mercadolibre.com/reputation")
+    time.sleep(10)
     i=0
     while (i<3):
         i=i+1
@@ -80,9 +81,13 @@ def get_reputation_info(window_id, name, site):
             if site == '乌拉圭':
                 country = 'Uruguay'
             #
-            force_select_country(driver, country)
-            print(get_now_time() + name+'成功选择站点:', site)
-            break
+            success=force_select_country(driver, country)
+            if(success):
+                print(get_now_time() + name+'成功选择站点:', site)
+                break
+            else:
+                print(get_now_time() + name+'选择站点失败:', site)
+                time.sleep(10)
         except Exception as e:
             print(get_now_time() + name+'选择站点失败:', site)
 
@@ -247,5 +252,5 @@ def get_reputation_info_all():
 
 if __name__ == '__main__':
 
-    # get_reputation_info('22139511815a4bf588fe96d5fdafded6','四季如春','墨西哥')
-    get_reputation_info_all()
+    get_reputation_info('22139511815a4bf588fe96d5fdafded6','四季如春','阿根廷')
+    # get_reputation_info_all()
