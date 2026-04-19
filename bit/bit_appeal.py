@@ -76,7 +76,7 @@ def use_one_browser_run_task(info):
                 # todo 后续的自动化操作y
                 try:
                     # shensu_ai(driver)
-                    shensu(driver, name, site,form)
+                    shensu(driver, name, site,form,"")
                 except Exception as e:
                     traceback.print_exc()
                     print("申诉执行异常", e)
@@ -102,7 +102,7 @@ def shensu_ai(driver):
 
 
 # 申诉
-def shensu(driver, name, site,form):
+def shensu(driver, name, site,form,message):
     driver.get("https://global-selling.mercadolibre.com/help/chat/v3?parent_skill=MLCX")
     words=[]
     if(form=="延误"):
@@ -113,6 +113,8 @@ def shensu(driver, name, site,form):
         ]
     if(form=="侵权"):
         words=['亲爱的客服，我叫Bruce！这些产品是通用品牌产品，他们被系统误检测为侵权产品，你能帮我消除记录吗？']
+
+    if(form=="投诉"):
 
 
     words_random = random.choice(words)
@@ -183,45 +185,55 @@ def shensu(driver, name, site,form):
         # 发消息
         print("进入人工客服")
 
+        if(message==""):
 
-        WebDriverWait(driver, 30).until(
-            EC.presence_of_element_located((By.XPATH,
-                                            "/html/body/main/div/div[2]/div/div/div/div[4]/div/div/div/div/div/div/div[2]/div/div[2]/div/div/div[1]/div[1]/p"))).send_keys(
-            words_random)
-        time.sleep(3)
-        WebDriverWait(driver, 30).until(
-            EC.element_to_be_clickable((By.CSS_SELECTOR, 'button[title="Send"]'))).click()
-        print("自动发送:" + time.strftime("%Y-%m-%d %H:%M:%S", time.localtime()), words_random)
-        time.sleep(3)
-
-        if (form == "延误"):
             WebDriverWait(driver, 30).until(
                 EC.presence_of_element_located((By.XPATH,
                                                 "/html/body/main/div/div[2]/div/div/div/div[4]/div/div/div/div/div/div/div[2]/div/div[2]/div/div/div[1]/div[1]/p"))).send_keys(
-                orders_random)
+                words_random)
             time.sleep(3)
             WebDriverWait(driver, 30).until(
                 EC.element_to_be_clickable((By.CSS_SELECTOR, 'button[title="Send"]'))).click()
-            print(get_now_time() + name + site + "发送延误订单:", orders_random)
-            chat_ai(driver)
-        if (form == "侵权"):
+            print("自动发送:" + time.strftime("%Y-%m-%d %H:%M:%S", time.localtime()), words_random)
+            time.sleep(3)
+
+            if (form == "延误"):
+                WebDriverWait(driver, 30).until(
+                    EC.presence_of_element_located((By.XPATH,
+                                                    "/html/body/main/div/div[2]/div/div/div/div[4]/div/div/div/div/div/div/div[2]/div/div[2]/div/div/div[1]/div[1]/p"))).send_keys(
+                    orders_random)
+                time.sleep(3)
+                WebDriverWait(driver, 30).until(
+                    EC.element_to_be_clickable((By.CSS_SELECTOR, 'button[title="Send"]'))).click()
+                print(get_now_time() + name + site + "发送延误订单:", orders_random)
+                chat_ai(driver)
+            if (form == "侵权"):
+                WebDriverWait(driver, 30).until(
+                    EC.presence_of_element_located((By.XPATH,
+                                                    "/html/body/main/div/div[2]/div/div/div/div[4]/div/div/div/div/div/div/div[2]/div/div[2]/div/div/div[1]/div[1]/p"))).send_keys(
+                    infraction_random)
+                time.sleep(3)
+                WebDriverWait(driver, 30).until(
+                    EC.element_to_be_clickable((By.CSS_SELECTOR, 'button[title="Send"]'))).click()
+                print(get_now_time() + name + site + "发送侵权的id:", infraction_random)
+                chat_ai(driver,form)
+        else:
             WebDriverWait(driver, 30).until(
                 EC.presence_of_element_located((By.XPATH,
                                                 "/html/body/main/div/div[2]/div/div/div/div[4]/div/div/div/div/div/div/div[2]/div/div[2]/div/div/div[1]/div[1]/p"))).send_keys(
-                infraction_random)
+                message)
             time.sleep(3)
             WebDriverWait(driver, 30).until(
                 EC.element_to_be_clickable((By.CSS_SELECTOR, 'button[title="Send"]'))).click()
-            print(get_now_time() + name + site + "发送侵权的id:", infraction_random)
-            chat_ai(driver)
-        if (form == "投诉"):
-            print("------------------待开发")
+            print("自动发送:" + time.strftime("%Y-%m-%d %H:%M:%S", time.localtime()), words_random)
+            chat_ai(driver, form)
+
 
 
     except Exception as e:
         print(get_now_time()+name+site+"继续与客服对话")
         # 全部聊天记录
-        chat_ai(driver)
+        chat_ai(driver,form)
 
 
 
@@ -290,7 +302,11 @@ def chat_ai(driver,form):
             response = get_ai_response(words)
             print("AI客服回复", response)
         if (form == "侵权"):
-            words = lines + "|这是我跟美客多客服的对话，我叫Bruce，我正在找他申诉我侵权的商品，麻烦你帮我用不超过十个字的自然语言回复他，如果你理解他拒绝了我的申请，麻烦返回：好的，我明白了,感谢您的回复"
+            words = lines + "|这是我跟美客多客服的对话，我叫Bruce，我正在找他申诉我侵权的商品，帮我想话术让客服相信这不是侵权产品,麻烦你帮我用不超过十个字的自然语言回复他，如果你理解他拒绝了我的申请，麻烦返回：好的，我明白了,感谢您的回复"
+            response = get_ai_response(words)
+            print("AI客服回复", response)
+        if (form == "投诉"):
+            words = lines + "|这是我跟美客多客服的对话，我叫Bruce，我正在给他我被投诉的订单号，帮我想办法让这些订单不影响我的声誉，麻烦你帮我用不超过十个字的自然语言回复他，如果你理解他拒绝了我的申请，麻烦返回：好的，我明白了,感谢您的回复"
             response = get_ai_response(words)
             print("AI客服回复", response)
         try:
