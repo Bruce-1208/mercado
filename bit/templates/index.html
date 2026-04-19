@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>申诉自动化控制台</title>
+    <style>
+        #log-container {
+            background: #2d2d2d;
+            color: #adff2f;
+            padding: 15px;
+            height: 400px;
+            overflow-y: auto;
+            font-family: monospace;
+            border-radius: 5px;
+            line-height: 1.5;
+        }
+        .input-box { margin-bottom: 20px; }
+        input { margin-right: 10px; padding: 5px; }
+    </style>
+</head>
+<body>
+    <h2>申诉执行控制台</h2>
+
+    <div class="input-box">
+        <input type="text" id="name" placeholder="店铺名" value="跃马扬鞭">
+        <input type="text" id="site" placeholder="站点" value="墨西哥">
+        <input type="text" id="form" placeholder="投诉" value="投诉">
+        <input type="text" id="message" placeholder="话术" value="这里填完整的话术，脚本会重复执行">
+        <button onclick="startTask()">开始执行</button>
+    </div>
+
+    <div id="log-container">等待任务启动...</div>
+
+    <script>
+        async function startTask() {
+            const container = document.getElementById('log-container');
+            container.innerHTML = "正在建立连接...<br>";
+
+            // 1. 构造参数
+            const params = new URLSearchParams({
+                name: document.getElementById('name').value,
+                site: document.getElementById('site').value,
+                form: document.getElementById('form').value,
+                message: document.getElementById('message').value
+            });
+
+            try {
+                // 2. 发起 fetch 请求
+                const response = await fetch(`/api/run_shensu?${params.toString()}`);
+                const reader = response.body.getReader();
+                const decoder = new TextDecoder();
+
+                // 3. 循环读取流数据
+                while (true) {
+                    const { done, value } = await reader.read();
+                    if (done) break;
+
+                    // 将二进制数据解码为文本并显示
+                    const text = decoder.decode(value);
+                    container.innerHTML += text;
+
+                    // 自动滚动到底部
+                    container.scrollTop = container.scrollHeight;
+                }
+                container.innerHTML += ">>> [任务结束]";
+            } catch (err) {
+                container.innerHTML += `<br><span style="color:red">连接出错: ${err}</span>`;
+            }
+        }
+    </script>
+</body>
+</html>

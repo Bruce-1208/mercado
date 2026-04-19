@@ -42,14 +42,23 @@ def get_reputation_info(window_id, name, site):
     driver.implicitly_wait(10)
     # 设置最长等待时间为 10 秒
     wait = WebDriverWait(driver, 10)
-    try:
-        driver.get("https://global-selling.mercadolibre.com/reputation")
-    except Exception as e:
-        print("正在切换网络")
-        switch_random_hongkong_node()
-        get_public_ip()
+
+    driver.get("https://global-selling.mercadolibre.com/reputation")
+    i=0
+    while (i<3):
+        i=i+1
+        try:
+            WebDriverWait(driver, 10).until(
+                EC.visibility_of_element_located(
+                    (By.CLASS_NAME,"title__page--cbt"))
+            )
+
+        except Exception as e:
+            print(f"美客多限频，正在第{i}次切换网络")
+            switch_random_hongkong_node()
+            get_public_ip()
+
     i = 0
-    time.sleep(10)
     while (i < 3):
         i = i + 1
         try:
@@ -72,10 +81,10 @@ def get_reputation_info(window_id, name, site):
                 country = 'Uruguay'
             #
             force_select_country(driver, country)
-            print(get_now_time() + '成功选择站点:', site)
+            print(get_now_time() + name+'成功选择站点:', site)
             break
         except Exception as e:
-            print(get_now_time() + '选择站点失败:', site)
+            print(get_now_time() + name+'选择站点失败:', site)
 
     # 1. 先定位包含 "Complaints" 文本的父级卡片元素
     # 这里使用 XPath 寻找：包含 h2 且 h2 文本为 Complaints 的那个 div
@@ -204,6 +213,7 @@ def get_reputation_info_all():
                     # 随机切换香港IP节点
                     switch_random_hongkong_node()
                     get_public_ip()
+            time.sleep(30)
 
         print(get_now_time() + "结束，正在关闭窗口")
 
