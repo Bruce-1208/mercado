@@ -112,7 +112,7 @@ def shensu(driver, name, site,form):
             '亲爱的客服，我叫Bruce！这些订单因为菜鸟，并非我这边发货延误，麻烦您帮忙处理一下，消除对店铺声誉的影响，非常感谢！'
         ]
     if(form=="侵权"):
-        words=[]
+        words=['亲爱的客服，我叫Bruce！这些产品是通用品牌产品，他们被系统误检测为侵权产品，你能帮我消除记录吗？']
 
 
     words_random = random.choice(words)
@@ -350,7 +350,7 @@ if __name__ == '__main__':
     # long
     # use_one_browser_run_task('9812f185f7ab49d98f3988994d9e8ebf','墨西哥')
     # 跃马扬鞭
-    # use_one_browser_run_task(('龙马精神','阿根廷'))
+    use_one_browser_run_task(('vngbjkk','墨西哥','侵权'))
     browser_list=[
         ('龙马精神','阿根廷'),
         ('跃马扬鞭', '阿根廷'),
