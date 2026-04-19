@@ -72,9 +72,9 @@ def summary_delayFile():
     for index, row in df.iterrows():
         print(row[0])
         if (len(row) > 6):
-            delayrate = row[3]
-            name = row[4]
-            site = row[5]
+            delayrate = row['延误率']
+            name = row['店铺名']
+            site = row['站点']
             key = name + site
             dict_delay[key] = delayrate
     print(dict_delay)
@@ -95,8 +95,11 @@ def summary_delayFile():
             site = '哥伦比亚'
         if (site == 'UY'):
             site = '乌拉圭'
-
-        delayrate = dict_delay[name + site]
+        delayrate=""
+        try:
+            delayrate = dict_delay[name + site]
+        except Exception as e:
+            continue
 
         part = filepath.split("_")
         filename_time = float((part[12].replace('.csv', '')).split(" (")[0]) / 1000

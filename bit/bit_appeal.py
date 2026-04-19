@@ -29,6 +29,7 @@ def use_one_browser_run_task(info):
     # /browser/open 接口会返回 selenium使用的http地址，以及webdriver的path，直接使用即可
     name=info[0]
     site=info[1]
+    form=info[2]
     config_path=get_bit_path()/"比特配置文件.xlsx"
     wb = load_workbook(config_path)
     sheet = wb.active
@@ -75,7 +76,7 @@ def use_one_browser_run_task(info):
                 # todo 后续的自动化操作y
                 try:
                     # shensu_ai(driver)
-                    shensu(driver, name, site)
+                    shensu(driver, name, site,form)
                 except Exception as e:
                     traceback.print_exc()
                     print("申诉执行异常", e)
@@ -101,13 +102,17 @@ def shensu_ai(driver):
 
 
 # 申诉
-def shensu(driver, name, site):
+def shensu(driver, name, site,form):
     driver.get("https://global-selling.mercadolibre.com/help/chat/v3?parent_skill=MLCX")
+    words=[]
+    if(form=="延误"):
 
-    words = [
-        '亲爱的客服，我叫Bruce！这些订单因合作物流车辆临时出现故障，导致未能及时揽收，并非我这边发货延误，麻烦您帮忙处理一下，消除对店铺声誉的影响，非常感谢！',
-        '亲爱的客服，我叫Bruce！这些订单因为菜鸟，并非我这边发货延误，麻烦您帮忙处理一下，消除对店铺声誉的影响，非常感谢！'
-]
+        words = [
+            '亲爱的客服，我叫Bruce！这些订单因合作物流车辆临时出现故障，导致未能及时揽收，并非我这边发货延误，麻烦您帮忙处理一下，消除对店铺声誉的影响，非常感谢！',
+            '亲爱的客服，我叫Bruce！这些订单因为菜鸟，并非我这边发货延误，麻烦您帮忙处理一下，消除对店铺声誉的影响，非常感谢！'
+        ]
+    if(form=="侵权"):
+        words=[]
 
 
     words_random = random.choice(words)
@@ -148,8 +153,10 @@ def shensu(driver, name, site):
             time.sleep(10)
             continue
 
-    orders_random = get_delay_orders_random(name, site, 10)
 
+
+    orders_random = get_delay_orders_random(name, site, 10)
+    infraction_random=get_infraction_orders_random(name, site, 5)
     try:
         print(get_now_time()+name+site+"开始打开listing选项卡寻找客服")
         # 跳转listing
@@ -175,6 +182,8 @@ def shensu(driver, name, site):
             return None
         # 发消息
         print("进入人工客服")
+
+
         WebDriverWait(driver, 30).until(
             EC.presence_of_element_located((By.XPATH,
                                             "/html/body/main/div/div[2]/div/div/div/div[4]/div/div/div/div/div/div/div[2]/div/div[2]/div/div/div[1]/div[1]/p"))).send_keys(
@@ -184,18 +193,33 @@ def shensu(driver, name, site):
             EC.element_to_be_clickable((By.CSS_SELECTOR, 'button[title="Send"]'))).click()
         print("自动发送:" + time.strftime("%Y-%m-%d %H:%M:%S", time.localtime()), words_random)
         time.sleep(3)
-        WebDriverWait(driver, 30).until(
-            EC.presence_of_element_located((By.XPATH,
-                                            "/html/body/main/div/div[2]/div/div/div/div[4]/div/div/div/div/div/div/div[2]/div/div[2]/div/div/div[1]/div[1]/p"))).send_keys(
-            orders_random)
-        time.sleep(3)
-        WebDriverWait(driver, 30).until(
-            EC.element_to_be_clickable((By.CSS_SELECTOR, 'button[title="Send"]'))).click()
-        chat_ai(driver)
-        print(get_now_time()+name+site+"发送延误订单:",orders_random)
+
+        if (form == "延误"):
+            WebDriverWait(driver, 30).until(
+                EC.presence_of_element_located((By.XPATH,
+                                                "/html/body/main/div/div[2]/div/div/div/div[4]/div/div/div/div/div/div/div[2]/div/div[2]/div/div/div[1]/div[1]/p"))).send_keys(
+                orders_random)
+            time.sleep(3)
+            WebDriverWait(driver, 30).until(
+                EC.element_to_be_clickable((By.CSS_SELECTOR, 'button[title="Send"]'))).click()
+            print(get_now_time() + name + site + "发送延误订单:", orders_random)
+            chat_ai(driver)
+        if (form == "侵权"):
+            WebDriverWait(driver, 30).until(
+                EC.presence_of_element_located((By.XPATH,
+                                                "/html/body/main/div/div[2]/div/div/div/div[4]/div/div/div/div/div/div/div[2]/div/div[2]/div/div/div[1]/div[1]/p"))).send_keys(
+                infraction_random)
+            time.sleep(3)
+            WebDriverWait(driver, 30).until(
+                EC.element_to_be_clickable((By.CSS_SELECTOR, 'button[title="Send"]'))).click()
+            print(get_now_time() + name + site + "发送侵权的id:", infraction_random)
+            chat_ai(driver)
+        if (form == "投诉"):
+            print("------------------待开发")
+
 
     except Exception as e:
-        print(get_now_time()+name+site+"正在客服对话中")
+        print(get_now_time()+name+site+"继续与客服对话")
         # 全部聊天记录
         chat_ai(driver)
 
@@ -229,8 +253,29 @@ def get_delay_orders_random(name, site, nums):
     print(get_now_time()+name+site+"随机得到的延误销售单号为",order_random)
     return order_random
 
+def get_infraction_orders_random(name, site, nums):
+    delay_folder_path = get_bit_path() / "美客多侵权"
+    delay_file = get_latest_modified_file(delay_folder_path)
+    delay_file_path = delay_folder_path / delay_file
+    fifteen_days_ago = datetime.now() - timedelta(days=15)
+    inf_list = []
+    df = pd.read_excel(delay_file_path, engine='openpyxl')
+    for index, row in df.iterrows():
+        # print(row)
+        line_name=row['店铺名']
+        line_site=row['站点']
+        id=row['编号']
+        if(name==line_name and site==line_site):
+            inf_list.append(id)
 
-def chat_ai(driver):
+    if len(inf_list) >= nums:
+        inf_list = str(random.sample(inf_list, nums))
+    else:
+        inf_list = str(inf_list)
+    print(get_now_time()+name+site+"随机得到的侵权单号为",inf_list)
+    return inf_list
+
+def chat_ai(driver,form):
     i = 0
     while (i < 5):
         i = i + 1
@@ -239,9 +284,15 @@ def chat_ai(driver):
         for message in messages:
             print(message.text)
             lines = lines + message.text + "\n"
-        words = lines+"|这是我跟美客多客服的对话，我叫Bruce，我正在找他申诉我延误的订单，麻烦你帮我用不超过十个字的自然语言回复他，如果你理解他拒绝了我的申请，麻烦返回：好的，我明白了,感谢您的回复"
-        response = get_ai_response(words)
-        print("AI客服回复", response)
+        response=""
+        if(form=="延误"):
+            words = lines+"|这是我跟美客多客服的对话，我叫Bruce，我正在找他申诉我延误的订单，麻烦你帮我用不超过十个字的自然语言回复他，如果你理解他拒绝了我的申请，麻烦返回：好的，我明白了,感谢您的回复"
+            response = get_ai_response(words)
+            print("AI客服回复", response)
+        if (form == "侵权"):
+            words = lines + "|这是我跟美客多客服的对话，我叫Bruce，我正在找他申诉我侵权的商品，麻烦你帮我用不超过十个字的自然语言回复他，如果你理解他拒绝了我的申请，麻烦返回：好的，我明白了,感谢您的回复"
+            response = get_ai_response(words)
+            print("AI客服回复", response)
         try:
             # 发消息
             WebDriverWait(driver, 30).until(

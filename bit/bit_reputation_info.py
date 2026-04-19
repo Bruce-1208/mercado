@@ -20,9 +20,11 @@ import pandas as pd
 
 from datetime import datetime
 from pathlib import Path
+from bit_mysql import *
+from bit_clash import *
 
 
-def get_reputation_info(window_id, site):
+def get_reputation_info(window_id, name, site):
     res = openBrowser(window_id)  # 窗口ID从窗口配置界面中复制，或者api创建后返回
 
     print(res)
@@ -40,51 +42,58 @@ def get_reputation_info(window_id, site):
     driver.implicitly_wait(10)
     # 设置最长等待时间为 10 秒
     wait = WebDriverWait(driver, 10)
-
-    driver.get("https://global-selling.mercadolibre.com/reputation")
+    try:
+        driver.get("https://global-selling.mercadolibre.com/reputation")
+    except Exception as e:
+        print("正在切换网络")
+        switch_random_hongkong_node()
+        get_public_ip()
     driver.refresh()
     time.sleep(10)
-    i=0
-    while(i<3):
-        i=i+1
+    i = 0
+    while (i < 3):
+        i = i + 1
         try:
 
-            #打开站点选择器
+            # 打开站点选择器
             oepn_country_switch(driver)
             # 选择站点
-            name = ''
+            country = ''
             if site == '墨西哥':
-                name = 'Mexico'
+                country = 'Mexico'
             if site == '巴西':
-                name = 'Brazil'
+                country = 'Brazil'
             if site == '哥伦比亚':
-                name = 'Colombia'
+                country = 'Colombia'
             if site == '智利':
-                name = 'Chile'
+                country = 'Chile'
             if site == '阿根廷':
-                name = 'Argentina'
+                country = 'Argentina'
             if site == '乌拉圭':
-                name = 'Uruguay'
+                country = 'Uruguay'
             #
-            force_select_country(driver, name)
-            print(get_now_time()+name+'成功选择站点:', site)
+            force_select_country(driver, country)
+            print(get_now_time() + '成功选择站点:', site)
             break
         except Exception as e:
             print(get_now_time()+name+'选择站点失败:', site)
 
+
+
     # 1. 先定位包含 "Complaints" 文本的父级卡片元素
     # 这里使用 XPath 寻找：包含 h2 且 h2 文本为 Complaints 的那个 div
-    card_element =WebDriverWait(driver, 10).until(
-        EC.visibility_of_element_located((By.XPATH, "//div[contains(@class, 'andes-card')][.//h2[text()='Complaints']]"))
+    card_element = WebDriverWait(driver, 10).until(
+        EC.visibility_of_element_located(
+            (By.XPATH, "//div[contains(@class, 'andes-card')][.//h2[text()='Complaints']]"))
     )
 
     # 2. 在这个卡片范围内，寻找类名为 variable__percentage 的元素
     # 注意：使用 card_element.find_element 是在当前节点下查找
-    data_complain =WebDriverWait(card_element, 10).until(
+    data_complain = WebDriverWait(card_element, 10).until(
         EC.visibility_of_element_located(
             (By.CLASS_NAME, "variable__percentage"))
     ).text
-    print("提取到的投诉率为:",data_complain)
+    print("提取到的投诉率为:", data_complain)
 
     # 1. 先定位包含 "Complaints" 文本的父级卡片元素
     # 这里使用 XPath 寻找：包含 h2 且 h2 文本为 Complaints 的那个 div
@@ -101,8 +110,7 @@ def get_reputation_info(window_id, site):
     ).text
 
 
-    print("提取到的延误率为:",data_delay)
-
+    print("提取到的延误率为:", data_delay)
     data_color = driver.find_element(By.CLASS_NAME, 'thermometer__level').text
     print("账号的声誉为:", data_color)
 
@@ -120,35 +128,39 @@ def get_reputation_info(window_id, site):
         data_color = '红色'
     if (data_color.__contains__("You still have no color")):
         data_color = '无色'
-
+    list.append(name)
+    list.append(site)
     list.append(data_color)
     list.append(data_orders)
     list.append(data_complain)
     list.append(data_delay)
 
+
     driver.get("https://global-selling.mercadolibre.com/sales-summary")
     time.sleep(10)
-    data_warn=""
+    data_warn = ""
     try:
         data_warn = WebDriverWait(driver, 10).until(
             EC.visibility_of_element_located(
                 (By.CLASS_NAME, "andes-message__content"))
         ).text
     except Exception as e:
-        data_warn="正常"
-    print("系统提示为:",data_warn)
+        data_warn = "正常"
+    print("系统提示为:", data_warn)
 
     data_gradient = driver.find_element(By.CSS_SELECTOR, ".andes-badge .andes-visually-hidden").text
-    if(data_gradient.__contains__("Decreased")):
-        data_gradient=data_gradient.replace("Decreased","下滑")
+    if (data_gradient.__contains__("Decreased")):
+        data_gradient = data_gradient.replace("Decreased", "下滑")
     else:
-        data_gradient=data_gradient.replace("Increased","增长")
-    print("近七天变化情况为:",data_gradient)
-    list.append(data_gradient)
+        data_gradient = data_gradient.replace("Increased", "增长")
+    print("近七天变化情况为:", data_gradient)
+
+    list.append(data_gradient.split(" ")[0])
+    list.append(data_gradient.split(" ")[1])
+
     list.append(data_warn)
+    list.append(get_now_time())
 
-
-    
     return list
 
 
@@ -157,6 +169,7 @@ def get_reputation_info_all():
     print(start)
     root_path = Path(__file__).resolve().parent
     file_path = root_path / "比特配置文件.xlsx"
+    # file_path = root_path / "比特配置文件测试.xlsx"
 
     wb = load_workbook(file_path)
     sheet = wb.active
@@ -170,41 +183,43 @@ def get_reputation_info_all():
         remark = row[2]
         if remark == '忽略':
             continue
-        print(get_now_time()+"开始打开窗口:"+name)
+        print(get_now_time() + "开始打开窗口:" + name)
         site_list = row[3].split("，")
         for site in site_list:
             i = 0
             while (i < 3):
                 i = i + 1
                 try:
-                    reputation_info = get_reputation_info(id, site)
-                    reputation_info.append(name)
-                    reputation_info.append(site)
+                    reputation_info = get_reputation_info(id, name, site)
                     reputation_info_sum.append(reputation_info)
-                    print(get_now_time()+name + site + "成功")
-                    reuslt.append(name + site + "获取声誉信息执行成功")
+                    print(get_now_time() + name + site + "获取声誉信息成功")
+                    reuslt.append(('获取声誉信息',name,site,"成功",get_now_time()))
                     break
                 except Exception as e:
-                    print(get_now_time()+name + site + "执行失败", e)
-                    reuslt.append(name + site + "获取声誉信息执行失败")
-                    time.sleep(180)
+                    print(get_now_time() + name + site + "执行失败", e)
+                    if(i==3):
+                        reuslt.append(('获取声誉信息',name,site,"失败",get_now_time()))
+
+
 
             time.sleep(10)
-        print(get_now_time()+"结束，正在关闭窗口")
+        print(get_now_time() + "结束，正在关闭窗口")
 
         try:
             closeBrowser(id)
         except Exception as e:
             continue
-        print(get_now_time()+"已经关闭窗口")
+        print(get_now_time() + "已经关闭窗口")
         time.sleep(5)
 
     result = "\n".join(map(str, reputation_info_sum))
     print(result)
 
     end = int(time.time())
-    print(get_now_time()+"总花费", end - start)
-    df = pd.DataFrame(reputation_info_sum, columns=['声誉颜色', '总单量', '投诉率', '延误率', '店铺名', '站点','近七天销售额变化率','系统告警'])
+    print(get_now_time() + "总花费", end - start)
+    df = pd.DataFrame(reputation_info_sum,
+                      columns=['店铺名', '站点', '声誉颜色', '总单量', '投诉率', '延误率', '增加或减少','近七天变化率',
+                               '系统告警','更新时间'])
 
     now = datetime.now()
     date_str = datetime.now().strftime("%Y-%m-%d-%H")
@@ -214,8 +229,10 @@ def get_reputation_info_all():
     send_info('美客多所有店铺声誉汇总', result,
               root_path / ("美客多声誉/武汉泽顺店铺声誉信息汇总" + date_str + ".xlsx"),
               r"武汉泽顺店铺声誉信息汇总" + date_str + ".xlsx")
-    print(get_now_time()+"发送邮件成功")
+    print(get_now_time() + "发送邮件成功")
 
+    inset_reputation_info(reputation_info_sum)
+    insert_task_record(reuslt)
 
 if __name__ == '__main__':
     get_reputation_info_all()

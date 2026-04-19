@@ -206,7 +206,9 @@ def download_relay_mail_all():
     #
     # time.sleep(100000)
     root_path = Path(__file__).resolve().parent
-    file_path = root_path / "比特配置文件.xlsx"
+    # file_path = root_path / "比特配置文件.xlsx"
+    file_path = root_path / "比特配置文件测试.xlsx"
+
 
     start = int(time.time())
     print(start)
