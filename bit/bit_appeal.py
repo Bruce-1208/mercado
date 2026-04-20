@@ -23,6 +23,7 @@ from datetime import datetime
 from AI_Agent.deepseek import *
 import re
 from openpyxl import load_workbook
+from bit_clash import *
 
 
 def use_one_browser_run_task(info):
@@ -94,6 +95,20 @@ def shensu(name, site, form, message):
     # 设置最长等待时间为 10 秒
     wait = WebDriverWait(driver, 30)
     driver.get("https://global-selling.mercadolibre.com/help/chat/v3?parent_skill=MLCX")
+    i=0
+    while(i<3):
+        i = i + 1
+        try:
+            WebDriverWait(driver, 10).until(
+                EC.visibility_of_element_located(
+                    (By.XPATH, "//a[text()='Mercado Libre International Selling']"))
+            )
+        except Exception as e:
+            print (f"美客多限频，正在第{i}次切换网络<br>")
+            switch_random_hongkong_node()
+            get_public_ip()
+
+
     words = []
     if (form == "延误"):
         words = [
@@ -105,7 +120,7 @@ def shensu(name, site, form, message):
         words=['亲爱的客服，我叫Bruce！这些产品是通用品牌产品，他们被系统误检测为侵权产品，你能帮我消除记录吗？']
 
     if (form == "投诉"):
-        print("正在进行申诉")
+        print (f"正在进行申诉<br>")
 
     words_random = random.choice(words)
 
@@ -117,7 +132,7 @@ def shensu(name, site, form, message):
             WebDriverWait(driver, 10).until(
                 EC.element_to_be_clickable((By.CLASS_NAME, "nav-header-cbt__site-switcher"))).click()
 
-            print(name + "打开站点选择器")
+            print (f"name +site+ '打开站点选择器'+<br>")
             time.sleep(5)
             path = 'div[data-value="MLM-remote"]'
             if site == "墨西哥":
@@ -138,7 +153,7 @@ def shensu(name, site, form, message):
 
             driver.refresh()
             time.sleep(3)
-            print(get_now_time() + name + site + "选择站点：", site)
+            print (f"{get_now_time()} + {name} + {site} + '选择站点成功'<br>")
             break
         except Exception as e:
             print(get_now_time() + name + site + "重新执行选择站点")
@@ -148,7 +163,7 @@ def shensu(name, site, form, message):
     orders_random = get_delay_orders_random(name, site, 10)
     infraction_random = get_infraction_orders_random(name, site, 5)
     try:
-        print(get_now_time() + name + site + "开始打开listing选项卡寻找客服")
+        print (f"{get_now_time()} + {name} + {site} + '开始打开listing选项卡寻找客服'<br>")
         # 跳转listing
         WebDriverWait(driver, 30).until(
             EC.element_to_be_clickable((By.XPATH,
@@ -168,7 +183,7 @@ def shensu(name, site, form, message):
                 EC.element_to_be_clickable(
                     (By.XPATH, "//button[contains(., 'We will send you a message in less than')]"))).click()
         except Exception as e:
-            print(get_now_time() + name + site + "没有人工客服")
+            print (f"{get_now_time()} + {name} + {site} + '没有人工客服'<br>")
             return None
         # 发消息
         print("进入人工客服")
@@ -183,6 +198,7 @@ def shensu(name, site, form, message):
             WebDriverWait(driver, 30).until(
                 EC.element_to_be_clickable((By.CSS_SELECTOR, 'button[title="Send"]'))).click()
             print("自动发送:" + time.strftime("%Y-%m-%d %H:%M:%S", time.localtime()), words_random)
+            print (f"{get_now_time()} + {name} + {site} + '自动发送'+{words_random}<br>")
             time.sleep(3)
 
             if (form == "延误"):
@@ -193,7 +209,7 @@ def shensu(name, site, form, message):
                 time.sleep(3)
                 WebDriverWait(driver, 30).until(
                     EC.element_to_be_clickable((By.CSS_SELECTOR, 'button[title="Send"]'))).click()
-                print(get_now_time() + name + site + "发送延误订单:", orders_random)
+                print (f"{get_now_time()} + {name} + {site} + '发送延误订单：'+{orders_random}<br>")
                 chat_ai(driver)
             if (form == "侵权"):
                 WebDriverWait(driver, 30).until(
@@ -203,7 +219,7 @@ def shensu(name, site, form, message):
                 time.sleep(3)
                 WebDriverWait(driver, 30).until(
                     EC.element_to_be_clickable((By.CSS_SELECTOR, 'button[title="Send"]'))).click()
-                print(get_now_time() + name + site + "发送侵权的id:", infraction_random)
+                print(f"{get_now_time()} + {name} + {site} + '发送侵权的 id：'+{infraction_random}<br>")
                 chat_ai(driver, form)
         else:
             WebDriverWait(driver, 30).until(
@@ -213,7 +229,7 @@ def shensu(name, site, form, message):
             time.sleep(3)
             WebDriverWait(driver, 30).until(
                 EC.element_to_be_clickable((By.CSS_SELECTOR, 'button[title="Send"]'))).click()
-            print("自动发送:" + time.strftime("%Y-%m-%d %H:%M:%S", time.localtime()), words_random)
+            print (f"{get_now_time()} + {name} + {site} + '自动发送自定义话术'+{message}<br>")
             chat_ai(driver, form)
 
 
@@ -286,17 +302,17 @@ def chat_ai(driver, form):
             lines = lines + message.text + "\n"
         response = ""
         if (form == "延误"):
-            words = lines + "|这是我跟美客多客服的对话，我叫Bruce，我正在找他申诉我延误的订单，麻烦你帮我用不超过十个字的自然语言回复他，如果你理解他拒绝了我的申请，麻烦返回：好的，我明白了,感谢您的回复"
+            words = lines + "|这是我跟美客多客服的对话，我叫Bruce，我正在找他申诉我延误的订单，麻烦你帮我用不超过三十个字的自然语言回复他，如果你理解他拒绝了我的申请，麻烦返回：好的，我明白了,感谢您的回复"
             response = get_ai_response(words)
-            print("AI客服回复", response)
+            print (f"{get_now_time()} + 'AI回复:'+{response}<br>")
         if (form == "侵权"):
-            words = lines + "|这是我跟美客多客服的对话，我叫Bruce，我正在找他申诉我侵权的商品，帮我想话术让客服相信这不是侵权产品,麻烦你帮我用不超过十个字的自然语言回复他，如果你理解他拒绝了我的申请，麻烦返回：好的，我明白了,感谢您的回复"
+            words = lines + "|这是我跟美客多客服的对话，我叫Bruce，我正在找他申诉我侵权的商品，帮我想话术让客服相信这不是侵权产品,麻烦你帮我用不超过三十个字的自然语言回复他，如果你理解他拒绝了我的申请，麻烦返回：好的，我明白了,感谢您的回复"
             response = get_ai_response(words)
-            print("AI客服回复", response)
+            print (f"{get_now_time()} + 'AI回复:'+{response}<br>")
         if (form == "投诉"):
-            words = lines + "|这是我跟美客多客服的对话，我叫Bruce，我正在给他我被投诉的订单号，帮我想办法让这些订单不影响我的声誉，麻烦你帮我用不超过十个字的自然语言回复他，如果你理解他拒绝了我的申请，麻烦返回：好的，我明白了,感谢您的回复"
+            words = lines + "|这是我跟美客多客服的对话，我叫Bruce，我正在给他我被投诉的订单号，帮我想办法让这些订单不影响我的声誉，麻烦你帮我用不超过三十个字的自然语言回复他，如果你理解他拒绝了我的申请，麻烦返回：好的，我明白了,感谢您的回复"
             response = get_ai_response(words)
-            print("AI客服回复", response)
+            print (f"{get_now_time()} + 'AI回复:'+{response}<br>")
         try:
             # 发消息
             WebDriverWait(driver, 30).until(
@@ -306,13 +322,14 @@ def chat_ai(driver, form):
             time.sleep(3)
             WebDriverWait(driver, 30).until(
                 EC.element_to_be_clickable((By.CSS_SELECTOR, 'button[title="Send"]'))).click()
-            print("自动发送:" + time.strftime("%Y-%m-%d %H:%M:%S", time.localtime()), response)
+            print (f"{get_now_time()} + '自动发送消息:'+{response}<br>")
+
         except Exception as e:
             print("聊天结束，发送失败")
             ###把聊天记录发到数据库里面去
 
         if (response.__contains__("好的，我明白了,感谢您的回复") or i == 5):
-            print("结束当前聊天窗口")
+            print (f"{get_now_time()} + '结束当前聊天'<br>")
             # 关闭页面
             WebDriverWait(driver, 30).until(
                 EC.element_to_be_clickable((By.XPATH,
@@ -354,11 +371,12 @@ if __name__ == '__main__':
     # long
     # use_one_browser_run_task('9812f185f7ab49d98f3988994d9e8ebf','墨西哥')
     # 跃马扬鞭
-    use_one_browser_run_task(('vngbjkk', '墨西哥', '侵权'))
+    # use_one_browser_run_task(('跃马扬鞭', '墨西哥', '侵权','MLM2872391307 - MLM2872380671 - MLM5204725168 - MLM5199341964 - MLM2870050527 - MLM2870047371 - MLM2870043695 - MLM5199197738 - MLM5199251620 - MLM4811240116 亲爱的客服，这些产品是通用品牌产品，他们被系统误判为侵权，你能帮我重新激活并且恢复我的账户吗？'))
+    use_one_browser_run_task(('健步如飞','墨西哥','延误',''))
     browser_list = [
-        ('龙马精神', '阿根廷', '延误'),
+        ('德德智汇', '墨西哥', '延误'),
         ('跃马扬鞭', '阿根廷', '延误'),
-        ('德德智慧', '墨西哥', '延误')
+        ('健步如飞', '墨西哥', '延误')
 
     ]
-    use_all_browser_run_task_with_thread_pool(browser_list)
+    # use_all_browser_run_task_with_thread_pool(browser_list)
