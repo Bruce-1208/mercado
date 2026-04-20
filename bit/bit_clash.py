@@ -5,7 +5,7 @@ import random
 
 # CLASH_API_URL = "http://127.0.0.1:50980"
 
-CLASH_API_URL = "http://127.0.0.1:65080"
+CLASH_API_URL = "http://127.0.0.1:9090"
 
 CLASH_SECRET = "12345678"  # 对应 config.yaml 中的 secret
 
