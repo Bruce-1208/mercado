@@ -168,8 +168,8 @@ def get_reputation_info(window_id, name, site):
 
     list_gradient=data_gradient.split(" ")
     if(len(list_gradient)==2):
-        list.append(list[0])
-        list.append(list[1])
+        list.append(list_gradient[0])
+        list.append(list_gradient[1])
     else:
         list.append(data_gradient)
         list.append(data_gradient)
@@ -244,7 +244,7 @@ def get_reputation_info_all():
 
     df.to_excel(root_path / ("美客多声誉/武汉泽顺店铺声誉信息汇总" + date_str + ".xlsx"), index=False)
 
-    send_info('美客多所有店铺声誉汇总', reputation_info_sum_str,
+    send_info('美客多所有店铺声誉汇总', "",
               root_path / ("美客多声誉/武汉泽顺店铺声誉信息汇总" + date_str + ".xlsx"),
               r"武汉泽顺店铺声誉信息汇总" + date_str + ".xlsx")
     print(get_now_time() + "发送邮件成功")
