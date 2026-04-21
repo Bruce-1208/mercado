@@ -3,9 +3,6 @@ from bit_reputation_info import *
 from bit_print import *
 from bit_summary_delayfile import *
 
-
-from apscheduler.schedulers.blocking import BlockingScheduler
-
 def print_orders():
      results=print_orders_all()
      for message in results:
@@ -31,3 +28,5 @@ def download_summary():
 if __name__ == '__main__':
     get_reputation_info_all()
     download_relay_mail_all()
+    summary_delayFile()
+

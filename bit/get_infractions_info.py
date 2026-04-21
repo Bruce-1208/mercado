@@ -134,7 +134,7 @@ def get_infractions_info_all():
     print(start)
     root_path = Path(__file__).resolve().parent
     # file_path = root_path / "比特配置文件.xlsx"
-    file_path = root_path / "比特配置文件测试.xlsx"
+    file_path = root_path / "比特配置文件.xlsx"
 
 
     wb = load_workbook(file_path)

@@ -63,4 +63,6 @@ def send_info(subject,body,local_file_path,display_filename):
 
 
 if __name__ == "__main__":
-    send_info('测试','测试',r'D:\比特配置文件.xlsx',r'比特配置文件.xlsx')
+    send_info('美客多所有店铺声誉汇总', "reputation_info_sum_str",
+              "/Users/a11/mercado/bit/美客多声誉/武汉泽顺店铺声誉信息汇总2026-04-20-05.xlsx",
+              r"武汉泽顺店铺声誉信息汇总2026-04-20-05.xlsx")
