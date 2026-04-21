@@ -10,6 +10,7 @@ app = Flask(__name__)
 
 # 1. 核心逻辑方法：改造成生成器
 def shensu_logic(name, site, form, message):
+
     while (True):
         try:
             yield f"--- 任务启动：{name}{site} ---<br>"
@@ -22,6 +23,7 @@ def shensu_logic(name, site, form, message):
             yield f"{name}{site}关闭浏览器等待十分钟，进行下一次申诉"
             window_id=getWindowidByName(name)
             time.sleep(600)
+
 
 
 # 2. 接口路由
