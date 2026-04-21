@@ -254,5 +254,5 @@ def get_reputation_info_all():
 
 if __name__ == '__main__':
 
-    get_reputation_info('22139511815a4bf588fe96d5fdafded6','四季如春','阿根廷')
-    # get_reputation_info_all()
+    # get_reputation_info('22139511815a4bf588fe96d5fdafded6','四季如春','阿根廷')
+    get_reputation_info_all()

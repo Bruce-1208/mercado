@@ -1,3 +1,5 @@
+from apscheduler.schedulers.blocking import BlockingScheduler
+
 from bit_download import *
 from bit_reputation_info import *
 from bit_print import *
@@ -22,11 +24,11 @@ def download_summary():
 # # Cron 格式任务（每天凌晨 2 点执行）
 # scheduler.add_job(download_summary, 'cron', hour=7, minute=0)
 # scheduler.add_job(download_summary, 'cron', hour=12, minute=9)
-#
-#
+
+
 # scheduler.start()
 if __name__ == '__main__':
-    get_reputation_info_all()
-    download_relay_mail_all()
-    summary_delayFile()
+    scheduler = BlockingScheduler()
+    scheduler.add_job(get_reputation_info_all(), 'cron', hour=6, minute=0)
+
 
