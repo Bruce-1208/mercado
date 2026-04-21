@@ -15,7 +15,7 @@ from selenium.webdriver.support import expected_conditions as EC
 import random
 
 from bit.bit_mysql import insert_chat_info
-from bit.bit_utils import get_latest_modified_file, get_bit_path, parser_delay_date, get_now_time
+from bit.bit_utils import get_latest_modified_file, get_bit_path, parser_delay_date, get_now_time, getWindowidByName
 from bit_api import *
 from AI_Agent.qianwen import *
 import pandas as pd
@@ -47,8 +47,13 @@ def use_one_browser_run_task(info):
                     traceback.print_exc()
                     print("申诉执行异常", e)
                 finally:
+                    window_id = getWindowidByName(name)
+                    try:
+                        closeBrowser(window_id)
+                    except Exception as e:
+                        continue
                     time.sleep(1800)
-                    continue
+
 
         else:
             print("ip检测不通过，请检查")
@@ -167,9 +172,13 @@ def shensu(name, site, form, message):
             continue
 
     orders_random = get_delay_orders_random(name, site, 10)
+
+    if(orders_random=="" and message==""):
+        return "没有可以申诉的订单"
+
     infraction_random = get_infraction_orders_random(name, site, 5)
     try:
-        print(f"{get_now_time()} + {name} + {site} + '开始打开listing选项卡寻找客服'<br>")
+        print(f"{get_now_time()}  {name}  {site} '开始打开listing选项卡寻找客服'<br>")
         # 跳转listing
         WebDriverWait(driver, 30).until(
             EC.element_to_be_clickable((By.XPATH,
@@ -185,7 +194,7 @@ def shensu(name, site, form, message):
 
         # 包含We will send you a message in less than 进入人工客服
         try:
-            WebDriverWait(driver, 30).until(
+            WebDriverWait(driver, 15).until(
                 EC.element_to_be_clickable(
                     (By.XPATH, "//button[contains(., 'We will send you a message in less than')]"))).click()
         except Exception as e:
@@ -196,16 +205,6 @@ def shensu(name, site, form, message):
 
         if (message == ""):
 
-            WebDriverWait(driver, 30).until(
-                EC.presence_of_element_located((By.XPATH,
-                                                "/html/body/main/div/div[2]/div/div/div/div[4]/div/div/div/div/div/div/div[2]/div/div[2]/div/div/div[1]/div[1]/p"))).send_keys(
-                words_random)
-            time.sleep(3)
-            WebDriverWait(driver, 30).until(
-                EC.element_to_be_clickable((By.CSS_SELECTOR, 'button[title="Send"]'))).click()
-            print(f"{get_now_time()} + {name} + {site} + '自动发送'+{words_random}<br>")
-            time.sleep(3)
-
             if (form == "延误"):
                 WebDriverWait(driver, 30).until(
                     EC.presence_of_element_located((By.XPATH,
@@ -214,8 +213,8 @@ def shensu(name, site, form, message):
                 time.sleep(3)
                 WebDriverWait(driver, 30).until(
                     EC.element_to_be_clickable((By.CSS_SELECTOR, 'button[title="Send"]'))).click()
-                print(f"{get_now_time()} + {name} + {site} + '发送延误订单：'+{orders_random}<br>")
-                chat_ai(driver, name, site, form, message)
+                print(f"{get_now_time()} {name}  {site} 发送延误订单：'+{orders_random}+{words_random}<br>")
+                chat_ai(driver, name, site, form, orders_random + words_random)
             if (form == "侵权"):
                 WebDriverWait(driver, 30).until(
                     EC.presence_of_element_located((By.XPATH,
@@ -224,8 +223,8 @@ def shensu(name, site, form, message):
                 time.sleep(3)
                 WebDriverWait(driver, 30).until(
                     EC.element_to_be_clickable((By.CSS_SELECTOR, 'button[title="Send"]'))).click()
-                print(f"{get_now_time()} + {name} + {site} + '发送侵权的 id：'+{infraction_random}<br>")
-                chat_ai(driver, name, site, form, message)
+                print(f"{get_now_time()} {name} {site} '发送侵权的 id：'{infraction_random}+{words_random}<br>")
+                chat_ai(driver, name, site, form, infraction_random + words_random)
         else:
             WebDriverWait(driver, 30).until(
                 EC.presence_of_element_located((By.XPATH,
@@ -234,20 +233,17 @@ def shensu(name, site, form, message):
             time.sleep(3)
             WebDriverWait(driver, 30).until(
                 EC.element_to_be_clickable((By.CSS_SELECTOR, 'button[title="Send"]'))).click()
-            print(f"{get_now_time()} + {name} + {site} + '自动发送自定义话术'+{message}<br>")
+            print(f"{get_now_time()} {name} {site} 自动发送自定义话术：{message}<br>")
             chat_ai(driver, name, site, form, message)
 
 
     except Exception as e:
         print(get_now_time() + name + site + "继续与客服对话")
-        print(e)
-        traceback.print_exc()
         # 全部聊天记录
         chat_ai(driver, name, site, form, message)
     finally:
         print(f"{get_now_time()} {name}{site}找客服执行完毕<br>")
         print(f"{get_now_time()} {name} {site} 关闭浏览器<br>")
-        driver.quit()
 
 
 def get_delay_orders_random(name, site, nums):
@@ -269,11 +265,13 @@ def get_delay_orders_random(name, site, nums):
             if (order_date > fifteen_days_ago):
                 order_list.append(order_num)
     print(get_now_time() + name + site + "最近15天的延误个数:", len(order_list))
+    order_random=""
     if len(order_list) >= nums:
         order_random = str(random.sample(order_list, nums))
     else:
         order_random = str(order_list)
     order_random = re.sub(r'[^\d,]', '', order_random)
+
     print(get_now_time() + name + site + "随机得到的延误销售单号为", order_random)
     return order_random
 
@@ -306,56 +304,38 @@ def checkChatEnd(driver, name, site):
     try:
         target_element = wait.until(
             EC.visibility_of_element_located((By.XPATH, "//p[contains(text(), 'This chat has ended')]")))
+        print(f"{get_now_time()} {name}{site}聊天已经结束,结束AI找客服<br>")
         return True
     except Exception as e:
-        print(f"{get_now_time()} {name}{site}聊天已经结束,结束AI找客服<br>")
         return False
     return False
 
 
-def chat_ai(driver, name, site, form, message):
+def chat_ai(driver, name, site, form, huashu):
     i = 0
     chat_rerord = set()
     chat_list = []
     while (i < 5):
+        i = i + 1
+        lines = ""
         response = ""
         isEnd = checkChatEnd(driver, name, site)
         if (isEnd):
             break
 
-        if (form == "延误"):
-            words = lines + "|这是我跟美客多客服的对话，我叫Bruce，我正在找他申诉我延误的订单，麻烦你帮我用不超过三十个字的自然语言回复他，如果你理解他拒绝了我的申请，麻烦返回：好的，我明白了,感谢您的回复"
-
-            response = get_ai_response(words)
-            print(f"{get_now_time()} + 'AI回复:'+{response}<br>")
-        if (form == "侵权"):
-            words = lines + "|这是我跟美客多客服的对话，我叫Bruce，我正在找他申诉我侵权的商品，帮我想话术让客服相信这不是侵权产品,麻烦你帮我用不超过三十个字的自然语言回复他，如果你理解他拒绝了我的申请，麻烦返回：好的，我明白了,感谢您的回复"
-
-            response = get_ai_response(words)
-            print(f"{get_now_time()} + 'AI回复:'+{response}<br>")
-        if (form == "投诉"):
-            words = lines + "|这是我跟美客多客服的对话，我叫Bruce，我正在给他我被投诉的订单号，帮我想办法让这些订单不影响我的声誉，麻烦你帮我用不超过三十个字的自然语言回复他，如果你理解他拒绝了我的申请，麻烦返回：好的，我明白了,感谢您的回复"
-
-            response = get_ai_response(words)
-            print(f"{get_now_time()} + 'AI回复:'+{response}<br>")
-
-        i = i + 1
-
         try:
             print(f"{get_now_time()} {name}{site}+'进入人工客服处理流程，循环回复第{i}次'<br>")
             messages = driver.find_elements(By.CLASS_NAME, 'chat-ui-message-bubble.chat-ui-message-bubble--from-agent')
-            lines = ""
 
-            for message in messages:
-                print(message.text)
-                lines = lines + message.text + "\n"
+            for mes in messages:
+                print(mes.text)
+                lines = lines + mes.text + "\n"
             if (lines in chat_rerord):
                 print(f"{get_now_time()} {name}{site}+'客服已经至少三分钟没有回复'<br>")
+                # 客服没有回消息，不用再次回复他
                 continue
 
-
             chat_rerord.add(lines)
-            # 客服没有回消息，不用再次回复他
 
             if (form == "延误"):
                 words = lines + "|这是我跟美客多客服的对话，我叫Bruce，我正在找他申诉我延误的订单，麻烦你帮我用不超过三十个字的自然语言回复他，如果你理解他拒绝了我的申请，麻烦返回：好的，我明白了,感谢您的回复"
@@ -379,8 +359,8 @@ def chat_ai(driver, name, site, form, message):
                 WebDriverWait(driver, 30).until(
                     EC.element_to_be_clickable((By.CSS_SELECTOR, 'button[title="Send"]'))).click()
                 print(f"{get_now_time()} {name}{site}'自动发送消息:'+{response}<br>")
-                #聊天记录插入数据库
-                insert_chat_info((name,site,message,lines,response,get_now_time()))
+                # 聊天记录插入数据库
+                insert_chat_info(name, site, huashu, lines, response, get_now_time())
 
             except Exception as e:
                 print(f"{get_now_time()} {name}{site}'发送消息失败'<br>")
@@ -432,6 +412,39 @@ def use_all_browser_run_task_with_thread_pool(browser_list, max_threads=10):
         executor.map(use_one_browser_run_task, browser_list)
 
 
+def auto_appeal_delay():
+    fold_path = get_bit_path() / "美客多延误"
+    file_path=fold_path/get_latest_modified_file(fold_path)
+    wb = load_workbook(file_path)
+    sheet = wb.active
+    # 使用 min_row=2 跳过第一行
+
+    name_site=set()
+    for row in sheet.iter_rows(min_row=2, values_only=True):
+        delayrate=row[2]
+        if (delayrate!=None and delayrate!=""):
+            delay_value=0.0
+            if(type(delayrate)==str):
+                delay_value = float(delayrate.strip('%')) / 100
+            else:
+                delay_value=float(delayrate)
+            if delay_value>=0.08:
+                name_site.add((row[0],row[1],delay_value))
+
+    print(len(name_site))
+
+    list_appeal=[]
+    for i in name_site:
+        list_appeal.append((i[0],i[1],"延误",""))
+
+    print(list_appeal)
+
+    use_all_browser_run_task_with_thread_pool(list_appeal,5)
+
+
+
+
+
 if __name__ == '__main__':
     # long
     # use_one_browser_run_task('9812f185f7ab49d98f3988994d9e8ebf','墨西哥')
@@ -460,4 +473,6 @@ if __name__ == '__main__':
 """),
 
     ]
-    use_all_browser_run_task_with_thread_pool(browser_list)
+    # use_all_browser_run_task_with_thread_pool(browser_list)
+
+    auto_appeal_delay()

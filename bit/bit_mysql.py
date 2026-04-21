@@ -193,7 +193,7 @@ def inset_delay_info(delay_list):
         connection.close()
 
 
-def insert_chat_info(chat_info):
+def insert_chat_info(name,site,message,chat,response,time):
     connection = pymysql.connect(**config)
 
     try:
@@ -211,10 +211,8 @@ def insert_chat_info(chat_info):
         %s, %s, %s, %s, %s, %s
     );    
         """
-            cursor.executemany(sql_insert, chat_info)
+            cursor.execute(sql_insert, (name,site,message,chat,response,time))
             print("执行sql成功", sql_insert)
-
-        # 核心：涉及写操作（增删改）必须提交事务
         connection.commit()
 
     except Exception as e:
