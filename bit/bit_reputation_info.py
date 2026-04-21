@@ -6,7 +6,7 @@ from selenium.webdriver.common.keys import Keys
 from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.support.wait import WebDriverWait
 
-from bit.utils import get_now_time
+from bit.bit_utils import get_now_time
 from bit_api import *
 from selenium.webdriver.common.desired_capabilities import DesiredCapabilities
 from selenium.webdriver.chrome.service import Service
@@ -254,5 +254,5 @@ def get_reputation_info_all():
 
 if __name__ == '__main__':
 
-    get_reputation_info('22139511815a4bf588fe96d5fdafded6','四季如春','阿根廷')
-    # get_reputation_info_all()
+    # get_reputation_info('22139511815a4bf588fe96d5fdafded6','四季如春','阿根廷')
+    get_reputation_info_all()

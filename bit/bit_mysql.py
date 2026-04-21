@@ -191,5 +191,42 @@ def inset_delay_info(delay_list):
     finally:
         # 关闭连接
         connection.close()
+
+
+def insert_chat_info(chat_info):
+    connection = pymysql.connect(**config)
+
+    try:
+        with connection.cursor() as cursor:
+            # --- 增 (Create) ---
+            sql_insert = """
+                INSERT INTO `record_chat` (
+        `店铺`, 
+        `站点`, 
+        `话术`, 
+        `客服消息`, 
+        `回复`, 
+        `时间`
+    ) VALUES (
+        %s, %s, %s, %s, %s, %s
+    );    
+        """
+            cursor.executemany(sql_insert, chat_info)
+            print("执行sql成功", sql_insert)
+
+        # 核心：涉及写操作（增删改）必须提交事务
+        connection.commit()
+
+    except Exception as e:
+        # 发生错误则回滚
+        connection.rollback()
+        print(f"操作失败，已回滚: {e}")
+    finally:
+        # 关闭连接
+        connection.close()
+
+
 if __name__ == "__main__":
     mysql_demo()
+
+
