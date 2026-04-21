@@ -9,7 +9,7 @@ from datetime import datetime
 import pandas
 from send_mail import *
 
-from utils import *
+from bit_utils import *
 import sys
 from bit_mysql import *
 

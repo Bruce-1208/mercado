@@ -1,0 +1,13 @@
+# --- PyCharm / IntelliJ IDEA 忽略配置 ---
+
+.idea/
+*.iml
+*.iws
+*.ipr
+
+# 即使你想保留部分配置，也建议忽略以下包含个人路径和状态的文件
+.idea/workspace.xml
+.idea/usage.statistics.xml
+.idea/dictionary.xml
+.idea/shelf/
+.idea/httpRequests/
