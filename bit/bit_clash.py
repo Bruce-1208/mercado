@@ -2,7 +2,11 @@ import requests
 import json
 import random
 # 配置信息
-CLASH_API_URL = "http://127.0.0.1:59034"
+
+# CLASH_API_URL = "http://127.0.0.1:50980"
+
+CLASH_API_URL = "http://127.0.0.1:9090"
+
 CLASH_SECRET = "12345678"  # 对应 config.yaml 中的 secret
 
 TARGET_GROUP = "🔰 选择节点"  # 确保这个名字和你之前 list_proxies 打印出来的一致

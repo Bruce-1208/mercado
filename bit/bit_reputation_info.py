@@ -91,6 +91,7 @@ def get_reputation_info(window_id, name, site):
         except Exception as e:
             print(get_now_time() + name+'选择站点失败:', site)
 
+
     # 1. 先定位包含 "Complaints" 文本的父级卡片元素
     # 这里使用 XPath 寻找：包含 h2 且 h2 文本为 Complaints 的那个 div
     card_element = WebDriverWait(driver, 10).until(
@@ -119,6 +120,7 @@ def get_reputation_info(window_id, name, site):
         EC.visibility_of_element_located(
             (By.CLASS_NAME, "variable__percentage"))
     ).text
+
 
     print("提取到的延误率为:", data_delay)
     data_color = driver.find_element(By.CLASS_NAME, 'thermometer__level').text
@@ -166,8 +168,8 @@ def get_reputation_info(window_id, name, site):
 
     list_gradient=data_gradient.split(" ")
     if(len(list_gradient)==2):
-        list.append(list[0])
-        list.append(list[1])
+        list.append(list_gradient[0])
+        list.append(list_gradient[1])
     else:
         list.append(data_gradient)
         list.append(data_gradient)
@@ -182,7 +184,7 @@ def get_reputation_info_all():
     start = int(time.time())
     print(start)
     root_path = Path(__file__).resolve().parent
-    file_path = root_path / "比特配置文件测试.xlsx"
+    file_path = root_path / "比特配置文件.xlsx"
     # file_path = root_path / "比特配置文件测试.xlsx"
 
     wb = load_workbook(file_path)
@@ -242,7 +244,7 @@ def get_reputation_info_all():
 
     df.to_excel(root_path / ("美客多声誉/武汉泽顺店铺声誉信息汇总" + date_str + ".xlsx"), index=False)
 
-    send_info('美客多所有店铺声誉汇总', reputation_info_sum_str,
+    send_info('美客多所有店铺声誉汇总', "",
               root_path / ("美客多声誉/武汉泽顺店铺声誉信息汇总" + date_str + ".xlsx"),
               r"武汉泽顺店铺声誉信息汇总" + date_str + ".xlsx")
     print(get_now_time() + "发送邮件成功")
