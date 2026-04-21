@@ -57,6 +57,22 @@ def get_now_time():
     formatted_time = now.strftime("%Y-%m-%d %H:%M:%S")
     return formatted_time
 
+def getWindowidByName(name):
+    config_path = get_bit_path() / "比特配置文件.xlsx"
+    wb = load_workbook(config_path)
+    sheet = wb.active
+    config_info = []
+
+    reuslt = []
+    # 使用 min_row=2 跳过第一行
+    window_id = ""
+    for row in sheet.iter_rows(min_row=2, values_only=True):
+        window_id = row[0]
+        window_name = row[1]
+        if window_name == name:
+            break
+    return window_id
 
 if __name__ == '__main__':
+    print(getWindowidByName("跃马扬鞭"))
     print(get_now_time())
