@@ -231,8 +231,8 @@ def shensu(name, site, form, message):
                 EC.element_to_be_clickable((By.CSS_SELECTOR, 'button[title="Send"]'))).click()
             print(f"{get_now_time()} + {name} + {site} + '自动发送自定义话术'+{message}<br>")
             chat_ai(driver, name, site, form, message)
-
-
+    print(f"{get_now_time()} {name} {site} 关闭浏览器<br>")
+    driver.quit()
 
     except Exception as e:
         print(get_now_time() + name + site + "继续与客服对话")

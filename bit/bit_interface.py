@@ -20,7 +20,7 @@ def shensu_logic(name, site, form, message):
             yield e
         finally:
             yield f"{name}{site}关闭浏览器等待十分钟，进行下一次申诉"
-
+            window_id=getWindowidByName(name)
             time.sleep(600)
 
 
