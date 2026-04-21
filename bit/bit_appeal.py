@@ -32,6 +32,7 @@ def use_one_browser_run_task(info):
     name = info[0]
     site = info[1]
     form = info[2]
+    message=info[3]
 
     try:
         ip_usable = True
@@ -40,7 +41,7 @@ def use_one_browser_run_task(info):
                 print("ip检测通过，打开店铺平台主页")
 
                 try:
-                    shensu(name, site, form, "")
+                    shensu(name, site, form, message)
                 except Exception as e:
                     traceback.print_exc()
                     print("申诉执行异常", e)
@@ -111,6 +112,7 @@ def shensu(name, site, form, message):
             get_public_ip()
 
     words = []
+
     if (form == "延误"):
         words = [
             '亲爱的客服，我叫Bruce！这些订单因合作物流车辆临时出现故障，导致未能及时揽收，并非我这边发货延误，麻烦您帮忙处理一下，消除对店铺声誉的影响，非常感谢！',
@@ -118,10 +120,10 @@ def shensu(name, site, form, message):
         ]
 
     if (form == "侵权"):
-        words = ['亲爱的客服，我叫Bruce！这些产品是通用品牌产品，他们被系统误检测为侵权产品，你能帮我消除记录吗？']
+        words = ['亲爱的客服，我叫Bruce！这些产品是通用品牌产品，他们被系统误检测为侵权产品，你能帮我消除记录吗？','亲爱的客服，我叫Bruce！这些产品是通用品牌产品，他们被系统误检测为侵权产品，你能帮我消除记录吗？']
 
     if (form == "投诉"):
-        print(f"正在进行申诉<br>")
+        words = ['亲爱的客服，我叫Bruce！我的产品没有任何质量问题，客户没有给出确凿的证据证明他出了问题，我认为客户是想免费购物，你能消除对我声誉的影响吗' ]
 
     words_random = random.choice(words)
 
@@ -231,8 +233,7 @@ def shensu(name, site, form, message):
                 EC.element_to_be_clickable((By.CSS_SELECTOR, 'button[title="Send"]'))).click()
             print(f"{get_now_time()} + {name} + {site} + '自动发送自定义话术'+{message}<br>")
             chat_ai(driver, name, site, form, message)
-    print(f"{get_now_time()} {name} {site} 关闭浏览器<br>")
-    driver.quit()
+
 
     except Exception as e:
         print(get_now_time() + name + site + "继续与客服对话")
@@ -242,6 +243,8 @@ def shensu(name, site, form, message):
         chat_ai(driver, name, site, form, message)
     finally:
         print(f"{get_now_time()} {name}{site}找客服执行完毕<br>")
+        print(f"{get_now_time()} {name} {site} 关闭浏览器<br>")
+        driver.quit()
 
 
 def get_delay_orders_random(name, site, nums):
@@ -382,7 +385,7 @@ def use_all_browser_run_task(browser_list):
         use_one_browser_run_task(browser)
 
 
-def use_all_browser_run_task_with_thread_pool(browser_list, max_threads=3):
+def use_all_browser_run_task_with_thread_pool(browser_list, max_threads=10):
     """
     使用线程池控制最大并发线程数
     :param browser_list: 店铺列表
@@ -399,8 +402,20 @@ if __name__ == '__main__':
     # use_one_browser_run_task(('跃马扬鞭', '墨西哥', '侵权','MLM2872391307 - MLM2872380671 - MLM5204725168 - MLM5199341964 - MLM2870050527 - MLM2870047371 - MLM2870043695 - MLM5199197738 - MLM5199251620 - MLM4811240116 亲爱的客服，这些产品是通用品牌产品，他们被系统误判为侵权，你能帮我重新激活并且恢复我的账户吗？'))
     # use_one_browser_run_task(('健步如飞','墨西哥','延误',''))
     browser_list = [
-        ('德德智汇', '墨西哥', '延误'),
-        ('跃马扬鞭', '阿根廷', '延误'),
-        ('健步如飞', '墨西哥', '延误')
+        ('龙', '阿根廷', '延误','2000015835896308, 2000015760415040, 2000015657210554, 2000015755669242, 2000015413354104亲爱的客服，这几个产品是菜鸟没有及时揽收造成了延误，你能帮我取消对我声誉的影响吗？'),
+        ('飞黄腾达5', '阿根廷', '投诉','#2000012217587531 亲爱的客服，我的产品如描述一致，客户并没有证据证明我的产品有问题，中介把钱判给了我，你能帮我消除对我声誉的影响吗'),
+        ('鸿运当头', '墨西哥', '投诉','2000012334909743 亲爱的客服，我的产品如描述一致，客户并没有证据证明我的产品有问题，是他自己不会使用，你能帮我消除对我声誉的影响吗'),
+        ('飞黄腾达5', '巴西', '投诉','#2000012373200625 亲爱的客服，我的产品如描述一致数量没错，客户并没有证据证明我的产品有问题，明显是想免费购物，你能帮我消除对我声誉的影响吗'),
+        ('腾', '墨西哥', '延误','2000015674360964、2000015591983456、2000015552663062、2000015371004100、2000015370997788 ，2000015237834384亲爱的客服，这几个产品是菜鸟没有及时揽收造成了延误，你能帮我取消对我声誉的影响吗？'),
+        ('梁山好汉666', '墨西哥', '延误',"""'2000015974674620
+'2000015974297176
+'2000015961496590
+'2000015956536118
+'2000015944080040
+'2000015930028184
+'2000015902497014
+'2000015852788368亲爱的客服，这几个产品是菜鸟没有及时揽收造成了延误，你能帮我取消对我声誉的影响吗？
+"""),
+
     ]
     use_all_browser_run_task_with_thread_pool(browser_list)
