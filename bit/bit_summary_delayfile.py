@@ -21,7 +21,7 @@ def summary_delayFile():
     wb = load_workbook(file_path)
     sheet = wb.active
     reputation_info_sum = []
-    save_fold=""
+    save_fold = ""
 
     if sys.platform == "win32":
         print("当前环境是 Windows")
@@ -72,7 +72,12 @@ def summary_delayFile():
     for index, row in df.iterrows():
         print(row[0])
         if (len(row) > 6):
-            delayrate = row['延误率']
+
+            if pd.isna(row['延误率']):
+                delayrate = ""
+            else:
+                delayrate = row['延误率']
+
             name = row['店铺名']
             site = row['站点']
             key = name + site
@@ -95,7 +100,7 @@ def summary_delayFile():
             site = '哥伦比亚'
         if (site == 'UY'):
             site = '乌拉圭'
-        delayrate=""
+        delayrate = ""
         try:
             delayrate = dict_delay[name + site]
         except Exception as e:
@@ -129,14 +134,14 @@ def summary_delayFile():
     now = datetime.now()
     date_str = datetime.now().strftime("%Y-%m-%d-%H")
 
-    df.to_excel(Path(__file__).resolve().parent/("美客多延误\武汉泽顺店铺延误信息汇总" + date_str + ".xlsx"), index=False)
+    df.to_excel(Path(__file__).resolve().parent / ("美客多延误\武汉泽顺店铺延误信息汇总" + date_str + ".xlsx"),
+                index=False)
 
-    send_info('美客多所有店铺延误信息汇总', "美客多所有店铺延误信息汇总",Path(__file__).resolve().parent/("美客多延误\武汉泽顺店铺延误信息汇总" + date_str + ".xlsx"),
+    send_info('美客多所有店铺延误信息汇总', "美客多所有店铺延误信息汇总",
+              Path(__file__).resolve().parent / ("美客多延误\武汉泽顺店铺延误信息汇总" + date_str + ".xlsx"),
               r"武汉泽顺店铺延误信息汇总" + date_str + ".xlsx")
     inset_delay_info(line)
 
 
-
 if __name__ == '__main__':
-   summary_delayFile()
-
+    summary_delayFile()
