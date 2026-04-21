@@ -372,11 +372,10 @@ if __name__ == '__main__':
     # use_one_browser_run_task('9812f185f7ab49d98f3988994d9e8ebf','墨西哥')
     # 跃马扬鞭
     # use_one_browser_run_task(('跃马扬鞭', '墨西哥', '侵权','MLM2872391307 - MLM2872380671 - MLM5204725168 - MLM5199341964 - MLM2870050527 - MLM2870047371 - MLM2870043695 - MLM5199197738 - MLM5199251620 - MLM4811240116 亲爱的客服，这些产品是通用品牌产品，他们被系统误判为侵权，你能帮我重新激活并且恢复我的账户吗？'))
-    use_one_browser_run_task(('健步如飞','墨西哥','延误',''))
+    # use_one_browser_run_task(('健步如飞','墨西哥','延误',''))
     browser_list = [
         ('德德智汇', '墨西哥', '延误'),
         ('跃马扬鞭', '阿根廷', '延误'),
         ('健步如飞', '墨西哥', '延误')
-
     ]
-    # use_all_browser_run_task_with_thread_pool(browser_list)
+    use_all_browser_run_task_with_thread_pool(browser_list)
