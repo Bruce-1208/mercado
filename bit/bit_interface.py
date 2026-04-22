@@ -2,29 +2,28 @@ import time
 from flask import Flask, Response, request, render_template
 
 from bit_appeal import *
+from bit_utils import *
+from bit_api import *
 
 app = Flask(__name__)
 
 
 # 1. 核心逻辑方法：改造成生成器
 def shensu_logic(name, site, form, message):
-    yield f"--- 任务启动：{name} ---<br>"
-    shensu(name, site, form, message)
-    # 模拟自动化操作步骤
-    time.sleep(1)
-    yield f"【1/4】正在连接站点：{site}...<br>"
 
-    time.sleep(2)
-    yield f"【2/4】正在定位表单：{form}<br>"
+    while (True):
+        try:
+            yield f"--- 任务启动：{name}{site} ---<br>"
+            shensu(name, site, form, message)
+            # 模拟自动化操作步骤
+            yield f"✅ {name}{site}申诉执行完毕,！<br>"
+        except Exception as e:
+            yield e
+        finally:
+            yield f"{name}{site}关闭浏览器等待十分钟，进行下一次申诉"
+            window_id=getWindowidByName(name)
+            time.sleep(600)
 
-    time.sleep(1.5)
-    yield f"【3/4】提交申诉内容：{message[:10]}...<br>"
-
-    # 这里可以放真实的 driver 操作代码
-    # driver.get(site) ...
-
-    time.sleep(1)
-    yield "【4/4】✅ 申诉执行完毕！<br>"
 
 
 # 2. 接口路由
