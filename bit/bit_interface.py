@@ -10,20 +10,20 @@ app = Flask(__name__)
 
 # 1. 核心逻辑方法：改造成生成器
 def shensu_logic(name, site, form, message):
-
-    while (True):
+    i = 0
+    while (i < 10):
+        i = i + 1
         try:
-            yield f"--- 任务启动：{name}{site} ---<br>"
+            yield f"{get_now_time()}--- 任务启动第{i}次：{name}{site} ---<br>"
             shensu(name, site, form, message)
             # 模拟自动化操作步骤
-            yield f"✅ {name}{site}申诉执行完毕,！<br>"
+            yield f"{get_now_time()}✅ {name}{site}申诉执行完毕,！<br>"
         except Exception as e:
             yield e
         finally:
-            yield f"{name}{site}关闭浏览器等待十分钟，进行下一次申诉"
-            window_id=getWindowidByName(name)
+            yield f"{get_now_time()}{name}{site}关闭浏览器等待十分钟，进行下一次申诉"
+            window_id = getWindowidByName(name)
             time.sleep(600)
-
 
 
 # 2. 接口路由
