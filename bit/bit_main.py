@@ -31,7 +31,7 @@ if __name__ == '__main__':
     scheduler = BlockingScheduler()
     scheduler.add_job(get_reputation_info_all, 'cron', hour=6, minute=00)
     scheduler.add_job(get_reputation_info_all, 'cron', hour=10, minute=00)
-    scheduler.add_job(download_summary, 'cron', hour=00, minute=00)
+    scheduler.add_job(download_summary, 'cron', hour=14, minute=00)
 
     scheduler.start()
 
