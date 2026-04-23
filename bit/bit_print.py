@@ -6,6 +6,8 @@ from selenium.webdriver.common.keys import Keys
 from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.support.wait import WebDriverWait
 
+from bit.bit_mysql import insert_task_record
+from bit.bit_utils import get_now_time
 from bit_api import *
 from selenium.webdriver.common.desired_capabilities import DesiredCapabilities
 from selenium.webdriver.chrome.service import Service
@@ -113,7 +115,7 @@ def print_orders(window_id, site):
 def print_orders_all():
     start = int(time.time())
 
-    file_path = Path(__file__).resolve().parent / "比特配置文件.xlsx"
+    file_path = Path(__file__).resolve().parent / "比特配置文件测试.xlsx"
     print(start)
 
     wb = load_workbook(file_path)
@@ -134,15 +136,16 @@ def print_orders_all():
         for site in site_list:
             i = 0
             while (i < 3):
+                i=i+1
                 try:
                     success = print_orders(id, site)
                     if (success == True):
-                        result.append(name+site+"打印订单任务执行成功")
+                        result.append("后台打印订单",name,site,"成功",get_now_time())
                         break
                 except Exception as e:
                     print("窗口" + name + site + "执行失败", e)
-                    if(i==2):
-                        result.append(name + site + "打印订单任务执行失败")
+                    if(i==3):
+                        result.append("后台打印订单",name,site,"失败",get_now_time())
                 time.sleep(300)
 
             time.sleep(5)
@@ -156,6 +159,7 @@ def print_orders_all():
         time.sleep(5)
     end = int(time.time())
     print("总花费", end - start)
+    insert_task_record(result)
 
 if __name__ == '__main__':
     while(1==1):
