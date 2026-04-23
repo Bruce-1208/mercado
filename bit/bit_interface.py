@@ -42,7 +42,10 @@ def api_run_shensu():
 @app.route('/')
 def index():
     return render_template('index.html')
-
+# 定义路由和返回内容
+@app.route('/zs')
+def hello_whzs():
+    return "武汉泽顺"
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000)
