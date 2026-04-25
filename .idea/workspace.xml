@@ -5,6 +5,24 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="b07967ff-6401-4f43-9914-61cdd26252b1" name="更改" comment="first commit">
+      <change afterPath="$PROJECT_DIR$/../AutoGui/LZW.png" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/../AutoGui/chat.png" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/../AutoGui/choose.png" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/../AutoGui/cmd.xls" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/../AutoGui/contactus.png" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/../AutoGui/guanli.png" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/../AutoGui/issue.png" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/../AutoGui/listings.png" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/../AutoGui/qidong.png" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/../AutoGui/test.py" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/../AutoGui/waterRPA.py" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/../AutoGui/wenhao.png" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/../AutoGui/ziniao.png" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/../AutoGui/ziniao2.png" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/../PythonProject/my.py" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/../PythonProject/test_playwright.py" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/../新建文件夹/mercado" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/../.gitignore" beforeDir="false" afterPath="$PROJECT_DIR$/../.gitignore" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/../.idea/.gitignore" beforeDir="false" />
       <change beforePath="$PROJECT_DIR$/../.idea/MercadoApp.iml" beforeDir="false" />
@@ -28,6 +46,9 @@
       <change beforePath="$PROJECT_DIR$/../DeepSeekApi.py" beforeDir="false" />
       <change beforePath="$PROJECT_DIR$/../EAN" beforeDir="false" />
       <change beforePath="$PROJECT_DIR$/../Listings-2024_10_31-08_42.xlsx" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/.idea/MercadoApp.iml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/MercadoApp.iml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/bit/bit_mysql.py" beforeDir="false" afterPath="$PROJECT_DIR$/bit/bit_mysql.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/../README.md" beforeDir="false" />
       <change beforePath="$PROJECT_DIR$/../Test'Post.py" beforeDir="false" />
       <change beforePath="$PROJECT_DIR$/../Utils.py" beforeDir="false" />
@@ -457,7 +478,7 @@
       <change beforePath="$PROJECT_DIR$/../chrome_profile/Crowd Deny/2025.8.28.61/_metadata/verified_contents.json" beforeDir="false" />
       <change beforePath="$PROJECT_DIR$/../chrome_profile/Crowd Deny/2025.8.28.61/manifest.json" beforeDir="false" />
       <change beforePath="$PROJECT_DIR$/../chrome_profile/Default/Account Web Data" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/../chrome_profile/Default/Account Web Data-journal" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/../chrome_profile/Default/Account Web Data-journal" beforeDir="false" afterPath="$PROJECT_DIR$/../AutoGui/test4.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/../chrome_profile/Default/Affiliation Database" beforeDir="false" />
       <change beforePath="$PROJECT_DIR$/../chrome_profile/Default/Affiliation Database-journal" beforeDir="false" />
       <change beforePath="$PROJECT_DIR$/../chrome_profile/Default/AutofillStrikeDatabase/LOCK" beforeDir="false" />
@@ -4798,7 +4819,7 @@
       <change beforePath="$PROJECT_DIR$/../chrome_profile/segmentation_platform/ukm_db" beforeDir="false" />
       <change beforePath="$PROJECT_DIR$/../chrome_profile/segmentation_platform/ukm_db-wal" beforeDir="false" />
       <change beforePath="$PROJECT_DIR$/../information.txt" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/../interface8088.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/../interface8088.py" beforeDir="false" afterPath="$PROJECT_DIR$/../AutoGui/test2.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/../mercado_interface/alibaba_API.py" beforeDir="false" />
       <change beforePath="$PROJECT_DIR$/../mercado_interface/data_analysis_main_1688.py" beforeDir="false" />
       <change beforePath="$PROJECT_DIR$/../mercado_interface/data_analysis_mercado.py" beforeDir="false" />
@@ -4891,104 +4912,104 @@
     <option name="hideEmptyMiddlePackages" value="true" />
     <option name="showLibraryContents" value="true" />
   </component>
-  <component name="PropertiesComponent">{
-  &quot;keyToString&quot;: {
-    &quot;DefaultHtmlFileTemplate&quot;: &quot;HTML File&quot;,
-    &quot;Python.1688_data_analysis.executor&quot;: &quot;Run&quot;,
-    &quot;Python.1688_data_analysis_main (1).executor&quot;: &quot;Run&quot;,
-    &quot;Python.DataAnalysis.executor&quot;: &quot;Run&quot;,
-    &quot;Python.DataAnalysis2 (1).executor&quot;: &quot;Run&quot;,
-    &quot;Python.DataAnalysis2.executor&quot;: &quot;Run&quot;,
-    &quot;Python.DataAnalysis3.executor&quot;: &quot;Run&quot;,
-    &quot;Python.DataAnalysisTest (1).executor&quot;: &quot;Run&quot;,
-    &quot;Python.DataAnalysisTest.executor&quot;: &quot;Run&quot;,
-    &quot;Python.DataAnalysis_db.executor&quot;: &quot;Run&quot;,
-    &quot;Python.DataAnalysis_orders.executor&quot;: &quot;Run&quot;,
-    &quot;Python.DeepSeekApi.executor&quot;: &quot;Run&quot;,
-    &quot;Python.Test'Post.executor&quot;: &quot;Run&quot;,
-    &quot;Python.Utils.executor&quot;: &quot;Run&quot;,
-    &quot;Python.alibaba_API.executor&quot;: &quot;Run&quot;,
-    &quot;Python.bit_api.executor&quot;: &quot;Run&quot;,
-    &quot;Python.bit_appeal.executor&quot;: &quot;Run&quot;,
-    &quot;Python.bit_clash.executor&quot;: &quot;Run&quot;,
-    &quot;Python.bit_download.executor&quot;: &quot;Run&quot;,
-    &quot;Python.bit_email.executor&quot;: &quot;Run&quot;,
-    &quot;Python.bit_email_info (1).executor&quot;: &quot;Run&quot;,
-    &quot;Python.bit_email_info.executor&quot;: &quot;Run&quot;,
-    &quot;Python.bit_interface.executor&quot;: &quot;Run&quot;,
-    &quot;Python.bit_main.executor&quot;: &quot;Run&quot;,
-    &quot;Python.bit_mysql.executor&quot;: &quot;Run&quot;,
-    &quot;Python.bit_print.executor&quot;: &quot;Run&quot;,
-    &quot;Python.bit_reputation_info.executor&quot;: &quot;Run&quot;,
-    &quot;Python.bit_selenium.executor&quot;: &quot;Debug&quot;,
-    &quot;Python.bit_summary_delayfile.executor&quot;: &quot;Run&quot;,
-    &quot;Python.bit_summary_info.executor&quot;: &quot;Run&quot;,
-    &quot;Python.bit_update_orders.executor&quot;: &quot;Run&quot;,
-    &quot;Python.data_analysis_main_1688 (1).executor&quot;: &quot;Debug&quot;,
-    &quot;Python.data_analysis_main_1688.executor&quot;: &quot;Run&quot;,
-    &quot;Python.data_analysis_mercado.executor&quot;: &quot;Run&quot;,
-    &quot;Python.data_analysis_single_1688.executor&quot;: &quot;Run&quot;,
-    &quot;Python.deepseek.executor&quot;: &quot;Run&quot;,
-    &quot;Python.get_infractions_info.executor&quot;: &quot;Run&quot;,
-    &quot;Python.get_orders.executor&quot;: &quot;Run&quot;,
-    &quot;Python.interface8088.executor&quot;: &quot;Run&quot;,
-    &quot;Python.mercado_interface.executor&quot;: &quot;Run&quot;,
-    &quot;Python.mercado_publish.executor&quot;: &quot;Run&quot;,
-    &quot;Python.playwright.executor&quot;: &quot;Run&quot;,
-    &quot;Python.pyauto_test.executor&quot;: &quot;Run&quot;,
-    &quot;Python.python3.7.executor&quot;: &quot;Run&quot;,
-    &quot;Python.send_mail.executor&quot;: &quot;Run&quot;,
-    &quot;Python.shensu_hu (1).executor&quot;: &quot;Run&quot;,
-    &quot;Python.shensu_hu.executor&quot;: &quot;Run&quot;,
-    &quot;Python.shensu_huakaifugui.executor&quot;: &quot;Run&quot;,
-    &quot;Python.shensu_long.executor&quot;: &quot;Run&quot;,
-    &quot;Python.shensu_lzw.executor&quot;: &quot;Run&quot;,
-    &quot;Python.shensu_rijindoujin.executor&quot;: &quot;Run&quot;,
-    &quot;Python.shensu_teng.executor&quot;: &quot;Run&quot;,
-    &quot;Python.shensu_test.executor&quot;: &quot;Run&quot;,
-    &quot;Python.shensu_vngbjkk.executor&quot;: &quot;Run&quot;,
-    &quot;Python.shensu_wxt1.executor&quot;: &quot;Run&quot;,
-    &quot;Python.shensu_yue.executor&quot;: &quot;Debug&quot;,
-    &quot;Python.temp.executor&quot;: &quot;Run&quot;,
-    &quot;Python.temp2.executor&quot;: &quot;Run&quot;,
-    &quot;Python.test.executor&quot;: &quot;Run&quot;,
-    &quot;Python.test2.executor&quot;: &quot;Run&quot;,
-    &quot;Python.test3.executor&quot;: &quot;Run&quot;,
-    &quot;Python.test4.executor&quot;: &quot;Run&quot;,
-    &quot;Python.testDataAnalysis.executor&quot;: &quot;Run&quot;,
-    &quot;Python.testDataAnalysis_huakaifugui.executor&quot;: &quot;Run&quot;,
-    &quot;Python.testDataAnalysis_huang.executor&quot;: &quot;Run&quot;,
-    &quot;Python.testDataAnalysis_long (1).executor&quot;: &quot;Run&quot;,
-    &quot;Python.testDataAnalysis_long.executor&quot;: &quot;Run&quot;,
-    &quot;Python.testDataAnalysis_vngbjkk.executor&quot;: &quot;Run&quot;,
-    &quot;Python.test_hu.executor&quot;: &quot;Run&quot;,
-    &quot;Python.test_huakaifugui.executor&quot;: &quot;Run&quot;,
-    &quot;Python.test_huang.executor&quot;: &quot;Run&quot;,
-    &quot;Python.test_long.executor&quot;: &quot;Run&quot;,
-    &quot;Python.test_lzw.executor&quot;: &quot;Run&quot;,
-    &quot;Python.test_rijindoujin.executor&quot;: &quot;Run&quot;,
-    &quot;Python.test_teng.executor&quot;: &quot;Run&quot;,
-    &quot;Python.test_vngbjkk.executor&quot;: &quot;Run&quot;,
-    &quot;Python.test_wxt1.executor&quot;: &quot;Run&quot;,
-    &quot;Python.test_wxt2.executor&quot;: &quot;Run&quot;,
-    &quot;Python.test_yue.executor&quot;: &quot;Run&quot;,
-    &quot;Python.test_zhouzhou.executor&quot;: &quot;Run&quot;,
-    &quot;Python.utils.executor&quot;: &quot;Run&quot;,
-    &quot;Python.ziniao_webdriver_http_py3.executor&quot;: &quot;Run&quot;,
-    &quot;Python.未命名.executor&quot;: &quot;Run&quot;,
-    &quot;RunOnceActivity.ShowReadmeOnStart&quot;: &quot;true&quot;,
-    &quot;RunOnceActivity.git.unshallow&quot;: &quot;true&quot;,
-    &quot;git-widget-placeholder&quot;: &quot;Merging main&quot;,
-    &quot;last_opened_file_path&quot;: &quot;C:/Users/Admin/PycharmProjects/MercadoApp/mercado_interface&quot;,
-    &quot;node.js.detected.package.eslint&quot;: &quot;true&quot;,
-    &quot;node.js.detected.package.tslint&quot;: &quot;true&quot;,
-    &quot;node.js.selected.package.eslint&quot;: &quot;(autodetect)&quot;,
-    &quot;node.js.selected.package.tslint&quot;: &quot;(autodetect)&quot;,
-    &quot;nodejs_package_manager_path&quot;: &quot;npm&quot;,
-    &quot;settings.editor.selected.configurable&quot;: &quot;preferences.pluginManager&quot;,
-    &quot;vue.rearranger.settings.migration&quot;: &quot;true&quot;
+  <component name="PropertiesComponent"><![CDATA[{
+  "keyToString": {
+    "DefaultHtmlFileTemplate": "HTML File",
+    "Python.1688_data_analysis.executor": "Run",
+    "Python.1688_data_analysis_main (1).executor": "Run",
+    "Python.DataAnalysis.executor": "Run",
+    "Python.DataAnalysis2 (1).executor": "Run",
+    "Python.DataAnalysis2.executor": "Run",
+    "Python.DataAnalysis3.executor": "Run",
+    "Python.DataAnalysisTest (1).executor": "Run",
+    "Python.DataAnalysisTest.executor": "Run",
+    "Python.DataAnalysis_db.executor": "Run",
+    "Python.DataAnalysis_orders.executor": "Run",
+    "Python.DeepSeekApi.executor": "Run",
+    "Python.Test'Post.executor": "Run",
+    "Python.Utils.executor": "Run",
+    "Python.alibaba_API.executor": "Run",
+    "Python.bit_api.executor": "Run",
+    "Python.bit_appeal.executor": "Run",
+    "Python.bit_clash.executor": "Run",
+    "Python.bit_download.executor": "Run",
+    "Python.bit_email.executor": "Run",
+    "Python.bit_email_info (1).executor": "Run",
+    "Python.bit_email_info.executor": "Run",
+    "Python.bit_interface.executor": "Run",
+    "Python.bit_main.executor": "Run",
+    "Python.bit_mysql.executor": "Run",
+    "Python.bit_print.executor": "Run",
+    "Python.bit_reputation_info.executor": "Run",
+    "Python.bit_selenium.executor": "Debug",
+    "Python.bit_summary_delayfile.executor": "Run",
+    "Python.bit_summary_info.executor": "Run",
+    "Python.bit_update_orders.executor": "Run",
+    "Python.data_analysis_main_1688 (1).executor": "Debug",
+    "Python.data_analysis_main_1688.executor": "Run",
+    "Python.data_analysis_mercado.executor": "Run",
+    "Python.data_analysis_single_1688.executor": "Run",
+    "Python.deepseek.executor": "Run",
+    "Python.get_infractions_info.executor": "Run",
+    "Python.get_orders.executor": "Run",
+    "Python.interface8088.executor": "Run",
+    "Python.mercado_interface.executor": "Run",
+    "Python.mercado_publish.executor": "Run",
+    "Python.playwright.executor": "Run",
+    "Python.pyauto_test.executor": "Run",
+    "Python.python3.7.executor": "Run",
+    "Python.send_mail.executor": "Run",
+    "Python.shensu_hu (1).executor": "Run",
+    "Python.shensu_hu.executor": "Run",
+    "Python.shensu_huakaifugui.executor": "Run",
+    "Python.shensu_long.executor": "Run",
+    "Python.shensu_lzw.executor": "Run",
+    "Python.shensu_rijindoujin.executor": "Run",
+    "Python.shensu_teng.executor": "Run",
+    "Python.shensu_test.executor": "Run",
+    "Python.shensu_vngbjkk.executor": "Run",
+    "Python.shensu_wxt1.executor": "Run",
+    "Python.shensu_yue.executor": "Debug",
+    "Python.temp.executor": "Run",
+    "Python.temp2.executor": "Run",
+    "Python.test.executor": "Run",
+    "Python.test2.executor": "Run",
+    "Python.test3.executor": "Run",
+    "Python.test4.executor": "Run",
+    "Python.testDataAnalysis.executor": "Run",
+    "Python.testDataAnalysis_huakaifugui.executor": "Run",
+    "Python.testDataAnalysis_huang.executor": "Run",
+    "Python.testDataAnalysis_long (1).executor": "Run",
+    "Python.testDataAnalysis_long.executor": "Run",
+    "Python.testDataAnalysis_vngbjkk.executor": "Run",
+    "Python.test_hu.executor": "Run",
+    "Python.test_huakaifugui.executor": "Run",
+    "Python.test_huang.executor": "Run",
+    "Python.test_long.executor": "Run",
+    "Python.test_lzw.executor": "Run",
+    "Python.test_rijindoujin.executor": "Run",
+    "Python.test_teng.executor": "Run",
+    "Python.test_vngbjkk.executor": "Run",
+    "Python.test_wxt1.executor": "Run",
+    "Python.test_wxt2.executor": "Run",
+    "Python.test_yue.executor": "Run",
+    "Python.test_zhouzhou.executor": "Run",
+    "Python.utils.executor": "Run",
+    "Python.ziniao_webdriver_http_py3.executor": "Run",
+    "Python.未命名.executor": "Run",
+    "RunOnceActivity.ShowReadmeOnStart": "true",
+    "RunOnceActivity.git.unshallow": "true",
+    "git-widget-placeholder": "main",
+    "last_opened_file_path": "C:/Users/Admin/PycharmProjects/MercadoApp/mercado_interface",
+    "node.js.detected.package.eslint": "true",
+    "node.js.detected.package.tslint": "true",
+    "node.js.selected.package.eslint": "(autodetect)",
+    "node.js.selected.package.tslint": "(autodetect)",
+    "nodejs_package_manager_path": "npm",
+    "settings.editor.selected.configurable": "preferences.pluginManager",
+    "vue.rearranger.settings.migration": "true"
   }
-}</component>
+}]]></component>
   <component name="RecentsManager">
     <key name="CopyFile.RECENT_KEYS">
       <recent name="C:\Users\Admin\PycharmProjects\MercadoApp\mercado_interface" />
@@ -4998,7 +5019,7 @@
       <recent name="C:\Users\Admin\PycharmProjects\MercadoApp\mercado_listing" />
     </key>
   </component>
-  <component name="RunManager" selected="Python.bit_appeal">
+  <component name="RunManager" selected="Python.bit_mysql">
     <configuration name="bit_appeal" type="PythonConfigurationType" factoryName="Python" temporary="true" nameIsGenerated="true">
       <module name="MercadoApp" />
       <option name="ENV_FILES" value="" />
@@ -5044,6 +5065,29 @@
       <option name="INPUT_FILE" value="" />
       <method v="2" />
     </configuration>
+    <configuration name="bit_mysql" type="PythonConfigurationType" factoryName="Python" temporary="true" nameIsGenerated="true">
+      <module name="MercadoApp" />
+      <option name="ENV_FILES" value="" />
+      <option name="INTERPRETER_OPTIONS" value="" />
+      <option name="PARENT_ENVS" value="true" />
+      <envs>
+        <env name="PYTHONUNBUFFERED" value="1" />
+      </envs>
+      <option name="SDK_HOME" value="" />
+      <option name="SDK_NAME" value="Python 3.12" />
+      <option name="WORKING_DIRECTORY" value="$PROJECT_DIR$/bit" />
+      <option name="IS_MODULE_SDK" value="false" />
+      <option name="ADD_CONTENT_ROOTS" value="true" />
+      <option name="ADD_SOURCE_ROOTS" value="true" />
+      <option name="SCRIPT_NAME" value="$PROJECT_DIR$/bit/bit_mysql.py" />
+      <option name="PARAMETERS" value="" />
+      <option name="SHOW_COMMAND_LINE" value="false" />
+      <option name="EMULATE_TERMINAL" value="false" />
+      <option name="MODULE_MODE" value="false" />
+      <option name="REDIRECT_INPUT" value="false" />
+      <option name="INPUT_FILE" value="" />
+      <method v="2" />
+    </configuration>
     <configuration name="data_analysis_main_1688" type="PythonConfigurationType" factoryName="Python" temporary="true" nameIsGenerated="true">
       <module name="MercadoApp" />
       <option name="ENV_FILES" value="" />
@@ -5059,29 +5103,6 @@
       <option name="ADD_CONTENT_ROOTS" value="true" />
       <option name="ADD_SOURCE_ROOTS" value="true" />
       <option name="SCRIPT_NAME" value="$PROJECT_DIR$/mercado_interface/data_analysis_main_1688.py" />
-      <option name="PARAMETERS" value="" />
-      <option name="SHOW_COMMAND_LINE" value="false" />
-      <option name="EMULATE_TERMINAL" value="false" />
-      <option name="MODULE_MODE" value="false" />
-      <option name="REDIRECT_INPUT" value="false" />
-      <option name="INPUT_FILE" value="" />
-      <method v="2" />
-    </configuration>
-    <configuration name="mercado_interface" type="PythonConfigurationType" factoryName="Python" temporary="true" nameIsGenerated="true">
-      <module name="MercadoApp" />
-      <option name="ENV_FILES" value="" />
-      <option name="INTERPRETER_OPTIONS" value="" />
-      <option name="PARENT_ENVS" value="true" />
-      <envs>
-        <env name="PYTHONUNBUFFERED" value="1" />
-      </envs>
-      <option name="SDK_HOME" value="" />
-      <option name="SDK_NAME" value="Python 3.12" />
-      <option name="WORKING_DIRECTORY" value="$PROJECT_DIR$/mercado_interface" />
-      <option name="IS_MODULE_SDK" value="false" />
-      <option name="ADD_CONTENT_ROOTS" value="true" />
-      <option name="ADD_SOURCE_ROOTS" value="true" />
-      <option name="SCRIPT_NAME" value="$PROJECT_DIR$/mercado_interface/mercado_interface.py" />
       <option name="PARAMETERS" value="" />
       <option name="SHOW_COMMAND_LINE" value="false" />
       <option name="EMULATE_TERMINAL" value="false" />
@@ -5187,19 +5208,19 @@
     </configuration>
     <list>
       <item itemvalue="Python.python3.7" />
+      <item itemvalue="Python.bit_mysql" />
       <item itemvalue="Python.bit_appeal" />
       <item itemvalue="Python.data_analysis_main_1688" />
-      <item itemvalue="Python.mercado_interface" />
       <item itemvalue="Python.mercado_publish" />
       <item itemvalue="Python.bit_interface" />
     </list>
     <recent_temporary>
       <list>
+        <item itemvalue="Python.bit_mysql" />
         <item itemvalue="Python.bit_appeal" />
         <item itemvalue="Python.bit_interface" />
         <item itemvalue="Python.data_analysis_main_1688" />
         <item itemvalue="Python.mercado_publish" />
-        <item itemvalue="Python.mercado_interface" />
       </list>
     </recent_temporary>
   </component>
