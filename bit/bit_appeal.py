@@ -16,7 +16,7 @@ import random
 
 from bit.bit_mysql import insert_chat_info
 from bit.bit_utils import get_latest_modified_file, get_bit_path, parser_delay_date, get_now_time, getWindowidByName
-from bit_api import *
+from bit.bit_api import *
 from AI_Agent.qianwen import *
 import pandas as pd
 from datetime import datetime, timedelta
@@ -24,7 +24,7 @@ from datetime import datetime
 from AI_Agent.deepseek import *
 import re
 from openpyxl import load_workbook
-from bit_clash import *
+from bit.bit_clash import *
 import traceback
 
 
