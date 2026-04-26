@@ -1,9 +1,9 @@
 import time
 from flask import Flask, Response, request, render_template
 
-from bit_appeal import *
-from bit_utils import *
-from bit_api import *
+from bit.bit_appeal import *
+from bit.bit_utils import *
+from bit.bit_api import *
 
 app = Flask(__name__)
 
