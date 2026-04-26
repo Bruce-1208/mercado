@@ -5,20 +5,19 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="b07967ff-6401-4f43-9914-61cdd26252b1" name="更改" comment="first commit">
+      <change afterPath="$PROJECT_DIR$/mercado_interface/publish_demo.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/bit/bit_ visit_info.py" beforeDir="false" afterPath="$PROJECT_DIR$/bit/bit_ visit_info.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/bit/bit_appeal.py" beforeDir="false" afterPath="$PROJECT_DIR$/bit/bit_appeal.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/bit/bit_download.py" beforeDir="false" afterPath="$PROJECT_DIR$/bit/bit_download.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/bit/bit_interface.py" beforeDir="false" afterPath="$PROJECT_DIR$/bit/bit_interface.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/bit/bit_main.py" beforeDir="false" afterPath="$PROJECT_DIR$/bit/bit_main.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/bit/bit_playwright.py" beforeDir="false" afterPath="$PROJECT_DIR$/bit/bit_playwright.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/bit/bit_email_info.py" beforeDir="false" afterPath="$PROJECT_DIR$/bit/bit_email_info.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/bit/bit_print.py" beforeDir="false" afterPath="$PROJECT_DIR$/bit/bit_print.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/bit/bit_reputation_info.py" beforeDir="false" afterPath="$PROJECT_DIR$/bit/bit_reputation_info.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/bit/bit_selenium.py" beforeDir="false" afterPath="$PROJECT_DIR$/bit/bit_selenium.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/bit/bit_summary_delayfile.py" beforeDir="false" afterPath="$PROJECT_DIR$/bit/bit_summary_delayfile.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/bit/bit_summary_info.py" beforeDir="false" afterPath="$PROJECT_DIR$/bit/bit_summary_info.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/bit/bit_update_orders.py" beforeDir="false" afterPath="$PROJECT_DIR$/bit/bit_update_orders.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/bit/get_infractions_info.py" beforeDir="false" afterPath="$PROJECT_DIR$/bit/get_infractions_info.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/bit/get_infractions_info.py" beforeDir="false" afterPath="$PROJECT_DIR$/bit/bit_infractions_info.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/bit/send_mail.py" beforeDir="false" afterPath="$PROJECT_DIR$/bit/bit_send_mail.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/bit/switch_country.py" beforeDir="false" afterPath="$PROJECT_DIR$/bit/bit_switch_country.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/bit/temp.py" beforeDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -177,7 +176,7 @@
       <recent name="C:\Users\Admin\PycharmProjects\MercadoApp\mercado_listing" />
     </key>
   </component>
-  <component name="RunManager" selected="Python.bit_mysql">
+  <component name="RunManager" selected="Python.publish_demo">
     <configuration name="bit_appeal" type="PythonConfigurationType" factoryName="Python" temporary="true" nameIsGenerated="true">
       <module name="MercadoApp" />
       <option name="ENV_FILES" value="" />
@@ -269,7 +268,7 @@
       <option name="INPUT_FILE" value="" />
       <method v="2" />
     </configuration>
-    <configuration name="mercado_publish" type="PythonConfigurationType" factoryName="Python" temporary="true" nameIsGenerated="true">
+    <configuration name="publish_demo" type="PythonConfigurationType" factoryName="Python" temporary="true" nameIsGenerated="true">
       <module name="MercadoApp" />
       <option name="ENV_FILES" value="" />
       <option name="INTERPRETER_OPTIONS" value="" />
@@ -278,12 +277,11 @@
         <env name="PYTHONUNBUFFERED" value="1" />
       </envs>
       <option name="SDK_HOME" value="" />
-      <option name="SDK_NAME" value="Python 3.12" />
-      <option name="WORKING_DIRECTORY" value="$PROJECT_DIR$/mercado_interface" />
-      <option name="IS_MODULE_SDK" value="false" />
+      <option name="WORKING_DIRECTORY" value="$PROJECT_DIR$/bit" />
+      <option name="IS_MODULE_SDK" value="true" />
       <option name="ADD_CONTENT_ROOTS" value="true" />
       <option name="ADD_SOURCE_ROOTS" value="true" />
-      <option name="SCRIPT_NAME" value="$PROJECT_DIR$/mercado_interface/mercado_publish.py" />
+      <option name="SCRIPT_NAME" value="C:\Users\Admin\PycharmProjects\MercadoApp\bit\publish_demo.py" />
       <option name="PARAMETERS" value="" />
       <option name="SHOW_COMMAND_LINE" value="false" />
       <option name="EMULATE_TERMINAL" value="false" />
@@ -366,19 +364,19 @@
     </configuration>
     <list>
       <item itemvalue="Python.python3.7" />
-      <item itemvalue="Python.bit_mysql" />
+      <item itemvalue="Python.publish_demo" />
       <item itemvalue="Python.bit_appeal" />
-      <item itemvalue="Python.data_analysis_main_1688" />
-      <item itemvalue="Python.mercado_publish" />
       <item itemvalue="Python.bit_interface" />
+      <item itemvalue="Python.bit_mysql" />
+      <item itemvalue="Python.data_analysis_main_1688" />
     </list>
     <recent_temporary>
       <list>
+        <item itemvalue="Python.publish_demo" />
         <item itemvalue="Python.bit_mysql" />
         <item itemvalue="Python.bit_appeal" />
         <item itemvalue="Python.bit_interface" />
         <item itemvalue="Python.data_analysis_main_1688" />
-        <item itemvalue="Python.mercado_publish" />
       </list>
     </recent_temporary>
   </component>
@@ -669,7 +667,7 @@
           <option name="timeStamp" value="118" />
         </line-breakpoint>
         <line-breakpoint enabled="true" suspend="THREAD" type="python-line">
-          <url>file://$PROJECT_DIR$/bit/get_infractions_info.py</url>
+          <url>file://$PROJECT_DIR$/bit/bit_infractions_info.py</url>
           <line>194</line>
           <option name="timeStamp" value="126" />
         </line-breakpoint>
