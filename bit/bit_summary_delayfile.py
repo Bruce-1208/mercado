@@ -7,7 +7,7 @@ from openpyxl import load_workbook
 from pathlib import Path
 from datetime import datetime
 import pandas
-from bit.send_mail import *
+from bit.bit_send_mail import *
 
 from bit.bit_utils import *
 import sys
