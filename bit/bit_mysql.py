@@ -1,24 +1,24 @@
 import pymysql
 
 # 1. 配置数据库连接信息
+config = {
+    'host': '192.168.3.47',
+    'user': 'mercado',
+    'password': 'mercado',
+    'database': 'mercado',
+    'charset': 'utf8mb4',
+    'port': 3306,
+    'cursorclass': pymysql.cursors.DictCursor  # 让查询结果以字典形式返回
+}
 # config = {
-#     'host': '192.168.47.1',
+#     'host': 'c766667e.natappfree.cc',
 #     'user': 'root',
 #     'password': 'zzw@951208',
 #     'database': 'mercado',
 #     'charset': 'utf8mb4',
-#     'port': 3307,
+#     'port': 39181,
 #     'cursorclass': pymysql.cursors.DictCursor  # 让查询结果以字典形式返回
 # }
-config = {
-    'host': 'c766667e.natappfree.cc',
-    'user': 'root',
-    'password': 'zzw@951208',
-    'database': 'mercado',
-    'charset': 'utf8mb4',
-    'port': 39181,
-    'cursorclass': pymysql.cursors.DictCursor  # 让查询结果以字典形式返回
-}
 # yuming=c766667e.natappfree.cc:39181
 
 
