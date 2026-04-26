@@ -1,10 +1,11 @@
 import time
-
-from bit_email_info import *
+from bit.bit_summary_delayfile import *
+from bit.bit_email_info import *
 import traceback
 from pathlib import Path
-from bit_mysql import *
-from bit_clash import *
+from bit.bit_mysql import *
+from bit.bit_clash import *
+from bit.bit_summary_delayfile import *
 
 
 def download_relay_mail(window_id, site):
@@ -240,10 +241,10 @@ def download_relay_mail_all():
                 print(get_now_time()+"执行任务:", name + site)
                 message = download_relay_mail(id, site)
                 print(get_now_time()+name + site + message)
-                result.append(('获取声誉信息', name, site, "成功", get_now_time()))
+                result.append(('下载延误表格', name, site, "成功", get_now_time()))
             except Exception as e:
                 print(get_now_time()+name + site + "执行失败", e)
-                result.append(('获取声誉信息', name, site, "失败", get_now_time()))
+                result.append(('下载延误表格', name, site, "失败", get_now_time()))
 
         print(get_now_time()+"结束，正在关闭窗口",name)
         try:
@@ -260,7 +261,12 @@ def download_relay_mail_all():
     for i in result:
         print(i)
     insert_task_record(result)
+    return result
 
 
 if __name__ == '__main__':
-    download_relay_mail_all()
+    results=download_relay_mail_all()
+    for i in results:
+        print(i)
+
+    bit_summary_delayfile()
