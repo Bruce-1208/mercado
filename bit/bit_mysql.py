@@ -2,7 +2,7 @@ import pymysql
 
 # 1. 配置数据库连接信息
 config = {
-    'host': '192.168.3.47',
+    'host': '192.168.1.6',
     'user': 'mercado',
     'password': 'mercado',
     'database': 'mercado',
