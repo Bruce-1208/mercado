@@ -164,7 +164,7 @@ def get_infractions_info_all():
                 except Exception as e:
                     print(get_now_time() + name + site + "执行失败", e)
                     if(i==3):
-                        result.append(('获取声誉信息', name, site, "失败", get_now_time()))
+                        result.append(('获取侵权信息', name, site, "失败", get_now_time()))
 
         print(get_now_time() + "结束，正在关闭窗口")
 

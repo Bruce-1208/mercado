@@ -5,19 +5,10 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="b07967ff-6401-4f43-9914-61cdd26252b1" name="更改" comment="first commit">
-      <change afterPath="$PROJECT_DIR$/mercado_interface/publish_demo.py" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/mercado_interface/publish.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/bit/bit_ visit_info.py" beforeDir="false" afterPath="$PROJECT_DIR$/bit/bit_ visit_info.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/bit/bit_email_info.py" beforeDir="false" afterPath="$PROJECT_DIR$/bit/bit_email_info.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/bit/bit_print.py" beforeDir="false" afterPath="$PROJECT_DIR$/bit/bit_print.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/bit/bit_reputation_info.py" beforeDir="false" afterPath="$PROJECT_DIR$/bit/bit_reputation_info.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/bit/bit_summary_delayfile.py" beforeDir="false" afterPath="$PROJECT_DIR$/bit/bit_summary_delayfile.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/bit/bit_summary_info.py" beforeDir="false" afterPath="$PROJECT_DIR$/bit/bit_summary_info.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/bit/bit_update_orders.py" beforeDir="false" afterPath="$PROJECT_DIR$/bit/bit_update_orders.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/bit/get_infractions_info.py" beforeDir="false" afterPath="$PROJECT_DIR$/bit/bit_infractions_info.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/bit/send_mail.py" beforeDir="false" afterPath="$PROJECT_DIR$/bit/bit_send_mail.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/bit/switch_country.py" beforeDir="false" afterPath="$PROJECT_DIR$/bit/bit_switch_country.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/bit/temp.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/bit/bit_infractions_info.py" beforeDir="false" afterPath="$PROJECT_DIR$/bit/bit_infractions_info.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/mercado_interface/publish_demo.py" beforeDir="false" afterPath="$PROJECT_DIR$/mercado_interface/publish_demo.py" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -176,7 +167,7 @@
       <recent name="C:\Users\Admin\PycharmProjects\MercadoApp\mercado_listing" />
     </key>
   </component>
-  <component name="RunManager" selected="Python.publish_demo">
+  <component name="RunManager" selected="Python.bit_update_orders">
     <configuration name="bit_appeal" type="PythonConfigurationType" factoryName="Python" temporary="true" nameIsGenerated="true">
       <module name="MercadoApp" />
       <option name="ENV_FILES" value="" />
@@ -245,7 +236,7 @@
       <option name="INPUT_FILE" value="" />
       <method v="2" />
     </configuration>
-    <configuration name="data_analysis_main_1688" type="PythonConfigurationType" factoryName="Python" temporary="true" nameIsGenerated="true">
+    <configuration name="bit_update_orders" type="PythonConfigurationType" factoryName="Python" temporary="true" nameIsGenerated="true">
       <module name="MercadoApp" />
       <option name="ENV_FILES" value="" />
       <option name="INTERPRETER_OPTIONS" value="" />
@@ -254,12 +245,11 @@
         <env name="PYTHONUNBUFFERED" value="1" />
       </envs>
       <option name="SDK_HOME" value="" />
-      <option name="SDK_NAME" value="Python 3.12" />
-      <option name="WORKING_DIRECTORY" value="$PROJECT_DIR$/mercado_interface" />
-      <option name="IS_MODULE_SDK" value="false" />
+      <option name="WORKING_DIRECTORY" value="$PROJECT_DIR$/bit" />
+      <option name="IS_MODULE_SDK" value="true" />
       <option name="ADD_CONTENT_ROOTS" value="true" />
       <option name="ADD_SOURCE_ROOTS" value="true" />
-      <option name="SCRIPT_NAME" value="$PROJECT_DIR$/mercado_interface/data_analysis_main_1688.py" />
+      <option name="SCRIPT_NAME" value="$PROJECT_DIR$/bit/bit_update_orders.py" />
       <option name="PARAMETERS" value="" />
       <option name="SHOW_COMMAND_LINE" value="false" />
       <option name="EMULATE_TERMINAL" value="false" />
@@ -364,19 +354,19 @@
     </configuration>
     <list>
       <item itemvalue="Python.python3.7" />
+      <item itemvalue="Python.bit_update_orders" />
       <item itemvalue="Python.publish_demo" />
       <item itemvalue="Python.bit_appeal" />
       <item itemvalue="Python.bit_interface" />
       <item itemvalue="Python.bit_mysql" />
-      <item itemvalue="Python.data_analysis_main_1688" />
     </list>
     <recent_temporary>
       <list>
+        <item itemvalue="Python.bit_update_orders" />
         <item itemvalue="Python.publish_demo" />
         <item itemvalue="Python.bit_mysql" />
         <item itemvalue="Python.bit_appeal" />
         <item itemvalue="Python.bit_interface" />
-        <item itemvalue="Python.data_analysis_main_1688" />
       </list>
     </recent_temporary>
   </component>
