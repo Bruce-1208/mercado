@@ -2,7 +2,7 @@ import requests
 import os
 
 
-def download_image(url, save_path='downloaded_image.jpg'):
+def download_image(url, save_path="downloaded_image.jpg"):
     """
     从指定URL下载图片并保存到本地
 
@@ -19,7 +19,7 @@ def download_image(url, save_path='downloaded_image.jpg'):
 
         # 示例图片URL
         path = "E:\\pictures\\" + list[-1]  # 保存路径
-        save_path=path.split("?")[0]
+        save_path = path.split("?")[0]
         # 发送HTTP请求获取图片
         response = requests.get(url, stream=True)
 
@@ -32,7 +32,7 @@ def download_image(url, save_path='downloaded_image.jpg'):
             os.makedirs(directory)
 
         # 写入图片文件
-        with open(save_path, 'wb') as file:
+        with open(save_path, "wb") as file:
             for chunk in response.iter_content(chunk_size=8192):
                 file.write(chunk)
 

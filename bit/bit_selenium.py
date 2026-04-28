@@ -9,12 +9,14 @@ from selenium.webdriver.common.by import By
 
 
 # /browser/open 接口会返回 selenium使用的http地址，以及webdriver的path，直接使用即可
-res = openBrowser("1495e31cb630406bb690ba187f264fe7") # 窗口ID从窗口配置界面中复制，或者api创建后返回
+res = openBrowser(
+    "1495e31cb630406bb690ba187f264fe7"
+)  # 窗口ID从窗口配置界面中复制，或者api创建后返回
 
 print(res)
 
-driverPath = res['data']['driver']
-debuggerAddress = res['data']['http']
+driverPath = res["data"]["driver"]
+debuggerAddress = res["data"]["http"]
 
 # selenium 连接代码
 chrome_options = webdriver.ChromeOptions()
@@ -37,7 +39,11 @@ driver = webdriver.Chrome(service=chrome_service, options=chrome_options)
 driver.implicitly_wait(60)
 
 driver.get("https://global-selling.mercadolibre.com/help/v2")
-driver.find_elements(By.XPATH,'/html/body/main/div/div/div[4]/div/div[2]/div/button/span/div/div/span')
-driver.switch_to.frame(driver.find_element(By.XPATH,'/html/body/header/div/div/div[4]/div/iframe'))
+driver.find_elements(
+    By.XPATH, "/html/body/main/div/div/div[4]/div/div[2]/div/button/span/div/div/span"
+)
+driver.switch_to.frame(
+    driver.find_element(By.XPATH, "/html/body/header/div/div/div[4]/div/iframe")
+)
 messages = driver.find_elements(By.CLASS_NAME, "mlc-scroll-paginate_item")
 print(messages)

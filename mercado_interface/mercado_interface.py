@@ -9,17 +9,17 @@ def get_mercadolibre_token(app_id, client_secret, tg_code, redirect_url):
 
     # 构建查询参数 (Query Parameters)
     params = {
-        'grant_type': 'authorization_code',
-        'client_id': app_id,
-        'client_secret': client_secret,
-        'code': tg_code,
-        'redirect_uri': redirect_url
+        "grant_type": "authorization_code",
+        "client_id": app_id,
+        "client_secret": client_secret,
+        "code": tg_code,
+        "redirect_uri": redirect_url,
     }
 
     # 设置请求头
     headers = {
-        'accept': 'application/json',
-        'content-type': 'application/x-www-form-urlencoded'
+        "accept": "application/json",
+        "content-type": "application/x-www-form-urlencoded",
     }
 
     try:
@@ -46,8 +46,7 @@ TG_CODE = "TG-69ea247989e44e0001b12ccd-1742669993"
 REDIRECT_URL = "https://zeshun.nat100.top/zs"
 
 
-
-if __name__ == '__main__':
+if __name__ == "__main__":
     token_data = get_mercadolibre_token(APP_ID, CLIENT_SECRET, TG_CODE, REDIRECT_URL)
 
     if token_data:

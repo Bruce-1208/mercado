@@ -30,14 +30,12 @@ def send_info(subject, body, local_file_path, display_filename):
 
             # 现代写法：自动处理 RFC 2231 编码
             part.add_header(
-                "Content-Disposition",
-                "attachment",
-                filename=display_filename
+                "Content-Disposition", "attachment", filename=display_filename
             )
             message.attach(part)
 
     try:
-        server = smtplib.SMTP_SSL(smtp_server, smtp_port,local_hostname='localhost')
+        server = smtplib.SMTP_SSL(smtp_server, smtp_port, local_hostname="localhost")
         server.login(sender_email, password)
         # 核心：使用 send_message 配合上面定义的 policy=default
         server.send_message(message)
@@ -46,4 +44,5 @@ def send_info(subject, body, local_file_path, display_filename):
     except Exception as e:
         # 这里打印详细错误，看看到底是哪一步
         import traceback
+
         traceback.print_exc()

@@ -2,7 +2,10 @@ import requests
 import multiprocessing
 import pandas as pd
 
-headers={'Authorization': 'Bearer APP_USR-8820539028080485-111711-86e60e5b1eb5894c1e44713a6d9c21f4-1742669993'}
+headers = {
+    "Authorization": "Bearer APP_USR-8820539028080485-111711-86e60e5b1eb5894c1e44713a6d9c21f4-1742669993"
+}
+
 
 def get_orders(order):
     id = order["id"]
@@ -28,34 +31,34 @@ def get_orders(order):
         print("错误id为", id, e)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
 
-
-    url="https://api.mercadolibre.com/marketplace/orders/search?offset="
+    url = "https://api.mercadolibre.com/marketplace/orders/search?offset="
     print(requests.get(url, headers=headers))
-    results=requests.get(url,headers=headers).json()["results"]
-    paging=requests.get(url,headers=headers).json()["paging"]
+    results = requests.get(url, headers=headers).json()["results"]
+    paging = requests.get(url, headers=headers).json()["paging"]
 
-    total=paging["total"]
-    offset=paging["offset"]
+    total = paging["total"]
+    offset = paging["offset"]
 
-    n=total/50
-    i=0
-    results_total=[]
-    while i <n:
-        url="https://api.mercadolibre.com/marketplace/orders/search?offset="+str(50*i)
-        results=requests.get(url,headers=headers).json()["results"]
-        i=i+1
+    n = total / 50
+    i = 0
+    results_total = []
+    while i < n:
+        url = "https://api.mercadolibre.com/marketplace/orders/search?offset=" + str(
+            50 * i
+        )
+        results = requests.get(url, headers=headers).json()["results"]
+        i = i + 1
         for order in results:
             results_total.append(order)
-    orders_list=[]
-
+    orders_list = []
 
     pool = multiprocessing.Pool(processes=20)
     orders_list = pool.map(get_orders, results_total)
-    print("长度为:",len(orders_list))
+    print("长度为:", len(orders_list))
     for order in orders_list:
-        print("-------------",order)
+        print("-------------", order)
     df = pd.DataFrame(orders_list)
-    df.to_excel('龙-订单.xlsx', index=False)
+    df.to_excel("龙-订单.xlsx", index=False)
     print("已生成")

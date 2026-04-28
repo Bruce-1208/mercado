@@ -1,6 +1,7 @@
 import requests
 import json
 import random
+
 # 配置信息
 
 # CLASH_API_URL = "http://127.0.0.1:50980"
@@ -29,8 +30,8 @@ def switch_random_hongkong_node():
             return
 
         group_data = resp.json()
-        current_node = group_data.get('now')
-        all_nodes = group_data.get('all', [])
+        current_node = group_data.get("now")
+        all_nodes = group_data.get("all", [])
 
         # 2. 筛选并排除当前节点
         hk_nodes = [n for n in all_nodes if "香港" in n and n != current_node]
@@ -48,7 +49,7 @@ def switch_random_hongkong_node():
             url,
             data=json.dumps({"name": new_node}),
             headers=headers,
-            proxies=proxies_setting
+            proxies=proxies_setting,
         )
 
         print("✅ 切换指令已发送")
@@ -56,20 +57,21 @@ def switch_random_hongkong_node():
     except Exception as e:
         print(f"❌ 运行时报错: {e}")
 
+
 def get_public_ip():
     urls = [
-        'https://api.ipify.org?format=json',
-        'https://myip.ipip.net',
-        'http://ip-api.com/json?lang=zh-CN'
+        "https://api.ipify.org?format=json",
+        "https://myip.ipip.net",
+        "http://ip-api.com/json?lang=zh-CN",
     ]
 
     print("--- 正在检测公网 IP ---")
     try:
         # 使用 ip-api.com 可以看到地理位置信息
-        response = requests.get('http://ip-api.com/json?lang=zh-CN', timeout=5)
+        response = requests.get("http://ip-api.com/json?lang=zh-CN", timeout=5)
         data = response.json()
 
-        if data['status'] == 'success':
+        if data["status"] == "success":
             print(f"当前 IP: {data['query']}")
             print(f"所在地: {data['country']} {data['regionName']} {data['city']}")
             print(f"运营商: {data['isp']}")
@@ -88,17 +90,21 @@ def switch_node(group_name, target_node_keyword):
     base_url = f"{CLASH_API_URL}/proxies"
     headers = {
         "Authorization": f"Bearer {CLASH_SECRET}",
-        "Content-Type": "application/json"
+        "Content-Type": "application/json",
     }
 
     # 1. 先获取该组下所有可选节点的准确名称
     try:
-        resp = requests.get(f"{base_url}/{group_name}", headers=headers, proxies={"http": None, "https": None})
+        resp = requests.get(
+            f"{base_url}/{group_name}",
+            headers=headers,
+            proxies={"http": None, "https": None},
+        )
         if resp.status_code != 200:
             print(f"❌ 找不到策略组: {group_name}")
             return
 
-        all_nodes = resp.json().get('all', [])
+        all_nodes = resp.json().get("all", [])
 
         # 2. 匹配关键词（因为节点名通常包含表情和特殊符号，全匹配很麻烦）
         matched_node = None
@@ -117,7 +123,7 @@ def switch_node(group_name, target_node_keyword):
             f"{base_url}/{group_name}",
             data=json.dumps(payload),
             headers=headers,
-            proxies={"http": None, "https": None}
+            proxies={"http": None, "https": None},
         )
 
         if put_resp.status_code == 204:
@@ -133,16 +139,13 @@ def list_proxies():
     url = f"{CLASH_API_URL}/proxies"
     headers = {
         "Authorization": f"Bearer {CLASH_SECRET}",
-        "Content-Type": "application/json"
+        "Content-Type": "application/json",
     }
 
     try:
         # 记得禁用系统代理，防止请求发往 Clash 导致死循环
         response = requests.get(
-            url,
-            headers=headers,
-            proxies={"http": None, "https": None},
-            timeout=5
+            url, headers=headers, proxies={"http": None, "https": None}, timeout=5
         )
 
         if response.status_code != 200:
@@ -150,7 +153,7 @@ def list_proxies():
             return
 
         data = response.json()
-        proxies = data.get('proxies', {})
+        proxies = data.get("proxies", {})
 
         print("=" * 50)
         print(f"{'策略组名称':<20} | {'当前选择节点':<20}")
@@ -159,12 +162,12 @@ def list_proxies():
         # 遍历所有对象
         for name, info in proxies.items():
             # 我们只关心策略组（Selector）或 自动测速组（URLTest）
-            if info.get('type') in ['Selector', 'URLTest']:
-                current_node = info.get('now', 'Unknown')
+            if info.get("type") in ["Selector", "URLTest"]:
+                current_node = info.get("now", "Unknown")
                 print(f"{name:<20} | {current_node:<20}")
 
                 # 列出该组下前 5 个可选节点（避免刷屏）
-                all_nodes = info.get('all', [])
+                all_nodes = info.get("all", [])
                 if all_nodes:
                     node_preview = ", ".join(all_nodes[:20])
                     print(f"  └─ 可选节点({len(all_nodes)}个): {node_preview} ...")
@@ -172,6 +175,8 @@ def list_proxies():
 
     except Exception as e:
         print(f"⚠️ 运行时出错: {e}")
+
+
 # --- 使用示例 ---
 # 注意：名称必须与 Clash 界面中看到的完全一致（区分大小写）
 if __name__ == "__main__":
