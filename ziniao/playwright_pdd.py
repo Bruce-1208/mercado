@@ -10,8 +10,8 @@ async def scrape_pinduoduo(url):
     async with async_playwright() as p:
         browser = await p.chromium.launch(headless=False)  # 必须设为 False
         context = await browser.new_context(
-            viewport={'width': 390, 'height': 844},
-            user_agent="Mozilla/5.0 (iPhone; CPU iPhone OS 16_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.0 Mobile/15E148 Safari/604.1"
+            viewport={"width": 390, "height": 844},
+            user_agent="Mozilla/5.0 (iPhone; CPU iPhone OS 16_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.0 Mobile/15E148 Safari/604.1",
         )
         page = await context.new_page()
 
@@ -23,7 +23,8 @@ async def scrape_pinduoduo(url):
         # 启用 stealth 插件避开基本检测
 
         # 3. 手动注入 Stealth 脚本 (绕过浏览器检测的关键)
-        await page.add_init_script("""
+        await page.add_init_script(
+            """
                     Object.defineProperty(navigator, 'webdriver', {
                         get: () => undefined
                     });
@@ -34,9 +35,10 @@ async def scrape_pinduoduo(url):
                     Object.defineProperty(navigator, 'plugins', {
                         get: () => [1, 2, 3, 4, 5]
                     });
-                """)
+                """
+        )
 
-        stealth=Stealth()
+        stealth = Stealth()
         await stealth.apply_stealth_async(page)
 
         print(f"正在访问: {url}")
@@ -51,9 +53,12 @@ async def scrape_pinduoduo(url):
 
             # 获取数据示例
             data = {
-                "title": await page.locator('xpath=/html/body/div[2]/div/div[2]/div[3]/div/span/span[2]/span').inner_text(),
-                "price": await page.locator('xpath=/html/body/div[2]/div/div[2]/div[1]/div/div[1]/div/span[1]/span[2]/span[1]').first.inner_text(),
-
+                "title": await page.locator(
+                    "xpath=/html/body/div[2]/div/div[2]/div[3]/div/span/span[2]/span"
+                ).inner_text(),
+                "price": await page.locator(
+                    "xpath=/html/body/div[2]/div/div[2]/div[1]/div/div[1]/div/span[1]/span[2]/span[1]"
+                ).first.inner_text(),
             }
 
             print("爬取结果:", data)

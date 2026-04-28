@@ -29,8 +29,8 @@ def get_infractions_info(window_id, name, site):
     res = openBrowser(window_id)  # 窗口ID从窗口配置界面中复制，或者api创建后返回
 
     print(res)
-    driverPath = res['data']['driver']
-    debuggerAddress = res['data']['http']
+    driverPath = res["data"]["driver"]
+    debuggerAddress = res["data"]["http"]
 
     # selenium 连接代码
     chrome_options = webdriver.ChromeOptions()
@@ -43,15 +43,20 @@ def get_infractions_info(window_id, name, site):
     # 设置最长等待时间为 10 秒
     wait = WebDriverWait(driver, 10)
 
-    driver.get("https://global-selling.mercadolibre.com/noindex/pppi/infractions?tab=detections&offset=0")
+    driver.get(
+        "https://global-selling.mercadolibre.com/noindex/pppi/infractions?tab=detections&offset=0"
+    )
     time.sleep(10)
     i = 0
-    while (i < 3):
+    while i < 3:
         i = i + 1
         try:
             # 打开站点选择器
             WebDriverWait(driver, 10).until(
-                EC.element_to_be_clickable((By.CLASS_NAME, "nav-header-cbt__site-switcher"))).click()
+                EC.element_to_be_clickable(
+                    (By.CLASS_NAME, "nav-header-cbt__site-switcher")
+                )
+            ).click()
 
             print(name + "打开站点选择器")
             time.sleep(5)
@@ -70,7 +75,8 @@ def get_infractions_info(window_id, name, site):
                 path = 'div[data-value="MLU-remote"]'
 
             WebDriverWait(driver, 30).until(
-                EC.element_to_be_clickable((By.CSS_SELECTOR, path))).click()
+                EC.element_to_be_clickable((By.CSS_SELECTOR, path))
+            ).click()
 
             driver.refresh()
             time.sleep(3)
@@ -95,7 +101,9 @@ def get_infractions_info(window_id, name, site):
     titles = [el.get_attribute("textContent") for el in titles]
     # infraction-denounce__date
     dates = wait.until(
-        EC.presence_of_all_elements_located((By.CLASS_NAME, "infraction-denounce__date"))
+        EC.presence_of_all_elements_located(
+            (By.CLASS_NAME, "infraction-denounce__date")
+        )
     )
     dates = [el.get_attribute("textContent") for el in dates]
     results = list(zip(ids, titles, dates))
@@ -106,19 +114,19 @@ def get_infractions_info(window_id, name, site):
         title = row[1]
         date = row[2]
         prefix = ""
-        if (site == "墨西哥"):
+        if site == "墨西哥":
             prefix = "MLM"
-        if (site == "巴西"):
+        if site == "巴西":
             prefix = "MLB"
-        if (site == "哥伦比亚"):
+        if site == "哥伦比亚":
             prefix = "MCO"
-        if (site == "智利"):
+        if site == "智利":
             prefix = "MLC"
-        if (site == "阿根廷"):
+        if site == "阿根廷":
             prefix = "MLA"
-        if (site == "乌拉圭"):
+        if site == "乌拉圭":
             prefix = "MLU"
-        id = id.replace("#",  prefix)
+        id = id.replace("#", prefix)
         new_row.append(name)
         new_row.append(site)
         new_row.append(id)
@@ -136,7 +144,6 @@ def get_infractions_info_all():
     # file_path = root_path / "比特配置文件.xlsx"
     file_path = root_path / "比特配置文件.xlsx"
 
-
     wb = load_workbook(file_path)
     sheet = wb.active
     infraction_info_sum = []
@@ -147,24 +154,26 @@ def get_infractions_info_all():
         id = row[0]
         name = row[1]
         remark = row[2]
-        if remark == '忽略':
+        if remark == "忽略":
             continue
         print(get_now_time() + "开始打开窗口:" + name)
         site_list = row[3].split("，")
         for site in site_list:
             i = 0
-            while (i < 3):
+            while i < 3:
                 i = i + 1
                 try:
                     infraction_info = get_infractions_info(id, name, site)
                     infraction_info_sum = infraction_info_sum + infraction_info
                     print(get_now_time() + name + site + "成功")
-                    result.append(('获取侵权信息', name, site, "成功", get_now_time()))
+                    result.append(("获取侵权信息", name, site, "成功", get_now_time()))
                     break
                 except Exception as e:
                     print(get_now_time() + name + site + "执行失败", e)
-                    if(i==3):
-                        result.append(('获取声誉信息', name, site, "失败", get_now_time()))
+                    if i == 3:
+                        result.append(
+                            ("获取声誉信息", name, site, "失败", get_now_time())
+                        )
 
         print(get_now_time() + "结束，正在关闭窗口")
 
@@ -179,23 +188,30 @@ def get_infractions_info_all():
 
     end = int(time.time())
     print(get_now_time() + "总花费", end - start)
-    df = pd.DataFrame(infraction_info_sum,
-                      columns=['店铺名','站点','编号','标题','侵权时间','执行时间'])
+    df = pd.DataFrame(
+        infraction_info_sum,
+        columns=["店铺名", "站点", "编号", "标题", "侵权时间", "执行时间"],
+    )
 
     now = datetime.now()
     date_str = datetime.now().strftime("%Y-%m-%d-%H")
 
-    df.to_excel(root_path / ("美客多侵权/武汉泽顺店铺侵权信息汇总" + date_str + ".xlsx"), index=False)
+    df.to_excel(
+        root_path / ("美客多侵权/武汉泽顺店铺侵权信息汇总" + date_str + ".xlsx"),
+        index=False,
+    )
 
-    send_info('美客多所有店铺侵权汇总', infraction_info_sum_str,
-              root_path / ("美客多侵权/武汉泽顺店铺侵权信息汇总" + date_str + ".xlsx"),
-              r"武汉泽顺店铺侵权信息汇总" + date_str + ".xlsx")
+    send_info(
+        "美客多所有店铺侵权汇总",
+        infraction_info_sum_str,
+        root_path / ("美客多侵权/武汉泽顺店铺侵权信息汇总" + date_str + ".xlsx"),
+        r"武汉泽顺店铺侵权信息汇总" + date_str + ".xlsx",
+    )
     print(get_now_time() + "发送邮件成功")
 
     insert_task_record(result)
     inset_infraction_info(infraction_info_sum)
 
 
-
-if __name__ == '__main__':
+if __name__ == "__main__":
     get_infractions_info_all()

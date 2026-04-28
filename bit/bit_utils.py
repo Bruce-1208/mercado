@@ -10,6 +10,7 @@ import pytz
 import random
 import time
 
+
 def parser_delay_date(time_str):
     date = time_str.split("-")[0]
     date_format = "%A %d %b %Y "
@@ -20,14 +21,15 @@ def parser_delay_date(time_str):
 def convert_text(text):
     # 初始化OpenCC对象，可以选择不同的转换配置文件
     # 't2s' 代表繁体转简体，'s2t' 代表简体转繁体
-    cc = OpenCC('t2s')  # 繁体转简体
+    cc = OpenCC("t2s")  # 繁体转简体
     # cc = OpenCC('s2t')  # 简体转繁体
     converted_text = cc.convert(text)
-    return converted_text # 输出简体化的文本
+    return converted_text  # 输出简体化的文本
+
 
 def get_latest_modified_file(folder_path):
     # 获取文件夹内所有文件的Path对象列表
-    files = Path(folder_path).glob('*.xlsx')
+    files = Path(folder_path).glob("*.xlsx")
     latest_file = None
     latest_modified_time = 0
 
@@ -44,8 +46,6 @@ def get_latest_modified_file(folder_path):
     return latest_file.name if latest_file else None
 
 
-
-
 def get_bit_path():
     return Path(__file__).resolve().parent
 
@@ -56,6 +56,7 @@ def get_now_time():
     # 自定义格式: 年-月-日 时:分:秒
     formatted_time = now.strftime("%Y-%m-%d %H:%M:%S")
     return formatted_time
+
 
 def getWindowidByName(name):
     config_path = get_bit_path() / "比特配置文件.xlsx"
@@ -73,6 +74,7 @@ def getWindowidByName(name):
             break
     return window_id
 
-if __name__ == '__main__':
+
+if __name__ == "__main__":
     print(getWindowidByName("跃马扬鞭"))
     print(get_now_time())

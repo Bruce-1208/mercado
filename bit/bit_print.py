@@ -31,8 +31,8 @@ def print_orders(window_id, site):
 
     print(res)
 
-    driverPath = res['data']['driver']
-    debuggerAddress = res['data']['http']
+    driverPath = res["data"]["driver"]
+    debuggerAddress = res["data"]["http"]
 
     # selenium 连接代码
     chrome_options = webdriver.ChromeOptions()
@@ -46,7 +46,8 @@ def print_orders(window_id, site):
     wait = WebDriverWait(driver, 10)
 
     driver.get(
-        "https://global-selling.mercadolibre.com/orders/omni/list?filters=&subFilters=&search=&limit=50&offset=0&startPeriod=WITH_DATE_CLOSED_2M_OLD&selectedTab=TAB_TODAY_CBT")
+        "https://global-selling.mercadolibre.com/orders/omni/list?filters=&subFilters=&search=&limit=50&offset=0&startPeriod=WITH_DATE_CLOSED_2M_OLD&selectedTab=TAB_TODAY_CBT"
+    )
     driver.refresh()
     time.sleep(5)
 
@@ -76,40 +77,50 @@ def print_orders(window_id, site):
     # 打开选择器
     success = driver.execute_script(deep_click_script)
     # 选择站点
-    name = ''
-    if site == '墨西哥':
-        name = 'Mexico'
-    if site == '巴西':
-        name = 'Brazil'
-    if site == '哥伦比亚':
-        name = 'Colombia'
-    if site == '智利':
-        name = 'Chile'
-    if site == '阿根廷':
-        name = 'Argentina'
-    if site == '乌拉圭':
-        name = 'Uruguay'
+    name = ""
+    if site == "墨西哥":
+        name = "Mexico"
+    if site == "巴西":
+        name = "Brazil"
+    if site == "哥伦比亚":
+        name = "Colombia"
+    if site == "智利":
+        name = "Chile"
+    if site == "阿根廷":
+        name = "Argentina"
+    if site == "乌拉圭":
+        name = "Uruguay"
     #
     force_select_country(driver, name)
-    print('成功选择站点')
+    print("成功选择站点")
     driver.get(
-        "https://global-selling.mercadolibre.com/orders/omni/list?filters=&subFilters=&search=&limit=50&offset=0&startPeriod=WITH_DATE_CLOSED_2M_OLD&selectedTab=TAB_TODAY_CBT")
+        "https://global-selling.mercadolibre.com/orders/omni/list?filters=&subFilters=&search=&limit=50&offset=0&startPeriod=WITH_DATE_CLOSED_2M_OLD&selectedTab=TAB_TODAY_CBT"
+    )
     driver.refresh()
     time.sleep(5)
     try:
         WebDriverWait(driver, 10).until(
-            EC.element_to_be_clickable((By.XPATH,
-                                        "/html/body/main/div/div[3]/div/div/div[3]/div/div[2]/div/div/section/div/div[1]/div/div/div[1]/div[1]/div/div/span/input"))).click()
+            EC.element_to_be_clickable(
+                (
+                    By.XPATH,
+                    "/html/body/main/div/div[3]/div/div/div[3]/div/div[2]/div/div/section/div/div[1]/div/div/div[1]/div[1]/div/div/span/input",
+                )
+            )
+        ).click()
     except Exception as e:
         print("无法勾选打印", e)
     try:
         WebDriverWait(driver, 10).until(
-            EC.element_to_be_clickable((By.XPATH,
-                                        "/html/body/main/div/div[3]/div/div/div[3]/div/div[2]/div/div/section/div/div[1]/div/div/div[2]/div/button"))).click()
+            EC.element_to_be_clickable(
+                (
+                    By.XPATH,
+                    "/html/body/main/div/div[3]/div/div/div[3]/div/div[2]/div/div/section/div/div[1]/div/div/div[2]/div/button",
+                )
+            )
+        ).click()
     except Exception as e:
         print("没有可以打印的订单", e)
     return True
-
 
 
 def print_orders_all():
@@ -123,29 +134,33 @@ def print_orders_all():
     sheet = wb.active
     reputation_info_sum = []
     # 使用 min_row=2 跳过第一行
-    result=[]
+    result = []
     for row in sheet.iter_rows(min_row=2, values_only=True):
         print(row)  # row 是一个元组，包含该行所有数据
         id = row[0]
         name = row[1]
         remark = row[2]
-        if remark == '忽略':
+        if remark == "忽略":
             continue
         print("开始打开窗口:", name)
         site_list = row[3].split("，")
         for site in site_list:
             i = 0
-            while (i < 3):
-                i=i+1
+            while i < 3:
+                i = i + 1
                 try:
                     success = print_orders(id, site)
-                    if (success == True):
-                        result.append("后台打印订单",name,site,"成功",get_now_time())
+                    if success == True:
+                        result.append(
+                            "后台打印订单", name, site, "成功", get_now_time()
+                        )
                         break
                 except Exception as e:
                     print("窗口" + name + site + "执行失败", e)
-                    if(i==3):
-                        result.append("后台打印订单",name,site,"失败",get_now_time())
+                    if i == 3:
+                        result.append(
+                            "后台打印订单", name, site, "失败", get_now_time()
+                        )
                 time.sleep(300)
 
             time.sleep(5)
@@ -161,7 +176,8 @@ def print_orders_all():
     print("总花费", end - start)
     insert_task_record(result)
 
-if __name__ == '__main__':
-    while(1==1):
+
+if __name__ == "__main__":
+    while 1 == 1:
         print_orders_all()
-        time.sleep(3600*6)
+        time.sleep(3600 * 6)
