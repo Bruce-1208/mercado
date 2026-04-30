@@ -1,3 +1,15 @@
+import os
+import sys
+
+# Make this entry file runnable both as:
+# 1) python bit/bit_main.py
+# 2) python -m bit.bit_main
+CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
+PROJECT_ROOT = os.path.dirname(CURRENT_DIR)
+if CURRENT_DIR not in sys.path:
+    sys.path.insert(0, CURRENT_DIR)
+if PROJECT_ROOT not in sys.path:
+    sys.path.insert(0, PROJECT_ROOT)
 import time
 
 from selenium import webdriver
@@ -14,9 +26,9 @@ from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support import expected_conditions as EC
 import pyautogui
-from switch_country import *
+from bit_switch_country import *
 from openpyxl import load_workbook
-from send_mail import *
+from bit.bit_send_mail import *
 import pandas as pd
 
 from datetime import datetime

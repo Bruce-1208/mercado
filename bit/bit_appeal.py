@@ -16,7 +16,7 @@ import random
 
 from bit.bit_mysql import insert_chat_info
 from bit.bit_utils import get_latest_modified_file, get_bit_path, parser_delay_date, get_now_time, getWindowidByName
-from bit_api import *
+from bit.bit_api import *
 from AI_Agent.qianwen import *
 import pandas as pd
 from datetime import datetime, timedelta
@@ -24,7 +24,7 @@ from datetime import datetime
 from AI_Agent.deepseek import *
 import re
 from openpyxl import load_workbook
-from bit_clash import *
+from bit.bit_clash import *
 import traceback
 
 
@@ -250,55 +250,63 @@ def shensu(name, site, form, message):
 
 
 def get_delay_orders_random(name, site, nums):
-    delay_folder_path = get_bit_path() / "美客多延误"
-    delay_file = get_latest_modified_file(delay_folder_path)
-    delay_file_path = delay_folder_path / delay_file
-    fifteen_days_ago = datetime.now() - timedelta(days=15)
-    order_list = []
-    df = pd.read_excel(delay_file_path, engine='openpyxl')
-    for index, row in df.iterrows():
-        # print(row)
-        line_name = row['店铺']
-        line_site = row['站点']
-        order_date = row['下单时间']
-        order_num = row['销售单号']
-        dispatch_date = row['实际揽收时间']
-        if (line_name == name and line_site == site and dispatch_date != "Not yet dispatched"):
-            order_date = parser_delay_date(order_date)
-            if (order_date > fifteen_days_ago):
-                order_list.append(order_num)
-    print(get_now_time() + name + site + "最近15天的延误个数:", len(order_list))
-    order_random=""
-    if len(order_list) >= nums:
-        order_random = str(random.sample(order_list, nums))
-    else:
-        order_random = str(order_list)
-    order_random = re.sub(r'[^\d,]', '', order_random)
+    order_random = ""
+    try:
+        delay_folder_path = get_bit_path() / "美客多延误"
+        delay_file = get_latest_modified_file(delay_folder_path)
+        delay_file_path = delay_folder_path / delay_file
+        fifteen_days_ago = datetime.now() - timedelta(days=15)
+        order_list = []
+        df = pd.read_excel(delay_file_path, engine='openpyxl')
+        for index, row in df.iterrows():
+            # print(row)
+            line_name = row['店铺']
+            line_site = row['站点']
+            order_date = row['下单时间']
+            order_num = row['销售单号']
+            dispatch_date = row['实际揽收时间']
+            if (line_name == name and line_site == site and dispatch_date != "Not yet dispatched"):
+                order_date = parser_delay_date(order_date)
+                if (order_date > fifteen_days_ago):
+                    order_list.append(order_num)
+        print(get_now_time() + name + site + "最近15天的延误个数:", len(order_list))
 
-    print(get_now_time() + name + site + "随机得到的延误销售单号为", order_random)
+        if len(order_list) >= nums:
+            order_random = str(random.sample(order_list, nums))
+        else:
+            order_random = str(order_list)
+        order_random = re.sub(r'[^\d,]', '', order_random)
+
+        print(get_now_time() + name + site + "随机得到的延误销售单号为", order_random)
+    except Exception as e:
+        print("获取延误表格信息失败",e)
     return order_random
 
 
 def get_infraction_orders_random(name, site, nums):
-    delay_folder_path = get_bit_path() / "美客多侵权"
-    delay_file = get_latest_modified_file(delay_folder_path)
-    delay_file_path = delay_folder_path / delay_file
-    fifteen_days_ago = datetime.now() - timedelta(days=15)
-    inf_list = []
-    df = pd.read_excel(delay_file_path, engine='openpyxl')
-    for index, row in df.iterrows():
-        # print(row)
-        line_name = row['店铺名']
-        line_site = row['站点']
-        id = row['编号']
-        if (name == line_name and site == line_site):
-            inf_list.append(id)
+    inf_list=""
+    try:
+        delay_folder_path = get_bit_path() / "美客多侵权"
+        delay_file = get_latest_modified_file(delay_folder_path)
+        delay_file_path = delay_folder_path / delay_file
+        fifteen_days_ago = datetime.now() - timedelta(days=15)
+        inf_list = []
+        df = pd.read_excel(delay_file_path, engine='openpyxl')
+        for index, row in df.iterrows():
+            # print(row)
+            line_name = row['店铺名']
+            line_site = row['站点']
+            id = row['编号']
+            if (name == line_name and site == line_site):
+                inf_list.append(id)
 
-    if len(inf_list) >= nums:
-        inf_list = str(random.sample(inf_list, nums))
-    else:
-        inf_list = str(inf_list)
-    print(get_now_time() + name + site + "随机得到的侵权单号为", inf_list)
+        if len(inf_list) >= nums:
+            inf_list = str(random.sample(inf_list, nums))
+        else:
+            inf_list = str(inf_list)
+        print(get_now_time() + name + site + "随机得到的侵权单号为", inf_list)
+    except Exception as e:
+        print("获取侵权订单信息失败",e)
     return inf_list
 
 

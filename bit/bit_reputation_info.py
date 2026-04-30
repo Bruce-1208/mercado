@@ -7,21 +7,21 @@ from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.support.wait import WebDriverWait
 
 from bit.bit_utils import get_now_time
-from bit_api import *
+from bit.bit_api import *
 from selenium.webdriver.common.desired_capabilities import DesiredCapabilities
 from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support import expected_conditions as EC
 import pyautogui
-from switch_country import *
+from bit.bit_switch_country import *
 from openpyxl import load_workbook
-from send_mail import *
+from bit.bit_send_mail import *
 import pandas as pd
 
 from datetime import datetime
 from pathlib import Path
-from bit_mysql import *
-from bit_clash import *
+from bit.bit_mysql import *
+from bit.bit_clash import *
 
 
 def get_reputation_info(window_id, name, site):
