@@ -1,4 +1,4 @@
-from bit_api import *
+from bit.bit_api import *
 import time
 import asyncio
 from playwright.async_api import async_playwright, Playwright

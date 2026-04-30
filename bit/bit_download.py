@@ -1,11 +1,11 @@
 import time
-from bit import bit_summary_delayfile
-from bit_email_info import *
+from bit.bit_summary_delayfile import *
+from bit.bit_email_info import *
 import traceback
 from pathlib import Path
-from bit_mysql import *
-from bit_clash import *
-from bit_summary_delayfile import *
+from bit.bit_mysql import *
+from bit.bit_clash import *
+from bit.bit_summary_delayfile import *
 
 
 def download_relay_mail(window_id, site):
