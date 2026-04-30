@@ -14,7 +14,7 @@ from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support import expected_conditions as EC
 import  pyautogui
-from switch_country import *
+from bit_switch_country import *
 from openpyxl import load_workbook
 from datetime import datetime
 
