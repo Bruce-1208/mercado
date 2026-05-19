@@ -199,7 +199,7 @@ def shensu(name, site, form, message):
         try:
             WebDriverWait(driver, 15).until(
                 EC.element_to_be_clickable(
-                    (By.XPATH, "//button[contains(., 'We will send you a message in less than')]"))).click()
+                    (By.XPATH, "//button[contains(., 'We’ll send you a message in less than 5 min')]"))).click()
         except Exception as e:
             print(f"{get_now_time()} {name} {site} '没有人工客服'<br>")
             return None
@@ -237,6 +237,7 @@ def shensu(name, site, form, message):
             WebDriverWait(driver, 30).until(
                 EC.element_to_be_clickable((By.CSS_SELECTOR, 'button[title="Send"]'))).click()
             print(f"{get_now_time()} {name} {site} 自动发送自定义话术：{message}<br>")
+            time.sleep(120)
             chat_ai(driver, name, site, form, infraction_random + words_random,nickname)
 
 
@@ -353,11 +354,11 @@ def chat_ai(driver, name, site, form, huashu,nickname):
                 response = get_ai_response(words)
                 print(f"{get_now_time()} {name}{site}AI回复:{response}<br>")
             if (form == "侵权"):
-                words = lines + f"|这是我跟美客多客服的对话，我叫{nickname}，我正在找他申诉我侵权的商品，帮我想话术让客服相信这不是侵权产品,麻烦你帮我用不超过三十个字的自然语言回复他，如果你理解他拒绝了我的申请，麻烦返回：好的，我明白了,感谢您的回复"
+                words = lines + f"|这是我跟美客多客服的对话，我叫{nickname}，我正在找他申诉我侵权的商品，帮我想话术让客服相信这不是侵权产品,麻烦你帮我用不超过三十个字的自然语言回复他，如果客服明确拒绝了我的申请，麻烦返回：好的，我明白了,感谢您的回复"
                 response = get_ai_response(words)
                 print(f"{get_now_time()} {name}{site}AI回复:{response}<br>")
             if (form == "投诉"):
-                words = lines + f"|这是我跟美客多客服的对话，我叫{nickname}，我正在给他我被投诉的订单号，帮我想办法让这些订单不影响我的声誉，麻烦你帮我用不超过三十个字的自然语言回复他，如果你理解他拒绝了我的申请，麻烦返回：好的，我明白了,感谢您的回复"
+                words = lines + f"|这是我跟美客多客服的对话，我叫{nickname}，我正在给他我被投诉的订单号，帮我想办法让这些订单不影响我的声誉，麻烦你帮我用不超过三十个字的自然语言回复他，如果客服明确拒绝了我的申请，麻烦返回：好的，我明白了,感谢您的回复"
                 response = get_ai_response(words)
                 print(f"{get_now_time()} {name}{site}AI回复:{response}<br>")
             try:
