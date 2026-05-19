@@ -30,7 +30,7 @@ import re
 
 def check_yuanyou_title(number):
     start = int(time.time())
-    res = openBrowser("1495e31cb630406bb690ba187f264fe7")
+    res = openBrowser("9812f185f7ab49d98f3988994d9e8ebf")
     print(res)
 
     driverPath = res['data']['driver']
@@ -47,7 +47,7 @@ def check_yuanyou_title(number):
     # 设置最长等待时间为 10 秒
     wait = WebDriverWait(driver, 5)
 
-    driver.get("https://meli.zying.net/#/product")
+    driver.get("https://listado.mercadolibre.com.mx/cosplay_NoIndex_True_SHIPPING*ORIGIN_10215069#applied_filter_id%3DSHIPPING_ORIGIN_HIGHLIGHTED%26applied_filter_name%3DOrigen+del+env%C3%ADo%26applied_filter_order%3D2%26applied_value_id%3D10215069%26applied_value_name%3DInternacional%26applied_value_order%3D1%26applied_value_results%3D486985%26is_custom%3Dfalse")
 
     # locator = (By.XPATH, "//span[@class='ant-select-selection-item']//span[contains(text(), '50条/页')]")
     # wait.until(EC.visibility_of_element_located(locator)).click()
