@@ -209,5 +209,5 @@ if __name__ == '__main__':
             weight = weight.replace("g", "")
         picture = row['附图']
         publish((title, description, picture, price, weight, name, result, token))
-        if index>5:
+        if index>0:
             break

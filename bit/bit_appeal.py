@@ -199,7 +199,7 @@ def shensu(name, site, form, message):
         try:
             WebDriverWait(driver, 15).until(
                 EC.element_to_be_clickable(
-                    (By.XPATH, "//button[contains(., 'We will send you a message in less than')]"))).click()
+                    (By.XPATH, "//button[contains(., 'We’ll send you a message in less than 5 min')]"))).click()
         except Exception as e:
             print(f"{get_now_time()} {name} {site} '没有人工客服'<br>")
             return None
