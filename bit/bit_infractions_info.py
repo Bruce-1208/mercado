@@ -1,6 +1,7 @@
 import time
 from sys import prefix
 
+from oss2 import is_valid_endpoint
 from selenium import webdriver
 from selenium.common.exceptions import TimeoutException
 from selenium.webdriver.common.keys import Keys
@@ -81,51 +82,70 @@ def get_infractions_info(window_id, name, site):
             switch_random_hongkong_node()
             get_public_ip()
             continue
-
-    # 使用 presence_of_all_elements_located 等待所有匹配的元素出现在 DOM 中
-    # 注意：这里传入的是一个元组 (By.CLASS_NAME, "value")
-    ids = wait.until(
-        EC.presence_of_all_elements_located((By.CLASS_NAME, "infraction-item__id"))
-    )
-    ids = [el.get_attribute("textContent") for el in ids]
-    # infraction-item__title
-    titles = wait.until(
-        EC.presence_of_all_elements_located((By.CLASS_NAME, "infraction-item__title"))
-    )
-    titles = [el.get_attribute("textContent") for el in titles]
-    # infraction-denounce__date
-    dates = wait.until(
-        EC.presence_of_all_elements_located((By.CLASS_NAME, "infraction-denounce__date"))
-    )
-    dates = [el.get_attribute("textContent") for el in dates]
-    results = list(zip(ids, titles, dates))
     infractions_list = []
-    for row in results:
-        new_row = []
-        id = row[0]
-        title = row[1]
-        date = row[2]
-        prefix = ""
-        if (site == "墨西哥"):
-            prefix = "MLM"
-        if (site == "巴西"):
-            prefix = "MLB"
-        if (site == "哥伦比亚"):
-            prefix = "MCO"
-        if (site == "智利"):
-            prefix = "MLC"
-        if (site == "阿根廷"):
-            prefix = "MLA"
-        if (site == "乌拉圭"):
-            prefix = "MLU"
-        id = id.replace("#",  prefix)
-        new_row.append(name)
-        new_row.append(site)
-        new_row.append(id)
-        new_row.append(title)
-        new_row.append(date)
-        new_row.append(get_now_time())
-        infractions_list.append(new_row)
+    while(1==1):
+
+        # 使用 presence_of_all_elements_located 等待所有匹配的元素出现在 DOM 中
+        # 注意：这里传入的是一个元组 (By.CLASS_NAME, "value")
+        ids = wait.until(
+            EC.presence_of_all_elements_located((By.CLASS_NAME, "infraction-item__id"))
+        )
+        ids = [el.get_attribute("textContent") for el in ids]
+        # infraction-item__title
+        titles = wait.until(
+            EC.presence_of_all_elements_located((By.CLASS_NAME, "infraction-item__title"))
+        )
+        titles = [el.get_attribute("textContent") for el in titles]
+        # infraction-denounce__date
+        dates = wait.until(
+            EC.presence_of_all_elements_located((By.CLASS_NAME, "infraction-denounce__date"))
+        )
+        dates = [el.get_attribute("textContent") for el in dates]
+        results = list(zip(ids, titles, dates))
+        for row in results:
+            new_row = []
+            id = row[0]
+            title = row[1]
+            date = row[2]
+            prefix = ""
+            if (site == "墨西哥"):
+                prefix = "MLM"
+            if (site == "巴西"):
+                prefix = "MLB"
+            if (site == "哥伦比亚"):
+                prefix = "MCO"
+            if (site == "智利"):
+                prefix = "MLC"
+            if (site == "阿根廷"):
+                prefix = "MLA"
+            if (site == "乌拉圭"):
+                prefix = "MLU"
+            id = id.replace("#",  prefix)
+            new_row.append(name)
+            new_row.append(site)
+            new_row.append(id)
+            new_row.append(title)
+            new_row.append(date)
+            new_row.append(get_now_time())
+            infractions_list.append(new_row)
+
+        #翻页
+        try:
+            # 增加显式等待，最多等待 5 秒，防止页面加载延迟导致误判
+
+            WebDriverWait(driver, 30).until(
+                EC.element_to_be_clickable(
+                    (By.XPATH, "//span[contains(@class, 'andes-pagination__arrow-title') and text()='Next']"))).click()
+            print("成功点击下一页")
+            time.sleep(3)
+
+        except TimeoutException:
+            # 捕获超时异常，说明在规定时间内无法定位到该元素
+            print("当前为最后一页，循环结束")
+            return infractions_list
+
+
+
     return infractions_list
 
 
@@ -198,4 +218,7 @@ def get_infractions_info_all():
 
 
 if __name__ == '__main__':
+
+    # inf=get_infractions_info('1495e31cb630406bb690ba187f264fe7','vngbjkk','墨西哥')
+    # print(inf)
     get_infractions_info_all()
