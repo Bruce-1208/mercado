@@ -1,7 +1,7 @@
 import json
 import os
 
-from alibaba_API import get_whiteBk
+from mercado_pictures import get_whiteBk
 from DeepSeekApi import get_title
 from Utils import download_image
 import requests
