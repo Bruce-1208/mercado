@@ -13,8 +13,13 @@ from selenium.webdriver.common.desired_capabilities import DesiredCapabilities
 from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support import expected_conditions as EC
+<<<<<<< HEAD
 import pyautogui
 from switch_country import *
+=======
+import  pyautogui
+from bit_switch_country import *
+>>>>>>> e24277ad03e5cfe86f67b6fb0c6440f756f7e643
 from openpyxl import load_workbook
 from datetime import datetime
 

@@ -16,6 +16,7 @@ def get_ai_response(message):
     reasoning_content = response.choices[0].message.reasoning_content
     content = response.choices[0].message.content
     # print("+++++++++",reasoning_content)
+    # print(content)
     return content
 
     # # Turn 2
