@@ -11,7 +11,6 @@ from selenium.webdriver.common.by import By
 from data_analysis_mercado import post_mercado
 from data_analysis_single_1688 import scrape_1688_single
 
-
 # 启用调试日志
 # logging.basicConfig(level=logging.DEBUG)
 

@@ -9,7 +9,6 @@ from selenium.webdriver.common.desired_capabilities import DesiredCapabilities
 from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.common.by import By
 
-
 # /browser/open 接口会返回 selenium使用的http地址，以及webdriver的path，直接使用即可
 res = openBrowser(
     "1495e31cb630406bb690ba187f264fe7"

@@ -3,7 +3,6 @@ import time
 from shensu import shensu
 import random
 
-
 list_br = [
     "2000006201220633 Estimado servicio al cliente, el cliente abrió la agencia directamente sin ninguna evidencia de problemas de calidad con mi producto, creo que quería comprar de forma gratuita, molestar a eliminar el impacto en mi reputación.",
     "2000008775303806 Estimado servicio al cliente, el cliente abrió la agencia directamente sin ninguna evidencia de problemas de calidad con mi producto, creo que quería comprar de forma gratuita, molestar a eliminar el impacto en mi reputación",

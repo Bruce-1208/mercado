@@ -23,8 +23,7 @@ async def scrape_pinduoduo(url):
         # 启用 stealth 插件避开基本检测
 
         # 3. 手动注入 Stealth 脚本 (绕过浏览器检测的关键)
-        await page.add_init_script(
-            """
+        await page.add_init_script("""
                     Object.defineProperty(navigator, 'webdriver', {
                         get: () => undefined
                     });
@@ -35,8 +34,7 @@ async def scrape_pinduoduo(url):
                     Object.defineProperty(navigator, 'plugins', {
                         get: () => [1, 2, 3, 4, 5]
                     });
-                """
-        )
+                """)
 
         stealth = Stealth()
         await stealth.apply_stealth_async(page)

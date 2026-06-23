@@ -10,11 +10,9 @@ async def run():
         context = await browser.new_context(**iphone)
 
         # 2. 注入反检测脚本
-        await context.add_init_script(
-            """
+        await context.add_init_script("""
             Object.defineProperty(navigator, 'webdriver', {get: () => undefined});
-        """
-        )
+        """)
 
         page = await context.new_page()
 
