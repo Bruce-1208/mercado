@@ -1,11 +1,13 @@
 import json
 import os
 
-from alibaba_API import get_whiteBk
+from mercado_pictures import get_whiteBk
 from DeepSeekApi import get_title
 from Utils import download_image
 import requests
 from PIL import Image
+
+
 def post_mercado(dict):
         ACCESS_TOKEN="APP_USR-8820539028080485-090307-8daa208dac330a12e1b10e5cb4e3cfa2-1597635622"
         price=dict.get("price")

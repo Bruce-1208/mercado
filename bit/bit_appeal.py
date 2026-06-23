@@ -105,7 +105,7 @@ def shensu(name, site, form, message):
     wait = WebDriverWait(driver, 15)
 
     # driver.switch_to.new_window('tab') 决定是否打开新窗口
-    driver.get("https://global-selling.mercadolibre.com/help/chat/v3?parent_skill=MLCX")
+    driver.get("https://global-selling.mercadolibre.com/help/hub/30928?source")
     i = 0
     while (i < 3):
         i = i + 1
