@@ -203,7 +203,7 @@ def inset_delay_info(delay_list):
         connection.close()
 
 
-def insert_chat_info(name,site,message,chat,response,time):
+def insert_chat_info(name, site, message, chat, response, time):
     connection = pymysql.connect(**config)
 
     try:
@@ -221,9 +221,11 @@ def insert_chat_info(name,site,message,chat,response,time):
         %s, %s, %s, %s, %s, %s
     );    
         """
-            cursor.execute(sql_insert, (name,site,message,chat,response,time))
+            cursor.execute(sql_insert, (name, site, message, chat, response, time))
+            chat_id = cursor.lastrowid
             print("执行sql成功", sql_insert)
         connection.commit()
+        return chat_id
 
     except Exception as e:
         # 发生错误则回滚
