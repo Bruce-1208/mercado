@@ -2,7 +2,6 @@ import time
 from shensu import shensu
 import random
 
-
 list_mx = []
 
 list_br = [

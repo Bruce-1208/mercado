@@ -3,7 +3,6 @@ import time
 from shensu import shensu
 import random
 
-
 list_mx = [
     "2994729840, 2994717160 Estimado Servicio de Atención al Cliente, Estos dos artículos son marcas genéricas de teléfonos móviles que",
     "2173614003 Estimado servicio al cliente, se trata de una máquina de juego de marca genérica, traje para, que acaba de adaptar android, se trata de un error de apreciación del sistema, por favor, ayúdame a eliminar los registros de infracción",
