@@ -273,14 +273,9 @@ def download_relay_mail_all():
     return result
 
 
-<<<<<<< HEAD
-if __name__ == "__main__":
-    download_relay_mail_all()
-=======
 if __name__ == '__main__':
     results=download_relay_mail_all()
     for i in results:
         print(i)
 
     bit_summary_delayfile()
->>>>>>> e24277ad03e5cfe86f67b6fb0c6440f756f7e643

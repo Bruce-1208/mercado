@@ -2,15 +2,6 @@ import pymysql
 
 # 1. 配置数据库连接信息
 config = {
-<<<<<<< HEAD
-    "host": "169.254.42.164",
-    "user": "root",
-    "password": "zzw@951208",
-    "database": "mercado",
-    "charset": "utf8mb4",
-    "port": 3307,
-    "cursorclass": pymysql.cursors.DictCursor,  # 让查询结果以字典形式返回
-=======
     'host': '192.168.1.11',
     'user': 'mercado',
     'password': 'mercado',
@@ -18,7 +9,6 @@ config = {
     'charset': 'utf8mb4',
     'port': 3306,
     'cursorclass': pymysql.cursors.DictCursor  # 让查询结果以字典形式返回
->>>>>>> e24277ad03e5cfe86f67b6fb0c6440f756f7e643
 }
 # config = {
 #     'host': 'c766667e.natappfree.cc',
