@@ -41,15 +41,7 @@ def download_summary():
 # scheduler.add_job(download_summary, 'cron', hour=12, minute=9)
 
 # scheduler.start()
-<<<<<<< HEAD
-if __name__ == "__main__":
 
-    scheduler = BlockingScheduler()
-    scheduler.add_job(get_reputation_info_all, "cron", hour=6, minute=00)
-    scheduler.add_job(get_reputation_info_all, "cron", hour=11, minute=00)
-    scheduler.add_job(download_summary, "cron", hour=14, minute=00)
-    scheduler.add_job(download_summary, "cron", hour=00, minute=00)
-=======
 if __name__ == '__main__':
     print("------------------------------")
     print(CURRENT_DIR)
@@ -60,5 +52,4 @@ if __name__ == '__main__':
     scheduler.add_job(get_reputation_info_all, 'cron', hour=11, minute=00)
     # scheduler.add_job(download_summary, 'cron', hour=00, minute=00)
     scheduler.add_job(get_infractions_info_all, 'cron', hour=15, minute=00)
->>>>>>> e24277ad03e5cfe86f67b6fb0c6440f756f7e643
-    scheduler.start()
+

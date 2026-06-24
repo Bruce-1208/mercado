@@ -88,55 +88,6 @@ def get_infractions_info(window_id, name, site):
             switch_random_hongkong_node()
             get_public_ip()
             continue
-<<<<<<< HEAD:bit/get_infractions_info.py
-
-    # 使用 presence_of_all_elements_located 等待所有匹配的元素出现在 DOM 中
-    # 注意：这里传入的是一个元组 (By.CLASS_NAME, "value")
-    ids = wait.until(
-        EC.presence_of_all_elements_located((By.CLASS_NAME, "infraction-item__id"))
-    )
-    ids = [el.get_attribute("textContent") for el in ids]
-    # infraction-item__title
-    titles = wait.until(
-        EC.presence_of_all_elements_located((By.CLASS_NAME, "infraction-item__title"))
-    )
-    titles = [el.get_attribute("textContent") for el in titles]
-    # infraction-denounce__date
-    dates = wait.until(
-        EC.presence_of_all_elements_located(
-            (By.CLASS_NAME, "infraction-denounce__date")
-        )
-    )
-    dates = [el.get_attribute("textContent") for el in dates]
-    results = list(zip(ids, titles, dates))
-    infractions_list = []
-    for row in results:
-        new_row = []
-        id = row[0]
-        title = row[1]
-        date = row[2]
-        prefix = ""
-        if site == "墨西哥":
-            prefix = "MLM"
-        if site == "巴西":
-            prefix = "MLB"
-        if site == "哥伦比亚":
-            prefix = "MCO"
-        if site == "智利":
-            prefix = "MLC"
-        if site == "阿根廷":
-            prefix = "MLA"
-        if site == "乌拉圭":
-            prefix = "MLU"
-        id = id.replace("#", prefix)
-        new_row.append(name)
-        new_row.append(site)
-        new_row.append(id)
-        new_row.append(title)
-        new_row.append(date)
-        new_row.append(get_now_time())
-        infractions_list.append(new_row)
-=======
     infractions_list = []
     while(1==1):
 
@@ -201,7 +152,6 @@ def get_infractions_info(window_id, name, site):
 
 
 
->>>>>>> e24277ad03e5cfe86f67b6fb0c6440f756f7e643:bit/bit_infractions_info.py
     return infractions_list
 
 
@@ -238,15 +188,8 @@ def get_infractions_info_all():
                     break
                 except Exception as e:
                     print(get_now_time() + name + site + "执行失败", e)
-<<<<<<< HEAD:bit/get_infractions_info.py
-                    if i == 3:
-                        result.append(
-                            ("获取声誉信息", name, site, "失败", get_now_time())
-                        )
-=======
                     if(i==3):
                         result.append(('获取侵权信息', name, site, "失败", get_now_time()))
->>>>>>> e24277ad03e5cfe86f67b6fb0c6440f756f7e643:bit/bit_infractions_info.py
 
         print(get_now_time() + "结束，正在关闭窗口")
 
@@ -286,13 +229,9 @@ def get_infractions_info_all():
     inset_infraction_info(infraction_info_sum)
 
 
-<<<<<<< HEAD:bit/get_infractions_info.py
-if __name__ == "__main__":
-=======
 
 if __name__ == '__main__':
 
     # inf=get_infractions_info('1495e31cb630406bb690ba187f264fe7','vngbjkk','墨西哥')
     # print(inf)
->>>>>>> e24277ad03e5cfe86f67b6fb0c6440f756f7e643:bit/bit_infractions_info.py
     get_infractions_info_all()

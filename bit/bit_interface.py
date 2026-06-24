@@ -50,11 +50,7 @@ def api_run_shensu():
 
 @app.route("/")
 def index():
-<<<<<<< HEAD
-    return render_template("index.html")
-=======
     return render_template('index.html')
->>>>>>> e24277ad03e5cfe86f67b6fb0c6440f756f7e643
 
 
 # 定义路由和返回内容
@@ -63,10 +59,6 @@ def hello_whzs():
     return "武汉泽顺"
 
 
-<<<<<<< HEAD
-if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=6000)
-=======
 # --- 新增：1688大模型找货数据插入接口 ---
 @app.route('/api/v1/records', methods=['POST'])
 def insert_record():
@@ -153,4 +145,3 @@ def insert_record():
 if __name__ == '__main__':
     # 保持 5000 端口，多线程模式开启以防流式阻塞
     app.run(host='0.0.0.0', port=5000, threaded=True)
->>>>>>> e24277ad03e5cfe86f67b6fb0c6440f756f7e643
