@@ -5,6 +5,7 @@ import time
 import traceback
 from concurrent.futures import ThreadPoolExecutor
 
+import requests
 from pydantic.v1.datetime_parse import parse_date
 from selenium.webdriver.chrome.service import Service
 
@@ -14,7 +15,6 @@ from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 import random
 
-from bit.bit_mysql import insert_chat_info
 from bit.bit_utils import get_latest_modified_file, get_bit_path, parser_delay_date, get_now_time, getWindowidByName
 from bit.bit_api import *
 from AI_Agent.qianwen import *
@@ -26,6 +26,24 @@ import re
 from openpyxl import load_workbook
 from bit.bit_clash import *
 import traceback
+from bit_infractions_info import *
+
+
+CHAT_INFO_API_URL = "https://zeshun.nat100.top/api/v1/chat"
+
+
+def insert_chat_info_by_api(name, site, message, chat, response, time):
+    payload = {
+        "name": name,
+        "site": site,
+        "message": message,
+        "chat": chat,
+        "response": response,
+        "time": time
+    }
+    res = requests.post(CHAT_INFO_API_URL, json=payload, timeout=10)
+    res.raise_for_status()
+    return res.json()
 
 
 def use_one_browser_run_task(info):
@@ -173,36 +191,22 @@ def shensu(name, site, form, message):
             print(f"{get_now_time()} {name} {site} '重新执行选择站点'<br>")
             time.sleep(10)
             continue
+    orders_random=""
+    infraction_random=""
 
-    orders_random = get_delay_orders_random(name, site, 10)
-
-    if(orders_random=="" and message==""):
-        return "没有可以申诉的订单"
-
-    infraction_random = get_infraction_orders_random(name, site, 5)
+    if(form=="延误"):
+        orders_random = get_delay_orders_random(name, site, 10)
+        if (orders_random == "" and message == ""):
+            return "没有可以申诉的订单"
+    if (form == "侵权"):
+        infraction_random = get_infraction_orders_random(window_id,name, site, 10)
+    driver.get("https://global-selling.mercadolibre.com/help/hub/30928?source")
     try:
-        print(f"{get_now_time()}  {name}  {site} '开始打开listing选项卡寻找客服'<br>")
-        # 跳转listing
-        WebDriverWait(driver, 30).until(
-            EC.element_to_be_clickable((By.XPATH,
-                                        "//p[text()='Listings']"))).click()
 
-        WebDriverWait(driver, 30).until(
-            EC.element_to_be_clickable((By.XPATH,
-                                        "//p[text()='Issues while listing or modifying a product']"))).click()
-
-        WebDriverWait(driver, 30).until(
-            EC.element_to_be_clickable((By.XPATH,
-                                        "//p[text()='Choose how to stay in contact']"))).click()
-
-        # 包含We will send you a message in less than 进入人工客服
-        try:
-            WebDriverWait(driver, 15).until(
+        WebDriverWait(driver, 15).until(
                 EC.element_to_be_clickable(
                     (By.XPATH, "//button[contains(., 'We’ll send you a message in less than 5 min')]"))).click()
-        except Exception as e:
-            print(f"{get_now_time()} {name} {site} '没有人工客服'<br>")
-            return None
+
         # 发消息
         print(f"{get_now_time()} {name} {site} '进入人工客服'<br>")
 
@@ -210,8 +214,7 @@ def shensu(name, site, form, message):
 
             if (form == "延误"):
                 WebDriverWait(driver, 30).until(
-                    EC.presence_of_element_located((By.XPATH,
-                                                    "/html/body/main/div/div[2]/div/div/div/div[4]/div/div/div/div/div/div/div[2]/div/div[2]/div/div/div[1]/div[1]/p"))).send_keys(
+                    EC.presence_of_element_located((By.XPATH, "//div[@aria-placeholder='Write your question or problem']"))).send_keys(
                     orders_random+words_random)
                 time.sleep(3)
                 WebDriverWait(driver, 30).until(
@@ -220,8 +223,7 @@ def shensu(name, site, form, message):
                 chat_ai(driver, name, site, form, orders_random + words_random,nickname)
             if (form == "侵权"):
                 WebDriverWait(driver, 30).until(
-                    EC.presence_of_element_located((By.XPATH,
-                                                    "/html/body/main/div/div[2]/div/div/div/div[4]/div/div/div/div/div/div/div[2]/div/div[2]/div/div/div[1]/div[1]/p"))).send_keys(
+                    EC.presence_of_element_located((By.XPATH, "//div[@aria-placeholder='Write your question or problem']"))).send_keys(
                     infraction_random+words_random)
                 time.sleep(3)
                 WebDriverWait(driver, 30).until(
@@ -242,6 +244,7 @@ def shensu(name, site, form, message):
 
 
     except Exception as e:
+        driver.get("https://global-selling.mercadolibre.com/help/chat/v2")
         print(get_now_time() + name + site + "继续与客服对话")
         # 全部聊天记录
         chat_ai(driver, name, site, form, infraction_random+words_random,nickname)
@@ -284,23 +287,12 @@ def get_delay_orders_random(name, site, nums):
     return order_random
 
 
-def get_infraction_orders_random(name, site, nums):
-    inf_list=""
+def get_infraction_orders_random(window_id,name, site, nums):
+    inf_list=[]
     try:
-        delay_folder_path = get_bit_path() / "美客多侵权"
-        delay_file = get_latest_modified_file(delay_folder_path)
-        delay_file_path = delay_folder_path / delay_file
-        fifteen_days_ago = datetime.now() - timedelta(days=15)
-        inf_list = []
-        df = pd.read_excel(delay_file_path, engine='openpyxl')
-        for index, row in df.iterrows():
-            # print(row)
-            line_name = row['店铺名']
-            line_site = row['站点']
-            id = row['编号']
-            if (name == line_name and site == line_site):
-                inf_list.append(id)
-
+        infos=get_infractions_info(window_id,name,site)
+        for i in infos:
+            inf_list.append(i[2])
         if len(inf_list) >= nums:
             inf_list = str(random.sample(inf_list, nums))
         else:
@@ -364,15 +356,15 @@ def chat_ai(driver, name, site, form, huashu,nickname):
             try:
                 # 发消息
                 WebDriverWait(driver, 30).until(
-                    EC.presence_of_element_located((By.XPATH,
-                                                    "/html/body/main/div/div[2]/div/div/div/div[4]/div/div/div/div/div/div/div[2]/div/div[2]/div/div/div[1]/div[1]/p"))).send_keys(
+                    EC.presence_of_element_located((By.XPATH, "//div[@aria-placeholder='Write your question or problem']"))).send_keys(
                     response)
                 time.sleep(3)
                 WebDriverWait(driver, 30).until(
                     EC.element_to_be_clickable((By.CSS_SELECTOR, 'button[title="Send"]'))).click()
                 print(f"{get_now_time()} {name}{site}自动发送消息:{response}<br>")
                 # 聊天记录插入数据库
-                insert_chat_info(name, site, huashu, lines, response, get_now_time())
+                result = insert_chat_info_by_api(name, site, huashu, lines, response, get_now_time())
+                print(f"{get_now_time()} {name}{site}聊天记录接口入库成功:{result}<br>")
 
             except Exception as e:
                 print(f"{get_now_time()} {name}{site}发送消息失败<br>")
@@ -462,7 +454,7 @@ if __name__ == '__main__':
     # use_one_browser_run_task('9812f185f7ab49d98f3988994d9e8ebf','墨西哥')
     # 跃马扬鞭
     # use_one_browser_run_task(('跃马扬鞭', '墨西哥', '侵权','MLM2872391307 - MLM2872380671 - MLM5204725168 - MLM5199341964 - MLM2870050527 - MLM2870047371 - MLM2870043695 - MLM5199197738 - MLM5199251620 - MLM4811240116 亲爱的客服，这些产品是通用品牌产品，他们被系统误判为侵权，你能帮我重新激活并且恢复我的账户吗？'))
-    # use_one_browser_run_task(('健步如飞','墨西哥','延误',''))
+    use_one_browser_run_task(('跃马扬鞭','墨西哥','侵权',''))
     browser_list = [
         ('龙', '阿根廷', '延误',
          '2000015835896308, 2000015760415040, 2000015657210554, 2000015755669242, 2000015413354104亲爱的客服，这几个产品是菜鸟没有及时揽收造成了延误，你能帮我取消对我声誉的影响吗？'),
@@ -487,4 +479,4 @@ if __name__ == '__main__':
     ]
     # use_all_browser_run_task_with_thread_pool(browser_list)
 
-    auto_appeal_delay()
+    # auto_appeal_delay()
