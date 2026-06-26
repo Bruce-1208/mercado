@@ -30,23 +30,23 @@ def mysql_demo():
         with connection.cursor() as cursor:
             # --- 增 (Create) ---
             sql_insert = "INSERT INTO `users` (`username`, `email`) VALUES (%s, %s)"
-            cursor.execute(sql_insert, ('Gemini', 'gemini@example.com'))
+            cursor.execute(sql_insert, ("Gemini", "gemini@example.com"))
             print(f"新增记录ID: {cursor.lastrowid}")
 
             # --- 查 (Read) ---
             sql_select = "SELECT * FROM `users` WHERE `username` = %s"
-            cursor.execute(sql_select, ('Gemini',))
+            cursor.execute(sql_select, ("Gemini",))
             result = cursor.fetchone()
             print(f"查询结果: {result}")
 
             # --- 改 (Update) ---
             sql_update = "UPDATE `users` SET `email` = %s WHERE `username` = %s"
-            cursor.execute(sql_update, ('new_gemini@example.com', 'Gemini'))
+            cursor.execute(sql_update, ("new_gemini@example.com", "Gemini"))
             print(f"修改行数: {cursor.rowcount}")
 
             # --- 删 (Delete) ---
             sql_delete = "DELETE FROM `users` WHERE `username` = %s"
-            cursor.execute(sql_delete, ('Gemini',))
+            cursor.execute(sql_delete, ("Gemini",))
             print(f"删除行数: {cursor.rowcount}")
 
         # 核心：涉及写操作（增删改）必须提交事务
@@ -111,6 +111,8 @@ def inset_reputation_info(reputation_list):
     finally:
         # 关闭连接
         connection.close()
+
+
 def inset_infraction_info(infraction_list):
     connection = pymysql.connect(**config)
 
@@ -165,6 +167,7 @@ def insert_orders(line):
     finally:
         # 关闭连接
         connection.close()
+
 
 def inset_delay_info(delay_list):
     connection = pymysql.connect(**config)
@@ -238,5 +241,3 @@ def insert_chat_info(name, site, message, chat, response, time):
 
 if __name__ == "__main__":
     mysql_demo()
-
-

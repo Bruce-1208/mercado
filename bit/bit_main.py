@@ -19,13 +19,15 @@ from bit_print import *
 from bit_summary_delayfile import *
 from bit.bit_infractions_info import *
 
+
 def print_orders():
-     results=print_orders_all()
-     for message in results:
-         print(message)
+    results = print_orders_all()
+    for message in results:
+        print(message)
+
 
 def download_summary():
-    results=download_relay_mail_all()
+    results = download_relay_mail_all()
 
     summary_delayFile()
 
@@ -39,6 +41,7 @@ def download_summary():
 # scheduler.add_job(download_summary, 'cron', hour=12, minute=9)
 
 # scheduler.start()
+
 if __name__ == '__main__':
     print("------------------------------")
     print(CURRENT_DIR)
@@ -49,7 +52,4 @@ if __name__ == '__main__':
     scheduler.add_job(get_reputation_info_all, 'cron', hour=11, minute=00)
     # scheduler.add_job(download_summary, 'cron', hour=00, minute=00)
     scheduler.add_job(get_infractions_info_all, 'cron', hour=15, minute=00)
-    scheduler.start()
-
-
 
