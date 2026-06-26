@@ -1,15 +1,20 @@
+import queue
+import sys
+import threading
 import time
+import traceback
 from flask import Flask, Response, request, render_template, jsonify
 
 from bit.bit_appeal import *
 from bit.bit_utils import *
 from bit.bit_api import *
+from bit.bit_mysql import insert_chat_info
 
 # 引入数据库入库需要的模块
 import logging
 from decimal import Decimal
 from datetime import datetime
-from db_pool import get_db_connection  # 确保你的连接池文件在这个目录下
+# from db_pool import get_db_connection  # 确保你的连接池文件在这个目录下
 
 app = Flask(__name__)
 
@@ -18,7 +23,61 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(
 
 
 # 1. 核心逻辑方法：改造成生成器
-def shensu_logic(name, site, form, message):
+_original_stdout = sys.stdout
+_original_stderr = sys.stderr
+_thread_log_queues = {}
+_thread_log_lock = threading.Lock()
+
+
+class ThreadLogStream:
+    def __init__(self, original_stream):
+        self.original_stream = original_stream
+
+    def write(self, text):
+        if text:
+            if isinstance(text, bytes):
+                encoding = getattr(self.original_stream, "encoding", None) or "utf-8"
+                text = text.decode(encoding, errors="replace")
+            with _thread_log_lock:
+                output_queue = _thread_log_queues.get(threading.get_ident())
+            if output_queue:
+                output_queue.put(text)
+            else:
+                self.original_stream.write(text)
+
+    def flush(self):
+        self.original_stream.flush()
+
+    def isatty(self):
+        return self.original_stream.isatty()
+
+    @property
+    def encoding(self):
+        return getattr(self.original_stream, "encoding", "utf-8")
+
+    def __getattr__(self, name):
+        return getattr(self.original_stream, name)
+
+
+sys.stdout = ThreadLogStream(_original_stdout)
+sys.stderr = ThreadLogStream(_original_stderr)
+
+
+def register_thread_log_queue(output_queue):
+    with _thread_log_lock:
+        _thread_log_queues[threading.get_ident()] = output_queue
+
+
+def unregister_thread_log_queue():
+    with _thread_log_lock:
+        _thread_log_queues.pop(threading.get_ident(), None)
+
+
+def format_log_text(text):
+    return str(text).replace("<br>", "\n").replace("<br/>", "\n").replace("<br />", "\n")
+
+
+def shensu_logic_old(name, site, form, message):
     i = 0
     while i < 10:
         i = i + 1
@@ -36,7 +95,71 @@ def shensu_logic(name, site, form, message):
 
 
 # 2. 接口路由
-@app.route("/api/run_shensu", methods=["GET"])
+def shensu_logic_previous(name, site, form, message):
+    for i in range(1, 11):
+        output_queue = queue.Queue()
+
+        def run_task():
+            writer = StreamWriter(output_queue)
+            with contextlib.redirect_stdout(writer), contextlib.redirect_stderr(writer):
+                try:
+                    print(f"{get_now_time()} --- 任务启动第 {i} 次：{name} {site}")
+                    shensu(name, site, form, message)
+                    print(f"{get_now_time()} {name} {site} 申诉执行完毕")
+                except Exception as e:
+                    print(f"{get_now_time()} 发生错误: {str(e)}")
+                    traceback.print_exc()
+                finally:
+                    output_queue.put(None)
+
+        task_thread = threading.Thread(target=run_task, daemon=True)
+        task_thread.start()
+
+        while True:
+            text = output_queue.get()
+            if text is None:
+                break
+            yield format_log_text(text)
+            sys.stdout.flush()
+
+        yield f"{get_now_time()} {name} {site} 本轮结束，等待十分钟后进入下一轮\n"
+        getWindowidByName(name)
+        time.sleep(600)
+
+
+def shensu_logic(name, site, form, message):
+    for i in range(1, 11):
+        output_queue = queue.Queue()
+
+        def run_task():
+            register_thread_log_queue(output_queue)
+            try:
+                print(f"{get_now_time()} --- 任务启动第 {i} 次：{name} {site}")
+                shensu(name, site, form, message)
+                print(f"{get_now_time()} {name} {site} 申诉执行完毕")
+            except Exception as e:
+                print(f"{get_now_time()} 发生错误: {str(e)}")
+                traceback.print_exc()
+            finally:
+                unregister_thread_log_queue()
+                output_queue.put(None)
+
+        task_thread = threading.Thread(target=run_task, daemon=True)
+        task_thread.start()
+
+        while True:
+            text = output_queue.get()
+            if text is None:
+                break
+            yield format_log_text(text)
+            sys.stdout.flush()
+
+        yield f"{get_now_time()} {name} {site} 本轮结束，等待十分钟后进入下一轮\n"
+        getWindowidByName(name)
+        time.sleep(600)
+
+
+@app.route('/api/run_shensu', methods=['GET'])
 def api_run_shensu():
     # 获取前端传入的参数
     name = request.args.get("name", "")
@@ -45,7 +168,10 @@ def api_run_shensu():
     message = request.args.get("message", "")
 
     # 返回流式响应，mimetype 设为 text/html 或 text/event-stream
-    return Response(shensu_logic(name, site, form, message), mimetype="text/html")
+    response = Response(shensu_logic(name, site, form, message), mimetype='text/plain; charset=utf-8')
+    response.headers["Cache-Control"] = "no-cache"
+    response.headers["X-Accel-Buffering"] = "no"
+    return response
 
 
 @app.route("/")
@@ -60,7 +186,41 @@ def hello_whzs():
 
 
 # --- 新增：1688大模型找货数据插入接口 ---
-@app.route('/api/v1/records', methods=['POST'])
+# @app.route('/api/v1/chat', methods=['POST'])
+def api_insert_chat_info():
+    data = request.get_json(silent=True)
+    if not data:
+        return jsonify({"status": "error", "message": "Missing JSON payload"}), 400
+
+    required_fields = ["name", "site", "message", "chat", "response", "time"]
+    missing_fields = [field for field in required_fields if data.get(field) in (None, "")]
+    if missing_fields:
+        return jsonify({
+            "status": "error",
+            "message": "Missing required fields",
+            "fields": missing_fields
+        }), 422
+
+    try:
+        chat_id = insert_chat_info(
+            data["name"],
+            data["site"],
+            data["message"],
+            data["chat"],
+            data["response"],
+            data["time"]
+        )
+        return jsonify({
+            "status": "success",
+            "message": "Chat info inserted successfully",
+            "id": chat_id
+        }), 201
+    except Exception as e:
+        logging.error(f"Chat info insert failed: {str(e)}")
+        return jsonify({"status": "error", "message": f"Database error: {str(e)}"}), 500
+
+
+# @app.route('/api/v1/records', methods=['POST'])
 def insert_record():
     # 获取客户端发送的 JSON 数据
     data = request.get_json()
@@ -144,4 +304,4 @@ def insert_record():
 
 if __name__ == '__main__':
     # 保持 5000 端口，多线程模式开启以防流式阻塞
-    app.run(host='0.0.0.0', port=5000, threaded=True)
+    app.run(host='0.0.0.0', port=5001, threaded=True)
