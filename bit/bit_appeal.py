@@ -60,7 +60,7 @@ def use_one_browser_run_task(info):
                 print("ip检测通过，打开店铺平台主页")
 
                 try:
-                    shensu(name, site, form, message)
+                    shensu(name, site, form, message,"人工客服")
                 except Exception as e:
                     traceback.print_exc()
                     print("申诉执行异常", e)
@@ -87,7 +87,7 @@ def shensu_ai(driver):
 
 
 # 申诉
-def shensu(name, site, form, message):
+def shensu(name, site, form, message,mode):
     print(f"{name} {site} 开始进行{form}申诉，话术为{message}<br>")
     config_path = get_bit_path() / "比特配置文件.xlsx"
     wb = load_workbook(config_path)
