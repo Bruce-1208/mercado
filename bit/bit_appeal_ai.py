@@ -31,6 +31,16 @@ from bit_infractions_info import *
 
 
 CHAT_INFO_API_URL = "https://zeshun.nat100.top/api/v1/chat"
+HELP_URL = "https://global-selling.mercadolibre.com/help"
+
+SITE_SWITCH_SELECTOR_MAP = {
+    "墨西哥": 'div[data-value="MLM-remote"]',
+    "巴西": 'div[data-value="MLB-remote"]',
+    "哥伦比亚": 'div[data-value="MCO-remote"]',
+    "智利": 'div[data-value="MLC-remote"]',
+    "阿根廷": 'div[data-value="MLA-remote"]',
+    "乌拉圭": 'div[data-value="MLU-remote"]',
+}
 
 
 def insert_chat_info_by_api(name, site, message, chat, response, time):
@@ -45,6 +55,225 @@ def insert_chat_info_by_api(name, site, message, chat, response, time):
     res = requests.post(CHAT_INFO_API_URL, json=payload, timeout=10)
     res.raise_for_status()
     return res.json()
+
+
+def connect_bit_browser(window_id):
+    res = openBrowser(window_id)
+    print(res)
+
+    driver_path = res["data"]["driver"]
+    debugger_address = res["data"]["http"]
+
+    chrome_options = webdriver.ChromeOptions()
+    chrome_options.add_experimental_option("debuggerAddress", debugger_address)
+
+    chrome_service = Service(driver_path)
+    driver = webdriver.Chrome(service=chrome_service, options=chrome_options)
+    driver.implicitly_wait(10)
+    return driver, res
+
+
+def get_window_id_by_shop_name(name):
+    config_path = get_bit_path() / "比特配置文件.xlsx"
+    wb = load_workbook(config_path)
+    sheet = wb.active
+
+    for row in sheet.iter_rows(min_row=2, values_only=True):
+        window_id = row[0]
+        window_name = row[1]
+        if window_name == name:
+            return window_id
+    raise RuntimeError(f"未在比特配置文件中找到店铺窗口: {name}")
+
+
+def select_site(driver, name, site):
+    for i in range(3):
+        try:
+            WebDriverWait(driver, 10).until(
+                EC.element_to_be_clickable(
+                    (By.CLASS_NAME, "nav-header-cbt__site-switcher")
+                )
+            ).click()
+
+            print(f"{get_now_time()} {name} {site} '打开站点选择器'<br>")
+            time.sleep(5)
+            path = SITE_SWITCH_SELECTOR_MAP.get(site, 'div[data-value="MLM-remote"]')
+            WebDriverWait(driver, 30).until(
+                EC.element_to_be_clickable((By.CSS_SELECTOR, path))
+            ).click()
+
+            driver.refresh()
+            time.sleep(3)
+            print(f"{get_now_time()} {name} {site} '选择站点成功'<br>")
+            return True
+        except Exception as e:
+            print(f"{get_now_time()} {name} {site} '重新执行选择站点'<br>")
+            time.sleep(10)
+    return False
+
+
+def build_appeal_message(window_id, name, site, form, message, nickname):
+    if message:
+        return message
+
+    words = []
+    if form == "延误":
+        orders_random = get_delay_orders_random(name, site, 10)
+        if orders_random == "":
+            return ""
+        words = [
+            f"亲爱的客服，我叫{nickname}！这些订单因合作物流车辆临时出现故障，导致未能及时揽收，并非我这边发货延误，麻烦您帮忙处理一下，消除对店铺声誉的影响，非常感谢！",
+            f"亲爱的客服，我叫{nickname}！这些订单因为菜鸟物流原因，并非我这边发货延误，麻烦您帮忙处理一下，消除对店铺声誉的影响，非常感谢！",
+        ]
+        return orders_random + random.choice(words)
+
+    if form == "侵权":
+        infraction_random = get_infraction_orders_random(window_id, name, site, 10)
+        words = [
+            f"亲爱的客服，我叫{nickname}！这些产品是通用品牌产品，被系统误检测为侵权产品，你能帮我重新核查并消除记录吗？",
+            f"亲爱的客服，我叫{nickname}！这些产品是通用产品，并没有侵犯品牌权益，麻烦你帮我重新审核并恢复产品，谢谢！",
+        ]
+        return infraction_random + random.choice(words)
+
+    if form == "投诉":
+        words = [
+            f"亲爱的客服，我叫{nickname}！我的产品没有质量问题，客户没有提供确凿证据证明产品存在问题，麻烦你帮我重新核查并消除对声誉的影响。"
+        ]
+        return random.choice(words)
+
+    return message
+
+
+def switch_to_ai_chat_frame(driver):
+    driver.switch_to.default_content()
+    frame_selectors = [
+        (By.XPATH, "//iframe[contains(@title, 'Meli AI Chat') or contains(@name, 'Meli AI Chat')]"),
+        (By.XPATH, "//iframe[contains(@src, 'chat') or contains(@src, 'help')]"),
+    ]
+    for by, selector in frame_selectors:
+        frames = driver.find_elements(by, selector)
+        for frame in frames:
+            try:
+                driver.switch_to.default_content()
+                driver.switch_to.frame(frame)
+                if find_chat_input(driver, timeout=3):
+                    return True
+            except Exception:
+                continue
+
+    driver.switch_to.default_content()
+    return find_chat_input(driver, timeout=3) is not None
+
+
+def find_chat_input(driver, timeout=30):
+    input_selectors = [
+        (By.XPATH, "//div[@aria-placeholder='Write your question or problem']"),
+        (By.XPATH, "//div[@contenteditable='true']"),
+        (By.CSS_SELECTOR, "textarea"),
+        (By.CSS_SELECTOR, "input[type='text']"),
+    ]
+    end_time = time.time() + timeout
+    while time.time() < end_time:
+        for by, selector in input_selectors:
+            elements = driver.find_elements(by, selector)
+            for element in elements:
+                try:
+                    if element.is_displayed() and element.is_enabled():
+                        return element
+                except Exception:
+                    continue
+        time.sleep(0.5)
+    return None
+
+
+def click_send_button(driver):
+    send_selectors = [
+        (By.CSS_SELECTOR, 'button[title="Send"]'),
+        (By.XPATH, "//button[contains(., 'Send')]"),
+        (By.XPATH, "//button[@type='submit']"),
+    ]
+    for by, selector in send_selectors:
+        buttons = driver.find_elements(by, selector)
+        for button in buttons:
+            try:
+                if button.is_displayed() and button.is_enabled():
+                    button.click()
+                    return True
+            except Exception:
+                continue
+    return False
+
+
+def send_ai_chat_message(driver, message):
+    if not switch_to_ai_chat_frame(driver):
+        raise RuntimeError("没有找到 AI 客服聊天窗口")
+
+    input_box = find_chat_input(driver)
+    if input_box is None:
+        raise RuntimeError("没有找到 AI 客服输入框")
+
+    input_box.click()
+    input_box.send_keys(message)
+    time.sleep(1)
+    if not click_send_button(driver):
+        input_box.send_keys(Keys.ENTER)
+    time.sleep(3)
+
+
+def click_contact_us(driver, name, site):
+    driver.switch_to.default_content()
+    driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
+    time.sleep(2)
+
+    contact_selectors = [
+        (By.XPATH, "//*[self::a or self::button][contains(normalize-space(), 'Contact us')]"),
+        (By.XPATH, "//*[contains(normalize-space(), 'Contact us')]"),
+    ]
+    for by, selector in contact_selectors:
+        elements = driver.find_elements(by, selector)
+        for element in elements:
+            try:
+                if not element.is_displayed():
+                    continue
+                driver.execute_script(
+                    "arguments[0].scrollIntoView({block: 'center', inline: 'center'});",
+                    element,
+                )
+                time.sleep(1)
+                element.click()
+                print(f"{get_now_time()} {name} {site} 点击 Contact us<br>")
+                return True
+            except Exception:
+                continue
+
+    clicked = driver.execute_script(
+        """
+        const candidates = [...document.querySelectorAll('a, button, span, div')]
+            .filter((node) => node.innerText && node.innerText.trim().includes('Contact us'));
+        const node = candidates.find((item) => {
+            const rect = item.getBoundingClientRect();
+            return rect.width > 0 && rect.height > 0;
+        });
+        if (!node) return false;
+        node.scrollIntoView({block: 'center', inline: 'center'});
+        node.click();
+        return true;
+        """
+    )
+    if clicked:
+        print(f"{get_now_time()} {name} {site} JS 点击 Contact us<br>")
+        return True
+    return False
+
+
+def open_ai_contact_window(driver, name, site):
+    driver.get(HELP_URL)
+    time.sleep(8)
+    if not click_contact_us(driver, name, site):
+        raise RuntimeError("没有找到页面底部 Contact us")
+
+    WebDriverWait(driver, 30).until(lambda d: switch_to_ai_chat_frame(d))
+    print(f"{get_now_time()} {name} {site} 进入 AI 客服悬浮窗<br>")
 
 
 def use_one_browser_run_task(info):
@@ -89,194 +318,32 @@ def shensu_ai(driver):
 # 申诉
 def shensu(name, site, form, message):
     print(f"{name} {site} 开始进行{form}申诉，话术为{message}<br>")
-    config_path = get_bit_path() / "比特配置文件.xlsx"
-    wb = load_workbook(config_path)
-    sheet = wb.active
-    config_info = []
-
-    reuslt = []
-    # 使用 min_row=2 跳过第一行
-    window_id = ""
-    for row in sheet.iter_rows(min_row=2, values_only=True):
-        window_id = row[0]
-        window_name = row[1]
-        if window_name == name:
-            break
-
-    res = openBrowser(window_id)  # 窗口ID从窗口配置界面中复制，或者api创建后返回
-
-    print(res)
+    window_id = get_window_id_by_shop_name(name)
+    driver, res = connect_bit_browser(window_id)
     name = res["data"]["name"]
 
-    driverPath = res["data"]["driver"]
-    debuggerAddress = res["data"]["http"]
-
-    # selenium 连接代码
-    chrome_options = webdriver.ChromeOptions()
-    chrome_options.add_experimental_option("debuggerAddress", debuggerAddress)
-
-    chrome_service = Service(driverPath)
-    driver = webdriver.Chrome(service=chrome_service, options=chrome_options)
-
-    driver.implicitly_wait(10)
-    # 设置最长等待时间为 10 秒
-    wait = WebDriverWait(driver, 15)
-
-    # driver.switch_to.new_window('tab') 决定是否打开新窗口
-    driver.get("https://global-selling.mercadolibre.com/help/hub/30928?source")
-    i = 0
-    while i < 3:
-        i = i + 1
-        try:
-            WebDriverWait(driver, 10).until(
-                EC.visibility_of_element_located(
-                    (By.XPATH, "//a[text()='Mercado Libre International Selling']")
-                )
-            )
-        except Exception as e:
-            print(f"{name} {site}美客多限频，正在第{i}次切换网络<br>")
-            switch_random_hongkong_node()
-            get_public_ip()
-
-    words = []
     nickname_list = ["Bruce", "Jack", "Lucy", "James"]
     nickname = random.choice(nickname_list)
-    if form == "延误":
-        words = [
-            f"亲爱的客服，我叫{nickname}！这些订单因合作物流车辆临时出现故障，导致未能及时揽收，并非我这边发货延误，麻烦您帮忙处理一下，消除对店铺声誉的影响，非常感谢！",
-            f"亲爱的客服，我叫{nickname}！这些订单因为菜鸟，并非我这边发货延误，麻烦您帮忙处理一下，消除对店铺声誉的影响，非常感谢！",
-        ]
 
-    if form == "侵权":
-        words = [
-            f"亲爱的客服，我叫{nickname}！这些产品是通用品牌产品，他们被系统误检测为侵权产品，你能帮我消除记录吗？",
-            f"亲爱的客服，我叫{nickname}！这些产品是通用品牌产品，他们被系统误检测为侵权产品，你能帮我消除记录吗？",
-        ]
-
-    if form == "投诉":
-        words = [
-            f"亲爱的客服，我叫{nickname}！我的产品没有任何质量问题，客户没有给出确凿的证据证明他出了问题，我认为客户是想免费购物，你能消除对我声誉的影响吗"
-        ]
-
-    words_random = random.choice(words)
-
-    i = 0
-    while i < 3:
-        i = i + 1
-        try:
-            # 打开站点选择器
-            WebDriverWait(driver, 10).until(
-                EC.element_to_be_clickable(
-                    (By.CLASS_NAME, "nav-header-cbt__site-switcher")
-                )
-            ).click()
-
-            print(f"{get_now_time()} {name} {site} '打开站点选择器'<br>")
-            time.sleep(5)
-            path = 'div[data-value="MLM-remote"]'
-            if site == "墨西哥":
-                path = 'div[data-value="MLM-remote"]'
-            if site == "巴西":
-                path = 'div[data-value="MLB-remote"]'
-            if site == "哥伦比亚":
-                path = 'div[data-value="MCO-remote"]'
-            if site == "智利":
-                path = 'div[data-value="MLC-remote"]'
-            if site == "阿根廷":
-                path = 'div[data-value="MLA-remote"]'
-            if site == "乌拉圭":
-                path = 'div[data-value="MLU-remote"]'
-
-            WebDriverWait(driver, 30).until(
-                EC.element_to_be_clickable((By.CSS_SELECTOR, path))
-            ).click()
-
-            driver.refresh()
-            time.sleep(3)
-            print(f"{get_now_time()} {name} {site} '选择站点成功'<br>")
-            break
-        except Exception as e:
-            print(f"{get_now_time()} {name} {site} '重新执行选择站点'<br>")
-            time.sleep(10)
-            continue
-    orders_random=""
-    infraction_random=""
-
-    if(form=="延误"):
-        orders_random = get_delay_orders_random(name, site, 10)
-        if (orders_random == "" and message == ""):
-            return "没有可以申诉的订单"
-    if (form == "侵权"):
-        infraction_random = get_infraction_orders_random(window_id,name, site, 10)
-    driver.get("https://global-selling.mercadolibre.com/help/hub/30928?source")
     try:
+        driver.get(HELP_URL)
+        time.sleep(8)
+        select_site(driver, name, site)
+        huashu = build_appeal_message(window_id, name, site, form, message, nickname)
+        if huashu == "":
+            print(f"{get_now_time()} {name} {site} 没有可以申诉的数据<br>")
+            return "没有可以申诉的数据"
 
-        WebDriverWait(driver, 15).until(
-                EC.element_to_be_clickable(
-                    (By.XPATH, "//button[contains(., 'We’ll send you a message in less than 5 min')]"))).click()
-
-        # 发消息
-        print(f"{get_now_time()} {name} {site} '进入人工客服'<br>")
-
-        if message == "":
-
-            if form == "延误":
-                WebDriverWait(driver, 30).until(
-                    EC.presence_of_element_located((By.XPATH, "//div[@aria-placeholder='Write your question or problem']"))).send_keys(
-                    orders_random+words_random)
-                time.sleep(3)
-                WebDriverWait(driver, 30).until(
-                    EC.element_to_be_clickable(
-                        (By.CSS_SELECTOR, 'button[title="Send"]')
-                    )
-                ).click()
-                print(
-                    f"{get_now_time()} {name}  {site} 发送延误订单：{orders_random}{words_random}<br>"
-                )
-                chat_ai(
-                    driver, name, site, form, orders_random + words_random, nickname
-                )
-            if form == "侵权":
-                WebDriverWait(driver, 30).until(
-                    EC.presence_of_element_located((By.XPATH, "//div[@aria-placeholder='Write your question or problem']"))).send_keys(
-                    infraction_random+words_random)
-                time.sleep(3)
-                WebDriverWait(driver, 30).until(
-                    EC.element_to_be_clickable(
-                        (By.CSS_SELECTOR, 'button[title="Send"]')
-                    )
-                ).click()
-                print(
-                    f"{get_now_time()} {name} {site} '发送侵权的 id：{infraction_random}{words_random}<br>"
-                )
-                chat_ai(
-                    driver, name, site, form, infraction_random + words_random, nickname
-                )
-        else:
-            WebDriverWait(driver, 30).until(
-                EC.presence_of_element_located(
-                    (
-                        By.XPATH,
-                        "/html/body/main/div/div[2]/div/div/div/div[4]/div/div/div/div/div/div/div[2]/div/div[2]/div/div/div[1]/div[1]/p",
-                    )
-                )
-            ).send_keys(message)
-            time.sleep(3)
-            WebDriverWait(driver, 30).until(
-                EC.element_to_be_clickable((By.CSS_SELECTOR, 'button[title="Send"]'))
-            ).click()
-            print(f"{get_now_time()} {name} {site} 自动发送自定义话术：{message}<br>")
-            chat_ai(
-                driver, name, site, form, infraction_random + words_random, nickname
-            )
-
+        open_ai_contact_window(driver, name, site)
+        send_ai_chat_message(driver, huashu)
+        print(f"{get_now_time()} {name} {site} 自动发送AI客服申诉话术：{huashu}<br>")
+        chat_ai(driver, name, site, form, huashu, nickname)
     except Exception as e:
-        driver.get("https://global-selling.mercadolibre.com/help/chat/v2")
-        print(get_now_time() + name + site + "继续与客服对话")
-        # 全部聊天记录
-        chat_ai(driver, name, site, form, infraction_random + words_random, nickname)
+        print(f"{get_now_time()} {name} {site} AI客服申诉执行失败<br>")
+        print(e)
+        traceback.print_exc()
     finally:
-        print(f"{get_now_time()} {name}{site}找客服执行完毕<br>")
+        print(f"{get_now_time()} {name}{site}AI客服申诉执行完毕<br>")
         print(f"{get_now_time()} {name}{site} 关闭浏览器<br>")
 
 
@@ -333,15 +400,64 @@ def get_infraction_orders_random(window_id,name, site, nums):
 # 检查聊天是否结束
 def checkChatEnd(driver, name, site):
     try:
-        target_element = wait.until(
+        switch_to_ai_chat_frame(driver)
+        WebDriverWait(driver, 5).until(
             EC.visibility_of_element_located(
-                (By.XPATH, "//p[contains(text(), 'This chat has ended')]")
+                (
+                    By.XPATH,
+                    "//*[contains(text(), 'This chat has ended') or contains(text(), 'chat has ended')]",
+                )
             )
         )
         print(f"{get_now_time()} {name}{site}聊天已经结束,结束AI找客服<br>")
         return True
     except Exception as e:
         return False
+    return False
+
+
+def get_agent_messages(driver):
+    switch_to_ai_chat_frame(driver)
+    message_selectors = [
+        (By.CSS_SELECTOR, ".chat-ui-message-bubble.chat-ui-message-bubble--from-agent"),
+        (By.CSS_SELECTOR, ".mlc-scroll-paginate_item"),
+        (By.CSS_SELECTOR, "[class*='message'][class*='agent']"),
+        (By.CSS_SELECTOR, "[class*='bubble']"),
+        (By.XPATH, "//*[contains(@class, 'message') or contains(@class, 'bubble')]"),
+    ]
+    messages = []
+    for by, selector in message_selectors:
+        elements = driver.find_elements(by, selector)
+        for element in elements:
+            try:
+                text = element.text.strip()
+                if text and text not in messages:
+                    messages.append(text)
+            except Exception:
+                continue
+        if messages:
+            break
+    return messages
+
+
+def close_ai_chat_if_needed(driver, name, site):
+    switch_to_ai_chat_frame(driver)
+    close_selectors = [
+        (By.CSS_SELECTOR, "button[aria-label='Close']"),
+        (By.CSS_SELECTOR, "button[title='Close']"),
+        (By.XPATH, "//button[contains(., 'Close')]"),
+        (By.XPATH, "//button[contains(., 'Understood')]"),
+    ]
+    for by, selector in close_selectors:
+        buttons = driver.find_elements(by, selector)
+        for button in buttons:
+            try:
+                if button.is_displayed() and button.is_enabled():
+                    button.click()
+                    print(f"{get_now_time()} {name}{site}点击关闭聊天窗口<br>")
+                    return True
+            except Exception:
+                continue
     return False
 
 
@@ -361,14 +477,14 @@ def chat_ai(driver, name, site, form, huashu, nickname):
             print(
                 f"{get_now_time()} {name}{site}+'进入人工客服处理流程，循环回复第{i}次'<br>"
             )
-            messages = driver.find_elements(
-                By.CLASS_NAME,
-                "chat-ui-message-bubble.chat-ui-message-bubble--from-agent",
-            )
+            messages = get_agent_messages(driver)
 
             for mes in messages:
-                print(mes.text)
-                lines = lines + mes.text + "\n"
+                print(mes)
+                lines = lines + mes + "\n"
+            if lines == "":
+                print(f"{get_now_time()} {name}{site}AI客服暂未回复，继续等待<br>")
+                continue
             if lines in chat_rerord:
                 print(f"{get_now_time()} {name}{site}+'客服已经至少三分钟没有回复'<br>")
                 # 客服没有回消息，不用再次回复他
@@ -399,16 +515,7 @@ def chat_ai(driver, name, site, form, huashu, nickname):
                 print(f"{get_now_time()} {name}{site}AI回复:{response}<br>")
             try:
                 # 发消息
-                WebDriverWait(driver, 30).until(
-
-                    EC.presence_of_element_located((By.XPATH, "//div[@aria-placeholder='Write your question or problem']"))).send_keys(
-                    response)
-                time.sleep(3)
-                WebDriverWait(driver, 30).until(
-                    EC.element_to_be_clickable(
-                        (By.CSS_SELECTOR, 'button[title="Send"]')
-                    )
-                ).click()
+                send_ai_chat_message(driver, response)
                 print(f"{get_now_time()} {name}{site}自动发送消息:{response}<br>")
                 # 聊天记录插入数据库
                 result = insert_chat_info_by_api(name, site, huashu, lines, response, get_now_time())
@@ -421,30 +528,14 @@ def chat_ai(driver, name, site, form, huashu, nickname):
 
             if response.__contains__("好的，我明白了,感谢您的回复") or i == 5:
                 print(f"{get_now_time()} {name}{site}客服拒绝，点击结束聊天<br>")
-                # 关闭页面
-                WebDriverWait(driver, 30).until(
-                    EC.element_to_be_clickable(
-                        (
-                            By.XPATH,
-                            "/html/body/main/div/div[2]/div/div/div/div[4]/div/div/div/div/div/div/header/div/div[2]/button",
-                        )
-                    )
-                ).click()
-
-                time.sleep(3)
-                WebDriverWait(driver, 30).until(
-                    EC.element_to_be_clickable(
-                        (By.XPATH, "//span[text()='Understood']")
-                    )
-                ).click()
-                print(f"{get_now_time()} {name}{site}点击关闭聊天窗口<br>")
+                close_ai_chat_if_needed(driver, name, site)
                 break
         except Exception as e:
             print(e)
             traceback.print_exc()
         finally:
-            print(f"{get_now_time()} {name}{site}等待三分钟<br>")
-            time.sleep(180)
+            print(f"{get_now_time()} {name}{site}等待1分钟<br>")
+            time.sleep(60)
 
     print(f"{get_now_time()} {name}{site}结束AI客服回复<br>")
 
@@ -507,7 +598,7 @@ if __name__ == "__main__":
     # use_one_browser_run_task('9812f185f7ab49d98f3988994d9e8ebf','墨西哥')
     # 跃马扬鞭
     # use_one_browser_run_task(('跃马扬鞭', '墨西哥', '侵权','MLM2872391307 - MLM2872380671 - MLM5204725168 - MLM5199341964 - MLM2870050527 - MLM2870047371 - MLM2870043695 - MLM5199197738 - MLM5199251620 - MLM4811240116 亲爱的客服，这些产品是通用品牌产品，他们被系统误判为侵权，你能帮我重新激活并且恢复我的账户吗？'))
-    use_one_browser_run_task(('跃马扬鞭','墨西哥','侵权',''))
+    use_one_browser_run_task(('vngbjkk','墨西哥','侵权',''))
     browser_list = [
         (
             "龙",

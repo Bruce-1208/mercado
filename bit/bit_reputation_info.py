@@ -1,4 +1,5 @@
 import time
+import re
 
 from selenium import webdriver
 from selenium.common.exceptions import TimeoutException
@@ -22,6 +23,396 @@ from datetime import datetime
 from pathlib import Path
 from bit.bit_mysql import *
 from bit.bit_clash import *
+
+
+def _connect_browser(window_id):
+    res = openBrowser(window_id)  # 窗口ID从窗口配置界面中复制，或者api创建后返回
+
+    print(res)
+
+    driverPath = res["data"]["driver"]
+    debuggerAddress = res["data"]["http"]
+
+    chrome_options = webdriver.ChromeOptions()
+    chrome_options.add_experimental_option("debuggerAddress", debuggerAddress)
+
+    chrome_service = Service(driverPath)
+    driver = webdriver.Chrome(service=chrome_service, options=chrome_options)
+    driver.implicitly_wait(10)
+    return driver
+
+
+def _get_country_name(site):
+    country_map = {
+        "墨西哥": "Mexico",
+        "巴西": "Brazil",
+        "哥伦比亚": "Colombia",
+        "智利": "Chile",
+        "阿根廷": "Argentina",
+        "乌拉圭": "Uruguay",
+    }
+    return country_map.get(site, site)
+
+
+def _select_country(driver, site, shop_name=""):
+    if not site:
+        return
+
+    country = _get_country_name(site)
+    for i in range(3):
+        try:
+            oepn_country_switch(driver)
+            success = force_select_country(driver, country)
+            if success:
+                print(get_now_time() + shop_name + "成功选择站点:", site)
+                return
+            print(get_now_time() + shop_name + "选择站点失败:", site)
+            time.sleep(10)
+        except Exception as e:
+            print(get_now_time() + shop_name + "选择站点失败:", site, e)
+            time.sleep(10)
+
+
+def _click_visits_metric(driver):
+    selectors = [
+        (By.XPATH, "//*[self::button or @role='button' or @role='tab'][contains(., 'Visits')]"),
+        (By.XPATH, "//*[normalize-space()='Visits']"),
+        (
+            By.XPATH,
+            "/html/body/main/div/div/div[3]/div/div/div[3]/section/div[2]/div[2]/div[2]/div[1]/div/div/div/div[4]",
+        ),
+    ]
+    for by, selector in selectors:
+        try:
+            WebDriverWait(driver, 10).until(
+                EC.element_to_be_clickable((by, selector))
+            ).click()
+            time.sleep(2)
+            return
+        except Exception:
+            continue
+
+    clicked = driver.execute_script(
+        """
+        function allNodes(root) {
+            const nodes = [...root.querySelectorAll('*')];
+            for (const node of [...nodes]) {
+                if (node.shadowRoot) {
+                    nodes.push(...allNodes(node.shadowRoot));
+                }
+            }
+            return nodes;
+        }
+
+        const visitNode = allNodes(document)
+            .find((node) => node.innerText && node.innerText.trim() === 'Visits');
+        if (!visitNode) {
+            return false;
+        }
+        visitNode.scrollIntoView({block: 'center', inline: 'center'});
+        visitNode.click();
+        return true;
+        """
+    )
+    if not clicked:
+        raise RuntimeError("没有找到 Visits 入口")
+    time.sleep(2)
+
+
+def _parse_visits_tooltip(text):
+    lines = [line.strip() for line in text.splitlines() if line.strip()]
+    if not lines:
+        return None
+
+    value = None
+    for line in reversed(lines):
+        match = re.search(r"[\d,.]+", line)
+        if match:
+            value = match.group(0).replace(",", "")
+            break
+    if value is None:
+        return None
+
+    date_text = ""
+    for line in lines:
+        if re.search(r"[A-Za-z]{3,}|月|日|/|-", line) and not re.fullmatch(
+            r"[\d,.]+", line
+        ):
+            date_text = line
+            break
+    if not date_text:
+        date_text = lines[0]
+
+    return {"date": date_text, "visits": value, "raw": text}
+
+
+def _parse_visit_records_from_json(data, days):
+    records = []
+
+    def walk(node, parent=None):
+        if isinstance(node, dict):
+            lower_keys = {str(key).lower(): key for key in node.keys()}
+            value_key = None
+            for key in node.keys():
+                key_text = str(key).lower()
+                if "visit" in key_text and isinstance(node.get(key), (int, float, str)):
+                    value_key = key
+                    break
+
+            date_key = None
+            for key_text, raw_key in lower_keys.items():
+                if any(token in key_text for token in ["date", "day", "period", "label"]):
+                    date_key = raw_key
+                    break
+
+            if value_key is not None:
+                records.append(
+                    {
+                        "date": str(node.get(date_key, "")),
+                        "visits": str(node.get(value_key, "")).replace(",", ""),
+                        "raw": node,
+                    }
+                )
+
+            for value in node.values():
+                walk(value, node)
+        elif isinstance(node, list):
+            numeric_items = [item for item in node if isinstance(item, (int, float))]
+            if parent and len(numeric_items) >= days:
+                parent_text = str(parent).lower()
+                if "visit" in parent_text:
+                    for value in numeric_items[-days:]:
+                        records.append({"date": "", "visits": str(value), "raw": parent})
+            for item in node:
+                walk(item, parent)
+
+    walk(data)
+
+    cleaned = []
+    seen = set()
+    for record in records:
+        visits = record.get("visits", "")
+        if not re.search(r"\d", visits):
+            continue
+        key = (record.get("date", ""), visits)
+        if key in seen:
+            continue
+        seen.add(key)
+        cleaned.append(record)
+    return cleaned[-days:]
+
+
+def _extract_visits_from_network(driver, days):
+    entries = driver.execute_script(
+        """
+        return performance.getEntriesByType('resource')
+            .map((entry) => entry.name)
+            .filter((url) => /metric|visit|traffic|analytics|sales-summary/i.test(url))
+            .slice(-30);
+        """
+    )
+
+    for url in reversed(entries):
+        try:
+            data = driver.execute_async_script(
+                """
+                const url = arguments[0];
+                const done = arguments[arguments.length - 1];
+                fetch(url, {credentials: 'include'})
+                    .then((response) => {
+                        const contentType = response.headers.get('content-type') || '';
+                        if (!contentType.includes('json')) {
+                            done(null);
+                            return;
+                        }
+                        return response.json().then((json) => done(json));
+                    })
+                    .catch(() => done(null));
+                """,
+                url,
+            )
+            if not data:
+                continue
+            visits = _parse_visit_records_from_json(data, days)
+            if visits:
+                return visits
+        except Exception:
+            continue
+    return []
+
+
+def _get_tooltip_text(driver):
+    tooltip_selectors = [
+        ".andes-tooltip",
+        ".recharts-tooltip-wrapper",
+        ".highcharts-tooltip",
+        "[role='tooltip']",
+        "[class*='tooltip']",
+    ]
+    for selector in tooltip_selectors:
+        elements = driver.find_elements(By.CSS_SELECTOR, selector)
+        for element in elements:
+            text = element.text.strip()
+            if text:
+                return text
+    return ""
+
+
+def _get_chart_rect(driver):
+    rect = driver.execute_script(
+        """
+        const candidates = [...document.querySelectorAll('svg, canvas')]
+            .map((node) => {
+                const rect = node.getBoundingClientRect();
+                return {
+                    x: rect.left,
+                    y: rect.top,
+                    width: rect.width,
+                    height: rect.height,
+                    area: rect.width * rect.height,
+                    visible: rect.width > 160 && rect.height > 100 && rect.bottom > 0 && rect.right > 0,
+                    tag: node.tagName,
+                    text: node.closest('section, main, div')?.innerText || ''
+                };
+            })
+            .filter((item) => item.visible)
+            .sort((a, b) => {
+                const aVisit = /Visits/i.test(a.text) ? 1 : 0;
+                const bVisit = /Visits/i.test(b.text) ? 1 : 0;
+                return (bVisit - aVisit) || (b.area - a.area);
+            });
+        return candidates[0] || null;
+        """
+    )
+    return rect
+
+
+def _extract_visits_from_dom(driver, days):
+    data = driver.execute_script(
+        """
+        const results = [];
+        const candidates = [
+            ...document.querySelectorAll('svg circle, svg [class*="dot"], svg [class*="point"]')
+        ];
+        for (const node of candidates) {
+            const aria = node.getAttribute('aria-label') || node.getAttribute('data-testid') || '';
+            const title = node.querySelector('title')?.textContent || '';
+            const text = `${aria} ${title}`.trim();
+            if (/visit/i.test(text) && /\\d/.test(text)) {
+                results.push(text);
+            }
+        }
+        return [...new Set(results)].slice(-arguments[0]);
+        """,
+        days,
+    )
+    visits = []
+    for item in data:
+        parsed = _parse_visits_tooltip(item)
+        if parsed:
+            visits.append(parsed)
+    return visits
+
+
+def _extract_visits_by_hover(driver, days):
+    rect = _get_chart_rect(driver)
+    if not rect:
+        return []
+
+    left = rect["x"] + rect["width"] * 0.08
+    right = rect["x"] + rect["width"] * 0.96
+    y_list = [
+        rect["y"] + rect["height"] * 0.35,
+        rect["y"] + rect["height"] * 0.5,
+        rect["y"] + rect["height"] * 0.65,
+    ]
+    visits = []
+
+    for i in range(days):
+        x = right - ((days - 1 - i) * (right - left) / max(days - 1, 1))
+        for y in y_list:
+            try:
+                driver.execute_script(
+                    """
+                    const x = arguments[0];
+                    const y = arguments[1];
+                    const target = document.elementFromPoint(x, y) || document.body;
+                    for (const type of ['pointerover', 'pointermove']) {
+                        const eventClass = window.PointerEvent || window.MouseEvent;
+                        target.dispatchEvent(new eventClass(type, {
+                            bubbles: true,
+                            cancelable: true,
+                            clientX: x,
+                            clientY: y,
+                            view: window,
+                            pointerType: 'mouse'
+                        }));
+                    }
+                    for (const type of ['mouseover', 'mousemove']) {
+                        target.dispatchEvent(new MouseEvent(type, {
+                            bubbles: true,
+                            cancelable: true,
+                            clientX: x,
+                            clientY: y,
+                            view: window
+                        }));
+                    }
+                    """,
+                    x,
+                    y,
+                )
+                time.sleep(0.35)
+                tooltip = _get_tooltip_text(driver)
+                parsed = _parse_visits_tooltip(tooltip)
+                if parsed and parsed not in visits:
+                    visits.append(parsed)
+                    break
+            except Exception:
+                continue
+
+    return visits[-days:]
+
+
+def _to_visit_number_list(visits, days):
+    numbers = []
+    for item in visits[-days:]:
+        value = item.get("visits", item) if isinstance(item, dict) else item
+        match = re.search(r"\d+(?:[,.]\d+)*", str(value))
+        if not match:
+            continue
+        numbers.append(int(match.group(0).replace(",", "").replace(".", "")))
+    return numbers[-days:]
+
+
+def get_recent_visits_info(driver,window_id, name, site, days=8):
+    # driver = _connect_browser(window_id)
+    driver.get("https://global-selling.mercadolibre.com/metrics#sc-menu")
+    driver.refresh()
+    time.sleep(5)
+
+    # _select_country(driver, site, name)
+    _click_visits_metric(driver)
+    time.sleep(3)
+
+    visits = _extract_visits_from_network(driver, days)
+    if len(visits) < days:
+        visits = _extract_visits_from_dom(driver, days)
+    if len(visits) < days:
+        visits = _extract_visits_by_hover(driver, days)
+
+    if not visits:
+        print("没有读取到Visits流量数据，请确认页面已加载并且Visits折线图可见")
+        debug_path = Path(__file__).resolve().parent / "visits_debug.png"
+        driver.save_screenshot(str(debug_path))
+        print("已保存调试截图:", debug_path)
+
+    result = _to_visit_number_list(visits, days)
+    print("最近8天Visits流量数据:", result)
+    return result
+
+
+def get_visits_info(driver,window_id, name="", site="", days=8):
+    return get_recent_visits_info(driver,window_id, name, site, days)
 
 
 def get_reputation_info(window_id, name, site):
@@ -112,8 +503,8 @@ def get_reputation_info(window_id, name, site):
     )
     print("提取到的投诉率为:", data_complain)
 
-    # 1. 先定位包含 "Complaints" 文本的父级卡片元素
-    # 这里使用 XPath 寻找：包含 h2 且 h2 文本为 Complaints 的那个 div
+    # 1. 先定位包含 "Non-compliant shipments" 文本的父级卡片元素
+    # 这里使用 XPath 寻找：包含 h2 且 h2 文本为 Non-compliant shipments 的那个 div
     card_element = WebDriverWait(driver, 10).until(
         EC.visibility_of_element_located(
             (
@@ -134,6 +525,29 @@ def get_reputation_info(window_id, name, site):
     )
 
     print("提取到的延误率为:", data_delay)
+
+    # 1. 先定位包含 "Cancellations" 文本的父级卡片元素
+    # 这里使用 XPath 寻找：包含 h2 且 h2 文本为 Cancellations 的那个 div
+    card_element = WebDriverWait(driver, 10).until(
+        EC.visibility_of_element_located(
+            (
+                By.XPATH,
+                "//div[contains(@class, 'andes-card')][.//h2[text()='Cancellations']]",
+            )
+        )
+    )
+
+    # 2. 在这个卡片范围内，寻找类名为 variable__percentage 的元素
+    # 注意：使用 card_element.find_element 是在当前节点下查找
+    data_cancel = (
+        WebDriverWait(card_element, 10)
+        .until(
+            EC.visibility_of_element_located((By.CLASS_NAME, "variable__percentage"))
+        )
+        .text
+    )
+
+    print("提取到的取消率率为:", data_cancel)
     data_color = driver.find_element(By.CLASS_NAME, "thermometer__level").text
     print("账号的声誉为:", data_color)
 
@@ -157,6 +571,7 @@ def get_reputation_info(window_id, name, site):
     list.append(data_orders)
     list.append(data_complain)
     list.append(data_delay)
+    list.append(data_cancel)
 
     driver.get("https://global-selling.mercadolibre.com/sales-summary")
     data_warn = ""
@@ -194,6 +609,9 @@ def get_reputation_info(window_id, name, site):
     list.append(data_warn)
     list.append(get_now_time())
 
+    visits=str(get_visits_info(driver,window_id,"","",8))
+    list.append(visits)
+
     return list
 
 
@@ -201,7 +619,7 @@ def get_reputation_info_all():
     start = int(time.time())
     print(start)
     root_path = Path(__file__).resolve().parent
-    file_path = root_path / "比特配置文件.xlsx"
+    file_path = root_path / "比特配置文件测试.xlsx"
     # file_path = root_path / "比特配置文件测试.xlsx"
 
     wb = load_workbook(file_path)
@@ -274,10 +692,12 @@ def get_reputation_info_all():
             "总单量",
             "投诉率",
             "延误率",
+            "取消率",
             "增加或减少",
             "近七天变化率",
             "系统告警",
             "更新时间",
+            "一周流量趋势"
         ],
     )
 
@@ -303,5 +723,5 @@ def get_reputation_info_all():
 
 if __name__ == "__main__":
 
-    # get_reputation_info('22139511815a4bf588fe96d5fdafded6','四季如春','阿根廷')
+    # get_reputation_info('22139511815a4bf588fe96d5fdafded6','四季如春','墨西哥')
     get_reputation_info_all()

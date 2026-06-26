@@ -11,3 +11,7 @@
 .idea/dictionary.xml
 .idea/shelf/
 .idea/httpRequests/
+
+dist/
+build/
+*.spec
