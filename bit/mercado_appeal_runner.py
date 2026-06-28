@@ -7,6 +7,11 @@ import urllib.request
 from pathlib import Path
 
 try:
+    from bit.chat_log import append_chat_log
+except Exception:
+    from chat_log import append_chat_log
+
+try:
     import websocket
 except ImportError as exc:
     raise SystemExit(
@@ -40,6 +45,24 @@ SITE_NAMES = {
     "AR": "Argentina",
     "CL": "Chile",
     "CO": "Colombia",
+    "UY": "Uruguay",
+}
+SITE_REMOTE_VALUES = {
+    "MX": "MLM-remote",
+    "BR": "MLB-remote",
+    "AR": "MLA-remote",
+    "CL": "MLC-remote",
+    "CO": "MCO-remote",
+    "UY": "MLU-remote",
+}
+
+SITE_OPTION_REPLIES = {
+    "MX": "Mexico (Direct to consumer)",
+    "BR": "Brazil",
+    "CL": "Chile",
+    "CO": "Colombia",
+    "AR": "Argentina",
+    "UY": "Uruguay",
 }
 
 
@@ -159,8 +182,15 @@ def put_json(url):
 
 
 def open_bitbrowser(window_name: str) -> str:
-    listing = post_json(f"{BIT_API}/browser/list", {"page": 0, "pageSize": 200})
-    browsers = listing["data"]["list"]
+    browsers = []
+    for page in range(0, 20):
+        listing = post_json(f"{BIT_API}/browser/list", {"page": page, "pageSize": 100})
+        page_browsers = listing["data"]["list"]
+        if not page_browsers:
+            break
+        browsers.extend(page_browsers)
+        if len(page_browsers) < 100:
+            break
     matches = [b for b in browsers if window_name in b.get("name", "")]
     if not matches:
         names = [b.get("name", "") for b in browsers]
@@ -203,23 +233,62 @@ def wait_for(cdp: Cdp, expression: str, timeout=60, label="condition"):
     raise TimeoutError(f"Timed out waiting for {label}: {last}")
 
 
+def current_site_state(cdp: Cdp):
+    return cdp.js(
+        r"""
+        (() => {
+          const text = (document.body && document.body.innerText) || '';
+          const lines = text.split(/\n+/).map(x => x.trim()).filter(Boolean);
+          const site = lines.find(x => /^(MX|BR|AR|CL|CO)$/.test(x)) || null;
+          return {url: location.href, title: document.title, site, text: text.slice(0, 1200)};
+        })()
+        """
+    )
+
+
+def verify_site(cdp: Cdp, site: str):
+    site = site.upper()
+    state = current_site_state(cdp)
+    country = SITE_NAMES.get(site, site)
+    text = state.get("text") or ""
+    title = state.get("title") or ""
+    current = state.get("site")
+    title_matches = country.lower() in title.lower() or country.lower() in text.lower()
+    return (current == site) or (f"\n{site}\n" in f"\n{text}\n" and title_matches)
+
+
 def switch_site_if_needed(cdp: Cdp, site: str):
     site = site.upper()
     wait_for(cdp, "!!document.body", timeout=30, label="document body")
-    text = cdp.js("(document.body && document.body.innerText) || ''") or ""
-    if f"\n{site}\n" in text or SITE_NAMES.get(site, site) in text:
+    if verify_site(cdp, site):
         return
 
-    cdp.js(
+    opened = cdp.js(
         r"""
         (() => {
+          function deepElements(root = document) {
+            const out = [];
+            const walk = node => {
+              const elements = node.querySelectorAll ? Array.from(node.querySelectorAll('*')) : [];
+              for (const el of elements) {
+                out.push(el);
+                if (el.shadowRoot) walk(el.shadowRoot);
+              }
+            };
+            walk(root);
+            return out;
+          }
           const vis = el => !!(el.offsetWidth || el.offsetHeight || el.getClientRects().length);
-          const els = [...document.querySelectorAll('button,a,[role="button"],div,span')].filter(vis);
+          const els = deepElements().filter(vis);
           const current = els.find(el => {
             const t = (el.innerText || el.textContent || el.getAttribute('aria-label') || '').trim();
-            return /^(MX|BR|AR|CL|CO)$/.test(t);
+            const cls = String(el.className || '');
+            return cls.includes('site-switcher') || /^(MX|BR|AR|CL|CO)$/.test(t);
           });
-          if (current) current.click();
+          if (current) {
+            current.scrollIntoView({block: 'center'});
+            current.click();
+          }
           return !!current;
         })()
         """
@@ -230,20 +299,51 @@ def switch_site_if_needed(cdp: Cdp, site: str):
         (() => {{
           const site = {json.dumps(site)};
           const name = {json.dumps(SITE_NAMES.get(site, site))};
+          const remote = {json.dumps(SITE_REMOTE_VALUES.get(site, ""))};
+          function deepElements(root = document) {{
+            const out = [];
+            const walk = node => {{
+              const elements = node.querySelectorAll ? Array.from(node.querySelectorAll('*')) : [];
+              for (const el of elements) {{
+                out.push(el);
+                if (el.shadowRoot) walk(el.shadowRoot);
+              }}
+            }};
+            walk(root);
+            return out;
+          }}
           const vis = el => !!(el.offsetWidth || el.offsetHeight || el.getClientRects().length);
-          const els = [...document.querySelectorAll('button,a,[role="button"],li,div,span')].filter(vis);
-          const target = els.find(el => {{
-            const t = (el.innerText || el.textContent || el.getAttribute('aria-label') || '').trim();
-            return t === site || t.includes(name);
+          const els = deepElements().filter(vis);
+          const exact = els.find(el => {{
+            const value = el.getAttribute('data-value') || '';
+            return remote && value === remote;
           }});
-          if (target) target.click();
+          const target = exact || els.find(el => {{
+            const t = (el.innerText || el.textContent || el.getAttribute('aria-label') || '').trim();
+            const value = el.getAttribute('data-value') || '';
+            return t === site || t.includes(name) || (remote && value.includes(remote));
+          }});
+          if (target) {{
+            target.scrollIntoView({{block: 'center'}});
+            target.click();
+          }}
           return !!target;
         }})()
         """
     )
     time.sleep(5)
-    if not picked:
-        print(f"Warning: could not find a visible site switch option for {site}; continuing with current site.")
+    if not opened or not picked:
+        state = current_site_state(cdp)
+        raise RuntimeError(
+            f"Failed to switch site to {site}: opened={opened} picked={picked} "
+            f"current={state.get('site')} title={state.get('title')} url={state.get('url')}"
+        )
+    if not verify_site(cdp, site):
+        state = current_site_state(cdp)
+        raise RuntimeError(
+            f"Site switch verification failed: expected={site} current={state.get('site')} "
+            f"title={state.get('title')} url={state.get('url')}"
+        )
 
 
 def collect_infractions(cdp_http: str, site: str):
@@ -254,6 +354,12 @@ def collect_infractions(cdp_http: str, site: str):
         time.sleep(5)
         switch_site_if_needed(cdp, site)
         first = cdp.js("({url: location.href, title: document.title, text: (((document.body && document.body.innerText) || '').slice(0, 2500))})")
+        if not verify_site(cdp, site):
+            state = current_site_state(cdp)
+            raise RuntimeError(
+                f"Refusing to collect wrong site: expected={site} current={state.get('site')} "
+                f"title={state.get('title')} url={state.get('url')}"
+            )
         print(first["text"][:500])
 
         total = cdp.js(
@@ -275,6 +381,12 @@ def collect_infractions(cdp_http: str, site: str):
             cdp.js(f"if (location.href !== {json.dumps(url)}) location.href={json.dumps(url)}; true")
             wait_for(cdp, "!!document.body", timeout=30, label=f"page {page} body")
             time.sleep(2)
+            if not verify_site(cdp, site):
+                state = current_site_state(cdp)
+                raise RuntimeError(
+                    f"Refusing to collect wrong site on page {page}: expected={site} "
+                    f"current={state.get('site')} title={state.get('title')} url={state.get('url')}"
+                )
             data = cdp.js(
                 r"""
                 (() => {
@@ -355,7 +467,14 @@ def frame_tree(cdp: Cdp):
 
 
 def ai_frame_id(cdp: Cdp):
-    frame = next((f for f in frame_tree(cdp) if "meli-ai-chat" in f.get("url", "")), None)
+    frame = next(
+        (
+            f
+            for f in frame_tree(cdp)
+            if "meli-ai-chat" in f.get("url", "") or "maxwell/new-chat" in f.get("url", "")
+        ),
+        None,
+    )
     return frame["id"] if frame else None
 
 
@@ -389,6 +508,76 @@ def wait_for_ai_input(cdp: Cdp, context_id: int, timeout=20):
             return last
         time.sleep(1)
     raise TimeoutError(f"assistant input not found: {last}")
+
+
+def ai_recent_chat(cdp: Cdp):
+    context_id = assistant_context(cdp)
+    return cdp.js(
+        f"""
+        (() => {{
+          {DEEP_JS}
+          const rows = deepElements()
+            .filter(el => /message-container|message-item|message|bubble/.test(String(el.className || '')) && (el.innerText || '').trim())
+            .map(el => (el.innerText || '').trim().replace(/\\s+/g, ' ').slice(0, 600));
+          return [...new Set(rows)].slice(-8);
+        }})()
+        """,
+        context_id=context_id,
+    ) or []
+
+
+def is_site_option_question(text: str) -> bool:
+    lower = (text or "").lower()
+    option_markers = [
+        "mexico (direct to consumer)",
+        "mexico (fulfillment)",
+        "brazil",
+        "chile",
+        "colombia",
+        "argentina",
+        "uruguay",
+    ]
+    question_markers = [
+        "which country",
+        "country",
+        "option",
+        "对应的是",
+        "哪个国家",
+        "选项",
+        "确认",
+    ]
+    return any(x in lower for x in option_markers) and any(x in lower for x in question_markers)
+
+
+def site_option_reply(site: str) -> str:
+    return SITE_OPTION_REPLIES.get((site or "MX").upper(), "Mexico (Direct to consumer)")
+
+
+def maybe_reply_site_option(cdp: Cdp, site: str, window: str = "", timeout=25):
+    end = time.time() + timeout
+    seen = set()
+    while time.time() < end:
+        messages = ai_recent_chat(cdp)
+        for message in reversed(messages):
+            if message in seen:
+                continue
+            seen.add(message)
+            if is_site_option_question(message):
+                reply = site_option_reply(site)
+                result = send_ai_message(cdp, reply)
+                append_chat_log(
+                    window,
+                    site,
+                    "send_site_option",
+                    message=reply,
+                    response=message,
+                    chat=messages,
+                    extra={"send_result": result},
+                )
+                print(f"AI asked site option; replied {reply} ({result})")
+                return reply
+        time.sleep(3)
+    return ""
 
 
 def open_ai_assistant(cdp_http: str) -> Cdp:
@@ -488,11 +677,27 @@ def send_ai_message(cdp: Cdp, message: str):
     return {"typed": bool(typed and typed.get("value")), **sent}
 
 
-def send_ai_groups(cdp: Cdp, groups, prefix: str):
+def send_ai_groups(cdp: Cdp, groups, prefix: str, site: str = "MX", window: str = ""):
     for idx, group in enumerate(groups, start=1):
         message = f"{PRODUCT_SEPARATOR.join(group)}{AI_APPEAL_SUFFIX}"
+        before_chat = ai_recent_chat(cdp)
         result = send_ai_message(cdp, message)
         time.sleep(7)
+        chat = ai_recent_chat(cdp)
+        append_chat_log(
+            window,
+            site,
+            "send_ai_group",
+            message=message,
+            chat=chat,
+            extra={
+                "group_index": idx,
+                "group_ids": group,
+                "send_result": result,
+                "before_chat": before_chat,
+            },
+        )
+        maybe_reply_site_option(cdp, site, window)
         path = OUT_DIR / f"{prefix}_ai_group_{idx}.png"
         cdp.screenshot(path)
         print(f"AI group {idx} sent ({result}): {message}")
@@ -535,7 +740,7 @@ def open_human_chat(cdp_http: str) -> Cdp:
     return cdp
 
 
-def send_human_group(cdp: Cdp, group, prefix: str, group_index=1):
+def send_human_group(cdp: Cdp, group, prefix: str, site: str = "", window: str = "", group_index=1):
     message = f"{PRODUCT_SEPARATOR.join(group)}{HUMAN_APPEAL_SUFFIX}"
     result = cdp.js(
         f"""
@@ -564,6 +769,13 @@ def send_human_group(cdp: Cdp, group, prefix: str, group_index=1):
     time.sleep(5)
     path = OUT_DIR / f"{prefix}_human_group_{group_index}.png"
     cdp.screenshot(path)
+    append_chat_log(
+        window or prefix,
+        site,
+        "send_human_group",
+        message=message,
+        extra={"group_index": group_index, "group_ids": group, "send_result": result},
+    )
     print(f"Human group {group_index} result: {result}; {message}")
 
 
@@ -617,7 +829,7 @@ def main():
     if args.mode in ("ai", "both"):
         ai = open_ai_assistant(cdp_http)
         try:
-            send_ai_groups(ai, ai_groups, prefix)
+            send_ai_groups(ai, ai_groups, prefix, site, args.window)
         finally:
             ai.close()
 
@@ -625,7 +837,7 @@ def main():
         idx = max(1, args.human_group_index) - 1
         human = open_human_chat(cdp_http)
         try:
-            send_human_group(human, human_groups[idx], prefix, idx + 1)
+            send_human_group(human, human_groups[idx], prefix, site, args.window, idx + 1)
         finally:
             human.close()
 

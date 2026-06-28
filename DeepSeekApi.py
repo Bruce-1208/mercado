@@ -1,28 +1,23 @@
-# Please install OpenAI SDK first: `pip3 install openai`
+import os
 
-from openai import OpenAI
+from AI_Agent.deepseek import chat_deepseek
 
 
-def get_title(tile):
-    client = OpenAI(
-        api_key="sk-ed493baf046d449997aa4077a4d2dfe1",
-        base_url="https://api.deepseek.com",
+TITLE_MODEL = os.getenv("DEEPSEEK_TITLE_MODEL", os.getenv("DEEPSEEK_MODEL", "deepseek-v4-flash"))
+
+
+def get_title(title: str) -> str:
+    prompt = (
+        f"{title}\n"
+        "把这个标题改成西班牙语，要求 60 个字符以内，不能出现品牌侵权。"
+        "只把标题写在第一行，不要特殊符号和其他解释。"
     )
-
-    response = client.chat.completions.create(
-        model="deepseek-chat",
-        messages=[
-            {
-                "role": "user",
-                "content": tile
-                + "把这个标题改成西班牙语，要求60个字符以内,不能出现品牌侵权,把标题写在第一行，不要有特殊符号和其他解释",
-            },
-        ],
-        stream=False,
-    )
-
-    return response.choices[0].message.content
+    return chat_deepseek(
+        [{"role": "user", "content": prompt}],
+        model=TITLE_MODEL,
+        temperature=0.3,
+    ).strip()
 
 
 if __name__ == "__main__":
-    get_title("跨境中式复古风台灯布艺灯")
+    print(get_title("跨境中式复古风台灯布艺灯"))
