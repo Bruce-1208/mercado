@@ -17,6 +17,7 @@ from datetime import datetime
 from db_pool import get_db_connection  # 确保你的连接池文件在这个目录下
 from decimal import Decimal, InvalidOperation
 
+
 app = Flask(__name__)
 
 # 配置日志
@@ -80,7 +81,7 @@ def format_log_text(text):
 
 def shensu_logic_old(name, site, form, message):
     i = 0
-    while (i < 10):
+    while i < 10:
         i = i + 1
         try:
             # yield f"{get_now_time()}--- 任务启动第{i}次：{name}{site} ---<br>"
@@ -164,10 +165,10 @@ def shensu_logic(name, site, form, message):
 @app.route('/api/run_shensu', methods=['GET'])
 def api_run_shensu():
     # 获取前端传入的参数
-    name = request.args.get('name', '')
-    site = request.args.get('site', '')
-    form = request.args.get('form', '')
-    message = request.args.get('message', '')
+    name = request.args.get("name", "")
+    site = request.args.get("site", "")
+    form = request.args.get("form", "")
+    message = request.args.get("message", "")
 
     # 返回流式响应，mimetype 设为 text/html 或 text/event-stream
     response = Response(shensu_logic(name, site, form, message), mimetype='text/plain; charset=utf-8')
@@ -176,13 +177,13 @@ def api_run_shensu():
     return response
 
 
-@app.route('/')
+@app.route("/")
 def index():
     return render_template('index.html')
 
 
 # 定义路由和返回内容
-@app.route('/zs')
+@app.route("/zs")
 def hello_whzs():
     return "武汉泽顺"
 
@@ -209,7 +210,7 @@ def safe_decimal(value, default="0.00"):
         return Decimal(default)
 
 # --- 新增：1688大模型找货数据插入接口 ---
-@app.route('/api/v1/chat', methods=['POST'])
+# @app.route('/api/v1/chat', methods=['POST'])
 def api_insert_chat_info():
     data = request.get_json(silent=True)
     if not data:
@@ -243,7 +244,7 @@ def api_insert_chat_info():
         return jsonify({"status": "error", "message": f"Database error: {str(e)}"}), 500
 
 
-@app.route('/api/v1/records', methods=['POST'])
+# @app.route('/api/v1/records', methods=['POST'])
 def insert_record():
     # 获取客户端发送的 JSON 数据
     data = request.get_json()
@@ -334,4 +335,4 @@ def insert_record():
 
 if __name__ == '__main__':
     # 保持 5000 端口，多线程模式开启以防流式阻塞
-    app.run(host='0.0.0.0', port=5000, threaded=True)
+    app.run(host='0.0.0.0', port=5001, threaded=True)

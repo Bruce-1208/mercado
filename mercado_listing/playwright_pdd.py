@@ -5,7 +5,7 @@ from playwright.async_api import async_playwright
 async def run():
     async with async_playwright() as p:
         # 1. 模拟更真实的 iPhone 13 环境
-        iphone = p.devices['iPhone 13']
+        iphone = p.devices["iPhone 13"]
         browser = await p.chromium.launch(headless=False)  # 必须设为 False 观察验证码
         context = await browser.new_context(**iphone)
 
@@ -45,7 +45,6 @@ async def run():
         try:
             # 寻找包含商品标题特征的元素
             title_xpath = "//div[';contains(@class, 'goods-name')] | //span[contains(@class, 'Title')]"
-
 
             price_xpath = "//*[contains(text(), '¥')]/following-sibling::*[1] | //span[contains(@class, 'Price')]"
 

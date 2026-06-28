@@ -59,6 +59,7 @@ def force_select_country(driver, country_name):
         print(f"⚠️ 脚本执行异常: {e}")
         return False
 
+
 def oepn_country_switch(driver):
     # 这段 JS 脚本会自动寻找页面上所有隐藏的 Shadow DOM 并在其中搜索目标
     deep_click_script = """
