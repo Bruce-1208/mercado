@@ -7,6 +7,11 @@ import urllib.request
 from datetime import datetime
 from pathlib import Path
 
+try:
+    from bit.chat_log import append_chat_log
+except Exception:
+    from chat_log import append_chat_log
+
 import websocket
 
 
@@ -48,6 +53,8 @@ GROUPS = [
     ["4808930954", "2661960953", "2716631901"],
     ["2711733759", "4605190062", "2641274057"],
 ]
+
+SITE_OPTION_REPLY = "Mexico (Direct to consumer)"
 
 
 DEEP_JS = r"""
@@ -333,11 +340,56 @@ def recent_chat(c, context_id):
     )
 
 
-def send_group(c, group_no, group, round_no):
-    context_id = assistant_context(c)
-    wait_for_input(c, context_id)
-    message = f"{PRODUCT_SEPARATOR.join(group)}{APPEAL_SUFFIX}"
+def is_site_option_question(text):
+    lower = (text or "").lower()
+    option_markers = [
+        "mexico (direct to consumer)",
+        "mexico (fulfillment)",
+        "brazil",
+        "chile",
+        "colombia",
+        "argentina",
+        "uruguay",
+    ]
+    question_markers = [
+        "which country",
+        "country",
+        "option",
+        "对应的是",
+        "哪个国家",
+        "选项",
+        "确认",
+    ]
+    return any(x in lower for x in option_markers) and any(x in lower for x in question_markers)
 
+
+def maybe_reply_site_option(c, context_id, window="", site="MX", timeout=25):
+    end = time.time() + timeout
+    seen = set()
+    while time.time() < end:
+        messages = recent_chat(c, context_id) or []
+        for message in reversed(messages):
+            if message in seen:
+                continue
+            seen.add(message)
+            if is_site_option_question(message):
+                send_text(c, context_id, SITE_OPTION_REPLY)
+                append_chat_log(
+                    window,
+                    site,
+                    "send_site_option",
+                    message=SITE_OPTION_REPLY,
+                    response=message,
+                    chat=messages,
+                )
+                log(f"AI asked site option; replied {SITE_OPTION_REPLY}")
+                return True
+        time.sleep(3)
+    return False
+
+
+def send_text(c, context_id, message):
+    wait_for_input(c, context_id)
     focus = c.js(
         f"""
         (() => {{
@@ -357,38 +409,6 @@ def send_group(c, group_no, group, round_no):
 
     c.call("Input.insertText", {"text": message})
     time.sleep(0.6)
-
-    typed = c.js(
-        f"""
-        (() => {{
-          {DEEP_JS}
-          const input = chatInput();
-          const btn = sendButton();
-          if (!input) return {{ok:false, reason:'no input after typing'}};
-          return {{
-            ok: true,
-            value: input.value || input.innerText || '',
-            buttonDisabled: btn ? (!!btn.disabled || btn.getAttribute('aria-disabled') === 'true') : null
-          }};
-        }})()
-        """,
-        context_id=context_id,
-    )
-    if not typed or not typed.get("value"):
-        typed = c.js(
-            f"""
-            (() => {{
-              {DEEP_JS}
-              const input = chatInput();
-              if (!input) return {{ok:false, reason:'fallback no input'}};
-              input.focus();
-              nativeSetValue(input, {json.dumps(message)});
-              return {{ok:true, value: input.value || input.innerText || ''}};
-            }})()
-            """,
-            context_id=context_id,
-        )
-
     sent = c.js(
         f"""
         (() => {{
@@ -403,26 +423,46 @@ def send_group(c, group_no, group, round_no):
         """,
         context_id=context_id,
     )
-
     if not sent or not sent.get("sent"):
         c.call("Input.dispatchKeyEvent", {"type": "keyDown", "key": "Enter", "code": "Enter", "windowsVirtualKeyCode": 13})
         c.call("Input.dispatchKeyEvent", {"type": "keyUp", "key": "Enter", "code": "Enter", "windowsVirtualKeyCode": 13})
-        sent = {"sent": True, "method": "enter-fallback"}
+    time.sleep(3)
+
+
+def send_group(c, group_no, group, round_no, window="", site="MX"):
+    context_id = assistant_context(c)
+    message = f"{PRODUCT_SEPARATOR.join(group)}{APPEAL_SUFFIX}"
+    before_chat = recent_chat(c, context_id) or []
+    send_text(c, context_id, message)
+    maybe_reply_site_option(c, context_id, window, site)
 
     time.sleep(8)
     shot = OUT / f"yuema_ai_{datetime.now().strftime('%Y%m%d_%H%M%S')}_r{round_no}_g{group_no}.png"
     c.screenshot(shot)
     chat = recent_chat(c, context_id)
+    append_chat_log(
+        window,
+        site,
+        "stable_loop_send_group",
+        message=message,
+        chat=chat,
+        extra={
+            "round": round_no,
+            "group_index": group_no,
+            "group_ids": group,
+            "screenshot": str(shot),
+            "before_chat": before_chat,
+        },
+    )
     log(
         "SENT "
-        + f"round={round_no} group={group_no} ids={','.join(group)} method={sent.get('method')} "
-        + f"typed={bool(typed and typed.get('value'))} screenshot={shot}"
+        + f"round={round_no} group={group_no} ids={','.join(group)} screenshot={shot}"
     )
     with LOG.open("a", encoding="utf-8") as f:
         f.write(f"\nMessage: {message}\nRecent chat: {json.dumps(chat, ensure_ascii=False)}\n")
 
 
-def run_once(cdp_http, start, rounds, continuous, delay, round_delay, max_groups):
+def run_once(cdp_http, start, rounds, continuous, delay, round_delay, max_groups, window="", site="MX"):
     c = help_tab(cdp_http)
     try:
         ensure_assistant_open(c)
@@ -434,7 +474,7 @@ def run_once(cdp_http, start, rounds, continuous, delay, round_delay, max_groups
             for idx, group in enumerate(GROUPS, start=1):
                 if idx < current_start:
                     continue
-                send_group(c, idx, group, round_no)
+                send_group(c, idx, group, round_no, window, site)
                 sent_count += 1
                 if max_groups and sent_count >= max_groups:
                     log(f"MAX GROUPS REACHED max_groups={max_groups}")
@@ -471,7 +511,7 @@ def main():
             cdp_http = args.cdp or open_bitbrowser(args.window)
             if not cdp_http:
                 cdp_http = DEFAULT_CDP
-            run_once(cdp_http, args.start, args.rounds, args.continuous, args.delay, args.round_delay, args.max_groups)
+            run_once(cdp_http, args.start, args.rounds, args.continuous, args.delay, args.round_delay, args.max_groups, args.window, "MX")
             break
         except Exception as exc:
             log(f"ERROR {type(exc).__name__}: {exc}")

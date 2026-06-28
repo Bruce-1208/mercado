@@ -15,3 +15,7 @@
 dist/
 build/
 *.spec
+
+__pycache__/
+*.pyc
+.env
