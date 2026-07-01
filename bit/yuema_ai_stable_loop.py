@@ -1,6 +1,7 @@
 import argparse
 import base64
 import json
+import re
 import time
 import urllib.parse
 import urllib.request
@@ -10,7 +11,11 @@ from pathlib import Path
 try:
     from bit.chat_log import append_chat_log
 except Exception:
-    from chat_log import append_chat_log
+    try:
+        from chat_log import append_chat_log
+    except Exception:
+        def append_chat_log(*args, **kwargs):
+            return None
 
 import websocket
 
@@ -54,7 +59,24 @@ GROUPS = [
     ["2711733759", "4605190062", "2641274057"],
 ]
 
-SITE_OPTION_REPLY = "Mexico (Direct to consumer)"
+SITE_OPTION_REPLIES = {
+    "MX": "Mexico (Direct to consumer)",
+    "BR": "Brazil",
+    "CL": "Chile",
+    "CO": "Colombia",
+    "AR": "Argentina",
+    "UY": "Uruguay",
+}
+SITE_OPTION_REPLY = SITE_OPTION_REPLIES["MX"]
+SITE_OPTION_MENU_OPTIONS = (
+    "Mexico (Direct to consumer)",
+    "Mexico (Fulfillment)",
+    "Brazil",
+    "Chile",
+    "Colombia",
+    "Argentina",
+    "Uruguay",
+)
 
 
 DEEP_JS = r"""
@@ -333,14 +355,55 @@ def recent_chat(c, context_id):
           const rows = deepElements()
             .filter(el => /message-container|message-item/.test(String(el.className || '')) && (el.innerText || '').trim())
             .map(el => (el.innerText || '').trim().replace(/\\s+/g, ' ').slice(0, 500));
-          return [...new Set(rows)].slice(-6);
+          const richRows = [];
+          const bodyText = document.body ? (document.body.innerText || '') : '';
+          const bodyHtml = document.body ? (document.body.innerHTML || '') : '';
+          richRows.push(bodyText, bodyHtml);
+          for (const el of deepElements()) {{
+            const text = [
+              el.innerText || '',
+              el.textContent || '',
+              el.innerHTML || '',
+              el.getAttribute('aria-label') || '',
+              el.getAttribute('title') || ''
+            ].join(' ');
+            if (/Mexico\\s*\\(Direct\\s+to\\s+consumer\\)/i.test(text) && /Uruguay/i.test(text)) {{
+              richRows.push(text);
+            }}
+          }}
+          const menuRows = richRows
+            .filter(Boolean)
+            .map(text => String(text).replace(/<[^>]+>/g, ' ').replace(/\\s+/g, ' ').trim())
+            .filter(text => /Mexico\\s*\\(Direct\\s+to\\s+consumer\\)/i.test(text) && /Uruguay/i.test(text))
+            .map(text => text.slice(0, 1200));
+          return [...new Set([...rows, ...menuRows])].slice(-12);
         }})()
         """,
         context_id=context_id,
     )
 
 
+def contains_site_option_menu(text):
+    lower = re.sub(r"\s+", " ", text or "").lower()
+    lower = lower.replace("（", "(").replace("）", ")")
+    compact = re.sub(r"[\s。．.、,，:：;；]+", "", lower)
+    compact_menu = re.sub(
+        r"[\s。．.、,，:：;；]+",
+        "",
+        "".join(SITE_OPTION_MENU_OPTIONS).lower(),
+    )
+    if compact_menu in compact:
+        return True
+    compact_options = [
+        re.sub(r"[\s。．.、,，:：;；]+", "", option.lower())
+        for option in SITE_OPTION_MENU_OPTIONS
+    ]
+    return sum(1 for option in compact_options if option in compact) >= 5
+
+
 def is_site_option_question(text):
+    if contains_site_option_menu(text):
+        return True
     lower = (text or "").lower()
     option_markers = [
         "mexico (direct to consumer)",
@@ -363,6 +426,10 @@ def is_site_option_question(text):
     return any(x in lower for x in option_markers) and any(x in lower for x in question_markers)
 
 
+def site_option_reply(site):
+    return SITE_OPTION_REPLIES.get((site or "MX").upper(), SITE_OPTION_REPLY)
+
+
 def maybe_reply_site_option(c, context_id, window="", site="MX", timeout=25):
     end = time.time() + timeout
     seen = set()
@@ -373,16 +440,17 @@ def maybe_reply_site_option(c, context_id, window="", site="MX", timeout=25):
                 continue
             seen.add(message)
             if is_site_option_question(message):
-                send_text(c, context_id, SITE_OPTION_REPLY)
+                reply = site_option_reply(site)
+                send_text(c, context_id, reply)
                 append_chat_log(
                     window,
                     site,
                     "send_site_option",
-                    message=SITE_OPTION_REPLY,
+                    message=reply,
                     response=message,
                     chat=messages,
                 )
-                log(f"AI asked site option; replied {SITE_OPTION_REPLY}")
+                log(f"AI asked site option; replied {reply}")
                 return True
         time.sleep(3)
     return False

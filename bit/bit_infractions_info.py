@@ -1,4 +1,5 @@
 import time
+import re
 from sys import prefix
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
@@ -47,10 +48,21 @@ SITE_SWITCH_SELECTOR_MAP = {
 
 
 def _get_text_list(driver, class_name):
-    elements = WebDriverWait(driver, 30).until(
-        EC.presence_of_all_elements_located((By.CLASS_NAME, class_name))
-    )
-    return [el.get_attribute("textContent").strip() for el in elements]
+    try:
+        elements = WebDriverWait(driver, 30).until(
+            EC.presence_of_all_elements_located((By.CLASS_NAME, class_name))
+        )
+        return [el.get_attribute("textContent").strip() for el in elements]
+    except Exception:
+        return driver.execute_script(
+            """
+            const cls = arguments[0];
+            return [...document.getElementsByClassName(cls)]
+              .map(el => (el.textContent || '').trim())
+              .filter(Boolean);
+            """,
+            class_name,
+        )
 
 
 def _get_page_signature(driver):
@@ -84,6 +96,9 @@ def _find_next_button(driver):
         (By.XPATH, "//button[.//span[contains(@class, 'andes-pagination__arrow-title') and normalize-space()='Next']]"),
         (By.XPATH, "//*[contains(@class, 'andes-pagination__button')][.//*[normalize-space()='Next']]"),
         (By.XPATH, "//span[contains(@class, 'andes-pagination__arrow-title') and normalize-space()='Next']/ancestor::*[self::a or self::button][1]"),
+        (By.XPATH, "//*[self::a or self::button][contains(translate(@aria-label, 'NEXT', 'next'), 'next')]"),
+        (By.XPATH, "//*[self::a or self::button][contains(translate(@title, 'NEXT', 'next'), 'next')]"),
+        (By.XPATH, "//*[self::a or self::button][normalize-space()='Next']"),
     ]
     for by, selector in selectors:
         elements = driver.find_elements(by, selector)
@@ -127,6 +142,86 @@ def _click_next_page(driver, previous_signature, page_no):
             continue
         except Exception as e:
             print(f"翻页失败，重试第{attempt + 1}次:", e)
+            time.sleep(2)
+            continue
+
+    print("翻页多次失败，结束当前站点抓取")
+    return False
+
+
+def _goto_next_offset(driver, previous_signature):
+    page_size = max(1, len(previous_signature or ()))
+    current_url = driver.current_url
+    match = re.search(r"([?&]offset=)(\d+)", current_url)
+    if match:
+        next_offset = int(match.group(2)) + page_size
+        next_url = current_url[: match.start(2)] + str(next_offset) + current_url[match.end(2) :]
+    else:
+        separator = "&" if "?" in current_url else "?"
+        next_url = f"{current_url}{separator}tab=detections&offset={page_size}"
+
+    driver.get(next_url)
+    WebDriverWait(driver, 30).until(
+        lambda d: _get_page_signature(d) and _get_page_signature(d) != previous_signature
+    )
+    return True
+
+
+def _click_next_page(driver, previous_signature, page_no):
+    for attempt in range(3):
+        previous_url = driver.current_url
+        try:
+            next_button = _find_next_button(driver)
+            if next_button is None or _is_next_button_disabled(next_button):
+                print("当前已经是最后一页，翻页结束")
+                return False
+
+            driver.execute_script(
+                "arguments[0].scrollIntoView({block: 'center', inline: 'center'});",
+                next_button,
+            )
+            time.sleep(0.5)
+            try:
+                WebDriverWait(driver, 10).until(lambda d: next_button.is_enabled())
+                next_button.click()
+            except Exception:
+                driver.execute_script("arguments[0].click();", next_button)
+
+            WebDriverWait(driver, 30).until(
+                lambda d: (
+                    _get_page_signature(d)
+                    and _get_page_signature(d) != previous_signature
+                )
+                or d.current_url != previous_url
+            )
+            WebDriverWait(driver, 30).until(
+                lambda d: _get_page_signature(d)
+                and _get_page_signature(d) != previous_signature
+            )
+            print(f"成功点击下一页，当前第{page_no + 1}页")
+            time.sleep(1)
+            return True
+        except StaleElementReferenceException:
+            time.sleep(1)
+            continue
+        except TimeoutException:
+            print(f"点击下一页后页面未变化，尝试 offset 兜底，第{attempt + 1}次")
+            try:
+                if _goto_next_offset(driver, previous_signature):
+                    print(f"offset兜底翻页成功，当前第{page_no + 1}页")
+                    return True
+            except Exception as fallback_error:
+                print("offset兜底翻页失败", fallback_error)
+            time.sleep(2)
+            continue
+        except Exception as e:
+            print(f"翻页失败，重试第{attempt + 1}次", e)
+            try:
+                if _goto_next_offset(driver, previous_signature):
+                    print(f"offset兜底翻页成功，当前第{page_no + 1}页")
+                    return True
+            except Exception as fallback_error:
+                print("offset兜底翻页失败", fallback_error)
             time.sleep(2)
             continue
 
