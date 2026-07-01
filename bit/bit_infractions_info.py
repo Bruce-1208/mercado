@@ -155,7 +155,7 @@ def _read_current_infractions_page(driver, name, site):
     return rows
 
 
-def get_infractions_info(window_id, name, site):
+def get_infractions_info(window_id, name, site,isSwitch):
     res = openBrowser(window_id)  # 窗口ID从窗口配置界面中复制，或者api创建后返回
 
     print(res)
@@ -178,33 +178,34 @@ def get_infractions_info(window_id, name, site):
     )
     time.sleep(10)
     i = 0
-    while i < 3:
-        i = i + 1
-        try:
-            # 打开站点选择器
-            WebDriverWait(driver, 10).until(
-                EC.element_to_be_clickable(
-                    (By.CLASS_NAME, "nav-header-cbt__site-switcher")
-                )
-            ).click()
+    if(isSwitch==1):
+        while i < 3:
+            i = i + 1
+            try:
+                # 打开站点选择器
+                WebDriverWait(driver, 10).until(
+                    EC.element_to_be_clickable(
+                        (By.CLASS_NAME, "nav-header-cbt__site-switcher")
+                    )
+                ).click()
 
-            print(name + "打开站点选择器")
-            time.sleep(5)
-            path = SITE_SWITCH_SELECTOR_MAP.get(site, 'div[data-value="MLM-remote"]')
+                print(name + "打开站点选择器")
+                time.sleep(5)
+                path = SITE_SWITCH_SELECTOR_MAP.get(site, 'div[data-value="MLM-remote"]')
 
-            WebDriverWait(driver, 30).until(
-                EC.element_to_be_clickable((By.CSS_SELECTOR, path))
-            ).click()
+                WebDriverWait(driver, 30).until(
+                    EC.element_to_be_clickable((By.CSS_SELECTOR, path))
+                ).click()
 
-            driver.refresh()
-            time.sleep(3)
-            print(get_now_time() + name + site + "选择站点：", site)
-            break
-        except Exception as e:
-            print(get_now_time() + name + site + "重新执行选择站点")
-            switch_random_hongkong_node()
-            get_public_ip()
-            continue
+                driver.refresh()
+                time.sleep(3)
+                print(get_now_time() + name + site + "选择站点：", site)
+                break
+            except Exception as e:
+                print(get_now_time() + name + site + "重新执行选择站点")
+                switch_random_hongkong_node()
+                get_public_ip()
+                continue
     infractions_list = []
     seen_ids = set()
     page_no = 1
@@ -254,7 +255,7 @@ def _run_infractions_for_browser(row):
 
         for i in range(1, 4):
             try:
-                infraction_info = get_infractions_info(id, name, site)
+                infraction_info = get_infractions_info(id, name, site,0)
                 infraction_info_sum.extend(infraction_info)
                 print(get_now_time() + name + site + "成功")
                 result.append(("获取侵权信息", name, site, "成功", get_now_time()))

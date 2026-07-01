@@ -5,6 +5,7 @@ import time
 import traceback
 from flask import Flask, Response, request, render_template, jsonify
 
+import bit.bit_appeal_ai as bit_appeal_ai
 from bit.bit_appeal import *
 from bit.bit_utils import *
 from bit.bit_api import *
@@ -130,15 +131,18 @@ def shensu_logic_previous(name, site, form, message):
         time.sleep(600)
 
 
-def shensu_logic(name, site, form, message):
+def shensu_logic(name, site, form, message, mode):
     for i in range(1, 11):
         output_queue = queue.Queue()
 
         def run_task():
             register_thread_log_queue(output_queue)
             try:
-                print(f"{get_now_time()} --- 任务启动第 {i} 次：{name} {site}")
-                shensu(name, site, form, message)
+                print(f"{get_now_time()} --- 任务启动第 {i} 次：{name} {site}，客服模式：{mode}")
+                if mode == "AI客服":
+                    bit_appeal_ai.shensu(name, site, form, message)
+                else:
+                    shensu(name, site, form, message, "人工客服")
                 print(f"{get_now_time()} {name} {site} 申诉执行完毕")
             except Exception as e:
                 print(f"{get_now_time()} 发生错误: {str(e)}")
@@ -169,9 +173,10 @@ def api_run_shensu():
     site = request.args.get("site", "")
     form = request.args.get("form", "")
     message = request.args.get("message", "")
+    mode = request.args.get("mode", "人工客服")
 
     # 返回流式响应，mimetype 设为 text/html 或 text/event-stream
-    response = Response(shensu_logic(name, site, form, message), mimetype='text/plain; charset=utf-8')
+    response = Response(shensu_logic(name, site, form, message, mode), mimetype='text/plain; charset=utf-8')
     response.headers["Cache-Control"] = "no-cache"
     response.headers["X-Accel-Buffering"] = "no"
     return response

@@ -41,7 +41,6 @@
             margin: 0;
             font-size: 28px;
             font-weight: 700;
-            letter-spacing: 0;
         }
 
         .topbar p {
@@ -214,7 +213,7 @@
 <body>
     <header class="topbar">
         <h1>武汉泽顺综合服务台</h1>
-        <p>申诉任务执行、接口调用与运行日志实时监控</p>
+        <p>选择 AI 客服或人工客服申诉，并实时查看本次任务日志</p>
     </header>
 
     <main class="page">
@@ -237,6 +236,14 @@
                     <option value="延误">延误</option>
                     <option value="侵权">侵权</option>
                     <option value="投诉">投诉</option>
+                </select>
+            </div>
+
+            <div class="field">
+                <label for="mode">客服模式</label>
+                <select id="mode">
+                    <option value="AI客服">找 AI 客服</option>
+                    <option value="人工客服">人工客服申诉</option>
                 </select>
             </div>
 
@@ -294,6 +301,7 @@
                 name: document.getElementById("name").value,
                 site: document.getElementById("site").value,
                 form: document.getElementById("form").value,
+                mode: document.getElementById("mode").value,
                 message: document.getElementById("message").value
             });
 

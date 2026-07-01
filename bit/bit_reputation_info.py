@@ -1,5 +1,6 @@
 import time
 import re
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 from selenium import webdriver
 from selenium.common.exceptions import TimeoutException
@@ -415,22 +416,10 @@ def get_visits_info(driver,window_id, name="", site="", days=8):
     return get_recent_visits_info(driver,window_id, name, site, days)
 
 
-def get_reputation_info(window_id, name, site):
-    res = openBrowser(window_id)  # 窗口ID从窗口配置界面中复制，或者api创建后返回
+def get_reputation_info(window_id, name, site, driver=None):
+    if driver is None:
+        driver = _connect_browser(window_id)
 
-    print(res)
-
-    driverPath = res["data"]["driver"]
-    debuggerAddress = res["data"]["http"]
-
-    # selenium 连接代码
-    chrome_options = webdriver.ChromeOptions()
-    chrome_options.add_experimental_option("debuggerAddress", debuggerAddress)
-
-    chrome_service = Service(driverPath)
-    driver = webdriver.Chrome(service=chrome_service, options=chrome_options)
-
-    driver.implicitly_wait(10)
     # 设置最长等待时间为 10 秒
     wait = WebDriverWait(driver, 10)
 
@@ -615,33 +604,48 @@ def get_reputation_info(window_id, name, site):
     return list
 
 
-def get_reputation_info_all():
-    start = int(time.time())
-    print(start)
-    root_path = Path(__file__).resolve().parent
-    file_path = root_path / "比特配置文件测试.xlsx"
-    # file_path = root_path / "比特配置文件测试.xlsx"
+def _build_reputation_failure_row(name, site):
+    return [
+        name,
+        site,
+        "执行失败",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        get_now_time(),
+        "",
+    ]
 
-    wb = load_workbook(file_path)
-    sheet = wb.active
+
+def _run_reputation_for_browser(row):
+    id = row[0]
+    name = row[1]
+    remark = row[2]
+    if remark == "忽略":
+        return [], []
+
+    if not row[3]:
+        return [], [("获取声誉信息", name, "", "失败：未配置站点", get_now_time())]
+
+    print(get_now_time() + "开始打开窗口:" + name)
+    driver = _connect_browser(id)
     reputation_info_sum = []
     result = []
-    # 使用 min_row=2 跳过第一行
-    for row in sheet.iter_rows(min_row=2, values_only=True):
-        print(row)  # row 是一个元组，包含该行所有数据
-        id = row[0]
-        name = row[1]
-        remark = row[2]
-        if remark == "忽略":
-            continue
-        print(get_now_time() + "开始打开窗口:" + name)
+
+    try:
         site_list = row[3].split("，")
         for site in site_list:
-            i = 0
-            while i < 3:
-                i = i + 1
+            site = str(site).strip()
+            if not site:
+                continue
+
+            for i in range(1, 4):
                 try:
-                    reputation_info = get_reputation_info(id, name, site)
+                    reputation_info = get_reputation_info(id, name, site, driver=driver)
                     reputation_info_sum.append(reputation_info)
                     print(get_now_time() + name + site + "获取声誉信息成功")
                     result.append(("获取声誉信息", name, site, "成功", get_now_time()))
@@ -652,31 +656,54 @@ def get_reputation_info_all():
                         result.append(
                             ("获取声誉信息", name, site, "失败", get_now_time())
                         )
-                        reputation_info = [
-                            name,
-                            site,
-                            "执行失败",
-                            "",
-                            "",
-                            "",
-                            "",
-                            "",
-                            "",
-                            get_now_time(),
-                        ]
-                        reputation_info_sum.append(reputation_info)
-                    # 随机切换香港IP节点
-                    switch_random_hongkong_node()
-                    get_public_ip()
-            time.sleep(30)
-
+                        reputation_info_sum.append(
+                            _build_reputation_failure_row(name, site)
+                        )
+                    else:
+                        switch_random_hongkong_node()
+                        get_public_ip()
+                        time.sleep(5)
+            time.sleep(10)
+    finally:
         print(get_now_time() + "结束，正在关闭窗口")
-
         try:
             closeBrowser(id)
         except Exception as e:
-            continue
+            print(get_now_time() + name + "关闭窗口失败", e)
         print(get_now_time() + "已经关闭窗口")
+
+    return reputation_info_sum, result
+
+
+def get_reputation_info_all(max_workers=10):
+    start = int(time.time())
+    print(start)
+    root_path = Path(__file__).resolve().parent
+    file_path = root_path / "比特配置文件.xlsx"
+    # file_path = root_path / "比特配置文件测试.xlsx"
+
+    wb = load_workbook(file_path)
+    sheet = wb.active
+    reputation_info_sum = []
+    result = []
+    rows = list(sheet.iter_rows(min_row=2, values_only=True))
+    rows = [row for row in rows if row and row[0] and row[2] != "忽略"]
+
+    with ThreadPoolExecutor(max_workers=max_workers) as executor:
+        future_map = {
+            executor.submit(_run_reputation_for_browser, row): row for row in rows
+        }
+        for future in as_completed(future_map):
+            row = future_map[future]
+            name = row[1]
+            try:
+                browser_reputations, browser_result = future.result()
+                reputation_info_sum.extend(browser_reputations)
+                result.extend(browser_result)
+                print(get_now_time() + name + "窗口任务完成")
+            except Exception as e:
+                print(get_now_time() + name + "窗口任务异常", e)
+                result.append(("获取声誉信息", name, "", "失败", get_now_time()))
 
     reputation_info_sum_str = "\n".join(map(str, reputation_info_sum))
     print(reputation_info_sum_str)

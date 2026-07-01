@@ -61,7 +61,7 @@ def use_one_browser_run_task(info):
                 print("ip检测通过，打开店铺平台主页")
 
                 try:
-                    shensu(name, site, form, message)
+                    shensu(name, site, form, message,"人工客服")
                 except Exception as e:
                     traceback.print_exc()
                     print("申诉执行异常", e)
@@ -79,15 +79,8 @@ def use_one_browser_run_task(info):
         print("脚本运行异常:" + traceback.format_exc())
 
 
-def shensu_ai(driver):
-    driver.get("https://global-selling.mercadolibre.com/help/v2")
-    driver.switch_to.frame("Meli AI Chat")
-    messages = driver.find_elements(By.CLASS_NAME, "mlc-scroll-paginate_item")
-    print(messages)
-
-
 # 申诉
-def shensu(name, site, form, message):
+def shensu(name, site, form, message, mode="人工客服"):
     print(f"{name} {site} 开始进行{form}申诉，话术为{message}<br>")
     config_path = get_bit_path() / "比特配置文件.xlsx"
     wb = load_workbook(config_path)
@@ -318,7 +311,7 @@ def get_delay_orders_random(name, site, nums):
 def get_infraction_orders_random(window_id,name, site, nums):
     inf_list=[]
     try:
-        infos=get_infractions_info(window_id,name,site)
+        infos=get_infractions_info(window_id,name,site,1)
         for i in infos:
             inf_list.append(i[2])
         if len(inf_list) >= nums:
@@ -504,58 +497,16 @@ def auto_appeal_delay():
     use_all_browser_run_task_with_thread_pool(list_appeal, 5)
 
 
-if __name__ == "__main__":
-    # long
-    # use_one_browser_run_task('9812f185f7ab49d98f3988994d9e8ebf','墨西哥')
-    # 跃马扬鞭
-    # use_one_browser_run_task(('跃马扬鞭', '墨西哥', '侵权','MLM2872391307 - MLM2872380671 - MLM5204725168 - MLM5199341964 - MLM2870050527 - MLM2870047371 - MLM2870043695 - MLM5199197738 - MLM5199251620 - MLM4811240116 亲爱的客服，这些产品是通用品牌产品，他们被系统误判为侵权，你能帮我重新激活并且恢复我的账户吗？'))
-    use_one_browser_run_task(('跃马扬鞭','墨西哥','侵权',''))
-    browser_list = [
-        (
-            "龙",
-            "阿根廷",
-            "延误",
-            "2000015835896308, 2000015760415040, 2000015657210554, 2000015755669242, 2000015413354104亲爱的客服，这几个产品是菜鸟没有及时揽收造成了延误，你能帮我取消对我声誉的影响吗？",
-        ),
-        (
-            "飞黄腾达5",
-            "阿根廷",
-            "投诉",
-            "#2000012217587531 亲爱的客服，我的产品如描述一致，客户并没有证据证明我的产品有问题，中介把钱判给了我，你能帮我消除对我声誉的影响吗",
-        ),
-        (
-            "鸿运当头",
-            "墨西哥",
-            "投诉",
-            "2000012334909743 亲爱的客服，我的产品如描述一致，客户并没有证据证明我的产品有问题，是他自己不会使用，你能帮我消除对我声誉的影响吗",
-        ),
-        (
-            "飞黄腾达5",
-            "巴西",
-            "投诉",
-            "#2000012373200625 亲爱的客服，我的产品如描述一致数量没错，客户并没有证据证明我的产品有问题，明显是想免费购物，你能帮我消除对我声誉的影响吗",
-        ),
-        (
-            "腾",
-            "墨西哥",
-            "延误",
-            "2000015674360964、2000015591983456、2000015552663062、2000015371004100、2000015370997788 ，2000015237834384亲爱的客服，这几个产品是菜鸟没有及时揽收造成了延误，你能帮我取消对我声誉的影响吗？",
-        ),
-        (
-            "梁山好汉666",
-            "墨西哥",
-            "延误",
-            """'2000015974674620
-'2000015974297176
-'2000015961496590
-'2000015956536118
-'2000015944080040
-'2000015930028184
-'2000015902497014
-'2000015852788368亲爱的客服，这几个产品是菜鸟没有及时揽收造成了延误，你能帮我取消对我声誉的影响吗？
-""",
-        ),
-    ]
-    # use_all_browser_run_task_with_thread_pool(browser_list)
+def main():
+    # 在这里指定要运行的店铺参数，不使用命令行传参。
+    shop_name = "跃马扬鞭"
+    site = "墨西哥"
+    appeal_type = "侵权"
+    message = ""
 
-    # auto_appeal_delay()
+    use_one_browser_run_task((shop_name, site, appeal_type, message))
+
+
+
+if __name__ == "__main__":
+    main()
