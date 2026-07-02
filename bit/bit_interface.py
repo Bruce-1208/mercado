@@ -3,13 +3,25 @@ import sys
 import threading
 import time
 import traceback
-from flask import Flask, Response, request, render_template, jsonify
+from io import BytesIO
+from pathlib import Path
+from urllib.parse import quote
+
+from flask import Flask, Response, request, render_template, jsonify, send_file
+from openpyxl import Workbook
+from openpyxl.styles import Alignment, Font, PatternFill
+
+CURRENT_DIR = Path(__file__).resolve().parent
+PROJECT_ROOT = CURRENT_DIR.parent
+for path in (str(CURRENT_DIR), str(PROJECT_ROOT)):
+    if path not in sys.path:
+        sys.path.insert(0, path)
 
 import bit.bit_appeal_ai as bit_appeal_ai
 from bit.bit_appeal import *
 from bit.bit_utils import *
 from bit.bit_api import *
-from bit.bit_mysql import insert_chat_info
+from bit.bit_mysql import get_latest_infraction_info, get_latest_reputation_info, insert_chat_info
 
 # 引入数据库入库需要的模块
 import logging
@@ -177,6 +189,96 @@ def api_run_shensu():
     response.headers["Cache-Control"] = "no-cache"
     response.headers["X-Accel-Buffering"] = "no"
     return response
+
+
+@app.route('/api/infractions/latest', methods=['GET'])
+def api_latest_infractions():
+    try:
+        return jsonify({
+            "status": "success",
+            "data": get_latest_infraction_info()
+        })
+    except Exception as e:
+        logging.error(f"Latest infraction query failed: {str(e)}")
+        return jsonify({
+            "status": "error",
+            "message": f"Database error: {str(e)}"
+        }), 500
+
+
+@app.route('/api/reputation/latest', methods=['GET'])
+def api_latest_reputation():
+    try:
+        return jsonify({
+            "status": "success",
+            "data": get_latest_reputation_info()
+        })
+    except Exception as e:
+        logging.error(f"Latest reputation query failed: {str(e)}")
+        return jsonify({
+            "status": "error",
+            "message": f"Database error: {str(e)}"
+        }), 500
+
+
+@app.route('/api/reputation/latest/export', methods=['GET'])
+def api_export_latest_reputation():
+    try:
+        data = get_latest_reputation_info()
+        rows = data.get("rows") or []
+        wb = Workbook()
+        ws = wb.active
+        ws.title = "最新声誉数据"
+
+        columns = [
+            "店铺名", "站点", "声誉颜色", "总单量", "投诉率", "延误率",
+            "增加或减少", "近七天变化率", "一周流量趋势", "系统告警",
+            "更新时间", "提交时间"
+        ]
+        ws.append(columns)
+
+        header_fill = PatternFill("solid", fgColor="D9EAF7")
+        header_font = Font(bold=True, color="1F2937")
+        for cell in ws[1]:
+            cell.fill = header_fill
+            cell.font = header_font
+            cell.alignment = Alignment(horizontal="center", vertical="center")
+
+        for row in rows:
+            ws.append([row.get(column, "") for column in columns])
+
+        for column_cells in ws.columns:
+            max_length = 0
+            column_letter = column_cells[0].column_letter
+            for cell in column_cells:
+                value = "" if cell.value is None else str(cell.value)
+                max_length = max(max_length, len(value))
+                cell.alignment = Alignment(vertical="top", wrap_text=True)
+            ws.column_dimensions[column_letter].width = min(max(max_length + 2, 10), 36)
+
+        ws.freeze_panes = "A2"
+        output = BytesIO()
+        wb.save(output)
+        output.seek(0)
+
+        submit_time = str(data.get("latest_submit_time") or datetime.now().strftime("%Y%m%d%H%M%S"))
+        safe_time = "".join(ch if ch.isdigit() else "" for ch in submit_time) or datetime.now().strftime("%Y%m%d%H%M%S")
+        filename = f"最新声誉数据_{safe_time}.xlsx"
+        encoded_filename = quote(filename)
+        response = send_file(
+            output,
+            mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            as_attachment=True,
+            download_name=filename,
+        )
+        response.headers["Content-Disposition"] = f"attachment; filename*=UTF-8''{encoded_filename}"
+        return response
+    except Exception as e:
+        logging.error(f"Latest reputation export failed: {str(e)}")
+        return jsonify({
+            "status": "error",
+            "message": f"Export error: {str(e)}"
+        }), 500
 
 
 @app.route("/")

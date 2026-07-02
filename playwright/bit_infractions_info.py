@@ -8,7 +8,6 @@ from pathlib import Path
 
 import pandas as pd
 from openpyxl import load_workbook
-
 from bit.bit_api import closeBrowser, openBrowser
 from bit.bit_mysql import insert_task_record, inset_infraction_info
 from bit.bit_send_mail import send_info
@@ -16,6 +15,10 @@ from bit.bit_utils import get_now_time
 
 
 INFRACTIONS_URL = "https://global-selling.mercadolibre.com/noindex/pppi/infractions?tab=detections&offset=0"
+INFRACTIONS_TAB_URLS = {
+    "侵权": "https://global-selling.mercadolibre.com/noindex/pppi/infractions?tab=detections&offset=0",
+    "权利人": "https://global-selling.mercadolibre.com/noindex/pppi/infractions?tab=denounces&offset=0",
+}
 
 SITE_PREFIX_MAP = {
     "墨西哥": "MLM",
@@ -131,16 +134,142 @@ def _get_page_signature(page):
         return tuple()
 
 
-def _read_current_infractions_page(page, name, site):
+def _wait_infractions_ready(page, timeout=30000):
+    try:
+        page.wait_for_load_state("domcontentloaded", timeout=timeout)
+    except Exception:
+        pass
+    try:
+        page.wait_for_function(
+            """
+            () => location.href.includes('/noindex/pppi/infractions') &&
+              (document.readyState === 'complete' || document.readyState === 'interactive')
+            """,
+            timeout=timeout,
+        )
+    except Exception:
+        pass
+
+ 
+def _safe_goto_infractions(page, url, timeout=60000):
+    try:
+        page.goto(url, wait_until="domcontentloaded", timeout=timeout)
+    except Exception:
+        current_url = page.url or ""
+        if "/noindex/pppi/infractions" not in current_url:
+            raise
+        print(f"页面自动跳转，继续使用当前侵权页: {current_url}")
+    _wait_infractions_ready(page)
+    return page.url
+
+
+def _current_infraction_type(page):
+    current_url = page.url or ""
+    match = re.search(r"[?&]tab=([^&]+)", current_url)
+    current_tab = match.group(1) if match else ""
+    if current_tab == "denounces":
+        return "权利人"
+    if current_tab == "detections":
+        return "侵权"
+    return "侵权"
+
+
+def _goto_infractions_type(page, infraction_type):
+    target_url = INFRACTIONS_TAB_URLS[infraction_type]
+    _safe_goto_infractions(page, target_url)
+    _reset_current_offset(page)
+    actual_type = _current_infraction_type(page)
+    if actual_type != infraction_type:
+        print(f"请求打开{infraction_type}标签，但页面实际停留在{actual_type}标签: {page.url}")
+    return actual_type
+
+
+def _extract_last_submit_times(page):
+    return page.evaluate(
+        """
+        () => {
+          const cards = [...document.querySelectorAll('.infraction-item__id')]
+            .map((idNode) =>
+              idNode.closest('.infraction-item') ||
+              idNode.closest('[class*="infraction-item"]') ||
+              idNode.closest('li') ||
+              idNode.parentElement
+            )
+            .filter(Boolean);
+
+          const labelPattern = /(last\\s+submitted|last\\s+submission|submitted|submission|最后提交|提交时间|提交日期|已提交)/i;
+          const datePattern = /(?:\\d{4}[-/]\\d{1,2}[-/]\\d{1,2}(?:\\s+\\d{1,2}:\\d{2}(?::\\d{2})?)?|\\d{1,2}[-/]\\d{1,2}[-/]\\d{4}(?:\\s+\\d{1,2}:\\d{2}(?::\\d{2})?)?|[A-Z][a-z]{2,8}\\.?\\s+\\d{1,2},?\\s*\\d{4}(?:\\s+\\d{1,2}:\\d{2}(?:\\s*[AP]M)?)?|\\d{1,2}\\s+[A-Z][a-z]{2,8}\\.?\\s+\\d{4}(?:\\s+\\d{1,2}:\\d{2})?|\\d{1,2}\\s+de\\s+[a-záéíóúñç]+\\s+de\\s+\\d{4})/i;
+
+          function clean(text) {
+            return (text || '').replace(/\\s+/g, ' ').trim();
+          }
+
+          function normalizeCandidate(text) {
+            const value = clean(text);
+            if (!value) return '';
+            const match = value.match(datePattern);
+            if (match) return match[0].trim();
+            return value.replace(labelPattern, '').replace(/^[:：\\s-]+/, '').trim();
+          }
+
+          function fromLines(text) {
+            const lines = (text || '')
+              .split(/\\n+/)
+              .map((line) => clean(line))
+              .filter(Boolean);
+            for (let index = 0; index < lines.length; index += 1) {
+              const line = lines[index];
+              if (!labelPattern.test(line)) continue;
+
+              const sameLine = normalizeCandidate(line);
+              if (sameLine && !labelPattern.test(sameLine)) return sameLine;
+
+              for (let offset = 1; offset <= 4 && index + offset < lines.length; offset += 1) {
+                const nextLine = normalizeCandidate(lines[index + offset]);
+                if (nextLine && !labelPattern.test(nextLine)) return nextLine;
+              }
+            }
+            return '';
+          }
+
+          return cards.map((card) => {
+            const fromCardText = fromLines(card.innerText || card.textContent || '');
+            if (fromCardText) return fromCardText;
+
+            const candidates = [
+              ...card.querySelectorAll(
+                '[class*="submit"], [class*="submission"], [class*="submitted"], [class*="date"], li, p, span, div'
+              ),
+            ]
+              .map((el) => clean(el.textContent || ''))
+              .filter(Boolean);
+
+            const labeled = candidates.find((text) => labelPattern.test(text));
+            if (labeled) {
+              return normalizeCandidate(labeled);
+            }
+            return '';
+          });
+        }
+        """
+    )
+
+
+def _read_current_infractions_page(page, name, site, infraction_type="侵权"):
     ids = _text_list(page, ".infraction-item__id", timeout=30000)
     titles = _text_list(page, ".infraction-item__title", timeout=5000)
     dates = _text_list(page, ".infraction-denounce__date", timeout=5000)
+    submit_times = _extract_last_submit_times(page)
 
     rows = []
+    submit_count = sum(1 for value in submit_times if value)
+    if ids:
+        print(f"{name}{site}{infraction_type}提交时间解析成功 {submit_count}/{len(ids)} 条")
     prefix = _site_prefix(site)
     for index, id_text in enumerate(ids):
         title = titles[index] if index < len(titles) else ""
         date = dates[index] if index < len(dates) else ""
+        submit_time = submit_times[index] if index < len(submit_times) else ""
         rows.append(
             [
                 name,
@@ -148,7 +277,9 @@ def _read_current_infractions_page(page, name, site):
                 id_text.replace("#", prefix),
                 title,
                 date,
+                submit_time,
                 get_now_time(),
+                infraction_type,
             ]
         )
     return rows
@@ -201,12 +332,12 @@ def _offset_url(current_url, previous_signature):
         return current_url[: match.start(2)] + str(next_offset) + current_url[match.end(2) :]
 
     separator = "&" if "?" in current_url else "?"
-    return f"{current_url}{separator}tab=detections&offset={page_size}"
+    return f"{current_url}{separator}offset={page_size}"
 
 
 def _goto_next_offset(page, previous_signature):
     next_url = _offset_url(page.url, previous_signature)
-    page.goto(next_url, wait_until="domcontentloaded", timeout=60000)
+    _safe_goto_infractions(page, next_url)
     page.wait_for_function(
         """
         previous => {
@@ -220,6 +351,123 @@ def _goto_next_offset(page, previous_signature):
         timeout=30000,
     )
     return True
+
+
+def _reset_current_offset(page):
+    next_url = re.sub(r"([?&]offset=)\d+", r"\g<1>0", page.url)
+    if next_url != page.url:
+        _safe_goto_infractions(page, next_url)
+        time.sleep(2)
+
+
+def _collect_current_infractions_tab(page, name, site, infraction_type):
+    infractions_list = []
+    seen_ids = set()
+    page_no = 1
+    while True:
+        page_rows = _read_current_infractions_page(page, name, site, infraction_type)
+        new_count = 0
+        for row in page_rows:
+            row_key = (row[2], row[7])
+            if row_key in seen_ids:
+                continue
+            seen_ids.add(row_key)
+            infractions_list.append(row)
+            new_count += 1
+
+        print(
+            f"{get_now_time()}{name}{site}{infraction_type}第{page_no}页抓取{len(page_rows)}条，新增{new_count}条"
+        )
+        previous_signature = _get_page_signature(page)
+        if not previous_signature:
+            print(f"当前页面没有{infraction_type}数据，结束当前标签抓取")
+            break
+
+        if not _click_next_page(page, previous_signature, page_no):
+            break
+        page_no += 1
+
+    return infractions_list
+
+
+def _open_rights_holder_report_tab(page):
+    clicked = page.evaluate(
+        """
+        () => {
+          const targetText = 'Reported by rights holders';
+          const isVisible = (el) => {
+            const style = window.getComputedStyle(el);
+            const rect = el.getBoundingClientRect();
+            return style && style.visibility !== 'hidden' && style.display !== 'none' &&
+              rect.width > 0 && rect.height > 0;
+          };
+          const nodes = [...document.querySelectorAll('a, button, [role="tab"], li, span, div')]
+            .filter((el) => isVisible(el) && (el.textContent || '').includes(targetText));
+          if (!nodes.length) return false;
+          const node = nodes.find((el) => ['A', 'BUTTON'].includes(el.tagName)) || nodes[0];
+          const clickable = node.closest('a, button, [role="tab"]') || node;
+          clickable.scrollIntoView({block: 'center', inline: 'center'});
+          clickable.click();
+          return true;
+        }
+        """
+    )
+    if not clicked:
+        return False
+
+    try:
+        page.wait_for_load_state("domcontentloaded", timeout=30000)
+    except Exception:
+        pass
+    time.sleep(3)
+    _reset_current_offset(page)
+    return True
+
+
+def _open_detected_report_tab(page):
+    clicked = page.evaluate(
+        """
+        () => {
+          const texts = ['Detected by Mercado Libre', 'Detected by MercadoLibre', 'Detected'];
+          const isVisible = (el) => {
+            const style = window.getComputedStyle(el);
+            const rect = el.getBoundingClientRect();
+            return style && style.visibility !== 'hidden' && style.display !== 'none' &&
+              rect.width > 0 && rect.height > 0;
+          };
+          const nodes = [...document.querySelectorAll('a, button, [role="tab"], li, span, div')]
+            .filter((el) => isVisible(el) && texts.some((text) => (el.textContent || '').includes(text)));
+          if (!nodes.length) return false;
+          const node = nodes.find((el) => ['A', 'BUTTON'].includes(el.tagName)) || nodes[0];
+          const clickable = node.closest('a, button, [role="tab"]') || node;
+          clickable.scrollIntoView({block: 'center', inline: 'center'});
+          clickable.click();
+          return true;
+        }
+        """
+    )
+    if not clicked:
+        return False
+
+    try:
+        page.wait_for_load_state("domcontentloaded", timeout=30000)
+    except Exception:
+        pass
+    time.sleep(3)
+    _reset_current_offset(page)
+    return True
+
+
+def _collect_type_once(page, name, site, infraction_type, collected_types):
+    actual_type = _current_infraction_type(page)
+    if actual_type != infraction_type:
+        print(f"当前实际标签是{actual_type}，跳过按{infraction_type}采集")
+        return []
+    if actual_type in collected_types:
+        print(f"{name}{site}{actual_type}已采集，跳过重复采集")
+        return []
+    collected_types.add(actual_type)
+    return _collect_current_infractions_tab(page, name, site, actual_type)
 
 
 def _click_next_page(page, previous_signature, page_no):
@@ -285,7 +533,14 @@ def _switch_site_if_needed(page, name, site, retries=3):
             page.locator(".nav-header-cbt__site-switcher").click(timeout=10000)
             print(f"{name}打开站点选择器")
             page.locator(selector).click(timeout=30000)
-            page.reload(wait_until="domcontentloaded", timeout=60000)
+            try:
+                page.reload(wait_until="domcontentloaded", timeout=60000)
+            except Exception:
+                current_url = page.url or ""
+                if "/noindex/pppi/infractions" not in current_url:
+                    raise
+                print(f"{name}{site}切换站点后页面自动跳转，继续使用当前页: {current_url}")
+            _wait_infractions_ready(page)
             time.sleep(3)
             print(get_now_time() + name + site + "选择站点成功")
             return
@@ -317,36 +572,31 @@ def get_infractions_info(window_id, name, site, isSwitch=1):
     with sync_playwright() as playwright:
         _browser, page = _connect_bitbrowser_with_playwright(playwright, res)
         try:
-            page.goto(INFRACTIONS_URL, wait_until="domcontentloaded", timeout=60000)
+            _safe_goto_infractions(page, INFRACTIONS_URL)
             time.sleep(5)
             if isSwitch == 1:
                 _switch_site_if_needed(page, name, site)
 
             infractions_list = []
-            seen_ids = set()
-            page_no = 1
-            while True:
-                page_rows = _read_current_infractions_page(page, name, site)
-                new_count = 0
-                for row in page_rows:
-                    row_id = row[2]
-                    if row_id in seen_ids:
-                        continue
-                    seen_ids.add(row_id)
-                    infractions_list.append(row)
-                    new_count += 1
+            collected_types = set()
 
-                print(
-                    f"{get_now_time()}{name}{site}第{page_no}页抓取{len(page_rows)}条，新增{new_count}条"
-                )
-                previous_signature = _get_page_signature(page)
-                if not previous_signature:
-                    print("当前页面没有侵权数据，结束当前站点抓取")
-                    break
+            current_type = _current_infraction_type(page)
+            print(get_now_time() + name + site + f"当前实际侵权标签: {current_type}")
+            infractions_list.extend(_collect_type_once(page, name, site, current_type, collected_types))
 
-                if not _click_next_page(page, previous_signature, page_no):
-                    break
-                page_no += 1
+            if "侵权" not in collected_types:
+                print(get_now_time() + name + site + "尝试切换到普通侵权报告")
+                opened = _open_detected_report_tab(page)
+                if not opened or _current_infraction_type(page) != "侵权":
+                    _goto_infractions_type(page, "侵权")
+                infractions_list.extend(_collect_type_once(page, name, site, "侵权", collected_types))
+
+            if "权利人" not in collected_types:
+                opened = _open_rights_holder_report_tab(page)
+                if not opened or _current_infraction_type(page) != "权利人":
+                    _goto_infractions_type(page, "权利人")
+                print(get_now_time() + name + site + "开始抓取权利人侵权报告")
+                infractions_list.extend(_collect_type_once(page, name, site, "权利人", collected_types))
 
             return infractions_list
         finally:
@@ -403,7 +653,7 @@ def get_infractions_info_all(max_workers=3):
     start = int(time.time())
     print(start)
     bit_dir = Path(__file__).resolve().parent.parent / "bit"
-    file_path = bit_dir / "比特配置文件测试.xlsx"
+    file_path = bit_dir / "比特配置文件测  试.xlsx"
 
     wb = load_workbook(file_path)
     sheet = wb.active
@@ -436,7 +686,7 @@ def get_infractions_info_all(max_workers=3):
 
     df = pd.DataFrame(
         infraction_info_sum,
-        columns=["店铺名", "站点", "编号", "标题", "侵权时间", "执行时间"],
+        columns=["店铺名", "站点", "编号", "标题", "侵权时间", "提交时间", "执行时间", "类型"],
     )
 
     date_str = datetime.now().strftime("%Y-%m-%d-%H")
