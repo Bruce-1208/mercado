@@ -3,21 +3,31 @@ import sys
 import threading
 import time
 import traceback
-from flask import Flask, Response, request, render_template, jsonify
+from io import BytesIO
+from pathlib import Path
+from urllib.parse import quote
+
+from flask import Flask, Response, request, render_template, jsonify, send_file
+from openpyxl import Workbook
+from openpyxl.styles import Alignment, Font, PatternFill
+
+CURRENT_DIR = Path(__file__).resolve().parent
+PROJECT_ROOT = CURRENT_DIR.parent
+for path in (str(CURRENT_DIR), str(PROJECT_ROOT)):
+    if path not in sys.path:
+        sys.path.insert(0, path)
 
 import bit.bit_appeal_ai as bit_appeal_ai
 from bit.bit_appeal import *
 from bit.bit_utils import *
 from bit.bit_api import *
-from bit.bit_mysql import insert_chat_info
+from bit.bit_mysql import get_latest_infraction_info, get_latest_reputation_info, insert_chat_info
 
 # 引入数据库入库需要的模块
 import logging
 from decimal import Decimal
 from datetime import datetime
-from db_pool import get_db_connection  # 确保你的连接池文件在这个目录下
-from decimal import Decimal, InvalidOperation
-
+# from db_pool import get_db_connection  # 确保你的连接池文件在这个目录下
 
 app = Flask(__name__)
 
@@ -85,16 +95,15 @@ def shensu_logic_old(name, site, form, message):
     while i < 10:
         i = i + 1
         try:
-            # yield f"{get_now_time()}--- 任务启动第{i}次：{name}{site} ---<br>"
+            yield f"{get_now_time()}--- 任务启动第{i}次：{name}{site} ---<br>"
             shensu(name, site, form, message)
             # 模拟自动化操作步骤
-            # yield f"{get_now_time()}✅ {name}{site}申诉执行完毕,！<br>"
+            yield f"{get_now_time()}✅ {name}{site}申诉执行完毕,！<br>"
         except Exception as e:
-            print(e)
+            yield f"发生错误: {str(e)}<br>"
         finally:
-            print(f"{get_now_time()}{name}{site}关闭浏览器等待十分钟，进行下一次申诉")
-            # window_id = getWindowidByName(name)
-
+            yield f"{get_now_time()}{name}{site}关闭浏览器等待十分钟，进行下一次申诉<br>"
+            window_id = getWindowidByName(name)
             time.sleep(600)
 
 
@@ -182,6 +191,171 @@ def api_run_shensu():
     return response
 
 
+@app.route('/api/infractions/latest', methods=['GET'])
+def api_latest_infractions():
+    try:
+        recent_days = request.args.get("days", 30)
+        return jsonify({
+            "status": "success",
+            "data": get_latest_infraction_info(recent_days)
+        })
+    except Exception as e:
+        logging.error(f"Latest infraction query failed: {str(e)}")
+        return jsonify({
+            "status": "error",
+            "message": f"Database error: {str(e)}"
+        }), 500
+
+
+@app.route('/api/infractions/latest/export', methods=['GET'])
+def api_export_latest_infractions():
+    try:
+        recent_days = request.args.get("days", 30)
+        data = get_latest_infraction_info(recent_days)
+        rows = data.get("rows") or []
+        summary = data.get("summary") or []
+        recent_days = data.get("recent_days") or 30
+
+        wb = Workbook()
+        summary_ws = wb.active
+        summary_ws.title = "侵权统计"
+        detail_ws = wb.create_sheet("侵权明细")
+
+        header_fill = PatternFill("solid", fgColor="D9EAF7")
+        header_font = Font(bold=True, color="1F2937")
+
+        summary_columns = ["排名", "店铺名", "站点", "总数", "侵权", "权利人"]
+        summary_ws.append(summary_columns)
+        for index, row in enumerate(summary, start=1):
+            summary_ws.append([
+                index,
+                row.get("店铺名", ""),
+                row.get("站点", ""),
+                row.get("总数", ""),
+                row.get("侵权", ""),
+                row.get("权利人", ""),
+            ])
+
+        detail_columns = ["店铺名", "站点", "类型", "编号", "标题", "侵权时间", "执行时间", "提交时间"]
+        detail_ws.append(detail_columns)
+        for row in rows:
+            detail_ws.append([row.get(column, "") for column in detail_columns])
+
+        for ws in (summary_ws, detail_ws):
+            for cell in ws[1]:
+                cell.fill = header_fill
+                cell.font = header_font
+                cell.alignment = Alignment(horizontal="center", vertical="center")
+
+            for column_cells in ws.columns:
+                max_length = 0
+                column_letter = column_cells[0].column_letter
+                for cell in column_cells:
+                    value = "" if cell.value is None else str(cell.value)
+                    max_length = max(max_length, len(value))
+                    cell.alignment = Alignment(vertical="top", wrap_text=True)
+                ws.column_dimensions[column_letter].width = min(max(max_length + 2, 10), 42)
+            ws.freeze_panes = "A2"
+
+        output = BytesIO()
+        wb.save(output)
+        output.seek(0)
+
+        submit_time = str(data.get("latest_submit_time") or datetime.now().strftime("%Y%m%d%H%M%S"))
+        safe_time = "".join(ch if ch.isdigit() else "" for ch in submit_time) or datetime.now().strftime("%Y%m%d%H%M%S")
+        filename = f"最新侵权数据_最近{recent_days}天_{safe_time}.xlsx"
+        encoded_filename = quote(filename)
+        response = send_file(
+            output,
+            mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            as_attachment=True,
+            download_name=filename,
+        )
+        response.headers["Content-Disposition"] = f"attachment; filename*=UTF-8''{encoded_filename}"
+        return response
+    except Exception as e:
+        logging.error(f"Latest infraction export failed: {str(e)}")
+        return jsonify({
+            "status": "error",
+            "message": f"Export error: {str(e)}"
+        }), 500
+
+
+@app.route('/api/reputation/latest', methods=['GET'])
+def api_latest_reputation():
+    try:
+        return jsonify({
+            "status": "success",
+            "data": get_latest_reputation_info()
+        })
+    except Exception as e:
+        logging.error(f"Latest reputation query failed: {str(e)}")
+        return jsonify({
+            "status": "error",
+            "message": f"Database error: {str(e)}"
+        }), 500
+
+
+@app.route('/api/reputation/latest/export', methods=['GET'])
+def api_export_latest_reputation():
+    try:
+        data = get_latest_reputation_info()
+        rows = data.get("rows") or []
+        wb = Workbook()
+        ws = wb.active
+        ws.title = "最新声誉数据"
+
+        columns = [
+            "店铺名", "站点", "声誉颜色", "总单量", "投诉率", "延误率",
+            "增加或减少", "近七天变化率", "一周流量趋势", "系统告警",
+            "更新时间", "提交时间"
+        ]
+        ws.append(columns)
+
+        header_fill = PatternFill("solid", fgColor="D9EAF7")
+        header_font = Font(bold=True, color="1F2937")
+        for cell in ws[1]:
+            cell.fill = header_fill
+            cell.font = header_font
+            cell.alignment = Alignment(horizontal="center", vertical="center")
+
+        for row in rows:
+            ws.append([row.get(column, "") for column in columns])
+
+        for column_cells in ws.columns:
+            max_length = 0
+            column_letter = column_cells[0].column_letter
+            for cell in column_cells:
+                value = "" if cell.value is None else str(cell.value)
+                max_length = max(max_length, len(value))
+                cell.alignment = Alignment(vertical="top", wrap_text=True)
+            ws.column_dimensions[column_letter].width = min(max(max_length + 2, 10), 36)
+
+        ws.freeze_panes = "A2"
+        output = BytesIO()
+        wb.save(output)
+        output.seek(0)
+
+        submit_time = str(data.get("latest_submit_time") or datetime.now().strftime("%Y%m%d%H%M%S"))
+        safe_time = "".join(ch if ch.isdigit() else "" for ch in submit_time) or datetime.now().strftime("%Y%m%d%H%M%S")
+        filename = f"最新声誉数据_{safe_time}.xlsx"
+        encoded_filename = quote(filename)
+        response = send_file(
+            output,
+            mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            as_attachment=True,
+            download_name=filename,
+        )
+        response.headers["Content-Disposition"] = f"attachment; filename*=UTF-8''{encoded_filename}"
+        return response
+    except Exception as e:
+        logging.error(f"Latest reputation export failed: {str(e)}")
+        return jsonify({
+            "status": "error",
+            "message": f"Export error: {str(e)}"
+        }), 500
+
+
 @app.route("/")
 def index():
     return render_template('index.html')
@@ -192,27 +366,6 @@ def index():
 def hello_whzs():
     return "武汉泽顺"
 
-
-from decimal import Decimal, InvalidOperation
-
-
-def safe_decimal(value, default="0.00"):
-    """安全地将输入转换为 Decimal，若为空、None、或非法格式则返回默认值"""
-    if value is None:
-        return Decimal(default)
-
-    # 转为字符串并去掉两端空格
-    clean_str = str(value).strip()
-
-    # 拦截常见的空值或无效字符串
-    if clean_str in ('', 'None', 'null', 'NaN', 'undefined'):
-        return Decimal(default)
-
-    try:
-        return Decimal(clean_str)
-    except InvalidOperation:
-        # 如果还是解析失败（比如传入了 "abc"），则安全返回默认值
-        return Decimal(default)
 
 # --- 新增：1688大模型找货数据插入接口 ---
 # @app.route('/api/v1/chat', methods=['POST'])
@@ -266,22 +419,15 @@ def insert_record():
     original_img_url = data.get('original_img_url', None)
     is_same_style = int(data.get('is_same_style', 0))
     title = data.get('title', None)
-    identified_weight = int(data.get('identified_weight') or 0)
-    pre_modified_weight = int(data.get('pre_modified_weight') or 0)
-    post_modified_weight = int(data.get('post_modified_weight') or 0)
+    identified_weight = int(data.get('identified_weight', 0))
+    pre_modified_weight = int(data.get('pre_modified_weight', 0))
+    post_modified_weight = int(data.get('post_modified_weight', 0))
 
     # 金额与置信度转换为 Decimal 类型，防止精度丢失
-    # pre_modified_cost_usd = Decimal(str(data.get('pre_modified_cost_usd', '0.0000')))
-    # post_modified_cost_usd = Decimal(str(data.get('post_modified_cost_usd', '0.0000')))
-    # max_sku_price_cny = Decimal(str(data.get('max_sku_price_cny', '0.00')))
-    # model_confidence = Decimal(str(data.get('model_confidence', '0.00')))
-    # pre_modified_cost_usd 和 post_modified_cost_usd 默认 4 位小数
-    pre_modified_cost_usd = safe_decimal(data.get('pre_modified_cost_usd'), default='0.0000')
-    post_modified_cost_usd = safe_decimal(data.get('post_modified_cost_usd'), default='0.0000')
-
-    # max_sku_price_cny 和 model_confidence 默认 2 位小数
-    max_sku_price_cny = safe_decimal(data.get('max_sku_price_cny'), default='0.00')
-    model_confidence = safe_decimal(data.get('model_confidence'), default='0.00')
+    pre_modified_cost_usd = Decimal(str(data.get('pre_modified_cost_usd', '0.0000')))
+    post_modified_cost_usd = Decimal(str(data.get('post_modified_cost_usd', '0.0000')))
+    max_sku_price_cny = Decimal(str(data.get('max_sku_price_cny', '0.00')))
+    model_confidence = Decimal(str(data.get('model_confidence', '0.00')))
 
     max_sku_spec = data.get('max_sku_spec', None)
     max_sku_id = data.get('max_sku_id', None)

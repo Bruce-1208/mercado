@@ -53,7 +53,7 @@
             width: min(1180px, calc(100% - 32px));
             margin: 24px auto;
             display: grid;
-            grid-template-columns: 360px 1fr;
+            grid-template-columns: 220px 1fr;
             gap: 20px;
         }
 
@@ -62,6 +62,74 @@
             border: 1px solid var(--border);
             border-radius: 8px;
             box-shadow: 0 10px 24px rgba(16, 24, 40, 0.06);
+        }
+
+        .sidebar {
+            align-self: start;
+            padding: 14px;
+            position: sticky;
+            top: 20px;
+        }
+
+        .nav-title {
+            margin: 0 0 12px;
+            color: var(--muted);
+            font-size: 12px;
+            font-weight: 800;
+        }
+
+        .tab-button {
+            width: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: flex-start;
+            margin-bottom: 8px;
+            border: 1px solid transparent;
+            border-radius: 8px;
+            background: transparent;
+            color: #344054;
+            padding: 12px;
+            text-align: left;
+        }
+
+        .tab-button.active {
+            border-color: #bfdbfe;
+            background: #eff6ff;
+            color: #1d4ed8;
+        }
+
+        .content {
+            min-width: 0;
+        }
+
+        .tab-page {
+            display: none;
+        }
+
+        .tab-page.active {
+            display: block;
+        }
+
+        .tab-heading {
+            margin-bottom: 16px;
+        }
+
+        .tab-heading h2 {
+            margin: 0;
+            font-size: 22px;
+            font-weight: 800;
+        }
+
+        .tab-heading p {
+            margin: 6px 0 0;
+            color: var(--muted);
+            font-size: 13px;
+        }
+
+        .appeal-grid {
+            display: grid;
+            grid-template-columns: 360px 1fr;
+            gap: 20px;
         }
 
         .form-panel {
@@ -199,13 +267,164 @@
             word-break: break-word;
         }
 
+        .infractions-panel {
+            overflow: hidden;
+        }
+
+        .infractions-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+            border-bottom: 1px solid var(--border);
+            padding: 16px 18px;
+        }
+
+        .header-actions {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            flex-wrap: wrap;
+            justify-content: flex-end;
+        }
+
+        .range-switch {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            background: #f8fafc;
+            padding: 3px;
+        }
+
+        .range-button {
+            min-width: 64px;
+            border-radius: 6px;
+            background: transparent;
+            color: #475467;
+            padding: 7px 10px;
+            font-size: 13px;
+        }
+
+        .range-button.active {
+            background: #2563eb;
+            color: #fff;
+        }
+
+        .summary-row {
+            display: grid;
+            grid-template-columns: repeat(4, minmax(0, 1fr));
+            gap: 12px;
+            padding: 16px 18px;
+        }
+
+        .metric {
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 12px;
+            background: #f8fafc;
+        }
+
+        .metric-label {
+            color: var(--muted);
+            font-size: 12px;
+            font-weight: 700;
+        }
+
+        .metric-value {
+            margin-top: 6px;
+            font-size: 18px;
+            font-weight: 800;
+            word-break: break-word;
+        }
+
+        .table-wrap {
+            max-height: 520px;
+            overflow: auto;
+            border-top: 1px solid var(--border);
+        }
+
+        .subsection-title {
+            margin: 0;
+            border-top: 1px solid var(--border);
+            padding: 14px 18px;
+            font-size: 15px;
+            font-weight: 800;
+        }
+
+        .summary-table-wrap {
+            max-height: 300px;
+            overflow: auto;
+            border-top: 1px solid var(--border);
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 13px;
+        }
+
+        th, td {
+            border-bottom: 1px solid var(--border);
+            padding: 10px 12px;
+            text-align: left;
+            vertical-align: top;
+        }
+
+        th {
+            position: sticky;
+            top: 0;
+            z-index: 1;
+            background: #eef4ff;
+            color: #344054;
+            font-size: 12px;
+            white-space: nowrap;
+        }
+
+        .empty-state {
+            padding: 24px 18px;
+            color: var(--muted);
+            text-align: center;
+        }
+
+        .tag {
+            display: inline-flex;
+            align-items: center;
+            border-radius: 999px;
+            padding: 3px 8px;
+            background: #e0f2fe;
+            color: #075985;
+            font-size: 12px;
+            font-weight: 700;
+            white-space: nowrap;
+        }
+
+        .traffic-chart {
+            width: 260px;
+            height: 78px;
+            display: block;
+        }
+
         @media (max-width: 900px) {
             .page {
                 grid-template-columns: 1fr;
             }
 
+            .sidebar {
+                position: static;
+            }
+
+            .appeal-grid {
+                grid-template-columns: 1fr;
+            }
+
             .log-panel {
                 min-height: 520px;
+            }
+
+            .summary-row {
+                grid-template-columns: 1fr 1fr;
             }
         }
     </style>
@@ -213,60 +432,213 @@
 <body>
     <header class="topbar">
         <h1>武汉泽顺综合服务台</h1>
-        <p>选择 AI 客服或人工客服申诉，并实时查看本次任务日志</p>
+        <p>自动化 AI 申诉与最新侵权数据看板</p>
     </header>
 
     <main class="page">
-        <section class="panel form-panel">
-            <h2 class="panel-title">任务参数</h2>
+        <aside class="panel sidebar">
+            <p class="nav-title">功能导航</p>
+            <button class="tab-button active" type="button" data-tab="appeal" onclick="switchTab('appeal')">自动化AI申诉</button>
+            <button class="tab-button" type="button" data-tab="infractions" onclick="switchTab('infractions')">侵权数据</button>
+            <button class="tab-button" type="button" data-tab="reputation" onclick="switchTab('reputation')">声誉数据</button>
+        </aside>
 
-            <div class="field">
-                <label for="name">店铺名</label>
-                <input type="text" id="name" value="跃马扬鞭">
+        <section class="content">
+            <div class="tab-page active" id="tab-appeal">
+                <div class="tab-heading">
+                    <h2>自动化AI申诉</h2>
+                    <p>选择客服模式、站点和话术，执行申诉任务并查看实时日志</p>
+                </div>
+
+                <div class="appeal-grid">
+                    <section class="panel form-panel">
+                        <h2 class="panel-title">任务参数</h2>
+
+                        <div class="field">
+                            <label for="name">店铺名</label>
+                            <input type="text" id="name" value="跃马扬鞭">
+                        </div>
+
+                        <div class="field">
+                            <label for="site">站点</label>
+                            <input type="text" id="site" value="墨西哥">
+                        </div>
+
+                        <div class="field">
+                            <label for="form">任务类型</label>
+                            <select id="form">
+                                <option value="延误">延误</option>
+                                <option value="侵权">侵权</option>
+                                <option value="投诉">投诉</option>
+                            </select>
+                        </div>
+
+                        <div class="field">
+                            <label for="mode">客服模式</label>
+                            <select id="mode">
+                                <option value="AI客服">找 AI 客服</option>
+                                <option value="人工客服">人工客服申诉</option>
+                            </select>
+                        </div>
+
+                        <div class="field">
+                            <label for="message">自定义话术</label>
+                            <textarea id="message" placeholder="不填写时按脚本内置逻辑执行"></textarea>
+                        </div>
+
+                        <div class="actions">
+                            <button class="primary" id="start-btn" onclick="startTask()">开始执行</button>
+                            <button class="secondary" type="button" onclick="clearLog()">清空日志</button>
+                        </div>
+                    </section>
+
+                    <section class="panel log-panel">
+                        <div class="log-header">
+                            <h2 class="panel-title" style="margin: 0;">实时运行日志</h2>
+                            <span class="status" id="status">
+                                <span class="status-dot"></span>
+                                <span id="status-text">等待任务启动</span>
+                            </span>
+                        </div>
+                        <pre id="log-container">等待任务启动...</pre>
+                    </section>
+                </div>
             </div>
 
-            <div class="field">
-                <label for="site">站点</label>
-                <input type="text" id="site" value="墨西哥">
+            <div class="tab-page" id="tab-infractions">
+                <div class="tab-heading">
+                    <h2>侵权数据</h2>
+                    <p id="infraction-heading-desc">统计最新一次提交批次的全部侵权数量，并展示最近 30 天新增明细</p>
+                </div>
+
+                <section class="panel infractions-panel">
+                    <div class="infractions-header">
+                        <h2 class="panel-title" style="margin: 0;">最新侵权数据</h2>
+                        <div class="header-actions">
+                            <div class="range-switch" aria-label="侵权数据时间范围">
+                                <button class="range-button" type="button" data-days="7" onclick="setInfractionDays(7)">7天</button>
+                                <button class="range-button active" type="button" data-days="30" onclick="setInfractionDays(30)">30天</button>
+                                <button class="range-button" type="button" data-days="100" onclick="setInfractionDays(100)">100天</button>
+                                <button class="range-button" type="button" data-days="365" onclick="setInfractionDays(365)">365天</button>
+                            </div>
+                            <button class="secondary" type="button" onclick="exportLatestInfractions()">导出 Excel</button>
+                            <button class="secondary" type="button" onclick="loadLatestInfractions()">刷新数据</button>
+                        </div>
+                    </div>
+                    <div class="summary-row">
+                        <div class="metric">
+                            <div class="metric-label">最新提交时间</div>
+                            <div class="metric-value" id="infraction-time">-</div>
+                        </div>
+                        <div class="metric">
+                            <div class="metric-label" id="infraction-total-label">最近30天新增明细</div>
+                            <div class="metric-value" id="infraction-total">0</div>
+                        </div>
+                        <div class="metric">
+                            <div class="metric-label" id="infraction-normal-label">最近30天侵权</div>
+                            <div class="metric-value" id="infraction-normal">0</div>
+                        </div>
+                        <div class="metric">
+                            <div class="metric-label" id="infraction-rights-label">最近30天权利人</div>
+                            <div class="metric-value" id="infraction-rights">0</div>
+                        </div>
+                    </div>
+                    <h3 class="subsection-title" id="infraction-summary-title">按店铺和站点统计（最近30天，总数由高到低）</h3>
+                    <div class="summary-table-wrap">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>排名</th>
+                                    <th>店铺名</th>
+                                    <th>站点</th>
+                                    <th>总数</th>
+                                    <th>侵权</th>
+                                    <th>权利人</th>
+                                </tr>
+                            </thead>
+                            <tbody id="infraction-summary-body">
+                                <tr><td class="empty-state" colspan="6">正在加载统计数据...</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                    <h3 class="subsection-title" id="infraction-detail-title">侵权明细（最近30天新增）</h3>
+                    <div class="table-wrap">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>店铺名</th>
+                                    <th>站点</th>
+                                    <th>类型</th>
+                                    <th>编号</th>
+                                    <th>标题</th>
+                                    <th>侵权时间</th>
+                                    <th>执行时间</th>
+                                </tr>
+                            </thead>
+                            <tbody id="infraction-body">
+                                <tr><td class="empty-state" colspan="7">正在加载最新侵权数据...</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </section>
             </div>
 
-            <div class="field">
-                <label for="form">任务类型</label>
-                <select id="form">
-                    <option value="延误">延误</option>
-                    <option value="侵权">侵权</option>
-                    <option value="投诉">投诉</option>
-                </select>
-            </div>
+            <div class="tab-page" id="tab-reputation">
+                <div class="tab-heading">
+                    <h2>声誉数据</h2>
+                    <p>展示 reputation 表最近一次提交的最新声誉数据</p>
+                </div>
 
-            <div class="field">
-                <label for="mode">客服模式</label>
-                <select id="mode">
-                    <option value="AI客服">找 AI 客服</option>
-                    <option value="人工客服">人工客服申诉</option>
-                </select>
+                <section class="panel infractions-panel">
+                    <div class="infractions-header">
+                        <h2 class="panel-title" style="margin: 0;">最新声誉数据</h2>
+                        <div class="header-actions">
+                            <button class="secondary" type="button" onclick="exportLatestReputation()">导出 Excel</button>
+                            <button class="secondary" type="button" onclick="loadLatestReputation()">刷新数据</button>
+                        </div>
+                    </div>
+                    <div class="summary-row">
+                        <div class="metric">
+                            <div class="metric-label">最新提交时间</div>
+                            <div class="metric-value" id="reputation-time">-</div>
+                        </div>
+                        <div class="metric">
+                            <div class="metric-label">记录数</div>
+                            <div class="metric-value" id="reputation-total">0</div>
+                        </div>
+                        <div class="metric">
+                            <div class="metric-label">绿色账号</div>
+                            <div class="metric-value" id="reputation-green">0</div>
+                        </div>
+                        <div class="metric">
+                            <div class="metric-label">非绿色账号</div>
+                            <div class="metric-value" id="reputation-risk">0</div>
+                        </div>
+                    </div>
+                    <div class="table-wrap">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>店铺名</th>
+                                    <th>站点</th>
+                                    <th>声誉颜色</th>
+                                    <th>总单量</th>
+                                    <th>投诉率</th>
+                                    <th>延误率</th>
+                                    <th>增加或减少</th>
+                                    <th>近七天变化率</th>
+                                    <th>流量趋势</th>
+                                    <th>系统告警</th>
+                                    <th>更新时间</th>
+                                </tr>
+                            </thead>
+                            <tbody id="reputation-body">
+                                <tr><td class="empty-state" colspan="11">正在加载最新声誉数据...</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </section>
             </div>
-
-            <div class="field">
-                <label for="message">自定义话术</label>
-                <textarea id="message" placeholder="不填写时按脚本内置逻辑执行"></textarea>
-            </div>
-
-            <div class="actions">
-                <button class="primary" id="start-btn" onclick="startTask()">开始执行</button>
-                <button class="secondary" type="button" onclick="clearLog()">清空日志</button>
-            </div>
-        </section>
-
-        <section class="panel log-panel">
-            <div class="log-header">
-                <h2 class="panel-title" style="margin: 0;">实时运行日志</h2>
-                <span class="status" id="status">
-                    <span class="status-dot"></span>
-                    <span id="status-text">等待任务启动</span>
-                </span>
-            </div>
-            <pre id="log-container">等待任务启动...</pre>
         </section>
     </main>
 
@@ -275,6 +647,41 @@
         const startBtn = document.getElementById("start-btn");
         const statusBox = document.getElementById("status");
         const statusText = document.getElementById("status-text");
+        const infractionBody = document.getElementById("infraction-body");
+        const infractionTime = document.getElementById("infraction-time");
+        const infractionTotal = document.getElementById("infraction-total");
+        const infractionNormal = document.getElementById("infraction-normal");
+        const infractionRights = document.getElementById("infraction-rights");
+        const infractionSummaryBody = document.getElementById("infraction-summary-body");
+        const infractionHeadingDesc = document.getElementById("infraction-heading-desc");
+        const infractionTotalLabel = document.getElementById("infraction-total-label");
+        const infractionDetailTitle = document.getElementById("infraction-detail-title");
+        const infractionNormalLabel = document.getElementById("infraction-normal-label");
+        const infractionRightsLabel = document.getElementById("infraction-rights-label");
+        const infractionSummaryTitle = document.getElementById("infraction-summary-title");
+        const reputationBody = document.getElementById("reputation-body");
+        const reputationTime = document.getElementById("reputation-time");
+        const reputationTotal = document.getElementById("reputation-total");
+        const reputationGreen = document.getElementById("reputation-green");
+        const reputationRisk = document.getElementById("reputation-risk");
+        let infractionDays = 30;
+        let infractionsLoaded = false;
+        let reputationLoaded = false;
+
+        function switchTab(tabName) {
+            document.querySelectorAll(".tab-button").forEach(button => {
+                button.classList.toggle("active", button.dataset.tab === tabName);
+            });
+            document.querySelectorAll(".tab-page").forEach(page => {
+                page.classList.toggle("active", page.id === `tab-${tabName}`);
+            });
+            if (tabName === "infractions" && !infractionsLoaded) {
+                loadLatestInfractions();
+            }
+            if (tabName === "reputation" && !reputationLoaded) {
+                loadLatestReputation();
+            }
+        }
 
         function setStatus(text, state) {
             statusText.textContent = text;
@@ -289,6 +696,225 @@
         function clearLog() {
             logContainer.textContent = "";
             setStatus("等待任务启动", "");
+        }
+
+        function escapeHtml(value) {
+            return String(value ?? "")
+                .replaceAll("&", "&amp;")
+                .replaceAll("<", "&lt;")
+                .replaceAll(">", "&gt;")
+                .replaceAll('"', "&quot;")
+                .replaceAll("'", "&#039;");
+        }
+
+        function parseTrafficValues(value) {
+            const text = String(value ?? "").trim();
+            if (!text) return [];
+            const matches = text.match(/-?\d+(?:\.\d+)?/g) || [];
+            return matches.map(Number).filter(Number.isFinite);
+        }
+
+        function renderTrafficCharts() {
+            document.querySelectorAll(".traffic-chart").forEach(canvas => {
+                const values = JSON.parse(canvas.dataset.values || "[]");
+                const ctx = canvas.getContext("2d");
+                const width = canvas.width = 260;
+                const height = canvas.height = 78;
+                const paddingLeft = 12;
+                const paddingRight = 12;
+                const paddingTop = 18;
+                const paddingBottom = 14;
+                ctx.clearRect(0, 0, width, height);
+                ctx.strokeStyle = "#d9e2ef";
+                ctx.lineWidth = 1;
+                for (let i = 0; i < 3; i += 1) {
+                    const y = paddingTop + i * ((height - paddingTop - paddingBottom) / 2);
+                    ctx.beginPath();
+                    ctx.moveTo(paddingLeft, y);
+                    ctx.lineTo(width - paddingRight, y);
+                    ctx.stroke();
+                }
+                if (values.length < 2) {
+                    ctx.fillStyle = "#98a2b3";
+                    ctx.font = "12px Microsoft YaHei, Arial";
+                    ctx.fillText("暂无趋势", 96, 44);
+                    return;
+                }
+                const min = Math.min(...values);
+                const max = Math.max(...values);
+                const span = max - min || 1;
+                const points = values.map((value, index) => {
+                    const x = values.length === 1
+                        ? width / 2
+                        : paddingLeft + (index / (values.length - 1)) * (width - paddingLeft - paddingRight);
+                    const y = height - paddingBottom - ((value - min) / span) * (height - paddingTop - paddingBottom);
+                    return { value, x, y };
+                });
+                ctx.strokeStyle = "#2563eb";
+                ctx.lineWidth = 2;
+                ctx.beginPath();
+                points.forEach(({ x, y }, index) => {
+                    if (index === 0) ctx.moveTo(x, y);
+                    else ctx.lineTo(x, y);
+                });
+                ctx.stroke();
+                ctx.fillStyle = "#1d4ed8";
+                points.forEach(({ x, y }) => {
+                    ctx.beginPath();
+                    ctx.arc(x, y, 3, 0, Math.PI * 2);
+                    ctx.fill();
+                });
+                ctx.font = "11px Microsoft YaHei, Arial";
+                ctx.textAlign = "center";
+                ctx.textBaseline = "bottom";
+                points.forEach(({ value, x, y }, index) => {
+                    const text = String(value);
+                    const labelX = Math.max(14, Math.min(width - 14, x));
+                    const rawLabelY = index % 2 === 0 ? y - 5 : y + 16;
+                    const labelY = Math.max(13, Math.min(height - 2, rawLabelY));
+                    ctx.fillStyle = "rgba(255,255,255,0.86)";
+                    const textWidth = ctx.measureText(text).width;
+                    ctx.fillRect(labelX - textWidth / 2 - 3, labelY - 12, textWidth + 6, 13);
+                    ctx.fillStyle = "#111827";
+                    ctx.fillText(text, labelX, labelY);
+                });
+            });
+        }
+
+        function exportLatestReputation() {
+            window.location.href = "/api/reputation/latest/export";
+        }
+
+        function exportLatestInfractions() {
+            window.location.href = `/api/infractions/latest/export?days=${encodeURIComponent(infractionDays)}`;
+        }
+
+        function updateInfractionRangeText(days) {
+            infractionHeadingDesc.textContent = `统计最新一次提交批次中最近 ${days} 天的侵权数据`;
+            infractionTotalLabel.textContent = `最近${days}天新增明细`;
+            infractionNormalLabel.textContent = `最近${days}天侵权`;
+            infractionRightsLabel.textContent = `最近${days}天权利人`;
+            infractionSummaryTitle.textContent = `按店铺和站点统计（最近${days}天，总数由高到低）`;
+            infractionDetailTitle.textContent = `侵权明细（最近${days}天新增）`;
+            document.querySelectorAll(".range-button").forEach(button => {
+                button.classList.toggle("active", Number(button.dataset.days) === Number(days));
+            });
+        }
+
+        function setInfractionDays(days) {
+            infractionDays = Number(days) || 30;
+            infractionsLoaded = false;
+            updateInfractionRangeText(infractionDays);
+            loadLatestInfractions();
+        }
+
+        async function loadLatestInfractions() {
+            updateInfractionRangeText(infractionDays);
+            infractionSummaryBody.innerHTML = '<tr><td class="empty-state" colspan="6">正在加载统计数据...</td></tr>';
+            infractionBody.innerHTML = '<tr><td class="empty-state" colspan="7">正在加载最新侵权数据...</td></tr>';
+            try {
+                const response = await fetch(`/api/infractions/latest?days=${encodeURIComponent(infractionDays)}`);
+                const payload = await response.json();
+                if (!response.ok || payload.status !== "success") {
+                    throw new Error(payload.message || `接口请求失败：${response.status}`);
+                }
+
+                const data = payload.data || {};
+                const rows = data.rows || [];
+                const summary = data.summary || [];
+                const recentDays = Number(data.recent_days || infractionDays || 30);
+                infractionDays = recentDays;
+                updateInfractionRangeText(recentDays);
+                infractionsLoaded = true;
+                const normalCount = summary.reduce((sum, row) => sum + Number(row["侵权"] || 0), 0);
+                const rightsCount = summary.reduce((sum, row) => sum + Number(row["权利人"] || 0), 0);
+
+                infractionTime.textContent = data.latest_submit_time || "-";
+                infractionTotal.textContent = data.total || rows.length || 0;
+                infractionNormal.textContent = normalCount;
+                infractionRights.textContent = rightsCount;
+
+                if (!summary.length) {
+                    infractionSummaryBody.innerHTML = '<tr><td class="empty-state" colspan="6">暂无统计数据</td></tr>';
+                } else {
+                    infractionSummaryBody.innerHTML = summary.map((row, index) => `
+                        <tr>
+                            <td>${index + 1}</td>
+                            <td>${escapeHtml(row["店铺名"])}</td>
+                            <td>${escapeHtml(row["站点"])}</td>
+                            <td>${escapeHtml(row["总数"])}</td>
+                            <td>${escapeHtml(row["侵权"])}</td>
+                            <td>${escapeHtml(row["权利人"])}</td>
+                        </tr>
+                    `).join("");
+                }
+
+                if (!rows.length) {
+                    infractionBody.innerHTML = `<tr><td class="empty-state" colspan="7">最新批次中暂无最近 ${recentDays} 天侵权数据</td></tr>`;
+                    return;
+                }
+
+                infractionBody.innerHTML = rows.map(row => `
+                    <tr>
+                        <td>${escapeHtml(row["店铺名"])}</td>
+                        <td>${escapeHtml(row["站点"])}</td>
+                        <td><span class="tag">${escapeHtml(row["类型"] || "侵权")}</span></td>
+                        <td>${escapeHtml(row["编号"])}</td>
+                        <td>${escapeHtml(row["标题"])}</td>
+                        <td>${escapeHtml(row["侵权时间"])}</td>
+                        <td>${escapeHtml(row["执行时间"])}</td>
+                    </tr>
+                `).join("");
+            } catch (err) {
+                infractionSummaryBody.innerHTML = `<tr><td class="empty-state" colspan="6">加载失败：${escapeHtml(err.message || err)}</td></tr>`;
+                infractionBody.innerHTML = `<tr><td class="empty-state" colspan="7">加载失败：${escapeHtml(err.message || err)}</td></tr>`;
+            }
+        }
+
+        async function loadLatestReputation() {
+            reputationBody.innerHTML = '<tr><td class="empty-state" colspan="11">正在加载最新声誉数据...</td></tr>';
+            try {
+                const response = await fetch("/api/reputation/latest");
+                const payload = await response.json();
+                if (!response.ok || payload.status !== "success") {
+                    throw new Error(payload.message || `接口请求失败：${response.status}`);
+                }
+
+                const data = payload.data || {};
+                const rows = data.rows || [];
+                reputationLoaded = true;
+                const greenCount = rows.filter(row => String(row["声誉颜色"] || "").includes("绿")).length;
+                const riskCount = rows.length - greenCount;
+
+                reputationTime.textContent = data.latest_submit_time || "-";
+                reputationTotal.textContent = data.total || rows.length || 0;
+                reputationGreen.textContent = greenCount;
+                reputationRisk.textContent = riskCount;
+
+                if (!rows.length) {
+                    reputationBody.innerHTML = '<tr><td class="empty-state" colspan="11">暂无最新声誉数据</td></tr>';
+                    return;
+                }
+
+                reputationBody.innerHTML = rows.map(row => `
+                    <tr>
+                        <td>${escapeHtml(row["店铺名"])}</td>
+                        <td>${escapeHtml(row["站点"])}</td>
+                        <td><span class="tag">${escapeHtml(row["声誉颜色"])}</span></td>
+                        <td>${escapeHtml(row["总单量"])}</td>
+                        <td>${escapeHtml(row["投诉率"])}</td>
+                        <td>${escapeHtml(row["延误率"])}</td>
+                        <td>${escapeHtml(row["增加或减少"])}</td>
+                        <td>${escapeHtml(row["近七天变化率"])}</td>
+                        <td><canvas class="traffic-chart" data-values="${escapeHtml(JSON.stringify(parseTrafficValues(row["一周流量趋势"])))}"></canvas></td>
+                        <td>${escapeHtml(row["系统告警"])}</td>
+                        <td>${escapeHtml(row["更新时间"])}</td>
+                    </tr>
+                `).join("");
+                renderTrafficCharts();
+            } catch (err) {
+                reputationBody.innerHTML = `<tr><td class="empty-state" colspan="11">加载失败：${escapeHtml(err.message || err)}</td></tr>`;
+            }
         }
 
         async function startTask() {
@@ -322,6 +948,7 @@
 
                 appendLog("\n>>> [任务结束]\n");
                 setStatus("任务已结束", "");
+                loadLatestInfractions();
             } catch (err) {
                 appendLog(`\n连接或执行出错：${err.message || err}\n`);
                 setStatus("任务异常", "error");
@@ -329,6 +956,7 @@
                 startBtn.disabled = false;
             }
         }
+
     </script>
 </body>
 </html>

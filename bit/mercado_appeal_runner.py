@@ -1,6 +1,7 @@
 import argparse
 import base64
 import json
+import re
 import time
 import urllib.parse
 import urllib.request
@@ -9,7 +10,11 @@ from pathlib import Path
 try:
     from bit.chat_log import append_chat_log
 except Exception:
-    from chat_log import append_chat_log
+    try:
+        from chat_log import append_chat_log
+    except Exception:
+        def append_chat_log(*args, **kwargs):
+            return None
 
 try:
     import websocket
@@ -64,6 +69,15 @@ SITE_OPTION_REPLIES = {
     "AR": "Argentina",
     "UY": "Uruguay",
 }
+SITE_OPTION_MENU_OPTIONS = (
+    "Mexico (Direct to consumer)",
+    "Mexico (Fulfillment)",
+    "Brazil",
+    "Chile",
+    "Colombia",
+    "Argentina",
+    "Uruguay",
+)
 
 
 DEEP_JS = r"""
@@ -239,7 +253,7 @@ def current_site_state(cdp: Cdp):
         (() => {
           const text = (document.body && document.body.innerText) || '';
           const lines = text.split(/\n+/).map(x => x.trim()).filter(Boolean);
-          const site = lines.find(x => /^(MX|BR|AR|CL|CO)$/.test(x)) || null;
+          const site = lines.find(x => /^(MX|BR|AR|CL|CO|UY)$/.test(x)) || null;
           return {url: location.href, title: document.title, site, text: text.slice(0, 1200)};
         })()
         """
@@ -255,6 +269,111 @@ def verify_site(cdp: Cdp, site: str):
     current = state.get("site")
     title_matches = country.lower() in title.lower() or country.lower() in text.lower()
     return (current == site) or (f"\n{site}\n" in f"\n{text}\n" and title_matches)
+
+
+def read_infractions_page(cdp: Cdp):
+    return cdp.js(
+        r"""
+        (() => {
+          function deepElements(root = document) {
+            const out = [];
+            const walk = node => {
+              const elements = node.querySelectorAll ? Array.from(node.querySelectorAll('*')) : [];
+              for (const el of elements) {
+                out.push(el);
+                if (el.shadowRoot) walk(el.shadowRoot);
+              }
+            };
+            walk(root);
+            return out;
+          }
+          const text = (document.body && document.body.innerText) || '';
+          const byClass = deepElements()
+            .filter(el => String(el.className || '').includes('infraction-item__id'))
+            .map(el => (el.innerText || el.textContent || '').replace(/\D/g, '').trim())
+            .filter(x => /^\d{8,12}$/.test(x));
+          const byText = (text.match(/#\s*(\d{8,12})/g) || []).map(x => x.replace(/\D/g, ''));
+          const ids = [...new Set([...byClass, ...byText])];
+          const activePage = (deepElements().find(el => {
+            const cls = String(el.className || '').toLowerCase();
+            return cls.includes('pagination') && cls.includes('active');
+          }) || {}).innerText || '';
+          return {
+            ids,
+            marker: ids.join(','),
+            count: ids.length,
+            url: location.href,
+            activePage: String(activePage).trim(),
+            text: text.slice(0, 2500)
+          };
+        })()
+        """
+    ) or {"ids": [], "marker": "", "count": 0, "url": "", "activePage": "", "text": ""}
+
+
+def wait_for_infractions_page(cdp: Cdp, previous_marker: str | None = None, timeout=30):
+    end = time.time() + timeout
+    last = None
+    while time.time() < end:
+        wait_for(cdp, "!!document.body", timeout=10, label="infractions body")
+        last = read_infractions_page(cdp)
+        marker = last.get("marker") or ""
+        if marker and marker != (previous_marker or ""):
+            return last
+        time.sleep(1)
+    return last
+
+
+def click_next_infractions_page(cdp: Cdp):
+    return cdp.js(
+        r"""
+        (() => {
+          function deepElements(root = document) {
+            const out = [];
+            const walk = node => {
+              const elements = node.querySelectorAll ? Array.from(node.querySelectorAll('*')) : [];
+              for (const el of elements) {
+                out.push(el);
+                if (el.shadowRoot) walk(el.shadowRoot);
+              }
+            };
+            walk(root);
+            return out;
+          }
+          const visible = el => !!(el.offsetWidth || el.offsetHeight || el.getClientRects().length);
+          const disabled = el => {
+            const cls = String(el.className || '').toLowerCase();
+            const parentCls = String(el.closest('li')?.className || '').toLowerCase();
+            return el.disabled || el.getAttribute('aria-disabled') === 'true' ||
+              cls.includes('disabled') || parentCls.includes('disabled');
+          };
+          const candidates = deepElements().filter(el => {
+            if (!visible(el) || disabled(el)) return false;
+            const tag = (el.tagName || '').toLowerCase();
+            if (!['a', 'button', 'span', 'li', 'div'].includes(tag)) return false;
+            const text = (el.innerText || el.textContent || '').trim();
+            const aria = (el.getAttribute('aria-label') || '').trim();
+            const title = (el.getAttribute('title') || '').trim();
+            const cls = String(el.className || '');
+            return /^next$/i.test(text) || /next/i.test(aria) || /next/i.test(title) ||
+              (cls.includes('andes-pagination') && /next|arrow/i.test(`${text} ${aria} ${title} ${cls}`));
+          });
+          const target = candidates.find(el => ['a', 'button'].includes((el.tagName || '').toLowerCase())) ||
+            candidates.map(el => el.closest('a,button')).find(Boolean);
+          if (!target || disabled(target)) return false;
+          target.scrollIntoView({block: 'center', inline: 'center'});
+          target.click();
+          return true;
+        })()
+        """
+    )
+
+
+def goto_infractions_offset(cdp: Cdp, offset: int, previous_marker: str | None = None):
+    url = f"{INFRACTIONS_URL}?tab=detections&offset={offset}"
+    cdp.js(f"location.href={json.dumps(url)}; true")
+    wait_for(cdp, "document.readyState === 'complete' || document.readyState === 'interactive'", timeout=30, label=f"offset {offset} load")
+    return wait_for_infractions_page(cdp, previous_marker=previous_marker, timeout=30)
 
 
 def switch_site_if_needed(cdp: Cdp, site: str):
@@ -283,7 +402,7 @@ def switch_site_if_needed(cdp: Cdp, site: str):
           const current = els.find(el => {
             const t = (el.innerText || el.textContent || el.getAttribute('aria-label') || '').trim();
             const cls = String(el.className || '');
-            return cls.includes('site-switcher') || /^(MX|BR|AR|CL|CO)$/.test(t);
+            return cls.includes('site-switcher') || /^(MX|BR|AR|CL|CO|UY)$/.test(t);
           });
           if (current) {
             current.scrollIntoView({block: 'center'});
@@ -349,10 +468,11 @@ def switch_site_if_needed(cdp: Cdp, site: str):
 def collect_infractions(cdp_http: str, site: str):
     cdp = tab_for(cdp_http, INFRACTIONS_URL, "/noindex/pppi/infractions")
     try:
-        cdp.js(f"location.href={json.dumps(INFRACTIONS_URL)}; true")
+        cdp.js(f"location.href={json.dumps(INFRACTIONS_URL + '?tab=detections&offset=0')}; true")
         wait_for(cdp, "document.readyState === 'complete' || document.readyState === 'interactive'", label="infractions load")
         time.sleep(5)
         switch_site_if_needed(cdp, site)
+        first_page = goto_infractions_offset(cdp, 0)
         first = cdp.js("({url: location.href, title: document.title, text: (((document.body && document.body.innerText) || '').slice(0, 2500))})")
         if not verify_site(cdp, site):
             state = current_site_state(cdp)
@@ -371,38 +491,51 @@ def collect_infractions(cdp_http: str, site: str):
             })()
             """
         )
-        page_size = 7
+        page_size = max(1, first_page.get("count") or 7)
         max_pages = max(1, min(60, ((total or 0) + page_size - 1) // page_size if total else 60))
         all_ids = []
         seen = set()
+        data = first_page
         for page in range(1, max_pages + 1):
-            offset = (page - 1) * page_size
-            url = f"{INFRACTIONS_URL}?tab=detections&offset={offset}"
-            cdp.js(f"if (location.href !== {json.dumps(url)}) location.href={json.dumps(url)}; true")
-            wait_for(cdp, "!!document.body", timeout=30, label=f"page {page} body")
-            time.sleep(2)
             if not verify_site(cdp, site):
                 state = current_site_state(cdp)
                 raise RuntimeError(
                     f"Refusing to collect wrong site on page {page}: expected={site} "
                     f"current={state.get('site')} title={state.get('title')} url={state.get('url')}"
                 )
-            data = cdp.js(
-                r"""
-                (() => {
-                  const text = (document.body && document.body.innerText) || '';
-                  const ids = [...new Set((text.match(/#\s*(\d{8,12})/g) || []).map(x => x.replace(/\D/g, '')))];
-                  return { ids, marker: ids.join(',') };
-                })()
-                """
-            )
-            if not data["ids"] or data["marker"] in seen:
+
+            marker = data.get("marker") or ""
+            ids = data.get("ids") or []
+            if not ids:
+                print(f"page {page}: no ids found; stop collecting")
                 break
-            seen.add(data["marker"])
-            all_ids.extend([x for x in data["ids"] if x not in all_ids])
-            print(f"page {page}: {', '.join(data['ids'])}")
+            if marker in seen:
+                print(f"page {page}: repeated page marker {marker}; stop collecting")
+                break
+
+            seen.add(marker)
+            all_ids.extend([x for x in ids if x not in all_ids])
+            print(f"page {page}: {', '.join(ids)}")
             if total and len(all_ids) >= total:
                 break
+
+            previous_marker = marker
+            next_data = None
+            clicked = click_next_infractions_page(cdp)
+            if clicked:
+                next_data = wait_for_infractions_page(cdp, previous_marker=previous_marker, timeout=30)
+                if not next_data or next_data.get("marker") == previous_marker:
+                    print(f"page {page}: Next click did not change page; fallback to offset")
+                    next_data = None
+
+            if not next_data:
+                next_offset = page * page_size
+                next_data = goto_infractions_offset(cdp, next_offset, previous_marker=previous_marker)
+
+            if not next_data or not next_data.get("ids") or next_data.get("marker") == previous_marker:
+                print(f"page {page}: no next page after click/offset; stop collecting")
+                break
+            data = next_data
         return first, all_ids
     finally:
         cdp.close()
@@ -519,14 +652,55 @@ def ai_recent_chat(cdp: Cdp):
           const rows = deepElements()
             .filter(el => /message-container|message-item|message|bubble/.test(String(el.className || '')) && (el.innerText || '').trim())
             .map(el => (el.innerText || '').trim().replace(/\\s+/g, ' ').slice(0, 600));
-          return [...new Set(rows)].slice(-8);
+          const richRows = [];
+          const bodyText = document.body ? (document.body.innerText || '') : '';
+          const bodyHtml = document.body ? (document.body.innerHTML || '') : '';
+          richRows.push(bodyText, bodyHtml);
+          for (const el of deepElements()) {{
+            const text = [
+              el.innerText || '',
+              el.textContent || '',
+              el.innerHTML || '',
+              el.getAttribute('aria-label') || '',
+              el.getAttribute('title') || ''
+            ].join(' ');
+            if (/Mexico\\s*\\(Direct\\s+to\\s+consumer\\)/i.test(text) && /Uruguay/i.test(text)) {{
+              richRows.push(text);
+            }}
+          }}
+          const menuRows = richRows
+            .filter(Boolean)
+            .map(text => String(text).replace(/<[^>]+>/g, ' ').replace(/\\s+/g, ' ').trim())
+            .filter(text => /Mexico\\s*\\(Direct\\s+to\\s+consumer\\)/i.test(text) && /Uruguay/i.test(text))
+            .map(text => text.slice(0, 1200));
+          return [...new Set([...rows, ...menuRows])].slice(-12);
         }})()
         """,
         context_id=context_id,
     ) or []
 
 
+def contains_site_option_menu(text: str) -> bool:
+    lower = re.sub(r"\s+", " ", text or "").lower()
+    lower = lower.replace("（", "(").replace("）", ")")
+    compact = re.sub(r"[\s。．.、,，:：;；]+", "", lower)
+    compact_menu = re.sub(
+        r"[\s。．.、,，:：;；]+",
+        "",
+        "".join(SITE_OPTION_MENU_OPTIONS).lower(),
+    )
+    if compact_menu in compact:
+        return True
+    compact_options = [
+        re.sub(r"[\s。．.、,，:：;；]+", "", option.lower())
+        for option in SITE_OPTION_MENU_OPTIONS
+    ]
+    return sum(1 for option in compact_options if option in compact) >= 5
+
+
 def is_site_option_question(text: str) -> bool:
+    if contains_site_option_menu(text):
+        return True
     lower = (text or "").lower()
     option_markers = [
         "mexico (direct to consumer)",

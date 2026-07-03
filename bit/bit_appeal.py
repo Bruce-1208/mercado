@@ -259,7 +259,6 @@ def shensu(name, site, form, message, mode="人工客服"):
                 EC.element_to_be_clickable((By.CSS_SELECTOR, 'button[title="Send"]'))
             ).click()
             print(f"{get_now_time()} {name} {site} 自动发送自定义话术：{message}<br>")
-
             chat_ai(
                 driver, name, site, form, infraction_random + words_random, nickname
             )
@@ -377,7 +376,6 @@ def chat_ai(driver, name, site, form, huashu, nickname):
                 )
                 response = get_ai_response(words)
                 print(f"{get_now_time()} {name}{site}AI回复:{response}<br>")
-
             if form == "侵权":
                 words = (
                     lines

@@ -1,9 +1,8 @@
 import requests
 import json
 
-url = "http://zeshun.nat100.top/api/v1/records"
+url = "zeshun.nat100.top/api/v1/records"
 
-# url = "http://127.0.0.1:5000/api/v1/records"
 # 爬虫抓取到或者大模型识别出的数据样例
 payload = {
     "zhiying_category": "家居/厨房用品",

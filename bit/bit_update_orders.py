@@ -79,8 +79,10 @@ def update_order_mysql():
                 ]
             )
             lines.append(line)
-    for item in lines[:10]:
+
+    for item in lines:
         print(item)
+    print("行数为",len(lines))
     insert_orders(lines)
 
 
