@@ -70,7 +70,10 @@ USE_DB_API = (
 if USE_DB_API:
     db_get_latest_infraction_info = bit_db_api.get_latest_infraction_info
     db_get_latest_reputation_info = bit_db_api.get_latest_reputation_info
+    db_get_ai_appeal_records = bit_db_api.get_ai_appeal_records
     db_insert_chat_info = bit_db_api.insert_chat_info
+    db_insert_appeal_chat_record = bit_db_api.insert_appeal_chat_record
+    db_insert_ai_appeal_record = bit_db_api.insert_ai_appeal_record
     db_insert_orders = bit_db_api.insert_orders
     db_insert_task_record = bit_db_api.insert_task_record
     db_inset_delay_info = bit_db_api.inset_delay_info
@@ -82,7 +85,10 @@ else:
     from bit.bit_mysql import (
         get_latest_infraction_info,
         get_latest_reputation_info,
+        get_ai_appeal_records,
         insert_chat_info,
+        insert_appeal_chat_record,
+        insert_ai_appeal_record,
         insert_orders,
         insert_task_record,
         inset_delay_info,
@@ -92,7 +98,10 @@ else:
 
     db_get_latest_infraction_info = get_latest_infraction_info
     db_get_latest_reputation_info = get_latest_reputation_info
+    db_get_ai_appeal_records = get_ai_appeal_records
     db_insert_chat_info = insert_chat_info
+    db_insert_appeal_chat_record = insert_appeal_chat_record
+    db_insert_ai_appeal_record = insert_ai_appeal_record
     db_insert_orders = insert_orders
     db_insert_task_record = insert_task_record
     db_inset_delay_info = inset_delay_info
@@ -423,16 +432,17 @@ def shensu_logic_previous(name, site, form, message):
 def shensu_logic(name, site, form, message, mode):
     for i in range(1, 11):
         output_queue = queue.Queue()
+        task_result = {"value": None}
 
         def run_task():
             register_thread_log_queue(output_queue)
             try:
                 print(f"{get_now_time()} --- 任务启动第 {i} 次：{name} {site}，客服模式：{mode}")
                 if mode == "AI客服":
-                    bit_appeal_ai.shensu(name, site, form, message)
+                    task_result["value"] = bit_appeal_ai.shensu(name, site, form, message)
                 else:
-                    shensu(name, site, form, message, "人工客服")
-                print(f"{get_now_time()} {name} {site} 申诉执行完毕")
+                    task_result["value"] = shensu(name, site, form, message, "人工客服")
+                print(f"{get_now_time()} {name} {site} 申诉执行完毕：{task_result['value']}")
             except Exception as e:
                 print(f"{get_now_time()} 发生错误: {str(e)}")
                 traceback.print_exc()
@@ -449,6 +459,10 @@ def shensu_logic(name, site, form, message, mode):
                 break
             yield format_log_text(text)
             sys.stdout.flush()
+
+        if task_result.get("value") == "未登录":
+            yield f"{get_now_time()} {name} {site} 未登录，已停止后续申诉循环\n"
+            return
 
         yield f"{get_now_time()} {name} {site} 本轮结束，等待十分钟后进入下一轮\n"
         getWindowidByName(name)
@@ -615,7 +629,7 @@ def api_export_latest_reputation():
         ws.title = "最新声誉数据"
 
         columns = [
-            "店铺名", "站点", "声誉颜色", "总单量", "投诉率", "延误率",
+            "店铺名", "站点", "声誉颜色", "总单量", "投诉率", "延误率", "取消率",
             "增加或减少", "近七天变化率", "一周流量趋势", "系统告警",
             "更新时间", "提交时间"
         ]
@@ -786,6 +800,44 @@ def api_db_insert_chat():
     return jsonify({"status": "success", "data": {"id": chat_id}})
 
 
+@app.route('/api/db/appeal-chat-records', methods=['POST'])
+@internal_api_required
+def api_db_insert_appeal_chat_record():
+    blocked = reject_db_api_client_mode()
+    if blocked:
+        return blocked
+    data = request.get_json(silent=True) or {}
+    record = data.get("record") or {}
+    if not isinstance(record, dict):
+        return jsonify({"status": "error", "message": "record must be an object"}), 422
+    record_id = db_insert_appeal_chat_record(record)
+    return jsonify({"status": "success", "data": {"id": record_id}})
+
+
+@app.route('/api/db/ai-appeal-records', methods=['POST'])
+@internal_api_required
+def api_db_insert_ai_appeal_record():
+    blocked = reject_db_api_client_mode()
+    if blocked:
+        return blocked
+    data = request.get_json(silent=True) or {}
+    record = data.get("record") or {}
+    if not isinstance(record, dict):
+        return jsonify({"status": "error", "message": "record must be an object"}), 422
+    record_id = db_insert_ai_appeal_record(record)
+    return jsonify({"status": "success", "data": {"id": record_id}})
+
+
+@app.route('/api/db/ai-appeal-records', methods=['GET'])
+@internal_api_required
+def api_db_get_ai_appeal_records():
+    blocked = reject_db_api_client_mode()
+    if blocked:
+        return blocked
+    limit = request.args.get("limit", 100)
+    return jsonify({"status": "success", "data": db_get_ai_appeal_records(limit)})
+
+
 @app.route('/api/db/infractions/latest', methods=['GET'])
 @internal_api_required
 def api_db_latest_infractions():
@@ -803,6 +855,17 @@ def api_db_latest_reputation():
     if blocked:
         return blocked
     return jsonify({"status": "success", "data": db_get_latest_reputation_info()})
+
+
+@app.route('/api/ai-appeal-records', methods=['GET'])
+@login_required
+def api_ai_appeal_records():
+    try:
+        limit = request.args.get("limit", 100)
+        return jsonify({"status": "success", "data": db_get_ai_appeal_records(limit)})
+    except Exception as e:
+        logging.error("AI appeal records query failed: %s", e)
+        return jsonify({"status": "error", "message": f"Database error: {str(e)}"}), 500
 
 
 @app.route('/api/db/workbench/login', methods=['POST'])

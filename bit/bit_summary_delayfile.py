@@ -38,7 +38,7 @@ def summary_delayFile():
         remark = row[2]
         seq = str(row[4])
 
-        if remark == "忽略":
+        if "忽略" in str(remark or "").strip():
             continue
         fold = Path(save_fold + seq)
         print(fold)

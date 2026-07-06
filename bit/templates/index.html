@@ -436,6 +436,61 @@
             white-space: nowrap;
         }
 
+        .reputation-color-tag {
+            display: inline-flex;
+            align-items: center;
+            border-radius: 999px;
+            padding: 3px 8px;
+            background: #f2f4f7;
+            color: #475467;
+            font-size: 11px;
+            font-weight: 700;
+            white-space: nowrap;
+        }
+
+        .reputation-color-tag.green {
+            background: #dcfce7;
+            color: #166534;
+        }
+
+        .reputation-color-tag.yellow {
+            background: #fef9c3;
+            color: #854d0e;
+        }
+
+        .reputation-color-tag.orange {
+            background: #ffedd5;
+            color: #9a3412;
+        }
+
+        .reputation-color-tag.red,
+        .reputation-color-tag.fail {
+            background: #fee2e2;
+            color: #991b1b;
+        }
+
+        .status-tag {
+            display: inline-flex;
+            align-items: center;
+            border-radius: 999px;
+            padding: 3px 8px;
+            background: #eef2ff;
+            color: #3730a3;
+            font-size: 11px;
+            font-weight: 700;
+            white-space: nowrap;
+        }
+
+        .status-tag.fail {
+            background: #fee2e2;
+            color: #991b1b;
+        }
+
+        .status-tag.empty {
+            background: #f2f4f7;
+            color: #475467;
+        }
+
         .traffic-chart {
             width: 260px;
             height: 42px;
@@ -475,7 +530,7 @@
         }
 
         .reputation-table {
-            min-width: 1180px;
+            min-width: 1320px;
         }
 
         .reputation-table th:nth-child(1),
@@ -502,22 +557,24 @@
         .reputation-table th:nth-child(7),
         .reputation-table td:nth-child(7),
         .reputation-table th:nth-child(8),
-        .reputation-table td:nth-child(8) {
-            width: 76px;
-        }
-
+        .reputation-table td:nth-child(8),
         .reputation-table th:nth-child(9),
         .reputation-table td:nth-child(9) {
-            width: 280px;
+            width: 76px;
         }
 
         .reputation-table th:nth-child(10),
         .reputation-table td:nth-child(10) {
-            width: 120px;
+            width: 280px;
         }
 
         .reputation-table th:nth-child(11),
         .reputation-table td:nth-child(11) {
+            width: 120px;
+        }
+
+        .reputation-table th:nth-child(12),
+        .reputation-table td:nth-child(12) {
             width: 136px;
         }
 
@@ -532,7 +589,7 @@
             white-space: nowrap;
         }
 
-        .reputation-table tbody td:nth-child(9) {
+        .reputation-table tbody td:nth-child(10) {
             padding-top: 4px;
             padding-bottom: 4px;
         }
@@ -578,6 +635,7 @@
             <button class="tab-button active" type="button" data-tab="appeal" onclick="switchTab('appeal')">自动化AI申诉</button>
             <button class="tab-button" type="button" data-tab="infractions" onclick="switchTab('infractions')">侵权数据</button>
             <button class="tab-button" type="button" data-tab="reputation" onclick="switchTab('reputation')">声誉数据</button>
+            <button class="tab-button" type="button" data-tab="ai-appeals" onclick="switchTab('ai-appeals')">AI申诉记录</button>
         </aside>
 
         <section class="content">
@@ -696,13 +754,14 @@
                                     <th>排名</th>
                                     <th>店铺名</th>
                                     <th>站点</th>
+                                    <th>状态</th>
                                     <th>总数</th>
                                     <th>侵权</th>
                                     <th>权利人</th>
                                 </tr>
                             </thead>
                             <tbody id="infraction-summary-body">
-                                <tr><td class="empty-state" colspan="6">正在加载统计数据...</td></tr>
+                                <tr><td class="empty-state" colspan="7">正在加载统计数据...</td></tr>
                             </tbody>
                         </table>
                     </div>
@@ -761,8 +820,8 @@
                             <div class="metric-value" id="reputation-risk">0</div>
                         </div>
                     </div>
-                    <div class="table-wrap">
-                        <table>
+                    <div class="table-wrap reputation-table-wrap">
+                        <table class="reputation-table">
                             <thead>
                                 <tr>
                                     <th>店铺名</th>
@@ -771,6 +830,7 @@
                                     <th>总单量</th>
                                     <th>投诉率</th>
                                     <th>延误率</th>
+                                    <th>取消率</th>
                                     <th>增加或减少</th>
                                     <th>近七天变化率</th>
                                     <th>流量趋势</th>
@@ -779,7 +839,54 @@
                                 </tr>
                             </thead>
                             <tbody id="reputation-body">
-                                <tr><td class="empty-state" colspan="11">正在加载最新声誉数据...</td></tr>
+                                <tr><td class="empty-state" colspan="12">正在加载最新声誉数据...</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </section>
+            </div>
+
+            <div class="tab-page" id="tab-ai-appeals">
+                <div class="tab-heading">
+                    <h2>AI申诉记录</h2>
+                    <p>展示 AI 客服申诉结果、成功编号、失败编号和 AI 总结</p>
+                </div>
+
+                <section class="panel infractions-panel">
+                    <div class="infractions-header">
+                        <h2 class="panel-title" style="margin: 0;">最新 AI 申诉记录</h2>
+                        <div class="header-actions">
+                            <button class="secondary" type="button" onclick="loadAiAppealRecords()">刷新数据</button>
+                        </div>
+                    </div>
+                    <div class="summary-row">
+                        <div class="metric">
+                            <div class="metric-label">最新申诉时间</div>
+                            <div class="metric-value" id="ai-appeal-latest-time">-</div>
+                        </div>
+                        <div class="metric">
+                            <div class="metric-label">记录数</div>
+                            <div class="metric-value" id="ai-appeal-total">0</div>
+                        </div>
+                    </div>
+                    <div class="table-wrap reputation-table-wrap">
+                        <table class="reputation-table">
+                            <thead>
+                                <tr>
+                                    <th>申诉时间</th>
+                                    <th>类型</th>
+                                    <th>店铺名</th>
+                                    <th>站点</th>
+                                    <th>结果</th>
+                                    <th>申诉编号</th>
+                                    <th>成功编号</th>
+                                    <th>失败编号</th>
+                                    <th>AI总结</th>
+                                    <th>异常</th>
+                                </tr>
+                            </thead>
+                            <tbody id="ai-appeal-record-body">
+                                <tr><td class="empty-state" colspan="10">正在加载 AI 申诉记录...</td></tr>
                             </tbody>
                         </table>
                     </div>
@@ -814,9 +921,13 @@
         const reputationRisk = document.getElementById("reputation-risk");
         const collectReputationBtn = document.getElementById("collect-reputation-btn");
         const trafficTooltip = document.getElementById("traffic-tooltip");
+        const aiAppealRecordBody = document.getElementById("ai-appeal-record-body");
+        const aiAppealLatestTime = document.getElementById("ai-appeal-latest-time");
+        const aiAppealTotal = document.getElementById("ai-appeal-total");
         let infractionDays = 30;
         let infractionsLoaded = false;
         let reputationLoaded = false;
+        let aiAppealsLoaded = false;
 
         function switchTab(tabName) {
             document.querySelectorAll(".tab-button").forEach(button => {
@@ -830,6 +941,9 @@
             }
             if (tabName === "reputation" && !reputationLoaded) {
                 loadLatestReputation();
+            }
+            if (tabName === "ai-appeals" && !aiAppealsLoaded) {
+                loadAiAppealRecords();
             }
         }
 
@@ -855,6 +969,17 @@
                 .replaceAll(">", "&gt;")
                 .replaceAll('"', "&quot;")
                 .replaceAll("'", "&#039;");
+        }
+
+        function renderReputationColor(value) {
+            const text = String(value || "无色");
+            let className = "neutral";
+            if (text.includes("绿")) className = "green";
+            else if (text.includes("黄")) className = "yellow";
+            else if (text.includes("橘") || text.includes("橙")) className = "orange";
+            else if (text.includes("红")) className = "red";
+            else if (text.includes("失败")) className = "fail";
+            return `<span class="reputation-color-tag ${className}">${escapeHtml(text)}</span>`;
         }
 
         function parseTrafficValues(value) {
@@ -1062,9 +1187,16 @@
             loadLatestInfractions();
         }
 
+        function renderInfractionStatus(row) {
+            const status = String(row["状态"] || "成功");
+            const statusTime = row["状态时间"] ? ` title="${escapeHtml(row["状态时间"])}"` : "";
+            const className = status === "失败" ? "fail" : (status === "无数据" ? "empty" : "");
+            return `<span class="status-tag ${className}"${statusTime}>${escapeHtml(status)}</span>`;
+        }
+
         async function loadLatestInfractions() {
             updateInfractionRangeText(infractionDays);
-            infractionSummaryBody.innerHTML = '<tr><td class="empty-state" colspan="6">正在加载统计数据...</td></tr>';
+            infractionSummaryBody.innerHTML = '<tr><td class="empty-state" colspan="7">正在加载统计数据...</td></tr>';
             infractionBody.innerHTML = '<tr><td class="empty-state" colspan="7">正在加载最新侵权数据...</td></tr>';
             try {
                 const response = await fetch(`/api/infractions/latest?days=${encodeURIComponent(infractionDays)}`);
@@ -1089,13 +1221,14 @@
                 infractionRights.textContent = rightsCount;
 
                 if (!summary.length) {
-                    infractionSummaryBody.innerHTML = '<tr><td class="empty-state" colspan="6">暂无统计数据</td></tr>';
+                    infractionSummaryBody.innerHTML = '<tr><td class="empty-state" colspan="7">暂无统计数据</td></tr>';
                 } else {
                     infractionSummaryBody.innerHTML = summary.map((row, index) => `
                         <tr>
                             <td>${index + 1}</td>
                             <td>${escapeHtml(row["店铺名"])}</td>
                             <td>${escapeHtml(row["站点"])}</td>
+                            <td>${renderInfractionStatus(row)}</td>
                             <td>${escapeHtml(row["总数"])}</td>
                             <td>${escapeHtml(row["侵权"])}</td>
                             <td>${escapeHtml(row["权利人"])}</td>
@@ -1120,13 +1253,69 @@
                     </tr>
                 `).join("");
             } catch (err) {
-                infractionSummaryBody.innerHTML = `<tr><td class="empty-state" colspan="6">加载失败：${escapeHtml(err.message || err)}</td></tr>`;
+                infractionSummaryBody.innerHTML = `<tr><td class="empty-state" colspan="7">加载失败：${escapeHtml(err.message || err)}</td></tr>`;
                 infractionBody.innerHTML = `<tr><td class="empty-state" colspan="7">加载失败：${escapeHtml(err.message || err)}</td></tr>`;
             }
         }
 
+        function formatAppealList(value) {
+            const list = Array.isArray(value) ? value : [];
+            return list.filter(item => String(item ?? "").trim()).join("、");
+        }
+
+        function renderAppealStatus(status) {
+            const text = String(status || "待确认");
+            const className = (text === "失败" || text === "未登录") ? "fail" : (text === "待确认" ? "empty" : "");
+            return `<span class="status-tag ${className}">${escapeHtml(text)}</span>`;
+        }
+
+        async function loadAiAppealRecords() {
+            if (!aiAppealRecordBody) return;
+            aiAppealRecordBody.innerHTML = '<tr><td class="empty-state" colspan="10">正在加载 AI 申诉记录...</td></tr>';
+            try {
+                const response = await fetch("/api/ai-appeal-records?limit=100");
+                const payload = await response.json();
+                if (!response.ok || payload.status !== "success") {
+                    throw new Error(payload.message || `接口请求失败：${response.status}`);
+                }
+
+                const data = payload.data || {};
+                const rows = data.rows || [];
+                aiAppealsLoaded = true;
+                aiAppealTotal.textContent = data.total || rows.length || 0;
+                aiAppealLatestTime.textContent = rows.length ? (rows[0].appeal_time || "-") : "-";
+
+                if (!rows.length) {
+                    aiAppealRecordBody.innerHTML = '<tr><td class="empty-state" colspan="10">暂无 AI 申诉记录</td></tr>';
+                    return;
+                }
+
+                aiAppealRecordBody.innerHTML = rows.map(row => {
+                    const identifiers = formatAppealList(row.identifiers_json);
+                    const successIds = formatAppealList(row.success_ids_json);
+                    const failedIds = formatAppealList(row.failed_ids_json);
+                    return `
+                    <tr>
+                        <td title="${escapeHtml(row.appeal_time)}">${escapeHtml(row.appeal_time)}</td>
+                        <td title="${escapeHtml(row.appeal_type)}"><span class="tag">${escapeHtml(row.appeal_type)}</span></td>
+                        <td title="${escapeHtml(row.shop_name)}">${escapeHtml(row.shop_name)}</td>
+                        <td title="${escapeHtml(row.site)}">${escapeHtml(row.site)}</td>
+                        <td>${renderAppealStatus(row.status)}</td>
+                        <td title="${escapeHtml(identifiers)}">${escapeHtml(identifiers || "-")}</td>
+                        <td title="${escapeHtml(successIds)}">${escapeHtml(successIds || "-")}</td>
+                        <td title="${escapeHtml(failedIds)}">${escapeHtml(failedIds || "-")}</td>
+                        <td title="${escapeHtml(row.ai_summary)}">${escapeHtml(row.ai_summary || "-")}</td>
+                        <td title="${escapeHtml(row.error)}">${escapeHtml(row.error || "-")}</td>
+                    </tr>
+                    `;
+                }).join("");
+            } catch (err) {
+                aiAppealRecordBody.innerHTML = `<tr><td class="empty-state" colspan="10">加载失败：${escapeHtml(err.message || err)}</td></tr>`;
+            }
+        }
+
         async function loadLatestReputation() {
-            reputationBody.innerHTML = '<tr><td class="empty-state" colspan="11">正在加载最新声誉数据...</td></tr>';
+            reputationBody.innerHTML = '<tr><td class="empty-state" colspan="12">正在加载最新声誉数据...</td></tr>';
             try {
                 const response = await fetch("/api/reputation/latest");
                 const payload = await response.json();
@@ -1146,7 +1335,7 @@
                 reputationRisk.textContent = riskCount;
 
                 if (!rows.length) {
-                    reputationBody.innerHTML = '<tr><td class="empty-state" colspan="11">暂无最新声誉数据</td></tr>';
+                    reputationBody.innerHTML = '<tr><td class="empty-state" colspan="12">暂无最新声誉数据</td></tr>';
                     return;
                 }
 
@@ -1158,10 +1347,11 @@
                     <tr>
                         <td title="${escapeHtml(row["店铺名"])}">${escapeHtml(row["店铺名"])}</td>
                         <td title="${escapeHtml(row["站点"])}">${escapeHtml(row["站点"])}</td>
-                        <td title="${escapeHtml(row["声誉颜色"])}"><span class="tag">${escapeHtml(row["声誉颜色"])}</span></td>
+                        <td title="${escapeHtml(row["声誉颜色"])}">${renderReputationColor(row["声誉颜色"])}</td>
                         <td title="${escapeHtml(row["总单量"])}">${escapeHtml(row["总单量"])}</td>
                         <td title="${escapeHtml(row["投诉率"])}">${escapeHtml(row["投诉率"])}</td>
                         <td title="${escapeHtml(row["延误率"])}">${escapeHtml(row["延误率"])}</td>
+                        <td title="${escapeHtml(row["取消率"])}">${escapeHtml(row["取消率"])}</td>
                         <td title="${escapeHtml(row["增加或减少"])}">${escapeHtml(row["增加或减少"])}</td>
                         <td title="${escapeHtml(row["近七天变化率"])}">${escapeHtml(row["近七天变化率"])}</td>
                         <td>
@@ -1177,7 +1367,7 @@
                 renderTrafficCharts();
                 bindTrafficTooltips();
             } catch (err) {
-                reputationBody.innerHTML = `<tr><td class="empty-state" colspan="11">加载失败：${escapeHtml(err.message || err)}</td></tr>`;
+                reputationBody.innerHTML = `<tr><td class="empty-state" colspan="12">加载失败：${escapeHtml(err.message || err)}</td></tr>`;
             }
         }
 

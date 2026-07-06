@@ -1,6 +1,8 @@
 import json
 import os
 import re
+import sys
+import threading
 from datetime import datetime
 from pathlib import Path
 
@@ -8,6 +10,8 @@ from pathlib import Path
 DEFAULT_CHAT_LOG = Path(__file__).resolve().parent / "ai_chat_records.jsonl"
 MAX_CHAT_LOG_BYTES = int(os.getenv("MERCADO_AI_CHAT_LOG_MAX_MB", "50")) * 1024 * 1024
 MAX_FIELD_CHARS = int(os.getenv("MERCADO_AI_CHAT_LOG_FIELD_CHARS", "2000"))
+CHAT_DB_ENABLED = os.getenv("MERCADO_AI_CHAT_DB_ENABLED", "1").strip().lower() not in ("0", "false", "no")
+_COLLECTOR = threading.local()
 
 INTERNAL_PROMPT_PATTERNS = (
     r"<desambiguacion_de_tools>.*?</desambiguacion_de_tools>",
@@ -61,6 +65,32 @@ def _rotate_log_if_needed(log_path):
     log_path.rename(rotated_path)
 
 
+def _write_record_to_db(record):
+    if not CHAT_DB_ENABLED:
+        return
+    try:
+        try:
+            from bit.bit_db_api import insert_appeal_chat_record
+        except ImportError:
+            from bit_db_api import insert_appeal_chat_record
+        insert_appeal_chat_record(record)
+    except Exception as e:
+        print(f"AI申诉聊天记录写入数据库失败：{e}", file=sys.stderr)
+
+
+def start_appeal_log_collection():
+    _COLLECTOR.records = []
+
+
+def get_appeal_log_records():
+    return list(getattr(_COLLECTOR, "records", []) or [])
+
+
+def stop_appeal_log_collection():
+    if hasattr(_COLLECTOR, "records"):
+        delattr(_COLLECTOR, "records")
+
+
 def append_chat_log(window, site, event, message="", response="", chat=None, extra=None):
     log_path = Path(os.getenv("MERCADO_AI_CHAT_LOG", str(DEFAULT_CHAT_LOG)))
     log_path.parent.mkdir(parents=True, exist_ok=True)
@@ -75,6 +105,10 @@ def append_chat_log(window, site, event, message="", response="", chat=None, ext
         "chat": _truncate_value(chat or []),
         "extra": _truncate_value(extra or {}),
     }
+    records = getattr(_COLLECTOR, "records", None)
+    if records is not None:
+        records.append(record)
     with log_path.open("a", encoding="utf-8") as f:
         f.write(json.dumps(record, ensure_ascii=False) + "\n")
+    _write_record_to_db(record)
     return log_path

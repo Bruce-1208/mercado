@@ -53,7 +53,7 @@ def print_orders_all():
     result = []
     for row in sheet.iter_rows(min_row=2, values_only=True):
         browser_id, name, remark, sites = row[:4]
-        if remark == "忽略" or not browser_id or not sites:
+        if "忽略" in str(remark or "").strip() or not browser_id or not sites:
             continue
         for site in str(sites).split("，"):
             site = site.strip()

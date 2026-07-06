@@ -31,7 +31,7 @@ def _is_bit_api_rate_limited(res):
     return "请求太过频繁" in text or "每秒最多可以发起" in text
 
 
-def _connect_browser(window_id, max_retries=3, retry_delay=3):
+def _connect_browser(window_id, max_retries=3, retry_delay=30):
     last_res = None
     for attempt in range(1, max_retries + 1):
         res = openBrowser(window_id)  # 窗口ID从窗口配置界面中复制，或者api创建后返回
@@ -646,11 +646,15 @@ def _build_reputation_failure_row(name, site):
     ]
 
 
+def _is_ignored_config_value(value):
+    return "忽略" in str(value or "").strip()
+
+
 def _run_reputation_for_browser(row):
     id = row[0]
     name = row[1]
     remark = row[2]
-    if remark == "忽略":
+    if _is_ignored_config_value(remark):
         return [], []
 
     if not row[3]:
@@ -712,7 +716,7 @@ def get_reputation_info_all(max_workers=10):
     reputation_info_sum = []
     result = []
     rows = list(sheet.iter_rows(min_row=2, values_only=True))
-    rows = [row for row in rows if row and row[0] and row[2] != "忽略"]
+    rows = [row for row in rows if row and row[0] and not _is_ignored_config_value(row[2])]
 
     with ThreadPoolExecutor(max_workers=max_workers) as executor:
         future_map = {

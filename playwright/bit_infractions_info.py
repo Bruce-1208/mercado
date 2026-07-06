@@ -117,6 +117,10 @@ def _site_prefix(site):
     return SITE_PREFIX_MAP.get(key) or SITE_PREFIX_MAP.get(key.upper(), "")
 
 
+def _is_ignored_config_value(value):
+    return "忽略" in str(value or "").strip()
+
+
 def _text_list(page, selector, timeout=30000):
     try:
         page.wait_for_selector(selector, timeout=timeout)
@@ -610,7 +614,7 @@ def _run_infractions_for_browser(row):
     browser_id = row[0]
     name = row[1]
     remark = row[2]
-    if remark == "忽略":
+    if _is_ignored_config_value(remark):
         return [], []
 
     print(get_now_time() + "开始打开窗口:" + name)
@@ -660,7 +664,7 @@ def get_infractions_info_all(max_workers=10):
     infraction_info_sum = []
     result = []
     rows = list(sheet.iter_rows(min_row=2, values_only=True))
-    rows = [row for row in rows if row and row[0] and row[2] != "忽略"]
+    rows = [row for row in rows if row and row[0] and not _is_ignored_config_value(row[2])]
 
     with ThreadPoolExecutor(max_workers=max_workers) as executor:
         future_map = {

@@ -244,7 +244,7 @@ def download_relay_mail_all():
         id = row[0]
         name = row[1]
         remark = row[2]
-        if remark == "忽略":
+        if "忽略" in str(remark or "").strip():
             continue
         print(get_now_time() + "开始打开窗口:", name)
         site_list = row[3].split("，")

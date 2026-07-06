@@ -43,7 +43,7 @@ import random
 from bit.bit_utils import get_latest_modified_file, get_bit_path, parser_delay_date, get_now_time, getWindowidByName
 from bit.bit_api import *
 from bit.bit_download import download_relay_mail
-from bit.bit_db_api import get_latest_infraction_info
+from bit.bit_db_api import get_latest_infraction_info, insert_ai_appeal_record
 from AI_Agent.qianwen import *
 import pandas as pd
 from datetime import datetime, timedelta
@@ -56,9 +56,19 @@ import traceback
 from bit_infractions_info import *
 
 try:
-    from bit.chat_log import append_chat_log
+    from bit.chat_log import (
+        append_chat_log,
+        get_appeal_log_records,
+        start_appeal_log_collection,
+        stop_appeal_log_collection,
+    )
 except Exception:
-    from chat_log import append_chat_log
+    from chat_log import (
+        append_chat_log,
+        get_appeal_log_records,
+        start_appeal_log_collection,
+        stop_appeal_log_collection,
+    )
 
 # 聊天记录入库接口；AI 与人工客服回复都会通过这个接口记录。
 CHAT_INFO_API_URL = "https://zeshun.nat100.top/api/v1/chat"
@@ -191,6 +201,38 @@ def connect_bit_browser(window_id):
         time.sleep(3)
 
     raise RuntimeError(f"打开比特浏览器失败，窗口ID={window_id}，返回={last_res}")
+
+
+def is_mercado_login_required_page(driver):
+    """识别 Mercado 登录页；命中后不再对该店铺窗口执行任何申诉操作。"""
+    if not driver:
+        return False
+    try:
+        driver.switch_to.default_content()
+    except Exception:
+        pass
+    try:
+        page_text = driver.execute_script("return document.body ? document.body.innerText : '';") or ""
+    except Exception:
+        page_text = ""
+    try:
+        current_url = driver.current_url or ""
+    except Exception:
+        current_url = ""
+    try:
+        title = driver.title or ""
+    except Exception:
+        title = ""
+
+    combined = f"{page_text}\n{title}\n{current_url}".lower()
+    login_markers = (
+        "fill out your e-mail address to log in",
+        "fill out your email address to log in",
+        "enter your e-mail address",
+        "ingresa tu e-mail",
+        "ingrese su e-mail",
+    )
+    return any(marker in combined for marker in login_markers)
 
 
 def close_current_tab_keep_browser(driver, name="", site=""):
@@ -1645,7 +1687,7 @@ def load_active_shop_site_config():
     for row in sheet.iter_rows(min_row=2, values_only=True):
         name = row[1]
         remark = row[2]
-        if not name or remark == "忽略":
+        if not name or "忽略" in str(remark or "").strip():
             continue
         sites = _split_config_sites(row[3] if len(row) > 3 else "")
         active[str(name)] = {normalize_site_code(site) for site in sites}
@@ -1769,21 +1811,224 @@ def auto_appeal_top_infractions_loop(
         round_no += 1
 
 
+def _unique_text_list(values):
+    result = []
+    seen = set()
+    for value in values or []:
+        if isinstance(value, (list, tuple, set)):
+            items = value
+        else:
+            items = [value]
+        for item in items:
+            text = str(item or "").strip()
+            if not text or text in seen:
+                continue
+            seen.add(text)
+            result.append(text)
+    return result
+
+
+def _extract_identifiers_from_text(text):
+    text = str(text or "")
+    values = re.findall(r"\bML[A-Z]{1,3}\d{6,}\b|\b\d{8,}\b", text)
+    return _unique_text_list(values)
+
+
+def _collect_appeal_record_fields(log_records, final_agent_messages=None):
+    appeal_messages = []
+    identifiers = []
+    ai_replies = []
+
+    for record in log_records or []:
+        message = record.get("message")
+        if message:
+            appeal_messages.append(message)
+            identifiers.extend(_extract_identifiers_from_text(message))
+
+        response = record.get("response")
+        if response:
+            ai_replies.append(response)
+
+        chat = record.get("chat")
+        if isinstance(chat, list):
+            ai_replies.extend(chat)
+        elif chat:
+            ai_replies.append(chat)
+
+        extra = record.get("extra") or {}
+        if isinstance(extra, dict):
+            for key in ("infraction_ids", "delay_ids", "order_ids", "product_ids", "ids"):
+                value = extra.get(key)
+                if isinstance(value, str):
+                    identifiers.extend(_extract_identifiers_from_text(value))
+                elif isinstance(value, (list, tuple, set)):
+                    identifiers.extend(value)
+
+    ai_replies.extend(final_agent_messages or [])
+    return {
+        "appeal_content": "\n".join(_unique_text_list(appeal_messages)),
+        "identifiers": _unique_text_list(identifiers),
+        "ai_replies": _unique_text_list(ai_replies),
+    }
+
+
+def _parse_ai_summary_json(text):
+    raw = str(text or "").strip()
+    if not raw:
+        raise ValueError("empty summary")
+    match = re.search(r"\{.*\}", raw, flags=re.S)
+    if match:
+        raw = match.group(0)
+    data = json.loads(raw)
+    return {
+        "summary": str(data.get("summary") or "").strip(),
+        "success_ids": _unique_text_list(data.get("success_ids") or []),
+        "failed_ids": _unique_text_list(data.get("failed_ids") or []),
+        "status": str(data.get("status") or "").strip(),
+    }
+
+
+def summarize_ai_appeal_result(appeal_type, identifiers, appeal_content, ai_replies):
+    identifiers = _unique_text_list(identifiers)
+    ai_replies = _unique_text_list(ai_replies)
+    if not ai_replies:
+        return {
+            "status": "待确认",
+            "summary": "未读取到 AI 客服回复，无法判断申诉结果。",
+            "success_ids": [],
+            "failed_ids": identifiers,
+            "error": "",
+        }
+
+    prompt = f"""
+你是武汉泽顺综合服务台的申诉结果分析助手。
+请只根据下面的 AI 客服回复判断申诉结果，不要补充外部信息。
+
+任务类型：{appeal_type}
+申诉编号列表：{json.dumps(identifiers, ensure_ascii=False)}
+申诉内容：
+{appeal_content}
+
+AI 客服全部回复：
+{json.dumps(ai_replies[-80:], ensure_ascii=False, indent=2)}
+
+请输出严格 JSON，不要 Markdown，不要解释：
+{{
+  "status": "成功/部分成功/失败/待确认",
+  "success_ids": ["明确被接受、已移除、已处理成功的编号"],
+  "failed_ids": ["明确被拒绝、无法处理、维持原判或需要人工继续跟进的编号"],
+  "summary": "用中文简短总结客服回复和判断依据"
+}}
+如果客服只是说正在处理、需要等待、没有明确结果，status 用“待确认”，不要把编号放入 success_ids。
+如果客服对多个编号统一回复成功或失败，请把对应列表里的编号都归类。
+"""
+    try:
+        content = chat_deepseek(
+            [{"role": "user", "content": prompt}],
+            temperature=0,
+            max_tokens=1200,
+        )
+        parsed = _parse_ai_summary_json(content)
+        status = parsed["status"] or "待确认"
+        if status not in ("成功", "部分成功", "失败", "待确认"):
+            status = "待确认"
+        return {
+            "status": status,
+            "summary": parsed["summary"],
+            "success_ids": parsed["success_ids"],
+            "failed_ids": parsed["failed_ids"],
+            "error": "",
+        }
+    except Exception as e:
+        return {
+            "status": "待确认",
+            "summary": "AI 总结失败，已保留原始客服回复供人工查看。",
+            "success_ids": [],
+            "failed_ids": [],
+            "error": f"AI总结失败：{e}",
+        }
+
+
+def save_ai_appeal_record(
+    appeal_time,
+    appeal_type,
+    shop_name,
+    site,
+    log_records,
+    final_agent_messages=None,
+    error="",
+):
+    fields = _collect_appeal_record_fields(log_records, final_agent_messages)
+    if str(error or "").strip() == "未登录":
+        summary = {
+            "status": "未登录",
+            "summary": "店铺窗口显示登录邮箱输入页，本次未执行申诉操作。",
+            "success_ids": [],
+            "failed_ids": [],
+            "error": "",
+        }
+    else:
+        summary = summarize_ai_appeal_result(
+            appeal_type,
+            fields["identifiers"],
+            fields["appeal_content"],
+            fields["ai_replies"],
+        )
+    record = {
+        "appeal_time": appeal_time,
+        "appeal_type": appeal_type,
+        "shop_name": shop_name,
+        "site": site,
+        "status": summary["status"],
+        "appeal_content": fields["appeal_content"],
+        "identifiers": fields["identifiers"],
+        "success_ids": summary["success_ids"],
+        "failed_ids": summary["failed_ids"],
+        "ai_replies": fields["ai_replies"],
+        "ai_summary": summary["summary"],
+        "error": "\n".join(_unique_text_list([error, summary.get("error", "")])),
+    }
+    try:
+        insert_ai_appeal_record(record)
+        print(f"{get_now_time()} {shop_name} {site} AI申诉汇总记录已入库<br>")
+    except Exception as e:
+        print(f"{get_now_time()} {shop_name} {site} AI申诉汇总记录入库失败：{e}<br>")
+    return record
+
+
 # 申诉
 def shensu(name, site, form, message):
     """AI 客服申诉主入口，根据 form 分发到延误、侵权或投诉处理逻辑。"""
     print(f"{name} {site} 开始进行{form}申诉，自定义话术为{message}<br>")
+    appeal_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    start_appeal_log_collection()
     site_name = normalize_site_name(site)
-    window_id = get_window_id_by_shop_name(name)
-    driver, res = connect_bit_browser(window_id)
-    name = res.get("data", {}).get("name") or name
+    driver = None
+    appeal_error = ""
+    window_id = ""
+    skip_close_tab = False
 
     nickname_list = ["Bruce", "Jack", "Lucy", "James"]
     nickname = random.choice(nickname_list)
 
     try:
+        window_id = get_window_id_by_shop_name(name)
+        driver, res = connect_bit_browser(window_id)
+        name = res.get("data", {}).get("name") or name
+        if is_mercado_login_required_page(driver):
+            appeal_error = "未登录"
+            skip_close_tab = True
+            print(f"{get_now_time()} {name} {site_name} 店铺窗口未登录，检测到邮箱登录页，本次不执行任何操作<br>")
+            return "未登录"
+
         driver.get(HELP_URL)
         time.sleep(8)
+        if is_mercado_login_required_page(driver):
+            appeal_error = "未登录"
+            skip_close_tab = True
+            print(f"{get_now_time()} {name} {site_name} 跳转帮助页后仍为登录页，本次不执行任何操作<br>")
+            return "未登录"
+
         select_site(driver, name, site_name)
 
         if form == "延误":
@@ -1814,12 +2059,32 @@ def shensu(name, site, form, message):
         print(f"{get_now_time()} {name} {site} 自动发送AI客服申诉话术：{huashu}<br>")
         # chat_ai(driver, name, site, form, huashu, nickname)
     except Exception as e:
+        appeal_error = str(e)
         print(f"{get_now_time()} {name} {site} AI客服申诉执行失败<br>")
         print(e)
         traceback.print_exc()
     finally:
+        final_messages = []
+        if driver is not None and not skip_close_tab:
+            try:
+                final_messages = safe_get_agent_messages(driver)
+            except Exception:
+                final_messages = []
+        log_records = get_appeal_log_records()
+        if log_records or final_messages or appeal_error:
+            save_ai_appeal_record(
+                appeal_time,
+                form,
+                name,
+                site_name,
+                log_records,
+                final_agent_messages=final_messages,
+                error=appeal_error,
+            )
+        stop_appeal_log_collection()
         print(f"{get_now_time()} {name}{site}AI客服申诉执行完毕<br>")
-        close_current_tab_keep_browser(driver, name, site)
+        if driver is not None and not skip_close_tab:
+            close_current_tab_keep_browser(driver, name, site)
 
 
 def handle_infraction(window_id, driver, name, site, message, nickname):

@@ -3,6 +3,7 @@ import sys
 import time
 import traceback
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from datetime import datetime
 
 
 CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -118,10 +119,42 @@ def run_top_infraction_ai_appeal_once(top_n=5, max_workers=None, recent_days=30,
     return results
 
 
-def loop_top_infraction_ai_appeal(top_n=5, max_workers=None, recent_days=30, round_interval=600, site_pause=30, message="", only_active=True):
+def _format_stop_at(stop_at):
+    if not stop_at:
+        return ""
+    if isinstance(stop_at, datetime):
+        return stop_at.strftime("%Y-%m-%d %H:%M:%S")
+    return str(stop_at)
+
+
+def _seconds_until_stop(stop_at):
+    if not stop_at:
+        return None
+    if isinstance(stop_at, datetime):
+        return (stop_at - datetime.now()).total_seconds()
+    return float(stop_at) - time.time()
+
+
+def loop_top_infraction_ai_appeal(
+    top_n=5,
+    max_workers=None,
+    recent_days=30,
+    round_interval=600,
+    site_pause=30,
+    message="",
+    only_active=True,
+    stop_at=None,
+):
     """循环执行 Top 侵权店铺 AI 客服申诉。"""
     round_no = 1
+    if stop_at:
+        print(f"{get_now_time()} Top 侵权店铺 AI 客服申诉循环将在 {_format_stop_at(stop_at)} 前停止<br>")
     while True:
+        remaining = _seconds_until_stop(stop_at)
+        if remaining is not None and remaining <= 0:
+            print(f"{get_now_time()} 已到达停止时间，结束 Top 侵权店铺 AI 客服申诉循环<br>")
+            return
+
         started = time.time()
         try:
             print(f"{get_now_time()} 开始第 {round_no} 轮 Top 侵权店铺 AI 客服申诉<br>")
@@ -138,10 +171,16 @@ def loop_top_infraction_ai_appeal(top_n=5, max_workers=None, recent_days=30, rou
             traceback.print_exc()
 
         sleep_seconds = max(0, int(round_interval) - (time.time() - started))
+        remaining = _seconds_until_stop(stop_at)
+        if remaining is not None:
+            if remaining <= 0:
+                print(f"{get_now_time()} 已到达停止时间，结束 Top 侵权店铺 AI 客服申诉循环<br>")
+                return
+            sleep_seconds = min(sleep_seconds, remaining)
         print(f"{get_now_time()} 第 {round_no} 轮结束，等待 {sleep_seconds:.1f} 秒后重新计算 Top 店铺<br>")
         time.sleep(sleep_seconds)
         round_no += 1
 
 
 if __name__ == "__main__":
-    loop_top_infraction_ai_appeal(top_n=10, max_workers=10, round_interval=600)
+    loop_top_infraction_ai_appeal(top_n=20, max_workers=20, round_interval=600)
