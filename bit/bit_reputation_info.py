@@ -22,17 +22,42 @@ import pandas as pd
 
 from datetime import datetime
 from pathlib import Path
-from bit.bit_mysql import *
+from bit.bit_db_api import insert_task_record, inset_reputation_info
 from bit.bit_clash import *
 
 
-def _connect_browser(window_id):
-    res = openBrowser(window_id)  # 窗口ID从窗口配置界面中复制，或者api创建后返回
+def _is_bit_api_rate_limited(res):
+    text = str(res or "")
+    return "请求太过频繁" in text or "每秒最多可以发起" in text
 
-    print(res)
 
-    driverPath = res["data"]["driver"]
-    debuggerAddress = res["data"]["http"]
+def _connect_browser(window_id, max_retries=3, retry_delay=3):
+    last_res = None
+    for attempt in range(1, max_retries + 1):
+        res = openBrowser(window_id)  # 窗口ID从窗口配置界面中复制，或者api创建后返回
+        last_res = res
+        print(res)
+
+        data = res.get("data") if isinstance(res, dict) else None
+        if data and data.get("driver") and data.get("http"):
+            driverPath = data["driver"]
+            debuggerAddress = data["http"]
+            break
+
+        msg = res.get("msg", "") if isinstance(res, dict) else str(res)
+        if _is_bit_api_rate_limited(res):
+            print(
+                f"{get_now_time()} 比特浏览器打开窗口被限频，等待 {retry_delay} 秒后重试："
+                f"{window_id}，第 {attempt}/{max_retries} 次，原因：{msg}"
+            )
+        else:
+            print(
+                f"{get_now_time()} 比特浏览器打开窗口返回异常，等待 {retry_delay} 秒后重试："
+                f"{window_id}，第 {attempt}/{max_retries} 次，返回：{res}"
+            )
+        time.sleep(retry_delay)
+    else:
+        raise RuntimeError(f"打开比特浏览器窗口失败，已重试 {max_retries} 次，最后返回：{last_res}")
 
     chrome_options = webdriver.ChromeOptions()
     chrome_options.add_experimental_option("debuggerAddress", debuggerAddress)
@@ -748,7 +773,10 @@ def get_reputation_info_all(max_workers=10):
     insert_task_record(result)
 
 
-if __name__ == "__main__":
+def main():
+    return get_reputation_info_all()
 
+
+if __name__ == "__main__":
     # get_reputation_info('22139511815a4bf588fe96d5fdafded6','四季如春','墨西哥')
-    get_reputation_info_all()
+    main()

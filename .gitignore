@@ -19,5 +19,7 @@ build/
 __pycache__/
 *.pyc
 .env
+deepseek_key.txt
+AI_Agent/deepseek_key.txt
 
 bit/ai_chat_records.jsonl

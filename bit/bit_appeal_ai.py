@@ -43,7 +43,7 @@ import random
 from bit.bit_utils import get_latest_modified_file, get_bit_path, parser_delay_date, get_now_time, getWindowidByName
 from bit.bit_api import *
 from bit.bit_download import download_relay_mail
-from bit.bit_mysql import get_latest_infraction_info
+from bit.bit_db_api import get_latest_infraction_info
 from AI_Agent.qianwen import *
 import pandas as pd
 from datetime import datetime, timedelta
@@ -60,17 +60,11 @@ try:
 except Exception:
     from chat_log import append_chat_log
 
-try:
-    import mercado_appeal_runner as mercado_cdp_runner
-except Exception:
-    mercado_cdp_runner = None
-
 # 聊天记录入库接口；AI 与人工客服回复都会通过这个接口记录。
 CHAT_INFO_API_URL = "https://zeshun.nat100.top/api/v1/chat"
 
 # 美客多帮助中心入口，AI 客服悬浮窗通常挂在这些页面中。
 HELP_URL = "https://global-selling.mercadolibre.com/help"
-AI_RECOLLECT_INTERVAL_SECONDS = 600
 
 # AI 悬浮窗 iframe 的特征。不同账号/页面版本的 src/title 可能不同，所以这里保留多个标记。
 AI_FRAME_URL_MARKERS = ("meli-ai-chat", "maxwell/new-chat")
@@ -113,6 +107,15 @@ SITE_CODE_MAP = {
     "乌拉圭": "UY",
 }
 
+SITE_CODE_TO_NAME = {
+    "MX": "墨西哥",
+    "BR": "巴西",
+    "CO": "哥伦比亚",
+    "CL": "智利",
+    "AR": "阿根廷",
+    "UY": "乌拉圭",
+}
+
 # 美客多顶部站点切换器中各站点对应的 data-value。
 SITE_SWITCH_SELECTOR_MAP = {
     "墨西哥": 'div[data-value="MLM-remote"]',
@@ -121,6 +124,24 @@ SITE_SWITCH_SELECTOR_MAP = {
     "智利": 'div[data-value="MLC-remote"]',
     "阿根廷": 'div[data-value="MLA-remote"]',
     "乌拉圭": 'div[data-value="MLU-remote"]',
+}
+
+SITE_REMOTE_VALUE_MAP = {
+    "墨西哥": "MLM-remote",
+    "巴西": "MLB-remote",
+    "哥伦比亚": "MCO-remote",
+    "智利": "MLC-remote",
+    "阿根廷": "MLA-remote",
+    "乌拉圭": "MLU-remote",
+}
+
+SITE_LABEL_MAP = {
+    "墨西哥": ("Mexico", "México", "墨西哥", "MLM"),
+    "巴西": ("Brazil", "Brasil", "巴西", "MLB"),
+    "哥伦比亚": ("Colombia", "哥伦比亚", "MCO"),
+    "智利": ("Chile", "智利", "MLC"),
+    "阿根廷": ("Argentina", "阿根廷", "MLA"),
+    "乌拉圭": ("Uruguay", "乌拉圭", "MLU"),
 }
 
 
@@ -172,6 +193,35 @@ def connect_bit_browser(window_id):
     raise RuntimeError(f"打开比特浏览器失败，窗口ID={window_id}，返回={last_res}")
 
 
+def close_current_tab_keep_browser(driver, name="", site=""):
+    """关闭当前标签页，但保留 BitBrowser 窗口本身。"""
+    if not driver:
+        return False
+    try:
+        driver.switch_to.default_content()
+    except Exception:
+        pass
+
+    try:
+        handles = list(driver.window_handles)
+        current = driver.current_window_handle
+        if len(handles) <= 1:
+            driver.execute_script("window.open('about:blank', '_blank');")
+            time.sleep(0.5)
+            handles = list(driver.window_handles)
+            driver.switch_to.window(current)
+
+        driver.close()
+        remaining = [handle for handle in driver.window_handles if handle != current]
+        if remaining:
+            driver.switch_to.window(remaining[-1])
+        print(f"{get_now_time()} {name}{site} 已关闭当前标签页<br>")
+        return True
+    except Exception as e:
+        print(f"{get_now_time()} {name}{site} 关闭当前标签页失败：{e}<br>")
+        return False
+
+
 def get_window_id_by_shop_name(name):
     """根据店铺名从“比特配置文件.xlsx”中读取比特浏览器窗口 ID。"""
     config_path = get_bit_path() / "比特配置文件.xlsx"
@@ -188,28 +238,157 @@ def get_window_id_by_shop_name(name):
 
 def select_site(driver, name, site):
     """在美客多全球销售后台顶部站点切换器中切换到指定站点。"""
-    for i in range(3):
-        try:
-            WebDriverWait(driver, 10).until(
-                EC.element_to_be_clickable(
-                    (By.CLASS_NAME, "nav-header-cbt__site-switcher")
-                )
-            ).click()
+    site_name = normalize_site_name(site)
+    if select_mercado_site_fast(driver, name, site_name):
+        return True
 
-            print(f"{get_now_time()} {name} {site} '打开站点选择器'<br>")
-            time.sleep(5)
-            path = SITE_SWITCH_SELECTOR_MAP.get(site, 'div[data-value="MLM-remote"]')
-            WebDriverWait(driver, 30).until(
-                EC.element_to_be_clickable((By.CSS_SELECTOR, path))
-            ).click()
+    try:
+        WebDriverWait(driver, 5).until(
+            EC.element_to_be_clickable((By.CLASS_NAME, "nav-header-cbt__site-switcher"))
+        ).click()
+        path = SITE_SWITCH_SELECTOR_MAP.get(site_name, 'div[data-value="MLM-remote"]')
+        WebDriverWait(driver, 8).until(
+            EC.element_to_be_clickable((By.CSS_SELECTOR, path))
+        ).click()
+        driver.refresh()
+        time.sleep(2)
+        if not verify_selected_site(driver, site_name):
+            raise RuntimeError("选择后页面校验站点不匹配")
+        print(f"{get_now_time()} {name} {site_name} '选择站点成功'<br>")
+        return True
+    except Exception as e:
+        print(f"{get_now_time()} {name} {site_name} '选择站点失败': {e}<br>")
+        raise RuntimeError(f"{name} 切换站点失败：目标={site_name}, 原始参数={site}") from e
 
+
+def verify_selected_site(driver, site):
+    site_name = normalize_site_name(site)
+    labels = SITE_LABEL_MAP.get(site_name, SITE_LABEL_MAP["墨西哥"])
+    site_code = normalize_site_code(site_name)
+    try:
+        return bool(driver.execute_script(
+            """
+            const labels = arguments[0].map(item => String(item).toLowerCase());
+            const siteCode = String(arguments[1] || '').toLowerCase();
+
+            function allElements(root) {
+                const out = [];
+                const walk = (node) => {
+                    const elements = node.querySelectorAll ? Array.from(node.querySelectorAll('*')) : [];
+                    for (const el of elements) {
+                        out.push(el);
+                        if (el.shadowRoot) walk(el.shadowRoot);
+                    }
+                };
+                walk(root || document);
+                return out;
+            }
+            function visible(el) {
+                const rect = el.getBoundingClientRect();
+                return rect.width > 0 && rect.height > 0;
+            }
+            function textOf(el) {
+                return [
+                    el.innerText || '',
+                    el.textContent || '',
+                    el.getAttribute('aria-label') || '',
+                    el.getAttribute('title') || ''
+                ].join(' ').toLowerCase();
+            }
+
+            const visibleTexts = allElements(document).filter(visible).map(textOf).join('\\n');
+            return labels.some(label => label && visibleTexts.includes(label)) ||
+                (siteCode && new RegExp(`(^|\\\\s)${siteCode}(\\\\s|$)`, 'i').test(visibleTexts));
+            """,
+            list(labels),
+            site_code,
+        ))
+    except Exception:
+        return False
+
+
+def select_mercado_site_fast(driver, name, site):
+    """快速切换美客多站点，优先用 JS 深度查找，减少重复重试。"""
+    site_name = normalize_site_name(site)
+    remote_value = SITE_REMOTE_VALUE_MAP.get(site_name, "MLM-remote")
+    labels = SITE_LABEL_MAP.get(site_name, SITE_LABEL_MAP["墨西哥"])
+    result = driver.execute_script(
+        """
+        const remoteValue = arguments[0];
+        const labels = arguments[1].map(item => String(item).toLowerCase());
+
+        function allElements(root) {
+            const out = [];
+            const walk = (node) => {
+                const elements = node.querySelectorAll ? Array.from(node.querySelectorAll('*')) : [];
+                for (const el of elements) {
+                    out.push(el);
+                    if (el.shadowRoot) walk(el.shadowRoot);
+                }
+            };
+            walk(root || document);
+            return out;
+        }
+
+        function visible(el) {
+            const rect = el.getBoundingClientRect();
+            return rect.width > 0 && rect.height > 0;
+        }
+
+        function textOf(el) {
+            return [
+                el.innerText || '',
+                el.textContent || '',
+                el.getAttribute('aria-label') || '',
+                el.getAttribute('title') || '',
+                el.getAttribute('data-value') || ''
+            ].join(' ').toLowerCase();
+        }
+
+        const elements = allElements(document);
+        const switcher = elements.find(el =>
+            visible(el) && (
+                String(el.className || '').includes('nav-header-cbt__site-switcher') ||
+                /select\\s+(country|site)|country|site/i.test(textOf(el))
+            )
+        );
+
+        if (switcher && labels.some(label => textOf(switcher).includes(label))) {
+            return 'already';
+        }
+
+        if (switcher) {
+            switcher.click();
+        }
+
+        const target = allElements(document).filter(visible).find(el =>
+            visible(el) && (
+                el.getAttribute('data-value') === remoteValue ||
+                labels.some(label => textOf(el).includes(label))
+            )
+        );
+        if (!target) {
+            return switcher ? 'opened_no_target' : 'no_switcher';
+        }
+        target.scrollIntoView({block: 'center'});
+        target.click();
+        for (const type of ['mousedown', 'mouseup', 'click']) {
+            target.dispatchEvent(new MouseEvent(type, {bubbles: true, cancelable: true, view: window}));
+        }
+        return 'clicked';
+        """,
+        remote_value,
+        list(labels),
+    )
+    print(f"{get_now_time()} {name} {site_name} 快速选择站点结果：{result}<br>")
+    if result in ("already", "clicked"):
+        time.sleep(2)
+        if result == "clicked":
             driver.refresh()
-            time.sleep(3)
-            print(f"{get_now_time()} {name} {site} '选择站点成功'<br>")
+            time.sleep(2)
+        if verify_selected_site(driver, site_name):
             return True
-        except Exception as e:
-            print(f"{get_now_time()} {name} {site} '重新执行选择站点'<br>")
-            time.sleep(10)
+        print(f"{get_now_time()} {name} {site_name} 快速选择后校验失败<br>")
     return False
 
 
@@ -277,11 +456,58 @@ def is_ai_frame_info(info):
     return any(marker in text for marker in AI_FRAME_MARKERS)
 
 
+def reset_expired_ai_iframe(driver, name="", site=""):
+    """父页面 iframe 地址已经过期时，直接重置为新的 AI 会话地址。"""
+    try:
+        driver.switch_to.default_content()
+        reset = driver.execute_script(
+            """
+            function cleanNewChatUrl(rawUrl) {
+                const url = new URL(rawUrl || '/maxwell/new-chat', window.location.origin);
+                url.pathname = '/maxwell/new-chat';
+                url.searchParams.set('flavor', 'seller-assistant');
+                url.searchParams.set('hideHeader', 'true');
+                url.searchParams.set('origin', 'sa');
+                url.searchParams.set('andes_ui', 'legacy');
+                url.searchParams.set('customLocale', 'en-US');
+                url.searchParams.delete('lifecycle');
+                url.searchParams.delete('conversation_id');
+                url.hash = '';
+                return url.toString();
+            }
+
+            const frames = Array.from(document.querySelectorAll('iframe'));
+            const target = frames.find((frame) => {
+                const src = frame.getAttribute('src') || '';
+                return /maxwell\\/new-chat|meli-ai-chat/i.test(src) &&
+                    /inactivity_expiration|conversation_id=/i.test(src);
+            });
+            if (!target) return false;
+            const nextUrl = cleanNewChatUrl(target.getAttribute('src') || '');
+            target.setAttribute('src', nextUrl);
+            return nextUrl;
+            """
+        )
+        if reset:
+            print(f"{get_now_time()} {name} {site} AI会话 iframe 已过期，已重置为新会话：{reset}<br>")
+            time.sleep(4)
+            return True
+    except Exception as e:
+        print(f"{get_now_time()} {name} {site} 重置过期 AI iframe 失败：{e}<br>")
+    finally:
+        try:
+            driver.switch_to.default_content()
+        except Exception:
+            pass
+    return False
+
+
 def switch_to_ai_chat_frame(driver, require_input=False, max_depth=2):
     """递归切换到 AI 客服 iframe。
 
     require_input=True 时，会进一步确认 iframe 内存在聊天输入框，避免误进帮助页顶部搜索框。
     """
+    reset_expired_ai_iframe(driver)
     driver.switch_to.default_content()
 
     def search_frames(depth):
@@ -517,6 +743,101 @@ def find_chat_input(driver, timeout=30, allow_default_content=False):
     return None
 
 
+def recover_expired_ai_conversation(driver, name="", site="", timeout=12):
+    """AI 会话过期时点击 New conversation，进入新的对话。"""
+    try:
+        result = driver.execute_script(
+            """
+            function cleanNewChatUrl(rawUrl) {
+                const url = new URL(rawUrl || '/maxwell/new-chat', window.location.origin);
+                url.pathname = '/maxwell/new-chat';
+                url.searchParams.set('flavor', 'seller-assistant');
+                url.searchParams.set('hideHeader', 'true');
+                url.searchParams.set('origin', 'sa');
+                url.searchParams.set('andes_ui', 'legacy');
+                url.searchParams.set('customLocale', 'en-US');
+                url.searchParams.delete('lifecycle');
+                url.searchParams.delete('conversation_id');
+                url.hash = '';
+                return url.toString();
+            }
+
+            function deepElements(root = document) {
+                const out = [];
+                const walk = (node) => {
+                    const elements = node.querySelectorAll ? Array.from(node.querySelectorAll('*')) : [];
+                    for (const el of elements) {
+                        out.push(el);
+                        if (el.shadowRoot) walk(el.shadowRoot);
+                    }
+                };
+                walk(root);
+                return out;
+            }
+
+            function visible(el) {
+                const rect = el.getBoundingClientRect();
+                const style = window.getComputedStyle(el);
+                return !!(rect.width || rect.height || el.getClientRects().length)
+                    && style.visibility !== 'hidden'
+                    && style.display !== 'none'
+                    && !el.disabled;
+            }
+
+            const nodes = deepElements();
+            const pageText = nodes.map(el => el.innerText || el.textContent || '').join('\\n');
+            const currentUrl = window.location.href || '';
+            const expired = /this conversation has ended|conversation has ended|inactivity_expiration/i.test(pageText + '\\n' + currentUrl);
+            if (!expired) return false;
+
+            if (/inactivity_expiration|conversation_id=/i.test(currentUrl)) {
+                const nextUrl = cleanNewChatUrl(currentUrl);
+                window.location.replace(nextUrl);
+                return { action: 'replace_location', url: nextUrl };
+            }
+
+            const target = nodes.find((el) => {
+                const text = [
+                    el.innerText || '',
+                    el.textContent || '',
+                    el.getAttribute('aria-label') || '',
+                    el.getAttribute('title') || '',
+                    el.getAttribute('href') || '',
+                ].join(' ');
+                return /new conversation/i.test(text);
+            });
+            if (!target) return 'expired_no_button';
+            const href = target.getAttribute('href');
+            if (href) {
+                const nextUrl = cleanNewChatUrl(href);
+                window.location.replace(nextUrl);
+                return { action: 'replace_href', url: nextUrl };
+            }
+            if (visible(target)) {
+                target.scrollIntoView({block: 'center', inline: 'center'});
+                target.click();
+                return { action: 'click_button' };
+            }
+            return 'expired_no_clickable_button';
+            """
+        )
+        if result in ("expired_no_button", "expired_no_clickable_button"):
+            print(f"{get_now_time()} {name} {site} AI会话已结束，但没有找到可用的 New conversation 入口<br>")
+            return False
+        if result:
+            print(f"{get_now_time()} {name} {site} AI会话已结束，已进入 New conversation：{result}<br>")
+            end_time = time.time() + timeout
+            while time.time() < end_time:
+                time.sleep(1)
+                if find_chat_input(driver, timeout=1, allow_default_content=False):
+                    print(f"{get_now_time()} {name} {site} 已进入新的 AI 会话<br>")
+                    return True
+            return True
+    except Exception as e:
+        print(f"{get_now_time()} {name} {site} 检查 AI 会话过期失败：{e}<br>")
+    return False
+
+
 def click_send_button(driver):
     """查找并点击 AI 客服输入框旁的发送按钮，失败时交给回车发送兜底。"""
     button = driver.execute_script(
@@ -590,7 +911,10 @@ def send_ai_chat_message(driver, message):
     if not switch_to_ai_chat_frame(driver):
         raise RuntimeError("没有找到 AI 客服聊天窗口")
 
+    recover_expired_ai_conversation(driver)
     input_box = find_chat_input(driver, timeout=5, allow_default_content=False)
+    if input_box is None and recover_expired_ai_conversation(driver):
+        input_box = find_chat_input(driver, timeout=8, allow_default_content=False)
     if input_box is None:
         raise RuntimeError("没有找到 AI 客服输入框")
 
@@ -1247,7 +1571,11 @@ def open_ai_contact_window(driver, name, site):
         dump_ai_entry_debug_info(driver)
         save_ai_open_debug_artifacts(driver, name, site)
         raise RuntimeError("没有切换到 AI 客服悬浮窗 iframe")
-    if not find_chat_input(driver, timeout=15, allow_default_content=False):
+    recover_expired_ai_conversation(driver, name, site)
+    input_box = find_chat_input(driver, timeout=15, allow_default_content=False)
+    if not input_box and recover_expired_ai_conversation(driver, name, site):
+        input_box = find_chat_input(driver, timeout=8, allow_default_content=False)
+    if not input_box:
         dump_iframe_debug_info(driver)
         dump_ai_entry_debug_info(driver)
         save_ai_open_debug_artifacts(driver, name, site)
@@ -1275,11 +1603,7 @@ def use_one_browser_run_task(info):
                     traceback.print_exc()
                     print("申诉执行异常", e)
                 finally:
-                    window_id = getWindowidByName(name)
-                    try:
-                        closeBrowser(window_id)
-                    except Exception as e:
-                        continue
+                    print(f"{get_now_time()} {name}{site} 本轮结束，标签页由申诉流程清理<br>")
                 # 5分钟执行一次这个方法
                 time.sleep(300)
         else:
@@ -1296,122 +1620,10 @@ def normalize_site_code(site):
     return SITE_CODE_MAP.get(str(site or "").strip(), key or "MX")
 
 
-def _require_cdp_runner():
-    """加载 CDP 稳定版运行器，缺失时给出明确错误。"""
-    if mercado_cdp_runner is None:
-        raise RuntimeError("没有找到 mercado_appeal_runner.py，无法执行稳定版 AI 侵权申诉流程")
-    return mercado_cdp_runner
-
-
-def _appeal_loop_log_path(name, site_code):
-    """生成稳定版循环日志文件路径。"""
-    return Path(__file__).resolve().parent / f"{name}_{site_code}_ai_recollect_loop.log"
-
-
-def _appeal_loop_log(path, message):
-    """同时写入日志文件和控制台，便于前端实时展示。"""
-    line = f"[{get_now_time()}] {message}"
-    with path.open("a", encoding="utf-8") as f:
-        f.write(line + "\n")
-    print(line, flush=True)
-
-
-def appeal_ai_recollect_once(name, site="MX"):
-    """
-    稳定版侵权 AI 申诉：
-    1. 打开指定比特浏览器窗口。
-    2. 进入当前站点侵权列表并重新读取所有当前编号。
-    3. 按 3 个一组重新分组。
-    4. 进入 Help 页 AI Assistant 悬浮窗逐组发送申诉话术。
-    """
-    runner = _require_cdp_runner()
+def normalize_site_name(site):
+    """把用户传入的中文站点、平台代码或英文缩写统一为中文站点名，供 Selenium 切站点使用。"""
     site_code = normalize_site_code(site)
-    log_path = _appeal_loop_log_path(name, site_code)
-    _appeal_loop_log(log_path, f"START window={name} site={site_code}")
-
-    cdp_http = runner.open_bitbrowser(name)
-    first, ids = runner.collect_infractions(cdp_http, site_code)
-    groups = list(runner.chunks(ids, 3))
-
-    prefix = f"{name}_{site_code}_loop_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
-    payload = {
-        "window": name,
-        "site": site_code,
-        "time": get_now_time(),
-        "first": first,
-        "ids": ids,
-        "aiGroups": groups,
-    }
-    out_dir = Path(__file__).resolve().parent
-    (out_dir / f"{prefix}_ids.json").write_text(
-        json.dumps(payload, ensure_ascii=False, indent=2),
-        encoding="utf-8",
-    )
-
-    _appeal_loop_log(log_path, f"COLLECTED ids={len(ids)} groups={len(groups)}")
-    if not groups:
-        _appeal_loop_log(log_path, "DONE no current infringement ids")
-        return {"ids": len(ids), "groups": 0, "sent": 0}
-
-    ai = runner.open_ai_assistant(cdp_http)
-    sent_count = 0
-    try:
-        for idx, group in enumerate(groups, start=1):
-            message = f"{runner.PRODUCT_SEPARATOR.join(group)}{runner.AI_APPEAL_SUFFIX}"
-            before_chat = runner.ai_recent_chat(ai)
-            result = runner.send_ai_message(ai, message)
-            time.sleep(7)
-            chat = runner.ai_recent_chat(ai)
-            append_chat_log(
-                name,
-                site_code,
-                "recollect_send_ai_group",
-                message=message,
-                chat=chat,
-                extra={
-                    "group_index": idx,
-                    "total_groups": len(groups),
-                    "group_ids": group,
-                    "send_result": result,
-                    "before_chat": before_chat,
-                },
-            )
-            runner.maybe_reply_site_option(ai, site_code, name)
-            shot = out_dir / f"{prefix}_ai_group_{idx}.png"
-            ai.screenshot(shot)
-            sent_count += 1
-            _appeal_loop_log(
-                log_path,
-                "SENT "
-                + f"group={idx}/{len(groups)} ids={','.join(group)} "
-                + f"method={result.get('method')} typed={result.get('typed')} screenshot={shot}",
-            )
-    finally:
-        ai.close()
-
-    _appeal_loop_log(log_path, f"DONE ids={len(ids)} sent_groups={sent_count}")
-    return {"ids": len(ids), "groups": len(groups), "sent": sent_count}
-
-
-def appeal_ai_recollect_loop(name, site="MX", interval=AI_RECOLLECT_INTERVAL_SECONDS):
-    """按固定间隔循环重新读取侵权编号并执行 AI 申诉。"""
-    site_code = normalize_site_code(site)
-    log_path = _appeal_loop_log_path(name, site_code)
-    cycle = 1
-    while True:
-        started = time.time()
-        try:
-            _appeal_loop_log(log_path, f"CYCLE {cycle} BEGIN")
-            result = appeal_ai_recollect_once(name, site_code)
-            _appeal_loop_log(log_path, f"CYCLE {cycle} OK {result}")
-        except Exception as e:
-            _appeal_loop_log(log_path, f"CYCLE {cycle} ERROR {type(e).__name__}: {e}")
-            traceback.print_exc()
-
-        sleep_seconds = max(0, interval - (time.time() - started))
-        _appeal_loop_log(log_path, f"CYCLE {cycle} SLEEP seconds={sleep_seconds:.1f}")
-        time.sleep(sleep_seconds)
-        cycle += 1
+    return SITE_CODE_TO_NAME.get(site_code, "墨西哥")
 
 
 def _split_config_sites(value):
@@ -1494,7 +1706,7 @@ def run_top_infraction_shop_once(shop_plan, site_pause=30):
         count = site["count"]
         try:
             print(f"{get_now_time()} {name} {site_code} 开始处理侵权，当前站点侵权数 {count}<br>")
-            result = appeal_ai_recollect_once(name, site_code)
+            result = shensu(name, site_code, "侵权", "")
             results.append({"site": site_code, "count": count, "result": result})
             print(f"{get_now_time()} {name} {site_code} 侵权处理完成：{result}<br>")
         except Exception as e:
@@ -1561,6 +1773,7 @@ def auto_appeal_top_infractions_loop(
 def shensu(name, site, form, message):
     """AI 客服申诉主入口，根据 form 分发到延误、侵权或投诉处理逻辑。"""
     print(f"{name} {site} 开始进行{form}申诉，自定义话术为{message}<br>")
+    site_name = normalize_site_name(site)
     window_id = get_window_id_by_shop_name(name)
     driver, res = connect_bit_browser(window_id)
     name = res.get("data", {}).get("name") or name
@@ -1571,28 +1784,29 @@ def shensu(name, site, form, message):
     try:
         driver.get(HELP_URL)
         time.sleep(8)
-        select_site(driver, name, site)
+        select_site(driver, name, site_name)
 
         if form == "延误":
-            handle_delay(driver, name, site, message, nickname)
+            handle_delay(window_id, driver, name, site_name, message, nickname)
+            return
 
         if form == "侵权":
-            handle_infraction(window_id, driver, name, site, message, nickname)
+            handle_infraction(window_id, driver, name, site_name, message, nickname)
             return
 
         if form == "投诉":
-            handle_complain(driver, name, site, message, nickname)
+            handle_complain(driver, name, site_name, message, nickname)
 
-        huashu = build_appeal_message(window_id, name, site, form, message, nickname)
+        huashu = build_appeal_message(window_id, name, site_name, form, message, nickname)
         if huashu == "":
             print(f"{get_now_time()} {name} {site} 没有可以申诉的数据<br>")
             return "没有可以申诉的数据"
 
-        open_ai_contact_window(driver, name, site)
+        open_ai_contact_window(driver, name, site_name)
         send_ai_chat_message(driver, huashu)
         append_chat_log(
             name,
-            site,
+            site_name,
             "send_initial_appeal",
             message=huashu,
             extra={"form": form, "window_id": window_id},
@@ -1605,7 +1819,7 @@ def shensu(name, site, form, message):
         traceback.print_exc()
     finally:
         print(f"{get_now_time()} {name}{site}AI客服申诉执行完毕<br>")
-        # print(f"{get_now_time()} {name}{site} 关闭浏览器<br>")
+        close_current_tab_keep_browser(driver, name, site)
 
 
 def handle_infraction(window_id, driver, name, site, message, nickname):
@@ -1636,9 +1850,45 @@ def handle_infraction(window_id, driver, name, site, message, nickname):
 
 
 
-def handle_delay(driver, name, site, message, nickname):
-    """延误申诉预留入口，目前主流程仍使用通用话术发送。"""
-    print("开始处理侵权")
+def handle_delay(window_id, driver, name, site, message, nickname):
+    """处理延误申诉：下载最新延误表，按每 5 个订单一组循环发送给 AI 客服。"""
+    group_size = 5
+    delay_orders = get_delay_orders_download_list(window_id, name, site)
+    if not delay_orders:
+        print(f"{get_now_time()} {name} {site} 没有可以申诉的延误订单<br>")
+        return
+
+    groups = [delay_orders[i:i + group_size] for i in range(0, len(delay_orders), group_size)]
+    print(f"{get_now_time()} {name} {site} 延误订单共 {len(delay_orders)} 个，按每组 {group_size} 个分为 {len(groups)} 组<br>")
+
+    default_message = (
+        f"亲爱的客服，我叫{nickname}！这些订单因为菜鸟物流原因，并非我这边发货延误，"
+        f"麻烦您帮忙处理一下，消除对店铺声誉的影响，非常感谢！"
+    )
+    appeal_suffix = message or default_message
+
+    open_ai_contact_window(driver, name, site)
+    for index, current_group in enumerate(groups, start=1):
+        delay_ids = "、".join(str(item) for item in current_group)
+        huashu = f"{delay_ids}{appeal_suffix}"
+        print(f"{get_now_time()} {name} {site} 开始发送第 {index}/{len(groups)} 组延误申诉：{huashu}<br>")
+        before_messages = safe_get_agent_messages(driver)
+        send_ai_chat_message(driver, huashu)
+        append_chat_log(
+            name,
+            site,
+            "send_delay_group",
+            message=huashu,
+            extra={
+                "group_index": index,
+                "total_groups": len(groups),
+                "delay_ids": current_group,
+                "before_messages": before_messages,
+            },
+        )
+        print(f"{get_now_time()} {name} {site} 第 {index}/{len(groups)} 组延误申诉发送完成<br>")
+        if index < len(groups):
+            time.sleep(20)
 
 
 def handle_complain(driver, name, site, message, nickname):
@@ -1680,9 +1930,9 @@ def get_delay_orders_random(name, site, nums):
         print("获取延误表格信息失败", e)
     return order_random
 
-def get_delay_orders_download_random(window_id,name, site, nums):
-    """下载最新延误报表，写入汇总 Excel，再随机抽取最近 15 天内 5 个订单号。"""
-    order_random = ""
+def get_delay_orders_download_list(window_id, name, site):
+    """下载最新延误报表，返回最近 15 天内已实际揽收的全部延误订单号。"""
+    order_list = []
     try:
         download_start_time = time.time()
         message = download_relay_mail(window_id, site)
@@ -1690,17 +1940,16 @@ def get_delay_orders_download_random(window_id,name, site, nums):
 
         if message != "下载文件成功":
             print(get_now_time() + name + site + "没有下载到新的延误报表")
-            return ""
+            return []
 
         delay_file_path = save_latest_delay_report_to_excel(
             window_id, name, site, download_start_time
         )
         if delay_file_path is None:
             print(get_now_time() + name + site + "没有找到刚下载的延误报表")
-            return ""
+            return []
 
         fifteen_days_ago = datetime.now() - timedelta(days=15)
-        order_list = []
         df = pd.read_excel(delay_file_path, engine='openpyxl')
         for index, row in df.iterrows():
             # print(row)
@@ -1712,16 +1961,23 @@ def get_delay_orders_download_random(window_id,name, site, nums):
             if (line_name == name and line_site == site and dispatch_date != "Not yet dispatched"):
                 order_date = parser_delay_date(order_date)
                 if (order_date > fifteen_days_ago):
-                    order_list.append(order_num)
+                    order_list.append(str(order_num).strip().lstrip("'"))
         print(get_now_time() + name + site + "最近15天的延误个数:", len(order_list))
+    except Exception as e:
+        print("获取延误表格信息失败", e)
+    return order_list
 
-        sample_nums = 5
-        if len(order_list) >= sample_nums:
-            order_random = str(random.sample(order_list, sample_nums))
+
+def get_delay_orders_download_random(window_id,name, site, nums):
+    """下载最新延误报表，写入汇总 Excel，再随机抽取最近 15 天内的延误订单号。"""
+    order_random = ""
+    try:
+        order_list = get_delay_orders_download_list(window_id, name, site)
+        if len(order_list) >= nums:
+            order_random = str(random.sample(order_list, nums))
         else:
             order_random = str(order_list)
         order_random = re.sub(r'[^\d,]', '', order_random)
-
         print(get_now_time() + name + site + "随机得到的延误销售单号为", order_random)
     except Exception as e:
         print("获取延误表格信息失败", e)
@@ -1982,13 +2238,11 @@ def get_agent_messages(driver):
             }
             const candidates = [];
             const bodyText = document.body ? document.body.innerText : '';
-            const bodyHtml = document.body ? document.body.innerHTML : '';
-            candidates.push(bodyText, bodyHtml);
+            candidates.push(bodyText);
             for (const el of deepElements()) {
                 const text = [
                     el.innerText || '',
                     el.textContent || '',
-                    el.innerHTML || '',
                     el.getAttribute('aria-label') || '',
                     el.getAttribute('title') || ''
                 ].join(' ');

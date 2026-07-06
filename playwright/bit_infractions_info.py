@@ -9,7 +9,7 @@ from pathlib import Path
 import pandas as pd
 from openpyxl import load_workbook
 from bit.bit_api import closeBrowser, openBrowser
-from bit.bit_mysql import insert_task_record, inset_infraction_info
+from bit.bit_db_api import insert_task_record, inset_infraction_info
 from bit.bit_send_mail import send_info
 from bit.bit_utils import get_now_time
 

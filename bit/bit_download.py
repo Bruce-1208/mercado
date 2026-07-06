@@ -3,7 +3,7 @@ from bit.bit_summary_delayfile import *
 from bit.bit_email_info import *
 import traceback
 from pathlib import Path
-from bit.bit_mysql import *
+from bit.bit_db_api import insert_task_record
 from bit.bit_clash import *
 from bit.bit_summary_delayfile import *
 
@@ -34,6 +34,8 @@ def download_relay_mail(window_id, site):
         i = i + 1
         try:
             click = click_download(driver, site)
+            if click:
+                break
         except Exception as e:
             print("点击下载失败", e)
             traceback.print_exc()

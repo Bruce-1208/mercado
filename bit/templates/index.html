@@ -33,28 +33,50 @@
         .topbar {
             background: linear-gradient(135deg, #1e40af, #2563eb);
             color: #fff;
-            padding: 26px 32px;
+            padding: 10px 18px;
             box-shadow: 0 10px 30px rgba(37, 99, 235, 0.18);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 16px;
         }
 
         .topbar h1 {
             margin: 0;
-            font-size: 28px;
+            font-size: 20px;
             font-weight: 700;
         }
 
         .topbar p {
-            margin: 8px 0 0;
+            margin: 2px 0 0;
             color: rgba(255, 255, 255, 0.82);
-            font-size: 14px;
+            font-size: 12px;
+        }
+
+        .topbar-user {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font-size: 13px;
+            white-space: nowrap;
+        }
+
+        .logout-link {
+            border: 1px solid rgba(255, 255, 255, 0.46);
+            border-radius: 7px;
+            color: #fff;
+            padding: 5px 9px;
+            text-decoration: none;
+            font-weight: 700;
+        }
+
+        .logout-link:hover {
+            background: rgba(255, 255, 255, 0.14);
         }
 
         .page {
-            width: min(1180px, calc(100% - 32px));
-            margin: 24px auto;
-            display: grid;
-            grid-template-columns: 220px 1fr;
-            gap: 20px;
+            width: calc(100% - 12px);
+            margin: 6px auto;
         }
 
         .panel {
@@ -65,31 +87,34 @@
         }
 
         .sidebar {
-            align-self: start;
-            padding: 14px;
-            position: sticky;
-            top: 20px;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            padding: 6px;
+            margin-bottom: 6px;
         }
 
         .nav-title {
-            margin: 0 0 12px;
+            margin: 0 8px 0 2px;
             color: var(--muted);
             font-size: 12px;
             font-weight: 800;
+            white-space: nowrap;
         }
 
         .tab-button {
-            width: 100%;
+            width: auto;
             display: flex;
             align-items: center;
             justify-content: flex-start;
-            margin-bottom: 8px;
+            margin-bottom: 0;
             border: 1px solid transparent;
             border-radius: 8px;
             background: transparent;
             color: #344054;
-            padding: 12px;
+            padding: 7px 10px;
             text-align: left;
+            white-space: nowrap;
         }
 
         .tab-button.active {
@@ -111,46 +136,50 @@
         }
 
         .tab-heading {
-            margin-bottom: 16px;
+            display: flex;
+            align-items: baseline;
+            justify-content: space-between;
+            gap: 12px;
+            margin-bottom: 6px;
         }
 
         .tab-heading h2 {
             margin: 0;
-            font-size: 22px;
+            font-size: 18px;
             font-weight: 800;
         }
 
         .tab-heading p {
-            margin: 6px 0 0;
+            margin: 0;
             color: var(--muted);
-            font-size: 13px;
+            font-size: 12px;
         }
 
         .appeal-grid {
             display: grid;
-            grid-template-columns: 360px 1fr;
-            gap: 20px;
+            grid-template-columns: 280px 1fr;
+            gap: 8px;
         }
 
         .form-panel {
-            padding: 22px;
+            padding: 10px;
         }
 
         .panel-title {
-            margin: 0 0 18px;
-            font-size: 18px;
+            margin: 0 0 8px;
+            font-size: 15px;
             font-weight: 700;
         }
 
         .field {
-            margin-bottom: 16px;
+            margin-bottom: 8px;
         }
 
         label {
             display: block;
-            margin-bottom: 7px;
+            margin-bottom: 4px;
             color: var(--muted);
-            font-size: 13px;
+            font-size: 12px;
             font-weight: 600;
         }
 
@@ -161,12 +190,12 @@
             color: var(--text);
             font: inherit;
             outline: none;
-            padding: 10px 12px;
+            padding: 6px 8px;
             transition: border-color 0.15s ease, box-shadow 0.15s ease;
         }
 
         textarea {
-            min-height: 120px;
+            min-height: 70px;
             resize: vertical;
             line-height: 1.55;
         }
@@ -178,8 +207,8 @@
 
         .actions {
             display: flex;
-            gap: 10px;
-            margin-top: 20px;
+            gap: 8px;
+            margin-top: 10px;
         }
 
         button {
@@ -188,7 +217,7 @@
             cursor: pointer;
             font: inherit;
             font-weight: 700;
-            padding: 10px 14px;
+            padding: 7px 10px;
         }
 
         .primary {
@@ -213,7 +242,7 @@
 
         .log-panel {
             display: flex;
-            min-height: 650px;
+            min-height: calc(100vh - 128px);
             flex-direction: column;
             overflow: hidden;
         }
@@ -222,9 +251,9 @@
             display: flex;
             align-items: center;
             justify-content: space-between;
-            gap: 12px;
+            gap: 8px;
             border-bottom: 1px solid var(--border);
-            padding: 16px 18px;
+            padding: 8px 10px;
         }
 
         .status {
@@ -258,11 +287,11 @@
             margin: 0;
             background: var(--log-bg);
             color: var(--log-text);
-            padding: 18px;
+            padding: 8px 10px;
             overflow-y: auto;
             font-family: Consolas, "Courier New", monospace;
-            font-size: 13px;
-            line-height: 1.65;
+            font-size: 12px;
+            line-height: 1.55;
             white-space: pre-wrap;
             word-break: break-word;
         }
@@ -275,15 +304,15 @@
             display: flex;
             align-items: center;
             justify-content: space-between;
-            gap: 12px;
+            gap: 8px;
             border-bottom: 1px solid var(--border);
-            padding: 16px 18px;
+            padding: 8px 10px;
         }
 
         .header-actions {
             display: flex;
             align-items: center;
-            gap: 8px;
+            gap: 6px;
             flex-wrap: wrap;
             justify-content: flex-end;
         }
@@ -291,20 +320,20 @@
         .range-switch {
             display: inline-flex;
             align-items: center;
-            gap: 4px;
+            gap: 2px;
             border: 1px solid var(--border);
             border-radius: 8px;
             background: #f8fafc;
-            padding: 3px;
+            padding: 2px;
         }
 
         .range-button {
-            min-width: 64px;
+            min-width: 52px;
             border-radius: 6px;
             background: transparent;
             color: #475467;
-            padding: 7px 10px;
-            font-size: 13px;
+            padding: 5px 7px;
+            font-size: 12px;
         }
 
         .range-button.active {
@@ -315,14 +344,14 @@
         .summary-row {
             display: grid;
             grid-template-columns: repeat(4, minmax(0, 1fr));
-            gap: 12px;
-            padding: 16px 18px;
+            gap: 6px;
+            padding: 6px 10px;
         }
 
         .metric {
             border: 1px solid var(--border);
             border-radius: 8px;
-            padding: 12px;
+            padding: 6px 8px;
             background: #f8fafc;
         }
 
@@ -333,14 +362,14 @@
         }
 
         .metric-value {
-            margin-top: 6px;
-            font-size: 18px;
+            margin-top: 3px;
+            font-size: 15px;
             font-weight: 800;
             word-break: break-word;
         }
 
         .table-wrap {
-            max-height: 520px;
+            max-height: calc(100vh - 214px);
             overflow: auto;
             border-top: 1px solid var(--border);
         }
@@ -348,13 +377,13 @@
         .subsection-title {
             margin: 0;
             border-top: 1px solid var(--border);
-            padding: 14px 18px;
-            font-size: 15px;
+            padding: 7px 10px;
+            font-size: 13px;
             font-weight: 800;
         }
 
         .summary-table-wrap {
-            max-height: 300px;
+            max-height: 190px;
             overflow: auto;
             border-top: 1px solid var(--border);
         }
@@ -362,12 +391,13 @@
         table {
             width: 100%;
             border-collapse: collapse;
-            font-size: 13px;
+            table-layout: fixed;
+            font-size: 12px;
         }
 
         th, td {
             border-bottom: 1px solid var(--border);
-            padding: 10px 12px;
+            padding: 4px 6px;
             text-align: left;
             vertical-align: top;
         }
@@ -378,8 +408,14 @@
             z-index: 1;
             background: #eef4ff;
             color: #344054;
-            font-size: 12px;
+            font-size: 11px;
             white-space: nowrap;
+        }
+
+        td {
+            line-height: 1.35;
+            overflow: hidden;
+            text-overflow: ellipsis;
         }
 
         .empty-state {
@@ -395,15 +431,110 @@
             padding: 3px 8px;
             background: #e0f2fe;
             color: #075985;
-            font-size: 12px;
+            font-size: 11px;
             font-weight: 700;
             white-space: nowrap;
         }
 
         .traffic-chart {
             width: 260px;
-            height: 78px;
+            height: 42px;
             display: block;
+        }
+
+        .traffic-cell {
+            display: inline-flex;
+            align-items: center;
+            cursor: default;
+        }
+
+        .traffic-tooltip {
+            position: fixed;
+            z-index: 30;
+            display: none;
+            max-width: 360px;
+            border: 1px solid #bfdbfe;
+            border-radius: 8px;
+            background: #fff;
+            box-shadow: 0 18px 42px rgba(16, 24, 40, 0.18);
+            color: var(--text);
+            padding: 10px 12px;
+            font-size: 12px;
+            line-height: 1.55;
+            white-space: pre-line;
+        }
+
+        .traffic-tooltip strong {
+            display: block;
+            margin-bottom: 4px;
+            font-size: 13px;
+        }
+
+        .reputation-table-wrap {
+            max-height: calc(100vh - 170px);
+        }
+
+        .reputation-table {
+            min-width: 1180px;
+        }
+
+        .reputation-table th:nth-child(1),
+        .reputation-table td:nth-child(1) {
+            width: 92px;
+        }
+
+        .reputation-table th:nth-child(2),
+        .reputation-table td:nth-child(2) {
+            width: 72px;
+        }
+
+        .reputation-table th:nth-child(3),
+        .reputation-table td:nth-child(3) {
+            width: 82px;
+        }
+
+        .reputation-table th:nth-child(4),
+        .reputation-table td:nth-child(4),
+        .reputation-table th:nth-child(5),
+        .reputation-table td:nth-child(5),
+        .reputation-table th:nth-child(6),
+        .reputation-table td:nth-child(6),
+        .reputation-table th:nth-child(7),
+        .reputation-table td:nth-child(7),
+        .reputation-table th:nth-child(8),
+        .reputation-table td:nth-child(8) {
+            width: 76px;
+        }
+
+        .reputation-table th:nth-child(9),
+        .reputation-table td:nth-child(9) {
+            width: 280px;
+        }
+
+        .reputation-table th:nth-child(10),
+        .reputation-table td:nth-child(10) {
+            width: 120px;
+        }
+
+        .reputation-table th:nth-child(11),
+        .reputation-table td:nth-child(11) {
+            width: 136px;
+        }
+
+        .reputation-table tbody tr {
+            height: 46px;
+        }
+
+        .reputation-table tbody td {
+            height: 46px;
+            max-height: 46px;
+            vertical-align: middle;
+            white-space: nowrap;
+        }
+
+        .reputation-table tbody td:nth-child(9) {
+            padding-top: 4px;
+            padding-bottom: 4px;
         }
 
         @media (max-width: 900px) {
@@ -431,8 +562,14 @@
 </head>
 <body>
     <header class="topbar">
-        <h1>武汉泽顺综合服务台</h1>
-        <p>自动化 AI 申诉与最新侵权数据看板</p>
+        <div>
+            <h1>武汉泽顺综合服务台</h1>
+            <p>自动化 AI 申诉与最新侵权数据看板</p>
+        </div>
+        <div class="topbar-user">
+            <span>{{ current_user.display_name or current_user.username }}</span>
+            <a class="logout-link" href="/logout">退出</a>
+        </div>
     </header>
 
     <main class="page">
@@ -461,7 +598,14 @@
 
                         <div class="field">
                             <label for="site">站点</label>
-                            <input type="text" id="site" value="墨西哥">
+                            <select id="site">
+                                <option value="墨西哥" selected>墨西哥</option>
+                                <option value="巴西">巴西</option>
+                                <option value="哥伦比亚">哥伦比亚</option>
+                                <option value="智利">智利</option>
+                                <option value="阿根廷">阿根廷</option>
+                                <option value="乌拉圭">乌拉圭</option>
+                            </select>
                         </div>
 
                         <div class="field">
@@ -521,7 +665,8 @@
                                 <button class="range-button" type="button" data-days="100" onclick="setInfractionDays(100)">100天</button>
                                 <button class="range-button" type="button" data-days="365" onclick="setInfractionDays(365)">365天</button>
                             </div>
-                            <button class="secondary" type="button" onclick="exportLatestInfractions()">导出 Excel</button>
+                            <button class="secondary" id="collect-infractions-btn" type="button" onclick="runInfractionCollection()">运行侵权采集</button>
+                            <button class="secondary" type="button" onclick="exportLatestInfractions()">导出明细 Excel</button>
                             <button class="secondary" type="button" onclick="loadLatestInfractions()">刷新数据</button>
                         </div>
                     </div>
@@ -562,8 +707,8 @@
                         </table>
                     </div>
                     <h3 class="subsection-title" id="infraction-detail-title">侵权明细（最近30天新增）</h3>
-                    <div class="table-wrap">
-                        <table>
+                    <div class="table-wrap reputation-table-wrap">
+                        <table class="reputation-table">
                             <thead>
                                 <tr>
                                     <th>店铺名</th>
@@ -593,6 +738,7 @@
                     <div class="infractions-header">
                         <h2 class="panel-title" style="margin: 0;">最新声誉数据</h2>
                         <div class="header-actions">
+                            <button class="secondary" id="collect-reputation-btn" type="button" onclick="runReputationCollection()">运行声誉采集</button>
                             <button class="secondary" type="button" onclick="exportLatestReputation()">导出 Excel</button>
                             <button class="secondary" type="button" onclick="loadLatestReputation()">刷新数据</button>
                         </div>
@@ -641,6 +787,7 @@
             </div>
         </section>
     </main>
+    <div class="traffic-tooltip" id="traffic-tooltip"></div>
 
     <script>
         const logContainer = document.getElementById("log-container");
@@ -659,11 +806,14 @@
         const infractionNormalLabel = document.getElementById("infraction-normal-label");
         const infractionRightsLabel = document.getElementById("infraction-rights-label");
         const infractionSummaryTitle = document.getElementById("infraction-summary-title");
+        const collectInfractionsBtn = document.getElementById("collect-infractions-btn");
         const reputationBody = document.getElementById("reputation-body");
         const reputationTime = document.getElementById("reputation-time");
         const reputationTotal = document.getElementById("reputation-total");
         const reputationGreen = document.getElementById("reputation-green");
         const reputationRisk = document.getElementById("reputation-risk");
+        const collectReputationBtn = document.getElementById("collect-reputation-btn");
+        const trafficTooltip = document.getElementById("traffic-tooltip");
         let infractionDays = 30;
         let infractionsLoaded = false;
         let reputationLoaded = false;
@@ -714,16 +864,70 @@
             return matches.map(Number).filter(Number.isFinite);
         }
 
+        function formatTrafficTooltip(rawValue) {
+            const rawText = String(rawValue ?? "").trim();
+            const values = parseTrafficValues(rawText);
+            if (!values.length) {
+                return "流量趋势\n暂无趋势数据";
+            }
+            const lines = values.map((value, index) => `第 ${index + 1} 天：${value}`);
+            const total = values.reduce((sum, value) => sum + value, 0);
+            const average = Math.round((total / values.length) * 100) / 100;
+            const change = values.length > 1 ? values[values.length - 1] - values[0] : 0;
+            return [
+                "流量趋势",
+                `数据点：${values.length} 个`,
+                `合计：${total}`,
+                `平均：${average}`,
+                `首尾变化：${change >= 0 ? "+" : ""}${change}`,
+                "",
+                lines.join("\n"),
+                rawText ? `\n原始数据：${rawText}` : "",
+            ].filter(Boolean).join("\n");
+        }
+
+        function moveTrafficTooltip(event) {
+            if (!trafficTooltip || trafficTooltip.style.display !== "block") return;
+            const gap = 14;
+            const tooltipWidth = trafficTooltip.offsetWidth || 320;
+            const tooltipHeight = trafficTooltip.offsetHeight || 180;
+            let left = event.clientX + gap;
+            let top = event.clientY + gap;
+            if (left + tooltipWidth > window.innerWidth - 8) {
+                left = event.clientX - tooltipWidth - gap;
+            }
+            if (top + tooltipHeight > window.innerHeight - 8) {
+                top = event.clientY - tooltipHeight - gap;
+            }
+            trafficTooltip.style.left = `${Math.max(8, left)}px`;
+            trafficTooltip.style.top = `${Math.max(8, top)}px`;
+        }
+
+        function bindTrafficTooltips() {
+            document.querySelectorAll(".traffic-cell").forEach(cell => {
+                cell.addEventListener("mouseenter", event => {
+                    if (!trafficTooltip) return;
+                    trafficTooltip.textContent = cell.dataset.tooltip || "流量趋势\n暂无趋势数据";
+                    trafficTooltip.style.display = "block";
+                    moveTrafficTooltip(event);
+                });
+                cell.addEventListener("mousemove", moveTrafficTooltip);
+                cell.addEventListener("mouseleave", () => {
+                    if (trafficTooltip) trafficTooltip.style.display = "none";
+                });
+            });
+        }
+
         function renderTrafficCharts() {
             document.querySelectorAll(".traffic-chart").forEach(canvas => {
                 const values = JSON.parse(canvas.dataset.values || "[]");
                 const ctx = canvas.getContext("2d");
                 const width = canvas.width = 260;
-                const height = canvas.height = 78;
-                const paddingLeft = 12;
-                const paddingRight = 12;
-                const paddingTop = 18;
-                const paddingBottom = 14;
+                const height = canvas.height = 42;
+                const paddingLeft = 14;
+                const paddingRight = 14;
+                const paddingTop = 8;
+                const paddingBottom = 8;
                 ctx.clearRect(0, 0, width, height);
                 ctx.strokeStyle = "#d9e2ef";
                 ctx.lineWidth = 1;
@@ -736,8 +940,8 @@
                 }
                 if (values.length < 2) {
                     ctx.fillStyle = "#98a2b3";
-                    ctx.font = "12px Microsoft YaHei, Arial";
-                    ctx.fillText("暂无趋势", 96, 44);
+                    ctx.font = "11px Microsoft YaHei, Arial";
+                    ctx.fillText("暂无趋势", 110, 24);
                     return;
                 }
                 const min = Math.min(...values);
@@ -761,20 +965,20 @@
                 ctx.fillStyle = "#1d4ed8";
                 points.forEach(({ x, y }) => {
                     ctx.beginPath();
-                    ctx.arc(x, y, 3, 0, Math.PI * 2);
+                    ctx.arc(x, y, 2, 0, Math.PI * 2);
                     ctx.fill();
                 });
-                ctx.font = "11px Microsoft YaHei, Arial";
+                ctx.font = "10px Microsoft YaHei, Arial";
                 ctx.textAlign = "center";
                 ctx.textBaseline = "bottom";
                 points.forEach(({ value, x, y }, index) => {
                     const text = String(value);
-                    const labelX = Math.max(14, Math.min(width - 14, x));
-                    const rawLabelY = index % 2 === 0 ? y - 5 : y + 16;
-                    const labelY = Math.max(13, Math.min(height - 2, rawLabelY));
+                    const labelX = Math.max(10, Math.min(width - 10, x));
+                    const rawLabelY = index % 2 === 0 ? y - 2 : y + 11;
+                    const labelY = Math.max(10, Math.min(height - 1, rawLabelY));
                     ctx.fillStyle = "rgba(255,255,255,0.86)";
                     const textWidth = ctx.measureText(text).width;
-                    ctx.fillRect(labelX - textWidth / 2 - 3, labelY - 12, textWidth + 6, 13);
+                    ctx.fillRect(labelX - textWidth / 2 - 2, labelY - 9, textWidth + 4, 10);
                     ctx.fillStyle = "#111827";
                     ctx.fillText(text, labelX, labelY);
                 });
@@ -785,8 +989,58 @@
             window.location.href = "/api/reputation/latest/export";
         }
 
+        async function runReputationCollection() {
+            if (!collectReputationBtn) return;
+            collectReputationBtn.disabled = true;
+            collectReputationBtn.textContent = "采集中...";
+            try {
+                const response = await fetch("/api/reputation/collect", { method: "POST" });
+                const payload = await response.json();
+                if (response.status === 409) {
+                    alert(payload.message || "声誉数据采集正在运行中");
+                    return;
+                }
+                if (!response.ok || payload.status !== "success") {
+                    throw new Error(payload.message || `接口请求失败：${response.status}`);
+                }
+                alert(payload.message || "声誉数据采集已启动");
+            } catch (err) {
+                alert(`启动失败：${err.message || err}`);
+            } finally {
+                setTimeout(() => {
+                    collectReputationBtn.disabled = false;
+                    collectReputationBtn.textContent = "运行声誉采集";
+                }, 1500);
+            }
+        }
+
         function exportLatestInfractions() {
             window.location.href = `/api/infractions/latest/export?days=${encodeURIComponent(infractionDays)}`;
+        }
+
+        async function runInfractionCollection() {
+            if (!collectInfractionsBtn) return;
+            collectInfractionsBtn.disabled = true;
+            collectInfractionsBtn.textContent = "采集中...";
+            try {
+                const response = await fetch("/api/infractions/collect", { method: "POST" });
+                const payload = await response.json();
+                if (response.status === 409) {
+                    alert(payload.message || "侵权数据采集正在运行中");
+                    return;
+                }
+                if (!response.ok || payload.status !== "success") {
+                    throw new Error(payload.message || `接口请求失败：${response.status}`);
+                }
+                alert(payload.message || "侵权数据采集已启动");
+            } catch (err) {
+                alert(`启动失败：${err.message || err}`);
+            } finally {
+                setTimeout(() => {
+                    collectInfractionsBtn.disabled = false;
+                    collectInfractionsBtn.textContent = "运行侵权采集";
+                }, 1500);
+            }
         }
 
         function updateInfractionRangeText(days) {
@@ -896,22 +1150,32 @@
                     return;
                 }
 
-                reputationBody.innerHTML = rows.map(row => `
+                reputationBody.innerHTML = rows.map(row => {
+                    const trafficRaw = row["一周流量趋势"];
+                    const trafficValues = parseTrafficValues(trafficRaw);
+                    const trafficTooltipText = formatTrafficTooltip(trafficRaw);
+                    return `
                     <tr>
-                        <td>${escapeHtml(row["店铺名"])}</td>
-                        <td>${escapeHtml(row["站点"])}</td>
-                        <td><span class="tag">${escapeHtml(row["声誉颜色"])}</span></td>
-                        <td>${escapeHtml(row["总单量"])}</td>
-                        <td>${escapeHtml(row["投诉率"])}</td>
-                        <td>${escapeHtml(row["延误率"])}</td>
-                        <td>${escapeHtml(row["增加或减少"])}</td>
-                        <td>${escapeHtml(row["近七天变化率"])}</td>
-                        <td><canvas class="traffic-chart" data-values="${escapeHtml(JSON.stringify(parseTrafficValues(row["一周流量趋势"])))}"></canvas></td>
-                        <td>${escapeHtml(row["系统告警"])}</td>
-                        <td>${escapeHtml(row["更新时间"])}</td>
+                        <td title="${escapeHtml(row["店铺名"])}">${escapeHtml(row["店铺名"])}</td>
+                        <td title="${escapeHtml(row["站点"])}">${escapeHtml(row["站点"])}</td>
+                        <td title="${escapeHtml(row["声誉颜色"])}"><span class="tag">${escapeHtml(row["声誉颜色"])}</span></td>
+                        <td title="${escapeHtml(row["总单量"])}">${escapeHtml(row["总单量"])}</td>
+                        <td title="${escapeHtml(row["投诉率"])}">${escapeHtml(row["投诉率"])}</td>
+                        <td title="${escapeHtml(row["延误率"])}">${escapeHtml(row["延误率"])}</td>
+                        <td title="${escapeHtml(row["增加或减少"])}">${escapeHtml(row["增加或减少"])}</td>
+                        <td title="${escapeHtml(row["近七天变化率"])}">${escapeHtml(row["近七天变化率"])}</td>
+                        <td>
+                            <span class="traffic-cell" data-tooltip="${escapeHtml(trafficTooltipText)}">
+                                <canvas class="traffic-chart" data-values="${escapeHtml(JSON.stringify(trafficValues))}"></canvas>
+                            </span>
+                        </td>
+                        <td title="${escapeHtml(row["系统告警"])}">${escapeHtml(row["系统告警"])}</td>
+                        <td title="${escapeHtml(row["更新时间"])}">${escapeHtml(row["更新时间"])}</td>
                     </tr>
-                `).join("");
+                    `;
+                }).join("");
                 renderTrafficCharts();
+                bindTrafficTooltips();
             } catch (err) {
                 reputationBody.innerHTML = `<tr><td class="empty-state" colspan="11">加载失败：${escapeHtml(err.message || err)}</td></tr>`;
             }

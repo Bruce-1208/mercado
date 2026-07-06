@@ -271,6 +271,15 @@ def verify_site(cdp: Cdp, site: str):
     return (current == site) or (f"\n{site}\n" in f"\n{text}\n" and title_matches)
 
 
+def wait_until_site_switched(cdp: Cdp, site: str, timeout=10):
+    end = time.time() + timeout
+    while time.time() < end:
+        if verify_site(cdp, site):
+            return True
+        time.sleep(1)
+    return False
+
+
 def read_infractions_page(cdp: Cdp):
     return cdp.js(
         r"""
@@ -382,80 +391,136 @@ def switch_site_if_needed(cdp: Cdp, site: str):
     if verify_site(cdp, site):
         return
 
-    opened = cdp.js(
-        r"""
-        (() => {
-          function deepElements(root = document) {
-            const out = [];
-            const walk = node => {
-              const elements = node.querySelectorAll ? Array.from(node.querySelectorAll('*')) : [];
-              for (const el of elements) {
-                out.push(el);
-                if (el.shadowRoot) walk(el.shadowRoot);
+    labels = [site, SITE_NAMES.get(site, site), SITE_REMOTE_VALUES.get(site, "")]
+    if site == "MX":
+        labels.extend(["Mexico (Direct to consumer)", "México", "MLM"])
+
+    opened = False
+    picked = False
+    last_pick_info = {}
+    for attempt in range(1, 4):
+        opened = bool(cdp.js(
+            r"""
+            (() => {
+              function deepElements(root = document) {
+                const out = [];
+                const walk = node => {
+                  const elements = node.querySelectorAll ? Array.from(node.querySelectorAll('*')) : [];
+                  for (const el of elements) {
+                    out.push(el);
+                    if (el.shadowRoot) walk(el.shadowRoot);
+                  }
+                };
+                walk(root);
+                return out;
               }
-            };
-            walk(root);
-            return out;
-          }
-          const vis = el => !!(el.offsetWidth || el.offsetHeight || el.getClientRects().length);
-          const els = deepElements().filter(vis);
-          const current = els.find(el => {
-            const t = (el.innerText || el.textContent || el.getAttribute('aria-label') || '').trim();
-            const cls = String(el.className || '');
-            return cls.includes('site-switcher') || /^(MX|BR|AR|CL|CO|UY)$/.test(t);
-          });
-          if (current) {
-            current.scrollIntoView({block: 'center'});
-            current.click();
-          }
-          return !!current;
-        })()
-        """
-    )
-    time.sleep(1.5)
-    picked = cdp.js(
-        f"""
-        (() => {{
-          const site = {json.dumps(site)};
-          const name = {json.dumps(SITE_NAMES.get(site, site))};
-          const remote = {json.dumps(SITE_REMOTE_VALUES.get(site, ""))};
-          function deepElements(root = document) {{
-            const out = [];
-            const walk = node => {{
-              const elements = node.querySelectorAll ? Array.from(node.querySelectorAll('*')) : [];
-              for (const el of elements) {{
-                out.push(el);
-                if (el.shadowRoot) walk(el.shadowRoot);
+              const vis = el => !!(el.offsetWidth || el.offsetHeight || el.getClientRects().length);
+              const textOf = el => [
+                el.innerText || '',
+                el.textContent || '',
+                el.getAttribute('aria-label') || '',
+                el.getAttribute('title') || '',
+                el.getAttribute('data-value') || ''
+              ].join(' ').trim();
+              const els = deepElements().filter(vis);
+              const current = els.find(el => {
+                const t = textOf(el);
+                const cls = String(el.className || '');
+                return cls.includes('site-switcher') ||
+                  cls.includes('nav-header-cbt__site-switcher') ||
+                  /^(MX|BR|AR|CL|CO|UY)$/.test(t) ||
+                  /select\s+(country|site)|country|site/i.test(t);
+              });
+              const clickable = current && (current.closest('button,a,[role="button"]') || current);
+              if (clickable) {
+                clickable.scrollIntoView({block: 'center', inline: 'center'});
+                clickable.click();
+              }
+              return !!clickable;
+            })()
+            """
+        ))
+        time.sleep(1 + attempt * 0.5)
+
+        last_pick_info = cdp.js(
+            f"""
+            (() => {{
+              const labels = {json.dumps([x for x in labels if x])}.map(x => String(x).toLowerCase());
+              const remote = {json.dumps(SITE_REMOTE_VALUES.get(site, ""))};
+              function deepElements(root = document) {{
+                const out = [];
+                const walk = node => {{
+                  const elements = node.querySelectorAll ? Array.from(node.querySelectorAll('*')) : [];
+                  for (const el of elements) {{
+                    out.push(el);
+                    if (el.shadowRoot) walk(el.shadowRoot);
+                  }}
+                }};
+                walk(root);
+                return out;
               }}
-            }};
-            walk(root);
-            return out;
-          }}
-          const vis = el => !!(el.offsetWidth || el.offsetHeight || el.getClientRects().length);
-          const els = deepElements().filter(vis);
-          const exact = els.find(el => {{
-            const value = el.getAttribute('data-value') || '';
-            return remote && value === remote;
-          }});
-          const target = exact || els.find(el => {{
-            const t = (el.innerText || el.textContent || el.getAttribute('aria-label') || '').trim();
-            const value = el.getAttribute('data-value') || '';
-            return t === site || t.includes(name) || (remote && value.includes(remote));
-          }});
-          if (target) {{
-            target.scrollIntoView({{block: 'center'}});
-            target.click();
-          }}
-          return !!target;
-        }})()
-        """
-    )
-    time.sleep(5)
+              const vis = el => !!(el.offsetWidth || el.offsetHeight || el.getClientRects().length);
+              const textOf = el => [
+                el.innerText || '',
+                el.textContent || '',
+                el.getAttribute('aria-label') || '',
+                el.getAttribute('title') || '',
+                el.getAttribute('data-value') || ''
+              ].join(' ').trim();
+              const all = deepElements();
+              const visible = all.filter(vis);
+              const exact = visible.find(el => remote && el.getAttribute('data-value') === remote);
+              const textTarget = visible.find(el => {{
+                const text = textOf(el).toLowerCase();
+                return labels.some(label => label && text.includes(label));
+              }});
+              const rawTarget = exact || textTarget;
+              const target = rawTarget && (
+                rawTarget.closest('[data-value],button,a,[role="button"],li,div') || rawTarget
+              );
+              if (target) {{
+                target.scrollIntoView({{block: 'center', inline: 'center'}});
+                target.click();
+                for (const type of ['mousedown', 'mouseup', 'click']) {{
+                  target.dispatchEvent(new MouseEvent(type, {{bubbles: true, cancelable: true, view: window}}));
+                }}
+              }}
+              const rect = target ? target.getBoundingClientRect() : null;
+              const visibleOptions = visible
+                .map(el => textOf(el))
+                .filter(Boolean)
+                .filter(text => /(Mexico|México|Brazil|Argentina|Chile|Colombia|Uruguay|MLM|MLB|MLA|MLC|MCO|MLU)/i.test(text))
+                .slice(0, 20);
+              return {{
+                picked: !!target,
+                targetText: rawTarget ? textOf(rawTarget).slice(0, 180) : '',
+                targetValue: rawTarget ? (rawTarget.getAttribute('data-value') || '') : '',
+                rect: rect ? {{x: rect.x, y: rect.y, width: rect.width, height: rect.height}} : null,
+                visibleOptions
+              }};
+            }})()
+            """
+        ) or {}
+        picked = bool(last_pick_info.get("picked"))
+        rect = last_pick_info.get("rect") or {}
+        if picked and rect.get("width") and rect.get("height"):
+            mouse_click(cdp, rect["x"] + rect["width"] / 2, rect["y"] + rect["height"] / 2)
+        time.sleep(2)
+        if wait_until_site_switched(cdp, site, timeout=8):
+            return
+        if picked:
+            cdp.js("location.reload(); true")
+            wait_for(cdp, "document.readyState === 'complete' || document.readyState === 'interactive'", timeout=20, label="site switch reload")
+            time.sleep(2)
+            if wait_until_site_switched(cdp, site, timeout=5):
+                return
+
     if not opened or not picked:
         state = current_site_state(cdp)
         raise RuntimeError(
             f"Failed to switch site to {site}: opened={opened} picked={picked} "
-            f"current={state.get('site')} title={state.get('title')} url={state.get('url')}"
+            f"current={state.get('site')} title={state.get('title')} url={state.get('url')} "
+            f"pickInfo={last_pick_info}"
         )
     if not verify_site(cdp, site):
         state = current_site_state(cdp)
@@ -654,13 +719,11 @@ def ai_recent_chat(cdp: Cdp):
             .map(el => (el.innerText || '').trim().replace(/\\s+/g, ' ').slice(0, 600));
           const richRows = [];
           const bodyText = document.body ? (document.body.innerText || '') : '';
-          const bodyHtml = document.body ? (document.body.innerHTML || '') : '';
-          richRows.push(bodyText, bodyHtml);
+          richRows.push(bodyText);
           for (const el of deepElements()) {{
             const text = [
               el.innerText || '',
               el.textContent || '',
-              el.innerHTML || '',
               el.getAttribute('aria-label') || '',
               el.getAttribute('title') || ''
             ].join(' ');

@@ -11,7 +11,7 @@ from bit.bit_send_mail import *
 
 from bit.bit_utils import *
 import sys
-from bit.bit_mysql import *
+from bit.bit_db_api import insert_orders
 
 
 def update_order_mysql():

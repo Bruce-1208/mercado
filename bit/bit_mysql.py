@@ -258,7 +258,6 @@ def get_latest_infraction_info(recent_days=30):
                     `提交时间`, `执行时间`, `类型`
                 FROM infraction
                 WHERE `提交时间` = %s
-                ORDER BY `店铺名`, `站点`, `类型`, `编号`
                 """,
                 (latest_submit_time,),
             )
@@ -344,7 +343,6 @@ def get_latest_reputation_info():
                     `系统告警`, `更新时间`, `一周流量趋势`, `提交时间`
                 FROM reputation
                 WHERE `提交时间` = %s
-                ORDER BY `店铺名`, `站点`
                 """,
                 (latest_submit_time,),
             )
