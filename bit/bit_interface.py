@@ -22,6 +22,21 @@ for path in (str(CURRENT_DIR), str(PROJECT_ROOT)):
     if path not in sys.path:
         sys.path.insert(0, path)
 
+
+def resolve_template_dir():
+    bundle_root = Path(getattr(sys, "_MEIPASS", CURRENT_DIR))
+    candidates = (
+        CURRENT_DIR / "templates",
+        CURRENT_DIR / "bit" / "templates",
+        bundle_root / "bit" / "templates",
+        bundle_root / "templates",
+        PROJECT_ROOT / "bit" / "templates",
+    )
+    for candidate in candidates:
+        if candidate.exists():
+            return candidate
+    return CURRENT_DIR / "templates"
+
 import bit.bit_appeal_ai as bit_appeal_ai
 import bit.bit_db_api as bit_db_api
 import bit.bit_infractions_info as bit_infractions_info
@@ -36,7 +51,7 @@ from decimal import Decimal
 from datetime import datetime
 # from db_pool import get_db_connection  # 确保你的连接池文件在这个目录下
 
-app = Flask(__name__)
+app = Flask(__name__, template_folder=str(resolve_template_dir()))
 app.secret_key = os.environ.get("WORKBENCH_SECRET_KEY") or secrets.token_hex(32)
 app.config.update(
     SESSION_COOKIE_HTTPONLY=True,
