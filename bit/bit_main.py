@@ -24,6 +24,7 @@ from bit.bit_utils import get_now_time
 
 
 SCHEDULE_LOCK = threading.Lock()
+SCHEDULE_INTERVAL_HOURS = 12
 
 
 def _get_int_env(name, default):
@@ -34,18 +35,13 @@ def _get_int_env(name, default):
         return default
 
 
-def get_next_daily_boundary(now=None):
-    now = now or datetime.now()
-    today_midday = now.replace(hour=12, minute=0, second=0, microsecond=0)
-    today_midnight = now.replace(hour=2, minute=1, second=0, microsecond=0)
-    tomorrow_midnight = today_midnight + timedelta(days=1)
-    if now < today_midday:
-        return today_midday
-    return tomorrow_midnight
+def get_next_run_boundary(started_at=None):
+    started_at = started_at or datetime.now()
+    return started_at + timedelta(hours=SCHEDULE_INTERVAL_HOURS)
 
 
 def run_reputation_infraction_then_daily():
-    """每天 00:00 和 12:00 执行：声誉采集 -> 侵权采集 -> AI 申诉循环。"""
+    """启动后立即执行，之后每 12 小时执行：声誉采集 -> 侵权采集 -> AI 申诉循环。"""
     if not SCHEDULE_LOCK.acquire(blocking=False):
         print(f"{get_now_time()} 定时任务仍在运行，本次跳过，避免声誉/侵权/申诉任务互相冲突<br>")
         return
@@ -67,7 +63,7 @@ def run_reputation_infraction_then_daily():
         site_pause = _get_int_env("BIT_DAILY_SITE_PAUSE", 30)
         round_interval = _get_int_env("BIT_DAILY_ROUND_INTERVAL", 600)
         stop_buffer_minutes = _get_int_env("BIT_DAILY_STOP_BUFFER_MINUTES", 10)
-        next_boundary = get_next_daily_boundary()
+        next_boundary = get_next_run_boundary(started_at)
         stop_at = next_boundary - timedelta(minutes=max(0, stop_buffer_minutes))
         print(
             f"{get_now_time()} 开始执行 bit_daily_task："
@@ -96,9 +92,9 @@ def build_scheduler():
     scheduler = BlockingScheduler()
     scheduler.add_job(
         run_reputation_infraction_then_daily,
-        "cron",
-        hour="0,12",
-        minute=0,
+        "interval",
+        hours=SCHEDULE_INTERVAL_HOURS,
+        next_run_time=datetime.now(),
         id="reputation_infraction_daily_chain",
         max_instances=1,
         coalesce=True,
@@ -110,7 +106,7 @@ def build_scheduler():
 if __name__ == "__main__":
     print("------------------------------")
     print(f"{get_now_time()} bit_main 定时任务启动")
-    print("默认执行时间：每天 00:00 和 12:00")
-    print("任务顺序：bit_reputation_info -> bit_infractions_info -> bit_daily_task 循环到下一次 00/12 点前")
+    print("默认执行时间：启动后立即执行一次，之后每 12 小时执行一次")
+    print("任务顺序：bit_reputation_info -> bit_infractions_info -> bit_daily_task 循环到下一次 12 小时间隔前")
     scheduler = build_scheduler()
     scheduler.start()

@@ -62,10 +62,28 @@ app.config.update(
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
 PASSWORD_ITERATIONS = 260000
-USE_DB_API = (
-    os.environ.get("BIT_INTERFACE_DB_MODE", "").strip().lower() == "api"
-    or os.environ.get("BIT_INTERFACE_USE_DB_API", "").strip() == "1"
-)
+
+
+def _truthy_env(value):
+    return str(value or "").strip().lower() in ("1", "true", "yes", "on")
+
+
+def _resolve_use_db_api():
+    mode = os.environ.get("BIT_INTERFACE_DB_MODE", "").strip().lower()
+    if mode in ("direct", "local", "server", "mysql"):
+        return False
+    if mode in ("api", "client", "remote"):
+        return True
+
+    use_db_api = os.environ.get("BIT_INTERFACE_USE_DB_API")
+    if use_db_api is not None:
+        return _truthy_env(use_db_api)
+
+    # 外网设备默认不直连内网 MySQL，统一通过 zeshun.nat100.top 的数据库接口访问。
+    return True
+
+
+USE_DB_API = _resolve_use_db_api()
 
 if USE_DB_API:
     db_get_latest_infraction_info = bit_db_api.get_latest_infraction_info
@@ -244,7 +262,7 @@ def reject_db_api_client_mode():
     if USE_DB_API:
         return jsonify({
             "status": "error",
-            "message": "当前 bit_interface 是数据库接口客户端模式，请把 BIT_DB_API_BASE_URL 指向有数据库权限的内部服务。"
+            "message": "当前 bit_interface 是数据库接口客户端模式；数据库服务器端请设置 BIT_INTERFACE_DB_MODE=direct 后再启动。"
         }), 503
     return None
 
@@ -252,6 +270,7 @@ def reject_db_api_client_mode():
 if USE_DB_API:
     logging.info("bit_interface 使用数据库接口模式：%s", bit_db_api.DB_API_BASE_URL)
 else:
+    logging.info("bit_interface 使用本地 MySQL 直连模式：%s", mysql_config.get("host"))
     try:
         ensure_workbench_user_table()
     except Exception as e:
