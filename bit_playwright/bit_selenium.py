@@ -1,4 +1,4 @@
-from playwright.common import BitPlaywrightSession
+from bit_playwright.common import BitPlaywrightSession
 
 
 def connect_browser(window_id):

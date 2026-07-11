@@ -1,4 +1,5 @@
 import json
+import os
 import re
 from datetime import datetime, timedelta
 from pathlib import Path
@@ -8,12 +9,12 @@ from openpyxl import load_workbook
 
 # 1. 配置数据库连接信息
 config = {
-    'host': '192.168.1.11',
-    'user': 'mercado',
-    'password': 'mercado',
-    'database': 'mercado',
-    'charset': 'utf8mb4',
-    'port': 3306,
+    'host': os.environ.get('MYSQL_HOST', os.environ.get('DB_HOST', '127.0.0.1')),
+    'user': os.environ.get('MYSQL_USER', os.environ.get('DB_USER', 'mercado')),
+    'password': os.environ.get('MYSQL_PASSWORD', os.environ.get('DB_PASSWORD', 'mercado')),
+    'database': os.environ.get('MYSQL_DATABASE', os.environ.get('DB_NAME', 'mercado')),
+    'charset': os.environ.get('MYSQL_CHARSET', 'utf8mb4'),
+    'port': int(os.environ.get('MYSQL_PORT', os.environ.get('DB_PORT', '3306'))),
     'cursorclass': pymysql.cursors.DictCursor  # 让查询结果以字典形式返回
 }
 # config = {
@@ -560,6 +561,69 @@ def inset_delay_info(delay_list):
         print(f"操作失败，已回滚: {e}")
     finally:
         # 关闭连接
+        connection.close()
+
+
+def _ensure_pago_table(cursor):
+    cursor.execute(
+        """
+        CREATE TABLE IF NOT EXISTS `pago` (
+            `id` BIGINT NOT NULL AUTO_INCREMENT,
+            `店铺名` VARCHAR(128) NULL,
+            `站点` VARCHAR(64) NULL,
+            `已释放美元` VARCHAR(64) NULL,
+            `未释放美元` VARCHAR(64) NULL,
+            `状态` VARCHAR(64) NULL,
+            `更新时间` DATETIME NULL,
+            `页面原始信息` LONGTEXT NULL,
+            `提交时间` DATETIME NULL,
+            PRIMARY KEY (`id`),
+            KEY `idx_pago_submit_time` (`提交时间`),
+            KEY `idx_pago_shop_site` (`店铺名`, `站点`)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+        """
+    )
+
+
+def inset_pago_info(pago_list):
+    connection = pymysql.connect(**config)
+
+    try:
+        with connection.cursor() as cursor:
+            _ensure_pago_table(cursor)
+            submit_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            normalized_list = []
+            for row in pago_list:
+                row = list(row)
+                if len(row) < 7:
+                    row.extend([""] * (7 - len(row)))
+                elif len(row) > 7:
+                    row = row[:7]
+                row.append(submit_time)
+                normalized_list.append(row)
+
+            sql_insert = """
+                INSERT INTO `pago` (
+                    `店铺名`,
+                    `站点`,
+                    `已释放美元`,
+                    `未释放美元`,
+                    `状态`,
+                    `更新时间`,
+                    `页面原始信息`,
+                    `提交时间`
+                ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+            """
+            cursor.executemany(sql_insert, normalized_list)
+            print(f"执行sql成功 {sql_insert}，准备插入款项记录 {len(normalized_list)} 条，提交时间 {submit_time}")
+
+        connection.commit()
+
+    except Exception as e:
+        connection.rollback()
+        print(f"操作失败，已回滚: {e}")
+        raise
+    finally:
         connection.close()
 
 

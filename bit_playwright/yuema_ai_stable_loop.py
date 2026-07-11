@@ -1,4 +1,4 @@
-from playwright.bit_appeal_ai import appeal_ai_recollect_loop, appeal_ai_recollect_once
+from bit_playwright.bit_appeal_ai import appeal_ai_recollect_loop, appeal_ai_recollect_once
 
 
 def main():

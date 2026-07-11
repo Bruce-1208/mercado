@@ -1,4 +1,4 @@
-from playwright.bit_zying_check import check_yuanyou_title, get_all_ids
+from bit_playwright.bit_zying_check import check_yuanyou_title, get_all_ids
 
 
 def up1688(img_url):

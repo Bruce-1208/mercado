@@ -39,6 +39,7 @@ def resolve_template_dir():
 
 import bit.bit_appeal_ai as bit_appeal_ai
 import bit.bit_db_api as bit_db_api
+import bit.bit_daily_task as bit_daily_task
 import bit.bit_infractions_info as bit_infractions_info
 import bit.bit_reputation_info as bit_reputation_info
 from bit.bit_appeal import *
@@ -48,7 +49,7 @@ from bit.bit_api import *
 # 引入数据库入库需要的模块
 import logging
 from decimal import Decimal
-from datetime import datetime
+from datetime import datetime, timedelta
 # from db_pool import get_db_connection  # 确保你的连接池文件在这个目录下
 
 app = Flask(__name__, template_folder=str(resolve_template_dir()))
@@ -79,8 +80,9 @@ def _resolve_use_db_api():
     if use_db_api is not None:
         return _truthy_env(use_db_api)
 
-    # 外网设备默认不直连内网 MySQL，统一通过 zeshun.nat100.top 的数据库接口访问。
-    return True
+    # 这台机器是服务端：默认直连本机 MySQL，并对外提供 /api/db/... 数据库接口。
+    # 外网客户端需要设置 BIT_INTERFACE_DB_MODE=api，或直接调用 bit_db_api.py。
+    return False
 
 
 USE_DB_API = _resolve_use_db_api()
@@ -96,6 +98,7 @@ if USE_DB_API:
     db_insert_task_record = bit_db_api.insert_task_record
     db_inset_delay_info = bit_db_api.inset_delay_info
     db_inset_infraction_info = bit_db_api.inset_infraction_info
+    db_inset_pago_info = bit_db_api.inset_pago_info
     db_inset_reputation_info = bit_db_api.inset_reputation_info
 else:
     import pymysql
@@ -111,6 +114,7 @@ else:
         insert_task_record,
         inset_delay_info,
         inset_infraction_info,
+        inset_pago_info,
         inset_reputation_info,
     )
 
@@ -124,6 +128,7 @@ else:
     db_insert_task_record = insert_task_record
     db_inset_delay_info = inset_delay_info
     db_inset_infraction_info = inset_infraction_info
+    db_inset_pago_info = inset_pago_info
     db_inset_reputation_info = inset_reputation_info
 
 
@@ -298,6 +303,15 @@ _reputation_collect_state = {
     "status": "idle",
     "message": "等待启动",
 }
+_daily_task_lock = threading.Lock()
+_daily_task_state = {
+    "running": False,
+    "started_at": "",
+    "finished_at": "",
+    "status": "idle",
+    "message": "等待启动",
+    "params": {},
+}
 
 
 class ThreadLogStream:
@@ -387,6 +401,90 @@ def run_reputation_collect_job():
         traceback.print_exc()
         with _reputation_collect_lock:
             _reputation_collect_state.update({
+                "running": False,
+                "finished_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                "status": "error",
+                "message": str(e),
+            })
+
+
+def _parse_int_param(data, name, default, min_value=0, max_value=None):
+    try:
+        value = int(data.get(name, default))
+    except (TypeError, ValueError):
+        value = default
+    value = max(min_value, value)
+    if max_value is not None:
+        value = min(max_value, value)
+    return value
+
+
+def _parse_bool_param(data, name, default=True):
+    value = data.get(name, default)
+    if isinstance(value, bool):
+        return value
+    return str(value).strip().lower() in ("1", "true", "yes", "on", "是", "启用")
+
+
+def build_daily_task_params(data):
+    mode = str(data.get("mode", "once")).strip().lower()
+    if mode not in ("once", "loop"):
+        mode = "once"
+    return {
+        "mode": mode,
+        "top_n": _parse_int_param(data, "top_n", bit_daily_task.DEFAULT_DAILY_TOP_N, 1, 100),
+        "max_workers": _parse_int_param(data, "max_workers", bit_daily_task.DEFAULT_DAILY_MAX_WORKERS, 1, 60),
+        "recent_days": _parse_int_param(data, "recent_days", 30, 1, 365),
+        "round_interval": _parse_int_param(data, "round_interval", 600, 10, 86400),
+        "site_pause": _parse_int_param(data, "site_pause", 30, 0, 3600),
+        "stop_after_minutes": _parse_int_param(data, "stop_after_minutes", 360, 0, 24 * 60),
+        "only_active": _parse_bool_param(data, "only_active", True),
+        "message": str(data.get("message", "") or ""),
+    }
+
+
+def run_daily_task_job(params):
+    try:
+        print(f"{get_now_time()} 开始执行 daily_task：{params}<br>")
+        if params["mode"] == "loop":
+            stop_at = None
+            if params["stop_after_minutes"] > 0:
+                stop_at = datetime.now() + timedelta(minutes=params["stop_after_minutes"])
+            bit_daily_task.loop_top_infraction_ai_appeal(
+                top_n=params["top_n"],
+                max_workers=params["max_workers"],
+                recent_days=params["recent_days"],
+                round_interval=params["round_interval"],
+                site_pause=params["site_pause"],
+                message=params["message"],
+                only_active=params["only_active"],
+                stop_at=stop_at,
+            )
+            result_message = "daily_task 循环执行完成"
+        else:
+            bit_daily_task.run_top_infraction_ai_appeal_once(
+                top_n=params["top_n"],
+                max_workers=params["max_workers"],
+                recent_days=params["recent_days"],
+                site_pause=params["site_pause"],
+                message=params["message"],
+                only_active=params["only_active"],
+            )
+            result_message = "daily_task 单轮执行完成"
+
+        with _daily_task_lock:
+            _daily_task_state.update({
+                "running": False,
+                "finished_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                "status": "success",
+                "message": result_message,
+            })
+        print(f"{get_now_time()} {result_message}<br>")
+    except Exception as e:
+        logging.error("daily_task failed: %s", e)
+        traceback.print_exc()
+        with _daily_task_lock:
+            _daily_task_state.update({
                 "running": False,
                 "finished_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
                 "status": "error",
@@ -737,6 +835,48 @@ def api_collect_reputation_status():
         })
 
 
+@app.route('/api/tasks/daily/start', methods=['POST'])
+@login_required
+def api_start_daily_task():
+    data = request.get_json(silent=True) or {}
+    params = build_daily_task_params(data)
+    with _daily_task_lock:
+        if _daily_task_state.get("running"):
+            return jsonify({
+                "status": "running",
+                "data": dict(_daily_task_state),
+                "message": "daily_task 正在运行中"
+            }), 409
+
+        started_at = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        _daily_task_state.update({
+            "running": True,
+            "started_at": started_at,
+            "finished_at": "",
+            "status": "running",
+            "message": "daily_task 已启动",
+            "params": params,
+        })
+
+    task_thread = threading.Thread(target=run_daily_task_job, args=(params,), daemon=True)
+    task_thread.start()
+    return jsonify({
+        "status": "success",
+        "data": dict(_daily_task_state),
+        "message": "daily_task 已在后台启动"
+    })
+
+
+@app.route('/api/tasks/daily/status', methods=['GET'])
+@login_required
+def api_daily_task_status():
+    with _daily_task_lock:
+        return jsonify({
+            "status": "success",
+            "data": dict(_daily_task_state),
+        })
+
+
 @app.route('/api/db/task-records', methods=['POST'])
 @internal_api_required
 def api_db_insert_task_records():
@@ -782,6 +922,18 @@ def api_db_insert_delays():
     data = request.get_json(silent=True) or {}
     rows = data.get("rows") or []
     db_inset_delay_info(rows)
+    return jsonify({"status": "success", "data": {"count": len(rows)}})
+
+
+@app.route('/api/db/pago/bulk', methods=['POST'])
+@internal_api_required
+def api_db_insert_pago():
+    blocked = reject_db_api_client_mode()
+    if blocked:
+        return blocked
+    data = request.get_json(silent=True) or {}
+    rows = data.get("rows") or []
+    db_inset_pago_info(rows)
     return jsonify({"status": "success", "data": {"count": len(rows)}})
 
 

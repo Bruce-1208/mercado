@@ -1,9 +1,9 @@
 from apscheduler.schedulers.blocking import BlockingScheduler
 
-from playwright.bit_download import download_relay_mail_all
-from playwright.bit_infractions_info import get_infractions_info_all
-from playwright.bit_print import print_orders_all
-from playwright.bit_summary_info import get_reputation_info_all
+from bit_playwright.bit_download import download_relay_mail_all
+from bit_playwright.bit_infractions_info import get_infractions_info_all
+from bit_playwright.bit_print import print_orders_all
+from bit_playwright.bit_summary_info import get_reputation_info_all
 from bit.bit_summary_delayfile import summary_delayFile
 
 

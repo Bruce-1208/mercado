@@ -82,7 +82,6 @@ AI_FRAME_MARKERS = ("meli-ai-chat", "maxwell", "new-chat", "ai chat", "assistant
 AI_HELP_URLS = (
     HELP_URL,
     "https://global-selling.mercadolibre.com/help/v2",
-    "https://global-selling.mercadolibre.com/help/chat/v2",
 )
 SITE_OPTION_MENU_OPTIONS = (
     "Mexico (Direct to consumer)",
@@ -143,6 +142,24 @@ SITE_REMOTE_VALUE_MAP = {
     "智利": "MLC-remote",
     "阿根廷": "MLA-remote",
     "乌拉圭": "MLU-remote",
+}
+
+SITE_ID_MAP = {
+    "墨西哥": "MLM",
+    "巴西": "MLB",
+    "哥伦比亚": "MCO",
+    "智利": "MLC",
+    "阿根廷": "MLA",
+    "乌拉圭": "MLU",
+}
+
+SITE_SHORT_CODE_MAP = {
+    "墨西哥": "MX",
+    "巴西": "BR",
+    "哥伦比亚": "CO",
+    "智利": "CL",
+    "阿根廷": "AR",
+    "乌拉圭": "UY",
 }
 
 SITE_LABEL_MAP = {
@@ -283,6 +300,8 @@ def select_site(driver, name, site):
     site_name = normalize_site_name(site)
     if select_mercado_site_fast(driver, name, site_name):
         return True
+    if select_mercado_site_by_cookie(driver, name, site_name):
+        return True
 
     try:
         WebDriverWait(driver, 5).until(
@@ -293,9 +312,14 @@ def select_site(driver, name, site):
             EC.element_to_be_clickable((By.CSS_SELECTOR, path))
         ).click()
         driver.refresh()
-        time.sleep(2)
-        if not verify_selected_site(driver, site_name):
-            raise RuntimeError("选择后页面校验站点不匹配")
+        matched = False
+        for _ in range(12):
+            time.sleep(1)
+            if verify_selected_site(driver, site_name):
+                matched = True
+                break
+        if not matched:
+            raise RuntimeError(f"选择后页面严格校验站点不匹配，state={get_selected_site_state(driver)}")
         print(f"{get_now_time()} {name} {site_name} '选择站点成功'<br>")
         return True
     except Exception as e:
@@ -303,16 +327,11 @@ def select_site(driver, name, site):
         raise RuntimeError(f"{name} 切换站点失败：目标={site_name}, 原始参数={site}") from e
 
 
-def verify_selected_site(driver, site):
-    site_name = normalize_site_name(site)
-    labels = SITE_LABEL_MAP.get(site_name, SITE_LABEL_MAP["墨西哥"])
-    site_code = normalize_site_code(site_name)
+def get_selected_site_state(driver):
+    """读取顶部站点切换器的真实当前站点，不扫描整页普通文本。"""
     try:
-        return bool(driver.execute_script(
+        return driver.execute_script(
             """
-            const labels = arguments[0].map(item => String(item).toLowerCase());
-            const siteCode = String(arguments[1] || '').toLowerCase();
-
             function allElements(root) {
                 const out = [];
                 const walk = (node) => {
@@ -325,33 +344,127 @@ def verify_selected_site(driver, site):
                 walk(root || document);
                 return out;
             }
-            function visible(el) {
-                const rect = el.getBoundingClientRect();
-                return rect.width > 0 && rect.height > 0;
-            }
-            function textOf(el) {
-                return [
-                    el.innerText || '',
-                    el.textContent || '',
-                    el.getAttribute('aria-label') || '',
-                    el.getAttribute('title') || ''
-                ].join(' ').toLowerCase();
+
+            function textOf(selector) {
+                const node = document.querySelector(selector);
+                return node ? (node.innerText || node.textContent || '').trim() : '';
             }
 
-            const visibleTexts = allElements(document).filter(visible).map(textOf).join('\\n');
-            return labels.some(label => label && visibleTexts.includes(label)) ||
-                (siteCode && new RegExp(`(^|\\\\s)${siteCode}(\\\\s|$)`, 'i').test(visibleTexts));
+            const currentNode = document.querySelector('.nav-header-cbt__current, .nav-header-cbt__site-switcher, [class*="site-switcher"]');
+            const currentText = currentNode ? (currentNode.innerText || currentNode.textContent || '').replace(/\\s+/g, ' ').trim() : '';
+            const currentFlag = document.querySelector('.nav-header-cbt__current-flag img, .nav-header-cbt__current img, [class*="current"] img');
+            const currentFlagAlt = currentFlag ? (currentFlag.getAttribute('alt') || currentFlag.getAttribute('title') || '') : '';
+            const selected = document.querySelector('#nav-header-cbt__switcher [class*="option-selected"], [data-value$="-remote"][class*="selected"]');
+            const selectedRemote = selected ? (selected.getAttribute('data-value') || selected.querySelector('[data-value]')?.getAttribute('data-value') || '') : '';
+            const selectedText = selected ? (selected.innerText || selected.textContent || selected.getAttribute('aria-label') || '').replace(/\\s+/g, ' ').trim() : '';
+            const available = [...document.querySelectorAll('#nav-header-cbt__switcher [data-value$="-remote"], [class*="site-switcher"] [data-value$="-remote"]')]
+                .map((node) => ({
+                    value: node.getAttribute('data-value') || '',
+                    text: (node.innerText || node.textContent || node.getAttribute('alt') || '').replace(/\\s+/g, ' ').trim(),
+                    selected: String(node.className || '').includes('selected')
+                }))
+                .filter((item, index, arr) => item.value && arr.findIndex((other) => other.value === item.value) === index);
+            const scriptsText = [...document.scripts].map((script) => script.textContent || '').join('\\n');
+            const operatingMatch = scriptsText.match(/operating_site_id["']?\\s*:\\s*["']([A-Z]{3})["']/);
+            const siteIdMatch = scriptsText.match(/"siteId"\\s*:\\s*"([A-Z]{3})"/);
+            const cookieMatch = document.cookie.match(/(?:^|;\\s*)cbtSiteId=([^;]+)/);
+            return {
+                currentShort: textOf('.nav-header-cbt__current-site'),
+                currentText,
+                currentFlagAlt,
+                selectedRemote,
+                selectedText,
+                operatingSiteId: operatingMatch ? operatingMatch[1] : '',
+                siteId: siteIdMatch ? siteIdMatch[1] : '',
+                cookieRemote: cookieMatch ? decodeURIComponent(cookieMatch[1]) : '',
+                available,
+                url: location.href,
+                title: document.title
+            };
+            """
+        ) or {}
+    except Exception as e:
+        return {"error": str(e)}
+
+
+def _site_state_matches(state, site):
+    site_name = normalize_site_name(site)
+    remote_value = SITE_REMOTE_VALUE_MAP.get(site_name, "")
+    site_id = SITE_ID_MAP.get(site_name, "")
+    short_code = SITE_SHORT_CODE_MAP.get(site_name, "")
+    labels = tuple(label.lower() for label in SITE_LABEL_MAP.get(site_name, ()))
+
+    selected_text = str(state.get("selectedText") or "").lower()
+    current_text = str(state.get("currentText") or "").lower()
+    current_flag_alt = str(state.get("currentFlagAlt") or "").lower()
+    return any(
+        [
+            remote_value and state.get("selectedRemote") == remote_value,
+            site_id and state.get("operatingSiteId") == site_id,
+            short_code and state.get("currentShort") == short_code,
+            labels and any(label and label in current_flag_alt for label in labels),
+            labels and any(label and label in selected_text for label in labels),
+            short_code and current_text == short_code.lower(),
+        ]
+    )
+
+
+def verify_selected_site(driver, site):
+    site_name = normalize_site_name(site)
+    state = get_selected_site_state(driver)
+    matched = _site_state_matches(state, site_name)
+    if not matched:
+        print(f"{get_now_time()} 站点严格校验失败：目标={site_name}，当前状态={state}<br>")
+    return matched
+
+
+def select_mercado_site_by_cookie(driver, name, site):
+    """直接写入美客多站点 cookie 后刷新，作为点击切换失败时的兜底。"""
+    site_name = normalize_site_name(site)
+    remote_value = SITE_REMOTE_VALUE_MAP.get(site_name, "MLM-remote")
+    state = get_selected_site_state(driver)
+    available = state.get("available") or []
+    if available and not any(item.get("value") == remote_value for item in available):
+        print(f"{get_now_time()} {name} {site_name} 当前店铺站点列表不包含目标：{remote_value}，available={available}<br>")
+        return False
+
+    try:
+        print(f"{get_now_time()} {name} {site_name} 尝试通过 cbtSiteId cookie 切换站点：{remote_value}<br>")
+        try:
+            driver.delete_cookie("cbtSiteId")
+        except Exception:
+            pass
+        try:
+            driver.add_cookie({"name": "cbtSiteId", "value": remote_value, "path": "/"})
+        except Exception:
+            pass
+        driver.execute_script(
+            """
+            const value = arguments[0];
+            document.cookie = `cbtSiteId=${value}; path=/`;
             """,
-            list(labels),
-            site_code,
-        ))
-    except Exception:
+            remote_value,
+        )
+        driver.refresh()
+        for _ in range(15):
+            time.sleep(1)
+            if verify_selected_site(driver, site_name):
+                print(f"{get_now_time()} {name} {site_name} cookie 切换站点成功<br>")
+                return True
+        print(f"{get_now_time()} {name} {site_name} cookie 切换后仍未通过严格校验，state={get_selected_site_state(driver)}<br>")
+        return False
+    except Exception as e:
+        print(f"{get_now_time()} {name} {site_name} cookie 切换站点异常：{e}<br>")
         return False
 
 
 def select_mercado_site_fast(driver, name, site):
     """快速切换美客多站点，优先用 JS 深度查找，减少重复重试。"""
     site_name = normalize_site_name(site)
+    if verify_selected_site(driver, site_name):
+        print(f"{get_now_time()} {name} {site_name} 当前站点严格校验已匹配，无需切换<br>")
+        return True
+
     remote_value = SITE_REMOTE_VALUE_MAP.get(site_name, "MLM-remote")
     labels = SITE_LABEL_MAP.get(site_name, SITE_LABEL_MAP["墨西哥"])
     result = driver.execute_script(
@@ -388,49 +501,64 @@ def select_mercado_site_fast(driver, name, site):
         }
 
         const elements = allElements(document);
+        const targetByValue = elements.find(el =>
+            visible(el) && (
+                el.getAttribute('data-value') === remoteValue ||
+                el.querySelector?.(`[data-value="${remoteValue}"]`)
+            )
+        );
+        if (targetByValue) {
+            const target = targetByValue.getAttribute('data-value') === remoteValue
+                ? targetByValue
+                : targetByValue.querySelector(`[data-value="${remoteValue}"]`);
+            const clickable = target.closest('li, button, a, [role="option"], [role="menuitem"], [class*="option-switcher"]') || target;
+            clickable.scrollIntoView({block: 'center', inline: 'center'});
+            clickable.click();
+            for (const type of ['pointerdown', 'mousedown', 'pointerup', 'mouseup', 'click']) {
+                clickable.dispatchEvent(new MouseEvent(type, {bubbles: true, cancelable: true, view: window}));
+            }
+            return `clicked_data_value:${remoteValue}`;
+        }
+
         const switcher = elements.find(el =>
             visible(el) && (
                 String(el.className || '').includes('nav-header-cbt__site-switcher') ||
+                String(el.className || '').includes('nav-header-cbt__trigger') ||
+                el.id === 'nav-header-cbt__logged' ||
                 /select\\s+(country|site)|country|site/i.test(textOf(el))
             )
         );
-
-        if (switcher && labels.some(label => textOf(switcher).includes(label))) {
-            return 'already';
-        }
-
         if (switcher) {
             switcher.click();
         }
 
-        const target = allElements(document).filter(visible).find(el =>
-            visible(el) && (
-                el.getAttribute('data-value') === remoteValue ||
-                labels.some(label => textOf(el).includes(label))
-            )
+        const switcherRoot = document.querySelector('#nav-header-cbt__switcher, #nav-header-cbt__logged-options, [class*="site-switcher"]') || document;
+        const target = allElements(switcherRoot).filter(visible).find(el =>
+            visible(el) && labels.some(label => textOf(el).includes(label))
         );
         if (!target) {
             return switcher ? 'opened_no_target' : 'no_switcher';
         }
-        target.scrollIntoView({block: 'center'});
-        target.click();
-        for (const type of ['mousedown', 'mouseup', 'click']) {
-            target.dispatchEvent(new MouseEvent(type, {bubbles: true, cancelable: true, view: window}));
+        const clickable = target.closest('li, button, a, [role="option"], [role="menuitem"], [class*="option-switcher"]') || target;
+        clickable.scrollIntoView({block: 'center'});
+        clickable.click();
+        for (const type of ['pointerdown', 'mousedown', 'pointerup', 'mouseup', 'click']) {
+            clickable.dispatchEvent(new MouseEvent(type, {bubbles: true, cancelable: true, view: window}));
         }
-        return 'clicked';
+        return 'clicked_text_in_switcher';
         """,
         remote_value,
         list(labels),
     )
     print(f"{get_now_time()} {name} {site_name} 快速选择站点结果：{result}<br>")
-    if result in ("already", "clicked"):
-        time.sleep(2)
-        if result == "clicked":
-            driver.refresh()
-            time.sleep(2)
-        if verify_selected_site(driver, site_name):
-            return True
-        print(f"{get_now_time()} {name} {site_name} 快速选择后校验失败<br>")
+    if str(result or "").startswith("clicked"):
+        time.sleep(3)
+        driver.refresh()
+        for _ in range(12):
+            time.sleep(1)
+            if verify_selected_site(driver, site_name):
+                return True
+        print(f"{get_now_time()} {name} {site_name} 快速选择后严格校验失败<br>")
     return False
 
 
@@ -453,7 +581,7 @@ def build_appeal_message(window_id, name, site, form, message, nickname):
     if form == "侵权":
         infraction_random = get_infraction_orders_random(window_id, name, site, 10)
         words = [
-            f"亲爱的客服，我叫{nickname}！这些产品是通用品牌产品，被系统误检测为侵权产品，你能帮我重新核查并消除记录吗？",
+            f"亲爱的客服，我叫{nickname}！这些产品是通用品牌产品，被系统误检测为侵权产品，你能帮我核查并消除记录吗？",
             f"亲爱的客服，我叫{nickname}！这些产品是通用产品，并没有侵犯品牌权益，麻烦你帮我重新审核并恢复产品，谢谢！",
         ]
         return infraction_random + random.choice(words)
@@ -1492,7 +1620,7 @@ def click_ai_assistant_entry(driver, name, site):
 
 
 def click_ai_entry_fallback(driver, name, site):
-    """AI 入口兜底点击：按 maxwell/assistant/chat 等关键词寻找最像悬浮入口的元素。"""
+    """AI 入口兜底点击：只按 Assistant/Maxwell 关键词寻找悬浮窗入口。"""
     driver.switch_to.default_content()
     try:
         clicked = driver.execute_script(
@@ -1523,7 +1651,6 @@ def click_ai_entry_fallback(driver, name, site):
                     let score = rect.bottom + rect.right;
                     if (label.includes('maxwell')) score += 10000;
                     if (label.includes('assistant')) score += 8000;
-                    if (label.includes('chat')) score += 5000;
                     if (label.includes('help')) score += 1500;
                     if (rect.top > window.innerHeight * 0.45) score += 3500;
                     if (rect.left > window.innerWidth * 0.55) score += 2500;
@@ -1532,8 +1659,7 @@ def click_ai_entry_fallback(driver, name, site):
                 .filter((item) => item.rect.width > 0 && item.rect.height > 0)
                 .filter((item) =>
                     item.label.includes('maxwell') ||
-                    item.label.includes('assistant') ||
-                    item.label.includes('chat')
+                    item.label.includes('assistant')
                 )
                 .sort((a, b) => b.score - a.score);
             const node = candidates.length ? candidates[0].node : null;
@@ -1551,10 +1677,25 @@ def click_ai_entry_fallback(driver, name, site):
     return False
 
 
+def is_top_level_human_customer_service_page(driver):
+    """AI 客服只认悬浮窗；顶层 chat/maxwell 页面属于人工客服页面。"""
+    try:
+        driver.switch_to.default_content()
+    except Exception:
+        pass
+    try:
+        current_url = (driver.current_url or "").lower()
+    except Exception:
+        current_url = ""
+    return "/help/chat" in current_url or "/maxwell/new-chat" in current_url
+
+
 def wait_for_ai_chat_frame(driver, timeout=15):
     """在限定时间内等待 AI 客服 iframe 出现并可切换。"""
     end_time = time.time() + timeout
     while time.time() < end_time:
+        if is_top_level_human_customer_service_page(driver):
+            return False
         if switch_to_ai_chat_frame(driver):
             return True
         time.sleep(0.5)
@@ -1569,6 +1710,7 @@ def open_ai_contact_window(driver, name, site):
     若失败会保存页面截图、HTML 和候选元素信息。
     """
     opened = False
+    entered_human_page = False
     for url in AI_HELP_URLS:
         driver.switch_to.default_content()
         driver.get(url)
@@ -1582,16 +1724,19 @@ def open_ai_contact_window(driver, name, site):
                 break
 
             if click_ai_assistant_entry(driver, name, site):
+                if is_top_level_human_customer_service_page(driver):
+                    entered_human_page = True
+                    print(f"{get_now_time()} {name} {site} 点击 Assistant 后进入人工客服页面，不按 AI 悬浮窗处理<br>")
+                    break
                 if wait_for_ai_chat_frame(driver, timeout=6):
                     opened = True
                     break
 
             if click_ai_entry_fallback(driver, name, site):
-                if wait_for_ai_chat_frame(driver, timeout=6):
-                    opened = True
+                if is_top_level_human_customer_service_page(driver):
+                    entered_human_page = True
+                    print(f"{get_now_time()} {name} {site} 兜底点击后进入人工客服页面，不按 AI 悬浮窗处理<br>")
                     break
-
-            if click_contact_us(driver, name, site):
                 if wait_for_ai_chat_frame(driver, timeout=6):
                     opened = True
                     break
@@ -1599,13 +1744,15 @@ def open_ai_contact_window(driver, name, site):
             driver.switch_to.default_content()
             time.sleep(2)
 
-        if opened:
+        if opened or entered_human_page:
             break
 
     if not opened:
         dump_iframe_debug_info(driver)
         dump_ai_entry_debug_info(driver)
         save_ai_open_debug_artifacts(driver, name, site)
+        if entered_human_page:
+            raise RuntimeError("进入了人工客服页面，不是 AI 客服悬浮窗")
         raise RuntimeError("没有找到 AI 客服悬浮窗 iframe")
 
     if not switch_to_ai_chat_frame(driver, require_input=False):
@@ -2089,7 +2236,7 @@ def shensu(name, site, form, message):
 
 def handle_infraction(window_id, driver, name, site, message, nickname):
     """处理侵权申诉：读取侵权编号，按固定数量分组，并逐组发送给 AI 客服。"""
-    group = 3
+    group = 10
     inf_list = get_infraction_orders(window_id, name, site)
     if not inf_list:
         print(f"{get_now_time()} {name} {site} 没有可以申诉的侵权编号<br>")

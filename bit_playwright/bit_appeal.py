@@ -1,5 +1,5 @@
 from bit.bit_utils import getWindowidByName
-from playwright.common import BitPlaywrightSession, select_country
+from bit_playwright.common import BitPlaywrightSession, select_country
 
 
 CHAT_INFO_API_URL = "https://zeshun.nat100.top/api/v1/chat"
@@ -31,7 +31,7 @@ def use_all_browser_run_task_with_thread_pool(browser_list, max_threads=10):
 
 
 def auto_appeal_delay():
-    raise NotImplementedError("请改用 playwright.bit_appeal.shensu 或 playwright.bit_appeal_ai 的 AI 入口。")
+    raise NotImplementedError("请改用 bit_playwright.bit_appeal.shensu 或 bit_playwright.bit_appeal_ai 的 AI 入口。")
 
 
 def main():

@@ -1,8 +1,8 @@
 import time
 
 from bit.bit_utils import getWindowidByName
-from playwright.bit_appeal import shensu as _shensu
-from playwright.common import BitPlaywrightSession, select_country
+from bit_playwright.bit_appeal import shensu as _shensu
+from bit_playwright.common import BitPlaywrightSession, select_country
 
 
 SITE_OPTION_REPLY = {

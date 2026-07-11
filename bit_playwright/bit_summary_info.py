@@ -8,7 +8,7 @@ from openpyxl import load_workbook
 from bit.bit_api import closeBrowser
 from bit.bit_send_mail import send_info
 from bit.bit_utils import get_now_time
-from playwright.common import BitPlaywrightSession, first_text, select_country
+from bit_playwright.common import BitPlaywrightSession, first_text, select_country
 
 
 def get_reputation_info(window_id, site):

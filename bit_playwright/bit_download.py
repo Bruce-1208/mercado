@@ -10,8 +10,8 @@ from bit.bit_clash import get_public_ip, switch_random_hongkong_node
 from bit.bit_mysql import insert_task_record
 from bit.bit_summary_delayfile import summary_delayFile
 from bit.bit_utils import get_now_time
-from playwright.bit_email_info import get_mail_info, read_email_info_all
-from playwright.common import BitPlaywrightSession, select_country
+from bit_playwright.bit_email_info import get_mail_info, read_email_info_all
+from bit_playwright.common import BitPlaywrightSession, select_country
 
 
 def download_relay_mail(window_id, site):

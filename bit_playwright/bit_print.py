@@ -6,7 +6,7 @@ from openpyxl import load_workbook
 from bit.bit_api import closeBrowser
 from bit.bit_mysql import insert_task_record
 from bit.bit_utils import get_now_time
-from playwright.common import BitPlaywrightSession, select_country
+from bit_playwright.common import BitPlaywrightSession, select_country
 
 
 ORDERS_URL = (

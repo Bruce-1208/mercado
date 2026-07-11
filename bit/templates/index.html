@@ -282,7 +282,8 @@
             box-shadow: 0 0 0 5px rgba(220, 38, 38, 0.12);
         }
 
-        #log-container {
+        #log-container,
+        #daily-task-state-log {
             flex: 1;
             margin: 0;
             background: var(--log-bg);
@@ -633,6 +634,7 @@
         <aside class="panel sidebar">
             <p class="nav-title">功能导航</p>
             <button class="tab-button active" type="button" data-tab="appeal" onclick="switchTab('appeal')">自动化AI申诉</button>
+            <button class="tab-button" type="button" data-tab="tasks" onclick="switchTab('tasks')">任务模块</button>
             <button class="tab-button" type="button" data-tab="infractions" onclick="switchTab('infractions')">侵权数据</button>
             <button class="tab-button" type="button" data-tab="reputation" onclick="switchTab('reputation')">声誉数据</button>
             <button class="tab-button" type="button" data-tab="ai-appeals" onclick="switchTab('ai-appeals')">AI申诉记录</button>
@@ -703,6 +705,101 @@
                             </span>
                         </div>
                         <pre id="log-container">等待任务启动...</pre>
+                    </section>
+                </div>
+            </div>
+
+            <div class="tab-page" id="tab-tasks">
+                <div class="tab-heading">
+                    <h2>任务模块</h2>
+                    <p>配置并启动 daily_task 自动申诉任务</p>
+                </div>
+
+                <div class="appeal-grid">
+                    <section class="panel form-panel">
+                        <h2 class="panel-title">daily_task 参数</h2>
+
+                        <div class="field">
+                            <label for="daily-task-mode">执行模式</label>
+                            <select id="daily-task-mode">
+                                <option value="once" selected>单轮执行</option>
+                                <option value="loop">循环执行</option>
+                            </select>
+                        </div>
+
+                        <div class="field">
+                            <label for="daily-task-top-n">店铺数量</label>
+                            <input type="number" id="daily-task-top-n" value="30" min="1" max="100">
+                        </div>
+
+                        <div class="field">
+                            <label for="daily-task-max-workers">并发进程</label>
+                            <input type="number" id="daily-task-max-workers" value="30" min="1" max="60">
+                        </div>
+
+                        <div class="field">
+                            <label for="daily-task-recent-days">统计天数</label>
+                            <select id="daily-task-recent-days">
+                                <option value="7">最近 7 天</option>
+                                <option value="30" selected>最近 30 天</option>
+                                <option value="100">最近 100 天</option>
+                                <option value="365">最近 365 天</option>
+                            </select>
+                        </div>
+
+                        <div class="field">
+                            <label for="daily-task-round-interval">循环间隔秒数</label>
+                            <input type="number" id="daily-task-round-interval" value="600" min="10" max="86400">
+                        </div>
+
+                        <div class="field">
+                            <label for="daily-task-site-pause">站点间隔秒数</label>
+                            <input type="number" id="daily-task-site-pause" value="30" min="0" max="3600">
+                        </div>
+
+                        <div class="field">
+                            <label for="daily-task-stop-after">循环时长分钟</label>
+                            <input type="number" id="daily-task-stop-after" value="360" min="0" max="1440">
+                        </div>
+
+                        <div class="field">
+                            <label for="daily-task-only-active">店铺配置过滤</label>
+                            <select id="daily-task-only-active">
+                                <option value="true" selected>只跑配置有效站点</option>
+                                <option value="false">不过滤配置</option>
+                            </select>
+                        </div>
+
+                        <div class="field">
+                            <label for="daily-task-message">自定义话术</label>
+                            <textarea id="daily-task-message" placeholder="不填写时按脚本内置逻辑执行"></textarea>
+                        </div>
+
+                        <div class="actions">
+                            <button class="primary" id="start-daily-task-btn" type="button" onclick="startDailyTask()">启动 daily_task</button>
+                            <button class="secondary" id="refresh-daily-task-status-btn" type="button" onclick="loadDailyTaskStatus()">刷新状态</button>
+                        </div>
+                    </section>
+
+                    <section class="panel log-panel">
+                        <div class="log-header">
+                            <h2 class="panel-title" style="margin: 0;">daily_task 状态</h2>
+                            <span class="status" id="daily-task-status-badge">
+                                <span class="status-dot"></span>
+                                <span id="daily-task-status-text">等待启动</span>
+                            </span>
+                        </div>
+                        <div class="summary-row">
+                            <div class="metric">
+                                <div class="metric-label">开始时间</div>
+                                <div class="metric-value" id="daily-task-started">-</div>
+                            </div>
+                            <div class="metric">
+                                <div class="metric-label">结束时间</div>
+                                <div class="metric-value" id="daily-task-finished">-</div>
+                            </div>
+                        </div>
+                        <pre id="daily-task-state-log">等待任务启动...</pre>
                     </section>
                 </div>
             </div>
@@ -924,10 +1021,17 @@
         const aiAppealRecordBody = document.getElementById("ai-appeal-record-body");
         const aiAppealLatestTime = document.getElementById("ai-appeal-latest-time");
         const aiAppealTotal = document.getElementById("ai-appeal-total");
+        const startDailyTaskBtn = document.getElementById("start-daily-task-btn");
+        const dailyTaskStatusBadge = document.getElementById("daily-task-status-badge");
+        const dailyTaskStatusText = document.getElementById("daily-task-status-text");
+        const dailyTaskStarted = document.getElementById("daily-task-started");
+        const dailyTaskFinished = document.getElementById("daily-task-finished");
+        const dailyTaskStateLog = document.getElementById("daily-task-state-log");
         let infractionDays = 30;
         let infractionsLoaded = false;
         let reputationLoaded = false;
         let aiAppealsLoaded = false;
+        let tasksLoaded = false;
 
         function switchTab(tabName) {
             document.querySelectorAll(".tab-button").forEach(button => {
@@ -944,6 +1048,9 @@
             }
             if (tabName === "ai-appeals" && !aiAppealsLoaded) {
                 loadAiAppealRecords();
+            }
+            if (tabName === "tasks" && !tasksLoaded) {
+                loadDailyTaskStatus();
             }
         }
 
@@ -1164,6 +1271,93 @@
                 setTimeout(() => {
                     collectInfractionsBtn.disabled = false;
                     collectInfractionsBtn.textContent = "运行侵权采集";
+                }, 1500);
+            }
+        }
+
+        function getDailyTaskPayload() {
+            return {
+                mode: document.getElementById("daily-task-mode").value,
+                top_n: Number(document.getElementById("daily-task-top-n").value || 30),
+                max_workers: Number(document.getElementById("daily-task-max-workers").value || 30),
+                recent_days: Number(document.getElementById("daily-task-recent-days").value || 30),
+                round_interval: Number(document.getElementById("daily-task-round-interval").value || 600),
+                site_pause: Number(document.getElementById("daily-task-site-pause").value || 30),
+                stop_after_minutes: Number(document.getElementById("daily-task-stop-after").value || 360),
+                only_active: document.getElementById("daily-task-only-active").value === "true",
+                message: document.getElementById("daily-task-message").value || "",
+            };
+        }
+
+        function renderDailyTaskStatus(data) {
+            if (!dailyTaskStateLog) return;
+            const state = data || {};
+            const params = state.params || {};
+            const status = String(state.status || "idle");
+            const running = Boolean(state.running);
+            const statusClass = status === "error" ? "error" : (running ? "running" : "");
+            dailyTaskStatusBadge.className = `status ${statusClass}`.trim();
+            dailyTaskStatusText.textContent = state.message || (running ? "运行中" : "等待启动");
+            dailyTaskStarted.textContent = state.started_at || "-";
+            dailyTaskFinished.textContent = state.finished_at || "-";
+            startDailyTaskBtn.disabled = running;
+            dailyTaskStateLog.textContent = [
+                `状态：${state.status || "idle"}`,
+                `消息：${state.message || "-"}`,
+                `开始时间：${state.started_at || "-"}`,
+                `结束时间：${state.finished_at || "-"}`,
+                "",
+                "参数：",
+                JSON.stringify(params, null, 2),
+            ].join("\n");
+        }
+
+        async function loadDailyTaskStatus() {
+            if (!dailyTaskStateLog) return;
+            try {
+                const response = await fetch("/api/tasks/daily/status");
+                const payload = await response.json();
+                if (!response.ok || payload.status !== "success") {
+                    throw new Error(payload.message || `接口请求失败：${response.status}`);
+                }
+                tasksLoaded = true;
+                renderDailyTaskStatus(payload.data || {});
+            } catch (err) {
+                dailyTaskStateLog.textContent = `加载失败：${err.message || err}`;
+                dailyTaskStatusText.textContent = "状态加载失败";
+                dailyTaskStatusBadge.className = "status error";
+            }
+        }
+
+        async function startDailyTask() {
+            if (!startDailyTaskBtn) return;
+            startDailyTaskBtn.disabled = true;
+            startDailyTaskBtn.textContent = "启动中...";
+            try {
+                const response = await fetch("/api/tasks/daily/start", {
+                    method: "POST",
+                    headers: {"Content-Type": "application/json"},
+                    body: JSON.stringify(getDailyTaskPayload()),
+                });
+                const payload = await response.json();
+                if (response.status === 409) {
+                    renderDailyTaskStatus(payload.data || {});
+                    alert(payload.message || "daily_task 正在运行中");
+                    return;
+                }
+                if (!response.ok || payload.status !== "success") {
+                    throw new Error(payload.message || `接口请求失败：${response.status}`);
+                }
+                tasksLoaded = true;
+                renderDailyTaskStatus(payload.data || {});
+                alert(payload.message || "daily_task 已启动");
+            } catch (err) {
+                alert(`启动失败：${err.message || err}`);
+                await loadDailyTaskStatus();
+            } finally {
+                setTimeout(() => {
+                    startDailyTaskBtn.textContent = "启动 daily_task";
+                    loadDailyTaskStatus();
                 }, 1500);
             }
         }

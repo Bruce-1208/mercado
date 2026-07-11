@@ -67,8 +67,8 @@ _PLAYWRIGHT_API = None
 
 def _load_playwright_sync_api():
     """
-    This project has a local package named ``playwright``. Temporarily hide it
-    so Python can import the official Playwright package.
+    This project has local Playwright helper modules. Temporarily hide the project
+    root so Python imports the official ``playwright.sync_api`` package.
     """
     global _PLAYWRIGHT_API
     if _PLAYWRIGHT_API is not None:
@@ -76,12 +76,12 @@ def _load_playwright_sync_api():
 
     project_root = Path(__file__).resolve().parent.parent
     original_path = list(sys.path)
-    local_parent = sys.modules.get("playwright")
+    local_parent = sys.modules.get("bit_playwright")
     current_module = sys.modules.get(__name__)
     removed_modules = {}
 
     for name, module in list(sys.modules.items()):
-        if name == "playwright" or (name.startswith("playwright.") and name != __name__):
+        if name == "bit_playwright" or (name.startswith("bit_playwright.") and name != __name__):
             removed_modules[name] = module
             sys.modules.pop(name, None)
 
@@ -98,7 +98,7 @@ def _load_playwright_sync_api():
     finally:
         sys.path = original_path
         if local_parent is not None:
-            sys.modules["playwright"] = local_parent
+            sys.modules["bit_playwright"] = local_parent
         if current_module is not None:
             sys.modules[__name__] = current_module
 
@@ -653,7 +653,7 @@ def _run_infractions_for_browser(row):
     return infraction_info_sum, result
 
 
-def get_infractions_info_all(max_workers=10):
+def get_infractions_info_all(max_workers=20):
     start = int(time.time())
     print(start)
     bit_dir = Path(__file__).resolve().parent.parent / "bit"

@@ -1,6 +1,6 @@
 import time
 
-from playwright.listing_review import (
+from bit_playwright.listing_review import (
     DEFAULT_REVIEW_WINDOW_ID,
     ask_ai_for_suspected_infringements,
     collect_paginated_products,

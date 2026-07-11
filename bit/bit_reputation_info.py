@@ -704,7 +704,7 @@ def _run_reputation_for_browser(row):
     return reputation_info_sum, result
 
 
-def get_reputation_info_all(max_workers=10):
+def get_reputation_info_all(max_workers=20):
     start = int(time.time())
     print(start)
     root_path = Path(__file__).resolve().parent

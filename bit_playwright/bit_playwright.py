@@ -1,4 +1,4 @@
-from playwright.common import BitPlaywrightSession
+from bit_playwright.common import BitPlaywrightSession
 
 
 def open_page(window_id, url=None, close_on_exit=False):

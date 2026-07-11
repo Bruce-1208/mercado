@@ -2,7 +2,7 @@ import re
 import time
 
 from AI_Agent.deepseek import get_ai_response
-from playwright.common import BitPlaywrightSession
+from bit_playwright.common import BitPlaywrightSession
 
 
 DEFAULT_REVIEW_WINDOW_ID = "1495e31cb630406bb690ba187f264fe7"

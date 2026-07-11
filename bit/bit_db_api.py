@@ -5,6 +5,8 @@ import requests
 
 DB_API_BASE_URL = os.environ.get("BIT_DB_API_BASE_URL", "http://zeshun.nat100.top").rstrip("/")
 DB_API_TOKEN = os.environ.get("BIT_DB_API_TOKEN", "")
+DB_API_SESSION = requests.Session()
+DB_API_SESSION.trust_env = False
 
 
 def _headers():
@@ -18,12 +20,19 @@ def _request(method, path, **kwargs):
     url = f"{DB_API_BASE_URL}{path}"
     timeout = kwargs.pop("timeout", 60)
     try:
-        response = requests.request(method, url, headers=_headers(), timeout=timeout, **kwargs)
-        payload = response.json()
+        response = DB_API_SESSION.request(method, url, headers=_headers(), timeout=timeout, **kwargs)
     except requests.RequestException as e:
         raise RuntimeError(f"数据库接口请求失败：{url}，请确认 bit_interface.py 已启动。原因：{e}") from e
+
+    try:
+        payload = response.json()
     except ValueError as e:
-        raise RuntimeError(f"数据库接口返回非 JSON：{url}，状态码：{response.status_code}") from e
+        content_type = response.headers.get("Content-Type", "")
+        body_preview = (response.text or "")[:500].replace("\n", " ").replace("\r", " ")
+        raise RuntimeError(
+            f"数据库接口返回非 JSON：{url}，状态码：{response.status_code}，"
+            f"Content-Type：{content_type}，返回内容：{body_preview}"
+        ) from e
 
     if not response.ok or payload.get("status") not in ("success", None):
         raise RuntimeError(payload.get("message") or f"数据库接口请求失败：{url}，状态码：{response.status_code}")
@@ -46,6 +55,10 @@ def inset_delay_info(delay_list):
     return _request("POST", "/api/db/delays/bulk", json={"rows": delay_list})
 
 
+def inset_pago_info(pago_list):
+    return _request("POST", "/api/db/pago/bulk", json={"rows": pago_list})
+
+
 def insert_orders(line):
     return _request("POST", "/api/db/orders/bulk", json={"rows": line})
 
@@ -66,7 +79,7 @@ def insert_appeal_chat_record(record, timeout=5):
     path = "/api/db/appeal-chat-records"
     url = f"{DB_API_BASE_URL}{path}"
     try:
-        response = requests.post(
+        response = DB_API_SESSION.post(
             url,
             headers=_headers(),
             timeout=timeout,
@@ -103,7 +116,7 @@ def login_workbench_user(username, password):
     path = "/api/db/workbench/login"
     url = f"{DB_API_BASE_URL}{path}"
     try:
-        response = requests.post(
+        response = DB_API_SESSION.post(
             url,
             headers=_headers(),
             timeout=30,

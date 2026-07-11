@@ -1,6 +1,6 @@
 import time
 
-from playwright.common import SITE_COUNTRY_MAP, deep_click
+from bit_playwright.common import SITE_COUNTRY_MAP, deep_click
 
 
 def force_select_country(page, country_name):

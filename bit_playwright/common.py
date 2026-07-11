@@ -33,7 +33,7 @@ _SYNC_API = None
 
 
 def load_sync_playwright():
-    """Load official Playwright even though this project has a local playwright package."""
+    """Load the official Playwright package, not this project's helper modules."""
     global _SYNC_API
     if _SYNC_API is not None:
         return _SYNC_API
@@ -42,7 +42,7 @@ def load_sync_playwright():
     local_modules = {}
     current_module = sys.modules.get(__name__)
     for name, module in list(sys.modules.items()):
-        if name == "playwright" or (name.startswith("playwright.") and name != __name__):
+        if name == "bit_playwright" or (name.startswith("bit_playwright.") and name != __name__):
             local_modules[name] = module
             sys.modules.pop(name, None)
 

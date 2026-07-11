@@ -1,4 +1,4 @@
-from playwright.bit_appeal_ai import (
+from bit_playwright.bit_appeal_ai import (
     appeal_ai_recollect_once,
     build_infraction_followup_message,
     build_site_option_reply,

@@ -1,7 +1,7 @@
 import asyncio
 import time
 
-from playwright.async_api import async_playwright
+from bit_playwright.async_api import async_playwright
 import playwright_stealth
 from playwright_stealth import Stealth
 

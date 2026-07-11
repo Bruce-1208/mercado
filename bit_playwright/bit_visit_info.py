@@ -1,7 +1,7 @@
 import time
 
 from bit.bit_api import closeBrowser
-from playwright.common import BitPlaywrightSession, select_country
+from bit_playwright.common import BitPlaywrightSession, select_country
 
 
 def get_visits_info(window_id, site):

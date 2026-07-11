@@ -1,4 +1,4 @@
-from playwright.common import BitPlaywrightSession
+from bit_playwright.common import BitPlaywrightSession
 
 
 def open_report(window_id, url):
