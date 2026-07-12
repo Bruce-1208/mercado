@@ -633,7 +633,10 @@ def reset_expired_ai_iframe(driver, name="", site=""):
         reset = driver.execute_script(
             """
             function cleanNewChatUrl(rawUrl) {
-                const url = new URL(rawUrl || '/maxwell/new-chat', window.location.origin);
+                const origin = window.location.origin && window.location.origin !== 'null'
+                    ? window.location.origin
+                    : 'https://global-selling.mercadolibre.com';
+                const url = new URL(rawUrl || '/maxwell/new-chat', origin);
                 url.pathname = '/maxwell/new-chat';
                 url.searchParams.set('flavor', 'seller-assistant');
                 url.searchParams.set('hideHeader', 'true');
@@ -870,12 +873,19 @@ def find_chat_input(driver, timeout=30, allow_default_content=False):
             const candidates = deepElements().filter((el) => {
                 const placeholder = el.getAttribute('placeholder') || '';
                 const aria = el.getAttribute('aria-label') || '';
+                const role = el.getAttribute('role') || '';
                 const tag = el.tagName || '';
-                return visible(el) && tag === 'TEXTAREA' && (
+                const editable = el.isContentEditable || el.getAttribute('contenteditable') === 'true';
+                const textboxLike = tag === 'TEXTAREA' || tag === 'INPUT' || role === 'textbox' || editable;
+                return visible(el) && textboxLike && (
                     el.id === 'chat-input' ||
                     aria.includes('Chat message input') ||
                     placeholder === 'Ask me' ||
-                    placeholder.includes('Ask the assistant')
+                    placeholder.includes('Ask the assistant') ||
+                    placeholder.includes('Escribe') ||
+                    placeholder.includes('Digite') ||
+                    placeholder.includes('输入') ||
+                    (editable && (aria.toLowerCase().includes('message') || role === 'textbox'))
                 );
             }).map((el) => {
                 const rect = el.getBoundingClientRect();
@@ -884,6 +894,7 @@ def find_chat_input(driver, timeout=30, allow_default_content=False):
                 let score = rect.bottom + rect.right;
                 if (el.id === 'chat-input') score += 10000;
                 if (aria.includes('Chat message input')) score += 5000;
+                if (el.isContentEditable || el.getAttribute('contenteditable') === 'true') score += 3500;
                 if (placeholder === 'Ask me') score += 3000;
                 if (rect.top > viewportHeight * 0.30) score += 8000;
                 if (rect.left > viewportWidth * 0.35) score += 1000;
@@ -913,13 +924,17 @@ def find_chat_input(driver, timeout=30, allow_default_content=False):
     return None
 
 
-def recover_expired_ai_conversation(driver, name="", site="", timeout=12):
-    """AI 会话过期时点击 New conversation，进入新的对话。"""
+def recover_expired_ai_conversation(driver, name="", site="", timeout=25, force=False):
+    """AI 会话过期时优先使用页面提供的 New conversation 链接进入新对话。"""
     try:
         result = driver.execute_script(
             """
-            function cleanNewChatUrl(rawUrl) {
-                const url = new URL(rawUrl || '/maxwell/new-chat', window.location.origin);
+            const force = arguments[0];
+            function fallbackNewChatUrl(rawUrl) {
+                const origin = window.location.origin && window.location.origin !== 'null'
+                    ? window.location.origin
+                    : 'https://global-selling.mercadolibre.com';
+                const url = new URL(rawUrl || '/maxwell/new-chat', origin);
                 url.pathname = '/maxwell/new-chat';
                 url.searchParams.set('flavor', 'seller-assistant');
                 url.searchParams.set('hideHeader', 'true');
@@ -957,39 +972,86 @@ def recover_expired_ai_conversation(driver, name="", site="", timeout=12):
             const nodes = deepElements();
             const pageText = nodes.map(el => el.innerText || el.textContent || '').join('\\n');
             const currentUrl = window.location.href || '';
-            const expired = /this conversation has ended|conversation has ended|inactivity_expiration/i.test(pageText + '\\n' + currentUrl);
+            const hasInput = nodes.some((el) => {
+                const tag = el.tagName || '';
+                const role = el.getAttribute('role') || '';
+                const placeholder = el.getAttribute('placeholder') || '';
+                const aria = el.getAttribute('aria-label') || '';
+                return visible(el) && (
+                    tag === 'TEXTAREA' ||
+                    tag === 'INPUT' ||
+                    role === 'textbox' ||
+                    el.isContentEditable ||
+                    el.getAttribute('contenteditable') === 'true'
+                ) && (
+                    el.id === 'chat-input' ||
+                    aria.includes('Chat message input') ||
+                    placeholder === 'Ask me' ||
+                    placeholder.includes('Ask the assistant') ||
+                    placeholder.includes('Escribe') ||
+                    placeholder.includes('Digite') ||
+                    placeholder.includes('输入')
+                );
+            });
+            const expired = force ||
+                /this conversation has ended|conversation has ended|inactivity_expiration/i.test(pageText + '\\n' + currentUrl) ||
+                (!hasInput && /new conversation|iniciar otra consulta|发起新咨询|新的对话/i.test(pageText));
             if (!expired) return false;
 
-            if (/inactivity_expiration|conversation_id=/i.test(currentUrl)) {
-                const nextUrl = cleanNewChatUrl(currentUrl);
-                window.location.replace(nextUrl);
-                return { action: 'replace_location', url: nextUrl };
-            }
-
-            const target = nodes.find((el) => {
-                const text = [
+            // 先精确查找页面真正显示的 New conversation 链接。SPA 版本的入口
+            // 可能使用 # 或 click handler，不能要求 href 必须包含 /maxwell/new-chat。
+            const links = nodes.filter((el) => {
+                if (String(el.tagName || '').toUpperCase() !== 'A') return false;
+                const href = el.getAttribute('href') || '';
+                const label = [
                     el.innerText || '',
-                    el.textContent || '',
                     el.getAttribute('aria-label') || '',
                     el.getAttribute('title') || '',
-                    el.getAttribute('href') || '',
                 ].join(' ');
-                return /new conversation/i.test(text);
+                return /new conversation|iniciar otra consulta|发起新咨询|新的对话/i.test(label);
             });
-            if (!target) return 'expired_no_button';
-            const href = target.getAttribute('href');
-            if (href) {
-                const nextUrl = cleanNewChatUrl(href);
-                window.location.replace(nextUrl);
-                return { action: 'replace_href', url: nextUrl };
+            links.sort((a, b) => Number(visible(b)) - Number(visible(a)));
+            const link = links[0];
+            if (link) {
+                const href = link.getAttribute('href') || '';
+                if (href && href !== '#' && !/^javascript:/i.test(href)) {
+                    // 服务端生成的 conversation_id 必须原样保留。
+                    const nextUrl = new URL(href, window.location.href).toString();
+                    window.location.assign(nextUrl);
+                    return { action: 'navigate_new_conversation_href', url: nextUrl };
+                }
+                link.scrollIntoView({block: 'center', inline: 'center'});
+                link.click();
+                return { action: 'click_new_conversation_link', href: href };
             }
-            if (visible(target)) {
-                target.scrollIntoView({block: 'center', inline: 'center'});
-                target.click();
-                return { action: 'click_button' };
+
+            // 某些版本使用按钮而不是链接；只匹配按钮本身，避免误点包含文案的祖先节点。
+            const button = nodes.find((el) => {
+                const tag = String(el.tagName || '').toUpperCase();
+                const role = el.getAttribute('role') || '';
+                if (!visible(el) || (tag !== 'BUTTON' && role !== 'button')) return false;
+                const label = [
+                    el.innerText || '',
+                    el.getAttribute('aria-label') || '',
+                    el.getAttribute('title') || '',
+                ].join(' ');
+                return /new conversation|iniciar otra consulta|发起新咨询|新的对话/i.test(label);
+            });
+            if (button) {
+                button.scrollIntoView({block: 'center', inline: 'center'});
+                button.click();
+                return { action: 'click_new_conversation_button' };
             }
-            return 'expired_no_clickable_button';
-            """
+
+            // 页面确实没有提供入口时，才使用不带旧 conversation_id 的标准地址兜底。
+            const fallbackUrl = new URL(fallbackNewChatUrl(currentUrl || '/maxwell/new-chat'));
+            // 避免浏览器把与当前地址相同的兜底导航优化掉。
+            fallbackUrl.searchParams.set('_new_conversation_ts', String(Date.now()));
+            const nextUrl = fallbackUrl.toString();
+            window.location.assign(nextUrl);
+            return { action: 'navigate_fallback', url: nextUrl };
+            """,
+            bool(force),
         )
         if result in ("expired_no_button", "expired_no_clickable_button"):
             print(f"{get_now_time()} {name} {site} AI会话已结束，但没有找到可用的 New conversation 入口<br>")
@@ -999,10 +1061,15 @@ def recover_expired_ai_conversation(driver, name="", site="", timeout=12):
             end_time = time.time() + timeout
             while time.time() < end_time:
                 time.sleep(1)
-                if find_chat_input(driver, timeout=1, allow_default_content=False):
-                    print(f"{get_now_time()} {name} {site} 已进入新的 AI 会话<br>")
-                    return True
-            return True
+                try:
+                    if find_chat_input(driver, timeout=1, allow_default_content=False):
+                        print(f"{get_now_time()} {name} {site} 已进入新的 AI 会话<br>")
+                        return True
+                except Exception:
+                    # iframe 跳转期间旧 document 可能短暂失效，继续等待新页面加载。
+                    continue
+            print(f"{get_now_time()} {name} {site} New conversation 已跳转，但未出现输入框<br>")
+            return False
     except Exception as e:
         print(f"{get_now_time()} {name} {site} 检查 AI 会话过期失败：{e}<br>")
     return False
@@ -1085,6 +1152,9 @@ def send_ai_chat_message(driver, message):
     input_box = find_chat_input(driver, timeout=5, allow_default_content=False)
     if input_box is None and recover_expired_ai_conversation(driver):
         input_box = find_chat_input(driver, timeout=8, allow_default_content=False)
+    if input_box is None and recover_expired_ai_conversation(driver, force=True):
+        switch_to_ai_chat_frame(driver, require_input=False)
+        input_box = find_chat_input(driver, timeout=8, allow_default_content=False)
     if input_box is None:
         raise RuntimeError("没有找到 AI 客服输入框")
 
@@ -1117,8 +1187,24 @@ def send_ai_chat_message(driver, message):
     else:
         try:
             input_box.click()
-            input_box.clear()
-            input_box.send_keys(message)
+            if (input_box.get_attribute("contenteditable") or "").lower() == "true":
+                driver.execute_script(
+                    """
+                    const input = arguments[0];
+                    const value = arguments[1];
+                    input.scrollIntoView({block: 'center', inline: 'center'});
+                    input.focus();
+                    input.innerText = value;
+                    input.textContent = value;
+                    input.dispatchEvent(new InputEvent('input', { bubbles: true, inputType: 'insertText', data: value }));
+                    input.dispatchEvent(new Event('change', { bubbles: true }));
+                    """,
+                    input_box,
+                    message,
+                )
+            else:
+                input_box.clear()
+                input_box.send_keys(message)
         except Exception:
             driver.execute_script(
                 """
@@ -1126,7 +1212,12 @@ def send_ai_chat_message(driver, message):
                 const value = arguments[1];
                 input.scrollIntoView({block: 'center', inline: 'center'});
                 input.focus();
-                input.value = value;
+                if (input.isContentEditable || input.getAttribute('contenteditable') === 'true') {
+                    input.innerText = value;
+                    input.textContent = value;
+                } else {
+                    input.value = value;
+                }
                 input.dispatchEvent(new InputEvent('input', { bubbles: true, inputType: 'insertText', data: value }));
                 input.dispatchEvent(new Event('change', { bubbles: true }));
                 """,
@@ -1151,7 +1242,7 @@ def safe_get_agent_messages(driver):
         return []
 
 
-def wait_for_ai_agent_reply(driver, previous_messages, timeout=60):
+def wait_for_ai_agent_reply(driver, previous_messages, timeout=60, poll_interval=5):
     """等待 AI 客服出现相对 previous_messages 的新回复。"""
     previous_messages = previous_messages or []
     previous_count = len(previous_messages)
@@ -1171,8 +1262,41 @@ def wait_for_ai_agent_reply(driver, previous_messages, timeout=60):
                 if is_site_option_question(message):
                     return message, latest_messages
             return latest_messages[-1], latest_messages
-        time.sleep(5)
+        remaining = end_time - time.time()
+        if remaining > 0:
+            time.sleep(min(poll_interval, remaining))
     return "", latest_messages
+
+
+def build_deepseek_infraction_reply(infraction_ids, site, appeal_message, agent_messages, reply_round):
+    """根据最新 AI 客服回复生成下一句侵权申诉回复。"""
+    site_option = build_site_option_reply(site)
+    prompt = f"""
+你正在代表 Mercado Libre 卖家与平台 AI 客服沟通侵权误判申诉。
+请根据客服的最新回复生成下一句中文回复，只输出要发送的回复正文，不要解释、不要 Markdown。
+
+要求：
+1. 回复要简短、礼貌、直接推进复核，不超过 120 个中文字。
+2. 商品是通用品牌/通用款，卖家主张未使用他人品牌商标，希望复查并删除误判记录。
+3. 如果客服询问站点，必须明确回复：{site_option}。
+4. 不要虚构证明、处理结果、商品信息或客服没有提到的事实。
+5. 不要说“如果你愿意”“回复继续”等引导语。
+
+商品编号：{infraction_ids}
+原始申诉：{appeal_message}
+当前是第 {reply_round} 次自动回复（最多两次）。
+客服消息记录：
+{json.dumps((agent_messages or [])[-20:], ensure_ascii=False, indent=2)}
+"""
+    reply = chat_deepseek(
+        [{"role": "user", "content": prompt}],
+        temperature=0.2,
+        max_tokens=300,
+    ).strip()
+    reply = re.sub(r"^```(?:\w+)?\s*|\s*```$", "", reply, flags=re.S).strip()
+    if not reply:
+        raise ValueError("DeepSeek 未生成侵权申诉回复")
+    return reply
 
 
 def should_intervene_ai_response(response_text):
@@ -1284,11 +1408,11 @@ def is_site_option_question(response_text):
 
 
 def build_infraction_followup_message(infraction_ids, site):
-    """生成侵权申诉被 AI 拒绝或要求确认后继续坚持复核的话术。"""
+    """生成侵权申诉被 AI 拒绝或要求确认后继续坚持核查的话术。"""
     return (
-        f"{infraction_ids} 请继续帮我人工复核。我的店铺对应的是 {build_site_option_reply(site)} 站点，"
+        f"{infraction_ids} 请继续帮我重新核查。我的店铺对应的是 {build_site_option_reply(site)} 站点，"
         f"这些商品是通用品牌/通用款产品，并非侵权产品，也没有使用他人品牌商标，"
-        f"这是系统误判。麻烦坚持帮我重新核查并删除侵权记录，谢谢。"
+        f"这是系统误判。请直接帮我复查并删除侵权记录，谢谢。"
     )
 
 
@@ -1360,12 +1484,15 @@ def send_infraction_message_with_retry(driver, huashu, infraction_ids, name, sit
 
 
 def send_infraction_message_with_retry(driver, huashu, infraction_ids, name, site, group_index, total_groups):
-    """发送一组侵权申诉，并根据 AI 回复自动补充站点或误判说明。
+    """发送一组侵权申诉，并使用 DeepSeek 回复新的客服消息。
 
     这是当前实际生效的同名函数：发送失败会重试；发送后会等待 AI 回复；
-    如果 AI 正在处理、拒绝处理或询问站点，会继续介入回复。
+    每 30 秒读取一次，连续 3 分钟没有新回复则结束当前组；DeepSeek 最多回复 2 次。
     """
     max_attempts = 4
+    max_auto_replies = 2
+    reply_timeout = 180
+    poll_interval = 30
     previous_messages = safe_get_agent_messages(driver)
     base_extra = {
         "group_index": group_index,
@@ -1386,16 +1513,6 @@ def send_infraction_message_with_retry(driver, huashu, infraction_ids, name, sit
                 extra={**base_extra, "attempt": attempt},
             )
             print(f"{get_now_time()} {name} {site} group {group_index}/{total_groups} sent<br>")
-            replied_site_option, site_option_response, site_option_messages = reply_site_option_menu_if_present(
-                driver,
-                name,
-                site,
-                timeout=25,
-            )
-            if replied_site_option:
-                previous_messages = site_option_messages
-                response = site_option_response
-                print(f"{get_now_time()} {name} {site} 已完成站点选项自动回复，继续等待后续AI回复<br>")
             break
         except Exception as e:
             append_chat_log(
@@ -1411,98 +1528,125 @@ def send_infraction_message_with_retry(driver, huashu, infraction_ids, name, sit
                 raise
             time.sleep(12 * attempt)
 
-    response, latest_messages = wait_for_ai_agent_reply(driver, previous_messages, timeout=90)
-    append_chat_log(
-        name,
-        site,
-        "agent_reply",
-        message=huashu,
-        response=response,
-        chat=latest_messages,
-        extra=base_extra,
-    )
-    if not response:
-        print(f"{get_now_time()} {name} {site} no AI reply for group {group_index}/{total_groups}<br>")
-        time.sleep(20)
-        return
-
-    print(f"{get_now_time()} {name} {site} AI reply: {response}<br>")
-    site_option_message = response if is_site_option_question(response) else find_site_option_message(latest_messages)
-    if site_option_message:
-        response = site_option_message
-        print(f"{get_now_time()} {name} {site} 从AI聊天记录识别到站点选项问题：{response}<br>")
-
-    if not should_intervene_ai_response(response):
-        return
-
-    is_site_reply = bool(site_option_message) or is_site_option_question(response)
-    if is_site_reply:
-        followup = build_site_option_reply(site)
-        print(f"{get_now_time()} {name} {site} 识别到AI站点选项问题，按当前站点回复：{followup}<br>")
-    else:
-        followup = build_infraction_followup_message(infraction_ids, site)
-
-    print(f"{get_now_time()} {name} {site} send followup: {followup}<br>")
-    for attempt in range(1, max_attempts + 1):
-        try:
-            send_ai_chat_message(driver, followup)
+    auto_reply_count = 0
+    reply_round = 0
+    while True:
+        reply_round += 1
+        response, latest_messages = wait_for_ai_agent_reply(
+            driver,
+            previous_messages,
+            timeout=reply_timeout,
+            poll_interval=poll_interval,
+        )
+        append_chat_log(
+            name,
+            site,
+            "agent_reply" if reply_round == 1 else "agent_reply_after_auto_reply",
+            message=huashu,
+            response=response,
+            chat=latest_messages,
+            extra={
+                **base_extra,
+                "reply_round": reply_round,
+                "auto_reply_count": auto_reply_count,
+                "max_auto_replies": max_auto_replies,
+            },
+        )
+        if not response:
+            print(
+                f"{get_now_time()} {name} {site} 第 {group_index}/{total_groups} 组"
+                f"连续 3 分钟没有客服新回复，终止本组<br>"
+            )
             append_chat_log(
                 name,
                 site,
-                "send_followup",
-                message=followup,
+                "infraction_reply_timeout",
+                message=huashu,
+                chat=latest_messages,
+                extra={**base_extra, "timeout_seconds": reply_timeout},
+            )
+            return
+
+        print(f"{get_now_time()} {name} {site} AI reply round {reply_round}: {response}<br>")
+        previous_messages = latest_messages
+
+        if auto_reply_count >= max_auto_replies:
+            print(
+                f"{get_now_time()} {name} {site} 第 {group_index}/{total_groups} 组已收到客服新回复，"
+                f"但 DeepSeek 回复已达 {max_auto_replies} 次，结束当前组<br>"
+            )
+            append_chat_log(
+                name,
+                site,
+                "infraction_auto_reply_limit_reached",
+                message=huashu,
                 response=response,
                 chat=latest_messages,
                 extra={
                     **base_extra,
-                    "attempt": attempt,
-                    "site_option_reply": is_site_option_question(response),
+                    "auto_reply_count": auto_reply_count,
+                    "max_auto_replies": max_auto_replies,
                 },
             )
-            print(f"{get_now_time()} {name} {site} followup sent for group {group_index}/{total_groups}<br>")
-            if is_site_reply:
-                site_reply_messages = safe_get_agent_messages(driver)
-                next_response, next_messages = wait_for_ai_agent_reply(driver, site_reply_messages, timeout=75)
+            return
+
+        followup = build_deepseek_infraction_reply(
+            infraction_ids,
+            site,
+            huashu,
+            latest_messages,
+            auto_reply_count + 1,
+        )
+
+        print(
+            f"{get_now_time()} {name} {site} send DeepSeek reply "
+            f"{auto_reply_count + 1}/{max_auto_replies}: {followup}<br>"
+        )
+        sent = False
+        for attempt in range(1, max_attempts + 1):
+            try:
+                send_ai_chat_message(driver, followup)
+                auto_reply_count += 1
                 append_chat_log(
                     name,
                     site,
-                    "agent_reply_after_site_option",
+                    "send_followup",
                     message=followup,
-                    response=next_response,
-                    chat=next_messages,
-                    extra=base_extra,
+                    response=response,
+                    chat=latest_messages,
+                    extra={
+                        **base_extra,
+                        "attempt": attempt,
+                        "auto_reply_count": auto_reply_count,
+                        "max_auto_replies": max_auto_replies,
+                        "generated_by": "deepseek",
+                    },
                 )
-                if next_response:
-                    print(f"{get_now_time()} {name} {site} site option后AI回复: {next_response}<br>")
-                if next_response and should_intervene_ai_response(next_response) and not is_site_option_question(next_response):
-                    insist_message = build_infraction_followup_message(infraction_ids, site)
-                    print(f"{get_now_time()} {name} {site} site option后继续坚持说明: {insist_message}<br>")
-                    send_ai_chat_message(driver, insist_message)
-                    append_chat_log(
-                        name,
-                        site,
-                        "send_insist_after_site_option",
-                        message=insist_message,
-                        response=next_response,
-                        chat=next_messages,
-                        extra=base_extra,
-                    )
-            time.sleep(8)
+                print(
+                    f"{get_now_time()} {name} {site} auto reply {auto_reply_count}/"
+                    f"{max_auto_replies} sent for group {group_index}/{total_groups}<br>"
+                )
+                sent = True
+                break
+            except Exception as e:
+                append_chat_log(
+                    name,
+                    site,
+                    "send_followup_error",
+                    message=followup,
+                    response=response,
+                    chat=latest_messages,
+                    extra={**base_extra, "attempt": attempt, "error": str(e)},
+                )
+                print(f"{get_now_time()} {name} {site} followup failed: {e}<br>")
+                if attempt == max_attempts:
+                    raise
+                time.sleep(12 * attempt)
+
+        if not sent:
             return
-        except Exception as e:
-            append_chat_log(
-                name,
-                site,
-                "send_followup_error",
-                message=followup,
-                response=response,
-                chat=latest_messages,
-                extra={**base_extra, "attempt": attempt, "error": str(e)},
-            )
-            print(f"{get_now_time()} {name} {site} followup failed: {e}<br>")
-            if attempt == max_attempts:
-                raise
-            time.sleep(12 * attempt)
+        previous_messages = latest_messages
+        time.sleep(8)
 
 
 def click_contact_us(driver, name, site):
@@ -1558,7 +1702,7 @@ def click_ai_assistant_entry(driver, name, site):
     页面可能使用 Shadow DOM，所以通过 JS 深度遍历元素，而不是只用普通 CSS 查找。
     """
     driver.switch_to.default_content()
-    entry_texts = ("Ask the assistant", "AI Assistant", "Assistant")
+    entry_texts = ("Ask the assistant", "AI Assistant", "Assistant", "助手", "助理", "个人助手")
     for text in entry_texts:
         try:
             clicked = driver.execute_script(
@@ -1591,6 +1735,7 @@ def click_ai_assistant_entry(driver, name, site):
                         let score = rect.bottom + rect.right;
                         if (label.includes(needle)) score += 10000;
                         if (label.includes('assistant') || label.includes('maxwell')) score += 6000;
+                        if (label.includes('助手') || label.includes('助理') || label.includes('个人助手')) score += 6000;
                         if (label.includes('chat')) score += 2500;
                         if (rect.top > window.innerHeight * 0.35) score += 3000;
                         if (rect.left > window.innerWidth * 0.45) score += 1500;
@@ -1600,7 +1745,10 @@ def click_ai_assistant_entry(driver, name, site):
                     .filter((item) =>
                         item.label.includes(needle) ||
                         item.label.includes('assistant') ||
-                        item.label.includes('maxwell')
+                        item.label.includes('maxwell') ||
+                        item.label.includes('助手') ||
+                        item.label.includes('助理') ||
+                        item.label.includes('个人助手')
                     )
                     .sort((a, b) => b.score - a.score);
                 const node = candidates.length ? candidates[0].node : null;
@@ -1651,6 +1799,7 @@ def click_ai_entry_fallback(driver, name, site):
                     let score = rect.bottom + rect.right;
                     if (label.includes('maxwell')) score += 10000;
                     if (label.includes('assistant')) score += 8000;
+                    if (label.includes('助手') || label.includes('助理') || label.includes('个人助手')) score += 8000;
                     if (label.includes('help')) score += 1500;
                     if (rect.top > window.innerHeight * 0.45) score += 3500;
                     if (rect.left > window.innerWidth * 0.55) score += 2500;
@@ -1659,7 +1808,10 @@ def click_ai_entry_fallback(driver, name, site):
                 .filter((item) => item.rect.width > 0 && item.rect.height > 0)
                 .filter((item) =>
                     item.label.includes('maxwell') ||
-                    item.label.includes('assistant')
+                    item.label.includes('assistant') ||
+                    item.label.includes('助手') ||
+                    item.label.includes('助理') ||
+                    item.label.includes('个人助手')
                 )
                 .sort((a, b) => b.score - a.score);
             const node = candidates.length ? candidates[0].node : null;
@@ -1764,6 +1916,9 @@ def open_ai_contact_window(driver, name, site):
     input_box = find_chat_input(driver, timeout=15, allow_default_content=False)
     if not input_box and recover_expired_ai_conversation(driver, name, site):
         input_box = find_chat_input(driver, timeout=8, allow_default_content=False)
+    if not input_box and recover_expired_ai_conversation(driver, name, site, force=True):
+        switch_to_ai_chat_frame(driver, require_input=False)
+        input_box = find_chat_input(driver, timeout=10, allow_default_content=False)
     if not input_box:
         dump_iframe_debug_info(driver)
         dump_ai_entry_debug_info(driver)
@@ -2035,10 +2190,10 @@ def _parse_ai_summary_json(text):
     }
 
 
-def summarize_ai_appeal_result(appeal_type, identifiers, appeal_content, ai_replies):
+def summarize_ai_appeal_result(appeal_type, identifiers, appeal_content, ai_replies, force=False):
     identifiers = _unique_text_list(identifiers)
     ai_replies = _unique_text_list(ai_replies)
-    if not ai_replies:
+    if not ai_replies and not force:
         return {
             "status": "待确认",
             "summary": "未读取到 AI 客服回复，无法判断申诉结果。",
@@ -2063,7 +2218,7 @@ AI 客服全部回复：
 {{
   "status": "成功/部分成功/失败/待确认",
   "success_ids": ["明确被接受、已移除、已处理成功的编号"],
-  "failed_ids": ["明确被拒绝、无法处理、维持原判或需要人工继续跟进的编号"],
+  "failed_ids": ["明确被拒绝、无法处理、维持原判或需要继续跟进的编号"],
   "summary": "用中文简短总结客服回复和判断依据"
 }}
 如果客服只是说正在处理、需要等待、没有明确结果，status 用“待确认”，不要把编号放入 success_ids。
@@ -2143,6 +2298,94 @@ def save_ai_appeal_record(
     return record
 
 
+def _collect_group_ai_replies(group_records):
+    replies = []
+    response_events = {
+        "agent_reply",
+        "agent_reply_after_auto_reply",
+        "agent_reply_after_site_option",
+        "send_followup",
+        "send_insist_after_site_option",
+        "infraction_auto_reply_limit_reached",
+        "send_followup_error",
+        "send_infraction_error",
+    }
+    for record in group_records or []:
+        event = record.get("event")
+        response = record.get("response")
+        if event in response_events and response:
+            replies.append(response)
+    return _unique_text_list(replies)
+
+
+def _filter_group_log_records(group_records, shop_name, site, group_index, total_groups, infraction_ids):
+    filtered = []
+    for record in group_records or []:
+        extra = record.get("extra") if isinstance(record.get("extra"), dict) else {}
+        if str(record.get("window") or "") != str(shop_name or ""):
+            continue
+        if str(record.get("site") or "") != str(site or ""):
+            continue
+        if str(extra.get("group_index") or "") != str(group_index):
+            continue
+        if str(extra.get("total_groups") or "") != str(total_groups):
+            continue
+        if str(extra.get("infraction_ids") or "") != str(infraction_ids or ""):
+            continue
+        filtered.append(record)
+    return filtered
+
+
+def save_ai_appeal_group_record(
+    appeal_time,
+    shop_name,
+    site,
+    group_index,
+    total_groups,
+    infraction_ids,
+    appeal_content,
+    group_records,
+    error="",
+):
+    """每组侵权申诉结束后立即调用 DeepSeek 总结，并写入 AI 申诉记录表。"""
+    identifiers = _extract_identifiers_from_text(infraction_ids)
+    ai_replies = _collect_group_ai_replies(group_records)
+    appeal_type = f"侵权-第{group_index}/{total_groups}组"
+    summary = summarize_ai_appeal_result(
+        appeal_type,
+        identifiers,
+        appeal_content,
+        ai_replies,
+        force=True,
+    )
+    record = {
+        "appeal_time": appeal_time,
+        "appeal_type": appeal_type,
+        "shop_name": shop_name,
+        "site": site,
+        "status": summary["status"],
+        "appeal_content": appeal_content,
+        "identifiers": identifiers,
+        "success_ids": summary["success_ids"],
+        "failed_ids": summary["failed_ids"],
+        "ai_replies": ai_replies,
+        "ai_summary": f"第{group_index}/{total_groups}组：{summary['summary']}",
+        "error": "\n".join(_unique_text_list([error, summary.get("error", "")])),
+        "record_scope": "group",
+        "group_index": group_index,
+        "total_groups": total_groups,
+    }
+    try:
+        insert_ai_appeal_record(record)
+        print(
+            f"{get_now_time()} {shop_name} {site} 第{group_index}/{total_groups}组"
+            f"AI申诉总结已入库：成功={summary['success_ids']}，失败={summary['failed_ids']}<br>"
+        )
+    except Exception as e:
+        print(f"{get_now_time()} {shop_name} {site} 第{group_index}/{total_groups}组AI申诉总结入库失败：{e}<br>")
+    return record
+
+
 # 申诉
 def shensu(name, site, form, message):
     """AI 客服申诉主入口，根据 form 分发到延误、侵权或投诉处理逻辑。"""
@@ -2210,6 +2453,7 @@ def shensu(name, site, form, message):
         print(f"{get_now_time()} {name} {site} AI客服申诉执行失败<br>")
         print(e)
         traceback.print_exc()
+        return f"执行失败：{appeal_error}"
     finally:
         final_messages = []
         if driver is not None and not skip_close_tab:
@@ -2255,7 +2499,34 @@ def handle_infraction(window_id, driver, name, site, message, nickname):
         infraction_ids = "、".join(str(item) for item in current_group)
         huashu = f"{infraction_ids}{message}" if message else f"{infraction_ids}{appeal_suffix}"
         print(f"{get_now_time()} {name} {site} 开始发送第 {index}/{len(groups)} 组侵权申诉：{huashu}<br>")
-        send_infraction_message_with_retry(driver, huashu, infraction_ids, name, site, index, len(groups))
+        group_appeal_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        group_log_start = len(get_appeal_log_records())
+        group_error = ""
+        try:
+            send_infraction_message_with_retry(driver, huashu, infraction_ids, name, site, index, len(groups))
+        except Exception as e:
+            group_error = str(e)
+            raise
+        finally:
+            group_records = _filter_group_log_records(
+                get_appeal_log_records()[group_log_start:],
+                name,
+                site,
+                index,
+                len(groups),
+                infraction_ids,
+            )
+            save_ai_appeal_group_record(
+                group_appeal_time,
+                name,
+                site,
+                index,
+                len(groups),
+                infraction_ids,
+                huashu,
+                group_records,
+                error=group_error,
+            )
         print(f"{get_now_time()} {name} {site} 第 {index}/{len(groups)} 组侵权申诉处理完成<br>")
         if index < len(groups):
             time.sleep(20)
@@ -2614,16 +2885,19 @@ def get_agent_messages(driver):
     switch_to_ai_chat_frame(driver)
     message_selectors = [
         (By.CSS_SELECTOR, ".chat-ui-message-bubble.chat-ui-message-bubble--from-agent"),
-        (By.CSS_SELECTOR, ".mlc-scroll-paginate_item"),
+        (By.CSS_SELECTOR, "[class*='message-bubble--from-agent']"),
+        (By.CSS_SELECTOR, "[class*='message'][class*='from-agent']"),
         (By.CSS_SELECTOR, "[class*='message'][class*='agent']"),
-        (By.CSS_SELECTOR, "[class*='bubble']"),
-        (By.XPATH, "//*[contains(@class, 'message') or contains(@class, 'bubble')]"),
     ]
     messages = []
     for by, selector in message_selectors:
         elements = driver.find_elements(by, selector)
         for element in elements:
             try:
+                # Selenium 的 text 只返回浏览器中可见的 innerText；不读取隐藏脚本、
+                # textContent、aria-label 或整页源码。
+                if not element.is_displayed():
+                    continue
                 text = element.text.strip()
                 # 不按文本去重：AI 对不同分组可能连续回复完全相同的站点选项菜单，
                 # 去重会导致后续相同回复无法被 wait_for_ai_agent_reply 识别为新消息。
@@ -2633,48 +2907,10 @@ def get_agent_messages(driver):
                 continue
         if messages:
             break
-    try:
-        rich_texts = driver.execute_script(
-            """
-            function deepElements(root = document) {
-                const out = [];
-                const walk = (node) => {
-                    const elements = node.querySelectorAll ? Array.from(node.querySelectorAll('*')) : [];
-                    for (const el of elements) {
-                        out.push(el);
-                        if (el.shadowRoot) walk(el.shadowRoot);
-                    }
-                };
-                walk(root);
-                return out;
-            }
-            const candidates = [];
-            const bodyText = document.body ? document.body.innerText : '';
-            candidates.push(bodyText);
-            for (const el of deepElements()) {
-                const text = [
-                    el.innerText || '',
-                    el.textContent || '',
-                    el.getAttribute('aria-label') || '',
-                    el.getAttribute('title') || ''
-                ].join(' ');
-                if (/Mexico\\s*\\(Direct\\s+to\\s+consumer\\)/i.test(text) && /Uruguay/i.test(text)) {
-                    candidates.push(text);
-                }
-            }
-            return candidates
-                .filter(Boolean)
-                .map(text => String(text).replace(/<[^>]+>/g, ' ').replace(/\\s+/g, ' ').trim())
-                .filter(Boolean)
-                .slice(-20);
-            """
-        )
-        for text in rich_texts or []:
-            if contains_site_option_menu(text):
-                messages.append(text)
-    except Exception:
-        pass
-    print("AI客服回复:",messages)
+    if messages:
+        print("AI客服明文回复：<br>" + "<br>".join(messages) + "<br>")
+    else:
+        print("AI客服明文回复：暂无<br>")
     return messages
 
 

@@ -59,7 +59,7 @@ def run_reputation_infraction_then_daily():
 
         top_n = _get_int_env("BIT_DAILY_TOP_N", bit_daily_task.DEFAULT_DAILY_TOP_N)
         max_workers = _get_int_env("BIT_DAILY_MAX_WORKERS", bit_daily_task.DEFAULT_DAILY_MAX_WORKERS)
-        recent_days = _get_int_env("BIT_DAILY_RECENT_DAYS", 30)
+        recent_days = _get_int_env("BIT_DAILY_RECENT_DAYS", bit_daily_task.DEFAULT_DAILY_RECENT_DAYS)
         site_pause = _get_int_env("BIT_DAILY_SITE_PAUSE", 30)
         round_interval = _get_int_env("BIT_DAILY_ROUND_INTERVAL", 600)
         stop_buffer_minutes = _get_int_env("BIT_DAILY_STOP_BUFFER_MINUTES", 10)

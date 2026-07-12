@@ -1,6 +1,6 @@
 import time
 import re
-from concurrent.futures import ThreadPoolExecutor, as_completed
+from concurrent.futures import ProcessPoolExecutor, as_completed
 
 from selenium import webdriver
 from selenium.common.exceptions import TimeoutException
@@ -705,6 +705,7 @@ def _run_reputation_for_browser(row):
 
 
 def get_reputation_info_all(max_workers=20):
+    """使用独立进程并发采集各店铺声誉，主进程负责汇总、导出和入库。"""
     start = int(time.time())
     print(start)
     root_path = Path(__file__).resolve().parent
@@ -718,7 +719,8 @@ def get_reputation_info_all(max_workers=20):
     rows = list(sheet.iter_rows(min_row=2, values_only=True))
     rows = [row for row in rows if row and row[0] and not _is_ignored_config_value(row[2])]
 
-    with ThreadPoolExecutor(max_workers=max_workers) as executor:
+    worker_count = max(1, min(int(max_workers), len(rows))) if rows else 1
+    with ProcessPoolExecutor(max_workers=worker_count) as executor:
         future_map = {
             executor.submit(_run_reputation_for_browser, row): row for row in rows
         }

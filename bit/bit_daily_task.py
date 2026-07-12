@@ -20,8 +20,12 @@ from bit.bit_utils import get_now_time
 
 DEFAULT_DAILY_TOP_N = 30
 DEFAULT_DAILY_MAX_WORKERS = 30
+DEFAULT_DAILY_RECENT_DAYS = 100
 DEFAULT_LOGIN_RETRY_ATTEMPTS = 3
 DEFAULT_LOGIN_RETRY_SECONDS = 180
+DEFAULT_SITE_RETRY_ATTEMPTS = int(os.getenv("BIT_DAILY_SITE_RETRY_ATTEMPTS", "2"))
+DEFAULT_SITE_RETRY_SECONDS = int(os.getenv("BIT_DAILY_SITE_RETRY_SECONDS", "25"))
+DEFAULT_START_STAGGER_SECONDS = float(os.getenv("BIT_DAILY_START_STAGGER_SECONDS", "2"))
 
 
 def _is_login_required_result(value):
@@ -33,7 +37,31 @@ def _is_login_required_result(value):
     )
 
 
-def build_latest_infraction_appeal_plan(top_n=DEFAULT_DAILY_TOP_N, recent_days=30, only_active=True):
+def _is_retryable_site_result(value):
+    text = str(value or "")
+    retry_markers = (
+        "AI 客服悬浮窗",
+        "AI客服悬浮窗",
+        "没有找到 AI 客服",
+        "没有找到AI客服",
+        "没有找到输入框",
+        "没有找到 AI 客服输入框",
+        "没有找到 AI 客服聊天窗口",
+        "about:blank",
+        "打开比特浏览器失败",
+        "打开窗口失败",
+        "请求太过频繁",
+        "timeout",
+        "timed out",
+        "Read timed out",
+        "chrome not reachable",
+        "session not created",
+        "aborted",
+    )
+    return any(marker.lower() in text.lower() for marker in retry_markers)
+
+
+def build_latest_infraction_appeal_plan(top_n=DEFAULT_DAILY_TOP_N, recent_days=DEFAULT_DAILY_RECENT_DAYS, only_active=True):
     """从最新一次侵权列表中选出侵权总数最多的 N 家店铺，并按站点侵权数降序排列。"""
     data = get_latest_infraction_info(recent_days)
     summary_rows = data.get("summary") or []
@@ -87,6 +115,8 @@ def appeal_one_shop_infractions(
     message="",
     login_retry_attempts=DEFAULT_LOGIN_RETRY_ATTEMPTS,
     login_retry_seconds=DEFAULT_LOGIN_RETRY_SECONDS,
+    site_retry_attempts=DEFAULT_SITE_RETRY_ATTEMPTS,
+    site_retry_seconds=DEFAULT_SITE_RETRY_SECONDS,
 ):
     """单个店铺内，按侵权数量最多的站点开始，依次调用 AI 客服侵权申诉。"""
     name = shop_plan["name"]
@@ -100,8 +130,23 @@ def appeal_one_shop_infractions(
         count = site["count"]
         for login_attempt in range(1, max(1, int(login_retry_attempts)) + 1):
             try:
-                print(f"{get_now_time()} {name} {site_code} 开始 AI 客服侵权申诉，站点侵权数 {count}<br>")
-                result = bit_appeal_ai.shensu(name, site_code, "侵权", message)
+                result = ""
+                for site_attempt in range(1, max(1, int(site_retry_attempts)) + 1):
+                    print(
+                        f"{get_now_time()} {name} {site_code} 开始 AI 客服侵权申诉，"
+                        f"站点侵权数 {count}，站点尝试 {site_attempt}/{site_retry_attempts}<br>"
+                    )
+                    result = bit_appeal_ai.shensu(name, site_code, "侵权", message)
+                    if not _is_retryable_site_result(result):
+                        break
+                    if site_attempt >= max(1, int(site_retry_attempts)):
+                        break
+                    print(
+                        f"{get_now_time()} {name} {site_code} 遇到瞬时失败，"
+                        f"{site_retry_seconds} 秒后重试：{result}<br>"
+                    )
+                    time.sleep(max(0, int(site_retry_seconds)))
+
                 results.append({
                     "site": site_code,
                     "count": count,
@@ -125,6 +170,8 @@ def appeal_one_shop_infractions(
                     time.sleep(max(0, int(login_retry_seconds)))
                     continue
 
+                if _is_retryable_site_result(result):
+                    print(f"{get_now_time()} {name} {site_code} 多次重试后仍失败：{result}<br>")
                 break
             except Exception as e:
                 error_text = str(e)
@@ -150,6 +197,11 @@ def appeal_one_shop_infractions(
                     time.sleep(max(0, int(login_retry_seconds)))
                     continue
 
+                if _is_retryable_site_result(error_text):
+                    print(f"{get_now_time()} {name} {site_code} 瞬时异常，本站点结束前已记录：{error_text}<br>")
+                    traceback.print_exc()
+                    break
+
                 print(f"{get_now_time()} {name} {site_code} AI 客服侵权申诉失败：{e}<br>")
                 traceback.print_exc()
                 break
@@ -165,10 +217,17 @@ def appeal_one_shop_infractions(
     }
 
 
+def _appeal_one_shop_worker(shop, site_pause, message, start_delay):
+    if start_delay > 0:
+        print(f"{get_now_time()} {shop.get('name', '')} 启动错峰等待 {start_delay:.1f} 秒<br>")
+        time.sleep(start_delay)
+    return appeal_one_shop_infractions(shop, site_pause, message)
+
+
 def run_top_infraction_ai_appeal_once(
     top_n=DEFAULT_DAILY_TOP_N,
     max_workers=DEFAULT_DAILY_MAX_WORKERS,
-    recent_days=30,
+    recent_days=DEFAULT_DAILY_RECENT_DAYS,
     site_pause=30,
     message="",
     only_active=True,
@@ -189,8 +248,14 @@ def run_top_infraction_ai_appeal_once(
     print(f"{get_now_time()} bit_daily_task 本轮使用 {worker_count} 个进程并发处理 {len(plan)} 个店铺<br>")
     with ProcessPoolExecutor(max_workers=worker_count) as executor:
         futures = [
-            executor.submit(appeal_one_shop_infractions, shop, site_pause, message)
-            for shop in plan
+            executor.submit(
+                _appeal_one_shop_worker,
+                shop,
+                site_pause,
+                message,
+                index * max(0, DEFAULT_START_STAGGER_SECONDS),
+            )
+            for index, shop in enumerate(plan)
         ]
         for future in as_completed(futures):
             try:
@@ -222,7 +287,7 @@ def _seconds_until_stop(stop_at):
 def loop_top_infraction_ai_appeal(
     top_n=DEFAULT_DAILY_TOP_N,
     max_workers=DEFAULT_DAILY_MAX_WORKERS,
-    recent_days=30,
+    recent_days=DEFAULT_DAILY_RECENT_DAYS,
     round_interval=600,
     site_pause=30,
     message="",
@@ -267,4 +332,4 @@ def loop_top_infraction_ai_appeal(
 
 
 if __name__ == "__main__":
-    loop_top_infraction_ai_appeal(top_n=30, max_workers=10, round_interval=300)
+    loop_top_infraction_ai_appeal(top_n=5, max_workers=5, round_interval=300)

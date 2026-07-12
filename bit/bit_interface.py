@@ -3,6 +3,7 @@ import functools
 import hashlib
 import hmac
 import os
+import platform
 import secrets
 import sys
 import threading
@@ -80,9 +81,8 @@ def _resolve_use_db_api():
     if use_db_api is not None:
         return _truthy_env(use_db_api)
 
-    # 这台机器是服务端：默认直连本机 MySQL，并对外提供 /api/db/... 数据库接口。
-    # 外网客户端需要设置 BIT_INTERFACE_DB_MODE=api，或直接调用 bit_db_api.py。
-    return False
+    # 默认平台策略：macOS 作为数据库服务端直连 MySQL；Windows 作为客户端走接口。
+    return platform.system() != "Darwin"
 
 
 USE_DB_API = _resolve_use_db_api()
@@ -434,7 +434,13 @@ def build_daily_task_params(data):
         "mode": mode,
         "top_n": _parse_int_param(data, "top_n", bit_daily_task.DEFAULT_DAILY_TOP_N, 1, 100),
         "max_workers": _parse_int_param(data, "max_workers", bit_daily_task.DEFAULT_DAILY_MAX_WORKERS, 1, 60),
-        "recent_days": _parse_int_param(data, "recent_days", 30, 1, 365),
+        "recent_days": _parse_int_param(
+            data,
+            "recent_days",
+            bit_daily_task.DEFAULT_DAILY_RECENT_DAYS,
+            1,
+            365,
+        ),
         "round_interval": _parse_int_param(data, "round_interval", 600, 10, 86400),
         "site_pause": _parse_int_param(data, "site_pause", 30, 0, 3600),
         "stop_after_minutes": _parse_int_param(data, "stop_after_minutes", 360, 0, 24 * 60),

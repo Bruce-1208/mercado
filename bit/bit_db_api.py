@@ -1,4 +1,5 @@
 import os
+import platform
 
 import requests
 
@@ -7,6 +8,36 @@ DB_API_BASE_URL = os.environ.get("BIT_DB_API_BASE_URL", "http://zeshun.nat100.to
 DB_API_TOKEN = os.environ.get("BIT_DB_API_TOKEN", "")
 DB_API_SESSION = requests.Session()
 DB_API_SESSION.trust_env = False
+
+
+def _resolve_db_mode():
+    """macOS 默认直连 MySQL，Windows/其他系统默认使用数据库 HTTP 接口。"""
+    mode = (
+        os.environ.get("BIT_DB_MODE")
+        or os.environ.get("BIT_INTERFACE_DB_MODE")
+        or ""
+    ).strip().lower()
+    if mode in ("direct", "local", "server", "mysql"):
+        return "mysql"
+    if mode in ("api", "client", "remote"):
+        return "api"
+    legacy_use_api = os.environ.get("BIT_INTERFACE_USE_DB_API")
+    if legacy_use_api is not None:
+        return "api" if str(legacy_use_api).strip().lower() in ("1", "true", "yes", "on") else "mysql"
+    return "mysql" if platform.system() == "Darwin" else "api"
+
+
+DB_MODE = _resolve_db_mode()
+
+
+def _local_call(function_name, *args, **kwargs):
+    """延迟导入 MySQL 实现，避免 Windows/API 客户端加载本地数据库依赖。"""
+    from bit import bit_mysql
+
+    function = getattr(bit_mysql, function_name)
+    # timeout 是 HTTP 层参数，本地 MySQL 函数不需要。
+    kwargs.pop("timeout", None)
+    return function(*args, **kwargs)
 
 
 def _headers():
@@ -40,30 +71,44 @@ def _request(method, path, **kwargs):
 
 
 def insert_task_record(record_list):
+    if DB_MODE == "mysql":
+        return _local_call("insert_task_record", record_list)
     return _request("POST", "/api/db/task-records", json={"records": record_list})
 
 
 def inset_reputation_info(reputation_list):
+    if DB_MODE == "mysql":
+        return _local_call("inset_reputation_info", reputation_list)
     return _request("POST", "/api/db/reputation/bulk", json={"rows": reputation_list})
 
 
 def inset_infraction_info(infraction_list):
+    if DB_MODE == "mysql":
+        return _local_call("inset_infraction_info", infraction_list)
     return _request("POST", "/api/db/infractions/bulk", json={"rows": infraction_list})
 
 
 def inset_delay_info(delay_list):
+    if DB_MODE == "mysql":
+        return _local_call("inset_delay_info", delay_list)
     return _request("POST", "/api/db/delays/bulk", json={"rows": delay_list})
 
 
 def inset_pago_info(pago_list):
+    if DB_MODE == "mysql":
+        return _local_call("inset_pago_info", pago_list)
     return _request("POST", "/api/db/pago/bulk", json={"rows": pago_list})
 
 
 def insert_orders(line):
+    if DB_MODE == "mysql":
+        return _local_call("insert_orders", line)
     return _request("POST", "/api/db/orders/bulk", json={"rows": line})
 
 
 def insert_chat_info(name, site, message, chat, response, time):
+    if DB_MODE == "mysql":
+        return _local_call("insert_chat_info", name, site, message, chat, response, time)
     payload = {
         "name": name,
         "site": site,
@@ -76,6 +121,8 @@ def insert_chat_info(name, site, message, chat, response, time):
 
 
 def insert_appeal_chat_record(record, timeout=5):
+    if DB_MODE == "mysql":
+        return _local_call("insert_appeal_chat_record", record)
     path = "/api/db/appeal-chat-records"
     url = f"{DB_API_BASE_URL}{path}"
     try:
@@ -97,18 +144,26 @@ def insert_appeal_chat_record(record, timeout=5):
 
 
 def insert_ai_appeal_record(record, timeout=10):
+    if DB_MODE == "mysql":
+        return _local_call("insert_ai_appeal_record", record)
     return _request("POST", "/api/db/ai-appeal-records", timeout=timeout, json={"record": record or {}})
 
 
 def get_ai_appeal_records(limit=100):
+    if DB_MODE == "mysql":
+        return _local_call("get_ai_appeal_records", limit)
     return _request("GET", "/api/db/ai-appeal-records", params={"limit": limit})
 
 
 def get_latest_infraction_info(recent_days=30):
+    if DB_MODE == "mysql":
+        return _local_call("get_latest_infraction_info", recent_days)
     return _request("GET", "/api/db/infractions/latest", params={"days": recent_days})
 
 
 def get_latest_reputation_info():
+    if DB_MODE == "mysql":
+        return _local_call("get_latest_reputation_info")
     return _request("GET", "/api/db/reputation/latest")
 
 

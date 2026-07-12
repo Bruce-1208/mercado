@@ -741,8 +741,8 @@
                             <label for="daily-task-recent-days">统计天数</label>
                             <select id="daily-task-recent-days">
                                 <option value="7">最近 7 天</option>
-                                <option value="30" selected>最近 30 天</option>
-                                <option value="100">最近 100 天</option>
+                                <option value="30">最近 30 天</option>
+                                <option value="100" selected>最近 100 天</option>
                                 <option value="365">最近 365 天</option>
                             </select>
                         </div>
@@ -946,7 +946,7 @@
             <div class="tab-page" id="tab-ai-appeals">
                 <div class="tab-heading">
                     <h2>AI申诉记录</h2>
-                    <p>展示 AI 客服申诉结果、成功编号、失败编号和 AI 总结</p>
+                    <p>按组展示 AI 客服申诉结果、成功编号、失败编号和 AI 总结</p>
                 </div>
 
                 <section class="panel infractions-panel">
@@ -971,7 +971,7 @@
                             <thead>
                                 <tr>
                                     <th>申诉时间</th>
-                                    <th>类型</th>
+                                    <th>类型/组别</th>
                                     <th>店铺名</th>
                                     <th>站点</th>
                                     <th>结果</th>
@@ -1280,7 +1280,7 @@
                 mode: document.getElementById("daily-task-mode").value,
                 top_n: Number(document.getElementById("daily-task-top-n").value || 30),
                 max_workers: Number(document.getElementById("daily-task-max-workers").value || 30),
-                recent_days: Number(document.getElementById("daily-task-recent-days").value || 30),
+                recent_days: Number(document.getElementById("daily-task-recent-days").value || 100),
                 round_interval: Number(document.getElementById("daily-task-round-interval").value || 600),
                 site_pause: Number(document.getElementById("daily-task-site-pause").value || 30),
                 stop_after_minutes: Number(document.getElementById("daily-task-stop-after").value || 360),
@@ -1467,7 +1467,7 @@
             if (!aiAppealRecordBody) return;
             aiAppealRecordBody.innerHTML = '<tr><td class="empty-state" colspan="10">正在加载 AI 申诉记录...</td></tr>';
             try {
-                const response = await fetch("/api/ai-appeal-records?limit=100");
+                const response = await fetch("/api/ai-appeal-records?limit=300");
                 const payload = await response.json();
                 if (!response.ok || payload.status !== "success") {
                     throw new Error(payload.message || `接口请求失败：${response.status}`);
