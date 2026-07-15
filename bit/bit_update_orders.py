@@ -11,7 +11,7 @@ from bit.bit_send_mail import *
 
 from bit.bit_utils import *
 import sys
-from bit.bit_db_api import insert_orders
+from bit.bit_mysql import insert_orders
 
 
 def update_order_mysql():
@@ -19,36 +19,45 @@ def update_order_mysql():
     print(fold)
     lines = []
     for file in fold.glob("*.xlsx"):
+        if file.name.startswith(("~$", ".~")):
+            continue
         print(file.absolute())
         wb = load_workbook(file.absolute())
         sheet = wb.active
 
-        # 使用 min_row=2 跳过第一行
-        file_dict = {}
+        headers = next(sheet.iter_rows(min_row=1, max_row=1, values_only=True))
+        header_index = {name: index for index, name in enumerate(headers) if name}
+
+        def value(row, name):
+            index = header_index.get(name)
+            if index is None or index >= len(row):
+                return None
+            return row[index]
+
         for row in sheet.iter_rows(min_row=2, values_only=True):
-            order_id = row[0]
-            order_num = row[1]
-            date = row[2]
-            name = row[3]
-            source = row[4]
-            status = row[9]
-            amount = row[13]
-            charge = row[14]
-            refund = row[16]
-            income = row[17]
-            cost = row[18]
-            purchase = row[19]
-            logistics = row[20]
-            profit = row[21]
-            product_id = row[23]
-            classify = row[24]
-            title = row[27]
-            img = row[31]
-            num = row[34]
-            freight = row[42]
-            remark = row[43]
-            site = row[45]
-            buyer = row[46]
+            order_id = value(row, "id")
+            order_num = value(row, "编号")
+            date = value(row, "时间")
+            name = value(row, "业务员")
+            source = value(row, "来源")
+            status = value(row, "状态")
+            amount = value(row, "金额")
+            charge = value(row, "费用")
+            refund = value(row, "退款")
+            income = value(row, "人民币收入")
+            cost = value(row, "采购成本")
+            purchase = value(row, "采购单号")
+            logistics = value(row, "采购追踪")
+            profit = value(row, "利润")
+            product_id = value(row, "产品id")
+            classify = value(row, "产品分类")
+            title = value(row, "标题")
+            img = value(row, "图片")
+            num = value(row, "数量")
+            freight = value(row, "订单运费")
+            remark = value(row, "订单备注")
+            site = value(row, "地区")
+            buyer = value(row, "买家名称")
             # 更加简洁的写法：直接用列表包裹
             line = []
             line.extend(
