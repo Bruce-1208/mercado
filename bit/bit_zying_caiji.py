@@ -1,168 +1,376 @@
+import argparse
+import os
+import re
 import time
+from datetime import datetime
 
 from selenium import webdriver
-from selenium.common.exceptions import TimeoutException
-from selenium.webdriver.common.keys import Keys
-from selenium.webdriver.chrome.options import Options
-from selenium.webdriver.support.wait import WebDriverWait
-
-from bit.bit_utils import get_now_time
-from bit.bit_api import *
-from selenium.webdriver.common.desired_capabilities import DesiredCapabilities
+from selenium.common.exceptions import NoSuchElementException, TimeoutException
 from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support import expected_conditions as EC
-import pyautogui
-from bit.bit_switch_country import *
-from openpyxl import load_workbook
-from bit.bit_send_mail import *
-import pandas as pd
+from selenium.webdriver.support.wait import WebDriverWait
 
-from datetime import datetime
-from pathlib import Path
-from bit.bit_clash import *
-from AI_Agent.deepseek import *
-import traceback
-import re
+from bit.bit_api import openBrowser
+from bit.bit_db_api import insert_zying_product_info
 
 
+DEFAULT_ZYING_WINDOW_ID = os.environ.get(
+    "BIT_ZYING_WINDOW_ID",
+    "9812f185f7ab49d98f3988994d9e8ebf",
+)
+ZYING_PRODUCT_URL = os.environ.get(
+    "BIT_ZYING_PRODUCT_URL",
+    "https://meli.zying.net/#/product",
+)
 
-def check_yuanyou_title(number):
-    start = int(time.time())
-    res = openBrowser("9812f185f7ab49d98f3988994d9e8ebf")
-    print(res)
+TITLE_SELECTOR = ".f12.product-title, .product-title"
+IMAGE_SELECTOR = "img.product-pic, img[class*='product-pic'], img[class*='product-image']"
 
-    driverPath = res['data']['driver']
-    debuggerAddress = res['data']['http']
+FIELD_DEFINITIONS = {
+    "sale_price": {
+        "labels": ("售价", "销售价", "销售价格", "Price", "Precio"),
+        "selectors": (
+            ".sale-price",
+            ".selling-price",
+            ".product-price",
+            "[class*='sale-price']",
+            "[class*='selling-price']",
+            "[class~='price']",
+            "[class*='product-price']",
+        ),
+    },
+    "net_income": {
+        "labels": (
+            "净收益",
+            "净利润",
+            "预计净收益",
+            "Net income",
+            "Net profit",
+            "Ganancia neta",
+        ),
+        "selectors": (
+            ".net-income",
+            ".net-profit",
+            "[class*='net-income']",
+            "[class*='net-profit']",
+            "[class*='profit']",
+        ),
+    },
+    "package_gross_weight": {
+        "labels": (
+            "包装毛重",
+            "包裹毛重",
+            "包装重量",
+            "毛重",
+            "Package gross weight",
+            "Package weight",
+            "Peso bruto",
+            "Peso del paquete",
+        ),
+        "selectors": (
+            ".package-gross-weight",
+            ".package-weight",
+            "[class*='package-weight']",
+            "[class*='gross-weight']",
+            "[class~='weight']",
+        ),
+    },
+    "package_dimensions": {
+        "labels": (
+            "包装尺寸",
+            "包裹尺寸",
+            "长宽高",
+            "Package dimensions",
+            "Dimensiones del paquete",
+        ),
+        "selectors": (
+            ".package-dimensions",
+            ".package-size",
+            "[class*='package-dimension']",
+            "[class*='package-size']",
+            "[class*='dimension']",
+        ),
+    },
+    "review_status": {
+        "labels": (
+            "审核状态",
+            "审核",
+            "Review status",
+            "Estado de revisión",
+        ),
+        "selectors": (
+            ".review-status",
+            ".audit-status",
+            "[class*='review-status']",
+            "[class*='audit-status']",
+            "[class~='status']",
+        ),
+    },
+}
 
-    # selenium 连接代码
-    chrome_options = webdriver.ChromeOptions()
-    chrome_options.add_experimental_option("debuggerAddress", debuggerAddress)
+PRODUCT_ID_LABELS = (
+    "产品编号",
+    "商品编号",
+    "产品ID",
+    "商品ID",
+    "Product ID",
+    "Item ID",
+)
 
-    chrome_service = Service(driverPath)
-    driver = webdriver.Chrome(service=chrome_service, options=chrome_options)
 
-    driver.implicitly_wait(10)
-    # 设置最长等待时间为 10 秒
-    wait = WebDriverWait(driver, 5)
+def _clean_text(value):
+    return re.sub(r"[\t\r ]+", " ", str(value or "")).strip()
 
-    driver.get("https://listado.mercadolibre.com.mx/cosplay_NoIndex_True_SHIPPING*ORIGIN_10215069#applied_filter_id%3DSHIPPING_ORIGIN_HIGHLIGHTED%26applied_filter_name%3DOrigen+del+env%C3%ADo%26applied_filter_order%3D2%26applied_value_id%3D10215069%26applied_value_name%3DInternacional%26applied_value_order%3D1%26applied_value_results%3D486985%26is_custom%3Dfalse")
 
-    # locator = (By.XPATH, "//span[@class='ant-select-selection-item']//span[contains(text(), '50条/页')]")
-    # wait.until(EC.visibility_of_element_located(locator)).click()
-    # option_locator = (By.XPATH, "//div[@class='ant-select-item-option-content' and .//span[text()='500条/页']]")
-    #
-    # wait.until(EC.element_to_be_clickable(option_locator)).click()
-    n = 0
-    list_response = []
-    list_response2 = []
-    page = int(number)
-    errors=set()
-    next_page=1
-    while n < page:
-        list_title = []
-        list_id = []
-        n = n + 1
-        try:
-            page_now = wait.until(EC.visibility_of_element_located((By.CLASS_NAME, "ant-pagination-item-active")))
-            page_now=int(page_now.get_attribute("title"))
-            print("当前页数为",page_now)
-            if (page_now !=next_page):
-                for i in range(next_page-page_now):
-                    driver.find_element(By.XPATH, "//li[@title='下一页']//button").click()
-                    time.sleep(1)
-                page_now = wait.until(EC.visibility_of_element_located(
-                    (By.CLASS_NAME, "ant-pagination-item-active")))
-                page_now = int(page_now.get_attribute("title"))
-                print("重新跳转到当前页数为", page_now)
+def _extract_labeled_value(text, labels):
+    """从卡片文本中兼容“标签: 值”和标签/值分行两种布局。"""
+    lines = [_clean_text(line) for line in str(text or "").splitlines()]
+    lines = [line for line in lines if line]
+    lowered_labels = {label.casefold() for label in labels}
 
-            titles = wait.until(EC.presence_of_all_elements_located((By.CLASS_NAME, "f12.product-title")))
-            isSuccess=True
-            for title in titles:
-                # time.sleep(0.5)
-                title_text = title.text
-                print(title_text)
-                list_title.append(title_text)
-                if title_text  in errors:
-                    continue
-                title.click()
-                id=0
-                try:
-                    id=wait.until(EC.visibility_of_element_located((By.XPATH,
-                                             '/html/body/div[1]/div/div[3]/div/div[2]/div[3]/div/div[1]/div[1]'))).text
-                except Exception as e:
-                    errors.add(title_text)
-                    print("报错")
-                    driver.find_element(By.XPATH, "//span[text()='返回首页']").click()
-                    print("返回首页")
-                    next_page=page_now
-                    n=n-1
-                    isSuccess=False
-                    break
-                print(id)
-                list_id.append(id)
-            if(isSuccess==False):
+    for index, line in enumerate(lines):
+        for label in labels:
+            match = re.match(
+                rf"^{re.escape(label)}\s*(?:[:：]|[-—])?\s*(.*)$",
+                line,
+                flags=re.IGNORECASE,
+            )
+            if not match:
                 continue
-            # 下一页
-            combined = list(zip(list_title, list_id))
-            line = ""
-            for i in combined:
-                line = line + str(i) + "\n"
-            print(line)
-            response = get_ai_response(
-                line + "这组数据每一行是产品标题和产品编号，韩国品牌IP,日本动漫IP一般不为侵权,帮我找出所有疑似侵权的产品，返回编号给我")
-            print("宽松检测侵权产品有:",response)
-            response2 = get_ai_response(
-                line + "这组数据每一行是产品标题和产品编号，帮我找出所有疑似侵权的产品，返回编号给我")
-            print("严格检测侵权产品有:",response2)
-
-            list_response.append(response)
-            list_response2.append(response2)
-            driver.find_element(By.XPATH, "//li[@title='下一页']//button").click()
-
-            print("点击翻页成功")
-            next_page=page_now+1
-            time.sleep(5)
-
-            # 在这里加入等待数据加载的逻辑...
-
-        except Exception as e:
-            print(e)
-            traceback.print_exc()
-            print("网页出错")
-            # break
-    end = int(time.time())
-    print("花费时间为:", end - start)
-    print("宽松检查要求疑似侵权")
-    for i in list_response:
-        print(i)
-    print("严格检查要求疑似侵权")
-    for i in list_response2:
-        print(i)
-    print("宽松检查要求疑似侵权产品编号")
-    get_all_ids(str(list_response))
-    print("严格检查要求疑似侵权产品编号")
-    get_all_ids(str(list_response2))
+            value = _clean_text(match.group(1))
+            if value and value.casefold() != label.casefold():
+                return value
+            if index + 1 < len(lines):
+                next_line = lines[index + 1]
+                if next_line.casefold() not in lowered_labels:
+                    return next_line
+    return ""
 
 
+def _element_value(element, labels=()):
+    text = _clean_text(element.get_attribute("textContent") or element.text)
+    if not text:
+        text = _clean_text(element.get_attribute("value") or element.get_attribute("title"))
+    if not labels:
+        return text
+
+    labeled_value = _extract_labeled_value(text, labels)
+    if labeled_value:
+        return labeled_value
+
+    for label in labels:
+        text = re.sub(
+            rf"^{re.escape(label)}\s*(?:[:：]|[-—])?\s*",
+            "",
+            text,
+            flags=re.IGNORECASE,
+        ).strip()
+    return text
+
+
+def _find_first_value(card, selectors, labels=()):
+    for selector in selectors:
+        for element in card.find_elements(By.CSS_SELECTOR, selector):
+            value = _element_value(element, labels)
+            if value:
+                return value
+    return ""
+
+
+def _find_product_card(driver, title_element):
+    card = driver.execute_script(
+        "return arguments[0].closest('.product-item, [class*=\"product-item\"]');",
+        title_element,
+    )
+    if card is not None:
+        return card
+
+    # 兼容旧页面：标题位于 product-info 内，外层第二级父元素才是卡片。
+    try:
+        return title_element.find_element(By.XPATH, "./../..")
+    except NoSuchElementException:
+        return title_element
+
+
+def _extract_image_url(card):
+    for image in card.find_elements(By.CSS_SELECTOR, IMAGE_SELECTOR):
+        for attribute in ("src", "data-src", "data-original"):
+            value = _clean_text(image.get_attribute(attribute))
+            if value and not value.startswith("data:"):
+                return value
+        srcset = _clean_text(image.get_attribute("srcset"))
+        if srcset:
+            return srcset.split(",", 1)[0].strip().split(" ", 1)[0]
+    return ""
+
+
+def _extract_product_id(card, raw_text):
+    selectors = (
+        ".product-id",
+        ".item-id",
+        ".id-link",
+        "[class*='product-id']",
+        "[class*='item-id']",
+    )
+    value = _find_first_value(card, selectors, PRODUCT_ID_LABELS)
+    if not value:
+        value = _extract_labeled_value(raw_text, PRODUCT_ID_LABELS)
+
+    match = re.search(r"\b(?:ML[A-Z]-?\d+|\d{8,})\b", value, flags=re.IGNORECASE)
+    return match.group(0) if match else value
+
+
+def extract_product_record(driver, title_element, page_number):
+    card = _find_product_card(driver, title_element)
+    raw_text = str(card.get_attribute("innerText") or card.text or "").strip()
+    title = _clean_text(title_element.get_attribute("textContent") or title_element.text)
+
+    record = {
+        "product_id": _extract_product_id(card, raw_text),
+        "main_image_url": _extract_image_url(card),
+        "title": title,
+        "page_number": page_number,
+        "collected_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+        "raw_text": raw_text,
+    }
+    for field_name, definition in FIELD_DEFINITIONS.items():
+        value = _extract_labeled_value(raw_text, definition["labels"])
+        if not value:
+            value = _find_first_value(
+                card,
+                definition["selectors"],
+                definition["labels"],
+            )
+        record[field_name] = value
+    return record
+
+
+def _page_signature(driver):
+    titles = driver.find_elements(By.CSS_SELECTOR, TITLE_SELECTOR)
+    return "|".join(_clean_text(item.text) for item in titles[:3])
+
+
+def _go_to_next_page(driver, wait):
+    selectors = (
+        "li[title='下一页']:not(.ant-pagination-disabled) button",
+        "li.ant-pagination-next:not(.ant-pagination-disabled) button",
+        "button[aria-label='Next']:not([disabled])",
+        "button[aria-label='下一页']:not([disabled])",
+    )
+    old_signature = _page_signature(driver)
+    old_page_elements = driver.find_elements(By.CSS_SELECTOR, ".ant-pagination-item-active")
+    old_page = old_page_elements[0].get_attribute("title") if old_page_elements else ""
+
+    next_button = None
+    for selector in selectors:
+        candidates = driver.find_elements(By.CSS_SELECTOR, selector)
+        if candidates:
+            next_button = candidates[0]
+            break
+    if next_button is None:
+        return False
+
+    driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", next_button)
+    next_button.click()
+
+    def page_changed(current_driver):
+        active = current_driver.find_elements(By.CSS_SELECTOR, ".ant-pagination-item-active")
+        current_page = active[0].get_attribute("title") if active else ""
+        return (old_page and current_page and current_page != old_page) or (
+            _page_signature(current_driver) != old_signature
+        )
+
+    try:
+        wait.until(page_changed)
+    except TimeoutException:
+        # 部分页码组件不会更新 title；只要卡片仍能加载，下一轮继续采集。
+        wait.until(EC.presence_of_all_elements_located((By.CSS_SELECTOR, TITLE_SELECTOR)))
+    return True
+
+
+def _record_key(record):
+    product_id = _clean_text(record.get("product_id"))
+    if product_id:
+        return ("id", product_id)
+    return (
+        "content",
+        _clean_text(record.get("title")),
+        _clean_text(record.get("main_image_url")),
+    )
+
+
+def collect_zying_products(number=1, window_id=DEFAULT_ZYING_WINDOW_ID):
+    """采集指定页数的智赢产品卡片，并批量写入 zying_product 表。"""
+    page_count = max(1, int(number))
+    started_at = time.time()
+    browser_info = openBrowser(window_id)
+    if not browser_info or not browser_info.get("data"):
+        raise RuntimeError(f"打开 BitBrowser 窗口失败：{browser_info}")
+
+    driver_path = browser_info["data"]["driver"]
+    debugger_address = browser_info["data"]["http"]
+    chrome_options = webdriver.ChromeOptions()
+    chrome_options.add_experimental_option("debuggerAddress", debugger_address)
+    chrome_service = Service(driver_path)
+    driver = webdriver.Chrome(
+        service=chrome_service,
+        options=chrome_options,
+    )
+    wait = WebDriverWait(driver, 15)
+    records = []
+    seen = set()
+
+    try:
+        driver.get(ZYING_PRODUCT_URL)
+        wait.until(EC.presence_of_all_elements_located((By.CSS_SELECTOR, TITLE_SELECTOR)))
+
+        for page_number in range(1, page_count + 1):
+            title_elements = wait.until(
+                EC.presence_of_all_elements_located((By.CSS_SELECTOR, TITLE_SELECTOR))
+            )
+            page_records = []
+            for title_element in title_elements:
+                record = extract_product_record(driver, title_element, page_number)
+                key = _record_key(record)
+                if key in seen:
+                    continue
+                seen.add(key)
+                records.append(record)
+                page_records.append(record)
+
+            print(f"智赢产品第 {page_number} 页采集 {len(page_records)} 条")
+            if page_number >= page_count or not _go_to_next_page(driver, wait):
+                break
+    finally:
+        # 只停止本次 ChromeDriver 连接，不关闭用户的 BitBrowser 窗口。
+        chrome_service.stop()
+
+    inserted_count = insert_zying_product_info(records)
+    print(
+        f"智赢产品采集完成，共 {len(records)} 条，入库 {inserted_count} 条，"
+        f"耗时 {int(time.time() - started_at)} 秒"
+    )
+    return records
+
+
+def check_yuanyou_title(number, window_id=DEFAULT_ZYING_WINDOW_ID):
+    """保留旧函数名，兼容已有的手工调用方式。"""
+    return collect_zying_products(number=number, window_id=window_id)
 
 
 def get_all_ids(text):
+    product_ids = re.findall(r"\b\d{9}\b", str(text or ""))
+    return sorted(set(product_ids))
 
 
-    # 使用正则表达式匹配 9 位数字
-    # \b 表示单词边界，确保不会匹配到 10 位或更多位数中的前 9 位
-    product_ids = re.findall(r'\b\d{9}\b', text)
+def main():
+    parser = argparse.ArgumentParser(description="采集智赢产品数据并写入数据库")
+    parser.add_argument("pages", nargs="?", type=int, default=1, help="采集页数")
+    parser.add_argument("--window-id", default=DEFAULT_ZYING_WINDOW_ID, help="BitBrowser 窗口 ID")
+    args = parser.parse_args()
+    collect_zying_products(args.pages, args.window_id)
 
-    # # 打印结果，为了方便查看，每行显示一个编号
-    # for item in product_ids:
-    #     print(item)
 
-    # 如果你需要一个去重后的列表，可以使用 set
-    unique_ids = sorted(list(set(product_ids)))
-    for id in unique_ids:
-        print(id)
-
-if __name__ == '__main__':
-
-    check_yuanyou_title(100)
+if __name__ == "__main__":
+    main()

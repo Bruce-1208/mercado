@@ -635,6 +635,7 @@
             <p class="nav-title">功能导航</p>
             <button class="tab-button active" type="button" data-tab="appeal" onclick="switchTab('appeal')">自动化AI申诉</button>
             <button class="tab-button" type="button" data-tab="tasks" onclick="switchTab('tasks')">任务模块</button>
+            <button class="tab-button" type="button" data-tab="window-anomalies" onclick="switchTab('window-anomalies')">窗口异常</button>
             <button class="tab-button" type="button" data-tab="infractions" onclick="switchTab('infractions')">侵权数据</button>
             <button class="tab-button" type="button" data-tab="reputation" onclick="switchTab('reputation')">声誉数据</button>
             <button class="tab-button" type="button" data-tab="ai-appeals" onclick="switchTab('ai-appeals')">AI申诉记录</button>
@@ -802,6 +803,52 @@
                         <pre id="daily-task-state-log">等待任务启动...</pre>
                     </section>
                 </div>
+            </div>
+
+            <div class="tab-page" id="tab-window-anomalies">
+                <div class="tab-heading">
+                    <h2>窗口异常</h2>
+                    <p>展示 daily_task 检测到登录失效、需要人工重新登录的店铺窗口</p>
+                </div>
+
+                <section class="panel infractions-panel">
+                    <div class="infractions-header">
+                        <h2 class="panel-title" style="margin: 0;">需要处理的窗口</h2>
+                        <div class="header-actions">
+                            <button class="secondary" type="button" onclick="loadWindowAnomalies()">刷新数据</button>
+                        </div>
+                    </div>
+                    <div class="summary-row">
+                        <div class="metric">
+                            <div class="metric-label">待登录窗口</div>
+                            <div class="metric-value" id="window-anomaly-total">0</div>
+                        </div>
+                        <div class="metric">
+                            <div class="metric-label">最近检测时间</div>
+                            <div class="metric-value" id="window-anomaly-latest-time">-</div>
+                        </div>
+                    </div>
+                    <div class="table-wrap reputation-table-wrap">
+                        <table class="reputation-table">
+                            <thead>
+                                <tr>
+                                    <th>店铺名</th>
+                                    <th>窗口 ID</th>
+                                    <th>站点</th>
+                                    <th>异常类型</th>
+                                    <th>原因</th>
+                                    <th>检测次数</th>
+                                    <th>首次检测</th>
+                                    <th>最近检测</th>
+                                    <th>操作</th>
+                                </tr>
+                            </thead>
+                            <tbody id="window-anomaly-body">
+                                <tr><td class="empty-state" colspan="9">正在加载窗口异常...</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </section>
             </div>
 
             <div class="tab-page" id="tab-infractions">
@@ -1027,11 +1074,15 @@
         const dailyTaskStarted = document.getElementById("daily-task-started");
         const dailyTaskFinished = document.getElementById("daily-task-finished");
         const dailyTaskStateLog = document.getElementById("daily-task-state-log");
+        const windowAnomalyBody = document.getElementById("window-anomaly-body");
+        const windowAnomalyTotal = document.getElementById("window-anomaly-total");
+        const windowAnomalyLatestTime = document.getElementById("window-anomaly-latest-time");
         let infractionDays = 30;
         let infractionsLoaded = false;
         let reputationLoaded = false;
         let aiAppealsLoaded = false;
         let tasksLoaded = false;
+        let windowAnomaliesLoaded = false;
 
         function switchTab(tabName) {
             document.querySelectorAll(".tab-button").forEach(button => {
@@ -1051,6 +1102,9 @@
             }
             if (tabName === "tasks" && !tasksLoaded) {
                 loadDailyTaskStatus();
+            }
+            if (tabName === "window-anomalies" && !windowAnomaliesLoaded) {
+                loadWindowAnomalies();
             }
         }
 
@@ -1309,6 +1363,9 @@
                 "",
                 "参数：",
                 JSON.stringify(params, null, 2),
+                "",
+                "跨进程锁：",
+                JSON.stringify(state.lock_owner || {}, null, 2),
             ].join("\n");
         }
 
@@ -1562,6 +1619,63 @@
                 bindTrafficTooltips();
             } catch (err) {
                 reputationBody.innerHTML = `<tr><td class="empty-state" colspan="12">加载失败：${escapeHtml(err.message || err)}</td></tr>`;
+            }
+        }
+
+        async function loadWindowAnomalies() {
+            if (!windowAnomalyBody) return;
+            windowAnomalyBody.innerHTML = '<tr><td class="empty-state" colspan="9">正在加载窗口异常...</td></tr>';
+            try {
+                const response = await fetch("/api/window-anomalies?active_only=1&limit=500");
+                const payload = await response.json();
+                if (!response.ok || payload.status !== "success") {
+                    throw new Error(payload.message || `接口请求失败：${response.status}`);
+                }
+
+                const data = payload.data || {};
+                const rows = data.rows || [];
+                windowAnomaliesLoaded = true;
+                windowAnomalyTotal.textContent = data.total || rows.length || 0;
+                windowAnomalyLatestTime.textContent = rows.length ? (rows[0].last_detected_at || "-") : "-";
+
+                if (!rows.length) {
+                    windowAnomalyBody.innerHTML = '<tr><td class="empty-state" colspan="9">当前没有需要重新登录的窗口</td></tr>';
+                    return;
+                }
+
+                windowAnomalyBody.innerHTML = rows.map(row => `
+                    <tr>
+                        <td title="${escapeHtml(row.window_name)}">${escapeHtml(row.window_name || "-")}</td>
+                        <td title="${escapeHtml(row.window_id)}">${escapeHtml(row.window_id || "-")}</td>
+                        <td>${escapeHtml(row.site || "-")}</td>
+                        <td><span class="status-tag fail">${escapeHtml(row.anomaly_type || "需要登录")}</span></td>
+                        <td title="${escapeHtml(row.reason)}">${escapeHtml(row.reason || "-")}</td>
+                        <td>${escapeHtml(row.occurrence_count || 1)}</td>
+                        <td>${escapeHtml(row.first_detected_at || "-")}</td>
+                        <td>${escapeHtml(row.last_detected_at || "-")}</td>
+                        <td><button class="secondary" type="button" onclick="resolveWindowAnomaly('${encodeURIComponent(row.window_id || "")}')">已重新登录</button></td>
+                    </tr>
+                `).join("");
+            } catch (err) {
+                windowAnomalyBody.innerHTML = `<tr><td class="empty-state" colspan="9">加载失败：${escapeHtml(err.message || err)}</td></tr>`;
+            }
+        }
+
+        async function resolveWindowAnomaly(encodedWindowId) {
+            const windowId = decodeURIComponent(encodedWindowId || "");
+            if (!windowId) return;
+            try {
+                const response = await fetch(`/api/window-anomalies/${encodeURIComponent(windowId)}/resolve`, {
+                    method: "POST",
+                });
+                const payload = await response.json();
+                if (!response.ok || payload.status !== "success") {
+                    throw new Error(payload.message || `接口请求失败：${response.status}`);
+                }
+                windowAnomaliesLoaded = false;
+                await loadWindowAnomalies();
+            } catch (err) {
+                alert(`更新窗口状态失败：${err.message || err}`);
             }
         }
 

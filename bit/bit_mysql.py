@@ -627,6 +627,85 @@ def inset_pago_info(pago_list):
         connection.close()
 
 
+def _ensure_zying_product_table(cursor):
+    cursor.execute(
+        """
+        CREATE TABLE IF NOT EXISTS `zying_product` (
+            `id` BIGINT NOT NULL AUTO_INCREMENT,
+            `产品编号` VARCHAR(128) NULL,
+            `主图链接` TEXT NULL,
+            `标题` VARCHAR(1024) NULL,
+            `售价` VARCHAR(128) NULL,
+            `净收益` VARCHAR(128) NULL,
+            `包装毛重` VARCHAR(128) NULL,
+            `包装尺寸` VARCHAR(255) NULL,
+            `审核状态` VARCHAR(128) NULL,
+            `采集页码` INT NULL,
+            `采集时间` DATETIME NOT NULL,
+            `页面原始信息` LONGTEXT NULL,
+            `提交时间` DATETIME NOT NULL,
+            PRIMARY KEY (`id`),
+            KEY `idx_zying_product_collect_time` (`采集时间`),
+            KEY `idx_zying_product_id_time` (`产品编号`, `采集时间`),
+            KEY `idx_zying_product_review_status` (`审核状态`)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+        """
+    )
+
+
+def insert_zying_product_info(product_list):
+    """创建智赢产品表，并将本次采集结果作为快照批量写入。"""
+    connection = pymysql.connect(**config)
+    try:
+        with connection.cursor() as cursor:
+            _ensure_zying_product_table(cursor)
+            submit_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            normalized_list = []
+            for record in product_list or []:
+                if isinstance(record, dict):
+                    normalized_list.append(
+                        (
+                            record.get("product_id", record.get("产品编号", "")),
+                            record.get("main_image_url", record.get("主图链接", "")),
+                            record.get("title", record.get("标题", "")),
+                            record.get("sale_price", record.get("售价", "")),
+                            record.get("net_income", record.get("净收益", "")),
+                            record.get("package_gross_weight", record.get("包装毛重", "")),
+                            record.get("package_dimensions", record.get("包装尺寸", "")),
+                            record.get("review_status", record.get("审核状态", "")),
+                            record.get("page_number", record.get("采集页码")),
+                            record.get("collected_at", record.get("采集时间")) or submit_time,
+                            record.get("raw_text", record.get("页面原始信息", "")),
+                            submit_time,
+                        )
+                    )
+                    continue
+
+                row = list(record)
+                if len(row) < 11:
+                    row.extend([""] * (11 - len(row)))
+                normalized_list.append(tuple(row[:11] + [submit_time]))
+
+            if normalized_list:
+                cursor.executemany(
+                    """
+                    INSERT INTO `zying_product` (
+                        `产品编号`, `主图链接`, `标题`, `售价`, `净收益`,
+                        `包装毛重`, `包装尺寸`, `审核状态`, `采集页码`,
+                        `采集时间`, `页面原始信息`, `提交时间`
+                    ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                    """,
+                    normalized_list,
+                )
+        connection.commit()
+        return len(normalized_list)
+    except Exception:
+        connection.rollback()
+        raise
+    finally:
+        connection.close()
+
+
 def insert_chat_info(name, site, message, chat, response, time):
     connection = pymysql.connect(**config)
 
@@ -857,6 +936,143 @@ def get_ai_appeal_records(limit=100):
                         row[json_key] = json.loads(value) if value else []
                     except Exception:
                         row[json_key] = []
+            return {"total": len(rows), "rows": rows}
+    finally:
+        connection.close()
+
+
+def _ensure_window_anomalies_table(cursor):
+    cursor.execute(
+        """
+        CREATE TABLE IF NOT EXISTS `window_anomalies` (
+            `id` BIGINT NOT NULL AUTO_INCREMENT,
+            `window_id` VARCHAR(64) NOT NULL,
+            `window_name` VARCHAR(128) NULL,
+            `site` VARCHAR(64) NULL,
+            `anomaly_type` VARCHAR(64) NOT NULL DEFAULT '需要登录',
+            `reason` LONGTEXT NULL,
+            `source` VARCHAR(64) NULL,
+            `active` TINYINT(1) NOT NULL DEFAULT 1,
+            `occurrence_count` INT NOT NULL DEFAULT 1,
+            `first_detected_at` DATETIME NOT NULL,
+            `last_detected_at` DATETIME NOT NULL,
+            `resolved_at` DATETIME NULL,
+            PRIMARY KEY (`id`),
+            UNIQUE KEY `uniq_window_anomaly_window` (`window_id`),
+            KEY `idx_window_anomaly_active_time` (`active`, `last_detected_at`),
+            KEY `idx_window_anomaly_name` (`window_name`)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+        """
+    )
+
+
+def upsert_window_anomaly(
+    window_id,
+    window_name,
+    site="",
+    anomaly_type="需要登录",
+    reason="",
+    source="bit_daily_task",
+):
+    window_id = str(window_id or "").strip()
+    if not window_id:
+        raise ValueError("窗口异常缺少 window_id")
+    now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    connection = pymysql.connect(**config)
+    try:
+        with connection.cursor() as cursor:
+            _ensure_window_anomalies_table(cursor)
+            cursor.execute(
+                """
+                INSERT INTO `window_anomalies` (
+                    `window_id`, `window_name`, `site`, `anomaly_type`, `reason`,
+                    `source`, `active`, `occurrence_count`, `first_detected_at`,
+                    `last_detected_at`, `resolved_at`
+                ) VALUES (%s, %s, %s, %s, %s, %s, 1, 1, %s, %s, NULL)
+                ON DUPLICATE KEY UPDATE
+                    `window_name` = VALUES(`window_name`),
+                    `site` = VALUES(`site`),
+                    `anomaly_type` = VALUES(`anomaly_type`),
+                    `reason` = VALUES(`reason`),
+                    `source` = VALUES(`source`),
+                    `active` = 1,
+                    `occurrence_count` = `occurrence_count` + 1,
+                    `last_detected_at` = VALUES(`last_detected_at`),
+                    `resolved_at` = NULL
+                """,
+                (
+                    window_id,
+                    str(window_name or ""),
+                    str(site or ""),
+                    str(anomaly_type or "需要登录"),
+                    str(reason or ""),
+                    str(source or "bit_daily_task"),
+                    now,
+                    now,
+                ),
+            )
+        connection.commit()
+    except Exception:
+        connection.rollback()
+        raise
+    finally:
+        connection.close()
+
+
+def resolve_window_anomaly(window_id):
+    window_id = str(window_id or "").strip()
+    if not window_id:
+        return 0
+    connection = pymysql.connect(**config)
+    try:
+        with connection.cursor() as cursor:
+            _ensure_window_anomalies_table(cursor)
+            cursor.execute(
+                """
+                UPDATE `window_anomalies`
+                SET `active` = 0, `resolved_at` = %s
+                WHERE `window_id` = %s AND `active` = 1
+                """,
+                (datetime.now().strftime("%Y-%m-%d %H:%M:%S"), window_id),
+            )
+            affected = cursor.rowcount
+        connection.commit()
+        return affected
+    except Exception:
+        connection.rollback()
+        raise
+    finally:
+        connection.close()
+
+
+def get_window_anomalies(active_only=True, limit=500):
+    try:
+        limit = max(1, min(int(limit), 1000))
+    except (TypeError, ValueError):
+        limit = 500
+    connection = pymysql.connect(**config)
+    try:
+        with connection.cursor() as cursor:
+            _ensure_window_anomalies_table(cursor)
+            where = "WHERE `active` = 1" if active_only else ""
+            cursor.execute(
+                f"""
+                SELECT `id`, `window_id`, `window_name`, `site`, `anomaly_type`,
+                       `reason`, `source`, `active`, `occurrence_count`,
+                       `first_detected_at`, `last_detected_at`, `resolved_at`
+                FROM `window_anomalies`
+                {where}
+                ORDER BY `active` DESC, `last_detected_at` DESC, `id` DESC
+                LIMIT %s
+                """,
+                (limit,),
+            )
+            rows = cursor.fetchall()
+            for row in rows:
+                for key in ("first_detected_at", "last_detected_at", "resolved_at"):
+                    if row.get(key) is not None:
+                        row[key] = str(row[key])
+                row["active"] = bool(row.get("active"))
             return {"total": len(rows), "rows": rows}
     finally:
         connection.close()

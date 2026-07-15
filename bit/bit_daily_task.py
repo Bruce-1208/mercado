@@ -14,7 +14,13 @@ if PROJECT_ROOT not in sys.path:
     sys.path.insert(0, PROJECT_ROOT)
 
 from bit import bit_appeal_ai
-from bit.bit_db_api import get_latest_infraction_info
+from bit.bit_api import closeBrowser
+from bit.bit_db_api import (
+    get_latest_infraction_info,
+    resolve_window_anomaly,
+    upsert_window_anomaly,
+)
+from bit.bit_runtime_lock import InterProcessLock, create_window_lease, get_lock_owner
 from bit.bit_utils import get_now_time
 
 
@@ -25,7 +31,29 @@ DEFAULT_LOGIN_RETRY_ATTEMPTS = 3
 DEFAULT_LOGIN_RETRY_SECONDS = 180
 DEFAULT_SITE_RETRY_ATTEMPTS = int(os.getenv("BIT_DAILY_SITE_RETRY_ATTEMPTS", "2"))
 DEFAULT_SITE_RETRY_SECONDS = int(os.getenv("BIT_DAILY_SITE_RETRY_SECONDS", "25"))
-DEFAULT_START_STAGGER_SECONDS = float(os.getenv("BIT_DAILY_START_STAGGER_SECONDS", "2"))
+DEFAULT_RATE_LIMIT_RETRIES = int(os.getenv("BIT_DAILY_RATE_LIMIT_RETRIES", "3"))
+DEFAULT_RATE_LIMIT_RETRY_SECONDS = int(os.getenv("BIT_DAILY_RATE_LIMIT_RETRY_SECONDS", "300"))
+DEFAULT_START_STAGGER_SECONDS = float(os.getenv("BIT_DAILY_START_STAGGER_SECONDS", "10"))
+DAILY_TASK_LOCK_KEY = "bit_daily_task_singleton"
+
+
+class DailyTaskAlreadyRunning(RuntimeError):
+    pass
+
+
+def acquire_daily_task_lock(owner="bit_daily_task", mode="once"):
+    lock = InterProcessLock(
+        DAILY_TASK_LOCK_KEY,
+        owner=owner,
+        metadata={"task_type": "bit_daily_task", "mode": mode},
+    )
+    if not lock.acquire(timeout=0):
+        return None
+    return lock
+
+
+def get_daily_task_lock_owner():
+    return get_lock_owner(DAILY_TASK_LOCK_KEY)
 
 
 def _is_login_required_result(value):
@@ -42,6 +70,7 @@ def _is_retryable_site_result(value):
     retry_markers = (
         "AI 客服悬浮窗",
         "AI客服悬浮窗",
+        "新版内嵌 AI 助手",
         "没有找到 AI 客服",
         "没有找到AI客服",
         "没有找到输入框",
@@ -50,6 +79,8 @@ def _is_retryable_site_result(value):
         "about:blank",
         "打开比特浏览器失败",
         "打开窗口失败",
+        "窗口页面打开验证失败",
+        "窗口页面未正常打开",
         "请求太过频繁",
         "timeout",
         "timed out",
@@ -59,6 +90,27 @@ def _is_retryable_site_result(value):
         "aborted",
     )
     return any(marker.lower() in text.lower() for marker in retry_markers)
+
+
+def _is_rate_limited_result(value):
+    text = str(value or "").lower()
+    markers = (
+        "429",
+        "too many requests",
+        "rate limit",
+        "request limit",
+        "限频",
+        "请求太过频繁",
+        "请求过于频繁",
+        "访问过于频繁",
+        "操作太频繁",
+        "每秒最多可以发起",
+        "西语错误页持续出现",
+        "页面访问异常",
+        "demasiadas solicitudes",
+        "muitas solicitações",
+    )
+    return any(marker in text for marker in markers)
 
 
 def build_latest_infraction_appeal_plan(top_n=DEFAULT_DAILY_TOP_N, recent_days=DEFAULT_DAILY_RECENT_DAYS, only_active=True):
@@ -109,102 +161,129 @@ def build_latest_infraction_appeal_plan(top_n=DEFAULT_DAILY_TOP_N, recent_days=D
     return selected
 
 
-def appeal_one_shop_infractions(
+def _save_login_anomaly(window_id, name, site_code, reason):
+    try:
+        upsert_window_anomaly(
+            window_id,
+            name,
+            site=site_code,
+            anomaly_type="需要登录",
+            reason=str(reason or "检测到登录失效"),
+            source="bit_daily_task",
+        )
+    except Exception as e:
+        print(f"{get_now_time()} {name} 写入窗口异常失败：{e}<br>")
+
+
+def _resolve_login_anomaly(window_id, name):
+    try:
+        resolve_window_anomaly(window_id)
+    except Exception as e:
+        print(f"{get_now_time()} {name} 更新窗口登录状态失败：{e}<br>")
+
+
+def _appeal_one_shop_infractions_locked(
     shop_plan,
+    window_id,
+    window_lease,
     site_pause=30,
     message="",
-    login_retry_attempts=DEFAULT_LOGIN_RETRY_ATTEMPTS,
-    login_retry_seconds=DEFAULT_LOGIN_RETRY_SECONDS,
     site_retry_attempts=DEFAULT_SITE_RETRY_ATTEMPTS,
     site_retry_seconds=DEFAULT_SITE_RETRY_SECONDS,
+    rate_limit_retries=DEFAULT_RATE_LIMIT_RETRIES,
+    rate_limit_retry_seconds=DEFAULT_RATE_LIMIT_RETRY_SECONDS,
 ):
-    """单个店铺内，按侵权数量最多的站点开始，依次调用 AI 客服侵权申诉。"""
     name = shop_plan["name"]
     results = []
     exit_shop = False
+
     for site in shop_plan["sites"]:
         if exit_shop:
             break
 
         site_code = site["site_code"]
         count = site["count"]
-        for login_attempt in range(1, max(1, int(login_retry_attempts)) + 1):
-            try:
-                result = ""
-                for site_attempt in range(1, max(1, int(site_retry_attempts)) + 1):
-                    print(
-                        f"{get_now_time()} {name} {site_code} 开始 AI 客服侵权申诉，"
-                        f"站点侵权数 {count}，站点尝试 {site_attempt}/{site_retry_attempts}<br>"
-                    )
-                    result = bit_appeal_ai.shensu(name, site_code, "侵权", message)
-                    if not _is_retryable_site_result(result):
-                        break
-                    if site_attempt >= max(1, int(site_retry_attempts)):
-                        break
-                    print(
-                        f"{get_now_time()} {name} {site_code} 遇到瞬时失败，"
-                        f"{site_retry_seconds} 秒后重试：{result}<br>"
-                    )
-                    time.sleep(max(0, int(site_retry_seconds)))
+        general_attempt = 1
+        rate_retry_count = 0
+        result = ""
 
+        while True:
+            try:
+                print(
+                    f"{get_now_time()} {name} {site_code} 开始 AI 客服侵权申诉，"
+                    f"站点侵权数 {count}，普通尝试 {general_attempt}/{site_retry_attempts}，"
+                    f"限频重试 {rate_retry_count}/{rate_limit_retries}<br>"
+                )
+                result = bit_appeal_ai.shensu(
+                    name,
+                    site_code,
+                    "侵权",
+                    message,
+                    validate_open=True,
+                )
+            except Exception as e:
+                result = f"执行异常：{e}"
+                traceback.print_exc()
+
+            if _is_login_required_result(result):
+                results.append({"site": site_code, "count": count, "result": result})
+                print(
+                    f"{get_now_time()} {name} {site_code} 检测到登录失效，"
+                    f"立即终止该店铺任务并关闭浏览器窗口<br>"
+                )
+                try:
+                    close_result = closeBrowser(window_id, lease=window_lease)
+                    print(f"{get_now_time()} {name} 关闭窗口结果：{close_result}<br>")
+                except Exception as e:
+                    print(f"{get_now_time()} {name} 登录失效后关闭窗口失败：{e}<br>")
+                _save_login_anomaly(window_id, name, site_code, result)
+                exit_shop = True
+                break
+
+            if _is_rate_limited_result(result):
+                if rate_retry_count < max(0, int(rate_limit_retries)):
+                    rate_retry_count += 1
+                    print(
+                        f"{get_now_time()} {name} {site_code} 遇到限频，"
+                        f"等待 {rate_limit_retry_seconds} 秒后进行第 "
+                        f"{rate_retry_count}/{rate_limit_retries} 次限频重试：{result}<br>"
+                    )
+                    time.sleep(max(0, int(rate_limit_retry_seconds)))
+                    continue
                 results.append({
                     "site": site_code,
                     "count": count,
                     "result": result,
-                    "login_attempt": login_attempt,
+                    "rate_limit_retries": rate_retry_count,
                 })
+                print(
+                    f"{get_now_time()} {name} {site_code} 限频重试 {rate_retry_count} 次后仍失败："
+                    f"{result}<br>"
+                )
+                break
+
+            if _is_retryable_site_result(result) and general_attempt < max(1, int(site_retry_attempts)):
+                general_attempt += 1
+                print(
+                    f"{get_now_time()} {name} {site_code} 遇到瞬时失败，"
+                    f"{site_retry_seconds} 秒后重试：{result}<br>"
+                )
+                time.sleep(max(0, int(site_retry_seconds)))
+                continue
+
+            results.append({
+                "site": site_code,
+                "count": count,
+                "result": result,
+                "site_attempts": general_attempt,
+                "rate_limit_retries": rate_retry_count,
+            })
+            if _is_retryable_site_result(result):
+                print(f"{get_now_time()} {name} {site_code} 多次重试后仍失败：{result}<br>")
+            else:
+                _resolve_login_anomaly(window_id, name)
                 print(f"{get_now_time()} {name} {site_code} AI 客服侵权申诉完成：{result}<br>")
-
-                if _is_login_required_result(result):
-                    if login_attempt >= max(1, int(login_retry_attempts)):
-                        print(
-                            f"{get_now_time()} {name} {site_code} 连续 {login_attempt} 次检测到未登录，"
-                            f"退出该店铺任务<br>"
-                        )
-                        exit_shop = True
-                        break
-                    print(
-                        f"{get_now_time()} {name} {site_code} 检测到需要重新登录，"
-                        f"休息 {login_retry_seconds} 秒后第 {login_attempt + 1}/{login_retry_attempts} 次重试<br>"
-                    )
-                    time.sleep(max(0, int(login_retry_seconds)))
-                    continue
-
-                if _is_retryable_site_result(result):
-                    print(f"{get_now_time()} {name} {site_code} 多次重试后仍失败：{result}<br>")
-                break
-            except Exception as e:
-                error_text = str(e)
-                results.append({
-                    "site": site_code,
-                    "count": count,
-                    "error": error_text,
-                    "login_attempt": login_attempt,
-                })
-                if _is_login_required_result(error_text):
-                    if login_attempt >= max(1, int(login_retry_attempts)):
-                        print(
-                            f"{get_now_time()} {name} {site_code} 连续 {login_attempt} 次登录页异常，"
-                            f"退出该店铺任务：{error_text}<br>"
-                        )
-                        exit_shop = True
-                        break
-                    print(
-                        f"{get_now_time()} {name} {site_code} 登录页异常，"
-                        f"休息 {login_retry_seconds} 秒后第 {login_attempt + 1}/{login_retry_attempts} 次重试："
-                        f"{error_text}<br>"
-                    )
-                    time.sleep(max(0, int(login_retry_seconds)))
-                    continue
-
-                if _is_retryable_site_result(error_text):
-                    print(f"{get_now_time()} {name} {site_code} 瞬时异常，本站点结束前已记录：{error_text}<br>")
-                    traceback.print_exc()
-                    break
-
-                print(f"{get_now_time()} {name} {site_code} AI 客服侵权申诉失败：{e}<br>")
-                traceback.print_exc()
-                break
+            break
 
         if not exit_shop and site_pause > 0:
             time.sleep(site_pause)
@@ -217,6 +296,60 @@ def appeal_one_shop_infractions(
     }
 
 
+def appeal_one_shop_infractions(
+    shop_plan,
+    site_pause=30,
+    message="",
+    login_retry_attempts=DEFAULT_LOGIN_RETRY_ATTEMPTS,
+    login_retry_seconds=DEFAULT_LOGIN_RETRY_SECONDS,
+    site_retry_attempts=DEFAULT_SITE_RETRY_ATTEMPTS,
+    site_retry_seconds=DEFAULT_SITE_RETRY_SECONDS,
+    rate_limit_retries=DEFAULT_RATE_LIMIT_RETRIES,
+    rate_limit_retry_seconds=DEFAULT_RATE_LIMIT_RETRY_SECONDS,
+):
+    """按店铺执行 AI 申诉；整个店铺期间独占该浏览器窗口。"""
+    del login_retry_attempts, login_retry_seconds  # 登录失效现在立即终止，不再原地重试。
+    name = shop_plan["name"]
+    try:
+        window_id = bit_appeal_ai.get_window_id_by_shop_name(name)
+    except Exception as e:
+        return {
+            "name": name,
+            "total": shop_plan.get("total", 0),
+            "results": [{"error": str(e)}],
+            "exit_reason": "未找到窗口",
+        }
+
+    lease = create_window_lease(
+        window_id,
+        owner=f"bit_daily_task:{name}",
+        shop_name=name,
+        task_type="bit_daily_task",
+    )
+    if not lease.acquire(timeout=0):
+        print(f"{get_now_time()} {name} 窗口已被其他任务占用，跳过本店铺<br>")
+        return {
+            "name": name,
+            "total": shop_plan.get("total", 0),
+            "results": [],
+            "exit_reason": "窗口被其他任务占用",
+        }
+    try:
+        return _appeal_one_shop_infractions_locked(
+            shop_plan,
+            window_id,
+            lease,
+            site_pause=site_pause,
+            message=message,
+            site_retry_attempts=site_retry_attempts,
+            site_retry_seconds=site_retry_seconds,
+            rate_limit_retries=rate_limit_retries,
+            rate_limit_retry_seconds=rate_limit_retry_seconds,
+        )
+    finally:
+        lease.release()
+
+
 def _appeal_one_shop_worker(shop, site_pause, message, start_delay):
     if start_delay > 0:
         print(f"{get_now_time()} {shop.get('name', '')} 启动错峰等待 {start_delay:.1f} 秒<br>")
@@ -224,7 +357,7 @@ def _appeal_one_shop_worker(shop, site_pause, message, start_delay):
     return appeal_one_shop_infractions(shop, site_pause, message)
 
 
-def run_top_infraction_ai_appeal_once(
+def _run_top_infraction_ai_appeal_once_locked(
     top_n=DEFAULT_DAILY_TOP_N,
     max_workers=DEFAULT_DAILY_MAX_WORKERS,
     recent_days=DEFAULT_DAILY_RECENT_DAYS,
@@ -268,6 +401,37 @@ def run_top_infraction_ai_appeal_once(
     return results
 
 
+def run_top_infraction_ai_appeal_once(
+    top_n=DEFAULT_DAILY_TOP_N,
+    max_workers=DEFAULT_DAILY_MAX_WORKERS,
+    recent_days=DEFAULT_DAILY_RECENT_DAYS,
+    site_pause=30,
+    message="",
+    only_active=True,
+    _task_lock=None,
+):
+    owned_lock = None
+    task_lock = _task_lock
+    if task_lock is None:
+        owned_lock = acquire_daily_task_lock(owner="bit_daily_task.py", mode="once")
+        task_lock = owned_lock
+    if task_lock is None or not task_lock.acquired:
+        owner = get_daily_task_lock_owner()
+        raise DailyTaskAlreadyRunning(f"bit_daily_task 已在其他进程运行：{owner}")
+    try:
+        return _run_top_infraction_ai_appeal_once_locked(
+            top_n=top_n,
+            max_workers=max_workers,
+            recent_days=recent_days,
+            site_pause=site_pause,
+            message=message,
+            only_active=only_active,
+        )
+    finally:
+        if owned_lock is not None:
+            owned_lock.release()
+
+
 def _format_stop_at(stop_at):
     if not stop_at:
         return ""
@@ -284,7 +448,7 @@ def _seconds_until_stop(stop_at):
     return float(stop_at) - time.time()
 
 
-def loop_top_infraction_ai_appeal(
+def _loop_top_infraction_ai_appeal_locked(
     top_n=DEFAULT_DAILY_TOP_N,
     max_workers=DEFAULT_DAILY_MAX_WORKERS,
     recent_days=DEFAULT_DAILY_RECENT_DAYS,
@@ -293,6 +457,7 @@ def loop_top_infraction_ai_appeal(
     message="",
     only_active=True,
     stop_at=None,
+    task_lock=None,
 ):
     """循环执行 Top 侵权店铺 AI 客服申诉。"""
     round_no = 1
@@ -314,6 +479,7 @@ def loop_top_infraction_ai_appeal(
                 site_pause=site_pause,
                 message=message,
                 only_active=only_active,
+                _task_lock=task_lock,
             )
         except Exception as e:
             print(f"{get_now_time()} 第 {round_no} 轮 Top 侵权店铺 AI 客服申诉异常：{e}<br>")
@@ -331,5 +497,41 @@ def loop_top_infraction_ai_appeal(
         round_no += 1
 
 
+def loop_top_infraction_ai_appeal(
+    top_n=DEFAULT_DAILY_TOP_N,
+    max_workers=DEFAULT_DAILY_MAX_WORKERS,
+    recent_days=DEFAULT_DAILY_RECENT_DAYS,
+    round_interval=600,
+    site_pause=30,
+    message="",
+    only_active=True,
+    stop_at=None,
+    _task_lock=None,
+):
+    owned_lock = None
+    task_lock = _task_lock
+    if task_lock is None:
+        owned_lock = acquire_daily_task_lock(owner="bit_daily_task.py", mode="loop")
+        task_lock = owned_lock
+    if task_lock is None or not task_lock.acquired:
+        owner = get_daily_task_lock_owner()
+        raise DailyTaskAlreadyRunning(f"bit_daily_task 已在其他进程运行：{owner}")
+    try:
+        return _loop_top_infraction_ai_appeal_locked(
+            top_n=top_n,
+            max_workers=max_workers,
+            recent_days=recent_days,
+            round_interval=round_interval,
+            site_pause=site_pause,
+            message=message,
+            only_active=only_active,
+            stop_at=stop_at,
+            task_lock=task_lock,
+        )
+    finally:
+        if owned_lock is not None:
+            owned_lock.release()
+
+
 if __name__ == "__main__":
-    loop_top_infraction_ai_appeal(top_n=5, max_workers=5, round_interval=300)
+    loop_top_infraction_ai_appeal(top_n=30, max_workers=5, round_interval=60)
