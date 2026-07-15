@@ -44,6 +44,7 @@ import bit.bit_daily_task as bit_daily_task
 import bit.bit_infractions_info as bit_infractions_info
 import bit.bit_reputation_info as bit_reputation_info
 from bit.bit_appeal import *
+from bit.bit_runtime_lock import create_window_lease
 from bit.bit_utils import *
 from bit.bit_api import *
 
@@ -91,11 +92,15 @@ if USE_DB_API:
     db_get_latest_infraction_info = bit_db_api.get_latest_infraction_info
     db_get_latest_reputation_info = bit_db_api.get_latest_reputation_info
     db_get_ai_appeal_records = bit_db_api.get_ai_appeal_records
+    db_get_window_anomalies = bit_db_api.get_window_anomalies
     db_insert_chat_info = bit_db_api.insert_chat_info
     db_insert_appeal_chat_record = bit_db_api.insert_appeal_chat_record
     db_insert_ai_appeal_record = bit_db_api.insert_ai_appeal_record
     db_insert_orders = bit_db_api.insert_orders
     db_insert_task_record = bit_db_api.insert_task_record
+    db_insert_zying_product_info = bit_db_api.insert_zying_product_info
+    db_resolve_window_anomaly = bit_db_api.resolve_window_anomaly
+    db_upsert_window_anomaly = bit_db_api.upsert_window_anomaly
     db_inset_delay_info = bit_db_api.inset_delay_info
     db_inset_infraction_info = bit_db_api.inset_infraction_info
     db_inset_pago_info = bit_db_api.inset_pago_info
@@ -107,25 +112,33 @@ else:
         get_latest_infraction_info,
         get_latest_reputation_info,
         get_ai_appeal_records,
+        get_window_anomalies,
         insert_chat_info,
         insert_appeal_chat_record,
         insert_ai_appeal_record,
         insert_orders,
         insert_task_record,
+        insert_zying_product_info,
+        resolve_window_anomaly,
         inset_delay_info,
         inset_infraction_info,
         inset_pago_info,
         inset_reputation_info,
+        upsert_window_anomaly,
     )
 
     db_get_latest_infraction_info = get_latest_infraction_info
     db_get_latest_reputation_info = get_latest_reputation_info
     db_get_ai_appeal_records = get_ai_appeal_records
+    db_get_window_anomalies = get_window_anomalies
     db_insert_chat_info = insert_chat_info
     db_insert_appeal_chat_record = insert_appeal_chat_record
     db_insert_ai_appeal_record = insert_ai_appeal_record
     db_insert_orders = insert_orders
     db_insert_task_record = insert_task_record
+    db_insert_zying_product_info = insert_zying_product_info
+    db_resolve_window_anomaly = resolve_window_anomaly
+    db_upsert_window_anomaly = upsert_window_anomaly
     db_inset_delay_info = inset_delay_info
     db_inset_infraction_info = inset_infraction_info
     db_inset_pago_info = inset_pago_info
@@ -449,7 +462,7 @@ def build_daily_task_params(data):
     }
 
 
-def run_daily_task_job(params):
+def run_daily_task_job(params, task_lock):
     try:
         print(f"{get_now_time()} 开始执行 daily_task：{params}<br>")
         if params["mode"] == "loop":
@@ -465,6 +478,7 @@ def run_daily_task_job(params):
                 message=params["message"],
                 only_active=params["only_active"],
                 stop_at=stop_at,
+                _task_lock=task_lock,
             )
             result_message = "daily_task 循环执行完成"
         else:
@@ -475,6 +489,7 @@ def run_daily_task_job(params):
                 site_pause=params["site_pause"],
                 message=params["message"],
                 only_active=params["only_active"],
+                _task_lock=task_lock,
             )
             result_message = "daily_task 单轮执行完成"
 
@@ -496,6 +511,9 @@ def run_daily_task_job(params):
                 "status": "error",
                 "message": str(e),
             })
+    finally:
+        if task_lock is not None:
+            task_lock.release()
 
 
 def format_log_text(text):
@@ -559,8 +577,20 @@ def shensu_logic(name, site, form, message, mode):
 
         def run_task():
             register_thread_log_queue(output_queue)
+            window_lease = None
             try:
                 print(f"{get_now_time()} --- 任务启动第 {i} 次：{name} {site}，客服模式：{mode}")
+                window_id = getWindowidByName(name)
+                window_lease = create_window_lease(
+                    window_id,
+                    owner=f"interface_appeal:{name}",
+                    shop_name=name,
+                    task_type="interface_appeal",
+                )
+                if not window_lease.acquire(timeout=0):
+                    task_result["value"] = "窗口正在被其他任务占用"
+                    print(f"{get_now_time()} {name} {site} {task_result['value']}，本轮已跳过")
+                    return
                 if mode == "AI客服":
                     task_result["value"] = bit_appeal_ai.shensu(name, site, form, message)
                 else:
@@ -570,6 +600,8 @@ def shensu_logic(name, site, form, message, mode):
                 print(f"{get_now_time()} 发生错误: {str(e)}")
                 traceback.print_exc()
             finally:
+                if window_lease is not None:
+                    window_lease.release()
                 unregister_thread_log_queue()
                 output_queue.put(None)
 
@@ -854,6 +886,18 @@ def api_start_daily_task():
                 "message": "daily_task 正在运行中"
             }), 409
 
+        task_lock = bit_daily_task.acquire_daily_task_lock(
+            owner="bit_interface.py",
+            mode=params["mode"],
+        )
+        if task_lock is None:
+            owner = bit_daily_task.get_daily_task_lock_owner()
+            return jsonify({
+                "status": "running",
+                "data": {**dict(_daily_task_state), "lock_owner": owner},
+                "message": "daily_task 已通过其他进程或启动方式运行"
+            }), 409
+
         started_at = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         _daily_task_state.update({
             "running": True,
@@ -864,8 +908,18 @@ def api_start_daily_task():
             "params": params,
         })
 
-    task_thread = threading.Thread(target=run_daily_task_job, args=(params,), daemon=True)
-    task_thread.start()
+    try:
+        task_thread = threading.Thread(
+            target=run_daily_task_job,
+            args=(params, task_lock),
+            daemon=True,
+        )
+        task_thread.start()
+    except Exception:
+        task_lock.release()
+        with _daily_task_lock:
+            _daily_task_state.update({"running": False, "status": "error", "message": "daily_task 启动失败"})
+        raise
     return jsonify({
         "status": "success",
         "data": dict(_daily_task_state),
@@ -877,9 +931,19 @@ def api_start_daily_task():
 @login_required
 def api_daily_task_status():
     with _daily_task_lock:
+        data = dict(_daily_task_state)
+        external_owner = bit_daily_task.get_daily_task_lock_owner()
+        if external_owner and not data.get("running"):
+            data.update({
+                "running": True,
+                "status": "running",
+                "message": "daily_task 正在其他进程中运行",
+                "started_at": external_owner.get("acquired_at", ""),
+                "lock_owner": external_owner,
+            })
         return jsonify({
             "status": "success",
-            "data": dict(_daily_task_state),
+            "data": data,
         })
 
 
@@ -941,6 +1005,18 @@ def api_db_insert_pago():
     rows = data.get("rows") or []
     db_inset_pago_info(rows)
     return jsonify({"status": "success", "data": {"count": len(rows)}})
+
+
+@app.route('/api/db/zying-products/bulk', methods=['POST'])
+@internal_api_required
+def api_db_insert_zying_products():
+    blocked = reject_db_api_client_mode()
+    if blocked:
+        return blocked
+    data = request.get_json(silent=True) or {}
+    rows = data.get("rows") or []
+    count = db_insert_zying_product_info(rows)
+    return jsonify({"status": "success", "data": {"count": count}})
 
 
 @app.route('/api/db/orders/bulk', methods=['POST'])
@@ -1034,6 +1110,48 @@ def api_db_latest_reputation():
     return jsonify({"status": "success", "data": db_get_latest_reputation_info()})
 
 
+@app.route('/api/db/window-anomalies', methods=['POST'])
+@internal_api_required
+def api_db_upsert_window_anomaly():
+    blocked = reject_db_api_client_mode()
+    if blocked:
+        return blocked
+    data = request.get_json(silent=True) or {}
+    if not str(data.get("window_id") or "").strip():
+        return jsonify({"status": "error", "message": "Missing window_id"}), 422
+    db_upsert_window_anomaly(
+        data.get("window_id"),
+        data.get("window_name", ""),
+        data.get("site", ""),
+        data.get("anomaly_type", "需要登录"),
+        data.get("reason", ""),
+        data.get("source", "bit_daily_task"),
+    )
+    return jsonify({"status": "success", "data": {"window_id": data.get("window_id")}})
+
+
+@app.route('/api/db/window-anomalies', methods=['GET'])
+@internal_api_required
+def api_db_get_window_anomalies():
+    blocked = reject_db_api_client_mode()
+    if blocked:
+        return blocked
+    active_only = str(request.args.get("active_only", "1")).strip().lower() not in ("0", "false", "no")
+    limit = request.args.get("limit", 500)
+    return jsonify({"status": "success", "data": db_get_window_anomalies(active_only, limit)})
+
+
+@app.route('/api/db/window-anomalies/resolve', methods=['POST'])
+@internal_api_required
+def api_db_resolve_window_anomaly():
+    blocked = reject_db_api_client_mode()
+    if blocked:
+        return blocked
+    data = request.get_json(silent=True) or {}
+    affected = db_resolve_window_anomaly(data.get("window_id"))
+    return jsonify({"status": "success", "data": {"affected": affected}})
+
+
 @app.route('/api/ai-appeal-records', methods=['GET'])
 @login_required
 def api_ai_appeal_records():
@@ -1042,6 +1160,32 @@ def api_ai_appeal_records():
         return jsonify({"status": "success", "data": db_get_ai_appeal_records(limit)})
     except Exception as e:
         logging.error("AI appeal records query failed: %s", e)
+        return jsonify({"status": "error", "message": f"Database error: {str(e)}"}), 500
+
+
+@app.route('/api/window-anomalies', methods=['GET'])
+@login_required
+def api_window_anomalies():
+    try:
+        active_only = str(request.args.get("active_only", "1")).strip().lower() not in ("0", "false", "no")
+        limit = request.args.get("limit", 500)
+        return jsonify({
+            "status": "success",
+            "data": db_get_window_anomalies(active_only, limit),
+        })
+    except Exception as e:
+        logging.error("Window anomalies query failed: %s", e)
+        return jsonify({"status": "error", "message": f"Database error: {str(e)}"}), 500
+
+
+@app.route('/api/window-anomalies/<window_id>/resolve', methods=['POST'])
+@login_required
+def api_resolve_window_anomaly(window_id):
+    try:
+        affected = db_resolve_window_anomaly(window_id)
+        return jsonify({"status": "success", "data": {"affected": affected}})
+    except Exception as e:
+        logging.error("Resolve window anomaly failed: %s", e)
         return jsonify({"status": "error", "message": f"Database error: {str(e)}"}), 500
 
 

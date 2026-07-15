@@ -42,6 +42,7 @@ import random
 
 from bit.bit_utils import get_latest_modified_file, get_bit_path, parser_delay_date, get_now_time, getWindowidByName
 from bit.bit_api import *
+from bit.bit_runtime_lock import create_window_lease, current_thread_window_lease
 from bit.bit_download import download_relay_mail
 from bit.bit_db_api import get_latest_infraction_info, insert_ai_appeal_record
 from AI_Agent.qianwen import *
@@ -79,9 +80,33 @@ HELP_URL = "https://global-selling.mercadolibre.com/help"
 # AI 悬浮窗 iframe 的特征。不同账号/页面版本的 src/title 可能不同，所以这里保留多个标记。
 AI_FRAME_URL_MARKERS = ("meli-ai-chat", "maxwell/new-chat")
 AI_FRAME_MARKERS = ("meli-ai-chat", "maxwell", "new-chat", "ai chat", "assistant", "chat", "meli")
+AI_CHAT_MODE_INLINE = "inline_dom"
+AI_CHAT_MODE_IFRAME = "legacy_iframe"
 AI_HELP_URLS = (
     HELP_URL,
     "https://global-selling.mercadolibre.com/help/v2",
+)
+MERCADO_RATE_LIMIT_MARKERS = (
+    "too many requests",
+    "429 too many",
+    "http 429",
+    "rate limit",
+    "rate-limit",
+    "request limit exceeded",
+    "access denied",
+    "请求太过频繁",
+    "请求过于频繁",
+    "访问过于频繁",
+    "操作太频繁",
+    "每秒最多可以发起",
+    "demasiadas solicitudes",
+    "muitas solicitações",
+    "hubo un error accediendo a esta página",
+    "hubo un error accediendo a esta pagina",
+)
+SPANISH_IP_SWITCH_MARKERS = (
+    "hubo un error accediendo a esta página",
+    "hubo un error accediendo a esta pagina",
 )
 SITE_OPTION_MENU_OPTIONS = (
     "Mexico (Direct to consumer)",
@@ -196,13 +221,20 @@ def connect_bit_browser(window_id):
         except Exception as e:
             last_res = {"success": False, "msg": str(e)}
             print(f"{get_now_time()} 打开比特浏览器失败，第 {attempt}/3 次: {e}<br>")
-            time.sleep(3)
+            if attempt < 3:
+                time.sleep(3)
             continue
 
         print(res)
         last_res = res
         data = res.get("data") if isinstance(res, dict) else None
-        if res.get("success") is not False and isinstance(data, dict) and data.get("driver") and data.get("http"):
+        if (
+            isinstance(res, dict)
+            and res.get("success") is not False
+            and isinstance(data, dict)
+            and data.get("driver")
+            and data.get("http")
+        ):
             driver_path = data["driver"]
             debugger_address = data["http"]
 
@@ -215,7 +247,8 @@ def connect_bit_browser(window_id):
             return driver, res
 
         print(f"{get_now_time()} 比特浏览器返回异常，第 {attempt}/3 次: {res}<br>")
-        time.sleep(3)
+        if attempt < 3:
+            time.sleep(3)
 
     raise RuntimeError(f"打开比特浏览器失败，窗口ID={window_id}，返回={last_res}")
 
@@ -250,6 +283,143 @@ def is_mercado_login_required_page(driver):
         "ingrese su e-mail",
     )
     return any(marker in combined for marker in login_markers)
+
+
+def get_mercado_page_open_state(driver):
+    """读取窗口当前页的关键状态，供 daily_task 打开验证和限频识别使用。"""
+    try:
+        driver.switch_to.default_content()
+    except Exception:
+        pass
+
+    try:
+        page_text = driver.execute_script("return document.body ? document.body.innerText : '';") or ""
+    except Exception:
+        page_text = ""
+    try:
+        current_url = driver.current_url or ""
+    except Exception:
+        current_url = ""
+    try:
+        title = driver.title or ""
+    except Exception:
+        title = ""
+    try:
+        page_source = driver.page_source or ""
+    except Exception:
+        page_source = ""
+
+    return {
+        "page_text": str(page_text),
+        "current_url": str(current_url),
+        "title": str(title),
+        "page_source": str(page_source),
+    }
+
+
+def is_mercado_rate_limited_page(driver=None, state=None):
+    """识别 Mercado 页面是否返回 429、请求过频或访问限制页面。"""
+    state = state or get_mercado_page_open_state(driver)
+    visible_state = "\n".join(
+        (
+            state.get("page_text", ""),
+            state.get("title", ""),
+            state.get("current_url", ""),
+        )
+    ).lower()
+    if any(marker.lower() in visible_state for marker in MERCADO_RATE_LIMIT_MARKERS):
+        return True
+
+    # 错误页偶尔没有可见正文；仅在正文和标题都为空时再检查源码，避免命中正常页脚本里的静态文案。
+    if not state.get("page_text", "").strip() and not state.get("title", "").strip():
+        page_source = state.get("page_source", "").lower()
+        return any(marker.lower() in page_source for marker in MERCADO_RATE_LIMIT_MARKERS)
+    return False
+
+
+def is_spanish_ip_switch_page(driver=None, state=None):
+    """只有指定的 Mercado 西语错误页允许触发香港 IP 切换。"""
+    state = state or get_mercado_page_open_state(driver)
+    visible_state = "\n".join(
+        (
+            state.get("page_text", ""),
+            state.get("title", ""),
+            state.get("current_url", ""),
+        )
+    ).lower()
+    if any(marker in visible_state for marker in SPANISH_IP_SWITCH_MARKERS):
+        return True
+    if not state.get("page_text", "").strip() and not state.get("title", "").strip():
+        page_source = state.get("page_source", "").lower()
+        return any(marker in page_source for marker in SPANISH_IP_SWITCH_MARKERS)
+    return False
+
+
+def open_help_page_with_daily_validation(
+    driver,
+    name="",
+    site="",
+    max_hongkong_switches=3,
+    switch_wait_seconds=8,
+):
+    """打开帮助页并验证页面；遇到限频时切换香港节点后重新打开。"""
+    max_hongkong_switches = max(0, int(max_hongkong_switches))
+    last_state = {}
+
+    for attempt in range(1, max_hongkong_switches + 2):
+        navigate_error = ""
+        try:
+            driver.switch_to.default_content()
+        except Exception:
+            pass
+        try:
+            driver.get(HELP_URL)
+        except Exception as e:
+            navigate_error = str(e)
+
+        time.sleep(8)
+        last_state = get_mercado_page_open_state(driver)
+        if is_spanish_ip_switch_page(state=last_state):
+            if attempt > max_hongkong_switches:
+                raise RuntimeError(
+                    f"{name} {site} 西语错误页持续出现，已切换香港 IP "
+                    f"{max_hongkong_switches} 次仍未恢复"
+                )
+            print(
+                f"{get_now_time()} {name} {site} 窗口打开验证发现限频，"
+                f"切换香港 IP 后重试，第 {attempt}/{max_hongkong_switches} 次<br>"
+            )
+            switch_random_hongkong_node()
+            get_public_ip()
+            time.sleep(max(0, int(switch_wait_seconds)))
+            continue
+
+        if is_mercado_rate_limited_page(state=last_state):
+            raise RuntimeError(
+                f"{name} {site} 检测到页面限频，但不是指定西语错误页，不切换 IP："
+                f"{last_state.get('page_text', '')[:200]}"
+            )
+
+        if navigate_error:
+            raise RuntimeError(f"{name} {site} 窗口页面打开验证失败：{navigate_error}")
+
+        current_url = last_state.get("current_url", "").strip()
+        has_page_content = bool(
+            last_state.get("page_text", "").strip()
+            or last_state.get("title", "").strip()
+            or last_state.get("page_source", "").strip()
+        )
+        if not current_url or current_url == "about:blank" or not has_page_content:
+            raise RuntimeError(
+                f"{name} {site} 窗口页面未正常打开：url={current_url or 'empty'}"
+            )
+
+        print(
+            f"{get_now_time()} {name} {site} 窗口打开验证通过：{current_url}<br>"
+        )
+        return True
+
+    raise RuntimeError(f"{name} {site} 窗口页面打开验证失败：state={last_state}")
 
 
 def close_current_tab_keep_browser(driver, name="", site=""):
@@ -388,24 +558,53 @@ def get_selected_site_state(driver):
 
 
 def _site_state_matches(state, site):
+    state = state or {}
     site_name = normalize_site_name(site)
     remote_value = SITE_REMOTE_VALUE_MAP.get(site_name, "")
     site_id = SITE_ID_MAP.get(site_name, "")
     short_code = SITE_SHORT_CODE_MAP.get(site_name, "")
     labels = tuple(label.lower() for label in SITE_LABEL_MAP.get(site_name, ()))
 
+    selected_remote = str(state.get("selectedRemote") or "").strip()
+    operating_site_id = str(state.get("operatingSiteId") or "").strip().upper()
+    current_short = str(state.get("currentShort") or "").strip().upper()
+    page_site_id = str(state.get("siteId") or "").strip().upper()
+    cookie_remote = str(state.get("cookieRemote") or "").strip()
     selected_text = str(state.get("selectedText") or "").lower()
     current_text = str(state.get("currentText") or "").lower()
     current_flag_alt = str(state.get("currentFlagAlt") or "").lower()
-    return any(
+    explicit_match = any(
         [
-            remote_value and state.get("selectedRemote") == remote_value,
-            site_id and state.get("operatingSiteId") == site_id,
-            short_code and state.get("currentShort") == short_code,
+            remote_value and selected_remote == remote_value,
+            site_id and operating_site_id == site_id,
+            short_code and current_short == short_code,
+            site_id and page_site_id == site_id,
             labels and any(label and label in current_flag_alt for label in labels),
             labels and any(label and label in selected_text for label in labels),
             short_code and current_text == short_code.lower(),
         ]
+    )
+    if explicit_match:
+        return True
+
+    # Help 页面有时不渲染站点切换器，siteId 也只返回通用的 CBT。
+    # 此时 cbtSiteId 是页面上唯一可用的当前站点证据；若存在任何明确页面状态，
+    # 仍然优先相信页面，避免用陈旧 cookie 覆盖真实站点。
+    has_explicit_state = any(
+        [
+            selected_remote,
+            operating_site_id,
+            current_short,
+            current_text,
+            current_flag_alt,
+            selected_text,
+            page_site_id not in ("", "CBT"),
+        ]
+    )
+    return bool(
+        not has_explicit_state
+        and remote_value
+        and cookie_remote == remote_value
     )
 
 
@@ -626,6 +825,289 @@ def is_ai_frame_info(info):
     return any(marker in text for marker in AI_FRAME_MARKERS)
 
 
+def classify_ai_chat_variant(state):
+    """根据页面探测结果区分新版内嵌助手和旧版 iframe 助手。"""
+    state = state or {}
+    if state.get("legacy_frame_count", 0):
+        return AI_CHAT_MODE_IFRAME
+    if state.get("inline_shell"):
+        return AI_CHAT_MODE_INLINE
+    return ""
+
+
+def get_ai_chat_dom_state(driver):
+    """探测 AI 助手页面结构，不点击页面，也不依赖界面语言。"""
+    try:
+        driver.switch_to.default_content()
+    except Exception:
+        pass
+
+    try:
+        return driver.execute_script(
+            """
+            const frameMarkers = arguments[0] || [];
+
+            function deepElements(root = document) {
+                const out = [];
+                const walk = (node) => {
+                    const elements = node.querySelectorAll ? Array.from(node.querySelectorAll('*')) : [];
+                    for (const el of elements) {
+                        out.push(el);
+                        if (el.shadowRoot) walk(el.shadowRoot);
+                    }
+                };
+                walk(root);
+                return out;
+            }
+
+            function visible(el) {
+                if (!el) return false;
+                const rect = el.getBoundingClientRect();
+                const style = window.getComputedStyle(el);
+                return !!(rect.width || rect.height || el.getClientRects().length)
+                    && style.visibility !== 'hidden'
+                    && style.display !== 'none';
+            }
+
+            function isTextbox(el) {
+                if (!el || !visible(el) || el.disabled) return false;
+                const tag = String(el.tagName || '').toUpperCase();
+                const role = (el.getAttribute('role') || '').toLowerCase();
+                return tag === 'TEXTAREA' || tag === 'INPUT' || role === 'textbox'
+                    || el.isContentEditable || el.getAttribute('contenteditable') === 'true';
+            }
+
+            const all = deepElements(document);
+            const root = all.find((el) => el.id === 'sa-assistant-chat') || null;
+            const opener = all.find((el) =>
+                el.id === 'sa-icon-button-wrapper'
+                || el.getAttribute('aria-controls') === 'sa-assistant-chat'
+            ) || null;
+            const inlineInput = root
+                ? deepElements(root).find((el) => isTextbox(el)) || null
+                : null;
+            const rootClass = root ? String(root.className || '') : '';
+            const ariaExpanded = opener ? (opener.getAttribute('aria-expanded') || '') : '';
+            const inlineOpen = !!inlineInput || ariaExpanded === 'true'
+                || (!!root && visible(root) && !rootClass.split(/\\s+/).includes('minimized'));
+
+            const legacyFrames = Array.from(document.querySelectorAll('iframe')).filter((frame) => {
+                if (!visible(frame)) return false;
+                const text = [
+                    frame.getAttribute('src') || '',
+                    frame.getAttribute('title') || '',
+                    frame.getAttribute('name') || '',
+                    frame.getAttribute('id') || '',
+                    String(frame.className || '')
+                ].join(' ').toLowerCase();
+                return frameMarkers.some((marker) => text.includes(String(marker).toLowerCase()));
+            });
+
+            return {
+                inline_shell: !!root || !!opener || all.some((el) =>
+                    el.matches && el.matches('button.action-button[aria-label*="助手"]')
+                ),
+                inline_open: inlineOpen,
+                inline_has_input: !!inlineInput,
+                inline_root_class: rootClass,
+                inline_aria_expanded: ariaExpanded,
+                legacy_frame_count: legacyFrames.length
+            };
+            """,
+            list(AI_FRAME_MARKERS),
+        ) or {}
+    except Exception:
+        return {}
+
+
+def detect_ai_chat_variant(driver):
+    """返回 inline_dom、legacy_iframe 或空字符串。"""
+    return classify_ai_chat_variant(get_ai_chat_dom_state(driver))
+
+
+def find_inline_chat_input(driver, timeout=15):
+    """只在新版 #sa-assistant-chat 内查找输入框，避免误命中帮助页顶部搜索框。"""
+    try:
+        driver.switch_to.default_content()
+    except Exception:
+        pass
+
+    end_time = time.time() + max(0, timeout)
+    while time.time() < end_time:
+        try:
+            element = driver.execute_script(
+                """
+                function deepElements(root = document) {
+                    const out = [];
+                    const walk = (node) => {
+                        const elements = node.querySelectorAll ? Array.from(node.querySelectorAll('*')) : [];
+                        for (const el of elements) {
+                            out.push(el);
+                            if (el.shadowRoot) walk(el.shadowRoot);
+                        }
+                    };
+                    walk(root);
+                    return out;
+                }
+
+                function visible(el) {
+                    const rect = el.getBoundingClientRect();
+                    const style = window.getComputedStyle(el);
+                    return !!(rect.width || rect.height || el.getClientRects().length)
+                        && style.visibility !== 'hidden'
+                        && style.display !== 'none'
+                        && !el.disabled;
+                }
+
+                const all = deepElements(document);
+                const root = all.find((el) => el.id === 'sa-assistant-chat');
+                if (!root) return null;
+                const candidates = deepElements(root).filter((el) => {
+                    if (!visible(el)) return false;
+                    const tag = String(el.tagName || '').toUpperCase();
+                    const role = (el.getAttribute('role') || '').toLowerCase();
+                    const editable = el.isContentEditable || el.getAttribute('contenteditable') === 'true';
+                    return tag === 'TEXTAREA' || tag === 'INPUT' || role === 'textbox' || editable;
+                }).map((el) => {
+                    const rect = el.getBoundingClientRect();
+                    const placeholder = (el.getAttribute('placeholder') || '').toLowerCase();
+                    const aria = (el.getAttribute('aria-label') || '').toLowerCase();
+                    const id = (el.id || '').toLowerCase();
+                    let score = rect.bottom + rect.right;
+                    if (id === 'chat-input' || id.includes('chat-input')) score += 12000;
+                    if (/message|mensaje|mensagem|消息|输入|提问/.test(aria)) score += 8000;
+                    if (/ask|escribe|digite|消息|输入|提问/.test(placeholder)) score += 6000;
+                    if (String(el.tagName || '').toUpperCase() === 'TEXTAREA') score += 3000;
+                    return {el, score};
+                });
+                candidates.sort((a, b) => b.score - a.score);
+                return candidates.length ? candidates[0].el : null;
+                """
+            )
+        except Exception:
+            element = None
+
+        if element:
+            try:
+                driver.execute_script("arguments[0].focus();", element)
+            except Exception:
+                pass
+            return element
+        time.sleep(0.25)
+    return None
+
+
+def click_inline_ai_assistant_entry(driver, name="", site="", timeout=12):
+    """点击新版内嵌助手的明确按钮，并用容器状态或输入框验证结果。"""
+    try:
+        driver.switch_to.default_content()
+    except Exception:
+        pass
+
+    if find_inline_chat_input(driver, timeout=0.2):
+        setattr(driver, "_mercado_ai_chat_mode", AI_CHAT_MODE_INLINE)
+        return True
+
+    try:
+        clicked = driver.execute_script(
+            """
+            function deepElements(root = document) {
+                const out = [];
+                const walk = (node) => {
+                    const elements = node.querySelectorAll ? Array.from(node.querySelectorAll('*')) : [];
+                    for (const el of elements) {
+                        out.push(el);
+                        if (el.shadowRoot) walk(el.shadowRoot);
+                    }
+                };
+                walk(root);
+                return out;
+            }
+
+            function visible(el) {
+                if (!el) return false;
+                const rect = el.getBoundingClientRect();
+                const style = window.getComputedStyle(el);
+                return !!(rect.width || rect.height || el.getClientRects().length)
+                    && style.visibility !== 'hidden'
+                    && style.display !== 'none'
+                    && !el.disabled;
+            }
+
+            const all = deepElements(document);
+            const selectors = [
+                'button.action-button[aria-label*="向助手提问"]',
+                'button.action-button[data-component="WIDGET"]',
+                '#sa-icon-button-wrapper[aria-expanded="false"]',
+                '[aria-controls="sa-assistant-chat"][aria-expanded="false"]',
+                'button[aria-label*="Ask the assistant"]',
+                'button[aria-label*="Preguntar al asistente"]',
+                'button[aria-label*="Perguntar ao assistente"]'
+            ];
+            let target = null;
+            for (const selector of selectors) {
+                target = all.find((el) => el.matches && el.matches(selector) && visible(el));
+                if (target) break;
+            }
+            if (!target) return null;
+            target.scrollIntoView({block: 'center', inline: 'center'});
+            target.click();
+            return {
+                id: target.id || '',
+                aria: target.getAttribute('aria-label') || '',
+                component: target.getAttribute('data-component') || ''
+            };
+            """
+        )
+    except Exception:
+        clicked = None
+
+    if not clicked:
+        return False
+
+    print(f"{get_now_time()} {name} {site} 点击新版内嵌 AI 助手入口：{clicked}<br>")
+    end_time = time.time() + max(0, timeout)
+    while time.time() < end_time:
+        if find_inline_chat_input(driver, timeout=0.5):
+            setattr(driver, "_mercado_ai_chat_mode", AI_CHAT_MODE_INLINE)
+            return True
+        state = get_ai_chat_dom_state(driver)
+        if state.get("inline_open"):
+            # 容器已经展开时继续等待异步加载输入框，不重复点击造成开关反转。
+            time.sleep(0.5)
+            continue
+        time.sleep(0.5)
+    return False
+
+
+def activate_ai_chat_context(driver, require_input=False):
+    """恢复已识别的聊天上下文，并在必要时自动重新探测模式。"""
+    preferred = getattr(driver, "_mercado_ai_chat_mode", "")
+    if preferred == AI_CHAT_MODE_INLINE:
+        state = get_ai_chat_dom_state(driver)
+        if state.get("inline_shell") and (not require_input or find_inline_chat_input(driver, timeout=1)):
+            driver.switch_to.default_content()
+            return AI_CHAT_MODE_INLINE
+    elif preferred == AI_CHAT_MODE_IFRAME:
+        if switch_to_ai_chat_frame(driver, require_input=require_input):
+            return AI_CHAT_MODE_IFRAME
+
+    variant = detect_ai_chat_variant(driver)
+    if variant == AI_CHAT_MODE_INLINE:
+        state = get_ai_chat_dom_state(driver)
+        if state.get("inline_shell") and (not require_input or find_inline_chat_input(driver, timeout=1)):
+            driver.switch_to.default_content()
+            setattr(driver, "_mercado_ai_chat_mode", AI_CHAT_MODE_INLINE)
+            return AI_CHAT_MODE_INLINE
+
+    if switch_to_ai_chat_frame(driver, require_input=require_input):
+        setattr(driver, "_mercado_ai_chat_mode", AI_CHAT_MODE_IFRAME)
+        return AI_CHAT_MODE_IFRAME
+
+    driver.switch_to.default_content()
+    return ""
+
+
 def reset_expired_ai_iframe(driver, name="", site=""):
     """父页面 iframe 地址已经过期时，直接重置为新的 AI 会话地址。"""
     try:
@@ -826,7 +1308,7 @@ def dump_ai_entry_debug_info(driver):
                 })
                 .filter((item) =>
                     item.visible &&
-                    /assistant|chat|help|maxwell|contact/i.test(item.label)
+                    /assistant|chat|help|maxwell|contact|助手|助理|提问|咨询|输入/i.test(item.label)
                 )
                 .slice(0, 30);
             """
@@ -834,6 +1316,18 @@ def dump_ai_entry_debug_info(driver):
         print(f"{get_now_time()} 当前页面AI入口候选：{entries}<br>")
     except Exception as e:
         print(f"{get_now_time()} 获取AI入口候选失败：{e}<br>")
+
+
+def dump_ai_chat_mode_debug_info(driver):
+    """同时输出新版内嵌助手和旧版 iframe 的探测状态。"""
+    try:
+        state = get_ai_chat_dom_state(driver)
+        print(
+            f"{get_now_time()} AI聊天模式探测："
+            f"variant={classify_ai_chat_variant(state) or 'unknown'}，state={state}<br>"
+        )
+    except Exception as e:
+        print(f"{get_now_time()} 获取AI聊天模式探测信息失败：{e}<br>")
 
 
 def find_chat_input(driver, timeout=30, allow_default_content=False):
@@ -1075,7 +1569,7 @@ def recover_expired_ai_conversation(driver, name="", site="", timeout=25, force=
     return False
 
 
-def click_send_button(driver):
+def click_send_button(driver, mode=AI_CHAT_MODE_IFRAME):
     """查找并点击 AI 客服输入框旁的发送按钮，失败时交给回车发送兜底。"""
     button = driver.execute_script(
         """
@@ -1101,14 +1595,20 @@ def click_send_button(driver):
                 && !el.disabled;
         }
 
+        const inlineMode = arguments[0] === 'inline_dom';
+        const all = deepElements(document);
+        const inlineRoot = inlineMode ? all.find((el) => el.id === 'sa-assistant-chat') : null;
+        const searchRoot = inlineMode ? inlineRoot : document;
+        if (!searchRoot) return null;
         const viewportHeight = window.innerHeight || document.documentElement.clientHeight;
-        const candidates = deepElements().filter((el) => {
+        const candidates = deepElements(searchRoot).filter((el) => {
             const aria = el.getAttribute('aria-label') || '';
             const title = el.getAttribute('title') || '';
             const cls = String(el.className || '');
-            return visible(el) && el.tagName === 'BUTTON' && (
-                aria.includes('Send') ||
-                title.includes('Send') ||
+            const buttonLike = el.tagName === 'BUTTON' || el.getAttribute('role') === 'button';
+            return visible(el) && buttonLike && (
+                /send|enviar|发送|提交/i.test(aria) ||
+                /send|enviar|发送|提交/i.test(title) ||
                 cls.includes('new-chat-input__right-button') ||
                 el.type === 'submit'
             );
@@ -1124,7 +1624,8 @@ def click_send_button(driver):
         });
         candidates.sort((a, b) => b.score - a.score);
         return candidates.length ? candidates[0].el : null;
-        """
+        """,
+        mode,
     )
     if not button:
         return False
@@ -1145,16 +1646,20 @@ def send_ai_chat_message(driver, message):
     Mercado 的 textarea 有时不接受普通 click/send_keys，所以优先用 JS 原生 setter 写值并触发 input/change 事件，
     如果页面仍未接收到内容，再使用 ActionChains 兜底。
     """
-    if not switch_to_ai_chat_frame(driver):
+    mode = activate_ai_chat_context(driver, require_input=False)
+    if not mode:
         raise RuntimeError("没有找到 AI 客服聊天窗口")
 
-    recover_expired_ai_conversation(driver)
-    input_box = find_chat_input(driver, timeout=5, allow_default_content=False)
-    if input_box is None and recover_expired_ai_conversation(driver):
-        input_box = find_chat_input(driver, timeout=8, allow_default_content=False)
-    if input_box is None and recover_expired_ai_conversation(driver, force=True):
-        switch_to_ai_chat_frame(driver, require_input=False)
-        input_box = find_chat_input(driver, timeout=8, allow_default_content=False)
+    if mode == AI_CHAT_MODE_INLINE:
+        input_box = find_inline_chat_input(driver, timeout=8)
+    else:
+        recover_expired_ai_conversation(driver)
+        input_box = find_chat_input(driver, timeout=5, allow_default_content=False)
+        if input_box is None and recover_expired_ai_conversation(driver):
+            input_box = find_chat_input(driver, timeout=8, allow_default_content=False)
+        if input_box is None and recover_expired_ai_conversation(driver, force=True):
+            switch_to_ai_chat_frame(driver, require_input=False)
+            input_box = find_chat_input(driver, timeout=8, allow_default_content=False)
     if input_box is None:
         raise RuntimeError("没有找到 AI 客服输入框")
 
@@ -1225,7 +1730,7 @@ def send_ai_chat_message(driver, message):
                 message,
             )
     time.sleep(1)
-    if not click_send_button(driver):
+    if not click_send_button(driver, mode=mode):
         try:
             input_box.send_keys(Keys.ENTER)
         except Exception:
@@ -1722,7 +2227,9 @@ def click_ai_assistant_entry(driver, name, site):
                 }
                 const needle = text.toLowerCase();
                 const candidates = deepElements()
-                    .filter((node) => ['BUTTON', 'A', 'DIV', 'SPAN'].includes(node.tagName))
+                    .filter((node) =>
+                        ['BUTTON', 'A'].includes(node.tagName) || node.getAttribute('role') === 'button'
+                    )
                     .map((node) => {
                         const rect = node.getBoundingClientRect();
                         const label = [
@@ -1742,14 +2249,7 @@ def click_ai_assistant_entry(driver, name, site):
                         return {node, rect, label, score};
                     })
                     .filter((item) => item.rect.width > 0 && item.rect.height > 0)
-                    .filter((item) =>
-                        item.label.includes(needle) ||
-                        item.label.includes('assistant') ||
-                        item.label.includes('maxwell') ||
-                        item.label.includes('助手') ||
-                        item.label.includes('助理') ||
-                        item.label.includes('个人助手')
-                    )
+                    .filter((item) => item.label.includes(needle))
                     .sort((a, b) => b.score - a.score);
                 const node = candidates.length ? candidates[0].node : null;
                 if (!node) return false;
@@ -1786,7 +2286,9 @@ def click_ai_entry_fallback(driver, name, site):
                 return out;
             }
             const candidates = deepElements()
-                .filter((node) => ['BUTTON', 'A', 'DIV', 'SPAN'].includes(node.tagName))
+                .filter((node) =>
+                    ['BUTTON', 'A'].includes(node.tagName) || node.getAttribute('role') === 'button'
+                )
                 .map((node) => {
                     const rect = node.getBoundingClientRect();
                     const label = [
@@ -1855,14 +2357,41 @@ def wait_for_ai_chat_frame(driver, timeout=15):
     return False
 
 
+def wait_for_ai_chat_ready(driver, timeout=15, require_input=False):
+    """等待任一受支持的聊天结构就绪，并返回对应模式。"""
+    end_time = time.time() + timeout
+    while time.time() < end_time:
+        variant = detect_ai_chat_variant(driver)
+        if variant == AI_CHAT_MODE_INLINE:
+            state = get_ai_chat_dom_state(driver)
+            if require_input:
+                ready = bool(find_inline_chat_input(driver, timeout=0.5))
+            else:
+                ready = bool(state.get("inline_open") or state.get("inline_has_input"))
+            if ready:
+                driver.switch_to.default_content()
+                setattr(driver, "_mercado_ai_chat_mode", AI_CHAT_MODE_INLINE)
+                return AI_CHAT_MODE_INLINE
+
+        # 旧版 iframe 可能嵌套在没有明显标记的外层 frame 中，始终保留递归探测兜底。
+        if switch_to_ai_chat_frame(driver, require_input=require_input):
+            setattr(driver, "_mercado_ai_chat_mode", AI_CHAT_MODE_IFRAME)
+            return AI_CHAT_MODE_IFRAME
+        time.sleep(0.5)
+
+    driver.switch_to.default_content()
+    return ""
+
+
 def open_ai_contact_window(driver, name, site):
-    """打开 Help 页面并进入 AI 客服悬浮窗。
+    """打开 Help 页面并自动进入新版内嵌助手或旧版 iframe 助手。
 
     不同账号的入口页和按钮文案可能不同，所以依次尝试多个 URL、多种入口点击方式；
     若失败会保存页面截图、HTML 和候选元素信息。
     """
-    opened = False
+    opened_mode = ""
     entered_human_page = False
+    last_variant = ""
     for url in AI_HELP_URLS:
         driver.switch_to.default_content()
         driver.get(url)
@@ -1870,18 +2399,33 @@ def open_ai_contact_window(driver, name, site):
         time.sleep(5)
 
         for attempt in range(1, 5):
-            print(f"{get_now_time()} {name} {site} 尝试打开AI客服悬浮窗，第 {attempt} 次<br>")
-            if wait_for_ai_chat_frame(driver, timeout=2):
-                opened = True
+            variant = detect_ai_chat_variant(driver)
+            if variant:
+                last_variant = variant
+            print(
+                f"{get_now_time()} {name} {site} 尝试打开AI客服，第 {attempt} 次，"
+                f"探测模式={variant or 'unknown'}<br>"
+            )
+
+            opened_mode = wait_for_ai_chat_ready(driver, timeout=2, require_input=True)
+            if opened_mode:
                 break
+
+            if variant == AI_CHAT_MODE_INLINE:
+                if click_inline_ai_assistant_entry(driver, name, site, timeout=12):
+                    opened_mode = AI_CHAT_MODE_INLINE
+                    break
+                driver.switch_to.default_content()
+                time.sleep(2)
+                continue
 
             if click_ai_assistant_entry(driver, name, site):
                 if is_top_level_human_customer_service_page(driver):
                     entered_human_page = True
                     print(f"{get_now_time()} {name} {site} 点击 Assistant 后进入人工客服页面，不按 AI 悬浮窗处理<br>")
                     break
-                if wait_for_ai_chat_frame(driver, timeout=6):
-                    opened = True
+                opened_mode = wait_for_ai_chat_ready(driver, timeout=6, require_input=False)
+                if opened_mode:
                     break
 
             if click_ai_entry_fallback(driver, name, site):
@@ -1889,42 +2433,53 @@ def open_ai_contact_window(driver, name, site):
                     entered_human_page = True
                     print(f"{get_now_time()} {name} {site} 兜底点击后进入人工客服页面，不按 AI 悬浮窗处理<br>")
                     break
-                if wait_for_ai_chat_frame(driver, timeout=6):
-                    opened = True
+                opened_mode = wait_for_ai_chat_ready(driver, timeout=6, require_input=False)
+                if opened_mode:
                     break
 
             driver.switch_to.default_content()
             time.sleep(2)
 
-        if opened or entered_human_page:
+        if opened_mode or entered_human_page:
             break
 
-    if not opened:
+    if not opened_mode:
         dump_iframe_debug_info(driver)
         dump_ai_entry_debug_info(driver)
+        dump_ai_chat_mode_debug_info(driver)
         save_ai_open_debug_artifacts(driver, name, site)
         if entered_human_page:
             raise RuntimeError("进入了人工客服页面，不是 AI 客服悬浮窗")
+        if last_variant == AI_CHAT_MODE_INLINE:
+            raise RuntimeError("检测到新版内嵌 AI 助手，但打开后没有找到聊天输入框")
         raise RuntimeError("没有找到 AI 客服悬浮窗 iframe")
 
-    if not switch_to_ai_chat_frame(driver, require_input=False):
-        dump_iframe_debug_info(driver)
-        dump_ai_entry_debug_info(driver)
-        save_ai_open_debug_artifacts(driver, name, site)
-        raise RuntimeError("没有切换到 AI 客服悬浮窗 iframe")
-    recover_expired_ai_conversation(driver, name, site)
-    input_box = find_chat_input(driver, timeout=15, allow_default_content=False)
-    if not input_box and recover_expired_ai_conversation(driver, name, site):
-        input_box = find_chat_input(driver, timeout=8, allow_default_content=False)
-    if not input_box and recover_expired_ai_conversation(driver, name, site, force=True):
-        switch_to_ai_chat_frame(driver, require_input=False)
-        input_box = find_chat_input(driver, timeout=10, allow_default_content=False)
+    setattr(driver, "_mercado_ai_chat_mode", opened_mode)
+    if opened_mode == AI_CHAT_MODE_INLINE:
+        driver.switch_to.default_content()
+        input_box = find_inline_chat_input(driver, timeout=15)
+    else:
+        if not switch_to_ai_chat_frame(driver, require_input=False):
+            dump_iframe_debug_info(driver)
+            dump_ai_entry_debug_info(driver)
+            dump_ai_chat_mode_debug_info(driver)
+            save_ai_open_debug_artifacts(driver, name, site)
+            raise RuntimeError("没有切换到旧版 AI 客服 iframe")
+        recover_expired_ai_conversation(driver, name, site)
+        input_box = find_chat_input(driver, timeout=15, allow_default_content=False)
+        if not input_box and recover_expired_ai_conversation(driver, name, site):
+            input_box = find_chat_input(driver, timeout=8, allow_default_content=False)
+        if not input_box and recover_expired_ai_conversation(driver, name, site, force=True):
+            switch_to_ai_chat_frame(driver, require_input=False)
+            input_box = find_chat_input(driver, timeout=10, allow_default_content=False)
     if not input_box:
         dump_iframe_debug_info(driver)
         dump_ai_entry_debug_info(driver)
+        dump_ai_chat_mode_debug_info(driver)
         save_ai_open_debug_artifacts(driver, name, site)
-        raise RuntimeError("AI 客服悬浮窗已打开，但没有找到输入框")
-    print(f"{get_now_time()} {name} {site} 进入 AI 客服悬浮窗<br>")
+        raise RuntimeError(f"{opened_mode} AI 客服已打开，但没有找到输入框")
+    print(f"{get_now_time()} {name} {site} 进入 AI 客服，模式={opened_mode}<br>")
+    return opened_mode
 
 
 def use_one_browser_run_task(info):
@@ -2387,7 +2942,7 @@ def save_ai_appeal_group_record(
 
 
 # 申诉
-def shensu(name, site, form, message):
+def shensu(name, site, form, message, validate_open=False):
     """AI 客服申诉主入口，根据 form 分发到延误、侵权或投诉处理逻辑。"""
     print(f"{name} {site} 开始进行{form}申诉，自定义话术为{message}<br>")
     appeal_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
@@ -2396,6 +2951,7 @@ def shensu(name, site, form, message):
     driver = None
     appeal_error = ""
     window_id = ""
+    owned_window_lease = None
     skip_close_tab = False
 
     nickname_list = ["Bruce", "Jack", "Lucy", "James"]
@@ -2403,6 +2959,17 @@ def shensu(name, site, form, message):
 
     try:
         window_id = get_window_id_by_shop_name(name)
+        if current_thread_window_lease(window_id) is None:
+            owned_window_lease = create_window_lease(
+                window_id,
+                owner=f"ai_appeal:{name}",
+                shop_name=name,
+                task_type="ai_appeal",
+            )
+            if not owned_window_lease.acquire(timeout=0):
+                appeal_error = "窗口正在被其他任务占用"
+                print(f"{get_now_time()} {name} {site_name} {appeal_error}，本次不执行申诉<br>")
+                return appeal_error
         driver, res = connect_bit_browser(window_id)
         name = res.get("data", {}).get("name") or name
         if is_mercado_login_required_page(driver):
@@ -2411,8 +2978,11 @@ def shensu(name, site, form, message):
             print(f"{get_now_time()} {name} {site_name} 店铺窗口未登录，检测到邮箱登录页，本次不执行任何操作<br>")
             return "未登录"
 
-        driver.get(HELP_URL)
-        time.sleep(8)
+        if validate_open:
+            open_help_page_with_daily_validation(driver, name, site_name)
+        else:
+            driver.get(HELP_URL)
+            time.sleep(8)
         if is_mercado_login_required_page(driver):
             appeal_error = "未登录"
             skip_close_tab = True
@@ -2476,6 +3046,8 @@ def shensu(name, site, form, message):
         print(f"{get_now_time()} {name}{site}AI客服申诉执行完毕<br>")
         if driver is not None and not skip_close_tab:
             close_current_tab_keep_browser(driver, name, site)
+        if owned_window_lease is not None:
+            owned_window_lease.release()
 
 
 def handle_infraction(window_id, driver, name, site, message, nickname):
@@ -2864,12 +3436,14 @@ def get_infraction_orders(window_id, name, site):
 def checkChatEnd(driver, name, site):
     """检查 AI 客服会话是否已经结束。"""
     try:
-        switch_to_ai_chat_frame(driver)
+        if not activate_ai_chat_context(driver, require_input=False):
+            return False
         WebDriverWait(driver, 5).until(
             EC.visibility_of_element_located(
                 (
                     By.XPATH,
-                    "//*[contains(text(), 'This chat has ended') or contains(text(), 'chat has ended')]",
+                    "//*[contains(text(), 'This chat has ended') or contains(text(), 'chat has ended') "
+                    "or contains(text(), '聊天已结束') or contains(text(), '对话已结束')]",
                 )
             )
         )
@@ -2880,9 +3454,79 @@ def checkChatEnd(driver, name, site):
     return False
 
 
+def get_inline_agent_messages(driver):
+    """从新版顶层 #sa-assistant-chat 容器读取客服侧消息。"""
+    driver.switch_to.default_content()
+    try:
+        return driver.execute_script(
+            """
+            function deepElements(root = document) {
+                const out = [];
+                const walk = (node) => {
+                    const elements = node.querySelectorAll ? Array.from(node.querySelectorAll('*')) : [];
+                    for (const el of elements) {
+                        out.push(el);
+                        if (el.shadowRoot) walk(el.shadowRoot);
+                    }
+                };
+                walk(root);
+                return out;
+            }
+
+            function visible(el) {
+                const rect = el.getBoundingClientRect();
+                const style = window.getComputedStyle(el);
+                return !!(rect.width || rect.height || el.getClientRects().length)
+                    && style.visibility !== 'hidden'
+                    && style.display !== 'none';
+            }
+
+            function marker(el) {
+                return [
+                    String(el.className || ''),
+                    el.getAttribute('data-testid') || '',
+                    el.getAttribute('data-role') || '',
+                    el.getAttribute('data-author') || '',
+                    el.getAttribute('data-sender') || '',
+                    el.getAttribute('data-message-author') || '',
+                    el.getAttribute('aria-label') || ''
+                ].join(' ').toLowerCase();
+            }
+
+            function isAgentMessage(el) {
+                const value = marker(el);
+                const agent = /from-agent|agent-message|assistant-message|message[^ ]*[-_ ](agent|assistant)|sender[^ ]*[-_ ](agent|assistant)|\\b(agent|assistant)\\b/.test(value);
+                const user = /from-user|user-message|seller-message|message[^ ]*[-_ ](user|seller|client)/.test(value);
+                return agent && !user;
+            }
+
+            const all = deepElements(document);
+            const root = all.find((el) => el.id === 'sa-assistant-chat');
+            if (!root) return [];
+            return deepElements(root)
+                .filter((el) => visible(el) && isAgentMessage(el))
+                .filter((el) => !deepElements(el).some((child) => visible(child) && isAgentMessage(child)))
+                .map((el) => (el.innerText || '').trim())
+                .filter(Boolean);
+            """
+        ) or []
+    except Exception:
+        return []
+
+
 def get_agent_messages(driver):
     """读取 AI 客服窗口中客服侧的消息文本。"""
-    switch_to_ai_chat_frame(driver)
+    mode = activate_ai_chat_context(driver, require_input=False)
+    if not mode:
+        return []
+    if mode == AI_CHAT_MODE_INLINE:
+        messages = get_inline_agent_messages(driver)
+        if messages:
+            print("AI客服明文回复：<br>" + "<br>".join(messages) + "<br>")
+        else:
+            print("AI客服明文回复：暂无<br>")
+        return messages
+
     message_selectors = [
         (By.CSS_SELECTOR, ".chat-ui-message-bubble.chat-ui-message-bubble--from-agent"),
         (By.CSS_SELECTOR, "[class*='message-bubble--from-agent']"),

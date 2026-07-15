@@ -100,6 +100,13 @@ def inset_pago_info(pago_list):
     return _request("POST", "/api/db/pago/bulk", json={"rows": pago_list})
 
 
+def insert_zying_product_info(product_list):
+    if DB_MODE == "mysql":
+        return _local_call("insert_zying_product_info", product_list)
+    data = _request("POST", "/api/db/zying-products/bulk", json={"rows": product_list})
+    return (data or {}).get("count", 0)
+
+
 def insert_orders(line):
     if DB_MODE == "mysql":
         return _local_call("insert_orders", line)
@@ -165,6 +172,48 @@ def get_latest_reputation_info():
     if DB_MODE == "mysql":
         return _local_call("get_latest_reputation_info")
     return _request("GET", "/api/db/reputation/latest")
+
+
+def upsert_window_anomaly(
+    window_id,
+    window_name,
+    site="",
+    anomaly_type="需要登录",
+    reason="",
+    source="bit_daily_task",
+):
+    payload = {
+        "window_id": window_id,
+        "window_name": window_name,
+        "site": site,
+        "anomaly_type": anomaly_type,
+        "reason": reason,
+        "source": source,
+    }
+    if DB_MODE == "mysql":
+        return _local_call("upsert_window_anomaly", **payload)
+    return _request("POST", "/api/db/window-anomalies", timeout=10, json=payload)
+
+
+def resolve_window_anomaly(window_id):
+    if DB_MODE == "mysql":
+        return _local_call("resolve_window_anomaly", window_id)
+    return _request(
+        "POST",
+        "/api/db/window-anomalies/resolve",
+        timeout=10,
+        json={"window_id": window_id},
+    )
+
+
+def get_window_anomalies(active_only=True, limit=500):
+    if DB_MODE == "mysql":
+        return _local_call("get_window_anomalies", active_only, limit)
+    return _request(
+        "GET",
+        "/api/db/window-anomalies",
+        params={"active_only": "1" if active_only else "0", "limit": limit},
+    )
 
 
 def login_workbench_user(username, password):

@@ -1,6 +1,14 @@
 import requests
 import json
+import threading
 import time
+
+from bit.bit_runtime_lock import (
+    create_window_lease,
+    current_thread_window_lease,
+    get_lock_owner,
+    window_lock_key,
+)
 
 # 官方文档地址
 # https://doc2.bitbrowser.cn/jiekou/ben-di-fu-wu-zhi-nan.html
@@ -9,6 +17,8 @@ import time
 
 url = "http://127.0.0.1:54345"
 headers = {"Content-Type": "application/json"}
+_AUTO_LEASES = {}
+_AUTO_LEASES_GUARD = threading.Lock()
 
 
 def createBrowser():  # 创建或者更新窗口，指纹参数 browserFingerPrint 如没有特定需求，只需要指定下内核即可，如果需要更详细的参数，请参考文档
@@ -47,18 +57,70 @@ def updateBrowser():  # 更新窗口，支持批量更新和按需更新，ids �
 
 
 def openBrowser(id):  # 直接指定ID打开窗口，也可以使用 createBrowser 方法返回的ID
+    auto_lease = None
+    if current_thread_window_lease(id) is None:
+        auto_lease = create_window_lease(
+            id,
+            owner="bit_api.openBrowser",
+            task_type="legacy_browser_task",
+        )
+        if not auto_lease.acquire(timeout=0):
+            return {
+                "success": False,
+                "msg": "窗口正在被其他任务占用",
+                "lockOwner": get_lock_owner(window_lock_key(id)),
+            }
+        with _AUTO_LEASES_GUARD:
+            _AUTO_LEASES[(threading.get_ident(), str(id))] = auto_lease
     json_data = {"id": f"{id}"}
-    res = requests.post(
-        f"{url}/browser/open", data=json.dumps(json_data), headers=headers
-    ).json()
-    return res
+    try:
+        res = requests.post(
+            f"{url}/browser/open", data=json.dumps(json_data), headers=headers
+        ).json()
+        if auto_lease is not None and isinstance(res, dict) and res.get("success") is False:
+            with _AUTO_LEASES_GUARD:
+                _AUTO_LEASES.pop((threading.get_ident(), str(id)), None)
+            auto_lease.release()
+        return res
+    except Exception:
+        if auto_lease is not None:
+            with _AUTO_LEASES_GUARD:
+                _AUTO_LEASES.pop((threading.get_ident(), str(id)), None)
+            auto_lease.release()
+        raise
 
 
-def closeBrowser(id):  # 关闭窗口
+def closeBrowser(id, lease=None):  # 关闭窗口
+    active_lease = lease or current_thread_window_lease(id)
+    auto_lease_key = (threading.get_ident(), str(id))
+    with _AUTO_LEASES_GUARD:
+        auto_lease = _AUTO_LEASES.get(auto_lease_key)
+    temporary_lease = None
+    if active_lease is None or not active_lease.acquired:
+        temporary_lease = create_window_lease(
+            id,
+            owner="bit_api.closeBrowser",
+            task_type="close_only",
+        )
+        if not temporary_lease.acquire(timeout=0):
+            return {
+                "success": False,
+                "skipped": True,
+                "msg": "窗口正在被其他任务使用，已跳过关闭",
+                "lockOwner": get_lock_owner(window_lock_key(id)),
+            }
     json_data = {"id": f"{id}"}
-    requests.post(
-        f"{url}/browser/close", data=json.dumps(json_data), headers=headers, timeout=10
-    ).json()
+    try:
+        return requests.post(
+            f"{url}/browser/close", data=json.dumps(json_data), headers=headers, timeout=10
+        ).json()
+    finally:
+        if temporary_lease is not None:
+            temporary_lease.release()
+        if auto_lease is not None and active_lease is auto_lease:
+            with _AUTO_LEASES_GUARD:
+                _AUTO_LEASES.pop(auto_lease_key, None)
+            auto_lease.release()
 
 
 def deleteBrowser(id):  # 删除窗口

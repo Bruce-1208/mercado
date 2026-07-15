@@ -14,6 +14,7 @@ from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.support.wait import WebDriverWait
 
 from bit.bit_api import closeBrowser, openBrowser
+from bit.bit_runtime_lock import create_window_lease
 from bit.bit_clash import get_public_ip, switch_random_hongkong_node
 from bit.bit_db_api import inset_pago_info as api_inset_pago_info
 from bit.bit_db_api import insert_task_record as api_insert_task_record
@@ -1064,12 +1065,22 @@ def _run_pago_for_browser(row, sites=None):
     if not sites:
         return [], [("获取款项信息", name, "", "失败：未配置站点", get_now_time())]
 
+    lease = create_window_lease(
+        window_id,
+        owner=f"pago_collection:{name}",
+        shop_name=name,
+        task_type="pago_collection",
+    )
+    if not lease.acquire(timeout=0):
+        print(get_now_time() + name + "窗口已被其他任务占用，跳过本次款项采集")
+        return [], [("获取款项信息", name, "", "跳过：窗口被其他任务占用", get_now_time())]
+
     print(get_now_time() + "开始打开窗口:" + name)
-    driver = _connect_browser(window_id)
     pago_info_sum = []
     result = []
 
     try:
+        driver = _connect_browser(window_id)
         for site in sites:
             for i in range(1, 4):
                 try:
@@ -1093,9 +1104,10 @@ def _run_pago_for_browser(row, sites=None):
     finally:
         print(get_now_time() + "结束，正在关闭窗口")
         try:
-            closeBrowser(window_id)
+            closeBrowser(window_id, lease=lease)
         except Exception as e:
             print(get_now_time() + name + "关闭窗口失败", e)
+        lease.release()
         print(get_now_time() + "已经关闭窗口")
 
     return pago_info_sum, result

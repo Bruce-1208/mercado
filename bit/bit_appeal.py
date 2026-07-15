@@ -33,6 +33,12 @@ from bit_infractions_info import *
 
 
 CHAT_INFO_API_URL = "https://zeshun.nat100.top/api/v1/chat"
+HUMAN_SERVICE_HUB_URL = "https://global-selling.mercadolibre.com/help/hub/30928?source"
+HUMAN_SERVICE_CHAT_V2_URL = "https://global-selling.mercadolibre.com/help/chat/v2"
+SPANISH_RATE_LIMIT_MARKERS = (
+    "hubo un error accediendo a esta página",
+    "hubo un error accediendo a esta pagina",
+)
 
 SITE_REMOTE_VALUE_MAP = {
     "墨西哥": "MLM-remote",
@@ -146,6 +152,29 @@ def insert_chat_info_by_api(name, site, message, chat, response, time):
     return res.json()
 
 
+def is_spanish_rate_limited_page(driver):
+    """只有指定的 Mercado 西语错误页才判定为需要切换 IP。"""
+    try:
+        driver.switch_to.default_content()
+    except Exception:
+        pass
+    try:
+        page_text = driver.execute_script("return document.body ? document.body.innerText : ''") or ""
+    except Exception:
+        page_text = ""
+    try:
+        title = driver.title or ""
+    except Exception:
+        title = ""
+    try:
+        current_url = driver.current_url or ""
+    except Exception:
+        current_url = ""
+
+    visible_text = f"{page_text}\n{title}\n{current_url}".lower()
+    return any(marker in visible_text for marker in SPANISH_RATE_LIMIT_MARKERS)
+
+
 def fast_navigate(driver, url, stop_after=4):
     """快速跳转页面：不等待所有资源加载，避免 Mercado help 页面长时间卡住。"""
     driver.switch_to.default_content()
@@ -162,6 +191,29 @@ def fast_navigate(driver, url, stop_after=4):
         driver.execute_script("window.stop();")
     except Exception:
         pass
+
+
+def open_human_service_hub_with_ip_retry(driver, name, site, max_hongkong_switches=3):
+    """打开指定人工客服 hub；只有指定西语错误页才切换香港 IP。"""
+    max_hongkong_switches = max(0, int(max_hongkong_switches))
+    fast_navigate(driver, HUMAN_SERVICE_HUB_URL, stop_after=3)
+    for attempt in range(1, max_hongkong_switches + 2):
+        if not is_spanish_rate_limited_page(driver):
+            return True
+        if attempt > max_hongkong_switches:
+            raise RuntimeError(
+                f"{name} {site} 指定西语限频页持续出现，已切换香港 IP "
+                f"{max_hongkong_switches} 次仍未恢复"
+            )
+        print(
+            f"{name} {site}检测到指定西语限频页，"
+            f"正在第{attempt}/{max_hongkong_switches}次切换香港 IP<br>"
+        )
+        switch_random_hongkong_node()
+        get_public_ip()
+        fast_navigate(driver, HUMAN_SERVICE_HUB_URL, stop_after=3)
+
+    return False
 
 
 def fast_open_new_tab(driver, url, stop_after=4):
@@ -301,28 +353,35 @@ def close_appeal_tabs(driver, base_handles, name, site):
 
 
 def open_human_service_chat(driver, name, site):
-    """打开人工客服聊天入口：先 hub 点精准 chat 入口，否则进入 chat/v2 继续对话。"""
-    chat_url = "https://global-selling.mercadolibre.com/help/chat/v2"
+    """当前标签优先打开指定 hub；进入对话窗失败时再回退 chat/v2。"""
     entry_xpath = "//*[self::button or self::a][contains(., 'We’ll send you a message in less than 5 min') or contains(., \"We'll send you a message in less than 5 min\")]"
 
-    if open_hub_new_tab_with_retry(driver, name, site, retries=3):
-        try:
-            element = WebDriverWait(driver, 2).until(EC.element_to_be_clickable((By.XPATH, entry_xpath)))
-            driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", element)
-            driver.execute_script("arguments[0].click();", element)
-            print(f"{get_now_time()} {name} {site} hub 页面点击人工客服 chat 入口成功<br>")
-            return wait_after_human_entry_click(driver, name, site)
-        except Exception:
-            print(f"{get_now_time()} {name} {site} hub 页面没有可点击 chat 入口，进入 chat/v2 继续对话<br>")
-    else:
-        print(f"{get_now_time()} {name} {site} hub 页面多次打开异常，进入 chat/v2 继续对话<br>")
+    try:
+        current_url = driver.current_url or ""
+    except Exception:
+        current_url = ""
+    if "/help/hub/30928" not in current_url or is_spanish_rate_limited_page(driver):
+        open_human_service_hub_with_ip_retry(driver, name, site)
 
-    fast_navigate(driver, chat_url, stop_after=3)
+    if wait_for_human_chat_input(driver, timeout=2) or switch_to_latest_chat_input_tab(driver, timeout=1):
+        print(f"{get_now_time()} {name} {site} hub 页面人工客服输入框已就绪<br>")
+        return True
+
+    try:
+        element = WebDriverWait(driver, 3).until(EC.element_to_be_clickable((By.XPATH, entry_xpath)))
+        driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", element)
+        driver.execute_script("arguments[0].click();", element)
+        print(f"{get_now_time()} {name} {site} hub 页面点击人工客服 chat 入口成功<br>")
+        return wait_after_human_entry_click(driver, name, site)
+    except Exception as e:
+        print(f"{get_now_time()} {name} {site} hub 进入对话窗失败，回退 chat/v2：{e}<br>")
+
+    fast_navigate(driver, HUMAN_SERVICE_CHAT_V2_URL, stop_after=3)
     if wait_for_human_chat_input(driver, timeout=2) or switch_to_latest_chat_input_tab(driver, timeout=1):
         print(f"{get_now_time()} {name} {site} chat/v2 聊天页已就绪<br>")
         return True
     save_human_service_debug_artifacts(driver, name, site)
-    raise RuntimeError("进入人工客服失败：hub 没有 chat 入口，chat/v2 也没有找到输入框")
+    raise RuntimeError("进入人工客服失败：hub 对话窗和 chat/v2 均没有找到输入框")
 
 
 def wait_after_human_entry_click(driver, name, site):
@@ -337,14 +396,7 @@ def wait_after_human_entry_click(driver, name, site):
         print(f"{get_now_time()} {name} {site} 人工客服输入框已出现<br>")
         return True
 
-    print(f"{get_now_time()} {name} {site} 入口已点击但未见输入框，直接进入聊天页兜底<br>")
-    fast_navigate(driver, "https://global-selling.mercadolibre.com/help/chat/v2", stop_after=3)
-    if wait_for_human_chat_input(driver, timeout=2) or switch_to_latest_chat_input_tab(driver, timeout=1):
-        print(f"{get_now_time()} {name} {site} 直接聊天页输入框已出现<br>")
-        return True
-
-    save_human_service_debug_artifacts(driver, name, site)
-    raise RuntimeError("点击人工客服入口后没有出现聊天输入框")
+    raise RuntimeError("点击 hub 人工客服入口后没有出现聊天输入框")
 
 
 def get_human_chat_input(driver, timeout=30):
@@ -584,6 +636,11 @@ def use_one_browser_run_task(info):
         print("脚本运行异常:" + traceback.format_exc())
 
 
+def should_load_infraction_orders(form, message):
+    """仅无自定义话术的侵权申诉才需要遍历侵权列表。"""
+    return form == "侵权" and message == ""
+
+
 # 申诉
 def shensu(name, site, form, message, mode="人工客服"):
     print(f"{name} {site} 开始进行{form}申诉，话术为{message}<br>")
@@ -630,18 +687,7 @@ def shensu(name, site, form, message, mode="人工客服"):
         pass
 
     # driver.switch_to.new_window('tab') 决定是否打开新窗口
-    fast_navigate(driver, "https://global-selling.mercadolibre.com/help/chat/v2", stop_after=3)
-    for i in range(3):
-        try:
-            page_text = driver.execute_script("return document.body ? document.body.innerText : ''") or ""
-            if not re.search(r"too many requests|429|access denied|rate limit|限频", page_text, re.I):
-                break
-            print(f"{name} {site}美客多限频，正在第{i + 1}次切换网络<br>")
-            switch_random_hongkong_node()
-            get_public_ip()
-            open_hub_new_tab_with_retry(driver, name, site, retries=2)
-        except Exception:
-            break
+    open_human_service_hub_with_ip_retry(driver, name, site)
 
     words = []
     nickname_list = ["Bruce", "Jack", "Lucy", "James"]
@@ -688,7 +734,7 @@ def shensu(name, site, form, message, mode="人工客服"):
         if (orders_random == "" and message == ""):
             close_appeal_tabs(driver, appeal_base_handles, name, site)
             return "没有可以申诉的订单"
-    if (form == "侵权"):
+    if should_load_infraction_orders(form, message):
         infraction_random = get_infraction_orders_random(window_id,name, site, 10)
     try:
         open_human_service_chat(driver, name, site)
@@ -731,7 +777,7 @@ def shensu(name, site, form, message, mode="人工客服"):
             )
 
     except Exception as e:
-        fast_navigate(driver, "https://global-selling.mercadolibre.com/help/chat/v2", stop_after=3)
+        fast_navigate(driver, HUMAN_SERVICE_CHAT_V2_URL, stop_after=3)
         print(get_now_time() + name + site + "继续与客服对话")
         # 全部聊天记录
         chat_ai(driver, name, site, form, initial_huashu, nickname)
