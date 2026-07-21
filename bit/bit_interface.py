@@ -45,6 +45,7 @@ import bit.bit_infractions_info as bit_infractions_info
 import bit.bit_reputation_info as bit_reputation_info
 from bit.bit_appeal import *
 from bit.bit_runtime_lock import create_window_lease
+from bit.bit_mercado_login import is_login_blocking_result
 from bit.bit_utils import *
 from bit.bit_api import *
 
@@ -326,6 +327,60 @@ _daily_task_state = {
     "params": {},
 }
 
+APPEAL_SITES = ("墨西哥", "巴西", "哥伦比亚", "智利", "阿根廷", "乌拉圭")
+APPEAL_LOOP_COUNTS = (10, 20, 50)
+DEFAULT_APPEAL_LOOP_COUNT = 10
+PERMANENT_APPEAL_LOOP_COUNT = 0
+AI_APPEAL_ROUND_INTERVAL_SECONDS = 60
+MANUAL_APPEAL_ROUND_INTERVAL_SECONDS = 600
+# 保留旧常量供其他模块调用，默认值等同人工客服的轮次间隔。
+APPEAL_ROUND_INTERVAL_SECONDS = MANUAL_APPEAL_ROUND_INTERVAL_SECONDS
+APPEAL_STREAM_HEARTBEAT_SECONDS = 15
+_appeal_task_lock = threading.Lock()
+_appeal_tasks = {}
+
+
+def normalize_appeal_task_id(task_id):
+    task_id = str(task_id or "").strip()[:96]
+    if not task_id:
+        return ""
+    allowed = set("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-_")
+    return task_id if all(char in allowed for char in task_id) else ""
+
+
+def register_appeal_task(task_id, metadata=None):
+    task_id = normalize_appeal_task_id(task_id)
+    if not task_id:
+        raise ValueError("任务编号格式无效")
+    with _appeal_task_lock:
+        if task_id in _appeal_tasks:
+            return None
+        stop_event = threading.Event()
+        _appeal_tasks[task_id] = {
+            "stop_event": stop_event,
+            "status": "running",
+            "started_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            **(metadata or {}),
+        }
+        return stop_event
+
+
+def request_appeal_task_stop(task_id):
+    task_id = normalize_appeal_task_id(task_id)
+    with _appeal_task_lock:
+        task = _appeal_tasks.get(task_id)
+        if task is None:
+            return False
+        task["status"] = "stopping"
+        task["stop_event"].set()
+        return True
+
+
+def finish_appeal_task(task_id):
+    task_id = normalize_appeal_task_id(task_id)
+    with _appeal_task_lock:
+        _appeal_tasks.pop(task_id, None)
+
 
 class ThreadLogStream:
     def __init__(self, original_stream):
@@ -570,58 +625,211 @@ def shensu_logic_previous(name, site, form, message):
         time.sleep(600)
 
 
-def shensu_logic(name, site, form, message, mode):
-    for i in range(1, 11):
-        output_queue = queue.Queue()
-        task_result = {"value": None}
+def resolve_appeal_sites(sites):
+    """规范化控制台选中的站点，兼容旧版单个 site 字符串调用。"""
+    raw_sites = [sites] if isinstance(sites, str) else list(sites or [])
+    selected_sites = []
+    invalid_sites = []
+    for raw_site in raw_sites:
+        site = str(raw_site or "").strip()
+        if not site:
+            continue
+        if site not in APPEAL_SITES:
+            invalid_sites.append(site)
+            continue
+        if site not in selected_sites:
+            selected_sites.append(site)
+    if invalid_sites:
+        raise ValueError(f"不支持的站点：{'、'.join(invalid_sites)}")
+    if not selected_sites:
+        raise ValueError("请至少选择一个站点")
+    return tuple(selected_sites)
 
-        def run_task():
-            register_thread_log_queue(output_queue)
-            window_lease = None
-            try:
-                print(f"{get_now_time()} --- 任务启动第 {i} 次：{name} {site}，客服模式：{mode}")
-                window_id = getWindowidByName(name)
-                window_lease = create_window_lease(
-                    window_id,
-                    owner=f"interface_appeal:{name}",
-                    shop_name=name,
-                    task_type="interface_appeal",
-                )
-                if not window_lease.acquire(timeout=0):
-                    task_result["value"] = "窗口正在被其他任务占用"
-                    print(f"{get_now_time()} {name} {site} {task_result['value']}，本轮已跳过")
-                    return
-                if mode == "AI客服":
-                    task_result["value"] = bit_appeal_ai.shensu(name, site, form, message)
-                else:
-                    task_result["value"] = shensu(name, site, form, message, "人工客服")
-                print(f"{get_now_time()} {name} {site} 申诉执行完毕：{task_result['value']}")
-            except Exception as e:
-                print(f"{get_now_time()} 发生错误: {str(e)}")
-                traceback.print_exc()
-            finally:
-                if window_lease is not None:
-                    window_lease.release()
-                unregister_thread_log_queue()
-                output_queue.put(None)
 
-        task_thread = threading.Thread(target=run_task, daemon=True)
-        task_thread.start()
+def normalize_appeal_loop_count(value):
+    """返回申诉轮数；0 表示永久循环，其他值只允许 10、20、50。"""
+    text = str(value if value is not None else DEFAULT_APPEAL_LOOP_COUNT).strip()
+    if text.casefold() in ("0", "permanent", "forever", "永久"):
+        return PERMANENT_APPEAL_LOOP_COUNT
+    try:
+        loop_count = int(text)
+    except (TypeError, ValueError) as exc:
+        raise ValueError("循环次数只支持 10、20、50 或永久") from exc
+    if loop_count not in APPEAL_LOOP_COUNTS:
+        raise ValueError("循环次数只支持 10、20、50 或永久")
+    return loop_count
 
-        while True:
-            text = output_queue.get()
-            if text is None:
-                break
-            yield format_log_text(text)
-            sys.stdout.flush()
 
-        if task_result.get("value") == "未登录":
-            yield f"{get_now_time()} {name} {site} 未登录，已停止后续申诉循环\n"
+def get_appeal_round_interval(mode):
+    """AI 客服每轮间隔 1 分钟，人工客服每轮间隔 10 分钟。"""
+    if mode == "AI客服":
+        return AI_APPEAL_ROUND_INTERVAL_SECONDS
+    return MANUAL_APPEAL_ROUND_INTERVAL_SECONDS
+
+
+def stream_task_output(output_queue, stop_event=None):
+    """持续转发任务日志，并在 AI 长时间无输出时发送心跳，避免请求连接超时。"""
+    heartbeat_seconds = max(1, APPEAL_STREAM_HEARTBEAT_SECONDS)
+    stop_notice_sent = False
+    while True:
+        if stop_event is not None and stop_event.is_set() and not stop_notice_sent:
+            yield (
+                f"{get_now_time()} 已收到终结请求，等待当前站点安全结束并释放窗口\n"
+            )
+            stop_notice_sent = True
+        try:
+            text = output_queue.get(timeout=heartbeat_seconds)
+        except queue.Empty:
+            yield f"{get_now_time()} 申诉任务仍在运行（保持连接）\n"
+            continue
+        if text is None:
             return
+        yield format_log_text(text)
+        sys.stdout.flush()
 
-        yield f"{get_now_time()} {name} {site} 本轮结束，等待十分钟后进入下一轮\n"
-        getWindowidByName(name)
-        time.sleep(600)
+
+def stream_appeal_round_wait(seconds, stop_event=None):
+    """分段等待下一轮，并持续向前端发送状态，避免静默导致连接断开。"""
+    remaining = max(0, int(seconds))
+    heartbeat_seconds = max(1, APPEAL_STREAM_HEARTBEAT_SECONDS)
+    while remaining > 0:
+        wait_seconds = min(heartbeat_seconds, remaining)
+        if stop_event is not None:
+            if stop_event.wait(wait_seconds):
+                yield f"{get_now_time()} 已终结本次申诉任务，不再进入下一轮\n"
+                return False
+        else:
+            time.sleep(wait_seconds)
+        remaining -= wait_seconds
+        if remaining > 0:
+            yield f"{get_now_time()} 等待下一轮，剩余 {remaining} 秒（保持连接）\n"
+    return True
+
+
+def shensu_logic(
+    name,
+    sites,
+    form,
+    message,
+    mode,
+    loop_count=DEFAULT_APPEAL_LOOP_COUNT,
+    stop_event=None,
+):
+    target_sites = resolve_appeal_sites(sites)
+    round_limit = normalize_appeal_loop_count(loop_count)
+    multiple_sites_selected = len(target_sites) > 1
+    round_interval_seconds = get_appeal_round_interval(mode)
+    round_interval_minutes = round_interval_seconds // 60
+    round_number = 0
+    cancellation_enabled = stop_event is not None
+    stop_event = stop_event or threading.Event()
+
+    while round_limit == PERMANENT_APPEAL_LOOP_COUNT or round_number < round_limit:
+        if stop_event.is_set():
+            yield f"{get_now_time()} 已终结本次申诉任务\n"
+            return
+        round_number += 1
+        if multiple_sites_selected:
+            yield (
+                f"{get_now_time()} 第 {round_number} 轮开始，将依次执行选中的 "
+                f"{len(target_sites)} 个站点：{'、'.join(target_sites)}\n"
+            )
+
+        for current_site in target_sites:
+            if stop_event.is_set():
+                yield f"{get_now_time()} 已终结本次申诉任务，不再执行后续站点\n"
+                return
+            output_queue = queue.Queue()
+            task_result = {"value": None}
+
+            def run_task(run_site=current_site, run_round=round_number):
+                register_thread_log_queue(output_queue)
+                window_lease = None
+                try:
+                    print(
+                        f"{get_now_time()} --- 第 {run_round} 轮任务启动："
+                        f"{name} {run_site}，客服模式：{mode}"
+                    )
+                    window_id = getWindowidByName(name)
+                    window_lease = create_window_lease(
+                        window_id,
+                        owner=f"interface_appeal:{name}",
+                        shop_name=name,
+                        task_type="interface_appeal",
+                    )
+                    if not window_lease.acquire(timeout=0):
+                        task_result["value"] = "窗口正在被其他任务占用"
+                        print(f"{get_now_time()} {name} {run_site} {task_result['value']}，本轮已跳过")
+                        return
+                    if mode == "AI客服":
+                        task_result["value"] = bit_appeal_ai.shensu(name, run_site, form, message)
+                    else:
+                        task_result["value"] = shensu(name, run_site, form, message, "人工客服")
+                    print(f"{get_now_time()} {name} {run_site} 申诉执行完毕：{task_result['value']}")
+                except Exception as e:
+                    print(f"{get_now_time()} {name} {run_site} 发生错误: {str(e)}")
+                    traceback.print_exc()
+                finally:
+                    if window_lease is not None:
+                        window_lease.release()
+                    unregister_thread_log_queue()
+                    output_queue.put(None)
+
+            task_thread = threading.Thread(target=run_task, daemon=True)
+            task_thread.start()
+
+            yield from stream_task_output(output_queue, stop_event=stop_event)
+
+            if stop_event.is_set():
+                yield (
+                    f"{get_now_time()} {name} {current_site} 当前操作已安全结束，"
+                    "本次任务已终结\n"
+                )
+                return
+
+            if is_login_blocking_result(task_result.get("value")):
+                yield (
+                    f"{get_now_time()} {name} {current_site} "
+                    f"{task_result.get('value')}，已停止该店铺后续站点和申诉循环\n"
+                )
+                return
+
+        has_next_round = (
+            round_limit == PERMANENT_APPEAL_LOOP_COUNT
+            or round_number < round_limit
+        )
+        if multiple_sites_selected:
+            yield (
+                f"{get_now_time()} 第 {round_number} 轮选中站点执行完成，"
+                + (
+                    f"等待 {round_interval_minutes} 分钟后开始下一轮\n"
+                    if has_next_round
+                    else "已达到规定循环次数\n"
+                )
+            )
+        else:
+            yield (
+                f"{get_now_time()} {name} {target_sites[0]} 第 {round_number} 轮结束，"
+                + (
+                    f"等待 {round_interval_minutes} 分钟后进入下一轮\n"
+                    if has_next_round
+                    else "已达到规定循环次数\n"
+                )
+            )
+        if (
+            round_limit != PERMANENT_APPEAL_LOOP_COUNT
+            and round_number >= round_limit
+        ):
+            yield (
+                f"{get_now_time()} 已完成规定的 {round_limit} 轮申诉，任务结束\n"
+            )
+            return
+        wait_completed = yield from stream_appeal_round_wait(
+            round_interval_seconds,
+            stop_event=stop_event if cancellation_enabled else None,
+        )
+        if not wait_completed:
+            return
 
 
 @app.route('/api/run_shensu', methods=['GET'])
@@ -629,16 +837,74 @@ def shensu_logic(name, site, form, message, mode):
 def api_run_shensu():
     # 获取前端传入的参数
     name = request.args.get("name", "")
-    site = request.args.get("site", "")
+    try:
+        sites = resolve_appeal_sites(request.args.getlist("site"))
+    except ValueError as exc:
+        return jsonify({"status": "error", "message": str(exc)}), 400
+    try:
+        loop_count = normalize_appeal_loop_count(
+            request.args.get("loop_count", DEFAULT_APPEAL_LOOP_COUNT)
+        )
+    except ValueError as exc:
+        return jsonify({"status": "error", "message": str(exc)}), 400
     form = request.args.get("form", "")
     message = request.args.get("message", "")
     mode = request.args.get("mode", "人工客服")
+    task_id = normalize_appeal_task_id(request.args.get("task_id", ""))
+    if not task_id:
+        task_id = secrets.token_hex(16)
+    stop_event = register_appeal_task(
+        task_id,
+        {
+            "name": name,
+            "sites": list(sites),
+            "loop_count": "永久" if loop_count == 0 else loop_count,
+            "form": form,
+            "mode": mode,
+        },
+    )
+    if stop_event is None:
+        return jsonify({"status": "error", "message": "该任务编号正在运行"}), 409
+
+    def generate():
+        try:
+            yield f"{get_now_time()} 申诉任务编号：{task_id}\n"
+            yield from shensu_logic(
+                name,
+                sites,
+                form,
+                message,
+                mode,
+                loop_count=loop_count,
+                stop_event=stop_event,
+            )
+        finally:
+            stop_event.set()
+            finish_appeal_task(task_id)
 
     # 返回流式响应，mimetype 设为 text/html 或 text/event-stream
-    response = Response(shensu_logic(name, site, form, message, mode), mimetype='text/plain; charset=utf-8')
+    response = Response(generate(), mimetype='text/plain; charset=utf-8')
     response.headers["Cache-Control"] = "no-cache"
     response.headers["X-Accel-Buffering"] = "no"
+    response.headers["X-Appeal-Task-ID"] = task_id
     return response
+
+
+@app.route('/api/run_shensu/stop', methods=['POST'])
+@login_required
+def api_stop_shensu():
+    data = request.get_json(silent=True) or {}
+    task_id = normalize_appeal_task_id(data.get("task_id"))
+    if not task_id:
+        return jsonify({"status": "error", "message": "缺少有效任务编号"}), 400
+    if not request_appeal_task_stop(task_id):
+        return jsonify({"status": "error", "message": "任务已结束或不存在"}), 404
+    return jsonify(
+        {
+            "status": "success",
+            "message": "已提交终结请求，当前站点结束后将释放窗口并停止后续任务",
+        }
+    )
 
 
 @app.route('/api/infractions/latest', methods=['GET'])

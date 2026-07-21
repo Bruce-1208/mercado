@@ -21,6 +21,7 @@ from bit.bit_db_api import (
     upsert_window_anomaly,
 )
 from bit.bit_runtime_lock import InterProcessLock, create_window_lease, get_lock_owner
+from bit.bit_mercado_login import is_login_blocking_result
 from bit.bit_utils import get_now_time
 
 
@@ -59,7 +60,7 @@ def get_daily_task_lock_owner():
 def _is_login_required_result(value):
     text = str(value or "")
     return (
-        "未登录" in text
+        is_login_blocking_result(text)
         or "Fill out your e-mail address to log in" in text
         or "Fill out your email address to log in" in text
     )
@@ -229,13 +230,22 @@ def _appeal_one_shop_infractions_locked(
                 results.append({"site": site_code, "count": count, "result": result})
                 print(
                     f"{get_now_time()} {name} {site_code} 检测到登录失效，"
-                    f"立即终止该店铺任务并关闭浏览器窗口<br>"
+                    f"立即终止该店铺任务<br>"
                 )
-                try:
-                    close_result = closeBrowser(window_id, lease=window_lease)
-                    print(f"{get_now_time()} {name} 关闭窗口结果：{close_result}<br>")
-                except Exception as e:
-                    print(f"{get_now_time()} {name} 登录失效后关闭窗口失败：{e}<br>")
+                if any(
+                    marker in str(result or "")
+                    for marker in ("需要验证码", "需要人机验证")
+                ):
+                    print(
+                        f"{get_now_time()} {name} 已保留登录验证页面，"
+                        "等待收到邮件提醒后人工处理<br>"
+                    )
+                else:
+                    try:
+                        close_result = closeBrowser(window_id, lease=window_lease)
+                        print(f"{get_now_time()} {name} 关闭窗口结果：{close_result}<br>")
+                    except Exception as e:
+                        print(f"{get_now_time()} {name} 登录失效后关闭窗口失败：{e}<br>")
                 _save_login_anomaly(window_id, name, site_code, result)
                 exit_shop = True
                 break

@@ -43,6 +43,10 @@ import random
 from bit.bit_utils import get_latest_modified_file, get_bit_path, parser_delay_date, get_now_time, getWindowidByName
 from bit.bit_api import *
 from bit.bit_runtime_lock import create_window_lease, current_thread_window_lease
+from bit.bit_mercado_login import (
+    ensure_mercado_login_from_home,
+    is_mercado_login_page as _is_mercado_login_page,
+)
 from bit.bit_download import download_relay_mail
 from bit.bit_db_api import get_latest_infraction_info, insert_ai_appeal_record
 from AI_Agent.qianwen import *
@@ -82,6 +86,8 @@ AI_FRAME_URL_MARKERS = ("meli-ai-chat", "maxwell/new-chat")
 AI_FRAME_MARKERS = ("meli-ai-chat", "maxwell", "new-chat", "ai chat", "assistant", "chat", "meli")
 AI_CHAT_MODE_INLINE = "inline_dom"
 AI_CHAT_MODE_IFRAME = "legacy_iframe"
+AI_AGENT_REPLY_TIMEOUT_SECONDS = 180
+AI_AGENT_REPLY_POLL_SECONDS = 10
 AI_HELP_URLS = (
     HELP_URL,
     "https://global-selling.mercadolibre.com/help/v2",
@@ -254,35 +260,8 @@ def connect_bit_browser(window_id):
 
 
 def is_mercado_login_required_page(driver):
-    """识别 Mercado 登录页；命中后不再对该店铺窗口执行任何申诉操作。"""
-    if not driver:
-        return False
-    try:
-        driver.switch_to.default_content()
-    except Exception:
-        pass
-    try:
-        page_text = driver.execute_script("return document.body ? document.body.innerText : '';") or ""
-    except Exception:
-        page_text = ""
-    try:
-        current_url = driver.current_url or ""
-    except Exception:
-        current_url = ""
-    try:
-        title = driver.title or ""
-    except Exception:
-        title = ""
-
-    combined = f"{page_text}\n{title}\n{current_url}".lower()
-    login_markers = (
-        "fill out your e-mail address to log in",
-        "fill out your email address to log in",
-        "enter your e-mail address",
-        "ingresa tu e-mail",
-        "ingrese su e-mail",
-    )
-    return any(marker in combined for marker in login_markers)
+    """兼容旧调用点，统一使用共享的 Mercado 登录页识别。"""
+    return _is_mercado_login_page(driver)
 
 
 def get_mercado_page_open_state(driver):
@@ -2972,23 +2951,30 @@ def shensu(name, site, form, message, validate_open=False):
                 return appeal_error
         driver, res = connect_bit_browser(window_id)
         name = res.get("data", {}).get("name") or name
-        if is_mercado_login_required_page(driver):
-            appeal_error = "未登录"
+        login_result = ensure_mercado_login_from_home(
+            driver,
+            name,
+            window_id=window_id,
+        )
+        if not login_result.get("ok"):
+            appeal_error = login_result.get("status") or "未登录"
             skip_close_tab = True
-            print(f"{get_now_time()} {name} {site_name} 店铺窗口未登录，检测到邮箱登录页，本次不执行任何操作<br>")
-            return "未登录"
+            print(
+                f"{get_now_time()} {name} {site_name} "
+                f"{login_result.get('message') or appeal_error}<br>"
+            )
+            return appeal_error
+        print(
+            f"{get_now_time()} {name} {site_name} "
+            f"首页登录检测结果：{login_result.get('message')}，"
+            "继续执行 AI 客服申诉<br>"
+        )
 
         if validate_open:
             open_help_page_with_daily_validation(driver, name, site_name)
         else:
             driver.get(HELP_URL)
             time.sleep(8)
-        if is_mercado_login_required_page(driver):
-            appeal_error = "未登录"
-            skip_close_tab = True
-            print(f"{get_now_time()} {name} {site_name} 跳转帮助页后仍为登录页，本次不执行任何操作<br>")
-            return "未登录"
-
         select_site(driver, name, site_name)
 
         if form == "延误":
@@ -3106,7 +3092,7 @@ def handle_infraction(window_id, driver, name, site, message, nickname):
 
 
 def handle_delay(window_id, driver, name, site, message, nickname):
-    """处理延误申诉：下载最新延误表，按每 5 个订单一组循环发送给 AI 客服。"""
+    """处理延误申诉：按每 5 个订单一组发送，并逐组等待、记录 AI 客服回复。"""
     group_size = 5
     delay_orders = get_delay_orders_download_list(window_id, name, site)
     if not delay_orders:
@@ -3142,6 +3128,36 @@ def handle_delay(window_id, driver, name, site, message, nickname):
             },
         )
         print(f"{get_now_time()} {name} {site} 第 {index}/{len(groups)} 组延误申诉发送完成<br>")
+        response, latest_messages = wait_for_ai_agent_reply(
+            driver,
+            before_messages,
+            timeout=AI_AGENT_REPLY_TIMEOUT_SECONDS,
+            poll_interval=AI_AGENT_REPLY_POLL_SECONDS,
+        )
+        append_chat_log(
+            name,
+            site,
+            "delay_agent_reply" if response else "delay_reply_timeout",
+            message=huashu,
+            response=response,
+            chat=latest_messages,
+            extra={
+                "group_index": index,
+                "total_groups": len(groups),
+                "delay_ids": current_group,
+                "timeout_seconds": AI_AGENT_REPLY_TIMEOUT_SECONDS,
+            },
+        )
+        if response:
+            print(
+                f"{get_now_time()} {name} {site} 第 {index}/{len(groups)} 组"
+                f"AI 客服回复：{response}<br>"
+            )
+        else:
+            print(
+                f"{get_now_time()} {name} {site} 第 {index}/{len(groups)} 组"
+                f"连续 3 分钟没有读取到 AI 客服新回复<br>"
+            )
         if index < len(groups):
             time.sleep(20)
 
@@ -3528,6 +3544,9 @@ def get_agent_messages(driver):
         return messages
 
     message_selectors = [
+        # 2026-07 新版 Maxwell：完成的回复放在 message-item--assistant 下。
+        # 限定到 message-item 可排除仍在生成中的 thinking-indicator。
+        (By.CSS_SELECTOR, ".message-item--assistant .chat-message__content"),
         (By.CSS_SELECTOR, ".chat-ui-message-bubble.chat-ui-message-bubble--from-agent"),
         (By.CSS_SELECTOR, "[class*='message-bubble--from-agent']"),
         (By.CSS_SELECTOR, "[class*='message'][class*='from-agent']"),

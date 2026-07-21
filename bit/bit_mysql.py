@@ -9,7 +9,7 @@ from openpyxl import load_workbook
 
 # 1. 配置数据库连接信息
 config = {
-    'host': os.environ.get('MYSQL_HOST', os.environ.get('DB_HOST', '127.0.0.1')),
+    'host': os.environ.get('MYSQL_HOST', os.environ.get('DB_HOST', '192.168.1.11')),
     'user': os.environ.get('MYSQL_USER', os.environ.get('DB_USER', 'mercado')),
     'password': os.environ.get('MYSQL_PASSWORD', os.environ.get('DB_PASSWORD', 'mercado')),
     'database': os.environ.get('MYSQL_DATABASE', os.environ.get('DB_NAME', 'mercado')),
@@ -633,6 +633,8 @@ def _ensure_zying_product_table(cursor):
         CREATE TABLE IF NOT EXISTS `zying_product` (
             `id` BIGINT NOT NULL AUTO_INCREMENT,
             `产品编号` VARCHAR(128) NULL,
+            `分类编号` VARCHAR(64) NULL,
+            `产品分类` VARCHAR(2048) NULL,
             `主图链接` TEXT NULL,
             `标题` VARCHAR(1024) NULL,
             `售价` VARCHAR(128) NULL,
@@ -640,6 +642,7 @@ def _ensure_zying_product_table(cursor):
             `包装毛重` VARCHAR(128) NULL,
             `包装尺寸` VARCHAR(255) NULL,
             `审核状态` VARCHAR(128) NULL,
+            `疑似侵权` VARCHAR(8) NULL,
             `采集页码` INT NULL,
             `采集时间` DATETIME NOT NULL,
             `页面原始信息` LONGTEXT NULL,
@@ -651,6 +654,9 @@ def _ensure_zying_product_table(cursor):
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
         """
     )
+    _ensure_column(cursor, "zying_product", "分类编号", "VARCHAR(64) NULL")
+    _ensure_column(cursor, "zying_product", "产品分类", "VARCHAR(2048) NULL")
+    _ensure_column(cursor, "zying_product", "疑似侵权", "VARCHAR(8) NULL")
 
 
 def insert_zying_product_info(product_list):
@@ -666,6 +672,14 @@ def insert_zying_product_info(product_list):
                     normalized_list.append(
                         (
                             record.get("product_id", record.get("产品编号", "")),
+                            record.get(
+                                "product_category_id",
+                                record.get("分类编号", ""),
+                            ),
+                            record.get(
+                                "product_category",
+                                record.get("产品分类", ""),
+                            ),
                             record.get("main_image_url", record.get("主图链接", "")),
                             record.get("title", record.get("标题", "")),
                             record.get("sale_price", record.get("售价", "")),
@@ -682,23 +696,91 @@ def insert_zying_product_info(product_list):
                     continue
 
                 row = list(record)
+                if len(row) >= 13:
+                    normalized_list.append(tuple(row[:13] + [submit_time]))
+                    continue
                 if len(row) < 11:
                     row.extend([""] * (11 - len(row)))
-                normalized_list.append(tuple(row[:11] + [submit_time]))
+                normalized_list.append(
+                    tuple([row[0], "", ""] + row[1:11] + [submit_time])
+                )
 
             if normalized_list:
                 cursor.executemany(
                     """
                     INSERT INTO `zying_product` (
-                        `产品编号`, `主图链接`, `标题`, `售价`, `净收益`,
+                        `产品编号`, `分类编号`, `产品分类`, `主图链接`, `标题`, `售价`, `净收益`,
                         `包装毛重`, `包装尺寸`, `审核状态`, `采集页码`,
                         `采集时间`, `页面原始信息`, `提交时间`
-                    ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                    ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                     """,
                     normalized_list,
                 )
         connection.commit()
         return len(normalized_list)
+    except Exception:
+        connection.rollback()
+        raise
+    finally:
+        connection.close()
+
+
+def get_zying_risk_candidates(hours=24, limit=0):
+    """读取最近入库的智赢商品，供标题和主图侵权风险检查。"""
+    hours = max(1, int(hours))
+    limit = max(0, int(limit or 0))
+    since = datetime.now() - timedelta(hours=hours)
+    connection = pymysql.connect(**config)
+    try:
+        with connection.cursor() as cursor:
+            _ensure_zying_product_table(cursor)
+            sql = """
+                SELECT
+                    `id` AS `row_id`,
+                    `产品编号` AS `product_id`,
+                    `主图链接` AS `main_image_url`,
+                    `标题` AS `title`,
+                    `产品分类` AS `product_category`,
+                    `提交时间` AS `submitted_at`,
+                    `疑似侵权` AS `suspected_infringement`
+                FROM `zying_product`
+                WHERE `提交时间` >= %s
+                  AND COALESCE(`疑似侵权`, '') <> '是'
+                ORDER BY `id` ASC
+            """
+            params = [since.strftime("%Y-%m-%d %H:%M:%S")]
+            if limit:
+                sql += " LIMIT %s"
+                params.append(limit)
+            cursor.execute(sql, tuple(params))
+            return cursor.fetchall()
+    finally:
+        connection.close()
+
+
+def mark_zying_products_suspected(row_ids):
+    """把指定 zying_product 数据行的“疑似侵权”字段标记为“是”。"""
+    normalized_ids = sorted(
+        {
+            int(row_id)
+            for row_id in (row_ids or [])
+            if str(row_id or "").strip().isdigit()
+        }
+    )
+    if not normalized_ids:
+        return 0
+
+    connection = pymysql.connect(**config)
+    try:
+        with connection.cursor() as cursor:
+            _ensure_zying_product_table(cursor)
+            cursor.executemany(
+                "UPDATE `zying_product` SET `疑似侵权` = '是' WHERE `id` = %s",
+                [(row_id,) for row_id in normalized_ids],
+            )
+            updated_count = cursor.rowcount
+        connection.commit()
+        return updated_count
     except Exception:
         connection.rollback()
         raise

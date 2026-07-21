@@ -205,6 +205,76 @@
             box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12);
         }
 
+        .site-picker {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 6px;
+        }
+
+        .site-option {
+            position: relative;
+            margin: 0;
+            cursor: pointer;
+        }
+
+        .site-option input {
+            position: absolute;
+            width: 1px;
+            height: 1px;
+            opacity: 0;
+            pointer-events: none;
+        }
+
+        .site-option span {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 5px;
+            min-height: 34px;
+            padding: 7px 8px;
+            border: 1px solid var(--border);
+            border-radius: 7px;
+            background: #fff;
+            color: #344054;
+            font-size: 12px;
+            font-weight: 600;
+            transition: border-color 0.15s ease, background 0.15s ease, color 0.15s ease;
+        }
+
+        .site-option span::before {
+            content: "";
+            width: 13px;
+            height: 13px;
+            border: 1px solid #cbd5e1;
+            border-radius: 4px;
+            background: #fff;
+            color: #fff;
+            font-size: 10px;
+            line-height: 11px;
+            text-align: center;
+        }
+
+        .site-option:hover span {
+            border-color: #94a3b8;
+            background: #f8fafc;
+        }
+
+        .site-option input:checked + span {
+            border-color: var(--primary);
+            background: #eff6ff;
+            color: var(--primary);
+        }
+
+        .site-option input:checked + span::before {
+            content: "✓";
+            border-color: var(--primary);
+            background: var(--primary);
+        }
+
+        .site-option input:focus-visible + span {
+            box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.16);
+        }
+
         .actions {
             display: flex;
             gap: 8px;
@@ -233,6 +303,15 @@
         .secondary {
             background: #eef2f7;
             color: #344054;
+        }
+
+        .danger {
+            background: #dc2626;
+            color: #fff;
+        }
+
+        .danger:hover {
+            background: #b91c1c;
         }
 
         button:disabled {
@@ -280,6 +359,11 @@
         .status.error .status-dot {
             background: var(--danger);
             box-shadow: 0 0 0 5px rgba(220, 38, 38, 0.12);
+        }
+
+        .status.stopping .status-dot {
+            background: #f59e0b;
+            box-shadow: 0 0 0 5px rgba(245, 158, 11, 0.14);
         }
 
         #log-container,
@@ -658,15 +742,15 @@
                         </div>
 
                         <div class="field">
-                            <label for="site">站点</label>
-                            <select id="site">
-                                <option value="墨西哥" selected>墨西哥</option>
-                                <option value="巴西">巴西</option>
-                                <option value="哥伦比亚">哥伦比亚</option>
-                                <option value="智利">智利</option>
-                                <option value="阿根廷">阿根廷</option>
-                                <option value="乌拉圭">乌拉圭</option>
-                            </select>
+                            <label id="site-label">站点（点击选择，可多选）</label>
+                            <div class="site-picker" id="site-picker" role="group" aria-labelledby="site-label">
+                                <label class="site-option"><input type="checkbox" name="site" value="墨西哥" checked><span>墨西哥</span></label>
+                                <label class="site-option"><input type="checkbox" name="site" value="巴西"><span>巴西</span></label>
+                                <label class="site-option"><input type="checkbox" name="site" value="哥伦比亚"><span>哥伦比亚</span></label>
+                                <label class="site-option"><input type="checkbox" name="site" value="智利"><span>智利</span></label>
+                                <label class="site-option"><input type="checkbox" name="site" value="阿根廷"><span>阿根廷</span></label>
+                                <label class="site-option"><input type="checkbox" name="site" value="乌拉圭"><span>乌拉圭</span></label>
+                            </div>
                         </div>
 
                         <div class="field">
@@ -687,12 +771,23 @@
                         </div>
 
                         <div class="field">
+                            <label for="loop-count">循环次数</label>
+                            <select id="loop-count">
+                                <option value="10" selected>10 次</option>
+                                <option value="20">20 次</option>
+                                <option value="50">50 次</option>
+                                <option value="permanent">永久</option>
+                            </select>
+                        </div>
+
+                        <div class="field">
                             <label for="message">自定义话术</label>
                             <textarea id="message" placeholder="不填写时按脚本内置逻辑执行"></textarea>
                         </div>
 
                         <div class="actions">
                             <button class="primary" id="start-btn" onclick="startTask()">开始执行</button>
+                            <button class="danger" id="stop-btn" type="button" onclick="stopTask()" disabled>终结本次任务</button>
                             <button class="secondary" type="button" onclick="clearLog()">清空日志</button>
                         </div>
                     </section>
@@ -1043,6 +1138,7 @@
     <script>
         const logContainer = document.getElementById("log-container");
         const startBtn = document.getElementById("start-btn");
+        const stopBtn = document.getElementById("stop-btn");
         const statusBox = document.getElementById("status");
         const statusText = document.getElementById("status-text");
         const infractionBody = document.getElementById("infraction-body");
@@ -1083,6 +1179,8 @@
         let aiAppealsLoaded = false;
         let tasksLoaded = false;
         let windowAnomaliesLoaded = false;
+        let activeAppealTaskId = "";
+        let appealStopRequested = false;
 
         function switchTab(tabName) {
             document.querySelectorAll(".tab-button").forEach(button => {
@@ -1121,6 +1219,13 @@
         function clearLog() {
             logContainer.textContent = "";
             setStatus("等待任务启动", "");
+        }
+
+        function createAppealTaskId() {
+            if (window.crypto && typeof window.crypto.randomUUID === "function") {
+                return window.crypto.randomUUID();
+            }
+            return `${Date.now()}-${Math.random().toString(16).slice(2)}`;
         }
 
         function escapeHtml(value) {
@@ -1680,18 +1785,32 @@
         }
 
         async function startTask() {
+            const selectedSites = Array.from(
+                document.querySelectorAll('#site-picker input[name="site"]:checked'),
+                input => input.value
+            );
+            if (selectedSites.length === 0) {
+                alert("请至少选择一个站点");
+                return;
+            }
+
             startBtn.disabled = true;
+            stopBtn.disabled = false;
+            appealStopRequested = false;
+            activeAppealTaskId = createAppealTaskId();
             logContainer.textContent = "";
             setStatus("任务运行中", "running");
             appendLog("正在建立连接...\n");
 
             const params = new URLSearchParams({
                 name: document.getElementById("name").value,
-                site: document.getElementById("site").value,
                 form: document.getElementById("form").value,
                 mode: document.getElementById("mode").value,
-                message: document.getElementById("message").value
+                loop_count: document.getElementById("loop-count").value,
+                message: document.getElementById("message").value,
+                task_id: activeAppealTaskId
             });
+            selectedSites.forEach(site => params.append("site", site));
 
             try {
                 const response = await fetch(`/api/run_shensu?${params.toString()}`);
@@ -1708,14 +1827,53 @@
                     appendLog(decoder.decode(value, { stream: true }));
                 }
 
-                appendLog("\n>>> [任务结束]\n");
-                setStatus("任务已结束", "");
+                if (appealStopRequested) {
+                    appendLog("\n>>> [本次任务已终结]\n");
+                    setStatus("任务已终结", "");
+                } else {
+                    appendLog("\n>>> [任务结束]\n");
+                    setStatus("任务已结束", "");
+                }
                 loadLatestInfractions();
             } catch (err) {
                 appendLog(`\n连接或执行出错：${err.message || err}\n`);
                 setStatus("任务异常", "error");
             } finally {
                 startBtn.disabled = false;
+                stopBtn.disabled = true;
+                activeAppealTaskId = "";
+            }
+        }
+
+        async function stopTask() {
+            if (!activeAppealTaskId || appealStopRequested) {
+                return;
+            }
+            if (!window.confirm("确定终结本次自动化申诉任务吗？当前正在执行的站点会先安全收尾。")) {
+                return;
+            }
+
+            appealStopRequested = true;
+            stopBtn.disabled = true;
+            setStatus("正在终结任务", "stopping");
+            appendLog("\n>>> 正在提交终结请求...\n");
+
+            try {
+                const response = await fetch("/api/run_shensu/stop", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ task_id: activeAppealTaskId })
+                });
+                const payload = await response.json();
+                if (!response.ok || payload.status !== "success") {
+                    throw new Error(payload.message || `接口请求失败：${response.status}`);
+                }
+                appendLog(`>>> ${payload.message}\n`);
+            } catch (err) {
+                appealStopRequested = false;
+                stopBtn.disabled = false;
+                setStatus("任务运行中", "running");
+                appendLog(`>>> 终结失败：${err.message || err}\n`);
             }
         }
 

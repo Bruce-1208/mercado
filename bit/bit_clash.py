@@ -1,6 +1,12 @@
-import requests
 import json
+import os
 import random
+import threading
+import time
+
+import requests
+
+from bit import bit_runtime_lock
 
 # 配置信息
 
@@ -12,22 +18,113 @@ CLASH_SECRET = "12345678"  # 对应 config.yaml 中的 secret
 
 TARGET_GROUP = "🔰 选择节点"  # 确保这个名字和你之前 list_proxies 打印出来的一致
 
+HONGKONG_IP_SWITCH_COOLDOWN_SECONDS = 20 * 60
+HONGKONG_IP_SWITCH_LOCK_KEY = "clash_hongkong_ip_switch"
+HONGKONG_IP_SWITCH_STATE_FILE = "clash_hongkong_ip_switch_state.json"
+
+
+def _hongkong_ip_switch_state_path():
+    return bit_runtime_lock.RUNTIME_LOCK_DIR / HONGKONG_IP_SWITCH_STATE_FILE
+
+
+def _read_hongkong_ip_switch_state():
+    try:
+        return json.loads(
+            _hongkong_ip_switch_state_path().read_text(encoding="utf-8")
+        )
+    except Exception:
+        return {}
+
+
+def _write_hongkong_ip_switch_state(state):
+    """在跨进程锁内原子更新冷却状态，避免其他进程读到半个 JSON。"""
+    path = _hongkong_ip_switch_state_path()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temp_path = path.with_name(
+        f".{path.name}.{os.getpid()}.{threading.get_ident()}.tmp"
+    )
+    try:
+        temp_path.write_text(
+            json.dumps(state, ensure_ascii=False, indent=2),
+            encoding="utf-8",
+        )
+        os.replace(temp_path, path)
+    finally:
+        try:
+            temp_path.unlink(missing_ok=True)
+        except OSError:
+            pass
+
+
+def _cooldown_remaining_seconds(state, now, cooldown_seconds):
+    last_attempt = state.get("last_attempt_at", state.get("last_switch_at", 0))
+    try:
+        last_attempt = float(last_attempt or 0)
+    except (TypeError, ValueError):
+        return 0
+    if last_attempt <= 0:
+        return 0
+    elapsed = max(0.0, float(now) - last_attempt)
+    return max(0, int(float(cooldown_seconds) - elapsed + 0.999))
+
 
 def switch_random_hongkong_node():
-    # 显式告诉 Python 使用全局变量（虽然读取不需要，但为了严谨推荐这样做）
-    global TARGET_GROUP
+    """切换随机香港节点；所有进程合计最多每 20 分钟尝试一次。"""
+    cooldown_seconds = HONGKONG_IP_SWITCH_COOLDOWN_SECONDS
+    switch_lock = bit_runtime_lock.InterProcessLock(
+        HONGKONG_IP_SWITCH_LOCK_KEY,
+        owner="clash_hongkong_ip_switch",
+        metadata={"cooldown_seconds": cooldown_seconds},
+        stale_seconds=max(60, cooldown_seconds + 300),
+    )
+    if not switch_lock.acquire(timeout=30):
+        print("⏳ 另一个进程正在切换香港 IP，本次调用跳过")
+        return {
+            "switched": False,
+            "reason": "switch_in_progress",
+            "remaining_seconds": 0,
+        }
 
     headers = {"Authorization": f"Bearer {CLASH_SECRET}"}
     proxies_setting = {"http": None, "https": None}
 
     try:
+        now = time.time()
+        state = _read_hongkong_ip_switch_state()
+        remaining_seconds = _cooldown_remaining_seconds(
+            state,
+            now,
+            cooldown_seconds,
+        )
+        if remaining_seconds > 0:
+            minutes, seconds = divmod(remaining_seconds, 60)
+            print(
+                "⏳ 香港 IP 切换处于跨进程冷却中，"
+                f"剩余 {minutes} 分 {seconds} 秒，本次调用跳过"
+            )
+            return {
+                "switched": False,
+                "reason": "cooldown",
+                "remaining_seconds": remaining_seconds,
+                "last_node": state.get("new_node", ""),
+            }
+
         # 1. 获取该组当前状态
         url = f"{CLASH_API_URL}/proxies/{TARGET_GROUP}"
-        resp = requests.get(url, headers=headers, proxies=proxies_setting)
+        resp = requests.get(
+            url,
+            headers=headers,
+            proxies=proxies_setting,
+            timeout=10,
+        )
 
         if resp.status_code != 200:
             print(f"❌ 无法连接到 Clash API，状态码: {resp.status_code}")
-            return
+            return {
+                "switched": False,
+                "reason": "clash_api_error",
+                "status_code": resp.status_code,
+            }
 
         group_data = resp.json()
         current_node = group_data.get("now")
@@ -38,24 +135,74 @@ def switch_random_hongkong_node():
 
         if not hk_nodes:
             print(f"⚠️ 库里没有多余的香港节点了。当前已在: {current_node}")
-            return
+            return {
+                "switched": False,
+                "reason": "no_alternative_hongkong_node",
+                "current_node": current_node,
+            }
 
         # 3. 随机选一个
         new_node = random.choice(hk_nodes)
         print(f"🔄 正在从 {current_node} 切换至 -> {new_node}")
 
-        # 4. 执行切换
-        requests.put(
+        # 4. 在发出切换前先持久化本次尝试。即使进程在请求途中退出，其他进程
+        # 也不会在 20 分钟内再次切换，保证全局“最多一次”的约束。
+        attempt_state = {
+            "last_attempt_at": now,
+            "last_switch_at": state.get("last_switch_at", 0),
+            "switch_succeeded": False,
+            "current_node": current_node,
+            "new_node": new_node,
+            "pid": os.getpid(),
+        }
+        _write_hongkong_ip_switch_state(attempt_state)
+
+        put_resp = requests.put(
             url,
             data=json.dumps({"name": new_node}),
             headers=headers,
             proxies=proxies_setting,
+            timeout=10,
         )
 
-        print("✅ 切换指令已发送")
+        if put_resp.status_code not in (200, 204):
+            print(
+                f"❌ 香港 IP 切换失败，状态码: {put_resp.status_code}，"
+                "为防止多个进程连续切换，仍进入 20 分钟冷却"
+            )
+            return {
+                "switched": False,
+                "reason": "switch_failed",
+                "status_code": put_resp.status_code,
+                "remaining_seconds": cooldown_seconds,
+            }
+
+        switched_at = time.time()
+        _write_hongkong_ip_switch_state(
+            {
+                **attempt_state,
+                "last_switch_at": switched_at,
+                "switch_succeeded": True,
+            }
+        )
+        print("✅ 香港 IP 切换成功，已进入 20 分钟跨进程冷却")
+        return {
+            "switched": True,
+            "reason": "switched",
+            "current_node": current_node,
+            "new_node": new_node,
+            "remaining_seconds": cooldown_seconds,
+        }
 
     except Exception as e:
         print(f"❌ 运行时报错: {e}")
+        return {
+            "switched": False,
+            "reason": "exception",
+            "error": str(e),
+        }
+    finally:
+        switch_lock.release()
 
 
 def get_public_ip():

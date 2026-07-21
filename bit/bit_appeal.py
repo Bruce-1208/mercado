@@ -20,6 +20,7 @@ import random
 
 from bit.bit_utils import get_latest_modified_file, get_bit_path, parser_delay_date, get_now_time, getWindowidByName
 from bit.bit_api import *
+from bit.bit_mercado_login import ensure_mercado_login_from_home
 from AI_Agent.qianwen import *
 import pandas as pd
 from datetime import datetime, timedelta
@@ -687,6 +688,22 @@ def shensu(name, site, form, message, mode="人工客服"):
         pass
 
     # driver.switch_to.new_window('tab') 决定是否打开新窗口
+    login_result = ensure_mercado_login_from_home(
+        driver,
+        name,
+        window_id=window_id,
+    )
+    if not login_result.get("ok"):
+        print(
+            f"{get_now_time()} {name} {site} "
+            f"{login_result.get('message')}<br>"
+        )
+        return login_result.get("status") or "未登录"
+    print(
+        f"{get_now_time()} {name} {site} 首页登录检测结果："
+        f"{login_result.get('message')}，继续执行人工客服申诉<br>"
+    )
+
     open_human_service_hub_with_ip_retry(driver, name, site)
 
     words = []

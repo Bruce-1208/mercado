@@ -1,13 +1,13 @@
 {
   "key": "bit_window_187700d9c3424c0eb6d8a75d92bf3b9c",
-  "owner": "reputation_collection:跃马扬鞭",
-  "pid": 87996,
-  "thread_id": 8330703104,
-  "token": "48f3531c9b464b559494970e2c126235",
-  "acquired_at": "2026-07-16 00:49:26",
+  "owner": "interface_appeal:跃马扬鞭",
+  "pid": 64380,
+  "thread_id": 26908,
+  "token": "fe6ae88f88094af8a137d0a9b66f181e",
+  "acquired_at": "2026-07-22 00:44:20",
   "metadata": {
     "window_id": "187700d9c3424c0eb6d8a75d92bf3b9c",
     "shop_name": "跃马扬鞭",
-    "task_type": "reputation_collection"
+    "task_type": "interface_appeal"
   }
 }

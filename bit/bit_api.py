@@ -75,7 +75,10 @@ def openBrowser(id):  # 直接指定ID打开窗口，也可以使用 createBrows
     json_data = {"id": f"{id}"}
     try:
         res = requests.post(
-            f"{url}/browser/open", data=json.dumps(json_data), headers=headers
+            f"{url}/browser/open",
+            data=json.dumps(json_data),
+            headers=headers,
+            timeout=20,
         ).json()
         if auto_lease is not None and isinstance(res, dict) and res.get("success") is False:
             with _AUTO_LEASES_GUARD:
@@ -88,6 +91,15 @@ def openBrowser(id):  # 直接指定ID打开窗口，也可以使用 createBrows
                 _AUTO_LEASES.pop((threading.get_ident(), str(id)), None)
             auto_lease.release()
         raise
+
+
+def releaseBrowserLease(id):
+    """释放 openBrowser 自动获取的任务锁，但保持浏览器窗口打开。"""
+    auto_lease_key = (threading.get_ident(), str(id))
+    with _AUTO_LEASES_GUARD:
+        auto_lease = _AUTO_LEASES.pop(auto_lease_key, None)
+    if auto_lease is not None:
+        auto_lease.release()
 
 
 def closeBrowser(id, lease=None):  # 关闭窗口

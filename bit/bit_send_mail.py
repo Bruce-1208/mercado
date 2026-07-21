@@ -41,8 +41,10 @@ def send_info(subject, body, local_file_path, display_filename):
         server.send_message(message)
         server.quit()
         print("邮件已发送")
+        return True
     except Exception as e:
         # 这里打印详细错误，看看到底是哪一步
         import traceback
 
         traceback.print_exc()
+        return False
