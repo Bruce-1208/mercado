@@ -14,8 +14,8 @@ from selenium.webdriver.common.by import By
 from selenium.webdriver.support import expected_conditions as EC
 import pyautogui
 from bit.bit_switch_country import *
-from openpyxl import load_workbook
 from bit.bit_send_mail import *
+from bit.bit_config import list_config_rows, split_config_sites
 import pandas as pd
 
 from datetime import datetime
@@ -133,22 +133,14 @@ def get_reputation_info_all():
     start = int(time.time())
     print(start)
     root_path = Path(__file__).resolve().parent
-    file_path = root_path / "比特配置文件.xlsx"
-
-    wb = load_workbook(file_path)
-    sheet = wb.active
     reputation_info_sum = []
     reuslt = []
-    # 使用 min_row=2 跳过第一行
-    for row in sheet.iter_rows(min_row=2, values_only=True):
+    for row in list_config_rows(include_ignored=False):
         print(row)  # row 是一个元组，包含该行所有数据
         id = row[0]
         name = row[1]
-        remark = row[2]
-        if "忽略" in str(remark or "").strip():
-            continue
         print(get_now_time() + "开始打开窗口:" + name)
-        site_list = row[3].split("，")
+        site_list = split_config_sites(row[3])
         for site in site_list:
             i = 0
             while i < 3:

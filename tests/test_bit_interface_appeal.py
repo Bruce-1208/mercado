@@ -4,6 +4,83 @@ from pathlib import Path
 from bit import bit_interface
 
 
+def test_mercado_login_console_command_supports_all_and_single_shop():
+    all_command = bit_interface._build_mercado_login_command(workers=3)
+    single_command = bit_interface._build_mercado_login_command(shop_name="四季如春")
+
+    assert all_command[0] == bit_interface.sys.executable
+    assert "--all-active-login" in all_command
+    assert all_command[all_command.index("--workers") + 1] == "3"
+    assert single_command[single_command.index("--shop") + 1] == "四季如春"
+    assert "--auto-login" in single_command
+
+
+def test_mercado_login_console_does_not_start_duplicate_task(monkeypatch):
+    with bit_interface._mercado_login_task_lock:
+        previous = dict(bit_interface._mercado_login_task_state)
+        bit_interface._mercado_login_task_state["running"] = True
+    try:
+        started, state = bit_interface.start_mercado_login_console_job()
+    finally:
+        with bit_interface._mercado_login_task_lock:
+            bit_interface._mercado_login_task_state.clear()
+            bit_interface._mercado_login_task_state.update(previous)
+
+    assert started is False
+    assert state["running"] is True
+
+
+def test_window_anomaly_can_restart_single_mercado_login(monkeypatch):
+    captured = {}
+    monkeypatch.setattr(
+        bit_interface,
+        "db_get_window_anomalies",
+        lambda active_only=True, limit=500: {
+            "total": 1,
+            "rows": [
+                {
+                    "window_id": "window-1",
+                    "window_name": "四季如春",
+                }
+            ],
+        },
+    )
+
+    def fake_start(shop_name="", window_id="", workers=3):
+        captured.update(
+            shop_name=shop_name,
+            window_id=window_id,
+            workers=workers,
+        )
+        return True, {
+            "running": True,
+            "status": "running",
+            "target": shop_name,
+        }
+
+    monkeypatch.setattr(
+        bit_interface,
+        "start_mercado_login_console_job",
+        fake_start,
+    )
+    client = bit_interface.app.test_client()
+    with client.session_transaction() as flask_session:
+        flask_session["workbench_user"] = {"username": "tester"}
+
+    response = client.post(
+        "/api/window-anomalies/mercado-login/start",
+        json={"window_id": "window-1"},
+    )
+
+    assert response.status_code == 200
+    assert response.get_json()["status"] == "success"
+    assert captured == {
+        "shop_name": "四季如春",
+        "window_id": "window-1",
+        "workers": 3,
+    }
+
+
 def test_resolve_selected_appeal_sites_and_remove_duplicates():
     assert bit_interface.resolve_appeal_sites(["墨西哥", "巴西", "墨西哥"]) == (
         "墨西哥", "巴西"
@@ -31,7 +108,7 @@ def test_normalize_appeal_loop_count():
     ("mode", "expected_interval"),
     [("AI客服", 60), ("人工客服", 600)],
 )
-@pytest.mark.parametrize("form", ["侵权", "延误"])
+@pytest.mark.parametrize("form", ["侵权", "延误", "取消率"])
 def test_selected_sites_run_sequentially_for_every_mode_and_form(
     monkeypatch,
     mode,
@@ -343,6 +420,7 @@ def test_appeal_page_contains_stop_button_and_handler():
     assert '<option value="全部站点">' not in template
     assert 'params.append("site", site)' in template
     assert '<select id="loop-count">' in template
+    assert '<option value="取消率">取消率</option>' in template
     assert '<option value="10" selected>10 次</option>' in template
     assert '<option value="20">20 次</option>' in template
     assert '<option value="50">50 次</option>' in template

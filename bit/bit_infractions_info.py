@@ -13,8 +13,8 @@ for path in (str(CURRENT_DIR), str(PROJECT_ROOT)):
 from bit_playwright.bit_infractions_info import *  # noqa: F401,F403
 
 
-def main():
-    return get_infractions_info_all()
+def main(**kwargs):
+    return get_infractions_info_all(**kwargs)
 
 
 if __name__ == "__main__":

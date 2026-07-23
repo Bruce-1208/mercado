@@ -2,7 +2,7 @@ import time
 from bit.bit_summary_delayfile import *
 from bit.bit_email_info import *
 import traceback
-from pathlib import Path
+from bit.bit_config import list_config_rows, split_config_sites
 from bit.bit_db_api import insert_task_record
 from bit.bit_clash import *
 from bit.bit_summary_delayfile import *
@@ -228,26 +228,15 @@ def download_relay_mail_all():
     # download_relay_mail('df2d33b20d0b4d72949fc490f7ff075a','墨西哥')
     #
     # time.sleep(100000)
-    root_path = Path(__file__).resolve().parent
-    # file_path = root_path / "比特配置文件.xlsx"
-    file_path = root_path / "比特配置文件.xlsx"
-
     start = int(time.time())
     print(start)
-    wb = load_workbook(file_path)
-    sheet = wb.active
-    reputation_info_sum = []
-    # 使用 min_row=2 跳过第一行
     result = []
-    for row in sheet.iter_rows(min_row=2, values_only=True):
-        print(row)  # row 是一个元组，包含该行所有数据
+    for row in list_config_rows(include_ignored=False):
+        print(row)
         id = row[0]
         name = row[1]
-        remark = row[2]
-        if "忽略" in str(remark or "").strip():
-            continue
         print(get_now_time() + "开始打开窗口:", name)
-        site_list = row[3].split("，")
+        site_list = split_config_sites(row[3])
         for site in site_list:
             try:
                 print(get_now_time() + "执行任务:", name + site)

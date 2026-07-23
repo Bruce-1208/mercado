@@ -11,20 +11,31 @@ from selenium.webdriver.support.wait import WebDriverWait
 from bit.bit_utils import get_now_time
 from bit.bit_api import *
 from bit.bit_runtime_lock import create_window_lease
+from bit.bit_collection_control import (
+    DEFAULT_COLLECTION_MAX_WORKERS,
+    DEFAULT_RETRY_LOCK_WAIT_SECONDS,
+    env_float,
+    outcome_failed,
+    outcome_has_marker,
+    outcome_is_permanent_failure,
+    row_key,
+    stagger_sleep,
+    trip_batch_rate_limit,
+    wait_for_batch_resume,
+)
 from selenium.webdriver.common.desired_capabilities import DesiredCapabilities
 from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support import expected_conditions as EC
 import pyautogui
 from bit.bit_switch_country import *
-from openpyxl import load_workbook
 from bit.bit_send_mail import *
 import pandas as pd
 
 from datetime import datetime
 from pathlib import Path
 from bit.bit_db_api import insert_task_record, inset_reputation_info
-from bit.bit_clash import *
+from bit.bit_config import list_config_rows
 
 
 REPUTATION_URL = "https://global-selling.mercadolibre.com/reputation"
@@ -119,6 +130,21 @@ METRIC_LABEL_ALIASES = {
     ),
 }
 VISITS_LABEL_ALIASES = ("visits", "visit", "访问量", "访问次数", "访问", "访客量")
+CANCELLATION_REVIEW_LABELS = (
+    "review in metrics",
+    "review metrics",
+    "view in metrics",
+    "view metrics",
+    "see metrics",
+    "ver en métricas",
+    "ver en metricas",
+    "revisar en métricas",
+    "revisar en metricas",
+    "ver métricas",
+    "ver metricas",
+    "查看指标",
+    "查看详情",
+)
 
 
 class MercadoRateLimitError(RuntimeError):
@@ -151,7 +177,13 @@ def _is_bit_api_rate_limited(res):
     return _is_rate_limited_text(res)
 
 
-def _connect_browser(window_id, max_retries=3, retry_delay=30):
+def _connect_browser(
+    window_id,
+    max_retries=3,
+    retry_delay=30,
+    batch_control=False,
+    batch_source="声誉采集",
+):
     last_res = None
     for attempt in range(1, max_retries + 1):
         res = openBrowser(window_id)  # 窗口ID从窗口配置界面中复制，或者api创建后返回
@@ -165,9 +197,10 @@ def _connect_browser(window_id, max_retries=3, retry_delay=30):
             break
 
         msg = res.get("msg", "") if isinstance(res, dict) else str(res)
-        if _is_bit_api_rate_limited(res):
+        is_rate_limited = _is_bit_api_rate_limited(res)
+        if is_rate_limited:
             print(
-                f"{get_now_time()} 比特浏览器打开窗口被限频，等待 {retry_delay} 秒后重试："
+                f"{get_now_time()} 比特浏览器打开窗口被限频："
                 f"{window_id}，第 {attempt}/{max_retries} 次，原因：{msg}"
             )
         else:
@@ -175,7 +208,13 @@ def _connect_browser(window_id, max_retries=3, retry_delay=30):
                 f"{get_now_time()} 比特浏览器打开窗口返回异常，等待 {retry_delay} 秒后重试："
                 f"{window_id}，第 {attempt}/{max_retries} 次，返回：{res}"
             )
-        time.sleep(retry_delay)
+        if is_rate_limited and batch_control:
+            trip_batch_rate_limit(batch_source, msg)
+        if attempt < max_retries:
+            if is_rate_limited and batch_control:
+                wait_for_batch_resume(batch_source)
+            else:
+                time.sleep(retry_delay)
     else:
         if _is_bit_api_rate_limited(last_res):
             raise MercadoRateLimitError(
@@ -285,54 +324,43 @@ def _open_reputation_page_with_validation(
     site="",
     max_hongkong_switches=3,
     switch_wait_seconds=8,
+    allow_global_ip_switch=False,
 ):
-    """打开声誉页并验证；命中 Mercado 限频页时切换香港节点后重试。"""
-    max_hongkong_switches = max(0, int(max_hongkong_switches))
-    for attempt in range(1, max_hongkong_switches + 2):
-        navigate_error = ""
-        try:
-            driver.get(REPUTATION_URL)
-        except Exception as exc:
-            navigate_error = str(exc)
+    """打开并验证声誉页；限频时交给批次熔断，禁止直接切换全局节点。"""
+    # 保留旧参数以兼容已有调用，但节点切换已由批次策略全面禁用。
+    del max_hongkong_switches, switch_wait_seconds, allow_global_ip_switch
+    navigate_error = ""
+    try:
+        driver.get(REPUTATION_URL)
+    except Exception as exc:
+        navigate_error = str(exc)
 
-        time.sleep(10)
-        state = _get_mercado_page_state(driver)
-        if _is_spanish_ip_switch_page(state=state):
-            if attempt > max_hongkong_switches:
-                raise MercadoRateLimitError(
-                    f"{name}{site}声誉页面持续显示指定西语错误，已切换香港 IP "
-                    f"{max_hongkong_switches} 次仍未恢复"
-                )
-            print(
-                f"{get_now_time()}{name}{site}声誉页面显示限频，"
-                f"第{attempt}/{max_hongkong_switches}次切换香港 IP 后重试"
-            )
-            switch_random_hongkong_node()
-            get_public_ip()
-            time.sleep(max(0, int(switch_wait_seconds)))
-            continue
-
-        _raise_if_mercado_unavailable(
-            state=state,
-            context=f"{name}{site}声誉页面",
+    time.sleep(10)
+    state = _get_mercado_page_state(driver)
+    if _is_spanish_ip_switch_page(state=state):
+        raise MercadoRateLimitError(
+            f"{name}{site}声誉页面触发限频；采集任务禁止直接切换全局 Clash 节点"
         )
 
-        if navigate_error:
-            raise RuntimeError(f"{name}{site}声誉页面打开失败：{navigate_error}")
+    _raise_if_mercado_unavailable(
+        state=state,
+        context=f"{name}{site}声誉页面",
+    )
 
-        try:
-            WebDriverWait(driver, 10).until(
-                EC.visibility_of_element_located((By.CLASS_NAME, "title__page--cbt"))
-            )
-        except Exception as exc:
-            raise MercadoPageStructureError(
-                f"{name}{site}声誉页面结构不匹配：{state.get('current_url', '')}"
-            ) from exc
+    if navigate_error:
+        raise RuntimeError(f"{name}{site}声誉页面打开失败：{navigate_error}")
 
-        print(f"{get_now_time()}{name}{site}声誉页面打开验证通过")
-        return True
+    try:
+        WebDriverWait(driver, 10).until(
+            EC.visibility_of_element_located((By.CLASS_NAME, "title__page--cbt"))
+        )
+    except Exception as exc:
+        raise MercadoPageStructureError(
+            f"{name}{site}声誉页面结构不匹配：{state.get('current_url', '')}"
+        ) from exc
 
-    raise RuntimeError(f"{name}{site}声誉页面打开验证失败")
+    print(f"{get_now_time()}{name}{site}声誉页面打开验证通过")
+    return True
 
 
 def _get_country_name(site):
@@ -868,6 +896,319 @@ def _extract_reputation_metrics(driver):
     return metrics
 
 
+def _normalize_cancellation_order_ids(values):
+    """按页面出现顺序去重并过滤明显不是 Mercado 订单号的值。"""
+    result = []
+    seen = set()
+    for value in values or []:
+        text = re.sub(r"\D", "", str(value or ""))
+        if not 10 <= len(text) <= 20 or text in seen:
+            continue
+        seen.add(text)
+        result.append(text)
+    return result
+
+
+def _click_cancellation_review_in_metrics(driver):
+    """定位取消率卡片，并点击该卡片内的 Review in Metrics。"""
+    before_handles = set(driver.window_handles)
+    result = driver.execute_script(
+        r"""
+        function normalize(value) {
+            return String(value || '')
+                .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+                .toLowerCase().replace(/[^a-z0-9\u3400-\u9fff]+/g, '').trim();
+        }
+        const cancelAliases = arguments[0].map(normalize);
+        const reviewAliases = arguments[1].map(normalize);
+        function allElements(root = document) {
+            const out = [];
+            const visit = (scope) => {
+                const elements = scope.querySelectorAll ? Array.from(scope.querySelectorAll('*')) : [];
+                for (const element of elements) {
+                    out.push(element);
+                    if (element.shadowRoot) visit(element.shadowRoot);
+                }
+            };
+            visit(root);
+            return out;
+        }
+        function textOf(element) {
+            return normalize([
+                element.innerText || element.textContent || '',
+                element.getAttribute?.('aria-label') || '',
+                element.getAttribute?.('title') || ''
+            ].join(' '));
+        }
+        function isCancellationTitle(element) {
+            const text = textOf(element);
+            return text && text.length < 180 && cancelAliases.some(alias => text.includes(alias));
+        }
+        function isReviewLink(element) {
+            const text = textOf(element);
+            const href = normalize(element.getAttribute?.('href') || '');
+            const clickable = ['A', 'BUTTON'].includes(element.tagName) ||
+                ['button', 'link'].includes(element.getAttribute?.('role')) ||
+                !!element.onclick || !!href;
+            return clickable && (
+                reviewAliases.some(alias => text.includes(alias)) ||
+                href.includes('metrics')
+            );
+        }
+        function click(element) {
+            element.scrollIntoView({block: 'center', inline: 'center'});
+            element.click();
+        }
+
+        const elements = allElements(document);
+        const variableTitles = elements.filter(element =>
+            String(element.className || '').includes('variable__title')
+        );
+        let title = variableTitles.find(isCancellationTitle) || elements.find(isCancellationTitle);
+        if (!title && variableTitles.length >= 2) {
+            // 平台目前固定为：取消率倒数第二，延误率最后一个。
+            title = variableTitles[variableTitles.length - 2];
+        }
+        if (!title) return {clicked: false, has_metric: false, reason: 'cancellation metric not found'};
+
+        let container = title;
+        for (let depth = 0; container && depth < 9; depth += 1, container = container.parentElement) {
+            const candidates = [container, ...allElements(container)];
+            const target = candidates.find(isReviewLink);
+            if (target) {
+                click(target);
+                return {
+                    clicked: true,
+                    has_metric: true,
+                    title: textOf(title),
+                    href: target.getAttribute?.('href') || ''
+                };
+            }
+        }
+
+        const globalReviewLinks = elements.filter(isReviewLink);
+        if (globalReviewLinks.length === 1) {
+            click(globalReviewLinks[0]);
+            return {clicked: true, has_metric: true, title: textOf(title), fallback: true};
+        }
+        return {clicked: false, has_metric: true, title: textOf(title), reason: 'review link not found'};
+        """,
+        list(METRIC_LABEL_ALIASES["cancellations"]),
+        list(CANCELLATION_REVIEW_LABELS),
+    ) or {}
+
+    if not result.get("clicked"):
+        return result
+
+    for _ in range(30):
+        handles = set(driver.window_handles)
+        new_handles = list(handles - before_handles)
+        if new_handles:
+            driver.switch_to.window(new_handles[-1])
+        current_url = str(getattr(driver, "current_url", "") or "").lower()
+        if "/metrics" in current_url:
+            break
+        time.sleep(0.5)
+    return result
+
+
+def _extract_visible_cancellation_order_ids(driver):
+    """从当前 Metrics 页的订单行、链接及订单属性中提取订单号。"""
+    result = driver.execute_script(
+        r"""
+        function normalize(value) {
+            return String(value || '').toLowerCase().replace(/\s+/g, ' ').trim();
+        }
+        function allElements(root = document) {
+            const out = [];
+            const visit = (scope) => {
+                const elements = scope.querySelectorAll ? Array.from(scope.querySelectorAll('*')) : [];
+                for (const element of elements) {
+                    out.push(element);
+                    if (element.shadowRoot) visit(element.shadowRoot);
+                }
+            };
+            visit(root);
+            return out;
+        }
+        const ids = [];
+        const seen = new Set();
+        const add = value => {
+            const id = String(value || '').replace(/\D/g, '');
+            if (id.length >= 10 && id.length <= 20 && !seen.has(id)) {
+                seen.add(id);
+                ids.push(id);
+            }
+        };
+        const prefixedPattern = /(?:order|orders|sale|sales|venta|ventas|venda|vendas|pedido|pedidos|订单|销售单)[^0-9]{0,30}(\d{8,20})/gi;
+        const genericPattern = /\b\d{10,20}\b/g;
+        for (const element of allElements(document)) {
+            for (const attribute of ['data-order-id', 'data-order-number', 'data-sale-id']) {
+                const value = element.getAttribute?.(attribute);
+                if (value) add(value);
+            }
+            const href = element.getAttribute?.('href') || '';
+            const hrefMatches = href.matchAll(/(?:orders?|sales?|ventas?|pedidos?)[^0-9]{0,20}(\d{8,20})/gi);
+            for (const match of hrefMatches) add(match[1]);
+
+            const text = String(element.innerText || element.textContent || '').trim();
+            if (!text || text.length > 800) continue;
+            for (const match of text.matchAll(prefixedPattern)) add(match[1]);
+
+            const tag = String(element.tagName || '').toLowerCase();
+            const role = normalize(element.getAttribute?.('role') || '');
+            const className = normalize(element.className || '');
+            const rowLike = ['tr', 'li'].includes(tag) || role === 'row' ||
+                /row|order|sale|card|item|record/.test(className);
+            const normalizedText = normalize(text);
+            if (rowLike) {
+                for (const match of text.matchAll(genericPattern)) add(match[0]);
+            }
+        }
+        return {
+            ids,
+            fingerprint: ids.join('|') + ':' + String(document.body?.scrollHeight || 0),
+            height: document.body?.scrollHeight || 0
+        };
+        """,
+    ) or {}
+    return {
+        "ids": _normalize_cancellation_order_ids(result.get("ids") or []),
+        "fingerprint": str(result.get("fingerprint") or ""),
+        "height": int(result.get("height") or 0),
+    }
+
+
+def _advance_cancellation_orders_page(driver):
+    """优先点击加载更多/下一页；没有分页控件时滚动触发懒加载。"""
+    return str(
+        driver.execute_script(
+            r"""
+            function normalize(value) {
+                return String(value || '')
+                    .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+                    .toLowerCase().replace(/\s+/g, ' ').trim();
+            }
+            function allElements(root = document) {
+                const out = [];
+                const visit = (scope) => {
+                    const elements = scope.querySelectorAll ? Array.from(scope.querySelectorAll('*')) : [];
+                    for (const element of elements) {
+                        out.push(element);
+                        if (element.shadowRoot) visit(element.shadowRoot);
+                    }
+                };
+                visit(root);
+                return out;
+            }
+            function visible(element) {
+                const rect = element.getBoundingClientRect();
+                const style = getComputedStyle(element);
+                return rect.width > 0 && rect.height > 0 && style.visibility !== 'hidden' && style.display !== 'none';
+            }
+            function disabled(element) {
+                return element.disabled || element.getAttribute('aria-disabled') === 'true' ||
+                    /disabled/.test(String(element.className || '').toLowerCase());
+            }
+            function label(element) {
+                return normalize([
+                    element.innerText || element.textContent || '',
+                    element.getAttribute('aria-label') || '',
+                    element.getAttribute('title') || ''
+                ].join(' '));
+            }
+            function click(element) {
+                element.scrollIntoView({block: 'center'});
+                element.click();
+            }
+            const clickables = allElements(document).filter(element =>
+                visible(element) && !disabled(element) && (
+                    ['A', 'BUTTON'].includes(element.tagName) ||
+                    ['button', 'link'].includes(element.getAttribute('role'))
+                )
+            );
+            const moreLabels = ['load more', 'show more', 'see more', 'view more', 'cargar mas',
+                'mostrar mas', 'ver mas', 'ver mais', 'carregar mais', 'mostrar mais', '加载更多', '显示更多', '查看更多'];
+            const nextLabels = ['next', 'next page', 'siguiente', 'proxima', 'próxima', '下一页'];
+            const more = clickables.find(element => moreLabels.some(value => label(element).includes(value)));
+            if (more) {
+                click(more);
+                return 'clicked_more';
+            }
+            const next = clickables.find(element => {
+                const text = label(element);
+                return nextLabels.some(value => text === value || text.includes(value + ' page'));
+            });
+            if (next) {
+                click(next);
+                return 'clicked_next';
+            }
+            const before = window.scrollY;
+            window.scrollTo(0, document.body?.scrollHeight || document.documentElement.scrollHeight);
+            return window.scrollY === before ? 'done' : 'scrolled';
+            """
+        ) or "done"
+    )
+
+
+def get_cancellation_orders(driver, name="", site="", max_pages=100):
+    """从声誉页取消率的 Review in Metrics 中读取全部取消订单号。"""
+    _open_reputation_page_with_validation(driver, name, site)
+    _select_country(driver, site, name)
+    click_result = _click_cancellation_review_in_metrics(driver)
+    if not click_result.get("has_metric"):
+        raise MercadoPageStructureError(
+            f"{name}{site}没有找到取消率指标卡片：{click_result.get('reason', '')}"
+        )
+    if not click_result.get("clicked"):
+        print(
+            f"{get_now_time()}{name}{site}取消率没有可点击的 Review in Metrics，"
+            "当前没有可获取的取消订单"
+        )
+        return []
+
+    time.sleep(3)
+    _raise_if_mercado_unavailable(
+        driver=driver,
+        context=f"{name}{site}取消率 Metrics 页面",
+    )
+
+    orders = []
+    seen = set()
+    stagnant_rounds = 0
+    previous_fingerprint = ""
+    for page_index in range(1, max(1, int(max_pages)) + 1):
+        state = _extract_visible_cancellation_order_ids(driver)
+        added = 0
+        for order_id in state["ids"]:
+            if order_id in seen:
+                continue
+            seen.add(order_id)
+            orders.append(order_id)
+            added += 1
+        print(
+            f"{get_now_time()}{name}{site}取消订单第{page_index}次读取新增{added}个，"
+            f"累计{len(orders)}个"
+        )
+
+        fingerprint = state["fingerprint"]
+        if added == 0 and fingerprint == previous_fingerprint:
+            stagnant_rounds += 1
+        else:
+            stagnant_rounds = 0
+        previous_fingerprint = fingerprint
+        if stagnant_rounds >= 2:
+            break
+
+        action = _advance_cancellation_orders_page(driver)
+        if action == "done":
+            break
+        time.sleep(2 if action.startswith("clicked") else 1)
+
+    print(f"{get_now_time()}{name}{site}共获取到{len(orders)}个取消订单：{orders}")
+    return orders
+
+
 def _normalize_reputation_color(text, class_name=""):
     value = f"{text or ''} {class_name or ''}".casefold()
     color_aliases = (
@@ -901,11 +1242,22 @@ def _parse_gradient(value):
     return direction, rate
 
 
-def get_reputation_info(window_id, name, site, driver=None):
+def get_reputation_info(
+    window_id,
+    name,
+    site,
+    driver=None,
+    allow_global_ip_switch=False,
+):
     if driver is None:
         driver = _connect_browser(window_id)
 
-    _open_reputation_page_with_validation(driver, name, site)
+    _open_reputation_page_with_validation(
+        driver,
+        name,
+        site,
+        allow_global_ip_switch=allow_global_ip_switch,
+    )
     _select_country(driver, site, name)
 
     metrics = _extract_reputation_metrics(driver)
@@ -1056,7 +1408,7 @@ def _deduplicate_config_rows(rows):
     return unique_rows
 
 
-def _run_reputation_for_browser(row):
+def _run_reputation_for_browser(row, lease_wait_seconds=0):
     id = row[0]
     name = row[1]
     remark = row[2]
@@ -1066,15 +1418,21 @@ def _run_reputation_for_browser(row):
     if not row[3]:
         return [], [("获取声誉信息", name, "", "失败：未配置站点", get_now_time())]
 
+    wait_for_batch_resume(f"声誉采集:{name}")
     lease = create_window_lease(
         id,
         owner=f"reputation_collection:{name}",
         shop_name=name,
         task_type="reputation_collection",
     )
-    if not lease.acquire(timeout=0):
+    if not lease.acquire(timeout=max(0, float(lease_wait_seconds or 0))):
         print(get_now_time() + name + "窗口已被其他任务占用，跳过本次声誉采集")
-        return [], [("获取声誉信息", name, "", "跳过：窗口被其他任务占用", get_now_time())]
+        status = "跳过：窗口被其他任务占用"
+        sites = _split_sites(row[3])
+        return (
+            [_build_reputation_failure_row(name, site, status) for site in sites],
+            [("获取声誉信息", name, site, status, get_now_time()) for site in sites],
+        )
 
     print(get_now_time() + "开始打开窗口:" + name)
     reputation_info_sum = []
@@ -1083,7 +1441,7 @@ def _run_reputation_for_browser(row):
 
     try:
         try:
-            driver = _connect_browser(id)
+            driver = _connect_browser(id, batch_control=True, batch_source="声誉采集")
         except Exception as exc:
             status = _failure_status(exc)
             print(get_now_time() + name + "打开窗口失败：" + status, exc)
@@ -1096,6 +1454,7 @@ def _run_reputation_for_browser(row):
 
         fatal_profile_error = None
         for site in sites:
+            wait_for_batch_resume(f"声誉采集:{name}")
             if fatal_profile_error is not None:
                 status = _failure_status(fatal_profile_error)
                 result.append(("获取声誉信息", name, site, status, get_now_time()))
@@ -1107,8 +1466,15 @@ def _run_reputation_for_browser(row):
             succeeded = False
             last_error = None
             for attempt in range(1, 4):
+                wait_for_batch_resume(f"声誉采集:{name}")
                 try:
-                    reputation_info = get_reputation_info(id, name, site, driver=driver)
+                    reputation_info = get_reputation_info(
+                        id,
+                        name,
+                        site,
+                        driver=driver,
+                        allow_global_ip_switch=False,
+                    )
                     reputation_info_sum.append(reputation_info)
                     print(get_now_time() + name + site + "获取声誉信息成功")
                     result.append(("获取声誉信息", name, site, "成功", get_now_time()))
@@ -1120,16 +1486,14 @@ def _run_reputation_for_browser(row):
                     if isinstance(e, MercadoAuthenticationError):
                         fatal_profile_error = e
                         break
+                    is_rate_limited = isinstance(e, MercadoRateLimitError) or _is_rate_limited_text(e)
+                    if is_rate_limited:
+                        trip_batch_rate_limit(f"声誉采集:{name}:{site}", str(e))
                     if attempt < 3:
-                        should_switch_ip = (
-                            _is_spanish_ip_switch_text(e)
-                            or _is_spanish_ip_switch_page(driver=driver)
-                        )
-                        if should_switch_ip:
-                            print(get_now_time() + name + site + "检测到指定西语错误页，切换香港 IP 后重试")
-                            switch_random_hongkong_node()
-                            get_public_ip()
-                        time.sleep(5)
+                        if is_rate_limited:
+                            wait_for_batch_resume(f"声誉采集:{name}")
+                        else:
+                            time.sleep(5)
 
             if not succeeded:
                 status = _failure_status(last_error)
@@ -1150,40 +1514,160 @@ def _run_reputation_for_browser(row):
     return reputation_info_sum, result
 
 
-def get_reputation_info_all(max_workers=20):
-    """使用独立进程并发采集各店铺声誉，主进程负责汇总、导出和入库。"""
-    start = int(time.time())
-    print(start)
-    root_path = Path(__file__).resolve().parent
-    file_path = root_path / "比特配置文件.xlsx"
-    # file_path = root_path / "比特配置文件测试.xlsx"
-
-    wb = load_workbook(file_path)
-    sheet = wb.active
-    reputation_info_sum = []
-    result = []
-    rows = list(sheet.iter_rows(min_row=2, values_only=True))
-    rows = [row for row in rows if row and row[0] and not _is_ignored_config_value(row[2])]
-    rows = _deduplicate_config_rows(rows)
-
+def _execute_reputation_rows(
+    rows,
+    max_workers,
+    stagger_min_seconds,
+    stagger_max_seconds,
+    lease_wait_seconds=0,
+):
+    outcomes = {}
     worker_count = max(1, min(int(max_workers), len(rows))) if rows else 1
     with ProcessPoolExecutor(max_workers=worker_count) as executor:
-        future_map = {
-            executor.submit(_run_reputation_for_browser, row): row for row in rows
-        }
+        future_map = {}
+        for index, row in enumerate(rows):
+            future = executor.submit(
+                _run_reputation_for_browser,
+                row,
+                lease_wait_seconds,
+            )
+            future_map[future] = row
+            if index < len(rows) - 1:
+                delay = stagger_sleep(stagger_min_seconds, stagger_max_seconds)
+                print(f"{get_now_time()}声誉店铺错峰启动，下一家等待 {delay:.1f} 秒")
+
         for future in as_completed(future_map):
             row = future_map[future]
             name = row[1]
             try:
                 browser_reputations, browser_result = future.result()
-                reputation_info_sum.extend(browser_reputations)
-                result.extend(browser_result)
-                print(get_now_time() + name + "窗口任务完成")
-            except Exception as e:
-                print(get_now_time() + name + "窗口任务异常", e)
-                result.append(
-                    ("获取声誉信息", name, "", _failure_status(e), get_now_time())
+            except Exception as exc:
+                print(get_now_time() + name + "窗口任务异常", exc)
+                status = _failure_status(exc)
+                sites = _split_sites(row[3]) or [""]
+                browser_reputations = [
+                    _build_reputation_failure_row(name, site, status)
+                    for site in sites
+                    if site
+                ]
+                browser_result = [
+                    ("获取声誉信息", name, site, status, get_now_time())
+                    for site in sites
+                ]
+            outcomes[row_key(row)] = (row, browser_reputations, browser_result)
+            print(get_now_time() + name + "窗口任务完成")
+    return outcomes
+
+
+def _row_as_login_config(row):
+    fields = (
+        "window_id",
+        "shop_name",
+        "status",
+        "sites",
+        "sequence_no",
+        "salesperson",
+        "email",
+    )
+    return {field: row[index] if index < len(row) else "" for index, field in enumerate(fields)}
+
+
+def _prepare_reputation_retry_rows(outcomes):
+    """修复可处理的登录/配置问题，并返回首轮失败店铺的最新配置。"""
+    latest_rows = _deduplicate_config_rows(list_config_rows(include_ignored=False))
+    latest_by_name = {str(row[1]).strip(): row for row in latest_rows if row and row[1]}
+    retry_plan = []
+
+    for original_key, (original_row, _data, browser_result) in outcomes.items():
+        if not outcome_failed(browser_result):
+            continue
+        name = str(original_row[1] or "").strip()
+        current_row = latest_by_name.get(name, original_row)
+
+        if outcome_has_marker(browser_result, "窗口ID不存在"):
+            if str(current_row[0] or "").strip() == str(original_row[0] or "").strip():
+                print(
+                    f"{get_now_time()}{name} 窗口ID仍为无效值，需先在配置库修正，本轮不盲目重试"
                 )
+                continue
+            print(f"{get_now_time()}{name} 已读取到更新后的窗口ID，将按新配置补跑")
+
+        if outcome_has_marker(browser_result, "登录失效"):
+            print(f"{get_now_time()}{name} 开始串行修复 Mercado 登录态")
+            try:
+                from bit.bit_mercado_login import login_one_database_shop
+
+                login_result = login_one_database_shop(
+                    _row_as_login_config(current_row),
+                    wait_seconds=int(env_float("BIT_LOGIN_REPAIR_WAIT_SECONDS", 60, 1)),
+                    page_load_timeout=int(env_float("BIT_LOGIN_REPAIR_PAGE_TIMEOUT", 20, 1)),
+                )
+            except Exception as exc:
+                print(f"{get_now_time()}{name} 登录修复异常，本轮不重试：{exc}")
+                continue
+            if not login_result.get("ok"):
+                print(
+                    f"{get_now_time()}{name} 登录修复未通过，本轮不重试："
+                    f"{login_result.get('message') or login_result.get('status')}"
+                )
+                continue
+            print(f"{get_now_time()}{name} 登录态修复成功")
+
+        if outcome_is_permanent_failure(browser_result) and not outcome_has_marker(
+            browser_result, "登录失效"
+        ):
+            continue
+        retry_plan.append((original_key, current_row))
+    return retry_plan
+
+
+def get_reputation_info_all(
+    max_workers=DEFAULT_COLLECTION_MAX_WORKERS,
+    stagger_min_seconds=None,
+    stagger_max_seconds=None,
+    retry_failed=True,
+):
+    """并发采集声誉；修复已识别问题后只补跑失败店铺，最后统一入库。"""
+    start = int(time.time())
+    print(start)
+    root_path = Path(__file__).resolve().parent
+    rows = list_config_rows(include_ignored=False)
+    rows = [row for row in rows if row and row[0]]
+    rows = _deduplicate_config_rows(rows)
+
+    outcomes = _execute_reputation_rows(
+        rows,
+        max_workers=max_workers,
+        stagger_min_seconds=stagger_min_seconds,
+        stagger_max_seconds=stagger_max_seconds,
+    )
+
+    if retry_failed:
+        retry_plan = _prepare_reputation_retry_rows(outcomes)
+        if retry_plan:
+            print(f"{get_now_time()}声誉首轮失败 {len(retry_plan)} 家，仅补跑这些店铺")
+            wait_for_batch_resume("声誉失败补跑")
+            retry_rows = [row for _original_key, row in retry_plan]
+            retry_outcomes = _execute_reputation_rows(
+                retry_rows,
+                max_workers=max_workers,
+                stagger_min_seconds=stagger_min_seconds,
+                stagger_max_seconds=stagger_max_seconds,
+                lease_wait_seconds=env_float(
+                    "BIT_RETRY_WINDOW_LOCK_WAIT_SECONDS",
+                    DEFAULT_RETRY_LOCK_WAIT_SECONDS,
+                ),
+            )
+            for original_key, retry_row in retry_plan:
+                retry_outcome = retry_outcomes.get(row_key(retry_row))
+                if retry_outcome is not None:
+                    outcomes[original_key] = retry_outcome
+
+    reputation_info_sum = []
+    result = []
+    for _row, browser_reputations, browser_result in outcomes.values():
+        reputation_info_sum.extend(browser_reputations)
+        result.extend(browser_result)
 
     reputation_info_sum_str = "\n".join(map(str, reputation_info_sum))
     print(reputation_info_sum_str)
@@ -1226,10 +1710,21 @@ def get_reputation_info_all(max_workers=20):
 
     inset_reputation_info(reputation_info_sum)
     insert_task_record(result)
+    return {
+        "data": reputation_info_sum,
+        "results": result,
+        "failed_shops": sorted(
+            {
+                str(row[1] or "")
+                for row in result
+                if len(row) >= 4 and str(row[3] or "") != "成功"
+            }
+        ),
+    }
 
 
-def main():
-    return get_reputation_info_all()
+def main(**kwargs):
+    return get_reputation_info_all(**kwargs)
 
 
 if __name__ == "__main__":

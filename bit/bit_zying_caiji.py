@@ -59,15 +59,74 @@ DEFAULT_ZYING_START_PAGE = max(
     1,
     int(os.environ.get("BIT_ZYING_START_PAGE", "1")),
 )
+DEFAULT_ZYING_CATEGORY = os.environ.get("BIT_ZYING_CATEGORY", "")
 ZYING_DETAIL_WORKERS = max(1, int(os.environ.get("BIT_ZYING_DETAIL_WORKERS", "6")))
 ZYING_DETAIL_CLICK_TIMEOUT = max(
-    15,
-    int(os.environ.get("BIT_ZYING_DETAIL_CLICK_TIMEOUT", "45")),
+    5,
+    int(os.environ.get("BIT_ZYING_DETAIL_CLICK_TIMEOUT", "12")),
+)
+ZYING_DETAIL_OPEN_TIMEOUT = max(
+    3,
+    int(os.environ.get("BIT_ZYING_DETAIL_OPEN_TIMEOUT", "5")),
+)
+ZYING_DETAIL_CLICK_ATTEMPTS = max(
+    1,
+    int(os.environ.get("BIT_ZYING_DETAIL_CLICK_ATTEMPTS", "2")),
 )
 
 TITLE_SELECTOR = ".f12.product-title, .product-title"
 IMAGE_SELECTOR = "img.product-pic, img[class*='product-pic'], img[class*='product-image']"
 LOGIN_SELECTOR = "input[type='password'], #password"
+DETAIL_ROOT_SELECTOR = ".curd-detail-wrap"
+DETAIL_CLICK_TARGET_SELECTOR = (
+    ".f12.product-title, .product-title, a[href], button, "
+    "img.product-pic, img[class*='product-pic'], img[class*='product-image']"
+)
+
+ZYING_CATEGORY_OPTIONS_SCRIPT = r"""
+const cascader = document.querySelector('.ant-cascader');
+if (!cascader) return [];
+const fiberKey = Object.keys(cascader).find(key => key.startsWith('__reactFiber$'));
+let fiber = fiberKey ? cascader[fiberKey] : null;
+while (fiber) {
+  const props = fiber.memoizedProps || {};
+  if (Array.isArray(props.options)) {
+    const copyOptions = options => options.map(option => ({
+      value: option.value,
+      label: String(option.label || '').trim(),
+      children: copyOptions(Array.isArray(option.children) ? option.children : []),
+    }));
+    return copyOptions(props.options);
+  }
+  fiber = fiber.return;
+}
+return [];
+"""
+
+ZYING_SET_CATEGORY_SCRIPT = r"""
+const wantedValues = arguments[0].map(value => String(value));
+const cascader = document.querySelector('.ant-cascader');
+if (!cascader) return false;
+const fiberKey = Object.keys(cascader).find(key => key.startsWith('__reactFiber$'));
+let fiber = fiberKey ? cascader[fiberKey] : null;
+while (fiber) {
+  const props = fiber.memoizedProps || {};
+  if (Array.isArray(props.options) && typeof props.onChange === 'function') {
+    const selectedOptions = [];
+    let options = props.options;
+    for (const wanted of wantedValues) {
+      const option = options.find(item => String(item.value) === wanted);
+      if (!option) return false;
+      selectedOptions.push(option);
+      options = Array.isArray(option.children) ? option.children : [];
+    }
+    props.onChange(selectedOptions.map(option => option.value), selectedOptions);
+    return true;
+  }
+  fiber = fiber.return;
+}
+return false;
+"""
 
 REVIEW_STATUS_NAMES = {
     1000: "通过",
@@ -83,6 +142,7 @@ DETAIL_FORM_SCRIPT = r"""
 const normalize = value => String(value || '').replace(/\s+/g, ' ').trim();
 const expectedTitle = normalize(arguments[0]);
 const expectedImage = String(arguments[1] || '').trim();
+const expectedProductId = normalize(arguments[2]);
 const root = document.querySelector('.curd-detail-wrap');
 if (!root) return null;
 const header = root.querySelector('.crud-detail-header .h1');
@@ -96,9 +156,10 @@ const detailImages = Array.from(root.querySelectorAll('img.ant-image-img'))
 if (!productId) return null;
 // 智赢的多变体产品会在价格、重量等字段加载完成前卸载标题编辑器。
 // 列表缩略图可能还是旧图，而详情已经换成新图；标题或主图任一匹配即可确认身份。
+const productIdMatches = Boolean(expectedProductId) && productId === expectedProductId;
 const titleMatches = Boolean(expectedTitle) && detailTitles.includes(expectedTitle);
 const imageMatches = Boolean(expectedImage) && detailImages.includes(expectedImage);
-if (!titleMatches && !imageMatches) return null;
+if (!productIdMatches && !titleMatches && !imageMatches) return null;
 
 const value = id => (root.querySelector(`#${id}`)?.value || '').trim();
 const checkedStatus = root.querySelector("input[name='stat']:checked");
@@ -115,7 +176,10 @@ const details = {
   size_height: value('sizeHeight'),
   review_status: status,
 };
-return Object.values(details).every(Boolean) ? details : null;
+return {
+  details,
+  ready: Object.values(details).every(Boolean),
+};
 """
 
 FIELD_DEFINITIONS = {
@@ -213,6 +277,140 @@ PRODUCT_ID_LABELS = (
 
 def _clean_text(value):
     return re.sub(r"[\t\r ]+", " ", str(value or "")).strip()
+
+
+def _iter_zying_category_paths(options, parents=()):
+    for option in options or []:
+        current = parents + (
+            {
+                "value": option.get("value"),
+                "label": _clean_text(option.get("label")),
+            },
+        )
+        yield current
+        yield from _iter_zying_category_paths(option.get("children"), current)
+
+
+def _resolve_zying_category(options, requested_category):
+    """按智赢分类 ID、唯一名称或完整路径解析 Cascader 选项。"""
+    requested = _clean_text(requested_category)
+    if not requested:
+        return None
+    paths = list(_iter_zying_category_paths(options))
+    requested_path = tuple(
+        _clean_text(value).casefold()
+        for value in re.split(r"\s*(?:/|>|＞)\s*", requested)
+        if _clean_text(value)
+    )
+    matches = []
+    for path in paths:
+        labels = tuple(item["label"].casefold() for item in path)
+        values = tuple(str(item["value"]) for item in path)
+        requested_folded = requested.casefold()
+        joined_labels = "/".join(labels)
+        if (
+            requested == values[-1]
+            or requested_path == labels
+            or requested_folded == joined_labels
+        ):
+            matches.append(path)
+        elif requested_folded == labels[-1]:
+            matches.append(path)
+
+    if not matches:
+        raise RuntimeError(
+            f"智赢产品分类中找不到 {requested!r}；"
+            "请填写分类 ID、唯一分类名或完整路径（例如：圆佑同步/家电类）"
+        )
+    unique_paths = {
+        tuple(str(item["value"]) for item in path): path for path in matches
+    }
+    if len(unique_paths) > 1:
+        candidates = [
+            "/".join(item["label"] for item in path)
+            for path in list(unique_paths.values())[:8]
+        ]
+        raise RuntimeError(
+            f"智赢产品分类名称 {requested!r} 不唯一，请改用分类 ID 或完整路径："
+            + "；".join(candidates)
+        )
+    path = next(iter(unique_paths.values()))
+    return {
+        "category_id": str(path[-1]["value"]),
+        "category_name": path[-1]["label"],
+        "category_path": "/".join(item["label"] for item in path),
+        "path_values": [item["value"] for item in path],
+        "path_labels": [item["label"] for item in path],
+    }
+
+
+def _find_search_button(driver):
+    for button in driver.find_elements(By.CSS_SELECTOR, "button"):
+        try:
+            text = _clean_text(button.get_attribute("textContent") or button.text)
+            if text == "搜索" and button.is_displayed() and button.is_enabled():
+                return button
+        except Exception:
+            continue
+    return None
+
+
+def _apply_zying_category_filter(driver, wait, requested_category):
+    options = driver.execute_script(ZYING_CATEGORY_OPTIONS_SCRIPT) or []
+    if not options:
+        raise RuntimeError("未能读取智赢产品分类选项，页面可能尚未加载完成或已改版")
+    selection = _resolve_zying_category(options, requested_category)
+    old_signature = _page_signature(driver)
+    changed = driver.execute_script(
+        ZYING_SET_CATEGORY_SCRIPT,
+        selection["path_values"],
+    )
+    if not changed:
+        raise RuntimeError(
+            f"智赢产品分类 {selection['category_path']!r} 设置失败，页面分类控件可能已改版"
+        )
+
+    try:
+        wait.until(
+            lambda current_driver: selection["category_name"]
+            in _clean_text(
+                current_driver.execute_script(
+                    "const item=document.querySelector('.ant-cascader "
+                    ".ant-select-selection-item');"
+                    "return item ? item.textContent : '';"
+                )
+            )
+        )
+    except TimeoutException as exc:
+        raise RuntimeError(
+            f"智赢产品分类 {selection['category_path']!r} 已解析，但页面未显示选中状态"
+        ) from exc
+
+    search_button = _find_search_button(driver)
+    if search_button is None:
+        raise RuntimeError("已设置智赢产品分类，但没有找到“搜索”按钮")
+    try:
+        search_button.click()
+    except Exception:
+        driver.execute_script("arguments[0].click();", search_button)
+
+    try:
+        wait.until(
+            lambda current_driver: bool(
+                current_driver.find_elements(By.CSS_SELECTOR, TITLE_SELECTOR)
+            )
+            and _page_signature(current_driver) != old_signature
+        )
+    except TimeoutException as exc:
+        raise RuntimeError(
+            f"智赢产品分类 {selection['category_path']!r} 搜索后列表加载超时"
+        ) from exc
+    print(
+        f"智赢产品分类已指定：{selection['category_path']} "
+        f"(ID {selection['category_id']})",
+        flush=True,
+    )
+    return selection
 
 
 def _browser_auth_token(driver):
@@ -498,16 +696,92 @@ def _merge_ui_detail_record(record, details):
     return record
 
 
-def _click_product_card(driver, card):
+def _click_product_card(driver, card, attempt=0):
+    """按重试次数切换点击策略，避免一直重复点击无响应的卡片外层。"""
     driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", card)
-    try:
-        card.click()
-    except Exception:
-        driver.execute_script(
-            "arguments[0].dispatchEvent(new MouseEvent('click', "
-            "{bubbles: true, cancelable: true, view: window}));",
-            card,
+    if attempt <= 0:
+        try:
+            card.click()
+            return "卡片"
+        except Exception:
+            driver.execute_script("arguments[0].click();", card)
+            return "卡片-JS"
+
+    target = driver.execute_script(
+        "return arguments[0].querySelector(arguments[1]) || arguments[0];",
+        card,
+        DETAIL_CLICK_TARGET_SELECTOR,
+    )
+    driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", target)
+    if attempt == 1:
+        try:
+            target.click()
+            return "标题/链接"
+        except Exception:
+            driver.execute_script("arguments[0].click();", target)
+            return "标题/链接-JS"
+
+    driver.execute_script(
+        """
+        const target = arguments[0];
+        const options = {bubbles: true, cancelable: true, view: window};
+        for (const type of ['pointerdown', 'mousedown', 'pointerup', 'mouseup', 'click']) {
+            const EventClass = type.startsWith('pointer') && window.PointerEvent
+                ? window.PointerEvent
+                : window.MouseEvent;
+            target.dispatchEvent(new EventClass(type, options));
+        }
+        """,
+        target,
+    )
+    return "指针事件"
+
+
+class _DetailFieldsTimeout(TimeoutException):
+    """目标详情已打开，但表单字段没有在限定时间内加载完整。"""
+
+    def __init__(self, details):
+        super().__init__("目标详情字段加载超时")
+        self.details = details
+
+
+def _wait_for_clicked_detail(
+    driver,
+    expected_title,
+    expected_image,
+    expected_product_id="",
+):
+    """先确认打开的是目标商品，再等待表单字段；避免把旧详情误判为已打开。"""
+
+    def read_state(current_driver):
+        return current_driver.execute_script(
+            DETAIL_FORM_SCRIPT,
+            expected_title,
+            expected_image,
+            expected_product_id,
         )
+
+    state = WebDriverWait(
+        driver,
+        min(ZYING_DETAIL_OPEN_TIMEOUT, ZYING_DETAIL_CLICK_TIMEOUT),
+        poll_frequency=0.25,
+    ).until(read_state)
+    if state.get("ready"):
+        return state["details"]
+
+    def read_ready_state(current_driver):
+        current_state = read_state(current_driver) or {}
+        return current_state if current_state.get("ready") else False
+
+    try:
+        state = WebDriverWait(
+            driver,
+            ZYING_DETAIL_CLICK_TIMEOUT,
+            poll_frequency=0.25,
+        ).until(read_ready_state)
+    except TimeoutException as exc:
+        raise _DetailFieldsTimeout(state["details"]) from exc
+    return state["details"]
 
 
 def _find_record_title_element(
@@ -549,21 +823,24 @@ def _collect_clicked_product_details(
     )
     completed_records = []
     skipped_messages = []
+    fallback_messages = []
     for index, record in enumerate(records):
         expected_title = _clean_text(record.get("title"))
         expected_image = _clean_text(record.get("main_image_url"))
+        expected_product_id = _clean_text(record.get("product_id"))
         if not expected_title or not expected_image:
             raise RuntimeError(f"点击详情前缺少标题或主图：{record!r}")
 
-        # 每条产品都实际点击，不能复用上一个详情；主图负责确认点击后的详情。
+        # 每条产品都实际点击，不能复用上一条详情；优先用预解析的产品编号确认身份。
         details = None
         last_error = None
-        for attempt in range(2):
+        for attempt in range(ZYING_DETAIL_CLICK_ATTEMPTS):
             if details:
                 break
             print(
                 f"智赢{page_label}，正在点击详情 {index + 1}/{len(records)}，"
-                f"第 {attempt + 1}/2 次，标题 {expected_title!r}",
+                f"第 {attempt + 1}/{ZYING_DETAIL_CLICK_ATTEMPTS} 次，"
+                f"标题 {expected_title!r}",
                 flush=True,
             )
             title_elements = driver.find_elements(By.CSS_SELECTOR, TITLE_SELECTOR)
@@ -581,37 +858,41 @@ def _collect_clicked_product_details(
                     f"{len(title_elements)} 条。"
                 )
             card = _find_product_card(driver, title_element)
-            _click_product_card(driver, card)
+            click_method = _click_product_card(driver, card, attempt=attempt)
             try:
-                details = WebDriverWait(
+                details = _wait_for_clicked_detail(
                     driver,
-                    ZYING_DETAIL_CLICK_TIMEOUT,
-                    poll_frequency=0.25,
-                ).until(
-                    lambda current_driver: current_driver.execute_script(
-                        DETAIL_FORM_SCRIPT,
-                        expected_title,
-                        expected_image,
-                    )
+                    expected_title,
+                    expected_image,
+                    expected_product_id,
                 )
+            except _DetailFieldsTimeout as exc:
+                last_error = exc
+                loaded_product_id = _clean_text(exc.details.get("product_id"))
+                if loaded_product_id:
+                    record["product_id"] = loaded_product_id
+                    expected_product_id = loaded_product_id
+                print(
+                    f"智赢{page_label}详情 {index + 1}/{len(records)} 已通过"
+                    f"{click_method}打开并确认产品编号 {expected_product_id or '空'}，"
+                    f"但字段等待 {ZYING_DETAIL_CLICK_TIMEOUT} 秒未完成；"
+                    "停止页面重试，稍后使用接口详情补全",
+                    flush=True,
+                )
+                break
             except TimeoutException as exc:
                 last_error = exc
                 print(
-                    f"智赢{page_label}详情 {index + 1}/{len(records)} 等待 "
-                    f"{ZYING_DETAIL_CLICK_TIMEOUT} 秒未完成，准备刷新重试",
+                    f"智赢{page_label}详情 {index + 1}/{len(records)} 使用"
+                    f"{click_method}后 {min(ZYING_DETAIL_OPEN_TIMEOUT, ZYING_DETAIL_CLICK_TIMEOUT)} "
+                    "秒内未打开目标详情，准备切换点击方式重试",
                     flush=True,
                 )
-                refresh_buttons = driver.find_elements(
-                    By.CSS_SELECTOR,
-                    ".curd-detail-wrap .crud-detail-refresh",
-                )
-                if refresh_buttons:
-                    driver.execute_script("arguments[0].click();", refresh_buttons[0])
 
         if not details:
             current_ids = driver.find_elements(
                 By.CSS_SELECTOR,
-                ".curd-detail-wrap .crud-detail-header .h1",
+                f"{DETAIL_ROOT_SELECTOR} .crud-detail-header .h1",
             )
             current_id = (
                 _clean_text(current_ids[0].get_attribute("textContent"))
@@ -620,7 +901,7 @@ def _collect_clicked_product_details(
             )
             current_titles = driver.find_elements(
                 By.CSS_SELECTOR,
-                ".curd-detail-wrap textarea[placeholder='请输入内容']",
+                f"{DETAIL_ROOT_SELECTOR} textarea[placeholder='请输入内容']",
             )
             current_title = (
                 _clean_text(current_titles[0].get_attribute("value"))
@@ -632,6 +913,16 @@ def _collect_clicked_product_details(
                 f"当前详情编号 {current_id or '空'}，"
                 f"当前详情标题 {current_title or '空'!r}。"
             )
+            if _clean_text(record.get("product_id")):
+                fallback_messages.append(message)
+                completed_records.append(record)
+                print(
+                    f"智赢{page_label}详情 {index + 1}/{len(records)} 页面采集未完成，"
+                    f"已保留产品编号 {record['product_id']} 并继续，稍后使用接口详情补全："
+                    f"{message}",
+                    flush=True,
+                )
+                continue
             skipped_messages.append(message)
             print(
                 f"智赢{page_label}详情 {index + 1}/{len(records)} 采集失败，"
@@ -658,26 +949,78 @@ def _collect_clicked_product_details(
             f"其余 {len(completed_records)} 条继续入库",
             flush=True,
         )
+    if fallback_messages:
+        print(
+            f"智赢{page_label}有 {len(fallback_messages)} 条页面详情未完整加载，"
+            "已改用接口详情补全，未跳过商品",
+            flush=True,
+        )
     return completed_records
+
+
+def _find_product_search_row(session, token, record):
+    product_id = _clean_text(record.get("product_id"))
+    if product_id:
+        return {"id": product_id}
+
+    search_data = _zying_api_post(
+        session,
+        token,
+        "sale.stat",
+        {"page": 1, "pagesize": 60, "word": record.get("title", "")},
+    )
+    rows = (search_data.get("list") or {}).get("data") or []
+    search_row = _select_search_result(record, rows)
+    if not search_row or not search_row.get("id"):
+        raise RuntimeError(f"未找到产品编号：{record.get('title')!r}")
+    return search_row
+
+
+def _resolve_product_id(record, token):
+    """在点击前通过并发接口查询补齐编号，用编号识别翻译后标题的详情。"""
+    if _clean_text(record.get("product_id")):
+        return record
+    with requests.Session() as session:
+        session.trust_env = False
+        search_row = _find_product_search_row(session, token, record)
+    record["product_id"] = _format_number(search_row["id"])
+    return record
+
+
+def _resolve_product_ids(token, records):
+    unresolved_records = [
+        record for record in records if not _clean_text(record.get("product_id"))
+    ]
+    if not unresolved_records:
+        return records
+
+    failures = []
+    worker_count = min(ZYING_DETAIL_WORKERS, len(unresolved_records))
+    with ThreadPoolExecutor(max_workers=worker_count) as executor:
+        future_records = {
+            executor.submit(_resolve_product_id, record, token): record
+            for record in unresolved_records
+        }
+        for future in as_completed(future_records):
+            record = future_records[future]
+            try:
+                future.result()
+            except Exception as exc:
+                failures.append(f"{record.get('title')!r}: {exc}")
+    if failures:
+        print(
+            f"智赢点击前有 {len(failures)}/{len(unresolved_records)} 条产品编号"
+            "未能预解析，将继续使用标题/主图识别详情："
+            + "；".join(failures[:3]),
+            flush=True,
+        )
+    return records
 
 
 def _enrich_product_record(record, token):
     with requests.Session() as session:
         session.trust_env = False
-        product_id = _clean_text(record.get("product_id"))
-        if product_id:
-            search_row = {"id": product_id}
-        else:
-            search_data = _zying_api_post(
-                session,
-                token,
-                "sale.stat",
-                {"page": 1, "pagesize": 60, "word": record.get("title", "")},
-            )
-            rows = (search_data.get("list") or {}).get("data") or []
-            search_row = _select_search_result(record, rows)
-            if not search_row or not search_row.get("id"):
-                raise RuntimeError(f"未找到产品编号：{record.get('title')!r}")
+        search_row = _find_product_search_row(session, token, record)
 
         detail_data = _zying_api_post(
             session,
@@ -693,10 +1036,10 @@ def _enrich_product_record(record, token):
         return _merge_detail_record(record, search_row, detail_rows[0])
 
 
-def _enrich_product_records(driver, records):
+def _enrich_product_records(driver, records, token=None):
     if not records:
         return records
-    token = _browser_auth_token(driver)
+    token = token or _browser_auth_token(driver)
     failures = []
     worker_count = min(ZYING_DETAIL_WORKERS, len(records))
     with ThreadPoolExecutor(max_workers=worker_count) as executor:
@@ -719,6 +1062,27 @@ def _enrich_product_records(driver, records):
         )
     _enrich_product_categories(token, records)
     return records
+
+
+def _attach_zying_category(record, selection):
+    if not selection:
+        record.setdefault("zying_category_id", "")
+        record.setdefault("zying_category", "")
+        return record
+    record["zying_category_id"] = selection["category_id"]
+    record["zying_category"] = selection["category_path"]
+    raw_text = str(record.get("raw_text") or "").rstrip()
+    record["raw_text"] = "\n".join(
+        filter(
+            None,
+            (
+                raw_text,
+                f"智赢分类编号: {selection['category_id']}",
+                f"智赢产品分类: {selection['category_path']}",
+            ),
+        )
+    )
+    return record
 
 
 def _extract_labeled_value(text, labels):
@@ -994,15 +1358,42 @@ def _record_key(record):
     )
 
 
+def _persist_zying_page(page_records, page_number, page_count):
+    """同步提交单页数据；只有数据库事务提交成功后，采集器才会继续翻页。"""
+    if not page_records:
+        print(
+            f"智赢第 {page_number}/{page_count} 页没有可入库商品，继续下一页",
+            flush=True,
+        )
+        return 0
+
+    print(
+        f"智赢第 {page_number}/{page_count} 页读取完成，正在立即提交数据库 "
+        f"({len(page_records)} 条)",
+        flush=True,
+    )
+    inserted_count = insert_zying_product_info(page_records)
+    print(
+        f"智赢第 {page_number}/{page_count} 页数据库提交完成："
+        f"{inserted_count} 条；后续即使中断，本页数据仍已保留",
+        flush=True,
+    )
+    return inserted_count
+
+
 def collect_zying_products(
     number=None,
     window_id=DEFAULT_ZYING_WINDOW_ID,
     start_page=DEFAULT_ZYING_START_PAGE,
+    category=None,
 ):
-    """采集指定页数的智赢产品卡片，并批量写入 zying_product 表。"""
+    """采集智赢产品；category 指智赢页面自身的产品分类。"""
     requested_pages = DEFAULT_ZYING_PAGE_COUNT if number is None else number
     page_count = max(1, int(requested_pages))
     start_page = max(1, int(start_page))
+    requested_category = _clean_text(
+        DEFAULT_ZYING_CATEGORY if category is None else category
+    )
     if start_page > page_count:
         raise ValueError(
             f"起始页 {start_page} 不能大于结束页 {page_count}。"
@@ -1030,10 +1421,18 @@ def collect_zying_products(
     seen = set()
     inserted_count = 0
     skipped_count = 0
+    category_selection = None
+    last_committed_page = start_page - 1
 
     try:
         driver.get(ZYING_PRODUCT_URL)
         _wait_for_product_titles(driver, wait)
+        if requested_category:
+            category_selection = _apply_zying_category_filter(
+                driver,
+                wait,
+                requested_category,
+            )
         _go_to_first_page(driver, wait)
         for next_page in range(2, start_page + 1):
             if not _go_to_next_page(driver, wait):
@@ -1042,9 +1441,15 @@ def collect_zying_products(
                 )
         print(
             f"智赢自动翻页采集开始，计划采集第 {start_page}-{page_count} 页，"
-            f"共 {page_count - start_page + 1} 页",
+            f"共 {page_count - start_page + 1} 页"
+            + (
+                f"，智赢产品分类：{category_selection['category_path']}"
+                if category_selection
+                else "，智赢产品分类：全部"
+            ),
             flush=True,
         )
+        token = _browser_auth_token(driver)
 
         for page_number in range(start_page, page_count + 1):
             title_elements = _wait_for_product_titles(driver, wait)
@@ -1053,6 +1458,7 @@ def collect_zying_products(
                 for title_element in title_elements
             ]
             listed_count = len(extracted_records)
+            _resolve_product_ids(token, extracted_records)
             extracted_records = _collect_clicked_product_details(
                 driver,
                 extracted_records,
@@ -1061,7 +1467,9 @@ def collect_zying_products(
             )
             page_skipped_count = listed_count - len(extracted_records)
             skipped_count += page_skipped_count
-            _enrich_product_records(driver, extracted_records)
+            _enrich_product_records(driver, extracted_records, token=token)
+            for record in extracted_records:
+                _attach_zying_category(record, category_selection)
 
             page_records = []
             for record in extracted_records:
@@ -1072,23 +1480,37 @@ def collect_zying_products(
                 records.append(record)
                 page_records.append(record)
 
-            page_inserted_count = insert_zying_product_info(page_records)
+            page_inserted_count = _persist_zying_page(
+                page_records,
+                page_number,
+                page_count,
+            )
             inserted_count += page_inserted_count
+            last_committed_page = page_number
             print(
                 f"智赢产品第 {page_number}/{page_count} 页采集 "
-                f"{len(page_records)} 条，跳过 {page_skipped_count} 条，"
+                f"{len(page_records)} 条，详情失败跳过 {page_skipped_count} 条，"
                 f"入库 {page_inserted_count} 条",
                 flush=True,
             )
             if page_number >= page_count or not _go_to_next_page(driver, wait):
                 break
+    except Exception:
+        if last_committed_page >= start_page:
+            print(
+                f"智赢采集在第 {last_committed_page + 1} 页附近中断；"
+                f"第 {start_page}-{last_committed_page} 页已经逐页提交数据库。"
+                f"下次可使用 --start-page {last_committed_page + 1} 继续",
+                flush=True,
+            )
+        raise
     finally:
         # 只停止本次 ChromeDriver 连接，不关闭用户的 BitBrowser 窗口。
         chrome_service.stop()
         releaseBrowserLease(window_id)
 
     print(
-        f"智赢产品采集完成，共 {len(records)} 条，跳过 {skipped_count} 条，"
+        f"智赢产品采集完成，共 {len(records)} 条，详情失败跳过 {skipped_count} 条，"
         f"入库 {inserted_count} 条，"
         f"耗时 {int(time.time() - started_at)} 秒",
         flush=True,
@@ -1096,9 +1518,17 @@ def collect_zying_products(
     return records
 
 
-def check_yuanyou_title(number=None, window_id=DEFAULT_ZYING_WINDOW_ID):
+def check_yuanyou_title(
+    number=None,
+    window_id=DEFAULT_ZYING_WINDOW_ID,
+    category=None,
+):
     """保留旧函数名，兼容已有的手工调用方式。"""
-    return collect_zying_products(number=number, window_id=window_id)
+    return collect_zying_products(
+        number=number,
+        window_id=window_id,
+        category=category,
+    )
 
 
 def get_all_ids(text):
@@ -1125,6 +1555,14 @@ def main():
         ),
     )
     parser.add_argument("--window-id", default=DEFAULT_ZYING_WINDOW_ID, help="BitBrowser 窗口 ID")
+    parser.add_argument(
+        "--category",
+        default=DEFAULT_ZYING_CATEGORY,
+        help=(
+            "指定智赢页面的产品分类，可填写智赢分类 ID、唯一分类名或完整路径"
+            "（例如：圆佑同步/家电类）"
+        ),
+    )
     args = parser.parse_args()
     page_count = (
         args.pages_option
@@ -1134,7 +1572,12 @@ def main():
         else DEFAULT_ZYING_PAGE_COUNT
     )
     try:
-        collect_zying_products(page_count, args.window_id, args.start_page)
+        collect_zying_products(
+            page_count,
+            args.window_id,
+            args.start_page,
+            category=args.category,
+        )
     except (RuntimeError, ValueError) as exc:
         parser.exit(status=1, message=f"采集失败：{exc}\n")
 

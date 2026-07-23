@@ -20,7 +20,9 @@ import random
 
 from bit.bit_utils import get_latest_modified_file, get_bit_path, parser_delay_date, get_now_time, getWindowidByName
 from bit.bit_api import *
+from bit.bit_config import get_window_id_by_shop_name
 from bit.bit_mercado_login import ensure_mercado_login_from_home
+from bit.bit_reputation_info import get_cancellation_orders
 from AI_Agent.qianwen import *
 import pandas as pd
 from datetime import datetime, timedelta
@@ -645,19 +647,7 @@ def should_load_infraction_orders(form, message):
 # 申诉
 def shensu(name, site, form, message, mode="人工客服"):
     print(f"{name} {site} 开始进行{form}申诉，话术为{message}<br>")
-    config_path = get_bit_path() / "比特配置文件.xlsx"
-    wb = load_workbook(config_path)
-    sheet = wb.active
-    config_info = []
-
-    reuslt = []
-    # 使用 min_row=2 跳过第一行
-    window_id = ""
-    for row in sheet.iter_rows(min_row=2, values_only=True):
-        window_id = row[0]
-        window_name = row[1]
-        if window_name == name:
-            break
+    window_id = get_window_id_by_shop_name(name)
 
     res = openBrowser(window_id)  # 窗口ID从窗口配置界面中复制，或者api创建后返回
 
@@ -721,6 +711,12 @@ def shensu(name, site, form, message, mode="人工客服"):
             f"亲爱的客服，我叫{nickname}！这些产品是通用品牌产品，他们被系统误检测为侵权产品，你能帮我消除记录吗？",
         ]
 
+    if form == "取消率":
+        words = [
+            f"亲爱的客服，我叫{nickname}！这些订单并非因卖家责任取消，麻烦您重新核查订单记录，并移除这些订单对店铺取消率和声誉的影响，非常感谢！",
+            f"亲爱的客服，我叫{nickname}！这些订单的取消不应计入卖家责任，麻烦您帮我复核并消除对店铺取消率的影响，谢谢！",
+        ]
+
     if form == "投诉":
         words = [
             f"亲爱的客服，我叫{nickname}！我的产品没有任何质量问题，客户没有给出确凿的证据证明他出了问题，我认为客户是想免费购物，你能消除对我声誉的影响吗"
@@ -744,6 +740,7 @@ def shensu(name, site, form, message, mode="人工客服"):
             print(f"{get_now_time()} {name} {site} '选择站点失败，继续使用当前页面': {e}<br>")
     orders_random=""
     infraction_random=""
+    cancellation_random=""
     initial_huashu = ""
 
     if(form=="延误" and message == ""):
@@ -753,6 +750,24 @@ def shensu(name, site, form, message, mode="人工客服"):
             return "没有可以申诉的订单"
     if should_load_infraction_orders(form, message):
         infraction_random = get_infraction_orders_random(window_id,name, site, 10)
+    if form == "取消率" and message == "":
+        cancellation_orders = get_cancellation_orders(driver, name, site)
+        if not cancellation_orders:
+            close_appeal_tabs(driver, appeal_base_handles, name, site)
+            return "没有可以申诉的取消订单"
+        selected_orders = (
+            random.sample(cancellation_orders, 10)
+            if len(cancellation_orders) > 10
+            else cancellation_orders
+        )
+        cancellation_random = "、".join(str(order_id) for order_id in selected_orders)
+        print(
+            f"{get_now_time()} {name} {site} 共获取 {len(cancellation_orders)} 个取消订单，"
+            f"本轮人工客服按侵权规则发送 {len(selected_orders)} 个：{cancellation_random}<br>"
+        )
+        # 获取订单后当前位于 Metrics 页面，重新回到人工客服入口。
+        open_human_service_hub_with_ip_retry(driver, name, site)
+        select_mercado_site_fast(driver, name, site)
     try:
         open_human_service_chat(driver, name, site)
 
@@ -779,6 +794,17 @@ def shensu(name, site, form, message, mode="人工客服"):
                 click_human_send_button(driver, 30)
                 print(
                     f"{get_now_time()} {name} {site} '发送侵权的 id：{initial_huashu}<br>"
+                )
+                chat_ai(
+                    driver, name, site, form, initial_huashu, nickname
+                )
+            if form == "取消率":
+                initial_huashu = cancellation_random + words_random
+                get_human_chat_input(driver, 30).send_keys(initial_huashu)
+                time.sleep(3)
+                click_human_send_button(driver, 30)
+                print(
+                    f"{get_now_time()} {name} {site} 发送取消订单：{initial_huashu}<br>"
                 )
                 chat_ai(
                     driver, name, site, form, initial_huashu, nickname
@@ -926,6 +952,7 @@ def get_deepseek_human_service_reply(context, form, nickname):
     task_map = {
         "延误": "我正在申诉延误订单，希望客服消除对店铺声誉的影响。",
         "侵权": "我正在申诉侵权记录，希望客服认可这是通用品牌产品并消除记录。",
+        "取消率": "我正在申诉取消订单，希望客服复核并消除这些订单对店铺取消率和声誉的影响。",
         "投诉": "我正在申诉投诉订单，希望客服消除对店铺声誉的影响。",
     }
     messages = [
