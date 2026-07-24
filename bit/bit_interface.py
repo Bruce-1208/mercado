@@ -570,9 +570,9 @@ def run_mercado_login_console_job(shop_name="", window_id="", workers=3):
         if succeeded and window_id:
             try:
                 db_resolve_window_anomaly(window_id)
-                resolve_message = "，窗口异常已自动解除"
+                resolve_message = "，店铺待登录状态已自动解除"
             except Exception as exc:
-                resolve_message = f"，但解除窗口异常失败：{exc}"
+                resolve_message = f"，但更新店铺状态失败：{exc}"
         message = (
             f"{target} 登录任务完成{resolve_message}"
             if succeeded
@@ -1749,13 +1749,13 @@ def api_start_mercado_login_console():
             )
         except Exception as exc:
             return jsonify(
-                {"status": "error", "message": f"读取窗口异常失败：{exc}"}
+                {"status": "error", "message": f"读取店铺状态失败：{exc}"}
             ), 500
         if anomaly is None:
-            return jsonify({"status": "error", "message": "窗口异常不存在或已解除"}), 404
+            return jsonify({"status": "error", "message": "店铺状态不存在或已恢复"}), 404
         shop_name = str(anomaly.get("window_name") or "").strip()
         if not shop_name:
-            return jsonify({"status": "error", "message": "窗口异常缺少店铺名"}), 422
+            return jsonify({"status": "error", "message": "店铺状态记录缺少店铺名"}), 422
 
     started, task_state = start_mercado_login_console_job(
         shop_name=shop_name,

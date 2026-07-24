@@ -150,28 +150,45 @@ def run_reputation_infraction_then_daily():
         return None
 
     started_at = datetime.now()
+    reputation_options = _collection_options("REPUTATION")
+    infraction_options = _collection_options("INFRACTION")
     print(
-        f"{get_now_time()} 定时任务开始：声誉(并发10) -> 冷却3–5分钟 -> "
-        "侵权(并发10)，店铺错峰5–10秒，AI申诉暂停<br>"
+        f"{get_now_time()} 定时任务开始：声誉(并发{reputation_options['max_workers']}) "
+        f"-> 冷却 -> 侵权(并发{infraction_options['max_workers']})，"
+        f"店铺错峰{reputation_options['stagger_min_seconds']:.0f}–"
+        f"{reputation_options['stagger_max_seconds']:.0f}秒，AI申诉暂停<br>"
     )
     try:
-        reputation_options = _collection_options("REPUTATION")
+        phase_errors = {}
+        reputation_result = None
+        infraction_result = None
+
         print(f"{get_now_time()} 开始执行声誉采集：{reputation_options}<br>")
-        reputation_result = bit_reputation_info.main(**reputation_options)
-        print(f"{get_now_time()} 声誉采集执行完成<br>")
+        try:
+            reputation_result = bit_reputation_info.main(**reputation_options)
+            print(f"{get_now_time()} 声誉采集执行完成<br>")
+        except Exception as exc:
+            phase_errors["reputation"] = str(exc)
+            print(f"{get_now_time()} 声誉采集异常，将继续执行侵权采集：{exc}<br>")
+            traceback.print_exc()
 
         _wait_between_collections()
 
-        infraction_options = _collection_options("INFRACTION")
         print(f"{get_now_time()} 开始执行侵权采集：{infraction_options}<br>")
-        infraction_result = bit_infractions_info.main(**infraction_options)
-        print(f"{get_now_time()} 侵权采集执行完成<br>")
+        try:
+            infraction_result = bit_infractions_info.main(**infraction_options)
+            print(f"{get_now_time()} 侵权采集执行完成<br>")
+        except Exception as exc:
+            phase_errors["infraction"] = str(exc)
+            print(f"{get_now_time()} 侵权采集异常：{exc}<br>")
+            traceback.print_exc()
 
         appeal_result = _run_ai_appeal_loop(started_at)
         return {
             "reputation": reputation_result,
             "infraction": infraction_result,
             "ai_appeal": appeal_result,
+            "errors": phase_errors,
         }
     except Exception as exc:
         print(f"{get_now_time()} 定时任务异常：{exc}<br>")

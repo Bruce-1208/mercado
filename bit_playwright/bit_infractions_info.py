@@ -19,6 +19,7 @@ from bit.bit_collection_control import (
     stagger_sleep,
     trip_batch_rate_limit,
     wait_for_batch_resume,
+    write_unreadable_site_report,
 )
 from bit.bit_config import list_config_rows
 from bit.bit_runtime_lock import create_window_lease
@@ -1138,6 +1139,9 @@ def get_infractions_info_all(
 
     end = int(time.time())
     print(get_now_time() + "总花费", end - start)
+    failure_report_path = write_unreadable_site_report("侵权采集", result)
+    if failure_report_path:
+        print(f"{get_now_time()}无法读取站点已记录：{failure_report_path}")
 
     df = pd.DataFrame(
         infraction_info_sum,
@@ -1146,21 +1150,38 @@ def get_infractions_info_all(
 
     date_str = datetime.now().strftime("%Y-%m-%d-%H")
     output_path = bit_dir / f"美客多-武汉泽顺店铺侵权信息汇总-{date_str}.xlsx"
-    df.to_excel(output_path, index=False)
+    post_errors = []
+    for step_name, action in (
+        ("写入侵权数据", lambda: inset_infraction_info(infraction_info_sum)),
+        ("写入侵权任务记录", lambda: insert_task_record(result)),
+        ("导出侵权汇总", lambda: df.to_excel(output_path, index=False)),
+    ):
+        try:
+            action()
+        except Exception as exc:
+            post_errors.append(f"{step_name}失败：{exc}")
+            print(f"{get_now_time()}{step_name}失败：{exc}")
 
-    send_info(
-        "美客多所有店铺侵权汇总",
-        infraction_info_sum_str,
-        output_path,
-        output_path.name,
-    )
-    print(get_now_time() + "发送邮件成功")
+    email_sent = False
+    if output_path.exists():
+        email_sent = bool(
+            send_info(
+                "美客多所有店铺侵权汇总",
+                infraction_info_sum_str,
+                output_path,
+                output_path.name,
+            )
+        )
+        print(get_now_time() + ("发送邮件成功" if email_sent else "发送邮件失败，汇总文件已保留"))
 
-    insert_task_record(result)
-    inset_infraction_info(infraction_info_sum)
+    if post_errors:
+        raise RuntimeError("；".join(post_errors))
     return {
         "data": infraction_info_sum,
         "results": result,
+        "output_path": str(output_path),
+        "failure_report_path": str(failure_report_path) if failure_report_path else "",
+        "email_sent": email_sent,
         "failed_shops": sorted(
             {
                 str(row[1] or "")

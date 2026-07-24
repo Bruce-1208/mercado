@@ -38,6 +38,22 @@ class CollectionControlTests(unittest.TestCase):
             )
         )
 
+    def test_unreadable_site_report_contains_only_final_failures(self):
+        rows = [
+            ("获取声誉信息", "正常店", "墨西哥", "成功", "2026-07-24 01:00:00"),
+            ("获取声誉信息", "异常店", "巴西", "失败：页面结构变化", "2026-07-24 01:01:00"),
+        ]
+        with tempfile.TemporaryDirectory() as directory:
+            output_path = control.write_unreadable_site_report(
+                "声誉采集",
+                rows,
+                output_dir=directory,
+            )
+            content = output_path.read_text(encoding="utf-8-sig")
+        self.assertIn("异常店", content)
+        self.assertIn("巴西", content)
+        self.assertNotIn("正常店", content)
+
 
 class CollectionOrchestrationTests(unittest.TestCase):
     def test_scheduler_runs_reputation_then_cooldown_then_infraction_and_pauses_ai(self):
@@ -75,7 +91,34 @@ class CollectionOrchestrationTests(unittest.TestCase):
         self.assertEqual(infraction_main.call_args.kwargs["max_workers"], 10)
         self.assertEqual(reputation_main.call_args.kwargs["stagger_min_seconds"], 5)
         self.assertEqual(reputation_main.call_args.kwargs["stagger_max_seconds"], 10)
+        self.assertEqual(result["errors"], {})
         process_lock.release.assert_called_once_with()
+
+    def test_infraction_still_runs_when_reputation_post_processing_fails(self):
+        events = []
+        process_lock = mock.Mock()
+        process_lock.acquire.return_value = True
+
+        with (
+            mock.patch.object(bit_main, "InterProcessLock", return_value=process_lock),
+            mock.patch.object(
+                bit_main.bit_reputation_info,
+                "main",
+                side_effect=RuntimeError("声誉数据库写入失败"),
+            ),
+            mock.patch.object(
+                bit_main.bit_infractions_info,
+                "main",
+                side_effect=lambda **_kwargs: events.append("infraction") or {"ok": True},
+            ),
+            mock.patch.object(bit_main, "_wait_between_collections"),
+            mock.patch.object(bit_main, "_run_ai_appeal_loop", return_value=None),
+        ):
+            result = bit_main.run_reputation_infraction_then_daily()
+
+        self.assertEqual(events, ["infraction"])
+        self.assertEqual(result["errors"], {"reputation": "声誉数据库写入失败"})
+        self.assertEqual(result["infraction"], {"ok": True})
 
     def test_retry_plan_contains_only_failed_repairable_shops(self):
         successful = ("id-ok", "正常店", "", "墨西哥", "", "", "")

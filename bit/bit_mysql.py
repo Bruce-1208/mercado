@@ -84,6 +84,8 @@ def mysql_demo():
 
 
 def insert_task_record(record_list):
+    if not record_list:
+        return 0
     # 建立连接
     connection = pymysql.connect(**config)
 
@@ -96,17 +98,21 @@ def insert_task_record(record_list):
 
         # 核心：涉及写操作（增删改）必须提交事务
         connection.commit()
+        return len(record_list)
 
     except Exception as e:
         # 发生错误则回滚
         connection.rollback()
         print(f"操作失败，已回滚: {e}")
+        raise
     finally:
         # 关闭连接
         connection.close()
 
 
 def inset_reputation_info(reputation_list):
+    if not reputation_list:
+        return 0
     connection = pymysql.connect(**config)
 
     try:
@@ -161,17 +167,21 @@ def inset_reputation_info(reputation_list):
 
         # 核心：涉及写操作（增删改）必须提交事务
         connection.commit()
+        return len(normalized_list)
 
     except Exception as e:
         # 发生错误则回滚
         connection.rollback()
         print(f"操作失败，已回滚: {e}")
+        raise
     finally:
         # 关闭连接
         connection.close()
 
 
 def inset_infraction_info(infraction_list):
+    if not infraction_list:
+        return 0
     connection = pymysql.connect(**config)
 
     try:
@@ -203,11 +213,13 @@ def inset_infraction_info(infraction_list):
 
         # 核心：涉及写操作（增删改）必须提交事务
         connection.commit()
+        return len(normalized_list)
 
     except Exception as e:
         # 发生错误则回滚
         connection.rollback()
         print(f"操作失败，已回滚: {e}")
+        raise
     finally:
         # 关闭连接
         connection.close()

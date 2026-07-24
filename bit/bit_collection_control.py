@@ -4,6 +4,8 @@ import json
 import os
 import random
 import time
+import csv
+from datetime import datetime
 from pathlib import Path
 
 from bit.bit_runtime_lock import InterProcessLock, RUNTIME_LOCK_DIR
@@ -160,6 +162,58 @@ def outcome_has_marker(result_rows, *markers):
 
 def outcome_is_permanent_failure(result_rows):
     return outcome_has_marker(result_rows, *_PERMANENT_FAILURE_MARKERS)
+
+
+def failed_result_rows(result_rows):
+    """返回最终未成功读取的站点记录。"""
+    return [
+        row
+        for row in (result_rows or [])
+        if isinstance(row, (list, tuple))
+        and len(row) >= 4
+        and is_failure_status(row[3])
+    ]
+
+
+def write_unreadable_site_report(
+    collection_name,
+    result_rows,
+    output_dir=None,
+    recorded_at=None,
+):
+    """把本轮最终仍无法读取的站点写入独立 CSV，避免邮件或数据库异常时丢失。"""
+    failed_rows = failed_result_rows(result_rows)
+    if not failed_rows:
+        return None
+
+    recorded_at = recorded_at or datetime.now()
+    output_dir = Path(
+        output_dir
+        or (Path(__file__).resolve().parent / "采集失败记录")
+    )
+    output_dir.mkdir(parents=True, exist_ok=True)
+    safe_name = "".join(
+        character if character.isalnum() or character in "-_" else "_"
+        for character in str(collection_name or "采集")
+    ).strip("_") or "采集"
+    output_path = output_dir / (
+        f"无法读取站点-{safe_name}-{recorded_at:%Y%m%d-%H%M%S}-{os.getpid()}.csv"
+    )
+
+    with output_path.open("w", encoding="utf-8-sig", newline="") as stream:
+        writer = csv.writer(stream)
+        writer.writerow(("任务类型", "店铺名", "站点", "状态", "记录时间"))
+        for row in failed_rows:
+            writer.writerow(
+                (
+                    row[0] if len(row) > 0 else collection_name,
+                    row[1] if len(row) > 1 else "",
+                    row[2] if len(row) > 2 else "",
+                    row[3] if len(row) > 3 else "",
+                    row[4] if len(row) > 4 else recorded_at.strftime("%Y-%m-%d %H:%M:%S"),
+                )
+            )
+    return output_path
 
 
 def row_key(row):

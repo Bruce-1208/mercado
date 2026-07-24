@@ -57,7 +57,7 @@ def test_mercado_login_console_detects_job_from_another_process(monkeypatch):
     assert "另一个进程" in state["message"]
 
 
-def test_window_anomaly_can_restart_single_mercado_login(monkeypatch):
+def test_shop_status_can_restart_single_shop_auto_login(monkeypatch):
     captured = {}
     monkeypatch.setattr(
         bit_interface,
@@ -106,6 +106,18 @@ def test_window_anomaly_can_restart_single_mercado_login(monkeypatch):
         "window_id": "window-1",
         "workers": 3,
     }
+
+
+def test_shop_status_ui_uses_single_shop_auto_login_action():
+    template = (
+        Path(bit_interface.CURRENT_DIR) / "templates" / "index.html"
+    ).read_text(encoding="utf-8")
+
+    assert '>店铺状态</button>' in template
+    assert "<h2>店铺状态</h2>" in template
+    assert "重新自动登录" in template
+    assert "startSingleShopAutoLogin" in template
+    assert ">重新检测</button>" not in template
 
 
 def test_resolve_selected_appeal_sites_and_remove_duplicates():

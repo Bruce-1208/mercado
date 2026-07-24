@@ -50,13 +50,13 @@ def force_select_country(driver, country_name):
     try:
         success = driver.execute_script(heavy_duty_script)
         if success:
-            print(f"🎯 成功排除干扰，选中了纯净的 {country_name}")
+            print(f"成功排除干扰，选中了纯净的 {country_name}")
         else:
-            print(f"❌ 未找到符合条件的 {country_name}")
+            print(f"未找到符合条件的 {country_name}")
             return False
         return success
     except Exception as e:
-        print(f"⚠️ 脚本执行异常: {e}")
+        print(f"脚本执行异常: {e}")
         return False
 
 
