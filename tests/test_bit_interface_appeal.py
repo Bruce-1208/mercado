@@ -30,6 +30,33 @@ def test_mercado_login_console_does_not_start_duplicate_task(monkeypatch):
     assert state["running"] is True
 
 
+def test_mercado_login_console_detects_job_from_another_process(monkeypatch):
+    with bit_interface._mercado_login_task_lock:
+        previous = dict(bit_interface._mercado_login_task_state)
+        bit_interface._mercado_login_task_state["running"] = False
+    monkeypatch.setattr(
+        bit_interface,
+        "get_lock_owner",
+        lambda key: {
+            "owner": "bit_mercado_login:全部未忽略店铺",
+            "pid": 456,
+            "metadata": {"target": "全部未忽略店铺"},
+        },
+    )
+    try:
+        started, state = bit_interface.start_mercado_login_console_job()
+        assert bit_interface._mercado_login_task_state["running"] is False
+    finally:
+        with bit_interface._mercado_login_task_lock:
+            bit_interface._mercado_login_task_state.clear()
+            bit_interface._mercado_login_task_state.update(previous)
+
+    assert started is False
+    assert state["running"] is True
+    assert state["pid"] == 456
+    assert "另一个进程" in state["message"]
+
+
 def test_window_anomaly_can_restart_single_mercado_login(monkeypatch):
     captured = {}
     monkeypatch.setattr(

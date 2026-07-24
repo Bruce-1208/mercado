@@ -1,9 +1,11 @@
 import requests
 import json
+import os
 import threading
 import time
 
 from bit.bit_runtime_lock import (
+    InterProcessLock,
     create_window_lease,
     current_thread_window_lease,
     get_lock_owner,
@@ -19,6 +21,32 @@ url = "http://127.0.0.1:54345"
 headers = {"Content-Type": "application/json"}
 _AUTO_LEASES = {}
 _AUTO_LEASES_GUARD = threading.Lock()
+_BROWSER_API_MUTATION_LOCK_KEY = "bit_browser_api_mutation"
+_BROWSER_API_LOCK_TIMEOUT = int(os.environ.get("BIT_BROWSER_API_LOCK_TIMEOUT", "180"))
+_BROWSER_OPEN_TIMEOUT = int(os.environ.get("BIT_BROWSER_OPEN_TIMEOUT", "60"))
+_BROWSER_CLOSE_TIMEOUT = int(os.environ.get("BIT_BROWSER_CLOSE_TIMEOUT", "30"))
+
+
+def _post_browser_mutation(endpoint, browser_id, request_timeout):
+    """串行调用 BitBrowser 窗口接口，避免本地服务被并发打开请求阻塞。"""
+    api_lock = InterProcessLock(
+        _BROWSER_API_MUTATION_LOCK_KEY,
+        owner=f"bit_api.{endpoint}",
+        metadata={"endpoint": endpoint, "window_id": str(browser_id or "")},
+    )
+    if not api_lock.acquire(timeout=max(1, _BROWSER_API_LOCK_TIMEOUT)):
+        raise TimeoutError(
+            f"等待 BitBrowser {endpoint} 接口锁超时：{_BROWSER_API_LOCK_TIMEOUT} 秒"
+        )
+    try:
+        return requests.post(
+            f"{url}/browser/{endpoint}",
+            data=json.dumps({"id": f"{browser_id}"}),
+            headers=headers,
+            timeout=max(1, int(request_timeout)),
+        ).json()
+    finally:
+        api_lock.release()
 
 
 def createBrowser():  # 创建或者更新窗口，指纹参数 browserFingerPrint 如没有特定需求，只需要指定下内核即可，如果需要更详细的参数，请参考文档
@@ -72,14 +100,8 @@ def openBrowser(id):  # 直接指定ID打开窗口，也可以使用 createBrows
             }
         with _AUTO_LEASES_GUARD:
             _AUTO_LEASES[(threading.get_ident(), str(id))] = auto_lease
-    json_data = {"id": f"{id}"}
     try:
-        res = requests.post(
-            f"{url}/browser/open",
-            data=json.dumps(json_data),
-            headers=headers,
-            timeout=20,
-        ).json()
+        res = _post_browser_mutation("open", id, _BROWSER_OPEN_TIMEOUT)
         if auto_lease is not None and isinstance(res, dict) and res.get("success") is False:
             with _AUTO_LEASES_GUARD:
                 _AUTO_LEASES.pop((threading.get_ident(), str(id)), None)
@@ -121,11 +143,8 @@ def closeBrowser(id, lease=None):  # 关闭窗口
                 "msg": "窗口正在被其他任务使用，已跳过关闭",
                 "lockOwner": get_lock_owner(window_lock_key(id)),
             }
-    json_data = {"id": f"{id}"}
     try:
-        return requests.post(
-            f"{url}/browser/close", data=json.dumps(json_data), headers=headers, timeout=10
-        ).json()
+        return _post_browser_mutation("close", id, _BROWSER_CLOSE_TIMEOUT)
     finally:
         if temporary_lease is not None:
             temporary_lease.release()

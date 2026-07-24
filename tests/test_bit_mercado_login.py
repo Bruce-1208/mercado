@@ -81,6 +81,18 @@ def test_all_shop_command_prints_summary_without_json_scope_error(
     monkeypatch,
     capsys,
 ):
+    class AvailableLock:
+        def acquire(self, timeout=0):
+            return True
+
+        def release(self):
+            return None
+
+    monkeypatch.setattr(
+        mercado_login,
+        "InterProcessLock",
+        lambda *args, **kwargs: AvailableLock(),
+    )
     monkeypatch.setattr(
         mercado_login,
         "run_all_database_shop_logins",
@@ -94,6 +106,7 @@ def test_all_shop_command_prints_summary_without_json_scope_error(
             "report_path": "login-report.xlsx",
             "email_sent": True,
             "max_workers": 3,
+            "status_counts": {},
         },
     )
 
@@ -104,6 +117,30 @@ def test_all_shop_command_prints_summary_without_json_scope_error(
     assert '"ok": true' in output
     assert '"shop_count": 67' in output
     assert "cannot access local variable 'json'" not in output
+
+
+def test_command_line_rejects_overlapping_login_job(monkeypatch, capsys):
+    class BusyLock:
+        def acquire(self, timeout=0):
+            return False
+
+    monkeypatch.setattr(mercado_login, "InterProcessLock", lambda *a, **k: BusyLock())
+    monkeypatch.setattr(
+        mercado_login,
+        "get_lock_owner",
+        lambda key: {
+            "owner": "bit_mercado_login:已有批次",
+            "pid": 123,
+            "metadata": {"target": "全部未忽略店铺"},
+        },
+    )
+
+    exit_code = mercado_login.main(["--all-active-login", "--no-email"])
+    output = capsys.readouterr().out
+
+    assert exit_code == 5
+    assert "已有登录检测任务运行中" in output
+    assert "bit_mercado_login:已有批次" in output
 
 
 def test_login_results_are_synced_to_window_anomalies(monkeypatch):
@@ -236,7 +273,7 @@ def test_rate_limit_detection_does_not_match_missing_bitbrowser_window():
     )
 
 
-def test_home_login_check_switches_node_once_then_retries_twice(monkeypatch):
+def test_home_login_check_switches_node_before_each_rate_limit_retry(monkeypatch):
     states = [
         {
             "page_text": "429 Too Many Requests",
@@ -298,7 +335,8 @@ def test_home_login_check_switches_node_once_then_retries_twice(monkeypatch):
     assert result["rate_limit_retry_count"] == 2
     assert result["node_switch_result"]["switched"] is True
     assert driver.navigation_count == 3
-    assert len(switch_calls) == 1
+    assert len(switch_calls) == 2
+    assert len(result["node_switch_results"]) == 2
     assert sleep_calls == [30, 30]
 
 
@@ -348,7 +386,8 @@ def test_home_login_check_reports_failure_after_two_rate_limit_retries(monkeypat
     assert "重试 2 次仍未恢复" in result["message"]
     assert result["node_switch_result"]["reason"] == "switch_failed"
     assert driver.navigation_count == 3
-    assert len(switch_calls) == 1
+    assert len(switch_calls) == 2
+    assert len(result["node_switch_results"]) == 2
 
 
 def test_separate_auto_login_uses_email_then_saved_password(monkeypatch):
@@ -555,6 +594,50 @@ def test_email_submission_replaces_prefilled_default_email(monkeypatch):
     assert email_input.value == "database-account@example.com"
 
 
+def test_email_submission_uses_native_setter_when_autofill_restores_value(monkeypatch):
+    class AutofilledEmailInput:
+        def __init__(self):
+            self.value = "default-account@example.com"
+
+        def click(self):
+            return None
+
+        def clear(self):
+            return None
+
+        def send_keys(self, *keys):
+            # 模拟浏览器自动填充：键盘清空和输入都被立即恢复成默认账号。
+            self.value = "default-account@example.com"
+
+        def get_attribute(self, name):
+            return self.value if name == "value" else ""
+
+    class Driver:
+        def execute_script(self, script, element, value):
+            element.value = value
+            return element.value
+
+    email_input = AutofilledEmailInput()
+    submitted_values = []
+    monkeypatch.setattr(
+        mercado_login,
+        "_first_visible_element",
+        lambda *args, **kwargs: email_input,
+    )
+    monkeypatch.setattr(
+        mercado_login,
+        "_click_continue_button",
+        lambda *args, **kwargs: submitted_values.append(email_input.value) or True,
+    )
+
+    assert mercado_login._fill_email_and_continue(
+        Driver(),
+        "database-account@example.com",
+        shop_name="测试店铺",
+    )
+    assert submitted_values == ["database-account@example.com"]
+
+
 def test_saved_password_submission_clicks_confirm(monkeypatch):
     password_input = object()
     confirm_calls = []
@@ -641,6 +724,148 @@ def test_saved_password_submission_reports_rate_limit(monkeypatch):
         "密码页面遇到限频",
         "rate_limited",
     )
+
+
+@pytest.mark.parametrize(
+    ("page_text", "saved_password_detected", "expected"),
+    [
+        (
+            "The password is incorrect. Please try again.",
+            True,
+            mercado_login.LOGIN_SAVED_PASSWORD_INCORRECT,
+        ),
+        (
+            "Please enter your password",
+            False,
+            mercado_login.LOGIN_SAVED_PASSWORD_MISSING,
+        ),
+        (
+            "Please enter your password",
+            True,
+            mercado_login.LOGIN_FAILED,
+        ),
+    ],
+)
+def test_password_page_failure_distinguishes_missing_and_incorrect_password(
+    monkeypatch,
+    page_text,
+    saved_password_detected,
+    expected,
+):
+    monkeypatch.setattr(
+        mercado_login,
+        "_page_snapshot",
+        lambda driver: {
+            "page_text": page_text,
+            "title": "Login",
+            "current_url": "https://www.mercadolibre.com/login/password",
+        },
+    )
+
+    status = mercado_login._classify_password_page_failure(
+        object(),
+        saved_password_detected=saved_password_detected,
+    )
+
+    assert status == expected
+
+
+@pytest.mark.parametrize(
+    ("detail", "classified_status", "expected_message"),
+    [
+        (
+            mercado_login.SAVED_PASSWORD_SELECTION_ATTEMPTED_DETAIL,
+            mercado_login.LOGIN_SAVED_PASSWORD_MISSING,
+            "未保存可用的默认密码",
+        ),
+        (
+            mercado_login.SAVED_PASSWORD_SUBMITTED_DETAIL,
+            mercado_login.LOGIN_SAVED_PASSWORD_INCORRECT,
+            "页面提示密码错误",
+        ),
+    ],
+)
+def test_auto_login_reports_password_failure_reason(
+    monkeypatch,
+    detail,
+    classified_status,
+    expected_message,
+):
+    monkeypatch.setattr(
+        mercado_login,
+        "ensure_mercado_login_from_home",
+        lambda *args, **kwargs: {
+            "ok": False,
+            "status": mercado_login.LOGIN_NOT_LOGGED_IN,
+            "login_stage": "password",
+        },
+    )
+    monkeypatch.setattr(
+        mercado_login,
+        "_submit_browser_saved_password",
+        lambda *args, **kwargs: (True, detail, "password"),
+    )
+    monkeypatch.setattr(
+        mercado_login,
+        "_wait_for_stage_transition",
+        lambda *args, **kwargs: "password",
+    )
+    monkeypatch.setattr(
+        mercado_login,
+        "_classify_password_page_failure",
+        lambda *args, **kwargs: classified_status,
+    )
+
+    result = mercado_login.login_mercado_with_saved_password(
+        object(),
+        "测试店铺",
+        window_id="window-1",
+        email="shop@example.com",
+    )
+
+    assert result["status"] == classified_status
+    assert result["program_login_result"] == mercado_login.PROGRAM_LOGIN_FAILED
+    assert result["result_category"] == mercado_login.LOGIN_OUTCOME_AUTO_LOGIN_FAILED
+    assert expected_message in result["message"]
+
+
+def test_auto_login_retries_email_once_then_reports_rejected(monkeypatch):
+    entered_emails = []
+    monkeypatch.setattr(
+        mercado_login,
+        "ensure_mercado_login_from_home",
+        lambda *args, **kwargs: {
+            "ok": False,
+            "status": mercado_login.LOGIN_NOT_LOGGED_IN,
+            "login_stage": "email",
+        },
+    )
+    monkeypatch.setattr(
+        mercado_login,
+        "_fill_email_and_continue",
+        lambda driver, email, **kwargs: entered_emails.append(email) or True,
+    )
+    monkeypatch.setattr(
+        mercado_login,
+        "_wait_for_stage_transition",
+        lambda *args, **kwargs: "email",
+    )
+    monkeypatch.setattr(
+        mercado_login,
+        "_classify_email_page_failure",
+        lambda driver: mercado_login.LOGIN_EMAIL_REJECTED,
+    )
+
+    result = mercado_login.login_mercado_with_saved_password(
+        object(),
+        "测试店铺",
+        window_id="window-1",
+        email="shop@example.com",
+    )
+
+    assert entered_emails == ["shop@example.com", "shop@example.com"]
+    assert result["status"] == mercado_login.LOGIN_EMAIL_REJECTED
+    assert result["result_category"] == mercado_login.LOGIN_OUTCOME_AUTO_LOGIN_FAILED
 
 
 def test_verification_method_page_is_not_misclassified_as_email(monkeypatch):
@@ -897,6 +1122,160 @@ def test_login_one_shop_always_closes_open_browser(monkeypatch):
     assert events[-1] == "lease_released"
 
 
+def test_connect_reopens_window_when_debugger_port_never_becomes_ready(monkeypatch):
+    import requests
+    from selenium import webdriver
+    from bit import bit_api
+
+    open_calls = []
+    close_calls = []
+    debugger_calls = []
+
+    def fake_open(window_id):
+        open_calls.append(window_id)
+        return {
+            "success": True,
+            "data": {
+                "driver": "/tmp/fake-driver",
+                "http": "127.0.0.1:9222",
+            },
+        }
+
+    class DebuggerResponse:
+        def raise_for_status(self):
+            if len(debugger_calls) <= 6:
+                raise requests.ConnectionError("debugger not ready")
+
+    def fake_get(*args, **kwargs):
+        debugger_calls.append(args[0])
+        return DebuggerResponse()
+
+    class Driver:
+        def implicitly_wait(self, seconds):
+            return None
+
+        def set_page_load_timeout(self, seconds):
+            return None
+
+    monkeypatch.setattr(bit_api, "openBrowser", fake_open)
+    monkeypatch.setattr(
+        bit_api,
+        "closeBrowser",
+        lambda window_id: close_calls.append(window_id) or {"success": True},
+    )
+    monkeypatch.setattr(requests, "get", fake_get)
+    monkeypatch.setattr(webdriver, "Chrome", lambda *args, **kwargs: Driver())
+    monkeypatch.setattr(mercado_login.time, "sleep", lambda seconds: None)
+
+    driver = mercado_login._connect_to_open_bit_browser("window-1")
+
+    assert isinstance(driver, Driver)
+    assert open_calls == ["window-1", "window-1"]
+    assert close_calls == ["window-1"]
+    assert len(debugger_calls) == 7
+
+
+def test_connect_retries_when_open_api_times_out(monkeypatch):
+    import requests
+    from selenium import webdriver
+    from bit import bit_api
+
+    open_calls = []
+    close_calls = []
+
+    def fake_open(window_id):
+        open_calls.append(window_id)
+        if len(open_calls) == 1:
+            raise requests.ReadTimeout("open timed out")
+        return {
+            "success": True,
+            "data": {
+                "driver": "/tmp/fake-driver",
+                "http": "127.0.0.1:9222",
+            },
+        }
+
+    class DebuggerResponse:
+        def raise_for_status(self):
+            return None
+
+    class Driver:
+        def implicitly_wait(self, seconds):
+            return None
+
+        def set_page_load_timeout(self, seconds):
+            return None
+
+    monkeypatch.setattr(bit_api, "openBrowser", fake_open)
+    monkeypatch.setattr(
+        bit_api,
+        "closeBrowser",
+        lambda window_id: close_calls.append(window_id) or {"success": True},
+    )
+    monkeypatch.setattr(requests, "get", lambda *args, **kwargs: DebuggerResponse())
+    monkeypatch.setattr(webdriver, "Chrome", lambda *args, **kwargs: Driver())
+    monkeypatch.setattr(mercado_login.time, "sleep", lambda seconds: None)
+
+    driver = mercado_login._connect_to_open_bit_browser("window-1")
+
+    assert isinstance(driver, Driver)
+    assert open_calls == ["window-1", "window-1"]
+    assert close_calls == ["window-1"]
+
+
+def test_login_one_shop_retries_close_while_browser_is_still_opening(monkeypatch):
+    from bit import bit_api, bit_runtime_lock
+
+    class Lease:
+        acquired = False
+
+        def acquire(self, timeout=0):
+            self.acquired = True
+            return True
+
+        def release(self):
+            self.acquired = False
+
+    class Driver:
+        service = None
+
+    close_responses = [
+        {"success": False, "msg": "浏览器正在打开中"},
+        {"success": False, "msg": "浏览器正在打开中"},
+        {"success": True},
+    ]
+    sleeps = []
+    monkeypatch.setattr(bit_runtime_lock, "create_window_lease", lambda *a, **k: Lease())
+    monkeypatch.setattr(
+        mercado_login,
+        "_connect_to_open_bit_browser",
+        lambda *args, **kwargs: Driver(),
+    )
+    monkeypatch.setattr(
+        mercado_login,
+        "login_mercado_with_saved_password",
+        lambda *args, **kwargs: {
+            "ok": True,
+            "status": mercado_login.LOGIN_ALREADY_ACTIVE,
+            "message": "已登录",
+        },
+    )
+    monkeypatch.setattr(
+        bit_api,
+        "closeBrowser",
+        lambda *args, **kwargs: close_responses.pop(0),
+    )
+    monkeypatch.setattr(mercado_login.time, "sleep", sleeps.append)
+
+    result = mercado_login.login_one_database_shop(
+        {"shop_name": "测试店铺", "window_id": "window-1"}
+    )
+
+    assert result["browser_closed"] is True
+    assert result["close_error"] == ""
+    assert sleeps == [5, 5]
+
+
 def test_login_status_report_contains_formulas_filters_and_statuses(tmp_path):
     report_path = tmp_path / "login-report.xlsx"
     results = [
@@ -944,6 +1323,14 @@ def test_login_status_report_contains_formulas_filters_and_statuses(tmp_path):
         )
         assert summary["B6"].value == (
             f'=COUNTIF(\'登录明细\'!G:G,"{mercado_login.LOGIN_OUTCOME_AUTO_LOGIN_SUCCESS}")'
+        )
+        assert summary["A8"].value == "其中：浏览器未保存默认密码"
+        assert summary["B8"].value == (
+            f'=COUNTIF(\'登录明细\'!H:H,"{mercado_login.LOGIN_SAVED_PASSWORD_MISSING}")'
+        )
+        assert summary["A9"].value == "其中：浏览器默认密码错误"
+        assert summary["B9"].value == (
+            f'=COUNTIF(\'登录明细\'!H:H,"{mercado_login.LOGIN_SAVED_PASSWORD_INCORRECT}")'
         )
         assert details.freeze_panes == "A2"
         assert details.auto_filter.ref == "A1:P3"

@@ -46,8 +46,8 @@ import bit.bit_daily_task as bit_daily_task
 import bit.bit_infractions_info as bit_infractions_info
 import bit.bit_reputation_info as bit_reputation_info
 from bit.bit_appeal import *
-from bit.bit_runtime_lock import create_window_lease
-from bit.bit_mercado_login import is_login_blocking_result
+from bit.bit_runtime_lock import create_window_lease, get_lock_owner
+from bit.bit_mercado_login import MERCADO_LOGIN_JOB_LOCK_KEY, is_login_blocking_result
 from bit.bit_utils import *
 from bit.bit_api import *
 
@@ -485,10 +485,28 @@ def _append_mercado_login_task_log(text):
 
 def _mercado_login_task_snapshot():
     with _mercado_login_task_lock:
-        return {
+        snapshot = {
             **dict(_mercado_login_task_state),
             "log": "".join(_mercado_login_task_logs),
         }
+    if not snapshot.get("running"):
+        process_owner = get_lock_owner(MERCADO_LOGIN_JOB_LOCK_KEY)
+        if process_owner:
+            target = str(
+                (process_owner.get("metadata") or {}).get("target")
+                or process_owner.get("owner")
+                or "现有登录检测任务"
+            )
+            snapshot.update(
+                {
+                    "running": True,
+                    "status": "running",
+                    "message": f"{target} 正在另一个进程中运行",
+                    "target": target,
+                    "pid": process_owner.get("pid"),
+                }
+            )
+    return snapshot
 
 
 def _build_mercado_login_command(shop_name="", workers=3):
@@ -594,8 +612,9 @@ def run_mercado_login_console_job(shop_name="", window_id="", workers=3):
 
 def start_mercado_login_console_job(shop_name="", window_id="", workers=3):
     with _mercado_login_task_lock:
-        if _mercado_login_task_state.get("running"):
-            return False, _mercado_login_task_snapshot()
+        snapshot = _mercado_login_task_snapshot()
+        if snapshot.get("running"):
+            return False, snapshot
         target = str(shop_name or "").strip() or "全部未忽略店铺"
         _mercado_login_task_state.update(
             {
