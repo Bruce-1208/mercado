@@ -158,34 +158,3 @@ if __name__ == "__main__":
     email_infos = read_email_info_all(driver)
     for i in email_infos:
         print(i)
-
-    # wb = load_workbook(r'D:\比特配置文件.xlsx')
-    # sheet = wb.active
-    # reputation_info_sum=[]
-    # # 使用 min_row=2 跳过第一行
-    # for row in sheet.iter_rows(min_row=2, values_only=True):
-    #     print(row)  # row 是一个元组，包含该行所有数据
-    #     id=row[0]
-    #     name = row[1]
-    #     remark= row[2]
-    #     res = openBrowser(id)
-    #
-    #     if(remark=='忽略'):
-    #         continue
-    #     print(res)
-    #
-    #     driverPath = res['data']['driver']
-    #     debuggerAddress = res['data']['http']
-    #
-    #     # selenium 连接代码
-    #     chrome_options = webdriver.ChromeOptions()
-    #     chrome_options.add_experimental_option("debuggerAddress", debuggerAddress)
-    #
-    #     chrome_service = Service(driverPath)
-    #     driver = webdriver.Chrome(service=chrome_service, options=chrome_options)
-    #
-    #     driver.implicitly_wait(10)
-    #     # 设置最长等待时间为 10 秒
-    #     wait = WebDriverWait(driver, 30)
-    #
-    #     read_email_info_all(driver)

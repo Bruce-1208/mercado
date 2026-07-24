@@ -758,6 +758,7 @@
                             <select id="form">
                                 <option value="延误">延误</option>
                                 <option value="侵权">侵权</option>
+                                <option value="取消率">取消率</option>
                                 <option value="投诉">投诉</option>
                             </select>
                         </div>
@@ -903,13 +904,14 @@
             <div class="tab-page" id="tab-window-anomalies">
                 <div class="tab-heading">
                     <h2>窗口异常</h2>
-                    <p>展示 daily_task 检测到登录失效、需要人工重新登录的店铺窗口</p>
+                    <p>展示登录失效窗口，并可启动 bit_mercado_login 自动重新检测</p>
                 </div>
 
                 <section class="panel infractions-panel">
                     <div class="infractions-header">
                         <h2 class="panel-title" style="margin: 0;">需要处理的窗口</h2>
                         <div class="header-actions">
+                            <button class="primary" id="start-mercado-login-btn" type="button" onclick="startMercadoLogin()">启动全部登录检测</button>
                             <button class="secondary" type="button" onclick="loadWindowAnomalies()">刷新数据</button>
                         </div>
                     </div>
@@ -931,6 +933,7 @@
                                     <th>窗口 ID</th>
                                     <th>站点</th>
                                     <th>异常类型</th>
+                                    <th>来源</th>
                                     <th>原因</th>
                                     <th>检测次数</th>
                                     <th>首次检测</th>
@@ -939,10 +942,38 @@
                                 </tr>
                             </thead>
                             <tbody id="window-anomaly-body">
-                                <tr><td class="empty-state" colspan="9">正在加载窗口异常...</td></tr>
+                                <tr><td class="empty-state" colspan="10">正在加载窗口异常...</td></tr>
                             </tbody>
                         </table>
                     </div>
+                </section>
+
+                <section class="panel log-panel" style="margin-top: 8px;">
+                    <div class="log-header">
+                        <h2 class="panel-title" style="margin: 0;">bit_mercado_login 运行日志</h2>
+                        <div class="header-actions">
+                            <span class="status" id="mercado-login-status-badge">
+                                <span class="status-dot"></span>
+                                <span id="mercado-login-status-text">等待启动</span>
+                            </span>
+                            <button class="secondary" type="button" onclick="loadMercadoLoginStatus()">刷新日志</button>
+                        </div>
+                    </div>
+                    <div class="summary-row">
+                        <div class="metric">
+                            <div class="metric-label">当前目标</div>
+                            <div class="metric-value" id="mercado-login-target">全部未忽略店铺</div>
+                        </div>
+                        <div class="metric">
+                            <div class="metric-label">开始时间</div>
+                            <div class="metric-value" id="mercado-login-started">-</div>
+                        </div>
+                        <div class="metric">
+                            <div class="metric-label">结束时间</div>
+                            <div class="metric-value" id="mercado-login-finished">-</div>
+                        </div>
+                    </div>
+                    <pre id="mercado-login-log">等待任务启动...</pre>
                 </section>
             </div>
 
@@ -1173,6 +1204,13 @@
         const windowAnomalyBody = document.getElementById("window-anomaly-body");
         const windowAnomalyTotal = document.getElementById("window-anomaly-total");
         const windowAnomalyLatestTime = document.getElementById("window-anomaly-latest-time");
+        const startMercadoLoginBtn = document.getElementById("start-mercado-login-btn");
+        const mercadoLoginStatusBadge = document.getElementById("mercado-login-status-badge");
+        const mercadoLoginStatusText = document.getElementById("mercado-login-status-text");
+        const mercadoLoginTarget = document.getElementById("mercado-login-target");
+        const mercadoLoginStarted = document.getElementById("mercado-login-started");
+        const mercadoLoginFinished = document.getElementById("mercado-login-finished");
+        const mercadoLoginLog = document.getElementById("mercado-login-log");
         let infractionDays = 30;
         let infractionsLoaded = false;
         let reputationLoaded = false;
@@ -1201,8 +1239,11 @@
             if (tabName === "tasks" && !tasksLoaded) {
                 loadDailyTaskStatus();
             }
-            if (tabName === "window-anomalies" && !windowAnomaliesLoaded) {
-                loadWindowAnomalies();
+            if (tabName === "window-anomalies") {
+                if (!windowAnomaliesLoaded) {
+                    loadWindowAnomalies();
+                }
+                loadMercadoLoginStatus();
             }
         }
 
@@ -1729,7 +1770,7 @@
 
         async function loadWindowAnomalies() {
             if (!windowAnomalyBody) return;
-            windowAnomalyBody.innerHTML = '<tr><td class="empty-state" colspan="9">正在加载窗口异常...</td></tr>';
+            windowAnomalyBody.innerHTML = '<tr><td class="empty-state" colspan="10">正在加载窗口异常...</td></tr>';
             try {
                 const response = await fetch("/api/window-anomalies?active_only=1&limit=500");
                 const payload = await response.json();
@@ -1744,7 +1785,7 @@
                 windowAnomalyLatestTime.textContent = rows.length ? (rows[0].last_detected_at || "-") : "-";
 
                 if (!rows.length) {
-                    windowAnomalyBody.innerHTML = '<tr><td class="empty-state" colspan="9">当前没有需要重新登录的窗口</td></tr>';
+                    windowAnomalyBody.innerHTML = '<tr><td class="empty-state" colspan="10">当前没有需要重新登录的窗口</td></tr>';
                     return;
                 }
 
@@ -1754,15 +1795,19 @@
                         <td title="${escapeHtml(row.window_id)}">${escapeHtml(row.window_id || "-")}</td>
                         <td>${escapeHtml(row.site || "-")}</td>
                         <td><span class="status-tag fail">${escapeHtml(row.anomaly_type || "需要登录")}</span></td>
+                        <td>${escapeHtml(row.source || "-")}</td>
                         <td title="${escapeHtml(row.reason)}">${escapeHtml(row.reason || "-")}</td>
                         <td>${escapeHtml(row.occurrence_count || 1)}</td>
                         <td>${escapeHtml(row.first_detected_at || "-")}</td>
                         <td>${escapeHtml(row.last_detected_at || "-")}</td>
-                        <td><button class="secondary" type="button" onclick="resolveWindowAnomaly('${encodeURIComponent(row.window_id || "")}')">已重新登录</button></td>
+                        <td>
+                            <button class="secondary" type="button" onclick="startMercadoLogin('${encodeURIComponent(row.window_id || "")}')">重新检测</button>
+                            <button class="secondary" type="button" onclick="resolveWindowAnomaly('${encodeURIComponent(row.window_id || "")}')">已重新登录</button>
+                        </td>
                     </tr>
                 `).join("");
             } catch (err) {
-                windowAnomalyBody.innerHTML = `<tr><td class="empty-state" colspan="9">加载失败：${escapeHtml(err.message || err)}</td></tr>`;
+                windowAnomalyBody.innerHTML = `<tr><td class="empty-state" colspan="10">加载失败：${escapeHtml(err.message || err)}</td></tr>`;
             }
         }
 
@@ -1842,6 +1887,60 @@
                 startBtn.disabled = false;
                 stopBtn.disabled = true;
                 activeAppealTaskId = "";
+            }
+        }
+
+        async function loadMercadoLoginStatus() {
+            if (!mercadoLoginLog) return;
+            try {
+                const response = await fetch("/api/window-anomalies/mercado-login/status");
+                const payload = await response.json();
+                if (!response.ok || payload.status !== "success") {
+                    throw new Error(payload.message || `接口请求失败：${response.status}`);
+                }
+                const state = payload.data || {};
+                mercadoLoginStatusText.textContent = state.running ? "运行中" : (
+                    state.status === "success" ? "已完成" : state.status === "error" ? "失败" : "等待启动"
+                );
+                mercadoLoginStatusBadge.className = `status ${state.running ? "running" : (state.status === "error" ? "error" : "")}`.trim();
+                mercadoLoginStarted.textContent = state.started_at || "-";
+                mercadoLoginFinished.textContent = state.finished_at || "-";
+                mercadoLoginTarget.textContent = state.target || "全部未忽略店铺";
+                mercadoLoginLog.textContent = state.log || state.message || "等待任务启动...";
+                mercadoLoginLog.scrollTop = mercadoLoginLog.scrollHeight;
+                startMercadoLoginBtn.disabled = Boolean(state.running);
+                startMercadoLoginBtn.textContent = state.running
+                    ? "登录检测运行中"
+                    : (state.started_at ? "重新启动全部登录检测" : "启动全部登录检测");
+                if (state.running) {
+                    window.setTimeout(loadMercadoLoginStatus, 2000);
+                } else if (windowAnomaliesLoaded) {
+                    await loadWindowAnomalies();
+                }
+            } catch (err) {
+                mercadoLoginStatusText.textContent = "状态读取失败";
+                mercadoLoginLog.textContent = `读取日志失败：${err.message || err}`;
+                startMercadoLoginBtn.disabled = false;
+            }
+        }
+
+        async function startMercadoLogin(encodedWindowId = "") {
+            const windowId = decodeURIComponent(encodedWindowId || "");
+            startMercadoLoginBtn.disabled = true;
+            try {
+                const response = await fetch("/api/window-anomalies/mercado-login/start", {
+                    method: "POST",
+                    headers: {"Content-Type": "application/json"},
+                    body: JSON.stringify(windowId ? {window_id: windowId} : {workers: 3}),
+                });
+                const payload = await response.json();
+                if (!response.ok || payload.status !== "success") {
+                    throw new Error(payload.message || `接口请求失败：${response.status}`);
+                }
+                await loadMercadoLoginStatus();
+            } catch (err) {
+                alert(`启动登录检测失败：${err.message || err}`);
+                await loadMercadoLoginStatus();
             }
         }
 

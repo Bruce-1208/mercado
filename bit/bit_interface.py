@@ -1,10 +1,12 @@
 import queue
+from collections import deque
 import functools
 import hashlib
 import hmac
 import os
 import platform
 import secrets
+import subprocess
 import sys
 import threading
 import time
@@ -90,6 +92,9 @@ def _resolve_use_db_api():
 USE_DB_API = _resolve_use_db_api()
 
 if USE_DB_API:
+    db_list_bit_browser_configs = bit_db_api.list_bit_browser_configs
+    db_get_bit_browser_config = bit_db_api.get_bit_browser_config
+    db_upsert_bit_browser_configs = bit_db_api.upsert_bit_browser_configs
     db_get_latest_infraction_info = bit_db_api.get_latest_infraction_info
     db_get_latest_reputation_info = bit_db_api.get_latest_reputation_info
     db_get_ai_appeal_records = bit_db_api.get_ai_appeal_records
@@ -110,6 +115,9 @@ else:
     import pymysql
     from bit.bit_mysql import config as mysql_config
     from bit.bit_mysql import (
+        list_bit_browser_configs,
+        get_bit_browser_config,
+        upsert_bit_browser_configs,
         get_latest_infraction_info,
         get_latest_reputation_info,
         get_ai_appeal_records,
@@ -128,6 +136,9 @@ else:
         upsert_window_anomaly,
     )
 
+    db_list_bit_browser_configs = list_bit_browser_configs
+    db_get_bit_browser_config = get_bit_browser_config
+    db_upsert_bit_browser_configs = upsert_bit_browser_configs
     db_get_latest_infraction_info = get_latest_infraction_info
     db_get_latest_reputation_info = get_latest_reputation_info
     db_get_ai_appeal_records = get_ai_appeal_records
@@ -326,6 +337,39 @@ _daily_task_state = {
     "message": "等待启动",
     "params": {},
 }
+_mercado_login_task_lock = threading.RLock()
+_mercado_login_task_process = None
+_mercado_login_log_path = CURRENT_DIR / "logs" / "bit_mercado_login_console.log"
+
+
+def _read_recent_mercado_login_logs(max_bytes=256 * 1024, max_lines=800):
+    try:
+        with _mercado_login_log_path.open("rb") as log_file:
+            log_file.seek(0, os.SEEK_END)
+            size = log_file.tell()
+            log_file.seek(max(0, size - max_bytes), os.SEEK_SET)
+            content = log_file.read().decode("utf-8", errors="replace")
+        return content.splitlines(keepends=True)[-max_lines:]
+    except OSError:
+        return []
+
+
+_mercado_login_task_logs = deque(
+    _read_recent_mercado_login_logs(),
+    maxlen=800,
+)
+_mercado_login_task_state = {
+    "running": False,
+    "started_at": "",
+    "finished_at": "",
+    "status": "idle",
+    "message": "等待启动",
+    "target": "全部未忽略店铺",
+    "window_id": "",
+    "pid": None,
+    "returncode": None,
+    "log_path": str(_mercado_login_log_path),
+}
 
 APPEAL_SITES = ("墨西哥", "巴西", "哥伦比亚", "智利", "阿根廷", "乌拉圭")
 APPEAL_LOOP_COUNTS = (10, 20, 50)
@@ -424,6 +468,155 @@ def register_thread_log_queue(output_queue):
 def unregister_thread_log_queue():
     with _thread_log_lock:
         _thread_log_queues.pop(threading.get_ident(), None)
+
+
+def _append_mercado_login_task_log(text):
+    text = format_log_text(text)
+    if not text:
+        return
+    if not text.endswith("\n"):
+        text += "\n"
+    with _mercado_login_task_lock:
+        _mercado_login_task_logs.append(text)
+        _mercado_login_log_path.parent.mkdir(parents=True, exist_ok=True)
+        with _mercado_login_log_path.open("a", encoding="utf-8") as log_file:
+            log_file.write(text)
+
+
+def _mercado_login_task_snapshot():
+    with _mercado_login_task_lock:
+        return {
+            **dict(_mercado_login_task_state),
+            "log": "".join(_mercado_login_task_logs),
+        }
+
+
+def _build_mercado_login_command(shop_name="", workers=3):
+    command = [
+        sys.executable,
+        "-u",
+        "-m",
+        "bit.bit_mercado_login",
+    ]
+    shop_name = str(shop_name or "").strip()
+    if shop_name:
+        command.extend(("--shop", shop_name, "--auto-login"))
+    else:
+        command.extend(
+            (
+                "--all-active-login",
+                "--workers",
+                str(max(1, min(int(workers or 3), 3))),
+            )
+        )
+    command.extend(("--wait-seconds", "60", "--page-load-timeout", "20"))
+    return command
+
+
+def run_mercado_login_console_job(shop_name="", window_id="", workers=3):
+    """后台运行登录任务，并把子进程及其工作进程输出持久化给控制台。"""
+    global _mercado_login_task_process
+    target = str(shop_name or "").strip() or "全部未忽略店铺"
+    command = _build_mercado_login_command(shop_name=shop_name, workers=workers)
+    _append_mercado_login_task_log(
+        f"{get_now_time()} ===== bit_mercado_login 启动：{target} ====="
+    )
+    try:
+        child_env = os.environ.copy()
+        child_env["PYTHONIOENCODING"] = "utf-8"
+        child_env["PYTHONUNBUFFERED"] = "1"
+        creationflags = (
+            getattr(subprocess, "CREATE_NO_WINDOW", 0) if os.name == "nt" else 0
+        )
+        process = subprocess.Popen(
+            command,
+            cwd=str(PROJECT_ROOT),
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            bufsize=1,
+            env=child_env,
+            creationflags=creationflags,
+        )
+        with _mercado_login_task_lock:
+            _mercado_login_task_process = process
+            _mercado_login_task_state["pid"] = process.pid
+        if process.stdout is not None:
+            for line in process.stdout:
+                _append_mercado_login_task_log(line)
+        returncode = process.wait()
+        succeeded = returncode == 0
+        resolve_message = ""
+        if succeeded and window_id:
+            try:
+                db_resolve_window_anomaly(window_id)
+                resolve_message = "，窗口异常已自动解除"
+            except Exception as exc:
+                resolve_message = f"，但解除窗口异常失败：{exc}"
+        message = (
+            f"{target} 登录任务完成{resolve_message}"
+            if succeeded
+            else f"{target} 登录任务失败，退出码：{returncode}"
+        )
+        with _mercado_login_task_lock:
+            _mercado_login_task_state.update(
+                {
+                    "running": False,
+                    "finished_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                    "status": "success" if succeeded else "error",
+                    "message": message,
+                    "returncode": returncode,
+                }
+            )
+        _append_mercado_login_task_log(f"{get_now_time()} {message}")
+    except Exception as exc:
+        logging.error("bit_mercado_login console job failed: %s", exc)
+        traceback.print_exc()
+        with _mercado_login_task_lock:
+            _mercado_login_task_state.update(
+                {
+                    "running": False,
+                    "finished_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                    "status": "error",
+                    "message": str(exc),
+                    "returncode": None,
+                }
+            )
+        _append_mercado_login_task_log(
+            f"{get_now_time()} bit_mercado_login 启动失败：{exc}"
+        )
+    finally:
+        with _mercado_login_task_lock:
+            _mercado_login_task_process = None
+
+
+def start_mercado_login_console_job(shop_name="", window_id="", workers=3):
+    with _mercado_login_task_lock:
+        if _mercado_login_task_state.get("running"):
+            return False, _mercado_login_task_snapshot()
+        target = str(shop_name or "").strip() or "全部未忽略店铺"
+        _mercado_login_task_state.update(
+            {
+                "running": True,
+                "started_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                "finished_at": "",
+                "status": "running",
+                "message": f"{target} 登录任务已启动",
+                "target": target,
+                "window_id": str(window_id or "").strip(),
+                "pid": None,
+                "returncode": None,
+            }
+        )
+        task_thread = threading.Thread(
+            target=run_mercado_login_console_job,
+            args=(shop_name, window_id, workers),
+            daemon=True,
+        )
+        task_thread.start()
+        return True, _mercado_login_task_snapshot()
 
 
 def run_infraction_collect_job():
@@ -1225,6 +1418,63 @@ def api_db_insert_task_records():
     return jsonify({"status": "success", "data": {"count": len(records)}})
 
 
+@app.route('/api/db/browser-configs', methods=['GET'])
+@internal_api_required
+def api_db_list_browser_configs():
+    blocked = reject_db_api_client_mode()
+    if blocked:
+        return blocked
+    include_ignored = str(request.args.get("include_ignored", "1")).strip().lower() not in (
+        "0",
+        "false",
+        "no",
+    )
+    return jsonify(
+        {
+            "status": "success",
+            "data": db_list_bit_browser_configs(include_ignored),
+        }
+    )
+
+
+@app.route('/api/db/browser-configs/lookup', methods=['GET'])
+@internal_api_required
+def api_db_get_browser_config():
+    blocked = reject_db_api_client_mode()
+    if blocked:
+        return blocked
+    shop_name = request.args.get("shop_name", "")
+    window_id = request.args.get("window_id", "")
+    if not str(shop_name or "").strip() and not str(window_id or "").strip():
+        return jsonify({"status": "error", "message": "Missing shop_name or window_id"}), 422
+    include_ignored = str(request.args.get("include_ignored", "1")).strip().lower() not in (
+        "0",
+        "false",
+        "no",
+    )
+    return jsonify(
+        {
+            "status": "success",
+            "data": db_get_bit_browser_config(shop_name, window_id, include_ignored),
+        }
+    )
+
+
+@app.route('/api/db/browser-configs/bulk', methods=['POST'])
+@internal_api_required
+def api_db_upsert_browser_configs():
+    blocked = reject_db_api_client_mode()
+    if blocked:
+        return blocked
+    data = request.get_json(silent=True) or {}
+    records = data.get("records") or []
+    if not isinstance(records, list):
+        return jsonify({"status": "error", "message": "records must be an array"}), 422
+    replace = bool(data.get("replace", False))
+    result = db_upsert_bit_browser_configs(records, replace)
+    return jsonify({"status": "success", "data": result})
+
+
 @app.route('/api/db/reputation/bulk', methods=['POST'])
 @internal_api_required
 def api_db_insert_reputation():
@@ -1453,6 +1703,61 @@ def api_resolve_window_anomaly(window_id):
     except Exception as e:
         logging.error("Resolve window anomaly failed: %s", e)
         return jsonify({"status": "error", "message": f"Database error: {str(e)}"}), 500
+
+
+@app.route('/api/window-anomalies/mercado-login/status', methods=['GET'])
+@login_required
+def api_mercado_login_console_status():
+    return jsonify({"status": "success", "data": _mercado_login_task_snapshot()})
+
+
+@app.route('/api/window-anomalies/mercado-login/start', methods=['POST'])
+@login_required
+def api_start_mercado_login_console():
+    data = request.get_json(silent=True) or {}
+    window_id = str(data.get("window_id") or "").strip()
+    shop_name = ""
+    if window_id:
+        try:
+            anomaly_data = db_get_window_anomalies(active_only=True, limit=1000) or {}
+            anomaly = next(
+                (
+                    row
+                    for row in (anomaly_data.get("rows") or [])
+                    if str(row.get("window_id") or "").strip() == window_id
+                ),
+                None,
+            )
+        except Exception as exc:
+            return jsonify(
+                {"status": "error", "message": f"读取窗口异常失败：{exc}"}
+            ), 500
+        if anomaly is None:
+            return jsonify({"status": "error", "message": "窗口异常不存在或已解除"}), 404
+        shop_name = str(anomaly.get("window_name") or "").strip()
+        if not shop_name:
+            return jsonify({"status": "error", "message": "窗口异常缺少店铺名"}), 422
+
+    started, task_state = start_mercado_login_console_job(
+        shop_name=shop_name,
+        window_id=window_id,
+        workers=_parse_int_param(data, "workers", 3, 1, 3),
+    )
+    if not started:
+        return jsonify(
+            {
+                "status": "running",
+                "data": task_state,
+                "message": "bit_mercado_login 正在运行，请等待完成后再重新启动",
+            }
+        ), 409
+    return jsonify(
+        {
+            "status": "success",
+            "data": task_state,
+            "message": f"{task_state['target']} 登录任务已启动",
+        }
+    )
 
 
 @app.route('/api/db/workbench/login', methods=['POST'])

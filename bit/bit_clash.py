@@ -1,8 +1,9 @@
 import json
 import os
 import random
-import threading
-import time
+import re
+import subprocess
+from pathlib import Path
 
 import requests
 
@@ -10,72 +11,113 @@ from bit import bit_runtime_lock
 
 # 配置信息
 
-# CLASH_API_URL = "http://127.0.0.1:50980"
-
-CLASH_API_URL = "http://127.0.0.1:9090"
-
-CLASH_SECRET = "12345678"  # 对应 config.yaml 中的 secret
+CLASH_API_URL = os.environ.get("CLASH_API_URL", "http://127.0.0.1:9090")
+CLASH_SECRET = os.environ.get("CLASH_SECRET", "12345678")
 
 TARGET_GROUP = "🔰 选择节点"  # 确保这个名字和你之前 list_proxies 打印出来的一致
 
-HONGKONG_IP_SWITCH_COOLDOWN_SECONDS = 20 * 60
 HONGKONG_IP_SWITCH_LOCK_KEY = "clash_hongkong_ip_switch"
-HONGKONG_IP_SWITCH_STATE_FILE = "clash_hongkong_ip_switch_state.json"
 
 
-def _hongkong_ip_switch_state_path():
-    return bit_runtime_lock.RUNTIME_LOCK_DIR / HONGKONG_IP_SWITCH_STATE_FILE
-
-
-def _read_hongkong_ip_switch_state():
+def _parse_clash_controller_config(config_path):
+    """只读取 Clash 的控制地址和密钥，不依赖额外的 YAML 包。"""
     try:
-        return json.loads(
-            _hongkong_ip_switch_state_path().read_text(encoding="utf-8")
-        )
-    except Exception:
-        return {}
+        content = Path(config_path).read_text(encoding="utf-8")
+    except (OSError, UnicodeError, TypeError):
+        return None
 
-
-def _write_hongkong_ip_switch_state(state):
-    """在跨进程锁内原子更新冷却状态，避免其他进程读到半个 JSON。"""
-    path = _hongkong_ip_switch_state_path()
-    path.parent.mkdir(parents=True, exist_ok=True)
-    temp_path = path.with_name(
-        f".{path.name}.{os.getpid()}.{threading.get_ident()}.tmp"
+    controller_match = re.search(
+        r"(?m)^\s*external-controller\s*:\s*['\"]?([^'\"#\r\n]+)",
+        content,
     )
+    if not controller_match:
+        return None
+    controller = controller_match.group(1).strip()
+    if not controller:
+        return None
+    if not controller.startswith(("http://", "https://")):
+        controller = f"http://{controller}"
+
+    secret_match = re.search(
+        r"(?m)^\s*secret\s*:\s*['\"]?([^'\"#\r\n]*)",
+        content,
+    )
+    secret = secret_match.group(1).strip() if secret_match else ""
+    return controller.rstrip("/"), secret
+
+
+def _running_clash_config_paths():
+    """定位 Clash for Windows 当前核心的 -d 数据目录。"""
+    if os.name != "nt":
+        return []
     try:
-        temp_path.write_text(
-            json.dumps(state, ensure_ascii=False, indent=2),
-            encoding="utf-8",
+        completed = subprocess.run(
+            [
+                "wmic",
+                "process",
+                "where",
+                "name='clash-win64.exe'",
+                "get",
+                "CommandLine",
+                "/value",
+            ],
+            check=False,
+            capture_output=True,
+            text=True,
+            timeout=5,
         )
-        os.replace(temp_path, path)
-    finally:
-        try:
-            temp_path.unlink(missing_ok=True)
-        except OSError:
-            pass
+    except (OSError, subprocess.SubprocessError):
+        return []
+
+    paths = []
+    for command_line in re.findall(r"(?m)^CommandLine=(.+)$", completed.stdout or ""):
+        match = re.search(r"(?:^|\s)-d\s+(?:\"([^\"]+)\"|(\S+))", command_line)
+        if match:
+            paths.append(Path(match.group(1) or match.group(2)) / "config.yaml")
+    return paths
 
 
-def _cooldown_remaining_seconds(state, now, cooldown_seconds):
-    last_attempt = state.get("last_attempt_at", state.get("last_switch_at", 0))
-    try:
-        last_attempt = float(last_attempt or 0)
-    except (TypeError, ValueError):
-        return 0
-    if last_attempt <= 0:
-        return 0
-    elapsed = max(0.0, float(now) - last_attempt)
-    return max(0, int(float(cooldown_seconds) - elapsed + 0.999))
+def _resolve_clash_api_settings():
+    """优先读取运行中 Clash 的实际控制端口，避免重启后随机端口失效。"""
+    if os.environ.get("CLASH_API_URL"):
+        return CLASH_API_URL.rstrip("/"), os.environ.get(
+            "CLASH_SECRET", CLASH_SECRET
+        )
+
+    config_paths = []
+    configured_path = os.environ.get("CLASH_CONFIG_PATH")
+    if configured_path:
+        config_paths.append(Path(configured_path))
+    config_paths.extend(_running_clash_config_paths())
+    config_paths.extend(
+        (
+            Path.home() / ".config" / "clash" / "config.yaml",
+            Path(os.environ.get("APPDATA", "")) / "clash_win" / "config.yaml",
+        )
+    )
+    seen = set()
+    for config_path in config_paths:
+        normalized = str(config_path)
+        if normalized in seen:
+            continue
+        seen.add(normalized)
+        parsed = _parse_clash_controller_config(config_path)
+        if parsed:
+            return parsed
+    return CLASH_API_URL.rstrip("/"), CLASH_SECRET
+
+
+def _clash_headers(secret):
+    return {"Authorization": f"Bearer {secret}"} if secret else {}
 
 
 def switch_random_hongkong_node():
-    """切换随机香港节点；所有进程合计最多每 20 分钟尝试一次。"""
-    cooldown_seconds = HONGKONG_IP_SWITCH_COOLDOWN_SECONDS
+    """切换随机香港节点；跨进程串行执行，但不再限制切换间隔。"""
     switch_lock = bit_runtime_lock.InterProcessLock(
         HONGKONG_IP_SWITCH_LOCK_KEY,
         owner="clash_hongkong_ip_switch",
-        metadata={"cooldown_seconds": cooldown_seconds},
-        stale_seconds=max(60, cooldown_seconds + 300),
+        metadata={"cooldown_seconds": 0},
+        stale_seconds=300,
     )
     if not switch_lock.acquire(timeout=30):
         print("⏳ 另一个进程正在切换香港 IP，本次调用跳过")
@@ -85,32 +127,13 @@ def switch_random_hongkong_node():
             "remaining_seconds": 0,
         }
 
-    headers = {"Authorization": f"Bearer {CLASH_SECRET}"}
+    clash_api_url, clash_secret = _resolve_clash_api_settings()
+    headers = _clash_headers(clash_secret)
     proxies_setting = {"http": None, "https": None}
 
     try:
-        now = time.time()
-        state = _read_hongkong_ip_switch_state()
-        remaining_seconds = _cooldown_remaining_seconds(
-            state,
-            now,
-            cooldown_seconds,
-        )
-        if remaining_seconds > 0:
-            minutes, seconds = divmod(remaining_seconds, 60)
-            print(
-                "⏳ 香港 IP 切换处于跨进程冷却中，"
-                f"剩余 {minutes} 分 {seconds} 秒，本次调用跳过"
-            )
-            return {
-                "switched": False,
-                "reason": "cooldown",
-                "remaining_seconds": remaining_seconds,
-                "last_node": state.get("new_node", ""),
-            }
-
         # 1. 获取该组当前状态
-        url = f"{CLASH_API_URL}/proxies/{TARGET_GROUP}"
+        url = f"{clash_api_url}/proxies/{TARGET_GROUP}"
         resp = requests.get(
             url,
             headers=headers,
@@ -145,18 +168,7 @@ def switch_random_hongkong_node():
         new_node = random.choice(hk_nodes)
         print(f"🔄 正在从 {current_node} 切换至 -> {new_node}")
 
-        # 4. 在发出切换前先持久化本次尝试。即使进程在请求途中退出，其他进程
-        # 也不会在 20 分钟内再次切换，保证全局“最多一次”的约束。
-        attempt_state = {
-            "last_attempt_at": now,
-            "last_switch_at": state.get("last_switch_at", 0),
-            "switch_succeeded": False,
-            "current_node": current_node,
-            "new_node": new_node,
-            "pid": os.getpid(),
-        }
-        _write_hongkong_ip_switch_state(attempt_state)
-
+        # 4. 发出切换。跨进程锁只负责避免并发写入，不再设置时间冷却。
         put_resp = requests.put(
             url,
             data=json.dumps({"name": new_node}),
@@ -166,32 +178,20 @@ def switch_random_hongkong_node():
         )
 
         if put_resp.status_code not in (200, 204):
-            print(
-                f"❌ 香港 IP 切换失败，状态码: {put_resp.status_code}，"
-                "为防止多个进程连续切换，仍进入 20 分钟冷却"
-            )
+            print(f"❌ 香港 IP 切换失败，状态码: {put_resp.status_code}")
             return {
                 "switched": False,
                 "reason": "switch_failed",
                 "status_code": put_resp.status_code,
-                "remaining_seconds": cooldown_seconds,
             }
 
-        switched_at = time.time()
-        _write_hongkong_ip_switch_state(
-            {
-                **attempt_state,
-                "last_switch_at": switched_at,
-                "switch_succeeded": True,
-            }
-        )
-        print("✅ 香港 IP 切换成功，已进入 20 分钟跨进程冷却")
+        print("✅ 香港 IP 切换成功；当前未设置时间冷却")
         return {
             "switched": True,
             "reason": "switched",
             "current_node": current_node,
             "new_node": new_node,
-            "remaining_seconds": cooldown_seconds,
+            "remaining_seconds": 0,
         }
 
     except Exception as e:
@@ -234,11 +234,9 @@ def switch_node(group_name, target_node_keyword):
     group_name: 策略组全名，例如 "🔰 选择节点"
     target_node_keyword: 你想切到的节点关键词，例如 "日本Z01"
     """
-    base_url = f"{CLASH_API_URL}/proxies"
-    headers = {
-        "Authorization": f"Bearer {CLASH_SECRET}",
-        "Content-Type": "application/json",
-    }
+    clash_api_url, clash_secret = _resolve_clash_api_settings()
+    base_url = f"{clash_api_url}/proxies"
+    headers = {**_clash_headers(clash_secret), "Content-Type": "application/json"}
 
     # 1. 先获取该组下所有可选节点的准确名称
     try:
@@ -283,11 +281,9 @@ def switch_node(group_name, target_node_keyword):
 
 
 def list_proxies():
-    url = f"{CLASH_API_URL}/proxies"
-    headers = {
-        "Authorization": f"Bearer {CLASH_SECRET}",
-        "Content-Type": "application/json",
-    }
+    clash_api_url, clash_secret = _resolve_clash_api_settings()
+    url = f"{clash_api_url}/proxies"
+    headers = {**_clash_headers(clash_secret), "Content-Type": "application/json"}
 
     try:
         # 记得禁用系统代理，防止请求发往 Clash 导致死循环

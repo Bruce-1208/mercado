@@ -2,10 +2,8 @@ import json
 import os
 import re
 from datetime import datetime, timedelta
-from pathlib import Path
 
 import pymysql
-from openpyxl import load_workbook
 
 # 1. 配置数据库连接信息
 config = {
@@ -260,23 +258,13 @@ def _is_ignored_config_value(value):
 
 
 def _load_configured_shop_sites():
-    config_path = Path(__file__).resolve().parent / "比特配置文件.xlsx"
-    if not config_path.exists():
-        return []
-
-    wb = load_workbook(config_path, data_only=True)
-    sheet = wb.active
     configured = []
     seen = set()
-    for row in sheet.iter_rows(min_row=2, values_only=True):
-        if not row:
+    for row in list_bit_browser_configs(include_ignored=False):
+        name = str(row.get("shop_name") or "").strip()
+        if not name:
             continue
-        name = str(row[1] or "").strip() if len(row) > 1 else ""
-        status = str(row[2] or "").strip() if len(row) > 2 else ""
-        sites_text = row[3] if len(row) > 3 else ""
-        if not name or _is_ignored_config_value(status):
-            continue
-        for site in _split_config_sites(sites_text):
+        for site in _split_config_sites(row.get("sites")):
             key = (name, site)
             if key in seen:
                 continue
@@ -633,6 +621,8 @@ def _ensure_zying_product_table(cursor):
         CREATE TABLE IF NOT EXISTS `zying_product` (
             `id` BIGINT NOT NULL AUTO_INCREMENT,
             `产品编号` VARCHAR(128) NULL,
+            `智赢分类编号` VARCHAR(64) NULL,
+            `智赢产品分类` VARCHAR(1024) NULL,
             `分类编号` VARCHAR(64) NULL,
             `产品分类` VARCHAR(2048) NULL,
             `主图链接` TEXT NULL,
@@ -654,6 +644,8 @@ def _ensure_zying_product_table(cursor):
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
         """
     )
+    _ensure_column(cursor, "zying_product", "智赢分类编号", "VARCHAR(64) NULL")
+    _ensure_column(cursor, "zying_product", "智赢产品分类", "VARCHAR(1024) NULL")
     _ensure_column(cursor, "zying_product", "分类编号", "VARCHAR(64) NULL")
     _ensure_column(cursor, "zying_product", "产品分类", "VARCHAR(2048) NULL")
     _ensure_column(cursor, "zying_product", "疑似侵权", "VARCHAR(8) NULL")
@@ -672,6 +664,14 @@ def insert_zying_product_info(product_list):
                     normalized_list.append(
                         (
                             record.get("product_id", record.get("产品编号", "")),
+                            record.get(
+                                "zying_category_id",
+                                record.get("智赢分类编号", ""),
+                            ),
+                            record.get(
+                                "zying_category",
+                                record.get("智赢产品分类", ""),
+                            ),
                             record.get(
                                 "product_category_id",
                                 record.get("分类编号", ""),
@@ -696,23 +696,29 @@ def insert_zying_product_info(product_list):
                     continue
 
                 row = list(record)
+                if len(row) >= 15:
+                    normalized_list.append(tuple(row[:15] + [submit_time]))
+                    continue
                 if len(row) >= 13:
-                    normalized_list.append(tuple(row[:13] + [submit_time]))
+                    normalized_list.append(
+                        tuple([row[0], "", ""] + row[1:13] + [submit_time])
+                    )
                     continue
                 if len(row) < 11:
                     row.extend([""] * (11 - len(row)))
                 normalized_list.append(
-                    tuple([row[0], "", ""] + row[1:11] + [submit_time])
+                    tuple([row[0], "", "", "", ""] + row[1:11] + [submit_time])
                 )
 
             if normalized_list:
                 cursor.executemany(
                     """
                     INSERT INTO `zying_product` (
-                        `产品编号`, `分类编号`, `产品分类`, `主图链接`, `标题`, `售价`, `净收益`,
+                        `产品编号`, `智赢分类编号`, `智赢产品分类`,
+                        `分类编号`, `产品分类`, `主图链接`, `标题`, `售价`, `净收益`,
                         `包装毛重`, `包装尺寸`, `审核状态`, `采集页码`,
                         `采集时间`, `页面原始信息`, `提交时间`
-                    ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                    ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                     """,
                     normalized_list,
                 )
@@ -784,6 +790,184 @@ def mark_zying_products_suspected(row_ids):
     except Exception:
         connection.rollback()
         raise
+    finally:
+        connection.close()
+
+
+def _ensure_bit_browser_configs_table(cursor):
+    cursor.execute(
+        """
+        CREATE TABLE IF NOT EXISTS `bit_browser_configs` (
+            `id` BIGINT NOT NULL AUTO_INCREMENT,
+            `window_id` VARCHAR(64) NOT NULL,
+            `shop_name` VARCHAR(255) NOT NULL,
+            `status` VARCHAR(255) NULL,
+            `sites` TEXT NULL,
+            `sequence_no` VARCHAR(64) NULL,
+            `salesperson` VARCHAR(255) NULL,
+            `email` VARCHAR(320) NULL,
+            `created_at` DATETIME NOT NULL,
+            `updated_at` DATETIME NOT NULL,
+            PRIMARY KEY (`id`),
+            UNIQUE KEY `uniq_bit_browser_shop_name` (`shop_name`),
+            KEY `idx_bit_browser_window_id` (`window_id`),
+            KEY `idx_bit_browser_status` (`status`)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+        """
+    )
+
+
+def _config_text(value):
+    if value is None:
+        return ""
+    if isinstance(value, float) and value.is_integer():
+        return str(int(value))
+    return str(value).strip()
+
+
+def _normalize_bit_browser_config(record):
+    if isinstance(record, dict):
+        values = {
+            "window_id": record.get("window_id", record.get("窗口ID")),
+            "shop_name": record.get("shop_name", record.get("账号名", record.get("店铺名"))),
+            "status": record.get("status", record.get("状态", record.get("状态（若为忽略则跳过）"))),
+            "sites": record.get("sites", record.get("站点")),
+            "sequence_no": record.get("sequence_no", record.get("序号")),
+            "salesperson": record.get("salesperson", record.get("业务员")),
+            "email": record.get("email", record.get("邮箱")),
+        }
+    else:
+        row = list(record or [])
+        row.extend([None] * (7 - len(row)))
+        values = dict(
+            zip(
+                ("window_id", "shop_name", "status", "sites", "sequence_no", "salesperson", "email"),
+                row[:7],
+            )
+        )
+    normalized = {key: _config_text(value) for key, value in values.items()}
+    if not normalized["window_id"] or not normalized["shop_name"]:
+        raise ValueError("比特浏览器配置缺少窗口ID或账号名")
+    return normalized
+
+
+def upsert_bit_browser_configs(records, replace=False):
+    normalized_records = [_normalize_bit_browser_config(record) for record in records or []]
+    if replace and not normalized_records:
+        raise ValueError("替换比特浏览器配置时不允许提交空数据")
+
+    now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    connection = pymysql.connect(**config)
+    try:
+        with connection.cursor() as cursor:
+            _ensure_bit_browser_configs_table(cursor)
+            if replace:
+                cursor.execute("DELETE FROM `bit_browser_configs`")
+            if normalized_records:
+                cursor.executemany(
+                    """
+                    INSERT INTO `bit_browser_configs` (
+                        `window_id`, `shop_name`, `status`, `sites`, `sequence_no`,
+                        `salesperson`, `email`, `created_at`, `updated_at`
+                    ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+                    ON DUPLICATE KEY UPDATE
+                        `window_id` = VALUES(`window_id`),
+                        `shop_name` = VALUES(`shop_name`),
+                        `status` = VALUES(`status`),
+                        `sites` = VALUES(`sites`),
+                        `sequence_no` = VALUES(`sequence_no`),
+                        `salesperson` = VALUES(`salesperson`),
+                        `email` = VALUES(`email`),
+                        `updated_at` = VALUES(`updated_at`)
+                    """,
+                    [
+                        (
+                            record["window_id"],
+                            record["shop_name"],
+                            record["status"],
+                            record["sites"],
+                            record["sequence_no"],
+                            record["salesperson"],
+                            record["email"],
+                            now,
+                            now,
+                        )
+                        for record in normalized_records
+                    ],
+                )
+        connection.commit()
+        return {"count": len(normalized_records), "replaced": bool(replace)}
+    except Exception:
+        connection.rollback()
+        raise
+    finally:
+        connection.close()
+
+
+def list_bit_browser_configs(include_ignored=True):
+    connection = pymysql.connect(**config)
+    try:
+        with connection.cursor() as cursor:
+            _ensure_bit_browser_configs_table(cursor)
+            where = "" if include_ignored else "WHERE COALESCE(`status`, '') NOT LIKE '%忽略%'"
+            cursor.execute(
+                f"""
+                SELECT `window_id`, `shop_name`, `status`, `sites`, `sequence_no`,
+                       `salesperson`, `email`, `created_at`, `updated_at`
+                FROM `bit_browser_configs`
+                {where}
+                ORDER BY
+                    CASE WHEN `sequence_no` REGEXP '^[0-9]+$' THEN CAST(`sequence_no` AS UNSIGNED) ELSE 999999999 END,
+                    `id`
+                """
+            )
+            rows = cursor.fetchall()
+            for row in rows:
+                for key in ("created_at", "updated_at"):
+                    if row.get(key) is not None:
+                        row[key] = str(row[key])
+            return rows
+    finally:
+        connection.close()
+
+
+def get_bit_browser_config(shop_name="", window_id="", include_ignored=True):
+    shop_name = _config_text(shop_name)
+    window_id = _config_text(window_id)
+    if not shop_name and not window_id:
+        return None
+
+    clauses = []
+    params = []
+    if window_id:
+        clauses.append("`window_id` = %s")
+        params.append(window_id)
+    if shop_name:
+        clauses.append("`shop_name` = %s")
+        params.append(shop_name)
+    if not include_ignored:
+        clauses.append("COALESCE(`status`, '') NOT LIKE '%忽略%'")
+
+    connection = pymysql.connect(**config)
+    try:
+        with connection.cursor() as cursor:
+            _ensure_bit_browser_configs_table(cursor)
+            cursor.execute(
+                f"""
+                SELECT `window_id`, `shop_name`, `status`, `sites`, `sequence_no`,
+                       `salesperson`, `email`, `created_at`, `updated_at`
+                FROM `bit_browser_configs`
+                WHERE {' AND '.join(clauses)}
+                LIMIT 1
+                """,
+                tuple(params),
+            )
+            row = cursor.fetchone()
+            if row:
+                for key in ("created_at", "updated_at"):
+                    if row.get(key) is not None:
+                        row[key] = str(row[key])
+            return row
     finally:
         connection.close()
 

@@ -3,9 +3,9 @@ from datetime import datetime
 from pathlib import Path
 
 import pandas as pd
-from openpyxl import load_workbook
 
 from bit.bit_api import closeBrowser
+from bit.bit_config import list_config_rows, split_config_sites
 from bit.bit_send_mail import send_info
 from bit.bit_utils import get_now_time
 from bit_playwright.common import BitPlaywrightSession, first_text, select_country
@@ -59,17 +59,14 @@ def get_reputation_info(window_id, site):
 def get_reputation_info_all():
     start = int(time.time())
     root_path = Path(__file__).resolve().parent.parent / "bit"
-    file_path = root_path / "比特配置文件.xlsx"
-    wb = load_workbook(file_path)
-    sheet = wb.active
     reputation_info_sum = []
     result = []
 
-    for row in sheet.iter_rows(min_row=2, values_only=True):
+    for row in list_config_rows(include_ignored=False):
         browser_id, name, remark, sites = row[:4]
-        if "忽略" in str(remark or "").strip() or not browser_id or not sites:
+        if not browser_id or not sites:
             continue
-        for site in str(sites).split("，"):
+        for site in split_config_sites(sites):
             site = site.strip()
             if not site:
                 continue

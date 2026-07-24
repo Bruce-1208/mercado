@@ -43,12 +43,18 @@ import random
 from bit.bit_utils import get_latest_modified_file, get_bit_path, parser_delay_date, get_now_time, getWindowidByName
 from bit.bit_api import *
 from bit.bit_runtime_lock import create_window_lease, current_thread_window_lease
+from bit.bit_config import (
+    get_shop_config,
+    get_window_id_by_shop_name as get_config_window_id_by_shop_name,
+    list_shop_configs,
+)
 from bit.bit_mercado_login import (
     ensure_mercado_login_from_home,
     is_mercado_login_page as _is_mercado_login_page,
 )
 from bit.bit_download import download_relay_mail
 from bit.bit_db_api import get_latest_infraction_info, insert_ai_appeal_record
+from bit.bit_reputation_info import get_cancellation_orders
 from AI_Agent.qianwen import *
 import pandas as pd
 from datetime import datetime, timedelta
@@ -431,17 +437,8 @@ def close_current_tab_keep_browser(driver, name="", site=""):
 
 
 def get_window_id_by_shop_name(name):
-    """根据店铺名从“比特配置文件.xlsx”中读取比特浏览器窗口 ID。"""
-    config_path = get_bit_path() / "比特配置文件.xlsx"
-    wb = load_workbook(config_path)
-    sheet = wb.active
-
-    for row in sheet.iter_rows(min_row=2, values_only=True):
-        window_id = row[0]
-        window_name = row[1]
-        if window_name == name:
-            return window_id
-    raise RuntimeError(f"未在比特配置文件中找到店铺窗口: {name}")
+    """根据店铺名从数据库配置中读取比特浏览器窗口 ID。"""
+    return get_config_window_id_by_shop_name(name)
 
 
 def select_site(driver, name, site):
@@ -1783,6 +1780,37 @@ def build_deepseek_infraction_reply(infraction_ids, site, appeal_message, agent_
     return reply
 
 
+def build_deepseek_cancellation_reply(order_ids, site, appeal_message, agent_messages, reply_round):
+    """根据 AI 客服回复生成下一句取消率申诉回复。"""
+    site_option = build_site_option_reply(site)
+    prompt = f"""
+你正在代表 Mercado Libre 卖家与平台 AI 客服沟通取消率申诉。
+请根据客服的最新回复生成下一句中文回复，只输出要发送的回复正文，不要解释、不要 Markdown。
+
+要求：
+1. 回复要简短、礼貌、直接推进复核，不超过 120 个中文字。
+2. 卖家主张这些订单并非因卖家责任取消，希望复查订单记录并移除对店铺取消率的影响。
+3. 如果客服询问站点，必须明确回复：{site_option}。
+4. 只能使用原始申诉和客服消息中已有的信息，不要虚构取消原因、证明或处理结果。
+5. 不要重复整组订单号，不要说“如果你愿意”“回复继续”等引导语。
+
+取消订单号：{order_ids}
+原始申诉：{appeal_message}
+当前是第 {reply_round} 次自动回复（最多两次）。
+客服消息记录：
+{json.dumps((agent_messages or [])[-20:], ensure_ascii=False, indent=2)}
+"""
+    reply = chat_deepseek(
+        [{"role": "user", "content": prompt}],
+        temperature=0.2,
+        max_tokens=300,
+    ).strip()
+    reply = re.sub(r"^```(?:\w+)?\s*|\s*```$", "", reply, flags=re.S).strip()
+    if not reply:
+        raise ValueError("DeepSeek 未生成取消率申诉回复")
+    return reply
+
+
 def should_intervene_ai_response(response_text):
     """判断 AI 回复是否需要脚本继续补充说明或坚持申诉。"""
     if not response_text:
@@ -1967,10 +1995,19 @@ def send_infraction_message_with_retry(driver, huashu, infraction_ids, name, sit
             time.sleep(12 * attempt)
 
 
-def send_infraction_message_with_retry(driver, huashu, infraction_ids, name, site, group_index, total_groups):
-    """发送一组侵权申诉，并使用 DeepSeek 回复新的客服消息。
+def send_infraction_message_with_retry(
+    driver,
+    huashu,
+    infraction_ids,
+    name,
+    site,
+    group_index,
+    total_groups,
+    appeal_kind="侵权",
+):
+    """按侵权申诉规则发送一组编号，并使用 DeepSeek 回复新的客服消息。
 
-    这是当前实际生效的同名函数：发送失败会重试；发送后会等待 AI 回复；
+    取消率复用同一套分组、重试、等待回复和最多自动追问两次的规则。
     每 30 秒读取一次，连续 3 分钟没有新回复则结束当前组；DeepSeek 最多回复 2 次。
     """
     max_attempts = 4
@@ -1978,10 +2015,14 @@ def send_infraction_message_with_retry(driver, huashu, infraction_ids, name, sit
     reply_timeout = 180
     poll_interval = 30
     previous_messages = safe_get_agent_messages(driver)
+    is_cancellation = appeal_kind == "取消率"
+    identifier_key = "cancellation_ids" if is_cancellation else "infraction_ids"
+    event_name = "cancellation" if is_cancellation else "infraction"
     base_extra = {
         "group_index": group_index,
         "total_groups": total_groups,
-        "infraction_ids": infraction_ids,
+        identifier_key: infraction_ids,
+        "appeal_kind": appeal_kind,
     }
 
     for attempt in range(1, max_attempts + 1):
@@ -1991,7 +2032,7 @@ def send_infraction_message_with_retry(driver, huashu, infraction_ids, name, sit
             append_chat_log(
                 name,
                 site,
-                "send_infraction",
+                f"send_{event_name}",
                 message=huashu,
                 chat=previous_messages,
                 extra={**base_extra, "attempt": attempt},
@@ -2002,7 +2043,7 @@ def send_infraction_message_with_retry(driver, huashu, infraction_ids, name, sit
             append_chat_log(
                 name,
                 site,
-                "send_infraction_error",
+                f"send_{event_name}_error",
                 message=huashu,
                 chat=previous_messages,
                 extra={**base_extra, "attempt": attempt, "error": str(e)},
@@ -2044,7 +2085,7 @@ def send_infraction_message_with_retry(driver, huashu, infraction_ids, name, sit
             append_chat_log(
                 name,
                 site,
-                "infraction_reply_timeout",
+                f"{event_name}_reply_timeout",
                 message=huashu,
                 chat=latest_messages,
                 extra={**base_extra, "timeout_seconds": reply_timeout},
@@ -2062,7 +2103,7 @@ def send_infraction_message_with_retry(driver, huashu, infraction_ids, name, sit
             append_chat_log(
                 name,
                 site,
-                "infraction_auto_reply_limit_reached",
+                f"{event_name}_auto_reply_limit_reached",
                 message=huashu,
                 response=response,
                 chat=latest_messages,
@@ -2074,13 +2115,22 @@ def send_infraction_message_with_retry(driver, huashu, infraction_ids, name, sit
             )
             return
 
-        followup = build_deepseek_infraction_reply(
-            infraction_ids,
-            site,
-            huashu,
-            latest_messages,
-            auto_reply_count + 1,
-        )
+        if is_cancellation:
+            followup = build_deepseek_cancellation_reply(
+                infraction_ids,
+                site,
+                huashu,
+                latest_messages,
+                auto_reply_count + 1,
+            )
+        else:
+            followup = build_deepseek_infraction_reply(
+                infraction_ids,
+                site,
+                huashu,
+                latest_messages,
+                auto_reply_count + 1,
+            )
 
         print(
             f"{get_now_time()} {name} {site} send DeepSeek reply "
@@ -2515,17 +2565,11 @@ def _split_config_sites(value):
 
 
 def load_active_shop_site_config():
-    """读取未忽略的比特窗口配置，返回店铺可运行站点。"""
-    config_path = get_bit_path() / "比特配置文件.xlsx"
-    wb = load_workbook(config_path, read_only=True)
-    sheet = wb.active
+    """从数据库读取未忽略的比特窗口配置，返回店铺可运行站点。"""
     active = {}
-    for row in sheet.iter_rows(min_row=2, values_only=True):
-        name = row[1]
-        remark = row[2]
-        if not name or "忽略" in str(remark or "").strip():
-            continue
-        sites = _split_config_sites(row[3] if len(row) > 3 else "")
+    for row in list_shop_configs(include_ignored=False):
+        name = row["shop_name"]
+        sites = _split_config_sites(row["sites"])
         active[str(name)] = {normalize_site_code(site) for site in sites}
     return active
 
@@ -2693,7 +2737,14 @@ def _collect_appeal_record_fields(log_records, final_agent_messages=None):
 
         extra = record.get("extra") or {}
         if isinstance(extra, dict):
-            for key in ("infraction_ids", "delay_ids", "order_ids", "product_ids", "ids"):
+            for key in (
+                "infraction_ids",
+                "cancellation_ids",
+                "delay_ids",
+                "order_ids",
+                "product_ids",
+                "ids",
+            ):
                 value = extra.get(key)
                 if isinstance(value, str):
                     identifiers.extend(_extract_identifiers_from_text(value))
@@ -2843,6 +2894,8 @@ def _collect_group_ai_replies(group_records):
         "infraction_auto_reply_limit_reached",
         "send_followup_error",
         "send_infraction_error",
+        "send_cancellation_error",
+        "cancellation_auto_reply_limit_reached",
     }
     for record in group_records or []:
         event = record.get("event")
@@ -2852,7 +2905,15 @@ def _collect_group_ai_replies(group_records):
     return _unique_text_list(replies)
 
 
-def _filter_group_log_records(group_records, shop_name, site, group_index, total_groups, infraction_ids):
+def _filter_group_log_records(
+    group_records,
+    shop_name,
+    site,
+    group_index,
+    total_groups,
+    infraction_ids,
+    identifier_key="infraction_ids",
+):
     filtered = []
     for record in group_records or []:
         extra = record.get("extra") if isinstance(record.get("extra"), dict) else {}
@@ -2864,7 +2925,7 @@ def _filter_group_log_records(group_records, shop_name, site, group_index, total
             continue
         if str(extra.get("total_groups") or "") != str(total_groups):
             continue
-        if str(extra.get("infraction_ids") or "") != str(infraction_ids or ""):
+        if str(extra.get(identifier_key) or "") != str(infraction_ids or ""):
             continue
         filtered.append(record)
     return filtered
@@ -2880,11 +2941,12 @@ def save_ai_appeal_group_record(
     appeal_content,
     group_records,
     error="",
+    appeal_kind="侵权",
 ):
-    """每组侵权申诉结束后立即调用 DeepSeek 总结，并写入 AI 申诉记录表。"""
+    """每组侵权/取消率申诉结束后立即总结并写入 AI 申诉记录表。"""
     identifiers = _extract_identifiers_from_text(infraction_ids)
     ai_replies = _collect_group_ai_replies(group_records)
-    appeal_type = f"侵权-第{group_index}/{total_groups}组"
+    appeal_type = f"{appeal_kind}-第{group_index}/{total_groups}组"
     summary = summarize_ai_appeal_result(
         appeal_type,
         identifiers,
@@ -2922,7 +2984,7 @@ def save_ai_appeal_group_record(
 
 # 申诉
 def shensu(name, site, form, message, validate_open=False):
-    """AI 客服申诉主入口，根据 form 分发到延误、侵权或投诉处理逻辑。"""
+    """AI 客服申诉主入口，根据 form 分发到延误、侵权、取消率或投诉。"""
     print(f"{name} {site} 开始进行{form}申诉，自定义话术为{message}<br>")
     appeal_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     start_appeal_log_collection()
@@ -2983,6 +3045,10 @@ def shensu(name, site, form, message, validate_open=False):
 
         if form == "侵权":
             handle_infraction(window_id, driver, name, site_name, message, nickname)
+            return
+
+        if form == "取消率":
+            handle_cancellation(window_id, driver, name, site_name, message, nickname)
             return
 
         if form == "投诉":
@@ -3162,6 +3228,90 @@ def handle_delay(window_id, driver, name, site, message, nickname):
             time.sleep(20)
 
 
+def handle_cancellation(window_id, driver, name, site, message, nickname):
+    """处理取消率申诉：从声誉 Metrics 读取全部取消订单，按侵权规则分组处理。"""
+    del window_id  # 与侵权入口保持相同调用签名；订单直接从当前浏览器页面读取。
+    group_size = 10
+    cancellation_orders = get_cancellation_orders(driver, name, site)
+    if not cancellation_orders:
+        print(f"{get_now_time()} {name} {site} 没有可以申诉的取消订单<br>")
+        return
+
+    groups = [
+        cancellation_orders[index:index + group_size]
+        for index in range(0, len(cancellation_orders), group_size)
+    ]
+    print(
+        f"{get_now_time()} {name} {site} 取消订单共 {len(cancellation_orders)} 个，"
+        f"按每组 {group_size} 个分为 {len(groups)} 组<br>"
+    )
+
+    default_message = (
+        f"亲爱的客服，我叫{nickname}！这些订单并非因卖家责任取消，"
+        "麻烦您重新核查订单记录，并移除这些订单对店铺取消率和声誉的影响，非常感谢！"
+    )
+    appeal_suffix = message or default_message
+
+    # 取消订单读取结束时位于 Metrics 页面，返回帮助页后再打开 AI 客服。
+    driver.get(HELP_URL)
+    time.sleep(8)
+    select_site(driver, name, site)
+    open_ai_contact_window(driver, name, site)
+
+    for index, current_group in enumerate(groups, start=1):
+        cancellation_ids = "、".join(str(item) for item in current_group)
+        huashu = f"{cancellation_ids}{appeal_suffix}"
+        print(
+            f"{get_now_time()} {name} {site} 开始发送第 {index}/{len(groups)} 组"
+            f"取消率申诉：{huashu}<br>"
+        )
+        group_appeal_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        group_log_start = len(get_appeal_log_records())
+        group_error = ""
+        try:
+            send_infraction_message_with_retry(
+                driver,
+                huashu,
+                cancellation_ids,
+                name,
+                site,
+                index,
+                len(groups),
+                appeal_kind="取消率",
+            )
+        except Exception as exc:
+            group_error = str(exc)
+            raise
+        finally:
+            group_records = _filter_group_log_records(
+                get_appeal_log_records()[group_log_start:],
+                name,
+                site,
+                index,
+                len(groups),
+                cancellation_ids,
+                identifier_key="cancellation_ids",
+            )
+            save_ai_appeal_group_record(
+                group_appeal_time,
+                name,
+                site,
+                index,
+                len(groups),
+                cancellation_ids,
+                huashu,
+                group_records,
+                error=group_error,
+                appeal_kind="取消率",
+            )
+        print(
+            f"{get_now_time()} {name} {site} 第 {index}/{len(groups)} 组"
+            "取消率申诉处理完成<br>"
+        )
+        if index < len(groups):
+            time.sleep(20)
+
+
 def handle_complain(driver, name, site, message, nickname):
     """投诉申诉预留入口，目前主流程仍使用通用话术发送。"""
     print("开始处理侵权")
@@ -3328,16 +3478,11 @@ def find_latest_delay_report(window_id, name, site, download_start_time):
 
 
 def get_browser_download_folder(window_id, name):
-    """根据比特配置表第 5 列的下载序号定位浏览器下载目录。"""
-    config_path = get_bit_path() / "比特配置文件.xlsx"
-    seq = None
+    """根据数据库配置中的下载序号定位浏览器下载目录。"""
+    seq = ""
     try:
-        wb = load_workbook(config_path)
-        sheet = wb.active
-        for row in sheet.iter_rows(min_row=2, values_only=True):
-            if str(row[0]) == str(window_id) or row[1] == name:
-                seq = str(row[4]) if len(row) > 4 and row[4] is not None else None
-                break
+        record = get_shop_config(shop_name=name, window_id=window_id)
+        seq = record["sequence_no"] if record else ""
     except Exception as e:
         print("读取比特下载目录配置失败", e)
 

@@ -21,25 +21,25 @@ print(result.database_path)
 
 默认生成 `mercado_api_listings.db`，主要数据表为 `mercado_listings`；变体位于 `mercado_listing_variations`，每次同步记录位于 `mercado_sync_runs`。重复运行会更新已有商品，最新一次已不存在的商品会保留并标记为 `is_current = 0`。
 
-## 自动登录美客多账号
+## 比特浏览器配置
 
-`bit/bit_mercado_login.py` 会连接指定的 BitBrowser 窗口，自动填写 Mercado Libre Global Selling 的账号密码。登录 Cookie 保存在对应的 BitBrowser 窗口中；程序不会把密码写入代码、Excel、数据库或日志。
+店铺窗口配置统一保存在 MySQL 的 `bit_browser_configs` 表中。业务代码通过 `bit.bit_config` 读取，并根据 `BIT_DB_MODE` 选择直连 MySQL 或数据库 HTTP 接口，不再在运行时读取 `比特配置文件.xlsx`。
 
-交互式运行（密码会在终端中隐藏输入）：
+首次迁移或需要用 Excel 完整覆盖数据库时执行：
 
-```bash
-python3 -m bit.bit_mercado_login \
-  --window-id 你的BitBrowser窗口ID \
-  --username 你的美客多登录账号
+```powershell
+$env:BIT_DB_MODE="mysql"
+py -3.12 -m bit.bit_config --import-excel "bit\比特配置文件.xlsx"
 ```
 
-无人值守运行时通过环境变量提供凭据：
+如需保留数据库中已有、但 Excel 中不存在的配置，追加 `--merge`。数据库接口服务更新代码后需要重启，客户端 API 模式才可使用 `/api/db/browser-configs` 系列接口。
 
-```bash
-export BIT_MERCADO_WINDOW_ID="你的BitBrowser窗口ID"
-export MERCADO_LOGIN_USER="你的美客多登录账号"
-export MERCADO_LOGIN_PASSWORD="你的美客多登录密码"
-python3 -m bit.bit_mercado_login
+## 批量检查并登录美客多店铺
+
+`bit.bit_mercado_login` 会读取数据库中全部未忽略店铺，默认使用 3 个进程检查登录状态。未登录时输入数据库邮箱、选择密码登录，并只提交 BitBrowser 已保存的默认密码；验证码或人机验证会记录为需要人工处理。所有店铺结束后关闭浏览器，生成 Excel 汇总并发送邮件。
+
+```powershell
+py -3.12 -m bit.bit_mercado_login --all-active-login --workers 3 --wait-seconds 60
 ```
 
-若美客多要求验证码、二维码或二次验证，程序会保留浏览器窗口并等待人工完成，默认最多等待 300 秒。该程序不会尝试绕过验证码或平台安全验证。
+测试时如不希望发邮件，可以追加 `--no-email`；Excel 默认保存在 `bit\登录状态汇总`。

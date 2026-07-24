@@ -77,6 +77,22 @@ def test_collector_uses_current_direct_mysql_writer():
     )
 
 
+def test_persist_zying_page_writes_one_page_immediately(monkeypatch):
+    calls = []
+    page_records = [{"product_id": "801623245"}, {"product_id": "801623017"}]
+
+    def insert_page(records):
+        calls.append(list(records))
+        return len(records)
+
+    monkeypatch.setattr(bit_zying_caiji, "insert_zying_product_info", insert_page)
+
+    inserted = bit_zying_caiji._persist_zying_page(page_records, 1, 60)
+
+    assert inserted == 2
+    assert calls == [page_records]
+
+
 def test_wait_for_product_titles_returns_found_elements():
     titles = [object(), object()]
     driver = _FakeDriver(url="https://meli.zying.net/#/product", titles=titles)
@@ -228,6 +244,209 @@ def test_merge_category_record_stores_id_and_bilingual_path():
     assert "_category_id" not in result
 
 
+def _zying_category_options():
+    return [
+        {
+            "value": 202170501,
+            "label": "圆佑同步",
+            "children": [
+                {"value": 202170531, "label": "游戏类", "children": []},
+                {"value": 202170568, "label": "家电类", "children": []},
+                {
+                    "value": 202170507,
+                    "label": "玩具/玩偶/娃娃",
+                    "children": [],
+                },
+            ],
+        },
+        {
+            "value": 202170575,
+            "label": "武汉泽顺跟卖",
+            "children": [
+                {"value": 202170576, "label": "墨西哥", "children": []},
+            ],
+        },
+        {
+            "value": 202170583,
+            "label": "刘德智采集",
+            "children": [
+                {"value": 202170584, "label": "墨西哥", "children": []},
+            ],
+        },
+    ]
+
+
+def test_zying_category_resolver_accepts_id_unique_name_and_full_path():
+    options = _zying_category_options()
+
+    by_id = bit_zying_caiji._resolve_zying_category(options, "202170568")
+    by_name = bit_zying_caiji._resolve_zying_category(options, "家电类")
+    by_path = bit_zying_caiji._resolve_zying_category(
+        options,
+        "圆佑同步/家电类",
+    )
+
+    assert by_id == by_name == by_path
+    assert by_id["category_id"] == "202170568"
+    assert by_id["category_path"] == "圆佑同步/家电类"
+    assert by_id["path_values"] == [202170501, 202170568]
+    assert bit_zying_caiji._resolve_zying_category(
+        options,
+        "玩具/玩偶/娃娃",
+    )["category_id"] == "202170507"
+
+
+def test_zying_category_resolver_rejects_ambiguous_leaf_name():
+    with pytest.raises(RuntimeError, match="不唯一") as error:
+        bit_zying_caiji._resolve_zying_category(
+            _zying_category_options(),
+            "墨西哥",
+        )
+
+    assert "武汉泽顺跟卖/墨西哥" in str(error.value)
+    assert "刘德智采集/墨西哥" in str(error.value)
+
+
+def test_attach_zying_category_keeps_it_separate_from_mercado_category():
+    record = {
+        "product_category_id": "CBT430974",
+        "product_category": "Patio Heaters | 露台加热器",
+        "raw_text": "卡片内容",
+    }
+    selection = bit_zying_caiji._resolve_zying_category(
+        _zying_category_options(),
+        "圆佑同步/家电类",
+    )
+
+    result = bit_zying_caiji._attach_zying_category(record, selection)
+
+    assert result["zying_category_id"] == "202170568"
+    assert result["zying_category"] == "圆佑同步/家电类"
+    assert result["product_category_id"] == "CBT430974"
+    assert result["product_category"] == "Patio Heaters | 露台加热器"
+    assert "智赢产品分类: 圆佑同步/家电类" in result["raw_text"]
+
+
+def test_apply_zying_category_sets_cascader_and_clicks_search(monkeypatch):
+    events = []
+
+    class Button:
+        text = "搜索"
+
+        def get_attribute(self, name):
+            return "搜索" if name == "textContent" else ""
+
+        def is_displayed(self):
+            return True
+
+        def is_enabled(self):
+            return True
+
+        def click(self):
+            events.append("search")
+
+    class Driver:
+        def execute_script(self, script, *args):
+            if script == bit_zying_caiji.ZYING_CATEGORY_OPTIONS_SCRIPT:
+                return _zying_category_options()
+            if script == bit_zying_caiji.ZYING_SET_CATEGORY_SCRIPT:
+                events.append(("category", args[0]))
+                return True
+            if "ant-select-selection-item" in script:
+                return "圆佑同步 / 家电类"
+            return None
+
+        def find_elements(self, by, selector):
+            if selector == "button":
+                return [Button()]
+            if selector == bit_zying_caiji.TITLE_SELECTOR:
+                return [object()]
+            return []
+
+    class Wait:
+        def until(self, condition):
+            return condition(driver)
+
+    driver = Driver()
+    signatures = iter(["before", "after"])
+    monkeypatch.setattr(
+        bit_zying_caiji,
+        "_page_signature",
+        lambda value: next(signatures),
+    )
+
+    selection = bit_zying_caiji._apply_zying_category_filter(
+        driver,
+        Wait(),
+        "圆佑同步/家电类",
+    )
+
+    assert selection["category_id"] == "202170568"
+    assert events == [("category", [202170501, 202170568]), "search"]
+
+
+def test_mysql_writer_stores_zying_and_mercado_categories_separately(monkeypatch):
+    captured = {}
+
+    class Cursor:
+        lastrowid = 1
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            return False
+
+        def execute(self, *args, **kwargs):
+            return None
+
+        def executemany(self, sql, rows):
+            captured["sql"] = sql
+            captured["rows"] = rows
+
+    class Connection:
+        def cursor(self):
+            return Cursor()
+
+        def commit(self):
+            captured["committed"] = True
+
+        def rollback(self):
+            captured["rolled_back"] = True
+
+        def close(self):
+            captured["closed"] = True
+
+    monkeypatch.setattr(bit_mysql.pymysql, "connect", lambda **kwargs: Connection())
+    monkeypatch.setattr(bit_mysql, "_ensure_zying_product_table", lambda cursor: None)
+
+    count = bit_mysql.insert_zying_product_info(
+        [
+            {
+                "product_id": "795184904",
+                "zying_category_id": "202170568",
+                "zying_category": "圆佑同步/家电类",
+                "product_category_id": "CBT430974",
+                "product_category": "Appliances | 家用电器",
+                "title": "测试商品",
+            }
+        ]
+    )
+
+    row = captured["rows"][0]
+    assert count == 1
+    assert len(row) == 16
+    assert row[:5] == (
+        "795184904",
+        "202170568",
+        "圆佑同步/家电类",
+        "CBT430974",
+        "Appliances | 家用电器",
+    )
+    assert "`智赢分类编号`" in captured["sql"]
+    assert "`智赢产品分类`" in captured["sql"]
+
+
 def test_merge_ui_detail_record_overwrites_api_values_with_clicked_form():
     record = {
         "product_id": "old-id",
@@ -260,10 +479,58 @@ def test_merge_ui_detail_record_overwrites_api_values_with_clicked_form():
     assert "详情产品编号: 795184904" in result["raw_text"]
 
 
-def test_detail_identity_accepts_matching_title_when_image_changed():
-    assert "if (!titleMatches && !imageMatches) return null;" in (
+def test_detail_identity_accepts_matching_id_when_title_is_translated():
+    assert (
+        "if (!productIdMatches && !titleMatches && !imageMatches) return null;"
+        in bit_zying_caiji.DETAIL_FORM_SCRIPT
+    )
+    assert "const expectedProductId = normalize(arguments[2]);" in (
         bit_zying_caiji.DETAIL_FORM_SCRIPT
     )
+
+
+def test_wait_for_clicked_detail_passes_expected_product_id(monkeypatch):
+    calls = []
+    details = {
+        "product_id": "801623245",
+        "sale_price": "10",
+        "net_income": "8",
+        "package_gross_weight": "100",
+        "size_length": "1",
+        "size_width": "2",
+        "size_height": "3",
+        "review_status": "通过",
+    }
+
+    class Driver:
+        def execute_script(self, script, *args):
+            calls.append(args)
+            return {"ready": True, "details": details}
+
+    class ImmediateWait:
+        def __init__(self, driver, timeout, poll_frequency):
+            self.driver = driver
+
+        def until(self, condition):
+            return condition(self.driver)
+
+    monkeypatch.setattr(bit_zying_caiji, "WebDriverWait", ImmediateWait)
+
+    result = bit_zying_caiji._wait_for_clicked_detail(
+        Driver(),
+        "English listing title",
+        "https://example.test/old.jpg",
+        "801623245",
+    )
+
+    assert result == details
+    assert calls == [
+        (
+            "English listing title",
+            "https://example.test/old.jpg",
+            "801623245",
+        )
+    ]
 
 
 def test_clicked_details_skips_one_timeout_and_returns_successes(monkeypatch):
@@ -277,19 +544,26 @@ def test_clicked_details_skips_one_timeout_and_returns_successes(monkeypatch):
         "size_height": "3",
         "review_status": "通过",
     }
-    outcomes = iter([details, TimeoutException(), TimeoutException()])
+    outcomes = iter(
+        [
+            details,
+            TimeoutException(),
+            TimeoutException(),
+            TimeoutException(),
+        ]
+    )
 
-    class _SequencedWait:
-        def __init__(self, *args, **kwargs):
-            pass
+    def sequenced_detail_wait(*args, **kwargs):
+        outcome = next(outcomes)
+        if isinstance(outcome, Exception):
+            raise outcome
+        return outcome
 
-        def until(self, condition):
-            outcome = next(outcomes)
-            if isinstance(outcome, Exception):
-                raise outcome
-            return outcome
-
-    monkeypatch.setattr(bit_zying_caiji, "WebDriverWait", _SequencedWait)
+    monkeypatch.setattr(
+        bit_zying_caiji,
+        "_wait_for_clicked_detail",
+        sequenced_detail_wait,
+    )
     monkeypatch.setattr(
         bit_zying_caiji,
         "_find_record_title_element",
@@ -330,3 +604,124 @@ def test_clicked_details_skips_one_timeout_and_returns_successes(monkeypatch):
     assert completed == [records[0]]
     assert completed[0]["product_id"] == "111111111"
     assert "product_id" not in records[1]
+
+
+def test_clicked_details_switches_click_strategy_after_detail_does_not_open(
+    monkeypatch,
+):
+    details = {
+        "product_id": "222222222",
+        "sale_price": "20",
+        "net_income": "16",
+        "package_gross_weight": "200",
+        "size_length": "2",
+        "size_width": "3",
+        "size_height": "4",
+        "review_status": "通过",
+    }
+    outcomes = iter([TimeoutException(), details])
+    click_attempts = []
+
+    def sequenced_detail_wait(*args, **kwargs):
+        outcome = next(outcomes)
+        if isinstance(outcome, Exception):
+            raise outcome
+        return outcome
+
+    monkeypatch.setattr(
+        bit_zying_caiji,
+        "_wait_for_clicked_detail",
+        sequenced_detail_wait,
+    )
+    monkeypatch.setattr(
+        bit_zying_caiji,
+        "_find_record_title_element",
+        lambda *args, **kwargs: object(),
+    )
+    monkeypatch.setattr(
+        bit_zying_caiji,
+        "_find_product_card",
+        lambda *args, **kwargs: object(),
+    )
+    monkeypatch.setattr(
+        bit_zying_caiji,
+        "_click_product_card",
+        lambda driver, card, attempt=0: click_attempts.append(attempt)
+        or ("卡片", "标题/链接", "指针事件")[attempt],
+    )
+    records = [
+        {
+            "title": "备用点击商品",
+            "main_image_url": "https://example.test/retry.jpg",
+            "sale_price": "USD 2",
+            "raw_text": "",
+        }
+    ]
+
+    completed = bit_zying_caiji._collect_clicked_product_details(
+        _DetailDriver(),
+        records,
+        page_number=1,
+        page_count=1,
+    )
+
+    assert click_attempts == [0, 1]
+    assert completed == records
+    assert completed[0]["product_id"] == "222222222"
+
+
+def test_clicked_details_uses_api_fallback_without_retrying_loaded_detail(
+    monkeypatch,
+):
+    click_attempts = []
+    partial_details = {
+        "product_id": "801623017",
+        "sale_price": "",
+        "net_income": "",
+        "package_gross_weight": "",
+        "size_length": "",
+        "size_width": "",
+        "size_height": "",
+        "review_status": "",
+    }
+    monkeypatch.setattr(
+        bit_zying_caiji,
+        "_wait_for_clicked_detail",
+        lambda *args, **kwargs: (_ for _ in ()).throw(
+            bit_zying_caiji._DetailFieldsTimeout(partial_details)
+        ),
+    )
+    monkeypatch.setattr(
+        bit_zying_caiji,
+        "_find_record_title_element",
+        lambda *args, **kwargs: object(),
+    )
+    monkeypatch.setattr(
+        bit_zying_caiji,
+        "_find_product_card",
+        lambda *args, **kwargs: object(),
+    )
+    monkeypatch.setattr(
+        bit_zying_caiji,
+        "_click_product_card",
+        lambda driver, card, attempt=0: click_attempts.append(attempt) or "卡片",
+    )
+    records = [
+        {
+            "product_id": "801623017",
+            "title": "English listing title",
+            "main_image_url": "https://example.test/item.jpg",
+            "sale_price": "USD 2",
+            "raw_text": "",
+        }
+    ]
+
+    completed = bit_zying_caiji._collect_clicked_product_details(
+        _DetailDriver(),
+        records,
+        page_number=1,
+        page_count=1,
+    )
+
+    assert click_attempts == [0]
+    assert completed == records

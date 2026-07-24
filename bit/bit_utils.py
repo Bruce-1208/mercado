@@ -1,7 +1,6 @@
 from opencc import OpenCC
 from pathlib import Path
 
-from openpyxl import load_workbook
 from datetime import datetime, timedelta
 
 from pydantic.v1.datetime_parse import parse_date
@@ -59,20 +58,9 @@ def get_now_time():
 
 
 def getWindowidByName(name):
-    config_path = get_bit_path() / "比特配置文件.xlsx"
-    wb = load_workbook(config_path)
-    sheet = wb.active
-    config_info = []
+    from bit.bit_config import get_window_id_by_shop_name
 
-    reuslt = []
-    # 使用 min_row=2 跳过第一行
-    window_id = ""
-    for row in sheet.iter_rows(min_row=2, values_only=True):
-        window_id = row[0]
-        window_name = row[1]
-        if window_name == name:
-            break
-    return window_id
+    return get_window_id_by_shop_name(name)
 
 
 if __name__ == "__main__":

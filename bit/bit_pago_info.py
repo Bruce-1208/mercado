@@ -6,7 +6,6 @@ from datetime import datetime
 from pathlib import Path
 
 import pandas as pd
-from openpyxl import load_workbook
 from selenium import webdriver
 from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.common.by import By
@@ -20,6 +19,7 @@ from bit.bit_db_api import inset_pago_info as api_inset_pago_info
 from bit.bit_db_api import insert_task_record as api_insert_task_record
 from bit.bit_send_mail import send_info
 from bit.bit_utils import get_now_time
+from bit.bit_config import list_config_rows
 
 
 PAGO_HOME_URL = "https://global-selling.mercadopago.com/home"
@@ -1117,14 +1117,10 @@ def get_pago_info_all(max_workers=20):
     start = int(time.time())
     print(start)
     root_path = Path(__file__).resolve().parent
-    config_filename = os.environ.get("BIT_PAGO_CONFIG_FILE", "比特配置文件.xlsx")
-    file_path = root_path / config_filename
     output_dir = root_path / "美客多款项"
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    wb = load_workbook(file_path)
-    sheet = wb.active
-    rows = list(sheet.iter_rows(min_row=2, values_only=True))
+    rows = list_config_rows(include_ignored=False)
     rows = [row for row in rows if row and row[0] and row[1]]
     shop_limit = _get_shop_limit()
     if shop_limit is not None:

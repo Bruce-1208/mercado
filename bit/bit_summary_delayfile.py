@@ -3,7 +3,6 @@ from ctypes.wintypes import DOUBLE
 
 import pandas as pd
 from bit.bit_api import *
-from openpyxl import load_workbook
 from pathlib import Path
 from datetime import datetime
 import pandas
@@ -12,14 +11,12 @@ from bit.bit_send_mail import *
 from bit.bit_utils import *
 import sys
 from bit.bit_db_api import inset_delay_info
+from bit.bit_config import list_config_rows
 
 
 def summary_delayFile():
     start = int(time.time())
     print(start)
-    file_path = Path(__file__).resolve().parent / "比特配置文件.xlsx"
-    wb = load_workbook(file_path)
-    sheet = wb.active
     reputation_info_sum = []
     save_fold = ""
 
@@ -30,16 +27,10 @@ def summary_delayFile():
         print("当前环境是 macOS")
         save_fold = "/Users/active11/Downloads/"
 
-    # 使用 min_row=2 跳过第一行
     file_dict = {}
-    for row in sheet.iter_rows(min_row=2, values_only=True):
-        id = row[0]
+    for row in list_config_rows(include_ignored=False):
         name = row[1]
-        remark = row[2]
         seq = str(row[4])
-
-        if "忽略" in str(remark or "").strip():
-            continue
         fold = Path(save_fold + seq)
         print(fold)
         for file in fold.glob("*.csv"):

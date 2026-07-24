@@ -174,6 +174,45 @@ def get_latest_reputation_info():
     return _request("GET", "/api/db/reputation/latest")
 
 
+def list_bit_browser_configs(include_ignored=True):
+    if DB_MODE == "mysql":
+        return _local_call("list_bit_browser_configs", include_ignored)
+    return _request(
+        "GET",
+        "/api/db/browser-configs",
+        params={"include_ignored": "1" if include_ignored else "0"},
+    )
+
+
+def get_bit_browser_config(shop_name="", window_id="", include_ignored=True):
+    if DB_MODE == "mysql":
+        return _local_call(
+            "get_bit_browser_config",
+            shop_name,
+            window_id,
+            include_ignored,
+        )
+    return _request(
+        "GET",
+        "/api/db/browser-configs/lookup",
+        params={
+            "shop_name": shop_name,
+            "window_id": window_id,
+            "include_ignored": "1" if include_ignored else "0",
+        },
+    )
+
+
+def upsert_bit_browser_configs(records, replace=False):
+    if DB_MODE == "mysql":
+        return _local_call("upsert_bit_browser_configs", records, replace)
+    return _request(
+        "POST",
+        "/api/db/browser-configs/bulk",
+        json={"records": records or [], "replace": bool(replace)},
+    )
+
+
 def upsert_window_anomaly(
     window_id,
     window_name,

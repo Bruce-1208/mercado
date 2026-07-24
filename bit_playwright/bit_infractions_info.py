@@ -7,10 +7,21 @@ from datetime import datetime
 from pathlib import Path
 
 import pandas as pd
-from openpyxl import load_workbook
 from bit.bit_api import closeBrowser, openBrowser
+from bit.bit_collection_control import (
+    DEFAULT_COLLECTION_MAX_WORKERS,
+    DEFAULT_RETRY_LOCK_WAIT_SECONDS,
+    env_float,
+    outcome_failed,
+    outcome_has_marker,
+    outcome_is_permanent_failure,
+    row_key,
+    stagger_sleep,
+    trip_batch_rate_limit,
+    wait_for_batch_resume,
+)
+from bit.bit_config import list_config_rows
 from bit.bit_runtime_lock import create_window_lease
-from bit.bit_clash import get_public_ip, switch_random_hongkong_node
 from bit.bit_db_api import insert_task_record, inset_infraction_info
 from bit.bit_send_mail import send_info
 from bit.bit_utils import get_now_time
@@ -302,7 +313,13 @@ def _deduplicate_config_rows(rows):
     return unique_rows
 
 
-def _open_bitbrowser(window_id, max_retries=3, retry_delay=10):
+def _open_bitbrowser(
+    window_id,
+    max_retries=3,
+    retry_delay=10,
+    batch_control=False,
+    batch_source="侵权采集",
+):
     last_result = None
     for attempt in range(1, max_retries + 1):
         result = openBrowser(window_id)
@@ -315,12 +332,18 @@ def _open_bitbrowser(window_id, max_retries=3, retry_delay=10):
         message = result.get("msg", "") if isinstance(result, dict) else str(result)
         if "没有找到相应数据" in message or "不存在" in message:
             raise BitBrowserWindowError(f"比特浏览器窗口无效或不存在：{result}")
+        is_rate_limited = _is_rate_limited_text(result)
+        if is_rate_limited and batch_control:
+            trip_batch_rate_limit(batch_source, message)
         if attempt < max_retries:
             print(
                 f"{get_now_time()}比特浏览器打开窗口失败，第{attempt}/{max_retries}次："
-                f"{message}；{retry_delay}秒后重试"
+                f"{message}"
             )
-            time.sleep(retry_delay)
+            if is_rate_limited and batch_control:
+                wait_for_batch_resume(batch_source)
+            else:
+                time.sleep(retry_delay)
 
     if _is_rate_limited_text(last_result):
         raise MercadoRateLimitError(
@@ -815,9 +838,13 @@ def _connect_bitbrowser_with_playwright(playwright, open_result):
     return browser, page
 
 
-def get_infractions_info(window_id, name, site, isSwitch=1):
+def get_infractions_info(window_id, name, site, isSwitch=1, batch_control=False):
     sync_playwright, _ = _load_playwright_sync_api()
-    res = _open_bitbrowser(window_id)
+    res = _open_bitbrowser(
+        window_id,
+        batch_control=batch_control,
+        batch_source=f"侵权采集:{name}:{site}",
+    )
 
     with sync_playwright() as playwright:
         _browser, page = _connect_bitbrowser_with_playwright(playwright, res)
@@ -875,6 +902,7 @@ def _run_infractions_for_browser_locked(row):
     fatal_profile_error = None
 
     for site in site_list:
+        wait_for_batch_resume(f"侵权采集:{name}")
         if fatal_profile_error is not None:
             result.append(
                 (
@@ -890,8 +918,15 @@ def _run_infractions_for_browser_locked(row):
         succeeded = False
         last_error = None
         for attempt in range(1, 4):
+            wait_for_batch_resume(f"侵权采集:{name}")
             try:
-                infraction_info = get_infractions_info(browser_id, name, site, 1)
+                infraction_info = get_infractions_info(
+                    browser_id,
+                    name,
+                    site,
+                    1,
+                    batch_control=True,
+                )
                 infraction_info_sum.extend(infraction_info)
                 print(get_now_time() + name + site + "成功")
                 result.append(("获取侵权信息", name, site, "成功", get_now_time()))
@@ -903,15 +938,14 @@ def _run_infractions_for_browser_locked(row):
                 if isinstance(exc, (MercadoAuthenticationError, BitBrowserWindowError)):
                     fatal_profile_error = exc
                     break
+                is_rate_limited = isinstance(exc, MercadoRateLimitError) or _is_rate_limited_text(exc)
+                if is_rate_limited:
+                    trip_batch_rate_limit(f"侵权采集:{name}:{site}", str(exc))
                 if attempt < 3:
-                    if _is_spanish_ip_switch_text(exc):
-                        print(
-                            f"{get_now_time()}{name}{site}检测到指定西语错误页，"
-                            f"第{attempt}次切换随机香港节点后重试"
-                        )
-                        switch_random_hongkong_node()
-                        get_public_ip()
-                    time.sleep(5)
+                    if is_rate_limited:
+                        wait_for_batch_resume(f"侵权采集:{name}")
+                    else:
+                        time.sleep(5)
         if not succeeded:
             result.append(
                 ("获取侵权信息", name, site, _failure_status(last_error), get_now_time())
@@ -926,57 +960,178 @@ def _run_infractions_for_browser_locked(row):
     return infraction_info_sum, result
 
 
-def _run_infractions_for_browser(row):
+def _run_infractions_for_browser(row, lease_wait_seconds=0):
     browser_id = row[0]
     name = row[1]
+    wait_for_batch_resume(f"侵权采集:{name}")
     lease = create_window_lease(
         browser_id,
         owner=f"infraction_collection:{name}",
         shop_name=name,
         task_type="infraction_collection",
     )
-    if not lease.acquire(timeout=0):
+    if not lease.acquire(timeout=max(0, float(lease_wait_seconds or 0))):
         print(get_now_time() + name + "窗口已被其他任务占用，跳过本次侵权采集")
-        return [], [("获取侵权信息", name, "", "跳过：窗口被其他任务占用", get_now_time())]
+        sites = _split_sites(row[3]) or [""]
+        return [], [
+            ("获取侵权信息", name, site, "跳过：窗口被其他任务占用", get_now_time())
+            for site in sites
+        ]
     try:
         return _run_infractions_for_browser_locked(row)
     finally:
         lease.release()
 
 
-def get_infractions_info_all(max_workers=20):
-    """使用独立进程并发采集各店铺侵权，主进程负责汇总、导出和入库。"""
-    start = int(time.time())
-    print(start)
-    bit_dir = Path(__file__).resolve().parent.parent / "bit"
-    file_path = bit_dir / "比特配置文件.xlsx"
-
-    wb = load_workbook(file_path)
-    sheet = wb.active
-    infraction_info_sum = []
-    result = []
-    rows = list(sheet.iter_rows(min_row=2, values_only=True))
-    rows = [row for row in rows if row and row[0] and not _is_ignored_config_value(row[2])]
-    rows = _deduplicate_config_rows(rows)
-
+def _execute_infraction_rows(
+    rows,
+    max_workers,
+    stagger_min_seconds,
+    stagger_max_seconds,
+    lease_wait_seconds=0,
+):
+    outcomes = {}
     worker_count = max(1, min(int(max_workers), len(rows))) if rows else 1
     with ProcessPoolExecutor(max_workers=worker_count) as executor:
-        future_map = {
-            executor.submit(_run_infractions_for_browser, row): row for row in rows
-        }
+        future_map = {}
+        for index, row in enumerate(rows):
+            future = executor.submit(
+                _run_infractions_for_browser,
+                row,
+                lease_wait_seconds,
+            )
+            future_map[future] = row
+            if index < len(rows) - 1:
+                delay = stagger_sleep(stagger_min_seconds, stagger_max_seconds)
+                print(f"{get_now_time()}侵权店铺错峰启动，下一家等待 {delay:.1f} 秒")
+
         for future in as_completed(future_map):
             row = future_map[future]
             name = row[1]
             try:
                 browser_infractions, browser_result = future.result()
-                infraction_info_sum.extend(browser_infractions)
-                result.extend(browser_result)
-                print(get_now_time() + name + "窗口任务完成")
             except Exception as exc:
                 print(get_now_time() + name + "窗口任务异常", exc)
-                result.append(
-                    ("获取侵权信息", name, "", _failure_status(exc), get_now_time())
+                status = _failure_status(exc)
+                sites = _split_sites(row[3]) or [""]
+                browser_infractions = []
+                browser_result = [
+                    ("获取侵权信息", name, site, status, get_now_time())
+                    for site in sites
+                ]
+            outcomes[row_key(row)] = (row, browser_infractions, browser_result)
+            print(get_now_time() + name + "窗口任务完成")
+    return outcomes
+
+
+def _row_as_login_config(row):
+    fields = (
+        "window_id",
+        "shop_name",
+        "status",
+        "sites",
+        "sequence_no",
+        "salesperson",
+        "email",
+    )
+    return {field: row[index] if index < len(row) else "" for index, field in enumerate(fields)}
+
+
+def _prepare_infraction_retry_rows(outcomes):
+    latest_rows = _deduplicate_config_rows(list_config_rows(include_ignored=False))
+    latest_by_name = {str(row[1]).strip(): row for row in latest_rows if row and row[1]}
+    retry_plan = []
+
+    for original_key, (original_row, _data, browser_result) in outcomes.items():
+        if not outcome_failed(browser_result):
+            continue
+        name = str(original_row[1] or "").strip()
+        current_row = latest_by_name.get(name, original_row)
+
+        if outcome_has_marker(browser_result, "窗口ID不存在"):
+            if str(current_row[0] or "").strip() == str(original_row[0] or "").strip():
+                print(
+                    f"{get_now_time()}{name} 窗口ID仍为无效值，需先在配置库修正，本轮不盲目重试"
                 )
+                continue
+            print(f"{get_now_time()}{name} 已读取到更新后的窗口ID，将按新配置补跑")
+
+        if outcome_has_marker(browser_result, "登录失效"):
+            print(f"{get_now_time()}{name} 开始串行修复 Mercado 登录态")
+            try:
+                from bit.bit_mercado_login import login_one_database_shop
+
+                login_result = login_one_database_shop(
+                    _row_as_login_config(current_row),
+                    wait_seconds=int(env_float("BIT_LOGIN_REPAIR_WAIT_SECONDS", 60, 1)),
+                    page_load_timeout=int(env_float("BIT_LOGIN_REPAIR_PAGE_TIMEOUT", 20, 1)),
+                )
+            except Exception as exc:
+                print(f"{get_now_time()}{name} 登录修复异常，本轮不重试：{exc}")
+                continue
+            if not login_result.get("ok"):
+                print(
+                    f"{get_now_time()}{name} 登录修复未通过，本轮不重试："
+                    f"{login_result.get('message') or login_result.get('status')}"
+                )
+                continue
+            print(f"{get_now_time()}{name} 登录态修复成功")
+
+        if outcome_is_permanent_failure(browser_result) and not outcome_has_marker(
+            browser_result, "登录失效"
+        ):
+            continue
+        retry_plan.append((original_key, current_row))
+    return retry_plan
+
+
+def get_infractions_info_all(
+    max_workers=DEFAULT_COLLECTION_MAX_WORKERS,
+    stagger_min_seconds=None,
+    stagger_max_seconds=None,
+    retry_failed=True,
+):
+    """并发采集侵权；修复已识别问题后只补跑失败店铺，最后统一入库。"""
+    start = int(time.time())
+    print(start)
+    bit_dir = Path(__file__).resolve().parent.parent / "bit"
+    rows = list_config_rows(include_ignored=False)
+    rows = [row for row in rows if row and row[0]]
+    rows = _deduplicate_config_rows(rows)
+
+    outcomes = _execute_infraction_rows(
+        rows,
+        max_workers=max_workers,
+        stagger_min_seconds=stagger_min_seconds,
+        stagger_max_seconds=stagger_max_seconds,
+    )
+
+    if retry_failed:
+        retry_plan = _prepare_infraction_retry_rows(outcomes)
+        if retry_plan:
+            print(f"{get_now_time()}侵权首轮失败 {len(retry_plan)} 家，仅补跑这些店铺")
+            wait_for_batch_resume("侵权失败补跑")
+            retry_rows = [row for _original_key, row in retry_plan]
+            retry_outcomes = _execute_infraction_rows(
+                retry_rows,
+                max_workers=max_workers,
+                stagger_min_seconds=stagger_min_seconds,
+                stagger_max_seconds=stagger_max_seconds,
+                lease_wait_seconds=env_float(
+                    "BIT_RETRY_WINDOW_LOCK_WAIT_SECONDS",
+                    DEFAULT_RETRY_LOCK_WAIT_SECONDS,
+                ),
+            )
+            for original_key, retry_row in retry_plan:
+                retry_outcome = retry_outcomes.get(row_key(retry_row))
+                if retry_outcome is not None:
+                    outcomes[original_key] = retry_outcome
+
+    infraction_info_sum = []
+    result = []
+    for _row, browser_infractions, browser_result in outcomes.values():
+        infraction_info_sum.extend(browser_infractions)
+        result.extend(browser_result)
 
     infraction_info_sum_str = "\n".join(map(str, infraction_info_sum))
     print(infraction_info_sum_str)
@@ -1003,6 +1158,17 @@ def get_infractions_info_all(max_workers=20):
 
     insert_task_record(result)
     inset_infraction_info(infraction_info_sum)
+    return {
+        "data": infraction_info_sum,
+        "results": result,
+        "failed_shops": sorted(
+            {
+                str(row[1] or "")
+                for row in result
+                if len(row) >= 4 and str(row[3] or "") != "成功"
+            }
+        ),
+    }
 
 
 if __name__ == "__main__":
