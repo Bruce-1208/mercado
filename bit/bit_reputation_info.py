@@ -22,6 +22,7 @@ from bit.bit_collection_control import (
     stagger_sleep,
     trip_batch_rate_limit,
     wait_for_batch_resume,
+    write_unreadable_site_report,
 )
 from selenium.webdriver.common.desired_capabilities import DesiredCapabilities
 from selenium.webdriver.chrome.service import Service
@@ -1674,6 +1675,10 @@ def get_reputation_info_all(
 
     end = int(time.time())
     print(get_now_time() + "总花费", end - start)
+    failure_report_path = write_unreadable_site_report("声誉采集", result)
+    if failure_report_path:
+        print(f"{get_now_time()}无法读取站点已记录：{failure_report_path}")
+
     df = pd.DataFrame(
         reputation_info_sum,
         columns=[
@@ -1694,25 +1699,42 @@ def get_reputation_info_all(
 
     now = datetime.now()
     date_str = datetime.now().strftime("%Y-%m-%d-%H")
+    output_dir = root_path / "美客多声誉"
+    output_dir.mkdir(parents=True, exist_ok=True)
+    output_path = output_dir / f"武汉泽顺店铺声誉信息汇总{date_str}.xlsx"
 
-    df.to_excel(
-        root_path / ("美客多声誉/武汉泽顺店铺声誉信息汇总" + date_str + ".xlsx"),
-        index=False,
-    )
+    post_errors = []
+    for step_name, action in (
+        ("写入声誉数据", lambda: inset_reputation_info(reputation_info_sum)),
+        ("写入声誉任务记录", lambda: insert_task_record(result)),
+        ("导出声誉汇总", lambda: df.to_excel(output_path, index=False)),
+    ):
+        try:
+            action()
+        except Exception as exc:
+            post_errors.append(f"{step_name}失败：{exc}")
+            print(f"{get_now_time()}{step_name}失败：{exc}")
 
-    send_info(
-        "美客多所有店铺声誉汇总",
-        "",
-        root_path / ("美客多声誉/武汉泽顺店铺声誉信息汇总" + date_str + ".xlsx"),
-        r"武汉泽顺店铺声誉信息汇总" + date_str + ".xlsx",
-    )
-    print(get_now_time() + "发送邮件成功")
+    email_sent = False
+    if output_path.exists():
+        email_sent = bool(
+            send_info(
+                "美客多所有店铺声誉汇总",
+                "",
+                output_path,
+                output_path.name,
+            )
+        )
+        print(get_now_time() + ("发送邮件成功" if email_sent else "发送邮件失败，汇总文件已保留"))
 
-    inset_reputation_info(reputation_info_sum)
-    insert_task_record(result)
+    if post_errors:
+        raise RuntimeError("；".join(post_errors))
     return {
         "data": reputation_info_sum,
         "results": result,
+        "output_path": str(output_path),
+        "failure_report_path": str(failure_report_path) if failure_report_path else "",
+        "email_sent": email_sent,
         "failed_shops": sorted(
             {
                 str(row[1] or "")

@@ -641,7 +641,7 @@ def _count_login_outcomes(results):
 
 
 def sync_login_results_to_window_anomalies(results):
-    """把登录失败明细写入窗口异常；成功店铺自动解除旧异常。"""
+    """把登录结果同步到店铺状态；成功店铺自动解除待登录状态。"""
     summary = {
         "anomaly_count": 0,
         "resolved_count": 0,
@@ -688,11 +688,11 @@ def sync_login_results_to_window_anomalies(results):
                 }
             )
             print(
-                f"{get_now_time()} {shop_name or window_id} 同步窗口异常失败：{exc}",
+                f"{get_now_time()} {shop_name or window_id} 同步店铺状态失败：{exc}",
                 flush=True,
             )
     print(
-        f"{get_now_time()} bit_mercado_login 窗口异常同步完成："
+        f"{get_now_time()} bit_mercado_login 店铺状态同步完成："
         f"异常 {summary['anomaly_count']} 家，解除 {summary['resolved_count']} 家，"
         f"跳过 {summary['skipped_count']} 家，失败 {summary['error_count']} 家",
         flush=True,
@@ -2236,7 +2236,7 @@ def run_login_test_from_command_line(args):
 
 
 def run_single_auto_login_from_command_line(args):
-    """执行单店自动登录，供控制台的异常窗口“重新检测”调用。"""
+    """执行单店自动登录，供控制台“店铺状态”的重新自动登录操作调用。"""
     shop_name = str(args.shop or "").strip()
     config = load_shop_login_config(shop_name)
     result = login_one_database_shop(

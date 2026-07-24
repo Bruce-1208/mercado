@@ -719,7 +719,7 @@
             <p class="nav-title">功能导航</p>
             <button class="tab-button active" type="button" data-tab="appeal" onclick="switchTab('appeal')">自动化AI申诉</button>
             <button class="tab-button" type="button" data-tab="tasks" onclick="switchTab('tasks')">任务模块</button>
-            <button class="tab-button" type="button" data-tab="window-anomalies" onclick="switchTab('window-anomalies')">窗口异常</button>
+            <button class="tab-button" type="button" data-tab="window-anomalies" onclick="switchTab('window-anomalies')">店铺状态</button>
             <button class="tab-button" type="button" data-tab="infractions" onclick="switchTab('infractions')">侵权数据</button>
             <button class="tab-button" type="button" data-tab="reputation" onclick="switchTab('reputation')">声誉数据</button>
             <button class="tab-button" type="button" data-tab="ai-appeals" onclick="switchTab('ai-appeals')">AI申诉记录</button>
@@ -903,21 +903,21 @@
 
             <div class="tab-page" id="tab-window-anomalies">
                 <div class="tab-heading">
-                    <h2>窗口异常</h2>
-                    <p>展示登录失效窗口，并可启动 bit_mercado_login 自动重新检测</p>
+                    <h2>店铺状态</h2>
+                    <p>展示需要重新登录的店铺，并可对单个店铺执行自动登录</p>
                 </div>
 
                 <section class="panel infractions-panel">
                     <div class="infractions-header">
-                        <h2 class="panel-title" style="margin: 0;">需要处理的窗口</h2>
+                        <h2 class="panel-title" style="margin: 0;">需要处理的店铺</h2>
                         <div class="header-actions">
-                            <button class="primary" id="start-mercado-login-btn" type="button" onclick="startMercadoLogin()">启动全部登录检测</button>
+                            <button class="primary" id="start-mercado-login-btn" type="button" onclick="startMercadoLogin()">启动全部店铺自动登录</button>
                             <button class="secondary" type="button" onclick="loadWindowAnomalies()">刷新数据</button>
                         </div>
                     </div>
                     <div class="summary-row">
                         <div class="metric">
-                            <div class="metric-label">待登录窗口</div>
+                            <div class="metric-label">待登录店铺</div>
                             <div class="metric-value" id="window-anomaly-total">0</div>
                         </div>
                         <div class="metric">
@@ -932,7 +932,7 @@
                                     <th>店铺名</th>
                                     <th>窗口 ID</th>
                                     <th>站点</th>
-                                    <th>异常类型</th>
+                                    <th>店铺状态</th>
                                     <th>来源</th>
                                     <th>原因</th>
                                     <th>检测次数</th>
@@ -942,7 +942,7 @@
                                 </tr>
                             </thead>
                             <tbody id="window-anomaly-body">
-                                <tr><td class="empty-state" colspan="10">正在加载窗口异常...</td></tr>
+                                <tr><td class="empty-state" colspan="10">正在加载店铺状态...</td></tr>
                             </tbody>
                         </table>
                     </div>
@@ -1770,7 +1770,7 @@
 
         async function loadWindowAnomalies() {
             if (!windowAnomalyBody) return;
-            windowAnomalyBody.innerHTML = '<tr><td class="empty-state" colspan="10">正在加载窗口异常...</td></tr>';
+            windowAnomalyBody.innerHTML = '<tr><td class="empty-state" colspan="10">正在加载店铺状态...</td></tr>';
             try {
                 const response = await fetch("/api/window-anomalies?active_only=1&limit=500");
                 const payload = await response.json();
@@ -1785,7 +1785,7 @@
                 windowAnomalyLatestTime.textContent = rows.length ? (rows[0].last_detected_at || "-") : "-";
 
                 if (!rows.length) {
-                    windowAnomalyBody.innerHTML = '<tr><td class="empty-state" colspan="10">当前没有需要重新登录的窗口</td></tr>';
+                    windowAnomalyBody.innerHTML = '<tr><td class="empty-state" colspan="10">当前没有需要重新登录的店铺</td></tr>';
                     return;
                 }
 
@@ -1801,7 +1801,7 @@
                         <td>${escapeHtml(row.first_detected_at || "-")}</td>
                         <td>${escapeHtml(row.last_detected_at || "-")}</td>
                         <td>
-                            <button class="secondary" type="button" onclick="startMercadoLogin('${encodeURIComponent(row.window_id || "")}')">重新检测</button>
+                            <button class="secondary" type="button" onclick="startSingleShopAutoLogin('${encodeURIComponent(row.window_id || "")}', this)">重新自动登录</button>
                             <button class="secondary" type="button" onclick="resolveWindowAnomaly('${encodeURIComponent(row.window_id || "")}')">已重新登录</button>
                         </td>
                     </tr>
@@ -1825,7 +1825,7 @@
                 windowAnomaliesLoaded = false;
                 await loadWindowAnomalies();
             } catch (err) {
-                alert(`更新窗口状态失败：${err.message || err}`);
+                alert(`更新店铺状态失败：${err.message || err}`);
             }
         }
 
@@ -1910,8 +1910,8 @@
                 mercadoLoginLog.scrollTop = mercadoLoginLog.scrollHeight;
                 startMercadoLoginBtn.disabled = Boolean(state.running);
                 startMercadoLoginBtn.textContent = state.running
-                    ? "登录检测运行中"
-                    : (state.started_at ? "重新启动全部登录检测" : "启动全部登录检测");
+                    ? "自动登录运行中"
+                    : (state.started_at ? "重新启动全部店铺自动登录" : "启动全部店铺自动登录");
                 if (state.running) {
                     window.setTimeout(loadMercadoLoginStatus, 2000);
                 } else if (windowAnomaliesLoaded) {
@@ -1939,8 +1939,49 @@
                 }
                 await loadMercadoLoginStatus();
             } catch (err) {
-                alert(`启动登录检测失败：${err.message || err}`);
+                alert(`启动自动登录失败：${err.message || err}`);
                 await loadMercadoLoginStatus();
+            }
+        }
+
+        async function startSingleShopAutoLogin(encodedWindowId, actionButton) {
+            const windowId = decodeURIComponent(encodedWindowId || "");
+            if (!windowId) {
+                alert("该店铺缺少窗口 ID，无法执行自动登录");
+                return;
+            }
+
+            const originalText = actionButton ? actionButton.textContent : "重新自动登录";
+            if (actionButton) {
+                actionButton.disabled = true;
+                actionButton.textContent = "正在启动...";
+            }
+            startMercadoLoginBtn.disabled = true;
+            let started = false;
+            try {
+                const response = await fetch("/api/window-anomalies/mercado-login/start", {
+                    method: "POST",
+                    headers: {"Content-Type": "application/json"},
+                    body: JSON.stringify({window_id: windowId}),
+                });
+                const payload = await response.json();
+                if (!response.ok || payload.status !== "success") {
+                    throw new Error(payload.message || `接口请求失败：${response.status}`);
+                }
+                started = true;
+                if (actionButton) {
+                    actionButton.textContent = "自动登录中";
+                }
+                await loadMercadoLoginStatus();
+            } catch (err) {
+                alert(`启动单店自动登录失败：${err.message || err}`);
+                await loadMercadoLoginStatus();
+            } finally {
+                if (actionButton && !actionButton.isConnected) return;
+                if (actionButton && !started) {
+                    actionButton.disabled = false;
+                    actionButton.textContent = originalText;
+                }
             }
         }
 
