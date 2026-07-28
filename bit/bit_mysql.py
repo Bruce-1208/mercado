@@ -2,6 +2,7 @@ import json
 import os
 import re
 from datetime import datetime, timedelta
+from decimal import Decimal, InvalidOperation
 
 import pymysql
 
@@ -41,6 +42,21 @@ def _parse_number(value):
         return float(number_text) if number_text else 0
     except ValueError:
         return 0
+
+
+def _parse_traffic_total(value):
+    if isinstance(value, (list, tuple)):
+        values = value
+    else:
+        text = str(value or "").strip()
+        if not text:
+            return 0
+        try:
+            parsed = json.loads(text)
+        except (TypeError, ValueError):
+            parsed = re.findall(r"-?\d+(?:\.\d+)?", text)
+        values = parsed if isinstance(parsed, (list, tuple)) else [parsed]
+    return sum(_parse_number(item) for item in values)
 
 
 def mysql_demo():
@@ -107,6 +123,44 @@ def insert_task_record(record_list):
         raise
     finally:
         # 关闭连接
+        connection.close()
+
+
+def get_latest_order_print_records():
+    """返回每个店铺站点最近一次订单打印记录。"""
+
+    connection = pymysql.connect(**config)
+    try:
+        with connection.cursor() as cursor:
+            cursor.execute(
+                """
+                SELECT `name`, `site`, `isSuccess`, `datetime`
+                FROM `record`
+                WHERE `type` = '后台打印订单'
+                  AND `name` IS NOT NULL AND `name` <> ''
+                  AND `site` IS NOT NULL AND `site` <> ''
+                ORDER BY `datetime` DESC, `id` DESC
+                """
+            )
+            latest = []
+            seen = set()
+            for row in cursor.fetchall():
+                shop_name = str(row.get("name") or "").strip()
+                site = str(row.get("site") or "").strip()
+                key = (shop_name, site)
+                if not shop_name or not site or key in seen:
+                    continue
+                seen.add(key)
+                latest.append(
+                    {
+                        "shop_name": shop_name,
+                        "site": site,
+                        "outcome": str(row.get("isSuccess") or "").strip(),
+                        "finished_at": str(row.get("datetime") or ""),
+                    }
+                )
+            return latest
+    finally:
         connection.close()
 
 
@@ -481,7 +535,7 @@ def get_latest_reputation_info():
                         row[key] = str(row[key])
             rows.sort(
                 key=lambda row: (
-                    -_parse_number(row.get("总单量")),
+                    -_parse_traffic_total(row.get("一周流量趋势")),
                     str(row.get("店铺名") or ""),
                     str(row.get("站点") or ""),
                 )
@@ -625,6 +679,138 @@ def inset_pago_info(pago_list):
         raise
     finally:
         connection.close()
+
+
+def _parse_currency_decimal(value):
+    """把 Pago 页面金额转换为 Decimal，兼容逗号或点作为小数分隔符。"""
+    text = str(value or "").strip()
+    if not text:
+        return Decimal("0")
+    negative = text.startswith("-") or ("(" in text and ")" in text)
+    number = re.sub(r"[^0-9,.-]", "", text).replace("-", "")
+    if not number:
+        return Decimal("0")
+
+    if "," in number and "." in number:
+        decimal_separator = "," if number.rfind(",") > number.rfind(".") else "."
+        thousands_separator = "." if decimal_separator == "," else ","
+        number = number.replace(thousands_separator, "")
+        if decimal_separator == ",":
+            number = number.replace(",", ".")
+    elif "," in number:
+        tail = number.rsplit(",", 1)[-1]
+        number = number.replace(",", ".") if len(tail) in (1, 2) else number.replace(",", "")
+    elif number.count(".") > 1:
+        parts = number.split(".")
+        number = "".join(parts[:-1]) + "." + parts[-1]
+
+    try:
+        amount = Decimal(number)
+    except InvalidOperation:
+        return Decimal("0")
+    return -amount if negative else amount
+
+
+def _format_currency_decimal(value):
+    return f"{Decimal(value or 0):,.2f}"
+
+
+def get_latest_pago_info(salesperson=""):
+    """返回每个有效店铺配置站点的最新款项数据，并补充店铺归属人。"""
+    owner_filter = str(salesperson or "").strip()
+    configs = list_bit_browser_configs(include_ignored=False) or []
+    configured_rows = []
+    owners = set()
+    for config_row in configs:
+        shop_name = str(config_row.get("shop_name") or "").strip()
+        window_id = str(config_row.get("window_id") or "").strip()
+        owner = str(config_row.get("salesperson") or "").strip()
+        display_owner = owner or "未分配"
+        if not shop_name or (owner_filter and display_owner != owner_filter):
+            continue
+        owners.add(display_owner)
+        sites = _split_config_sites(config_row.get("sites")) or [""]
+        for site in sites:
+            configured_rows.append(
+                {
+                    "window_id": window_id,
+                    "店铺名": shop_name,
+                    "店铺归属人": display_owner,
+                    "站点": site,
+                    "配置状态": str(config_row.get("status") or "").strip(),
+                    "sequence_no": str(config_row.get("sequence_no") or "").strip(),
+                }
+            )
+
+    connection = pymysql.connect(**config)
+    try:
+        with connection.cursor() as cursor:
+            _ensure_pago_table(cursor)
+            cursor.execute(
+                """
+                SELECT
+                    p.`店铺名`, p.`站点`, p.`已释放美元`, p.`未释放美元`,
+                    p.`状态`, p.`更新时间`, p.`提交时间`
+                FROM `pago` p
+                INNER JOIN (
+                    SELECT `店铺名`, `站点`, MAX(`id`) AS latest_id
+                    FROM `pago`
+                    GROUP BY `店铺名`, `站点`
+                ) latest ON latest.latest_id = p.`id`
+                """
+            )
+            latest_rows = cursor.fetchall() or []
+    finally:
+        connection.close()
+
+    latest_by_shop_site = {
+        (
+            str(row.get("店铺名") or "").strip(),
+            str(row.get("站点") or "").strip(),
+        ): row
+        for row in latest_rows
+    }
+    rows = []
+    released_total = Decimal("0")
+    pending_total = Decimal("0")
+    latest_submit_time = ""
+    for configured in configured_rows:
+        key = (configured["店铺名"], configured["站点"])
+        latest = latest_by_shop_site.get(key) or {}
+        released = str(latest.get("已释放美元") or "").strip()
+        pending = str(latest.get("未释放美元") or "").strip()
+        submit_time = str(latest.get("提交时间") or "")
+        update_time = str(latest.get("更新时间") or "")
+        released_total += _parse_currency_decimal(released)
+        pending_total += _parse_currency_decimal(pending)
+        if submit_time > latest_submit_time:
+            latest_submit_time = submit_time
+        rows.append(
+            {
+                **configured,
+                "已释放美元": released,
+                "待释放美元": pending,
+                "未释放美元": pending,
+                "状态": str(latest.get("状态") or "无数据"),
+                "更新时间": update_time,
+                "提交时间": submit_time,
+            }
+        )
+
+    def sequence_sort_value(row):
+        value = str(row.get("sequence_no") or "")
+        return (int(value) if value.isdigit() else 999999999, row["店铺名"], row["站点"])
+
+    rows.sort(key=sequence_sort_value)
+    return {
+        "latest_submit_time": latest_submit_time,
+        "total": len(rows),
+        "shop_total": len({row["店铺名"] for row in rows}),
+        "released_total": _format_currency_decimal(released_total),
+        "pending_total": _format_currency_decimal(pending_total),
+        "owners": sorted(owners),
+        "rows": rows,
+    }
 
 
 def _ensure_zying_product_table(cursor):

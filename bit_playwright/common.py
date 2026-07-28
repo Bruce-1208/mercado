@@ -4,6 +4,12 @@ import time
 from pathlib import Path
 
 from bit.bit_api import closeBrowser, openBrowser
+from bit.bit_mercado_limit import (
+    MERCADO_RATE_LIMIT_TEXT,
+    get_mercado_backend_status,
+    get_playwright_mercado_page_state,
+    process_mercado_rate_limit,
+)
 
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
@@ -71,6 +77,8 @@ class BitPlaywrightSession:
         self.browser = None
         self.context = None
         self.page = None
+        self.open_result = {}
+        self.shop_name = ""
 
     def __enter__(self):
         sync_playwright, _ = load_sync_playwright()
@@ -78,7 +86,9 @@ class BitPlaywrightSession:
         self.playwright = self.playwright_cm.__enter__()
         result = openBrowser(self.window_id)
         print(result)
+        self.open_result = dict(result or {})
         data = result.get("data") or {}
+        self.shop_name = str(data.get("name") or self.window_id)
         endpoint = data.get("ws") or (f"http://{data['http']}" if data.get("http") else "")
         if not endpoint:
             raise RuntimeError(f"BitBrowser open result missing ws/http: {result}")
@@ -102,6 +112,129 @@ class BitPlaywrightSession:
                     closeBrowser(self.window_id)
                 except Exception:
                     pass
+
+    def auto_login_mercado(self, wait_seconds=60):
+        """使用同一 BitBrowser 窗口自动恢复 Mercado 登录态。"""
+        from selenium import webdriver
+        from selenium.webdriver.chrome.service import Service
+
+        from bit.bit_mercado_login import login_mercado_with_saved_password
+
+        data = self.open_result.get("data") or {}
+        driver_path = data.get("driver")
+        debugger_address = data.get("http")
+        if not driver_path or not debugger_address:
+            return {
+                "ok": False,
+                "status": "登录失败",
+                "message": "BitBrowser 结果缺少 driver 或 http 地址",
+            }
+
+        options = webdriver.ChromeOptions()
+        options.add_experimental_option("debuggerAddress", debugger_address)
+        service = Service(driver_path)
+        driver = None
+        try:
+            driver = webdriver.Chrome(service=service, options=options)
+            driver.implicitly_wait(2)
+            return login_mercado_with_saved_password(
+                driver,
+                self.shop_name,
+                window_id=self.window_id,
+                wait_seconds=max(1, int(wait_seconds)),
+            )
+        except Exception as exc:
+            return {"ok": False, "status": "登录失败", "message": str(exc)}
+        finally:
+            # 只停止临时 ChromeDriver 服务，不 quit 共用的 BitBrowser。
+            try:
+                service.stop()
+            except Exception:
+                pass
+
+
+def open_mercado_backend_page(
+    session,
+    url,
+    *,
+    settle_seconds=5,
+    max_rate_limit_retries=2,
+    rate_limit_retry_wait_seconds=30,
+    max_login_retries=1,
+):
+    """Playwright 业务页入口：限频换节点，退出登录后自动重登。"""
+    page = session.page
+    rate_retry_count = 0
+    login_retry_count = 0
+    while True:
+        navigation_error = ""
+        try:
+            page.goto(url, wait_until="domcontentloaded", timeout=60000)
+        except Exception as exc:
+            navigation_error = str(exc)
+        if settle_seconds:
+            time.sleep(max(0, float(settle_seconds)))
+
+        state = get_playwright_mercado_page_state(page)
+        status = get_mercado_backend_status(state=state)
+        if status == "ready":
+            if navigation_error:
+                return {
+                    "ok": False,
+                    "status": "navigation_failed",
+                    "message": f"{session.shop_name} 打开 Mercado 业务页失败：{navigation_error}",
+                    "state": state,
+                }
+            return {
+                "ok": True,
+                "status": "ready",
+                "message": f"{session.shop_name} Mercado 业务页已就绪",
+                "state": state,
+                "rate_limit_retry_count": rate_retry_count,
+                "login_retry_count": login_retry_count,
+            }
+
+        if status == "rate_limited":
+            result = process_mercado_rate_limit(
+                state=state,
+                name=session.shop_name,
+                retry_count=rate_retry_count,
+                max_retries=max_rate_limit_retries,
+                retry_wait_seconds=rate_limit_retry_wait_seconds,
+            )
+            if result["exhausted"]:
+                return {
+                    "ok": False,
+                    "status": "rate_limited",
+                    "message": (
+                        f"{session.shop_name} Mercado 限频（{MERCADO_RATE_LIMIT_TEXT}），"
+                        f"重试 {rate_retry_count} 次仍未恢复"
+                    ),
+                    "state": state,
+                }
+            rate_retry_count = result["retry_count"]
+            continue
+
+        if login_retry_count >= max(0, int(max_login_retries)):
+            return {
+                "ok": False,
+                "status": "logged_out",
+                "message": f"{session.shop_name} Mercado 登录态失效",
+                "state": state,
+            }
+        login_retry_count += 1
+        login_result = session.auto_login_mercado()
+        if not login_result.get("ok"):
+            return {
+                "ok": False,
+                "status": "logged_out",
+                "message": (
+                    f"{session.shop_name} Mercado 登录态失效，自动登录失败："
+                    f"{login_result.get('message') or login_result.get('status')}"
+                ),
+                "state": state,
+                "login_result": login_result,
+            }
 
 
 def deep_click(page, selector):

@@ -4,7 +4,7 @@ from bit.bit_email_info import *
 import traceback
 from bit.bit_config import list_config_rows, split_config_sites
 from bit.bit_db_api import insert_task_record
-from bit.bit_clash import *
+from bit.bit_mercado_login import open_mercado_backend_page
 from bit.bit_summary_delayfile import *
 
 
@@ -25,6 +25,7 @@ def download_relay_mail(window_id, site):
     driver = webdriver.Chrome(service=chrome_service, options=chrome_options)
 
     driver.implicitly_wait(10)
+    shop_name = str(res.get("data", {}).get("name") or window_id)
     # 设置最长等待时间为 10 秒
     wait = WebDriverWait(driver, 30)
     ## 进入声誉页面点击下载
@@ -33,14 +34,18 @@ def download_relay_mail(window_id, site):
     while i < 3:
         i = i + 1
         try:
-            click = click_download(driver, site)
+            click = click_download(
+                driver,
+                site,
+                shop_name=shop_name,
+                window_id=window_id,
+            )
             if click:
                 break
         except Exception as e:
             print("点击下载失败", e)
             traceback.print_exc()
-            switch_random_hongkong_node()
-            get_public_ip()
+            time.sleep(3)
 
     if click == True:
 
@@ -63,7 +68,12 @@ def download_relay_mail(window_id, site):
 
                 try:
 
-                    flag = download_excel(driver, mail_item)
+                    flag = download_excel(
+                        driver,
+                        mail_item,
+                        shop_name=shop_name,
+                        window_id=window_id,
+                    )
                 except Exception as e:
                     print("下载延误邮件失败", e)
                     traceback.print_exc()
@@ -76,10 +86,16 @@ def download_relay_mail(window_id, site):
         return "没有需要下载的文件"
 
 
-def click_download(driver, site):
-    driver.get("https://global-selling.mercadolibre.com/reputation")
-    driver.refresh()
-    time.sleep(10)
+def click_download(driver, site, shop_name="", window_id=""):
+    access_result = open_mercado_backend_page(
+        driver,
+        "https://global-selling.mercadolibre.com/reputation",
+        shop_name,
+        window_id,
+        settle_seconds=10,
+    )
+    if not access_result.get("ok"):
+        raise RuntimeError(access_result.get("message") or access_result.get("status"))
 
     # 这段 JS 脚本会自动寻找页面上所有隐藏的 Shadow DOM 并在其中搜索目标
 
@@ -169,7 +185,7 @@ def scan_email(driver, isAll):
                 return (subject, time, element, text)
 
 
-def download_excel(driver, mail_item):
+def download_excel(driver, mail_item, shop_name="", window_id=""):
     wait = WebDriverWait(driver, 30)
     print("扫描到的邮件为", mail_item)
     subject = mail_item[0]
@@ -208,7 +224,15 @@ def download_excel(driver, mail_item):
     ).get_attribute("href")
 
     print(downlod_url)
-    driver.get(downlod_url)
+    access_result = open_mercado_backend_page(
+        driver,
+        downlod_url,
+        shop_name,
+        window_id,
+        settle_seconds=5,
+    )
+    if not access_result.get("ok"):
+        raise RuntimeError(access_result.get("message") or access_result.get("status"))
 
     driver.switch_to.window(driver.window_handles[-1])  # 切换窗口
     ##下载文件

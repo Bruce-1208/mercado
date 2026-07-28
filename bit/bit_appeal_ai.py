@@ -49,8 +49,8 @@ from bit.bit_config import (
     list_shop_configs,
 )
 from bit.bit_mercado_login import (
-    ensure_mercado_login_from_home,
     is_mercado_login_page as _is_mercado_login_page,
+    open_mercado_backend_page,
 )
 from bit.bit_download import download_relay_mail
 from bit.bit_db_api import get_latest_infraction_info, insert_ai_appeal_record
@@ -62,7 +62,6 @@ from datetime import datetime
 from AI_Agent.deepseek import *
 import re
 from openpyxl import load_workbook
-from bit.bit_clash import *
 import traceback
 from bit_infractions_info import *
 
@@ -97,28 +96,6 @@ AI_AGENT_REPLY_POLL_SECONDS = 10
 AI_HELP_URLS = (
     HELP_URL,
     "https://global-selling.mercadolibre.com/help/v2",
-)
-MERCADO_RATE_LIMIT_MARKERS = (
-    "too many requests",
-    "429 too many",
-    "http 429",
-    "rate limit",
-    "rate-limit",
-    "request limit exceeded",
-    "access denied",
-    "请求太过频繁",
-    "请求过于频繁",
-    "访问过于频繁",
-    "操作太频繁",
-    "每秒最多可以发起",
-    "demasiadas solicitudes",
-    "muitas solicitações",
-    "hubo un error accediendo a esta página",
-    "hubo un error accediendo a esta pagina",
-)
-SPANISH_IP_SWITCH_MARKERS = (
-    "hubo un error accediendo a esta página",
-    "hubo un error accediendo a esta pagina",
 )
 SITE_OPTION_MENU_OPTIONS = (
     "Mexico (Direct to consumer)",
@@ -270,141 +247,43 @@ def is_mercado_login_required_page(driver):
     return _is_mercado_login_page(driver)
 
 
-def get_mercado_page_open_state(driver):
-    """读取窗口当前页的关键状态，供 daily_task 打开验证和限频识别使用。"""
-    try:
-        driver.switch_to.default_content()
-    except Exception:
-        pass
-
-    try:
-        page_text = driver.execute_script("return document.body ? document.body.innerText : '';") or ""
-    except Exception:
-        page_text = ""
-    try:
-        current_url = driver.current_url or ""
-    except Exception:
-        current_url = ""
-    try:
-        title = driver.title or ""
-    except Exception:
-        title = ""
-    try:
-        page_source = driver.page_source or ""
-    except Exception:
-        page_source = ""
-
-    return {
-        "page_text": str(page_text),
-        "current_url": str(current_url),
-        "title": str(title),
-        "page_source": str(page_source),
-    }
-
-
-def is_mercado_rate_limited_page(driver=None, state=None):
-    """识别 Mercado 页面是否返回 429、请求过频或访问限制页面。"""
-    state = state or get_mercado_page_open_state(driver)
-    visible_state = "\n".join(
-        (
-            state.get("page_text", ""),
-            state.get("title", ""),
-            state.get("current_url", ""),
-        )
-    ).lower()
-    if any(marker.lower() in visible_state for marker in MERCADO_RATE_LIMIT_MARKERS):
-        return True
-
-    # 错误页偶尔没有可见正文；仅在正文和标题都为空时再检查源码，避免命中正常页脚本里的静态文案。
-    if not state.get("page_text", "").strip() and not state.get("title", "").strip():
-        page_source = state.get("page_source", "").lower()
-        return any(marker.lower() in page_source for marker in MERCADO_RATE_LIMIT_MARKERS)
-    return False
-
-
-def is_spanish_ip_switch_page(driver=None, state=None):
-    """只有指定的 Mercado 西语错误页允许触发香港 IP 切换。"""
-    state = state or get_mercado_page_open_state(driver)
-    visible_state = "\n".join(
-        (
-            state.get("page_text", ""),
-            state.get("title", ""),
-            state.get("current_url", ""),
-        )
-    ).lower()
-    if any(marker in visible_state for marker in SPANISH_IP_SWITCH_MARKERS):
-        return True
-    if not state.get("page_text", "").strip() and not state.get("title", "").strip():
-        page_source = state.get("page_source", "").lower()
-        return any(marker in page_source for marker in SPANISH_IP_SWITCH_MARKERS)
-    return False
-
-
 def open_help_page_with_daily_validation(
     driver,
     name="",
     site="",
     max_hongkong_switches=3,
     switch_wait_seconds=8,
+    window_id="",
 ):
-    """打开帮助页并验证页面；遇到限频时切换香港节点后重新打开。"""
-    max_hongkong_switches = max(0, int(max_hongkong_switches))
-    last_state = {}
-
-    for attempt in range(1, max_hongkong_switches + 2):
-        navigate_error = ""
-        try:
-            driver.switch_to.default_content()
-        except Exception:
-            pass
-        try:
-            driver.get(HELP_URL)
-        except Exception as e:
-            navigate_error = str(e)
-
-        time.sleep(8)
-        last_state = get_mercado_page_open_state(driver)
-        if is_spanish_ip_switch_page(state=last_state):
-            if attempt > max_hongkong_switches:
-                raise RuntimeError(
-                    f"{name} {site} 西语错误页持续出现，已切换香港 IP "
-                    f"{max_hongkong_switches} 次仍未恢复"
-                )
-            print(
-                f"{get_now_time()} {name} {site} 窗口打开验证发现限频，"
-                f"切换香港 IP 后重试，第 {attempt}/{max_hongkong_switches} 次<br>"
-            )
-            switch_random_hongkong_node()
-            get_public_ip()
-            time.sleep(max(0, int(switch_wait_seconds)))
-            continue
-
-        if is_mercado_rate_limited_page(state=last_state):
-            raise RuntimeError(
-                f"{name} {site} 检测到页面限频，但不是指定西语错误页，不切换 IP："
-                f"{last_state.get('page_text', '')[:200]}"
-            )
-
-        if navigate_error:
-            raise RuntimeError(f"{name} {site} 窗口页面打开验证失败：{navigate_error}")
-
-        current_url = last_state.get("current_url", "").strip()
-        has_page_content = bool(
-            last_state.get("page_text", "").strip()
-            or last_state.get("title", "").strip()
-            or last_state.get("page_source", "").strip()
+    """打开帮助页，统一处理限频、退出登录和页面有效性。"""
+    result = open_mercado_backend_page(
+        driver,
+        HELP_URL,
+        name,
+        window_id,
+        settle_seconds=8,
+        max_rate_limit_retries=max_hongkong_switches,
+        rate_limit_retry_wait_seconds=switch_wait_seconds,
+    )
+    if not result.get("ok"):
+        raise RuntimeError(
+            f"{name} {site} 窗口页面打开验证失败："
+            f"{result.get('message') or result.get('status')}"
         )
-        if not current_url or current_url == "about:blank" or not has_page_content:
-            raise RuntimeError(
-                f"{name} {site} 窗口页面未正常打开：url={current_url or 'empty'}"
-            )
 
-        print(
-            f"{get_now_time()} {name} {site} 窗口打开验证通过：{current_url}<br>"
+    state = result.get("state") or {}
+    current_url = str(state.get("current_url") or "").strip()
+    has_page_content = bool(
+        str(state.get("page_text") or "").strip()
+        or str(state.get("title") or "").strip()
+        or str(state.get("page_source") or "").strip()
+    )
+    if not current_url or current_url == "about:blank" or not has_page_content:
+        raise RuntimeError(
+            f"{name} {site} 窗口页面未正常打开：url={current_url or 'empty'}"
         )
-        return True
-
-    raise RuntimeError(f"{name} {site} 窗口页面打开验证失败：state={last_state}")
+    print(f"{get_now_time()} {name} {site} 窗口打开验证通过：{current_url}<br>")
+    return True
 
 
 def close_current_tab_keep_browser(driver, name="", site=""):
@@ -2423,9 +2302,17 @@ def open_ai_contact_window(driver, name, site):
     last_variant = ""
     for url in AI_HELP_URLS:
         driver.switch_to.default_content()
-        driver.get(url)
+        backend_result = open_mercado_backend_page(
+            driver,
+            url,
+            name,
+            settle_seconds=5,
+        )
+        if not backend_result.get("ok"):
+            raise RuntimeError(
+                backend_result.get("message") or backend_result.get("status")
+            )
         print(f"{get_now_time()} {name} {site} 打开AI客服入口页面：{url}<br>")
-        time.sleep(5)
 
         for attempt in range(1, 5):
             variant = detect_ai_chat_variant(driver)
@@ -3013,30 +2900,24 @@ def shensu(name, site, form, message, validate_open=False):
                 return appeal_error
         driver, res = connect_bit_browser(window_id)
         name = res.get("data", {}).get("name") or name
-        login_result = ensure_mercado_login_from_home(
-            driver,
-            name,
-            window_id=window_id,
-        )
-        if not login_result.get("ok"):
-            appeal_error = login_result.get("status") or "未登录"
+        try:
+            open_help_page_with_daily_validation(
+                driver,
+                name,
+                site_name,
+                window_id=window_id,
+            )
+        except Exception as exc:
+            appeal_error = str(exc) or "美客多后台不可用"
             skip_close_tab = True
             print(
-                f"{get_now_time()} {name} {site_name} "
-                f"{login_result.get('message') or appeal_error}<br>"
+                f"{get_now_time()} {name} {site_name} {appeal_error}<br>"
             )
             return appeal_error
         print(
             f"{get_now_time()} {name} {site_name} "
-            f"首页登录检测结果：{login_result.get('message')}，"
-            "继续执行 AI 客服申诉<br>"
+            "后台限频和登录态验证通过，继续执行 AI 客服申诉<br>"
         )
-
-        if validate_open:
-            open_help_page_with_daily_validation(driver, name, site_name)
-        else:
-            driver.get(HELP_URL)
-            time.sleep(8)
         select_site(driver, name, site_name)
 
         if form == "延误":
@@ -3230,7 +3111,6 @@ def handle_delay(window_id, driver, name, site, message, nickname):
 
 def handle_cancellation(window_id, driver, name, site, message, nickname):
     """处理取消率申诉：从声誉 Metrics 读取全部取消订单，按侵权规则分组处理。"""
-    del window_id  # 与侵权入口保持相同调用签名；订单直接从当前浏览器页面读取。
     group_size = 10
     cancellation_orders = get_cancellation_orders(driver, name, site)
     if not cancellation_orders:
@@ -3253,8 +3133,12 @@ def handle_cancellation(window_id, driver, name, site, message, nickname):
     appeal_suffix = message or default_message
 
     # 取消订单读取结束时位于 Metrics 页面，返回帮助页后再打开 AI 客服。
-    driver.get(HELP_URL)
-    time.sleep(8)
+    open_help_page_with_daily_validation(
+        driver,
+        name,
+        site,
+        window_id=window_id,
+    )
     select_site(driver, name, site)
     open_ai_contact_window(driver, name, site)
 

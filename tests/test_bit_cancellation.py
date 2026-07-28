@@ -106,6 +106,11 @@ def test_ai_cancellation_uses_infraction_grouping_rules(monkeypatch):
     driver = FakeDriver()
     orders = [str(2000017400000000 + index) for index in range(12)]
     monkeypatch.setattr(bit_appeal_ai, "get_cancellation_orders", lambda *args: orders)
+    monkeypatch.setattr(
+        bit_appeal_ai,
+        "open_help_page_with_daily_validation",
+        lambda driver, *args, **kwargs: driver.get(bit_appeal_ai.HELP_URL) or True,
+    )
     monkeypatch.setattr(bit_appeal_ai, "select_site", lambda *args: True)
     monkeypatch.setattr(bit_appeal_ai, "open_ai_contact_window", lambda *args: True)
     monkeypatch.setattr(bit_appeal_ai.time, "sleep", lambda seconds: None)

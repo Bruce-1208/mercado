@@ -2,7 +2,11 @@ import time
 
 from bit.bit_utils import getWindowidByName
 from bit_playwright.bit_appeal import shensu as _shensu
-from bit_playwright.common import BitPlaywrightSession, select_country
+from bit_playwright.common import (
+    BitPlaywrightSession,
+    open_mercado_backend_page,
+    select_country,
+)
 
 
 SITE_OPTION_REPLY = {
@@ -82,8 +86,14 @@ def select_site(page, name, site):
     return select_country(page, site)
 
 
-def open_ai_contact_window(page, name, site):
-    page.goto("https://global-selling.mercadolibre.com/help/hub/30928?source", wait_until="domcontentloaded", timeout=60000)
+def open_ai_contact_window(session, name, site):
+    page = session.page
+    access = open_mercado_backend_page(
+        session,
+        "https://global-selling.mercadolibre.com/help/hub/30928?source",
+    )
+    if not access.get("ok"):
+        raise RuntimeError(access.get("message") or access.get("status"))
     select_country(page, site)
     page.get_by_text("Contact us").first.click(timeout=15000)
     return page
@@ -96,7 +106,7 @@ def shensu(name, site, form, message):
 def appeal_ai_recollect_once(name, site="MX"):
     window_id = getWindowidByName(name)
     with BitPlaywrightSession(window_id) as session:
-        open_ai_contact_window(session.page, name, site)
+        open_ai_contact_window(session, name, site)
         return True
 
 

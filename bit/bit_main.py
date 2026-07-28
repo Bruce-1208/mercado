@@ -31,6 +31,7 @@ from bit.bit_utils import get_now_time
 
 SCHEDULE_LOCK = threading.Lock()
 SCHEDULE_INTERVAL_HOURS = 12
+# 保留旧锁名，确保升级前后运行的调度进程仍然互斥。
 SCHEDULE_PROCESS_LOCK_KEY = "reputation_infraction_schedule"
 
 
@@ -70,27 +71,28 @@ def _collection_options(prefix):
 
 
 def _wait_between_collections():
-    lower = env_float("BIT_REPUTATION_INFRACTION_WAIT_MIN_SECONDS", 180)
-    upper = env_float("BIT_REPUTATION_INFRACTION_WAIT_MAX_SECONDS", 300)
+    legacy_lower = env_float("BIT_REPUTATION_INFRACTION_WAIT_MIN_SECONDS", 180)
+    legacy_upper = env_float("BIT_REPUTATION_INFRACTION_WAIT_MAX_SECONDS", 300)
+    lower = env_float("BIT_INFRACTION_REPUTATION_WAIT_MIN_SECONDS", legacy_lower)
+    upper = env_float("BIT_INFRACTION_REPUTATION_WAIT_MAX_SECONDS", legacy_upper)
     if upper < lower:
         lower, upper = upper, lower
     delay = random.uniform(lower, upper) if upper > lower else lower
     print(
-        f"{get_now_time()} 声誉采集完成，等待 {delay:.1f} 秒后启动侵权采集<br>",
+        f"{get_now_time()} 侵权采集完成，等待 {delay:.1f} 秒后启动声誉采集<br>",
         flush=True,
     )
     if delay > 0:
         time.sleep(delay)
-    # 若声誉末尾触发过全局限频，3–5 分钟冷却仍不足时继续等到批次熔断解除。
-    wait_for_batch_resume("侵权启动")
+    # 若侵权末尾触发过全局限频，3–5 分钟冷却仍不足时继续等到批次熔断解除。
+    wait_for_batch_resume("声誉启动")
     return delay
 
 
 def _run_ai_appeal_loop(started_at):
-    if not _get_bool_env("BIT_ENABLE_AI_APPEAL_LOOP", False):
+    if not _get_bool_env("BIT_ENABLE_AI_APPEAL_LOOP", True):
         print(
-            f"{get_now_time()} AI 申诉循环保持暂停；"
-            "如需恢复请显式设置 BIT_ENABLE_AI_APPEAL_LOOP=1<br>",
+            f"{get_now_time()} 已按 BIT_ENABLE_AI_APPEAL_LOOP=0 跳过侵权 AI 申诉<br>",
             flush=True,
         )
         return None
@@ -106,13 +108,11 @@ def _run_ai_appeal_loop(started_at):
     )
     site_pause = _get_int_env("BIT_DAILY_SITE_PAUSE", 30)
     round_interval = _get_int_env("BIT_DAILY_ROUND_INTERVAL", 600)
-    stop_buffer_minutes = _get_int_env("BIT_DAILY_STOP_BUFFER_MINUTES", 10)
-    next_boundary = get_next_run_boundary(started_at)
-    stop_at = next_boundary - timedelta(minutes=max(0, stop_buffer_minutes))
+    appeal_rounds = max(1, _get_int_env("BIT_DAILY_APPEAL_ROUNDS", 20))
     print(
         f"{get_now_time()} 开始执行 AI 申诉循环：top_n={top_n}, "
         f"max_workers={max_workers}, recent_days={recent_days}, "
-        f"round_interval={round_interval}，计划在 {stop_at:%Y-%m-%d %H:%M:%S} 前停止<br>"
+        f"round_interval={round_interval}，共执行 {appeal_rounds} 轮<br>"
     )
     result = bit_daily_task.loop_top_infraction_ai_appeal(
         top_n=top_n,
@@ -120,14 +120,14 @@ def _run_ai_appeal_loop(started_at):
         recent_days=recent_days,
         site_pause=site_pause,
         round_interval=round_interval,
-        stop_at=stop_at,
+        max_rounds=appeal_rounds,
     )
-    print(f"{get_now_time()} AI 申诉循环已按计划停止<br>")
+    print(f"{get_now_time()} AI 申诉循环已完成 {appeal_rounds} 轮<br>")
     return result
 
 
-def run_reputation_infraction_then_daily():
-    """声誉采集 -> 冷却 3–5 分钟 -> 侵权采集；AI 申诉默认暂停。"""
+def run_infraction_reputation_then_appeal():
+    """侵权采集 -> 冷却 3–5 分钟 -> 声誉采集 -> 20 轮侵权 AI 申诉。"""
     if not SCHEDULE_LOCK.acquire(blocking=False):
         print(f"{get_now_time()} 本进程调度任务仍在运行，本次跳过<br>")
         return None
@@ -136,7 +136,7 @@ def run_reputation_infraction_then_daily():
         process_lock = InterProcessLock(
             SCHEDULE_PROCESS_LOCK_KEY,
             owner="bit_main_scheduler",
-            metadata={"task_type": "reputation_infraction_chain"},
+            metadata={"task_type": "infraction_reputation_appeal_chain"},
             stale_seconds=24 * 60 * 60,
         )
         process_lock_acquired = process_lock.acquire(timeout=0)
@@ -153,26 +153,15 @@ def run_reputation_infraction_then_daily():
     reputation_options = _collection_options("REPUTATION")
     infraction_options = _collection_options("INFRACTION")
     print(
-        f"{get_now_time()} 定时任务开始：声誉(并发{reputation_options['max_workers']}) "
-        f"-> 冷却 -> 侵权(并发{infraction_options['max_workers']})，"
-        f"店铺错峰{reputation_options['stagger_min_seconds']:.0f}–"
-        f"{reputation_options['stagger_max_seconds']:.0f}秒，AI申诉暂停<br>"
+        f"{get_now_time()} 定时任务开始：侵权(并发{infraction_options['max_workers']}) "
+        f"-> 冷却 -> 声誉(并发{reputation_options['max_workers']}) -> 20轮侵权AI申诉，"
+        f"店铺错峰{infraction_options['stagger_min_seconds']:.0f}–"
+        f"{infraction_options['stagger_max_seconds']:.0f}秒<br>"
     )
     try:
         phase_errors = {}
         reputation_result = None
         infraction_result = None
-
-        print(f"{get_now_time()} 开始执行声誉采集：{reputation_options}<br>")
-        try:
-            reputation_result = bit_reputation_info.main(**reputation_options)
-            print(f"{get_now_time()} 声誉采集执行完成<br>")
-        except Exception as exc:
-            phase_errors["reputation"] = str(exc)
-            print(f"{get_now_time()} 声誉采集异常，将继续执行侵权采集：{exc}<br>")
-            traceback.print_exc()
-
-        _wait_between_collections()
 
         print(f"{get_now_time()} 开始执行侵权采集：{infraction_options}<br>")
         try:
@@ -180,13 +169,30 @@ def run_reputation_infraction_then_daily():
             print(f"{get_now_time()} 侵权采集执行完成<br>")
         except Exception as exc:
             phase_errors["infraction"] = str(exc)
-            print(f"{get_now_time()} 侵权采集异常：{exc}<br>")
+            print(f"{get_now_time()} 侵权采集异常，将继续执行声誉采集：{exc}<br>")
             traceback.print_exc()
 
-        appeal_result = _run_ai_appeal_loop(started_at)
+        _wait_between_collections()
+
+        print(f"{get_now_time()} 开始执行声誉采集：{reputation_options}<br>")
+        try:
+            reputation_result = bit_reputation_info.main(**reputation_options)
+            print(f"{get_now_time()} 声誉采集执行完成<br>")
+        except Exception as exc:
+            phase_errors["reputation"] = str(exc)
+            print(f"{get_now_time()} 声誉采集异常，将继续执行侵权 AI 申诉：{exc}<br>")
+            traceback.print_exc()
+
+        appeal_result = None
+        try:
+            appeal_result = _run_ai_appeal_loop(started_at)
+        except Exception as exc:
+            phase_errors["ai_appeal"] = str(exc)
+            print(f"{get_now_time()} 侵权 AI 申诉异常：{exc}<br>")
+            traceback.print_exc()
         return {
-            "reputation": reputation_result,
             "infraction": infraction_result,
+            "reputation": reputation_result,
             "ai_appeal": appeal_result,
             "errors": phase_errors,
         }
@@ -201,14 +207,19 @@ def run_reputation_infraction_then_daily():
         SCHEDULE_LOCK.release()
 
 
+def run_reputation_infraction_then_daily():
+    """兼容旧入口；实际按侵权、声誉、侵权申诉的顺序执行。"""
+    return run_infraction_reputation_then_appeal()
+
+
 def build_scheduler():
     scheduler = BlockingScheduler()
     scheduler.add_job(
-        run_reputation_infraction_then_daily,
+        run_infraction_reputation_then_appeal,
         "interval",
         hours=SCHEDULE_INTERVAL_HOURS,
         next_run_time=datetime.now(),
-        id="reputation_infraction_daily_chain",
+        id="infraction_reputation_appeal_chain",
         max_instances=1,
         coalesce=True,
         misfire_grace_time=3600,
@@ -220,5 +231,5 @@ if __name__ == "__main__":
     print("------------------------------")
     print(f"{get_now_time()} bit_main 定时任务启动")
     print("启动后立即执行一次，之后每 12 小时执行一次")
-    print("任务顺序：声誉采集 -> 冷却 3–5 分钟 -> 侵权采集；AI 申诉默认暂停")
+    print("任务顺序：侵权采集 -> 冷却 3–5 分钟 -> 声誉采集 -> 20 轮侵权 AI 申诉")
     build_scheduler().start()

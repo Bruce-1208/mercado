@@ -76,6 +76,12 @@ def insert_task_record(record_list):
     return _request("POST", "/api/db/task-records", json={"records": record_list})
 
 
+def get_latest_order_print_records():
+    if DB_MODE == "mysql":
+        return _local_call("get_latest_order_print_records")
+    return _request("GET", "/api/db/task-records/order-print/latest")
+
+
 def inset_reputation_info(reputation_list):
     if DB_MODE == "mysql":
         return _local_call("inset_reputation_info", reputation_list)
@@ -172,6 +178,16 @@ def get_latest_reputation_info():
     if DB_MODE == "mysql":
         return _local_call("get_latest_reputation_info")
     return _request("GET", "/api/db/reputation/latest")
+
+
+def get_latest_pago_info(salesperson=""):
+    if DB_MODE == "mysql":
+        return _local_call("get_latest_pago_info", salesperson)
+    return _request(
+        "GET",
+        "/api/db/pago/latest",
+        params={"salesperson": salesperson},
+    )
 
 
 def list_bit_browser_configs(include_ignored=True):

@@ -7,6 +7,12 @@ import urllib.parse
 import urllib.request
 from pathlib import Path
 
+from bit.bit_mercado_limit import (
+    get_mercado_backend_status,
+    process_mercado_rate_limit,
+)
+from bit.mercado_click_delay import javascript_contains_click, mercado_click_cooldown
+
 try:
     from bit.chat_log import append_chat_log
 except Exception:
@@ -167,7 +173,10 @@ class Cdp:
         )
         if "exceptionDetails" in result:
             raise RuntimeError(result["exceptionDetails"].get("text", "Runtime.evaluate failed"))
-        return result.get("result", {}).get("value")
+        value = result.get("result", {}).get("value")
+        if javascript_contains_click(expression) and value is not False:
+            mercado_click_cooldown()
+        return value
 
     def screenshot(self, path: Path):
         data = self.call("Page.captureScreenshot", {"format": "png", "fromSurface": True})["data"]
@@ -258,6 +267,55 @@ def current_site_state(cdp: Cdp):
         })()
         """
     )
+
+
+def open_cdp_mercado_backend_page(
+    cdp: Cdp,
+    url: str,
+    *,
+    name="",
+    max_rate_limit_retries=2,
+    retry_wait_seconds=30,
+):
+    """CDP 入口页限频重试与退出登录检测。"""
+    retry_count = 0
+    while True:
+        cdp.js(f"location.href={json.dumps(url)}; true")
+        wait_for(
+            cdp,
+            "document.readyState === 'complete' || document.readyState === 'interactive'",
+            timeout=60,
+            label="Mercado backend page",
+        )
+        state = current_site_state(cdp)
+        status = get_mercado_backend_status(
+            state={
+                "current_url": state.get("url", ""),
+                "title": state.get("title", ""),
+                "page_text": state.get("text", ""),
+            }
+        )
+        if status == "ready":
+            return state
+        if status == "logged_out":
+            raise RuntimeError(
+                f"{name} Mercado 登录态失效，请先完成登录后重试："
+                f"{state.get('url', '')}"
+            )
+        limit_result = process_mercado_rate_limit(
+            state={
+                "current_url": state.get("url", ""),
+                "title": state.get("title", ""),
+                "page_text": state.get("text", ""),
+            },
+            name=name,
+            retry_count=retry_count,
+            max_retries=max_rate_limit_retries,
+            retry_wait_seconds=retry_wait_seconds,
+        )
+        if limit_result["exhausted"]:
+            raise RuntimeError(f"{name} Mercado 限频，重试 {retry_count} 次仍未恢复")
+        retry_count = limit_result["retry_count"]
 
 
 def verify_site(cdp: Cdp, site: str):
@@ -380,8 +438,7 @@ def click_next_infractions_page(cdp: Cdp):
 
 def goto_infractions_offset(cdp: Cdp, offset: int, previous_marker: str | None = None):
     url = f"{INFRACTIONS_URL}?tab=detections&offset={offset}"
-    cdp.js(f"location.href={json.dumps(url)}; true")
-    wait_for(cdp, "document.readyState === 'complete' || document.readyState === 'interactive'", timeout=30, label=f"offset {offset} load")
+    open_cdp_mercado_backend_page(cdp, url)
     return wait_for_infractions_page(cdp, previous_marker=previous_marker, timeout=30)
 
 
@@ -533,8 +590,10 @@ def switch_site_if_needed(cdp: Cdp, site: str):
 def collect_infractions(cdp_http: str, site: str):
     cdp = tab_for(cdp_http, INFRACTIONS_URL, "/noindex/pppi/infractions")
     try:
-        cdp.js(f"location.href={json.dumps(INFRACTIONS_URL + '?tab=detections&offset=0')}; true")
-        wait_for(cdp, "document.readyState === 'complete' || document.readyState === 'interactive'", label="infractions load")
+        open_cdp_mercado_backend_page(
+            cdp,
+            INFRACTIONS_URL + "?tab=detections&offset=0",
+        )
         time.sleep(5)
         switch_site_if_needed(cdp, site)
         first_page = goto_infractions_offset(cdp, 0)
@@ -819,8 +878,7 @@ def maybe_reply_site_option(cdp: Cdp, site: str, window: str = "", timeout=25):
 
 def open_ai_assistant(cdp_http: str) -> Cdp:
     cdp = tab_for(cdp_http, HELP_URL, "/help", exact_url=HELP_URL)
-    cdp.js(f"if (location.href !== {json.dumps(HELP_URL)}) location.href={json.dumps(HELP_URL)}; true")
-    wait_for(cdp, "document.readyState === 'complete' || document.readyState === 'interactive'", label="help load")
+    open_cdp_mercado_backend_page(cdp, HELP_URL)
     time.sleep(4)
     for _ in range(3):
         if ai_frame_id(cdp):
@@ -947,8 +1005,7 @@ def open_human_chat(cdp_http: str) -> Cdp:
     if not tab:
         hub = tab_for(cdp_http, HUB_URL, "/help/hub/30928")
         try:
-            hub.js(f"if (!location.href.includes('/help/hub/30928')) location.href={json.dumps(HUB_URL)}; true")
-            wait_for(hub, "document.readyState === 'complete' || document.readyState === 'interactive'", label="hub load")
+            open_cdp_mercado_backend_page(hub, HUB_URL)
             time.sleep(4)
             hub.js(
                 r"""
@@ -974,6 +1031,7 @@ def open_human_chat(cdp_http: str) -> Cdp:
     cdp.call("Page.enable")
     cdp.call("Runtime.enable")
     cdp.call("Page.bringToFront")
+    open_cdp_mercado_backend_page(cdp, DIRECT_CHAT_URL)
     return cdp
 
 
@@ -1020,6 +1078,7 @@ def mouse_click(cdp: Cdp, x, y):
     cdp.call("Input.dispatchMouseEvent", {"type": "mouseMoved", "x": x, "y": y, "button": "none"})
     cdp.call("Input.dispatchMouseEvent", {"type": "mousePressed", "x": x, "y": y, "button": "left", "clickCount": 1})
     cdp.call("Input.dispatchMouseEvent", {"type": "mouseReleased", "x": x, "y": y, "button": "left", "clickCount": 1})
+    mercado_click_cooldown()
 
 
 def key(cdp: Cdp, event_type, key_name, code, vk, modifiers=0):

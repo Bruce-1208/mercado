@@ -13,8 +13,19 @@ from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.support.wait import WebDriverWait
 
 from bit.bit_api import closeBrowser, openBrowser
+from bit.bit_collection_control import (
+    DEFAULT_COLLECTION_MAX_WORKERS,
+    batch_pause_remaining,
+    env_float,
+    stagger_sleep,
+    trip_batch_rate_limit,
+)
+from bit.bit_mercado_limit import (
+    get_mercado_backend_status,
+    get_mercado_page_state,
+    is_mercado_rate_limited_text,
+)
 from bit.bit_runtime_lock import create_window_lease
-from bit.bit_clash import get_public_ip, switch_random_hongkong_node
 from bit.bit_db_api import inset_pago_info as api_inset_pago_info
 from bit.bit_db_api import insert_task_record as api_insert_task_record
 from bit.bit_send_mail import send_info
@@ -67,6 +78,14 @@ SITE_SHORT_CODE_MAP = {
 }
 
 
+class PagoRateLimitError(RuntimeError):
+    pass
+
+
+class PagoCollectionCancelled(RuntimeError):
+    pass
+
+
 def _safe_insert_pago_info(pago_info_sum):
     if not pago_info_sum:
         return
@@ -107,14 +126,53 @@ def _safe_insert_task_record(result):
         print(get_now_time() + f"款项任务记录本地 MySQL 写入也失败，已跳过：{e}")
 
 
+def _raise_if_cancelled(stop_event):
+    if stop_event is not None and stop_event.is_set():
+        raise PagoCollectionCancelled("资金采集任务已终止")
+
+
+def _interruptible_wait(seconds, stop_event=None):
+    seconds = max(0.0, float(seconds or 0))
+    if seconds <= 0:
+        _raise_if_cancelled(stop_event)
+        return
+    if stop_event is not None:
+        if stop_event.wait(seconds):
+            raise PagoCollectionCancelled("资金采集任务已终止")
+        return
+    time.sleep(seconds)
+
+
+def _wait_for_pago_batch_resume(source, stop_event=None):
+    announced = False
+    while True:
+        _raise_if_cancelled(stop_event)
+        remaining = batch_pause_remaining()
+        if remaining <= 0:
+            return
+        if not announced:
+            print(
+                f"{source} 检测到批次限频熔断，统一暂停约 {int(remaining + 0.999)} 秒",
+                flush=True,
+            )
+            announced = True
+        _interruptible_wait(min(5.0, remaining), stop_event)
+
+
 def _is_bit_api_rate_limited(res):
-    text = str(res or "")
-    return "请求太过频繁" in text or "每秒最多可以发起" in text
+    return is_mercado_rate_limited_text(res)
 
 
-def _connect_browser(window_id, max_retries=3, retry_delay=30):
+def _connect_browser(
+    window_id,
+    max_retries=3,
+    retry_delay=30,
+    stop_event=None,
+    batch_source="资金采集",
+):
     last_res = None
     for attempt in range(1, max_retries + 1):
+        _wait_for_pago_batch_resume(batch_source, stop_event)
         res = openBrowser(window_id)
         last_res = res
         print(res)
@@ -127,16 +185,20 @@ def _connect_browser(window_id, max_retries=3, retry_delay=30):
 
         msg = res.get("msg", "") if isinstance(res, dict) else str(res)
         if _is_bit_api_rate_limited(res):
+            trip_batch_rate_limit(f"{batch_source}:比特浏览器", msg)
             print(
-                f"{get_now_time()} 比特浏览器打开窗口被限频，等待 {retry_delay} 秒后重试："
+                f"{get_now_time()} 比特浏览器打开窗口被限频，进入批次暂停后重试："
                 f"{window_id}，第 {attempt}/{max_retries} 次，原因：{msg}"
             )
+            if attempt < max_retries:
+                _wait_for_pago_batch_resume(batch_source, stop_event)
         else:
             print(
                 f"{get_now_time()} 比特浏览器打开窗口返回异常，等待 {retry_delay} 秒后重试："
                 f"{window_id}，第 {attempt}/{max_retries} 次，返回：{res}"
             )
-        time.sleep(retry_delay)
+            if attempt < max_retries:
+                _interruptible_wait(retry_delay, stop_event)
     else:
         raise RuntimeError(f"打开比特浏览器窗口失败，已重试 {max_retries} 次，最后返回：{last_res}")
 
@@ -287,14 +349,15 @@ def _has_country_switch(driver):
         return False
 
 
-def _wait_country_switch_or_login(driver, timeout=12):
+def _wait_country_switch_or_login(driver, timeout=12, stop_event=None):
     end_time = time.time() + timeout
     while time.time() < end_time:
+        _raise_if_cancelled(stop_event)
         if _is_not_logged_in(driver):
             return "login"
         if _has_country_switch(driver):
             return "switcher"
-        time.sleep(1)
+        _interruptible_wait(1, stop_event)
     return "timeout"
 
 
@@ -530,17 +593,18 @@ def _site_available_in_state(state, site):
     return any(item.get("value") == target_remote for item in available)
 
 
-def _wait_pago_site_options(driver, timeout=20):
+def _wait_pago_site_options(driver, timeout=20, stop_event=None):
     end_time = time.time() + timeout
     last_state = {}
     while time.time() < end_time:
+        _raise_if_cancelled(stop_event)
         if _is_not_logged_in(driver):
             return "login", last_state
         state = _get_pago_site_state(driver)
         last_state = state
         if state.get("available") or state.get("currentShort") or state.get("operatingSiteId"):
             return "ready", state
-        time.sleep(1)
+        _interruptible_wait(1, stop_event)
     return "timeout", last_state
 
 
@@ -562,8 +626,21 @@ def _set_pago_site_cookie(driver, remote_value):
     )
 
 
-def _reload_pago_home(driver, name="", site=""):
-    return _open_pago_home_with_retry(driver, name, site, reason="切换站点后刷新")
+def _reload_pago_home(
+    driver,
+    name="",
+    site="",
+    stop_event=None,
+    batch_source="资金采集",
+):
+    return _open_pago_home_with_retry(
+        driver,
+        name,
+        site,
+        reason="切换站点后刷新",
+        stop_event=stop_event,
+        batch_source=batch_source,
+    )
 
 
 def _save_pago_debug(driver, name, site, reason):
@@ -586,7 +663,13 @@ def _save_pago_debug(driver, name, site, reason):
         return ""
 
 
-def _select_country(driver, site, shop_name=""):
+def _select_country(
+    driver,
+    site,
+    shop_name="",
+    stop_event=None,
+    batch_source="资金采集",
+):
     if not site:
         return {"ok": True, "status": "未配置站点", "detail": ""}
 
@@ -598,7 +681,7 @@ def _select_country(driver, site, shop_name=""):
             "detail": f"未配置站点映射：{site}",
         }
 
-    ready_state, state = _wait_pago_site_options(driver)
+    ready_state, state = _wait_pago_site_options(driver, stop_event=stop_event)
     if ready_state == "login":
         return {"ok": False, "status": "未登录", "detail": "切换站点前检测到登录页面"}
     if ready_state == "timeout":
@@ -628,6 +711,7 @@ def _select_country(driver, site, shop_name=""):
 
     last_state = state
     for attempt in range(1, 4):
+        _wait_for_pago_batch_resume(batch_source, stop_event)
         print(
             get_now_time()
             + shop_name
@@ -635,8 +719,18 @@ def _select_country(driver, site, shop_name=""):
         )
         try:
             _set_pago_site_cookie(driver, target_remote)
-            _reload_pago_home(driver, shop_name, site)
-            ready_state, new_state = _wait_pago_site_options(driver, timeout=12)
+            _reload_pago_home(
+                driver,
+                shop_name,
+                site,
+                stop_event=stop_event,
+                batch_source=batch_source,
+            )
+            ready_state, new_state = _wait_pago_site_options(
+                driver,
+                timeout=12,
+                stop_event=stop_event,
+            )
             last_state = new_state
             if ready_state == "login":
                 return {"ok": False, "status": "未登录", "detail": "刷新后进入登录页面"}
@@ -644,11 +738,13 @@ def _select_country(driver, site, shop_name=""):
                 print(get_now_time() + shop_name + "成功切换 Pago 站点:", site)
                 return {"ok": True, "status": "成功", "detail": str(new_state)}
             print(get_now_time() + shop_name + f"Pago 站点切换后校验失败：{new_state}")
-            time.sleep(2)
+            _interruptible_wait(2, stop_event)
+        except PagoCollectionCancelled:
+            raise
         except Exception as e:
             last_state = {"error": str(e), "state": last_state}
             print(get_now_time() + shop_name + "Pago 站点切换异常:", site, e)
-            time.sleep(2)
+            _interruptible_wait(2, stop_event)
 
     debug_file = _save_pago_debug(driver, shop_name, site, "cookie_switch_failed")
     return {
@@ -660,6 +756,11 @@ def _select_country(driver, site, shop_name=""):
 
 
 def _is_not_logged_in(driver):
+    if get_mercado_backend_status(
+        driver=driver,
+        state=get_mercado_page_state(driver),
+    ) == "logged_out":
+        return True
     try:
         text = driver.find_element(By.TAG_NAME, "body").text
     except Exception:
@@ -676,9 +777,10 @@ def _is_not_logged_in(driver):
     return any(marker in text for marker in login_markers)
 
 
-def _wait_pago_home_ready(driver):
+def _wait_pago_home_ready(driver, stop_event=None):
     WebDriverWait(driver, 30).until(EC.presence_of_element_located((By.TAG_NAME, "body")))
     for _ in range(30):
+        _raise_if_cancelled(stop_event)
         if _is_not_logged_in(driver):
             return True
         ready = driver.execute_script(
@@ -690,8 +792,28 @@ def _wait_pago_home_ready(driver):
         )
         if ready:
             return True
-        time.sleep(1)
+        _interruptible_wait(1, stop_event)
     return False
+
+
+def _pago_page_text(driver):
+    try:
+        body_text = driver.find_element(By.TAG_NAME, "body").text
+    except Exception:
+        body_text = ""
+    try:
+        title = driver.title
+    except Exception:
+        title = ""
+    try:
+        current_url = driver.current_url
+    except Exception:
+        current_url = ""
+    return "\n".join((str(title or ""), str(current_url or ""), str(body_text or "")))
+
+
+def _is_pago_rate_limited_page(driver):
+    return is_mercado_rate_limited_text(_pago_page_text(driver))
 
 
 def _is_pago_open_failure(driver):
@@ -719,33 +841,60 @@ def _is_pago_open_failure(driver):
     return any(marker in normalized for marker in failure_markers)
 
 
-def _open_pago_home_with_retry(driver, name="", site="", reason="打开 Pago 首页", max_retries=3):
+def _open_pago_home_with_retry(
+    driver,
+    name="",
+    site="",
+    reason="打开 Pago 首页",
+    max_retries=3,
+    stop_event=None,
+    batch_source="资金采集",
+    allow_global_ip_switch=False,
+):
+    # 保留参数兼容旧调用；普通打开失败不得切换节点，只有统一入口识别到
+    # 指定西语限频文案时才进入限频处理。
+    del allow_global_ip_switch
     last_error = ""
+    last_was_rate_limit = False
     for attempt in range(1, max_retries + 1):
+        _wait_for_pago_batch_resume(batch_source, stop_event)
         try:
             print(get_now_time() + f"{name}{site}{reason}，第 {attempt}/{max_retries} 次")
             driver.get(PAGO_HOME_URL)
-            ready = _wait_pago_home_ready(driver)
+            ready = _wait_pago_home_ready(driver, stop_event=stop_event)
+            if _is_pago_rate_limited_page(driver):
+                last_error = _pago_page_text(driver)[:500] or "Pago 页面触发限频"
+                last_was_rate_limit = True
+                trip_batch_rate_limit(f"{batch_source}:{name}:{site}", last_error)
+                if attempt < max_retries:
+                    _wait_for_pago_batch_resume(batch_source, stop_event)
+                    continue
+                break
             state = _get_pago_site_state(driver)
             if ready and not _is_pago_open_failure(driver):
                 return True
             if state.get("available") or state.get("currentShort") or state.get("operatingSiteId"):
                 return True
             last_error = f"页面未就绪，ready={ready}，state={state}"
+            last_was_rate_limit = False
+        except PagoCollectionCancelled:
+            raise
         except Exception as e:
             last_error = str(e)
+            last_was_rate_limit = is_mercado_rate_limited_text(last_error)
+            if last_was_rate_limit:
+                trip_batch_rate_limit(f"{batch_source}:{name}:{site}", last_error)
 
         if attempt < max_retries:
-            print(
-                get_now_time()
-                + f"{name}{site}Pago 页面打开失败，切换香港 VPN 节点后重试：{last_error}"
-            )
-            switch_random_hongkong_node()
-            get_public_ip()
-            time.sleep(8)
+            if last_was_rate_limit:
+                _wait_for_pago_batch_resume(batch_source, stop_event)
+            else:
+                print(get_now_time() + f"{name}{site}Pago 页面打开失败，等待后重试：{last_error}")
+                _interruptible_wait(8, stop_event)
 
     debug_file = _save_pago_debug(driver, name, site, "open_home_failed")
-    raise RuntimeError(f"Pago 页面打开失败，已切换香港节点重试 {max_retries} 次：{last_error}，debug={debug_file}")
+    error_type = PagoRateLimitError if last_was_rate_limit else RuntimeError
+    raise error_type(f"Pago 页面打开失败，已重试 {max_retries} 次：{last_error}，debug={debug_file}")
 
 
 def _amount_to_number(amount_text):
@@ -945,11 +1094,28 @@ def _extract_pago_amounts(driver):
     }
 
 
-def get_pago_info(window_id, name, site, driver=None):
+def get_pago_info(
+    window_id,
+    name,
+    site,
+    driver=None,
+    stop_event=None,
+    batch_source="资金采集",
+):
     if driver is None:
-        driver = _connect_browser(window_id)
+        driver = _connect_browser(
+            window_id,
+            stop_event=stop_event,
+            batch_source=batch_source,
+        )
 
-    _open_pago_home_with_retry(driver, name, site)
+    _open_pago_home_with_retry(
+        driver,
+        name,
+        site,
+        stop_event=stop_event,
+        batch_source=batch_source,
+    )
     if _is_not_logged_in(driver):
         print(get_now_time() + name + site + "未登录 Mercado Pago")
         return [
@@ -962,7 +1128,13 @@ def get_pago_info(window_id, name, site, driver=None):
             "",
         ]
 
-    switch_result = _select_country(driver, site, name)
+    switch_result = _select_country(
+        driver,
+        site,
+        name,
+        stop_event=stop_event,
+        batch_source=batch_source,
+    )
     if not switch_result.get("ok"):
         if _is_not_logged_in(driver):
             print(get_now_time() + name + site + "未登录 Mercado Pago")
@@ -985,7 +1157,14 @@ def get_pago_info(window_id, name, site, driver=None):
             switch_result.get("detail", "") or switch_result.get("debug_file", ""),
         ]
 
-    _open_pago_home_with_retry(driver, name, site, reason="读取款项前刷新 Pago 首页")
+    _open_pago_home_with_retry(
+        driver,
+        name,
+        site,
+        reason="读取款项前刷新 Pago 首页",
+        stop_event=stop_event,
+        batch_source=batch_source,
+    )
     if _is_not_logged_in(driver):
         print(get_now_time() + name + site + "未登录 Mercado Pago")
         return [
@@ -1058,13 +1237,14 @@ def _get_shop_limit():
         return DEFAULT_PAGO_SHOP_LIMIT
 
 
-def _run_pago_for_browser(row, sites=None):
+def _run_pago_for_browser(row, sites=None, stop_event=None):
     window_id = row[0]
     name = row[1]
     sites = list(sites or [])
     if not sites:
         return [], [("获取款项信息", name, "", "失败：未配置站点", get_now_time())]
 
+    _wait_for_pago_batch_resume(f"资金采集:{name}", stop_event)
     lease = create_window_lease(
         window_id,
         owner=f"pago_collection:{name}",
@@ -1080,27 +1260,91 @@ def _run_pago_for_browser(row, sites=None):
     result = []
 
     try:
-        driver = _connect_browser(window_id)
-        for site in sites:
+        driver = _connect_browser(
+            window_id,
+            stop_event=stop_event,
+            batch_source=f"资金采集:{name}",
+        )
+        for site_index, site in enumerate(sites):
+            _raise_if_cancelled(stop_event)
+            login_expired = False
             for i in range(1, 4):
                 try:
-                    pago_info = get_pago_info(window_id, name, site, driver=driver)
+                    _wait_for_pago_batch_resume(f"资金采集:{name}", stop_event)
+                    pago_info = get_pago_info(
+                        window_id,
+                        name,
+                        site,
+                        driver=driver,
+                        stop_event=stop_event,
+                        batch_source=f"资金采集:{name}",
+                    )
                     pago_info_sum.append(pago_info)
                     status = pago_info[4] or "成功"
-                    is_success = "成功" if status in ("成功", "未登录") else status
-                    print(get_now_time() + name + site + "获取款项信息" + is_success)
-                    result.append(("获取款项信息", name, site, is_success, get_now_time()))
+                    task_status = "失败：登录失效" if status == "未登录" else status
+                    print(get_now_time() + name + site + "获取款项信息" + task_status)
+                    result.append(("获取款项信息", name, site, task_status, get_now_time()))
+                    login_expired = status == "未登录"
                     break
+                except PagoCollectionCancelled:
+                    raise
                 except Exception as e:
                     print(get_now_time() + name + site + "执行失败", e)
+                    is_rate_limited = (
+                        isinstance(e, PagoRateLimitError)
+                        or is_mercado_rate_limited_text(e)
+                    )
+                    if is_rate_limited:
+                        trip_batch_rate_limit(f"资金采集:{name}:{site}", str(e))
                     if i == 3:
-                        result.append(("获取款项信息", name, site, "失败", get_now_time()))
-                        pago_info_sum.append(_build_pago_failure_row(name, site, "执行失败", str(e)))
+                        status = "失败：限频" if is_rate_limited else "失败"
+                        result.append(("获取款项信息", name, site, status, get_now_time()))
+                        pago_info_sum.append(
+                            _build_pago_failure_row(
+                                name,
+                                site,
+                                "限频" if is_rate_limited else "执行失败",
+                                str(e),
+                            )
+                        )
                     else:
-                        switch_random_hongkong_node()
-                        get_public_ip()
-                        time.sleep(5)
-            time.sleep(5)
+                        if is_rate_limited:
+                            _wait_for_pago_batch_resume(f"资金采集:{name}", stop_event)
+                        else:
+                            _interruptible_wait(5, stop_event)
+            if login_expired:
+                for remaining_site in sites[site_index + 1:]:
+                    pago_info_sum.append(
+                        _build_pago_failure_row(
+                            name,
+                            remaining_site,
+                            "未登录",
+                            "同一店铺已检测到登录失效，等待自动登录修复",
+                        )
+                    )
+                    result.append(
+                        (
+                            "获取款项信息",
+                            name,
+                            remaining_site,
+                            "失败：登录失效",
+                            get_now_time(),
+                        )
+                    )
+                break
+            if site_index < len(sites) - 1:
+                _interruptible_wait(5, stop_event)
+    except PagoCollectionCancelled:
+        completed_sites = {
+            str(item[1] or "")
+            for item in pago_info_sum
+            if isinstance(item, (list, tuple)) and len(item) > 1
+        }
+        for site in sites:
+            if site in completed_sites:
+                continue
+            pago_info_sum.append(_build_pago_failure_row(name, site, "已终止", "任务已终止"))
+            result.append(("获取款项信息", name, site, "已终止", get_now_time()))
     finally:
         print(get_now_time() + "结束，正在关闭窗口")
         try:
@@ -1113,23 +1357,294 @@ def _run_pago_for_browser(row, sites=None):
     return pago_info_sum, result
 
 
-def get_pago_info_all(max_workers=20):
+def _selection_set(values):
+    if values is None:
+        return set()
+    if isinstance(values, str):
+        values = (values,)
+    return {
+        str(value or "").strip()
+        for value in values
+        if str(value or "").strip()
+    }
+
+
+def _display_salesperson(value):
+    return str(value or "").strip() or "未分配"
+
+
+def _build_pago_collection_jobs(
+    apply_shop_limit=True,
+    selected_shops=None,
+    selected_window_ids=None,
+    salesperson="",
+):
+    rows = list_config_rows(include_ignored=False)
+    rows = [row for row in rows if row and row[0] and row[1]]
+    shop_names = _selection_set(selected_shops)
+    window_ids = _selection_set(selected_window_ids)
+    owner = str(salesperson or "").strip()
+    if shop_names:
+        rows = [row for row in rows if str(row[1] or "").strip() in shop_names]
+    if window_ids:
+        rows = [row for row in rows if str(row[0] or "").strip() in window_ids]
+    if owner:
+        rows = [
+            row
+            for row in rows
+            if _display_salesperson(row[5] if len(row) > 5 else "") == owner
+        ]
+    shop_limit = _get_shop_limit() if apply_shop_limit else None
+    if shop_limit is not None:
+        rows = rows[:shop_limit]
+    jobs = [
+        (row, _split_config_sites(row[3] if len(row) > 3 else ""))
+        for row in rows
+    ]
+    return jobs, shop_limit
+
+
+def _row_as_login_config(row):
+    fields = (
+        "window_id",
+        "shop_name",
+        "status",
+        "sites",
+        "sequence_no",
+        "salesperson",
+        "email",
+    )
+    return {
+        field: row[index] if index < len(row) else ""
+        for index, field in enumerate(fields)
+    }
+
+
+def _execute_pago_jobs(
+    jobs,
+    max_workers=DEFAULT_COLLECTION_MAX_WORKERS,
+    stop_event=None,
+    stagger_min_seconds=None,
+    stagger_max_seconds=None,
+):
+    outcomes = {}
+    if not jobs:
+        return outcomes
+
+    worker_count = max(1, min(int(max_workers), len(jobs)))
+    with ThreadPoolExecutor(max_workers=worker_count) as executor:
+        future_map = {}
+        for index, (row, sites) in enumerate(jobs):
+            if stop_event is not None and stop_event.is_set():
+                break
+            future = executor.submit(_run_pago_for_browser, row, sites, stop_event)
+            future_map[future] = (row, sites)
+            if index < len(jobs) - 1:
+                try:
+                    delay = stagger_sleep(
+                        stagger_min_seconds,
+                        stagger_max_seconds,
+                        sleep=lambda seconds: _interruptible_wait(seconds, stop_event),
+                    )
+                    print(f"{get_now_time()}资金店铺错峰启动，下一家等待 {delay:.1f} 秒")
+                except PagoCollectionCancelled:
+                    break
+
+        if stop_event is not None and stop_event.is_set():
+            for future in future_map:
+                future.cancel()
+
+        for future in as_completed(future_map):
+            row, sites = future_map[future]
+            name = row[1]
+            if future.cancelled():
+                browser_pagos = [
+                    _build_pago_failure_row(name, site, "已终止", "任务已终止")
+                    for site in sites
+                ]
+                browser_result = [
+                    ("获取款项信息", name, site, "已终止", get_now_time())
+                    for site in sites
+                ]
+            else:
+                try:
+                    browser_pagos, browser_result = future.result()
+                except PagoCollectionCancelled:
+                    browser_pagos = [
+                        _build_pago_failure_row(name, site, "已终止", "任务已终止")
+                        for site in sites
+                    ]
+                    browser_result = [
+                        ("获取款项信息", name, site, "已终止", get_now_time())
+                        for site in sites
+                    ]
+                except Exception as e:
+                    print(get_now_time() + name + "窗口任务异常", e)
+                    browser_pagos = [
+                        _build_pago_failure_row(name, site, "执行失败", str(e))
+                        for site in sites
+                    ]
+                    browser_result = [
+                        ("获取款项信息", name, site, "失败", get_now_time())
+                        for site in sites
+                    ]
+            outcomes[(str(row[0]), str(row[1]))] = (
+                row,
+                browser_pagos,
+                browser_result,
+            )
+            print(get_now_time() + name + f"窗口任务完成，站点：{','.join(sites)}")
+    return outcomes
+
+
+def _repair_pago_logins(outcomes, stop_event=None):
+    for key, (row, _pago_rows, task_rows) in list(outcomes.items()):
+        if stop_event is not None and stop_event.is_set():
+            break
+        if not any("登录失效" in str(item[3] or "") for item in task_rows if len(item) >= 4):
+            continue
+        name = str(row[1] or "").strip()
+        print(f"{get_now_time()}{name} 开始串行修复 Mercado 登录态")
+        try:
+            from bit.bit_mercado_login import login_one_database_shop
+
+            login_result = login_one_database_shop(
+                _row_as_login_config(row),
+                wait_seconds=int(env_float("BIT_LOGIN_REPAIR_WAIT_SECONDS", 60, 1)),
+                page_load_timeout=int(env_float("BIT_LOGIN_REPAIR_PAGE_TIMEOUT", 20, 1)),
+            )
+        except Exception as e:
+            print(f"{get_now_time()}{name} 登录修复异常，本轮不重试：{e}")
+            continue
+        if not login_result.get("ok"):
+            print(
+                f"{get_now_time()}{name} 登录修复未通过，本轮不重试："
+                f"{login_result.get('message') or login_result.get('status')}"
+            )
+            continue
+        if stop_event is not None and stop_event.is_set():
+            break
+        print(f"{get_now_time()}{name} 登录态修复成功，重新采集全部配置站点")
+        sites = _split_config_sites(row[3] if len(row) > 3 else "")
+        outcomes[key] = (row, *_run_pago_for_browser(row, sites, stop_event))
+    return outcomes
+
+
+def _collect_pago_jobs(
+    jobs,
+    max_workers=DEFAULT_COLLECTION_MAX_WORKERS,
+    stop_event=None,
+    stagger_min_seconds=None,
+    stagger_max_seconds=None,
+    auto_login=True,
+):
+    outcomes = _execute_pago_jobs(
+        jobs,
+        max_workers=max_workers,
+        stop_event=stop_event,
+        stagger_min_seconds=stagger_min_seconds,
+        stagger_max_seconds=stagger_max_seconds,
+    )
+    if auto_login and not (stop_event is not None and stop_event.is_set()):
+        _repair_pago_logins(outcomes, stop_event=stop_event)
+    pago_info_sum = []
+    result = []
+    for row, sites in jobs:
+        outcome = outcomes.get((str(row[0]), str(row[1])))
+        if outcome is None:
+            name = str(row[1] or "")
+            pago_info_sum.extend(
+                _build_pago_failure_row(name, site, "已终止", "任务已终止")
+                for site in sites
+            )
+            result.extend(
+                ("获取款项信息", name, site, "已终止", get_now_time())
+                for site in sites
+            )
+            continue
+        pago_info_sum.extend(outcome[1])
+        result.extend(outcome[2])
+    return pago_info_sum, result
+
+
+def get_pago_info_for_shop(
+    shop_name="",
+    window_id="",
+    stop_event=None,
+    auto_login=True,
+):
+    """采集指定店铺配置的全部站点；未配置的国家不会被额外执行。"""
+    shop_name = str(shop_name or "").strip()
+    window_id = str(window_id or "").strip()
+    if not shop_name and not window_id:
+        raise ValueError("请指定店铺名或窗口 ID")
+
+    rows = [
+        row
+        for row in list_config_rows(include_ignored=False)
+        if row and row[0] and row[1]
+    ]
+    row = next(
+        (
+            item
+            for item in rows
+            if (not shop_name or str(item[1]).strip() == shop_name)
+            and (not window_id or str(item[0]).strip() == window_id)
+        ),
+        None,
+    )
+    if row is None:
+        identifier = shop_name or window_id
+        raise RuntimeError(f"未找到有效店铺配置：{identifier}")
+
+    name = str(row[1]).strip()
+    sites = _split_config_sites(row[3] if len(row) > 3 else "")
+    if sites:
+        pago_info_sum, result = _collect_pago_jobs(
+            [(row, sites)],
+            max_workers=1,
+            stop_event=stop_event,
+            stagger_min_seconds=0,
+            stagger_max_seconds=0,
+            auto_login=auto_login,
+        )
+    else:
+        pago_info_sum = [_build_pago_failure_row(name, "", "未配置站点", "")]
+        result = [("获取款项信息", name, "", "失败：未配置站点", get_now_time())]
+
+    _safe_insert_pago_info(pago_info_sum)
+    _safe_insert_task_record(result)
+    return pago_info_sum
+
+
+def get_pago_info_all(
+    max_workers=DEFAULT_COLLECTION_MAX_WORKERS,
+    apply_shop_limit=True,
+    selected_shops=None,
+    selected_window_ids=None,
+    salesperson="",
+    stop_event=None,
+    stagger_min_seconds=None,
+    stagger_max_seconds=None,
+    auto_login=True,
+):
     start = int(time.time())
     print(start)
     root_path = Path(__file__).resolve().parent
     output_dir = root_path / "美客多款项"
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    rows = list_config_rows(include_ignored=False)
-    rows = [row for row in rows if row and row[0] and row[1]]
-    shop_limit = _get_shop_limit()
-    if shop_limit is not None:
-        rows = rows[:shop_limit]
-
-    jobs = [(row, _split_config_sites(row[3] if len(row) > 3 else "")) for row in rows]
+    jobs, shop_limit = _build_pago_collection_jobs(
+        apply_shop_limit=apply_shop_limit,
+        selected_shops=selected_shops,
+        selected_window_ids=selected_window_ids,
+        salesperson=salesperson,
+    )
+    if (selected_shops or selected_window_ids or salesperson) and not jobs:
+        raise ValueError("当前执行范围内没有有效店铺")
     print(
         get_now_time()
-        + f"本次款项采集店铺数：{len(rows)}，限制：{'全部' if shop_limit is None else shop_limit}"
+        + f"本次款项采集店铺数：{len(jobs)}，限制：{'全部' if shop_limit is None else shop_limit}"
     )
     for row, sites in jobs:
         print(get_now_time() + f"款项采集计划：{row[1]} -> {','.join(sites) if sites else '未配置站点'}")
@@ -1146,22 +1661,16 @@ def get_pago_info_all(max_workers=20):
             pago_info_sum.append(_build_pago_failure_row(name, "", "未配置站点", ""))
 
     if runnable_jobs:
-        with ThreadPoolExecutor(max_workers=min(max_workers, len(runnable_jobs))) as executor:
-            future_map = {
-                executor.submit(_run_pago_for_browser, row, sites): (row, sites)
-                for row, sites in runnable_jobs
-            }
-            for future in as_completed(future_map):
-                row, sites = future_map[future]
-                name = row[1]
-                try:
-                    browser_pagos, browser_result = future.result()
-                    pago_info_sum.extend(browser_pagos)
-                    result.extend(browser_result)
-                    print(get_now_time() + name + f"窗口任务完成，站点：{','.join(sites)}")
-                except Exception as e:
-                    print(get_now_time() + name + "窗口任务异常", e)
-                    result.append(("获取款项信息", name, ",".join(sites), "失败", get_now_time()))
+        browser_pagos, browser_result = _collect_pago_jobs(
+            runnable_jobs,
+            max_workers=max_workers,
+            stop_event=stop_event,
+            stagger_min_seconds=stagger_min_seconds,
+            stagger_max_seconds=stagger_max_seconds,
+            auto_login=auto_login,
+        )
+        pago_info_sum.extend(browser_pagos)
+        result.extend(browser_result)
 
     print("\n".join(map(str, pago_info_sum)))
     end = int(time.time())
@@ -1180,20 +1689,23 @@ def get_pago_info_all(max_workers=20):
         ],
     )
 
-    date_str = datetime.now().strftime("%Y-%m-%d-%H")
+    date_str = datetime.now().strftime("%Y-%m-%d-%H-%M-%S")
     output_path = output_dir / ("武汉泽顺店铺款项信息汇总" + date_str + ".xlsx")
     df.to_excel(output_path, index=False)
 
-    send_info(
-        "美客多所有店铺款项汇总",
-        "",
-        output_path,
-        "武汉泽顺店铺款项信息汇总" + date_str + ".xlsx",
-    )
-    print(get_now_time() + "发送邮件成功")
-
     _safe_insert_pago_info(pago_info_sum)
     _safe_insert_task_record(result)
+
+    if not (stop_event is not None and stop_event.is_set()):
+        send_info(
+            "美客多店铺款项汇总",
+            "",
+            output_path,
+            "武汉泽顺店铺款项信息汇总" + date_str + ".xlsx",
+        )
+        print(get_now_time() + "发送邮件成功")
+    else:
+        print(get_now_time() + "资金采集任务已终止，保留已采集数据但跳过汇总邮件")
     return pago_info_sum
 
 

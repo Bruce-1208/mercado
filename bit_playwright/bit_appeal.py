@@ -1,5 +1,9 @@
 from bit.bit_utils import getWindowidByName
-from bit_playwright.common import BitPlaywrightSession, select_country
+from bit_playwright.common import (
+    BitPlaywrightSession,
+    open_mercado_backend_page,
+    select_country,
+)
 
 
 CHAT_INFO_API_URL = "https://zeshun.nat100.top/api/v1/chat"
@@ -10,7 +14,12 @@ def shensu(name, site, form, message, mode="人工客服"):
     print(f"{name} {site} 开始进行{form}申诉，话术为{message}<br>")
     with BitPlaywrightSession(window_id) as session:
         page = session.page
-        page.goto("https://global-selling.mercadolibre.com/help/hub/30928?source", wait_until="domcontentloaded", timeout=60000)
+        access = open_mercado_backend_page(
+            session,
+            "https://global-selling.mercadolibre.com/help/hub/30928?source",
+        )
+        if not access.get("ok"):
+            raise RuntimeError(access.get("message") or access.get("status"))
         select_country(page, site)
         if mode == "AI客服":
             page.get_by_text("Contact us").first.click(timeout=15000)

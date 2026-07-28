@@ -1,5 +1,6 @@
 import requests
 import json
+import hashlib
 import os
 import threading
 import time
@@ -23,21 +24,56 @@ _AUTO_LEASES = {}
 _AUTO_LEASES_GUARD = threading.Lock()
 _BROWSER_API_MUTATION_LOCK_KEY = "bit_browser_api_mutation"
 _BROWSER_API_LOCK_TIMEOUT = int(os.environ.get("BIT_BROWSER_API_LOCK_TIMEOUT", "180"))
+_BROWSER_API_MUTATION_CONCURRENCY = max(
+    1,
+    min(int(os.environ.get("BIT_BROWSER_API_MUTATION_CONCURRENCY", "1")), 8),
+)
 _BROWSER_OPEN_TIMEOUT = int(os.environ.get("BIT_BROWSER_OPEN_TIMEOUT", "60"))
 _BROWSER_CLOSE_TIMEOUT = int(os.environ.get("BIT_BROWSER_CLOSE_TIMEOUT", "30"))
 
 
-def _post_browser_mutation(endpoint, browser_id, request_timeout):
-    """串行调用 BitBrowser 窗口接口，避免本地服务被并发打开请求阻塞。"""
-    api_lock = InterProcessLock(
-        _BROWSER_API_MUTATION_LOCK_KEY,
-        owner=f"bit_api.{endpoint}",
-        metadata={"endpoint": endpoint, "window_id": str(browser_id or "")},
+def _browser_api_slot_order(browser_id, slot_count=None):
+    slot_count = max(
+        1,
+        int(slot_count or _BROWSER_API_MUTATION_CONCURRENCY),
     )
-    if not api_lock.acquire(timeout=max(1, _BROWSER_API_LOCK_TIMEOUT)):
-        raise TimeoutError(
-            f"等待 BitBrowser {endpoint} 接口锁超时：{_BROWSER_API_LOCK_TIMEOUT} 秒"
-        )
+    digest = hashlib.sha256(str(browser_id or "").encode("utf-8")).digest()
+    start_index = int.from_bytes(digest[:4], "big") % slot_count
+    return tuple((start_index + offset) % slot_count for offset in range(slot_count))
+
+
+def _acquire_browser_api_mutation_slot(endpoint, browser_id, timeout):
+    """限制跨进程窗口操作；默认串行，避免 BitBrowser 并发启动超时。"""
+    timeout = max(1, float(timeout))
+    deadline = time.monotonic() + timeout
+    slot_order = _browser_api_slot_order(browser_id)
+    while True:
+        for slot_index in slot_order:
+            slot_lock = InterProcessLock(
+                f"{_BROWSER_API_MUTATION_LOCK_KEY}_slot_{slot_index}",
+                owner=f"bit_api.{endpoint}",
+                metadata={
+                    "endpoint": endpoint,
+                    "window_id": str(browser_id or ""),
+                    "slot": slot_index,
+                },
+            )
+            if slot_lock.acquire(timeout=0):
+                return slot_lock
+        if time.monotonic() >= deadline:
+            raise TimeoutError(
+                f"等待 BitBrowser {endpoint} 接口并发槽位超时：{int(timeout)} 秒"
+            )
+        time.sleep(0.1)
+
+
+def _post_browser_mutation(endpoint, browser_id, request_timeout):
+    """限流调用 BitBrowser 窗口接口；窗口连接后的业务仍可多进程并行。"""
+    api_lock = _acquire_browser_api_mutation_slot(
+        endpoint,
+        browser_id,
+        _BROWSER_API_LOCK_TIMEOUT,
+    )
     try:
         return requests.post(
             f"{url}/browser/{endpoint}",

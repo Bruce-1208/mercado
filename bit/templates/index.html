@@ -367,7 +367,8 @@
         }
 
         #log-container,
-        #daily-task-state-log {
+        #daily-task-state-log,
+        #order-print-log {
             flex: 1;
             margin: 0;
             background: var(--log-bg);
@@ -400,6 +401,164 @@
             gap: 6px;
             flex-wrap: wrap;
             justify-content: flex-end;
+        }
+
+        .collection-scope-panel {
+            border-bottom: 1px solid var(--border);
+            background: #f8fafc;
+            padding: 10px;
+        }
+
+        .collection-scope-grid {
+            display: grid;
+            grid-template-columns: minmax(220px, 1.3fr) minmax(180px, 0.9fr) 150px;
+            gap: 10px;
+            align-items: start;
+        }
+
+        .collection-scope-field label {
+            color: #344054;
+        }
+
+        .collection-checkbox-table-wrap {
+            max-height: 176px;
+            overflow: auto;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            background: #fff;
+        }
+
+        .collection-checkbox-table {
+            min-width: 100%;
+            table-layout: fixed;
+        }
+
+        .collection-checkbox-table th,
+        .collection-checkbox-table td {
+            height: 34px;
+            vertical-align: middle;
+        }
+
+        .collection-checkbox-table th:first-child,
+        .collection-checkbox-table td:first-child {
+            width: 42px;
+            text-align: center;
+        }
+
+        .collection-shop-table {
+            min-width: 500px;
+        }
+
+        .collection-shop-table th:nth-child(2),
+        .collection-shop-table td:nth-child(2) {
+            width: 160px;
+        }
+
+        .collection-shop-table th:nth-child(3),
+        .collection-shop-table td:nth-child(3) {
+            width: 100px;
+        }
+
+        .collection-checkbox {
+            width: 16px;
+            height: 16px;
+            margin: 0;
+            cursor: pointer;
+            accent-color: var(--primary);
+        }
+
+        .collection-checkbox:disabled {
+            cursor: not-allowed;
+        }
+
+        .collection-shop-sites {
+            color: var(--muted);
+            white-space: normal;
+            word-break: break-word;
+        }
+
+        .collection-scope-hint,
+        .collection-scope-summary {
+            margin: 5px 0 0;
+            color: var(--muted);
+            font-size: 11px;
+            line-height: 1.45;
+        }
+
+        .collection-scope-summary {
+            border: 1px solid #bfdbfe;
+            border-radius: 7px;
+            background: #eff6ff;
+            color: #1d4ed8;
+            padding: 7px 8px;
+            font-weight: 700;
+        }
+
+        .fund-controls {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            flex-wrap: wrap;
+        }
+
+        .fund-controls select {
+            width: 160px;
+            min-width: 140px;
+        }
+
+        .fund-toggle {
+            display: inline-flex;
+            align-items: center;
+            gap: 7px;
+            margin: 0;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            background: #f8fafc;
+            color: #344054;
+            padding: 6px 9px;
+            cursor: pointer;
+            white-space: nowrap;
+        }
+
+        .fund-toggle input {
+            width: 16px;
+            height: 16px;
+            margin: 0;
+            accent-color: var(--primary);
+        }
+
+        .fund-selection-summary {
+            min-width: 92px;
+            color: var(--muted);
+            font-size: 12px;
+            font-weight: 700;
+            white-space: nowrap;
+        }
+
+        .fund-row-select {
+            width: 16px;
+            height: 16px;
+            margin: 0;
+            cursor: pointer;
+            accent-color: var(--primary);
+        }
+
+        .fund-row-select:disabled {
+            cursor: not-allowed;
+        }
+
+        .fund-table {
+            min-width: 1120px;
+        }
+
+        .fund-amount {
+            color: #166534;
+            font-weight: 800;
+            font-variant-numeric: tabular-nums;
+        }
+
+        .fund-amount.pending {
+            color: #9a3412;
         }
 
         .range-switch {
@@ -554,6 +713,20 @@
             color: #991b1b;
         }
 
+        .reputation-rate-cell {
+            font-weight: 700;
+        }
+
+        .reputation-rate-cell.rate-yellow {
+            background: #fef9c3;
+            color: #854d0e;
+        }
+
+        .reputation-rate-cell.rate-red {
+            background: #fee2e2;
+            color: #991b1b;
+        }
+
         .status-tag {
             display: inline-flex;
             align-items: center;
@@ -582,17 +755,26 @@
             display: block;
         }
 
-        .traffic-cell {
+        .traffic-cell,
+        .reason-cell {
             display: inline-flex;
             align-items: center;
             cursor: default;
+        }
+
+        .reason-cell {
+            width: 100%;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            cursor: help;
         }
 
         .traffic-tooltip {
             position: fixed;
             z-index: 30;
             display: none;
-            max-width: 360px;
+            max-width: min(520px, calc(100vw - 24px));
             border: 1px solid #bfdbfe;
             border-radius: 8px;
             background: #fff;
@@ -601,7 +783,8 @@
             padding: 10px 12px;
             font-size: 12px;
             line-height: 1.55;
-            white-space: pre-line;
+            white-space: pre-wrap;
+            overflow-wrap: anywhere;
         }
 
         .traffic-tooltip strong {
@@ -679,6 +862,70 @@
             padding-bottom: 4px;
         }
 
+        .window-anomaly-table {
+            min-width: 1880px;
+        }
+
+        .window-anomaly-table th:first-child,
+        .window-anomaly-table td:first-child {
+            width: 44px;
+            text-align: center;
+        }
+
+        .window-anomaly-table th:last-child,
+        .window-anomaly-table td:last-child {
+            width: 230px;
+        }
+
+        .window-anomaly-table th:nth-child(2),
+        .window-anomaly-table td:nth-child(2) {
+            width: 120px;
+        }
+
+        .window-anomaly-table th:nth-child(3),
+        .window-anomaly-table td:nth-child(3) {
+            width: 96px;
+        }
+
+        .window-anomaly-table th:nth-child(4),
+        .window-anomaly-table td:nth-child(4) {
+            width: 220px;
+        }
+
+        .window-anomaly-table th:nth-child(5),
+        .window-anomaly-table td:nth-child(5) {
+            width: 180px;
+        }
+
+        .window-anomaly-table th:nth-child(9),
+        .window-anomaly-table td:nth-child(9) {
+            width: 280px;
+        }
+
+        .window-anomaly-table th:nth-child(10),
+        .window-anomaly-table td:nth-child(10) {
+            width: 76px;
+        }
+
+        .window-anomaly-table th:nth-child(11),
+        .window-anomaly-table td:nth-child(11),
+        .window-anomaly-table th:nth-child(12),
+        .window-anomaly-table td:nth-child(12) {
+            width: 136px;
+        }
+
+        .window-anomaly-select {
+            width: 16px;
+            height: 16px;
+            margin: 0;
+            cursor: pointer;
+            accent-color: var(--primary);
+        }
+
+        .window-anomaly-select:disabled {
+            cursor: not-allowed;
+        }
+
         @media (max-width: 900px) {
             .page {
                 grid-template-columns: 1fr;
@@ -698,6 +945,10 @@
 
             .summary-row {
                 grid-template-columns: 1fr 1fr;
+            }
+
+            .collection-scope-grid {
+                grid-template-columns: 1fr;
             }
         }
     </style>
@@ -719,7 +970,9 @@
             <p class="nav-title">功能导航</p>
             <button class="tab-button active" type="button" data-tab="appeal" onclick="switchTab('appeal')">自动化AI申诉</button>
             <button class="tab-button" type="button" data-tab="tasks" onclick="switchTab('tasks')">任务模块</button>
+            <button class="tab-button" type="button" data-tab="order-print" onclick="switchTab('order-print')">订单打印</button>
             <button class="tab-button" type="button" data-tab="window-anomalies" onclick="switchTab('window-anomalies')">店铺状态</button>
+            <button class="tab-button" type="button" data-tab="funds" onclick="switchTab('funds')">资金管理</button>
             <button class="tab-button" type="button" data-tab="infractions" onclick="switchTab('infractions')">侵权数据</button>
             <button class="tab-button" type="button" data-tab="reputation" onclick="switchTab('reputation')">声誉数据</button>
             <button class="tab-button" type="button" data-tab="ai-appeals" onclick="switchTab('ai-appeals')">AI申诉记录</button>
@@ -825,6 +1078,15 @@
                         </div>
 
                         <div class="field">
+                            <label for="daily-task-appeal-type">申诉类型</label>
+                            <select id="daily-task-appeal-type">
+                                <option value="侵权" selected>侵权</option>
+                                <option value="延误率">延误率</option>
+                                <option value="取消率">取消率</option>
+                            </select>
+                        </div>
+
+                        <div class="field">
                             <label for="daily-task-top-n">店铺数量</label>
                             <input type="number" id="daily-task-top-n" value="30" min="1" max="100">
                         </div>
@@ -835,13 +1097,18 @@
                         </div>
 
                         <div class="field">
-                            <label for="daily-task-recent-days">统计天数</label>
+                            <label for="daily-task-recent-days">统计天数（仅侵权）</label>
                             <select id="daily-task-recent-days">
                                 <option value="7">最近 7 天</option>
                                 <option value="30">最近 30 天</option>
                                 <option value="100" selected>最近 100 天</option>
                                 <option value="365">最近 365 天</option>
                             </select>
+                        </div>
+
+                        <div class="field">
+                            <label for="daily-task-min-rate">最低比率（仅延误率/取消率，%）</label>
+                            <input type="number" id="daily-task-min-rate" value="0" min="0" max="100" step="0.01">
                         </div>
 
                         <div class="field">
@@ -901,16 +1168,139 @@
                 </div>
             </div>
 
+            <div class="tab-page" id="tab-order-print">
+                <div class="tab-heading">
+                    <h2>订单打印</h2>
+                    <p>按店铺配置选择站点并执行一次，控制台展示全部站点的最后执行时间</p>
+                </div>
+
+                <div class="appeal-grid">
+                    <section class="panel form-panel">
+                        <h2 class="panel-title">打印任务参数</h2>
+
+                        <div class="field">
+                            <label for="order-print-retries">单站点最大尝试次数</label>
+                            <select id="order-print-retries">
+                                <option value="1">1 次</option>
+                                <option value="2">2 次</option>
+                                <option value="3" selected>3 次</option>
+                            </select>
+                        </div>
+
+                        <div class="field">
+                            <label for="order-print-retry-delay">失败重试等待（秒）</label>
+                            <input id="order-print-retry-delay" type="number" min="0" max="600" value="300">
+                        </div>
+
+                        <div class="field collection-scope-field">
+                            <label>店铺（勾选可多选）</label>
+                            <div class="collection-checkbox-table-wrap">
+                                <table class="collection-checkbox-table collection-shop-table">
+                                    <thead>
+                                        <tr>
+                                            <th><input class="collection-checkbox" id="order-print-collection-shops-all" type="checkbox" aria-label="选择全部打印店铺" onchange="toggleAllCollectionOptions('order-print', 'shops', this.checked)"></th>
+                                            <th>店铺</th>
+                                            <th>归属人</th>
+                                            <th>配置站点</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="order-print-collection-shops">
+                                        <tr><td class="empty-state" colspan="4">正在加载店铺...</td></tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+
+                        <div class="field collection-scope-field">
+                            <label>站点（按店铺配置联动，勾选可多选）</label>
+                            <div class="collection-checkbox-table-wrap">
+                                <table class="collection-checkbox-table collection-site-table">
+                                    <thead>
+                                        <tr>
+                                            <th><input class="collection-checkbox" id="order-print-collection-sites-all" type="checkbox" aria-label="选择全部打印站点" onchange="toggleAllCollectionOptions('order-print', 'sites', this.checked)"></th>
+                                            <th>站点</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="order-print-collection-sites">
+                                        <tr><td class="empty-state" colspan="2">正在加载站点...</td></tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                        <input id="order-print-collection-workers" type="hidden" value="1">
+                        <p class="collection-scope-summary" id="order-print-collection-summary">正在加载打印范围...</p>
+
+                        <div class="actions">
+                            <button class="primary" id="start-order-print-btn" type="button" onclick="startOrderPrint()">执行打印</button>
+                            <button class="danger" id="stop-order-print-btn" type="button" onclick="stopOrderPrint()" disabled>停止任务</button>
+                        </div>
+                    </section>
+
+                    <section class="panel log-panel">
+                        <div class="log-header">
+                            <h2 class="panel-title" style="margin: 0;">订单打印运行日志</h2>
+                            <div class="header-actions">
+                                <span class="status" id="order-print-status-badge">
+                                    <span class="status-dot"></span>
+                                    <span id="order-print-status-text">等待启动</span>
+                                </span>
+                                <button class="secondary" type="button" onclick="loadOrderPrintStatus()">刷新状态</button>
+                            </div>
+                        </div>
+                        <div class="summary-row">
+                            <div class="metric">
+                                <div class="metric-label">开始时间</div>
+                                <div class="metric-value" id="order-print-started-at">-</div>
+                            </div>
+                            <div class="metric">
+                                <div class="metric-label">完成时间</div>
+                                <div class="metric-value" id="order-print-completed-at">-</div>
+                            </div>
+                            <div class="metric">
+                                <div class="metric-label">已提交 / 无订单</div>
+                                <div class="metric-value" id="order-print-success-count">0 / 0</div>
+                            </div>
+                            <div class="metric">
+                                <div class="metric-label">失败 / 跳过</div>
+                                <div class="metric-value" id="order-print-failure-count">0 / 0</div>
+                            </div>
+                        </div>
+                        <pre id="order-print-log">等待任务启动...</pre>
+                    </section>
+                </div>
+
+                <section class="panel infractions-panel" style="margin-top: 8px;">
+                    <div class="infractions-header">
+                        <h2 class="panel-title" style="margin: 0;">所有站点最后执行时间</h2>
+                    </div>
+                    <div class="table-wrap">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>店铺名</th>
+                                    <th>站点</th>
+                                    <th>最后执行时间</th>
+                                </tr>
+                            </thead>
+                            <tbody id="order-print-site-run-body">
+                                <tr><td class="empty-state" colspan="3">正在加载站点执行时间...</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </section>
+            </div>
+
             <div class="tab-page" id="tab-window-anomalies">
                 <div class="tab-heading">
                     <h2>店铺状态</h2>
-                    <p>展示需要重新登录的店铺，并可对单个店铺执行自动登录</p>
+                    <p>展示需要重新登录的店铺，可多选后批量执行自动登录</p>
                 </div>
 
                 <section class="panel infractions-panel">
                     <div class="infractions-header">
                         <h2 class="panel-title" style="margin: 0;">需要处理的店铺</h2>
                         <div class="header-actions">
+                            <button class="primary" id="start-selected-mercado-login-btn" type="button" onclick="startSelectedShopsAutoLogin()" disabled>自动登录所选店铺</button>
                             <button class="primary" id="start-mercado-login-btn" type="button" onclick="startMercadoLogin()">启动全部店铺自动登录</button>
                             <button class="secondary" type="button" onclick="loadWindowAnomalies()">刷新数据</button>
                         </div>
@@ -926,10 +1316,13 @@
                         </div>
                     </div>
                     <div class="table-wrap reputation-table-wrap">
-                        <table class="reputation-table">
+                        <table class="reputation-table window-anomaly-table">
                             <thead>
                                 <tr>
+                                    <th><input class="window-anomaly-select" id="window-anomaly-select-all" type="checkbox" aria-label="选择全部待登录店铺" onchange="toggleAllWindowAnomalies(this.checked)"></th>
                                     <th>店铺名</th>
+                                    <th>店铺归属人</th>
+                                    <th>邮箱</th>
                                     <th>窗口 ID</th>
                                     <th>站点</th>
                                     <th>店铺状态</th>
@@ -942,7 +1335,7 @@
                                 </tr>
                             </thead>
                             <tbody id="window-anomaly-body">
-                                <tr><td class="empty-state" colspan="10">正在加载店铺状态...</td></tr>
+                                <tr><td class="empty-state" colspan="13">正在加载店铺状态...</td></tr>
                             </tbody>
                         </table>
                     </div>
@@ -956,6 +1349,7 @@
                                 <span class="status-dot"></span>
                                 <span id="mercado-login-status-text">等待启动</span>
                             </span>
+                            <button class="danger" id="stop-mercado-login-btn" type="button" onclick="stopMercadoLoginTask()" disabled>停止当前任务</button>
                             <button class="secondary" type="button" onclick="loadMercadoLoginStatus()">刷新日志</button>
                         </div>
                     </div>
@@ -974,6 +1368,81 @@
                         </div>
                     </div>
                     <pre id="mercado-login-log">等待任务启动...</pre>
+                </section>
+            </div>
+
+            <div class="tab-page" id="tab-funds">
+                <div class="tab-heading">
+                    <h2>资金管理</h2>
+                    <p>展示全部有效店铺各配置站点的已释放与待释放金额</p>
+                </div>
+
+                <section class="panel infractions-panel">
+                    <div class="infractions-header">
+                        <h2 class="panel-title" style="margin: 0;">店铺资金</h2>
+                        <div class="header-actions">
+                            <div class="fund-controls">
+                                <select id="fund-owner-filter" aria-label="按店铺归属人筛选" onchange="changeFundOwnerFilter()">
+                                    <option value="">全部归属人</option>
+                                </select>
+                                <label class="fund-toggle" for="fund-all-toggle">
+                                    <input id="fund-all-toggle" type="checkbox" checked onchange="updateFundScopeControls()">
+                                    <span>执行全部店铺</span>
+                                </label>
+                                <span class="fund-selection-summary" id="fund-selection-summary">已选择 0 家</span>
+                                <button class="primary" id="collect-funds-btn" type="button" onclick="runFundCollection()">运行全部店铺任务</button>
+                                <button class="danger" id="stop-funds-btn" type="button" onclick="stopFundCollection()" disabled>终止任务</button>
+                                <button class="secondary" type="button" onclick="loadLatestFunds()">刷新数据</button>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="summary-row">
+                        <div class="metric">
+                            <div class="metric-label">最近采集时间</div>
+                            <div class="metric-value" id="fund-latest-time">-</div>
+                        </div>
+                        <div class="metric">
+                            <div class="metric-label">当前店铺数</div>
+                            <div class="metric-value" id="fund-shop-total">0</div>
+                        </div>
+                        <div class="metric">
+                            <div class="metric-label">已释放合计（USD）</div>
+                            <div class="metric-value fund-amount" id="fund-released-total">0.00</div>
+                        </div>
+                        <div class="metric">
+                            <div class="metric-label">待释放合计（USD）</div>
+                            <div class="metric-value fund-amount pending" id="fund-pending-total">0.00</div>
+                        </div>
+                    </div>
+                    <div class="log-header">
+                        <div>
+                            <span class="status" id="fund-collect-status-badge">
+                                <span class="status-dot"></span>
+                                <span id="fund-collect-status-text">等待启动</span>
+                            </span>
+                            <span id="fund-collect-detail" style="margin-left: 10px; color: var(--muted); font-size: 12px;"></span>
+                        </div>
+                    </div>
+                    <div class="table-wrap reputation-table-wrap">
+                        <table class="fund-table">
+                            <thead>
+                                <tr>
+                                    <th><input class="fund-row-select" id="fund-select-all" type="checkbox" aria-label="选择当前筛选下全部店铺" onchange="toggleAllVisibleFundShops(this.checked)"></th>
+                                    <th>店铺归属人</th>
+                                    <th>店铺名</th>
+                                    <th>站点</th>
+                                    <th>已释放（USD）</th>
+                                    <th>待释放（USD）</th>
+                                    <th>状态</th>
+                                    <th>更新时间</th>
+                                    <th>操作</th>
+                                </tr>
+                            </thead>
+                            <tbody id="fund-body">
+                                <tr><td class="empty-state" colspan="9">正在加载资金数据...</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
                 </section>
             </div>
 
@@ -996,6 +1465,50 @@
                             <button class="secondary" id="collect-infractions-btn" type="button" onclick="runInfractionCollection()">运行侵权采集</button>
                             <button class="secondary" type="button" onclick="exportLatestInfractions()">导出明细 Excel</button>
                             <button class="secondary" type="button" onclick="loadLatestInfractions()">刷新数据</button>
+                        </div>
+                    </div>
+                    <div class="collection-scope-panel">
+                        <div class="collection-scope-grid">
+                            <div class="collection-scope-field">
+                                <label>补跑店铺（勾选可多选）</label>
+                                <div class="collection-checkbox-table-wrap">
+                                    <table class="collection-checkbox-table collection-shop-table">
+                                        <thead>
+                                            <tr>
+                                                <th><input class="collection-checkbox" id="infraction-collection-shops-all" type="checkbox" aria-label="选择全部侵权采集店铺" onchange="toggleAllCollectionOptions('infraction', 'shops', this.checked)"></th>
+                                                <th>店铺</th>
+                                                <th>归属人</th>
+                                                <th>配置站点</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody id="infraction-collection-shops">
+                                            <tr><td class="empty-state" colspan="4">正在加载店铺...</td></tr>
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                            <div class="collection-scope-field">
+                                <label>补跑站点（按店铺配置联动，勾选可多选）</label>
+                                <div class="collection-checkbox-table-wrap">
+                                    <table class="collection-checkbox-table collection-site-table">
+                                        <thead>
+                                            <tr>
+                                                <th><input class="collection-checkbox" id="infraction-collection-sites-all" type="checkbox" aria-label="选择全部侵权采集站点" onchange="toggleAllCollectionOptions('infraction', 'sites', this.checked)"></th>
+                                                <th>站点</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody id="infraction-collection-sites">
+                                            <tr><td class="empty-state" colspan="2">正在加载站点...</td></tr>
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                            <div class="collection-scope-field">
+                                <label for="infraction-collection-workers">并发进程</label>
+                                <input id="infraction-collection-workers" type="number" min="1" max="10" value="3" onchange="updateCollectionScopeSummary('infraction')">
+                                <p class="collection-scope-hint">默认 3 个进程；实际只执行店铺与站点的有效交集。</p>
+                                <p class="collection-scope-summary" id="infraction-collection-summary">正在加载采集范围...</p>
+                            </div>
                         </div>
                     </div>
                     <div class="summary-row">
@@ -1070,6 +1583,50 @@
                             <button class="secondary" id="collect-reputation-btn" type="button" onclick="runReputationCollection()">运行声誉采集</button>
                             <button class="secondary" type="button" onclick="exportLatestReputation()">导出 Excel</button>
                             <button class="secondary" type="button" onclick="loadLatestReputation()">刷新数据</button>
+                        </div>
+                    </div>
+                    <div class="collection-scope-panel">
+                        <div class="collection-scope-grid">
+                            <div class="collection-scope-field">
+                                <label>补跑店铺（勾选可多选）</label>
+                                <div class="collection-checkbox-table-wrap">
+                                    <table class="collection-checkbox-table collection-shop-table">
+                                        <thead>
+                                            <tr>
+                                                <th><input class="collection-checkbox" id="reputation-collection-shops-all" type="checkbox" aria-label="选择全部声誉采集店铺" onchange="toggleAllCollectionOptions('reputation', 'shops', this.checked)"></th>
+                                                <th>店铺</th>
+                                                <th>归属人</th>
+                                                <th>配置站点</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody id="reputation-collection-shops">
+                                            <tr><td class="empty-state" colspan="4">正在加载店铺...</td></tr>
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                            <div class="collection-scope-field">
+                                <label>补跑站点（按店铺配置联动，勾选可多选）</label>
+                                <div class="collection-checkbox-table-wrap">
+                                    <table class="collection-checkbox-table collection-site-table">
+                                        <thead>
+                                            <tr>
+                                                <th><input class="collection-checkbox" id="reputation-collection-sites-all" type="checkbox" aria-label="选择全部声誉采集站点" onchange="toggleAllCollectionOptions('reputation', 'sites', this.checked)"></th>
+                                                <th>站点</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody id="reputation-collection-sites">
+                                            <tr><td class="empty-state" colspan="2">正在加载站点...</td></tr>
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                            <div class="collection-scope-field">
+                                <label for="reputation-collection-workers">并发进程</label>
+                                <input id="reputation-collection-workers" type="number" min="1" max="10" value="3" onchange="updateCollectionScopeSummary('reputation')">
+                                <p class="collection-scope-hint">默认 3 个进程；实际只执行店铺与站点的有效交集。</p>
+                                <p class="collection-scope-summary" id="reputation-collection-summary">正在加载采集范围...</p>
+                            </div>
                         </div>
                     </div>
                     <div class="summary-row">
@@ -1201,9 +1758,21 @@
         const dailyTaskStarted = document.getElementById("daily-task-started");
         const dailyTaskFinished = document.getElementById("daily-task-finished");
         const dailyTaskStateLog = document.getElementById("daily-task-state-log");
+        const startOrderPrintBtn = document.getElementById("start-order-print-btn");
+        const stopOrderPrintBtn = document.getElementById("stop-order-print-btn");
+        const orderPrintStatusBadge = document.getElementById("order-print-status-badge");
+        const orderPrintStatusText = document.getElementById("order-print-status-text");
+        const orderPrintStartedAt = document.getElementById("order-print-started-at");
+        const orderPrintCompletedAt = document.getElementById("order-print-completed-at");
+        const orderPrintSuccessCount = document.getElementById("order-print-success-count");
+        const orderPrintFailureCount = document.getElementById("order-print-failure-count");
+        const orderPrintLog = document.getElementById("order-print-log");
+        const orderPrintSiteRunBody = document.getElementById("order-print-site-run-body");
         const windowAnomalyBody = document.getElementById("window-anomaly-body");
         const windowAnomalyTotal = document.getElementById("window-anomaly-total");
         const windowAnomalyLatestTime = document.getElementById("window-anomaly-latest-time");
+        const windowAnomalySelectAll = document.getElementById("window-anomaly-select-all");
+        const startSelectedMercadoLoginBtn = document.getElementById("start-selected-mercado-login-btn");
         const startMercadoLoginBtn = document.getElementById("start-mercado-login-btn");
         const mercadoLoginStatusBadge = document.getElementById("mercado-login-status-badge");
         const mercadoLoginStatusText = document.getElementById("mercado-login-status-text");
@@ -1211,12 +1780,47 @@
         const mercadoLoginStarted = document.getElementById("mercado-login-started");
         const mercadoLoginFinished = document.getElementById("mercado-login-finished");
         const mercadoLoginLog = document.getElementById("mercado-login-log");
+        const stopMercadoLoginBtn = document.getElementById("stop-mercado-login-btn");
+        const fundBody = document.getElementById("fund-body");
+        const fundOwnerFilter = document.getElementById("fund-owner-filter");
+        const fundAllToggle = document.getElementById("fund-all-toggle");
+        const fundSelectionSummary = document.getElementById("fund-selection-summary");
+        const fundSelectAll = document.getElementById("fund-select-all");
+        const collectFundsBtn = document.getElementById("collect-funds-btn");
+        const stopFundsBtn = document.getElementById("stop-funds-btn");
+        const fundLatestTime = document.getElementById("fund-latest-time");
+        const fundShopTotal = document.getElementById("fund-shop-total");
+        const fundReleasedTotal = document.getElementById("fund-released-total");
+        const fundPendingTotal = document.getElementById("fund-pending-total");
+        const fundCollectStatusBadge = document.getElementById("fund-collect-status-badge");
+        const fundCollectStatusText = document.getElementById("fund-collect-status-text");
+        const fundCollectDetail = document.getElementById("fund-collect-detail");
         let infractionDays = 30;
         let infractionsLoaded = false;
         let reputationLoaded = false;
         let aiAppealsLoaded = false;
         let tasksLoaded = false;
+        let orderPrintLoaded = false;
+        let orderPrintRunning = false;
+        let orderPrintStopping = false;
+        let orderPrintStatusPollTimer = null;
         let windowAnomaliesLoaded = false;
+        let mercadoLoginRunning = false;
+        let mercadoLoginAllRunning = false;
+        let activeMercadoLoginTaskId = "";
+        let mercadoLoginStopRequested = false;
+        let lastMercadoLoginWindowRefreshAt = 0;
+        let activeMercadoLoginWindowIds = new Set();
+        let fundsLoaded = false;
+        let fundRows = [];
+        let fundLatestSubmitTime = "";
+        let fundCollectionRunning = false;
+        let fundCollectionStopping = false;
+        let selectedFundWindowIds = new Set();
+        let fundStatusPollTimer = null;
+        let collectionOptionsLoaded = false;
+        let collectionOptionsLoading = null;
+        let collectionShopOptions = [];
         let activeAppealTaskId = "";
         let appealStopRequested = false;
 
@@ -1230,6 +1834,9 @@
             if (tabName === "infractions" && !infractionsLoaded) {
                 loadLatestInfractions();
             }
+            if (tabName === "infractions" || tabName === "reputation" || tabName === "order-print") {
+                loadCollectionOptions();
+            }
             if (tabName === "reputation" && !reputationLoaded) {
                 loadLatestReputation();
             }
@@ -1239,11 +1846,20 @@
             if (tabName === "tasks" && !tasksLoaded) {
                 loadDailyTaskStatus();
             }
+            if (tabName === "order-print") {
+                loadOrderPrintStatus();
+            }
             if (tabName === "window-anomalies") {
                 if (!windowAnomaliesLoaded) {
                     loadWindowAnomalies();
                 }
                 loadMercadoLoginStatus();
+            }
+            if (tabName === "funds") {
+                if (!fundsLoaded) {
+                    loadLatestFunds();
+                }
+                loadFundCollectionStatus();
             }
         }
 
@@ -1278,6 +1894,310 @@
                 .replaceAll("'", "&#039;");
         }
 
+        function parseFundAmount(value) {
+            let text = String(value ?? "").trim();
+            if (!text) return 0;
+            const negative = text.startsWith("-") || (text.includes("(") && text.includes(")"));
+            text = text.replace(/[^0-9,.-]/g, "").replaceAll("-", "");
+            if (!text) return 0;
+            if (text.includes(",") && text.includes(".")) {
+                const decimalSeparator = text.lastIndexOf(",") > text.lastIndexOf(".") ? "," : ".";
+                const thousandsSeparator = decimalSeparator === "," ? "." : ",";
+                text = text.replaceAll(thousandsSeparator, "");
+                if (decimalSeparator === ",") text = text.replaceAll(",", ".");
+            } else if (text.includes(",")) {
+                const tail = text.split(",").at(-1);
+                text = tail.length === 1 || tail.length === 2
+                    ? text.replaceAll(",", ".")
+                    : text.replaceAll(",", "");
+            } else if ((text.match(/\./g) || []).length > 1) {
+                const parts = text.split(".");
+                text = `${parts.slice(0, -1).join("")}.${parts.at(-1)}`;
+            }
+            const amount = Number(text);
+            return Number.isFinite(amount) ? (negative ? -amount : amount) : 0;
+        }
+
+        function formatFundTotal(value) {
+            return Number(value || 0).toLocaleString("en-US", {
+                minimumFractionDigits: 2,
+                maximumFractionDigits: 2,
+            });
+        }
+
+        function renderFundStatus(value) {
+            const status = String(value || "无数据");
+            const className = status === "无数据" ? "empty" : (status.includes("成功") ? "" : "fail");
+            return `<span class="status-tag ${className}">${escapeHtml(status)}</span>`;
+        }
+
+        function updateFundOwnerOptions() {
+            if (!fundOwnerFilter) return;
+            const selectedOwner = fundOwnerFilter.value;
+            const owners = Array.from(new Set(
+                fundRows.map(row => String(row["店铺归属人"] || "未分配").trim() || "未分配")
+            )).sort((a, b) => a.localeCompare(b, "zh-CN"));
+            fundOwnerFilter.innerHTML = '<option value="">全部归属人</option>' + owners.map(owner => (
+                `<option value="${escapeHtml(owner)}">${escapeHtml(owner)}</option>`
+            )).join("");
+            if (owners.includes(selectedOwner)) fundOwnerFilter.value = selectedOwner;
+        }
+
+        function fundRowOwner(row) {
+            return String(row["店铺归属人"] || "未分配").trim() || "未分配";
+        }
+
+        function visibleFundRows() {
+            const owner = String(fundOwnerFilter?.value || "");
+            return fundRows.filter(row => !owner || fundRowOwner(row) === owner);
+        }
+
+        function visibleFundShops() {
+            const shops = [];
+            const seen = new Set();
+            visibleFundRows().forEach(row => {
+                const windowId = String(row.window_id || "").trim();
+                const shopName = String(row["店铺名"] || "").trim();
+                const key = windowId || shopName;
+                if (!key || seen.has(key)) return;
+                seen.add(key);
+                shops.push({windowId, shopName});
+            });
+            return shops;
+        }
+
+        function changeFundOwnerFilter() {
+            selectedFundWindowIds.clear();
+            renderFundsTable();
+        }
+
+        function toggleFundShop(encodedWindowId, checked) {
+            const windowId = decodeURIComponent(encodedWindowId || "");
+            if (!windowId || fundCollectionRunning || fundAllToggle?.checked) return;
+            if (checked) selectedFundWindowIds.add(windowId);
+            else selectedFundWindowIds.delete(windowId);
+            renderFundsTable();
+        }
+
+        function toggleAllVisibleFundShops(checked) {
+            if (fundCollectionRunning || fundAllToggle?.checked) return;
+            visibleFundShops().forEach(shop => {
+                if (!shop.windowId) return;
+                if (checked) selectedFundWindowIds.add(shop.windowId);
+                else selectedFundWindowIds.delete(shop.windowId);
+            });
+            renderFundsTable();
+        }
+
+        function updateFundScopeControls() {
+            if (!fundAllToggle || !collectFundsBtn) return;
+            const allShops = fundAllToggle.checked;
+            const visibleShops = visibleFundShops();
+            const visibleIds = visibleShops.map(shop => shop.windowId).filter(Boolean);
+            const selectedVisibleCount = visibleIds.filter(windowId => selectedFundWindowIds.has(windowId)).length;
+            const owner = String(fundOwnerFilter?.value || "");
+            collectFundsBtn.disabled = fundCollectionRunning || (!allShops && selectedFundWindowIds.size === 0);
+            collectFundsBtn.textContent = fundCollectionRunning
+                ? "资金采集中..."
+                : (allShops
+                    ? (owner ? `运行${owner}全部店铺` : "运行全部店铺任务")
+                    : `执行所选 ${selectedFundWindowIds.size} 家`);
+            if (fundSelectionSummary) {
+                fundSelectionSummary.textContent = allShops
+                    ? `执行范围 ${visibleShops.length} 家`
+                    : `已选择 ${selectedFundWindowIds.size} 家`;
+            }
+            if (fundSelectAll) {
+                fundSelectAll.disabled = allShops || fundCollectionRunning || visibleIds.length === 0;
+                fundSelectAll.checked = visibleIds.length > 0 && selectedVisibleCount === visibleIds.length;
+                fundSelectAll.indeterminate = selectedVisibleCount > 0 && selectedVisibleCount < visibleIds.length;
+            }
+            if (stopFundsBtn) {
+                stopFundsBtn.disabled = !fundCollectionRunning || fundCollectionStopping;
+                stopFundsBtn.textContent = fundCollectionStopping ? "正在终止" : "终止任务";
+            }
+            document.querySelectorAll(".fund-row-select").forEach(checkbox => {
+                if (checkbox.id !== "fund-select-all") {
+                    checkbox.disabled = allShops || fundCollectionRunning || !checkbox.value;
+                }
+            });
+            document.querySelectorAll(".fund-refresh-action").forEach(button => {
+                button.disabled = fundCollectionRunning;
+                button.textContent = fundCollectionRunning ? "采集中" : "刷新店铺";
+            });
+        }
+
+        function renderFundsTable() {
+            if (!fundBody) return;
+            const rows = visibleFundRows();
+            fundLatestTime.textContent = fundLatestSubmitTime || "-";
+            fundShopTotal.textContent = new Set(rows.map(row => row["店铺名"]).filter(Boolean)).size;
+            fundReleasedTotal.textContent = formatFundTotal(
+                rows.reduce((sum, row) => sum + parseFundAmount(row["已释放美元"]), 0)
+            );
+            fundPendingTotal.textContent = formatFundTotal(
+                rows.reduce((sum, row) => sum + parseFundAmount(row["待释放美元"] || row["未释放美元"]), 0)
+            );
+
+            if (!rows.length) {
+                fundBody.innerHTML = '<tr><td class="empty-state" colspan="9">当前筛选条件下暂无资金数据</td></tr>';
+                updateFundScopeControls();
+                return;
+            }
+            fundBody.innerHTML = rows.map(row => {
+                const shopName = String(row["店铺名"] || "");
+                const windowId = String(row.window_id || "");
+                const released = String(row["已释放美元"] || "").trim() || "-";
+                const pending = String(row["待释放美元"] || row["未释放美元"] || "").trim() || "-";
+                const checked = windowId && selectedFundWindowIds.has(windowId);
+                return `
+                    <tr>
+                        <td><input class="fund-row-select" type="checkbox" value="${escapeHtml(windowId)}" aria-label="选择店铺 ${escapeHtml(shopName)}" onchange="toggleFundShop('${encodeURIComponent(windowId)}', this.checked)" ${checked ? "checked" : ""} ${windowId ? "" : "disabled"}></td>
+                        <td title="${escapeHtml(row["店铺归属人"] || "未分配")}">${escapeHtml(row["店铺归属人"] || "未分配")}</td>
+                        <td title="${escapeHtml(shopName)}">${escapeHtml(shopName)}</td>
+                        <td>${escapeHtml(row["站点"] || "未配置站点")}</td>
+                        <td class="fund-amount" title="${escapeHtml(released)}">${escapeHtml(released)}</td>
+                        <td class="fund-amount pending" title="${escapeHtml(pending)}">${escapeHtml(pending)}</td>
+                        <td>${renderFundStatus(row["状态"])}</td>
+                        <td title="${escapeHtml(row["更新时间"] || row["提交时间"] || "")}">${escapeHtml(row["更新时间"] || row["提交时间"] || "-")}</td>
+                        <td><button class="secondary fund-refresh-action" type="button" onclick="runFundCollection('${encodeURIComponent(shopName)}', '${encodeURIComponent(windowId)}', this)">刷新店铺</button></td>
+                    </tr>
+                `;
+            }).join("");
+            updateFundScopeControls();
+        }
+
+        async function loadLatestFunds() {
+            if (!fundBody) return;
+            fundBody.innerHTML = '<tr><td class="empty-state" colspan="9">正在加载资金数据...</td></tr>';
+            try {
+                const response = await fetch("/api/funds/latest", {cache: "no-store"});
+                const payload = await response.json();
+                if (!response.ok || payload.status !== "success") {
+                    throw new Error(payload.message || `接口请求失败：${response.status}`);
+                }
+                const data = payload.data || {};
+                fundRows = Array.isArray(data.rows) ? data.rows : [];
+                fundLatestSubmitTime = data.latest_submit_time || "";
+                fundsLoaded = true;
+                updateFundOwnerOptions();
+                renderFundsTable();
+            } catch (err) {
+                fundsLoaded = false;
+                fundBody.innerHTML = `<tr><td class="empty-state" colspan="9">加载失败：${escapeHtml(err.message || err)}</td></tr>`;
+            }
+        }
+
+        function renderFundCollectionStatus(state) {
+            const data = state || {};
+            fundCollectionRunning = Boolean(data.running);
+            const status = String(data.status || "idle");
+            fundCollectionStopping = status === "stopping";
+            fundCollectStatusBadge.className = `status ${status === "error" ? "error" : (fundCollectionStopping ? "stopping" : (fundCollectionRunning ? "running" : ""))}`.trim();
+            fundCollectStatusText.textContent = data.message || (fundCollectionRunning ? "运行中" : "等待启动");
+            fundCollectDetail.textContent = [data.target, data.started_at, data.finished_at].filter(Boolean).join(" · ");
+            updateFundScopeControls();
+        }
+
+        async function loadFundCollectionStatus() {
+            if (!fundCollectStatusBadge) return;
+            if (fundStatusPollTimer) {
+                window.clearTimeout(fundStatusPollTimer);
+                fundStatusPollTimer = null;
+            }
+            const wasRunning = fundCollectionRunning;
+            try {
+                const response = await fetch("/api/funds/collect/status", {cache: "no-store"});
+                const payload = await response.json();
+                if (!response.ok || payload.status !== "success") {
+                    throw new Error(payload.message || `接口请求失败：${response.status}`);
+                }
+                renderFundCollectionStatus(payload.data || {});
+                if (fundCollectionRunning) {
+                    fundStatusPollTimer = window.setTimeout(loadFundCollectionStatus, 2000);
+                } else if (wasRunning) {
+                    await loadLatestFunds();
+                }
+            } catch (err) {
+                fundCollectionRunning = false;
+                fundCollectStatusBadge.className = "status error";
+                fundCollectStatusText.textContent = "状态读取失败";
+                fundCollectDetail.textContent = err.message || err;
+                updateFundScopeControls();
+            }
+        }
+
+        async function runFundCollection(encodedShopName = "", encodedWindowId = "", actionButton = null) {
+            if (fundCollectionRunning) return;
+            const rowShopName = decodeURIComponent(encodedShopName || "");
+            const rowWindowId = decodeURIComponent(encodedWindowId || "");
+            const rowRefresh = Boolean(rowShopName || rowWindowId);
+            const allShops = rowRefresh ? false : Boolean(fundAllToggle?.checked);
+            const windowIds = rowRefresh ? [rowWindowId] : Array.from(selectedFundWindowIds);
+            if (!allShops && !windowIds.filter(Boolean).length) {
+                alert("请至少勾选一家店铺");
+                return;
+            }
+
+            fundCollectionRunning = true;
+            fundCollectionStopping = false;
+            updateFundScopeControls();
+            if (actionButton) actionButton.textContent = "正在启动...";
+            try {
+                const response = await fetch("/api/funds/collect", {
+                    method: "POST",
+                    headers: {"Content-Type": "application/json"},
+                    body: JSON.stringify({
+                        all_shops: allShops,
+                        salesperson: String(fundOwnerFilter?.value || ""),
+                        window_ids: windowIds.filter(Boolean),
+                        max_workers: 3,
+                    }),
+                });
+                const payload = await response.json();
+                if (response.status === 409) {
+                    renderFundCollectionStatus(payload.data || {});
+                    alert(payload.message || "资金数据采集正在运行中");
+                    return;
+                }
+                if (!response.ok || payload.status !== "success") {
+                    throw new Error(payload.message || `接口请求失败：${response.status}`);
+                }
+                renderFundCollectionStatus(payload.data || {});
+                await loadFundCollectionStatus();
+            } catch (err) {
+                fundCollectionRunning = false;
+                alert(`启动资金采集失败：${err.message || err}`);
+                await loadFundCollectionStatus();
+            }
+        }
+
+        async function stopFundCollection() {
+            if (!fundCollectionRunning || fundCollectionStopping) return;
+            if (!window.confirm("确定终止当前资金采集任务吗？已打开的窗口会在当前操作结束后安全关闭。")) {
+                return;
+            }
+            fundCollectionStopping = true;
+            updateFundScopeControls();
+            try {
+                const response = await fetch("/api/funds/collect/stop", {
+                    method: "POST",
+                    headers: {"Content-Type": "application/json"},
+                    body: JSON.stringify({}),
+                });
+                const payload = await response.json();
+                if (!response.ok || payload.status !== "success") {
+                    throw new Error(payload.message || `接口请求失败：${response.status}`);
+                }
+                renderFundCollectionStatus(payload.data || {});
+                await loadFundCollectionStatus();
+            } catch (err) {
+                fundCollectionStopping = false;
+                alert(`终止资金采集失败：${err.message || err}`);
+                await loadFundCollectionStatus();
+            }
+        }
+
         function renderReputationColor(value) {
             const text = String(value || "无色");
             let className = "neutral";
@@ -1287,6 +2207,34 @@
             else if (text.includes("红")) className = "red";
             else if (text.includes("失败")) className = "fail";
             return `<span class="reputation-color-tag ${className}">${escapeHtml(text)}</span>`;
+        }
+
+        function parseReputationPercentage(value) {
+            const text = String(value ?? "").trim().replaceAll(",", ".");
+            const match = text.match(/-?\d+(?:\.\d+)?/);
+            if (!match) return Number.NaN;
+            return Number(match[0]);
+        }
+
+        function reputationRateClass(metric, value) {
+            const rate = parseReputationPercentage(value);
+            if (!Number.isFinite(rate)) return "";
+            if (metric === "投诉率") {
+                if (rate > 1.5) return "rate-red";
+                if (rate > 1) return "rate-yellow";
+            }
+            if (metric === "延误率") {
+                if (rate > 10) return "rate-red";
+                if (rate > 8) return "rate-yellow";
+            }
+            if (metric === "取消率" && rate > 1) return "rate-red";
+            return "";
+        }
+
+        function renderReputationRateCell(metric, value) {
+            const text = String(value ?? "").trim() || "-";
+            const className = reputationRateClass(metric, value);
+            return `<td class="reputation-rate-cell ${className}" title="${escapeHtml(text)}">${escapeHtml(text)}</td>`;
         }
 
         function parseTrafficValues(value) {
@@ -1336,10 +2284,12 @@
         }
 
         function bindTrafficTooltips() {
-            document.querySelectorAll(".traffic-cell").forEach(cell => {
+            document.querySelectorAll(".traffic-cell, .reason-cell").forEach(cell => {
+                if (cell.dataset.tooltipBound === "1") return;
+                cell.dataset.tooltipBound = "1";
                 cell.addEventListener("mouseenter", event => {
                     if (!trafficTooltip) return;
-                    trafficTooltip.textContent = cell.dataset.tooltip || "流量趋势\n暂无趋势数据";
+                    trafficTooltip.textContent = cell.dataset.tooltip || "暂无详细内容";
                     trafficTooltip.style.display = "block";
                     moveTrafficTooltip(event);
                 });
@@ -1421,12 +2371,216 @@
             window.location.href = "/api/reputation/latest/export";
         }
 
+        function selectedCollectionValues(elementId) {
+            const element = document.getElementById(elementId);
+            if (!element) return [];
+            return Array.from(
+                element.querySelectorAll(".collection-option-checkbox:checked"),
+                checkbox => checkbox.value,
+            ).filter(Boolean);
+        }
+
+        function collectionElements(prefix) {
+            return {
+                shops: document.getElementById(`${prefix}-collection-shops`),
+                sites: document.getElementById(`${prefix}-collection-sites`),
+                shopsAll: document.getElementById(`${prefix}-collection-shops-all`),
+                sitesAll: document.getElementById(`${prefix}-collection-sites-all`),
+                workers: document.getElementById(`${prefix}-collection-workers`),
+                summary: document.getElementById(`${prefix}-collection-summary`),
+            };
+        }
+
+        function collectionOptionCheckboxes(element) {
+            if (!element) return [];
+            return Array.from(element.querySelectorAll(".collection-option-checkbox"));
+        }
+
+        function updateCollectionSelectAll(prefix, field) {
+            const elements = collectionElements(prefix);
+            const selectAll = elements[`${field}All`];
+            if (!selectAll) return;
+            const checkboxes = collectionOptionCheckboxes(elements[field]);
+            const selectable = checkboxes.filter(checkbox => !checkbox.disabled);
+            const selectedCount = selectable.filter(checkbox => checkbox.checked).length;
+            selectAll.disabled = selectable.length === 0;
+            selectAll.checked = selectable.length > 0 && selectedCount === selectable.length;
+            selectAll.indeterminate = selectedCount > 0 && selectedCount < selectable.length;
+        }
+
+        function syncCollectionDisabledState(prefix) {
+            if (prefix !== "order-print" || !orderPrintRunning) return;
+            const elements = collectionElements(prefix);
+            ["shops", "sites"].forEach(field => {
+                collectionOptionCheckboxes(elements[field]).forEach(checkbox => {
+                    checkbox.disabled = true;
+                });
+                const selectAll = elements[`${field}All`];
+                if (selectAll) selectAll.disabled = true;
+            });
+        }
+
+        function renderCollectionShopOptions(prefix) {
+            const elements = collectionElements(prefix);
+            if (!elements.shops) return;
+            if (!collectionShopOptions.length) {
+                elements.shops.innerHTML = '<tr><td class="empty-state" colspan="4">没有可执行的店铺配置</td></tr>';
+            } else {
+                elements.shops.innerHTML = collectionShopOptions.map(shop => `
+                    <tr>
+                        <td><input class="collection-checkbox collection-option-checkbox" type="checkbox" value="${escapeHtml(shop.shop_name || "")}" aria-label="选择店铺 ${escapeHtml(shop.shop_name || "")}" onchange="handleCollectionOptionChange('${prefix}', 'shops')" checked></td>
+                        <td title="${escapeHtml(shop.shop_name || "")}">${escapeHtml(shop.shop_name || "-")}</td>
+                        <td title="${escapeHtml(shop.salesperson || "")}">${escapeHtml(shop.salesperson || "-")}</td>
+                        <td class="collection-shop-sites" title="${escapeHtml((shop.sites || []).join("、"))}">${escapeHtml((shop.sites || []).join("、") || "-")}</td>
+                    </tr>
+                `).join("");
+            }
+            updateCollectionSelectAll(prefix, "shops");
+            updateCollectionSiteOptions(prefix, true);
+            syncCollectionDisabledState(prefix);
+        }
+
+        function updateCollectionSiteOptions(prefix, selectAll = false) {
+            const elements = collectionElements(prefix);
+            if (!elements.shops || !elements.sites) return;
+            const selectedShops = new Set(selectedCollectionValues(elements.shops.id));
+            const previousSites = new Set(selectedCollectionValues(elements.sites.id));
+            const previousSiteCheckboxes = collectionOptionCheckboxes(elements.sites);
+            const previousWasAll = previousSiteCheckboxes.length > 0
+                && previousSites.size === previousSiteCheckboxes.length;
+            const eligibleSites = [];
+            collectionShopOptions.forEach(shop => {
+                if (!selectedShops.has(shop.shop_name)) return;
+                (shop.sites || []).forEach(site => {
+                    if (!eligibleSites.includes(site)) eligibleSites.push(site);
+                });
+            });
+            if (!eligibleSites.length) {
+                elements.sites.innerHTML = '<tr><td class="empty-state" colspan="2">请先选择店铺</td></tr>';
+            } else {
+                elements.sites.innerHTML = eligibleSites.map(site => {
+                    const checked = selectAll
+                        || previousWasAll
+                        || previousSiteCheckboxes.length === 0
+                        || previousSites.has(site);
+                    return `
+                        <tr>
+                            <td><input class="collection-checkbox collection-option-checkbox" type="checkbox" value="${escapeHtml(site)}" aria-label="选择站点 ${escapeHtml(site)}" onchange="handleCollectionOptionChange('${prefix}', 'sites')" ${checked ? "checked" : ""}></td>
+                            <td>${escapeHtml(site)}</td>
+                        </tr>
+                    `;
+                }).join("");
+            }
+            updateCollectionSelectAll(prefix, "shops");
+            updateCollectionSelectAll(prefix, "sites");
+            updateCollectionScopeSummary(prefix);
+            syncCollectionDisabledState(prefix);
+        }
+
+        function handleCollectionOptionChange(prefix, field) {
+            updateCollectionSelectAll(prefix, field);
+            if (field === "shops") {
+                updateCollectionSiteOptions(prefix);
+            } else {
+                updateCollectionScopeSummary(prefix);
+            }
+        }
+
+        function toggleAllCollectionOptions(prefix, field, checked) {
+            const elements = collectionElements(prefix);
+            collectionOptionCheckboxes(elements[field]).forEach(checkbox => {
+                if (!checkbox.disabled) checkbox.checked = Boolean(checked);
+            });
+            updateCollectionSelectAll(prefix, field);
+            if (field === "shops") {
+                updateCollectionSiteOptions(prefix, Boolean(checked));
+            } else {
+                updateCollectionScopeSummary(prefix);
+            }
+        }
+
+        function setCollectionSelection(prefix, field, selected) {
+            toggleAllCollectionOptions(prefix, field, selected);
+        }
+
+        function updateCollectionScopeSummary(prefix) {
+            const elements = collectionElements(prefix);
+            if (!elements.summary) return;
+            const shops = selectedCollectionValues(elements.shops?.id);
+            const sites = selectedCollectionValues(elements.sites?.id);
+            const workers = Math.max(1, Math.min(10, Number(elements.workers?.value || 3)));
+            const selectedShopSet = new Set(shops);
+            const selectedSiteSet = new Set(sites);
+            let effectiveShopCount = 0;
+            const pairCount = collectionShopOptions.reduce((count, shop) => {
+                if (!selectedShopSet.has(shop.shop_name)) return count;
+                const matchingCount = (shop.sites || []).filter(site => selectedSiteSet.has(site)).length;
+                if (matchingCount) effectiveShopCount += 1;
+                return count + matchingCount;
+            }, 0);
+            elements.summary.textContent = shops.length && sites.length
+                ? (prefix === "order-print"
+                    ? `将按店铺串行执行 ${effectiveShopCount} 家店铺、${pairCount} 个有效站点`
+                    : `将执行 ${effectiveShopCount} 家店铺、${pairCount} 个有效站点，并发 ${workers}`)
+                : "请至少选择一个店铺和一个站点";
+        }
+
+        async function loadCollectionOptions(force = false) {
+            if (collectionOptionsLoaded && !force) return;
+            if (collectionOptionsLoading) return collectionOptionsLoading;
+            collectionOptionsLoading = (async () => {
+                const response = await fetch("/api/collections/options", {cache: "no-store"});
+                const payload = await response.json();
+                if (!response.ok || payload.status !== "success") {
+                    throw new Error(payload.message || `接口请求失败：${response.status}`);
+                }
+                collectionShopOptions = Array.isArray(payload.data?.shops) ? payload.data.shops : [];
+                renderCollectionShopOptions("infraction");
+                renderCollectionShopOptions("reputation");
+                renderCollectionShopOptions("order-print");
+                collectionOptionsLoaded = true;
+            })();
+            try {
+                await collectionOptionsLoading;
+            } catch (err) {
+                ["infraction", "reputation", "order-print"].forEach(prefix => {
+                    const summary = collectionElements(prefix).summary;
+                    if (summary) summary.textContent = `加载采集范围失败：${err.message || err}`;
+                });
+            } finally {
+                collectionOptionsLoading = null;
+            }
+        }
+
+        function collectionRequestPayload(prefix) {
+            const elements = collectionElements(prefix);
+            const shops = selectedCollectionValues(elements.shops?.id);
+            const sites = selectedCollectionValues(elements.sites?.id);
+            if (!shops.length) throw new Error("请至少选择一个店铺");
+            if (!sites.length) throw new Error("请至少选择一个站点");
+            const maxWorkers = Math.max(1, Math.min(10, Number(elements.workers?.value || 3)));
+            if (elements.workers) elements.workers.value = String(maxWorkers);
+            return {shops, sites, max_workers: maxWorkers};
+        }
+
         async function runReputationCollection() {
             if (!collectReputationBtn) return;
+            let requestPayload;
+            try {
+                await loadCollectionOptions();
+                requestPayload = collectionRequestPayload("reputation");
+            } catch (err) {
+                alert(`无法启动：${err.message || err}`);
+                return;
+            }
             collectReputationBtn.disabled = true;
             collectReputationBtn.textContent = "采集中...";
             try {
-                const response = await fetch("/api/reputation/collect", { method: "POST" });
+                const response = await fetch("/api/reputation/collect", {
+                    method: "POST",
+                    headers: {"Content-Type": "application/json"},
+                    body: JSON.stringify(requestPayload),
+                });
                 const payload = await response.json();
                 if (response.status === 409) {
                     alert(payload.message || "声誉数据采集正在运行中");
@@ -1435,7 +2589,7 @@
                 if (!response.ok || payload.status !== "success") {
                     throw new Error(payload.message || `接口请求失败：${response.status}`);
                 }
-                alert(payload.message || "声誉数据采集已启动");
+                alert(payload.data?.message || payload.message || "声誉数据采集已启动");
             } catch (err) {
                 alert(`启动失败：${err.message || err}`);
             } finally {
@@ -1452,10 +2606,22 @@
 
         async function runInfractionCollection() {
             if (!collectInfractionsBtn) return;
+            let requestPayload;
+            try {
+                await loadCollectionOptions();
+                requestPayload = collectionRequestPayload("infraction");
+            } catch (err) {
+                alert(`无法启动：${err.message || err}`);
+                return;
+            }
             collectInfractionsBtn.disabled = true;
             collectInfractionsBtn.textContent = "采集中...";
             try {
-                const response = await fetch("/api/infractions/collect", { method: "POST" });
+                const response = await fetch("/api/infractions/collect", {
+                    method: "POST",
+                    headers: {"Content-Type": "application/json"},
+                    body: JSON.stringify(requestPayload),
+                });
                 const payload = await response.json();
                 if (response.status === 409) {
                     alert(payload.message || "侵权数据采集正在运行中");
@@ -1464,7 +2630,7 @@
                 if (!response.ok || payload.status !== "success") {
                     throw new Error(payload.message || `接口请求失败：${response.status}`);
                 }
-                alert(payload.message || "侵权数据采集已启动");
+                alert(payload.data?.message || payload.message || "侵权数据采集已启动");
             } catch (err) {
                 alert(`启动失败：${err.message || err}`);
             } finally {
@@ -1475,9 +2641,139 @@
             }
         }
 
+        function orderPrintPayload() {
+            const selection = collectionRequestPayload("order-print");
+            return {
+                shops: selection.shops,
+                sites: selection.sites,
+                max_retries: Number(document.getElementById("order-print-retries").value || 3),
+                retry_delay_seconds: Number(document.getElementById("order-print-retry-delay").value || 300),
+            };
+        }
+
+        function renderOrderPrintSiteLastRuns(rows) {
+            if (!orderPrintSiteRunBody) return;
+            const resultRows = Array.isArray(rows) ? rows : [];
+            if (!resultRows.length) {
+                orderPrintSiteRunBody.innerHTML = '<tr><td class="empty-state" colspan="3">暂无已配置站点</td></tr>';
+                return;
+            }
+            orderPrintSiteRunBody.innerHTML = resultRows.map(row => {
+                return `
+                    <tr>
+                        <td>${escapeHtml(row.shop_name || "-")}</td>
+                        <td>${escapeHtml(row.site || "-")}</td>
+                        <td>${escapeHtml(row.finished_at || "尚未执行")}</td>
+                    </tr>`;
+            }).join("");
+        }
+
+        function renderOrderPrintStatus(state) {
+            const data = state || {};
+            orderPrintRunning = Boolean(data.running);
+            orderPrintStopping = String(data.status || "") === "stopping";
+            const statusClass = orderPrintStopping ? "stopping" : (orderPrintRunning ? "running" : (data.status === "error" ? "error" : ""));
+            orderPrintStatusBadge.className = `status ${statusClass}`.trim();
+            orderPrintStatusText.textContent = data.message || (orderPrintRunning ? "运行中" : "等待启动");
+            orderPrintStartedAt.textContent = data.started_at || "-";
+            orderPrintCompletedAt.textContent = data.finished_at || "-";
+            orderPrintSuccessCount.textContent = `${data.printed || 0} / ${data.no_orders || 0}`;
+            orderPrintFailureCount.textContent = `${data.failed || 0} / ${data.skipped || 0}`;
+            orderPrintLog.textContent = data.log || data.message || "等待任务启动...";
+            orderPrintLog.scrollTop = orderPrintLog.scrollHeight;
+            renderOrderPrintSiteLastRuns(data.site_last_runs);
+            startOrderPrintBtn.disabled = orderPrintRunning;
+            startOrderPrintBtn.textContent = orderPrintRunning ? "打印任务运行中" : "执行打印";
+            stopOrderPrintBtn.disabled = !data.can_stop || orderPrintStopping;
+            stopOrderPrintBtn.textContent = orderPrintStopping ? "正在停止" : "停止任务";
+            document.querySelectorAll("#tab-order-print select, #tab-order-print input").forEach(element => {
+                element.disabled = orderPrintRunning;
+            });
+        }
+
+        async function loadOrderPrintStatus() {
+            if (!orderPrintStatusBadge) return;
+            if (orderPrintStatusPollTimer) {
+                window.clearTimeout(orderPrintStatusPollTimer);
+                orderPrintStatusPollTimer = null;
+            }
+            try {
+                const response = await fetch("/api/order-print/status", {cache: "no-store"});
+                const payload = await response.json();
+                if (!response.ok || payload.status !== "success") {
+                    throw new Error(payload.message || `接口请求失败：${response.status}`);
+                }
+                orderPrintLoaded = true;
+                renderOrderPrintStatus(payload.data || {});
+                if (orderPrintRunning) {
+                    orderPrintStatusPollTimer = window.setTimeout(loadOrderPrintStatus, 2000);
+                }
+            } catch (err) {
+                orderPrintRunning = false;
+                orderPrintStatusBadge.className = "status error";
+                orderPrintStatusText.textContent = "状态读取失败";
+                orderPrintLog.textContent = `读取订单打印状态失败：${err.message || err}`;
+                startOrderPrintBtn.disabled = false;
+                stopOrderPrintBtn.disabled = true;
+            }
+        }
+
+        async function startOrderPrint() {
+            if (!startOrderPrintBtn || orderPrintRunning) return;
+            let requestPayload;
+            try {
+                await loadCollectionOptions();
+                requestPayload = orderPrintPayload();
+            } catch (err) {
+                alert(`无法启动：${err.message || err}`);
+                return;
+            }
+            startOrderPrintBtn.disabled = true;
+            startOrderPrintBtn.textContent = "正在启动...";
+            try {
+                const response = await fetch("/api/order-print/start", {
+                    method: "POST",
+                    headers: {"Content-Type": "application/json"},
+                    body: JSON.stringify(requestPayload),
+                });
+                const payload = await response.json();
+                if (!response.ok || payload.status !== "success") {
+                    throw new Error(payload.message || `接口请求失败：${response.status}`);
+                }
+                renderOrderPrintStatus(payload.data || {});
+                await loadOrderPrintStatus();
+            } catch (err) {
+                alert(`启动订单打印失败：${err.message || err}`);
+                await loadOrderPrintStatus();
+            }
+        }
+
+        async function stopOrderPrint() {
+            if (!orderPrintRunning || orderPrintStopping) return;
+            if (!window.confirm("确定停止订单打印吗？当前正在执行的页面操作会安全收尾。")) return;
+            orderPrintStopping = true;
+            stopOrderPrintBtn.disabled = true;
+            stopOrderPrintBtn.textContent = "正在停止";
+            try {
+                const response = await fetch("/api/order-print/stop", {method: "POST"});
+                const payload = await response.json();
+                if (!response.ok || payload.status !== "success") {
+                    throw new Error(payload.message || `接口请求失败：${response.status}`);
+                }
+                renderOrderPrintStatus(payload.data || {});
+                await loadOrderPrintStatus();
+            } catch (err) {
+                orderPrintStopping = false;
+                alert(`停止订单打印失败：${err.message || err}`);
+                await loadOrderPrintStatus();
+            }
+        }
+
         function getDailyTaskPayload() {
+            const minRatePercent = Number(document.getElementById("daily-task-min-rate").value || 0);
             return {
                 mode: document.getElementById("daily-task-mode").value,
+                appeal_type: document.getElementById("daily-task-appeal-type").value,
                 top_n: Number(document.getElementById("daily-task-top-n").value || 30),
                 max_workers: Number(document.getElementById("daily-task-max-workers").value || 30),
                 recent_days: Number(document.getElementById("daily-task-recent-days").value || 100),
@@ -1485,6 +2781,7 @@
                 site_pause: Number(document.getElementById("daily-task-site-pause").value || 30),
                 stop_after_minutes: Number(document.getElementById("daily-task-stop-after").value || 360),
                 only_active: document.getElementById("daily-task-only-active").value === "true",
+                min_rate: `${minRatePercent}%`,
                 message: document.getElementById("daily-task-message").value || "",
             };
         }
@@ -1746,9 +3043,9 @@
                         <td title="${escapeHtml(row["站点"])}">${escapeHtml(row["站点"])}</td>
                         <td title="${escapeHtml(row["声誉颜色"])}">${renderReputationColor(row["声誉颜色"])}</td>
                         <td title="${escapeHtml(row["总单量"])}">${escapeHtml(row["总单量"])}</td>
-                        <td title="${escapeHtml(row["投诉率"])}">${escapeHtml(row["投诉率"])}</td>
-                        <td title="${escapeHtml(row["延误率"])}">${escapeHtml(row["延误率"])}</td>
-                        <td title="${escapeHtml(row["取消率"])}">${escapeHtml(row["取消率"])}</td>
+                        ${renderReputationRateCell("投诉率", row["投诉率"])}
+                        ${renderReputationRateCell("延误率", row["延误率"])}
+                        ${renderReputationRateCell("取消率", row["取消率"])}
                         <td title="${escapeHtml(row["增加或减少"])}">${escapeHtml(row["增加或减少"])}</td>
                         <td title="${escapeHtml(row["近七天变化率"])}">${escapeHtml(row["近七天变化率"])}</td>
                         <td>
@@ -1770,9 +3067,18 @@
 
         async function loadWindowAnomalies() {
             if (!windowAnomalyBody) return;
-            windowAnomalyBody.innerHTML = '<tr><td class="empty-state" colspan="10">正在加载店铺状态...</td></tr>';
+            windowAnomalyBody.innerHTML = '<tr><td class="empty-state" colspan="13">正在加载店铺状态...</td></tr>';
+            if (windowAnomalySelectAll) {
+                windowAnomalySelectAll.checked = false;
+                windowAnomalySelectAll.indeterminate = false;
+                windowAnomalySelectAll.disabled = true;
+            }
+            updateWindowAnomalySelection();
             try {
-                const response = await fetch("/api/window-anomalies?active_only=1&limit=500");
+                const response = await fetch(
+                    "/api/window-anomalies?active_only=1&limit=500",
+                    {cache: "no-store"},
+                );
                 const payload = await response.json();
                 if (!response.ok || payload.status !== "success") {
                     throw new Error(payload.message || `接口请求失败：${response.status}`);
@@ -1781,34 +3087,86 @@
                 const data = payload.data || {};
                 const rows = data.rows || [];
                 windowAnomaliesLoaded = true;
+                lastMercadoLoginWindowRefreshAt = Date.now();
                 windowAnomalyTotal.textContent = data.total || rows.length || 0;
                 windowAnomalyLatestTime.textContent = rows.length ? (rows[0].last_detected_at || "-") : "-";
 
                 if (!rows.length) {
-                    windowAnomalyBody.innerHTML = '<tr><td class="empty-state" colspan="10">当前没有需要重新登录的店铺</td></tr>';
+                    windowAnomalyBody.innerHTML = '<tr><td class="empty-state" colspan="13">当前没有需要重新登录的店铺</td></tr>';
+                    updateWindowAnomalySelection();
                     return;
                 }
 
                 windowAnomalyBody.innerHTML = rows.map(row => `
                     <tr>
+                        <td><input class="window-anomaly-select window-anomaly-row-select" type="checkbox" value="${escapeHtml(row.window_id || "")}" aria-label="选择店铺 ${escapeHtml(row.window_name || row.window_id || "")}" onchange="updateWindowAnomalySelection()" ${row.window_id ? "" : "disabled"}></td>
                         <td title="${escapeHtml(row.window_name)}">${escapeHtml(row.window_name || "-")}</td>
+                        <td title="${escapeHtml(row.salesperson || "")}">${escapeHtml(row.salesperson || "-")}</td>
+                        <td title="${escapeHtml(row.email || "")}">${escapeHtml(row.email || "-")}</td>
                         <td title="${escapeHtml(row.window_id)}">${escapeHtml(row.window_id || "-")}</td>
                         <td>${escapeHtml(row.site || "-")}</td>
                         <td><span class="status-tag fail">${escapeHtml(row.anomaly_type || "需要登录")}</span></td>
                         <td>${escapeHtml(row.source || "-")}</td>
-                        <td title="${escapeHtml(row.reason)}">${escapeHtml(row.reason || "-")}</td>
+                        <td><span class="reason-cell" data-tooltip="${escapeHtml(row.reason || "暂无原因")}">${escapeHtml(row.reason || "-")}</span></td>
                         <td>${escapeHtml(row.occurrence_count || 1)}</td>
                         <td>${escapeHtml(row.first_detected_at || "-")}</td>
                         <td>${escapeHtml(row.last_detected_at || "-")}</td>
                         <td>
-                            <button class="secondary" type="button" onclick="startSingleShopAutoLogin('${encodeURIComponent(row.window_id || "")}', this)">重新自动登录</button>
-                            <button class="secondary" type="button" onclick="resolveWindowAnomaly('${encodeURIComponent(row.window_id || "")}')">已重新登录</button>
+                            <button class="secondary window-anomaly-login-action" data-login-window-id="${escapeHtml(row.window_id || "")}" type="button" onclick="startSingleShopAutoLogin('${encodeURIComponent(row.window_id || "")}', this)">重新自动登录</button>
+                            <button class="secondary" type="button" onclick="resolveWindowAnomaly('${encodeURIComponent(row.window_id || "")}')">已重新登录并停止</button>
                         </td>
                     </tr>
                 `).join("");
+                bindTrafficTooltips();
+                updateWindowAnomalySelection();
             } catch (err) {
-                windowAnomalyBody.innerHTML = `<tr><td class="empty-state" colspan="10">加载失败：${escapeHtml(err.message || err)}</td></tr>`;
+                windowAnomalyBody.innerHTML = `<tr><td class="empty-state" colspan="13">加载失败：${escapeHtml(err.message || err)}</td></tr>`;
+                updateWindowAnomalySelection();
             }
+        }
+
+        function selectedWindowAnomalyIds() {
+            return Array.from(
+                document.querySelectorAll(".window-anomaly-row-select:checked"),
+                checkbox => checkbox.value
+            ).filter(Boolean);
+        }
+
+        function updateWindowAnomalySelection() {
+            const checkboxes = Array.from(
+                document.querySelectorAll(".window-anomaly-row-select")
+            );
+            checkboxes.forEach(checkbox => {
+                const busy = mercadoLoginAllRunning || activeMercadoLoginWindowIds.has(checkbox.value);
+                checkbox.disabled = busy || !checkbox.value;
+                if (busy) checkbox.checked = false;
+            });
+            document.querySelectorAll(".window-anomaly-login-action").forEach(button => {
+                const windowId = String(button.dataset.loginWindowId || "");
+                const busy = mercadoLoginAllRunning || activeMercadoLoginWindowIds.has(windowId);
+                button.disabled = busy || !windowId;
+                button.textContent = busy ? "自动登录中" : "重新自动登录";
+            });
+            const selectable = checkboxes.filter(checkbox => checkbox.value && !checkbox.disabled);
+            const selectedCount = selectable.filter(checkbox => checkbox.checked).length;
+            if (windowAnomalySelectAll) {
+                windowAnomalySelectAll.disabled = mercadoLoginAllRunning || selectable.length === 0;
+                windowAnomalySelectAll.checked = selectable.length > 0 && selectedCount === selectable.length;
+                windowAnomalySelectAll.indeterminate = selectedCount > 0 && selectedCount < selectable.length;
+            }
+            if (startSelectedMercadoLoginBtn) {
+                startSelectedMercadoLoginBtn.disabled = mercadoLoginAllRunning || selectedCount === 0;
+                startSelectedMercadoLoginBtn.textContent = selectedCount
+                    ? `自动登录所选店铺（${selectedCount}）`
+                    : "自动登录所选店铺";
+            }
+        }
+
+        function toggleAllWindowAnomalies(checked) {
+            document.querySelectorAll(".window-anomaly-row-select").forEach(checkbox => {
+                if (!checkbox.disabled) checkbox.checked = Boolean(checked);
+            });
+            updateWindowAnomalySelection();
         }
 
         async function resolveWindowAnomaly(encodedWindowId) {
@@ -1823,6 +3181,7 @@
                     throw new Error(payload.message || `接口请求失败：${response.status}`);
                 }
                 windowAnomaliesLoaded = false;
+                await loadMercadoLoginStatus();
                 await loadWindowAnomalies();
             } catch (err) {
                 alert(`更新店铺状态失败：${err.message || err}`);
@@ -1890,43 +3249,137 @@
             }
         }
 
+        function latestMercadoLoginLog(rawLog, fallback = "") {
+            const text = String(rawLog || "");
+            const lines = text.split(/\r?\n/);
+            const markerText = "===== bit_mercado_login 启动：";
+            let markerIndex = -1;
+            for (let index = lines.length - 1; index >= 0; index -= 1) {
+                if (lines[index].includes(markerText)) {
+                    markerIndex = index;
+                    break;
+                }
+            }
+            if (markerIndex < 0) {
+                return text || fallback || "等待任务启动...";
+            }
+
+            const markerLine = lines[markerIndex];
+            const targetMatch = markerLine.match(/===== bit_mercado_login 启动：(.*?) =====/);
+            const target = targetMatch ? targetMatch[1].trim() : "";
+            if (!target) {
+                return lines.slice(markerIndex).join("\n").trimEnd();
+            }
+
+            const targetPrefix = `[${target}]`;
+            const latestLines = lines.slice(markerIndex).filter((line, index) => (
+                index === 0
+                || line.startsWith(targetPrefix)
+                || (!line.startsWith("[") && line.includes(`${target} 登录任务`))
+            ));
+            return latestLines.join("\n").trimEnd() || fallback || "等待任务启动...";
+        }
+
         async function loadMercadoLoginStatus() {
             if (!mercadoLoginLog) return;
             try {
-                const response = await fetch("/api/window-anomalies/mercado-login/status");
+                const response = await fetch(
+                    "/api/window-anomalies/mercado-login/status",
+                    {cache: "no-store"},
+                );
                 const payload = await response.json();
                 if (!response.ok || payload.status !== "success") {
                     throw new Error(payload.message || `接口请求失败：${response.status}`);
                 }
                 const state = payload.data || {};
-                mercadoLoginStatusText.textContent = state.running ? "运行中" : (
-                    state.status === "success" ? "已完成" : state.status === "error" ? "失败" : "等待启动"
+                mercadoLoginRunning = Boolean(state.running);
+                mercadoLoginAllRunning = Boolean(state.all_running);
+                activeMercadoLoginTaskId = state.can_stop ? String(state.current_task_id || "") : "";
+                mercadoLoginStopRequested = Boolean(state.current_task_stopping);
+                activeMercadoLoginWindowIds = new Set(
+                    Array.isArray(state.active_window_ids) ? state.active_window_ids.map(String) : []
                 );
-                mercadoLoginStatusBadge.className = `status ${state.running ? "running" : (state.status === "error" ? "error" : "")}`.trim();
+                mercadoLoginStatusText.textContent = mercadoLoginStopRequested
+                    ? "正在停止"
+                    : state.running ? "运行中" : (
+                        state.status === "success" ? "已完成"
+                            : state.status === "stopped" ? "已停止"
+                                : state.status === "error" ? "失败" : "等待启动"
+                    );
+                mercadoLoginStatusBadge.className = `status ${mercadoLoginStopRequested ? "stopping" : (state.running ? "running" : (state.status === "error" ? "error" : ""))}`.trim();
                 mercadoLoginStarted.textContent = state.started_at || "-";
                 mercadoLoginFinished.textContent = state.finished_at || "-";
-                mercadoLoginTarget.textContent = state.target || "全部未忽略店铺";
-                mercadoLoginLog.textContent = state.log || state.message || "等待任务启动...";
+                mercadoLoginTarget.textContent = state.current_task_target || state.target || "全部未忽略店铺";
+                mercadoLoginLog.textContent = latestMercadoLoginLog(state.log, state.message);
                 mercadoLoginLog.scrollTop = mercadoLoginLog.scrollHeight;
-                startMercadoLoginBtn.disabled = Boolean(state.running);
-                startMercadoLoginBtn.textContent = state.running
-                    ? "自动登录运行中"
-                    : (state.started_at ? "重新启动全部店铺自动登录" : "启动全部店铺自动登录");
-                if (state.running) {
-                    window.setTimeout(loadMercadoLoginStatus, 2000);
-                } else if (windowAnomaliesLoaded) {
+                stopMercadoLoginBtn.disabled = !activeMercadoLoginTaskId || mercadoLoginStopRequested;
+                stopMercadoLoginBtn.textContent = mercadoLoginStopRequested ? "正在停止" : "停止当前任务";
+                startMercadoLoginBtn.disabled = mercadoLoginRunning;
+                updateWindowAnomalySelection();
+                startMercadoLoginBtn.textContent = mercadoLoginAllRunning
+                    ? "全部店铺自动登录运行中"
+                    : (mercadoLoginRunning
+                        ? "等待单店自动登录结束"
+                        : (state.started_at ? "重新启动全部店铺自动登录" : "启动全部店铺自动登录"));
+                const shouldRefreshWindowStatus = windowAnomaliesLoaded && (
+                    !state.running
+                    || Date.now() - lastMercadoLoginWindowRefreshAt >= 4000
+                );
+                if (shouldRefreshWindowStatus) {
                     await loadWindowAnomalies();
                 }
+                if (state.running) {
+                    window.setTimeout(loadMercadoLoginStatus, 2000);
+                }
             } catch (err) {
+                mercadoLoginRunning = false;
+                mercadoLoginAllRunning = false;
+                activeMercadoLoginWindowIds = new Set();
+                activeMercadoLoginTaskId = "";
+                mercadoLoginStopRequested = false;
                 mercadoLoginStatusText.textContent = "状态读取失败";
                 mercadoLoginLog.textContent = `读取日志失败：${err.message || err}`;
                 startMercadoLoginBtn.disabled = false;
+                stopMercadoLoginBtn.disabled = true;
+                updateWindowAnomalySelection();
+            }
+        }
+
+        async function stopMercadoLoginTask() {
+            if (!activeMercadoLoginTaskId || mercadoLoginStopRequested) return;
+            if (!window.confirm("确定停止当前店铺自动登录任务吗？该任务创建的并发进程和浏览器窗口会一起关闭。")) {
+                return;
+            }
+
+            mercadoLoginStopRequested = true;
+            stopMercadoLoginBtn.disabled = true;
+            stopMercadoLoginBtn.textContent = "正在停止";
+            mercadoLoginStatusText.textContent = "正在停止";
+            mercadoLoginStatusBadge.className = "status stopping";
+            try {
+                const response = await fetch("/api/window-anomalies/mercado-login/stop", {
+                    method: "POST",
+                    headers: {"Content-Type": "application/json"},
+                    body: JSON.stringify({task_id: activeMercadoLoginTaskId}),
+                });
+                const payload = await response.json();
+                if (!response.ok || payload.status !== "success") {
+                    throw new Error(payload.message || `接口请求失败：${response.status}`);
+                }
+                await loadMercadoLoginStatus();
+            } catch (err) {
+                mercadoLoginStopRequested = false;
+                alert(`停止自动登录失败：${err.message || err}`);
+                await loadMercadoLoginStatus();
             }
         }
 
         async function startMercadoLogin(encodedWindowId = "") {
             const windowId = decodeURIComponent(encodedWindowId || "");
+            mercadoLoginRunning = true;
+            mercadoLoginAllRunning = !windowId;
             startMercadoLoginBtn.disabled = true;
+            updateWindowAnomalySelection();
             try {
                 const response = await fetch("/api/window-anomalies/mercado-login/start", {
                     method: "POST",
@@ -1939,7 +3392,38 @@
                 }
                 await loadMercadoLoginStatus();
             } catch (err) {
+                mercadoLoginRunning = false;
+                mercadoLoginAllRunning = false;
                 alert(`启动自动登录失败：${err.message || err}`);
+                await loadMercadoLoginStatus();
+            }
+        }
+
+        async function startSelectedShopsAutoLogin() {
+            const windowIds = selectedWindowAnomalyIds();
+            if (!windowIds.length) {
+                alert("请至少选择一个待登录店铺");
+                return;
+            }
+
+            mercadoLoginRunning = true;
+            windowIds.forEach(windowId => activeMercadoLoginWindowIds.add(String(windowId)));
+            updateWindowAnomalySelection();
+            try {
+                const response = await fetch("/api/window-anomalies/mercado-login/start", {
+                    method: "POST",
+                    headers: {"Content-Type": "application/json"},
+                    body: JSON.stringify({window_ids: windowIds, workers: windowIds.length}),
+                });
+                const payload = await response.json();
+                if (!response.ok || payload.status !== "success") {
+                    throw new Error(payload.message || `接口请求失败：${response.status}`);
+                }
+                await loadMercadoLoginStatus();
+            } catch (err) {
+                mercadoLoginRunning = false;
+                windowIds.forEach(windowId => activeMercadoLoginWindowIds.delete(String(windowId)));
+                alert(`启动所选店铺自动登录失败：${err.message || err}`);
                 await loadMercadoLoginStatus();
             }
         }
@@ -1956,7 +3440,9 @@
                 actionButton.disabled = true;
                 actionButton.textContent = "正在启动...";
             }
-            startMercadoLoginBtn.disabled = true;
+            mercadoLoginRunning = true;
+            activeMercadoLoginWindowIds.add(windowId);
+            updateWindowAnomalySelection();
             let started = false;
             try {
                 const response = await fetch("/api/window-anomalies/mercado-login/start", {
@@ -1974,6 +3460,8 @@
                 }
                 await loadMercadoLoginStatus();
             } catch (err) {
+                mercadoLoginRunning = false;
+                activeMercadoLoginWindowIds.delete(windowId);
                 alert(`启动单店自动登录失败：${err.message || err}`);
                 await loadMercadoLoginStatus();
             } finally {

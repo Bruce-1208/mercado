@@ -4,7 +4,11 @@ from bit.bit_api import closeBrowser
 from bit.bit_config import list_config_rows, split_config_sites
 from bit.bit_mysql import insert_task_record
 from bit.bit_utils import get_now_time
-from bit_playwright.common import BitPlaywrightSession, select_country
+from bit_playwright.common import (
+    BitPlaywrightSession,
+    open_mercado_backend_page,
+    select_country,
+)
 
 
 ORDERS_URL = (
@@ -17,13 +21,13 @@ ORDERS_URL = (
 def print_orders(window_id, site):
     with BitPlaywrightSession(window_id) as session:
         page = session.page
-        page.goto(ORDERS_URL, wait_until="domcontentloaded", timeout=60000)
-        page.reload(wait_until="domcontentloaded", timeout=60000)
-        time.sleep(5)
+        access = open_mercado_backend_page(session, ORDERS_URL, settle_seconds=5)
+        if not access.get("ok"):
+            raise RuntimeError(access.get("message") or access.get("status"))
         select_country(page, site)
-        page.goto(ORDERS_URL, wait_until="domcontentloaded", timeout=60000)
-        page.reload(wait_until="domcontentloaded", timeout=60000)
-        time.sleep(5)
+        access = open_mercado_backend_page(session, ORDERS_URL, settle_seconds=5)
+        if not access.get("ok"):
+            raise RuntimeError(access.get("message") or access.get("status"))
 
         try:
             page.locator(

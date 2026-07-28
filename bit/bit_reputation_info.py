@@ -15,6 +15,10 @@ from bit.bit_collection_control import (
     DEFAULT_COLLECTION_MAX_WORKERS,
     DEFAULT_RETRY_LOCK_WAIT_SECONDS,
     env_float,
+    env_int,
+    failed_sites,
+    filter_config_rows,
+    merge_site_retry_outcome,
     outcome_failed,
     outcome_has_marker,
     outcome_is_permanent_failure,
@@ -24,6 +28,13 @@ from bit.bit_collection_control import (
     wait_for_batch_resume,
     write_unreadable_site_report,
 )
+from bit.bit_mercado_limit import (
+    get_mercado_page_state as _get_mercado_page_state,
+    is_mercado_rate_limited_page,
+    is_mercado_logged_out_state,
+    is_mercado_rate_limited_text,
+)
+from bit.bit_mercado_login import open_mercado_backend_page
 from selenium.webdriver.common.desired_capabilities import DesiredCapabilities
 from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.common.by import By
@@ -42,26 +53,6 @@ from bit.bit_config import list_config_rows
 REPUTATION_URL = "https://global-selling.mercadolibre.com/reputation"
 SALES_SUMMARY_URL = "https://global-selling.mercadolibre.com/sales-summary"
 METRICS_URL = "https://global-selling.mercadolibre.com/metrics#sc-menu"
-RATE_LIMIT_MARKERS = (
-    "429",
-    "too many requests",
-    "rate limit",
-    "request limit",
-    "access denied",
-    "请求太过频繁",
-    "请求过于频繁",
-    "每秒最多可以发起",
-    "访问过于频繁",
-    "demasiadas solicitudes",
-    "muitas solicitações",
-    "hubo un error accediendo a esta página",
-    "hubo un error accediendo a esta pagina",
-)
-SPANISH_IP_SWITCH_MARKERS = (
-    "hubo un error accediendo a esta página",
-    "hubo un error accediendo a esta pagina",
-)
-LOGIN_URL_MARKERS = ("/login/", "/lgz/", "/legacy-user")
 LOGIN_TEXT_MARKERS = (
     "fill out your e-mail address to log in",
     "fill out your email address to log in",
@@ -95,6 +86,19 @@ SITE_CODE_MAP = {
     "UY": "MLU",
     "MLU": "MLU",
 }
+COUNTRY_SWITCH_SELECTORS = (
+    'button[aria-label="Select country"]',
+    'button[aria-label*="country" i]',
+    'button[aria-label*="país" i]',
+    'button[aria-label*="pais" i]',
+    'button[aria-label*="国家"]',
+    'button[aria-label*="站点"]',
+    '.cbt-site-selector button[role="combobox"]',
+    '.andes-dropdown__trigger[role="combobox"]',
+    'button[role="combobox"]',
+    ".nav-header-cbt__site-switcher",
+    '[data-testid*="site-switcher"]',
+)
 METRIC_LABEL_ALIASES = {
     "complaints": (
         "complaints",
@@ -165,13 +169,11 @@ class BitBrowserWindowError(RuntimeError):
 
 
 def _is_rate_limited_text(value):
-    text = str(value or "").lower()
-    return any(marker in text for marker in RATE_LIMIT_MARKERS)
+    return is_mercado_rate_limited_text(value)
 
 
 def _is_spanish_ip_switch_text(value):
-    text = str(value or "").lower()
-    return any(marker in text for marker in SPANISH_IP_SWITCH_MARKERS)
+    return is_mercado_rate_limited_text(value)
 
 
 def _is_bit_api_rate_limited(res):
@@ -198,6 +200,8 @@ def _connect_browser(
             break
 
         msg = res.get("msg", "") if isinstance(res, dict) else str(res)
+        if "没有找到相应数据" in msg or "不存在" in msg:
+            raise BitBrowserWindowError(f"比特浏览器窗口无效或不存在：{res}")
         is_rate_limited = _is_bit_api_rate_limited(res)
         if is_rate_limited:
             print(
@@ -234,95 +238,72 @@ def _connect_browser(
     return driver
 
 
-def _get_mercado_page_state(driver):
-    try:
-        driver.switch_to.default_content()
-    except Exception:
-        pass
-    try:
-        page_text = driver.execute_script("return document.body ? document.body.innerText : '';") or ""
-    except Exception:
-        page_text = ""
-    try:
-        current_url = driver.current_url or ""
-    except Exception:
-        current_url = ""
-    try:
-        title = driver.title or ""
-    except Exception:
-        title = ""
-    try:
-        page_source = driver.page_source or ""
-    except Exception:
-        page_source = ""
-    return {
-        "page_text": str(page_text),
-        "current_url": str(current_url),
-        "title": str(title),
-        "page_source": str(page_source),
-    }
-
-
 def _is_mercado_rate_limited_page(driver=None, state=None):
-    state = state or _get_mercado_page_state(driver)
-    visible_state = "\n".join(
-        (
-            state.get("page_text", ""),
-            state.get("title", ""),
-            state.get("current_url", ""),
-        )
-    )
-    if _is_rate_limited_text(visible_state):
-        return True
-    if not state.get("page_text", "").strip() and not state.get("title", "").strip():
-        return _is_rate_limited_text(state.get("page_source", ""))
-    return False
+    return is_mercado_rate_limited_page(driver=driver, state=state)
 
 
 def _is_spanish_ip_switch_page(driver=None, state=None):
-    state = state or _get_mercado_page_state(driver)
-    visible_state = "\n".join(
-        (
-            state.get("page_text", ""),
-            state.get("title", ""),
-            state.get("current_url", ""),
-        )
-    )
-    if _is_spanish_ip_switch_text(visible_state):
-        return True
-    if not state.get("page_text", "").strip() and not state.get("title", "").strip():
-        return _is_spanish_ip_switch_text(state.get("page_source", ""))
-    return False
+    return is_mercado_rate_limited_page(driver=driver, state=state)
 
 
 def _is_mercado_login_state(state):
-    current_url = str(state.get("current_url", "") or "").lower()
-    visible_text = "\n".join(
-        (str(state.get("title", "") or ""), str(state.get("page_text", "") or ""))
-    ).lower()
-    return any(marker in current_url for marker in LOGIN_URL_MARKERS) or any(
-        marker in visible_text for marker in LOGIN_TEXT_MARKERS
-    )
+    return is_mercado_logged_out_state(state)
 
 
 def _raise_if_mercado_unavailable(driver=None, state=None, context="页面"):
     state = state or _get_mercado_page_state(driver)
+    if _is_mercado_login_state(state):
+        raise MercadoAuthenticationError(
+            f"{context}登录态失效，已跳转登录页：{state.get('current_url', '')}"
+        )
     if _is_mercado_rate_limited_page(state=state):
         raise MercadoRateLimitError(
             f"{context}访问受限：{state.get('current_url', '')} "
             f"{state.get('page_text', '')[:160]}"
         )
-    if _is_mercado_login_state(state):
-        raise MercadoAuthenticationError(
-            f"{context}登录态失效，已跳转登录页：{state.get('current_url', '')}"
-        )
     return state
+
+
+def _open_collection_backend_page(
+    driver,
+    url,
+    *,
+    window_id="",
+    name="",
+    site="",
+    context="页面",
+    settle_seconds=5,
+):
+    """采集页面共用入口：自动恢复登录，限频交给批次熔断。"""
+    result = open_mercado_backend_page(
+        driver,
+        url,
+        name,
+        window_id,
+        settle_seconds=settle_seconds,
+        max_rate_limit_retries=0,
+        max_login_retries=1,
+        state_reader=_get_mercado_page_state,
+    )
+    if result.get("status") == "rate_limited":
+        raise MercadoRateLimitError(
+            f"{name}{site}{context}触发限频；采集任务禁止直接切换全局 "
+            "Clash 节点，交给批次熔断统一暂停"
+        )
+    if result.get("status") == "logged_out":
+        raise MercadoAuthenticationError(
+            result.get("message") or f"{name}{site}{context}登录态失效"
+        )
+    if not result.get("ok"):
+        raise RuntimeError(result.get("message") or f"{name}{site}{context}打开失败")
+    return result.get("state") or {}
 
 
 def _open_reputation_page_with_validation(
     driver,
     name="",
     site="",
+    window_id="",
     max_hongkong_switches=3,
     switch_wait_seconds=8,
     allow_global_ip_switch=False,
@@ -330,26 +311,15 @@ def _open_reputation_page_with_validation(
     """打开并验证声誉页；限频时交给批次熔断，禁止直接切换全局节点。"""
     # 保留旧参数以兼容已有调用，但节点切换已由批次策略全面禁用。
     del max_hongkong_switches, switch_wait_seconds, allow_global_ip_switch
-    navigate_error = ""
-    try:
-        driver.get(REPUTATION_URL)
-    except Exception as exc:
-        navigate_error = str(exc)
-
-    time.sleep(10)
-    state = _get_mercado_page_state(driver)
-    if _is_spanish_ip_switch_page(state=state):
-        raise MercadoRateLimitError(
-            f"{name}{site}声誉页面触发限频；采集任务禁止直接切换全局 Clash 节点"
-        )
-
-    _raise_if_mercado_unavailable(
-        state=state,
-        context=f"{name}{site}声誉页面",
+    state = _open_collection_backend_page(
+        driver,
+        REPUTATION_URL,
+        window_id=window_id,
+        name=name,
+        site=site,
+        context="声誉页面",
+        settle_seconds=10,
     )
-
-    if navigate_error:
-        raise RuntimeError(f"{name}{site}声誉页面打开失败：{navigate_error}")
 
     try:
         WebDriverWait(driver, 10).until(
@@ -403,6 +373,22 @@ def _deep_shadow_click(driver, selectors):
     )
 
 
+def _open_country_switch(driver, timeout=15, poll_seconds=1):
+    """等待并打开站点选择器。
+
+    新版站点控件是异步加载的 Shadow DOM 模块，部分账号使用
+    ``button[role=combobox]`` 且 aria-label 为西语 ``Seleccionar país``。
+    声誉页主体可见不代表该模块已经完成渲染，因此需要单独等待。
+    """
+    deadline = time.monotonic() + max(0, float(timeout or 0))
+    while True:
+        if _deep_shadow_click(driver, COUNTRY_SWITCH_SELECTORS):
+            return True
+        if time.monotonic() >= deadline:
+            return False
+        time.sleep(max(0.05, float(poll_seconds or 0)))
+
+
 def _select_country(driver, site, shop_name=""):
     if not site:
         return True
@@ -412,17 +398,7 @@ def _select_country(driver, site, shop_name=""):
     country = _get_country_name(site)
     for attempt in range(1, 4):
         try:
-            opened = _deep_shadow_click(
-                driver,
-                (
-                    'button[aria-label="Select country"]',
-                    'button[aria-label*="country" i]',
-                    'button[aria-label*="国家"]',
-                    'button[aria-label*="站点"]',
-                    ".nav-header-cbt__site-switcher",
-                    '[data-testid*="site-switcher"]',
-                ),
-            )
+            opened = _open_country_switch(driver)
             if not opened:
                 opened = bool(oepn_country_switch(driver))
             if not opened:
@@ -462,7 +438,20 @@ def _select_country(driver, site, shop_name=""):
                     ) from exc
                 return True
             raise MercadoPageStructureError(f"没有找到站点选项：{site}")
-        except (MercadoAuthenticationError, MercadoRateLimitError):
+        except MercadoAuthenticationError:
+            if attempt >= 3:
+                raise
+            _open_collection_backend_page(
+                driver,
+                REPUTATION_URL,
+                name=shop_name,
+                site=site,
+                context="站点切换登录恢复",
+                settle_seconds=5,
+            )
+            print(f"{get_now_time()}{shop_name}{site}登录态已恢复，重试站点切换")
+            continue
+        except MercadoRateLimitError:
             raise
         except Exception as exc:
             print(
@@ -803,12 +792,14 @@ def _to_visit_number_list(visits, days):
 
 def get_recent_visits_info(driver,window_id, name, site, days=8):
     # driver = _connect_browser(window_id)
-    driver.get(METRICS_URL)
-    driver.refresh()
-    time.sleep(5)
-    _raise_if_mercado_unavailable(
-        driver=driver,
-        context=f"{name}{site}流量页面",
+    _open_collection_backend_page(
+        driver,
+        METRICS_URL,
+        window_id=window_id,
+        name=name,
+        site=site,
+        context="流量页面",
+        settle_seconds=5,
     )
 
     # _select_country(driver, site, name)
@@ -1213,7 +1204,18 @@ def get_cancellation_orders(driver, name="", site="", max_pages=100):
 def _normalize_reputation_color(text, class_name=""):
     value = f"{text or ''} {class_name or ''}".casefold()
     color_aliases = (
-        ("无色", ("you still have no color", "no color", "sin color", "sem cor", "无色", "暂无颜色")),
+        (
+            "无色",
+            (
+                "you still have no color",
+                "no color",
+                "sin color",
+                "sem cor",
+                "无色",
+                "暂无颜色",
+                "没有颜色",
+            ),
+        ),
         ("红色", ("red", "rojo", "vermelho", "红色", "红")),
         ("橘色", ("orange", "naranja", "laranja", "橘色", "橙色")),
         ("黄色", ("yellow", "amarillo", "amarelo", "黄色", "黄")),
@@ -1229,8 +1231,8 @@ def _parse_gradient(value):
     text = re.sub(r"\s+", " ", str(value or "")).strip()
     replacements = (
         (r"decreased?|下降|减少|下滑", "下滑"),
-        (r"increased?|上升|增加|增长", "增长"),
-        (r"unchanged|no\s+change|持平|未变化|无变化|不变", "持平"),
+        (r"increased?|上升|上涨|增加|增长", "增长"),
+        (r"unchanged|no\s+change|持平|未变化|未变更|无变化|不变", "持平"),
     )
     normalized = text
     for pattern, replacement in replacements:
@@ -1257,6 +1259,7 @@ def get_reputation_info(
         driver,
         name,
         site,
+        window_id=window_id,
         allow_global_ip_switch=allow_global_ip_switch,
     )
     _select_country(driver, site, name)
@@ -1294,11 +1297,14 @@ def get_reputation_info(
     gradient_rate = ""
     auxiliary_errors = []
     try:
-        driver.get(SALES_SUMMARY_URL)
-        time.sleep(3)
-        _raise_if_mercado_unavailable(
-            driver=driver,
-            context=f"{name}{site}销售汇总页面",
+        _open_collection_backend_page(
+            driver,
+            SALES_SUMMARY_URL,
+            window_id=window_id,
+            name=name,
+            site=site,
+            context="销售汇总页面",
+            settle_seconds=3,
         )
         try:
             data_warn = (
@@ -1573,11 +1579,14 @@ def _row_as_login_config(row):
     return {field: row[index] if index < len(row) else "" for index, field in enumerate(fields)}
 
 
-def _prepare_reputation_retry_rows(outcomes):
+def _prepare_reputation_retry_rows(outcomes, permanent_login_failures=None):
     """修复可处理的登录/配置问题，并返回首轮失败店铺的最新配置。"""
     latest_rows = _deduplicate_config_rows(list_config_rows(include_ignored=False))
     latest_by_name = {str(row[1]).strip(): row for row in latest_rows if row and row[1]}
     retry_plan = []
+    permanent_login_failures = (
+        permanent_login_failures if permanent_login_failures is not None else set()
+    )
 
     for original_key, (original_row, _data, browser_result) in outcomes.items():
         if not outcome_failed(browser_result):
@@ -1594,9 +1603,18 @@ def _prepare_reputation_retry_rows(outcomes):
             print(f"{get_now_time()}{name} 已读取到更新后的窗口ID，将按新配置补跑")
 
         if outcome_has_marker(browser_result, "登录失效"):
+            if name in permanent_login_failures:
+                print(f"{get_now_time()}{name} 登录配置为确定性失败，不再重复提交")
+                continue
             print(f"{get_now_time()}{name} 开始串行修复 Mercado 登录态")
             try:
-                from bit.bit_mercado_login import login_one_database_shop
+                from bit.bit_mercado_login import (
+                    LOGIN_EMAIL_MISSING,
+                    LOGIN_EMAIL_REJECTED,
+                    LOGIN_SAVED_PASSWORD_INCORRECT,
+                    LOGIN_SAVED_PASSWORD_MISSING,
+                    login_one_database_shop,
+                )
 
                 login_result = login_one_database_shop(
                     _row_as_login_config(current_row),
@@ -1607,6 +1625,13 @@ def _prepare_reputation_retry_rows(outcomes):
                 print(f"{get_now_time()}{name} 登录修复异常，本轮不重试：{exc}")
                 continue
             if not login_result.get("ok"):
+                if login_result.get("status") in {
+                    LOGIN_EMAIL_MISSING,
+                    LOGIN_EMAIL_REJECTED,
+                    LOGIN_SAVED_PASSWORD_INCORRECT,
+                    LOGIN_SAVED_PASSWORD_MISSING,
+                }:
+                    permanent_login_failures.add(name)
                 print(
                     f"{get_now_time()}{name} 登录修复未通过，本轮不重试："
                     f"{login_result.get('message') or login_result.get('status')}"
@@ -1618,7 +1643,14 @@ def _prepare_reputation_retry_rows(outcomes):
             browser_result, "登录失效"
         ):
             continue
-        retry_plan.append((original_key, current_row))
+        sites_to_retry = failed_sites(browser_result)
+        configured_sites = _split_sites(current_row[3])
+        sites_to_retry = [site for site in configured_sites if site in sites_to_retry]
+        if not sites_to_retry:
+            continue
+        retry_row = list(current_row)
+        retry_row[3] = "，".join(sites_to_retry)
+        retry_plan.append((original_key, tuple(retry_row)))
     return retry_plan
 
 
@@ -1627,6 +1659,8 @@ def get_reputation_info_all(
     stagger_min_seconds=None,
     stagger_max_seconds=None,
     retry_failed=True,
+    selected_shops=None,
+    selected_sites=None,
 ):
     """并发采集声誉；修复已识别问题后只补跑失败店铺，最后统一入库。"""
     start = int(time.time())
@@ -1635,6 +1669,13 @@ def get_reputation_info_all(
     rows = list_config_rows(include_ignored=False)
     rows = [row for row in rows if row and row[0]]
     rows = _deduplicate_config_rows(rows)
+    rows = filter_config_rows(
+        rows,
+        selected_shops=selected_shops,
+        selected_sites=selected_sites,
+    )
+    if (selected_shops or selected_sites) and not rows:
+        raise ValueError("所选店铺和站点没有可执行的声誉采集配置")
 
     outcomes = _execute_reputation_rows(
         rows,
@@ -1643,26 +1684,43 @@ def get_reputation_info_all(
         stagger_max_seconds=stagger_max_seconds,
     )
 
-    if retry_failed:
-        retry_plan = _prepare_reputation_retry_rows(outcomes)
-        if retry_plan:
-            print(f"{get_now_time()}声誉首轮失败 {len(retry_plan)} 家，仅补跑这些店铺")
-            wait_for_batch_resume("声誉失败补跑")
-            retry_rows = [row for _original_key, row in retry_plan]
-            retry_outcomes = _execute_reputation_rows(
-                retry_rows,
-                max_workers=max_workers,
-                stagger_min_seconds=stagger_min_seconds,
-                stagger_max_seconds=stagger_max_seconds,
-                lease_wait_seconds=env_float(
-                    "BIT_RETRY_WINDOW_LOCK_WAIT_SECONDS",
-                    DEFAULT_RETRY_LOCK_WAIT_SECONDS,
-                ),
-            )
-            for original_key, retry_row in retry_plan:
-                retry_outcome = retry_outcomes.get(row_key(retry_row))
-                if retry_outcome is not None:
-                    outcomes[original_key] = retry_outcome
+    retry_rounds = (
+        env_int("BIT_COLLECTION_RETRY_ROUNDS", 2, 0)
+        if retry_failed
+        else 0
+    )
+    permanent_login_failures = set()
+    for retry_round in range(1, retry_rounds + 1):
+        retry_plan = _prepare_reputation_retry_rows(
+            outcomes,
+            permanent_login_failures=permanent_login_failures,
+        )
+        if not retry_plan:
+            break
+        retry_site_count = sum(len(_split_sites(row[3])) for _key, row in retry_plan)
+        print(
+            f"{get_now_time()}声誉第 {retry_round}/{retry_rounds} 轮补跑 "
+            f"{len(retry_plan)} 家、{retry_site_count} 个失败站点"
+        )
+        wait_for_batch_resume("声誉失败补跑")
+        retry_rows = [row for _original_key, row in retry_plan]
+        retry_outcomes = _execute_reputation_rows(
+            retry_rows,
+            max_workers=max_workers,
+            stagger_min_seconds=stagger_min_seconds,
+            stagger_max_seconds=stagger_max_seconds,
+            lease_wait_seconds=env_float(
+                "BIT_RETRY_WINDOW_LOCK_WAIT_SECONDS",
+                DEFAULT_RETRY_LOCK_WAIT_SECONDS,
+            ),
+        )
+        for original_key, retry_row in retry_plan:
+            retry_outcome = retry_outcomes.get(row_key(retry_row))
+            if retry_outcome is not None:
+                outcomes[original_key] = merge_site_retry_outcome(
+                    outcomes[original_key],
+                    retry_outcome,
+                )
 
     reputation_info_sum = []
     result = []
@@ -1698,10 +1756,14 @@ def get_reputation_info_all(
     )
 
     now = datetime.now()
-    date_str = datetime.now().strftime("%Y-%m-%d-%H")
+    scoped_collection = bool(selected_shops or selected_sites)
+    date_str = datetime.now().strftime(
+        "%Y-%m-%d-%H%M%S" if scoped_collection else "%Y-%m-%d-%H"
+    )
     output_dir = root_path / "美客多声誉"
     output_dir.mkdir(parents=True, exist_ok=True)
-    output_path = output_dir / f"武汉泽顺店铺声誉信息汇总{date_str}.xlsx"
+    scope_suffix = "-选定范围" if scoped_collection else ""
+    output_path = output_dir / f"武汉泽顺店铺声誉信息汇总{scope_suffix}{date_str}.xlsx"
 
     post_errors = []
     for step_name, action in (
@@ -1735,6 +1797,9 @@ def get_reputation_info_all(
         "output_path": str(output_path),
         "failure_report_path": str(failure_report_path) if failure_report_path else "",
         "email_sent": email_sent,
+        "selected_shops": list(selected_shops or ()),
+        "selected_sites": list(selected_sites or ()),
+        "max_workers": max_workers,
         "failed_shops": sorted(
             {
                 str(row[1] or "")

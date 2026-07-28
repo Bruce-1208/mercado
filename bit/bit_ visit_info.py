@@ -13,6 +13,7 @@ from selenium.webdriver.common.by import By
 from selenium.webdriver.support import expected_conditions as EC
 import pyautogui
 from bit.bit_switch_country import *
+from bit.bit_mercado_login import open_mercado_backend_page
 
 
 def get_visits_info(window_id, site):
@@ -39,9 +40,16 @@ def get_visits_info(window_id, site):
     # 设置最长等待时间为 10 秒
     wait = WebDriverWait(driver, 10)
 
-    driver.get("https://global-selling.mercadolibre.com/metrics#sc-menu")
-    driver.refresh()
-    time.sleep(5)
+    shop_name = str(res.get("data", {}).get("name") or window_id)
+    access_result = open_mercado_backend_page(
+        driver,
+        "https://global-selling.mercadolibre.com/metrics#sc-menu",
+        shop_name,
+        window_id,
+        settle_seconds=5,
+    )
+    if not access_result.get("ok"):
+        raise RuntimeError(access_result.get("message") or access_result.get("status"))
 
     site = "阿根廷"
     # 这段 JS 脚本会自动寻找页面上所有隐藏的 Shadow DOM 并在其中搜索目标
