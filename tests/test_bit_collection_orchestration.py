@@ -207,8 +207,8 @@ class CollectionOrchestrationTests(unittest.TestCase):
 
         self.assertEqual(events, ["infraction", ("sleep", 240), "reputation", "appeal"])
         self.assertEqual(result["ai_appeal"], {"ok": True})
-        self.assertEqual(reputation_main.call_args.kwargs["max_workers"], 3)
-        self.assertEqual(infraction_main.call_args.kwargs["max_workers"], 3)
+        self.assertEqual(reputation_main.call_args.kwargs["max_workers"], 10)
+        self.assertEqual(infraction_main.call_args.kwargs["max_workers"], 10)
         self.assertEqual(reputation_main.call_args.kwargs["stagger_min_seconds"], 5)
         self.assertEqual(reputation_main.call_args.kwargs["stagger_max_seconds"], 10)
         self.assertEqual(result["errors"], {})
@@ -418,6 +418,44 @@ class CollectionOrchestrationTests(unittest.TestCase):
                     allow_global_ip_switch=False,
                 )
         self.assertFalse(hasattr(reputation, "switch_random_hongkong_node"))
+
+    def test_infraction_login_repair_records_human_verification_source(self):
+        from bit import bit_mercado_login
+
+        row = ("window-captcha", "人机验证店铺", "", "墨西哥", "", "", "")
+        outcomes = {
+            control.row_key(row): (
+                row,
+                [],
+                [("获取侵权信息", "人机验证店铺", "墨西哥", "失败：登录失效", "now")],
+            )
+        }
+        recorded = []
+        with (
+            mock.patch.object(infractions, "list_config_rows", return_value=[row]),
+            mock.patch.object(
+                bit_mercado_login,
+                "login_one_database_shop",
+                return_value={
+                    "ok": False,
+                    "status": bit_mercado_login.LOGIN_CAPTCHA_REQUIRED,
+                    "login_stage": "captcha",
+                    "message": "检测到人机验证，需要人工处理",
+                },
+            ),
+            mock.patch.object(
+                infractions,
+                "record_human_verification_anomaly",
+                side_effect=lambda *args, **kwargs: recorded.append((args, kwargs)),
+            ),
+        ):
+            retry_plan = infractions._prepare_infraction_retry_rows(outcomes)
+
+        self.assertEqual(retry_plan, [])
+        self.assertEqual(len(recorded), 1)
+        self.assertEqual(recorded[0][0][1:3], ("window-captcha", "人机验证店铺"))
+        self.assertEqual(recorded[0][1]["site"], "墨西哥")
+        self.assertEqual(recorded[0][1]["source"], "侵权采集")
 
 
 if __name__ == "__main__":

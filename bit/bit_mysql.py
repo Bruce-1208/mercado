@@ -164,8 +164,261 @@ def get_latest_order_print_records():
         connection.close()
 
 
-def inset_reputation_info(reputation_list):
-    if not reputation_list:
+def _normalize_collection_targets(targets):
+    normalized = set()
+    for target in targets or ():
+        if isinstance(target, dict):
+            shop_name = target.get("shop_name") or target.get("店铺名")
+            site = target.get("site") or target.get("站点")
+        elif isinstance(target, (list, tuple)) and len(target) >= 2:
+            shop_name, site = target[:2]
+        else:
+            continue
+        key = (str(shop_name or "").strip(), str(site or "").strip())
+        if key[0] and key[1]:
+            normalized.add(key)
+    return normalized
+
+
+def _active_collection_snapshot_rows(rows):
+    """只保留当前启用店铺站点，避免把已经停用的历史店铺重新带回页面。"""
+    rows = list(rows or ())
+    try:
+        active_targets = {
+            (item["店铺名"], item["站点"])
+            for item in _load_configured_shop_sites()
+        }
+    except Exception as exc:
+        print(f"读取启用店铺范围失败，保留原快照：{exc}")
+        return rows
+    if not active_targets:
+        return rows
+    return [
+        row
+        for row in rows
+        if (
+            str(row.get("店铺名") or "").strip(),
+            str(row.get("站点") or "").strip(),
+        ) in active_targets
+    ]
+
+
+def _ensure_collection_snapshots_table(cursor):
+    cursor.execute(
+        """
+        CREATE TABLE IF NOT EXISTS `collection_snapshots` (
+            `id` BIGINT NOT NULL AUTO_INCREMENT,
+            `collection_type` VARCHAR(32) NOT NULL,
+            `submit_time` DATETIME NOT NULL,
+            PRIMARY KEY (`id`),
+            UNIQUE KEY `uniq_collection_snapshot` (`collection_type`, `submit_time`),
+            KEY `idx_collection_snapshot_latest` (`collection_type`, `submit_time`)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+        """
+    )
+
+
+def _latest_tracked_collection_snapshot(cursor, collection_type):
+    _ensure_collection_snapshots_table(cursor)
+    cursor.execute(
+        """
+        SELECT MAX(`submit_time`) AS `latest_submit_time`
+        FROM `collection_snapshots`
+        WHERE `collection_type` = %s
+        """,
+        (str(collection_type or "").strip(),),
+    )
+    return (cursor.fetchone() or {}).get("latest_submit_time")
+
+
+def _record_collection_snapshot(cursor, collection_type, submit_time):
+    cursor.execute(
+        """
+        INSERT INTO `collection_snapshots` (`collection_type`, `submit_time`)
+        VALUES (%s, %s)
+        ON DUPLICATE KEY UPDATE `submit_time` = VALUES(`submit_time`)
+        """,
+        (str(collection_type or "").strip(), submit_time),
+    )
+
+
+def _next_collection_submit_time(cursor, collection_type, table_name):
+    latest_submit_time = _latest_tracked_collection_snapshot(
+        cursor,
+        collection_type,
+    )
+    if not latest_submit_time:
+        cursor.execute(
+            f"SELECT MAX(`提交时间`) AS `latest_submit_time` FROM `{table_name}`"
+        )
+        latest_submit_time = (cursor.fetchone() or {}).get("latest_submit_time")
+    now = datetime.now().replace(microsecond=0)
+    if latest_submit_time:
+        if isinstance(latest_submit_time, datetime):
+            latest_datetime = latest_submit_time.replace(microsecond=0)
+        else:
+            try:
+                latest_datetime = datetime.strptime(
+                    str(latest_submit_time),
+                    "%Y-%m-%d %H:%M:%S",
+                )
+            except ValueError:
+                latest_datetime = None
+        if latest_datetime is not None and now <= latest_datetime:
+            now = latest_datetime + timedelta(seconds=1)
+    return now.strftime("%Y-%m-%d %H:%M:%S")
+
+
+def _latest_reputation_snapshot_rows(cursor):
+    latest_submit_time = _latest_tracked_collection_snapshot(cursor, "reputation")
+    column_names = (
+        "店铺名", "站点", "声誉颜色", "总单量", "投诉率", "延误率",
+        "取消率", "增加或减少", "近七天变化率", "系统告警", "更新时间",
+        "一周流量趋势", "提交时间",
+    )
+    columns = ", ".join(f"`{name}`" for name in column_names)
+    if latest_submit_time:
+        cursor.execute(
+            f"SELECT {columns} FROM `reputation` WHERE `提交时间` = %s",
+            (latest_submit_time,),
+        )
+    else:
+        joined_columns = ", ".join(
+            f"source_rows.`{name}`" for name in column_names
+        )
+        cursor.execute(
+            f"""
+            SELECT {joined_columns}
+            FROM `reputation` AS source_rows
+            INNER JOIN (
+                SELECT `店铺名`, `站点`, MAX(`提交时间`) AS `latest_submit_time`
+                FROM `reputation`
+                WHERE `提交时间` IS NOT NULL
+                GROUP BY `店铺名`, `站点`
+            ) AS latest
+              ON source_rows.`店铺名` = latest.`店铺名`
+             AND source_rows.`站点` = latest.`站点`
+             AND source_rows.`提交时间` = latest.`latest_submit_time`
+            """
+        )
+    return cursor.fetchall()
+
+
+def _latest_infraction_snapshot_rows(cursor):
+    latest_submit_time = _latest_tracked_collection_snapshot(cursor, "infraction")
+    column_names = (
+        "店铺名", "站点", "编号", "标题", "侵权时间",
+        "提交时间", "执行时间", "类型",
+    )
+    columns = ", ".join(f"`{name}`" for name in column_names)
+    if latest_submit_time:
+        cursor.execute(
+            f"SELECT {columns} FROM `infraction` WHERE `提交时间` = %s",
+            (latest_submit_time,),
+        )
+    else:
+        joined_columns = ", ".join(
+            f"source_rows.`{name}`" for name in column_names
+        )
+        cursor.execute(
+            f"""
+            SELECT {joined_columns}
+            FROM `infraction` AS source_rows
+            INNER JOIN (
+                SELECT `店铺名`, `站点`, MAX(`提交时间`) AS `latest_submit_time`
+                FROM `infraction`
+                WHERE `提交时间` IS NOT NULL AND `提交时间` <> ''
+                GROUP BY `店铺名`, `站点`
+            ) AS latest
+              ON source_rows.`店铺名` = latest.`店铺名`
+             AND source_rows.`站点` = latest.`站点`
+             AND source_rows.`提交时间` = latest.`latest_submit_time`
+            """
+        )
+    return cursor.fetchall()
+
+
+def _merge_reputation_snapshot_rows(
+    latest_rows,
+    collected_rows,
+    replace_targets,
+    submit_time,
+):
+    targets = _normalize_collection_targets(replace_targets)
+    targets.update(
+        (str(row[0] or "").strip(), str(row[1] or "").strip())
+        for row in collected_rows
+        if str(row[0] or "").strip() and str(row[1] or "").strip()
+    )
+    merged_rows = {}
+    for row in latest_rows or ():
+        key = (
+            str(row.get("店铺名") or "").strip(),
+            str(row.get("站点") or "").strip(),
+        )
+        if not key[0] or not key[1] or key in targets:
+            continue
+        merged_rows[key] = [
+            row.get("店铺名"),
+            row.get("站点"),
+            row.get("声誉颜色"),
+            row.get("总单量"),
+            row.get("投诉率"),
+            row.get("延误率"),
+            row.get("取消率"),
+            row.get("增加或减少"),
+            row.get("近七天变化率"),
+            row.get("系统告警"),
+            row.get("更新时间"),
+            row.get("一周流量趋势"),
+            submit_time,
+        ]
+    for row in collected_rows:
+        merged_rows[(str(row[0]).strip(), str(row[1]).strip())] = row
+    return list(merged_rows.values())
+
+
+def _merge_infraction_snapshot_rows(
+    latest_rows,
+    collected_rows,
+    replace_targets,
+    submit_time,
+):
+    targets = _normalize_collection_targets(replace_targets)
+    targets.update(
+        (str(row[0] or "").strip(), str(row[1] or "").strip())
+        for row in collected_rows
+        if str(row[0] or "").strip() and str(row[1] or "").strip()
+    )
+    merged_rows = []
+    for row in latest_rows or ():
+        key = (
+            str(row.get("店铺名") or "").strip(),
+            str(row.get("站点") or "").strip(),
+        )
+        if not key[0] or not key[1] or key in targets:
+            continue
+        merged_rows.append(
+            [
+                row.get("店铺名"),
+                row.get("站点"),
+                row.get("编号"),
+                row.get("标题"),
+                row.get("侵权时间"),
+                submit_time,
+                row.get("执行时间"),
+                row.get("类型") or "侵权",
+            ]
+        )
+    return merged_rows + list(collected_rows)
+
+
+def inset_reputation_info(
+    reputation_list,
+    merge_latest=False,
+    replace_targets=None,
+):
+    if not reputation_list and not merge_latest:
         return 0
     connection = pymysql.connect(**config)
 
@@ -173,7 +426,11 @@ def inset_reputation_info(reputation_list):
         with connection.cursor() as cursor:
             _ensure_column(cursor, "reputation", "取消率", "VARCHAR(255) NULL")
             _ensure_column(cursor, "reputation", "一周流量趋势", "TEXT NULL")
-            submit_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            submit_time = _next_collection_submit_time(
+                cursor,
+                "reputation",
+                "reputation",
+            )
             normalized_list = []
             for row in reputation_list:
                 row = list(row)
@@ -206,6 +463,15 @@ def inset_reputation_info(reputation_list):
                 elif len(row) == 13:
                     row[12] = submit_time
                 normalized_list.append(row)
+            if merge_latest:
+                normalized_list = _merge_reputation_snapshot_rows(
+                    _active_collection_snapshot_rows(
+                        _latest_reputation_snapshot_rows(cursor)
+                    ),
+                    normalized_list,
+                    replace_targets,
+                    submit_time,
+                )
             print(f"准备插入声誉记录 {len(normalized_list)} 条，提交时间 {submit_time}")
 
             # --- 增 (Create) ---
@@ -216,7 +482,9 @@ def inset_reputation_info(reputation_list):
         系统告警, 更新时间, 一周流量趋势, 提交时间
     ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
     """
-            cursor.executemany(sql_insert, normalized_list)
+            if normalized_list:
+                cursor.executemany(sql_insert, normalized_list)
+            _record_collection_snapshot(cursor, "reputation", submit_time)
             print("执行sql成功", sql_insert)
 
         # 核心：涉及写操作（增删改）必须提交事务
@@ -233,15 +501,23 @@ def inset_reputation_info(reputation_list):
         connection.close()
 
 
-def inset_infraction_info(infraction_list):
-    if not infraction_list:
+def inset_infraction_info(
+    infraction_list,
+    merge_latest=False,
+    replace_targets=None,
+):
+    if not infraction_list and not merge_latest:
         return 0
     connection = pymysql.connect(**config)
 
     try:
         with connection.cursor() as cursor:
             normalized_list = []
-            submit_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            submit_time = _next_collection_submit_time(
+                cursor,
+                "infraction",
+                "infraction",
+            )
             for row in infraction_list:
                 row = list(row)
                 if len(row) == 6:
@@ -252,6 +528,15 @@ def inset_infraction_info(infraction_list):
                 if len(row) >= 8:
                     row[5] = submit_time
                 normalized_list.append(row)
+            if merge_latest:
+                normalized_list = _merge_infraction_snapshot_rows(
+                    _active_collection_snapshot_rows(
+                        _latest_infraction_snapshot_rows(cursor)
+                    ),
+                    normalized_list,
+                    replace_targets,
+                    submit_time,
+                )
             submit_time_count = sum(1 for row in normalized_list if len(row) > 5 and row[5])
             print(f"准备插入侵权记录 {len(normalized_list)} 条，提交时间 {submit_time}，非空 {submit_time_count} 条")
 
@@ -262,7 +547,9 @@ def inset_infraction_info(infraction_list):
 
     ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
     """
-            cursor.executemany(sql_insert, normalized_list)
+            if normalized_list:
+                cursor.executemany(sql_insert, normalized_list)
+            _record_collection_snapshot(cursor, "infraction", submit_time)
             print("执行sql成功", sql_insert)
 
         # 核心：涉及写操作（增删改）必须提交事务
@@ -339,16 +626,17 @@ def _load_configured_shop_sites():
     return configured
 
 
-def _get_latest_infraction_task_status(cursor):
+def _get_latest_collection_task_status(cursor, record_type):
     cursor.execute(
         """
         SELECT `name`, `site`, `isSuccess`, `datetime`
         FROM record
-        WHERE `type` = '获取侵权信息'
+        WHERE `type` = %s
           AND `name` IS NOT NULL AND `name` <> ''
           AND `site` IS NOT NULL AND `site` <> ''
         ORDER BY `datetime` DESC, `id` DESC
-        """
+        """,
+        (str(record_type or "").strip(),),
     )
     status_map = {}
     for row in cursor.fetchall():
@@ -360,6 +648,10 @@ def _get_latest_infraction_task_status(cursor):
             "状态时间": str(row.get("datetime") or ""),
         }
     return status_map
+
+
+def _get_latest_infraction_task_status(cursor):
+    return _get_latest_collection_task_status(cursor, "获取侵权信息")
 
 
 def get_latest_infraction_info(recent_days=30):
@@ -375,15 +667,21 @@ def get_latest_infraction_info(recent_days=30):
     try:
         with connection.cursor() as cursor:
             _ensure_column(cursor, "reputation", "一周流量趋势", "TEXT NULL")
-            cursor.execute(
-                """
-                SELECT MAX(`提交时间`) AS latest_submit_time
-                FROM infraction
-                WHERE `提交时间` IS NOT NULL AND `提交时间` <> ''
-                """
+            latest_submit_time = _latest_tracked_collection_snapshot(
+                cursor,
+                "infraction",
             )
-            latest = cursor.fetchone() or {}
-            latest_submit_time = latest.get("latest_submit_time")
+            if not latest_submit_time:
+                cursor.execute(
+                    """
+                    SELECT MAX(`提交时间`) AS latest_submit_time
+                    FROM infraction
+                    WHERE `提交时间` IS NOT NULL AND `提交时间` <> ''
+                    """
+                )
+                latest_submit_time = (cursor.fetchone() or {}).get(
+                    "latest_submit_time"
+                )
             if not latest_submit_time:
                 task_status_map = _get_latest_infraction_task_status(cursor)
                 summary = []
@@ -401,17 +699,11 @@ def get_latest_infraction_info(recent_days=30):
                     })
                 return {"latest_submit_time": "", "total": 0, "summary": summary, "rows": []}
 
-            cursor.execute(
-                """
-                SELECT
-                    `店铺名`, `站点`, `编号`, `标题`, `侵权时间`,
-                    `提交时间`, `执行时间`, `类型`
-                FROM infraction
-                WHERE `提交时间` = %s
-                """,
-                (latest_submit_time,),
+            # 有完整批次标记时读取该批次；兼容历史数据没有标记的情况时，
+            # 按店铺和站点分别取最新批次，避免一次补跑把其他店铺从页面隐藏。
+            rows = _active_collection_snapshot_rows(
+                _latest_infraction_snapshot_rows(cursor)
             )
-            rows = cursor.fetchall()
             cutoff = datetime.now() - timedelta(days=recent_days)
             recent_rows = []
             for row in rows:
@@ -505,30 +797,46 @@ def get_latest_reputation_info():
         with connection.cursor() as cursor:
             _ensure_column(cursor, "reputation", "取消率", "VARCHAR(255) NULL")
             _ensure_column(cursor, "reputation", "一周流量趋势", "TEXT NULL")
-            cursor.execute(
-                """
-                SELECT MAX(`提交时间`) AS latest_submit_time
-                FROM reputation
-                WHERE `提交时间` IS NOT NULL
-                """
+            latest_submit_time = _latest_tracked_collection_snapshot(
+                cursor,
+                "reputation",
             )
-            latest = cursor.fetchone() or {}
-            latest_submit_time = latest.get("latest_submit_time")
             if not latest_submit_time:
-                return {"latest_submit_time": "", "total": 0, "rows": []}
+                cursor.execute(
+                    """
+                    SELECT MAX(`提交时间`) AS latest_submit_time
+                    FROM reputation
+                    WHERE `提交时间` IS NOT NULL
+                    """
+                )
+                latest_submit_time = (cursor.fetchone() or {}).get(
+                    "latest_submit_time"
+                )
+            if not latest_submit_time:
+                task_status_map = _get_latest_collection_task_status(
+                    cursor,
+                    "获取声誉信息",
+                )
+                return {
+                    "latest_submit_time": "",
+                    "total": 0,
+                    "summary": [
+                        {
+                            "店铺名": shop_name,
+                            "站点": site,
+                            "状态": task_status.get("状态") or "未知",
+                            "状态时间": task_status.get("状态时间") or "",
+                        }
+                        for (shop_name, site), task_status in task_status_map.items()
+                    ],
+                    "rows": [],
+                }
 
-            cursor.execute(
-                """
-                SELECT
-                    `店铺名`, `站点`, `声誉颜色`, `总单量`, `投诉率`,
-                    `延误率`, `取消率`, `增加或减少`, `近七天变化率`,
-                    `系统告警`, `更新时间`, `一周流量趋势`, `提交时间`
-                FROM reputation
-                WHERE `提交时间` = %s
-                """,
-                (latest_submit_time,),
+            # 有完整批次标记时读取该批次；兼容历史数据没有标记的情况时，
+            # 按店铺和站点分别取最新记录，让补跑结果与此前成功结果一起展示。
+            rows = _active_collection_snapshot_rows(
+                _latest_reputation_snapshot_rows(cursor)
             )
-            rows = cursor.fetchall()
             for row in rows:
                 for key in ("更新时间", "提交时间"):
                     if row.get(key) is not None:
@@ -540,9 +848,23 @@ def get_latest_reputation_info():
                     str(row.get("站点") or ""),
                 )
             )
+            task_status_map = _get_latest_collection_task_status(
+                cursor,
+                "获取声誉信息",
+            )
+            summary = [
+                {
+                    "店铺名": shop_name,
+                    "站点": site,
+                    "状态": task_status.get("状态") or "未知",
+                    "状态时间": task_status.get("状态时间") or "",
+                }
+                for (shop_name, site), task_status in task_status_map.items()
+            ]
             return {
                 "latest_submit_time": str(latest_submit_time),
                 "total": len(rows),
+                "summary": summary,
                 "rows": rows,
             }
     except Exception as e:

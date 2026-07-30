@@ -304,6 +304,14 @@ def test_login_results_are_synced_to_window_anomalies(monkeypatch):
                 "message": "需要验证码",
             },
             {
+                "shop_name": "人机验证店铺",
+                "window_id": "window-captcha",
+                "ok": False,
+                "status": mercado_login.LOGIN_CAPTCHA_REQUIRED,
+                "login_stage": "captcha",
+                "message": "需要人工处理人机验证",
+            },
+            {
                 "shop_name": "接口超时店铺",
                 "window_id": "window-timeout",
                 "ok": False,
@@ -314,14 +322,17 @@ def test_login_results_are_synced_to_window_anomalies(monkeypatch):
         ]
     )
 
-    assert resolved == ["window-success"]
-    assert summary["resolved_count"] == 1
-    assert summary["anomaly_count"] == 2
+    assert resolved == [
+        "window-success",
+        "window-rate-limit",
+        "window-verification",
+    ]
+    assert summary["resolved_count"] == 3
+    assert summary["anomaly_count"] == 1
     assert summary["skipped_count"] == 1
-    assert len(upserts) == 2
-    assert upserts[0][1]["anomaly_type"] == "美客多限频"
+    assert len(upserts) == 1
+    assert upserts[0][1]["anomaly_type"] == mercado_login.LOGIN_CAPTCHA_REQUIRED
     assert upserts[0][1]["source"] == "bit_mercado_login"
-    assert upserts[1][1]["anomaly_type"] == mercado_login.LOGIN_VERIFICATION_REQUIRED
 
 
 def test_login_check_always_uses_global_selling_home(monkeypatch):
@@ -575,6 +586,54 @@ def test_backend_page_relogs_and_reopens_original_url(monkeypatch):
     assert result["login_retry_count"] == 1
     assert navigations == [target_url, target_url]
     assert len(login_calls) == 1
+
+
+def test_backend_page_records_captcha_with_task_source(monkeypatch):
+    target_url = "https://global-selling.mercadolibre.com/reputation"
+    recorded = []
+    monkeypatch.setattr(
+        mercado_login,
+        "get_mercado_page_state",
+        lambda _driver: {
+            "current_url": "https://www.mercadolibre.com/jms/cbt/lgz/login",
+            "title": "Log in",
+            "page_text": "Fill out your e-mail address to log in",
+        },
+    )
+    monkeypatch.setattr(mercado_login, "is_mercado_login_page", lambda _driver: False)
+    monkeypatch.setattr(
+        mercado_login.bit_db_api,
+        "upsert_window_anomaly",
+        lambda *args, **kwargs: recorded.append((args, kwargs)),
+    )
+
+    result = mercado_login.open_mercado_backend_page(
+        object(),
+        target_url,
+        "人机验证店铺",
+        "window-captcha",
+        settle_seconds=0,
+        navigate=lambda _url: None,
+        login_handler=lambda *args: {
+            "ok": False,
+            "status": mercado_login.LOGIN_CAPTCHA_REQUIRED,
+            "login_stage": "captcha",
+            "message": "检测到人机验证，需要人工处理",
+        },
+        sleep=lambda _seconds: None,
+        anomaly_site="墨西哥",
+        anomaly_source="声誉采集",
+    )
+
+    assert result["ok"] is False
+    assert len(recorded) == 1
+    assert recorded[0][0][:3] == (
+        "window-captcha",
+        "人机验证店铺",
+        "墨西哥",
+    )
+    assert recorded[0][1]["anomaly_type"] == mercado_login.LOGIN_CAPTCHA_REQUIRED
+    assert recorded[0][1]["source"] == "声誉采集"
 
 
 def test_backend_page_handles_designated_limit_before_reopening(monkeypatch):

@@ -137,11 +137,37 @@ def _normalized_selection(values: Iterable[str] | str | None):
     )
 
 
-def build_print_jobs(rows=None, selected_shops=None, selected_sites=None):
+def _normalized_targets(targets):
+    normalized = []
+    seen = set()
+    for target in targets or ():
+        if isinstance(target, dict):
+            shop_name = str(target.get("shop_name") or "").strip()
+            site = str(target.get("site") or "").strip()
+        elif isinstance(target, (list, tuple)) and len(target) >= 2:
+            shop_name = str(target[0] or "").strip()
+            site = str(target[1] or "").strip()
+        else:
+            continue
+        key = (shop_name, site)
+        if not shop_name or not site or key in seen:
+            continue
+        seen.add(key)
+        normalized.append(key)
+    return tuple(normalized)
+
+
+def build_print_jobs(
+    rows=None,
+    selected_shops=None,
+    selected_sites=None,
+    selected_targets=None,
+):
     """把数据库店铺配置转为待执行的店铺/站点任务。"""
 
     shop_filter = set(_normalized_selection(selected_shops))
     site_filter = set(_normalized_selection(selected_sites))
+    target_filter = set(_normalized_targets(selected_targets))
     jobs = []
     seen_window_sites = set()
     for row in rows if rows is not None else list_config_rows(include_ignored=False):
@@ -153,11 +179,14 @@ def build_print_jobs(rows=None, selected_shops=None, selected_sites=None):
             continue
         if shop_filter and shop_name not in shop_filter:
             continue
-        sites = [
-            site
-            for site in split_config_sites(configured_sites)
-            if not site_filter or site in site_filter
-        ]
+        sites = []
+        for site in split_config_sites(configured_sites):
+            if target_filter:
+                if (shop_name, site) not in target_filter:
+                    continue
+            elif site_filter and site not in site_filter:
+                continue
+            sites.append(site)
         sites = [
             site
             for site in sites
@@ -491,6 +520,7 @@ def _summary(results, started_at, stopped=False):
 def print_orders_all(
     selected_shops=None,
     selected_sites=None,
+    selected_targets=None,
     *,
     max_retries=3,
     retry_delay_seconds=300,
@@ -506,6 +536,7 @@ def print_orders_all(
     jobs = build_print_jobs(
         selected_shops=selected_shops,
         selected_sites=selected_sites,
+        selected_targets=selected_targets,
     )
     _emit(
         logger,

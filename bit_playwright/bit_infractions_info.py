@@ -31,6 +31,10 @@ from bit.bit_mercado_limit import (
     is_mercado_logged_out_state,
     is_mercado_rate_limited_text,
 )
+from bit.bit_mercado_login import (
+    is_human_verification_result,
+    record_human_verification_anomaly,
+)
 from bit.bit_runtime_lock import create_window_lease
 from bit.bit_db_api import insert_task_record, inset_infraction_info
 from bit.bit_send_mail import send_info
@@ -164,6 +168,10 @@ def _raise_if_page_unavailable(page, context="侵权页面"):
             "title": "",
         }
     )
+    if is_human_verification_result(body_text):
+        raise MercadoAuthenticationError(
+            f"{context}检测到人机验证，需要人工处理：{body_text[:300]}"
+        )
     if backend_status == "logged_out":
         raise MercadoAuthenticationError(f"{context}登录态失效，已跳转登录页：{current_url}")
     if backend_status == "rate_limited":
@@ -266,7 +274,9 @@ def _split_sites(value):
 def _failure_status(exc):
     text = re.sub(r"\s+", " ", str(exc or "")).strip()
     lower = text.casefold()
-    if isinstance(exc, MercadoAuthenticationError) or _is_login_page("", text):
+    if is_human_verification_result(exc):
+        reason = "需要人机验证"
+    elif isinstance(exc, MercadoAuthenticationError) or _is_login_page("", text):
         reason = "登录失效"
     elif isinstance(exc, MercadoRateLimitError) or _is_rate_limited_text(text):
         reason = "访问限频"
@@ -1018,6 +1028,23 @@ def _run_infractions_for_browser_locked(row):
                             except Exception as exc:
                                 last_error = exc
                                 print(get_now_time() + name + site + "执行失败", exc)
+                                if is_human_verification_result(exc):
+                                    try:
+                                        record_human_verification_anomaly(
+                                            exc,
+                                            browser_id,
+                                            name,
+                                            site=site,
+                                            source="侵权采集",
+                                        )
+                                    except Exception as record_exc:
+                                        print(
+                                            get_now_time()
+                                            + name
+                                            + site
+                                            + "登记人机验证失败："
+                                            + str(record_exc)
+                                        )
                                 if isinstance(
                                     exc,
                                     (MercadoAuthenticationError, BitBrowserWindowError),
@@ -1188,6 +1215,14 @@ def _prepare_infraction_retry_rows(outcomes, permanent_login_failures=None):
                     wait_seconds=int(env_float("BIT_LOGIN_REPAIR_WAIT_SECONDS", 60, 1)),
                     page_load_timeout=int(env_float("BIT_LOGIN_REPAIR_PAGE_TIMEOUT", 20, 1)),
                 )
+                if is_human_verification_result(login_result):
+                    record_human_verification_anomaly(
+                        login_result,
+                        current_row[0],
+                        name,
+                        site=current_row[3],
+                        source="侵权采集",
+                    )
             except Exception as exc:
                 print(f"{get_now_time()}{name} 登录修复异常，本轮不重试：{exc}")
                 continue
@@ -1310,6 +1345,12 @@ def get_infractions_info_all(
     )
 
     scoped_collection = bool(selected_shops or selected_sites)
+    replace_targets = [
+        (str(row[1] or "").strip(), site)
+        for row in rows
+        for site in _split_sites(row[3])
+        if str(row[1] or "").strip() and site
+    ]
     date_str = datetime.now().strftime(
         "%Y-%m-%d-%H%M%S" if scoped_collection else "%Y-%m-%d-%H"
     )
@@ -1317,7 +1358,18 @@ def get_infractions_info_all(
     output_path = bit_dir / f"美客多-武汉泽顺店铺侵权信息汇总{scope_suffix}-{date_str}.xlsx"
     post_errors = []
     for step_name, action in (
-        ("写入侵权数据", lambda: inset_infraction_info(infraction_info_sum)),
+        (
+            "写入侵权数据",
+            lambda: (
+                inset_infraction_info(
+                    infraction_info_sum,
+                    merge_latest=True,
+                    replace_targets=replace_targets,
+                )
+                if scoped_collection
+                else inset_infraction_info(infraction_info_sum)
+            ),
+        ),
         ("写入侵权任务记录", lambda: insert_task_record(result)),
         ("导出侵权汇总", lambda: df.to_excel(output_path, index=False)),
     ):

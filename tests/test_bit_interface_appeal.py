@@ -271,6 +271,7 @@ def test_shop_status_can_restart_single_shop_auto_login(monkeypatch):
                 {
                     "window_id": "window-1",
                     "window_name": "四季如春",
+                    "anomaly_type": "需要人机验证",
                 }
             ],
         },
@@ -319,8 +320,16 @@ def test_shop_status_starts_one_login_process_per_selected_shop(monkeypatch):
         lambda active_only=True, limit=500: {
             "total": 2,
             "rows": [
-                {"window_id": "window-1", "window_name": "四季如春"},
-                {"window_id": "window-2", "window_name": "龙凤呈祥"},
+                {
+                    "window_id": "window-1",
+                    "window_name": "四季如春",
+                    "anomaly_type": "需要人机验证",
+                },
+                {
+                    "window_id": "window-2",
+                    "window_name": "龙凤呈祥",
+                    "anomaly_type": "需要人机验证",
+                },
             ],
         },
     )
@@ -448,7 +457,7 @@ def test_shop_status_ui_requests_one_worker_per_selected_shop():
     assert "lastMercadoLoginWindowRefreshAt" in template
     assert "Date.now() - lastMercadoLoginWindowRefreshAt >= 4000" in template
     assert "await loadWindowAnomalies()" in template
-    assert "已重新登录并停止" in template
+    assert "已人工处理并移除" in template
     assert "await loadMercadoLoginStatus();" in template
     assert '{cache: "no-store"}' in template
 
@@ -499,7 +508,13 @@ def test_shop_status_rejects_selected_shop_that_is_no_longer_pending(monkeypatch
         "db_get_window_anomalies",
         lambda active_only=True, limit=500: {
             "total": 1,
-            "rows": [{"window_id": "window-1", "window_name": "四季如春"}],
+            "rows": [
+                {
+                    "window_id": "window-1",
+                    "window_name": "四季如春",
+                    "anomaly_type": "需要人机验证",
+                }
+            ],
         },
     )
     client = bit_interface.app.test_client()
@@ -559,6 +574,60 @@ def test_shop_status_enriches_salesperson_from_browser_configs(monkeypatch):
     ]
 
 
+def test_shop_status_only_returns_human_verification_rows(monkeypatch):
+    monkeypatch.setattr(
+        bit_interface,
+        "db_get_window_anomalies",
+        lambda active_only=True, limit=500: {
+            "total": 4,
+            "rows": [
+                {
+                    "window_id": "window-captcha",
+                    "window_name": "人机验证店铺",
+                    "anomaly_type": "需要人机验证",
+                    "reason": "检测到人机验证，需要人工处理",
+                },
+                {
+                    "window_id": "window-legacy-captcha",
+                    "window_name": "历史人机验证店铺",
+                    "anomaly_type": "需要登录",
+                    "reason": "自动登录遇到 captcha",
+                },
+                {
+                    "window_id": "window-code",
+                    "window_name": "验证码店铺",
+                    "anomaly_type": "需要验证码",
+                    "reason": "需要邮箱验证码",
+                },
+                {
+                    "window_id": "window-limit",
+                    "window_name": "限频店铺",
+                    "anomaly_type": "美客多限频",
+                    "reason": "访问限频",
+                },
+            ],
+        },
+    )
+    monkeypatch.setattr(
+        bit_interface,
+        "db_list_bit_browser_configs",
+        lambda include_ignored=True: [],
+    )
+    client = bit_interface.app.test_client()
+    with client.session_transaction() as flask_session:
+        flask_session["workbench_user"] = {"username": "tester"}
+
+    response = client.get("/api/window-anomalies?active_only=1&limit=500")
+
+    assert response.status_code == 200
+    data = response.get_json()["data"]
+    assert data["total"] == 2
+    assert [row["window_id"] for row in data["rows"]] == [
+        "window-captcha",
+        "window-legacy-captcha",
+    ]
+
+
 def test_shop_status_ui_uses_single_shop_auto_login_action():
     template = (
         Path(bit_interface.CURRENT_DIR) / "templates" / "index.html"
@@ -566,17 +635,17 @@ def test_shop_status_ui_uses_single_shop_auto_login_action():
 
     assert '>店铺状态</button>' in template
     assert "<h2>店铺状态</h2>" in template
-    assert "重新自动登录" in template
+    assert "重新检测" in template
     assert "startSingleShopAutoLogin" in template
     assert "startSelectedShopsAutoLogin" in template
     assert "window-anomaly-select-all" in template
-    assert "自动登录所选店铺" in template
+    assert "重新检测所选店铺" in template
     assert "<th>店铺归属人</th>" in template
     assert "<th>邮箱</th>" in template
     assert "row.salesperson" in template
     assert "row.email" in template
     assert 'class="reason-cell" data-tooltip=' in template
-    assert ">重新检测</button>" not in template
+    assert ">重新检测</button>" in template
 
 
 def test_reputation_rate_cells_use_requested_warning_thresholds():
@@ -1026,19 +1095,33 @@ def test_collection_page_uses_shop_status_style_checkbox_multiselect():
 
     for prefix in ("order-print", "infraction", "reputation"):
         assert f'id="{prefix}-collection-shops-all" type="checkbox"' in template
-        assert f'id="{prefix}-collection-sites-all" type="checkbox"' in template
         assert f'id="{prefix}-collection-shops"' in template
-        assert f'id="{prefix}-collection-sites"' in template
         assert f"toggleAllCollectionOptions('{prefix}', 'shops', this.checked)" in template
-        assert f"toggleAllCollectionOptions('{prefix}', 'sites', this.checked)" in template
+    assert 'id="order-print-collection-sites-all" type="checkbox"' in template
+    assert 'id="order-print-collection-sites"' in template
+    assert "toggleAllCollectionOptions('order-print', 'sites', this.checked)" in template
     for prefix in ("infraction", "reputation"):
         assert f'id="{prefix}-collection-workers" type="number" min="1" max="10" value="3"' in template
+        assert f'id="{prefix}-collection-sites-all"' not in template
+        assert f'id="{prefix}-collection-sites"' not in template
     assert "Ctrl/Cmd 可多选" not in template
     assert 'querySelectorAll(".collection-option-checkbox:checked")' in template
     assert "selectAll.indeterminate" in template
     assert 'fetch("/api/collections/options"' in template
     assert "JSON.stringify(requestPayload)" in template
     assert "max_workers: maxWorkers" in template
+    assert template.count(">补跑已开启店铺</button>") >= 2
+    assert template.count("<label>失败店铺</label>") == 2
+    assert "失败站点（随已开启店铺联动）" not in template
+    assert "将补跑 ${shops.length} 家失败店铺，并发 ${workers}" in template
+    assert 'class="collection-rerun-switch"' in template
+    assert "collectionFailedShopOptions" in template
+    assert 'id="reputation-select-all" type="checkbox"' in template
+    assert 'id="reputation-selection-summary">已选择 0 家店铺' in template
+    assert 'id="update-selected-reputation-btn"' in template
+    assert 'class="reputation-shop-select reputation-row-select"' in template
+    assert 'fetch("/api/reputation/update-selected"' in template
+    assert "toggleReputationShopSelection(this.value, this.checked)" in template
 
 
 def test_collection_options_returns_active_shop_site_mapping(monkeypatch):
@@ -1059,6 +1142,38 @@ def test_collection_options_returns_active_shop_site_mapping(monkeypatch):
                 "sites": "巴西/智利",
             },
         ],
+    )
+    monkeypatch.setattr(
+        bit_interface,
+        "db_get_latest_infraction_info",
+        lambda _days=30: {
+            "summary": [
+                {"店铺名": "店铺甲", "站点": "墨西哥", "状态": "成功"},
+                {
+                    "店铺名": "店铺甲",
+                    "站点": "巴西",
+                    "状态": "失败：页面结构不匹配",
+                    "状态时间": "2026-07-29 10:00:00",
+                },
+                {"店铺名": "店铺乙", "站点": "智利", "状态": "成功"},
+            ]
+        },
+    )
+    monkeypatch.setattr(
+        bit_interface,
+        "db_get_latest_reputation_info",
+        lambda: {
+            "summary": [
+                {"店铺名": "店铺甲", "站点": "墨西哥", "状态": "成功"},
+                {"店铺名": "店铺甲", "站点": "巴西", "状态": "成功"},
+                {
+                    "店铺名": "店铺乙",
+                    "站点": "智利",
+                    "状态": "跳过：窗口被其他任务占用",
+                    "状态时间": "2026-07-29 10:05:00",
+                },
+            ]
+        },
     )
     client = bit_interface.app.test_client()
     with client.session_transaction() as flask_session:
@@ -1082,6 +1197,36 @@ def test_collection_options_returns_active_shop_site_mapping(monkeypatch):
             },
         ],
         "sites": ["墨西哥", "巴西", "智利"],
+        "failed_shops": {
+            "infraction": [
+                {
+                    "shop_name": "店铺甲",
+                    "salesperson": "业务员甲",
+                    "sites": ["巴西"],
+                    "failures": [
+                        {
+                            "site": "巴西",
+                            "status": "失败：页面结构不匹配",
+                            "status_time": "2026-07-29 10:00:00",
+                        }
+                    ],
+                }
+            ],
+            "reputation": [
+                {
+                    "shop_name": "店铺乙",
+                    "salesperson": "业务员乙",
+                    "sites": ["智利"],
+                    "failures": [
+                        {
+                            "site": "智利",
+                            "status": "跳过：窗口被其他任务占用",
+                            "status_time": "2026-07-29 10:05:00",
+                        }
+                    ],
+                }
+            ],
+        },
     }
 
 
@@ -1090,9 +1235,10 @@ def test_collection_options_returns_active_shop_site_mapping(monkeypatch):
     [
         ("/api/infractions/collect", "_infraction_collect_state", "run_infraction_collect_job"),
         ("/api/reputation/collect", "_reputation_collect_state", "run_reputation_collect_job"),
+        ("/api/reputation/update-selected", "_reputation_collect_state", "run_reputation_collect_job"),
     ],
 )
-def test_collection_start_passes_selected_scope_and_defaults_to_three_workers(
+def test_collection_start_passes_selected_scope_and_defaults_to_ten_workers(
     monkeypatch,
     endpoint,
     state_name,
@@ -1147,12 +1293,12 @@ def test_collection_start_passes_selected_scope_and_defaults_to_three_workers(
     assert payload["data"]["params"] == {
         "shops": ["店铺甲"],
         "sites": ["巴西"],
-        "max_workers": 3,
+        "max_workers": 10,
         "target": "1 家店铺 / 1 个站点",
     }
     assert captured == {
         "target": getattr(bit_interface, target_name),
-        "args": (("店铺甲",), ("巴西",), 3),
+        "args": (("店铺甲",), ("巴西",), 10),
         "daemon": True,
         "started": True,
     }

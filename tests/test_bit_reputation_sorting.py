@@ -66,6 +66,46 @@ class ReputationSortingTests(unittest.TestCase):
             ["低单量高流量店", "高单量低流量店"],
         )
 
+    def test_latest_collection_task_status_keeps_latest_site_result(self):
+        class StatusCursor:
+            def __init__(self):
+                self.params = None
+
+            def execute(self, _query, params=None):
+                self.params = params
+
+            def fetchall(self):
+                return [
+                    {
+                        "name": "店铺甲",
+                        "site": "墨西哥",
+                        "isSuccess": "失败：页面结构不匹配",
+                        "datetime": "2026-07-29 10:00:00",
+                    },
+                    {
+                        "name": "店铺甲",
+                        "site": "墨西哥",
+                        "isSuccess": "成功",
+                        "datetime": "2026-07-29 09:00:00",
+                    },
+                    {
+                        "name": "店铺甲",
+                        "site": "巴西",
+                        "isSuccess": "成功",
+                        "datetime": "2026-07-29 09:30:00",
+                    },
+                ]
+
+        cursor = StatusCursor()
+        status = bit_mysql._get_latest_collection_task_status(
+            cursor,
+            "获取声誉信息",
+        )
+
+        self.assertEqual(cursor.params, ("获取声誉信息",))
+        self.assertEqual(status[("店铺甲", "墨西哥")]["状态"], "失败：页面结构不匹配")
+        self.assertEqual(status[("店铺甲", "巴西")]["状态"], "成功")
+
     def test_parse_traffic_total_handles_empty_and_fallback_text(self):
         self.assertEqual(bit_mysql._parse_traffic_total(""), 0)
         self.assertEqual(bit_mysql._parse_traffic_total("流量: 10 / 20 / 30"), 60)

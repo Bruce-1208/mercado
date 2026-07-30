@@ -13,7 +13,7 @@ from bit.bit_mercado_limit import is_mercado_rate_limited_text
 from bit.bit_runtime_lock import InterProcessLock, RUNTIME_LOCK_DIR
 
 
-DEFAULT_COLLECTION_MAX_WORKERS = 3
+DEFAULT_COLLECTION_MAX_WORKERS = 10
 DEFAULT_STAGGER_MIN_SECONDS = 5.0
 DEFAULT_STAGGER_MAX_SECONDS = 10.0
 DEFAULT_RATE_LIMIT_PAUSE_SECONDS = 300.0

@@ -20,11 +20,14 @@ from bit.bit_db_api import (
     get_latest_infraction_info,
     get_latest_reputation_info,
     resolve_window_anomaly,
-    upsert_window_anomaly,
 )
 from bit.bit_runtime_lock import InterProcessLock, create_window_lease, get_lock_owner
 from bit.bit_mercado_limit import is_mercado_rate_limited_text
-from bit.bit_mercado_login import is_login_blocking_result
+from bit.bit_mercado_login import (
+    is_human_verification_result,
+    is_login_blocking_result,
+    record_human_verification_anomaly,
+)
 from bit.bit_utils import get_now_time
 
 
@@ -121,6 +124,9 @@ def _is_login_required_result(value):
     text = str(value or "")
     return (
         is_login_blocking_result(text)
+        or "登录失效" in text
+        or "登录态失效" in text
+        or "触发自动登录" in text
         or "Fill out your e-mail address to log in" in text
         or "Fill out your email address to log in" in text
     )
@@ -155,6 +161,44 @@ def _is_retryable_site_result(value):
 
 def _is_rate_limited_result(value):
     return is_mercado_rate_limited_text(value)
+
+
+def _is_failed_appeal_result(value):
+    text = str(value or "").strip().casefold()
+    if not text:
+        return False
+    return any(
+        marker in text
+        for marker in (
+            "执行异常",
+            "执行失败",
+            "打开比特浏览器失败",
+            "窗口页面打开验证失败",
+            "窗口页面未正常打开",
+            "没有找到 ai 客服",
+            "没有找到ai客服",
+            "没有找到输入框",
+            "进入了人工客服页面",
+            "chrome not reachable",
+            "session not created",
+            "timed out",
+            "timeout",
+        )
+    )
+
+
+def _close_ai_appeal_browser(window_id, window_lease, name, reason):
+    """在异常等待或退出前关闭完整浏览器窗口，避免并发任务积累内存。"""
+    try:
+        close_result = closeBrowser(window_id, lease=window_lease)
+        print(
+            f"{get_now_time()} {name} 因{reason}关闭浏览器窗口："
+            f"{close_result}<br>"
+        )
+        return close_result
+    except Exception as exc:
+        print(f"{get_now_time()} {name} 因{reason}关闭浏览器窗口失败：{exc}<br>")
+        return None
 
 
 def build_latest_infraction_appeal_plan(top_n=DEFAULT_DAILY_TOP_N, recent_days=DEFAULT_DAILY_RECENT_DAYS, only_active=True):
@@ -299,17 +343,20 @@ def build_appeal_plan(
 
 
 def _save_login_anomaly(window_id, name, site_code, reason):
+    """兼容旧调用：只允许人机验证进入店铺状态。"""
+    if not is_human_verification_result(reason):
+        return False
     try:
-        upsert_window_anomaly(
+        return record_human_verification_anomaly(
+            reason,
             window_id,
             name,
             site=site_code,
-            anomaly_type="需要登录",
-            reason=str(reason or "检测到登录失效"),
-            source="bit_daily_task",
+            source="AI申诉",
         )
     except Exception as e:
         print(f"{get_now_time()} {name} 写入窗口异常失败：{e}<br>")
+        return False
 
 
 def _resolve_login_anomaly(window_id, name):
@@ -372,25 +419,22 @@ def _appeal_one_shop_locked(
                     f"{get_now_time()} {name} {site_code} 检测到登录失效，"
                     f"立即终止该店铺任务<br>"
                 )
-                if any(
-                    marker in str(result or "")
-                    for marker in ("需要验证码", "需要人机验证")
-                ):
-                    print(
-                        f"{get_now_time()} {name} 已保留登录验证页面，"
-                        "等待收到邮件提醒后人工处理<br>"
-                    )
-                else:
-                    try:
-                        close_result = closeBrowser(window_id, lease=window_lease)
-                        print(f"{get_now_time()} {name} 关闭窗口结果：{close_result}<br>")
-                    except Exception as e:
-                        print(f"{get_now_time()} {name} 登录失效后关闭窗口失败：{e}<br>")
-                _save_login_anomaly(window_id, name, site_code, result)
+                _close_ai_appeal_browser(
+                    window_id,
+                    window_lease,
+                    name,
+                    "登录失效或触发自动登录",
+                )
                 exit_shop = True
                 break
 
             if _is_rate_limited_result(result):
+                _close_ai_appeal_browser(
+                    window_id,
+                    window_lease,
+                    name,
+                    "访问限频",
+                )
                 if rate_retry_count < max(0, int(rate_limit_retries)):
                     rate_retry_count += 1
                     print(
@@ -413,6 +457,12 @@ def _appeal_one_shop_locked(
                 break
 
             if _is_retryable_site_result(result) and general_attempt < max(1, int(site_retry_attempts)):
+                _close_ai_appeal_browser(
+                    window_id,
+                    window_lease,
+                    name,
+                    "自动找客服报错",
+                )
                 general_attempt += 1
                 print(
                     f"{get_now_time()} {name} {site_code} 遇到瞬时失败，"
@@ -428,8 +478,19 @@ def _appeal_one_shop_locked(
                 "site_attempts": general_attempt,
                 "rate_limit_retries": rate_retry_count,
             })
-            if _is_retryable_site_result(result):
+            retryable_failure = _is_retryable_site_result(result)
+            appeal_failure = retryable_failure or _is_failed_appeal_result(result)
+            if appeal_failure:
+                _close_ai_appeal_browser(
+                    window_id,
+                    window_lease,
+                    name,
+                    "自动找客服报错",
+                )
+            if retryable_failure:
                 print(f"{get_now_time()} {name} {site_code} 多次重试后仍失败：{result}<br>")
+            elif appeal_failure:
+                print(f"{get_now_time()} {name} {site_code} 自动找客服执行失败：{result}<br>")
             else:
                 _resolve_login_anomaly(window_id, name)
                 print(
@@ -532,6 +593,14 @@ def appeal_one_shop(
             rate_limit_retries=rate_limit_retries,
             rate_limit_retry_seconds=rate_limit_retry_seconds,
         )
+    except Exception:
+        _close_ai_appeal_browser(
+            window_id,
+            lease,
+            name,
+            "未处理的自动找客服异常",
+        )
+        raise
     finally:
         lease.release()
 

@@ -52,7 +52,11 @@ from bit.bit_appeal import *
 from bit.bit_collection_control import DEFAULT_COLLECTION_MAX_WORKERS
 from bit.bit_config import split_config_sites
 from bit.bit_runtime_lock import create_window_lease, get_lock_owner
-from bit.bit_mercado_login import MERCADO_LOGIN_JOB_LOCK_KEY, is_login_blocking_result
+from bit.bit_mercado_login import (
+    MERCADO_LOGIN_JOB_LOCK_KEY,
+    is_human_verification_result,
+    is_login_blocking_result,
+)
 from bit.bit_utils import *
 from bit.bit_api import *
 
@@ -339,6 +343,7 @@ _reputation_collect_state = {
     "finished_at": "",
     "status": "idle",
     "message": "等待启动",
+    "operation": "",
     "params": {},
 }
 _fund_collect_lock = threading.Lock()
@@ -868,7 +873,7 @@ def _mercado_login_selected_target(selected_shops):
     preview = "、".join(names[:3])
     if len(names) > 3:
         preview += "等"
-    return f"所选 {len(shops)} 家待登录店铺" + (f"（{preview}）" if preview else "")
+    return f"所选 {len(shops)} 家待处理人机验证店铺" + (f"（{preview}）" if preview else "")
 
 
 def run_mercado_login_console_job(
@@ -1076,7 +1081,61 @@ def start_mercado_login_console_job(
         return True, snapshot
 
 
-def _collection_config_options():
+def _collection_status_failed(value):
+    text = str(value or "").strip()
+    return bool(text) and text not in ("成功", "无数据", "未知")
+
+
+def _failed_collection_shop_options(shop_options, status_rows):
+    """按店铺聚合失败站点；任一站点失败时店铺只出现一次。"""
+
+    configured = {
+        str(shop.get("shop_name") or "").strip(): shop
+        for shop in (shop_options or [])
+        if str(shop.get("shop_name") or "").strip()
+    }
+    failures_by_shop = {}
+    for row in status_rows or []:
+        shop_name = str(row.get("店铺名") or row.get("shop_name") or "").strip()
+        site = str(row.get("站点") or row.get("site") or "").strip()
+        status = str(row.get("状态") or row.get("status") or "").strip()
+        shop = configured.get(shop_name)
+        if (
+            shop is None
+            or not site
+            or site not in (shop.get("sites") or [])
+            or not _collection_status_failed(status)
+        ):
+            continue
+        failed_shop = failures_by_shop.setdefault(
+            shop_name,
+            {
+                "shop_name": shop_name,
+                "salesperson": str(shop.get("salesperson") or "").strip(),
+                "sites": [],
+                "failures": [],
+            },
+        )
+        if site not in failed_shop["sites"]:
+            failed_shop["sites"].append(site)
+        failure = {
+            "site": site,
+            "status": status,
+            "status_time": str(
+                row.get("状态时间") or row.get("status_time") or ""
+            ),
+        }
+        if failure not in failed_shop["failures"]:
+            failed_shop["failures"].append(failure)
+
+    return [
+        failures_by_shop[shop["shop_name"]]
+        for shop in (shop_options or [])
+        if shop.get("shop_name") in failures_by_shop
+    ]
+
+
+def _collection_config_options(include_failures=False):
     configs = db_list_bit_browser_configs(include_ignored=False) or []
     shops_by_name = {}
     site_order = []
@@ -1098,7 +1157,48 @@ def _collection_config_options():
                 shop["sites"].append(site)
             if site not in site_order:
                 site_order.append(site)
-    return {"shops": list(shops_by_name.values()), "sites": site_order}
+    shop_options = list(shops_by_name.values())
+    result = {"shops": shop_options, "sites": site_order}
+    if not include_failures:
+        return result
+
+    try:
+        infraction_data = db_get_latest_infraction_info(30) or {}
+        infraction_status_rows = infraction_data.get("summary") or []
+    except Exception as exc:
+        logging.warning("读取侵权失败店铺失败：%s", exc)
+        infraction_status_rows = []
+
+    try:
+        reputation_data = db_get_latest_reputation_info() or {}
+        reputation_status_rows = reputation_data.get("summary") or []
+        if not reputation_status_rows:
+            reputation_status_rows = [
+                {
+                    "店铺名": row.get("店铺名"),
+                    "站点": row.get("站点"),
+                    "状态": "失败",
+                    "状态时间": row.get("更新时间") or row.get("提交时间"),
+                }
+                for row in (reputation_data.get("rows") or [])
+                if "失败" in str(row.get("声誉颜色") or "")
+                or str(row.get("系统告警") or "").strip().startswith("失败")
+            ]
+    except Exception as exc:
+        logging.warning("读取声誉失败店铺失败：%s", exc)
+        reputation_status_rows = []
+
+    result["failed_shops"] = {
+        "infraction": _failed_collection_shop_options(
+            shop_options,
+            infraction_status_rows,
+        ),
+        "reputation": _failed_collection_shop_options(
+            shop_options,
+            reputation_status_rows,
+        ),
+    }
+    return result
 
 
 def _normalized_collection_list(data, key):
@@ -1217,8 +1317,15 @@ def run_reputation_collect_job(
     max_workers=DEFAULT_COLLECTION_MAX_WORKERS,
 ):
     try:
+        with _reputation_collect_lock:
+            operation = _reputation_collect_state.get("operation")
+        action_label = (
+            "所选店铺声誉更新"
+            if operation == "selected_update"
+            else "声誉数据补跑"
+        )
         print(
-            f"{get_now_time()} 开始执行声誉数据采集："
+            f"{get_now_time()} 开始执行{action_label}："
             f"{len(selected_shops or ()) or '全部'} 家店铺，"
             f"{len(selected_sites or ()) or '全部'} 个站点，并发 {max_workers}<br>"
         )
@@ -1238,9 +1345,9 @@ def run_reputation_collect_job(
                 "running": False,
                 "finished_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
                 "status": "success",
-                "message": f"声誉数据采集完成，异常站点 {failed_count} 个",
+                "message": f"{action_label}完成，异常站点 {failed_count} 个",
             })
-        print(f"{get_now_time()} 声誉数据采集完成<br>")
+        print(f"{get_now_time()} {action_label}完成<br>")
     except Exception as e:
         logging.error("Reputation collect failed: %s", e)
         traceback.print_exc()
@@ -1447,7 +1554,53 @@ def _refresh_order_print_site_last_runs(current_results=None):
 
 def build_order_print_params(data):
     data = data if isinstance(data, dict) else {}
-    selection = _parse_collection_request({**data, "max_workers": 1})
+    raw_targets = data.get("targets")
+    selected_targets = []
+    if raw_targets is not None:
+        if not isinstance(raw_targets, list):
+            raise ValueError("targets 必须是数组")
+        if not raw_targets:
+            raise ValueError("请至少选择一个店铺站点")
+        if len(raw_targets) > 1000:
+            raise ValueError("单次最多选择 1000 个店铺站点")
+
+        options = _collection_config_options()
+        configured_pairs = {
+            (shop["shop_name"], site)
+            for shop in options["shops"]
+            for site in shop["sites"]
+        }
+        seen_targets = set()
+        for raw_target in raw_targets:
+            if not isinstance(raw_target, dict):
+                raise ValueError("每个店铺站点必须包含 shop_name 和 site")
+            shop_name = str(raw_target.get("shop_name") or "").strip()
+            site = str(raw_target.get("site") or "").strip()
+            if not shop_name or not site:
+                raise ValueError("每个店铺站点必须包含 shop_name 和 site")
+            pair = (shop_name, site)
+            if pair not in configured_pairs:
+                raise ValueError(f"店铺站点不存在或已被忽略：{shop_name} / {site}")
+            if pair in seen_targets:
+                continue
+            seen_targets.add(pair)
+            selected_targets.append({"shop_name": shop_name, "site": site})
+
+        selected_shops = tuple(
+            dict.fromkeys(target["shop_name"] for target in selected_targets)
+        )
+        selected_sites = tuple(
+            dict.fromkeys(target["site"] for target in selected_targets)
+        )
+        target_label = (
+            f"{len(selected_shops)} 家店铺 / "
+            f"{len(selected_targets)} 个店铺站点"
+        )
+    else:
+        selection = _parse_collection_request({**data, "max_workers": 1})
+        selected_shops = selection["selected_shops"]
+        selected_sites = selection["selected_sites"]
+        target_label = selection["target"]
     return {
         "mode": "once",
         "max_retries": _parse_int_param(
@@ -1456,9 +1609,10 @@ def build_order_print_params(data):
         "retry_delay_seconds": _parse_int_param(
             data, "retry_delay_seconds", 300, min_value=0, max_value=600
         ),
-        "selected_shops": selection["selected_shops"],
-        "selected_sites": selection["selected_sites"],
-        "target": selection["target"],
+        "selected_shops": selected_shops,
+        "selected_sites": selected_sites,
+        "selected_targets": selected_targets,
+        "target": target_label,
     }
 
 
@@ -1471,6 +1625,7 @@ def run_order_print_job(params, task_lock, stop_event):
         summary = bit_print.print_orders_all(
             selected_shops=params["selected_shops"],
             selected_sites=params["selected_sites"],
+            selected_targets=params.get("selected_targets"),
             max_retries=params["max_retries"],
             retry_delay_seconds=params["retry_delay_seconds"],
             stop_event=stop_event,
@@ -2192,12 +2347,36 @@ def api_collect_reputation():
         logging.error("读取声誉采集范围失败：%s", exc)
         return jsonify({"status": "error", "message": f"读取采集范围失败：{exc}"}), 500
 
+    return _start_reputation_collect_task(params, operation="rerun")
+
+
+@app.route('/api/reputation/update-selected', methods=['POST'])
+@login_required
+def api_update_selected_reputation():
+    try:
+        params = _parse_collection_request(request.get_json(silent=True) or {})
+    except ValueError as exc:
+        return jsonify({"status": "error", "message": str(exc)}), 400
+    except Exception as exc:
+        logging.error("读取所选店铺声誉更新范围失败：%s", exc)
+        return jsonify({"status": "error", "message": f"读取更新范围失败：{exc}"}), 500
+
+    return _start_reputation_collect_task(params, operation="selected_update")
+
+
+def _start_reputation_collect_task(params, *, operation):
+    action_label = (
+        "所选店铺声誉更新"
+        if operation == "selected_update"
+        else "声誉数据补跑"
+    )
+
     with _reputation_collect_lock:
         if _reputation_collect_state.get("running"):
             return jsonify({
                 "status": "running",
                 "data": dict(_reputation_collect_state),
-                "message": "声誉数据采集正在运行中"
+                "message": "另一个声誉数据任务正在运行中"
             }), 409
 
         started_at = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
@@ -2206,7 +2385,8 @@ def api_collect_reputation():
             "started_at": started_at,
             "finished_at": "",
             "status": "running",
-            "message": f"声誉数据采集已启动：{params['target']}，并发 {params['max_workers']}",
+            "message": f"{action_label}已启动：{params['target']}，并发 {params['max_workers']}",
+            "operation": operation,
             "params": {
                 "shops": list(params["selected_shops"]),
                 "sites": list(params["selected_sites"]),
@@ -2228,7 +2408,7 @@ def api_collect_reputation():
     return jsonify({
         "status": "success",
         "data": dict(_reputation_collect_state),
-        "message": "声誉数据采集已在后台启动"
+        "message": f"{action_label}已在后台启动"
     })
 
 
@@ -2246,7 +2426,10 @@ def api_collect_reputation_status():
 @login_required
 def api_collection_options():
     try:
-        response = jsonify({"status": "success", "data": _collection_config_options()})
+        response = jsonify({
+            "status": "success",
+            "data": _collection_config_options(include_failures=True),
+        })
         response.headers["Cache-Control"] = "no-store"
         return response
     except Exception as exc:
@@ -2745,8 +2928,13 @@ def api_db_insert_reputation():
         return blocked
     data = request.get_json(silent=True) or {}
     rows = data.get("rows") or []
-    db_inset_reputation_info(rows)
-    return jsonify({"status": "success", "data": {"count": len(rows)}})
+    replace_targets = data.get("replace_targets") or []
+    count = db_inset_reputation_info(
+        rows,
+        merge_latest=bool(data.get("merge_latest", False)),
+        replace_targets=replace_targets,
+    )
+    return jsonify({"status": "success", "data": {"count": count}})
 
 
 @app.route('/api/db/infractions/bulk', methods=['POST'])
@@ -2757,8 +2945,13 @@ def api_db_insert_infractions():
         return blocked
     data = request.get_json(silent=True) or {}
     rows = data.get("rows") or []
-    db_inset_infraction_info(rows)
-    return jsonify({"status": "success", "data": {"count": len(rows)}})
+    replace_targets = data.get("replace_targets") or []
+    count = db_inset_infraction_info(
+        rows,
+        merge_latest=bool(data.get("merge_latest", False)),
+        replace_targets=replace_targets,
+    )
+    return jsonify({"status": "success", "data": {"count": count}})
 
 
 @app.route('/api/db/delays/bulk', methods=['POST'])
@@ -2960,7 +3153,9 @@ def api_window_anomalies():
     try:
         active_only = str(request.args.get("active_only", "1")).strip().lower() not in ("0", "false", "no")
         limit = request.args.get("limit", 500)
-        anomaly_data = db_get_window_anomalies(active_only, limit)
+        anomaly_data = filter_human_verification_anomalies(
+            db_get_window_anomalies(active_only, limit)
+        )
         response = jsonify({
             "status": "success",
             "data": enrich_window_anomaly_salespersons(anomaly_data),
@@ -2970,6 +3165,19 @@ def api_window_anomalies():
     except Exception as e:
         logging.error("Window anomalies query failed: %s", e)
         return jsonify({"status": "error", "message": f"Database error: {str(e)}"}), 500
+
+
+def filter_human_verification_anomalies(anomaly_data):
+    """店铺状态页只展示明确需要人工处理的人机验证。"""
+    data = dict(anomaly_data or {})
+    rows = [
+        dict(row)
+        for row in (data.get("rows") or [])
+        if is_human_verification_result(row)
+    ]
+    data["rows"] = rows
+    data["total"] = len(rows)
+    return data
 
 
 def enrich_window_anomaly_salespersons(anomaly_data):
@@ -3105,14 +3313,16 @@ def api_start_mercado_login_console():
         )
         if not window_ids:
             return jsonify(
-                {"status": "error", "message": "请至少选择一个待登录店铺"}
+                {"status": "error", "message": "请至少选择一个待处理人机验证店铺"}
             ), 400
         if len(window_ids) > 500:
             return jsonify(
-                {"status": "error", "message": "单次最多选择 500 个待登录店铺"}
+                {"status": "error", "message": "单次最多选择 500 个待处理人机验证店铺"}
             ), 400
         try:
-            anomaly_data = db_get_window_anomalies(active_only=True, limit=1000) or {}
+            anomaly_data = filter_human_verification_anomalies(
+                db_get_window_anomalies(active_only=True, limit=1000) or {}
+            )
         except Exception as exc:
             return jsonify(
                 {"status": "error", "message": f"读取店铺状态失败：{exc}"}
@@ -3148,7 +3358,9 @@ def api_start_mercado_login_console():
             ), 422
     elif window_id:
         try:
-            anomaly_data = db_get_window_anomalies(active_only=True, limit=1000) or {}
+            anomaly_data = filter_human_verification_anomalies(
+                db_get_window_anomalies(active_only=True, limit=1000) or {}
+            )
             anomaly = next(
                 (
                     row

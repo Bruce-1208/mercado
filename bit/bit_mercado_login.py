@@ -655,6 +655,86 @@ def _normalize_login_judgement(result):
     return normalized
 
 
+def is_human_verification_result(value):
+    """判断任务结果或异常记录是否明确表示遇到人机验证。
+
+    普通邮箱验证码/身份验证码不属于这里的“人机验证”，避免店铺状态页
+    再次混入所有登录失败类型。
+    """
+    if isinstance(value, dict):
+        status = str(value.get("status") or value.get("anomaly_type") or "").strip()
+        stage = str(value.get("login_stage") or "").strip().casefold()
+        category = str(value.get("result_category") or "").strip()
+        if (
+            status == LOGIN_CAPTCHA_REQUIRED
+            or stage == "captcha"
+            or category == LOGIN_OUTCOME_CAPTCHA_REQUIRED
+        ):
+            return True
+        return any(
+            is_human_verification_result(value.get(key))
+            for key in (
+                "message",
+                "reason",
+                "detail",
+                "login_result",
+                "result",
+                "error",
+            )
+            if key in value
+        )
+    if isinstance(value, (list, tuple, set)):
+        return any(is_human_verification_result(item) for item in value)
+
+    text = str(value or "").strip().casefold()
+    if not text:
+        return False
+    return any(
+        marker in text
+        for marker in (
+            "人机验证",
+            "captcha",
+            "human verification",
+            "i'm not a robot",
+            "i am not a robot",
+            "no soy un robot",
+            "não sou um robô",
+            "nao sou um robo",
+            "我不是机器人",
+        )
+    )
+
+
+def record_human_verification_anomaly(
+    result,
+    window_id,
+    shop_name,
+    site="",
+    source="业务任务",
+):
+    """把明确的人机验证写入店铺状态；其他登录结果一律不写入。"""
+    window_id = str(window_id or "").strip()
+    if not window_id or not is_human_verification_result(result):
+        return False
+    if isinstance(result, dict):
+        reason = str(
+            result.get("message")
+            or result.get("status")
+            or LOGIN_CAPTCHA_REQUIRED
+        ).strip()
+    else:
+        reason = str(result or LOGIN_CAPTCHA_REQUIRED).strip()
+    bit_db_api.upsert_window_anomaly(
+        window_id,
+        str(shop_name or "").strip(),
+        str(site or "").strip(),
+        anomaly_type=LOGIN_CAPTCHA_REQUIRED,
+        reason=reason,
+        source=str(source or "业务任务").strip(),
+    )
+    return True
+
+
 def _count_login_outcomes(results):
     categories = (
         LOGIN_OUTCOME_ALREADY_ACTIVE,
@@ -692,7 +772,7 @@ def _merge_window_anomaly_sync_summary(target, update):
 
 
 def sync_login_results_to_window_anomalies(results):
-    """只同步已完成登录判断的结果；基础设施异常不改写店铺状态。"""
+    """店铺状态只保留人机验证；其余确定性结果会解除旧记录。"""
     summary = _new_window_anomaly_sync_summary()
     for raw_result in results or []:
         result = _normalize_login_judgement(raw_result)
@@ -711,27 +791,23 @@ def sync_login_results_to_window_anomalies(results):
                     flush=True,
                 )
                 continue
-            if result_category in (
-                LOGIN_OUTCOME_ALREADY_ACTIVE,
-                LOGIN_OUTCOME_AUTO_LOGIN_SUCCESS,
-            ) or result.get("ok"):
+            if is_human_verification_result(result):
+                record_human_verification_anomaly(
+                    result,
+                    window_id,
+                    shop_name,
+                    str(result.get("sites") or result.get("site") or "").strip(),
+                    source="bit_mercado_login",
+                )
+                summary["anomaly_count"] += 1
+                continue
+
+            # 已完成判断且当前并非人机验证时，解除可能遗留的旧人机验证。
+            # 邮箱验证码、密码失败、限频等状态不再写入店铺状态页。
+            if result_category != LOGIN_OUTCOME_NOT_DETERMINED:
                 bit_db_api.resolve_window_anomaly(window_id)
                 summary["resolved_count"] += 1
                 continue
-
-            status = str(result.get("status") or LOGIN_FAILED).strip()
-            stage = str(result.get("login_stage") or "").strip()
-            anomaly_type = "美客多限频" if stage == "rate_limited" else status
-            reason = str(result.get("message") or "登录任务未完成").strip()
-            bit_db_api.upsert_window_anomaly(
-                window_id,
-                shop_name,
-                str(result.get("sites") or result.get("site") or "").strip(),
-                anomaly_type=anomaly_type,
-                reason=reason,
-                source="bit_mercado_login",
-            )
-            summary["anomaly_count"] += 1
         except Exception as exc:
             summary["error_count"] += 1
             summary["errors"].append(
@@ -747,7 +823,7 @@ def sync_login_results_to_window_anomalies(results):
             )
     print(
         f"{get_now_time()} bit_mercado_login 店铺状态同步完成："
-        f"异常 {summary['anomaly_count']} 家，解除 {summary['resolved_count']} 家，"
+        f"人机验证 {summary['anomaly_count']} 家，解除 {summary['resolved_count']} 家，"
         f"跳过 {summary['skipped_count']} 家，失败 {summary['error_count']} 家",
         flush=True,
     )
@@ -2002,6 +2078,8 @@ def open_mercado_backend_page(
     login_handler=None,
     state_reader=None,
     sleep=None,
+    anomaly_site="",
+    anomaly_source="业务任务",
 ):
     """打开 Mercado 业务页，统一处理限频和退出登录。
 
@@ -2136,7 +2214,27 @@ def open_mercado_backend_page(
                 "ok": False,
                 "status": LOGIN_FAILED,
                 "message": str(exc),
+                "action": "执行异常",
             }
+        if is_human_verification_result(last_login_result):
+            try:
+                record_human_verification_anomaly(
+                    last_login_result,
+                    window_id,
+                    shop_name,
+                    site=anomaly_site,
+                    source=anomaly_source,
+                )
+                print(
+                    f"{get_now_time()} {shop_name} 检测到人机验证，"
+                    f"已登记到店铺状态（来源：{anomaly_source}）",
+                    flush=True,
+                )
+            except Exception as exc:
+                print(
+                    f"{get_now_time()} {shop_name} 登记人机验证状态失败：{exc}",
+                    flush=True,
+                )
         if not last_login_result.get("ok"):
             return {
                 "ok": False,

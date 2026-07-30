@@ -284,6 +284,8 @@ def _open_collection_backend_page(
         max_rate_limit_retries=0,
         max_login_retries=1,
         state_reader=_get_mercado_page_state,
+        anomaly_site=site,
+        anomaly_source="声誉采集",
     )
     if result.get("status") == "rate_limited":
         raise MercadoRateLimitError(
@@ -1757,6 +1759,12 @@ def get_reputation_info_all(
 
     now = datetime.now()
     scoped_collection = bool(selected_shops or selected_sites)
+    replace_targets = [
+        (str(row[1] or "").strip(), site)
+        for row in rows
+        for site in _split_sites(row[3])
+        if str(row[1] or "").strip() and site
+    ]
     date_str = datetime.now().strftime(
         "%Y-%m-%d-%H%M%S" if scoped_collection else "%Y-%m-%d-%H"
     )
@@ -1767,7 +1775,18 @@ def get_reputation_info_all(
 
     post_errors = []
     for step_name, action in (
-        ("写入声誉数据", lambda: inset_reputation_info(reputation_info_sum)),
+        (
+            "写入声誉数据",
+            lambda: (
+                inset_reputation_info(
+                    reputation_info_sum,
+                    merge_latest=True,
+                    replace_targets=replace_targets,
+                )
+                if scoped_collection
+                else inset_reputation_info(reputation_info_sum)
+            ),
+        ),
         ("写入声誉任务记录", lambda: insert_task_record(result)),
         ("导出声誉汇总", lambda: df.to_excel(output_path, index=False)),
     ):

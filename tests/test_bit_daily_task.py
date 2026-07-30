@@ -130,3 +130,147 @@ def test_shop_executor_sends_expected_form(monkeypatch, appeal_type, expected_fo
 
     assert calls == [("测试店铺", "MX", expected_form, "测试话术", True)]
     assert result["appeal_type"] == ("延误率" if expected_form == "延误" else expected_form)
+
+
+def _single_site_shop_plan():
+    return {
+        "name": "测试店铺",
+        "total": 1,
+        "sites": [{"site_code": "MX", "count": 1}],
+    }
+
+
+def test_shop_executor_closes_browser_when_auto_login_is_triggered(monkeypatch):
+    close_calls = []
+    monkeypatch.setattr(
+        bit_daily_task.bit_appeal_ai,
+        "shensu",
+        lambda *args, **kwargs: "登录态失效并触发自动登录，已终止自动找客服",
+    )
+    monkeypatch.setattr(
+        bit_daily_task,
+        "closeBrowser",
+        lambda window_id, lease=None: close_calls.append((window_id, lease))
+        or {"success": True},
+    )
+    monkeypatch.setattr(bit_daily_task, "_save_login_anomaly", lambda *args: None)
+
+    lease = object()
+    result = bit_daily_task._appeal_one_shop_locked(
+        _single_site_shop_plan(),
+        "window-id",
+        lease,
+        site_pause=0,
+    )
+
+    assert close_calls == [("window-id", lease)]
+    assert result["exit_reason"] == "未登录"
+
+
+def test_shop_executor_closes_browser_before_rate_limit_retry(monkeypatch):
+    close_calls = []
+    appeal_results = iter(
+        [
+            f"访问限频：{bit_daily_task.bit_appeal_ai.MERCADO_RATE_LIMIT_TEXT}",
+            "完成",
+        ]
+    )
+    monkeypatch.setattr(
+        bit_daily_task.bit_appeal_ai,
+        "shensu",
+        lambda *args, **kwargs: next(appeal_results),
+    )
+    monkeypatch.setattr(
+        bit_daily_task,
+        "closeBrowser",
+        lambda window_id, lease=None: close_calls.append((window_id, lease))
+        or {"success": True},
+    )
+    monkeypatch.setattr(bit_daily_task.time, "sleep", lambda seconds: None)
+    monkeypatch.setattr(bit_daily_task, "_resolve_login_anomaly", lambda *args: None)
+
+    lease = object()
+    result = bit_daily_task._appeal_one_shop_locked(
+        _single_site_shop_plan(),
+        "window-id",
+        lease,
+        site_pause=0,
+        rate_limit_retries=1,
+        rate_limit_retry_seconds=0,
+    )
+
+    assert close_calls == [("window-id", lease)]
+    assert result["results"][0]["result"] == "完成"
+    assert result["results"][0]["rate_limit_retries"] == 1
+
+
+def test_shop_executor_closes_browser_on_unexpected_appeal_error(monkeypatch):
+    close_calls = []
+
+    def fail_appeal(*args, **kwargs):
+        raise RuntimeError("客服页面崩溃")
+
+    monkeypatch.setattr(bit_daily_task.bit_appeal_ai, "shensu", fail_appeal)
+    monkeypatch.setattr(
+        bit_daily_task,
+        "closeBrowser",
+        lambda window_id, lease=None: close_calls.append((window_id, lease))
+        or {"success": True},
+    )
+    monkeypatch.setattr(bit_daily_task, "_resolve_login_anomaly", lambda *args: None)
+
+    lease = object()
+    result = bit_daily_task._appeal_one_shop_locked(
+        _single_site_shop_plan(),
+        "window-id",
+        lease,
+        site_pause=0,
+        site_retry_attempts=1,
+    )
+
+    assert close_calls == [("window-id", lease)]
+    assert result["results"][0]["result"] == "执行异常：客服页面崩溃"
+
+
+@pytest.mark.parametrize(
+    "backend_result",
+    [
+        {
+            "ok": True,
+            "status": "ready",
+            "message": "自动登录后业务页已就绪",
+            "login_retry_count": 1,
+        },
+        {
+            "ok": True,
+            "status": "ready",
+            "message": "切换节点后业务页已就绪",
+            "rate_limit_retry_count": 1,
+        },
+    ],
+)
+def test_ai_appeal_aborts_after_backend_recovery(backend_result):
+    with pytest.raises(RuntimeError, match="终止自动找客服"):
+        bit_daily_task.bit_appeal_ai._abort_ai_appeal_after_backend_recovery(
+            backend_result,
+            "测试店铺",
+            "墨西哥",
+        )
+
+
+def test_manual_ai_appeal_can_continue_after_successful_backend_recovery():
+    backend_result = {
+        "ok": True,
+        "status": "ready",
+        "message": "自动登录后业务页已就绪",
+        "login_retry_count": 1,
+    }
+
+    result = bit_daily_task.bit_appeal_ai._abort_ai_appeal_after_backend_recovery(
+        backend_result,
+        "测试店铺",
+        "墨西哥",
+        abort_on_recovery=False,
+    )
+
+    assert result is backend_result

@@ -185,6 +185,8 @@ def open_human_service_hub_with_ip_retry(
         max_rate_limit_retries=max_hongkong_switches,
         rate_limit_retry_wait_seconds=0,
         navigate=lambda url: fast_navigate(driver, url, stop_after=3),
+        anomaly_site=site,
+        anomaly_source="人工申诉",
     )
     if not result.get("ok"):
         raise RuntimeError(f"{name} {site} {result.get('message') or result.get('status')}")
@@ -284,6 +286,8 @@ def open_hub_new_tab_with_retry(driver, name, site, retries=3, window_id=""):
             settle_seconds=0,
             rate_limit_retry_wait_seconds=0,
             navigate=lambda url: fast_navigate(driver, url, stop_after=3),
+            anomaly_site=site,
+            anomaly_source="人工申诉",
         )
 
         if open_result.get("ok") and (
@@ -378,6 +382,8 @@ def open_human_service_chat(driver, name, site, window_id=""):
         settle_seconds=0,
         rate_limit_retry_wait_seconds=0,
         navigate=lambda url: fast_navigate(driver, url, stop_after=3),
+        anomaly_site=site,
+        anomaly_source="人工申诉",
     )
     if not chat_result.get("ok"):
         raise RuntimeError(chat_result.get("message") or "chat/v2 页面打开失败")
@@ -827,6 +833,8 @@ def shensu(name, site, form, message, mode="人工客服"):
             settle_seconds=0,
             rate_limit_retry_wait_seconds=0,
             navigate=lambda url: fast_navigate(driver, url, stop_after=3),
+            anomaly_site=site,
+            anomaly_source="人工申诉",
         )
         if not chat_result.get("ok"):
             raise RuntimeError(chat_result.get("message") or str(e)) from e

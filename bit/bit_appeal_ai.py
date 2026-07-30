@@ -52,6 +52,7 @@ from bit.bit_mercado_login import (
     is_mercado_login_page as _is_mercado_login_page,
     open_mercado_backend_page,
 )
+from bit.bit_mercado_limit import MERCADO_RATE_LIMIT_TEXT
 from bit.bit_download import download_relay_mail
 from bit.bit_db_api import get_latest_infraction_info, insert_ai_appeal_record
 from bit.bit_reputation_info import get_cancellation_orders
@@ -247,6 +248,42 @@ def is_mercado_login_required_page(driver):
     return _is_mercado_login_page(driver)
 
 
+def _abort_ai_appeal_after_backend_recovery(
+    result,
+    name="",
+    site="",
+    abort_on_recovery=True,
+):
+    """自动找客服遇到限频或自动登录后立即结束本次浏览器任务。
+
+    ``open_mercado_backend_page`` 会尝试自动恢复限频和登录态。自动找客服的
+    并发量较大，即使恢复成功也不应继续长期占用窗口；把恢复记录转成明确的
+    异常结果，交给 ``bit_daily_task`` 立即关闭完整 BitBrowser 窗口。
+    """
+    if not isinstance(result, dict):
+        raise RuntimeError(f"{name} {site} 美客多后台返回无效结果：{result}")
+
+    status = str(result.get("status") or "").strip()
+    message = str(result.get("message") or status or "美客多后台不可用").strip()
+    rate_limit_retry_count = int(result.get("rate_limit_retry_count") or 0)
+    login_retry_count = int(result.get("login_retry_count") or 0)
+
+    if status == "rate_limited" or (abort_on_recovery and rate_limit_retry_count):
+        raise RuntimeError(
+            f"{name} {site} 检测到访问限频（{MERCADO_RATE_LIMIT_TEXT}），"
+            "已终止自动找客服并准备关闭浏览器"
+        )
+    if status == "logged_out" or (abort_on_recovery and login_retry_count):
+        raise RuntimeError(
+            f"{name} {site} 检测到登录态失效并触发自动登录，"
+            "已终止自动找客服并准备关闭浏览器："
+            f"{message}"
+        )
+    if not result.get("ok"):
+        raise RuntimeError(f"{name} {site} 窗口页面打开验证失败：{message}")
+    return result
+
+
 def open_help_page_with_daily_validation(
     driver,
     name="",
@@ -254,6 +291,7 @@ def open_help_page_with_daily_validation(
     max_hongkong_switches=3,
     switch_wait_seconds=8,
     window_id="",
+    abort_on_recovery=None,
 ):
     """打开帮助页，统一处理限频、退出登录和页面有效性。"""
     result = open_mercado_backend_page(
@@ -264,12 +302,19 @@ def open_help_page_with_daily_validation(
         settle_seconds=8,
         max_rate_limit_retries=max_hongkong_switches,
         rate_limit_retry_wait_seconds=switch_wait_seconds,
+        anomaly_site=site,
+        anomaly_source="AI申诉",
     )
-    if not result.get("ok"):
-        raise RuntimeError(
-            f"{name} {site} 窗口页面打开验证失败："
-            f"{result.get('message') or result.get('status')}"
+    if abort_on_recovery is None:
+        abort_on_recovery = bool(
+            getattr(driver, "_bit_abort_ai_on_backend_recovery", False)
         )
+    _abort_ai_appeal_after_backend_recovery(
+        result,
+        name,
+        site,
+        abort_on_recovery=abort_on_recovery,
+    )
 
     state = result.get("state") or {}
     current_url = str(state.get("current_url") or "").strip()
@@ -2291,7 +2336,7 @@ def wait_for_ai_chat_ready(driver, timeout=15, require_input=False):
     return ""
 
 
-def open_ai_contact_window(driver, name, site):
+def open_ai_contact_window(driver, name, site, window_id=""):
     """打开 Help 页面并自动进入新版内嵌助手或旧版 iframe 助手。
 
     不同账号的入口页和按钮文案可能不同，所以依次尝试多个 URL、多种入口点击方式；
@@ -2306,12 +2351,19 @@ def open_ai_contact_window(driver, name, site):
             driver,
             url,
             name,
+            window_id,
             settle_seconds=5,
+            anomaly_site=site,
+            anomaly_source="AI申诉",
         )
-        if not backend_result.get("ok"):
-            raise RuntimeError(
-                backend_result.get("message") or backend_result.get("status")
-            )
+        _abort_ai_appeal_after_backend_recovery(
+            backend_result,
+            name,
+            site,
+            abort_on_recovery=bool(
+                getattr(driver, "_bit_abort_ai_on_backend_recovery", False)
+            ),
+        )
         print(f"{get_now_time()} {name} {site} 打开AI客服入口页面：{url}<br>")
 
         for attempt in range(1, 5):
@@ -2900,6 +2952,11 @@ def shensu(name, site, form, message, validate_open=False):
                 return appeal_error
         driver, res = connect_bit_browser(window_id)
         name = res.get("data", {}).get("name") or name
+        setattr(
+            driver,
+            "_bit_abort_ai_on_backend_recovery",
+            bool(validate_open),
+        )
         try:
             open_help_page_with_daily_validation(
                 driver,
@@ -2940,7 +2997,7 @@ def shensu(name, site, form, message, validate_open=False):
             print(f"{get_now_time()} {name} {site} 没有可以申诉的数据<br>")
             return "没有可以申诉的数据"
 
-        open_ai_contact_window(driver, name, site_name)
+        open_ai_contact_window(driver, name, site_name, window_id)
         send_ai_chat_message(driver, huashu)
         append_chat_log(
             name,
@@ -2999,7 +3056,7 @@ def handle_infraction(window_id, driver, name, site, message, nickname):
         f"麻烦帮我重新核查并删除侵权记录，谢谢"
     )
 
-    open_ai_contact_window(driver, name, site)
+    open_ai_contact_window(driver, name, site, window_id)
     for index, current_group in enumerate(groups, start=1):
         infraction_ids = "、".join(str(item) for item in current_group)
         huashu = f"{infraction_ids}{message}" if message else f"{infraction_ids}{appeal_suffix}"
@@ -3055,7 +3112,7 @@ def handle_delay(window_id, driver, name, site, message, nickname):
     )
     appeal_suffix = message or default_message
 
-    open_ai_contact_window(driver, name, site)
+    open_ai_contact_window(driver, name, site, window_id)
     for index, current_group in enumerate(groups, start=1):
         delay_ids = "、".join(str(item) for item in current_group)
         huashu = f"{delay_ids}{appeal_suffix}"
@@ -3140,7 +3197,7 @@ def handle_cancellation(window_id, driver, name, site, message, nickname):
         window_id=window_id,
     )
     select_site(driver, name, site)
-    open_ai_contact_window(driver, name, site)
+    open_ai_contact_window(driver, name, site, window_id)
 
     for index, current_group in enumerate(groups, start=1):
         cancellation_ids = "、".join(str(item) for item in current_group)

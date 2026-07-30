@@ -82,16 +82,50 @@ def get_latest_order_print_records():
     return _request("GET", "/api/db/task-records/order-print/latest")
 
 
-def inset_reputation_info(reputation_list):
+def inset_reputation_info(
+    reputation_list,
+    merge_latest=False,
+    replace_targets=None,
+):
     if DB_MODE == "mysql":
-        return _local_call("inset_reputation_info", reputation_list)
-    return _request("POST", "/api/db/reputation/bulk", json={"rows": reputation_list})
+        return _local_call(
+            "inset_reputation_info",
+            reputation_list,
+            merge_latest,
+            replace_targets,
+        )
+    return _request(
+        "POST",
+        "/api/db/reputation/bulk",
+        json={
+            "rows": reputation_list,
+            "merge_latest": bool(merge_latest),
+            "replace_targets": list(replace_targets or ()),
+        },
+    )
 
 
-def inset_infraction_info(infraction_list):
+def inset_infraction_info(
+    infraction_list,
+    merge_latest=False,
+    replace_targets=None,
+):
     if DB_MODE == "mysql":
-        return _local_call("inset_infraction_info", infraction_list)
-    return _request("POST", "/api/db/infractions/bulk", json={"rows": infraction_list})
+        return _local_call(
+            "inset_infraction_info",
+            infraction_list,
+            merge_latest,
+            replace_targets,
+        )
+    return _request(
+        "POST",
+        "/api/db/infractions/bulk",
+        json={
+            "rows": infraction_list,
+            "merge_latest": bool(merge_latest),
+            "replace_targets": list(replace_targets or ()),
+        },
+    )
 
 
 def inset_delay_info(delay_list):

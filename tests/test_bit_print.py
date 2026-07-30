@@ -22,6 +22,26 @@ def test_build_print_jobs_filters_shop_and_configured_site_intersection():
     ]
 
 
+def test_build_print_jobs_supports_exact_shop_site_targets_without_cross_product():
+    rows = [
+        ("window-1", "店铺甲", "", "墨西哥,巴西", "", "", ""),
+        ("window-2", "店铺乙", "", "墨西哥,巴西", "", "", ""),
+    ]
+
+    jobs = bit_print.build_print_jobs(
+        rows,
+        selected_targets=[
+            {"shop_name": "店铺甲", "site": "墨西哥"},
+            {"shop_name": "店铺乙", "site": "巴西"},
+        ],
+    )
+
+    assert jobs == [
+        {"window_id": "window-1", "shop_name": "店铺甲", "sites": ["墨西哥"]},
+        {"window_id": "window-2", "shop_name": "店铺乙", "sites": ["巴西"]},
+    ]
+
+
 def test_print_round_returns_structured_summary_and_persists_valid_records(monkeypatch):
     monkeypatch.setattr(
         bit_print,
@@ -223,6 +243,9 @@ def test_order_print_job_runs_only_once_even_with_legacy_loop_param(monkeypatch)
                 "mode": "loop",
                 "selected_shops": ["店铺甲"],
                 "selected_sites": ["墨西哥"],
+                "selected_targets": [
+                    {"shop_name": "店铺甲", "site": "墨西哥"}
+                ],
                 "max_retries": 1,
                 "retry_delay_seconds": 0,
             },
@@ -236,6 +259,9 @@ def test_order_print_job_runs_only_once_even_with_legacy_loop_param(monkeypatch)
             bit_interface._order_print_stop_event = previous_stop_event
 
     assert len(summaries) == 1
+    assert summaries[0]["selected_targets"] == [
+        {"shop_name": "店铺甲", "site": "墨西哥"}
+    ]
     assert task_lock.release.call_count == 1
 
 
@@ -308,9 +334,58 @@ def test_order_print_page_is_single_run_and_shows_all_site_last_run_times():
     assert 'id="order-print-mode"' not in template
     assert 'id="order-print-interval"' not in template
     assert "定时循环执行" not in template
-    assert "所有站点最后执行时间" in template
+    assert "所有店铺和站点" in template
     assert 'id="order-print-site-run-body"' in template
     assert "data.site_last_runs" in template
+
+
+def test_order_print_page_can_select_exact_shop_sites_and_rerun():
+    template = (
+        Path(bit_interface.__file__).resolve().parent / "templates" / "index.html"
+    ).read_text(encoding="utf-8")
+
+    assert "所有店铺和站点" in template
+    assert 'id="order-print-site-run-all" type="checkbox"' in template
+    assert 'id="rerun-selected-order-print-btn"' in template
+    assert "toggleOrderPrintSiteTarget" in template
+    assert "rerunSelectedOrderPrintTargets" in template
+    assert "JSON.stringify(requestPayload)" in template
+
+
+def test_order_print_params_validate_and_preserve_exact_shop_site_targets(monkeypatch):
+    monkeypatch.setattr(
+        bit_interface,
+        "db_list_bit_browser_configs",
+        lambda include_ignored=False: [
+            {
+                "window_id": "window-1",
+                "shop_name": "店铺甲",
+                "sites": "墨西哥,巴西",
+            },
+            {
+                "window_id": "window-2",
+                "shop_name": "店铺乙",
+                "sites": "墨西哥,巴西",
+            },
+        ],
+    )
+
+    params = bit_interface.build_order_print_params(
+        {
+            "targets": [
+                {"shop_name": "店铺甲", "site": "墨西哥"},
+                {"shop_name": "店铺乙", "site": "巴西"},
+            ]
+        }
+    )
+
+    assert params["selected_targets"] == [
+        {"shop_name": "店铺甲", "site": "墨西哥"},
+        {"shop_name": "店铺乙", "site": "巴西"},
+    ]
+    assert params["selected_shops"] == ("店铺甲", "店铺乙")
+    assert params["selected_sites"] == ("墨西哥", "巴西")
+    assert params["target"] == "2 家店铺 / 2 个店铺站点"
 
 
 def test_order_print_service_rejects_unconfigured_site(monkeypatch):

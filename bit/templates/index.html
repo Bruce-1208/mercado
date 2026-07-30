@@ -416,6 +416,10 @@
             align-items: start;
         }
 
+        .collection-rerun-grid {
+            grid-template-columns: minmax(320px, 1fr) 150px;
+        }
+
         .collection-scope-field label {
             color: #344054;
         }
@@ -449,6 +453,10 @@
             min-width: 500px;
         }
 
+        .collection-rerun-shop-table {
+            min-width: 360px;
+        }
+
         .collection-shop-table th:nth-child(2),
         .collection-shop-table td:nth-child(2) {
             width: 160px;
@@ -469,6 +477,55 @@
 
         .collection-checkbox:disabled {
             cursor: not-allowed;
+        }
+
+        .collection-rerun-switch {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            margin: 0;
+            cursor: pointer;
+        }
+
+        .collection-rerun-switch input {
+            position: absolute;
+            opacity: 0;
+            pointer-events: none;
+        }
+
+        .collection-rerun-switch-track {
+            position: relative;
+            width: 34px;
+            height: 18px;
+            border-radius: 999px;
+            background: #cbd5e1;
+            transition: background 0.18s ease;
+        }
+
+        .collection-rerun-switch-track::after {
+            content: "";
+            position: absolute;
+            top: 2px;
+            left: 2px;
+            width: 14px;
+            height: 14px;
+            border-radius: 50%;
+            background: #fff;
+            box-shadow: 0 1px 3px rgba(15, 23, 42, 0.28);
+            transition: transform 0.18s ease;
+        }
+
+        .collection-rerun-switch input:checked + .collection-rerun-switch-track {
+            background: var(--primary);
+        }
+
+        .collection-rerun-switch input:checked + .collection-rerun-switch-track::after {
+            transform: translateX(16px);
+        }
+
+        .collection-rerun-switch input:focus-visible + .collection-rerun-switch-track {
+            outline: 2px solid #93c5fd;
+            outline-offset: 2px;
         }
 
         .collection-shop-sites {
@@ -492,6 +549,40 @@
             color: #1d4ed8;
             padding: 7px 8px;
             font-weight: 700;
+        }
+
+        .reputation-update-bar {
+            display: flex;
+            align-items: center;
+            justify-content: flex-end;
+            gap: 8px;
+            border-top: 1px solid var(--border);
+            padding: 7px 10px;
+            background: #f8fafc;
+        }
+
+        .reputation-selection-summary {
+            color: var(--muted);
+            font-size: 12px;
+            font-weight: 700;
+        }
+
+        .reputation-shop-select-label {
+            display: inline-flex;
+            align-items: center;
+            gap: 7px;
+            min-width: 0;
+            margin: 0;
+            cursor: pointer;
+        }
+
+        .reputation-shop-select {
+            width: 16px;
+            height: 16px;
+            flex: 0 0 auto;
+            margin: 0;
+            cursor: pointer;
+            accent-color: var(--primary);
         }
 
         .fund-controls {
@@ -1171,7 +1262,7 @@
             <div class="tab-page" id="tab-order-print">
                 <div class="tab-heading">
                     <h2>订单打印</h2>
-                    <p>按店铺配置选择站点并执行一次，控制台展示全部站点的最后执行时间</p>
+                    <p>展示全部已配置店铺和站点，可按范围或从执行记录中多选后精确补跑</p>
                 </div>
 
                 <div class="appeal-grid">
@@ -1231,7 +1322,7 @@
                         <p class="collection-scope-summary" id="order-print-collection-summary">正在加载打印范围...</p>
 
                         <div class="actions">
-                            <button class="primary" id="start-order-print-btn" type="button" onclick="startOrderPrint()">执行打印</button>
+                            <button class="primary" id="start-order-print-btn" type="button" onclick="startOrderPrint()">补跑所选范围</button>
                             <button class="danger" id="stop-order-print-btn" type="button" onclick="stopOrderPrint()" disabled>停止任务</button>
                         </div>
                     </section>
@@ -1271,19 +1362,26 @@
 
                 <section class="panel infractions-panel" style="margin-top: 8px;">
                     <div class="infractions-header">
-                        <h2 class="panel-title" style="margin: 0;">所有站点最后执行时间</h2>
+                        <h2 class="panel-title" style="margin: 0;">所有店铺和站点</h2>
+                        <div class="header-actions">
+                            <span class="collection-scope-summary" id="order-print-target-selection-summary">已选择 0 个店铺站点</span>
+                            <button class="primary" id="rerun-selected-order-print-btn" type="button" onclick="rerunSelectedOrderPrintTargets()" disabled>补跑所选站点</button>
+                            <button class="secondary" type="button" onclick="loadOrderPrintStatus()">刷新数据</button>
+                        </div>
                     </div>
                     <div class="table-wrap">
                         <table>
                             <thead>
                                 <tr>
+                                    <th><input class="collection-checkbox" id="order-print-site-run-all" type="checkbox" aria-label="选择全部店铺站点" onchange="toggleAllOrderPrintSiteTargets(this.checked)" disabled></th>
                                     <th>店铺名</th>
                                     <th>站点</th>
+                                    <th>执行状态</th>
                                     <th>最后执行时间</th>
                                 </tr>
                             </thead>
                             <tbody id="order-print-site-run-body">
-                                <tr><td class="empty-state" colspan="3">正在加载站点执行时间...</td></tr>
+                                <tr><td class="empty-state" colspan="5">正在加载店铺站点...</td></tr>
                             </tbody>
                         </table>
                     </div>
@@ -1293,21 +1391,21 @@
             <div class="tab-page" id="tab-window-anomalies">
                 <div class="tab-heading">
                     <h2>店铺状态</h2>
-                    <p>展示需要重新登录的店铺，可多选后批量执行自动登录</p>
+                    <p>仅展示各类任务中遇到、需要人工处理人机验证的店铺</p>
                 </div>
 
                 <section class="panel infractions-panel">
                     <div class="infractions-header">
                         <h2 class="panel-title" style="margin: 0;">需要处理的店铺</h2>
                         <div class="header-actions">
-                            <button class="primary" id="start-selected-mercado-login-btn" type="button" onclick="startSelectedShopsAutoLogin()" disabled>自动登录所选店铺</button>
-                            <button class="primary" id="start-mercado-login-btn" type="button" onclick="startMercadoLogin()">启动全部店铺自动登录</button>
+                            <button class="primary" id="start-selected-mercado-login-btn" type="button" onclick="startSelectedShopsAutoLogin()" disabled>重新检测所选店铺</button>
+                            <button class="primary" id="start-mercado-login-btn" type="button" onclick="startMercadoLogin()">重新检测全部店铺</button>
                             <button class="secondary" type="button" onclick="loadWindowAnomalies()">刷新数据</button>
                         </div>
                     </div>
                     <div class="summary-row">
                         <div class="metric">
-                            <div class="metric-label">待登录店铺</div>
+                            <div class="metric-label">待处理人机验证</div>
                             <div class="metric-value" id="window-anomaly-total">0</div>
                         </div>
                         <div class="metric">
@@ -1319,7 +1417,7 @@
                         <table class="reputation-table window-anomaly-table">
                             <thead>
                                 <tr>
-                                    <th><input class="window-anomaly-select" id="window-anomaly-select-all" type="checkbox" aria-label="选择全部待登录店铺" onchange="toggleAllWindowAnomalies(this.checked)"></th>
+                                    <th><input class="window-anomaly-select" id="window-anomaly-select-all" type="checkbox" aria-label="选择全部待处理人机验证店铺" onchange="toggleAllWindowAnomalies(this.checked)"></th>
                                     <th>店铺名</th>
                                     <th>店铺归属人</th>
                                     <th>邮箱</th>
@@ -1462,43 +1560,26 @@
                                 <button class="range-button" type="button" data-days="100" onclick="setInfractionDays(100)">100天</button>
                                 <button class="range-button" type="button" data-days="365" onclick="setInfractionDays(365)">365天</button>
                             </div>
-                            <button class="secondary" id="collect-infractions-btn" type="button" onclick="runInfractionCollection()">运行侵权采集</button>
+                            <button class="secondary" id="collect-infractions-btn" type="button" onclick="runInfractionCollection()">补跑已开启店铺</button>
                             <button class="secondary" type="button" onclick="exportLatestInfractions()">导出明细 Excel</button>
                             <button class="secondary" type="button" onclick="loadLatestInfractions()">刷新数据</button>
                         </div>
                     </div>
                     <div class="collection-scope-panel">
-                        <div class="collection-scope-grid">
+                        <div class="collection-scope-grid collection-rerun-grid">
                             <div class="collection-scope-field">
-                                <label>补跑店铺（勾选可多选）</label>
+                                <label>失败店铺</label>
                                 <div class="collection-checkbox-table-wrap">
-                                    <table class="collection-checkbox-table collection-shop-table">
+                                    <table class="collection-checkbox-table collection-shop-table collection-rerun-shop-table">
                                         <thead>
                                             <tr>
-                                                <th><input class="collection-checkbox" id="infraction-collection-shops-all" type="checkbox" aria-label="选择全部侵权采集店铺" onchange="toggleAllCollectionOptions('infraction', 'shops', this.checked)"></th>
+                                                <th><input class="collection-checkbox" id="infraction-collection-shops-all" type="checkbox" aria-label="开启全部侵权失败店铺补跑" onchange="toggleAllCollectionOptions('infraction', 'shops', this.checked)"> 补跑</th>
                                                 <th>店铺</th>
                                                 <th>归属人</th>
-                                                <th>配置站点</th>
                                             </tr>
                                         </thead>
                                         <tbody id="infraction-collection-shops">
-                                            <tr><td class="empty-state" colspan="4">正在加载店铺...</td></tr>
-                                        </tbody>
-                                    </table>
-                                </div>
-                            </div>
-                            <div class="collection-scope-field">
-                                <label>补跑站点（按店铺配置联动，勾选可多选）</label>
-                                <div class="collection-checkbox-table-wrap">
-                                    <table class="collection-checkbox-table collection-site-table">
-                                        <thead>
-                                            <tr>
-                                                <th><input class="collection-checkbox" id="infraction-collection-sites-all" type="checkbox" aria-label="选择全部侵权采集站点" onchange="toggleAllCollectionOptions('infraction', 'sites', this.checked)"></th>
-                                                <th>站点</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody id="infraction-collection-sites">
-                                            <tr><td class="empty-state" colspan="2">正在加载站点...</td></tr>
+                                            <tr><td class="empty-state" colspan="3">正在加载店铺...</td></tr>
                                         </tbody>
                                     </table>
                                 </div>
@@ -1506,7 +1587,7 @@
                             <div class="collection-scope-field">
                                 <label for="infraction-collection-workers">并发进程</label>
                                 <input id="infraction-collection-workers" type="number" min="1" max="10" value="3" onchange="updateCollectionScopeSummary('infraction')">
-                                <p class="collection-scope-hint">默认 3 个进程；实际只执行店铺与站点的有效交集。</p>
+                                <p class="collection-scope-hint">默认 3 个进程。</p>
                                 <p class="collection-scope-summary" id="infraction-collection-summary">正在加载采集范围...</p>
                             </div>
                         </div>
@@ -1580,43 +1661,26 @@
                     <div class="infractions-header">
                         <h2 class="panel-title" style="margin: 0;">最新声誉数据</h2>
                         <div class="header-actions">
-                            <button class="secondary" id="collect-reputation-btn" type="button" onclick="runReputationCollection()">运行声誉采集</button>
+                            <button class="secondary" id="collect-reputation-btn" type="button" onclick="runReputationCollection()">补跑已开启店铺</button>
                             <button class="secondary" type="button" onclick="exportLatestReputation()">导出 Excel</button>
                             <button class="secondary" type="button" onclick="loadLatestReputation()">刷新数据</button>
                         </div>
                     </div>
                     <div class="collection-scope-panel">
-                        <div class="collection-scope-grid">
+                        <div class="collection-scope-grid collection-rerun-grid">
                             <div class="collection-scope-field">
-                                <label>补跑店铺（勾选可多选）</label>
+                                <label>失败店铺</label>
                                 <div class="collection-checkbox-table-wrap">
-                                    <table class="collection-checkbox-table collection-shop-table">
+                                    <table class="collection-checkbox-table collection-shop-table collection-rerun-shop-table">
                                         <thead>
                                             <tr>
-                                                <th><input class="collection-checkbox" id="reputation-collection-shops-all" type="checkbox" aria-label="选择全部声誉采集店铺" onchange="toggleAllCollectionOptions('reputation', 'shops', this.checked)"></th>
+                                                <th><input class="collection-checkbox" id="reputation-collection-shops-all" type="checkbox" aria-label="开启全部声誉失败店铺补跑" onchange="toggleAllCollectionOptions('reputation', 'shops', this.checked)"> 补跑</th>
                                                 <th>店铺</th>
                                                 <th>归属人</th>
-                                                <th>配置站点</th>
                                             </tr>
                                         </thead>
                                         <tbody id="reputation-collection-shops">
-                                            <tr><td class="empty-state" colspan="4">正在加载店铺...</td></tr>
-                                        </tbody>
-                                    </table>
-                                </div>
-                            </div>
-                            <div class="collection-scope-field">
-                                <label>补跑站点（按店铺配置联动，勾选可多选）</label>
-                                <div class="collection-checkbox-table-wrap">
-                                    <table class="collection-checkbox-table collection-site-table">
-                                        <thead>
-                                            <tr>
-                                                <th><input class="collection-checkbox" id="reputation-collection-sites-all" type="checkbox" aria-label="选择全部声誉采集站点" onchange="toggleAllCollectionOptions('reputation', 'sites', this.checked)"></th>
-                                                <th>站点</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody id="reputation-collection-sites">
-                                            <tr><td class="empty-state" colspan="2">正在加载站点...</td></tr>
+                                            <tr><td class="empty-state" colspan="3">正在加载店铺...</td></tr>
                                         </tbody>
                                     </table>
                                 </div>
@@ -1624,7 +1688,7 @@
                             <div class="collection-scope-field">
                                 <label for="reputation-collection-workers">并发进程</label>
                                 <input id="reputation-collection-workers" type="number" min="1" max="10" value="3" onchange="updateCollectionScopeSummary('reputation')">
-                                <p class="collection-scope-hint">默认 3 个进程；实际只执行店铺与站点的有效交集。</p>
+                                <p class="collection-scope-hint">默认 3 个进程。</p>
                                 <p class="collection-scope-summary" id="reputation-collection-summary">正在加载采集范围...</p>
                             </div>
                         </div>
@@ -1647,11 +1711,15 @@
                             <div class="metric-value" id="reputation-risk">0</div>
                         </div>
                     </div>
+                    <div class="reputation-update-bar">
+                        <span class="reputation-selection-summary" id="reputation-selection-summary">已选择 0 家店铺</span>
+                        <button class="primary" id="update-selected-reputation-btn" type="button" onclick="runSelectedReputationUpdate()" disabled>更新所选店铺</button>
+                    </div>
                     <div class="table-wrap reputation-table-wrap">
                         <table class="reputation-table">
                             <thead>
                                 <tr>
-                                    <th>店铺名</th>
+                                    <th><label class="reputation-shop-select-label"><input class="reputation-shop-select" id="reputation-select-all" type="checkbox" aria-label="选择全部声誉数据店铺" onchange="toggleAllReputationShops(this.checked)" disabled><span>店铺名</span></label></th>
                                     <th>站点</th>
                                     <th>声誉颜色</th>
                                     <th>总单量</th>
@@ -1748,6 +1816,9 @@
         const reputationGreen = document.getElementById("reputation-green");
         const reputationRisk = document.getElementById("reputation-risk");
         const collectReputationBtn = document.getElementById("collect-reputation-btn");
+        const reputationSelectAll = document.getElementById("reputation-select-all");
+        const reputationSelectionSummary = document.getElementById("reputation-selection-summary");
+        const updateSelectedReputationBtn = document.getElementById("update-selected-reputation-btn");
         const trafficTooltip = document.getElementById("traffic-tooltip");
         const aiAppealRecordBody = document.getElementById("ai-appeal-record-body");
         const aiAppealLatestTime = document.getElementById("ai-appeal-latest-time");
@@ -1768,6 +1839,9 @@
         const orderPrintFailureCount = document.getElementById("order-print-failure-count");
         const orderPrintLog = document.getElementById("order-print-log");
         const orderPrintSiteRunBody = document.getElementById("order-print-site-run-body");
+        const orderPrintSiteRunAll = document.getElementById("order-print-site-run-all");
+        const orderPrintTargetSelectionSummary = document.getElementById("order-print-target-selection-summary");
+        const rerunSelectedOrderPrintBtn = document.getElementById("rerun-selected-order-print-btn");
         const windowAnomalyBody = document.getElementById("window-anomaly-body");
         const windowAnomalyTotal = document.getElementById("window-anomaly-total");
         const windowAnomalyLatestTime = document.getElementById("window-anomaly-latest-time");
@@ -1804,6 +1878,8 @@
         let orderPrintRunning = false;
         let orderPrintStopping = false;
         let orderPrintStatusPollTimer = null;
+        let orderPrintSiteRows = [];
+        let selectedOrderPrintTargetKeys = new Set();
         let windowAnomaliesLoaded = false;
         let mercadoLoginRunning = false;
         let mercadoLoginAllRunning = false;
@@ -1821,6 +1897,10 @@
         let collectionOptionsLoaded = false;
         let collectionOptionsLoading = null;
         let collectionShopOptions = [];
+        let collectionFailedShopOptions = {infraction: [], reputation: []};
+        let selectedReputationShops = new Set();
+        let selectedReputationUpdateRunning = false;
+        let selectedReputationUpdatePollTimer = null;
         let activeAppealTaskId = "";
         let appealStopRequested = false;
 
@@ -2420,23 +2500,57 @@
             });
         }
 
+        function collectionOptionsForPrefix(prefix) {
+            if (prefix === "infraction" || prefix === "reputation") {
+                return Array.isArray(collectionFailedShopOptions[prefix])
+                    ? collectionFailedShopOptions[prefix]
+                    : [];
+            }
+            return collectionShopOptions;
+        }
+
+        function isCollectionRerun(prefix) {
+            return prefix === "infraction" || prefix === "reputation";
+        }
+
         function renderCollectionShopOptions(prefix) {
             const elements = collectionElements(prefix);
             if (!elements.shops) return;
-            if (!collectionShopOptions.length) {
-                elements.shops.innerHTML = '<tr><td class="empty-state" colspan="4">没有可执行的店铺配置</td></tr>';
+            const shopOptions = collectionOptionsForPrefix(prefix);
+            if (!shopOptions.length) {
+                const message = isCollectionRerun(prefix)
+                    ? "当前没有失败店铺，无需补跑"
+                    : "没有可执行的店铺配置";
+                const columnCount = isCollectionRerun(prefix) ? 3 : 4;
+                elements.shops.innerHTML = `<tr><td class="empty-state" colspan="${columnCount}">${message}</td></tr>`;
             } else {
-                elements.shops.innerHTML = collectionShopOptions.map(shop => `
-                    <tr>
-                        <td><input class="collection-checkbox collection-option-checkbox" type="checkbox" value="${escapeHtml(shop.shop_name || "")}" aria-label="选择店铺 ${escapeHtml(shop.shop_name || "")}" onchange="handleCollectionOptionChange('${prefix}', 'shops')" checked></td>
-                        <td title="${escapeHtml(shop.shop_name || "")}">${escapeHtml(shop.shop_name || "-")}</td>
-                        <td title="${escapeHtml(shop.salesperson || "")}">${escapeHtml(shop.salesperson || "-")}</td>
-                        <td class="collection-shop-sites" title="${escapeHtml((shop.sites || []).join("、"))}">${escapeHtml((shop.sites || []).join("、") || "-")}</td>
-                    </tr>
-                `).join("");
+                elements.shops.innerHTML = shopOptions.map(shop => {
+                    const shopName = String(shop.shop_name || "");
+                    if (isCollectionRerun(prefix)) {
+                        return `
+                            <tr>
+                                <td><label class="collection-rerun-switch" title="开启或关闭 ${escapeHtml(shopName)} 补跑"><input class="collection-option-checkbox" type="checkbox" value="${escapeHtml(shopName)}" aria-label="补跑店铺 ${escapeHtml(shopName)}" onchange="handleCollectionOptionChange('${prefix}', 'shops')" checked><span class="collection-rerun-switch-track" aria-hidden="true"></span></label></td>
+                                <td title="${escapeHtml(shopName)}">${escapeHtml(shopName || "-")}</td>
+                                <td title="${escapeHtml(shop.salesperson || "")}">${escapeHtml(shop.salesperson || "-")}</td>
+                            </tr>
+                        `;
+                    }
+                    return `
+                        <tr>
+                            <td><input class="collection-checkbox collection-option-checkbox" type="checkbox" value="${escapeHtml(shopName)}" aria-label="选择店铺 ${escapeHtml(shopName)}" onchange="handleCollectionOptionChange('${prefix}', 'shops')" checked></td>
+                            <td title="${escapeHtml(shopName)}">${escapeHtml(shopName || "-")}</td>
+                            <td title="${escapeHtml(shop.salesperson || "")}">${escapeHtml(shop.salesperson || "-")}</td>
+                            <td class="collection-shop-sites" title="${escapeHtml((shop.sites || []).join("、"))}">${escapeHtml((shop.sites || []).join("、") || "-")}</td>
+                        </tr>
+                    `;
+                }).join("");
             }
             updateCollectionSelectAll(prefix, "shops");
-            updateCollectionSiteOptions(prefix, true);
+            if (isCollectionRerun(prefix)) {
+                updateCollectionScopeSummary(prefix);
+            } else {
+                updateCollectionSiteOptions(prefix, true);
+            }
             syncCollectionDisabledState(prefix);
         }
 
@@ -2449,7 +2563,7 @@
             const previousWasAll = previousSiteCheckboxes.length > 0
                 && previousSites.size === previousSiteCheckboxes.length;
             const eligibleSites = [];
-            collectionShopOptions.forEach(shop => {
+            collectionOptionsForPrefix(prefix).forEach(shop => {
                 if (!selectedShops.has(shop.shop_name)) return;
                 (shop.sites || []).forEach(site => {
                     if (!eligibleSites.includes(site)) eligibleSites.push(site);
@@ -2479,7 +2593,7 @@
 
         function handleCollectionOptionChange(prefix, field) {
             updateCollectionSelectAll(prefix, field);
-            if (field === "shops") {
+            if (field === "shops" && !isCollectionRerun(prefix)) {
                 updateCollectionSiteOptions(prefix);
             } else {
                 updateCollectionScopeSummary(prefix);
@@ -2492,7 +2606,7 @@
                 if (!checkbox.disabled) checkbox.checked = Boolean(checked);
             });
             updateCollectionSelectAll(prefix, field);
-            if (field === "shops") {
+            if (field === "shops" && !isCollectionRerun(prefix)) {
                 updateCollectionSiteOptions(prefix, Boolean(checked));
             } else {
                 updateCollectionScopeSummary(prefix);
@@ -2507,21 +2621,28 @@
             const elements = collectionElements(prefix);
             if (!elements.summary) return;
             const shops = selectedCollectionValues(elements.shops?.id);
-            const sites = selectedCollectionValues(elements.sites?.id);
             const workers = Math.max(1, Math.min(10, Number(elements.workers?.value || 3)));
+            const shopOptions = collectionOptionsForPrefix(prefix);
+            if (isCollectionRerun(prefix)) {
+                elements.summary.textContent = !shopOptions.length
+                    ? "当前没有失败店铺，无需补跑"
+                    : shops.length
+                    ? `将补跑 ${shops.length} 家失败店铺，并发 ${workers}`
+                    : "请至少选择一个店铺";
+                return;
+            }
+            const sites = selectedCollectionValues(elements.sites?.id);
             const selectedShopSet = new Set(shops);
             const selectedSiteSet = new Set(sites);
             let effectiveShopCount = 0;
-            const pairCount = collectionShopOptions.reduce((count, shop) => {
+            const pairCount = shopOptions.reduce((count, shop) => {
                 if (!selectedShopSet.has(shop.shop_name)) return count;
                 const matchingCount = (shop.sites || []).filter(site => selectedSiteSet.has(site)).length;
                 if (matchingCount) effectiveShopCount += 1;
                 return count + matchingCount;
             }, 0);
             elements.summary.textContent = shops.length && sites.length
-                ? (prefix === "order-print"
-                    ? `将按店铺串行执行 ${effectiveShopCount} 家店铺、${pairCount} 个有效站点`
-                    : `将执行 ${effectiveShopCount} 家店铺、${pairCount} 个有效站点，并发 ${workers}`)
+                ? `将按店铺串行执行 ${effectiveShopCount} 家店铺、${pairCount} 个有效站点`
                 : "请至少选择一个店铺和一个站点";
         }
 
@@ -2535,6 +2656,11 @@
                     throw new Error(payload.message || `接口请求失败：${response.status}`);
                 }
                 collectionShopOptions = Array.isArray(payload.data?.shops) ? payload.data.shops : [];
+                const failedShops = payload.data?.failed_shops || {};
+                collectionFailedShopOptions = {
+                    infraction: Array.isArray(failedShops.infraction) ? failedShops.infraction : [],
+                    reputation: Array.isArray(failedShops.reputation) ? failedShops.reputation : [],
+                };
                 renderCollectionShopOptions("infraction");
                 renderCollectionShopOptions("reputation");
                 renderCollectionShopOptions("order-print");
@@ -2555,12 +2681,57 @@
         function collectionRequestPayload(prefix) {
             const elements = collectionElements(prefix);
             const shops = selectedCollectionValues(elements.shops?.id);
-            const sites = selectedCollectionValues(elements.sites?.id);
             if (!shops.length) throw new Error("请至少选择一个店铺");
+            const selectedShopSet = new Set(shops);
+            const sites = isCollectionRerun(prefix)
+                ? Array.from(new Set(
+                    collectionOptionsForPrefix(prefix)
+                        .filter(shop => selectedShopSet.has(shop.shop_name))
+                        .flatMap(shop => Array.isArray(shop.sites) ? shop.sites : [])
+                        .filter(Boolean)
+                ))
+                : selectedCollectionValues(elements.sites?.id);
             if (!sites.length) throw new Error("请至少选择一个站点");
             const maxWorkers = Math.max(1, Math.min(10, Number(elements.workers?.value || 3)));
             if (elements.workers) elements.workers.value = String(maxWorkers);
             return {shops, sites, max_workers: maxWorkers};
+        }
+
+        function resetCollectionRerunButton(kind) {
+            const isReputation = kind === "reputation";
+            const button = isReputation ? collectReputationBtn : collectInfractionsBtn;
+            if (!button) return;
+            button.disabled = false;
+            button.textContent = "补跑已开启店铺";
+        }
+
+        async function pollCollectionRerun(kind) {
+            const isReputation = kind === "reputation";
+            const statusUrl = isReputation
+                ? "/api/reputation/collect/status"
+                : "/api/infractions/collect/status";
+            try {
+                const response = await fetch(statusUrl, {cache: "no-store"});
+                const payload = await response.json();
+                if (!response.ok || payload.status !== "success") {
+                    throw new Error(payload.message || `接口请求失败：${response.status}`);
+                }
+                const state = payload.data || {};
+                if (state.running) {
+                    setTimeout(() => pollCollectionRerun(kind), 2000);
+                    return;
+                }
+                resetCollectionRerunButton(kind);
+                if (state.status === "success") {
+                    if (isReputation) await loadLatestReputation();
+                    else await loadLatestInfractions();
+                    await loadCollectionOptions(true);
+                } else {
+                    alert(state.message || `${isReputation ? "声誉" : "侵权"}数据补跑失败`);
+                }
+            } catch (_err) {
+                setTimeout(() => pollCollectionRerun(kind), 3000);
+            }
         }
 
         async function runReputationCollection() {
@@ -2574,7 +2745,8 @@
                 return;
             }
             collectReputationBtn.disabled = true;
-            collectReputationBtn.textContent = "采集中...";
+            collectReputationBtn.textContent = "补跑中...";
+            let launched = false;
             try {
                 const response = await fetch("/api/reputation/collect", {
                     method: "POST",
@@ -2583,20 +2755,150 @@
                 });
                 const payload = await response.json();
                 if (response.status === 409) {
-                    alert(payload.message || "声誉数据采集正在运行中");
+                    alert(payload.message || "另一个声誉数据任务正在运行中");
                     return;
                 }
                 if (!response.ok || payload.status !== "success") {
                     throw new Error(payload.message || `接口请求失败：${response.status}`);
                 }
-                alert(payload.data?.message || payload.message || "声誉数据采集已启动");
+                launched = true;
+                alert(payload.data?.message || payload.message || "声誉数据补跑已启动");
+                setTimeout(() => pollCollectionRerun("reputation"), 1000);
             } catch (err) {
                 alert(`启动失败：${err.message || err}`);
             } finally {
-                setTimeout(() => {
-                    collectReputationBtn.disabled = false;
-                    collectReputationBtn.textContent = "运行声誉采集";
-                }, 1500);
+                if (!launched) resetCollectionRerunButton("reputation");
+            }
+        }
+
+        function reputationRowCheckboxes() {
+            return Array.from(document.querySelectorAll(".reputation-row-select"));
+        }
+
+        function updateReputationTableSelection() {
+            const checkboxes = reputationRowCheckboxes();
+            const availableShops = new Set(checkboxes.map(checkbox => checkbox.value).filter(Boolean));
+            selectedReputationShops.forEach(shopName => {
+                if (!availableShops.has(shopName)) selectedReputationShops.delete(shopName);
+            });
+            checkboxes.forEach(checkbox => {
+                checkbox.checked = selectedReputationShops.has(checkbox.value);
+                checkbox.disabled = selectedReputationUpdateRunning;
+            });
+            if (reputationSelectAll) {
+                reputationSelectAll.disabled = selectedReputationUpdateRunning || availableShops.size === 0;
+                reputationSelectAll.checked = availableShops.size > 0
+                    && selectedReputationShops.size === availableShops.size;
+                reputationSelectAll.indeterminate = selectedReputationShops.size > 0
+                    && selectedReputationShops.size < availableShops.size;
+            }
+            if (reputationSelectionSummary) {
+                reputationSelectionSummary.textContent = selectedReputationUpdateRunning
+                    ? `正在更新 ${selectedReputationShops.size} 家店铺...`
+                    : `已选择 ${selectedReputationShops.size} 家店铺`;
+            }
+            if (updateSelectedReputationBtn) {
+                updateSelectedReputationBtn.disabled = selectedReputationUpdateRunning
+                    || selectedReputationShops.size === 0;
+                updateSelectedReputationBtn.textContent = selectedReputationUpdateRunning
+                    ? "更新中..."
+                    : `更新所选店铺${selectedReputationShops.size ? `（${selectedReputationShops.size} 家）` : ""}`;
+            }
+        }
+
+        function toggleReputationShopSelection(shopName, checked) {
+            const normalizedShopName = String(shopName || "").trim();
+            if (!normalizedShopName || selectedReputationUpdateRunning) return;
+            if (checked) selectedReputationShops.add(normalizedShopName);
+            else selectedReputationShops.delete(normalizedShopName);
+            updateReputationTableSelection();
+        }
+
+        function toggleAllReputationShops(checked) {
+            if (selectedReputationUpdateRunning) return;
+            const availableShops = new Set(
+                reputationRowCheckboxes().map(checkbox => checkbox.value).filter(Boolean),
+            );
+            availableShops.forEach(shopName => {
+                if (checked) selectedReputationShops.add(shopName);
+                else selectedReputationShops.delete(shopName);
+            });
+            updateReputationTableSelection();
+        }
+
+        function scheduleSelectedReputationUpdatePoll() {
+            if (selectedReputationUpdatePollTimer) clearTimeout(selectedReputationUpdatePollTimer);
+            selectedReputationUpdatePollTimer = setTimeout(pollSelectedReputationUpdate, 2000);
+        }
+
+        async function pollSelectedReputationUpdate() {
+            if (!selectedReputationUpdateRunning) return;
+            try {
+                const response = await fetch("/api/reputation/collect/status", {cache: "no-store"});
+                const payload = await response.json();
+                if (!response.ok || payload.status !== "success") {
+                    throw new Error(payload.message || `接口请求失败：${response.status}`);
+                }
+                const state = payload.data || {};
+                if (state.running) {
+                    scheduleSelectedReputationUpdatePoll();
+                    return;
+                }
+                selectedReputationUpdateRunning = false;
+                updateReputationTableSelection();
+                if (state.status === "success") {
+                    await loadLatestReputation();
+                } else {
+                    alert(state.message || "所选店铺声誉更新失败");
+                }
+            } catch (_err) {
+                scheduleSelectedReputationUpdatePoll();
+            }
+        }
+
+        async function runSelectedReputationUpdate() {
+            if (!updateSelectedReputationBtn || selectedReputationUpdateRunning) return;
+            const shops = Array.from(selectedReputationShops);
+            if (!shops.length) {
+                alert("请先在下方列表勾选需要更新的店铺");
+                return;
+            }
+            try {
+                await loadCollectionOptions();
+                const selectedShopSet = new Set(shops);
+                const selectedConfigs = collectionShopOptions.filter(shop => (
+                    selectedShopSet.has(String(shop.shop_name || "").trim())
+                ));
+                const configuredNames = new Set(selectedConfigs.map(shop => String(shop.shop_name || "").trim()));
+                const missingShops = shops.filter(shopName => !configuredNames.has(shopName));
+                if (missingShops.length) {
+                    throw new Error(`店铺不存在或已被忽略：${missingShops.join("、")}`);
+                }
+                const sites = Array.from(new Set(
+                    selectedConfigs.flatMap(shop => Array.isArray(shop.sites) ? shop.sites : []),
+                )).filter(Boolean);
+                if (!sites.length) throw new Error("所选店铺没有配置站点");
+
+                selectedReputationUpdateRunning = true;
+                updateReputationTableSelection();
+                const response = await fetch("/api/reputation/update-selected", {
+                    method: "POST",
+                    headers: {"Content-Type": "application/json"},
+                    body: JSON.stringify({shops, sites, max_workers: 3}),
+                });
+                const payload = await response.json();
+                if (response.status === 409) {
+                    throw new Error(payload.message || "另一个声誉数据任务正在运行中");
+                }
+                if (!response.ok || payload.status !== "success") {
+                    throw new Error(payload.message || `接口请求失败：${response.status}`);
+                }
+                alert(payload.message || "所选店铺声誉更新已启动");
+                scheduleSelectedReputationUpdatePoll();
+            } catch (err) {
+                selectedReputationUpdateRunning = false;
+                updateReputationTableSelection();
+                alert(`更新失败：${err.message || err}`);
             }
         }
 
@@ -2616,6 +2918,7 @@
             }
             collectInfractionsBtn.disabled = true;
             collectInfractionsBtn.textContent = "采集中...";
+            let launched = false;
             try {
                 const response = await fetch("/api/infractions/collect", {
                     method: "POST",
@@ -2630,14 +2933,13 @@
                 if (!response.ok || payload.status !== "success") {
                     throw new Error(payload.message || `接口请求失败：${response.status}`);
                 }
+                launched = true;
                 alert(payload.data?.message || payload.message || "侵权数据采集已启动");
+                setTimeout(() => pollCollectionRerun("infraction"), 1000);
             } catch (err) {
                 alert(`启动失败：${err.message || err}`);
             } finally {
-                setTimeout(() => {
-                    collectInfractionsBtn.disabled = false;
-                    collectInfractionsBtn.textContent = "运行侵权采集";
-                }, 1500);
+                if (!launched) resetCollectionRerunButton("infraction");
             }
         }
 
@@ -2651,21 +2953,97 @@
             };
         }
 
+        function orderPrintTargetKey(row) {
+            return JSON.stringify([
+                String(row?.shop_name || "").trim(),
+                String(row?.site || "").trim(),
+            ]);
+        }
+
+        function renderOrderPrintRunStatus(status) {
+            const statusMap = {
+                printed: ["已提交", ""],
+                no_orders: ["无待打印订单", "empty"],
+                failed: ["失败", "fail"],
+                skipped: ["跳过", "empty"],
+                not_run: ["尚未执行", "empty"],
+                unknown: ["状态未知", "empty"],
+            };
+            const [label, className] = statusMap[String(status || "unknown")]
+                || statusMap.unknown;
+            return `<span class="status-tag ${className}">${label}</span>`;
+        }
+
+        function updateOrderPrintTargetSelection() {
+            const availableKeys = new Set(orderPrintSiteRows.map(orderPrintTargetKey));
+            selectedOrderPrintTargetKeys.forEach(key => {
+                if (!availableKeys.has(key)) selectedOrderPrintTargetKeys.delete(key);
+            });
+            document.querySelectorAll(".order-print-target-select").forEach(checkbox => {
+                const row = orderPrintSiteRows[Number(checkbox.dataset.targetIndex)];
+                checkbox.checked = Boolean(row && selectedOrderPrintTargetKeys.has(orderPrintTargetKey(row)));
+                checkbox.disabled = orderPrintRunning;
+            });
+            if (orderPrintSiteRunAll) {
+                orderPrintSiteRunAll.disabled = orderPrintRunning || availableKeys.size === 0;
+                orderPrintSiteRunAll.checked = availableKeys.size > 0
+                    && selectedOrderPrintTargetKeys.size === availableKeys.size;
+                orderPrintSiteRunAll.indeterminate = selectedOrderPrintTargetKeys.size > 0
+                    && selectedOrderPrintTargetKeys.size < availableKeys.size;
+            }
+            if (orderPrintTargetSelectionSummary) {
+                orderPrintTargetSelectionSummary.textContent = orderPrintRunning
+                    ? `正在补跑，已选择 ${selectedOrderPrintTargetKeys.size} 个店铺站点`
+                    : `已选择 ${selectedOrderPrintTargetKeys.size} 个店铺站点`;
+            }
+            if (rerunSelectedOrderPrintBtn) {
+                rerunSelectedOrderPrintBtn.disabled = orderPrintRunning
+                    || selectedOrderPrintTargetKeys.size === 0;
+                rerunSelectedOrderPrintBtn.textContent = orderPrintRunning
+                    ? "订单打印运行中"
+                    : `补跑所选站点${selectedOrderPrintTargetKeys.size ? `（${selectedOrderPrintTargetKeys.size} 个）` : ""}`;
+            }
+        }
+
+        function toggleOrderPrintSiteTarget(index, checked) {
+            if (orderPrintRunning) return;
+            const row = orderPrintSiteRows[Number(index)];
+            if (!row) return;
+            const key = orderPrintTargetKey(row);
+            if (checked) selectedOrderPrintTargetKeys.add(key);
+            else selectedOrderPrintTargetKeys.delete(key);
+            updateOrderPrintTargetSelection();
+        }
+
+        function toggleAllOrderPrintSiteTargets(checked) {
+            if (orderPrintRunning) return;
+            orderPrintSiteRows.forEach(row => {
+                const key = orderPrintTargetKey(row);
+                if (checked) selectedOrderPrintTargetKeys.add(key);
+                else selectedOrderPrintTargetKeys.delete(key);
+            });
+            updateOrderPrintTargetSelection();
+        }
+
         function renderOrderPrintSiteLastRuns(rows) {
             if (!orderPrintSiteRunBody) return;
-            const resultRows = Array.isArray(rows) ? rows : [];
-            if (!resultRows.length) {
-                orderPrintSiteRunBody.innerHTML = '<tr><td class="empty-state" colspan="3">暂无已配置站点</td></tr>';
+            orderPrintSiteRows = Array.isArray(rows) ? rows : [];
+            if (!orderPrintSiteRows.length) {
+                orderPrintSiteRunBody.innerHTML = '<tr><td class="empty-state" colspan="5">暂无已配置店铺站点</td></tr>';
+                updateOrderPrintTargetSelection();
                 return;
             }
-            orderPrintSiteRunBody.innerHTML = resultRows.map(row => {
+            orderPrintSiteRunBody.innerHTML = orderPrintSiteRows.map((row, index) => {
                 return `
                     <tr>
+                        <td><input class="collection-checkbox order-print-target-select" type="checkbox" data-target-index="${index}" aria-label="选择 ${escapeHtml(row.shop_name || "")} ${escapeHtml(row.site || "")}" onchange="toggleOrderPrintSiteTarget(${index}, this.checked)"></td>
                         <td>${escapeHtml(row.shop_name || "-")}</td>
                         <td>${escapeHtml(row.site || "-")}</td>
+                        <td>${renderOrderPrintRunStatus(row.status)}</td>
                         <td>${escapeHtml(row.finished_at || "尚未执行")}</td>
                     </tr>`;
             }).join("");
+            updateOrderPrintTargetSelection();
         }
 
         function renderOrderPrintStatus(state) {
@@ -2683,12 +3061,13 @@
             orderPrintLog.scrollTop = orderPrintLog.scrollHeight;
             renderOrderPrintSiteLastRuns(data.site_last_runs);
             startOrderPrintBtn.disabled = orderPrintRunning;
-            startOrderPrintBtn.textContent = orderPrintRunning ? "打印任务运行中" : "执行打印";
+            startOrderPrintBtn.textContent = orderPrintRunning ? "打印任务运行中" : "补跑所选范围";
             stopOrderPrintBtn.disabled = !data.can_stop || orderPrintStopping;
             stopOrderPrintBtn.textContent = orderPrintStopping ? "正在停止" : "停止任务";
             document.querySelectorAll("#tab-order-print select, #tab-order-print input").forEach(element => {
                 element.disabled = orderPrintRunning;
             });
+            updateOrderPrintTargetSelection();
         }
 
         async function loadOrderPrintStatus() {
@@ -2728,8 +3107,30 @@
                 alert(`无法启动：${err.message || err}`);
                 return;
             }
+            await submitOrderPrint(requestPayload);
+        }
+
+        async function rerunSelectedOrderPrintTargets() {
+            if (!rerunSelectedOrderPrintBtn || orderPrintRunning) return;
+            const targets = orderPrintSiteRows
+                .filter(row => selectedOrderPrintTargetKeys.has(orderPrintTargetKey(row)))
+                .map(row => ({shop_name: row.shop_name, site: row.site}));
+            if (!targets.length) {
+                alert("请先勾选需要补跑的店铺站点");
+                return;
+            }
+            const requestPayload = {
+                targets,
+                max_retries: Number(document.getElementById("order-print-retries").value || 3),
+                retry_delay_seconds: Number(document.getElementById("order-print-retry-delay").value || 300),
+            };
+            await submitOrderPrint(requestPayload);
+        }
+
+        async function submitOrderPrint(requestPayload) {
             startOrderPrintBtn.disabled = true;
             startOrderPrintBtn.textContent = "正在启动...";
+            if (rerunSelectedOrderPrintBtn) rerunSelectedOrderPrintBtn.disabled = true;
             try {
                 const response = await fetch("/api/order-print/start", {
                     method: "POST",
@@ -2932,6 +3333,7 @@
 
                 if (!rows.length) {
                     infractionBody.innerHTML = `<tr><td class="empty-state" colspan="7">最新批次中暂无最近 ${recentDays} 天侵权数据</td></tr>`;
+                    await loadCollectionOptions(true);
                     return;
                 }
 
@@ -2946,6 +3348,7 @@
                         <td>${escapeHtml(row["执行时间"])}</td>
                     </tr>
                 `).join("");
+                await loadCollectionOptions(true);
             } catch (err) {
                 infractionSummaryBody.innerHTML = `<tr><td class="empty-state" colspan="7">加载失败：${escapeHtml(err.message || err)}</td></tr>`;
                 infractionBody.innerHTML = `<tr><td class="empty-state" colspan="7">加载失败：${escapeHtml(err.message || err)}</td></tr>`;
@@ -3010,6 +3413,7 @@
 
         async function loadLatestReputation() {
             reputationBody.innerHTML = '<tr><td class="empty-state" colspan="12">正在加载最新声誉数据...</td></tr>';
+            if (reputationSelectAll) reputationSelectAll.disabled = true;
             try {
                 const response = await fetch("/api/reputation/latest");
                 const payload = await response.json();
@@ -3030,6 +3434,9 @@
 
                 if (!rows.length) {
                     reputationBody.innerHTML = '<tr><td class="empty-state" colspan="12">暂无最新声誉数据</td></tr>';
+                    selectedReputationShops.clear();
+                    updateReputationTableSelection();
+                    await loadCollectionOptions(true);
                     return;
                 }
 
@@ -3037,9 +3444,10 @@
                     const trafficRaw = row["一周流量趋势"];
                     const trafficValues = parseTrafficValues(trafficRaw);
                     const trafficTooltipText = formatTrafficTooltip(trafficRaw);
+                    const shopName = String(row["店铺名"] || "").trim();
                     return `
                     <tr>
-                        <td title="${escapeHtml(row["店铺名"])}">${escapeHtml(row["店铺名"])}</td>
+                        <td title="${escapeHtml(shopName)}"><label class="reputation-shop-select-label"><input class="reputation-shop-select reputation-row-select" type="checkbox" value="${escapeHtml(shopName)}" aria-label="选择店铺 ${escapeHtml(shopName)}" onchange="toggleReputationShopSelection(this.value, this.checked)" ${shopName ? "" : "disabled"}><span>${escapeHtml(shopName || "-")}</span></label></td>
                         <td title="${escapeHtml(row["站点"])}">${escapeHtml(row["站点"])}</td>
                         <td title="${escapeHtml(row["声誉颜色"])}">${renderReputationColor(row["声誉颜色"])}</td>
                         <td title="${escapeHtml(row["总单量"])}">${escapeHtml(row["总单量"])}</td>
@@ -3058,10 +3466,13 @@
                     </tr>
                     `;
                 }).join("");
+                updateReputationTableSelection();
                 renderTrafficCharts();
                 bindTrafficTooltips();
+                await loadCollectionOptions(true);
             } catch (err) {
                 reputationBody.innerHTML = `<tr><td class="empty-state" colspan="12">加载失败：${escapeHtml(err.message || err)}</td></tr>`;
+                updateReputationTableSelection();
             }
         }
 
@@ -3092,7 +3503,7 @@
                 windowAnomalyLatestTime.textContent = rows.length ? (rows[0].last_detected_at || "-") : "-";
 
                 if (!rows.length) {
-                    windowAnomalyBody.innerHTML = '<tr><td class="empty-state" colspan="13">当前没有需要重新登录的店铺</td></tr>';
+                    windowAnomalyBody.innerHTML = '<tr><td class="empty-state" colspan="13">当前没有需要人工处理人机验证的店铺</td></tr>';
                     updateWindowAnomalySelection();
                     return;
                 }
@@ -3112,8 +3523,8 @@
                         <td>${escapeHtml(row.first_detected_at || "-")}</td>
                         <td>${escapeHtml(row.last_detected_at || "-")}</td>
                         <td>
-                            <button class="secondary window-anomaly-login-action" data-login-window-id="${escapeHtml(row.window_id || "")}" type="button" onclick="startSingleShopAutoLogin('${encodeURIComponent(row.window_id || "")}', this)">重新自动登录</button>
-                            <button class="secondary" type="button" onclick="resolveWindowAnomaly('${encodeURIComponent(row.window_id || "")}')">已重新登录并停止</button>
+                            <button class="secondary window-anomaly-login-action" data-login-window-id="${escapeHtml(row.window_id || "")}" type="button" onclick="startSingleShopAutoLogin('${encodeURIComponent(row.window_id || "")}', this)">重新检测</button>
+                            <button class="secondary" type="button" onclick="resolveWindowAnomaly('${encodeURIComponent(row.window_id || "")}')">已人工处理并移除</button>
                         </td>
                     </tr>
                 `).join("");
@@ -3145,7 +3556,7 @@
                 const windowId = String(button.dataset.loginWindowId || "");
                 const busy = mercadoLoginAllRunning || activeMercadoLoginWindowIds.has(windowId);
                 button.disabled = busy || !windowId;
-                button.textContent = busy ? "自动登录中" : "重新自动登录";
+                button.textContent = busy ? "检测中" : "重新检测";
             });
             const selectable = checkboxes.filter(checkbox => checkbox.value && !checkbox.disabled);
             const selectedCount = selectable.filter(checkbox => checkbox.checked).length;
@@ -3157,8 +3568,8 @@
             if (startSelectedMercadoLoginBtn) {
                 startSelectedMercadoLoginBtn.disabled = mercadoLoginAllRunning || selectedCount === 0;
                 startSelectedMercadoLoginBtn.textContent = selectedCount
-                    ? `自动登录所选店铺（${selectedCount}）`
-                    : "自动登录所选店铺";
+                    ? `重新检测所选店铺（${selectedCount}）`
+                    : "重新检测所选店铺";
             }
         }
 
@@ -3317,10 +3728,10 @@
                 startMercadoLoginBtn.disabled = mercadoLoginRunning;
                 updateWindowAnomalySelection();
                 startMercadoLoginBtn.textContent = mercadoLoginAllRunning
-                    ? "全部店铺自动登录运行中"
+                    ? "全部店铺检测中"
                     : (mercadoLoginRunning
-                        ? "等待单店自动登录结束"
-                        : (state.started_at ? "重新启动全部店铺自动登录" : "启动全部店铺自动登录"));
+                        ? "等待单店检测结束"
+                        : "重新检测全部店铺");
                 const shouldRefreshWindowStatus = windowAnomaliesLoaded && (
                     !state.running
                     || Date.now() - lastMercadoLoginWindowRefreshAt >= 4000
@@ -3394,7 +3805,7 @@
             } catch (err) {
                 mercadoLoginRunning = false;
                 mercadoLoginAllRunning = false;
-                alert(`启动自动登录失败：${err.message || err}`);
+                alert(`启动重新检测失败：${err.message || err}`);
                 await loadMercadoLoginStatus();
             }
         }
@@ -3402,7 +3813,7 @@
         async function startSelectedShopsAutoLogin() {
             const windowIds = selectedWindowAnomalyIds();
             if (!windowIds.length) {
-                alert("请至少选择一个待登录店铺");
+                alert("请至少选择一个待处理人机验证店铺");
                 return;
             }
 
@@ -3423,7 +3834,7 @@
             } catch (err) {
                 mercadoLoginRunning = false;
                 windowIds.forEach(windowId => activeMercadoLoginWindowIds.delete(String(windowId)));
-                alert(`启动所选店铺自动登录失败：${err.message || err}`);
+                alert(`启动所选店铺重新检测失败：${err.message || err}`);
                 await loadMercadoLoginStatus();
             }
         }
@@ -3431,11 +3842,11 @@
         async function startSingleShopAutoLogin(encodedWindowId, actionButton) {
             const windowId = decodeURIComponent(encodedWindowId || "");
             if (!windowId) {
-                alert("该店铺缺少窗口 ID，无法执行自动登录");
+                alert("该店铺缺少窗口 ID，无法重新检测");
                 return;
             }
 
-            const originalText = actionButton ? actionButton.textContent : "重新自动登录";
+            const originalText = actionButton ? actionButton.textContent : "重新检测";
             if (actionButton) {
                 actionButton.disabled = true;
                 actionButton.textContent = "正在启动...";
@@ -3456,7 +3867,7 @@
                 }
                 started = true;
                 if (actionButton) {
-                    actionButton.textContent = "自动登录中";
+                    actionButton.textContent = "检测中";
                 }
                 await loadMercadoLoginStatus();
             } catch (err) {
