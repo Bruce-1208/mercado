@@ -139,23 +139,61 @@ class CollectionOrchestrationTests(unittest.TestCase):
                     [("id-2", "店铺乙", "", "巴西", "", "", "")],
                 )
 
-    def test_infraction_ai_appeal_is_enabled_by_default(self):
+    def test_all_ai_appeal_types_run_ten_rounds_with_ten_workers(self):
         started_at = bit_main.datetime.now()
+        task_lock = mock.Mock()
+        task_lock.acquired = True
+        calls = []
         with (
             mock.patch.object(bit_main, "_get_bool_env", return_value=True) as enabled,
             mock.patch.object(
                 bit_main.bit_daily_task,
-                "loop_top_infraction_ai_appeal",
-                return_value={"ok": True},
-            ) as appeal_loop,
+                "acquire_daily_task_lock",
+                return_value=task_lock,
+            ),
+            mock.patch.object(
+                bit_main.bit_daily_task,
+                "run_ai_appeal_once",
+                side_effect=lambda appeal_type, **kwargs: calls.append(
+                    (appeal_type, kwargs)
+                ) or {"ok": True},
+            ),
+            mock.patch.dict(
+                "os.environ",
+                {
+                    "BIT_DAILY_ROUND_INTERVAL": "0",
+                    "BIT_DAILY_MAX_WORKERS": "30",
+                    "BIT_MAIN_BROWSER_WORKER_LIMIT": "30",
+                },
+                clear=True,
+            ),
         ):
             result = bit_main._run_ai_appeal_loop(started_at)
 
         enabled.assert_called_once_with("BIT_ENABLE_AI_APPEAL_LOOP", True)
-        appeal_loop.assert_called_once()
-        self.assertEqual(appeal_loop.call_args.kwargs["max_rounds"], 20)
-        self.assertNotIn("stop_at", appeal_loop.call_args.kwargs)
-        self.assertEqual(result, {"ok": True})
+        expected_round = list(bit_main.MAIN_APPEAL_TYPES)
+        self.assertEqual([appeal_type for appeal_type, _kwargs in calls], expected_round * 10)
+        self.assertEqual(len(calls), 40)
+        self.assertTrue(all(kwargs["max_workers"] == 10 for _type, kwargs in calls))
+        self.assertTrue(all(kwargs["_task_lock"] is task_lock for _type, kwargs in calls))
+        self.assertEqual(result["round_count"], 10)
+        self.assertEqual(result["appeal_types"], expected_round)
+        task_lock.release.assert_called_once_with()
+
+    def test_main_loop_waits_two_hours_after_complete_chain(self):
+        with (
+            mock.patch.object(
+                bit_main,
+                "run_infraction_reputation_then_appeal",
+                side_effect=[{"cycle": 1}, {"cycle": 2}],
+            ) as run_chain,
+            mock.patch.object(bit_main.time, "sleep") as sleep,
+        ):
+            result = bit_main.run_main_loop(max_cycles=2)
+
+        self.assertEqual(result, [{"cycle": 1}, {"cycle": 2}])
+        self.assertEqual(run_chain.call_count, 2)
+        sleep.assert_called_once_with(2 * 60 * 60)
 
     def test_ai_appeal_round_limit_stops_after_twenty_without_final_sleep(self):
         with (
@@ -213,6 +251,40 @@ class CollectionOrchestrationTests(unittest.TestCase):
         self.assertEqual(reputation_main.call_args.kwargs["stagger_max_seconds"], 10)
         self.assertEqual(result["errors"], {})
         process_lock.release.assert_called_once_with()
+
+    def test_scheduler_caps_explicit_high_worker_settings(self):
+        with mock.patch.dict(
+            "os.environ",
+            {
+                "BIT_REPUTATION_MAX_WORKERS": "12",
+                "BIT_INFRACTION_MAX_WORKERS": "9",
+                "BIT_MAIN_BROWSER_WORKER_LIMIT": "2",
+            },
+            clear=True,
+        ):
+            reputation_options = bit_main._collection_options("REPUTATION")
+            infraction_options = bit_main._collection_options("INFRACTION")
+
+        self.assertEqual(reputation_options["max_workers"], 2)
+        self.assertEqual(infraction_options["max_workers"], 2)
+
+    def test_scheduler_never_exceeds_ten_workers(self):
+        with mock.patch.dict(
+            "os.environ",
+            {
+                "BIT_REPUTATION_MAX_WORKERS": "30",
+                "BIT_INFRACTION_MAX_WORKERS": "30",
+                "BIT_MAIN_BROWSER_WORKER_LIMIT": "30",
+                "BIT_DAILY_MAX_WORKERS": "30",
+            },
+            clear=True,
+        ):
+            reputation_options = bit_main._collection_options("REPUTATION")
+            infraction_options = bit_main._collection_options("INFRACTION")
+
+        self.assertEqual(reputation_options["max_workers"], 10)
+        self.assertEqual(infraction_options["max_workers"], 10)
+        self.assertEqual(bit_main._main_browser_worker_limit(), 10)
 
     def test_reputation_and_appeal_still_run_when_infraction_fails(self):
         events = []

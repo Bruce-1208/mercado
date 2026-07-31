@@ -147,6 +147,81 @@ def insert_zying_product_info(product_list):
     return (data or {}).get("count", 0)
 
 
+def get_zying_risk_candidates(
+    hours=24,
+    limit=0,
+    zying_category=None,
+    include_checked=False,
+):
+    if DB_MODE == "mysql":
+        return _local_call(
+            "get_zying_risk_candidates",
+            hours,
+            limit,
+            zying_category,
+            include_checked,
+        )
+    return _request(
+        "GET",
+        "/api/db/zying-risk/candidates",
+        params={
+            "hours": hours,
+            "limit": limit,
+            "category": zying_category or "",
+            "include_checked": "1" if include_checked else "0",
+        },
+    )
+
+
+def update_zying_product_risks(results):
+    if DB_MODE == "mysql":
+        return _local_call("update_zying_product_risks", results)
+    data = _request(
+        "POST",
+        "/api/db/zying-risk/bulk",
+        json={"results": results or []},
+    )
+    return int((data or {}).get("count", 0))
+
+
+def list_zying_risk_categories():
+    if DB_MODE == "mysql":
+        return _local_call("list_zying_risk_categories")
+    return _request("GET", "/api/db/zying-risk/categories")
+
+
+def get_zying_risk_results(
+    zying_category=None,
+    risk_level=None,
+    search="",
+    sort_by="risk_level",
+    sort_dir="desc",
+    limit=1000,
+):
+    if DB_MODE == "mysql":
+        return _local_call(
+            "get_zying_risk_results",
+            zying_category,
+            risk_level,
+            search,
+            sort_by,
+            sort_dir,
+            limit,
+        )
+    return _request(
+        "GET",
+        "/api/db/zying-risk/results",
+        params={
+            "category": zying_category or "",
+            "risk_level": risk_level if risk_level is not None else "",
+            "search": search or "",
+            "sort_by": sort_by,
+            "sort_dir": sort_dir,
+            "limit": limit,
+        },
+    )
+
+
 def insert_orders(line):
     if DB_MODE == "mysql":
         return _local_call("insert_orders", line)

@@ -156,6 +156,7 @@ def test_mercado_login_console_command_supports_all_and_single_shop():
         workers=2,
         window_ids=["window-1", "window-2", "window-3", "window-4", "window-1"],
     )
+    capped_all_command = bit_interface._build_mercado_login_command(workers=99)
 
     assert all_command[0] == bit_interface.sys.executable
     assert "--all-active-login" in all_command
@@ -167,11 +168,12 @@ def test_mercado_login_console_command_supports_all_and_single_shop():
     assert "--keep-browser-open" in single_command
     assert single_command[single_command.index("--manual-login-wait-seconds") + 1] == "1200"
     assert selected_command.count("--window-id") == 4
-    assert selected_command[selected_command.index("--workers") + 1] == "4"
+    assert selected_command[selected_command.index("--workers") + 1] == "2"
     assert selected_command[selected_command.index("--manual-login-wait-seconds") + 1] == "1200"
     assert "--all-active-login" not in selected_command
     assert "--no-email" in selected_command
     assert "--keep-browser-open" in selected_command
+    assert capped_all_command[capped_all_command.index("--workers") + 1] == "10"
 
 
 def test_mercado_login_console_runs_distinct_windows_asynchronously(monkeypatch):
@@ -312,7 +314,7 @@ def test_shop_status_can_restart_single_shop_auto_login(monkeypatch):
     }
 
 
-def test_shop_status_starts_one_login_process_per_selected_shop(monkeypatch):
+def test_shop_status_starts_selected_shops_as_one_worker_limited_batch(monkeypatch):
     captured = []
     monkeypatch.setattr(
         bit_interface,
@@ -339,23 +341,14 @@ def test_shop_status_starts_one_login_process_per_selected_shop(monkeypatch):
         return True, {
             "running": True,
             "status": "running",
-            "target": kwargs["shop_name"],
-            "started_task_id": f"task-{kwargs['window_id']}",
+            "target": "所选 2 家店铺",
+            "started_task_id": "task-selected-batch",
         }
 
     monkeypatch.setattr(
         bit_interface,
         "start_mercado_login_console_job",
         fake_start,
-    )
-    monkeypatch.setattr(
-        bit_interface,
-        "_mercado_login_task_snapshot",
-        lambda: {
-            "running": True,
-            "status": "running",
-            "target": "2 个登录任务",
-        },
     )
     client = bit_interface.app.test_client()
     with client.session_transaction() as flask_session:
@@ -368,14 +361,44 @@ def test_shop_status_starts_one_login_process_per_selected_shop(monkeypatch):
 
     assert response.status_code == 200
     assert response.get_json()["status"] == "success"
-    assert captured == [
-        {"shop_name": "龙凤呈祥", "window_id": "window-2", "workers": 1},
-        {"shop_name": "四季如春", "window_id": "window-1", "workers": 1},
-    ]
+    assert captured == [{
+        "selected_shops": [
+            {"window_id": "window-2", "window_name": "龙凤呈祥"},
+            {"window_id": "window-1", "window_name": "四季如春"},
+        ],
+        "workers": 1,
+    }]
+    assert response.get_json()["data"]["started_count"] == 2
+    assert response.get_json()["data"]["workers"] == 1
     assert response.get_json()["data"]["started_task_ids"] == [
-        "task-window-2",
-        "task-window-1",
+        "task-selected-batch"
     ]
+
+
+def test_shop_status_all_shops_uses_requested_worker_count(monkeypatch):
+    captured = {}
+
+    def fake_start(**kwargs):
+        captured.update(kwargs)
+        return True, {
+            "running": True,
+            "status": "running",
+            "target": "全部未忽略店铺",
+        }
+
+    monkeypatch.setattr(bit_interface, "start_mercado_login_console_job", fake_start)
+    client = bit_interface.app.test_client()
+    with client.session_transaction() as flask_session:
+        flask_session["workbench_user"] = {"username": "tester"}
+
+    response = client.post(
+        "/api/window-anomalies/mercado-login/start",
+        json={"workers": 7},
+    )
+
+    assert response.status_code == 200
+    assert response.get_json()["status"] == "success"
+    assert captured == {"shop_name": "", "window_id": "", "workers": 7}
 
 
 def test_resolve_shop_status_stops_only_the_matching_login_task(monkeypatch):
@@ -448,12 +471,12 @@ def test_stop_window_login_tasks_does_not_stop_other_or_grouped_tasks(monkeypatc
     assert stopped == ["matching"]
 
 
-def test_shop_status_ui_requests_one_worker_per_selected_shop():
+def test_shop_status_ui_uses_selected_worker_count_for_batch():
     template = (
         Path(bit_interface.CURRENT_DIR) / "templates" / "index.html"
     ).read_text(encoding="utf-8")
 
-    assert "workers: windowIds.length" in template
+    assert "JSON.stringify({window_ids: windowIds, workers})" in template
     assert "lastMercadoLoginWindowRefreshAt" in template
     assert "Date.now() - lastMercadoLoginWindowRefreshAt >= 4000" in template
     assert "await loadWindowAnomalies()" in template
@@ -640,6 +663,9 @@ def test_shop_status_ui_uses_single_shop_auto_login_action():
     assert "startSelectedShopsAutoLogin" in template
     assert "window-anomaly-select-all" in template
     assert "重新检测所选店铺" in template
+    assert 'id="mercado-login-workers" type="number" min="1" max="10" value="3"' in template
+    assert "selectedMercadoLoginWorkerCount" in template
+    assert "JSON.stringify({window_ids: windowIds, workers})" in template
     assert "<th>店铺归属人</th>" in template
     assert "<th>邮箱</th>" in template
     assert "row.salesperson" in template
@@ -666,7 +692,7 @@ def test_reputation_rate_cells_use_requested_warning_thresholds():
     assert ".reputation-rate-cell.rate-red" in template
 
 
-def test_daily_task_console_exposes_three_appeal_types_and_rate_threshold():
+def test_daily_task_console_exposes_four_appeal_types_and_rate_threshold():
     template = (
         Path(bit_interface.CURRENT_DIR) / "templates" / "index.html"
     ).read_text(encoding="utf-8")
@@ -675,13 +701,14 @@ def test_daily_task_console_exposes_three_appeal_types_and_rate_threshold():
     assert '<option value="侵权" selected>侵权</option>' in template
     assert '<option value="延误率">延误率</option>' in template
     assert '<option value="取消率">取消率</option>' in template
+    assert '<option value="投诉">投诉</option>' in template
     assert 'id="daily-task-min-rate"' in template
     assert "appeal_type: document.getElementById(\"daily-task-appeal-type\").value" in template
     assert "min_rate: `${minRatePercent}%`" in template
 
 
-@pytest.mark.parametrize("appeal_type", ["侵权", "延误率", "取消率"])
-def test_build_daily_task_params_accepts_three_appeal_types(appeal_type):
+@pytest.mark.parametrize("appeal_type", ["侵权", "延误率", "取消率", "投诉"])
+def test_build_daily_task_params_accepts_four_appeal_types(appeal_type):
     params = bit_interface.build_daily_task_params(
         {"appeal_type": appeal_type, "min_rate": "7.5%"}
     )
@@ -692,7 +719,7 @@ def test_build_daily_task_params_accepts_three_appeal_types(appeal_type):
 
 def test_build_daily_task_params_rejects_invalid_appeal_settings():
     with pytest.raises(ValueError, match="不支持的申诉类型"):
-        bit_interface.build_daily_task_params({"appeal_type": "投诉"})
+        bit_interface.build_daily_task_params({"appeal_type": "退款"})
     with pytest.raises(ValueError, match="min_rate"):
         bit_interface.build_daily_task_params({"min_rate": "101%"})
 
@@ -753,6 +780,17 @@ def test_resolve_selected_appeal_sites_and_remove_duplicates():
         bit_interface.resolve_appeal_sites(["全部站点"])
 
 
+def test_resolve_selected_appeal_forms_and_use_fixed_execution_order():
+    assert bit_interface.resolve_appeal_forms(["取消率", "延误", "取消率"]) == (
+        "延误", "取消率"
+    )
+    assert bit_interface.resolve_appeal_forms("投诉") == ("投诉",)
+    with pytest.raises(ValueError, match="至少选择一个任务类型"):
+        bit_interface.resolve_appeal_forms([])
+    with pytest.raises(ValueError, match="不支持的任务类型"):
+        bit_interface.resolve_appeal_forms(["未知类型"])
+
+
 def test_normalize_appeal_loop_count():
     assert bit_interface.normalize_appeal_loop_count(None) == 10
     assert bit_interface.normalize_appeal_loop_count("10") == 10
@@ -769,7 +807,7 @@ def test_normalize_appeal_loop_count():
     ("mode", "expected_interval"),
     [("AI客服", 60), ("人工客服", 600)],
 )
-@pytest.mark.parametrize("form", ["侵权", "延误", "取消率"])
+@pytest.mark.parametrize("form", ["侵权", "延误", "取消率", "投诉"])
 def test_selected_sites_run_sequentially_for_every_mode_and_form(
     monkeypatch,
     mode,
@@ -840,6 +878,67 @@ def test_selected_sites_run_sequentially_for_every_mode_and_form(
         f"等待 {expected_interval // 60} 分钟后开始下一轮" in line
         for line in output
     )
+
+
+def test_selected_forms_run_in_fixed_order_within_one_round(monkeypatch):
+    calls = []
+
+    class ImmediateThread:
+        def __init__(self, target, daemon=False):
+            self.target = target
+
+        def start(self):
+            self.target()
+
+    class Lease:
+        def acquire(self, timeout=0):
+            return True
+
+        def release(self):
+            return None
+
+    class StopAfterFirstRound(Exception):
+        pass
+
+    monkeypatch.setattr(bit_interface.threading, "Thread", ImmediateThread)
+    monkeypatch.setattr(bit_interface, "getWindowidByName", lambda name: "window-id")
+    monkeypatch.setattr(bit_interface, "create_window_lease", lambda *args, **kwargs: Lease())
+    monkeypatch.setattr(
+        bit_interface.bit_appeal_ai,
+        "shensu",
+        lambda name, site, appeal_form, message: calls.append((site, appeal_form)),
+    )
+    monkeypatch.setattr(
+        bit_interface.time,
+        "sleep",
+        lambda seconds: (_ for _ in ()).throw(StopAfterFirstRound()),
+    )
+    monkeypatch.setattr(
+        bit_interface,
+        "APPEAL_STREAM_HEARTBEAT_SECONDS",
+        bit_interface.APPEAL_ROUND_INTERVAL_SECONDS,
+    )
+
+    selected_sites = ("墨西哥", "智利")
+    stream = bit_interface.shensu_logic(
+        "测试店铺",
+        selected_sites,
+        ("取消率", "延误"),
+        "",
+        "AI客服",
+    )
+    output = []
+    with pytest.raises(StopAfterFirstRound):
+        while True:
+            output.append(next(stream))
+
+    assert calls == [
+        ("墨西哥", "延误"),
+        ("智利", "延误"),
+        ("墨西哥", "取消率"),
+        ("智利", "取消率"),
+    ]
+    assert any("延误 → 取消率" in line for line in output)
 
 
 def test_stream_task_output_sends_heartbeat_while_worker_is_quiet():
@@ -1080,12 +1179,32 @@ def test_appeal_page_contains_stop_button_and_handler():
     assert 'input[name="site"]:checked' in template
     assert '<option value="全部站点">' not in template
     assert 'params.append("site", site)' in template
+    assert '<div class="site-picker" id="form-picker"' in template
+    assert 'input type="checkbox" name="form" value="延误" checked' in template
+    assert 'input[name="form"]:checked' in template
+    assert 'params.append("form", form)' in template
     assert '<select id="loop-count">' in template
     assert '<option value="取消率">取消率</option>' in template
     assert '<option value="10" selected>10 次</option>' in template
     assert '<option value="20">20 次</option>' in template
     assert '<option value="50">50 次</option>' in template
     assert '<option value="permanent">永久</option>' in template
+
+
+def test_appeal_shop_name_supports_fuzzy_search_and_keyboard_selection():
+    template = (
+        Path(bit_interface.__file__).resolve().parent / "templates" / "index.html"
+    ).read_text(encoding="utf-8")
+
+    assert 'id="name" value="跃马扬鞭" placeholder="输入部分店铺名搜索"' in template
+    assert 'id="appeal-shop-options" role="listbox"' in template
+    assert "function appealShopMatchScore(shopName, query)" in template
+    assert "name.indexOf(keyword)" in template
+    assert "function renderAppealShopOptions(queryOverride = null)" in template
+    assert "function handleAppealShopKeydown(event)" in template
+    assert 'event.key === "ArrowDown" || event.key === "ArrowUp"' in template
+    assert "selectAppealShop(appealShopActiveIndex)" in template
+    assert 'name: shopName' in template
 
 
 def test_collection_page_uses_shop_status_style_checkbox_multiselect():
@@ -1336,19 +1455,20 @@ def test_collection_start_rejects_shop_site_without_configured_intersection(monk
     assert "没有配置所选站点" in response.get_json()["message"]
 
 
-def test_run_appeal_api_accepts_multiple_site_parameters(monkeypatch):
+def test_run_appeal_api_accepts_multiple_site_and_form_parameters(monkeypatch):
     captured = {}
 
     def fake_shensu_logic(
         name,
         sites,
-        form,
+        forms,
         message,
         mode,
         loop_count=10,
         stop_event=None,
     ):
         captured["sites"] = sites
+        captured["forms"] = forms
         captured["loop_count"] = loop_count
         yield "完成\n"
 
@@ -1368,6 +1488,7 @@ def test_run_appeal_api_accepts_multiple_site_parameters(monkeypatch):
             ("site", "墨西哥"),
             ("site", "智利"),
             ("form", "侵权"),
+            ("form", "取消率"),
             ("mode", "AI客服"),
             ("loop_count", "20"),
             ("task_id", "multi-site-api-test"),
@@ -1377,4 +1498,5 @@ def test_run_appeal_api_accepts_multiple_site_parameters(monkeypatch):
 
     assert response.status_code == 200
     assert captured["sites"] == ("墨西哥", "智利")
+    assert captured["forms"] == ("侵权", "取消率")
     assert captured["loop_count"] == 20

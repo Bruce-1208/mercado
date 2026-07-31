@@ -799,6 +799,46 @@ def test_auto_login_enters_login_page_before_filling_email(monkeypatch):
     ]
 
 
+def test_auto_login_fills_email_before_reporting_visible_captcha(monkeypatch):
+    actions = []
+    monkeypatch.setattr(
+        mercado_login,
+        "ensure_mercado_login_from_home",
+        lambda *args, **kwargs: {
+            "ok": False,
+            "status": mercado_login.LOGIN_NOT_LOGGED_IN,
+            "login_stage": "captcha",
+        },
+    )
+    monkeypatch.setattr(
+        mercado_login,
+        "_first_visible_element",
+        lambda driver, selectors: (
+            object() if selectors == mercado_login.EMAIL_INPUT_SELECTORS else None
+        ),
+    )
+    monkeypatch.setattr(
+        mercado_login,
+        "_submit_email_with_retries",
+        lambda driver, email, **kwargs: actions.append(("email", email))
+        or (True, "captcha", 1),
+    )
+
+    result = mercado_login.login_mercado_with_saved_password(
+        object(),
+        "人机验证店铺",
+        window_id="window-captcha",
+        email="shop@example.com",
+    )
+
+    assert actions == [("email", "shop@example.com")]
+    assert result["ok"] is False
+    assert result["status"] == mercado_login.LOGIN_CAPTCHA_REQUIRED
+    assert result["login_stage"] == "captcha"
+    assert result["action"] == "自动登录未完成"
+    assert "输入邮箱后出现人机验证" in result["message"]
+
+
 def test_email_submission_clicks_continue_instead_of_only_pressing_enter(monkeypatch):
     class EmailInput:
         def __init__(self):

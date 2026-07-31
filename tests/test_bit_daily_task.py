@@ -1,3 +1,5 @@
+from unittest import mock
+
 import pytest
 
 from bit import bit_daily_task
@@ -11,6 +13,8 @@ from bit import bit_daily_task
         ("delay", bit_daily_task.APPEAL_TYPE_DELAY),
         ("取消率", bit_daily_task.APPEAL_TYPE_CANCELLATION),
         ("cancellation_rate", bit_daily_task.APPEAL_TYPE_CANCELLATION),
+        ("投诉", bit_daily_task.APPEAL_TYPE_COMPLAINT),
+        ("complaints", bit_daily_task.APPEAL_TYPE_COMPLAINT),
     ],
 )
 def test_normalize_appeal_type(value, expected):
@@ -70,15 +74,37 @@ def test_build_latest_cancellation_plan_only_keeps_positive_rates(monkeypatch):
     assert [site["site_code"] for site in plan[0]["sites"]] == ["BR"]
 
 
+def test_build_latest_complaint_plan_uses_complaint_rate(monkeypatch):
+    monkeypatch.setattr(
+        bit_daily_task,
+        "get_latest_reputation_info",
+        lambda: {
+            "rows": [
+                {"店铺名": "店铺甲", "站点": "墨西哥", "投诉率": "0%"},
+                {"店铺名": "店铺甲", "站点": "巴西", "投诉率": "1.2%"},
+            ]
+        },
+    )
+
+    plan = bit_daily_task.build_latest_reputation_appeal_plan(
+        "投诉",
+        only_active=False,
+    )
+
+    assert len(plan) == 1
+    assert [site["site_code"] for site in plan[0]["sites"]] == ["BR"]
+
+
 @pytest.mark.parametrize(
     ("method_name", "expected_type"),
     [
         ("auto_appeal_infraction", bit_daily_task.APPEAL_TYPE_INFRACTION),
         ("auto_appeal_delay", bit_daily_task.APPEAL_TYPE_DELAY),
         ("auto_appeal_cancellation", bit_daily_task.APPEAL_TYPE_CANCELLATION),
+        ("auto_appeal_complaint", bit_daily_task.APPEAL_TYPE_COMPLAINT),
     ],
 )
-def test_three_auto_appeal_methods_dispatch_independently(
+def test_auto_appeal_methods_dispatch_independently(
     monkeypatch,
     method_name,
     expected_type,
@@ -102,6 +128,7 @@ def test_three_auto_appeal_methods_dispatch_independently(
         ("侵权", "侵权"),
         ("延误率", "延误"),
         ("取消率", "取消率"),
+        ("投诉", "投诉"),
     ],
 )
 def test_shop_executor_sends_expected_form(monkeypatch, appeal_type, expected_form):
@@ -138,6 +165,35 @@ def _single_site_shop_plan():
         "total": 1,
         "sites": [{"site_code": "MX", "count": 1}],
     }
+
+
+def test_appeal_one_shop_always_closes_browser_window(monkeypatch):
+    lease = mock.Mock()
+    lease.acquire.return_value = True
+    monkeypatch.setattr(
+        bit_daily_task.bit_appeal_ai,
+        "get_window_id_by_shop_name",
+        lambda _name: "window-id",
+    )
+    monkeypatch.setattr(bit_daily_task, "create_window_lease", lambda *args, **kwargs: lease)
+    monkeypatch.setattr(
+        bit_daily_task,
+        "_appeal_one_shop_locked",
+        lambda *args, **kwargs: {"name": "测试店铺", "results": []},
+    )
+    close_browser = mock.Mock(return_value={"success": True})
+    monkeypatch.setattr(bit_daily_task, "closeBrowser", close_browser)
+
+    result = bit_daily_task.appeal_one_shop(_single_site_shop_plan())
+
+    assert result["name"] == "测试店铺"
+    close_browser.assert_called_once_with("window-id", lease=lease)
+    lease.release.assert_called_once_with()
+
+
+def test_daily_appeal_worker_limit_defaults_to_ten(monkeypatch):
+    monkeypatch.delenv("BIT_DAILY_BROWSER_WORKER_LIMIT", raising=False)
+    assert bit_daily_task._daily_browser_worker_limit() == 10
 
 
 def test_shop_executor_closes_browser_when_auto_login_is_triggered(monkeypatch):

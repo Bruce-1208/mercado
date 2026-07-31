@@ -195,7 +195,7 @@ def test_funds_single_shop_api_starts_background_refresh(monkeypatch):
     assert started[0]["kwargs"]["all_shops"] is False
     assert started[0]["kwargs"]["selected_window_ids"] == ("window-1",)
     assert started[0]["kwargs"]["salesperson"] == ""
-    assert started[0]["kwargs"]["max_workers"] == 3
+    assert started[0]["kwargs"]["max_workers"] == 10
     assert not started[0]["kwargs"]["stop_event"].is_set()
 
 

@@ -42,6 +42,7 @@ def resolve_template_dir():
     return CURRENT_DIR / "templates"
 
 import bit.bit_appeal_ai as bit_appeal_ai
+import bit.bit_check_risk as bit_check_risk
 import bit.bit_db_api as bit_db_api
 import bit.bit_daily_task as bit_daily_task
 import bit.bit_infractions_info as bit_infractions_info
@@ -116,6 +117,10 @@ if USE_DB_API:
     db_insert_orders = bit_db_api.insert_orders
     db_insert_task_record = bit_db_api.insert_task_record
     db_insert_zying_product_info = bit_db_api.insert_zying_product_info
+    db_get_zying_risk_candidates = bit_db_api.get_zying_risk_candidates
+    db_update_zying_product_risks = bit_db_api.update_zying_product_risks
+    db_list_zying_risk_categories = bit_db_api.list_zying_risk_categories
+    db_get_zying_risk_results = bit_db_api.get_zying_risk_results
     db_resolve_window_anomaly = bit_db_api.resolve_window_anomaly
     db_upsert_window_anomaly = bit_db_api.upsert_window_anomaly
     db_inset_delay_info = bit_db_api.inset_delay_info
@@ -141,6 +146,10 @@ else:
         insert_orders,
         insert_task_record,
         insert_zying_product_info,
+        get_zying_risk_candidates,
+        update_zying_product_risks,
+        list_zying_risk_categories,
+        get_zying_risk_results,
         resolve_window_anomaly,
         inset_delay_info,
         inset_infraction_info,
@@ -164,6 +173,10 @@ else:
     db_insert_orders = insert_orders
     db_insert_task_record = insert_task_record
     db_insert_zying_product_info = insert_zying_product_info
+    db_get_zying_risk_candidates = get_zying_risk_candidates
+    db_update_zying_product_risks = update_zying_product_risks
+    db_list_zying_risk_categories = list_zying_risk_categories
+    db_get_zying_risk_results = get_zying_risk_results
     db_resolve_window_anomaly = resolve_window_anomaly
     db_upsert_window_anomaly = upsert_window_anomaly
     db_inset_delay_info = inset_delay_info
@@ -346,6 +359,18 @@ _reputation_collect_state = {
     "operation": "",
     "params": {},
 }
+_risk_check_lock = threading.Lock()
+_risk_check_state_lock = threading.RLock()
+_risk_check_logs = deque(maxlen=500)
+_risk_check_state = {
+    "running": False,
+    "started_at": "",
+    "finished_at": "",
+    "status": "idle",
+    "message": "等待启动",
+    "params": {},
+    "summary": {},
+}
 _fund_collect_lock = threading.Lock()
 _fund_collect_state = {
     "running": False,
@@ -390,6 +415,8 @@ _mercado_login_task_processes = {}
 _mercado_login_tasks = {}
 MERCADO_LOGIN_TASK_HISTORY_LIMIT = 100
 MERCADO_LOGIN_STOP_GRACE_SECONDS = 8
+DEFAULT_MERCADO_LOGIN_WORKERS = 3
+MAX_MERCADO_LOGIN_WORKERS = 10
 _mercado_login_log_path = CURRENT_DIR / "logs" / "bit_mercado_login_console.log"
 MERCADO_LOGIN_SINGLE_MANUAL_WAIT_SECONDS = 20 * 60
 MERCADO_LOGIN_SELECTED_MANUAL_WAIT_SECONDS = 20 * 60
@@ -430,6 +457,7 @@ _mercado_login_task_state = {
 }
 
 APPEAL_SITES = ("墨西哥", "巴西", "哥伦比亚", "智利", "阿根廷", "乌拉圭")
+APPEAL_FORMS = ("延误", "侵权", "取消率", "投诉")
 APPEAL_LOOP_COUNTS = (10, 20, 50)
 DEFAULT_APPEAL_LOOP_COUNT = 10
 PERMANENT_APPEAL_LOOP_COUNT = 0
@@ -810,7 +838,11 @@ def _mercado_login_task_scope(shop_name="", window_id="", selected_shops=None):
     return "all", [], ("all",)
 
 
-def _build_mercado_login_command(shop_name="", workers=3, window_ids=None):
+def _build_mercado_login_command(
+    shop_name="",
+    workers=DEFAULT_MERCADO_LOGIN_WORKERS,
+    window_ids=None,
+):
     command = [
         sys.executable,
         "-u",
@@ -837,12 +869,20 @@ def _build_mercado_login_command(shop_name="", workers=3, window_ids=None):
             )
         )
     elif selected_window_ids:
+        worker_count = max(
+            1,
+            min(
+                int(workers or DEFAULT_MERCADO_LOGIN_WORKERS),
+                MAX_MERCADO_LOGIN_WORKERS,
+                len(selected_window_ids),
+            ),
+        )
         for window_id in selected_window_ids:
             command.extend(("--window-id", window_id))
         command.extend(
             (
                 "--workers",
-                str(len(selected_window_ids)),
+                str(worker_count),
                 "--no-email",
                 "--keep-browser-open",
                 "--manual-login-wait-seconds",
@@ -854,7 +894,15 @@ def _build_mercado_login_command(shop_name="", workers=3, window_ids=None):
             (
                 "--all-active-login",
                 "--workers",
-                str(max(1, min(int(workers or 3), 3))),
+                str(
+                    max(
+                        1,
+                        min(
+                            int(workers or DEFAULT_MERCADO_LOGIN_WORKERS),
+                            MAX_MERCADO_LOGIN_WORKERS,
+                        ),
+                    )
+                ),
             )
         )
     command.extend(("--wait-seconds", "60", "--page-load-timeout", "20"))
@@ -879,7 +927,7 @@ def _mercado_login_selected_target(selected_shops):
 def run_mercado_login_console_job(
     shop_name="",
     window_id="",
-    workers=3,
+    workers=DEFAULT_MERCADO_LOGIN_WORKERS,
     selected_shops=None,
     task_id="",
 ):
@@ -1012,10 +1060,17 @@ def run_mercado_login_console_job(
 def start_mercado_login_console_job(
     shop_name="",
     window_id="",
-    workers=3,
+    workers=DEFAULT_MERCADO_LOGIN_WORKERS,
     selected_shops=None,
 ):
     selected_shops = tuple(dict(shop) for shop in (selected_shops or ()))
+    workers = max(
+        1,
+        min(
+            int(workers or DEFAULT_MERCADO_LOGIN_WORKERS),
+            MAX_MERCADO_LOGIN_WORKERS,
+        ),
+    )
     scope, selected_window_ids, scope_keys = _mercado_login_task_scope(
         shop_name=shop_name,
         window_id=window_id,
@@ -1057,6 +1112,11 @@ def start_mercado_login_console_job(
             "target": target,
             "window_id": str(window_id or "").strip(),
             "window_ids": selected_window_ids,
+            "workers": (
+                min(workers, len(selected_window_ids))
+                if selected_window_ids
+                else workers
+            ),
             "pid": None,
             "returncode": None,
             "stop_requested": False,
@@ -1425,6 +1485,122 @@ def _parse_bool_param(data, name, default=True):
     if isinstance(value, bool):
         return value
     return str(value).strip().lower() in ("1", "true", "yes", "on", "是", "启用")
+
+
+def build_risk_check_params(data):
+    """校验泽顺控制台提交的侵权检测参数。"""
+    data = data if isinstance(data, dict) else {}
+    category = str(data.get("category") or "").strip()[:1024]
+    model = str(data.get("model") or "").strip()[:128] or None
+    return {
+        "zying_category": category or None,
+        "hours": _parse_int_param(data, "hours", 0, min_value=0, max_value=87600),
+        "limit": _parse_int_param(data, "limit", 0, min_value=0, max_value=50000),
+        "batch_size": _parse_int_param(
+            data,
+            "batch_size",
+            bit_check_risk.DEFAULT_BATCH_SIZE,
+            min_value=1,
+            max_value=50,
+        ),
+        "model": model,
+        "retries": _parse_int_param(
+            data,
+            "ai_retries",
+            bit_check_risk.DEFAULT_AI_RETRIES,
+            min_value=0,
+            max_value=5,
+        ),
+        "recheck": _parse_bool_param(data, "recheck", False),
+        "dry_run": _parse_bool_param(data, "dry_run", False),
+    }
+
+
+def _append_risk_check_log(message):
+    text = str(message or "").strip()
+    if not text:
+        return
+    timestamp = datetime.now().strftime("%H:%M:%S")
+    with _risk_check_state_lock:
+        for line in text.splitlines():
+            line = line.strip()
+            if line:
+                _risk_check_logs.append(f"[{timestamp}] {line}")
+                if _risk_check_state.get("running"):
+                    _risk_check_state["message"] = line
+
+
+def run_risk_check_job(params, task_lock):
+    """在后台线程执行侵权检测，并更新控制台任务状态。"""
+    try:
+        summary = bit_check_risk.scan_products(
+            **params,
+            candidate_reader=db_get_zying_risk_candidates,
+            risk_writer=db_update_zying_product_risks,
+            log_callback=_append_risk_check_log,
+        )
+        public_summary = {
+            key: int(summary.get(key) or 0)
+            for key in ("checked", "risk_0", "risk_1", "risk_2", "updated")
+        }
+        completion_message = (
+            f"检测完成：{public_summary['checked']} 条，"
+            f"疑似 {public_summary['risk_1']} 条，"
+            f"侵权 {public_summary['risk_2']} 条"
+        )
+        _append_risk_check_log(completion_message)
+        with _risk_check_state_lock:
+            _risk_check_state.update(
+                {
+                    "running": False,
+                    "finished_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                    "status": "success",
+                    "message": completion_message,
+                    "summary": public_summary,
+                }
+            )
+    except Exception as exc:
+        logging.error("侵权检测任务失败：%s", exc)
+        traceback.print_exc()
+        _append_risk_check_log(f"任务失败：{exc}")
+        with _risk_check_state_lock:
+            _risk_check_state.update(
+                {
+                    "running": False,
+                    "finished_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                    "status": "error",
+                    "message": str(exc),
+                    "summary": {},
+                }
+            )
+    finally:
+        task_lock.release()
+
+
+def _risk_result_query_params(args, export=False):
+    risk_level = str(args.get("risk_level") or "").strip().lower()
+    if risk_level not in {"", "0", "1", "2", "unchecked"}:
+        raise ValueError("风险级别只能是 0、1、2 或未检测")
+    sort_by = str(args.get("sort_by") or "risk_level").strip()
+    if sort_by not in {
+        "row_id",
+        "product_id",
+        "title",
+        "zying_category",
+        "risk_level",
+        "keywords",
+        "submitted_at",
+    }:
+        sort_by = "risk_level"
+    sort_dir = "asc" if str(args.get("sort_dir") or "").lower() == "asc" else "desc"
+    return {
+        "zying_category": str(args.get("category") or "").strip()[:1024] or None,
+        "risk_level": risk_level or None,
+        "search": str(args.get("search") or "").strip()[:200],
+        "sort_by": sort_by,
+        "sort_dir": sort_dir,
+        "limit": 0 if export else _parse_int_param(args, "limit", 1000, 1, 5000),
+    }
 
 
 def _append_order_print_log(message):
@@ -1860,6 +2036,28 @@ def resolve_appeal_sites(sites):
     return tuple(selected_sites)
 
 
+def resolve_appeal_forms(forms):
+    """规范化申诉类型，并按固定业务顺序执行，兼容旧版单个 form 字符串。"""
+    raw_forms = [forms] if isinstance(forms, str) else list(forms or [])
+    selected_forms = set()
+    invalid_forms = []
+    for raw_form in raw_forms:
+        appeal_form = str(raw_form or "").strip()
+        if not appeal_form:
+            continue
+        if appeal_form not in APPEAL_FORMS:
+            invalid_forms.append(appeal_form)
+            continue
+        selected_forms.add(appeal_form)
+    if invalid_forms:
+        raise ValueError(f"不支持的任务类型：{'、'.join(dict.fromkeys(invalid_forms))}")
+    if not selected_forms:
+        raise ValueError("请至少选择一个任务类型")
+    return tuple(
+        appeal_form for appeal_form in APPEAL_FORMS if appeal_form in selected_forms
+    )
+
+
 def normalize_appeal_loop_count(value):
     """返回申诉轮数；0 表示永久循环，其他值只允许 10、20、50。"""
     text = str(value if value is not None else DEFAULT_APPEAL_LOOP_COUNT).strip()
@@ -1930,8 +2128,9 @@ def shensu_logic(
     stop_event=None,
 ):
     target_sites = resolve_appeal_sites(sites)
+    target_forms = resolve_appeal_forms(form)
     round_limit = normalize_appeal_loop_count(loop_count)
-    multiple_sites_selected = len(target_sites) > 1
+    multiple_tasks_selected = len(target_sites) > 1 or len(target_forms) > 1
     round_interval_seconds = get_appeal_round_interval(mode)
     round_interval_minutes = round_interval_seconds // 60
     round_number = 0
@@ -1943,78 +2142,107 @@ def shensu_logic(
             yield f"{get_now_time()} 已终结本次申诉任务\n"
             return
         round_number += 1
-        if multiple_sites_selected:
+        if multiple_tasks_selected:
             yield (
-                f"{get_now_time()} 第 {round_number} 轮开始，将依次执行选中的 "
-                f"{len(target_sites)} 个站点：{'、'.join(target_sites)}\n"
+                f"{get_now_time()} 第 {round_number} 轮开始，任务类型将按 "
+                f"{' → '.join(target_forms)} 的顺序执行；"
+                f"选中站点：{'、'.join(target_sites)}\n"
             )
 
-        for current_site in target_sites:
-            if stop_event.is_set():
-                yield f"{get_now_time()} 已终结本次申诉任务，不再执行后续站点\n"
-                return
-            output_queue = queue.Queue()
-            task_result = {"value": None}
-
-            def run_task(run_site=current_site, run_round=round_number):
-                register_thread_log_queue(output_queue)
-                window_lease = None
-                try:
-                    print(
-                        f"{get_now_time()} --- 第 {run_round} 轮任务启动："
-                        f"{name} {run_site}，客服模式：{mode}"
-                    )
-                    window_id = getWindowidByName(name)
-                    window_lease = create_window_lease(
-                        window_id,
-                        owner=f"interface_appeal:{name}",
-                        shop_name=name,
-                        task_type="interface_appeal",
-                    )
-                    if not window_lease.acquire(timeout=0):
-                        task_result["value"] = "窗口正在被其他任务占用"
-                        print(f"{get_now_time()} {name} {run_site} {task_result['value']}，本轮已跳过")
-                        return
-                    if mode == "AI客服":
-                        task_result["value"] = bit_appeal_ai.shensu(name, run_site, form, message)
-                    else:
-                        task_result["value"] = shensu(name, run_site, form, message, "人工客服")
-                    print(f"{get_now_time()} {name} {run_site} 申诉执行完毕：{task_result['value']}")
-                except Exception as e:
-                    print(f"{get_now_time()} {name} {run_site} 发生错误: {str(e)}")
-                    traceback.print_exc()
-                finally:
-                    if window_lease is not None:
-                        window_lease.release()
-                    unregister_thread_log_queue()
-                    output_queue.put(None)
-
-            task_thread = threading.Thread(target=run_task, daemon=True)
-            task_thread.start()
-
-            yield from stream_task_output(output_queue, stop_event=stop_event)
-
-            if stop_event.is_set():
+        for current_form in target_forms:
+            if len(target_forms) > 1:
                 yield (
-                    f"{get_now_time()} {name} {current_site} 当前操作已安全结束，"
-                    "本次任务已终结\n"
+                    f"{get_now_time()} 第 {round_number} 轮开始执行任务类型："
+                    f"{current_form}\n"
                 )
-                return
+            for current_site in target_sites:
+                if stop_event.is_set():
+                    yield (
+                        f"{get_now_time()} 已终结本次申诉任务，"
+                        "不再执行后续任务类型和站点\n"
+                    )
+                    return
+                output_queue = queue.Queue()
+                task_result = {"value": None}
 
-            if is_login_blocking_result(task_result.get("value")):
-                yield (
-                    f"{get_now_time()} {name} {current_site} "
-                    f"{task_result.get('value')}，已停止该店铺后续站点和申诉循环\n"
-                )
-                return
+                def run_task(
+                    run_site=current_site,
+                    run_form=current_form,
+                    run_round=round_number,
+                ):
+                    register_thread_log_queue(output_queue)
+                    window_lease = None
+                    try:
+                        print(
+                            f"{get_now_time()} --- 第 {run_round} 轮任务启动："
+                            f"{name} {run_site}，任务类型：{run_form}，客服模式：{mode}"
+                        )
+                        window_id = getWindowidByName(name)
+                        window_lease = create_window_lease(
+                            window_id,
+                            owner=f"interface_appeal:{name}",
+                            shop_name=name,
+                            task_type="interface_appeal",
+                        )
+                        if not window_lease.acquire(timeout=0):
+                            task_result["value"] = "窗口正在被其他任务占用"
+                            print(
+                                f"{get_now_time()} {name} {run_site} {run_form} "
+                                f"{task_result['value']}，本轮已跳过"
+                            )
+                            return
+                        if mode == "AI客服":
+                            task_result["value"] = bit_appeal_ai.shensu(
+                                name, run_site, run_form, message
+                            )
+                        else:
+                            task_result["value"] = shensu(
+                                name, run_site, run_form, message, "人工客服"
+                            )
+                        print(
+                            f"{get_now_time()} {name} {run_site} {run_form} "
+                            f"申诉执行完毕：{task_result['value']}"
+                        )
+                    except Exception as e:
+                        print(
+                            f"{get_now_time()} {name} {run_site} {run_form} "
+                            f"发生错误: {str(e)}"
+                        )
+                        traceback.print_exc()
+                    finally:
+                        if window_lease is not None:
+                            window_lease.release()
+                        unregister_thread_log_queue()
+                        output_queue.put(None)
+
+                task_thread = threading.Thread(target=run_task, daemon=True)
+                task_thread.start()
+
+                yield from stream_task_output(output_queue, stop_event=stop_event)
+
+                if stop_event.is_set():
+                    yield (
+                        f"{get_now_time()} {name} {current_site} {current_form} "
+                        "当前操作已安全结束，本次任务已终结\n"
+                    )
+                    return
+
+                if is_login_blocking_result(task_result.get("value")):
+                    yield (
+                        f"{get_now_time()} {name} {current_site} "
+                        f"{task_result.get('value')}，已停止该店铺后续站点、"
+                        "任务类型和申诉循环\n"
+                    )
+                    return
 
         has_next_round = (
             round_limit == PERMANENT_APPEAL_LOOP_COUNT
             or round_number < round_limit
         )
-        if multiple_sites_selected:
+        if multiple_tasks_selected:
             yield (
-                f"{get_now_time()} 第 {round_number} 轮选中站点执行完成，"
+                f"{get_now_time()} 第 {round_number} 轮任务类型 "
+                f"{'、'.join(target_forms)} 和选中站点执行完成，"
                 + (
                     f"等待 {round_interval_minutes} 分钟后开始下一轮\n"
                     if has_next_round
@@ -2056,12 +2284,15 @@ def api_run_shensu():
     except ValueError as exc:
         return jsonify({"status": "error", "message": str(exc)}), 400
     try:
+        forms = resolve_appeal_forms(request.args.getlist("form"))
+    except ValueError as exc:
+        return jsonify({"status": "error", "message": str(exc)}), 400
+    try:
         loop_count = normalize_appeal_loop_count(
             request.args.get("loop_count", DEFAULT_APPEAL_LOOP_COUNT)
         )
     except ValueError as exc:
         return jsonify({"status": "error", "message": str(exc)}), 400
-    form = request.args.get("form", "")
     message = request.args.get("message", "")
     mode = request.args.get("mode", "人工客服")
     task_id = normalize_appeal_task_id(request.args.get("task_id", ""))
@@ -2073,7 +2304,8 @@ def api_run_shensu():
             "name": name,
             "sites": list(sites),
             "loop_count": "永久" if loop_count == 0 else loop_count,
-            "form": form,
+            "form": forms[0] if len(forms) == 1 else "、".join(forms),
+            "forms": list(forms),
             "mode": mode,
         },
     )
@@ -2086,7 +2318,7 @@ def api_run_shensu():
             yield from shensu_logic(
                 name,
                 sites,
-                form,
+                forms,
                 message,
                 mode,
                 loop_count=loop_count,
@@ -2839,6 +3071,175 @@ def api_daily_task_status():
         })
 
 
+@app.route('/api/risk-check/categories', methods=['GET'])
+@login_required
+def api_risk_check_categories():
+    try:
+        return jsonify({
+            "status": "success",
+            "data": db_list_zying_risk_categories(),
+        })
+    except Exception as exc:
+        logging.error("读取智赢侵权检测分类失败：%s", exc)
+        return jsonify({"status": "error", "message": str(exc)}), 500
+
+
+@app.route('/api/risk-check/results', methods=['GET'])
+@login_required
+def api_risk_check_results():
+    try:
+        params = _risk_result_query_params(request.args)
+        return jsonify({
+            "status": "success",
+            "data": db_get_zying_risk_results(**params),
+        })
+    except ValueError as exc:
+        return jsonify({"status": "error", "message": str(exc)}), 400
+    except Exception as exc:
+        logging.error("读取智赢侵权检测结果失败：%s", exc)
+        return jsonify({"status": "error", "message": str(exc)}), 500
+
+
+@app.route('/api/risk-check/results/export', methods=['GET'])
+@login_required
+def api_export_risk_check_results():
+    try:
+        params = _risk_result_query_params(request.args, export=True)
+        data = db_get_zying_risk_results(**params) or {}
+        rows = data.get("rows") or []
+
+        wb = Workbook()
+        ws = wb.active
+        ws.title = "侵权检测结果"
+        columns = [
+            ("数据行", "row_id"),
+            ("产品编号", "product_id"),
+            ("标题", "title"),
+            ("智赢分类编号", "zying_category_id"),
+            ("智赢产品分类", "zying_category"),
+            ("产品分类", "product_category"),
+            ("风险级别", "risk_level"),
+            ("侵权关键词/品牌", "keywords"),
+            ("主图链接", "main_image_url"),
+            ("采集时间", "collected_at"),
+            ("提交时间", "submitted_at"),
+        ]
+        ws.append([label for label, _ in columns])
+        risk_labels = {
+            "0": "0 - 无可疑",
+            "1": "1 - 疑似/需复核",
+            "2": "2 - 侵权",
+        }
+        for row in rows:
+            values = []
+            for _, key in columns:
+                value = row.get(key, "")
+                if key == "risk_level":
+                    value = risk_labels.get(str(value or ""), "未检测")
+                values.append(value)
+            ws.append(values)
+
+        header_fill = PatternFill("solid", fgColor="D9EAF7")
+        header_font = Font(bold=True, color="1F2937")
+        for cell in ws[1]:
+            cell.fill = header_fill
+            cell.font = header_font
+            cell.alignment = Alignment(horizontal="center", vertical="center")
+        for column_cells in ws.columns:
+            max_length = 0
+            column_letter = column_cells[0].column_letter
+            for cell in column_cells:
+                value = "" if cell.value is None else str(cell.value)
+                max_length = max(max_length, len(value))
+                cell.alignment = Alignment(vertical="top", wrap_text=True)
+            ws.column_dimensions[column_letter].width = min(max(max_length + 2, 10), 48)
+        ws.freeze_panes = "A2"
+        ws.auto_filter.ref = ws.dimensions
+
+        output = BytesIO()
+        wb.save(output)
+        output.seek(0)
+        filename = f"侵权检测结果_{datetime.now().strftime('%Y%m%d%H%M%S')}.xlsx"
+        response = send_file(
+            output,
+            mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            as_attachment=True,
+            download_name=filename,
+        )
+        response.headers["Content-Disposition"] = (
+            f"attachment; filename*=UTF-8''{quote(filename)}"
+        )
+        return response
+    except ValueError as exc:
+        return jsonify({"status": "error", "message": str(exc)}), 400
+    except Exception as exc:
+        logging.error("导出智赢侵权检测结果失败：%s", exc)
+        return jsonify({"status": "error", "message": str(exc)}), 500
+
+
+@app.route('/api/risk-check/start', methods=['POST'])
+@login_required
+def api_start_risk_check():
+    params = build_risk_check_params(request.get_json(silent=True) or {})
+    if not _risk_check_lock.acquire(blocking=False):
+        with _risk_check_state_lock:
+            data = dict(_risk_check_state)
+        return jsonify({
+            "status": "error",
+            "message": "侵权检测任务正在运行",
+            "data": data,
+        }), 409
+
+    with _risk_check_state_lock:
+        _risk_check_logs.clear()
+        _risk_check_state.update(
+            {
+                "running": True,
+                "started_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                "finished_at": "",
+                "status": "running",
+                "message": "正在读取商品并进行 AI 侵权检测",
+                "params": dict(params),
+                "summary": {},
+            }
+        )
+        _append_risk_check_log("侵权检测任务已启动：当前仅识别商品标题，主图 Logo 暂不检测")
+        data = {**dict(_risk_check_state), "logs": list(_risk_check_logs)}
+    try:
+        threading.Thread(
+            target=run_risk_check_job,
+            args=(params, _risk_check_lock),
+            daemon=True,
+            name="zying-risk-check",
+        ).start()
+    except Exception:
+        _risk_check_lock.release()
+        with _risk_check_state_lock:
+            _risk_check_state.update(
+                {
+                    "running": False,
+                    "finished_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                    "status": "error",
+                    "message": "侵权检测后台线程启动失败",
+                }
+            )
+        raise
+    return jsonify({"status": "success", "data": data})
+
+
+@app.route('/api/risk-check/status', methods=['GET'])
+@login_required
+def api_risk_check_status():
+    with _risk_check_state_lock:
+        data = {
+            **dict(_risk_check_state),
+            "params": dict(_risk_check_state.get("params") or {}),
+            "summary": dict(_risk_check_state.get("summary") or {}),
+            "logs": list(_risk_check_logs),
+        }
+    return jsonify({"status": "success", "data": data})
+
+
 @app.route('/api/db/task-records', methods=['POST'])
 @internal_api_required
 def api_db_insert_task_records():
@@ -2988,6 +3389,63 @@ def api_db_insert_zying_products():
     rows = data.get("rows") or []
     count = db_insert_zying_product_info(rows)
     return jsonify({"status": "success", "data": {"count": count}})
+
+
+@app.route('/api/db/zying-risk/candidates', methods=['GET'])
+@internal_api_required
+def api_db_zying_risk_candidates():
+    blocked = reject_db_api_client_mode()
+    if blocked:
+        return blocked
+    rows = db_get_zying_risk_candidates(
+        hours=_parse_int_param(request.args, "hours", 24, 0, 87600),
+        limit=_parse_int_param(request.args, "limit", 0, 0, 50000),
+        zying_category=str(request.args.get("category") or "").strip() or None,
+        include_checked=_parse_bool_param(request.args, "include_checked", False),
+    )
+    return jsonify({"status": "success", "data": rows})
+
+
+@app.route('/api/db/zying-risk/bulk', methods=['POST'])
+@internal_api_required
+def api_db_update_zying_risks():
+    blocked = reject_db_api_client_mode()
+    if blocked:
+        return blocked
+    data = request.get_json(silent=True) or {}
+    results = data.get("results") or []
+    if not isinstance(results, list):
+        return jsonify({"status": "error", "message": "results must be an array"}), 422
+    count = db_update_zying_product_risks(results)
+    return jsonify({"status": "success", "data": {"count": count}})
+
+
+@app.route('/api/db/zying-risk/categories', methods=['GET'])
+@internal_api_required
+def api_db_zying_risk_categories():
+    blocked = reject_db_api_client_mode()
+    if blocked:
+        return blocked
+    return jsonify({"status": "success", "data": db_list_zying_risk_categories()})
+
+
+@app.route('/api/db/zying-risk/results', methods=['GET'])
+@internal_api_required
+def api_db_zying_risk_results():
+    blocked = reject_db_api_client_mode()
+    if blocked:
+        return blocked
+    try:
+        params = _risk_result_query_params(
+            request.args,
+            export=str(request.args.get("limit") or "").strip() == "0",
+        )
+    except ValueError as exc:
+        return jsonify({"status": "error", "message": str(exc)}), 400
+    return jsonify({
+        "status": "success",
+        "data": db_get_zying_risk_results(**params),
+    })
 
 
 @app.route('/api/db/orders/bulk', methods=['POST'])
@@ -3295,6 +3753,13 @@ def api_stop_mercado_login_console():
 @login_required
 def api_start_mercado_login_console():
     data = request.get_json(silent=True) or {}
+    worker_count = _parse_int_param(
+        data,
+        "workers",
+        DEFAULT_MERCADO_LOGIN_WORKERS,
+        1,
+        MAX_MERCADO_LOGIN_WORKERS,
+    )
     window_id = str(data.get("window_id") or "").strip()
     shop_name = ""
     selected_shops = []
@@ -3380,69 +3845,41 @@ def api_start_mercado_login_console():
             return jsonify({"status": "error", "message": "店铺状态记录缺少店铺名"}), 422
 
     if selected_shops:
-        started_task_ids = []
-        failed_shops = []
-        latest_state = _mercado_login_task_snapshot()
-        for shop in selected_shops:
-            try:
-                started, latest_state = start_mercado_login_console_job(
-                    shop_name=shop["window_name"],
-                    window_id=shop["window_id"],
-                    workers=1,
-                )
-            except Exception as exc:
-                started = False
-                latest_state = _mercado_login_task_snapshot()
-                latest_state["message"] = str(exc)
-            if started:
-                current_task_id = str(
-                    latest_state.get("started_task_id")
-                    or latest_state.get("current_task_id")
-                    or ""
-                ).strip()
-                if current_task_id:
-                    started_task_ids.append(current_task_id)
-            else:
-                failed_shops.append(
-                    {
-                        "window_id": shop["window_id"],
-                        "window_name": shop["window_name"],
-                        "message": str(latest_state.get("message") or "启动失败"),
-                    }
-                )
-        task_state = _mercado_login_task_snapshot()
-        task_state.update(
-            {
-                "started_count": len(started_task_ids),
-                "started_task_ids": started_task_ids,
-                "failed_count": len(failed_shops),
-                "failed_shops": failed_shops,
-            }
+        started, task_state = start_mercado_login_console_job(
+            selected_shops=selected_shops,
+            workers=worker_count,
         )
-        if not started_task_ids:
+        if not started:
             return jsonify(
                 {
                     "status": "running",
                     "data": task_state,
-                    "message": "所选店铺均未启动，请检查是否已有任务正在运行",
+                    "message": task_state.get("message")
+                    or "所选店铺已有自动登录任务正在运行",
                 }
             ), 409
+        started_task_id = str(task_state.get("started_task_id") or "").strip()
+        actual_worker_count = min(worker_count, len(selected_shops))
+        task_state.update(
+            {
+                "started_count": len(selected_shops),
+                "started_task_ids": [started_task_id] if started_task_id else [],
+                "failed_count": 0,
+                "failed_shops": [],
+                "workers": actual_worker_count,
+            }
+        )
         return jsonify(
             {
                 "status": "success",
                 "data": task_state,
                 "message": (
-                    f"已为 {len(started_task_ids)} 家店铺分别启动独立登录进程"
-                    + (
-                        f"，另有 {len(failed_shops)} 家未启动"
-                        if failed_shops
-                        else ""
-                    )
+                    f"已启动 {len(selected_shops)} 家店铺的重新检测，"
+                    f"并发进程数：{actual_worker_count}"
                 ),
             }
         )
 
-    worker_count = _parse_int_param(data, "workers", 3, 1, 3)
     job_args = {
         "shop_name": shop_name,
         "window_id": window_id,

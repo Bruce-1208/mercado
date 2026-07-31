@@ -1153,6 +1153,7 @@ def _ensure_zying_product_table(cursor):
             `包装尺寸` VARCHAR(255) NULL,
             `审核状态` VARCHAR(128) NULL,
             `疑似侵权` VARCHAR(8) NULL,
+            `侵权关键词` VARCHAR(1024) NULL,
             `采集页码` INT NULL,
             `采集时间` DATETIME NOT NULL,
             `页面原始信息` LONGTEXT NULL,
@@ -1169,6 +1170,7 @@ def _ensure_zying_product_table(cursor):
     _ensure_column(cursor, "zying_product", "分类编号", "VARCHAR(64) NULL")
     _ensure_column(cursor, "zying_product", "产品分类", "VARCHAR(2048) NULL")
     _ensure_column(cursor, "zying_product", "疑似侵权", "VARCHAR(8) NULL")
+    _ensure_column(cursor, "zying_product", "侵权关键词", "VARCHAR(1024) NULL")
 
 
 def insert_zying_product_info(product_list):
@@ -1251,11 +1253,20 @@ def insert_zying_product_info(product_list):
         connection.close()
 
 
-def get_zying_risk_candidates(hours=24, limit=0):
-    """读取最近入库的智赢商品，供标题和主图侵权风险检查。"""
-    hours = max(1, int(hours))
+def get_zying_risk_candidates(
+    hours=24,
+    limit=0,
+    zying_category=None,
+    include_checked=False,
+):
+    """读取智赢商品，供标题和主图侵权风险检查。
+
+    ``zying_category`` 可以是智赢分类编号、完整分类路径或末级分类名。
+    ``hours`` 为 0 时不限制入库时间。默认跳过已有 0/1/2 审核结果的数据。
+    """
+    hours = max(0, int(hours or 0))
     limit = max(0, int(limit or 0))
-    since = datetime.now() - timedelta(hours=hours)
+    category = str(zying_category or "").strip()
     connection = pymysql.connect(**config)
     try:
         with connection.cursor() as cursor:
@@ -1267,14 +1278,31 @@ def get_zying_risk_candidates(hours=24, limit=0):
                     `主图链接` AS `main_image_url`,
                     `标题` AS `title`,
                     `产品分类` AS `product_category`,
+                    `智赢分类编号` AS `zying_category_id`,
+                    `智赢产品分类` AS `zying_category`,
                     `提交时间` AS `submitted_at`,
-                    `疑似侵权` AS `suspected_infringement`
+                    `疑似侵权` AS `suspected_infringement`,
+                    `侵权关键词` AS `infringement_keywords`
                 FROM `zying_product`
-                WHERE `提交时间` >= %s
-                  AND COALESCE(`疑似侵权`, '') <> '是'
-                ORDER BY `id` ASC
+                WHERE 1 = 1
             """
-            params = [since.strftime("%Y-%m-%d %H:%M:%S")]
+            params = []
+            if hours:
+                since = datetime.now() - timedelta(hours=hours)
+                sql += " AND `提交时间` >= %s"
+                params.append(since.strftime("%Y-%m-%d %H:%M:%S"))
+            if not include_checked:
+                sql += " AND COALESCE(`疑似侵权`, '') NOT IN ('0', '1', '2')"
+            if category:
+                sql += """
+                    AND (
+                        `智赢分类编号` = %s
+                        OR `智赢产品分类` = %s
+                        OR `智赢产品分类` LIKE %s
+                    )
+                """
+                params.extend((category, category, f"%/{category}"))
+            sql += " ORDER BY `id` ASC"
             if limit:
                 sql += " LIMIT %s"
                 params.append(limit)
@@ -1285,7 +1313,7 @@ def get_zying_risk_candidates(hours=24, limit=0):
 
 
 def mark_zying_products_suspected(row_ids):
-    """把指定 zying_product 数据行的“疑似侵权”字段标记为“是”。"""
+    """兼容旧调用：把指定数据行的风险级别标记为 1。"""
     normalized_ids = sorted(
         {
             int(row_id)
@@ -1301,7 +1329,7 @@ def mark_zying_products_suspected(row_ids):
         with connection.cursor() as cursor:
             _ensure_zying_product_table(cursor)
             cursor.executemany(
-                "UPDATE `zying_product` SET `疑似侵权` = '是' WHERE `id` = %s",
+                "UPDATE `zying_product` SET `疑似侵权` = '1' WHERE `id` = %s",
                 [(row_id,) for row_id in normalized_ids],
             )
             updated_count = cursor.rowcount
@@ -1310,6 +1338,202 @@ def mark_zying_products_suspected(row_ids):
     except Exception:
         connection.rollback()
         raise
+    finally:
+        connection.close()
+
+
+def update_zying_product_risks(results):
+    """批量写入智赢商品的 0/1/2 侵权风险和命中关键词。
+
+    ``results`` 中每项需要包含 ``row_id`` 和 ``risk_level``，
+    ``keywords`` 可以是字符串或字符串数组。0 级会清空旧的关键词。
+    """
+    normalized = {}
+    for result in results or []:
+        if not isinstance(result, dict):
+            continue
+        try:
+            row_id = int(result.get("row_id"))
+            risk_level = int(result.get("risk_level"))
+        except (TypeError, ValueError):
+            continue
+        if row_id <= 0 or risk_level not in {0, 1, 2}:
+            continue
+
+        raw_keywords = result.get("keywords") or []
+        if isinstance(raw_keywords, str):
+            keywords = raw_keywords.strip()
+        else:
+            keywords = ", ".join(
+                str(item).strip()
+                for item in raw_keywords
+                if str(item or "").strip()
+            )
+        normalized[row_id] = (
+            str(risk_level),
+            keywords[:1024] if risk_level else None,
+            row_id,
+        )
+
+    if not normalized:
+        return 0
+
+    connection = pymysql.connect(**config)
+    try:
+        with connection.cursor() as cursor:
+            _ensure_zying_product_table(cursor)
+            cursor.executemany(
+                """
+                UPDATE `zying_product`
+                SET `疑似侵权` = %s, `侵权关键词` = %s
+                WHERE `id` = %s
+                """,
+                list(normalized.values()),
+            )
+            updated_count = cursor.rowcount
+        connection.commit()
+        return updated_count
+    except Exception:
+        connection.rollback()
+        raise
+    finally:
+        connection.close()
+
+
+def list_zying_risk_categories():
+    """返回 zying_product 中可用的智赢分类及各风险级别数量。"""
+    connection = pymysql.connect(**config)
+    try:
+        with connection.cursor() as cursor:
+            _ensure_zying_product_table(cursor)
+            cursor.execute(
+                """
+                SELECT
+                    COALESCE(`智赢分类编号`, '') AS `category_id`,
+                    COALESCE(`智赢产品分类`, '') AS `category_name`,
+                    COUNT(*) AS `total`,
+                    SUM(CASE WHEN `疑似侵权` = '0' THEN 1 ELSE 0 END) AS `risk_0`,
+                    SUM(CASE WHEN `疑似侵权` = '1' THEN 1 ELSE 0 END) AS `risk_1`,
+                    SUM(CASE WHEN `疑似侵权` = '2' THEN 1 ELSE 0 END) AS `risk_2`,
+                    SUM(
+                        CASE
+                            WHEN COALESCE(`疑似侵权`, '') NOT IN ('0', '1', '2')
+                            THEN 1 ELSE 0
+                        END
+                    ) AS `unchecked`
+                FROM `zying_product`
+                WHERE COALESCE(`智赢分类编号`, '') <> ''
+                   OR COALESCE(`智赢产品分类`, '') <> ''
+                GROUP BY `智赢分类编号`, `智赢产品分类`
+                ORDER BY `智赢产品分类` ASC, `智赢分类编号` ASC
+                """
+            )
+            return cursor.fetchall()
+    finally:
+        connection.close()
+
+
+def get_zying_risk_results(
+    zying_category=None,
+    risk_level=None,
+    search="",
+    sort_by="risk_level",
+    sort_dir="desc",
+    limit=1000,
+):
+    """按控制台筛选与排序条件返回智赢侵权检测结果。"""
+    category = str(zying_category or "").strip()
+    risk = str(risk_level if risk_level is not None else "").strip().lower()
+    keyword = str(search or "").strip()[:200]
+    limit = max(0, int(limit or 0))
+    sort_columns = {
+        "row_id": "`id`",
+        "product_id": "`产品编号`",
+        "title": "`标题`",
+        "zying_category": "`智赢产品分类`",
+        "risk_level": "CAST(COALESCE(NULLIF(`疑似侵权`, ''), '-1') AS SIGNED)",
+        "keywords": "`侵权关键词`",
+        "submitted_at": "`提交时间`",
+    }
+    order_column = sort_columns.get(str(sort_by or "").strip(), sort_columns["risk_level"])
+    order_direction = "ASC" if str(sort_dir or "").strip().lower() == "asc" else "DESC"
+
+    where = ["1 = 1"]
+    params = []
+    if category:
+        where.append(
+            "(`智赢分类编号` = %s OR `智赢产品分类` = %s OR `智赢产品分类` LIKE %s)"
+        )
+        params.extend((category, category, f"%/{category}"))
+    if risk in {"0", "1", "2"}:
+        where.append("`疑似侵权` = %s")
+        params.append(risk)
+    elif risk in {"unchecked", "pending", "未检测"}:
+        where.append("COALESCE(`疑似侵权`, '') NOT IN ('0', '1', '2')")
+    if keyword:
+        like_value = f"%{keyword}%"
+        where.append(
+            "(`产品编号` LIKE %s OR `标题` LIKE %s OR `侵权关键词` LIKE %s)"
+        )
+        params.extend((like_value, like_value, like_value))
+
+    where_sql = " AND ".join(where)
+    connection = pymysql.connect(**config)
+    try:
+        with connection.cursor() as cursor:
+            _ensure_zying_product_table(cursor)
+            cursor.execute(
+                f"""
+                SELECT
+                    COUNT(*) AS `total`,
+                    SUM(CASE WHEN `疑似侵权` = '0' THEN 1 ELSE 0 END) AS `risk_0`,
+                    SUM(CASE WHEN `疑似侵权` = '1' THEN 1 ELSE 0 END) AS `risk_1`,
+                    SUM(CASE WHEN `疑似侵权` = '2' THEN 1 ELSE 0 END) AS `risk_2`,
+                    SUM(
+                        CASE
+                            WHEN COALESCE(`疑似侵权`, '') NOT IN ('0', '1', '2')
+                            THEN 1 ELSE 0
+                        END
+                    ) AS `unchecked`
+                FROM `zying_product`
+                WHERE {where_sql}
+                """,
+                tuple(params),
+            )
+            counts = cursor.fetchone() or {}
+            sql = f"""
+                SELECT
+                    `id` AS `row_id`,
+                    `产品编号` AS `product_id`,
+                    `主图链接` AS `main_image_url`,
+                    `标题` AS `title`,
+                    `产品分类` AS `product_category`,
+                    `智赢分类编号` AS `zying_category_id`,
+                    `智赢产品分类` AS `zying_category`,
+                    `疑似侵权` AS `risk_level`,
+                    `侵权关键词` AS `keywords`,
+                    `采集时间` AS `collected_at`,
+                    `提交时间` AS `submitted_at`
+                FROM `zying_product`
+                WHERE {where_sql}
+                ORDER BY {order_column} {order_direction}, `id` DESC
+            """
+            row_params = list(params)
+            if limit:
+                sql += " LIMIT %s"
+                row_params.append(limit)
+            cursor.execute(sql, tuple(row_params))
+            rows = cursor.fetchall()
+            return {
+                "total": int(counts.get("total") or 0),
+                "risk_0": int(counts.get("risk_0") or 0),
+                "risk_1": int(counts.get("risk_1") or 0),
+                "risk_2": int(counts.get("risk_2") or 0),
+                "unchecked": int(counts.get("unchecked") or 0),
+                "rows": rows,
+                "sort_by": str(sort_by or "risk_level"),
+                "sort_dir": order_direction.lower(),
+            }
     finally:
         connection.close()
 

@@ -865,8 +865,18 @@ def _connect_bitbrowser_with_playwright(playwright, open_result):
     return browser, page
 
 
-def _collect_site_infractions(page, name, site, switch_site=True):
-    """在已连接的同一 BitBrowser 页面中采集一个站点。"""
+def _collect_site_infractions(
+    page,
+    name,
+    site,
+    switch_site=True,
+    include_rights_holder=True,
+):
+    """在已连接的同一 BitBrowser 页面中采集一个站点。
+
+    ``include_rights_holder=False`` 时只读取 detections/infringements，
+    不打开 denounces/reports 权利人举报标签。
+    """
     _safe_goto_infractions(page, INFRACTIONS_URL)
     time.sleep(5)
     _validate_infractions_page(page)
@@ -877,6 +887,13 @@ def _collect_site_infractions(page, name, site, switch_site=True):
     infractions_list = []
     collected_types = set()
     current_type = _current_infraction_type(page)
+    if not include_rights_holder and current_type != "侵权":
+        _goto_infractions_type(page, "侵权")
+        current_type = _current_infraction_type(page)
+        if current_type != "侵权":
+            raise MercadoPageStructureError(
+                f"{name}{site}无法打开 infringements 标签"
+            )
     print(get_now_time() + name + site + f"当前实际侵权标签: {current_type}")
     infractions_list.extend(
         _collect_type_once(page, name, site, current_type, collected_types)
@@ -906,7 +923,7 @@ def _collect_site_infractions(page, name, site, switch_site=True):
                     _collect_type_once(page, name, site, "侵权", collected_types)
                 )
 
-    if "权利人" not in collected_types:
+    if include_rights_holder and "权利人" not in collected_types:
         rights_total = _infraction_type_total(page, "权利人")
         if rights_total == 0:
             collected_types.add("权利人")
@@ -933,7 +950,14 @@ def _collect_site_infractions(page, name, site, switch_site=True):
     return infractions_list
 
 
-def get_infractions_info(window_id, name, site, isSwitch=1, batch_control=False):
+def get_infractions_info(
+    window_id,
+    name,
+    site,
+    isSwitch=1,
+    batch_control=False,
+    include_rights_holder=True,
+):
     """兼容单站点调用；批量任务会在店铺内复用同一个页面连接。"""
     sync_playwright, _ = _load_playwright_sync_api()
     res = _open_bitbrowser(
@@ -950,6 +974,7 @@ def get_infractions_info(window_id, name, site, isSwitch=1, batch_control=False)
                 name,
                 site,
                 switch_site=isSwitch == 1,
+                include_rights_holder=include_rights_holder,
             )
         finally:
             try:

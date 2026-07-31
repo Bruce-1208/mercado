@@ -32,7 +32,8 @@ from bit.bit_utils import get_now_time
 
 
 DEFAULT_DAILY_TOP_N = 30
-DEFAULT_DAILY_MAX_WORKERS = 30
+DEFAULT_DAILY_MAX_WORKERS = 10
+DEFAULT_DAILY_BROWSER_WORKER_LIMIT = 10
 DEFAULT_DAILY_RECENT_DAYS = 100
 DEFAULT_LOGIN_RETRY_ATTEMPTS = 3
 DEFAULT_LOGIN_RETRY_SECONDS = 180
@@ -46,19 +47,37 @@ DAILY_TASK_LOCK_KEY = "bit_daily_task_singleton"
 APPEAL_TYPE_INFRACTION = "侵权"
 APPEAL_TYPE_DELAY = "延误"
 APPEAL_TYPE_CANCELLATION = "取消率"
+APPEAL_TYPE_COMPLAINT = "投诉"
 SUPPORTED_APPEAL_TYPES = (
     APPEAL_TYPE_INFRACTION,
     APPEAL_TYPE_DELAY,
     APPEAL_TYPE_CANCELLATION,
+    APPEAL_TYPE_COMPLAINT,
 )
 REPUTATION_RATE_FIELDS = {
     APPEAL_TYPE_DELAY: "延误率",
     APPEAL_TYPE_CANCELLATION: "取消率",
+    APPEAL_TYPE_COMPLAINT: "投诉率",
 }
 
 
 class DailyTaskAlreadyRunning(RuntimeError):
     pass
+
+
+def _daily_browser_worker_limit():
+    try:
+        return max(
+            1,
+            int(
+                os.getenv(
+                    "BIT_DAILY_BROWSER_WORKER_LIMIT",
+                    str(DEFAULT_DAILY_BROWSER_WORKER_LIMIT),
+                )
+            ),
+        )
+    except (TypeError, ValueError):
+        return DEFAULT_DAILY_BROWSER_WORKER_LIMIT
 
 
 def normalize_appeal_type(appeal_type):
@@ -76,11 +95,16 @@ def normalize_appeal_type(appeal_type):
         "取消率": APPEAL_TYPE_CANCELLATION,
         "cancellation": APPEAL_TYPE_CANCELLATION,
         "cancellation_rate": APPEAL_TYPE_CANCELLATION,
+        "投诉": APPEAL_TYPE_COMPLAINT,
+        "投诉率": APPEAL_TYPE_COMPLAINT,
+        "complaint": APPEAL_TYPE_COMPLAINT,
+        "complaints": APPEAL_TYPE_COMPLAINT,
+        "complaint_rate": APPEAL_TYPE_COMPLAINT,
     }
     normalized = aliases.get(text.casefold())
     if normalized is None:
         raise ValueError(
-            f"不支持的申诉类型：{appeal_type}，仅支持侵权、延误率、取消率"
+            f"不支持的申诉类型：{appeal_type}，仅支持侵权、延误率、取消率、投诉"
         )
     return normalized
 
@@ -255,7 +279,7 @@ def build_latest_reputation_appeal_plan(
     only_active=True,
     min_rate=0,
 ):
-    """按最新声誉批次生成延误率或取消率申诉计划。
+    """按最新声誉批次生成延误率、取消率或投诉申诉计划。
 
     只选择比率大于 0 且不低于 ``min_rate`` 的站点；同一店铺内按比率降序，
     店铺之间按最高站点比率和比率总和排序。
@@ -263,7 +287,7 @@ def build_latest_reputation_appeal_plan(
     normalized_type = normalize_appeal_type(appeal_type)
     rate_field = REPUTATION_RATE_FIELDS.get(normalized_type)
     if not rate_field:
-        raise ValueError("声誉申诉计划仅支持延误率或取消率")
+        raise ValueError("声誉申诉计划仅支持延误率、取消率或投诉")
 
     threshold = max(0, _parse_rate(min_rate))
     data = get_latest_reputation_info()
@@ -593,15 +617,15 @@ def appeal_one_shop(
             rate_limit_retries=rate_limit_retries,
             rate_limit_retry_seconds=rate_limit_retry_seconds,
         )
-    except Exception:
+    finally:
+        # shensu 会关闭当前标签页，但不会关闭比特浏览器窗口。bit_main 会连续
+        # 跑多轮申诉，如果这里不关窗口，Chromium 主进程和渲染进程会跨轮累积。
         _close_ai_appeal_browser(
             window_id,
             lease,
             name,
-            "未处理的自动找客服异常",
+            "店铺 AI 申诉任务结束",
         )
-        raise
-    finally:
         lease.release()
 
 
@@ -668,8 +692,19 @@ def _run_ai_appeal_once_locked(
         print(f"{get_now_time()} 没有找到可处理的{appeal_label}店铺<br>")
         return []
 
-    worker_count = max_workers if max_workers is not None else DEFAULT_DAILY_MAX_WORKERS
-    worker_count = max(1, min(int(worker_count), len(plan)))
+    requested_workers = (
+        max_workers if max_workers is not None else DEFAULT_DAILY_MAX_WORKERS
+    )
+    worker_limit = _daily_browser_worker_limit()
+    worker_count = max(
+        1,
+        min(int(requested_workers), len(plan), worker_limit),
+    )
+    if int(requested_workers) > worker_count:
+        print(
+            f"{get_now_time()} AI 申诉并发已从 {requested_workers} 限制为 "
+            f"{worker_count}，可通过 BIT_DAILY_BROWSER_WORKER_LIMIT 调整<br>"
+        )
     results = []
     print(
         f"{get_now_time()} bit_daily_task 本轮使用 {worker_count} 个进程"
@@ -793,6 +828,11 @@ def auto_appeal_delay(**kwargs):
 def auto_appeal_cancellation(**kwargs):
     """自动对取消率进行一轮申诉。"""
     return run_ai_appeal_once(APPEAL_TYPE_CANCELLATION, **kwargs)
+
+
+def auto_appeal_complaint(**kwargs):
+    """自动对投诉进行一轮申诉。"""
+    return run_ai_appeal_once(APPEAL_TYPE_COMPLAINT, **kwargs)
 
 
 def auto_appeal_infringement(**kwargs):
@@ -1021,6 +1061,11 @@ def loop_delay_ai_appeal(**kwargs):
 def loop_cancellation_ai_appeal(**kwargs):
     """循环自动对取消率进行申诉。"""
     return loop_ai_appeal(APPEAL_TYPE_CANCELLATION, **kwargs)
+
+
+def loop_complaint_ai_appeal(**kwargs):
+    """循环自动对投诉进行申诉。"""
+    return loop_ai_appeal(APPEAL_TYPE_COMPLAINT, **kwargs)
 
 
 if __name__ == "__main__":

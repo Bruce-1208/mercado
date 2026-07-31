@@ -1828,6 +1828,17 @@ def login_mercado_with_saved_password(
         return initial
 
     stage = str(initial.get("login_stage") or detect_login_stage(driver))
+    if (
+        stage == "captcha"
+        and email
+        and _first_visible_element(driver, EMAIL_INPUT_SELECTORS) is not None
+    ):
+        print(
+            f"{get_now_time()} {shop_name} 登录页同时显示邮箱框和人机验证，"
+            "先自动输入数据库邮箱",
+            flush=True,
+        )
+        stage = "email"
     if stage == "captcha":
         return _unlogged_program_login_result(
             False,
@@ -1941,9 +1952,13 @@ def login_mercado_with_saved_password(
         return _unlogged_program_login_result(
             False,
             LOGIN_CAPTCHA_REQUIRED,
-            f"{shop_name} 出现人机验证，需要人工处理",
+            (
+                f"{shop_name} 输入邮箱后出现人机验证，需要人工处理"
+                if email_submitted
+                else f"{shop_name} 出现人机验证，需要人工处理"
+            ),
             login_stage=stage,
-            action="未登录",
+            action="自动登录未完成" if email_submitted else "未登录",
         )
     if stage == "verification":
         return _unlogged_program_login_result(

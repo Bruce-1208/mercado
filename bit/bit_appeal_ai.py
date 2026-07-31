@@ -55,7 +55,7 @@ from bit.bit_mercado_login import (
 from bit.bit_mercado_limit import MERCADO_RATE_LIMIT_TEXT
 from bit.bit_download import download_relay_mail
 from bit.bit_db_api import get_latest_infraction_info, insert_ai_appeal_record
-from bit.bit_reputation_info import get_cancellation_orders
+from bit.bit_reputation_info import get_cancellation_orders, get_complaint_orders
 from AI_Agent.qianwen import *
 import pandas as pd
 from datetime import datetime, timedelta
@@ -107,6 +107,22 @@ SITE_OPTION_MENU_OPTIONS = (
     "Argentina",
     "Uruguay",
 )
+
+CANCELLATION_DEFAULT_APPEAL_TEMPLATE = """尊敬的平台审核专员：
+
+1. 订单编号：{order_ids}
+
+2. 订单取消原因：页面显示【Mercado Libre取消的包裹，我们已取消此交易】，本次订单为平台系统主动取消交易，并非我方卖家主动发起订单取消。
+
+3. 订单节点说明：该订单产生时，我方商品链接正常在售、库存充足、已经备好货物、完全按平台时效要求准备安排发货，不存在缺货、超时、虚假发货等任何卖家违规行为。
+
+4. 诉求：本次交易取消责任完全不在我方，本次不良记录严重影响我方店铺信誉与店铺评分，现正式申诉，恳请平台核实系统后台记录，撤销本次订单的负面处罚。"""
+
+COMPLAINT_DEFAULT_APPEAL_MESSAGE = (
+    "亲爱的客服，我叫 Jack，这个产品没有任何证据证明产品有质量问题，"
+    "这是买家想白嫖，能帮我消除对我声誉的影响吗？"
+)
+COMPLAINT_GROUP_SIZE = 2
 
 # 将中文站点名、平台代码统一转成内部站点码，便于回复 AI 的站点确认问题。
 SITE_CODE_MAP = {
@@ -686,10 +702,7 @@ def build_appeal_message(window_id, name, site, form, message, nickname):
         return infraction_random + random.choice(words)
 
     if form == "投诉":
-        words = [
-            f"亲爱的客服，我叫{nickname}！我的产品没有质量问题，客户没有提供确凿证据证明产品存在问题，麻烦你帮我重新核查并消除对声誉的影响。"
-        ]
-        return random.choice(words)
+        return COMPLAINT_DEFAULT_APPEAL_MESSAGE
 
     return message
 
@@ -1735,6 +1748,37 @@ def build_deepseek_cancellation_reply(order_ids, site, appeal_message, agent_mes
     return reply
 
 
+def build_deepseek_complaint_reply(order_ids, site, appeal_message, agent_messages, reply_round):
+    """根据 AI 客服回复生成下一句投诉申诉回复。"""
+    site_option = build_site_option_reply(site)
+    prompt = f"""
+你正在代表 Mercado Libre 卖家与平台 AI 客服沟通商品质量投诉申诉。
+请根据客服的最新回复生成下一句中文回复，只输出要发送的回复正文，不要解释、不要 Markdown。
+
+要求：
+1. 回复要简短、礼貌、直接推进复核，不超过 120 个中文字。
+2. 卖家主张当前没有证据证明商品存在质量问题，希望复查相关销售单并移除对店铺声誉的影响。
+3. 如果客服询问站点，必须明确回复：{site_option}。
+4. 只能使用原始申诉和客服消息中已有的信息，不要虚构检测报告、证据、商品信息或处理结果。
+5. 不要重复整组销售单号，不要说“如果你愿意”“回复继续”等引导语。
+
+销售单号：{order_ids}
+原始申诉：{appeal_message}
+当前是第 {reply_round} 次自动回复（最多两次）。
+客服消息记录：
+{json.dumps((agent_messages or [])[-20:], ensure_ascii=False, indent=2)}
+"""
+    reply = chat_deepseek(
+        [{"role": "user", "content": prompt}],
+        temperature=0.2,
+        max_tokens=300,
+    ).strip()
+    reply = re.sub(r"^```(?:\w+)?\s*|\s*```$", "", reply, flags=re.S).strip()
+    if not reply:
+        raise ValueError("DeepSeek 未生成投诉申诉回复")
+    return reply
+
+
 def should_intervene_ai_response(response_text):
     """判断 AI 回复是否需要脚本继续补充说明或坚持申诉。"""
     if not response_text:
@@ -1931,7 +1975,7 @@ def send_infraction_message_with_retry(
 ):
     """按侵权申诉规则发送一组编号，并使用 DeepSeek 回复新的客服消息。
 
-    取消率复用同一套分组、重试、等待回复和最多自动追问两次的规则。
+    取消率和投诉复用同一套分组、重试、等待回复和最多自动追问两次的规则。
     每 30 秒读取一次，连续 3 分钟没有新回复则结束当前组；DeepSeek 最多回复 2 次。
     """
     max_attempts = 4
@@ -1940,8 +1984,17 @@ def send_infraction_message_with_retry(
     poll_interval = 30
     previous_messages = safe_get_agent_messages(driver)
     is_cancellation = appeal_kind == "取消率"
-    identifier_key = "cancellation_ids" if is_cancellation else "infraction_ids"
-    event_name = "cancellation" if is_cancellation else "infraction"
+    is_complaint = appeal_kind == "投诉"
+    identifier_key = (
+        "cancellation_ids"
+        if is_cancellation
+        else ("complaint_order_ids" if is_complaint else "infraction_ids")
+    )
+    event_name = (
+        "cancellation"
+        if is_cancellation
+        else ("complaint" if is_complaint else "infraction")
+    )
     base_extra = {
         "group_index": group_index,
         "total_groups": total_groups,
@@ -2041,6 +2094,14 @@ def send_infraction_message_with_retry(
 
         if is_cancellation:
             followup = build_deepseek_cancellation_reply(
+                infraction_ids,
+                site,
+                huashu,
+                latest_messages,
+                auto_reply_count + 1,
+            )
+        elif is_complaint:
+            followup = build_deepseek_complaint_reply(
                 infraction_ids,
                 site,
                 huashu,
@@ -2679,6 +2740,7 @@ def _collect_appeal_record_fields(log_records, final_agent_messages=None):
             for key in (
                 "infraction_ids",
                 "cancellation_ids",
+                "complaint_order_ids",
                 "delay_ids",
                 "order_ids",
                 "product_ids",
@@ -2990,7 +3052,8 @@ def shensu(name, site, form, message, validate_open=False):
             return
 
         if form == "投诉":
-            handle_complain(driver, name, site_name, message, nickname)
+            handle_complaint(window_id, driver, name, site_name, message, nickname)
+            return
 
         huashu = build_appeal_message(window_id, name, site_name, form, message, nickname)
         if huashu == "":
@@ -3183,12 +3246,6 @@ def handle_cancellation(window_id, driver, name, site, message, nickname):
         f"按每组 {group_size} 个分为 {len(groups)} 组<br>"
     )
 
-    default_message = (
-        f"亲爱的客服，我叫{nickname}！这些订单并非因卖家责任取消，"
-        "麻烦您重新核查订单记录，并移除这些订单对店铺取消率和声誉的影响，非常感谢！"
-    )
-    appeal_suffix = message or default_message
-
     # 取消订单读取结束时位于 Metrics 页面，返回帮助页后再打开 AI 客服。
     open_help_page_with_daily_validation(
         driver,
@@ -3201,7 +3258,14 @@ def handle_cancellation(window_id, driver, name, site, message, nickname):
 
     for index, current_group in enumerate(groups, start=1):
         cancellation_ids = "、".join(str(item) for item in current_group)
-        huashu = f"{cancellation_ids}{appeal_suffix}"
+        custom_message = str(message or "").strip()
+        huashu = (
+            f"{cancellation_ids}{custom_message}"
+            if custom_message
+            else CANCELLATION_DEFAULT_APPEAL_TEMPLATE.format(
+                order_ids=cancellation_ids,
+            )
+        )
         print(
             f"{get_now_time()} {name} {site} 开始发送第 {index}/{len(groups)} 组"
             f"取消率申诉：{huashu}<br>"
@@ -3253,9 +3317,97 @@ def handle_cancellation(window_id, driver, name, site, message, nickname):
             time.sleep(20)
 
 
+def handle_complaint(window_id, driver, name, site, message, nickname):
+    """处理投诉申诉：读取全部销售单号，每两个一组提交给 AI 客服。"""
+    del nickname
+    group_size = COMPLAINT_GROUP_SIZE
+    complaint_orders = get_complaint_orders(driver, name, site)
+    if not complaint_orders:
+        print(f"{get_now_time()} {name} {site} 没有影响声誉的投诉销售单<br>")
+        return
+
+    groups = [
+        complaint_orders[index:index + group_size]
+        for index in range(0, len(complaint_orders), group_size)
+    ]
+    print(
+        f"{get_now_time()} {name} {site} 投诉销售单共 {len(complaint_orders)} 个，"
+        f"按每组 {group_size} 个分为 {len(groups)} 组<br>"
+    )
+
+    # 销售单读取结束时位于 Metrics 页面，返回帮助页后再打开 AI 客服。
+    open_help_page_with_daily_validation(
+        driver,
+        name,
+        site,
+        window_id=window_id,
+    )
+    select_site(driver, name, site)
+    open_ai_contact_window(driver, name, site, window_id)
+
+    for index, current_group in enumerate(groups, start=1):
+        complaint_ids = "、".join(str(item) for item in current_group)
+        custom_message = str(message or "").strip()
+        huashu = (
+            f"{complaint_ids}{custom_message}"
+            if custom_message
+            else f"销售单号：{complaint_ids}\n{COMPLAINT_DEFAULT_APPEAL_MESSAGE}"
+        )
+        print(
+            f"{get_now_time()} {name} {site} 开始发送第 {index}/{len(groups)} 组"
+            f"投诉申诉：{huashu}<br>"
+        )
+        group_appeal_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        group_log_start = len(get_appeal_log_records())
+        group_error = ""
+        try:
+            send_infraction_message_with_retry(
+                driver,
+                huashu,
+                complaint_ids,
+                name,
+                site,
+                index,
+                len(groups),
+                appeal_kind="投诉",
+            )
+        except Exception as exc:
+            group_error = str(exc)
+            raise
+        finally:
+            group_records = _filter_group_log_records(
+                get_appeal_log_records()[group_log_start:],
+                name,
+                site,
+                index,
+                len(groups),
+                complaint_ids,
+                identifier_key="complaint_order_ids",
+            )
+            save_ai_appeal_group_record(
+                group_appeal_time,
+                name,
+                site,
+                index,
+                len(groups),
+                complaint_ids,
+                huashu,
+                group_records,
+                error=group_error,
+                appeal_kind="投诉",
+            )
+        print(
+            f"{get_now_time()} {name} {site} 第 {index}/{len(groups)} 组"
+            "投诉申诉处理完成<br>"
+        )
+        if index < len(groups):
+            time.sleep(20)
+
+
 def handle_complain(driver, name, site, message, nickname):
-    """投诉申诉预留入口，目前主流程仍使用通用话术发送。"""
-    print("开始处理侵权")
+    """保留旧函数名；新流程请调用需要 window_id 的 ``handle_complaint``。"""
+    window_id = get_window_id_by_shop_name(name)
+    return handle_complaint(window_id, driver, name, site, message, nickname)
 
 
 def get_delay_orders_random(name, site, nums):
@@ -3504,12 +3656,42 @@ def get_site_code(site):
     return site_map.get(site, "")
 
 
+def _is_ai_infringement_record(record):
+    """防御性过滤：AI 侵权申诉不接受 reports/权利人举报记录。"""
+    if isinstance(record, dict):
+        record_type = record.get("类型", record.get("type", ""))
+    else:
+        try:
+            record_type = record[7] if len(record) > 7 else ""
+        except (TypeError, IndexError):
+            return False
+    normalized_type = str(record_type or "").strip().lower()
+    if not normalized_type:
+        # 兼容旧采集器的三列返回值；新采集器会明确返回类型。
+        return True
+    return normalized_type in {
+        "侵权",
+        "infringement",
+        "infringements",
+        "detection",
+        "detections",
+    }
+
+
 def get_infraction_orders_random(window_id, name, site, nums):
-    """从当前侵权列表中随机抽取指定数量的侵权编号。"""
+    """仅从 infringements 列表中随机抽取指定数量的侵权编号。"""
     inf_list = []
     try:
-        infos = get_infractions_info(window_id, name, site,0)
+        infos = get_infractions_info(
+            window_id,
+            name,
+            site,
+            0,
+            include_rights_holder=False,
+        )
         for i in infos:
+            if not _is_ai_infringement_record(i):
+                continue
             inf_list.append(i[2])
         if len(inf_list) >= nums:
             inf_list = str(random.sample(inf_list, nums))
@@ -3522,11 +3704,19 @@ def get_infraction_orders_random(window_id, name, site, nums):
 
 
 def get_infraction_orders(window_id, name, site):
-    """读取当前店铺、站点下全部侵权编号。"""
+    """读取当前店铺、站点下全部 infringements 编号。"""
     inf_list = []
     try:
-        infos = get_infractions_info(window_id, name, site,0)
+        infos = get_infractions_info(
+            window_id,
+            name,
+            site,
+            0,
+            include_rights_holder=False,
+        )
         for i in infos:
+            if not _is_ai_infringement_record(i):
+                continue
             inf_list.append(i[2])
         print(get_now_time() + name + site + "得到的侵权编号为", inf_list)
     except Exception as e:

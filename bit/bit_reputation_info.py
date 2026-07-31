@@ -903,8 +903,8 @@ def _normalize_cancellation_order_ids(values):
     return result
 
 
-def _click_cancellation_review_in_metrics(driver):
-    """定位取消率卡片，并点击该卡片内的 Review in Metrics。"""
+def _click_reputation_review_in_metrics(driver, metric_kind, fallback_index):
+    """定位指定声誉指标卡片，并点击该卡片内的 Review in Metrics。"""
     before_handles = set(driver.window_handles)
     result = driver.execute_script(
         r"""
@@ -913,8 +913,9 @@ def _click_cancellation_review_in_metrics(driver):
                 .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
                 .toLowerCase().replace(/[^a-z0-9\u3400-\u9fff]+/g, '').trim();
         }
-        const cancelAliases = arguments[0].map(normalize);
+        const metricAliases = arguments[0].map(normalize);
         const reviewAliases = arguments[1].map(normalize);
+        const fallbackIndex = Number(arguments[2]);
         function allElements(root = document) {
             const out = [];
             const visit = (scope) => {
@@ -934,9 +935,9 @@ def _click_cancellation_review_in_metrics(driver):
                 element.getAttribute?.('title') || ''
             ].join(' '));
         }
-        function isCancellationTitle(element) {
+        function isMetricTitle(element) {
             const text = textOf(element);
-            return text && text.length < 180 && cancelAliases.some(alias => text.includes(alias));
+            return text && text.length < 180 && metricAliases.some(alias => text.includes(alias));
         }
         function isReviewLink(element) {
             const text = textOf(element);
@@ -958,12 +959,14 @@ def _click_cancellation_review_in_metrics(driver):
         const variableTitles = elements.filter(element =>
             String(element.className || '').includes('variable__title')
         );
-        let title = variableTitles.find(isCancellationTitle) || elements.find(isCancellationTitle);
-        if (!title && variableTitles.length >= 2) {
-            // 平台目前固定为：取消率倒数第二，延误率最后一个。
-            title = variableTitles[variableTitles.length - 2];
+        let title = variableTitles.find(isMetricTitle) || elements.find(isMetricTitle);
+        if (!title && variableTitles.length) {
+            const index = fallbackIndex < 0
+                ? variableTitles.length + fallbackIndex
+                : fallbackIndex;
+            if (index >= 0 && index < variableTitles.length) title = variableTitles[index];
         }
-        if (!title) return {clicked: false, has_metric: false, reason: 'cancellation metric not found'};
+        if (!title) return {clicked: false, has_metric: false, reason: 'metric not found'};
 
         let container = title;
         for (let depth = 0; container && depth < 9; depth += 1, container = container.parentElement) {
@@ -987,8 +990,9 @@ def _click_cancellation_review_in_metrics(driver):
         }
         return {clicked: false, has_metric: true, title: textOf(title), reason: 'review link not found'};
         """,
-        list(METRIC_LABEL_ALIASES["cancellations"]),
+        list(METRIC_LABEL_ALIASES[metric_kind]),
         list(CANCELLATION_REVIEW_LABELS),
+        int(fallback_index),
     ) or {}
 
     if not result.get("clicked"):
@@ -1004,6 +1008,16 @@ def _click_cancellation_review_in_metrics(driver):
             break
         time.sleep(0.5)
     return result
+
+
+def _click_cancellation_review_in_metrics(driver):
+    """定位取消率卡片，并点击该卡片内的 Review in Metrics。"""
+    return _click_reputation_review_in_metrics(driver, "cancellations", -2)
+
+
+def _click_complaint_review_in_metrics(driver):
+    """定位 Complaints 卡片，并点击该卡片内的 Review in Metrics。"""
+    return _click_reputation_review_in_metrics(driver, "complaints", 0)
 
 
 def _extract_visible_cancellation_order_ids(driver):
@@ -1145,26 +1159,33 @@ def _advance_cancellation_orders_page(driver):
     )
 
 
-def get_cancellation_orders(driver, name="", site="", max_pages=100):
-    """从声誉页取消率的 Review in Metrics 中读取全部取消订单号。"""
+def _get_reputation_metric_order_ids(
+    driver,
+    name,
+    site,
+    metric_label,
+    click_review,
+    max_pages,
+):
+    """从指定声誉指标的 Metrics 页面读取全部影响声誉的销售单号。"""
     _open_reputation_page_with_validation(driver, name, site)
     _select_country(driver, site, name)
-    click_result = _click_cancellation_review_in_metrics(driver)
+    click_result = click_review(driver)
     if not click_result.get("has_metric"):
         raise MercadoPageStructureError(
-            f"{name}{site}没有找到取消率指标卡片：{click_result.get('reason', '')}"
+            f"{name}{site}没有找到{metric_label}指标卡片：{click_result.get('reason', '')}"
         )
     if not click_result.get("clicked"):
         print(
-            f"{get_now_time()}{name}{site}取消率没有可点击的 Review in Metrics，"
-            "当前没有可获取的取消订单"
+            f"{get_now_time()}{name}{site}{metric_label}没有可点击的 Review in Metrics，"
+            "当前没有可获取的销售单号"
         )
         return []
 
     time.sleep(3)
     _raise_if_mercado_unavailable(
         driver=driver,
-        context=f"{name}{site}取消率 Metrics 页面",
+        context=f"{name}{site}{metric_label} Metrics 页面",
     )
 
     orders = []
@@ -1181,7 +1202,7 @@ def get_cancellation_orders(driver, name="", site="", max_pages=100):
             orders.append(order_id)
             added += 1
         print(
-            f"{get_now_time()}{name}{site}取消订单第{page_index}次读取新增{added}个，"
+            f"{get_now_time()}{name}{site}{metric_label}销售单第{page_index}次读取新增{added}个，"
             f"累计{len(orders)}个"
         )
 
@@ -1199,8 +1220,32 @@ def get_cancellation_orders(driver, name="", site="", max_pages=100):
             break
         time.sleep(2 if action.startswith("clicked") else 1)
 
-    print(f"{get_now_time()}{name}{site}共获取到{len(orders)}个取消订单：{orders}")
+    print(f"{get_now_time()}{name}{site}{metric_label}共获取到{len(orders)}个销售单号：{orders}")
     return orders
+
+
+def get_cancellation_orders(driver, name="", site="", max_pages=100):
+    """从声誉页取消率的 Review in Metrics 中读取全部取消订单号。"""
+    return _get_reputation_metric_order_ids(
+        driver,
+        name,
+        site,
+        "取消率",
+        _click_cancellation_review_in_metrics,
+        max_pages,
+    )
+
+
+def get_complaint_orders(driver, name="", site="", max_pages=100):
+    """从声誉页 Complaints 的 Review in Metrics 中读取全部影响声誉的销售单号。"""
+    return _get_reputation_metric_order_ids(
+        driver,
+        name,
+        site,
+        "投诉",
+        _click_complaint_review_in_metrics,
+        max_pages,
+    )
 
 
 def _normalize_reputation_color(text, class_name=""):

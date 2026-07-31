@@ -13,6 +13,7 @@ from bit.bit_mercado_limit import is_mercado_rate_limited_text
 from bit.bit_runtime_lock import InterProcessLock, RUNTIME_LOCK_DIR
 
 
+# 采集任务默认同时处理 10 家店铺；各任务结束时必须及时关闭浏览器窗口。
 DEFAULT_COLLECTION_MAX_WORKERS = 10
 DEFAULT_STAGGER_MIN_SECONDS = 5.0
 DEFAULT_STAGGER_MAX_SECONDS = 10.0

@@ -120,6 +120,7 @@ def test_ai_cancellation_uses_infraction_grouping_rules(monkeypatch):
         "send_infraction_message_with_retry",
         lambda driver, message, identifiers, name, site, group_index, total_groups, appeal_kind="侵权": sent_groups.append(
             {
+                "message": message,
                 "identifiers": identifiers.split("、"),
                 "group_index": group_index,
                 "total_groups": total_groups,
@@ -147,6 +148,13 @@ def test_ai_cancellation_uses_infraction_grouping_rules(monkeypatch):
     assert all(group["total_groups"] == 2 for group in sent_groups)
     assert all(group["appeal_kind"] == "取消率" for group in sent_groups)
     assert all(group["appeal_kind"] == "取消率" for group in saved_groups)
+    assert sent_groups[0]["message"].startswith("尊敬的平台审核专员：")
+    assert (
+        "1. 订单编号：" + "、".join(sent_groups[0]["identifiers"])
+        in sent_groups[0]["message"]
+    )
+    assert "本次订单为平台系统主动取消交易" in sent_groups[0]["message"]
+    assert sent_groups[0]["message"].endswith("撤销本次订单的负面处罚。")
     assert driver.urls == [bit_appeal_ai.HELP_URL]
 
 

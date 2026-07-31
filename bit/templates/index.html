@@ -161,6 +161,60 @@
             gap: 8px;
         }
 
+        .order-print-grid {
+            display: grid;
+            grid-template-columns: minmax(0, 3fr) minmax(360px, 2fr);
+            gap: 8px;
+            align-items: stretch;
+        }
+
+        .order-print-data-panel,
+        .order-print-log-panel {
+            min-height: calc(100vh - 128px);
+        }
+
+        .order-print-data-panel {
+            display: flex;
+            min-width: 0;
+            flex-direction: column;
+        }
+
+        .order-print-log-panel {
+            min-width: 0;
+        }
+
+        .order-print-settings {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(150px, 1fr));
+            gap: 8px;
+            margin-bottom: 8px;
+        }
+
+        .order-print-settings .field {
+            margin-bottom: 0;
+        }
+
+        .order-print-scope-grid {
+            grid-template-columns: minmax(300px, 1.4fr) minmax(180px, 0.8fr);
+        }
+
+        .order-print-scope-actions {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 8px;
+            margin-top: 8px;
+        }
+
+        .order-print-scope-actions .collection-scope-summary {
+            flex: 1;
+            margin: 0;
+        }
+
+        .order-print-scope-actions .primary {
+            flex: 0 0 auto;
+        }
+
         .form-panel {
             padding: 10px;
         }
@@ -203,6 +257,75 @@
         input:focus, textarea:focus, select:focus {
             border-color: var(--primary);
             box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12);
+        }
+
+        .shop-combobox {
+            position: relative;
+        }
+
+        .shop-suggestions {
+            position: absolute;
+            z-index: 30;
+            top: calc(100% + 4px);
+            right: 0;
+            left: 0;
+            max-height: 240px;
+            overflow-y: auto;
+            border: 1px solid var(--border);
+            border-radius: 7px;
+            background: #fff;
+            box-shadow: 0 12px 28px rgba(16, 24, 40, 0.16);
+        }
+
+        .shop-suggestion {
+            display: flex;
+            width: 100%;
+            align-items: center;
+            justify-content: space-between;
+            gap: 8px;
+            border-radius: 0;
+            background: #fff;
+            color: var(--text);
+            padding: 8px 10px;
+            text-align: left;
+        }
+
+        .shop-suggestion:hover,
+        .shop-suggestion.active {
+            background: #eff6ff;
+            color: var(--primary-dark);
+        }
+
+        .shop-suggestion + .shop-suggestion {
+            border-top: 1px solid #eef2f7;
+        }
+
+        .shop-suggestion-name {
+            min-width: 0;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .shop-suggestion-owner {
+            flex: 0 0 auto;
+            color: var(--muted);
+            font-size: 11px;
+            font-weight: 600;
+        }
+
+        .shop-suggestion-empty,
+        .shop-search-hint {
+            color: var(--muted);
+            font-size: 11px;
+        }
+
+        .shop-suggestion-empty {
+            padding: 9px 10px;
+        }
+
+        .shop-search-hint {
+            margin: 4px 0 0;
         }
 
         .site-picker {
@@ -401,6 +524,19 @@
             gap: 6px;
             flex-wrap: wrap;
             justify-content: flex-end;
+        }
+
+        .header-worker-control {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            margin: 0;
+            white-space: nowrap;
+        }
+
+        .header-worker-control input {
+            width: 64px;
+            padding: 5px 7px;
         }
 
         .collection-scope-panel {
@@ -840,6 +976,206 @@
             color: #475467;
         }
 
+        .risk-check-task-layout {
+            display: grid;
+            grid-template-columns: minmax(0, 3fr) minmax(320px, 2fr);
+            align-items: stretch;
+            border-top: 1px solid var(--border);
+        }
+
+        .risk-check-task-main {
+            min-width: 0;
+        }
+
+        .risk-check-task-grid,
+        .risk-check-filter-bar {
+            display: grid;
+            grid-template-columns: repeat(4, minmax(110px, 1fr));
+            align-items: end;
+            gap: 8px;
+            padding: 10px;
+        }
+
+        .risk-check-filter-bar {
+            grid-template-columns: minmax(180px, 1.4fr) minmax(130px, 0.7fr) minmax(210px, 1.8fr) 110px auto;
+            border-top: 1px solid var(--border);
+        }
+
+        .risk-check-task-grid .field,
+        .risk-check-filter-bar .field {
+            margin: 0;
+        }
+
+        .risk-check-checkbox {
+            display: flex;
+            align-items: center;
+            gap: 7px;
+            min-height: 34px;
+            margin: 0;
+            padding: 6px 8px;
+            border: 1px solid var(--border);
+            border-radius: 7px;
+            background: #f8fafc;
+            color: #344054;
+        }
+
+        .risk-check-checkbox input {
+            width: 16px;
+            height: 16px;
+            margin: 0;
+        }
+
+        .risk-check-summary-row {
+            grid-template-columns: repeat(5, minmax(0, 1fr));
+        }
+
+        .risk-check-log-card {
+            display: flex;
+            min-width: 0;
+            min-height: 230px;
+            max-height: 310px;
+            flex-direction: column;
+            margin: 10px 10px 10px 0;
+            overflow: hidden;
+            border: 1px solid #263349;
+            border-radius: 8px;
+            background: var(--log-bg);
+        }
+
+        .risk-check-log-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 8px;
+            padding: 8px 10px;
+            border-bottom: 1px solid #263349;
+            color: #e2e8f0;
+            font-size: 12px;
+            font-weight: 800;
+        }
+
+        .risk-check-live-indicator {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            color: #94a3b8;
+            font-size: 11px;
+            font-weight: 600;
+        }
+
+        .risk-check-live-indicator::before {
+            width: 7px;
+            height: 7px;
+            border-radius: 999px;
+            background: #22c55e;
+            box-shadow: 0 0 0 3px rgba(34, 197, 94, 0.14);
+            content: "";
+        }
+
+        #risk-check-log {
+            flex: 1;
+            margin: 0;
+            overflow-y: auto;
+            padding: 9px 10px;
+            color: var(--log-text);
+            font-family: Consolas, "Courier New", monospace;
+            font-size: 12px;
+            line-height: 1.55;
+            white-space: pre-wrap;
+            word-break: break-word;
+        }
+
+        .risk-check-mode-note {
+            color: #475467;
+            font-size: 11px;
+            font-weight: 600;
+        }
+
+        .risk-sort-button {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            width: auto;
+            margin: -4px -6px;
+            padding: 4px 6px;
+            border: 0;
+            border-radius: 0;
+            background: transparent;
+            color: inherit;
+            font-size: inherit;
+            font-weight: inherit;
+            white-space: nowrap;
+        }
+
+        .risk-sort-button:hover {
+            color: var(--primary);
+        }
+
+        .risk-level-tag {
+            display: inline-flex;
+            align-items: center;
+            border-radius: 999px;
+            padding: 3px 8px;
+            font-size: 11px;
+            font-weight: 800;
+            white-space: nowrap;
+        }
+
+        .risk-level-tag.risk-0 {
+            background: #dcfce7;
+            color: #166534;
+        }
+
+        .risk-level-tag.risk-1 {
+            background: #fef3c7;
+            color: #92400e;
+        }
+
+        .risk-level-tag.risk-2 {
+            background: #fee2e2;
+            color: #991b1b;
+        }
+
+        .risk-level-tag.risk-unchecked {
+            background: #f2f4f7;
+            color: #475467;
+        }
+
+        .risk-product-image {
+            display: block;
+            width: 48px;
+            height: 48px;
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            object-fit: cover;
+            background: #f8fafc;
+        }
+
+        .risk-product-title {
+            display: -webkit-box;
+            overflow: hidden;
+            -webkit-box-orient: vertical;
+            -webkit-line-clamp: 3;
+            white-space: normal;
+        }
+
+        .risk-check-table th:nth-child(1),
+        .risk-check-table td:nth-child(1) { width: 76px; }
+        .risk-check-table th:nth-child(2),
+        .risk-check-table td:nth-child(2) { width: 118px; }
+        .risk-check-table th:nth-child(3),
+        .risk-check-table td:nth-child(3) { width: 26%; }
+        .risk-check-table th:nth-child(4),
+        .risk-check-table td:nth-child(4) { width: 15%; }
+        .risk-check-table th:nth-child(5),
+        .risk-check-table td:nth-child(5) { width: 108px; }
+        .risk-check-table th:nth-child(6),
+        .risk-check-table td:nth-child(6) { width: 15%; }
+        .risk-check-table th:nth-child(7),
+        .risk-check-table td:nth-child(7) { width: 66px; }
+        .risk-check-table th:nth-child(8),
+        .risk-check-table td:nth-child(8) { width: 150px; }
+
         .traffic-chart {
             width: 260px;
             height: 42px;
@@ -953,6 +1289,52 @@
             padding-bottom: 4px;
         }
 
+        .order-print-table-wrap {
+            flex: 1;
+            max-height: none;
+            min-height: 260px;
+        }
+
+        .order-print-table {
+            min-width: 720px;
+        }
+
+        .order-print-table th:first-child,
+        .order-print-table td:first-child {
+            width: 44px;
+            text-align: center;
+        }
+
+        .order-print-table th:nth-child(2),
+        .order-print-table td:nth-child(2) {
+            width: 180px;
+        }
+
+        .order-print-table th:nth-child(3),
+        .order-print-table td:nth-child(3) {
+            width: 90px;
+        }
+
+        .order-print-table th:nth-child(4),
+        .order-print-table td:nth-child(4) {
+            width: 110px;
+        }
+
+        .order-print-table th:nth-child(5),
+        .order-print-table td:nth-child(5) {
+            width: 170px;
+        }
+
+        .order-print-table tbody tr,
+        .order-print-table tbody td {
+            height: 46px;
+        }
+
+        .order-print-table tbody td {
+            vertical-align: middle;
+            white-space: nowrap;
+        }
+
         .window-anomaly-table {
             min-width: 1880px;
         }
@@ -1030,6 +1412,15 @@
                 grid-template-columns: 1fr;
             }
 
+            .order-print-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .order-print-data-panel,
+            .order-print-log-panel {
+                min-height: 520px;
+            }
+
             .log-panel {
                 min-height: 520px;
             }
@@ -1040,6 +1431,34 @@
 
             .collection-scope-grid {
                 grid-template-columns: 1fr;
+            }
+
+            .risk-check-task-layout {
+                grid-template-columns: 1fr;
+            }
+
+            .risk-check-log-card {
+                min-height: 220px;
+                margin: 0 10px 10px;
+            }
+
+            .risk-check-task-grid,
+            .risk-check-filter-bar,
+            .risk-check-summary-row {
+                grid-template-columns: 1fr 1fr;
+            }
+
+            .order-print-settings {
+                grid-template-columns: 1fr 1fr;
+            }
+
+            .order-print-scope-actions {
+                align-items: stretch;
+                flex-direction: column;
+            }
+
+            .order-print-scope-actions .primary {
+                width: 100%;
             }
         }
     </style>
@@ -1064,6 +1483,7 @@
             <button class="tab-button" type="button" data-tab="order-print" onclick="switchTab('order-print')">订单打印</button>
             <button class="tab-button" type="button" data-tab="window-anomalies" onclick="switchTab('window-anomalies')">店铺状态</button>
             <button class="tab-button" type="button" data-tab="funds" onclick="switchTab('funds')">资金管理</button>
+            <button class="tab-button" type="button" data-tab="risk-check" onclick="switchTab('risk-check')">侵权检测</button>
             <button class="tab-button" type="button" data-tab="infractions" onclick="switchTab('infractions')">侵权数据</button>
             <button class="tab-button" type="button" data-tab="reputation" onclick="switchTab('reputation')">声誉数据</button>
             <button class="tab-button" type="button" data-tab="ai-appeals" onclick="switchTab('ai-appeals')">AI申诉记录</button>
@@ -1082,7 +1502,11 @@
 
                         <div class="field">
                             <label for="name">店铺名</label>
-                            <input type="text" id="name" value="跃马扬鞭">
+                            <div class="shop-combobox">
+                                <input type="text" id="name" value="跃马扬鞭" placeholder="输入部分店铺名搜索" autocomplete="off" role="combobox" aria-autocomplete="list" aria-controls="appeal-shop-options" aria-expanded="false" onfocus="openAppealShopOptions()" oninput="renderAppealShopOptions()" onkeydown="handleAppealShopKeydown(event)" onblur="window.setTimeout(closeAppealShopOptions, 120)">
+                                <div class="shop-suggestions" id="appeal-shop-options" role="listbox" hidden></div>
+                            </div>
+                            <p class="shop-search-hint">输入店铺名中的任意文字，再从结果中选择</p>
                         </div>
 
                         <div class="field">
@@ -1098,13 +1522,13 @@
                         </div>
 
                         <div class="field">
-                            <label for="form">任务类型</label>
-                            <select id="form">
-                                <option value="延误">延误</option>
-                                <option value="侵权">侵权</option>
-                                <option value="取消率">取消率</option>
-                                <option value="投诉">投诉</option>
-                            </select>
+                            <label id="form-label">任务类型（点击选择，可多选）</label>
+                            <div class="site-picker" id="form-picker" role="group" aria-labelledby="form-label">
+                                <label class="site-option"><input type="checkbox" name="form" value="延误" checked><span>延误</span></label>
+                                <label class="site-option"><input type="checkbox" name="form" value="侵权"><span>侵权</span></label>
+                                <label class="site-option"><input type="checkbox" name="form" value="取消率"><span>取消率</span></label>
+                                <label class="site-option"><input type="checkbox" name="form" value="投诉"><span>投诉</span></label>
+                            </div>
                         </div>
 
                         <div class="field">
@@ -1174,6 +1598,7 @@
                                 <option value="侵权" selected>侵权</option>
                                 <option value="延误率">延误率</option>
                                 <option value="取消率">取消率</option>
+                                <option value="投诉">投诉</option>
                             </select>
                         </div>
 
@@ -1184,7 +1609,7 @@
 
                         <div class="field">
                             <label for="daily-task-max-workers">并发进程</label>
-                            <input type="number" id="daily-task-max-workers" value="30" min="1" max="60">
+                            <input type="number" id="daily-task-max-workers" value="10" min="1" max="10">
                         </div>
 
                         <div class="field">
@@ -1198,7 +1623,7 @@
                         </div>
 
                         <div class="field">
-                            <label for="daily-task-min-rate">最低比率（仅延误率/取消率，%）</label>
+                            <label for="daily-task-min-rate">最低比率（仅延误率/取消率/投诉，%）</label>
                             <input type="number" id="daily-task-min-rate" value="0" min="0" max="100" step="0.01">
                         </div>
 
@@ -1265,79 +1690,75 @@
                     <p>展示全部已配置店铺和站点，可按范围或从执行记录中多选后精确补跑</p>
                 </div>
 
-                <div class="appeal-grid">
-                    <section class="panel form-panel">
-                        <h2 class="panel-title">打印任务参数</h2>
-
-                        <div class="field">
-                            <label for="order-print-retries">单站点最大尝试次数</label>
-                            <select id="order-print-retries">
-                                <option value="1">1 次</option>
-                                <option value="2">2 次</option>
-                                <option value="3" selected>3 次</option>
-                            </select>
-                        </div>
-
-                        <div class="field">
-                            <label for="order-print-retry-delay">失败重试等待（秒）</label>
-                            <input id="order-print-retry-delay" type="number" min="0" max="600" value="300">
-                        </div>
-
-                        <div class="field collection-scope-field">
-                            <label>店铺（勾选可多选）</label>
-                            <div class="collection-checkbox-table-wrap">
-                                <table class="collection-checkbox-table collection-shop-table">
-                                    <thead>
-                                        <tr>
-                                            <th><input class="collection-checkbox" id="order-print-collection-shops-all" type="checkbox" aria-label="选择全部打印店铺" onchange="toggleAllCollectionOptions('order-print', 'shops', this.checked)"></th>
-                                            <th>店铺</th>
-                                            <th>归属人</th>
-                                            <th>配置站点</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody id="order-print-collection-shops">
-                                        <tr><td class="empty-state" colspan="4">正在加载店铺...</td></tr>
-                                    </tbody>
-                                </table>
-                            </div>
-                        </div>
-
-                        <div class="field collection-scope-field">
-                            <label>站点（按店铺配置联动，勾选可多选）</label>
-                            <div class="collection-checkbox-table-wrap">
-                                <table class="collection-checkbox-table collection-site-table">
-                                    <thead>
-                                        <tr>
-                                            <th><input class="collection-checkbox" id="order-print-collection-sites-all" type="checkbox" aria-label="选择全部打印站点" onchange="toggleAllCollectionOptions('order-print', 'sites', this.checked)"></th>
-                                            <th>站点</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody id="order-print-collection-sites">
-                                        <tr><td class="empty-state" colspan="2">正在加载站点...</td></tr>
-                                    </tbody>
-                                </table>
-                            </div>
-                        </div>
-                        <input id="order-print-collection-workers" type="hidden" value="1">
-                        <p class="collection-scope-summary" id="order-print-collection-summary">正在加载打印范围...</p>
-
-                        <div class="actions">
-                            <button class="primary" id="start-order-print-btn" type="button" onclick="startOrderPrint()">补跑所选范围</button>
-                            <button class="danger" id="stop-order-print-btn" type="button" onclick="stopOrderPrint()" disabled>停止任务</button>
-                        </div>
-                    </section>
-
-                    <section class="panel log-panel">
-                        <div class="log-header">
-                            <h2 class="panel-title" style="margin: 0;">订单打印运行日志</h2>
+                <div class="order-print-grid">
+                    <section class="panel infractions-panel order-print-data-panel">
+                        <div class="infractions-header">
+                            <h2 class="panel-title" style="margin: 0;">订单打印信息列表 · 所有店铺和站点</h2>
                             <div class="header-actions">
-                                <span class="status" id="order-print-status-badge">
-                                    <span class="status-dot"></span>
-                                    <span id="order-print-status-text">等待启动</span>
-                                </span>
-                                <button class="secondary" type="button" onclick="loadOrderPrintStatus()">刷新状态</button>
+                                <button class="secondary" type="button" onclick="loadOrderPrintStatus()">刷新数据</button>
                             </div>
                         </div>
+
+                        <div class="collection-scope-panel">
+                            <div class="order-print-settings">
+                                <div class="field">
+                                    <label for="order-print-retries">单站点最大尝试次数</label>
+                                    <select id="order-print-retries">
+                                        <option value="1">1 次</option>
+                                        <option value="2">2 次</option>
+                                        <option value="3" selected>3 次</option>
+                                    </select>
+                                </div>
+                                <div class="field">
+                                    <label for="order-print-retry-delay">失败重试等待（秒）</label>
+                                    <input id="order-print-retry-delay" type="number" min="0" max="600" value="300">
+                                </div>
+                            </div>
+
+                            <div class="collection-scope-grid order-print-scope-grid">
+                                <div class="collection-scope-field">
+                                    <label>店铺（勾选可多选）</label>
+                                    <div class="collection-checkbox-table-wrap">
+                                        <table class="collection-checkbox-table collection-shop-table">
+                                            <thead>
+                                                <tr>
+                                                    <th><input class="collection-checkbox" id="order-print-collection-shops-all" type="checkbox" aria-label="选择全部打印店铺" onchange="toggleAllCollectionOptions('order-print', 'shops', this.checked)"></th>
+                                                    <th>店铺</th>
+                                                    <th>归属人</th>
+                                                    <th>配置站点</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody id="order-print-collection-shops">
+                                                <tr><td class="empty-state" colspan="4">正在加载店铺...</td></tr>
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </div>
+
+                                <div class="collection-scope-field">
+                                    <label>站点（按店铺配置联动）</label>
+                                    <div class="collection-checkbox-table-wrap">
+                                        <table class="collection-checkbox-table collection-site-table">
+                                            <thead>
+                                                <tr>
+                                                    <th><input class="collection-checkbox" id="order-print-collection-sites-all" type="checkbox" aria-label="选择全部打印站点" onchange="toggleAllCollectionOptions('order-print', 'sites', this.checked)"></th>
+                                                    <th>站点</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody id="order-print-collection-sites">
+                                                <tr><td class="empty-state" colspan="2">正在加载站点...</td></tr>
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </div>
+                            </div>
+                            <input id="order-print-collection-workers" type="hidden" value="1">
+                            <div class="order-print-scope-actions">
+                                <p class="collection-scope-summary" id="order-print-collection-summary">正在加载打印范围...</p>
+                                <button class="primary" id="start-order-print-btn" type="button" onclick="startOrderPrint()">补跑所选范围</button>
+                            </div>
+                        </div>
+
                         <div class="summary-row">
                             <div class="metric">
                                 <div class="metric-label">开始时间</div>
@@ -1356,36 +1777,45 @@
                                 <div class="metric-value" id="order-print-failure-count">0 / 0</div>
                             </div>
                         </div>
+
+                        <div class="reputation-update-bar">
+                            <span class="reputation-selection-summary" id="order-print-target-selection-summary">已选择 0 个店铺站点</span>
+                            <button class="primary" id="rerun-selected-order-print-btn" type="button" onclick="rerunSelectedOrderPrintTargets()" disabled>补跑所选站点</button>
+                        </div>
+
+                        <div class="table-wrap order-print-table-wrap">
+                            <table class="order-print-table">
+                                <thead>
+                                    <tr>
+                                        <th><input class="collection-checkbox" id="order-print-site-run-all" type="checkbox" aria-label="选择全部店铺站点" onchange="toggleAllOrderPrintSiteTargets(this.checked)" disabled></th>
+                                        <th>店铺名</th>
+                                        <th>站点</th>
+                                        <th>执行状态</th>
+                                        <th>最后执行时间</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="order-print-site-run-body">
+                                    <tr><td class="empty-state" colspan="5">正在加载店铺站点...</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </section>
+
+                    <section class="panel log-panel order-print-log-panel">
+                        <div class="log-header">
+                            <h2 class="panel-title" style="margin: 0;">订单打印运行日志</h2>
+                            <div class="header-actions">
+                                <span class="status" id="order-print-status-badge">
+                                    <span class="status-dot"></span>
+                                    <span id="order-print-status-text">等待启动</span>
+                                </span>
+                                <button class="secondary" type="button" onclick="loadOrderPrintStatus()">刷新状态</button>
+                                <button class="danger" id="stop-order-print-btn" type="button" onclick="stopOrderPrint()" disabled>停止任务</button>
+                            </div>
+                        </div>
                         <pre id="order-print-log">等待任务启动...</pre>
                     </section>
                 </div>
-
-                <section class="panel infractions-panel" style="margin-top: 8px;">
-                    <div class="infractions-header">
-                        <h2 class="panel-title" style="margin: 0;">所有店铺和站点</h2>
-                        <div class="header-actions">
-                            <span class="collection-scope-summary" id="order-print-target-selection-summary">已选择 0 个店铺站点</span>
-                            <button class="primary" id="rerun-selected-order-print-btn" type="button" onclick="rerunSelectedOrderPrintTargets()" disabled>补跑所选站点</button>
-                            <button class="secondary" type="button" onclick="loadOrderPrintStatus()">刷新数据</button>
-                        </div>
-                    </div>
-                    <div class="table-wrap">
-                        <table>
-                            <thead>
-                                <tr>
-                                    <th><input class="collection-checkbox" id="order-print-site-run-all" type="checkbox" aria-label="选择全部店铺站点" onchange="toggleAllOrderPrintSiteTargets(this.checked)" disabled></th>
-                                    <th>店铺名</th>
-                                    <th>站点</th>
-                                    <th>执行状态</th>
-                                    <th>最后执行时间</th>
-                                </tr>
-                            </thead>
-                            <tbody id="order-print-site-run-body">
-                                <tr><td class="empty-state" colspan="5">正在加载店铺站点...</td></tr>
-                            </tbody>
-                        </table>
-                    </div>
-                </section>
             </div>
 
             <div class="tab-page" id="tab-window-anomalies">
@@ -1398,6 +1828,7 @@
                     <div class="infractions-header">
                         <h2 class="panel-title" style="margin: 0;">需要处理的店铺</h2>
                         <div class="header-actions">
+                            <label class="header-worker-control" for="mercado-login-workers"><span>并发进程</span><input id="mercado-login-workers" type="number" min="1" max="10" value="3"></label>
                             <button class="primary" id="start-selected-mercado-login-btn" type="button" onclick="startSelectedShopsAutoLogin()" disabled>重新检测所选店铺</button>
                             <button class="primary" id="start-mercado-login-btn" type="button" onclick="startMercadoLogin()">重新检测全部店铺</button>
                             <button class="secondary" type="button" onclick="loadWindowAnomalies()">刷新数据</button>
@@ -1538,6 +1969,150 @@
                             </thead>
                             <tbody id="fund-body">
                                 <tr><td class="empty-state" colspan="9">正在加载资金数据...</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </section>
+            </div>
+
+            <div class="tab-page" id="tab-risk-check">
+                <div class="tab-heading">
+                    <h2>侵权检测</h2>
+                    <p>当前仅根据智赢商品标题识别；主图链接和 Logo 暂不参与判断</p>
+                </div>
+
+                <section class="panel infractions-panel">
+                    <div class="infractions-header">
+                        <div>
+                            <h2 class="panel-title" style="margin: 0;">检测任务</h2>
+                            <div class="risk-check-mode-note">标题识别模式 · 图片 Logo 检测已暂时关闭</div>
+                        </div>
+                        <div class="header-actions">
+                            <button class="primary" id="start-risk-check-btn" type="button" onclick="startRiskCheck()">启动侵权检测</button>
+                            <button class="secondary" type="button" onclick="loadRiskCheckStatus()">刷新状态</button>
+                        </div>
+                    </div>
+                    <div class="risk-check-task-layout">
+                        <div class="risk-check-task-main">
+                            <div class="risk-check-task-grid">
+                                <div class="field">
+                                    <label for="risk-check-task-category">智赢产品分类</label>
+                                    <select id="risk-check-task-category">
+                                        <option value="">全部分类</option>
+                                    </select>
+                                </div>
+                                <div class="field">
+                                    <label for="risk-check-hours">入库时间范围</label>
+                                    <select id="risk-check-hours">
+                                        <option value="0" selected>不限时间</option>
+                                        <option value="24">最近 24 小时</option>
+                                        <option value="168">最近 7 天</option>
+                                        <option value="720">最近 30 天</option>
+                                    </select>
+                                </div>
+                                <div class="field">
+                                    <label for="risk-check-limit">最多检测条数</label>
+                                    <input id="risk-check-limit" type="number" min="0" max="50000" value="0" title="0 表示不限">
+                                </div>
+                                <div class="field">
+                                    <label for="risk-check-batch-size">AI 每批条数</label>
+                                    <input id="risk-check-batch-size" type="number" min="1" max="50" value="20">
+                                </div>
+                                <label class="risk-check-checkbox" for="risk-check-recheck">
+                                    <input id="risk-check-recheck" type="checkbox">
+                                    <span>重新检测已有结果</span>
+                                </label>
+                            </div>
+                            <div class="summary-row risk-check-summary-row">
+                                <div class="metric">
+                                    <div class="metric-label">任务状态</div>
+                                    <div class="metric-value" id="risk-check-status-text">等待启动</div>
+                                </div>
+                                <div class="metric">
+                                    <div class="metric-label">本次已检测</div>
+                                    <div class="metric-value" id="risk-check-checked">0</div>
+                                </div>
+                                <div class="metric">
+                                    <div class="metric-label">0 · 无可疑</div>
+                                    <div class="metric-value" id="risk-check-zero">0</div>
+                                </div>
+                                <div class="metric">
+                                    <div class="metric-label">1 · 疑似</div>
+                                    <div class="metric-value" id="risk-check-one">0</div>
+                                </div>
+                                <div class="metric">
+                                    <div class="metric-label">2 · 侵权</div>
+                                    <div class="metric-value" id="risk-check-two">0</div>
+                                </div>
+                            </div>
+                        </div>
+                        <aside class="risk-check-log-card" aria-label="任务执行日志">
+                            <div class="risk-check-log-header">
+                                <span>实时任务执行日志</span>
+                                <span class="risk-check-live-indicator">实时更新</span>
+                            </div>
+                            <pre id="risk-check-log" aria-live="polite">等待任务启动...</pre>
+                        </aside>
+                    </div>
+
+                    <div class="infractions-header" style="border-top: 1px solid var(--border);">
+                        <div>
+                            <h2 class="panel-title" style="margin: 0;">检测结果</h2>
+                            <p id="risk-result-count" style="margin: 3px 0 0; color: var(--muted); font-size: 12px;">共 0 条</p>
+                        </div>
+                        <div class="header-actions">
+                            <button class="secondary" type="button" onclick="exportRiskResults()">导出当前结果 Excel</button>
+                            <button class="secondary" type="button" onclick="loadRiskResults()">刷新结果</button>
+                        </div>
+                    </div>
+                    <div class="risk-check-filter-bar">
+                        <div class="field">
+                            <label for="risk-result-category">智赢分类筛选</label>
+                            <select id="risk-result-category" onchange="loadRiskResults()">
+                                <option value="">全部分类</option>
+                            </select>
+                        </div>
+                        <div class="field">
+                            <label for="risk-result-level">风险级别</label>
+                            <select id="risk-result-level" onchange="loadRiskResults()">
+                                <option value="">全部结果</option>
+                                <option value="unchecked">未检测</option>
+                                <option value="0">0 · 无可疑</option>
+                                <option value="1">1 · 疑似</option>
+                                <option value="2">2 · 侵权</option>
+                            </select>
+                        </div>
+                        <div class="field">
+                            <label for="risk-result-search">搜索产品编号、标题或关键词</label>
+                            <input id="risk-result-search" type="search" placeholder="输入后回车搜索" onkeydown="if (event.key === 'Enter') loadRiskResults()">
+                        </div>
+                        <div class="field">
+                            <label for="risk-result-limit">显示条数</label>
+                            <select id="risk-result-limit" onchange="loadRiskResults()">
+                                <option value="200">200</option>
+                                <option value="500" selected>500</option>
+                                <option value="1000">1000</option>
+                                <option value="5000">5000</option>
+                            </select>
+                        </div>
+                        <button class="primary" type="button" onclick="loadRiskResults()">查询</button>
+                    </div>
+                    <div class="table-wrap reputation-table-wrap">
+                        <table class="risk-check-table">
+                            <thead>
+                                <tr>
+                                    <th><button class="risk-sort-button" type="button" data-risk-sort="row_id" onclick="sortRiskResults('row_id')">数据行 <span class="risk-sort-indicator"></span></button></th>
+                                    <th><button class="risk-sort-button" type="button" data-risk-sort="product_id" onclick="sortRiskResults('product_id')">产品编号 <span class="risk-sort-indicator"></span></button></th>
+                                    <th><button class="risk-sort-button" type="button" data-risk-sort="title" onclick="sortRiskResults('title')">标题 <span class="risk-sort-indicator"></span></button></th>
+                                    <th><button class="risk-sort-button" type="button" data-risk-sort="zying_category" onclick="sortRiskResults('zying_category')">智赢分类 <span class="risk-sort-indicator"></span></button></th>
+                                    <th><button class="risk-sort-button" type="button" data-risk-sort="risk_level" onclick="sortRiskResults('risk_level')">风险级别 <span class="risk-sort-indicator">↓</span></button></th>
+                                    <th><button class="risk-sort-button" type="button" data-risk-sort="keywords" onclick="sortRiskResults('keywords')">侵权关键词/品牌 <span class="risk-sort-indicator"></span></button></th>
+                                    <th>主图</th>
+                                    <th><button class="risk-sort-button" type="button" data-risk-sort="submitted_at" onclick="sortRiskResults('submitted_at')">提交时间 <span class="risk-sort-indicator"></span></button></th>
+                                </tr>
+                            </thead>
+                            <tbody id="risk-result-body">
+                                <tr><td class="empty-state" colspan="8">请查询侵权检测结果</td></tr>
                             </tbody>
                         </table>
                     </div>
@@ -1795,6 +2370,8 @@
         const logContainer = document.getElementById("log-container");
         const startBtn = document.getElementById("start-btn");
         const stopBtn = document.getElementById("stop-btn");
+        const appealShopInput = document.getElementById("name");
+        const appealShopOptions = document.getElementById("appeal-shop-options");
         const statusBox = document.getElementById("status");
         const statusText = document.getElementById("status-text");
         const infractionBody = document.getElementById("infraction-body");
@@ -1810,6 +2387,20 @@
         const infractionRightsLabel = document.getElementById("infraction-rights-label");
         const infractionSummaryTitle = document.getElementById("infraction-summary-title");
         const collectInfractionsBtn = document.getElementById("collect-infractions-btn");
+        const startRiskCheckBtn = document.getElementById("start-risk-check-btn");
+        const riskCheckTaskCategory = document.getElementById("risk-check-task-category");
+        const riskCheckStatusText = document.getElementById("risk-check-status-text");
+        const riskCheckChecked = document.getElementById("risk-check-checked");
+        const riskCheckZero = document.getElementById("risk-check-zero");
+        const riskCheckOne = document.getElementById("risk-check-one");
+        const riskCheckTwo = document.getElementById("risk-check-two");
+        const riskCheckLog = document.getElementById("risk-check-log");
+        const riskResultCategory = document.getElementById("risk-result-category");
+        const riskResultLevel = document.getElementById("risk-result-level");
+        const riskResultSearch = document.getElementById("risk-result-search");
+        const riskResultLimit = document.getElementById("risk-result-limit");
+        const riskResultCount = document.getElementById("risk-result-count");
+        const riskResultBody = document.getElementById("risk-result-body");
         const reputationBody = document.getElementById("reputation-body");
         const reputationTime = document.getElementById("reputation-time");
         const reputationTotal = document.getElementById("reputation-total");
@@ -1848,6 +2439,7 @@
         const windowAnomalySelectAll = document.getElementById("window-anomaly-select-all");
         const startSelectedMercadoLoginBtn = document.getElementById("start-selected-mercado-login-btn");
         const startMercadoLoginBtn = document.getElementById("start-mercado-login-btn");
+        const mercadoLoginWorkers = document.getElementById("mercado-login-workers");
         const mercadoLoginStatusBadge = document.getElementById("mercado-login-status-badge");
         const mercadoLoginStatusText = document.getElementById("mercado-login-status-text");
         const mercadoLoginTarget = document.getElementById("mercado-login-target");
@@ -1871,6 +2463,12 @@
         const fundCollectDetail = document.getElementById("fund-collect-detail");
         let infractionDays = 30;
         let infractionsLoaded = false;
+        let riskCheckLoaded = false;
+        let riskCategoriesLoaded = false;
+        let riskCheckRunning = false;
+        let riskCheckPollTimer = null;
+        let riskResultSortBy = "risk_level";
+        let riskResultSortDir = "desc";
         let reputationLoaded = false;
         let aiAppealsLoaded = false;
         let tasksLoaded = false;
@@ -1898,6 +2496,8 @@
         let collectionOptionsLoading = null;
         let collectionShopOptions = [];
         let collectionFailedShopOptions = {infraction: [], reputation: []};
+        let appealShopMatches = [];
+        let appealShopActiveIndex = -1;
         let selectedReputationShops = new Set();
         let selectedReputationUpdateRunning = false;
         let selectedReputationUpdatePollTimer = null;
@@ -1913,6 +2513,11 @@
             });
             if (tabName === "infractions" && !infractionsLoaded) {
                 loadLatestInfractions();
+            }
+            if (tabName === "risk-check") {
+                loadRiskCategories();
+                loadRiskCheckStatus();
+                if (!riskCheckLoaded) loadRiskResults();
             }
             if (tabName === "infractions" || tabName === "reputation" || tabName === "order-print") {
                 loadCollectionOptions();
@@ -1972,6 +2577,373 @@
                 .replaceAll(">", "&gt;")
                 .replaceAll('"', "&quot;")
                 .replaceAll("'", "&#039;");
+        }
+
+        function normalizeAppealShopSearch(value) {
+            return String(value || "")
+                .normalize("NFKC")
+                .toLocaleLowerCase("zh-CN")
+                .replace(/\s+/g, "");
+        }
+
+        function appealShopMatchScore(shopName, query) {
+            const name = normalizeAppealShopSearch(shopName);
+            const keyword = normalizeAppealShopSearch(query);
+            if (!keyword) return 0;
+
+            const directIndex = name.indexOf(keyword);
+            if (directIndex >= 0) return directIndex;
+
+            let nameIndex = 0;
+            let gapCount = 0;
+            for (const character of keyword) {
+                const matchedIndex = name.indexOf(character, nameIndex);
+                if (matchedIndex < 0) return null;
+                gapCount += matchedIndex - nameIndex;
+                nameIndex = matchedIndex + 1;
+            }
+            return 100 + gapCount;
+        }
+
+        function setAppealShopActiveIndex(index) {
+            const options = Array.from(
+                appealShopOptions?.querySelectorAll(".shop-suggestion") || []
+            );
+            if (!options.length) {
+                appealShopActiveIndex = -1;
+                appealShopInput?.removeAttribute("aria-activedescendant");
+                return;
+            }
+            appealShopActiveIndex = Math.max(0, Math.min(index, options.length - 1));
+            options.forEach((option, optionIndex) => {
+                const active = optionIndex === appealShopActiveIndex;
+                option.classList.toggle("active", active);
+                option.setAttribute("aria-selected", String(active));
+            });
+            const activeOption = options[appealShopActiveIndex];
+            appealShopInput?.setAttribute("aria-activedescendant", activeOption.id);
+            activeOption.scrollIntoView({block: "nearest"});
+        }
+
+        function renderAppealShopOptions(queryOverride = null) {
+            if (!appealShopInput || !appealShopOptions) return;
+            appealShopOptions.hidden = false;
+            appealShopInput.setAttribute("aria-expanded", "true");
+            appealShopInput.removeAttribute("aria-activedescendant");
+            appealShopActiveIndex = -1;
+
+            if (!collectionOptionsLoaded) {
+                appealShopMatches = [];
+                appealShopOptions.innerHTML = '<div class="shop-suggestion-empty">正在加载店铺...</div>';
+                return;
+            }
+
+            const query = queryOverride === null ? appealShopInput.value : queryOverride;
+            appealShopMatches = collectionShopOptions
+                .map(shop => ({shop, score: appealShopMatchScore(shop.shop_name, query)}))
+                .filter(item => item.score !== null)
+                .sort((left, right) => (
+                    left.score - right.score
+                    || String(left.shop.shop_name || "").localeCompare(
+                        String(right.shop.shop_name || ""),
+                        "zh-CN",
+                    )
+                ))
+                .map(item => item.shop)
+                .slice(0, 100);
+
+            if (!appealShopMatches.length) {
+                appealShopOptions.innerHTML = '<div class="shop-suggestion-empty">没有匹配的店铺</div>';
+                return;
+            }
+
+            appealShopOptions.innerHTML = appealShopMatches.map((shop, index) => {
+                const shopName = String(shop.shop_name || "");
+                const owner = String(shop.salesperson || "");
+                return `
+                    <button class="shop-suggestion" id="appeal-shop-option-${index}" type="button" role="option" aria-selected="false" onmousedown="event.preventDefault()" onmouseenter="setAppealShopActiveIndex(${index})" onclick="selectAppealShop(${index})">
+                        <span class="shop-suggestion-name" title="${escapeHtml(shopName)}">${escapeHtml(shopName)}</span>
+                        ${owner ? `<span class="shop-suggestion-owner">${escapeHtml(owner)}</span>` : ""}
+                    </button>
+                `;
+            }).join("");
+        }
+
+        async function openAppealShopOptions() {
+            if (!appealShopInput || !appealShopOptions) return;
+            renderAppealShopOptions();
+            await loadCollectionOptions();
+            if (!collectionOptionsLoaded) return;
+            const currentName = String(appealShopInput.value || "").trim();
+            const isExactShopName = collectionShopOptions.some(shop => (
+                String(shop.shop_name || "").trim() === currentName
+            ));
+            renderAppealShopOptions(isExactShopName ? "" : currentName);
+            if (isExactShopName) appealShopInput.select();
+        }
+
+        function closeAppealShopOptions() {
+            if (!appealShopInput || !appealShopOptions) return;
+            appealShopOptions.hidden = true;
+            appealShopInput.setAttribute("aria-expanded", "false");
+            appealShopInput.removeAttribute("aria-activedescendant");
+            appealShopActiveIndex = -1;
+        }
+
+        function selectAppealShop(index) {
+            const shop = appealShopMatches[index];
+            if (!shop || !appealShopInput) return;
+            appealShopInput.value = String(shop.shop_name || "");
+            closeAppealShopOptions();
+            appealShopInput.focus();
+        }
+
+        function handleAppealShopKeydown(event) {
+            if (!appealShopOptions || !appealShopInput) return;
+            if (event.key === "Escape") {
+                closeAppealShopOptions();
+                return;
+            }
+            if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+                event.preventDefault();
+                if (appealShopOptions.hidden) {
+                    openAppealShopOptions();
+                    return;
+                }
+                const direction = event.key === "ArrowDown" ? 1 : -1;
+                const nextIndex = appealShopActiveIndex < 0
+                    ? (direction > 0 ? 0 : appealShopMatches.length - 1)
+                    : appealShopActiveIndex + direction;
+                setAppealShopActiveIndex(nextIndex);
+                return;
+            }
+            if (event.key === "Enter" && appealShopActiveIndex >= 0) {
+                event.preventDefault();
+                selectAppealShop(appealShopActiveIndex);
+            }
+        }
+
+        function riskCategoryValue(row) {
+            return String(row.category_id || row.category_name || "").trim();
+        }
+
+        async function loadRiskCategories(force = false) {
+            if (riskCategoriesLoaded && !force) return;
+            const taskValue = riskCheckTaskCategory?.value || "";
+            const resultValue = riskResultCategory?.value || "";
+            try {
+                const response = await fetch("/api/risk-check/categories", {cache: "no-store"});
+                const payload = await response.json();
+                if (!response.ok || payload.status !== "success") {
+                    throw new Error(payload.message || `接口请求失败：${response.status}`);
+                }
+                const rows = Array.isArray(payload.data) ? payload.data : [];
+                const options = rows.map(row => {
+                    const value = riskCategoryValue(row);
+                    const name = String(row.category_name || row.category_id || "未分类");
+                    const idText = row.category_id && row.category_id !== name ? ` [${row.category_id}]` : "";
+                    return `<option value="${escapeHtml(value)}">${escapeHtml(name + idText)} · ${Number(row.total || 0)} 条</option>`;
+                }).join("");
+                if (riskCheckTaskCategory) {
+                    riskCheckTaskCategory.innerHTML = '<option value="">全部分类</option>' + options;
+                    if (Array.from(riskCheckTaskCategory.options).some(option => option.value === taskValue)) {
+                        riskCheckTaskCategory.value = taskValue;
+                    }
+                }
+                if (riskResultCategory) {
+                    riskResultCategory.innerHTML = '<option value="">全部分类</option>' + options;
+                    if (Array.from(riskResultCategory.options).some(option => option.value === resultValue)) {
+                        riskResultCategory.value = resultValue;
+                    }
+                }
+                riskCategoriesLoaded = true;
+            } catch (err) {
+                console.error("加载智赢分类失败", err);
+            }
+        }
+
+        function riskResultQueryParams(includeLimit = true) {
+            const params = new URLSearchParams({
+                category: riskResultCategory?.value || "",
+                risk_level: riskResultLevel?.value || "",
+                search: riskResultSearch?.value.trim() || "",
+                sort_by: riskResultSortBy,
+                sort_dir: riskResultSortDir,
+            });
+            if (includeLimit) params.set("limit", riskResultLimit?.value || "500");
+            return params;
+        }
+
+        function updateRiskSortIndicators() {
+            document.querySelectorAll("[data-risk-sort]").forEach(button => {
+                const indicator = button.querySelector(".risk-sort-indicator");
+                if (!indicator) return;
+                indicator.textContent = button.dataset.riskSort === riskResultSortBy
+                    ? (riskResultSortDir === "asc" ? "↑" : "↓")
+                    : "";
+            });
+        }
+
+        function sortRiskResults(column) {
+            if (riskResultSortBy === column) {
+                riskResultSortDir = riskResultSortDir === "asc" ? "desc" : "asc";
+            } else {
+                riskResultSortBy = column;
+                riskResultSortDir = ["risk_level", "submitted_at", "row_id"].includes(column) ? "desc" : "asc";
+            }
+            updateRiskSortIndicators();
+            loadRiskResults();
+        }
+
+        function renderRiskLevel(value) {
+            const level = String(value ?? "").trim();
+            const labels = {
+                "0": "0 · 无可疑",
+                "1": "1 · 疑似",
+                "2": "2 · 侵权",
+            };
+            const className = ["0", "1", "2"].includes(level) ? `risk-${level}` : "risk-unchecked";
+            return `<span class="risk-level-tag ${className}">${labels[level] || "未检测"}</span>`;
+        }
+
+        function safeRiskImageUrl(value) {
+            const url = String(value || "").trim();
+            return /^https?:\/\//i.test(url) ? url : "";
+        }
+
+        async function loadRiskResults() {
+            if (!riskResultBody) return;
+            riskResultBody.innerHTML = '<tr><td class="empty-state" colspan="8">正在加载侵权检测结果...</td></tr>';
+            updateRiskSortIndicators();
+            try {
+                const response = await fetch(`/api/risk-check/results?${riskResultQueryParams().toString()}`, {cache: "no-store"});
+                const payload = await response.json();
+                if (!response.ok || payload.status !== "success") {
+                    throw new Error(payload.message || `接口请求失败：${response.status}`);
+                }
+                const data = payload.data || {};
+                const rows = Array.isArray(data.rows) ? data.rows : [];
+                riskCheckLoaded = true;
+                riskResultCount.textContent = (
+                    `共 ${Number(data.total || 0)} 条 · 未检测 ${Number(data.unchecked || 0)} · `
+                    + `0 级 ${Number(data.risk_0 || 0)} · 1 级 ${Number(data.risk_1 || 0)} · 2 级 ${Number(data.risk_2 || 0)}`
+                );
+                if (!rows.length) {
+                    riskResultBody.innerHTML = '<tr><td class="empty-state" colspan="8">当前筛选条件下暂无结果</td></tr>';
+                    return;
+                }
+                riskResultBody.innerHTML = rows.map(row => {
+                    const imageUrl = safeRiskImageUrl(row.main_image_url);
+                    const image = imageUrl
+                        ? `<a href="${escapeHtml(imageUrl)}" target="_blank" rel="noopener noreferrer"><img class="risk-product-image" src="${escapeHtml(imageUrl)}" alt="产品主图" loading="lazy" onerror="this.style.display='none'"></a>`
+                        : "-";
+                    const category = row.zying_category || row.zying_category_id || "-";
+                    return `
+                        <tr>
+                            <td title="${escapeHtml(row.row_id)}">${escapeHtml(row.row_id)}</td>
+                            <td title="${escapeHtml(row.product_id)}">${escapeHtml(row.product_id || "-")}</td>
+                            <td title="${escapeHtml(row.title)}"><span class="risk-product-title">${escapeHtml(row.title || "-")}</span></td>
+                            <td title="${escapeHtml(category)}">${escapeHtml(category)}</td>
+                            <td>${renderRiskLevel(row.risk_level)}</td>
+                            <td title="${escapeHtml(row.keywords)}">${escapeHtml(row.keywords || "-")}</td>
+                            <td>${image}</td>
+                            <td title="${escapeHtml(row.submitted_at)}">${escapeHtml(row.submitted_at || "-")}</td>
+                        </tr>
+                    `;
+                }).join("");
+            } catch (err) {
+                riskResultBody.innerHTML = `<tr><td class="empty-state" colspan="8">加载失败：${escapeHtml(err.message || err)}</td></tr>`;
+            }
+        }
+
+        function exportRiskResults() {
+            window.location.href = `/api/risk-check/results/export?${riskResultQueryParams(false).toString()}`;
+        }
+
+        function scheduleRiskCheckStatusPoll() {
+            if (riskCheckPollTimer) clearTimeout(riskCheckPollTimer);
+            riskCheckPollTimer = riskCheckRunning
+                ? setTimeout(loadRiskCheckStatus, 1000)
+                : null;
+        }
+
+        function renderRiskCheckLogs(logs) {
+            if (!riskCheckLog) return;
+            const entries = Array.isArray(logs) ? logs : [];
+            const nextText = entries.length ? entries.join("\n") : "等待任务启动...";
+            const shouldFollow = (
+                riskCheckLog.scrollHeight - riskCheckLog.scrollTop - riskCheckLog.clientHeight
+            ) < 36;
+            if (riskCheckLog.textContent !== nextText) {
+                riskCheckLog.textContent = nextText;
+                if (shouldFollow) riskCheckLog.scrollTop = riskCheckLog.scrollHeight;
+            }
+        }
+
+        async function loadRiskCheckStatus() {
+            if (!riskCheckStatusText) return;
+            try {
+                const wasRunning = riskCheckRunning;
+                const response = await fetch("/api/risk-check/status", {cache: "no-store"});
+                const payload = await response.json();
+                if (!response.ok || payload.status !== "success") {
+                    throw new Error(payload.message || `接口请求失败：${response.status}`);
+                }
+                const data = payload.data || {};
+                const summary = data.summary || {};
+                riskCheckRunning = Boolean(data.running);
+                riskCheckStatusText.textContent = data.message || (riskCheckRunning ? "检测中" : "等待启动");
+                riskCheckChecked.textContent = Number(summary.checked || 0);
+                riskCheckZero.textContent = Number(summary.risk_0 || 0);
+                riskCheckOne.textContent = Number(summary.risk_1 || 0);
+                riskCheckTwo.textContent = Number(summary.risk_2 || 0);
+                renderRiskCheckLogs(data.logs);
+                startRiskCheckBtn.disabled = riskCheckRunning;
+                startRiskCheckBtn.textContent = riskCheckRunning ? "正在检测..." : "启动侵权检测";
+                if (wasRunning && !riskCheckRunning) {
+                    riskCategoriesLoaded = false;
+                    await loadRiskCategories(true);
+                    await loadRiskResults();
+                }
+            } catch (err) {
+                riskCheckStatusText.textContent = `状态读取失败：${err.message || err}`;
+            } finally {
+                scheduleRiskCheckStatusPoll();
+            }
+        }
+
+        async function startRiskCheck() {
+            if (!startRiskCheckBtn || riskCheckRunning) return;
+            const recheck = Boolean(document.getElementById("risk-check-recheck")?.checked);
+            if (recheck && !window.confirm("重新检测会覆盖已有 0/1/2 结果，确定继续吗？")) return;
+            const payload = {
+                category: riskCheckTaskCategory?.value || "",
+                hours: Number(document.getElementById("risk-check-hours")?.value || 0),
+                limit: Number(document.getElementById("risk-check-limit")?.value || 0),
+                batch_size: Number(document.getElementById("risk-check-batch-size")?.value || 20),
+                recheck,
+            };
+            startRiskCheckBtn.disabled = true;
+            startRiskCheckBtn.textContent = "正在启动...";
+            renderRiskCheckLogs([]);
+            try {
+                const response = await fetch("/api/risk-check/start", {
+                    method: "POST",
+                    headers: {"Content-Type": "application/json"},
+                    body: JSON.stringify(payload),
+                });
+                const result = await response.json();
+                if (!response.ok || result.status !== "success") {
+                    throw new Error(result.message || `接口请求失败：${response.status}`);
+                }
+                riskCheckRunning = true;
+                riskCheckStatusText.textContent = result.data?.message || "侵权检测已启动";
+                renderRiskCheckLogs(result.data?.logs);
+                scheduleRiskCheckStatusPoll();
+            } catch (err) {
+                alert(`启动失败：${err.message || err}`);
+                await loadRiskCheckStatus();
+            }
         }
 
         function parseFundAmount(value) {
@@ -2665,10 +3637,17 @@
                 renderCollectionShopOptions("reputation");
                 renderCollectionShopOptions("order-print");
                 collectionOptionsLoaded = true;
+                if (appealShopInput && document.activeElement === appealShopInput) {
+                    renderAppealShopOptions();
+                }
             })();
             try {
                 await collectionOptionsLoading;
             } catch (err) {
+                if (appealShopOptions && document.activeElement === appealShopInput) {
+                    appealShopOptions.hidden = false;
+                    appealShopOptions.innerHTML = `<div class="shop-suggestion-empty">店铺加载失败：${escapeHtml(err.message || err)}</div>`;
+                }
                 ["infraction", "reputation", "order-print"].forEach(prefix => {
                     const summary = collectionElements(prefix).summary;
                     if (summary) summary.textContent = `加载采集范围失败：${err.message || err}`;
@@ -3176,7 +4155,7 @@
                 mode: document.getElementById("daily-task-mode").value,
                 appeal_type: document.getElementById("daily-task-appeal-type").value,
                 top_n: Number(document.getElementById("daily-task-top-n").value || 30),
-                max_workers: Number(document.getElementById("daily-task-max-workers").value || 30),
+                max_workers: Number(document.getElementById("daily-task-max-workers").value || 10),
                 recent_days: Number(document.getElementById("daily-task-recent-days").value || 100),
                 round_interval: Number(document.getElementById("daily-task-round-interval").value || 600),
                 site_pause: Number(document.getElementById("daily-task-site-pause").value || 30),
@@ -3600,12 +4579,26 @@
         }
 
         async function startTask() {
+            const shopName = String(appealShopInput?.value || "").trim();
+            if (!shopName) {
+                alert("请输入并选择店铺名");
+                appealShopInput?.focus();
+                return;
+            }
             const selectedSites = Array.from(
                 document.querySelectorAll('#site-picker input[name="site"]:checked'),
                 input => input.value
             );
             if (selectedSites.length === 0) {
                 alert("请至少选择一个站点");
+                return;
+            }
+            const selectedForms = Array.from(
+                document.querySelectorAll('#form-picker input[name="form"]:checked'),
+                input => input.value
+            );
+            if (selectedForms.length === 0) {
+                alert("请至少选择一个任务类型");
                 return;
             }
 
@@ -3618,14 +4611,14 @@
             appendLog("正在建立连接...\n");
 
             const params = new URLSearchParams({
-                name: document.getElementById("name").value,
-                form: document.getElementById("form").value,
+                name: shopName,
                 mode: document.getElementById("mode").value,
                 loop_count: document.getElementById("loop-count").value,
                 message: document.getElementById("message").value,
                 task_id: activeAppealTaskId
             });
             selectedSites.forEach(site => params.append("site", site));
+            selectedForms.forEach(form => params.append("form", form));
 
             try {
                 const response = await fetch(`/api/run_shensu?${params.toString()}`);
@@ -3785,8 +4778,19 @@
             }
         }
 
+        function selectedMercadoLoginWorkerCount() {
+            const rawValue = Number(mercadoLoginWorkers?.value || 3);
+            const workers = Math.max(
+                1,
+                Math.min(10, Number.isFinite(rawValue) ? Math.trunc(rawValue) : 3)
+            );
+            if (mercadoLoginWorkers) mercadoLoginWorkers.value = String(workers);
+            return workers;
+        }
+
         async function startMercadoLogin(encodedWindowId = "") {
             const windowId = decodeURIComponent(encodedWindowId || "");
+            const workers = selectedMercadoLoginWorkerCount();
             mercadoLoginRunning = true;
             mercadoLoginAllRunning = !windowId;
             startMercadoLoginBtn.disabled = true;
@@ -3795,7 +4799,7 @@
                 const response = await fetch("/api/window-anomalies/mercado-login/start", {
                     method: "POST",
                     headers: {"Content-Type": "application/json"},
-                    body: JSON.stringify(windowId ? {window_id: windowId} : {workers: 3}),
+                    body: JSON.stringify(windowId ? {window_id: windowId} : {workers}),
                 });
                 const payload = await response.json();
                 if (!response.ok || payload.status !== "success") {
@@ -3816,6 +4820,7 @@
                 alert("请至少选择一个待处理人机验证店铺");
                 return;
             }
+            const workers = selectedMercadoLoginWorkerCount();
 
             mercadoLoginRunning = true;
             windowIds.forEach(windowId => activeMercadoLoginWindowIds.add(String(windowId)));
@@ -3824,7 +4829,7 @@
                 const response = await fetch("/api/window-anomalies/mercado-login/start", {
                     method: "POST",
                     headers: {"Content-Type": "application/json"},
-                    body: JSON.stringify({window_ids: windowIds, workers: windowIds.length}),
+                    body: JSON.stringify({window_ids: windowIds, workers}),
                 });
                 const payload = await response.json();
                 if (!response.ok || payload.status !== "success") {
