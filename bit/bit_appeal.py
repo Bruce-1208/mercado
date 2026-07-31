@@ -21,7 +21,8 @@ import random
 from bit.bit_utils import get_latest_modified_file, get_bit_path, parser_delay_date, get_now_time, getWindowidByName
 from bit.bit_api import *
 from bit.bit_config import get_window_id_by_shop_name
-from bit.bit_mercado_login import ensure_mercado_login_from_home
+from bit.bit_mercado_limit import is_mercado_rate_limited_page
+from bit.bit_mercado_login import open_mercado_backend_page
 from bit.bit_reputation_info import get_cancellation_orders
 from AI_Agent.qianwen import *
 import pandas as pd
@@ -30,7 +31,6 @@ from datetime import datetime
 from AI_Agent.deepseek import *
 import re
 from openpyxl import load_workbook
-from bit.bit_clash import *
 import traceback
 from bit_infractions_info import *
 
@@ -38,11 +38,6 @@ from bit_infractions_info import *
 CHAT_INFO_API_URL = "https://zeshun.nat100.top/api/v1/chat"
 HUMAN_SERVICE_HUB_URL = "https://global-selling.mercadolibre.com/help/hub/30928?source"
 HUMAN_SERVICE_CHAT_V2_URL = "https://global-selling.mercadolibre.com/help/chat/v2"
-SPANISH_RATE_LIMIT_MARKERS = (
-    "hubo un error accediendo a esta página",
-    "hubo un error accediendo a esta pagina",
-)
-
 SITE_REMOTE_VALUE_MAP = {
     "墨西哥": "MLM-remote",
     "巴西": "MLB-remote",
@@ -155,29 +150,6 @@ def insert_chat_info_by_api(name, site, message, chat, response, time):
     return res.json()
 
 
-def is_spanish_rate_limited_page(driver):
-    """只有指定的 Mercado 西语错误页才判定为需要切换 IP。"""
-    try:
-        driver.switch_to.default_content()
-    except Exception:
-        pass
-    try:
-        page_text = driver.execute_script("return document.body ? document.body.innerText : ''") or ""
-    except Exception:
-        page_text = ""
-    try:
-        title = driver.title or ""
-    except Exception:
-        title = ""
-    try:
-        current_url = driver.current_url or ""
-    except Exception:
-        current_url = ""
-
-    visible_text = f"{page_text}\n{title}\n{current_url}".lower()
-    return any(marker in visible_text for marker in SPANISH_RATE_LIMIT_MARKERS)
-
-
 def fast_navigate(driver, url, stop_after=4):
     """快速跳转页面：不等待所有资源加载，避免 Mercado help 页面长时间卡住。"""
     driver.switch_to.default_content()
@@ -196,27 +168,29 @@ def fast_navigate(driver, url, stop_after=4):
         pass
 
 
-def open_human_service_hub_with_ip_retry(driver, name, site, max_hongkong_switches=3):
-    """打开指定人工客服 hub；只有指定西语错误页才切换香港 IP。"""
-    max_hongkong_switches = max(0, int(max_hongkong_switches))
-    fast_navigate(driver, HUMAN_SERVICE_HUB_URL, stop_after=3)
-    for attempt in range(1, max_hongkong_switches + 2):
-        if not is_spanish_rate_limited_page(driver):
-            return True
-        if attempt > max_hongkong_switches:
-            raise RuntimeError(
-                f"{name} {site} 指定西语限频页持续出现，已切换香港 IP "
-                f"{max_hongkong_switches} 次仍未恢复"
-            )
-        print(
-            f"{name} {site}检测到指定西语限频页，"
-            f"正在第{attempt}/{max_hongkong_switches}次切换香港 IP<br>"
-        )
-        switch_random_hongkong_node()
-        get_public_ip()
-        fast_navigate(driver, HUMAN_SERVICE_HUB_URL, stop_after=3)
-
-    return False
+def open_human_service_hub_with_ip_retry(
+    driver,
+    name,
+    site,
+    max_hongkong_switches=3,
+    window_id="",
+):
+    """打开人工客服 Hub，同时处理指定限频页和退出登录。"""
+    result = open_mercado_backend_page(
+        driver,
+        HUMAN_SERVICE_HUB_URL,
+        name,
+        window_id,
+        settle_seconds=3,
+        max_rate_limit_retries=max_hongkong_switches,
+        rate_limit_retry_wait_seconds=0,
+        navigate=lambda url: fast_navigate(driver, url, stop_after=3),
+        anomaly_site=site,
+        anomaly_source="人工申诉",
+    )
+    if not result.get("ok"):
+        raise RuntimeError(f"{name} {site} {result.get('message') or result.get('status')}")
+    return True
 
 
 def fast_open_new_tab(driver, url, stop_after=4):
@@ -286,7 +260,7 @@ def switch_to_latest_valid_hub_tab(driver, expected_texts, timeout=2):
     return False
 
 
-def open_hub_new_tab_with_retry(driver, name, site, retries=3):
+def open_hub_new_tab_with_retry(driver, name, site, retries=3, window_id=""):
     hub_url = "https://global-selling.mercadolibre.com/help/hub/30928?source"
     expected_texts = ("Chat", "Email")
     for attempt in range(1, retries + 1):
@@ -297,18 +271,34 @@ def open_hub_new_tab_with_retry(driver, name, site, retries=3):
             before_handles = set()
             previous_handle = None
 
-        opened_handle = fast_open_new_tab(driver, hub_url, stop_after=3)
+        opened_handle = fast_open_new_tab(driver, "about:blank", stop_after=0)
         try:
             if opened_handle in driver.window_handles:
                 driver.switch_to.window(opened_handle)
         except Exception:
             pass
 
-        if page_contains_all_texts(driver, expected_texts, timeout=6) or switch_to_latest_valid_hub_tab(driver, expected_texts):
+        open_result = open_mercado_backend_page(
+            driver,
+            hub_url,
+            name,
+            window_id,
+            settle_seconds=0,
+            rate_limit_retry_wait_seconds=0,
+            navigate=lambda url: fast_navigate(driver, url, stop_after=3),
+            anomaly_site=site,
+            anomaly_source="人工申诉",
+        )
+
+        if open_result.get("ok") and (
+            page_contains_all_texts(driver, expected_texts, timeout=6)
+            or switch_to_latest_valid_hub_tab(driver, expected_texts)
+        ):
             print(f"{get_now_time()} {name} {site} hub 页面打开正常，第{attempt}次成功<br>")
             return True
 
-        print(f"{get_now_time()} {name} {site} hub 页面异常，未看到 Chat 和 Email，第{attempt}次重试<br>")
+        reason = open_result.get("message") or "未看到 Chat 和 Email"
+        print(f"{get_now_time()} {name} {site} hub 页面异常：{reason}，第{attempt}次重试<br>")
         try:
             current_handle = opened_handle or driver.current_window_handle
             if current_handle not in before_handles and current_handle in driver.window_handles and len(driver.window_handles) > 1:
@@ -355,7 +345,7 @@ def close_appeal_tabs(driver, base_handles, name, site):
         pass
 
 
-def open_human_service_chat(driver, name, site):
+def open_human_service_chat(driver, name, site, window_id=""):
     """当前标签优先打开指定 hub；进入对话窗失败时再回退 chat/v2。"""
     entry_xpath = "//*[self::button or self::a][contains(., 'We’ll send you a message in less than 5 min') or contains(., \"We'll send you a message in less than 5 min\")]"
 
@@ -363,8 +353,13 @@ def open_human_service_chat(driver, name, site):
         current_url = driver.current_url or ""
     except Exception:
         current_url = ""
-    if "/help/hub/30928" not in current_url or is_spanish_rate_limited_page(driver):
-        open_human_service_hub_with_ip_retry(driver, name, site)
+    if "/help/hub/30928" not in current_url or is_mercado_rate_limited_page(driver):
+        open_human_service_hub_with_ip_retry(
+            driver,
+            name,
+            site,
+            window_id=window_id,
+        )
 
     if wait_for_human_chat_input(driver, timeout=2) or switch_to_latest_chat_input_tab(driver, timeout=1):
         print(f"{get_now_time()} {name} {site} hub 页面人工客服输入框已就绪<br>")
@@ -379,7 +374,19 @@ def open_human_service_chat(driver, name, site):
     except Exception as e:
         print(f"{get_now_time()} {name} {site} hub 进入对话窗失败，回退 chat/v2：{e}<br>")
 
-    fast_navigate(driver, HUMAN_SERVICE_CHAT_V2_URL, stop_after=3)
+    chat_result = open_mercado_backend_page(
+        driver,
+        HUMAN_SERVICE_CHAT_V2_URL,
+        name,
+        window_id,
+        settle_seconds=0,
+        rate_limit_retry_wait_seconds=0,
+        navigate=lambda url: fast_navigate(driver, url, stop_after=3),
+        anomaly_site=site,
+        anomaly_source="人工申诉",
+    )
+    if not chat_result.get("ok"):
+        raise RuntimeError(chat_result.get("message") or "chat/v2 页面打开失败")
     if wait_for_human_chat_input(driver, timeout=2) or switch_to_latest_chat_input_tab(driver, timeout=1):
         print(f"{get_now_time()} {name} {site} chat/v2 聊天页已就绪<br>")
         return True
@@ -678,23 +685,16 @@ def shensu(name, site, form, message, mode="人工客服"):
         pass
 
     # driver.switch_to.new_window('tab') 决定是否打开新窗口
-    login_result = ensure_mercado_login_from_home(
-        driver,
-        name,
-        window_id=window_id,
-    )
-    if not login_result.get("ok"):
-        print(
-            f"{get_now_time()} {name} {site} "
-            f"{login_result.get('message')}<br>"
+    try:
+        open_human_service_hub_with_ip_retry(
+            driver,
+            name,
+            site,
+            window_id=window_id,
         )
-        return login_result.get("status") or "未登录"
-    print(
-        f"{get_now_time()} {name} {site} 首页登录检测结果："
-        f"{login_result.get('message')}，继续执行人工客服申诉<br>"
-    )
-
-    open_human_service_hub_with_ip_retry(driver, name, site)
+    except Exception as exc:
+        print(f"{get_now_time()} {name} {site} {exc}<br>")
+        return str(exc)
 
     words = []
     nickname_list = ["Bruce", "Jack", "Lucy", "James"]
@@ -766,10 +766,15 @@ def shensu(name, site, form, message, mode="人工客服"):
             f"本轮人工客服按侵权规则发送 {len(selected_orders)} 个：{cancellation_random}<br>"
         )
         # 获取订单后当前位于 Metrics 页面，重新回到人工客服入口。
-        open_human_service_hub_with_ip_retry(driver, name, site)
+        open_human_service_hub_with_ip_retry(
+            driver,
+            name,
+            site,
+            window_id=window_id,
+        )
         select_mercado_site_fast(driver, name, site)
     try:
-        open_human_service_chat(driver, name, site)
+        open_human_service_chat(driver, name, site, window_id=window_id)
 
         # 发消息
         print(f"{get_now_time()} {name} {site} '进入人工客服'<br>")
@@ -820,7 +825,19 @@ def shensu(name, site, form, message, mode="人工客服"):
             )
 
     except Exception as e:
-        fast_navigate(driver, HUMAN_SERVICE_CHAT_V2_URL, stop_after=3)
+        chat_result = open_mercado_backend_page(
+            driver,
+            HUMAN_SERVICE_CHAT_V2_URL,
+            name,
+            window_id,
+            settle_seconds=0,
+            rate_limit_retry_wait_seconds=0,
+            navigate=lambda url: fast_navigate(driver, url, stop_after=3),
+            anomaly_site=site,
+            anomaly_source="人工申诉",
+        )
+        if not chat_result.get("ok"):
+            raise RuntimeError(chat_result.get("message") or str(e)) from e
         print(get_now_time() + name + site + "继续与客服对话")
         # 全部聊天记录
         chat_ai(driver, name, site, form, initial_huashu, nickname)

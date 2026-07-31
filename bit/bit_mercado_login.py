@@ -1,6 +1,8 @@
 """Mercado 店铺登录态检测，供申诉、声誉和侵权任务共用。"""
 
 import json
+import hashlib
+import sys
 import threading
 import time
 from collections import OrderedDict
@@ -10,12 +12,24 @@ from pathlib import Path
 
 from selenium.webdriver.common.by import By
 from selenium.webdriver.common.keys import Keys
+from selenium.webdriver.common.action_chains import ActionChains
 
 from bit import bit_db_api
-from bit.bit_clash import switch_random_hongkong_node
 from bit.bit_config import list_shop_configs, require_shop_config
+from bit.bit_mercado_limit import (
+    MERCADO_RATE_LIMIT_TEXT,
+    get_mercado_page_state,
+    get_mercado_backend_status,
+    is_mercado_logged_out_state,
+    is_mercado_rate_limited_page,
+    process_mercado_rate_limit,
+)
 from bit.bit_send_mail import send_info
+from bit.bit_runtime_lock import InterProcessLock, get_lock_owner
 from bit.bit_utils import get_bit_path, get_now_time
+
+
+MERCADO_LOGIN_JOB_LOCK_KEY = "mercado_login_job"
 
 
 LOGIN_URL_MARKERS = ("/login", "/lgz/", "/legacy-user")
@@ -70,26 +84,6 @@ CAPTCHA_TEXT_MARKERS = (
     "人机验证",
     "我不是机器人",
 )
-MERCADO_RATE_LIMIT_MARKERS = (
-    "429 too many",
-    "http 429",
-    "too many requests",
-    "rate limit",
-    "rate-limit",
-    "request limit exceeded",
-    "request limit",
-    "access denied",
-    "请求太过频繁",
-    "请求过于频繁",
-    "访问过于频繁",
-    "操作太频繁",
-    "每秒最多可以发起",
-    "demasiadas solicitudes",
-    "muitas solicitações",
-    "hubo un error accediendo a esta página",
-    "hubo un error accediendo a esta pagina",
-)
-
 EMAIL_INPUT_SELECTORS = (
     "input[type='email']",
     "#user_id",
@@ -181,8 +175,20 @@ CONTINUE_BUTTON_EXACT_TEXTS = (
     "继续",
     "下一步",
 )
+CONTINUE_BUTTON_SELECTORS = (
+    "button[type='submit']",
+    "input[type='submit']",
+    "button[id*='continue' i]",
+    "button[name*='continue' i]",
+    "button[data-testid*='continue' i]",
+    "button[data-testid*='submit' i]",
+    "[role='button'][id*='continue' i]",
+    "[role='button'][data-testid*='continue' i]",
+)
 CONFIRM_BUTTON_EXACT_TEXTS = (
     "confirm",
+    "confirm password",
+    "confirmar",
     "continue",
     "log in",
     "sign in",
@@ -193,6 +199,23 @@ CONFIRM_BUTTON_EXACT_TEXTS = (
     "continuar",
     "确认",
     "登录",
+)
+CONFIRM_BUTTON_TEXT_MARKERS = (
+    "confirm",
+    "confirmar",
+    "submit",
+    "continuar",
+    "确认",
+)
+CONFIRM_BUTTON_SELECTORS = (
+    "button[type='submit']",
+    "input[type='submit']",
+    "button[id*='confirm' i]",
+    "button[name*='confirm' i]",
+    "button[data-testid*='confirm' i]",
+    "button[data-testid*='submit' i]",
+    "[role='button'][id*='confirm' i]",
+    "[role='button'][data-testid*='confirm' i]",
 )
 PASSWORD_OPTION_TEXT_MARKERS = (
     "password",
@@ -226,6 +249,46 @@ PASSWORD_OPTION_NEGATIVE_MARKERS = (
     "重置",
     "修改",
 )
+PASSWORD_INCORRECT_TEXT_MARKERS = (
+    "incorrect password",
+    "invalid password",
+    "wrong password",
+    "password is incorrect",
+    "password isn't correct",
+    "contraseña incorrecta",
+    "contrasena incorrecta",
+    "senha incorreta",
+    "密码错误",
+    "密码不正确",
+    "密码不对",
+)
+PASSWORD_REQUIRED_TEXT_MARKERS = (
+    "enter your password",
+    "password is required",
+    "please enter your password",
+    "ingresa tu contraseña",
+    "ingresa tu contrasena",
+    "digite sua senha",
+    "请输入密码",
+    "密码不能为空",
+)
+EMAIL_REJECTED_TEXT_MARKERS = (
+    "enter a valid email",
+    "enter a valid e-mail",
+    "email is not valid",
+    "e-mail is not valid",
+    "account not found",
+    "we couldn't find",
+    "we could not find",
+    "correo no válido",
+    "correo no valido",
+    "cuenta no encontrada",
+    "e-mail inválido",
+    "e-mail invalido",
+    "邮箱格式不正确",
+    "找不到该账号",
+    "账号不存在",
+)
 LOGIN_ALREADY_ACTIVE = "已登录"
 LOGIN_SUCCESS = "登录成功"
 LOGIN_NOT_LOGGED_IN = "未登录"
@@ -233,19 +296,23 @@ LOGIN_VERIFICATION_REQUIRED = "需要验证码"
 LOGIN_CAPTCHA_REQUIRED = "需要人机验证"
 LOGIN_FAILED = "登录状态检测失败"
 LOGIN_EMAIL_MISSING = "数据库未配置邮箱"
+LOGIN_EMAIL_REJECTED = "数据库邮箱未通过登录页校验"
 LOGIN_SAVED_PASSWORD_MISSING = "浏览器未保存默认密码"
+LOGIN_SAVED_PASSWORD_INCORRECT = "浏览器默认密码错误"
 LOGIN_WINDOW_BUSY = "窗口正在被其他任务占用"
 INITIAL_LOGIN_ACTIVE = "已登录"
 INITIAL_LOGIN_INACTIVE = "未登录"
 INITIAL_LOGIN_UNKNOWN = "未确认"
 PROGRAM_LOGIN_NOT_REQUIRED = "无需登录"
 PROGRAM_LOGIN_SUCCESS = "登录成功"
+PROGRAM_LOGIN_MANUAL_SUCCESS = "人工登录成功"
 PROGRAM_LOGIN_FAILED = "登录失败"
 PROGRAM_LOGIN_VERIFICATION_REQUIRED = "遇到验证码"
 PROGRAM_LOGIN_CAPTCHA_REQUIRED = "遇到人机验证"
 PROGRAM_LOGIN_NOT_RUN = "未执行"
 LOGIN_OUTCOME_ALREADY_ACTIVE = "原本已登录"
 LOGIN_OUTCOME_AUTO_LOGIN_SUCCESS = "未登录，程序登录成功"
+LOGIN_OUTCOME_MANUAL_LOGIN_SUCCESS = "自动登录失败，人工登录成功"
 LOGIN_OUTCOME_AUTO_LOGIN_FAILED = "未登录，程序登录失败"
 LOGIN_OUTCOME_VERIFICATION_REQUIRED = "未登录，程序登录遇到验证码"
 LOGIN_OUTCOME_CAPTCHA_REQUIRED = "未登录，程序登录遇到人机验证"
@@ -255,6 +322,8 @@ RATE_LIMIT_RETRY_WAIT_SECONDS = 30
 LOGIN_EVENT_LOG_PATH = get_bit_path() / "logs" / "mercado_unlogged_shops.jsonl"
 LOGIN_REPORT_DIR = get_bit_path() / "登录状态汇总"
 _LOGIN_EVENT_LOG_GUARD = threading.Lock()
+SAVED_PASSWORD_SUBMITTED_DETAIL = "已提交浏览器保存的默认密码"
+SAVED_PASSWORD_SELECTION_ATTEMPTED_DETAIL = "已尝试选择浏览器保存的默认密码并提交"
 
 
 def load_shop_login_config(shop_name, window_id="", config_path=None):
@@ -274,61 +343,22 @@ def load_shop_login_config(shop_name, window_id="", config_path=None):
 
 
 def _page_snapshot(driver):
-    try:
-        driver.switch_to.default_content()
-    except Exception:
-        pass
-    try:
-        page_text = driver.execute_script(
-            "return document.body ? document.body.innerText : '';"
-        ) or ""
-    except Exception:
-        page_text = ""
-    try:
-        current_url = driver.current_url or ""
-    except Exception:
-        current_url = ""
-    try:
-        title = driver.title or ""
-    except Exception:
-        title = ""
-    return {
-        "page_text": str(page_text),
-        "current_url": str(current_url),
-        "title": str(title),
-    }
+    return get_mercado_page_state(driver)
 
 
-def is_mercado_rate_limited_page(driver=None, state=None):
-    """识别 Mercado 可见限频页；空白错误页才回退检查源码。"""
-    state = dict(state or _page_snapshot(driver))
-    visible_state = "\n".join(
+def _visible_snapshot_text(state):
+    """只返回用户实际可见的标题和正文，不读取隐藏脚本里的登录文案。"""
+    state = dict(state or {})
+    return "\n".join(
         (
             str(state.get("page_text") or ""),
             str(state.get("title") or ""),
-            str(state.get("current_url") or ""),
-            str(state.get("navigation_error") or ""),
         )
     ).casefold()
-    # 明确的人机验证仍按验证码流程处理，不能误当成限频后自动换 IP。
-    if any(marker in visible_state for marker in CAPTCHA_TEXT_MARKERS):
-        return False
-    if any(marker in visible_state for marker in MERCADO_RATE_LIMIT_MARKERS):
-        return True
 
-    if str(state.get("page_text") or "").strip() or str(
-        state.get("title") or ""
-    ).strip():
-        return False
 
-    page_source = state.get("page_source")
-    if page_source is None and driver is not None:
-        try:
-            page_source = driver.page_source or ""
-        except Exception:
-            page_source = ""
-    source_text = str(page_source or "").casefold()
-    return any(marker in source_text for marker in MERCADO_RATE_LIMIT_MARKERS)
+def _snapshot_url(state):
+    return str(dict(state or {}).get("current_url") or "").casefold()
 
 
 def _is_visible_enabled(element):
@@ -487,7 +517,10 @@ def is_mercado_login_page(driver):
     if not driver:
         return False
     state = _page_snapshot(driver)
-    combined = "\n".join(state.values()).casefold()
+    if is_mercado_logged_out_state(state):
+        return True
+    visible_text = _visible_snapshot_text(state)
+    current_url = _snapshot_url(state)
     if _visible_elements(
         driver,
         EMAIL_INPUT_SELECTORS + PASSWORD_INPUT_SELECTORS + CODE_INPUT_SELECTORS,
@@ -496,13 +529,10 @@ def is_mercado_login_page(driver):
     if _has_visible_captcha_widget(_visible_elements(driver, CAPTCHA_SELECTORS)):
         return True
     return any(
-        marker in combined
-        for marker in (
-            LOGIN_URL_MARKERS
-            + LOGIN_TEXT_MARKERS
-            + VERIFICATION_TEXT_MARKERS
-            + CAPTCHA_TEXT_MARKERS
-        )
+        marker in current_url for marker in LOGIN_URL_MARKERS
+    ) or any(
+        marker in visible_text
+        for marker in LOGIN_TEXT_MARKERS + VERIFICATION_TEXT_MARKERS + CAPTCHA_TEXT_MARKERS
     )
 
 
@@ -511,14 +541,15 @@ def detect_login_stage(driver):
     # 先看页面级文案，避免“验证方式选择页”里的 Email 选项/隐藏单选框
     # 被误认成需要填写的 Email 输入框。
     state = _page_snapshot(driver)
-    combined = "\n".join(state.values()).casefold()
+    visible_text = _visible_snapshot_text(state)
+    current_url = _snapshot_url(state)
     if is_mercado_rate_limited_page(driver=driver, state=state):
         return "rate_limited"
-    if any(marker in combined for marker in CAPTCHA_TEXT_MARKERS):
+    if any(marker in visible_text for marker in CAPTCHA_TEXT_MARKERS):
         return "captcha"
     if _has_visible_captcha_widget(_visible_elements(driver, CAPTCHA_SELECTORS)):
         return "captcha"
-    if any(marker in combined for marker in AUTH_METHOD_TEXT_MARKERS):
+    if any(marker in visible_text for marker in AUTH_METHOD_TEXT_MARKERS):
         return "login"
 
     if _visible_elements(driver, CODE_INPUT_SELECTORS):
@@ -528,9 +559,11 @@ def detect_login_stage(driver):
     if _visible_elements(driver, EMAIL_INPUT_SELECTORS):
         return "email"
 
-    if any(marker in combined for marker in VERIFICATION_TEXT_MARKERS):
+    if any(marker in visible_text for marker in VERIFICATION_TEXT_MARKERS):
         return "verification"
-    if any(marker in combined for marker in LOGIN_URL_MARKERS + LOGIN_TEXT_MARKERS):
+    if any(marker in current_url for marker in LOGIN_URL_MARKERS) or any(
+        marker in visible_text for marker in LOGIN_TEXT_MARKERS
+    ):
         return "login"
     return "logged_in"
 
@@ -622,10 +655,91 @@ def _normalize_login_judgement(result):
     return normalized
 
 
+def is_human_verification_result(value):
+    """判断任务结果或异常记录是否明确表示遇到人机验证。
+
+    普通邮箱验证码/身份验证码不属于这里的“人机验证”，避免店铺状态页
+    再次混入所有登录失败类型。
+    """
+    if isinstance(value, dict):
+        status = str(value.get("status") or value.get("anomaly_type") or "").strip()
+        stage = str(value.get("login_stage") or "").strip().casefold()
+        category = str(value.get("result_category") or "").strip()
+        if (
+            status == LOGIN_CAPTCHA_REQUIRED
+            or stage == "captcha"
+            or category == LOGIN_OUTCOME_CAPTCHA_REQUIRED
+        ):
+            return True
+        return any(
+            is_human_verification_result(value.get(key))
+            for key in (
+                "message",
+                "reason",
+                "detail",
+                "login_result",
+                "result",
+                "error",
+            )
+            if key in value
+        )
+    if isinstance(value, (list, tuple, set)):
+        return any(is_human_verification_result(item) for item in value)
+
+    text = str(value or "").strip().casefold()
+    if not text:
+        return False
+    return any(
+        marker in text
+        for marker in (
+            "人机验证",
+            "captcha",
+            "human verification",
+            "i'm not a robot",
+            "i am not a robot",
+            "no soy un robot",
+            "não sou um robô",
+            "nao sou um robo",
+            "我不是机器人",
+        )
+    )
+
+
+def record_human_verification_anomaly(
+    result,
+    window_id,
+    shop_name,
+    site="",
+    source="业务任务",
+):
+    """把明确的人机验证写入店铺状态；其他登录结果一律不写入。"""
+    window_id = str(window_id or "").strip()
+    if not window_id or not is_human_verification_result(result):
+        return False
+    if isinstance(result, dict):
+        reason = str(
+            result.get("message")
+            or result.get("status")
+            or LOGIN_CAPTCHA_REQUIRED
+        ).strip()
+    else:
+        reason = str(result or LOGIN_CAPTCHA_REQUIRED).strip()
+    bit_db_api.upsert_window_anomaly(
+        window_id,
+        str(shop_name or "").strip(),
+        str(site or "").strip(),
+        anomaly_type=LOGIN_CAPTCHA_REQUIRED,
+        reason=reason,
+        source=str(source or "业务任务").strip(),
+    )
+    return True
+
+
 def _count_login_outcomes(results):
     categories = (
         LOGIN_OUTCOME_ALREADY_ACTIVE,
         LOGIN_OUTCOME_AUTO_LOGIN_SUCCESS,
+        LOGIN_OUTCOME_MANUAL_LOGIN_SUCCESS,
         LOGIN_OUTCOME_AUTO_LOGIN_FAILED,
         LOGIN_OUTCOME_VERIFICATION_REQUIRED,
         LOGIN_OUTCOME_CAPTCHA_REQUIRED,
@@ -640,15 +754,26 @@ def _count_login_outcomes(results):
     return counts
 
 
-def sync_login_results_to_window_anomalies(results):
-    """把登录结果同步到店铺状态；成功店铺自动解除待登录状态。"""
-    summary = {
+def _new_window_anomaly_sync_summary():
+    return {
         "anomaly_count": 0,
         "resolved_count": 0,
         "skipped_count": 0,
         "error_count": 0,
         "errors": [],
     }
+
+
+def _merge_window_anomaly_sync_summary(target, update):
+    for key in ("anomaly_count", "resolved_count", "skipped_count", "error_count"):
+        target[key] = int(target.get(key) or 0) + int((update or {}).get(key) or 0)
+    target.setdefault("errors", []).extend((update or {}).get("errors") or [])
+    return target
+
+
+def sync_login_results_to_window_anomalies(results):
+    """店铺状态只保留人机验证；其余确定性结果会解除旧记录。"""
+    summary = _new_window_anomaly_sync_summary()
     for raw_result in results or []:
         result = _normalize_login_judgement(raw_result)
         window_id = str(result.get("window_id") or "").strip()
@@ -657,27 +782,32 @@ def sync_login_results_to_window_anomalies(results):
             summary["skipped_count"] += 1
             continue
         try:
-            if result.get("result_category") in (
-                LOGIN_OUTCOME_ALREADY_ACTIVE,
-                LOGIN_OUTCOME_AUTO_LOGIN_SUCCESS,
-            ) or result.get("ok"):
+            result_category = result.get("result_category")
+            if result_category == LOGIN_OUTCOME_NOT_DETERMINED:
+                summary["skipped_count"] += 1
+                print(
+                    f"{get_now_time()} {shop_name or window_id} 未完成登录判断，"
+                    "保留原店铺状态，不写入登录异常",
+                    flush=True,
+                )
+                continue
+            if is_human_verification_result(result):
+                record_human_verification_anomaly(
+                    result,
+                    window_id,
+                    shop_name,
+                    str(result.get("sites") or result.get("site") or "").strip(),
+                    source="bit_mercado_login",
+                )
+                summary["anomaly_count"] += 1
+                continue
+
+            # 已完成判断且当前并非人机验证时，解除可能遗留的旧人机验证。
+            # 邮箱验证码、密码失败、限频等状态不再写入店铺状态页。
+            if result_category != LOGIN_OUTCOME_NOT_DETERMINED:
                 bit_db_api.resolve_window_anomaly(window_id)
                 summary["resolved_count"] += 1
                 continue
-
-            status = str(result.get("status") or LOGIN_FAILED).strip()
-            stage = str(result.get("login_stage") or "").strip()
-            anomaly_type = "美客多限频" if stage == "rate_limited" else status
-            reason = str(result.get("message") or "登录任务未完成").strip()
-            bit_db_api.upsert_window_anomaly(
-                window_id,
-                shop_name,
-                str(result.get("sites") or result.get("site") or "").strip(),
-                anomaly_type=anomaly_type,
-                reason=reason,
-                source="bit_mercado_login",
-            )
-            summary["anomaly_count"] += 1
         except Exception as exc:
             summary["error_count"] += 1
             summary["errors"].append(
@@ -693,7 +823,7 @@ def sync_login_results_to_window_anomalies(results):
             )
     print(
         f"{get_now_time()} bit_mercado_login 店铺状态同步完成："
-        f"异常 {summary['anomaly_count']} 家，解除 {summary['resolved_count']} 家，"
+        f"人机验证 {summary['anomaly_count']} 家，解除 {summary['resolved_count']} 家，"
         f"跳过 {summary['skipped_count']} 家，失败 {summary['error_count']} 家",
         flush=True,
     )
@@ -747,12 +877,12 @@ def ensure_mercado_login_from_home(
     max_rate_limit_retries=2,
     rate_limit_retry_wait_seconds=RATE_LIMIT_RETRY_WAIT_SECONDS,
 ):
-    """访问首页；遇到限频时切换节点，等待 30 秒后最多重试两次。"""
+    """访问首页；每次遇到限频都切换香港节点，等待后最多重试两次。"""
     max_rate_limit_retries = max(0, int(max_rate_limit_retries))
     rate_limit_retry_count = 0
     rate_limit_detected = False
-    node_switch_attempted = False
     node_switch_result = {}
+    node_switch_results = []
 
     while True:
         print(
@@ -805,28 +935,36 @@ def ensure_mercado_login_from_home(
         state = _page_snapshot(driver)
         current_url = str(state.get("current_url") or "").casefold()
         reached_mercado = "mercadolibre.com" in current_url
-        rate_limited = is_mercado_rate_limited_page(
+        limit_result = process_mercado_rate_limit(
             driver=driver,
             state={**state, "navigation_error": navigation_error},
+            name=shop_name,
+            retry_count=rate_limit_retry_count,
+            max_retries=max_rate_limit_retries,
+            retry_wait_seconds=rate_limit_retry_wait_seconds,
+            sleep=time.sleep,
         )
+        rate_limited = limit_result["rate_limited"]
         login_detected = False if rate_limited else is_mercado_login_page(driver)
 
         if not rate_limited:
             break
 
         rate_limit_detected = True
-        if rate_limit_retry_count >= max_rate_limit_retries:
+        if limit_result["exhausted"]:
             switch_reason = str(node_switch_result.get("reason") or "未执行")
             result = _result(
                 False,
                 LOGIN_FAILED,
-                f"{shop_name} 检测到美客多限频，切换节点后重试 "
+                f"{shop_name} 检测到美客多限频"
+                f"（{MERCADO_RATE_LIMIT_TEXT}），切换节点后重试 "
                 f"{rate_limit_retry_count} 次仍未恢复（节点切换：{switch_reason}）",
                 login_stage="rate_limited",
                 action="限频重试失败",
                 rate_limited=True,
                 rate_limit_retry_count=rate_limit_retry_count,
                 node_switch_result=node_switch_result,
+                node_switch_results=node_switch_results,
             )
             return {
                 **result,
@@ -836,29 +974,9 @@ def ensure_mercado_login_from_home(
                 "login_check_url": MERCADO_HOME_URL,
             }
 
-        if not node_switch_attempted:
-            node_switch_attempted = True
-            print(
-                f"{get_now_time()} {shop_name} 检测到美客多限频，正在切换香港节点",
-                flush=True,
-            )
-            try:
-                node_switch_result = switch_random_hongkong_node() or {}
-            except Exception as exc:
-                node_switch_result = {
-                    "switched": False,
-                    "reason": "exception",
-                    "error": str(exc),
-                }
-
-        rate_limit_retry_count += 1
-        print(
-            f"{get_now_time()} {shop_name} 限频后准备第 "
-            f"{rate_limit_retry_count}/{max_rate_limit_retries} 次重试，"
-            f"等待 {max(0, int(rate_limit_retry_wait_seconds))} 秒",
-            flush=True,
-        )
-        time.sleep(max(0, int(rate_limit_retry_wait_seconds)))
+        node_switch_result = limit_result["node_switch_result"]
+        node_switch_results.append(dict(node_switch_result))
+        rate_limit_retry_count = limit_result["retry_count"]
 
     if navigation_error and not reached_mercado:
         result = _result(
@@ -901,6 +1019,7 @@ def ensure_mercado_login_from_home(
         "rate_limited": rate_limit_detected,
         "rate_limit_retry_count": rate_limit_retry_count,
         "node_switch_result": node_switch_result,
+        "node_switch_results": node_switch_results,
     }
 
 
@@ -912,7 +1031,14 @@ def _element_search_text(element):
         pass
     # Mercado 的认证方式卡片是外层 button + 内层文字节点，WebElement.text
     # 在部分 BitBrowser 内核上为空，因此同时读取后代 innerText/textContent。
-    for attribute in ("aria-label", "title", "value", "innerText", "textContent"):
+    for attribute in (
+        "aria-label",
+        "aria-labelledby",
+        "title",
+        "value",
+        "innerText",
+        "textContent",
+    ):
         try:
             values.append(element.get_attribute(attribute) or "")
         except Exception:
@@ -939,6 +1065,7 @@ def _click_matching_control(
     exact_texts=(),
     text_markers=(),
     negative_markers=(),
+    click_element=None,
 ):
     """点击文案明确的按钮；普通 click 失败时回退到页面内 click。"""
     exact_texts = {str(value).casefold() for value in exact_texts}
@@ -949,6 +1076,13 @@ def _click_matching_control(
         if not text or any(marker in text for marker in negative_markers):
             continue
         if text not in exact_texts and not any(marker in text for marker in text_markers):
+            continue
+        if click_element is not None:
+            try:
+                if click_element(element):
+                    return True
+            except Exception:
+                pass
             continue
         try:
             element.click()
@@ -974,41 +1108,292 @@ def _click_login_entry_button(driver, shop_name=""):
     return clicked
 
 
-def _click_continue_button(driver, shop_name=""):
-    clicked = _click_matching_control(
-        driver,
-        exact_texts=CONTINUE_BUTTON_EXACT_TEXTS,
-        negative_markers=LOGIN_ENTRY_NEGATIVE_MARKERS,
-    )
-    if clicked:
-        print(f"{get_now_time()} {shop_name} 已点击 Continue", flush=True)
-    return clicked
+def _click_continue_button(driver, shop_name="", wait_seconds=3):
+    """等待邮箱页 Continue 可用后点击。
+
+    网络波动时 React 可能先渲染邮箱框，再延迟渲染或启用
+    Continue。因此在一个小时间窗内反复扫描，并对无可见文案的
+    submit 按钮做受控回退。页面是否真正离开邮箱阶段由上层确认。
+    """
+    deadline = time.monotonic() + max(0, float(wait_seconds))
+    while True:
+        clicked = _click_matching_control(
+            driver,
+            exact_texts=CONTINUE_BUTTON_EXACT_TEXTS,
+            text_markers=CONTINUE_BUTTON_EXACT_TEXTS,
+            negative_markers=LOGIN_ENTRY_NEGATIVE_MARKERS,
+        )
+        if clicked:
+            print(f"{get_now_time()} {shop_name} 已点击 Continue", flush=True)
+            return True
+
+        # 新版邮箱页有时只有 submit 语义，按钮文案位于
+        # Shadow DOM 或其他节点。本函数只在确认的邮箱阶段调用。
+        for element in _visible_elements(driver, CONTINUE_BUTTON_SELECTORS):
+            try:
+                driver.execute_script(
+                    "arguments[0].scrollIntoView({block:'center', inline:'center'});",
+                    element,
+                )
+            except Exception:
+                pass
+            try:
+                ActionChains(driver).move_to_element(element).pause(0.15).click().perform()
+            except Exception:
+                try:
+                    element.click()
+                except Exception:
+                    try:
+                        driver.execute_script("arguments[0].click();", element)
+                    except Exception:
+                        continue
+            print(f"{get_now_time()} {shop_name} 已点击 Continue", flush=True)
+            return True
+
+        if time.monotonic() >= deadline:
+            return False
+        time.sleep(min(0.25, max(0, deadline - time.monotonic())))
 
 
-def _click_confirm_button(driver, shop_name=""):
-    clicked = _click_matching_control(
-        driver,
-        exact_texts=CONFIRM_BUTTON_EXACT_TEXTS,
-        negative_markers=PASSWORD_OPTION_NEGATIVE_MARKERS
-        + LOGIN_ENTRY_NEGATIVE_MARKERS,
-    )
-    if clicked:
-        print(f"{get_now_time()} {shop_name} 已点击 Confirm 登录", flush=True)
-    return clicked
+def _click_control_with_cdp_pointer(driver, element):
+    """使用 Chrome DevTools 原生鼠标事件点击元素中心。"""
+    try:
+        driver.execute_cdp_cmd("Page.bringToFront", {})
+    except Exception:
+        return False
+    try:
+        point = driver.execute_script(
+            """
+            const element = arguments[0];
+            element.scrollIntoView({block: 'center', inline: 'center'});
+            const rect = element.getBoundingClientRect();
+            const x = rect.left + rect.width / 2;
+            const y = rect.top + rect.height / 2;
+            const hit = document.elementFromPoint(x, y);
+            return {
+                x,
+                y,
+                clickable: Boolean(
+                    rect.width > 0 && rect.height > 0 && hit
+                    && (hit === element || element.contains(hit))
+                ),
+            };
+            """,
+            element,
+        )
+    except Exception:
+        return False
+    if not isinstance(point, dict) or not point.get("clickable"):
+        return False
+    try:
+        x = float(point["x"])
+        y = float(point["y"])
+        driver.execute_cdp_cmd(
+            "Input.dispatchMouseEvent",
+            {"type": "mouseMoved", "x": x, "y": y},
+        )
+        driver.execute_cdp_cmd(
+            "Input.dispatchMouseEvent",
+            {
+                "type": "mousePressed",
+                "x": x,
+                "y": y,
+                "button": "left",
+                "buttons": 1,
+                "clickCount": 1,
+            },
+        )
+        driver.execute_cdp_cmd(
+            "Input.dispatchMouseEvent",
+            {
+                "type": "mouseReleased",
+                "x": x,
+                "y": y,
+                "button": "left",
+                "buttons": 0,
+                "clickCount": 1,
+            },
+        )
+        return True
+    except Exception:
+        return False
+
+
+def _request_submit_control(driver, element):
+    """通过表单原生 requestSubmit 触发 React submit 流程。"""
+    try:
+        return bool(
+            driver.execute_script(
+                """
+                const button = arguments[0];
+                const form = button.form || button.closest('form');
+                if (!form || typeof form.requestSubmit !== 'function') {
+                    return false;
+                }
+                form.requestSubmit(button);
+                return true;
+                """,
+                element,
+            )
+        )
+    except Exception:
+        return False
+
+
+def _click_confirm_control(driver, element, submission_attempt=1):
+    """按尝试次数切换 Confirm 提交方式，避免重复假点击。"""
+    attempt = max(1, int(submission_attempt or 1))
+    if attempt == 1:
+        strategies = (
+            ("CDP 原生鼠标", lambda: _click_control_with_cdp_pointer(driver, element)),
+            (
+                "ActionChains 鼠标",
+                lambda: _click_control_with_action_chains(driver, element),
+            ),
+            ("WebDriver", lambda: _click_control_with_webdriver(element)),
+        )
+    elif attempt == 2:
+        strategies = (
+            (
+                "ActionChains 鼠标",
+                lambda: _click_control_with_action_chains(driver, element),
+            ),
+            ("CDP 原生鼠标", lambda: _click_control_with_cdp_pointer(driver, element)),
+            ("WebDriver", lambda: _click_control_with_webdriver(element)),
+        )
+    else:
+        strategies = (
+            ("表单 requestSubmit", lambda: _request_submit_control(driver, element)),
+            ("CDP 原生鼠标", lambda: _click_control_with_cdp_pointer(driver, element)),
+            (
+                "ActionChains 鼠标",
+                lambda: _click_control_with_action_chains(driver, element),
+            ),
+            ("WebDriver", lambda: _click_control_with_webdriver(element)),
+        )
+
+    for mode, strategy in strategies:
+        try:
+            if strategy():
+                return mode
+        except Exception:
+            continue
+    return ""
+
+
+def _click_control_with_action_chains(driver, element):
+    try:
+        driver.execute_script(
+            "arguments[0].scrollIntoView({block:'center', inline:'center'});",
+            element,
+        )
+    except Exception:
+        pass
+    try:
+        ActionChains(driver).move_to_element(element).pause(0.2).click().perform()
+        return True
+    except Exception:
+        return False
+
+
+def _click_control_with_webdriver(element):
+    try:
+        element.click()
+        return True
+    except Exception:
+        return False
+
+
+def _click_confirm_button(
+    driver,
+    shop_name="",
+    wait_seconds=3,
+    submission_attempt=1,
+):
+    """点击密码页的提交按钮。
+
+    Mercado 同时存在按钮文案、aria 语义和纯 submit 按钮三种实现。
+    浏览器自动填充密码后 React 还可能延迟启用按钮，因此在小窗口内
+    重新扫描，不把第一次的 disabled 状态当成最终结果。
+    """
+    deadline = time.monotonic() + max(0, float(wait_seconds))
+    while True:
+        used_mode = []
+
+        def click_confirm_element(element):
+            mode = _click_confirm_control(
+                driver,
+                element,
+                submission_attempt=submission_attempt,
+            )
+            if mode:
+                used_mode.append(mode)
+                return True
+            return False
+
+        # 先用可见文案/可访问名称定位，避免误点页面其他提交控件。
+        clicked = _click_matching_control(
+            driver,
+            exact_texts=CONFIRM_BUTTON_EXACT_TEXTS,
+            text_markers=CONFIRM_BUTTON_TEXT_MARKERS,
+            negative_markers=PASSWORD_OPTION_NEGATIVE_MARKERS
+            + LOGIN_ENTRY_NEGATIVE_MARKERS,
+            click_element=click_confirm_element,
+        )
+        if clicked:
+            print(
+                f"{get_now_time()} {shop_name} 已使用 "
+                f"{used_mode[-1] if used_mode else '受信任事件'}"
+                " 提交 Confirm",
+                flush=True,
+            )
+            return True
+
+        # 新版认证页的按钮有时只有 type=submit，可见文案位于
+        # React/Shadow DOM 的其他节点。该函数只在已确认的密码页调用，
+        # 因此可以安全地回退到密码表单的 submit 语义。
+        for element in _visible_elements(driver, CONFIRM_BUTTON_SELECTORS):
+            mode = _click_confirm_control(
+                driver,
+                element,
+                submission_attempt=submission_attempt,
+            )
+            if not mode:
+                continue
+            print(
+                f"{get_now_time()} {shop_name} 已使用 {mode} 提交 Confirm",
+                flush=True,
+            )
+            return True
+
+        if time.monotonic() >= deadline:
+            return False
+        time.sleep(min(0.25, max(0, deadline - time.monotonic())))
 
 
 def _click_password_login_option(driver, shop_name=""):
     """只点击明确标为“密码”的登录方式，不点击发送验证码入口。"""
     # Mercado 当前验证方式页的卡片按钮本身无文字，通过 aria-labelledby
-    # 指向相邻内容；先使用稳定的 password_validation 语义标识定位。
+    # 指向相邻内容。普通 WebDriver click 可能返回成功但未触发 React 事件，
+    # 因此先滚动到按钮并模拟真实鼠标移动后点击。
     for element in _visible_elements(driver, PASSWORD_OPTION_SELECTORS):
         try:
-            element.click()
+            driver.execute_script(
+                "arguments[0].scrollIntoView({block:'center', inline:'center'});",
+                element,
+            )
+        except Exception:
+            pass
+        try:
+            ActionChains(driver).move_to_element(element).pause(0.2).click().perform()
         except Exception:
             try:
-                driver.execute_script("arguments[0].click();", element)
+                element.click()
             except Exception:
-                continue
+                try:
+                    driver.execute_script("arguments[0].click();", element)
+                except Exception:
+                    continue
         print(
             f"{get_now_time()} {shop_name} 已选择密码登录方式",
             flush=True,
@@ -1062,41 +1447,170 @@ def _fill_email_and_continue(driver, email, shop_name=""):
         email_input.click()
     except Exception:
         pass
-    try:
-        email_input.clear()
-    except Exception:
-        pass
-    # Mercado/React 的受控输入框可能让 clear() 表面成功但保留默认邮箱；
-    # 无论 clear() 是否报错，都强制全选删除后再输入数据库邮箱。
-    try:
-        email_input.send_keys(Keys.CONTROL, "a")
-        email_input.send_keys(Keys.BACKSPACE)
-    except Exception:
-        pass
-    email_input.send_keys(email)
-
+    accelerators = (
+        [Keys.COMMAND, Keys.CONTROL]
+        if sys.platform == "darwin"
+        else [Keys.CONTROL]
+    )
     value_readable = False
     actual_value = ""
-    try:
-        actual_value = str(email_input.get_attribute("value") or "").strip()
-        value_readable = True
-    except Exception:
-        pass
-    if value_readable and actual_value != email:
-        # 浏览器自动填充可能在首次删除后立即回写，再覆盖一次并强校验。
-        email_input.click()
-        email_input.send_keys(Keys.CONTROL, "a")
-        email_input.send_keys(Keys.BACKSPACE)
+    for accelerator in accelerators:
+        try:
+            email_input.clear()
+        except Exception:
+            pass
+        try:
+            email_input.send_keys(accelerator, "a")
+            email_input.send_keys(Keys.BACKSPACE)
+        except Exception:
+            pass
         email_input.send_keys(email)
-        actual_value = str(email_input.get_attribute("value") or "").strip()
+        try:
+            actual_value = str(email_input.get_attribute("value") or "").strip()
+            value_readable = True
+        except Exception:
+            value_readable = False
+            break
+        if actual_value == email:
+            break
+
+    if value_readable and actual_value != email:
+        # React 受控输入或浏览器自动填充可能拦截键盘清空；使用原生 value
+        # setter 并派发 input/change 事件，使 React 状态与 DOM 保持一致。
+        try:
+            actual_value = str(
+                driver.execute_script(
+                    """
+                    const input = arguments[0];
+                    const value = arguments[1];
+                    const setter = Object.getOwnPropertyDescriptor(
+                        window.HTMLInputElement.prototype, 'value'
+                    ).set;
+                    setter.call(input, value);
+                    input.dispatchEvent(new Event('input', {bubbles: true}));
+                    input.dispatchEvent(new Event('change', {bubbles: true}));
+                    return input.value;
+                    """,
+                    email_input,
+                    email,
+                )
+                or ""
+            ).strip()
+        except Exception:
+            actual_value = ""
         if actual_value != email:
             raise RuntimeError(
                 "Email 输入框未能清除默认账号，已停止提交，避免登录错误账号"
             )
 
-    if not _click_continue_button(driver, shop_name=shop_name):
+    if _click_continue_button(driver, shop_name=shop_name):
+        return True
+    try:
         email_input.send_keys(Keys.ENTER)
+    except Exception:
+        return False
+    print(
+        f"{get_now_time()} {shop_name} 未定位到可点击的 Continue，"
+        "已改用 Enter 提交邮箱",
+        flush=True,
+    )
     return True
+
+
+def _submit_email_with_retries(
+    driver,
+    email,
+    shop_name="",
+    wait_seconds=60,
+    max_attempts=3,
+):
+    """提交邮箱并确认页面真正离开邮箱阶段。
+
+    首次输入数据库邮箱；后续因网络波动重试时，若输入框
+    仍是正确邮箱，只重新点击 Continue，避免反复改写账号。
+    """
+    attempts = max(1, int(max_attempts))
+    transition_timeout = min(max(1, float(wait_seconds)), 15)
+    stage = "email"
+
+    for attempt in range(1, attempts + 1):
+        if attempt == 1:
+            submitted = _fill_email_and_continue(
+                driver,
+                email,
+                shop_name=shop_name,
+            )
+        else:
+            email_input = _first_visible_element(driver, EMAIL_INPUT_SELECTORS)
+            refill_required = False
+            if email_input is not None:
+                try:
+                    current_value = str(
+                        email_input.get_attribute("value") or ""
+                    ).strip()
+                except Exception:
+                    current_value = None
+                refill_required = current_value is not None and current_value != email
+
+            if refill_required:
+                print(
+                    f"{get_now_time()} {shop_name} Continue 重试前发现邮箱值变化，"
+                    "正在恢复数据库邮箱",
+                    flush=True,
+                )
+                submitted = _fill_email_and_continue(
+                    driver,
+                    email,
+                    shop_name=shop_name,
+                )
+            else:
+                submitted = _click_continue_button(
+                    driver,
+                    shop_name=shop_name,
+                )
+                if not submitted and email_input is not None:
+                    try:
+                        email_input.send_keys(Keys.ENTER)
+                        submitted = True
+                        print(
+                            f"{get_now_time()} {shop_name} Continue 重试未定位到按钮，"
+                            "已改用 Enter 提交",
+                            flush=True,
+                        )
+                    except Exception:
+                        pass
+
+        if not submitted:
+            return False, stage, attempt
+
+        print(
+            f"{get_now_time()} {shop_name} 已执行邮箱提交 "
+            f"({attempt}/{attempts})，正在等待页面切换",
+            flush=True,
+        )
+        stage = _wait_for_stage_transition(
+            driver,
+            "email",
+            timeout=transition_timeout,
+        )
+        if stage != "email":
+            return True, stage, attempt
+        if attempt < attempts:
+            print(
+                f"{get_now_time()} {shop_name} 页面仍停留在邮箱阶段，"
+                f"即将重新点击 Continue ({attempt + 1}/{attempts})",
+                flush=True,
+            )
+
+    return True, stage, attempts
+
+
+def _classify_email_page_failure(driver):
+    state = _page_snapshot(driver)
+    combined = _visible_snapshot_text(state)
+    if any(marker in combined for marker in EMAIL_REJECTED_TEXT_MARKERS):
+        return LOGIN_EMAIL_REJECTED
+    return LOGIN_FAILED
 
 
 def _password_input_has_saved_value(driver, password_input):
@@ -1110,6 +1624,27 @@ def _password_input_has_saved_value(driver, password_input):
         )
     except Exception:
         return False
+
+
+def _classify_password_page_failure(driver, saved_password_detected=False):
+    """区分浏览器无保存密码与已保存密码错误，不读取密码内容。"""
+    state = _page_snapshot(driver)
+    combined = _visible_snapshot_text(state)
+    if any(marker in combined for marker in PASSWORD_INCORRECT_TEXT_MARKERS):
+        return LOGIN_SAVED_PASSWORD_INCORRECT
+    if not saved_password_detected and any(
+        marker in combined for marker in PASSWORD_REQUIRED_TEXT_MARKERS
+    ):
+        return LOGIN_SAVED_PASSWORD_MISSING
+
+    password_input = _first_visible_element(driver, PASSWORD_INPUT_SELECTORS)
+    has_value = bool(
+        password_input is not None
+        and _password_input_has_saved_value(driver, password_input)
+    )
+    if not saved_password_detected and not has_value:
+        return LOGIN_SAVED_PASSWORD_MISSING
+    return LOGIN_FAILED
 
 
 def _submit_browser_saved_password(driver, wait_seconds=15, shop_name=""):
@@ -1157,17 +1692,95 @@ def _submit_browser_saved_password(driver, wait_seconds=15, shop_name=""):
         return False, "未找到密码输入框", "password"
 
     # 即使 JS 看不到密码值，也尝试点击 Confirm；最终以页面是否离开密码页判断。
-    if not _click_confirm_button(driver, shop_name=shop_name):
+    if not _click_confirm_button(
+        driver,
+        shop_name=shop_name,
+        wait_seconds=min(max(1, float(wait_seconds)), 3),
+    ):
         try:
             password_input.send_keys(Keys.ENTER)
+            print(
+                f"{get_now_time()} {shop_name} 未定位到 Confirm 按钮，"
+                "已在密码输入框按 Enter 提交",
+                flush=True,
+            )
         except Exception as exc:
             return False, f"提交浏览器保存密码失败：{exc}", "password"
     detail = (
-        "已提交浏览器保存的默认密码"
+        SAVED_PASSWORD_SUBMITTED_DETAIL
         if has_saved_password
-        else "已尝试选择浏览器保存的默认密码并提交"
+        else SAVED_PASSWORD_SELECTION_ATTEMPTED_DETAIL
     )
     return True, detail, "password"
+
+
+def _complete_confirm_submission(
+    driver,
+    shop_name="",
+    wait_seconds=60,
+    max_attempts=3,
+):
+    """确认 Confirm 点击真正使页面离开密码阶段。
+
+    第一次提交已由 ``_submit_browser_saved_password`` 执行。
+    若网络波动或 React 事件丢失导致页面仍在密码页，
+    重新定位最新 Confirm 按钮，必要时在密码框按 Enter。
+    """
+    attempts = max(1, int(max_attempts))
+    transition_timeout = min(max(1, float(wait_seconds)), 12)
+    stage = "password"
+
+    for attempt in range(1, attempts + 1):
+        if attempt > 1:
+            submitted = _click_confirm_button(
+                driver,
+                shop_name=shop_name,
+                wait_seconds=min(max(1, float(wait_seconds)), 3),
+                submission_attempt=attempt,
+            )
+            if not submitted:
+                password_input = _first_visible_element(
+                    driver,
+                    PASSWORD_INPUT_SELECTORS,
+                )
+                if password_input is not None:
+                    try:
+                        password_input.click()
+                    except Exception:
+                        pass
+                    try:
+                        password_input.send_keys(Keys.ENTER)
+                        submitted = True
+                        print(
+                            f"{get_now_time()} {shop_name} Confirm 重试未定位到按钮，"
+                            "已改用 Enter 提交",
+                            flush=True,
+                        )
+                    except Exception:
+                        pass
+            if not submitted:
+                return stage, attempt - 1
+
+        print(
+            f"{get_now_time()} {shop_name} 已执行 Confirm 提交 "
+            f"({attempt}/{attempts})，正在等待页面切换",
+            flush=True,
+        )
+        stage = _wait_for_stage_transition(
+            driver,
+            "password",
+            timeout=transition_timeout,
+        )
+        if stage != "password":
+            return stage, attempt
+        if attempt < attempts:
+            print(
+                f"{get_now_time()} {shop_name} 页面仍停留在密码阶段，"
+                f"即将重新点击 Confirm ({attempt + 1}/{attempts})",
+                flush=True,
+            )
+
+    return stage, attempts
 
 
 def login_mercado_with_saved_password(
@@ -1215,6 +1828,17 @@ def login_mercado_with_saved_password(
         return initial
 
     stage = str(initial.get("login_stage") or detect_login_stage(driver))
+    if (
+        stage == "captcha"
+        and email
+        and _first_visible_element(driver, EMAIL_INPUT_SELECTORS) is not None
+    ):
+        print(
+            f"{get_now_time()} {shop_name} 登录页同时显示邮箱框和人机验证，"
+            "先自动输入数据库邮箱",
+            flush=True,
+        )
+        stage = "email"
     if stage == "captcha":
         return _unlogged_program_login_result(
             False,
@@ -1244,10 +1868,11 @@ def login_mercado_with_saved_password(
                 action="未登录",
             )
         try:
-            submitted = _fill_email_and_continue(
+            submitted, stage, email_attempts = _submit_email_with_retries(
                 driver,
                 email,
                 shop_name=shop_name,
+                wait_seconds=wait_seconds,
             )
         except Exception as exc:
             return _unlogged_program_login_result(
@@ -1266,8 +1891,26 @@ def login_mercado_with_saved_password(
                 action="未登录",
             )
         email_submitted = True
-        print(f"{get_now_time()} {shop_name} 已输入数据库邮箱并继续", flush=True)
-        stage = _wait_for_stage_transition(driver, "email", timeout=wait_seconds)
+        print(
+            f"{get_now_time()} {shop_name} 已输入数据库邮箱并继续"
+            f" (Continue 尝试 {email_attempts} 次)",
+            flush=True,
+        )
+
+    if stage == "email":
+        email_status = _classify_email_page_failure(driver)
+        message = (
+            f"{shop_name} 数据库邮箱未通过登录页校验"
+            if email_status == LOGIN_EMAIL_REJECTED
+            else f"{shop_name} Continue 容错重试后页面仍未继续"
+        )
+        return _unlogged_program_login_result(
+            False,
+            email_status,
+            message,
+            login_stage=stage,
+            action="自动登录失败",
+        )
 
     if stage == "logged_in":
         return _unlogged_program_login_result(
@@ -1287,15 +1930,35 @@ def login_mercado_with_saved_password(
     if stage in ("login", "verification") and _click_password_login_option(
         driver, shop_name
     ):
-        stage = _wait_for_stage_transition(driver, stage, timeout=wait_seconds)
+        previous_stage = stage
+        stage = _wait_for_stage_transition(
+            driver,
+            stage,
+            timeout=min(max(1, int(wait_seconds)), 20),
+        )
+        if stage == previous_stage:
+            print(
+                f"{get_now_time()} {shop_name} Password 首次点击后页面未切换，正在重试",
+                flush=True,
+            )
+            if _click_password_login_option(driver, shop_name):
+                stage = _wait_for_stage_transition(
+                    driver,
+                    previous_stage,
+                    timeout=min(max(1, int(wait_seconds)), 20),
+                )
 
     if stage == "captcha":
         return _unlogged_program_login_result(
             False,
             LOGIN_CAPTCHA_REQUIRED,
-            f"{shop_name} 出现人机验证，需要人工处理",
+            (
+                f"{shop_name} 输入邮箱后出现人机验证，需要人工处理"
+                if email_submitted
+                else f"{shop_name} 出现人机验证，需要人工处理"
+            ),
             login_stage=stage,
-            action="未登录",
+            action="自动登录未完成" if email_submitted else "未登录",
         )
     if stage == "verification":
         return _unlogged_program_login_result(
@@ -1335,10 +1998,15 @@ def login_mercado_with_saved_password(
 
     final_stage = observed_stage
     if final_stage == "password":
-        final_stage = _wait_for_stage_transition(
+        final_stage, confirm_attempts = _complete_confirm_submission(
             driver,
-            "password",
-            timeout=wait_seconds,
+            shop_name=shop_name,
+            wait_seconds=wait_seconds,
+        )
+        print(
+            f"{get_now_time()} {shop_name} Confirm 流程完成，"
+            f"共尝试 {confirm_attempts} 次，当前阶段：{final_stage}",
+            flush=True,
         )
     if final_stage == "captcha":
         return _unlogged_program_login_result(
@@ -1355,6 +2023,24 @@ def login_mercado_with_saved_password(
             f"{shop_name} 提交密码后需要验证码",
             login_stage=final_stage,
             action="自动登录未完成",
+        )
+    if final_stage == "password":
+        password_status = _classify_password_page_failure(
+            driver,
+            saved_password_detected=(detail == SAVED_PASSWORD_SUBMITTED_DETAIL),
+        )
+        if password_status == LOGIN_SAVED_PASSWORD_INCORRECT:
+            message = f"{shop_name} 已提交浏览器默认密码，但页面提示密码错误"
+        elif password_status == LOGIN_SAVED_PASSWORD_MISSING:
+            message = f"{shop_name} 浏览器未保存可用的默认密码"
+        else:
+            message = f"{shop_name} 提交默认密码后仍停留在密码页面，原因未识别"
+        return _unlogged_program_login_result(
+            False,
+            password_status,
+            message,
+            login_stage=final_stage,
+            action="自动登录失败",
         )
 
     verification = ensure_mercado_login_from_home(
@@ -1390,6 +2076,196 @@ def login_mercado_with_saved_password(
         login_stage=verified_stage,
         action="自动登录未完成",
     )
+
+
+def open_mercado_backend_page(
+    driver,
+    target_url,
+    shop_name,
+    window_id="",
+    *,
+    settle_seconds=5,
+    max_rate_limit_retries=2,
+    rate_limit_retry_wait_seconds=RATE_LIMIT_RETRY_WAIT_SECONDS,
+    max_login_retries=1,
+    login_wait_seconds=60,
+    navigate=None,
+    login_handler=None,
+    state_reader=None,
+    sleep=None,
+    anomaly_site="",
+    anomaly_source="业务任务",
+):
+    """打开 Mercado 业务页，统一处理限频和退出登录。
+
+    遇到指定西语限频页时切换香港节点后重开目标页；遇到
+    登录页时使用数据库邮箱和浏览器保存的默认密码自动登录，
+    成功后重开原业务页。调用方必须检查返回值的 ``ok``。
+    """
+    shop_name = str(shop_name or "").strip()
+    window_id = str(window_id or "").strip()
+    target_url = str(target_url or "").strip()
+    max_rate_limit_retries = max(0, int(max_rate_limit_retries))
+    max_login_retries = max(0, int(max_login_retries))
+    rate_retry_count = 0
+    login_retry_count = 0
+    node_switch_results = []
+    last_login_result = {}
+    sleeper = time.sleep if sleep is None else sleep
+
+    while True:
+        navigation_error = ""
+        try:
+            if target_url:
+                if navigate is None:
+                    driver.get(target_url)
+                else:
+                    navigate(target_url)
+        except Exception as exc:
+            navigation_error = str(exc)
+
+        if settle_seconds:
+            sleeper(max(0, float(settle_seconds)))
+        state = (state_reader or get_mercado_page_state)(driver)
+        backend_status = get_mercado_backend_status(driver=driver, state=state)
+        # 元素型登录页在少数版本中没有稳定 URL/标题，
+        # 因此保留登录模块现有的 DOM 检测作为补充。
+        if backend_status == "ready" and is_mercado_login_page(driver):
+            backend_status = "logged_out"
+
+        if backend_status == "ready":
+            if navigation_error:
+                return {
+                    "ok": False,
+                    "status": "navigation_failed",
+                    "message": f"{shop_name} 打开美客多业务页失败：{navigation_error}",
+                    "state": state,
+                    "target_url": target_url,
+                    "rate_limit_retry_count": rate_retry_count,
+                    "login_retry_count": login_retry_count,
+                    "node_switch_results": node_switch_results,
+                    "login_result": last_login_result,
+                }
+            return {
+                "ok": True,
+                "status": "ready",
+                "message": f"{shop_name} 美客多业务页已就绪",
+                "state": state,
+                "target_url": target_url,
+                "rate_limit_retry_count": rate_retry_count,
+                "login_retry_count": login_retry_count,
+                "node_switch_results": node_switch_results,
+                "login_result": last_login_result,
+            }
+
+        if backend_status == "rate_limited":
+            limit_result = process_mercado_rate_limit(
+                driver=driver,
+                state=state,
+                name=shop_name,
+                retry_count=rate_retry_count,
+                max_retries=max_rate_limit_retries,
+                retry_wait_seconds=rate_limit_retry_wait_seconds,
+                sleep=sleeper,
+            )
+            if limit_result["exhausted"]:
+                return {
+                    "ok": False,
+                    "status": "rate_limited",
+                    "message": (
+                        f"{shop_name} 美客多限频（{MERCADO_RATE_LIMIT_TEXT}），"
+                        f"切换节点重试 {rate_retry_count} 次仍未恢复"
+                    ),
+                    "state": state,
+                    "target_url": target_url,
+                    "rate_limit_retry_count": rate_retry_count,
+                    "login_retry_count": login_retry_count,
+                    "node_switch_results": node_switch_results,
+                    "login_result": last_login_result,
+                }
+            rate_retry_count = limit_result["retry_count"]
+            node_switch_results.append(limit_result["node_switch_result"])
+            continue
+
+        if login_retry_count >= max_login_retries:
+            return {
+                "ok": False,
+                "status": "logged_out",
+                "message": (
+                    f"{shop_name} 美客多登录态失效，自动登录 "
+                    f"{login_retry_count} 次后仍未恢复"
+                ),
+                "state": state,
+                "target_url": target_url,
+                "rate_limit_retry_count": rate_retry_count,
+                "login_retry_count": login_retry_count,
+                "node_switch_results": node_switch_results,
+                "login_result": last_login_result,
+            }
+
+        login_retry_count += 1
+        print(
+            f"{get_now_time()} {shop_name} 检测到退出登录，"
+            f"正在进行第 {login_retry_count}/{max_login_retries} 次自动登录",
+            flush=True,
+        )
+        try:
+            if login_handler is None:
+                last_login_result = login_mercado_with_saved_password(
+                    driver,
+                    shop_name,
+                    window_id=window_id,
+                    wait_seconds=max(1, int(login_wait_seconds)),
+                    navigation_wait_seconds=min(5, max(0, float(settle_seconds))),
+                )
+            else:
+                last_login_result = login_handler(
+                    driver,
+                    shop_name,
+                    window_id,
+                )
+        except Exception as exc:
+            last_login_result = {
+                "ok": False,
+                "status": LOGIN_FAILED,
+                "message": str(exc),
+                "action": "执行异常",
+            }
+        if is_human_verification_result(last_login_result):
+            try:
+                record_human_verification_anomaly(
+                    last_login_result,
+                    window_id,
+                    shop_name,
+                    site=anomaly_site,
+                    source=anomaly_source,
+                )
+                print(
+                    f"{get_now_time()} {shop_name} 检测到人机验证，"
+                    f"已登记到店铺状态（来源：{anomaly_source}）",
+                    flush=True,
+                )
+            except Exception as exc:
+                print(
+                    f"{get_now_time()} {shop_name} 登记人机验证状态失败：{exc}",
+                    flush=True,
+                )
+        if not last_login_result.get("ok"):
+            return {
+                "ok": False,
+                "status": "logged_out",
+                "message": (
+                    f"{shop_name} 美客多登录态失效，自动登录未成功："
+                    f"{last_login_result.get('message') or last_login_result.get('status')}"
+                ),
+                "state": state,
+                "target_url": target_url,
+                "rate_limit_retry_count": rate_retry_count,
+                "login_retry_count": login_retry_count,
+                "node_switch_results": node_switch_results,
+                "login_result": last_login_result,
+            }
+        # 登录流程最后会停留在首页，下一轮重新打开原业务页。
 
 
 def is_login_blocking_result(value):
@@ -1521,52 +2397,140 @@ def send_unlogged_shop_summary(task_name, entries, log_path=None):
     return True
 
 
+def _bitbrowser_open_may_complete_in_background(error):
+    """BitBrowser 超时后窗口可能仍会在后台完成启动。"""
+    text = str(error or "").strip().lower()
+    return any(
+        marker in text
+        for marker in (
+            "timeout",
+            "timed out",
+            "超时",
+            "正在打开",
+            "aborted",
+            "降低接口请求频率",
+            "接口并发槽位",
+        )
+    )
+
+
 def _connect_to_open_bit_browser(window_id, page_load_timeout=20):
     import requests
     from selenium import webdriver
     from selenium.webdriver.chrome.service import Service
 
-    from bit.bit_api import openBrowser
+    from bit.bit_api import closeBrowser, openBrowser
 
-    response = openBrowser(window_id)
-    if isinstance(response, dict) and response.get("success") is False:
-        raise RuntimeError(response.get("msg") or f"打开比特浏览器失败：{response}")
-    data = response.get("data") if isinstance(response, dict) else None
-    if not isinstance(data, dict) or not data.get("driver") or not data.get("http"):
-        raise RuntimeError(f"打开比特浏览器失败：{response}")
-
-    debugger_address = str(data["http"]).strip()
-    debugger_url = (
-        debugger_address
-        if debugger_address.startswith(("http://", "https://"))
-        else f"http://{debugger_address}"
-    )
-    debugger_error = ""
-    for attempt in range(1, 7):
+    last_error = ""
+    max_browser_attempts = 5
+    for browser_attempt in range(1, max_browser_attempts + 1):
+        preserve_opening_window = False
         try:
-            response = requests.get(
-                f"{debugger_url.rstrip('/')}/json/version",
-                timeout=3,
-            )
-            response.raise_for_status()
-            break
+            response = openBrowser(window_id)
         except Exception as exc:
-            debugger_error = str(exc)
-            if attempt >= 6:
-                raise RuntimeError(
-                    f"BitBrowser 调试端口未就绪：{debugger_error or debugger_address}"
-                ) from exc
-            time.sleep(2)
+            response = None
+            last_error = f"BitBrowser 打开接口异常：{exc}"
+            preserve_opening_window = _bitbrowser_open_may_complete_in_background(
+                last_error
+            )
+        data = response.get("data") if isinstance(response, dict) else None
+        if response is None:
+            pass
+        elif isinstance(response, dict) and response.get("success") is False:
+            last_error = str(
+                response.get("msg") or f"打开比特浏览器失败：{response}"
+            )
+            preserve_opening_window = _bitbrowser_open_may_complete_in_background(
+                last_error
+            )
+        elif not (
+            isinstance(data, dict) and data.get("driver") and data.get("http")
+        ):
+            last_error = f"打开比特浏览器失败：{response}"
+        else:
+            debugger_address = str(data["http"]).strip()
+            debugger_url = (
+                debugger_address
+                if debugger_address.startswith(("http://", "https://"))
+                else f"http://{debugger_address}"
+            )
+            debugger_error = ""
+            debugger_ready = False
+            for attempt in range(1, 7):
+                try:
+                    debugger_response = requests.get(
+                        f"{debugger_url.rstrip('/')}/json/version",
+                        timeout=3,
+                    )
+                    debugger_response.raise_for_status()
+                    debugger_ready = True
+                    break
+                except Exception as exc:
+                    debugger_error = str(exc)
+                    if attempt < 6:
+                        time.sleep(2)
+            if debugger_ready:
+                try:
+                    options = webdriver.ChromeOptions()
+                    options.add_experimental_option(
+                        "debuggerAddress", debugger_address
+                    )
+                    driver = webdriver.Chrome(
+                        service=Service(data["driver"]),
+                        options=options,
+                    )
+                    driver.implicitly_wait(10)
+                    try:
+                        driver.set_page_load_timeout(
+                            max(1, int(page_load_timeout))
+                        )
+                    except Exception:
+                        pass
+                    return driver
+                except Exception as exc:
+                    last_error = f"WebDriver 附着失败：{exc}"
+            else:
+                last_error = (
+                    f"BitBrowser 调试端口未就绪："
+                    f"{debugger_error or debugger_address}"
+                )
 
-    options = webdriver.ChromeOptions()
-    options.add_experimental_option("debuggerAddress", debugger_address)
-    driver = webdriver.Chrome(service=Service(data["driver"]), options=options)
-    driver.implicitly_wait(10)
-    try:
-        driver.set_page_load_timeout(max(1, int(page_load_timeout)))
-    except Exception:
-        pass
-    return driver
+        if browser_attempt >= max_browser_attempts:
+            break
+        if preserve_opening_window:
+            print(
+                f"{get_now_time()} 窗口 {window_id} 第 "
+                f"{browser_attempt}/{max_browser_attempts} 次打开接口未及时返回："
+                f"{last_error}；窗口可能仍在后台启动，保留窗口并重新获取连接信息",
+                flush=True,
+            )
+            time.sleep(3)
+            continue
+        print(
+            f"{get_now_time()} 窗口 {window_id} 第 "
+            f"{browser_attempt}/{max_browser_attempts} 次打开未就绪：{last_error}；"
+            "正在关闭残留启动后重试",
+            flush=True,
+        )
+        for close_attempt in range(1, 7):
+            try:
+                close_response = closeBrowser(window_id)
+            except Exception as exc:
+                last_error = f"{last_error}；重试前关闭失败：{exc}"
+                break
+            if not (
+                isinstance(close_response, dict)
+                and close_response.get("success") is False
+            ):
+                break
+            close_message = str(close_response.get("msg") or close_response)
+            if "正在打开" not in close_message or close_attempt >= 6:
+                last_error = f"{last_error}；重试前关闭失败：{close_message}"
+                break
+            time.sleep(5)
+        time.sleep(3)
+
+    raise RuntimeError(last_error or "BitBrowser 打开后无法附着 WebDriver")
 
 
 def _finalize_shop_login_result(
@@ -1576,6 +2540,7 @@ def _finalize_shop_login_result(
     browser_closed,
     close_error,
     browser_opened=False,
+    browser_close_requested=True,
 ):
     ended_at = datetime.now()
     result = _normalize_login_judgement(result)
@@ -1596,6 +2561,7 @@ def _finalize_shop_login_result(
             result.get("result_category") or LOGIN_OUTCOME_NOT_DETERMINED
         ),
         "login_stage": str(result.get("login_stage") or ""),
+        "recheck_status": str(result.get("recheck_status") or ""),
         "action": str(result.get("action") or ""),
         "message": str(result.get("message") or ""),
         "started_at": started_at.strftime("%Y-%m-%d %H:%M:%S"),
@@ -1603,12 +2569,153 @@ def _finalize_shop_login_result(
         "duration_seconds": round((ended_at - started_at).total_seconds(), 1),
         "browser_opened": bool(browser_opened),
         "browser_closed": bool(browser_closed),
+        "browser_close_requested": bool(browser_close_requested),
+        "browser_kept_open": bool(
+            browser_opened and not browser_closed and not browser_close_requested
+        ),
         "close_error": str(close_error or ""),
     }
 
 
-def login_one_database_shop(config, wait_seconds=60, page_load_timeout=20):
-    """打开一个数据库店铺、按需登录，最后关闭浏览器并返回可序列化结果。"""
+def _wait_for_manual_login_after_failure(driver, shop_name, result, wait_seconds):
+    wait_seconds = max(0, int(wait_seconds or 0))
+    result = _normalize_login_judgement(result)
+    if not driver or result.get("ok") or wait_seconds <= 0:
+        return result
+    if (
+        result.get("status") == LOGIN_CAPTCHA_REQUIRED
+        or result.get("login_stage") == "captcha"
+    ):
+        print(
+            f"{get_now_time()} {shop_name} 检测到人机验证，已记录并直接结束当前店铺，"
+            "不等待人工处理",
+            flush=True,
+        )
+        return result
+
+    print(
+        f"{get_now_time()} {shop_name} 自动登录失败，浏览器保持打开 "
+        f"{wait_seconds} 秒，等待人工登录",
+        flush=True,
+    )
+    time.sleep(wait_seconds)
+    try:
+        stage = detect_login_stage(driver)
+    except Exception as exc:
+        updated = dict(result)
+        updated["message"] = (
+            f"{result.get('message') or ''}；等待人工登录 {wait_seconds} 秒后"
+            f"复检失败：{exc}"
+        ).strip("；")
+        return updated
+
+    if stage == "logged_in":
+        return _result(
+            True,
+            LOGIN_SUCCESS,
+            f"{shop_name} 自动登录失败后由人工登录成功",
+            initial_login_status=INITIAL_LOGIN_INACTIVE,
+            program_login_result=PROGRAM_LOGIN_MANUAL_SUCCESS,
+            result_category=LOGIN_OUTCOME_MANUAL_LOGIN_SUCCESS,
+            login_stage="logged_in",
+            action="人工登录",
+        )
+
+    updated = dict(result)
+    updated["login_stage"] = stage
+    updated["message"] = (
+        f"{result.get('message') or ''}；等待人工登录 {wait_seconds} 秒后仍未登录"
+        f"（{stage}）"
+    ).strip("；")
+    return updated
+
+
+def _recheck_completed_login(
+    driver,
+    shop_name,
+    window_id,
+    result,
+    wait_seconds=60,
+):
+    """自动或人工完成登录后再访问首页复检，复检结果才用于状态同步。"""
+    normalized = _normalize_login_judgement(result)
+    if not driver or not normalized.get("ok"):
+        return normalized
+    if normalized.get("result_category") not in (
+        LOGIN_OUTCOME_AUTO_LOGIN_SUCCESS,
+        LOGIN_OUTCOME_MANUAL_LOGIN_SUCCESS,
+    ):
+        return normalized
+
+    print(
+        f"{get_now_time()} {shop_name} 登录已完成，正在重新检测最新登录状态",
+        flush=True,
+    )
+    try:
+        verification = ensure_mercado_login_from_home(
+            driver,
+            shop_name,
+            window_id=window_id,
+            wait_seconds=max(1, int(wait_seconds)),
+            navigation_wait_seconds=2,
+        )
+    except Exception as exc:
+        message = f"{shop_name} 登录完成后复检异常：{exc}"
+        print(f"{get_now_time()} {message}", flush=True)
+        return _unlogged_program_login_result(
+            False,
+            LOGIN_FAILED,
+            message,
+            login_stage="recheck_error",
+            recheck_status="recheck_error",
+            action="登录完成后复检",
+        )
+    if verification.get("ok"):
+        updated = dict(normalized)
+        updated["login_stage"] = "logged_in"
+        updated["recheck_status"] = "logged_in"
+        updated["message"] = (
+            f"{normalized.get('message') or shop_name + ' 登录成功'}；"
+            "登录完成后复检确认已登录"
+        )
+        print(
+            f"{get_now_time()} {shop_name} 登录完成后复检确认已登录",
+            flush=True,
+        )
+        return updated
+
+    verified_stage = str(
+        verification.get("login_stage") or detect_login_stage(driver)
+    )
+    if verified_stage == "captcha":
+        status = LOGIN_CAPTCHA_REQUIRED
+    elif verified_stage == "verification":
+        status = LOGIN_VERIFICATION_REQUIRED
+    else:
+        status = LOGIN_FAILED
+    message = (
+        f"{shop_name} 登录完成后复检未通过："
+        f"{verification.get('message') or verified_stage}"
+    )
+    print(f"{get_now_time()} {message}", flush=True)
+    return _unlogged_program_login_result(
+        False,
+        status,
+        message,
+        login_stage=verified_stage,
+        recheck_status=verified_stage,
+        action="登录完成后复检",
+    )
+
+
+def login_one_database_shop(
+    config,
+    wait_seconds=60,
+    page_load_timeout=20,
+    manual_login_wait_seconds=0,
+    close_browser=True,
+):
+    """打开一个数据库店铺并按需登录，可选择结束后保留浏览器。"""
     from bit.bit_api import closeBrowser
     from bit.bit_runtime_lock import create_window_lease
 
@@ -1672,6 +2779,10 @@ def login_one_database_shop(config, wait_seconds=60, page_load_timeout=20):
             wait_seconds=wait_seconds,
         )
     except Exception as exc:
+        print(
+            f"{get_now_time()} {shop_name} 登录任务异常：{exc}",
+            flush=True,
+        )
         result = _result(
             False,
             LOGIN_FAILED,
@@ -1679,21 +2790,62 @@ def login_one_database_shop(config, wait_seconds=60, page_load_timeout=20):
             action="执行异常",
         )
     finally:
-        if browser_opened:
+        result = _wait_for_manual_login_after_failure(
+            driver,
+            shop_name,
+            result,
+            manual_login_wait_seconds,
+        )
+        result = _recheck_completed_login(
+            driver,
+            shop_name,
+            window_id,
+            result,
+            wait_seconds=wait_seconds,
+        )
+        verified_auto_login = bool(
+            result.get("ok")
+            and result.get("result_category")
+            == LOGIN_OUTCOME_AUTO_LOGIN_SUCCESS
+            and result.get("recheck_status") == "logged_in"
+        )
+        should_close_browser = bool(close_browser or verified_auto_login)
+        if verified_auto_login and not close_browser:
+            print(
+                f"{get_now_time()} {shop_name} 自动登录已复检确认，"
+                "现在关闭比特浏览器后改写店铺状态",
+                flush=True,
+            )
+        if browser_opened and should_close_browser:
             try:
-                close_response = closeBrowser(window_id, lease=lease)
-                if (
-                    isinstance(close_response, dict)
-                    and close_response.get("success") is False
-                ):
+                for close_attempt in range(1, 7):
+                    close_response = closeBrowser(window_id, lease=lease)
+                    if not (
+                        isinstance(close_response, dict)
+                        and close_response.get("success") is False
+                    ):
+                        browser_closed = True
+                        close_error = ""
+                        break
                     close_error = str(close_response.get("msg") or close_response)
-                else:
-                    browser_closed = True
+                    if "正在打开" not in close_error or close_attempt >= 6:
+                        break
+                    print(
+                        f"{get_now_time()} {shop_name} 浏览器仍在打开中，"
+                        f"5 秒后重试关闭（{close_attempt}/6）",
+                        flush=True,
+                    )
+                    time.sleep(5)
             except Exception as exc:
                 close_error = str(exc)
             print(
                 f"{get_now_time()} {shop_name} "
                 f"{'已关闭比特浏览器' if browser_closed else '关闭比特浏览器失败'}",
+                flush=True,
+            )
+        elif browser_opened:
+            print(
+                f"{get_now_time()} {shop_name} 指定店铺任务完成，比特浏览器保持打开",
                 flush=True,
             )
         service = getattr(driver, "service", None)
@@ -1716,19 +2868,34 @@ def login_one_database_shop(config, wait_seconds=60, page_load_timeout=20):
         browser_closed,
         close_error,
         browser_opened=browser_opened,
+        browser_close_requested=should_close_browser,
     )
 
 
-def _login_config_group_worker(configs, wait_seconds, page_load_timeout):
+def _login_config_group_worker(
+    configs,
+    wait_seconds,
+    page_load_timeout,
+    manual_login_wait_seconds=0,
+    close_browsers=True,
+):
     # 相同窗口 ID 的数据库记录在同一进程内串行执行，避免互抢同一个浏览器配置。
-    return [
-        login_one_database_shop(
-            config,
-            wait_seconds=wait_seconds,
-            page_load_timeout=page_load_timeout,
+    results = []
+    for index, config in enumerate(configs):
+        if index and close_browsers:
+            # 全店任务会逐条关闭窗口；数据库中若有多条记录复用同一窗口，
+            # 关闭后立即重开可能返回“浏览器正在打开中”，需等待状态稳定。
+            time.sleep(3)
+        results.append(
+            login_one_database_shop(
+                config,
+                wait_seconds=wait_seconds,
+                page_load_timeout=page_load_timeout,
+                manual_login_wait_seconds=manual_login_wait_seconds,
+                close_browser=close_browsers,
+            )
         )
-        for config in configs
-    ]
+    return results
 
 
 def _config_order_key(config):
@@ -1788,8 +2955,20 @@ def write_login_status_report(results, output_path=None):
             f'=COUNTIF(\'登录明细\'!G:G,"{LOGIN_OUTCOME_AUTO_LOGIN_SUCCESS}")',
         ),
         (
+            "自动登录失败，人工登录成功",
+            f'=COUNTIF(\'登录明细\'!G:G,"{LOGIN_OUTCOME_MANUAL_LOGIN_SUCCESS}")',
+        ),
+        (
             "未登录，程序登录失败",
             f'=COUNTIF(\'登录明细\'!G:G,"{LOGIN_OUTCOME_AUTO_LOGIN_FAILED}")',
+        ),
+        (
+            "其中：浏览器未保存默认密码",
+            f'=COUNTIF(\'登录明细\'!H:H,"{LOGIN_SAVED_PASSWORD_MISSING}")',
+        ),
+        (
+            "其中：浏览器默认密码错误",
+            f'=COUNTIF(\'登录明细\'!H:H,"{LOGIN_SAVED_PASSWORD_INCORRECT}")',
         ),
         (
             "未登录，程序登录遇到验证码",
@@ -1849,7 +3028,13 @@ def write_login_status_report(results, output_path=None):
         browser_opened = bool(result.get("browser_opened"))
         browser_closed = bool(result.get("browser_closed"))
         close_status = (
-            "是" if browser_closed else ("失败" if browser_opened else "未打开")
+            "是"
+            if browser_closed
+            else (
+                "保留打开"
+                if result.get("browser_kept_open")
+                else ("失败" if browser_opened else "未打开")
+            )
         )
         values = (
             index,
@@ -1874,6 +3059,7 @@ def write_login_status_report(results, output_path=None):
         if result.get("result_category") in (
             LOGIN_OUTCOME_ALREADY_ACTIVE,
             LOGIN_OUTCOME_AUTO_LOGIN_SUCCESS,
+            LOGIN_OUTCOME_MANUAL_LOGIN_SUCCESS,
         ):
             row_fill = success_fill
         elif result.get("result_category") in (
@@ -1906,7 +3092,14 @@ def send_login_status_report(results, report_path):
     outcome_counts = _count_login_outcomes(rows)
     already_active_count = outcome_counts[LOGIN_OUTCOME_ALREADY_ACTIVE]
     auto_success_count = outcome_counts[LOGIN_OUTCOME_AUTO_LOGIN_SUCCESS]
-    success_count = already_active_count + auto_success_count
+    manual_success_count = outcome_counts[LOGIN_OUTCOME_MANUAL_LOGIN_SUCCESS]
+    success_count = already_active_count + auto_success_count + manual_success_count
+    missing_password_count = sum(
+        1 for row in rows if row.get("status") == LOGIN_SAVED_PASSWORD_MISSING
+    )
+    incorrect_password_count = sum(
+        1 for row in rows if row.get("status") == LOGIN_SAVED_PASSWORD_INCORRECT
+    )
     body = "\n".join(
         (
             "美客多数据库店铺登录检查已完成。",
@@ -1914,7 +3107,10 @@ def send_login_status_report(results, report_path):
             f"店铺总数：{len(rows)}",
             f"原本已登录：{already_active_count}",
             f"未登录，程序登录成功：{auto_success_count}",
+            f"自动登录失败，人工登录成功：{manual_success_count}",
             f"未登录，程序登录失败：{outcome_counts[LOGIN_OUTCOME_AUTO_LOGIN_FAILED]}",
+            f"其中浏览器未保存默认密码：{missing_password_count}",
+            f"其中浏览器默认密码错误：{incorrect_password_count}",
             "未登录，程序登录遇到验证码："
             f"{outcome_counts[LOGIN_OUTCOME_VERIFICATION_REQUIRED]}",
             "未登录，程序登录遇到人机验证："
@@ -1938,12 +3134,42 @@ def run_all_database_shop_logins(
     page_load_timeout=20,
     output_path=None,
     send_email=True,
+    window_ids=None,
+    manual_login_wait_seconds=0,
+    close_browsers=True,
 ):
-    """并发处理数据库中所有未忽略店铺，生成 Excel，并在全部结束后发邮件。"""
-    configs = sorted(
-        (dict(row) for row in list_shop_configs(include_ignored=False)),
-        key=_config_order_key,
+    """并发处理全部未忽略店铺，或显式指定的窗口，并生成登录结果汇总。"""
+    requested_window_ids = tuple(
+        dict.fromkeys(
+            str(window_id or "").strip()
+            for window_id in (window_ids or ())
+            if str(window_id or "").strip()
+        )
     )
+    configs = [
+        dict(row)
+        for row in list_shop_configs(include_ignored=bool(requested_window_ids))
+    ]
+    if requested_window_ids:
+        requested_set = set(requested_window_ids)
+        configs = [
+            config
+            for config in configs
+            if str(config.get("window_id") or "").strip() in requested_set
+        ]
+        found_window_ids = {
+            str(config.get("window_id") or "").strip() for config in configs
+        }
+        missing_window_ids = [
+            window_id
+            for window_id in requested_window_ids
+            if window_id not in found_window_ids
+        ]
+        if missing_window_ids:
+            raise ValueError(
+                "数据库中未找到所选窗口：" + "、".join(missing_window_ids)
+            )
+    configs.sort(key=_config_order_key)
     for index, config in enumerate(configs, start=1):
         config["config_index"] = index
 
@@ -1954,9 +3180,11 @@ def run_all_database_shop_logins(
         grouped.setdefault(group_key, []).append(config)
 
     results = []
+    window_anomaly_sync = _new_window_anomaly_sync_summary()
     worker_count = max(1, min(int(max_workers or 3), len(grouped))) if grouped else 1
+    scope_text = "所选待登录店铺" if requested_window_ids else "未忽略店铺"
     print(
-        f"{get_now_time()} 开始检查 {len(configs)} 个未忽略店铺，"
+        f"{get_now_time()} 开始检查 {len(configs)} 个{scope_text}，"
         f"并发进程数：{worker_count}",
         flush=True,
     )
@@ -1968,16 +3196,19 @@ def run_all_database_shop_logins(
                     group,
                     max(1, int(wait_seconds)),
                     max(1, int(page_load_timeout)),
+                    max(0, int(manual_login_wait_seconds or 0)),
+                    bool(close_browsers),
                 ): group
                 for group in grouped.values()
             }
             for future in as_completed(future_map):
                 group = future_map[future]
                 try:
-                    results.extend(future.result())
+                    completed_results = list(future.result())
                 except Exception as exc:
+                    completed_results = []
                     for config in group:
-                        results.append(
+                        completed_results.append(
                             _finalize_shop_login_result(
                                 config,
                                 _result(
@@ -1991,14 +3222,30 @@ def run_all_database_shop_logins(
                                 "",
                             )
                         )
+                results.extend(completed_results)
+                completed_sync = sync_login_results_to_window_anomalies(
+                    completed_results
+                )
+                _merge_window_anomaly_sync_summary(
+                    window_anomaly_sync,
+                    completed_sync,
+                )
 
     results = [_normalize_login_judgement(row) for row in results]
     results.sort(key=lambda row: int(row.get("config_index") or 0))
-    window_anomaly_sync = sync_login_results_to_window_anomalies(results)
     outcome_counts = _count_login_outcomes(results)
+    status_counts = {
+        LOGIN_SAVED_PASSWORD_MISSING: sum(
+            1 for row in results if row.get("status") == LOGIN_SAVED_PASSWORD_MISSING
+        ),
+        LOGIN_SAVED_PASSWORD_INCORRECT: sum(
+            1 for row in results if row.get("status") == LOGIN_SAVED_PASSWORD_INCORRECT
+        ),
+    }
     success_count = (
         outcome_counts[LOGIN_OUTCOME_ALREADY_ACTIVE]
         + outcome_counts[LOGIN_OUTCOME_AUTO_LOGIN_SUCCESS]
+        + outcome_counts[LOGIN_OUTCOME_MANUAL_LOGIN_SUCCESS]
     )
     report_path = write_login_status_report(results, output_path=output_path)
     email_sent = bool(send_login_status_report(results, report_path)) if send_email else False
@@ -2006,8 +3253,12 @@ def run_all_database_shop_logins(
         f"{get_now_time()} 登录任务完成：{len(results)} 家，"
         f"原本已登录 {outcome_counts[LOGIN_OUTCOME_ALREADY_ACTIVE]} 家，"
         f"程序登录成功 {outcome_counts[LOGIN_OUTCOME_AUTO_LOGIN_SUCCESS]} 家，"
+        f"人工登录成功 {outcome_counts[LOGIN_OUTCOME_MANUAL_LOGIN_SUCCESS]} 家，"
         f"程序登录失败 {outcome_counts[LOGIN_OUTCOME_AUTO_LOGIN_FAILED]} 家，"
+        f"无默认密码 {status_counts[LOGIN_SAVED_PASSWORD_MISSING]} 家，"
+        f"默认密码错误 {status_counts[LOGIN_SAVED_PASSWORD_INCORRECT]} 家，"
         f"遇到验证码 {outcome_counts[LOGIN_OUTCOME_VERIFICATION_REQUIRED]} 家，"
+        f"遇到人机验证 {outcome_counts[LOGIN_OUTCOME_CAPTCHA_REQUIRED]} 家，"
         f"Excel：{report_path}，邮件：{'已发送' if email_sent else '未发送'}",
         flush=True,
     )
@@ -2015,6 +3266,7 @@ def run_all_database_shop_logins(
         "shop_count": len(results),
         "success_count": success_count,
         "outcome_counts": outcome_counts,
+        "status_counts": status_counts,
         "results": results,
         "report_path": report_path,
         "email_sent": email_sent,
@@ -2046,6 +3298,12 @@ def build_command_line_parser():
         action="store_true",
         help="处理数据库中全部未忽略店铺，并按需使用邮箱和浏览器保存密码登录",
     )
+    target.add_argument(
+        "--window-id",
+        dest="window_ids",
+        action="append",
+        help="只处理指定窗口 ID；可重复传入以批量自动登录所选店铺",
+    )
     parser.add_argument(
         "--wait-seconds",
         type=int,
@@ -2066,13 +3324,24 @@ def build_command_line_parser():
     parser.add_argument(
         "--auto-login",
         action="store_true",
-        help="与 --shop 配合：检测到未登录时使用数据库邮箱和浏览器保存密码自动登录，并关闭窗口",
+        help="与 --shop 配合：检测到未登录时使用数据库邮箱和浏览器保存密码自动登录",
+    )
+    parser.add_argument(
+        "--keep-browser-open",
+        action="store_true",
+        help="指定单店或所选店铺执行完成后保留比特浏览器；全店任务默认关闭窗口释放内存",
     )
     parser.add_argument(
         "--workers",
         type=int,
         default=3,
         help="全店自动登录的并发进程数，默认 3",
+    )
+    parser.add_argument(
+        "--manual-login-wait-seconds",
+        type=int,
+        default=0,
+        help="自动登录失败后保持浏览器开启、等待人工登录的秒数；默认不等待",
     )
     parser.add_argument(
         "--output",
@@ -2243,6 +3512,10 @@ def run_single_auto_login_from_command_line(args):
         config,
         wait_seconds=max(1, int(args.wait_seconds)),
         page_load_timeout=max(1, int(args.page_load_timeout)),
+        manual_login_wait_seconds=max(
+            0, int(getattr(args, "manual_login_wait_seconds", 0) or 0)
+        ),
+        close_browser=not bool(getattr(args, "keep_browser_open", False)),
     )
     sync_login_results_to_window_anomalies([result])
     safe_result = {
@@ -2254,17 +3527,119 @@ def run_single_auto_login_from_command_line(args):
     return 0 if result.get("ok") else 3
 
 
+def _command_line_login_job_lock_keys(args, selected_window_ids=()):
+    """批量全店任务保留全局锁；单店和所选店铺改用窗口级锁。"""
+    if getattr(args, "all_active_login", False):
+        return (MERCADO_LOGIN_JOB_LOCK_KEY,)
+
+    window_ids = tuple(
+        dict.fromkeys(
+            str(window_id or "").strip()
+            for window_id in (selected_window_ids or ())
+            if str(window_id or "").strip()
+        )
+    )
+    if not window_ids:
+        shop_name = str(getattr(args, "shop", "") or "").strip()
+        if shop_name:
+            try:
+                config = load_shop_login_config(shop_name)
+            except Exception:
+                config = {}
+            window_id = str(config.get("window_id") or "").strip()
+            if window_id:
+                window_ids = (window_id,)
+            else:
+                digest = hashlib.sha256(shop_name.encode("utf-8")).hexdigest()[:16]
+                return (f"{MERCADO_LOGIN_JOB_LOCK_KEY}_shop_{digest}",)
+
+    return tuple(
+        f"{MERCADO_LOGIN_JOB_LOCK_KEY}_window_{window_id}"
+        for window_id in sorted(window_ids)
+    ) or (MERCADO_LOGIN_JOB_LOCK_KEY,)
+
+
 def main(argv=None):
     parser = build_command_line_parser()
     args = parser.parse_args(argv)
+    selected_window_ids = tuple(
+        dict.fromkeys(
+            str(window_id or "").strip()
+            for window_id in (getattr(args, "window_ids", None) or ())
+            if str(window_id or "").strip()
+        )
+    )
+    target = str(getattr(args, "shop", "") or "").strip()
+    if not target:
+        target = (
+            f"所选 {len(selected_window_ids)} 家待登录店铺"
+            if selected_window_ids
+            else "全部未忽略店铺"
+        )
+    lock_keys = _command_line_login_job_lock_keys(args, selected_window_ids)
+    if MERCADO_LOGIN_JOB_LOCK_KEY not in lock_keys:
+        all_shop_owner = get_lock_owner(MERCADO_LOGIN_JOB_LOCK_KEY)
+        if all_shop_owner:
+            print(
+                json.dumps(
+                    {
+                        "ok": False,
+                        "status": "已有全店登录检测任务运行中",
+                        "shop": str(getattr(args, "shop", "") or ""),
+                        "message": "请等待全店登录任务结束后重试",
+                        "lock_owner": all_shop_owner,
+                    },
+                    ensure_ascii=False,
+                ),
+                flush=True,
+            )
+            return 5
+    job_locks = []
+    for lock_key in lock_keys:
+        job_lock = InterProcessLock(
+            lock_key,
+            owner=f"bit_mercado_login:{target}",
+            metadata={"target": target, "task_type": "mercado_login"},
+        )
+        if job_lock.acquire(timeout=0):
+            job_locks.append(job_lock)
+            continue
+
+        owner = get_lock_owner(lock_key)
+        for acquired_lock in reversed(job_locks):
+            acquired_lock.release()
+        print(
+            json.dumps(
+                {
+                    "ok": False,
+                    "status": "已有登录检测任务运行中",
+                    "shop": str(getattr(args, "shop", "") or ""),
+                    "message": f"请等待相同店铺任务结束：{owner.get('owner') or 'mercado_login'}",
+                    "lock_owner": owner,
+                },
+                ensure_ascii=False,
+            ),
+            flush=True,
+        )
+        return 5
     try:
-        if args.all_active_login:
+        if args.all_active_login or selected_window_ids:
             batch_result = run_all_database_shop_logins(
                 max_workers=max(1, int(args.workers)),
                 wait_seconds=max(1, int(args.wait_seconds)),
                 page_load_timeout=max(1, int(args.page_load_timeout)),
                 output_path=args.output or None,
                 send_email=not args.no_email,
+                window_ids=selected_window_ids or None,
+                manual_login_wait_seconds=(
+                    max(0, int(args.manual_login_wait_seconds or 0))
+                    if selected_window_ids
+                    else 0
+                ),
+                close_browsers=not bool(
+                    selected_window_ids
+                    and getattr(args, "keep_browser_open", False)
+                ),
             )
             print(
                 json.dumps(
@@ -2273,6 +3648,7 @@ def main(argv=None):
                         "shop_count": batch_result["shop_count"],
                         "success_count": batch_result["success_count"],
                         "outcome_counts": batch_result["outcome_counts"],
+                        "status_counts": batch_result.get("status_counts", {}),
                         "report_path": batch_result["report_path"],
                         "email_sent": batch_result["email_sent"],
                         "max_workers": batch_result["max_workers"],
@@ -2305,6 +3681,9 @@ def main(argv=None):
         )
         traceback.print_exc()
         return 1
+    finally:
+        for job_lock in reversed(job_locks):
+            job_lock.release()
 
 
 if __name__ == "__main__":

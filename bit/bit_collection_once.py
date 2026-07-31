@@ -1,4 +1,4 @@
-"""一次性执行声誉和侵权采集，默认使用 MySQL 直连。"""
+"""一次性执行侵权和声誉采集，默认使用 MySQL 直连且不启动申诉循环。"""
 
 import argparse
 import json
@@ -8,10 +8,10 @@ import sys
 
 def build_parser():
     parser = argparse.ArgumentParser(
-        description="一次性串行执行声誉采集和侵权采集"
+        description="一次性串行执行侵权采集和声誉采集"
     )
     parser.add_argument("--db-mode", default="mysql", choices=("mysql", "api"))
-    parser.add_argument("--workers", type=int, default=10)
+    parser.add_argument("--workers", type=int, default=3)
     parser.add_argument("--stagger-min-seconds", type=float, default=5)
     parser.add_argument("--stagger-max-seconds", type=float, default=10)
     parser.add_argument("--wait-min-seconds", type=float, default=180)
@@ -43,10 +43,11 @@ def main(argv=None):
     os.environ["BIT_REPUTATION_INFRACTION_WAIT_MAX_SECONDS"] = str(
         max(0, args.wait_max_seconds)
     )
+    os.environ["BIT_ENABLE_AI_APPEAL_LOOP"] = "0"
 
     # 必须先设置环境变量再导入，bit_db_api 会在导入时固定本进程的数据源模式。
     from bit import bit_db_api
-    from bit.bit_main import run_reputation_infraction_then_daily
+    from bit.bit_main import run_infraction_reputation_then_appeal
 
     if bit_db_api.DB_MODE != args.db_mode:
         raise RuntimeError(
@@ -60,7 +61,7 @@ def main(argv=None):
         f"{max(0, args.stagger_max_seconds)}s",
         flush=True,
     )
-    result = run_reputation_infraction_then_daily()
+    result = run_infraction_reputation_then_appeal()
     print(
         "COLLECTION_FINAL_RESULT="
         + json.dumps(result, ensure_ascii=False, default=str),

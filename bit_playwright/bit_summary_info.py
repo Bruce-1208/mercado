@@ -8,15 +8,24 @@ from bit.bit_api import closeBrowser
 from bit.bit_config import list_config_rows, split_config_sites
 from bit.bit_send_mail import send_info
 from bit.bit_utils import get_now_time
-from bit_playwright.common import BitPlaywrightSession, first_text, select_country
+from bit_playwright.common import (
+    BitPlaywrightSession,
+    first_text,
+    open_mercado_backend_page,
+    select_country,
+)
 
 
 def get_reputation_info(window_id, site):
     with BitPlaywrightSession(window_id) as session:
         page = session.page
-        page.goto("https://global-selling.mercadolibre.com/sales-summary", wait_until="domcontentloaded", timeout=60000)
-        page.reload(wait_until="domcontentloaded", timeout=60000)
-        time.sleep(8)
+        access = open_mercado_backend_page(
+            session,
+            "https://global-selling.mercadolibre.com/sales-summary",
+            settle_seconds=8,
+        )
+        if not access.get("ok"):
+            raise RuntimeError(access.get("message") or access.get("status"))
         select_country(page, site)
 
         data_delay = ""

@@ -38,6 +38,29 @@ class FakePlaywrightPage:
 
 
 class ReputationLocalizationTests(unittest.TestCase):
+    def test_login_url_takes_priority_over_generic_spanish_error(self):
+        state = {
+            "current_url": "https://www.mercadolibre.com/jms/cbt/lgz/login?platform_id=ML",
+            "title": "Mercado Libre",
+            "page_text": "Hubo un error accediendo a esta pagina...",
+            "page_source": "",
+        }
+        with self.assertRaises(reputation.MercadoAuthenticationError):
+            reputation._raise_if_mercado_unavailable(state=state)
+
+    def test_listing_identifier_containing_429_is_not_rate_limit(self):
+        normal_page = (
+            "Intellectual property infringements - Argentina\n"
+            "#2689542986\nDetected by Mercado Libre"
+        )
+        self.assertFalse(reputation._is_rate_limited_text(normal_page))
+        self.assertFalse(reputation._is_rate_limited_text("HTTP 429 too many requests"))
+        self.assertTrue(
+            reputation._is_rate_limited_text(
+                "Hubo un error accediendo a esta página"
+            )
+        )
+
     def test_chinese_metric_aliases(self):
         self.assertEqual(reputation._metric_kind_from_title("买家投诉"), "complaints")
         self.assertEqual(reputation._metric_kind_from_title("未按时发货"), "shipments")
@@ -75,8 +98,14 @@ class ReputationLocalizationTests(unittest.TestCase):
             ),
             "绿色",
         )
+        self.assertEqual(
+            reputation._normalize_reputation_color("您仍然没有颜色（选项）"),
+            "无色",
+        )
         self.assertEqual(reputation._parse_gradient("下降 12.5%"), ("下滑", "12.5%"))
         self.assertEqual(reputation._parse_gradient("Increased 8%"), ("增长", "8%"))
+        self.assertEqual(reputation._parse_gradient("已上涨 —%"), ("增长", "—%"))
+        self.assertEqual(reputation._parse_gradient("未变更"), ("持平", "持平"))
 
     def test_login_and_window_failures_are_classified(self):
         state = {
@@ -102,14 +131,100 @@ class ReputationLocalizationTests(unittest.TestCase):
             "失败：窗口打开超时",
         )
 
+    def test_invalid_bitbrowser_id_is_not_retried(self):
+        response = {"success": False, "msg": "服务调用成功，但没有找到相应数据！"}
+        with mock.patch.object(reputation, "openBrowser", return_value=response) as open_browser:
+            with self.assertRaises(reputation.BitBrowserWindowError):
+                reputation._connect_browser(
+                    "invalid-window-id",
+                    max_retries=3,
+                    retry_delay=0,
+                )
+        open_browser.assert_called_once_with("invalid-window-id")
+
     def test_site_list_accepts_chinese_and_ascii_separators(self):
         self.assertEqual(
             reputation._split_sites("墨西哥，巴西,智利；阿根廷"),
             ["墨西哥", "巴西", "智利", "阿根廷"],
         )
 
+    def test_spanish_async_country_switcher_is_supported(self):
+        driver = mock.Mock()
+        with (
+            mock.patch.object(
+                reputation,
+                "_deep_shadow_click",
+                side_effect=[False, True],
+            ) as deep_click,
+            mock.patch.object(reputation.time, "sleep"),
+        ):
+            self.assertTrue(
+                reputation._open_country_switch(
+                    driver,
+                    timeout=1,
+                    poll_seconds=0,
+                )
+            )
+
+        selectors = deep_click.call_args.args[1]
+        self.assertIn('button[aria-label*="país" i]', selectors)
+        self.assertIn('button[role="combobox"]', selectors)
+
 
 class InfractionLocalizationTests(unittest.TestCase):
+    def test_incomplete_infraction_total_is_not_reported_as_success(self):
+        page = mock.Mock()
+        with (
+            mock.patch.object(infractions, "_infraction_type_total", return_value=2),
+            mock.patch.object(infractions, "_validate_infractions_page"),
+            mock.patch.object(infractions, "_read_current_infractions_page", return_value=[]),
+            mock.patch.object(infractions, "_get_page_signature", return_value=()),
+        ):
+            with self.assertRaisesRegex(
+                infractions.MercadoPageStructureError,
+                "预计 2 条.*实际只完整读取 0 条",
+            ):
+                infractions._collect_current_infractions_tab(
+                    page, "店铺", "墨西哥", "侵权"
+                )
+
+    def test_selected_tab_and_zero_rights_holder_total_use_page_state(self):
+        page = mock.Mock()
+        page.url = "https://global-selling.mercadolibre.com/noindex/pppi/infractions"
+        page.evaluate.side_effect = ["denounces", 0]
+        self.assertEqual(infractions._current_infraction_type(page), "权利人")
+        self.assertEqual(infractions._infraction_type_total(page, "权利人"), 0)
+
+    def test_mismatched_infraction_tab_is_not_silently_successful(self):
+        page = mock.Mock()
+        with mock.patch.object(infractions, "_current_infraction_type", return_value="侵权"):
+            with self.assertRaises(infractions.MercadoPageStructureError):
+                infractions._collect_type_once(page, "店铺", "墨西哥", "权利人", set())
+
+    def test_login_url_takes_priority_over_generic_spanish_error(self):
+        page = FakePlaywrightPage(
+            "https://www.mercadolibre.com/jms/cbt/lgz/login?platform_id=ML",
+            "Hubo un error accediendo a esta pagina...",
+        )
+        with self.assertRaises(infractions.MercadoAuthenticationError):
+            infractions._raise_if_page_unavailable(page)
+
+    def test_listing_identifier_containing_429_does_not_trip_batch_pause(self):
+        page = FakePlaywrightPage(
+            "https://global-selling.mercadolibre.com/noindex/pppi/infractions"
+            "?tab=detections&offset=0",
+            "Intellectual property infringements - Argentina\n"
+            "#2689542986\nDetected by Mercado Libre",
+            structure_count=1,
+        )
+        self.assertIn("#2689542986", infractions._raise_if_page_unavailable(page))
+        self.assertFalse(infractions._is_rate_limited_text("status code: 429"))
+        self.assertTrue(
+            infractions._is_rate_limited_text(
+                "Hubo un error accediendo a esta página"
+            )
+        )
+
     def test_login_redirect_is_detected(self):
         page = FakePlaywrightPage(
             "https://www.mercadolibre.com/jms/cbt/lgz/msl/login/x/legacy-user",

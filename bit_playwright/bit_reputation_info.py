@@ -1,6 +1,10 @@
 from bit_playwright.bit_summary_info import get_reputation_info_all
 from bit_playwright.bit_visit_info import get_visits_info
-from bit_playwright.common import BitPlaywrightSession, select_country
+from bit_playwright.common import (
+    BitPlaywrightSession,
+    open_mercado_backend_page,
+    select_country,
+)
 
 
 def get_reputation_info(window_id, name="", site="", driver=None):
@@ -19,7 +23,13 @@ def get_recent_visits_info(driver_or_page, window_id, name="", site="", days=8):
 def get_reputation_page(window_id, site=""):
     session = BitPlaywrightSession(window_id)
     session.__enter__()
-    session.page.goto("https://global-selling.mercadolibre.com/reputation", wait_until="domcontentloaded", timeout=60000)
+    access = open_mercado_backend_page(
+        session,
+        "https://global-selling.mercadolibre.com/reputation",
+    )
+    if not access.get("ok"):
+        session.__exit__(None, None, None)
+        raise RuntimeError(access.get("message") or access.get("status"))
     if site:
         select_country(session.page, site)
     return session

@@ -49,12 +49,13 @@ from bit.bit_config import (
     list_shop_configs,
 )
 from bit.bit_mercado_login import (
-    ensure_mercado_login_from_home,
     is_mercado_login_page as _is_mercado_login_page,
+    open_mercado_backend_page,
 )
+from bit.bit_mercado_limit import MERCADO_RATE_LIMIT_TEXT
 from bit.bit_download import download_relay_mail
 from bit.bit_db_api import get_latest_infraction_info, insert_ai_appeal_record
-from bit.bit_reputation_info import get_cancellation_orders
+from bit.bit_reputation_info import get_cancellation_orders, get_complaint_orders
 from AI_Agent.qianwen import *
 import pandas as pd
 from datetime import datetime, timedelta
@@ -62,7 +63,6 @@ from datetime import datetime
 from AI_Agent.deepseek import *
 import re
 from openpyxl import load_workbook
-from bit.bit_clash import *
 import traceback
 from bit_infractions_info import *
 
@@ -98,28 +98,6 @@ AI_HELP_URLS = (
     HELP_URL,
     "https://global-selling.mercadolibre.com/help/v2",
 )
-MERCADO_RATE_LIMIT_MARKERS = (
-    "too many requests",
-    "429 too many",
-    "http 429",
-    "rate limit",
-    "rate-limit",
-    "request limit exceeded",
-    "access denied",
-    "请求太过频繁",
-    "请求过于频繁",
-    "访问过于频繁",
-    "操作太频繁",
-    "每秒最多可以发起",
-    "demasiadas solicitudes",
-    "muitas solicitações",
-    "hubo un error accediendo a esta página",
-    "hubo un error accediendo a esta pagina",
-)
-SPANISH_IP_SWITCH_MARKERS = (
-    "hubo un error accediendo a esta página",
-    "hubo un error accediendo a esta pagina",
-)
 SITE_OPTION_MENU_OPTIONS = (
     "Mexico (Direct to consumer)",
     "Mexico (Fulfillment)",
@@ -129,6 +107,22 @@ SITE_OPTION_MENU_OPTIONS = (
     "Argentina",
     "Uruguay",
 )
+
+CANCELLATION_DEFAULT_APPEAL_TEMPLATE = """尊敬的平台审核专员：
+
+1. 订单编号：{order_ids}
+
+2. 订单取消原因：页面显示【Mercado Libre取消的包裹，我们已取消此交易】，本次订单为平台系统主动取消交易，并非我方卖家主动发起订单取消。
+
+3. 订单节点说明：该订单产生时，我方商品链接正常在售、库存充足、已经备好货物、完全按平台时效要求准备安排发货，不存在缺货、超时、虚假发货等任何卖家违规行为。
+
+4. 诉求：本次交易取消责任完全不在我方，本次不良记录严重影响我方店铺信誉与店铺评分，现正式申诉，恳请平台核实系统后台记录，撤销本次订单的负面处罚。"""
+
+COMPLAINT_DEFAULT_APPEAL_MESSAGE = (
+    "亲爱的客服，我叫 Jack，这个产品没有任何证据证明产品有质量问题，"
+    "这是买家想白嫖，能帮我消除对我声誉的影响吗？"
+)
+COMPLAINT_GROUP_SIZE = 2
 
 # 将中文站点名、平台代码统一转成内部站点码，便于回复 AI 的站点确认问题。
 SITE_CODE_MAP = {
@@ -270,74 +264,40 @@ def is_mercado_login_required_page(driver):
     return _is_mercado_login_page(driver)
 
 
-def get_mercado_page_open_state(driver):
-    """读取窗口当前页的关键状态，供 daily_task 打开验证和限频识别使用。"""
-    try:
-        driver.switch_to.default_content()
-    except Exception:
-        pass
+def _abort_ai_appeal_after_backend_recovery(
+    result,
+    name="",
+    site="",
+    abort_on_recovery=True,
+):
+    """自动找客服遇到限频或自动登录后立即结束本次浏览器任务。
 
-    try:
-        page_text = driver.execute_script("return document.body ? document.body.innerText : '';") or ""
-    except Exception:
-        page_text = ""
-    try:
-        current_url = driver.current_url or ""
-    except Exception:
-        current_url = ""
-    try:
-        title = driver.title or ""
-    except Exception:
-        title = ""
-    try:
-        page_source = driver.page_source or ""
-    except Exception:
-        page_source = ""
+    ``open_mercado_backend_page`` 会尝试自动恢复限频和登录态。自动找客服的
+    并发量较大，即使恢复成功也不应继续长期占用窗口；把恢复记录转成明确的
+    异常结果，交给 ``bit_daily_task`` 立即关闭完整 BitBrowser 窗口。
+    """
+    if not isinstance(result, dict):
+        raise RuntimeError(f"{name} {site} 美客多后台返回无效结果：{result}")
 
-    return {
-        "page_text": str(page_text),
-        "current_url": str(current_url),
-        "title": str(title),
-        "page_source": str(page_source),
-    }
+    status = str(result.get("status") or "").strip()
+    message = str(result.get("message") or status or "美客多后台不可用").strip()
+    rate_limit_retry_count = int(result.get("rate_limit_retry_count") or 0)
+    login_retry_count = int(result.get("login_retry_count") or 0)
 
-
-def is_mercado_rate_limited_page(driver=None, state=None):
-    """识别 Mercado 页面是否返回 429、请求过频或访问限制页面。"""
-    state = state or get_mercado_page_open_state(driver)
-    visible_state = "\n".join(
-        (
-            state.get("page_text", ""),
-            state.get("title", ""),
-            state.get("current_url", ""),
+    if status == "rate_limited" or (abort_on_recovery and rate_limit_retry_count):
+        raise RuntimeError(
+            f"{name} {site} 检测到访问限频（{MERCADO_RATE_LIMIT_TEXT}），"
+            "已终止自动找客服并准备关闭浏览器"
         )
-    ).lower()
-    if any(marker.lower() in visible_state for marker in MERCADO_RATE_LIMIT_MARKERS):
-        return True
-
-    # 错误页偶尔没有可见正文；仅在正文和标题都为空时再检查源码，避免命中正常页脚本里的静态文案。
-    if not state.get("page_text", "").strip() and not state.get("title", "").strip():
-        page_source = state.get("page_source", "").lower()
-        return any(marker.lower() in page_source for marker in MERCADO_RATE_LIMIT_MARKERS)
-    return False
-
-
-def is_spanish_ip_switch_page(driver=None, state=None):
-    """只有指定的 Mercado 西语错误页允许触发香港 IP 切换。"""
-    state = state or get_mercado_page_open_state(driver)
-    visible_state = "\n".join(
-        (
-            state.get("page_text", ""),
-            state.get("title", ""),
-            state.get("current_url", ""),
+    if status == "logged_out" or (abort_on_recovery and login_retry_count):
+        raise RuntimeError(
+            f"{name} {site} 检测到登录态失效并触发自动登录，"
+            "已终止自动找客服并准备关闭浏览器："
+            f"{message}"
         )
-    ).lower()
-    if any(marker in visible_state for marker in SPANISH_IP_SWITCH_MARKERS):
-        return True
-    if not state.get("page_text", "").strip() and not state.get("title", "").strip():
-        page_source = state.get("page_source", "").lower()
-        return any(marker in page_source for marker in SPANISH_IP_SWITCH_MARKERS)
-    return False
+    if not result.get("ok"):
+        raise RuntimeError(f"{name} {site} 窗口页面打开验证失败：{message}")
+    return result
 
 
 def open_help_page_with_daily_validation(
@@ -346,65 +306,45 @@ def open_help_page_with_daily_validation(
     site="",
     max_hongkong_switches=3,
     switch_wait_seconds=8,
+    window_id="",
+    abort_on_recovery=None,
 ):
-    """打开帮助页并验证页面；遇到限频时切换香港节点后重新打开。"""
-    max_hongkong_switches = max(0, int(max_hongkong_switches))
-    last_state = {}
-
-    for attempt in range(1, max_hongkong_switches + 2):
-        navigate_error = ""
-        try:
-            driver.switch_to.default_content()
-        except Exception:
-            pass
-        try:
-            driver.get(HELP_URL)
-        except Exception as e:
-            navigate_error = str(e)
-
-        time.sleep(8)
-        last_state = get_mercado_page_open_state(driver)
-        if is_spanish_ip_switch_page(state=last_state):
-            if attempt > max_hongkong_switches:
-                raise RuntimeError(
-                    f"{name} {site} 西语错误页持续出现，已切换香港 IP "
-                    f"{max_hongkong_switches} 次仍未恢复"
-                )
-            print(
-                f"{get_now_time()} {name} {site} 窗口打开验证发现限频，"
-                f"切换香港 IP 后重试，第 {attempt}/{max_hongkong_switches} 次<br>"
-            )
-            switch_random_hongkong_node()
-            get_public_ip()
-            time.sleep(max(0, int(switch_wait_seconds)))
-            continue
-
-        if is_mercado_rate_limited_page(state=last_state):
-            raise RuntimeError(
-                f"{name} {site} 检测到页面限频，但不是指定西语错误页，不切换 IP："
-                f"{last_state.get('page_text', '')[:200]}"
-            )
-
-        if navigate_error:
-            raise RuntimeError(f"{name} {site} 窗口页面打开验证失败：{navigate_error}")
-
-        current_url = last_state.get("current_url", "").strip()
-        has_page_content = bool(
-            last_state.get("page_text", "").strip()
-            or last_state.get("title", "").strip()
-            or last_state.get("page_source", "").strip()
+    """打开帮助页，统一处理限频、退出登录和页面有效性。"""
+    result = open_mercado_backend_page(
+        driver,
+        HELP_URL,
+        name,
+        window_id,
+        settle_seconds=8,
+        max_rate_limit_retries=max_hongkong_switches,
+        rate_limit_retry_wait_seconds=switch_wait_seconds,
+        anomaly_site=site,
+        anomaly_source="AI申诉",
+    )
+    if abort_on_recovery is None:
+        abort_on_recovery = bool(
+            getattr(driver, "_bit_abort_ai_on_backend_recovery", False)
         )
-        if not current_url or current_url == "about:blank" or not has_page_content:
-            raise RuntimeError(
-                f"{name} {site} 窗口页面未正常打开：url={current_url or 'empty'}"
-            )
+    _abort_ai_appeal_after_backend_recovery(
+        result,
+        name,
+        site,
+        abort_on_recovery=abort_on_recovery,
+    )
 
-        print(
-            f"{get_now_time()} {name} {site} 窗口打开验证通过：{current_url}<br>"
+    state = result.get("state") or {}
+    current_url = str(state.get("current_url") or "").strip()
+    has_page_content = bool(
+        str(state.get("page_text") or "").strip()
+        or str(state.get("title") or "").strip()
+        or str(state.get("page_source") or "").strip()
+    )
+    if not current_url or current_url == "about:blank" or not has_page_content:
+        raise RuntimeError(
+            f"{name} {site} 窗口页面未正常打开：url={current_url or 'empty'}"
         )
-        return True
-
-    raise RuntimeError(f"{name} {site} 窗口页面打开验证失败：state={last_state}")
+    print(f"{get_now_time()} {name} {site} 窗口打开验证通过：{current_url}<br>")
+    return True
 
 
 def close_current_tab_keep_browser(driver, name="", site=""):
@@ -762,10 +702,7 @@ def build_appeal_message(window_id, name, site, form, message, nickname):
         return infraction_random + random.choice(words)
 
     if form == "投诉":
-        words = [
-            f"亲爱的客服，我叫{nickname}！我的产品没有质量问题，客户没有提供确凿证据证明产品存在问题，麻烦你帮我重新核查并消除对声誉的影响。"
-        ]
-        return random.choice(words)
+        return COMPLAINT_DEFAULT_APPEAL_MESSAGE
 
     return message
 
@@ -1811,6 +1748,37 @@ def build_deepseek_cancellation_reply(order_ids, site, appeal_message, agent_mes
     return reply
 
 
+def build_deepseek_complaint_reply(order_ids, site, appeal_message, agent_messages, reply_round):
+    """根据 AI 客服回复生成下一句投诉申诉回复。"""
+    site_option = build_site_option_reply(site)
+    prompt = f"""
+你正在代表 Mercado Libre 卖家与平台 AI 客服沟通商品质量投诉申诉。
+请根据客服的最新回复生成下一句中文回复，只输出要发送的回复正文，不要解释、不要 Markdown。
+
+要求：
+1. 回复要简短、礼貌、直接推进复核，不超过 120 个中文字。
+2. 卖家主张当前没有证据证明商品存在质量问题，希望复查相关销售单并移除对店铺声誉的影响。
+3. 如果客服询问站点，必须明确回复：{site_option}。
+4. 只能使用原始申诉和客服消息中已有的信息，不要虚构检测报告、证据、商品信息或处理结果。
+5. 不要重复整组销售单号，不要说“如果你愿意”“回复继续”等引导语。
+
+销售单号：{order_ids}
+原始申诉：{appeal_message}
+当前是第 {reply_round} 次自动回复（最多两次）。
+客服消息记录：
+{json.dumps((agent_messages or [])[-20:], ensure_ascii=False, indent=2)}
+"""
+    reply = chat_deepseek(
+        [{"role": "user", "content": prompt}],
+        temperature=0.2,
+        max_tokens=300,
+    ).strip()
+    reply = re.sub(r"^```(?:\w+)?\s*|\s*```$", "", reply, flags=re.S).strip()
+    if not reply:
+        raise ValueError("DeepSeek 未生成投诉申诉回复")
+    return reply
+
+
 def should_intervene_ai_response(response_text):
     """判断 AI 回复是否需要脚本继续补充说明或坚持申诉。"""
     if not response_text:
@@ -2007,7 +1975,7 @@ def send_infraction_message_with_retry(
 ):
     """按侵权申诉规则发送一组编号，并使用 DeepSeek 回复新的客服消息。
 
-    取消率复用同一套分组、重试、等待回复和最多自动追问两次的规则。
+    取消率和投诉复用同一套分组、重试、等待回复和最多自动追问两次的规则。
     每 30 秒读取一次，连续 3 分钟没有新回复则结束当前组；DeepSeek 最多回复 2 次。
     """
     max_attempts = 4
@@ -2016,8 +1984,17 @@ def send_infraction_message_with_retry(
     poll_interval = 30
     previous_messages = safe_get_agent_messages(driver)
     is_cancellation = appeal_kind == "取消率"
-    identifier_key = "cancellation_ids" if is_cancellation else "infraction_ids"
-    event_name = "cancellation" if is_cancellation else "infraction"
+    is_complaint = appeal_kind == "投诉"
+    identifier_key = (
+        "cancellation_ids"
+        if is_cancellation
+        else ("complaint_order_ids" if is_complaint else "infraction_ids")
+    )
+    event_name = (
+        "cancellation"
+        if is_cancellation
+        else ("complaint" if is_complaint else "infraction")
+    )
     base_extra = {
         "group_index": group_index,
         "total_groups": total_groups,
@@ -2117,6 +2094,14 @@ def send_infraction_message_with_retry(
 
         if is_cancellation:
             followup = build_deepseek_cancellation_reply(
+                infraction_ids,
+                site,
+                huashu,
+                latest_messages,
+                auto_reply_count + 1,
+            )
+        elif is_complaint:
+            followup = build_deepseek_complaint_reply(
                 infraction_ids,
                 site,
                 huashu,
@@ -2412,7 +2397,7 @@ def wait_for_ai_chat_ready(driver, timeout=15, require_input=False):
     return ""
 
 
-def open_ai_contact_window(driver, name, site):
+def open_ai_contact_window(driver, name, site, window_id=""):
     """打开 Help 页面并自动进入新版内嵌助手或旧版 iframe 助手。
 
     不同账号的入口页和按钮文案可能不同，所以依次尝试多个 URL、多种入口点击方式；
@@ -2423,9 +2408,24 @@ def open_ai_contact_window(driver, name, site):
     last_variant = ""
     for url in AI_HELP_URLS:
         driver.switch_to.default_content()
-        driver.get(url)
+        backend_result = open_mercado_backend_page(
+            driver,
+            url,
+            name,
+            window_id,
+            settle_seconds=5,
+            anomaly_site=site,
+            anomaly_source="AI申诉",
+        )
+        _abort_ai_appeal_after_backend_recovery(
+            backend_result,
+            name,
+            site,
+            abort_on_recovery=bool(
+                getattr(driver, "_bit_abort_ai_on_backend_recovery", False)
+            ),
+        )
         print(f"{get_now_time()} {name} {site} 打开AI客服入口页面：{url}<br>")
-        time.sleep(5)
 
         for attempt in range(1, 5):
             variant = detect_ai_chat_variant(driver)
@@ -2740,6 +2740,7 @@ def _collect_appeal_record_fields(log_records, final_agent_messages=None):
             for key in (
                 "infraction_ids",
                 "cancellation_ids",
+                "complaint_order_ids",
                 "delay_ids",
                 "order_ids",
                 "product_ids",
@@ -3013,30 +3014,29 @@ def shensu(name, site, form, message, validate_open=False):
                 return appeal_error
         driver, res = connect_bit_browser(window_id)
         name = res.get("data", {}).get("name") or name
-        login_result = ensure_mercado_login_from_home(
+        setattr(
             driver,
-            name,
-            window_id=window_id,
+            "_bit_abort_ai_on_backend_recovery",
+            bool(validate_open),
         )
-        if not login_result.get("ok"):
-            appeal_error = login_result.get("status") or "未登录"
+        try:
+            open_help_page_with_daily_validation(
+                driver,
+                name,
+                site_name,
+                window_id=window_id,
+            )
+        except Exception as exc:
+            appeal_error = str(exc) or "美客多后台不可用"
             skip_close_tab = True
             print(
-                f"{get_now_time()} {name} {site_name} "
-                f"{login_result.get('message') or appeal_error}<br>"
+                f"{get_now_time()} {name} {site_name} {appeal_error}<br>"
             )
             return appeal_error
         print(
             f"{get_now_time()} {name} {site_name} "
-            f"首页登录检测结果：{login_result.get('message')}，"
-            "继续执行 AI 客服申诉<br>"
+            "后台限频和登录态验证通过，继续执行 AI 客服申诉<br>"
         )
-
-        if validate_open:
-            open_help_page_with_daily_validation(driver, name, site_name)
-        else:
-            driver.get(HELP_URL)
-            time.sleep(8)
         select_site(driver, name, site_name)
 
         if form == "延误":
@@ -3052,14 +3052,15 @@ def shensu(name, site, form, message, validate_open=False):
             return
 
         if form == "投诉":
-            handle_complain(driver, name, site_name, message, nickname)
+            handle_complaint(window_id, driver, name, site_name, message, nickname)
+            return
 
         huashu = build_appeal_message(window_id, name, site_name, form, message, nickname)
         if huashu == "":
             print(f"{get_now_time()} {name} {site} 没有可以申诉的数据<br>")
             return "没有可以申诉的数据"
 
-        open_ai_contact_window(driver, name, site_name)
+        open_ai_contact_window(driver, name, site_name, window_id)
         send_ai_chat_message(driver, huashu)
         append_chat_log(
             name,
@@ -3118,7 +3119,7 @@ def handle_infraction(window_id, driver, name, site, message, nickname):
         f"麻烦帮我重新核查并删除侵权记录，谢谢"
     )
 
-    open_ai_contact_window(driver, name, site)
+    open_ai_contact_window(driver, name, site, window_id)
     for index, current_group in enumerate(groups, start=1):
         infraction_ids = "、".join(str(item) for item in current_group)
         huashu = f"{infraction_ids}{message}" if message else f"{infraction_ids}{appeal_suffix}"
@@ -3174,7 +3175,7 @@ def handle_delay(window_id, driver, name, site, message, nickname):
     )
     appeal_suffix = message or default_message
 
-    open_ai_contact_window(driver, name, site)
+    open_ai_contact_window(driver, name, site, window_id)
     for index, current_group in enumerate(groups, start=1):
         delay_ids = "、".join(str(item) for item in current_group)
         huashu = f"{delay_ids}{appeal_suffix}"
@@ -3230,7 +3231,6 @@ def handle_delay(window_id, driver, name, site, message, nickname):
 
 def handle_cancellation(window_id, driver, name, site, message, nickname):
     """处理取消率申诉：从声誉 Metrics 读取全部取消订单，按侵权规则分组处理。"""
-    del window_id  # 与侵权入口保持相同调用签名；订单直接从当前浏览器页面读取。
     group_size = 10
     cancellation_orders = get_cancellation_orders(driver, name, site)
     if not cancellation_orders:
@@ -3246,21 +3246,26 @@ def handle_cancellation(window_id, driver, name, site, message, nickname):
         f"按每组 {group_size} 个分为 {len(groups)} 组<br>"
     )
 
-    default_message = (
-        f"亲爱的客服，我叫{nickname}！这些订单并非因卖家责任取消，"
-        "麻烦您重新核查订单记录，并移除这些订单对店铺取消率和声誉的影响，非常感谢！"
-    )
-    appeal_suffix = message or default_message
-
     # 取消订单读取结束时位于 Metrics 页面，返回帮助页后再打开 AI 客服。
-    driver.get(HELP_URL)
-    time.sleep(8)
+    open_help_page_with_daily_validation(
+        driver,
+        name,
+        site,
+        window_id=window_id,
+    )
     select_site(driver, name, site)
-    open_ai_contact_window(driver, name, site)
+    open_ai_contact_window(driver, name, site, window_id)
 
     for index, current_group in enumerate(groups, start=1):
         cancellation_ids = "、".join(str(item) for item in current_group)
-        huashu = f"{cancellation_ids}{appeal_suffix}"
+        custom_message = str(message or "").strip()
+        huashu = (
+            f"{cancellation_ids}{custom_message}"
+            if custom_message
+            else CANCELLATION_DEFAULT_APPEAL_TEMPLATE.format(
+                order_ids=cancellation_ids,
+            )
+        )
         print(
             f"{get_now_time()} {name} {site} 开始发送第 {index}/{len(groups)} 组"
             f"取消率申诉：{huashu}<br>"
@@ -3312,9 +3317,97 @@ def handle_cancellation(window_id, driver, name, site, message, nickname):
             time.sleep(20)
 
 
+def handle_complaint(window_id, driver, name, site, message, nickname):
+    """处理投诉申诉：读取全部销售单号，每两个一组提交给 AI 客服。"""
+    del nickname
+    group_size = COMPLAINT_GROUP_SIZE
+    complaint_orders = get_complaint_orders(driver, name, site)
+    if not complaint_orders:
+        print(f"{get_now_time()} {name} {site} 没有影响声誉的投诉销售单<br>")
+        return
+
+    groups = [
+        complaint_orders[index:index + group_size]
+        for index in range(0, len(complaint_orders), group_size)
+    ]
+    print(
+        f"{get_now_time()} {name} {site} 投诉销售单共 {len(complaint_orders)} 个，"
+        f"按每组 {group_size} 个分为 {len(groups)} 组<br>"
+    )
+
+    # 销售单读取结束时位于 Metrics 页面，返回帮助页后再打开 AI 客服。
+    open_help_page_with_daily_validation(
+        driver,
+        name,
+        site,
+        window_id=window_id,
+    )
+    select_site(driver, name, site)
+    open_ai_contact_window(driver, name, site, window_id)
+
+    for index, current_group in enumerate(groups, start=1):
+        complaint_ids = "、".join(str(item) for item in current_group)
+        custom_message = str(message or "").strip()
+        huashu = (
+            f"{complaint_ids}{custom_message}"
+            if custom_message
+            else f"销售单号：{complaint_ids}\n{COMPLAINT_DEFAULT_APPEAL_MESSAGE}"
+        )
+        print(
+            f"{get_now_time()} {name} {site} 开始发送第 {index}/{len(groups)} 组"
+            f"投诉申诉：{huashu}<br>"
+        )
+        group_appeal_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        group_log_start = len(get_appeal_log_records())
+        group_error = ""
+        try:
+            send_infraction_message_with_retry(
+                driver,
+                huashu,
+                complaint_ids,
+                name,
+                site,
+                index,
+                len(groups),
+                appeal_kind="投诉",
+            )
+        except Exception as exc:
+            group_error = str(exc)
+            raise
+        finally:
+            group_records = _filter_group_log_records(
+                get_appeal_log_records()[group_log_start:],
+                name,
+                site,
+                index,
+                len(groups),
+                complaint_ids,
+                identifier_key="complaint_order_ids",
+            )
+            save_ai_appeal_group_record(
+                group_appeal_time,
+                name,
+                site,
+                index,
+                len(groups),
+                complaint_ids,
+                huashu,
+                group_records,
+                error=group_error,
+                appeal_kind="投诉",
+            )
+        print(
+            f"{get_now_time()} {name} {site} 第 {index}/{len(groups)} 组"
+            "投诉申诉处理完成<br>"
+        )
+        if index < len(groups):
+            time.sleep(20)
+
+
 def handle_complain(driver, name, site, message, nickname):
-    """投诉申诉预留入口，目前主流程仍使用通用话术发送。"""
-    print("开始处理侵权")
+    """保留旧函数名；新流程请调用需要 window_id 的 ``handle_complaint``。"""
+    window_id = get_window_id_by_shop_name(name)
+    return handle_complaint(window_id, driver, name, site, message, nickname)
 
 
 def get_delay_orders_random(name, site, nums):
@@ -3563,12 +3656,42 @@ def get_site_code(site):
     return site_map.get(site, "")
 
 
+def _is_ai_infringement_record(record):
+    """防御性过滤：AI 侵权申诉不接受 reports/权利人举报记录。"""
+    if isinstance(record, dict):
+        record_type = record.get("类型", record.get("type", ""))
+    else:
+        try:
+            record_type = record[7] if len(record) > 7 else ""
+        except (TypeError, IndexError):
+            return False
+    normalized_type = str(record_type or "").strip().lower()
+    if not normalized_type:
+        # 兼容旧采集器的三列返回值；新采集器会明确返回类型。
+        return True
+    return normalized_type in {
+        "侵权",
+        "infringement",
+        "infringements",
+        "detection",
+        "detections",
+    }
+
+
 def get_infraction_orders_random(window_id, name, site, nums):
-    """从当前侵权列表中随机抽取指定数量的侵权编号。"""
+    """仅从 infringements 列表中随机抽取指定数量的侵权编号。"""
     inf_list = []
     try:
-        infos = get_infractions_info(window_id, name, site,0)
+        infos = get_infractions_info(
+            window_id,
+            name,
+            site,
+            0,
+            include_rights_holder=False,
+        )
         for i in infos:
+            if not _is_ai_infringement_record(i):
+                continue
             inf_list.append(i[2])
         if len(inf_list) >= nums:
             inf_list = str(random.sample(inf_list, nums))
@@ -3581,11 +3704,19 @@ def get_infraction_orders_random(window_id, name, site, nums):
 
 
 def get_infraction_orders(window_id, name, site):
-    """读取当前店铺、站点下全部侵权编号。"""
+    """读取当前店铺、站点下全部 infringements 编号。"""
     inf_list = []
     try:
-        infos = get_infractions_info(window_id, name, site,0)
+        infos = get_infractions_info(
+            window_id,
+            name,
+            site,
+            0,
+            include_rights_holder=False,
+        )
         for i in infos:
+            if not _is_ai_infringement_record(i):
+                continue
             inf_list.append(i[2])
         print(get_now_time() + name + site + "得到的侵权编号为", inf_list)
     except Exception as e:

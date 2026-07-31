@@ -8,6 +8,9 @@ import urllib.request
 from datetime import datetime
 from pathlib import Path
 
+from bit.bit_mercado_limit import get_mercado_backend_status, process_mercado_rate_limit
+from bit.mercado_click_delay import javascript_contains_click, mercado_click_cooldown
+
 try:
     from bit.chat_log import append_chat_log
 except Exception:
@@ -158,7 +161,10 @@ class Cdp:
         res = self.call("Runtime.evaluate", params, timeout=timeout)
         if "exceptionDetails" in res:
             raise RuntimeError(res["exceptionDetails"].get("text", "Runtime.evaluate failed"))
-        return res.get("result", {}).get("value")
+        value = res.get("result", {}).get("value")
+        if javascript_contains_click(expression) and value is not False:
+            mercado_click_cooldown()
+        return value
 
     def screenshot(self, path):
         data = self.call("Page.captureScreenshot", {"format": "png", "fromSurface": True})["data"]
@@ -227,10 +233,29 @@ def help_tab(cdp_http):
     c.call("Page.enable")
     c.call("Runtime.enable")
     c.call("Page.bringToFront")
-    if tab.get("url") != HELP_URL:
+    retry_count = 0
+    while True:
         c.js(f"location.href={json.dumps(HELP_URL)}")
         time.sleep(4)
-    return c
+        state = c.js(
+            "({current_url: location.href, title: document.title, "
+            "page_text: ((document.body && document.body.innerText) || '').slice(0, 2000)})"
+        ) or {}
+        status = get_mercado_backend_status(state=state)
+        if status == "ready":
+            return c
+        if status == "logged_out":
+            raise RuntimeError("Mercado 登录态失效，请先完成登录后重试")
+        limit_result = process_mercado_rate_limit(
+            state=state,
+            name=DEFAULT_WINDOW,
+            retry_count=retry_count,
+            max_retries=2,
+            retry_wait_seconds=30,
+        )
+        if limit_result["exhausted"]:
+            raise RuntimeError("Mercado 限频，切换节点重试 2 次仍未恢复")
+        retry_count = limit_result["retry_count"]
 
 
 def click_visible(c, label):

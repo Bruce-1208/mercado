@@ -3,12 +3,15 @@ import traceback
 from datetime import datetime
 from bit.bit_api import closeBrowser
 from bit.bit_config import list_config_rows, split_config_sites
-from bit.bit_clash import get_public_ip, switch_random_hongkong_node
 from bit.bit_mysql import insert_task_record
 from bit.bit_summary_delayfile import summary_delayFile
 from bit.bit_utils import get_now_time
 from bit_playwright.bit_email_info import get_mail_info, read_email_info_all
-from bit_playwright.common import BitPlaywrightSession, select_country
+from bit_playwright.common import (
+    BitPlaywrightSession,
+    open_mercado_backend_page,
+    select_country,
+)
 
 
 def download_relay_mail(window_id, site):
@@ -17,14 +20,13 @@ def download_relay_mail(window_id, site):
         clicked = False
         for _ in range(3):
             try:
-                clicked = click_download(page, site)
+                clicked = click_download(session, site)
                 if clicked:
                     break
             except Exception as exc:
                 print("点击下载失败", exc)
                 traceback.print_exc()
-                switch_random_hongkong_node()
-                get_public_ip()
+                time.sleep(3)
 
         if not clicked:
             return "没有需要下载的文件"
@@ -35,7 +37,7 @@ def download_relay_mail(window_id, site):
                 mail_item = scan_email(page, 1)
                 if mail_item == "读取邮件失败":
                     break
-                if mail_item and download_excel(page, mail_item):
+                if mail_item and download_excel(session, mail_item):
                     return "下载文件成功"
             except Exception as exc:
                 print("下载延误邮件失败", exc)
@@ -43,10 +45,15 @@ def download_relay_mail(window_id, site):
         return "下载文件失败"
 
 
-def click_download(page, site):
-    page.goto("https://global-selling.mercadolibre.com/reputation", wait_until="domcontentloaded", timeout=60000)
-    page.reload(wait_until="domcontentloaded", timeout=60000)
-    time.sleep(8)
+def click_download(session, site):
+    page = session.page
+    access = open_mercado_backend_page(
+        session,
+        "https://global-selling.mercadolibre.com/reputation",
+        settle_seconds=8,
+    )
+    if not access.get("ok"):
+        raise RuntimeError(access.get("message") or access.get("status"))
     select_country(page, site)
     time.sleep(3)
     link = page.locator(
@@ -77,7 +84,8 @@ def scan_email(page, isAll):
     return None
 
 
-def download_excel(page, mail_item):
+def download_excel(session, mail_item):
+    page = session.page
     subject, mail_time, element, text = mail_item
     if text == "垃圾邮件":
         element.click(timeout=10000)
@@ -90,7 +98,9 @@ def download_excel(page, mail_item):
     page.wait_for_timeout(10000)
     url = page.get_by_text("Go to download report").first.get_attribute("href", timeout=30000)
     print(url)
-    page.goto(url, wait_until="domcontentloaded", timeout=60000)
+    access = open_mercado_backend_page(session, url, settle_seconds=5)
+    if not access.get("ok"):
+        raise RuntimeError(access.get("message") or access.get("status"))
     page.get_by_text("Download", exact=True).click(timeout=30000)
     print("已下载延误文件")
     return True

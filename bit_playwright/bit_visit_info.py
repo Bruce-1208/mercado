@@ -1,15 +1,23 @@
 import time
 
 from bit.bit_api import closeBrowser
-from bit_playwright.common import BitPlaywrightSession, select_country
+from bit_playwright.common import (
+    BitPlaywrightSession,
+    open_mercado_backend_page,
+    select_country,
+)
 
 
 def get_visits_info(window_id, site):
     with BitPlaywrightSession(window_id) as session:
         page = session.page
-        page.goto("https://global-selling.mercadolibre.com/metrics#sc-menu", wait_until="domcontentloaded", timeout=60000)
-        page.reload(wait_until="domcontentloaded", timeout=60000)
-        time.sleep(5)
+        access = open_mercado_backend_page(
+            session,
+            "https://global-selling.mercadolibre.com/metrics#sc-menu",
+            settle_seconds=5,
+        )
+        if not access.get("ok"):
+            raise RuntimeError(access.get("message") or access.get("status"))
         select_country(page, site)
         print("成功选择站点")
         try:

@@ -76,16 +76,56 @@ def insert_task_record(record_list):
     return _request("POST", "/api/db/task-records", json={"records": record_list})
 
 
-def inset_reputation_info(reputation_list):
+def get_latest_order_print_records():
     if DB_MODE == "mysql":
-        return _local_call("inset_reputation_info", reputation_list)
-    return _request("POST", "/api/db/reputation/bulk", json={"rows": reputation_list})
+        return _local_call("get_latest_order_print_records")
+    return _request("GET", "/api/db/task-records/order-print/latest")
 
 
-def inset_infraction_info(infraction_list):
+def inset_reputation_info(
+    reputation_list,
+    merge_latest=False,
+    replace_targets=None,
+):
     if DB_MODE == "mysql":
-        return _local_call("inset_infraction_info", infraction_list)
-    return _request("POST", "/api/db/infractions/bulk", json={"rows": infraction_list})
+        return _local_call(
+            "inset_reputation_info",
+            reputation_list,
+            merge_latest,
+            replace_targets,
+        )
+    return _request(
+        "POST",
+        "/api/db/reputation/bulk",
+        json={
+            "rows": reputation_list,
+            "merge_latest": bool(merge_latest),
+            "replace_targets": list(replace_targets or ()),
+        },
+    )
+
+
+def inset_infraction_info(
+    infraction_list,
+    merge_latest=False,
+    replace_targets=None,
+):
+    if DB_MODE == "mysql":
+        return _local_call(
+            "inset_infraction_info",
+            infraction_list,
+            merge_latest,
+            replace_targets,
+        )
+    return _request(
+        "POST",
+        "/api/db/infractions/bulk",
+        json={
+            "rows": infraction_list,
+            "merge_latest": bool(merge_latest),
+            "replace_targets": list(replace_targets or ()),
+        },
+    )
 
 
 def inset_delay_info(delay_list):
@@ -105,6 +145,81 @@ def insert_zying_product_info(product_list):
         return _local_call("insert_zying_product_info", product_list)
     data = _request("POST", "/api/db/zying-products/bulk", json={"rows": product_list})
     return (data or {}).get("count", 0)
+
+
+def get_zying_risk_candidates(
+    hours=24,
+    limit=0,
+    zying_category=None,
+    include_checked=False,
+):
+    if DB_MODE == "mysql":
+        return _local_call(
+            "get_zying_risk_candidates",
+            hours,
+            limit,
+            zying_category,
+            include_checked,
+        )
+    return _request(
+        "GET",
+        "/api/db/zying-risk/candidates",
+        params={
+            "hours": hours,
+            "limit": limit,
+            "category": zying_category or "",
+            "include_checked": "1" if include_checked else "0",
+        },
+    )
+
+
+def update_zying_product_risks(results):
+    if DB_MODE == "mysql":
+        return _local_call("update_zying_product_risks", results)
+    data = _request(
+        "POST",
+        "/api/db/zying-risk/bulk",
+        json={"results": results or []},
+    )
+    return int((data or {}).get("count", 0))
+
+
+def list_zying_risk_categories():
+    if DB_MODE == "mysql":
+        return _local_call("list_zying_risk_categories")
+    return _request("GET", "/api/db/zying-risk/categories")
+
+
+def get_zying_risk_results(
+    zying_category=None,
+    risk_level=None,
+    search="",
+    sort_by="risk_level",
+    sort_dir="desc",
+    limit=1000,
+):
+    if DB_MODE == "mysql":
+        return _local_call(
+            "get_zying_risk_results",
+            zying_category,
+            risk_level,
+            search,
+            sort_by,
+            sort_dir,
+            limit,
+        )
+    return _request(
+        "GET",
+        "/api/db/zying-risk/results",
+        params={
+            "category": zying_category or "",
+            "risk_level": risk_level if risk_level is not None else "",
+            "search": search or "",
+            "sort_by": sort_by,
+            "sort_dir": sort_dir,
+            "limit": limit,
+        },
+    )
 
 
 def insert_orders(line):
@@ -172,6 +287,16 @@ def get_latest_reputation_info():
     if DB_MODE == "mysql":
         return _local_call("get_latest_reputation_info")
     return _request("GET", "/api/db/reputation/latest")
+
+
+def get_latest_pago_info(salesperson=""):
+    if DB_MODE == "mysql":
+        return _local_call("get_latest_pago_info", salesperson)
+    return _request(
+        "GET",
+        "/api/db/pago/latest",
+        params={"salesperson": salesperson},
+    )
 
 
 def list_bit_browser_configs(include_ignored=True):

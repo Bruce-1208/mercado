@@ -3,19 +3,23 @@
 import json
 import os
 import random
+import re
 import time
 import csv
 from datetime import datetime
 from pathlib import Path
 
+from bit.bit_mercado_limit import is_mercado_rate_limited_text
 from bit.bit_runtime_lock import InterProcessLock, RUNTIME_LOCK_DIR
 
 
+# 采集任务默认同时处理 10 家店铺；各任务结束时必须及时关闭浏览器窗口。
 DEFAULT_COLLECTION_MAX_WORKERS = 10
 DEFAULT_STAGGER_MIN_SECONDS = 5.0
 DEFAULT_STAGGER_MAX_SECONDS = 10.0
 DEFAULT_RATE_LIMIT_PAUSE_SECONDS = 300.0
 DEFAULT_RETRY_LOCK_WAIT_SECONDS = 120.0
+CONFIG_SITE_SEPARATOR_PATTERN = re.compile(r"[，,、/;；|\s]+")
 
 RATE_LIMIT_STATE_PATH = Path(
     os.environ.get("BIT_COLLECTION_RATE_LIMIT_STATE_PATH")
@@ -31,7 +35,6 @@ _PERMANENT_FAILURE_MARKERS = (
     "captcha",
 )
 
-
 def env_int(name, default, minimum=0):
     try:
         return max(minimum, int(os.environ.get(name, default)))
@@ -44,6 +47,11 @@ def env_float(name, default, minimum=0.0):
         return max(minimum, float(os.environ.get(name, default)))
     except (TypeError, ValueError):
         return max(minimum, float(default))
+
+
+def is_rate_limited_text(value):
+    """兼容旧调用点；限频识别统一交给 ``bit_mercado_limit``。"""
+    return is_mercado_rate_limited_text(value)
 
 
 def stagger_bounds(min_seconds=None, max_seconds=None):
@@ -143,6 +151,54 @@ def is_failure_status(status):
     return bool(text) and text != "成功"
 
 
+def _selection_values(values):
+    if values is None:
+        return ()
+    if isinstance(values, str):
+        values = (values,)
+    return tuple(
+        dict.fromkeys(
+            str(value or "").strip()
+            for value in values
+            if str(value or "").strip()
+        )
+    )
+
+
+def split_config_sites(value):
+    """拆分数据库配置中的站点，保持原始顺序并去重。"""
+    return list(
+        dict.fromkeys(
+            site.strip()
+            for site in CONFIG_SITE_SEPARATOR_PATTERN.split(str(value or ""))
+            if site.strip()
+        )
+    )
+
+
+def filter_config_rows(rows, selected_shops=None, selected_sites=None):
+    """按前端选择过滤店铺配置，并把每行站点缩小到实际选中的交集。"""
+    shop_names = set(_selection_values(selected_shops))
+    site_names = set(_selection_values(selected_sites))
+    filtered = []
+    for raw_row in rows or []:
+        if not isinstance(raw_row, (list, tuple)) or len(raw_row) < 4:
+            continue
+        shop_name = str(raw_row[1] or "").strip()
+        if shop_names and shop_name not in shop_names:
+            continue
+        configured_sites = split_config_sites(raw_row[3])
+        target_sites = [
+            site for site in configured_sites if not site_names or site in site_names
+        ]
+        if not target_sites:
+            continue
+        row = list(raw_row)
+        row[3] = "，".join(target_sites)
+        filtered.append(tuple(row))
+    return filtered
+
+
 def outcome_failed(result_rows):
     return any(
         len(row) >= 4 and is_failure_status(row[3])
@@ -173,6 +229,51 @@ def failed_result_rows(result_rows):
         and len(row) >= 4
         and is_failure_status(row[3])
     ]
+
+
+def failed_sites(result_rows):
+    """按出现顺序返回最终失败的站点，供失败补跑精确缩小范围。"""
+    sites = []
+    for row in failed_result_rows(result_rows):
+        site = str(row[2] or "").strip() if len(row) > 2 else ""
+        if site and site not in sites:
+            sites.append(site)
+    return sites
+
+
+def merge_site_retry_outcome(original_outcome, retry_outcome):
+    """用补跑结果替换对应站点，保留同店铺其他已成功站点的数据。"""
+    original_row, original_data, original_results = original_outcome
+    _retry_row, retry_data, retry_results = retry_outcome
+    retried_sites = {
+        str(row[2] or "").strip()
+        for row in (retry_results or [])
+        if isinstance(row, (list, tuple)) and len(row) > 2 and str(row[2] or "").strip()
+    }
+    if not retried_sites:
+        return original_outcome
+
+    merged_data = [
+        row
+        for row in (original_data or [])
+        if not (
+            isinstance(row, (list, tuple))
+            and len(row) > 1
+            and str(row[1] or "").strip() in retried_sites
+        )
+    ]
+    merged_data.extend(retry_data or [])
+    merged_results = [
+        row
+        for row in (original_results or [])
+        if not (
+            isinstance(row, (list, tuple))
+            and len(row) > 2
+            and str(row[2] or "").strip() in retried_sites
+        )
+    ]
+    merged_results.extend(retry_results or [])
+    return original_row, merged_data, merged_results
 
 
 def write_unreadable_site_report(

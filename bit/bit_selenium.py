@@ -6,11 +6,11 @@ from bit.bit_api import *
 from selenium.webdriver.common.desired_capabilities import DesiredCapabilities
 from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.common.by import By
+from bit.bit_mercado_login import open_mercado_backend_page
 
 # /browser/open 接口会返回 selenium使用的http地址，以及webdriver的path，直接使用即可
-res = openBrowser(
-    "1495e31cb630406bb690ba187f264fe7"
-)  # 窗口ID从窗口配置界面中复制，或者api创建后返回
+window_id = "1495e31cb630406bb690ba187f264fe7"
+res = openBrowser(window_id)  # 窗口ID从窗口配置界面中复制，或者api创建后返回
 
 print(res)
 
@@ -37,7 +37,15 @@ driver = webdriver.Chrome(service=chrome_service, options=chrome_options)
 # print('after click')
 driver.implicitly_wait(60)
 
-driver.get("https://global-selling.mercadolibre.com/help/v2")
+shop_name = res.get("data", {}).get("name", "")
+open_result = open_mercado_backend_page(
+    driver,
+    "https://global-selling.mercadolibre.com/help/v2",
+    shop_name,
+    window_id,
+)
+if not open_result.get("ok"):
+    raise RuntimeError(open_result.get("message") or open_result.get("status"))
 driver.find_elements(
     By.XPATH, "/html/body/main/div/div/div[4]/div/div[2]/div/button/span/div/div/span"
 )

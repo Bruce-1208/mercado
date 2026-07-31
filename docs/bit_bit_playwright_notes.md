@@ -12,9 +12,9 @@
 ```mermaid
 flowchart LR
   UI["综合服务台 / bit_interface.py"] --> Appeal["AI/人工申诉入口"]
-  Scheduler["bit_main.py 定时任务"] --> Reputation["bit_reputation_info.py 声誉采集"]
-  Scheduler --> InfractionCollect["bit_infractions_info.py 侵权采集包装"]
-  Scheduler --> Daily["bit_daily_task.py Top 店铺 AI 申诉循环"]
+  Scheduler["bit_main.py 定时任务"] --> InfractionCollect["bit_infractions_info.py 侵权采集包装"]
+  InfractionCollect --> Reputation["bit_reputation_info.py 声誉采集"]
+  Reputation --> Daily["bit_daily_task.py Top 店铺 AI 申诉循环"]
   Daily --> AppealAI["bit_appeal_ai.py AI 客服申诉"]
   Appeal --> AppealAI
   Appeal --> Human["bit_appeal.py 人工客服申诉"]
@@ -32,9 +32,9 @@ flowchart LR
 | --- | --- | --- | --- |
 | `__init__.py` | 标记 `bit` 为 Python 包。 | 无 | 无业务逻辑。 |
 | `bit_api.py` | 封装 BitBrowser 本地接口。 | `openBrowser`, `closeBrowser`, `createBrowser` | 所有浏览器窗口打开/关闭都经过 `127.0.0.1:54345`。 |
-| `bit_interface.py` | Flask 综合服务台，提供页面、登录、采集按钮、申诉流式日志、数据库代理接口。 | `shensu_logic`, `/api/shensu`, `/api/db/*`, `/api/infractions/*`, `/api/reputation/*` | 服务端模式应直连 MySQL；外网客户端通过 `/api/db/*` 访问。 |
-| `bit_main.py` | 总调度入口。 | `run_reputation_infraction_then_daily`, `build_scheduler` | 启动即执行，之后 12 小时循环：声誉采集 -> 侵权采集 -> `bit_daily_task`。 |
-| `bit_daily_task.py` | 自动选择侵权 Top 店铺，并发调用 AI 客服申诉。 | `build_latest_infraction_appeal_plan`, `run_top_infraction_ai_appeal_once`, `loop_top_infraction_ai_appeal` | 每个店铺内按站点串行处理；店铺间并发。 |
+| `bit_interface.py` | Flask 综合服务台，提供页面、登录、采集按钮、申诉流式日志、自动申诉任务和数据库代理接口。 | `shensu_logic`, `/api/shensu`, `/api/tasks/daily/*`, `/api/db/*`, `/api/infractions/*`, `/api/reputation/*` | 任务模块可选择侵权、延误率或取消率；服务端模式应直连 MySQL，外网客户端通过 `/api/db/*` 访问。 |
+| `bit_main.py` | 总调度入口。 | `run_infraction_reputation_then_appeal`, `run_main_loop`, `build_scheduler` | 启动即执行一条任务链：侵权采集 -> 声誉采集 -> 侵权/延误/投诉/取消率 AI 申诉 10 轮（最多 10 个进程）；整条链结束后休息 2 小时再重新执行。 |
+| `bit_daily_task.py` | 自动选择 Top 店铺，并分别执行侵权、延误率或取消率 AI 申诉。 | `auto_appeal_infraction`, `auto_appeal_delay`, `auto_appeal_cancellation`, `loop_ai_appeal` | 侵权计划来自最新侵权批次；延误率、取消率计划来自最新声誉批次。每个店铺内按站点串行，店铺间并发。 |
 | `bit_appeal_ai.py` | 当前 AI 客服申诉主逻辑，使用 Selenium 控制 BitBrowser。 | `shensu`, `open_ai_contact_window`, `handle_infraction`, `handle_delay`, `send_ai_chat_message` | AI 客服只应识别右侧悬浮窗；人工客服页面不应混入该流程。 |
 | `bit_appeal.py` | 人工客服申诉逻辑。 | `shensu`, `open_human_service_chat`, `wait_for_human_chat_input` | 这里处理 Hub/Chat 人工客服页面，不应和 AI 悬浮窗逻辑混用。 |
 | `bit_infractions_info.py` | 侵权采集包装入口。 | `main` | 当前转发到 `bit_playwright.bit_infractions_info`。 |
@@ -115,13 +115,21 @@ flowchart TD
   C -->|"AI客服"| D["bit_appeal_ai.shensu(name, site, form, message)"]
   C -->|"人工客服"| H["bit_appeal.shensu(..., 人工客服)"]
 
-  S["bit_main.py 定时任务"] --> S1["bit_reputation_info.main()"]
-  S1 --> S2["bit_infractions_info.main()"]
-  S2 --> S3["bit_daily_task.loop_top_infraction_ai_appeal()"]
-  S3 --> S4["build_latest_infraction_appeal_plan()"]
-  S4 --> S5["ThreadPoolExecutor 并发店铺"]
-  S5 --> S6["appeal_one_shop_infractions()"]
+  S["bit_main.py 定时任务"] --> S1["bit_infractions_info.main()"]
+  S1 --> SW["冷却 3–5 分钟"]
+  SW --> S2["bit_reputation_info.main()"]
+  S2 --> S3["四类 AI 申诉顺序执行，共 10 轮"]
+  S3 --> S31["侵权 → 延误 → 投诉 → 取消率"]
+  S31 --> S4["run_ai_appeal_once(appeal_type, max_workers=10)"]
+  S4 --> S40["build_appeal_plan(appeal_type)"]
+  S40 -->|"侵权"| S41["最新侵权批次"]
+  S40 -->|"延误率 / 投诉率 / 取消率"| S42["最新声誉批次"]
+  S41 --> S5["ProcessPoolExecutor 并发店铺"]
+  S42 --> S5
+  S5 --> S6["appeal_one_shop()"]
   S6 --> D
+  S6 -->|"10 轮完成"| S7["整链结束后休息 2 小时"]
+  S7 --> S1
 ```
 
 ### `bit_appeal_ai.shensu` 主流程

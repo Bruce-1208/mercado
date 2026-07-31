@@ -16,6 +16,7 @@ import pyautogui
 from bit.bit_switch_country import *
 from bit.bit_send_mail import *
 from bit.bit_config import list_config_rows, split_config_sites
+from bit.bit_mercado_login import open_mercado_backend_page
 import pandas as pd
 
 from datetime import datetime
@@ -41,9 +42,16 @@ def get_reputation_info(window_id, site):
     # 设置最长等待时间为 10 秒
     wait = WebDriverWait(driver, 10)
 
-    driver.get("https://global-selling.mercadolibre.com/sales-summary")
-    driver.refresh()
-    time.sleep(10)
+    shop_name = str(res.get("data", {}).get("name") or window_id)
+    access_result = open_mercado_backend_page(
+        driver,
+        "https://global-selling.mercadolibre.com/sales-summary",
+        shop_name,
+        window_id,
+        settle_seconds=10,
+    )
+    if not access_result.get("ok"):
+        raise RuntimeError(access_result.get("message") or access_result.get("status"))
     i = 0
     while i < 3:
         i = i + 1

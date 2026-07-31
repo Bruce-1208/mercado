@@ -6,6 +6,7 @@ import hmac
 import os
 import platform
 import secrets
+import signal
 import subprocess
 import sys
 import threading
@@ -41,13 +42,22 @@ def resolve_template_dir():
     return CURRENT_DIR / "templates"
 
 import bit.bit_appeal_ai as bit_appeal_ai
+import bit.bit_check_risk as bit_check_risk
 import bit.bit_db_api as bit_db_api
 import bit.bit_daily_task as bit_daily_task
 import bit.bit_infractions_info as bit_infractions_info
+import bit.bit_pago_info as bit_pago_info
+import bit.bit_print as bit_print
 import bit.bit_reputation_info as bit_reputation_info
 from bit.bit_appeal import *
-from bit.bit_runtime_lock import create_window_lease
-from bit.bit_mercado_login import is_login_blocking_result
+from bit.bit_collection_control import DEFAULT_COLLECTION_MAX_WORKERS
+from bit.bit_config import split_config_sites
+from bit.bit_runtime_lock import create_window_lease, get_lock_owner
+from bit.bit_mercado_login import (
+    MERCADO_LOGIN_JOB_LOCK_KEY,
+    is_human_verification_result,
+    is_login_blocking_result,
+)
 from bit.bit_utils import *
 from bit.bit_api import *
 
@@ -96,6 +106,8 @@ if USE_DB_API:
     db_get_bit_browser_config = bit_db_api.get_bit_browser_config
     db_upsert_bit_browser_configs = bit_db_api.upsert_bit_browser_configs
     db_get_latest_infraction_info = bit_db_api.get_latest_infraction_info
+    db_get_latest_order_print_records = bit_db_api.get_latest_order_print_records
+    db_get_latest_pago_info = bit_db_api.get_latest_pago_info
     db_get_latest_reputation_info = bit_db_api.get_latest_reputation_info
     db_get_ai_appeal_records = bit_db_api.get_ai_appeal_records
     db_get_window_anomalies = bit_db_api.get_window_anomalies
@@ -105,6 +117,10 @@ if USE_DB_API:
     db_insert_orders = bit_db_api.insert_orders
     db_insert_task_record = bit_db_api.insert_task_record
     db_insert_zying_product_info = bit_db_api.insert_zying_product_info
+    db_get_zying_risk_candidates = bit_db_api.get_zying_risk_candidates
+    db_update_zying_product_risks = bit_db_api.update_zying_product_risks
+    db_list_zying_risk_categories = bit_db_api.list_zying_risk_categories
+    db_get_zying_risk_results = bit_db_api.get_zying_risk_results
     db_resolve_window_anomaly = bit_db_api.resolve_window_anomaly
     db_upsert_window_anomaly = bit_db_api.upsert_window_anomaly
     db_inset_delay_info = bit_db_api.inset_delay_info
@@ -119,6 +135,8 @@ else:
         get_bit_browser_config,
         upsert_bit_browser_configs,
         get_latest_infraction_info,
+        get_latest_order_print_records,
+        get_latest_pago_info,
         get_latest_reputation_info,
         get_ai_appeal_records,
         get_window_anomalies,
@@ -128,6 +146,10 @@ else:
         insert_orders,
         insert_task_record,
         insert_zying_product_info,
+        get_zying_risk_candidates,
+        update_zying_product_risks,
+        list_zying_risk_categories,
+        get_zying_risk_results,
         resolve_window_anomaly,
         inset_delay_info,
         inset_infraction_info,
@@ -140,6 +162,8 @@ else:
     db_get_bit_browser_config = get_bit_browser_config
     db_upsert_bit_browser_configs = upsert_bit_browser_configs
     db_get_latest_infraction_info = get_latest_infraction_info
+    db_get_latest_order_print_records = get_latest_order_print_records
+    db_get_latest_pago_info = get_latest_pago_info
     db_get_latest_reputation_info = get_latest_reputation_info
     db_get_ai_appeal_records = get_ai_appeal_records
     db_get_window_anomalies = get_window_anomalies
@@ -149,6 +173,10 @@ else:
     db_insert_orders = insert_orders
     db_insert_task_record = insert_task_record
     db_insert_zying_product_info = insert_zying_product_info
+    db_get_zying_risk_candidates = get_zying_risk_candidates
+    db_update_zying_product_risks = update_zying_product_risks
+    db_list_zying_risk_categories = list_zying_risk_categories
+    db_get_zying_risk_results = get_zying_risk_results
     db_resolve_window_anomaly = resolve_window_anomaly
     db_upsert_window_anomaly = upsert_window_anomaly
     db_inset_delay_info = inset_delay_info
@@ -319,6 +347,7 @@ _infraction_collect_state = {
     "finished_at": "",
     "status": "idle",
     "message": "等待启动",
+    "params": {},
 }
 _reputation_collect_lock = threading.Lock()
 _reputation_collect_state = {
@@ -327,6 +356,49 @@ _reputation_collect_state = {
     "finished_at": "",
     "status": "idle",
     "message": "等待启动",
+    "operation": "",
+    "params": {},
+}
+_risk_check_lock = threading.Lock()
+_risk_check_state_lock = threading.RLock()
+_risk_check_logs = deque(maxlen=500)
+_risk_check_state = {
+    "running": False,
+    "started_at": "",
+    "finished_at": "",
+    "status": "idle",
+    "message": "等待启动",
+    "params": {},
+    "summary": {},
+}
+_fund_collect_lock = threading.Lock()
+_fund_collect_state = {
+    "running": False,
+    "started_at": "",
+    "finished_at": "",
+    "status": "idle",
+    "message": "等待启动",
+    "scope": "",
+    "target": "",
+    "collected_count": 0,
+}
+_fund_collect_stop_event = None
+_order_print_lock = threading.RLock()
+_order_print_stop_event = None
+_order_print_logs = deque(maxlen=1000)
+_order_print_state = {
+    "running": False,
+    "started_at": "",
+    "finished_at": "",
+    "status": "idle",
+    "message": "等待启动",
+    "params": {},
+    "printed": 0,
+    "no_orders": 0,
+    "failed": 0,
+    "skipped": 0,
+    "results": [],
+    "site_last_runs": [],
 }
 _daily_task_lock = threading.Lock()
 _daily_task_state = {
@@ -339,7 +411,15 @@ _daily_task_state = {
 }
 _mercado_login_task_lock = threading.RLock()
 _mercado_login_task_process = None
+_mercado_login_task_processes = {}
+_mercado_login_tasks = {}
+MERCADO_LOGIN_TASK_HISTORY_LIMIT = 100
+MERCADO_LOGIN_STOP_GRACE_SECONDS = 8
+DEFAULT_MERCADO_LOGIN_WORKERS = 3
+MAX_MERCADO_LOGIN_WORKERS = 10
 _mercado_login_log_path = CURRENT_DIR / "logs" / "bit_mercado_login_console.log"
+MERCADO_LOGIN_SINGLE_MANUAL_WAIT_SECONDS = 20 * 60
+MERCADO_LOGIN_SELECTED_MANUAL_WAIT_SECONDS = 20 * 60
 
 
 def _read_recent_mercado_login_logs(max_bytes=256 * 1024, max_lines=800):
@@ -349,7 +429,11 @@ def _read_recent_mercado_login_logs(max_bytes=256 * 1024, max_lines=800):
             size = log_file.tell()
             log_file.seek(max(0, size - max_bytes), os.SEEK_SET)
             content = log_file.read().decode("utf-8", errors="replace")
-        return content.splitlines(keepends=True)[-max_lines:]
+        lines = content.splitlines(keepends=True)[-max_lines:]
+        for index in range(len(lines) - 1, -1, -1):
+            if "===== bit_mercado_login 启动：" in lines[index]:
+                return lines[index:]
+        return lines
     except OSError:
         return []
 
@@ -366,12 +450,14 @@ _mercado_login_task_state = {
     "message": "等待启动",
     "target": "全部未忽略店铺",
     "window_id": "",
+    "window_ids": [],
     "pid": None,
     "returncode": None,
     "log_path": str(_mercado_login_log_path),
 }
 
 APPEAL_SITES = ("墨西哥", "巴西", "哥伦比亚", "智利", "阿根廷", "乌拉圭")
+APPEAL_FORMS = ("延误", "侵权", "取消率", "投诉")
 APPEAL_LOOP_COUNTS = (10, 20, 50)
 DEFAULT_APPEAL_LOOP_COUNT = 10
 PERMANENT_APPEAL_LOOP_COUNT = 0
@@ -470,7 +556,15 @@ def unregister_thread_log_queue():
         _thread_log_queues.pop(threading.get_ident(), None)
 
 
-def _append_mercado_login_task_log(text):
+def _public_mercado_login_task(task):
+    return {
+        key: value
+        for key, value in dict(task or {}).items()
+        if key not in ("scope_keys", "log_chunks", "stop_worker_started")
+    }
+
+
+def _append_mercado_login_task_log(text, task_id=""):
     text = format_log_text(text)
     if not text:
         return
@@ -478,20 +572,277 @@ def _append_mercado_login_task_log(text):
         text += "\n"
     with _mercado_login_task_lock:
         _mercado_login_task_logs.append(text)
+        task = _mercado_login_tasks.get(str(task_id or ""))
+        if task is not None:
+            task.setdefault("log_chunks", deque(maxlen=800)).append(text)
         _mercado_login_log_path.parent.mkdir(parents=True, exist_ok=True)
         with _mercado_login_log_path.open("a", encoding="utf-8") as log_file:
             log_file.write(text)
 
 
+def _terminate_mercado_login_process_tree(process):
+    """终止登录控制进程及它创建的并发 worker。"""
+    if process is None or process.poll() is not None:
+        return
+
+    used_process_group = False
+    try:
+        if os.name == "nt":
+            subprocess.run(
+                ["taskkill", "/PID", str(process.pid), "/T"],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                check=False,
+            )
+        else:
+            process_group_id = os.getpgid(process.pid)
+            if process_group_id == process.pid:
+                os.killpg(process_group_id, signal.SIGTERM)
+                used_process_group = True
+            else:
+                process.terminate()
+    except (OSError, ProcessLookupError):
+        return
+
+    deadline = time.monotonic() + MERCADO_LOGIN_STOP_GRACE_SECONDS
+    while process.poll() is None and time.monotonic() < deadline:
+        time.sleep(0.1)
+    if process.poll() is not None:
+        return
+
+    try:
+        if os.name == "nt":
+            subprocess.run(
+                ["taskkill", "/PID", str(process.pid), "/T", "/F"],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                check=False,
+            )
+        elif used_process_group:
+            os.killpg(process.pid, signal.SIGKILL)
+        else:
+            process.kill()
+    except (OSError, ProcessLookupError):
+        pass
+
+
+def _stop_mercado_login_process_worker(task_id, process):
+    _terminate_mercado_login_process_tree(process)
+    with _mercado_login_task_lock:
+        task = dict(_mercado_login_tasks.get(task_id) or {})
+    for window_id in task.get("window_ids", ()):
+        try:
+            close_result = closeBrowser(window_id)
+            if isinstance(close_result, dict) and close_result.get("success") is False:
+                _append_mercado_login_task_log(
+                    f"{get_now_time()} 停止任务后关闭窗口 {window_id} 失败："
+                    f"{close_result.get('msg') or close_result}",
+                    task_id=task_id,
+                )
+        except Exception as exc:
+            _append_mercado_login_task_log(
+                f"{get_now_time()} 停止任务后关闭窗口 {window_id} 失败：{exc}",
+                task_id=task_id,
+            )
+
+
+def _start_mercado_login_stop_worker(task_id, process):
+    if process is None:
+        return
+    with _mercado_login_task_lock:
+        task = _mercado_login_tasks.get(task_id)
+        if task is None or task.get("stop_worker_started"):
+            return
+        task["stop_worker_started"] = True
+    threading.Thread(
+        target=_stop_mercado_login_process_worker,
+        args=(task_id, process),
+        daemon=True,
+    ).start()
+
+
+def request_mercado_login_task_stop(task_id):
+    task_id = normalize_appeal_task_id(task_id)
+    with _mercado_login_task_lock:
+        task = _mercado_login_tasks.get(task_id)
+        if task is None or not task.get("running"):
+            return False, _mercado_login_task_snapshot()
+        task.update(
+            {
+                "status": "stopping",
+                "message": f"{task.get('target') or '当前'} 登录任务正在停止",
+                "stop_requested": True,
+            }
+        )
+        process = _mercado_login_task_processes.get(task_id)
+    _append_mercado_login_task_log(
+        f"{get_now_time()} 已收到停止请求，正在终止登录任务及子进程",
+        task_id=task_id,
+    )
+    _start_mercado_login_stop_worker(task_id, process)
+    return True, _mercado_login_task_snapshot()
+
+
+def request_mercado_login_window_tasks_stop(window_id):
+    """停止指定窗口对应的独立登录任务，不影响其他窗口。"""
+    window_id = str(window_id or "").strip()
+    if not window_id:
+        return []
+    with _mercado_login_task_lock:
+        task_ids = [
+            task_id
+            for task_id, task in _mercado_login_tasks.items()
+            if task.get("running")
+            and window_id in {
+                str(item or "").strip()
+                for item in task.get("window_ids", ())
+            }
+            and len(task.get("window_ids", ())) == 1
+        ]
+    stopped_task_ids = []
+    for task_id in task_ids:
+        stopped, _ = request_mercado_login_task_stop(task_id)
+        if stopped:
+            stopped_task_ids.append(task_id)
+    return stopped_task_ids
+
+
 def _mercado_login_task_snapshot():
     with _mercado_login_task_lock:
-        return {
+        completed_task_ids = [
+            task_id
+            for task_id, task in _mercado_login_tasks.items()
+            if not task.get("running")
+        ]
+        for completed_task_id in completed_task_ids[:-MERCADO_LOGIN_TASK_HISTORY_LIMIT]:
+            _mercado_login_tasks.pop(completed_task_id, None)
+        active_tasks = [
+            task for task in _mercado_login_tasks.values() if task.get("running")
+        ]
+        latest_task = next(reversed(_mercado_login_tasks.values()), None) if _mercado_login_tasks else None
+        current_task = active_tasks[-1] if active_tasks else latest_task
+        if active_tasks:
+            primary = active_tasks[-1]
+            if len(active_tasks) == 1:
+                _mercado_login_task_state.update(_public_mercado_login_task(primary))
+            else:
+                active_window_ids = list(
+                    dict.fromkeys(
+                        window_id
+                        for task in active_tasks
+                        for window_id in task.get("window_ids", ())
+                    )
+                )
+                _mercado_login_task_state.update(
+                    {
+                        "running": True,
+                        "started_at": min(
+                            str(task.get("started_at") or "") for task in active_tasks
+                        ),
+                        "finished_at": "",
+                        "status": "running",
+                        "message": f"{len(active_tasks)} 个登录任务正在异步执行",
+                        "target": f"{len(active_tasks)} 个登录任务",
+                        "window_id": "",
+                        "window_ids": active_window_ids,
+                        "pid": None,
+                        "returncode": None,
+                    }
+                )
+        elif latest_task:
+            _mercado_login_task_state.update(_public_mercado_login_task(latest_task))
+
+        public_tasks = [
+            _public_mercado_login_task(task)
+            for task in reversed(tuple(_mercado_login_tasks.values()))
+        ]
+        active_window_ids = list(
+            dict.fromkeys(
+                window_id
+                for task in active_tasks
+                for window_id in task.get("window_ids", ())
+            )
+        )
+        all_running = any(task.get("scope") == "all" for task in active_tasks)
+        latest_log = (
+            "".join(current_task.get("log_chunks") or ())
+            if current_task is not None
+            else "".join(_mercado_login_task_logs)
+        )
+        snapshot = {
             **dict(_mercado_login_task_state),
-            "log": "".join(_mercado_login_task_logs),
+            "log": latest_log,
+            "tasks": public_tasks,
+            "running_count": len(active_tasks),
+            "active_window_ids": active_window_ids,
+            "all_running": all_running,
+            "current_task_id": (
+                str(current_task.get("task_id") or "")
+                if current_task is not None and current_task.get("running")
+                else ""
+            ),
+            "current_task_target": (
+                str(current_task.get("target") or "")
+                if current_task is not None
+                else ""
+            ),
+            "current_task_stopping": bool(
+                current_task is not None and current_task.get("stop_requested")
+            ),
+            "can_stop": bool(current_task is not None and current_task.get("running")),
         }
+    process_owner = get_lock_owner(MERCADO_LOGIN_JOB_LOCK_KEY)
+    if process_owner:
+        local_pids = {
+            task.get("pid") for task in active_tasks if task.get("pid") is not None
+        }
+        owner_is_local_task = process_owner.get("pid") in local_pids
+        snapshot["all_running"] = True
+        if not owner_is_local_task:
+            target = str(
+                (process_owner.get("metadata") or {}).get("target")
+                or process_owner.get("owner")
+                or "现有登录检测任务"
+            )
+            snapshot.update(
+                {
+                    "running": True,
+                    "status": "running",
+                    "message": f"{target} 正在另一个进程中运行",
+                    "target": target,
+                    "pid": process_owner.get("pid"),
+                    "running_count": int(snapshot.get("running_count") or 0) + 1,
+                }
+            )
+    return snapshot
 
 
-def _build_mercado_login_command(shop_name="", workers=3):
+def _mercado_login_task_scope(shop_name="", window_id="", selected_shops=None):
+    selected_shops = tuple(selected_shops or ())
+    window_ids = list(
+        dict.fromkeys(
+            str(value or "").strip()
+            for value in (
+                [shop.get("window_id") for shop in selected_shops]
+                if selected_shops
+                else [window_id]
+            )
+            if str(value or "").strip()
+        )
+    )
+    if window_ids:
+        return "windows", window_ids, tuple(f"window:{value}" for value in window_ids)
+    shop_name = str(shop_name or "").strip()
+    if shop_name:
+        return "shop", [], (f"shop:{shop_name}",)
+    return "all", [], ("all",)
+
+
+def _build_mercado_login_command(
+    shop_name="",
+    workers=DEFAULT_MERCADO_LOGIN_WORKERS,
+    window_ids=None,
+):
     command = [
         sys.executable,
         "-u",
@@ -499,27 +850,104 @@ def _build_mercado_login_command(shop_name="", workers=3):
         "bit.bit_mercado_login",
     ]
     shop_name = str(shop_name or "").strip()
+    selected_window_ids = tuple(
+        dict.fromkeys(
+            str(window_id or "").strip()
+            for window_id in (window_ids or ())
+            if str(window_id or "").strip()
+        )
+    )
     if shop_name:
-        command.extend(("--shop", shop_name, "--auto-login"))
+        command.extend(
+            (
+                "--shop",
+                shop_name,
+                "--auto-login",
+                "--keep-browser-open",
+                "--manual-login-wait-seconds",
+                str(MERCADO_LOGIN_SINGLE_MANUAL_WAIT_SECONDS),
+            )
+        )
+    elif selected_window_ids:
+        worker_count = max(
+            1,
+            min(
+                int(workers or DEFAULT_MERCADO_LOGIN_WORKERS),
+                MAX_MERCADO_LOGIN_WORKERS,
+                len(selected_window_ids),
+            ),
+        )
+        for window_id in selected_window_ids:
+            command.extend(("--window-id", window_id))
+        command.extend(
+            (
+                "--workers",
+                str(worker_count),
+                "--no-email",
+                "--keep-browser-open",
+                "--manual-login-wait-seconds",
+                str(MERCADO_LOGIN_SELECTED_MANUAL_WAIT_SECONDS),
+            )
+        )
     else:
         command.extend(
             (
                 "--all-active-login",
                 "--workers",
-                str(max(1, min(int(workers or 3), 3))),
+                str(
+                    max(
+                        1,
+                        min(
+                            int(workers or DEFAULT_MERCADO_LOGIN_WORKERS),
+                            MAX_MERCADO_LOGIN_WORKERS,
+                        ),
+                    )
+                ),
             )
         )
     command.extend(("--wait-seconds", "60", "--page-load-timeout", "20"))
     return command
 
 
-def run_mercado_login_console_job(shop_name="", window_id="", workers=3):
+def _mercado_login_selected_target(selected_shops):
+    shops = tuple(selected_shops or ())
+    if not shops:
+        return ""
+    names = [
+        str(shop.get("window_name") or shop.get("shop_name") or "").strip()
+        for shop in shops
+    ]
+    names = [name for name in names if name]
+    preview = "、".join(names[:3])
+    if len(names) > 3:
+        preview += "等"
+    return f"所选 {len(shops)} 家待处理人机验证店铺" + (f"（{preview}）" if preview else "")
+
+
+def run_mercado_login_console_job(
+    shop_name="",
+    window_id="",
+    workers=DEFAULT_MERCADO_LOGIN_WORKERS,
+    selected_shops=None,
+    task_id="",
+):
     """后台运行登录任务，并把子进程及其工作进程输出持久化给控制台。"""
     global _mercado_login_task_process
-    target = str(shop_name or "").strip() or "全部未忽略店铺"
-    command = _build_mercado_login_command(shop_name=shop_name, workers=workers)
+    selected_shops = tuple(dict(shop) for shop in (selected_shops or ()))
+    selected_window_ids = [shop.get("window_id") for shop in selected_shops]
+    target = (
+        _mercado_login_selected_target(selected_shops)
+        or str(shop_name or "").strip()
+        or "全部未忽略店铺"
+    )
+    command = _build_mercado_login_command(
+        shop_name=shop_name,
+        workers=workers,
+        window_ids=selected_window_ids,
+    )
     _append_mercado_login_task_log(
-        f"{get_now_time()} ===== bit_mercado_login 启动：{target} ====="
+        f"{get_now_time()} ===== bit_mercado_login 启动：{target} =====",
+        task_id=task_id,
     )
     try:
         child_env = os.environ.copy()
@@ -539,15 +967,32 @@ def run_mercado_login_console_job(shop_name="", window_id="", workers=3):
             bufsize=1,
             env=child_env,
             creationflags=creationflags,
+            start_new_session=(os.name != "nt"),
         )
         with _mercado_login_task_lock:
             _mercado_login_task_process = process
-            _mercado_login_task_state["pid"] = process.pid
+            _mercado_login_task_processes[task_id] = process
+            if task_id in _mercado_login_tasks:
+                _mercado_login_tasks[task_id]["pid"] = process.pid
+                stop_requested = bool(
+                    _mercado_login_tasks[task_id].get("stop_requested")
+                )
+            else:
+                stop_requested = False
+        if stop_requested:
+            _start_mercado_login_stop_worker(task_id, process)
         if process.stdout is not None:
             for line in process.stdout:
-                _append_mercado_login_task_log(line)
+                _append_mercado_login_task_log(
+                    f"[{target}] {line}",
+                    task_id=task_id,
+                )
         returncode = process.wait()
-        succeeded = returncode == 0
+        with _mercado_login_task_lock:
+            stop_requested = bool(
+                (_mercado_login_tasks.get(task_id) or {}).get("stop_requested")
+            )
+        succeeded = returncode == 0 and not stop_requested
         resolve_message = ""
         if succeeded and window_id:
             try:
@@ -555,81 +1000,363 @@ def run_mercado_login_console_job(shop_name="", window_id="", workers=3):
                 resolve_message = "，店铺待登录状态已自动解除"
             except Exception as exc:
                 resolve_message = f"，但更新店铺状态失败：{exc}"
-        message = (
-            f"{target} 登录任务完成{resolve_message}"
-            if succeeded
-            else f"{target} 登录任务失败，退出码：{returncode}"
-        )
+        if stop_requested:
+            message = f"{target} 登录任务已停止"
+        elif succeeded:
+            message = f"{target} 登录任务完成{resolve_message}"
+        else:
+            message = f"{target} 登录任务失败，退出码：{returncode}"
         with _mercado_login_task_lock:
-            _mercado_login_task_state.update(
-                {
+            if task_id in _mercado_login_tasks:
+                _mercado_login_tasks[task_id].update({
                     "running": False,
                     "finished_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-                    "status": "success" if succeeded else "error",
+                    "status": (
+                        "stopped"
+                        if stop_requested
+                        else "success" if succeeded else "error"
+                    ),
                     "message": message,
                     "returncode": returncode,
-                }
-            )
-        _append_mercado_login_task_log(f"{get_now_time()} {message}")
+                })
+        _append_mercado_login_task_log(
+            f"{get_now_time()} {message}",
+            task_id=task_id,
+        )
     except Exception as exc:
         logging.error("bit_mercado_login console job failed: %s", exc)
         traceback.print_exc()
         with _mercado_login_task_lock:
-            _mercado_login_task_state.update(
-                {
+            stop_requested = bool(
+                (_mercado_login_tasks.get(task_id) or {}).get("stop_requested")
+            )
+            if task_id in _mercado_login_tasks:
+                _mercado_login_tasks[task_id].update({
                     "running": False,
                     "finished_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-                    "status": "error",
-                    "message": str(exc),
+                    "status": "stopped" if stop_requested else "error",
+                    "message": (
+                        f"{target} 登录任务已停止" if stop_requested else str(exc)
+                    ),
                     "returncode": None,
-                }
-            )
+                })
         _append_mercado_login_task_log(
-            f"{get_now_time()} bit_mercado_login 启动失败：{exc}"
+            (
+                f"{get_now_time()} {target} 登录任务已停止"
+                if stop_requested
+                else f"{get_now_time()} bit_mercado_login 启动失败：{exc}"
+            ),
+            task_id=task_id,
         )
     finally:
         with _mercado_login_task_lock:
-            _mercado_login_task_process = None
+            _mercado_login_task_processes.pop(task_id, None)
+            _mercado_login_task_process = next(
+                iter(_mercado_login_task_processes.values()),
+                None,
+            )
 
 
-def start_mercado_login_console_job(shop_name="", window_id="", workers=3):
+def start_mercado_login_console_job(
+    shop_name="",
+    window_id="",
+    workers=DEFAULT_MERCADO_LOGIN_WORKERS,
+    selected_shops=None,
+):
+    selected_shops = tuple(dict(shop) for shop in (selected_shops or ()))
+    workers = max(
+        1,
+        min(
+            int(workers or DEFAULT_MERCADO_LOGIN_WORKERS),
+            MAX_MERCADO_LOGIN_WORKERS,
+        ),
+    )
+    scope, selected_window_ids, scope_keys = _mercado_login_task_scope(
+        shop_name=shop_name,
+        window_id=window_id,
+        selected_shops=selected_shops,
+    )
     with _mercado_login_task_lock:
-        if _mercado_login_task_state.get("running"):
-            return False, _mercado_login_task_snapshot()
-        target = str(shop_name or "").strip() or "全部未忽略店铺"
-        _mercado_login_task_state.update(
-            {
-                "running": True,
-                "started_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-                "finished_at": "",
-                "status": "running",
-                "message": f"{target} 登录任务已启动",
-                "target": target,
-                "window_id": str(window_id or "").strip(),
-                "pid": None,
-                "returncode": None,
-            }
+        active_tasks = [
+            task for task in _mercado_login_tasks.values() if task.get("running")
+        ]
+        active_all_task = any(task.get("scope") == "all" for task in active_tasks)
+        if active_all_task or (scope == "all" and active_tasks):
+            snapshot = _mercado_login_task_snapshot()
+            snapshot["message"] = "全部店铺自动登录任务与单店任务不能同时运行"
+            return False, snapshot
+        if get_lock_owner(MERCADO_LOGIN_JOB_LOCK_KEY):
+            snapshot = _mercado_login_task_snapshot()
+            return False, snapshot
+        occupied_scope_keys = {
+            key for task in active_tasks for key in task.get("scope_keys", ())
+        }
+        overlapping_keys = occupied_scope_keys.intersection(scope_keys)
+        if overlapping_keys:
+            snapshot = _mercado_login_task_snapshot()
+            snapshot["message"] = "所选店铺已有自动登录任务正在运行"
+            return False, snapshot
+        target = (
+            _mercado_login_selected_target(selected_shops)
+            or str(shop_name or "").strip()
+            or "全部未忽略店铺"
         )
+        task_id = secrets.token_hex(8)
+        task_state = {
+            "task_id": task_id,
+            "running": True,
+            "started_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            "finished_at": "",
+            "status": "running",
+            "message": f"{target} 登录任务已启动",
+            "target": target,
+            "window_id": str(window_id or "").strip(),
+            "window_ids": selected_window_ids,
+            "workers": (
+                min(workers, len(selected_window_ids))
+                if selected_window_ids
+                else workers
+            ),
+            "pid": None,
+            "returncode": None,
+            "stop_requested": False,
+            "stop_worker_started": False,
+            "scope": scope,
+            "scope_keys": scope_keys,
+            "log_chunks": deque(maxlen=800),
+        }
+        _mercado_login_tasks[task_id] = task_state
         task_thread = threading.Thread(
             target=run_mercado_login_console_job,
-            args=(shop_name, window_id, workers),
+            args=(shop_name, window_id, workers, selected_shops, task_id),
             daemon=True,
         )
-        task_thread.start()
-        return True, _mercado_login_task_snapshot()
+        try:
+            task_thread.start()
+        except Exception:
+            _mercado_login_tasks.pop(task_id, None)
+            raise
+        snapshot = _mercado_login_task_snapshot()
+        snapshot["started_task_id"] = task_id
+        return True, snapshot
 
 
-def run_infraction_collect_job():
+def _collection_status_failed(value):
+    text = str(value or "").strip()
+    return bool(text) and text not in ("成功", "无数据", "未知")
+
+
+def _failed_collection_shop_options(shop_options, status_rows):
+    """按店铺聚合失败站点；任一站点失败时店铺只出现一次。"""
+
+    configured = {
+        str(shop.get("shop_name") or "").strip(): shop
+        for shop in (shop_options or [])
+        if str(shop.get("shop_name") or "").strip()
+    }
+    failures_by_shop = {}
+    for row in status_rows or []:
+        shop_name = str(row.get("店铺名") or row.get("shop_name") or "").strip()
+        site = str(row.get("站点") or row.get("site") or "").strip()
+        status = str(row.get("状态") or row.get("status") or "").strip()
+        shop = configured.get(shop_name)
+        if (
+            shop is None
+            or not site
+            or site not in (shop.get("sites") or [])
+            or not _collection_status_failed(status)
+        ):
+            continue
+        failed_shop = failures_by_shop.setdefault(
+            shop_name,
+            {
+                "shop_name": shop_name,
+                "salesperson": str(shop.get("salesperson") or "").strip(),
+                "sites": [],
+                "failures": [],
+            },
+        )
+        if site not in failed_shop["sites"]:
+            failed_shop["sites"].append(site)
+        failure = {
+            "site": site,
+            "status": status,
+            "status_time": str(
+                row.get("状态时间") or row.get("status_time") or ""
+            ),
+        }
+        if failure not in failed_shop["failures"]:
+            failed_shop["failures"].append(failure)
+
+    return [
+        failures_by_shop[shop["shop_name"]]
+        for shop in (shop_options or [])
+        if shop.get("shop_name") in failures_by_shop
+    ]
+
+
+def _collection_config_options(include_failures=False):
+    configs = db_list_bit_browser_configs(include_ignored=False) or []
+    shops_by_name = {}
+    site_order = []
+    for config in configs:
+        shop_name = str(config.get("shop_name") or "").strip()
+        window_id = str(config.get("window_id") or "").strip()
+        if not shop_name or not window_id:
+            continue
+        shop = shops_by_name.setdefault(
+            shop_name,
+            {
+                "shop_name": shop_name,
+                "salesperson": str(config.get("salesperson") or "").strip(),
+                "sites": [],
+            },
+        )
+        for site in split_config_sites(config.get("sites")):
+            if site not in shop["sites"]:
+                shop["sites"].append(site)
+            if site not in site_order:
+                site_order.append(site)
+    shop_options = list(shops_by_name.values())
+    result = {"shops": shop_options, "sites": site_order}
+    if not include_failures:
+        return result
+
     try:
-        print(f"{get_now_time()} 开始执行侵权数据采集<br>")
+        infraction_data = db_get_latest_infraction_info(30) or {}
+        infraction_status_rows = infraction_data.get("summary") or []
+    except Exception as exc:
+        logging.warning("读取侵权失败店铺失败：%s", exc)
+        infraction_status_rows = []
+
+    try:
+        reputation_data = db_get_latest_reputation_info() or {}
+        reputation_status_rows = reputation_data.get("summary") or []
+        if not reputation_status_rows:
+            reputation_status_rows = [
+                {
+                    "店铺名": row.get("店铺名"),
+                    "站点": row.get("站点"),
+                    "状态": "失败",
+                    "状态时间": row.get("更新时间") or row.get("提交时间"),
+                }
+                for row in (reputation_data.get("rows") or [])
+                if "失败" in str(row.get("声誉颜色") or "")
+                or str(row.get("系统告警") or "").strip().startswith("失败")
+            ]
+    except Exception as exc:
+        logging.warning("读取声誉失败店铺失败：%s", exc)
+        reputation_status_rows = []
+
+    result["failed_shops"] = {
+        "infraction": _failed_collection_shop_options(
+            shop_options,
+            infraction_status_rows,
+        ),
+        "reputation": _failed_collection_shop_options(
+            shop_options,
+            reputation_status_rows,
+        ),
+    }
+    return result
+
+
+def _normalized_collection_list(data, key):
+    if key not in data:
+        return ()
+    raw_values = data.get(key)
+    if not isinstance(raw_values, list):
+        raise ValueError(f"{key} 必须是数组")
+    values = tuple(
+        dict.fromkeys(
+            str(value or "").strip()
+            for value in raw_values
+            if str(value or "").strip()
+        )
+    )
+    if not values:
+        label = "店铺" if key == "shops" else "站点"
+        raise ValueError(f"请至少选择一个{label}")
+    return values
+
+
+def _parse_collection_request(data):
+    data = data if isinstance(data, dict) else {}
+    shops = _normalized_collection_list(data, "shops")
+    sites = _normalized_collection_list(data, "sites")
+    max_workers = _parse_int_param(
+        data,
+        "max_workers",
+        DEFAULT_COLLECTION_MAX_WORKERS,
+        min_value=1,
+        max_value=10,
+    )
+    options = _collection_config_options()
+    configured = {shop["shop_name"]: shop for shop in options["shops"]}
+    unknown_shops = [shop for shop in shops if shop not in configured]
+    if unknown_shops:
+        raise ValueError("店铺不存在或已被忽略：" + "、".join(unknown_shops))
+    unknown_sites = [site for site in sites if site not in options["sites"]]
+    if unknown_sites:
+        raise ValueError("站点不存在：" + "、".join(unknown_sites))
+
+    target_shops = shops or tuple(configured)
+    matching_shop_names = [
+        shop_name
+        for shop_name in target_shops
+        if any(
+            not sites or site in sites
+            for site in configured[shop_name]["sites"]
+        )
+    ]
+    matching_sites = {
+        site
+        for shop_name in matching_shop_names
+        for site in configured[shop_name]["sites"]
+        if not sites or site in sites
+    }
+    if not matching_sites:
+        raise ValueError("所选店铺没有配置所选站点")
+    return {
+        "selected_shops": shops,
+        "selected_sites": sites,
+        "max_workers": max_workers,
+        "target": (
+            f"{len(matching_shop_names)} 家店铺"
+        ) + " / " + (
+            f"{len(sites)} 个站点" if sites else "全部站点"
+        ),
+    }
+
+
+def run_infraction_collect_job(
+    selected_shops=None,
+    selected_sites=None,
+    max_workers=DEFAULT_COLLECTION_MAX_WORKERS,
+):
+    try:
+        print(
+            f"{get_now_time()} 开始执行侵权数据采集："
+            f"{len(selected_shops or ()) or '全部'} 家店铺，"
+            f"{len(selected_sites or ()) or '全部'} 个站点，并发 {max_workers}<br>"
+        )
         target = getattr(bit_infractions_info, "main", None) or bit_infractions_info.get_infractions_info_all
-        target()
+        result = target(
+            max_workers=max_workers,
+            selected_shops=selected_shops,
+            selected_sites=selected_sites,
+        )
+        failed_count = sum(
+            1
+            for row in (result or {}).get("results", [])
+            if len(row) >= 4 and str(row[3] or "") != "成功"
+        )
         with _infraction_collect_lock:
             _infraction_collect_state.update({
                 "running": False,
                 "finished_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
                 "status": "success",
-                "message": "侵权数据采集完成",
+                "message": f"侵权数据采集完成，异常站点 {failed_count} 个",
             })
         print(f"{get_now_time()} 侵权数据采集完成<br>")
     except Exception as e:
@@ -644,19 +1371,43 @@ def run_infraction_collect_job():
             })
 
 
-def run_reputation_collect_job():
+def run_reputation_collect_job(
+    selected_shops=None,
+    selected_sites=None,
+    max_workers=DEFAULT_COLLECTION_MAX_WORKERS,
+):
     try:
-        print(f"{get_now_time()} 开始执行声誉数据采集<br>")
+        with _reputation_collect_lock:
+            operation = _reputation_collect_state.get("operation")
+        action_label = (
+            "所选店铺声誉更新"
+            if operation == "selected_update"
+            else "声誉数据补跑"
+        )
+        print(
+            f"{get_now_time()} 开始执行{action_label}："
+            f"{len(selected_shops or ()) or '全部'} 家店铺，"
+            f"{len(selected_sites or ()) or '全部'} 个站点，并发 {max_workers}<br>"
+        )
         target = getattr(bit_reputation_info, "main", None) or bit_reputation_info.get_reputation_info_all
-        target()
+        result = target(
+            max_workers=max_workers,
+            selected_shops=selected_shops,
+            selected_sites=selected_sites,
+        )
+        failed_count = sum(
+            1
+            for row in (result or {}).get("results", [])
+            if len(row) >= 4 and str(row[3] or "") != "成功"
+        )
         with _reputation_collect_lock:
             _reputation_collect_state.update({
                 "running": False,
                 "finished_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
                 "status": "success",
-                "message": "声誉数据采集完成",
+                "message": f"{action_label}完成，异常站点 {failed_count} 个",
             })
-        print(f"{get_now_time()} 声誉数据采集完成<br>")
+        print(f"{get_now_time()} {action_label}完成<br>")
     except Exception as e:
         logging.error("Reputation collect failed: %s", e)
         traceback.print_exc()
@@ -667,6 +1418,55 @@ def run_reputation_collect_job():
                 "status": "error",
                 "message": str(e),
             })
+
+
+def run_fund_collect_job(
+    all_shops=True,
+    selected_window_ids=None,
+    salesperson="",
+    max_workers=DEFAULT_COLLECTION_MAX_WORKERS,
+    stop_event=None,
+):
+    global _fund_collect_stop_event
+    try:
+        rows = bit_pago_info.get_pago_info_all(
+            max_workers=max_workers,
+            apply_shop_limit=False,
+            selected_window_ids=None if all_shops else selected_window_ids,
+            salesperson=salesperson,
+            stop_event=stop_event,
+        )
+        collected_count = len(rows or [])
+        with _fund_collect_lock:
+            stopped = bool(stop_event is not None and stop_event.is_set())
+            _fund_collect_state.update(
+                {
+                    "running": False,
+                    "finished_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                    "status": "stopped" if stopped else "success",
+                    "message": (
+                        f"资金数据采集已终止，已保留 {collected_count} 个店铺站点结果"
+                        if stopped
+                        else f"资金数据采集完成，共更新 {collected_count} 个店铺站点"
+                    ),
+                    "collected_count": collected_count,
+                }
+            )
+    except Exception as e:
+        logging.error("Fund collect failed: %s", e)
+        traceback.print_exc()
+        with _fund_collect_lock:
+            stopped = bool(stop_event is not None and stop_event.is_set())
+            _fund_collect_state.update({
+                "running": False,
+                "finished_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                "status": "stopped" if stopped else "error",
+                "message": "资金数据采集已终止" if stopped else str(e),
+            })
+    finally:
+        with _fund_collect_lock:
+            if _fund_collect_stop_event is stop_event:
+                _fund_collect_stop_event = None
 
 
 def _parse_int_param(data, name, default, min_value=0, max_value=None):
@@ -687,12 +1487,402 @@ def _parse_bool_param(data, name, default=True):
     return str(value).strip().lower() in ("1", "true", "yes", "on", "是", "启用")
 
 
+def build_risk_check_params(data):
+    """校验泽顺控制台提交的侵权检测参数。"""
+    data = data if isinstance(data, dict) else {}
+    category = str(data.get("category") or "").strip()[:1024]
+    model = str(data.get("model") or "").strip()[:128] or None
+    return {
+        "zying_category": category or None,
+        "hours": _parse_int_param(data, "hours", 0, min_value=0, max_value=87600),
+        "limit": _parse_int_param(data, "limit", 0, min_value=0, max_value=50000),
+        "batch_size": _parse_int_param(
+            data,
+            "batch_size",
+            bit_check_risk.DEFAULT_BATCH_SIZE,
+            min_value=1,
+            max_value=50,
+        ),
+        "model": model,
+        "retries": _parse_int_param(
+            data,
+            "ai_retries",
+            bit_check_risk.DEFAULT_AI_RETRIES,
+            min_value=0,
+            max_value=5,
+        ),
+        "recheck": _parse_bool_param(data, "recheck", False),
+        "dry_run": _parse_bool_param(data, "dry_run", False),
+    }
+
+
+def _append_risk_check_log(message):
+    text = str(message or "").strip()
+    if not text:
+        return
+    timestamp = datetime.now().strftime("%H:%M:%S")
+    with _risk_check_state_lock:
+        for line in text.splitlines():
+            line = line.strip()
+            if line:
+                _risk_check_logs.append(f"[{timestamp}] {line}")
+                if _risk_check_state.get("running"):
+                    _risk_check_state["message"] = line
+
+
+def run_risk_check_job(params, task_lock):
+    """在后台线程执行侵权检测，并更新控制台任务状态。"""
+    try:
+        summary = bit_check_risk.scan_products(
+            **params,
+            candidate_reader=db_get_zying_risk_candidates,
+            risk_writer=db_update_zying_product_risks,
+            log_callback=_append_risk_check_log,
+        )
+        public_summary = {
+            key: int(summary.get(key) or 0)
+            for key in ("checked", "risk_0", "risk_1", "risk_2", "updated")
+        }
+        completion_message = (
+            f"检测完成：{public_summary['checked']} 条，"
+            f"疑似 {public_summary['risk_1']} 条，"
+            f"侵权 {public_summary['risk_2']} 条"
+        )
+        _append_risk_check_log(completion_message)
+        with _risk_check_state_lock:
+            _risk_check_state.update(
+                {
+                    "running": False,
+                    "finished_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                    "status": "success",
+                    "message": completion_message,
+                    "summary": public_summary,
+                }
+            )
+    except Exception as exc:
+        logging.error("侵权检测任务失败：%s", exc)
+        traceback.print_exc()
+        _append_risk_check_log(f"任务失败：{exc}")
+        with _risk_check_state_lock:
+            _risk_check_state.update(
+                {
+                    "running": False,
+                    "finished_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                    "status": "error",
+                    "message": str(exc),
+                    "summary": {},
+                }
+            )
+    finally:
+        task_lock.release()
+
+
+def _risk_result_query_params(args, export=False):
+    risk_level = str(args.get("risk_level") or "").strip().lower()
+    if risk_level not in {"", "0", "1", "2", "unchecked"}:
+        raise ValueError("风险级别只能是 0、1、2 或未检测")
+    sort_by = str(args.get("sort_by") or "risk_level").strip()
+    if sort_by not in {
+        "row_id",
+        "product_id",
+        "title",
+        "zying_category",
+        "risk_level",
+        "keywords",
+        "submitted_at",
+    }:
+        sort_by = "risk_level"
+    sort_dir = "asc" if str(args.get("sort_dir") or "").lower() == "asc" else "desc"
+    return {
+        "zying_category": str(args.get("category") or "").strip()[:1024] or None,
+        "risk_level": risk_level or None,
+        "search": str(args.get("search") or "").strip()[:200],
+        "sort_by": sort_by,
+        "sort_dir": sort_dir,
+        "limit": 0 if export else _parse_int_param(args, "limit", 1000, 1, 5000),
+    }
+
+
+def _append_order_print_log(message):
+    text = format_log_text(message).rstrip()
+    if not text:
+        return
+    with _order_print_lock:
+        _order_print_logs.append(text + "\n")
+
+
+def _order_print_snapshot():
+    with _order_print_lock:
+        return {
+            **dict(_order_print_state),
+            "params": dict(_order_print_state.get("params") or {}),
+            "results": [dict(row) for row in (_order_print_state.get("results") or [])],
+            "site_last_runs": [
+                dict(row) for row in (_order_print_state.get("site_last_runs") or [])
+            ],
+            "log": "".join(_order_print_logs),
+            "can_stop": bool(
+                _order_print_state.get("running")
+                and _order_print_stop_event is not None
+            ),
+        }
+
+
+def _order_print_history_status(outcome):
+    text = str(outcome or "").strip()
+    if "无待打印订单" in text:
+        return "no_orders"
+    if text.startswith("成功"):
+        return "printed"
+    if text.startswith("跳过"):
+        return "skipped"
+    if text.startswith("失败"):
+        return "failed"
+    return "unknown"
+
+
+def _load_order_print_site_last_runs(current_results=None):
+    """汇总全部已配置店铺站点及其最近一次订单打印时间。"""
+
+    current_results = [dict(row) for row in (current_results or [])]
+    configs_loaded = True
+    try:
+        configs = db_list_bit_browser_configs(include_ignored=False) or []
+    except Exception as exc:
+        logging.warning("读取订单打印站点配置失败：%s", exc)
+        configs = []
+        configs_loaded = False
+    try:
+        history = db_get_latest_order_print_records() or []
+    except Exception as exc:
+        logging.warning("读取订单打印历史失败：%s", exc)
+        history = []
+
+    latest_by_key = {}
+    for record in history:
+        shop_name = str(record.get("shop_name") or "").strip()
+        site = str(record.get("site") or "").strip()
+        if not shop_name or not site:
+            continue
+        latest_by_key[(shop_name, site)] = {
+            "shop_name": shop_name,
+            "site": site,
+            "status": _order_print_history_status(record.get("outcome")),
+            "finished_at": str(record.get("finished_at") or ""),
+        }
+    for result in current_results:
+        shop_name = str(result.get("shop_name") or "").strip()
+        site = str(result.get("site") or "").strip()
+        if not shop_name or not site:
+            continue
+        key = (shop_name, site)
+        finished_at = str(result.get("finished_at") or "")
+        existing = latest_by_key.get(key)
+        if existing and str(existing.get("finished_at") or "") > finished_at:
+            continue
+        latest_by_key[key] = {
+            "shop_name": shop_name,
+            "site": site,
+            "status": str(result.get("status") or "unknown"),
+            "finished_at": finished_at,
+        }
+
+    rows = []
+    seen = set()
+    for config in configs:
+        shop_name = str(config.get("shop_name") or "").strip()
+        if not shop_name:
+            continue
+        for site in split_config_sites(config.get("sites")):
+            key = (shop_name, site)
+            if key in seen:
+                continue
+            seen.add(key)
+            rows.append(
+                latest_by_key.get(
+                    key,
+                    {
+                        "shop_name": shop_name,
+                        "site": site,
+                        "status": "not_run",
+                        "finished_at": "",
+                    },
+                )
+            )
+    if not configs_loaded:
+        for key, record in latest_by_key.items():
+            if key not in seen:
+                rows.append(record)
+    return rows
+
+
+def _refresh_order_print_site_last_runs(current_results=None):
+    if current_results is None:
+        with _order_print_lock:
+            current_results = [
+                dict(row) for row in (_order_print_state.get("results") or [])
+            ]
+    rows = _load_order_print_site_last_runs(current_results)
+    with _order_print_lock:
+        _order_print_state["site_last_runs"] = rows
+    return rows
+
+
+def build_order_print_params(data):
+    data = data if isinstance(data, dict) else {}
+    raw_targets = data.get("targets")
+    selected_targets = []
+    if raw_targets is not None:
+        if not isinstance(raw_targets, list):
+            raise ValueError("targets 必须是数组")
+        if not raw_targets:
+            raise ValueError("请至少选择一个店铺站点")
+        if len(raw_targets) > 1000:
+            raise ValueError("单次最多选择 1000 个店铺站点")
+
+        options = _collection_config_options()
+        configured_pairs = {
+            (shop["shop_name"], site)
+            for shop in options["shops"]
+            for site in shop["sites"]
+        }
+        seen_targets = set()
+        for raw_target in raw_targets:
+            if not isinstance(raw_target, dict):
+                raise ValueError("每个店铺站点必须包含 shop_name 和 site")
+            shop_name = str(raw_target.get("shop_name") or "").strip()
+            site = str(raw_target.get("site") or "").strip()
+            if not shop_name or not site:
+                raise ValueError("每个店铺站点必须包含 shop_name 和 site")
+            pair = (shop_name, site)
+            if pair not in configured_pairs:
+                raise ValueError(f"店铺站点不存在或已被忽略：{shop_name} / {site}")
+            if pair in seen_targets:
+                continue
+            seen_targets.add(pair)
+            selected_targets.append({"shop_name": shop_name, "site": site})
+
+        selected_shops = tuple(
+            dict.fromkeys(target["shop_name"] for target in selected_targets)
+        )
+        selected_sites = tuple(
+            dict.fromkeys(target["site"] for target in selected_targets)
+        )
+        target_label = (
+            f"{len(selected_shops)} 家店铺 / "
+            f"{len(selected_targets)} 个店铺站点"
+        )
+    else:
+        selection = _parse_collection_request({**data, "max_workers": 1})
+        selected_shops = selection["selected_shops"]
+        selected_sites = selection["selected_sites"]
+        target_label = selection["target"]
+    return {
+        "mode": "once",
+        "max_retries": _parse_int_param(
+            data, "max_retries", 3, min_value=1, max_value=3
+        ),
+        "retry_delay_seconds": _parse_int_param(
+            data, "retry_delay_seconds", 300, min_value=0, max_value=600
+        ),
+        "selected_shops": selected_shops,
+        "selected_sites": selected_sites,
+        "selected_targets": selected_targets,
+        "target": target_label,
+    }
+
+
+def run_order_print_job(params, task_lock, stop_event):
+    global _order_print_stop_event
+    try:
+        with _order_print_lock:
+            _order_print_state["message"] = "正在执行订单打印"
+        _append_order_print_log(f"{get_now_time()} ===== 订单打印开始 =====")
+        summary = bit_print.print_orders_all(
+            selected_shops=params["selected_shops"],
+            selected_sites=params["selected_sites"],
+            selected_targets=params.get("selected_targets"),
+            max_retries=params["max_retries"],
+            retry_delay_seconds=params["retry_delay_seconds"],
+            stop_event=stop_event,
+            logger=_append_order_print_log,
+        )
+        site_last_runs = _load_order_print_site_last_runs(summary.get("results", []))
+        with _order_print_lock:
+            _order_print_state.update(
+                {
+                    "printed": summary.get("printed", 0),
+                    "no_orders": summary.get("no_orders", 0),
+                    "failed": summary.get("failed", 0),
+                    "skipped": summary.get("skipped", 0),
+                    "results": summary.get("results", []),
+                    "site_last_runs": site_last_runs,
+                }
+            )
+
+        stopped = stop_event.is_set()
+        with _order_print_lock:
+            _order_print_state.update(
+                {
+                    "running": False,
+                    "finished_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                    "status": "stopped" if stopped else "success",
+                    "message": "订单打印已停止" if stopped else "订单打印任务已完成",
+                }
+            )
+    except Exception as exc:
+        logging.error("Order print task failed: %s", exc)
+        traceback.print_exc()
+        _append_order_print_log(f"{get_now_time()} 订单打印异常：{exc}")
+        with _order_print_lock:
+            _order_print_state.update(
+                {
+                    "running": False,
+                    "finished_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                    "status": "error",
+                    "message": str(exc),
+                }
+            )
+    finally:
+        if task_lock is not None:
+            task_lock.release()
+        with _order_print_lock:
+            if _order_print_stop_event is stop_event:
+                _order_print_stop_event = None
+
+
+def _parse_rate_param(data, name="min_rate", default=0):
+    value = data.get(name, default)
+    text = str(value if value is not None else default).strip().replace("％", "%")
+    if not text:
+        return float(default)
+    is_percent = "%" in text
+    number_text = text.replace("%", "").replace("，", ".").replace(",", ".").strip()
+    try:
+        number = float(number_text)
+    except (TypeError, ValueError) as exc:
+        raise ValueError(f"{name} 必须是 0% 到 100% 之间的比率") from exc
+    rate = number / 100 if is_percent or number > 1 else number
+    if rate < 0 or rate > 1:
+        raise ValueError(f"{name} 必须是 0% 到 100% 之间的比率")
+    return rate
+
+
 def build_daily_task_params(data):
     mode = str(data.get("mode", "once")).strip().lower()
     if mode not in ("once", "loop"):
         mode = "once"
+    normalized_appeal_type = bit_daily_task.normalize_appeal_type(
+        data.get("appeal_type") or bit_daily_task.APPEAL_TYPE_INFRACTION
+    )
+    appeal_type = (
+        "延误率"
+        if normalized_appeal_type == bit_daily_task.APPEAL_TYPE_DELAY
+        else normalized_appeal_type
+    )
     return {
         "mode": mode,
+        "appeal_type": appeal_type,
         "top_n": _parse_int_param(data, "top_n", bit_daily_task.DEFAULT_DAILY_TOP_N, 1, 100),
         "max_workers": _parse_int_param(data, "max_workers", bit_daily_task.DEFAULT_DAILY_MAX_WORKERS, 1, 60),
         "recent_days": _parse_int_param(
@@ -706,6 +1896,7 @@ def build_daily_task_params(data):
         "site_pause": _parse_int_param(data, "site_pause", 30, 0, 3600),
         "stop_after_minutes": _parse_int_param(data, "stop_after_minutes", 360, 0, 24 * 60),
         "only_active": _parse_bool_param(data, "only_active", True),
+        "min_rate": _parse_rate_param(data),
         "message": str(data.get("message", "") or ""),
     }
 
@@ -713,11 +1904,14 @@ def build_daily_task_params(data):
 def run_daily_task_job(params, task_lock):
     try:
         print(f"{get_now_time()} 开始执行 daily_task：{params}<br>")
+        appeal_type = params.get("appeal_type", bit_daily_task.APPEAL_TYPE_INFRACTION)
+        min_rate = params.get("min_rate", 0)
         if params["mode"] == "loop":
             stop_at = None
             if params["stop_after_minutes"] > 0:
                 stop_at = datetime.now() + timedelta(minutes=params["stop_after_minutes"])
-            bit_daily_task.loop_top_infraction_ai_appeal(
+            bit_daily_task.loop_ai_appeal(
+                appeal_type,
                 top_n=params["top_n"],
                 max_workers=params["max_workers"],
                 recent_days=params["recent_days"],
@@ -725,21 +1919,24 @@ def run_daily_task_job(params, task_lock):
                 site_pause=params["site_pause"],
                 message=params["message"],
                 only_active=params["only_active"],
+                min_rate=min_rate,
                 stop_at=stop_at,
                 _task_lock=task_lock,
             )
-            result_message = "daily_task 循环执行完成"
+            result_message = f"daily_task {appeal_type}申诉循环执行完成"
         else:
-            bit_daily_task.run_top_infraction_ai_appeal_once(
+            bit_daily_task.run_ai_appeal_once(
+                appeal_type,
                 top_n=params["top_n"],
                 max_workers=params["max_workers"],
                 recent_days=params["recent_days"],
                 site_pause=params["site_pause"],
                 message=params["message"],
                 only_active=params["only_active"],
+                min_rate=min_rate,
                 _task_lock=task_lock,
             )
-            result_message = "daily_task 单轮执行完成"
+            result_message = f"daily_task {appeal_type}申诉单轮执行完成"
 
         with _daily_task_lock:
             _daily_task_state.update({
@@ -839,6 +2036,28 @@ def resolve_appeal_sites(sites):
     return tuple(selected_sites)
 
 
+def resolve_appeal_forms(forms):
+    """规范化申诉类型，并按固定业务顺序执行，兼容旧版单个 form 字符串。"""
+    raw_forms = [forms] if isinstance(forms, str) else list(forms or [])
+    selected_forms = set()
+    invalid_forms = []
+    for raw_form in raw_forms:
+        appeal_form = str(raw_form or "").strip()
+        if not appeal_form:
+            continue
+        if appeal_form not in APPEAL_FORMS:
+            invalid_forms.append(appeal_form)
+            continue
+        selected_forms.add(appeal_form)
+    if invalid_forms:
+        raise ValueError(f"不支持的任务类型：{'、'.join(dict.fromkeys(invalid_forms))}")
+    if not selected_forms:
+        raise ValueError("请至少选择一个任务类型")
+    return tuple(
+        appeal_form for appeal_form in APPEAL_FORMS if appeal_form in selected_forms
+    )
+
+
 def normalize_appeal_loop_count(value):
     """返回申诉轮数；0 表示永久循环，其他值只允许 10、20、50。"""
     text = str(value if value is not None else DEFAULT_APPEAL_LOOP_COUNT).strip()
@@ -909,8 +2128,9 @@ def shensu_logic(
     stop_event=None,
 ):
     target_sites = resolve_appeal_sites(sites)
+    target_forms = resolve_appeal_forms(form)
     round_limit = normalize_appeal_loop_count(loop_count)
-    multiple_sites_selected = len(target_sites) > 1
+    multiple_tasks_selected = len(target_sites) > 1 or len(target_forms) > 1
     round_interval_seconds = get_appeal_round_interval(mode)
     round_interval_minutes = round_interval_seconds // 60
     round_number = 0
@@ -922,78 +2142,107 @@ def shensu_logic(
             yield f"{get_now_time()} 已终结本次申诉任务\n"
             return
         round_number += 1
-        if multiple_sites_selected:
+        if multiple_tasks_selected:
             yield (
-                f"{get_now_time()} 第 {round_number} 轮开始，将依次执行选中的 "
-                f"{len(target_sites)} 个站点：{'、'.join(target_sites)}\n"
+                f"{get_now_time()} 第 {round_number} 轮开始，任务类型将按 "
+                f"{' → '.join(target_forms)} 的顺序执行；"
+                f"选中站点：{'、'.join(target_sites)}\n"
             )
 
-        for current_site in target_sites:
-            if stop_event.is_set():
-                yield f"{get_now_time()} 已终结本次申诉任务，不再执行后续站点\n"
-                return
-            output_queue = queue.Queue()
-            task_result = {"value": None}
-
-            def run_task(run_site=current_site, run_round=round_number):
-                register_thread_log_queue(output_queue)
-                window_lease = None
-                try:
-                    print(
-                        f"{get_now_time()} --- 第 {run_round} 轮任务启动："
-                        f"{name} {run_site}，客服模式：{mode}"
-                    )
-                    window_id = getWindowidByName(name)
-                    window_lease = create_window_lease(
-                        window_id,
-                        owner=f"interface_appeal:{name}",
-                        shop_name=name,
-                        task_type="interface_appeal",
-                    )
-                    if not window_lease.acquire(timeout=0):
-                        task_result["value"] = "窗口正在被其他任务占用"
-                        print(f"{get_now_time()} {name} {run_site} {task_result['value']}，本轮已跳过")
-                        return
-                    if mode == "AI客服":
-                        task_result["value"] = bit_appeal_ai.shensu(name, run_site, form, message)
-                    else:
-                        task_result["value"] = shensu(name, run_site, form, message, "人工客服")
-                    print(f"{get_now_time()} {name} {run_site} 申诉执行完毕：{task_result['value']}")
-                except Exception as e:
-                    print(f"{get_now_time()} {name} {run_site} 发生错误: {str(e)}")
-                    traceback.print_exc()
-                finally:
-                    if window_lease is not None:
-                        window_lease.release()
-                    unregister_thread_log_queue()
-                    output_queue.put(None)
-
-            task_thread = threading.Thread(target=run_task, daemon=True)
-            task_thread.start()
-
-            yield from stream_task_output(output_queue, stop_event=stop_event)
-
-            if stop_event.is_set():
+        for current_form in target_forms:
+            if len(target_forms) > 1:
                 yield (
-                    f"{get_now_time()} {name} {current_site} 当前操作已安全结束，"
-                    "本次任务已终结\n"
+                    f"{get_now_time()} 第 {round_number} 轮开始执行任务类型："
+                    f"{current_form}\n"
                 )
-                return
+            for current_site in target_sites:
+                if stop_event.is_set():
+                    yield (
+                        f"{get_now_time()} 已终结本次申诉任务，"
+                        "不再执行后续任务类型和站点\n"
+                    )
+                    return
+                output_queue = queue.Queue()
+                task_result = {"value": None}
 
-            if is_login_blocking_result(task_result.get("value")):
-                yield (
-                    f"{get_now_time()} {name} {current_site} "
-                    f"{task_result.get('value')}，已停止该店铺后续站点和申诉循环\n"
-                )
-                return
+                def run_task(
+                    run_site=current_site,
+                    run_form=current_form,
+                    run_round=round_number,
+                ):
+                    register_thread_log_queue(output_queue)
+                    window_lease = None
+                    try:
+                        print(
+                            f"{get_now_time()} --- 第 {run_round} 轮任务启动："
+                            f"{name} {run_site}，任务类型：{run_form}，客服模式：{mode}"
+                        )
+                        window_id = getWindowidByName(name)
+                        window_lease = create_window_lease(
+                            window_id,
+                            owner=f"interface_appeal:{name}",
+                            shop_name=name,
+                            task_type="interface_appeal",
+                        )
+                        if not window_lease.acquire(timeout=0):
+                            task_result["value"] = "窗口正在被其他任务占用"
+                            print(
+                                f"{get_now_time()} {name} {run_site} {run_form} "
+                                f"{task_result['value']}，本轮已跳过"
+                            )
+                            return
+                        if mode == "AI客服":
+                            task_result["value"] = bit_appeal_ai.shensu(
+                                name, run_site, run_form, message
+                            )
+                        else:
+                            task_result["value"] = shensu(
+                                name, run_site, run_form, message, "人工客服"
+                            )
+                        print(
+                            f"{get_now_time()} {name} {run_site} {run_form} "
+                            f"申诉执行完毕：{task_result['value']}"
+                        )
+                    except Exception as e:
+                        print(
+                            f"{get_now_time()} {name} {run_site} {run_form} "
+                            f"发生错误: {str(e)}"
+                        )
+                        traceback.print_exc()
+                    finally:
+                        if window_lease is not None:
+                            window_lease.release()
+                        unregister_thread_log_queue()
+                        output_queue.put(None)
+
+                task_thread = threading.Thread(target=run_task, daemon=True)
+                task_thread.start()
+
+                yield from stream_task_output(output_queue, stop_event=stop_event)
+
+                if stop_event.is_set():
+                    yield (
+                        f"{get_now_time()} {name} {current_site} {current_form} "
+                        "当前操作已安全结束，本次任务已终结\n"
+                    )
+                    return
+
+                if is_login_blocking_result(task_result.get("value")):
+                    yield (
+                        f"{get_now_time()} {name} {current_site} "
+                        f"{task_result.get('value')}，已停止该店铺后续站点、"
+                        "任务类型和申诉循环\n"
+                    )
+                    return
 
         has_next_round = (
             round_limit == PERMANENT_APPEAL_LOOP_COUNT
             or round_number < round_limit
         )
-        if multiple_sites_selected:
+        if multiple_tasks_selected:
             yield (
-                f"{get_now_time()} 第 {round_number} 轮选中站点执行完成，"
+                f"{get_now_time()} 第 {round_number} 轮任务类型 "
+                f"{'、'.join(target_forms)} 和选中站点执行完成，"
                 + (
                     f"等待 {round_interval_minutes} 分钟后开始下一轮\n"
                     if has_next_round
@@ -1035,12 +2284,15 @@ def api_run_shensu():
     except ValueError as exc:
         return jsonify({"status": "error", "message": str(exc)}), 400
     try:
+        forms = resolve_appeal_forms(request.args.getlist("form"))
+    except ValueError as exc:
+        return jsonify({"status": "error", "message": str(exc)}), 400
+    try:
         loop_count = normalize_appeal_loop_count(
             request.args.get("loop_count", DEFAULT_APPEAL_LOOP_COUNT)
         )
     except ValueError as exc:
         return jsonify({"status": "error", "message": str(exc)}), 400
-    form = request.args.get("form", "")
     message = request.args.get("message", "")
     mode = request.args.get("mode", "人工客服")
     task_id = normalize_appeal_task_id(request.args.get("task_id", ""))
@@ -1052,7 +2304,8 @@ def api_run_shensu():
             "name": name,
             "sites": list(sites),
             "loop_count": "永久" if loop_count == 0 else loop_count,
-            "form": form,
+            "form": forms[0] if len(forms) == 1 else "、".join(forms),
+            "forms": list(forms),
             "mode": mode,
         },
     )
@@ -1065,7 +2318,7 @@ def api_run_shensu():
             yield from shensu_logic(
                 name,
                 sites,
-                form,
+                forms,
                 message,
                 mode,
                 loop_count=loop_count,
@@ -1180,6 +2433,14 @@ def api_export_latest_infractions():
 @app.route('/api/infractions/collect', methods=['POST'])
 @login_required
 def api_collect_infractions():
+    try:
+        params = _parse_collection_request(request.get_json(silent=True) or {})
+    except ValueError as exc:
+        return jsonify({"status": "error", "message": str(exc)}), 400
+    except Exception as exc:
+        logging.error("读取侵权采集范围失败：%s", exc)
+        return jsonify({"status": "error", "message": f"读取采集范围失败：{exc}"}), 500
+
     with _infraction_collect_lock:
         if _infraction_collect_state.get("running"):
             return jsonify({
@@ -1194,10 +2455,24 @@ def api_collect_infractions():
             "started_at": started_at,
             "finished_at": "",
             "status": "running",
-            "message": "侵权数据采集已启动",
+            "message": f"侵权数据采集已启动：{params['target']}，并发 {params['max_workers']}",
+            "params": {
+                "shops": list(params["selected_shops"]),
+                "sites": list(params["selected_sites"]),
+                "max_workers": params["max_workers"],
+                "target": params["target"],
+            },
         })
 
-    task_thread = threading.Thread(target=run_infraction_collect_job, daemon=True)
+    task_thread = threading.Thread(
+        target=run_infraction_collect_job,
+        args=(
+            params["selected_shops"],
+            params["selected_sites"],
+            params["max_workers"],
+        ),
+        daemon=True,
+    )
     task_thread.start()
     return jsonify({
         "status": "success",
@@ -1296,12 +2571,44 @@ def api_export_latest_reputation():
 @app.route('/api/reputation/collect', methods=['POST'])
 @login_required
 def api_collect_reputation():
+    try:
+        params = _parse_collection_request(request.get_json(silent=True) or {})
+    except ValueError as exc:
+        return jsonify({"status": "error", "message": str(exc)}), 400
+    except Exception as exc:
+        logging.error("读取声誉采集范围失败：%s", exc)
+        return jsonify({"status": "error", "message": f"读取采集范围失败：{exc}"}), 500
+
+    return _start_reputation_collect_task(params, operation="rerun")
+
+
+@app.route('/api/reputation/update-selected', methods=['POST'])
+@login_required
+def api_update_selected_reputation():
+    try:
+        params = _parse_collection_request(request.get_json(silent=True) or {})
+    except ValueError as exc:
+        return jsonify({"status": "error", "message": str(exc)}), 400
+    except Exception as exc:
+        logging.error("读取所选店铺声誉更新范围失败：%s", exc)
+        return jsonify({"status": "error", "message": f"读取更新范围失败：{exc}"}), 500
+
+    return _start_reputation_collect_task(params, operation="selected_update")
+
+
+def _start_reputation_collect_task(params, *, operation):
+    action_label = (
+        "所选店铺声誉更新"
+        if operation == "selected_update"
+        else "声誉数据补跑"
+    )
+
     with _reputation_collect_lock:
         if _reputation_collect_state.get("running"):
             return jsonify({
                 "status": "running",
                 "data": dict(_reputation_collect_state),
-                "message": "声誉数据采集正在运行中"
+                "message": "另一个声誉数据任务正在运行中"
             }), 409
 
         started_at = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
@@ -1310,15 +2617,30 @@ def api_collect_reputation():
             "started_at": started_at,
             "finished_at": "",
             "status": "running",
-            "message": "声誉数据采集已启动",
+            "message": f"{action_label}已启动：{params['target']}，并发 {params['max_workers']}",
+            "operation": operation,
+            "params": {
+                "shops": list(params["selected_shops"]),
+                "sites": list(params["selected_sites"]),
+                "max_workers": params["max_workers"],
+                "target": params["target"],
+            },
         })
 
-    task_thread = threading.Thread(target=run_reputation_collect_job, daemon=True)
+    task_thread = threading.Thread(
+        target=run_reputation_collect_job,
+        args=(
+            params["selected_shops"],
+            params["selected_sites"],
+            params["max_workers"],
+        ),
+        daemon=True,
+    )
     task_thread.start()
     return jsonify({
         "status": "success",
         "data": dict(_reputation_collect_state),
-        "message": "声誉数据采集已在后台启动"
+        "message": f"{action_label}已在后台启动"
     })
 
 
@@ -1332,11 +2654,354 @@ def api_collect_reputation_status():
         })
 
 
+@app.route('/api/collections/options', methods=['GET'])
+@login_required
+def api_collection_options():
+    try:
+        response = jsonify({
+            "status": "success",
+            "data": _collection_config_options(include_failures=True),
+        })
+        response.headers["Cache-Control"] = "no-store"
+        return response
+    except Exception as exc:
+        logging.error("读取采集店铺和站点失败：%s", exc)
+        return jsonify({
+            "status": "error",
+            "message": f"读取采集店铺和站点失败：{exc}",
+        }), 500
+
+
+@app.route('/api/funds/latest', methods=['GET'])
+@login_required
+def api_latest_funds():
+    try:
+        salesperson = str(request.args.get("salesperson") or "").strip()
+        response = jsonify({
+            "status": "success",
+            "data": db_get_latest_pago_info(salesperson),
+        })
+        response.headers["Cache-Control"] = "no-store"
+        return response
+    except Exception as e:
+        logging.error("Latest funds query failed: %s", e)
+        return jsonify({
+            "status": "error",
+            "message": f"Database error: {str(e)}",
+        }), 500
+
+
+@app.route('/api/funds/collect', methods=['POST'])
+@login_required
+def api_collect_funds():
+    global _fund_collect_stop_event
+    data = request.get_json(silent=True) or {}
+    all_shops = _parse_bool_param(data, "all_shops", False)
+    salesperson = str(data.get("salesperson") or "").strip()
+    max_workers = _parse_int_param(
+        data,
+        "max_workers",
+        DEFAULT_COLLECTION_MAX_WORKERS,
+        1,
+        10,
+    )
+    raw_window_ids = data.get("window_ids", [])
+    if not isinstance(raw_window_ids, list):
+        return jsonify({"status": "error", "message": "window_ids 必须是数组"}), 400
+    selected_window_ids = tuple(
+        dict.fromkeys(
+            str(value or "").strip()
+            for value in raw_window_ids
+            if str(value or "").strip()
+        )
+    )
+    legacy_window_id = str(data.get("window_id") or "").strip()
+    legacy_shop_name = str(data.get("shop_name") or "").strip()
+    if legacy_window_id and legacy_window_id not in selected_window_ids:
+        selected_window_ids += (legacy_window_id,)
+    if len(selected_window_ids) > 500:
+        return jsonify({"status": "error", "message": "单次最多选择 500 家店铺"}), 400
+
+    try:
+        configs = db_list_bit_browser_configs(include_ignored=False) or []
+    except Exception as e:
+        return jsonify({
+            "status": "error",
+            "message": f"读取店铺配置失败：{str(e)}",
+        }), 500
+    valid_configs = [
+        config
+        for config in configs
+        if str(config.get("window_id") or "").strip()
+        and str(config.get("shop_name") or "").strip()
+    ]
+    if salesperson:
+        valid_configs = [
+            config
+            for config in valid_configs
+            if (str(config.get("salesperson") or "").strip() or "未分配") == salesperson
+        ]
+    config_by_window = {
+        str(config.get("window_id") or "").strip(): config
+        for config in valid_configs
+    }
+    if not selected_window_ids and legacy_shop_name:
+        legacy_config = next(
+            (
+                config
+                for config in valid_configs
+                if str(config.get("shop_name") or "").strip() == legacy_shop_name
+            ),
+            None,
+        )
+        if legacy_config is not None:
+            selected_window_ids = (
+                str(legacy_config.get("window_id") or "").strip(),
+            )
+
+    if all_shops:
+        target_configs = valid_configs
+        selected_window_ids = ()
+    else:
+        if not selected_window_ids:
+            return jsonify({"status": "error", "message": "请至少勾选一家店铺"}), 400
+        unknown_ids = [window_id for window_id in selected_window_ids if window_id not in config_by_window]
+        if unknown_ids:
+            return jsonify({
+                "status": "error",
+                "message": "所选店铺不存在、已被忽略或不属于当前归属人",
+            }), 404
+        target_configs = [config_by_window[window_id] for window_id in selected_window_ids]
+
+    if not target_configs:
+        return jsonify({
+            "status": "error",
+            "message": "当前归属人没有可执行的有效店铺" if salesperson else "没有可执行的有效店铺",
+        }), 400
+
+    owner_label = f"归属人 {salesperson}的" if salesperson else ""
+    target = (
+        f"{owner_label}全部 {len(target_configs)} 家有效店铺"
+        if all_shops
+        else f"所选 {len(target_configs)} 家店铺"
+    )
+    with _fund_collect_lock:
+        if _fund_collect_state.get("running"):
+            return jsonify({
+                "status": "running",
+                "data": dict(_fund_collect_state),
+                "message": "资金数据采集正在运行中",
+            }), 409
+        stop_event = threading.Event()
+        _fund_collect_stop_event = stop_event
+        _fund_collect_state.update({
+            "running": True,
+            "started_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            "finished_at": "",
+            "status": "running",
+            "message": f"{target}资金数据采集已启动",
+            "scope": "all" if all_shops else "selected",
+            "target": target,
+            "salesperson": salesperson,
+            "target_count": len(target_configs),
+            "window_ids": list(selected_window_ids),
+            "collected_count": 0,
+        })
+        task_state = dict(_fund_collect_state)
+
+    task_thread = threading.Thread(
+        target=run_fund_collect_job,
+        kwargs={
+            "all_shops": all_shops,
+            "selected_window_ids": selected_window_ids,
+            "salesperson": salesperson,
+            "max_workers": max_workers,
+            "stop_event": stop_event,
+        },
+        daemon=True,
+    )
+    try:
+        task_thread.start()
+    except Exception:
+        with _fund_collect_lock:
+            if _fund_collect_stop_event is stop_event:
+                _fund_collect_stop_event = None
+            _fund_collect_state.update({
+                "running": False,
+                "finished_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                "status": "error",
+                "message": "资金数据采集启动失败",
+            })
+        raise
+    return jsonify({
+        "status": "success",
+        "data": task_state,
+        "message": f"{target}资金数据采集已在后台启动",
+    })
+
+
+@app.route('/api/funds/collect/stop', methods=['POST'])
+@login_required
+def api_stop_funds_collection():
+    with _fund_collect_lock:
+        if not _fund_collect_state.get("running") or _fund_collect_stop_event is None:
+            return jsonify({
+                "status": "error",
+                "data": dict(_fund_collect_state),
+                "message": "当前没有正在运行的资金采集任务",
+            }), 409
+        _fund_collect_stop_event.set()
+        _fund_collect_state.update({
+            "status": "stopping",
+            "message": "正在终止资金数据采集，已打开的窗口将在安全边界关闭",
+        })
+        state = dict(_fund_collect_state)
+    return jsonify({
+        "status": "success",
+        "data": state,
+        "message": "已发送终止指令",
+    })
+
+
+@app.route('/api/funds/collect/status', methods=['GET'])
+@login_required
+def api_collect_funds_status():
+    with _fund_collect_lock:
+        response = jsonify({
+            "status": "success",
+            "data": dict(_fund_collect_state),
+        })
+    response.headers["Cache-Control"] = "no-store"
+    return response
+
+
+@app.route('/api/order-print/start', methods=['POST'])
+@login_required
+def api_start_order_print():
+    global _order_print_stop_event
+    data = request.get_json(silent=True) or {}
+    try:
+        params = build_order_print_params(data)
+    except ValueError as exc:
+        return jsonify({"status": "error", "message": str(exc)}), 400
+    except Exception as exc:
+        logging.error("读取订单打印范围失败：%s", exc)
+        return jsonify({"status": "error", "message": f"读取店铺配置失败：{exc}"}), 500
+
+    with _order_print_lock:
+        if _order_print_state.get("running"):
+            return jsonify({
+                "status": "running",
+                "data": _order_print_snapshot(),
+                "message": "订单打印任务正在运行",
+            }), 409
+        task_lock = bit_print.acquire_order_print_lock(
+            owner="bit_interface.py",
+            mode="once",
+        )
+        if task_lock is None:
+            owner = bit_print.get_order_print_lock_owner()
+            return jsonify({
+                "status": "running",
+                "data": {**_order_print_snapshot(), "lock_owner": owner},
+                "message": "订单打印已在其他进程中运行",
+            }), 409
+
+        stop_event = threading.Event()
+        _order_print_stop_event = stop_event
+        _order_print_logs.clear()
+        _order_print_state.update({
+            "running": True,
+            "started_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            "finished_at": "",
+            "status": "running",
+            "message": f"{params['target']} 订单打印已启动",
+            "params": params,
+            "printed": 0,
+            "no_orders": 0,
+            "failed": 0,
+            "skipped": 0,
+            "results": [],
+        })
+        task_state = _order_print_snapshot()
+
+    task_thread = threading.Thread(
+        target=run_order_print_job,
+        args=(params, task_lock, stop_event),
+        daemon=True,
+    )
+    try:
+        task_thread.start()
+    except Exception:
+        task_lock.release()
+        with _order_print_lock:
+            if _order_print_stop_event is stop_event:
+                _order_print_stop_event = None
+            _order_print_state.update({
+                "running": False,
+                "finished_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                "status": "error",
+                "message": "订单打印任务启动失败",
+            })
+        raise
+    return jsonify({
+        "status": "success",
+        "data": task_state,
+        "message": "订单打印已在后台启动",
+    })
+
+
+@app.route('/api/order-print/stop', methods=['POST'])
+@login_required
+def api_stop_order_print():
+    with _order_print_lock:
+        if not _order_print_state.get("running") or _order_print_stop_event is None:
+            return jsonify({
+                "status": "error",
+                "data": _order_print_snapshot(),
+                "message": "当前没有正在运行的订单打印任务",
+            }), 409
+        _order_print_stop_event.set()
+        _order_print_state.update({
+            "status": "stopping",
+            "message": "正在停止，当前页面操作完成后会关闭窗口",
+        })
+        state = _order_print_snapshot()
+    _append_order_print_log(f"{get_now_time()} 已收到停止订单打印请求")
+    return jsonify({
+        "status": "success",
+        "data": state,
+        "message": "已发送停止指令",
+    })
+
+
+@app.route('/api/order-print/status', methods=['GET'])
+@login_required
+def api_order_print_status():
+    _refresh_order_print_site_last_runs()
+    state = _order_print_snapshot()
+    external_owner = bit_print.get_order_print_lock_owner()
+    if external_owner and not state.get("running"):
+        state.update({
+            "running": True,
+            "status": "running",
+            "message": "订单打印正在其他进程中运行",
+            "started_at": external_owner.get("acquired_at", ""),
+            "lock_owner": external_owner,
+        })
+    response = jsonify({"status": "success", "data": state})
+    response.headers["Cache-Control"] = "no-store"
+    return response
+
+
 @app.route('/api/tasks/daily/start', methods=['POST'])
 @login_required
 def api_start_daily_task():
     data = request.get_json(silent=True) or {}
-    params = build_daily_task_params(data)
+    try:
+        params = build_daily_task_params(data)
+    except ValueError as exc:
+        return jsonify({"status": "error", "message": str(exc)}), 400
     with _daily_task_lock:
         if _daily_task_state.get("running"):
             return jsonify({
@@ -1406,6 +3071,175 @@ def api_daily_task_status():
         })
 
 
+@app.route('/api/risk-check/categories', methods=['GET'])
+@login_required
+def api_risk_check_categories():
+    try:
+        return jsonify({
+            "status": "success",
+            "data": db_list_zying_risk_categories(),
+        })
+    except Exception as exc:
+        logging.error("读取智赢侵权检测分类失败：%s", exc)
+        return jsonify({"status": "error", "message": str(exc)}), 500
+
+
+@app.route('/api/risk-check/results', methods=['GET'])
+@login_required
+def api_risk_check_results():
+    try:
+        params = _risk_result_query_params(request.args)
+        return jsonify({
+            "status": "success",
+            "data": db_get_zying_risk_results(**params),
+        })
+    except ValueError as exc:
+        return jsonify({"status": "error", "message": str(exc)}), 400
+    except Exception as exc:
+        logging.error("读取智赢侵权检测结果失败：%s", exc)
+        return jsonify({"status": "error", "message": str(exc)}), 500
+
+
+@app.route('/api/risk-check/results/export', methods=['GET'])
+@login_required
+def api_export_risk_check_results():
+    try:
+        params = _risk_result_query_params(request.args, export=True)
+        data = db_get_zying_risk_results(**params) or {}
+        rows = data.get("rows") or []
+
+        wb = Workbook()
+        ws = wb.active
+        ws.title = "侵权检测结果"
+        columns = [
+            ("数据行", "row_id"),
+            ("产品编号", "product_id"),
+            ("标题", "title"),
+            ("智赢分类编号", "zying_category_id"),
+            ("智赢产品分类", "zying_category"),
+            ("产品分类", "product_category"),
+            ("风险级别", "risk_level"),
+            ("侵权关键词/品牌", "keywords"),
+            ("主图链接", "main_image_url"),
+            ("采集时间", "collected_at"),
+            ("提交时间", "submitted_at"),
+        ]
+        ws.append([label for label, _ in columns])
+        risk_labels = {
+            "0": "0 - 无可疑",
+            "1": "1 - 疑似/需复核",
+            "2": "2 - 侵权",
+        }
+        for row in rows:
+            values = []
+            for _, key in columns:
+                value = row.get(key, "")
+                if key == "risk_level":
+                    value = risk_labels.get(str(value or ""), "未检测")
+                values.append(value)
+            ws.append(values)
+
+        header_fill = PatternFill("solid", fgColor="D9EAF7")
+        header_font = Font(bold=True, color="1F2937")
+        for cell in ws[1]:
+            cell.fill = header_fill
+            cell.font = header_font
+            cell.alignment = Alignment(horizontal="center", vertical="center")
+        for column_cells in ws.columns:
+            max_length = 0
+            column_letter = column_cells[0].column_letter
+            for cell in column_cells:
+                value = "" if cell.value is None else str(cell.value)
+                max_length = max(max_length, len(value))
+                cell.alignment = Alignment(vertical="top", wrap_text=True)
+            ws.column_dimensions[column_letter].width = min(max(max_length + 2, 10), 48)
+        ws.freeze_panes = "A2"
+        ws.auto_filter.ref = ws.dimensions
+
+        output = BytesIO()
+        wb.save(output)
+        output.seek(0)
+        filename = f"侵权检测结果_{datetime.now().strftime('%Y%m%d%H%M%S')}.xlsx"
+        response = send_file(
+            output,
+            mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            as_attachment=True,
+            download_name=filename,
+        )
+        response.headers["Content-Disposition"] = (
+            f"attachment; filename*=UTF-8''{quote(filename)}"
+        )
+        return response
+    except ValueError as exc:
+        return jsonify({"status": "error", "message": str(exc)}), 400
+    except Exception as exc:
+        logging.error("导出智赢侵权检测结果失败：%s", exc)
+        return jsonify({"status": "error", "message": str(exc)}), 500
+
+
+@app.route('/api/risk-check/start', methods=['POST'])
+@login_required
+def api_start_risk_check():
+    params = build_risk_check_params(request.get_json(silent=True) or {})
+    if not _risk_check_lock.acquire(blocking=False):
+        with _risk_check_state_lock:
+            data = dict(_risk_check_state)
+        return jsonify({
+            "status": "error",
+            "message": "侵权检测任务正在运行",
+            "data": data,
+        }), 409
+
+    with _risk_check_state_lock:
+        _risk_check_logs.clear()
+        _risk_check_state.update(
+            {
+                "running": True,
+                "started_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                "finished_at": "",
+                "status": "running",
+                "message": "正在读取商品并进行 AI 侵权检测",
+                "params": dict(params),
+                "summary": {},
+            }
+        )
+        _append_risk_check_log("侵权检测任务已启动：当前仅识别商品标题，主图 Logo 暂不检测")
+        data = {**dict(_risk_check_state), "logs": list(_risk_check_logs)}
+    try:
+        threading.Thread(
+            target=run_risk_check_job,
+            args=(params, _risk_check_lock),
+            daemon=True,
+            name="zying-risk-check",
+        ).start()
+    except Exception:
+        _risk_check_lock.release()
+        with _risk_check_state_lock:
+            _risk_check_state.update(
+                {
+                    "running": False,
+                    "finished_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                    "status": "error",
+                    "message": "侵权检测后台线程启动失败",
+                }
+            )
+        raise
+    return jsonify({"status": "success", "data": data})
+
+
+@app.route('/api/risk-check/status', methods=['GET'])
+@login_required
+def api_risk_check_status():
+    with _risk_check_state_lock:
+        data = {
+            **dict(_risk_check_state),
+            "params": dict(_risk_check_state.get("params") or {}),
+            "summary": dict(_risk_check_state.get("summary") or {}),
+            "logs": list(_risk_check_logs),
+        }
+    return jsonify({"status": "success", "data": data})
+
+
 @app.route('/api/db/task-records', methods=['POST'])
 @internal_api_required
 def api_db_insert_task_records():
@@ -1416,6 +3250,18 @@ def api_db_insert_task_records():
     records = data.get("records") or []
     db_insert_task_record(records)
     return jsonify({"status": "success", "data": {"count": len(records)}})
+
+
+@app.route('/api/db/task-records/order-print/latest', methods=['GET'])
+@internal_api_required
+def api_db_latest_order_print_records():
+    blocked = reject_db_api_client_mode()
+    if blocked:
+        return blocked
+    return jsonify({
+        "status": "success",
+        "data": db_get_latest_order_print_records(),
+    })
 
 
 @app.route('/api/db/browser-configs', methods=['GET'])
@@ -1483,8 +3329,13 @@ def api_db_insert_reputation():
         return blocked
     data = request.get_json(silent=True) or {}
     rows = data.get("rows") or []
-    db_inset_reputation_info(rows)
-    return jsonify({"status": "success", "data": {"count": len(rows)}})
+    replace_targets = data.get("replace_targets") or []
+    count = db_inset_reputation_info(
+        rows,
+        merge_latest=bool(data.get("merge_latest", False)),
+        replace_targets=replace_targets,
+    )
+    return jsonify({"status": "success", "data": {"count": count}})
 
 
 @app.route('/api/db/infractions/bulk', methods=['POST'])
@@ -1495,8 +3346,13 @@ def api_db_insert_infractions():
         return blocked
     data = request.get_json(silent=True) or {}
     rows = data.get("rows") or []
-    db_inset_infraction_info(rows)
-    return jsonify({"status": "success", "data": {"count": len(rows)}})
+    replace_targets = data.get("replace_targets") or []
+    count = db_inset_infraction_info(
+        rows,
+        merge_latest=bool(data.get("merge_latest", False)),
+        replace_targets=replace_targets,
+    )
+    return jsonify({"status": "success", "data": {"count": count}})
 
 
 @app.route('/api/db/delays/bulk', methods=['POST'])
@@ -1533,6 +3389,63 @@ def api_db_insert_zying_products():
     rows = data.get("rows") or []
     count = db_insert_zying_product_info(rows)
     return jsonify({"status": "success", "data": {"count": count}})
+
+
+@app.route('/api/db/zying-risk/candidates', methods=['GET'])
+@internal_api_required
+def api_db_zying_risk_candidates():
+    blocked = reject_db_api_client_mode()
+    if blocked:
+        return blocked
+    rows = db_get_zying_risk_candidates(
+        hours=_parse_int_param(request.args, "hours", 24, 0, 87600),
+        limit=_parse_int_param(request.args, "limit", 0, 0, 50000),
+        zying_category=str(request.args.get("category") or "").strip() or None,
+        include_checked=_parse_bool_param(request.args, "include_checked", False),
+    )
+    return jsonify({"status": "success", "data": rows})
+
+
+@app.route('/api/db/zying-risk/bulk', methods=['POST'])
+@internal_api_required
+def api_db_update_zying_risks():
+    blocked = reject_db_api_client_mode()
+    if blocked:
+        return blocked
+    data = request.get_json(silent=True) or {}
+    results = data.get("results") or []
+    if not isinstance(results, list):
+        return jsonify({"status": "error", "message": "results must be an array"}), 422
+    count = db_update_zying_product_risks(results)
+    return jsonify({"status": "success", "data": {"count": count}})
+
+
+@app.route('/api/db/zying-risk/categories', methods=['GET'])
+@internal_api_required
+def api_db_zying_risk_categories():
+    blocked = reject_db_api_client_mode()
+    if blocked:
+        return blocked
+    return jsonify({"status": "success", "data": db_list_zying_risk_categories()})
+
+
+@app.route('/api/db/zying-risk/results', methods=['GET'])
+@internal_api_required
+def api_db_zying_risk_results():
+    blocked = reject_db_api_client_mode()
+    if blocked:
+        return blocked
+    try:
+        params = _risk_result_query_params(
+            request.args,
+            export=str(request.args.get("limit") or "").strip() == "0",
+        )
+    except ValueError as exc:
+        return jsonify({"status": "error", "message": str(exc)}), 400
+    return jsonify({
+        "status": "success",
+        "data": db_get_zying_risk_results(**params),
+    })
 
 
 @app.route('/api/db/orders/bulk', methods=['POST'])
@@ -1626,6 +3539,19 @@ def api_db_latest_reputation():
     return jsonify({"status": "success", "data": db_get_latest_reputation_info()})
 
 
+@app.route('/api/db/pago/latest', methods=['GET'])
+@internal_api_required
+def api_db_latest_pago():
+    blocked = reject_db_api_client_mode()
+    if blocked:
+        return blocked
+    salesperson = str(request.args.get("salesperson") or "").strip()
+    return jsonify({
+        "status": "success",
+        "data": db_get_latest_pago_info(salesperson),
+    })
+
+
 @app.route('/api/db/window-anomalies', methods=['POST'])
 @internal_api_required
 def api_db_upsert_window_anomaly():
@@ -1685,21 +3611,104 @@ def api_window_anomalies():
     try:
         active_only = str(request.args.get("active_only", "1")).strip().lower() not in ("0", "false", "no")
         limit = request.args.get("limit", 500)
-        return jsonify({
+        anomaly_data = filter_human_verification_anomalies(
+            db_get_window_anomalies(active_only, limit)
+        )
+        response = jsonify({
             "status": "success",
-            "data": db_get_window_anomalies(active_only, limit),
+            "data": enrich_window_anomaly_salespersons(anomaly_data),
         })
+        response.headers["Cache-Control"] = "no-store"
+        return response
     except Exception as e:
         logging.error("Window anomalies query failed: %s", e)
         return jsonify({"status": "error", "message": f"Database error: {str(e)}"}), 500
+
+
+def filter_human_verification_anomalies(anomaly_data):
+    """店铺状态页只展示明确需要人工处理的人机验证。"""
+    data = dict(anomaly_data or {})
+    rows = [
+        dict(row)
+        for row in (data.get("rows") or [])
+        if is_human_verification_result(row)
+    ]
+    data["rows"] = rows
+    data["total"] = len(rows)
+    return data
+
+
+def enrich_window_anomaly_salespersons(anomaly_data):
+    """按窗口和店铺配置补充归属人与邮箱，不修改历史异常记录。"""
+    data = dict(anomaly_data or {})
+    rows = [dict(row) for row in (data.get("rows") or [])]
+    data["rows"] = rows
+    if not rows:
+        return data
+
+    try:
+        configs = db_list_bit_browser_configs(include_ignored=True) or []
+    except Exception as exc:
+        logging.warning("读取店铺归属人和邮箱失败：%s", exc)
+        return data
+
+    exact_owners = {}
+    window_owners = {}
+    exact_emails = {}
+    window_emails = {}
+
+    for config in configs:
+        window_id = str(config.get("window_id") or "").strip()
+        shop_name = str(config.get("shop_name") or "").strip()
+        salesperson = str(
+            config.get("salesperson") or config.get("业务员") or ""
+        ).strip()
+        email = str(config.get("email") or config.get("邮箱") or "").strip()
+        if not window_id:
+            continue
+        if salesperson:
+            exact_owners.setdefault((window_id, shop_name), salesperson)
+            window_owners.setdefault(window_id, salesperson)
+        if email:
+            exact_emails.setdefault((window_id, shop_name), email)
+            window_emails.setdefault(window_id, email)
+
+    for row in rows:
+        window_id = str(row.get("window_id") or "").strip()
+        shop_name = str(row.get("window_name") or "").strip()
+        row["salesperson"] = str(
+            row.get("salesperson")
+            or row.get("业务员")
+            or exact_owners.get((window_id, shop_name))
+            or window_owners.get(window_id)
+            or ""
+        ).strip()
+        row["email"] = str(
+            row.get("email")
+            or row.get("邮箱")
+            or exact_emails.get((window_id, shop_name))
+            or window_emails.get(window_id)
+            or ""
+        ).strip()
+    return data
 
 
 @app.route('/api/window-anomalies/<window_id>/resolve', methods=['POST'])
 @login_required
 def api_resolve_window_anomaly(window_id):
     try:
+        stopped_task_ids = request_mercado_login_window_tasks_stop(window_id)
         affected = db_resolve_window_anomaly(window_id)
-        return jsonify({"status": "success", "data": {"affected": affected}})
+        return jsonify(
+            {
+                "status": "success",
+                "data": {
+                    "affected": affected,
+                    "stopped_count": len(stopped_task_ids),
+                    "stopped_task_ids": stopped_task_ids,
+                },
+            }
+        )
     except Exception as e:
         logging.error("Resolve window anomaly failed: %s", e)
         return jsonify({"status": "error", "message": f"Database error: {str(e)}"}), 500
@@ -1708,18 +3717,115 @@ def api_resolve_window_anomaly(window_id):
 @app.route('/api/window-anomalies/mercado-login/status', methods=['GET'])
 @login_required
 def api_mercado_login_console_status():
-    return jsonify({"status": "success", "data": _mercado_login_task_snapshot()})
+    response = jsonify(
+        {"status": "success", "data": _mercado_login_task_snapshot()}
+    )
+    response.headers["Cache-Control"] = "no-store"
+    return response
+
+
+@app.route('/api/window-anomalies/mercado-login/stop', methods=['POST'])
+@login_required
+def api_stop_mercado_login_console():
+    data = request.get_json(silent=True) or {}
+    task_id = normalize_appeal_task_id(data.get("task_id"))
+    if not task_id:
+        return jsonify({"status": "error", "message": "缺少有效任务编号"}), 400
+    stopped, task_state = request_mercado_login_task_stop(task_id)
+    if not stopped:
+        return jsonify(
+            {
+                "status": "error",
+                "data": task_state,
+                "message": "登录任务已结束或不存在",
+            }
+        ), 404
+    return jsonify(
+        {
+            "status": "success",
+            "data": task_state,
+            "message": "已提交停止请求，正在关闭任务进程和浏览器窗口",
+        }
+    )
 
 
 @app.route('/api/window-anomalies/mercado-login/start', methods=['POST'])
 @login_required
 def api_start_mercado_login_console():
     data = request.get_json(silent=True) or {}
+    worker_count = _parse_int_param(
+        data,
+        "workers",
+        DEFAULT_MERCADO_LOGIN_WORKERS,
+        1,
+        MAX_MERCADO_LOGIN_WORKERS,
+    )
     window_id = str(data.get("window_id") or "").strip()
     shop_name = ""
-    if window_id:
+    selected_shops = []
+    if "window_ids" in data:
+        raw_window_ids = data.get("window_ids")
+        if not isinstance(raw_window_ids, list):
+            return jsonify(
+                {"status": "error", "message": "window_ids 必须是窗口 ID 数组"}
+            ), 400
+        window_ids = list(
+            dict.fromkeys(
+                str(item or "").strip()
+                for item in raw_window_ids
+                if str(item or "").strip()
+            )
+        )
+        if not window_ids:
+            return jsonify(
+                {"status": "error", "message": "请至少选择一个待处理人机验证店铺"}
+            ), 400
+        if len(window_ids) > 500:
+            return jsonify(
+                {"status": "error", "message": "单次最多选择 500 个待处理人机验证店铺"}
+            ), 400
         try:
-            anomaly_data = db_get_window_anomalies(active_only=True, limit=1000) or {}
+            anomaly_data = filter_human_verification_anomalies(
+                db_get_window_anomalies(active_only=True, limit=1000) or {}
+            )
+        except Exception as exc:
+            return jsonify(
+                {"status": "error", "message": f"读取店铺状态失败：{exc}"}
+            ), 500
+        anomaly_by_window_id = {
+            str(row.get("window_id") or "").strip(): row
+            for row in (anomaly_data.get("rows") or [])
+            if str(row.get("window_id") or "").strip()
+        }
+        missing_window_ids = [
+            item for item in window_ids if item not in anomaly_by_window_id
+        ]
+        if missing_window_ids:
+            return jsonify(
+                {
+                    "status": "error",
+                    "message": "部分店铺状态不存在或已恢复，请刷新后重试："
+                    + "、".join(missing_window_ids),
+                }
+            ), 404
+        selected_shops = [
+            {
+                "window_id": item,
+                "window_name": str(
+                    anomaly_by_window_id[item].get("window_name") or ""
+                ).strip(),
+            }
+            for item in window_ids
+        ]
+        if any(not shop["window_name"] for shop in selected_shops):
+            return jsonify(
+                {"status": "error", "message": "部分店铺状态记录缺少店铺名"}
+            ), 422
+    elif window_id:
+        try:
+            anomaly_data = filter_human_verification_anomalies(
+                db_get_window_anomalies(active_only=True, limit=1000) or {}
+            )
             anomaly = next(
                 (
                     row
@@ -1738,17 +3844,55 @@ def api_start_mercado_login_console():
         if not shop_name:
             return jsonify({"status": "error", "message": "店铺状态记录缺少店铺名"}), 422
 
-    started, task_state = start_mercado_login_console_job(
-        shop_name=shop_name,
-        window_id=window_id,
-        workers=_parse_int_param(data, "workers", 3, 1, 3),
-    )
+    if selected_shops:
+        started, task_state = start_mercado_login_console_job(
+            selected_shops=selected_shops,
+            workers=worker_count,
+        )
+        if not started:
+            return jsonify(
+                {
+                    "status": "running",
+                    "data": task_state,
+                    "message": task_state.get("message")
+                    or "所选店铺已有自动登录任务正在运行",
+                }
+            ), 409
+        started_task_id = str(task_state.get("started_task_id") or "").strip()
+        actual_worker_count = min(worker_count, len(selected_shops))
+        task_state.update(
+            {
+                "started_count": len(selected_shops),
+                "started_task_ids": [started_task_id] if started_task_id else [],
+                "failed_count": 0,
+                "failed_shops": [],
+                "workers": actual_worker_count,
+            }
+        )
+        return jsonify(
+            {
+                "status": "success",
+                "data": task_state,
+                "message": (
+                    f"已启动 {len(selected_shops)} 家店铺的重新检测，"
+                    f"并发进程数：{actual_worker_count}"
+                ),
+            }
+        )
+
+    job_args = {
+        "shop_name": shop_name,
+        "window_id": window_id,
+        "workers": worker_count,
+    }
+    started, task_state = start_mercado_login_console_job(**job_args)
     if not started:
         return jsonify(
             {
                 "status": "running",
                 "data": task_state,
-                "message": "bit_mercado_login 正在运行，请等待完成后再重新启动",
+                "message": task_state.get("message")
+                or "所选店铺已有自动登录任务正在运行",
             }
         ), 409
     return jsonify(

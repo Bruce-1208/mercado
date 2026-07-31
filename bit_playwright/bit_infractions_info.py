@@ -12,6 +12,10 @@ from bit.bit_collection_control import (
     DEFAULT_COLLECTION_MAX_WORKERS,
     DEFAULT_RETRY_LOCK_WAIT_SECONDS,
     env_float,
+    env_int,
+    failed_sites,
+    filter_config_rows,
+    merge_site_retry_outcome,
     outcome_failed,
     outcome_has_marker,
     outcome_is_permanent_failure,
@@ -22,10 +26,23 @@ from bit.bit_collection_control import (
     write_unreadable_site_report,
 )
 from bit.bit_config import list_config_rows
+from bit.bit_mercado_limit import (
+    get_mercado_backend_status,
+    is_mercado_logged_out_state,
+    is_mercado_rate_limited_text,
+)
+from bit.bit_mercado_login import (
+    is_human_verification_result,
+    record_human_verification_anomaly,
+)
 from bit.bit_runtime_lock import create_window_lease
 from bit.bit_db_api import insert_task_record, inset_infraction_info
 from bit.bit_send_mail import send_info
 from bit.bit_utils import get_now_time
+from bit.mercado_click_delay import install_playwright_click_delay
+
+
+install_playwright_click_delay()
 
 
 INFRACTIONS_URL = "https://global-selling.mercadolibre.com/noindex/pppi/infractions?tab=detections&offset=0"
@@ -95,38 +112,6 @@ class BitBrowserWindowError(RuntimeError):
     """比特浏览器窗口配置无效或无法打开。"""
 
 
-RATE_LIMIT_MARKERS = (
-    "429",
-    "too many requests",
-    "rate limit",
-    "request limit",
-    "请求太过频繁",
-    "请求过于频繁",
-    "每秒最多可以发起",
-    "访问过于频繁",
-    "demasiadas solicitudes",
-    "muitas solicitações",
-    "hubo un error accediendo a esta página",
-    "hubo un error accediendo a esta pagina",
-)
-SPANISH_IP_SWITCH_MARKERS = (
-    "hubo un error accediendo a esta página",
-    "hubo un error accediendo a esta pagina",
-)
-LOGIN_URL_MARKERS = ("/login/", "/lgz/", "/legacy-user")
-LOGIN_TEXT_MARKERS = (
-    "fill out your e-mail address to log in",
-    "fill out your email address to log in",
-    "iniciar sesión",
-    "iniciar sesion",
-    "iniciar sessão",
-    "iniciar sessao",
-    "登录您的账户",
-    "登录你的账户",
-    "登录账号",
-    "请登录",
-    "填写您的电子邮件地址以登录",
-)
 RIGHTS_HOLDER_LABELS = (
     "Reported by rights holders",
     "Reported by rights holder",
@@ -148,13 +133,11 @@ DETECTED_LABELS = (
 
 
 def _is_rate_limited_text(value):
-    text = str(value or "").lower()
-    return any(marker in text for marker in RATE_LIMIT_MARKERS)
+    return is_mercado_rate_limited_text(value)
 
 
 def _is_spanish_ip_switch_text(value):
-    text = str(value or "").lower()
-    return any(marker in text for marker in SPANISH_IP_SWITCH_MARKERS)
+    return is_mercado_rate_limited_text(value)
 
 
 def _get_page_text(page):
@@ -165,10 +148,12 @@ def _get_page_text(page):
 
 
 def _is_login_page(current_url, body_text):
-    url = str(current_url or "").casefold()
-    text = str(body_text or "").casefold()
-    return any(marker in url for marker in LOGIN_URL_MARKERS) or any(
-        marker in text for marker in LOGIN_TEXT_MARKERS
+    return is_mercado_logged_out_state(
+        {
+            "current_url": current_url,
+            "page_text": body_text,
+            "title": "",
+        }
     )
 
 
@@ -176,10 +161,21 @@ def _raise_if_page_unavailable(page, context="侵权页面"):
     """识别限频和登录跳转，避免把登录页误判为“0 条侵权”。"""
     body_text = _get_page_text(page)
     current_url = page.url or ""
-    if _is_rate_limited_text(f"{current_url}\n{body_text}"):
-        raise MercadoRateLimitError(f"Mercado 页面限频：{current_url} {body_text[:300]}")
-    if _is_login_page(current_url, body_text):
+    backend_status = get_mercado_backend_status(
+        state={
+            "current_url": current_url,
+            "page_text": body_text,
+            "title": "",
+        }
+    )
+    if is_human_verification_result(body_text):
+        raise MercadoAuthenticationError(
+            f"{context}检测到人机验证，需要人工处理：{body_text[:300]}"
+        )
+    if backend_status == "logged_out":
         raise MercadoAuthenticationError(f"{context}登录态失效，已跳转登录页：{current_url}")
+    if backend_status == "rate_limited":
+        raise MercadoRateLimitError(f"Mercado 页面限频：{current_url} {body_text[:300]}")
     return body_text
 
 
@@ -278,7 +274,9 @@ def _split_sites(value):
 def _failure_status(exc):
     text = re.sub(r"\s+", " ", str(exc or "")).strip()
     lower = text.casefold()
-    if isinstance(exc, MercadoAuthenticationError) or _is_login_page("", text):
+    if is_human_verification_result(exc):
+        reason = "需要人机验证"
+    elif isinstance(exc, MercadoAuthenticationError) or _is_login_page("", text):
         reason = "登录失效"
     elif isinstance(exc, MercadoRateLimitError) or _is_rate_limited_text(text):
         reason = "访问限频"
@@ -392,8 +390,6 @@ def _wait_infractions_ready(page, timeout=30000):
 def _safe_goto_infractions(page, url, timeout=60000):
     try:
         response = page.goto(url, wait_until="domcontentloaded", timeout=timeout)
-        if response is not None and response.status == 429:
-            raise MercadoRateLimitError(f"Mercado 页面返回 HTTP 429：{url}")
         if response is not None and response.status in (401, 403):
             raise MercadoAuthenticationError(
                 f"Mercado 页面返回 HTTP {response.status}：{url}"
@@ -415,6 +411,17 @@ def _safe_goto_infractions(page, url, timeout=60000):
 
 
 def _current_infraction_type(page):
+    try:
+        selected_tab = page.evaluate(
+            """() => window.__PRELOADED_STATE__?.body?.container?.selectedTab || ''"""
+        )
+    except Exception:
+        selected_tab = ""
+    if selected_tab == "denounces":
+        return "权利人"
+    if selected_tab == "detections":
+        return "侵权"
+
     current_url = page.url or ""
     match = re.search(r"[?&]tab=([^&]+)", current_url)
     current_tab = match.group(1) if match else ""
@@ -423,6 +430,20 @@ def _current_infraction_type(page):
     if current_tab == "detections":
         return "侵权"
     return "侵权"
+
+
+def _infraction_type_total(page, infraction_type):
+    field = "denouncesTotal" if infraction_type == "权利人" else "detectionsTotal"
+    try:
+        value = page.evaluate(
+            """field => window.__PRELOADED_STATE__?.body?.container?.[field]""",
+            field,
+        )
+        return int(value) if value is not None else None
+    except (TypeError, ValueError):
+        return None
+    except Exception:
+        return None
 
 
 def _goto_infractions_type(page, infraction_type):
@@ -624,6 +645,7 @@ def _collect_current_infractions_tab(page, name, site, infraction_type):
     infractions_list = []
     seen_ids = set()
     page_no = 1
+    expected_total = _infraction_type_total(page, infraction_type)
     while True:
         _validate_infractions_page(page)
         page_rows = _read_current_infractions_page(page, name, site, infraction_type)
@@ -648,6 +670,11 @@ def _collect_current_infractions_tab(page, name, site, infraction_type):
             break
         page_no += 1
 
+    if expected_total is not None and len(infractions_list) < expected_total:
+        raise MercadoPageStructureError(
+            f"{name}{site}{infraction_type}预计 {expected_total} 条，"
+            f"实际只完整读取 {len(infractions_list)} 条"
+        )
     return infractions_list
 
 
@@ -662,14 +689,13 @@ def _open_rights_holder_report_tab(page):
             return style && style.visibility !== 'hidden' && style.display !== 'none' &&
               rect.width > 0 && rect.height > 0;
           };
-          const nodes = [...document.querySelectorAll('a, button, [role="tab"], li, span, div')]
+          const nodes = [...document.querySelectorAll('a, button, [role="tab"]')]
             .filter((el) => {
               const text = (el.textContent || '').toLocaleLowerCase();
               return isVisible(el) && normalizedTargets.some((target) => text.includes(target));
             });
           if (!nodes.length) return false;
-          const node = nodes.find((el) => ['A', 'BUTTON'].includes(el.tagName)) || nodes[0];
-          const clickable = node.closest('a, button, [role="tab"]') || node;
+          const clickable = nodes[0];
           clickable.scrollIntoView({block: 'center', inline: 'center'});
           clickable.click();
           return true;
@@ -700,14 +726,13 @@ def _open_detected_report_tab(page):
             return style && style.visibility !== 'hidden' && style.display !== 'none' &&
               rect.width > 0 && rect.height > 0;
           };
-          const nodes = [...document.querySelectorAll('a, button, [role="tab"], li, span, div')]
+          const nodes = [...document.querySelectorAll('a, button, [role="tab"]')]
             .filter((el) => {
               const text = (el.textContent || '').toLocaleLowerCase();
               return isVisible(el) && normalizedTexts.some((target) => text.includes(target));
             });
           if (!nodes.length) return false;
-          const node = nodes.find((el) => ['A', 'BUTTON'].includes(el.tagName)) || nodes[0];
-          const clickable = node.closest('a, button, [role="tab"]') || node;
+          const clickable = nodes[0];
           clickable.scrollIntoView({block: 'center', inline: 'center'});
           clickable.click();
           return true;
@@ -730,8 +755,9 @@ def _open_detected_report_tab(page):
 def _collect_type_once(page, name, site, infraction_type, collected_types):
     actual_type = _current_infraction_type(page)
     if actual_type != infraction_type:
-        print(f"当前实际标签是{actual_type}，跳过按{infraction_type}采集")
-        return []
+        raise MercadoPageStructureError(
+            f"{name}{site}请求采集{infraction_type}，页面实际标签为{actual_type}"
+        )
     if actual_type in collected_types:
         print(f"{name}{site}{actual_type}已采集，跳过重复采集")
         return []
@@ -839,7 +865,100 @@ def _connect_bitbrowser_with_playwright(playwright, open_result):
     return browser, page
 
 
-def get_infractions_info(window_id, name, site, isSwitch=1, batch_control=False):
+def _collect_site_infractions(
+    page,
+    name,
+    site,
+    switch_site=True,
+    include_rights_holder=True,
+):
+    """在已连接的同一 BitBrowser 页面中采集一个站点。
+
+    ``include_rights_holder=False`` 时只读取 detections/infringements，
+    不打开 denounces/reports 权利人举报标签。
+    """
+    _safe_goto_infractions(page, INFRACTIONS_URL)
+    time.sleep(5)
+    _validate_infractions_page(page)
+    if switch_site:
+        _switch_site_if_needed(page, name, site)
+        _validate_infractions_page(page)
+
+    infractions_list = []
+    collected_types = set()
+    current_type = _current_infraction_type(page)
+    if not include_rights_holder and current_type != "侵权":
+        _goto_infractions_type(page, "侵权")
+        current_type = _current_infraction_type(page)
+        if current_type != "侵权":
+            raise MercadoPageStructureError(
+                f"{name}{site}无法打开 infringements 标签"
+            )
+    print(get_now_time() + name + site + f"当前实际侵权标签: {current_type}")
+    infractions_list.extend(
+        _collect_type_once(page, name, site, current_type, collected_types)
+    )
+
+    if "侵权" not in collected_types:
+        detected_total = _infraction_type_total(page, "侵权")
+        if detected_total == 0:
+            collected_types.add("侵权")
+            print(get_now_time() + name + site + "普通侵权报告为 0 条")
+        else:
+            print(get_now_time() + name + site + "尝试切换到普通侵权报告")
+            opened = _open_detected_report_tab(page)
+            if not opened or _current_infraction_type(page) != "侵权":
+                _goto_infractions_type(page, "侵权")
+            if _current_infraction_type(page) != "侵权":
+                detected_total = _infraction_type_total(page, "侵权")
+                if detected_total == 0:
+                    collected_types.add("侵权")
+                    print(get_now_time() + name + site + "普通侵权报告为 0 条")
+                else:
+                    raise MercadoPageStructureError(
+                        f"{name}{site}无法打开普通侵权报告标签"
+                    )
+            if "侵权" not in collected_types:
+                infractions_list.extend(
+                    _collect_type_once(page, name, site, "侵权", collected_types)
+                )
+
+    if include_rights_holder and "权利人" not in collected_types:
+        rights_total = _infraction_type_total(page, "权利人")
+        if rights_total == 0:
+            collected_types.add("权利人")
+            print(get_now_time() + name + site + "权利人侵权报告为 0 条")
+        else:
+            opened = _open_rights_holder_report_tab(page)
+            if not opened or _current_infraction_type(page) != "权利人":
+                _goto_infractions_type(page, "权利人")
+            if _current_infraction_type(page) != "权利人":
+                rights_total = _infraction_type_total(page, "权利人")
+                if rights_total == 0:
+                    collected_types.add("权利人")
+                    print(get_now_time() + name + site + "权利人侵权报告为 0 条")
+                else:
+                    raise MercadoPageStructureError(
+                        f"{name}{site}无法打开权利人侵权报告标签"
+                    )
+            if "权利人" not in collected_types:
+                print(get_now_time() + name + site + "开始抓取权利人侵权报告")
+                infractions_list.extend(
+                    _collect_type_once(page, name, site, "权利人", collected_types)
+                )
+
+    return infractions_list
+
+
+def get_infractions_info(
+    window_id,
+    name,
+    site,
+    isSwitch=1,
+    batch_control=False,
+    include_rights_holder=True,
+):
+    """兼容单站点调用；批量任务会在店铺内复用同一个页面连接。"""
     sync_playwright, _ = _load_playwright_sync_api()
     res = _open_bitbrowser(
         window_id,
@@ -850,35 +969,13 @@ def get_infractions_info(window_id, name, site, isSwitch=1, batch_control=False)
     with sync_playwright() as playwright:
         _browser, page = _connect_bitbrowser_with_playwright(playwright, res)
         try:
-            _safe_goto_infractions(page, INFRACTIONS_URL)
-            time.sleep(5)
-            _validate_infractions_page(page)
-            if isSwitch == 1:
-                _switch_site_if_needed(page, name, site)
-                _validate_infractions_page(page)
-
-            infractions_list = []
-            collected_types = set()
-
-            current_type = _current_infraction_type(page)
-            print(get_now_time() + name + site + f"当前实际侵权标签: {current_type}")
-            infractions_list.extend(_collect_type_once(page, name, site, current_type, collected_types))
-
-            if "侵权" not in collected_types:
-                print(get_now_time() + name + site + "尝试切换到普通侵权报告")
-                opened = _open_detected_report_tab(page)
-                if not opened or _current_infraction_type(page) != "侵权":
-                    _goto_infractions_type(page, "侵权")
-                infractions_list.extend(_collect_type_once(page, name, site, "侵权", collected_types))
-
-            if "权利人" not in collected_types:
-                opened = _open_rights_holder_report_tab(page)
-                if not opened or _current_infraction_type(page) != "权利人":
-                    _goto_infractions_type(page, "权利人")
-                print(get_now_time() + name + site + "开始抓取权利人侵权报告")
-                infractions_list.extend(_collect_type_once(page, name, site, "权利人", collected_types))
-
-            return infractions_list
+            return _collect_site_infractions(
+                page,
+                name,
+                site,
+                switch_site=isSwitch == 1,
+                include_rights_holder=include_rights_holder,
+            )
         finally:
             try:
                 page.close()
@@ -901,63 +998,127 @@ def _run_infractions_for_browser_locked(row):
     infraction_info_sum = []
     result = []
     fatal_profile_error = None
-
-    for site in site_list:
-        wait_for_batch_resume(f"侵权采集:{name}")
-        if fatal_profile_error is not None:
-            result.append(
-                (
-                    "获取侵权信息",
-                    name,
-                    site,
-                    _failure_status(fatal_profile_error),
-                    get_now_time(),
-                )
-            )
-            continue
-
-        succeeded = False
-        last_error = None
-        for attempt in range(1, 4):
-            wait_for_batch_resume(f"侵权采集:{name}")
-            try:
-                infraction_info = get_infractions_info(
-                    browser_id,
-                    name,
-                    site,
-                    1,
-                    batch_control=True,
-                )
-                infraction_info_sum.extend(infraction_info)
-                print(get_now_time() + name + site + "成功")
-                result.append(("获取侵权信息", name, site, "成功", get_now_time()))
-                succeeded = True
-                break
-            except Exception as exc:
-                last_error = exc
-                print(get_now_time() + name + site + "执行失败", exc)
-                if isinstance(exc, (MercadoAuthenticationError, BitBrowserWindowError)):
-                    fatal_profile_error = exc
-                    break
-                is_rate_limited = isinstance(exc, MercadoRateLimitError) or _is_rate_limited_text(exc)
-                if is_rate_limited:
-                    trip_batch_rate_limit(f"侵权采集:{name}:{site}", str(exc))
-                if attempt < 3:
-                    if is_rate_limited:
-                        wait_for_batch_resume(f"侵权采集:{name}")
-                    else:
-                        time.sleep(5)
-        if not succeeded:
-            result.append(
-                ("获取侵权信息", name, site, _failure_status(last_error), get_now_time())
-            )
-
-    print(get_now_time() + "结束，正在关闭窗口")
     try:
-        closeBrowser(browser_id)
-    except Exception as exc:
-        print(get_now_time() + name + "关闭窗口失败", exc)
-    print(get_now_time() + "已经关闭窗口")
+        try:
+            open_result = _open_bitbrowser(
+                browser_id,
+                batch_control=True,
+                batch_source=f"侵权采集:{name}",
+            )
+            sync_playwright, _ = _load_playwright_sync_api()
+            with sync_playwright() as playwright:
+                _browser, page = _connect_bitbrowser_with_playwright(
+                    playwright,
+                    open_result,
+                )
+                try:
+                    for site in site_list:
+                        wait_for_batch_resume(f"侵权采集:{name}")
+                        if fatal_profile_error is not None:
+                            result.append(
+                                (
+                                    "获取侵权信息",
+                                    name,
+                                    site,
+                                    _failure_status(fatal_profile_error),
+                                    get_now_time(),
+                                )
+                            )
+                            continue
+
+                        succeeded = False
+                        last_error = None
+                        for attempt in range(1, 4):
+                            wait_for_batch_resume(f"侵权采集:{name}")
+                            try:
+                                infraction_info = _collect_site_infractions(
+                                    page,
+                                    name,
+                                    site,
+                                    switch_site=True,
+                                )
+                                infraction_info_sum.extend(infraction_info)
+                                print(get_now_time() + name + site + "成功")
+                                result.append(
+                                    (
+                                        "获取侵权信息",
+                                        name,
+                                        site,
+                                        "成功",
+                                        get_now_time(),
+                                    )
+                                )
+                                succeeded = True
+                                break
+                            except Exception as exc:
+                                last_error = exc
+                                print(get_now_time() + name + site + "执行失败", exc)
+                                if is_human_verification_result(exc):
+                                    try:
+                                        record_human_verification_anomaly(
+                                            exc,
+                                            browser_id,
+                                            name,
+                                            site=site,
+                                            source="侵权采集",
+                                        )
+                                    except Exception as record_exc:
+                                        print(
+                                            get_now_time()
+                                            + name
+                                            + site
+                                            + "登记人机验证失败："
+                                            + str(record_exc)
+                                        )
+                                if isinstance(
+                                    exc,
+                                    (MercadoAuthenticationError, BitBrowserWindowError),
+                                ):
+                                    fatal_profile_error = exc
+                                    break
+                                is_rate_limited = isinstance(
+                                    exc,
+                                    MercadoRateLimitError,
+                                ) or _is_rate_limited_text(exc)
+                                if is_rate_limited:
+                                    trip_batch_rate_limit(
+                                        f"侵权采集:{name}:{site}",
+                                        str(exc),
+                                    )
+                                if attempt < 3:
+                                    if is_rate_limited:
+                                        wait_for_batch_resume(f"侵权采集:{name}")
+                                    else:
+                                        time.sleep(5)
+                        if not succeeded:
+                            result.append(
+                                (
+                                    "获取侵权信息",
+                                    name,
+                                    site,
+                                    _failure_status(last_error),
+                                    get_now_time(),
+                                )
+                            )
+                finally:
+                    try:
+                        page.close()
+                    except Exception:
+                        pass
+        except Exception as exc:
+            status = _failure_status(exc)
+            print(get_now_time() + name + "打开窗口失败：" + status, exc)
+            result = [
+                ("获取侵权信息", name, site, status, get_now_time())
+                for site in site_list
+            ]
+    finally:
+        print(get_now_time() + "结束，正在关闭窗口")
+        try:
+            closeBrowser(browser_id)
+        except Exception as exc:
+            print(get_now_time() + name + "关闭窗口失败", exc)
+        print(get_now_time() + "已经关闭窗口")
     return infraction_info_sum, result
 
 
@@ -1038,10 +1199,13 @@ def _row_as_login_config(row):
     return {field: row[index] if index < len(row) else "" for index, field in enumerate(fields)}
 
 
-def _prepare_infraction_retry_rows(outcomes):
+def _prepare_infraction_retry_rows(outcomes, permanent_login_failures=None):
     latest_rows = _deduplicate_config_rows(list_config_rows(include_ignored=False))
     latest_by_name = {str(row[1]).strip(): row for row in latest_rows if row and row[1]}
     retry_plan = []
+    permanent_login_failures = (
+        permanent_login_failures if permanent_login_failures is not None else set()
+    )
 
     for original_key, (original_row, _data, browser_result) in outcomes.items():
         if not outcome_failed(browser_result):
@@ -1058,19 +1222,43 @@ def _prepare_infraction_retry_rows(outcomes):
             print(f"{get_now_time()}{name} 已读取到更新后的窗口ID，将按新配置补跑")
 
         if outcome_has_marker(browser_result, "登录失效"):
+            if name in permanent_login_failures:
+                print(f"{get_now_time()}{name} 登录配置为确定性失败，不再重复提交")
+                continue
             print(f"{get_now_time()}{name} 开始串行修复 Mercado 登录态")
             try:
-                from bit.bit_mercado_login import login_one_database_shop
+                from bit.bit_mercado_login import (
+                    LOGIN_EMAIL_MISSING,
+                    LOGIN_EMAIL_REJECTED,
+                    LOGIN_SAVED_PASSWORD_INCORRECT,
+                    LOGIN_SAVED_PASSWORD_MISSING,
+                    login_one_database_shop,
+                )
 
                 login_result = login_one_database_shop(
                     _row_as_login_config(current_row),
                     wait_seconds=int(env_float("BIT_LOGIN_REPAIR_WAIT_SECONDS", 60, 1)),
                     page_load_timeout=int(env_float("BIT_LOGIN_REPAIR_PAGE_TIMEOUT", 20, 1)),
                 )
+                if is_human_verification_result(login_result):
+                    record_human_verification_anomaly(
+                        login_result,
+                        current_row[0],
+                        name,
+                        site=current_row[3],
+                        source="侵权采集",
+                    )
             except Exception as exc:
                 print(f"{get_now_time()}{name} 登录修复异常，本轮不重试：{exc}")
                 continue
             if not login_result.get("ok"):
+                if login_result.get("status") in {
+                    LOGIN_EMAIL_MISSING,
+                    LOGIN_EMAIL_REJECTED,
+                    LOGIN_SAVED_PASSWORD_INCORRECT,
+                    LOGIN_SAVED_PASSWORD_MISSING,
+                }:
+                    permanent_login_failures.add(name)
                 print(
                     f"{get_now_time()}{name} 登录修复未通过，本轮不重试："
                     f"{login_result.get('message') or login_result.get('status')}"
@@ -1082,7 +1270,14 @@ def _prepare_infraction_retry_rows(outcomes):
             browser_result, "登录失效"
         ):
             continue
-        retry_plan.append((original_key, current_row))
+        sites_to_retry = failed_sites(browser_result)
+        configured_sites = _split_sites(current_row[3])
+        sites_to_retry = [site for site in configured_sites if site in sites_to_retry]
+        if not sites_to_retry:
+            continue
+        retry_row = list(current_row)
+        retry_row[3] = "，".join(sites_to_retry)
+        retry_plan.append((original_key, tuple(retry_row)))
     return retry_plan
 
 
@@ -1091,6 +1286,8 @@ def get_infractions_info_all(
     stagger_min_seconds=None,
     stagger_max_seconds=None,
     retry_failed=True,
+    selected_shops=None,
+    selected_sites=None,
 ):
     """并发采集侵权；修复已识别问题后只补跑失败店铺，最后统一入库。"""
     start = int(time.time())
@@ -1099,6 +1296,13 @@ def get_infractions_info_all(
     rows = list_config_rows(include_ignored=False)
     rows = [row for row in rows if row and row[0]]
     rows = _deduplicate_config_rows(rows)
+    rows = filter_config_rows(
+        rows,
+        selected_shops=selected_shops,
+        selected_sites=selected_sites,
+    )
+    if (selected_shops or selected_sites) and not rows:
+        raise ValueError("所选店铺和站点没有可执行的侵权采集配置")
 
     outcomes = _execute_infraction_rows(
         rows,
@@ -1107,26 +1311,43 @@ def get_infractions_info_all(
         stagger_max_seconds=stagger_max_seconds,
     )
 
-    if retry_failed:
-        retry_plan = _prepare_infraction_retry_rows(outcomes)
-        if retry_plan:
-            print(f"{get_now_time()}侵权首轮失败 {len(retry_plan)} 家，仅补跑这些店铺")
-            wait_for_batch_resume("侵权失败补跑")
-            retry_rows = [row for _original_key, row in retry_plan]
-            retry_outcomes = _execute_infraction_rows(
-                retry_rows,
-                max_workers=max_workers,
-                stagger_min_seconds=stagger_min_seconds,
-                stagger_max_seconds=stagger_max_seconds,
-                lease_wait_seconds=env_float(
-                    "BIT_RETRY_WINDOW_LOCK_WAIT_SECONDS",
-                    DEFAULT_RETRY_LOCK_WAIT_SECONDS,
-                ),
-            )
-            for original_key, retry_row in retry_plan:
-                retry_outcome = retry_outcomes.get(row_key(retry_row))
-                if retry_outcome is not None:
-                    outcomes[original_key] = retry_outcome
+    retry_rounds = (
+        env_int("BIT_COLLECTION_RETRY_ROUNDS", 2, 0)
+        if retry_failed
+        else 0
+    )
+    permanent_login_failures = set()
+    for retry_round in range(1, retry_rounds + 1):
+        retry_plan = _prepare_infraction_retry_rows(
+            outcomes,
+            permanent_login_failures=permanent_login_failures,
+        )
+        if not retry_plan:
+            break
+        retry_site_count = sum(len(_split_sites(row[3])) for _key, row in retry_plan)
+        print(
+            f"{get_now_time()}侵权第 {retry_round}/{retry_rounds} 轮补跑 "
+            f"{len(retry_plan)} 家、{retry_site_count} 个失败站点"
+        )
+        wait_for_batch_resume("侵权失败补跑")
+        retry_rows = [row for _original_key, row in retry_plan]
+        retry_outcomes = _execute_infraction_rows(
+            retry_rows,
+            max_workers=max_workers,
+            stagger_min_seconds=stagger_min_seconds,
+            stagger_max_seconds=stagger_max_seconds,
+            lease_wait_seconds=env_float(
+                "BIT_RETRY_WINDOW_LOCK_WAIT_SECONDS",
+                DEFAULT_RETRY_LOCK_WAIT_SECONDS,
+            ),
+        )
+        for original_key, retry_row in retry_plan:
+            retry_outcome = retry_outcomes.get(row_key(retry_row))
+            if retry_outcome is not None:
+                outcomes[original_key] = merge_site_retry_outcome(
+                    outcomes[original_key],
+                    retry_outcome,
+                )
 
     infraction_info_sum = []
     result = []
@@ -1148,11 +1369,32 @@ def get_infractions_info_all(
         columns=["店铺名", "站点", "编号", "标题", "侵权时间", "提交时间", "执行时间", "类型"],
     )
 
-    date_str = datetime.now().strftime("%Y-%m-%d-%H")
-    output_path = bit_dir / f"美客多-武汉泽顺店铺侵权信息汇总-{date_str}.xlsx"
+    scoped_collection = bool(selected_shops or selected_sites)
+    replace_targets = [
+        (str(row[1] or "").strip(), site)
+        for row in rows
+        for site in _split_sites(row[3])
+        if str(row[1] or "").strip() and site
+    ]
+    date_str = datetime.now().strftime(
+        "%Y-%m-%d-%H%M%S" if scoped_collection else "%Y-%m-%d-%H"
+    )
+    scope_suffix = "-选定范围" if scoped_collection else ""
+    output_path = bit_dir / f"美客多-武汉泽顺店铺侵权信息汇总{scope_suffix}-{date_str}.xlsx"
     post_errors = []
     for step_name, action in (
-        ("写入侵权数据", lambda: inset_infraction_info(infraction_info_sum)),
+        (
+            "写入侵权数据",
+            lambda: (
+                inset_infraction_info(
+                    infraction_info_sum,
+                    merge_latest=True,
+                    replace_targets=replace_targets,
+                )
+                if scoped_collection
+                else inset_infraction_info(infraction_info_sum)
+            ),
+        ),
         ("写入侵权任务记录", lambda: insert_task_record(result)),
         ("导出侵权汇总", lambda: df.to_excel(output_path, index=False)),
     ):
@@ -1182,6 +1424,9 @@ def get_infractions_info_all(
         "output_path": str(output_path),
         "failure_report_path": str(failure_report_path) if failure_report_path else "",
         "email_sent": email_sent,
+        "selected_shops": list(selected_shops or ()),
+        "selected_sites": list(selected_sites or ()),
+        "max_workers": max_workers,
         "failed_shops": sorted(
             {
                 str(row[1] or "")
