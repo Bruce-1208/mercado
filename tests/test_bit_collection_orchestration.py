@@ -139,7 +139,7 @@ class CollectionOrchestrationTests(unittest.TestCase):
                     [("id-2", "店铺乙", "", "巴西", "", "", "")],
                 )
 
-    def test_all_ai_appeal_types_run_ten_rounds_with_ten_workers(self):
+    def test_all_ai_appeal_types_run_ten_rounds_with_fifteen_workers(self):
         started_at = bit_main.datetime.now()
         task_lock = mock.Mock()
         task_lock.acquired = True
@@ -174,7 +174,7 @@ class CollectionOrchestrationTests(unittest.TestCase):
         expected_round = list(bit_main.MAIN_APPEAL_TYPES)
         self.assertEqual([appeal_type for appeal_type, _kwargs in calls], expected_round * 10)
         self.assertEqual(len(calls), 40)
-        self.assertTrue(all(kwargs["max_workers"] == 10 for _type, kwargs in calls))
+        self.assertTrue(all(kwargs["max_workers"] == 15 for _type, kwargs in calls))
         self.assertTrue(all(kwargs["_task_lock"] is task_lock for _type, kwargs in calls))
         self.assertEqual(result["round_count"], 10)
         self.assertEqual(result["appeal_types"], expected_round)
@@ -268,7 +268,7 @@ class CollectionOrchestrationTests(unittest.TestCase):
         self.assertEqual(reputation_options["max_workers"], 2)
         self.assertEqual(infraction_options["max_workers"], 2)
 
-    def test_scheduler_never_exceeds_ten_workers(self):
+    def test_scheduler_never_exceeds_fifteen_workers(self):
         with mock.patch.dict(
             "os.environ",
             {
@@ -282,9 +282,9 @@ class CollectionOrchestrationTests(unittest.TestCase):
             reputation_options = bit_main._collection_options("REPUTATION")
             infraction_options = bit_main._collection_options("INFRACTION")
 
-        self.assertEqual(reputation_options["max_workers"], 10)
-        self.assertEqual(infraction_options["max_workers"], 10)
-        self.assertEqual(bit_main._main_browser_worker_limit(), 10)
+        self.assertEqual(reputation_options["max_workers"], 15)
+        self.assertEqual(infraction_options["max_workers"], 15)
+        self.assertEqual(bit_main._main_browser_worker_limit(), 15)
 
     def test_reputation_and_appeal_still_run_when_infraction_fails(self):
         events = []

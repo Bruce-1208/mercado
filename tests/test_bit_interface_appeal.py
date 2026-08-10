@@ -692,6 +692,20 @@ def test_reputation_rate_cells_use_requested_warning_thresholds():
     assert ".reputation-rate-cell.rate-red" in template
 
 
+def test_reputation_traffic_change_cells_use_thirty_percent_threshold():
+    template = (
+        Path(bit_interface.CURRENT_DIR) / "templates" / "index.html"
+    ).read_text(encoding="utf-8")
+
+    assert "function reputationTrafficChangeClass(direction, value)" in template
+    assert "Math.abs(signedRate) <= 30" in template
+    assert 'return "change-green"' in template
+    assert 'return "change-red"' in template
+    assert 'renderReputationTrafficChangeCell(row["增加或减少"], row["近七天变化率"])' in template
+    assert ".reputation-change-cell.change-green" in template
+    assert ".reputation-change-cell.change-red" in template
+
+
 def test_daily_task_console_exposes_four_appeal_types_and_rate_threshold():
     template = (
         Path(bit_interface.CURRENT_DIR) / "templates" / "index.html"

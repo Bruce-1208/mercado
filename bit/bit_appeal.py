@@ -23,6 +23,7 @@ from bit.bit_api import *
 from bit.bit_config import get_window_id_by_shop_name
 from bit.bit_mercado_limit import is_mercado_rate_limited_page
 from bit.bit_mercado_login import open_mercado_backend_page
+from bit.bit_appeal_phrases import render_appeal_phrase, select_appeal_phrase
 from bit.bit_reputation_info import get_cancellation_orders
 from AI_Agent.qianwen import *
 import pandas as pd
@@ -654,6 +655,9 @@ def should_load_infraction_orders(form, message):
 # 申诉
 def shensu(name, site, form, message, mode="人工客服"):
     print(f"{name} {site} 开始进行{form}申诉，话术为{message}<br>")
+    selected_phrase = select_appeal_phrase(form) if message == "" else ""
+    if selected_phrase:
+        print(f"{get_now_time()} {name} {site} 从{form}话术库随机选取：{selected_phrase}<br>")
     window_id = get_window_id_by_shop_name(name)
 
     res = openBrowser(window_id)  # 窗口ID从窗口配置界面中复制，或者api创建后返回
@@ -782,7 +786,16 @@ def shensu(name, site, form, message, mode="人工客服"):
         if message == "":
 
             if form == "延误":
-                initial_huashu = orders_random + words_random
+                initial_huashu = (
+                    render_appeal_phrase(
+                        selected_phrase,
+                        nickname=nickname,
+                        order_ids=orders_random,
+                        appeal_type=form,
+                    )
+                    if selected_phrase
+                    else orders_random + words_random
+                )
                 get_human_chat_input(driver, 30).send_keys(initial_huashu)
                 time.sleep(3)
                 click_human_send_button(driver, 30)
@@ -793,7 +806,16 @@ def shensu(name, site, form, message, mode="人工客服"):
                     driver, name, site, form, initial_huashu, nickname
                 )
             if form == "侵权":
-                initial_huashu = infraction_random + words_random
+                initial_huashu = (
+                    render_appeal_phrase(
+                        selected_phrase,
+                        nickname=nickname,
+                        order_ids=infraction_random,
+                        appeal_type=form,
+                    )
+                    if selected_phrase
+                    else infraction_random + words_random
+                )
                 get_human_chat_input(driver, 30).send_keys(initial_huashu)
                 time.sleep(3)
                 click_human_send_button(driver, 30)
@@ -804,12 +826,38 @@ def shensu(name, site, form, message, mode="人工客服"):
                     driver, name, site, form, initial_huashu, nickname
                 )
             if form == "取消率":
-                initial_huashu = cancellation_random + words_random
+                initial_huashu = (
+                    render_appeal_phrase(
+                        selected_phrase,
+                        nickname=nickname,
+                        order_ids=cancellation_random,
+                        appeal_type=form,
+                    )
+                    if selected_phrase
+                    else cancellation_random + words_random
+                )
                 get_human_chat_input(driver, 30).send_keys(initial_huashu)
                 time.sleep(3)
                 click_human_send_button(driver, 30)
                 print(
                     f"{get_now_time()} {name} {site} 发送取消订单：{initial_huashu}<br>"
+                )
+                chat_ai(
+                    driver, name, site, form, initial_huashu, nickname
+                )
+            if form == "投诉":
+                initial_huashu = (
+                    render_appeal_phrase(
+                        selected_phrase or words_random,
+                        nickname=nickname,
+                        appeal_type=form,
+                    )
+                )
+                get_human_chat_input(driver, 30).send_keys(initial_huashu)
+                time.sleep(3)
+                click_human_send_button(driver, 30)
+                print(
+                    f"{get_now_time()} {name} {site} 发送投诉申诉：{initial_huashu}<br>"
                 )
                 chat_ai(
                     driver, name, site, form, initial_huashu, nickname

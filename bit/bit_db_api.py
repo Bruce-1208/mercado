@@ -40,6 +40,12 @@ def _local_call(function_name, *args, **kwargs):
     return function(*args, **kwargs)
 
 
+def _local_interface_call(function_name, *args, **kwargs):
+    from bit import bit_interface
+
+    return getattr(bit_interface, function_name)(*args, **kwargs)
+
+
 def _headers():
     headers = {"Content-Type": "application/json"}
     if DB_API_TOKEN:
@@ -147,6 +153,26 @@ def insert_zying_product_info(product_list):
     return (data or {}).get("count", 0)
 
 
+def get_existing_zying_product_ids(product_ids):
+    normalized_ids = list(
+        dict.fromkeys(
+            str(value or "").strip()
+            for value in (product_ids or ())
+            if str(value or "").strip()
+        )
+    )
+    if not normalized_ids:
+        return set()
+    if DB_MODE == "mysql":
+        return set(_local_call("get_existing_zying_product_ids", normalized_ids))
+    data = _request(
+        "POST",
+        "/api/db/zying-products/existing",
+        json={"product_ids": normalized_ids},
+    )
+    return set((data or {}).get("product_ids") or ())
+
+
 def get_zying_risk_candidates(
     hours=24,
     limit=0,
@@ -228,6 +254,70 @@ def insert_orders(line):
     return _request("POST", "/api/db/orders/bulk", json={"rows": line})
 
 
+def get_high_after_sale_alerts(
+    sort_by="after_sale_quantity",
+    sort_dir="desc",
+    search="",
+    date_from="",
+    date_to="",
+    limit=100,
+):
+    if DB_MODE == "mysql":
+        return _local_call(
+            "get_high_after_sale_alerts",
+            sort_by,
+            sort_dir,
+            search,
+            date_from,
+            date_to,
+            limit,
+        )
+    return _request(
+        "GET",
+        "/api/db/orders/high-after-sales",
+        params={
+            "sort_by": sort_by,
+            "sort_dir": sort_dir,
+            "search": search,
+            "date_from": date_from,
+            "date_to": date_to,
+            "limit": limit,
+        },
+    )
+
+
+def get_high_profit_products(
+    sort_by="total_profit",
+    sort_dir="desc",
+    search="",
+    date_from="",
+    date_to="",
+    limit=100,
+):
+    if DB_MODE == "mysql":
+        return _local_call(
+            "get_high_profit_products",
+            sort_by,
+            sort_dir,
+            search,
+            date_from,
+            date_to,
+            limit,
+        )
+    return _request(
+        "GET",
+        "/api/db/orders/high-profits",
+        params={
+            "sort_by": sort_by,
+            "sort_dir": sort_dir,
+            "search": search,
+            "date_from": date_from,
+            "date_to": date_to,
+            "limit": limit,
+        },
+    )
+
+
 def insert_chat_info(name, site, message, chat, response, time):
     if DB_MODE == "mysql":
         return _local_call("insert_chat_info", name, site, message, chat, response, time)
@@ -275,6 +365,44 @@ def get_ai_appeal_records(limit=100):
     if DB_MODE == "mysql":
         return _local_call("get_ai_appeal_records", limit)
     return _request("GET", "/api/db/ai-appeal-records", params={"limit": limit})
+
+
+def list_appeal_phrases():
+    if DB_MODE == "mysql":
+        return _local_call("list_appeal_phrases")
+    return _request("GET", "/api/db/appeal-phrases")
+
+
+def get_random_appeal_phrase(appeal_type):
+    if DB_MODE == "mysql":
+        return _local_call("get_random_appeal_phrase", appeal_type)
+    return _request(
+        "GET",
+        "/api/db/appeal-phrases/random",
+        params={"appeal_type": appeal_type},
+    )
+
+
+def create_appeal_phrase(record):
+    if DB_MODE == "mysql":
+        return _local_call("create_appeal_phrase", record)
+    return _request("POST", "/api/db/appeal-phrases", json=record or {})
+
+
+def update_appeal_phrase(phrase_id, record):
+    if DB_MODE == "mysql":
+        return _local_call("update_appeal_phrase", phrase_id, record)
+    return _request(
+        "PUT",
+        f"/api/db/appeal-phrases/{int(phrase_id)}",
+        json=record or {},
+    )
+
+
+def delete_appeal_phrase(phrase_id):
+    if DB_MODE == "mysql":
+        return _local_call("delete_appeal_phrase", phrase_id)
+    return _request("DELETE", f"/api/db/appeal-phrases/{int(phrase_id)}")
 
 
 def get_latest_infraction_info(recent_days=30):
@@ -336,6 +464,28 @@ def upsert_bit_browser_configs(records, replace=False):
         "/api/db/browser-configs/bulk",
         json={"records": records or [], "replace": bool(replace)},
     )
+
+
+def create_bit_browser_config(record):
+    if DB_MODE == "mysql":
+        return _local_call("create_bit_browser_config", record)
+    return _request("POST", "/api/db/browser-configs", json=record or {})
+
+
+def update_bit_browser_config(config_id, record):
+    if DB_MODE == "mysql":
+        return _local_call("update_bit_browser_config", config_id, record)
+    return _request(
+        "PUT",
+        f"/api/db/browser-configs/{int(config_id)}",
+        json=record or {},
+    )
+
+
+def delete_bit_browser_config(config_id):
+    if DB_MODE == "mysql":
+        return _local_call("delete_bit_browser_config", config_id)
+    return _request("DELETE", f"/api/db/browser-configs/{int(config_id)}")
 
 
 def upsert_window_anomaly(
@@ -401,3 +551,88 @@ def login_workbench_user(username, password):
     if not response.ok or payload.get("status") not in ("success", None):
         raise RuntimeError(payload.get("message") or f"登录接口请求失败：{url}，状态码：{response.status_code}")
     return payload.get("data")
+
+
+def get_workbench_session_user(user_id):
+    if DB_MODE == "mysql":
+        from bit import bit_interface
+
+        row = bit_interface.get_workbench_user(user_id=user_id)
+        if not row or not row.get("is_active"):
+            return None
+        return bit_interface.build_workbench_session_user(row)
+    return _request(
+        "GET",
+        "/api/db/workbench/session-user",
+        params={"user_id": user_id},
+        timeout=15,
+    )
+
+
+def list_workbench_roles():
+    if DB_MODE == "mysql":
+        return _local_interface_call("list_workbench_roles_local")
+    return _request("GET", "/api/db/workbench/roles", timeout=15)
+
+
+def create_workbench_role(data):
+    if DB_MODE == "mysql":
+        return _local_interface_call("create_workbench_role_local", data)
+    return _request("POST", "/api/db/workbench/roles", json=data, timeout=15)
+
+
+def update_workbench_role(role_key, data):
+    if DB_MODE == "mysql":
+        return _local_interface_call("update_workbench_role_local", role_key, data)
+    return _request(
+        "PUT",
+        f"/api/db/workbench/roles/{role_key}",
+        json=data,
+        timeout=15,
+    )
+
+
+def delete_workbench_role(role_key):
+    if DB_MODE == "mysql":
+        return _local_interface_call("delete_workbench_role_local", role_key)
+    return _request(
+        "DELETE",
+        f"/api/db/workbench/roles/{role_key}",
+        timeout=15,
+    )
+
+
+def list_workbench_users():
+    if DB_MODE == "mysql":
+        return _local_interface_call("list_workbench_users_local")
+    return _request("GET", "/api/db/workbench/users", timeout=15)
+
+
+def create_workbench_user(data):
+    if DB_MODE == "mysql":
+        return _local_interface_call("create_workbench_user_local", data)
+    return _request("POST", "/api/db/workbench/users", json=data, timeout=15)
+
+
+def update_workbench_user(user_id, data):
+    if DB_MODE == "mysql":
+        return _local_interface_call("update_workbench_user_local", user_id, data)
+    return _request(
+        "PUT",
+        f"/api/db/workbench/users/{int(user_id)}",
+        json=data,
+        timeout=15,
+    )
+
+
+def reset_workbench_user_password(user_id, password):
+    if DB_MODE == "mysql":
+        return _local_interface_call(
+            "reset_workbench_user_password_local", user_id, password
+        )
+    return _request(
+        "POST",
+        f"/api/db/workbench/users/{int(user_id)}/password",
+        json={"password": password},
+        timeout=15,
+    )

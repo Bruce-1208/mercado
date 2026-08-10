@@ -32,7 +32,7 @@ from bit.bit_utils import get_now_time
 SCHEDULE_LOCK = threading.Lock()
 SCHEDULE_INTERVAL_HOURS = 2
 DEFAULT_CHAIN_REPEAT_SECONDS = 2 * 60 * 60
-DEFAULT_MAIN_BROWSER_WORKER_LIMIT = 10
+DEFAULT_MAIN_BROWSER_WORKER_LIMIT = 15
 DEFAULT_MAIN_APPEAL_ROUNDS = 10
 MAIN_APPEAL_TYPES = (
     bit_daily_task.APPEAL_TYPE_INFRACTION,
@@ -358,6 +358,6 @@ if __name__ == "__main__":
     print("启动后立即执行，每条完整任务链结束后休息 2 小时再重新执行")
     print(
         "任务顺序：侵权采集 -> 冷却 3–5 分钟 -> 声誉采集 -> "
-        "侵权 -> 延误 -> 投诉 -> 取消率 AI 申诉，共 10 轮，最多 10 个进程"
+        "侵权 -> 延误 -> 投诉 -> 取消率 AI 申诉，共 10 轮，最多 15 个进程"
     )
     run_main_loop()
