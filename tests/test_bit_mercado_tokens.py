@@ -1,0 +1,416 @@
+from urllib.parse import parse_qs, urlparse
+
+import pytest
+
+from bit import bit_db_api, bit_interface, bit_mysql, mercado_tokens
+
+
+class FakeResponse:
+    def __init__(self, payload, status_code=200):
+        self.payload = payload
+        self.status_code = status_code
+        self.ok = 200 <= status_code < 300
+        self.text = str(payload)
+
+    def json(self):
+        return self.payload
+
+
+class OAuthSession:
+    def __init__(self, token_payload=None, profile_payload=None):
+        self.token_payload = token_payload or {
+            "access_token": "access-secret",
+            "refresh_token": "refresh-secret",
+            "token_type": "Bearer",
+            "expires_in": 21600,
+            "scope": "offline_access read write",
+            "user_id": 123456,
+        }
+        self.profile_payload = profile_payload or {
+            "id": 123456,
+            "nickname": "SELLER_TEST",
+            "site_id": "CBT",
+        }
+        self.posts = []
+        self.gets = []
+
+    def post(self, url, **kwargs):
+        self.posts.append((url, kwargs))
+        return FakeResponse(dict(self.token_payload))
+
+    def get(self, url, **kwargs):
+        self.gets.append((url, kwargs))
+        return FakeResponse(dict(self.profile_payload))
+
+
+@pytest.fixture
+def oauth_env(monkeypatch):
+    monkeypatch.setenv("MELI_CLIENT_ID", "app-123")
+    monkeypatch.setenv("MELI_CLIENT_SECRET", "app-secret")
+    monkeypatch.setenv("MELI_REDIRECT_URI", "https://console.test/zs")
+    monkeypatch.setenv(
+        "MELI_AUTHORIZATION_URL",
+        "https://global-selling.mercadolibre.com/authorization",
+    )
+
+
+def test_authorization_link_uses_server_configuration_without_secret(oauth_env):
+    info = mercado_tokens.authorization_info()
+    query = parse_qs(urlparse(info["authorization_url"]).query)
+
+    assert info["configured"] is True
+    assert query == {
+        "response_type": ["code"],
+        "client_id": ["app-123"],
+        "redirect_uri": ["https://console.test/zs"],
+    }
+    assert "app-secret" not in str(info)
+
+
+def test_authorization_link_only_requires_public_client_id(monkeypatch):
+    monkeypatch.setenv("MELI_CLIENT_ID", "app-123")
+    monkeypatch.delenv("MELI_CLIENT_SECRET", raising=False)
+    monkeypatch.delenv("MERCADO_CLIENT_SECRET", raising=False)
+    monkeypatch.setattr(mercado_tokens, "_legacy_oauth_credentials", lambda: {})
+
+    info = mercado_tokens.authorization_info()
+
+    assert info["configured"] is True
+    assert "client_id=app-123" in info["authorization_url"]
+
+
+def test_token_summary_defensively_removes_both_secrets():
+    summary = bit_mysql._mercado_token_summary(
+        {
+            "id": 1,
+            "display_name": "店铺",
+            "access_token": "must-not-leak",
+            "refresh_token": "must-not-leak-either",
+            "has_refresh_token": 1,
+        }
+    )
+
+    assert "access_token" not in summary
+    assert "refresh_token" not in summary
+    assert summary["has_refresh_token"] is True
+
+
+@pytest.mark.parametrize(
+    "value",
+    [
+        "TG-fresh-123",
+        "https://console.test/zs?code=TG-fresh-123",
+    ],
+)
+def test_extract_authorization_code_accepts_tg_or_callback(value):
+    assert mercado_tokens.extract_authorization_code(value) == "TG-fresh-123"
+
+
+def test_exchange_identifies_store_and_passes_tokens_only_to_database(oauth_env):
+    http = OAuthSession()
+    captured = {}
+
+    def upsert(record):
+        captured.update(record)
+        return {
+            "id": 7,
+            "display_name": record["display_name"],
+            "meli_user_id": record["meli_user_id"],
+            "status": "active",
+        }
+
+    result = mercado_tokens.exchange_and_save(
+        "  自定义店铺  ",
+        "TG-once-123",
+        upsert=upsert,
+        http=http,
+    )
+
+    assert captured["display_name"] == "自定义店铺"
+    assert captured["meli_user_id"] == "123456"
+    assert captured["nickname"] == "SELLER_TEST"
+    assert captured["site_id"] == "CBT"
+    assert captured["access_token"] == "access-secret"
+    assert captured["refresh_token"] == "refresh-secret"
+    assert result["id"] == 7
+    assert "access_token" not in result
+    assert "refresh_token" not in result
+    assert http.posts[0][1]["data"]["code"] == "TG-once-123"
+
+
+def test_refresh_rotates_and_saves_replacement_refresh_token(oauth_env):
+    http = OAuthSession(
+        token_payload={
+            "access_token": "new-access",
+            "refresh_token": "new-refresh",
+            "expires_in": 21600,
+            "user_id": 123456,
+        }
+    )
+    updated = {}
+    errors = []
+
+    result = mercado_tokens.refresh_and_save(
+        9,
+        get_token=lambda token_id: {
+            "id": token_id,
+            "display_name": "店铺九",
+            "refresh_token": "old-refresh",
+        },
+        update_token=lambda token_id, record: (
+            updated.update(token_id=token_id, record=record)
+            or {"id": token_id, "status": "active"}
+        ),
+        record_error=lambda token_id, message: errors.append((token_id, message)),
+        http=http,
+    )
+
+    assert result == {"id": 9, "status": "active", "warning": ""}
+    assert http.posts[0][1]["data"]["refresh_token"] == "old-refresh"
+    assert updated["record"]["access_token"] == "new-access"
+    assert updated["record"]["refresh_token"] == "new-refresh"
+    assert errors == []
+
+
+def test_refresh_still_saves_rotated_token_when_profile_lookup_fails(oauth_env):
+    class ProfileFailureSession(OAuthSession):
+        def get(self, url, **kwargs):
+            self.gets.append((url, kwargs))
+            return FakeResponse({"message": "temporary unavailable"}, status_code=503)
+
+    http = ProfileFailureSession(
+        token_payload={
+            "access_token": "rotated-access",
+            "refresh_token": "rotated-refresh",
+            "expires_in": 21600,
+            "user_id": 123456,
+        }
+    )
+    updated = {}
+
+    result = mercado_tokens.refresh_and_save(
+        10,
+        get_token=lambda _token_id: {
+            "id": 10,
+            "display_name": "店铺十",
+            "meli_user_id": "123456",
+            "nickname": "KNOWN_NAME",
+            "site_id": "CBT",
+            "refresh_token": "old-refresh",
+        },
+        update_token=lambda token_id, record: (
+            updated.update(token_id=token_id, record=record) or {"id": token_id}
+        ),
+        http=http,
+    )
+
+    assert updated["record"]["refresh_token"] == "rotated-refresh"
+    assert updated["record"]["nickname"] == "KNOWN_NAME"
+    assert "读取授权店铺失败" in updated["record"]["last_error"]
+    assert result["warning"] == updated["record"]["last_error"]
+
+
+def _logged_in_client():
+    client = bit_interface.app.test_client()
+    with client.session_transaction() as flask_session:
+        flask_session["workbench_user"] = {
+            "id": 1,
+            "username": "tester",
+            "display_name": "测试员",
+        }
+    return client
+
+
+def test_browser_routes_return_metadata_and_accept_management_actions(monkeypatch):
+    summary = {
+        "id": 2,
+        "display_name": "店铺二",
+        "meli_user_id": "9988",
+        "status": "active",
+        "has_refresh_token": True,
+        "site_settings": [],
+    }
+    calls = []
+    monkeypatch.setattr(
+        bit_interface.bit_db_api,
+        "list_mercado_store_tokens",
+        lambda: {"total": 1, "rows": [summary]},
+    )
+    monkeypatch.setattr(
+        bit_interface.bit_db_api,
+        "exchange_mercado_store_token",
+        lambda name, code: calls.append(("exchange", name, code)) or summary,
+    )
+    monkeypatch.setattr(
+        bit_interface.bit_db_api,
+        "refresh_mercado_store_token",
+        lambda token_id: calls.append(("refresh", token_id)) or summary,
+    )
+    monkeypatch.setattr(
+        bit_interface.bit_db_api,
+        "rename_mercado_store_token",
+        lambda token_id, name: calls.append(("rename", token_id, name)) or summary,
+    )
+    monkeypatch.setattr(
+        bit_interface.bit_db_api,
+        "delete_mercado_store_token",
+        lambda token_id: calls.append(("delete", token_id)) or 1,
+    )
+    monkeypatch.setattr(
+        bit_interface.bit_db_api,
+        "list_mercado_store_site_settings",
+        lambda token_id: calls.append(("list-sites", token_id))
+        or {"token_id": token_id, "rows": []},
+    )
+    monkeypatch.setattr(
+        bit_interface.bit_db_api,
+        "update_mercado_store_site_settings",
+        lambda token_id, settings: calls.append(("save-sites", token_id, settings))
+        or {"token_id": token_id, "rows": settings},
+    )
+    client = _logged_in_client()
+
+    list_response = client.get("/api/mercado-tokens")
+    exchange_response = client.post(
+        "/api/mercado-tokens/exchange",
+        json={"display_name": "店铺二", "code": "TG-code"},
+    )
+    refresh_response = client.post("/api/mercado-tokens/2/refresh", json={})
+    rename_response = client.patch(
+        "/api/mercado-tokens/2", json={"display_name": "新名字"}
+    )
+    site_list_response = client.get("/api/mercado-tokens/2/site-settings")
+    site_save_response = client.put(
+        "/api/mercado-tokens/2/site-settings",
+        json={
+            "settings": [{
+                "site_id": "MLM",
+                "discount_rate": 95,
+                "salesperson": "张三",
+                "group_name": "精品组",
+            }]
+        },
+    )
+    delete_response = client.delete("/api/mercado-tokens/2")
+
+    assert list_response.status_code == 200
+    assert "access_token" not in list_response.get_data(as_text=True)
+    assert exchange_response.status_code == 200
+    assert refresh_response.status_code == 200
+    assert rename_response.status_code == 200
+    assert site_list_response.status_code == 200
+    assert site_save_response.status_code == 200
+    assert delete_response.status_code == 200
+    assert calls == [
+        ("exchange", "店铺二", "TG-code"),
+        ("refresh", 2),
+        ("rename", 2, "新名字"),
+        ("list-sites", 2),
+        ("save-sites", 2, [{
+            "site_id": "MLM",
+            "discount_rate": 95,
+            "salesperson": "张三",
+            "group_name": "精品组",
+        }]),
+        ("delete", 2),
+    ]
+
+
+def test_database_api_client_uses_remote_token_endpoints(monkeypatch):
+    calls = []
+    monkeypatch.setattr(bit_db_api, "DB_MODE", "api")
+    monkeypatch.setattr(
+        bit_db_api,
+        "_request",
+        lambda method, path, **kwargs: calls.append((method, path, kwargs)) or {},
+    )
+
+    bit_db_api.list_mercado_store_tokens()
+    bit_db_api.list_mercado_store_site_settings(3)
+    bit_db_api.update_mercado_store_site_settings(3, [{"site_id": "MLB"}])
+    bit_db_api.exchange_mercado_store_token("店铺", "TG-code")
+    bit_db_api.refresh_mercado_store_token(3)
+    bit_db_api.rename_mercado_store_token(3, "改名")
+    bit_db_api.delete_mercado_store_token(3)
+
+    assert [(method, path) for method, path, _ in calls] == [
+        ("GET", "/api/db/mercado-tokens"),
+        ("GET", "/api/db/mercado-tokens/3/site-settings"),
+        ("PUT", "/api/db/mercado-tokens/3/site-settings"),
+        ("POST", "/api/db/mercado-tokens/exchange"),
+        ("POST", "/api/db/mercado-tokens/3/refresh"),
+        ("PATCH", "/api/db/mercado-tokens/3"),
+        ("DELETE", "/api/db/mercado-tokens/3"),
+    ]
+
+
+def test_token_list_falls_back_to_direct_mysql_when_cloud_route_is_old(monkeypatch):
+    monkeypatch.setattr(bit_db_api, "DB_MODE", "api")
+    monkeypatch.setattr(
+        bit_db_api,
+        "_request",
+        lambda method, path, **kwargs: (_ for _ in ()).throw(
+            RuntimeError(
+                "数据库接口返回非 JSON：http://host/api/db/mercado-tokens，状态码：404"
+            )
+        ),
+    )
+    monkeypatch.setattr(
+        bit_db_api,
+        "_local_call",
+        lambda function_name, *args, **kwargs: {
+            "source": function_name,
+            "total": 0,
+            "rows": [],
+        },
+    )
+
+    result = bit_db_api.list_mercado_store_tokens()
+
+    assert result == {
+        "source": "list_mercado_store_tokens",
+        "total": 0,
+        "rows": [],
+    }
+
+
+def test_oauth_callback_displays_one_time_code_without_login():
+    client = bit_interface.app.test_client()
+    response = client.get("/zs?code=TG-visible-123")
+
+    assert response.status_code == 200
+    assert "TG-visible-123" in response.get_data(as_text=True)
+    assert response.headers["Cache-Control"] == "no-store"
+
+
+def test_console_template_contains_store_token_module():
+    client = _logged_in_client()
+    response = client.get("/")
+
+    assert response.status_code == 200
+    body = response.get_data(as_text=True)
+    assert 'id="tab-store-tokens"' in body
+    assert 'id="mercado-token-code"' in body
+    assert 'id="mercado-authorization-url"' in body
+    assert 'id="mercado-site-settings-dialog"' in body
+    assert 'id="mercado-site-settings-body"' in body
+    assert "折扣比例（%）" in body
+    assert "自定义组别" in body
+    assert "global-selling.mercadolibre.com/authorization" in body
+    assert "Access Token 和 Refresh Token 仅保存在数据库服务端" in body
+
+
+def test_site_settings_reject_unsupported_site_before_database_call():
+    with pytest.raises(ValueError, match="不支持的美客多站点"):
+        bit_mysql.upsert_mercado_store_site_settings(
+            2,
+            [{"site_id": "CBT", "discount_rate": 90}],
+        )
+
+
+def test_site_settings_reject_discount_outside_percentage_range():
+    with pytest.raises(ValueError, match="必须在 0 到 100 之间"):
+        bit_mysql.upsert_mercado_store_site_settings(
+            2,
+            [{"site_id": "MLM", "discount_rate": 101}],
+        )

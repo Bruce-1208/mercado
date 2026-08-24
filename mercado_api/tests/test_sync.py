@@ -2,6 +2,9 @@ import json
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
+
+import requests
 
 from mercado_api.client import MercadoLibreClient
 from mercado_api.database import MercadoDatabase
@@ -15,6 +18,87 @@ class ClientTests(unittest.TestCase):
             {"id": 888, "orders": [{"id": 101}]},
         ]
         self.assertEqual(list(MercadoLibreClient._order_ids(results)), ["101", "102", "103"])
+
+    def test_order_search_uses_global_selling_seller_parameter_and_offset(self):
+        client = MercadoLibreClient("token")
+        requests = []
+
+        def fake_request(method, path, *, params=None):
+            requests.append((method, path, dict(params or {})))
+            offset = int((params or {}).get("offset") or 0)
+            if offset == 0:
+                return {
+                    "results": [{"orders": [{"id": 101}]}, {"orders": [{"id": 102}]}],
+                    "paging": {"total": 3},
+                }
+            return {
+                "results": [{"orders": [{"id": 103}]}],
+                "paging": {"total": 3},
+            }
+
+        client.request = fake_request
+
+        self.assertEqual(list(client.iter_order_ids("seller-7", sort="date_desc")), ["101", "102", "103"])
+        self.assertEqual(requests[0][2]["seller"], "seller-7")
+        self.assertNotIn("seller.id", requests[0][2])
+        self.assertEqual([request[2]["offset"] for request in requests], [0, 2])
+
+    def test_request_retries_after_transient_network_error(self):
+        class Response:
+            status_code = 200
+            ok = True
+            headers = {}
+
+            @staticmethod
+            def json():
+                return {"ok": True}
+
+        class Session:
+            def __init__(self):
+                self.calls = 0
+
+            def request(self, *_args, **_kwargs):
+                self.calls += 1
+                if self.calls == 1:
+                    raise requests.ConnectionError("connection reset")
+                return Response()
+
+        session = Session()
+        client = MercadoLibreClient("token", session=session)
+        with patch("mercado_api.client.time.sleep") as sleep:
+            result = client.request("GET", "/marketplace/users/seller-1/items/search")
+
+        self.assertEqual(result, {"ok": True})
+        self.assertEqual(session.calls, 2)
+        sleep.assert_called_once_with(1)
+
+    def test_get_shipment_label_returns_official_pdf_bytes(self):
+        class Response:
+            status_code = 200
+            ok = True
+            headers = {"Content-Type": "application/pdf"}
+            content = b"%PDF-1.4\nofficial-label\n%%EOF"
+            text = ""
+
+        class Session:
+            def __init__(self):
+                self.calls = []
+
+            def request(self, method, url, **kwargs):
+                self.calls.append((method, url, kwargs))
+                return Response()
+
+        session = Session()
+        client = MercadoLibreClient("token-value", session=session)
+
+        result = client.get_shipment_label("47841658738")
+
+        self.assertTrue(result.startswith(b"%PDF"))
+        self.assertEqual(
+            session.calls[0][1],
+            "https://api.mercadolibre.com/marketplace/shipments/47841658738/labels",
+        )
+        self.assertEqual(session.calls[0][2]["headers"]["Authorization"], "Bearer token-value")
 
 
 class DatabaseTests(unittest.TestCase):

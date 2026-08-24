@@ -90,14 +90,22 @@ class MercadoLibreClient:
     def request(self, method: str, path: str, *, params: dict[str, Any] | None = None) -> Any:
         """发送已认证请求，并处理 token 失效、限流及临时服务端错误。
 
-        401 每次请求最多触发一次 token 刷新；429 和 5xx 使用退避等待，避免
-        瞬时故障导致整个定时同步任务直接退出。
+        401 每次请求最多触发一次 token 刷新；网络中断、429 和 5xx 使用退避
+        等待，避免瞬时故障导致整个定时同步任务直接退出。
         """
         url = path if path.startswith("http") else f"{self.BASE_URL}{path}"
         refreshed = False
         for attempt in range(4):
-            response = self.session.request(method, url, params=params,
-                headers={"Authorization": f"Bearer {self.access_token}"}, timeout=self.timeout)
+            try:
+                response = self.session.request(method, url, params=params,
+                    headers={"Authorization": f"Bearer {self.access_token}"}, timeout=self.timeout)
+            except requests.RequestException as exc:
+                if attempt < 3:
+                    delay = min(2**attempt, 8)
+                    LOGGER.warning("API 网络请求中断，%s 秒后重试：%s", delay, exc)
+                    time.sleep(delay)
+                    continue
+                raise MercadoAPIError(f"{method} {path} 网络请求多次失败：{exc}") from exc
             if response.status_code == 401 and not refreshed:
                 self._refresh_access_token()
                 refreshed = True
@@ -111,6 +119,43 @@ class MercadoLibreClient:
             if not response.ok:
                 raise MercadoAPIError(f"{method} {path} 失败 ({response.status_code}): {response.text[:1000]}")
             return response.json()
+        raise MercadoAPIError(f"{method} {path} 多次重试后仍失败")
+
+    def request_bytes(self, method: str, path: str, *, params: dict[str, Any] | None = None) -> bytes:
+        """发送认证请求并返回二进制内容，供官方 PDF 等文件接口使用。"""
+        url = path if path.startswith("http") else f"{self.BASE_URL}{path}"
+        refreshed = False
+        for attempt in range(4):
+            try:
+                response = self.session.request(
+                    method,
+                    url,
+                    params=params,
+                    headers={"Authorization": f"Bearer {self.access_token}"},
+                    timeout=self.timeout,
+                )
+            except requests.RequestException as exc:
+                if attempt < 3:
+                    delay = min(2**attempt, 8)
+                    LOGGER.warning("API 文件请求中断，%s 秒后重试：%s", delay, exc)
+                    time.sleep(delay)
+                    continue
+                raise MercadoAPIError(f"{method} {path} 网络请求多次失败：{exc}") from exc
+            if response.status_code == 401 and not refreshed and self.refresh_token:
+                self._refresh_access_token()
+                refreshed = True
+                continue
+            if response.status_code == 429 or response.status_code >= 500:
+                if attempt < 3:
+                    delay = min(float(response.headers.get("Retry-After", 2**attempt)), 30)
+                    LOGGER.warning("API 文件暂时不可用 (%s)，%.1f 秒后重试", response.status_code, delay)
+                    time.sleep(delay)
+                    continue
+            if not response.ok:
+                raise MercadoAPIError(
+                    f"{method} {path} 失败 ({response.status_code}): {response.text[:1000]}"
+                )
+            return bytes(response.content)
         raise MercadoAPIError(f"{method} {path} 多次重试后仍失败")
 
     @staticmethod
@@ -133,7 +178,9 @@ class MercadoLibreClient:
         """
         offset, limit = 0, 50
         while True:
-            params = {"seller.id": seller_id, "limit": limit, "offset": offset, **filters}
+            # Global Selling 的生产接口使用 ``seller``；传 ``seller.id`` 会
+            # 返回 200 但 paging.total=0，容易被误判为店铺确实没有订单。
+            params = {"seller": seller_id, "limit": limit, "offset": offset, **filters}
             page = self.request("GET", "/marketplace/orders/search", params=params)
             results = page.get("results", [])
             yield from self._order_ids(results)
@@ -146,13 +193,34 @@ class MercadoLibreClient:
         """读取单个订单的完整详情。"""
         return self.request("GET", f"/marketplace/orders/{order_id}")
 
-    def iter_listing_ids(self, user_id: str) -> Iterator[str]:
+    def get_marketplace_item(
+        self,
+        item_id: str,
+        *,
+        attributes: Iterable[str] | None = None,
+    ) -> dict[str, Any]:
+        """读取 Global Selling 本地站点 Listing（含图片）。"""
+        params = None
+        if attributes:
+            params = {"attributes": ",".join(str(value) for value in attributes if value)}
+        return self.request("GET", f"/marketplace/items/{item_id}", params=params)
+
+    def get_shipment_label(self, shipment_id: str) -> bytes:
+        """调用 Mercado 官方接口下载 shipment 发货面单 PDF。"""
+        return self.request_bytes("GET", f"/marketplace/shipments/{shipment_id}/labels")
+
+    def iter_listing_ids(self, user_id: str, **filters: Any) -> Iterator[str]:
         """使用 scan/scroll 模式遍历账号下的全部 Listing ID。
 
         普通搜索只适合较小结果集；scan 模式可以继续读取超过 1000 条的数据。
         ``seen`` 用于防御接口分页边界偶尔出现的重复 ID。
         """
-        params: dict[str, Any] = {"search_type": "scan", "limit": 100}
+        base_params: dict[str, Any] = {
+            "search_type": "scan",
+            "limit": 100,
+            **filters,
+        }
+        params = dict(base_params)
         seen: set[str] = set()
         while True:
             page = self.request("GET", f"/marketplace/users/{user_id}/items/search", params=params)
@@ -164,7 +232,7 @@ class MercadoLibreClient:
             scroll_id = page.get("scroll_id") or page.get("paging", {}).get("scroll_id")
             if not results or not scroll_id:
                 break
-            params = {"search_type": "scan", "scroll_id": scroll_id, "limit": 100}
+            params = {**base_params, "scroll_id": scroll_id}
 
     def get_listings(self, item_ids: Iterable[str], batch_size: int = 20) -> Iterator[dict[str, Any]]:
         """分批调用 multiget 接口并逐条返回 Listing 完整数据。"""

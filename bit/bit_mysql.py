@@ -1,7 +1,7 @@
 import json
 import os
 import re
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from decimal import Decimal, InvalidOperation
 
 import pymysql
@@ -875,11 +875,28 @@ def get_latest_reputation_info():
 
 
 def insert_orders(line):
+    rows = list(line or [])
+    if not rows:
+        return 0
+    original_count = len(rows)
+
+    # 导出的相邻分页偶尔会重复包含边界订单。按订单 id 保留最后一条，
+    # 避免同一批次内触发唯一索引冲突。
+    deduplicated = {}
+    rows_without_id = []
+    for row in rows:
+        order_id = row[0] if row else None
+        if order_id in (None, ""):
+            rows_without_id.append(row)
+            continue
+        deduplicated[str(order_id).strip()] = row
+    rows = [*deduplicated.values(), *rows_without_id]
+
     connection = pymysql.connect(**config)
 
     try:
         with connection.cursor() as cursor:
-            # --- 增 (Create) ---
+            # 已存在的订单更新为本次导出值，使导入可以安全地重复执行。
             sql_insert = """
             INSERT INTO orders (
                 `id`, `编号`, `时间`, `业务员`, `来源`, `状态`, 
@@ -887,19 +904,827 @@ def insert_orders(line):
                 `采购追踪`, `利润`, `产品id`, `产品分类`, `标题`, 
                 `图片`, `数量`, `订单运费`,`订单备注`, `地区`, `买家姓名`
             ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            ON DUPLICATE KEY UPDATE
+                `编号` = VALUES(`编号`),
+                `时间` = VALUES(`时间`),
+                `业务员` = VALUES(`业务员`),
+                `来源` = VALUES(`来源`),
+                `状态` = VALUES(`状态`),
+                `金额` = VALUES(`金额`),
+                `费用` = VALUES(`费用`),
+                `退款` = VALUES(`退款`),
+                `人民币收入` = VALUES(`人民币收入`),
+                `采购成本` = VALUES(`采购成本`),
+                `采购单号` = VALUES(`采购单号`),
+                `采购追踪` = VALUES(`采购追踪`),
+                `利润` = VALUES(`利润`),
+                `产品id` = VALUES(`产品id`),
+                `产品分类` = VALUES(`产品分类`),
+                `标题` = VALUES(`标题`),
+                `图片` = VALUES(`图片`),
+                `数量` = VALUES(`数量`),
+                `订单运费` = VALUES(`订单运费`),
+                `订单备注` = VALUES(`订单备注`),
+                `地区` = VALUES(`地区`),
+                `买家姓名` = VALUES(`买家姓名`)
             """
-            cursor.executemany(sql_insert, line)
-            print("执行sql成功", sql_insert)
+            cursor.executemany(sql_insert, rows)
 
         # 核心：涉及写操作（增删改）必须提交事务
         connection.commit()
+        duplicate_count = original_count - len(rows)
+        print(f"订单入库成功：{len(rows)} 条，合并重复订单 {duplicate_count} 条")
+        return len(rows)
 
     except Exception as e:
         # 发生错误则回滚
         connection.rollback()
         print(f"操作失败，已回滚: {e}")
+        raise
     finally:
         # 关闭连接
+        connection.close()
+
+
+def _ensure_mercado_synced_orders_table(cursor):
+    cursor.execute(
+        """
+        CREATE TABLE IF NOT EXISTS `mercado_synced_orders` (
+            `order_id` VARCHAR(64) NOT NULL,
+            `token_id` BIGINT NOT NULL,
+            `shop_name` VARCHAR(100) NOT NULL,
+            `seller_id` VARCHAR(64) NOT NULL,
+            `site_id` VARCHAR(32) NULL,
+            `country` VARCHAR(32) NULL,
+            `status` VARCHAR(64) NULL,
+            `status_label` VARCHAR(32) NULL,
+            `status_detail` TEXT NULL,
+            `date_created` DATETIME NULL,
+            `date_closed` DATETIME NULL,
+            `last_updated` DATETIME NULL,
+            `currency_id` VARCHAR(16) NULL,
+            `total_amount` DECIMAL(20, 4) NULL,
+            `paid_amount` DECIMAL(20, 4) NULL,
+            `shipping_id` VARCHAR(64) NULL,
+            `buyer_id` VARCHAR(64) NULL,
+            `buyer_name` VARCHAR(255) NULL,
+            `product_id` VARCHAR(64) NULL,
+            `title` TEXT NULL,
+            `image_url` TEXT NULL,
+            `quantity` INT NULL,
+            `sale_fee` DECIMAL(20, 4) NULL,
+            `freight` DECIMAL(20, 4) NULL,
+            `workflow_status` VARCHAR(32) NULL,
+            `purchase_order` VARCHAR(255) NULL,
+            `purchase_tracking` VARCHAR(255) NULL,
+            `logistics_company` VARCHAR(64) NULL,
+            `purchase_cost` DECIMAL(20, 4) NULL,
+            `purchase_remark` TEXT NULL,
+            `tracking_cache_json` LONGTEXT NULL,
+            `tracking_checked_at` DATETIME NULL,
+            `manual_updated_at` DATETIME NULL,
+            `raw_json` LONGTEXT NOT NULL,
+            `first_synced_at` DATETIME NOT NULL,
+            `synced_at` DATETIME NOT NULL,
+            PRIMARY KEY (`order_id`),
+            KEY `idx_mercado_synced_orders_token_updated` (`token_id`, `last_updated`),
+            KEY `idx_mercado_synced_orders_created` (`date_created`),
+            KEY `idx_mercado_synced_orders_status` (`status_label`),
+            KEY `idx_mercado_synced_orders_country` (`country`)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+        """
+    )
+    _ensure_column(cursor, "mercado_synced_orders", "workflow_status", "VARCHAR(32) NULL")
+    _ensure_column(cursor, "mercado_synced_orders", "purchase_order", "VARCHAR(255) NULL")
+    _ensure_column(cursor, "mercado_synced_orders", "purchase_tracking", "VARCHAR(255) NULL")
+    _ensure_column(cursor, "mercado_synced_orders", "logistics_company", "VARCHAR(64) NULL")
+    _ensure_column(cursor, "mercado_synced_orders", "purchase_cost", "DECIMAL(20, 4) NULL")
+    _ensure_column(cursor, "mercado_synced_orders", "purchase_remark", "TEXT NULL")
+    _ensure_column(cursor, "mercado_synced_orders", "tracking_cache_json", "LONGTEXT NULL")
+    _ensure_column(cursor, "mercado_synced_orders", "tracking_checked_at", "DATETIME NULL")
+    _ensure_column(cursor, "mercado_synced_orders", "manual_updated_at", "DATETIME NULL")
+    _ensure_mercado_order_logs_table(cursor)
+
+
+def _ensure_mercado_order_logs_table(cursor):
+    cursor.execute(
+        """
+        CREATE TABLE IF NOT EXISTS `mercado_order_operation_logs` (
+            `id` BIGINT NOT NULL AUTO_INCREMENT,
+            `order_id` VARCHAR(64) NOT NULL,
+            `action_type` VARCHAR(32) NOT NULL,
+            `action_label` VARCHAR(64) NOT NULL,
+            `operator_id` BIGINT NULL,
+            `operator_name` VARCHAR(100) NULL,
+            `changes_json` LONGTEXT NULL,
+            `before_json` LONGTEXT NULL,
+            `after_json` LONGTEXT NULL,
+            `created_at` DATETIME NOT NULL,
+            PRIMARY KEY (`id`),
+            KEY `idx_mercado_order_logs_order_time` (`order_id`, `created_at`),
+            KEY `idx_mercado_order_logs_action` (`action_type`)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+        """
+    )
+
+
+_MERCADO_ORDER_STATUS_LABELS = {
+    "payment_required": "待付款",
+    "payment_in_process": "待付款",
+    "partially_paid": "待付款",
+    "confirmed": "审核",
+    "paid": "找货",
+    "ready_to_ship": "待发",
+    "shipped": "已发",
+    "delivered": "交付",
+    "cancelled": "取消",
+    "invalid": "问题",
+    "partially_refunded": "退货",
+    "refunded": "退货",
+}
+_MERCADO_SITE_COUNTRIES = {
+    "MLM": "墨西哥", "MLB": "巴西", "MLC": "智利",
+    "MCO": "哥伦比亚", "MLA": "阿根廷", "MLU": "乌拉圭",
+}
+
+
+def _mercado_order_datetime(value):
+    if value in (None, ""):
+        return None
+    if isinstance(value, datetime):
+        parsed = value
+    else:
+        try:
+            parsed = datetime.fromisoformat(str(value).replace("Z", "+00:00"))
+        except ValueError:
+            return str(value)[:19]
+    if parsed.tzinfo is not None:
+        parsed = parsed.astimezone(timezone.utc).replace(tzinfo=None)
+    return parsed.strftime("%Y-%m-%d %H:%M:%S")
+
+
+def upsert_mercado_synced_orders(token_record, orders):
+    token_record = dict(token_record or {})
+    orders = [dict(order or {}) for order in orders or [] if (order or {}).get("id") is not None]
+    if not orders:
+        return {"total": 0, "inserted": 0, "updated": 0}
+    token_id = int(token_record.get("id") or 0)
+    shop_name = str(token_record.get("display_name") or token_record.get("nickname") or token_id)
+    seller_id = str(token_record.get("meli_user_id") or "")
+    default_site_id = str(token_record.get("site_id") or "")
+    now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    connection = pymysql.connect(**config)
+    try:
+        with connection.cursor() as cursor:
+            _ensure_mercado_synced_orders_table(cursor)
+            order_ids = [str(order["id"]) for order in orders]
+            placeholders = ",".join(["%s"] * len(order_ids))
+            cursor.execute(
+                f"SELECT `order_id` FROM `mercado_synced_orders` WHERE `order_id` IN ({placeholders})",
+                order_ids,
+            )
+            existing = {str(row["order_id"]) for row in cursor.fetchall()}
+            rows = []
+            for order in orders:
+                items = list(order.get("order_items") or [])
+                first_item = items[0] if items else {}
+                product = dict(first_item.get("item") or {})
+                titles = [str((item.get("item") or {}).get("title") or "").strip() for item in items]
+                titles = [title for title in titles if title]
+                title = titles[0] if len(titles) == 1 else (
+                    f"{titles[0]} 等 {len(titles)} 件商品" if titles else ""
+                )
+                quantity = sum(int(item.get("quantity") or 0) for item in items)
+                sale_fee = sum(Decimal(str(item.get("sale_fee") or 0)) for item in items)
+                shipping = dict(order.get("shipping") or {})
+                buyer = dict(order.get("buyer") or {})
+                context = order.get("context") if isinstance(order.get("context"), dict) else {}
+                item_site_id = str(product.get("id") or "")[:3]
+                site_id = str(
+                    order.get("site_id")
+                    or context.get("site")
+                    or (item_site_id if item_site_id in _MERCADO_SITE_COUNTRIES else "")
+                    or default_site_id
+                )
+                raw_status = str(order.get("status") or "")
+                rows.append(
+                    (
+                        str(order["id"]), token_id, shop_name, seller_id, site_id,
+                        _MERCADO_SITE_COUNTRIES.get(site_id, site_id), raw_status,
+                        _MERCADO_ORDER_STATUS_LABELS.get(raw_status, raw_status or "未分类"),
+                        json.dumps(order.get("status_detail"), ensure_ascii=False),
+                        _mercado_order_datetime(order.get("date_created")),
+                        _mercado_order_datetime(order.get("date_closed")),
+                        _mercado_order_datetime(order.get("last_updated")),
+                        str(order.get("currency_id") or first_item.get("currency_id") or ""),
+                        order.get("total_amount"), order.get("paid_amount"),
+                        str(shipping.get("id") or ""), str(buyer.get("id") or ""),
+                        str(buyer.get("nickname") or buyer.get("first_name") or ""),
+                        str(product.get("id") or ""), title,
+                        str(product.get("thumbnail") or product.get("secure_thumbnail") or ""),
+                        quantity, sale_fee, shipping.get("cost") or 0,
+                        json.dumps(order, ensure_ascii=False, separators=(",", ":")),
+                        now, now,
+                    )
+                )
+            cursor.executemany(
+                """
+                INSERT INTO `mercado_synced_orders` (
+                    `order_id`, `token_id`, `shop_name`, `seller_id`, `site_id`, `country`,
+                    `status`, `status_label`, `status_detail`, `date_created`, `date_closed`,
+                    `last_updated`, `currency_id`, `total_amount`, `paid_amount`, `shipping_id`,
+                    `buyer_id`, `buyer_name`, `product_id`, `title`, `image_url`, `quantity`,
+                    `sale_fee`, `freight`, `raw_json`, `first_synced_at`, `synced_at`
+                ) VALUES (
+                    %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
+                    %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s
+                ) ON DUPLICATE KEY UPDATE
+                    `token_id` = VALUES(`token_id`), `shop_name` = VALUES(`shop_name`),
+                    `seller_id` = VALUES(`seller_id`), `site_id` = VALUES(`site_id`),
+                    `country` = VALUES(`country`), `status` = VALUES(`status`),
+                    `status_label` = VALUES(`status_label`), `status_detail` = VALUES(`status_detail`),
+                    `date_created` = VALUES(`date_created`), `date_closed` = VALUES(`date_closed`),
+                    `last_updated` = VALUES(`last_updated`), `currency_id` = VALUES(`currency_id`),
+                    `total_amount` = VALUES(`total_amount`), `paid_amount` = VALUES(`paid_amount`),
+                    `shipping_id` = VALUES(`shipping_id`), `buyer_id` = VALUES(`buyer_id`),
+                    `buyer_name` = VALUES(`buyer_name`), `product_id` = VALUES(`product_id`),
+                    `title` = VALUES(`title`),
+                    `image_url` = COALESCE(NULLIF(VALUES(`image_url`), ''), `image_url`),
+                    `quantity` = VALUES(`quantity`), `sale_fee` = VALUES(`sale_fee`),
+                    `freight` = VALUES(`freight`), `raw_json` = VALUES(`raw_json`),
+                    `synced_at` = VALUES(`synced_at`)
+                """,
+                rows,
+            )
+        connection.commit()
+        inserted = sum(1 for order_id in order_ids if order_id not in existing)
+        return {"total": len(order_ids), "inserted": inserted, "updated": len(order_ids) - inserted}
+    except Exception:
+        connection.rollback()
+        raise
+    finally:
+        connection.close()
+
+
+def get_mercado_order_sync_cursor(token_id):
+    connection = pymysql.connect(**config)
+    try:
+        with connection.cursor() as cursor:
+            _ensure_mercado_synced_orders_table(cursor)
+            cursor.execute(
+                "SELECT MAX(`last_updated`) AS `last_updated` FROM `mercado_synced_orders` WHERE `token_id` = %s",
+                (int(token_id),),
+            )
+            value = (cursor.fetchone() or {}).get("last_updated")
+            if value is None:
+                return None
+            if isinstance(value, datetime):
+                return value.replace(tzinfo=timezone.utc)
+            return datetime.fromisoformat(str(value)).replace(tzinfo=timezone.utc)
+    finally:
+        connection.close()
+
+
+def list_orders(
+    country="", status="", salesperson="", search="", start_date="", end_date="",
+    origin="", page=1, page_size=50,
+):
+    """分页查询当前已授权店铺的 Token 同步订单。"""
+    page = max(1, int(page or 1))
+    page_size = max(10, min(200, int(page_size or 50)))
+    country, status, salesperson, search = (
+        str(value or "").strip() for value in (country, status, salesperson, search)
+    )
+    start_date, end_date = (str(value or "").strip() for value in (start_date, end_date))
+    origin = str(origin or "").strip().lower()
+    if origin not in ("", "token", "zying"):
+        origin = ""
+
+    def build_where(
+        include_country=True, include_status=True, include_origin=True,
+        include_salesperson=True,
+    ):
+        clauses, params = [], []
+        if include_country and country:
+            clauses.append("`country` = %s")
+            params.append(country)
+        if include_status and status:
+            clauses.append("`status` = %s")
+            params.append(status)
+        if include_origin and origin:
+            clauses.append("`data_origin` = %s")
+            params.append(origin)
+        if include_salesperson and salesperson:
+            if salesperson == "__unassigned__":
+                clauses.append("COALESCE(`salesperson`, '') = ''")
+            else:
+                clauses.append("`salesperson` = %s")
+                params.append(salesperson)
+        if start_date:
+            clauses.append("`ordered_at` >= %s")
+            params.append(f"{start_date} 00:00:00")
+        if end_date:
+            clauses.append("`ordered_at` < DATE_ADD(%s, INTERVAL 1 DAY)")
+            params.append(f"{end_date} 00:00:00")
+        if search:
+            pattern = f"%{search}%"
+            clauses.append(
+                "(CAST(`id` AS CHAR) LIKE %s OR `order_number` LIKE %s OR "
+                "`purchase_order` LIKE %s OR `purchase_tracking` LIKE %s OR "
+                "`product_id` LIKE %s OR `title` LIKE %s OR `buyer` LIKE %s OR "
+                "`purchase_remark` LIKE %s OR `remark` LIKE %s OR `shop_name` LIKE %s)"
+            )
+            params.extend([pattern] * 10)
+        return (" WHERE " + " AND ".join(clauses)) if clauses else "", params
+
+    def json_value(value):
+        if isinstance(value, Decimal):
+            return float(value)
+        if isinstance(value, datetime):
+            return value.strftime("%Y-%m-%d %H:%M:%S")
+        return value
+
+    connection = pymysql.connect(**config)
+    try:
+        with connection.cursor() as cursor:
+            _ensure_mercado_synced_orders_table(cursor)
+            _ensure_mercado_store_tokens_table(cursor)
+            _ensure_mercado_store_site_settings_table(cursor)
+            source_sql = """
+                (
+                    SELECT synced.`order_id` AS `id`, synced.`order_id` AS `order_number`,
+                           synced.`date_created` AS `ordered_at`, site_settings.`salesperson`,
+                           site_settings.`discount_rate`, site_settings.`group_name`,
+                           synced.`shop_name`, '美客多 Token' AS `source`, 'token' AS `data_origin`,
+                           COALESCE(NULLIF(synced.`workflow_status`, ''), synced.`status_label`) AS `status`,
+                           synced.`status_label` AS `platform_status`, synced.`workflow_status`,
+                           synced.`total_amount` AS `amount`, synced.`sale_fee` AS `fee`,
+                           0 AS `refund`, synced.`paid_amount` AS `income`,
+                           COALESCE(synced.`purchase_cost`, 0) AS `cost`, synced.`purchase_order`,
+                           synced.`purchase_tracking`, synced.`logistics_company`,
+                           synced.`purchase_remark`, synced.`shipping_id` AS `platform_shipping_id`,
+                           COALESCE(synced.`paid_amount`, 0) - COALESCE(synced.`purchase_cost`, 0) AS `profit`,
+                           synced.`product_id`, '' AS `category`, synced.`title`,
+                           synced.`image_url`, synced.`quantity`, synced.`freight`,
+                           synced.`status_detail` AS `remark`,
+                           synced.`country`,
+                           synced.`buyer_name` AS `buyer`, synced.`currency_id`, synced.`last_updated`
+                    FROM `mercado_synced_orders` AS synced
+                    INNER JOIN `mercado_store_tokens` AS stores ON stores.`id` = synced.`token_id`
+                    LEFT JOIN `mercado_store_site_settings` AS site_settings
+                      ON site_settings.`token_id` = synced.`token_id`
+                     AND site_settings.`site_id` = synced.`site_id`
+                ) AS `order_source`
+            """
+            where_sql, params = build_where()
+            cursor.execute(f"SELECT COUNT(*) AS `total` FROM {source_sql}{where_sql}", params)
+            total = int((cursor.fetchone() or {}).get("total") or 0)
+            cursor.execute(
+                f"SELECT COALESCE(SUM(`amount`),0) AS `amount`, COALESCE(SUM(`income`),0) AS `income`, "
+                f"COALESCE(SUM(`cost`),0) AS `cost`, COALESCE(SUM(`profit`),0) AS `profit` "
+                f"FROM {source_sql}{where_sql}",
+                params,
+            )
+            summary = {key: json_value(value or 0) for key, value in (cursor.fetchone() or {}).items()}
+
+            status_where, status_params = build_where(include_status=False)
+            cursor.execute(
+                f"SELECT COALESCE(`status`,'未分类') AS `status`, COUNT(*) AS `count` "
+                f"FROM {source_sql}{status_where} GROUP BY COALESCE(`status`,'未分类') ORDER BY `count` DESC",
+                status_params,
+            )
+            status_counts = {str(row["status"]): int(row["count"]) for row in cursor.fetchall()}
+
+            country_where, country_params = build_where(include_country=False, include_status=False)
+            cursor.execute(
+                f"SELECT COALESCE(`country`,'未分类') AS `country`, COUNT(*) AS `count` "
+                f"FROM {source_sql}{country_where} GROUP BY COALESCE(`country`,'未分类') ORDER BY `count` DESC",
+                country_params,
+            )
+            country_counts = {str(row["country"]): int(row["count"]) for row in cursor.fetchall()}
+
+            origin_where, origin_params = build_where(include_origin=False)
+            cursor.execute(
+                f"SELECT `data_origin`, COUNT(*) AS `count` FROM {source_sql}{origin_where} GROUP BY `data_origin`",
+                origin_params,
+            )
+            origin_counts = {str(row["data_origin"]): int(row["count"]) for row in cursor.fetchall()}
+
+            salesperson_where, salesperson_params = build_where(include_salesperson=False)
+            cursor.execute(
+                f"SELECT COALESCE(NULLIF(`salesperson`,''),'未分配') AS `salesperson`, COUNT(*) AS `count` "
+                f"FROM {source_sql}{salesperson_where} "
+                f"GROUP BY COALESCE(NULLIF(`salesperson`,''),'未分配') ORDER BY `salesperson` ASC",
+                salesperson_params,
+            )
+            salesperson_counts = {
+                str(row["salesperson"]): int(row["count"]) for row in cursor.fetchall()
+            }
+
+            offset = (page - 1) * page_size
+            cursor.execute(
+                f"SELECT * FROM {source_sql}{where_sql} ORDER BY `ordered_at` DESC, `id` DESC LIMIT %s OFFSET %s",
+                [*params, page_size, offset],
+            )
+            rows = [{key: json_value(value) for key, value in row.items()} for row in cursor.fetchall()]
+            return {
+                "rows": rows, "total": total, "page": page, "page_size": page_size,
+                "pages": max(1, (total + page_size - 1) // page_size),
+                "status_counts": status_counts, "country_counts": country_counts,
+                "origin_counts": origin_counts, "salesperson_counts": salesperson_counts,
+                "summary": summary,
+            }
+    finally:
+        connection.close()
+
+
+def bulk_update_mercado_orders(
+    order_ids,
+    workflow_status=None,
+    purchase_order=None,
+    purchase_tracking=None,
+    logistics_company=None,
+    purchase_cost=None,
+    purchase_remark=None,
+    operator_id=None,
+    operator_name="",
+):
+    """批量更新当前授权店铺订单的处理状态和采购信息。"""
+    normalized_ids = []
+    for value in order_ids or []:
+        order_id = str(value or "").strip()
+        if order_id and order_id not in normalized_ids:
+            normalized_ids.append(order_id)
+    if not normalized_ids:
+        raise ValueError("请至少选择一个订单")
+    if len(normalized_ids) > 500:
+        raise ValueError("单次最多操作 500 个订单")
+
+    assignments, values, requested_changes = [], [], {}
+    if workflow_status is not None:
+        workflow_status = str(workflow_status or "").strip()
+        if len(workflow_status) > 32:
+            raise ValueError("订单状态不能超过 32 个字符")
+        assignments.append("synced.`workflow_status` = %s")
+        values.append(workflow_status or None)
+        requested_changes["workflow_status"] = workflow_status or None
+    if purchase_order is not None:
+        purchase_order = str(purchase_order or "").strip()
+        if len(purchase_order) > 255:
+            raise ValueError("采购单号不能超过 255 个字符")
+        assignments.append("synced.`purchase_order` = %s")
+        values.append(purchase_order or None)
+        requested_changes["purchase_order"] = purchase_order or None
+    tracking_changed = False
+    if purchase_tracking is not None:
+        purchase_tracking = str(purchase_tracking or "").strip()
+        if len(purchase_tracking) > 255:
+            raise ValueError("物流号不能超过 255 个字符")
+        assignments.append("synced.`purchase_tracking` = %s")
+        values.append(purchase_tracking or None)
+        requested_changes["purchase_tracking"] = purchase_tracking or None
+        tracking_changed = True
+    if logistics_company is not None:
+        logistics_company = str(logistics_company or "").strip().lower()
+        if len(logistics_company) > 64:
+            raise ValueError("物流公司编码不能超过 64 个字符")
+        assignments.append("synced.`logistics_company` = %s")
+        values.append(logistics_company or None)
+        requested_changes["logistics_company"] = logistics_company or None
+        tracking_changed = True
+    if purchase_cost is not None:
+        cost_text = str(purchase_cost or "").replace(",", "").strip()
+        if cost_text:
+            try:
+                cost_value = Decimal(cost_text)
+            except InvalidOperation as exc:
+                raise ValueError("采购成本必须是有效数字") from exc
+            if cost_value < 0:
+                raise ValueError("采购成本不能小于 0")
+        else:
+            cost_value = None
+        assignments.append("synced.`purchase_cost` = %s")
+        values.append(cost_value)
+        requested_changes["purchase_cost"] = cost_value
+    if purchase_remark is not None:
+        purchase_remark = str(purchase_remark or "").strip()
+        if len(purchase_remark) > 5000:
+            raise ValueError("采购备注不能超过 5000 个字符")
+        assignments.append("synced.`purchase_remark` = %s")
+        values.append(purchase_remark or None)
+        requested_changes["purchase_remark"] = purchase_remark or None
+    if tracking_changed:
+        assignments.extend([
+            "synced.`tracking_cache_json` = NULL",
+            "synced.`tracking_checked_at` = NULL",
+        ])
+    if not assignments:
+        raise ValueError("没有需要更新的订单内容")
+    assignments.append("synced.`manual_updated_at` = %s")
+    values.append(datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
+
+    placeholders = ",".join(["%s"] * len(normalized_ids))
+    field_labels = {
+        "workflow_status": "订单状态",
+        "purchase_order": "采购订单号",
+        "purchase_tracking": "物流号",
+        "logistics_company": "物流公司",
+        "purchase_cost": "采购成本",
+        "purchase_remark": "采购备注",
+    }
+
+    def audit_value(value):
+        if isinstance(value, Decimal):
+            return format(value, "f")
+        if isinstance(value, datetime):
+            return value.strftime("%Y-%m-%d %H:%M:%S")
+        return value
+
+    def comparable(value):
+        value = audit_value(value)
+        return "" if value is None else str(value)
+
+    connection = pymysql.connect(**config)
+    try:
+        with connection.cursor() as cursor:
+            _ensure_mercado_synced_orders_table(cursor)
+            _ensure_mercado_store_tokens_table(cursor)
+            cursor.execute(
+                f"SELECT synced.`order_id`, synced.`workflow_status`, synced.`purchase_order`, "
+                f"synced.`purchase_tracking`, synced.`logistics_company`, synced.`purchase_cost`, "
+                f"synced.`purchase_remark` FROM `mercado_synced_orders` AS synced "
+                f"INNER JOIN `mercado_store_tokens` AS stores ON stores.`id` = synced.`token_id` "
+                f"WHERE synced.`order_id` IN ({placeholders})",
+                normalized_ids,
+            )
+            before_rows = list(cursor.fetchall() or [])
+            matched = len(before_rows)
+            cursor.execute(
+                f"UPDATE `mercado_synced_orders` AS synced "
+                f"INNER JOIN `mercado_store_tokens` AS stores ON stores.`id` = synced.`token_id` "
+                f"SET {', '.join(assignments)} "
+                f"WHERE synced.`order_id` IN ({placeholders})",
+                [*values, *normalized_ids],
+            )
+            changed = int(cursor.rowcount)
+            log_rows = []
+            now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            procurement_fields = {
+                "purchase_order", "purchase_tracking", "logistics_company",
+                "purchase_cost", "purchase_remark",
+            }
+            for before in before_rows:
+                changed_fields = {}
+                after = {key: audit_value(before.get(key)) for key in field_labels}
+                for key, new_value in requested_changes.items():
+                    old_value = audit_value(before.get(key))
+                    new_value = audit_value(new_value)
+                    after[key] = new_value
+                    if comparable(old_value) != comparable(new_value):
+                        changed_fields[key] = {
+                            "label": field_labels[key],
+                            "before": old_value,
+                            "after": new_value,
+                        }
+                if not changed_fields:
+                    continue
+                if procurement_fields.intersection(changed_fields):
+                    created = (
+                        not comparable(before.get("purchase_order"))
+                        and bool(comparable(after.get("purchase_order")))
+                    )
+                    action_type = "purchase_created" if created else "purchase_updated"
+                    action_label = "新增采购单" if created else "修改采购单"
+                else:
+                    action_type = "status_updated"
+                    action_label = "修改订单状态"
+                before_payload = {
+                    key: audit_value(before.get(key)) for key in changed_fields
+                }
+                after_payload = {key: after.get(key) for key in changed_fields}
+                log_rows.append((
+                    str(before.get("order_id") or ""), action_type, action_label,
+                    int(operator_id) if str(operator_id or "").isdigit() else None,
+                    str(operator_name or "").strip()[:100] or "系统",
+                    json.dumps(changed_fields, ensure_ascii=False, separators=(",", ":")),
+                    json.dumps(before_payload, ensure_ascii=False, separators=(",", ":")),
+                    json.dumps(after_payload, ensure_ascii=False, separators=(",", ":")),
+                    now,
+                ))
+            if log_rows:
+                cursor.executemany(
+                    """
+                    INSERT INTO `mercado_order_operation_logs` (
+                        `order_id`, `action_type`, `action_label`, `operator_id`, `operator_name`,
+                        `changes_json`, `before_json`, `after_json`, `created_at`
+                    ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+                    """,
+                    log_rows,
+                )
+        connection.commit()
+        return {"matched": matched, "changed": changed}
+    except Exception:
+        connection.rollback()
+        raise
+    finally:
+        connection.close()
+
+
+def get_mercado_order_label_contexts(order_ids):
+    normalized_ids = []
+    for value in order_ids or []:
+        order_id = str(value or "").strip()
+        if order_id and order_id not in normalized_ids:
+            normalized_ids.append(order_id)
+    if not normalized_ids:
+        raise ValueError("请至少选择一个订单")
+    if len(normalized_ids) > 100:
+        raise ValueError("单次最多打印 100 个订单")
+    placeholders = ",".join(["%s"] * len(normalized_ids))
+    connection = pymysql.connect(**config)
+    try:
+        with connection.cursor() as cursor:
+            _ensure_mercado_synced_orders_table(cursor)
+            _ensure_mercado_store_tokens_table(cursor)
+            cursor.execute(
+                f"""
+                SELECT synced.`order_id`, synced.`shipping_id`, synced.`token_id`,
+                       synced.`shop_name`, synced.`status`, synced.`status_label`,
+                       stores.`access_token`, stores.`refresh_token`, stores.`expires_at`
+                FROM `mercado_synced_orders` AS synced
+                INNER JOIN `mercado_store_tokens` AS stores ON stores.`id` = synced.`token_id`
+                WHERE synced.`order_id` IN ({placeholders})
+                ORDER BY FIELD(synced.`order_id`, {placeholders})
+                """,
+                [*normalized_ids, *normalized_ids],
+            )
+            return list(cursor.fetchall() or [])
+    finally:
+        connection.close()
+
+
+def record_mercado_order_print_logs(order_ids, operator_id=None, operator_name=""):
+    orders = get_mercado_order_label_contexts(order_ids)
+    if not orders:
+        return 0
+    now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    actor_id = int(operator_id) if str(operator_id or "").isdigit() else None
+    actor_name = str(operator_name or "").strip()[:100] or "系统"
+    connection = pymysql.connect(**config)
+    try:
+        with connection.cursor() as cursor:
+            _ensure_mercado_order_logs_table(cursor)
+            cursor.executemany(
+                """
+                INSERT INTO `mercado_order_operation_logs` (
+                    `order_id`, `action_type`, `action_label`, `operator_id`, `operator_name`,
+                    `changes_json`, `before_json`, `after_json`, `created_at`
+                ) VALUES (%s, 'label_printed', '打印美客多面单', %s, %s, %s, NULL, NULL, %s)
+                """,
+                [
+                    (
+                        str(row.get("order_id") or ""), actor_id, actor_name,
+                        json.dumps({"format": "PDF"}, ensure_ascii=False), now,
+                    )
+                    for row in orders
+                ],
+            )
+        connection.commit()
+        return len(orders)
+    except Exception:
+        connection.rollback()
+        raise
+    finally:
+        connection.close()
+
+
+def list_mercado_order_operation_logs(order_id, limit=100):
+    limit = max(1, min(200, int(limit or 100)))
+    connection = pymysql.connect(**config)
+    try:
+        with connection.cursor() as cursor:
+            _ensure_mercado_synced_orders_table(cursor)
+            _ensure_mercado_store_tokens_table(cursor)
+            cursor.execute(
+                """
+                SELECT logs.`id`, logs.`order_id`, logs.`action_type`, logs.`action_label`,
+                       logs.`operator_id`, logs.`operator_name`, logs.`changes_json`,
+                       logs.`before_json`, logs.`after_json`, logs.`created_at`
+                FROM `mercado_order_operation_logs` AS logs
+                INNER JOIN `mercado_synced_orders` AS synced ON synced.`order_id` = logs.`order_id`
+                INNER JOIN `mercado_store_tokens` AS stores ON stores.`id` = synced.`token_id`
+                WHERE logs.`order_id` = %s
+                ORDER BY logs.`created_at` DESC, logs.`id` DESC
+                LIMIT %s
+                """,
+                (str(order_id), limit),
+            )
+            rows = list(cursor.fetchall() or [])
+            for row in rows:
+                for key in ("changes_json", "before_json", "after_json"):
+                    raw = row.pop(key, None)
+                    target = key.removesuffix("_json")
+                    try:
+                        row[target] = json.loads(raw) if raw else {}
+                    except (TypeError, ValueError):
+                        row[target] = {}
+                if isinstance(row.get("created_at"), datetime):
+                    row["created_at"] = row["created_at"].strftime("%Y-%m-%d %H:%M:%S")
+            return rows
+    finally:
+        connection.close()
+
+
+def get_mercado_order_procurement(order_id):
+    connection = pymysql.connect(**config)
+    try:
+        with connection.cursor() as cursor:
+            _ensure_mercado_synced_orders_table(cursor)
+            _ensure_mercado_store_tokens_table(cursor)
+            cursor.execute(
+                """
+                SELECT synced.`order_id`, synced.`token_id`, synced.`shop_name`, synced.`product_id`,
+                       synced.`title`, synced.`image_url`, synced.`purchase_order`,
+                       synced.`purchase_tracking`, synced.`logistics_company`, synced.`purchase_cost`,
+                       synced.`purchase_remark`, synced.`tracking_cache_json`,
+                       synced.`tracking_checked_at`
+                FROM `mercado_synced_orders` AS synced
+                INNER JOIN `mercado_store_tokens` AS stores ON stores.`id` = synced.`token_id`
+                WHERE synced.`order_id` = %s LIMIT 1
+                """,
+                (str(order_id),),
+            )
+            return cursor.fetchone()
+    finally:
+        connection.close()
+
+
+def update_mercado_tracking_cache(order_id, payload):
+    connection = pymysql.connect(**config)
+    try:
+        with connection.cursor() as cursor:
+            _ensure_mercado_synced_orders_table(cursor)
+            cursor.execute(
+                """
+                UPDATE `mercado_synced_orders`
+                SET `tracking_cache_json` = %s, `tracking_checked_at` = %s
+                WHERE `order_id` = %s
+                """,
+                (
+                    json.dumps(payload or {}, ensure_ascii=False, separators=(",", ":")),
+                    datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                    str(order_id),
+                ),
+            )
+        connection.commit()
+    except Exception:
+        connection.rollback()
+        raise
+    finally:
+        connection.close()
+
+
+def list_mercado_missing_product_images(token_id, limit=200):
+    connection = pymysql.connect(**config)
+    try:
+        with connection.cursor() as cursor:
+            _ensure_mercado_synced_orders_table(cursor)
+            cursor.execute(
+                """
+                SELECT `product_id`, MAX(`title`) AS `title`, COUNT(*) AS `order_count`
+                FROM `mercado_synced_orders`
+                WHERE `token_id` = %s AND COALESCE(`image_url`, '') = ''
+                  AND COALESCE(`product_id`, '') <> ''
+                GROUP BY `product_id`
+                ORDER BY MAX(`date_created`) DESC
+                LIMIT %s
+                """,
+                (int(token_id), max(1, min(1000, int(limit or 200)))),
+            )
+            return cursor.fetchall() or []
+    finally:
+        connection.close()
+
+
+def update_mercado_product_image(token_id, product_id, image_url):
+    connection = pymysql.connect(**config)
+    try:
+        with connection.cursor() as cursor:
+            _ensure_mercado_synced_orders_table(cursor)
+            cursor.execute(
+                """
+                UPDATE `mercado_synced_orders` SET `image_url` = %s
+                WHERE `token_id` = %s AND `product_id` = %s
+                """,
+                (str(image_url or ""), int(token_id), str(product_id)),
+            )
+            affected = int(cursor.rowcount)
+        connection.commit()
+        return affected
+    except Exception:
+        connection.rollback()
+        raise
+    finally:
         connection.close()
 
 
@@ -1947,6 +2772,536 @@ def get_ai_appeal_records(limit=100):
                     except Exception:
                         row[json_key] = []
             return {"total": len(rows), "rows": rows}
+    finally:
+        connection.close()
+
+
+def _ensure_mercado_store_tokens_table(cursor):
+    cursor.execute(
+        """
+        CREATE TABLE IF NOT EXISTS `mercado_store_tokens` (
+            `id` BIGINT NOT NULL AUTO_INCREMENT,
+            `display_name` VARCHAR(100) NOT NULL,
+            `meli_user_id` VARCHAR(64) NULL,
+            `nickname` VARCHAR(255) NULL,
+            `site_id` VARCHAR(32) NULL,
+            `client_id` VARCHAR(64) NULL,
+            `access_token` LONGTEXT NOT NULL,
+            `refresh_token` LONGTEXT NULL,
+            `token_type` VARCHAR(32) NOT NULL DEFAULT 'Bearer',
+            `scope` TEXT NULL,
+            `expires_at` DATETIME NULL,
+            `last_verified_at` DATETIME NULL,
+            `last_refreshed_at` DATETIME NULL,
+            `last_error` TEXT NULL,
+            `created_at` DATETIME NOT NULL,
+            `updated_at` DATETIME NOT NULL,
+            PRIMARY KEY (`id`),
+            UNIQUE KEY `uniq_mercado_store_display_name` (`display_name`),
+            UNIQUE KEY `uniq_mercado_store_user_id` (`meli_user_id`),
+            KEY `idx_mercado_store_expires_at` (`expires_at`)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+        """
+    )
+
+
+MERCADO_CONFIGURABLE_SITES = {
+    "MLM": "墨西哥",
+    "MLB": "巴西",
+    "MLC": "智利",
+    "MCO": "哥伦比亚",
+    "MLA": "阿根廷",
+    "MLU": "乌拉圭",
+}
+
+
+def _ensure_mercado_store_site_settings_table(cursor):
+    cursor.execute(
+        """
+        CREATE TABLE IF NOT EXISTS `mercado_store_site_settings` (
+            `id` BIGINT NOT NULL AUTO_INCREMENT,
+            `token_id` BIGINT NOT NULL,
+            `site_id` VARCHAR(32) NOT NULL,
+            `salesperson` VARCHAR(100) NULL,
+            `discount_rate` DECIMAL(7,4) NULL,
+            `group_name` VARCHAR(100) NULL,
+            `created_at` DATETIME NOT NULL,
+            `updated_at` DATETIME NOT NULL,
+            PRIMARY KEY (`id`),
+            UNIQUE KEY `uniq_mercado_store_site_setting` (`token_id`, `site_id`),
+            KEY `idx_mercado_site_salesperson` (`salesperson`),
+            KEY `idx_mercado_site_group` (`group_name`)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+        """
+    )
+
+
+def _mercado_store_site_setting_rows(cursor, token_id):
+    cursor.execute(
+        """
+        SELECT `token_id`, `site_id`, `salesperson`, `discount_rate`, `group_name`,
+               `created_at`, `updated_at`
+        FROM `mercado_store_site_settings`
+        WHERE `token_id` = %s
+        ORDER BY `site_id` ASC
+        """,
+        (int(token_id),),
+    )
+    configured = {str(row["site_id"]): dict(row) for row in (cursor.fetchall() or [])}
+    result = []
+    for site_id, site_name in MERCADO_CONFIGURABLE_SITES.items():
+        row = configured.get(site_id, {})
+        discount_rate = row.get("discount_rate")
+        result.append(
+            {
+                "token_id": int(token_id),
+                "site_id": site_id,
+                "site_name": site_name,
+                "salesperson": str(row.get("salesperson") or ""),
+                "discount_rate": (
+                    float(discount_rate) if discount_rate is not None else None
+                ),
+                "group_name": str(row.get("group_name") or ""),
+                "created_at": str(row["created_at"]) if row.get("created_at") else None,
+                "updated_at": str(row["updated_at"]) if row.get("updated_at") else None,
+            }
+        )
+    return result
+
+
+def list_mercado_store_site_settings(token_id):
+    token_id = int(token_id)
+    connection = pymysql.connect(**config)
+    try:
+        with connection.cursor() as cursor:
+            _ensure_mercado_store_tokens_table(cursor)
+            _ensure_mercado_store_site_settings_table(cursor)
+            cursor.execute(
+                "SELECT 1 FROM `mercado_store_tokens` WHERE `id` = %s LIMIT 1",
+                (token_id,),
+            )
+            if not cursor.fetchone():
+                raise KeyError("店铺 Token 不存在")
+            rows = _mercado_store_site_setting_rows(cursor, token_id)
+            return {"token_id": token_id, "rows": rows}
+    finally:
+        connection.close()
+
+
+def upsert_mercado_store_site_settings(token_id, settings):
+    token_id = int(token_id)
+    if not isinstance(settings, list):
+        raise ValueError("站点配置必须是数组")
+    if len(settings) > len(MERCADO_CONFIGURABLE_SITES):
+        raise ValueError("站点配置数量超过支持范围")
+
+    normalized = []
+    seen_sites = set()
+    for raw in settings:
+        if not isinstance(raw, dict):
+            raise ValueError("站点配置格式不正确")
+        site_id = str(raw.get("site_id") or "").strip().upper()
+        if site_id not in MERCADO_CONFIGURABLE_SITES:
+            raise ValueError(f"不支持的美客多站点：{site_id or '空'}")
+        if site_id in seen_sites:
+            raise ValueError(f"站点 {site_id} 配置重复")
+        seen_sites.add(site_id)
+
+        salesperson = str(raw.get("salesperson") or "").strip()
+        group_name = str(raw.get("group_name") or "").strip()
+        if len(salesperson) > 100:
+            raise ValueError(f"{site_id} 的业务员不能超过 100 个字符")
+        if len(group_name) > 100:
+            raise ValueError(f"{site_id} 的组别不能超过 100 个字符")
+
+        raw_discount = raw.get("discount_rate")
+        if raw_discount in (None, ""):
+            discount_rate = None
+        else:
+            try:
+                discount_rate = Decimal(str(raw_discount))
+            except Exception as exc:
+                raise ValueError(f"{site_id} 的折扣比例不是有效数字") from exc
+            if discount_rate < 0 or discount_rate > 100:
+                raise ValueError(f"{site_id} 的折扣比例必须在 0 到 100 之间")
+            discount_rate = discount_rate.quantize(Decimal("0.0001"))
+        normalized.append((site_id, salesperson, discount_rate, group_name))
+
+    now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    connection = pymysql.connect(**config)
+    try:
+        with connection.cursor() as cursor:
+            _ensure_mercado_store_tokens_table(cursor)
+            _ensure_mercado_store_site_settings_table(cursor)
+            cursor.execute(
+                "SELECT 1 FROM `mercado_store_tokens` WHERE `id` = %s LIMIT 1",
+                (token_id,),
+            )
+            if not cursor.fetchone():
+                raise KeyError("店铺 Token 不存在")
+            for site_id, salesperson, discount_rate, group_name in normalized:
+                if not salesperson and discount_rate is None and not group_name:
+                    cursor.execute(
+                        "DELETE FROM `mercado_store_site_settings` WHERE `token_id` = %s AND `site_id` = %s",
+                        (token_id, site_id),
+                    )
+                    continue
+                cursor.execute(
+                    """
+                    INSERT INTO `mercado_store_site_settings` (
+                        `token_id`, `site_id`, `salesperson`, `discount_rate`, `group_name`,
+                        `created_at`, `updated_at`
+                    ) VALUES (%s, %s, %s, %s, %s, %s, %s)
+                    ON DUPLICATE KEY UPDATE
+                        `salesperson` = VALUES(`salesperson`),
+                        `discount_rate` = VALUES(`discount_rate`),
+                        `group_name` = VALUES(`group_name`),
+                        `updated_at` = VALUES(`updated_at`)
+                    """,
+                    (
+                        token_id, site_id, salesperson or None, discount_rate,
+                        group_name or None, now, now,
+                    ),
+                )
+            rows = _mercado_store_site_setting_rows(cursor, token_id)
+        connection.commit()
+        return {"token_id": token_id, "rows": rows}
+    except Exception:
+        connection.rollback()
+        raise
+    finally:
+        connection.close()
+
+
+def _mercado_token_datetime(value):
+    if value in (None, ""):
+        return None
+    if isinstance(value, datetime):
+        return value.strftime("%Y-%m-%d %H:%M:%S")
+    return str(value)
+
+
+def _mercado_token_record(record):
+    normalized = {
+        "display_name": str(record.get("display_name") or "").strip(),
+        "meli_user_id": str(record.get("meli_user_id") or "").strip() or None,
+        "nickname": str(record.get("nickname") or "").strip(),
+        "site_id": str(record.get("site_id") or "").strip(),
+        "client_id": str(record.get("client_id") or "").strip(),
+        "access_token": str(record.get("access_token") or "").strip(),
+        "refresh_token": str(record.get("refresh_token") or "").strip(),
+        "token_type": str(record.get("token_type") or "Bearer").strip() or "Bearer",
+        "scope": str(record.get("scope") or "").strip(),
+        "expires_at": _mercado_token_datetime(record.get("expires_at")),
+        "last_verified_at": _mercado_token_datetime(record.get("last_verified_at")),
+        "last_refreshed_at": _mercado_token_datetime(record.get("last_refreshed_at")),
+        "last_error": str(record.get("last_error") or "").strip(),
+    }
+    if not normalized["display_name"]:
+        raise ValueError("店铺 Token 缺少自定义名称")
+    if len(normalized["display_name"]) > 100:
+        raise ValueError("自定义店铺名称不能超过 100 个字符")
+    if not normalized["access_token"]:
+        raise ValueError("店铺 Token 缺少 Access Token")
+    return normalized
+
+
+def _mercado_token_summary(row, now=None):
+    result = dict(row or {})
+    result.pop("access_token", None)
+    result.pop("refresh_token", None)
+    now = now or datetime.now()
+    expires_at = result.get("expires_at")
+    if isinstance(expires_at, str):
+        try:
+            expires_at = datetime.fromisoformat(expires_at)
+        except ValueError:
+            expires_at = None
+    has_refresh_token = bool(result.pop("has_refresh_token", False))
+    last_error = str(result.get("last_error") or "")
+    if expires_at is None:
+        status = "unknown"
+        status_text = "有效期未知"
+    elif expires_at <= now:
+        status = "expired"
+        status_text = "已过期，可刷新" if has_refresh_token else "已过期，需重新授权"
+    elif expires_at <= now + timedelta(minutes=30):
+        status = "expiring"
+        status_text = "即将过期"
+    else:
+        status = "active"
+        status_text = "有效"
+    if last_error and status not in ("expired",):
+        status = "warning"
+        status_text = "需检查"
+    result["has_refresh_token"] = has_refresh_token
+    result["status"] = status
+    result["status_text"] = status_text
+    for key in (
+        "expires_at",
+        "last_verified_at",
+        "last_refreshed_at",
+        "created_at",
+        "updated_at",
+    ):
+        if result.get(key) is not None:
+            result[key] = str(result[key])
+    return result
+
+
+def upsert_mercado_store_token(record):
+    token = _mercado_token_record(record)
+    now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    connection = pymysql.connect(**config)
+    try:
+        with connection.cursor() as cursor:
+            _ensure_mercado_store_tokens_table(cursor)
+            cursor.execute(
+                "SELECT `id`, `display_name`, `meli_user_id` "
+                "FROM `mercado_store_tokens` "
+                "WHERE `display_name` = %s OR (`meli_user_id` IS NOT NULL AND `meli_user_id` = %s)",
+                (token["display_name"], token["meli_user_id"]),
+            )
+            matches = cursor.fetchall() or []
+            matched_ids = {int(row["id"]) for row in matches}
+            if len(matched_ids) > 1:
+                raise ValueError("自定义名称已被另一个授权店铺使用，请更换名称")
+
+            values = (
+                token["display_name"],
+                token["meli_user_id"],
+                token["nickname"],
+                token["site_id"],
+                token["client_id"],
+                token["access_token"],
+                token["refresh_token"],
+                token["token_type"],
+                token["scope"],
+                token["expires_at"],
+                token["last_verified_at"],
+                token["last_refreshed_at"],
+                token["last_error"],
+                now,
+            )
+            if matched_ids:
+                token_id = matched_ids.pop()
+                cursor.execute(
+                    """
+                    UPDATE `mercado_store_tokens`
+                    SET `display_name` = %s, `meli_user_id` = %s, `nickname` = %s,
+                        `site_id` = %s, `client_id` = %s, `access_token` = %s,
+                        `refresh_token` = %s, `token_type` = %s, `scope` = %s,
+                        `expires_at` = %s, `last_verified_at` = %s,
+                        `last_refreshed_at` = %s, `last_error` = %s, `updated_at` = %s
+                    WHERE `id` = %s
+                    """,
+                    values + (token_id,),
+                )
+            else:
+                cursor.execute(
+                    """
+                    INSERT INTO `mercado_store_tokens` (
+                        `display_name`, `meli_user_id`, `nickname`, `site_id`, `client_id`,
+                        `access_token`, `refresh_token`, `token_type`, `scope`, `expires_at`,
+                        `last_verified_at`, `last_refreshed_at`, `last_error`, `created_at`,
+                        `updated_at`
+                    ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                    """,
+                    values + (now,),
+                )
+                token_id = cursor.lastrowid
+        connection.commit()
+        return get_mercado_store_token_summary(token_id)
+    except Exception:
+        connection.rollback()
+        raise
+    finally:
+        connection.close()
+
+
+def list_mercado_store_tokens():
+    connection = pymysql.connect(**config)
+    try:
+        with connection.cursor() as cursor:
+            _ensure_mercado_store_tokens_table(cursor)
+            _ensure_mercado_store_site_settings_table(cursor)
+            cursor.execute(
+                """
+                SELECT `id`, `display_name`, `meli_user_id`, `nickname`, `site_id`,
+                       `client_id`, `token_type`, `scope`, `expires_at`,
+                       `last_verified_at`, `last_refreshed_at`, `last_error`,
+                       `created_at`, `updated_at`,
+                       (`refresh_token` IS NOT NULL AND `refresh_token` <> '') AS `has_refresh_token`
+                FROM `mercado_store_tokens`
+                ORDER BY `display_name` ASC, `id` ASC
+                """
+            )
+            rows = [_mercado_token_summary(row) for row in (cursor.fetchall() or [])]
+            for row in rows:
+                row["site_settings"] = _mercado_store_site_setting_rows(cursor, row["id"])
+            return {"total": len(rows), "rows": rows}
+    finally:
+        connection.close()
+
+
+def get_mercado_store_token_summary(token_id):
+    connection = pymysql.connect(**config)
+    try:
+        with connection.cursor() as cursor:
+            _ensure_mercado_store_tokens_table(cursor)
+            _ensure_mercado_store_site_settings_table(cursor)
+            cursor.execute(
+                """
+                SELECT `id`, `display_name`, `meli_user_id`, `nickname`, `site_id`,
+                       `client_id`, `token_type`, `scope`, `expires_at`,
+                       `last_verified_at`, `last_refreshed_at`, `last_error`,
+                       `created_at`, `updated_at`,
+                       (`refresh_token` IS NOT NULL AND `refresh_token` <> '') AS `has_refresh_token`
+                FROM `mercado_store_tokens` WHERE `id` = %s LIMIT 1
+                """,
+                (int(token_id),),
+            )
+            row = cursor.fetchone()
+            if not row:
+                return None
+            result = _mercado_token_summary(row)
+            result["site_settings"] = _mercado_store_site_setting_rows(cursor, token_id)
+            return result
+    finally:
+        connection.close()
+
+
+def get_mercado_store_token(token_id):
+    """Return secrets for server-side refresh/API use; never expose via UI routes."""
+    connection = pymysql.connect(**config)
+    try:
+        with connection.cursor() as cursor:
+            _ensure_mercado_store_tokens_table(cursor)
+            _ensure_mercado_store_site_settings_table(cursor)
+            cursor.execute(
+                "SELECT * FROM `mercado_store_tokens` WHERE `id` = %s LIMIT 1",
+                (int(token_id),),
+            )
+            return cursor.fetchone()
+    finally:
+        connection.close()
+
+
+def update_mercado_store_token(token_id, record):
+    token = _mercado_token_record(record)
+    token_id = int(token_id)
+    now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    connection = pymysql.connect(**config)
+    try:
+        with connection.cursor() as cursor:
+            _ensure_mercado_store_tokens_table(cursor)
+            cursor.execute(
+                """
+                UPDATE `mercado_store_tokens`
+                SET `meli_user_id` = %s, `nickname` = %s, `site_id` = %s,
+                    `client_id` = %s, `access_token` = %s, `refresh_token` = %s,
+                    `token_type` = %s, `scope` = %s, `expires_at` = %s,
+                    `last_verified_at` = %s, `last_refreshed_at` = %s,
+                    `last_error` = %s, `updated_at` = %s
+                WHERE `id` = %s
+                """,
+                (
+                    token["meli_user_id"], token["nickname"], token["site_id"],
+                    token["client_id"], token["access_token"], token["refresh_token"],
+                    token["token_type"], token["scope"], token["expires_at"],
+                    token["last_verified_at"], token["last_refreshed_at"],
+                    token["last_error"], now, token_id,
+                ),
+            )
+            if cursor.rowcount == 0:
+                cursor.execute("SELECT 1 FROM `mercado_store_tokens` WHERE `id` = %s", (token_id,))
+                if not cursor.fetchone():
+                    raise KeyError("店铺 Token 不存在")
+        connection.commit()
+        return get_mercado_store_token_summary(token_id)
+    except Exception:
+        connection.rollback()
+        raise
+    finally:
+        connection.close()
+
+
+def record_mercado_store_token_error(token_id, message):
+    connection = pymysql.connect(**config)
+    try:
+        with connection.cursor() as cursor:
+            _ensure_mercado_store_tokens_table(cursor)
+            cursor.execute(
+                "UPDATE `mercado_store_tokens` SET `last_error` = %s, `updated_at` = %s WHERE `id` = %s",
+                (str(message or "")[:2000], datetime.now().strftime("%Y-%m-%d %H:%M:%S"), int(token_id)),
+            )
+            affected = cursor.rowcount
+        connection.commit()
+        return affected
+    except Exception:
+        connection.rollback()
+        raise
+    finally:
+        connection.close()
+
+
+def rename_mercado_store_token(token_id, display_name):
+    token_id = int(token_id)
+    display_name = str(display_name or "").strip()
+    if not display_name:
+        raise ValueError("请输入自定义店铺名称")
+    if len(display_name) > 100:
+        raise ValueError("自定义店铺名称不能超过 100 个字符")
+    connection = pymysql.connect(**config)
+    try:
+        with connection.cursor() as cursor:
+            _ensure_mercado_store_tokens_table(cursor)
+            cursor.execute(
+                "SELECT `id` FROM `mercado_store_tokens` WHERE `display_name` = %s AND `id` <> %s LIMIT 1",
+                (display_name, token_id),
+            )
+            if cursor.fetchone():
+                raise ValueError("自定义店铺名称已存在")
+            cursor.execute(
+                "UPDATE `mercado_store_tokens` SET `display_name` = %s, `updated_at` = %s WHERE `id` = %s",
+                (display_name, datetime.now().strftime("%Y-%m-%d %H:%M:%S"), token_id),
+            )
+            if cursor.rowcount == 0:
+                cursor.execute("SELECT 1 FROM `mercado_store_tokens` WHERE `id` = %s", (token_id,))
+                if not cursor.fetchone():
+                    raise KeyError("店铺 Token 不存在")
+        connection.commit()
+        return get_mercado_store_token_summary(token_id)
+    except Exception:
+        connection.rollback()
+        raise
+    finally:
+        connection.close()
+
+
+def delete_mercado_store_token(token_id):
+    connection = pymysql.connect(**config)
+    try:
+        with connection.cursor() as cursor:
+            _ensure_mercado_store_tokens_table(cursor)
+            _ensure_mercado_store_site_settings_table(cursor)
+            cursor.execute("SHOW TABLES LIKE 'mercado_synced_orders'")
+            if cursor.fetchone():
+                cursor.execute(
+                    "DELETE FROM `mercado_synced_orders` WHERE `token_id` = %s",
+                    (int(token_id),),
+                )
+            cursor.execute(
+                "DELETE FROM `mercado_store_site_settings` WHERE `token_id` = %s",
+                (int(token_id),),
+            )
+            cursor.execute("DELETE FROM `mercado_store_tokens` WHERE `id` = %s", (int(token_id),))
+            affected = cursor.rowcount
+        connection.commit()
+        return affected
+    except Exception:
+        connection.rollback()
+        raise
     finally:
         connection.close()
 

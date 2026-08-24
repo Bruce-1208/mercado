@@ -25,10 +25,12 @@ AI_Agent/deepseek_key.txt
 bit/ai_chat_records.jsonl
 mercado_api/*.sqlite3*
 mercado_api/tokens.json*
+erp/tokens.json*
 
 # Local runtime and generated artifacts
 tmp/
 output/
 outputs/
 bit/runtime_locks/
+cache/mercado_playwright_profile/
 *.log

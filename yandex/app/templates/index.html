@@ -1,0 +1,196 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>武汉泽顺控制台</title>
+  <link rel="stylesheet" href="{{ url_for('static', path='/styles.css') }}?v=20260823-7">
+</head>
+<body class="{% if embedded %}embedded{% endif %}">
+  <div class="shell">
+    <header class="hero">
+      <div>
+        <p class="eyebrow">WUHAN ZESHUN · YANDEX MARKET</p>
+        <h1>武汉泽顺控制台</h1>
+        <p class="subtitle">店铺授权与 token 管理、关键词搜品、国外商品识别、SQLite 入库，再挂载到你的 Yandex 商品卡。</p>
+      </div>
+      <div id="connectionBadge" class="badge neutral"><span></span>未选择店铺</div>
+    </header>
+
+    <main>
+      <section class="panel authorization-panel">
+        <div class="section-heading">
+          <div>
+            <p class="eyebrow">STORE AUTHORIZATION</p>
+            <h2>店铺授权管理 <span id="zeshunStoreCount" class="muted-count">0</span></h2>
+          </div>
+          <p class="section-help">按 TG 码维护店铺，授权后粘贴返回链接更新 token</p>
+        </div>
+
+        <form id="zeshunStoreForm" class="authorization-create-form">
+          <div class="field">
+            <label for="zeshunStoreAlias">自定义店铺名</label>
+            <input id="zeshunStoreAlias" type="text" maxlength="80" placeholder="例如：俄罗斯 01 店" required>
+          </div>
+          <div class="field">
+            <label for="zeshunTgCode">TG 码</label>
+            <input id="zeshunTgCode" type="text" maxlength="120" autocomplete="off" spellcheck="false" placeholder="输入唯一 TG 码" required>
+            <small>TG 码在数据库中唯一维护</small>
+          </div>
+          <div class="field">
+            <label for="zeshunAuthorizationUrl">授权链接（可选）</label>
+            <input id="zeshunAuthorizationUrl" type="url" maxlength="4000" placeholder="未填写时使用系统配置的授权链接">
+            <small>支持用 {tg_code} 作为 TG 码占位符</small>
+          </div>
+          <button id="addZeshunStoreButton" class="button primary" type="submit">新增店铺</button>
+        </form>
+
+        <div id="zeshunStoreList" class="authorization-list"></div>
+        <div id="zeshunStoreEmpty" class="empty-state">还没有授权店铺。填写自定义名称和 TG 码新增第一家店铺。</div>
+        <p class="authorization-security">授权返回链接和 token 均通过 Windows DPAPI 加密保存；接口和页面不会返回明文 token。</p>
+      </section>
+
+      <section class="panel stores-panel">
+        <div class="section-heading">
+          <div>
+            <p class="eyebrow">STORE DIRECTORY</p>
+            <h2>Yandex 上传店铺 <span id="storeCount" class="muted-count">0</span></h2>
+          </div>
+          <p class="section-help">选择一个店铺作为商品上传目标</p>
+        </div>
+
+        <form id="storeForm" class="store-form">
+          <div class="field alias-field">
+            <label for="storeAlias">自定义店铺名</label>
+            <input id="storeAlias" type="text" maxlength="80" placeholder="例如：俄罗斯主店" required>
+          </div>
+          <div class="field add-token-field">
+            <label for="storeToken">店铺 API-Key token</label>
+            <div class="token-row">
+              <input id="storeToken" type="password" autocomplete="off" spellcheck="false" placeholder="ACMA:…" required>
+              <button id="toggleStoreToken" type="button" class="icon-button" aria-label="显示或隐藏 token">显示</button>
+            </div>
+            <small>通过 Windows DPAPI 加密，仅当前 Windows 用户可以解密</small>
+          </div>
+          <button id="addStoreButton" class="button primary" type="submit">添加店铺</button>
+        </form>
+
+        <div id="storeList" class="store-list"></div>
+        <div id="storeEmpty" class="empty-state">还没有店铺。输入自定义名称和 token 添加第一家店铺。</div>
+      </section>
+
+      <section class="panel control-panel">
+        <div class="field keyword-field">
+          <label for="keyword">搜索关键词</label>
+          <input id="keyword" type="text" value="行车记录仪" placeholder="例如：行车记录仪">
+        </div>
+        <div class="field count-field">
+          <label for="count">商品个数</label>
+          <input id="count" type="number" value="200" min="1" max="{{ max_products }}">
+          <small>默认 200，最多 {{ max_products }}</small>
+        </div>
+        <div class="field price-field">
+          <label for="pricePercent">上架价格比例</label>
+          <div class="percent-row">
+            <input id="pricePercent" type="number" value="200" min="1" max="1000" step="0.01">
+            <span>%</span>
+          </div>
+          <small class="rate-help">
+            <span>200% = 抓取价 × 2</span>
+            <span id="exchangeRateText">正在读取 RUB/CNY 汇率…</span>
+            <button id="refreshExchangeRate" type="button" class="inline-link">刷新</button>
+          </small>
+        </div>
+        <div class="actions">
+          <button id="searchButton" class="button primary" type="button">搜索国外商品</button>
+        </div>
+      </section>
+
+      <section class="panel package-panel">
+        <div class="package-heading">
+          <div>
+            <p class="eyebrow">FULFILLMENT PROFILE</p>
+            <h2>包装与初始库存</h2>
+          </div>
+          <p>用于本批所有选中商品。包装和库存都必须填写真实数据；上传后会向所选 FBS 仓库写入库存。</p>
+        </div>
+        <div class="package-fields">
+          <div class="field">
+            <label for="packageLength">长度（cm）</label>
+            <input id="packageLength" type="number" min="0.001" max="1000" step="0.001" placeholder="例如 30">
+          </div>
+          <div class="field">
+            <label for="packageWidth">宽度（cm）</label>
+            <input id="packageWidth" type="number" min="0.001" max="1000" step="0.001" placeholder="例如 20">
+          </div>
+          <div class="field">
+            <label for="packageHeight">高度（cm）</label>
+            <input id="packageHeight" type="number" min="0.001" max="1000" step="0.001" placeholder="例如 10">
+          </div>
+          <div class="field">
+            <label for="packageWeight">毛重（kg）</label>
+            <input id="packageWeight" type="number" min="0.001" max="1000" step="0.001" placeholder="例如 0.5">
+          </div>
+          <div class="field">
+            <label for="initialStock">初始可售库存（件）</label>
+            <input id="initialStock" type="number" min="1" max="2000000000" step="1" placeholder="例如 10">
+          </div>
+        </div>
+        <p id="packageStatus" class="package-status">上传前必须填写包装四项和真实库存，不能使用猜测值。</p>
+      </section>
+
+      <section id="statusPanel" class="panel status-panel hidden" aria-live="polite">
+        <div class="status-head">
+          <div>
+            <p class="eyebrow">任务状态</p>
+            <h2 id="statusTitle">准备中</h2>
+          </div>
+          <div id="statusCount" class="status-count">0 / 200</div>
+        </div>
+        <div class="progress-track"><div id="progressBar" class="progress-bar"></div></div>
+        <p id="statusMessage" class="status-message"></p>
+      </section>
+
+      <section id="resultsSection" class="results hidden">
+        <div class="results-toolbar">
+          <div>
+            <p class="eyebrow">商品数据库</p>
+            <h2><span id="resultCount">0</span> 个国外商品</h2>
+          </div>
+          <div class="toolbar-actions">
+            <label class="select-all"><input id="selectAll" type="checkbox"> 全选可发布</label>
+            <button id="publishButton" class="button danger" type="button" disabled>上传选中商品</button>
+          </div>
+        </div>
+        <div id="productGrid" class="product-grid"></div>
+      </section>
+
+      <section id="publishPanel" class="panel publish-panel hidden" aria-live="polite">
+        <div class="status-head">
+          <div>
+            <p class="eyebrow">UPLOAD PROGRESS</p>
+            <h2 id="publishTitle">正在上传商品</h2>
+            <p id="publishStoreName" class="status-message"></p>
+          </div>
+          <div id="publishCount" class="status-count">0 / 0</div>
+        </div>
+        <div class="progress-track"><div id="publishProgressBar" class="progress-bar"></div></div>
+        <div class="publish-stats">
+          <span class="stat processing">已处理 <strong id="publishProcessed">0</strong></span>
+          <span class="stat success">成功 <strong id="publishSucceeded">0</strong></span>
+          <span class="stat failure">失败 <strong id="publishFailed">0</strong></span>
+        </div>
+        <div id="publishResults" class="publish-results"></div>
+      </section>
+
+      <section class="panel notice-panel">
+        <strong>说明</strong>
+        <p>程序只识别页面上带“Из-за рубежа”标记的商品。只提交 Yandex 商品 CDN 的合规主图，过滤二维码、广告和统计图片。上传价格按俄罗斯央行 RUB/CNY 日汇率换算并以人民币 CNY 提交，再应用你设置的价格比例。包装尺寸和毛重按本页填写值提交；错误数据会影响物流费用，请按商品厂包装如实填写。</p>
+      </section>
+    </main>
+  </div>
+
+  <div id="toast" class="toast" role="status"></div>
+  <script src="{{ url_for('static', path='/app.js') }}?v=20260824-1" defer></script>
+</body>
+</html>

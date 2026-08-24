@@ -1,0 +1,15 @@
+{
+  "mode": "all",
+  "category": "全部分类",
+  "salesperson": "精品区",
+  "parent_only": true,
+  "expected_count": 17074,
+  "pages": 35,
+  "allow_count_drift": true,
+  "filter_wait": 5.0,
+  "source_images": true,
+  "image_delay": 0.5,
+  "image_timeout": 30,
+  "image_token_env": "MELI_ACCESS_TOKEN",
+  "output_dir": "outputs/zying_boutique_export"
+}

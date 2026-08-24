@@ -1,10 +1,11 @@
 import queue
+import json
 from collections import deque
 import functools
+import html
 import hashlib
 import hmac
 import os
-import platform
 import secrets
 import signal
 import subprocess
@@ -15,6 +16,7 @@ import traceback
 from io import BytesIO
 from pathlib import Path
 from urllib.parse import quote
+from urllib.request import urlopen
 
 from flask import Flask, Response, request, render_template, jsonify, send_file, session, redirect, url_for
 from openpyxl import Workbook
@@ -49,6 +51,9 @@ import bit.bit_infractions_info as bit_infractions_info
 import bit.bit_pago_info as bit_pago_info
 import bit.bit_print as bit_print
 import bit.bit_reputation_info as bit_reputation_info
+import bit.bit_order_sync as bit_order_sync
+import bit.bit_store_link_sync as bit_store_link_sync
+import bit.mercado_tokens as mercado_tokens
 from bit.bit_appeal import *
 from bit.bit_collection_control import DEFAULT_COLLECTION_MAX_WORKERS
 from bit.bit_config import split_config_sites
@@ -79,6 +84,85 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(
 
 PASSWORD_ITERATIONS = 260000
 
+try:
+    YANDEX_CONSOLE_PORT = int(os.environ.get("WORKBENCH_YANDEX_PORT", "8011"))
+except ValueError:
+    YANDEX_CONSOLE_PORT = 8011
+YANDEX_CONSOLE_HOST = "127.0.0.1"
+YANDEX_CONSOLE_BASE_URL = f"http://{YANDEX_CONSOLE_HOST}:{YANDEX_CONSOLE_PORT}"
+YANDEX_PACKAGE_ROOT = PROJECT_ROOT / "yandex"
+_yandex_console_lock = threading.Lock()
+_yandex_console_process = None
+
+
+def _yandex_console_health():
+    try:
+        with urlopen(f"{YANDEX_CONSOLE_BASE_URL}/api/health", timeout=1.0) as response:
+            payload = json.loads(response.read().decode("utf-8"))
+        return bool(
+            response.status == 200
+            and payload.get("status") == "ok"
+            and payload.get("service") == "yandex-console"
+        )
+    except Exception:
+        return False
+
+
+def _yandex_console_python():
+    configured = str(os.environ.get("WORKBENCH_YANDEX_PYTHON", "")).strip()
+    if configured:
+        return Path(configured)
+    if os.name == "nt":
+        return YANDEX_PACKAGE_ROOT / ".venv" / "Scripts" / "python.exe"
+    return YANDEX_PACKAGE_ROOT / ".venv" / "bin" / "python"
+
+
+def ensure_yandex_console():
+    global _yandex_console_process
+    if _yandex_console_health():
+        return True, "Yandex 控制台已运行"
+
+    with _yandex_console_lock:
+        if _yandex_console_health():
+            return True, "Yandex 控制台已运行"
+        python_executable = _yandex_console_python()
+        if not python_executable.exists():
+            return False, "Yandex 运行环境不存在，请先执行 .\\yandex\\run.ps1 完成安装"
+        if not (YANDEX_PACKAGE_ROOT / "__main__.py").exists():
+            return False, "mercado/yandex 包不完整，缺少 __main__.py"
+
+        data_dir = YANDEX_PACKAGE_ROOT / ".data"
+        data_dir.mkdir(parents=True, exist_ok=True)
+        log_path = data_dir / "workbench-server.log"
+        environment = os.environ.copy()
+        environment["YANDEX_HOST"] = YANDEX_CONSOLE_HOST
+        environment["YANDEX_PORT"] = str(YANDEX_CONSOLE_PORT)
+        creation_flags = (
+            getattr(subprocess, "CREATE_NO_WINDOW", 0) if os.name == "nt" else 0
+        )
+        try:
+            with log_path.open("ab", buffering=0) as log_file:
+                _yandex_console_process = subprocess.Popen(
+                    [str(python_executable), "-m", "yandex"],
+                    cwd=str(PROJECT_ROOT),
+                    env=environment,
+                    stdout=log_file,
+                    stderr=subprocess.STDOUT,
+                    creationflags=creation_flags,
+                    start_new_session=os.name != "nt",
+                )
+        except Exception as exc:
+            logging.exception("启动 Yandex 控制台失败")
+            return False, f"启动 Yandex 控制台失败：{exc}"
+
+        for _ in range(40):
+            if _yandex_console_health():
+                return True, "Yandex 控制台已启动"
+            if _yandex_console_process.poll() is not None:
+                break
+            time.sleep(0.25)
+        return False, f"Yandex 控制台启动失败，请检查日志：{log_path}"
+
 
 def _truthy_env(value):
     return str(value or "").strip().lower() in ("1", "true", "yes", "on")
@@ -95,8 +179,9 @@ def _resolve_use_db_api():
     if use_db_api is not None:
         return _truthy_env(use_db_api)
 
-    # 默认平台策略：macOS 作为数据库服务端直连 MySQL；Windows 作为客户端走接口。
-    return platform.system() != "Darwin"
+    # 武汉泽顺工作台当前直接连接局域网 MySQL（192.168.1.11）。需要恢复
+    # 服务端 API 时可显式设置 BIT_INTERFACE_DB_MODE=api。
+    return False
 
 
 USE_DB_API = _resolve_use_db_api()
@@ -115,6 +200,7 @@ if USE_DB_API:
     db_insert_appeal_chat_record = bit_db_api.insert_appeal_chat_record
     db_insert_ai_appeal_record = bit_db_api.insert_ai_appeal_record
     db_insert_orders = bit_db_api.insert_orders
+    db_list_orders = bit_db_api.list_orders
     db_insert_task_record = bit_db_api.insert_task_record
     db_insert_zying_product_info = bit_db_api.insert_zying_product_info
     db_get_zying_risk_candidates = bit_db_api.get_zying_risk_candidates
@@ -127,6 +213,19 @@ if USE_DB_API:
     db_inset_infraction_info = bit_db_api.inset_infraction_info
     db_inset_pago_info = bit_db_api.inset_pago_info
     db_inset_reputation_info = bit_db_api.inset_reputation_info
+    db_create_mercado_collection_task = bit_db_api.create_mercado_collection_task
+    db_update_mercado_collection_task = bit_db_api.update_mercado_collection_task
+    db_get_mercado_collection_task = bit_db_api.get_mercado_collection_task
+    db_upsert_mercado_collection_items = bit_db_api.upsert_mercado_collection_items
+    db_list_mercado_collection_items = bit_db_api.list_mercado_collection_items
+    db_list_mercado_product_items = bit_db_api.list_mercado_product_items
+    db_add_mercado_collection_items_to_products = bit_db_api.add_mercado_collection_items_to_products
+    db_delete_mercado_collection_items = bit_db_api.delete_mercado_collection_items
+    db_delete_mercado_product_items = bit_db_api.delete_mercado_product_items
+    db_get_mercado_product_items_by_ids = bit_db_api.get_mercado_product_items_by_ids
+    db_update_mercado_product_publish_state = bit_db_api.update_mercado_product_publish_state
+    db_list_mercado_store_links = bit_db_api.list_mercado_store_links
+    db_bulk_update_mercado_store_links = bit_db_api.bulk_update_mercado_store_links
 else:
     import pymysql
     from bit.bit_mysql import config as mysql_config
@@ -144,6 +243,7 @@ else:
         insert_appeal_chat_record,
         insert_ai_appeal_record,
         insert_orders,
+        list_orders,
         insert_task_record,
         insert_zying_product_info,
         get_zying_risk_candidates,
@@ -171,6 +271,7 @@ else:
     db_insert_appeal_chat_record = insert_appeal_chat_record
     db_insert_ai_appeal_record = insert_ai_appeal_record
     db_insert_orders = insert_orders
+    db_list_orders = list_orders
     db_insert_task_record = insert_task_record
     db_insert_zying_product_info = insert_zying_product_info
     db_get_zying_risk_candidates = get_zying_risk_candidates
@@ -183,6 +284,23 @@ else:
     db_inset_infraction_info = inset_infraction_info
     db_inset_pago_info = inset_pago_info
     db_inset_reputation_info = inset_reputation_info
+    from erp.mercadolibre_collection_store import (
+        add_collection_items_to_products as db_add_mercado_collection_items_to_products,
+        create_collection_task as db_create_mercado_collection_task,
+        delete_collection_items as db_delete_mercado_collection_items,
+        delete_product_items as db_delete_mercado_product_items,
+        get_collection_task as db_get_mercado_collection_task,
+        get_product_items_by_ids as db_get_mercado_product_items_by_ids,
+        list_collection_items as db_list_mercado_collection_items,
+        list_product_items as db_list_mercado_product_items,
+        update_collection_task as db_update_mercado_collection_task,
+        update_product_publish_state as db_update_mercado_product_publish_state,
+        upsert_collection_items as db_upsert_mercado_collection_items,
+    )
+    from erp.mercadolibre_store_link_store import (
+        bulk_update_store_links as db_bulk_update_mercado_store_links,
+        list_store_links as db_list_mercado_store_links,
+    )
 
 
 def make_password_hash(password):
@@ -381,6 +499,53 @@ _fund_collect_state = {
     "scope": "",
     "target": "",
     "collected_count": 0,
+}
+_mercado_collection_lock = threading.RLock()
+_mercado_collection_stop_event = threading.Event()
+_mercado_collection_state = {
+    "running": False,
+    "task_id": None,
+    "status": "idle",
+    "message": "等待启动",
+    "source_url": "",
+    "requested_count": 0,
+    "worker_count": 4,
+    "candidate_count": 0,
+    "processed_count": 0,
+    "completed_count": 0,
+    "failed_count": 0,
+    "current_page": 0,
+    "current_item_id": "",
+    "started_at": "",
+    "finished_at": "",
+}
+_mercado_playwright_setup_state = {
+    "running": False,
+    "status": "idle",
+    "message": "采集浏览器尚未打开",
+}
+_mercado_profit_refresh_lock = threading.Lock()
+_mercado_profit_refresh_started = False
+_mercado_profit_refresh_stop_event = threading.Event()
+_mercado_publish_lock = threading.RLock()
+_mercado_publish_state = {
+    "running": False,
+    "status": "idle",
+    "message": "等待选择产品上架",
+    "token_id": None,
+    "store_name": "",
+    "site_id": "MLM",
+    "site_name": "墨西哥",
+    "quantity": 1,
+    "worker_count": 4,
+    "requested_count": 0,
+    "processed_count": 0,
+    "published_count": 0,
+    "failed_count": 0,
+    "current_item_id": "",
+    "started_at": "",
+    "finished_at": "",
+    "results": [],
 }
 _fund_collect_stop_event = None
 _order_print_lock = threading.RLock()
@@ -2994,6 +3159,270 @@ def api_order_print_status():
     return response
 
 
+@app.route('/api/orders', methods=['GET'])
+@login_required
+def api_orders():
+    try:
+        data = db_list_orders(
+            country=str(request.args.get("country") or "").strip(),
+            status=str(request.args.get("status") or "").strip(),
+            salesperson=str(request.args.get("salesperson") or "").strip(),
+            search=str(request.args.get("search") or "").strip(),
+            start_date=str(request.args.get("start_date") or "").strip(),
+            end_date=str(request.args.get("end_date") or "").strip(),
+            origin=str(request.args.get("origin") or "").strip(),
+            page=_parse_int_param(request.args, "page", 1, 1, 1000000),
+            page_size=_parse_int_param(request.args, "page_size", 50, 10, 200),
+        )
+    except ValueError as exc:
+        return jsonify({"status": "error", "message": str(exc)}), 400
+    except Exception as exc:
+        logging.exception("订单列表加载失败")
+        return jsonify({
+            "status": "error",
+            "message": f"订单列表加载失败：{exc}",
+        }), 502
+    response = jsonify({"status": "success", "data": data})
+    response.headers["Cache-Control"] = "no-store"
+    return response
+
+
+@app.route('/api/order-sync/options', methods=['GET'])
+@login_required
+def api_order_sync_options():
+    try:
+        data = bit_db_api.list_mercado_store_tokens() or {}
+        return jsonify({"status": "success", "data": data})
+    except Exception as exc:
+        logging.exception("读取订单同步店铺失败")
+        return jsonify({"status": "error", "message": f"读取授权店铺失败：{exc}"}), 502
+
+
+@app.route('/api/orders/bulk-update', methods=['POST'])
+@login_required
+def api_bulk_update_orders():
+    data = request.get_json(silent=True) or {}
+    order_ids = data.get("order_ids") or []
+    if not isinstance(order_ids, list):
+        return jsonify({"status": "error", "message": "order_ids 必须是数组"}), 422
+    changes = {}
+    for field in (
+        "workflow_status", "purchase_order", "purchase_tracking",
+        "logistics_company", "purchase_cost", "purchase_remark",
+    ):
+        if field in data:
+            changes[field] = data.get(field)
+    user = session.get("workbench_user") or {}
+    try:
+        result = bit_db_api.bulk_update_orders(
+            order_ids,
+            operator_id=user.get("id"),
+            operator_name=user.get("display_name") or user.get("username") or "",
+            **changes,
+        )
+    except ValueError as exc:
+        return jsonify({"status": "error", "message": str(exc)}), 400
+    except Exception as exc:
+        logging.exception("批量更新订单失败")
+        return jsonify({"status": "error", "message": f"批量更新订单失败：{exc}"}), 502
+    return jsonify({
+        "status": "success",
+        "message": f"已更新 {int(result.get('matched') or 0)} 个订单",
+        "data": result,
+    })
+
+
+@app.route('/api/orders/print', methods=['POST'])
+@login_required
+def api_print_orders_pdf():
+    data = request.get_json(silent=True) or {}
+    order_ids = data.get("order_ids") or []
+    if not isinstance(order_ids, list):
+        return jsonify({"status": "error", "message": "order_ids 必须是数组"}), 422
+    try:
+        result = bit_db_api.download_order_labels(order_ids)
+        user = session.get("workbench_user") or {}
+        bit_db_api.record_order_print_logs(
+            result.get("order_ids") or order_ids,
+            operator_id=user.get("id"),
+            operator_name=user.get("display_name") or user.get("username") or "",
+        )
+    except ValueError as exc:
+        return jsonify({"status": "error", "message": str(exc)}), 400
+    except Exception as exc:
+        logging.exception("美客多面单 PDF 下载失败")
+        return jsonify({"status": "error", "message": f"美客多面单下载失败：{exc}"}), 502
+    response = send_file(
+        BytesIO(result["content"]),
+        mimetype="application/pdf",
+        as_attachment=False,
+        download_name=result.get("filename") or "mercado-labels.pdf",
+        max_age=0,
+    )
+    response.headers["X-Mercado-Shipment-Count"] = str(result.get("shipment_count") or 0)
+    response.headers["Cache-Control"] = "no-store"
+    return response
+
+
+@app.route('/api/orders/<order_id>/logs', methods=['GET'])
+@login_required
+def api_order_operation_logs(order_id):
+    try:
+        rows = bit_db_api.list_order_operation_logs(
+            order_id,
+            limit=_parse_int_param(request.args, "limit", 100, 1, 200),
+        )
+    except Exception as exc:
+        logging.exception("订单操作日志加载失败")
+        return jsonify({"status": "error", "message": f"订单操作日志加载失败：{exc}"}), 502
+    response = jsonify({"status": "success", "data": {"rows": rows}})
+    response.headers["Cache-Control"] = "no-store"
+    return response
+
+
+@app.route('/api/orders/<order_id>/tracking', methods=['GET'])
+@login_required
+def api_order_tracking(order_id):
+    try:
+        data = bit_db_api.get_order_tracking(order_id)
+    except (KeyError, ValueError) as exc:
+        return jsonify({"status": "error", "message": str(exc)}), 404
+    except Exception as exc:
+        logging.exception("物流轨迹查询失败")
+        return jsonify({"status": "error", "message": f"物流轨迹查询失败：{exc}"}), 502
+    response = jsonify({"status": "success", "data": data})
+    response.headers["Cache-Control"] = "no-store"
+    return response
+
+
+@app.route('/api/order-sync/start', methods=['POST'])
+@login_required
+def api_start_order_sync():
+    data = request.get_json(silent=True) or {}
+    token_ids = data.get("token_ids") or []
+    if not isinstance(token_ids, list):
+        return jsonify({"status": "error", "message": "token_ids 必须是数组"}), 422
+    try:
+        result = bit_db_api.start_order_sync(
+            start_date=str(data.get("start_date") or "").strip(),
+            end_date=str(data.get("end_date") or "").strip(),
+            token_ids=token_ids,
+            mode="manual",
+        )
+    except ValueError as exc:
+        return jsonify({"status": "error", "message": str(exc)}), 400
+    except Exception as exc:
+        logging.exception("启动订单同步失败")
+        return jsonify({"status": "error", "message": f"启动订单同步失败：{exc}"}), 502
+    started = bool(result.get("started"))
+    return jsonify({
+        "status": "success" if started else "running",
+        "message": "订单拉取任务已启动" if started else "已有订单同步任务正在运行",
+        "data": result.get("state") or {},
+    }), 202 if started else 409
+
+
+@app.route('/api/order-sync/status', methods=['GET'])
+@login_required
+def api_order_sync_status():
+    try:
+        data = bit_db_api.get_order_sync_status() or {}
+        response = jsonify({"status": "success", "data": data})
+        response.headers["Cache-Control"] = "no-store"
+        return response
+    except Exception as exc:
+        logging.exception("读取订单同步状态失败")
+        return jsonify({"status": "error", "message": f"读取订单同步状态失败：{exc}"}), 502
+
+
+@app.route('/api/store-links', methods=['GET'])
+@login_required
+def api_store_links():
+    try:
+        token_text = str(request.args.get("token_id") or "").strip()
+        data = bit_db_api.list_mercado_store_links(
+            search=str(request.args.get("search") or "").strip(),
+            token_id=int(token_text) if token_text else None,
+            site_id=str(request.args.get("site_id") or "").strip(),
+            status=str(request.args.get("status") or "").strip(),
+            sales_sort=str(request.args.get("sales_sort") or "desc").strip(),
+            current_only=str(request.args.get("current_only") or "1").strip().lower()
+            not in ("0", "false", "no", "off"),
+            page=_parse_int_param(request.args, "page", 1, 1, 1000000),
+            page_size=_parse_int_param(request.args, "page_size", 100, 10, 500),
+        )
+    except ValueError as exc:
+        return jsonify({"status": "error", "message": str(exc)}), 400
+    except Exception as exc:
+        logging.exception("店铺链接列表加载失败")
+        return jsonify({"status": "error", "message": f"店铺链接列表加载失败：{exc}"}), 502
+    response = jsonify({"status": "success", "data": data})
+    response.headers["Cache-Control"] = "no-store"
+    return response
+
+
+@app.route('/api/store-links/bulk-update', methods=['POST'])
+@login_required
+def api_bulk_update_store_links():
+    data = request.get_json(silent=True) or {}
+    link_ids = data.get("link_ids") or []
+    if not isinstance(link_ids, list):
+        return jsonify({"status": "error", "message": "link_ids 必须是数组"}), 422
+    allowed = (
+        "price", "weight_g", "package_length_cm", "package_width_cm",
+        "package_height_cm", "net_proceeds_usd",
+    )
+    changes = {field: data.get(field) for field in allowed if field in data}
+    try:
+        result = bit_db_api.bulk_update_mercado_store_links(link_ids, **changes)
+    except ValueError as exc:
+        return jsonify({"status": "error", "message": str(exc)}), 400
+    except Exception as exc:
+        logging.exception("批量更新店铺链接失败")
+        return jsonify({"status": "error", "message": f"批量更新店铺链接失败：{exc}"}), 502
+    return jsonify({
+        "status": "success",
+        "message": f"已更新 {int(result.get('matched') or 0)} 条店铺链接",
+        "data": result,
+    })
+
+
+@app.route('/api/store-links/sync/start', methods=['POST'])
+@login_required
+def api_start_store_link_sync():
+    data = request.get_json(silent=True) or {}
+    sync_all = data.get("sync_all") is True
+    token_ids = [] if sync_all else (data.get("token_ids") or [])
+    if not isinstance(token_ids, list):
+        return jsonify({"status": "error", "message": "token_ids 必须是数组"}), 422
+    try:
+        result = bit_db_api.start_store_link_sync(token_ids)
+    except ValueError as exc:
+        return jsonify({"status": "error", "message": str(exc)}), 400
+    except Exception as exc:
+        logging.exception("启动店铺链接同步失败")
+        return jsonify({"status": "error", "message": f"启动店铺链接同步失败：{exc}"}), 502
+    started = bool(result.get("started"))
+    return jsonify({
+        "status": "success" if started else "running",
+        "message": "店铺链接同步已启动" if started else "已有店铺链接同步任务正在运行",
+        "data": result.get("state") or {},
+    }), 202 if started else 409
+
+
+@app.route('/api/store-links/sync/status', methods=['GET'])
+@login_required
+def api_store_link_sync_status():
+    try:
+        data = bit_db_api.get_store_link_sync_status() or {}
+        response = jsonify({"status": "success", "data": data})
+        response.headers["Cache-Control"] = "no-store"
+        return response
+    except Exception as exc:
+        logging.exception("读取店铺链接同步状态失败")
+        return jsonify({"status": "error", "message": f"读取店铺链接同步状态失败：{exc}"}), 502
+
+
 @app.route('/api/tasks/daily/start', methods=['POST'])
 @login_required
 def api_start_daily_task():
@@ -3240,6 +3669,795 @@ def api_risk_check_status():
     return jsonify({"status": "success", "data": data})
 
 
+def _mercado_collection_state_update(**changes):
+    with _mercado_collection_lock:
+        _mercado_collection_state.update(changes)
+
+
+def _mercado_collection_finish_status(processed, completed, failed):
+    processed = max(0, int(processed or 0))
+    completed = max(0, int(completed or 0))
+    failed = max(0, int(failed or 0))
+    if processed and failed >= processed and completed == 0:
+        status = "error"
+        prefix = "采集失败"
+    elif failed:
+        status = "partial"
+        prefix = "采集部分完成"
+    else:
+        status = "completed"
+        prefix = "采集完成"
+    message = (
+        f"{prefix}：入库 {processed} 件，"
+        f"重量尺寸完整 {completed} 件，待补充 {failed} 件"
+    )
+    return status, message
+
+
+def _mercado_profit_refresh_loop():
+    """Refresh stale official fee snapshots without blocking the workbench UI."""
+
+    from erp.mercadolibre_collection_store import (
+        list_stale_profitability_items,
+        update_item_profitability,
+    )
+    from erp.mercadolibre_profitability import (
+        MercadoProfitabilityClient,
+        active_store_token,
+        enrich_profitability,
+    )
+
+    try:
+        stale_hours = max(1, int(os.environ.get("MERCADO_PROFIT_STALE_HOURS", "6")))
+    except ValueError:
+        stale_hours = 6
+    try:
+        batch_size = max(1, min(int(os.environ.get("MERCADO_PROFIT_REFRESH_BATCH", "50")), 500))
+    except ValueError:
+        batch_size = 50
+    try:
+        interval = max(60, int(os.environ.get("MERCADO_PROFIT_REFRESH_SECONDS", "300")))
+    except ValueError:
+        interval = 300
+
+    while not _mercado_profit_refresh_stop_event.is_set():
+        try:
+            stale_before = (datetime.now() - timedelta(hours=stale_hours)).strftime(
+                "%Y-%m-%d %H:%M:%S"
+            )
+            rows = list_stale_profitability_items(
+                stale_before=stale_before,
+                limit=batch_size,
+            )
+            if rows:
+                client = MercadoProfitabilityClient(active_store_token())
+                for row in rows:
+                    if _mercado_profit_refresh_stop_event.is_set():
+                        break
+                    enriched = enrich_profitability(row, client=client)
+                    update_item_profitability(
+                        str(row.get("source_item_id") or ""), enriched
+                    )
+        except Exception:
+            logging.exception("自动更新 Mercado 官网佣金、汇率和运费失败")
+        _mercado_profit_refresh_stop_event.wait(interval)
+
+
+def ensure_mercado_profit_refresh_worker():
+    global _mercado_profit_refresh_started
+    if app.testing or _truthy_env(os.environ.get("MERCADO_PROFIT_REFRESH_DISABLED")):
+        return
+    with _mercado_profit_refresh_lock:
+        if _mercado_profit_refresh_started:
+            return
+        thread = threading.Thread(
+            target=_mercado_profit_refresh_loop,
+            name="mercado-profit-refresh",
+            daemon=True,
+        )
+        thread.start()
+        _mercado_profit_refresh_started = True
+
+
+@app.before_request
+def _start_mercado_profit_refresh_worker():
+    ensure_mercado_profit_refresh_worker()
+
+
+@app.before_request
+def _start_order_sync_scheduler():
+    if not USE_DB_API and not app.testing:
+        bit_order_sync.ensure_order_sync_scheduler()
+
+
+def _run_mercado_collection_task(task_id, source_url, requested_count, worker_count):
+    from erp.mercadolibre_batch_collector import (
+        CollectionStopped,
+        collect_marketplace_listing,
+    )
+    from erp.mercadolibre_profitability import (
+        MercadoProfitabilityClient,
+        active_store_token,
+        enrich_profitability,
+    )
+
+    counters = {"candidate": 0, "processed": 0, "completed": 0, "failed": 0}
+    profitability_client = None
+    profitability_setup_error = ""
+    try:
+        profitability_client = MercadoProfitabilityClient(active_store_token())
+    except Exception as exc:
+        profitability_setup_error = str(exc)
+        logging.warning("Mercado 官网费用计算暂不可用：%s", exc)
+
+    def on_page(info):
+        counters["candidate"] = int(info.get("candidate_count") or 0)
+        current_page = int(info.get("page") or 0)
+        message = (
+            f"已扫描第 {current_page} 页，找到 {counters['candidate']} 个不重复商品"
+        )
+        _mercado_collection_state_update(
+            candidate_count=counters["candidate"],
+            current_page=current_page,
+            message=message,
+        )
+        db_update_mercado_collection_task(
+            task_id,
+            collected_count=counters["candidate"],
+            current_page=current_page,
+            message=message,
+        )
+
+    def on_progress(info):
+        _mercado_collection_state_update(
+            current_item_id=str(info.get("item_id") or ""),
+            message=str(info.get("message") or "正在采集商品详情"),
+        )
+
+    def on_item(row):
+        if profitability_client is not None:
+            row = enrich_profitability(row, client=profitability_client)
+        else:
+            row = {
+                **row,
+                "profitability_updated_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                "profitability_source": "mercadolibre_official_api",
+                "profitability_error": profitability_setup_error or "官网费用计算暂不可用",
+            }
+        db_upsert_mercado_collection_items(task_id, [row])
+        counters["processed"] += 1
+        if row.get("scrape_status") == "ok":
+            counters["completed"] += 1
+        else:
+            counters["failed"] += 1
+        message = (
+            f"已完成 {counters['processed']}/{counters['candidate']}，"
+            f"完整 {counters['completed']}，待补充 {counters['failed']}"
+        )
+        _mercado_collection_state_update(
+            processed_count=counters["processed"],
+            completed_count=counters["completed"],
+            failed_count=counters["failed"],
+            message=message,
+        )
+        db_update_mercado_collection_task(
+            task_id,
+            collected_count=max(counters["candidate"], counters["processed"]),
+            completed_count=counters["completed"],
+            failed_count=counters["failed"],
+            message=message,
+        )
+
+    try:
+        db_update_mercado_collection_task(
+            task_id, status="running", message="正在打开采集浏览器", started=True
+        )
+        result = collect_marketplace_listing(
+            source_url,
+            requested_count,
+            max_workers=worker_count,
+            on_page=on_page,
+            on_item=on_item,
+            on_progress=on_progress,
+            stop_event=_mercado_collection_stop_event,
+        )
+        status, message = _mercado_collection_finish_status(
+            counters["processed"],
+            counters["completed"],
+            counters["failed"],
+        )
+        db_update_mercado_collection_task(
+            task_id,
+            status=status,
+            message=message,
+            collected_count=int(result.get("candidate_count") or counters["candidate"]),
+            completed_count=counters["completed"],
+            failed_count=counters["failed"],
+            finished=True,
+        )
+        _mercado_collection_state_update(status=status, message=message)
+    except CollectionStopped:
+        message = f"采集已停止，已保留入库的 {counters['processed']} 件商品"
+        try:
+            db_update_mercado_collection_task(
+                task_id,
+                status="stopped",
+                message=message,
+                completed_count=counters["completed"],
+                failed_count=counters["failed"],
+                finished=True,
+            )
+        except Exception:
+            logging.exception("更新 Mercado 采集停止状态失败")
+        _mercado_collection_state_update(status="stopped", message=message)
+    except Exception as exc:
+        message = f"采集失败：{exc}"
+        logging.exception("Mercado 列表采集失败")
+        try:
+            db_update_mercado_collection_task(
+                task_id,
+                status="error",
+                message=message,
+                completed_count=counters["completed"],
+                failed_count=counters["failed"],
+                finished=True,
+            )
+        except Exception:
+            logging.exception("更新 Mercado 采集失败状态失败")
+        _mercado_collection_state_update(status="error", message=message)
+    finally:
+        _mercado_collection_state_update(
+            running=False,
+            current_item_id="",
+            finished_at=datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+        )
+
+
+@app.route('/api/mercado-collection/start', methods=['POST'])
+@login_required
+def api_start_mercado_collection():
+    from erp.mercadolibre_batch_collector import (
+        DEFAULT_COLLECTION_WORKERS,
+        normalize_collection_workers,
+        validate_collection_request,
+    )
+
+    data = request.get_json(silent=True) or {}
+    try:
+        source_url, requested_count = validate_collection_request(
+            data.get("source_url", ""), data.get("requested_count", 20)
+        )
+        worker_count = normalize_collection_workers(
+            data.get("worker_count", DEFAULT_COLLECTION_WORKERS)
+        )
+    except ValueError as exc:
+        return jsonify({"status": "error", "message": str(exc)}), 400
+
+    with _mercado_collection_lock:
+        if _mercado_playwright_setup_state.get("running"):
+            return jsonify({
+                "status": "error",
+                "message": "Playwright 登录窗口仍开着，请登录智赢后关闭该窗口，再开始采集",
+            }), 409
+        if _mercado_collection_state.get("running"):
+            return jsonify({
+                "status": "error",
+                "message": "已有采集任务正在运行，请等待当前任务完成",
+            }), 409
+        user = session.get("workbench_user") or {}
+        try:
+            task_id = db_create_mercado_collection_task(
+                source_url,
+                requested_count,
+                str(user.get("display_name") or user.get("username") or ""),
+            )
+        except Exception as exc:
+            logging.exception("创建 Mercado 采集任务失败")
+            return jsonify({"status": "error", "message": f"创建采集任务失败：{exc}"}), 500
+        _mercado_collection_stop_event.clear()
+        _mercado_collection_state.update(
+            {
+                "running": True,
+                "task_id": int(task_id),
+                "status": "starting",
+                "message": f"正在启动自动翻页采集（并发数 {worker_count}）",
+                "source_url": source_url,
+                "requested_count": requested_count,
+                "worker_count": worker_count,
+                "candidate_count": 0,
+                "processed_count": 0,
+                "completed_count": 0,
+                "failed_count": 0,
+                "current_page": 0,
+                "current_item_id": "",
+                "started_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                "finished_at": "",
+            }
+        )
+        worker = threading.Thread(
+            target=_run_mercado_collection_task,
+            args=(int(task_id), source_url, requested_count, worker_count),
+            name=f"mercado-collection-{task_id}",
+            daemon=True,
+        )
+        try:
+            worker.start()
+        except Exception:
+            _mercado_collection_state["running"] = False
+            raise
+    return jsonify({
+        "status": "success",
+        "data": {"task_id": int(task_id), **dict(_mercado_collection_state)},
+    })
+
+
+def _run_mercado_playwright_setup():
+    try:
+        from erp.mercadolibre_playwright_collector import open_playwright_login_setup
+
+        open_playwright_login_setup()
+        with _mercado_collection_lock:
+            _mercado_playwright_setup_state.update({
+                "running": False,
+                "status": "completed",
+                "message": "采集浏览器已关闭，可以开始采集",
+            })
+    except Exception as exc:
+        logging.exception("打开 Playwright 智赢登录窗口失败")
+        with _mercado_collection_lock:
+            _mercado_playwright_setup_state.update({
+                "running": False,
+                "status": "error",
+                "message": f"打开采集浏览器失败：{exc}",
+            })
+
+
+@app.route('/api/mercado-collection/playwright-setup', methods=['POST'])
+@login_required
+def api_open_mercado_playwright_setup():
+    with _mercado_collection_lock:
+        if _mercado_collection_state.get("running"):
+            return jsonify({
+                "status": "error",
+                "message": "采集任务运行中，不能同时打开登录窗口",
+            }), 409
+        if _mercado_playwright_setup_state.get("running"):
+            return jsonify({
+                "status": "success",
+                "data": dict(_mercado_playwright_setup_state),
+            })
+        _mercado_playwright_setup_state.update({
+            "running": True,
+            "status": "starting",
+            "message": "正在打开 Playwright 采集浏览器",
+        })
+        worker = threading.Thread(
+            target=_run_mercado_playwright_setup,
+            name="mercado-playwright-login-setup",
+            daemon=True,
+        )
+        worker.start()
+        return jsonify({
+            "status": "success",
+            "data": dict(_mercado_playwright_setup_state),
+        })
+
+
+@app.route('/api/mercado-collection/stop', methods=['POST'])
+@login_required
+def api_stop_mercado_collection():
+    with _mercado_collection_lock:
+        if not _mercado_collection_state.get("running"):
+            return jsonify({"status": "success", "data": dict(_mercado_collection_state)})
+        _mercado_collection_stop_event.set()
+        _mercado_collection_state["message"] = "正在停止，当前商品处理后将结束"
+        data = dict(_mercado_collection_state)
+    return jsonify({"status": "success", "data": data})
+
+
+@app.route('/api/mercado-collection/status', methods=['GET'])
+@login_required
+def api_mercado_collection_status():
+    with _mercado_collection_lock:
+        data = dict(_mercado_collection_state)
+    task_id = data.get("task_id")
+    if task_id:
+        try:
+            data["task"] = db_get_mercado_collection_task(task_id)
+        except Exception as exc:
+            data["database_message"] = str(exc)
+    response = jsonify({"status": "success", "data": data})
+    response.headers["Cache-Control"] = "no-store"
+    return response
+
+
+@app.route('/api/mercado-collection/items', methods=['GET', 'DELETE'])
+@login_required
+def api_mercado_collection_items():
+    try:
+        if request.method == "DELETE":
+            data = request.get_json(silent=True) or {}
+            item_ids = data.get("collection_item_ids") or []
+            if not isinstance(item_ids, list):
+                return jsonify({"status": "error", "message": "collection_item_ids 必须是数组"}), 422
+            result = db_delete_mercado_collection_items(item_ids)
+            return jsonify({"status": "success", "data": result})
+        task_id = request.args.get("task_id")
+        result = db_list_mercado_collection_items(
+            search=str(request.args.get("search") or "").strip(),
+            limit=_parse_int_param(request.args, "limit", 500, 1, 1000),
+            offset=_parse_int_param(request.args, "offset", 0, 0, 1000000),
+            task_id=int(task_id) if str(task_id or "").strip() else None,
+        )
+        return jsonify({"status": "success", "data": result})
+    except Exception as exc:
+        logging.exception("读取 Mercado 采集列表失败")
+        return jsonify({"status": "error", "message": f"读取采集列表失败：{exc}"}), 500
+
+
+@app.route('/api/mercado-products', methods=['GET', 'DELETE'])
+@login_required
+def api_mercado_products():
+    try:
+        if request.method == "DELETE":
+            with _mercado_publish_lock:
+                if _mercado_publish_state.get("running"):
+                    return jsonify({
+                        "status": "error",
+                        "message": "批量上架正在运行，完成后再删除产品",
+                    }), 409
+            data = request.get_json(silent=True) or {}
+            item_ids = data.get("product_item_ids") or []
+            if not isinstance(item_ids, list):
+                return jsonify({"status": "error", "message": "product_item_ids 必须是数组"}), 422
+            result = db_delete_mercado_product_items(item_ids)
+            return jsonify({"status": "success", "data": result})
+        result = db_list_mercado_product_items(
+            search=str(request.args.get("search") or "").strip(),
+            limit=_parse_int_param(request.args, "limit", 500, 1, 1000),
+            offset=_parse_int_param(request.args, "offset", 0, 0, 1000000),
+        )
+        return jsonify({"status": "success", "data": result})
+    except Exception as exc:
+        logging.exception("读取 Mercado 产品列表失败")
+        return jsonify({"status": "error", "message": f"读取产品列表失败：{exc}"}), 500
+
+
+@app.route('/api/mercado-products/add', methods=['POST'])
+@login_required
+def api_add_mercado_products():
+    data = request.get_json(silent=True) or {}
+    item_ids = data.get("collection_item_ids") or []
+    if not isinstance(item_ids, list):
+        return jsonify({"status": "error", "message": "collection_item_ids 必须是数组"}), 422
+    try:
+        result = db_add_mercado_collection_items_to_products(item_ids)
+        return jsonify({"status": "success", "data": result})
+    except ValueError as exc:
+        return jsonify({"status": "error", "message": str(exc)}), 400
+    except Exception as exc:
+        logging.exception("加入 Mercado 产品列表失败")
+        return jsonify({"status": "error", "message": f"加入产品列表失败：{exc}"}), 500
+
+
+def _mercado_publish_state_update(**changes):
+    with _mercado_publish_lock:
+        _mercado_publish_state.update(changes)
+
+
+def _run_mercado_product_publish(
+    product_rows, token_id, site_id, site_name, quantity, worker_count, store_name
+):
+    from erp.mercadolibre_batch_publish import publish_product_batch
+
+    def on_progress(info):
+        _mercado_publish_state_update(
+            processed_count=int(info.get("current") or 0),
+            published_count=int(info.get("published_count", _mercado_publish_state.get("published_count") or 0)),
+            failed_count=int(info.get("failed_count", _mercado_publish_state.get("failed_count") or 0)),
+            worker_count=int(info.get("worker_count") or worker_count),
+            current_item_id=str(info.get("source_item_id") or ""),
+            message=str(info.get("message") or "正在批量上架"),
+        )
+
+    try:
+        result = publish_product_batch(
+            product_rows,
+            token_id=int(token_id),
+            site_id=str(site_id),
+            quantity=int(quantity),
+            workers=int(worker_count),
+            update_state=db_update_mercado_product_publish_state,
+            on_progress=on_progress,
+        )
+        status = "completed" if not result.get("failed_count") else "partial"
+        message = (
+            f"批量上架完成：成功 {int(result.get('published_count') or 0)} 件，"
+            f"失败 {int(result.get('failed_count') or 0)} 件"
+        )
+        _mercado_publish_state_update(
+            running=False,
+            status=status,
+            message=message,
+            processed_count=int(result.get("requested_count") or 0),
+            published_count=int(result.get("published_count") or 0),
+            failed_count=int(result.get("failed_count") or 0),
+            current_item_id="",
+            site_id=str(result.get("site_id") or site_id),
+            site_name=str(result.get("site_name") or site_name),
+            worker_count=int(result.get("worker_count") or worker_count),
+            finished_at=str(result.get("finished_at") or datetime.now().strftime("%Y-%m-%d %H:%M:%S")),
+            results=list(result.get("results") or []),
+        )
+    except Exception as exc:
+        logging.exception("Mercado 产品批量上架失败")
+        _mercado_publish_state_update(
+            running=False,
+            status="error",
+            message=f"批量上架失败：{exc}",
+            current_item_id="",
+            finished_at=datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+        )
+
+
+@app.route('/api/mercado-products/publish', methods=['POST'])
+@login_required
+def api_publish_mercado_products():
+    data = request.get_json(silent=True) or {}
+    item_ids = data.get("product_item_ids") or []
+    if not isinstance(item_ids, list):
+        return jsonify({"status": "error", "message": "product_item_ids 必须是数组"}), 422
+    try:
+        from erp.mercadolibre_translation import (
+            marketplace_site_name,
+            normalize_marketplace_site,
+        )
+
+        token_id = int(data.get("token_id") or 0)
+        site_id = normalize_marketplace_site(data.get("site_id") or "MLM")
+        site_name = marketplace_site_name(site_id)
+        quantity = int(data.get("quantity") or 1)
+        worker_count = int(data.get("worker_count") or 4)
+        if token_id <= 0:
+            raise ValueError("请选择要上架的授权店铺")
+        if quantity < 1 or quantity > 9999:
+            raise ValueError("上架库存必须在 1-9999 之间")
+        if worker_count < 1 or worker_count > 8:
+            raise ValueError("上架线程数必须在 1-8 之间")
+        rows = db_get_mercado_product_items_by_ids(item_ids)
+        if len(rows) != len({int(value) for value in item_ids}):
+            raise ValueError("部分勾选产品已不存在，请刷新列表后重试")
+        token_rows = list((bit_db_api.list_mercado_store_tokens() or {}).get("rows") or [])
+        token = next((row for row in token_rows if int(row.get("id") or 0) == token_id), None)
+        if not token:
+            raise ValueError("指定的授权店铺不存在")
+        token_site_id = str(token.get("site_id") or "").strip().upper()
+        if token_site_id and token_site_id != "CBT" and token_site_id != site_id:
+            raise ValueError(
+                f"所选店铺属于 {token_site_id} 站点，不能发布到 {site_id}；"
+                "请选择 Global Selling 店铺或对应本地站点"
+            )
+        store_name = str(token.get("display_name") or token.get("nickname") or token_id)
+    except (TypeError, ValueError) as exc:
+        return jsonify({"status": "error", "message": str(exc)}), 400
+    except Exception as exc:
+        logging.exception("准备 Mercado 批量上架失败")
+        return jsonify({"status": "error", "message": f"准备批量上架失败：{exc}"}), 500
+
+    with _mercado_publish_lock:
+        if _mercado_publish_state.get("running"):
+            return jsonify({
+                "status": "error",
+                "message": "已有批量上架任务正在运行",
+            }), 409
+        _mercado_publish_state.update({
+            "running": True,
+            "status": "running",
+            "message": (
+                f"准备使用 {min(worker_count, len(rows))} 个线程上架 "
+                f"{len(rows)} 件产品到 {store_name} · {site_name}"
+            ),
+            "token_id": token_id,
+            "store_name": store_name,
+            "site_id": site_id,
+            "site_name": site_name,
+            "quantity": quantity,
+            "worker_count": min(worker_count, len(rows)),
+            "requested_count": len(rows),
+            "processed_count": 0,
+            "published_count": 0,
+            "failed_count": 0,
+            "current_item_id": "",
+            "started_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            "finished_at": "",
+            "results": [],
+        })
+        thread = threading.Thread(
+            target=_run_mercado_product_publish,
+            args=(
+                rows,
+                token_id,
+                site_id,
+                site_name,
+                quantity,
+                worker_count,
+                store_name,
+            ),
+            name=f"mercado-publish-{token_id}-{site_id}",
+            daemon=True,
+        )
+        try:
+            thread.start()
+        except Exception as exc:
+            _mercado_publish_state.update(
+                running=False,
+                status="error",
+                message=f"批量上架线程启动失败：{exc}",
+            )
+            raise
+        state = dict(_mercado_publish_state)
+    return jsonify({"status": "success", "data": state})
+
+
+@app.route('/api/mercado-products/publish/status', methods=['GET'])
+@login_required
+def api_mercado_product_publish_status():
+    with _mercado_publish_lock:
+        state = {**_mercado_publish_state, "results": list(_mercado_publish_state.get("results") or [])}
+    response = jsonify({"status": "success", "data": state})
+    response.headers["Cache-Control"] = "no-store"
+    return response
+
+
+@app.route('/api/db/mercado-collection/tasks', methods=['POST'])
+@internal_api_required
+def api_db_create_mercado_collection_task():
+    blocked = reject_db_api_client_mode()
+    if blocked:
+        return blocked
+    data = request.get_json(silent=True) or {}
+    try:
+        task_id = db_create_mercado_collection_task(
+            data.get("source_url", ""),
+            data.get("requested_count", 20),
+            data.get("created_by", ""),
+        )
+        return jsonify({"status": "success", "data": {"task_id": int(task_id)}})
+    except ValueError as exc:
+        return jsonify({"status": "error", "message": str(exc)}), 400
+
+
+@app.route('/api/db/mercado-collection/tasks/<int:task_id>', methods=['GET', 'PATCH'])
+@internal_api_required
+def api_db_mercado_collection_task(task_id):
+    blocked = reject_db_api_client_mode()
+    if blocked:
+        return blocked
+    if request.method == "GET":
+        row = db_get_mercado_collection_task(task_id)
+        if not row:
+            return jsonify({"status": "error", "message": "采集任务不存在"}), 404
+        return jsonify({"status": "success", "data": row})
+    changes = request.get_json(silent=True) or {}
+    allowed = {
+        "status", "message", "collected_count", "completed_count",
+        "failed_count", "current_page", "started", "finished",
+    }
+    db_update_mercado_collection_task(
+        task_id, **{key: value for key, value in changes.items() if key in allowed}
+    )
+    return jsonify({"status": "success", "data": {"task_id": task_id}})
+
+
+@app.route('/api/db/mercado-collection/items', methods=['GET', 'POST'])
+@internal_api_required
+def api_db_mercado_collection_items():
+    blocked = reject_db_api_client_mode()
+    if blocked:
+        return blocked
+    if request.method == "GET":
+        task_id = request.args.get("task_id")
+        result = db_list_mercado_collection_items(
+            search=str(request.args.get("search") or "").strip(),
+            limit=_parse_int_param(request.args, "limit", 500, 1, 1000),
+            offset=_parse_int_param(request.args, "offset", 0, 0, 1000000),
+            task_id=int(task_id) if str(task_id or "").strip() else None,
+        )
+        return jsonify({"status": "success", "data": result})
+    data = request.get_json(silent=True) or {}
+    rows = data.get("rows") or []
+    if not isinstance(rows, list):
+        return jsonify({"status": "error", "message": "rows 必须是数组"}), 422
+    count = db_upsert_mercado_collection_items(int(data.get("task_id")), rows)
+    return jsonify({"status": "success", "data": {"count": count}})
+
+
+@app.route('/api/db/mercado-products', methods=['GET'])
+@internal_api_required
+def api_db_mercado_products():
+    blocked = reject_db_api_client_mode()
+    if blocked:
+        return blocked
+    result = db_list_mercado_product_items(
+        search=str(request.args.get("search") or "").strip(),
+        limit=_parse_int_param(request.args, "limit", 500, 1, 1000),
+        offset=_parse_int_param(request.args, "offset", 0, 0, 1000000),
+    )
+    return jsonify({"status": "success", "data": result})
+
+
+@app.route('/api/db/mercado-products/add', methods=['POST'])
+@internal_api_required
+def api_db_add_mercado_products():
+    blocked = reject_db_api_client_mode()
+    if blocked:
+        return blocked
+    data = request.get_json(silent=True) or {}
+    item_ids = data.get("collection_item_ids") or []
+    if not isinstance(item_ids, list):
+        return jsonify({"status": "error", "message": "collection_item_ids 必须是数组"}), 422
+    result = db_add_mercado_collection_items_to_products(item_ids)
+    return jsonify({"status": "success", "data": result})
+
+
+@app.route('/api/db/mercado-collection/items/delete', methods=['POST'])
+@internal_api_required
+def api_db_delete_mercado_collection_items():
+    blocked = reject_db_api_client_mode()
+    if blocked:
+        return blocked
+    data = request.get_json(silent=True) or {}
+    item_ids = data.get("collection_item_ids") or []
+    if not isinstance(item_ids, list):
+        return jsonify({"status": "error", "message": "collection_item_ids 必须是数组"}), 422
+    return jsonify({"status": "success", "data": db_delete_mercado_collection_items(item_ids)})
+
+
+@app.route('/api/db/mercado-products/delete', methods=['POST'])
+@internal_api_required
+def api_db_delete_mercado_product_items():
+    blocked = reject_db_api_client_mode()
+    if blocked:
+        return blocked
+    data = request.get_json(silent=True) or {}
+    item_ids = data.get("product_item_ids") or []
+    if not isinstance(item_ids, list):
+        return jsonify({"status": "error", "message": "product_item_ids 必须是数组"}), 422
+    return jsonify({"status": "success", "data": db_delete_mercado_product_items(item_ids)})
+
+
+@app.route('/api/db/mercado-products/by-ids', methods=['POST'])
+@internal_api_required
+def api_db_get_mercado_product_items_by_ids():
+    blocked = reject_db_api_client_mode()
+    if blocked:
+        return blocked
+    data = request.get_json(silent=True) or {}
+    item_ids = data.get("product_item_ids") or []
+    if not isinstance(item_ids, list):
+        return jsonify({"status": "error", "message": "product_item_ids 必须是数组"}), 422
+    rows = db_get_mercado_product_items_by_ids(item_ids)
+    return jsonify({"status": "success", "data": {"rows": rows}})
+
+
+@app.route('/api/db/mercado-products/<int:product_item_id>/publish-state', methods=['PATCH'])
+@internal_api_required
+def api_db_update_mercado_product_publish_state(product_item_id):
+    blocked = reject_db_api_client_mode()
+    if blocked:
+        return blocked
+    data = request.get_json(silent=True) or {}
+    allowed = {
+        "status", "store_name", "token_id", "published_item_id",
+        "error_message", "result", "finished",
+    }
+    db_update_mercado_product_publish_state(
+        product_item_id,
+        **{key: value for key, value in data.items() if key in allowed},
+    )
+    return jsonify({"status": "success", "data": {"product_item_id": product_item_id}})
+
+
 @app.route('/api/db/task-records', methods=['POST'])
 @internal_api_required
 def api_db_insert_task_records():
@@ -3319,6 +4537,105 @@ def api_db_upsert_browser_configs():
     replace = bool(data.get("replace", False))
     result = db_upsert_bit_browser_configs(records, replace)
     return jsonify({"status": "success", "data": result})
+
+
+def _mercado_token_error_response(exc):
+    if isinstance(exc, KeyError):
+        return jsonify({"status": "error", "message": str(exc.args[0])}), 404
+    if isinstance(exc, (ValueError, mercado_tokens.MercadoTokenError)):
+        return jsonify({"status": "error", "message": str(exc)}), 400
+    logging.exception("店铺 Token 操作失败")
+    return jsonify({"status": "error", "message": f"店铺 Token 操作失败：{exc}"}), 500
+
+
+@app.route('/api/db/mercado-tokens/authorization', methods=['GET'])
+@internal_api_required
+def api_db_mercado_token_authorization():
+    blocked = reject_db_api_client_mode()
+    if blocked:
+        return blocked
+    return jsonify({
+        "status": "success",
+        "data": bit_db_api.get_mercado_token_authorization_info(),
+    })
+
+
+@app.route('/api/db/mercado-tokens', methods=['GET'])
+@internal_api_required
+def api_db_list_mercado_tokens():
+    blocked = reject_db_api_client_mode()
+    if blocked:
+        return blocked
+    return jsonify({"status": "success", "data": bit_db_api.list_mercado_store_tokens()})
+
+
+@app.route('/api/db/mercado-tokens/<int:token_id>/site-settings', methods=['GET', 'PUT'])
+@internal_api_required
+def api_db_mercado_token_site_settings(token_id):
+    blocked = reject_db_api_client_mode()
+    if blocked:
+        return blocked
+    try:
+        if request.method == "GET":
+            result = bit_db_api.list_mercado_store_site_settings(token_id)
+        else:
+            data = request.get_json(silent=True) or {}
+            result = bit_db_api.update_mercado_store_site_settings(
+                token_id, data.get("settings", [])
+            )
+        return jsonify({"status": "success", "data": result})
+    except Exception as exc:
+        return _mercado_token_error_response(exc)
+
+
+@app.route('/api/db/mercado-tokens/exchange', methods=['POST'])
+@internal_api_required
+def api_db_exchange_mercado_token():
+    blocked = reject_db_api_client_mode()
+    if blocked:
+        return blocked
+    data = request.get_json(silent=True) or {}
+    try:
+        result = bit_db_api.exchange_mercado_store_token(
+            data.get("display_name", ""), data.get("code", "")
+        )
+        return jsonify({"status": "success", "data": result})
+    except Exception as exc:
+        return _mercado_token_error_response(exc)
+
+
+@app.route('/api/db/mercado-tokens/<int:token_id>/refresh', methods=['POST'])
+@internal_api_required
+def api_db_refresh_mercado_token(token_id):
+    blocked = reject_db_api_client_mode()
+    if blocked:
+        return blocked
+    try:
+        result = bit_db_api.refresh_mercado_store_token(token_id)
+        return jsonify({"status": "success", "data": result})
+    except Exception as exc:
+        return _mercado_token_error_response(exc)
+
+
+@app.route('/api/db/mercado-tokens/<int:token_id>', methods=['PATCH', 'DELETE'])
+@internal_api_required
+def api_db_update_mercado_token(token_id):
+    blocked = reject_db_api_client_mode()
+    if blocked:
+        return blocked
+    try:
+        if request.method == "DELETE":
+            affected = bit_db_api.delete_mercado_store_token(token_id)
+            if not affected:
+                raise KeyError("店铺 Token 不存在")
+            return jsonify({"status": "success", "data": {"deleted": affected}})
+        data = request.get_json(silent=True) or {}
+        result = bit_db_api.rename_mercado_store_token(
+            token_id, data.get("display_name", "")
+        )
+        return jsonify({"status": "success", "data": result})
+    except Exception as exc:
+        return _mercado_token_error_response(exc)
 
 
 @app.route('/api/db/reputation/bulk', methods=['POST'])
@@ -3446,6 +4763,233 @@ def api_db_zying_risk_results():
         "status": "success",
         "data": db_get_zying_risk_results(**params),
     })
+
+
+@app.route('/api/db/orders', methods=['GET'])
+@internal_api_required
+def api_db_list_orders():
+    blocked = reject_db_api_client_mode()
+    if blocked:
+        return blocked
+    try:
+        data = db_list_orders(
+            country=str(request.args.get("country") or "").strip(),
+            status=str(request.args.get("status") or "").strip(),
+            salesperson=str(request.args.get("salesperson") or "").strip(),
+            search=str(request.args.get("search") or "").strip(),
+            start_date=str(request.args.get("start_date") or "").strip(),
+            end_date=str(request.args.get("end_date") or "").strip(),
+            origin=str(request.args.get("origin") or "").strip(),
+            page=_parse_int_param(request.args, "page", 1, 1, 1000000),
+            page_size=_parse_int_param(request.args, "page_size", 50, 10, 200),
+        )
+    except ValueError as exc:
+        return jsonify({"status": "error", "message": str(exc)}), 400
+    return jsonify({"status": "success", "data": data})
+
+
+@app.route('/api/db/order-sync/start', methods=['POST'])
+@internal_api_required
+def api_db_start_order_sync():
+    blocked = reject_db_api_client_mode()
+    if blocked:
+        return blocked
+    data = request.get_json(silent=True) or {}
+    token_ids = data.get("token_ids") or []
+    if not isinstance(token_ids, list):
+        return jsonify({"status": "error", "message": "token_ids must be an array"}), 422
+    try:
+        started, state = bit_order_sync.start_order_sync(
+            start_date=str(data.get("start_date") or "").strip(),
+            end_date=str(data.get("end_date") or "").strip(),
+            token_ids=token_ids,
+            mode="automatic" if str(data.get("mode")) == "automatic" else "manual",
+        )
+    except ValueError as exc:
+        return jsonify({"status": "error", "message": str(exc)}), 400
+    return jsonify({"status": "success", "data": {"started": started, "state": state}})
+
+
+@app.route('/api/db/order-sync/status', methods=['GET'])
+@internal_api_required
+def api_db_order_sync_status():
+    blocked = reject_db_api_client_mode()
+    if blocked:
+        return blocked
+    return jsonify({"status": "success", "data": bit_order_sync.order_sync_status()})
+
+
+@app.route('/api/db/store-links', methods=['GET'])
+@internal_api_required
+def api_db_store_links():
+    blocked = reject_db_api_client_mode()
+    if blocked:
+        return blocked
+    try:
+        token_text = str(request.args.get("token_id") or "").strip()
+        data = db_list_mercado_store_links(
+            search=str(request.args.get("search") or "").strip(),
+            token_id=int(token_text) if token_text else None,
+            site_id=str(request.args.get("site_id") or "").strip(),
+            status=str(request.args.get("status") or "").strip(),
+            sales_sort=str(request.args.get("sales_sort") or "desc").strip(),
+            current_only=str(request.args.get("current_only") or "1").strip().lower()
+            not in ("0", "false", "no", "off"),
+            page=_parse_int_param(request.args, "page", 1, 1, 1000000),
+            page_size=_parse_int_param(request.args, "page_size", 100, 10, 500),
+        )
+    except ValueError as exc:
+        return jsonify({"status": "error", "message": str(exc)}), 400
+    return jsonify({"status": "success", "data": data})
+
+
+@app.route('/api/db/store-links/bulk-update', methods=['POST'])
+@internal_api_required
+def api_db_bulk_update_store_links():
+    blocked = reject_db_api_client_mode()
+    if blocked:
+        return blocked
+    data = request.get_json(silent=True) or {}
+    link_ids = data.get("link_ids") or []
+    changes = data.get("changes") or {}
+    if not isinstance(link_ids, list) or not isinstance(changes, dict):
+        return jsonify({"status": "error", "message": "link_ids must be an array and changes an object"}), 422
+    try:
+        result = db_bulk_update_mercado_store_links(link_ids, changes)
+    except ValueError as exc:
+        return jsonify({"status": "error", "message": str(exc)}), 400
+    return jsonify({"status": "success", "data": result})
+
+
+@app.route('/api/db/store-links/sync/start', methods=['POST'])
+@internal_api_required
+def api_db_start_store_link_sync():
+    blocked = reject_db_api_client_mode()
+    if blocked:
+        return blocked
+    data = request.get_json(silent=True) or {}
+    sync_all = data.get("sync_all") is True
+    token_ids = [] if sync_all else (data.get("token_ids") or [])
+    if not isinstance(token_ids, list):
+        return jsonify({"status": "error", "message": "token_ids must be an array"}), 422
+    try:
+        started, state = bit_store_link_sync.start_store_link_sync(token_ids)
+    except ValueError as exc:
+        return jsonify({"status": "error", "message": str(exc)}), 400
+    return jsonify({"status": "success", "data": {"started": started, "state": state}})
+
+
+@app.route('/api/db/store-links/sync/status', methods=['GET'])
+@internal_api_required
+def api_db_store_link_sync_status():
+    blocked = reject_db_api_client_mode()
+    if blocked:
+        return blocked
+    return jsonify({"status": "success", "data": bit_store_link_sync.store_link_sync_status()})
+
+
+@app.route('/api/db/orders/bulk-update', methods=['POST'])
+@internal_api_required
+def api_db_bulk_update_orders():
+    blocked = reject_db_api_client_mode()
+    if blocked:
+        return blocked
+    data = request.get_json(silent=True) or {}
+    order_ids = data.get("order_ids") or []
+    if not isinstance(order_ids, list):
+        return jsonify({"status": "error", "message": "order_ids must be an array"}), 422
+    changes = {}
+    for field in (
+        "workflow_status", "purchase_order", "purchase_tracking",
+        "logistics_company", "purchase_cost", "purchase_remark",
+    ):
+        if field in data:
+            changes[field] = data.get(field)
+    try:
+        result = bit_order_sync.bit_mysql.bulk_update_mercado_orders(
+            order_ids,
+            operator_id=data.get("operator_id"),
+            operator_name=data.get("operator_name") or "",
+            **changes,
+        )
+    except ValueError as exc:
+        return jsonify({"status": "error", "message": str(exc)}), 400
+    return jsonify({"status": "success", "data": result})
+
+
+@app.route('/api/db/orders/labels', methods=['POST'])
+@internal_api_required
+def api_db_order_labels():
+    blocked = reject_db_api_client_mode()
+    if blocked:
+        return blocked
+    data = request.get_json(silent=True) or {}
+    order_ids = data.get("order_ids") or []
+    if not isinstance(order_ids, list):
+        return jsonify({"status": "error", "message": "order_ids must be an array"}), 422
+    try:
+        from bit.bit_order_labels import download_order_labels
+
+        result = download_order_labels(order_ids)
+    except (ValueError, RuntimeError) as exc:
+        return jsonify({"status": "error", "message": str(exc)}), 400
+    response = send_file(
+        BytesIO(result["content"]),
+        mimetype="application/pdf",
+        as_attachment=False,
+        download_name=result.get("filename") or "mercado-labels.pdf",
+        max_age=0,
+    )
+    response.headers["X-Mercado-Label-Filename"] = result.get("filename") or "mercado-labels.pdf"
+    response.headers["X-Mercado-Shipment-Count"] = str(result.get("shipment_count") or 0)
+    response.headers["Cache-Control"] = "no-store"
+    return response
+
+
+@app.route('/api/db/orders/print-logs', methods=['POST'])
+@internal_api_required
+def api_db_order_print_logs():
+    blocked = reject_db_api_client_mode()
+    if blocked:
+        return blocked
+    data = request.get_json(silent=True) or {}
+    order_ids = data.get("order_ids") or []
+    if not isinstance(order_ids, list):
+        return jsonify({"status": "error", "message": "order_ids must be an array"}), 422
+    count = bit_order_sync.bit_mysql.record_mercado_order_print_logs(
+        order_ids,
+        operator_id=data.get("operator_id"),
+        operator_name=data.get("operator_name") or "",
+    )
+    return jsonify({"status": "success", "data": {"count": count}})
+
+
+@app.route('/api/db/orders/<order_id>/logs', methods=['GET'])
+@internal_api_required
+def api_db_order_operation_logs(order_id):
+    blocked = reject_db_api_client_mode()
+    if blocked:
+        return blocked
+    rows = bit_order_sync.bit_mysql.list_mercado_order_operation_logs(
+        order_id,
+        limit=_parse_int_param(request.args, "limit", 100, 1, 200),
+    )
+    return jsonify({"status": "success", "data": rows})
+
+
+@app.route('/api/db/orders/<order_id>/tracking', methods=['GET'])
+@internal_api_required
+def api_db_order_tracking(order_id):
+    blocked = reject_db_api_client_mode()
+    if blocked:
+        return blocked
+    from bit.bit_logistics import query_order_tracking
+
+    try:
+        data = query_order_tracking(order_id)
+    except (KeyError, ValueError) as exc:
+        return jsonify({"status": "error", "message": str(exc)}), 404
+    return jsonify({"status": "success", "data": data})
 
 
 @app.route('/api/db/orders/bulk', methods=['POST'])
@@ -3922,10 +5466,149 @@ def api_db_workbench_login():
     return jsonify({"status": "success", "data": user})
 
 
+@app.route('/api/mercado-tokens/authorization', methods=['GET'])
+@login_required
+def api_mercado_token_authorization():
+    try:
+        data = bit_db_api.get_mercado_token_authorization_info()
+        return jsonify({"status": "success", "data": data})
+    except Exception as exc:
+        return _mercado_token_error_response(exc)
+
+
+@app.route('/api/mercado-tokens', methods=['GET'])
+@login_required
+def api_list_mercado_tokens():
+    try:
+        data = bit_db_api.list_mercado_store_tokens()
+        return jsonify({"status": "success", "data": data})
+    except Exception as exc:
+        return _mercado_token_error_response(exc)
+
+
+@app.route('/api/mercado-tokens/<int:token_id>/site-settings', methods=['GET', 'PUT'])
+@login_required
+def api_mercado_token_site_settings(token_id):
+    try:
+        if request.method == "GET":
+            result = bit_db_api.list_mercado_store_site_settings(token_id)
+            message = ""
+        else:
+            data = request.get_json(silent=True) or {}
+            result = bit_db_api.update_mercado_store_site_settings(
+                token_id, data.get("settings", [])
+            )
+            message = "站点配置已保存"
+        return jsonify({"status": "success", "data": result, "message": message})
+    except Exception as exc:
+        return _mercado_token_error_response(exc)
+
+
+@app.route('/api/mercado-tokens/exchange', methods=['POST'])
+@login_required
+def api_exchange_mercado_token():
+    data = request.get_json(silent=True) or {}
+    try:
+        result = bit_db_api.exchange_mercado_store_token(
+            data.get("display_name", ""), data.get("code", "")
+        )
+        return jsonify({
+            "status": "success",
+            "data": result,
+            "message": "店铺授权成功，Token 已保存",
+        })
+    except Exception as exc:
+        return _mercado_token_error_response(exc)
+
+
+@app.route('/api/mercado-tokens/<int:token_id>/refresh', methods=['POST'])
+@login_required
+def api_refresh_mercado_token(token_id):
+    try:
+        result = bit_db_api.refresh_mercado_store_token(token_id)
+        return jsonify({
+            "status": "success",
+            "data": result,
+            "message": "Token 已刷新并保存",
+        })
+    except Exception as exc:
+        return _mercado_token_error_response(exc)
+
+
+@app.route('/api/mercado-tokens/<int:token_id>', methods=['PATCH', 'DELETE'])
+@login_required
+def api_update_mercado_token(token_id):
+    try:
+        if request.method == "DELETE":
+            affected = bit_db_api.delete_mercado_store_token(token_id)
+            if not affected:
+                raise KeyError("店铺 Token 不存在")
+            return jsonify({"status": "success", "data": {"deleted": affected}})
+        data = request.get_json(silent=True) or {}
+        result = bit_db_api.rename_mercado_store_token(
+            token_id, data.get("display_name", "")
+        )
+        return jsonify({
+            "status": "success",
+            "data": result,
+            "message": "店铺名称已更新",
+        })
+    except Exception as exc:
+        return _mercado_token_error_response(exc)
+
+
+@app.route("/api/yandex-console/status", methods=["GET"])
+@login_required
+def api_yandex_console_status():
+    running = _yandex_console_health()
+    return jsonify(
+        {
+            "status": "success",
+            "data": {
+                "running": running,
+                "url": f"{YANDEX_CONSOLE_BASE_URL}/?embedded=1",
+                "external_url": f"{YANDEX_CONSOLE_BASE_URL}/",
+                "port": YANDEX_CONSOLE_PORT,
+                "pid": (
+                    _yandex_console_process.pid
+                    if _yandex_console_process is not None
+                    and _yandex_console_process.poll() is None
+                    else None
+                ),
+            },
+        }
+    )
+
+
+@app.route("/api/yandex-console/start", methods=["POST"])
+@login_required
+def api_yandex_console_start():
+    running, message = ensure_yandex_console()
+    return (
+        jsonify(
+            {
+                "status": "success" if running else "error",
+                "message": message,
+                "data": {
+                    "running": running,
+                    "url": f"{YANDEX_CONSOLE_BASE_URL}/?embedded=1",
+                    "external_url": f"{YANDEX_CONSOLE_BASE_URL}/",
+                    "port": YANDEX_CONSOLE_PORT,
+                },
+            }
+        ),
+        200 if running else 503,
+    )
+
+
 @app.route("/")
 @login_required
 def index():
-    return render_template('index.html', current_user=session.get("workbench_user") or {})
+    return render_template(
+        'index.html',
+        current_user=session.get("workbench_user") or {},
+        mercado_authorization=mercado_tokens.authorization_info(),
+    )
 
 
 @app.route("/login")
@@ -3967,8 +5650,28 @@ def logout():
 
 # 定义路由和返回内容
 @app.route("/zs")
-@login_required
 def hello_whzs():
+    callback_code = request.args.get("code", "")
+    if callback_code:
+        try:
+            code = mercado_tokens.extract_authorization_code(callback_code)
+        except ValueError:
+            return Response("无效的 Mercado Libre 授权码", status=400, content_type="text/plain; charset=utf-8")
+        escaped_code = html.escape(code)
+        response = Response(
+            f"""<!doctype html>
+<html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width">
+<meta name="referrer" content="no-referrer"><title>授权成功</title>
+<style>body{{margin:0;background:#f4f7fb;color:#172033;font-family:Arial,'Microsoft YaHei',sans-serif}}main{{max-width:640px;margin:12vh auto;padding:28px;background:#fff;border:1px solid #d9e2ef;border-radius:12px;box-shadow:0 16px 40px #10284014}}h1{{font-size:22px}}code{{display:block;margin:18px 0;padding:14px;background:#f1f5f9;border-radius:8px;word-break:break-all}}button{{border:0;border-radius:8px;background:#2563eb;color:#fff;padding:10px 16px;font-weight:700;cursor:pointer}}p{{color:#667085}}</style></head>
+<body><main><h1>Mercado Libre 授权成功</h1><p>复制下面的 TG Code，回到“店铺 Token”模块完成添加。TG Code 只能使用一次。</p>
+<code id="tg-code">{escaped_code}</code><button type="button" onclick="navigator.clipboard.writeText(document.getElementById('tg-code').textContent).then(()=>this.textContent='已复制')">复制 TG Code</button></main></body></html>""",
+            content_type="text/html; charset=utf-8",
+        )
+        response.headers["Cache-Control"] = "no-store"
+        response.headers["Pragma"] = "no-cache"
+        return response
+    if not session.get("workbench_user"):
+        return redirect(url_for("login_page"))
     return "武汉泽顺"
 
 
@@ -4093,6 +5796,21 @@ def insert_record():
             conn.close()  # 将连接放回连接池
 
 
+def recover_interrupted_mercado_collection_tasks():
+    """Mark tasks owned by an earlier workbench process as interrupted."""
+    from erp.mercadolibre_collection_store import recover_interrupted_collection_tasks
+
+    cutoff = datetime.now().replace(microsecond=0).strftime("%Y-%m-%d %H:%M:%S")
+    recovered = recover_interrupted_collection_tasks(cutoff=cutoff)
+    if recovered:
+        logging.warning("已恢复 %s 个异常中断的 Mercado 商品采集任务", recovered)
+    return recovered
+
+
 if __name__ == '__main__':
+    try:
+        recover_interrupted_mercado_collection_tasks()
+    except Exception:
+        logging.exception("恢复异常中断的 Mercado 商品采集任务失败")
     # 保持 5000 端口，多线程模式开启以防流式阻塞
     app.run(host='0.0.0.0', port=5000, threaded=True)

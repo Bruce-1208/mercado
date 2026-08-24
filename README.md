@@ -1,5 +1,29 @@
 # mercado
 
+## Yandex Market 控制台
+
+Yandex 店铺授权、token 管理、国外商品抓取和商品卡发布功能位于独立的 `yandex` 包。首次运行会在包内创建隔离的虚拟环境和 `.data` 数据目录：
+
+```powershell
+.\yandex\run.ps1
+```
+
+安装完成后，登录“武汉泽顺综合服务台”，点击功能导航中的“Yandex 店铺”即可使用。工作台会自动在本机 8011 端口启动并内嵌 Yandex 页面；可通过 `WORKBENCH_YANDEX_PORT` 修改内部端口。
+
+安装完成后可以使用快速启动脚本：
+
+```powershell
+.\yandex\start.ps1
+```
+
+也可以在 `mercado` 根目录通过 Python 模块启动：
+
+```powershell
+.\yandex\.venv\Scripts\python.exe -m yandex
+```
+
+详细说明见 `yandex/README.md`。
+
 ## 同步美客多 Listings
 
 `mercado_api/mercado_api_listings.py` 使用官方 Global Selling API，通过 access token 自动识别店铺，完整获取 listing 并保存到本地 SQLite。
