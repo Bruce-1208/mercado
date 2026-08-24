@@ -32,8 +32,8 @@ from bit.bit_utils import get_now_time
 
 
 DEFAULT_DAILY_TOP_N = 30
-DEFAULT_DAILY_MAX_WORKERS = 10
-DEFAULT_DAILY_BROWSER_WORKER_LIMIT = 10
+DEFAULT_DAILY_MAX_WORKERS = 15
+DEFAULT_DAILY_BROWSER_WORKER_LIMIT = 15
 DEFAULT_DAILY_RECENT_DAYS = 100
 DEFAULT_LOGIN_RETRY_ATTEMPTS = 3
 DEFAULT_LOGIN_RETRY_SECONDS = 180
@@ -63,6 +63,19 @@ REPUTATION_RATE_FIELDS = {
 
 class DailyTaskAlreadyRunning(RuntimeError):
     pass
+
+
+def _normalize_appeal_plan_limit(top_n):
+    try:
+        return int(top_n)
+    except (TypeError, ValueError):
+        return DEFAULT_DAILY_TOP_N
+
+
+def _select_appeal_plan(plan, top_n):
+    """按数量限制申诉计划；top_n <= 0 表示执行全部符合条件的店铺。"""
+    limit = _normalize_appeal_plan_limit(top_n)
+    return list(plan) if limit <= 0 else list(plan)[:limit]
 
 
 def _daily_browser_worker_limit():
@@ -267,9 +280,11 @@ def build_latest_infraction_appeal_plan(top_n=DEFAULT_DAILY_TOP_N, recent_days=D
         ),
         reverse=True,
     )
-    selected = plan[:max(1, int(top_n))]
+    limit = _normalize_appeal_plan_limit(top_n)
+    selected = _select_appeal_plan(plan, limit)
+    scope_label = "全部" if limit <= 0 else f"Top {limit}"
     print(f"{get_now_time()} 最新侵权数据时间：{data.get('latest_submit_time', '')}<br>")
-    print(f"{get_now_time()} Top {top_n} 侵权店铺计划：{selected}<br>")
+    print(f"{get_now_time()} {scope_label}侵权店铺计划：{selected}<br>")
     return selected
 
 
@@ -333,11 +348,13 @@ def build_latest_reputation_appeal_plan(
         ),
         reverse=True,
     )
-    selected = plan[:max(1, int(top_n))]
+    limit = _normalize_appeal_plan_limit(top_n)
+    selected = _select_appeal_plan(plan, limit)
+    scope_label = "全部" if limit <= 0 else f"Top {limit} "
     label = _appeal_type_label(normalized_type)
     print(f"{get_now_time()} 最新声誉数据时间：{data.get('latest_submit_time', '')}<br>")
     print(
-        f"{get_now_time()} Top {top_n} {label}店铺计划（最低比率 {threshold:.2%}）："
+        f"{get_now_time()} {scope_label}{label}店铺计划（最低比率 {threshold:.2%}）："
         f"{selected}<br>"
     )
     return selected

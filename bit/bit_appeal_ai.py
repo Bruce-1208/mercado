@@ -43,6 +43,12 @@ import random
 from bit.bit_utils import get_latest_modified_file, get_bit_path, parser_delay_date, get_now_time, getWindowidByName
 from bit.bit_api import *
 from bit.bit_runtime_lock import create_window_lease, current_thread_window_lease
+from bit.bit_appeal_phrases import (
+    get_current_appeal_phrase,
+    render_appeal_phrase,
+    select_appeal_phrase,
+    use_appeal_phrase,
+)
 from bit.bit_config import (
     get_shop_config,
     get_window_id_by_shop_name as get_config_window_id_by_shop_name,
@@ -687,6 +693,14 @@ def build_appeal_message(window_id, name, site, form, message, nickname):
         orders_random = get_delay_orders_download_random(window_id, name, site, 5)
         if orders_random == "":
             return ""
+        selected_phrase = get_current_appeal_phrase()
+        if selected_phrase:
+            return render_appeal_phrase(
+                selected_phrase,
+                nickname=nickname,
+                order_ids=orders_random,
+                appeal_type=form,
+            )
         words = [
             f"亲爱的客服，我叫{nickname}！这些订单因合作物流车辆临时出现故障，导致未能及时揽收，并非我这边发货延误，麻烦您帮忙处理一下，消除对店铺声誉的影响，非常感谢！",
             f"亲爱的客服，我叫{nickname}！这些订单因为菜鸟物流原因，并非我这边发货延误，麻烦您帮忙处理一下，消除对店铺声誉的影响，非常感谢！",
@@ -695,6 +709,14 @@ def build_appeal_message(window_id, name, site, form, message, nickname):
 
     if form == "侵权":
         infraction_random = get_infraction_orders_random(window_id, name, site, 10)
+        selected_phrase = get_current_appeal_phrase()
+        if selected_phrase:
+            return render_appeal_phrase(
+                selected_phrase,
+                nickname=nickname,
+                order_ids=infraction_random,
+                appeal_type=form,
+            )
         words = [
             f"亲爱的客服，我叫{nickname}！这些产品是通用品牌产品，被系统误检测为侵权产品，你能帮我核查并消除记录吗？",
             f"亲爱的客服，我叫{nickname}！这些产品是通用产品，并没有侵犯品牌权益，麻烦你帮我重新审核并恢复产品，谢谢！",
@@ -702,6 +724,13 @@ def build_appeal_message(window_id, name, site, form, message, nickname):
         return infraction_random + random.choice(words)
 
     if form == "投诉":
+        selected_phrase = get_current_appeal_phrase()
+        if selected_phrase:
+            return render_appeal_phrase(
+                selected_phrase,
+                nickname=nickname,
+                appeal_type=form,
+            )
         return COMPLAINT_DEFAULT_APPEAL_MESSAGE
 
     return message
@@ -736,6 +765,42 @@ def is_ai_frame_info(info):
     """根据 iframe 的 src/title/name/id/class 等文本特征识别 AI 客服 iframe。"""
     text = " ".join(str(info.get(key, "")) for key in ("src", "title", "name", "id", "cls")).lower()
     return any(marker in text for marker in AI_FRAME_MARKERS)
+
+
+def find_frames_including_shadow_dom(driver):
+    """返回当前文档及所有开放 Shadow Root 中的 iframe。
+
+    2026-08 版 seller-assistant loader 会把 ``#sa-assistant-chat`` 和真正的
+    Maxwell iframe 渲染进 ``#sof-seller-assistant-frm-host`` 的 Shadow Root。
+    Selenium 的普通 ``find_elements`` 和 ``document.querySelectorAll`` 都不会穿透
+    Shadow DOM，因此必须显式递归开放的 Shadow Root。
+    """
+    try:
+        return driver.execute_script(
+            """
+            function deepElements(root = document) {
+                const out = [];
+                const walk = (node) => {
+                    const elements = node.querySelectorAll ? Array.from(node.querySelectorAll('*')) : [];
+                    for (const el of elements) {
+                        out.push(el);
+                        if (el.shadowRoot) walk(el.shadowRoot);
+                    }
+                };
+                walk(root);
+                return out;
+            }
+            return deepElements(document).filter((el) =>
+                String(el.tagName || '').toUpperCase() === 'IFRAME'
+            );
+            """
+        ) or []
+    except Exception:
+        # 旧浏览器或测试替身不支持 execute_script 时保留原定位方式。
+        try:
+            return driver.find_elements(By.TAG_NAME, "iframe")
+        except Exception:
+            return []
 
 
 def classify_ai_chat_variant(state):
@@ -801,11 +866,14 @@ def get_ai_chat_dom_state(driver):
                 : null;
             const rootClass = root ? String(root.className || '') : '';
             const ariaExpanded = opener ? (opener.getAttribute('aria-expanded') || '') : '';
+            const rootClasses = rootClass.split(/\\s+/).filter(Boolean);
             const inlineOpen = !!inlineInput || ariaExpanded === 'true'
-                || (!!root && visible(root) && !rootClass.split(/\\s+/).includes('minimized'));
+                || (!!root && rootClasses.includes('show') && !rootClasses.includes('minimized'));
 
-            const legacyFrames = Array.from(document.querySelectorAll('iframe')).filter((frame) => {
-                if (!visible(frame)) return false;
+            // 新版 loader 把 Maxwell iframe 放在开放的 Shadow Root 中，必须从 all
+            // 里取 iframe；document.querySelectorAll('iframe') 只能看到 Hotjar 等顶层 frame。
+            const aiFrames = all.filter((frame) => {
+                if (String(frame.tagName || '').toUpperCase() !== 'IFRAME') return false;
                 const text = [
                     frame.getAttribute('src') || '',
                     frame.getAttribute('title') || '',
@@ -815,6 +883,7 @@ def get_ai_chat_dom_state(driver):
                 ].join(' ').toLowerCase();
                 return frameMarkers.some((marker) => text.includes(String(marker).toLowerCase()));
             });
+            const visibleAiFrames = aiFrames.filter((frame) => visible(frame));
 
             return {
                 inline_shell: !!root || !!opener || all.some((el) =>
@@ -824,7 +893,14 @@ def get_ai_chat_dom_state(driver):
                 inline_has_input: !!inlineInput,
                 inline_root_class: rootClass,
                 inline_aria_expanded: ariaExpanded,
-                legacy_frame_count: legacyFrames.length
+                ai_frame_count: aiFrames.length,
+                visible_ai_frame_count: visibleAiFrames.length,
+                shadow_ai_frame_count: aiFrames.filter((frame) => {
+                    const frameRoot = frame.getRootNode ? frame.getRootNode() : null;
+                    return !!(frameRoot && frameRoot.host);
+                }).length,
+                // 保留原字段供分类与旧调用方使用；现在包含 Shadow DOM 中可见的 iframe。
+                legacy_frame_count: visibleAiFrames.length
             };
             """,
             list(AI_FRAME_MARKERS),
@@ -911,15 +987,18 @@ def find_inline_chat_input(driver, timeout=15):
 
 
 def click_inline_ai_assistant_entry(driver, name="", site="", timeout=12):
-    """点击新版内嵌助手的明确按钮，并用容器状态或输入框验证结果。"""
+    """点击新版助手入口，并用内嵌输入框或 Shadow DOM iframe 验证结果。"""
     try:
         driver.switch_to.default_content()
     except Exception:
         pass
 
+    if switch_to_ai_chat_frame(driver, require_input=True):
+        setattr(driver, "_mercado_ai_chat_mode", AI_CHAT_MODE_IFRAME)
+        return AI_CHAT_MODE_IFRAME
     if find_inline_chat_input(driver, timeout=0.2):
         setattr(driver, "_mercado_ai_chat_mode", AI_CHAT_MODE_INLINE)
-        return True
+        return AI_CHAT_MODE_INLINE
 
     try:
         clicked = driver.execute_script(
@@ -981,9 +1060,12 @@ def click_inline_ai_assistant_entry(driver, name="", site="", timeout=12):
     print(f"{get_now_time()} {name} {site} 点击新版内嵌 AI 助手入口：{clicked}<br>")
     end_time = time.time() + max(0, timeout)
     while time.time() < end_time:
+        if switch_to_ai_chat_frame(driver, require_input=True):
+            setattr(driver, "_mercado_ai_chat_mode", AI_CHAT_MODE_IFRAME)
+            return AI_CHAT_MODE_IFRAME
         if find_inline_chat_input(driver, timeout=0.5):
             setattr(driver, "_mercado_ai_chat_mode", AI_CHAT_MODE_INLINE)
-            return True
+            return AI_CHAT_MODE_INLINE
         state = get_ai_chat_dom_state(driver)
         if state.get("inline_open"):
             # 容器已经展开时继续等待异步加载输入框，不重复点击造成开关反转。
@@ -1027,6 +1109,19 @@ def reset_expired_ai_iframe(driver, name="", site=""):
         driver.switch_to.default_content()
         reset = driver.execute_script(
             """
+            function deepElements(root = document) {
+                const out = [];
+                const walk = (node) => {
+                    const elements = node.querySelectorAll ? Array.from(node.querySelectorAll('*')) : [];
+                    for (const el of elements) {
+                        out.push(el);
+                        if (el.shadowRoot) walk(el.shadowRoot);
+                    }
+                };
+                walk(root);
+                return out;
+            }
+
             function cleanNewChatUrl(rawUrl) {
                 const origin = window.location.origin && window.location.origin !== 'null'
                     ? window.location.origin
@@ -1044,7 +1139,9 @@ def reset_expired_ai_iframe(driver, name="", site=""):
                 return url.toString();
             }
 
-            const frames = Array.from(document.querySelectorAll('iframe'));
+            const frames = deepElements(document).filter((el) =>
+                String(el.tagName || '').toUpperCase() === 'IFRAME'
+            );
             const target = frames.find((frame) => {
                 const src = frame.getAttribute('src') || '';
                 return /maxwell\\/new-chat|meli-ai-chat/i.test(src) &&
@@ -1080,7 +1177,7 @@ def switch_to_ai_chat_frame(driver, require_input=False, max_depth=2):
 
     def search_frames(depth):
         """按页面位置和 AI 特征给 iframe 打分，优先尝试右下方的悬浮窗。"""
-        frames = driver.find_elements(By.TAG_NAME, "iframe")
+        frames = find_frames_including_shadow_dom(driver)
         frame_infos = []
         for frame in frames:
             try:
@@ -1154,8 +1251,24 @@ def dump_iframe_debug_info(driver):
     try:
         frames = driver.execute_script(
             """
-            return [...document.querySelectorAll('iframe')].map((frame, index) => {
+            function deepElements(root = document) {
+                const out = [];
+                const walk = (node) => {
+                    const elements = node.querySelectorAll ? Array.from(node.querySelectorAll('*')) : [];
+                    for (const el of elements) {
+                        out.push(el);
+                        if (el.shadowRoot) walk(el.shadowRoot);
+                    }
+                };
+                walk(root);
+                return out;
+            }
+            return deepElements(document)
+                .filter((el) => String(el.tagName || '').toUpperCase() === 'IFRAME')
+                .map((frame, index) => {
                 const rect = frame.getBoundingClientRect();
+                const root = frame.getRootNode ? frame.getRootNode() : null;
+                const host = root && root.host ? root.host : null;
                 return {
                     index,
                     title: frame.getAttribute('title') || '',
@@ -1165,7 +1278,8 @@ def dump_iframe_debug_info(driver):
                     bottom: Math.round(rect.bottom),
                     width: Math.round(rect.width),
                     height: Math.round(rect.height),
-                    visible: !!(rect.width || rect.height || frame.getClientRects().length)
+                    visible: !!(rect.width || rect.height || frame.getClientRects().length),
+                    shadowHost: host ? (host.id || host.className || host.tagName || '') : ''
                 };
             });
             """
@@ -1176,7 +1290,7 @@ def dump_iframe_debug_info(driver):
 
 
 def save_ai_open_debug_artifacts(driver, name, site):
-    """AI 悬浮窗打开失败时保存截图和 HTML，便于后续人工分析页面结构。"""
+    """AI 悬浮窗打开失败时保存截图、HTML 和 Shadow DOM 结构化快照。"""
     driver.switch_to.default_content()
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     prefix = Path(__file__).resolve().parent / f"ai_chat_open_failed_{name}_{site}_{timestamp}"
@@ -1190,6 +1304,92 @@ def save_ai_open_debug_artifacts(driver, name, site):
         print(f"{get_now_time()} 已保存AI悬浮窗失败HTML：{prefix.with_suffix('.html')}<br>")
     except Exception as e:
         print(f"{get_now_time()} 保存AI悬浮窗失败HTML失败：{e}<br>")
+    try:
+        snapshot = driver.execute_script(
+            """
+            function deepElements(root = document) {
+                const out = [];
+                const walk = (node) => {
+                    const elements = node.querySelectorAll ? Array.from(node.querySelectorAll('*')) : [];
+                    for (const el of elements) {
+                        out.push(el);
+                        if (el.shadowRoot) walk(el.shadowRoot);
+                    }
+                };
+                walk(root);
+                return out;
+            }
+            function visible(el) {
+                const rect = el.getBoundingClientRect();
+                const style = window.getComputedStyle(el);
+                return !!(rect.width || rect.height || el.getClientRects().length)
+                    && style.visibility !== 'hidden'
+                    && style.display !== 'none';
+            }
+            const all = deepElements(document);
+            return {
+                title: document.title || '',
+                readyState: document.readyState || '',
+                shadowHosts: all
+                    .filter((el) => !!el.shadowRoot)
+                    .map((el) => ({
+                        tag: el.tagName || '',
+                        id: el.id || '',
+                        className: String(el.className || '')
+                    })),
+                aiShells: all
+                    .filter((el) =>
+                        el.id === 'sa-assistant-chat'
+                        || el.id === 'sa-icon-button-wrapper'
+                        || el.getAttribute('aria-controls') === 'sa-assistant-chat'
+                    )
+                    .map((el) => ({
+                        tag: el.tagName || '',
+                        id: el.id || '',
+                        className: String(el.className || ''),
+                        ariaExpanded: el.getAttribute('aria-expanded') || '',
+                        visible: visible(el)
+                    })),
+                frames: all
+                    .filter((el) => String(el.tagName || '').toUpperCase() === 'IFRAME')
+                    .map((frame) => {
+                        const rect = frame.getBoundingClientRect();
+                        const root = frame.getRootNode ? frame.getRootNode() : null;
+                        const host = root && root.host ? root.host : null;
+                        return {
+                            src: frame.getAttribute('src') || '',
+                            title: frame.getAttribute('title') || '',
+                            id: frame.id || '',
+                            className: String(frame.className || ''),
+                            width: Math.round(rect.width),
+                            height: Math.round(rect.height),
+                            visible: visible(frame),
+                            shadowHost: host
+                                ? (host.id || String(host.className || '') || host.tagName || '')
+                                : ''
+                        };
+                    })
+            };
+            """
+        ) or {}
+        debug_info = {
+            "captured_at": datetime.now().isoformat(timespec="seconds"),
+            "current_url": driver.current_url,
+            "chat_state": get_ai_chat_dom_state(driver),
+            "dom_snapshot": snapshot,
+        }
+        try:
+            debug_info["browser_logs"] = driver.get_log("browser")[-100:]
+        except Exception:
+            debug_info["browser_logs"] = []
+        debug_path = prefix.with_suffix(".debug.json")
+        debug_path.write_text(
+            json.dumps(debug_info, ensure_ascii=False, indent=2, default=str),
+            encoding="utf-8",
+        )
+        print(f"{get_now_time()} 已保存AI悬浮窗失败结构化快照：{debug_path}<br>")
+    except Exception as e:
+        print(f"{get_now_time()} 保存AI悬浮窗失败结构化快照失败：{e}<br>")
 
 
 def dump_ai_entry_debug_info(driver):
@@ -1198,7 +1398,20 @@ def dump_ai_entry_debug_info(driver):
     try:
         entries = driver.execute_script(
             """
-            return [...document.querySelectorAll('button, a, div, span')]
+            function deepElements(root = document) {
+                const out = [];
+                const walk = (node) => {
+                    const elements = node.querySelectorAll ? Array.from(node.querySelectorAll('*')) : [];
+                    for (const el of elements) {
+                        out.push(el);
+                        if (el.shadowRoot) walk(el.shadowRoot);
+                    }
+                };
+                walk(root);
+                return out;
+            }
+            return deepElements(document)
+                .filter((node) => ['BUTTON', 'A', 'DIV', 'SPAN'].includes(node.tagName))
                 .map((node, index) => {
                     const rect = node.getBoundingClientRect();
                     const label = [
@@ -2429,6 +2642,7 @@ def open_ai_contact_window(driver, name, site, window_id=""):
 
         for attempt in range(1, 5):
             variant = detect_ai_chat_variant(driver)
+            state = get_ai_chat_dom_state(driver)
             if variant:
                 last_variant = variant
             print(
@@ -2440,9 +2654,22 @@ def open_ai_contact_window(driver, name, site, window_id=""):
             if opened_mode:
                 break
 
+            if state.get("visible_ai_frame_count", 0):
+                # 面板已经展开时只等待 iframe 内部就绪。再次点击入口会把面板关掉，
+                # 这正是旧逻辑在新 Shadow DOM 结构下反复开关、最终误报的原因。
+                print(
+                    f"{get_now_time()} {name} {site} AI客服面板已展开，等待 iframe 输入框加载<br>"
+                )
+                opened_mode = wait_for_ai_chat_ready(driver, timeout=10, require_input=True)
+                if opened_mode:
+                    break
+                driver.switch_to.default_content()
+                time.sleep(1)
+                continue
+
             if variant == AI_CHAT_MODE_INLINE:
-                if click_inline_ai_assistant_entry(driver, name, site, timeout=12):
-                    opened_mode = AI_CHAT_MODE_INLINE
+                opened_mode = click_inline_ai_assistant_entry(driver, name, site, timeout=12)
+                if opened_mode:
                     break
                 driver.switch_to.default_content()
                 time.sleep(2)
@@ -2998,6 +3225,9 @@ def shensu(name, site, form, message, validate_open=False):
 
     nickname_list = ["Bruce", "Jack", "Lucy", "James"]
     nickname = random.choice(nickname_list)
+    selected_phrase = select_appeal_phrase(form) if not str(message or "").strip() else ""
+    if selected_phrase:
+        print(f"{get_now_time()} {name} {site} 从{form}话术库随机选取：{selected_phrase}<br>")
 
     try:
         window_id = get_window_id_by_shop_name(name)
@@ -3039,37 +3269,38 @@ def shensu(name, site, form, message, validate_open=False):
         )
         select_site(driver, name, site_name)
 
-        if form == "延误":
-            handle_delay(window_id, driver, name, site_name, message, nickname)
-            return
+        with use_appeal_phrase(selected_phrase):
+            if form == "延误":
+                handle_delay(window_id, driver, name, site_name, message, nickname)
+                return
 
-        if form == "侵权":
-            handle_infraction(window_id, driver, name, site_name, message, nickname)
-            return
+            if form == "侵权":
+                handle_infraction(window_id, driver, name, site_name, message, nickname)
+                return
 
-        if form == "取消率":
-            handle_cancellation(window_id, driver, name, site_name, message, nickname)
-            return
+            if form == "取消率":
+                handle_cancellation(window_id, driver, name, site_name, message, nickname)
+                return
 
-        if form == "投诉":
-            handle_complaint(window_id, driver, name, site_name, message, nickname)
-            return
+            if form == "投诉":
+                handle_complaint(window_id, driver, name, site_name, message, nickname)
+                return
 
-        huashu = build_appeal_message(window_id, name, site_name, form, message, nickname)
-        if huashu == "":
-            print(f"{get_now_time()} {name} {site} 没有可以申诉的数据<br>")
-            return "没有可以申诉的数据"
+            huashu = build_appeal_message(window_id, name, site_name, form, message, nickname)
+            if huashu == "":
+                print(f"{get_now_time()} {name} {site} 没有可以申诉的数据<br>")
+                return "没有可以申诉的数据"
 
-        open_ai_contact_window(driver, name, site_name, window_id)
-        send_ai_chat_message(driver, huashu)
-        append_chat_log(
-            name,
-            site_name,
-            "send_initial_appeal",
-            message=huashu,
-            extra={"form": form, "window_id": window_id},
-        )
-        print(f"{get_now_time()} {name} {site} 自动发送AI客服申诉话术：{huashu}<br>")
+            open_ai_contact_window(driver, name, site_name, window_id)
+            send_ai_chat_message(driver, huashu)
+            append_chat_log(
+                name,
+                site_name,
+                "send_initial_appeal",
+                message=huashu,
+                extra={"form": form, "window_id": window_id},
+            )
+            print(f"{get_now_time()} {name} {site} 自动发送AI客服申诉话术：{huashu}<br>")
         # chat_ai(driver, name, site, form, huashu, nickname)
     except Exception as e:
         appeal_error = str(e)
@@ -3118,11 +3349,23 @@ def handle_infraction(window_id, driver, name, site, message, nickname):
         f"这几个产品是通用品牌产品，并非侵权产品，这是系统误判，"
         f"麻烦帮我重新核查并删除侵权记录，谢谢"
     )
+    selected_phrase = get_current_appeal_phrase()
 
     open_ai_contact_window(driver, name, site, window_id)
     for index, current_group in enumerate(groups, start=1):
         infraction_ids = "、".join(str(item) for item in current_group)
-        huashu = f"{infraction_ids}{message}" if message else f"{infraction_ids}{appeal_suffix}"
+        huashu = (
+            f"{infraction_ids}{message}"
+            if message
+            else render_appeal_phrase(
+                selected_phrase,
+                nickname=nickname,
+                order_ids=infraction_ids,
+                appeal_type="侵权",
+            )
+            if selected_phrase
+            else f"{infraction_ids}{appeal_suffix}"
+        )
         print(f"{get_now_time()} {name} {site} 开始发送第 {index}/{len(groups)} 组侵权申诉：{huashu}<br>")
         group_appeal_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         group_log_start = len(get_appeal_log_records())
@@ -3173,12 +3416,26 @@ def handle_delay(window_id, driver, name, site, message, nickname):
         f"亲爱的客服，我叫{nickname}！这些订单因为菜鸟物流原因，并非我这边发货延误，"
         f"麻烦您帮忙处理一下，消除对店铺声誉的影响，非常感谢！"
     )
-    appeal_suffix = message or default_message
+    selected_phrase = get_current_appeal_phrase()
+    appeal_suffix = message or (
+        render_appeal_phrase(selected_phrase, nickname=nickname)
+        if selected_phrase
+        else default_message
+    )
 
     open_ai_contact_window(driver, name, site, window_id)
     for index, current_group in enumerate(groups, start=1):
         delay_ids = "、".join(str(item) for item in current_group)
-        huashu = f"{delay_ids}{appeal_suffix}"
+        huashu = (
+            render_appeal_phrase(
+                selected_phrase,
+                nickname=nickname,
+                order_ids=delay_ids,
+                appeal_type="延误",
+            )
+            if selected_phrase and not message
+            else f"{delay_ids}{appeal_suffix}"
+        )
         print(f"{get_now_time()} {name} {site} 开始发送第 {index}/{len(groups)} 组延误申诉：{huashu}<br>")
         before_messages = safe_get_agent_messages(driver)
         send_ai_chat_message(driver, huashu)
@@ -3255,6 +3512,7 @@ def handle_cancellation(window_id, driver, name, site, message, nickname):
     )
     select_site(driver, name, site)
     open_ai_contact_window(driver, name, site, window_id)
+    selected_phrase = get_current_appeal_phrase()
 
     for index, current_group in enumerate(groups, start=1):
         cancellation_ids = "、".join(str(item) for item in current_group)
@@ -3262,6 +3520,13 @@ def handle_cancellation(window_id, driver, name, site, message, nickname):
         huashu = (
             f"{cancellation_ids}{custom_message}"
             if custom_message
+            else render_appeal_phrase(
+                selected_phrase,
+                nickname=nickname,
+                order_ids=cancellation_ids,
+                appeal_type="取消率",
+            )
+            if selected_phrase
             else CANCELLATION_DEFAULT_APPEAL_TEMPLATE.format(
                 order_ids=cancellation_ids,
             )
@@ -3319,7 +3584,6 @@ def handle_cancellation(window_id, driver, name, site, message, nickname):
 
 def handle_complaint(window_id, driver, name, site, message, nickname):
     """处理投诉申诉：读取全部销售单号，每两个一组提交给 AI 客服。"""
-    del nickname
     group_size = COMPLAINT_GROUP_SIZE
     complaint_orders = get_complaint_orders(driver, name, site)
     if not complaint_orders:
@@ -3344,6 +3608,7 @@ def handle_complaint(window_id, driver, name, site, message, nickname):
     )
     select_site(driver, name, site)
     open_ai_contact_window(driver, name, site, window_id)
+    selected_phrase = get_current_appeal_phrase()
 
     for index, current_group in enumerate(groups, start=1):
         complaint_ids = "、".join(str(item) for item in current_group)
@@ -3351,6 +3616,13 @@ def handle_complaint(window_id, driver, name, site, message, nickname):
         huashu = (
             f"{complaint_ids}{custom_message}"
             if custom_message
+            else render_appeal_phrase(
+                selected_phrase,
+                nickname=nickname,
+                order_ids=complaint_ids,
+                appeal_type="投诉",
+            )
+            if selected_phrase
             else f"销售单号：{complaint_ids}\n{COMPLAINT_DEFAULT_APPEAL_MESSAGE}"
         )
         print(

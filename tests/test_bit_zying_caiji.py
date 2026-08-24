@@ -75,6 +75,59 @@ def test_collector_uses_current_direct_mysql_writer():
     assert bit_zying_caiji.insert_zying_product_info is (
         bit_mysql.insert_zying_product_info
     )
+    assert bit_zying_caiji.get_existing_zying_product_ids is (
+        bit_mysql.get_existing_zying_product_ids
+    )
+
+
+def test_existing_product_ids_are_skipped_before_detail_collection():
+    calls = []
+    known_existing_ids = set()
+    checked_product_ids = set()
+    records = [
+        {"product_id": "801623245", "title": "已入库"},
+        {"product_id": "801623017", "title": "新商品"},
+        {"product_id": "", "title": "待解析编号"},
+    ]
+
+    def read_existing(product_ids):
+        calls.append(product_ids)
+        return {"801623245"}
+
+    filtered, skipped = bit_zying_caiji._skip_existing_zying_records(
+        records,
+        read_existing,
+        known_existing_ids,
+        checked_product_ids,
+    )
+    filtered_again, skipped_again = bit_zying_caiji._skip_existing_zying_records(
+        filtered,
+        read_existing,
+        known_existing_ids,
+        checked_product_ids,
+    )
+
+    assert skipped == 1
+    assert skipped_again == 0
+    assert [row["title"] for row in filtered_again] == ["新商品", "待解析编号"]
+    assert calls == [["801623017", "801623245"]]
+
+
+def test_product_id_deduplication_keeps_only_first_new_record():
+    records = [
+        {"product_id": "801623245", "title": "第一条"},
+        {"product_id": "801623245", "title": "重复条"},
+        {"product_id": "801623017", "title": "上页已采集"},
+        {"product_id": "", "title": "编号未解析"},
+    ]
+
+    filtered, duplicate_count = bit_zying_caiji._deduplicate_zying_records(
+        records,
+        previously_seen={("id", "801623017")},
+    )
+
+    assert duplicate_count == 2
+    assert [row["title"] for row in filtered] == ["第一条", "编号未解析"]
 
 
 def test_persist_zying_page_writes_one_page_immediately(monkeypatch):
@@ -445,6 +498,43 @@ def test_mysql_writer_stores_zying_and_mercado_categories_separately(monkeypatch
     )
     assert "`智赢分类编号`" in captured["sql"]
     assert "`智赢产品分类`" in captured["sql"]
+
+
+def test_mysql_existing_product_reader_returns_only_found_ids(monkeypatch):
+    captured = {}
+
+    class Cursor:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            return False
+
+        def execute(self, sql, params=None):
+            captured["sql"] = sql
+            captured["params"] = params
+
+        def fetchall(self):
+            return [{"产品编号": "801623245"}]
+
+    class Connection:
+        def cursor(self):
+            return Cursor()
+
+        def close(self):
+            captured["closed"] = True
+
+    monkeypatch.setattr(bit_mysql.pymysql, "connect", lambda **kwargs: Connection())
+    monkeypatch.setattr(bit_mysql, "_ensure_zying_product_table", lambda cursor: None)
+
+    result = bit_mysql.get_existing_zying_product_ids(
+        ["801623245", "801623017", "801623245", ""],
+    )
+
+    assert result == {"801623245"}
+    assert "SELECT DISTINCT `产品编号`" in captured["sql"]
+    assert captured["params"] == ("801623245", "801623017")
+    assert captured["closed"] is True
 
 
 def test_merge_ui_detail_record_overwrites_api_values_with_clicked_form():

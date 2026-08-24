@@ -18,7 +18,7 @@ from pathlib import Path
 from urllib.parse import quote
 from urllib.request import urlopen
 
-from flask import Flask, Response, request, render_template, jsonify, send_file, session, redirect, url_for
+from flask import Flask, Response, request, render_template, jsonify, send_file, session, redirect, url_for, g
 from openpyxl import Workbook
 from openpyxl.styles import Alignment, Font, PatternFill
 
@@ -53,6 +53,8 @@ import bit.bit_print as bit_print
 import bit.bit_reputation_info as bit_reputation_info
 import bit.bit_order_sync as bit_order_sync
 import bit.bit_store_link_sync as bit_store_link_sync
+import bit.bit_update_orders as bit_update_orders
+import bit.bit_zying_caiji as bit_zying_caiji
 import bit.mercado_tokens as mercado_tokens
 from bit.bit_appeal import *
 from bit.bit_collection_control import DEFAULT_COLLECTION_MAX_WORKERS
@@ -83,6 +85,53 @@ app.config.update(
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
 PASSWORD_ITERATIONS = 260000
+
+WORKBENCH_PERMISSION_GROUPS = (
+    ("appeal", "自动化 AI 申诉", (("appeal.view", "查看"), ("appeal.execute", "执行/终止"))),
+    ("tasks", "任务模块", (("tasks.view", "查看"), ("tasks.execute", "启动任务"))),
+    ("order_print", "订单打印", (("order_print.view", "查看"), ("order_print.execute", "执行/终止"))),
+    ("order_analysis", "订单分析", (("order_analysis.view", "查看"), ("order_analysis.execute", "导入订单"))),
+    ("shop_status", "店铺状态", (("shop_status.view", "查看"), ("shop_status.execute", "检测/处理"))),
+    ("funds", "资金管理", (("funds.view", "查看"), ("funds.execute", "采集/终止"))),
+    ("zying_collection", "智赢产品采集", (("zying_collection.view", "查看"), ("zying_collection.execute", "执行采集"))),
+    ("risk_check", "侵权检测", (("risk_check.view", "查看"), ("risk_check.execute", "执行检测"))),
+    ("infractions", "侵权数据", (("infractions.view", "查看/导出"), ("infractions.execute", "采集"))),
+    ("reputation", "声誉数据", (("reputation.view", "查看/导出"), ("reputation.execute", "采集/更新"))),
+    ("ai_appeals", "AI 申诉记录", (("ai_appeals.view", "查看"),)),
+    ("access", "人员与权限", (("access.view", "查看"), ("access.manage", "管理账号、角色和店铺配置"))),
+)
+WORKBENCH_PERMISSION_KEYS = tuple(
+    permission_key
+    for _, _, permissions in WORKBENCH_PERMISSION_GROUPS
+    for permission_key, _ in permissions
+)
+WORKBENCH_DEFAULT_ROLES = (
+    {
+        "role_key": "super_admin",
+        "role_name": "超级管理员",
+        "description": "拥有控制台全部权限",
+        "permissions": ("*",),
+        "is_system": True,
+    },
+    {
+        "role_key": "operator",
+        "role_name": "运营人员",
+        "description": "可查看并执行各业务模块，不可管理账号与权限",
+        "permissions": tuple(
+            key for key in WORKBENCH_PERMISSION_KEYS if not key.startswith("access.")
+        ),
+        "is_system": True,
+    },
+    {
+        "role_key": "viewer",
+        "role_name": "只读人员",
+        "description": "只能查看业务数据，不能执行任务或修改配置",
+        "permissions": tuple(
+            key for key in WORKBENCH_PERMISSION_KEYS if key.endswith(".view")
+        ),
+        "is_system": True,
+    },
+)
 
 try:
     YANDEX_CONSOLE_PORT = int(os.environ.get("WORKBENCH_YANDEX_PORT", "8011"))
@@ -190,19 +239,30 @@ if USE_DB_API:
     db_list_bit_browser_configs = bit_db_api.list_bit_browser_configs
     db_get_bit_browser_config = bit_db_api.get_bit_browser_config
     db_upsert_bit_browser_configs = bit_db_api.upsert_bit_browser_configs
+    db_create_bit_browser_config = bit_db_api.create_bit_browser_config
+    db_update_bit_browser_config = bit_db_api.update_bit_browser_config
+    db_delete_bit_browser_config = bit_db_api.delete_bit_browser_config
     db_get_latest_infraction_info = bit_db_api.get_latest_infraction_info
     db_get_latest_order_print_records = bit_db_api.get_latest_order_print_records
     db_get_latest_pago_info = bit_db_api.get_latest_pago_info
     db_get_latest_reputation_info = bit_db_api.get_latest_reputation_info
     db_get_ai_appeal_records = bit_db_api.get_ai_appeal_records
+    db_list_appeal_phrases = bit_db_api.list_appeal_phrases
+    db_get_random_appeal_phrase = bit_db_api.get_random_appeal_phrase
+    db_create_appeal_phrase = bit_db_api.create_appeal_phrase
+    db_update_appeal_phrase = bit_db_api.update_appeal_phrase
+    db_delete_appeal_phrase = bit_db_api.delete_appeal_phrase
     db_get_window_anomalies = bit_db_api.get_window_anomalies
     db_insert_chat_info = bit_db_api.insert_chat_info
     db_insert_appeal_chat_record = bit_db_api.insert_appeal_chat_record
     db_insert_ai_appeal_record = bit_db_api.insert_ai_appeal_record
     db_insert_orders = bit_db_api.insert_orders
+    db_get_high_after_sale_alerts = bit_db_api.get_high_after_sale_alerts
+    db_get_high_profit_products = bit_db_api.get_high_profit_products
     db_list_orders = bit_db_api.list_orders
     db_insert_task_record = bit_db_api.insert_task_record
     db_insert_zying_product_info = bit_db_api.insert_zying_product_info
+    db_get_existing_zying_product_ids = bit_db_api.get_existing_zying_product_ids
     db_get_zying_risk_candidates = bit_db_api.get_zying_risk_candidates
     db_update_zying_product_risks = bit_db_api.update_zying_product_risks
     db_list_zying_risk_categories = bit_db_api.list_zying_risk_categories
@@ -234,19 +294,30 @@ else:
         list_bit_browser_configs,
         get_bit_browser_config,
         upsert_bit_browser_configs,
+        create_bit_browser_config,
+        update_bit_browser_config,
+        delete_bit_browser_config,
         get_latest_infraction_info,
         get_latest_order_print_records,
         get_latest_pago_info,
         get_latest_reputation_info,
         get_ai_appeal_records,
+        list_appeal_phrases,
+        get_random_appeal_phrase,
+        create_appeal_phrase,
+        update_appeal_phrase,
+        delete_appeal_phrase,
         get_window_anomalies,
         insert_chat_info,
         insert_appeal_chat_record,
         insert_ai_appeal_record,
         insert_orders,
+        get_high_after_sale_alerts,
+        get_high_profit_products,
         list_orders,
         insert_task_record,
         insert_zying_product_info,
+        get_existing_zying_product_ids,
         get_zying_risk_candidates,
         update_zying_product_risks,
         list_zying_risk_categories,
@@ -262,19 +333,30 @@ else:
     db_list_bit_browser_configs = list_bit_browser_configs
     db_get_bit_browser_config = get_bit_browser_config
     db_upsert_bit_browser_configs = upsert_bit_browser_configs
+    db_create_bit_browser_config = create_bit_browser_config
+    db_update_bit_browser_config = update_bit_browser_config
+    db_delete_bit_browser_config = delete_bit_browser_config
     db_get_latest_infraction_info = get_latest_infraction_info
     db_get_latest_order_print_records = get_latest_order_print_records
     db_get_latest_pago_info = get_latest_pago_info
     db_get_latest_reputation_info = get_latest_reputation_info
     db_get_ai_appeal_records = get_ai_appeal_records
+    db_list_appeal_phrases = list_appeal_phrases
+    db_get_random_appeal_phrase = get_random_appeal_phrase
+    db_create_appeal_phrase = create_appeal_phrase
+    db_update_appeal_phrase = update_appeal_phrase
+    db_delete_appeal_phrase = delete_appeal_phrase
     db_get_window_anomalies = get_window_anomalies
     db_insert_chat_info = insert_chat_info
     db_insert_appeal_chat_record = insert_appeal_chat_record
     db_insert_ai_appeal_record = insert_ai_appeal_record
     db_insert_orders = insert_orders
+    db_get_high_after_sale_alerts = get_high_after_sale_alerts
+    db_get_high_profit_products = get_high_profit_products
     db_list_orders = list_orders
     db_insert_task_record = insert_task_record
     db_insert_zying_product_info = insert_zying_product_info
+    db_get_existing_zying_product_ids = get_existing_zying_product_ids
     db_get_zying_risk_candidates = get_zying_risk_candidates
     db_update_zying_product_risks = update_zying_product_risks
     db_list_zying_risk_categories = list_zying_risk_categories
@@ -332,10 +414,116 @@ def verify_password(password, password_hash):
         return False
 
 
+def _normalize_workbench_permissions(value):
+    if isinstance(value, str):
+        try:
+            value = json.loads(value)
+        except (TypeError, ValueError):
+            value = [value]
+    if not isinstance(value, (list, tuple, set)):
+        return []
+    permissions = []
+    for item in value:
+        permission = str(item or "").strip()
+        if permission and permission not in permissions:
+            permissions.append(permission)
+    return permissions
+
+
+def workbench_permission_catalog():
+    return [
+        {
+            "module": module,
+            "label": label,
+            "permissions": [
+                {"key": permission_key, "label": permission_label}
+                for permission_key, permission_label in permissions
+            ],
+        }
+        for module, label, permissions in WORKBENCH_PERMISSION_GROUPS
+    ]
+
+
+def _validate_workbench_permissions(permissions):
+    normalized = _normalize_workbench_permissions(permissions)
+    invalid = [
+        permission
+        for permission in normalized
+        if permission not in WORKBENCH_PERMISSION_KEYS
+    ]
+    if invalid:
+        raise ValueError("包含不支持的权限：" + "、".join(invalid))
+    for permission in tuple(normalized):
+        if permission.endswith(".execute") or permission.endswith(".manage"):
+            view_permission = permission.rsplit(".", 1)[0] + ".view"
+            if view_permission in WORKBENCH_PERMISSION_KEYS and view_permission not in normalized:
+                normalized.append(view_permission)
+    return normalized
+
+
+def _validate_workbench_password(password, required=True):
+    password = str(password or "")
+    if not password and not required:
+        return ""
+    if len(password) < 8:
+        raise ValueError("密码至少需要 8 位")
+    return password
+
+
+def _validate_workbench_username(username):
+    username = str(username or "").strip()
+    allowed = set("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-_.")
+    if not 3 <= len(username) <= 64:
+        raise ValueError("账号长度需要为 3–64 位")
+    if any(character not in allowed for character in username):
+        raise ValueError("账号只支持字母、数字、点、下划线和短横线")
+    return username
+
+
 def ensure_workbench_user_table():
     connection = pymysql.connect(**mysql_config)
     try:
         with connection.cursor() as cursor:
+            cursor.execute(
+                """
+                CREATE TABLE IF NOT EXISTS `workbench_roles` (
+                    `role_key` VARCHAR(64) NOT NULL,
+                    `role_name` VARCHAR(64) NOT NULL,
+                    `description` VARCHAR(255) NULL,
+                    `permissions_json` TEXT NOT NULL,
+                    `is_system` TINYINT(1) NOT NULL DEFAULT 0,
+                    `created_at` DATETIME NOT NULL,
+                    `updated_at` DATETIME NOT NULL,
+                    PRIMARY KEY (`role_key`),
+                    UNIQUE KEY `uniq_workbench_role_name` (`role_name`)
+                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+                """
+            )
+            now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            for role in WORKBENCH_DEFAULT_ROLES:
+                cursor.execute(
+                    """
+                    INSERT INTO `workbench_roles`
+                        (`role_key`, `role_name`, `description`, `permissions_json`,
+                         `is_system`, `created_at`, `updated_at`)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s)
+                    ON DUPLICATE KEY UPDATE
+                        `role_name` = VALUES(`role_name`),
+                        `description` = VALUES(`description`),
+                        `permissions_json` = VALUES(`permissions_json`),
+                        `is_system` = VALUES(`is_system`),
+                        `updated_at` = VALUES(`updated_at`)
+                    """,
+                    (
+                        role["role_key"],
+                        role["role_name"],
+                        role["description"],
+                        json.dumps(role["permissions"], ensure_ascii=False),
+                        1 if role["is_system"] else 0,
+                        now,
+                        now,
+                    ),
+                )
             cursor.execute(
                 """
                 CREATE TABLE IF NOT EXISTS `workbench_users` (
@@ -343,6 +531,9 @@ def ensure_workbench_user_table():
                     `username` VARCHAR(64) NOT NULL,
                     `password_hash` VARCHAR(255) NOT NULL,
                     `display_name` VARCHAR(64) NULL,
+                    `email` VARCHAR(128) NULL,
+                    `department` VARCHAR(64) NULL,
+                    `role_key` VARCHAR(64) NOT NULL DEFAULT 'viewer',
                     `is_active` TINYINT(1) NOT NULL DEFAULT 1,
                     `created_at` DATETIME NOT NULL,
                     `updated_at` DATETIME NOT NULL,
@@ -351,17 +542,38 @@ def ensure_workbench_user_table():
                 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
                 """
             )
+            for column_name, column_definition in (
+                ("email", "VARCHAR(128) NULL"),
+                ("department", "VARCHAR(64) NULL"),
+                ("role_key", "VARCHAR(64) NULL"),
+            ):
+                cursor.execute(
+                    "SHOW COLUMNS FROM `workbench_users` LIKE %s",
+                    (column_name,),
+                )
+                if not cursor.fetchone():
+                    cursor.execute(
+                        f"ALTER TABLE `workbench_users` ADD COLUMN `{column_name}` "
+                        f"{column_definition}"
+                    )
+            cursor.execute(
+                """
+                UPDATE `workbench_users`
+                SET `role_key` = 'super_admin'
+                WHERE `role_key` IS NULL OR `role_key` = ''
+                """
+            )
             cursor.execute("SELECT COUNT(*) AS total FROM `workbench_users`")
             total = (cursor.fetchone() or {}).get("total") or 0
             if total == 0:
                 username = os.environ.get("WORKBENCH_DEFAULT_USER", "admin")
                 password = os.environ.get("WORKBENCH_DEFAULT_PASSWORD", "admin123456")
-                now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                 cursor.execute(
                     """
                     INSERT INTO `workbench_users`
-                        (`username`, `password_hash`, `display_name`, `is_active`, `created_at`, `updated_at`)
-                    VALUES (%s, %s, %s, 1, %s, %s)
+                        (`username`, `password_hash`, `display_name`, `role_key`,
+                         `is_active`, `created_at`, `updated_at`)
+                    VALUES (%s, %s, %s, 'super_admin', 1, %s, %s)
                     """,
                     (username, make_password_hash(password), "管理员", now, now),
                 )
@@ -374,18 +586,23 @@ def ensure_workbench_user_table():
         connection.close()
 
 
-def get_workbench_user(username):
+def get_workbench_user(username="", user_id=None):
     connection = pymysql.connect(**mysql_config)
     try:
         with connection.cursor() as cursor:
+            where_clause = "u.`id` = %s" if user_id is not None else "u.`username` = %s"
+            lookup_value = user_id if user_id is not None else username
             cursor.execute(
-                """
-                SELECT `id`, `username`, `password_hash`, `display_name`, `is_active`
-                FROM `workbench_users`
-                WHERE `username` = %s
+                f"""
+                SELECT u.`id`, u.`username`, u.`password_hash`, u.`display_name`,
+                       u.`email`, u.`department`, u.`role_key`, u.`is_active`,
+                       r.`role_name`, r.`permissions_json`
+                FROM `workbench_users` AS u
+                LEFT JOIN `workbench_roles` AS r ON r.`role_key` = u.`role_key`
+                WHERE {where_clause}
                 LIMIT 1
                 """,
-                (username,),
+                (lookup_value,),
             )
             return cursor.fetchone()
     finally:
@@ -393,10 +610,22 @@ def get_workbench_user(username):
 
 
 def build_workbench_session_user(user):
+    role_key = str(user.get("role_key") or "viewer")
+    permissions = (
+        ["*"]
+        if role_key == "super_admin"
+        else _normalize_workbench_permissions(user.get("permissions_json"))
+    )
     return {
         "id": user["id"],
         "username": user["username"],
         "display_name": user.get("display_name") or user["username"],
+        "email": user.get("email") or "",
+        "department": user.get("department") or "",
+        "role_key": role_key,
+        "role_name": user.get("role_name") or role_key,
+        "permissions": permissions,
+        "access_version": 1,
     }
 
 
@@ -410,10 +639,366 @@ def authenticate_workbench_user(username, password):
     return build_workbench_session_user(user)
 
 
+def _role_row_to_dict(row):
+    row = dict(row or {})
+    row["permissions"] = _normalize_workbench_permissions(
+        row.pop("permissions_json", [])
+    )
+    row["is_system"] = bool(row.get("is_system"))
+    row["user_count"] = int(row.get("user_count") or 0)
+    return row
+
+
+def list_workbench_roles_local():
+    connection = pymysql.connect(**mysql_config)
+    try:
+        with connection.cursor() as cursor:
+            cursor.execute(
+                """
+                SELECT r.`role_key`, r.`role_name`, r.`description`,
+                       r.`permissions_json`, r.`is_system`, r.`created_at`,
+                       r.`updated_at`, COUNT(u.`id`) AS `user_count`
+                FROM `workbench_roles` AS r
+                LEFT JOIN `workbench_users` AS u ON u.`role_key` = r.`role_key`
+                GROUP BY r.`role_key`, r.`role_name`, r.`description`,
+                         r.`permissions_json`, r.`is_system`, r.`created_at`,
+                         r.`updated_at`
+                ORDER BY FIELD(r.`role_key`, 'super_admin', 'operator', 'viewer'),
+                         r.`role_name`
+                """
+            )
+            return [_role_row_to_dict(row) for row in (cursor.fetchall() or [])]
+    finally:
+        connection.close()
+
+
+def create_workbench_role_local(data):
+    role_name = str((data or {}).get("role_name") or "").strip()
+    if not role_name or len(role_name) > 64:
+        raise ValueError("角色名称不能为空且最多 64 个字符")
+    description = str((data or {}).get("description") or "").strip()[:255]
+    permissions = _validate_workbench_permissions((data or {}).get("permissions"))
+    role_key = "role_" + secrets.token_hex(8)
+    now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    connection = pymysql.connect(**mysql_config)
+    try:
+        with connection.cursor() as cursor:
+            cursor.execute(
+                """
+                INSERT INTO `workbench_roles`
+                    (`role_key`, `role_name`, `description`, `permissions_json`,
+                     `is_system`, `created_at`, `updated_at`)
+                VALUES (%s, %s, %s, %s, 0, %s, %s)
+                """,
+                (
+                    role_key,
+                    role_name,
+                    description,
+                    json.dumps(permissions, ensure_ascii=False),
+                    now,
+                    now,
+                ),
+            )
+        connection.commit()
+    except pymysql.err.IntegrityError as exc:
+        connection.rollback()
+        raise ValueError("角色名称已存在") from exc
+    except Exception:
+        connection.rollback()
+        raise
+    finally:
+        connection.close()
+    return role_key
+
+
+def update_workbench_role_local(role_key, data):
+    role_key = str(role_key or "").strip()
+    role_name = str((data or {}).get("role_name") or "").strip()
+    if not role_name or len(role_name) > 64:
+        raise ValueError("角色名称不能为空且最多 64 个字符")
+    description = str((data or {}).get("description") or "").strip()[:255]
+    permissions = _validate_workbench_permissions((data or {}).get("permissions"))
+    if role_key == "super_admin":
+        permissions = ["*"]
+    now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    connection = pymysql.connect(**mysql_config)
+    try:
+        with connection.cursor() as cursor:
+            cursor.execute(
+                "SELECT `role_key` FROM `workbench_roles` WHERE `role_key` = %s",
+                (role_key,),
+            )
+            if not cursor.fetchone():
+                raise ValueError("角色不存在")
+            cursor.execute(
+                """
+                UPDATE `workbench_roles`
+                SET `role_name` = %s, `description` = %s,
+                    `permissions_json` = %s, `updated_at` = %s
+                WHERE `role_key` = %s
+                """,
+                (
+                    role_name,
+                    description,
+                    json.dumps(permissions, ensure_ascii=False),
+                    now,
+                    role_key,
+                ),
+            )
+        connection.commit()
+    except pymysql.err.IntegrityError as exc:
+        connection.rollback()
+        raise ValueError("角色名称已存在") from exc
+    except Exception:
+        connection.rollback()
+        raise
+    finally:
+        connection.close()
+
+
+def delete_workbench_role_local(role_key):
+    role_key = str(role_key or "").strip()
+    connection = pymysql.connect(**mysql_config)
+    try:
+        with connection.cursor() as cursor:
+            cursor.execute(
+                """
+                SELECT r.`is_system`, COUNT(u.`id`) AS `user_count`
+                FROM `workbench_roles` AS r
+                LEFT JOIN `workbench_users` AS u ON u.`role_key` = r.`role_key`
+                WHERE r.`role_key` = %s
+                GROUP BY r.`role_key`, r.`is_system`
+                """,
+                (role_key,),
+            )
+            role = cursor.fetchone()
+            if not role:
+                raise ValueError("角色不存在")
+            if role.get("is_system"):
+                raise ValueError("系统角色不能删除")
+            if int(role.get("user_count") or 0) > 0:
+                raise ValueError("该角色仍有关联账号，不能删除")
+            cursor.execute(
+                "DELETE FROM `workbench_roles` WHERE `role_key` = %s",
+                (role_key,),
+            )
+        connection.commit()
+    except Exception:
+        connection.rollback()
+        raise
+    finally:
+        connection.close()
+
+
+def list_workbench_users_local():
+    connection = pymysql.connect(**mysql_config)
+    try:
+        with connection.cursor() as cursor:
+            cursor.execute(
+                """
+                SELECT u.`id`, u.`username`, u.`display_name`, u.`email`,
+                       u.`department`, u.`role_key`, u.`is_active`,
+                       u.`created_at`, u.`updated_at`, r.`role_name`
+                FROM `workbench_users` AS u
+                LEFT JOIN `workbench_roles` AS r ON r.`role_key` = u.`role_key`
+                ORDER BY u.`is_active` DESC, u.`id`
+                """
+            )
+            rows = [dict(row) for row in (cursor.fetchall() or [])]
+            for row in rows:
+                row["is_active"] = bool(row.get("is_active"))
+            return rows
+    finally:
+        connection.close()
+
+
+def _require_workbench_role(cursor, role_key):
+    cursor.execute(
+        "SELECT `role_key` FROM `workbench_roles` WHERE `role_key` = %s",
+        (role_key,),
+    )
+    if not cursor.fetchone():
+        raise ValueError("所选角色不存在")
+
+
+def create_workbench_user_local(data):
+    data = data or {}
+    username = _validate_workbench_username(data.get("username"))
+    password = _validate_workbench_password(data.get("password"))
+    display_name = str(data.get("display_name") or username).strip()[:64]
+    email = str(data.get("email") or "").strip()[:128]
+    department = str(data.get("department") or "").strip()[:64]
+    role_key = str(data.get("role_key") or "viewer").strip()
+    is_active = 1 if data.get("is_active", True) else 0
+    now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    connection = pymysql.connect(**mysql_config)
+    try:
+        with connection.cursor() as cursor:
+            _require_workbench_role(cursor, role_key)
+            cursor.execute(
+                """
+                INSERT INTO `workbench_users`
+                    (`username`, `password_hash`, `display_name`, `email`,
+                     `department`, `role_key`, `is_active`, `created_at`, `updated_at`)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+                """,
+                (
+                    username,
+                    make_password_hash(password),
+                    display_name,
+                    email,
+                    department,
+                    role_key,
+                    is_active,
+                    now,
+                    now,
+                ),
+            )
+            user_id = cursor.lastrowid
+        connection.commit()
+        return user_id
+    except pymysql.err.IntegrityError as exc:
+        connection.rollback()
+        raise ValueError("账号已存在") from exc
+    except Exception:
+        connection.rollback()
+        raise
+    finally:
+        connection.close()
+
+
+def update_workbench_user_local(user_id, data):
+    data = data or {}
+    display_name = str(data.get("display_name") or "").strip()[:64]
+    email = str(data.get("email") or "").strip()[:128]
+    department = str(data.get("department") or "").strip()[:64]
+    role_key = str(data.get("role_key") or "viewer").strip()
+    is_active = 1 if data.get("is_active", True) else 0
+    now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    connection = pymysql.connect(**mysql_config)
+    try:
+        with connection.cursor() as cursor:
+            cursor.execute(
+                """
+                SELECT `id`, `role_key`, `is_active`
+                FROM `workbench_users` WHERE `id` = %s
+                """,
+                (user_id,),
+            )
+            current = cursor.fetchone()
+            if not current:
+                raise ValueError("账号不存在")
+            _require_workbench_role(cursor, role_key)
+            removing_active_admin = (
+                current.get("role_key") == "super_admin"
+                and bool(current.get("is_active"))
+                and (role_key != "super_admin" or not is_active)
+            )
+            if removing_active_admin:
+                cursor.execute(
+                    """
+                    SELECT COUNT(*) AS total FROM `workbench_users`
+                    WHERE `role_key` = 'super_admin' AND `is_active` = 1
+                    """
+                )
+                if int((cursor.fetchone() or {}).get("total") or 0) <= 1:
+                    raise ValueError("至少需要保留一个启用状态的超级管理员")
+            cursor.execute(
+                """
+                UPDATE `workbench_users`
+                SET `display_name` = %s, `email` = %s, `department` = %s,
+                    `role_key` = %s, `is_active` = %s, `updated_at` = %s
+                WHERE `id` = %s
+                """,
+                (
+                    display_name,
+                    email,
+                    department,
+                    role_key,
+                    is_active,
+                    now,
+                    user_id,
+                ),
+            )
+        connection.commit()
+    except Exception:
+        connection.rollback()
+        raise
+    finally:
+        connection.close()
+
+
+def reset_workbench_user_password_local(user_id, password):
+    password = _validate_workbench_password(password)
+    now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    connection = pymysql.connect(**mysql_config)
+    try:
+        with connection.cursor() as cursor:
+            cursor.execute(
+                """
+                UPDATE `workbench_users`
+                SET `password_hash` = %s, `updated_at` = %s
+                WHERE `id` = %s
+                """,
+                (make_password_hash(password), now, user_id),
+            )
+            if cursor.rowcount == 0:
+                raise ValueError("账号不存在")
+        connection.commit()
+    except Exception:
+        connection.rollback()
+        raise
+    finally:
+        connection.close()
+
+
+def _workbench_backend(function_name, *args):
+    if USE_DB_API:
+        return getattr(bit_db_api, function_name)(*args)
+    return globals()[f"{function_name}_local"](*args)
+
+
+def get_current_workbench_user():
+    cached = getattr(g, "workbench_user", None)
+    if cached is not None:
+        return cached
+    session_user = session.get("workbench_user")
+    if not session_user:
+        return None
+    # 兼容升级前的会话和测试注入会话；新登录会话会实时读取账号状态和角色权限。
+    if session_user.get("access_version") != 1:
+        g.workbench_user = dict(session_user)
+        return g.workbench_user
+    if USE_DB_API:
+        user = bit_db_api.get_workbench_session_user(session_user.get("id"))
+    else:
+        row = get_workbench_user(user_id=session_user.get("id"))
+        user = (
+            build_workbench_session_user(row)
+            if row and row.get("is_active")
+            else None
+        )
+    if not user:
+        session.clear()
+        return None
+    session["workbench_user"] = user
+    g.workbench_user = user
+    return user
+
+
+def workbench_user_has_permission(user, permission):
+    if not user:
+        return False
+    if user.get("access_version") != 1:
+        return True
+    permissions = set(_normalize_workbench_permissions(user.get("permissions")))
+    return "*" in permissions or permission in permissions
+
+
 def login_required(view_func):
     @functools.wraps(view_func)
     def wrapper(*args, **kwargs):
-        if session.get("workbench_user"):
+        if get_current_workbench_user():
             return view_func(*args, **kwargs)
         if request.path.startswith("/api/"):
             return jsonify({"status": "error", "message": "请先登录"}), 401
@@ -434,6 +1019,107 @@ def internal_api_required(view_func):
         return jsonify({"status": "error", "message": "Forbidden"}), 403
 
     return wrapper
+
+
+def _required_workbench_permissions(path, method):
+    method = str(method or "GET").upper()
+    if path.startswith("/api/access/"):
+        return ("access.view",) if method == "GET" else ("access.manage",)
+    if path.startswith("/api/appeal-phrases"):
+        return ("appeal.view",) if method == "GET" else ("appeal.execute",)
+    if path.startswith("/api/run_shensu"):
+        return ("appeal.execute",)
+    if path == "/api/collections/options":
+        return (
+            "appeal.view",
+            "order_print.view",
+            "infractions.view",
+            "reputation.view",
+        )
+    if path.startswith("/api/infractions/"):
+        return (
+            ("infractions.execute",)
+            if path == "/api/infractions/collect" and method == "POST"
+            else ("infractions.view",)
+        )
+    if path.startswith("/api/reputation/"):
+        return (
+            ("reputation.execute",)
+            if method == "POST"
+            else ("reputation.view",)
+        )
+    if path.startswith("/api/funds/"):
+        return (
+            ("funds.execute",)
+            if method == "POST"
+            else ("funds.view",)
+        )
+    if path.startswith("/api/order-print/"):
+        return (
+            ("order_print.execute",)
+            if method == "POST"
+            else ("order_print.view",)
+        )
+    if path.startswith("/api/order-analysis/"):
+        return (
+            ("order_analysis.execute",)
+            if method == "POST"
+            else ("order_analysis.view",)
+        )
+    if path.startswith("/api/tasks/daily/"):
+        return (
+            ("tasks.execute",)
+            if path.endswith("/start") and method == "POST"
+            else ("tasks.view",)
+        )
+    if path.startswith("/api/risk-check/"):
+        return (
+            ("risk_check.execute",)
+            if path.endswith("/start") and method == "POST"
+            else ("risk_check.view",)
+        )
+    if path.startswith("/api/zying-collection/"):
+        return (
+            ("zying_collection.execute",)
+            if path.endswith("/start") and method == "POST"
+            else ("zying_collection.view",)
+        )
+    if path == "/api/ai-appeal-records":
+        return ("ai_appeals.view",)
+    if path.startswith("/api/window-anomalies"):
+        return (
+            ("shop_status.execute",)
+            if method == "POST"
+            else ("shop_status.view",)
+        )
+    return ()
+
+
+@app.before_request
+def enforce_workbench_permissions():
+    path = request.path
+    if not path.startswith("/api/") or path.startswith("/api/db/"):
+        return None
+    if path in ("/api/login",):
+        return None
+    required_permissions = _required_workbench_permissions(path, request.method)
+    if not required_permissions:
+        return None
+    user = get_current_workbench_user()
+    if not user:
+        return jsonify({"status": "error", "message": "请先登录"}), 401
+    if not any(
+        workbench_user_has_permission(user, permission)
+        for permission in required_permissions
+    ):
+        return jsonify(
+            {
+                "status": "error",
+                "message": "当前账号没有执行该操作的权限",
+                "required_permissions": list(required_permissions),
+            }
+        ), 403
+    return None
 
 
 def reject_db_api_client_mode():
@@ -483,6 +1169,18 @@ _risk_check_lock = threading.Lock()
 _risk_check_state_lock = threading.RLock()
 _risk_check_logs = deque(maxlen=500)
 _risk_check_state = {
+    "running": False,
+    "started_at": "",
+    "finished_at": "",
+    "status": "idle",
+    "message": "等待启动",
+    "params": {},
+    "summary": {},
+}
+_zying_collection_lock = threading.Lock()
+_zying_collection_state_lock = threading.RLock()
+_zying_collection_logs = deque(maxlen=800)
+_zying_collection_state = {
     "running": False,
     "started_at": "",
     "finished_at": "",
@@ -567,6 +1265,7 @@ _order_print_state = {
     "results": [],
     "site_last_runs": [],
 }
+_order_analysis_import_lock = threading.Lock()
 _daily_task_lock = threading.Lock()
 _daily_task_state = {
     "running": False,
@@ -1654,6 +2353,122 @@ def _parse_bool_param(data, name, default=True):
     return str(value).strip().lower() in ("1", "true", "yes", "on", "是", "启用")
 
 
+def build_zying_collection_params(data):
+    """校验智赢产品采集页面提交的参数。"""
+    data = data if isinstance(data, dict) else {}
+    start_page = _parse_int_param(
+        data,
+        "start_page",
+        bit_zying_caiji.DEFAULT_ZYING_START_PAGE,
+        min_value=1,
+        max_value=10000,
+    )
+    end_page = _parse_int_param(
+        data,
+        "end_page",
+        max(start_page, bit_zying_caiji.DEFAULT_ZYING_PAGE_COUNT),
+        min_value=1,
+        max_value=10000,
+    )
+    if start_page > end_page:
+        raise ValueError(f"起始页 {start_page} 不能大于结束页 {end_page}")
+    window_id = str(data.get("window_id") or "").strip()[:128]
+    return {
+        "number": end_page,
+        "window_id": window_id or bit_zying_caiji.DEFAULT_ZYING_WINDOW_ID,
+        "start_page": start_page,
+        "category": str(data.get("category") or "").strip()[:1024] or None,
+    }
+
+
+def _append_zying_collection_log(message):
+    text = format_log_text(message).strip()
+    if not text:
+        return
+    timestamp = datetime.now().strftime("%H:%M:%S")
+    with _zying_collection_state_lock:
+        for line in text.splitlines():
+            line = line.strip()
+            if not line:
+                continue
+            _zying_collection_logs.append(f"[{timestamp}] {line}")
+            if _zying_collection_state.get("running"):
+                _zying_collection_state["message"] = line
+
+
+class _ZyingCollectionLogSink:
+    def __init__(self):
+        self.buffer = ""
+
+    def put(self, text):
+        self.buffer += format_log_text(text)
+        while "\n" in self.buffer:
+            line, self.buffer = self.buffer.split("\n", 1)
+            _append_zying_collection_log(line)
+
+    def flush(self):
+        if self.buffer.strip():
+            _append_zying_collection_log(self.buffer)
+        self.buffer = ""
+
+
+def run_zying_collection_job(params, task_lock):
+    """在后台执行智赢产品采集，并保留控制台实时日志。"""
+    log_sink = _ZyingCollectionLogSink()
+    register_thread_log_queue(log_sink)
+    try:
+        result = bit_zying_caiji.collect_zying_products(
+            **params,
+            product_writer=db_insert_zying_product_info,
+            existing_product_id_reader=db_get_existing_zying_product_ids,
+            return_summary=True,
+        )
+        summary = {
+            key: int((result or {}).get(key) or 0)
+            for key in (
+                "collected_count",
+                "inserted_count",
+                "skipped_existing_count",
+                "duplicate_count",
+                "detail_failed_count",
+            )
+        }
+        completion_message = (
+            f"智赢产品采集完成：入库 {summary['inserted_count']} 条，"
+            f"已有产品跳过 {summary['skipped_existing_count']} 条，"
+            f"页面重复跳过 {summary['duplicate_count']} 条"
+        )
+        _append_zying_collection_log(completion_message)
+        with _zying_collection_state_lock:
+            _zying_collection_state.update(
+                {
+                    "running": False,
+                    "finished_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                    "status": "success",
+                    "message": completion_message,
+                    "summary": summary,
+                }
+            )
+    except Exception as exc:
+        logging.error("智赢产品采集失败：%s", exc)
+        traceback.print_exc()
+        _append_zying_collection_log(f"采集失败：{exc}")
+        with _zying_collection_state_lock:
+            _zying_collection_state.update(
+                {
+                    "running": False,
+                    "finished_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                    "status": "error",
+                    "message": str(exc),
+                    "summary": {},
+                }
+            )
+    finally:
+        log_sink.flush()
+        unregister_thread_log_queue()
+        task_lock.release()
+
+
 def build_risk_check_params(data):
     """校验泽顺控制台提交的侵权检测参数。"""
     data = data if isinstance(data, dict) else {}
@@ -2520,6 +3335,35 @@ def api_stop_shensu():
     )
 
 
+@app.route('/api/appeal-phrases', methods=['GET', 'POST'])
+@login_required
+def api_appeal_phrases():
+    try:
+        if request.method == "POST":
+            result = db_create_appeal_phrase(request.get_json(silent=True) or {})
+        else:
+            result = db_list_appeal_phrases()
+        return jsonify({"status": "success", "data": result})
+    except ValueError as exc:
+        return jsonify({"status": "error", "message": str(exc)}), 400
+
+
+@app.route('/api/appeal-phrases/<int:phrase_id>', methods=['PUT', 'DELETE'])
+@login_required
+def api_appeal_phrase_detail(phrase_id):
+    try:
+        if request.method == "PUT":
+            result = db_update_appeal_phrase(
+                phrase_id,
+                request.get_json(silent=True) or {},
+            )
+        else:
+            result = db_delete_appeal_phrase(phrase_id)
+        return jsonify({"status": "success", "data": result})
+    except ValueError as exc:
+        return jsonify({"status": "error", "message": str(exc)}), 400
+
+
 @app.route('/api/infractions/latest', methods=['GET'])
 @login_required
 def api_latest_infractions():
@@ -3161,6 +4005,111 @@ def api_order_print_status():
     return response
 
 
+@app.route('/api/order-analysis/import', methods=['POST'])
+@login_required
+def api_import_order_analysis():
+    uploads = []
+    skipped_files = []
+    for upload in request.files.getlist("files"):
+        filename = str(upload.filename or "").strip()
+        if bit_update_orders.is_order_excel_file(filename):
+            uploads.append((filename, upload.stream))
+        elif filename:
+            skipped_files.append(filename)
+    if not uploads:
+        return jsonify({
+            "status": "error",
+            "message": "所选文件夹中没有可导入的 .xlsx 或 .xlsm 文件",
+        }), 400
+    if not _order_analysis_import_lock.acquire(blocking=False):
+        return jsonify({
+            "status": "running",
+            "message": "已有订单文件夹正在导入，请等待当前任务完成",
+        }), 409
+    try:
+        result = bit_update_orders.update_order_sources(
+            uploads,
+            insert_func=db_insert_orders,
+        )
+        result["skipped_files"] = skipped_files
+        result["completed_at"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        return jsonify({
+            "status": "success",
+            "data": result,
+            "message": f"已更新 {result['imported_orders']} 个唯一订单",
+        })
+    except ValueError as exc:
+        return jsonify({"status": "error", "message": str(exc)}), 400
+    except Exception as exc:
+        logging.exception("订单分析文件夹导入失败")
+        return jsonify({
+            "status": "error",
+            "message": f"订单导入失败：{exc}",
+        }), 500
+    finally:
+        _order_analysis_import_lock.release()
+
+
+def _high_after_sale_query_params(values):
+    try:
+        limit = int(values.get("limit") or 100)
+    except (TypeError, ValueError) as exc:
+        raise ValueError("展示数量必须是整数") from exc
+    return {
+        "sort_by": str(values.get("sort_by") or "after_sale_quantity").strip(),
+        "sort_dir": str(values.get("sort_dir") or "desc").strip(),
+        "search": str(values.get("search") or "").strip(),
+        "date_from": str(values.get("date_from") or "").strip(),
+        "date_to": str(values.get("date_to") or "").strip(),
+        "limit": max(1, min(limit, 500)),
+    }
+
+
+@app.route('/api/order-analysis/high-after-sales', methods=['GET'])
+@login_required
+def api_high_after_sale_alerts():
+    try:
+        data = db_get_high_after_sale_alerts(
+            **_high_after_sale_query_params(request.args)
+        )
+        return jsonify({"status": "success", "data": data})
+    except ValueError as exc:
+        return jsonify({"status": "error", "message": str(exc)}), 400
+    except Exception as exc:
+        logging.exception("读取高售后告警失败")
+        return jsonify({"status": "error", "message": str(exc)}), 500
+
+
+def _high_profit_query_params(values):
+    try:
+        limit = int(values.get("limit") or 100)
+    except (TypeError, ValueError) as exc:
+        raise ValueError("展示数量必须是整数") from exc
+    return {
+        "sort_by": str(values.get("sort_by") or "total_profit").strip(),
+        "sort_dir": str(values.get("sort_dir") or "desc").strip(),
+        "search": str(values.get("search") or "").strip(),
+        "date_from": str(values.get("date_from") or "").strip(),
+        "date_to": str(values.get("date_to") or "").strip(),
+        "limit": max(1, min(limit, 500)),
+    }
+
+
+@app.route('/api/order-analysis/high-profits', methods=['GET'])
+@login_required
+def api_high_profit_products():
+    try:
+        data = db_get_high_profit_products(
+            **_high_profit_query_params(request.args)
+        )
+        return jsonify({"status": "success", "data": data})
+    except ValueError as exc:
+        return jsonify({"status": "error", "message": str(exc)}), 400
+    except Exception as exc:
+        logging.exception("读取高利润产品失败")
+        return jsonify({"status": "error", "message": str(exc)}), 500
+
+
 @app.route('/api/orders', methods=['GET'])
 @login_required
 def api_orders():
@@ -3606,6 +4555,99 @@ def api_export_risk_check_results():
     except Exception as exc:
         logging.error("导出智赢侵权检测结果失败：%s", exc)
         return jsonify({"status": "error", "message": str(exc)}), 500
+
+
+@app.route('/api/zying-collection/categories', methods=['GET'])
+@login_required
+def api_zying_collection_categories():
+    try:
+        return jsonify({
+            "status": "success",
+            "data": db_list_zying_risk_categories(),
+        })
+    except Exception as exc:
+        logging.error("读取智赢产品采集分类失败：%s", exc)
+        return jsonify({"status": "error", "message": str(exc)}), 500
+
+
+@app.route('/api/zying-collection/start', methods=['POST'])
+@login_required
+def api_start_zying_collection():
+    try:
+        params = build_zying_collection_params(request.get_json(silent=True) or {})
+    except ValueError as exc:
+        return jsonify({"status": "error", "message": str(exc)}), 400
+    if not _zying_collection_lock.acquire(blocking=False):
+        with _zying_collection_state_lock:
+            data = {
+                **dict(_zying_collection_state),
+                "logs": list(_zying_collection_logs),
+            }
+        return jsonify({
+            "status": "error",
+            "message": "智赢产品采集任务正在运行",
+            "data": data,
+        }), 409
+
+    with _zying_collection_state_lock:
+        _zying_collection_logs.clear()
+        _zying_collection_state.update(
+            {
+                "running": True,
+                "started_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                "finished_at": "",
+                "status": "running",
+                "message": "正在启动智赢产品采集",
+                "params": dict(params),
+                "summary": {},
+            }
+        )
+        _append_zying_collection_log(
+            f"智赢采集任务已启动：第 {params['start_page']}-{params['number']} 页，"
+            f"分类 {params.get('category') or '全部'}；数据库已有产品将直接跳过"
+        )
+        data = {
+            **dict(_zying_collection_state),
+            "logs": list(_zying_collection_logs),
+        }
+    try:
+        threading.Thread(
+            target=run_zying_collection_job,
+            args=(params, _zying_collection_lock),
+            daemon=True,
+            name="zying-product-collection",
+        ).start()
+    except Exception:
+        _zying_collection_lock.release()
+        with _zying_collection_state_lock:
+            _zying_collection_state.update(
+                {
+                    "running": False,
+                    "finished_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                    "status": "error",
+                    "message": "智赢产品采集后台线程启动失败",
+                }
+            )
+        raise
+    return jsonify({"status": "success", "data": data})
+
+
+@app.route('/api/zying-collection/status', methods=['GET'])
+@login_required
+def api_zying_collection_status():
+    with _zying_collection_state_lock:
+        data = {
+            **dict(_zying_collection_state),
+            "params": dict(_zying_collection_state.get("params") or {}),
+            "summary": dict(_zying_collection_state.get("summary") or {}),
+            "logs": list(_zying_collection_logs),
+            "defaults": {
+                "window_id": bit_zying_caiji.DEFAULT_ZYING_WINDOW_ID,
+                "start_page": bit_zying_caiji.DEFAULT_ZYING_START_PAGE,
+                "end_page": bit_zying_caiji.DEFAULT_ZYING_PAGE_COUNT,
+            },
+        }
+    return jsonify({"status": "success", "data": data})
 
 
 @app.route('/api/risk-check/start', methods=['POST'])
@@ -4531,12 +5573,18 @@ def api_db_latest_order_print_records():
     })
 
 
-@app.route('/api/db/browser-configs', methods=['GET'])
+@app.route('/api/db/browser-configs', methods=['GET', 'POST'])
 @internal_api_required
 def api_db_list_browser_configs():
     blocked = reject_db_api_client_mode()
     if blocked:
         return blocked
+    if request.method == "POST":
+        try:
+            result = db_create_bit_browser_config(request.get_json(silent=True) or {})
+            return jsonify({"status": "success", "data": result})
+        except ValueError as exc:
+            return jsonify({"status": "error", "message": str(exc)}), 400
     include_ignored = str(request.args.get("include_ignored", "1")).strip().lower() not in (
         "0",
         "false",
@@ -4548,6 +5596,25 @@ def api_db_list_browser_configs():
             "data": db_list_bit_browser_configs(include_ignored),
         }
     )
+
+
+@app.route('/api/db/browser-configs/<int:config_id>', methods=['PUT', 'DELETE'])
+@internal_api_required
+def api_db_browser_config_detail(config_id):
+    blocked = reject_db_api_client_mode()
+    if blocked:
+        return blocked
+    try:
+        if request.method == "PUT":
+            result = db_update_bit_browser_config(
+                config_id,
+                request.get_json(silent=True) or {},
+            )
+        else:
+            result = db_delete_bit_browser_config(config_id)
+        return jsonify({"status": "success", "data": result})
+    except ValueError as exc:
+        return jsonify({"status": "error", "message": str(exc)}), 400
 
 
 @app.route('/api/db/browser-configs/lookup', methods=['GET'])
@@ -4755,6 +5822,26 @@ def api_db_insert_zying_products():
     rows = data.get("rows") or []
     count = db_insert_zying_product_info(rows)
     return jsonify({"status": "success", "data": {"count": count}})
+
+
+@app.route('/api/db/zying-products/existing', methods=['POST'])
+@internal_api_required
+def api_db_existing_zying_product_ids():
+    blocked = reject_db_api_client_mode()
+    if blocked:
+        return blocked
+    data = request.get_json(silent=True) or {}
+    product_ids = data.get("product_ids") or []
+    if not isinstance(product_ids, list):
+        return jsonify({
+            "status": "error",
+            "message": "product_ids 必须是数组",
+        }), 400
+    existing_ids = sorted(db_get_existing_zying_product_ids(product_ids))
+    return jsonify({
+        "status": "success",
+        "data": {"product_ids": existing_ids},
+    })
 
 
 @app.route('/api/db/zying-risk/candidates', methods=['GET'])
@@ -5053,6 +6140,36 @@ def api_db_insert_orders():
     return jsonify({"status": "success", "data": {"count": len(rows)}})
 
 
+@app.route('/api/db/orders/high-after-sales', methods=['GET'])
+@internal_api_required
+def api_db_high_after_sale_alerts():
+    blocked = reject_db_api_client_mode()
+    if blocked:
+        return blocked
+    try:
+        data = db_get_high_after_sale_alerts(
+            **_high_after_sale_query_params(request.args)
+        )
+        return jsonify({"status": "success", "data": data})
+    except ValueError as exc:
+        return jsonify({"status": "error", "message": str(exc)}), 400
+
+
+@app.route('/api/db/orders/high-profits', methods=['GET'])
+@internal_api_required
+def api_db_high_profit_products():
+    blocked = reject_db_api_client_mode()
+    if blocked:
+        return blocked
+    try:
+        data = db_get_high_profit_products(
+            **_high_profit_query_params(request.args)
+        )
+        return jsonify({"status": "success", "data": data})
+    except ValueError as exc:
+        return jsonify({"status": "error", "message": str(exc)}), 400
+
+
 @app.route('/api/db/chat', methods=['POST'])
 @internal_api_required
 def api_db_insert_chat():
@@ -5111,6 +6228,54 @@ def api_db_get_ai_appeal_records():
         return blocked
     limit = request.args.get("limit", 100)
     return jsonify({"status": "success", "data": db_get_ai_appeal_records(limit)})
+
+
+@app.route('/api/db/appeal-phrases', methods=['GET', 'POST'])
+@internal_api_required
+def api_db_appeal_phrases():
+    blocked = reject_db_api_client_mode()
+    if blocked:
+        return blocked
+    try:
+        if request.method == "POST":
+            result = db_create_appeal_phrase(request.get_json(silent=True) or {})
+        else:
+            result = db_list_appeal_phrases()
+        return jsonify({"status": "success", "data": result})
+    except ValueError as exc:
+        return jsonify({"status": "error", "message": str(exc)}), 400
+
+
+@app.route('/api/db/appeal-phrases/random', methods=['GET'])
+@internal_api_required
+def api_db_random_appeal_phrase():
+    blocked = reject_db_api_client_mode()
+    if blocked:
+        return blocked
+    try:
+        result = db_get_random_appeal_phrase(request.args.get("appeal_type", ""))
+        return jsonify({"status": "success", "data": result})
+    except ValueError as exc:
+        return jsonify({"status": "error", "message": str(exc)}), 400
+
+
+@app.route('/api/db/appeal-phrases/<int:phrase_id>', methods=['PUT', 'DELETE'])
+@internal_api_required
+def api_db_appeal_phrase_detail(phrase_id):
+    blocked = reject_db_api_client_mode()
+    if blocked:
+        return blocked
+    try:
+        if request.method == "PUT":
+            result = db_update_appeal_phrase(
+                phrase_id,
+                request.get_json(silent=True) or {},
+            )
+        else:
+            result = db_delete_appeal_phrase(phrase_id)
+        return jsonify({"status": "success", "data": result})
+    except ValueError as exc:
+        return jsonify({"status": "error", "message": str(exc)}), 400
 
 
 @app.route('/api/db/infractions/latest', methods=['GET'])
@@ -5495,6 +6660,262 @@ def api_start_mercado_login_console():
             "message": f"{task_state['target']} 登录任务已启动",
         }
     )
+
+
+@app.route('/api/db/workbench/session-user', methods=['GET'])
+@internal_api_required
+def api_db_workbench_session_user():
+    blocked = reject_db_api_client_mode()
+    if blocked:
+        return blocked
+    user_id = request.args.get("user_id", type=int)
+    if not user_id:
+        return jsonify({"status": "error", "message": "缺少用户 ID"}), 400
+    row = get_workbench_user(user_id=user_id)
+    user = (
+        build_workbench_session_user(row)
+        if row and row.get("is_active")
+        else None
+    )
+    return jsonify({"status": "success", "data": user})
+
+
+@app.route('/api/db/workbench/roles', methods=['GET', 'POST'])
+@internal_api_required
+def api_db_workbench_roles():
+    blocked = reject_db_api_client_mode()
+    if blocked:
+        return blocked
+    try:
+        if request.method == "GET":
+            data = list_workbench_roles_local()
+        else:
+            data = create_workbench_role_local(request.get_json(silent=True) or {})
+        return jsonify({"status": "success", "data": data})
+    except ValueError as exc:
+        return jsonify({"status": "error", "message": str(exc)}), 400
+    except Exception as exc:
+        logging.exception("工作台角色数据库接口失败")
+        return jsonify({"status": "error", "message": str(exc)}), 500
+
+
+@app.route('/api/db/workbench/roles/<role_key>', methods=['PUT', 'DELETE'])
+@internal_api_required
+def api_db_workbench_role_detail(role_key):
+    blocked = reject_db_api_client_mode()
+    if blocked:
+        return blocked
+    try:
+        if request.method == "PUT":
+            update_workbench_role_local(
+                role_key,
+                request.get_json(silent=True) or {},
+            )
+        else:
+            delete_workbench_role_local(role_key)
+        return jsonify({"status": "success"})
+    except ValueError as exc:
+        return jsonify({"status": "error", "message": str(exc)}), 400
+    except Exception as exc:
+        logging.exception("工作台角色数据库接口失败")
+        return jsonify({"status": "error", "message": str(exc)}), 500
+
+
+@app.route('/api/db/workbench/users', methods=['GET', 'POST'])
+@internal_api_required
+def api_db_workbench_users():
+    blocked = reject_db_api_client_mode()
+    if blocked:
+        return blocked
+    try:
+        if request.method == "GET":
+            data = list_workbench_users_local()
+        else:
+            data = create_workbench_user_local(request.get_json(silent=True) or {})
+        return jsonify({"status": "success", "data": data})
+    except ValueError as exc:
+        return jsonify({"status": "error", "message": str(exc)}), 400
+    except Exception as exc:
+        logging.exception("工作台账号数据库接口失败")
+        return jsonify({"status": "error", "message": str(exc)}), 500
+
+
+@app.route('/api/db/workbench/users/<int:user_id>', methods=['PUT'])
+@internal_api_required
+def api_db_workbench_user_detail(user_id):
+    blocked = reject_db_api_client_mode()
+    if blocked:
+        return blocked
+    try:
+        update_workbench_user_local(user_id, request.get_json(silent=True) or {})
+        return jsonify({"status": "success"})
+    except ValueError as exc:
+        return jsonify({"status": "error", "message": str(exc)}), 400
+    except Exception as exc:
+        logging.exception("工作台账号数据库接口失败")
+        return jsonify({"status": "error", "message": str(exc)}), 500
+
+
+@app.route('/api/db/workbench/users/<int:user_id>/password', methods=['POST'])
+@internal_api_required
+def api_db_workbench_user_password(user_id):
+    blocked = reject_db_api_client_mode()
+    if blocked:
+        return blocked
+    try:
+        data = request.get_json(silent=True) or {}
+        reset_workbench_user_password_local(user_id, data.get("password"))
+        return jsonify({"status": "success"})
+    except ValueError as exc:
+        return jsonify({"status": "error", "message": str(exc)}), 400
+    except Exception as exc:
+        logging.exception("工作台密码数据库接口失败")
+        return jsonify({"status": "error", "message": str(exc)}), 500
+
+
+@app.route('/api/access/catalog', methods=['GET'])
+@login_required
+def api_access_catalog():
+    return jsonify(
+        {
+            "status": "success",
+            "data": {"groups": workbench_permission_catalog()},
+        }
+    )
+
+
+@app.route('/api/access/roles', methods=['GET', 'POST'])
+@login_required
+def api_access_roles():
+    try:
+        if request.method == "GET":
+            data = _workbench_backend("list_workbench_roles")
+        else:
+            data = _workbench_backend(
+                "create_workbench_role",
+                request.get_json(silent=True) or {},
+            )
+        return jsonify({"status": "success", "data": data})
+    except ValueError as exc:
+        return jsonify({"status": "error", "message": str(exc)}), 400
+    except Exception as exc:
+        logging.exception("人员与权限角色接口失败")
+        return jsonify({"status": "error", "message": str(exc)}), 500
+
+
+@app.route('/api/access/roles/<role_key>', methods=['PUT', 'DELETE'])
+@login_required
+def api_access_role_detail(role_key):
+    try:
+        if request.method == "PUT":
+            _workbench_backend(
+                "update_workbench_role",
+                role_key,
+                request.get_json(silent=True) or {},
+            )
+        else:
+            _workbench_backend("delete_workbench_role", role_key)
+        return jsonify({"status": "success"})
+    except ValueError as exc:
+        return jsonify({"status": "error", "message": str(exc)}), 400
+    except Exception as exc:
+        logging.exception("人员与权限角色接口失败")
+        return jsonify({"status": "error", "message": str(exc)}), 500
+
+
+@app.route('/api/access/users', methods=['GET', 'POST'])
+@login_required
+def api_access_users():
+    try:
+        if request.method == "GET":
+            data = _workbench_backend("list_workbench_users")
+        else:
+            data = _workbench_backend(
+                "create_workbench_user",
+                request.get_json(silent=True) or {},
+            )
+        return jsonify({"status": "success", "data": data})
+    except ValueError as exc:
+        return jsonify({"status": "error", "message": str(exc)}), 400
+    except Exception as exc:
+        logging.exception("人员与权限账号接口失败")
+        return jsonify({"status": "error", "message": str(exc)}), 500
+
+
+@app.route('/api/access/users/<int:user_id>', methods=['PUT'])
+@login_required
+def api_access_user_detail(user_id):
+    data = request.get_json(silent=True) or {}
+    current_user = get_current_workbench_user() or {}
+    if int(current_user.get("id") or 0) == user_id and not data.get("is_active", True):
+        return jsonify({"status": "error", "message": "不能停用当前登录账号"}), 400
+    try:
+        _workbench_backend("update_workbench_user", user_id, data)
+        # 当前账号资料或角色变化后立即刷新本会话。
+        if int(current_user.get("id") or 0) == user_id:
+            g.pop("workbench_user", None)
+            refreshed = get_current_workbench_user()
+            if refreshed:
+                session["workbench_user"] = refreshed
+        return jsonify({"status": "success"})
+    except ValueError as exc:
+        return jsonify({"status": "error", "message": str(exc)}), 400
+    except Exception as exc:
+        logging.exception("人员与权限账号接口失败")
+        return jsonify({"status": "error", "message": str(exc)}), 500
+
+
+@app.route('/api/access/users/<int:user_id>/password', methods=['POST'])
+@login_required
+def api_access_user_password(user_id):
+    try:
+        data = request.get_json(silent=True) or {}
+        _workbench_backend(
+            "reset_workbench_user_password",
+            user_id,
+            data.get("password"),
+        )
+        return jsonify({"status": "success"})
+    except ValueError as exc:
+        return jsonify({"status": "error", "message": str(exc)}), 400
+    except Exception as exc:
+        logging.exception("人员与权限密码接口失败")
+        return jsonify({"status": "error", "message": str(exc)}), 500
+
+
+@app.route('/api/access/browser-configs', methods=['GET', 'POST'])
+@login_required
+def api_access_browser_configs():
+    try:
+        if request.method == "GET":
+            data = db_list_bit_browser_configs(include_ignored=True)
+        else:
+            data = db_create_bit_browser_config(request.get_json(silent=True) or {})
+        return jsonify({"status": "success", "data": data})
+    except ValueError as exc:
+        return jsonify({"status": "error", "message": str(exc)}), 400
+    except Exception as exc:
+        logging.exception("人员与权限店铺配置接口失败")
+        return jsonify({"status": "error", "message": str(exc)}), 500
+
+
+@app.route('/api/access/browser-configs/<int:config_id>', methods=['PUT', 'DELETE'])
+@login_required
+def api_access_browser_config_detail(config_id):
+    try:
+        if request.method == "PUT":
+            data = db_update_bit_browser_config(
+                config_id,
+                request.get_json(silent=True) or {},
+            )
+        else:
+            data = db_delete_bit_browser_config(config_id)
+        return jsonify({"status": "success", "data": data})
+    except ValueError as exc:
+        return jsonify({"status": "error", "message": str(exc)}), 400
+    except Exception as exc:
+        logging.exception("人员与权限店铺配置接口失败")
+        return jsonify({"status": "error", "message": str(exc)}), 500
 
 
 @app.route('/api/db/workbench/login', methods=['POST'])

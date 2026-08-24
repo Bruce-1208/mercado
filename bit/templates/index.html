@@ -1268,6 +1268,86 @@
             margin: 0;
         }
 
+        .order-analysis-panel {
+            padding-bottom: 10px;
+        }
+
+        .order-analysis-alert-panel {
+            margin-top: 8px;
+        }
+
+        .order-analysis-picker {
+            margin: 10px;
+            border: 1px dashed #93c5fd;
+            border-radius: 10px;
+            background: #eff6ff;
+            padding: 14px;
+        }
+
+        .order-analysis-picker input[type="file"] {
+            display: block;
+            width: 100%;
+            margin-top: 8px;
+        }
+
+        .order-analysis-actions {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 10px;
+            margin-top: 10px;
+        }
+
+        .order-analysis-actions p {
+            margin: 0;
+            color: var(--muted);
+            font-size: 12px;
+        }
+
+        #order-analysis-log {
+            min-height: 88px;
+            max-height: 160px;
+            margin: 0 10px;
+        }
+
+        .after-sale-filter-bar {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(140px, 0.7fr)) minmax(180px, 1fr) auto auto;
+            gap: 8px;
+            align-items: end;
+            padding: 10px;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .after-sale-filter-bar .field {
+            margin: 0;
+        }
+
+        .after-sale-sort-buttons {
+            display: inline-flex;
+            gap: 4px;
+        }
+
+        .after-sale-sort-buttons button {
+            width: auto;
+            white-space: nowrap;
+        }
+
+        .after-sale-table-wrap {
+            max-height: 58vh;
+        }
+
+        .after-sale-rate-high {
+            color: #b42318;
+            font-weight: 800;
+        }
+
+        .profit-value,
+        .profit-rate-high {
+            color: #067647;
+            font-weight: 800;
+        }
+
         .order-print-scope-actions .primary {
             flex: 0 0 auto;
         }
@@ -1682,6 +1762,89 @@
             min-height: calc(100vh - 128px);
             flex-direction: column;
             overflow: hidden;
+        }
+
+        .appeal-phrase-panel {
+            margin-top: 10px;
+            overflow: hidden;
+        }
+
+        .appeal-phrase-editor {
+            margin: 0 10px 10px;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            background: #f8fafc;
+            padding: 10px;
+        }
+
+        .appeal-phrase-editor-grid {
+            display: grid;
+            grid-template-columns: minmax(140px, 0.35fr) minmax(320px, 1.65fr);
+            gap: 10px;
+        }
+
+        .appeal-phrase-editor .field {
+            margin: 0;
+        }
+
+        .appeal-phrase-active-label {
+            display: inline-flex;
+            width: auto;
+            align-items: center;
+            gap: 6px;
+            margin-top: 8px;
+            cursor: pointer;
+        }
+
+        .appeal-phrase-active-label input {
+            width: auto;
+            margin: 0;
+        }
+
+        .appeal-phrase-table-wrap {
+            max-height: 440px;
+        }
+
+        .appeal-phrase-table {
+            min-width: 860px;
+        }
+
+        .appeal-phrase-table th:nth-child(1),
+        .appeal-phrase-table td:nth-child(1) {
+            width: 86px;
+        }
+
+        .appeal-phrase-table th:nth-child(2),
+        .appeal-phrase-table td:nth-child(2) {
+            width: 72px;
+        }
+
+        .appeal-phrase-table th:nth-child(4),
+        .appeal-phrase-table td:nth-child(4) {
+            width: 150px;
+        }
+
+        .appeal-phrase-table th:nth-child(5),
+        .appeal-phrase-table td:nth-child(5) {
+            width: 130px;
+        }
+
+        .appeal-phrase-content {
+            display: block;
+            max-height: 92px;
+            overflow: auto;
+            line-height: 1.55;
+            white-space: pre-wrap;
+            word-break: break-word;
+        }
+
+        .appeal-phrase-actions {
+            display: flex;
+            gap: 5px;
+        }
+
+        .appeal-phrase-actions button {
+            white-space: nowrap;
         }
 
         .log-header {
@@ -2189,6 +2352,20 @@
             color: #991b1b;
         }
 
+        .reputation-change-cell {
+            font-weight: 700;
+        }
+
+        .reputation-change-cell.change-green {
+            background: #dcfce7;
+            color: #166534;
+        }
+
+        .reputation-change-cell.change-red {
+            background: #fee2e2;
+            color: #991b1b;
+        }
+
         .status-tag {
             display: inline-flex;
             align-items: center;
@@ -2275,6 +2452,128 @@
             border: 1px solid #263349;
             border-radius: 8px;
             background: var(--log-bg);
+        }
+
+        .access-grid {
+            display: grid;
+            grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.3fr);
+            gap: 8px;
+        }
+
+        .access-card {
+            min-width: 0;
+            overflow: hidden;
+        }
+
+        .access-shop-card {
+            grid-column: 1 / -1;
+        }
+
+        .access-shop-tools {
+            display: flex;
+            align-items: center;
+            gap: 7px;
+            flex-wrap: wrap;
+        }
+
+        .access-shop-search {
+            width: min(260px, 42vw);
+            min-width: 160px;
+        }
+
+        .access-editor {
+            border-top: 1px solid var(--border);
+            background: #f8fafc;
+            padding: 10px;
+        }
+
+        .access-form-grid {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 8px;
+        }
+
+        .access-form-grid .field {
+            margin: 0;
+        }
+
+        .access-span-2 {
+            grid-column: 1 / -1;
+        }
+
+        .access-permission-grid {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 6px;
+        }
+
+        .access-permission-group {
+            border: 1px solid var(--border);
+            border-radius: 7px;
+            background: #fff;
+            padding: 7px 8px;
+        }
+
+        .access-permission-title {
+            margin-bottom: 5px;
+            color: #344054;
+            font-size: 12px;
+            font-weight: 800;
+        }
+
+        .access-permission-options {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 5px 10px;
+        }
+
+        .access-permission-option,
+        .access-active-option {
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+            margin: 0;
+            color: #475467;
+        }
+
+        .access-permission-option input,
+        .access-active-option input {
+            width: 15px;
+            height: 15px;
+            margin: 0;
+        }
+
+        .access-form-actions,
+        .access-table-actions {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            flex-wrap: wrap;
+        }
+
+        .access-form-actions {
+            justify-content: flex-end;
+            margin-top: 9px;
+        }
+
+        .access-table-actions button {
+            width: auto;
+            padding: 4px 8px;
+            font-size: 11px;
+        }
+
+        .access-table {
+            min-width: 720px;
+        }
+
+        .access-role-summary {
+            display: block;
+            max-width: 260px;
+            overflow: hidden;
+            color: var(--muted);
+            font-size: 11px;
+            text-overflow: ellipsis;
+            white-space: nowrap;
         }
 
         .risk-check-log-header {
@@ -3145,6 +3444,10 @@
                 grid-template-columns: 1fr;
             }
 
+            .appeal-phrase-editor-grid {
+                grid-template-columns: 1fr;
+            }
+
             .order-print-grid {
                 grid-template-columns: 1fr;
             }
@@ -3190,6 +3493,12 @@
                 grid-template-columns: 1fr 1fr;
             }
 
+            .access-grid,
+            .access-form-grid,
+            .access-permission-grid {
+                grid-template-columns: 1fr;
+            }
+
             .token-layout {
                 grid-template-columns: 1fr;
             }
@@ -3201,6 +3510,15 @@
 
             .order-print-scope-actions .primary {
                 width: 100%;
+            }
+
+            .order-analysis-actions {
+                align-items: stretch;
+                flex-direction: column;
+            }
+
+            .after-sale-filter-bar {
+                grid-template-columns: 1fr 1fr;
             }
 
             .market-collector-form {
@@ -3307,7 +3625,7 @@
             <p>自动化 AI 申诉与最新侵权数据看板</p>
         </div>
         <div class="topbar-user">
-            <span>{{ current_user.display_name or current_user.username }}</span>
+            <span>{{ current_user.display_name or current_user.username }}{% if current_user.role_name %} · {{ current_user.role_name }}{% endif %}</span>
             <a class="logout-link" href="/logout">退出</a>
         </div>
     </header>
@@ -3315,19 +3633,22 @@
     <main class="page">
         <aside class="panel sidebar">
             <p class="nav-title">功能导航</p>
-            <button class="tab-button active" type="button" data-tab="appeal" onclick="switchTab('appeal')">自动化AI申诉</button>
-            <button class="tab-button" type="button" data-tab="tasks" onclick="switchTab('tasks')">任务模块</button>
-            <button class="tab-button" type="button" data-tab="order-print" onclick="switchTab('order-print')">订单打印</button>
+            <button class="tab-button active" type="button" data-tab="appeal" data-permission="appeal.view" onclick="switchTab('appeal')">自动化AI申诉</button>
+            <button class="tab-button" type="button" data-tab="tasks" data-permission="tasks.view" onclick="switchTab('tasks')">任务模块</button>
+            <button class="tab-button" type="button" data-tab="order-print" data-permission="order_print.view" onclick="switchTab('order-print')">订单打印</button>
+            <button class="tab-button" type="button" data-tab="order-analysis" data-permission="order_analysis.view" onclick="switchTab('order-analysis')">订单分析</button>
             <button class="tab-button" type="button" data-tab="orders" onclick="switchTab('orders')">订单管理</button>
-            <button class="tab-button" type="button" data-tab="window-anomalies" onclick="switchTab('window-anomalies')">店铺状态</button>
+            <button class="tab-button" type="button" data-tab="window-anomalies" data-permission="shop_status.view" onclick="switchTab('window-anomalies')">店铺状态</button>
             <button class="tab-button" type="button" data-tab="store-tokens" onclick="switchTab('store-tokens')">店铺 Token</button>
             <button class="tab-button" type="button" data-tab="store-links" onclick="switchTab('store-links')">店铺链接</button>
             <button class="tab-button" type="button" data-tab="mercado-collection" onclick="switchTab('mercado-collection')">商品采集</button>
-            <button class="tab-button" type="button" data-tab="funds" onclick="switchTab('funds')">资金管理</button>
-            <button class="tab-button" type="button" data-tab="risk-check" onclick="switchTab('risk-check')">侵权检测</button>
-            <button class="tab-button" type="button" data-tab="infractions" onclick="switchTab('infractions')">侵权数据</button>
-            <button class="tab-button" type="button" data-tab="reputation" onclick="switchTab('reputation')">声誉数据</button>
-            <button class="tab-button" type="button" data-tab="ai-appeals" onclick="switchTab('ai-appeals')">AI申诉记录</button>
+            <button class="tab-button" type="button" data-tab="funds" data-permission="funds.view" onclick="switchTab('funds')">资金管理</button>
+            <button class="tab-button" type="button" data-tab="zying-collection" data-permission="zying_collection.view" onclick="switchTab('zying-collection')">智赢产品采集</button>
+            <button class="tab-button" type="button" data-tab="risk-check" data-permission="risk_check.view" onclick="switchTab('risk-check')">侵权检测</button>
+            <button class="tab-button" type="button" data-tab="infractions" data-permission="infractions.view" onclick="switchTab('infractions')">侵权数据</button>
+            <button class="tab-button" type="button" data-tab="reputation" data-permission="reputation.view" onclick="switchTab('reputation')">声誉数据</button>
+            <button class="tab-button" type="button" data-tab="ai-appeals" data-permission="ai_appeals.view" onclick="switchTab('ai-appeals')">AI申诉记录</button>
+            <button class="tab-button" type="button" data-tab="access" data-permission="access.view" onclick="switchTab('access')">人员与权限</button>
             <button class="tab-button" type="button" data-tab="yandex" onclick="switchTab('yandex')">Yandex 店铺</button>
         </aside>
 
@@ -3835,8 +4156,8 @@
                         </div>
 
                         <div class="field">
-                            <label for="message">自定义话术</label>
-                            <textarea id="message" placeholder="不填写时按脚本内置逻辑执行"></textarea>
+                            <label for="message">临时自定义话术</label>
+                            <textarea id="message" placeholder="留空时按申诉类型从话术库随机选择；填写后覆盖本次随机话术"></textarea>
                         </div>
 
                         <div class="actions">
@@ -3857,6 +4178,69 @@
                         <pre id="log-container">等待任务启动...</pre>
                     </section>
                 </div>
+
+                <section class="panel appeal-phrase-panel">
+                    <div class="infractions-header">
+                        <div>
+                            <h2 class="panel-title" style="margin: 0;">申诉话术库</h2>
+                            <p class="shop-search-hint">按申诉类型管理随机话术；支持 {nickname} 昵称和 {order_ids} 订单编号占位符</p>
+                        </div>
+                        <div class="header-actions">
+                            <button class="secondary" type="button" onclick="loadAppealPhrases(true)">刷新</button>
+                            <button class="primary" id="add-appeal-phrase-btn" type="button" onclick="openAppealPhraseEditor()">新增话术</button>
+                        </div>
+                    </div>
+                    <div class="summary-row" id="appeal-phrase-summary">
+                        <div class="metric"><div class="metric-label">延误</div><div class="metric-value">-</div></div>
+                        <div class="metric"><div class="metric-label">侵权</div><div class="metric-value">-</div></div>
+                        <div class="metric"><div class="metric-label">取消率</div><div class="metric-value">-</div></div>
+                        <div class="metric"><div class="metric-label">投诉</div><div class="metric-value">-</div></div>
+                    </div>
+                    <form class="appeal-phrase-editor" id="appeal-phrase-form" hidden>
+                        <input id="appeal-phrase-id" type="hidden">
+                        <div class="appeal-phrase-editor-grid">
+                            <div>
+                                <div class="field">
+                                    <label for="appeal-phrase-type">申诉类型</label>
+                                    <select id="appeal-phrase-type" required>
+                                        <option value="延误">延误</option>
+                                        <option value="侵权">侵权</option>
+                                        <option value="取消率">取消率</option>
+                                        <option value="投诉">投诉</option>
+                                    </select>
+                                </div>
+                                <label class="appeal-phrase-active-label" for="appeal-phrase-active">
+                                    <input id="appeal-phrase-active" type="checkbox" checked>
+                                    启用并参与随机选择
+                                </label>
+                            </div>
+                            <div class="field">
+                                <label for="appeal-phrase-content">话术内容</label>
+                                <textarea id="appeal-phrase-content" maxlength="10000" required placeholder="输入申诉话术，可使用 {nickname} 和 {order_ids}"></textarea>
+                            </div>
+                        </div>
+                        <div class="access-form-actions">
+                            <button class="secondary" type="button" onclick="closeAppealPhraseEditor()">取消</button>
+                            <button class="primary" id="save-appeal-phrase-btn" type="submit">保存话术</button>
+                        </div>
+                    </form>
+                    <div class="table-wrap appeal-phrase-table-wrap">
+                        <table class="appeal-phrase-table">
+                            <thead>
+                                <tr>
+                                    <th>申诉类型</th>
+                                    <th>状态</th>
+                                    <th>话术内容</th>
+                                    <th>更新时间</th>
+                                    <th>操作</th>
+                                </tr>
+                            </thead>
+                            <tbody id="appeal-phrase-body">
+                                <tr><td class="empty-state" colspan="5">正在加载话术库...</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </section>
             </div>
 
             <div class="tab-page" id="tab-tasks">
@@ -4101,6 +4485,198 @@
                         <pre id="order-print-log">等待任务启动...</pre>
                     </section>
                 </div>
+            </div>
+
+            <div class="tab-page" id="tab-order-analysis">
+                <div class="tab-heading">
+                    <h2>订单分析</h2>
+                    <p>选择订单文件夹，识别其中全部 Excel 工作簿并更新订单数据库</p>
+                </div>
+
+                <section class="panel order-analysis-panel">
+                    <div class="infractions-header">
+                        <h2 class="panel-title" style="margin: 0;">订单 Excel 批量入库</h2>
+                        <span class="status" id="order-analysis-status-badge">
+                            <span class="status-dot"></span>
+                            <span id="order-analysis-status-text">等待选择文件夹</span>
+                        </span>
+                    </div>
+
+                    <div class="order-analysis-picker">
+                        <label for="order-analysis-folder"><strong>选择订单文件夹</strong></label>
+                        <input id="order-analysis-folder" type="file" accept=".xlsx,.xlsm" webkitdirectory directory multiple onchange="selectOrderAnalysisFolder(this.files)">
+                        <div class="order-analysis-actions">
+                            <p id="order-analysis-folder-summary">尚未选择文件夹；支持 .xlsx 和 .xlsm，并会递归识别子文件夹。</p>
+                            <button class="primary" id="import-order-analysis-btn" type="button" onclick="importOrderAnalysisFolder()" disabled>更新订单数据库</button>
+                        </div>
+                    </div>
+
+                    <div class="summary-row">
+                        <div class="metric">
+                            <div class="metric-label">Excel 文件</div>
+                            <div class="metric-value" id="order-analysis-file-count">0</div>
+                        </div>
+                        <div class="metric">
+                            <div class="metric-label">读取订单行</div>
+                            <div class="metric-value" id="order-analysis-raw-count">0</div>
+                        </div>
+                        <div class="metric">
+                            <div class="metric-label">重复覆盖</div>
+                            <div class="metric-value" id="order-analysis-duplicate-count">0</div>
+                        </div>
+                        <div class="metric">
+                            <div class="metric-label">唯一订单入库</div>
+                            <div class="metric-value" id="order-analysis-imported-count">0</div>
+                        </div>
+                    </div>
+                    <pre id="order-analysis-log">选择文件夹后点击“更新订单数据库”。同一订单按文件修改时间和文件内行顺序处理，最后读取到的数据覆盖之前的数据。</pre>
+                </section>
+
+                <section class="panel infractions-panel order-analysis-alert-panel">
+                    <div class="infractions-header">
+                        <div>
+                            <h2 class="panel-title" style="margin: 0;">高售后告警</h2>
+                            <p class="collection-scope-hint">按产品编号汇总“取消-发货后”数量；售后比例 = 售后数量 ÷ 同期总销售数量</p>
+                        </div>
+                        <div class="after-sale-sort-buttons">
+                            <button class="range-button active" id="after-sale-sort-quantity" type="button" onclick="sortHighAfterSaleAlerts('after_sale_quantity')">按售后数量</button>
+                            <button class="range-button" id="after-sale-sort-rate" type="button" onclick="sortHighAfterSaleAlerts('after_sale_rate')">按售后比例</button>
+                        </div>
+                    </div>
+
+                    <div class="after-sale-filter-bar">
+                        <div class="field">
+                            <label for="after-sale-date-from">开始日期</label>
+                            <input id="after-sale-date-from" type="date">
+                        </div>
+                        <div class="field">
+                            <label for="after-sale-date-to">结束日期</label>
+                            <input id="after-sale-date-to" type="date">
+                        </div>
+                        <div class="field">
+                            <label for="after-sale-search">产品编号或标题</label>
+                            <input id="after-sale-search" type="search" placeholder="输入产品编号或标题" onkeydown="if (event.key === 'Enter') loadHighAfterSaleAlerts()">
+                        </div>
+                        <div class="after-sale-sort-buttons">
+                            <button class="secondary" type="button" onclick="setHighAfterSalePeriod(30)">近30天</button>
+                            <button class="secondary" type="button" onclick="setHighAfterSalePeriod(90)">近90天</button>
+                            <button class="secondary" type="button" onclick="setHighAfterSalePeriod(0)">全部</button>
+                        </div>
+                        <button class="primary" id="load-after-sale-alerts-btn" type="button" onclick="loadHighAfterSaleAlerts()">查询告警</button>
+                    </div>
+
+                    <div class="summary-row">
+                        <div class="metric">
+                            <div class="metric-label">告警产品</div>
+                            <div class="metric-value" id="after-sale-product-count">0</div>
+                        </div>
+                        <div class="metric">
+                            <div class="metric-label">同期总销量</div>
+                            <div class="metric-value" id="after-sale-total-quantity">0</div>
+                        </div>
+                        <div class="metric">
+                            <div class="metric-label">售后数量</div>
+                            <div class="metric-value" id="after-sale-quantity">0</div>
+                        </div>
+                        <div class="metric">
+                            <div class="metric-label">整体售后比例</div>
+                            <div class="metric-value" id="after-sale-overall-rate">0%</div>
+                        </div>
+                    </div>
+
+                    <div class="table-wrap after-sale-table-wrap">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th style="width: 110px;">产品编号</th>
+                                    <th>产品标题</th>
+                                    <th style="width: 90px;">站点</th>
+                                    <th style="width: 90px;">总销量</th>
+                                    <th style="width: 90px;">售后数量</th>
+                                    <th style="width: 90px;">售后比例</th>
+                                    <th style="width: 90px;">售后订单</th>
+                                    <th style="width: 145px;">最近售后时间</th>
+                                </tr>
+                            </thead>
+                            <tbody id="after-sale-alert-body">
+                                <tr><td class="empty-state" colspan="8">正在加载高售后告警...</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </section>
+
+                <section class="panel infractions-panel order-analysis-alert-panel">
+                    <div class="infractions-header">
+                        <div>
+                            <h2 class="panel-title" style="margin: 0;">高利润产品</h2>
+                            <p class="collection-scope-hint">按产品编号汇总利润；利润率 = 利润合计 ÷ 人民币收入合计，退货和取消产生的负利润会计入</p>
+                        </div>
+                        <div class="after-sale-sort-buttons">
+                            <button class="range-button active" id="profit-sort-total" type="button" onclick="sortHighProfitProducts('total_profit')">按利润</button>
+                            <button class="range-button" id="profit-sort-rate" type="button" onclick="sortHighProfitProducts('profit_rate')">按利润率</button>
+                        </div>
+                    </div>
+
+                    <div class="after-sale-filter-bar">
+                        <div class="field">
+                            <label for="profit-date-from">开始日期</label>
+                            <input id="profit-date-from" type="date">
+                        </div>
+                        <div class="field">
+                            <label for="profit-date-to">结束日期</label>
+                            <input id="profit-date-to" type="date">
+                        </div>
+                        <div class="field">
+                            <label for="profit-search">产品编号或标题</label>
+                            <input id="profit-search" type="search" placeholder="输入产品编号或标题" onkeydown="if (event.key === 'Enter') loadHighProfitProducts()">
+                        </div>
+                        <div class="after-sale-sort-buttons">
+                            <button class="secondary" type="button" onclick="setHighProfitPeriod(30)">近30天</button>
+                            <button class="secondary" type="button" onclick="setHighProfitPeriod(90)">近90天</button>
+                            <button class="secondary" type="button" onclick="setHighProfitPeriod(0)">全部</button>
+                        </div>
+                        <button class="primary" id="load-high-profit-btn" type="button" onclick="loadHighProfitProducts()">查询产品</button>
+                    </div>
+
+                    <div class="summary-row">
+                        <div class="metric">
+                            <div class="metric-label">盈利产品</div>
+                            <div class="metric-value" id="profit-product-count">0</div>
+                        </div>
+                        <div class="metric">
+                            <div class="metric-label">人民币收入</div>
+                            <div class="metric-value" id="profit-total-income">¥0.00</div>
+                        </div>
+                        <div class="metric">
+                            <div class="metric-label">总利润</div>
+                            <div class="metric-value profit-value" id="profit-total-profit">¥0.00</div>
+                        </div>
+                        <div class="metric">
+                            <div class="metric-label">整体利润率</div>
+                            <div class="metric-value" id="profit-overall-rate">0%</div>
+                        </div>
+                    </div>
+
+                    <div class="table-wrap after-sale-table-wrap">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th style="width: 110px;">产品编号</th>
+                                    <th>产品标题</th>
+                                    <th style="width: 90px;">站点</th>
+                                    <th style="width: 80px;">销量</th>
+                                    <th style="width: 110px;">人民币收入</th>
+                                    <th style="width: 105px;">利润</th>
+                                    <th style="width: 90px;">利润率</th>
+                                    <th style="width: 145px;">最近订单时间</th>
+                                </tr>
+                            </thead>
+                            <tbody id="high-profit-body">
+                                <tr><td class="empty-state" colspan="8">正在加载高利润产品...</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </section>
             </div>
 
             <div class="tab-page" id="tab-window-anomalies">
@@ -4462,6 +5038,78 @@
                                 <tr><td class="empty-state" colspan="9">正在加载资金数据...</td></tr>
                             </tbody>
                         </table>
+                    </div>
+                </section>
+            </div>
+
+            <div class="tab-page" id="tab-zying-collection">
+                <div class="tab-heading">
+                    <h2>智赢产品采集</h2>
+                    <p>运行 bit_zying_caiji 采集智赢商品；数据库已有的产品编号会在详情采集前直接跳过</p>
+                </div>
+
+                <section class="panel infractions-panel">
+                    <div class="infractions-header">
+                        <div>
+                            <h2 class="panel-title" style="margin: 0;">采集任务</h2>
+                            <div class="risk-check-mode-note">按产品编号去重 · 每页采集完立即入库</div>
+                        </div>
+                        <div class="header-actions">
+                            <button class="primary" id="start-zying-collection-btn" type="button" onclick="startZyingCollection()">启动产品采集</button>
+                            <button class="secondary" type="button" onclick="loadZyingCollectionStatus()">刷新状态</button>
+                        </div>
+                    </div>
+                    <div class="risk-check-task-layout">
+                        <div class="risk-check-task-main">
+                            <div class="risk-check-task-grid">
+                                <div class="field">
+                                    <label for="zying-collection-start-page">起始页数</label>
+                                    <input id="zying-collection-start-page" type="number" min="1" max="10000" value="1">
+                                </div>
+                                <div class="field">
+                                    <label for="zying-collection-end-page">结束页数</label>
+                                    <input id="zying-collection-end-page" type="number" min="1" max="10000" value="1">
+                                </div>
+                                <div class="field">
+                                    <label for="zying-collection-category">起始分类</label>
+                                    <input id="zying-collection-category" type="text" list="zying-collection-category-options" placeholder="全部分类，或选择/输入分类">
+                                    <datalist id="zying-collection-category-options"></datalist>
+                                </div>
+                                <div class="field">
+                                    <label for="zying-collection-window-id">BitBrowser 窗口 ID</label>
+                                    <input id="zying-collection-window-id" type="text" placeholder="留空使用默认智赢窗口">
+                                </div>
+                            </div>
+                            <div class="summary-row risk-check-summary-row">
+                                <div class="metric">
+                                    <div class="metric-label">任务状态</div>
+                                    <div class="metric-value" id="zying-collection-status-text">等待启动</div>
+                                </div>
+                                <div class="metric">
+                                    <div class="metric-label">本次入库</div>
+                                    <div class="metric-value" id="zying-collection-inserted">0</div>
+                                </div>
+                                <div class="metric">
+                                    <div class="metric-label">已有编号跳过</div>
+                                    <div class="metric-value" id="zying-collection-existing">0</div>
+                                </div>
+                                <div class="metric">
+                                    <div class="metric-label">页面重复跳过</div>
+                                    <div class="metric-value" id="zying-collection-duplicates">0</div>
+                                </div>
+                                <div class="metric">
+                                    <div class="metric-label">详情失败</div>
+                                    <div class="metric-value" id="zying-collection-failed">0</div>
+                                </div>
+                            </div>
+                        </div>
+                        <aside class="risk-check-log-card" aria-label="智赢产品采集日志">
+                            <div class="risk-check-log-header">
+                                <span>实时采集日志</span>
+                                <span class="risk-check-live-indicator">实时更新</span>
+                            </div>
+                            <pre id="zying-collection-log" aria-live="polite">等待任务启动...</pre>
+                        </aside>
                     </div>
                 </section>
             </div>
@@ -4853,11 +5501,207 @@
                     </div>
                 </section>
             </div>
+
+            <div class="tab-page" id="tab-access">
+                <div class="tab-heading">
+                    <h2>人员与权限</h2>
+                    <p>维护控制台账号、人员信息和角色权限；权限变更会在账号下一次请求时立即生效</p>
+                </div>
+
+                <div class="access-grid">
+                    <section class="panel access-card">
+                        <div class="infractions-header">
+                            <h2 class="panel-title" style="margin: 0;">角色配置</h2>
+                            <div class="header-actions">
+                                <button class="primary access-manage-action" type="button" onclick="openAccessRoleEditor()">新增角色</button>
+                                <button class="secondary" type="button" onclick="loadAccessManagement(true)">刷新</button>
+                            </div>
+                        </div>
+                        <div class="table-wrap">
+                            <table class="access-table">
+                                <thead>
+                                    <tr>
+                                        <th>角色</th>
+                                        <th>权限</th>
+                                        <th>账号数</th>
+                                        <th>操作</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="access-role-body">
+                                    <tr><td class="empty-state" colspan="4">正在加载角色...</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                        <form class="access-editor access-manage-action" id="access-role-form" hidden>
+                            <input id="access-role-key" type="hidden">
+                            <div class="access-form-grid">
+                                <div class="field">
+                                    <label for="access-role-name">角色名称</label>
+                                    <input id="access-role-name" maxlength="64" required>
+                                </div>
+                                <div class="field">
+                                    <label for="access-role-description">角色说明</label>
+                                    <input id="access-role-description" maxlength="255">
+                                </div>
+                                <div class="field access-span-2">
+                                    <label>角色权限</label>
+                                    <div class="access-permission-grid" id="access-permission-grid"></div>
+                                </div>
+                            </div>
+                            <div class="access-form-actions">
+                                <button class="secondary" type="button" onclick="closeAccessRoleEditor()">取消</button>
+                                <button class="primary" id="save-access-role-btn" type="submit">保存角色</button>
+                            </div>
+                        </form>
+                    </section>
+
+                    <section class="panel access-card">
+                        <div class="infractions-header">
+                            <h2 class="panel-title" style="margin: 0;">人员账号</h2>
+                            <button class="primary access-manage-action" type="button" onclick="openAccessUserEditor()">新增账号</button>
+                        </div>
+                        <div class="table-wrap">
+                            <table class="access-table">
+                                <thead>
+                                    <tr>
+                                        <th>人员/账号</th>
+                                        <th>部门</th>
+                                        <th>角色</th>
+                                        <th>状态</th>
+                                        <th>操作</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="access-user-body">
+                                    <tr><td class="empty-state" colspan="5">正在加载账号...</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                        <form class="access-editor access-manage-action" id="access-user-form" hidden>
+                            <input id="access-user-id" type="hidden">
+                            <div class="access-form-grid">
+                                <div class="field">
+                                    <label for="access-username">登录账号</label>
+                                    <input id="access-username" maxlength="64" autocomplete="off" required>
+                                </div>
+                                <div class="field">
+                                    <label for="access-display-name">人员姓名</label>
+                                    <input id="access-display-name" maxlength="64" required>
+                                </div>
+                                <div class="field">
+                                    <label for="access-department">部门</label>
+                                    <input id="access-department" maxlength="64">
+                                </div>
+                                <div class="field">
+                                    <label for="access-email">邮箱</label>
+                                    <input id="access-email" type="email" maxlength="128">
+                                </div>
+                                <div class="field">
+                                    <label for="access-user-role">角色</label>
+                                    <select id="access-user-role" required></select>
+                                </div>
+                                <div class="field">
+                                    <label for="access-user-password">密码（编辑时留空表示不修改）</label>
+                                    <input id="access-user-password" type="password" minlength="8" autocomplete="new-password">
+                                </div>
+                                <div class="field access-span-2">
+                                    <label class="access-active-option"><input id="access-user-active" type="checkbox" checked><span>启用账号</span></label>
+                                </div>
+                            </div>
+                            <div class="access-form-actions">
+                                <button class="secondary" type="button" onclick="closeAccessUserEditor()">取消</button>
+                                <button class="primary" id="save-access-user-btn" type="submit">保存账号</button>
+                            </div>
+                        </form>
+                    </section>
+
+                    <section class="panel access-card access-shop-card">
+                        <div class="infractions-header">
+                            <div>
+                                <h2 class="panel-title" style="margin: 0;">店铺配置</h2>
+                                <p class="panel-subtitle">直接维护 bit_browser_configs，保存后采集与申诉任务会读取最新配置</p>
+                            </div>
+                            <div class="access-shop-tools">
+                                <input class="access-shop-search" id="access-shop-search" type="search" placeholder="搜索店铺、窗口ID、业务员">
+                                <button class="primary access-manage-action" type="button" onclick="openAccessShopEditor()">新增店铺</button>
+                                <button class="secondary" type="button" onclick="loadAccessManagement(true)">刷新</button>
+                            </div>
+                        </div>
+                        <div class="table-wrap">
+                            <table class="access-table">
+                                <thead>
+                                    <tr>
+                                        <th>序号</th>
+                                        <th>店铺名称</th>
+                                        <th>窗口 ID</th>
+                                        <th>站点</th>
+                                        <th>业务员</th>
+                                        <th>邮箱</th>
+                                        <th>状态</th>
+                                        <th>操作</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="access-shop-body">
+                                    <tr><td class="empty-state" colspan="8">正在加载店铺配置...</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                        <form class="access-editor access-manage-action" id="access-shop-form" hidden>
+                            <input id="access-shop-id" type="hidden">
+                            <div class="access-form-grid">
+                                <div class="field">
+                                    <label for="access-shop-name">店铺名称</label>
+                                    <input id="access-shop-name" maxlength="255" required>
+                                </div>
+                                <div class="field">
+                                    <label for="access-shop-window-id">窗口 ID</label>
+                                    <input id="access-shop-window-id" maxlength="64" required>
+                                </div>
+                                <div class="field">
+                                    <label for="access-shop-sites">站点</label>
+                                    <input id="access-shop-sites" placeholder="例如：墨西哥，巴西">
+                                </div>
+                                <div class="field">
+                                    <label for="access-shop-sequence">序号</label>
+                                    <input id="access-shop-sequence" maxlength="64">
+                                </div>
+                                <div class="field">
+                                    <label for="access-shop-salesperson">业务员</label>
+                                    <input id="access-shop-salesperson" maxlength="255">
+                                </div>
+                                <div class="field">
+                                    <label for="access-shop-email">邮箱</label>
+                                    <input id="access-shop-email" type="email" maxlength="320">
+                                </div>
+                                <div class="field access-span-2">
+                                    <label for="access-shop-status">状态</label>
+                                    <input id="access-shop-status" maxlength="255" placeholder="填写“忽略”后，自动化任务会跳过该店铺">
+                                </div>
+                            </div>
+                            <div class="access-form-actions">
+                                <button class="secondary" type="button" onclick="closeAccessShopEditor()">取消</button>
+                                <button class="primary" id="save-access-shop-btn" type="submit">保存店铺配置</button>
+                            </div>
+                        </form>
+                    </section>
+                </div>
+            </div>
         </section>
     </main>
     <div class="traffic-tooltip" id="traffic-tooltip"></div>
 
     <script>
+        const currentWorkbenchUser = {{ current_user | tojson }};
+        const currentWorkbenchPermissions = new Set(
+            Array.isArray(currentWorkbenchUser.permissions)
+                ? currentWorkbenchUser.permissions
+                : ["*"]
+        );
+
+        function hasWorkbenchPermission(permission) {
+            return currentWorkbenchPermissions.has("*")
+                || currentWorkbenchPermissions.has(permission);
+        }
+
         const logContainer = document.getElementById("log-container");
         const startBtn = document.getElementById("start-btn");
         const stopBtn = document.getElementById("stop-btn");
@@ -4865,6 +5709,13 @@
         const appealShopOptions = document.getElementById("appeal-shop-options");
         const statusBox = document.getElementById("status");
         const statusText = document.getElementById("status-text");
+        const appealPhraseSummary = document.getElementById("appeal-phrase-summary");
+        const appealPhraseBody = document.getElementById("appeal-phrase-body");
+        const appealPhraseForm = document.getElementById("appeal-phrase-form");
+        const appealPhraseId = document.getElementById("appeal-phrase-id");
+        const appealPhraseType = document.getElementById("appeal-phrase-type");
+        const appealPhraseContent = document.getElementById("appeal-phrase-content");
+        const appealPhraseActive = document.getElementById("appeal-phrase-active");
         const infractionBody = document.getElementById("infraction-body");
         const infractionTime = document.getElementById("infraction-time");
         const infractionTotal = document.getElementById("infraction-total");
@@ -4878,6 +5729,18 @@
         const infractionRightsLabel = document.getElementById("infraction-rights-label");
         const infractionSummaryTitle = document.getElementById("infraction-summary-title");
         const collectInfractionsBtn = document.getElementById("collect-infractions-btn");
+        const startZyingCollectionBtn = document.getElementById("start-zying-collection-btn");
+        const zyingCollectionStartPage = document.getElementById("zying-collection-start-page");
+        const zyingCollectionEndPage = document.getElementById("zying-collection-end-page");
+        const zyingCollectionCategory = document.getElementById("zying-collection-category");
+        const zyingCollectionCategoryOptions = document.getElementById("zying-collection-category-options");
+        const zyingCollectionWindowId = document.getElementById("zying-collection-window-id");
+        const zyingCollectionStatusText = document.getElementById("zying-collection-status-text");
+        const zyingCollectionInserted = document.getElementById("zying-collection-inserted");
+        const zyingCollectionExisting = document.getElementById("zying-collection-existing");
+        const zyingCollectionDuplicates = document.getElementById("zying-collection-duplicates");
+        const zyingCollectionFailed = document.getElementById("zying-collection-failed");
+        const zyingCollectionLog = document.getElementById("zying-collection-log");
         const startRiskCheckBtn = document.getElementById("start-risk-check-btn");
         const riskCheckTaskCategory = document.getElementById("risk-check-task-category");
         const riskCheckStatusText = document.getElementById("risk-check-status-text");
@@ -4924,6 +5787,34 @@
         const orderPrintSiteRunAll = document.getElementById("order-print-site-run-all");
         const orderPrintTargetSelectionSummary = document.getElementById("order-print-target-selection-summary");
         const rerunSelectedOrderPrintBtn = document.getElementById("rerun-selected-order-print-btn");
+        const orderAnalysisFolder = document.getElementById("order-analysis-folder");
+        const orderAnalysisFolderSummary = document.getElementById("order-analysis-folder-summary");
+        const importOrderAnalysisBtn = document.getElementById("import-order-analysis-btn");
+        const orderAnalysisStatusBadge = document.getElementById("order-analysis-status-badge");
+        const orderAnalysisStatusText = document.getElementById("order-analysis-status-text");
+        const orderAnalysisFileCount = document.getElementById("order-analysis-file-count");
+        const orderAnalysisRawCount = document.getElementById("order-analysis-raw-count");
+        const orderAnalysisDuplicateCount = document.getElementById("order-analysis-duplicate-count");
+        const orderAnalysisImportedCount = document.getElementById("order-analysis-imported-count");
+        const orderAnalysisLog = document.getElementById("order-analysis-log");
+        const afterSaleDateFrom = document.getElementById("after-sale-date-from");
+        const afterSaleDateTo = document.getElementById("after-sale-date-to");
+        const afterSaleSearch = document.getElementById("after-sale-search");
+        const afterSaleAlertBody = document.getElementById("after-sale-alert-body");
+        const afterSaleProductCount = document.getElementById("after-sale-product-count");
+        const afterSaleTotalQuantity = document.getElementById("after-sale-total-quantity");
+        const afterSaleQuantity = document.getElementById("after-sale-quantity");
+        const afterSaleOverallRate = document.getElementById("after-sale-overall-rate");
+        const loadAfterSaleAlertsBtn = document.getElementById("load-after-sale-alerts-btn");
+        const profitDateFrom = document.getElementById("profit-date-from");
+        const profitDateTo = document.getElementById("profit-date-to");
+        const profitSearch = document.getElementById("profit-search");
+        const highProfitBody = document.getElementById("high-profit-body");
+        const profitProductCount = document.getElementById("profit-product-count");
+        const profitTotalIncome = document.getElementById("profit-total-income");
+        const profitTotalProfit = document.getElementById("profit-total-profit");
+        const profitOverallRate = document.getElementById("profit-overall-rate");
+        const loadHighProfitBtn = document.getElementById("load-high-profit-btn");
         const windowAnomalyBody = document.getElementById("window-anomaly-body");
         const windowAnomalyTotal = document.getElementById("window-anomaly-total");
         const windowAnomalyLatestTime = document.getElementById("window-anomaly-latest-time");
@@ -4952,6 +5843,14 @@
         const fundCollectStatusBadge = document.getElementById("fund-collect-status-badge");
         const fundCollectStatusText = document.getElementById("fund-collect-status-text");
         const fundCollectDetail = document.getElementById("fund-collect-detail");
+        const accessRoleBody = document.getElementById("access-role-body");
+        const accessUserBody = document.getElementById("access-user-body");
+        const accessRoleForm = document.getElementById("access-role-form");
+        const accessUserForm = document.getElementById("access-user-form");
+        const accessPermissionGrid = document.getElementById("access-permission-grid");
+        const accessShopBody = document.getElementById("access-shop-body");
+        const accessShopForm = document.getElementById("access-shop-form");
+        const accessShopSearch = document.getElementById("access-shop-search");
         const mercadoAuthorizationUrl = document.getElementById("mercado-authorization-url");
         const copyMercadoAuthBtn = document.getElementById("copy-mercado-auth-btn");
         const openMercadoAuthBtn = document.getElementById("open-mercado-auth-btn");
@@ -5096,6 +5995,12 @@
         let orderPrintStatusPollTimer = null;
         let orderPrintSiteRows = [];
         let selectedOrderPrintTargetKeys = new Set();
+        let orderAnalysisFiles = [];
+        let orderAnalysisImporting = false;
+        let highAfterSaleLoaded = false;
+        let highAfterSaleSortBy = "after_sale_quantity";
+        let highProfitLoaded = false;
+        let highProfitSortBy = "total_profit";
         let windowAnomaliesLoaded = false;
         let mercadoLoginRunning = false;
         let mercadoLoginAllRunning = false;
@@ -5109,6 +6014,9 @@
         let fundCollectionRunning = false;
         let fundCollectionStopping = false;
         let selectedFundWindowIds = new Set();
+        let zyingCollectionRunning = false;
+        let zyingCollectionPollTimer = null;
+        let zyingCollectionCategoriesLoaded = false;
         let fundStatusPollTimer = null;
         let mercadoTokenAuthorizationLoaded = Boolean(mercadoAuthorizationUrl?.value);
         let mercadoStoreTokensLoaded = false;
@@ -5131,6 +6039,13 @@
         let selectedReputationUpdatePollTimer = null;
         let activeAppealTaskId = "";
         let appealStopRequested = false;
+        let appealPhrasesLoaded = false;
+        let appealPhraseRows = [];
+        let accessLoaded = false;
+        let accessPermissionGroups = [];
+        let accessRoles = [];
+        let accessUsers = [];
+        let accessShopConfigs = [];
         let yandexConsoleLoaded = false;
         let yandexConsoleLoading = false;
         let yandexConsoleExternalUrl = "";
@@ -5222,7 +6137,47 @@
             }
         }
 
+        function applyWorkbenchPermissions() {
+            document.querySelectorAll(".tab-button[data-permission]").forEach(button => {
+                button.hidden = !hasWorkbenchPermission(button.dataset.permission);
+            });
+            const actionSelectors = {
+                "appeal.execute": ["#start-btn", "#stop-btn", "#add-appeal-phrase-btn", "#save-appeal-phrase-btn"],
+                "tasks.execute": ["#start-daily-task-btn"],
+                "order_print.execute": ["#start-order-print-btn", "#stop-order-print-btn", "#rerun-selected-order-print-btn"],
+                "order_analysis.execute": ["#order-analysis-folder", "#import-order-analysis-btn"],
+                "shop_status.execute": ["#start-selected-mercado-login-btn", "#start-mercado-login-btn", "#stop-mercado-login-btn", ".header-worker-control"],
+                "funds.execute": ["#collect-funds-btn", "#stop-funds-btn"],
+                "zying_collection.execute": ["#start-zying-collection-btn"],
+                "risk_check.execute": ["#start-risk-check-btn"],
+                "infractions.execute": ["#collect-infractions-btn"],
+                "reputation.execute": ["#collect-reputation-btn", "#update-selected-reputation-btn"],
+            };
+            Object.entries(actionSelectors).forEach(([permission, selectors]) => {
+                if (hasWorkbenchPermission(permission)) return;
+                selectors.forEach(selector => {
+                    const element = document.querySelector(selector);
+                    if (element) element.hidden = true;
+                });
+            });
+            document.querySelectorAll(".access-manage-action").forEach(element => {
+                if (!hasWorkbenchPermission("access.manage")) {
+                    element.hidden = true;
+                } else if (!element.classList.contains("access-editor")) {
+                    element.hidden = false;
+                }
+            });
+            const activeButton = document.querySelector(".tab-button.active:not([hidden])");
+            const firstVisibleButton = document.querySelector(".tab-button:not([hidden])");
+            if (!activeButton && firstVisibleButton) switchTab(firstVisibleButton.dataset.tab);
+            if (!firstVisibleButton) {
+                document.querySelectorAll(".tab-page").forEach(page => page.classList.remove("active"));
+            }
+        }
+
         function switchTab(tabName) {
+            const targetButton = document.querySelector(`.tab-button[data-tab="${tabName}"]`);
+            if (!targetButton || targetButton.hidden) return;
             document.querySelectorAll(".tab-button").forEach(button => {
                 button.classList.toggle("active", button.dataset.tab === tabName);
             });
@@ -5232,10 +6187,17 @@
             if (tabName === "infractions" && !infractionsLoaded) {
                 loadLatestInfractions();
             }
+            if (tabName === "appeal" && !appealPhrasesLoaded) {
+                loadAppealPhrases();
+            }
             if (tabName === "risk-check") {
                 loadRiskCategories();
                 loadRiskCheckStatus();
                 if (!riskCheckLoaded) loadRiskResults();
+            }
+            if (tabName === "zying-collection") {
+                loadZyingCollectionCategories();
+                loadZyingCollectionStatus();
             }
             if (tabName === "infractions" || tabName === "reputation" || tabName === "order-print") {
                 loadCollectionOptions();
@@ -5251,6 +6213,10 @@
             }
             if (tabName === "order-print") {
                 loadOrderPrintStatus();
+            }
+            if (tabName === "order-analysis") {
+                if (!highAfterSaleLoaded) setHighAfterSalePeriod(30);
+                if (!highProfitLoaded) setHighProfitPeriod(30);
             }
             if (tabName === "orders" && !ordersLoaded) {
                 loadOrders(1);
@@ -5277,6 +6243,9 @@
                     loadLatestFunds();
                 }
                 loadFundCollectionStatus();
+            }
+            if (tabName === "access" && !accessLoaded) {
+                loadAccessManagement();
             }
             if (tabName === "yandex") {
                 loadYandexConsole();
@@ -7311,6 +8280,107 @@
             }
         }
 
+        function renderAppealPhraseSummary(summary) {
+            if (!appealPhraseSummary) return;
+            const byType = new Map(
+                (Array.isArray(summary) ? summary : []).map(item => [item.appeal_type, item])
+            );
+            appealPhraseSummary.innerHTML = ["延误", "侵权", "取消率", "投诉"].map(type => {
+                const item = byType.get(type) || {};
+                const total = Number(item.total || 0);
+                const active = Number(item.active || 0);
+                return `
+                    <div class="metric">
+                        <div class="metric-label">${escapeHtml(type)}</div>
+                        <div class="metric-value">${active} 条启用 / ${total} 条</div>
+                    </div>
+                `;
+            }).join("");
+        }
+
+        function renderAppealPhraseRows() {
+            if (!appealPhraseBody) return;
+            if (!appealPhraseRows.length) {
+                appealPhraseBody.innerHTML = '<tr><td class="empty-state" colspan="5">暂无话术，请先新增</td></tr>';
+                return;
+            }
+            const canManage = hasWorkbenchPermission("appeal.execute");
+            appealPhraseBody.innerHTML = appealPhraseRows.map(row => `
+                <tr>
+                    <td><span class="tag">${escapeHtml(row.appeal_type || "-")}</span></td>
+                    <td><span class="status-tag ${row.is_active ? "" : "empty"}">${row.is_active ? "启用" : "停用"}</span></td>
+                    <td><span class="appeal-phrase-content">${escapeHtml(row.content || "-")}</span></td>
+                    <td title="${escapeHtml(row.updated_at || "")}">${escapeHtml(row.updated_at || "-")}</td>
+                    <td>
+                        ${canManage ? `
+                            <div class="appeal-phrase-actions">
+                                <button class="secondary" type="button" onclick="openAppealPhraseEditor(${Number(row.id)})">修改</button>
+                                <button class="danger" type="button" onclick="deleteAppealPhrase(${Number(row.id)})">删除</button>
+                            </div>
+                        ` : "-"}
+                    </td>
+                </tr>
+            `).join("");
+        }
+
+        async function loadAppealPhrases(force = false) {
+            if (!appealPhraseBody || (appealPhrasesLoaded && !force)) return;
+            appealPhraseBody.innerHTML = '<tr><td class="empty-state" colspan="5">正在加载话术库...</td></tr>';
+            try {
+                const response = await fetch("/api/appeal-phrases", {cache: "no-store"});
+                const payload = await response.json();
+                if (!response.ok || payload.status !== "success") {
+                    throw new Error(payload.message || `接口请求失败：${response.status}`);
+                }
+                const data = payload.data || {};
+                appealPhraseRows = Array.isArray(data.rows) ? data.rows : [];
+                appealPhrasesLoaded = true;
+                renderAppealPhraseSummary(data.summary || []);
+                renderAppealPhraseRows();
+            } catch (error) {
+                appealPhraseBody.innerHTML = `<tr><td class="empty-state" colspan="5">加载失败：${escapeHtml(error.message || error)}</td></tr>`;
+            }
+        }
+
+        function openAppealPhraseEditor(phraseId = 0) {
+            if (!appealPhraseForm || !hasWorkbenchPermission("appeal.execute")) return;
+            const row = appealPhraseRows.find(item => Number(item.id) === Number(phraseId));
+            appealPhraseId.value = row ? String(row.id) : "";
+            appealPhraseType.value = row?.appeal_type || "延误";
+            appealPhraseContent.value = row?.content || "";
+            appealPhraseActive.checked = row ? Boolean(row.is_active) : true;
+            appealPhraseForm.hidden = false;
+            appealPhraseContent.focus();
+            appealPhraseForm.scrollIntoView({behavior: "smooth", block: "nearest"});
+        }
+
+        function closeAppealPhraseEditor() {
+            if (!appealPhraseForm) return;
+            appealPhraseForm.reset();
+            appealPhraseId.value = "";
+            appealPhraseActive.checked = true;
+            appealPhraseForm.hidden = true;
+        }
+
+        async function deleteAppealPhrase(phraseId) {
+            const row = appealPhraseRows.find(item => Number(item.id) === Number(phraseId));
+            if (!row || !window.confirm(`确定删除“${row.appeal_type}”下的这条话术吗？`)) return;
+            try {
+                const response = await fetch(`/api/appeal-phrases/${Number(phraseId)}`, {
+                    method: "DELETE",
+                });
+                const payload = await response.json();
+                if (!response.ok || payload.status !== "success") {
+                    throw new Error(payload.message || `接口请求失败：${response.status}`);
+                }
+                closeAppealPhraseEditor();
+                appealPhrasesLoaded = false;
+                await loadAppealPhrases(true);
+            } catch (error) {
+                alert(`删除话术失败：${error.message || error}`);
+            }
+        }
+
         function normalizeAppealShopSearch(value) {
             return String(value || "")
                 .normalize("NFKC")
@@ -7452,6 +8522,143 @@
             if (event.key === "Enter" && appealShopActiveIndex >= 0) {
                 event.preventDefault();
                 selectAppealShop(appealShopActiveIndex);
+            }
+        }
+
+        async function loadZyingCollectionCategories(force = false) {
+            if (!zyingCollectionCategoryOptions) return;
+            if (zyingCollectionCategoriesLoaded && !force) return;
+            try {
+                const response = await fetch("/api/zying-collection/categories", {cache: "no-store"});
+                const payload = await response.json();
+                if (!response.ok || payload.status !== "success") {
+                    throw new Error(payload.message || `接口请求失败：${response.status}`);
+                }
+                const rows = Array.isArray(payload.data) ? payload.data : [];
+                zyingCollectionCategoryOptions.innerHTML = rows.map(row => {
+                    const value = String(row.category_id || row.category_name || "").trim();
+                    const label = String(row.category_name || row.category_id || "未分类");
+                    return `<option value="${escapeHtml(value)}" label="${escapeHtml(label)}"></option>`;
+                }).join("");
+                zyingCollectionCategoriesLoaded = true;
+            } catch (err) {
+                console.error("加载智赢产品采集分类失败", err);
+            }
+        }
+
+        function renderZyingCollectionLogs(logs) {
+            if (!zyingCollectionLog) return;
+            const entries = Array.isArray(logs) ? logs : [];
+            const nextText = entries.length ? entries.join("\n") : "等待任务启动...";
+            const shouldFollow = (
+                zyingCollectionLog.scrollHeight
+                - zyingCollectionLog.scrollTop
+                - zyingCollectionLog.clientHeight
+            ) < 36;
+            if (zyingCollectionLog.textContent !== nextText) {
+                zyingCollectionLog.textContent = nextText;
+                if (shouldFollow) {
+                    zyingCollectionLog.scrollTop = zyingCollectionLog.scrollHeight;
+                }
+            }
+        }
+
+        function scheduleZyingCollectionStatusPoll() {
+            if (zyingCollectionPollTimer) clearTimeout(zyingCollectionPollTimer);
+            zyingCollectionPollTimer = zyingCollectionRunning
+                ? setTimeout(loadZyingCollectionStatus, 1000)
+                : null;
+        }
+
+        async function loadZyingCollectionStatus() {
+            if (!zyingCollectionStatusText) return;
+            try {
+                const wasRunning = zyingCollectionRunning;
+                const response = await fetch("/api/zying-collection/status", {cache: "no-store"});
+                const payload = await response.json();
+                if (!response.ok || payload.status !== "success") {
+                    throw new Error(payload.message || `接口请求失败：${response.status}`);
+                }
+                const data = payload.data || {};
+                const summary = data.summary || {};
+                const defaults = data.defaults || {};
+                zyingCollectionRunning = Boolean(data.running);
+                zyingCollectionStatusText.textContent = data.message || (zyingCollectionRunning ? "采集中" : "等待启动");
+                zyingCollectionInserted.textContent = Number(summary.inserted_count || 0);
+                zyingCollectionExisting.textContent = Number(summary.skipped_existing_count || 0);
+                zyingCollectionDuplicates.textContent = Number(summary.duplicate_count || 0);
+                zyingCollectionFailed.textContent = Number(summary.detail_failed_count || 0);
+                renderZyingCollectionLogs(data.logs);
+                if (!zyingCollectionWindowId.dataset.defaultsLoaded) {
+                    zyingCollectionWindowId.value = defaults.window_id || "";
+                    zyingCollectionStartPage.value = Number(defaults.start_page || 1);
+                    zyingCollectionEndPage.value = Number(defaults.end_page || 1);
+                    zyingCollectionWindowId.dataset.defaultsLoaded = "1";
+                }
+                startZyingCollectionBtn.disabled = zyingCollectionRunning;
+                startZyingCollectionBtn.textContent = zyingCollectionRunning
+                    ? "正在采集..."
+                    : "启动产品采集";
+                [
+                    zyingCollectionStartPage,
+                    zyingCollectionEndPage,
+                    zyingCollectionCategory,
+                    zyingCollectionWindowId,
+                ].forEach(input => { if (input) input.disabled = zyingCollectionRunning; });
+                if (wasRunning && !zyingCollectionRunning) {
+                    zyingCollectionCategoriesLoaded = false;
+                    riskCategoriesLoaded = false;
+                    await loadZyingCollectionCategories(true);
+                }
+            } catch (err) {
+                zyingCollectionStatusText.textContent = `状态读取失败：${err.message || err}`;
+            } finally {
+                scheduleZyingCollectionStatusPoll();
+            }
+        }
+
+        async function startZyingCollection() {
+            if (!startZyingCollectionBtn || zyingCollectionRunning) return;
+            const startPage = Number(zyingCollectionStartPage?.value || 1);
+            const endPage = Number(zyingCollectionEndPage?.value || 1);
+            if (!Number.isInteger(startPage) || startPage < 1) {
+                alert("起始页数必须是大于等于 1 的整数");
+                return;
+            }
+            if (!Number.isInteger(endPage) || endPage < startPage) {
+                alert("结束页数必须是大于等于起始页的整数");
+                return;
+            }
+            startZyingCollectionBtn.disabled = true;
+            startZyingCollectionBtn.textContent = "正在启动...";
+            renderZyingCollectionLogs([]);
+            try {
+                const response = await fetch("/api/zying-collection/start", {
+                    method: "POST",
+                    headers: {"Content-Type": "application/json"},
+                    body: JSON.stringify({
+                        start_page: startPage,
+                        end_page: endPage,
+                        category: zyingCollectionCategory?.value.trim() || "",
+                        window_id: zyingCollectionWindowId?.value.trim() || "",
+                    }),
+                });
+                const payload = await response.json();
+                if (response.status === 409) {
+                    zyingCollectionRunning = Boolean(payload.data?.running);
+                    renderZyingCollectionLogs(payload.data?.logs);
+                    alert(payload.message || "智赢产品采集任务正在运行");
+                    return;
+                }
+                if (!response.ok || payload.status !== "success") {
+                    throw new Error(payload.message || `接口请求失败：${response.status}`);
+                }
+                zyingCollectionRunning = true;
+                await loadZyingCollectionStatus();
+            } catch (err) {
+                zyingCollectionRunning = false;
+                alert(`启动智赢产品采集失败：${err.message || err}`);
+                await loadZyingCollectionStatus();
             }
         }
 
@@ -8019,6 +9226,25 @@
             const text = String(value ?? "").trim() || "-";
             const className = reputationRateClass(metric, value);
             return `<td class="reputation-rate-cell ${className}" title="${escapeHtml(text)}">${escapeHtml(text)}</td>`;
+        }
+
+        function reputationTrafficChangeClass(direction, value) {
+            const signedRate = parseReputationPercentage(value);
+            if (!Number.isFinite(signedRate) || Math.abs(signedRate) <= 30) return "";
+            const directionText = String(direction ?? "").trim();
+            if (/\u4e0b\u6ed1|\u4e0b\u964d|\u51cf\u5c11/.test(directionText) || signedRate < 0) {
+                return "change-red";
+            }
+            if (/\u589e\u957f|\u4e0a\u6da8|\u4e0a\u5347|\u589e\u52a0/.test(directionText) || signedRate > 0) {
+                return "change-green";
+            }
+            return "";
+        }
+
+        function renderReputationTrafficChangeCell(direction, value) {
+            const text = String(value ?? "").trim() || "-";
+            const className = reputationTrafficChangeClass(direction, value);
+            return `<td class="reputation-change-cell ${className}" title="${escapeHtml(text)}">${escapeHtml(text)}</td>`;
         }
 
         function parseTrafficValues(value) {
@@ -8881,6 +10107,298 @@
             }
         }
 
+        function selectOrderAnalysisFolder(fileList) {
+            orderAnalysisFiles = Array.from(fileList || [])
+                .filter(file => {
+                    const name = String(file.name || "");
+                    const lowerName = name.toLocaleLowerCase();
+                    return !name.startsWith("~$")
+                        && !name.startsWith(".~")
+                        && (lowerName.endsWith(".xlsx") || lowerName.endsWith(".xlsm"));
+                })
+                .sort((left, right) => (
+                    Number(left.lastModified || 0) - Number(right.lastModified || 0)
+                    || String(left.webkitRelativePath || left.name).localeCompare(
+                        String(right.webkitRelativePath || right.name),
+                        "zh-CN",
+                        {numeric: true},
+                    )
+                ));
+            const firstPath = String(orderAnalysisFiles[0]?.webkitRelativePath || "");
+            const folderName = firstPath.includes("/") ? firstPath.split("/")[0] : "所选文件夹";
+            orderAnalysisFileCount.textContent = String(orderAnalysisFiles.length);
+            orderAnalysisRawCount.textContent = "0";
+            orderAnalysisDuplicateCount.textContent = "0";
+            orderAnalysisImportedCount.textContent = "0";
+            orderAnalysisFolderSummary.textContent = orderAnalysisFiles.length
+                ? `${folderName}：识别到 ${orderAnalysisFiles.length} 个 Excel 文件，将按修改时间从旧到新处理。`
+                : "所选文件夹中没有 .xlsx 或 .xlsm 文件。";
+            orderAnalysisStatusBadge.className = "status";
+            orderAnalysisStatusText.textContent = orderAnalysisFiles.length ? "已选择文件夹" : "没有可导入文件";
+            orderAnalysisLog.textContent = orderAnalysisFiles.length
+                ? orderAnalysisFiles.map(file => file.webkitRelativePath || file.name).join("\n")
+                : "请选择包含订单 Excel 的文件夹。";
+            importOrderAnalysisBtn.disabled = orderAnalysisFiles.length === 0
+                || !hasWorkbenchPermission("order_analysis.execute");
+        }
+
+        async function importOrderAnalysisFolder() {
+            if (orderAnalysisImporting || !orderAnalysisFiles.length) return;
+            orderAnalysisImporting = true;
+            importOrderAnalysisBtn.disabled = true;
+            orderAnalysisFolder.disabled = true;
+            orderAnalysisStatusBadge.className = "status running";
+            orderAnalysisStatusText.textContent = "正在读取并更新";
+            orderAnalysisLog.textContent = `正在上传并处理 ${orderAnalysisFiles.length} 个 Excel 文件...`;
+            const formData = new FormData();
+            orderAnalysisFiles.forEach(file => {
+                formData.append("files", file, file.webkitRelativePath || file.name);
+            });
+            try {
+                const response = await fetch("/api/order-analysis/import", {
+                    method: "POST",
+                    body: formData,
+                });
+                const payload = await response.json();
+                if (!response.ok || payload.status !== "success") {
+                    throw new Error(payload.message || `接口请求失败：${response.status}`);
+                }
+                const data = payload.data || {};
+                orderAnalysisFileCount.textContent = String(data.files_processed || 0);
+                orderAnalysisRawCount.textContent = String(data.raw_rows || 0);
+                orderAnalysisDuplicateCount.textContent = String(data.duplicate_rows || 0);
+                orderAnalysisImportedCount.textContent = String(data.imported_orders || 0);
+                orderAnalysisStatusBadge.className = "status";
+                orderAnalysisStatusText.textContent = "更新完成";
+                const lines = [
+                    `完成时间：${data.completed_at || "-"}`,
+                    `发现文件：${data.files_discovered || 0}`,
+                    `成功读取：${data.files_processed || 0}`,
+                    `读取订单行：${data.raw_rows || 0}`,
+                    `重复订单覆盖：${data.duplicate_rows || 0}`,
+                    `空订单编号跳过：${data.blank_order_ids || 0}`,
+                    `唯一订单入库：${data.imported_orders || 0}`,
+                ];
+                (data.errors || []).forEach(error => {
+                    lines.push(`读取失败：${error.file || "未知文件"}：${error.error || "未知错误"}`);
+                });
+                orderAnalysisLog.textContent = lines.join("\n");
+                await Promise.all([
+                    loadHighAfterSaleAlerts(),
+                    loadHighProfitProducts(),
+                ]);
+            } catch (err) {
+                orderAnalysisStatusBadge.className = "status error";
+                orderAnalysisStatusText.textContent = "更新失败";
+                orderAnalysisLog.textContent = `订单导入失败：${err.message || err}`;
+            } finally {
+                orderAnalysisImporting = false;
+                orderAnalysisFolder.disabled = false;
+                importOrderAnalysisBtn.disabled = orderAnalysisFiles.length === 0
+                    || !hasWorkbenchPermission("order_analysis.execute");
+            }
+        }
+
+        function localDateText(date) {
+            const year = date.getFullYear();
+            const month = String(date.getMonth() + 1).padStart(2, "0");
+            const day = String(date.getDate()).padStart(2, "0");
+            return `${year}-${month}-${day}`;
+        }
+
+        function setHighAfterSalePeriod(days) {
+            if (Number(days) <= 0) {
+                afterSaleDateFrom.value = "";
+                afterSaleDateTo.value = "";
+            } else {
+                const endDate = new Date();
+                const startDate = new Date(endDate);
+                startDate.setDate(startDate.getDate() - Number(days) + 1);
+                afterSaleDateFrom.value = localDateText(startDate);
+                afterSaleDateTo.value = localDateText(endDate);
+            }
+            loadHighAfterSaleAlerts();
+        }
+
+        function sortHighAfterSaleAlerts(sortBy) {
+            highAfterSaleSortBy = sortBy === "after_sale_rate"
+                ? "after_sale_rate"
+                : "after_sale_quantity";
+            document.getElementById("after-sale-sort-quantity").classList.toggle(
+                "active",
+                highAfterSaleSortBy === "after_sale_quantity",
+            );
+            document.getElementById("after-sale-sort-rate").classList.toggle(
+                "active",
+                highAfterSaleSortBy === "after_sale_rate",
+            );
+            loadHighAfterSaleAlerts();
+        }
+
+        function renderHighAfterSaleRows(rows) {
+            if (!afterSaleAlertBody) return;
+            if (!Array.isArray(rows) || !rows.length) {
+                afterSaleAlertBody.innerHTML = '<tr><td class="empty-state" colspan="8">所选时间段没有“取消-发货后”订单</td></tr>';
+                return;
+            }
+            afterSaleAlertBody.innerHTML = rows.map(row => {
+                const rate = Number(row.after_sale_rate || 0);
+                const rateClass = rate >= 10 ? "after-sale-rate-high" : "";
+                return `
+                    <tr>
+                        <td>${escapeHtml(row.product_id || "-")}</td>
+                        <td title="${escapeHtml(row.title || "")}">${escapeHtml(row.title || "-")}</td>
+                        <td>${escapeHtml(row.sites || "-")}</td>
+                        <td>${Number(row.total_quantity || 0).toLocaleString("zh-CN")}</td>
+                        <td><strong>${Number(row.after_sale_quantity || 0).toLocaleString("zh-CN")}</strong></td>
+                        <td class="${rateClass}">${rate.toFixed(2)}%</td>
+                        <td>${Number(row.after_sale_orders || 0).toLocaleString("zh-CN")}</td>
+                        <td>${escapeHtml(row.latest_after_sale_time || "-")}</td>
+                    </tr>`;
+            }).join("");
+        }
+
+        async function loadHighAfterSaleAlerts() {
+            if (!afterSaleAlertBody || !loadAfterSaleAlertsBtn) return;
+            if (afterSaleDateFrom.value && afterSaleDateTo.value
+                && afterSaleDateFrom.value > afterSaleDateTo.value) {
+                afterSaleAlertBody.innerHTML = '<tr><td class="empty-state" colspan="8">开始日期不能晚于结束日期</td></tr>';
+                return;
+            }
+            loadAfterSaleAlertsBtn.disabled = true;
+            loadAfterSaleAlertsBtn.textContent = "正在查询...";
+            afterSaleAlertBody.innerHTML = '<tr><td class="empty-state" colspan="8">正在汇总订单...</td></tr>';
+            const params = new URLSearchParams({
+                sort_by: highAfterSaleSortBy,
+                sort_dir: "desc",
+                search: afterSaleSearch.value.trim(),
+                date_from: afterSaleDateFrom.value,
+                date_to: afterSaleDateTo.value,
+                limit: "100",
+            });
+            try {
+                const response = await fetch(`/api/order-analysis/high-after-sales?${params}`, {
+                    cache: "no-store",
+                });
+                const payload = await response.json();
+                if (!response.ok || payload.status !== "success") {
+                    throw new Error(payload.message || `接口请求失败：${response.status}`);
+                }
+                const data = payload.data || {};
+                const summary = data.summary || {};
+                highAfterSaleLoaded = true;
+                afterSaleProductCount.textContent = Number(summary.alert_products || 0).toLocaleString("zh-CN");
+                afterSaleTotalQuantity.textContent = Number(summary.total_quantity || 0).toLocaleString("zh-CN");
+                afterSaleQuantity.textContent = Number(summary.after_sale_quantity || 0).toLocaleString("zh-CN");
+                afterSaleOverallRate.textContent = `${Number(summary.after_sale_rate || 0).toFixed(2)}%`;
+                renderHighAfterSaleRows(data.rows || []);
+            } catch (err) {
+                afterSaleAlertBody.innerHTML = `<tr><td class="empty-state" colspan="8">读取失败：${escapeHtml(err.message || err)}</td></tr>`;
+            } finally {
+                loadAfterSaleAlertsBtn.disabled = false;
+                loadAfterSaleAlertsBtn.textContent = "查询告警";
+            }
+        }
+
+        function setHighProfitPeriod(days) {
+            if (Number(days) <= 0) {
+                profitDateFrom.value = "";
+                profitDateTo.value = "";
+            } else {
+                const endDate = new Date();
+                const startDate = new Date(endDate);
+                startDate.setDate(startDate.getDate() - Number(days) + 1);
+                profitDateFrom.value = localDateText(startDate);
+                profitDateTo.value = localDateText(endDate);
+            }
+            loadHighProfitProducts();
+        }
+
+        function sortHighProfitProducts(sortBy) {
+            highProfitSortBy = sortBy === "profit_rate" ? "profit_rate" : "total_profit";
+            document.getElementById("profit-sort-total").classList.toggle(
+                "active",
+                highProfitSortBy === "total_profit",
+            );
+            document.getElementById("profit-sort-rate").classList.toggle(
+                "active",
+                highProfitSortBy === "profit_rate",
+            );
+            loadHighProfitProducts();
+        }
+
+        function formatRenminbi(value) {
+            return `¥${Number(value || 0).toLocaleString("zh-CN", {
+                minimumFractionDigits: 2,
+                maximumFractionDigits: 2,
+            })}`;
+        }
+
+        function renderHighProfitRows(rows) {
+            if (!highProfitBody) return;
+            if (!Array.isArray(rows) || !rows.length) {
+                highProfitBody.innerHTML = '<tr><td class="empty-state" colspan="8">所选时间段没有盈利产品</td></tr>';
+                return;
+            }
+            highProfitBody.innerHTML = rows.map(row => {
+                const rate = Number(row.profit_rate || 0);
+                const rateClass = rate >= 30 ? "profit-rate-high" : "";
+                return `
+                    <tr>
+                        <td>${escapeHtml(row.product_id || "-")}</td>
+                        <td title="${escapeHtml(row.title || "")}">${escapeHtml(row.title || "-")}</td>
+                        <td>${escapeHtml(row.sites || "-")}</td>
+                        <td>${Number(row.total_quantity || 0).toLocaleString("zh-CN")}</td>
+                        <td>${formatRenminbi(row.total_income)}</td>
+                        <td class="profit-value">${formatRenminbi(row.total_profit)}</td>
+                        <td class="${rateClass}">${rate.toFixed(2)}%</td>
+                        <td>${escapeHtml(row.latest_order_time || "-")}</td>
+                    </tr>`;
+            }).join("");
+        }
+
+        async function loadHighProfitProducts() {
+            if (!highProfitBody || !loadHighProfitBtn) return;
+            if (profitDateFrom.value && profitDateTo.value
+                && profitDateFrom.value > profitDateTo.value) {
+                highProfitBody.innerHTML = '<tr><td class="empty-state" colspan="8">开始日期不能晚于结束日期</td></tr>';
+                return;
+            }
+            loadHighProfitBtn.disabled = true;
+            loadHighProfitBtn.textContent = "正在查询...";
+            highProfitBody.innerHTML = '<tr><td class="empty-state" colspan="8">正在汇总利润...</td></tr>';
+            const params = new URLSearchParams({
+                sort_by: highProfitSortBy,
+                sort_dir: "desc",
+                search: profitSearch.value.trim(),
+                date_from: profitDateFrom.value,
+                date_to: profitDateTo.value,
+                limit: "100",
+            });
+            try {
+                const response = await fetch(`/api/order-analysis/high-profits?${params}`, {
+                    cache: "no-store",
+                });
+                const payload = await response.json();
+                if (!response.ok || payload.status !== "success") {
+                    throw new Error(payload.message || `接口请求失败：${response.status}`);
+                }
+                const data = payload.data || {};
+                const summary = data.summary || {};
+                highProfitLoaded = true;
+                profitProductCount.textContent = Number(summary.profitable_products || 0).toLocaleString("zh-CN");
+                profitTotalIncome.textContent = formatRenminbi(summary.total_income);
+                profitTotalProfit.textContent = formatRenminbi(summary.total_profit);
+                profitOverallRate.textContent = `${Number(summary.profit_rate || 0).toFixed(2)}%`;
+                renderHighProfitRows(data.rows || []);
+            } catch (err) {
+                highProfitBody.innerHTML = `<tr><td class="empty-state" colspan="8">读取失败：${escapeHtml(err.message || err)}</td></tr>`;
+            } finally {
+                loadHighProfitBtn.disabled = false;
+                loadHighProfitBtn.textContent = "查询产品";
+            }
+        }
+
         function getDailyTaskPayload() {
             const minRatePercent = Number(document.getElementById("daily-task-min-rate").value || 0);
             return {
@@ -9166,7 +10684,7 @@
                         ${renderReputationRateCell("延误率", row["延误率"])}
                         ${renderReputationRateCell("取消率", row["取消率"])}
                         <td title="${escapeHtml(row["增加或减少"])}">${escapeHtml(row["增加或减少"])}</td>
-                        <td title="${escapeHtml(row["近七天变化率"])}">${escapeHtml(row["近七天变化率"])}</td>
+                        ${renderReputationTrafficChangeCell(row["增加或减少"], row["近七天变化率"])}
                         <td>
                             <span class="traffic-cell" data-tooltip="${escapeHtml(trafficTooltipText)}">
                                 <canvas class="traffic-chart" data-values="${escapeHtml(JSON.stringify(trafficValues))}"></canvas>
@@ -9234,8 +10752,10 @@
                         <td>${escapeHtml(row.first_detected_at || "-")}</td>
                         <td>${escapeHtml(row.last_detected_at || "-")}</td>
                         <td>
-                            <button class="secondary window-anomaly-login-action" data-login-window-id="${escapeHtml(row.window_id || "")}" type="button" onclick="startSingleShopAutoLogin('${encodeURIComponent(row.window_id || "")}', this)">重新检测</button>
-                            <button class="secondary" type="button" onclick="resolveWindowAnomaly('${encodeURIComponent(row.window_id || "")}')">已人工处理并移除</button>
+                            ${hasWorkbenchPermission("shop_status.execute") ? `
+                                <button class="secondary window-anomaly-login-action" data-login-window-id="${escapeHtml(row.window_id || "")}" type="button" onclick="startSingleShopAutoLogin('${encodeURIComponent(row.window_id || "")}', this)">重新检测</button>
+                                <button class="secondary" type="button" onclick="resolveWindowAnomaly('${encodeURIComponent(row.window_id || "")}')">已人工处理并移除</button>
+                            ` : "-"}
                         </td>
                     </tr>
                 `).join("");
@@ -9621,6 +11141,420 @@
             }
         }
 
+        async function requestAccessApi(url, options = {}) {
+            const response = await fetch(url, options);
+            const payload = await response.json();
+            if (!response.ok || payload.status !== "success") {
+                throw new Error(payload.message || `接口请求失败：${response.status}`);
+            }
+            return payload.data;
+        }
+
+        function accessPermissionLabel(permissionKey) {
+            for (const group of accessPermissionGroups) {
+                const permission = (group.permissions || []).find(item => item.key === permissionKey);
+                if (permission) return `${group.label}·${permission.label}`;
+            }
+            return permissionKey;
+        }
+
+        function renderAccessPermissionGrid() {
+            if (!accessPermissionGrid) return;
+            accessPermissionGrid.innerHTML = accessPermissionGroups.map(group => `
+                <div class="access-permission-group">
+                    <div class="access-permission-title">${escapeHtml(group.label)}</div>
+                    <div class="access-permission-options">
+                        ${(group.permissions || []).map(permission => `
+                            <label class="access-permission-option">
+                                <input class="access-permission-checkbox" type="checkbox" value="${escapeHtml(permission.key)}">
+                                <span>${escapeHtml(permission.label)}</span>
+                            </label>
+                        `).join("")}
+                    </div>
+                </div>
+            `).join("");
+        }
+
+        function renderAccessRoles() {
+            if (!accessRoleBody) return;
+            if (!accessRoles.length) {
+                accessRoleBody.innerHTML = '<tr><td class="empty-state" colspan="4">暂无角色</td></tr>';
+                return;
+            }
+            const canManage = hasWorkbenchPermission("access.manage");
+            accessRoleBody.innerHTML = accessRoles.map((role, index) => {
+                const permissions = Array.isArray(role.permissions) ? role.permissions : [];
+                const permissionSummary = permissions.includes("*")
+                    ? "全部权限"
+                    : permissions.map(accessPermissionLabel).join("、") || "未分配权限";
+                return `
+                    <tr>
+                        <td>
+                            <strong>${escapeHtml(role.role_name || role.role_key)}</strong>
+                            <span class="access-role-summary">${escapeHtml(role.description || role.role_key)}</span>
+                        </td>
+                        <td title="${escapeHtml(permissionSummary)}"><span class="access-role-summary">${escapeHtml(permissionSummary)}</span></td>
+                        <td>${escapeHtml(role.user_count || 0)}</td>
+                        <td>
+                            ${canManage ? `
+                                <div class="access-table-actions">
+                                    <button class="secondary" type="button" onclick="openAccessRoleEditor(${index})">编辑</button>
+                                    ${role.is_system ? "" : `<button class="danger" type="button" onclick="deleteAccessRole(${index})">删除</button>`}
+                                </div>
+                            ` : "-"}
+                        </td>
+                    </tr>
+                `;
+            }).join("");
+        }
+
+        function renderAccessUsers() {
+            if (!accessUserBody) return;
+            if (!accessUsers.length) {
+                accessUserBody.innerHTML = '<tr><td class="empty-state" colspan="5">暂无账号</td></tr>';
+                return;
+            }
+            const canManage = hasWorkbenchPermission("access.manage");
+            accessUserBody.innerHTML = accessUsers.map((user, index) => `
+                <tr>
+                    <td>
+                        <strong>${escapeHtml(user.display_name || user.username)}</strong>
+                        <span class="access-role-summary">${escapeHtml(user.username)}${user.email ? ` · ${escapeHtml(user.email)}` : ""}</span>
+                    </td>
+                    <td>${escapeHtml(user.department || "-")}</td>
+                    <td><span class="tag">${escapeHtml(user.role_name || user.role_key || "-")}</span></td>
+                    <td><span class="status-tag ${user.is_active ? "" : "fail"}">${user.is_active ? "启用" : "停用"}</span></td>
+                    <td>
+                        ${canManage ? `
+                            <div class="access-table-actions">
+                                <button class="secondary" type="button" onclick="openAccessUserEditor(${index})">编辑</button>
+                            </div>
+                        ` : "-"}
+                    </td>
+                </tr>
+            `).join("");
+        }
+
+        function renderAccessShopConfigs() {
+            if (!accessShopBody) return;
+            const keyword = (accessShopSearch?.value || "").trim().toLowerCase();
+            const rows = keyword
+                ? accessShopConfigs.filter(config => [
+                    config.shop_name,
+                    config.window_id,
+                    config.sites,
+                    config.salesperson,
+                    config.email,
+                    config.status,
+                ].some(value => String(value || "").toLowerCase().includes(keyword)))
+                : accessShopConfigs;
+            if (!rows.length) {
+                accessShopBody.innerHTML = `<tr><td class="empty-state" colspan="8">${keyword ? "没有匹配的店铺配置" : "暂无店铺配置"}</td></tr>`;
+                return;
+            }
+            const canManage = hasWorkbenchPermission("access.manage");
+            accessShopBody.innerHTML = rows.map(config => {
+                const configIndex = accessShopConfigs.indexOf(config);
+                const canEdit = canManage && Number(config.id || 0) > 0;
+                return `
+                    <tr>
+                        <td>${escapeHtml(config.sequence_no || "-")}</td>
+                        <td><strong>${escapeHtml(config.shop_name || "-")}</strong></td>
+                        <td>${escapeHtml(config.window_id || "-")}</td>
+                        <td>${escapeHtml(config.sites || "-")}</td>
+                        <td>${escapeHtml(config.salesperson || "-")}</td>
+                        <td>${escapeHtml(config.email || "-")}</td>
+                        <td><span class="tag">${escapeHtml(config.status || "正常")}</span></td>
+                        <td>
+                            ${canEdit ? `
+                                <div class="access-table-actions">
+                                    <button class="secondary" type="button" onclick="openAccessShopEditor(${configIndex})">编辑</button>
+                                    <button class="danger" type="button" onclick="deleteAccessShopConfig(${configIndex})">删除</button>
+                                </div>
+                            ` : "-"}
+                        </td>
+                    </tr>
+                `;
+            }).join("");
+        }
+
+        function renderAccessRoleOptions(selectedRoleKey = "") {
+            const select = document.getElementById("access-user-role");
+            if (!select) return;
+            select.innerHTML = accessRoles.map(role => `
+                <option value="${escapeHtml(role.role_key)}" ${role.role_key === selectedRoleKey ? "selected" : ""}>
+                    ${escapeHtml(role.role_name || role.role_key)}
+                </option>
+            `).join("");
+        }
+
+        async function loadAccessManagement(force = false) {
+            if (accessLoaded && !force) return;
+            if (accessRoleBody) accessRoleBody.innerHTML = '<tr><td class="empty-state" colspan="4">正在加载角色...</td></tr>';
+            if (accessUserBody) accessUserBody.innerHTML = '<tr><td class="empty-state" colspan="5">正在加载账号...</td></tr>';
+            if (accessShopBody) accessShopBody.innerHTML = '<tr><td class="empty-state" colspan="8">正在加载店铺配置...</td></tr>';
+            try {
+                const [catalog, roles, users, shopConfigs] = await Promise.all([
+                    requestAccessApi("/api/access/catalog"),
+                    requestAccessApi("/api/access/roles"),
+                    requestAccessApi("/api/access/users"),
+                    requestAccessApi("/api/access/browser-configs"),
+                ]);
+                accessPermissionGroups = catalog?.groups || [];
+                accessRoles = Array.isArray(roles) ? roles : [];
+                accessUsers = Array.isArray(users) ? users : [];
+                accessShopConfigs = Array.isArray(shopConfigs) ? shopConfigs : [];
+                accessLoaded = true;
+                renderAccessPermissionGrid();
+                renderAccessRoles();
+                renderAccessUsers();
+                renderAccessShopConfigs();
+                renderAccessRoleOptions();
+                applyWorkbenchPermissions();
+            } catch (error) {
+                if (accessRoleBody) accessRoleBody.innerHTML = `<tr><td class="empty-state" colspan="4">加载失败：${escapeHtml(error.message || error)}</td></tr>`;
+                if (accessUserBody) accessUserBody.innerHTML = `<tr><td class="empty-state" colspan="5">加载失败：${escapeHtml(error.message || error)}</td></tr>`;
+                if (accessShopBody) accessShopBody.innerHTML = `<tr><td class="empty-state" colspan="8">加载失败：${escapeHtml(error.message || error)}</td></tr>`;
+            }
+        }
+
+        function openAccessRoleEditor(roleIndex = -1) {
+            if (!hasWorkbenchPermission("access.manage") || !accessRoleForm) return;
+            const role = roleIndex >= 0 ? accessRoles[roleIndex] : null;
+            document.getElementById("access-role-key").value = role?.role_key || "";
+            document.getElementById("access-role-name").value = role?.role_name || "";
+            document.getElementById("access-role-description").value = role?.description || "";
+            const selectedPermissions = new Set(role?.permissions || []);
+            document.querySelectorAll(".access-permission-checkbox").forEach(checkbox => {
+                checkbox.checked = selectedPermissions.has("*") || selectedPermissions.has(checkbox.value);
+                checkbox.disabled = role?.role_key === "super_admin";
+            });
+            accessRoleForm.hidden = false;
+            document.getElementById("access-role-name").focus();
+        }
+
+        function closeAccessRoleEditor() {
+            if (accessRoleForm) accessRoleForm.hidden = true;
+        }
+
+        async function deleteAccessRole(roleIndex) {
+            const role = accessRoles[roleIndex];
+            if (!role || role.is_system || !window.confirm(`确定删除角色“${role.role_name}”吗？`)) return;
+            try {
+                await requestAccessApi(`/api/access/roles/${encodeURIComponent(role.role_key)}`, {method: "DELETE"});
+                accessLoaded = false;
+                await loadAccessManagement(true);
+            } catch (error) {
+                alert(`删除角色失败：${error.message || error}`);
+            }
+        }
+
+        function openAccessUserEditor(userIndex = -1) {
+            if (!hasWorkbenchPermission("access.manage") || !accessUserForm) return;
+            const user = userIndex >= 0 ? accessUsers[userIndex] : null;
+            document.getElementById("access-user-id").value = user?.id || "";
+            const usernameInput = document.getElementById("access-username");
+            usernameInput.value = user?.username || "";
+            usernameInput.readOnly = Boolean(user);
+            document.getElementById("access-display-name").value = user?.display_name || "";
+            document.getElementById("access-department").value = user?.department || "";
+            document.getElementById("access-email").value = user?.email || "";
+            document.getElementById("access-user-password").value = "";
+            document.getElementById("access-user-password").required = !user;
+            document.getElementById("access-user-active").checked = user ? Boolean(user.is_active) : true;
+            renderAccessRoleOptions(user?.role_key || "viewer");
+            accessUserForm.hidden = false;
+            usernameInput.focus();
+        }
+
+        function closeAccessUserEditor() {
+            if (accessUserForm) accessUserForm.hidden = true;
+        }
+
+        function openAccessShopEditor(configIndex = -1) {
+            if (!hasWorkbenchPermission("access.manage") || !accessShopForm) return;
+            const config = configIndex >= 0 ? accessShopConfigs[configIndex] : null;
+            document.getElementById("access-shop-id").value = config?.id || "";
+            document.getElementById("access-shop-name").value = config?.shop_name || "";
+            document.getElementById("access-shop-window-id").value = config?.window_id || "";
+            document.getElementById("access-shop-sites").value = config?.sites || "";
+            document.getElementById("access-shop-sequence").value = config?.sequence_no || "";
+            document.getElementById("access-shop-salesperson").value = config?.salesperson || "";
+            document.getElementById("access-shop-email").value = config?.email || "";
+            document.getElementById("access-shop-status").value = config?.status || "";
+            accessShopForm.hidden = false;
+            document.getElementById("access-shop-name").focus();
+        }
+
+        function closeAccessShopEditor() {
+            if (accessShopForm) accessShopForm.hidden = true;
+        }
+
+        async function deleteAccessShopConfig(configIndex) {
+            const config = accessShopConfigs[configIndex];
+            if (!config || !config.id || !window.confirm(`确定删除店铺“${config.shop_name}”的配置吗？`)) return;
+            try {
+                await requestAccessApi(`/api/access/browser-configs/${config.id}`, {method: "DELETE"});
+                closeAccessShopEditor();
+                accessLoaded = false;
+                collectionOptionsLoaded = false;
+                await loadAccessManagement(true);
+            } catch (error) {
+                alert(`删除店铺配置失败：${error.message || error}`);
+            }
+        }
+
+        accessShopSearch?.addEventListener("input", renderAccessShopConfigs);
+
+        accessRoleForm?.addEventListener("submit", async event => {
+            event.preventDefault();
+            const roleKey = document.getElementById("access-role-key").value;
+            const data = {
+                role_name: document.getElementById("access-role-name").value.trim(),
+                description: document.getElementById("access-role-description").value.trim(),
+                permissions: Array.from(
+                    document.querySelectorAll(".access-permission-checkbox:checked"),
+                    checkbox => checkbox.value,
+                ),
+            };
+            const saveButton = document.getElementById("save-access-role-btn");
+            saveButton.disabled = true;
+            try {
+                await requestAccessApi(
+                    roleKey ? `/api/access/roles/${encodeURIComponent(roleKey)}` : "/api/access/roles",
+                    {
+                        method: roleKey ? "PUT" : "POST",
+                        headers: {"Content-Type": "application/json"},
+                        body: JSON.stringify(data),
+                    },
+                );
+                closeAccessRoleEditor();
+                accessLoaded = false;
+                await loadAccessManagement(true);
+            } catch (error) {
+                alert(`保存角色失败：${error.message || error}`);
+            } finally {
+                saveButton.disabled = false;
+            }
+        });
+
+        accessUserForm?.addEventListener("submit", async event => {
+            event.preventDefault();
+            const userId = document.getElementById("access-user-id").value;
+            const password = document.getElementById("access-user-password").value;
+            const data = {
+                username: document.getElementById("access-username").value.trim(),
+                display_name: document.getElementById("access-display-name").value.trim(),
+                department: document.getElementById("access-department").value.trim(),
+                email: document.getElementById("access-email").value.trim(),
+                role_key: document.getElementById("access-user-role").value,
+                is_active: document.getElementById("access-user-active").checked,
+            };
+            if (!userId) data.password = password;
+            const saveButton = document.getElementById("save-access-user-btn");
+            saveButton.disabled = true;
+            try {
+                await requestAccessApi(
+                    userId ? `/api/access/users/${userId}` : "/api/access/users",
+                    {
+                        method: userId ? "PUT" : "POST",
+                        headers: {"Content-Type": "application/json"},
+                        body: JSON.stringify(data),
+                    },
+                );
+                if (userId && password) {
+                    await requestAccessApi(`/api/access/users/${userId}/password`, {
+                        method: "POST",
+                        headers: {"Content-Type": "application/json"},
+                        body: JSON.stringify({password}),
+                    });
+                }
+                if (Number(userId || 0) === Number(currentWorkbenchUser.id || 0)) {
+                    window.location.reload();
+                    return;
+                }
+                closeAccessUserEditor();
+                accessLoaded = false;
+                await loadAccessManagement(true);
+            } catch (error) {
+                alert(`保存账号失败：${error.message || error}`);
+            } finally {
+                saveButton.disabled = false;
+            }
+        });
+
+        accessShopForm?.addEventListener("submit", async event => {
+            event.preventDefault();
+            const configId = document.getElementById("access-shop-id").value;
+            const data = {
+                shop_name: document.getElementById("access-shop-name").value.trim(),
+                window_id: document.getElementById("access-shop-window-id").value.trim(),
+                sites: document.getElementById("access-shop-sites").value.trim(),
+                sequence_no: document.getElementById("access-shop-sequence").value.trim(),
+                salesperson: document.getElementById("access-shop-salesperson").value.trim(),
+                email: document.getElementById("access-shop-email").value.trim(),
+                status: document.getElementById("access-shop-status").value.trim(),
+            };
+            const saveButton = document.getElementById("save-access-shop-btn");
+            saveButton.disabled = true;
+            try {
+                await requestAccessApi(
+                    configId ? `/api/access/browser-configs/${configId}` : "/api/access/browser-configs",
+                    {
+                        method: configId ? "PUT" : "POST",
+                        headers: {"Content-Type": "application/json"},
+                        body: JSON.stringify(data),
+                    },
+                );
+                closeAccessShopEditor();
+                accessLoaded = false;
+                collectionOptionsLoaded = false;
+                await loadAccessManagement(true);
+            } catch (error) {
+                alert(`保存店铺配置失败：${error.message || error}`);
+            } finally {
+                saveButton.disabled = false;
+            }
+        });
+
+        appealPhraseForm?.addEventListener("submit", async event => {
+            event.preventDefault();
+            const phraseId = Number(appealPhraseId.value || 0);
+            const content = appealPhraseContent.value.trim();
+            if (!content) {
+                alert("话术内容不能为空");
+                appealPhraseContent.focus();
+                return;
+            }
+            const saveButton = document.getElementById("save-appeal-phrase-btn");
+            saveButton.disabled = true;
+            try {
+                const response = await fetch(
+                    phraseId ? `/api/appeal-phrases/${phraseId}` : "/api/appeal-phrases",
+                    {
+                        method: phraseId ? "PUT" : "POST",
+                        headers: {"Content-Type": "application/json"},
+                        body: JSON.stringify({
+                            appeal_type: appealPhraseType.value,
+                            content,
+                            is_active: appealPhraseActive.checked,
+                        }),
+                    },
+                );
+                const payload = await response.json();
+                if (!response.ok || payload.status !== "success") {
+                    throw new Error(payload.message || `接口请求失败：${response.status}`);
+                }
+                closeAppealPhraseEditor();
+                appealPhrasesLoaded = false;
+                await loadAppealPhrases(true);
+            } catch (error) {
+                alert(`保存话术失败：${error.message || error}`);
+            } finally {
+                saveButton.disabled = false;
+            }
+        });
+
         async function stopTask() {
             if (!activeAppealTaskId || appealStopRequested) {
                 return;
@@ -9651,6 +11585,11 @@
                 setStatus("任务运行中", "running");
                 appendLog(`>>> 终结失败：${err.message || err}\n`);
             }
+        }
+
+        applyWorkbenchPermissions();
+        if (hasWorkbenchPermission("appeal.view")) {
+            loadAppealPhrases();
         }
 
     </script>

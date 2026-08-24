@@ -36,19 +36,25 @@ class _Connection:
 
 
 class ReputationSortingTests(unittest.TestCase):
-    def test_latest_reputation_is_sorted_by_total_traffic(self):
+    def test_latest_reputation_is_sorted_by_shop_total_traffic_across_sites(self):
         rows = [
             {
-                "店铺名": "高单量低流量店",
+                "店铺名": "多站点店铺",
                 "站点": "墨西哥",
-                "总单量": "999",
-                "一周流量趋势": "[1, 2, 3]",
+                "总单量": "10",
+                "一周流量趋势": "[60, 60]",
             },
             {
-                "店铺名": "低单量高流量店",
+                "店铺名": "单站点店铺",
                 "站点": "巴西",
-                "总单量": "1",
-                "一周流量趋势": "[100, 200, 300]",
+                "总单量": "999",
+                "一周流量趋势": "[200]",
+            },
+            {
+                "店铺名": "多站点店铺",
+                "站点": "阿根廷",
+                "总单量": "20",
+                "一周流量趋势": "[50, 50]",
             },
         ]
         with (
@@ -62,8 +68,12 @@ class ReputationSortingTests(unittest.TestCase):
             data = bit_mysql.get_latest_reputation_info()
 
         self.assertEqual(
-            [row["店铺名"] for row in data["rows"]],
-            ["低单量高流量店", "高单量低流量店"],
+            [(row["店铺名"], row["站点"]) for row in data["rows"]],
+            [
+                ("多站点店铺", "墨西哥"),
+                ("多站点店铺", "阿根廷"),
+                ("单站点店铺", "巴西"),
+            ],
         )
 
     def test_latest_collection_task_status_keeps_latest_site_result(self):

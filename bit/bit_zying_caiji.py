@@ -39,7 +39,10 @@ from selenium.webdriver.common.by import By
 from selenium.webdriver.support.wait import WebDriverWait
 
 from bit.bit_api import openBrowser, releaseBrowserLease
-from bit.bit_mysql import insert_zying_product_info
+from bit.bit_mysql import (
+    get_existing_zying_product_ids,
+    insert_zying_product_info,
+)
 
 
 DEFAULT_ZYING_WINDOW_ID = os.environ.get(
@@ -1358,7 +1361,66 @@ def _record_key(record):
     )
 
 
-def _persist_zying_page(page_records, page_number, page_count):
+def _skip_existing_zying_records(
+    records,
+    existing_product_id_reader,
+    known_existing_ids=None,
+    checked_product_ids=None,
+):
+    """按产品编号过滤数据库已存在商品，避免继续打开详情页。"""
+    known_existing_ids = (
+        known_existing_ids if known_existing_ids is not None else set()
+    )
+    checked_product_ids = (
+        checked_product_ids if checked_product_ids is not None else set()
+    )
+    product_ids = {
+        _clean_text(record.get("product_id"))
+        for record in (records or ())
+        if _clean_text(record.get("product_id"))
+    }
+    unchecked_ids = product_ids - checked_product_ids
+    if unchecked_ids:
+        existing_ids = existing_product_id_reader(sorted(unchecked_ids)) or ()
+        checked_product_ids.update(unchecked_ids)
+        known_existing_ids.update(
+            _clean_text(product_id)
+            for product_id in existing_ids
+            if _clean_text(product_id)
+        )
+    filtered_records = [
+        record
+        for record in (records or ())
+        if not _clean_text(record.get("product_id"))
+        or _clean_text(record.get("product_id")) not in known_existing_ids
+    ]
+    return filtered_records, len(records or ()) - len(filtered_records)
+
+
+def _deduplicate_zying_records(records, previously_seen=None):
+    """同一批及先前页面中的产品编号只保留第一条。"""
+    previously_seen = previously_seen or set()
+    batch_seen = set()
+    filtered_records = []
+    for record in records or ():
+        product_id = _clean_text(record.get("product_id"))
+        if not product_id:
+            filtered_records.append(record)
+            continue
+        key = ("id", product_id)
+        if key in previously_seen or key in batch_seen:
+            continue
+        batch_seen.add(key)
+        filtered_records.append(record)
+    return filtered_records, len(records or ()) - len(filtered_records)
+
+
+def _persist_zying_page(
+    page_records,
+    page_number,
+    page_count,
+    product_writer=None,
+):
     """同步提交单页数据；只有数据库事务提交成功后，采集器才会继续翻页。"""
     if not page_records:
         print(
@@ -1372,7 +1434,8 @@ def _persist_zying_page(page_records, page_number, page_count):
         f"({len(page_records)} 条)",
         flush=True,
     )
-    inserted_count = insert_zying_product_info(page_records)
+    writer = product_writer or insert_zying_product_info
+    inserted_count = writer(page_records)
     print(
         f"智赢第 {page_number}/{page_count} 页数据库提交完成："
         f"{inserted_count} 条；后续即使中断，本页数据仍已保留",
@@ -1386,6 +1449,9 @@ def collect_zying_products(
     window_id=DEFAULT_ZYING_WINDOW_ID,
     start_page=DEFAULT_ZYING_START_PAGE,
     category=None,
+    product_writer=None,
+    existing_product_id_reader=None,
+    return_summary=False,
 ):
     """采集智赢产品；category 指智赢页面自身的产品分类。"""
     requested_pages = DEFAULT_ZYING_PAGE_COUNT if number is None else number
@@ -1419,10 +1485,18 @@ def collect_zying_products(
     wait = WebDriverWait(driver, 30)
     records = []
     seen = set()
+    known_existing_ids = set()
+    checked_product_ids = set()
     inserted_count = 0
     skipped_count = 0
+    skipped_existing_count = 0
+    duplicate_count = 0
     category_selection = None
     last_committed_page = start_page - 1
+    product_writer = product_writer or insert_zying_product_info
+    existing_product_id_reader = (
+        existing_product_id_reader or get_existing_zying_product_ids
+    )
 
     try:
         driver.get(ZYING_PRODUCT_URL)
@@ -1457,17 +1531,63 @@ def collect_zying_products(
                 extract_product_record(driver, title_element, page_number)
                 for title_element in title_elements
             ]
-            listed_count = len(extracted_records)
+            extracted_records, skipped_before_resolve = _skip_existing_zying_records(
+                extracted_records,
+                existing_product_id_reader,
+                known_existing_ids,
+                checked_product_ids,
+            )
+            skipped_existing_count += skipped_before_resolve
             _resolve_product_ids(token, extracted_records)
+            extracted_records, skipped_after_resolve = _skip_existing_zying_records(
+                extracted_records,
+                existing_product_id_reader,
+                known_existing_ids,
+                checked_product_ids,
+            )
+            skipped_existing_count += skipped_after_resolve
+            extracted_records, page_duplicate_count = _deduplicate_zying_records(
+                extracted_records,
+                seen,
+            )
+            duplicate_count += page_duplicate_count
+            page_existing_count = skipped_before_resolve + skipped_after_resolve
+            if page_existing_count or page_duplicate_count:
+                print(
+                    f"智赢第 {page_number}/{page_count} 页在详情采集前已跳过 "
+                    f"数据库已有产品 {page_existing_count} 条，"
+                    f"重复产品 {page_duplicate_count} 条",
+                    flush=True,
+                )
+            detail_candidate_count = len(extracted_records)
             extracted_records = _collect_clicked_product_details(
                 driver,
                 extracted_records,
                 page_number=page_number,
                 page_count=page_count,
             )
-            page_skipped_count = listed_count - len(extracted_records)
+            page_skipped_count = detail_candidate_count - len(extracted_records)
             skipped_count += page_skipped_count
             _enrich_product_records(driver, extracted_records, token=token)
+            extracted_records, skipped_after_enrich = _skip_existing_zying_records(
+                extracted_records,
+                existing_product_id_reader,
+                known_existing_ids,
+                checked_product_ids,
+            )
+            skipped_existing_count += skipped_after_enrich
+            extracted_records, duplicates_after_enrich = _deduplicate_zying_records(
+                extracted_records,
+                seen,
+            )
+            duplicate_count += duplicates_after_enrich
+            if skipped_after_enrich or duplicates_after_enrich:
+                print(
+                    f"智赢第 {page_number}/{page_count} 页详情补全后又跳过 "
+                    f"数据库已有产品 {skipped_after_enrich} 条，"
+                    f"重复产品 {duplicates_after_enrich} 条",
+                    flush=True,
+                )
             for record in extracted_records:
                 _attach_zying_category(record, category_selection)
 
@@ -1484,6 +1604,7 @@ def collect_zying_products(
                 page_records,
                 page_number,
                 page_count,
+                product_writer=product_writer,
             )
             inserted_count += page_inserted_count
             last_committed_page = page_number
@@ -1511,10 +1632,27 @@ def collect_zying_products(
 
     print(
         f"智赢产品采集完成，共 {len(records)} 条，详情失败跳过 {skipped_count} 条，"
+        f"已有产品跳过 {skipped_existing_count} 条，页面重复跳过 {duplicate_count} 条，"
         f"入库 {inserted_count} 条，"
         f"耗时 {int(time.time() - started_at)} 秒",
         flush=True,
     )
+    if return_summary:
+        return {
+            "records": records,
+            "collected_count": len(records),
+            "inserted_count": inserted_count,
+            "skipped_existing_count": skipped_existing_count,
+            "duplicate_count": duplicate_count,
+            "detail_failed_count": skipped_count,
+            "start_page": start_page,
+            "end_page": last_committed_page,
+            "category": (
+                category_selection.get("category_path", "")
+                if category_selection
+                else ""
+            ),
+        }
     return records
 
 

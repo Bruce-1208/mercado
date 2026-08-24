@@ -160,12 +160,18 @@ def test_db_api_browser_config_uses_remote_endpoints(monkeypatch):
     bit_db_api.list_bit_browser_configs(include_ignored=False)
     bit_db_api.get_bit_browser_config(shop_name="测试店铺")
     bit_db_api.upsert_bit_browser_configs([{"window_id": "1", "shop_name": "店铺"}], replace=True)
+    bit_db_api.create_bit_browser_config({"window_id": "2", "shop_name": "新增店铺"})
+    bit_db_api.update_bit_browser_config(7, {"window_id": "3", "shop_name": "修改店铺"})
+    bit_db_api.delete_bit_browser_config(7)
 
     assert calls[0][0:2] == ("GET", "/api/db/browser-configs")
     assert calls[0][2]["params"]["include_ignored"] == "0"
     assert calls[1][0:2] == ("GET", "/api/db/browser-configs/lookup")
     assert calls[2][0:2] == ("POST", "/api/db/browser-configs/bulk")
     assert calls[2][2]["json"]["replace"] is True
+    assert calls[3][0:2] == ("POST", "/api/db/browser-configs")
+    assert calls[4][0:2] == ("PUT", "/api/db/browser-configs/7")
+    assert calls[5][0:2] == ("DELETE", "/api/db/browser-configs/7")
 
 
 def test_browser_config_database_routes(monkeypatch):
@@ -191,6 +197,21 @@ def test_browser_config_database_routes(monkeypatch):
             "count": len(records)
         },
     )
+    monkeypatch.setattr(
+        bit_interface,
+        "db_create_bit_browser_config",
+        lambda record: captured.update(created=record) or {"id": 7},
+    )
+    monkeypatch.setattr(
+        bit_interface,
+        "db_update_bit_browser_config",
+        lambda config_id, record: captured.update(updated=(config_id, record)) or {"id": config_id},
+    )
+    monkeypatch.setattr(
+        bit_interface,
+        "db_delete_bit_browser_config",
+        lambda config_id: captured.update(deleted=config_id) or {"id": config_id},
+    )
     client = bit_interface.app.test_client()
 
     list_response = client.get("/api/db/browser-configs?include_ignored=0")
@@ -202,11 +223,26 @@ def test_browser_config_database_routes(monkeypatch):
             "replace": True,
         },
     )
+    create_response = client.post(
+        "/api/db/browser-configs",
+        json={"window_id": "window-2", "shop_name": "新增店铺"},
+    )
+    update_response = client.put(
+        "/api/db/browser-configs/7",
+        json={"window_id": "window-3", "shop_name": "修改店铺"},
+    )
+    delete_response = client.delete("/api/db/browser-configs/7")
 
     assert list_response.status_code == 200
     assert lookup_response.get_json()["data"]["shop_name"] == "测试店铺"
     assert write_response.status_code == 200
     assert captured["replace"] is True
+    assert create_response.get_json()["data"] == {"id": 7}
+    assert captured["created"]["shop_name"] == "新增店铺"
+    assert update_response.status_code == 200
+    assert captured["updated"][0] == 7
+    assert delete_response.status_code == 200
+    assert captured["deleted"] == 7
 
 
 def test_runtime_modules_do_not_read_bit_config_excel_directly():
