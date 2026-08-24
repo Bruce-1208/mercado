@@ -53,6 +53,45 @@ def test_build_latest_delay_appeal_plan_filters_and_sorts(monkeypatch):
     assert plan[0]["sites"][0]["rate"] == pytest.approx(0.12)
 
 
+def test_reputation_appeal_plan_top_n_zero_keeps_every_affected_shop(monkeypatch):
+    rows = [
+        {"店铺名": f"店铺{index:02d}", "站点": "墨西哥", "投诉率": "1%"}
+        for index in range(35)
+    ]
+    monkeypatch.setattr(
+        bit_daily_task,
+        "get_latest_reputation_info",
+        lambda: {"rows": rows},
+    )
+
+    plan = bit_daily_task.build_latest_reputation_appeal_plan(
+        "投诉",
+        top_n=0,
+        only_active=False,
+    )
+
+    assert len(plan) == 35
+
+
+def test_infraction_appeal_plan_top_n_zero_keeps_every_affected_shop(monkeypatch):
+    summary = [
+        {"店铺名": f"店铺{index:02d}", "站点": "墨西哥", "总数": 1}
+        for index in range(35)
+    ]
+    monkeypatch.setattr(
+        bit_daily_task,
+        "get_latest_infraction_info",
+        lambda _recent_days: {"latest_submit_time": "2026-08-23 10:00:00", "summary": summary},
+    )
+
+    plan = bit_daily_task.build_latest_infraction_appeal_plan(
+        top_n=0,
+        only_active=False,
+    )
+
+    assert len(plan) == 35
+
+
 def test_build_latest_cancellation_plan_only_keeps_positive_rates(monkeypatch):
     monkeypatch.setattr(
         bit_daily_task,

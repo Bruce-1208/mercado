@@ -139,7 +139,7 @@ class CollectionOrchestrationTests(unittest.TestCase):
                     [("id-2", "店铺乙", "", "巴西", "", "", "")],
                 )
 
-    def test_all_ai_appeal_types_run_ten_rounds_with_fifteen_workers(self):
+    def test_infraction_focused_appeal_sequence_runs_ten_rounds(self):
         started_at = bit_main.datetime.now()
         task_lock = mock.Mock()
         task_lock.acquired = True
@@ -171,13 +171,76 @@ class CollectionOrchestrationTests(unittest.TestCase):
             result = bit_main._run_ai_appeal_loop(started_at)
 
         enabled.assert_called_once_with("BIT_ENABLE_AI_APPEAL_LOOP", True)
-        expected_round = list(bit_main.MAIN_APPEAL_TYPES)
+        expected_round = [
+            appeal_type
+            for _step_key, appeal_type in bit_main.MAIN_APPEAL_SEQUENCE
+        ]
         self.assertEqual([appeal_type for appeal_type, _kwargs in calls], expected_round * 10)
-        self.assertEqual(len(calls), 40)
+        self.assertEqual(len(calls), 70)
+        self.assertEqual(
+            sum(
+                appeal_type == bit_main.bit_daily_task.APPEAL_TYPE_INFRACTION
+                for appeal_type, _kwargs in calls
+            ),
+            40,
+        )
         self.assertTrue(all(kwargs["max_workers"] == 15 for _type, kwargs in calls))
+        self.assertTrue(all(kwargs["top_n"] == 0 for _type, kwargs in calls))
         self.assertTrue(all(kwargs["_task_lock"] is task_lock for _type, kwargs in calls))
         self.assertEqual(result["round_count"], 10)
-        self.assertEqual(result["appeal_types"], expected_round)
+        self.assertEqual(result["appeal_types"], list(bit_main.MAIN_APPEAL_TYPES))
+        self.assertEqual(result["appeal_sequence"], expected_round)
+        task_lock.release.assert_called_once_with()
+
+    def test_infraction_still_runs_after_reputation_appeal_failure(self):
+        started_at = bit_main.datetime.now()
+        task_lock = mock.Mock()
+        calls = []
+
+        def run_once(appeal_type, **_kwargs):
+            calls.append(appeal_type)
+            if appeal_type == bit_main.bit_daily_task.APPEAL_TYPE_DELAY:
+                raise RuntimeError("延误申诉失败")
+            return {"ok": True}
+
+        with (
+            mock.patch.object(
+                bit_main.bit_daily_task,
+                "acquire_daily_task_lock",
+                return_value=task_lock,
+            ),
+            mock.patch.object(
+                bit_main.bit_daily_task,
+                "run_ai_appeal_once",
+                side_effect=run_once,
+            ),
+            mock.patch.dict(
+                "os.environ",
+                {
+                    "BIT_DAILY_APPEAL_ROUNDS": "1",
+                    "BIT_DAILY_ROUND_INTERVAL": "0",
+                },
+                clear=True,
+            ),
+        ):
+            result = bit_main._run_ai_appeal_loop(started_at)
+
+        expected_round = [
+            appeal_type
+            for _step_key, appeal_type in bit_main.MAIN_APPEAL_SEQUENCE
+        ]
+        self.assertEqual(calls, expected_round)
+        self.assertEqual(
+            result["rounds"][0]["errors"]["delay"],
+            {
+                "appeal_type": bit_main.bit_daily_task.APPEAL_TYPE_DELAY,
+                "error": "延误申诉失败",
+            },
+        )
+        self.assertIn(
+            "after_delay_infraction",
+            result["rounds"][0]["results"],
+        )
         task_lock.release.assert_called_once_with()
 
     def test_main_loop_waits_two_hours_after_complete_chain(self):
@@ -194,6 +257,42 @@ class CollectionOrchestrationTests(unittest.TestCase):
         self.assertEqual(result, [{"cycle": 1}, {"cycle": 2}])
         self.assertEqual(run_chain.call_count, 2)
         sleep.assert_called_once_with(2 * 60 * 60)
+
+    def test_order_print_runs_at_most_once_per_24_hours_across_state_reloads(self):
+        first_started_at = 1_000_000
+        task_lock = mock.Mock()
+        print_summary = {"printed": 2, "no_orders": 3, "failed": 0}
+
+        with tempfile.TemporaryDirectory() as directory:
+            state_path = Path(directory) / "order-print-state.json"
+            with (
+                mock.patch.object(bit_main, "ORDER_PRINT_STATE_PATH", state_path),
+                mock.patch.object(
+                    bit_main.bit_print,
+                    "acquire_order_print_lock",
+                    return_value=task_lock,
+                ) as acquire_lock,
+                mock.patch.object(
+                    bit_main.bit_print,
+                    "print_orders_all",
+                    return_value=print_summary,
+                ) as print_orders,
+            ):
+                first = bit_main._run_order_print_if_due(now=first_started_at)
+                within_24_hours = bit_main._run_order_print_if_due(
+                    now=first_started_at + bit_main.ORDER_PRINT_INTERVAL_SECONDS - 1
+                )
+                at_24_hours = bit_main._run_order_print_if_due(
+                    now=first_started_at + bit_main.ORDER_PRINT_INTERVAL_SECONDS
+                )
+
+        self.assertEqual(first["status"], "completed")
+        self.assertEqual(within_24_hours["reason"], "within_24_hours")
+        self.assertEqual(within_24_hours["wait_seconds"], 1)
+        self.assertEqual(at_24_hours["status"], "completed")
+        self.assertEqual(print_orders.call_count, 2)
+        self.assertEqual(acquire_lock.call_count, 2)
+        self.assertEqual(task_lock.release.call_count, 2)
 
     def test_ai_appeal_round_limit_stops_after_twenty_without_final_sleep(self):
         with (
@@ -217,6 +316,11 @@ class CollectionOrchestrationTests(unittest.TestCase):
 
         with (
             mock.patch.object(bit_main, "InterProcessLock", return_value=process_lock),
+            mock.patch.object(
+                bit_main,
+                "_run_order_print_if_due",
+                side_effect=lambda: events.append("order_print") or {"status": "completed"},
+            ),
             mock.patch.object(
                 bit_main.bit_reputation_info,
                 "main",
@@ -243,7 +347,11 @@ class CollectionOrchestrationTests(unittest.TestCase):
         ):
             result = bit_main.run_infraction_reputation_then_appeal()
 
-        self.assertEqual(events, ["infraction", ("sleep", 240), "reputation", "appeal"])
+        self.assertEqual(
+            events,
+            ["order_print", "infraction", ("sleep", 240), "reputation", "appeal"],
+        )
+        self.assertEqual(result["order_print"], {"status": "completed"})
         self.assertEqual(result["ai_appeal"], {"ok": True})
         self.assertEqual(reputation_main.call_args.kwargs["max_workers"], 10)
         self.assertEqual(infraction_main.call_args.kwargs["max_workers"], 10)
@@ -293,6 +401,11 @@ class CollectionOrchestrationTests(unittest.TestCase):
 
         with (
             mock.patch.object(bit_main, "InterProcessLock", return_value=process_lock),
+            mock.patch.object(
+                bit_main,
+                "_run_order_print_if_due",
+                return_value={"status": "skipped", "reason": "within_24_hours"},
+            ),
             mock.patch.object(
                 bit_main.bit_infractions_info,
                 "main",

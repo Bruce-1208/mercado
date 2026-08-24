@@ -767,6 +767,42 @@ def is_ai_frame_info(info):
     return any(marker in text for marker in AI_FRAME_MARKERS)
 
 
+def find_frames_including_shadow_dom(driver):
+    """返回当前文档及所有开放 Shadow Root 中的 iframe。
+
+    2026-08 版 seller-assistant loader 会把 ``#sa-assistant-chat`` 和真正的
+    Maxwell iframe 渲染进 ``#sof-seller-assistant-frm-host`` 的 Shadow Root。
+    Selenium 的普通 ``find_elements`` 和 ``document.querySelectorAll`` 都不会穿透
+    Shadow DOM，因此必须显式递归开放的 Shadow Root。
+    """
+    try:
+        return driver.execute_script(
+            """
+            function deepElements(root = document) {
+                const out = [];
+                const walk = (node) => {
+                    const elements = node.querySelectorAll ? Array.from(node.querySelectorAll('*')) : [];
+                    for (const el of elements) {
+                        out.push(el);
+                        if (el.shadowRoot) walk(el.shadowRoot);
+                    }
+                };
+                walk(root);
+                return out;
+            }
+            return deepElements(document).filter((el) =>
+                String(el.tagName || '').toUpperCase() === 'IFRAME'
+            );
+            """
+        ) or []
+    except Exception:
+        # 旧浏览器或测试替身不支持 execute_script 时保留原定位方式。
+        try:
+            return driver.find_elements(By.TAG_NAME, "iframe")
+        except Exception:
+            return []
+
+
 def classify_ai_chat_variant(state):
     """根据页面探测结果区分新版内嵌助手和旧版 iframe 助手。"""
     state = state or {}
@@ -830,11 +866,14 @@ def get_ai_chat_dom_state(driver):
                 : null;
             const rootClass = root ? String(root.className || '') : '';
             const ariaExpanded = opener ? (opener.getAttribute('aria-expanded') || '') : '';
+            const rootClasses = rootClass.split(/\\s+/).filter(Boolean);
             const inlineOpen = !!inlineInput || ariaExpanded === 'true'
-                || (!!root && visible(root) && !rootClass.split(/\\s+/).includes('minimized'));
+                || (!!root && rootClasses.includes('show') && !rootClasses.includes('minimized'));
 
-            const legacyFrames = Array.from(document.querySelectorAll('iframe')).filter((frame) => {
-                if (!visible(frame)) return false;
+            // 新版 loader 把 Maxwell iframe 放在开放的 Shadow Root 中，必须从 all
+            // 里取 iframe；document.querySelectorAll('iframe') 只能看到 Hotjar 等顶层 frame。
+            const aiFrames = all.filter((frame) => {
+                if (String(frame.tagName || '').toUpperCase() !== 'IFRAME') return false;
                 const text = [
                     frame.getAttribute('src') || '',
                     frame.getAttribute('title') || '',
@@ -844,6 +883,7 @@ def get_ai_chat_dom_state(driver):
                 ].join(' ').toLowerCase();
                 return frameMarkers.some((marker) => text.includes(String(marker).toLowerCase()));
             });
+            const visibleAiFrames = aiFrames.filter((frame) => visible(frame));
 
             return {
                 inline_shell: !!root || !!opener || all.some((el) =>
@@ -853,7 +893,14 @@ def get_ai_chat_dom_state(driver):
                 inline_has_input: !!inlineInput,
                 inline_root_class: rootClass,
                 inline_aria_expanded: ariaExpanded,
-                legacy_frame_count: legacyFrames.length
+                ai_frame_count: aiFrames.length,
+                visible_ai_frame_count: visibleAiFrames.length,
+                shadow_ai_frame_count: aiFrames.filter((frame) => {
+                    const frameRoot = frame.getRootNode ? frame.getRootNode() : null;
+                    return !!(frameRoot && frameRoot.host);
+                }).length,
+                // 保留原字段供分类与旧调用方使用；现在包含 Shadow DOM 中可见的 iframe。
+                legacy_frame_count: visibleAiFrames.length
             };
             """,
             list(AI_FRAME_MARKERS),
@@ -940,15 +987,18 @@ def find_inline_chat_input(driver, timeout=15):
 
 
 def click_inline_ai_assistant_entry(driver, name="", site="", timeout=12):
-    """点击新版内嵌助手的明确按钮，并用容器状态或输入框验证结果。"""
+    """点击新版助手入口，并用内嵌输入框或 Shadow DOM iframe 验证结果。"""
     try:
         driver.switch_to.default_content()
     except Exception:
         pass
 
+    if switch_to_ai_chat_frame(driver, require_input=True):
+        setattr(driver, "_mercado_ai_chat_mode", AI_CHAT_MODE_IFRAME)
+        return AI_CHAT_MODE_IFRAME
     if find_inline_chat_input(driver, timeout=0.2):
         setattr(driver, "_mercado_ai_chat_mode", AI_CHAT_MODE_INLINE)
-        return True
+        return AI_CHAT_MODE_INLINE
 
     try:
         clicked = driver.execute_script(
@@ -1010,9 +1060,12 @@ def click_inline_ai_assistant_entry(driver, name="", site="", timeout=12):
     print(f"{get_now_time()} {name} {site} 点击新版内嵌 AI 助手入口：{clicked}<br>")
     end_time = time.time() + max(0, timeout)
     while time.time() < end_time:
+        if switch_to_ai_chat_frame(driver, require_input=True):
+            setattr(driver, "_mercado_ai_chat_mode", AI_CHAT_MODE_IFRAME)
+            return AI_CHAT_MODE_IFRAME
         if find_inline_chat_input(driver, timeout=0.5):
             setattr(driver, "_mercado_ai_chat_mode", AI_CHAT_MODE_INLINE)
-            return True
+            return AI_CHAT_MODE_INLINE
         state = get_ai_chat_dom_state(driver)
         if state.get("inline_open"):
             # 容器已经展开时继续等待异步加载输入框，不重复点击造成开关反转。
@@ -1056,6 +1109,19 @@ def reset_expired_ai_iframe(driver, name="", site=""):
         driver.switch_to.default_content()
         reset = driver.execute_script(
             """
+            function deepElements(root = document) {
+                const out = [];
+                const walk = (node) => {
+                    const elements = node.querySelectorAll ? Array.from(node.querySelectorAll('*')) : [];
+                    for (const el of elements) {
+                        out.push(el);
+                        if (el.shadowRoot) walk(el.shadowRoot);
+                    }
+                };
+                walk(root);
+                return out;
+            }
+
             function cleanNewChatUrl(rawUrl) {
                 const origin = window.location.origin && window.location.origin !== 'null'
                     ? window.location.origin
@@ -1073,7 +1139,9 @@ def reset_expired_ai_iframe(driver, name="", site=""):
                 return url.toString();
             }
 
-            const frames = Array.from(document.querySelectorAll('iframe'));
+            const frames = deepElements(document).filter((el) =>
+                String(el.tagName || '').toUpperCase() === 'IFRAME'
+            );
             const target = frames.find((frame) => {
                 const src = frame.getAttribute('src') || '';
                 return /maxwell\\/new-chat|meli-ai-chat/i.test(src) &&
@@ -1109,7 +1177,7 @@ def switch_to_ai_chat_frame(driver, require_input=False, max_depth=2):
 
     def search_frames(depth):
         """按页面位置和 AI 特征给 iframe 打分，优先尝试右下方的悬浮窗。"""
-        frames = driver.find_elements(By.TAG_NAME, "iframe")
+        frames = find_frames_including_shadow_dom(driver)
         frame_infos = []
         for frame in frames:
             try:
@@ -1183,8 +1251,24 @@ def dump_iframe_debug_info(driver):
     try:
         frames = driver.execute_script(
             """
-            return [...document.querySelectorAll('iframe')].map((frame, index) => {
+            function deepElements(root = document) {
+                const out = [];
+                const walk = (node) => {
+                    const elements = node.querySelectorAll ? Array.from(node.querySelectorAll('*')) : [];
+                    for (const el of elements) {
+                        out.push(el);
+                        if (el.shadowRoot) walk(el.shadowRoot);
+                    }
+                };
+                walk(root);
+                return out;
+            }
+            return deepElements(document)
+                .filter((el) => String(el.tagName || '').toUpperCase() === 'IFRAME')
+                .map((frame, index) => {
                 const rect = frame.getBoundingClientRect();
+                const root = frame.getRootNode ? frame.getRootNode() : null;
+                const host = root && root.host ? root.host : null;
                 return {
                     index,
                     title: frame.getAttribute('title') || '',
@@ -1194,7 +1278,8 @@ def dump_iframe_debug_info(driver):
                     bottom: Math.round(rect.bottom),
                     width: Math.round(rect.width),
                     height: Math.round(rect.height),
-                    visible: !!(rect.width || rect.height || frame.getClientRects().length)
+                    visible: !!(rect.width || rect.height || frame.getClientRects().length),
+                    shadowHost: host ? (host.id || host.className || host.tagName || '') : ''
                 };
             });
             """
@@ -1205,7 +1290,7 @@ def dump_iframe_debug_info(driver):
 
 
 def save_ai_open_debug_artifacts(driver, name, site):
-    """AI 悬浮窗打开失败时保存截图和 HTML，便于后续人工分析页面结构。"""
+    """AI 悬浮窗打开失败时保存截图、HTML 和 Shadow DOM 结构化快照。"""
     driver.switch_to.default_content()
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     prefix = Path(__file__).resolve().parent / f"ai_chat_open_failed_{name}_{site}_{timestamp}"
@@ -1219,6 +1304,92 @@ def save_ai_open_debug_artifacts(driver, name, site):
         print(f"{get_now_time()} 已保存AI悬浮窗失败HTML：{prefix.with_suffix('.html')}<br>")
     except Exception as e:
         print(f"{get_now_time()} 保存AI悬浮窗失败HTML失败：{e}<br>")
+    try:
+        snapshot = driver.execute_script(
+            """
+            function deepElements(root = document) {
+                const out = [];
+                const walk = (node) => {
+                    const elements = node.querySelectorAll ? Array.from(node.querySelectorAll('*')) : [];
+                    for (const el of elements) {
+                        out.push(el);
+                        if (el.shadowRoot) walk(el.shadowRoot);
+                    }
+                };
+                walk(root);
+                return out;
+            }
+            function visible(el) {
+                const rect = el.getBoundingClientRect();
+                const style = window.getComputedStyle(el);
+                return !!(rect.width || rect.height || el.getClientRects().length)
+                    && style.visibility !== 'hidden'
+                    && style.display !== 'none';
+            }
+            const all = deepElements(document);
+            return {
+                title: document.title || '',
+                readyState: document.readyState || '',
+                shadowHosts: all
+                    .filter((el) => !!el.shadowRoot)
+                    .map((el) => ({
+                        tag: el.tagName || '',
+                        id: el.id || '',
+                        className: String(el.className || '')
+                    })),
+                aiShells: all
+                    .filter((el) =>
+                        el.id === 'sa-assistant-chat'
+                        || el.id === 'sa-icon-button-wrapper'
+                        || el.getAttribute('aria-controls') === 'sa-assistant-chat'
+                    )
+                    .map((el) => ({
+                        tag: el.tagName || '',
+                        id: el.id || '',
+                        className: String(el.className || ''),
+                        ariaExpanded: el.getAttribute('aria-expanded') || '',
+                        visible: visible(el)
+                    })),
+                frames: all
+                    .filter((el) => String(el.tagName || '').toUpperCase() === 'IFRAME')
+                    .map((frame) => {
+                        const rect = frame.getBoundingClientRect();
+                        const root = frame.getRootNode ? frame.getRootNode() : null;
+                        const host = root && root.host ? root.host : null;
+                        return {
+                            src: frame.getAttribute('src') || '',
+                            title: frame.getAttribute('title') || '',
+                            id: frame.id || '',
+                            className: String(frame.className || ''),
+                            width: Math.round(rect.width),
+                            height: Math.round(rect.height),
+                            visible: visible(frame),
+                            shadowHost: host
+                                ? (host.id || String(host.className || '') || host.tagName || '')
+                                : ''
+                        };
+                    })
+            };
+            """
+        ) or {}
+        debug_info = {
+            "captured_at": datetime.now().isoformat(timespec="seconds"),
+            "current_url": driver.current_url,
+            "chat_state": get_ai_chat_dom_state(driver),
+            "dom_snapshot": snapshot,
+        }
+        try:
+            debug_info["browser_logs"] = driver.get_log("browser")[-100:]
+        except Exception:
+            debug_info["browser_logs"] = []
+        debug_path = prefix.with_suffix(".debug.json")
+        debug_path.write_text(
+            json.dumps(debug_info, ensure_ascii=False, indent=2, default=str),
+            encoding="utf-8",
+        )
+        print(f"{get_now_time()} 已保存AI悬浮窗失败结构化快照：{debug_path}<br>")
+    except Exception as e:
+        print(f"{get_now_time()} 保存AI悬浮窗失败结构化快照失败：{e}<br>")
 
 
 def dump_ai_entry_debug_info(driver):
@@ -1227,7 +1398,20 @@ def dump_ai_entry_debug_info(driver):
     try:
         entries = driver.execute_script(
             """
-            return [...document.querySelectorAll('button, a, div, span')]
+            function deepElements(root = document) {
+                const out = [];
+                const walk = (node) => {
+                    const elements = node.querySelectorAll ? Array.from(node.querySelectorAll('*')) : [];
+                    for (const el of elements) {
+                        out.push(el);
+                        if (el.shadowRoot) walk(el.shadowRoot);
+                    }
+                };
+                walk(root);
+                return out;
+            }
+            return deepElements(document)
+                .filter((node) => ['BUTTON', 'A', 'DIV', 'SPAN'].includes(node.tagName))
                 .map((node, index) => {
                     const rect = node.getBoundingClientRect();
                     const label = [
@@ -2458,6 +2642,7 @@ def open_ai_contact_window(driver, name, site, window_id=""):
 
         for attempt in range(1, 5):
             variant = detect_ai_chat_variant(driver)
+            state = get_ai_chat_dom_state(driver)
             if variant:
                 last_variant = variant
             print(
@@ -2469,9 +2654,22 @@ def open_ai_contact_window(driver, name, site, window_id=""):
             if opened_mode:
                 break
 
+            if state.get("visible_ai_frame_count", 0):
+                # 面板已经展开时只等待 iframe 内部就绪。再次点击入口会把面板关掉，
+                # 这正是旧逻辑在新 Shadow DOM 结构下反复开关、最终误报的原因。
+                print(
+                    f"{get_now_time()} {name} {site} AI客服面板已展开，等待 iframe 输入框加载<br>"
+                )
+                opened_mode = wait_for_ai_chat_ready(driver, timeout=10, require_input=True)
+                if opened_mode:
+                    break
+                driver.switch_to.default_content()
+                time.sleep(1)
+                continue
+
             if variant == AI_CHAT_MODE_INLINE:
-                if click_inline_ai_assistant_entry(driver, name, site, timeout=12):
-                    opened_mode = AI_CHAT_MODE_INLINE
+                opened_mode = click_inline_ai_assistant_entry(driver, name, site, timeout=12)
+                if opened_mode:
                     break
                 driver.switch_to.default_content()
                 time.sleep(2)

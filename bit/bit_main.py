@@ -1,3 +1,4 @@
+import json
 import os
 import random
 import sys
@@ -5,6 +6,7 @@ import threading
 import time
 import traceback
 from datetime import datetime, timedelta
+from pathlib import Path
 
 
 # 兼容 python bit/bit_main.py 与 python -m bit.bit_main 两种启动方式。
@@ -19,13 +21,14 @@ from apscheduler.schedulers.blocking import BlockingScheduler
 
 from bit import bit_daily_task
 from bit import bit_infractions_info
+from bit import bit_print
 from bit import bit_reputation_info
 from bit.bit_collection_control import (
     DEFAULT_COLLECTION_MAX_WORKERS,
     env_float,
     wait_for_batch_resume,
 )
-from bit.bit_runtime_lock import InterProcessLock
+from bit.bit_runtime_lock import InterProcessLock, RUNTIME_LOCK_DIR
 from bit.bit_utils import get_now_time
 
 
@@ -34,11 +37,24 @@ SCHEDULE_INTERVAL_HOURS = 2
 DEFAULT_CHAIN_REPEAT_SECONDS = 2 * 60 * 60
 DEFAULT_MAIN_BROWSER_WORKER_LIMIT = 15
 DEFAULT_MAIN_APPEAL_ROUNDS = 10
+# bit_main 默认处理全部符合条件的店铺；BIT_DAILY_TOP_N 设置为正数时仍可限量。
+DEFAULT_MAIN_TOP_N = 0
+ORDER_PRINT_INTERVAL_SECONDS = 24 * 60 * 60
+ORDER_PRINT_STATE_PATH = RUNTIME_LOCK_DIR / "bit_main_order_print_state.json"
 MAIN_APPEAL_TYPES = (
     bit_daily_task.APPEAL_TYPE_INFRACTION,
     bit_daily_task.APPEAL_TYPE_DELAY,
     bit_daily_task.APPEAL_TYPE_COMPLAINT,
     bit_daily_task.APPEAL_TYPE_CANCELLATION,
+)
+MAIN_APPEAL_SEQUENCE = (
+    ("initial_infraction", bit_daily_task.APPEAL_TYPE_INFRACTION),
+    ("delay", bit_daily_task.APPEAL_TYPE_DELAY),
+    ("after_delay_infraction", bit_daily_task.APPEAL_TYPE_INFRACTION),
+    ("complaint", bit_daily_task.APPEAL_TYPE_COMPLAINT),
+    ("after_complaint_infraction", bit_daily_task.APPEAL_TYPE_INFRACTION),
+    ("cancellation", bit_daily_task.APPEAL_TYPE_CANCELLATION),
+    ("after_cancellation_infraction", bit_daily_task.APPEAL_TYPE_INFRACTION),
 )
 # 保留旧锁名，确保升级前后运行的调度进程仍然互斥。
 SCHEDULE_PROCESS_LOCK_KEY = "reputation_infraction_schedule"
@@ -111,6 +127,106 @@ def _wait_between_collections():
     return delay
 
 
+def _load_order_print_last_started_at():
+    try:
+        payload = json.loads(Path(ORDER_PRINT_STATE_PATH).read_text(encoding="utf-8"))
+        started_at = float(payload.get("last_started_at"))
+        return started_at if started_at > 0 else None
+    except (OSError, TypeError, ValueError, json.JSONDecodeError):
+        return None
+
+
+def _save_order_print_last_started_at(started_at):
+    state_path = Path(ORDER_PRINT_STATE_PATH)
+    state_path.parent.mkdir(parents=True, exist_ok=True)
+    temporary_path = state_path.with_suffix(
+        f"{state_path.suffix}.{os.getpid()}.{threading.get_ident()}.tmp"
+    )
+    payload = {
+        "last_started_at": float(started_at),
+        "last_started_at_text": datetime.fromtimestamp(started_at).strftime(
+            "%Y-%m-%d %H:%M:%S"
+        ),
+    }
+    try:
+        temporary_path.write_text(
+            json.dumps(payload, ensure_ascii=False, indent=2),
+            encoding="utf-8",
+        )
+        os.replace(temporary_path, state_path)
+    finally:
+        try:
+            temporary_path.unlink()
+        except OSError:
+            pass
+
+
+def _order_print_wait_seconds(now, last_started_at):
+    if last_started_at is None:
+        return 0
+    return max(0, ORDER_PRINT_INTERVAL_SECONDS - (float(now) - last_started_at))
+
+
+def _run_order_print_if_due(now=None):
+    """订单打印到期才执行；启动时间持久化，确保重启后仍按 24 小时节流。"""
+
+    now = time.time() if now is None else float(now)
+    last_started_at = _load_order_print_last_started_at()
+    wait_seconds = _order_print_wait_seconds(now, last_started_at)
+    if wait_seconds > 0:
+        print(
+            f"{get_now_time()} 订单打印未满 24 小时，本轮跳过，"
+            f"约 {wait_seconds / 3600:.2f} 小时后到期<br>",
+            flush=True,
+        )
+        return {
+            "status": "skipped",
+            "reason": "within_24_hours",
+            "wait_seconds": wait_seconds,
+        }
+
+    task_lock = bit_print.acquire_order_print_lock(
+        owner="bit_main.py:24_hour_order_print",
+        mode="24_hours",
+    )
+    if task_lock is None:
+        owner = bit_print.get_order_print_lock_owner()
+        print(f"{get_now_time()} 订单打印任务已被占用，本轮跳过：{owner}<br>")
+        return {
+            "status": "skipped",
+            "reason": "task_busy",
+            "lock_owner": owner,
+        }
+
+    try:
+        # 获取跨进程锁后再次检查，避免多个调度进程同时通过首次到期判断。
+        last_started_at = _load_order_print_last_started_at()
+        wait_seconds = _order_print_wait_seconds(now, last_started_at)
+        if wait_seconds > 0:
+            return {
+                "status": "skipped",
+                "reason": "within_24_hours",
+                "wait_seconds": wait_seconds,
+            }
+
+        # 一启动就记时；即使部分店铺失败，也不会在后续两小时循环中重复打印。
+        _save_order_print_last_started_at(now)
+        print(f"{get_now_time()} 开始执行每 24 小时一次的订单打印<br>")
+        summary = bit_print.print_orders_all()
+        print(
+            f"{get_now_time()} 订单打印执行完成：已提交 {summary.get('printed', 0)}，"
+            f"无订单 {summary.get('no_orders', 0)}，失败 {summary.get('failed', 0)}，"
+            f"跳过 {summary.get('skipped', 0)}<br>"
+        )
+        return {
+            "status": "completed",
+            "started_at": datetime.fromtimestamp(now).strftime("%Y-%m-%d %H:%M:%S"),
+            "summary": summary,
+        }
+    finally:
+        task_lock.release()
+
+
 def _run_ai_appeal_loop(started_at):
     if not _get_bool_env("BIT_ENABLE_AI_APPEAL_LOOP", True):
         print(
@@ -119,7 +235,7 @@ def _run_ai_appeal_loop(started_at):
         )
         return None
 
-    top_n = _get_int_env("BIT_DAILY_TOP_N", bit_daily_task.DEFAULT_DAILY_TOP_N)
+    top_n = _get_int_env("BIT_DAILY_TOP_N", DEFAULT_MAIN_TOP_N)
     max_workers = _get_int_env(
         "BIT_DAILY_MAX_WORKERS",
         bit_daily_task.DEFAULT_DAILY_MAX_WORKERS,
@@ -136,9 +252,12 @@ def _run_ai_appeal_loop(started_at):
         _get_int_env("BIT_DAILY_APPEAL_ROUNDS", DEFAULT_MAIN_APPEAL_ROUNDS),
     )
     min_rate = os.environ.get("BIT_DAILY_MIN_RATE", "0")
-    appeal_labels = " -> ".join(MAIN_APPEAL_TYPES)
+    appeal_labels = " -> ".join(
+        appeal_type for _step_key, appeal_type in MAIN_APPEAL_SEQUENCE
+    )
+    appeal_scope = "全部符合条件的店铺" if top_n <= 0 else f"Top {top_n} 店铺"
     print(
-        f"{get_now_time()} 开始执行 AI 申诉循环：top_n={top_n}, "
+        f"{get_now_time()} 开始执行 AI 申诉循环：范围={appeal_scope}, "
         f"max_workers={max_workers}, recent_days={recent_days}, "
         f"round_interval={round_interval}，每轮 {appeal_labels}，"
         f"共执行 {appeal_rounds} 轮<br>"
@@ -166,33 +285,44 @@ def _run_ai_appeal_loop(started_at):
                 f"{get_now_time()} 开始第 {round_no}/{appeal_rounds} 轮 "
                 f"AI 申诉：{appeal_labels}<br>"
             )
-            for appeal_type in MAIN_APPEAL_TYPES:
+            for step_no, (step_key, appeal_type) in enumerate(
+                MAIN_APPEAL_SEQUENCE,
+                start=1,
+            ):
                 try:
                     print(
                         f"{get_now_time()} 第 {round_no}/{appeal_rounds} 轮"
-                        f"开始 {appeal_type} AI 申诉，最多 {max_workers} 个进程<br>"
+                        f"第 {step_no}/{len(MAIN_APPEAL_SEQUENCE)} 步开始 "
+                        f"{appeal_type} AI 申诉，最多 {max_workers} 个进程<br>"
                     )
-                    round_result["results"][appeal_type] = (
-                        bit_daily_task.run_ai_appeal_once(
-                            appeal_type,
-                            top_n=top_n,
-                            max_workers=max_workers,
-                            recent_days=recent_days,
-                            site_pause=site_pause,
-                            only_active=True,
-                            min_rate=min_rate,
-                            _task_lock=task_lock,
-                        )
+                    result = bit_daily_task.run_ai_appeal_once(
+                        appeal_type,
+                        top_n=top_n,
+                        max_workers=max_workers,
+                        recent_days=recent_days,
+                        site_pause=site_pause,
+                        only_active=True,
+                        min_rate=min_rate,
+                        _task_lock=task_lock,
                     )
+                    round_result["results"][step_key] = {
+                        "appeal_type": appeal_type,
+                        "result": result,
+                    }
                     print(
                         f"{get_now_time()} 第 {round_no}/{appeal_rounds} 轮"
+                        f"第 {step_no}/{len(MAIN_APPEAL_SEQUENCE)} 步"
                         f"{appeal_type} AI 申诉完成<br>"
                     )
                 except Exception as exc:
-                    round_result["errors"][appeal_type] = str(exc)
+                    round_result["errors"][step_key] = {
+                        "appeal_type": appeal_type,
+                        "error": str(exc),
+                    }
                     print(
                         f"{get_now_time()} 第 {round_no}/{appeal_rounds} 轮"
-                        f"{appeal_type} AI 申诉异常，继续下一类：{exc}<br>"
+                        f"第 {step_no}/{len(MAIN_APPEAL_SEQUENCE)} 步"
+                        f"{appeal_type} AI 申诉异常，继续下一步：{exc}<br>"
                     )
                     traceback.print_exc()
             all_rounds.append(round_result)
@@ -205,7 +335,7 @@ def _run_ai_appeal_loop(started_at):
             )
             print(
                 f"{get_now_time()} 第 {round_no}/{appeal_rounds} 轮全部申诉类型完成，"
-                f"等待 {sleep_seconds:.1f} 秒后重新计算 Top 店铺<br>"
+                f"等待 {sleep_seconds:.1f} 秒后重新计算申诉店铺<br>"
             )
             if sleep_seconds > 0:
                 time.sleep(sleep_seconds)
@@ -218,12 +348,15 @@ def _run_ai_appeal_loop(started_at):
         "round_count": appeal_rounds,
         "max_workers": max_workers,
         "appeal_types": list(MAIN_APPEAL_TYPES),
+        "appeal_sequence": [
+            appeal_type for _step_key, appeal_type in MAIN_APPEAL_SEQUENCE
+        ],
         "started_at": started_at.strftime("%Y-%m-%d %H:%M:%S"),
     }
 
 
 def run_infraction_reputation_then_appeal():
-    """侵权采集 -> 声誉采集 -> 四类 AI 申诉循环 10 轮。"""
+    """到期订单打印 -> 侵权采集 -> 声誉采集 -> 四类 AI 申诉循环。"""
     if not SCHEDULE_LOCK.acquire(blocking=False):
         print(f"{get_now_time()} 本进程调度任务仍在运行，本次跳过<br>")
         return None
@@ -249,16 +382,25 @@ def run_infraction_reputation_then_appeal():
     reputation_options = _collection_options("REPUTATION")
     infraction_options = _collection_options("INFRACTION")
     print(
-        f"{get_now_time()} 定时任务开始：侵权(并发{infraction_options['max_workers']}) "
+        f"{get_now_time()} 定时任务开始：订单打印(每24小时最多一次) "
+        f"-> 侵权(并发{infraction_options['max_workers']}) "
         f"-> 冷却 -> 声誉(并发{reputation_options['max_workers']}) "
-        f"-> 侵权/延误/投诉/取消率 AI 申诉 10 轮，"
+        f"-> 侵权为主的 AI 申诉 10 轮，"
         f"店铺错峰{infraction_options['stagger_min_seconds']:.0f}–"
         f"{infraction_options['stagger_max_seconds']:.0f}秒<br>"
     )
     try:
         phase_errors = {}
+        order_print_result = None
         reputation_result = None
         infraction_result = None
+
+        try:
+            order_print_result = _run_order_print_if_due()
+        except Exception as exc:
+            phase_errors["order_print"] = str(exc)
+            print(f"{get_now_time()} 订单打印异常，将继续执行侵权采集：{exc}<br>")
+            traceback.print_exc()
 
         print(f"{get_now_time()} 开始执行侵权采集：{infraction_options}<br>")
         try:
@@ -288,6 +430,7 @@ def run_infraction_reputation_then_appeal():
             print(f"{get_now_time()} AI 申诉循环异常：{exc}<br>")
             traceback.print_exc()
         return {
+            "order_print": order_print_result,
             "infraction": infraction_result,
             "reputation": reputation_result,
             "ai_appeal": appeal_result,
@@ -305,7 +448,7 @@ def run_infraction_reputation_then_appeal():
 
 
 def run_reputation_infraction_then_daily():
-    """兼容旧入口；实际执行采集和四类 AI 申诉循环。"""
+    """兼容旧入口；实际执行到期订单打印、采集和四类 AI 申诉循环。"""
     return run_infraction_reputation_then_appeal()
 
 
@@ -357,7 +500,9 @@ if __name__ == "__main__":
     print(f"{get_now_time()} bit_main 循环任务启动")
     print("启动后立即执行，每条完整任务链结束后休息 2 小时再重新执行")
     print(
-        "任务顺序：侵权采集 -> 冷却 3–5 分钟 -> 声誉采集 -> "
-        "侵权 -> 延误 -> 投诉 -> 取消率 AI 申诉，共 10 轮，最多 15 个进程"
+        "任务顺序：订单打印（每 24 小时最多一次）-> 侵权采集 -> "
+        "冷却 3–5 分钟 -> 声誉采集 -> "
+        "侵权 -> 延误 -> 侵权 -> 投诉 -> 侵权 -> 取消率 -> 侵权，"
+        "共 10 轮，最多 15 个进程"
     )
     run_main_loop()
