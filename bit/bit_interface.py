@@ -224,6 +224,7 @@ if USE_DB_API:
     db_delete_mercado_product_items = bit_db_api.delete_mercado_product_items
     db_get_mercado_product_items_by_ids = bit_db_api.get_mercado_product_items_by_ids
     db_update_mercado_product_publish_state = bit_db_api.update_mercado_product_publish_state
+    db_update_mercado_product_review_status = bit_db_api.update_mercado_product_review_status
     db_list_mercado_store_links = bit_db_api.list_mercado_store_links
     db_bulk_update_mercado_store_links = bit_db_api.bulk_update_mercado_store_links
 else:
@@ -295,6 +296,7 @@ else:
         list_product_items as db_list_mercado_product_items,
         update_collection_task as db_update_mercado_collection_task,
         update_product_publish_state as db_update_mercado_product_publish_state,
+        update_product_review_status as db_update_mercado_product_review_status,
         upsert_collection_items as db_upsert_mercado_collection_items,
     )
     from erp.mercadolibre_store_link_store import (
@@ -4116,6 +4118,8 @@ def api_mercado_products():
             search=str(request.args.get("search") or "").strip(),
             limit=_parse_int_param(request.args, "limit", 500, 1, 1000),
             offset=_parse_int_param(request.args, "offset", 0, 0, 1000000),
+            source_type=str(request.args.get("source_type") or "").strip(),
+            review_status=str(request.args.get("review_status") or "").strip(),
         )
         return jsonify({"status": "success", "data": result})
     except Exception as exc:
@@ -4138,6 +4142,25 @@ def api_add_mercado_products():
     except Exception as exc:
         logging.exception("加入 Mercado 产品列表失败")
         return jsonify({"status": "error", "message": f"加入产品列表失败：{exc}"}), 500
+
+
+@app.route('/api/mercado-products/review-status', methods=['POST'])
+@login_required
+def api_update_mercado_product_review_status():
+    data = request.get_json(silent=True) or {}
+    item_ids = data.get("product_item_ids") or []
+    if not isinstance(item_ids, list):
+        return jsonify({"status": "error", "message": "product_item_ids 必须是数组"}), 422
+    try:
+        result = db_update_mercado_product_review_status(
+            item_ids, str(data.get("review_status") or "").strip()
+        )
+        return jsonify({"status": "success", "data": result})
+    except ValueError as exc:
+        return jsonify({"status": "error", "message": str(exc)}), 400
+    except Exception as exc:
+        logging.exception("更新 Mercado 产品审核状态失败")
+        return jsonify({"status": "error", "message": f"更新审核状态失败：{exc}"}), 500
 
 
 def _mercado_publish_state_update(**changes):
@@ -4227,6 +4250,11 @@ def api_publish_mercado_products():
         rows = db_get_mercado_product_items_by_ids(item_ids)
         if len(rows) != len({int(value) for value in item_ids}):
             raise ValueError("部分勾选产品已不存在，请刷新列表后重试")
+        blocked_rows = [row for row in rows if row.get("review_status") != "approved"]
+        if blocked_rows:
+            raise ValueError(
+                f"只有审核状态为“通过”的产品可以上架；当前选择中有 {len(blocked_rows)} 件未通过"
+            )
         token_rows = list((bit_db_api.list_mercado_store_tokens() or {}).get("rows") or [])
         token = next((row for row in token_rows if int(row.get("id") or 0) == token_id), None)
         if not token:
@@ -4382,7 +4410,28 @@ def api_db_mercado_products():
         search=str(request.args.get("search") or "").strip(),
         limit=_parse_int_param(request.args, "limit", 500, 1, 1000),
         offset=_parse_int_param(request.args, "offset", 0, 0, 1000000),
+        source_type=str(request.args.get("source_type") or "").strip(),
+        review_status=str(request.args.get("review_status") or "").strip(),
     )
+    return jsonify({"status": "success", "data": result})
+
+
+@app.route('/api/db/mercado-products/review-status', methods=['POST'])
+@internal_api_required
+def api_db_update_mercado_product_review_status():
+    blocked = reject_db_api_client_mode()
+    if blocked:
+        return blocked
+    data = request.get_json(silent=True) or {}
+    item_ids = data.get("product_item_ids") or []
+    if not isinstance(item_ids, list):
+        return jsonify({"status": "error", "message": "product_item_ids 必须是数组"}), 422
+    try:
+        result = db_update_mercado_product_review_status(
+            item_ids, str(data.get("review_status") or "").strip()
+        )
+    except ValueError as exc:
+        return jsonify({"status": "error", "message": str(exc)}), 400
     return jsonify({"status": "success", "data": result})
 
 

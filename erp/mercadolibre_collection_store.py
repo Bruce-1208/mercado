@@ -45,6 +45,14 @@ PRODUCT_PUBLISH_COLUMN_DEFINITIONS = (
     ("last_publish_result_json", "LONGTEXT NULL"),
     ("last_published_at", "DATETIME NULL"),
 )
+PRODUCT_SOURCE_TYPES = {"collected", "pulled"}
+PRODUCT_REVIEW_STATUSES = {
+    "unreviewed", "approved", "suspected", "infringing", "risk",
+}
+PRODUCT_WORKFLOW_COLUMN_DEFINITIONS = (
+    ("source_type", "VARCHAR(32) NOT NULL DEFAULT 'collected' AFTER `collection_item_id`"),
+    ("review_status", "VARCHAR(32) NOT NULL DEFAULT 'unreviewed' AFTER `source_type`"),
+)
 
 
 def _connect() -> Any:
@@ -91,6 +99,14 @@ def _ensure_column(cursor: Any, table: str, column: str, definition: str) -> boo
     if cursor.fetchone():
         return False
     cursor.execute(f"ALTER TABLE `{table}` ADD COLUMN `{column}` {definition}")
+    return True
+
+
+def _ensure_index(cursor: Any, table: str, index_name: str, definition: str) -> bool:
+    cursor.execute(f"SHOW INDEX FROM `{table}` WHERE `Key_name` = %s", (index_name,))
+    if cursor.fetchone():
+        return False
+    cursor.execute(f"ALTER TABLE `{table}` ADD KEY `{index_name}` {definition}")
     return True
 
 
@@ -177,6 +193,8 @@ def ensure_collection_tables(cursor: Any) -> None:
         CREATE TABLE IF NOT EXISTS `{PRODUCT_TABLE}` (
             `id` BIGINT NOT NULL AUTO_INCREMENT,
             `collection_item_id` BIGINT NOT NULL,
+            `source_type` VARCHAR(32) NOT NULL DEFAULT 'collected',
+            `review_status` VARCHAR(32) NOT NULL DEFAULT 'unreviewed',
             `source_item_id` VARCHAR(32) NOT NULL,
             `source_url` VARCHAR(1500) NOT NULL,
             `main_image_url` VARCHAR(1500) NULL,
@@ -222,7 +240,9 @@ def ensure_collection_tables(cursor: Any) -> None:
             `updated_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
             PRIMARY KEY (`id`),
             UNIQUE KEY `uniq_erp_meli_product_item` (`source_item_id`),
-            KEY `idx_erp_meli_product_added` (`added_at`)
+            KEY `idx_erp_meli_product_added` (`added_at`),
+            KEY `idx_erp_meli_product_source` (`source_type`, `id`),
+            KEY `idx_erp_meli_product_review` (`review_status`, `id`)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
         """
     )
@@ -240,6 +260,14 @@ def ensure_collection_tables(cursor: Any) -> None:
             _ensure_column(cursor, table, column, definition)
     for column, definition in PRODUCT_PUBLISH_COLUMN_DEFINITIONS:
         _ensure_column(cursor, PRODUCT_TABLE, column, definition)
+    for column, definition in PRODUCT_WORKFLOW_COLUMN_DEFINITIONS:
+        _ensure_column(cursor, PRODUCT_TABLE, column, definition)
+    _ensure_index(
+        cursor, PRODUCT_TABLE, "idx_erp_meli_product_source", "(`source_type`, `id`)"
+    )
+    _ensure_index(
+        cursor, PRODUCT_TABLE, "idx_erp_meli_product_review", "(`review_status`, `id`)"
+    )
     if collection_volumetric_added:
         cursor.execute(
             f"""
@@ -541,6 +569,8 @@ def _list_rows(
     limit: int = 500,
     offset: int = 0,
     task_id: int | None = None,
+    source_type: str = "",
+    review_status: str = "",
     connection_factory: Callable[[], Any] | None = None,
 ) -> dict[str, Any]:
     limit = max(1, min(int(limit), 1000))
@@ -555,6 +585,19 @@ def _list_rows(
     if task_id is not None and table == COLLECTION_TABLE:
         where.append("`task_id` = %s")
         params.append(int(task_id))
+    if table == PRODUCT_TABLE:
+        source_type = str(source_type or "").strip().lower()
+        review_status = str(review_status or "").strip().lower()
+        if source_type:
+            if source_type not in PRODUCT_SOURCE_TYPES:
+                raise ValueError(f"不支持的产品来源: {source_type}")
+            where.append("`source_type` = %s")
+            params.append(source_type)
+        if review_status:
+            if review_status not in PRODUCT_REVIEW_STATUSES:
+                raise ValueError(f"不支持的审核状态: {review_status}")
+            where.append("`review_status` = %s")
+            params.append(review_status)
     where_sql = f"WHERE {' AND '.join(where)}" if where else ""
     connection = (connection_factory or _connect)()
     try:
@@ -580,6 +623,134 @@ def list_collection_items(**kwargs: Any) -> dict[str, Any]:
 def list_product_items(**kwargs: Any) -> dict[str, Any]:
     kwargs.pop("task_id", None)
     return _list_rows(PRODUCT_TABLE, **kwargs)
+
+
+def update_product_review_status(
+    product_item_ids: Iterable[int],
+    review_status: str,
+    *,
+    connection_factory: Callable[[], Any] | None = None,
+) -> dict[str, int]:
+    ids = _normalize_row_ids(product_item_ids, empty_message="请至少勾选一个产品")
+    status = str(review_status or "").strip().lower()
+    if status not in PRODUCT_REVIEW_STATUSES:
+        raise ValueError(f"不支持的审核状态: {status}")
+    placeholders = ", ".join(["%s"] * len(ids))
+    connection = (connection_factory or _connect)()
+    try:
+        with connection.cursor() as cursor:
+            ensure_collection_tables(cursor)
+            cursor.execute(
+                f"UPDATE `{PRODUCT_TABLE}` SET `review_status` = %s "
+                f"WHERE `id` IN ({placeholders})",
+                tuple([status] + ids),
+            )
+            changed = int(cursor.rowcount or 0)
+        connection.commit()
+        return {"requested": len(ids), "changed": changed}
+    except BaseException:
+        connection.rollback()
+        raise
+    finally:
+        connection.close()
+
+
+def upsert_pulled_store_links_to_products(
+    token: Mapping[str, Any],
+    items: Iterable[Mapping[str, Any]],
+    *,
+    connection_factory: Callable[[], Any] | None = None,
+) -> dict[str, int]:
+    """Mirror detailed authorized-store listings into publish-ready products."""
+
+    from erp.mercadolibre_store_link_store import listing_record
+
+    now = _now()
+    values = []
+    skipped = 0
+    for item in items or []:
+        source = dict(item or {})
+        record = listing_record(token, source, now)
+        if not all((
+            record.get("item_id"), record.get("title"), record.get("permalink"),
+            record.get("thumbnail_url"), record.get("category_id"),
+            record.get("price") is not None,
+        )):
+            skipped += 1
+            continue
+        snapshot = {
+            "source": source,
+            "description": {},
+            "page_snapshot": {},
+            "plugin_snapshot": {
+                "source_type": "pulled",
+                "store_name": record.get("store_name"),
+                "site_id": record.get("site_id"),
+            },
+        }
+        net_proceeds = source.get("net_proceeds") or {}
+        net_amount = (
+            net_proceeds.get("amount")
+            if isinstance(net_proceeds, Mapping)
+            and str(net_proceeds.get("currency_id") or record.get("currency_id")).upper() == "USD"
+            else None
+        )
+        sale_price_usd = (
+            record.get("price")
+            if str(record.get("currency_id") or "").upper() == "USD"
+            else None
+        )
+        values.append((
+            0, "pulled", "unreviewed", record["item_id"], record["permalink"],
+            record["thumbnail_url"], record["title"], record.get("price"),
+            record.get("currency_id"), record.get("weight_g"),
+            record.get("volumetric_weight_kg"), record.get("package_length_cm"),
+            record.get("package_width_cm"), record.get("package_height_cm"),
+            "official_api" if record.get("weight_g") is not None else "official_missing",
+            sale_price_usd, record.get("category_id"), record.get("listing_type_id"),
+            net_amount, _dumps(snapshot), now,
+        ))
+    if not values:
+        return {"count": 0, "skipped": skipped}
+
+    pulled_fields = (
+        "source_url", "main_image_url", "title", "price", "currency_id",
+        "weight_g", "volumetric_weight_kg", "package_length_cm",
+        "package_width_cm", "package_height_cm", "weight_basis",
+        "sale_price_usd", "category_id", "listing_type_id", "net_proceeds_usd",
+        "source_snapshot_json",
+    )
+    updates = ",\n                    ".join(
+        f"`{field}` = IF(`source_type` = 'pulled', VALUES(`{field}`), `{field}`)"
+        for field in pulled_fields
+    )
+    connection = (connection_factory or _connect)()
+    try:
+        with connection.cursor() as cursor:
+            ensure_collection_tables(cursor)
+            cursor.executemany(
+                f"""
+                INSERT INTO `{PRODUCT_TABLE}` (
+                    `collection_item_id`, `source_type`, `review_status`, `source_item_id`,
+                    `source_url`, `main_image_url`, `title`, `price`, `currency_id`,
+                    `weight_g`, `volumetric_weight_kg`, `package_length_cm`,
+                    `package_width_cm`, `package_height_cm`, `weight_basis`,
+                    `sale_price_usd`, `category_id`, `listing_type_id`,
+                    `net_proceeds_usd`, `source_snapshot_json`, `added_at`
+                ) VALUES ({", ".join(["%s"] * 21)})
+                ON DUPLICATE KEY UPDATE
+                    {updates},
+                    `updated_at` = CURRENT_TIMESTAMP
+                """,
+                values,
+            )
+        connection.commit()
+        return {"count": len(values), "skipped": skipped}
+    except BaseException:
+        connection.rollback()
+        raise
+    finally:
+        connection.close()
 
 
 def _normalize_row_ids(values: Iterable[int], *, empty_message: str) -> list[int]:
@@ -852,7 +1023,8 @@ def add_collection_items_to_products(
                     "plugin_snapshot": _loads(row.get("plugin_snapshot_json"), {}),
                 }
                 values = (
-                    row["id"], row["source_item_id"], row["source_url"],
+                    row["id"], "collected", "unreviewed",
+                    row["source_item_id"], row["source_url"],
                     row.get("main_image_url"), row.get("title"), row.get("price"),
                     row.get("currency_id"), row.get("weight_g"),
                     row.get("volumetric_weight_kg"),
@@ -864,7 +1036,8 @@ def add_collection_items_to_products(
                 cursor.execute(
                     f"""
                     INSERT INTO `{PRODUCT_TABLE}` (
-                        `collection_item_id`, `source_item_id`, `source_url`,
+                        `collection_item_id`, `source_type`, `review_status`,
+                        `source_item_id`, `source_url`,
                         `main_image_url`, `title`, `price`, `currency_id`, `weight_g`,
                         `volumetric_weight_kg`,
                         `package_length_cm`, `package_width_cm`, `package_height_cm`,
@@ -873,6 +1046,7 @@ def add_collection_items_to_products(
                     ) VALUES ({", ".join(["%s"] * len(values))})
                     ON DUPLICATE KEY UPDATE
                         `collection_item_id` = VALUES(`collection_item_id`),
+                        `source_type` = 'collected',
                         `source_url` = VALUES(`source_url`),
                         `main_image_url` = VALUES(`main_image_url`),
                         `title` = VALUES(`title`),

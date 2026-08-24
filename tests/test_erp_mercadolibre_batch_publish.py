@@ -8,8 +8,8 @@ from erp import mercadolibre_batch_publish as batch_publish
 
 def _rows():
     return [
-        {"id": 11, "source_item_id": "MLM111", "source_url": "https://example/MLM111"},
-        {"id": 12, "source_item_id": "MLM222", "source_url": "https://example/MLM222"},
+        {"id": 11, "source_item_id": "MLM111", "source_url": "https://example/MLM111", "review_status": "approved"},
+        {"id": 12, "source_item_id": "MLM222", "source_url": "https://example/MLM222", "review_status": "approved"},
     ]
 
 
@@ -65,6 +65,16 @@ def test_batch_publish_validates_quantity_before_contacting_store():
         assert "1-9999" in str(exc)
     else:
         raise AssertionError("quantity validation was not applied")
+
+
+def test_batch_publish_rejects_products_that_are_not_approved():
+    rows = [{"id": 11, "source_item_id": "MLM111", "review_status": "risk"}]
+    with pytest.raises(ValueError, match="只有审核状态为“通过”"):
+        batch_publish.publish_product_batch(
+            rows,
+            token_id=7,
+            update_state=lambda *args, **kwargs: None,
+        )
 
 
 def test_batch_publish_validates_worker_count_before_contacting_store():

@@ -144,6 +144,11 @@ def publish_product_batch(
     rows = [dict(row) for row in product_rows or []]
     if not rows:
         raise ValueError("请至少勾选一个产品")
+    blocked = [row for row in rows if row.get("review_status") != "approved"]
+    if blocked:
+        raise ValueError(
+            f"只有审核状态为“通过”的产品可以上架；当前选择中有 {len(blocked)} 件未通过"
+        )
     quantity = int(quantity)
     if quantity < 1 or quantity > 9999:
         raise ValueError("上架库存必须在 1-9999 之间")

@@ -831,22 +831,52 @@ def list_mercado_collection_items(search="", limit=500, offset=0, task_id=None):
         )
 
 
-def list_mercado_product_items(search="", limit=500, offset=0):
+def list_mercado_product_items(
+    search="", limit=500, offset=0, source_type="", review_status="",
+):
+    params = {
+        "search": search,
+        "limit": limit,
+        "offset": offset,
+        "source_type": str(source_type or "").strip().lower(),
+        "review_status": str(review_status or "").strip().lower(),
+    }
     if DB_MODE == "mysql":
         return _collection_store_call(
-            "list_product_items", search=search, limit=limit, offset=offset
+            "list_product_items", **params
         )
     path = "/api/db/mercado-products"
     try:
         return _request(
             "GET", path,
-            params={"search": search, "limit": limit, "offset": offset},
+            params=params,
         )
     except RuntimeError as exc:
         if not _collection_route_missing(exc, path):
             raise
         return _collection_store_call(
-            "list_product_items", search=search, limit=limit, offset=offset
+            "list_product_items", **params
+        )
+
+
+def update_mercado_product_review_status(product_item_ids, review_status):
+    item_ids = [int(value) for value in product_item_ids or []]
+    payload = {
+        "product_item_ids": item_ids,
+        "review_status": str(review_status or "").strip().lower(),
+    }
+    if DB_MODE == "mysql":
+        return _collection_store_call(
+            "update_product_review_status", item_ids, payload["review_status"]
+        )
+    path = "/api/db/mercado-products/review-status"
+    try:
+        return _request("POST", path, json=payload)
+    except RuntimeError as exc:
+        if not _collection_route_missing(exc, path):
+            raise
+        return _collection_store_call(
+            "update_product_review_status", item_ids, payload["review_status"]
         )
 
 

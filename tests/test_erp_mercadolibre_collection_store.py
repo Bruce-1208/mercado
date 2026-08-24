@@ -1,3 +1,5 @@
+import json
+
 import pytest
 
 from erp import mercadolibre_collection_store as store
@@ -19,6 +21,12 @@ class _FakeCursor:
         normalized = " ".join(str(query).split())
         self.queries.append((normalized, params))
         self.rowcount = self.update_rowcount if normalized.startswith("UPDATE") else 0
+
+    def executemany(self, query, params):
+        normalized = " ".join(str(query).split())
+        rows = list(params)
+        self.queries.append((normalized, rows))
+        self.rowcount = len(rows)
 
     def fetchone(self):
         # Pretend all migration columns already exist.
@@ -64,6 +72,78 @@ def test_delete_and_publish_selection_reject_empty_ids_before_database_connectio
         store.delete_product_items([], connection_factory=lambda: None)
     with pytest.raises(ValueError, match="至少勾选"):
         store.get_product_items_by_ids([], connection_factory=lambda: None)
+
+
+def test_product_review_status_validates_and_updates_selected_rows():
+    connection = _FakeConnection(update_rowcount=2)
+
+    result = store.update_product_review_status(
+        [9, 3, 9],
+        "approved",
+        connection_factory=lambda: connection,
+    )
+
+    update_sql, params = next(
+        (query, params)
+        for query, params in connection.fake_cursor.queries
+        if query.startswith(f"UPDATE `{store.PRODUCT_TABLE}` SET `review_status`")
+    )
+    assert result == {"requested": 2, "changed": 2}
+    assert "WHERE `id` IN (%s, %s)" in update_sql
+    assert params == ("approved", 3, 9)
+    assert connection.committed is True
+
+    with pytest.raises(ValueError, match="不支持的审核状态"):
+        store.update_product_review_status([1], "published", connection_factory=lambda: None)
+
+
+def test_pulled_store_link_is_mirrored_as_publish_ready_unreviewed_product():
+    connection = _FakeConnection()
+    item = {
+        "id": "MLM1234567890",
+        "site_id": "MLM",
+        "title": "Official API product",
+        "permalink": "https://articulo.mercadolibre.com.mx/MLM-1234567890",
+        "pictures": [{"secure_url": "https://http2.mlstatic.com/image.jpg"}],
+        "price": 399.9,
+        "currency_id": "MXN",
+        "category_id": "MLM123",
+        "listing_type_id": "gold_special",
+        "attributes": [
+            {"id": "PACKAGE_WEIGHT", "value_name": "500 g"},
+            {"id": "PACKAGE_LENGTH", "value_name": "20 cm"},
+            {"id": "PACKAGE_WIDTH", "value_name": "10 cm"},
+            {"id": "PACKAGE_HEIGHT", "value_name": "5 cm"},
+        ],
+        "net_proceeds": {"amount": 18.25, "currency_id": "USD"},
+    }
+
+    result = store.upsert_pulled_store_links_to_products(
+        {"id": 7, "display_name": "MX Store", "site_id": "MLM"},
+        [item],
+        connection_factory=lambda: connection,
+    )
+
+    upsert_sql, rows = next(
+        (query, params)
+        for query, params in connection.fake_cursor.queries
+        if "ON DUPLICATE KEY UPDATE" in query
+    )
+    values = rows[0]
+    snapshot = json.loads(values[-2])
+    assert result == {"count": 1, "skipped": 0}
+    assert values[1:4] == ("pulled", "unreviewed", "MLM1234567890")
+    assert values[5:9] == (
+        "https://http2.mlstatic.com/image.jpg",
+        "Official API product",
+        399.9,
+        "MXN",
+    )
+    assert snapshot["source"] == item
+    assert snapshot["plugin_snapshot"]["source_type"] == "pulled"
+    assert "IF(`source_type` = 'pulled'" in upsert_sql
+    assert "`review_status`" not in upsert_sql.split("ON DUPLICATE KEY UPDATE", 1)[1]
+    assert connection.committed is True
 
 
 def test_failed_refresh_cannot_overwrite_an_existing_complete_item():

@@ -13,6 +13,7 @@ from erp.mercadolibre_store_link_store import (
     finalize_store_snapshot,
     replace_store_snapshot,
 )
+from erp.mercadolibre_collection_store import upsert_pulled_store_links_to_products
 from mercado_api.client import MercadoAPIError, MercadoLibreClient
 
 
@@ -51,6 +52,7 @@ _sync_state = {
     "updated_count": 0,
     "detail_count": 0,
     "detail_failed_count": 0,
+    "product_count": 0,
     "failed_count": 0,
     "started_at": "",
     "finished_at": "",
@@ -268,6 +270,7 @@ def _sync_store(record: dict) -> dict:
     base_updated = int(_sync_state.get("updated_count") or 0)
     base_details = int(_sync_state.get("detail_count") or 0)
     base_detail_failures = int(_sync_state.get("detail_failed_count") or 0)
+    base_products = int(_sync_state.get("product_count") or 0)
     while True:
         try:
             marker = uuid.uuid4().hex
@@ -280,6 +283,7 @@ def _sync_store(record: dict) -> dict:
                 "updated": 0,
                 "details": 0,
                 "failed": 0,
+                "products": 0,
             }
 
             def write_batch(item_ids, items):
@@ -295,19 +299,25 @@ def _sync_store(record: dict) -> dict:
                     finalize=False,
                     synced_at=_now_text(),
                 )
+                product_result = upsert_pulled_store_links_to_products(record, detailed_items)
                 totals["discovered"] += len(item_ids)
                 totals["stored"] += int(result.get("total") or 0)
                 totals["inserted"] += int(result.get("inserted") or 0)
                 totals["updated"] += int(result.get("updated") or 0)
                 totals["details"] += len(item_ids) - detail_failures
                 totals["failed"] += detail_failures
+                totals["products"] += int(product_result.get("count") or 0)
                 _state_update(
-                    message=f"正在同步 {store_name}：已写入 {totals['stored']} 条，详情 {totals['details']} 条",
+                    message=(
+                        f"正在同步 {store_name}：链接 {totals['stored']} 条，"
+                        f"详情 {totals['details']} 条，产品 {totals['products']} 件"
+                    ),
                     discovered_count=base_discovered + totals["discovered"],
                     inserted_count=base_inserted + totals["inserted"],
                     updated_count=base_updated + totals["updated"],
                     detail_count=base_details + totals["details"],
                     detail_failed_count=base_detail_failures + totals["failed"],
+                    product_count=base_products + totals["products"],
                 )
 
             seen_ids = set()
@@ -372,6 +382,7 @@ def run_store_link_sync(token_ids=None) -> dict:
         updated_count=0,
         detail_count=0,
         detail_failed_count=0,
+        product_count=0,
         failed_count=0,
         started_at=_now_text(),
         finished_at="",
@@ -401,6 +412,7 @@ def run_store_link_sync(token_ids=None) -> dict:
             updated_count=sum(int(row.get("updated") or 0) for row in results),
             detail_count=sum(int(row.get("details") or 0) for row in results),
             detail_failed_count=sum(int(row.get("failed") or 0) for row in results),
+            product_count=sum(int(row.get("products") or 0) for row in results),
             failed_count=sum(1 for row in results if row.get("status") == "error"),
             results=list(results),
         )
@@ -470,6 +482,7 @@ def start_store_link_sync(token_ids=None) -> tuple[bool, dict]:
             updated_count=0,
             detail_count=0,
             detail_failed_count=0,
+            product_count=0,
             failed_count=0,
             started_at=_now_text(),
             finished_at="",

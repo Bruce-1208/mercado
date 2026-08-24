@@ -35,6 +35,7 @@ def reset_sync_state():
             updated_count=0,
             detail_count=0,
             detail_failed_count=0,
+            product_count=0,
             failed_count=0,
             results=[],
             logs=[],
@@ -303,6 +304,11 @@ def test_sync_store_writes_listing_batches_incrementally(monkeypatch):
         "finalize_store_snapshot",
         lambda token_id, marker: captured["finalized"].append((token_id, marker)) or 0,
     )
+    monkeypatch.setattr(
+        bit_store_link_sync,
+        "upsert_pulled_store_links_to_products",
+        lambda record, items: {"count": len(list(items)), "skipped": 0},
+    )
 
     result = bit_store_link_sync._sync_store(token)
 
@@ -311,6 +317,7 @@ def test_sync_store_writes_listing_batches_incrementally(monkeypatch):
     assert result["updated"] == 0
     assert result["details"] == 5
     assert result["failed"] == 0
+    assert result["products"] == 5
     assert [len(batch["items"]) for batch in captured["batches"]] == [2, 2, 1]
     assert all(batch["finalize"] is False for batch in captured["batches"])
     assert len({batch["sync_marker"] for batch in captured["batches"]}) == 1

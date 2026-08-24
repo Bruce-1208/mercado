@@ -2884,6 +2884,33 @@
             color: #991b1b;
         }
 
+        .market-review-select {
+            width: 92px;
+            min-height: 30px;
+            padding: 4px 6px;
+            border: 1px solid var(--border);
+            border-radius: 7px;
+            background: #fff;
+            font-size: 11px;
+            font-weight: 700;
+        }
+
+        .market-source-tag {
+            display: inline-flex;
+            padding: 3px 7px;
+            border-radius: 999px;
+            background: #eef2ff;
+            color: #3730a3;
+            font-size: 10px;
+            font-weight: 800;
+            white-space: nowrap;
+        }
+
+        .market-source-tag.pulled {
+            background: #ecfdf3;
+            color: #166534;
+        }
+
         .market-row-select {
             width: 16px;
             height: 16px;
@@ -3670,6 +3697,33 @@
                             <input class="market-publish-workers" id="mercado-publish-workers" type="number" min="1" max="8" value="4">
                             <button class="primary" id="mercado-publish-selected" type="button" onclick="publishSelectedMercadoProducts()" disabled>批量上架</button>
                         </div>
+                        <div class="market-mode-actions" id="mercado-product-review-actions" style="display:none">
+                            <label>产品来源</label>
+                            <div class="market-list-switch" aria-label="产品来源筛选">
+                                <button class="active" id="mercado-source-all" type="button" onclick="setMercadoProductSource('')">全部</button>
+                                <button id="mercado-source-collected" type="button" onclick="setMercadoProductSource('collected')">采集</button>
+                                <button id="mercado-source-pulled" type="button" onclick="setMercadoProductSource('pulled')">拉取</button>
+                            </div>
+                            <label for="mercado-review-filter">审核筛选</label>
+                            <select id="mercado-review-filter" onchange="selectedMercadoCollectionIds.clear(); mercadoSelectAll.checked = false; loadMercadoList()">
+                                <option value="">全部状态</option>
+                                <option value="unreviewed">未审核</option>
+                                <option value="approved">通过</option>
+                                <option value="suspected">疑似</option>
+                                <option value="infringing">侵权</option>
+                                <option value="risk">风险</option>
+                            </select>
+                            <label for="mercado-review-bulk">批量改为</label>
+                            <select id="mercado-review-bulk">
+                                <option value="approved">通过</option>
+                                <option value="unreviewed">未审核</option>
+                                <option value="suspected">疑似</option>
+                                <option value="infringing">侵权</option>
+                                <option value="risk">风险</option>
+                            </select>
+                            <button class="secondary" id="mercado-review-selected" type="button" onclick="updateSelectedMercadoReviewStatus()" disabled>更新审核状态</button>
+                            <span class="market-list-summary">仅“通过”状态可上架</span>
+                        </div>
                         <button class="danger" id="mercado-delete-selected" type="button" onclick="deleteSelectedMercadoItems()" disabled>删除所选</button>
                         <span class="market-list-summary" id="mercado-selection-summary">已选择 0 件</span>
                         <span class="market-list-summary" id="mercado-publish-status"></span>
@@ -3681,6 +3735,7 @@
                                     <th>选择</th>
                                     <th>主图</th>
                                     <th>商品编号</th>
+                                    <th>来源</th>
                                     <th>标题</th>
                                     <th>价格</th>
                                     <th>美元售价</th>
@@ -3691,12 +3746,12 @@
                                     <th>分类佣金</th>
                                     <th>最新运费</th>
                                     <th>净收益</th>
-                                    <th>状态</th>
+                                    <th>审核 / 上架状态</th>
                                     <th>采集 / 加入时间</th>
                                 </tr>
                             </thead>
                             <tbody id="mercado-list-body">
-                                <tr><td class="empty-state" colspan="15">打开商品采集模块后加载数据</td></tr>
+                                <tr><td class="empty-state" colspan="16">打开商品采集模块后加载数据</td></tr>
                             </tbody>
                         </table>
                     </div>
@@ -4958,6 +5013,13 @@
         const mercadoDeleteSelected = document.getElementById("mercado-delete-selected");
         const mercadoCollectionOnlyActions = document.getElementById("mercado-collection-only-actions");
         const mercadoProductActions = document.getElementById("mercado-product-actions");
+        const mercadoProductReviewActions = document.getElementById("mercado-product-review-actions");
+        const mercadoSourceAll = document.getElementById("mercado-source-all");
+        const mercadoSourceCollected = document.getElementById("mercado-source-collected");
+        const mercadoSourcePulled = document.getElementById("mercado-source-pulled");
+        const mercadoReviewFilter = document.getElementById("mercado-review-filter");
+        const mercadoReviewBulk = document.getElementById("mercado-review-bulk");
+        const mercadoReviewSelected = document.getElementById("mercado-review-selected");
         const mercadoPublishStore = document.getElementById("mercado-publish-store");
         const mercadoPublishSite = document.getElementById("mercado-publish-site");
         const mercadoPublishQuantity = document.getElementById("mercado-publish-quantity");
@@ -5077,6 +5139,7 @@
         let mercadoCollectionPollTimer = null;
         let mercadoCollectionLastProcessed = -1;
         let mercadoListMode = "collection";
+        let mercadoProductSource = "";
         let mercadoListRows = [];
         let selectedMercadoCollectionIds = new Set();
         let mercadoPublishRunning = false;
@@ -6069,7 +6132,7 @@
             mercadoListRows = Array.isArray(rows) ? rows : [];
             if (!mercadoListRows.length) {
                 const label = mercadoListMode === "collection" ? "采集列表暂无商品" : "产品列表暂无商品";
-                mercadoListBody.innerHTML = `<tr><td class="empty-state" colspan="15">${label}</td></tr>`;
+                mercadoListBody.innerHTML = `<tr><td class="empty-state" colspan="16">${label}</td></tr>`;
                 updateMercadoSelection();
                 return;
             }
@@ -6086,7 +6149,11 @@
                 const itemLink = sourceUrl
                     ? `<a class="market-item-link" href="${escapeHtml(sourceUrl)}" target="_blank" rel="noopener noreferrer">打开商品页</a>`
                     : "";
-                let status = "产品列表";
+                const sourceType = String(row.source_type || "collected");
+                const sourceTag = mercadoListMode === "products"
+                    ? `<span class="market-source-tag ${sourceType === "pulled" ? "pulled" : ""}">${sourceType === "pulled" ? "店铺拉取" : "商品采集"}</span>`
+                    : '<span class="market-source-tag">采集候选</span>';
+                let status = "未上架";
                 let statusClass = "added";
                 if (mercadoListMode === "collection") {
                     if (alreadyAdded) {
@@ -6151,10 +6218,19 @@
                 const publishNote = mercadoListMode === "products" && row.last_publish_status
                     ? `<span class="market-metric-note" title="${publishTitle}">${escapeHtml(row.last_publish_store_name || "")}${row.last_published_item_id ? ` · ${escapeHtml(row.last_published_item_id)}` : ""}</span>`
                     : "";
+                const reviewStatus = String(row.review_status || "unreviewed");
+                const reviewOptions = [
+                    ["unreviewed", "未审核"], ["approved", "通过"], ["suspected", "疑似"],
+                    ["infringing", "侵权"], ["risk", "风险"],
+                ];
+                const reviewControl = mercadoListMode === "products"
+                    ? `<select class="market-review-select" aria-label="修改 ${escapeHtml(row.source_item_id || "产品")} 的审核状态" onchange="updateMercadoProductReviewStatus([${rowId}], this.value)">${reviewOptions.map(([value, label]) => `<option value="${value}" ${reviewStatus === value ? "selected" : ""}>${label}</option>`).join("")}</select>`
+                    : "";
                 return `<tr>
                     <td>${checkbox}</td>
                     <td>${image}</td>
                     <td><strong>${escapeHtml(row.source_item_id || "-")}</strong>${itemLink}</td>
+                    <td>${sourceTag}</td>
                     <td><span class="market-product-title" title="${title}">${title}</span></td>
                     <td><span class="market-metric-main">${mercadoMetric(row.price)}</span><span class="market-metric-note">${escapeHtml(row.currency_id || "MXN")}</span></td>
                     <td title="${profitTitle}"><span class="market-metric-main">${mercadoMetric(row.sale_price_usd, " USD")}</span><span class="market-metric-note">官网实时汇率</span></td>
@@ -6165,7 +6241,7 @@
                     <td title="${profitTitle}"><span class="market-metric-main">${mercadoMetric(row.commission_amount_usd, " USD")}</span><span class="market-metric-note">${escapeHtml(commissionNote)}</span></td>
                     <td title="${profitTitle}"><span class="market-metric-main">${mercadoMetric(row.shipping_fee_usd, " USD")}</span><span class="market-metric-note">${escapeHtml(shippingNote)}</span></td>
                     <td title="${profitTitle}"><span class="market-metric-main ${netClass}">${mercadoMetric(netProceeds, " USD")}</span><span class="market-metric-note">售价−佣金−运费</span></td>
-                    <td title="${statusTitle}"><span class="market-status-tag ${statusClass}">${status}</span>${publishNote}</td>
+                    <td title="${statusTitle}">${reviewControl}<span class="market-status-tag ${statusClass}">${status}</span>${publishNote}</td>
                     <td>${escapeHtml(timeText)}</td>
                 </tr>`;
             }).join("");
@@ -6174,12 +6250,16 @@
 
         async function loadMercadoList() {
             if (!mercadoListBody) return;
-            mercadoListBody.innerHTML = `<tr><td class="empty-state" colspan="15">正在读取数据库...</td></tr>`;
+            mercadoListBody.innerHTML = `<tr><td class="empty-state" colspan="16">正在读取数据库...</td></tr>`;
             const endpoint = mercadoListMode === "collection" ? "/api/mercado-collection/items" : "/api/mercado-products";
             const query = new URLSearchParams({
                 search: mercadoListSearch.value.trim(),
                 limit: "500",
             });
+            if (mercadoListMode === "products") {
+                if (mercadoProductSource) query.set("source_type", mercadoProductSource);
+                if (mercadoReviewFilter.value) query.set("review_status", mercadoReviewFilter.value);
+            }
             try {
                 const response = await fetch(`${endpoint}?${query.toString()}`, {cache: "no-store"});
                 const payload = await response.json();
@@ -6191,7 +6271,7 @@
                 renderMercadoListRows(rows);
                 mercadoCollectionLoaded = true;
             } catch (error) {
-                mercadoListBody.innerHTML = `<tr><td class="empty-state" colspan="15">加载失败：${escapeHtml(error.message || error)}</td></tr>`;
+                mercadoListBody.innerHTML = `<tr><td class="empty-state" colspan="16">加载失败：${escapeHtml(error.message || error)}</td></tr>`;
             }
         }
 
@@ -6202,6 +6282,7 @@
             mercadoCollectionActions.style.display = "flex";
             mercadoCollectionOnlyActions.style.display = mercadoListMode === "collection" ? "inline-flex" : "none";
             mercadoProductActions.style.display = mercadoListMode === "products" ? "inline-flex" : "none";
+            mercadoProductReviewActions.style.display = mercadoListMode === "products" ? "inline-flex" : "none";
             selectedMercadoCollectionIds.clear();
             mercadoSelectAll.checked = false;
             if (mercadoListMode === "products") {
@@ -6209,6 +6290,47 @@
                 loadMercadoPublishStatus();
             }
             loadMercadoList();
+        }
+
+        function setMercadoProductSource(sourceType) {
+            mercadoProductSource = ["collected", "pulled"].includes(sourceType) ? sourceType : "";
+            mercadoSourceAll.classList.toggle("active", mercadoProductSource === "");
+            mercadoSourceCollected.classList.toggle("active", mercadoProductSource === "collected");
+            mercadoSourcePulled.classList.toggle("active", mercadoProductSource === "pulled");
+            selectedMercadoCollectionIds.clear();
+            mercadoSelectAll.checked = false;
+            loadMercadoList();
+        }
+
+        async function updateMercadoProductReviewStatus(itemIds, reviewStatus) {
+            const ids = Array.from(new Set((itemIds || []).map(Number).filter(value => value > 0)));
+            if (!ids.length) return;
+            mercadoReviewSelected.disabled = true;
+            try {
+                const response = await fetch("/api/mercado-products/review-status", {
+                    method: "POST",
+                    headers: {"Content-Type": "application/json"},
+                    body: JSON.stringify({product_item_ids: ids, review_status: reviewStatus}),
+                });
+                const payload = await response.json();
+                if (!response.ok || payload.status !== "success") {
+                    throw new Error(payload.message || `接口请求失败：${response.status}`);
+                }
+                mercadoCollectionMessage.textContent = `已更新 ${Number(payload.data?.changed || 0)} 件产品的审核状态`;
+                await loadMercadoList();
+            } catch (error) {
+                mercadoCollectionMessage.textContent = `审核状态更新失败：${error.message || error}`;
+                await loadMercadoList();
+            } finally {
+                updateMercadoSelection();
+            }
+        }
+
+        async function updateSelectedMercadoReviewStatus() {
+            await updateMercadoProductReviewStatus(
+                Array.from(selectedMercadoCollectionIds),
+                mercadoReviewBulk.value,
+            );
         }
 
         function toggleMercadoItem(rowId, checked) {
@@ -6234,12 +6356,21 @@
             mercadoSelectAll.indeterminate = selectedVisible.length > 0 && selectedVisible.length < selectable.length;
             mercadoSelectionSummary.textContent = `已选择 ${selectedMercadoCollectionIds.size} 件`;
             const hasSelection = selectedMercadoCollectionIds.size > 0;
+            const selectedRows = mercadoListRows.filter(row => selectedMercadoCollectionIds.has(Number(row.id)));
+            const allApproved = Boolean(
+                hasSelection && selectedRows.length === selectedMercadoCollectionIds.size
+                && selectedRows.every(row => row.review_status === "approved")
+            );
             mercadoAddSelected.disabled = !hasSelection || mercadoListMode !== "collection";
             mercadoDeleteSelected.disabled = !hasSelection || mercadoPublishRunning;
+            mercadoReviewSelected.disabled = !hasSelection || mercadoListMode !== "products" || mercadoPublishRunning;
             mercadoPublishSelected.disabled = (
                 !hasSelection || mercadoListMode !== "products" || mercadoPublishRunning ||
-                !mercadoPublishStore.value || !mercadoPublishSite.value
+                !mercadoPublishStore.value || !mercadoPublishSite.value || !allApproved
             );
+            mercadoPublishSelected.title = allApproved || !hasSelection
+                ? ""
+                : "只有审核状态为“通过”的产品可以上架";
         }
 
         async function addSelectedMercadoProducts() {
@@ -7100,9 +7231,10 @@
             const updated = Number(data?.updated_count || 0);
             const details = Number(data?.detail_count || 0);
             const detailFailed = Number(data?.detail_failed_count || 0);
+            const products = Number(data?.product_count || 0);
             storeLinkSyncState.textContent = data?.status === "idle"
                 ? "等待手动同步"
-                : `${data?.message || "正在同步"}${total ? ` · 店铺 ${processed}/${total}` : ""} · 发现 ${discovered} · 详情 ${details} · 详情失败 ${detailFailed} · 新增 ${inserted} · 更新 ${updated}`;
+                : `${data?.message || "正在同步"}${total ? ` · 店铺 ${processed}/${total}` : ""} · 发现 ${discovered} · 详情 ${details} · 产品 ${products} · 详情失败 ${detailFailed} · 新增 ${inserted} · 更新 ${updated}`;
             storeLinkSyncAllButton.disabled = storeLinkSyncRunning;
             storeLinkSyncButton.disabled = storeLinkSyncRunning;
             storeLinkSyncAllButton.textContent = storeLinkSyncRunning ? "正在同步所有店铺..." : "同步所有店铺链接";

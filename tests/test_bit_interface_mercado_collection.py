@@ -74,6 +74,14 @@ def test_workbench_contains_collection_and_product_list_ui():
     for site_name in ("墨西哥", "巴西", "阿根廷", "智利", "哥伦比亚", "乌拉圭"):
         assert site_name.encode("utf-8") in response.data
     assert b'id="mercado-publish-selected"' in response.data
+    assert b'id="mercado-product-review-actions"' in response.data
+    assert b'id="mercado-source-collected"' in response.data
+    assert b'id="mercado-source-pulled"' in response.data
+    assert b'id="mercado-review-filter"' in response.data
+    assert b'id="mercado-review-bulk"' in response.data
+    for status_name in ("未审核", "通过", "疑似", "侵权", "风险"):
+        assert status_name.encode("utf-8") in response.data
+    assert "仅“通过”状态可上架".encode("utf-8") in response.data
     assert "批量上架".encode("utf-8") in response.data
     assert 'partial: "部分完成"'.encode("utf-8") in response.data
 
@@ -178,6 +186,41 @@ def test_collection_list_and_batch_add_endpoints():
     add_products.assert_called_once_with([7])
 
 
+def test_product_list_filters_and_review_status_endpoint():
+    client = _client()
+    rows = {"total": 1, "rows": [{"id": 9, "review_status": "risk"}]}
+    with patch.object(
+        workbench, "db_list_mercado_product_items", return_value=rows
+    ) as list_products:
+        response = client.get(
+            "/api/mercado-products?search=bag&source_type=pulled&review_status=risk"
+        )
+
+    assert response.status_code == 200
+    assert response.get_json()["data"] == rows
+    list_products.assert_called_once_with(
+        search="bag",
+        limit=500,
+        offset=0,
+        source_type="pulled",
+        review_status="risk",
+    )
+
+    with patch.object(
+        workbench,
+        "db_update_mercado_product_review_status",
+        return_value={"requested": 2, "changed": 2},
+    ) as update_review:
+        response = client.post(
+            "/api/mercado-products/review-status",
+            json={"product_item_ids": [9, 10], "review_status": "approved"},
+        )
+
+    assert response.status_code == 200
+    assert response.get_json()["data"]["changed"] == 2
+    update_review.assert_called_once_with([9, 10], "approved")
+
+
 def test_collection_and_product_delete_endpoints():
     _reset_publish_state()
     client = _client()
@@ -210,7 +253,7 @@ def test_collection_and_product_delete_endpoints():
 def test_batch_publish_endpoint_starts_background_task_for_selected_store():
     _reset_publish_state()
     client = _client()
-    rows = [{"id": 9, "source_item_id": "MLM3016972321", "source_url": "source"}]
+    rows = [{"id": 9, "source_item_id": "MLM3016972321", "source_url": "source", "review_status": "approved"}]
     tokens = {
         "total": 1,
         "rows": [{"id": 5, "display_name": "泽顺墨西哥", "nickname": "SHOP"}],
@@ -255,6 +298,29 @@ def test_batch_publish_endpoint_rejects_unsupported_site():
     assert "不支持的目标站点" in response.get_json()["message"]
 
 
+def test_batch_publish_endpoint_rejects_product_that_is_not_approved():
+    _reset_publish_state()
+    rows = [
+        {
+            "id": 9,
+            "source_item_id": "MLM3016972321",
+            "source_url": "source",
+            "review_status": "unreviewed",
+        }
+    ]
+    with patch.object(
+        workbench, "db_get_mercado_product_items_by_ids", return_value=rows
+    ), patch.object(workbench.threading.Thread, "start") as start_thread:
+        response = _client().post(
+            "/api/mercado-products/publish",
+            json={"product_item_ids": [9], "token_id": 5, "site_id": "MLM"},
+        )
+
+    assert response.status_code == 400
+    assert "只有审核状态为“通过”的产品可以上架" in response.get_json()["message"]
+    start_thread.assert_not_called()
+
+
 def test_batch_publish_endpoint_rejects_invalid_worker_count():
     _reset_publish_state()
     response = _client().post(
@@ -273,7 +339,7 @@ def test_batch_publish_endpoint_rejects_invalid_worker_count():
 
 def test_batch_publish_endpoint_rejects_cross_site_for_local_store():
     _reset_publish_state()
-    rows = [{"id": 9, "source_item_id": "MLM3016972321", "source_url": "source"}]
+    rows = [{"id": 9, "source_item_id": "MLM3016972321", "source_url": "source", "review_status": "approved"}]
     tokens = {
         "total": 1,
         "rows": [{"id": 5, "display_name": "本地墨西哥店", "site_id": "MLM"}],
