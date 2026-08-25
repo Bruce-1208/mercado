@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import threading
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime
@@ -140,6 +141,10 @@ def publish_product_batch(
     update_state: Callable[..., Any],
     on_progress: Callable[[dict[str, Any]], None] | None = None,
     client: MercadoLibreClient | None = None,
+    batch_id: str = "",
+    created_by: str = "",
+    create_records: Callable[..., Mapping[int, int]] | None = None,
+    update_record: Callable[..., Any] | None = None,
 ) -> dict[str, Any]:
     rows = [dict(row) for row in product_rows or []]
     if not rows:
@@ -166,6 +171,29 @@ def publish_product_batch(
         )
     store_name = str(token.get("display_name") or token.get("nickname") or token_id)
     worker_count = min(workers, len(rows))
+    record_ids: dict[int, int] = {}
+    if create_records is not None:
+        created_record_ids = create_records(
+            rows,
+            batch_id=str(batch_id or ""),
+            token_id=int(token_id),
+            store_name=store_name,
+            site_id=site_id,
+            site_name=site_name,
+            quantity=quantity,
+            created_by=str(created_by or ""),
+        )
+        record_ids = {
+            int(product_id): int(record_id)
+            for product_id, record_id in dict(created_record_ids or {}).items()
+        }
+        missing_record_ids = [
+            int(row.get("id") or 0)
+            for row in rows
+            if int(row.get("id") or 0) not in record_ids
+        ]
+        if missing_record_ids:
+            raise RuntimeError("部分产品的上架记录创建失败，已取消本次上架")
     worker_local = threading.local()
     result_lock = threading.Lock()
     result_slots: list[dict[str, Any] | None] = [None] * len(rows)
@@ -179,6 +207,14 @@ def publish_product_batch(
             mercado_client = DatabaseMercadoLibreClient(token_id)
             worker_local.mercado_client = mercado_client
         return mercado_client
+
+    def save_record(record_id: int, **changes: Any) -> None:
+        if not record_id or update_record is None:
+            return
+        try:
+            update_record(record_id, **changes)
+        except Exception:
+            logging.exception("保存 Mercado 产品上架记录失败: record_id=%s", record_id)
 
     def finish(
         index: int,
@@ -208,9 +244,11 @@ def publish_product_batch(
 
     def publish_one(index: int, row: Mapping[str, Any]) -> None:
         product_id = int(row.get("id") or 0)
+        record_id = int(record_ids.get(product_id) or 0)
         source_item_id = str(row.get("source_item_id") or "")
         source_url = str(row.get("source_url") or source_item_id)
         try:
+            save_record(record_id, status="publishing", started=True)
             update_state(
                 product_id,
                 status="publishing",
@@ -227,21 +265,38 @@ def publish_product_batch(
                 publish=True,
             )
             published_item_id = _published_item_id(publication)
-            update_state(
-                product_id,
+            state_warning = ""
+            try:
+                update_state(
+                    product_id,
+                    status="published",
+                    store_name=store_name,
+                    token_id=int(token_id),
+                    published_item_id=published_item_id,
+                    result=publication,
+                    finished=True,
+                )
+            except Exception as state_exc:
+                state_warning = f"；保存产品最新状态时出错: {state_exc}"[:2000]
+                logging.exception(
+                    "Mercado 产品已上架，但保存产品状态失败: product_id=%s",
+                    product_id,
+                )
+            save_record(
+                record_id,
                 status="published",
-                store_name=store_name,
-                token_id=int(token_id),
                 published_item_id=published_item_id,
+                failure_reason="",
                 result=publication,
                 finished=True,
             )
             item_result = {
+                "record_id": record_id,
                 "product_id": product_id,
                 "source_item_id": source_item_id,
                 "status": "published",
                 "published_item_id": published_item_id,
-                "message": "上架成功",
+                "message": f"上架成功{state_warning}",
             }
         except Exception as exc:
             message = str(exc)[:2000]
@@ -256,7 +311,14 @@ def publish_product_batch(
                 )
             except Exception as state_exc:
                 message = f"{message}；保存失败状态时出错: {state_exc}"[:2000]
+            save_record(
+                record_id,
+                status="failed",
+                failure_reason=message,
+                finished=True,
+            )
             item_result = {
+                "record_id": record_id,
                 "product_id": product_id,
                 "source_item_id": source_item_id,
                 "status": "failed",
@@ -279,6 +341,7 @@ def publish_product_batch(
     results = [result for result in result_slots if result is not None]
 
     return {
+        "batch_id": str(batch_id or ""),
         "store_name": store_name,
         "site_id": site_id,
         "site_name": site_name,

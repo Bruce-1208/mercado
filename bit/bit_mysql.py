@@ -1541,14 +1541,15 @@ def get_mercado_order_sync_cursor(token_id):
 
 
 def list_orders(
-    country="", status="", salesperson="", search="", start_date="", end_date="",
+    country="", status="", salesperson="", group_name="", search="", start_date="", end_date="",
     origin="", page=1, page_size=50,
 ):
     """分页查询当前已授权店铺的 Token 同步订单。"""
     page = max(1, int(page or 1))
     page_size = max(10, min(200, int(page_size or 50)))
-    country, status, salesperson, search = (
-        str(value or "").strip() for value in (country, status, salesperson, search)
+    country, status, salesperson, group_name, search = (
+        str(value or "").strip()
+        for value in (country, status, salesperson, group_name, search)
     )
     start_date, end_date = (str(value or "").strip() for value in (start_date, end_date))
     origin = str(origin or "").strip().lower()
@@ -1557,7 +1558,7 @@ def list_orders(
 
     def build_where(
         include_country=True, include_status=True, include_origin=True,
-        include_salesperson=True,
+        include_salesperson=True, include_group=True,
     ):
         clauses, params = [], []
         if include_country and country:
@@ -1575,6 +1576,12 @@ def list_orders(
             else:
                 clauses.append("`salesperson` = %s")
                 params.append(salesperson)
+        if include_group and group_name:
+            if group_name == "__ungrouped__":
+                clauses.append("COALESCE(`group_name`, '') = ''")
+            else:
+                clauses.append("`group_name` = %s")
+                params.append(group_name)
         if start_date:
             clauses.append("`ordered_at` >= %s")
             params.append(f"{start_date} 00:00:00")
@@ -1608,7 +1615,8 @@ def list_orders(
             source_sql = """
                 (
                     SELECT synced.`order_id` AS `id`, synced.`order_id` AS `order_number`,
-                           synced.`date_created` AS `ordered_at`, site_settings.`salesperson`,
+                           DATE_ADD(synced.`date_created`, INTERVAL 8 HOUR) AS `ordered_at`,
+                           site_settings.`salesperson`,
                            site_settings.`discount_rate`, site_settings.`group_name`,
                            synced.`shop_name`, '美客多 Token' AS `source`, 'token' AS `data_origin`,
                            COALESCE(NULLIF(synced.`workflow_status`, ''), synced.`status_label`) AS `status`,
@@ -1623,7 +1631,8 @@ def list_orders(
                            synced.`image_url`, synced.`quantity`, synced.`freight`,
                            synced.`status_detail` AS `remark`,
                            synced.`country`,
-                           synced.`buyer_name` AS `buyer`, synced.`currency_id`, synced.`last_updated`
+                           synced.`buyer_name` AS `buyer`, synced.`currency_id`,
+                           DATE_ADD(synced.`last_updated`, INTERVAL 8 HOUR) AS `last_updated`
                     FROM `mercado_synced_orders` AS synced
                     INNER JOIN `mercado_store_tokens` AS stores ON stores.`id` = synced.`token_id`
                     LEFT JOIN `mercado_store_site_settings` AS site_settings
@@ -1676,6 +1685,17 @@ def list_orders(
                 str(row["salesperson"]): int(row["count"]) for row in cursor.fetchall()
             }
 
+            group_where, group_params = build_where(include_group=False)
+            cursor.execute(
+                f"SELECT COALESCE(NULLIF(`group_name`,''),'未分组') AS `group_name`, COUNT(*) AS `count` "
+                f"FROM {source_sql}{group_where} "
+                f"GROUP BY COALESCE(NULLIF(`group_name`,''),'未分组') ORDER BY `group_name` ASC",
+                group_params,
+            )
+            group_counts = {
+                str(row["group_name"]): int(row["count"]) for row in cursor.fetchall()
+            }
+
             offset = (page - 1) * page_size
             cursor.execute(
                 f"SELECT * FROM {source_sql}{where_sql} ORDER BY `ordered_at` DESC, `id` DESC LIMIT %s OFFSET %s",
@@ -1687,6 +1707,7 @@ def list_orders(
                 "pages": max(1, (total + page_size - 1) // page_size),
                 "status_counts": status_counts, "country_counts": country_counts,
                 "origin_counts": origin_counts, "salesperson_counts": salesperson_counts,
+                "group_counts": group_counts,
                 "summary": summary,
             }
     finally:
@@ -3711,7 +3732,7 @@ def list_mercado_store_site_settings(token_id):
                 (token_id,),
             )
             if not cursor.fetchone():
-                raise KeyError("店铺 Token 不存在")
+                raise KeyError("店铺授权不存在")
             rows = _mercado_store_site_setting_rows(cursor, token_id)
             return {"token_id": token_id, "rows": rows}
     finally:
@@ -3768,7 +3789,7 @@ def upsert_mercado_store_site_settings(token_id, settings):
                 (token_id,),
             )
             if not cursor.fetchone():
-                raise KeyError("店铺 Token 不存在")
+                raise KeyError("店铺授权不存在")
             for site_id, salesperson, discount_rate, group_name in normalized:
                 if not salesperson and discount_rate is None and not group_name:
                     cursor.execute(
@@ -3828,11 +3849,11 @@ def _mercado_token_record(record):
         "last_error": str(record.get("last_error") or "").strip(),
     }
     if not normalized["display_name"]:
-        raise ValueError("店铺 Token 缺少自定义名称")
+        raise ValueError("店铺授权缺少自定义名称")
     if len(normalized["display_name"]) > 100:
         raise ValueError("自定义店铺名称不能超过 100 个字符")
     if not normalized["access_token"]:
-        raise ValueError("店铺 Token 缺少 Access Token")
+        raise ValueError("店铺授权缺少 Access Token")
     return normalized
 
 
@@ -4046,7 +4067,7 @@ def update_mercado_store_token(token_id, record):
             if cursor.rowcount == 0:
                 cursor.execute("SELECT 1 FROM `mercado_store_tokens` WHERE `id` = %s", (token_id,))
                 if not cursor.fetchone():
-                    raise KeyError("店铺 Token 不存在")
+                    raise KeyError("店铺授权不存在")
         connection.commit()
         return get_mercado_store_token_summary(token_id)
     except Exception:
@@ -4099,7 +4120,7 @@ def rename_mercado_store_token(token_id, display_name):
             if cursor.rowcount == 0:
                 cursor.execute("SELECT 1 FROM `mercado_store_tokens` WHERE `id` = %s", (token_id,))
                 if not cursor.fetchone():
-                    raise KeyError("店铺 Token 不存在")
+                    raise KeyError("店铺授权不存在")
         connection.commit()
         return get_mercado_store_token_summary(token_id)
     except Exception:

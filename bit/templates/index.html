@@ -435,7 +435,7 @@
 
         .order-filters {
             display: grid;
-            grid-template-columns: 130px 130px 130px 130px minmax(240px, 1fr) auto;
+            grid-template-columns: 120px 140px 150px 120px 120px minmax(220px, 1fr) auto;
             gap: 8px;
             align-items: end;
             padding: 10px;
@@ -1517,7 +1517,8 @@
             font-size: 11px;
         }
 
-        .mercado-site-settings-table input {
+        .mercado-site-settings-table input,
+        .mercado-site-settings-table select {
             width: 100%;
             min-width: 130px;
         }
@@ -2940,7 +2941,7 @@
 
         .market-collector-form {
             display: grid;
-            grid-template-columns: minmax(360px, 1fr) 130px 110px auto;
+            grid-template-columns: minmax(260px, 1fr) 118px 148px 100px 90px auto;
             align-items: end;
             gap: 12px;
         }
@@ -2958,6 +2959,13 @@
             margin: 10px 0 0;
             color: var(--muted);
             font-size: 12px;
+        }
+
+        .market-collector-front-link {
+            display: inline-block;
+            margin-left: 6px;
+            color: var(--primary);
+            font-weight: 700;
         }
 
         .market-collector-status {
@@ -3214,6 +3222,85 @@
             width: 16px;
             height: 16px;
             accent-color: var(--primary);
+        }
+
+        .publish-record-filters {
+            display: grid;
+            grid-template-columns: minmax(240px, 1fr) 150px 150px minmax(180px, .7fr) auto;
+            align-items: end;
+            gap: 10px;
+        }
+
+        .publish-record-filters .field {
+            margin: 0;
+        }
+
+        .publish-record-table {
+            min-width: 2000px;
+        }
+
+        .publish-record-table thead th {
+            position: sticky;
+            top: 0;
+            z-index: 1;
+            background: #f8fafc;
+        }
+
+        .publish-record-table th:nth-child(1) { width: 380px; }
+        .publish-record-table th:nth-child(2) { width: 150px; }
+        .publish-record-table th:nth-child(3) { width: 190px; }
+        .publish-record-table th:nth-child(4) { width: 205px; }
+        .publish-record-table th:nth-child(5) { width: 70px; }
+        .publish-record-table th:nth-child(6) { width: 105px; }
+        .publish-record-table th:nth-child(7) { width: 155px; }
+        .publish-record-table th:nth-child(8) { width: 360px; }
+        .publish-record-table th:nth-child(9) { width: 215px; }
+        .publish-record-table th:nth-child(10) { width: 110px; }
+
+        .publish-record-product {
+            display: flex;
+            min-width: 340px;
+            align-items: center;
+            gap: 9px;
+        }
+
+        .publish-record-product .market-product-image {
+            flex: 0 0 64px;
+        }
+
+        .publish-record-product .market-product-title {
+            max-width: 300px;
+        }
+
+        .publish-record-reason {
+            display: -webkit-box;
+            overflow: hidden;
+            max-width: 360px;
+            color: #991b1b;
+            line-height: 1.45;
+            -webkit-box-orient: vertical;
+            -webkit-line-clamp: 3;
+        }
+
+        .publish-record-details summary {
+            cursor: pointer;
+            color: var(--primary);
+            font-size: 11px;
+            font-weight: 700;
+        }
+
+        .publish-record-details pre {
+            overflow: auto;
+            width: 480px;
+            max-height: 220px;
+            margin: 6px 0 0;
+            padding: 8px;
+            border-radius: 7px;
+            background: #0f172a;
+            color: #e2e8f0;
+            font-size: 10px;
+            white-space: pre-wrap;
+            word-break: break-word;
         }
 
         .store-link-board {
@@ -3615,44 +3702,698 @@
                 align-items: flex-start;
                 flex-direction: column;
             }
+
+            .publish-record-filters {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        /* 圆佑风格的工作台外壳。业务模块保留原有 DOM 与脚本，只统一信息层级和视觉语言。 */
+        :root {
+            --bg: #f5f7fb;
+            --panel: #ffffff;
+            --text: #182230;
+            --muted: #7a8494;
+            --primary: #1687eb;
+            --primary-dark: #0874d1;
+            --border: #e5eaf1;
+            --soft-blue: #eef7ff;
+            --sidebar-width: 214px;
+            --topbar-height: 64px;
+        }
+
+        body {
+            overflow-x: hidden;
+            background:
+                radial-gradient(circle at 42% 4%, rgba(103, 180, 255, .11), transparent 27%),
+                radial-gradient(circle at 88% 11%, rgba(154, 118, 255, .1), transparent 24%),
+                var(--bg);
+            color: var(--text);
+            font-family: "Microsoft YaHei", "PingFang SC", system-ui, -apple-system, sans-serif;
+        }
+
+        .topbar {
+            position: sticky;
+            top: 0;
+            z-index: 60;
+            min-height: var(--topbar-height);
+            border-bottom: 1px solid #edf0f4;
+            background: rgba(255, 255, 255, .96);
+            color: var(--text);
+            padding: 0 22px;
+            box-shadow: 0 1px 5px rgba(16, 24, 40, .04);
+            backdrop-filter: blur(14px);
+        }
+
+        .brand,
+        .topbar-tools,
+        .topbar-user {
+            display: flex;
+            align-items: center;
+        }
+
+        .brand { gap: 12px; }
+
+        .brand-mark {
+            position: relative;
+            width: 38px;
+            height: 36px;
+            flex: 0 0 38px;
+        }
+
+        .brand-mark span {
+            position: absolute;
+            width: 22px;
+            height: 22px;
+            border-radius: 6px;
+            transform: rotate(30deg) skew(-7deg);
+            box-shadow: 0 6px 14px rgba(39, 103, 235, .16);
+        }
+
+        .brand-mark span:nth-child(1) { top: 2px; left: 1px; background: linear-gradient(135deg, #7357f7, #9346e7); }
+        .brand-mark span:nth-child(2) { top: 12px; left: 13px; background: linear-gradient(135deg, #04c3c9, #10a9e9); }
+        .brand-mark span:nth-child(3) { top: 3px; left: 18px; background: linear-gradient(135deg, #28c98b, #0abcc2); opacity: .92; }
+
+        .brand-copy h1 {
+            margin: 0;
+            font-size: 19px;
+            font-weight: 850;
+            letter-spacing: .08em;
+        }
+
+        .brand-copy p {
+            margin: 1px 0 0;
+            color: #8b95a5;
+            font-size: 9px;
+            font-weight: 700;
+            letter-spacing: .08em;
+        }
+
+        .sidebar-toggle,
+        .icon-button {
+            display: inline-grid;
+            place-items: center;
+            width: 34px;
+            height: 34px;
+            border: 0;
+            border-radius: 9px;
+            background: transparent;
+            color: #697386;
+            padding: 0;
+            font-size: 17px;
+        }
+
+        .sidebar-toggle { margin-left: 18px; font-size: 18px; }
+        .sidebar-toggle:hover,
+        .icon-button:hover { background: #f2f6fa; color: var(--primary); }
+
+        .topbar-tools { gap: 10px; }
+
+        .service-pill {
+            display: inline-flex;
+            align-items: center;
+            gap: 7px;
+            min-height: 32px;
+            border: 1px solid #d9f1e3;
+            border-radius: 8px;
+            background: #f4fdf7;
+            color: #17834c;
+            padding: 5px 10px;
+            font-size: 11px;
+            font-weight: 750;
+        }
+
+        .service-pill i,
+        .status-line i {
+            width: 7px;
+            height: 7px;
+            border-radius: 50%;
+            background: #22b66a;
+            box-shadow: 0 0 0 3px rgba(34, 182, 106, .12);
+        }
+
+        .topbar-divider { width: 1px; height: 24px; background: #edf0f3; }
+        .topbar-user { gap: 9px; font-size: 12px; }
+
+        .user-avatar {
+            display: inline-grid;
+            place-items: center;
+            width: 34px;
+            height: 34px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, #e8f3ff, #f1ecff);
+            color: #217fdd;
+            font-size: 13px;
+            font-weight: 850;
+        }
+
+        .user-copy { display: grid; gap: 1px; }
+        .user-copy strong { color: #263041; font-size: 12px; }
+        .user-copy small { color: #9099a8; font-size: 10px; }
+
+        .logout-link {
+            border: 0;
+            border-radius: 7px;
+            color: #667085;
+            padding: 6px 8px;
+            font-size: 11px;
+            font-weight: 700;
+        }
+
+        .logout-link:hover { background: #f2f5f8; color: var(--primary); }
+
+        .workspace-tabs {
+            position: sticky;
+            top: var(--topbar-height);
+            z-index: 50;
+            display: flex;
+            align-items: flex-end;
+            min-height: 42px;
+            overflow-x: auto;
+            border-bottom: 1px solid #dfe5ed;
+            background: rgba(255, 255, 255, .97);
+            padding: 6px 18px 0 calc(var(--sidebar-width) + 32px);
+            scrollbar-width: none;
+        }
+
+        .workspace-tabs::-webkit-scrollbar { display: none; }
+
+        .workspace-tab {
+            min-width: 92px;
+            min-height: 35px;
+            border: 1px solid #e0e6ed;
+            border-bottom: 0;
+            border-radius: 7px 7px 0 0;
+            background: #fff;
+            color: #4d5766;
+            margin-right: 3px;
+            padding: 7px 14px;
+            font-size: 12px;
+            font-weight: 650;
+            white-space: nowrap;
+        }
+
+        .workspace-tab:hover { color: var(--primary); background: #f8fbff; }
+        .workspace-tab.active { border-color: var(--primary); background: var(--primary); color: #fff; }
+        .workspace-tab span { margin-left: 9px; opacity: .75; }
+
+        .page {
+            display: grid;
+            grid-template-columns: var(--sidebar-width) minmax(0, 1fr);
+            align-items: start;
+            gap: 16px;
+            width: 100%;
+            margin: 0;
+            padding: 14px 18px 24px;
+        }
+
+        .panel {
+            border-color: var(--border);
+            border-radius: 12px;
+            box-shadow: 0 8px 24px rgba(44, 62, 92, .045);
+        }
+
+        .sidebar {
+            position: sticky;
+            top: calc(var(--topbar-height) + 56px);
+            display: flex;
+            height: calc(100vh - var(--topbar-height) - 72px);
+            min-height: 560px;
+            overflow: hidden;
+            flex-direction: column;
+            align-items: stretch;
+            gap: 0;
+            border: 1px solid #e8edf3;
+            background: rgba(255, 255, 255, .96);
+            padding: 7px;
+            margin: 0;
+        }
+
+        .sidebar-scroll {
+            min-height: 0;
+            overflow: auto;
+            padding: 2px 1px 8px;
+            scrollbar-color: #dfe6ee transparent;
+            scrollbar-width: thin;
+        }
+
+        .nav-title {
+            margin: 13px 10px 6px;
+            color: #a0a8b4;
+            font-size: 9px;
+            font-weight: 800;
+            letter-spacing: .12em;
+        }
+
+        .nav-title:first-child { margin-top: 6px; }
+
+        .tab-button {
+            position: relative;
+            display: flex;
+            width: 100%;
+            min-height: 39px;
+            align-items: center;
+            gap: 11px;
+            border: 0;
+            border-radius: 8px;
+            background: transparent;
+            color: #3e4858;
+            margin: 2px 0;
+            padding: 8px 11px;
+            font-size: 12px;
+            font-weight: 650;
+            transition: background .18s ease, color .18s ease, transform .18s ease;
+        }
+
+        .tab-button::before {
+            display: inline-grid;
+            width: 22px;
+            height: 22px;
+            flex: 0 0 22px;
+            place-items: center;
+            border-radius: 6px;
+            color: #647084;
+            content: attr(data-icon);
+            font-size: 15px;
+            font-weight: 750;
+        }
+
+        .tab-button:hover { background: #f4f8fc; color: var(--primary); transform: translateX(1px); }
+
+        .tab-button.active {
+            border: 0;
+            background: linear-gradient(90deg, #e4f2ff, #f1f8ff);
+            color: #1682e3;
+            box-shadow: inset 3px 0 0 #1687eb;
+        }
+
+        .tab-button.active::before { background: rgba(22, 135, 235, .1); color: #1687eb; }
+
+        .sidebar-footer {
+            display: flex;
+            align-items: center;
+            gap: 9px;
+            min-height: 54px;
+            border-top: 1px solid #edf0f4;
+            padding: 9px 7px 3px;
+        }
+
+        .sidebar-footer-icon {
+            display: inline-grid;
+            width: 32px;
+            height: 32px;
+            flex: 0 0 32px;
+            place-items: center;
+            border-radius: 9px;
+            background: linear-gradient(135deg, #1687eb, #6f64eb);
+            color: #fff;
+            font-size: 10px;
+            font-weight: 850;
+        }
+
+        .sidebar-footer-copy { display: grid; min-width: 0; gap: 1px; }
+        .sidebar-footer-copy strong { overflow: hidden; color: #323c4b; font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
+        .sidebar-footer-copy small { color: #9aa3b0; font-size: 9px; }
+
+        .content { min-width: 0; }
+
+        .tab-heading {
+            align-items: center;
+            min-height: 66px;
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            background: rgba(255, 255, 255, .94);
+            padding: 12px 18px;
+            margin-bottom: 12px;
+            box-shadow: 0 6px 20px rgba(44, 62, 92, .035);
+        }
+
+        .tab-heading h2 { color: #1b2635; font-size: 17px; }
+        .tab-heading p { color: #8791a1; font-size: 11px; }
+
+        .overview-hero {
+            display: flex;
+            min-height: 142px;
+            align-items: center;
+            justify-content: space-between;
+            overflow: hidden;
+            border: 1px solid rgba(210, 225, 244, .9);
+            border-radius: 14px;
+            background:
+                radial-gradient(circle at 88% 30%, rgba(126, 88, 242, .19), transparent 23%),
+                linear-gradient(112deg, rgba(240, 248, 255, .98), rgba(251, 249, 255, .96));
+            padding: 23px 30px;
+            margin-bottom: 14px;
+            box-shadow: 0 12px 30px rgba(80, 116, 165, .07);
+        }
+
+        .overview-eyebrow,
+        .section-kicker {
+            display: block;
+            color: #2d91e7;
+            font-size: 9px;
+            font-weight: 850;
+            letter-spacing: .14em;
+        }
+
+        .overview-hero h2 { margin: 7px 0 5px; color: #142238; font-size: 25px; letter-spacing: -.02em; }
+        .overview-hero p { max-width: 720px; margin: 0; color: #6d788a; font-size: 12px; line-height: 1.7; }
+
+        .overview-date {
+            display: grid;
+            min-width: 170px;
+            gap: 5px;
+            border: 1px solid rgba(255, 255, 255, .8);
+            border-radius: 12px;
+            background: rgba(255, 255, 255, .7);
+            padding: 14px 17px;
+            box-shadow: 0 10px 24px rgba(65, 89, 126, .06);
+        }
+
+        .overview-date span { color: #8d97a6; font-size: 10px; }
+        .overview-date strong { color: #27344a; font-size: 14px; }
+
+        .overview-notices,
+        .overview-quick,
+        .overview-flow,
+        .overview-help { padding: 15px 17px; }
+
+        .overview-notices,
+        .overview-metrics,
+        .overview-quick { margin-bottom: 14px; }
+
+        .overview-section-heading {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+            margin-bottom: 11px;
+        }
+
+        .overview-section-heading h3 { margin: 2px 0 0; color: #1a2738; font-size: 15px; }
+        .heading-note { color: #9aa3af; font-size: 10px; }
+        .text-button { border: 0; background: transparent; color: var(--primary); padding: 4px; font-size: 11px; }
+
+        .notice-list { display: grid; gap: 7px; }
+
+        .notice-row {
+            display: grid;
+            grid-template-columns: auto minmax(0, 1fr) auto;
+            align-items: center;
+            gap: 12px;
+            min-height: 38px;
+            border: 1px solid #edf1f5;
+            border-radius: 9px;
+            background: #fbfcfe;
+            padding: 7px 11px;
+        }
+
+        .notice-tag { border-radius: 5px; background: #eaf5ff; color: #2189df; padding: 4px 7px; font-size: 9px; font-weight: 750; }
+        .notice-row strong { overflow: hidden; color: #303b4c; font-size: 11px; font-weight: 650; text-overflow: ellipsis; white-space: nowrap; }
+        .notice-row time { color: #a1a9b5; font-size: 9px; white-space: nowrap; }
+
+        .overview-metrics {
+            display: grid;
+            grid-template-columns: repeat(4, minmax(0, 1fr));
+            gap: 12px;
+        }
+
+        .overview-metric {
+            display: grid;
+            grid-template-columns: auto minmax(0, 1fr) auto;
+            min-height: 82px;
+            align-items: center;
+            gap: 12px;
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            background: #fff;
+            color: inherit;
+            padding: 13px 15px;
+            text-align: left;
+            box-shadow: 0 8px 20px rgba(44, 62, 92, .04);
+        }
+
+        button.overview-metric:hover { border-color: #c9e4fb; box-shadow: 0 10px 24px rgba(26, 125, 213, .09); transform: translateY(-1px); }
+        .overview-metric > span:nth-child(2) { display: grid; min-width: 0; gap: 3px; }
+        .overview-metric strong { color: #14233a; font-size: 17px; }
+        .overview-metric small { color: #8892a2; font-size: 10px; }
+        .overview-metric > b { color: #a0a9b6; font-size: 13px; }
+
+        .metric-icon,
+        .quick-icon {
+            display: inline-grid;
+            place-items: center;
+            border-radius: 10px;
+            font-weight: 800;
+        }
+
+        .metric-icon { width: 42px; height: 42px; font-size: 19px; }
+        .quick-icon { width: 43px; height: 43px; flex: 0 0 43px; font-size: 18px; }
+        .blue { background: #eaf5ff; color: #1789e8; }
+        .green { background: #effbe9; color: #4b9d2f; }
+        .violet { background: #f4edff; color: #7d48d5; }
+        .amber { background: #fff6e6; color: #dc8c19; }
+        .cyan { background: #e8fbfb; color: #1596a4; }
+        .overview-metric .online-dot { border-radius: 999px; background: #edf9f2; color: #20935a; padding: 4px 7px; font-size: 9px; }
+
+        .quick-grid {
+            display: grid;
+            grid-template-columns: repeat(5, minmax(0, 1fr));
+            gap: 10px;
+        }
+
+        .quick-card {
+            display: flex;
+            min-width: 0;
+            min-height: 80px;
+            align-items: center;
+            gap: 10px;
+            border: 1px solid #e9edf3;
+            border-radius: 10px;
+            background: #fcfdff;
+            color: inherit;
+            padding: 11px;
+            text-align: left;
+        }
+
+        .quick-card:hover { border-color: #c9e4fb; background: #fff; box-shadow: 0 9px 20px rgba(40, 83, 126, .07); transform: translateY(-1px); }
+        .quick-card > span:nth-child(2) { display: grid; min-width: 0; flex: 1; gap: 4px; }
+        .quick-card strong { color: #253145; font-size: 12px; }
+        .quick-card small { display: -webkit-box; overflow: hidden; color: #9099a7; font-size: 9px; line-height: 1.45; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
+        .quick-card > b { color: #a5adba; font-size: 12px; }
+
+        .overview-bottom-grid { display: grid; grid-template-columns: minmax(0, 2fr) minmax(260px, .7fr); gap: 14px; }
+        .flow-line { display: flex; align-items: center; justify-content: space-between; gap: 7px; min-height: 85px; }
+        .flow-line button { display: flex; min-width: 0; align-items: center; gap: 9px; border: 0; background: transparent; color: inherit; padding: 4px; text-align: left; }
+        .flow-line button:hover strong { color: var(--primary); }
+        .flow-line i { display: inline-grid; width: 31px; height: 31px; flex: 0 0 31px; place-items: center; border-radius: 50%; background: #edf6ff; color: var(--primary); font-size: 11px; font-style: normal; font-weight: 850; }
+        .flow-line span { display: grid; gap: 3px; }
+        .flow-line strong { color: #2a3547; font-size: 11px; }
+        .flow-line small { color: #98a1ae; font-size: 9px; white-space: nowrap; }
+        .flow-line em { height: 1px; min-width: 16px; flex: 1; background: linear-gradient(90deg, #c6ddf3, #d9e3ef); }
+
+        .overview-help { display: flex; flex-direction: column; }
+        .status-line { display: flex; align-items: center; justify-content: space-between; gap: 12px; border-top: 1px solid #edf1f5; padding: 10px 2px; font-size: 10px; }
+        .status-line span { display: flex; align-items: center; gap: 8px; color: #606b7b; }
+        .status-line strong { color: #2d8e59; font-size: 10px; }
+
+        body.sidebar-collapsed { --sidebar-width: 66px; }
+        body.sidebar-collapsed .nav-label,
+        body.sidebar-collapsed .nav-title,
+        body.sidebar-collapsed .sidebar-footer-copy { display: none; }
+        body.sidebar-collapsed .tab-button { justify-content: center; padding-inline: 9px; }
+        body.sidebar-collapsed .tab-button::before { margin: 0; }
+        body.sidebar-collapsed .sidebar-footer { justify-content: center; }
+
+        @media (max-width: 1280px) {
+            .quick-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+            .overview-metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+            .overview-bottom-grid { grid-template-columns: 1fr; }
+        }
+
+        @media (max-width: 900px) {
+            :root { --sidebar-width: 74px; }
+            .topbar { padding-inline: 12px; }
+            .brand-copy,
+            .user-copy,
+            .service-pill,
+            .topbar-divider { display: none; }
+            .sidebar-toggle { margin-left: 4px; }
+            .workspace-tabs { padding-left: 12px; }
+            .page { grid-template-columns: var(--sidebar-width) minmax(0, 1fr); gap: 10px; padding: 10px; }
+            .sidebar { position: sticky; min-height: 520px; }
+            .nav-label,
+            .nav-title,
+            .sidebar-footer-copy { display: none; }
+            .tab-button { justify-content: center; padding-inline: 8px; }
+            .sidebar-footer { justify-content: center; }
+            .overview-hero { align-items: flex-start; flex-direction: column; gap: 14px; padding: 20px; }
+            .overview-date { min-width: min(100%, 260px); }
+            .quick-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+            .flow-line { align-items: stretch; flex-direction: column; }
+            .flow-line button { width: 100%; }
+            .flow-line em { width: 1px; min-height: 12px; margin-left: 19px; }
+        }
+
+        @media (max-width: 640px) {
+            :root { --topbar-height: 56px; }
+            .topbar { min-height: var(--topbar-height); }
+            .brand-mark { transform: scale(.88); transform-origin: left center; }
+            .icon-button { display: none; }
+            .workspace-tabs { min-height: 39px; }
+            .page { display: block; padding: 8px; }
+            .sidebar { position: static; height: auto; min-height: 0; overflow: visible; padding: 5px; margin-bottom: 8px; }
+            .sidebar-scroll { display: flex; overflow-x: auto; gap: 4px; padding: 0; }
+            .tab-button { width: 41px; min-width: 41px; height: 38px; min-height: 38px; margin: 0; }
+            .sidebar-footer { display: none; }
+            .overview-hero h2 { font-size: 21px; }
+            .overview-metrics,
+            .quick-grid { grid-template-columns: 1fr; }
+            .notice-row { grid-template-columns: auto minmax(0, 1fr); }
+            .notice-row time { display: none; }
+            .tab-heading { align-items: flex-start; flex-direction: column; }
         }
     </style>
 </head>
 <body>
     <header class="topbar">
-        <div>
-            <h1>武汉泽顺综合服务台</h1>
-            <p>自动化 AI 申诉与最新侵权数据看板</p>
+        <div class="brand">
+            <div class="brand-mark" aria-hidden="true"><span></span><span></span><span></span></div>
+            <div class="brand-copy">
+                <h1>泽顺</h1>
+                <p>ZE SHUN · 运营服务台</p>
+            </div>
+            <button class="sidebar-toggle" id="sidebar-toggle" type="button" aria-label="收起或展开功能导航" title="收起或展开功能导航">☰</button>
         </div>
-        <div class="topbar-user">
-            <span>{{ current_user.display_name or current_user.username }}{% if current_user.role_name %} · {{ current_user.role_name }}{% endif %}</span>
-            <a class="logout-link" href="/logout">退出</a>
+        <div class="topbar-tools">
+            <span class="service-pill"><i></i> 服务在线</span>
+            <button class="icon-button" type="button" aria-label="通知" title="暂无新通知">♢</button>
+            <span class="topbar-divider"></span>
+            <div class="topbar-user">
+                <span class="user-avatar">{{ (current_user.display_name or current_user.username)[:1] }}</span>
+                <span class="user-copy"><strong>{{ current_user.display_name or current_user.username }}</strong>{% if current_user.role_name %}<small>{{ current_user.role_name }}</small>{% endif %}</span>
+                <a class="logout-link" href="/logout">退出</a>
+            </div>
         </div>
     </header>
 
+    <nav class="workspace-tabs" aria-label="常用工作区">
+        <button class="workspace-tab active" type="button" data-tab="overview" onclick="switchTab('overview')">总览 <span>×</span></button>
+        <button class="workspace-tab" type="button" data-tab="orders" onclick="switchTab('orders')">订单管理</button>
+        <button class="workspace-tab" type="button" data-tab="mercado-collection" onclick="switchTab('mercado-collection')">商品采集</button>
+        <button class="workspace-tab" type="button" data-tab="store-tokens" onclick="switchTab('store-tokens')">店铺授权</button>
+        <button class="workspace-tab" type="button" data-tab="risk-check" onclick="switchTab('risk-check')">侵权检测</button>
+    </nav>
+
     <main class="page">
         <aside class="panel sidebar">
-            <p class="nav-title">功能导航</p>
-            <button class="tab-button active" type="button" data-tab="appeal" data-permission="appeal.view" onclick="switchTab('appeal')">自动化AI申诉</button>
-            <button class="tab-button" type="button" data-tab="tasks" data-permission="tasks.view" onclick="switchTab('tasks')">任务模块</button>
-            <button class="tab-button" type="button" data-tab="order-print" data-permission="order_print.view" onclick="switchTab('order-print')">订单打印</button>
-            <button class="tab-button" type="button" data-tab="order-analysis" data-permission="order_analysis.view" onclick="switchTab('order-analysis')">订单分析</button>
-            <button class="tab-button" type="button" data-tab="orders" onclick="switchTab('orders')">订单管理</button>
-            <button class="tab-button" type="button" data-tab="window-anomalies" data-permission="shop_status.view" onclick="switchTab('window-anomalies')">店铺状态</button>
-            <button class="tab-button" type="button" data-tab="store-tokens" onclick="switchTab('store-tokens')">店铺 Token</button>
-            <button class="tab-button" type="button" data-tab="store-links" onclick="switchTab('store-links')">店铺链接</button>
-            <button class="tab-button" type="button" data-tab="mercado-collection" onclick="switchTab('mercado-collection')">商品采集</button>
-            <button class="tab-button" type="button" data-tab="funds" data-permission="funds.view" onclick="switchTab('funds')">资金管理</button>
-            <button class="tab-button" type="button" data-tab="zying-collection" data-permission="zying_collection.view" onclick="switchTab('zying-collection')">智赢产品采集</button>
-            <button class="tab-button" type="button" data-tab="risk-check" data-permission="risk_check.view" onclick="switchTab('risk-check')">侵权检测</button>
-            <button class="tab-button" type="button" data-tab="infractions" data-permission="infractions.view" onclick="switchTab('infractions')">侵权数据</button>
-            <button class="tab-button" type="button" data-tab="reputation" data-permission="reputation.view" onclick="switchTab('reputation')">声誉数据</button>
-            <button class="tab-button" type="button" data-tab="ai-appeals" data-permission="ai_appeals.view" onclick="switchTab('ai-appeals')">AI申诉记录</button>
-            <button class="tab-button" type="button" data-tab="access" data-permission="access.view" onclick="switchTab('access')">人员与权限</button>
-            <button class="tab-button" type="button" data-tab="yandex" onclick="switchTab('yandex')">Yandex 店铺</button>
+            <div class="sidebar-scroll">
+                <p class="nav-title">工作台</p>
+                <button class="tab-button active" type="button" data-tab="overview" data-icon="⌂" onclick="switchTab('overview')"><span class="nav-label">总览</span></button>
+
+                <p class="nav-title">订单运营</p>
+                <button class="tab-button" type="button" data-tab="orders" data-icon="▤" onclick="switchTab('orders')"><span class="nav-label">订单管理</span></button>
+                <button class="tab-button" type="button" data-tab="order-print" data-icon="▣" data-permission="order_print.view" onclick="switchTab('order-print')"><span class="nav-label">订单打印</span></button>
+                <button class="tab-button" type="button" data-tab="order-analysis" data-icon="⌁" data-permission="order_analysis.view" onclick="switchTab('order-analysis')"><span class="nav-label">订单分析</span></button>
+
+                <p class="nav-title">商品中心</p>
+                <button class="tab-button" type="button" data-tab="mercado-collection" data-icon="◇" onclick="switchTab('mercado-collection')"><span class="nav-label">商品采集</span></button>
+                <button class="tab-button" type="button" data-tab="zying-collection" data-icon="⊞" data-permission="zying_collection.view" onclick="switchTab('zying-collection')"><span class="nav-label">智赢产品采集</span></button>
+                <button class="tab-button" type="button" data-tab="mercado-publish-records" data-icon="⇧" onclick="switchTab('mercado-publish-records')"><span class="nav-label">产品上架记录</span></button>
+
+                <p class="nav-title">店铺管理</p>
+                <button class="tab-button" type="button" data-tab="window-anomalies" data-icon="◉" data-permission="shop_status.view" onclick="switchTab('window-anomalies')"><span class="nav-label">店铺状态</span></button>
+                <button class="tab-button" type="button" data-tab="store-tokens" data-icon="⌘" onclick="switchTab('store-tokens')"><span class="nav-label">店铺授权</span></button>
+                <button class="tab-button" type="button" data-tab="store-links" data-icon="↗" onclick="switchTab('store-links')"><span class="nav-label">店铺链接</span></button>
+                <button class="tab-button" type="button" data-tab="funds" data-icon="$" data-permission="funds.view" onclick="switchTab('funds')"><span class="nav-label">资金管理</span></button>
+
+                <p class="nav-title">自动化与风控</p>
+                <button class="tab-button" type="button" data-tab="appeal" data-icon="✦" data-permission="appeal.view" onclick="switchTab('appeal')"><span class="nav-label">自动化 AI 申诉</span></button>
+                <button class="tab-button" type="button" data-tab="tasks" data-icon="✓" data-permission="tasks.view" onclick="switchTab('tasks')"><span class="nav-label">任务模块</span></button>
+                <button class="tab-button" type="button" data-tab="risk-check" data-icon="◎" data-permission="risk_check.view" onclick="switchTab('risk-check')"><span class="nav-label">侵权检测</span></button>
+                <button class="tab-button" type="button" data-tab="infractions" data-icon="!" data-permission="infractions.view" onclick="switchTab('infractions')"><span class="nav-label">侵权数据</span></button>
+                <button class="tab-button" type="button" data-tab="reputation" data-icon="☆" data-permission="reputation.view" onclick="switchTab('reputation')"><span class="nav-label">声誉数据</span></button>
+                <button class="tab-button" type="button" data-tab="ai-appeals" data-icon="◫" data-permission="ai_appeals.view" onclick="switchTab('ai-appeals')"><span class="nav-label">AI 申诉记录</span></button>
+
+                <p class="nav-title">系统</p>
+                <button class="tab-button" type="button" data-tab="access" data-permission="access.view" data-icon="♙" onclick="switchTab('access')"><span class="nav-label">人员与权限</span></button>
+                <button class="tab-button" type="button" data-tab="yandex" data-icon="Y" onclick="switchTab('yandex')"><span class="nav-label">Yandex 店铺</span></button>
+            </div>
+            <div class="sidebar-footer">
+                <span class="sidebar-footer-icon">ZS</span>
+                <span class="sidebar-footer-copy"><strong>泽顺运营中心</strong><small>v2.0 · 企业工作台</small></span>
+            </div>
         </aside>
 
         <section class="content">
+            <div class="tab-page active" id="tab-overview">
+                <section class="overview-hero">
+                    <div>
+                        <span class="overview-eyebrow">OPERATIONS OVERVIEW</span>
+                        <h2>你好，{{ current_user.display_name or current_user.username }}</h2>
+                        <p>欢迎回到泽顺运营服务台。订单、店铺、商品与风控任务已集中到同一工作流。</p>
+                    </div>
+                    <div class="overview-date">
+                        <span>今日工作台</span>
+                        <strong id="overview-current-date">—</strong>
+                    </div>
+                </section>
+
+                <section class="panel overview-notices">
+                    <div class="overview-section-heading">
+                        <div><span class="section-kicker">NOTICE</span><h3>最新公告</h3></div>
+                        <button class="text-button" type="button" onclick="refreshOverviewClock()">刷新</button>
+                    </div>
+                    <div class="notice-list">
+                        <div class="notice-row"><span class="notice-tag">系统公告</span><strong>泽顺运营服务台界面升级，业务入口与任务状态已统一整合</strong><time>今天</time></div>
+                        <div class="notice-row"><span class="notice-tag">运营提醒</span><strong>授权店铺订单每 15 分钟自动同步，也可在订单管理中手动回填</strong><time>持续运行</time></div>
+                        <div class="notice-row"><span class="notice-tag">功能更新</span><strong>商品采集、产品上架记录与侵权检测已加入快捷工作流</strong><time>已上线</time></div>
+                    </div>
+                </section>
+
+                <section class="overview-metrics" aria-label="工作台概况">
+                    <button class="overview-metric" type="button" onclick="switchTab('orders')"><span class="metric-icon blue">▤</span><span><strong>15 分钟</strong><small>订单自动同步</small></span><b>→</b></button>
+                    <button class="overview-metric" type="button" onclick="switchTab('store-tokens')"><span class="metric-icon green">◉</span><span><strong>6 个站点</strong><small>跨境店铺覆盖</small></span><b>→</b></button>
+                    <button class="overview-metric" type="button" onclick="switchTab('risk-check')"><span class="metric-icon violet">◎</span><span><strong>AI 风控</strong><small>侵权检测与申诉</small></span><b>→</b></button>
+                    <div class="overview-metric"><span class="metric-icon amber">✓</span><span><strong id="overview-module-count">18 项</strong><small>业务功能在线</small></span><b class="online-dot">在线</b></div>
+                </section>
+
+                <section class="panel overview-quick">
+                    <div class="overview-section-heading">
+                        <div><span class="section-kicker">QUICK ACCESS</span><h3>快捷入口</h3></div>
+                        <span class="heading-note">常用流程一键直达</span>
+                    </div>
+                    <div class="quick-grid">
+                        <button class="quick-card" type="button" onclick="switchTab('mercado-collection')"><span class="quick-icon blue">◇</span><span><strong>商品采集</strong><small>按关键词或列表链接批量采集商品</small></span><b>→</b></button>
+                        <button class="quick-card" type="button" onclick="switchTab('orders')"><span class="quick-icon violet">▤</span><span><strong>订单管理</strong><small>统一处理多站点订单与采购进度</small></span><b>→</b></button>
+                        <button class="quick-card" type="button" onclick="switchTab('store-tokens')"><span class="quick-icon green">⌘</span><span><strong>店铺授权</strong><small>维护 Mercado Libre 店铺授权状态</small></span><b>→</b></button>
+                        <button class="quick-card" type="button" onclick="switchTab('risk-check')"><span class="quick-icon amber">◎</span><span><strong>侵权检测</strong><small>执行商品风险检查并查看检测结果</small></span><b>→</b></button>
+                        <button class="quick-card" type="button" onclick="switchTab('funds')"><span class="quick-icon cyan">$</span><span><strong>资金管理</strong><small>采集并汇总各店铺款项信息</small></span><b>→</b></button>
+                    </div>
+                </section>
+
+                <section class="overview-bottom-grid">
+                    <div class="panel overview-flow">
+                        <div class="overview-section-heading"><div><span class="section-kicker">WORKFLOW</span><h3>核心运营流程</h3></div></div>
+                        <div class="flow-line">
+                            <button type="button" onclick="switchTab('mercado-collection')"><i>1</i><span><strong>采集商品</strong><small>建立候选产品池</small></span></button>
+                            <em></em>
+                            <button type="button" onclick="switchTab('risk-check')"><i>2</i><span><strong>风险检测</strong><small>筛除侵权风险</small></span></button>
+                            <em></em>
+                            <button type="button" onclick="switchTab('mercado-publish-records')"><i>3</i><span><strong>产品上架</strong><small>跟踪刊登结果</small></span></button>
+                            <em></em>
+                            <button type="button" onclick="switchTab('orders')"><i>4</i><span><strong>订单履约</strong><small>采购与发货跟进</small></span></button>
+                        </div>
+                    </div>
+                    <div class="panel overview-help">
+                        <div class="overview-section-heading"><div><span class="section-kicker">STATUS</span><h3>系统状态</h3></div></div>
+                        <div class="status-line"><span><i class="ok"></i>泽顺服务台</span><strong>运行正常</strong></div>
+                        <div class="status-line"><span><i class="ok"></i>订单自动同步</span><strong>每 15 分钟</strong></div>
+                        <div class="status-line"><span><i class="ok"></i>权限控制</span><strong>{{ current_user.role_name or '已启用' }}</strong></div>
+                    </div>
+                </section>
+            </div>
+
             <div class="tab-page" id="tab-orders">
                 <div class="tab-heading">
                     <div>
@@ -3733,9 +4474,15 @@
                             </select>
                         </div>
                         <div class="order-filter-field">
-                            <label for="order-salesperson-filter">业务员</label>
+                            <label for="order-salesperson-filter">店铺业务员</label>
                             <select id="order-salesperson-filter" onchange="setOrderSalesperson(this.value)">
                                 <option value="">全部业务员</option>
+                            </select>
+                        </div>
+                        <div class="order-filter-field">
+                            <label for="order-group-filter">店铺分组</label>
+                            <select id="order-group-filter" onchange="setOrderGroup(this.value)">
+                                <option value="">全部分组</option>
                             </select>
                         </div>
                         <div class="order-filter-field">
@@ -3747,8 +4494,8 @@
                             <input id="order-end-date" type="date">
                         </div>
                         <div class="order-filter-field search">
-                            <label for="order-search-input">订单、采购单、运单、商品或备注关键词</label>
-                            <input id="order-search-input" type="search" placeholder="支持采购备注和订单备注模糊查询">
+                            <label for="order-search-input">订单、采购单、运单、商品名或备注关键词</label>
+                            <input id="order-search-input" type="search" placeholder="商品名、采购备注和订单备注均支持模糊查询">
                         </div>
                         <div class="order-filter-actions">
                             <button class="primary" type="submit">搜索</button>
@@ -3779,7 +4526,7 @@
                                     <th><input class="order-row-checkbox" type="checkbox" aria-label="全选本页订单" onchange="toggleAllVisibleOrders(this.checked)"></th>
                                     <th>订单号</th><th>商品</th><th>销售单号</th><th>金额</th><th>成本</th>
                                     <th>利润</th><th>利润率</th><th>状态</th><th>备货</th><th>签收/发货</th>
-                                    <th>运单</th><th>买家 / 备注</th><th>下单时间</th>
+                                    <th>运单</th><th>买家 / 备注</th><th>下单时间（北京时间）</th>
                                 </tr>
                             </thead>
                             <tbody id="order-table-body">
@@ -3831,7 +4578,7 @@
                     <div class="order-detail-header">
                         <div>
                             <h3>拉取订单</h3>
-                            <p style="margin:3px 0 0;color:#667085;font-size:11px">从已授权店铺 Token 拉取所选日期内的全部订单</p>
+                            <p style="margin:3px 0 0;color:#667085;font-size:11px">从已完成店铺授权的账号拉取所选日期内的全部订单</p>
                         </div>
                         <button class="order-detail-close" id="order-sync-close-x" type="button" aria-label="关闭拉取订单" onclick="closeOrderSyncDialog()">×</button>
                     </div>
@@ -3944,14 +4691,32 @@
             <div class="tab-page" id="tab-mercado-collection">
                 <div class="tab-heading">
                     <h2>Mercado 商品采集</h2>
-                    <p>输入列表链接和数量，自动翻页；重量与尺寸来自商品详情页的智赢插件</p>
+                    <p>输入关键词并选择国家、采集专区，自动打开对应前台搜索并翻页采集</p>
                 </div>
 
                 <section class="panel market-collector-panel">
                     <div class="market-collector-form">
                         <div class="field">
-                            <label for="mercado-collection-url">商品列表或搜索链接</label>
-                            <input id="mercado-collection-url" type="url" placeholder="https://listado.mercadolibre.com.mx/..." autocomplete="off">
+                            <label for="mercado-collection-url">关键词或商品列表链接</label>
+                            <input id="mercado-collection-url" type="text" placeholder="例如：bolsas para mujer；也可粘贴 Mercado 链接" autocomplete="off" oninput="updateMercadoCollectionFrontLink()">
+                        </div>
+                        <div class="field">
+                            <label for="mercado-collection-site">采集国家</label>
+                            <select id="mercado-collection-site" onchange="updateMercadoCollectionFrontLink()">
+                                <option value="MLM" selected>墨西哥</option>
+                                <option value="MLB">巴西</option>
+                                <option value="MLA">阿根廷</option>
+                                <option value="MLC">智利</option>
+                                <option value="MCO">哥伦比亚</option>
+                                <option value="MLU">乌拉圭</option>
+                            </select>
+                        </div>
+                        <div class="field">
+                            <label for="mercado-collection-scope">采集专区</label>
+                            <select id="mercado-collection-scope" onchange="updateMercadoCollectionFrontLink()">
+                                <option value="cross_border" selected>跨境卖家专区</option>
+                                <option value="all">全部商品</option>
+                            </select>
                         </div>
                         <div class="field">
                             <label for="mercado-collection-count">采集数量</label>
@@ -3959,7 +4724,7 @@
                         </div>
                         <div class="field">
                             <label for="mercado-collection-workers">并发数</label>
-                            <input id="mercado-collection-workers" type="number" min="1" max="6" value="4">
+                            <input id="mercado-collection-workers" type="number" min="1" max="8" value="6">
                         </div>
                         <div class="market-collector-actions">
                             <button class="secondary" id="mercado-playwright-setup" type="button" onclick="openMercadoPlaywrightSetup()">登录智赢采集浏览器</button>
@@ -3967,6 +4732,7 @@
                             <button class="danger" id="mercado-collection-stop" type="button" onclick="stopMercadoCollection()" disabled>停止</button>
                         </div>
                     </div>
+                    <p class="market-collector-hint">跨境卖家专区只保留前台卡片带 Internacional 标识的商品；仍兼容直接粘贴列表或详情链接。<a class="market-collector-front-link" id="mercado-collection-front-link" href="#" target="_blank" rel="noopener" hidden>打开对应前台链接</a></p>
                     <p class="market-collector-hint">使用 Playwright 直接读取页面 DOM，自动翻页并并发加载详情页，不使用键鼠 RPA、截图或 OCR。重量和尺寸只读取智赢插件在详情页注入的数据，不读取智赢产品库。优先复用 9222 端口的已登录 Edge；否则会打开独立采集浏览器，首次使用需在其中登录一次智赢。</p>
                     <div class="market-collector-status">
                         <div class="market-status-card"><span>任务状态</span><strong id="mercado-collection-state">等待启动</strong></div>
@@ -4079,6 +4845,84 @@
                 </section>
             </div>
 
+            <div class="tab-page" id="tab-mercado-publish-records">
+                <div class="tab-heading">
+                    <h2>产品上架记录</h2>
+                    <p>查看每个产品的历次上架明细、执行结果与失败原因</p>
+                </div>
+
+                <section class="panel market-collector-panel">
+                    <div class="market-collector-status">
+                        <div class="market-status-card"><span>全部记录</span><strong id="publish-record-count-all">0</strong></div>
+                        <div class="market-status-card"><span>上架成功</span><strong id="publish-record-count-published">0</strong></div>
+                        <div class="market-status-card"><span>上架失败</span><strong id="publish-record-count-failed">0</strong></div>
+                        <div class="market-status-card"><span>正在上架</span><strong id="publish-record-count-publishing">0</strong></div>
+                        <div class="market-status-card"><span>等待上架</span><strong id="publish-record-count-pending">0</strong></div>
+                    </div>
+                </section>
+
+                <section class="panel market-list-panel">
+                    <div class="publish-record-filters">
+                        <div class="field">
+                            <label for="publish-record-search">产品 / 批次搜索</label>
+                            <input id="publish-record-search" type="search" placeholder="商品编号、标题、结果编号或批次" onkeydown="if(event.key === 'Enter') loadMercadoPublishRecords()">
+                        </div>
+                        <div class="field">
+                            <label for="publish-record-status">上架状态</label>
+                            <select id="publish-record-status" onchange="loadMercadoPublishRecords()">
+                                <option value="">全部状态</option>
+                                <option value="pending">等待上架</option>
+                                <option value="publishing">正在上架</option>
+                                <option value="published">上架成功</option>
+                                <option value="failed">上架失败</option>
+                            </select>
+                        </div>
+                        <div class="field">
+                            <label for="publish-record-site">目标站点</label>
+                            <select id="publish-record-site" onchange="loadMercadoPublishRecords()">
+                                <option value="">全部站点</option>
+                                <option value="MLM">墨西哥</option>
+                                <option value="MLB">巴西</option>
+                                <option value="MLA">阿根廷</option>
+                                <option value="MLC">智利</option>
+                                <option value="MCO">哥伦比亚</option>
+                                <option value="MLU">乌拉圭</option>
+                            </select>
+                        </div>
+                        <div class="field">
+                            <label for="publish-record-store">上架店铺</label>
+                            <input id="publish-record-store" type="search" placeholder="输入店铺名称" onkeydown="if(event.key === 'Enter') loadMercadoPublishRecords()">
+                        </div>
+                        <button class="primary" type="button" onclick="loadMercadoPublishRecords()">搜索 / 刷新</button>
+                    </div>
+                    <div class="market-list-toolbar" style="margin-top:12px">
+                        <span class="market-list-summary" id="publish-record-summary">共 0 条记录</span>
+                        <span class="market-list-summary" id="publish-record-message">按产品保留每一次上架结果</span>
+                    </div>
+                    <div class="market-table-wrap">
+                        <table class="publish-record-table">
+                            <thead>
+                                <tr>
+                                    <th>产品</th>
+                                    <th>源商品编号</th>
+                                    <th>上架店铺 / 站点</th>
+                                    <th>批次</th>
+                                    <th>库存</th>
+                                    <th>结果</th>
+                                    <th>上架商品编号</th>
+                                    <th>失败原因 / 接口明细</th>
+                                    <th>开始 / 完成时间</th>
+                                    <th>操作人</th>
+                                </tr>
+                            </thead>
+                            <tbody id="publish-record-body">
+                                <tr><td class="empty-state" colspan="10">打开产品上架记录模块后加载数据</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </section>
+            </div>
+
             <div class="tab-page" id="tab-yandex">
                 <div class="tab-heading">
                     <h2>Yandex 店铺管理</h2>
@@ -4096,7 +4940,7 @@
                 </section>
             </div>
 
-            <div class="tab-page active" id="tab-appeal">
+            <div class="tab-page" id="tab-appeal">
                 <div class="tab-heading">
                     <h2>自动化AI申诉</h2>
                     <p>选择客服模式、站点和话术，执行申诉任务并查看实时日志</p>
@@ -4870,7 +5714,7 @@
 
             <div class="tab-page" id="tab-store-tokens">
                 <div class="tab-heading">
-                    <h2>店铺 Token</h2>
+                    <h2>店铺授权</h2>
                     <p>通过授权链接获取 TG Code，为店铺保存并维护 Mercado Libre Token</p>
                 </div>
 
@@ -4934,7 +5778,7 @@
                                     </tr>
                                 </thead>
                                 <tbody id="mercado-token-body">
-                                    <tr><td class="empty-state" colspan="8">正在加载店铺 Token...</td></tr>
+                                    <tr><td class="empty-state" colspan="8">正在加载店铺授权...</td></tr>
                                 </tbody>
                             </table>
                         </div>
@@ -4949,7 +5793,7 @@
                         </div>
                         <button class="order-detail-close" type="button" aria-label="关闭站点配置" onclick="document.getElementById('mercado-site-settings-dialog').close()">×</button>
                     </div>
-                    <p class="mercado-site-settings-intro">折扣比例按百分比填写（0–100）；业务员和组别支持自定义文字。留空并保存会清除该站点配置。</p>
+                    <p class="mercado-site-settings-intro">折扣比例按百分比填写（0–100）；业务员仅可从“人员与权限”中的启用人员选择，组别支持自定义文字。留空并保存会清除该站点配置。</p>
                     <div class="mercado-site-settings-wrap">
                         <table class="mercado-site-settings-table">
                             <thead><tr><th>站点</th><th>折扣比例（%）</th><th>业务员</th><th>自定义组别</th></tr></thead>
@@ -5891,6 +6735,9 @@
         const yandexConsoleState = document.getElementById("yandex-console-state");
         const openYandexConsoleButton = document.getElementById("open-yandex-console");
         const mercadoCollectionUrl = document.getElementById("mercado-collection-url");
+        const mercadoCollectionSite = document.getElementById("mercado-collection-site");
+        const mercadoCollectionScope = document.getElementById("mercado-collection-scope");
+        const mercadoCollectionFrontLink = document.getElementById("mercado-collection-front-link");
         const mercadoCollectionCount = document.getElementById("mercado-collection-count");
         const mercadoCollectionWorkers = document.getElementById("mercado-collection-workers");
         const mercadoCollectionStart = document.getElementById("mercado-collection-start");
@@ -5927,10 +6774,18 @@
         const mercadoPublishStatus = document.getElementById("mercado-publish-status");
         const mercadoViewCollection = document.getElementById("mercado-view-collection");
         const mercadoViewProducts = document.getElementById("mercado-view-products");
+        const publishRecordBody = document.getElementById("publish-record-body");
+        const publishRecordSearch = document.getElementById("publish-record-search");
+        const publishRecordStatus = document.getElementById("publish-record-status");
+        const publishRecordSite = document.getElementById("publish-record-site");
+        const publishRecordStore = document.getElementById("publish-record-store");
+        const publishRecordSummary = document.getElementById("publish-record-summary");
+        const publishRecordMessage = document.getElementById("publish-record-message");
         const orderTableBody = document.getElementById("order-table-body");
         const orderStatusStrip = document.getElementById("order-status-strip");
         const orderStatusFilter = document.getElementById("order-status-filter");
         const orderSalespersonFilter = document.getElementById("order-salesperson-filter");
+        const orderGroupFilter = document.getElementById("order-group-filter");
         const orderStartDate = document.getElementById("order-start-date");
         const orderEndDate = document.getElementById("order-end-date");
         const orderSearchInput = document.getElementById("order-search-input");
@@ -6061,7 +6916,10 @@
         let mercadoPublishPollTimer = null;
         let mercadoPublishStoresLoaded = false;
         let mercadoStoreTokenRows = [];
+        let mercadoPublishRecordsLoaded = false;
+        let mercadoPublishRecordPollTimer = null;
         let mercadoSiteSettingsTokenId = 0;
+        let mercadoSalespeople = [];
         const mercadoSiteDefinitions = [
             ["MLM", "墨西哥"], ["MLB", "巴西"], ["MLC", "智利"],
             ["MCO", "哥伦比亚"], ["MLA", "阿根廷"], ["MLU", "乌拉圭"],
@@ -6073,6 +6931,7 @@
         let orderCountry = "";
         let orderStatus = "";
         let orderSalesperson = "";
+        let orderGroupName = "";
         let orderOrigin = "token";
         let orderPage = 1;
         let orderPages = 1;
@@ -6173,6 +7032,45 @@
             if (!firstVisibleButton) {
                 document.querySelectorAll(".tab-page").forEach(page => page.classList.remove("active"));
             }
+            const moduleCount = document.getElementById("overview-module-count");
+            if (moduleCount) {
+                const visibleModules = Array.from(document.querySelectorAll(".tab-button:not([hidden])"))
+                    .filter(button => button.dataset.tab !== "overview").length;
+                moduleCount.textContent = `${visibleModules} 项`;
+            }
+        }
+
+        function refreshOverviewClock() {
+            const target = document.getElementById("overview-current-date");
+            if (!target) return;
+            target.textContent = new Intl.DateTimeFormat("zh-CN", {
+                year: "numeric",
+                month: "long",
+                day: "numeric",
+                weekday: "long",
+            }).format(new Date());
+        }
+
+        function syncWorkspaceTabs(tabName) {
+            const tabs = document.querySelector(".workspace-tabs");
+            if (!tabs) return;
+            let selected = tabs.querySelector(`.workspace-tab[data-tab="${tabName}"]`);
+            if (!selected) {
+                const navButton = document.querySelector(`.tab-button[data-tab="${tabName}"]`);
+                if (navButton) {
+                    selected = document.createElement("button");
+                    selected.className = "workspace-tab";
+                    selected.type = "button";
+                    selected.dataset.tab = tabName;
+                    selected.textContent = navButton.querySelector(".nav-label")?.textContent?.trim() || tabName;
+                    selected.addEventListener("click", () => switchTab(tabName));
+                    tabs.appendChild(selected);
+                }
+            }
+            tabs.querySelectorAll(".workspace-tab").forEach(tab => {
+                tab.classList.toggle("active", tab.dataset.tab === tabName);
+            });
+            selected?.scrollIntoView({block: "nearest", inline: "nearest"});
         }
 
         function switchTab(tabName) {
@@ -6184,6 +7082,8 @@
             document.querySelectorAll(".tab-page").forEach(page => {
                 page.classList.toggle("active", page.id === `tab-${tabName}`);
             });
+            syncWorkspaceTabs(tabName);
+            window.scrollTo({top: 0, behavior: "smooth"});
             if (tabName === "infractions" && !infractionsLoaded) {
                 loadLatestInfractions();
             }
@@ -6254,6 +7154,10 @@
                 if (!mercadoCollectionLoaded) loadMercadoList();
                 loadMercadoCollectionStatus();
                 if (!mercadoPublishStoresLoaded) loadMercadoPublishStores();
+                loadMercadoPublishStatus();
+            }
+            if (tabName === "mercado-publish-records") {
+                loadMercadoPublishRecords();
                 loadMercadoPublishStatus();
             }
         }
@@ -6376,6 +7280,16 @@
                 return `<option value="${escapeHtml(value)}">${escapeHtml(name)}（${Number(count || 0)}）</option>`;
             }).join("");
             orderSalespersonFilter.value = orderSalesperson;
+        }
+
+        function renderOrderGroups(counts = {}) {
+            if (!orderGroupFilter) return;
+            const rows = Object.entries(counts && typeof counts === "object" ? counts : {});
+            orderGroupFilter.innerHTML = '<option value="">全部分组</option>' + rows.map(([name, count]) => {
+                const value = name === "未分组" ? "__ungrouped__" : name;
+                return `<option value="${escapeHtml(value)}">${escapeHtml(name)}（${Number(count || 0)}）</option>`;
+            }).join("");
+            orderGroupFilter.value = orderGroupName;
         }
 
         function updateOrderSelectionState() {
@@ -6524,6 +7438,7 @@
                 country: orderCountry,
                 status: orderStatus,
                 salesperson: orderSalesperson,
+                group_name: orderGroupName,
                 search: String(orderSearchInput?.value || "").trim(),
                 start_date: startDate,
                 end_date: endDate,
@@ -6544,6 +7459,7 @@
                 renderOrderMetrics(data);
                 renderOrderOriginCounts(data.origin_counts || {});
                 renderOrderSalespeople(data.salesperson_counts || {});
+                renderOrderGroups(data.group_counts || {});
                 renderOrderPagination(data);
                 const countryCounts = data.country_counts || {};
                 document.querySelectorAll(".order-market-button").forEach(button => {
@@ -6594,12 +7510,20 @@
             loadOrders(1);
         }
 
+        function setOrderGroup(groupName) {
+            orderGroupName = String(groupName || "");
+            if (orderGroupFilter) orderGroupFilter.value = orderGroupName;
+            loadOrders(1);
+        }
+
         function resetOrderFilters() {
             orderCountry = "";
             orderStatus = "";
             orderSalesperson = "";
+            orderGroupName = "";
             orderStatusFilter.value = "";
             if (orderSalespersonFilter) orderSalespersonFilter.value = "";
+            if (orderGroupFilter) orderGroupFilter.value = "";
             orderStartDate.value = "";
             orderEndDate.value = "";
             orderSearchInput.value = "";
@@ -6902,7 +7826,7 @@
                 ["采购订单号", row.purchase_order || "未登记"], ["采购成本", orderMoney(row.cost || 0)],
                 ["采购物流", [row.logistics_company, row.purchase_tracking].filter(Boolean).join(" · ") || "未登记", true],
                 ["采购备注", row.purchase_remark || "无备注", true],
-                ["买家", row.buyer || "-"], ["下单时间", row.ordered_at || "-"],
+                ["买家", row.buyer || "-"], ["下单时间（北京时间）", row.ordered_at || "-"],
                 ["商品", row.title || "未记录商品标题", true], ["订单备注", row.remark || "无备注", true],
             ];
             orderDetailContent.innerHTML = items.map(([label, value, wide]) => `
@@ -6942,7 +7866,7 @@
         function renderOrderSyncStores(rows) {
             orderSyncStoreRows = Array.isArray(rows) ? rows : [];
             if (!orderSyncStoreRows.length) {
-                orderSyncStoreList.innerHTML = '<div class="empty-state">暂无已授权店铺，请先在“店铺 Token”中完成授权</div>';
+                orderSyncStoreList.innerHTML = '<div class="empty-state">暂无已授权店铺，请先在“店铺授权”中完成授权</div>';
                 return;
             }
             orderSyncStoreList.innerHTML = orderSyncStoreRows.map(row => `
@@ -7095,6 +8019,107 @@
             if (!Number.isFinite(number)) return "-";
             const text = Number.isInteger(number) ? String(number) : number.toFixed(2).replace(/0+$/, "").replace(/\.$/, "");
             return `${text}${suffix}`;
+        }
+
+        function publishRecordResultText(value) {
+            if (value === null || value === undefined || value === "") return "";
+            try {
+                const decoded = typeof value === "string" ? JSON.parse(value) : value;
+                const formatted = JSON.stringify(decoded, null, 2);
+                return formatted.length > 8000 ? `${formatted.slice(0, 8000)}\n…内容过长，已截断` : formatted;
+            } catch (_) {
+                const text = String(value);
+                return text.length > 8000 ? `${text.slice(0, 8000)}\n…内容过长，已截断` : text;
+            }
+        }
+
+        function renderMercadoPublishRecords(data) {
+            const rows = Array.isArray(data?.rows) ? data.rows : [];
+            const counts = data?.counts || {};
+            document.getElementById("publish-record-count-all").textContent = Number(counts.all || 0).toLocaleString("zh-CN");
+            document.getElementById("publish-record-count-published").textContent = Number(counts.published || 0).toLocaleString("zh-CN");
+            document.getElementById("publish-record-count-failed").textContent = Number(counts.failed || 0).toLocaleString("zh-CN");
+            document.getElementById("publish-record-count-publishing").textContent = Number(counts.publishing || 0).toLocaleString("zh-CN");
+            document.getElementById("publish-record-count-pending").textContent = Number(counts.pending || 0).toLocaleString("zh-CN");
+            publishRecordSummary.textContent = `当前筛选共 ${Number(data?.total || 0).toLocaleString("zh-CN")} 条记录`;
+            if (!rows.length) {
+                publishRecordBody.innerHTML = '<tr><td class="empty-state" colspan="10">暂无符合条件的产品上架记录</td></tr>';
+                return;
+            }
+            const statusDefinitions = {
+                pending: ["等待上架", "partial"],
+                publishing: ["正在上架", "partial"],
+                published: ["上架成功", "ok"],
+                failed: ["上架失败", "failed"],
+            };
+            publishRecordBody.innerHTML = rows.map(row => {
+                const sourceUrl = mercadoSafeUrl(row.source_url);
+                const imageUrl = mercadoSafeUrl(row.main_image_url);
+                const image = imageUrl
+                    ? `<img class="market-product-image" src="${escapeHtml(imageUrl)}" alt="产品主图" loading="lazy" onerror="this.style.visibility='hidden'">`
+                    : '<span class="market-product-image"></span>';
+                const productLink = sourceUrl
+                    ? `<a class="market-item-link" href="${escapeHtml(sourceUrl)}" target="_blank" rel="noopener noreferrer">打开源商品</a>`
+                    : "";
+                const [statusLabel, statusClass] = statusDefinitions[String(row.status || "")] || [String(row.status || "未知"), "partial"];
+                const resultText = publishRecordResultText(row.result_json);
+                const failureReason = String(row.failure_reason || "");
+                const details = resultText
+                    ? `<details class="publish-record-details"><summary>查看接口返回明细</summary><pre>${escapeHtml(resultText)}</pre></details>`
+                    : "";
+                const target = `${escapeHtml(row.store_name || "-")}<span class="market-metric-note">${escapeHtml(row.site_name || row.site_id || "-")} · ${escapeHtml(row.site_id || "-")}</span>`;
+                const resultItem = row.published_item_id
+                    ? `<strong>${escapeHtml(row.published_item_id)}</strong>`
+                    : '<span class="market-list-summary">-</span>';
+                return `<tr>
+                    <td><div class="publish-record-product">${image}<div><span class="market-product-title" title="${escapeHtml(row.title || '')}">${escapeHtml(row.title || "未识别标题")}</span>${productLink}</div></div></td>
+                    <td><strong>${escapeHtml(row.source_item_id || "-")}</strong><span class="market-metric-note">产品记录 #${Number(row.product_item_id || 0) || "-"}</span></td>
+                    <td>${target}</td>
+                    <td><strong>${escapeHtml(row.batch_id || "-")}</strong></td>
+                    <td>${Number(row.quantity || 0).toLocaleString("zh-CN")}</td>
+                    <td><span class="market-status-tag ${statusClass}">${escapeHtml(statusLabel)}</span></td>
+                    <td>${resultItem}</td>
+                    <td title="${escapeHtml(failureReason)}">${failureReason ? `<span class="publish-record-reason">${escapeHtml(failureReason)}</span>` : '<span class="market-list-summary">-</span>'}${details}</td>
+                    <td><span class="market-metric-main">${escapeHtml(row.started_at || row.created_at || "-")}</span><span class="market-metric-note">完成：${escapeHtml(row.finished_at || "-")}</span></td>
+                    <td>${escapeHtml(row.created_by || "-")}</td>
+                </tr>`;
+            }).join("");
+        }
+
+        async function loadMercadoPublishRecords() {
+            if (!publishRecordBody) return;
+            if (mercadoPublishRecordPollTimer) {
+                window.clearTimeout(mercadoPublishRecordPollTimer);
+                mercadoPublishRecordPollTimer = null;
+            }
+            publishRecordBody.innerHTML = '<tr><td class="empty-state" colspan="10">正在读取产品上架记录...</td></tr>';
+            publishRecordMessage.textContent = "正在刷新记录";
+            const query = new URLSearchParams({
+                search: String(publishRecordSearch.value || "").trim(),
+                status: String(publishRecordStatus.value || ""),
+                site_id: String(publishRecordSite.value || ""),
+                store_name: String(publishRecordStore.value || "").trim(),
+                limit: "500",
+            });
+            try {
+                const response = await fetch(`/api/mercado-publish-records?${query.toString()}`, {cache: "no-store"});
+                const payload = await response.json();
+                if (!response.ok || payload.status !== "success") {
+                    throw new Error(payload.message || `接口请求失败：${response.status}`);
+                }
+                renderMercadoPublishRecords(payload.data || {});
+                mercadoPublishRecordsLoaded = true;
+                publishRecordMessage.textContent = `最近刷新：${new Date().toLocaleTimeString("zh-CN", {hour12: false})}`;
+                const counts = payload.data?.counts || {};
+                const hasActiveRecords = Number(counts.pending || 0) + Number(counts.publishing || 0) > 0;
+                const recordsTabActive = document.getElementById("tab-mercado-publish-records")?.classList.contains("active");
+                if ((hasActiveRecords || mercadoPublishRunning) && recordsTabActive) {
+                    mercadoPublishRecordPollTimer = window.setTimeout(loadMercadoPublishRecords, 2000);
+                }
+            } catch (error) {
+                publishRecordBody.innerHTML = `<tr><td class="empty-state" colspan="10">加载失败：${escapeHtml(error.message || error)}</td></tr>`;
+                publishRecordMessage.textContent = `读取失败：${error.message || error}`;
+            }
         }
 
         function renderMercadoListRows(rows) {
@@ -7449,6 +8474,10 @@
                 mercadoPublishStatus.textContent = `${message}${siteSuffix}${workerSuffix} · ${processed}/${requested} · 成功 ${published} · 失败 ${failed}`;
             }
             mercadoPublishSelected.textContent = mercadoPublishRunning ? "正在上架..." : "批量上架";
+            const recordsTabActive = document.getElementById("tab-mercado-publish-records")?.classList.contains("active");
+            if (recordsTabActive && mercadoPublishRunning && !mercadoPublishRecordPollTimer) {
+                mercadoPublishRecordPollTimer = window.setTimeout(loadMercadoPublishRecords, 500);
+            }
             updateMercadoSelection();
         }
 
@@ -7545,6 +8574,7 @@
                 idle: "等待启动",
                 starting: "正在启动",
                 running: "采集中",
+                waiting_verification: "等待安全验证",
                 completed: "采集完成",
                 partial: "部分完成",
                 stopped: "已停止",
@@ -7592,12 +8622,45 @@
             }
         }
 
+        function buildMercadoCollectionFrontUrl() {
+            const input = mercadoCollectionUrl.value.trim();
+            if (!input) return "";
+            if (/^https?:\/\//i.test(input)) return input;
+            const hosts = {
+                MLM: "listado.mercadolibre.com.mx",
+                MLB: "lista.mercadolivre.com.br",
+                MLA: "listado.mercadolibre.com.ar",
+                MLC: "listado.mercadolibre.cl",
+                MCO: "listado.mercadolibre.com.co",
+                MLU: "listado.mercadolibre.com.uy",
+            };
+            const host = hosts[String(mercadoCollectionSite.value || "MLM")];
+            const slug = encodeURIComponent(input.replace(/\s+/g, "-"));
+            if (!host) return "";
+            const baseUrl = `https://${host}/${slug}`;
+            return mercadoCollectionScope.value === "cross_border"
+                ? `${baseUrl}_NoIndex_True_SHIPPING*ORIGIN_10215069`
+                : baseUrl;
+        }
+
+        function updateMercadoCollectionFrontLink() {
+            const frontUrl = buildMercadoCollectionFrontUrl();
+            mercadoCollectionFrontLink.hidden = !frontUrl;
+            mercadoCollectionFrontLink.href = frontUrl || "#";
+            const siteName = mercadoCollectionSite.options[
+                mercadoCollectionSite.selectedIndex
+            ]?.textContent || "对应国家";
+            mercadoCollectionFrontLink.textContent = frontUrl
+                ? `打开${siteName}前台链接`
+                : "打开对应前台链接";
+        }
+
         async function startMercadoCollection() {
-            const sourceUrl = mercadoCollectionUrl.value.trim();
+            const sourceInput = mercadoCollectionUrl.value.trim();
             const requestedCount = Number(mercadoCollectionCount.value || 0);
             const workerCount = Number(mercadoCollectionWorkers.value || 0);
-            if (!sourceUrl) {
-                mercadoCollectionMessage.textContent = "请先输入 Mercado 商品列表或搜索链接";
+            if (!sourceInput) {
+                mercadoCollectionMessage.textContent = "请先输入采集关键词或 Mercado 商品列表链接";
                 mercadoCollectionUrl.focus();
                 return;
             }
@@ -7606,8 +8669,8 @@
                 mercadoCollectionCount.focus();
                 return;
             }
-            if (!Number.isInteger(workerCount) || workerCount < 1 || workerCount > 6) {
-                mercadoCollectionMessage.textContent = "并发数必须在 1-6 之间";
+            if (!Number.isInteger(workerCount) || workerCount < 1 || workerCount > 8) {
+                mercadoCollectionMessage.textContent = "并发数必须在 1-8 之间";
                 mercadoCollectionWorkers.focus();
                 return;
             }
@@ -7618,7 +8681,10 @@
                     method: "POST",
                     headers: {"Content-Type": "application/json"},
                     body: JSON.stringify({
-                        source_url: sourceUrl,
+                        source_url: /^https?:\/\//i.test(sourceInput) ? sourceInput : "",
+                        keyword: /^https?:\/\//i.test(sourceInput) ? "" : sourceInput,
+                        site_id: String(mercadoCollectionSite.value || "MLM"),
+                        collection_scope: String(mercadoCollectionScope.value || "cross_border"),
                         requested_count: requestedCount,
                         worker_count: workerCount,
                     }),
@@ -7744,6 +8810,17 @@
             mercadoSiteSettingsMessage.classList.toggle("error", Boolean(isError));
         }
 
+        async function loadMercadoSalespeople() {
+            const users = await requestAccessApi("/api/access/users");
+            mercadoSalespeople = Array.from(new Set(
+                (Array.isArray(users) ? users : [])
+                    .filter(user => user?.is_active !== false)
+                    .map(user => String(user?.display_name || user?.username || "").trim())
+                    .filter(Boolean),
+            )).sort((left, right) => left.localeCompare(right, "zh-CN"));
+            return mercadoSalespeople;
+        }
+
         function renderMercadoSiteSettings(rows = []) {
             if (!mercadoSiteSettingsBody) return;
             const settings = new Map(
@@ -7754,11 +8831,23 @@
                 const discount = setting.discount_rate === null || setting.discount_rate === undefined
                     ? ""
                     : setting.discount_rate;
+                const salesperson = String(setting.salesperson || "").trim();
+                const salespersonOptions = [
+                    '<option value="">未分配</option>',
+                    ...mercadoSalespeople.map(name => `
+                        <option value="${escapeHtml(name)}" ${name === salesperson ? "selected" : ""}>${escapeHtml(name)}</option>
+                    `),
+                ];
+                if (salesperson && !mercadoSalespeople.includes(salesperson)) {
+                    salespersonOptions.splice(1, 0, `
+                        <option value="${escapeHtml(salesperson)}" selected disabled>${escapeHtml(salesperson)}（不在启用人员中）</option>
+                    `);
+                }
                 return `
                     <tr data-site-id="${siteId}">
                         <td><strong>${escapeHtml(siteName)}</strong><span>${siteId}</span></td>
                         <td><input data-field="discount_rate" type="number" min="0" max="100" step="0.01" value="${escapeHtml(discount)}" placeholder="例如 95"></td>
-                        <td><input data-field="salesperson" type="text" maxlength="100" value="${escapeHtml(setting.salesperson || "")}" placeholder="输入业务员姓名"></td>
+                        <td><select data-field="salesperson" aria-label="${escapeHtml(siteName)}业务员">${salespersonOptions.join("")}</select></td>
                         <td><input data-field="group_name" type="text" maxlength="100" value="${escapeHtml(setting.group_name || "")}" placeholder="例如 A组 / 精品组"></td>
                     </tr>
                 `;
@@ -7771,14 +8860,17 @@
             if (!id || !account || !mercadoSiteSettingsDialog) return;
             mercadoSiteSettingsTokenId = id;
             mercadoSiteSettingsTitle.textContent = `${account.display_name || account.nickname || `账号 ${id}`} · 站点配置`;
-            renderMercadoSiteSettings(account.site_settings || []);
-            setMercadoSiteSettingsMessage("正在读取最新配置…");
+            mercadoSiteSettingsBody.innerHTML = '<tr><td class="empty-state" colspan="4">正在读取人员和最新配置...</td></tr>';
+            setMercadoSiteSettingsMessage("正在读取人员和最新配置…");
             mercadoSiteSettingsSave.disabled = false;
             if (typeof mercadoSiteSettingsDialog.showModal === "function" && !mercadoSiteSettingsDialog.open) {
                 mercadoSiteSettingsDialog.showModal();
             }
             try {
-                const response = await fetch(`/api/mercado-tokens/${id}/site-settings`, {cache: "no-store"});
+                const [response] = await Promise.all([
+                    fetch(`/api/mercado-tokens/${id}/site-settings`, {cache: "no-store"}),
+                    loadMercadoSalespeople(),
+                ]);
                 const payload = await response.json();
                 if (!response.ok || payload.status !== "success") {
                     throw new Error(payload.message || `接口请求失败：${response.status}`);
@@ -7806,10 +8898,16 @@
                     row.querySelector('[data-field="discount_rate"]')?.focus();
                     return;
                 }
+                const salesperson = String(row.querySelector('[data-field="salesperson"]')?.value || "").trim();
+                if (salesperson && !mercadoSalespeople.includes(salesperson)) {
+                    setMercadoSiteSettingsMessage(`${siteId} 的业务员不在启用人员中，请重新选择`, true);
+                    row.querySelector('[data-field="salesperson"]')?.focus();
+                    return;
+                }
                 settings.push({
                     site_id: siteId,
                     discount_rate: discount,
-                    salesperson: String(row.querySelector('[data-field="salesperson"]')?.value || "").trim(),
+                    salesperson,
                     group_name: String(row.querySelector('[data-field="group_name"]')?.value || "").trim(),
                 });
             }
@@ -7882,7 +8980,7 @@
 
         async function loadMercadoStoreTokens(force = false) {
             if (!mercadoTokenBody || (mercadoStoreTokensLoaded && !force)) return;
-            mercadoTokenBody.innerHTML = '<tr><td class="empty-state" colspan="8">正在加载店铺 Token...</td></tr>';
+            mercadoTokenBody.innerHTML = '<tr><td class="empty-state" colspan="8">正在加载店铺授权...</td></tr>';
             try {
                 const response = await fetch("/api/mercado-tokens", {cache: "no-store"});
                 const payload = await response.json();
@@ -11587,6 +12685,15 @@
             }
         }
 
+        const sidebarToggle = document.getElementById("sidebar-toggle");
+        if (window.localStorage.getItem("zeshun-sidebar-collapsed") === "1") {
+            document.body.classList.add("sidebar-collapsed");
+        }
+        sidebarToggle?.addEventListener("click", () => {
+            const collapsed = document.body.classList.toggle("sidebar-collapsed");
+            window.localStorage.setItem("zeshun-sidebar-collapsed", collapsed ? "1" : "0");
+        });
+        refreshOverviewClock();
         applyWorkbenchPermissions();
         if (hasWorkbenchPermission("appeal.view")) {
             loadAppealPhrases();

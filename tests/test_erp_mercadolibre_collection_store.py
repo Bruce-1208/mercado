@@ -10,6 +10,7 @@ class _FakeCursor:
         self.queries = []
         self.rowcount = 0
         self.update_rowcount = update_rowcount
+        self.lastrowid = 0
 
     def __enter__(self):
         return self
@@ -21,6 +22,8 @@ class _FakeCursor:
         normalized = " ".join(str(query).split())
         self.queries.append((normalized, params))
         self.rowcount = self.update_rowcount if normalized.startswith("UPDATE") else 0
+        if normalized.startswith(f"INSERT INTO `{store.PUBLISH_RECORD_TABLE}`"):
+            self.lastrowid += 1
 
     def executemany(self, query, params):
         normalized = " ".join(str(query).split())
@@ -31,6 +34,9 @@ class _FakeCursor:
     def fetchone(self):
         # Pretend all migration columns already exist.
         return {"Field": "existing"}
+
+    def fetchall(self):
+        return []
 
 
 class _FakeConnection:
@@ -51,6 +57,21 @@ class _FakeConnection:
 
     def close(self):
         self.closed = True
+
+
+class _IndexCursor:
+    def __init__(self, columns):
+        self.columns = list(columns)
+        self.queries = []
+
+    def execute(self, query, params=None):
+        self.queries.append((" ".join(str(query).split()), params))
+
+    def fetchall(self):
+        return [
+            {"Column_name": column, "Seq_in_index": index}
+            for index, column in enumerate(self.columns, start=1)
+        ]
 
 
 def test_create_task_rejects_non_url_before_database_connection():
@@ -174,6 +195,18 @@ def test_failed_refresh_cannot_overwrite_an_existing_complete_item():
     assert connection.closed is True
 
 
+def test_collection_unique_index_is_scoped_to_each_task():
+    legacy = _IndexCursor(["source_item_id"])
+    assert store._ensure_collection_task_unique_index(legacy) is True
+    migration_sql = [query for query, _params in legacy.queries]
+    assert any("DROP INDEX `uniq_erp_meli_collection_item`" in query for query in migration_sql)
+    assert any("(`task_id`, `source_item_id`)" in query for query in migration_sql)
+
+    current = _IndexCursor(["task_id", "source_item_id"])
+    assert store._ensure_collection_task_unique_index(current) is False
+    assert not any("ALTER TABLE" in query for query, _params in current.queries)
+
+
 def test_recover_interrupted_tasks_marks_only_prestartup_rows():
     connection = _FakeConnection(update_rowcount=3)
     recovered = store.recover_interrupted_collection_tasks(
@@ -191,3 +224,53 @@ def test_recover_interrupted_tasks_marks_only_prestartup_rows():
     assert "`updated_at` < %s" in update_sql
     assert params[1:] == ("2026-08-24 02:00:00", "2026-08-24 02:00:00")
     assert connection.committed is True
+
+
+def test_publish_attempt_records_copy_product_details_and_save_failure_reason():
+    connection = _FakeConnection(update_rowcount=1)
+    record_ids = store.create_product_publish_records(
+        [
+            {
+                "id": 11,
+                "source_item_id": "mlm111",
+                "source_url": "https://example/MLM111",
+                "main_image_url": "https://example/image.jpg",
+                "title": "测试产品",
+            },
+            {"id": 12, "source_item_id": "MLM222", "title": "第二个产品"},
+        ],
+        batch_id="batch-001",
+        token_id=7,
+        store_name="测试店铺",
+        site_id="mlb",
+        site_name="巴西",
+        quantity=3,
+        created_by="测试用户",
+        connection_factory=lambda: connection,
+    )
+
+    insert_queries = [
+        (query, params)
+        for query, params in connection.fake_cursor.queries
+        if query.startswith(f"INSERT INTO `{store.PUBLISH_RECORD_TABLE}`")
+    ]
+    assert record_ids == {11: 1, 12: 2}
+    assert len(insert_queries) == 2
+    assert insert_queries[0][1][0:3] == ("batch-001", 11, "MLM111")
+    assert insert_queries[0][1][6:11] == (7, "测试店铺", "MLB", "巴西", 3)
+
+    store.update_product_publish_record(
+        1,
+        status="failed",
+        failure_reason="category rejected",
+        finished=True,
+        connection_factory=lambda: connection,
+    )
+    update_query, update_params = next(
+        (query, params)
+        for query, params in reversed(connection.fake_cursor.queries)
+        if query.startswith(f"UPDATE `{store.PUBLISH_RECORD_TABLE}`")
+    )
+    assert "`failure_reason` = %s" in update_query
+    assert update_params[0:2] == ("failed", "category rejected")
+    assert update_params[-1] == 1

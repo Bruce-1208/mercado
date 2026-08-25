@@ -23,10 +23,12 @@ def test_workbench_contains_order_management_ui():
     assert b'id="tab-orders"' in response.data
     assert b'id="order-status-strip"' in response.data
     assert b'id="order-salesperson-filter"' in response.data
+    assert b'id="order-group-filter"' in response.data
     assert b'id="order-table-body"' in response.data
     assert b'id="order-sync-dialog"' in response.data
     assert b'data-origin="token"' in response.data
-    assert "支持采购备注和订单备注模糊查询".encode("utf-8") in response.data
+    assert "商品名、采购备注和订单备注均支持模糊查询".encode("utf-8") in response.data
+    assert "下单时间（北京时间）".encode("utf-8") in response.data
     assert "预计利润 / 利润率".encode("utf-8") in response.data
     assert "每 15 分钟自动拉取".encode("utf-8") in response.data
     assert "Token 自动拉取".encode("utf-8") in response.data
@@ -67,7 +69,8 @@ def test_order_api_passes_filters_and_pagination():
         response = _client().get(
             "/api/orders?country=%E5%B7%B4%E8%A5%BF&status=%E6%89%BE%E8%B4%A7"
             "&search=2000014667&start_date=2026-08-01&end_date=2026-08-23"
-            "&origin=token&salesperson=%E5%BC%A0%E4%B8%89&page=2&page_size=25"
+            "&origin=token&salesperson=%E5%BC%A0%E4%B8%89"
+            "&group_name=%E7%B2%BE%E5%93%81%E7%BB%84&page=2&page_size=25"
         )
 
     assert response.status_code == 200
@@ -76,6 +79,7 @@ def test_order_api_passes_filters_and_pagination():
         country="巴西",
         status="找货",
         salesperson="张三",
+        group_name="精品组",
         search="2000014667",
         start_date="2026-08-01",
         end_date="2026-08-23",

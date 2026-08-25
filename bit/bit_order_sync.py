@@ -145,9 +145,9 @@ def _token_records(selected_token_ids=None):
     if selected:
         missing = selected.difference(int(row.get("id") or 0) for row in records)
         if missing:
-            raise ValueError(f"选择的店铺 Token 不存在：{', '.join(map(str, sorted(missing)))}")
+            raise ValueError(f"选择的店铺授权不存在：{', '.join(map(str, sorted(missing)))}")
     if not records:
-        raise ValueError("暂无已授权店铺，请先在“店铺 Token”中完成授权")
+        raise ValueError("暂无已授权店铺，请先在“店铺授权”中完成授权")
     return records
 
 

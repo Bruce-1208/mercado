@@ -16,7 +16,7 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Callable, Iterable, Mapping
-from urllib.parse import urljoin
+from urllib.parse import urljoin, urlsplit, urlunsplit
 
 from erp.mercadolibre_follow_sell import extract_item_id
 
@@ -29,8 +29,11 @@ from erp.mercadolibre_batch_collector import (
     _normalize_image_url,
     _number,
     extract_listing_item_id,
+    marketplace_url_has_cross_border_filter,
     merge_listing_candidates,
+    normalize_collection_scope,
     normalize_collection_workers,
+    ocr_plugin_image,
     parse_plugin_metrics,
     validate_collection_request,
 )
@@ -78,12 +81,14 @@ LISTING_DOM_SCRIPT = r"""() => {
     const cents = root.querySelector && root.querySelector('.andes-money-amount__cents');
     let price = fraction ? clean(fraction.textContent).replace(/\D/g, '') : '';
     if (price && cents) price += '.' + clean(cents.textContent).replace(/\D/g, '');
+    const cardText = clean(root.innerText || root.textContent || '');
     rows.push({
       href: link.href,
       title: clean((titleNode && titleNode.textContent) || link.textContent),
       main_image_url: imageUrl(img),
       price,
-      currency_id: 'MXN'
+      currency_id: 'MXN',
+      is_cross_border: /(^|\s)internacional(\s|$)/i.test(cardText)
     });
   }
   const next = document.querySelector(
@@ -211,6 +216,7 @@ class _PlaywrightRuntime:
     # one untracked page alive while detail pages are opened and closed in
     # batches; _close_runtime() closes it together with the context.
     anchor_page: Any | None = None
+    bitbrowser_window_id: str = ""
 
 
 PLUGIN_REACT_METRICS_SCRIPT = r"""(() => {
@@ -311,8 +317,11 @@ class _PluginMetricReader:
 
             def remember_context(event: Mapping[str, Any]) -> None:
                 context = event.get("context") or {}
-                if str(context.get("origin") or "") != (
-                    f"chrome-extension://{ZYING_EXTENSION_ID}"
+                # BitBrowser can install the same ZYing extension under a
+                # different generated ID.  Probe every extension isolated
+                # world; the evaluator itself only accepts ZYing metric nodes.
+                if not str(context.get("origin") or "").startswith(
+                    "chrome-extension://"
                 ):
                     return
                 try:
@@ -342,7 +351,11 @@ class _PluginMetricReader:
                     },
                 )
                 value = (response.get("result") or {}).get("value")
-                if isinstance(value, dict) and value.get("found"):
+                if (
+                    isinstance(value, dict)
+                    and value.get("found")
+                    and (value.get("data") or value.get("metrics"))
+                ):
                     return value
             except Exception:
                 # Redirects replace the extension execution context.  The
@@ -398,10 +411,45 @@ def _headless_enabled() -> bool:
     }
 
 
-async def _open_runtime() -> _PlaywrightRuntime:
+async def _open_runtime(bitbrowser_window_id: str = "") -> _PlaywrightRuntime:
     from playwright.async_api import async_playwright
 
     playwright = await async_playwright().start()
+    bitbrowser_window_id = str(bitbrowser_window_id or "").strip()
+    if bitbrowser_window_id:
+        from bit.bit_api import openBrowser, releaseBrowserLease
+
+        browser_info = openBrowser(bitbrowser_window_id)
+        data = browser_info.get("data") if isinstance(browser_info, dict) else None
+        if not data or not data.get("http"):
+            await playwright.stop()
+            message = (
+                browser_info.get("msg")
+                if isinstance(browser_info, dict)
+                else str(browser_info or "")
+            )
+            raise RuntimeError(f"打开比特采集窗口失败：{message or browser_info}")
+        cdp_url = str(data["http"]).strip()
+        if not cdp_url.startswith(("http://", "https://")):
+            cdp_url = f"http://{cdp_url}"
+        try:
+            browser = await playwright.chromium.connect_over_cdp(
+                cdp_url, timeout=30000
+            )
+            if not browser.contexts:
+                raise RuntimeError("比特采集窗口没有可用的浏览器上下文")
+        except Exception:
+            releaseBrowserLease(bitbrowser_window_id)
+            await playwright.stop()
+            raise
+        return _PlaywrightRuntime(
+            playwright=playwright,
+            browser=browser,
+            context=browser.contexts[0],
+            managed=False,
+            connection_mode=f"bitbrowser:{bitbrowser_window_id}",
+            bitbrowser_window_id=bitbrowser_window_id,
+        )
     connect_error = ""
     if DEFAULT_CDP_URL:
         try:
@@ -476,6 +524,13 @@ async def _close_runtime(runtime: _PlaywrightRuntime) -> None:
         await runtime.playwright.stop()
     except Exception:
         pass
+    if runtime.bitbrowser_window_id:
+        try:
+            from bit.bit_api import releaseBrowserLease
+
+            releaseBrowserLease(runtime.bitbrowser_window_id)
+        except Exception:
+            pass
 
 
 async def _new_page(runtime: _PlaywrightRuntime) -> Any:
@@ -484,7 +539,16 @@ async def _new_page(runtime: _PlaywrightRuntime) -> Any:
     page.set_default_timeout(float(os.environ.get("MERCADO_PLAYWRIGHT_TIMEOUT_MS", "30000")))
 
     async def skip_heavy_assets(route: Any) -> None:
-        if route.request.resource_type in {"media", "font"}:
+        request_url = str(route.request.url or "").lower()
+        frame_url = str(getattr(route.request.frame, "url", "") or "").lower()
+        verification_page = any(
+            marker in f"{request_url} {frame_url}"
+            for marker in ("account-verification", "/captcha/", "buyer-login")
+        )
+        if (
+            route.request.resource_type in {"image", "media", "font"}
+            and not verification_page
+        ):
             await route.abort()
         else:
             await route.continue_()
@@ -494,9 +558,11 @@ async def _new_page(runtime: _PlaywrightRuntime) -> Any:
 
 
 async def _goto(page: Any, url: str) -> None:
-    timeout = float(os.environ.get("MERCADO_PLAYWRIGHT_NAVIGATION_TIMEOUT_MS", "35000"))
+    timeout = float(os.environ.get("MERCADO_PLAYWRIGHT_NAVIGATION_TIMEOUT_MS", "20000"))
     try:
-        await page.goto(url, wait_until="domcontentloaded", timeout=timeout)
+        # Waiting for commit avoids spending tens of seconds on Mercado's
+        # tracking/resource redirects.  The caller waits for the actual DOM it needs.
+        await page.goto(url, wait_until="commit", timeout=timeout)
     except Exception as exc:
         message = str(exc or "").lower()
         transient = "page.goto" in message and (
@@ -573,11 +639,53 @@ async def _evaluate_after_navigation(
     raise RuntimeError("Playwright 页面 DOM 读取失败")
 
 
+async def _wait_for_listing_dom(page: Any, timeout: float = 4.0) -> None:
+    """Wait until lazy-loaded search cards stop growing before extracting."""
+    deadline = asyncio.get_running_loop().time() + max(1.0, timeout)
+    previous_count = -1
+    stable_rounds = 0
+    scrolled = False
+    while asyncio.get_running_loop().time() < deadline:
+        try:
+            count = await page.locator(
+                'li.ui-search-layout__item, .ui-search-result, .poly-card, [data-testid="result"]'
+            ).count()
+            if count > 0 and count == previous_count:
+                stable_rounds += 1
+            else:
+                stable_rounds = 0
+            previous_count = count
+            if count > 0 and not scrolled:
+                await page.evaluate("window.scrollTo(0, document.body.scrollHeight)")
+                scrolled = True
+            if stable_rounds >= 2:
+                return
+        except Exception as exc:
+            if not _is_navigation_context_error(exc):
+                return
+        await asyncio.sleep(0.35)
+
+
+def _synthesized_listing_page_url(source_url: str, page_number: int) -> str:
+    """Build Mercado's 48-item offset URL when NoIndex hides pagination links."""
+    offset = max(1, (int(page_number) - 1) * 48 + 1)
+    parts = urlsplit(str(source_url or ""))
+    path = re.sub(r"_Desde_\d+", f"_Desde_{offset}", parts.path, flags=re.I)
+    if path == parts.path:
+        marker = re.search(r"_NoIndex_", path, flags=re.I)
+        if marker:
+            path = f"{path[:marker.start()]}_Desde_{offset}{path[marker.start():]}"
+        else:
+            path = f"{path}_Desde_{offset}"
+    return urlunsplit((parts.scheme, parts.netloc, path, parts.query, ""))
+
+
 async def _listing_candidates(
     runtime: _PlaywrightRuntime,
     source_url: str,
     requested_count: int,
     *,
+    collection_scope: str = "all",
     on_page: Callable[[dict[str, Any]], None] | None,
     stop_event: threading.Event | None,
 ) -> list[dict[str, Any]]:
@@ -608,14 +716,94 @@ async def _listing_candidates(
             )
         except Exception:
             pass
+        await _wait_for_listing_dom(page)
         snapshot = await _evaluate_after_navigation(page, LISTING_DOM_SCRIPT)
         actual_url = page.url
         blocked = _blocked_page_message(actual_url, str(snapshot.get("body") or ""))
         if blocked:
-            raise RuntimeError(blocked)
+            if on_page:
+                on_page({
+                    "stage": "waiting_verification",
+                    "page": page_number,
+                    "page_url": actual_url,
+                    "page_items": 0,
+                    "candidate_count": len(candidates),
+                    "browser": runtime.connection_mode,
+                    "message": (
+                        "Mercado 要求安全验证：采集浏览器已保留，请在窗口中完成一次验证，"
+                        "完成后任务会自动继续"
+                    ),
+                })
+            try:
+                await page.bring_to_front()
+            except Exception:
+                pass
+            try:
+                verification_timeout = max(
+                    30.0,
+                    min(
+                        float(
+                            os.environ.get(
+                                "MERCADO_PLAYWRIGHT_VERIFICATION_TIMEOUT_SECONDS",
+                                "300",
+                            )
+                        ),
+                        900.0,
+                    ),
+                )
+            except ValueError:
+                verification_timeout = 300.0
+            deadline = asyncio.get_running_loop().time() + verification_timeout
+            while asyncio.get_running_loop().time() < deadline:
+                _check_stop(stop_event)
+                await asyncio.sleep(1.0)
+                try:
+                    await _wait_for_listing_dom(page, timeout=1.5)
+                    snapshot = await _evaluate_after_navigation(page, LISTING_DOM_SCRIPT)
+                except Exception as exc:
+                    if _is_navigation_context_error(exc):
+                        continue
+                    raise
+                actual_url = page.url
+                blocked = _blocked_page_message(
+                    actual_url, str(snapshot.get("body") or "")
+                )
+                try:
+                    resolved_item_id = extract_listing_item_id(actual_url)
+                except ValueError:
+                    resolved_item_id = ""
+                if not blocked and (snapshot.get("rows") or resolved_item_id):
+                    if on_page:
+                        on_page({
+                            "stage": "verification_resolved",
+                            "page": page_number,
+                            "page_url": actual_url,
+                            "page_items": 0,
+                            "candidate_count": len(candidates),
+                            "browser": runtime.connection_mode,
+                            "message": "安全验证已完成，正在继续扫描商品列表",
+                        })
+                    break
+            if blocked:
+                raise RuntimeError(
+                    f"{blocked}；等待 {int(verification_timeout)} 秒仍未完成验证"
+                )
         before = len(candidates)
         page_rows = [] if page_number == 1 and direct_source_item_id else snapshot.get("rows") or []
-        merge_listing_candidates(candidates, page_rows, requested_count)
+        if (
+            collection_scope == "cross_border"
+            and marketplace_url_has_cross_border_filter(source_url)
+        ):
+            # The filtered Mercado result page does not consistently render
+            # the "Internacional" badge on every card layout.  Its explicit
+            # server-side shipping-origin filter is the authoritative signal.
+            page_rows = [{**row, "is_cross_border": True} for row in page_rows]
+        merge_listing_candidates(
+            candidates,
+            page_rows,
+            requested_count,
+            collection_scope=collection_scope,
+        )
         if len(candidates) == before:
             try:
                 item_id = direct_source_item_id or extract_listing_item_id(actual_url)
@@ -654,7 +842,36 @@ async def _listing_candidates(
                 "candidate_count": len(candidates),
                 "browser": runtime.connection_mode,
             })
-        next_url = urljoin(actual_url, str(snapshot.get("next_url") or ""))
+        raw_next_url = str(snapshot.get("next_url") or "").strip()
+        next_url = urljoin(actual_url, raw_next_url) if raw_next_url else ""
+        if next_url:
+            current_parts = urlsplit(actual_url)
+            next_parts = urlsplit(next_url)
+            if (
+                current_parts.scheme,
+                current_parts.netloc,
+                current_parts.path,
+                current_parts.query,
+            ) == (
+                next_parts.scheme,
+                next_parts.netloc,
+                next_parts.path,
+                next_parts.query,
+            ):
+                next_url = ""
+        if (
+            not next_url
+            and len(snapshot.get("rows") or []) >= 40
+            and len(candidates) < requested_count
+        ):
+            # NoIndex result pages often omit the next-page anchor even though
+            # more results exist.  Stop if a synthesized page produced no new
+            # IDs; otherwise advance using Mercado's standard 48-item offset.
+            if page_number > 1 and len(candidates) == before:
+                break
+            next_url = _synthesized_listing_page_url(
+                source_url, page_number + 1
+            )
         if not next_url:
             break
         page_url = next_url
@@ -767,6 +984,15 @@ def _metrics_from_react_payload(
     return metrics, lines
 
 
+def _plugin_text_is_visually_protected(lines: Iterable[Any]) -> bool:
+    """Detect the dense placeholder text emitted by visual-text protection."""
+    values = [re.sub(r"\s+", "", str(value or "")).lower() for value in lines]
+    return any(
+        len(value) >= 20 and re.fullmatch(r"[a-z0-9|]+", value)
+        for value in values
+    )
+
+
 async def _wait_for_plugin_metrics(
     page: Any,
     timeout: float,
@@ -777,7 +1003,9 @@ async def _wait_for_plugin_metrics(
     deadline = asyncio.get_running_loop().time() + max(1.0, float(timeout))
     last_lines: list[str] = []
     last_metrics = parse_plugin_metrics("")
+    poll_number = 0
     while asyncio.get_running_loop().time() < deadline:
+        poll_number += 1
         _check_stop(stop_event)
         if react_reader is not None:
             react_payload = await react_reader.read()
@@ -792,12 +1020,15 @@ async def _wait_for_plugin_metrics(
                 and react_metrics.get("package_height_cm") is not None
             ):
                 return react_metrics, react_lines
-        last_lines = await _plugin_dom_lines(page)
-        dom_metrics = parse_plugin_metrics(" ".join(last_lines))
-        if any(dom_metrics.get(key) is not None for key in (
-            "weight_g", "package_length_cm", "package_width_cm", "package_height_cm"
-        )):
-            last_metrics = dom_metrics
+        # React props are the fast path.  A full shadow-DOM/frame scan is much
+        # heavier, so use it only initially and then every third poll.
+        if not last_lines or poll_number % 3 == 0:
+            last_lines = await _plugin_dom_lines(page)
+            dom_metrics = parse_plugin_metrics(" ".join(last_lines))
+            if any(dom_metrics.get(key) is not None for key in (
+                "weight_g", "package_length_cm", "package_width_cm", "package_height_cm"
+            )):
+                last_metrics = dom_metrics
         if (
             last_metrics.get("weight_g") is not None
             and last_metrics.get("package_length_cm") is not None
@@ -805,8 +1036,43 @@ async def _wait_for_plugin_metrics(
             and last_metrics.get("package_height_cm") is not None
         ):
             return last_metrics, last_lines
-        await asyncio.sleep(0.3)
+        if last_lines and _plugin_text_is_visually_protected(last_lines):
+            # The values are already visible but intentionally represented as
+            # blob-backed glyphs.  Waiting longer cannot make DOM text readable;
+            # return immediately so the bounded OCR fallback can run.
+            return last_metrics, last_lines
+        await asyncio.sleep(0.25)
     return last_metrics, last_lines
+
+
+async def _ocr_visible_plugin_metrics(page: Any) -> tuple[dict[str, Any], dict[str, Any]]:
+    """OCR the visible ZYing metric strip when another extension hides DOM text."""
+    columns = page.locator(".zying-meli-detail-metric-column")
+    boxes = []
+    for index in range(await columns.count()):
+        try:
+            box = await columns.nth(index).bounding_box()
+        except Exception:
+            box = None
+        if box and box.get("width", 0) > 0 and box.get("height", 0) > 0:
+            boxes.append(box)
+    if not boxes:
+        return parse_plugin_metrics(""), {}
+    left = min(box["x"] for box in boxes)
+    top = min(box["y"] for box in boxes)
+    right = max(box["x"] + box["width"] for box in boxes)
+    bottom = max(box["y"] + box["height"] for box in boxes)
+    image = await page.screenshot(
+        type="png",
+        clip={
+            "x": max(0.0, left - 12.0),
+            "y": max(0.0, top - 10.0),
+            "width": right - left + 24.0,
+            "height": bottom - top + 20.0,
+        },
+    )
+    ocr = await asyncio.to_thread(ocr_plugin_image, image)
+    return parse_plugin_metrics(str(ocr.get("text") or "")), ocr
 
 
 def _failure_row(candidate: Mapping[str, Any], exc: Exception) -> dict[str, Any]:
@@ -841,7 +1107,14 @@ async def _collect_detail(
     page = await _new_page(runtime)
     react_reader: _PluginMetricReader | None = None
     try:
-        await _goto(page, str(candidate["source_url"]))
+        primary_url = str(candidate["source_url"])
+        fallback_url = str(candidate.get("listing_url") or "").strip()
+        try:
+            await _goto(page, primary_url)
+        except Exception:
+            if not fallback_url or fallback_url == primary_url:
+                raise
+            await _goto(page, fallback_url)
         try:
             await page.wait_for_selector('h1.ui-pdp-title, h1', timeout=10000)
         except Exception:
@@ -858,6 +1131,52 @@ async def _collect_detail(
             stop_event,
             react_reader=react_reader,
         )
+        ocr_snapshot: dict[str, Any] = {}
+        metric_keys = (
+            "weight_g",
+            "volumetric_weight_kg",
+            "package_length_cm",
+            "package_width_cm",
+            "package_height_cm",
+            "dimensions_display",
+            "weight_display",
+            "plugin_volumetric_display",
+        )
+        if not all(
+            metrics.get(key) is not None
+            for key in (
+                "weight_g",
+                "package_length_cm",
+                "package_width_cm",
+                "package_height_cm",
+            )
+        ):
+            try:
+                ocr_metrics, ocr_snapshot = await _ocr_visible_plugin_metrics(page)
+                for key in metric_keys:
+                    if metrics.get(key) is None and ocr_metrics.get(key) is not None:
+                        metrics[key] = ocr_metrics[key]
+            except Exception as exc:
+                ocr_snapshot = {"error": str(exc)}
+
+        weight_basis = "plugin_actual"
+        if (
+            metrics.get("weight_g") is None
+            and metrics.get("volumetric_weight_kg") is not None
+            and all(
+                metrics.get(key) is not None
+                for key in (
+                    "package_length_cm",
+                    "package_width_cm",
+                    "package_height_cm",
+                )
+            )
+        ):
+            # Some ZYing layouts expose dimensions and chargeable volumetric
+            # weight but omit actual weight.  Using the larger chargeable value
+            # is conservative for shipping and is explicitly labelled.
+            metrics["weight_g"] = float(metrics["volumetric_weight_kg"]) * 1000.0
+            weight_basis = "plugin_volumetric_fallback"
         pictures = [
             url
             for url in (
@@ -887,11 +1206,15 @@ async def _collect_detail(
         if not main_image:
             errors.append("未识别到商品主图")
         plugin_text = " ".join(plugin_lines)
-        if not plugin_lines:
+        ocr_text = str(ocr_snapshot.get("text") or "").strip()
+        readable_plugin_text = " ".join(
+            value for value in (plugin_text, ocr_text) if value
+        )
+        if not plugin_lines and not ocr_text:
             errors.append(
                 "详情页未检测到智赢插件重量尺寸，请确认 Playwright 采集浏览器已登录智赢"
             )
-        elif re.search(r"(?:^|\s)登录(?:\s|$)", plugin_text):
+        elif re.search(r"(?:^|\s)登录(?:\s|$)", readable_plugin_text):
             errors.append(
                 "Playwright 采集浏览器中的智赢插件尚未登录，请先点击“登录智赢采集浏览器”"
             )
@@ -928,7 +1251,7 @@ async def _collect_detail(
             "package_length_cm": metrics.get("package_length_cm"),
             "package_width_cm": metrics.get("package_width_cm"),
             "package_height_cm": metrics.get("package_height_cm"),
-            "weight_basis": "plugin_actual",
+            "weight_basis": weight_basis,
             "scrape_status": "ok" if complete else "partial",
             "error_message": "；".join(errors),
             "source": source,
@@ -941,10 +1264,17 @@ async def _collect_detail(
             },
             "plugin_snapshot": {
                 "source": "智赢浏览器插件商品详情浮层",
-                "read_method": "playwright_shadow_dom",
+                "read_method": (
+                    "playwright_shadow_dom_ocr_fallback"
+                    if ocr_snapshot
+                    else "playwright_shadow_dom"
+                ),
                 "dom_lines": plugin_lines,
                 "dom_text": plugin_text,
-                "weight_basis": "plugin_actual",
+                "ocr_text": ocr_text,
+                "ocr_confidence": ocr_snapshot.get("confidence"),
+                "ocr_error": ocr_snapshot.get("error"),
+                "weight_basis": weight_basis,
                 "dimensions_display": metrics.get("dimensions_display"),
                 "weight_display": metrics.get("weight_display"),
                 "plugin_volumetric_display": metrics.get("plugin_volumetric_display"),
@@ -967,10 +1297,99 @@ async def _collect_detail(
             pass
 
 
+async def _repair_items_async(
+    rows: Iterable[Mapping[str, Any]],
+    *,
+    window_id: str,
+    plugin_timeout: float,
+    attempts: int,
+    on_item: Callable[[dict[str, Any]], None] | None,
+    on_progress: Callable[[dict[str, Any]], None] | None,
+    stop_event: threading.Event | None,
+) -> dict[str, Any]:
+    """Re-read incomplete details sequentially in one reusable browser context."""
+    candidates = [
+        {
+            "source_item_id": str(row.get("source_item_id") or ""),
+            "source_url": str(row.get("source_url") or row.get("final_url") or ""),
+            "listing_url": str(row.get("final_url") or ""),
+            "main_image_url": str(row.get("main_image_url") or ""),
+            "title": str(row.get("title") or ""),
+            "price": row.get("price"),
+            "currency_id": str(row.get("currency_id") or "MXN"),
+        }
+        for row in rows
+        if str(row.get("scrape_status") or "").lower() != "ok"
+        and str(row.get("source_item_id") or "").strip()
+        and str(row.get("source_url") or row.get("final_url") or "").strip()
+    ]
+    if not candidates:
+        return {"requested_count": 0, "completed_count": 0, "failed_count": 0, "rows": []}
+
+    attempts = max(1, min(int(attempts), 3))
+    runtime = await (_open_runtime(window_id) if window_id else _open_runtime())
+    repaired: list[dict[str, Any]] = []
+    completed = failed = 0
+    try:
+        for index, candidate in enumerate(candidates, start=1):
+            _check_stop(stop_event)
+            value: Any = None
+            for attempt in range(attempts):
+                try:
+                    value = await _collect_detail(
+                        runtime,
+                        candidate,
+                        plugin_timeout=plugin_timeout,
+                        stop_event=stop_event,
+                    )
+                except CollectionStopped:
+                    raise
+                except Exception as exc:
+                    value = exc
+                if isinstance(value, Mapping) and value.get("scrape_status") == "ok":
+                    break
+                if attempt + 1 < attempts:
+                    await asyncio.sleep(1.0)
+            row = _failure_row(candidate, value) if isinstance(value, Exception) else dict(value)
+            repaired.append(row)
+            if row.get("scrape_status") == "ok":
+                completed += 1
+            else:
+                failed += 1
+            if on_item:
+                await asyncio.to_thread(on_item, row)
+            if on_progress:
+                on_progress({
+                    "stage": "detail_repair",
+                    "current": index,
+                    "total": len(candidates),
+                    "item_id": candidate["source_item_id"],
+                    "message": (
+                        f"正在低并发补采重量尺寸（{index}/{len(candidates)}），"
+                        f"已修复 {completed} 件"
+                    ),
+                })
+            # ZYing injects metrics asynchronously and becomes unreliable when
+            # incomplete items immediately trigger another navigation.
+            if index < len(candidates):
+                await asyncio.sleep(0.4)
+        return {
+            "requested_count": len(candidates),
+            "completed_count": completed,
+            "failed_count": failed,
+            "browser_connection": runtime.connection_mode,
+            "rows": repaired,
+        }
+    finally:
+        await _close_runtime(runtime)
+
+
 async def _collect_async(
     source_url: str,
     requested_count: int,
     *,
+    collection_scope: str = "all",
+    window_id: str = "",
     max_workers: int,
     plugin_timeout: float,
     on_page: Callable[[dict[str, Any]], None] | None,
@@ -978,7 +1397,10 @@ async def _collect_async(
     on_progress: Callable[[dict[str, Any]], None] | None,
     stop_event: threading.Event | None,
 ) -> dict[str, Any]:
-    runtime = await _open_runtime()
+    async def open_runtime() -> _PlaywrightRuntime:
+        return await (_open_runtime(window_id) if window_id else _open_runtime())
+
+    runtime = await open_runtime()
     results: list[dict[str, Any]] = []
     completed = failed = 0
     try:
@@ -987,6 +1409,7 @@ async def _collect_async(
                 runtime,
                 source_url,
                 requested_count,
+                collection_scope=collection_scope,
                 on_page=on_page,
                 stop_event=stop_event,
             )
@@ -994,109 +1417,179 @@ async def _collect_async(
             if not _is_browser_closed_error(exc):
                 raise
             await _close_runtime(runtime)
-            runtime = await _open_runtime()
+            runtime = await open_runtime()
             candidates = await _listing_candidates(
                 runtime,
                 source_url,
                 requested_count,
+                collection_scope=collection_scope,
                 on_page=on_page,
                 stop_event=stop_event,
             )
         if not candidates:
             raise RuntimeError(
-                "Playwright 在列表页没有识别到商品，请确认链接是 Mercado 商品列表或详情页"
+                (
+                    "列表页没有识别到带 Internacional 标识的跨境卖家商品"
+                    if collection_scope == "cross_border"
+                    else "Playwright 在列表页没有识别到商品，请确认链接是 Mercado 商品列表或详情页"
+                )
             )
         workers = normalize_collection_workers(max_workers)
-        for batch_start in range(0, len(candidates), workers):
-            _check_stop(stop_event)
-            batch = candidates[batch_start:batch_start + workers]
-            if on_progress:
-                on_progress({
-                    "stage": "detail_batch",
-                    "current": batch_start + 1,
-                    "total": len(candidates),
-                    "item_id": " / ".join(row["source_item_id"] for row in batch),
-                    "message": (
-                        f"Playwright 正在并发采集 {len(batch)} 个详情页"
-                        f"（并发数 {workers}，DOM 读取智赢数据）"
+        semaphore = asyncio.Semaphore(workers)
+        navigation_lock = asyncio.Lock()
+        next_navigation_at = 0.0
+        try:
+            navigation_stagger = max(
+                0.0,
+                min(
+                    float(
+                        os.environ.get(
+                            "MERCADO_PLAYWRIGHT_NAVIGATION_STAGGER_SECONDS", "0.65"
+                        )
                     ),
-                })
-            tasks = [
-                asyncio.create_task(
-                    _collect_detail(
-                        runtime,
-                        candidate,
-                        plugin_timeout=plugin_timeout,
-                        stop_event=stop_event,
-                    )
-                )
-                for candidate in batch
-            ]
-            settled = await asyncio.gather(*tasks, return_exceptions=True)
-            retry_indexes = [
-                index
-                for index, value in enumerate(settled)
-                if (
-                    isinstance(value, Exception)
-                    and not isinstance(value, CollectionStopped)
-                )
-                or (
-                    isinstance(value, dict)
-                    and not value.get("title")
-                    and not value.get("main_image_url")
-                )
-            ]
-            if retry_indexes:
-                if any(
-                    isinstance(settled[index], Exception)
-                    and _is_browser_closed_error(settled[index])
-                    for index in retry_indexes
-                ):
-                    await _close_runtime(runtime)
-                    runtime = await _open_runtime()
-                if on_progress:
-                    on_progress({
-                        "stage": "detail_retry",
-                        "current": batch_start + 1,
-                        "total": len(candidates),
-                        "item_id": " / ".join(
-                            batch[index]["source_item_id"] for index in retry_indexes
-                        ),
-                        "message": f"正在重试 {len(retry_indexes)} 个瞬时失败的详情页",
-                    })
-                retry_values = await asyncio.gather(
-                    *[
-                        _collect_detail(
-                            runtime,
-                            batch[index],
+                    3.0,
+                ),
+            )
+        except ValueError:
+            navigation_stagger = 0.65
+
+        async def wait_for_navigation_slot() -> None:
+            """Keep parallel tabs, but avoid a burst of simultaneous navigations."""
+            nonlocal next_navigation_at
+            async with navigation_lock:
+                loop = asyncio.get_running_loop()
+                remaining = next_navigation_at - loop.time()
+                if remaining > 0:
+                    await asyncio.sleep(remaining)
+                next_navigation_at = loop.time() + navigation_stagger
+
+        async def collect_one(
+            active_runtime: _PlaywrightRuntime,
+            index: int,
+            candidate: Mapping[str, Any],
+        ) -> tuple[int, Mapping[str, Any], Any]:
+            async with semaphore:
+                value: Any = None
+                for attempt in range(2):
+                    _check_stop(stop_event)
+                    await wait_for_navigation_slot()
+                    try:
+                        value = await _collect_detail(
+                            active_runtime,
+                            candidate,
                             plugin_timeout=plugin_timeout,
                             stop_event=stop_event,
                         )
-                        for index in retry_indexes
-                    ],
-                    return_exceptions=True,
-                )
-                for index, retry_value in zip(retry_indexes, retry_values):
-                    settled[index] = retry_value
-            for offset, (candidate, value) in enumerate(zip(batch, settled), start=1):
-                if isinstance(value, CollectionStopped):
-                    raise value
-                row = _failure_row(candidate, value) if isinstance(value, Exception) else value
-                if row["scrape_status"] == "ok":
-                    completed += 1
-                else:
-                    failed += 1
-                results.append(row)
-                if on_item:
-                    on_item(row)
-                if on_progress:
-                    on_progress({
-                        "stage": "detail",
-                        "current": batch_start + offset,
-                        "total": len(candidates),
-                        "item_id": candidate["source_item_id"],
-                        "message": f"已读取 {candidate['source_item_id']} 的页面和智赢 DOM 数据",
-                    })
+                    except CollectionStopped:
+                        raise
+                    except Exception as exc:
+                        value = exc
+                    incomplete = (
+                        isinstance(value, dict)
+                        and (
+                            (not value.get("title") and not value.get("main_image_url"))
+                            or value.get("scrape_status") in {"partial", "failed"}
+                        )
+                    )
+                    if not isinstance(value, Exception) and not incomplete:
+                        break
+                    if isinstance(value, Exception) and _is_browser_closed_error(value):
+                        break
+                    if attempt == 0:
+                        message = str(value.get("error_message") if isinstance(value, dict) else value)
+                        blocked = any(
+                            marker in message.lower()
+                            for marker in ("验证页", "captcha", "account-verification")
+                        )
+                        delay_key = (
+                            "MERCADO_PLAYWRIGHT_BLOCKED_RETRY_SECONDS"
+                            if blocked
+                            else "MERCADO_PLAYWRIGHT_RETRY_SECONDS"
+                        )
+                        default_delay = 3.0 if blocked else 0.75
+                        try:
+                            retry_delay = max(
+                                0.0,
+                                min(float(os.environ.get(delay_key, str(default_delay))), 10.0),
+                            )
+                        except ValueError:
+                            retry_delay = default_delay
+                        # A small deterministic spread prevents all blocked tabs
+                        # from retrying together and immediately hitting the wall again.
+                        await asyncio.sleep(retry_delay + (index % workers) * 0.15)
+                return index, candidate, value
+
+        async def save_result(
+            candidate: Mapping[str, Any], value: Any, current: int
+        ) -> None:
+            nonlocal completed, failed
+            if isinstance(value, CollectionStopped):
+                raise value
+            row = _failure_row(candidate, value) if isinstance(value, Exception) else value
+            if row["scrape_status"] == "ok":
+                completed += 1
+            else:
+                failed += 1
+            results.append(row)
+            if on_item:
+                await asyncio.to_thread(on_item, row)
+            if on_progress:
+                on_progress({
+                    "stage": "detail",
+                    "current": current,
+                    "total": len(candidates),
+                    "item_id": candidate["source_item_id"],
+                    "message": (
+                        f"已读取 {candidate['source_item_id']} 的页面和智赢 DOM 数据"
+                        f"（{current}/{len(candidates)}）"
+                    ),
+                })
+
+        if on_progress:
+            on_progress({
+                "stage": "detail_pool",
+                "current": 0,
+                "total": len(candidates),
+                "item_id": "",
+                "message": f"正在用 {workers} 个动态并发槽采集 {len(candidates)} 个详情页",
+            })
+
+        tasks = [
+            asyncio.create_task(collect_one(runtime, index, candidate))
+            for index, candidate in enumerate(candidates)
+        ]
+        closed_context_rows: list[tuple[int, Mapping[str, Any]]] = []
+        saved_count = 0
+        for future in asyncio.as_completed(tasks):
+            index, candidate, value = await future
+            if isinstance(value, Exception) and _is_browser_closed_error(value):
+                closed_context_rows.append((index, candidate))
+                continue
+            saved_count += 1
+            await save_result(candidate, value, saved_count)
+
+        if closed_context_rows:
+            await _close_runtime(runtime)
+            runtime = await open_runtime()
+            if on_progress:
+                on_progress({
+                    "stage": "detail_retry",
+                    "current": saved_count,
+                    "total": len(candidates),
+                    "item_id": " / ".join(
+                        candidate["source_item_id"]
+                        for _, candidate in closed_context_rows
+                    ),
+                    "message": f"浏览器上下文已恢复，重试 {len(closed_context_rows)} 个商品",
+                })
+            retry_tasks = [
+                asyncio.create_task(collect_one(runtime, index, candidate))
+                for index, candidate in closed_context_rows
+            ]
+            for future in asyncio.as_completed(retry_tasks):
+                _, candidate, value = await future
+                saved_count += 1
+                await save_result(candidate, value, saved_count)
         return {
             "requested_count": requested_count,
             "candidate_count": len(candidates),
@@ -1104,6 +1597,7 @@ async def _collect_async(
             "failed_count": failed,
             "browser_mode": "playwright",
             "browser_connection": runtime.connection_mode,
+            "collection_scope": collection_scope,
             "rows": results,
         }
     finally:
@@ -1115,6 +1609,8 @@ def collect_marketplace_listing_playwright(
     requested_count: int,
     *,
     max_workers: int,
+    window_id: str = "",
+    collection_scope: str = "all",
     plugin_timeout: float,
     on_page: Callable[[dict[str, Any]], None] | None = None,
     on_item: Callable[[dict[str, Any]], None] | None = None,
@@ -1124,13 +1620,40 @@ def collect_marketplace_listing_playwright(
     """Collect pages concurrently using Playwright without any RPA actions."""
     source_url, requested_count = validate_collection_request(source_url, requested_count)
     max_workers = normalize_collection_workers(max_workers)
+    collection_scope = normalize_collection_scope(collection_scope)
     return asyncio.run(
         _collect_async(
             source_url,
             requested_count,
+            window_id=window_id,
+            collection_scope=collection_scope,
             max_workers=max_workers,
             plugin_timeout=plugin_timeout,
             on_page=on_page,
+            on_item=on_item,
+            on_progress=on_progress,
+            stop_event=stop_event,
+        )
+    )
+
+
+def repair_marketplace_items_playwright(
+    rows: Iterable[Mapping[str, Any]],
+    *,
+    window_id: str,
+    plugin_timeout: float = 30.0,
+    attempts: int = 1,
+    on_item: Callable[[dict[str, Any]], None] | None = None,
+    on_progress: Callable[[dict[str, Any]], None] | None = None,
+    stop_event: threading.Event | None = None,
+) -> dict[str, Any]:
+    """Sequential quality pass for rows that missed ZYing weight/dimensions."""
+    return asyncio.run(
+        _repair_items_async(
+            rows,
+            window_id=str(window_id or "").strip(),
+            plugin_timeout=max(1.0, float(plugin_timeout)),
+            attempts=attempts,
             on_item=on_item,
             on_progress=on_progress,
             stop_event=stop_event,
@@ -1171,4 +1694,5 @@ __all__ = [
     "collect_marketplace_listing_playwright",
     "discover_zying_extension_dir",
     "open_playwright_login_setup",
+    "repair_marketplace_items_playwright",
 ]

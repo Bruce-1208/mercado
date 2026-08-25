@@ -11,6 +11,7 @@ from typing import Any, Callable, Iterable, Mapping
 TASK_TABLE = "erp_mercadolibre_collection_tasks"
 COLLECTION_TABLE = "erp_mercadolibre_collection_items"
 PRODUCT_TABLE = "erp_mercadolibre_products"
+PUBLISH_RECORD_TABLE = "erp_mercadolibre_publish_records"
 
 PROFITABILITY_COLUMN_DEFINITIONS = (
     ("sale_price_usd", "DECIMAL(20,4) NULL"),
@@ -49,6 +50,7 @@ PRODUCT_SOURCE_TYPES = {"collected", "pulled"}
 PRODUCT_REVIEW_STATUSES = {
     "unreviewed", "approved", "suspected", "infringing", "risk",
 }
+PRODUCT_PUBLISH_RECORD_STATUSES = {"pending", "publishing", "published", "failed"}
 PRODUCT_WORKFLOW_COLUMN_DEFINITIONS = (
     ("source_type", "VARCHAR(32) NOT NULL DEFAULT 'collected' AFTER `collection_item_id`"),
     ("review_status", "VARCHAR(32) NOT NULL DEFAULT 'unreviewed' AFTER `source_type`"),
@@ -107,6 +109,37 @@ def _ensure_index(cursor: Any, table: str, index_name: str, definition: str) -> 
     if cursor.fetchone():
         return False
     cursor.execute(f"ALTER TABLE `{table}` ADD KEY `{index_name}` {definition}")
+    return True
+
+
+def _ensure_collection_task_unique_index(cursor: Any) -> bool:
+    """Keep collected items unique inside a task, not across all task history.
+
+    The former source-item-only index caused an item already collected by an
+    older task to remain attached to that task.  A new 200-item run could then
+    report 200 processed rows while its task detail contained fewer than 200.
+    """
+    index_name = "uniq_erp_meli_collection_item"
+    cursor.execute(
+        f"SHOW INDEX FROM `{COLLECTION_TABLE}` WHERE `Key_name` = %s ",
+        (index_name,),
+    )
+    rows = list(cursor.fetchall() or [])
+    columns = [
+        str(row.get("Column_name") or "")
+        for row in sorted(rows, key=lambda row: int(row.get("Seq_in_index") or 0))
+        if isinstance(row, Mapping)
+    ]
+    if columns == ["task_id", "source_item_id"]:
+        return False
+    if rows:
+        cursor.execute(
+            f"ALTER TABLE `{COLLECTION_TABLE}` DROP INDEX `{index_name}`"
+        )
+    cursor.execute(
+        f"ALTER TABLE `{COLLECTION_TABLE}` "
+        f"ADD UNIQUE KEY `{index_name}` (`task_id`, `source_item_id`)"
+    )
     return True
 
 
@@ -182,7 +215,7 @@ def ensure_collection_tables(cursor: Any) -> None:
             `collected_at` DATETIME NOT NULL,
             `updated_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
             PRIMARY KEY (`id`),
-            UNIQUE KEY `uniq_erp_meli_collection_item` (`source_item_id`),
+            UNIQUE KEY `uniq_erp_meli_collection_item` (`task_id`, `source_item_id`),
             KEY `idx_erp_meli_collection_task` (`task_id`, `collected_at`),
             KEY `idx_erp_meli_collection_status` (`scrape_status`, `collected_at`)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
@@ -246,6 +279,38 @@ def ensure_collection_tables(cursor: Any) -> None:
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
         """
     )
+    cursor.execute(
+        f"""
+        CREATE TABLE IF NOT EXISTS `{PUBLISH_RECORD_TABLE}` (
+            `id` BIGINT NOT NULL AUTO_INCREMENT,
+            `batch_id` VARCHAR(64) NOT NULL,
+            `product_item_id` BIGINT NULL,
+            `source_item_id` VARCHAR(32) NOT NULL,
+            `source_url` VARCHAR(1500) NULL,
+            `main_image_url` VARCHAR(1500) NULL,
+            `title` VARCHAR(255) NULL,
+            `token_id` BIGINT NOT NULL,
+            `store_name` VARCHAR(100) NOT NULL,
+            `site_id` VARCHAR(16) NOT NULL,
+            `site_name` VARCHAR(64) NULL,
+            `quantity` INT NOT NULL DEFAULT 1,
+            `status` VARCHAR(32) NOT NULL DEFAULT 'pending',
+            `published_item_id` VARCHAR(64) NULL,
+            `failure_reason` TEXT NULL,
+            `result_json` LONGTEXT NULL,
+            `created_by` VARCHAR(128) NULL,
+            `started_at` DATETIME NULL,
+            `finished_at` DATETIME NULL,
+            `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            `updated_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            PRIMARY KEY (`id`),
+            UNIQUE KEY `uniq_erp_meli_publish_batch_product` (`batch_id`, `product_item_id`),
+            KEY `idx_erp_meli_publish_product` (`product_item_id`, `created_at`),
+            KEY `idx_erp_meli_publish_status` (`status`, `created_at`),
+            KEY `idx_erp_meli_publish_store` (`token_id`, `created_at`)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+        """
+    )
     collection_volumetric_added = _ensure_column(
         cursor, COLLECTION_TABLE, "volumetric_weight_kg", "DECIMAL(20,4) NULL AFTER `weight_g`"
     )
@@ -262,6 +327,7 @@ def ensure_collection_tables(cursor: Any) -> None:
         _ensure_column(cursor, PRODUCT_TABLE, column, definition)
     for column, definition in PRODUCT_WORKFLOW_COLUMN_DEFINITIONS:
         _ensure_column(cursor, PRODUCT_TABLE, column, definition)
+    _ensure_collection_task_unique_index(cursor)
     _ensure_index(
         cursor, PRODUCT_TABLE, "idx_erp_meli_product_source", "(`source_type`, `id`)"
     )
@@ -623,6 +689,215 @@ def list_collection_items(**kwargs: Any) -> dict[str, Any]:
 def list_product_items(**kwargs: Any) -> dict[str, Any]:
     kwargs.pop("task_id", None)
     return _list_rows(PRODUCT_TABLE, **kwargs)
+
+
+def create_product_publish_records(
+    product_rows: Iterable[Mapping[str, Any]],
+    *,
+    batch_id: str,
+    token_id: int,
+    store_name: str,
+    site_id: str,
+    site_name: str = "",
+    quantity: int = 1,
+    created_by: str = "",
+    connection_factory: Callable[[], Any] | None = None,
+) -> dict[int, int]:
+    """Create one immutable attempt row for every selected product."""
+
+    rows = [dict(row) for row in product_rows or []]
+    if not rows:
+        raise ValueError("请至少勾选一个产品")
+    normalized_batch_id = str(batch_id or "").strip()[:64]
+    if not normalized_batch_id:
+        raise ValueError("上架批次编号不能为空")
+    quantity = int(quantity)
+    if quantity < 1 or quantity > 9999:
+        raise ValueError("上架库存必须在 1-9999 之间")
+    normalized_token_id = int(token_id)
+    if normalized_token_id <= 0:
+        raise ValueError("上架店铺编号无效")
+
+    connection = (connection_factory or _connect)()
+    record_ids: dict[int, int] = {}
+    try:
+        with connection.cursor() as cursor:
+            ensure_collection_tables(cursor)
+            for row in rows:
+                product_item_id = int(row.get("id") or 0)
+                if product_item_id <= 0:
+                    raise ValueError("产品记录编号无效")
+                source_item_id = str(row.get("source_item_id") or "").strip().upper()
+                if not source_item_id:
+                    raise ValueError(f"产品 {product_item_id} 缺少商品编号")
+                cursor.execute(
+                    f"""
+                    INSERT INTO `{PUBLISH_RECORD_TABLE}` (
+                        `batch_id`, `product_item_id`, `source_item_id`, `source_url`,
+                        `main_image_url`, `title`, `token_id`, `store_name`,
+                        `site_id`, `site_name`, `quantity`, `status`, `created_by`,
+                        `created_at`
+                    ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, 'pending', %s, %s)
+                    ON DUPLICATE KEY UPDATE `id` = LAST_INSERT_ID(`id`)
+                    """,
+                    (
+                        normalized_batch_id,
+                        product_item_id,
+                        source_item_id,
+                        str(row.get("source_url") or "")[:1500],
+                        str(row.get("main_image_url") or "")[:1500],
+                        str(row.get("title") or "")[:255],
+                        normalized_token_id,
+                        str(store_name or normalized_token_id)[:100],
+                        str(site_id or "")[:16].upper(),
+                        str(site_name or "")[:64],
+                        quantity,
+                        str(created_by or "")[:128],
+                        _now(),
+                    ),
+                )
+                record_ids[product_item_id] = int(cursor.lastrowid)
+        connection.commit()
+        return record_ids
+    except BaseException:
+        connection.rollback()
+        raise
+    finally:
+        connection.close()
+
+
+def update_product_publish_record(
+    record_id: int,
+    *,
+    status: str | None = None,
+    published_item_id: str | None = None,
+    failure_reason: str | None = None,
+    result: Mapping[str, Any] | None = None,
+    started: bool = False,
+    finished: bool = False,
+    connection_factory: Callable[[], Any] | None = None,
+) -> None:
+    assignments: list[str] = []
+    values: list[Any] = []
+    if status is not None:
+        normalized_status = str(status or "").strip().lower()
+        if normalized_status not in PRODUCT_PUBLISH_RECORD_STATUSES:
+            raise ValueError(f"不支持的上架记录状态: {normalized_status}")
+        assignments.append("`status` = %s")
+        values.append(normalized_status)
+    if published_item_id is not None:
+        assignments.append("`published_item_id` = %s")
+        values.append(str(published_item_id or "")[:64])
+    if failure_reason is not None:
+        assignments.append("`failure_reason` = %s")
+        values.append(str(failure_reason or "")[:4000])
+    if result is not None:
+        assignments.append("`result_json` = %s")
+        values.append(_dumps(result))
+    if started:
+        assignments.append("`started_at` = COALESCE(`started_at`, %s)")
+        values.append(_now())
+    if finished:
+        assignments.append("`finished_at` = %s")
+        values.append(_now())
+    if not assignments:
+        return
+
+    values.append(int(record_id))
+    connection = (connection_factory or _connect)()
+    try:
+        with connection.cursor() as cursor:
+            ensure_collection_tables(cursor)
+            cursor.execute(
+                f"UPDATE `{PUBLISH_RECORD_TABLE}` SET {', '.join(assignments)} WHERE `id` = %s",
+                tuple(values),
+            )
+            if int(cursor.rowcount or 0) == 0:
+                cursor.execute(
+                    f"SELECT 1 FROM `{PUBLISH_RECORD_TABLE}` WHERE `id` = %s",
+                    (int(record_id),),
+                )
+                if not cursor.fetchone():
+                    raise KeyError("产品上架记录不存在")
+        connection.commit()
+    except BaseException:
+        connection.rollback()
+        raise
+    finally:
+        connection.close()
+
+
+def list_product_publish_records(
+    *,
+    search: str = "",
+    status: str = "",
+    store_name: str = "",
+    site_id: str = "",
+    limit: int = 500,
+    offset: int = 0,
+    connection_factory: Callable[[], Any] | None = None,
+) -> dict[str, Any]:
+    limit = max(1, min(int(limit), 1000))
+    offset = max(0, int(offset))
+    base_where: list[str] = []
+    base_params: list[Any] = []
+    search = str(search or "").strip()
+    if search:
+        pattern = f"%{search}%"
+        base_where.append(
+            "(`source_item_id` LIKE %s OR `title` LIKE %s OR "
+            "`published_item_id` LIKE %s OR `batch_id` LIKE %s)"
+        )
+        base_params.extend((pattern, pattern, pattern, pattern))
+    store_name = str(store_name or "").strip()
+    if store_name:
+        base_where.append("`store_name` LIKE %s")
+        base_params.append(f"%{store_name}%")
+    site_id = str(site_id or "").strip().upper()
+    if site_id:
+        base_where.append("`site_id` = %s")
+        base_params.append(site_id)
+    where = list(base_where)
+    params = list(base_params)
+    status = str(status or "").strip().lower()
+    if status:
+        if status not in PRODUCT_PUBLISH_RECORD_STATUSES:
+            raise ValueError(f"不支持的上架记录状态: {status}")
+        where.append("`status` = %s")
+        params.append(status)
+    base_where_sql = f"WHERE {' AND '.join(base_where)}" if base_where else ""
+    where_sql = f"WHERE {' AND '.join(where)}" if where else ""
+
+    connection = (connection_factory or _connect)()
+    try:
+        with connection.cursor() as cursor:
+            ensure_collection_tables(cursor)
+            cursor.execute(
+                f"SELECT `status`, COUNT(*) AS total FROM `{PUBLISH_RECORD_TABLE}` "
+                f"{base_where_sql} GROUP BY `status`",
+                tuple(base_params),
+            )
+            counts = {key: 0 for key in PRODUCT_PUBLISH_RECORD_STATUSES}
+            for count_row in cursor.fetchall():
+                count_status = str(count_row.get("status") or "")
+                if count_status in counts:
+                    counts[count_status] = int(count_row.get("total") or 0)
+            counts["all"] = sum(counts.values())
+            cursor.execute(
+                f"SELECT COUNT(*) AS total FROM `{PUBLISH_RECORD_TABLE}` {where_sql}",
+                tuple(params),
+            )
+            total = int((cursor.fetchone() or {}).get("total") or 0)
+            cursor.execute(
+                f"SELECT * FROM `{PUBLISH_RECORD_TABLE}` {where_sql} "
+                "ORDER BY `id` DESC LIMIT %s OFFSET %s",
+                tuple(params + [limit, offset]),
+            )
+            rows = [_json_safe_row(row) for row in cursor.fetchall()]
+        connection.commit()
+        return {"total": total, "counts": counts, "rows": rows}
+    finally:
+        connection.close()
 
 
 def update_product_review_status(

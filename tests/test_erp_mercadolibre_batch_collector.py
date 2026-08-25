@@ -5,8 +5,12 @@ import pytest
 from erp import mercadolibre_batch_collector as collector
 from erp import mercadolibre_playwright_collector as playwright_collector
 from erp.mercadolibre_batch_collector import (
+    build_marketplace_search_url,
+    canonical_marketplace_item_url,
     extract_listing_item_id,
+    marketplace_url_has_cross_border_filter,
     merge_listing_candidates,
+    normalize_collection_scope,
     normalize_collection_workers,
     parse_detail_html,
     parse_listing_html,
@@ -90,9 +94,86 @@ def test_collection_request_requires_mercado_host_and_bounded_count():
     with pytest.raises(ValueError, match="1-500"):
         validate_collection_request("https://listado.mercadolibre.com.mx/bolsas", 501)
 
-    assert normalize_collection_workers(4) == 4
-    with pytest.raises(ValueError, match="1-6"):
-        normalize_collection_workers(7)
+    assert normalize_collection_workers(8) == 8
+    with pytest.raises(ValueError, match="1-8"):
+        normalize_collection_workers(9)
+
+
+def test_keyword_builds_country_frontend_search_urls():
+    assert build_marketplace_search_url("bolsas para mujer", "MLM") == (
+        "https://listado.mercadolibre.com.mx/bolsas-para-mujer"
+    )
+    assert build_marketplace_search_url("bolsa feminina", "MLB") == (
+        "https://lista.mercadolivre.com.br/bolsa-feminina"
+    )
+    assert build_marketplace_search_url("disfraces", "MLU") == (
+        "https://listado.mercadolibre.com.uy/disfraces"
+    )
+    assert build_marketplace_search_url(
+        "cosplay", "MLM", "cross_border"
+    ) == (
+        "https://listado.mercadolibre.com.mx/"
+        "cosplay_NoIndex_True_SHIPPING*ORIGIN_10215069"
+    )
+    assert normalize_collection_scope("cross_border") == "cross_border"
+    with pytest.raises(ValueError, match="采集国家"):
+        build_marketplace_search_url("bolsas", "MPE")
+    with pytest.raises(ValueError, match="采集专区"):
+        normalize_collection_scope("official_store")
+    assert canonical_marketplace_item_url("MLM3016972321") == (
+        "https://articulo.mercadolibre.com.mx/MLM-3016972321"
+    )
+    assert canonical_marketplace_item_url("MLB5113933391") == (
+        "https://produto.mercadolivre.com.br/MLB-5113933391"
+    )
+    assert marketplace_url_has_cross_border_filter(
+        "https://listado.mercadolibre.com.mx/"
+        "cosplay_NoIndex_True_SHIPPING*ORIGIN_10215069"
+    )
+
+
+def test_cross_border_scope_only_keeps_international_cards():
+    rows = merge_listing_candidates(
+        [],
+        [
+            {
+                "href": "https://articulo.mercadolibre.com.mx/MLM-3016972321",
+                "title": "Producto internacional",
+                "is_cross_border": True,
+            },
+            {
+                "href": "https://articulo.mercadolibre.com.mx/MLM-3016972322",
+                "title": "Producto local",
+                "is_cross_border": False,
+            },
+        ],
+        20,
+        collection_scope="cross_border",
+    )
+
+    assert [row["source_item_id"] for row in rows] == ["MLM3016972321"]
+    assert rows[0]["is_cross_border"] is True
+    assert rows[0]["listing_url"].endswith("/MLM-3016972321")
+
+
+def test_listing_html_marks_international_seller_cards():
+    listing = parse_listing_html(
+        """
+        <html><body><ol>
+          <li class="ui-search-layout__item">
+            <a class="ui-search-link" href="/MLM-3016972321">Bolsa</a>
+            <h2>Bolsa</h2><span>China Internacional China</span>
+          </li>
+          <li class="ui-search-layout__item">
+            <a class="ui-search-link" href="/MLM-3016972322">Local</a>
+            <h2>Local</h2><span>Llega mañana</span>
+          </li>
+        </ol></body></html>
+        """,
+        "https://listado.mercadolibre.com.mx/bolsas",
+    )
+
+    assert [row["is_cross_border"] for row in listing["rows"]] == [True, False]
 
 
 def test_default_and_legacy_edge_labels_use_playwright(monkeypatch):
@@ -112,9 +193,31 @@ def test_default_and_legacy_edge_labels_use_playwright(monkeypatch):
         max_workers=3,
     )
 
-    assert collector.DEFAULT_BROWSER_MODE == "playwright"
+    assert collector.DEFAULT_BROWSER_MODE == "bitbrowser"
     assert result["browser_mode"] == "playwright"
     assert calls == [("https://listado.mercadolibre.com.mx/bolsas", 2, 3)]
+
+
+def test_bitbrowser_mode_uses_parallel_playwright_connection(monkeypatch):
+    calls = []
+
+    def fake_collect(source_url, requested_count, **kwargs):
+        calls.append(kwargs)
+        return {"browser_mode": "playwright", "rows": []}
+
+    monkeypatch.setattr(
+        playwright_collector, "collect_marketplace_listing_playwright", fake_collect
+    )
+    collector.collect_marketplace_listing(
+        "https://listado.mercadolibre.com.mx/cosplay",
+        5,
+        browser_mode="bitbrowser",
+        window_id="window-123",
+        max_workers=6,
+    )
+
+    assert calls[0]["window_id"] == "window-123"
+    assert calls[0]["max_workers"] == 6
 
 
 def test_playwright_plugin_reader_targets_zying_shadow_dom():
@@ -123,6 +226,46 @@ def test_playwright_plugin_reader_targets_zying_shadow_dom():
     assert "__reactFiber$" in playwright_collector.PLUGIN_REACT_METRICS_SCRIPT
     assert "chrome-extension://" in (
         f"chrome-extension://{playwright_collector.ZYING_EXTENSION_ID}"
+    )
+
+
+def test_playwright_plugin_reader_skips_empty_extension_world():
+    class FakeSession:
+        async def send(self, _method, payload):
+            if payload["contextId"] == 2:
+                value = {"found": True, "metrics": {}, "data": {}}
+            else:
+                value = {"found": True, "metrics": {"weight": {"value": "509g"}}, "data": {}}
+            return {"result": {"value": value}}
+
+    reader = playwright_collector._PluginMetricReader(FakeSession())
+    reader.context_ids = [1, 2]
+
+    result = asyncio.run(reader.read())
+
+    assert result["metrics"]["weight"]["value"] == "509g"
+
+
+def test_playwright_detects_visually_protected_plugin_text():
+    assert playwright_collector._plugin_text_is_visually_protected(
+        ["lp3lp3lp435s97l97l97kdztxutxutxut"]
+    )
+    assert not playwright_collector._plugin_text_is_visually_protected(
+        ["重量：509g", "尺寸：31 × 26 × 7"]
+    )
+
+
+def test_playwright_synthesizes_noindex_pagination_url():
+    source = (
+        "https://listado.mercadolibre.com.mx/"
+        "cosplay_NoIndex_True_SHIPPING*ORIGIN_10215069"
+    )
+    assert playwright_collector._synthesized_listing_page_url(source, 2) == (
+        "https://listado.mercadolibre.com.mx/"
+        "cosplay_Desde_49_NoIndex_True_SHIPPING*ORIGIN_10215069"
+    )
+    assert "_Desde_97_" in playwright_collector._synthesized_listing_page_url(
+        source, 3
     )
 
 
@@ -151,6 +294,8 @@ def test_playwright_decodes_plugin_metrics_from_extension_react_props():
 
 
 def test_playwright_retries_one_transient_detail_failure(monkeypatch):
+    monkeypatch.setenv("MERCADO_PLAYWRIGHT_NAVIGATION_STAGGER_SECONDS", "0")
+    monkeypatch.setenv("MERCADO_PLAYWRIGHT_RETRY_SECONDS", "0")
     candidate = {
         "source_item_id": "MLM3016972321",
         "source_url": "https://articulo.mercadolibre.com.mx/MLM-3016972321",
@@ -194,6 +339,59 @@ def test_playwright_retries_one_transient_detail_failure(monkeypatch):
 
     assert len(calls) == 2
     assert result["completed_count"] == 1
+
+
+def test_playwright_dynamic_pool_does_not_wait_for_slowest_batch_member(monkeypatch):
+    monkeypatch.setenv("MERCADO_PLAYWRIGHT_NAVIGATION_STAGGER_SECONDS", "0")
+    candidates = [
+        {
+            "source_item_id": f"MLM301697232{index}",
+            "source_url": f"https://example.test/{index}",
+            "title": f"Producto {index}",
+        }
+        for index in range(1, 4)
+    ]
+    runtime = type("Runtime", (), {"connection_mode": "test"})()
+    third_started = asyncio.Event()
+
+    async def fake_open():
+        return runtime
+
+    async def fake_close(_runtime):
+        return None
+
+    async def fake_candidates(*args, **kwargs):
+        return candidates
+
+    async def fake_detail(_runtime, candidate, **kwargs):
+        if candidate["source_item_id"].endswith("1"):
+            await asyncio.wait_for(third_started.wait(), timeout=1)
+        elif candidate["source_item_id"].endswith("3"):
+            third_started.set()
+        return {**candidate, "scrape_status": "ok", "main_image_url": "image"}
+
+    monkeypatch.setattr(playwright_collector, "_open_runtime", fake_open)
+    monkeypatch.setattr(playwright_collector, "_close_runtime", fake_close)
+    monkeypatch.setattr(playwright_collector, "_listing_candidates", fake_candidates)
+    monkeypatch.setattr(playwright_collector, "_collect_detail", fake_detail)
+
+    result = asyncio.run(
+        asyncio.wait_for(
+            playwright_collector._collect_async(
+                "https://listado.mercadolibre.com.mx/cosplay",
+                3,
+                max_workers=2,
+                plugin_timeout=1,
+                on_page=None,
+                on_item=None,
+                on_progress=None,
+                stop_event=None,
+            ),
+            timeout=2,
+        )
+    )
+
+    assert result["completed_count"] == 3
 
 
 def test_playwright_reopens_browser_before_retrying_closed_context(monkeypatch):

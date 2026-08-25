@@ -280,7 +280,7 @@ def refresh_and_save(
     """Rotate a store's refresh token and persist the replacement atomically."""
     existing = get_token(token_id)
     if not existing:
-        raise KeyError("店铺 Token 不存在")
+        raise KeyError("店铺授权不存在")
     refresh_token = str(existing.get("refresh_token") or "").strip()
     if not refresh_token:
         raise MercadoTokenError("该店铺没有 Refresh Token，请重新授权")

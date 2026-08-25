@@ -15,6 +15,8 @@ def _rows():
 
 def test_batch_publish_continues_after_an_item_failure_and_records_each_state():
     state_calls = []
+    record_create_calls = []
+    record_update_calls = []
     simultaneous = threading.Barrier(2)
     thread_ids = set()
 
@@ -29,6 +31,10 @@ def test_batch_publish_continues_after_an_item_failure_and_records_each_state():
             raise RuntimeError("category rejected")
         return {"result": {"id": "CBT999"}}
 
+    def create_records(rows, **metadata):
+        record_create_calls.append((list(rows), metadata))
+        return {11: 101, 12: 102}
+
     with patch.object(
         batch_publish,
         "_token_record",
@@ -42,6 +48,10 @@ def test_batch_publish_continues_after_an_item_failure_and_records_each_state():
             workers=2,
             update_state=lambda product_id, **changes: state_calls.append((product_id, changes)),
             client=object(),
+            batch_id="batch-001",
+            created_by="测试用户",
+            create_records=create_records,
+            update_record=lambda record_id, **changes: record_update_calls.append((record_id, changes)),
         )
 
     assert result["published_count"] == 1
@@ -54,6 +64,16 @@ def test_batch_publish_continues_after_an_item_failure_and_records_each_state():
     assert result["results"][1]["status"] == "failed"
     assert any(call[1]["status"] == "published" for call in state_calls)
     assert any(call[1]["status"] == "failed" for call in state_calls)
+    assert result["batch_id"] == "batch-001"
+    assert record_create_calls[0][1]["created_by"] == "测试用户"
+    assert record_create_calls[0][1]["site_id"] == "MLB"
+    assert any(record_id == 101 and changes["status"] == "published" for record_id, changes in record_update_calls)
+    assert any(
+        record_id == 102
+        and changes["status"] == "failed"
+        and "category rejected" in changes["failure_reason"]
+        for record_id, changes in record_update_calls
+    )
 
 
 def test_batch_publish_validates_quantity_before_contacting_store():
@@ -122,3 +142,41 @@ def test_product_snapshot_is_refreshed_before_publish():
     saved = upsert_source_snapshot.call_args.args[0]
     assert saved["category_id"] == "MLM123"
     assert saved["main_image_url"] == "https://example/product.webp"
+
+
+def test_successful_upload_is_not_reported_failed_when_latest_state_save_fails():
+    row = _rows()[0]
+    record_updates = []
+
+    def update_state(_product_id, **changes):
+        if changes.get("status") == "published":
+            raise RuntimeError("database temporarily unavailable")
+
+    with patch.object(
+        batch_publish,
+        "_token_record",
+        return_value={"display_name": "测试店铺", "access_token": "secret"},
+    ), patch.object(
+        batch_publish,
+        "follow_sell",
+        return_value={"result": {"id": "CBT999"}},
+    ):
+        result = batch_publish.publish_product_batch(
+            [row],
+            token_id=7,
+            update_state=update_state,
+            client=object(),
+            batch_id="batch-002",
+            create_records=lambda rows, **metadata: {11: 103},
+            update_record=lambda record_id, **changes: record_updates.append(
+                (record_id, changes)
+            ),
+        )
+
+    assert result["published_count"] == 1
+    assert result["failed_count"] == 0
+    assert "保存产品最新状态时出错" in result["results"][0]["message"]
+    assert any(
+        record_id == 103 and changes["status"] == "published"
+        for record_id, changes in record_updates
+    )

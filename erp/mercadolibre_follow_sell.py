@@ -305,6 +305,39 @@ DEFAULT_SALE_TERMS = [
         "value_name": "No warranty",
     }
 ]
+GENDER_VALUE_IDS = {
+    "WOMAN": "339665",
+    "WOMEN": "339665",
+    "MUJER": "339665",
+    "MUJERES": "339665",
+    "FEMENINO": "339665",
+    "FEMININO": "339665",
+    "MAN": "339666",
+    "MEN": "339666",
+    "HOMBRE": "339666",
+    "HOMBRES": "339666",
+    "MASCULINO": "339666",
+    "GIRL": "339668",
+    "GIRLS": "339668",
+    "NINA": "339668",
+    "NINAS": "339668",
+    "MENINA": "339668",
+    "MENINAS": "339668",
+    "BOY": "339667",
+    "BOYS": "339667",
+    "NINO": "339667",
+    "NINOS": "339667",
+    "MENINO": "339667",
+    "MENINOS": "339667",
+    "BABY": "371795",
+    "BABIES": "371795",
+    "BEBE": "371795",
+    "BEBES": "371795",
+    "GENDER_NEUTRAL": "110461",
+    "SIN_GENERO": "110461",
+    "SEM_GENERO": "110461",
+    "UNISEX": "110461",
+}
 ATTRIBUTE_ID_ALIASES = {
     "MARCA": "BRAND",
     "MODELO": "MODEL",
@@ -477,6 +510,25 @@ def _picture_sources(item: Mapping[str, Any]) -> tuple[list[dict[str, str]], dic
     return pictures, ids_to_urls
 
 
+def _validate_uploaded_picture_dimensions(
+    client: MercadoLibreClient, picture_id: str
+) -> tuple[int, int]:
+    """Verify dimensions after Mercado has transcoded an uploaded picture."""
+    metadata = client.request("GET", f"/pictures/{picture_id}")
+    max_size = str(metadata.get("max_size") or "") if isinstance(metadata, Mapping) else ""
+    match = re.fullmatch(r"\s*(\d+)\s*x\s*(\d+)\s*", max_size, re.IGNORECASE)
+    if not match:
+        raise MercadoLibreError(
+            f"无法确认 Mercado 上传图片尺寸 ({picture_id}): {max_size or '(empty)'}"
+        )
+    width, height = int(match.group(1)), int(match.group(2))
+    if max(width, height) < 500:
+        raise MercadoLibreError(
+            f"Mercado 处理后图片尺寸不足 500px ({width}x{height}): {picture_id}"
+        )
+    return width, height
+
+
 def _description_text(description: Any) -> str:
     if not isinstance(description, Mapping):
         return ""
@@ -618,6 +670,47 @@ def _ensure_required_attribute_defaults(
             present.add(attribute_id)
 
 
+def _normalize_enumerated_attributes(
+    attributes: list[dict[str, Any]],
+    schema: Iterable[Mapping[str, Any]] | None,
+) -> None:
+    """Map localized source values to IDs accepted by the CBT category."""
+    if schema is None:
+        return
+    definitions = {
+        str(definition.get("id") or "").upper(): definition
+        for definition in schema
+        if definition.get("id")
+    }
+    for attribute in attributes:
+        if str(attribute.get("id") or "").upper() != "GENDER":
+            continue
+        definition = definitions.get("GENDER") or {}
+        allowed_values = {
+            str(value.get("id") or ""): value
+            for value in definition.get("values") or []
+            if isinstance(value, Mapping) and value.get("id")
+        }
+        if not allowed_values:
+            continue
+        existing_value_id = str(attribute.get("value_id") or "")
+        target_value_id = (
+            existing_value_id
+            if existing_value_id in allowed_values
+            else GENDER_VALUE_IDS.get(
+                _normalized_attribute_key(attribute.get("value_name"))
+            )
+        )
+        target_value = allowed_values.get(str(target_value_id or ""))
+        if not target_value:
+            raise MercadoLibreError(
+                "无法把源商品 GENDER 值映射到目标类目: "
+                f"{attribute.get('value_name') or attribute.get('value_id') or '(empty)'}"
+            )
+        attribute["value_id"] = str(target_value["id"])
+        attribute["value_name"] = str(target_value.get("name") or "")
+
+
 def _converted_usd_amount(
     client: MercadoLibreClient, amount: float, currency_id: str
 ) -> float:
@@ -750,6 +843,7 @@ def build_global_payload(
     )
     _ensure_item_condition(attributes, str(source.get("condition") or "new"))
     _ensure_gtin_or_empty_reason(attributes)
+    _normalize_enumerated_attributes(attributes, attribute_schema)
     _ensure_required_attribute_defaults(attributes, attribute_schema)
     _validate_required_attributes(attributes, attribute_schema)
     site: dict[str, Any] = {
@@ -813,6 +907,7 @@ def build_user_product_payload(
     )
     _ensure_item_condition(attributes, str(source.get("condition") or "new"))
     _ensure_gtin_or_empty_reason(attributes)
+    _normalize_enumerated_attributes(attributes, attribute_schema)
     _ensure_required_attribute_defaults(attributes, attribute_schema)
     _validate_required_attributes(attributes, attribute_schema)
     pictures: list[dict[str, str]]
@@ -961,9 +1056,9 @@ def follow_sell(
             picture_ids = []
             for picture in source_pictures:
                 try:
-                    picture_ids.append(
-                        client.upload_picture_from_url(picture["source"])
-                    )
+                    picture_id = client.upload_picture_from_url(picture["source"])
+                    _validate_uploaded_picture_dimensions(client, picture_id)
+                    picture_ids.append(picture_id)
                 except MercadoLibreError as exc:
                     picture_upload_errors.append(str(exc))
             if not picture_ids:

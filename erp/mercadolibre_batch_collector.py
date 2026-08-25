@@ -16,23 +16,40 @@ import unicodedata
 from datetime import datetime
 from decimal import Decimal, InvalidOperation
 from typing import Any, Callable, Iterable, Mapping
-from urllib.parse import unquote, urljoin, urlparse
+from urllib.parse import quote, unquote, urljoin, urlparse
 
 from erp.mercadolibre_follow_sell import extract_item_id
 
 
 DEFAULT_ZYING_WINDOW_ID = os.environ.get(
     "BIT_ZYING_WINDOW_ID",
-    "9812f185f7ab49d98f3988994d9e8ebf",
+    "e27ab66368b141a993f9c6847f51222b",
 )
 DEFAULT_BROWSER_MODE = os.environ.get(
     "MERCADO_COLLECTION_BROWSER",
-    "playwright",
+    "bitbrowser",
 ).strip().lower()
 MAX_COLLECTION_COUNT = 500
 DEFAULT_COLLECTION_WORKERS = 4
-MAX_COLLECTION_WORKERS = 6
+MAX_COLLECTION_WORKERS = 8
 MAX_LISTING_PAGES = 100
+MARKETPLACE_SEARCH_HOSTS = {
+    "MLM": "listado.mercadolibre.com.mx",
+    "MLB": "lista.mercadolivre.com.br",
+    "MLA": "listado.mercadolibre.com.ar",
+    "MLC": "listado.mercadolibre.cl",
+    "MCO": "listado.mercadolibre.com.co",
+    "MLU": "listado.mercadolibre.com.uy",
+}
+MARKETPLACE_ITEM_HOSTS = {
+    "MLM": "articulo.mercadolibre.com.mx",
+    "MLB": "produto.mercadolivre.com.br",
+    "MLA": "articulo.mercadolibre.com.ar",
+    "MLC": "articulo.mercadolibre.cl",
+    "MCO": "articulo.mercadolibre.com.co",
+    "MLU": "articulo.mercadolibre.com.uy",
+}
+COLLECTION_SCOPES = {"all", "cross_border"}
 MERCADO_HOST_PATTERN = re.compile(
     r"(^|\.)(mercadolibre\.[a-z.]+|mercadolivre\.com\.br)$", re.IGNORECASE
 )
@@ -50,6 +67,8 @@ ACTUAL_WEIGHT_PATTERN = re.compile(
     r"(?:商品\s*)?(?:重量|毛重|净重)[^\d]{0,24}(\d+(?:[.,]\d+)?)\s*(kg|公斤|千克|g|克)\b",
     re.IGNORECASE,
 )
+_PLUGIN_OCR_ENGINE: Any | None = None
+_PLUGIN_OCR_LOCK = threading.Lock()
 
 
 class CollectionStopped(RuntimeError):
@@ -81,6 +100,58 @@ def validate_collection_request(source_url: str, requested_count: int) -> tuple[
     if count < 1 or count > MAX_COLLECTION_COUNT:
         raise ValueError(f"采集数量必须在 1-{MAX_COLLECTION_COUNT} 之间")
     return url, count
+
+
+def build_marketplace_search_url(
+    keyword: Any,
+    site_id: Any = "MLM",
+    collection_scope: Any = "all",
+) -> str:
+    """Build the public search URL for a keyword and destination country."""
+    normalized_site = str(site_id or "").strip().upper()
+    host = MARKETPLACE_SEARCH_HOSTS.get(normalized_site)
+    if not host:
+        raise ValueError("采集国家仅支持墨西哥、巴西、阿根廷、智利、哥伦比亚和乌拉圭")
+    normalized_keyword = re.sub(r"\s+", " ", str(keyword or "")).strip()
+    if not normalized_keyword:
+        raise ValueError("请输入采集关键词或 Mercado 商品列表链接")
+    if len(normalized_keyword) > 160:
+        raise ValueError("采集关键词不能超过 160 个字符")
+    scope = normalize_collection_scope(collection_scope)
+    slug = quote(normalized_keyword.replace(" ", "-"), safe="-")
+    url = f"https://{host}/{slug}"
+    if scope == "cross_border":
+        # This is Mercado's public "Origen del envío: Internacional" filter.
+        # The DOM-level Internacional check remains enabled as a safety net.
+        url += "_NoIndex_True_SHIPPING*ORIGIN_10215069"
+    return url
+
+
+def normalize_collection_scope(value: Any) -> str:
+    scope = str(value or "all").strip().lower()
+    if scope not in COLLECTION_SCOPES:
+        raise ValueError("采集专区仅支持全部商品或跨境卖家专区")
+    return scope
+
+
+def marketplace_url_has_cross_border_filter(value: Any) -> bool:
+    """Return whether Mercado's server-side international-origin filter is set."""
+    decoded = unquote(str(value or "")).upper()
+    return bool(
+        re.search(r"SHIPPING(?:\*|_)?ORIGIN(?:_|=)10215069", decoded)
+        or "SHIPPING_ORIGIN=10215069" in decoded
+    )
+
+
+def canonical_marketplace_item_url(item_id: Any, fallback_url: Any = "") -> str:
+    normalized = str(item_id or "").strip().upper().replace("-", "")
+    match = re.fullmatch(r"(ML[A-Z])(\d+)", normalized)
+    if not match:
+        return str(fallback_url or "").strip()
+    host = MARKETPLACE_ITEM_HOSTS.get(match.group(1))
+    if not host:
+        return str(fallback_url or "").strip()
+    return f"https://{host}/{match.group(1)}-{match.group(2)}"
 
 
 def normalize_collection_workers(value: Any) -> int:
@@ -181,7 +252,14 @@ def ocr_plugin_image(image_bytes: bytes) -> dict[str, Any]:
     image = cv2.imdecode(np.frombuffer(image_bytes, dtype=np.uint8), cv2.IMREAD_COLOR)
     if image is None:
         raise RuntimeError("无法读取智赢插件截图")
-    result, _ = RapidOCR()(image)
+    global _PLUGIN_OCR_ENGINE
+    # Initializing RapidOCR for every product costs several seconds and can
+    # exhaust memory under concurrent collection.  Reuse one guarded engine;
+    # OCR is only the fallback for visually protected plugin text.
+    with _PLUGIN_OCR_LOCK:
+        if _PLUGIN_OCR_ENGINE is None:
+            _PLUGIN_OCR_ENGINE = RapidOCR()
+        result, _ = _PLUGIN_OCR_ENGINE(image)
     lines: list[dict[str, Any]] = []
     for item in result or []:
         if not isinstance(item, (list, tuple)) or len(item) < 2:
@@ -198,12 +276,19 @@ def ocr_plugin_image(image_bytes: bytes) -> dict[str, Any]:
 
 
 def merge_listing_candidates(
-    existing: list[dict[str, Any]], rows: Iterable[Mapping[str, Any]], limit: int
+    existing: list[dict[str, Any]],
+    rows: Iterable[Mapping[str, Any]],
+    limit: int,
+    *,
+    collection_scope: str = "all",
 ) -> list[dict[str, Any]]:
     """Append new cards while retaining list order and de-duplicating item IDs."""
+    collection_scope = normalize_collection_scope(collection_scope)
     seen = {str(row.get("source_item_id") or "") for row in existing}
     for source_row in rows or []:
         row = dict(source_row)
+        if collection_scope == "cross_border" and not bool(row.get("is_cross_border")):
+            continue
         href = str(row.get("source_url") or row.get("href") or "").strip()
         try:
             item_id = extract_listing_item_id(str(row.get("source_item_id") or href))
@@ -215,11 +300,13 @@ def merge_listing_candidates(
         existing.append(
             {
                 "source_item_id": item_id,
-                "source_url": href,
+                "source_url": canonical_marketplace_item_url(item_id, href),
+                "listing_url": href,
                 "title": str(row.get("title") or "").strip(),
                 "main_image_url": _normalize_image_url(row.get("main_image_url")),
                 "price": _number(row.get("price")),
                 "currency_id": str(row.get("currency_id") or "MXN"),
+                "is_cross_border": bool(row.get("is_cross_border")),
             }
         )
         if len(existing) >= limit:
@@ -254,12 +341,14 @@ for (const root of roots) {
   const cents = root.querySelector && root.querySelector('.andes-money-amount__cents');
   let price = fraction ? clean(fraction.textContent).replace(/\D/g, '') : '';
   if (price && cents) price += '.' + clean(cents.textContent).replace(/\D/g, '');
+  const cardText = clean((root.innerText || root.textContent || ''));
   rows.push({
     href: link.href,
     title: clean((titleNode && titleNode.textContent) || link.textContent),
     main_image_url: imageUrl(img),
     price,
-    currency_id: 'MXN'
+    currency_id: 'MXN',
+    is_cross_border: /(^|\s)internacional(\s|$)/i.test(cardText)
   });
 }
 const next = document.querySelector(
@@ -387,6 +476,7 @@ def _collect_listing_pages(
     source_url: str,
     requested_count: int,
     *,
+    collection_scope: str = "all",
     on_page: Callable[[dict[str, Any]], None] | None = None,
     stop_event: threading.Event | None = None,
 ) -> list[dict[str, Any]]:
@@ -411,7 +501,12 @@ def _collect_listing_pages(
         if blocked:
             raise RuntimeError(blocked)
         before = len(candidates)
-        merge_listing_candidates(candidates, snapshot.get("rows") or [], requested_count)
+        merge_listing_candidates(
+            candidates,
+            snapshot.get("rows") or [],
+            requested_count,
+            collection_scope=collection_scope,
+        )
         # A detail URL is also accepted for one-off collection.  This keeps the
         # same workbench form useful when the operator pastes an individual item.
         if len(candidates) == before:
@@ -634,8 +729,9 @@ def _collect_marketplace_listing_bitbrowser(
     source_url: str,
     requested_count: int,
     *,
+    collection_scope: str = "all",
     window_id: str = DEFAULT_ZYING_WINDOW_ID,
-    plugin_timeout: float = 15.0,
+    plugin_timeout: float = 20.0,
     on_page: Callable[[dict[str, Any]], None] | None = None,
     on_item: Callable[[dict[str, Any]], None] | None = None,
     on_progress: Callable[[dict[str, Any]], None] | None = None,
@@ -657,6 +753,7 @@ def _collect_marketplace_listing_bitbrowser(
             driver,
             source_url,
             requested_count,
+            collection_scope=collection_scope,
             on_page=on_page,
             stop_event=stop_event,
         )
@@ -811,6 +908,9 @@ def parse_listing_html(html_text: str, page_url: str) -> dict[str, Any]:
                 "main_image_url": _normalize_image_url(image_url),
                 "price": price_text,
                 "currency_id": "MXN",
+                "is_cross_border": bool(
+                    re.search(r"(^|\s)internacional(\s|$)", card.get_text(" ", strip=True), re.I)
+                ),
             }
         )
     next_node = soup.select_one(
@@ -1275,6 +1375,7 @@ def _collect_marketplace_listing_edge_ui(
     source_url: str,
     requested_count: int,
     *,
+    collection_scope: str = "all",
     plugin_timeout: float,
     max_workers: int,
     on_page: Callable[[dict[str, Any]], None] | None,
@@ -1309,7 +1410,12 @@ def _collect_marketplace_listing_edge_ui(
                 raise RuntimeError(blocked)
             before = len(candidates)
             page_rows = [] if page_number == 1 and direct_source_item_id else (page.get("rows") or [])
-            merge_listing_candidates(candidates, page_rows, requested_count)
+            merge_listing_candidates(
+                candidates,
+                page_rows,
+                requested_count,
+                collection_scope=collection_scope,
+            )
             if len(candidates) == before:
                 try:
                     item_id = direct_source_item_id or extract_listing_item_id(actual_url)
@@ -1445,6 +1551,7 @@ def collect_marketplace_listing(
     window_id: str = DEFAULT_ZYING_WINDOW_ID,
     browser_mode: str = DEFAULT_BROWSER_MODE,
     max_workers: int = DEFAULT_COLLECTION_WORKERS,
+    collection_scope: str = "all",
     plugin_timeout: float = 15.0,
     on_page: Callable[[dict[str, Any]], None] | None = None,
     on_item: Callable[[dict[str, Any]], None] | None = None,
@@ -1454,10 +1561,13 @@ def collect_marketplace_listing(
     """Collect a Mercado list; Playwright is the default and non-RPA path."""
     source_url, requested_count = validate_collection_request(source_url, requested_count)
     max_workers = normalize_collection_workers(max_workers)
+    collection_scope = normalize_collection_scope(collection_scope)
     mode = str(browser_mode or DEFAULT_BROWSER_MODE).strip().lower()
     # Treat the former Edge labels as Playwright aliases so an old environment
     # variable cannot silently reactivate the keyboard/screenshot RPA path.
-    if mode in ("playwright", "pw", "edge", "edge_ui", "msedge"):
+    if mode in (
+        "playwright", "pw", "edge", "edge_ui", "msedge", "bitbrowser", "bit"
+    ):
         from erp.mercadolibre_playwright_collector import (
             collect_marketplace_listing_playwright,
         )
@@ -1466,6 +1576,8 @@ def collect_marketplace_listing(
             source_url,
             requested_count,
             max_workers=max_workers,
+            window_id=window_id if mode in ("bitbrowser", "bit") else "",
+            collection_scope=collection_scope,
             plugin_timeout=plugin_timeout,
             on_page=on_page,
             on_item=on_item,
@@ -1478,17 +1590,19 @@ def collect_marketplace_listing(
             requested_count,
             plugin_timeout=plugin_timeout,
             max_workers=max_workers,
+            collection_scope=collection_scope,
             on_page=on_page,
             on_item=on_item,
             on_progress=on_progress,
             stop_event=stop_event,
         )
-    if mode not in ("bitbrowser", "bit", "selenium", "legacy_bitbrowser"):
+    if mode not in ("selenium", "legacy_bitbrowser"):
         raise ValueError(f"不支持的采集浏览器模式: {browser_mode}")
     return _collect_marketplace_listing_bitbrowser(
         source_url,
         requested_count,
         window_id=window_id,
+        collection_scope=collection_scope,
         plugin_timeout=plugin_timeout,
         on_page=on_page,
         on_item=on_item,
@@ -1505,10 +1619,14 @@ __all__ = [
     "MAX_COLLECTION_COUNT",
     "MAX_COLLECTION_WORKERS",
     "calculate_volumetric_weight_kg",
+    "build_marketplace_search_url",
+    "canonical_marketplace_item_url",
+    "marketplace_url_has_cross_border_filter",
     "collect_marketplace_listing",
     "extract_listing_item_id",
     "merge_listing_candidates",
     "normalize_collection_workers",
+    "normalize_collection_scope",
     "ocr_plugin_image",
     "parse_plugin_metrics",
     "parse_detail_html",

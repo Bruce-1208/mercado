@@ -320,6 +320,7 @@ def list_orders(
     country="",
     status="",
     salesperson="",
+    group_name="",
     search="",
     start_date="",
     end_date="",
@@ -331,6 +332,7 @@ def list_orders(
         "country": country or "",
         "status": status or "",
         "salesperson": salesperson or "",
+        "group_name": group_name or "",
         "search": search or "",
         "start_date": start_date or "",
         "end_date": end_date or "",
@@ -1102,6 +1104,89 @@ def update_mercado_product_publish_state(product_item_id, **changes):
         return _collection_store_call(
             "update_product_publish_state", int(product_item_id), **changes
         )
+
+
+def create_mercado_product_publish_records(
+    product_rows,
+    *,
+    batch_id,
+    token_id,
+    store_name,
+    site_id,
+    site_name="",
+    quantity=1,
+    created_by="",
+):
+    rows = list(product_rows or [])
+    payload = {
+        "rows": rows,
+        "batch_id": str(batch_id or ""),
+        "token_id": int(token_id),
+        "store_name": str(store_name or ""),
+        "site_id": str(site_id or ""),
+        "site_name": str(site_name or ""),
+        "quantity": int(quantity),
+        "created_by": str(created_by or ""),
+    }
+    if DB_MODE == "mysql":
+        return _collection_store_call(
+            "create_product_publish_records",
+            rows,
+            **{key: value for key, value in payload.items() if key != "rows"},
+        )
+    path = "/api/db/mercado-publish-records/bulk"
+    try:
+        data = _request("POST", path, timeout=120, json=payload)
+        return {
+            int(product_id): int(record_id)
+            for product_id, record_id in (data.get("record_ids") or {}).items()
+        }
+    except RuntimeError as exc:
+        if not _collection_route_missing(exc, path):
+            raise
+        return _collection_store_call(
+            "create_product_publish_records",
+            rows,
+            **{key: value for key, value in payload.items() if key != "rows"},
+        )
+
+
+def update_mercado_product_publish_record(record_id, **changes):
+    if DB_MODE == "mysql":
+        return _collection_store_call(
+            "update_product_publish_record", int(record_id), **changes
+        )
+    path = f"/api/db/mercado-publish-records/{int(record_id)}"
+    try:
+        return _request("PATCH", path, json=changes)
+    except RuntimeError as exc:
+        if not _collection_route_missing(exc, path):
+            raise
+        return _collection_store_call(
+            "update_product_publish_record", int(record_id), **changes
+        )
+
+
+def list_mercado_product_publish_records(
+    search="", status="", store_name="", site_id="", limit=500, offset=0,
+):
+    params = {
+        "search": str(search or ""),
+        "status": str(status or "").strip().lower(),
+        "store_name": str(store_name or "").strip(),
+        "site_id": str(site_id or "").strip().upper(),
+        "limit": int(limit),
+        "offset": int(offset),
+    }
+    if DB_MODE == "mysql":
+        return _collection_store_call("list_product_publish_records", **params)
+    path = "/api/db/mercado-publish-records"
+    try:
+        return _request("GET", path, params=params)
+    except RuntimeError as exc:
+        if not _collection_route_missing(exc, path):
+            raise
+        return _collection_store_call("list_product_publish_records", **params)
 
 
 def login_workbench_user(username, password):

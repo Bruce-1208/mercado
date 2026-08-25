@@ -64,7 +64,13 @@ Shadow DOM，不操作鼠标键盘、不截图、不做 OCR，也不会读取智
 
 - `erp_mercadolibre_collection_tasks`：任务进度和结果；
 - `erp_mercadolibre_collection_items`：采集列表；
-- `erp_mercadolibre_products`：人工多选后加入的产品列表。
+- `erp_mercadolibre_products`：人工多选后加入的产品列表；
+- `erp_mercadolibre_publish_records`：每个产品的历次上架记录，包含批次、目标店铺、
+  目标站点、成功商品编号、失败原因和接口返回明细。
+
+工作台中的“产品上架记录”是独立模块。每次批量上架都会先为所选产品逐条建立
+记录，并在任务执行过程中更新为等待、上架中、成功或失败；历史记录不会因产品
+再次上架而被覆盖。
 
 采集器优先连接 `9222` 端口上的 Edge，这样可以复用已登录的智赢插件。Edge 需在
 完全退出后用 `--remote-debugging-port=9222` 重新启动；普通方式启动的 Edge 无法在

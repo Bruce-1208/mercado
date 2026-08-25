@@ -86,6 +86,30 @@ class RequiredUnknownCategoryClient(CategoryClient):
         return super().request(method, path, **kwargs)
 
 
+class GenderCategoryClient(CategoryClient):
+    def request(self, method, path, **kwargs):
+        if path == "/categories/CBT301/attributes":
+            return [
+                {"id": "BRAND"},
+                {
+                    "id": "GENDER",
+                    "tags": {"required": True},
+                    "values": [
+                        {"id": "339665", "name": "Woman"},
+                        {"id": "339666", "name": "Man"},
+                        {"id": "339668", "name": "Girls"},
+                        {"id": "371795", "name": "Babies"},
+                        {"id": "110461", "name": "Gender neutral"},
+                        {"id": "339667", "name": "Boys"},
+                    ],
+                },
+                {"id": "ITEM_CONDITION"},
+                {"id": "EMPTY_GTIN_REASON"},
+                {"id": "SELLER_SKU"},
+            ]
+        return super().request(method, path, **kwargs)
+
+
 def sample_source():
     return {
         "id": "MLM3016972321",
@@ -197,6 +221,38 @@ def test_payload_defaults_brand_and_canonicalizes_spanish_attribute_ids():
     assert "MARCA" not in by_id
     assert "G_NERO" not in by_id
     assert "CAMPO_INVENTADO" not in by_id
+
+
+@pytest.mark.parametrize(
+    ("source_value", "expected_id", "expected_name"),
+    [
+        ("Sin género", "110461", "Gender neutral"),
+        ("Mujer", "339665", "Woman"),
+        ("Niñas", "339668", "Girls"),
+        ("Niños", "339667", "Boys"),
+        ("Hombre", "339666", "Man"),
+        ("Sem gênero", "110461", "Gender neutral"),
+        ("Feminino", "339665", "Woman"),
+        ("Meninos", "339667", "Boys"),
+    ],
+)
+def test_payload_maps_localized_gender_to_target_category_value(
+    source_value, expected_id, expected_name
+):
+    source = sample_source()
+    source["attributes"].append(
+        {"id": "G_NERO", "name": "Género", "value_name": source_value}
+    )
+
+    payload = build_user_product_payload(
+        GenderCategoryClient(), source, {}, quantity=1, net_proceeds=20
+    )
+    gender = next(
+        attribute for attribute in payload["attributes"] if attribute["id"] == "GENDER"
+    )
+
+    assert gender["value_id"] == expected_id
+    assert gender["value_name"] == expected_name
 
 
 def test_payload_overrides_source_brand_with_generic_without_adding_a_duplicate():
@@ -328,6 +384,8 @@ def test_follow_sell_skips_one_failed_picture_upload_and_publishes_remaining():
         def request(self, method, path, **kwargs):
             if path == "/users/me":
                 return {"id": 77, "site_id": "CBT", "tags": ["user_product_seller"]}
+            if path == "/pictures/uploaded-good-picture":
+                return {"id": "uploaded-good-picture", "max_size": "800x800"}
             if method == "POST" and path == "/global/items":
                 self.posted_payload = kwargs["json_body"]
                 return {"id": "CBT999"}
@@ -359,6 +417,51 @@ def test_follow_sell_skips_one_failed_picture_upload_and_publishes_remaining():
 
     assert client.posted_payload["pictures"] == [{"id": "uploaded-good-picture"}]
     assert "70x70" in result["picture_upload_errors"][0]
+
+
+def test_follow_sell_skips_picture_that_shrinks_below_limit_after_upload():
+    class GlobalUserProductClient(CategoryClient):
+        def __init__(self):
+            self.posted_payload = None
+
+        def request(self, method, path, **kwargs):
+            if path == "/users/me":
+                return {"id": 77, "site_id": "CBT", "tags": ["user_product_seller"]}
+            if path == "/pictures/uploaded-small-picture":
+                return {"id": "uploaded-small-picture", "max_size": "358x495"}
+            if path == "/pictures/uploaded-good-picture":
+                return {"id": "uploaded-good-picture", "max_size": "480x854"}
+            if method == "POST" and path == "/global/items":
+                self.posted_payload = kwargs["json_body"]
+                return {"id": "CBT999"}
+            return super().request(method, path, **kwargs)
+
+        def upload_picture_from_url(self, source_url):
+            if "111-CBT456" in source_url:
+                return "uploaded-small-picture"
+            return "uploaded-good-picture"
+
+    source = sample_source()
+    source["pictures"] = [
+        {"source": "https://http2.mlstatic.com/D_NQ_NP_111-CBT456-O-small.webp"},
+        {"source": "https://http2.mlstatic.com/D_NQ_NP_2X_222-CBT456-F-good.webp"},
+    ]
+    client = GlobalUserProductClient()
+    with patch(
+        "erp.mercadolibre_source_store.load_listing_for_publish",
+        return_value=(source, {}),
+    ), patch("erp.mercadolibre_source_store.record_publish_result"):
+        result = follow_sell(
+            client,
+            "MLM3016972321",
+            destination_site_id="MLM",
+            source_from_database=True,
+            publish=True,
+            net_proceeds=20,
+        )
+
+    assert client.posted_payload["pictures"] == [{"id": "uploaded-good-picture"}]
+    assert "358x495" in result["picture_upload_errors"][0]
 
 
 def test_follow_sell_translates_mexico_listing_for_brazil_destination():
