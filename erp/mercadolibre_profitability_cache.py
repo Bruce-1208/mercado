@@ -309,6 +309,90 @@ class DatabaseProfitabilityCache:
         finally:
             connection.close()
 
+    def put_exchange_rate_history(
+        self,
+        from_currency_id: str,
+        to_currency_id: str,
+        values: list[Mapping[str, Any]],
+    ) -> int:
+        """Persist a dated series efficiently and expose its latest row as fallback."""
+        refreshed_at, expires_at = _freshness(self.ttl_hours)
+        from_currency_id = str(from_currency_id or "").upper()
+        to_currency_id = str(to_currency_id or "").upper()
+        snapshots = []
+        for value in values or []:
+            try:
+                rate = float(value.get("ratio"))
+            except (TypeError, ValueError):
+                continue
+            if rate <= 0:
+                continue
+            snapshots.append((
+                _exchange_rate_date(value, refreshed_at),
+                rate,
+                str(value.get("creation_date") or "")[:64],
+                str(value.get("valid_until") or "")[:64],
+                _dumps(value),
+            ))
+        if not snapshots:
+            return 0
+        snapshots.sort(key=lambda row: row[0])
+        connection = self._connection()
+        try:
+            with connection.cursor() as cursor:
+                cursor.executemany(
+                    f"""
+                    INSERT INTO `{DAILY_EXCHANGE_RATE_TABLE}` (
+                        `from_currency_id`, `to_currency_id`, `rate_date`, `rate`,
+                        `source_created_at`, `source_valid_until`, `payload_json`,
+                        `refreshed_at`
+                    ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+                    ON DUPLICATE KEY UPDATE
+                        `rate` = VALUES(`rate`),
+                        `source_created_at` = VALUES(`source_created_at`),
+                        `source_valid_until` = VALUES(`source_valid_until`),
+                        `payload_json` = VALUES(`payload_json`),
+                        `refreshed_at` = VALUES(`refreshed_at`)
+                    """,
+                    [
+                        (
+                            from_currency_id, to_currency_id, rate_date, rate,
+                            source_created_at, source_valid_until, payload_json,
+                            refreshed_at,
+                        )
+                        for rate_date, rate, source_created_at, source_valid_until, payload_json
+                        in snapshots
+                    ],
+                )
+                latest = snapshots[-1]
+                cursor.execute(
+                    f"""
+                    INSERT INTO `{EXCHANGE_RATE_TABLE}` (
+                        `from_currency_id`, `to_currency_id`, `rate`,
+                        `source_created_at`, `source_valid_until`, `payload_json`,
+                        `refreshed_at`, `expires_at`
+                    ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+                    ON DUPLICATE KEY UPDATE
+                        `rate` = VALUES(`rate`),
+                        `source_created_at` = VALUES(`source_created_at`),
+                        `source_valid_until` = VALUES(`source_valid_until`),
+                        `payload_json` = VALUES(`payload_json`),
+                        `refreshed_at` = VALUES(`refreshed_at`),
+                        `expires_at` = VALUES(`expires_at`)
+                    """,
+                    (
+                        from_currency_id, to_currency_id, latest[1], latest[2],
+                        latest[3], latest[4], refreshed_at, expires_at,
+                    ),
+                )
+            connection.commit()
+            return len(snapshots)
+        except BaseException:
+            connection.rollback()
+            raise
+        finally:
+            connection.close()
+
     @staticmethod
     def commission_key(
         *,

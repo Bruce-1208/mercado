@@ -86,6 +86,104 @@ def test_listing_record_extracts_link_weight_dimensions_and_sku():
     assert record["permalink"].startswith("https://")
 
 
+def test_sync_run_records_three_day_clock_for_completed_store(monkeypatch):
+    events = []
+    token = {"id": 8, "display_name": "自动同步店铺"}
+    monkeypatch.setattr(bit_store_link_sync, "get_lock_owner", lambda _key: None)
+    monkeypatch.setattr(bit_store_link_sync, "_token_records", lambda _ids: [token])
+    monkeypatch.setattr(
+        bit_store_link_sync,
+        "_sync_store",
+        lambda _record: {
+            "store": "自动同步店铺",
+            "token_id": 8,
+            "status": "success",
+            "discovered": 12,
+            "stored": 12,
+            "inserted": 2,
+            "updated": 10,
+            "details": 12,
+            "failed": 0,
+            "products": 12,
+        },
+    )
+    monkeypatch.setattr(
+        bit_store_link_sync,
+        "mark_store_link_sync_started",
+        lambda token_id: events.append(("started", token_id)),
+    )
+    monkeypatch.setattr(
+        bit_store_link_sync,
+        "mark_store_link_sync_finished",
+        lambda token_id, status, error="": events.append(("finished", token_id, status, error)),
+    )
+
+    state = bit_store_link_sync.run_store_link_sync([8])
+
+    assert state["status"] == "completed"
+    assert events == [("started", 8), ("finished", 8, "success", "")]
+
+
+def test_due_scheduler_starts_only_returned_store_ids(monkeypatch):
+    calls = []
+    monkeypatch.setattr(
+        bit_store_link_sync,
+        "list_due_store_link_token_ids",
+        lambda **kwargs: calls.append(("due", kwargs)) or [3, 9],
+    )
+    monkeypatch.setattr(
+        bit_store_link_sync,
+        "start_store_link_sync",
+        lambda token_ids: calls.append(("start", token_ids)) or (True, {"running": True}),
+    )
+
+    result = bit_store_link_sync.start_due_store_link_sync()
+
+    assert result["started"] is True
+    assert result["due_token_ids"] == [3, 9]
+    assert calls[0][1]["interval_days"] == 3
+    assert calls[1] == ("start", [3, 9])
+
+
+def test_immediate_sync_request_is_persisted_for_new_store():
+    batches = []
+
+    class Cursor:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args):
+            return False
+
+        def execute(self, sql, params=None):
+            self.sql = sql
+
+        def executemany(self, sql, rows):
+            batches.append((sql, list(rows)))
+
+        def fetchone(self):
+            return {"Field": "exists"} if "SHOW COLUMNS" in self.sql else None
+
+    class Connection:
+        def cursor(self):
+            return Cursor()
+
+        def commit(self):
+            pass
+
+        def rollback(self):
+            raise AssertionError("should not roll back")
+
+        def close(self):
+            pass
+
+    queued = store.request_store_link_sync([7, 7, 12], connection_factory=Connection)
+
+    assert queued == 2
+    assert [row[0] for row in batches[0][1]] == [7, 12]
+    assert "`requested_at` = VALUES(`requested_at`)" in batches[0][0]
+
+
 def test_replace_store_snapshot_marks_missing_links_and_upserts_current_rows():
     calls = []
     batches = []
@@ -369,6 +467,7 @@ def test_workbench_store_link_ui_and_routes():
     assert "销量从高到低".encode("utf-8") in response.data
     assert "净收益(USD)".encode("utf-8") in response.data
     assert "任务执行日志".encode("utf-8") in response.data
+    assert "每 3 天自动同步链接状态".encode("utf-8") in response.data
     assert "每页最多 1,000 条".encode("utf-8") in response.data
 
     listing_data = {

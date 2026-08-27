@@ -4,6 +4,35 @@ from unittest.mock import patch
 import bit.bit_interface as workbench
 
 
+def test_startup_maintenance_runs_in_daemon_threads(monkeypatch):
+    created_threads = []
+
+    class FakeThread:
+        def __init__(self, *, target, name, daemon):
+            self.target = target
+            self.name = name
+            self.daemon = daemon
+            self.started = False
+            created_threads.append(self)
+
+        def start(self):
+            self.started = True
+
+    monkeypatch.setattr(workbench.threading, "Thread", FakeThread)
+    monkeypatch.setattr(workbench.bit_db_api, "DB_MODE", "mysql")
+
+    recovery_thread = workbench.start_interrupted_collection_recovery()
+    scheduler_thread = workbench.start_store_link_scheduler_bootstrap()
+
+    assert recovery_thread is created_threads[0]
+    assert scheduler_thread is created_threads[1]
+    assert [thread.name for thread in created_threads] == [
+        "mercado-collection-startup-recovery",
+        "mercado-store-link-scheduler-bootstrap",
+    ]
+    assert all(thread.daemon and thread.started for thread in created_threads)
+
+
 def _client():
     workbench.app.config.update(TESTING=True, SECRET_KEY="test-secret")
     client = workbench.app.test_client()
@@ -83,6 +112,13 @@ def test_workbench_contains_collection_and_product_list_ui():
     assert "失败原因 / 接口明细".encode("utf-8") in response.data
     assert b"mercadoPublishRecordPollTimer" not in response.data
     assert b'id="mercado-list-body"' in response.data
+    assert b'class="tab-page mercado-workbench"' in response.data
+    assert b'class="tab-heading mercado-workbench-heading"' in response.data
+    assert b'class="market-flow-indicator"' in response.data
+    assert "采集商品".encode("utf-8") in response.data
+    assert "审核数据".encode("utf-8") in response.data
+    assert b'class="market-task-dashboard"' in response.data
+    assert b'class="market-collector-help"' in response.data
     assert b'id="mercado-add-selected"' in response.data
     assert b'id="mercado-collection-workers"' in response.data
     assert b'id="mercado-collection-success"' in response.data
@@ -117,6 +153,10 @@ def test_workbench_contains_collection_and_product_list_ui():
     assert b'id="mercado-publish-quantity" type="number" min="1" max="9999" value="500"' in response.data
     assert b'id="mercado-publish-workers" type="number" min="1" value="10"' in response.data
     assert b'market-multi-picker' in response.data
+    assert b'class="market-selection-meta"' in response.data
+    assert b'class="market-selection-tools"' in response.data
+    assert b'class="market-publish-footer"' in response.data
+    assert b'class="market-table-heading"' in response.data
     assert "批量发布设置".encode("utf-8") in response.data
     for site_name in ("墨西哥", "巴西", "阿根廷", "智利", "哥伦比亚", "乌拉圭"):
         assert site_name.encode("utf-8") in response.data
@@ -124,6 +164,8 @@ def test_workbench_contains_collection_and_product_list_ui():
     assert b'id="mercado-product-review-actions"' in response.data
     assert b'id="mercado-source-collected"' in response.data
     assert b'id="mercado-source-pulled"' in response.data
+    assert b'id="mercado-source-zying"' in response.data
+    assert "智赢采集".encode("utf-8") in response.data
     assert b'id="mercado-review-filter"' in response.data
     assert b'id="mercado-publish-filter"' in response.data
     assert b'id="mercado-weight-min"' in response.data

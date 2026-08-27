@@ -137,7 +137,8 @@ def get_reputation_info(window_id, site):
     return list
 
 
-def get_reputation_info_all():
+def get_reputation_info_all_browser():
+    """历史 Selenium 声誉汇总，仅保留兼容，不再由默认入口调用。"""
     start = int(time.time())
     print(start)
     root_path = Path(__file__).resolve().parent
@@ -201,6 +202,13 @@ def get_reputation_info_all():
         r"武汉泽顺店铺声誉信息汇总" + date_str + ".xlsx",
     )
     print(get_now_time() + "发送邮件成功")
+
+
+def get_reputation_info_all(**kwargs):
+    """统一使用官方 API 声誉采集器。"""
+    from bit.bit_reputation_info import main as collect_api_reputation
+
+    return collect_api_reputation(**kwargs)
 
 
 if __name__ == "__main__":

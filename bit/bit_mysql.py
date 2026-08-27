@@ -1584,6 +1584,90 @@ def get_mercado_order_sync_cursor(token_id):
         connection.close()
 
 
+def list_mercado_order_ids_before(token_id, cutoff):
+    """Return locally stored order IDs created before the UTC cutoff."""
+
+    if isinstance(cutoff, datetime):
+        cutoff_value = cutoff
+        if cutoff_value.tzinfo is not None:
+            cutoff_value = cutoff_value.astimezone(timezone.utc).replace(tzinfo=None)
+        cutoff_value = cutoff_value.strftime("%Y-%m-%d %H:%M:%S")
+    else:
+        cutoff_value = str(cutoff or "").strip()
+    if not cutoff_value:
+        raise ValueError("老订单刷新缺少截止时间")
+
+    connection = pymysql.connect(**config)
+    try:
+        with connection.cursor() as cursor:
+            _ensure_mercado_synced_orders_table(cursor)
+            cursor.execute(
+                "SELECT `order_id` FROM `mercado_synced_orders` "
+                "WHERE `token_id` = %s AND `date_created` < %s "
+                "ORDER BY `date_created` ASC, `order_id` ASC",
+                (int(token_id), cutoff_value),
+            )
+            return [
+                str(row.get("order_id") or "")
+                for row in (cursor.fetchall() or [])
+                if row.get("order_id") not in (None, "")
+            ]
+    finally:
+        connection.close()
+
+
+def list_mercado_after_sale_order_contexts(token_id, resource_ids):
+    """按订单、Pack 或物流 ID 批量补销售后列表所需的本地订单信息。"""
+    identifiers = []
+    for value in resource_ids or ():
+        text = str(value or "").strip()
+        if text and text.isdigit() and text not in identifiers:
+            identifiers.append(text)
+    if not identifiers:
+        return []
+    if len(identifiers) > 200:
+        raise ValueError("单次最多补全 200 条售后订单")
+
+    placeholders = ",".join(["%s"] * len(identifiers))
+    connection = pymysql.connect(**config)
+    try:
+        with connection.cursor() as cursor:
+            _ensure_mercado_synced_orders_table(cursor)
+            cursor.execute(
+                f"""
+                SELECT `order_id`, `shop_name`, `site_id`, `country`, `status`,
+                       `status_label`, `date_created`, `last_updated`, `shipping_id`,
+                       `buyer_name`, `title`, `image_url`, `raw_json`
+                FROM `mercado_synced_orders`
+                WHERE `token_id` = %s
+                  AND (
+                      `order_id` IN ({placeholders})
+                      OR `shipping_id` IN ({placeholders})
+                      OR JSON_UNQUOTE(JSON_EXTRACT(`raw_json`, '$.pack_id'))
+                         IN ({placeholders})
+                  )
+                ORDER BY `last_updated` DESC, `order_id` DESC
+                """,
+                [int(token_id), *identifiers, *identifiers, *identifiers],
+            )
+            rows = []
+            for row in cursor.fetchall() or ():
+                context = dict(row or {})
+                raw = {}
+                try:
+                    raw = json.loads(context.pop("raw_json", "") or "{}")
+                except (TypeError, ValueError):
+                    pass
+                context["pack_id"] = str(raw.get("pack_id") or context.get("order_id") or "")
+                for key in ("date_created", "last_updated"):
+                    if isinstance(context.get(key), datetime):
+                        context[key] = context[key].strftime("%Y-%m-%d %H:%M:%S")
+                rows.append(context)
+            return rows
+    finally:
+        connection.close()
+
+
 def list_orders(
     country="", status="", salesperson="", group_name="", search="", start_date="", end_date="",
     origin="", page=1, page_size=50, store_ids=None, salespeople=None,
@@ -1721,6 +1805,9 @@ def list_orders(
                 "WHEN daily_rate.`rate` IS NOT NULL THEN daily_rate.`rate` "
                 "ELSE current_rate.`rate` END"
             )
+            cny_rate_sql = "COALESCE(cny_daily_rate.`rate`, cny_current_rate.`rate`)"
+            usd_amount_sql = f"synced.`total_amount` * ({rate_sql})"
+            cny_income_sql = f"({usd_amount_sql}) * ({cny_rate_sql})"
             source_sql = f"""
                 (
                     SELECT synced.`order_id` AS `id`, synced.`order_id` AS `order_number`,
@@ -1731,13 +1818,15 @@ def list_orders(
                            synced.`shop_name`, '美客多 Token' AS `source`, 'token' AS `data_origin`,
                            COALESCE(NULLIF(synced.`workflow_status`, ''), synced.`status_label`) AS `status`,
                            synced.`status_label` AS `platform_status`, synced.`workflow_status`,
-                           ROUND(synced.`total_amount` * ({rate_sql}), 2) AS `amount`,
+                           ROUND({usd_amount_sql}, 2) AS `amount`,
                            synced.`total_amount` AS `amount_local`, synced.`sale_fee` AS `fee`,
-                           0 AS `refund`, synced.`paid_amount` AS `income`,
+                           0 AS `refund`, ROUND({cny_income_sql}, 2) AS `income`,
+                           synced.`paid_amount` AS `paid_amount_usd`,
                            COALESCE(synced.`purchase_cost`, 0) AS `cost`, synced.`purchase_order`,
                            synced.`purchase_tracking`, synced.`logistics_company`,
                            synced.`purchase_remark`, synced.`shipping_id` AS `platform_shipping_id`,
-                           COALESCE(synced.`paid_amount`, 0) - COALESCE(synced.`purchase_cost`, 0) AS `profit`,
+                           ROUND({cny_income_sql} - COALESCE(synced.`purchase_cost`, 0), 2)
+                               AS `profit`,
                            synced.`product_id`, '' AS `category`, synced.`title`,
                            synced.`image_url`, synced.`quantity`,
                            ROUND(COALESCE(synced.`freight`, 0) * ({rate_sql}), 2) AS `freight`,
@@ -1774,6 +1863,27 @@ def list_orders(
                                     OR current_rate.`rate` IS NOT NULL THEN 0
                                ELSE 1
                            END AS `exchange_rate_missing`,
+                           ({cny_rate_sql}) AS `exchange_rate_usd_to_cny`,
+                           CASE
+                               WHEN cny_daily_rate.`rate_date` IS NOT NULL
+                                   THEN DATE_FORMAT(cny_daily_rate.`rate_date`, '%%Y-%%m-%%d')
+                               WHEN cny_current_rate.`source_created_at` IS NOT NULL
+                                   THEN LEFT(cny_current_rate.`source_created_at`, 10)
+                               WHEN cny_current_rate.`refreshed_at` IS NOT NULL
+                                   THEN DATE_FORMAT(cny_current_rate.`refreshed_at`, '%%Y-%%m-%%d')
+                               ELSE NULL
+                           END AS `cny_exchange_rate_date`,
+                           CASE
+                               WHEN cny_daily_rate.`rate_date` = {order_date_sql} THEN 'order_date'
+                               WHEN cny_daily_rate.`rate_date` IS NOT NULL THEN 'nearest_previous'
+                               WHEN cny_current_rate.`rate` IS NOT NULL THEN 'current_fallback'
+                               ELSE 'missing'
+                           END AS `cny_exchange_rate_match`,
+                           CASE
+                               WHEN cny_daily_rate.`rate` IS NOT NULL
+                                    OR cny_current_rate.`rate` IS NOT NULL THEN 0
+                               ELSE 1
+                           END AS `cny_exchange_rate_missing`,
                            DATE_ADD(synced.`last_updated`, INTERVAL 8 HOUR) AS `last_updated`
                     FROM `mercado_synced_orders` AS synced
                     INNER JOIN `mercado_store_tokens` AS stores ON stores.`id` = synced.`token_id`
@@ -1793,6 +1903,19 @@ def list_orders(
                     LEFT JOIN `{EXCHANGE_RATE_TABLE}` AS current_rate
                       ON current_rate.`from_currency_id` = {currency_sql}
                      AND current_rate.`to_currency_id` = 'USD'
+                    LEFT JOIN `{DAILY_EXCHANGE_RATE_TABLE}` AS cny_daily_rate
+                      ON cny_daily_rate.`id` = (
+                          SELECT historical_cny_rate.`id`
+                          FROM `{DAILY_EXCHANGE_RATE_TABLE}` AS historical_cny_rate
+                          WHERE historical_cny_rate.`from_currency_id` = 'USD'
+                            AND historical_cny_rate.`to_currency_id` = 'CNY'
+                            AND historical_cny_rate.`rate_date` <= {order_date_sql}
+                          ORDER BY historical_cny_rate.`rate_date` DESC
+                          LIMIT 1
+                      )
+                    LEFT JOIN `{EXCHANGE_RATE_TABLE}` AS cny_current_rate
+                      ON cny_current_rate.`from_currency_id` = 'USD'
+                     AND cny_current_rate.`to_currency_id` = 'CNY'
                 ) AS `order_source`
             """
             where_sql, params = build_where()
@@ -1801,7 +1924,8 @@ def list_orders(
             cursor.execute(
                 f"SELECT COALESCE(SUM(`amount`),0) AS `amount`, COALESCE(SUM(`income`),0) AS `income`, "
                 f"COALESCE(SUM(`cost`),0) AS `cost`, COALESCE(SUM(`profit`),0) AS `profit`, "
-                f"COALESCE(SUM(`exchange_rate_missing`),0) AS `exchange_rate_missing_count` "
+                f"COALESCE(SUM(`exchange_rate_missing`),0) AS `exchange_rate_missing_count`, "
+                f"COALESCE(SUM(`cny_exchange_rate_missing`),0) AS `cny_exchange_rate_missing_count` "
                 f"FROM {source_sql}{where_sql}",
                 params,
             )
@@ -2108,6 +2232,60 @@ def get_mercado_order_label_contexts(order_ids):
                 [*normalized_ids, *normalized_ids],
             )
             return list(cursor.fetchall() or [])
+    finally:
+        connection.close()
+
+
+def _ensure_mercado_order_sync_schedule_table(cursor):
+    cursor.execute(
+        """
+        CREATE TABLE IF NOT EXISTS `mercado_order_sync_schedule` (
+            `state_key` VARCHAR(64) NOT NULL,
+            `state_value` VARCHAR(255) NULL,
+            `updated_at` DATETIME NOT NULL,
+            PRIMARY KEY (`state_key`)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+        """
+    )
+
+
+def get_mercado_order_sync_schedule_value(state_key):
+    connection = pymysql.connect(**config)
+    try:
+        with connection.cursor() as cursor:
+            _ensure_mercado_order_sync_schedule_table(cursor)
+            cursor.execute(
+                "SELECT `state_value` FROM `mercado_order_sync_schedule` "
+                "WHERE `state_key` = %s LIMIT 1",
+                (str(state_key or "")[:64],),
+            )
+            row = cursor.fetchone() or {}
+            return str(row.get("state_value") or "")
+    finally:
+        connection.close()
+
+
+def set_mercado_order_sync_schedule_value(state_key, state_value):
+    now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    connection = pymysql.connect(**config)
+    try:
+        with connection.cursor() as cursor:
+            _ensure_mercado_order_sync_schedule_table(cursor)
+            cursor.execute(
+                """
+                INSERT INTO `mercado_order_sync_schedule` (
+                    `state_key`, `state_value`, `updated_at`
+                ) VALUES (%s, %s, %s)
+                ON DUPLICATE KEY UPDATE
+                    `state_value` = VALUES(`state_value`),
+                    `updated_at` = VALUES(`updated_at`)
+                """,
+                (str(state_key or "")[:64], str(state_value or "")[:255], now),
+            )
+        connection.commit()
+    except Exception:
+        connection.rollback()
+        raise
     finally:
         connection.close()
 
@@ -2999,6 +3177,7 @@ def _ensure_zying_product_table(cursor):
     _ensure_column(cursor, "zying_product", "智赢产品分类", "VARCHAR(1024) NULL")
     _ensure_column(cursor, "zying_product", "分类编号", "VARCHAR(64) NULL")
     _ensure_column(cursor, "zying_product", "产品分类", "VARCHAR(2048) NULL")
+    _ensure_column(cursor, "zying_product", "上架快照", "LONGTEXT NULL")
     _ensure_column(cursor, "zying_product", "疑似侵权", "VARCHAR(8) NULL")
     _ensure_column(cursor, "zying_product", "侵权关键词", "VARCHAR(1024) NULL")
 
@@ -3042,24 +3221,33 @@ def insert_zying_product_info(product_list):
                             record.get("page_number", record.get("采集页码")),
                             record.get("collected_at", record.get("采集时间")) or submit_time,
                             record.get("raw_text", record.get("页面原始信息", "")),
+                            json.dumps(
+                                record.get("listing_snapshot", record.get("上架快照", {})) or {},
+                                ensure_ascii=False,
+                                separators=(",", ":"),
+                                default=str,
+                            ),
                             submit_time,
                         )
                     )
                     continue
 
                 row = list(record)
+                if len(row) >= 16:
+                    normalized_list.append(tuple(row[:16] + [submit_time]))
+                    continue
                 if len(row) >= 15:
-                    normalized_list.append(tuple(row[:15] + [submit_time]))
+                    normalized_list.append(tuple(row[:15] + [""] + [submit_time]))
                     continue
                 if len(row) >= 13:
                     normalized_list.append(
-                        tuple([row[0], "", ""] + row[1:13] + [submit_time])
+                        tuple([row[0], "", ""] + row[1:13] + [""] + [submit_time])
                     )
                     continue
                 if len(row) < 11:
                     row.extend([""] * (11 - len(row)))
                 normalized_list.append(
-                    tuple([row[0], "", "", "", ""] + row[1:11] + [submit_time])
+                    tuple([row[0], "", "", "", ""] + row[1:11] + [""] + [submit_time])
                 )
 
             if normalized_list:
@@ -3069,8 +3257,8 @@ def insert_zying_product_info(product_list):
                         `产品编号`, `智赢分类编号`, `智赢产品分类`,
                         `分类编号`, `产品分类`, `主图链接`, `标题`, `售价`, `净收益`,
                         `包装毛重`, `包装尺寸`, `审核状态`, `采集页码`,
-                        `采集时间`, `页面原始信息`, `提交时间`
-                    ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                        `采集时间`, `页面原始信息`, `上架快照`, `提交时间`
+                    ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                     """,
                     normalized_list,
                 )
@@ -3108,6 +3296,8 @@ def get_existing_zying_product_ids(product_ids):
                     SELECT DISTINCT `产品编号`
                     FROM `zying_product`
                     WHERE `产品编号` IN ({placeholders})
+                      AND `上架快照` IS NOT NULL
+                      AND `上架快照` NOT IN ('', '{{}}')
                     """,
                     tuple(batch),
                 )

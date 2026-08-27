@@ -1,4 +1,4 @@
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 import pytest
 
@@ -22,6 +22,9 @@ def reset_order_sync_state(monkeypatch):
             total_stores=0,
             results=[],
             logs=[],
+            recent_window_hours=bit_order_sync.RECENT_ORDER_WINDOW_HOURS,
+            daily_status_last_run_date="",
+            next_daily_status_at="",
         )
     yield
 
@@ -104,7 +107,7 @@ def test_sync_enriches_order_sku_image_from_marketplace_item():
     assert orders[0]["order_items"][0]["item"]["secure_thumbnail"] == "https://img.example/sku.jpg"
 
 
-def test_automatic_sync_uses_last_updated_cursor(monkeypatch):
+def test_automatic_sync_refreshes_recent_72_hours(monkeypatch):
     token = {
         "id": 3,
         "display_name": "泽顺巴西",
@@ -112,15 +115,12 @@ def test_automatic_sync_uses_last_updated_cursor(monkeypatch):
         "access_token": "secret",
     }
     filters_seen = {}
+    options_seen = {}
     monkeypatch.setattr(bit_order_sync, "_token_records", lambda _ids: [token])
-    monkeypatch.setattr(
-        bit_order_sync.bit_mysql,
-        "get_mercado_order_sync_cursor",
-        lambda _token_id: datetime(2026, 8, 23, 10, 0, tzinfo=timezone.utc),
-    )
 
-    def fake_sync(_record, filters):
+    def fake_sync(_record, filters, **options):
         filters_seen.update(filters)
+        options_seen.update(options)
         return {"store": "泽顺巴西", "status": "success", "fetched": 0, "inserted": 0, "updated": 0}
 
     monkeypatch.setattr(bit_order_sync, "_sync_store", fake_sync)
@@ -128,9 +128,104 @@ def test_automatic_sync_uses_last_updated_cursor(monkeypatch):
     state = bit_order_sync.run_order_sync(mode="automatic")
 
     assert state["status"] == "completed"
-    assert filters_seen["sort"] == "updated_asc"
-    assert filters_seen["last_updated.from"].startswith("2026-08-23T09:55:00")
-    assert "last_updated.to" in filters_seen
+    assert filters_seen["sort"] == "date_asc"
+    start_at = datetime.fromisoformat(
+        filters_seen["order.date_created.from"].replace("Z", "+00:00")
+    )
+    end_at = datetime.fromisoformat(
+        filters_seen["order.date_created.to"].replace("Z", "+00:00")
+    )
+    assert end_at - start_at == timedelta(hours=72)
+    assert "last_updated.from" not in filters_seen
+    assert options_seen == {"enrich_images": True}
+
+
+def test_daily_status_sync_uses_local_old_order_ids(monkeypatch):
+    token = {
+        "id": 3,
+        "display_name": "泽顺巴西",
+        "meli_user_id": "seller-3",
+        "access_token": "secret",
+    }
+    cutoff_seen = {}
+    monkeypatch.setattr(bit_order_sync, "_token_records", lambda _ids: [token])
+
+    def fake_sync(record, cutoff):
+        cutoff_seen["record"] = record
+        cutoff_seen["cutoff"] = cutoff
+        return {
+            "store": "泽顺巴西",
+            "status": "success",
+            "fetched": 4,
+            "inserted": 0,
+            "updated": 4,
+            "failed": 0,
+        }
+
+    monkeypatch.setattr(bit_order_sync, "_sync_old_store_statuses", fake_sync)
+
+    before = datetime.now(timezone.utc) - timedelta(hours=72, seconds=1)
+    state = bit_order_sync.run_order_sync(mode=bit_order_sync.DAILY_STATUS_MODE)
+    after = datetime.now(timezone.utc) - timedelta(hours=72) + timedelta(seconds=1)
+
+    assert state["status"] == "completed"
+    assert state["mode"] == bit_order_sync.DAILY_STATUS_MODE
+    assert cutoff_seen["record"] == token
+    assert before <= cutoff_seen["cutoff"] <= after
+
+
+def test_old_status_sync_fetches_only_local_old_orders_and_skips_images(monkeypatch):
+    token = {
+        "id": 8,
+        "display_name": "泽顺墨西哥",
+        "meli_user_id": "seller-8",
+        "access_token": "secret",
+    }
+    cutoff = datetime(2026, 8, 24, 8, 0, tzinfo=timezone.utc)
+    requested = []
+    batches = []
+
+    class FakeClient:
+        def get_order(self, order_id):
+            requested.append(order_id)
+            return {"id": order_id, "status": "delivered", "order_items": []}
+
+    monkeypatch.setattr(
+        bit_order_sync.bit_mysql,
+        "list_mercado_order_ids_before",
+        lambda token_id, cutoff_value: ["101", "102"]
+        if token_id == 8 and cutoff_value == cutoff
+        else [],
+    )
+    monkeypatch.setattr(
+        bit_order_sync,
+        "_client_and_token",
+        lambda record: (FakeClient(), record),
+    )
+    monkeypatch.setattr(
+        bit_order_sync.bit_mysql,
+        "upsert_mercado_synced_orders",
+        lambda record, orders: batches.append((record, list(orders)))
+        or {"inserted": 0, "updated": len(orders)},
+    )
+    monkeypatch.setattr(
+        bit_order_sync,
+        "_enrich_order_images",
+        lambda *_args: pytest.fail("老订单状态刷新不应读取 SKU 图片"),
+    )
+
+    result = bit_order_sync._sync_old_store_statuses(token, cutoff)
+
+    assert requested == ["101", "102"]
+    assert [order["id"] for order in batches[0][1]] == ["101", "102"]
+    assert result == {
+        "store": "泽顺墨西哥",
+        "status": "success",
+        "fetched": 2,
+        "inserted": 0,
+        "updated": 2,
+        "failed": 0,
+    }
 
 
 def test_mysql_upsert_maps_token_order_origin_fields(monkeypatch):

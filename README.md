@@ -51,6 +51,19 @@ print(result.database_path)
 
 每个店铺首次执行时，如果没有可靠的逐单打印状态，只读取最近 72 小时内可取得 Shipment ID 的订单；API 同步成功后建立追踪起点，后续仅处理没有成功打印记录的订单。成功生成面单后会写入订单操作日志，失败订单会保留到下一次重试。
 
+## 美客多售后处理 API
+
+工作台新增“售后处理”，列表布局分为“售后消息”和“订单索赔”：
+
+- 售后消息：读取官方未读 Pack，关联本地订单图片与店铺信息；完整会话按 Pack ID 查询且显式设置 `mark_as_read=false`，支持回复状态筛选并发送原文及买家语言翻译；
+- 订单索赔：按类型、状态、日期和订单查询，显示索赔阶段、原因、处理期限、买家期望方案、声誉影响和沟通记录，并按官方 `available_actions` 回复买家或调解员。
+
+售前问答保留在独立的“售前问答”模块中。
+
+Access Token 和 Refresh Token 仍只在数据库服务端使用；接口遇到 401 会轮换并保存 Refresh Token，写消息的 POST 不会因网络错误自动重发，避免重复消息。Model 6 店铺被官方限制访问 Questions、Messages、Claims 时，页面会直接显示对应的 403 说明。
+
+实现入口为 `mercado_api/communications.py`，工作台服务端适配位于 `bit/mercado_communications.py`。官方资料：[售前问答](https://global-selling.mercadolibre.com/devsite/devsite/manage-questions-answers-global-selling)、[售后消息](https://global-selling.mercadolibre.com/devsite/en_us/size-chart-validation/messaging-after-sale-global-selling)、[投诉管理](https://global-selling.mercadolibre.com/devsite/api-docs/manage-claims)、[投诉消息](https://global-selling.mercadolibre.com/devsite/en_us/manage-claims-messages)。
+
 ## 比特浏览器配置
 
 店铺窗口配置统一保存在 MySQL 的 `bit_browser_configs` 表中。业务代码通过 `bit.bit_config` 读取，并根据 `BIT_DB_MODE` 选择直连 MySQL 或数据库 HTTP 接口，不再在运行时读取 `比特配置文件.xlsx`。

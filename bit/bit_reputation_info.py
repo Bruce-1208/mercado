@@ -1,6 +1,6 @@
 import time
 import re
-from concurrent.futures import ProcessPoolExecutor, as_completed
+from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor, as_completed
 
 from selenium import webdriver
 from selenium.common.exceptions import TimeoutException
@@ -46,7 +46,12 @@ import pandas as pd
 
 from datetime import datetime
 from pathlib import Path
-from bit.bit_db_api import insert_task_record, inset_reputation_info
+from bit.bit_db_api import (
+    get_mercado_store_reputation,
+    insert_task_record,
+    inset_reputation_info,
+    list_mercado_store_tokens,
+)
 from bit.bit_config import list_config_rows
 
 
@@ -391,7 +396,13 @@ def _open_country_switch(driver, timeout=15, poll_seconds=1):
         time.sleep(max(0.05, float(poll_seconds or 0)))
 
 
-def _select_country(driver, site, shop_name=""):
+def _select_country(
+    driver,
+    site,
+    shop_name="",
+    recovery_url=REPUTATION_URL,
+    structure_context="页面",
+):
     if not site:
         return True
 
@@ -435,7 +446,7 @@ def _select_country(driver, site, shop_name=""):
                     )
                 except Exception as exc:
                     raise MercadoPageStructureError(
-                        f"{shop_name}{site}切换站点后声誉页结构不匹配："
+                        f"{shop_name}{site}切换站点后{structure_context}结构不匹配："
                         f"{state.get('current_url', '')}"
                     ) from exc
                 return True
@@ -445,7 +456,7 @@ def _select_country(driver, site, shop_name=""):
                 raise
             _open_collection_backend_page(
                 driver,
-                REPUTATION_URL,
+                recovery_url,
                 name=shop_name,
                 site=site,
                 context="站点切换登录恢复",
@@ -1292,6 +1303,91 @@ def _parse_gradient(value):
     return direction, rate
 
 
+def get_reputation_auxiliary_info(
+    window_id,
+    name,
+    site,
+    driver=None,
+    select_site=True,
+):
+    """从非声誉页面采集近七天变化、系统告警和流量趋势。"""
+    if driver is None:
+        driver = _connect_browser(window_id)
+
+    data_warn = "正常"
+    direction = ""
+    gradient_rate = ""
+    auxiliary_errors = []
+    try:
+        _open_collection_backend_page(
+            driver,
+            SALES_SUMMARY_URL,
+            window_id=window_id,
+            name=name,
+            site=site,
+            context="销售汇总页面",
+            settle_seconds=3,
+        )
+        if select_site:
+            _select_country(
+                driver,
+                site,
+                name,
+                recovery_url=SALES_SUMMARY_URL,
+                structure_context="销售汇总页面",
+            )
+        try:
+            data_warn = (
+                WebDriverWait(driver, 10)
+                .until(
+                    EC.visibility_of_element_located(
+                        (By.CLASS_NAME, "andes-message__content")
+                    )
+                )
+                .text
+            )
+        except Exception:
+            data_warn = "正常"
+
+        try:
+            data_gradient = WebDriverWait(driver, 10).until(
+                EC.presence_of_element_located(
+                    (By.CSS_SELECTOR, ".andes-badge .andes-visually-hidden")
+                )
+            ).text
+        except Exception:
+            data_gradient = "持平"
+        print("近七天变化情况为:", data_gradient)
+        direction, gradient_rate = _parse_gradient(data_gradient)
+    except Exception as exc:
+        if select_site:
+            raise
+        auxiliary_errors.append(f"销售汇总{_failure_status(exc).removeprefix('失败：')}")
+
+    print("系统提示为:", data_warn)
+
+    try:
+        visits = str(get_visits_info(driver, window_id, name, site, 8))
+    except Exception as exc:
+        visits = "[]"
+        auxiliary_errors.append(f"流量{_failure_status(exc).removeprefix('失败：')}")
+
+    if auxiliary_errors:
+        auxiliary_message = "辅助采集失败：" + "；".join(auxiliary_errors)
+        data_warn = auxiliary_message if data_warn == "正常" else f"{data_warn}\n{auxiliary_message}"
+
+    return {
+        "store_name": name,
+        "site": site,
+        "direction": direction,
+        "gradient_rate": gradient_rate,
+        "system_warning": data_warn,
+        "updated_at": get_now_time(),
+        "visits": visits,
+        "error": "；".join(auxiliary_errors),
+    }
+
+
 def get_reputation_info(
     window_id,
     name,
@@ -1338,61 +1434,20 @@ def get_reputation_info(
         data_delay,
         data_cancel,
     ]
-
-    data_warn = "正常"
-    direction = ""
-    gradient_rate = ""
-    auxiliary_errors = []
-    try:
-        _open_collection_backend_page(
-            driver,
-            SALES_SUMMARY_URL,
-            window_id=window_id,
-            name=name,
-            site=site,
-            context="销售汇总页面",
-            settle_seconds=3,
-        )
-        try:
-            data_warn = (
-                WebDriverWait(driver, 10)
-                .until(
-                    EC.visibility_of_element_located(
-                        (By.CLASS_NAME, "andes-message__content")
-                    )
-                )
-                .text
-            )
-        except Exception:
-            data_warn = "正常"
-
-        try:
-            data_gradient = WebDriverWait(driver, 10).until(
-                EC.presence_of_element_located(
-                    (By.CSS_SELECTOR, ".andes-badge .andes-visually-hidden")
-                )
-            ).text
-        except Exception:
-            data_gradient = "持平"
-        print("近七天变化情况为:", data_gradient)
-        direction, gradient_rate = _parse_gradient(data_gradient)
-    except Exception as exc:
-        auxiliary_errors.append(f"销售汇总{_failure_status(exc).removeprefix('失败：')}")
-
-    print("系统提示为:", data_warn)
-
-    try:
-        visits = str(get_visits_info(driver, window_id, name, site, 8))
-    except Exception as exc:
-        visits = "[]"
-        auxiliary_errors.append(f"流量{_failure_status(exc).removeprefix('失败：')}")
-
-    if auxiliary_errors:
-        auxiliary_message = "辅助采集失败：" + "；".join(auxiliary_errors)
-        data_warn = auxiliary_message if data_warn == "正常" else f"{data_warn}\n{auxiliary_message}"
-
-    reputation.extend([direction, gradient_rate, data_warn, get_now_time()])
-    reputation.append(visits)
+    auxiliary = get_reputation_auxiliary_info(
+        window_id,
+        name,
+        site,
+        driver=driver,
+        select_site=False,
+    )
+    reputation.extend([
+        auxiliary["direction"],
+        auxiliary["gradient_rate"],
+        auxiliary["system_warning"],
+        auxiliary["updated_at"],
+        auxiliary["visits"],
+    ])
     return reputation
 
 
@@ -1443,6 +1498,19 @@ def _build_reputation_failure_row(name, site, failure_status="失败：未知异
         get_now_time(),
         "",
     ]
+
+
+def _build_reputation_auxiliary_failure(name, site, failure_status="失败：未知异常"):
+    return {
+        "store_name": name,
+        "site": site,
+        "direction": "",
+        "gradient_rate": "",
+        "system_warning": f"辅助采集{failure_status}",
+        "updated_at": get_now_time(),
+        "visits": "[]",
+        "error": failure_status,
+    }
 
 
 def _is_ignored_config_value(value):
@@ -1568,6 +1636,137 @@ def _run_reputation_for_browser(row, lease_wait_seconds=0):
     return reputation_info_sum, result
 
 
+def _run_reputation_auxiliary_for_browser(row, lease_wait_seconds=0):
+    """每家店共用一个浏览器，只采集销售汇总和流量页面。"""
+    window_id = row[0]
+    name = row[1]
+    remark = row[2]
+    if _is_ignored_config_value(remark):
+        return [], []
+    sites = _split_sites(row[3])
+    if not sites:
+        return [], [
+            ("获取声誉辅助信息", name, "", "失败：未配置站点", get_now_time())
+        ]
+
+    wait_for_batch_resume(f"声誉辅助采集:{name}")
+    lease = create_window_lease(
+        window_id,
+        owner=f"reputation_auxiliary_collection:{name}",
+        shop_name=name,
+        task_type="reputation_collection",
+    )
+    if not lease.acquire(timeout=max(0, float(lease_wait_seconds or 0))):
+        status = "跳过：窗口被其他任务占用"
+        return (
+            [
+                _build_reputation_auxiliary_failure(name, site, status)
+                for site in sites
+            ],
+            [
+                ("获取声誉辅助信息", name, site, status, get_now_time())
+                for site in sites
+            ],
+        )
+
+    auxiliary_rows = []
+    result = []
+    try:
+        try:
+            driver = _connect_browser(
+                window_id,
+                batch_control=True,
+                batch_source="声誉辅助采集",
+            )
+        except Exception as exc:
+            status = _failure_status(exc)
+            for site in sites:
+                auxiliary_rows.append(
+                    _build_reputation_auxiliary_failure(name, site, status)
+                )
+                result.append(
+                    ("获取声誉辅助信息", name, site, status, get_now_time())
+                )
+            return auxiliary_rows, result
+
+        fatal_profile_error = None
+        for site in sites:
+            wait_for_batch_resume(f"声誉辅助采集:{name}")
+            if fatal_profile_error is not None:
+                status = _failure_status(fatal_profile_error)
+                auxiliary_rows.append(
+                    _build_reputation_auxiliary_failure(name, site, status)
+                )
+                result.append(
+                    ("获取声誉辅助信息", name, site, status, get_now_time())
+                )
+                continue
+
+            last_error = None
+            for attempt in range(1, 4):
+                try:
+                    auxiliary = get_reputation_auxiliary_info(
+                        window_id,
+                        name,
+                        site,
+                        driver=driver,
+                        select_site=True,
+                    )
+                    auxiliary_rows.append(auxiliary)
+                    auxiliary_status = (
+                        f"部分失败：{auxiliary.get('error')}"[:180]
+                        if auxiliary.get("error")
+                        else "成功"
+                    )
+                    result.append((
+                        "获取声誉辅助信息",
+                        name,
+                        site,
+                        auxiliary_status,
+                        get_now_time(),
+                    ))
+                    print(
+                        f"{get_now_time()}{name}{site}流量趋势及辅助数据"
+                        + ("部分失败" if auxiliary.get("error") else "采集成功")
+                    )
+                    break
+                except Exception as exc:
+                    last_error = exc
+                    print(f"{get_now_time()}{name}{site}辅助数据执行失败", exc)
+                    if isinstance(exc, MercadoAuthenticationError):
+                        fatal_profile_error = exc
+                        break
+                    is_rate_limited = isinstance(exc, MercadoRateLimitError) or _is_rate_limited_text(exc)
+                    if is_rate_limited:
+                        trip_batch_rate_limit(f"声誉辅助采集:{name}:{site}", str(exc))
+                    if attempt < 3:
+                        if is_rate_limited:
+                            wait_for_batch_resume(f"声誉辅助采集:{name}")
+                        else:
+                            time.sleep(5)
+            else:
+                last_error = last_error or RuntimeError("未知异常")
+
+            if not result or result[-1][2] != site or not (
+                result[-1][3] == "成功" or str(result[-1][3]).startswith("部分失败")
+            ):
+                status = _failure_status(last_error)
+                auxiliary_rows.append(
+                    _build_reputation_auxiliary_failure(name, site, status)
+                )
+                result.append(
+                    ("获取声誉辅助信息", name, site, status, get_now_time())
+                )
+            time.sleep(2)
+    finally:
+        try:
+            closeBrowser(window_id, lease=lease)
+        except Exception as exc:
+            print(f"{get_now_time()}{name}关闭窗口失败", exc)
+        lease.release()
+    return auxiliary_rows, result
+
+
 def _execute_reputation_rows(
     rows,
     max_workers,
@@ -1610,6 +1809,52 @@ def _execute_reputation_rows(
                 ]
             outcomes[row_key(row)] = (row, browser_reputations, browser_result)
             print(get_now_time() + name + "窗口任务完成")
+    return outcomes
+
+
+def _execute_reputation_auxiliary_rows(
+    rows,
+    max_workers,
+    stagger_min_seconds,
+    stagger_max_seconds,
+    lease_wait_seconds=0,
+):
+    outcomes = {}
+    worker_count = max(1, min(int(max_workers), len(rows))) if rows else 1
+    with ProcessPoolExecutor(max_workers=worker_count) as executor:
+        future_map = {}
+        for index, row in enumerate(rows):
+            future = executor.submit(
+                _run_reputation_auxiliary_for_browser,
+                row,
+                lease_wait_seconds,
+            )
+            future_map[future] = row
+            if index < len(rows) - 1:
+                delay = stagger_sleep(stagger_min_seconds, stagger_max_seconds)
+                print(
+                    f"{get_now_time()}声誉辅助店铺错峰启动，下一家等待 {delay:.1f} 秒"
+                )
+
+        for future in as_completed(future_map):
+            row = future_map[future]
+            name = row[1]
+            try:
+                auxiliary_rows, browser_result = future.result()
+            except Exception as exc:
+                status = _failure_status(exc)
+                sites = _split_sites(row[3]) or [""]
+                auxiliary_rows = [
+                    _build_reputation_auxiliary_failure(name, site, status)
+                    for site in sites
+                    if site
+                ]
+                browser_result = [
+                    ("获取声誉辅助信息", name, site, status, get_now_time())
+                    for site in sites
+                ]
+            outcomes[row_key(row)] = (row, auxiliary_rows, browser_result)
+            print(f"{get_now_time()}{name}声誉辅助窗口任务完成")
     return outcomes
 
 
@@ -1701,7 +1946,7 @@ def _prepare_reputation_retry_rows(outcomes, permanent_login_failures=None):
     return retry_plan
 
 
-def get_reputation_info_all(
+def get_reputation_info_all_browser(
     max_workers=DEFAULT_COLLECTION_MAX_WORKERS,
     stagger_min_seconds=None,
     stagger_max_seconds=None,
@@ -1709,7 +1954,7 @@ def get_reputation_info_all(
     selected_shops=None,
     selected_sites=None,
 ):
-    """并发采集声誉；修复已识别问题后只补跑失败店铺，最后统一入库。"""
+    """历史浏览器采集实现；仅保留兼容，不再由默认业务流程调用。"""
     start = int(time.time())
     print(start)
     root_path = Path(__file__).resolve().parent
@@ -1871,6 +2116,565 @@ def get_reputation_info_all(
                 if len(row) >= 4 and str(row[3] or "") != "成功"
             }
         ),
+    }
+
+
+def _normalize_api_site_code(value):
+    site = str(value or "").strip()
+    if not site:
+        return ""
+    return SITE_CODE_MAP.get(site) or SITE_CODE_MAP.get(site.upper()) or site.upper()
+
+
+def _format_api_percentage(value):
+    if value in (None, ""):
+        return ""
+    try:
+        number = float(value)
+    except (TypeError, ValueError):
+        return ""
+    text = f"{number:.4f}".rstrip("0").rstrip(".")
+    return f"{text}%"
+
+
+def _emit_api_collection_log(message, callback=None):
+    text = str(message or "").strip()
+    if not text:
+        return
+    print(f"{get_now_time()} {text}")
+    if callback is not None:
+        try:
+            callback(text)
+        except Exception as exc:
+            print(f"{get_now_time()} 声誉日志回调失败：{exc}")
+
+
+def _emit_api_collection_progress(callback, event, **payload):
+    if callback is None:
+        return
+    try:
+        callback({"event": event, **payload})
+    except Exception as exc:
+        print(f"{get_now_time()} 声誉进度回调失败：{exc}")
+
+
+def _api_reputation_database_row(store_name, api_row, updated_at):
+    site_name = str(api_row.get("site_name") or api_row.get("site_id") or "").strip()
+    total_orders = api_row.get("sales_completed")
+    if total_orders in (None, ""):
+        total_orders = api_row.get("transaction_total")
+    return [
+        store_name,
+        site_name,
+        str(api_row.get("level_name") or api_row.get("level_id") or "暂无等级"),
+        "" if total_orders is None else total_orders,
+        _format_api_percentage(api_row.get("claims_rate_percent")),
+        _format_api_percentage(api_row.get("delayed_handling_rate_percent")),
+        _format_api_percentage(api_row.get("cancellations_rate_percent")),
+        "",
+        "",
+        "正常",
+        updated_at,
+        "[]",
+    ]
+
+
+def _deduplicate_api_site_rows(rows):
+    """旧声誉表按店铺和站点存一行，优先保留 remote 口径。"""
+    selected = {}
+    for raw_row in rows or ():
+        row = dict(raw_row or {})
+        site_code = _normalize_api_site_code(row.get("site_id"))
+        if not site_code:
+            continue
+        current = selected.get(site_code)
+        if current is None or (
+            str(row.get("logistic_type") or "").lower() == "remote"
+            and str(current.get("logistic_type") or "").lower() != "remote"
+        ):
+            selected[site_code] = row
+    return [selected[site_code] for site_code in sorted(selected)]
+
+
+def _api_auxiliary_config_rows(tokens, api_rows):
+    """把浏览器配置名称映射到授权店铺，只保留 API 已返回的站点。"""
+    canonical_by_alias = {}
+    for token in tokens:
+        canonical_name = str(
+            token.get("display_name") or token.get("nickname") or token.get("id") or ""
+        ).strip()
+        for alias in (token.get("display_name"), token.get("nickname")):
+            alias_key = str(alias or "").strip().casefold()
+            if alias_key:
+                canonical_by_alias[alias_key] = canonical_name
+
+    api_keys = {
+        (
+            str(row.get("store_name") or "").strip().casefold(),
+            _normalize_api_site_code(row.get("site_id") or row.get("site_name")),
+        )
+        for row in api_rows
+    }
+    selected_rows = []
+    claimed_sites = set()
+    for raw_row in list_config_rows(include_ignored=False) or ():
+        if not raw_row or len(raw_row) < 4 or not str(raw_row[0] or "").strip():
+            continue
+        original_name = str(raw_row[1] or "").strip()
+        canonical_name = canonical_by_alias.get(original_name.casefold())
+        if not canonical_name:
+            continue
+        sites = [
+            site
+            for site in _split_sites(raw_row[3])
+            if (
+                canonical_name.casefold(),
+                _normalize_api_site_code(site),
+            )
+            in api_keys
+            and (
+                canonical_name.casefold(),
+                _normalize_api_site_code(site),
+            )
+            not in claimed_sites
+        ]
+        if not sites:
+            continue
+        row = list(raw_row)
+        row[1] = canonical_name
+        row[3] = "，".join(sites)
+        row = tuple(row)
+        claimed_sites.update(
+            (canonical_name.casefold(), _normalize_api_site_code(site))
+            for site in sites
+        )
+        selected_rows.append(row)
+    return selected_rows
+
+
+def _merge_api_auxiliary_rows(api_rows, database_rows, auxiliary_rows):
+    auxiliary_by_key = {
+        (
+            str(row.get("store_name") or "").strip().casefold(),
+            _normalize_api_site_code(row.get("site")),
+        ): row
+        for row in auxiliary_rows
+    }
+    database_by_key = {
+        (
+            str(row[0] or "").strip().casefold(),
+            _normalize_api_site_code(row[1]),
+        ): row
+        for row in database_rows
+        if len(row) >= 12
+    }
+    for api_row in api_rows:
+        key = (
+            str(api_row.get("store_name") or "").strip().casefold(),
+            _normalize_api_site_code(api_row.get("site_id") or api_row.get("site_name")),
+        )
+        auxiliary = auxiliary_by_key.get(key)
+        if auxiliary is None:
+            continue
+        api_row.update({
+            "direction": auxiliary.get("direction") or "",
+            "gradient_rate": auxiliary.get("gradient_rate") or "",
+            "system_warning": auxiliary.get("system_warning") or "正常",
+            "updated_at": auxiliary.get("updated_at") or get_now_time(),
+            "visits": auxiliary.get("visits") or "[]",
+            "auxiliary_error": auxiliary.get("error") or "",
+        })
+        database_row = database_by_key.get(key)
+        if database_row is not None:
+            database_row[7] = api_row["direction"]
+            database_row[8] = api_row["gradient_rate"]
+            database_row[9] = api_row["system_warning"]
+            database_row[10] = api_row["updated_at"]
+            database_row[11] = api_row["visits"]
+    return auxiliary_by_key
+
+
+def get_reputation_info_all(
+    max_workers=DEFAULT_COLLECTION_MAX_WORKERS,
+    stagger_min_seconds=None,
+    stagger_max_seconds=None,
+    retry_failed=True,
+    selected_shops=None,
+    selected_sites=None,
+    log_callback=None,
+    progress_callback=None,
+    send_email=True,
+    export_excel=True,
+    collect_browser_auxiliary=True,
+):
+    """通过 Mercado Libre 官方 API 更新声誉并兼容原有声誉数据链路。"""
+    started_monotonic = time.monotonic()
+    root_path = Path(__file__).resolve().parent
+    selected_shop_keys = {
+        str(value or "").strip().casefold()
+        for value in (selected_shops or ())
+        if str(value or "").strip()
+    }
+    selected_site_codes = {
+        _normalize_api_site_code(value)
+        for value in (selected_sites or ())
+        if _normalize_api_site_code(value)
+    }
+
+    token_data = list_mercado_store_tokens() or {}
+    tokens = [
+        dict(row)
+        for row in (token_data.get("rows") or [])
+        if int(row.get("id") or 0) > 0
+    ]
+    if selected_shop_keys:
+        tokens = [
+            token
+            for token in tokens
+            if {
+                str(token.get("display_name") or "").strip().casefold(),
+                str(token.get("nickname") or "").strip().casefold(),
+            }
+            & selected_shop_keys
+        ]
+    if (selected_shops or selected_sites) and not tokens:
+        raise ValueError("所选店铺没有可用的美客多 API 授权")
+
+    try:
+        requested_workers = max(1, int(max_workers or 1))
+    except (TypeError, ValueError):
+        requested_workers = DEFAULT_COLLECTION_MAX_WORKERS
+    worker_count = min(requested_workers, len(tokens)) if tokens else 0
+    _emit_api_collection_log(
+        f"开始官方 API 声誉更新，共 {len(tokens)} 家授权店铺，并发 {worker_count}",
+        log_callback,
+    )
+    _emit_api_collection_progress(
+        progress_callback,
+        "initialized",
+        total_stores=len(tokens),
+    )
+
+    def fetch_one(token):
+        token_id = int(token["id"])
+        store_name = str(
+            token.get("display_name") or token.get("nickname") or token_id
+        ).strip()
+        _emit_api_collection_log(f"{store_name}：开始读取官方声誉接口", log_callback)
+        _emit_api_collection_progress(
+            progress_callback,
+            "store_started",
+            token_id=token_id,
+            store_name=store_name,
+        )
+        attempts = 2 if retry_failed else 1
+        last_error = None
+        for attempt in range(1, attempts + 1):
+            try:
+                response = get_mercado_store_reputation(token_id) or {}
+                api_rows = _deduplicate_api_site_rows(response.get("rows") or [])
+                if selected_site_codes:
+                    api_rows = [
+                        row
+                        for row in api_rows
+                        if _normalize_api_site_code(row.get("site_id"))
+                        in selected_site_codes
+                    ]
+                if not api_rows:
+                    scope_text = "所选站点" if selected_site_codes else "任何站点"
+                    raise RuntimeError(f"官方接口未返回{scope_text}的声誉数据")
+                enriched_rows = []
+                database_rows = []
+                task_rows = []
+                updated_at = get_now_time()
+                for api_row in api_rows:
+                    enriched = dict(api_row)
+                    enriched.update({
+                        "token_id": token_id,
+                        "store_name": store_name,
+                        "store_nickname": str(token.get("nickname") or ""),
+                    })
+                    enriched_rows.append(enriched)
+                    database_rows.append(
+                        _api_reputation_database_row(store_name, enriched, updated_at)
+                    )
+                    task_rows.append((
+                        "获取声誉信息",
+                        store_name,
+                        str(enriched.get("site_name") or enriched.get("site_id") or ""),
+                        "成功",
+                        updated_at,
+                    ))
+                return {
+                    "token_id": token_id,
+                    "store_name": store_name,
+                    "api_rows": enriched_rows,
+                    "database_rows": database_rows,
+                    "task_rows": task_rows,
+                }
+            except Exception as exc:
+                last_error = exc
+                if attempt < attempts:
+                    _emit_api_collection_log(
+                        f"{store_name}：首次读取失败，立即重试（{exc}）",
+                        log_callback,
+                    )
+        raise last_error
+
+    api_rows = []
+    reputation_rows = []
+    task_rows = []
+    failures = []
+    if tokens:
+        with ThreadPoolExecutor(
+            max_workers=worker_count,
+            thread_name_prefix="reputation-api",
+        ) as executor:
+            futures = {executor.submit(fetch_one, token): token for token in tokens}
+            for future in as_completed(futures):
+                token = futures[future]
+                token_id = int(token["id"])
+                store_name = str(
+                    token.get("display_name") or token.get("nickname") or token_id
+                ).strip()
+                try:
+                    store_result = future.result()
+                    store_api_rows = store_result["api_rows"]
+                    api_rows.extend(store_api_rows)
+                    reputation_rows.extend(store_result["database_rows"])
+                    task_rows.extend(store_result["task_rows"])
+                    _emit_api_collection_log(
+                        f"{store_name}：成功，返回 {len(store_api_rows)} 个站点",
+                        log_callback,
+                    )
+                    _emit_api_collection_progress(
+                        progress_callback,
+                        "store_success",
+                        token_id=token_id,
+                        store_name=store_name,
+                        rows=store_api_rows,
+                    )
+                except Exception as exc:
+                    error_text = str(exc)
+                    failure = {
+                        "token_id": token_id,
+                        "store_name": store_name,
+                        "error": error_text,
+                    }
+                    failures.append(failure)
+                    task_rows.append((
+                        "获取声誉信息",
+                        store_name,
+                        "",
+                        f"失败：{error_text}"[:180],
+                        get_now_time(),
+                    ))
+                    _emit_api_collection_log(
+                        f"{store_name}：失败，{error_text}",
+                        log_callback,
+                    )
+                    _emit_api_collection_progress(
+                        progress_callback,
+                        "store_failure",
+                        **failure,
+                    )
+
+    auxiliary_rows = []
+    auxiliary_task_rows = []
+    auxiliary_config_error = ""
+    if collect_browser_auxiliary and api_rows:
+        try:
+            auxiliary_configs = _api_auxiliary_config_rows(tokens, api_rows)
+        except Exception as exc:
+            auxiliary_configs = []
+            auxiliary_config_error = f"读取浏览器配置失败：{exc}"
+            _emit_api_collection_log(auxiliary_config_error, log_callback)
+
+        _emit_api_collection_log(
+            f"开始浏览器辅助采集：{len(auxiliary_configs)} 家店铺，"
+            "仅访问销售汇总和流量页面，不访问 reputation 页面",
+            log_callback,
+        )
+        if auxiliary_configs:
+            auxiliary_outcomes = _execute_reputation_auxiliary_rows(
+                auxiliary_configs,
+                max_workers=requested_workers,
+                stagger_min_seconds=stagger_min_seconds,
+                stagger_max_seconds=stagger_max_seconds,
+            )
+            for _row, browser_auxiliary, browser_result in auxiliary_outcomes.values():
+                auxiliary_rows.extend(browser_auxiliary)
+                auxiliary_task_rows.extend(browser_result)
+            task_rows.extend(auxiliary_task_rows)
+
+        auxiliary_by_key = _merge_api_auxiliary_rows(
+            api_rows,
+            reputation_rows,
+            auxiliary_rows,
+        )
+        for api_row in api_rows:
+            store_name = str(api_row.get("store_name") or "").strip()
+            site_id = _normalize_api_site_code(
+                api_row.get("site_id") or api_row.get("site_name")
+            )
+            site_name = str(api_row.get("site_name") or site_id).strip()
+            key = (store_name.casefold(), site_id)
+            auxiliary = auxiliary_by_key.get(key)
+            if auxiliary is None:
+                error_text = auxiliary_config_error or "未找到匹配的浏览器店铺/站点配置"
+                task_rows.append((
+                    "获取声誉辅助信息",
+                    store_name,
+                    site_name,
+                    f"失败：{error_text}"[:180],
+                    get_now_time(),
+                ))
+            else:
+                error_text = str(auxiliary.get("error") or "").strip()
+            if error_text:
+                failure = {
+                    "token_id": int(api_row.get("token_id") or 0),
+                    "store_name": store_name,
+                    "site_id": site_id,
+                    "stage": "browser_auxiliary",
+                    "error": error_text,
+                }
+                failures.append(failure)
+                _emit_api_collection_log(
+                    f"{store_name}{site_name}：声誉 API 成功，浏览器辅助数据失败，"
+                    f"{error_text}",
+                    log_callback,
+                )
+            else:
+                _emit_api_collection_log(
+                    f"{store_name}{site_name}：流量趋势及辅助数据合并完成",
+                    log_callback,
+                )
+
+    api_rows.sort(
+        key=lambda row: (
+            str(row.get("store_name") or ""),
+            str(row.get("site_id") or ""),
+        )
+    )
+    failure_report_path = write_unreadable_site_report("声誉API采集", task_rows)
+    if failure_report_path:
+        _emit_api_collection_log(
+            f"失败店铺已记录：{failure_report_path}",
+            log_callback,
+        )
+
+    scoped_collection = bool(selected_shops or selected_sites)
+    replace_targets = [
+        (str(row[0] or "").strip(), str(row[1] or "").strip())
+        for row in reputation_rows
+        if str(row[0] or "").strip() and str(row[1] or "").strip()
+    ]
+    date_str = datetime.now().strftime(
+        "%Y-%m-%d-%H%M%S" if scoped_collection else "%Y-%m-%d-%H"
+    )
+    output_dir = root_path / "美客多声誉"
+    scope_suffix = "-选定范围" if scoped_collection else ""
+    output_path = output_dir / f"武汉泽顺店铺声誉信息汇总{scope_suffix}{date_str}.xlsx"
+
+    post_errors = []
+    post_steps = [
+        (
+            "写入声誉数据",
+            lambda: (
+                inset_reputation_info(
+                    reputation_rows,
+                    merge_latest=True,
+                    replace_targets=replace_targets,
+                )
+                if scoped_collection
+                else inset_reputation_info(reputation_rows)
+            ),
+        ),
+        ("写入声誉任务记录", lambda: insert_task_record(task_rows)),
+    ]
+    if export_excel:
+        output_dir.mkdir(parents=True, exist_ok=True)
+        dataframe = pd.DataFrame(
+            reputation_rows,
+            columns=[
+                "店铺名",
+                "站点",
+                "声誉颜色",
+                "总单量",
+                "投诉率",
+                "延误率",
+                "取消率",
+                "增加或减少",
+                "近七天变化率",
+                "系统告警",
+                "更新时间",
+                "一周流量趋势",
+            ],
+        )
+        post_steps.append(("导出声誉汇总", lambda: dataframe.to_excel(output_path, index=False)))
+
+    for step_name, action in post_steps:
+        try:
+            action()
+            _emit_api_collection_log(f"{step_name}完成", log_callback)
+        except Exception as exc:
+            post_errors.append(f"{step_name}失败：{exc}")
+            _emit_api_collection_log(f"{step_name}失败：{exc}", log_callback)
+
+    email_sent = False
+    if send_email and export_excel and output_path.exists():
+        try:
+            email_sent = bool(
+                send_info(
+                    "美客多所有店铺声誉汇总",
+                    "",
+                    output_path,
+                    output_path.name,
+                )
+            )
+            _emit_api_collection_log(
+                "声誉汇总邮件发送成功" if email_sent else "声誉汇总邮件发送失败，文件已保留",
+                log_callback,
+            )
+        except Exception as exc:
+            post_errors.append(f"发送声誉汇总邮件失败：{exc}")
+            _emit_api_collection_log(f"发送声誉汇总邮件失败：{exc}", log_callback)
+
+    elapsed_seconds = max(0, round(time.monotonic() - started_monotonic, 3))
+    failed_store_names = {
+        str(row.get("store_name") or "").strip()
+        for row in failures
+        if str(row.get("store_name") or "").strip()
+    }
+    success_stores = max(0, len(tokens) - len(failed_store_names))
+    _emit_api_collection_log(
+        f"声誉混合更新完成：完整成功 {success_stores} 家，"
+        f"异常 {len(failed_store_names)} 家，"
+        f"共 {len(api_rows)} 个站点，耗时 {elapsed_seconds} 秒",
+        log_callback,
+    )
+    if post_errors:
+        raise RuntimeError("；".join(post_errors))
+    return {
+        "data": reputation_rows,
+        "api_rows": api_rows,
+        "results": task_rows,
+        "output_path": str(output_path) if export_excel else "",
+        "failure_report_path": str(failure_report_path) if failure_report_path else "",
+        "email_sent": email_sent,
+        "selected_shops": list(selected_shops or ()),
+        "selected_sites": list(selected_sites or ()),
+        "max_workers": worker_count,
+        "total_stores": len(tokens),
+        "completed_stores": len(tokens),
+        "success_stores": success_stores,
+        "failed_stores": len(failed_store_names),
+        "total_sites": len(api_rows),
+        "failures": failures,
+        "failed_shops": sorted(failed_store_names),
+        "auxiliary_rows": auxiliary_rows,
+        "elapsed_seconds": elapsed_seconds,
     }
 
 

@@ -22,6 +22,10 @@ def test_zying_collection_console_exposes_page_category_and_dedup_controls():
     assert 'id="zying-collection-start-page"' in template
     assert 'id="zying-collection-end-page"' in template
     assert 'id="zying-collection-category"' in template
+    assert 'id="zying-collection-browser-type"' in template
+    assert 'id="zying-collection-window-name"' in template
+    assert "本地 Edge（9222）" in template
+    assert "比特浏览器窗口名称" in template
     assert 'id="start-zying-collection-btn"' in template
     assert "数据库已有的产品编号会在详情采集前直接跳过" in template
     assert 'fetch("/api/zying-collection/start"' in template
@@ -53,6 +57,25 @@ def test_build_zying_collection_params_rejects_end_before_start():
         )
 
 
+def test_build_zying_collection_params_accepts_edge_or_bitbrowser_name():
+    edge = bit_interface.build_zying_collection_params(
+        {"start_page": 1, "end_page": 2, "browser_type": "edge"}
+    )
+    bitbrowser = bit_interface.build_zying_collection_params(
+        {
+            "start_page": 1,
+            "end_page": 2,
+            "browser_type": "bitbrowser",
+            "window_name": " 智赢专用窗口 ",
+        }
+    )
+
+    assert edge["browser_type"] == "edge"
+    assert edge["window_name"] == ""
+    assert bitbrowser["browser_type"] == "bitbrowser"
+    assert bitbrowser["window_name"] == "智赢专用窗口"
+
+
 def test_zying_collection_start_runs_script_with_database_dedup(monkeypatch):
     captured = {}
 
@@ -62,7 +85,8 @@ def test_zying_collection_start_runs_script_with_database_dedup(monkeypatch):
             self.args = args
 
         def start(self):
-            self.target(*self.args)
+            if self.target is bit_interface.run_zying_collection_job:
+                self.target(*self.args)
 
     def collect_products(**kwargs):
         captured.update(kwargs)
@@ -77,6 +101,11 @@ def test_zying_collection_start_runs_script_with_database_dedup(monkeypatch):
         }
 
     monkeypatch.setattr(bit_interface.threading, "Thread", ImmediateThread)
+    monkeypatch.setattr(
+        bit_interface,
+        "ensure_mercado_profit_refresh_worker",
+        lambda: None,
+    )
     monkeypatch.setattr(
         bit_interface.bit_zying_caiji,
         "collect_zying_products",
@@ -111,6 +140,10 @@ def test_zying_collection_start_runs_script_with_database_dedup(monkeypatch):
     assert (
         captured["existing_product_id_reader"]
         is bit_interface.db_get_existing_zying_product_ids
+    )
+    assert (
+        captured["product_mirror_writer"]
+        is bit_interface.db_upsert_zying_products_to_products
     )
     assert captured["return_summary"] is True
     status = status_response.get_json()["data"]
@@ -156,3 +189,22 @@ def test_bit_db_api_forwards_existing_product_id_lookup(monkeypatch):
     assert captured["method"] == "POST"
     assert captured["path"] == "/api/db/zying-products/existing"
     assert captured["json"]["product_ids"] == ["801623245", "801623017"]
+
+
+def test_bit_db_api_forwards_zying_product_list_mirror(monkeypatch):
+    captured = {}
+    monkeypatch.setattr(bit_db_api, "DB_MODE", "api")
+
+    def request(method, path, **kwargs):
+        captured.update({"method": method, "path": path, **kwargs})
+        return {"count": 1, "skipped": 0}
+
+    monkeypatch.setattr(bit_db_api, "_request", request)
+    rows = [{"product_id": "795184904", "listing_snapshot": {"source": {}}}]
+
+    result = bit_db_api.upsert_zying_products_to_products(rows)
+
+    assert result == {"count": 1, "skipped": 0}
+    assert captured["method"] == "POST"
+    assert captured["path"] == "/api/db/zying-products/product-list"
+    assert captured["json"]["rows"] == rows

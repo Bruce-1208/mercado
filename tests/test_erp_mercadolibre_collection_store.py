@@ -108,6 +108,60 @@ def test_add_products_rejects_invalid_or_empty_ids_before_database_connection():
         store.add_collection_items_to_products(["bad"], connection_factory=lambda: None)
 
 
+def test_zying_detail_snapshot_is_upserted_as_third_product_source():
+    connection = _FakeConnection()
+    snapshot = {
+        "source_url": "https://meli.zying.net/#/product",
+        "main_image_url": "https://example.test/image.jpg",
+        "title": "Zying product",
+        "price": 36.55,
+        "currency_id": "USD",
+        "category_id": "CBT430974",
+        "weight_g": 1000,
+        "package_length_cm": 23,
+        "package_width_cm": 22,
+        "package_height_cm": 13,
+        "source": {
+            "id": "CBT795184904",
+            "title": "Zying product",
+            "category_id": "CBT430974",
+            "attributes": [{"id": "BRAND", "value_name": "Generic"}],
+            "pictures": [{"source": "https://example.test/image.jpg"}],
+        },
+        "description": {"plain_text": "description"},
+    }
+
+    result = store.upsert_zying_products_to_products(
+        [
+            {
+                "product_id": "795184904",
+                "title": "Zying product",
+                "sale_price": "USD 36.55",
+                "net_income": "USD 22",
+                "product_category_id": "CBT430974",
+                "product_category": "Home / Test",
+                "listing_snapshot": snapshot,
+            }
+        ],
+        connection_factory=lambda: connection,
+    )
+
+    upsert_sql, rows = next(
+        (query, params)
+        for query, params in connection.fake_cursor.queries
+        if query.startswith(f"INSERT INTO `{store.PRODUCT_TABLE}`")
+    )
+    row = rows[0]
+    assert result == {"count": 1, "skipped": 0}
+    assert row[1] == "zying"
+    assert row[3] == "795184904"
+    assert row[10] == Decimal("1000")
+    assert row[19] == Decimal("22")
+    assert json.loads(row[22])["source"]["attributes"][0]["id"] == "BRAND"
+    assert "IF(`source_type` = 'zying'" in upsert_sql
+    assert "zying" in store.PRODUCT_SOURCE_TYPES
+
+
 def test_add_products_keeps_missing_weight_rows_in_collection_list():
     rows = [
         {

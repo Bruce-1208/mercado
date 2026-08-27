@@ -53,3 +53,51 @@ def test_browser_api_slot_order_is_stable_and_covers_every_slot(monkeypatch):
 
     assert first == second
     assert set(first) == {0, 1, 2}
+
+
+def test_get_browser_id_by_name_uses_unique_exact_window_name(monkeypatch):
+    calls = []
+
+    class Response:
+        def json(self):
+            return {
+                "success": True,
+                "data": {
+                    "list": [
+                        {"id": "partial", "name": "智赢专用窗口-备份"},
+                        {"id": "wanted", "name": "智赢专用窗口"},
+                    ]
+                },
+            }
+
+    def fake_post(url, **kwargs):
+        calls.append((url, kwargs))
+        return Response()
+
+    monkeypatch.setattr(bit_api.requests, "post", fake_post)
+
+    assert bit_api.getBrowserIdByName(" 智赢专用窗口 ") == "wanted"
+    assert calls[0][0].endswith("/browser/list")
+
+
+def test_get_browser_id_by_name_rejects_duplicate_exact_names(monkeypatch):
+    class Response:
+        def json(self):
+            return {
+                "success": True,
+                "data": {
+                    "list": [
+                        {"id": "one", "name": "同名窗口"},
+                        {"id": "two", "name": "同名窗口"},
+                    ]
+                },
+            }
+
+    monkeypatch.setattr(bit_api.requests, "post", lambda *args, **kwargs: Response())
+
+    try:
+        bit_api.getBrowserIdByName("同名窗口")
+    except RuntimeError as exc:
+        assert "同名" in str(exc)
+    else:
+        raise AssertionError("duplicate browser names must be rejected")

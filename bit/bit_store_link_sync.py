@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 import threading
 import uuid
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -11,7 +12,11 @@ from bit import bit_mysql, mercado_tokens
 from bit.bit_runtime_lock import InterProcessLock, get_lock_owner
 from erp.mercadolibre_store_link_store import (
     finalize_store_snapshot,
+    list_due_store_link_token_ids,
+    mark_store_link_sync_finished,
+    mark_store_link_sync_started,
     replace_store_snapshot,
+    request_store_link_sync,
 )
 from erp.mercadolibre_collection_store import upsert_pulled_store_links_to_products
 from mercado_api.client import MercadoAPIError, MercadoLibreClient
@@ -20,6 +25,15 @@ from mercado_api.client import MercadoAPIError, MercadoLibreClient
 STORE_LINK_SYNC_LOCK_KEY = "mercado_store_link_sync_task"
 STORE_LINK_WRITE_BATCH_SIZE = 100
 STORE_LINK_DETAIL_WORKERS = 12
+STORE_LINK_AUTO_SYNC_DAYS = max(
+    1, int(os.getenv("MERCADO_STORE_LINK_AUTO_SYNC_DAYS", "3"))
+)
+STORE_LINK_AUTO_RETRY_MINUTES = max(
+    1, int(os.getenv("MERCADO_STORE_LINK_AUTO_RETRY_MINUTES", "60"))
+)
+STORE_LINK_AUTO_CHECK_SECONDS = max(
+    60, int(os.getenv("MERCADO_STORE_LINK_AUTO_CHECK_SECONDS", "300"))
+)
 STORE_LINK_DETAIL_ATTRIBUTES = (
     "id", "site_id", "title", "permalink", "secure_thumbnail", "thumbnail",
     "pictures", "status", "price", "currency_id", "available_quantity",
@@ -39,6 +53,8 @@ SITE_ITEM_URLS = {
 }
 
 _state_guard = threading.RLock()
+_scheduler_guard = threading.Lock()
+_scheduler_thread: threading.Thread | None = None
 _sync_state = {
     "running": False,
     "task_id": "",
@@ -91,6 +107,8 @@ def store_link_sync_status() -> dict:
             message="店铺链接正在其他进程同步",
             lock_owner=owner,
         )
+    state["auto_sync_enabled"] = True
+    state["auto_sync_days"] = STORE_LINK_AUTO_SYNC_DAYS
     return state
 
 
@@ -401,11 +419,17 @@ def run_store_link_sync(token_ids=None) -> dict:
     results = []
     for index, record in enumerate(records, start=1):
         store_name = str(record.get("display_name") or record.get("nickname") or record.get("id"))
+        token_id = int(record["id"])
         _state_update(current_store=store_name, processed_stores=index - 1)
         _append_log(f"开始同步 {store_name}")
         try:
+            mark_store_link_sync_started(token_id)
             result = _sync_store(record)
             results.append(result)
+            try:
+                mark_store_link_sync_finished(token_id, str(result.get("status") or "success"))
+            except Exception as state_exc:
+                _append_log(f"{store_name} 同步状态写入失败：{state_exc}")
             _append_log(
                 f"{store_name} 完成：发现 {result['discovered']}，"
                 f"详情 {result['details']}，产品 {result['products']}，"
@@ -415,6 +439,10 @@ def run_store_link_sync(token_ids=None) -> dict:
         except Exception as exc:
             result = {"store": store_name, "status": "error", "message": str(exc)}
             results.append(result)
+            try:
+                mark_store_link_sync_finished(token_id, "error", str(exc))
+            except Exception as state_exc:
+                _append_log(f"{store_name} 同步状态写入失败：{state_exc}")
             _append_log(f"{store_name} 失败：{exc}")
         _state_update(
             processed_stores=index,
@@ -478,6 +506,13 @@ def _run_background(token_ids) -> None:
 
 def start_store_link_sync(token_ids=None) -> tuple[bool, dict]:
     selected_ids = _token_ids(token_ids)
+    queued_ids = selected_ids
+    if not queued_ids:
+        queued_ids = _token_ids(
+            row.get("id") for row in ((bit_mysql.list_mercado_store_tokens() or {}).get("rows") or [])
+        )
+    if queued_ids:
+        request_store_link_sync(queued_ids)
     with _state_guard:
         if _sync_state.get("running"):
             return False, store_link_sync_status()
@@ -511,8 +546,52 @@ def start_store_link_sync(token_ids=None) -> tuple[bool, dict]:
     return True, store_link_sync_status()
 
 
+def start_due_store_link_sync() -> dict:
+    """Start one batch of stores due for their automatic three-day refresh."""
+
+    token_ids = list_due_store_link_token_ids(
+        interval_days=STORE_LINK_AUTO_SYNC_DAYS,
+        retry_minutes=STORE_LINK_AUTO_RETRY_MINUTES,
+    )
+    if not token_ids:
+        return {"started": False, "due_token_ids": [], "state": store_link_sync_status()}
+    started, state = start_store_link_sync(token_ids)
+    return {"started": bool(started), "due_token_ids": token_ids, "state": state}
+
+
+def _auto_sync_loop() -> None:
+    while True:
+        try:
+            result = start_due_store_link_sync()
+            if result.get("started"):
+                _append_log(
+                    f"自动同步已触发：{len(result.get('due_token_ids') or [])} 家店铺到期或待拉取"
+                )
+        except Exception as exc:
+            _append_log(f"自动同步检查失败：{exc}")
+        threading.Event().wait(STORE_LINK_AUTO_CHECK_SECONDS)
+
+
+def start_store_link_auto_scheduler() -> bool:
+    """Start the process-local scheduler once; the task lock handles other processes."""
+
+    global _scheduler_thread
+    with _scheduler_guard:
+        if _scheduler_thread and _scheduler_thread.is_alive():
+            return False
+        _scheduler_thread = threading.Thread(
+            target=_auto_sync_loop,
+            name="mercado-store-link-auto-sync",
+            daemon=True,
+        )
+        _scheduler_thread.start()
+        return True
+
+
 __all__ = [
     "run_store_link_sync",
+    "start_due_store_link_sync",
+    "start_store_link_auto_scheduler",
     "start_store_link_sync",
     "store_link_sync_status",
 ]

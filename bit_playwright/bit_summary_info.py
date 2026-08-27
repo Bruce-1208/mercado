@@ -65,7 +65,8 @@ def get_reputation_info(window_id, site):
         return [data_color, data_orders, data_complain, data_delay]
 
 
-def get_reputation_info_all():
+def get_reputation_info_all_browser():
+    """历史 Playwright 声誉汇总，仅保留兼容，不再由默认入口调用。"""
     start = int(time.time())
     root_path = Path(__file__).resolve().parent.parent / "bit"
     reputation_info_sum = []
@@ -106,6 +107,13 @@ def get_reputation_info_all():
     output_path = root_path / f"美客多-武汉泽顺店铺声誉信息汇总-{date_str}.xlsx"
     df.to_excel(output_path, index=False)
     send_info("美客多所有店铺声誉汇总", body, output_path, output_path.name)
+
+
+def get_reputation_info_all(**kwargs):
+    """Playwright 调度器也统一转到官方 API 声誉采集器。"""
+    from bit.bit_reputation_info import main as collect_api_reputation
+
+    return collect_api_reputation(**kwargs)
 
 
 if __name__ == "__main__":

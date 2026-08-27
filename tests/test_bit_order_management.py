@@ -32,7 +32,9 @@ def test_workbench_contains_order_management_ui():
     assert "商品名、采购备注和订单备注均支持模糊查询".encode("utf-8") in response.data
     assert "下单时间（北京时间）".encode("utf-8") in response.data
     assert "预计利润 / 利润率".encode("utf-8") in response.data
-    assert "每 15 分钟自动拉取".encode("utf-8") in response.data
+    assert "每 15 分钟重新拉取".encode("utf-8") in response.data
+    assert "最近 72 小时".encode("utf-8") in response.data
+    assert "每天北京时间凌晨".encode("utf-8") in response.data
     assert "Token 自动拉取".encode("utf-8") in response.data
     assert "智赢导入".encode("utf-8") not in response.data
     assert b'id="order-select-all"' in response.data
