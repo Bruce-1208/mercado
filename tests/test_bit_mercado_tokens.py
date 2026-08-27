@@ -95,6 +95,32 @@ def test_token_summary_defensively_removes_both_secrets():
     assert summary["has_refresh_token"] is True
 
 
+def test_default_oauth_client_does_not_inherit_system_proxy(monkeypatch):
+    http = OAuthSession()
+    http.trust_env = True
+    monkeypatch.setattr(mercado_tokens.requests, "Session", lambda: http)
+
+    token_data = mercado_tokens._request_token({"grant_type": "test"})
+
+    assert token_data["access_token"] == "access-secret"
+    assert http.trust_env is False
+
+
+def test_oauth_proxy_failure_returns_actionable_error():
+    class ProxyFailureSession:
+        def post(self, *_args, **_kwargs):
+            raise mercado_tokens.requests.exceptions.ProxyError("proxy refused")
+
+    with pytest.raises(
+        mercado_tokens.MercadoTokenError,
+        match="无法连接 Mercado Libre Token 接口",
+    ):
+        mercado_tokens._request_token(
+            {"grant_type": "test"},
+            http=ProxyFailureSession(),
+        )
+
+
 @pytest.mark.parametrize(
     "value",
     [
