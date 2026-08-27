@@ -31,7 +31,7 @@ DEFAULT_BROWSER_MODE = os.environ.get(
 ).strip().lower()
 MAX_COLLECTION_COUNT = 500
 DEFAULT_COLLECTION_WORKERS = 4
-MAX_COLLECTION_WORKERS = 8
+MAX_COLLECTION_WORKERS = 10
 MAX_LISTING_PAGES = 100
 MARKETPLACE_SEARCH_HOSTS = {
     "MLM": "listado.mercadolibre.com.mx",
@@ -76,10 +76,10 @@ class CollectionStopped(RuntimeError):
 
 
 def extract_listing_item_id(value: str) -> str:
-    """Prefer a seller ``item_id`` over the catalog ID in a product URL."""
+    """Prefer a seller ``item_id``/``wid`` over the catalog product ID."""
     decoded = unquote(str(value or ""))
     match = re.search(
-        r"(?:item_id|itemId)\s*[:=]\s*((?:ML[A-Z]|CBT)-?\d+)",
+        r"(?:item_id|itemId|wid)\s*[:=]\s*((?:ML[A-Z]|CBT)-?\d+)",
         decoded,
         re.IGNORECASE,
     )
@@ -337,8 +337,17 @@ for (const root of roots) {
     '.poly-component__title, .ui-search-item__title, h2, h3'
   );
   const img = root.querySelector && root.querySelector('img');
-  const fraction = root.querySelector && root.querySelector('.andes-money-amount__fraction');
-  const cents = root.querySelector && root.querySelector('.andes-money-amount__cents');
+  const originalPrice = root.querySelector && root.querySelector(
+    '.andes-money-amount--previous, .ui-search-price__original-value .andes-money-amount, s.andes-money-amount'
+  );
+  const currentPrice = root.querySelector && root.querySelector(
+    '.poly-price__current .andes-money-amount, .ui-search-price__second-line .andes-money-amount'
+  );
+  const collectedPrice = originalPrice || currentPrice;
+  const fraction = collectedPrice ? collectedPrice.querySelector('.andes-money-amount__fraction') :
+    (root.querySelector && root.querySelector('.andes-money-amount__fraction'));
+  const cents = collectedPrice ? collectedPrice.querySelector('.andes-money-amount__cents') :
+    (root.querySelector && root.querySelector('.andes-money-amount__cents'));
   let price = fraction ? clean(fraction.textContent).replace(/\D/g, '') : '';
   if (price && cents) price += '.' + clean(cents.textContent).replace(/\D/g, '');
   const cardText = clean((root.innerText || root.textContent || ''));
@@ -395,11 +404,21 @@ document.querySelectorAll('.andes-table__row, .ui-pdp-specs__table tr, .ui-vpp-s
 });
 const offer = Array.isArray(product.offers) ? product.offers[0] : (product.offers || {});
 const canonical = document.querySelector('link[rel="canonical"]');
+const originalPrice = first([
+  '.ui-pdp-price__original-value .andes-money-amount',
+  '.ui-pdp-price__second-line .andes-money-amount--previous',
+  '.andes-money-amount--previous',
+  's.andes-money-amount'
+]);
+const visibleFraction = originalPrice && originalPrice.querySelector('.andes-money-amount__fraction');
+const visibleCents = originalPrice && originalPrice.querySelector('.andes-money-amount__cents');
+let visibleOriginalPrice = visibleFraction ? clean(visibleFraction.textContent).replace(/\D/g, '') : '';
+if (visibleOriginalPrice && visibleCents) visibleOriginalPrice += '.' + clean(visibleCents.textContent).replace(/\D/g, '');
 return {
   final_url: (canonical && canonical.href) || location.href,
   title: clean((h1 && h1.textContent) || product.name),
   description: clean((description && description.textContent) || product.description),
-  price: (metaPrice && metaPrice.content) || offer.price || '',
+  price: visibleOriginalPrice || (metaPrice && metaPrice.content) || offer.price || '',
   currency_id: (currency && currency.content) || offer.priceCurrency || 'MXN',
   pictures,
   specs,
@@ -452,8 +471,8 @@ def _blocked_page_message(url: str, page_text: str) -> str:
     )
     if any(marker in probe for marker in markers):
         return (
-            "Mercado 页面进入买家验证页；请确认 Clash 已按 Mercado 域名直连，"
-            "并在 Edge 手工完成当前验证后重试"
+            "Mercado 页面进入买家验证页；采集器将自动降速冷却，"
+            "如仍未恢复请在比特浏览器窗口完成一次验证"
         )
     return ""
 
@@ -886,8 +905,16 @@ def parse_listing_html(html_text: str, page_url: str) -> dict[str, Any]:
             continue
         title_node = card.select_one(".poly-component__title, .ui-search-item__title, h2, h3")
         image_node = card.select_one("img")
-        fraction = card.select_one(".andes-money-amount__fraction")
-        cents = card.select_one(".andes-money-amount__cents")
+        price_root = card.select_one(
+            ".andes-money-amount--previous, "
+            ".ui-search-price__original-value .andes-money-amount, "
+            "s.andes-money-amount"
+        ) or card.select_one(
+            ".poly-price__current .andes-money-amount, "
+            ".ui-search-price__second-line .andes-money-amount"
+        ) or card
+        fraction = price_root.select_one(".andes-money-amount__fraction")
+        cents = price_root.select_one(".andes-money-amount__cents")
         price_text = fraction.get_text(" ", strip=True) if fraction else ""
         if cents and price_text:
             price_text = f"{price_text}.{cents.get_text('', strip=True)}"
@@ -984,11 +1011,28 @@ def parse_detail_html(html_text: str, page_url: str) -> dict[str, Any]:
         if len(cells) >= 2:
             specs.append({"name": cells[0], "value": " ".join(cells[1:])})
     canonical = soup.select_one('link[rel="canonical"]')
+    original_price_root = soup.select_one(
+        ".ui-pdp-price__original-value .andes-money-amount, "
+        ".ui-pdp-price__second-line .andes-money-amount--previous, "
+        ".andes-money-amount--previous, s.andes-money-amount"
+    )
+    original_price = ""
+    if original_price_root:
+        original_fraction = original_price_root.select_one(
+            ".andes-money-amount__fraction"
+        )
+        original_cents = original_price_root.select_one(
+            ".andes-money-amount__cents"
+        )
+        if original_fraction:
+            original_price = original_fraction.get_text(" ", strip=True)
+            if original_cents:
+                original_price += f".{original_cents.get_text('', strip=True)}"
     return {
         "final_url": urljoin(page_url, canonical.get("href")) if canonical and canonical.get("href") else page_url,
         "title": title.strip(),
         "description": description.strip(),
-        "price": meta('meta[itemprop="price"]', 'meta[property="product:price:amount"]') or offer.get("price") or (title_price.group(1) if title_price else None),
+        "price": original_price or meta('meta[itemprop="price"]', 'meta[property="product:price:amount"]') or offer.get("price") or (title_price.group(1) if title_price else None),
         "currency_id": meta('meta[itemprop="priceCurrency"]', 'meta[property="product:price:currency"]') or offer.get("priceCurrency") or "MXN",
         "pictures": pictures,
         "specs": specs,

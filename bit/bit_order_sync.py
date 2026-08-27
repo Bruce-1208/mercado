@@ -5,7 +5,7 @@ from __future__ import annotations
 import os
 import threading
 import uuid
-from datetime import date, datetime, time as datetime_time, timedelta, timezone
+from datetime import datetime, timedelta, timezone
 
 from bit import bit_mysql, mercado_tokens
 from bit.bit_runtime_lock import InterProcessLock, get_lock_owner
@@ -15,6 +15,7 @@ from mercado_api.client import MercadoAPIError, MercadoLibreClient
 ORDER_SYNC_LOCK_KEY = "mercado_order_sync_task"
 DEFAULT_SYNC_INTERVAL_SECONDS = 15 * 60
 FIRST_SYNC_LOOKBACK_HOURS = 48
+WORKBENCH_LOCAL_TIMEZONE = timezone(timedelta(hours=8))
 
 SITE_COUNTRIES = {
     "MLM": "墨西哥",
@@ -102,16 +103,45 @@ def order_sync_status():
 
 
 def _date_range(start_date, end_date):
-    try:
-        start = date.fromisoformat(str(start_date or ""))
-        end = date.fromisoformat(str(end_date or ""))
-    except ValueError as exc:
-        raise ValueError("请选择有效的起始日期和截止日期") from exc
+    def parse_value(value, label):
+        text = str(value or "").strip()
+        if not text:
+            raise ValueError(f"请选择有效的{label}")
+        normalized = text.replace("T", " ")
+        for date_format, precision in (
+            ("%Y-%m-%d", "day"),
+            ("%Y-%m-%d %H:%M", "minute"),
+            ("%Y-%m-%d %H:%M:%S", "minute"),
+        ):
+            try:
+                parsed = datetime.strptime(normalized, date_format)
+                display = parsed.strftime(
+                    "%Y-%m-%d" if precision == "day" else "%Y-%m-%dT%H:%M"
+                )
+                return parsed, precision, display
+            except ValueError:
+                continue
+        raise ValueError(f"{label}必须使用 YYYY-MM-DD HH:MM 格式")
+
+    start, start_precision, start_text = parse_value(start_date, "起始日期时间")
+    end, end_precision, end_text = parse_value(end_date, "截止日期时间")
     if end < start:
-        raise ValueError("截止日期不能早于起始日期")
-    start_at = datetime.combine(start, datetime_time.min, timezone.utc)
-    end_at = datetime.combine(end + timedelta(days=1), datetime_time.min, timezone.utc)
-    return start, end, start_at, end_at
+        raise ValueError("截止日期时间不能早于起始日期时间")
+
+    if start_precision == "day":
+        start_at = start.replace(tzinfo=timezone.utc)
+    else:
+        start_at = start.replace(tzinfo=WORKBENCH_LOCAL_TIMEZONE).astimezone(timezone.utc)
+    end_exclusive = end + (
+        timedelta(days=1) if end_precision == "day" else timedelta(minutes=1)
+    )
+    if end_precision == "day":
+        end_at = end_exclusive.replace(tzinfo=timezone.utc)
+    else:
+        end_at = end_exclusive.replace(
+            tzinfo=WORKBENCH_LOCAL_TIMEZONE
+        ).astimezone(timezone.utc)
+    return start_text, end_text, start_at, end_at
 
 
 def _iso_millis(value):
@@ -298,8 +328,7 @@ def run_order_sync(start_date="", end_date="", token_ids=None, mode="manual"):
     start_text = end_text = ""
     manual_filters = None
     if mode == "manual":
-        start, end, start_at, end_at = _date_range(start_date, end_date)
-        start_text, end_text = start.isoformat(), end.isoformat()
+        start_text, end_text, start_at, end_at = _date_range(start_date, end_date)
         manual_filters = {
             "sort": "date_asc",
             "order.date_created.from": _iso_millis(start_at),

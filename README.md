@@ -45,6 +45,12 @@ print(result.database_path)
 
 默认生成 `mercado_api_listings.db`，主要数据表为 `mercado_listings`；变体位于 `mercado_listing_variations`，每次同步记录位于 `mercado_sync_runs`。重复运行会更新已有商品，最新一次已不存在的商品会保留并标记为 `is_current = 0`。
 
+## 美客多订单 API 打印
+
+工作台“订单打印”已改为使用美客多官方 Orders 与 Shipment Labels API，不再打开 BitBrowser 或操作订单网页。页面支持多选已授权店铺和站点，任务完成后可下载一份合并 PDF。
+
+每个店铺首次执行时，如果没有可靠的逐单打印状态，只读取最近 72 小时内可取得 Shipment ID 的订单；API 同步成功后建立追踪起点，后续仅处理没有成功打印记录的订单。成功生成面单后会写入订单操作日志，失败订单会保留到下一次重试。
+
 ## 比特浏览器配置
 
 店铺窗口配置统一保存在 MySQL 的 `bit_browser_configs` 表中。业务代码通过 `bit.bit_config` 读取，并根据 `BIT_DB_MODE` 选择直连 MySQL 或数据库 HTTP 接口，不再在运行时读取 `比特配置文件.xlsx`。

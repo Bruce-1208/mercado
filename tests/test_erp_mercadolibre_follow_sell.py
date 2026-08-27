@@ -1,10 +1,14 @@
 import json
+import io
 from unittest.mock import patch
 
 import pytest
 
+from erp import mercadolibre_follow_sell as follow_sell_module
 from erp.mercadolibre_follow_sell import (
+    MercadoLibreClient,
     MercadoLibreError,
+    _converted_usd_amount,
     _picture_sources,
     build_global_payload,
     build_user_product_payload,
@@ -13,6 +17,24 @@ from erp.mercadolibre_follow_sell import (
     extract_item_id,
     follow_sell,
 )
+
+
+def test_publish_price_conversion_uses_daily_database_rate(monkeypatch):
+    class Cache:
+        def get_exchange_rate(self, source, target):
+            assert (source, target) == ("MXN", "USD")
+            return {"rate": 0.05}
+
+    class Client:
+        def request(self, *args, **kwargs):
+            raise AssertionError("fresh conversion API must not be called")
+
+    monkeypatch.setattr(
+        "erp.mercadolibre_profitability_cache.DatabaseProfitabilityCache",
+        lambda: Cache(),
+    )
+
+    assert _converted_usd_amount(Client(), 400, "MXN") == 20
 
 
 class FakeResponse:
@@ -82,6 +104,24 @@ class RequiredUnknownCategoryClient(CategoryClient):
             return [
                 {"id": "BRAND", "tags": {"required": True}},
                 {"id": "COLLECTION", "tags": {"required": True}},
+            ]
+        return super().request(method, path, **kwargs)
+
+
+class LocalizedRequiredCategoryClient(CategoryClient):
+    def request(self, method, path, **kwargs):
+        if path == "/categories/CBT301/attributes":
+            return [
+                {"id": attribute_id, "tags": {"required": True}}
+                for attribute_id in (
+                    "BOARD_GAME_NAME",
+                    "PRODUCT_TYPE",
+                    "PLAYING_CARDS_TYPE",
+                    "IS_SET",
+                    "SURVEILLANCE_CAMERA_TYPE",
+                    "CAMERA_LOCATIONS",
+                    "IS_WIRELESS",
+                )
             ]
         return super().request(method, path, **kwargs)
 
@@ -295,6 +335,36 @@ def test_payload_still_reports_unknown_required_category_attributes():
         )
 
 
+def test_payload_maps_collected_spanish_attribute_ids_to_cbt_schema():
+    source = sample_source()
+    source["attributes"] = [
+        {"id": "NOMBRE_DEL_JUEGO_DE_MESA", "value_name": "The Mind"},
+        {"id": "TIPO_DE_PRODUCTO", "value_name": "Intercomunicador"},
+        {"id": "TIPO_DE_CARTAS", "value_name": "Coleccionables"},
+        {"id": "ES_SET", "value_name": "Sí"},
+        {"id": "TIPO_DE_CAMARA_DE_VIGILANCIA", "value_name": "IP"},
+        {"id": "LOCACIONES_DE_LA_CAMARA", "value_name": "Exterior"},
+        {"id": "ES_INALAMBRICO", "value_name": "Sí"},
+    ]
+
+    payload = build_user_product_payload(
+        LocalizedRequiredCategoryClient(),
+        source,
+        {},
+        quantity=1,
+        net_proceeds=20,
+    )
+
+    by_id = {attribute["id"]: attribute for attribute in payload["attributes"]}
+    assert by_id["BOARD_GAME_NAME"]["value_name"] == "The Mind"
+    assert by_id["PRODUCT_TYPE"]["value_name"] == "Intercomunicador"
+    assert by_id["PLAYING_CARDS_TYPE"]["value_name"] == "Coleccionables"
+    assert by_id["IS_SET"]["value_name"] == "Sí"
+    assert by_id["SURVEILLANCE_CAMERA_TYPE"]["value_name"] == "IP"
+    assert by_id["CAMERA_LOCATIONS"]["value_name"] == "Exterior"
+    assert by_id["IS_WIRELESS"]["value_name"] == "Sí"
+
+
 def test_user_product_payload_uses_uploaded_picture_ids():
     payload = build_user_product_payload(
         CategoryClient(),
@@ -319,6 +389,106 @@ def test_user_product_payload_uses_uploaded_picture_ids():
             "value_name": "The product does not have registered code",
         }
     ]
+
+
+def test_user_product_payload_limits_family_name_to_platform_maximum():
+    source = sample_source()
+    source["title"] = "A" * 80
+
+    payload = build_user_product_payload(
+        CategoryClient(),
+        source,
+        {},
+        quantity=1,
+        net_proceeds=22,
+        picture_ids=["uploaded-CBT-picture"],
+    )
+
+    assert payload["family_name"] == "A" * 60
+
+
+def test_api_client_retries_explicit_rate_limit_for_publish(tmp_path):
+    class Response:
+        def __init__(self, status_code, payload, headers=None):
+            self.status_code = status_code
+            self.ok = 200 <= status_code < 300
+            self._payload = payload
+            self.content = json.dumps(payload).encode()
+            self.headers = headers or {}
+
+        def json(self):
+            return self._payload
+
+    class Session:
+        def __init__(self):
+            self.responses = [
+                Response(429, {"message": "local_rate_limited"}, {"Retry-After": "0"}),
+                Response(201, {"id": "CBT123"}),
+            ]
+            self.calls = []
+
+        def request(self, method, url, **kwargs):
+            self.calls.append((method, url, kwargs))
+            return self.responses.pop(0)
+
+    token_file = tmp_path / "tokens.json"
+    token_file.write_text(json.dumps({"access_token": "token"}), encoding="utf-8")
+    session = Session()
+    client = MercadoLibreClient(
+        token_file,
+        client_id="client",
+        client_secret="secret",
+        session=session,
+    )
+
+    with patch("erp.mercadolibre_follow_sell.time.sleep") as sleep:
+        result = client.request("POST", "/global/items", json_body={"title": "test"})
+
+    assert result == {"id": "CBT123"}
+    assert len(session.calls) == 2
+    sleep.assert_called_once()
+
+
+def test_picture_upload_adds_margin_to_boundary_size_image(tmp_path):
+    from PIL import Image
+
+    source_image = io.BytesIO()
+    Image.new("RGB", (500, 400), "white").save(source_image, format="JPEG")
+
+    class Response:
+        def __init__(self, *, content=b"", payload=None):
+            self.status_code = 200
+            self.ok = True
+            self.content = content
+            self.headers = {"Content-Type": "image/jpeg"}
+            self._payload = payload or {}
+
+        def json(self):
+            return self._payload
+
+    class Session:
+        uploaded = b""
+
+        def get(self, url, timeout):
+            return Response(content=source_image.getvalue())
+
+        def post(self, url, **kwargs):
+            self.uploaded = kwargs["files"]["file"][1]
+            return Response(payload={"id": "uploaded-picture"})
+
+    token_file = tmp_path / "tokens.json"
+    token_file.write_text(json.dumps({"access_token": "token"}), encoding="utf-8")
+    session = Session()
+    client = MercadoLibreClient(
+        token_file,
+        client_id="client",
+        client_secret="secret",
+        session=session,
+    )
+
+    assert client.upload_picture_from_url("https://example.test/image.jpg") == "uploaded-picture"
+    with Image.open(io.BytesIO(session.uploaded)) as uploaded:
+        assert max(uploaded.size) == 520
 
 
 def test_user_product_payload_derives_seller_warranty_from_description():
@@ -386,7 +556,7 @@ def test_follow_sell_skips_one_failed_picture_upload_and_publishes_remaining():
                 return {"id": 77, "site_id": "CBT", "tags": ["user_product_seller"]}
             if path == "/pictures/uploaded-good-picture":
                 return {"id": "uploaded-good-picture", "max_size": "800x800"}
-            if method == "POST" and path == "/global/items":
+            if method == "POST" and path == "/global/user-products":
                 self.posted_payload = kwargs["json_body"]
                 return {"id": "CBT999"}
             return super().request(method, path, **kwargs)
@@ -417,6 +587,8 @@ def test_follow_sell_skips_one_failed_picture_upload_and_publishes_remaining():
 
     assert client.posted_payload["pictures"] == [{"id": "uploaded-good-picture"}]
     assert "70x70" in result["picture_upload_errors"][0]
+    assert result["endpoint"] == "/global/user-products"
+    assert result["timings"]["total"] >= 0
 
 
 def test_follow_sell_skips_picture_that_shrinks_below_limit_after_upload():
@@ -431,7 +603,7 @@ def test_follow_sell_skips_picture_that_shrinks_below_limit_after_upload():
                 return {"id": "uploaded-small-picture", "max_size": "358x495"}
             if path == "/pictures/uploaded-good-picture":
                 return {"id": "uploaded-good-picture", "max_size": "480x854"}
-            if method == "POST" and path == "/global/items":
+            if method == "POST" and path == "/global/user-products":
                 self.posted_payload = kwargs["json_body"]
                 return {"id": "CBT999"}
             return super().request(method, path, **kwargs)
@@ -462,6 +634,69 @@ def test_follow_sell_skips_picture_that_shrinks_below_limit_after_upload():
 
     assert client.posted_payload["pictures"] == [{"id": "uploaded-good-picture"}]
     assert "358x495" in result["picture_upload_errors"][0]
+
+
+def test_validated_picture_upload_is_shared_across_workers_for_same_account():
+    class Client:
+        token_id = 99123
+
+        def __init__(self):
+            self.upload_calls = 0
+            self._uploaded_picture_metadata = {
+                "uploaded-shared": {"id": "uploaded-shared", "max_size": "800x800"}
+            }
+
+        def upload_picture_from_url(self, _source_url):
+            self.upload_calls += 1
+            return "uploaded-shared"
+
+    client = Client()
+    source_url = "https://http2.mlstatic.com/D_NQ_NP_123-CBT456-F.webp"
+    with follow_sell_module._PICTURE_CACHE_LOCK:
+        follow_sell_module._PICTURE_ID_CACHE.clear()
+        follow_sell_module._PICTURE_KEY_LOCKS.clear()
+
+    first = follow_sell_module._upload_validated_picture(client, source_url)
+    second = follow_sell_module._upload_validated_picture(client, source_url)
+
+    assert first == second == "uploaded-shared"
+    assert client.upload_calls == 1
+
+
+def test_user_products_endpoint_falls_back_only_on_explicit_not_found():
+    class FallbackClient(CategoryClient):
+        def __init__(self):
+            self.paths = []
+
+        def request(self, method, path, **kwargs):
+            self.paths.append((method, path))
+            if path == "/users/me":
+                return {"id": 77, "site_id": "CBT", "tags": ["user_product_seller"]}
+            if path == "/pictures/uploaded-picture":
+                return {"id": "uploaded-picture", "max_size": "800x800"}
+            if method == "POST" and path == "/global/user-products":
+                raise MercadoLibreError("endpoint unavailable", status_code=404)
+            if method == "POST" and path == "/global/items":
+                return {"id": "CBT-fallback"}
+            return super().request(method, path, **kwargs)
+
+        def upload_picture_from_url(self, _source_url):
+            return "uploaded-picture"
+
+    client = FallbackClient()
+    result = follow_sell(
+        client,
+        "MLM3016972321",
+        destination_site_id="MLM",
+        prepared_listing=(sample_source(), {}),
+        publish=True,
+        net_proceeds=20,
+    )
+
+    assert result["endpoint"] == "/global/items"
+    assert result["result"]["id"] == "CBT-fallback"
+    assert ("POST", "/global/user-products") in client.paths
+    assert ("POST", "/global/items") in client.paths
 
 
 def test_follow_sell_translates_mexico_listing_for_brazil_destination():

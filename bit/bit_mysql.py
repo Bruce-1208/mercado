@@ -29,6 +29,38 @@ config = {
 # yuming=c766667e.natappfree.cc:39181
 
 
+def _parse_filter_datetime(value, label="时间"):
+    """解析日期或精确到分钟的日期时间，返回值及其输入精度。"""
+    text = str(value or "").strip()
+    if not text:
+        return None, ""
+    normalized = text.replace("T", " ")
+    formats = (
+        ("%Y-%m-%d", "day"),
+        ("%Y-%m-%d %H:%M", "minute"),
+        ("%Y-%m-%d %H:%M:%S", "minute"),
+    )
+    for date_format, precision in formats:
+        try:
+            return datetime.strptime(normalized, date_format), precision
+        except ValueError:
+            continue
+    raise ValueError(f"{label}必须使用 YYYY-MM-DD HH:MM 格式")
+
+
+def _filter_datetime_bounds(date_from="", date_to=""):
+    start_at, _ = _parse_filter_datetime(date_from, "开始时间")
+    end_at, end_precision = _parse_filter_datetime(date_to, "结束时间")
+    if start_at and end_at and start_at > end_at:
+        raise ValueError("开始日期不能晚于结束日期")
+    end_exclusive = None
+    if end_at:
+        end_exclusive = end_at + (
+            timedelta(days=1) if end_precision == "day" else timedelta(minutes=1)
+        )
+    return start_at, end_exclusive
+
+
 def _ensure_column(cursor, table_name, column_name, column_definition):
     cursor.execute(f"SHOW COLUMNS FROM `{table_name}` LIKE %s", (column_name,))
     if cursor.fetchone():
@@ -1318,6 +1350,7 @@ def _ensure_mercado_synced_orders_table(cursor):
             `date_closed` DATETIME NULL,
             `last_updated` DATETIME NULL,
             `currency_id` VARCHAR(16) NULL,
+            `amount_currency_id` VARCHAR(16) NULL,
             `total_amount` DECIMAL(20, 4) NULL,
             `paid_amount` DECIMAL(20, 4) NULL,
             `shipping_id` VARCHAR(64) NULL,
@@ -1358,6 +1391,7 @@ def _ensure_mercado_synced_orders_table(cursor):
     _ensure_column(cursor, "mercado_synced_orders", "tracking_cache_json", "LONGTEXT NULL")
     _ensure_column(cursor, "mercado_synced_orders", "tracking_checked_at", "DATETIME NULL")
     _ensure_column(cursor, "mercado_synced_orders", "manual_updated_at", "DATETIME NULL")
+    _ensure_column(cursor, "mercado_synced_orders", "amount_currency_id", "VARCHAR(16) NULL")
     _ensure_mercado_order_logs_table(cursor)
 
 
@@ -1400,6 +1434,10 @@ _MERCADO_ORDER_STATUS_LABELS = {
 _MERCADO_SITE_COUNTRIES = {
     "MLM": "墨西哥", "MLB": "巴西", "MLC": "智利",
     "MCO": "哥伦比亚", "MLA": "阿根廷", "MLU": "乌拉圭",
+}
+_MERCADO_SITE_CURRENCIES = {
+    "MLM": "MXN", "MLB": "BRL", "MLC": "CLP",
+    "MCO": "COP", "MLA": "ARS", "MLU": "UYU",
 }
 
 
@@ -1462,6 +1500,10 @@ def upsert_mercado_synced_orders(token_record, orders):
                     or default_site_id
                 )
                 raw_status = str(order.get("status") or "")
+                amount_currency_id = _MERCADO_SITE_CURRENCIES.get(
+                    site_id,
+                    str(order.get("currency_id") or first_item.get("currency_id") or "").upper(),
+                )
                 rows.append(
                     (
                         str(order["id"]), token_id, shop_name, seller_id, site_id,
@@ -1479,7 +1521,7 @@ def upsert_mercado_synced_orders(token_record, orders):
                         str(product.get("thumbnail") or product.get("secure_thumbnail") or ""),
                         quantity, sale_fee, shipping.get("cost") or 0,
                         json.dumps(order, ensure_ascii=False, separators=(",", ":")),
-                        now, now,
+                        now, now, amount_currency_id,
                     )
                 )
             cursor.executemany(
@@ -1489,10 +1531,11 @@ def upsert_mercado_synced_orders(token_record, orders):
                     `status`, `status_label`, `status_detail`, `date_created`, `date_closed`,
                     `last_updated`, `currency_id`, `total_amount`, `paid_amount`, `shipping_id`,
                     `buyer_id`, `buyer_name`, `product_id`, `title`, `image_url`, `quantity`,
-                    `sale_fee`, `freight`, `raw_json`, `first_synced_at`, `synced_at`
+                    `sale_fee`, `freight`, `raw_json`, `first_synced_at`, `synced_at`,
+                    `amount_currency_id`
                 ) VALUES (
                     %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
-                    %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s
+                    %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s
                 ) ON DUPLICATE KEY UPDATE
                     `token_id` = VALUES(`token_id`), `shop_name` = VALUES(`shop_name`),
                     `seller_id` = VALUES(`seller_id`), `site_id` = VALUES(`site_id`),
@@ -1500,6 +1543,7 @@ def upsert_mercado_synced_orders(token_record, orders):
                     `status_label` = VALUES(`status_label`), `status_detail` = VALUES(`status_detail`),
                     `date_created` = VALUES(`date_created`), `date_closed` = VALUES(`date_closed`),
                     `last_updated` = VALUES(`last_updated`), `currency_id` = VALUES(`currency_id`),
+                    `amount_currency_id` = VALUES(`amount_currency_id`),
                     `total_amount` = VALUES(`total_amount`), `paid_amount` = VALUES(`paid_amount`),
                     `shipping_id` = VALUES(`shipping_id`), `buyer_id` = VALUES(`buyer_id`),
                     `buyer_name` = VALUES(`buyer_name`), `product_id` = VALUES(`product_id`),
@@ -1542,7 +1586,7 @@ def get_mercado_order_sync_cursor(token_id):
 
 def list_orders(
     country="", status="", salesperson="", group_name="", search="", start_date="", end_date="",
-    origin="", page=1, page_size=50,
+    origin="", page=1, page_size=50, store_ids=None, salespeople=None,
 ):
     """分页查询当前已授权店铺的 Token 同步订单。"""
     page = max(1, int(page or 1))
@@ -1552,13 +1596,39 @@ def list_orders(
         for value in (country, status, salesperson, group_name, search)
     )
     start_date, end_date = (str(value or "").strip() for value in (start_date, end_date))
+    start_at, end_exclusive = _filter_datetime_bounds(start_date, end_date)
     origin = str(origin or "").strip().lower()
     if origin not in ("", "token", "zying"):
         origin = ""
 
+    normalized_store_ids = []
+    for value in store_ids or ():
+        try:
+            store_id = int(value)
+        except (TypeError, ValueError):
+            continue
+        if store_id > 0 and store_id not in normalized_store_ids:
+            normalized_store_ids.append(store_id)
+    if len(normalized_store_ids) > 200:
+        raise ValueError("单次最多筛选 200 个店铺")
+
+    normalized_salespeople = []
+    salesperson_values = salespeople if salespeople is not None else ([salesperson] if salesperson else [])
+    if isinstance(salesperson_values, str):
+        salesperson_values = [salesperson_values]
+    for value in salesperson_values or ():
+        name = str(value or "").strip()
+        if not name or name in normalized_salespeople:
+            continue
+        if len(name) > 100:
+            raise ValueError("业务员名称不能超过 100 个字符")
+        normalized_salespeople.append(name)
+    if len(normalized_salespeople) > 100:
+        raise ValueError("单次最多筛选 100 个业务员")
+
     def build_where(
         include_country=True, include_status=True, include_origin=True,
-        include_salesperson=True, include_group=True,
+        include_salesperson=True, include_group=True, include_store=True,
     ):
         clauses, params = [], []
         if include_country and country:
@@ -1570,24 +1640,34 @@ def list_orders(
         if include_origin and origin:
             clauses.append("`data_origin` = %s")
             params.append(origin)
-        if include_salesperson and salesperson:
-            if salesperson == "__unassigned__":
-                clauses.append("COALESCE(`salesperson`, '') = ''")
-            else:
-                clauses.append("`salesperson` = %s")
-                params.append(salesperson)
+        if include_store and normalized_store_ids:
+            clauses.append(f"`store_id` IN ({','.join(['%s'] * len(normalized_store_ids))})")
+            params.extend(normalized_store_ids)
+        if include_salesperson and normalized_salespeople:
+            named_salespeople = [
+                value for value in normalized_salespeople if value != "__unassigned__"
+            ]
+            salesperson_clauses = []
+            if "__unassigned__" in normalized_salespeople:
+                salesperson_clauses.append("COALESCE(`salesperson`, '') = ''")
+            if named_salespeople:
+                salesperson_clauses.append(
+                    f"`salesperson` IN ({','.join(['%s'] * len(named_salespeople))})"
+                )
+                params.extend(named_salespeople)
+            clauses.append(f"({' OR '.join(salesperson_clauses)})")
         if include_group and group_name:
             if group_name == "__ungrouped__":
                 clauses.append("COALESCE(`group_name`, '') = ''")
             else:
                 clauses.append("`group_name` = %s")
                 params.append(group_name)
-        if start_date:
+        if start_at:
             clauses.append("`ordered_at` >= %s")
-            params.append(f"{start_date} 00:00:00")
-        if end_date:
-            clauses.append("`ordered_at` < DATE_ADD(%s, INTERVAL 1 DAY)")
-            params.append(f"{end_date} 00:00:00")
+            params.append(start_at.strftime("%Y-%m-%d %H:%M:%S"))
+        if end_exclusive:
+            clauses.append("`ordered_at` < %s")
+            params.append(end_exclusive.strftime("%Y-%m-%d %H:%M:%S"))
         if search:
             pattern = f"%{search}%"
             clauses.append(
@@ -1609,35 +1689,110 @@ def list_orders(
     connection = pymysql.connect(**config)
     try:
         with connection.cursor() as cursor:
+            from erp.mercadolibre_profitability_cache import (
+                DAILY_EXCHANGE_RATE_TABLE,
+                EXCHANGE_RATE_TABLE,
+                ensure_profitability_cache_tables,
+            )
+
             _ensure_mercado_synced_orders_table(cursor)
             _ensure_mercado_store_tokens_table(cursor)
             _ensure_mercado_store_site_settings_table(cursor)
-            source_sql = """
+            ensure_profitability_cache_tables(cursor)
+            connection.commit()
+            order_date_sql = "DATE(DATE_ADD(synced.`date_created`, INTERVAL 8 HOUR))"
+            currency_sql = (
+                "UPPER(COALESCE(NULLIF(synced.`amount_currency_id`, ''), "
+                "CASE UPPER(COALESCE(synced.`site_id`, '')) "
+                "WHEN 'MLM' THEN 'MXN' WHEN 'MLB' THEN 'BRL' WHEN 'MLA' THEN 'ARS' "
+                "WHEN 'MLC' THEN 'CLP' WHEN 'MCO' THEN 'COP' WHEN 'MLU' THEN 'UYU' "
+                "ELSE NULLIF(synced.`currency_id`, '') END, 'USD'))"
+            )
+            order_rate_sql = (
+                f"CASE WHEN {currency_sql} <> 'USD' "
+                "AND UPPER(COALESCE(synced.`currency_id`, '')) = 'USD' "
+                "AND COALESCE(synced.`total_amount`, 0) > 0 "
+                "AND COALESCE(synced.`paid_amount`, 0) > 0 "
+                "THEN synced.`paid_amount` / synced.`total_amount` ELSE NULL END"
+            )
+            rate_sql = (
+                f"CASE WHEN {currency_sql} = 'USD' THEN 1 "
+                f"WHEN ({order_rate_sql}) IS NOT NULL THEN ({order_rate_sql}) "
+                "WHEN daily_rate.`rate` IS NOT NULL THEN daily_rate.`rate` "
+                "ELSE current_rate.`rate` END"
+            )
+            source_sql = f"""
                 (
                     SELECT synced.`order_id` AS `id`, synced.`order_id` AS `order_number`,
+                           synced.`token_id` AS `store_id`,
                            DATE_ADD(synced.`date_created`, INTERVAL 8 HOUR) AS `ordered_at`,
                            site_settings.`salesperson`,
                            site_settings.`discount_rate`, site_settings.`group_name`,
                            synced.`shop_name`, '美客多 Token' AS `source`, 'token' AS `data_origin`,
                            COALESCE(NULLIF(synced.`workflow_status`, ''), synced.`status_label`) AS `status`,
                            synced.`status_label` AS `platform_status`, synced.`workflow_status`,
-                           synced.`total_amount` AS `amount`, synced.`sale_fee` AS `fee`,
+                           ROUND(synced.`total_amount` * ({rate_sql}), 2) AS `amount`,
+                           synced.`total_amount` AS `amount_local`, synced.`sale_fee` AS `fee`,
                            0 AS `refund`, synced.`paid_amount` AS `income`,
                            COALESCE(synced.`purchase_cost`, 0) AS `cost`, synced.`purchase_order`,
                            synced.`purchase_tracking`, synced.`logistics_company`,
                            synced.`purchase_remark`, synced.`shipping_id` AS `platform_shipping_id`,
                            COALESCE(synced.`paid_amount`, 0) - COALESCE(synced.`purchase_cost`, 0) AS `profit`,
                            synced.`product_id`, '' AS `category`, synced.`title`,
-                           synced.`image_url`, synced.`quantity`, synced.`freight`,
+                           synced.`image_url`, synced.`quantity`,
+                           ROUND(COALESCE(synced.`freight`, 0) * ({rate_sql}), 2) AS `freight`,
+                           synced.`freight` AS `freight_local`,
                            synced.`status_detail` AS `remark`,
                            synced.`country`,
-                           synced.`buyer_name` AS `buyer`, synced.`currency_id`,
+                           synced.`buyer_name` AS `buyer`, {currency_sql} AS `currency_id`,
+                           UPPER(COALESCE(NULLIF(synced.`currency_id`, ''), {currency_sql}))
+                               AS `platform_currency_id`,
+                           ({rate_sql}) AS `exchange_rate_to_usd`,
+                           CASE
+                               WHEN {currency_sql} = 'USD' THEN DATE_FORMAT({order_date_sql}, '%%Y-%%m-%%d')
+                               WHEN ({order_rate_sql}) IS NOT NULL
+                                   THEN DATE_FORMAT({order_date_sql}, '%%Y-%%m-%%d')
+                               WHEN daily_rate.`rate_date` IS NOT NULL
+                                   THEN DATE_FORMAT(daily_rate.`rate_date`, '%%Y-%%m-%%d')
+                               WHEN current_rate.`source_created_at` IS NOT NULL
+                                   THEN LEFT(current_rate.`source_created_at`, 10)
+                               WHEN current_rate.`refreshed_at` IS NOT NULL
+                                   THEN DATE_FORMAT(current_rate.`refreshed_at`, '%%Y-%%m-%%d')
+                               ELSE NULL
+                           END AS `exchange_rate_date`,
+                           CASE
+                               WHEN {currency_sql} = 'USD' THEN 'same_currency'
+                               WHEN ({order_rate_sql}) IS NOT NULL THEN 'order_implied'
+                               WHEN daily_rate.`rate_date` = {order_date_sql} THEN 'order_date'
+                               WHEN daily_rate.`rate_date` IS NOT NULL THEN 'nearest_previous'
+                               WHEN current_rate.`rate` IS NOT NULL THEN 'current_fallback'
+                               ELSE 'missing'
+                           END AS `exchange_rate_match`,
+                           CASE
+                               WHEN {currency_sql} = 'USD' OR ({order_rate_sql}) IS NOT NULL
+                                    OR daily_rate.`rate` IS NOT NULL
+                                    OR current_rate.`rate` IS NOT NULL THEN 0
+                               ELSE 1
+                           END AS `exchange_rate_missing`,
                            DATE_ADD(synced.`last_updated`, INTERVAL 8 HOUR) AS `last_updated`
                     FROM `mercado_synced_orders` AS synced
                     INNER JOIN `mercado_store_tokens` AS stores ON stores.`id` = synced.`token_id`
                     LEFT JOIN `mercado_store_site_settings` AS site_settings
                       ON site_settings.`token_id` = synced.`token_id`
                      AND site_settings.`site_id` = synced.`site_id`
+                    LEFT JOIN `{DAILY_EXCHANGE_RATE_TABLE}` AS daily_rate
+                      ON daily_rate.`id` = (
+                          SELECT historical_rate.`id`
+                          FROM `{DAILY_EXCHANGE_RATE_TABLE}` AS historical_rate
+                          WHERE historical_rate.`from_currency_id` = {currency_sql}
+                            AND historical_rate.`to_currency_id` = 'USD'
+                            AND historical_rate.`rate_date` <= {order_date_sql}
+                          ORDER BY historical_rate.`rate_date` DESC
+                          LIMIT 1
+                      )
+                    LEFT JOIN `{EXCHANGE_RATE_TABLE}` AS current_rate
+                      ON current_rate.`from_currency_id` = {currency_sql}
+                     AND current_rate.`to_currency_id` = 'USD'
                 ) AS `order_source`
             """
             where_sql, params = build_where()
@@ -1645,7 +1800,8 @@ def list_orders(
             total = int((cursor.fetchone() or {}).get("total") or 0)
             cursor.execute(
                 f"SELECT COALESCE(SUM(`amount`),0) AS `amount`, COALESCE(SUM(`income`),0) AS `income`, "
-                f"COALESCE(SUM(`cost`),0) AS `cost`, COALESCE(SUM(`profit`),0) AS `profit` "
+                f"COALESCE(SUM(`cost`),0) AS `cost`, COALESCE(SUM(`profit`),0) AS `profit`, "
+                f"COALESCE(SUM(`exchange_rate_missing`),0) AS `exchange_rate_missing_count` "
                 f"FROM {source_sql}{where_sql}",
                 params,
             )
@@ -1673,6 +1829,22 @@ def list_orders(
                 origin_params,
             )
             origin_counts = {str(row["data_origin"]): int(row["count"]) for row in cursor.fetchall()}
+
+            store_where, store_params = build_where(include_store=False)
+            cursor.execute(
+                f"SELECT `store_id`, `shop_name`, COUNT(*) AS `count` "
+                f"FROM {source_sql}{store_where} GROUP BY `store_id`, `shop_name` "
+                f"ORDER BY `shop_name` ASC, `store_id` ASC",
+                store_params,
+            )
+            store_counts = [
+                {
+                    "id": int(row["store_id"]),
+                    "name": str(row.get("shop_name") or f"店铺 {row['store_id']}"),
+                    "count": int(row["count"]),
+                }
+                for row in cursor.fetchall()
+            ]
 
             salesperson_where, salesperson_params = build_where(include_salesperson=False)
             cursor.execute(
@@ -1706,7 +1878,8 @@ def list_orders(
                 "rows": rows, "total": total, "page": page, "page_size": page_size,
                 "pages": max(1, (total + page_size - 1) // page_size),
                 "status_counts": status_counts, "country_counts": country_counts,
-                "origin_counts": origin_counts, "salesperson_counts": salesperson_counts,
+                "origin_counts": origin_counts, "store_counts": store_counts,
+                "salesperson_counts": salesperson_counts,
                 "group_counts": group_counts,
                 "summary": summary,
             }
@@ -1939,6 +2112,149 @@ def get_mercado_order_label_contexts(order_ids):
         connection.close()
 
 
+def get_mercado_order_print_state(token_id):
+    """Return API-print tracking state, or ``None`` before the first safe scan."""
+
+    connection = pymysql.connect(**config)
+    try:
+        with connection.cursor() as cursor:
+            _ensure_mercado_order_print_states_table(cursor)
+            cursor.execute(
+                """
+                SELECT `token_id`, `tracking_since`, `last_scan_at`, `created_at`, `updated_at`
+                FROM `mercado_order_print_states`
+                WHERE `token_id` = %s
+                LIMIT 1
+                """,
+                (int(token_id),),
+            )
+            row = cursor.fetchone()
+            return dict(row) if row else None
+    finally:
+        connection.close()
+
+
+def save_mercado_order_print_state(token_id, tracking_since, last_scan_at):
+    """Mark a store as safely tracked after its Mercado API order scan succeeds."""
+
+    token_id = int(token_id)
+    if token_id <= 0:
+        raise ValueError("店铺 Token ID 无效")
+    tracking_since = _mercado_order_datetime(tracking_since)
+    last_scan_at = _mercado_order_datetime(last_scan_at)
+    if not tracking_since or not last_scan_at:
+        raise ValueError("订单打印追踪时间无效")
+    now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    connection = pymysql.connect(**config)
+    try:
+        with connection.cursor() as cursor:
+            _ensure_mercado_store_tokens_table(cursor)
+            _ensure_mercado_order_print_states_table(cursor)
+            cursor.execute(
+                "SELECT 1 FROM `mercado_store_tokens` WHERE `id` = %s LIMIT 1",
+                (token_id,),
+            )
+            if not cursor.fetchone():
+                raise KeyError("店铺授权不存在")
+            cursor.execute(
+                """
+                INSERT INTO `mercado_order_print_states` (
+                    `token_id`, `tracking_since`, `last_scan_at`, `created_at`, `updated_at`
+                ) VALUES (%s, %s, %s, %s, %s)
+                ON DUPLICATE KEY UPDATE
+                    `tracking_since` = LEAST(`tracking_since`, VALUES(`tracking_since`)),
+                    `last_scan_at` = VALUES(`last_scan_at`),
+                    `updated_at` = VALUES(`updated_at`)
+                """,
+                (token_id, tracking_since, last_scan_at, now, now),
+            )
+        connection.commit()
+        return get_mercado_order_print_state(token_id)
+    except Exception:
+        connection.rollback()
+        raise
+    finally:
+        connection.close()
+
+
+def list_mercado_order_print_candidates(
+    token_id,
+    *,
+    tracking_since,
+    site_ids=None,
+    include_previously_printed=False,
+    limit=0,
+):
+    """List printable API orders while excluding successfully generated labels.
+
+    ``include_previously_printed`` is only used for a store's first run.  At
+    that point legacy browser printing cannot be matched to individual order
+    IDs, so the caller deliberately falls back to all printable orders inside
+    the configured safety window (72 hours by default).
+    """
+
+    token_id = int(token_id)
+    limit = max(0, min(100000, int(limit or 0)))
+    tracking_since = _mercado_order_datetime(tracking_since)
+    if not tracking_since:
+        raise ValueError("订单打印追踪起始时间无效")
+    normalized_sites = []
+    for value in site_ids or ():
+        site_id = str(value or "").strip().upper()
+        if site_id and site_id not in normalized_sites:
+            normalized_sites.append(site_id)
+    if len(normalized_sites) > len(MERCADO_CONFIGURABLE_SITES):
+        raise ValueError("订单打印站点数量超过支持范围")
+
+    where = [
+        "synced.`token_id` = %s",
+        "synced.`date_created` >= %s",
+        "COALESCE(synced.`shipping_id`, '') <> ''",
+    ]
+    params = [token_id, tracking_since]
+    if normalized_sites:
+        where.append(
+            f"UPPER(COALESCE(synced.`site_id`, '')) IN "
+            f"({','.join(['%s'] * len(normalized_sites))})"
+        )
+        params.extend(normalized_sites)
+    if not include_previously_printed:
+        where.append(
+            "NOT EXISTS ("
+            "SELECT 1 FROM `mercado_order_operation_logs` AS print_logs "
+            "WHERE print_logs.`order_id` = synced.`order_id` "
+            "AND print_logs.`action_type` = 'label_printed'"
+            ")"
+        )
+
+    connection = pymysql.connect(**config)
+    try:
+        with connection.cursor() as cursor:
+            _ensure_mercado_synced_orders_table(cursor)
+            _ensure_mercado_store_tokens_table(cursor)
+            limit_sql = " LIMIT %s" if limit else ""
+            query_params = list(params)
+            if limit:
+                query_params.append(limit)
+            cursor.execute(
+                f"""
+                SELECT synced.`order_id`, synced.`shipping_id`, synced.`token_id`,
+                       synced.`shop_name`, synced.`site_id`, synced.`country`,
+                       synced.`status`, synced.`status_label`, synced.`date_created`,
+                       stores.`access_token`, stores.`refresh_token`, stores.`expires_at`
+                FROM `mercado_synced_orders` AS synced
+                INNER JOIN `mercado_store_tokens` AS stores ON stores.`id` = synced.`token_id`
+                WHERE {' AND '.join(where)}
+                ORDER BY synced.`date_created` ASC, synced.`order_id` ASC
+                {limit_sql}
+                """,
+                query_params,
+            )
+            return list(cursor.fetchall() or [])
+    finally:
+        connection.close()
+
+
 def record_mercado_order_print_logs(order_ids, operator_id=None, operator_name=""):
     orders = get_mercado_order_label_contexts(order_ids)
     if not orders:
@@ -2104,6 +2420,24 @@ def update_mercado_product_image(token_id, product_id, image_url):
         connection.close()
 
 
+def _ensure_mercado_order_print_states_table(cursor):
+    """Persist the point from which per-order print history is trustworthy."""
+
+    cursor.execute(
+        """
+        CREATE TABLE IF NOT EXISTS `mercado_order_print_states` (
+            `token_id` BIGINT NOT NULL,
+            `tracking_since` DATETIME NOT NULL,
+            `last_scan_at` DATETIME NULL,
+            `created_at` DATETIME NOT NULL,
+            `updated_at` DATETIME NOT NULL,
+            PRIMARY KEY (`token_id`),
+            KEY `idx_mercado_order_print_last_scan` (`last_scan_at`)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+        """
+    )
+
+
 def get_high_after_sale_alerts(
     sort_by="after_sale_quantity",
     sort_dir="desc",
@@ -2125,30 +2459,19 @@ def get_high_after_sale_alerts(
     search_text = str(search or "").strip()
     date_from_text = str(date_from or "").strip()
     date_to_text = str(date_to or "").strip()
-    try:
-        start_date = (
-            datetime.strptime(date_from_text, "%Y-%m-%d")
-            if date_from_text
-            else None
-        )
-        end_date = (
-            datetime.strptime(date_to_text, "%Y-%m-%d")
-            if date_to_text
-            else None
-        )
-    except ValueError as exc:
-        raise ValueError("时间范围必须使用 YYYY-MM-DD 格式") from exc
-    if start_date and end_date and start_date > end_date:
-        raise ValueError("开始日期不能晚于结束日期")
+    start_date, end_exclusive = _filter_datetime_bounds(
+        date_from_text,
+        date_to_text,
+    )
     limit = max(1, min(int(limit or 100), 500))
     order_conditions = ["`id` IS NOT NULL", "TRIM(`id`) <> ''"]
     params = []
     if start_date:
         order_conditions.append("`时间` >= %s")
-        params.append(start_date.strftime("%Y-%m-%d 00:00:00"))
-    if end_date:
+        params.append(start_date.strftime("%Y-%m-%d %H:%M:%S"))
+    if end_exclusive:
         order_conditions.append("`时间` < %s")
-        params.append((end_date + timedelta(days=1)).strftime("%Y-%m-%d 00:00:00"))
+        params.append(end_exclusive.strftime("%Y-%m-%d %H:%M:%S"))
     order_where_clause = " AND ".join(order_conditions)
     where_clause = ""
     if search_text:
@@ -2287,30 +2610,19 @@ def get_high_profit_products(
     search_text = str(search or "").strip()
     date_from_text = str(date_from or "").strip()
     date_to_text = str(date_to or "").strip()
-    try:
-        start_date = (
-            datetime.strptime(date_from_text, "%Y-%m-%d")
-            if date_from_text
-            else None
-        )
-        end_date = (
-            datetime.strptime(date_to_text, "%Y-%m-%d")
-            if date_to_text
-            else None
-        )
-    except ValueError as exc:
-        raise ValueError("时间范围必须使用 YYYY-MM-DD 格式") from exc
-    if start_date and end_date and start_date > end_date:
-        raise ValueError("开始日期不能晚于结束日期")
+    start_date, end_exclusive = _filter_datetime_bounds(
+        date_from_text,
+        date_to_text,
+    )
     limit = max(1, min(int(limit or 100), 500))
     order_conditions = ["`id` IS NOT NULL", "TRIM(`id`) <> ''"]
     params = []
     if start_date:
         order_conditions.append("`时间` >= %s")
-        params.append(start_date.strftime("%Y-%m-%d 00:00:00"))
-    if end_date:
+        params.append(start_date.strftime("%Y-%m-%d %H:%M:%S"))
+    if end_exclusive:
         order_conditions.append("`时间` < %s")
-        params.append((end_date + timedelta(days=1)).strftime("%Y-%m-%d 00:00:00"))
+        params.append(end_exclusive.strftime("%Y-%m-%d %H:%M:%S"))
     order_where_clause = " AND ".join(order_conditions)
     where_clause = ""
     if search_text:

@@ -395,11 +395,13 @@ def test_console_template_contains_store_token_module():
     assert 'id="mercado-site-settings-dialog"' in body
     assert 'id="mercado-site-settings-body"' in body
     assert "折扣比例（%）" in body
-    assert "自定义组别" in body
+    assert 'id="mercado-site-salesperson"' in body
+    assert 'id="mercado-site-group-name"' in body
     assert ">店铺授权</button>" in body
-    assert '<select data-field="salesperson"' in body
+    assert 'data-field="salesperson"' not in body
+    assert 'data-field="group_name"' not in body
     assert 'requestAccessApi("/api/access/users")' in body
-    assert "业务员仅可从“人员与权限”中的启用人员选择" in body
+    assert "业务员和分组对该店铺授权下的全部站点统一生效" in body
     assert "global-selling.mercadolibre.com/authorization" in body
     assert "Access Token 和 Refresh Token 仅保存在数据库服务端" in body
 

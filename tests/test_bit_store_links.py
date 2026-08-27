@@ -58,6 +58,13 @@ def test_listing_record_extracts_link_weight_dimensions_and_sku():
             "permalink": "https://articulo.mercadolibre.com.mx/MLM123",
             "price": 19.99,
             "currency_id": "USD",
+            "net_proceeds": {
+                "amount": 14.25,
+                "currency_id": "USD",
+                "additional_concepts": [
+                    {"id": "sale_fee", "amount": 2.49},
+                ],
+            },
             "attributes": [
                 {"id": "PACKAGE_WEIGHT", "value_struct": {"number": 0.8, "unit": "kg"}},
                 {"id": "PACKAGE_LENGTH", "value_struct": {"number": 30, "unit": "cm"}},
@@ -75,6 +82,7 @@ def test_listing_record_extracts_link_weight_dimensions_and_sku():
     assert record["package_length_cm"] == Decimal("30")
     assert record["volumetric_weight_kg"] == Decimal("1.0000")
     assert record["seller_sku"] == "SKU-01"
+    assert record["net_proceeds_usd"] == Decimal("14.25")
     assert record["permalink"].startswith("https://")
 
 
@@ -183,6 +191,7 @@ def test_bulk_update_store_links_updates_only_allowed_numeric_fields():
     assert "`price` = %s" in update_sql
     assert "`package_length_cm` = %s" in update_sql
     assert "`volumetric_weight_kg`" in update_sql
+    assert "`net_proceeds_manual` = 1" in update_sql
     assert params[-2:] == (4, 5)
 
 
@@ -208,10 +217,13 @@ def test_list_store_links_filters_site_and_defaults_to_sales_descending():
             return {"total": 2}
 
         def fetchall(self):
-            if "SELECT *" in self.sql:
+            if f"FROM `{store.STORE_LINK_TABLE}`" in self.sql and "LIMIT %s OFFSET %s" in self.sql:
                 return [{"id": 1, "site_id": "MLM", "sold_quantity": 20, "is_current": 1}]
-            if "GROUP BY `token_id`" in self.sql:
-                return [{"token_id": 1, "store_name": "店铺一", "link_count": 2}]
+            if "FROM `mercado_store_tokens` AS tokens" in self.sql:
+                return [
+                    {"token_id": 1, "store_name": "店铺一", "link_count": 2},
+                    {"token_id": 2, "store_name": "新授权店铺", "link_count": 0},
+                ]
             if "GROUP BY `site_id`" in self.sql:
                 return [{"site_id": "MLM", "link_count": 2}]
             return []
@@ -228,10 +240,22 @@ def test_list_store_links_filters_site_and_defaults_to_sales_descending():
 
     result = store.list_store_links(site_id="mlm", connection_factory=Connection)
 
-    list_sql, params = next((sql, params) for sql, params in calls if "SELECT *" in sql)
+    list_sql, params = next(
+        (sql, params)
+        for sql, params in calls
+        if f"FROM `{store.STORE_LINK_TABLE}`" in sql and "LIMIT %s OFFSET %s" in sql
+    )
     assert "`site_id` = %s" in list_sql
+    assert "`remote_json`" not in list_sql
     assert "COALESCE(`sold_quantity`, 0) DESC" in list_sql
     assert params[0] == "MLM"
+    assert result["page_size"] == 1000
+    assert result["stores"][1] == {
+        "token_id": 2,
+        "store_name": "新授权店铺",
+        "link_count": 0,
+        "is_current": False,
+    }
     assert result["sites"] == [{"site_id": "MLM", "link_count": 2, "is_current": False}]
 
 
@@ -318,6 +342,8 @@ def test_sync_store_writes_listing_batches_incrementally(monkeypatch):
     assert result["details"] == 5
     assert result["failed"] == 0
     assert result["products"] == 5
+    assert any("开始扫描 MLM · active" in line for line in bit_store_link_sync._sync_state["logs"])
+    assert any("批次完成" in line for line in bit_store_link_sync._sync_state["logs"])
     assert [len(batch["items"]) for batch in captured["batches"]] == [2, 2, 1]
     assert all(batch["finalize"] is False for batch in captured["batches"])
     assert len({batch["sync_marker"] for batch in captured["batches"]}) == 1
@@ -337,10 +363,13 @@ def test_workbench_store_link_ui_and_routes():
     assert b'id="store-link-sync-button"' in response.data
     assert b'id="store-link-site-filter"' in response.data
     assert b'id="store-link-sales-sort"' in response.data
+    assert b'id="store-link-sync-log"' in response.data
     assert "同步所有店铺链接".encode("utf-8") in response.data
     assert "同步当前店铺".encode("utf-8") in response.data
     assert "销量从高到低".encode("utf-8") in response.data
     assert "净收益(USD)".encode("utf-8") in response.data
+    assert "任务执行日志".encode("utf-8") in response.data
+    assert "每页最多 1,000 条".encode("utf-8") in response.data
 
     listing_data = {
         "rows": [{"id": 1, "item_id": "MLM1"}],
@@ -350,7 +379,7 @@ def test_workbench_store_link_ui_and_routes():
         "total": 1,
         "page": 1,
         "pages": 1,
-        "page_size": 100,
+        "page_size": 1000,
     }
     with patch.object(workbench.bit_db_api, "list_mercado_store_links", return_value=listing_data) as listing:
         response = client.get("/api/store-links?search=MLM1&site_id=MLM&sales_sort=asc")
@@ -359,6 +388,7 @@ def test_workbench_store_link_ui_and_routes():
     assert response.get_json()["data"]["sites"][0]["site_id"] == "MLM"
     assert listing.call_args.kwargs["site_id"] == "MLM"
     assert listing.call_args.kwargs["sales_sort"] == "asc"
+    assert listing.call_args.kwargs["page_size"] == 1000
 
     with patch.object(
         workbench.bit_db_api,

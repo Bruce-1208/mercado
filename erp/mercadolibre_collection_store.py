@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import json
-from datetime import datetime
+from datetime import datetime, timedelta
 from decimal import Decimal
 from typing import Any, Callable, Iterable, Mapping
 
@@ -51,9 +51,12 @@ PRODUCT_REVIEW_STATUSES = {
     "unreviewed", "approved", "suspected", "infringing", "risk",
 }
 PRODUCT_PUBLISH_RECORD_STATUSES = {"pending", "publishing", "published", "failed"}
+PRODUCT_PUBLISH_RETRYABLE_STATUSES = {"pending", "publishing", "failed"}
+PRODUCT_PUBLISH_FILTER_STATUSES = PRODUCT_PUBLISH_RECORD_STATUSES | {"unpublished"}
 PRODUCT_WORKFLOW_COLUMN_DEFINITIONS = (
     ("source_type", "VARCHAR(32) NOT NULL DEFAULT 'collected' AFTER `collection_item_id`"),
     ("review_status", "VARCHAR(32) NOT NULL DEFAULT 'unreviewed' AFTER `source_type`"),
+    ("description_text", "LONGTEXT NULL AFTER `title`"),
 )
 
 
@@ -150,9 +153,11 @@ def ensure_collection_tables(cursor: Any) -> None:
             `id` BIGINT NOT NULL AUTO_INCREMENT,
             `source_url` VARCHAR(1500) NOT NULL,
             `requested_count` INT NOT NULL,
+            `worker_count` INT NOT NULL DEFAULT 0,
             `collected_count` INT NOT NULL DEFAULT 0,
             `completed_count` INT NOT NULL DEFAULT 0,
             `failed_count` INT NOT NULL DEFAULT 0,
+            `elapsed_seconds` INT NOT NULL DEFAULT 0,
             `current_page` INT NOT NULL DEFAULT 0,
             `status` VARCHAR(32) NOT NULL DEFAULT 'pending',
             `message` TEXT NULL,
@@ -176,6 +181,7 @@ def ensure_collection_tables(cursor: Any) -> None:
             `final_url` VARCHAR(1500) NULL,
             `main_image_url` VARCHAR(1500) NULL,
             `title` VARCHAR(255) NULL,
+            `description_text` LONGTEXT NULL,
             `price` DECIMAL(20,4) NULL,
             `currency_id` VARCHAR(16) NULL,
             `weight_g` DECIMAL(20,4) NULL,
@@ -320,6 +326,12 @@ def ensure_collection_tables(cursor: Any) -> None:
     product_basis_added = _ensure_column(
         cursor, PRODUCT_TABLE, "weight_basis", "VARCHAR(64) NULL AFTER `package_height_cm`"
     )
+    _ensure_column(
+        cursor, TASK_TABLE, "worker_count", "INT NOT NULL DEFAULT 0 AFTER `requested_count`"
+    )
+    _ensure_column(
+        cursor, TASK_TABLE, "elapsed_seconds", "INT NOT NULL DEFAULT 0 AFTER `failed_count`"
+    )
     for table in (COLLECTION_TABLE, PRODUCT_TABLE):
         for column, definition in PROFITABILITY_COLUMN_DEFINITIONS:
             _ensure_column(cursor, table, column, definition)
@@ -333,6 +345,17 @@ def ensure_collection_tables(cursor: Any) -> None:
     )
     _ensure_index(
         cursor, PRODUCT_TABLE, "idx_erp_meli_product_review", "(`review_status`, `id`)"
+    )
+    _ensure_index(
+        cursor, COLLECTION_TABLE, "idx_erp_meli_collection_added", "(`added_to_products`, `id`)"
+    )
+    _ensure_index(
+        cursor, PRODUCT_TABLE, "idx_erp_meli_product_publish", "(`last_publish_status`, `id`)"
+    )
+    _ensure_index(cursor, PRODUCT_TABLE, "idx_erp_meli_product_weight", "(`weight_g`)")
+    _ensure_index(cursor, PRODUCT_TABLE, "idx_erp_meli_product_price", "(`price`)")
+    _ensure_index(
+        cursor, PRODUCT_TABLE, "idx_erp_meli_product_net", "(`net_proceeds_usd`)"
     )
     if collection_volumetric_added:
         cursor.execute(
@@ -370,12 +393,14 @@ def create_collection_task(
     requested_count: int,
     created_by: str = "",
     *,
+    worker_count: int = 0,
     connection_factory: Callable[[], Any] | None = None,
 ) -> int:
     source_url = str(source_url or "").strip()
     if not source_url.startswith(("https://", "http://")):
         raise ValueError("请输入有效的 Mercado Libre 列表链接")
     requested_count = max(1, min(int(requested_count), 1000))
+    worker_count = max(0, min(int(worker_count or 0), 10))
     connection = (connection_factory or _connect)()
     try:
         with connection.cursor() as cursor:
@@ -383,10 +408,16 @@ def create_collection_task(
             cursor.execute(
                 f"""
                 INSERT INTO `{TASK_TABLE}`
-                    (`source_url`, `requested_count`, `status`, `created_by`, `created_at`)
-                VALUES (%s, %s, 'pending', %s, %s)
+                    (`source_url`, `requested_count`, `worker_count`, `status`, `created_by`, `created_at`)
+                VALUES (%s, %s, %s, 'pending', %s, %s)
                 """,
-                (source_url, requested_count, str(created_by or "")[:128], _now()),
+                (
+                    source_url,
+                    requested_count,
+                    worker_count,
+                    str(created_by or "")[:128],
+                    _now(),
+                ),
             )
             task_id = int(cursor.lastrowid)
         connection.commit()
@@ -406,6 +437,8 @@ def update_collection_task(
     collected_count: int | None = None,
     completed_count: int | None = None,
     failed_count: int | None = None,
+    worker_count: int | None = None,
+    elapsed_seconds: int | None = None,
     current_page: int | None = None,
     started: bool = False,
     finished: bool = False,
@@ -419,6 +452,8 @@ def update_collection_task(
         ("collected_count", collected_count),
         ("completed_count", completed_count),
         ("failed_count", failed_count),
+        ("worker_count", worker_count),
+        ("elapsed_seconds", elapsed_seconds),
         ("current_page", current_page),
     ):
         if value is not None:
@@ -637,6 +672,16 @@ def _list_rows(
     task_id: int | None = None,
     source_type: str = "",
     review_status: str = "",
+    publish_status: str = "",
+    weight_min: Any = None,
+    weight_max: Any = None,
+    price_min: Any = None,
+    price_max: Any = None,
+    net_proceeds_min: Any = None,
+    net_proceeds_max: Any = None,
+    date_from: str = "",
+    date_to: str = "",
+    exclude_added: bool = False,
     connection_factory: Callable[[], Any] | None = None,
 ) -> dict[str, Any]:
     limit = max(1, min(int(limit), 1000))
@@ -651,6 +696,8 @@ def _list_rows(
     if task_id is not None and table == COLLECTION_TABLE:
         where.append("`task_id` = %s")
         params.append(int(task_id))
+    if table == COLLECTION_TABLE and exclude_added:
+        where.append("`added_to_products` = 0")
     if table == PRODUCT_TABLE:
         source_type = str(source_type or "").strip().lower()
         review_status = str(review_status or "").strip().lower()
@@ -664,6 +711,76 @@ def _list_rows(
                 raise ValueError(f"不支持的审核状态: {review_status}")
             where.append("`review_status` = %s")
             params.append(review_status)
+        publish_status = str(publish_status or "").strip().lower()
+        if publish_status:
+            if publish_status not in PRODUCT_PUBLISH_FILTER_STATUSES:
+                raise ValueError(f"不支持的上架状态: {publish_status}")
+            if publish_status == "unpublished":
+                where.append("(`last_publish_status` IS NULL OR `last_publish_status` = '')")
+            else:
+                where.append("`last_publish_status` = %s")
+                params.append(publish_status)
+
+        def optional_decimal(value: Any, name: str, *, nonnegative: bool) -> Decimal | None:
+            if value in (None, ""):
+                return None
+            try:
+                number = Decimal(str(value))
+            except Exception as exc:
+                raise ValueError(f"{name}必须是数字") from exc
+            if not number.is_finite() or (nonnegative and number < 0):
+                raise ValueError(f"{name}必须是{'非负' if nonnegative else '有效'}数字")
+            return number
+
+        ranges = (
+            ("weight_g", "重量", weight_min, weight_max, True),
+            ("price", "售价", price_min, price_max, True),
+            (
+                "net_proceeds_usd", "净收益", net_proceeds_min,
+                net_proceeds_max, False,
+            ),
+        )
+        for column, label, raw_min, raw_max, nonnegative in ranges:
+            minimum = optional_decimal(raw_min, f"最低{label}", nonnegative=nonnegative)
+            maximum = optional_decimal(raw_max, f"最高{label}", nonnegative=nonnegative)
+            if minimum is not None and maximum is not None and minimum > maximum:
+                raise ValueError(f"最低{label}不能大于最高{label}")
+            if minimum is not None:
+                where.append(f"`{column}` >= %s")
+                params.append(minimum)
+            if maximum is not None:
+                where.append(f"`{column}` <= %s")
+                params.append(maximum)
+
+        def parsed_datetime(value: Any, name: str) -> tuple[datetime | None, str]:
+            text = str(value or "").strip()
+            if not text:
+                return None, ""
+            normalized = text.replace("T", " ")
+            for date_format, precision in (
+                ("%Y-%m-%d", "day"),
+                ("%Y-%m-%d %H:%M", "minute"),
+                ("%Y-%m-%d %H:%M:%S", "minute"),
+            ):
+                try:
+                    return datetime.strptime(normalized, date_format), precision
+                except ValueError:
+                    continue
+            raise ValueError(f"{name}格式必须为 YYYY-MM-DD HH:MM")
+
+        start_date, _ = parsed_datetime(date_from, "开始时间")
+        end_date, end_precision = parsed_datetime(date_to, "结束时间")
+        if start_date and end_date and start_date > end_date:
+            raise ValueError("开始时间不能晚于结束时间")
+        if start_date:
+            where.append("`added_at` >= %s")
+            params.append(start_date.strftime("%Y-%m-%d %H:%M:%S"))
+        if end_date:
+            where.append("`added_at` < %s")
+            end_exclusive = end_date + (
+                timedelta(days=1) if end_precision == "day" else timedelta(minutes=1)
+            )
+            params.append(end_exclusive.strftime("%Y-%m-%d %H:%M:%S"))
     where_sql = f"WHERE {' AND '.join(where)}" if where else ""
     connection = (connection_factory or _connect)()
     try:
@@ -762,6 +879,42 @@ def create_product_publish_records(
     except BaseException:
         connection.rollback()
         raise
+    finally:
+        connection.close()
+
+
+def get_published_product_item_ids(
+    product_item_ids: Iterable[int],
+    *,
+    token_id: int,
+    site_id: str,
+    connection_factory: Callable[[], Any] | None = None,
+) -> list[int]:
+    """Return products already published for the same seller and destination site."""
+
+    item_ids = list(dict.fromkeys(
+        int(value) for value in product_item_ids or [] if int(value) > 0
+    ))
+    if not item_ids:
+        return []
+    normalized_token_id = int(token_id)
+    normalized_site_id = str(site_id or "").strip().upper()
+    if normalized_token_id <= 0 or not normalized_site_id:
+        raise ValueError("查询历史上架记录时账号或站点无效")
+    placeholders = ", ".join(["%s"] * len(item_ids))
+    connection = (connection_factory or _connect)()
+    try:
+        with connection.cursor() as cursor:
+            ensure_collection_tables(cursor)
+            cursor.execute(
+                f"SELECT DISTINCT `product_item_id` FROM `{PUBLISH_RECORD_TABLE}` "
+                f"WHERE `product_item_id` IN ({placeholders}) "
+                "AND `token_id` = %s AND `site_id` = %s AND `status` = 'published'",
+                tuple(item_ids + [normalized_token_id, normalized_site_id]),
+            )
+            rows = cursor.fetchall()
+        connection.commit()
+        return [int(row.get("product_item_id") or 0) for row in rows]
     finally:
         connection.close()
 
@@ -900,6 +1053,38 @@ def list_product_publish_records(
         connection.close()
 
 
+def get_product_publish_records_by_ids(
+    record_ids: Iterable[int],
+    *,
+    connection_factory: Callable[[], Any] | None = None,
+) -> list[dict[str, Any]]:
+    ids: list[int] = []
+    for value in record_ids or []:
+        try:
+            record_id = int(value)
+        except (TypeError, ValueError) as exc:
+            raise ValueError(f"上架记录编号无效: {value!r}") from exc
+        if record_id > 0 and record_id not in ids:
+            ids.append(record_id)
+    if not ids:
+        raise ValueError("请至少勾选一条可重新上架的记录")
+    placeholders = ", ".join(["%s"] * len(ids))
+    connection = (connection_factory or _connect)()
+    try:
+        with connection.cursor() as cursor:
+            ensure_collection_tables(cursor)
+            cursor.execute(
+                f"SELECT * FROM `{PUBLISH_RECORD_TABLE}` "
+                f"WHERE `id` IN ({placeholders}) ORDER BY `id` DESC",
+                tuple(ids),
+            )
+            rows = [_json_safe_row(row) for row in cursor.fetchall()]
+        connection.commit()
+        return rows
+    finally:
+        connection.close()
+
+
 def update_product_review_status(
     product_item_ids: Iterable[int],
     review_status: str,
@@ -923,6 +1108,177 @@ def update_product_review_status(
             changed = int(cursor.rowcount or 0)
         connection.commit()
         return {"requested": len(ids), "changed": changed}
+    except BaseException:
+        connection.rollback()
+        raise
+    finally:
+        connection.close()
+
+
+def update_product_item(
+    product_item_id: int,
+    changes: Mapping[str, Any],
+    *,
+    connection_factory: Callable[[], Any] | None = None,
+) -> dict[str, Any]:
+    """Update user-editable product content and invalidate derived costs."""
+
+    try:
+        row_id = int(product_item_id)
+    except (TypeError, ValueError) as exc:
+        raise ValueError("产品记录编号无效") from exc
+    if row_id <= 0:
+        raise ValueError("产品记录编号无效")
+    if not isinstance(changes, Mapping):
+        raise ValueError("产品内容必须是对象")
+
+    normalized: dict[str, Any] = {}
+    text_rules = {
+        "title": ("标题", 255, False),
+        "description_text": ("产品描述", 60000, True),
+        "main_image_url": ("主图链接", 1500, False),
+        "category_id": ("分类编号", 64, True),
+    }
+    for field, (label, max_length, allow_empty) in text_rules.items():
+        if field not in changes:
+            continue
+        value = str(changes.get(field) or "").strip()
+        if not allow_empty and not value:
+            raise ValueError(f"{label}不能为空")
+        if len(value) > max_length:
+            raise ValueError(f"{label}不能超过 {max_length} 个字符")
+        if field == "main_image_url" and not value.lower().startswith(("http://", "https://")):
+            raise ValueError("主图链接必须以 http:// 或 https:// 开头")
+        normalized[field] = value
+
+    numeric_rules = {
+        "price": "原价",
+        "weight_g": "实际重量",
+        "package_length_cm": "包装长度",
+        "package_width_cm": "包装宽度",
+        "package_height_cm": "包装高度",
+    }
+    for field, label in numeric_rules.items():
+        if field not in changes:
+            continue
+        raw_value = changes.get(field)
+        try:
+            value = Decimal(str(raw_value))
+        except Exception as exc:
+            raise ValueError(f"{label}必须是数字") from exc
+        if not value.is_finite() or value <= 0:
+            raise ValueError(f"{label}必须大于 0")
+        normalized[field] = value
+
+    if not normalized:
+        raise ValueError("没有可保存的产品内容")
+
+    assignments = [f"`{field}` = %s" for field in normalized]
+    values = list(normalized.values())
+    metric_fields = set(numeric_rules) | {"category_id"}
+    profitability_stale = bool(metric_fields.intersection(normalized))
+    if "weight_g" in normalized:
+        assignments.append("`weight_basis` = 'manual_edit'")
+    if set(normalized).intersection({
+        "package_length_cm", "package_width_cm", "package_height_cm",
+    }):
+        assignments.append(
+            "`volumetric_weight_kg` = CASE "
+            "WHEN `package_length_cm` > 0 AND `package_width_cm` > 0 "
+            "AND `package_height_cm` > 0 THEN ROUND("
+            "`package_length_cm` * `package_width_cm` * `package_height_cm` / 6000, 4) "
+            "ELSE NULL END"
+        )
+    if profitability_stale:
+        assignments.extend((
+            "`sale_price_usd` = NULL",
+            "`commission_amount_local` = NULL",
+            "`commission_amount_usd` = NULL",
+            "`shipping_fee_local` = NULL",
+            "`shipping_fee_usd` = NULL",
+            "`billable_weight_g` = NULL",
+            "`shipping_api_billable_weight_g` = NULL",
+            "`net_proceeds_usd` = NULL",
+            "`profitability_updated_at` = NULL",
+            "`profitability_source` = 'manual_edit_pending'",
+            "`profitability_error` = ''",
+        ))
+        if "category_id" in normalized:
+            assignments.extend((
+                "`category_name` = NULL",
+                "`commission_rate` = NULL",
+            ))
+
+    connection = (connection_factory or _connect)()
+    try:
+        with connection.cursor() as cursor:
+            ensure_collection_tables(cursor)
+            cursor.execute(
+                f"UPDATE `{PRODUCT_TABLE}` SET {', '.join(assignments)} WHERE `id` = %s",
+                tuple(values + [row_id]),
+            )
+            changed = int(cursor.rowcount or 0)
+            if changed == 0:
+                cursor.execute(
+                    f"SELECT 1 FROM `{PRODUCT_TABLE}` WHERE `id` = %s",
+                    (row_id,),
+                )
+                if not cursor.fetchone():
+                    raise KeyError("产品记录不存在")
+
+            # The daily profitability worker reads collection rows, so mirror
+            # edited pricing/weight data back there and mark the snapshot stale.
+            mirrored_fields = [
+                field for field in normalized
+                if field in {
+                    "title", "main_image_url", "price", "weight_g", "category_id",
+                    "package_length_cm", "package_width_cm", "package_height_cm",
+                }
+            ]
+            if mirrored_fields:
+                collection_assignments = [
+                    f"c.`{field}` = p.`{field}`" for field in mirrored_fields
+                ]
+                if "weight_g" in normalized:
+                    collection_assignments.append("c.`weight_basis` = 'manual_edit'")
+                if set(normalized).intersection({
+                    "package_length_cm", "package_width_cm", "package_height_cm",
+                }):
+                    collection_assignments.append(
+                        "c.`volumetric_weight_kg` = p.`volumetric_weight_kg`"
+                    )
+                if profitability_stale:
+                    collection_assignments.extend((
+                        "c.`sale_price_usd` = NULL",
+                        "c.`commission_amount_local` = NULL",
+                        "c.`commission_amount_usd` = NULL",
+                        "c.`shipping_fee_local` = NULL",
+                        "c.`shipping_fee_usd` = NULL",
+                        "c.`billable_weight_g` = NULL",
+                        "c.`shipping_api_billable_weight_g` = NULL",
+                        "c.`net_proceeds_usd` = NULL",
+                        "c.`profitability_updated_at` = NULL",
+                        "c.`profitability_source` = 'manual_edit_pending'",
+                        "c.`profitability_error` = ''",
+                    ))
+                    if "category_id" in normalized:
+                        collection_assignments.extend((
+                            "c.`category_name` = NULL",
+                            "c.`commission_rate` = NULL",
+                        ))
+                cursor.execute(
+                    f"UPDATE `{COLLECTION_TABLE}` AS c "
+                    f"INNER JOIN `{PRODUCT_TABLE}` AS p "
+                    "ON c.`source_item_id` = p.`source_item_id` "
+                    f"SET {', '.join(collection_assignments)} WHERE p.`id` = %s",
+                    (row_id,),
+                )
+        connection.commit()
+        return {
+            "product_item_id": row_id,
+            "changed": changed,
+            "profitability_refresh_pending": profitability_stale,
+        }
     except BaseException:
         connection.rollback()
         raise
@@ -1133,6 +1489,142 @@ def delete_product_items(
         connection.close()
 
 
+def move_product_items_to_collection(
+    product_item_ids: Iterable[int],
+    *,
+    reason: str = "不可上架",
+    connection_factory: Callable[[], Any] | None = None,
+) -> dict[str, Any]:
+    """Move products out of the product list and restore/create collection rows."""
+
+    ids = _normalize_row_ids(product_item_ids, empty_message="请至少勾选一个产品")
+    placeholders = ", ".join(["%s"] * len(ids))
+    reason_text = str(reason or "不可上架").strip()[:1000]
+    connection = (connection_factory or _connect)()
+    moved = 0
+    created = 0
+    deleted = 0
+    try:
+        with connection.cursor() as cursor:
+            ensure_collection_tables(cursor)
+            cursor.execute(
+                f"SELECT * FROM `{PRODUCT_TABLE}` WHERE `id` IN ({placeholders})",
+                tuple(ids),
+            )
+            product_rows = [dict(row) for row in cursor.fetchall()]
+            profitability_columns_sql = ", ".join(
+                f"`{column}`" for column in PROFITABILITY_COLUMNS
+            )
+            for row in product_rows:
+                cursor.execute(
+                    f"SELECT `id` FROM `{COLLECTION_TABLE}` "
+                    "WHERE `id` = %s OR `source_item_id` = %s "
+                    "ORDER BY (`id` = %s) DESC, `id` DESC LIMIT 1",
+                    (
+                        int(row.get("collection_item_id") or 0),
+                        str(row.get("source_item_id") or ""),
+                        int(row.get("collection_item_id") or 0),
+                    ),
+                )
+                existing = cursor.fetchone() or {}
+                if existing.get("id"):
+                    cursor.execute(
+                        f"""
+                        UPDATE `{COLLECTION_TABLE}`
+                        SET `main_image_url` = COALESCE(NULLIF(%s, ''), `main_image_url`),
+                            `title` = COALESCE(NULLIF(%s, ''), `title`),
+                            `price` = COALESCE(%s, `price`),
+                            `currency_id` = COALESCE(NULLIF(%s, ''), `currency_id`),
+                            `weight_g` = COALESCE(%s, `weight_g`),
+                            `volumetric_weight_kg` = COALESCE(%s, `volumetric_weight_kg`),
+                            `package_length_cm` = COALESCE(%s, `package_length_cm`),
+                            `package_width_cm` = COALESCE(%s, `package_width_cm`),
+                            `package_height_cm` = COALESCE(%s, `package_height_cm`),
+                            `weight_basis` = COALESCE(NULLIF(%s, ''), `weight_basis`),
+                            `added_to_products` = 0,
+                            `error_message` = %s
+                        WHERE `id` = %s
+                        """,
+                        (
+                            str(row.get("main_image_url") or ""),
+                            str(row.get("title") or ""),
+                            row.get("price"),
+                            str(row.get("currency_id") or ""),
+                            row.get("weight_g"),
+                            row.get("volumetric_weight_kg"),
+                            row.get("package_length_cm"),
+                            row.get("package_width_cm"),
+                            row.get("package_height_cm"),
+                            str(row.get("weight_basis") or ""),
+                            f"产品列表自动移回：{reason_text}",
+                            int(existing["id"]),
+                        ),
+                    )
+                else:
+                    snapshot = _loads(row.get("source_snapshot_json"), {})
+                    values = (
+                        0,
+                        str(row.get("source_item_id") or ""),
+                        str(row.get("source_url") or ""),
+                        str(row.get("source_url") or ""),
+                        str(row.get("main_image_url") or ""),
+                        str(row.get("title") or "")[:255],
+                        row.get("price"),
+                        str(row.get("currency_id") or ""),
+                        row.get("weight_g"),
+                        row.get("volumetric_weight_kg"),
+                        row.get("package_length_cm"),
+                        row.get("package_width_cm"),
+                        row.get("package_height_cm"),
+                        str(row.get("weight_basis") or ""),
+                        *(row.get(column) for column in PROFITABILITY_COLUMNS),
+                        "partial",
+                        f"产品列表自动移回：{reason_text}",
+                        _dumps(snapshot.get("source") or {}),
+                        _dumps(snapshot.get("description") or {}),
+                        _dumps(snapshot.get("page_snapshot") or {}),
+                        _dumps(snapshot.get("plugin_snapshot") or {}),
+                        _now(),
+                    )
+                    cursor.execute(
+                        f"""
+                        INSERT INTO `{COLLECTION_TABLE}` (
+                            `task_id`, `source_item_id`, `source_url`, `final_url`,
+                            `main_image_url`, `title`, `price`, `currency_id`,
+                            `weight_g`, `volumetric_weight_kg`, `package_length_cm`,
+                            `package_width_cm`, `package_height_cm`, `weight_basis`,
+                            {profitability_columns_sql}, `scrape_status`, `error_message`,
+                            `source_json`, `description_json`, `page_snapshot_json`,
+                            `plugin_snapshot_json`, `collected_at`
+                        ) VALUES ({", ".join(["%s"] * len(values))})
+                        ON DUPLICATE KEY UPDATE
+                            `added_to_products` = 0,
+                            `error_message` = VALUES(`error_message`),
+                            `updated_at` = CURRENT_TIMESTAMP
+                        """,
+                        values,
+                    )
+                    created += 1
+                moved += 1
+            cursor.execute(
+                f"DELETE FROM `{PRODUCT_TABLE}` WHERE `id` IN ({placeholders})",
+                tuple(ids),
+            )
+            deleted = int(cursor.rowcount or 0)
+        connection.commit()
+        return {
+            "requested": len(ids),
+            "moved": moved,
+            "created_collection_rows": created,
+            "deleted": deleted,
+        }
+    except BaseException:
+        connection.rollback()
+        raise
+    finally:
+        connection.close()
+
+
 def update_product_publish_state(
     product_item_id: int,
     *,
@@ -1197,7 +1689,7 @@ def list_stale_profitability_items(
     limit: int = 50,
     connection_factory: Callable[[], Any] | None = None,
 ) -> list[dict[str, Any]]:
-    """Return collected rows whose official cost snapshot needs refreshing."""
+    """Return collected and pulled rows whose cost snapshot needs refreshing."""
 
     limit = max(1, min(int(limit), 500))
     connection = (connection_factory or _connect)()
@@ -1221,6 +1713,27 @@ def list_stale_profitability_items(
                 (stale_before, limit),
             )
             rows = [_json_safe_row(row) for row in cursor.fetchall()]
+            remaining = limit - len(rows)
+            if remaining > 0:
+                cursor.execute(
+                    f"""
+                    SELECT * FROM `{PRODUCT_TABLE}`
+                    WHERE `source_type` = 'pulled'
+                      AND (`profitability_updated_at` IS NULL
+                           OR `profitability_updated_at` < %s)
+                      AND `price` IS NOT NULL
+                      AND `price` > 0
+                      AND `title` IS NOT NULL
+                      AND `title` <> ''
+                      AND `weight_g` IS NOT NULL
+                      AND `weight_g` > 0
+                    ORDER BY COALESCE(`profitability_updated_at`, '1970-01-01') ASC,
+                             `id` ASC
+                    LIMIT %s
+                    """,
+                    (stale_before, remaining),
+                )
+                rows.extend(_json_safe_row(row) for row in cursor.fetchall())
         connection.commit()
         return rows
     finally:
@@ -1257,6 +1770,67 @@ def update_item_profitability(
         connection.close()
 
 
+def backfill_item_exchange_prices(
+    exchange_rates: Mapping[str, Any],
+    *,
+    connection_factory: Callable[[], Any] | None = None,
+) -> dict[str, Any]:
+    """Fill local-to-USD rates and USD sale prices independently of fee quotes."""
+
+    normalized: dict[str, tuple[Decimal, str]] = {
+        "USD": (Decimal("1"), _now()),
+    }
+    for raw_currency, raw_snapshot in dict(exchange_rates or {}).items():
+        currency_id = str(raw_currency or "").strip().upper()
+        if not currency_id:
+            continue
+        snapshot = raw_snapshot if isinstance(raw_snapshot, Mapping) else {}
+        raw_rate = snapshot.get("ratio") if snapshot else raw_snapshot
+        try:
+            rate = Decimal(str(raw_rate))
+        except Exception as exc:
+            raise ValueError(f"{currency_id} 到 USD 的汇率不是有效数字") from exc
+        if not rate.is_finite() or rate <= 0:
+            raise ValueError(f"{currency_id} 到 USD 的汇率必须大于 0")
+        updated_at = str(
+            snapshot.get("creation_date")
+            or snapshot.get("refreshed_at")
+            or _now()
+        )[:64]
+        normalized[currency_id] = (rate, updated_at)
+
+    connection = (connection_factory or _connect)()
+    updated = 0
+    try:
+        with connection.cursor() as cursor:
+            ensure_collection_tables(cursor)
+            for table in (COLLECTION_TABLE, PRODUCT_TABLE):
+                for currency_id, (rate, updated_at) in normalized.items():
+                    cursor.execute(
+                        f"""
+                        UPDATE `{table}`
+                        SET `sale_price_usd` = ROUND(`price` * %s, 2),
+                            `exchange_rate_to_usd` = %s,
+                            `exchange_rate_updated_at` = %s
+                        WHERE UPPER(COALESCE(`currency_id`, '')) = %s
+                          AND `price` IS NOT NULL
+                          AND `price` > 0
+                        """,
+                        (rate, rate, updated_at, currency_id),
+                    )
+                    updated += max(0, int(cursor.rowcount or 0))
+        connection.commit()
+        return {
+            "updated": updated,
+            "currencies": sorted(normalized),
+        }
+    except BaseException:
+        connection.rollback()
+        raise
+    finally:
+        connection.close()
+
+
 def add_collection_items_to_products(
     collection_item_ids: Iterable[int],
     *,
@@ -1284,6 +1858,18 @@ def add_collection_items_to_products(
                 tuple(ids),
             )
             selected_rows = [dict(row) for row in cursor.fetchall()]
+            incomplete_rows: list[dict[str, Any]] = []
+            complete_rows: list[dict[str, Any]] = []
+            for row in selected_rows:
+                try:
+                    weight = Decimal(str(row.get("weight_g")))
+                except Exception:
+                    weight = None
+                if weight is None or not weight.is_finite() or weight <= 0:
+                    incomplete_rows.append(row)
+                else:
+                    complete_rows.append(row)
+            selected_rows = complete_rows
             profitability_columns_sql = ", ".join(
                 f"`{column}`" for column in PROFITABILITY_COLUMNS
             )
@@ -1297,10 +1883,16 @@ def add_collection_items_to_products(
                     "page_snapshot": _loads(row.get("page_snapshot_json"), {}),
                     "plugin_snapshot": _loads(row.get("plugin_snapshot_json"), {}),
                 }
+                description_text = str(
+                    (snapshot.get("description") or {}).get("plain_text")
+                    or (snapshot.get("description") or {}).get("text")
+                    or ""
+                ).strip()
                 values = (
                     row["id"], "collected", "unreviewed",
                     row["source_item_id"], row["source_url"],
-                    row.get("main_image_url"), row.get("title"), row.get("price"),
+                    row.get("main_image_url"), row.get("title"), description_text,
+                    row.get("price"),
                     row.get("currency_id"), row.get("weight_g"),
                     row.get("volumetric_weight_kg"),
                     row.get("package_length_cm"), row.get("package_width_cm"),
@@ -1313,7 +1905,8 @@ def add_collection_items_to_products(
                     INSERT INTO `{PRODUCT_TABLE}` (
                         `collection_item_id`, `source_type`, `review_status`,
                         `source_item_id`, `source_url`,
-                        `main_image_url`, `title`, `price`, `currency_id`, `weight_g`,
+                        `main_image_url`, `title`, `description_text`, `price`,
+                        `currency_id`, `weight_g`,
                         `volumetric_weight_kg`,
                         `package_length_cm`, `package_width_cm`, `package_height_cm`,
                         `weight_basis`, {profitability_columns_sql},
@@ -1325,6 +1918,7 @@ def add_collection_items_to_products(
                         `source_url` = VALUES(`source_url`),
                         `main_image_url` = VALUES(`main_image_url`),
                         `title` = VALUES(`title`),
+                        `description_text` = VALUES(`description_text`),
                         `price` = VALUES(`price`),
                         `currency_id` = VALUES(`currency_id`),
                         `weight_g` = VALUES(`weight_g`),
@@ -1339,10 +1933,22 @@ def add_collection_items_to_products(
                     """,
                     values,
                 )
-            cursor.execute(
-                f"UPDATE `{COLLECTION_TABLE}` SET `added_to_products` = 1 WHERE `id` IN ({placeholders})",
-                tuple(ids),
-            )
+            complete_ids = [int(row["id"]) for row in complete_rows]
+            if complete_ids:
+                complete_placeholders = ", ".join(["%s"] * len(complete_ids))
+                cursor.execute(
+                    f"UPDATE `{COLLECTION_TABLE}` SET `added_to_products` = 1 "
+                    f"WHERE `id` IN ({complete_placeholders})",
+                    tuple(complete_ids),
+                )
+            incomplete_ids = [int(row["id"]) for row in incomplete_rows]
+            if incomplete_ids:
+                incomplete_placeholders = ", ".join(["%s"] * len(incomplete_ids))
+                cursor.execute(
+                    f"UPDATE `{COLLECTION_TABLE}` SET `added_to_products` = 0 "
+                    f"WHERE `id` IN ({incomplete_placeholders})",
+                    tuple(incomplete_ids),
+                )
         connection.commit()
     except BaseException:
         connection.rollback()
@@ -1390,6 +1996,11 @@ def add_collection_items_to_products(
         mirror_errors.append(str(exc))
     return {
         "count": len(selected_rows),
+        "requested": len(ids),
+        "skipped_incomplete": len(incomplete_rows),
+        "skipped_incomplete_item_ids": [
+            str(row.get("source_item_id") or "") for row in incomplete_rows
+        ],
         "mirrored": mirrored,
         "mirror_errors": mirror_errors[:10],
     }

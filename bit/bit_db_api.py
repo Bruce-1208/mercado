@@ -327,8 +327,14 @@ def list_orders(
     origin="",
     page=1,
     page_size=50,
+    store_ids=None,
+    salespeople=None,
 ):
-    params = {
+    normalized_store_ids = [int(value) for value in store_ids or [] if str(value or "").isdigit()]
+    normalized_salespeople = [
+        str(value or "").strip() for value in salespeople or [] if str(value or "").strip()
+    ]
+    local_params = {
         "country": country or "",
         "status": status or "",
         "salesperson": salesperson or "",
@@ -340,8 +346,19 @@ def list_orders(
         "page": int(page or 1),
         "page_size": int(page_size or 50),
     }
+    if normalized_store_ids:
+        local_params["store_ids"] = normalized_store_ids
+    if normalized_salespeople:
+        local_params["salespeople"] = normalized_salespeople
     if DB_MODE == "mysql":
-        return _local_call("list_orders", **params)
+        return _local_call("list_orders", **local_params)
+    params = dict(local_params)
+    if normalized_store_ids:
+        params.pop("store_ids", None)
+        params["store_id"] = normalized_store_ids
+    if normalized_salespeople:
+        params.pop("salespeople", None)
+        params["salesperson"] = normalized_salespeople
     path = "/api/db/orders"
     try:
         return _request("GET", path, params=params)
@@ -349,7 +366,7 @@ def list_orders(
         message = str(exc or "")
         if "404" not in message or path not in message:
             raise
-        return _local_call("list_orders", **params)
+        return _local_call("list_orders", **local_params)
 
 
 def start_order_sync(start_date="", end_date="", token_ids=None, mode="manual"):
@@ -389,7 +406,7 @@ def list_mercado_store_links(
     sales_sort="desc",
     current_only=True,
     page=1,
-    page_size=100,
+    page_size=1000,
 ):
     params = {
         "search": search or "",
@@ -398,7 +415,7 @@ def list_mercado_store_links(
         "sales_sort": "asc" if str(sales_sort or "").strip().lower() == "asc" else "desc",
         "current_only": "1" if current_only else "0",
         "page": int(page or 1),
-        "page_size": int(page_size or 100),
+        "page_size": int(page_size or 1000),
     }
     if token_id not in (None, ""):
         params["token_id"] = int(token_id)
@@ -985,6 +1002,9 @@ def list_mercado_collection_items(search="", limit=500, offset=0, task_id=None):
 
 def list_mercado_product_items(
     search="", limit=500, offset=0, source_type="", review_status="",
+    publish_status="", weight_min=None, weight_max=None, price_min=None,
+    price_max=None, net_proceeds_min=None, net_proceeds_max=None,
+    date_from="", date_to="",
 ):
     params = {
         "search": search,
@@ -992,6 +1012,15 @@ def list_mercado_product_items(
         "offset": offset,
         "source_type": str(source_type or "").strip().lower(),
         "review_status": str(review_status or "").strip().lower(),
+        "publish_status": str(publish_status or "").strip().lower(),
+        "weight_min": weight_min,
+        "weight_max": weight_max,
+        "price_min": price_min,
+        "price_max": price_max,
+        "net_proceeds_min": net_proceeds_min,
+        "net_proceeds_max": net_proceeds_max,
+        "date_from": str(date_from or "").strip(),
+        "date_to": str(date_to or "").strip(),
     }
     if DB_MODE == "mysql":
         return _collection_store_call(
@@ -1030,6 +1059,20 @@ def update_mercado_product_review_status(product_item_ids, review_status):
         return _collection_store_call(
             "update_product_review_status", item_ids, payload["review_status"]
         )
+
+
+def update_mercado_product_item(product_item_id, changes):
+    row_id = int(product_item_id)
+    payload = dict(changes or {})
+    if DB_MODE == "mysql":
+        return _collection_store_call("update_product_item", row_id, payload)
+    path = f"/api/db/mercado-products/{row_id}"
+    try:
+        return _request("PATCH", path, json=payload)
+    except RuntimeError as exc:
+        if not _collection_route_missing(exc, path):
+            raise
+        return _collection_store_call("update_product_item", row_id, payload)
 
 
 def add_mercado_collection_items_to_products(collection_item_ids):
@@ -1074,6 +1117,31 @@ def delete_mercado_product_items(product_item_ids):
         if not _collection_route_missing(exc, path):
             raise
         return _collection_store_call("delete_product_items", item_ids)
+
+
+def move_mercado_product_items_to_collection(product_item_ids, reason="不可上架"):
+    item_ids = [int(value) for value in product_item_ids or []]
+    payload = {
+        "product_item_ids": item_ids,
+        "reason": str(reason or "不可上架"),
+    }
+    if DB_MODE == "mysql":
+        return _collection_store_call(
+            "move_product_items_to_collection",
+            item_ids,
+            reason=payload["reason"],
+        )
+    path = "/api/db/mercado-products/move-to-collection"
+    try:
+        return _request("POST", path, json=payload)
+    except RuntimeError as exc:
+        if not _collection_route_missing(exc, path):
+            raise
+        return _collection_store_call(
+            "move_product_items_to_collection",
+            item_ids,
+            reason=payload["reason"],
+        )
 
 
 def get_mercado_product_items_by_ids(product_item_ids):
@@ -1151,6 +1219,35 @@ def create_mercado_product_publish_records(
         )
 
 
+def get_published_mercado_product_item_ids(product_item_ids, *, token_id, site_id):
+    item_ids = [int(value) for value in product_item_ids or []]
+    payload = {
+        "product_item_ids": item_ids,
+        "token_id": int(token_id),
+        "site_id": str(site_id or ""),
+    }
+    if DB_MODE == "mysql":
+        return _collection_store_call(
+            "get_published_product_item_ids",
+            item_ids,
+            token_id=payload["token_id"],
+            site_id=payload["site_id"],
+        )
+    path = "/api/db/mercado-publish-records/published-product-ids"
+    try:
+        data = _request("POST", path, json=payload)
+        return [int(value) for value in data.get("product_item_ids") or []]
+    except RuntimeError as exc:
+        if not _collection_route_missing(exc, path):
+            raise
+        return _collection_store_call(
+            "get_published_product_item_ids",
+            item_ids,
+            token_id=payload["token_id"],
+            site_id=payload["site_id"],
+        )
+
+
 def update_mercado_product_publish_record(record_id, **changes):
     if DB_MODE == "mysql":
         return _collection_store_call(
@@ -1187,6 +1284,20 @@ def list_mercado_product_publish_records(
         if not _collection_route_missing(exc, path):
             raise
         return _collection_store_call("list_product_publish_records", **params)
+
+
+def get_mercado_product_publish_records_by_ids(record_ids):
+    ids = [int(value) for value in record_ids or []]
+    if DB_MODE == "mysql":
+        return _collection_store_call("get_product_publish_records_by_ids", ids)
+    path = "/api/db/mercado-publish-records/by-ids"
+    try:
+        data = _request("POST", path, json={"record_ids": ids})
+        return list(data.get("rows") or [])
+    except RuntimeError as exc:
+        if not _collection_route_missing(exc, path):
+            raise
+        return _collection_store_call("get_product_publish_records_by_ids", ids)
 
 
 def login_workbench_user(username, password):

@@ -319,6 +319,12 @@ def _sync_store(record: dict) -> dict:
                     detail_failed_count=base_detail_failures + totals["failed"],
                     product_count=base_products + totals["products"],
                 )
+                _append_log(
+                    f"{store_name} 批次完成：发现 {totals['discovered']}，"
+                    f"详情 {totals['details']}，产品 {totals['products']}，"
+                    f"新增 {totals['inserted']}，更新 {totals['updated']}，"
+                    f"详情失败 {totals['failed']}"
+                )
 
             seen_ids = set()
             accounts = _marketplace_accounts(client, seller_id)
@@ -329,6 +335,7 @@ def _sync_store(record: dict) -> dict:
                     _state_update(
                         message=f"正在扫描 {store_name} · {site_id} · {listing_status}"
                     )
+                    _append_log(f"{store_name} 开始扫描 {site_id} · {listing_status}")
                     for item_id in client.iter_listing_ids(
                         child_seller_id,
                         status=listing_status,
@@ -366,6 +373,7 @@ def _sync_store(record: dict) -> dict:
             record = _refresh_token(token_id)
             client = MercadoLibreClient(str(record.get("access_token") or ""))
             refreshed_after_unauthorized = True
+            _append_log(f"{store_name} Token 已刷新，继续同步")
 
 
 def run_store_link_sync(token_ids=None) -> dict:
@@ -399,7 +407,10 @@ def run_store_link_sync(token_ids=None) -> dict:
             result = _sync_store(record)
             results.append(result)
             _append_log(
-                f"{store_name} 完成：发现 {result['discovered']}，新增 {result['inserted']}，更新 {result['updated']}"
+                f"{store_name} 完成：发现 {result['discovered']}，"
+                f"详情 {result['details']}，产品 {result['products']}，"
+                f"新增 {result['inserted']}，更新 {result['updated']}，"
+                f"详情失败 {result['failed']}"
             )
         except Exception as exc:
             result = {"store": store_name, "status": "error", "message": str(exc)}
@@ -448,6 +459,7 @@ def _run_background(token_ids) -> None:
             message="店铺链接同步已在其他进程运行",
             finished_at=_now_text(),
         )
+        _append_log("同步任务未启动：店铺链接正在其他进程同步")
         return
     try:
         run_store_link_sync(token_ids)
