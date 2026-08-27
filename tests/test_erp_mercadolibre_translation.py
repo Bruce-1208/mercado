@@ -1,5 +1,6 @@
 import pytest
 
+from erp import mercadolibre_translation as translation_module
 from erp.mercadolibre_translation import (
     normalize_marketplace_site,
     translate_listing_content,
@@ -94,3 +95,32 @@ def test_site_validation_accepts_only_publish_ui_sites():
     assert normalize_marketplace_site("mlb") == "MLB"
     with pytest.raises(ValueError, match="不支持的目标站点"):
         normalize_marketplace_site("MPE")
+
+
+def test_default_translation_reuses_identical_result_across_accounts(monkeypatch):
+    calls = []
+
+    def fake_translate(texts, source_language, target_language):
+        calls.append((list(texts), source_language, target_language))
+        return [f"pt:{text}" for text in texts]
+
+    with translation_module._TRANSLATION_CACHE_LOCK:
+        translation_module._TRANSLATION_CACHE.clear()
+        translation_module._TRANSLATION_KEY_LOCKS.clear()
+    monkeypatch.setattr(
+        translation_module, "_deepseek_batch_translate", fake_translate
+    )
+
+    first = translate_listing_content(
+        _spanish_source(),
+        {"plain_text": "Descripción"},
+        destination_site_id="MLB",
+    )
+    second = translate_listing_content(
+        _spanish_source(),
+        {"plain_text": "Descripción"},
+        destination_site_id="MLB",
+    )
+
+    assert first[0]["title"] == second[0]["title"]
+    assert len(calls) == 1

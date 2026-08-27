@@ -49,7 +49,12 @@ import bit.bit_db_api as bit_db_api
 import bit.bit_daily_task as bit_daily_task
 import bit.bit_infractions_info as bit_infractions_info
 import bit.bit_pago_info as bit_pago_info
-import bit.bit_print as bit_print
+try:
+    import bit.bit_print as bit_print
+except ModuleNotFoundError as exc:
+    if exc.name != "bit.bit_print":
+        raise
+    import bit_playwright.bit_print as bit_print
 import bit.bit_reputation_info as bit_reputation_info
 import bit.bit_order_sync as bit_order_sync
 import bit.bit_store_link_sync as bit_store_link_sync
@@ -74,11 +79,52 @@ from decimal import Decimal
 from datetime import datetime, timedelta
 # from db_pool import get_db_connection  # 确保你的连接池文件在这个目录下
 
+
+WORKBENCH_REMEMBER_HOURS = 6
+WORKBENCH_SECRET_KEY_FILE = CURRENT_DIR / "runtime_locks" / "workbench_secret.key"
+
+
+def resolve_workbench_secret_key(secret_file=None):
+    configured = str(os.environ.get("WORKBENCH_SECRET_KEY", "")).strip()
+    if configured:
+        return configured
+
+    configured_file = str(os.environ.get("WORKBENCH_SECRET_KEY_FILE", "")).strip()
+    secret_path = Path(secret_file or configured_file or WORKBENCH_SECRET_KEY_FILE)
+    try:
+        if secret_path.exists():
+            persisted = secret_path.read_text(encoding="utf-8").strip()
+            if len(persisted) >= 32:
+                return persisted
+            logging.warning("工作台会话密钥文件内容无效，将使用本次进程临时密钥：%s", secret_path)
+            return secrets.token_hex(32)
+
+        secret_path.parent.mkdir(parents=True, exist_ok=True)
+        generated = secrets.token_hex(32)
+        try:
+            file_descriptor = os.open(
+                str(secret_path),
+                os.O_WRONLY | os.O_CREAT | os.O_EXCL,
+                0o600,
+            )
+        except FileExistsError:
+            persisted = secret_path.read_text(encoding="utf-8").strip()
+            return persisted if len(persisted) >= 32 else secrets.token_hex(32)
+        with os.fdopen(file_descriptor, "w", encoding="utf-8") as secret_handle:
+            secret_handle.write(generated)
+        return generated
+    except OSError as exc:
+        logging.warning("无法持久化工作台会话密钥，将使用本次进程临时密钥：%s", exc)
+        return secrets.token_hex(32)
+
+
 app = Flask(__name__, template_folder=str(resolve_template_dir()))
-app.secret_key = os.environ.get("WORKBENCH_SECRET_KEY") or secrets.token_hex(32)
+app.secret_key = resolve_workbench_secret_key()
 app.config.update(
     SESSION_COOKIE_HTTPONLY=True,
     SESSION_COOKIE_SAMESITE="Lax",
+    PERMANENT_SESSION_LIFETIME=timedelta(hours=WORKBENCH_REMEMBER_HOURS),
+    SESSION_REFRESH_EACH_REQUEST=False,
 )
 
 # 配置日志
@@ -282,12 +328,16 @@ if USE_DB_API:
     db_add_mercado_collection_items_to_products = bit_db_api.add_mercado_collection_items_to_products
     db_delete_mercado_collection_items = bit_db_api.delete_mercado_collection_items
     db_delete_mercado_product_items = bit_db_api.delete_mercado_product_items
+    db_move_mercado_product_items_to_collection = bit_db_api.move_mercado_product_items_to_collection
     db_get_mercado_product_items_by_ids = bit_db_api.get_mercado_product_items_by_ids
     db_update_mercado_product_publish_state = bit_db_api.update_mercado_product_publish_state
     db_create_mercado_product_publish_records = bit_db_api.create_mercado_product_publish_records
+    db_get_mercado_product_publish_records_by_ids = bit_db_api.get_mercado_product_publish_records_by_ids
+    db_get_published_mercado_product_item_ids = bit_db_api.get_published_mercado_product_item_ids
     db_update_mercado_product_publish_record = bit_db_api.update_mercado_product_publish_record
     db_list_mercado_product_publish_records = bit_db_api.list_mercado_product_publish_records
     db_update_mercado_product_review_status = bit_db_api.update_mercado_product_review_status
+    db_update_mercado_product_item = bit_db_api.update_mercado_product_item
     db_list_mercado_store_links = bit_db_api.list_mercado_store_links
     db_bulk_update_mercado_store_links = bit_db_api.bulk_update_mercado_store_links
 else:
@@ -377,13 +427,17 @@ else:
         delete_product_items as db_delete_mercado_product_items,
         get_collection_task as db_get_mercado_collection_task,
         get_product_items_by_ids as db_get_mercado_product_items_by_ids,
+        move_product_items_to_collection as db_move_mercado_product_items_to_collection,
         create_product_publish_records as db_create_mercado_product_publish_records,
+        get_product_publish_records_by_ids as db_get_mercado_product_publish_records_by_ids,
+        get_published_product_item_ids as db_get_published_mercado_product_item_ids,
         list_product_publish_records as db_list_mercado_product_publish_records,
         list_collection_items as db_list_mercado_collection_items,
         list_product_items as db_list_mercado_product_items,
         update_collection_task as db_update_mercado_collection_task,
         update_product_publish_state as db_update_mercado_product_publish_state,
         update_product_publish_record as db_update_mercado_product_publish_record,
+        update_product_item as db_update_mercado_product_item,
         update_product_review_status as db_update_mercado_product_review_status,
         upsert_collection_items as db_upsert_mercado_collection_items,
     )
@@ -487,7 +541,13 @@ def _validate_workbench_username(username):
 
 
 def ensure_workbench_user_table():
-    connection = pymysql.connect(**mysql_config)
+    connection_config = dict(mysql_config)
+    # 登录表初始化不能无限阻塞整个控制台启动；数据库暂时被锁定时先启动服务，
+    # 后续登录请求仍会返回明确的数据库错误。
+    connection_config.setdefault("connect_timeout", 5)
+    connection_config.setdefault("read_timeout", 8)
+    connection_config.setdefault("write_timeout", 8)
+    connection = pymysql.connect(**connection_config)
     try:
         with connection.cursor() as cursor:
             cursor.execute(
@@ -1224,6 +1284,7 @@ _mercado_collection_state = {
     "processed_count": 0,
     "completed_count": 0,
     "failed_count": 0,
+    "elapsed_seconds": 0,
     "current_page": 0,
     "current_item_id": "",
     "started_at": "",
@@ -1243,16 +1304,30 @@ _mercado_publish_state = {
     "batch_id": "",
     "status": "idle",
     "message": "等待选择产品上架",
+    "selection_mode": "accounts",
     "token_id": None,
+    "token_ids": [],
+    "group_names": [],
     "store_name": "",
     "site_id": "MLM",
+    "site_ids": ["MLM"],
     "site_name": "墨西哥",
-    "quantity": 1,
-    "worker_count": 4,
+    "target_count": 0,
+    "completed_target_count": 0,
+    "skipped_target_count": 0,
+    "quantity": 500,
+    "worker_count": 10,
     "requested_count": 0,
     "processed_count": 0,
     "published_count": 0,
     "failed_count": 0,
+    "moved_to_collection_count": 0,
+    "skipped_published_count": 0,
+    "elapsed_seconds": 0,
+    "average_seconds_per_item": 0,
+    "items_per_minute": 0,
+    "estimated_remaining_seconds": 0,
+    "average_stage_seconds": {},
     "current_item_id": "",
     "started_at": "",
     "finished_at": "",
@@ -1273,6 +1348,12 @@ _order_print_state = {
     "no_orders": 0,
     "failed": 0,
     "skipped": 0,
+    "printed_order_count": 0,
+    "shipment_count": 0,
+    "fallback_store_count": 0,
+    "task_id": "",
+    "download_path": "",
+    "download_name": "",
     "results": [],
     "site_last_runs": [],
 }
@@ -2606,7 +2687,7 @@ def _append_order_print_log(message):
 
 def _order_print_snapshot():
     with _order_print_lock:
-        return {
+        snapshot = {
             **dict(_order_print_state),
             "params": dict(_order_print_state.get("params") or {}),
             "results": [dict(row) for row in (_order_print_state.get("results") or [])],
@@ -2619,6 +2700,13 @@ def _order_print_snapshot():
                 and _order_print_stop_event is not None
             ),
         }
+        snapshot.pop("download_path", None)
+        snapshot["download_url"] = (
+            "/api/order-print/download"
+            if _order_print_state.get("download_path")
+            else ""
+        )
+        return snapshot
 
 
 def _order_print_history_status(outcome):
@@ -2635,12 +2723,12 @@ def _order_print_history_status(outcome):
 
 
 def _load_order_print_site_last_runs(current_results=None):
-    """汇总全部已配置店铺站点及其最近一次订单打印时间。"""
+    """汇总全部 API 授权店铺站点及其最近一次订单打印时间。"""
 
     current_results = [dict(row) for row in (current_results or [])]
     configs_loaded = True
     try:
-        configs = db_list_bit_browser_configs(include_ignored=False) or []
+        configs = _order_print_config_options()["shops"]
     except Exception as exc:
         logging.warning("读取订单打印站点配置失败：%s", exc)
         configs = []
@@ -2686,7 +2774,7 @@ def _load_order_print_site_last_runs(current_results=None):
         shop_name = str(config.get("shop_name") or "").strip()
         if not shop_name:
             continue
-        for site in split_config_sites(config.get("sites")):
+        for site in config.get("sites") or []:
             key = (shop_name, site)
             if key in seen:
                 continue
@@ -2707,6 +2795,56 @@ def _load_order_print_site_last_runs(current_results=None):
             if key not in seen:
                 rows.append(record)
     return rows
+
+
+def _order_print_config_options():
+    """Return selectable stores from Mercado API authorizations only."""
+
+    token_rows = list((bit_db_api.list_mercado_store_tokens() or {}).get("rows") or [])
+    shops = []
+    site_order = []
+    for token in token_rows:
+        token_id = int(token.get("id") or 0)
+        shop_name = str(
+            token.get("display_name") or token.get("nickname") or token_id or ""
+        ).strip()
+        if not token_id or not shop_name:
+            continue
+        sites = []
+        salespeople = []
+        for setting in token.get("site_settings") or []:
+            site_id = str(setting.get("site_id") or "").strip().upper()
+            site_name = str(
+                setting.get("site_name")
+                or bit_print.SITE_NAMES.get(site_id)
+                or ""
+            ).strip()
+            if site_name and site_name not in sites:
+                sites.append(site_name)
+            salesperson = str(setting.get("salesperson") or "").strip()
+            if salesperson and salesperson not in salespeople:
+                salespeople.append(salesperson)
+        default_site = bit_print.SITE_NAMES.get(
+            str(token.get("site_id") or "").strip().upper()
+        )
+        if default_site and default_site not in sites:
+            sites.append(default_site)
+        if not sites:
+            sites = list(bit_print.SITE_IDS)
+        for site in sites:
+            if site not in site_order:
+                site_order.append(site)
+        shops.append(
+            {
+                "token_id": token_id,
+                "shop_name": shop_name,
+                "salesperson": "、".join(salespeople),
+                "sites": sites,
+                "token_status": str(token.get("status") or "unknown"),
+                "token_status_text": str(token.get("status_text") or ""),
+            }
+        )
+    return {"shops": shops, "sites": site_order}
 
 
 def _refresh_order_print_site_last_runs(current_results=None):
@@ -2733,7 +2871,7 @@ def build_order_print_params(data):
         if len(raw_targets) > 1000:
             raise ValueError("单次最多选择 1000 个店铺站点")
 
-        options = _collection_config_options()
+        options = _order_print_config_options()
         configured_pairs = {
             (shop["shop_name"], site)
             for shop in options["shops"]
@@ -2766,18 +2904,34 @@ def build_order_print_params(data):
             f"{len(selected_targets)} 个店铺站点"
         )
     else:
-        selection = _parse_collection_request({**data, "max_workers": 1})
-        selected_shops = selection["selected_shops"]
-        selected_sites = selection["selected_sites"]
-        target_label = selection["target"]
+        selected_shops = _normalized_collection_list(data, "shops")
+        selected_sites = _normalized_collection_list(data, "sites")
+        options = _order_print_config_options()
+        configured = {shop["shop_name"]: shop for shop in options["shops"]}
+        unknown_shops = [shop for shop in selected_shops if shop not in configured]
+        if unknown_shops:
+            raise ValueError("API 授权店铺不存在：" + "、".join(unknown_shops))
+        unknown_sites = [site for site in selected_sites if site not in options["sites"]]
+        if unknown_sites:
+            raise ValueError("站点不存在：" + "、".join(unknown_sites))
+        matching_shops = [
+            shop
+            for shop in selected_shops
+            if any(site in selected_sites for site in configured[shop]["sites"])
+        ]
+        if not matching_shops:
+            raise ValueError("所选 API 授权店铺没有匹配站点")
+        target_label = f"{len(matching_shops)} 家 API 授权店铺 / {len(selected_sites)} 个站点"
     return {
+        "task_id": secrets.token_hex(16),
         "mode": "once",
         "max_retries": _parse_int_param(
             data, "max_retries", 3, min_value=1, max_value=3
         ),
         "retry_delay_seconds": _parse_int_param(
-            data, "retry_delay_seconds", 300, min_value=0, max_value=600
+            data, "retry_delay_seconds", 3, min_value=0, max_value=60
         ),
+        "fallback_hours": bit_print.DEFAULT_FALLBACK_HOURS,
         "selected_shops": selected_shops,
         "selected_sites": selected_sites,
         "selected_targets": selected_targets,
@@ -2789,16 +2943,20 @@ def run_order_print_job(params, task_lock, stop_event):
     global _order_print_stop_event
     try:
         with _order_print_lock:
-            _order_print_state["message"] = "正在执行订单打印"
-        _append_order_print_log(f"{get_now_time()} ===== 订单打印开始 =====")
+            _order_print_state["message"] = "正在通过美客多 API 生成面单"
+        _append_order_print_log(f"{get_now_time()} ===== 美客多 API 订单打印开始 =====")
         summary = bit_print.print_orders_all(
             selected_shops=params["selected_shops"],
             selected_sites=params["selected_sites"],
             selected_targets=params.get("selected_targets"),
             max_retries=params["max_retries"],
             retry_delay_seconds=params["retry_delay_seconds"],
+            fallback_hours=params.get(
+                "fallback_hours", bit_print.DEFAULT_FALLBACK_HOURS
+            ),
             stop_event=stop_event,
             logger=_append_order_print_log,
+            task_id=params.get("task_id"),
         )
         site_last_runs = _load_order_print_site_last_runs(summary.get("results", []))
         with _order_print_lock:
@@ -2808,6 +2966,11 @@ def run_order_print_job(params, task_lock, stop_event):
                     "no_orders": summary.get("no_orders", 0),
                     "failed": summary.get("failed", 0),
                     "skipped": summary.get("skipped", 0),
+                    "printed_order_count": summary.get("printed_order_count", 0),
+                    "shipment_count": summary.get("shipment_count", 0),
+                    "fallback_store_count": summary.get("fallback_store_count", 0),
+                    "download_path": summary.get("download_path", ""),
+                    "download_name": summary.get("download_name", ""),
                     "results": summary.get("results", []),
                     "site_last_runs": site_last_runs,
                 }
@@ -2820,7 +2983,15 @@ def run_order_print_job(params, task_lock, stop_event):
                     "running": False,
                     "finished_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
                     "status": "stopped" if stopped else "success",
-                    "message": "订单打印已停止" if stopped else "订单打印任务已完成",
+                    "message": (
+                        "API 订单打印已停止"
+                        if stopped
+                        else (
+                            f"API 面单已生成：{summary.get('shipment_count', 0)} 个"
+                            if summary.get("download_path")
+                            else "没有需要打印的订单"
+                        )
+                    ),
                 }
             )
     except Exception as exc:
@@ -3897,6 +4068,21 @@ def api_collect_funds_status():
     return response
 
 
+@app.route('/api/order-print/options', methods=['GET'])
+@login_required
+def api_order_print_options():
+    try:
+        response = jsonify({"status": "success", "data": _order_print_config_options()})
+        response.headers["Cache-Control"] = "no-store"
+        return response
+    except Exception as exc:
+        logging.error("读取 API 打印店铺失败：%s", exc)
+        return jsonify({
+            "status": "error",
+            "message": f"读取美客多授权店铺失败：{exc}",
+        }), 500
+
+
 @app.route('/api/order-print/start', methods=['POST'])
 @login_required
 def api_start_order_print():
@@ -3937,12 +4123,18 @@ def api_start_order_print():
             "started_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
             "finished_at": "",
             "status": "running",
-            "message": f"{params['target']} 订单打印已启动",
+            "message": f"{params['target']} API 订单打印已启动",
             "params": params,
+            "task_id": params["task_id"],
             "printed": 0,
             "no_orders": 0,
             "failed": 0,
             "skipped": 0,
+            "printed_order_count": 0,
+            "shipment_count": 0,
+            "fallback_store_count": 0,
+            "download_path": "",
+            "download_name": "",
             "results": [],
         })
         task_state = _order_print_snapshot()
@@ -3969,7 +4161,7 @@ def api_start_order_print():
     return jsonify({
         "status": "success",
         "data": task_state,
-        "message": "订单打印已在后台启动",
+        "message": "美客多 API 订单打印已在后台启动",
     })
 
 
@@ -3986,10 +4178,10 @@ def api_stop_order_print():
         _order_print_stop_event.set()
         _order_print_state.update({
             "status": "stopping",
-            "message": "正在停止，当前页面操作完成后会关闭窗口",
+            "message": "正在停止，当前 API 请求完成后会安全结束",
         })
         state = _order_print_snapshot()
-    _append_order_print_log(f"{get_now_time()} 已收到停止订单打印请求")
+    _append_order_print_log(f"{get_now_time()} 已收到停止 API 订单打印请求")
     return jsonify({
         "status": "success",
         "data": state,
@@ -4012,6 +4204,29 @@ def api_order_print_status():
             "lock_owner": external_owner,
         })
     response = jsonify({"status": "success", "data": state})
+    response.headers["Cache-Control"] = "no-store"
+    return response
+
+
+@app.route('/api/order-print/download', methods=['GET'])
+@login_required
+def api_order_print_download():
+    with _order_print_lock:
+        raw_path = str(_order_print_state.get("download_path") or "")
+        download_name = str(_order_print_state.get("download_name") or "")
+    if not raw_path:
+        return jsonify({"status": "error", "message": "当前没有可下载的 API 面单"}), 404
+    path = Path(raw_path).resolve()
+    output_root = bit_print.ORDER_PRINT_OUTPUT_DIR.resolve()
+    if not path.is_relative_to(output_root) or not path.is_file():
+        return jsonify({"status": "error", "message": "面单文件不存在或已失效"}), 404
+    response = send_file(
+        path,
+        mimetype="application/pdf",
+        as_attachment=False,
+        download_name=download_name or path.name,
+        max_age=0,
+    )
     response.headers["Cache-Control"] = "no-store"
     return response
 
@@ -4121,22 +4336,49 @@ def api_high_profit_products():
         return jsonify({"status": "error", "message": str(exc)}), 500
 
 
+def _order_list_query_params(args):
+    salespeople = []
+    for value in args.getlist("salesperson"):
+        name = str(value or "").strip()
+        if name and name not in salespeople:
+            salespeople.append(name)
+    store_ids = []
+    for value in args.getlist("store_id"):
+        text = str(value or "").strip()
+        if not text:
+            continue
+        try:
+            store_id = int(text)
+        except ValueError as exc:
+            raise ValueError("店铺筛选参数无效") from exc
+        if store_id <= 0:
+            raise ValueError("店铺筛选参数无效")
+        if store_id not in store_ids:
+            store_ids.append(store_id)
+    params = {
+        "country": str(args.get("country") or "").strip(),
+        "status": str(args.get("status") or "").strip(),
+        "salesperson": salespeople[0] if len(salespeople) == 1 else "",
+        "group_name": str(args.get("group_name") or "").strip(),
+        "search": str(args.get("search") or "").strip(),
+        "start_date": str(args.get("start_date") or "").strip(),
+        "end_date": str(args.get("end_date") or "").strip(),
+        "origin": str(args.get("origin") or "").strip(),
+        "page": _parse_int_param(args, "page", 1, 1, 1000000),
+        "page_size": _parse_int_param(args, "page_size", 50, 10, 200),
+    }
+    if len(salespeople) > 1:
+        params["salespeople"] = salespeople
+    if store_ids:
+        params["store_ids"] = store_ids
+    return params
+
+
 @app.route('/api/orders', methods=['GET'])
 @login_required
 def api_orders():
     try:
-        data = db_list_orders(
-            country=str(request.args.get("country") or "").strip(),
-            status=str(request.args.get("status") or "").strip(),
-            salesperson=str(request.args.get("salesperson") or "").strip(),
-            group_name=str(request.args.get("group_name") or "").strip(),
-            search=str(request.args.get("search") or "").strip(),
-            start_date=str(request.args.get("start_date") or "").strip(),
-            end_date=str(request.args.get("end_date") or "").strip(),
-            origin=str(request.args.get("origin") or "").strip(),
-            page=_parse_int_param(request.args, "page", 1, 1, 1000000),
-            page_size=_parse_int_param(request.args, "page_size", 50, 10, 200),
-        )
+        data = db_list_orders(**_order_list_query_params(request.args))
     except ValueError as exc:
         return jsonify({"status": "error", "message": str(exc)}), 400
     except Exception as exc:
@@ -4312,7 +4554,7 @@ def api_store_links():
             current_only=str(request.args.get("current_only") or "1").strip().lower()
             not in ("0", "false", "no", "off"),
             page=_parse_int_param(request.args, "page", 1, 1, 1000000),
-            page_size=_parse_int_param(request.args, "page_size", 100, 10, 500),
+            page_size=_parse_int_param(request.args, "page_size", 1000, 10, 1000),
         )
     except ValueError as exc:
         return jsonify({"status": "error", "message": str(exc)}), 400
@@ -4754,23 +4996,61 @@ def _mercado_collection_finish_status(processed, completed, failed, requested=No
     return status, message
 
 
+def _mercado_collection_elapsed_seconds(state, task=None, now=None):
+    """Return a stable live/final task duration for the status API."""
+    state = state or {}
+    task = task or {}
+    started_value = state.get("started_at") or task.get("started_at")
+    if not started_value:
+        return max(0, int(state.get("elapsed_seconds") or task.get("elapsed_seconds") or 0))
+    finished_value = state.get("finished_at") or task.get("finished_at")
+
+    def parse(value):
+        if isinstance(value, datetime):
+            return value
+        text = str(value or "").strip()
+        if not text:
+            return None
+        try:
+            return datetime.fromisoformat(text)
+        except ValueError:
+            return None
+
+    started_at = parse(started_value)
+    finished_at = parse(finished_value) or now or datetime.now()
+    if started_at is None:
+        return max(0, int(state.get("elapsed_seconds") or task.get("elapsed_seconds") or 0))
+    return max(0, int((finished_at - started_at).total_seconds()))
+
+
+def _format_mercado_elapsed(seconds):
+    seconds = max(0, int(seconds or 0))
+    hours, remainder = divmod(seconds, 3600)
+    minutes, seconds = divmod(remainder, 60)
+    if hours:
+        return f"{hours}小时{minutes}分{seconds}秒"
+    if minutes:
+        return f"{minutes}分{seconds}秒"
+    return f"{seconds}秒"
+
+
 def _mercado_profit_refresh_loop():
     """Refresh stale official fee snapshots without blocking the workbench UI."""
 
     from erp.mercadolibre_collection_store import (
+        backfill_item_exchange_prices,
         list_stale_profitability_items,
         update_item_profitability,
     )
     from erp.mercadolibre_profitability import (
         MercadoProfitabilityClient,
+        SUPPORTED_SITE_CURRENCIES,
         active_store_token,
         enrich_profitability,
+        refresh_supported_exchange_rates,
     )
 
-    try:
-        stale_hours = max(1, int(os.environ.get("MERCADO_PROFIT_STALE_HOURS", "6")))
-    except ValueError:
-        stale_hours = 6
+    stale_hours = 24
     try:
         batch_size = max(1, min(int(os.environ.get("MERCADO_PROFIT_REFRESH_BATCH", "50")), 500))
     except ValueError:
@@ -4780,6 +5060,7 @@ def _mercado_profit_refresh_loop():
     except ValueError:
         interval = 300
 
+    next_reference_check = 0.0
     while not _mercado_profit_refresh_stop_event.is_set():
         try:
             stale_before = (datetime.now() - timedelta(hours=stale_hours)).strftime(
@@ -4789,8 +5070,18 @@ def _mercado_profit_refresh_loop():
                 stale_before=stale_before,
                 limit=batch_size,
             )
-            if rows:
+            client = None
+            if time.monotonic() >= next_reference_check:
                 client = MercadoProfitabilityClient(active_store_token())
+                site_rates = refresh_supported_exchange_rates(client)
+                backfill_item_exchange_prices({
+                    SUPPORTED_SITE_CURRENCIES[site_id]: snapshot
+                    for site_id, snapshot in site_rates.items()
+                })
+                # Refresh reference data and backfill converted prices once a day.
+                next_reference_check = time.monotonic() + 24 * 60 * 60
+            if rows:
+                client = client or MercadoProfitabilityClient(active_store_token())
                 for row in rows:
                     if _mercado_profit_refresh_stop_event.is_set():
                         break
@@ -4830,6 +5121,31 @@ def _start_order_sync_scheduler():
         bit_order_sync.ensure_order_sync_scheduler()
 
 
+def _mercado_collection_rows_needing_repair(rows):
+    """Retry every incomplete row; plugin-visible rows can succeed once load drops."""
+    return [row for row in rows or [] if row.get("scrape_status") != "ok"]
+
+
+def _mercado_collection_db_call(operation, *args, attempts=6, **kwargs):
+    """Retry transient database/network failures without killing browser workers."""
+    attempts = max(1, min(int(attempts), 10))
+    for attempt in range(attempts):
+        try:
+            return operation(*args, **kwargs)
+        except Exception:
+            if attempt + 1 >= attempts:
+                raise
+            delay = min(0.5 * (2 ** attempt), 8.0)
+            logging.warning(
+                "Mercado 采集数据库操作失败，%.1f 秒后重试（%s/%s）",
+                delay,
+                attempt + 1,
+                attempts,
+                exc_info=True,
+            )
+            time.sleep(delay)
+
+
 def _run_mercado_collection_task(
     task_id, source_url, requested_count, worker_count, collection_scope
 ):
@@ -4841,6 +5157,21 @@ def _run_mercado_collection_task(
     counters = {"candidate": 0, "processed": 0, "completed": 0, "failed": 0}
     counters_lock = threading.Lock()
     item_statuses = {}
+    pending_rows = []
+    pending_rows_lock = threading.Lock()
+    collection_write_batch_size = 25
+    started_monotonic = time.monotonic()
+    last_task_status_write = 0.0
+
+    def elapsed_seconds():
+        return max(0, int(time.monotonic() - started_monotonic))
+
+    def result_summary(message):
+        return (
+            f"{message} · 成功 {counters['completed']} 件 · "
+            f"失败 {counters['failed']} 件 · 并发 {worker_count} · "
+            f"耗时 {_format_mercado_elapsed(elapsed_seconds())}"
+        )
 
     def on_page(info):
         counters["candidate"] = int(info.get("candidate_count") or 0)
@@ -4856,7 +5187,8 @@ def _run_mercado_collection_task(
             current_page=current_page,
             message=message,
         )
-        db_update_mercado_collection_task(
+        _mercado_collection_db_call(
+            db_update_mercado_collection_task,
             task_id,
             status="running",
             collected_count=counters["candidate"],
@@ -4870,7 +5202,21 @@ def _run_mercado_collection_task(
             message=str(info.get("message") or "正在采集商品详情"),
         )
 
+    def buffer_collection_row(row, *, force=False):
+        batch = []
+        with pending_rows_lock:
+            if row is not None:
+                pending_rows.append(dict(row))
+            if force or len(pending_rows) >= collection_write_batch_size:
+                batch.extend(pending_rows)
+                pending_rows.clear()
+        if batch:
+            _mercado_collection_db_call(
+                db_upsert_mercado_collection_items, task_id, batch
+            )
+
     def on_item(row):
+        nonlocal last_task_status_write
         # Persist collection results immediately.  Official commission,
         # exchange-rate and shipping estimates are filled by the existing
         # background profitability worker and must not block browser slots.
@@ -4880,7 +5226,7 @@ def _run_mercado_collection_task(
             "profitability_source": "mercadolibre_official_api_pending",
             "profitability_error": "",
         }
-        db_upsert_mercado_collection_items(task_id, [row])
+        buffer_collection_row(row)
         with counters_lock:
             item_id = str(row.get("source_item_id") or "")
             incoming_status = "ok" if row.get("scrape_status") == "ok" else "partial"
@@ -4906,17 +5252,38 @@ def _run_mercado_collection_task(
                 failed_count=counters["failed"],
                 message=message,
             )
-            db_update_mercado_collection_task(
+            now_monotonic = time.monotonic()
+            persist_task_status = (
+                now_monotonic - last_task_status_write >= 1.0
+                or counters["processed"] >= max(counters["candidate"], requested_count)
+            )
+            if persist_task_status:
+                last_task_status_write = now_monotonic
+                task_snapshot = {
+                    "collected_count": max(
+                        counters["candidate"], counters["processed"]
+                    ),
+                    "completed_count": counters["completed"],
+                    "failed_count": counters["failed"],
+                    "message": message,
+                }
+            else:
+                task_snapshot = None
+        if task_snapshot is not None:
+            _mercado_collection_db_call(
+                db_update_mercado_collection_task,
                 task_id,
-                collected_count=max(counters["candidate"], counters["processed"]),
-                completed_count=counters["completed"],
-                failed_count=counters["failed"],
-                message=message,
+                **task_snapshot,
             )
 
     try:
-        db_update_mercado_collection_task(
-            task_id, status="running", message="正在打开采集浏览器", started=True
+        _mercado_collection_db_call(
+            db_update_mercado_collection_task,
+            task_id,
+            status="running",
+            message="正在打开采集浏览器",
+            worker_count=worker_count,
+            started=True,
         )
         result = collect_marketplace_listing(
             source_url,
@@ -4928,10 +5295,8 @@ def _run_mercado_collection_task(
             on_progress=on_progress,
             stop_event=_mercado_collection_stop_event,
         )
-        incomplete_rows = [
-            row for row in result.get("rows") or []
-            if row.get("scrape_status") != "ok"
-        ]
+        buffer_collection_row(None, force=True)
+        incomplete_rows = _mercado_collection_rows_needing_repair(result.get("rows"))
         if incomplete_rows and not _mercado_collection_stop_event.is_set():
             from erp.mercadolibre_playwright_collector import (
                 repair_marketplace_items_playwright,
@@ -4943,58 +5308,83 @@ def _run_mercado_collection_task(
             repair_marketplace_items_playwright(
                 incomplete_rows,
                 window_id=DEFAULT_ZYING_WINDOW_ID,
-                plugin_timeout=30.0,
+                plugin_timeout=15.0,
                 attempts=1,
                 on_item=on_item,
                 on_progress=on_progress,
                 stop_event=_mercado_collection_stop_event,
             )
+            buffer_collection_row(None, force=True)
         status, message = _mercado_collection_finish_status(
             counters["processed"],
             counters["completed"],
             counters["failed"],
             requested_count,
         )
-        db_update_mercado_collection_task(
+        message = result_summary(message)
+        _mercado_collection_db_call(
+            db_update_mercado_collection_task,
             task_id,
             status=status,
             message=message,
             collected_count=int(result.get("candidate_count") or counters["candidate"]),
             completed_count=counters["completed"],
             failed_count=counters["failed"],
+            worker_count=worker_count,
+            elapsed_seconds=elapsed_seconds(),
             finished=True,
         )
-        _mercado_collection_state_update(status=status, message=message)
+        _mercado_collection_state_update(
+            status=status,
+            message=message,
+            elapsed_seconds=elapsed_seconds(),
+        )
     except CollectionStopped:
-        message = f"采集已停止，已保留入库的 {counters['processed']} 件商品"
+        message = result_summary(
+            f"采集已停止，已保留入库的 {counters['processed']} 件商品"
+        )
         try:
-            db_update_mercado_collection_task(
+            _mercado_collection_db_call(
+                db_update_mercado_collection_task,
                 task_id,
                 status="stopped",
                 message=message,
                 completed_count=counters["completed"],
                 failed_count=counters["failed"],
+                worker_count=worker_count,
+                elapsed_seconds=elapsed_seconds(),
                 finished=True,
             )
         except Exception:
             logging.exception("更新 Mercado 采集停止状态失败")
-        _mercado_collection_state_update(status="stopped", message=message)
+        _mercado_collection_state_update(
+            status="stopped", message=message, elapsed_seconds=elapsed_seconds()
+        )
     except Exception as exc:
-        message = f"采集失败：{exc}"
+        message = result_summary(f"采集失败：{exc}")
         logging.exception("Mercado 列表采集失败")
         try:
-            db_update_mercado_collection_task(
+            _mercado_collection_db_call(
+                db_update_mercado_collection_task,
                 task_id,
                 status="error",
                 message=message,
                 completed_count=counters["completed"],
                 failed_count=counters["failed"],
+                worker_count=worker_count,
+                elapsed_seconds=elapsed_seconds(),
                 finished=True,
             )
         except Exception:
             logging.exception("更新 Mercado 采集失败状态失败")
-        _mercado_collection_state_update(status="error", message=message)
+        _mercado_collection_state_update(
+            status="error", message=message, elapsed_seconds=elapsed_seconds()
+        )
     finally:
+        try:
+            buffer_collection_row(None, force=True)
+        except Exception:
+            logging.exception("刷新 Mercado 采集批量写入缓冲区失败")
         _mercado_collection_state_update(
             running=False,
             current_item_id="",
@@ -5056,6 +5446,7 @@ def api_start_mercado_collection():
                 source_url,
                 requested_count,
                 str(user.get("display_name") or user.get("username") or ""),
+                worker_count=worker_count,
             )
         except Exception as exc:
             logging.exception("创建 Mercado 采集任务失败")
@@ -5082,6 +5473,7 @@ def api_start_mercado_collection():
                 "processed_count": 0,
                 "completed_count": 0,
                 "failed_count": 0,
+                "elapsed_seconds": 0,
                 "current_page": 0,
                 "current_item_id": "",
                 "started_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
@@ -5186,6 +5578,10 @@ def api_mercado_collection_status():
             data["task"] = db_get_mercado_collection_task(task_id)
         except Exception as exc:
             data["database_message"] = str(exc)
+    task = data.get("task") or {}
+    if not data.get("worker_count") and task.get("worker_count"):
+        data["worker_count"] = int(task["worker_count"])
+    data["elapsed_seconds"] = _mercado_collection_elapsed_seconds(data, task)
     response = jsonify({"status": "success", "data": data})
     response.headers["Cache-Control"] = "no-store"
     return response
@@ -5208,8 +5604,11 @@ def api_mercado_collection_items():
             limit=_parse_int_param(request.args, "limit", 500, 1, 1000),
             offset=_parse_int_param(request.args, "offset", 0, 0, 1000000),
             task_id=int(task_id) if str(task_id or "").strip() else None,
+            exclude_added=True,
         )
         return jsonify({"status": "success", "data": result})
+    except ValueError as exc:
+        return jsonify({"status": "error", "message": str(exc)}), 400
     except Exception as exc:
         logging.exception("读取 Mercado 采集列表失败")
         return jsonify({"status": "error", "message": f"读取采集列表失败：{exc}"}), 500
@@ -5238,8 +5637,19 @@ def api_mercado_products():
             offset=_parse_int_param(request.args, "offset", 0, 0, 1000000),
             source_type=str(request.args.get("source_type") or "").strip(),
             review_status=str(request.args.get("review_status") or "").strip(),
+            publish_status=str(request.args.get("publish_status") or "").strip(),
+            weight_min=str(request.args.get("weight_min") or "").strip(),
+            weight_max=str(request.args.get("weight_max") or "").strip(),
+            price_min=str(request.args.get("price_min") or "").strip(),
+            price_max=str(request.args.get("price_max") or "").strip(),
+            net_proceeds_min=str(request.args.get("net_proceeds_min") or "").strip(),
+            net_proceeds_max=str(request.args.get("net_proceeds_max") or "").strip(),
+            date_from=str(request.args.get("date_from") or "").strip(),
+            date_to=str(request.args.get("date_to") or "").strip(),
         )
         return jsonify({"status": "success", "data": result})
+    except ValueError as exc:
+        return jsonify({"status": "error", "message": str(exc)}), 400
     except Exception as exc:
         logging.exception("读取 Mercado 产品列表失败")
         return jsonify({"status": "error", "message": f"读取产品列表失败：{exc}"}), 500
@@ -5260,6 +5670,37 @@ def api_add_mercado_products():
     except Exception as exc:
         logging.exception("加入 Mercado 产品列表失败")
         return jsonify({"status": "error", "message": f"加入产品列表失败：{exc}"}), 500
+
+
+@app.route('/api/mercado-products/<int:product_item_id>', methods=['PATCH'])
+@login_required
+def api_update_mercado_product(product_item_id):
+    with _mercado_publish_lock:
+        if _mercado_publish_state.get("running"):
+            return jsonify({
+                "status": "error",
+                "message": "批量上架正在运行，完成后再修改产品",
+            }), 409
+    data = request.get_json(silent=True)
+    if not isinstance(data, dict):
+        return jsonify({"status": "error", "message": "产品内容必须是对象"}), 422
+    allowed = {
+        "title", "description_text", "main_image_url", "category_id", "price",
+        "weight_g", "package_length_cm", "package_width_cm", "package_height_cm",
+    }
+    try:
+        result = db_update_mercado_product_item(
+            product_item_id,
+            {key: value for key, value in data.items() if key in allowed},
+        )
+        return jsonify({"status": "success", "data": result})
+    except ValueError as exc:
+        return jsonify({"status": "error", "message": str(exc)}), 400
+    except KeyError as exc:
+        return jsonify({"status": "error", "message": str(exc)}), 404
+    except Exception as exc:
+        logging.exception("修改 Mercado 产品内容失败")
+        return jsonify({"status": "error", "message": f"修改产品失败：{exc}"}), 500
 
 
 @app.route('/api/mercado-products/review-status', methods=['POST'])
@@ -5288,63 +5729,236 @@ def _mercado_publish_state_update(**changes):
 
 def _run_mercado_product_publish(
     product_rows, token_id, site_id, site_name, quantity, worker_count, store_name,
-    batch_id, created_by,
+    batch_id, created_by, discount_rate, moved_to_collection_count=0,
+):
+    """Backward-compatible single-target entry point."""
+    return _run_mercado_product_publish_targets(
+        product_rows,
+        targets=[{
+            "token_id": int(token_id),
+            "store_name": str(store_name),
+            "site_id": str(site_id),
+            "site_name": str(site_name),
+            "discount_rate": float(discount_rate),
+        }],
+        quantity=quantity,
+        worker_count=worker_count,
+        batch_id=batch_id,
+        created_by=created_by,
+        moved_to_collection_count=moved_to_collection_count,
+    )
+
+
+def _run_mercado_product_publish_targets(
+    product_rows, targets, quantity, worker_count, batch_id, created_by,
+    moved_to_collection_count=0,
 ):
     from erp.mercadolibre_batch_publish import publish_product_batch
 
-    def on_progress(info):
+    rows = [dict(row) for row in product_rows or []]
+    target_rows = [dict(target) for target in targets or []]
+    target_count = len(target_rows)
+    total_requested = sum(
+        len(target.get("product_rows") or rows) for target in target_rows
+    )
+    processed = published = failed = skipped_published = 0
+    all_results = []
+    stage_duration_totals: dict[str, float] = {}
+    stage_sample_count = 0
+    started_monotonic = time.monotonic()
+
+    def timing_metrics(done_count):
+        elapsed = max(0.0, time.monotonic() - started_monotonic)
+        done = max(0, int(done_count or 0))
+        attempted_done = max(0, done - skipped_published)
+        rate_per_second = (
+            attempted_done / elapsed
+        ) if attempted_done and elapsed else 0.0
+        remaining = max(0, total_requested - done)
+        return {
+            "elapsed_seconds": round(elapsed, 1),
+            "average_seconds_per_item": round(
+                elapsed / attempted_done, 2
+            ) if attempted_done else 0,
+            "items_per_minute": round(rate_per_second * 60, 2),
+            "estimated_remaining_seconds": round(
+                remaining / rate_per_second, 1
+            ) if rate_per_second else 0,
+        }
+
+    for target_index, target in enumerate(target_rows, start=1):
+        token_id = int(target.get("token_id") or 0)
+        site_id = str(target.get("site_id") or "")
+        site_name = str(target.get("site_name") or site_id)
+        store_name = str(target.get("store_name") or token_id)
+        discount_rate = float(target.get("discount_rate") or 0)
+        current_rows = [dict(row) for row in (target.get("product_rows") or rows)]
+        current_quantity = int(target.get("quantity") or quantity)
+        try:
+            published_product_ids = set(db_get_published_mercado_product_item_ids(
+                [int(row.get("id") or 0) for row in current_rows],
+                token_id=token_id,
+                site_id=site_id,
+            ))
+        except Exception:
+            logging.exception(
+                "读取历史成功上架记录失败，将继续当前组合: token_id=%s site_id=%s",
+                token_id,
+                site_id,
+            )
+            published_product_ids = set()
+        target_rows_to_publish = [
+            row for row in current_rows
+            if int(row.get("id") or 0) not in published_product_ids
+        ]
+        target_skipped = len(current_rows) - len(target_rows_to_publish)
+        skipped_published += target_skipped
+        processed += target_skipped
+        base_processed = processed
+        base_published = published
+        base_failed = failed
+
+        def on_progress(info, *, _target_index=target_index):
+            current = int(info.get("current") or 0)
+            current_published = int(info.get("published_count") or 0)
+            current_failed = int(info.get("failed_count") or 0)
+            aggregate_processed = base_processed + current
+            _mercado_publish_state_update(
+                processed_count=aggregate_processed,
+                published_count=base_published + current_published,
+                failed_count=base_failed + current_failed,
+                skipped_published_count=skipped_published,
+                completed_target_count=_target_index - 1,
+                worker_count=int(info.get("worker_count") or worker_count),
+                current_item_id=str(info.get("source_item_id") or ""),
+                average_stage_seconds=dict(
+                    info.get("average_stage_seconds") or {}
+                ),
+                message=(
+                    f"组合 {_target_index}/{target_count} · {store_name} · {site_name}"
+                ),
+                **timing_metrics(aggregate_processed),
+            )
+
+        try:
+            target_batch_id = f"{batch_id}-{target_index}"
+            if target_rows_to_publish:
+                result = publish_product_batch(
+                    target_rows_to_publish,
+                    token_id=token_id,
+                    site_id=site_id,
+                    quantity=current_quantity,
+                    workers=int(worker_count),
+                    discount_rate=discount_rate,
+                    update_state=db_update_mercado_product_publish_state,
+                    on_progress=on_progress,
+                    batch_id=target_batch_id,
+                    created_by=str(created_by),
+                    create_records=db_create_mercado_product_publish_records,
+                    update_record=db_update_mercado_product_publish_record,
+                )
+                target_requested = int(
+                    result.get("requested_count") or len(target_rows_to_publish)
+                )
+                target_published = int(result.get("published_count") or 0)
+                target_failed = int(result.get("failed_count") or 0)
+                target_results = list(result.get("results") or [])
+                target_stage_averages = dict(
+                    result.get("average_stage_seconds") or {}
+                )
+            else:
+                target_requested = target_published = target_failed = 0
+                target_results = []
+                target_stage_averages = {}
+        except Exception as exc:
+            logging.exception(
+                "Mercado 产品上架组合失败: token_id=%s site_id=%s",
+                token_id,
+                site_id,
+            )
+            target_requested = len(target_rows_to_publish)
+            target_published = 0
+            target_failed = len(target_rows_to_publish)
+            target_results = [{
+                "product_id": int(row.get("id") or 0),
+                "source_item_id": str(row.get("source_item_id") or ""),
+                "status": "failed",
+                "published_item_id": "",
+                "message": f"上架组合启动失败：{exc}"[:2000],
+            } for row in target_rows_to_publish]
+            target_stage_averages = {}
+
+        processed += target_requested
+        published += target_published
+        failed += target_failed
+        if target_results:
+            sample_size = len(target_results)
+            stage_sample_count += sample_size
+            for stage, average in target_stage_averages.items():
+                try:
+                    stage_duration_totals[str(stage)] = (
+                        stage_duration_totals.get(str(stage), 0.0)
+                        + float(average or 0) * sample_size
+                    )
+                except (TypeError, ValueError):
+                    continue
+        aggregate_stage_averages = {
+            stage: round(total / max(1, stage_sample_count), 4)
+            for stage, total in stage_duration_totals.items()
+        }
+        for item in target_results:
+            all_results.append({
+                **dict(item),
+                "target_index": target_index,
+                "token_id": token_id,
+                "store_name": store_name,
+                "site_id": site_id,
+                "site_name": site_name,
+                "discount_rate": discount_rate,
+            })
         _mercado_publish_state_update(
-            processed_count=int(info.get("current") or 0),
-            published_count=int(info.get("published_count", _mercado_publish_state.get("published_count") or 0)),
-            failed_count=int(info.get("failed_count", _mercado_publish_state.get("failed_count") or 0)),
-            worker_count=int(info.get("worker_count") or worker_count),
-            current_item_id=str(info.get("source_item_id") or ""),
-            message=str(info.get("message") or "正在批量上架"),
+            processed_count=processed,
+            published_count=published,
+            failed_count=failed,
+            skipped_published_count=skipped_published,
+            completed_target_count=target_index,
+            current_item_id="",
+            average_stage_seconds=aggregate_stage_averages,
+            results=list(all_results),
+            message=f"已完成组合 {target_index}/{target_count} · {store_name} · {site_name}",
+            **timing_metrics(processed),
         )
 
-    try:
-        result = publish_product_batch(
-            product_rows,
-            token_id=int(token_id),
-            site_id=str(site_id),
-            quantity=int(quantity),
-            workers=int(worker_count),
-            update_state=db_update_mercado_product_publish_state,
-            on_progress=on_progress,
-            batch_id=str(batch_id),
-            created_by=str(created_by),
-            create_records=db_create_mercado_product_publish_records,
-            update_record=db_update_mercado_product_publish_record,
-        )
-        status = "completed" if not result.get("failed_count") else "partial"
-        message = (
-            f"批量上架完成：成功 {int(result.get('published_count') or 0)} 件，"
-            f"失败 {int(result.get('failed_count') or 0)} 件"
-        )
-        _mercado_publish_state_update(
-            running=False,
-            status=status,
-            message=message,
-            processed_count=int(result.get("requested_count") or 0),
-            published_count=int(result.get("published_count") or 0),
-            failed_count=int(result.get("failed_count") or 0),
-            current_item_id="",
-            site_id=str(result.get("site_id") or site_id),
-            site_name=str(result.get("site_name") or site_name),
-            worker_count=int(result.get("worker_count") or worker_count),
-            finished_at=str(result.get("finished_at") or datetime.now().strftime("%Y-%m-%d %H:%M:%S")),
-            results=list(result.get("results") or []),
-            batch_id=str(result.get("batch_id") or batch_id),
-        )
-    except Exception as exc:
-        logging.exception("Mercado 产品批量上架失败")
-        _mercado_publish_state_update(
-            running=False,
-            status="error",
-            message=f"批量上架失败：{exc}",
-            current_item_id="",
-            finished_at=datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-        )
+    if failed == 0:
+        status = "completed"
+    elif published:
+        status = "partial"
+    else:
+        status = "error"
+    message = f"批量上架完成：{target_count} 个账号-站点组合"
+    if moved_to_collection_count:
+        message += f"；已忽略并移回采集列表 {moved_to_collection_count} 件不可上架商品"
+    _mercado_publish_state_update(
+        running=False,
+        status=status,
+        message=message,
+        requested_count=total_requested,
+        processed_count=processed,
+        published_count=published,
+        failed_count=failed,
+        moved_to_collection_count=int(moved_to_collection_count or 0),
+        skipped_published_count=skipped_published,
+        current_item_id="",
+        completed_target_count=target_count,
+        finished_at=datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+        results=list(all_results),
+        average_stage_seconds={
+            stage: round(total / max(1, stage_sample_count), 4)
+            for stage, total in stage_duration_totals.items()
+        },
+        batch_id=str(batch_id),
+        **timing_metrics(processed),
+    )
 
 
 @app.route('/api/mercado-products/publish', methods=['POST'])
@@ -5354,42 +5968,247 @@ def api_publish_mercado_products():
     item_ids = data.get("product_item_ids") or []
     if not isinstance(item_ids, list):
         return jsonify({"status": "error", "message": "product_item_ids 必须是数组"}), 422
+    with _mercado_publish_lock:
+        if _mercado_publish_state.get("running"):
+            return jsonify({
+                "status": "error",
+                "message": "已有批量上架任务正在运行",
+            }), 409
     try:
         from erp.mercadolibre_translation import (
             marketplace_site_name,
             normalize_marketplace_site,
         )
+        from erp.mercadolibre_batch_publish import (
+            product_publish_issues,
+            site_discount_rate,
+            validate_publishable_products,
+        )
 
-        token_id = int(data.get("token_id") or 0)
-        site_id = normalize_marketplace_site(data.get("site_id") or "MLM")
+        selection_mode = str(data.get("selection_mode") or "accounts").strip().lower()
+        if selection_mode not in {"accounts", "groups"}:
+            raise ValueError("上架选择方式必须是账号或分组")
+
+        raw_token_ids = data.get("token_ids")
+        if raw_token_ids is None:
+            raw_token_ids = [data.get("token_id")]
+        if not isinstance(raw_token_ids, list):
+            raise ValueError("token_ids 必须是数组")
+        token_ids = []
+        for value in raw_token_ids:
+            token_id_value = int(value or 0)
+            if token_id_value > 0 and token_id_value not in token_ids:
+                token_ids.append(token_id_value)
+
+        raw_group_names = data.get("group_names") or []
+        if not isinstance(raw_group_names, list):
+            raise ValueError("group_names 必须是数组")
+        group_names = []
+        for value in raw_group_names:
+            group_name = str(value or "").strip()
+            if group_name and group_name not in group_names:
+                group_names.append(group_name)
+
+        raw_site_ids = data.get("site_ids")
+        if raw_site_ids is None:
+            raw_site_ids = [data.get("site_id") or "MLM"]
+        if not isinstance(raw_site_ids, list):
+            raise ValueError("site_ids 必须是数组")
+        site_ids = []
+        for value in raw_site_ids:
+            site_id_value = normalize_marketplace_site(value)
+            if site_id_value not in site_ids:
+                site_ids.append(site_id_value)
+        if not site_ids:
+            raise ValueError("请选择至少一个目标站点")
+        if selection_mode == "accounts" and not token_ids:
+            raise ValueError("请选择至少一个要上架的授权账号")
+        if selection_mode == "groups" and not group_names:
+            raise ValueError("请选择至少一个账号分组")
+
+        token_id = token_ids[0] if token_ids else None
+        site_id = site_ids[0]
         site_name = marketplace_site_name(site_id)
-        quantity = int(data.get("quantity") or 1)
-        worker_count = int(data.get("worker_count") or 4)
-        if token_id <= 0:
-            raise ValueError("请选择要上架的授权店铺")
+        raw_quantity = data.get("quantity")
+        raw_worker_count = data.get("worker_count")
+        quantity = int(500 if raw_quantity in (None, "") else raw_quantity)
+        worker_count = int(10 if raw_worker_count in (None, "") else raw_worker_count)
         if quantity < 1 or quantity > 9999:
             raise ValueError("上架库存必须在 1-9999 之间")
-        if worker_count < 1 or worker_count > 8:
-            raise ValueError("上架线程数必须在 1-8 之间")
+        if worker_count < 1:
+            raise ValueError("上架并发必须是大于 0 的整数")
         rows = db_get_mercado_product_items_by_ids(item_ids)
         if len(rows) != len({int(value) for value in item_ids}):
             raise ValueError("部分勾选产品已不存在，请刷新列表后重试")
-        blocked_rows = [row for row in rows if row.get("review_status") != "approved"]
+        blocked_rows = []
+        publish_rows = []
+        for row in rows:
+            issues = product_publish_issues(row)
+            if issues:
+                blocked_rows.append((row, issues))
+            else:
+                publish_rows.append(row)
+        moved_to_collection_count = 0
         if blocked_rows:
-            raise ValueError(
-                f"只有审核状态为“通过”的产品可以上架；当前选择中有 {len(blocked_rows)} 件未通过"
+            reason_counts: dict[str, int] = {}
+            for _row, issues in blocked_rows:
+                for issue in issues:
+                    reason_counts[issue] = reason_counts.get(issue, 0) + 1
+            reason_summary = "；".join(
+                f"{reason} {count} 件" for reason, count in reason_counts.items()
             )
+            move_result = db_move_mercado_product_items_to_collection(
+                [int(row.get("id") or 0) for row, _issues in blocked_rows],
+                reason=reason_summary,
+            )
+            moved_to_collection_count = int(
+                move_result.get("moved") or move_result.get("deleted") or 0
+            )
+        rows = publish_rows
+        if not rows:
+            message = (
+                f"已忽略并移回采集列表 {moved_to_collection_count} 件不可上架商品，"
+                "本次没有可上架产品"
+            )
+            with _mercado_publish_lock:
+                _mercado_publish_state.update({
+                    "running": False,
+                    "batch_id": "",
+                    "status": "completed",
+                    "message": message,
+                    "selection_mode": selection_mode,
+                    "token_id": token_id,
+                    "token_ids": token_ids,
+                    "group_names": group_names,
+                    "site_id": site_id,
+                    "site_ids": site_ids,
+                    "site_name": site_name,
+                    "target_count": 0,
+                    "completed_target_count": 0,
+                    "skipped_target_count": 0,
+                    "quantity": quantity,
+                    "worker_count": 0,
+                    "requested_count": 0,
+                    "processed_count": 0,
+                    "published_count": 0,
+                    "failed_count": 0,
+                    "moved_to_collection_count": moved_to_collection_count,
+                    "skipped_published_count": 0,
+                    "elapsed_seconds": 0,
+                    "average_seconds_per_item": 0,
+                    "items_per_minute": 0,
+                    "estimated_remaining_seconds": 0,
+                    "average_stage_seconds": {},
+                    "current_item_id": "",
+                    "started_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                    "finished_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                    "results": [],
+                })
+                state = dict(_mercado_publish_state)
+            return jsonify({"status": "success", "data": state})
+        validate_publishable_products(rows)
         token_rows = list((bit_db_api.list_mercado_store_tokens() or {}).get("rows") or [])
-        token = next((row for row in token_rows if int(row.get("id") or 0) == token_id), None)
-        if not token:
-            raise ValueError("指定的授权店铺不存在")
-        token_site_id = str(token.get("site_id") or "").strip().upper()
-        if token_site_id and token_site_id != "CBT" and token_site_id != site_id:
-            raise ValueError(
-                f"所选店铺属于 {token_site_id} 站点，不能发布到 {site_id}；"
-                "请选择 Global Selling 店铺或对应本地站点"
+        token_by_id = {
+            int(row.get("id") or 0): row
+            for row in token_rows
+            if int(row.get("id") or 0) > 0
+        }
+        if selection_mode == "accounts":
+            missing_token_ids = [value for value in token_ids if value not in token_by_id]
+            if missing_token_ids:
+                raise ValueError(
+                    "部分授权账号不存在，请刷新后重试："
+                    + "、".join(str(value) for value in missing_token_ids)
+                )
+            candidate_tokens = [token_by_id[value] for value in token_ids]
+        else:
+            candidate_tokens = [
+                row for row in token_rows
+                if row.get("status") != "expired" or row.get("has_refresh_token")
+            ]
+
+        targets = []
+        skipped_target_count = 0
+        for token in candidate_tokens:
+            current_token_id = int(token.get("id") or 0)
+            token_site_id = str(token.get("site_id") or "").strip().upper()
+            store_name = str(
+                token.get("display_name") or token.get("nickname") or current_token_id
             )
-        store_name = str(token.get("display_name") or token.get("nickname") or token_id)
+            settings_by_site = {
+                str(setting.get("site_id") or "").strip().upper(): setting
+                for setting in (token.get("site_settings") or [])
+                if str(setting.get("site_id") or "").strip()
+            }
+            for current_site_id in site_ids:
+                compatible = (
+                    not token_site_id
+                    or token_site_id == "CBT"
+                    or token_site_id == current_site_id
+                )
+                if not compatible:
+                    if selection_mode == "accounts":
+                        skipped_target_count += 1
+                    continue
+                site_setting = settings_by_site.get(current_site_id) or {}
+                configured_group = str(site_setting.get("group_name") or "").strip()
+                normalized_group = configured_group or "__ungrouped__"
+                if selection_mode == "groups" and normalized_group not in group_names:
+                    continue
+                targets.append({
+                    "token_id": current_token_id,
+                    "store_name": store_name,
+                    "site_id": current_site_id,
+                    "site_name": marketplace_site_name(current_site_id),
+                    "group_name": configured_group,
+                    "discount_rate": float(site_discount_rate(token, current_site_id)),
+                })
+
+        if not targets:
+            if (
+                selection_mode == "accounts"
+                and len(token_ids) == 1
+                and len(site_ids) == 1
+                and token_ids[0] in token_by_id
+            ):
+                selected_token_site = str(
+                    token_by_id[token_ids[0]].get("site_id") or ""
+                ).strip().upper()
+                if selected_token_site and selected_token_site != "CBT":
+                    raise ValueError(
+                        f"所选店铺属于 {selected_token_site} 站点，不能发布到 {site_ids[0]}；"
+                        "请选择 Global Selling 店铺或对应本地站点"
+                    )
+            if selection_mode == "groups":
+                raise ValueError("所选分组和站点没有可用的账号-站点组合")
+            raise ValueError("所选账号和站点没有兼容的上架组合")
+
+        target_token_ids = list(dict.fromkeys(
+            int(target["token_id"]) for target in targets
+        ))
+        target_site_ids = list(dict.fromkeys(
+            str(target["site_id"]) for target in targets
+        ))
+        target_store_names = list(dict.fromkeys(
+            str(target["store_name"]) for target in targets
+        ))
+        target_site_names = list(dict.fromkeys(
+            str(target["site_name"]) for target in targets
+        ))
+        store_name = (
+            target_store_names[0]
+            if len(target_store_names) == 1
+            else f"{len(target_store_names)} 个账号"
+        )
+        site_name = (
+            target_site_names[0]
+            if len(target_site_names) == 1
+            else f"{len(target_site_names)} 个站点"
+        )
+        discount_rate = (
+            float(targets[0]["discount_rate"])
+            if len(targets) == 1 else None
+        )
         current_user = get_current_workbench_user() or {}
         created_by = str(
             current_user.get("display_name") or current_user.get("username") or ""
@@ -5413,37 +6232,55 @@ def api_publish_mercado_products():
             "status": "running",
             "message": (
                 f"准备使用 {min(worker_count, len(rows))} 个线程上架 "
-                f"{len(rows)} 件产品到 {store_name} · {site_name}"
+                f"{len(rows)} 件产品到 {len(targets)} 个账号-站点组合 · "
+                "各组合按对应站点折扣计算净收益"
+                + (
+                    f"；已忽略并移回采集列表 {moved_to_collection_count} 件不可上架商品"
+                    if moved_to_collection_count else ""
+                )
             ),
+            "selection_mode": selection_mode,
             "token_id": token_id,
+            "token_ids": target_token_ids,
+            "group_names": group_names,
             "store_name": store_name,
-            "site_id": site_id,
+            "site_id": target_site_ids[0] if len(target_site_ids) == 1 else "",
+            "site_ids": target_site_ids,
             "site_name": site_name,
+            "target_count": len(targets),
+            "completed_target_count": 0,
+            "skipped_target_count": skipped_target_count,
             "quantity": quantity,
             "worker_count": min(worker_count, len(rows)),
-            "requested_count": len(rows),
+            "discount_rate": discount_rate,
+            "requested_count": len(rows) * len(targets),
             "processed_count": 0,
             "published_count": 0,
             "failed_count": 0,
+            "moved_to_collection_count": moved_to_collection_count,
+            "skipped_published_count": 0,
+            "elapsed_seconds": 0,
+            "average_seconds_per_item": 0,
+            "items_per_minute": 0,
+            "estimated_remaining_seconds": 0,
+            "average_stage_seconds": {},
             "current_item_id": "",
             "started_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
             "finished_at": "",
             "results": [],
         })
         thread = threading.Thread(
-            target=_run_mercado_product_publish,
+            target=_run_mercado_product_publish_targets,
             args=(
                 rows,
-                token_id,
-                site_id,
-                site_name,
+                targets,
                 quantity,
                 worker_count,
-                store_name,
                 batch_id,
                 created_by,
+                moved_to_collection_count,
             ),
-            name=f"mercado-publish-{token_id}-{site_id}",
+            name=f"mercado-publish-{batch_id}",
             daemon=True,
         )
         try:
@@ -5481,6 +6318,8 @@ def api_mercado_product_publish_records():
             limit=_parse_int_param(request.args, "limit", 500, 1, 1000),
             offset=_parse_int_param(request.args, "offset", 0, 0, 1000000),
         )
+        with _mercado_publish_lock:
+            result["publish_running"] = bool(_mercado_publish_state.get("running"))
         response = jsonify({"status": "success", "data": result})
         response.headers["Cache-Control"] = "no-store"
         return response
@@ -5489,6 +6328,196 @@ def api_mercado_product_publish_records():
     except Exception as exc:
         logging.exception("读取 Mercado 产品上架记录失败")
         return jsonify({"status": "error", "message": f"读取产品上架记录失败：{exc}"}), 500
+
+
+@app.route('/api/mercado-publish-records/retry', methods=['POST'])
+@login_required
+def api_retry_mercado_product_publish_records():
+    data = request.get_json(silent=True) or {}
+    record_ids = data.get("record_ids") or []
+    if not isinstance(record_ids, list):
+        return jsonify({"status": "error", "message": "record_ids 必须是数组"}), 422
+    with _mercado_publish_lock:
+        if _mercado_publish_state.get("running"):
+            return jsonify({
+                "status": "error",
+                "message": "已有批量上架任务正在运行，完成后再重新上架",
+            }), 409
+    try:
+        from erp.mercadolibre_batch_publish import (
+            site_discount_rate,
+            validate_publishable_products,
+        )
+        from erp.mercadolibre_collection_store import (
+            PRODUCT_PUBLISH_RETRYABLE_STATUSES,
+        )
+        from erp.mercadolibre_translation import (
+            marketplace_site_name,
+            normalize_marketplace_site,
+        )
+
+        normalized_record_ids = list(dict.fromkeys(
+            int(value) for value in record_ids if int(value) > 0
+        ))
+        if not normalized_record_ids:
+            raise ValueError("请至少勾选一条可重新上架的记录")
+        records = db_get_mercado_product_publish_records_by_ids(normalized_record_ids)
+        if len(records) != len(normalized_record_ids):
+            raise ValueError("部分上架记录已不存在，请刷新后重试")
+        blocked = [
+            record for record in records
+            if str(record.get("status") or "") not in PRODUCT_PUBLISH_RETRYABLE_STATUSES
+        ]
+        if blocked:
+            raise ValueError("只有上架暂停或上架失败的记录可以重新上架")
+
+        # A product may have several failed attempts. Keep only the newest selected
+        # attempt for the same product/account/site to prevent duplicate listings.
+        retry_records = []
+        seen_product_targets = set()
+        for record in records:
+            key = (
+                int(record.get("product_item_id") or 0),
+                int(record.get("token_id") or 0),
+                str(record.get("site_id") or "").strip().upper(),
+            )
+            if min(key[0], key[1]) <= 0 or not key[2]:
+                raise ValueError("所选记录缺少产品、账号或站点信息")
+            if key in seen_product_targets:
+                continue
+            seen_product_targets.add(key)
+            retry_records.append(record)
+        duplicate_selection_count = len(records) - len(retry_records)
+
+        product_ids = list(dict.fromkeys(
+            int(record.get("product_item_id") or 0) for record in retry_records
+        ))
+        products = db_get_mercado_product_items_by_ids(product_ids)
+        product_by_id = {int(row.get("id") or 0): dict(row) for row in products}
+        missing_product_ids = [value for value in product_ids if value not in product_by_id]
+        if missing_product_ids:
+            raise ValueError("部分记录对应的产品已从产品列表删除，无法重新上架")
+        validate_publishable_products(products)
+
+        token_rows = list((bit_db_api.list_mercado_store_tokens() or {}).get("rows") or [])
+        token_by_id = {
+            int(row.get("id") or 0): dict(row)
+            for row in token_rows if int(row.get("id") or 0) > 0
+        }
+        grouped_targets: dict[tuple[int, str, int], dict] = {}
+        for record in retry_records:
+            token_id = int(record.get("token_id") or 0)
+            token = token_by_id.get(token_id)
+            if not token:
+                raise ValueError(f"上架账号 {token_id} 已不存在，请重新授权后再试")
+            site_id = normalize_marketplace_site(record.get("site_id") or "")
+            token_site_id = str(token.get("site_id") or "").strip().upper()
+            if token_site_id and token_site_id != "CBT" and token_site_id != site_id:
+                raise ValueError(
+                    f"账号 {token_id} 属于 {token_site_id} 站点，不能重新发布到 {site_id}"
+                )
+            quantity = int(record.get("quantity") or 1)
+            if quantity < 1 or quantity > 9999:
+                raise ValueError("历史记录中的上架库存无效")
+            group_key = (token_id, site_id, quantity)
+            target = grouped_targets.setdefault(group_key, {
+                "token_id": token_id,
+                "store_name": str(
+                    token.get("display_name") or token.get("nickname")
+                    or record.get("store_name") or token_id
+                ),
+                "site_id": site_id,
+                "site_name": marketplace_site_name(site_id),
+                "discount_rate": float(site_discount_rate(token, site_id)),
+                "quantity": quantity,
+                "product_rows": [],
+            })
+            product = product_by_id[int(record.get("product_item_id") or 0)]
+            target["product_rows"].append(product)
+
+        targets = list(grouped_targets.values())
+        requested_count = sum(len(target["product_rows"]) for target in targets)
+        worker_count = int(data.get("worker_count") or 10)
+        if worker_count < 1:
+            raise ValueError("重新上架并发必须是大于 0 的整数")
+        current_user = get_current_workbench_user() or {}
+        created_by = str(
+            current_user.get("display_name") or current_user.get("username") or ""
+        )[:128]
+        batch_id = f"retry-{datetime.now().strftime('%Y%m%d%H%M%S')}-{secrets.token_hex(4)}"
+        token_ids = list(dict.fromkeys(int(target["token_id"]) for target in targets))
+        site_ids = list(dict.fromkeys(str(target["site_id"]) for target in targets))
+        quantities = list(dict.fromkeys(int(target["quantity"]) for target in targets))
+    except (TypeError, ValueError) as exc:
+        return jsonify({"status": "error", "message": str(exc)}), 400
+    except Exception as exc:
+        logging.exception("准备重新上架 Mercado 产品失败")
+        return jsonify({"status": "error", "message": f"准备重新上架失败：{exc}"}), 500
+
+    with _mercado_publish_lock:
+        if _mercado_publish_state.get("running"):
+            return jsonify({
+                "status": "error",
+                "message": "已有批量上架任务正在运行，完成后再重新上架",
+            }), 409
+        _mercado_publish_state.update({
+            "running": True,
+            "batch_id": batch_id,
+            "status": "running",
+            "message": f"正在重新上架 {requested_count} 件产品",
+            "selection_mode": "retry",
+            "token_id": token_ids[0] if len(token_ids) == 1 else None,
+            "token_ids": token_ids,
+            "group_names": [],
+            "store_name": (
+                targets[0]["store_name"] if len(targets) == 1
+                else f"{len(token_ids)} 个账号"
+            ),
+            "site_id": site_ids[0] if len(site_ids) == 1 else "",
+            "site_ids": site_ids,
+            "site_name": (
+                targets[0]["site_name"] if len(site_ids) == 1
+                else f"{len(site_ids)} 个站点"
+            ),
+            "target_count": len(targets),
+            "completed_target_count": 0,
+            "skipped_target_count": 0,
+            "quantity": quantities[0] if len(quantities) == 1 else 0,
+            "worker_count": min(worker_count, requested_count),
+            "discount_rate": None,
+            "requested_count": requested_count,
+            "processed_count": 0,
+            "published_count": 0,
+            "failed_count": 0,
+            "moved_to_collection_count": 0,
+            "skipped_published_count": 0,
+            "duplicate_selection_count": duplicate_selection_count,
+            "elapsed_seconds": 0,
+            "average_seconds_per_item": 0,
+            "items_per_minute": 0,
+            "estimated_remaining_seconds": 0,
+            "current_item_id": "",
+            "started_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            "finished_at": "",
+            "results": [],
+        })
+        thread = threading.Thread(
+            target=_run_mercado_product_publish_targets,
+            args=([], targets, 1, worker_count, batch_id, created_by, 0),
+            name=f"mercado-publish-retry-{batch_id}",
+            daemon=True,
+        )
+        try:
+            thread.start()
+        except Exception as exc:
+            _mercado_publish_state.update(
+                running=False,
+                status="error",
+                message=f"重新上架线程启动失败：{exc}",
+            )
+            raise
+        state = dict(_mercado_publish_state)
+    return jsonify({"status": "success", "data": state})
 
 
 @app.route('/api/db/mercado-collection/tasks', methods=['POST'])
@@ -5566,7 +6595,34 @@ def api_db_mercado_products():
         offset=_parse_int_param(request.args, "offset", 0, 0, 1000000),
         source_type=str(request.args.get("source_type") or "").strip(),
         review_status=str(request.args.get("review_status") or "").strip(),
+        publish_status=str(request.args.get("publish_status") or "").strip(),
+        weight_min=str(request.args.get("weight_min") or "").strip(),
+        weight_max=str(request.args.get("weight_max") or "").strip(),
+        price_min=str(request.args.get("price_min") or "").strip(),
+        price_max=str(request.args.get("price_max") or "").strip(),
+        net_proceeds_min=str(request.args.get("net_proceeds_min") or "").strip(),
+        net_proceeds_max=str(request.args.get("net_proceeds_max") or "").strip(),
+        date_from=str(request.args.get("date_from") or "").strip(),
+        date_to=str(request.args.get("date_to") or "").strip(),
     )
+    return jsonify({"status": "success", "data": result})
+
+
+@app.route('/api/db/mercado-products/<int:product_item_id>', methods=['PATCH'])
+@internal_api_required
+def api_db_update_mercado_product(product_item_id):
+    blocked = reject_db_api_client_mode()
+    if blocked:
+        return blocked
+    data = request.get_json(silent=True)
+    if not isinstance(data, dict):
+        return jsonify({"status": "error", "message": "产品内容必须是对象"}), 422
+    try:
+        result = db_update_mercado_product_item(product_item_id, data)
+    except ValueError as exc:
+        return jsonify({"status": "error", "message": str(exc)}), 400
+    except KeyError as exc:
+        return jsonify({"status": "error", "message": str(exc)}), 404
     return jsonify({"status": "success", "data": result})
 
 
@@ -5585,6 +6641,47 @@ def api_db_mercado_product_publish_records():
         offset=_parse_int_param(request.args, "offset", 0, 0, 1000000),
     )
     return jsonify({"status": "success", "data": result})
+
+
+@app.route('/api/db/mercado-publish-records/published-product-ids', methods=['POST'])
+@internal_api_required
+def api_db_published_mercado_product_item_ids():
+    blocked = reject_db_api_client_mode()
+    if blocked:
+        return blocked
+    data = request.get_json(silent=True) or {}
+    item_ids = data.get("product_item_ids") or []
+    if not isinstance(item_ids, list):
+        return jsonify({"status": "error", "message": "product_item_ids 必须是数组"}), 422
+    try:
+        published_ids = db_get_published_mercado_product_item_ids(
+            item_ids,
+            token_id=int(data.get("token_id") or 0),
+            site_id=str(data.get("site_id") or ""),
+        )
+    except (TypeError, ValueError) as exc:
+        return jsonify({"status": "error", "message": str(exc)}), 400
+    return jsonify({
+        "status": "success",
+        "data": {"product_item_ids": published_ids},
+    })
+
+
+@app.route('/api/db/mercado-publish-records/by-ids', methods=['POST'])
+@internal_api_required
+def api_db_mercado_product_publish_records_by_ids():
+    blocked = reject_db_api_client_mode()
+    if blocked:
+        return blocked
+    data = request.get_json(silent=True) or {}
+    record_ids = data.get("record_ids") or []
+    if not isinstance(record_ids, list):
+        return jsonify({"status": "error", "message": "record_ids 必须是数组"}), 422
+    try:
+        rows = db_get_mercado_product_publish_records_by_ids(record_ids)
+    except ValueError as exc:
+        return jsonify({"status": "error", "message": str(exc)}), 400
+    return jsonify({"status": "success", "data": {"rows": rows}})
 
 
 @app.route('/api/db/mercado-publish-records/bulk', methods=['POST'])
@@ -5651,6 +6748,26 @@ def api_db_update_mercado_product_review_status():
     try:
         result = db_update_mercado_product_review_status(
             item_ids, str(data.get("review_status") or "").strip()
+        )
+    except ValueError as exc:
+        return jsonify({"status": "error", "message": str(exc)}), 400
+    return jsonify({"status": "success", "data": result})
+
+
+@app.route('/api/db/mercado-products/move-to-collection', methods=['POST'])
+@internal_api_required
+def api_db_move_mercado_products_to_collection():
+    blocked = reject_db_api_client_mode()
+    if blocked:
+        return blocked
+    data = request.get_json(silent=True) or {}
+    item_ids = data.get("product_item_ids") or []
+    if not isinstance(item_ids, list):
+        return jsonify({"status": "error", "message": "product_item_ids 必须是数组"}), 422
+    try:
+        result = db_move_mercado_product_items_to_collection(
+            item_ids,
+            reason=str(data.get("reason") or "不可上架"),
         )
     except ValueError as exc:
         return jsonify({"status": "error", "message": str(exc)}), 400
@@ -6088,18 +7205,7 @@ def api_db_list_orders():
     if blocked:
         return blocked
     try:
-        data = db_list_orders(
-            country=str(request.args.get("country") or "").strip(),
-            status=str(request.args.get("status") or "").strip(),
-            salesperson=str(request.args.get("salesperson") or "").strip(),
-            group_name=str(request.args.get("group_name") or "").strip(),
-            search=str(request.args.get("search") or "").strip(),
-            start_date=str(request.args.get("start_date") or "").strip(),
-            end_date=str(request.args.get("end_date") or "").strip(),
-            origin=str(request.args.get("origin") or "").strip(),
-            page=_parse_int_param(request.args, "page", 1, 1, 1000000),
-            page_size=_parse_int_param(request.args, "page_size", 50, 10, 200),
-        )
+        data = db_list_orders(**_order_list_query_params(request.args))
     except ValueError as exc:
         return jsonify({"status": "error", "message": str(exc)}), 400
     return jsonify({"status": "success", "data": data})
@@ -6153,7 +7259,7 @@ def api_db_store_links():
             current_only=str(request.args.get("current_only") or "1").strip().lower()
             not in ("0", "false", "no", "off"),
             page=_parse_int_param(request.args, "page", 1, 1, 1000000),
-            page_size=_parse_int_param(request.args, "page_size", 100, 10, 500),
+            page_size=_parse_int_param(request.args, "page_size", 1000, 10, 1000),
         )
     except ValueError as exc:
         return jsonify({"status": "error", "message": str(exc)}), 400
@@ -7149,7 +8255,7 @@ def api_mercado_token_site_settings(token_id):
             result = bit_db_api.update_mercado_store_site_settings(
                 token_id, data.get("settings", [])
             )
-            message = "站点配置已保存"
+            message = "店铺配置已保存"
         return jsonify({"status": "success", "data": result, "message": message})
     except Exception as exc:
         return _mercado_token_error_response(exc)
@@ -7274,6 +8380,12 @@ def api_login():
     data = request.get_json(silent=True) or request.form
     username = str(data.get("username", "")).strip()
     password = str(data.get("password", ""))
+    remember = str(data.get("remember", "")).strip().lower() in (
+        "1",
+        "true",
+        "yes",
+        "on",
+    )
     if not username or not password:
         return jsonify({"status": "error", "message": "请输入账号和密码"}), 400
 
@@ -7287,8 +8399,14 @@ def api_login():
         return jsonify({"status": "error", "message": "账号或密码错误"}), 401
 
     session.clear()
+    session.permanent = remember
     session["workbench_user"] = user
-    return jsonify({"status": "success", "data": session["workbench_user"]})
+    return jsonify({
+        "status": "success",
+        "data": session["workbench_user"],
+        "remember": remember,
+        "expires_in": WORKBENCH_REMEMBER_HOURS * 60 * 60 if remember else None,
+    })
 
 
 @app.route("/logout", methods=["GET", "POST"])

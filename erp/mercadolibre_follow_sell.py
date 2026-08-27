@@ -11,9 +11,12 @@ import argparse
 import io
 import json
 import os
+import random
 import re
 import sys
 import tempfile
+import threading
+import time
 import unicodedata
 from pathlib import Path
 from typing import Any, Iterable, Mapping
@@ -36,6 +39,10 @@ ITEM_ID_PATTERN = re.compile(r"\b(ML[A-Z]|CBT)-?(\d+)\b", re.IGNORECASE)
 
 class MercadoLibreError(RuntimeError):
     """A Mercado Libre API request failed."""
+
+    def __init__(self, message: str, *, status_code: int | None = None) -> None:
+        super().__init__(message)
+        self.status_code = status_code
 
 
 def extract_item_id(value: str) -> str:
@@ -152,6 +159,7 @@ class MercadoLibreClient:
         self.client_secret = client_secret
         self.session = session or requests.Session()
         self.timeout = timeout
+        self._uploaded_picture_metadata: dict[str, Mapping[str, Any]] = {}
 
     def _refresh(self) -> None:
         refresh_token = self.tokens.get("refresh_token")
@@ -184,30 +192,59 @@ class MercadoLibreClient:
         authenticated: bool = True,
     ) -> Any:
         url = path if path.startswith("http") else f"{API_BASE_URL}{path}"
-        for attempt in range(2):
+        method_name = method.upper()
+        auth_refreshed = False
+        transient_retries = 0
+        while True:
             headers = {"Accept": "application/json"}
             if authenticated:
                 headers["Authorization"] = f"Bearer {self.tokens['access_token']}"
-            response = self.session.request(
-                method,
-                url,
-                params=dict(params or {}),
-                json=dict(json_body) if json_body is not None else None,
-                headers=headers,
-                timeout=self.timeout,
-            )
-            if authenticated and response.status_code == 401 and attempt == 0:
+            try:
+                response = self.session.request(
+                    method_name,
+                    url,
+                    params=dict(params or {}),
+                    json=dict(json_body) if json_body is not None else None,
+                    headers=headers,
+                    timeout=self.timeout,
+                )
+            except requests.RequestException as exc:
+                is_idempotent = method_name in {"GET", "HEAD", "OPTIONS", "PUT", "DELETE"}
+                if is_idempotent and transient_retries < 3:
+                    delay = min(8.0, 2 ** transient_retries) + random.uniform(0, 0.5)
+                    transient_retries += 1
+                    time.sleep(delay)
+                    continue
+                raise MercadoLibreError(
+                    f"{method_name} {path} 请求异常: {exc}"
+                ) from exc
+            if authenticated and response.status_code == 401 and not auth_refreshed:
                 self._refresh()
+                auth_refreshed = True
+                continue
+            retryable_status = response.status_code == 429 or (
+                500 <= response.status_code < 600
+                and method_name in {"GET", "HEAD", "OPTIONS", "PUT", "DELETE"}
+            )
+            if retryable_status and transient_retries < 3:
+                retry_after = str(response.headers.get("Retry-After") or "").strip()
+                try:
+                    delay = float(retry_after)
+                except (TypeError, ValueError):
+                    delay = min(8.0, 2 ** transient_retries)
+                delay = max(0.25, min(delay, 30.0)) + random.uniform(0, 0.5)
+                transient_retries += 1
+                time.sleep(delay)
                 continue
             if not response.ok:
                 raise MercadoLibreError(
-                    f"{method.upper()} {path} 失败 (HTTP {response.status_code}): "
-                    f"{_api_message(response)}"
+                    f"{method_name} {path} 失败 (HTTP {response.status_code}): "
+                    f"{_api_message(response)}",
+                    status_code=int(response.status_code),
                 )
             if response.status_code == 204 or not response.content:
                 return None
             return response.json()
-        raise MercadoLibreError(f"{method.upper()} {path} 认证失败")
 
     def upload_picture_from_url(self, source_url: str) -> str:
         """Download a source image and upload it for a User Products listing."""
@@ -220,30 +257,40 @@ class MercadoLibreClient:
             raise MercadoLibreError(f"源图片超过 10 MB: {source_url}")
         content_type = source_response.headers.get("Content-Type", "image/jpeg").split(";", 1)[0]
         image_bytes = source_response.content
+        if content_type not in {"image/jpeg", "image/jpg", "image/png", "image/webp"}:
+            raise MercadoLibreError(f"源图片格式不受支持 ({content_type}): {source_url}")
         try:
-            from PIL import Image
+            from PIL import Image, ImageOps
 
             with Image.open(io.BytesIO(image_bytes)) as image:
+                image = ImageOps.exif_transpose(image)
                 width, height = image.size
-            if max(width, height) < 500:
-                raise MercadoLibreError(
-                    f"源图片尺寸不足 500px ({width}x{height}): {source_url}"
-                )
+                if max(width, height) < 500:
+                    raise MercadoLibreError(
+                        f"源图片尺寸不足 500px ({width}x{height}): {source_url}"
+                    )
+                # Mercado's image processing can shave one or two pixels from a
+                # boundary-size image. Keep a small margin so valid 500px source
+                # pictures are not rejected later as 497-499px.
+                needs_resize = max(width, height) < 520
+                if needs_resize or content_type == "image/webp":
+                    if needs_resize:
+                        scale = 520 / max(width, height)
+                        image = image.resize(
+                            (round(width * scale), round(height * scale)),
+                            Image.Resampling.LANCZOS,
+                        )
+                    converted = io.BytesIO()
+                    if content_type == "image/png":
+                        image.save(converted, format="PNG", optimize=True)
+                    else:
+                        image.convert("RGB").save(converted, format="JPEG", quality=95)
+                        content_type = "image/jpeg"
+                    image_bytes = converted.getvalue()
         except MercadoLibreError:
             raise
         except Exception as exc:
             raise MercadoLibreError(f"无法读取源图片尺寸: {source_url}") from exc
-        if content_type == "image/webp":
-            try:
-                converted = io.BytesIO()
-                with Image.open(io.BytesIO(image_bytes)) as image:
-                    image.convert("RGB").save(converted, format="JPEG", quality=95)
-                image_bytes = converted.getvalue()
-                content_type = "image/jpeg"
-            except Exception as exc:
-                raise MercadoLibreError(f"转换 WebP 源图片失败: {source_url}") from exc
-        if content_type not in {"image/jpeg", "image/jpg", "image/png"}:
-            raise MercadoLibreError(f"源图片格式不受支持 ({content_type}): {source_url}")
         extension = ".png" if content_type == "image/png" else ".jpg"
         for attempt in range(2):
             response = self.session.post(
@@ -269,6 +316,11 @@ class MercadoLibreClient:
             picture_id = data.get("id")
             if not picture_id:
                 raise MercadoLibreError("图片上传成功，但响应中没有图片 id")
+            metadata_cache = getattr(self, "_uploaded_picture_metadata", None)
+            if not isinstance(metadata_cache, dict):
+                metadata_cache = {}
+                self._uploaded_picture_metadata = metadata_cache
+            metadata_cache[str(picture_id)] = dict(data)
             return str(picture_id)
         raise MercadoLibreError("上传图片认证失败")
 
@@ -343,6 +395,13 @@ ATTRIBUTE_ID_ALIASES = {
     "MODELO": "MODEL",
     "GENERO": "GENDER",
     "PERSONAJE": "CHARACTER",
+    "NOMBRE_DEL_JUEGO_DE_MESA": "BOARD_GAME_NAME",
+    "TIPO_DE_PRODUCTO": "PRODUCT_TYPE",
+    "TIPO_DE_CARTAS": "PLAYING_CARDS_TYPE",
+    "ES_SET": "IS_SET",
+    "TIPO_DE_CAMARA_DE_VIGILANCIA": "SURVEILLANCE_CAMERA_TYPE",
+    "LOCACIONES_DE_LA_CAMARA": "CAMERA_LOCATIONS",
+    "ES_INALAMBRICO": "IS_WIRELESS",
     "TALLA": "SIZE",
     "MATERIAL_PRINCIPAL": "MAIN_MATERIAL",
     "COMPOSICION": "COMPOSITION",
@@ -514,7 +573,10 @@ def _validate_uploaded_picture_dimensions(
     client: MercadoLibreClient, picture_id: str
 ) -> tuple[int, int]:
     """Verify dimensions after Mercado has transcoded an uploaded picture."""
-    metadata = client.request("GET", f"/pictures/{picture_id}")
+    metadata_cache = getattr(client, "_uploaded_picture_metadata", {})
+    metadata = metadata_cache.get(picture_id) if isinstance(metadata_cache, Mapping) else None
+    if not isinstance(metadata, Mapping):
+        metadata = client.request("GET", f"/pictures/{picture_id}")
     max_size = str(metadata.get("max_size") or "") if isinstance(metadata, Mapping) else ""
     match = re.fullmatch(r"\s*(\d+)\s*x\s*(\d+)\s*", max_size, re.IGNORECASE)
     if not match:
@@ -542,6 +604,98 @@ def _try_request(client: MercadoLibreClient, method: str, path: str, **kwargs: A
         return None
 
 
+_USER_PROFILE_CACHE_LOCK = threading.Lock()
+_USER_PROFILE_CACHE: dict[int, tuple[float, Mapping[str, Any]]] = {}
+_CATEGORY_CACHE_LOCK = threading.Lock()
+_CATEGORY_SCHEMA_CACHE: dict[str, tuple[float, list[Mapping[str, Any]]]] = {}
+_DIRECT_CBT_CATEGORY_CACHE: dict[str, float] = {}
+_CATEGORY_KEY_LOCKS: dict[str, threading.Lock] = {}
+_PICTURE_CACHE_LOCK = threading.Lock()
+_PICTURE_ID_CACHE: dict[tuple[int, str], tuple[float, str]] = {}
+_PICTURE_KEY_LOCKS: dict[tuple[int, str], threading.Lock] = {}
+_CACHE_TTL_SECONDS = 24 * 60 * 60
+_PICTURE_CACHE_TTL_SECONDS = 7 * 24 * 60 * 60
+
+
+def _cached_user_profile(client: MercadoLibreClient) -> Mapping[str, Any]:
+    instance_profile = getattr(client, "_cached_user_profile_value", None)
+    if isinstance(instance_profile, Mapping):
+        return instance_profile
+    token_id = int(getattr(client, "token_id", 0) or 0)
+    if token_id <= 0:
+        profile = client.request("GET", "/users/me")
+        client._cached_user_profile_value = profile
+        return profile
+
+
+def _upload_validated_picture(client: MercadoLibreClient, source_url: str) -> str:
+    """Upload once per account/source URL and reuse only dimension-checked IDs."""
+    token_id = int(getattr(client, "token_id", 0) or 0)
+    if token_id <= 0:
+        picture_id = client.upload_picture_from_url(source_url)
+        _validate_uploaded_picture_dimensions(client, picture_id)
+        return picture_id
+
+    key = (token_id, _mercado_picture_identity(source_url))
+    now = time.monotonic()
+    with _PICTURE_CACHE_LOCK:
+        cached = _PICTURE_ID_CACHE.get(key)
+        if cached and now - cached[0] < _PICTURE_CACHE_TTL_SECONDS:
+            return cached[1]
+        key_lock = _PICTURE_KEY_LOCKS.setdefault(key, threading.Lock())
+    with key_lock:
+        with _PICTURE_CACHE_LOCK:
+            cached = _PICTURE_ID_CACHE.get(key)
+            if cached and time.monotonic() - cached[0] < _PICTURE_CACHE_TTL_SECONDS:
+                return cached[1]
+        picture_id = client.upload_picture_from_url(source_url)
+        _validate_uploaded_picture_dimensions(client, picture_id)
+        with _PICTURE_CACHE_LOCK:
+            _PICTURE_ID_CACHE[key] = (time.monotonic(), picture_id)
+            if len(_PICTURE_ID_CACHE) > 10000:
+                oldest = min(
+                    _PICTURE_ID_CACHE,
+                    key=lambda cache_key: _PICTURE_ID_CACHE[cache_key][0],
+                )
+                _PICTURE_ID_CACHE.pop(oldest, None)
+                _PICTURE_KEY_LOCKS.pop(oldest, None)
+        return picture_id
+    now = time.monotonic()
+    with _USER_PROFILE_CACHE_LOCK:
+        cached = _USER_PROFILE_CACHE.get(token_id)
+        if cached and now - cached[0] < _CACHE_TTL_SECONDS:
+            client._cached_user_profile_value = cached[1]
+            return cached[1]
+        profile = client.request("GET", "/users/me")
+        _USER_PROFILE_CACHE[token_id] = (time.monotonic(), profile)
+        client._cached_user_profile_value = profile
+        return profile
+
+
+def _direct_cbt_category_exists(
+    client: MercadoLibreClient, candidate: str
+) -> bool:
+    token_id = int(getattr(client, "token_id", 0) or 0)
+    if token_id <= 0:
+        return bool(_try_request(client, "GET", f"/categories/{candidate}"))
+    now = time.monotonic()
+    with _CATEGORY_CACHE_LOCK:
+        cached_at = _DIRECT_CBT_CATEGORY_CACHE.get(candidate)
+        if cached_at is not None and now - cached_at < _CACHE_TTL_SECONDS:
+            return True
+        key_lock = _CATEGORY_KEY_LOCKS.setdefault(f"category:{candidate}", threading.Lock())
+    with key_lock:
+        with _CATEGORY_CACHE_LOCK:
+            cached_at = _DIRECT_CBT_CATEGORY_CACHE.get(candidate)
+            if cached_at is not None and time.monotonic() - cached_at < _CACHE_TTL_SECONDS:
+                return True
+        exists = bool(_try_request(client, "GET", f"/categories/{candidate}"))
+        if exists:
+            with _CATEGORY_CACHE_LOCK:
+                _DIRECT_CBT_CATEGORY_CACHE[candidate] = time.monotonic()
+        return exists
+
+
 def fetch_source_listing(
     client: MercadoLibreClient, source: str
 ) -> tuple[dict[str, Any], dict[str, Any]]:
@@ -564,7 +718,7 @@ def infer_cbt_category(client: MercadoLibreClient, source: Mapping[str, Any]) ->
         return category_id
     numeric = re.sub(r"^[A-Z]+", "", category_id)
     candidate = f"CBT{numeric}" if numeric else ""
-    if candidate and _try_request(client, "GET", f"/categories/{candidate}"):
+    if candidate and _direct_cbt_category_exists(client, candidate):
         return candidate
     suggestions = client.request(
         "GET",
@@ -584,10 +738,45 @@ def infer_cbt_category(client: MercadoLibreClient, source: Mapping[str, Any]) ->
 def _category_attribute_schema(
     client: MercadoLibreClient, category_id: str
 ) -> list[Mapping[str, Any]] | None:
+    instance_cache = getattr(client, "_category_schema_cache", None)
+    if not isinstance(instance_cache, dict):
+        instance_cache = {}
+        client._category_schema_cache = instance_cache
+    if category_id in instance_cache:
+        return instance_cache[category_id]
+    token_id = int(getattr(client, "token_id", 0) or 0)
+    if token_id > 0:
+        now = time.monotonic()
+        with _CATEGORY_CACHE_LOCK:
+            cached = _CATEGORY_SCHEMA_CACHE.get(category_id)
+            if cached and now - cached[0] < _CACHE_TTL_SECONDS:
+                instance_cache[category_id] = cached[1]
+                return cached[1]
+            key_lock = _CATEGORY_KEY_LOCKS.setdefault(
+                f"schema:{category_id}", threading.Lock()
+            )
+        with key_lock:
+            with _CATEGORY_CACHE_LOCK:
+                cached = _CATEGORY_SCHEMA_CACHE.get(category_id)
+                if cached and time.monotonic() - cached[0] < _CACHE_TTL_SECONDS:
+                    instance_cache[category_id] = cached[1]
+                    return cached[1]
+            schema = _try_request(client, "GET", f"/categories/{category_id}/attributes")
+            if isinstance(schema, list):
+                normalized = [
+                    attribute for attribute in schema if isinstance(attribute, Mapping)
+                ]
+                with _CATEGORY_CACHE_LOCK:
+                    _CATEGORY_SCHEMA_CACHE[category_id] = (time.monotonic(), normalized)
+                instance_cache[category_id] = normalized
+                return normalized
+            return None
     schema = _try_request(client, "GET", f"/categories/{category_id}/attributes")
     if not isinstance(schema, list):
         return None
-    return [attribute for attribute in schema if isinstance(attribute, Mapping)]
+    normalized = [attribute for attribute in schema if isinstance(attribute, Mapping)]
+    instance_cache[category_id] = normalized
+    return normalized
 
 
 def _category_attribute_ids(
@@ -714,14 +903,24 @@ def _normalize_enumerated_attributes(
 def _converted_usd_amount(
     client: MercadoLibreClient, amount: float, currency_id: str
 ) -> float:
-    if currency_id.upper() == "USD":
+    source_currency = currency_id.upper()
+    if source_currency == "USD":
         return round(amount, 2)
-    conversion = client.request(
-        "GET",
-        "/currency_conversions/search",
-        params={"from": currency_id.upper(), "to": "USD"},
-    )
-    ratio = conversion.get("ratio") if isinstance(conversion, Mapping) else None
+    from erp.mercadolibre_profitability_cache import DatabaseProfitabilityCache
+
+    cache = DatabaseProfitabilityCache()
+    persisted = cache.get_exchange_rate(source_currency, "USD")
+    if persisted:
+        ratio = persisted.get("rate")
+    else:
+        conversion = client.request(
+            "GET",
+            "/currency_conversions/search",
+            params={"from": source_currency, "to": "USD"},
+        )
+        ratio = conversion.get("ratio") if isinstance(conversion, Mapping) else None
+        if ratio:
+            cache.put_exchange_rate(source_currency, "USD", conversion)
     if not ratio:
         raise MercadoLibreError(f"无法取得 {currency_id} 到 USD 的汇率")
     return max(round(float(amount) * float(ratio), 2), 1.0)
@@ -921,7 +1120,7 @@ def build_user_product_payload(
             raise MercadoLibreError("User Products 刊登缺少已上传的图片 id")
     payload: dict[str, Any] = {
         "sites_to_sell": [{"site_id": site_id, "logistic_type": "remote"}],
-        "family_name": str(source.get("title") or "").strip(),
+        "family_name": str(source.get("title") or "").strip()[:60],
         "category_id": category_id,
         "global_net_proceeds": resolve_net_proceeds(client, source, net_proceeds),
         "available_quantity": quantity,
@@ -989,12 +1188,21 @@ def follow_sell(
     destination_site_id: str = "MLM",
     translator: BatchTranslator | None = None,
     source_from_database: bool = False,
+    prepared_listing: tuple[Mapping[str, Any], Mapping[str, Any]] | None = None,
     publish: bool = False,
 ) -> dict[str, Any]:
     """Build, and optionally publish, a copied listing."""
+    total_started = time.perf_counter()
+    timings: dict[str, float] = {}
     destination_site_id = normalize_marketplace_site(destination_site_id)
-    user = client.request("GET", "/users/me")
-    if source_from_database:
+    stage_started = time.perf_counter()
+    user = _cached_user_profile(client)
+    timings["account"] = time.perf_counter() - stage_started
+    stage_started = time.perf_counter()
+    if prepared_listing is not None:
+        source = dict(prepared_listing[0])
+        description = dict(prepared_listing[1])
+    elif source_from_database:
         from erp.mercadolibre_source_store import load_listing_for_publish
 
         source, description = load_listing_for_publish(source_url)
@@ -1010,6 +1218,7 @@ def follow_sell(
                 source, description = load_listing_for_publish(source_url)
             except Exception:
                 raise api_error
+    timings["source"] = time.perf_counter() - stage_started
     target_site = str(user.get("site_id") or "")
     is_global = target_site == "CBT"
     is_user_product = is_global and "user_product_seller" in set(user.get("tags") or [])
@@ -1022,6 +1231,7 @@ def follow_sell(
         "translated_field_count": 0,
     }
     picture_upload_errors: list[str] = []
+    stage_started = time.perf_counter()
     if is_global:
         category_prediction_title = str(source.get("title") or "")
         source, description, translation = translate_listing_content(
@@ -1036,6 +1246,8 @@ def follow_sell(
             f"目标店铺只能在 {target_site or '(unknown)'} 站点上架，"
             f"不能选择 {destination_site_id}"
         )
+    timings["translation"] = time.perf_counter() - stage_started
+    stage_started = time.perf_counter()
     if is_user_product:
         if source.get("variations"):
             raise MercadoLibreError(
@@ -1051,13 +1263,17 @@ def follow_sell(
             net_proceeds=net_proceeds,
             picture_ids=None,
         )
+        timings["payload"] = time.perf_counter() - stage_started
+        timings["pictures"] = 0.0
         if publish:
+            image_started = time.perf_counter()
             source_pictures, _ = _picture_sources(source)
             picture_ids = []
             for picture in source_pictures:
                 try:
-                    picture_id = client.upload_picture_from_url(picture["source"])
-                    _validate_uploaded_picture_dimensions(client, picture_id)
+                    picture_id = _upload_validated_picture(
+                        client, picture["source"]
+                    )
                     picture_ids.append(picture_id)
                 except MercadoLibreError as exc:
                     picture_upload_errors.append(str(exc))
@@ -1068,7 +1284,11 @@ def follow_sell(
                     + (f"：{details}" if details else "")
                 )
             payload["pictures"] = [{"id": picture_id} for picture_id in picture_ids]
-        endpoint = "/global/items"
+            timings["pictures"] = time.perf_counter() - image_started
+        endpoint = str(
+            os.environ.get("MERCADO_USER_PRODUCTS_CREATE_ENDPOINT")
+            or "/global/user-products"
+        ).strip()
     elif is_global:
         payload = build_global_payload(
             client,
@@ -1078,6 +1298,8 @@ def follow_sell(
             quantity=quantity,
             net_proceeds=net_proceeds,
         )
+        timings["payload"] = time.perf_counter() - stage_started
+        timings["pictures"] = 0.0
         endpoint = "/global/items"
     else:
         if target_site and target_site != source.get("site_id"):
@@ -1087,10 +1309,30 @@ def follow_sell(
         payload = build_local_payload(
             source, description, quantity=quantity, price=local_price
         )
+        timings["payload"] = time.perf_counter() - stage_started
+        timings["pictures"] = 0.0
         endpoint = "/items"
-    result = client.request("POST", endpoint, json_body=payload) if publish else None
+    stage_started = time.perf_counter()
+    result = None
+    if publish:
+        try:
+            result = client.request("POST", endpoint, json_body=payload)
+        except MercadoLibreError as exc:
+            if (
+                is_user_product
+                and endpoint == "/global/user-products"
+                and exc.status_code in {404, 405}
+            ):
+                # Explicit not-found/method-not-allowed responses are safe to
+                # fall back because Mercado confirms no product was created.
+                endpoint = "/global/items"
+                result = client.request("POST", endpoint, json_body=payload)
+            else:
+                raise
+    timings["publish"] = time.perf_counter() - stage_started
     database_publish_recorded = False
     database_publish_error = None
+    stage_started = time.perf_counter()
     if publish and result and source_from_database:
         try:
             from erp.mercadolibre_source_store import record_publish_result
@@ -1105,6 +1347,8 @@ def follow_sell(
             # The remote listing already exists at this point.  Surface the
             # local checkpoint failure without misreporting publication as failed.
             database_publish_error = f"{type(exc).__name__}: {exc}"
+    timings["checkpoint"] = time.perf_counter() - stage_started
+    timings["total"] = time.perf_counter() - total_started
     return {
         "mode": "published" if publish else "dry_run",
         "target_user_id": user.get("id"),
@@ -1121,6 +1365,9 @@ def follow_sell(
         "database_publish_error": database_publish_error,
         "picture_upload_errors": picture_upload_errors,
         "translation": translation,
+        "timings": {
+            key: round(value, 4) for key, value in timings.items()
+        },
     }
 
 

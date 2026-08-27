@@ -40,12 +40,14 @@ def _json_safe_row(row: Mapping[str, Any]) -> dict[str, Any]:
     return result
 
 
-def _ensure_column(cursor: Any, column: str, definition: str) -> None:
+def _ensure_column(cursor: Any, column: str, definition: str) -> bool:
     cursor.execute(f"SHOW COLUMNS FROM `{STORE_LINK_TABLE}` LIKE %s", (column,))
-    if not cursor.fetchone():
-        cursor.execute(
-            f"ALTER TABLE `{STORE_LINK_TABLE}` ADD COLUMN `{column}` {definition}"
-        )
+    if cursor.fetchone():
+        return False
+    cursor.execute(
+        f"ALTER TABLE `{STORE_LINK_TABLE}` ADD COLUMN `{column}` {definition}"
+    )
+    return True
 
 
 def ensure_store_link_table(cursor: Any) -> None:
@@ -78,6 +80,7 @@ def ensure_store_link_table(cursor: Any) -> None:
             `price_manual` TINYINT(1) NOT NULL DEFAULT 0,
             `weight_manual` TINYINT(1) NOT NULL DEFAULT 0,
             `dimensions_manual` TINYINT(1) NOT NULL DEFAULT 0,
+            `net_proceeds_manual` TINYINT(1) NOT NULL DEFAULT 0,
             `sync_marker` VARCHAR(64) NULL,
             `remote_json` LONGTEXT NULL,
             `is_current` TINYINT(1) NOT NULL DEFAULT 1,
@@ -92,6 +95,30 @@ def ensure_store_link_table(cursor: Any) -> None:
         """
     )
     _ensure_column(cursor, "sync_marker", "VARCHAR(64) NULL AFTER `dimensions_manual`")
+    net_manual_added = _ensure_column(
+        cursor,
+        "net_proceeds_manual",
+        "TINYINT(1) NOT NULL DEFAULT 0 AFTER `dimensions_manual`",
+    )
+    if net_manual_added:
+        cursor.execute(
+            f"UPDATE `{STORE_LINK_TABLE}` SET `net_proceeds_manual` = 1 "
+            "WHERE `net_proceeds_usd` IS NOT NULL"
+        )
+        cursor.execute(
+            f"""
+            UPDATE `{STORE_LINK_TABLE}`
+            SET `net_proceeds_usd` = CAST(
+                JSON_UNQUOTE(JSON_EXTRACT(`remote_json`, '$.net_proceeds.amount'))
+                AS DECIMAL(20,4)
+            )
+            WHERE `net_proceeds_manual` = 0
+              AND JSON_UNQUOTE(
+                    JSON_EXTRACT(`remote_json`, '$.net_proceeds.currency_id')
+                  ) = 'USD'
+              AND JSON_EXTRACT(`remote_json`, '$.net_proceeds.amount') IS NOT NULL
+            """
+        )
 
 
 def _value_struct_number(value: Any, *, weight: bool = False) -> Decimal | None:
@@ -165,6 +192,24 @@ def _thumbnail(item: Mapping[str, Any]) -> str:
     return str(item.get("secure_thumbnail") or item.get("thumbnail") or "")
 
 
+def _net_proceeds_usd(item: Mapping[str, Any]) -> Any:
+    values = item.get("net_proceeds")
+    candidates = values if isinstance(values, list) else [values]
+    for candidate in candidates:
+        if not isinstance(candidate, Mapping):
+            continue
+        if str(candidate.get("currency_id") or "").strip().upper() != "USD":
+            continue
+        amount = candidate.get("amount")
+        if amount in (None, ""):
+            continue
+        try:
+            return Decimal(str(amount))
+        except (InvalidOperation, TypeError, ValueError):
+            continue
+    return None
+
+
 def listing_record(token: Mapping[str, Any], item: Mapping[str, Any], synced_at: str) -> dict[str, Any]:
     """Normalize one official API listing while keeping package values editable."""
 
@@ -202,6 +247,7 @@ def listing_record(token: Mapping[str, Any], item: Mapping[str, Any], synced_at:
         "package_length_cm": length,
         "package_width_cm": width,
         "package_height_cm": height,
+        "net_proceeds_usd": _net_proceeds_usd(item),
         "remote_json": _dumps(item),
         "is_current": 1,
         "last_synced_at": synced_at,
@@ -265,8 +311,9 @@ def replace_store_snapshot(
                     `available_quantity`, `sold_quantity`, `seller_sku`, `category_id`,
                     `listing_type_id`, `weight_g`, `volumetric_weight_kg`,
                     `package_length_cm`, `package_width_cm`, `package_height_cm`,
-                    `sync_marker`, `remote_json`, `is_current`, `last_synced_at`
-                ) VALUES ({", ".join(["%s"] * 25)})
+                    `net_proceeds_usd`, `sync_marker`, `remote_json`, `is_current`,
+                    `last_synced_at`
+                ) VALUES ({", ".join(["%s"] * 26)})
                 ON DUPLICATE KEY UPDATE
                     `store_name` = VALUES(`store_name`), `seller_id` = VALUES(`seller_id`),
                     `site_id` = VALUES(`site_id`),
@@ -286,6 +333,7 @@ def replace_store_snapshot(
                     `package_length_cm` = IF(`dimensions_manual` = 1, `package_length_cm`, COALESCE(VALUES(`package_length_cm`), `package_length_cm`)),
                     `package_width_cm` = IF(`dimensions_manual` = 1, `package_width_cm`, COALESCE(VALUES(`package_width_cm`), `package_width_cm`)),
                     `package_height_cm` = IF(`dimensions_manual` = 1, `package_height_cm`, COALESCE(VALUES(`package_height_cm`), `package_height_cm`)),
+                    `net_proceeds_usd` = IF(`net_proceeds_manual` = 1, `net_proceeds_usd`, COALESCE(VALUES(`net_proceeds_usd`), `net_proceeds_usd`)),
                     `sync_marker` = VALUES(`sync_marker`),
                     `remote_json` = VALUES(`remote_json`), `is_current` = 1,
                     `last_synced_at` = VALUES(`last_synced_at`)
@@ -301,7 +349,8 @@ def replace_store_snapshot(
                             "available_quantity", "sold_quantity", "seller_sku", "category_id",
                             "listing_type_id", "weight_g", "volumetric_weight_kg",
                             "package_length_cm", "package_width_cm", "package_height_cm",
-                            "sync_marker", "remote_json", "is_current", "last_synced_at",
+                            "net_proceeds_usd", "sync_marker", "remote_json", "is_current",
+                            "last_synced_at",
                         )
                     )
                 )
@@ -357,11 +406,11 @@ def list_store_links(
     sales_sort: str = "desc",
     current_only: bool = True,
     page: int = 1,
-    page_size: int = 100,
+    page_size: int = 1000,
     connection_factory: Callable[[], Any] | None = None,
 ) -> dict[str, Any]:
     page = max(1, int(page or 1))
-    page_size = max(10, min(int(page_size or 100), 500))
+    page_size = max(10, min(int(page_size or 1000), 1000))
     conditions: list[str] = []
     values: list[Any] = []
     if current_only:
@@ -398,7 +447,16 @@ def list_store_links(
             pages = max(1, (total + page_size - 1) // page_size)
             page = min(page, pages)
             cursor.execute(
-                f"SELECT * FROM `{STORE_LINK_TABLE}`{where_sql} "
+                f"""
+                SELECT `id`, `token_id`, `store_name`, `seller_id`, `site_id`,
+                       `item_id`, `title`, `permalink`, `thumbnail_url`, `status`,
+                       `price`, `currency_id`, `available_quantity`, `sold_quantity`,
+                       `seller_sku`, `category_id`, `listing_type_id`, `weight_g`,
+                       `volumetric_weight_kg`, `package_length_cm`, `package_width_cm`,
+                       `package_height_cm`, `net_proceeds_usd`, `price_manual`,
+                       `weight_manual`, `dimensions_manual`, `net_proceeds_manual`, `is_current`,
+                       `last_synced_at`, `created_at`, `updated_at`
+                FROM `{STORE_LINK_TABLE}`{where_sql} """
                 f"ORDER BY COALESCE(`sold_quantity`, 0) {sales_direction}, "
                 "`last_synced_at` DESC, `store_name` ASC, `item_id` ASC LIMIT %s OFFSET %s",
                 tuple(values + [page_size, (page - 1) * page_size]),
@@ -406,10 +464,15 @@ def list_store_links(
             rows = [_json_safe_row(row) for row in cursor.fetchall()]
             cursor.execute(
                 f"""
-                SELECT `token_id`, MAX(`store_name`) AS `store_name`,
-                       SUM(CASE WHEN `is_current` = 1 THEN 1 ELSE 0 END) AS `link_count`,
-                       MAX(`last_synced_at`) AS `last_synced_at`
-                FROM `{STORE_LINK_TABLE}` GROUP BY `token_id` ORDER BY `store_name`
+                SELECT tokens.`id` AS `token_id`,
+                       tokens.`display_name` AS `store_name`,
+                       SUM(CASE WHEN links.`is_current` = 1 THEN 1 ELSE 0 END) AS `link_count`,
+                       MAX(CASE WHEN links.`is_current` = 1 THEN links.`last_synced_at` END)
+                           AS `last_synced_at`
+                FROM `mercado_store_tokens` AS tokens
+                LEFT JOIN `{STORE_LINK_TABLE}` AS links ON links.`token_id` = tokens.`id`
+                GROUP BY tokens.`id`, tokens.`display_name`
+                ORDER BY tokens.`display_name`, tokens.`id`
                 """
             )
             stores = [_json_safe_row(row) for row in cursor.fetchall()]
@@ -502,6 +565,8 @@ def bulk_update_store_links(
             "THEN ROUND(`package_length_cm` * `package_width_cm` * `package_height_cm` / 6000, 4) "
             "ELSE NULL END"
         )
+    if "net_proceeds_usd" in clean_changes:
+        assignments.append("`net_proceeds_manual` = 1")
     placeholders = ", ".join(["%s"] * len(ids))
     connection = (connection_factory or _connect)()
     try:

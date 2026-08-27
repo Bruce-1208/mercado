@@ -3,8 +3,11 @@
 from __future__ import annotations
 
 import copy
+import hashlib
 import json
 import re
+import threading
+import time
 from typing import Any, Callable, Iterable, Mapping
 
 
@@ -31,6 +34,10 @@ PROTECTED_ATTRIBUTE_IDS = {
     "EMPTY_GTIN_REASON",
 }
 BatchTranslator = Callable[[list[str], str, str], list[str]]
+_TRANSLATION_CACHE_LOCK = threading.Lock()
+_TRANSLATION_CACHE: dict[str, tuple[float, list[str]]] = {}
+_TRANSLATION_KEY_LOCKS: dict[str, threading.Lock] = {}
+_TRANSLATION_CACHE_TTL_SECONDS = 30 * 24 * 60 * 60
 
 
 class ListingTranslationError(RuntimeError):
@@ -125,6 +132,41 @@ def _deepseek_batch_translate(
     return result
 
 
+def _cached_default_translate(
+    texts: list[str], source_language: str, target_language: str
+) -> list[str]:
+    encoded = json.dumps(
+        [source_language, target_language, texts],
+        ensure_ascii=False,
+        separators=(",", ":"),
+    ).encode("utf-8")
+    cache_key = hashlib.sha256(encoded).hexdigest()
+    now = time.monotonic()
+    with _TRANSLATION_CACHE_LOCK:
+        cached = _TRANSLATION_CACHE.get(cache_key)
+        if cached and now - cached[0] < _TRANSLATION_CACHE_TTL_SECONDS:
+            return list(cached[1])
+        key_lock = _TRANSLATION_KEY_LOCKS.setdefault(cache_key, threading.Lock())
+    with key_lock:
+        with _TRANSLATION_CACHE_LOCK:
+            cached = _TRANSLATION_CACHE.get(cache_key)
+            if cached and time.monotonic() - cached[0] < _TRANSLATION_CACHE_TTL_SECONDS:
+                return list(cached[1])
+        translated = _deepseek_batch_translate(
+            texts, source_language, target_language
+        )
+        with _TRANSLATION_CACHE_LOCK:
+            _TRANSLATION_CACHE[cache_key] = (time.monotonic(), list(translated))
+            if len(_TRANSLATION_CACHE) > 5000:
+                oldest = min(
+                    _TRANSLATION_CACHE,
+                    key=lambda key: _TRANSLATION_CACHE[key][0],
+                )
+                _TRANSLATION_CACHE.pop(oldest, None)
+                _TRANSLATION_KEY_LOCKS.pop(oldest, None)
+        return list(translated)
+
+
 def _translatable_attribute(attribute: Mapping[str, Any]) -> bool:
     attribute_id = str(attribute.get("id") or "").upper()
     if (
@@ -206,8 +248,10 @@ def translate_listing_content(
 
     if not texts:
         return translated_source, translated_description, metadata
-    translated_values = (translator or _deepseek_batch_translate)(
-        texts, source_language, str(target_language)
+    translated_values = (
+        translator(texts, source_language, str(target_language))
+        if translator is not None
+        else _cached_default_translate(texts, source_language, str(target_language))
     )
     if not isinstance(translated_values, list) or len(translated_values) != len(texts):
         raise ListingTranslationError("翻译结果数量与原文不一致")

@@ -87,6 +87,52 @@
             box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12);
         }
 
+        .remember-row {
+            display: flex;
+            align-items: flex-start;
+            justify-content: space-between;
+            gap: 12px;
+            margin: 2px 0 16px;
+        }
+
+        .remember-option {
+            display: flex;
+            align-items: flex-start;
+            gap: 9px;
+            margin: 0;
+            color: var(--text);
+            cursor: pointer;
+            font-size: 13px;
+            font-weight: 700;
+        }
+
+        .remember-option input {
+            width: 16px;
+            height: 16px;
+            flex: 0 0 16px;
+            margin: 1px 0 0;
+            accent-color: var(--primary);
+        }
+
+        .remember-copy {
+            display: grid;
+            gap: 2px;
+        }
+
+        .remember-copy small {
+            color: var(--muted);
+            font-size: 11px;
+            font-weight: 400;
+        }
+
+        .security-note {
+            margin: 13px 0 0;
+            color: var(--muted);
+            font-size: 11px;
+            line-height: 1.55;
+            text-align: center;
+        }
+
         button {
             width: 100%;
             border: 0;
@@ -127,7 +173,7 @@
             <h1>武汉泽顺综合服务台</h1>
             <p>请输入账号密码后继续</p>
         </div>
-        <form id="login-form">
+        <form id="login-form" action="/api/login" method="post" autocomplete="on">
             <p class="error" id="error-box"></p>
             <div class="field">
                 <label for="username">账号</label>
@@ -137,7 +183,14 @@
                 <label for="password">密码</label>
                 <input id="password" name="password" type="password" autocomplete="current-password">
             </div>
+            <div class="remember-row">
+                <label class="remember-option" for="remember-login">
+                    <input id="remember-login" name="remember" type="checkbox" value="1">
+                    <span class="remember-copy">记住账号密码<small>6 小时内自动登录</small></span>
+                </label>
+            </div>
             <button id="login-btn" type="submit">登录</button>
+            <p class="security-note">密码不会以明文保存在页面中，登录状态由安全 Cookie 维持。</p>
         </form>
     </section>
 
@@ -145,6 +198,17 @@
         const form = document.getElementById("login-form");
         const button = document.getElementById("login-btn");
         const errorBox = document.getElementById("error-box");
+        const usernameInput = document.getElementById("username");
+        const passwordInput = document.getElementById("password");
+        const rememberLogin = document.getElementById("remember-login");
+        const rememberedUsernameKey = "zeshun-remembered-username";
+
+        const rememberedUsername = window.localStorage.getItem(rememberedUsernameKey) || "";
+        if (rememberedUsername) {
+            usernameInput.value = rememberedUsername;
+            rememberLogin.checked = true;
+            passwordInput.focus();
+        }
 
         function showError(message) {
             errorBox.textContent = message;
@@ -158,17 +222,25 @@
             button.textContent = "登录中...";
 
             try {
+                const username = usernameInput.value.trim();
+                const remember = rememberLogin.checked;
                 const response = await fetch("/api/login", {
                     method: "POST",
                     headers: { "Content-Type": "application/json" },
                     body: JSON.stringify({
-                        username: document.getElementById("username").value.trim(),
-                        password: document.getElementById("password").value
+                        username,
+                        password: passwordInput.value,
+                        remember,
                     })
                 });
                 const payload = await response.json();
                 if (!response.ok || payload.status !== "success") {
                     throw new Error(payload.message || "登录失败");
+                }
+                if (remember) {
+                    window.localStorage.setItem(rememberedUsernameKey, username);
+                } else {
+                    window.localStorage.removeItem(rememberedUsernameKey);
                 }
                 const params = new URLSearchParams(window.location.search);
                 window.location.href = params.get("next") || "/";

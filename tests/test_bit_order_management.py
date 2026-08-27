@@ -1,6 +1,7 @@
 from unittest.mock import patch
 
 import bit.bit_interface as workbench
+from bit import bit_db_api
 
 
 def _client():
@@ -22,6 +23,7 @@ def test_workbench_contains_order_management_ui():
     assert b'data-tab="orders"' in response.data
     assert b'id="tab-orders"' in response.data
     assert b'id="order-status-strip"' in response.data
+    assert b'id="order-store-filter"' in response.data
     assert b'id="order-salesperson-filter"' in response.data
     assert b'id="order-group-filter"' in response.data
     assert b'id="order-table-body"' in response.data
@@ -45,6 +47,8 @@ def test_workbench_contains_order_management_ui():
     assert b'id="order-tracking-dialog"' in response.data
     assert b'id="order-detail-log-list"' in response.data
     assert b'/api/orders/print' in response.data
+    assert "店铺（可多选）".encode("utf-8") in response.data
+    assert "店铺业务员（可多选）".encode("utf-8") in response.data
 
 
 def test_order_api_requires_login():
@@ -102,6 +106,45 @@ def test_order_api_caps_page_size():
 
     assert response.status_code == 200
     assert list_orders.call_args.kwargs["page_size"] == 200
+
+
+def test_order_api_passes_multiple_stores_and_salespeople():
+    with patch.object(
+        workbench,
+        "db_list_orders",
+        return_value={
+            "rows": [], "total": 0, "page": 1, "page_size": 50, "pages": 1,
+            "status_counts": {}, "country_counts": {}, "store_counts": [],
+            "salesperson_counts": {}, "summary": {},
+        },
+    ) as list_orders:
+        response = _client().get(
+            "/api/orders?store_id=2&store_id=7"
+            "&salesperson=%E5%BC%A0%E4%B8%89&salesperson=%E6%9D%8E%E5%9B%9B"
+        )
+
+    assert response.status_code == 200
+    assert list_orders.call_args.kwargs["store_ids"] == [2, 7]
+    assert list_orders.call_args.kwargs["salespeople"] == ["张三", "李四"]
+    assert list_orders.call_args.kwargs["salesperson"] == ""
+
+
+def test_order_db_api_forwards_multi_value_filters(monkeypatch):
+    captured = {}
+
+    def fake_request(method, path, **kwargs):
+        captured.update(method=method, path=path, **kwargs)
+        return {"rows": [], "total": 0}
+
+    monkeypatch.setattr(bit_db_api, "DB_MODE", "api")
+    monkeypatch.setattr(bit_db_api, "_request", fake_request)
+
+    bit_db_api.list_orders(store_ids=[2, 7], salespeople=["张三", "__unassigned__"])
+
+    assert captured["method"] == "GET"
+    assert captured["path"] == "/api/db/orders"
+    assert captured["params"]["store_id"] == [2, 7]
+    assert captured["params"]["salesperson"] == ["张三", "__unassigned__"]
 
 
 def test_manual_order_sync_start_uses_selected_token_stores():

@@ -208,7 +208,9 @@ def test_mysql_upsert_maps_token_order_origin_fields(monkeypatch):
     assert row[5] == "墨西哥"
     assert row[7] == "交付"
     assert row[19] == "商品一"
+    assert row[-1] == "MXN"
     assert "status_label" in upsert_sql[0]
+    assert "amount_currency_id" in upsert_sql[0]
     assert "workflow_status" not in upsert_sql[0]
 
 

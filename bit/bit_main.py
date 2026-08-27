@@ -211,10 +211,11 @@ def _run_order_print_if_due(now=None):
 
         # 一启动就记时；即使部分店铺失败，也不会在后续两小时循环中重复打印。
         _save_order_print_last_started_at(now)
-        print(f"{get_now_time()} 开始执行每 24 小时一次的订单打印<br>")
+        print(f"{get_now_time()} 开始执行每 24 小时一次的美客多 API 订单打印<br>")
         summary = bit_print.print_orders_all()
         print(
-            f"{get_now_time()} 订单打印执行完成：已提交 {summary.get('printed', 0)}，"
+            f"{get_now_time()} API 订单打印执行完成：已生成站点 {summary.get('printed', 0)}，"
+            f"订单 {summary.get('printed_order_count', 0)}，面单 {summary.get('shipment_count', 0)}，"
             f"无订单 {summary.get('no_orders', 0)}，失败 {summary.get('failed', 0)}，"
             f"跳过 {summary.get('skipped', 0)}<br>"
         )

@@ -83,6 +83,10 @@ def test_merge_listing_candidates_normalizes_and_deduplicates_ids():
         "https://www.mercadolibre.com.mx/producto/p/MLM2069788918?"
         "pdp_filters=item_id%3AMLM3016972321"
     ) == "MLM3016972321"
+    assert extract_listing_item_id(
+        "https://www.mercadolibre.com.mx/producto/p/MLM2069788918?"
+        "pdp_filters=SHIPPING_ORIGIN%3A10215069#position=3&wid=MLM5546998214"
+    ) == "MLM5546998214"
 
 
 def test_collection_request_requires_mercado_host_and_bounded_count():
@@ -94,9 +98,9 @@ def test_collection_request_requires_mercado_host_and_bounded_count():
     with pytest.raises(ValueError, match="1-500"):
         validate_collection_request("https://listado.mercadolibre.com.mx/bolsas", 501)
 
-    assert normalize_collection_workers(8) == 8
-    with pytest.raises(ValueError, match="1-8"):
-        normalize_collection_workers(9)
+    assert normalize_collection_workers(10) == 10
+    with pytest.raises(ValueError, match="1-10"):
+        normalize_collection_workers(11)
 
 
 def test_keyword_builds_country_frontend_search_urls():
@@ -174,6 +178,180 @@ def test_listing_html_marks_international_seller_cards():
     )
 
     assert [row["is_cross_border"] for row in listing["rows"]] == [True, False]
+
+
+def test_playwright_listing_pages_keep_images_needed_by_lazy_result_grid():
+    should_block = playwright_collector._should_block_resource
+
+    assert not should_block(
+        "image",
+        "https://http2.mlstatic.com/result.webp",
+        "https://listado.mercadolibre.com.mx/intercoms",
+        allow_images=True,
+    )
+    assert should_block(
+        "image",
+        "https://http2.mlstatic.com/detail.webp",
+        "https://articulo.mercadolibre.com.mx/MLM-123",
+        allow_images=False,
+    )
+    assert should_block(
+        "font", "https://example.test/font.woff2", "", allow_images=True
+    )
+    assert not should_block(
+        "image",
+        "https://example.test/captcha/picture.png",
+        "https://example.test/account-verification",
+        allow_images=False,
+    )
+
+    class FakePage:
+        def __init__(self):
+            self.route_calls = 0
+
+        def set_default_timeout(self, _timeout):
+            return None
+
+        async def route(self, *_args):
+            self.route_calls += 1
+
+    page = FakePage()
+
+    class FakeContext:
+        async def new_page(self):
+            return page
+
+    runtime = type("Runtime", (), {"context": FakeContext(), "pages": []})()
+    result = asyncio.run(
+        playwright_collector._new_page(runtime, optimize_resources=False)
+    )
+
+    assert result is page
+    assert page.route_calls == 0
+
+
+def test_listing_dom_scripts_prefer_original_price_over_current_price():
+    for script in (
+        playwright_collector.LISTING_DOM_SCRIPT,
+        collector._LISTING_PAGE_SCRIPT,
+    ):
+        assert ".andes-money-amount--previous" in script
+        assert "const collectedPrice = originalPrice || currentPrice" in script
+
+
+def test_listing_and_detail_html_prefer_original_price():
+    listing = parse_listing_html(
+        """
+        <li class="ui-search-layout__item">
+          <a class="ui-search-link" href="/MLM-3016972321">Producto</a>
+          <h2>Producto</h2>
+          <s class="andes-money-amount andes-money-amount--previous">
+            <span class="andes-money-amount__fraction">1,299</span>
+            <span class="andes-money-amount__cents">90</span>
+          </s>
+          <div class="ui-search-price__second-line">
+            <span class="andes-money-amount">
+              <span class="andes-money-amount__fraction">999</span>
+            </span>
+          </div>
+        </li>
+        """,
+        "https://listado.mercadolibre.com.mx/cosplay",
+    )
+    assert listing["rows"][0]["price"] == "1,299.90"
+
+    detail = parse_detail_html(
+        """
+        <html><head><meta itemprop="price" content="999"></head><body>
+          <h1 class="ui-pdp-title">Producto</h1>
+          <s class="andes-money-amount andes-money-amount--previous">
+            <span class="andes-money-amount__fraction">1,299</span>
+            <span class="andes-money-amount__cents">90</span>
+          </s>
+        </body></html>
+        """,
+        "https://articulo.mercadolibre.com.mx/MLM-3016972321",
+    )
+    assert detail["price"] == "1,299.90"
+
+
+def test_plugin_reader_scans_loaded_react_wrappers_not_only_stale_metric_lines():
+    script = playwright_collector.PLUGIN_REACT_METRICS_SCRIPT
+
+    assert "const reactNodes = []" in script
+    assert "root.querySelectorAll('*')" in script
+    assert "captureValue(directProps" in script
+
+
+def test_detail_reader_attaches_before_navigation_context_is_created():
+    import inspect
+
+    source = inspect.getsource(playwright_collector._collect_detail)
+    assert source.index("_PluginMetricReader.open(page)") < source.index(
+        "await _goto(page, primary_url)"
+    )
+    assert "await _goto(page, fallback_url)" in source
+
+
+def test_product_detail_wait_does_not_accept_generic_error_page_heading():
+    class Page:
+        def __init__(self):
+            self.selector = ""
+
+        async def wait_for_selector(self, selector, **_kwargs):
+            self.selector = selector
+            raise RuntimeError("not a product page")
+
+    page = Page()
+    ready = asyncio.run(
+        playwright_collector._wait_for_product_detail(page, timeout=1)
+    )
+
+    assert ready is False
+    assert "h1.ui-pdp-title" in page.selector
+    assert ", h1" not in page.selector
+
+
+def test_plugin_reader_waits_past_protected_placeholder_for_loaded_api_data(
+    monkeypatch,
+):
+    class Reader:
+        def __init__(self):
+            self.calls = 0
+
+        async def read(self):
+            self.calls += 1
+            if self.calls == 1:
+                return {}
+            return {
+                "found": True,
+                "metrics": {},
+                "data": {
+                    "weight_g": 196,
+                    "size_cm": [12, 10, 6],
+                    "volume_weight_g": 120,
+                },
+            }
+
+    async def protected_lines(_page):
+        return ["xutxutxut35s97l97l97kdzt"]
+
+    async def no_sleep(_seconds):
+        return None
+
+    reader = Reader()
+    monkeypatch.setattr(playwright_collector, "_plugin_dom_lines", protected_lines)
+    monkeypatch.setattr(playwright_collector.asyncio, "sleep", no_sleep)
+
+    metrics, _lines = asyncio.run(
+        playwright_collector._wait_for_plugin_metrics(
+            object(), 1, None, react_reader=reader
+        )
+    )
+
+    assert reader.calls == 2
+    assert metrics["weight_g"] == 196
+    assert metrics["package_length_cm"] == 12
 
 
 def test_default_and_legacy_edge_labels_use_playwright(monkeypatch):
@@ -341,6 +519,75 @@ def test_playwright_retries_one_transient_detail_failure(monkeypatch):
     assert result["completed_count"] == 1
 
 
+def test_playwright_verification_block_uses_serial_recovery_probes(monkeypatch):
+    monkeypatch.setenv("MERCADO_PLAYWRIGHT_NAVIGATION_STAGGER_SECONDS", "0")
+    monkeypatch.setenv("MERCADO_PLAYWRIGHT_VERIFICATION_COOLDOWN_SECONDS", "0")
+    monkeypatch.setenv("MERCADO_PLAYWRIGHT_VERIFICATION_MAX_COOLDOWN_SECONDS", "0")
+    monkeypatch.setenv("MERCADO_PLAYWRIGHT_VERIFICATION_RECOVERY_SUCCESSES", "2")
+    candidates = [
+        {
+            "source_item_id": f"MLM301697232{index}",
+            "source_url": f"https://example.test/{index}",
+            "title": f"Producto {index}",
+        }
+        for index in range(1, 4)
+    ]
+    runtime = type("Runtime", (), {"connection_mode": "test"})()
+    first_wave_ready = asyncio.Event()
+    first_wave_calls = 0
+    recovery_active = 0
+    max_recovery_active = 0
+    attempts = {}
+
+    async def fake_open():
+        return runtime
+
+    async def fake_close(_runtime):
+        return None
+
+    async def fake_candidates(*args, **kwargs):
+        return candidates
+
+    async def fake_detail(_runtime, candidate, **kwargs):
+        nonlocal first_wave_calls, recovery_active, max_recovery_active
+        item_id = candidate["source_item_id"]
+        attempts[item_id] = attempts.get(item_id, 0) + 1
+        if attempts[item_id] == 1:
+            first_wave_calls += 1
+            if first_wave_calls == len(candidates):
+                first_wave_ready.set()
+            await asyncio.wait_for(first_wave_ready.wait(), timeout=1)
+            raise RuntimeError("Mercado 页面进入买家验证页 account-verification")
+        recovery_active += 1
+        max_recovery_active = max(max_recovery_active, recovery_active)
+        await asyncio.sleep(0)
+        recovery_active -= 1
+        return {**candidate, "scrape_status": "ok", "main_image_url": "image"}
+
+    monkeypatch.setattr(playwright_collector, "_open_runtime", fake_open)
+    monkeypatch.setattr(playwright_collector, "_close_runtime", fake_close)
+    monkeypatch.setattr(playwright_collector, "_listing_candidates", fake_candidates)
+    monkeypatch.setattr(playwright_collector, "_collect_detail", fake_detail)
+
+    result = asyncio.run(
+        playwright_collector._collect_async(
+            "https://listado.mercadolibre.com.mx/cardgame",
+            3,
+            max_workers=3,
+            plugin_timeout=1,
+            on_page=None,
+            on_item=None,
+            on_progress=None,
+            stop_event=None,
+        )
+    )
+
+    assert result["completed_count"] == 3
+    assert result["failed_count"] == 0
+    assert max_recovery_active == 1
+    assert set(attempts.values()) == {2}
+
+
 def test_playwright_dynamic_pool_does_not_wait_for_slowest_batch_member(monkeypatch):
     monkeypatch.setenv("MERCADO_PLAYWRIGHT_NAVIGATION_STAGGER_SECONDS", "0")
     candidates = [
@@ -392,6 +639,143 @@ def test_playwright_dynamic_pool_does_not_wait_for_slowest_batch_member(monkeypa
     )
 
     assert result["completed_count"] == 3
+
+
+def test_playwright_reuses_preheated_detail_pages_across_items(monkeypatch):
+    monkeypatch.setenv("MERCADO_PLAYWRIGHT_NAVIGATION_STAGGER_SECONDS", "0")
+    candidates = [
+        {
+            "source_item_id": f"MLM900000000{index}",
+            "source_url": f"https://example.test/{index}",
+            "title": f"Producto {index}",
+        }
+        for index in range(4)
+    ]
+    created_pages = []
+    used_pages = []
+
+    class Page:
+        def __init__(self):
+            self.closed = False
+
+        def set_default_timeout(self, _timeout):
+            return None
+
+        async def route(self, *_args):
+            return None
+
+        def is_closed(self):
+            return self.closed
+
+        async def close(self):
+            self.closed = True
+
+    class Context:
+        async def new_page(self):
+            page = Page()
+            created_pages.append(page)
+            return page
+
+    class Reader:
+        async def close(self):
+            return None
+
+    runtime = type(
+        "Runtime",
+        (),
+        {"connection_mode": "test", "context": Context(), "pages": []},
+    )()
+
+    async def fake_open():
+        return runtime
+
+    async def fake_close(_runtime):
+        return None
+
+    async def fake_candidates(*_args, **_kwargs):
+        return candidates
+
+    async def fake_reader_open(_page):
+        return Reader()
+
+    async def fake_detail(_runtime, candidate, **kwargs):
+        used_pages.append(kwargs["page"])
+        await asyncio.sleep(0)
+        return {**candidate, "scrape_status": "ok", "main_image_url": "image"}
+
+    monkeypatch.setattr(playwright_collector, "_open_runtime", fake_open)
+    monkeypatch.setattr(playwright_collector, "_close_runtime", fake_close)
+    monkeypatch.setattr(playwright_collector, "_listing_candidates", fake_candidates)
+    monkeypatch.setattr(
+        playwright_collector._PluginMetricReader, "open", fake_reader_open
+    )
+    monkeypatch.setattr(playwright_collector, "_collect_detail", fake_detail)
+
+    result = asyncio.run(
+        playwright_collector._collect_async(
+            "https://listado.mercadolibre.com.mx/cosplay",
+            4,
+            max_workers=2,
+            plugin_timeout=1,
+            on_page=None,
+            on_item=None,
+            on_progress=None,
+            stop_event=None,
+        )
+    )
+
+    assert result["completed_count"] == 4
+    assert len(created_pages) == 2
+    assert len({id(page) for page in used_pages}) == 2
+    assert all(page.closed for page in created_pages)
+
+
+def test_playwright_quality_repair_stops_after_repeated_no_hit(monkeypatch):
+    monkeypatch.setenv("MERCADO_PLAYWRIGHT_REPAIR_FAILURE_LIMIT", "3")
+    candidates = [
+        {
+            "source_item_id": f"MLM30169723{index:02d}",
+            "source_url": f"https://example.test/{index}",
+            "scrape_status": "partial",
+        }
+        for index in range(10)
+    ]
+    runtime = type("Runtime", (), {"connection_mode": "test"})()
+    calls = []
+
+    async def fake_open(_window_id):
+        return runtime
+
+    async def fake_close(_runtime):
+        return None
+
+    async def fake_detail(_runtime, candidate, **_kwargs):
+        calls.append(candidate["source_item_id"])
+        return {**candidate, "scrape_status": "partial", "error_message": "no metrics"}
+
+    async def fake_sleep(_seconds):
+        return None
+
+    monkeypatch.setattr(playwright_collector, "_open_runtime", fake_open)
+    monkeypatch.setattr(playwright_collector, "_close_runtime", fake_close)
+    monkeypatch.setattr(playwright_collector, "_collect_detail", fake_detail)
+    monkeypatch.setattr(playwright_collector.asyncio, "sleep", fake_sleep)
+
+    result = asyncio.run(
+        playwright_collector._repair_items_async(
+            candidates,
+            window_id="window",
+            plugin_timeout=1,
+            attempts=1,
+            on_item=None,
+            on_progress=None,
+            stop_event=None,
+        )
+    )
+
+    assert len(calls) == 3
+    assert result["attempted_count"] == 3
+    assert result["skipped_count"] == 7
 
 
 def test_playwright_reopens_browser_before_retrying_closed_context(monkeypatch):
