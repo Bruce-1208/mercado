@@ -24,6 +24,15 @@ class MercadoTokenError(RuntimeError):
     """A Mercado Libre OAuth or identity request failed."""
 
 
+def _mercado_http_client(http: requests.Session | None = None) -> requests.Session:
+    """Use a direct client so a stale Windows system proxy cannot break OAuth."""
+    if http is not None:
+        return http
+    client = requests.Session()
+    client.trust_env = False
+    return client
+
+
 def _legacy_oauth_credentials() -> dict[str, str]:
     """Reuse the project's existing Mercado application during migration."""
     try:
@@ -130,13 +139,18 @@ def _request_token(
     http: requests.Session | None = None,
     timeout: int = 30,
 ) -> dict[str, Any]:
-    client = http or requests.Session()
-    response = client.post(
-        f"{API_BASE_URL}/oauth/token",
-        headers={"Accept": "application/json"},
-        data=dict(form_data),
-        timeout=timeout,
-    )
+    client = _mercado_http_client(http)
+    try:
+        response = client.post(
+            f"{API_BASE_URL}/oauth/token",
+            headers={"Accept": "application/json"},
+            data=dict(form_data),
+            timeout=timeout,
+        )
+    except requests.exceptions.RequestException as exc:
+        raise MercadoTokenError(
+            "无法连接 Mercado Libre Token 接口，请检查服务器网络后重试"
+        ) from exc
     if not response.ok:
         raise MercadoTokenError(
             f"Token 请求失败（HTTP {response.status_code}）：{_response_message(response)}"
@@ -156,15 +170,20 @@ def _seller_profile(
     http: requests.Session | None = None,
     timeout: int = 30,
 ) -> dict[str, Any]:
-    client = http or requests.Session()
-    response = client.get(
-        f"{API_BASE_URL}/users/me",
-        headers={
-            "Accept": "application/json",
-            "Authorization": f"Bearer {access_token}",
-        },
-        timeout=timeout,
-    )
+    client = _mercado_http_client(http)
+    try:
+        response = client.get(
+            f"{API_BASE_URL}/users/me",
+            headers={
+                "Accept": "application/json",
+                "Authorization": f"Bearer {access_token}",
+            },
+            timeout=timeout,
+        )
+    except requests.exceptions.RequestException as exc:
+        raise MercadoTokenError(
+            "无法连接 Mercado Libre 店铺身份接口，请检查服务器网络后重试"
+        ) from exc
     if not response.ok:
         raise MercadoTokenError(
             f"读取授权店铺失败（HTTP {response.status_code}）：{_response_message(response)}"
