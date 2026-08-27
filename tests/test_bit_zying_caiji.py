@@ -1,3 +1,5 @@
+import json
+
 import pytest
 from selenium.common.exceptions import TimeoutException
 
@@ -146,6 +148,22 @@ def test_persist_zying_page_writes_one_page_immediately(monkeypatch):
     assert calls == [page_records]
 
 
+def test_persist_zying_page_mirrors_product_list_before_snapshot(monkeypatch):
+    calls = []
+    page_records = [{"product_id": "801623245"}]
+
+    inserted = bit_zying_caiji._persist_zying_page(
+        page_records,
+        1,
+        1,
+        product_writer=lambda rows: calls.append("snapshot") or len(rows),
+        product_mirror_writer=lambda rows: calls.append("product-list") or {"count": len(rows)},
+    )
+
+    assert inserted == 1
+    assert calls == ["product-list", "snapshot"]
+
+
 def test_wait_for_product_titles_returns_found_elements():
     titles = [object(), object()]
     driver = _FakeDriver(url="https://meli.zying.net/#/product", titles=titles)
@@ -238,6 +256,68 @@ def test_merge_detail_record_populates_all_database_fields():
     assert result["main_image_url"] == "https://example.test/new-image.jpg"
     assert result["_category_site"] == "CBT"
     assert result["_category_id"] == "430974"
+
+
+def test_zying_detail_builds_publish_ready_snapshot_with_all_common_fields():
+    record = {
+        "product_id": "795184904",
+        "title": "List title",
+        "main_image_url": "https://example.test/list.jpg",
+        "sale_price": "USD 36.55",
+        "net_income": "USD 22",
+        "collected_at": "2026-08-27 12:00:00",
+        "zying_category_id": "202170568",
+        "zying_category": "圆佑同步/家电类",
+    }
+    detail = {
+        "sale_id": 795184904,
+        "sale_title": '{"en":"Detailed English title"}',
+        "sale_description": '{"en":"Detailed description"}',
+        "sale_cur": "USD",
+        "sale_cost": 36.55,
+        "sale_netproceed": 22,
+        "sale_weight": 1000,
+        "sale_size": [23, 22, 13],
+        "sale_pic": ["https://example.test/one.jpg", "https://example.test/two.jpg"],
+        "sale_siteid": 8,
+        "sale_attrs": json.dumps(
+            {
+                "8": {
+                    "site": "CBT",
+                    "kindid": "430974",
+                    "attributes": [
+                        {"id": "BRAND", "value_name": "Generic"},
+                        {"id": "MODEL", "value_name": "M-9"},
+                    ],
+                }
+            }
+        ),
+        "sale_variations": [
+            {"attribute_combinations": [{"id": "COLOR", "value_name": "Blue"}]}
+        ],
+        "sale_terms": [{"id": "WARRANTY_TYPE", "value_name": "Seller warranty"}],
+    }
+
+    bit_zying_caiji._merge_detail_record(record, {}, detail)
+    bit_zying_caiji._merge_category_record(
+        record,
+        {"cate_cateid": "CBT430974", "cate_fullname": "Home / Test"},
+    )
+    result = bit_zying_caiji._finalize_zying_listing_snapshot(record)
+    snapshot = result["listing_snapshot"]
+
+    assert snapshot["source"]["id"] == "CBT795184904"
+    assert snapshot["source"]["title"] == "Detailed English title"
+    assert snapshot["source"]["category_id"] == "CBT430974"
+    assert snapshot["description"]["plain_text"] == "Detailed description"
+    assert [row["id"] for row in snapshot["source"]["attributes"]] == [
+        "BRAND",
+        "MODEL",
+    ]
+    assert len(snapshot["source"]["pictures"]) == 2
+    assert snapshot["source"]["variations"] == detail["sale_variations"]
+    assert snapshot["source"]["sale_terms"] == detail["sale_terms"]
+    assert snapshot["page_snapshot"]["zying_detail"]["sale_id"] == 795184904
 
 
 def test_merge_detail_record_keeps_values_read_from_clicked_product():
@@ -488,7 +568,7 @@ def test_mysql_writer_stores_zying_and_mercado_categories_separately(monkeypatch
 
     row = captured["rows"][0]
     assert count == 1
-    assert len(row) == 16
+    assert len(row) == 17
     assert row[:5] == (
         "795184904",
         "202170568",
@@ -498,6 +578,35 @@ def test_mysql_writer_stores_zying_and_mercado_categories_separately(monkeypatch
     )
     assert "`智赢分类编号`" in captured["sql"]
     assert "`智赢产品分类`" in captured["sql"]
+    assert "`上架快照`" in captured["sql"]
+
+
+def test_open_collection_browser_can_attach_local_edge_without_bitbrowser(monkeypatch):
+    stopped = []
+
+    class Service:
+        def stop(self):
+            stopped.append(True)
+
+    class Driver:
+        service = Service()
+
+    monkeypatch.setattr(bit_zying_caiji.webdriver, "Edge", lambda **kwargs: Driver())
+    monkeypatch.setattr(
+        bit_zying_caiji,
+        "openBrowser",
+        lambda *args, **kwargs: (_ for _ in ()).throw(AssertionError("BitBrowser should not open")),
+    )
+
+    driver, service, lease_id = bit_zying_caiji._open_zying_collection_browser(
+        "edge",
+        "unused",
+        edge_debugger_address="http://127.0.0.1:9222/",
+    )
+
+    assert isinstance(driver, Driver)
+    assert service is driver.service
+    assert lease_id == ""
 
 
 def test_mysql_existing_product_reader_returns_only_found_ids(monkeypatch):

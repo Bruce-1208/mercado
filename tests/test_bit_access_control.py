@@ -2,6 +2,8 @@ import inspect
 from io import BytesIO
 from pathlib import Path
 
+import pytest
+
 from bit import bit_db_api, bit_interface
 
 
@@ -269,6 +271,97 @@ def test_workbench_schema_migrates_roles_and_existing_users():
     assert "`role_key` VARCHAR(64)" in source
     assert "SET `role_key` = 'super_admin'" in source
     assert "WORKBENCH_DEFAULT_ROLES" in source
+
+
+def test_workbench_schema_ready_fast_path_avoids_startup_writes(monkeypatch):
+    events = []
+
+    class Cursor:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc_value, traceback):
+            return False
+
+    class Connection:
+        def cursor(self):
+            return Cursor()
+
+        def commit(self):
+            events.append("commit")
+
+        def rollback(self):
+            events.append("rollback")
+
+        def close(self):
+            events.append("close")
+
+    monkeypatch.setattr(
+        bit_interface.pymysql,
+        "connect",
+        lambda **config: Connection(),
+    )
+    monkeypatch.setattr(
+        bit_interface,
+        "_workbench_schema_state",
+        lambda cursor: (
+            {"workbench_roles", "workbench_users"},
+            set(bit_interface._WORKBENCH_USER_REQUIRED_COLUMNS),
+        ),
+    )
+    monkeypatch.setattr(
+        bit_interface,
+        "_workbench_default_roles_are_current",
+        lambda cursor: True,
+    )
+    monkeypatch.setattr(
+        bit_interface,
+        "_workbench_users_are_current",
+        lambda cursor: True,
+    )
+
+    assert bit_interface.ensure_workbench_user_table() is False
+    assert events == ["close"]
+
+
+def test_workbench_schema_rollback_error_does_not_hide_original_error(monkeypatch):
+    original_error = bit_interface.pymysql.err.OperationalError(
+        2013,
+        "Lost connection to MySQL server during query (timed out)",
+    )
+
+    class Cursor:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc_value, traceback):
+            return False
+
+    class Connection:
+        def cursor(self):
+            return Cursor()
+
+        def rollback(self):
+            raise bit_interface.pymysql.err.InterfaceError(0, "")
+
+        def close(self):
+            return None
+
+    monkeypatch.setattr(
+        bit_interface.pymysql,
+        "connect",
+        lambda **config: Connection(),
+    )
+    monkeypatch.setattr(
+        bit_interface,
+        "_workbench_schema_state",
+        lambda cursor: (_ for _ in ()).throw(original_error),
+    )
+
+    with pytest.raises(bit_interface.pymysql.err.OperationalError) as captured:
+        bit_interface.ensure_workbench_user_table()
+
+    assert captured.value is original_error
 
 
 def test_access_management_page_contains_role_user_and_permission_controls():

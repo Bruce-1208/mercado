@@ -107,37 +107,35 @@ class CollectionControlTests(unittest.TestCase):
 
 
 class CollectionOrchestrationTests(unittest.TestCase):
-    def test_collectors_execute_only_selected_shop_site_rows(self):
+    def test_infraction_collector_executes_only_selected_shop_site_rows(self):
         rows = [
             ("id-1", "店铺甲", "", "墨西哥，巴西", "", "", ""),
             ("id-2", "店铺乙", "", "巴西，智利", "", "", ""),
         ]
-        cases = (
-            (reputation, reputation.get_reputation_info_all, "_execute_reputation_rows"),
-            (infractions, infractions.get_infractions_info_all, "_execute_infraction_rows"),
-        )
-        for module, collect, executor_name in cases:
-            with self.subTest(module=module.__name__):
-                captured = []
+        captured = []
 
-                def stop_after_capture(filtered_rows, **_kwargs):
-                    captured.extend(filtered_rows)
-                    raise RuntimeError("stop-after-selection")
+        def stop_after_capture(filtered_rows, **_kwargs):
+            captured.extend(filtered_rows)
+            raise RuntimeError("stop-after-selection")
 
-                with (
-                    mock.patch.object(module, "list_config_rows", return_value=rows),
-                    mock.patch.object(module, executor_name, side_effect=stop_after_capture),
-                ):
-                    with self.assertRaisesRegex(RuntimeError, "stop-after-selection"):
-                        collect(
-                            selected_shops=["店铺乙"],
-                            selected_sites=["巴西"],
-                        )
-
-                self.assertEqual(
-                    captured,
-                    [("id-2", "店铺乙", "", "巴西", "", "", "")],
+        with (
+            mock.patch.object(infractions, "list_config_rows", return_value=rows),
+            mock.patch.object(
+                infractions,
+                "_execute_infraction_rows",
+                side_effect=stop_after_capture,
+            ),
+        ):
+            with self.assertRaisesRegex(RuntimeError, "stop-after-selection"):
+                infractions.get_infractions_info_all(
+                    selected_shops=["店铺乙"],
+                    selected_sites=["巴西"],
                 )
+
+        self.assertEqual(
+            captured,
+            [("id-2", "店铺乙", "", "巴西", "", "", "")],
+        )
 
     def test_infraction_focused_appeal_sequence_runs_ten_rounds(self):
         started_at = bit_main.datetime.now()

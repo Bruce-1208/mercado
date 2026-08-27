@@ -120,6 +120,53 @@ def updateBrowser():  # 更新窗口，支持批量更新和按需更新，ids �
     print(res)
 
 
+def getBrowserIdByName(name, page_size=100, max_pages=100):
+    """按 BitBrowser 窗口名称查找 ID，优先且要求唯一的精确匹配。"""
+    wanted_name = str(name or "").strip()
+    if not wanted_name:
+        raise ValueError("请输入比特浏览器窗口名称")
+
+    browsers = []
+    for page in range(max(1, int(max_pages))):
+        response = requests.post(
+            f"{url}/browser/list",
+            data=json.dumps({"page": page, "pageSize": max(1, int(page_size))}),
+            headers=headers,
+            timeout=max(1, _BROWSER_OPEN_TIMEOUT),
+        ).json()
+        if not isinstance(response, dict) or response.get("success") is False:
+            message = response.get("msg") if isinstance(response, dict) else response
+            raise RuntimeError(f"读取比特浏览器窗口列表失败：{message or response}")
+        page_rows = (response.get("data") or {}).get("list") or []
+        if not isinstance(page_rows, list):
+            raise RuntimeError(f"比特浏览器窗口列表返回格式异常：{response}")
+        browsers.extend(row for row in page_rows if isinstance(row, dict))
+        if len(page_rows) < max(1, int(page_size)):
+            break
+
+    exact_matches = [
+        row for row in browsers
+        if str(row.get("name") or "").strip() == wanted_name
+    ]
+    if not exact_matches:
+        folded_name = wanted_name.casefold()
+        exact_matches = [
+            row for row in browsers
+            if str(row.get("name") or "").strip().casefold() == folded_name
+        ]
+    if not exact_matches:
+        raise RuntimeError(f"未找到名称为“{wanted_name}”的比特浏览器窗口")
+    if len(exact_matches) > 1:
+        raise RuntimeError(
+            f"存在 {len(exact_matches)} 个同名比特浏览器窗口“{wanted_name}”，"
+            "请先在比特浏览器中将窗口名称改为唯一名称"
+        )
+    browser_id = str(exact_matches[0].get("id") or "").strip()
+    if not browser_id:
+        raise RuntimeError(f"比特浏览器窗口“{wanted_name}”缺少窗口 ID")
+    return browser_id
+
+
 def openBrowser(id):  # 直接指定ID打开窗口，也可以使用 createBrowser 方法返回的ID
     auto_lease = None
     if current_thread_window_lease(id) is None:

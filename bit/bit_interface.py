@@ -60,6 +60,8 @@ import bit.bit_order_sync as bit_order_sync
 import bit.bit_store_link_sync as bit_store_link_sync
 import bit.bit_update_orders as bit_update_orders
 import bit.bit_zying_caiji as bit_zying_caiji
+import bit.mercado_communications as mercado_communications
+import bit.mercado_reputation as mercado_reputation
 import bit.mercado_tokens as mercado_tokens
 from bit.bit_appeal import *
 from bit.bit_collection_control import DEFAULT_COLLECTION_MAX_WORKERS
@@ -143,6 +145,7 @@ WORKBENCH_PERMISSION_GROUPS = (
     ("risk_check", "侵权检测", (("risk_check.view", "查看"), ("risk_check.execute", "执行检测"))),
     ("infractions", "侵权数据", (("infractions.view", "查看/导出"), ("infractions.execute", "采集"))),
     ("reputation", "声誉数据", (("reputation.view", "查看/导出"), ("reputation.execute", "采集/更新"))),
+    ("customer_service", "客户消息", (("customer_service.view", "查看"), ("customer_service.manage", "回复/删除"))),
     ("ai_appeals", "AI 申诉记录", (("ai_appeals.view", "查看"),)),
     ("access", "人员与权限", (("access.view", "查看"), ("access.manage", "管理账号、角色和店铺配置"))),
 )
@@ -308,6 +311,7 @@ if USE_DB_API:
     db_list_orders = bit_db_api.list_orders
     db_insert_task_record = bit_db_api.insert_task_record
     db_insert_zying_product_info = bit_db_api.insert_zying_product_info
+    db_upsert_zying_products_to_products = bit_db_api.upsert_zying_products_to_products
     db_get_existing_zying_product_ids = bit_db_api.get_existing_zying_product_ids
     db_get_zying_risk_candidates = bit_db_api.get_zying_risk_candidates
     db_update_zying_product_risks = bit_db_api.update_zying_product_risks
@@ -439,6 +443,7 @@ else:
         update_product_publish_record as db_update_mercado_product_publish_record,
         update_product_item as db_update_mercado_product_item,
         update_product_review_status as db_update_mercado_product_review_status,
+        upsert_zying_products_to_products as db_upsert_zying_products_to_products,
         upsert_collection_items as db_upsert_mercado_collection_items,
     )
     from erp.mercadolibre_store_link_store import (
@@ -540,6 +545,106 @@ def _validate_workbench_username(username):
     return username
 
 
+_WORKBENCH_USER_REQUIRED_COLUMNS = {
+    "id",
+    "username",
+    "password_hash",
+    "display_name",
+    "email",
+    "department",
+    "role_key",
+    "is_active",
+    "created_at",
+    "updated_at",
+}
+
+
+def _workbench_schema_state(cursor):
+    cursor.execute(
+        """
+        SELECT `TABLE_NAME` AS `table_name`
+        FROM `information_schema`.`TABLES`
+        WHERE `TABLE_SCHEMA` = DATABASE()
+          AND `TABLE_NAME` IN ('workbench_roles', 'workbench_users')
+        """
+    )
+    table_names = {
+        str((row or {}).get("table_name") or "")
+        for row in (cursor.fetchall() or [])
+    }
+    user_columns = set()
+    if "workbench_users" in table_names:
+        cursor.execute(
+            """
+            SELECT `COLUMN_NAME` AS `column_name`
+            FROM `information_schema`.`COLUMNS`
+            WHERE `TABLE_SCHEMA` = DATABASE()
+              AND `TABLE_NAME` = 'workbench_users'
+            """
+        )
+        user_columns = {
+            str((row or {}).get("column_name") or "")
+            for row in (cursor.fetchall() or [])
+        }
+    return table_names, user_columns
+
+
+def _workbench_default_roles_are_current(cursor):
+    cursor.execute(
+        """
+        SELECT `role_key`, `role_name`, `description`, `permissions_json`, `is_system`
+        FROM `workbench_roles`
+        WHERE `role_key` IN ('super_admin', 'operator', 'viewer')
+        """
+    )
+    current_roles = {
+        str(row.get("role_key") or ""): row
+        for row in (cursor.fetchall() or [])
+    }
+    for role in WORKBENCH_DEFAULT_ROLES:
+        current = current_roles.get(role["role_key"])
+        if not current:
+            return False
+        current_permissions = set(
+            _normalize_workbench_permissions(current.get("permissions_json"))
+        )
+        expected_permissions = set(role["permissions"])
+        if (
+            str(current.get("role_name") or "") != role["role_name"]
+            or str(current.get("description") or "") != role["description"]
+            or current_permissions != expected_permissions
+            or bool(current.get("is_system")) != bool(role["is_system"])
+        ):
+            return False
+    return True
+
+
+def _workbench_users_are_current(cursor):
+    cursor.execute(
+        """
+        SELECT COUNT(*) AS `total`,
+               SUM(CASE WHEN `role_key` IS NULL OR `role_key` = '' THEN 1 ELSE 0 END)
+                   AS `missing_role_count`
+        FROM `workbench_users`
+        """
+    )
+    row = cursor.fetchone() or {}
+    return int(row.get("total") or 0) > 0 and int(row.get("missing_role_count") or 0) == 0
+
+
+def _rollback_workbench_connection(connection):
+    try:
+        connection.rollback()
+    except Exception as rollback_error:
+        # 连接超时后 PyMySQL 会在 rollback() 上抛出 InterfaceError(0, "")。
+        # 这里只记录清理失败，不能覆盖最初且更有价值的数据库异常。
+        logging.warning(
+            "工作台登录表初始化失败后的回滚未执行: %s: %s",
+            type(rollback_error).__name__,
+            rollback_error,
+        )
+
+
 def ensure_workbench_user_table():
     connection_config = dict(mysql_config)
     # 登录表初始化不能无限阻塞整个控制台启动；数据库暂时被锁定时先启动服务，
@@ -550,21 +655,37 @@ def ensure_workbench_user_table():
     connection = pymysql.connect(**connection_config)
     try:
         with connection.cursor() as cursor:
-            cursor.execute(
-                """
-                CREATE TABLE IF NOT EXISTS `workbench_roles` (
-                    `role_key` VARCHAR(64) NOT NULL,
-                    `role_name` VARCHAR(64) NOT NULL,
-                    `description` VARCHAR(255) NULL,
-                    `permissions_json` TEXT NOT NULL,
-                    `is_system` TINYINT(1) NOT NULL DEFAULT 0,
-                    `created_at` DATETIME NOT NULL,
-                    `updated_at` DATETIME NOT NULL,
-                    PRIMARY KEY (`role_key`),
-                    UNIQUE KEY `uniq_workbench_role_name` (`role_name`)
-                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
-                """
+            table_names, user_columns = _workbench_schema_state(cursor)
+            roles_exist = "workbench_roles" in table_names
+            users_exist = "workbench_users" in table_names
+            user_schema_ready = (
+                users_exist
+                and _WORKBENCH_USER_REQUIRED_COLUMNS.issubset(user_columns)
             )
+            if (
+                roles_exist
+                and user_schema_ready
+                and _workbench_default_roles_are_current(cursor)
+                and _workbench_users_are_current(cursor)
+            ):
+                return False
+
+            if not roles_exist:
+                cursor.execute(
+                    """
+                    CREATE TABLE IF NOT EXISTS `workbench_roles` (
+                        `role_key` VARCHAR(64) NOT NULL,
+                        `role_name` VARCHAR(64) NOT NULL,
+                        `description` VARCHAR(255) NULL,
+                        `permissions_json` TEXT NOT NULL,
+                        `is_system` TINYINT(1) NOT NULL DEFAULT 0,
+                        `created_at` DATETIME NOT NULL,
+                        `updated_at` DATETIME NOT NULL,
+                        PRIMARY KEY (`role_key`),
+                        UNIQUE KEY `uniq_workbench_role_name` (`role_name`)
+                    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+                    """
+                )
             now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
             for role in WORKBENCH_DEFAULT_ROLES:
                 cursor.execute(
@@ -590,34 +711,31 @@ def ensure_workbench_user_table():
                         now,
                     ),
                 )
-            cursor.execute(
-                """
-                CREATE TABLE IF NOT EXISTS `workbench_users` (
-                    `id` INT NOT NULL AUTO_INCREMENT,
-                    `username` VARCHAR(64) NOT NULL,
-                    `password_hash` VARCHAR(255) NOT NULL,
-                    `display_name` VARCHAR(64) NULL,
-                    `email` VARCHAR(128) NULL,
-                    `department` VARCHAR(64) NULL,
-                    `role_key` VARCHAR(64) NOT NULL DEFAULT 'viewer',
-                    `is_active` TINYINT(1) NOT NULL DEFAULT 1,
-                    `created_at` DATETIME NOT NULL,
-                    `updated_at` DATETIME NOT NULL,
-                    PRIMARY KEY (`id`),
-                    UNIQUE KEY `uniq_workbench_username` (`username`)
-                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
-                """
-            )
+            if not users_exist:
+                cursor.execute(
+                    """
+                    CREATE TABLE IF NOT EXISTS `workbench_users` (
+                        `id` INT NOT NULL AUTO_INCREMENT,
+                        `username` VARCHAR(64) NOT NULL,
+                        `password_hash` VARCHAR(255) NOT NULL,
+                        `display_name` VARCHAR(64) NULL,
+                        `email` VARCHAR(128) NULL,
+                        `department` VARCHAR(64) NULL,
+                        `role_key` VARCHAR(64) NOT NULL DEFAULT 'viewer',
+                        `is_active` TINYINT(1) NOT NULL DEFAULT 1,
+                        `created_at` DATETIME NOT NULL,
+                        `updated_at` DATETIME NOT NULL,
+                        PRIMARY KEY (`id`),
+                        UNIQUE KEY `uniq_workbench_username` (`username`)
+                    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+                    """
+                )
             for column_name, column_definition in (
                 ("email", "VARCHAR(128) NULL"),
                 ("department", "VARCHAR(64) NULL"),
                 ("role_key", "VARCHAR(64) NULL"),
             ):
-                cursor.execute(
-                    "SHOW COLUMNS FROM `workbench_users` LIKE %s",
-                    (column_name,),
-                )
-                if not cursor.fetchone():
+                if users_exist and column_name not in user_columns:
                     cursor.execute(
                         f"ALTER TABLE `workbench_users` ADD COLUMN `{column_name}` "
                         f"{column_definition}"
@@ -645,11 +763,19 @@ def ensure_workbench_user_table():
                 )
                 logging.warning("workbench_users 为空，已创建默认账号 %s", username)
         connection.commit()
+        return True
     except Exception:
-        connection.rollback()
+        _rollback_workbench_connection(connection)
         raise
     finally:
-        connection.close()
+        try:
+            connection.close()
+        except Exception as close_error:
+            logging.warning(
+                "关闭工作台登录表初始化连接失败: %s: %s",
+                type(close_error).__name__,
+                close_error,
+            )
 
 
 def get_workbench_user(username="", user_id=None):
@@ -1158,6 +1284,12 @@ def _required_workbench_permissions(path, method):
             if method == "POST"
             else ("shop_status.view",)
         )
+    if path.startswith("/api/mercado-communications/"):
+        return (
+            ("customer_service.manage",)
+            if method == "POST"
+            else ("customer_service.view",)
+        )
     return ()
 
 
@@ -1230,6 +1362,23 @@ _reputation_collect_state = {
     "message": "等待启动",
     "operation": "",
     "params": {},
+}
+_api_reputation_lock = threading.Lock()
+_api_reputation_logs = deque(maxlen=1000)
+_api_reputation_state = {
+    "running": False,
+    "status": "idle",
+    "message": "等待全量更新",
+    "started_at": "",
+    "finished_at": "",
+    "elapsed_seconds": 0,
+    "total_stores": 0,
+    "completed_stores": 0,
+    "success_stores": 0,
+    "failed_stores": 0,
+    "total_sites": 0,
+    "rows": [],
+    "failures": [],
 }
 _risk_check_lock = threading.Lock()
 _risk_check_state_lock = threading.RLock()
@@ -2465,12 +2614,24 @@ def build_zying_collection_params(data):
     if start_page > end_page:
         raise ValueError(f"起始页 {start_page} 不能大于结束页 {end_page}")
     window_id = str(data.get("window_id") or "").strip()[:128]
-    return {
+    params = {
         "number": end_page,
         "window_id": window_id or bit_zying_caiji.DEFAULT_ZYING_WINDOW_ID,
         "start_page": start_page,
         "category": str(data.get("category") or "").strip()[:1024] or None,
     }
+    # browser_type/window_name 是工作台的新参数；未提交时维持旧接口返回结构，
+    # 兼容仍按 BitBrowser 窗口 ID 调用的脚本和客户端。
+    if "browser_type" in data or "window_name" in data:
+        params.update(
+            {
+                "browser_type": bit_zying_caiji.normalize_zying_browser_type(
+                    data.get("browser_type")
+                ),
+                "window_name": str(data.get("window_name") or "").strip()[:256],
+            }
+        )
+    return params
 
 
 def _append_zying_collection_log(message):
@@ -2513,6 +2674,7 @@ def run_zying_collection_job(params, task_lock):
             **params,
             product_writer=db_insert_zying_product_info,
             existing_product_id_reader=db_get_existing_zying_product_ids,
+            product_mirror_writer=db_upsert_zying_products_to_products,
             return_summary=True,
         )
         summary = {
@@ -4856,9 +5018,19 @@ def api_start_zying_collection():
                 "summary": {},
             }
         )
+        browser_type = bit_zying_caiji.normalize_zying_browser_type(
+            params.get("browser_type")
+        )
+        if browser_type == "edge":
+            browser_label = "本地 Edge"
+        elif params.get("window_name"):
+            browser_label = f"比特浏览器窗口“{params['window_name']}”"
+        else:
+            browser_label = "默认比特浏览器窗口"
         _append_zying_collection_log(
             f"智赢采集任务已启动：第 {params['start_page']}-{params['number']} 页，"
-            f"分类 {params.get('category') or '全部'}；数据库已有产品将直接跳过"
+            f"分类 {params.get('category') or '全部'}，浏览器 {browser_label}；"
+            "数据库已有产品将直接跳过"
         )
         data = {
             **dict(_zying_collection_state),
@@ -4897,6 +5069,10 @@ def api_zying_collection_status():
             "logs": list(_zying_collection_logs),
             "defaults": {
                 "window_id": bit_zying_caiji.DEFAULT_ZYING_WINDOW_ID,
+                "browser_type": bit_zying_caiji.normalize_zying_browser_type(
+                    bit_zying_caiji.DEFAULT_ZYING_BROWSER_TYPE
+                ),
+                "window_name": "",
                 "start_page": bit_zying_caiji.DEFAULT_ZYING_START_PAGE,
                 "end_page": bit_zying_caiji.DEFAULT_ZYING_PAGE_COUNT,
             },
@@ -5037,6 +5213,7 @@ def _format_mercado_elapsed(seconds):
 def _mercado_profit_refresh_loop():
     """Refresh stale official fee snapshots without blocking the workbench UI."""
 
+    from erp.ecb_exchange_rates import refresh_usd_cny_daily_rates
     from erp.mercadolibre_collection_store import (
         backfill_item_exchange_prices,
         list_stale_profitability_items,
@@ -5078,6 +5255,7 @@ def _mercado_profit_refresh_loop():
                     SUPPORTED_SITE_CURRENCIES[site_id]: snapshot
                     for site_id, snapshot in site_rates.items()
                 })
+                refresh_usd_cny_daily_rates()
                 # Refresh reference data and backfill converted prices once a day.
                 next_reference_check = time.monotonic() + 24 * 60 * 60
             if rows:
@@ -6955,10 +7133,35 @@ def api_db_upsert_browser_configs():
 def _mercado_token_error_response(exc):
     if isinstance(exc, KeyError):
         return jsonify({"status": "error", "message": str(exc.args[0])}), 404
-    if isinstance(exc, (ValueError, mercado_tokens.MercadoTokenError)):
+    if isinstance(
+        exc,
+        (
+            ValueError,
+            mercado_tokens.MercadoTokenError,
+            mercado_reputation.MercadoReputationError,
+        ),
+    ):
         return jsonify({"status": "error", "message": str(exc)}), 400
     logging.exception("店铺授权操作失败")
     return jsonify({"status": "error", "message": f"店铺授权操作失败：{exc}"}), 500
+
+
+def _mercado_communication_error_response(exc):
+    if isinstance(exc, KeyError):
+        return jsonify({"status": "error", "message": str(exc.args[0])}), 404
+    if isinstance(exc, ValueError):
+        return jsonify({"status": "error", "message": str(exc)}), 400
+    if isinstance(exc, mercado_communications.MercadoCommunicationError):
+        status_code = int(exc.status_code or 502)
+        if status_code not in (400, 401, 403, 404, 409, 422, 429):
+            status_code = 502
+        return jsonify({
+            "status": "error",
+            "message": str(exc),
+            "model_6_restricted": bool(exc.model_6_restricted),
+        }), status_code
+    logging.exception("美客多客户消息操作失败")
+    return jsonify({"status": "error", "message": f"美客多客户消息操作失败：{exc}"}), 500
 
 
 @app.route('/api/db/mercado-tokens/authorization', methods=['GET'])
@@ -7028,6 +7231,37 @@ def api_db_refresh_mercado_token(token_id):
         return jsonify({"status": "success", "data": result})
     except Exception as exc:
         return _mercado_token_error_response(exc)
+
+
+@app.route('/api/db/mercado-tokens/<int:token_id>/reputation', methods=['GET'])
+@internal_api_required
+def api_db_mercado_token_reputation(token_id):
+    blocked = reject_db_api_client_mode()
+    if blocked:
+        return blocked
+    try:
+        result = bit_db_api.get_mercado_store_reputation(token_id)
+        return jsonify({"status": "success", "data": result})
+    except Exception as exc:
+        return _mercado_token_error_response(exc)
+
+
+@app.route(
+    '/api/db/mercado-communications/<int:token_id>/<action>',
+    methods=['POST'],
+)
+@internal_api_required
+def api_db_mercado_communication(token_id, action):
+    blocked = reject_db_api_client_mode()
+    if blocked:
+        return blocked
+    try:
+        result = bit_db_api.execute_mercado_store_communication(
+            token_id, action, request.get_json(silent=True) or {}
+        )
+        return jsonify({"status": "success", "data": result})
+    except Exception as exc:
+        return _mercado_communication_error_response(exc)
 
 
 @app.route('/api/db/mercado-tokens/<int:token_id>', methods=['PATCH', 'DELETE'])
@@ -7139,6 +7373,20 @@ def api_db_existing_zying_product_ids():
         "status": "success",
         "data": {"product_ids": existing_ids},
     })
+
+
+@app.route('/api/db/zying-products/product-list', methods=['POST'])
+@internal_api_required
+def api_db_upsert_zying_product_list():
+    blocked = reject_db_api_client_mode()
+    if blocked:
+        return blocked
+    data = request.get_json(silent=True) or {}
+    rows = data.get("rows") or []
+    if not isinstance(rows, list):
+        return jsonify({"status": "error", "message": "rows 必须是数组"}), 400
+    result = db_upsert_zying_products_to_products(rows)
+    return jsonify({"status": "success", "data": result})
 
 
 @app.route('/api/db/zying-risk/candidates', methods=['GET'])
@@ -8269,10 +8517,32 @@ def api_exchange_mercado_token():
         result = bit_db_api.exchange_mercado_store_token(
             data.get("display_name", ""), data.get("code", "")
         )
+        response_data = dict(result or {})
+        token_id = int(response_data.get("id") or 0)
+        auto_sync = {"started": False, "queued": False}
+        if token_id:
+            try:
+                sync_result = bit_db_api.start_store_link_sync([token_id]) or {}
+                auto_sync = {
+                    "started": bool(sync_result.get("started")),
+                    "queued": True,
+                    "task_id": str((sync_result.get("state") or {}).get("task_id") or ""),
+                }
+            except Exception as sync_exc:
+                logging.exception("店铺授权成功，但自动拉取店铺链接启动失败")
+                auto_sync["error"] = str(sync_exc)
+        response_data["auto_link_sync"] = auto_sync
+        message = (
+            "店铺授权成功，正在自动拉取全部链接"
+            if auto_sync.get("started")
+            else "店铺授权成功，全部链接已加入自动拉取队列"
+        )
+        if auto_sync.get("error"):
+            message = "店铺授权成功；自动拉取暂未启动，系统会在下次周期检查时重试"
         return jsonify({
             "status": "success",
-            "data": result,
-            "message": "店铺授权成功，Token 已保存",
+            "data": response_data,
+            "message": message,
         })
     except Exception as exc:
         return _mercado_token_error_response(exc)
@@ -8290,6 +8560,213 @@ def api_refresh_mercado_token(token_id):
         })
     except Exception as exc:
         return _mercado_token_error_response(exc)
+
+
+def _append_api_reputation_log(message):
+    line = f"[{datetime.now().strftime('%H:%M:%S')}] {str(message or '').strip()}"
+    with _api_reputation_lock:
+        _api_reputation_logs.append(line)
+
+
+def _api_reputation_snapshot():
+    with _api_reputation_lock:
+        data = dict(_api_reputation_state)
+        data["rows"] = [dict(row) for row in _api_reputation_state.get("rows", [])]
+        data["failures"] = [
+            dict(row) for row in _api_reputation_state.get("failures", [])
+        ]
+        data["logs"] = list(_api_reputation_logs)
+    if data.get("running"):
+        data["elapsed_seconds"] = _mercado_collection_elapsed_seconds(data)
+    return data
+
+
+def _run_all_api_reputation_refresh():
+    started_monotonic = time.monotonic()
+
+    def update_progress(progress):
+        event = str((progress or {}).get("event") or "")
+        with _api_reputation_lock:
+            if event == "initialized":
+                total_stores = int(progress.get("total_stores") or 0)
+                _api_reputation_state["total_stores"] = total_stores
+                _api_reputation_state["message"] = (
+                    f"正在更新 {total_stores} 家授权店铺"
+                    if total_stores
+                    else "没有可更新的授权店铺"
+                )
+            elif event == "store_success":
+                rows = [dict(row) for row in (progress.get("rows") or [])]
+                _api_reputation_state["completed_stores"] += 1
+                _api_reputation_state["success_stores"] += 1
+                _api_reputation_state["total_sites"] += len(rows)
+                _api_reputation_state["rows"].extend(rows)
+            elif event == "store_failure":
+                _api_reputation_state["completed_stores"] += 1
+                _api_reputation_state["failed_stores"] += 1
+                _api_reputation_state["failures"].append({
+                    "token_id": int(progress.get("token_id") or 0),
+                    "store_name": str(progress.get("store_name") or ""),
+                    "error": str(progress.get("error") or ""),
+                })
+
+    try:
+        result = bit_reputation_info.main(
+            max_workers=4,
+            retry_failed=True,
+            send_email=False,
+            export_excel=False,
+            log_callback=_append_api_reputation_log,
+            progress_callback=update_progress,
+        ) or {}
+        finished_at = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        rows = [dict(row) for row in (result.get("api_rows") or [])]
+        failures = [dict(row) for row in (result.get("failures") or [])]
+        total_stores = int(result.get("total_stores") or 0)
+        completed_stores = int(result.get("completed_stores") or total_stores)
+        success_count = int(result.get("success_stores") or 0)
+        failed_count = int(result.get("failed_stores") or len(failures))
+        total_sites = int(result.get("total_sites") or len(rows))
+        with _api_reputation_lock:
+            _api_reputation_state.update({
+                "running": False,
+                "status": (
+                    "success" if failed_count == 0
+                    else "partial" if success_count else "error"
+                ),
+                "message": (
+                    f"全量更新完成：成功 {success_count} 家，失败 {failed_count} 家"
+                    if total_stores
+                    else "没有可更新的授权店铺"
+                ),
+                "finished_at": finished_at,
+                "elapsed_seconds": max(0, int(time.monotonic() - started_monotonic)),
+                "total_stores": total_stores,
+                "completed_stores": completed_stores,
+                "success_stores": success_count,
+                "failed_stores": failed_count,
+                "total_sites": total_sites,
+                "rows": rows,
+                "failures": failures,
+            })
+    except Exception as exc:
+        logging.exception("API 声誉全量更新失败")
+        with _api_reputation_lock:
+            _api_reputation_state.update({
+                "running": False,
+                "status": "error",
+                "message": f"全量更新失败：{exc}",
+                "finished_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                "elapsed_seconds": max(0, int(time.monotonic() - started_monotonic)),
+            })
+        _append_api_reputation_log(f"任务异常终止：{exc}")
+
+
+@app.route('/api/mercado-reputation/refresh', methods=['POST'])
+@login_required
+def api_refresh_all_mercado_reputation():
+    with _api_reputation_lock:
+        if _api_reputation_state.get("running"):
+            data = dict(_api_reputation_state)
+            data["logs"] = list(_api_reputation_logs)
+            return jsonify({
+                "status": "running",
+                "data": data,
+                "message": "API 声誉全量更新任务正在运行",
+            }), 409
+        _api_reputation_logs.clear()
+        _api_reputation_state.update({
+            "running": True,
+            "status": "running",
+            "message": "正在读取授权店铺",
+            "started_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            "finished_at": "",
+            "elapsed_seconds": 0,
+            "total_stores": 0,
+            "completed_stores": 0,
+            "success_stores": 0,
+            "failed_stores": 0,
+            "total_sites": 0,
+            "rows": [],
+            "failures": [],
+        })
+    threading.Thread(
+        target=_run_all_api_reputation_refresh,
+        name="api-reputation-refresh",
+        daemon=True,
+    ).start()
+    return jsonify({
+        "status": "success",
+        "data": _api_reputation_snapshot(),
+        "message": "API 声誉全量更新已启动",
+    })
+
+
+@app.route('/api/mercado-reputation/status', methods=['GET'])
+@login_required
+def api_mercado_reputation_status():
+    response = jsonify({"status": "success", "data": _api_reputation_snapshot()})
+    response.headers["Cache-Control"] = "no-store"
+    return response
+
+
+@app.route('/api/mercado-tokens/<int:token_id>/reputation', methods=['GET'])
+@login_required
+def api_mercado_token_reputation(token_id):
+    try:
+        result = bit_db_api.get_mercado_store_reputation(token_id)
+        response = jsonify({
+            "status": "success",
+            "data": result,
+            "message": "已获取美客多官方声誉",
+        })
+        response.headers["Cache-Control"] = "no-store"
+        return response
+    except Exception as exc:
+        return _mercado_token_error_response(exc)
+
+
+MERCADO_COMMUNICATION_READ_ACTIONS = frozenset((
+    "pre-sale-list",
+    "pre-sale-summary",
+    "pre-sale-detail",
+    "post-sale-unread",
+    "post-sale-messages",
+    "claims-list",
+    "claims-detail",
+))
+MERCADO_COMMUNICATION_WRITE_ACTIONS = frozenset((
+    "pre-sale-answer",
+    "pre-sale-delete",
+    "post-sale-send",
+    "claims-send",
+))
+
+
+@app.route(
+    '/api/mercado-communications/<int:token_id>/<action>',
+    methods=['GET', 'POST'],
+)
+@login_required
+def api_mercado_communication(token_id, action):
+    normalized_action = str(action or "").strip().lower()
+    allowed = (
+        normalized_action in MERCADO_COMMUNICATION_READ_ACTIONS
+        if request.method == "GET"
+        else normalized_action in MERCADO_COMMUNICATION_WRITE_ACTIONS
+    )
+    if not allowed:
+        return jsonify({"status": "error", "message": "不支持的美客多消息操作"}), 404
+    payload = request.args.to_dict() if request.method == "GET" else (request.get_json(silent=True) or {})
+    try:
+        result = bit_db_api.execute_mercado_store_communication(
+            token_id, normalized_action, payload
+        )
+        response = jsonify({"status": "success", "data": result})
+        response.headers["Cache-Control"] = "no-store"
+        return response
+    except Exception as exc:
+        return _mercado_communication_error_response(exc)
 
 
 @app.route('/api/mercado-tokens/<int:token_id>', methods=['PATCH', 'DELETE'])
@@ -8576,10 +9053,51 @@ def recover_interrupted_mercado_collection_tasks():
     return recovered
 
 
+def start_interrupted_collection_recovery():
+    """Run startup recovery without delaying the HTTP service from listening."""
+
+    def recover_safely():
+        try:
+            recover_interrupted_mercado_collection_tasks()
+        except Exception:
+            logging.exception("恢复异常中断的 Mercado 商品采集任务失败")
+
+    recovery_thread = threading.Thread(
+        target=recover_safely,
+        name="mercado-collection-startup-recovery",
+        daemon=True,
+    )
+    recovery_thread.start()
+    return recovery_thread
+
+
+def start_store_link_scheduler_bootstrap():
+    """Start the optional store-link scheduler without blocking Flask startup."""
+
+    if bit_db_api.DB_MODE != "mysql":
+        return None
+
+    def start_safely():
+        try:
+            bit_store_link_sync.start_store_link_auto_scheduler()
+            logging.info(
+                "店铺链接自动同步调度已启动：每 %s 天同步一次",
+                bit_store_link_sync.STORE_LINK_AUTO_SYNC_DAYS,
+            )
+        except Exception:
+            logging.exception("启动店铺链接自动同步调度失败")
+
+    scheduler_thread = threading.Thread(
+        target=start_safely,
+        name="mercado-store-link-scheduler-bootstrap",
+        daemon=True,
+    )
+    scheduler_thread.start()
+    return scheduler_thread
+
+
 if __name__ == '__main__':
-    try:
-        recover_interrupted_mercado_collection_tasks()
-    except Exception:
-        logging.exception("恢复异常中断的 Mercado 商品采集任务失败")
+    start_interrupted_collection_recovery()
+    start_store_link_scheduler_bootstrap()
     # 保持 5000 端口，多线程模式开启以防流式阻塞
     app.run(host='0.0.0.0', port=5000, threaded=True)

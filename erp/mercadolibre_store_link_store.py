@@ -4,12 +4,13 @@ from __future__ import annotations
 
 import json
 import re
-from datetime import datetime
+from datetime import datetime, timedelta
 from decimal import Decimal, InvalidOperation
 from typing import Any, Callable, Iterable, Mapping
 
 
 STORE_LINK_TABLE = "erp_mercadolibre_store_links"
+STORE_LINK_SYNC_STATE_TABLE = "erp_mercadolibre_store_link_sync_state"
 
 
 def _connect() -> Any:
@@ -119,6 +120,219 @@ def ensure_store_link_table(cursor: Any) -> None:
               AND JSON_EXTRACT(`remote_json`, '$.net_proceeds.amount') IS NOT NULL
             """
         )
+
+
+def ensure_store_link_sync_state_table(cursor: Any) -> None:
+    """Keep automatic sync requests durable across service restarts."""
+
+    cursor.execute(
+        f"""
+        CREATE TABLE IF NOT EXISTS `{STORE_LINK_SYNC_STATE_TABLE}` (
+            `token_id` BIGINT NOT NULL,
+            `requested_at` DATETIME NULL,
+            `last_started_at` DATETIME NULL,
+            `last_completed_at` DATETIME NULL,
+            `last_status` VARCHAR(32) NOT NULL DEFAULT 'pending',
+            `last_error` TEXT NULL,
+            `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            `updated_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            PRIMARY KEY (`token_id`),
+            KEY `idx_erp_meli_store_link_sync_due` (`requested_at`, `last_completed_at`),
+            KEY `idx_erp_meli_store_link_sync_retry` (`last_started_at`)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+        """
+    )
+    # Seed stores synchronized before the scheduler existed. INSERT IGNORE also
+    # makes this safe to execute during every schema check.
+    cursor.execute(
+        f"""
+        INSERT IGNORE INTO `{STORE_LINK_SYNC_STATE_TABLE}` (
+            `token_id`, `last_started_at`, `last_completed_at`, `last_status`
+        )
+        SELECT `token_id`, MAX(`last_synced_at`), MAX(`last_synced_at`), 'completed'
+        FROM `{STORE_LINK_TABLE}`
+        GROUP BY `token_id`
+        """
+    )
+
+
+def request_store_link_sync(
+    token_ids: Iterable[int],
+    *,
+    connection_factory: Callable[[], Any] | None = None,
+) -> int:
+    """Persist an immediate sync request for one or more authorized stores."""
+
+    ids: list[int] = []
+    for value in token_ids or ():
+        try:
+            token_id = int(value)
+        except (TypeError, ValueError):
+            continue
+        if token_id > 0 and token_id not in ids:
+            ids.append(token_id)
+    if not ids:
+        return 0
+    connection = (connection_factory or _connect)()
+    try:
+        with connection.cursor() as cursor:
+            ensure_store_link_table(cursor)
+            ensure_store_link_sync_state_table(cursor)
+            cursor.executemany(
+                f"""
+                INSERT INTO `{STORE_LINK_SYNC_STATE_TABLE}` (
+                    `token_id`, `requested_at`, `last_status`, `last_error`
+                ) VALUES (%s, %s, 'queued', NULL)
+                ON DUPLICATE KEY UPDATE
+                    `requested_at` = VALUES(`requested_at`),
+                    `last_status` = 'queued',
+                    `last_error` = NULL
+                """,
+                [(token_id, _now()) for token_id in ids],
+            )
+        connection.commit()
+        return len(ids)
+    except BaseException:
+        connection.rollback()
+        raise
+    finally:
+        connection.close()
+
+
+def mark_store_link_sync_started(
+    token_id: int,
+    *,
+    connection_factory: Callable[[], Any] | None = None,
+) -> None:
+    connection = (connection_factory or _connect)()
+    try:
+        with connection.cursor() as cursor:
+            ensure_store_link_table(cursor)
+            ensure_store_link_sync_state_table(cursor)
+            cursor.execute(
+                f"""
+                INSERT INTO `{STORE_LINK_SYNC_STATE_TABLE}` (
+                    `token_id`, `last_started_at`, `last_status`, `last_error`
+                ) VALUES (%s, %s, 'running', NULL)
+                ON DUPLICATE KEY UPDATE
+                    `last_started_at` = VALUES(`last_started_at`),
+                    `last_status` = 'running',
+                    `last_error` = NULL
+                """,
+                (int(token_id), _now()),
+            )
+        connection.commit()
+    except BaseException:
+        connection.rollback()
+        raise
+    finally:
+        connection.close()
+
+
+def mark_store_link_sync_finished(
+    token_id: int,
+    status: str,
+    error: str = "",
+    *,
+    connection_factory: Callable[[], Any] | None = None,
+) -> None:
+    """Save a result; only completed scans advance the three-day clock."""
+
+    status = str(status or "error").strip().lower()[:32]
+    successful = status in {"success", "partial", "completed"}
+    finished_at = _now()
+    connection = (connection_factory or _connect)()
+    try:
+        with connection.cursor() as cursor:
+            ensure_store_link_table(cursor)
+            ensure_store_link_sync_state_table(cursor)
+            if successful:
+                cursor.execute(
+                    f"""
+                    INSERT INTO `{STORE_LINK_SYNC_STATE_TABLE}` (
+                        `token_id`, `last_started_at`, `last_completed_at`,
+                        `last_status`, `last_error`
+                    ) VALUES (%s, %s, %s, %s, NULL)
+                    ON DUPLICATE KEY UPDATE
+                        `last_completed_at` = VALUES(`last_completed_at`),
+                        `last_status` = VALUES(`last_status`),
+                        `last_error` = NULL,
+                        `requested_at` = CASE
+                            WHEN `requested_at` IS NULL
+                              OR `last_started_at` IS NULL
+                              OR `requested_at` <= `last_started_at`
+                            THEN NULL ELSE `requested_at` END
+                    """,
+                    (int(token_id), finished_at, finished_at, status),
+                )
+            else:
+                cursor.execute(
+                    f"""
+                    INSERT INTO `{STORE_LINK_SYNC_STATE_TABLE}` (
+                        `token_id`, `last_started_at`, `last_status`, `last_error`
+                    ) VALUES (%s, %s, 'error', %s)
+                    ON DUPLICATE KEY UPDATE
+                        `last_status` = 'error', `last_error` = VALUES(`last_error`)
+                    """,
+                    (int(token_id), finished_at, str(error or "")[:4000]),
+                )
+        connection.commit()
+    except BaseException:
+        connection.rollback()
+        raise
+    finally:
+        connection.close()
+
+
+def list_due_store_link_token_ids(
+    *,
+    interval_days: int = 3,
+    retry_minutes: int = 60,
+    limit: int = 1000,
+    connection_factory: Callable[[], Any] | None = None,
+) -> list[int]:
+    """Return authorized stores with a queued request or an expired sync clock."""
+
+    due_before = (
+        datetime.now().replace(microsecond=0) - timedelta(days=max(1, int(interval_days)))
+    ).strftime("%Y-%m-%d %H:%M:%S")
+    retry_before = (
+        datetime.now().replace(microsecond=0) - timedelta(minutes=max(1, int(retry_minutes)))
+    ).strftime("%Y-%m-%d %H:%M:%S")
+    limit = max(1, min(int(limit or 1000), 1000))
+    connection = (connection_factory or _connect)()
+    try:
+        with connection.cursor() as cursor:
+            ensure_store_link_table(cursor)
+            ensure_store_link_sync_state_table(cursor)
+            cursor.execute(
+                f"""
+                SELECT tokens.`id`
+                FROM `mercado_store_tokens` AS tokens
+                LEFT JOIN `{STORE_LINK_SYNC_STATE_TABLE}` AS sync_state
+                  ON sync_state.`token_id` = tokens.`id`
+                WHERE (
+                    sync_state.`requested_at` IS NOT NULL
+                    OR sync_state.`last_completed_at` IS NULL
+                    OR sync_state.`last_completed_at` <= %s
+                )
+                  AND (
+                    sync_state.`last_started_at` IS NULL
+                    OR sync_state.`last_started_at` <= %s
+                  )
+                ORDER BY
+                    CASE WHEN sync_state.`requested_at` IS NOT NULL THEN 0 ELSE 1 END,
+                    COALESCE(sync_state.`requested_at`, sync_state.`last_completed_at`) ASC,
+                    tokens.`id` ASC
+                LIMIT %s
+                """,
+                (due_before, retry_before, limit),
+            )
+            rows = cursor.fetchall()
+        connection.commit()
+        return [int(row["id"]) for row in rows]
+    finally:
+        connection.close()
 
 
 def _value_struct_number(value: Any, *, weight: bool = False) -> Decimal | None:
@@ -593,10 +807,16 @@ def bulk_update_store_links(
 
 __all__ = [
     "STORE_LINK_TABLE",
+    "STORE_LINK_SYNC_STATE_TABLE",
     "bulk_update_store_links",
     "ensure_store_link_table",
+    "ensure_store_link_sync_state_table",
     "finalize_store_snapshot",
     "list_store_links",
+    "list_due_store_link_token_ids",
     "listing_record",
+    "mark_store_link_sync_finished",
+    "mark_store_link_sync_started",
+    "request_store_link_sync",
     "replace_store_snapshot",
 ]

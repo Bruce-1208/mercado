@@ -38,7 +38,7 @@ from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.wait import WebDriverWait
 
-from bit.bit_api import openBrowser, releaseBrowserLease
+from bit.bit_api import getBrowserIdByName, openBrowser, releaseBrowserLease
 from bit.bit_mysql import (
     get_existing_zying_product_ids,
     insert_zying_product_info,
@@ -48,6 +48,14 @@ from bit.bit_mysql import (
 DEFAULT_ZYING_WINDOW_ID = os.environ.get(
     "BIT_ZYING_WINDOW_ID",
     "9812f185f7ab49d98f3988994d9e8ebf",
+)
+DEFAULT_ZYING_BROWSER_TYPE = os.environ.get(
+    "BIT_ZYING_BROWSER_TYPE",
+    "bitbrowser",
+)
+DEFAULT_ZYING_EDGE_DEBUGGER_ADDRESS = os.environ.get(
+    "BIT_ZYING_EDGE_DEBUGGER_ADDRESS",
+    "127.0.0.1:9222",
 )
 ZYING_PRODUCT_URL = os.environ.get(
     "BIT_ZYING_PRODUCT_URL",
@@ -169,6 +177,22 @@ const checkedStatus = root.querySelector("input[name='stat']:checked");
 const status = (
   checkedStatus?.closest('label')?.querySelector('.ant-radio-label')?.textContent || ''
 ).trim();
+const formFields = {};
+for (const control of root.querySelectorAll('input, textarea, select')) {
+  if ((control.type === 'radio' || control.type === 'checkbox') && !control.checked) continue;
+  const label = control.id
+    ? root.querySelector(`label[for="${CSS.escape(control.id)}"]`)
+    : null;
+  const key = normalize(
+    control.id || control.name || label?.textContent ||
+    control.getAttribute('placeholder') || control.getAttribute('aria-label')
+  );
+  if (!key) continue;
+  const fieldValue = control.type === 'checkbox'
+    ? Boolean(control.checked)
+    : normalize(control.value);
+  if (fieldValue !== '') formFields[key] = fieldValue;
+}
 const details = {
   product_id: productId,
   sale_price: value('cost'),
@@ -178,10 +202,18 @@ const details = {
   size_width: value('sizeWidth'),
   size_height: value('sizeHeight'),
   review_status: status,
+  title_values: detailTitles,
+  images: detailImages,
+  form_fields: formFields,
+  detail_text: String(root.innerText || '').trim(),
 };
 return {
   details,
-  ready: Object.values(details).every(Boolean),
+  ready: [
+    details.product_id, details.sale_price, details.net_income,
+    details.package_gross_weight, details.size_length, details.size_width,
+    details.size_height, details.review_status,
+  ].every(Boolean),
 };
 """
 
@@ -514,23 +546,249 @@ def _format_money(value, currency):
     return f"{currency} {number}".strip()
 
 
-def _detail_category_reference(detail):
+def _json_value(value, default=None):
+    if isinstance(value, (dict, list)):
+        return value
+    if value in (None, ""):
+        return default
     try:
-        attributes = json.loads(detail.get("sale_attrs") or "{}")
+        return json.loads(str(value))
     except (TypeError, ValueError):
-        attributes = {}
+        return default
+
+
+def _localized_detail_text(value):
+    parsed = _json_value(value)
+    if isinstance(parsed, dict):
+        for language in ("en", "es", "pt", "zh", "cn"):
+            text = _clean_text(parsed.get(language))
+            if text:
+                return text
+        return next(
+            (_clean_text(item) for item in parsed.values() if _clean_text(item)),
+            "",
+        )
+    if isinstance(parsed, list):
+        return " ".join(_clean_text(item) for item in parsed if _clean_text(item))
+    return _clean_text(value)
+
+
+def _detail_site_attributes(detail):
+    attributes = _json_value(detail.get("sale_attrs"), {})
+    if not isinstance(attributes, dict):
+        return {}
     site_attributes = attributes.get(str(detail.get("sale_siteid") or "")) or {}
-    if not site_attributes:
+    if not isinstance(site_attributes, dict) or not site_attributes:
         site_attributes = next(
             (value for value in attributes.values() if isinstance(value, dict)),
             {},
         )
+    return site_attributes
+
+
+def _normalize_listing_attribute(attribute, fallback_id=""):
+    if isinstance(attribute, dict):
+        attribute_id = _clean_text(
+            attribute.get("id")
+            or attribute.get("attribute_id")
+            or attribute.get("attr_id")
+            or attribute.get("code")
+            or fallback_id
+        )
+        name = _clean_text(attribute.get("name") or attribute.get("label"))
+        value_name = attribute.get("value_name")
+        if value_name in (None, ""):
+            value_name = attribute.get("value")
+        if value_name in (None, ""):
+            value_name = attribute.get("text")
+        normalized = {
+            key: attribute.get(key)
+            for key in ("value_id", "value_struct", "values")
+            if attribute.get(key) not in (None, "")
+        }
+        if attribute_id:
+            normalized["id"] = attribute_id
+        if name:
+            normalized["name"] = name
+        if value_name not in (None, ""):
+            normalized["value_name"] = _clean_text(value_name)
+        return normalized if normalized.get("id") else None
+    if fallback_id and attribute not in (None, ""):
+        return {"id": _clean_text(fallback_id), "value_name": _clean_text(attribute)}
+    return None
+
+
+def _detail_listing_attributes(detail):
+    """尽量从 sale.detail 的不同版本中还原 Mercado attributes 数组。"""
+    site_attributes = _detail_site_attributes(detail)
+    candidates = []
+    for container in (detail, site_attributes):
+        if not isinstance(container, dict):
+            continue
+        for key in (
+            "attributes", "attrs", "attribute", "item_attributes",
+            "sale_attributes", "specifications", "specs",
+        ):
+            value = _json_value(container.get(key), container.get(key))
+            if isinstance(value, list):
+                candidates.extend(value)
+            elif isinstance(value, dict):
+                candidates.extend(
+                    {"id": item_id, "value": item_value}
+                    if not isinstance(item_value, dict)
+                    else {"id": item_id, **item_value}
+                    for item_id, item_value in value.items()
+                )
+
+    common_fields = {
+        "sale_brand": "BRAND",
+        "brand": "BRAND",
+        "sale_model": "MODEL",
+        "model": "MODEL",
+        "sale_gtin": "GTIN",
+        "gtin": "GTIN",
+        "ean": "GTIN",
+        "upc": "GTIN",
+        "sale_sku": "SELLER_SKU",
+    }
+    for field_name, attribute_id in common_fields.items():
+        if detail.get(field_name) not in (None, ""):
+            candidates.append({"id": attribute_id, "value": detail[field_name]})
+
+    normalized = []
+    positions = {}
+    for candidate in candidates:
+        attribute = _normalize_listing_attribute(candidate)
+        if not attribute:
+            continue
+        attribute_id = attribute["id"].upper()
+        attribute["id"] = attribute_id
+        if attribute_id in positions:
+            existing = normalized[positions[attribute_id]]
+            if not existing.get("value_name") and attribute.get("value_name"):
+                normalized[positions[attribute_id]] = attribute
+            continue
+        positions[attribute_id] = len(normalized)
+        normalized.append(attribute)
+    return normalized
+
+
+def _detail_list(detail, *keys):
+    for key in keys:
+        value = _json_value(detail.get(key), detail.get(key))
+        if isinstance(value, list):
+            return value
+    return []
+
+
+def _finalize_zying_listing_snapshot(record):
+    """生成与普通商品采集一致、可供产品上架直接读取的源快照。"""
+    detail = dict(record.get("detail_data") or {})
+    product_id = _clean_text(record.get("product_id"))
+    category_id = _clean_text(record.get("product_category_id"))
+    title = (
+        _localized_detail_text(detail.get("sale_title"))
+        or _clean_text(record.get("title"))
+    )
+    currency = _clean_text(detail.get("sale_cur"))
+    price = detail.get("sale_cost")
+    if price in (None, ""):
+        price = _clean_text(record.get("sale_price")).split(" ")[-1]
+    images = [
+        _clean_text(value.get("source") or value.get("url") or value.get("secure_url"))
+        if isinstance(value, dict)
+        else _clean_text(value)
+        for value in _detail_list(detail, "sale_pic", "pictures", "images")
+    ]
+    images = list(dict.fromkeys(value for value in images if value))
+    if not images and _clean_text(record.get("main_image_url")):
+        images = [_clean_text(record["main_image_url"])]
+    description = ""
+    for key in (
+        "sale_description", "sale_desc", "description", "desc",
+        "sale_content", "content",
+    ):
+        description = _localized_detail_text(detail.get(key))
+        if description:
+            break
+    attributes = _detail_listing_attributes(detail)
+    variations = _detail_list(
+        detail, "sale_variations", "sale_variation", "variations", "variation"
+    )
+    sale_terms = _detail_list(
+        detail, "sale_terms", "sale_saleterms", "saleterms", "terms"
+    )
+    source_id = product_id
+    if product_id and not re.match(r"^(?:ML[A-Z]|CBT)-?\d+$", product_id, re.I):
+        source_id = f"CBT{re.sub(r'\D+', '', product_id) or product_id}"
+    source = {
+        "id": source_id,
+        "site_id": "CBT",
+        "title": title,
+        "category_id": category_id,
+        "price": price,
+        "currency_id": currency or "USD",
+        "condition": _clean_text(
+            detail.get("sale_condition") or detail.get("condition") or "new"
+        ),
+        "pictures": [{"source": value} for value in images],
+        "attributes": attributes,
+        "variations": variations,
+        "sale_terms": sale_terms,
+    }
+    quantity = detail.get("sale_stock")
+    if quantity in (None, ""):
+        quantity = detail.get("available_quantity")
+    if quantity not in (None, ""):
+        source["available_quantity"] = quantity
+    package_size = _detail_list(detail, "sale_size", "size", "dimensions")[:3]
+    package_size.extend([None] * (3 - len(package_size)))
+    snapshot = {
+        "item_id": product_id,
+        "source_url": ZYING_PRODUCT_URL,
+        "final_url": ZYING_PRODUCT_URL,
+        "main_image_url": images[0] if images else "",
+        "title": title,
+        "price": price,
+        "currency_id": source["currency_id"],
+        "category_id": category_id,
+        "source": source,
+        "description": {"plain_text": description} if description else {},
+        "page_snapshot": {
+            "zying_detail": detail,
+            "detail_form_fields": record.get("detail_form_fields") or {},
+            "detail_text": record.get("detail_text") or "",
+        },
+        "plugin_snapshot": {
+            "source_type": "zying",
+            "zying_category_id": record.get("zying_category_id") or "",
+            "zying_category": record.get("zying_category") or "",
+        },
+        "weight_g": detail.get("sale_weight"),
+        "package_length_cm": package_size[0],
+        "package_width_cm": package_size[1],
+        "package_height_cm": package_size[2],
+        "scrape_status": "ok",
+        "scraped_at": record.get("collected_at"),
+    }
+    record["listing_attributes"] = attributes
+    record["listing_variations"] = variations
+    record["listing_sale_terms"] = sale_terms
+    record["description_text"] = description
+    record["all_image_urls"] = images
+    record["listing_snapshot"] = snapshot
+    return record
+
+
+def _detail_category_reference(detail):
+    site_attributes = _detail_site_attributes(detail)
     site = _clean_text(site_attributes.get("site") or detail.get("sale_area"))
     category_id = _format_number(site_attributes.get("kindid"))
     return site, category_id
 
 
 def _merge_detail_record(record, search_row, detail):
+    record["detail_data"] = dict(detail or {})
     product_id = detail.get("sale_id") or search_row.get("id")
     currency = detail.get("sale_cur") or search_row.get("cur")
     sale_price = detail.get("sale_cost")
@@ -685,6 +943,13 @@ def _merge_ui_detail_record(record, details):
         f"{_clean_text(details.get('size_height'))} 厘米"
     )
     record["review_status"] = _clean_text(details.get("review_status"))
+    record["detail_form_fields"] = dict(details.get("form_fields") or {})
+    record["detail_text"] = str(details.get("detail_text") or "").strip()
+    detail_images = [
+        _clean_text(value) for value in (details.get("images") or []) if _clean_text(value)
+    ]
+    if detail_images:
+        record["all_image_urls"] = list(dict.fromkeys(detail_images))
 
     detail_lines = (
         f"详情产品编号: {record['product_id']}",
@@ -1420,6 +1685,7 @@ def _persist_zying_page(
     page_number,
     page_count,
     product_writer=None,
+    product_mirror_writer=None,
 ):
     """同步提交单页数据；只有数据库事务提交成功后，采集器才会继续翻页。"""
     if not page_records:
@@ -1434,6 +1700,13 @@ def _persist_zying_page(
         f"({len(page_records)} 条)",
         flush=True,
     )
+    if product_mirror_writer is not None:
+        mirror_result = product_mirror_writer(page_records) or {}
+        print(
+            f"智赢第 {page_number}/{page_count} 页已同步产品列表 "
+            f"{int(mirror_result.get('count') or 0)} 条",
+            flush=True,
+        )
     writer = product_writer or insert_zying_product_info
     inserted_count = writer(page_records)
     print(
@@ -1444,6 +1717,92 @@ def _persist_zying_page(
     return inserted_count
 
 
+def normalize_zying_browser_type(value):
+    """将页面和命令行中的浏览器类型统一为 edge 或 bitbrowser。"""
+    normalized = str(value or DEFAULT_ZYING_BROWSER_TYPE).strip().lower()
+    aliases = {
+        "bit": "bitbrowser",
+        "bit_browser": "bitbrowser",
+        "bit-browser": "bitbrowser",
+        "比特": "bitbrowser",
+        "比特浏览器": "bitbrowser",
+        "local_edge": "edge",
+        "local-edge": "edge",
+        "msedge": "edge",
+        "本地edge": "edge",
+        "本地 edge": "edge",
+    }
+    normalized = aliases.get(normalized, normalized)
+    if normalized not in {"edge", "bitbrowser"}:
+        raise ValueError("浏览器类型只能选择本地 Edge 或比特浏览器")
+    return normalized
+
+
+def _edge_debugger_address(value):
+    address = str(value or DEFAULT_ZYING_EDGE_DEBUGGER_ADDRESS).strip()
+    address = re.sub(r"^https?://", "", address, flags=re.I).rstrip("/")
+    if not address:
+        raise ValueError("本地 Edge 调试地址不能为空")
+    return address
+
+
+def _open_zying_collection_browser(
+    browser_type,
+    window_id,
+    window_name="",
+    edge_debugger_address=DEFAULT_ZYING_EDGE_DEBUGGER_ADDRESS,
+):
+    """连接采集浏览器，返回 driver、driver service 和需释放锁的窗口 ID。"""
+    browser_type = normalize_zying_browser_type(browser_type)
+    if browser_type == "edge":
+        debugger_address = _edge_debugger_address(edge_debugger_address)
+        edge_options = webdriver.EdgeOptions()
+        edge_options.add_experimental_option("debuggerAddress", debugger_address)
+        try:
+            driver = webdriver.Edge(options=edge_options)
+        except Exception as exc:
+            raise RuntimeError(
+                f"无法连接本地 Edge（{debugger_address}）。请完全退出 Edge 后，"
+                "使用 --remote-debugging-port=9222 启动 Edge，并确认已登录智赢"
+            ) from exc
+        print(f"已连接本地 Edge：{debugger_address}", flush=True)
+        return driver, getattr(driver, "service", None), ""
+
+    requested_name = _clean_text(window_name)
+    resolved_window_id = (
+        getBrowserIdByName(requested_name)
+        if requested_name
+        else _clean_text(window_id) or DEFAULT_ZYING_WINDOW_ID
+    )
+    browser_info = openBrowser(resolved_window_id)
+    if not browser_info or not browser_info.get("data"):
+        identifier = f"窗口“{requested_name}”" if requested_name else f"窗口 ID {resolved_window_id}"
+        raise RuntimeError(f"打开比特浏览器{identifier}失败：{browser_info}")
+
+    driver_path = browser_info["data"]["driver"]
+    debugger_address = browser_info["data"]["http"]
+    chrome_options = webdriver.ChromeOptions()
+    chrome_options.add_experimental_option("debuggerAddress", debugger_address)
+    chrome_service = Service(driver_path)
+    try:
+        driver = webdriver.Chrome(
+            service=chrome_service,
+            options=chrome_options,
+        )
+    except Exception:
+        try:
+            chrome_service.stop()
+        finally:
+            releaseBrowserLease(resolved_window_id)
+        raise
+    opened_name = _clean_text(browser_info.get("data", {}).get("name")) or requested_name
+    print(
+        f"已连接比特浏览器窗口：{opened_name or resolved_window_id}",
+        flush=True,
+    )
+    return driver, chrome_service, resolved_window_id
+
+
 def collect_zying_products(
     number=None,
     window_id=DEFAULT_ZYING_WINDOW_ID,
@@ -1451,7 +1810,11 @@ def collect_zying_products(
     category=None,
     product_writer=None,
     existing_product_id_reader=None,
+    product_mirror_writer=None,
     return_summary=False,
+    browser_type=DEFAULT_ZYING_BROWSER_TYPE,
+    window_name="",
+    edge_debugger_address=DEFAULT_ZYING_EDGE_DEBUGGER_ADDRESS,
 ):
     """采集智赢产品；category 指智赢页面自身的产品分类。"""
     requested_pages = DEFAULT_ZYING_PAGE_COUNT if number is None else number
@@ -1465,23 +1828,13 @@ def collect_zying_products(
             f"起始页 {start_page} 不能大于结束页 {page_count}。"
         )
     started_at = time.time()
-    browser_info = openBrowser(window_id)
-    if not browser_info or not browser_info.get("data"):
-        raise RuntimeError(f"打开 BitBrowser 窗口失败：{browser_info}")
-
-    driver_path = browser_info["data"]["driver"]
-    debugger_address = browser_info["data"]["http"]
-    chrome_options = webdriver.ChromeOptions()
-    chrome_options.add_experimental_option("debuggerAddress", debugger_address)
-    chrome_service = Service(driver_path)
-    try:
-        driver = webdriver.Chrome(
-            service=chrome_service,
-            options=chrome_options,
-        )
-    except Exception:
-        releaseBrowserLease(window_id)
-        raise
+    browser_type = normalize_zying_browser_type(browser_type)
+    driver, browser_service, leased_window_id = _open_zying_collection_browser(
+        browser_type,
+        window_id,
+        window_name=window_name,
+        edge_debugger_address=edge_debugger_address,
+    )
     wait = WebDriverWait(driver, 30)
     records = []
     seen = set()
@@ -1497,6 +1850,10 @@ def collect_zying_products(
     existing_product_id_reader = (
         existing_product_id_reader or get_existing_zying_product_ids
     )
+    if product_mirror_writer is None:
+        from erp.mercadolibre_collection_store import upsert_zying_products_to_products
+
+        product_mirror_writer = upsert_zying_products_to_products
 
     try:
         driver.get(ZYING_PRODUCT_URL)
@@ -1590,6 +1947,7 @@ def collect_zying_products(
                 )
             for record in extracted_records:
                 _attach_zying_category(record, category_selection)
+                _finalize_zying_listing_snapshot(record)
 
             page_records = []
             for record in extracted_records:
@@ -1605,6 +1963,7 @@ def collect_zying_products(
                 page_number,
                 page_count,
                 product_writer=product_writer,
+                product_mirror_writer=product_mirror_writer,
             )
             inserted_count += page_inserted_count
             last_committed_page = page_number
@@ -1626,9 +1985,13 @@ def collect_zying_products(
             )
         raise
     finally:
-        # 只停止本次 ChromeDriver 连接，不关闭用户的 BitBrowser 窗口。
-        chrome_service.stop()
-        releaseBrowserLease(window_id)
+        # 只停止本次 WebDriver 连接，不关闭用户的 Edge/BitBrowser 窗口。
+        try:
+            if browser_service is not None:
+                browser_service.stop()
+        finally:
+            if leased_window_id:
+                releaseBrowserLease(leased_window_id)
 
     print(
         f"智赢产品采集完成，共 {len(records)} 条，详情失败跳过 {skipped_count} 条，"
@@ -1660,12 +2023,16 @@ def check_yuanyou_title(
     number=None,
     window_id=DEFAULT_ZYING_WINDOW_ID,
     category=None,
+    browser_type=DEFAULT_ZYING_BROWSER_TYPE,
+    window_name="",
 ):
     """保留旧函数名，兼容已有的手工调用方式。"""
     return collect_zying_products(
         number=number,
         window_id=window_id,
         category=category,
+        browser_type=browser_type,
+        window_name=window_name,
     )
 
 
@@ -1692,7 +2059,19 @@ def main():
             f"（默认 {DEFAULT_ZYING_START_PAGE}，也可设置 BIT_ZYING_START_PAGE）"
         ),
     )
-    parser.add_argument("--window-id", default=DEFAULT_ZYING_WINDOW_ID, help="BitBrowser 窗口 ID")
+    parser.add_argument("--window-id", default=DEFAULT_ZYING_WINDOW_ID, help="比特浏览器窗口 ID（兼容旧用法）")
+    parser.add_argument(
+        "--browser-type",
+        default=DEFAULT_ZYING_BROWSER_TYPE,
+        choices=("bitbrowser", "edge"),
+        help="采集浏览器：bitbrowser 或 edge",
+    )
+    parser.add_argument("--window-name", default="", help="比特浏览器窗口名称（优先于窗口 ID）")
+    parser.add_argument(
+        "--edge-debugger-address",
+        default=DEFAULT_ZYING_EDGE_DEBUGGER_ADDRESS,
+        help="本地 Edge 远程调试地址",
+    )
     parser.add_argument(
         "--category",
         default=DEFAULT_ZYING_CATEGORY,
@@ -1715,6 +2094,9 @@ def main():
             args.window_id,
             args.start_page,
             category=args.category,
+            browser_type=args.browser_type,
+            window_name=args.window_name,
+            edge_debugger_address=args.edge_debugger_address,
         )
     except (RuntimeError, ValueError) as exc:
         parser.exit(status=1, message=f"采集失败：{exc}\n")

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import re
 from datetime import datetime, timedelta
 from decimal import Decimal
 from typing import Any, Callable, Iterable, Mapping
@@ -46,7 +47,7 @@ PRODUCT_PUBLISH_COLUMN_DEFINITIONS = (
     ("last_publish_result_json", "LONGTEXT NULL"),
     ("last_published_at", "DATETIME NULL"),
 )
-PRODUCT_SOURCE_TYPES = {"collected", "pulled"}
+PRODUCT_SOURCE_TYPES = {"collected", "pulled", "zying"}
 PRODUCT_REVIEW_STATUSES = {
     "unreviewed", "approved", "suspected", "infringing", "risk",
 }
@@ -84,6 +85,24 @@ def _loads(value: Any, default: Any) -> Any:
         return json.loads(str(value))
     except (TypeError, ValueError):
         return default
+
+
+def _decimal_from_text(value: Any) -> Decimal | None:
+    if value in (None, ""):
+        return None
+    text = str(value).strip()
+    if "," in text and "." not in text:
+        text = text.replace(",", ".")
+    else:
+        text = text.replace(",", "")
+    match = re.search(r"-?\d+(?:\.\d+)?", text)
+    if not match:
+        return None
+    try:
+        number = Decimal(match.group(0).replace(",", "."))
+    except Exception:
+        return None
+    return number if number.is_finite() else None
 
 
 def _json_safe_row(row: Mapping[str, Any]) -> dict[str, Any]:
@@ -1279,6 +1298,144 @@ def update_product_item(
             "changed": changed,
             "profitability_refresh_pending": profitability_stale,
         }
+    except BaseException:
+        connection.rollback()
+        raise
+    finally:
+        connection.close()
+
+
+def upsert_zying_products_to_products(
+    records: Iterable[Mapping[str, Any]],
+    *,
+    connection_factory: Callable[[], Any] | None = None,
+) -> dict[str, int]:
+    """将智赢二级详情快照写入统一产品列表，供审核和上架流程复用。"""
+
+    values = []
+    skipped = 0
+    now = _now()
+    for raw_record in records or []:
+        record = dict(raw_record or {})
+        product_id = str(record.get("product_id") or "").strip()[:32]
+        snapshot = dict(record.get("listing_snapshot") or {})
+        source = dict(snapshot.get("source") or {})
+        description = dict(snapshot.get("description") or {})
+        title = str(
+            snapshot.get("title") or source.get("title") or record.get("title") or ""
+        ).strip()[:255]
+        if not product_id or not title:
+            skipped += 1
+            continue
+        plugin_snapshot = dict(snapshot.get("plugin_snapshot") or {})
+        plugin_snapshot.update(
+            {
+                "source_type": "zying",
+                "zying_product_id": product_id,
+                "zying_category_id": record.get("zying_category_id") or "",
+                "zying_category": record.get("zying_category") or "",
+            }
+        )
+        snapshot["plugin_snapshot"] = plugin_snapshot
+        source_url = str(
+            snapshot.get("final_url")
+            or snapshot.get("source_url")
+            or "https://meli.zying.net/#/product"
+        ).strip()[:1500]
+        main_image_url = str(
+            snapshot.get("main_image_url") or record.get("main_image_url") or ""
+        ).strip()[:1500]
+        price = _decimal_from_text(
+            snapshot.get("price") if snapshot.get("price") not in (None, "")
+            else record.get("sale_price")
+        )
+        currency_id = str(
+            snapshot.get("currency_id") or source.get("currency_id") or "USD"
+        ).strip().upper()[:16]
+        if currency_id in {"$", "US$", "USD$"}:
+            currency_id = "USD"
+        weight_g = _decimal_from_text(
+            snapshot.get("weight_g") if snapshot.get("weight_g") not in (None, "")
+            else record.get("package_gross_weight")
+        )
+        dimensions = [
+            _decimal_from_text(snapshot.get("package_length_cm")),
+            _decimal_from_text(snapshot.get("package_width_cm")),
+            _decimal_from_text(snapshot.get("package_height_cm")),
+        ]
+        if any(value is None for value in dimensions):
+            parsed_dimensions = re.findall(
+                r"\d+(?:[.,]\d+)?",
+                str(record.get("package_dimensions") or ""),
+            )[:3]
+            if len(parsed_dimensions) == 3:
+                dimensions = [_decimal_from_text(value) for value in parsed_dimensions]
+        volumetric_weight = (
+            dimensions[0] * dimensions[1] * dimensions[2] / Decimal("6000")
+            if all(value is not None for value in dimensions)
+            else None
+        )
+        category_id = str(
+            snapshot.get("category_id")
+            or source.get("category_id")
+            or record.get("product_category_id")
+            or ""
+        ).strip()[:64]
+        category_name = str(record.get("product_category") or "").strip()[:255]
+        sale_price_usd = price if currency_id == "USD" else None
+        net_proceeds = _decimal_from_text(record.get("net_income"))
+        if currency_id != "USD":
+            net_proceeds = None
+        description_text = str(
+            description.get("plain_text")
+            or description.get("text")
+            or record.get("description_text")
+            or ""
+        ).strip()
+        values.append((
+            0, "zying", "unreviewed", product_id, source_url,
+            main_image_url, title, description_text, price, currency_id,
+            weight_g, volumetric_weight, dimensions[0], dimensions[1], dimensions[2],
+            "zying_detail", sale_price_usd, category_id, category_name,
+            net_proceeds, now, "zying_collection", _dumps(snapshot), now,
+        ))
+    if not values:
+        return {"count": 0, "skipped": skipped}
+
+    mirrored_fields = (
+        "source_url", "main_image_url", "title", "description_text", "price",
+        "currency_id", "weight_g", "volumetric_weight_kg", "package_length_cm",
+        "package_width_cm", "package_height_cm", "weight_basis", "sale_price_usd",
+        "category_id", "category_name", "net_proceeds_usd",
+        "profitability_updated_at", "profitability_source", "source_snapshot_json",
+    )
+    updates = ",\n                    ".join(
+        f"`{field}` = IF(`source_type` = 'zying', VALUES(`{field}`), `{field}`)"
+        for field in mirrored_fields
+    )
+    connection = (connection_factory or _connect)()
+    try:
+        with connection.cursor() as cursor:
+            ensure_collection_tables(cursor)
+            cursor.executemany(
+                f"""
+                INSERT INTO `{PRODUCT_TABLE}` (
+                    `collection_item_id`, `source_type`, `review_status`, `source_item_id`,
+                    `source_url`, `main_image_url`, `title`, `description_text`, `price`,
+                    `currency_id`, `weight_g`, `volumetric_weight_kg`,
+                    `package_length_cm`, `package_width_cm`, `package_height_cm`,
+                    `weight_basis`, `sale_price_usd`, `category_id`, `category_name`,
+                    `net_proceeds_usd`, `profitability_updated_at`, `profitability_source`,
+                    `source_snapshot_json`, `added_at`
+                ) VALUES ({", ".join(["%s"] * 24)})
+                ON DUPLICATE KEY UPDATE
+                    {updates},
+                    `updated_at` = CURRENT_TIMESTAMP
+                """,
+                values,
+            )
+        connection.commit()
+        return {"count": len(values), "skipped": skipped}
     except BaseException:
         connection.rollback()
         raise

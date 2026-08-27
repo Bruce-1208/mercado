@@ -269,6 +269,12 @@ def test_browser_routes_return_metadata_and_accept_management_actions(monkeypatc
     )
     monkeypatch.setattr(
         bit_interface.bit_db_api,
+        "start_store_link_sync",
+        lambda token_ids: calls.append(("sync-links", token_ids))
+        or {"started": True, "state": {"task_id": "task-new-store"}},
+    )
+    monkeypatch.setattr(
+        bit_interface.bit_db_api,
         "refresh_mercado_store_token",
         lambda token_id: calls.append(("refresh", token_id)) or summary,
     )
@@ -322,6 +328,8 @@ def test_browser_routes_return_metadata_and_accept_management_actions(monkeypatc
     assert list_response.status_code == 200
     assert "access_token" not in list_response.get_data(as_text=True)
     assert exchange_response.status_code == 200
+    assert exchange_response.get_json()["data"]["auto_link_sync"]["queued"] is True
+    assert "自动拉取全部链接" in exchange_response.get_json()["message"]
     assert refresh_response.status_code == 200
     assert rename_response.status_code == 200
     assert site_list_response.status_code == 200
@@ -329,6 +337,7 @@ def test_browser_routes_return_metadata_and_accept_management_actions(monkeypatc
     assert delete_response.status_code == 200
     assert calls == [
         ("exchange", "店铺二", "TG-code"),
+        ("sync-links", [2]),
         ("refresh", 2),
         ("rename", 2, "新名字"),
         ("list-sites", 2),

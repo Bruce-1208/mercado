@@ -19,3 +19,30 @@ python -m mercado_api run
 ```
 
 `run` 启动时先同步一次 Listing，随后立即同步订单并每 30 分钟增量更新订单。生产环境可把该命令注册为 Windows 服务或任务计划。数据库默认生成在 `mercado_api/mercado.sqlite3`。
+
+## 售前、售后与投诉通信
+
+`communications.py` 封装 Global Selling 官方通信资源：
+
+```python
+from mercado_api.communications import MercadoCommunicationsClient
+
+client = MercadoCommunicationsClient("access-token")
+
+# 售前：查询待回复问题并提交答案
+questions = client.search_questions(seller_id="523130418", status="UNANSWERED")
+client.answer_question(questions["questions"][0]["id"], "Original", text_translated="Traducción")
+
+# 售后：按 Pack 读取或发送消息；工作台读取时不会自动标记为已读
+thread = client.get_post_sale_messages_for_seller(
+    "2315686468", "523130418", mark_as_read=False
+)
+client.send_post_sale_message("2315686468", "Original", text_translated="Traducción")
+
+# 投诉：查询列表、读取完整处理上下文并按官方可用动作回复
+claims = client.search_claims("523130418", status="opened")
+detail = client.get_claim_bundle(claims["data"][0]["id"])
+client.send_claim_message(detail["claim"]["id"], "Reply", receiver_role="complainant")
+```
+
+生产调用应传入 `refresh_access_token` 回调并在回调中持久化轮换后的 Refresh Token。工作台已经通过 `bit/mercado_communications.py` 完成这一接入，密钥不会返回浏览器。官方禁止 Model 6 店铺访问 Questions、Messages 和 Claims 时，客户端会抛出带 `model_6_restricted=True` 的明确异常。

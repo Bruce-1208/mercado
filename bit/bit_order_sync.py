@@ -1,9 +1,10 @@
-"""Mercado Libre 订单手动回填与十五分钟增量同步。"""
+"""Mercado Libre 订单手动回填、72 小时滚动同步与每日状态刷新。"""
 
 from __future__ import annotations
 
 import os
 import threading
+import time
 import uuid
 from datetime import datetime, timedelta, timezone
 
@@ -14,8 +15,10 @@ from mercado_api.client import MercadoAPIError, MercadoLibreClient
 
 ORDER_SYNC_LOCK_KEY = "mercado_order_sync_task"
 DEFAULT_SYNC_INTERVAL_SECONDS = 15 * 60
-FIRST_SYNC_LOOKBACK_HOURS = 48
+RECENT_ORDER_WINDOW_HOURS = 72
 WORKBENCH_LOCAL_TIMEZONE = timezone(timedelta(hours=8))
+DAILY_STATUS_MODE = "daily_status"
+DAILY_STATUS_STATE_KEY = "last_daily_old_order_status_refresh"
 
 SITE_COUNTRIES = {
     "MLM": "墨西哥",
@@ -63,6 +66,9 @@ _sync_state = {
     "scheduler_enabled": False,
     "sync_interval_seconds": DEFAULT_SYNC_INTERVAL_SECONDS,
     "next_run_at": "",
+    "recent_window_hours": RECENT_ORDER_WINDOW_HOURS,
+    "daily_status_last_run_date": "",
+    "next_daily_status_at": "",
 }
 _scheduler_guard = threading.Lock()
 _scheduler_started = False
@@ -147,6 +153,13 @@ def _date_range(start_date, end_date):
 def _iso_millis(value):
     value = value.astimezone(timezone.utc)
     return value.isoformat(timespec="milliseconds").replace("+00:00", "Z")
+
+
+def _sync_mode(value):
+    value = str(value or "").strip().lower()
+    if value == DAILY_STATUS_MODE:
+        return DAILY_STATUS_MODE
+    return "automatic" if value == "automatic" else "manual"
 
 
 def _token_ids(values):
@@ -273,7 +286,7 @@ def backfill_order_images(token_ids=None, limit_per_store=200):
     return results
 
 
-def _sync_store(record, filters):
+def _sync_store(record, filters, *, enrich_images=True):
     token_id = int(record["id"])
     display_name = str(record.get("display_name") or record.get("nickname") or token_id)
     seller_id = str(record.get("meli_user_id") or "").strip()
@@ -291,7 +304,8 @@ def _sync_store(record, filters):
                 batch.append(order)
                 totals["fetched"] += 1
                 if len(batch) >= 50:
-                    _enrich_order_images(client, batch)
+                    if enrich_images:
+                        _enrich_order_images(client, batch)
                     result = bit_mysql.upsert_mercado_synced_orders(record, batch)
                     totals["inserted"] += int(result.get("inserted") or 0)
                     totals["updated"] += int(result.get("updated") or 0)
@@ -302,7 +316,8 @@ def _sync_store(record, filters):
                         updated_count=int(_sync_state.get("updated_count") or 0) + int(result.get("updated") or 0),
                     )
             if batch:
-                _enrich_order_images(client, batch)
+                if enrich_images:
+                    _enrich_order_images(client, batch)
                 result = bit_mysql.upsert_mercado_synced_orders(record, batch)
                 totals["inserted"] += int(result.get("inserted") or 0)
                 totals["updated"] += int(result.get("updated") or 0)
@@ -322,11 +337,76 @@ def _sync_store(record, filters):
             refreshed_after_unauthorized = True
 
 
+def _sync_old_store_statuses(record, cutoff):
+    """Refresh locally stored old orders without searching the entire account history."""
+
+    token_id = int(record["id"])
+    display_name = str(record.get("display_name") or record.get("nickname") or token_id)
+    order_ids = bit_mysql.list_mercado_order_ids_before(token_id, cutoff)
+    client, record = _client_and_token(record)
+    refreshed_after_unauthorized = False
+    batch = []
+    totals = {"fetched": 0, "inserted": 0, "updated": 0, "failed": 0}
+
+    def save_batch():
+        if not batch:
+            return
+        batch_size = len(batch)
+        result = bit_mysql.upsert_mercado_synced_orders(record, list(batch))
+        totals["inserted"] += int(result.get("inserted") or 0)
+        totals["updated"] += int(result.get("updated") or 0)
+        _state_update(
+            fetched_count=int(_sync_state.get("fetched_count") or 0) + batch_size,
+            inserted_count=int(_sync_state.get("inserted_count") or 0)
+            + int(result.get("inserted") or 0),
+            updated_count=int(_sync_state.get("updated_count") or 0)
+            + int(result.get("updated") or 0),
+        )
+        batch.clear()
+
+    for order_id in order_ids:
+        while True:
+            try:
+                order = client.get_order(order_id)
+                break
+            except MercadoAPIError as exc:
+                message = str(exc)
+                unauthorized = "401" in message or "access token" in message.lower()
+                if unauthorized and not refreshed_after_unauthorized and record.get("refresh_token"):
+                    record = _refresh_token(token_id)
+                    client = MercadoLibreClient(str(record.get("access_token") or ""))
+                    refreshed_after_unauthorized = True
+                    continue
+                totals["failed"] += 1
+                _append_log(f"{display_name} 订单 {order_id} 状态读取失败：{exc}")
+                order = None
+                break
+            except Exception as exc:
+                totals["failed"] += 1
+                _append_log(f"{display_name} 订单 {order_id} 状态读取失败：{exc}")
+                order = None
+                break
+        if not order:
+            continue
+        batch.append(order)
+        totals["fetched"] += 1
+        if len(batch) >= 50:
+            save_batch()
+    save_batch()
+    return {
+        "store": display_name,
+        "status": "success" if totals["failed"] == 0 else "error",
+        **totals,
+    }
+
+
 def run_order_sync(start_date="", end_date="", token_ids=None, mode="manual"):
-    mode = "automatic" if str(mode) == "automatic" else "manual"
+    mode = _sync_mode(mode)
     records = _token_records(token_ids)
     start_text = end_text = ""
     manual_filters = None
+    scheduled_filters = None
+    now_utc = datetime.now(timezone.utc)
     if mode == "manual":
         start_text, end_text, start_at, end_at = _date_range(start_date, end_date)
         manual_filters = {
@@ -334,12 +414,37 @@ def run_order_sync(start_date="", end_date="", token_ids=None, mode="manual"):
             "order.date_created.from": _iso_millis(start_at),
             "order.date_created.to": _iso_millis(end_at),
         }
+    elif mode == "automatic":
+        recent_start = now_utc - timedelta(hours=RECENT_ORDER_WINDOW_HOURS)
+        start_text = recent_start.astimezone(WORKBENCH_LOCAL_TIMEZONE).strftime(
+            "%Y-%m-%dT%H:%M"
+        )
+        end_text = now_utc.astimezone(WORKBENCH_LOCAL_TIMEZONE).strftime(
+            "%Y-%m-%dT%H:%M"
+        )
+        scheduled_filters = {
+            "sort": "date_asc",
+            "order.date_created.from": _iso_millis(recent_start),
+            "order.date_created.to": _iso_millis(now_utc),
+        }
+    else:
+        old_order_cutoff = now_utc - timedelta(hours=RECENT_ORDER_WINDOW_HOURS)
+        end_text = old_order_cutoff.astimezone(WORKBENCH_LOCAL_TIMEZONE).strftime(
+            "%Y-%m-%dT%H:%M"
+        )
+        scheduled_filters = {"old_order_cutoff": old_order_cutoff}
+
+    mode_messages = {
+        "manual": "正在拉取订单",
+        "automatic": "正在更新最近 72 小时订单",
+        DAILY_STATUS_MODE: "正在执行每日老订单状态刷新",
+    }
 
     _state_update(
         running=True,
         mode=mode,
         status="running",
-        message="正在拉取订单" if mode == "manual" else "正在执行十五分钟增量同步",
+        message=mode_messages[mode],
         start_date=start_text,
         end_date=end_text,
         total_stores=len(records),
@@ -354,30 +459,30 @@ def run_order_sync(start_date="", end_date="", token_ids=None, mode="manual"):
         results=[],
         logs=[],
     )
-    _append_log(f"任务启动，共 {len(records)} 家店铺")
+    if mode == "automatic":
+        _append_log(f"十五分钟任务启动：更新最近 {RECENT_ORDER_WINDOW_HOURS} 小时，共 {len(records)} 家店铺")
+    elif mode == DAILY_STATUS_MODE:
+        _append_log(f"每日老订单状态刷新启动：更新 72 小时以前订单，共 {len(records)} 家店铺")
+    else:
+        _append_log(f"手动订单任务启动，共 {len(records)} 家店铺")
     results = []
     for index, record in enumerate(records, start=1):
         store_name = str(record.get("display_name") or record.get("nickname") or record.get("id"))
         _state_update(current_store=store_name, processed_stores=index - 1)
         _append_log(f"开始同步 {store_name}")
         try:
-            if manual_filters is not None:
-                filters = dict(manual_filters)
+            filters = dict(manual_filters or scheduled_filters or {})
+            if mode == DAILY_STATUS_MODE:
+                result = _sync_old_store_statuses(
+                    record,
+                    filters["old_order_cutoff"],
+                )
             else:
-                cursor = bit_mysql.get_mercado_order_sync_cursor(int(record["id"]))
-                start_at = cursor or datetime.now(timezone.utc) - timedelta(hours=FIRST_SYNC_LOOKBACK_HOURS)
-                if start_at.tzinfo is None:
-                    start_at = start_at.replace(tzinfo=timezone.utc)
-                start_at -= timedelta(minutes=5)
-                filters = {
-                    "sort": "updated_asc",
-                    "last_updated.from": _iso_millis(start_at),
-                    "last_updated.to": _iso_millis(datetime.now(timezone.utc)),
-                }
-            result = _sync_store(record, filters)
+                result = _sync_store(record, filters, enrich_images=True)
             results.append(result)
             _append_log(
-                f"{store_name} 完成：读取 {result['fetched']}，新增 {result['inserted']}，更新 {result['updated']}"
+                f"{store_name} 完成：读取 {result['fetched']}，新增 {result['inserted']}，"
+                f"更新 {result['updated']}，失败 {result.get('failed', 0)}"
             )
         except Exception as exc:
             result = {"store": store_name, "status": "error", "message": str(exc)}
@@ -423,7 +528,14 @@ def _run_background(start_date, end_date, token_ids, mode):
         )
         return
     try:
-        run_order_sync(start_date, end_date, token_ids, mode)
+        state = run_order_sync(start_date, end_date, token_ids, mode)
+        if mode == DAILY_STATUS_MODE and state.get("status") in ("completed", "partial"):
+            run_date = datetime.now(WORKBENCH_LOCAL_TIMEZONE).date().isoformat()
+            bit_mysql.set_mercado_order_sync_schedule_value(
+                DAILY_STATUS_STATE_KEY,
+                run_date,
+            )
+            _state_update(daily_status_last_run_date=run_date)
     except Exception as exc:
         _state_update(
             running=False,
@@ -438,7 +550,7 @@ def _run_background(start_date, end_date, token_ids, mode):
 
 
 def start_order_sync(start_date="", end_date="", token_ids=None, mode="manual"):
-    mode = "automatic" if str(mode) == "automatic" else "manual"
+    mode = _sync_mode(mode)
     if mode == "manual":
         _date_range(start_date, end_date)
     selected_ids = _token_ids(token_ids)
@@ -451,7 +563,11 @@ def start_order_sync(start_date="", end_date="", token_ids=None, mode="manual"):
             task_id=task_id,
             mode=mode,
             status="starting",
-            message="正在启动订单同步",
+            message=(
+                "正在启动每日老订单状态刷新"
+                if mode == DAILY_STATUS_MODE
+                else "正在启动订单同步"
+            ),
             start_date=str(start_date or ""),
             end_date=str(end_date or ""),
             finished_at="",
@@ -467,16 +583,46 @@ def start_order_sync(start_date="", end_date="", token_ids=None, mode="manual"):
 
 
 def _scheduler_loop(interval_seconds):
+    next_recent_run = time.monotonic() + interval_seconds
     while not _scheduler_stop_event.is_set():
-        next_run = datetime.now() + timedelta(seconds=interval_seconds)
+        now_local = datetime.now(WORKBENCH_LOCAL_TIMEZONE)
+        today = now_local.date().isoformat()
+        try:
+            last_daily_date = bit_mysql.get_mercado_order_sync_schedule_value(
+                DAILY_STATUS_STATE_KEY
+            )
+        except Exception:
+            last_daily_date = str(_sync_state.get("daily_status_last_run_date") or "")
+        daily_due = last_daily_date != today
+        task_busy = bool(_sync_state.get("running") or get_lock_owner(ORDER_SYNC_LOCK_KEY))
+        if daily_due and not task_busy:
+            start_order_sync(mode=DAILY_STATUS_MODE)
+        elif time.monotonic() >= next_recent_run and not task_busy:
+            started, _state = start_order_sync(mode="automatic")
+            if started:
+                next_recent_run = time.monotonic() + interval_seconds
+
+        seconds_to_recent = max(0, int(next_recent_run - time.monotonic()))
+        next_recent_at = datetime.now() + timedelta(seconds=seconds_to_recent)
+        next_daily_at = (
+            now_local
+            if daily_due
+            else datetime.combine(
+                now_local.date() + timedelta(days=1),
+                datetime.min.time(),
+                tzinfo=WORKBENCH_LOCAL_TIMEZONE,
+            )
+        )
         _state_update(
             scheduler_enabled=True,
             sync_interval_seconds=interval_seconds,
-            next_run_at=next_run.strftime("%Y-%m-%d %H:%M:%S"),
+            recent_window_hours=RECENT_ORDER_WINDOW_HOURS,
+            next_run_at=next_recent_at.strftime("%Y-%m-%d %H:%M:%S"),
+            daily_status_last_run_date=last_daily_date,
+            next_daily_status_at=next_daily_at.strftime("%Y-%m-%d %H:%M:%S"),
         )
-        if _scheduler_stop_event.wait(interval_seconds):
+        if _scheduler_stop_event.wait(min(30, max(1, seconds_to_recent))):
             break
-        start_order_sync(mode="automatic")
 
 
 def ensure_order_sync_scheduler():

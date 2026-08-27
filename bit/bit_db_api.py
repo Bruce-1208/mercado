@@ -151,6 +151,20 @@ def insert_zying_product_info(product_list):
     return (data or {}).get("count", 0)
 
 
+def upsert_zying_products_to_products(product_list):
+    if DB_MODE == "mysql":
+        from erp.mercadolibre_collection_store import (
+            upsert_zying_products_to_products as local_upsert,
+        )
+
+        return local_upsert(product_list)
+    return _request(
+        "POST",
+        "/api/db/zying-products/product-list",
+        json={"rows": product_list},
+    )
+
+
 def get_existing_zying_product_ids(product_ids):
     normalized_ids = list(
         dict.fromkeys(
@@ -821,6 +835,78 @@ def refresh_mercado_store_token(token_id):
             update_token=bit_mysql.update_mercado_store_token,
             record_error=bit_mysql.record_mercado_store_token_error,
         )
+
+
+def _fetch_mercado_store_reputation_local(token_id):
+    from bit import bit_mysql
+    from bit.mercado_reputation import fetch_store_reputation
+    from bit.mercado_tokens import refresh_and_save
+
+    def refresh(identifier):
+        return refresh_and_save(
+            int(identifier),
+            get_token=bit_mysql.get_mercado_store_token,
+            update_token=bit_mysql.update_mercado_store_token,
+            record_error=bit_mysql.record_mercado_store_token_error,
+        )
+
+    return fetch_store_reputation(
+        int(token_id),
+        get_token=bit_mysql.get_mercado_store_token,
+        refresh_token=refresh,
+    )
+
+
+def get_mercado_store_reputation(token_id):
+    """在 token 所在服务端调用官方 API，绝不向控制台返回密钥。"""
+
+    token_id = int(token_id)
+    if DB_MODE == "mysql":
+        return _fetch_mercado_store_reputation_local(token_id)
+    return _request(
+        "GET",
+        f"/api/db/mercado-tokens/{token_id}/reputation",
+        timeout=60,
+    )
+
+
+def _execute_mercado_store_communication_local(token_id, action, payload=None):
+    from bit import bit_mysql
+    from bit.mercado_communications import execute_store_communication
+    from bit.mercado_tokens import refresh_and_save
+
+    token_id = int(token_id)
+
+    def refresh(identifier):
+        return refresh_and_save(
+            int(identifier),
+            get_token=bit_mysql.get_mercado_store_token,
+            update_token=bit_mysql.update_mercado_store_token,
+            record_error=bit_mysql.record_mercado_store_token_error,
+        )
+
+    return execute_store_communication(
+        token_id,
+        action,
+        payload,
+        get_token=bit_mysql.get_mercado_store_token,
+        refresh_token=refresh,
+        get_order_contexts=bit_mysql.list_mercado_after_sale_order_contexts,
+    )
+
+
+def execute_mercado_store_communication(token_id, action, payload=None):
+    """在保存密钥的数据库服务端执行售前、售后或投诉操作。"""
+    token_id = int(token_id)
+    action = str(action or "").strip()
+    if DB_MODE == "mysql":
+        return _execute_mercado_store_communication_local(token_id, action, payload)
+    return _request(
+        "POST",
+        f"/api/db/mercado-communications/{token_id}/{action}",
+        timeout=60,
+        json=dict(payload or {}),
+    )
 
 
 def rename_mercado_store_token(token_id, display_name):
