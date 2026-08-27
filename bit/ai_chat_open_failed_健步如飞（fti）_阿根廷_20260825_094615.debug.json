@@ -1,0 +1,533 @@
+{
+  "captured_at": "2026-08-25T09:46:16",
+  "current_url": "https://global-selling.mercadolibre.com/help/v2",
+  "chat_state": {
+    "ai_frame_count": 1,
+    "inline_aria_expanded": "false",
+    "inline_has_input": false,
+    "inline_open": true,
+    "inline_root_class": "assistant-chat show expanded relative-height",
+    "inline_shell": true,
+    "legacy_frame_count": 1,
+    "shadow_ai_frame_count": 1,
+    "visible_ai_frame_count": 1
+  },
+  "dom_snapshot": {
+    "aiShells": [
+      {
+        "ariaExpanded": "false",
+        "className": "icon-button__wrapper icon-button__wrapper--closed",
+        "id": "sa-icon-button-wrapper",
+        "tag": "BUTTON",
+        "visible": true
+      },
+      {
+        "ariaExpanded": "",
+        "className": "assistant-chat show expanded relative-height",
+        "id": "sa-assistant-chat",
+        "tag": "DIV",
+        "visible": true
+      }
+    ],
+    "frames": [
+      {
+        "className": "",
+        "height": 369,
+        "id": "",
+        "shadowHost": "sof-seller-assistant-frm-host",
+        "src": "https://global-selling.mercadolibre.com/maxwell/new-chat?flavor=seller-assistant&hideHeader=true&origin=sa&andes_ui=legacy&customLocale=en-US",
+        "title": "Meli AI Chat",
+        "visible": true,
+        "width": 460
+      },
+      {
+        "className": "",
+        "height": 0,
+        "id": "_hjSafeContext_80610619",
+        "shadowHost": "",
+        "src": "about:blank",
+        "title": "_hjSafeContext",
+        "visible": false,
+        "width": 0
+      }
+    ],
+    "readyState": "complete",
+    "shadowHosts": [
+      {
+        "className": "remote-module cx-contents-search-frontend-cx-search-frm",
+        "id": "remote-module-container-cx-contents-search-frontend-cx-search-frm-default",
+        "tag": "SECTION"
+      },
+      {
+        "className": "",
+        "id": "sof-seller-assistant-frm-host",
+        "tag": "DIV"
+      }
+    ],
+    "title": "Help"
+  },
+  "browser_logs": [
+    {
+      "level": "SEVERE",
+      "message": "https://outlook.live.com/mail/0/ - Unchecked runtime.lastError: Could not establish connection. Receiving end does not exist.",
+      "source": "other",
+      "timestamp": 1787622018329
+    },
+    {
+      "level": "SEVERE",
+      "message": "https://outlook.live.com/PeopleGraphVx/v1.0/people/SMTP:mercadozhangjianfti@outlook.com/fetchResizedPhoto(height=48,width=48,allowResizeUp=true)/$value - Failed to load resource: the server responded with a status of 404 ()",
+      "source": "network",
+      "timestamp": 1787622018331
+    },
+    {
+      "level": "SEVERE",
+      "message": "https://msft-ssp.adnxs.com/ut/v3 - Failed to load resource: net::ERR_CONNECTION_RESET",
+      "source": "network",
+      "timestamp": 1787622018331
+    },
+    {
+      "level": "SEVERE",
+      "message": "https://msft-ssp.adnxs.com/ut/v3 - Failed to load resource: net::ERR_CONNECTION_CLOSED",
+      "source": "network",
+      "timestamp": 1787622018331
+    },
+    {
+      "level": "SEVERE",
+      "message": "https://msft-ssp.adnxs.com/ut/v3 - Failed to load resource: net::ERR_CONNECTION_RESET",
+      "source": "network",
+      "timestamp": 1787622018331
+    },
+    {
+      "level": "SEVERE",
+      "message": "https://msft-ssp.adnxs.com/ut/v3 - Failed to load resource: net::ERR_CONNECTION_CLOSED",
+      "source": "network",
+      "timestamp": 1787622018331
+    },
+    {
+      "level": "SEVERE",
+      "message": "https://msft-ssp.adnxs.com/ut/v3 - Failed to load resource: net::ERR_CONNECTION_CLOSED",
+      "source": "network",
+      "timestamp": 1787622018331
+    },
+    {
+      "level": "SEVERE",
+      "message": "https://outlook.live.com/PeopleGraphVx/v1.0/people/SMTP:no-reply@mercadolibre.com/fetchResizedPhoto(height=120,width=120,allowResizeUp=true)/$value - Failed to load resource: the server responded with a status of 404 ()",
+      "source": "network",
+      "timestamp": 1787622018332
+    },
+    {
+      "level": "SEVERE",
+      "message": "https://outlook.live.com/PeopleGraphVx/v1.0/people/SMTP:no-responder@info.mercadolibre.com/fetchResizedPhoto(height=120,width=120,allowResizeUp=true)/$value - Failed to load resource: the server responded with a status of 404 ()",
+      "source": "network",
+      "timestamp": 1787622018332
+    },
+    {
+      "level": "SEVERE",
+      "message": "https://outlook.live.com/PeopleGraphVx/v1.0/people/SMTP:no-responder@mercadolibre.com/fetchResizedPhoto(height=120,width=120,allowResizeUp=true)/$value - Failed to load resource: the server responded with a status of 404 ()",
+      "source": "network",
+      "timestamp": 1787622018332
+    },
+    {
+      "level": "SEVERE",
+      "message": "https://ib.adnxs.com/prebid/setuid?bidder=triplelift&gdpr=0&gdpr_consent=0&uid=2316930500946550587099 - Failed to load resource: net::ERR_CONNECTION_CLOSED",
+      "source": "network",
+      "timestamp": 1787622018332
+    },
+    {
+      "level": "SEVERE",
+      "message": "https://msft-ssp.adnxs.com/ut/v3 - Failed to load resource: net::ERR_CONNECTION_CLOSED",
+      "source": "network",
+      "timestamp": 1787622018332
+    },
+    {
+      "level": "SEVERE",
+      "message": "https://outlook.live.com/imageB2/v1.0/users/no-reply%40mercadolibre.com/image/resize(width=120,height=120,allowResizeUp=true) - Failed to load resource: the server responded with a status of 401 ()",
+      "source": "network",
+      "timestamp": 1787622018332
+    },
+    {
+      "level": "SEVERE",
+      "message": "https://outlook.live.com/imageB2/v1.0/users/no-reply%40mercadolibre.com/image/resize(width=120,height=120,allowResizeUp=true) - Failed to load resource: the server responded with a status of 401 ()",
+      "source": "network",
+      "timestamp": 1787622018332
+    },
+    {
+      "level": "SEVERE",
+      "message": "https://outlook.live.com/imageB2/v1.0/users/no-reply%40mercadolibre.com/image/resize(width=120,height=120,allowResizeUp=true) - Failed to load resource: the server responded with a status of 401 ()",
+      "source": "network",
+      "timestamp": 1787622018332
+    },
+    {
+      "level": "SEVERE",
+      "message": "https://outlook.live.com/imageB2/v1.0/users/no-responder%40mercadolibre.com/image/resize(width=120,height=120,allowResizeUp=true) - Failed to load resource: the server responded with a status of 401 ()",
+      "source": "network",
+      "timestamp": 1787622018332
+    },
+    {
+      "level": "SEVERE",
+      "message": "https://outlook.live.com/imageB2/v1.0/users/no-responder%40mercadolibre.com/image/resize(width=120,height=120,allowResizeUp=true) - Failed to load resource: the server responded with a status of 401 ()",
+      "source": "network",
+      "timestamp": 1787622018332
+    },
+    {
+      "level": "SEVERE",
+      "message": "https://outlook.live.com/imageB2/v1.0/users/no-responder%40mercadolibre.com/image/resize(width=120,height=120,allowResizeUp=true) - Failed to load resource: the server responded with a status of 401 ()",
+      "source": "network",
+      "timestamp": 1787622018332
+    },
+    {
+      "level": "SEVERE",
+      "message": "https://graph.microsoft.com/v1.0/84df9e7f-e9f6-40af-b435-aaaaaaaaaaaa/subscribedskus - Failed to load resource: the server responded with a status of 401 (Unauthorized)",
+      "source": "network",
+      "timestamp": 1787622018332
+    },
+    {
+      "level": "SEVERE",
+      "message": "https://outlook.live.com/mail/0/ - Unchecked runtime.lastError: Could not establish connection. Receiving end does not exist.",
+      "source": "other",
+      "timestamp": 1787622018343
+    },
+    {
+      "level": "SEVERE",
+      "message": "https://outlook.live.com/PeopleGraphVx/v1.0/people/SMTP:mercadozhangjianfti@outlook.com/fetchResizedPhoto(height=48,width=48,allowResizeUp=true)/$value - Failed to load resource: the server responded with a status of 404 ()",
+      "source": "network",
+      "timestamp": 1787622018343
+    },
+    {
+      "level": "SEVERE",
+      "message": "https://msft-ssp.adnxs.com/ut/v3 - Failed to load resource: net::ERR_CONNECTION_CLOSED",
+      "source": "network",
+      "timestamp": 1787622018343
+    },
+    {
+      "level": "SEVERE",
+      "message": "https://msft-ssp.adnxs.com/ut/v3 - Failed to load resource: net::ERR_CONNECTION_CLOSED",
+      "source": "network",
+      "timestamp": 1787622018343
+    },
+    {
+      "level": "SEVERE",
+      "message": "https://msft-ssp.adnxs.com/ut/v3 - Failed to load resource: net::ERR_CONNECTION_CLOSED",
+      "source": "network",
+      "timestamp": 1787622018343
+    },
+    {
+      "level": "SEVERE",
+      "message": "https://msft-ssp.adnxs.com/ut/v3 - Failed to load resource: net::ERR_CONNECTION_CLOSED",
+      "source": "network",
+      "timestamp": 1787622018343
+    },
+    {
+      "level": "SEVERE",
+      "message": "https://outlook.live.com/PeopleGraphVx/v1.0/people/SMTP:msa@communication.microsoft.com/fetchResizedPhoto(height=120,width=120,allowResizeUp=true)/$value - Failed to load resource: the server responded with a status of 404 ()",
+      "source": "network",
+      "timestamp": 1787622018343
+    },
+    {
+      "level": "SEVERE",
+      "message": "https://msft-ssp.adnxs.com/ut/v3 - Failed to load resource: net::ERR_CONNECTION_CLOSED",
+      "source": "network",
+      "timestamp": 1787622018343
+    },
+    {
+      "level": "SEVERE",
+      "message": "https://outlook.live.com/PeopleGraphVx/v1.0/people/SMTP:novedades@legal.mercadolibre.com/fetchResizedPhoto(height=120,width=120,allowResizeUp=true)/$value - Failed to load resource: the server responded with a status of 404 ()",
+      "source": "network",
+      "timestamp": 1787622018343
+    },
+    {
+      "level": "SEVERE",
+      "message": "https://outlook.live.com/PeopleGraphVx/v1.0/people/SMTP:no-reply@mercadolibre.com/fetchResizedPhoto(height=120,width=120,allowResizeUp=true)/$value - Failed to load resource: the server responded with a status of 404 ()",
+      "source": "network",
+      "timestamp": 1787622018343
+    },
+    {
+      "level": "SEVERE",
+      "message": "https://outlook.live.com/PeopleGraphVx/v1.0/people/SMTP:no-responder@info.mercadolibre.com/fetchResizedPhoto(height=120,width=120,allowResizeUp=true)/$value - Failed to load resource: the server responded with a status of 404 ()",
+      "source": "network",
+      "timestamp": 1787622018343
+    },
+    {
+      "level": "SEVERE",
+      "message": "https://ib.adnxs.com/prebid/setuid?bidder=triplelift&gdpr=0&gdpr_consent=0&uid=2316930500946550587099 - Failed to load resource: net::ERR_CONNECTION_CLOSED",
+      "source": "network",
+      "timestamp": 1787622018343
+    },
+    {
+      "level": "SEVERE",
+      "message": "https://outlook.live.com/PeopleGraphVx/v1.0/people/SMTP:no-responder@mercadolibre.com/fetchResizedPhoto(height=120,width=120,allowResizeUp=true)/$value - Failed to load resource: the server responded with a status of 404 ()",
+      "source": "network",
+      "timestamp": 1787622018343
+    },
+    {
+      "level": "SEVERE",
+      "message": "https://cm.g.doubleclick.net/pixel?google_nid=tl&gdpr=0&gdpr_consent=&us_privacy=&google_hm=MjMxNjkzMDUwMDk0NjU1MDU4NzA5OQ%3D%3D - Failed to load resource: net::ERR_CONNECTION_RESET",
+      "source": "network",
+      "timestamp": 1787622018343
+    },
+    {
+      "level": "SEVERE",
+      "message": "https://msft-ssp.adnxs.com/ut/v3 - Failed to load resource: net::ERR_CONNECTION_CLOSED",
+      "source": "network",
+      "timestamp": 1787622018343
+    },
+    {
+      "level": "SEVERE",
+      "message": "https://outlook.live.com/imageB2/v1.0/users/no-reply%40mercadolibre.com/image/resize(width=120,height=120,allowResizeUp=true) - Failed to load resource: the server responded with a status of 401 ()",
+      "source": "network",
+      "timestamp": 1787622018343
+    },
+    {
+      "level": "SEVERE",
+      "message": "https://outlook.live.com/imageB2/v1.0/users/no-reply%40mercadolibre.com/image/resize(width=120,height=120,allowResizeUp=true) - Failed to load resource: the server responded with a status of 401 ()",
+      "source": "network",
+      "timestamp": 1787622018343
+    },
+    {
+      "level": "SEVERE",
+      "message": "https://outlook.live.com/imageB2/v1.0/users/no-reply%40mercadolibre.com/image/resize(width=120,height=120,allowResizeUp=true) - Failed to load resource: the server responded with a status of 401 ()",
+      "source": "network",
+      "timestamp": 1787622018343
+    },
+    {
+      "level": "SEVERE",
+      "message": "https://outlook.live.com/imageB2/v1.0/users/no-responder%40mercadolibre.com/image/resize(width=120,height=120,allowResizeUp=true) - Failed to load resource: the server responded with a status of 401 ()",
+      "source": "network",
+      "timestamp": 1787622018343
+    },
+    {
+      "level": "SEVERE",
+      "message": "https://outlook.live.com/imageB2/v1.0/users/no-responder%40mercadolibre.com/image/resize(width=120,height=120,allowResizeUp=true) - Failed to load resource: the server responded with a status of 401 ()",
+      "source": "network",
+      "timestamp": 1787622018343
+    },
+    {
+      "level": "SEVERE",
+      "message": "https://outlook.live.com/imageB2/v1.0/users/no-responder%40mercadolibre.com/image/resize(width=120,height=120,allowResizeUp=true) - Failed to load resource: the server responded with a status of 401 ()",
+      "source": "network",
+      "timestamp": 1787622018343
+    },
+    {
+      "level": "SEVERE",
+      "message": "https://graph.microsoft.com/v1.0/84df9e7f-e9f6-40af-b435-aaaaaaaaaaaa/subscribedskus - Failed to load resource: the server responded with a status of 401 (Unauthorized)",
+      "source": "network",
+      "timestamp": 1787622018343
+    },
+    {
+      "level": "SEVERE",
+      "message": "https://outlook.live.com/mail/0/ - Unchecked runtime.lastError: Could not establish connection. Receiving end does not exist.",
+      "source": "other",
+      "timestamp": 1787622018346
+    },
+    {
+      "level": "SEVERE",
+      "message": "https://outlook.live.com/mail/manifests/pwa.json?culture=zh-hans - Failed to load resource: the server responded with a status of 404 ()",
+      "source": "network",
+      "timestamp": 1787622018348
+    },
+    {
+      "level": "SEVERE",
+      "message": "https://outlook.live.com/mail/0/ - Manifest fetch from https://outlook.live.com/mail/manifests/pwa.json?culture=zh-hans failed, code 404",
+      "source": "other",
+      "timestamp": 1787622018348
+    },
+    {
+      "level": "SEVERE",
+      "message": "https://outlook.live.com/PeopleGraphVx/v1.0/people/SMTP:mercadozhangjianfti@outlook.com/fetchResizedPhoto(height=48,width=48,allowResizeUp=true)/$value - Failed to load resource: the server responded with a status of 404 ()",
+      "source": "network",
+      "timestamp": 1787622018348
+    },
+    {
+      "level": "SEVERE",
+      "message": "https://msft-ssp.adnxs.com/ut/v3 - Failed to load resource: net::ERR_CONNECTION_CLOSED",
+      "source": "network",
+      "timestamp": 1787622018348
+    },
+    {
+      "level": "SEVERE",
+      "message": "https://msft-ssp.adnxs.com/ut/v3 - Failed to load resource: net::ERR_CONNECTION_CLOSED",
+      "source": "network",
+      "timestamp": 1787622018348
+    },
+    {
+      "level": "SEVERE",
+      "message": "https://msft-ssp.adnxs.com/ut/v3 - Failed to load resource: net::ERR_CONNECTION_CLOSED",
+      "source": "network",
+      "timestamp": 1787622018348
+    },
+    {
+      "level": "SEVERE",
+      "message": "https://msft-ssp.adnxs.com/ut/v3 - Failed to load resource: net::ERR_CONNECTION_CLOSED",
+      "source": "network",
+      "timestamp": 1787622018348
+    },
+    {
+      "level": "SEVERE",
+      "message": "https://msft-ssp.adnxs.com/ut/v3 - Failed to load resource: net::ERR_CONNECTION_CLOSED",
+      "source": "network",
+      "timestamp": 1787622018348
+    },
+    {
+      "level": "SEVERE",
+      "message": "https://outlook.live.com/PeopleGraphVx/v1.0/people/SMTP:msa@communication.microsoft.com/fetchResizedPhoto(height=120,width=120,allowResizeUp=true)/$value - Failed to load resource: the server responded with a status of 404 ()",
+      "source": "network",
+      "timestamp": 1787622018348
+    },
+    {
+      "level": "SEVERE",
+      "message": "https://outlook.live.com/PeopleGraphVx/v1.0/people/SMTP:novedades@legal.mercadolibre.com/fetchResizedPhoto(height=120,width=120,allowResizeUp=true)/$value - Failed to load resource: the server responded with a status of 404 ()",
+      "source": "network",
+      "timestamp": 1787622018348
+    },
+    {
+      "level": "SEVERE",
+      "message": "https://outlook.live.com/PeopleGraphVx/v1.0/people/SMTP:no-reply@mercadolibre.com/fetchResizedPhoto(height=120,width=120,allowResizeUp=true)/$value - Failed to load resource: the server responded with a status of 404 ()",
+      "source": "network",
+      "timestamp": 1787622018348
+    },
+    {
+      "level": "SEVERE",
+      "message": "https://outlook.live.com/PeopleGraphVx/v1.0/people/SMTP:no-responder@info.mercadolibre.com/fetchResizedPhoto(height=120,width=120,allowResizeUp=true)/$value - Failed to load resource: the server responded with a status of 404 ()",
+      "source": "network",
+      "timestamp": 1787622018348
+    },
+    {
+      "level": "SEVERE",
+      "message": "https://ib.adnxs.com/prebid/setuid?bidder=triplelift&gdpr=0&gdpr_consent=0&uid=2316930500946550587099 - Failed to load resource: net::ERR_CONNECTION_CLOSED",
+      "source": "network",
+      "timestamp": 1787622018348
+    },
+    {
+      "level": "SEVERE",
+      "message": "https://outlook.live.com/PeopleGraphVx/v1.0/people/SMTP:no-responder@mercadolibre.com/fetchResizedPhoto(height=120,width=120,allowResizeUp=true)/$value - Failed to load resource: the server responded with a status of 404 ()",
+      "source": "network",
+      "timestamp": 1787622018348
+    },
+    {
+      "level": "SEVERE",
+      "message": "https://cm.g.doubleclick.net/pixel?google_nid=triplelift&gdpr=0&gdpr_consent=&us_privacy=&google_hm=MjMxNjkzMDUwMDk0NjU1MDU4NzA5OQ%3D%3D - Failed to load resource: net::ERR_CONNECTION_CLOSED",
+      "source": "network",
+      "timestamp": 1787622018348
+    },
+    {
+      "level": "SEVERE",
+      "message": "https://msft-ssp.adnxs.com/ut/v3 - Failed to load resource: net::ERR_CONNECTION_CLOSED",
+      "source": "network",
+      "timestamp": 1787622018348
+    },
+    {
+      "level": "SEVERE",
+      "message": "https://outlook.live.com/PeopleGraphVx/v1.0/people/SMTP:no-reply@mercadolibre.com/fetchResizedPhoto(height=120,width=120,allowResizeUp=true)/$value - Failed to load resource: the server responded with a status of 404 ()",
+      "source": "network",
+      "timestamp": 1787622018348
+    },
+    {
+      "level": "SEVERE",
+      "message": "https://outlook.live.com/PeopleGraphVx/v1.0/people/SMTP:no-responder@mercadolibre.com/fetchResizedPhoto(height=120,width=120,allowResizeUp=true)/$value - Failed to load resource: the server responded with a status of 404 ()",
+      "source": "network",
+      "timestamp": 1787622018348
+    },
+    {
+      "level": "SEVERE",
+      "message": "https://msft-ssp.adnxs.com/ut/v3 - Failed to load resource: net::ERR_CONNECTION_CLOSED",
+      "source": "network",
+      "timestamp": 1787622018348
+    },
+    {
+      "level": "SEVERE",
+      "message": "https://graph.microsoft.com/v1.0/84df9e7f-e9f6-40af-b435-aaaaaaaaaaaa/subscribedskus - Failed to load resource: the server responded with a status of 401 (Unauthorized)",
+      "source": "network",
+      "timestamp": 1787622018348
+    },
+    {
+      "level": "SEVERE",
+      "message": "https://outlook.live.com/mail/0/junkemail - Access to fetch at 'https://outlook.office365.com/autodiscover/autodiscover.json/v1.0/mercadozhangjianfti@outlook.com?Protocol=Actions' from origin 'https://outlook.live.com' has been blocked by CORS policy: Response to preflight request doesn't pass access control check: No 'Access-Control-Allow-Origin' header is present on the requested resource.",
+      "source": "javascript",
+      "timestamp": 1787622018348
+    },
+    {
+      "level": "SEVERE",
+      "message": "https://outlook.office365.com/autodiscover/autodiscover.json/v1.0/mercadozhangjianfti@outlook.com?Protocol=Actions - Failed to load resource: net::ERR_FAILED",
+      "source": "network",
+      "timestamp": 1787622018348
+    },
+    {
+      "level": "SEVERE",
+      "message": "https://outlook.live.com/actionsb2netcore/v1.0/mercadozhangjianfti@outlook.com/clientConfigs/WAC_Outlook_React?clientVersion=16.2026.0814.00803&clientColorScheme=default&$expand=providerConfigs - Failed to load resource: the server responded with a status of 401 ()",
+      "source": "network",
+      "timestamp": 1787622018348
+    },
+    {
+      "level": "SEVERE",
+      "message": "https://console.bitbrowser.net/?id=b15c1542fb154a68b6ffbee7b868c33d&locale=zh&port=54345 - Unchecked runtime.lastError: Could not establish connection. Receiving end does not exist.",
+      "source": "other",
+      "timestamp": 1787622018353
+    },
+    {
+      "level": "SEVERE",
+      "message": "https://global-selling.mercadolibre.com/help 0 Unchecked runtime.lastError: Could not establish connection. Receiving end does not exist.",
+      "source": "other",
+      "timestamp": 1787622021831
+    },
+    {
+      "level": "SEVERE",
+      "message": "https://www.global-selling.mercadolibre.com/browser-assessment/s/assessment.js?mo=manual&fi=maxwell_user_message - Failed to load resource: net::ERR_SSL_VERSION_OR_CIPHER_MISMATCH",
+      "source": "network",
+      "timestamp": 1787622030563
+    },
+    {
+      "level": "SEVERE",
+      "message": "https://www.googletagmanager.com/gtm.js?id=GTM-XRHR 325 Loading the script 'https://s.pinimg.com/ct/core.js' violates the following Content Security Policy directive: \"script-src 'self' 'unsafe-inline' 'unsafe-eval' blob: mercadolibre.com.ar *.mercadolibre.com.ar credithub.com.br *.credithub.com.br siteintercept.qualtrics.com *.siteintercept.qualtrics.com http2.mlstatic.com *.http2.mlstatic.com adminml.com *.adminml.com facebook.net *.facebook.net googletagmanager.com *.googletagmanager.com js-agent.newrelic.com *.js-agent.newrelic.com googleapis.com *.googleapis.com jsdelivr.net *.jsdelivr.net static.hotjar.com *.static.hotjar.com hotjar.com *.hotjar.com tiktok.com *.tiktok.com creativecdn.com *.creativecdn.com bing.com *.bing.com ads-twitter.com *.ads-twitter.com segreencolumn.com *.segreencolumn.com googlesyndication.com *.googlesyndication.com googleadservices.com *.googleadservices.com doubleclick.net *.doubleclick.net mercadolivre.com.br *.mercadolivre.com.br mercadolibre.com.mx *.mercadolibre.com.mx mercadolibre.com *.mercadolibre.com mercadolibre.cl *.mercadolibre.cl mercadolibre.com.co *.mercadolibre.com.co mercadolibre.com.uy *.mercadolibre.com.uy mercadolibre.com.pe *.mercadolibre.com.pe mercadolibre.com.ec *.mercadolibre.com.ec newrelic.com *.newrelic.com google.com *.google.com\". Note that 'script-src-elem' was not explicitly set, so 'script-src' is used as a fallback. The action has been blocked.",
+      "source": "security",
+      "timestamp": 1787622166594
+    },
+    {
+      "level": "SEVERE",
+      "message": "https://ad.doubleclick.net/ccm/s/collect?auid=695079403.1785933086&gtm=45He68l1v576886za200zd576886xea&fmt=8 - Failed to load resource: net::ERR_CONNECTION_CLOSED",
+      "source": "network",
+      "timestamp": 1787622166594
+    },
+    {
+      "level": "SEVERE",
+      "message": "https://www.global-selling.mercadolibre.com/browser-assessment/s/assessment.js?mo=manual&fi=maxwell_user_message - Failed to load resource: net::ERR_SSL_VERSION_OR_CIPHER_MISMATCH",
+      "source": "network",
+      "timestamp": 1787622166595
+    },
+    {
+      "level": "SEVERE",
+      "message": "https://www.global-selling.mercadolibre.com/browser-assessment/s/assessment.js?mo=manual&fi=maxwell_user_message - Failed to load resource: net::ERR_SSL_VERSION_OR_CIPHER_MISMATCH",
+      "source": "network",
+      "timestamp": 1787622175815
+    },
+    {
+      "level": "SEVERE",
+      "message": "https://www.global-selling.mercadolibre.com/browser-assessment/s/assessment.js?mo=manual&fi=maxwell_user_message - Failed to load resource: net::ERR_SSL_VERSION_OR_CIPHER_MISMATCH",
+      "source": "network",
+      "timestamp": 1787622180313
+    },
+    {
+      "level": "SEVERE",
+      "message": "https://outlook.live.com/owa/0/notificationchannel?cid=62a87b78-0aaf-6988-05c6-65b930cdad43&UA=0&id=ydJY3oUH4Clm_Rsycv9SxA - Failed to load resource: the server responded with a status of 404 ()",
+      "source": "network",
+      "timestamp": 1787622191792
+    },
+    {
+      "level": "SEVERE",
+      "message": "https://www.global-selling.mercadolibre.com/browser-assessment/s/assessment.js?mo=manual&fi=maxwell_user_message - Failed to load resource: net::ERR_SSL_VERSION_OR_CIPHER_MISMATCH",
+      "source": "network",
+      "timestamp": 1787622250847
+    },
+    {
+      "level": "SEVERE",
+      "message": "https://outlook.live.com/owa/0/notificationchannel?cid=bdd942de-5c67-f87a-e53e-8e36fd0e0c05&UA=0&id=ihc0Vl2-EM737QDy0_lF_g - Failed to load resource: the server responded with a status of 404 ()",
+      "source": "network",
+      "timestamp": 1787622271734
+    },
+    {
+      "level": "SEVERE",
+      "message": "https://www.global-selling.mercadolibre.com/browser-assessment/s/assessment.js?mo=manual&fi=maxwell_user_message - Failed to load resource: net::ERR_SSL_VERSION_OR_CIPHER_MISMATCH",
+      "source": "network",
+      "timestamp": 1787622316979
+    }
+  ]
+}

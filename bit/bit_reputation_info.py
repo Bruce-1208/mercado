@@ -1,5 +1,7 @@
 import time
 import re
+import json
+import unicodedata
 from concurrent.futures import ProcessPoolExecutor, as_completed
 
 from selenium import webdriver
@@ -53,6 +55,7 @@ from bit.bit_config import list_config_rows
 REPUTATION_URL = "https://global-selling.mercadolibre.com/reputation"
 SALES_SUMMARY_URL = "https://global-selling.mercadolibre.com/sales-summary"
 METRICS_URL = "https://global-selling.mercadolibre.com/metrics#sc-menu"
+METRICS_PERFORMANCE_DATA_URL = "/api/sc-business-metrics/performance-data"
 LOGIN_TEXT_MARKERS = (
     "fill out your e-mail address to log in",
     "fill out your email address to log in",
@@ -162,6 +165,10 @@ class MercadoAuthenticationError(RuntimeError):
 
 class MercadoPageStructureError(RuntimeError):
     """Mercado Libre 页面已打开，但预期的业务结构不存在。"""
+
+
+class TrafficCollectionError(MercadoPageStructureError):
+    """流量页面可访问，但没有取得完整且可信的逐日数据。"""
 
 
 class BitBrowserWindowError(RuntimeError):
@@ -348,27 +355,94 @@ def _get_country_name(site):
     return country_map.get(site, site)
 
 
+def _get_selected_country(driver):
+    """读取新版 Shadow DOM 站点选择器当前显示的国家。"""
+    try:
+        return (
+            driver.execute_script(
+                """
+                function findCountryButton(root) {
+                    const countryButton = root.querySelector(
+                        'button[aria-label*="country" i], ' +
+                        'button[aria-label*="país" i], ' +
+                        'button[aria-label*="pais" i], ' +
+                        'button[aria-label*="国家"], ' +
+                        'button[aria-label*="站点"]'
+                    );
+                    if (countryButton) return countryButton;
+                    for (const host of root.querySelectorAll('*')) {
+                        if (!host.shadowRoot) continue;
+                        const nested = findCountryButton(host.shadowRoot);
+                        if (nested) return nested;
+                    }
+                    return null;
+                }
+                const countryButton = findCountryButton(document);
+                if (!countryButton) return '';
+                const display = countryButton.querySelector(
+                    '[data-andes-dropdown-value], .andes-dropdown__display-values'
+                );
+                return (
+                    display?.innerText || display?.textContent ||
+                    countryButton.innerText || countryButton.textContent || ''
+                ).trim();
+                """
+            )
+            or ""
+        ).strip()
+    except Exception:
+        return ""
+
+
+def _country_name_matches(actual, site):
+    aliases = {
+        "墨西哥": ("Mexico", "México", "墨西哥"),
+        "巴西": ("Brazil", "Brasil", "巴西"),
+        "哥伦比亚": ("Colombia", "哥伦比亚"),
+        "智利": ("Chile", "智利"),
+        "阿根廷": ("Argentina", "阿根廷"),
+        "乌拉圭": ("Uruguay", "乌拉圭"),
+    }
+
+    def normalize(value):
+        decomposed = unicodedata.normalize("NFKD", str(value or "").casefold())
+        return "".join(char for char in decomposed if char.isalnum())
+
+    actual_key = normalize(actual)
+    expected = aliases.get(str(site).strip(), (_get_country_name(site), site))
+    return bool(actual_key) and any(
+        actual_key == normalize(value) or normalize(value) in actual_key
+        for value in expected
+        if normalize(value)
+    )
+
+
 def _deep_shadow_click(driver, selectors):
     return bool(
         driver.execute_script(
             """
             const selectors = arguments[0];
-            function findAndClick(root) {
-                for (const selector of selectors) {
-                    let node = null;
-                    try { node = root.querySelector(selector); } catch (_) {}
-                    if (node) {
-                        node.scrollIntoView({block: 'center', inline: 'center'});
-                        node.click();
-                        return true;
-                    }
-                }
+            function findBySelector(root, selector) {
+                let node = null;
+                try { node = root.querySelector(selector); } catch (_) {}
+                if (node) return node;
                 for (const node of root.querySelectorAll('*')) {
-                    if (node.shadowRoot && findAndClick(node.shadowRoot)) return true;
+                    if (!node.shadowRoot) continue;
+                    const nested = findBySelector(node.shadowRoot, selector);
+                    if (nested) return nested;
                 }
-                return false;
+                return null;
             }
-            return findAndClick(document);
+            // 保持 selector 的优先级跨越所有 Shadow DOM。旧实现先在 light DOM
+            // 命中最后的通用 combobox，指标页会误点“最近7天”而非国家选择器。
+            for (const selector of selectors) {
+                const node = findBySelector(document, selector);
+                if (!node) continue;
+                node.scrollIntoView({block: 'center', inline: 'center'});
+                node.click();
+                return true;
+            }
+            return false;
             """,
             list(selectors),
         )
@@ -393,6 +467,15 @@ def _open_country_switch(driver, timeout=15, poll_seconds=1):
 
 def _select_country(driver, site, shop_name=""):
     if not site:
+        return True
+
+    selected_country = _get_selected_country(driver)
+    if _country_name_matches(selected_country, site):
+        print(
+            get_now_time()
+            + shop_name
+            + f"当前站点已是{site}({selected_country})，无需重复切换"
+        )
         return True
 
     site_key = str(site).strip()
@@ -429,14 +512,17 @@ def _select_country(driver, site, shop_name=""):
                 )
                 try:
                     WebDriverWait(driver, 10).until(
-                        EC.visibility_of_element_located(
-                            (By.CLASS_NAME, "title__page--cbt")
+                        lambda current_driver: _country_name_matches(
+                            _get_selected_country(current_driver),
+                            site,
                         )
                     )
                 except Exception as exc:
+                    selected_country = _get_selected_country(driver)
                     raise MercadoPageStructureError(
-                        f"{shop_name}{site}切换站点后声誉页结构不匹配："
-                        f"{state.get('current_url', '')}"
+                        f"{shop_name}{site}切换后站点校验失败，"
+                        f"当前显示：{selected_country or '未知'}；"
+                        f"页面：{state.get('current_url', '')}"
                     ) from exc
                 return True
             raise MercadoPageStructureError(f"没有找到站点选项：{site}")
@@ -610,15 +696,137 @@ def _parse_visit_records_from_json(data, days):
     return cleaned[-days:]
 
 
+def _extract_visit_chart_records(data, days):
+    """从新版业务指标接口中提取折线图的逐日访问量。
+
+    performance-data 同时包含访问总量、报表按钮等许多带 ``visit`` 的字段，
+    只有 ``metrics_line_chart`` 的 dataset 才是需要的一天一条数据。因此这里
+    只接受包含精确 ``visits`` 键的数据集，避免把总量或商品表访问量误当成趋势。
+    """
+    candidates = []
+
+    def walk(node):
+        if isinstance(node, dict):
+            dataset = node.get("dataset")
+            if isinstance(dataset, list):
+                records = []
+                for item in dataset:
+                    if not isinstance(item, dict) or "visits" not in item:
+                        continue
+                    value = item.get("visits")
+                    if isinstance(value, bool) or not isinstance(value, (int, float, str)):
+                        continue
+                    value_text = str(value).strip().replace(",", "")
+                    if not re.fullmatch(r"-?\d+(?:\.\d+)?", value_text):
+                        continue
+                    records.append(
+                        {
+                            "date": str(item.get("date", "")),
+                            "visits": value_text,
+                            "raw": item,
+                        }
+                    )
+
+                if records:
+                    line_config = node.get("line_config")
+                    declares_visits = isinstance(line_config, list) and any(
+                        isinstance(config, dict)
+                        and config.get("data_key") == "visits"
+                        for config in line_config
+                    )
+                    dated_records = sum(bool(record["date"]) for record in records)
+                    score = (1000 if declares_visits else 0) + dated_records
+                    candidates.append((score, records))
+
+            for value in node.values():
+                walk(value)
+        elif isinstance(node, list):
+            for item in node:
+                walk(item)
+
+    walk(data)
+    if not candidates:
+        return []
+    _score, records = max(candidates, key=lambda item: (item[0], len(item[1])))
+    return records[-days:]
+
+
+def _extract_visits_from_metrics_api(driver, days, diagnostics=None):
+    """直接读取页面正在使用的业务指标接口，不依赖性能日志或鼠标悬停。"""
+    diagnostics = diagnostics if diagnostics is not None else []
+    try:
+        response = driver.execute_async_script(
+            """
+            const url = arguments[0];
+            const done = arguments[arguments.length - 1];
+            let completed = false;
+            const finish = (result) => {
+                if (completed) return;
+                completed = true;
+                done(result);
+            };
+            const timer = setTimeout(
+                () => finish({ok: false, status: 0, error: '接口读取超时'}),
+                15000
+            );
+            fetch(url, {
+                credentials: 'include',
+                headers: {Accept: 'application/json'}
+            })
+                .then(async (response) => {
+                    const text = await response.text();
+                    clearTimeout(timer);
+                    finish({ok: response.ok, status: response.status, text});
+                })
+                .catch((error) => {
+                    clearTimeout(timer);
+                    finish({ok: false, status: 0, error: String(error)});
+                });
+            """,
+            METRICS_PERFORMANCE_DATA_URL,
+        )
+    except Exception as exc:
+        print("业务指标接口调用失败，降级读取页面图表:", exc)
+        diagnostics.append(f"业务指标接口调用失败：{exc}")
+        return []
+
+    if not isinstance(response, dict) or not response.get("ok"):
+        print(
+            "业务指标接口返回异常，降级读取页面图表:",
+            response if isinstance(response, dict) else str(response),
+        )
+        if isinstance(response, dict):
+            status = response.get("status") or 0
+            error = response.get("error") or ""
+            diagnostics.append(f"业务指标接口 HTTP {status}：{error}".rstrip("："))
+        else:
+            diagnostics.append(f"业务指标接口返回格式异常：{response}")
+        return []
+
+    try:
+        data = json.loads(response.get("text") or "{}")
+    except (TypeError, ValueError) as exc:
+        print("业务指标接口没有返回有效 JSON，降级读取页面图表:", exc)
+        diagnostics.append(f"业务指标接口 JSON 无效：{exc}")
+        return []
+    records = _extract_visit_chart_records(data, days)
+    if len(records) < days:
+        diagnostics.append(f"业务指标接口仅返回 {len(records)}/{days} 天")
+    return records
+
+
 def _extract_visits_from_network(driver, days):
-    entries = driver.execute_script(
-        """
-        return performance.getEntriesByType('resource')
-            .map((entry) => entry.name)
-            .filter((url) => /metric|visit|traffic|analytics|sales-summary/i.test(url))
-            .slice(-30);
-        """
-    )
+    try:
+        entries = driver.execute_script(
+            """
+            return performance.getEntriesByType('resource')
+                .map((entry) => entry.name)
+                .filter((url) => /metric|visit|traffic|analytics|sales-summary/i.test(url))
+                .slice(-30);
+            """
+        )
+    except Exception:
+        return []
 
     for url in reversed(entries):
         try:
@@ -650,20 +858,31 @@ def _extract_visits_from_network(driver, days):
 
 
 def _get_tooltip_text(driver):
-    tooltip_selectors = [
-        ".andes-tooltip",
-        ".recharts-tooltip-wrapper",
-        ".highcharts-tooltip",
-        "[role='tooltip']",
-        "[class*='tooltip']",
-    ]
-    for selector in tooltip_selectors:
-        elements = driver.find_elements(By.CSS_SELECTOR, selector)
-        for element in elements:
-            text = element.text.strip()
-            if text:
-                return text
-    return ""
+    # 不使用 find_elements：driver 配置了 10 秒隐式等待，tooltip 未出现时每个
+    # selector 都会阻塞 10 秒，24 个悬停点最坏会把单站点拖到十几分钟。
+    return (
+        driver.execute_script(
+            """
+            const selectors = [
+                '.andes-tooltip',
+                '.recharts-tooltip-wrapper',
+                '.highcharts-tooltip',
+                '[role="tooltip"]',
+                '[class*="tooltip"]'
+            ];
+            for (const selector of selectors) {
+                for (const element of document.querySelectorAll(selector)) {
+                    const rect = element.getBoundingClientRect();
+                    if (rect.width <= 0 && rect.height <= 0) continue;
+                    const text = (element.innerText || element.textContent || '').trim();
+                    if (text) return text;
+                }
+            }
+            return '';
+            """
+        )
+        or ""
+    ).strip()
 
 
 def _get_chart_rect(driver):
@@ -792,6 +1011,63 @@ def _to_visit_number_list(visits, days):
     return numbers[-days:]
 
 
+def _visit_date_key(value):
+    """生成跨来源可比较的日期键；没有日期的记录不能参与拼接。"""
+    text = unicodedata.normalize("NFKD", str(value or "").casefold())
+    return re.sub(r"[^0-9a-z]+", "", text)
+
+
+def _merge_visit_candidates(candidates, days):
+    """按日期合并 API、网络和 DOM 结果，避免各差一天时仍误判失败。"""
+    valid_candidates = []
+    for candidate in candidates or []:
+        cleaned = []
+        seen_dates = set()
+        for item in candidate or []:
+            if not isinstance(item, dict):
+                continue
+            value = str(item.get("visits", "")).strip().replace(",", "")
+            if not re.fullmatch(r"-?\d+(?:\.\d+)?", value):
+                continue
+            date_key = _visit_date_key(item.get("date"))
+            if date_key and date_key in seen_dates:
+                continue
+            if date_key:
+                seen_dates.add(date_key)
+            cleaned.append({**item, "visits": value})
+        if cleaned:
+            valid_candidates.append(cleaned[-days:])
+
+    if not valid_candidates:
+        return []
+    for candidate in valid_candidates:
+        if len(candidate) >= days:
+            return candidate[-days:]
+
+    # 只有带日期的数据才能安全互补；悬停等无日期结果只能作为完整候选使用，
+    # 不能凭位置补零或拼接，否则会把不同日期错配成虚假的 8 天数据。
+    dated_candidates = [
+        candidate
+        for candidate in valid_candidates
+        if all(_visit_date_key(item.get("date")) for item in candidate)
+    ]
+    if not dated_candidates:
+        return max(valid_candidates, key=len)
+
+    merged = {}
+    order = []
+    for candidate in dated_candidates:
+        for item in candidate:
+            key = _visit_date_key(item.get("date"))
+            if key not in merged:
+                order.append(key)
+                merged[key] = item
+    combined = [merged[key] for key in order]
+    if len(combined) >= days:
+        return combined[-days:]
+    return max(valid_candidates + [combined], key=len)
+
+
 def get_recent_visits_info(driver,window_id, name, site, days=8):
     # driver = _connect_browser(window_id)
     _open_collection_backend_page(
@@ -804,23 +1080,85 @@ def get_recent_visits_info(driver,window_id, name, site, days=8):
         settle_seconds=5,
     )
 
-    # _select_country(driver, site, name)
-    _click_visits_metric(driver)
-    time.sleep(3)
+    # 页面导航通常会保留声誉页选择的站点，但仍在指标页再次读取控件确认，
+    # 避免部分账号导航后回到默认国家而把另一站点的流量写入当前行。
+    _select_country(driver, site, name)
 
-    visits = _extract_visits_from_network(driver, days)
-    if len(visits) < days:
-        visits = _extract_visits_from_dom(driver, days)
-    if len(visits) < days:
-        visits = _extract_visits_by_hover(driver, days)
+    # 新版指标页的接口直接返回逐日 visits，是首选读取方式，也能正确保留
+    # 没有流量的 0。
+    diagnostics = []
+    candidates = []
+    visits = []
+    for api_attempt in range(1, 4):
+        api_visits = _extract_visits_from_metrics_api(
+            driver,
+            days,
+            diagnostics,
+        )
+        candidates.append(api_visits)
+        visits = _merge_visit_candidates(candidates, days)
+        if len(visits) >= days:
+            break
+        if api_attempt < 3:
+            time.sleep(1.5)
 
-    if not visits:
-        print("没有读取到Visits/访问量流量数据，请确认页面已加载并且折线图可见")
-        debug_path = Path(__file__).resolve().parent / "visits_debug.png"
-        driver.save_screenshot(str(debug_path))
-        print("已保存调试截图:", debug_path)
+    # 兼容接口临时异常、返回天数不足或旧版页面。接口已读满时不再点击图表，
+    # 避免助手浮层遮挡、翻译文案变化和悬停读取拖慢正常店铺。
+    if len(visits) < days:
+        try:
+            _click_visits_metric(driver)
+            time.sleep(2)
+        except Exception as exc:
+            diagnostics.append(f"Visits 入口点击失败：{exc}")
+
+        for source_name, extractor in (
+            ("网络响应", _extract_visits_from_network),
+            ("页面 DOM", _extract_visits_from_dom),
+        ):
+            try:
+                records = extractor(driver, days)
+                candidates.append(records)
+                if len(records) < days:
+                    diagnostics.append(f"{source_name}仅返回 {len(records)}/{days} 天")
+            except Exception as exc:
+                diagnostics.append(f"{source_name}读取失败：{exc}")
+        visits = _merge_visit_candidates(candidates, days)
+
+        if len(visits) < days:
+            try:
+                hover_records = _extract_visits_by_hover(driver, days)
+                candidates.append(hover_records)
+                if len(hover_records) < days:
+                    diagnostics.append(
+                        f"图表悬停仅返回 {len(hover_records)}/{days} 天"
+                    )
+            except Exception as exc:
+                diagnostics.append(f"图表悬停读取失败：{exc}")
+            visits = _merge_visit_candidates(candidates, days)
 
     result = _to_visit_number_list(visits, days)
+    if len(result) < days:
+        print(
+            f"Visits/访问量只读取到{len(result)}/{days}天，"
+            "请确认页面已加载并且折线图可见"
+        )
+        # 失败前再次区分登录失效和限频，避免全部归为“页面结构不匹配”。
+        _raise_if_mercado_unavailable(driver=driver, context=f"{name}{site}流量页面")
+        safe_label = re.sub(r"[^0-9A-Za-z\u4e00-\u9fff_-]+", "_", f"{name}_{site}")
+        debug_path = (
+            Path(__file__).resolve().parent
+            / "采集失败记录"
+            / f"流量读取失败-{safe_label}-{datetime.now():%Y%m%d-%H%M%S}.png"
+        )
+        debug_path.parent.mkdir(parents=True, exist_ok=True)
+        driver.save_screenshot(str(debug_path))
+        print("已保存调试截图:", debug_path)
+        detail = "；".join(dict.fromkeys(diagnostics))
+        raise TrafficCollectionError(
+            f"{name}{site} Visits/访问量数据不完整：{len(result)}/{days}天"
+            + (f"；{detail}" if detail else "")
+        )
+
     print(f"最近{days}天Visits/访问量流量数据:", result)
     return result
 
@@ -1381,11 +1719,9 @@ def get_reputation_info(
 
     print("系统提示为:", data_warn)
 
-    try:
-        visits = str(get_visits_info(driver, window_id, name, site, 8))
-    except Exception as exc:
-        visits = "[]"
-        auxiliary_errors.append(f"流量{_failure_status(exc).removeprefix('失败：')}")
+    # 流量是声誉结果的必需字段。读取失败必须抛给外层整站重试，不能保存 []
+    # 后仍把任务标记为成功，否则控制台无法区分“无流量”和“没有读到”。
+    visits = str(get_visits_info(driver, window_id, name, site, 8))
 
     if auxiliary_errors:
         auxiliary_message = "辅助采集失败：" + "；".join(auxiliary_errors)
@@ -1411,10 +1747,17 @@ def _failure_status(exc):
         reason = "窗口ID不存在"
     elif isinstance(exc, BitBrowserWindowError) and "timeout" in lower:
         reason = "窗口打开超时"
+    elif isinstance(exc, BitBrowserWindowError) and "浏览器正在打开中" in text:
+        reason = "比特浏览器窗口一直处于启动中"
     elif "窗口正在被其他任务占用" in text:
         reason = "窗口被其他任务占用"
     elif "站点切换失败" in text or "没有找到站点" in text:
         reason = "站点切换失败"
+    elif "业务指标接口 HTTP 401" in text or "业务指标接口 HTTP 403" in text:
+        reason = "流量接口无权限或登录失效"
+    elif isinstance(exc, TrafficCollectionError) or "访问量数据不完整" in text:
+        detail = text.split("Visits/访问量", 1)[-1].strip(" ：;")
+        reason = f"流量数据读取失败：{detail or text}"
     elif isinstance(exc, MercadoPageStructureError):
         reason = "页面结构不匹配"
     elif isinstance(exc, TimeoutException) or "timeout" in lower:
