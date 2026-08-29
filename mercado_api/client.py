@@ -121,11 +121,19 @@ class MercadoLibreClient:
             return response.json()
         raise MercadoAPIError(f"{method} {path} 多次重试后仍失败")
 
-    def request_bytes(self, method: str, path: str, *, params: dict[str, Any] | None = None) -> bytes:
+    def request_bytes(
+        self,
+        method: str,
+        path: str,
+        *,
+        params: dict[str, Any] | None = None,
+        max_attempts: int = 4,
+    ) -> bytes:
         """发送认证请求并返回二进制内容，供官方 PDF 等文件接口使用。"""
         url = path if path.startswith("http") else f"{self.BASE_URL}{path}"
         refreshed = False
-        for attempt in range(4):
+        attempts = max(1, min(4, int(max_attempts or 1)))
+        for attempt in range(attempts):
             try:
                 response = self.session.request(
                     method,
@@ -135,7 +143,7 @@ class MercadoLibreClient:
                     timeout=self.timeout,
                 )
             except requests.RequestException as exc:
-                if attempt < 3:
+                if attempt < attempts - 1:
                     delay = min(2**attempt, 8)
                     LOGGER.warning("API 文件请求中断，%s 秒后重试：%s", delay, exc)
                     time.sleep(delay)
@@ -146,7 +154,7 @@ class MercadoLibreClient:
                 refreshed = True
                 continue
             if response.status_code == 429 or response.status_code >= 500:
-                if attempt < 3:
+                if attempt < attempts - 1:
                     delay = min(float(response.headers.get("Retry-After", 2**attempt)), 30)
                     LOGGER.warning("API 文件暂时不可用 (%s)，%.1f 秒后重试", response.status_code, delay)
                     time.sleep(delay)
@@ -205,9 +213,13 @@ class MercadoLibreClient:
             params = {"attributes": ",".join(str(value) for value in attributes if value)}
         return self.request("GET", f"/marketplace/items/{item_id}", params=params)
 
-    def get_shipment_label(self, shipment_id: str) -> bytes:
+    def get_shipment_label(self, shipment_id: str, *, max_attempts: int = 4) -> bytes:
         """调用 Mercado 官方接口下载 shipment 发货面单 PDF。"""
-        return self.request_bytes("GET", f"/marketplace/shipments/{shipment_id}/labels")
+        return self.request_bytes(
+            "GET",
+            f"/marketplace/shipments/{shipment_id}/labels",
+            max_attempts=max_attempts,
+        )
 
     def iter_listing_ids(self, user_id: str, **filters: Any) -> Iterator[str]:
         """使用 scan/scroll 模式遍历账号下的全部 Listing ID。

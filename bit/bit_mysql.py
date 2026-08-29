@@ -1456,6 +1456,46 @@ def _mercado_order_datetime(value):
     return parsed.strftime("%Y-%m-%d %H:%M:%S")
 
 
+def _mercado_order_sku_items(raw_order, fallback_image=""):
+    if isinstance(raw_order, str):
+        try:
+            raw_order = json.loads(raw_order or "{}")
+        except (TypeError, ValueError):
+            raw_order = {}
+    raw_order = raw_order if isinstance(raw_order, dict) else {}
+    result = []
+    for order_item in raw_order.get("order_items") or []:
+        product = order_item.get("item") if isinstance(order_item.get("item"), dict) else {}
+        attributes = []
+        for attribute in product.get("variation_attributes") or []:
+            value = str(attribute.get("value_name") or "").strip()
+            name = str(attribute.get("name") or attribute.get("id") or "").strip()
+            if value:
+                attributes.append(f"{name}: {value}" if name else value)
+        result.append(
+            {
+                "product_id": str(product.get("id") or ""),
+                "seller_sku": str(
+                    product.get("seller_sku")
+                    or product.get("seller_custom_field")
+                    or ""
+                ),
+                "title": str(product.get("title") or ""),
+                "variation_id": str(product.get("variation_id") or ""),
+                "variation": " · ".join(attributes),
+                "quantity": int(order_item.get("quantity") or 0),
+                "image_url": str(
+                    product.get("sku_image_url")
+                    or product.get("secure_thumbnail")
+                    or product.get("thumbnail")
+                    or fallback_image
+                    or ""
+                ),
+            }
+        )
+    return result
+
+
 def upsert_mercado_synced_orders(token_record, orders):
     token_record = dict(token_record or {})
     orders = [dict(order or {}) for order in orders or [] if (order or {}).get("id") is not None]
@@ -1518,8 +1558,16 @@ def upsert_mercado_synced_orders(token_record, orders):
                         str(shipping.get("id") or ""), str(buyer.get("id") or ""),
                         str(buyer.get("nickname") or buyer.get("first_name") or ""),
                         str(product.get("id") or ""), title,
-                        str(product.get("thumbnail") or product.get("secure_thumbnail") or ""),
-                        quantity, sale_fee, shipping.get("cost") or 0,
+                        str(
+                            product.get("sku_image_url")
+                            or product.get("secure_thumbnail")
+                            or product.get("thumbnail")
+                            or ""
+                        ),
+                        quantity, sale_fee,
+                        order.get("shipping_cost")
+                        if order.get("shipping_cost") is not None
+                        else shipping.get("cost") or 0,
                         json.dumps(order, ensure_ascii=False, separators=(",", ":")),
                         now, now, amount_currency_id,
                     )
@@ -1670,11 +1718,11 @@ def list_mercado_after_sale_order_contexts(token_id, resource_ids):
 
 def list_orders(
     country="", status="", salesperson="", group_name="", search="", start_date="", end_date="",
-    origin="", page=1, page_size=50, store_ids=None, salespeople=None,
+    origin="", page=1, page_size=200, store_ids=None, salespeople=None,
 ):
     """分页查询当前已授权店铺的 Token 同步订单。"""
     page = max(1, int(page or 1))
-    page_size = max(10, min(200, int(page_size or 50)))
+    page_size = max(10, min(200, int(page_size or 200)))
     country, status, salesperson, group_name, search = (
         str(value or "").strip()
         for value in (country, status, salesperson, group_name, search)
@@ -1713,19 +1761,27 @@ def list_orders(
     def build_where(
         include_country=True, include_status=True, include_origin=True,
         include_salesperson=True, include_group=True, include_store=True,
+        table_alias="",
     ):
         clauses, params = [], []
+        prefix = f"{table_alias}." if table_alias else ""
+
+        def column(name):
+            return f"{prefix}`{name}`"
+
         if include_country and country:
-            clauses.append("`country` = %s")
+            clauses.append(f"{column('country')} = %s")
             params.append(country)
         if include_status and status:
-            clauses.append("`status` = %s")
+            clauses.append(f"{column('status')} = %s")
             params.append(status)
         if include_origin and origin:
-            clauses.append("`data_origin` = %s")
+            clauses.append(f"{column('data_origin')} = %s")
             params.append(origin)
         if include_store and normalized_store_ids:
-            clauses.append(f"`store_id` IN ({','.join(['%s'] * len(normalized_store_ids))})")
+            clauses.append(
+                f"{column('store_id')} IN ({','.join(['%s'] * len(normalized_store_ids))})"
+            )
             params.extend(normalized_store_ids)
         if include_salesperson and normalized_salespeople:
             named_salespeople = [
@@ -1733,32 +1789,35 @@ def list_orders(
             ]
             salesperson_clauses = []
             if "__unassigned__" in normalized_salespeople:
-                salesperson_clauses.append("COALESCE(`salesperson`, '') = ''")
+                salesperson_clauses.append(f"COALESCE({column('salesperson')}, '') = ''")
             if named_salespeople:
                 salesperson_clauses.append(
-                    f"`salesperson` IN ({','.join(['%s'] * len(named_salespeople))})"
+                    f"{column('salesperson')} IN "
+                    f"({','.join(['%s'] * len(named_salespeople))})"
                 )
                 params.extend(named_salespeople)
             clauses.append(f"({' OR '.join(salesperson_clauses)})")
         if include_group and group_name:
             if group_name == "__ungrouped__":
-                clauses.append("COALESCE(`group_name`, '') = ''")
+                clauses.append(f"COALESCE({column('group_name')}, '') = ''")
             else:
-                clauses.append("`group_name` = %s")
+                clauses.append(f"{column('group_name')} = %s")
                 params.append(group_name)
         if start_at:
-            clauses.append("`ordered_at` >= %s")
+            clauses.append(f"{column('ordered_at')} >= %s")
             params.append(start_at.strftime("%Y-%m-%d %H:%M:%S"))
         if end_exclusive:
-            clauses.append("`ordered_at` < %s")
+            clauses.append(f"{column('ordered_at')} < %s")
             params.append(end_exclusive.strftime("%Y-%m-%d %H:%M:%S"))
         if search:
             pattern = f"%{search}%"
             clauses.append(
-                "(CAST(`id` AS CHAR) LIKE %s OR `order_number` LIKE %s OR "
-                "`purchase_order` LIKE %s OR `purchase_tracking` LIKE %s OR "
-                "`product_id` LIKE %s OR `title` LIKE %s OR `buyer` LIKE %s OR "
-                "`purchase_remark` LIKE %s OR `remark` LIKE %s OR `shop_name` LIKE %s)"
+                f"(CAST({column('id')} AS CHAR) LIKE %s OR "
+                f"{column('order_number')} LIKE %s OR {column('purchase_order')} LIKE %s OR "
+                f"{column('purchase_tracking')} LIKE %s OR {column('product_id')} LIKE %s OR "
+                f"{column('title')} LIKE %s OR {column('buyer')} LIKE %s OR "
+                f"{column('purchase_remark')} LIKE %s OR {column('remark')} LIKE %s OR "
+                f"{column('shop_name')} LIKE %s)"
             )
             params.extend([pattern] * 10)
         return (" WHERE " + " AND ".join(clauses)) if clauses else "", params
@@ -1792,6 +1851,48 @@ def list_orders(
                 "WHEN 'MLC' THEN 'CLP' WHEN 'MCO' THEN 'COP' WHEN 'MLU' THEN 'UYU' "
                 "ELSE NULLIF(synced.`currency_id`, '') END, 'USD'))"
             )
+            # Resolve historical rates per distinct currency/day instead of once per
+            # order.  A full order set contains tens of thousands of rows but only a
+            # small number of currency/day pairs, so this removes most correlated
+            # history lookups without changing the nearest-previous-date rule.
+            rate_key_table = "`tmp_mercado_order_rate_keys`"
+            cursor.execute(f"DROP TEMPORARY TABLE IF EXISTS {rate_key_table}")
+            cursor.execute(
+                f"""
+                CREATE TEMPORARY TABLE {rate_key_table} AS
+                SELECT pairs.`currency_id`, pairs.`order_date`,
+                       (
+                           SELECT historical_rate.`id`
+                           FROM `{DAILY_EXCHANGE_RATE_TABLE}` AS historical_rate
+                           WHERE historical_rate.`from_currency_id` = pairs.`currency_id`
+                             AND historical_rate.`to_currency_id` = 'USD'
+                             AND historical_rate.`rate_date` <= pairs.`order_date`
+                           ORDER BY historical_rate.`rate_date` DESC
+                           LIMIT 1
+                       ) AS `daily_rate_id`,
+                       (
+                           SELECT historical_cny_rate.`id`
+                           FROM `{DAILY_EXCHANGE_RATE_TABLE}` AS historical_cny_rate
+                           WHERE historical_cny_rate.`from_currency_id` = 'USD'
+                             AND historical_cny_rate.`to_currency_id` = 'CNY'
+                             AND historical_cny_rate.`rate_date` <= pairs.`order_date`
+                           ORDER BY historical_cny_rate.`rate_date` DESC
+                           LIMIT 1
+                       ) AS `cny_daily_rate_id`
+                FROM (
+                    SELECT DISTINCT {currency_sql} AS `currency_id`,
+                                    {order_date_sql} AS `order_date`
+                    FROM `mercado_synced_orders` AS synced
+                    INNER JOIN `mercado_store_tokens` AS stores
+                      ON stores.`id` = synced.`token_id`
+                ) AS pairs
+                WHERE pairs.`order_date` IS NOT NULL
+                """
+            )
+            cursor.execute(
+                f"ALTER TABLE {rate_key_table} "
+                f"ADD PRIMARY KEY (`currency_id`, `order_date`)"
+            )
             order_rate_sql = (
                 f"CASE WHEN {currency_sql} <> 'USD' "
                 "AND UPPER(COALESCE(synced.`currency_id`, '')) = 'USD' "
@@ -1807,6 +1908,16 @@ def list_orders(
             )
             cny_rate_sql = "COALESCE(cny_daily_rate.`rate`, cny_current_rate.`rate`)"
             usd_amount_sql = f"synced.`total_amount` * ({rate_sql})"
+            fee_usd_sql = "COALESCE(synced.`sale_fee`, 0)"
+            freight_local_sql = (
+                "COALESCE(NULLIF(synced.`freight`, 0), "
+                "CAST(NULLIF(JSON_UNQUOTE(JSON_EXTRACT(synced.`raw_json`, '$.shipping_cost')), "
+                "'null') AS DECIMAL(20, 4)), 0)"
+            )
+            freight_usd_sql = f"({freight_local_sql}) * ({rate_sql})"
+            balance_usd_sql = (
+                f"({usd_amount_sql}) - ({fee_usd_sql}) - ({freight_usd_sql})"
+            )
             cny_income_sql = f"({usd_amount_sql}) * ({cny_rate_sql})"
             source_sql = f"""
                 (
@@ -1816,10 +1927,13 @@ def list_orders(
                            site_settings.`salesperson`,
                            site_settings.`discount_rate`, site_settings.`group_name`,
                            synced.`shop_name`, '美客多 Token' AS `source`, 'token' AS `data_origin`,
+                           COALESCE(NULLIF(JSON_UNQUOTE(JSON_EXTRACT(synced.`raw_json`, '$.pack_id')), 'null'), '')
+                               AS `pack_id`,
                            COALESCE(NULLIF(synced.`workflow_status`, ''), synced.`status_label`) AS `status`,
                            synced.`status_label` AS `platform_status`, synced.`workflow_status`,
                            ROUND({usd_amount_sql}, 2) AS `amount`,
-                           synced.`total_amount` AS `amount_local`, synced.`sale_fee` AS `fee`,
+                           synced.`total_amount` AS `amount_local`,
+                           ROUND({fee_usd_sql}, 2) AS `fee`,
                            0 AS `refund`, ROUND({cny_income_sql}, 2) AS `income`,
                            synced.`paid_amount` AS `paid_amount_usd`,
                            COALESCE(synced.`purchase_cost`, 0) AS `cost`, synced.`purchase_order`,
@@ -1829,8 +1943,9 @@ def list_orders(
                                AS `profit`,
                            synced.`product_id`, '' AS `category`, synced.`title`,
                            synced.`image_url`, synced.`quantity`,
-                           ROUND(COALESCE(synced.`freight`, 0) * ({rate_sql}), 2) AS `freight`,
-                           synced.`freight` AS `freight_local`,
+                           ROUND({freight_usd_sql}, 2) AS `freight`,
+                           ROUND({balance_usd_sql}, 2) AS `balance`,
+                           ({freight_local_sql}) AS `freight_local`,
                            synced.`status_detail` AS `remark`,
                            synced.`country`,
                            synced.`buyer_name` AS `buyer`, {currency_sql} AS `currency_id`,
@@ -1890,51 +2005,142 @@ def list_orders(
                     LEFT JOIN `mercado_store_site_settings` AS site_settings
                       ON site_settings.`token_id` = synced.`token_id`
                      AND site_settings.`site_id` = synced.`site_id`
+                    LEFT JOIN {rate_key_table} AS rate_keys
+                      ON rate_keys.`currency_id` = {currency_sql}
+                     AND rate_keys.`order_date` = {order_date_sql}
                     LEFT JOIN `{DAILY_EXCHANGE_RATE_TABLE}` AS daily_rate
-                      ON daily_rate.`id` = (
-                          SELECT historical_rate.`id`
-                          FROM `{DAILY_EXCHANGE_RATE_TABLE}` AS historical_rate
-                          WHERE historical_rate.`from_currency_id` = {currency_sql}
-                            AND historical_rate.`to_currency_id` = 'USD'
-                            AND historical_rate.`rate_date` <= {order_date_sql}
-                          ORDER BY historical_rate.`rate_date` DESC
-                          LIMIT 1
-                      )
+                      ON daily_rate.`id` = rate_keys.`daily_rate_id`
                     LEFT JOIN `{EXCHANGE_RATE_TABLE}` AS current_rate
                       ON current_rate.`from_currency_id` = {currency_sql}
                      AND current_rate.`to_currency_id` = 'USD'
                     LEFT JOIN `{DAILY_EXCHANGE_RATE_TABLE}` AS cny_daily_rate
-                      ON cny_daily_rate.`id` = (
-                          SELECT historical_cny_rate.`id`
-                          FROM `{DAILY_EXCHANGE_RATE_TABLE}` AS historical_cny_rate
-                          WHERE historical_cny_rate.`from_currency_id` = 'USD'
-                            AND historical_cny_rate.`to_currency_id` = 'CNY'
-                            AND historical_cny_rate.`rate_date` <= {order_date_sql}
-                          ORDER BY historical_cny_rate.`rate_date` DESC
-                          LIMIT 1
-                      )
+                      ON cny_daily_rate.`id` = rate_keys.`cny_daily_rate_id`
                     LEFT JOIN `{EXCHANGE_RATE_TABLE}` AS cny_current_rate
                       ON cny_current_rate.`from_currency_id` = 'USD'
                      AND cny_current_rate.`to_currency_id` = 'CNY'
                 ) AS `order_source`
             """
-            where_sql, params = build_where()
-            cursor.execute(f"SELECT COUNT(*) AS `total` FROM {source_sql}{where_sql}", params)
-            total = int((cursor.fetchone() or {}).get("total") or 0)
+            # Counts and facets only need searchable/filterable fields.  Keep their
+            # temporary table deliberately narrow; pricing is calculated once for the
+            # summary and only for the 200 rows returned by the current page.
+            filter_source_sql = f"""
+                (
+                    SELECT synced.`order_id` AS `id`, synced.`order_id` AS `order_number`,
+                           synced.`token_id` AS `store_id`,
+                           DATE_ADD(synced.`date_created`, INTERVAL 8 HOUR) AS `ordered_at`,
+                           site_settings.`salesperson`, site_settings.`group_name`,
+                           synced.`shop_name`, 'token' AS `data_origin`,
+                           COALESCE(NULLIF(synced.`workflow_status`, ''), synced.`status_label`)
+                               AS `status`,
+                           synced.`purchase_order`, synced.`purchase_tracking`,
+                           synced.`product_id`, synced.`title`,
+                           synced.`buyer_name` AS `buyer`, synced.`purchase_remark`,
+                           synced.`status_detail` AS `remark`, synced.`country`,
+                           {currency_sql} AS `currency_id`, {order_date_sql} AS `order_date`,
+                           synced.`currency_id` AS `platform_currency_id`,
+                           COALESCE(synced.`total_amount`, 0) AS `total_amount`,
+                           COALESCE(synced.`paid_amount`, 0) AS `paid_amount`,
+                           COALESCE(synced.`sale_fee`, 0) AS `sale_fee`,
+                           COALESCE(synced.`freight`, 0) AS `freight_local`,
+                           COALESCE(synced.`purchase_cost`, 0) AS `purchase_cost`
+                    FROM `mercado_synced_orders` AS synced
+                    INNER JOIN `mercado_store_tokens` AS stores
+                      ON stores.`id` = synced.`token_id`
+                    LEFT JOIN `mercado_store_site_settings` AS site_settings
+                      ON site_settings.`token_id` = synced.`token_id`
+                     AND site_settings.`site_id` = synced.`site_id`
+                ) AS `order_filter_source`
+            """
+            base_where_sql, base_params = build_where(
+                include_country=False,
+                include_status=False,
+                include_origin=False,
+                include_salesperson=False,
+                include_group=False,
+                include_store=False,
+            )
+            order_filter_table = "`tmp_mercado_order_filter_source`"
+            cursor.execute(f"DROP TEMPORARY TABLE IF EXISTS {order_filter_table}")
             cursor.execute(
-                f"SELECT COALESCE(SUM(`amount`),0) AS `amount`, COALESCE(SUM(`income`),0) AS `income`, "
-                f"COALESCE(SUM(`cost`),0) AS `cost`, COALESCE(SUM(`profit`),0) AS `profit`, "
-                f"COALESCE(SUM(`exchange_rate_missing`),0) AS `exchange_rate_missing_count`, "
-                f"COALESCE(SUM(`cny_exchange_rate_missing`),0) AS `cny_exchange_rate_missing_count` "
-                f"FROM {source_sql}{where_sql}",
-                params,
+                f"CREATE TEMPORARY TABLE {order_filter_table} AS "
+                f"SELECT * FROM {filter_source_sql}{base_where_sql}",
+                base_params,
+            )
+            cursor.execute(
+                f"ALTER TABLE {order_filter_table} "
+                f"ADD PRIMARY KEY (`id`), ADD KEY `idx_ordered_at` (`ordered_at`, `id`)"
+            )
+            where_sql, params = build_where()
+            cursor.execute(
+                f"SELECT COUNT(*) AS `total` FROM {order_filter_table}{where_sql}", params
+            )
+            total = int((cursor.fetchone() or {}).get("total") or 0)
+            summary_where_sql, summary_params = build_where(table_alias="scoped")
+            summary_order_rate_sql = (
+                "CASE WHEN scoped.`currency_id` <> 'USD' "
+                "AND UPPER(COALESCE(scoped.`platform_currency_id`, '')) = 'USD' "
+                "AND scoped.`total_amount` > 0 AND scoped.`paid_amount` > 0 "
+                "THEN scoped.`paid_amount` / scoped.`total_amount` ELSE NULL END"
+            )
+            summary_rate_sql = (
+                "CASE WHEN scoped.`currency_id` = 'USD' THEN 1 "
+                f"WHEN ({summary_order_rate_sql}) IS NOT NULL "
+                f"THEN ({summary_order_rate_sql}) "
+                "WHEN daily_rate.`rate` IS NOT NULL THEN daily_rate.`rate` "
+                "ELSE current_rate.`rate` END"
+            )
+            summary_cny_rate_sql = (
+                "COALESCE(cny_daily_rate.`rate`, cny_current_rate.`rate`)"
+            )
+            summary_amount_sql = (
+                f"scoped.`total_amount` * ({summary_rate_sql})"
+            )
+            summary_freight_sql = (
+                f"scoped.`freight_local` * ({summary_rate_sql})"
+            )
+            summary_income_sql = (
+                f"({summary_amount_sql}) * ({summary_cny_rate_sql})"
+            )
+            cursor.execute(
+                f"SELECT COALESCE(SUM(ROUND({summary_amount_sql}, 2)),0) AS `amount`, "
+                f"COALESCE(SUM(ROUND(scoped.`sale_fee`, 2)),0) AS `fee`, "
+                f"COALESCE(SUM(ROUND({summary_freight_sql}, 2)),0) AS `freight`, "
+                f"COALESCE(SUM(ROUND(({summary_amount_sql}) - scoped.`sale_fee` "
+                f"- ({summary_freight_sql}), 2)),0) AS `balance`, "
+                f"COALESCE(SUM(ROUND({summary_income_sql}, 2)),0) AS `income`, "
+                f"COALESCE(SUM(scoped.`purchase_cost`),0) AS `cost`, "
+                f"COALESCE(SUM(ROUND(({summary_income_sql}) - scoped.`purchase_cost`, 2)),0) "
+                f"AS `profit`, "
+                f"COALESCE(SUM(CASE WHEN scoped.`currency_id` = 'USD' "
+                f"OR ({summary_order_rate_sql}) IS NOT NULL OR daily_rate.`rate` IS NOT NULL "
+                f"OR current_rate.`rate` IS NOT NULL THEN 0 ELSE 1 END),0) "
+                f"AS `exchange_rate_missing_count`, "
+                f"COALESCE(SUM(CASE WHEN cny_daily_rate.`rate` IS NOT NULL "
+                f"OR cny_current_rate.`rate` IS NOT NULL THEN 0 ELSE 1 END),0) "
+                f"AS `cny_exchange_rate_missing_count` "
+                f"FROM {order_filter_table} AS scoped "
+                f"LEFT JOIN {rate_key_table} AS rate_keys "
+                f"ON rate_keys.`currency_id` = scoped.`currency_id` "
+                f"AND rate_keys.`order_date` = scoped.`order_date` "
+                f"LEFT JOIN `{DAILY_EXCHANGE_RATE_TABLE}` AS daily_rate "
+                f"ON daily_rate.`id` = rate_keys.`daily_rate_id` "
+                f"LEFT JOIN `{EXCHANGE_RATE_TABLE}` AS current_rate "
+                f"ON current_rate.`from_currency_id` = scoped.`currency_id` "
+                f"AND current_rate.`to_currency_id` = 'USD' "
+                f"LEFT JOIN `{DAILY_EXCHANGE_RATE_TABLE}` AS cny_daily_rate "
+                f"ON cny_daily_rate.`id` = rate_keys.`cny_daily_rate_id` "
+                f"LEFT JOIN `{EXCHANGE_RATE_TABLE}` AS cny_current_rate "
+                f"ON cny_current_rate.`from_currency_id` = 'USD' "
+                f"AND cny_current_rate.`to_currency_id` = 'CNY'{summary_where_sql}",
+                summary_params,
             )
             summary = {key: json_value(value or 0) for key, value in (cursor.fetchone() or {}).items()}
 
             status_where, status_params = build_where(include_status=False)
             cursor.execute(
                 f"SELECT COALESCE(`status`,'未分类') AS `status`, COUNT(*) AS `count` "
-                f"FROM {source_sql}{status_where} GROUP BY COALESCE(`status`,'未分类') ORDER BY `count` DESC",
+                f"FROM {order_filter_table}{status_where} "
+                f"GROUP BY COALESCE(`status`,'未分类') ORDER BY `count` DESC",
                 status_params,
             )
             status_counts = {str(row["status"]): int(row["count"]) for row in cursor.fetchall()}
@@ -1942,14 +2148,16 @@ def list_orders(
             country_where, country_params = build_where(include_country=False, include_status=False)
             cursor.execute(
                 f"SELECT COALESCE(`country`,'未分类') AS `country`, COUNT(*) AS `count` "
-                f"FROM {source_sql}{country_where} GROUP BY COALESCE(`country`,'未分类') ORDER BY `count` DESC",
+                f"FROM {order_filter_table}{country_where} "
+                f"GROUP BY COALESCE(`country`,'未分类') ORDER BY `count` DESC",
                 country_params,
             )
             country_counts = {str(row["country"]): int(row["count"]) for row in cursor.fetchall()}
 
             origin_where, origin_params = build_where(include_origin=False)
             cursor.execute(
-                f"SELECT `data_origin`, COUNT(*) AS `count` FROM {source_sql}{origin_where} GROUP BY `data_origin`",
+                f"SELECT `data_origin`, COUNT(*) AS `count` "
+                f"FROM {order_filter_table}{origin_where} GROUP BY `data_origin`",
                 origin_params,
             )
             origin_counts = {str(row["data_origin"]): int(row["count"]) for row in cursor.fetchall()}
@@ -1957,7 +2165,7 @@ def list_orders(
             store_where, store_params = build_where(include_store=False)
             cursor.execute(
                 f"SELECT `store_id`, `shop_name`, COUNT(*) AS `count` "
-                f"FROM {source_sql}{store_where} GROUP BY `store_id`, `shop_name` "
+                f"FROM {order_filter_table}{store_where} GROUP BY `store_id`, `shop_name` "
                 f"ORDER BY `shop_name` ASC, `store_id` ASC",
                 store_params,
             )
@@ -1973,7 +2181,7 @@ def list_orders(
             salesperson_where, salesperson_params = build_where(include_salesperson=False)
             cursor.execute(
                 f"SELECT COALESCE(NULLIF(`salesperson`,''),'未分配') AS `salesperson`, COUNT(*) AS `count` "
-                f"FROM {source_sql}{salesperson_where} "
+                f"FROM {order_filter_table}{salesperson_where} "
                 f"GROUP BY COALESCE(NULLIF(`salesperson`,''),'未分配') ORDER BY `salesperson` ASC",
                 salesperson_params,
             )
@@ -1984,7 +2192,7 @@ def list_orders(
             group_where, group_params = build_where(include_group=False)
             cursor.execute(
                 f"SELECT COALESCE(NULLIF(`group_name`,''),'未分组') AS `group_name`, COUNT(*) AS `count` "
-                f"FROM {source_sql}{group_where} "
+                f"FROM {order_filter_table}{group_where} "
                 f"GROUP BY COALESCE(NULLIF(`group_name`,''),'未分组') ORDER BY `group_name` ASC",
                 group_params,
             )
@@ -1994,10 +2202,34 @@ def list_orders(
 
             offset = (page - 1) * page_size
             cursor.execute(
-                f"SELECT * FROM {source_sql}{where_sql} ORDER BY `ordered_at` DESC, `id` DESC LIMIT %s OFFSET %s",
+                f"SELECT * FROM {source_sql}{where_sql} "
+                f"ORDER BY `ordered_at` DESC, `id` DESC LIMIT %s OFFSET %s",
                 [*params, page_size, offset],
             )
             rows = [{key: json_value(value) for key, value in row.items()} for row in cursor.fetchall()]
+            order_ids = [str(row.get("id") or "") for row in rows if row.get("id")]
+            raw_orders = {}
+            if order_ids:
+                placeholders = ",".join(["%s"] * len(order_ids))
+                cursor.execute(
+                    f"SELECT `order_id`, `raw_json` FROM `mercado_synced_orders` "
+                    f"WHERE `order_id` IN ({placeholders})",
+                    order_ids,
+                )
+                raw_orders = {
+                    str(row.get("order_id") or ""): row.get("raw_json") or "{}"
+                    for row in (cursor.fetchall() or [])
+                }
+            for row in rows:
+                order_id = str(row.get("id") or "")
+                sku_items = _mercado_order_sku_items(
+                    raw_orders.get(order_id, "{}"),
+                    row.get("image_url") or "",
+                )
+                for item in sku_items:
+                    item["order_id"] = order_id
+                row["sku_items"] = sku_items
+                row["merged_order_ids"] = [order_id] if order_id else []
             return {
                 "rows": rows, "total": total, "page": page, "page_size": page_size,
                 "pages": max(1, (total + page_size - 1) // page_size),
@@ -2341,7 +2573,10 @@ def save_mercado_order_print_state(token_id, tracking_since, last_scan_at):
                 ) VALUES (%s, %s, %s, %s, %s)
                 ON DUPLICATE KEY UPDATE
                     `tracking_since` = LEAST(`tracking_since`, VALUES(`tracking_since`)),
-                    `last_scan_at` = VALUES(`last_scan_at`),
+                    `last_scan_at` = GREATEST(
+                        COALESCE(`last_scan_at`, VALUES(`last_scan_at`)),
+                        VALUES(`last_scan_at`)
+                    ),
                     `updated_at` = VALUES(`updated_at`)
                 """,
                 (token_id, tracking_since, last_scan_at, now, now),
@@ -2359,6 +2594,7 @@ def list_mercado_order_print_candidates(
     token_id,
     *,
     tracking_since,
+    end_at=None,
     site_ids=None,
     include_previously_printed=False,
     limit=0,
@@ -2376,6 +2612,9 @@ def list_mercado_order_print_candidates(
     tracking_since = _mercado_order_datetime(tracking_since)
     if not tracking_since:
         raise ValueError("订单打印追踪起始时间无效")
+    end_at = _mercado_order_datetime(end_at)
+    if end_at and end_at < tracking_since:
+        raise ValueError("订单打印结束时间不能早于开始时间")
     normalized_sites = []
     for value in site_ids or ():
         site_id = str(value or "").strip().upper()
@@ -2388,8 +2627,12 @@ def list_mercado_order_print_candidates(
         "synced.`token_id` = %s",
         "synced.`date_created` >= %s",
         "COALESCE(synced.`shipping_id`, '') <> ''",
+        "LOWER(COALESCE(synced.`status`, '')) IN ('paid', 'ready_to_ship')",
     ]
     params = [token_id, tracking_since]
+    if end_at:
+        where.append("synced.`date_created` <= %s")
+        params.append(end_at)
     if normalized_sites:
         where.append(
             f"UPPER(COALESCE(synced.`site_id`, '')) IN "
@@ -2401,7 +2644,7 @@ def list_mercado_order_print_candidates(
             "NOT EXISTS ("
             "SELECT 1 FROM `mercado_order_operation_logs` AS print_logs "
             "WHERE print_logs.`order_id` = synced.`order_id` "
-            "AND print_logs.`action_type` = 'label_printed'"
+            "AND print_logs.`action_type` IN ('label_printed', 'label_unavailable')"
             ")"
         )
 
@@ -2765,6 +3008,117 @@ def get_high_after_sale_alerts(
         "date_from": date_from_text,
         "date_to": date_to_text,
     }
+
+
+def record_mercado_order_label_unavailable(
+    order_ids,
+    *,
+    shipment_status="",
+    reason="",
+    operator_name="订单打印/API",
+):
+    """Remember terminal shipment states so they are not retried every round."""
+
+    normalized = list(
+        dict.fromkeys(
+            str(value or "").strip()
+            for value in order_ids or ()
+            if str(value or "").strip()
+        )
+    )
+    if not normalized:
+        return 0
+    now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    changes = json.dumps(
+        {
+            "shipment_status": str(shipment_status or "").strip().lower(),
+            "reason": str(reason or "").strip()[:1000],
+        },
+        ensure_ascii=False,
+    )
+    connection = pymysql.connect(**config)
+    try:
+        with connection.cursor() as cursor:
+            _ensure_mercado_synced_orders_table(cursor)
+            placeholders = ",".join(["%s"] * len(normalized))
+            cursor.execute(
+                f"SELECT `order_id` FROM `mercado_synced_orders` "
+                f"WHERE `order_id` IN ({placeholders})",
+                normalized,
+            )
+            existing = {str(row.get("order_id") or "") for row in cursor.fetchall() or []}
+            rows = [
+                (
+                    order_id,
+                    str(operator_name or "系统").strip()[:100] or "系统",
+                    changes,
+                    now,
+                )
+                for order_id in normalized
+                if order_id in existing
+            ]
+            if rows:
+                cursor.executemany(
+                    """
+                    INSERT INTO `mercado_order_operation_logs` (
+                        `order_id`, `action_type`, `action_label`, `operator_id`,
+                        `operator_name`, `changes_json`, `before_json`, `after_json`,
+                        `created_at`
+                    ) VALUES (%s, 'label_unavailable', '跳过不可打印面单', NULL,
+                              %s, %s, NULL, NULL, %s)
+                    """,
+                    rows,
+                )
+        connection.commit()
+        return len(rows)
+    except Exception:
+        connection.rollback()
+        raise
+    finally:
+        connection.close()
+
+
+def list_mercado_missing_order_images(token_id, limit=200):
+    connection = pymysql.connect(**config)
+    try:
+        with connection.cursor() as cursor:
+            _ensure_mercado_synced_orders_table(cursor)
+            cursor.execute(
+                """
+                SELECT `order_id`, `product_id`, `raw_json`
+                FROM `mercado_synced_orders`
+                WHERE `token_id` = %s AND COALESCE(`image_url`, '') = ''
+                  AND COALESCE(`product_id`, '') <> ''
+                ORDER BY `date_created` DESC, `order_id` DESC
+                LIMIT %s
+                """,
+                (int(token_id), max(1, min(int(limit or 200), 5000))),
+            )
+            return cursor.fetchall() or []
+    finally:
+        connection.close()
+
+
+def update_mercado_order_image(token_id, order_id, image_url):
+    connection = pymysql.connect(**config)
+    try:
+        with connection.cursor() as cursor:
+            _ensure_mercado_synced_orders_table(cursor)
+            cursor.execute(
+                """
+                UPDATE `mercado_synced_orders` SET `image_url` = %s
+                WHERE `token_id` = %s AND `order_id` = %s
+                """,
+                (str(image_url or ""), int(token_id), str(order_id or "")),
+            )
+            affected = int(cursor.rowcount)
+        connection.commit()
+        return affected
+    except Exception:
+        connection.rollback()
+        raise
+    finally:
+        connection.close()
 
 
 def get_high_profit_products(

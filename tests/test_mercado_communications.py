@@ -248,6 +248,69 @@ def test_claim_search_rejects_invalid_type_and_inverted_dates():
         )
 
 
+def test_claim_adapter_defaults_unfiltered_search_to_opened():
+    records = {
+        7: {
+            "id": 7,
+            "meli_user_id": "523130418",
+            "access_token": "secret",
+        }
+    }
+    session = Session([Response(payload={"paging": {"total": 0}, "data": []})])
+
+    execute_store_communication(
+        7,
+        "claims-list",
+        {"limit": 1, "offset": 0},
+        get_token=records.get,
+        refresh_token=lambda _token_id: None,
+        http=session,
+    )
+
+    assert session.calls[0][2]["params"]["status"] == "opened"
+
+
+def test_claim_adapter_uses_cbt_marketplace_child_sellers_and_merges_results():
+    records = {
+        7: {
+            "id": 7,
+            "meli_user_id": "root-seller",
+            "site_id": "CBT",
+            "access_token": "secret",
+        }
+    }
+    session = Session([
+        Response(payload={"marketplaces": [
+            {"site_id": "MLM", "user_id": "70001"},
+            {"site_id": "MLB", "user_id": "70002"},
+        ]}),
+        Response(payload={
+            "paging": {"total": 1},
+            "data": [{"id": 101, "last_updated": "2026-08-27T10:00:00Z"}],
+        }),
+        Response(payload={
+            "paging": {"total": 1},
+            "data": [{"id": 102, "last_updated": "2026-08-28T10:00:00Z"}],
+        }),
+    ])
+
+    result = execute_store_communication(
+        7,
+        "claims-list",
+        {"status": "opened", "limit": 20, "offset": 0},
+        get_token=records.get,
+        refresh_token=lambda _token_id: None,
+        http=session,
+    )
+
+    assert session.calls[0][1].endswith("/marketplace/users/root-seller")
+    assert session.calls[1][2]["params"]["user_id"] == "70001"
+    assert session.calls[2][2]["params"]["user_id"] == "70002"
+    assert result["paging"]["total"] == 2
+    assert [row["id"] for row in result["data"]] == [102, 101]
+    assert [row["site_id"] for row in result["data"]] == ["MLB", "MLM"]
+
+
 def test_unauthorized_request_refreshes_once_and_retries_with_new_token():
     session = Session(
         [Response(status_code=401, payload={"message": "expired"}), Response(payload={"id": 10})]
@@ -355,6 +418,79 @@ def test_pre_sale_summary_returns_status_totals_for_dashboard_tabs():
     assert all(call[2]["params"]["from"] == "466076859" for call in session.calls)
 
 
+def test_pre_sale_translation_converts_local_question_text_to_chinese():
+    records = {7: {"id": 7, "meli_user_id": "523130418", "access_token": "secret"}}
+    calls = []
+
+    result = execute_store_communication(
+        7,
+        "pre-sale-translate",
+        {
+            "texts": ["¿Tienen stock?"],
+            "site_id": "MLM",
+            "target_language": "zh-CN",
+        },
+        get_token=records.get,
+        refresh_token=lambda _token_id: None,
+        http=Session([]),
+        translator=lambda texts, source, target: calls.append((texts, source, target))
+        or ["有库存吗？"],
+    )
+
+    assert result["translations"] == ["有库存吗？"]
+    assert calls == [(["¿Tienen stock?"], "es", "zh-CN")]
+
+
+def test_pre_sale_translation_can_auto_detect_question_source_language():
+    records = {7: {"id": 7, "meli_user_id": "523130418", "access_token": "secret"}}
+    calls = []
+
+    result = execute_store_communication(
+        7,
+        "pre-sale-translate",
+        {
+            "texts": ["Is this compatible?"],
+            "source_language": "auto",
+            "target_language": "zh-CN",
+        },
+        get_token=records.get,
+        refresh_token=lambda _token_id: None,
+        http=Session([]),
+        translator=lambda texts, source, target: calls.append((texts, source, target))
+        or ["这个兼容吗？"],
+    )
+
+    assert result["translations"] == ["这个兼容吗？"]
+    assert calls == [(["Is this compatible?"], "auto", "zh-CN")]
+
+
+def test_pre_sale_chinese_reply_is_translated_to_buyer_language_before_send():
+    records = {7: {"id": 7, "meli_user_id": "523130418", "access_token": "secret"}}
+    session = Session([Response(payload={"id": 101, "status": "ANSWERED"})])
+
+    result = execute_store_communication(
+        7,
+        "pre-sale-answer",
+        {
+            "question_id": 101,
+            "text": "有库存，今天可以发货。",
+            "site_id": "MLB",
+            "auto_translate": True,
+        },
+        get_token=records.get,
+        refresh_token=lambda _token_id: None,
+        http=session,
+        translator=lambda texts, source, target: ["Temos estoque e podemos enviar hoje."],
+    )
+
+    assert session.calls[0][2]["json"] == {
+        "question_id": 101,
+        "text": "有库存，今天可以发货。",
+        "text_translated": "Temos estoque e podemos enviar hoje.",
+    }
+    assert result["translation"]["target_language"] == "pt-BR"
+
+
 def _workbench_user(*permissions):
     return {
         "id": 12,
@@ -413,6 +549,29 @@ def test_customer_service_view_can_read_pre_sale_summary(monkeypatch):
     assert response.get_json()["data"]["total"] == 3
 
 
+def test_customer_service_view_can_request_pre_sale_translation(monkeypatch):
+    calls = []
+    monkeypatch.setattr(
+        bit_interface,
+        "get_current_workbench_user",
+        lambda: _workbench_user("customer_service.view"),
+    )
+    monkeypatch.setattr(
+        bit_interface.bit_db_api,
+        "execute_mercado_store_communication",
+        lambda token_id, action, payload: calls.append((token_id, action, payload))
+        or {"translations": ["你好"]},
+    )
+
+    response = bit_interface.app.test_client().post(
+        "/api/mercado-communications/7/pre-sale-translate",
+        json={"texts": ["Hola"], "source_language": "es", "target_language": "zh-CN"},
+    )
+
+    assert response.status_code == 200
+    assert calls[0][0:2] == (7, "pre-sale-translate")
+
+
 def test_pre_sale_workbench_module_has_filters_table_pagination_and_reply():
     template = (Path(__file__).resolve().parents[1] / "bit" / "templates" / "index.html").read_text(
         encoding="utf-8"
@@ -420,12 +579,22 @@ def test_pre_sale_workbench_module_has_filters_table_pagination_and_reply():
 
     assert 'data-tab="pre-sale"' in template
     assert 'id="tab-pre-sale"' in template
+    assert 'id="pre-sale-salesperson"' in template
+    assert 'id="pre-sale-group"' in template
     assert 'id="pre-sale-status-bar"' in template
     assert 'class="pre-sale-table"' in template
     assert 'id="pre-sale-pagination"' in template
     assert 'pre-sale-summary' in template
     assert 'pre-sale-answer' in template
     assert 'pre-sale-delete' in template
+    assert 'function preSaleMatchedStores' in template
+    assert '_token_id: Number(store.id)' in template
+    assert 'sendPreSaleAnswerForModule(questionId, tokenId, siteId)' in template
+    assert 'id="pre-sale-reply-preview"' in template
+    assert 'auto_translate: true' in template
+    assert 'target_language: "zh-CN"' in template
+    assert "客户提问（中文翻译）" in template
+    assert 'chinesePrefix = "中文："' in template
 
 
 def test_customer_service_manager_can_send_claim_message(monkeypatch):
@@ -457,3 +626,20 @@ def test_customer_service_manager_can_send_claim_message(monkeypatch):
     assert response.status_code == 200
     assert calls[0][0:2] == (9, "claims-send")
     assert calls[0][2]["receiver_role"] == "complainant"
+
+
+def test_customer_service_supports_owner_group_aggregation_and_row_store_replies():
+    template = (
+        Path(__file__).resolve().parents[1] / "bit" / "templates" / "index.html"
+    ).read_text(encoding="utf-8")
+
+    assert 'id="customer-service-salesperson"' in template
+    assert 'id="customer-service-group"' in template
+    assert "function customerServiceTargetStores()" in template
+    assert "customerServiceAllRows = await customerServiceLoadPostSale(stores, search)" in template
+    assert 'for (const status of ["opened", "closed"])' in template
+    assert "customerServiceFailureDetails(results)" in template
+    assert "token_id: Number(tokenId || store.id || 0)" in template
+    assert 'customerServiceRequest("post-sale-send", {method: "POST", tokenId' in template
+    assert 'customerServiceRequest("claims-send", {method: "POST", tokenId' in template
+    assert "await loadClaimDetail(row.id, row.token_id)" in template

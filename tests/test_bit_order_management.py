@@ -28,10 +28,19 @@ def test_workbench_contains_order_management_ui():
     assert b'id="order-group-filter"' in response.data
     assert b'id="order-table-body"' in response.data
     assert b'id="order-sync-dialog"' in response.data
+    assert b'id="order-sync-start-date" type="datetime-local"' in response.data
+    assert b'id="order-sync-end-date" type="datetime-local"' in response.data
+    assert "自定义拉取时间段（北京时间）".encode("utf-8") in response.data
+    assert "近 30 天".encode("utf-8") in response.data
+    assert b"orderSyncStartDate.disabled = manualSyncRunning" in response.data
+    assert b"start.setDate(start.getDate() - 6)" not in response.data
     assert b'data-origin="token"' in response.data
     assert "商品名、采购备注和订单备注均支持模糊查询".encode("utf-8") in response.data
     assert "下单时间（北京时间）".encode("utf-8") in response.data
     assert "预计利润 / 利润率".encode("utf-8") in response.data
+    assert "手续费".encode("utf-8") in response.data
+    assert "运费".encode("utf-8") in response.data
+    assert "结余".encode("utf-8") in response.data
     assert "每 15 分钟重新拉取".encode("utf-8") in response.data
     assert "最近 72 小时".encode("utf-8") in response.data
     assert "每天北京时间凌晨".encode("utf-8") in response.data
@@ -51,6 +60,9 @@ def test_workbench_contains_order_management_ui():
     assert b'/api/orders/print' in response.data
     assert "店铺（可多选）".encode("utf-8") in response.data
     assert "店铺业务员（可多选）".encode("utf-8") in response.data
+    assert '<option value="200" selected>200 条/页</option>'.encode("utf-8") in response.data
+    assert "合并单全部 SKU".encode("utf-8") in response.data
+    assert "order-detail-sku-media".encode("utf-8") in response.data
 
 
 def test_order_api_requires_login():

@@ -924,3 +924,93 @@ def test_clicked_details_uses_api_fallback_without_retrying_loaded_detail(
 
     assert click_attempts == [0]
     assert completed == records
+
+
+def test_zying_auth_token_round_trip_uses_local_runtime_file(tmp_path, monkeypatch):
+    auth_file = tmp_path / "zying_auth.json"
+    monkeypatch.delenv("BIT_ZYING_TOKEN", raising=False)
+
+    status = bit_zying_caiji.save_zying_auth_token(
+        "secret-token",
+        browser_type="bitbrowser",
+        window_name="智赢登录窗口",
+        auth_file=auth_file,
+    )
+
+    assert status["configured"] is True
+    assert status["window_name"] == "智赢登录窗口"
+    assert bit_zying_caiji.load_zying_auth_token(auth_file) == "secret-token"
+    assert "secret-token" not in str(status)
+
+
+def test_api_collection_reads_list_and_details_without_opening_browser(monkeypatch):
+    api_calls = []
+    written = []
+    mirrored = []
+
+    monkeypatch.setattr(bit_zying_caiji, "validate_zying_auth_token", lambda token: True)
+    monkeypatch.setattr(
+        bit_zying_caiji,
+        "_zying_api_post",
+        lambda session, token, command, payload: api_calls.append((command, payload))
+        or {
+            "list": {
+                "data": [
+                    {
+                        "id": 801623017,
+                        "title": "<b>API product</b>",
+                        "thumb": "https://example.test/api.jpg",
+                        "cost": 19.5,
+                        "cur": "USD",
+                    }
+                ]
+            }
+        },
+    )
+
+    def enrich(driver, records, token=None):
+        assert driver is None
+        assert token == "saved-token"
+        records[0]["detail_data"] = {
+            "sale_id": 801623017,
+            "sale_title": "API product",
+            "sale_cost": 19.5,
+            "sale_cur": "USD",
+            "sale_pic": ["https://example.test/api.jpg"],
+            "sale_size": [10, 20, 30],
+            "sale_weight": 500,
+            "sale_localid": 202170568,
+        }
+        return records
+
+    monkeypatch.setattr(bit_zying_caiji, "_enrich_product_records", enrich)
+
+    result = bit_zying_caiji.collect_zying_products_api(
+        auth_token="saved-token",
+        start_page=2,
+        number=2,
+        category="202170568",
+        category_name="圆佑同步/家电类",
+        existing_product_id_reader=lambda product_ids: set(),
+        product_writer=lambda rows: written.extend(rows) or len(rows),
+        product_mirror_writer=lambda rows: mirrored.extend(rows) or {"count": len(rows)},
+        return_summary=True,
+    )
+
+    assert api_calls == [
+        (
+            "sale.stat",
+            {
+                "page": 2,
+                "pagesize": bit_zying_caiji.ZYING_API_PAGE_SIZE,
+                "word": "",
+                "from": bit_zying_caiji.ZYING_MELI_PLATFORM_ID,
+                "localid": "202170568",
+            },
+        )
+    ]
+    assert result["collection_mode"] == "api"
+    assert result["inserted_count"] == 1
+    assert written[0]["zying_category"] == "圆佑同步/家电类"
+    assert written[0]["listing_snapshot"]["source"]["title"] == "API product"
+    assert mirrored == written

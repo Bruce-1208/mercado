@@ -124,3 +124,33 @@ def test_default_translation_reuses_identical_result_across_accounts(monkeypatch
 
     assert first[0]["title"] == second[0]["title"]
     assert len(calls) == 1
+
+
+def test_deepseek_translation_uses_json_mode_and_retries_invalid_content(monkeypatch):
+    responses = iter([
+        "translation without json",
+        '{"translations":["你好，有库存。"]}',
+    ])
+    calls = []
+
+    def fake_chat(messages, **kwargs):
+        calls.append((messages, kwargs))
+        return next(responses)
+
+    monkeypatch.setattr("AI_Agent.deepseek.chat_deepseek", fake_chat)
+
+    translated = translation_module._deepseek_batch_translate(
+        ["Hola, tenemos stock."], "es", "zh-CN"
+    )
+
+    assert translated == ["你好，有库存。"]
+    assert len(calls) == 2
+    assert all(call[1]["response_format"] == {"type": "json_object"} for call in calls)
+
+
+def test_translation_json_parser_skips_non_json_reasoning_prefix():
+    decoded = translation_module._extract_json_object(
+        'analysis with {invalid json}\n```json\n{"translations":["中文"]}\n```'
+    )
+
+    assert decoded == {"translations": ["中文"]}

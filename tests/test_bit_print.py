@@ -144,6 +144,58 @@ def test_subsequent_scan_uses_incremental_api_window(monkeypatch):
     assert "order.date_created.from" not in calls["filters"]
 
 
+def test_selected_time_range_uses_created_window_and_upper_bound(monkeypatch):
+    now = datetime.now(timezone.utc)
+    start_at = now - timedelta(hours=8)
+    end_at = now - timedelta(hours=2)
+    calls = {}
+
+    class Client:
+        def iter_order_ids(self, _seller_id, **filters):
+            calls["filters"] = filters
+            return iter(())
+
+    record = {
+        "id": 7,
+        "display_name": "店铺甲",
+        "meli_user_id": "seller-7",
+        "access_token": "token",
+    }
+    monkeypatch.setattr(bit_print.bit_mysql, "get_mercado_store_token", lambda _id: record)
+    monkeypatch.setattr(
+        bit_print.bit_mysql,
+        "get_mercado_order_print_state",
+        lambda _id: {
+            "tracking_since": now - timedelta(days=2),
+            "last_scan_at": now - timedelta(minutes=10),
+        },
+    )
+    monkeypatch.setattr(bit_print, "_client_and_record", lambda row: (Client(), row))
+    monkeypatch.setattr(
+        bit_print.bit_mysql,
+        "save_mercado_order_print_state",
+        lambda _token_id, tracking_since, last_scan_at: calls.update(
+            tracking_since=tracking_since,
+            last_scan_at=last_scan_at,
+        ),
+    )
+
+    result = bit_print._scan_store_orders(
+        {"token_id": 7, "shop_name": "店铺甲", "sites": ["墨西哥"]},
+        fallback_hours=72,
+        start_at=start_at.isoformat(),
+        end_at=end_at.isoformat(),
+        logger=lambda _message: None,
+    )
+
+    assert calls["filters"]["order.date_created.from"] == bit_print._iso_millis(start_at)
+    assert calls["filters"]["order.date_created.to"] == bit_print._iso_millis(end_at)
+    assert "last_updated.from" not in calls["filters"]
+    assert result["tracking_since"] == start_at
+    assert result["end_at"] == end_at
+    assert calls["last_scan_at"] == end_at
+
+
 def test_shop_job_downloads_only_candidate_orders_and_records_success(monkeypatch):
     candidates = [
         _context("20001", "30001"),
@@ -195,6 +247,52 @@ def test_shop_job_downloads_only_candidate_orders_and_records_success(monkeypatc
     assert seen["candidate_args"][1]["include_previously_printed"] is False
     assert seen["recorded"] == ["20001", "20002", "20003"]
     assert len(documents) == 2
+
+
+def test_shop_job_skips_terminal_shipment_without_retrying_forever(monkeypatch):
+    candidate = _context("20001", "30001")
+    monkeypatch.setattr(
+        bit_print,
+        "_scan_store_orders",
+        lambda *_args, **_kwargs: {
+            "first_run": False,
+            "tracking_since": datetime.now(timezone.utc) - timedelta(days=1),
+            "end_at": datetime.now(timezone.utc),
+        },
+    )
+    monkeypatch.setattr(
+        bit_print.bit_mysql,
+        "list_mercado_order_print_candidates",
+        lambda *_args, **_kwargs: [candidate],
+    )
+    attempts = []
+
+    def unavailable(_context, **_kwargs):
+        attempts.append(1)
+        raise bit_print.bit_order_labels.MercadoLabelUnavailable(
+            "运单已取消",
+            shipment_status="cancelled",
+            permanent=True,
+        )
+
+    recorded = []
+    monkeypatch.setattr(bit_print, "_download_label", unavailable)
+    monkeypatch.setattr(
+        bit_print,
+        "_record_unavailable_orders",
+        lambda order_ids, _exc: recorded.extend(order_ids),
+    )
+
+    rows = bit_print._run_shop_job(
+        {"token_id": 7, "shop_name": "店铺甲", "sites": ["墨西哥"]},
+        max_retries=3,
+        logger=lambda _message: None,
+    )
+
+    assert attempts == [1]
+    assert recorded == ["20001"]
+    assert rows[0]["status"] == "skipped"
+    assert rows[0]["failed_count"] == 0
 
 
 def test_print_round_combines_multiple_selected_stores(monkeypatch, tmp_path):
@@ -253,3 +351,5 @@ def test_order_print_page_describes_api_unprinted_and_72_hour_fallback():
     assert "只处理未打印订单" in template
     assert "最近 72 小时" in template
     assert "API 授权店铺（可多选）" in template
+    assert 'id="order-print-date-from" type="datetime-local"' in template
+    assert 'id="order-print-date-to" type="datetime-local"' in template

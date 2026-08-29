@@ -1,4 +1,4 @@
-"""Translate Mercado Libre listing text between Spanish and Brazilian Portuguese."""
+"""Translate Mercado Libre commerce text with a cached DeepSeek backend."""
 
 from __future__ import annotations
 
@@ -20,6 +20,9 @@ MARKETPLACE_SITES = {
     "MLU": {"name": "乌拉圭", "language": "es"},
 }
 LANGUAGE_NAMES = {
+    "auto": "自动识别原文语言",
+    "zh-CN": "简体中文",
+    "en": "英语",
     "es": "拉丁美洲西班牙语",
     "pt-BR": "巴西葡萄牙语",
 }
@@ -70,16 +73,20 @@ def _extract_json_object(value: str) -> Mapping[str, Any]:
     if raw.startswith("```"):
         raw = re.sub(r"^```(?:json)?\s*", "", raw, flags=re.IGNORECASE)
         raw = re.sub(r"\s*```$", "", raw)
-    try:
-        decoded = json.loads(raw)
-    except json.JSONDecodeError:
-        match = re.search(r"\{.*\}", raw, flags=re.DOTALL)
-        if not match:
-            raise ListingTranslationError("翻译服务没有返回有效 JSON")
+    candidates = [raw]
+    candidates.extend(raw[index:] for index, char in enumerate(raw) if char == "{")
+    decoder = json.JSONDecoder()
+    decoded = None
+    for candidate in candidates:
         try:
-            decoded = json.loads(match.group(0))
-        except json.JSONDecodeError as exc:
-            raise ListingTranslationError("翻译服务返回的 JSON 无法解析") from exc
+            value, _end = decoder.raw_decode(candidate.lstrip())
+        except json.JSONDecodeError:
+            continue
+        if isinstance(value, Mapping):
+            decoded = value
+            break
+    if decoded is None:
+        raise ListingTranslationError("翻译服务没有返回有效 JSON")
     if not isinstance(decoded, Mapping):
         raise ListingTranslationError("翻译服务返回格式错误")
     return decoded
@@ -93,43 +100,58 @@ def _deepseek_batch_translate(
     try:
         from AI_Agent.deepseek import chat_deepseek
 
-        response = chat_deepseek(
-            [
-                {
-                    "role": "system",
-                    "content": (
-                        "你是 Mercado Libre 跨境电商翻译器。只做准确翻译，不扩写、不删减，"
-                        "保留品牌、型号、人物名、数字、单位、SKU 和 HTML 以外的原有结构。"
-                        "返回且只返回 JSON：{\"translations\":[\"...\"]}，顺序和数量必须与输入一致。"
-                    ),
-                },
-                {
-                    "role": "user",
-                    "content": json.dumps(
-                        {
-                            "source_language": LANGUAGE_NAMES[source_language],
-                            "target_language": LANGUAGE_NAMES[target_language],
-                            "texts": texts,
+        messages = [
+            {
+                "role": "system",
+                "content": (
+                    "你是 Mercado Libre 跨境电商翻译器。只做准确翻译，不扩写、不删减，"
+                    "保留品牌、型号、人物名、数字、单位、SKU 和 HTML 以外的原有结构。"
+                    "返回且只返回 JSON：{\"translations\":[\"...\"]}，顺序和数量必须与输入一致。"
+                ),
+            },
+            {
+                "role": "user",
+                "content": json.dumps(
+                    {
+                        "source_language": LANGUAGE_NAMES[source_language],
+                        "target_language": LANGUAGE_NAMES[target_language],
+                        "texts": texts,
+                        "json_output_example": {
+                            "translations": [
+                                f"翻译结果{index + 1}" for index in range(len(texts))
+                            ]
                         },
-                        ensure_ascii=False,
-                    ),
-                },
-            ],
-            temperature=0,
-            max_tokens=4096,
-        )
+                    },
+                    ensure_ascii=False,
+                ),
+            },
+        ]
     except ListingTranslationError:
         raise
     except Exception as exc:
         raise ListingTranslationError(f"自动翻译服务调用失败: {exc}") from exc
-    decoded = _extract_json_object(response)
-    translations = decoded.get("translations")
-    if not isinstance(translations, list) or len(translations) != len(texts):
-        raise ListingTranslationError("翻译结果数量与原文不一致")
-    result = [str(value or "").strip() for value in translations]
-    if any(not value for value in result):
-        raise ListingTranslationError("翻译结果包含空文本")
-    return result
+    last_error: ListingTranslationError | None = None
+    for _attempt in range(2):
+        try:
+            response = chat_deepseek(
+                messages,
+                temperature=0,
+                max_tokens=4096,
+                response_format={"type": "json_object"},
+            )
+            decoded = _extract_json_object(response)
+            translations = decoded.get("translations")
+            if not isinstance(translations, list) or len(translations) != len(texts):
+                raise ListingTranslationError("翻译结果数量与原文不一致")
+            result = [str(value or "").strip() for value in translations]
+            if any(not value for value in result):
+                raise ListingTranslationError("翻译结果包含空文本")
+            return result
+        except ListingTranslationError as exc:
+            last_error = exc
+        except Exception as exc:
+            last_error = ListingTranslationError(f"自动翻译服务调用失败: {exc}")
+    raise last_error or ListingTranslationError("翻译服务没有返回有效 JSON")
 
 
 def _cached_default_translate(
@@ -165,6 +187,42 @@ def _cached_default_translate(
                 _TRANSLATION_CACHE.pop(oldest, None)
                 _TRANSLATION_KEY_LOCKS.pop(oldest, None)
         return list(translated)
+
+
+def translate_texts(
+    texts: list[str],
+    source_language: str,
+    target_language: str,
+    *,
+    translator: BatchTranslator | None = None,
+) -> list[str]:
+    """Translate a bounded text batch while preserving order and item count."""
+    source = str(source_language or "").strip()
+    target = str(target_language or "").strip()
+    if source not in LANGUAGE_NAMES or target not in LANGUAGE_NAMES:
+        raise ListingTranslationError("不支持的翻译语言")
+    values = [str(value or "").strip() for value in texts]
+    if not values:
+        return []
+    if len(values) > 100:
+        raise ListingTranslationError("单次最多翻译 100 条文本")
+    if any(not value for value in values):
+        raise ListingTranslationError("待翻译文本不能为空")
+    if any(len(value) > 2000 for value in values):
+        raise ListingTranslationError("单条待翻译文本不能超过 2,000 字符")
+    if source == target:
+        return values
+    translated_values = (
+        translator(values, source, target)
+        if translator is not None
+        else _cached_default_translate(values, source, target)
+    )
+    if not isinstance(translated_values, list) or len(translated_values) != len(values):
+        raise ListingTranslationError("翻译结果数量与原文不一致")
+    result = [str(value or "").strip() for value in translated_values]
+    if any(not value for value in result):
+        raise ListingTranslationError("翻译结果包含空文本")
+    return result
 
 
 def _translatable_attribute(attribute: Mapping[str, Any]) -> bool:
@@ -248,10 +306,11 @@ def translate_listing_content(
 
     if not texts:
         return translated_source, translated_description, metadata
-    translated_values = (
-        translator(texts, source_language, str(target_language))
-        if translator is not None
-        else _cached_default_translate(texts, source_language, str(target_language))
+    translated_values = translate_texts(
+        texts,
+        source_language,
+        str(target_language),
+        translator=translator,
     )
     if not isinstance(translated_values, list) or len(translated_values) != len(texts):
         raise ListingTranslationError("翻译结果数量与原文不一致")
@@ -272,5 +331,6 @@ __all__ = [
     "marketplace_language",
     "marketplace_site_name",
     "normalize_marketplace_site",
+    "translate_texts",
     "translate_listing_content",
 ]

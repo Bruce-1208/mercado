@@ -43,6 +43,56 @@ def test_manual_date_range_rejects_reverse_dates():
         bit_order_sync._date_range("2026-08-23", "2026-08-01")
 
 
+def test_manual_datetime_range_uses_selected_china_times():
+    start_text, end_text, start_at, end_at = bit_order_sync._date_range(
+        "2026-08-29T08:30", "2026-08-29T09:45"
+    )
+
+    assert start_text == "2026-08-29T08:30"
+    assert end_text == "2026-08-29T09:45"
+    assert bit_order_sync._iso_millis(start_at) == "2026-08-29T00:30:00.000Z"
+    assert bit_order_sync._iso_millis(end_at) == "2026-08-29T01:46:00.000Z"
+
+
+def test_manual_sync_passes_selected_datetime_range_to_mercado(monkeypatch):
+    token = {
+        "id": 3,
+        "display_name": "泽顺巴西",
+        "meli_user_id": "seller-3",
+        "access_token": "secret",
+    }
+    filters_seen = {}
+    monkeypatch.setattr(bit_order_sync, "_token_records", lambda _ids: [token])
+
+    def fake_sync(_record, filters, **_options):
+        filters_seen.update(filters)
+        return {
+            "store": "泽顺巴西",
+            "status": "success",
+            "fetched": 0,
+            "inserted": 0,
+            "updated": 0,
+        }
+
+    monkeypatch.setattr(bit_order_sync, "_sync_store", fake_sync)
+
+    state = bit_order_sync.run_order_sync(
+        "2026-08-29T08:30",
+        "2026-08-29T09:45",
+        token_ids=[3],
+        mode="manual",
+    )
+
+    assert filters_seen == {
+        "sort": "date_asc",
+        "order.date_created.from": "2026-08-29T00:30:00.000Z",
+        "order.date_created.to": "2026-08-29T01:46:00.000Z",
+    }
+    assert state["start_date"] == "2026-08-29T08:30"
+    assert state["end_date"] == "2026-08-29T09:45"
+    assert any("08:30 至 2026-08-29T09:45" in row for row in state["logs"])
+
+
 def test_sync_store_fetches_every_order_and_upserts(monkeypatch):
     filters_seen = {}
 
@@ -105,6 +155,78 @@ def test_sync_enriches_order_sku_image_from_marketplace_item():
     bit_order_sync._enrich_order_images(Client(), orders)
 
     assert orders[0]["order_items"][0]["item"]["secure_thumbnail"] == "https://img.example/sku.jpg"
+
+
+def test_sync_uses_picture_assigned_to_purchased_variation():
+    orders = [
+        {
+            "id": "101",
+            "order_items": [
+                {
+                    "item": {
+                        "id": "MLB-1",
+                        "title": "鞋子",
+                        "variation_id": "202",
+                    }
+                }
+            ],
+        }
+    ]
+
+    class Client:
+        def get_marketplace_item(self, item_id):
+            assert item_id == "MLB-1"
+            return {
+                "pictures": [
+                    {"id": "main", "secure_url": "https://img.example/main-O.jpg"},
+                    {"id": "white-33", "secure_url": "https://img.example/white-33-O.jpg"},
+                ],
+                "variations": [
+                    {"id": 201, "picture_ids": ["main"]},
+                    {"id": 202, "picture_ids": ["white-33"]},
+                ],
+            }
+
+    bit_order_sync._enrich_order_images(Client(), orders)
+
+    product = orders[0]["order_items"][0]["item"]
+    assert product["sku_image_url"] == "https://img.example/white-33-O.jpg"
+    assert product["secure_thumbnail"] == "https://img.example/white-33-O.jpg"
+
+
+def test_mysql_builds_sku_items_with_variation_and_sku_image():
+    items = bit_mysql._mercado_order_sku_items(
+        {
+            "order_items": [
+                {
+                    "quantity": 2,
+                    "item": {
+                        "id": "MLB-1",
+                        "title": "鞋子",
+                        "seller_sku": "SHOE-WHITE-33",
+                        "variation_id": 202,
+                        "sku_image_url": "https://img.example/white-33-O.jpg",
+                        "variation_attributes": [
+                            {"name": "颜色", "value_name": "白色"},
+                            {"name": "尺码", "value_name": "33"},
+                        ],
+                    },
+                }
+            ]
+        }
+    )
+
+    assert items == [
+        {
+            "product_id": "MLB-1",
+            "seller_sku": "SHOE-WHITE-33",
+            "title": "鞋子",
+            "variation_id": "202",
+            "variation": "颜色: 白色 · 尺码: 33",
+            "quantity": 2,
+            "image_url": "https://img.example/white-33-O.jpg",
+        }
+    ]
 
 
 def test_automatic_sync_refreshes_recent_72_hours(monkeypatch):
@@ -307,6 +429,63 @@ def test_mysql_upsert_maps_token_order_origin_fields(monkeypatch):
     assert "status_label" in upsert_sql[0]
     assert "amount_currency_id" in upsert_sql[0]
     assert "workflow_status" not in upsert_sql[0]
+
+
+def test_mysql_upsert_uses_top_level_shipping_cost(monkeypatch):
+    captured_rows = []
+
+    class Cursor:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args):
+            return False
+
+        def execute(self, _sql, _params=None):
+            pass
+
+        def executemany(self, _sql, rows):
+            captured_rows.extend(rows)
+
+        def fetchall(self):
+            return []
+
+        def fetchone(self):
+            return {"Field": "exists"}
+
+    class Connection:
+        def cursor(self):
+            return Cursor()
+
+        def commit(self):
+            pass
+
+        def rollback(self):
+            pass
+
+        def close(self):
+            pass
+
+    monkeypatch.setattr(bit_mysql.pymysql, "connect", lambda **_kwargs: Connection())
+
+    bit_mysql.upsert_mercado_synced_orders(
+        {"id": 4, "display_name": "巴西店", "meli_user_id": "seller-4"},
+        [
+            {
+                "id": "40001",
+                "site_id": "MLB",
+                "currency_id": "USD",
+                "total_amount": 58.32,
+                "paid_amount": 10.86,
+                "shipping_cost": 31.99,
+                "shipping": {"id": "shipment-4", "cost": 999},
+                "order_items": [],
+            }
+        ],
+    )
+
+    row = captured_rows[0]
+    assert str(row[23]) == "31.99"
 
 
 def test_mysql_bulk_update_changes_only_authorized_store_orders(monkeypatch):

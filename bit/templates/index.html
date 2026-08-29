@@ -567,7 +567,7 @@
         }
 
         .order-table {
-            min-width: 1500px;
+            min-width: 1840px;
             table-layout: fixed;
         }
 
@@ -703,6 +703,40 @@
             align-items: center;
         }
 
+        .order-product-list {
+            display: grid;
+            gap: 8px;
+        }
+
+        .order-product + .order-product {
+            border-top: 1px dashed #dbe3ee;
+            padding-top: 8px;
+        }
+
+        .order-product-media,
+        .order-detail-sku-media {
+            position: relative;
+            display: grid;
+            place-items: center;
+            overflow: hidden;
+            border: 1px solid #e4eaf2;
+            border-radius: 7px;
+            background: #f5f7fa;
+        }
+
+        .order-product-media::after,
+        .order-detail-sku-media::after {
+            display: none;
+            color: #98a2b3;
+            content: "SKU";
+            font-weight: 900;
+        }
+
+        .order-product-media.missing::after,
+        .order-detail-sku-media.missing::after {
+            display: block;
+        }
+
         .order-product-image,
         .order-product-placeholder {
             width: 44px;
@@ -719,6 +753,15 @@
             color: #98a2b3;
             font-size: 16px;
             font-weight: 900;
+        }
+
+        .order-product-media {
+            width: 44px;
+            height: 44px;
+        }
+
+        .order-product-media .order-product-image {
+            border: 0;
         }
 
         .order-money {
@@ -861,6 +904,55 @@
             line-height: 1.55;
         }
 
+        .order-detail-skus {
+            grid-column: 1 / -1;
+            background: #fff;
+            padding: 16px;
+        }
+
+        .order-detail-skus > strong {
+            display: block;
+            margin-bottom: 10px;
+            color: #172033;
+            font-size: 14px;
+        }
+
+        .order-detail-sku-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+            gap: 10px;
+        }
+
+        .order-detail-sku-card {
+            display: grid;
+            grid-template-columns: 132px minmax(0, 1fr);
+            gap: 12px;
+            align-items: center;
+            border: 1px solid #e4eaf2;
+            border-radius: 10px;
+            background: #f8fafc;
+            padding: 10px;
+        }
+
+        .order-detail-sku-media,
+        .order-detail-sku-media img {
+            width: 132px;
+            height: 132px;
+            object-fit: contain;
+        }
+
+        .order-detail-sku-card strong,
+        .order-detail-sku-card span {
+            display: block;
+            overflow-wrap: anywhere;
+        }
+
+        .order-detail-sku-card span {
+            margin-top: 5px;
+            color: #667085;
+            font-size: 12px;
+        }
+
         .order-detail-log-section {
             padding: 16px 18px;
             border-top: 1px solid #e7edf5;
@@ -988,6 +1080,34 @@
             grid-template-columns: 1fr 1fr;
             gap: 10px;
             margin-bottom: 12px;
+        }
+
+        .order-sync-range-toolbar {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            flex-wrap: wrap;
+            gap: 10px;
+            margin-bottom: 8px;
+        }
+
+        .order-sync-range-toolbar strong {
+            color: #344054;
+            font-size: 13px;
+        }
+
+        .order-sync-range-presets {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: flex-end;
+            gap: 5px;
+        }
+
+        .order-sync-range-presets button {
+            min-height: 28px;
+            border-radius: 7px;
+            padding: 3px 9px;
+            font-size: 12px;
         }
 
         .order-sync-store-header {
@@ -1507,7 +1627,7 @@
         }
         .customer-service-toolbar {
             display: grid;
-            grid-template-columns: minmax(180px, 260px) 145px 145px minmax(220px, 1fr) auto auto;
+            grid-template-columns: minmax(130px, 180px) minmax(130px, 180px) minmax(180px, 250px) 135px 135px minmax(200px, 1fr) auto auto;
             gap: 8px;
             align-items: end;
             padding: 12px;
@@ -1697,7 +1817,7 @@
         .pre-sale-panel { overflow: hidden; }
         .pre-sale-toolbar {
             display: grid;
-            grid-template-columns: minmax(190px, 260px) minmax(150px, 210px) minmax(150px, 210px) minmax(210px, 1fr) auto auto;
+            grid-template-columns: repeat(4, minmax(150px, 1fr));
             gap: 8px;
             align-items: end;
             padding: 12px;
@@ -1778,6 +1898,15 @@
         .pre-sale-secondary { display: block; margin-top: 3px; color: #98a2b3; line-height: 1.4; }
         .pre-sale-account { color: #175cd3; }
         .pre-sale-question { display: block; color: #101828; line-height: 1.5; }
+        .pre-sale-translation-label { color: #175cd3; font-weight: 800; }
+        .pre-sale-original {
+            display: block;
+            margin-top: 3px;
+            color: #98a2b3;
+            font-size: 11px;
+            line-height: 1.4;
+        }
+        .pre-sale-translation-warning { color: #b54708; }
         .pre-sale-answer {
             display: block;
             margin-top: 6px;
@@ -1785,6 +1914,11 @@
             color: #667085;
             padding-left: 7px;
             line-height: 1.45;
+        }
+        .pre-sale-reply-preview {
+            min-height: 76px;
+            background: #f8fafc;
+            color: #344054;
         }
         .pre-sale-status-tag {
             display: inline-flex;
@@ -1868,6 +2002,15 @@
         .mercado-account-settings-grid input,
         .mercado-account-settings-grid select {
             width: 100%;
+        }
+
+        .mercado-bulk-account-settings-grid {
+            grid-template-columns: minmax(0, 1fr);
+        }
+
+        .mercado-token-select-column {
+            width: 38px;
+            text-align: center !important;
         }
 
         .mercado-site-settings-table {
@@ -6216,20 +6359,21 @@
                         <table class="order-table">
                             <colgroup>
                                 <col style="width:42px"><col style="width:110px"><col style="width:250px"><col style="width:150px">
-                                <col style="width:95px"><col style="width:90px"><col style="width:90px">
-                                <col style="width:72px"><col style="width:110px"><col style="width:120px">
+                                <col style="width:120px"><col style="width:85px"><col style="width:85px"><col style="width:95px">
+                                <col style="width:90px"><col style="width:90px"><col style="width:72px"><col style="width:110px"><col style="width:120px">
                                 <col style="width:100px"><col style="width:145px"><col style="width:165px"><col style="width:155px">
                             </colgroup>
                             <thead>
                                 <tr>
                                     <th><input class="order-row-checkbox" type="checkbox" aria-label="全选本页订单" onchange="toggleAllVisibleOrders(this.checked)"></th>
-                                    <th>订单号</th><th>商品</th><th>销售单号</th><th>金额（美元）</th><th>成本</th>
+                                    <th>订单号</th><th>商品</th><th>销售单号</th><th>金额（美元）</th>
+                                    <th>手续费</th><th>运费</th><th>结余</th><th>成本</th>
                                     <th>利润</th><th>利润率</th><th>状态</th><th>备货</th><th>签收/发货</th>
                                     <th>运单</th><th>买家 / 备注</th><th>下单时间（北京时间）</th>
                                 </tr>
                             </thead>
                             <tbody id="order-table-body">
-                                <tr class="order-loading-row"><td colspan="14">打开订单管理后加载数据</td></tr>
+                                <tr class="order-loading-row"><td colspan="17">打开订单管理后加载数据</td></tr>
                             </tbody>
                         </table>
                     </div>
@@ -6239,8 +6383,9 @@
                         <div class="order-pagination-actions">
                             <select id="order-page-size" aria-label="每页数量" onchange="changeOrderPageSize(this.value)">
                                 <option value="25">25 条/页</option>
-                                <option value="50" selected>50 条/页</option>
+                                <option value="50">50 条/页</option>
                                 <option value="100">100 条/页</option>
+                                <option value="200" selected>200 条/页</option>
                             </select>
                             <button class="secondary" id="order-prev-page" type="button" onclick="loadOrders(orderPage - 1)">‹</button>
                             <span id="order-page-indicator">1 / 1</span>
@@ -6267,7 +6412,7 @@
                     <div class="order-detail-footer">
                         <span id="order-detail-action-message">可打印当前订单或维护采购信息</span>
                         <div>
-                            <button class="secondary" type="button" onclick="printOrders([orderDetailOrderId])">打印美客多面单</button>
+                            <button class="secondary" type="button" onclick="printOrders(orderDetailOrderIds)">打印美客多面单</button>
                             <button class="primary" type="button" onclick="editOrderPurchaseFromDetail()">添加 / 修改采购单</button>
                         </div>
                     </div>
@@ -6283,6 +6428,16 @@
                     </div>
                     <div class="order-sync-body">
                         <p class="order-sync-note">后台每 15 分钟重新拉取全部授权店铺最近 72 小时内的订单；每天北京时间凌晨刷新 72 小时以前老订单的状态。这里的手动任务用于按日期回填历史订单。</p>
+                        <div class="order-sync-range-toolbar">
+                            <strong>自定义拉取时间段（北京时间）</strong>
+                            <div class="order-sync-range-presets" aria-label="常用拉取时间段">
+                                <button class="secondary" type="button" onclick="setOrderSyncRangeDays(1)">今天</button>
+                                <button class="secondary" type="button" onclick="setOrderSyncRangeDays(3)">近 3 天</button>
+                                <button class="secondary" type="button" onclick="setOrderSyncRangeDays(7)">近 7 天</button>
+                                <button class="secondary" type="button" onclick="setOrderSyncRangeDays(30)">近 30 天</button>
+                                <button class="secondary" type="button" onclick="clearOrderSyncRange()">清空</button>
+                            </div>
+                        </div>
                         <div class="order-sync-date-grid">
                             <div class="order-filter-field">
                                 <label for="order-sync-start-date">起始时间</label>
@@ -6868,6 +7023,7 @@
                         </div>
                     </form>
                 </dialog>
+
             </div>
 
             <div class="tab-page" id="tab-yandex">
@@ -7161,6 +7317,14 @@
 
                         <div class="collection-scope-panel">
                             <div class="order-print-settings">
+                                <div class="field">
+                                    <label for="order-print-date-from">订单开始时间</label>
+                                    <input class="minute-datetime" id="order-print-date-from" type="datetime-local" step="60">
+                                </div>
+                                <div class="field">
+                                    <label for="order-print-date-to">订单结束时间</label>
+                                    <input class="minute-datetime" id="order-print-date-to" type="datetime-local" step="60">
+                                </div>
                                 <div class="field">
                                     <label for="order-print-retries">单面单最大尝试次数</label>
                                     <select id="order-print-retries">
@@ -7725,6 +7889,8 @@
                                 <p id="mercado-token-total" style="margin: 3px 0 0; color: var(--muted); font-size: 13px;">共 0 家</p>
                             </div>
                             <div class="header-actions">
+                                <span class="reputation-selection-summary" id="mercado-token-selection-summary">已选择 0 家</span>
+                                <button class="primary" id="mercado-token-bulk-settings" type="button" onclick="openMercadoBulkSiteSettings()" disabled>批量设置业务员 / 比例</button>
                                 <button class="secondary" type="button" onclick="loadMercadoStoreTokens(true)">刷新列表</button>
                             </div>
                         </div>
@@ -7732,6 +7898,7 @@
                             <table class="reputation-table">
                                 <thead>
                                     <tr>
+                                        <th class="mercado-token-select-column"><input class="market-row-select" id="mercado-token-select-all" type="checkbox" aria-label="全选授权店铺" onchange="toggleAllMercadoStoreTokens(this.checked)"></th>
                                         <th>自定义名称</th>
                                         <th>店铺配置</th>
                                         <th>授权账号</th>
@@ -7743,7 +7910,7 @@
                                     </tr>
                                 </thead>
                                 <tbody id="mercado-token-body">
-                                    <tr><td class="empty-state" colspan="8">正在加载店铺授权...</td></tr>
+                                    <tr><td class="empty-state" colspan="9">正在加载店铺授权...</td></tr>
                                 </tbody>
                             </table>
                         </div>
@@ -7784,16 +7951,59 @@
                         </div>
                     </div>
                 </dialog>
+
+                <dialog class="order-detail-dialog mercado-site-settings-dialog" id="mercado-bulk-settings-dialog" onclick="if(event.target === this) this.close()">
+                    <div class="order-detail-header">
+                        <div>
+                            <h3 id="mercado-bulk-settings-title">批量设置店铺配置</h3>
+                            <p style="margin:3px 0 0;color:#667085;font-size:12px">统一业务员，分别设置六个站点的折扣比例</p>
+                        </div>
+                        <button class="order-detail-close" type="button" aria-label="关闭批量配置" onclick="document.getElementById('mercado-bulk-settings-dialog').close()">×</button>
+                    </div>
+                    <p class="mercado-site-settings-intro">以下配置应用到全部已选店铺；每家店铺原有分组保持不变。</p>
+                    <div class="mercado-account-settings-grid mercado-bulk-account-settings-grid">
+                        <div class="field">
+                            <label for="mercado-bulk-salesperson">业务员</label>
+                            <select id="mercado-bulk-salesperson"></select>
+                        </div>
+                    </div>
+                    <div class="mercado-site-settings-wrap">
+                        <table class="mercado-site-settings-table">
+                            <thead><tr><th>站点</th><th>折扣比例（%）</th></tr></thead>
+                            <tbody id="mercado-bulk-settings-body"></tbody>
+                        </table>
+                    </div>
+                    <p class="mercado-site-settings-message" id="mercado-bulk-settings-message" role="status"></p>
+                    <div class="order-detail-footer">
+                        <span id="mercado-bulk-settings-summary">尚未选择店铺</span>
+                        <div>
+                            <button class="secondary" type="button" onclick="document.getElementById('mercado-bulk-settings-dialog').close()">取消</button>
+                            <button class="primary" id="mercado-bulk-settings-save" type="button" onclick="saveMercadoBulkSiteSettings()">批量保存</button>
+                        </div>
+                    </div>
+                </dialog>
             </div>
 
             <div class="tab-page" id="tab-pre-sale">
                 <div class="tab-heading">
                     <h2>美客多售前问答</h2>
-                    <p>按账号、状态、产品和买家筛选问题，查看原文与翻译并直接回复</p>
+                    <p>按业务员对应店铺聚合查询；客户问题自动翻译成中文，中文回复自动翻译成买家当地语言</p>
                 </div>
 
                 <section class="panel pre-sale-panel">
                     <div class="pre-sale-toolbar">
+                        <div class="field">
+                            <label for="pre-sale-salesperson">业务员</label>
+                            <select id="pre-sale-salesperson" onchange="handlePreSaleScopeChange()">
+                                <option value="">全部业务员</option>
+                            </select>
+                        </div>
+                        <div class="field">
+                            <label for="pre-sale-group">分组</label>
+                            <select id="pre-sale-group" onchange="handlePreSaleScopeChange()">
+                                <option value="">全部分组</option>
+                            </select>
+                        </div>
                         <div class="field">
                             <label for="pre-sale-store">美客多账号</label>
                             <select id="pre-sale-store" onchange="resetPreSaleView()">
@@ -7825,7 +8035,7 @@
                         <button class="pre-sale-status-button" type="button" data-status="BANNED" onclick="setPreSaleStatus('BANNED')">被禁用 <span class="pre-sale-status-count" data-count-status="BANNED">—</span></button>
                         <button class="danger" id="pre-sale-bulk-delete" type="button" onclick="deleteSelectedPreSaleQuestions()" disabled>批量删除</button>
                     </div>
-                    <p class="pre-sale-message" id="pre-sale-message" role="status">选择账号后查询官方售前问题</p>
+                    <p class="pre-sale-message" id="pre-sale-message" role="status">可按业务员、分组或账号查询其名下全部店铺的售前问题</p>
                     <div class="pre-sale-list" id="pre-sale-list"><div class="customer-service-empty">点击“查询”读取官方售前问题</div></div>
                     <div class="pre-sale-pagination" id="pre-sale-pagination" hidden></div>
                 </section>
@@ -7835,12 +8045,13 @@
                     <div class="order-detail-header">
                         <div>
                             <h3 id="pre-sale-detail-title">售前问题详情</h3>
-                            <p style="margin:3px 0 0;color:#667085;font-size:12px">回复将直接提交到 Mercado Libre 官方接口</p>
+                            <p style="margin:3px 0 0;color:#667085;font-size:12px">中文回复会自动翻译成西班牙语或葡萄牙语后提交到 Mercado Libre</p>
                         </div>
                         <button class="order-detail-close" type="button" aria-label="关闭售前详情" onclick="closePreSaleDetail()">×</button>
                     </div>
                     <div class="pre-sale-detail" id="pre-sale-detail"><div class="customer-service-empty">正在读取详情...</div></div>
                 </dialog>
+
             </div>
 
             <div class="tab-page" id="tab-customer-service">
@@ -7855,6 +8066,18 @@
                         <button class="customer-service-mode" type="button" data-mode="claims" onclick="setCustomerServiceMode('claims')">⚖ 订单索赔</button>
                     </div>
                     <div class="customer-service-toolbar">
+                        <div class="field">
+                            <label for="customer-service-salesperson">业务员</label>
+                            <select id="customer-service-salesperson" onchange="changeCustomerServiceScope()">
+                                <option value="">全部业务员</option>
+                            </select>
+                        </div>
+                        <div class="field">
+                            <label for="customer-service-group">分组</label>
+                            <select id="customer-service-group" onchange="changeCustomerServiceScope()">
+                                <option value="">全部分组</option>
+                            </select>
+                        </div>
                         <div class="field">
                             <label for="customer-service-store">美客多账号</label>
                             <select id="customer-service-store" onchange="resetCustomerServiceView()">
@@ -7877,11 +8100,11 @@
                         <button class="secondary" type="button" onclick="resetCustomerServiceFilters()">重置</button>
                     </div>
                     <div class="customer-service-quick-filters" id="customer-service-quick-filters"></div>
-                    <p class="customer-service-message" id="customer-service-message" role="status">选择店铺后查询售后数据</p>
+                    <p class="customer-service-message" id="customer-service-message" role="status">可按业务员、分组或店铺查询全部售后数据</p>
                     <div class="customer-service-list" id="customer-service-list"><div class="customer-service-empty">点击“查询”读取官方售后数据</div></div>
                     <div class="customer-service-pagination" id="customer-service-pagination" hidden></div>
                 </section>
-                <p class="token-sensitive-note">未读会话来自官方 Pending Messages；打开详情使用不标记已读的查询。Model 6 店铺命中官方限制时会显示 403 原因。</p>
+                <p class="token-sensitive-note">售后消息聚合所选范围内全部店铺的官方 Pending Messages；打开详情使用不标记已读的查询，回复会自动使用消息所属店铺授权。Model 6 店铺命中官方限制时会显示 403 原因。</p>
 
                 <dialog class="order-detail-dialog customer-service-detail-dialog" id="customer-service-detail-dialog" onclick="if(event.target === this) closeCustomerServiceDetail()">
                     <div class="order-detail-header">
@@ -7973,18 +8196,28 @@
             <div class="tab-page" id="tab-zying-collection">
                 <div class="tab-heading">
                     <h2>智赢产品采集</h2>
-                    <p>运行 bit_zying_caiji 采集智赢商品；数据库已有的产品编号会在详情采集前直接跳过</p>
+                    <p>后台通过智赢 API 采集列表、详情及上架属性；浏览器只用于登录或刷新凭证，数据库已有的产品编号会在详情采集前直接跳过</p>
                 </div>
 
                 <section class="panel infractions-panel">
                     <div class="infractions-header">
                         <div>
                             <h2 class="panel-title" style="margin: 0;">采集任务</h2>
-                            <div class="risk-check-mode-note">按产品编号去重 · 每页立即入库 · 本地 Edge 需以 9222 调试端口启动</div>
+                            <div class="risk-check-mode-note">API 后台采集 · 按产品编号去重 · 每页立即入库 · 登录失效时可视化处理</div>
                         </div>
                         <div class="header-actions">
                             <button class="primary" id="start-zying-collection-btn" type="button" onclick="startZyingCollection()">启动产品采集</button>
                             <button class="secondary" type="button" onclick="loadZyingCollectionStatus()">刷新状态</button>
+                        </div>
+                    </div>
+                    <div id="zying-auth-panel" style="margin: 14px 0; padding: 14px 16px; border: 1px solid var(--border); border-radius: 12px; background: var(--panel-soft); display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap;">
+                        <div>
+                            <strong id="zying-auth-status">正在检测智赢登录状态...</strong>
+                            <div id="zying-auth-detail" class="risk-check-mode-note" style="margin-top: 4px;">登录凭证仅保存在本机，不会显示在页面中</div>
+                        </div>
+                        <div class="header-actions">
+                            <button class="secondary" id="open-zying-login-btn" type="button" onclick="openZyingLoginWindow()">打开登录窗口</button>
+                            <button class="primary" id="capture-zying-login-btn" type="button" onclick="captureZyingLoginState()">检测并保存登录状态</button>
                         </div>
                     </div>
                     <div class="risk-check-task-layout">
@@ -8004,14 +8237,14 @@
                                     <datalist id="zying-collection-category-options"></datalist>
                                 </div>
                                 <div class="field">
-                                    <label for="zying-collection-browser-type">采集浏览器</label>
+                                    <label for="zying-collection-browser-type">登录浏览器</label>
                                     <select id="zying-collection-browser-type" onchange="syncZyingCollectionBrowserFields()">
                                         <option value="bitbrowser">比特浏览器</option>
                                         <option value="edge">本地 Edge（9222）</option>
                                     </select>
                                 </div>
                                 <div class="field">
-                                    <label for="zying-collection-window-name">比特浏览器窗口名称</label>
+                                    <label for="zying-collection-window-name">比特浏览器窗口名称（仅登录）</label>
                                     <input id="zying-collection-window-name" type="text" maxlength="256" placeholder="直接输入窗口名称；留空使用默认窗口">
                                 </div>
                             </div>
@@ -8736,6 +8969,11 @@
         const zyingCollectionCategoryOptions = document.getElementById("zying-collection-category-options");
         const zyingCollectionBrowserType = document.getElementById("zying-collection-browser-type");
         const zyingCollectionWindowName = document.getElementById("zying-collection-window-name");
+        const zyingAuthPanel = document.getElementById("zying-auth-panel");
+        const zyingAuthStatus = document.getElementById("zying-auth-status");
+        const zyingAuthDetail = document.getElementById("zying-auth-detail");
+        const openZyingLoginBtn = document.getElementById("open-zying-login-btn");
+        const captureZyingLoginBtn = document.getElementById("capture-zying-login-btn");
         const zyingCollectionStatusText = document.getElementById("zying-collection-status-text");
         const zyingCollectionInserted = document.getElementById("zying-collection-inserted");
         const zyingCollectionExisting = document.getElementById("zying-collection-existing");
@@ -8872,6 +9110,9 @@
         const mercadoTokenFormMessage = document.getElementById("mercado-token-form-message");
         const mercadoTokenTotal = document.getElementById("mercado-token-total");
         const mercadoTokenBody = document.getElementById("mercado-token-body");
+        const mercadoTokenSelectAll = document.getElementById("mercado-token-select-all");
+        const mercadoTokenSelectionSummary = document.getElementById("mercado-token-selection-summary");
+        const mercadoTokenBulkSettings = document.getElementById("mercado-token-bulk-settings");
         const mercadoSiteSettingsDialog = document.getElementById("mercado-site-settings-dialog");
         const mercadoSiteSettingsTitle = document.getElementById("mercado-site-settings-title");
         const mercadoSiteSalesperson = document.getElementById("mercado-site-salesperson");
@@ -8879,6 +9120,15 @@
         const mercadoSiteSettingsBody = document.getElementById("mercado-site-settings-body");
         const mercadoSiteSettingsMessage = document.getElementById("mercado-site-settings-message");
         const mercadoSiteSettingsSave = document.getElementById("mercado-site-settings-save");
+        const mercadoBulkSettingsDialog = document.getElementById("mercado-bulk-settings-dialog");
+        const mercadoBulkSettingsTitle = document.getElementById("mercado-bulk-settings-title");
+        const mercadoBulkSalesperson = document.getElementById("mercado-bulk-salesperson");
+        const mercadoBulkSettingsBody = document.getElementById("mercado-bulk-settings-body");
+        const mercadoBulkSettingsMessage = document.getElementById("mercado-bulk-settings-message");
+        const mercadoBulkSettingsSummary = document.getElementById("mercado-bulk-settings-summary");
+        const mercadoBulkSettingsSave = document.getElementById("mercado-bulk-settings-save");
+        const preSaleSalesperson = document.getElementById("pre-sale-salesperson");
+        const preSaleGroup = document.getElementById("pre-sale-group");
         const preSaleStore = document.getElementById("pre-sale-store");
         const preSaleLoad = document.getElementById("pre-sale-load");
         const preSaleMessage = document.getElementById("pre-sale-message");
@@ -8888,6 +9138,8 @@
         const preSaleDetailTitle = document.getElementById("pre-sale-detail-title");
         const preSaleDetail = document.getElementById("pre-sale-detail");
         const preSaleBulkDelete = document.getElementById("pre-sale-bulk-delete");
+        const customerServiceSalesperson = document.getElementById("customer-service-salesperson");
+        const customerServiceGroup = document.getElementById("customer-service-group");
         const customerServiceStore = document.getElementById("customer-service-store");
         const customerServiceLoad = document.getElementById("customer-service-load");
         const customerServiceMessage = document.getElementById("customer-service-message");
@@ -9060,6 +9312,7 @@
         const orderSyncFooterStatus = document.getElementById("order-sync-footer-status");
         const orderSyncLog = document.getElementById("order-sync-log");
         let orderDetailOrderId = "";
+        let orderDetailOrderIds = [];
         let infractionDays = 30;
         let infractionsLoaded = false;
         let riskCheckLoaded = false;
@@ -9100,6 +9353,7 @@
         let zyingCollectionRunning = false;
         let zyingCollectionPollTimer = null;
         let zyingCollectionCategoriesLoaded = false;
+        let zyingCollectionCategoryNames = new Map();
         let fundStatusPollTimer = null;
         let mercadoTokenAuthorizationLoaded = Boolean(mercadoAuthorizationUrl?.value);
         let mercadoStoreTokensLoaded = false;
@@ -9108,13 +9362,21 @@
         let preSalePage = 1;
         let preSalePages = 1;
         let preSaleTotal = 0;
+        let preSaleOfficialTotal = 0;
+        let preSalePartialFailureCount = 0;
         let preSaleStatus = "UNANSWERED";
         let preSaleSummaryKey = "";
+        let preSaleQueryKey = "";
         const preSalePageSize = 20;
         const selectedPreSaleQuestionIds = new Set();
         let customerServiceLoaded = false;
         let customerServiceMode = "post-sale";
         let customerServiceRows = [];
+        let customerServiceAllRows = [];
+        let customerServiceLastQueryKey = "";
+        let customerServicePartialFailureCount = 0;
+        let customerServiceFailureMessages = [];
+        let customerServiceClaimStatusTotals = {opened: 0, closed: 0};
         let customerServiceSelectedIndex = -1;
         let customerServiceClaimBundle = null;
         let customerServicePage = 1;
@@ -9170,6 +9432,7 @@
         let mercadoPublishRecordsLoaded = false;
         let mercadoPublishRecordRows = [];
         const selectedMercadoPublishRecordIds = new Set();
+        const selectedMercadoStoreTokenIds = new Set();
         let mercadoSiteSettingsTokenId = 0;
         let mercadoSalespeople = [];
         const mercadoSiteDefinitions = [
@@ -9186,7 +9449,7 @@
         let orderOrigin = "token";
         let orderPage = 1;
         let orderPages = 1;
-        let orderPageSize = 50;
+        let orderPageSize = 200;
         let selectedOrderIds = new Set();
         let orderBulkRunning = false;
         let orderPurchaseSaving = false;
@@ -9695,10 +9958,13 @@
         }
 
         function updateOrderSelectionState() {
-            const visibleIds = orderRows.map(row => String(row.id || row.order_number || "")).filter(Boolean);
+            const visibleIds = orderRows.flatMap(orderRowIds);
             const selectedVisible = visibleIds.filter(orderId => selectedOrderIds.has(orderId));
             document.querySelectorAll("#tab-orders .order-row-checkbox").forEach(checkbox => {
-                if (checkbox.value) checkbox.checked = selectedOrderIds.has(String(checkbox.value));
+                const ids = String(checkbox.dataset.orderIds || checkbox.value || "").split(",").filter(Boolean);
+                const selected = ids.filter(orderId => selectedOrderIds.has(orderId)).length;
+                checkbox.checked = ids.length > 0 && selected === ids.length;
+                checkbox.indeterminate = selected > 0 && selected < ids.length;
             });
             const allChecked = visibleIds.length > 0 && selectedVisible.length === visibleIds.length;
             document.querySelectorAll("#tab-orders thead .order-row-checkbox, #order-select-all").forEach(checkbox => {
@@ -9725,46 +9991,114 @@
             updateOrderSelectionState();
         }
 
-        function toggleAllVisibleOrders(checked) {
-            orderRows.forEach(row => {
-                const orderId = String(row.id || row.order_number || "");
-                if (!orderId) return;
+        function toggleOrderGroupSelection(orderIds, checked, rowElement) {
+            String(orderIds || "").split(",").filter(Boolean).forEach(orderId => {
                 if (checked) selectedOrderIds.add(orderId);
                 else selectedOrderIds.delete(orderId);
+            });
+            rowElement?.classList.toggle("selected", Boolean(checked));
+            updateOrderSelectionState();
+        }
+
+        function toggleAllVisibleOrders(checked) {
+            orderRows.forEach(row => {
+                orderRowIds(row).forEach(orderId => {
+                    if (checked) selectedOrderIds.add(orderId);
+                    else selectedOrderIds.delete(orderId);
+                });
             });
             document.querySelectorAll("#order-table-body tr").forEach(row => row.classList.toggle("selected", Boolean(checked)));
             updateOrderSelectionState();
         }
 
-        function orderProductMarkup(row) {
-            const imageUrl = row.image_url ? mercadoSafeUrl(row.image_url) : "";
+        function orderRowIds(row) {
+            const values = Array.isArray(row?.merged_order_ids) && row.merged_order_ids.length
+                ? row.merged_order_ids
+                : [row?.id || row?.order_number];
+            return [...new Set(values.map(value => String(value || "")).filter(Boolean))];
+        }
+
+        function orderSkuItems(row) {
+            if (Array.isArray(row?.sku_items) && row.sku_items.length) return row.sku_items;
+            return [{
+                order_id: String(row?.id || row?.order_number || ""),
+                product_id: row?.product_id || row?.category || "",
+                seller_sku: "",
+                title: row?.title || "未记录商品标题",
+                variation: "",
+                quantity: row?.quantity || 1,
+                image_url: row?.image_url || "",
+            }];
+        }
+
+        function mergeVisibleOrders(rows) {
+            const groups = new Map();
+            (Array.isArray(rows) ? rows : []).forEach(source => {
+                const row = {...source};
+                row.merged_order_ids = orderRowIds(row);
+                row.sku_items = orderSkuItems(row).map(item => ({...item}));
+                row.merged_rows = [source];
+                const groupKey = `${row.store_id || ""}:${row.pack_id || row.id || row.order_number || ""}`;
+                if (!groups.has(groupKey)) {
+                    groups.set(groupKey, row);
+                    return;
+                }
+                const target = groups.get(groupKey);
+                target.merged_order_ids = [...new Set([...target.merged_order_ids, ...row.merged_order_ids])];
+                target.sku_items.push(...row.sku_items);
+                target.merged_rows.push(source);
+                ["amount", "amount_local", "fee", "freight", "balance", "income", "cost", "profit", "quantity"].forEach(field => {
+                    target[field] = orderNumberValue(target[field]) + orderNumberValue(row[field]);
+                });
+                if (!target.image_url && row.image_url) target.image_url = row.image_url;
+                if (target.purchase_order !== row.purchase_order) target.purchase_order = "多个采购单";
+            });
+            return Array.from(groups.values()).map(row => ({
+                ...row,
+                is_merged: row.merged_order_ids.length > 1,
+            }));
+        }
+
+        function orderSkuImageMarkup(item, detail = false) {
+            const imageUrl = item?.image_url ? mercadoSafeUrl(item.image_url) : "";
+            const mediaClass = detail ? "order-detail-sku-media" : "order-product-media";
+            const imageClass = detail ? "" : "order-product-image";
             const image = imageUrl
-                ? `<img class="order-product-image" src="${escapeHtml(imageUrl)}" alt="" loading="lazy">`
-                : '<span class="order-product-placeholder">图</span>';
-            return `
+                ? `<img class="${imageClass}" src="${escapeHtml(imageUrl)}" alt="SKU ${escapeHtml(item?.seller_sku || item?.product_id || "")}" loading="lazy" referrerpolicy="no-referrer" onerror="this.style.display='none';this.parentElement.classList.add('missing')">`
+                : "";
+            return `<div class="${mediaClass}${imageUrl ? "" : " missing"}">${image}</div>`;
+        }
+
+        function orderProductMarkup(row) {
+            return `<div class="order-product-list">${orderSkuItems(row).map(item => `
                 <div class="order-product">
-                    ${image}
+                    ${orderSkuImageMarkup(item)}
                     <div class="order-cell-stack">
-                        <strong title="${escapeHtml(row.title || "")}">${escapeHtml(row.title || "未记录商品标题")}</strong>
-                        <span>${escapeHtml(row.product_id || row.category || "-")} · 数量 ${escapeHtml(row.quantity || 1)}</span>
+                        <strong title="${escapeHtml(item.title || "")}">${escapeHtml(item.title || "未记录商品标题")}</strong>
+                        <span>SKU ${escapeHtml(item.seller_sku || item.product_id || "-")} · 数量 ${escapeHtml(item.quantity || 1)}</span>
+                        ${item.variation ? `<span>${escapeHtml(item.variation)}</span>` : ""}
                     </div>
                 </div>
-            `;
+            `).join("")}</div>`;
         }
 
         function renderOrderRows(rows) {
-            orderRows = Array.isArray(rows) ? rows : [];
+            orderRows = mergeVisibleOrders(rows);
             if (!orderRows.length) {
-                orderTableBody.innerHTML = '<tr class="order-loading-row"><td colspan="14">没有符合当前条件的订单</td></tr>';
+                orderTableBody.innerHTML = '<tr class="order-loading-row"><td colspan="17">没有符合当前条件的订单</td></tr>';
                 updateOrderSelectionState();
                 return;
             }
             orderTableBody.innerHTML = orderRows.map((row, index) => {
                 const profit = orderNumberValue(row.profit);
                 const income = orderNumberValue(row.income);
+                const balance = orderNumberValue(row.balance);
                 const margin = income ? profit * 100 / income : 0;
                 const encodedId = encodeURIComponent(String(row.id || row.order_number || ""));
                 const orderId = String(row.id || row.order_number || "");
+                const mergedOrderIds = orderRowIds(row);
+                const encodedOrderIds = encodeURIComponent(JSON.stringify(mergedOrderIds));
+                const allSelected = mergedOrderIds.every(value => selectedOrderIds.has(value));
                 const stateClass = orderStateClass(row.status);
                 const tracking = row.purchase_tracking || "";
                 const assignment = [
@@ -9775,19 +10109,23 @@
                         : "",
                 ].filter(Boolean).join(" · ");
                 return `
-                    <tr class="${selectedOrderIds.has(orderId) ? "selected" : ""}" onclick="showOrderDetail(${index})" tabindex="0" onkeydown="if(event.key === 'Enter') showOrderDetail(${index})">
-                        <td onclick="event.stopPropagation()"><input class="order-row-checkbox" type="checkbox" value="${escapeHtml(orderId)}" aria-label="选择订单 ${escapeHtml(orderId)}" onchange="toggleOrderSelection(this.value, this.checked, this.closest('tr'))" ${selectedOrderIds.has(orderId) ? "checked" : ""}></td>
+                    <tr class="${allSelected ? "selected" : ""}" onclick="showOrderDetail(${index})" tabindex="0" onkeydown="if(event.key === 'Enter') showOrderDetail(${index})">
+                        <td onclick="event.stopPropagation()"><input class="order-row-checkbox" type="checkbox" value="${escapeHtml(orderId)}" data-order-ids="${escapeHtml(mergedOrderIds.join(','))}" aria-label="选择订单 ${escapeHtml(mergedOrderIds.join('、'))}" onchange="toggleOrderGroupSelection(this.dataset.orderIds, this.checked, this.closest('tr'))" ${allSelected ? "checked" : ""}></td>
                         <td><div class="order-cell-stack">
                             <button class="order-copy-link" type="button" title="复制订单号" onclick="event.stopPropagation(); copyOrderNumber('${encodedId}', this)">
-                                ${escapeHtml(row.id || "-")} <span aria-hidden="true">⧉</span>
+                                ${escapeHtml(row.is_merged ? `合并单 ${row.pack_id}` : (row.id || "-"))} <span aria-hidden="true">⧉</span>
                             </button>
-                            <button class="order-copy-link" type="button" title="调用美客多接口打印发货面单" onclick="event.stopPropagation(); printOrders([decodeURIComponent('${encodedId}')])">打印面单</button>
+                            ${row.is_merged ? `<span>${mergedOrderIds.length} 个子订单</span>` : ""}
+                            <button class="order-copy-link" type="button" title="调用美客多接口打印发货面单" onclick="event.stopPropagation(); printOrders(JSON.parse(decodeURIComponent('${encodedOrderIds}')))">打印面单</button>
                             <span class="order-country-tag">${escapeHtml(row.country || "未分类")}</span>
                             <span class="order-origin-tag token">Token 拉取</span>
                         </div></td>
                         <td>${orderProductMarkup(row)}</td>
                         <td><div class="order-cell-stack"><strong>${escapeHtml(row.order_number || "-")}</strong><span>${escapeHtml(row.shop_name || row.source || "美客多")}</span></div></td>
-                        <td><div class="order-cell-stack"><strong class="order-money">${escapeHtml(orderAmount(row.amount))}</strong><span title="${escapeHtml(orderExchangeDescription(row))}">${escapeHtml(orderExchangeDescription(row))}</span><span title="${escapeHtml(orderCnyExchangeDescription(row))}">人民币收入 ${escapeHtml(orderCnyIncome(row.income))}</span><span>运费 ${escapeHtml(orderAmount(row.freight ?? 0))}</span></div></td>
+                        <td><div class="order-cell-stack"><strong class="order-money">${escapeHtml(orderAmount(row.amount))}</strong><span title="${escapeHtml(orderExchangeDescription(row))}">${escapeHtml(orderExchangeDescription(row))}</span><span title="${escapeHtml(orderCnyExchangeDescription(row))}">人民币收入 ${escapeHtml(orderCnyIncome(row.income))}</span></div></td>
+                        <td><span class="order-money">${escapeHtml(orderAmount(row.fee ?? 0))}</span></td>
+                        <td><span class="order-money" title="${escapeHtml(orderOriginalAmount(row, 'freight_local'))}">${escapeHtml(orderAmount(row.freight))}</span></td>
+                        <td><span class="order-money ${balance < 0 ? "negative" : "positive"}" title="订单金额－手续费－运费">${escapeHtml(orderAmount(row.balance))}</span></td>
                         <td><span class="order-money">${escapeHtml(orderMoney(row.cost))}</span></td>
                         <td><span class="order-money ${profit < 0 ? "negative" : "positive"}">${escapeHtml(orderMoney(profit))}</span></td>
                         <td><span class="order-money ${margin < 0 ? "negative" : "positive"}">${margin.toFixed(1)}%</span></td>
@@ -9795,7 +10133,7 @@
                         <td><div class="order-cell-stack">
                             <strong>${escapeHtml(row.purchase_order || "待处理")}</strong>
                             <span>${row.purchase_order ? `成本 ${orderMoney(row.cost || 0)}` : "尚未汇总"}</span>
-                            <button class="order-copy-link" type="button" onclick="event.stopPropagation(); openPurchaseOrderDialog([decodeURIComponent('${encodedId}')])">${row.purchase_order ? "修改采购单" : "添加采购单"}</button>
+                            <button class="order-copy-link" type="button" onclick="event.stopPropagation(); openPurchaseOrderDialog(JSON.parse(decodeURIComponent('${encodedOrderIds}')))">${row.purchase_order ? "修改采购单" : "添加采购单"}</button>
                         </div></td>
                         <td><span class="order-state-tag ${stateClass}">${orderFulfilmentText(row.status)}</span></td>
                         <td><div class="order-cell-stack">${tracking ? `
@@ -9827,14 +10165,14 @@
             const startDate = String(orderStartDate?.value || "");
             const endDate = String(orderEndDate?.value || "");
             if (startDate && endDate && startDate > endDate) {
-                orderTableBody.innerHTML = '<tr class="order-loading-row"><td colspan="13">起始时间不能晚于截止时间</td></tr>';
+                orderTableBody.innerHTML = '<tr class="order-loading-row"><td colspan="17">起始时间不能晚于截止时间</td></tr>';
                 return;
             }
             const requestId = ++orderLoadSequence;
             clearOrderSelection();
             ordersLoading = true;
             orderRefreshButton.disabled = true;
-            orderTableBody.innerHTML = '<tr class="order-loading-row"><td colspan="14"><span class="order-loading-dot"></span>正在读取订单数据</td></tr>';
+            orderTableBody.innerHTML = '<tr class="order-loading-row"><td colspan="17"><span class="order-loading-dot"></span>正在读取订单数据</td></tr>';
             const page = Math.max(1, Math.min(Number(targetPage || 1), orderPages || 1));
             const params = new URLSearchParams({
                 country: orderCountry,
@@ -9876,7 +10214,7 @@
             } catch (error) {
                 if (requestId !== orderLoadSequence) return;
                 orderRows = [];
-                orderTableBody.innerHTML = `<tr class="order-loading-row"><td colspan="14">加载失败：${escapeHtml(error.message || error)}<br><button class="secondary" type="button" style="margin-top:12px" onclick="loadOrders(1)">重新加载</button></td></tr>`;
+                orderTableBody.innerHTML = `<tr class="order-loading-row"><td colspan="17">加载失败：${escapeHtml(error.message || error)}<br><button class="secondary" type="button" style="margin-top:12px" onclick="loadOrders(1)">重新加载</button></td></tr>`;
                 orderPaginationSummary.textContent = "订单数据暂不可用";
             } finally {
                 if (requestId === orderLoadSequence) {
@@ -9986,28 +10324,31 @@
             const targetIds = Array.isArray(orderIds) && orderIds.length
                 ? orderIds.map(String)
                 : Array.from(selectedOrderIds);
-            const rows = targetIds.map(orderId => orderRows.find(row => String(row.id || row.order_number) === orderId)).filter(Boolean);
+            const rows = [...new Set(targetIds.map(orderId =>
+                orderRows.find(row => orderRowIds(row).includes(orderId))
+            ).filter(Boolean))];
             if (!rows.length) {
                 orderBulkMessage.textContent = "请先选择需要添加采购单的订单";
                 return;
             }
-            orderPurchaseTargetIds = rows.map(row => String(row.id || row.order_number));
-            orderPurchaseTitle.textContent = rows.length === 1 && rows[0].purchase_order ? "修改采购单" : "添加采购单";
-            orderPurchaseProducts.innerHTML = rows.map(row => {
-                const imageUrl = row.image_url ? mercadoSafeUrl(row.image_url) : "";
+            orderPurchaseTargetIds = [...new Set(targetIds)];
+            const purchaseRows = rows.flatMap(row => Array.isArray(row.merged_rows) ? row.merged_rows : [row]);
+            orderPurchaseTitle.textContent = orderPurchaseTargetIds.length === 1 && rows[0].purchase_order ? "修改采购单" : "添加采购单";
+            orderPurchaseProducts.innerHTML = rows.flatMap(row => orderSkuItems(row).map(item => {
+                const imageUrl = item.image_url ? mercadoSafeUrl(item.image_url) : "";
                 return `
                     <div class="order-purchase-product">
-                        ${imageUrl ? `<img src="${escapeHtml(imageUrl)}" alt="${escapeHtml(row.product_id || "SKU")}">` : '<span class="placeholder">图</span>'}
-                        <div><strong>${escapeHtml(row.title || "未记录商品标题")}</strong><span>订单 ${escapeHtml(row.id || row.order_number)} · SKU ${escapeHtml(row.product_id || "-")}</span><span>${escapeHtml(row.shop_name || "未记录店铺")}</span></div>
+                        ${imageUrl ? `<img src="${escapeHtml(imageUrl)}" alt="${escapeHtml(item.seller_sku || item.product_id || "SKU")}" referrerpolicy="no-referrer">` : '<span class="placeholder">SKU</span>'}
+                        <div><strong>${escapeHtml(item.title || "未记录商品标题")}</strong><span>订单 ${escapeHtml(item.order_id || row.id || row.order_number)} · SKU ${escapeHtml(item.seller_sku || item.product_id || "-")}</span><span>${escapeHtml(item.variation || row.shop_name || "未记录店铺")}</span></div>
                     </div>
                 `;
-            }).join("");
-            orderPurchaseNumber.value = commonOrderValue(rows, "purchase_order");
-            orderPurchaseTracking.value = commonOrderValue(rows, "purchase_tracking");
-            orderLogisticsCompany.value = commonOrderValue(rows, "logistics_company");
-            orderPurchaseCost.value = commonOrderValue(rows, "cost");
-            orderPurchaseRemark.value = commonOrderValue(rows, "purchase_remark");
-            orderPurchaseMessage.textContent = rows.length > 1 ? `将采购信息应用到 ${rows.length} 个订单` : "可新增或修改采购信息";
+            })).join("");
+            orderPurchaseNumber.value = commonOrderValue(purchaseRows, "purchase_order");
+            orderPurchaseTracking.value = commonOrderValue(purchaseRows, "purchase_tracking");
+            orderLogisticsCompany.value = commonOrderValue(purchaseRows, "logistics_company");
+            orderPurchaseCost.value = commonOrderValue(purchaseRows, "cost");
+            orderPurchaseRemark.value = commonOrderValue(purchaseRows, "purchase_remark");
+            orderPurchaseMessage.textContent = orderPurchaseTargetIds.length > 1 ? `将采购信息应用到 ${orderPurchaseTargetIds.length} 个子订单` : "可新增或修改采购信息";
             if (typeof orderPurchaseDialog.showModal === "function" && !orderPurchaseDialog.open) orderPurchaseDialog.showModal();
         }
 
@@ -10056,7 +10397,7 @@
         }
 
         async function openOrderTracking(orderId) {
-            const row = orderRows.find(item => String(item.id || item.order_number) === String(orderId));
+            const row = orderRows.find(item => orderRowIds(item).includes(String(orderId)));
             const trackingNumber = String(row?.purchase_tracking || "");
             orderTrackingTitle.textContent = `物流轨迹 · ${trackingNumber || "未填写物流号"}`;
             orderTrackingSubtitle.textContent = `采购单 ${row?.purchase_order || "-"} · 订单 ${orderId}`;
@@ -10087,7 +10428,7 @@
         }
 
         function changeOrderPageSize(value) {
-            orderPageSize = Math.max(10, Math.min(200, Number(value || 50)));
+            orderPageSize = Math.max(10, Math.min(200, Number(value || 200)));
             orderPages = 1;
             loadOrders(1);
         }
@@ -10206,18 +10547,22 @@
 
         function editOrderPurchaseFromDetail() {
             if (!orderDetailOrderId) return;
-            openPurchaseOrderDialog([orderDetailOrderId]);
+            openPurchaseOrderDialog(orderDetailOrderIds);
         }
 
         function showOrderDetail(index) {
             const row = orderRows[Number(index)];
             if (!row || !orderDetailDialog) return;
             orderDetailOrderId = String(row.id || row.order_number || "");
+            orderDetailOrderIds = orderRowIds(row);
             const profit = orderNumberValue(row.profit);
             const income = orderNumberValue(row.income);
             const margin = income ? profit * 100 / income : 0;
-            orderDetailTitle.textContent = `订单 ${row.id || row.order_number || "详情"}`;
+            orderDetailTitle.textContent = row.is_merged
+                ? `合并单 ${row.pack_id} · ${orderDetailOrderIds.length} 个子订单`
+                : `订单 ${row.id || row.order_number || "详情"}`;
             const items = [
+                ["子订单号", orderDetailOrderIds.join("、"), true],
                 ["销售单号", row.order_number || "-"], ["国家地区", row.country || "-"],
                 ["处理状态", row.status || "未分类"], ["平台状态", row.platform_status || row.status || "未分类"],
                 ["数据来源", "Token 自动拉取"], ["店铺", row.shop_name || "-"],
@@ -10225,6 +10570,9 @@
                 ["站点折扣", row.discount_rate !== null && row.discount_rate !== undefined ? `${Number(row.discount_rate).toLocaleString("zh-CN")}%` : "未设置"],
                 ["Shipment ID", row.platform_shipping_id || "未生成"],
                 ["订单金额（美元）", orderAmount(row.amount)], ["原币金额", orderOriginalAmount(row)],
+                ["手续费（美元）", orderAmount(row.fee ?? 0)], ["运费（美元）", orderAmount(row.freight)],
+                ["运费（原币）", orderOriginalAmount(row, "freight_local")],
+                ["结余（美元）", orderAmount(row.balance)],
                 ["美元换算汇率", orderExchangeDescription(row), true], ["人民币收入", orderCnyIncome(row.income)],
                 ["美元兑人民币汇率", orderCnyExchangeDescription(row), true],
                 ["采购成本", orderMoney(row.cost)], ["利润 / 利润率", `${orderMoney(profit)} / ${margin.toFixed(1)}%`],
@@ -10234,7 +10582,20 @@
                 ["买家", row.buyer || "-"], ["下单时间（北京时间）", row.ordered_at || "-"],
                 ["商品", row.title || "未记录商品标题", true], ["订单备注", row.remark || "无备注", true],
             ];
-            orderDetailContent.innerHTML = items.map(([label, value, wide]) => `
+            const skuGallery = `<section class="order-detail-skus">
+                <strong>${row.is_merged ? "合并单全部 SKU" : "SKU 图片"}</strong>
+                <div class="order-detail-sku-grid">${orderSkuItems(row).map(item => `
+                    <article class="order-detail-sku-card">
+                        ${orderSkuImageMarkup(item, true)}
+                        <div><strong>${escapeHtml(item.title || "未记录商品标题")}</strong>
+                            <span>SKU ${escapeHtml(item.seller_sku || item.product_id || "-")} · 数量 ${escapeHtml(item.quantity || 1)}</span>
+                            ${item.variation ? `<span>${escapeHtml(item.variation)}</span>` : ""}
+                            <span>子订单 ${escapeHtml(item.order_id || orderDetailOrderId)}</span>
+                        </div>
+                    </article>
+                `).join("")}</div>
+            </section>`;
+            orderDetailContent.innerHTML = skuGallery + items.map(([label, value, wide]) => `
                 <div class="order-detail-item${wide ? " wide" : ""}"><span>${escapeHtml(label)}</span><strong>${escapeHtml(value)}</strong></div>
             `).join("");
             orderDetailActionMessage.textContent = "可打印当前订单或维护采购信息";
@@ -10244,21 +10605,34 @@
 
         async function openOrderSyncDialog() {
             if (!orderSyncDialog) return;
-            if (!orderSyncEndDate.value) {
-                const end = new Date();
-                const start = new Date();
-                end.setSeconds(0, 0);
-                start.setDate(start.getDate() - 6);
-                start.setHours(0, 0, 0, 0);
-                orderSyncStartDate.value = localDateTimeText(start);
-                orderSyncEndDate.value = localDateTimeText(end);
-                syncDateTimeControl(orderSyncStartDate);
-                syncDateTimeControl(orderSyncEndDate);
-            }
+            syncDateTimeControl(orderSyncStartDate);
+            syncDateTimeControl(orderSyncEndDate);
             if (typeof orderSyncDialog.showModal === "function" && !orderSyncDialog.open) {
                 orderSyncDialog.showModal();
             }
             await Promise.all([loadOrderSyncOptions(), loadOrderSyncStatus()]);
+        }
+
+        function setOrderSyncRangeDays(days) {
+            const dayCount = Math.max(1, Number(days) || 1);
+            const end = new Date();
+            const start = new Date(end);
+            end.setSeconds(0, 0);
+            start.setDate(start.getDate() - (dayCount - 1));
+            start.setHours(0, 0, 0, 0);
+            orderSyncStartDate.value = localDateTimeText(start);
+            orderSyncEndDate.value = localDateTimeText(end);
+            syncDateTimeControl(orderSyncStartDate);
+            syncDateTimeControl(orderSyncEndDate);
+            orderSyncFooterStatus.textContent = `已选择近 ${dayCount} 天，可继续手动调整起止时间`;
+        }
+
+        function clearOrderSyncRange() {
+            orderSyncStartDate.value = "";
+            orderSyncEndDate.value = "";
+            syncDateTimeControl(orderSyncStartDate);
+            syncDateTimeControl(orderSyncEndDate);
+            orderSyncFooterStatus.textContent = "请选择自定义起始时间和截止时间";
         }
 
         function closeOrderSyncDialog() {
@@ -10313,6 +10687,7 @@
         function renderOrderSyncStatus(data = {}) {
             const wasRunning = ordersSyncRunning;
             ordersSyncRunning = Boolean(data.running);
+            const manualSyncRunning = ordersSyncRunning && String(data.mode || "") === "manual";
             const intervalMinutes = Math.max(1, Math.round(Number(data.sync_interval_seconds || 900) / 60));
             if (ordersSyncRunning) {
                 const dailyStatus = String(data.mode || "") === "daily_status";
@@ -10332,13 +10707,23 @@
             document.getElementById("order-sync-fetched").textContent = Number(data.fetched_count || 0).toLocaleString("zh-CN");
             document.getElementById("order-sync-inserted").textContent = Number(data.inserted_count || 0).toLocaleString("zh-CN");
             document.getElementById("order-sync-updated").textContent = Number(data.updated_count || 0).toLocaleString("zh-CN");
-            orderSyncFooterStatus.textContent = data.message || "等待拉取任务";
+            const selectedRange = data.start_date && data.end_date
+                ? `${String(data.start_date).replace("T", " ")} 至 ${String(data.end_date).replace("T", " ")}`
+                : "";
+            orderSyncFooterStatus.textContent = selectedRange && String(data.mode || "") === "manual"
+                ? `${data.message || "正在拉取订单"} · ${selectedRange}`
+                : (data.message || "等待拉取任务");
             orderSyncLog.textContent = (data.logs || []).join("\n") || "等待拉取任务";
             orderSyncLog.scrollTop = orderSyncLog.scrollHeight;
             orderSyncStartButton.disabled = ordersSyncRunning || !orderSyncStoreRows.length;
-            orderSyncStartDate.disabled = ordersSyncRunning;
-            orderSyncEndDate.disabled = ordersSyncRunning;
-            orderSyncStoreList.querySelectorAll("input").forEach(input => { input.disabled = ordersSyncRunning; });
+            orderSyncStartDate.disabled = manualSyncRunning;
+            orderSyncEndDate.disabled = manualSyncRunning;
+            orderSyncStoreList.querySelectorAll("input").forEach(input => {
+                input.disabled = manualSyncRunning;
+            });
+            orderSyncDialog.querySelectorAll(".order-sync-range-presets button").forEach(button => {
+                button.disabled = manualSyncRunning;
+            });
             if (wasRunning && !ordersSyncRunning && ["completed", "partial"].includes(String(data.status))) {
                 loadOrders(1);
             }
@@ -11715,6 +12100,22 @@
             return mercadoSalespeople;
         }
 
+        function mercadoSalespersonOptions(selected = "", emptyLabel = "未分配") {
+            const salesperson = String(selected || "").trim();
+            const options = [
+                `<option value="">${escapeHtml(emptyLabel)}</option>`,
+                ...mercadoSalespeople.map(name => `
+                    <option value="${escapeHtml(name)}" ${name === salesperson ? "selected" : ""}>${escapeHtml(name)}</option>
+                `),
+            ];
+            if (salesperson && !mercadoSalespeople.includes(salesperson)) {
+                options.splice(1, 0, `
+                    <option value="${escapeHtml(salesperson)}" selected disabled>${escapeHtml(salesperson)}（不在启用人员中）</option>
+                `);
+            }
+            return options.join("");
+        }
+
         function renderMercadoSiteSettings(rows = []) {
             if (!mercadoSiteSettingsBody) return;
             const records = Array.isArray(rows) ? rows : [];
@@ -11729,18 +12130,7 @@
             ));
             const salesperson = salespeople[0] || "";
             const groupName = groups[0] || "";
-            const salespersonOptions = [
-                '<option value="">未分配</option>',
-                ...mercadoSalespeople.map(name => `
-                    <option value="${escapeHtml(name)}" ${name === salesperson ? "selected" : ""}>${escapeHtml(name)}</option>
-                `),
-            ];
-            if (salesperson && !mercadoSalespeople.includes(salesperson)) {
-                salespersonOptions.splice(1, 0, `
-                    <option value="${escapeHtml(salesperson)}" selected disabled>${escapeHtml(salesperson)}（不在启用人员中）</option>
-                `);
-            }
-            mercadoSiteSalesperson.innerHTML = salespersonOptions.join("");
+            mercadoSiteSalesperson.innerHTML = mercadoSalespersonOptions(salesperson);
             mercadoSiteGroupName.value = groupName;
             mercadoSiteSettingsBody.innerHTML = mercadoSiteDefinitions.map(([siteId, siteName]) => {
                 const setting = settings.get(siteId) || {};
@@ -11850,6 +12240,169 @@
             } finally {
                 mercadoSiteSettingsSave.disabled = false;
                 mercadoSiteSettingsSave.textContent = "保存配置";
+            }
+        }
+
+        function setMercadoBulkSettingsMessage(message, isError = false) {
+            if (!mercadoBulkSettingsMessage) return;
+            mercadoBulkSettingsMessage.textContent = String(message || "");
+            mercadoBulkSettingsMessage.classList.toggle("error", Boolean(isError));
+        }
+
+        function selectedMercadoStoreAccounts() {
+            return mercadoStoreTokenRows.filter(row => (
+                selectedMercadoStoreTokenIds.has(Number(row.id || 0))
+            ));
+        }
+
+        function mercadoAccountSalesperson(account) {
+            return String(
+                (Array.isArray(account?.site_settings) ? account.site_settings : [])
+                    .map(setting => String(setting.salesperson || "").trim())
+                    .find(Boolean) || "",
+            );
+        }
+
+        function mercadoAccountGroup(account) {
+            return String(
+                (Array.isArray(account?.site_settings) ? account.site_settings : [])
+                    .map(setting => String(setting.group_name || "").trim())
+                    .find(Boolean) || "",
+            );
+        }
+
+        function renderMercadoBulkSiteSettings(accounts) {
+            const records = Array.isArray(accounts) ? accounts : [];
+            const salespersonValues = records.map(mercadoAccountSalesperson);
+            const commonSalesperson = salespersonValues.length && new Set(salespersonValues).size === 1
+                ? salespersonValues[0]
+                : "";
+            mercadoBulkSalesperson.innerHTML = mercadoSalespersonOptions(commonSalesperson, "请选择业务员");
+            mercadoBulkSettingsBody.innerHTML = mercadoSiteDefinitions.map(([siteId, siteName]) => {
+                const values = records.map(account => {
+                    const setting = (Array.isArray(account.site_settings) ? account.site_settings : [])
+                        .find(item => String(item.site_id || "").toUpperCase() === siteId);
+                    return setting?.discount_rate === null || setting?.discount_rate === undefined
+                        ? ""
+                        : String(setting.discount_rate);
+                });
+                const discount = values.length && new Set(values).size === 1 ? values[0] : "";
+                return `
+                    <tr data-site-id="${siteId}">
+                        <td><strong>${escapeHtml(siteName)}</strong><span>${siteId}</span></td>
+                        <td><input data-field="bulk_discount_rate" type="number" min="0" max="100" step="0.01" value="${escapeHtml(discount)}" placeholder="必填，0–100"></td>
+                    </tr>
+                `;
+            }).join("");
+        }
+
+        async function openMercadoBulkSiteSettings() {
+            const accounts = selectedMercadoStoreAccounts();
+            if (!accounts.length || !mercadoBulkSettingsDialog) return;
+            mercadoBulkSettingsTitle.textContent = `批量设置店铺配置 · 已选 ${accounts.length} 家`;
+            mercadoBulkSettingsSummary.textContent = `将应用到 ${accounts.length} 家店铺`;
+            mercadoBulkSalesperson.innerHTML = '<option value="">正在读取人员...</option>';
+            mercadoBulkSalesperson.disabled = true;
+            mercadoBulkSettingsBody.innerHTML = '<tr><td class="empty-state" colspan="2">正在读取人员和现有配置...</td></tr>';
+            mercadoBulkSettingsSave.disabled = true;
+            setMercadoBulkSettingsMessage("正在准备批量配置…");
+            if (typeof mercadoBulkSettingsDialog.showModal === "function" && !mercadoBulkSettingsDialog.open) {
+                mercadoBulkSettingsDialog.showModal();
+            }
+            try {
+                await loadMercadoSalespeople();
+                renderMercadoBulkSiteSettings(accounts);
+                mercadoBulkSalesperson.disabled = false;
+                mercadoBulkSettingsSave.disabled = false;
+                setMercadoBulkSettingsMessage("请选择业务员并填写每个站点的比例");
+            } catch (error) {
+                setMercadoBulkSettingsMessage(`读取人员失败：${error.message || error}`, true);
+            }
+        }
+
+        async function saveMercadoBulkSiteSettings() {
+            const accounts = selectedMercadoStoreAccounts();
+            if (!accounts.length) {
+                setMercadoBulkSettingsMessage("请先选择需要设置的店铺", true);
+                return;
+            }
+            const salesperson = String(mercadoBulkSalesperson?.value || "").trim();
+            if (!salesperson || !mercadoSalespeople.includes(salesperson)) {
+                setMercadoBulkSettingsMessage("请选择启用人员中的业务员", true);
+                mercadoBulkSalesperson?.focus();
+                return;
+            }
+            const discounts = new Map();
+            for (const row of mercadoBulkSettingsBody.querySelectorAll("tr[data-site-id]")) {
+                const siteId = String(row.dataset.siteId || "");
+                const input = row.querySelector('[data-field="bulk_discount_rate"]');
+                const text = String(input?.value || "").trim();
+                const discount = text === "" ? null : Number(text);
+                if (discount === null || !Number.isFinite(discount) || discount < 0 || discount > 100) {
+                    setMercadoBulkSettingsMessage(`${siteId} 的比例为必填项，且必须在 0 到 100 之间`, true);
+                    input?.focus();
+                    return;
+                }
+                discounts.set(siteId, discount);
+            }
+            mercadoBulkSettingsSave.disabled = true;
+            mercadoBulkSettingsSave.textContent = "保存中…";
+            const succeededIds = [];
+            const failures = [];
+            const saveAccount = async account => {
+                const tokenId = Number(account.id || 0);
+                const groupName = mercadoAccountGroup(account);
+                const settings = mercadoSiteDefinitions.map(([siteId]) => ({
+                    site_id: siteId,
+                    discount_rate: discounts.get(siteId),
+                    salesperson,
+                    group_name: groupName,
+                }));
+                const response = await fetch(`/api/mercado-tokens/${tokenId}/site-settings`, {
+                    method: "PUT",
+                    headers: {"Content-Type": "application/json"},
+                    body: JSON.stringify({settings}),
+                });
+                const payload = await response.json();
+                if (!response.ok || payload.status !== "success") {
+                    throw new Error(payload.message || `接口请求失败：${response.status}`);
+                }
+                account.site_settings = payload.data?.rows || settings;
+                return tokenId;
+            };
+            try {
+                for (let start = 0; start < accounts.length; start += 5) {
+                    const chunk = accounts.slice(start, start + 5);
+                    const results = await Promise.allSettled(chunk.map(saveAccount));
+                    results.forEach((result, index) => {
+                        const account = chunk[index];
+                        if (result.status === "fulfilled") {
+                            succeededIds.push(Number(account.id || 0));
+                        } else {
+                            failures.push({
+                                name: account.display_name || account.nickname || `账号 ${account.id}`,
+                                message: result.reason?.message || String(result.reason || "保存失败"),
+                            });
+                        }
+                    });
+                    setMercadoBulkSettingsMessage(`正在保存：${Math.min(start + chunk.length, accounts.length)} / ${accounts.length}`);
+                }
+                succeededIds.forEach(tokenId => selectedMercadoStoreTokenIds.delete(tokenId));
+                await loadMercadoStoreTokens(true);
+                if (failures.length) {
+                    const preview = failures.slice(0, 3).map(item => `${item.name}：${item.message}`).join("；");
+                    setMercadoBulkSettingsMessage(
+                        `成功 ${succeededIds.length} 家，失败 ${failures.length} 家。${preview}`,
+                        true,
+                    );
+                } else {
+                    setMercadoBulkSettingsMessage(`已完成 ${succeededIds.length} 家店铺的批量配置`);
+                    showMercadoTokenMessage(`已批量设置 ${succeededIds.length} 家店铺的业务员和站点比例`);
+                    mercadoBulkSettingsDialog.close();
+                }
+            } finally {
+                mercadoBulkSettingsSave.disabled = false;
+                mercadoBulkSettingsSave.textContent = "批量保存";
             }
         }
 
@@ -11998,14 +12551,57 @@
             }
         }
 
+        function updateMercadoStoreTokenSelection() {
+            const validIds = new Set(
+                mercadoStoreTokenRows.map(row => Number(row.id || 0)).filter(Boolean),
+            );
+            for (const tokenId of Array.from(selectedMercadoStoreTokenIds)) {
+                if (!validIds.has(tokenId)) selectedMercadoStoreTokenIds.delete(tokenId);
+            }
+            const selectedCount = selectedMercadoStoreTokenIds.size;
+            if (mercadoTokenSelectionSummary) {
+                mercadoTokenSelectionSummary.textContent = `已选择 ${selectedCount} 家`;
+            }
+            if (mercadoTokenBulkSettings) mercadoTokenBulkSettings.disabled = selectedCount === 0;
+            if (mercadoTokenSelectAll) {
+                mercadoTokenSelectAll.checked = validIds.size > 0 && selectedCount === validIds.size;
+                mercadoTokenSelectAll.indeterminate = selectedCount > 0 && selectedCount < validIds.size;
+            }
+        }
+
+        function toggleMercadoStoreToken(tokenId, checked) {
+            const id = Number(tokenId || 0);
+            if (!id) return;
+            if (checked) selectedMercadoStoreTokenIds.add(id);
+            else selectedMercadoStoreTokenIds.delete(id);
+            updateMercadoStoreTokenSelection();
+        }
+
+        function toggleAllMercadoStoreTokens(checked) {
+            for (const row of mercadoStoreTokenRows) {
+                const tokenId = Number(row.id || 0);
+                if (!tokenId) continue;
+                if (checked) selectedMercadoStoreTokenIds.add(tokenId);
+                else selectedMercadoStoreTokenIds.delete(tokenId);
+            }
+            mercadoTokenBody.querySelectorAll(".mercado-token-row-select").forEach(checkbox => {
+                checkbox.checked = Boolean(checked);
+            });
+            updateMercadoStoreTokenSelection();
+        }
+
         function renderMercadoStoreTokens(rows) {
             const records = Array.isArray(rows) ? rows : [];
+            mercadoStoreTokenRows = records;
             renderMercadoPublishStores(records);
+            renderPreSaleScopeFilters(records);
             renderPreSaleStores(records);
+            renderCustomerServiceScopeFilters(records);
             renderCustomerServiceStores(records);
             mercadoTokenTotal.textContent = `共 ${records.length} 家`;
             if (!records.length) {
-                mercadoTokenBody.innerHTML = '<tr><td class="empty-state" colspan="8">暂无已授权店铺，请先添加</td></tr>';
+                mercadoTokenBody.innerHTML = '<tr><td class="empty-state" colspan="9">暂无已授权店铺，请先添加</td></tr>';
+                updateMercadoStoreTokenSelection();
                 return;
             }
             mercadoTokenBody.innerHTML = records.map(row => {
@@ -12017,8 +12613,10 @@
                     item.salesperson || item.group_name ||
                     (item.discount_rate !== null && item.discount_rate !== undefined)
                 ));
+                const selected = selectedMercadoStoreTokenIds.has(tokenId);
                 return `
                     <tr>
+                        <td class="mercado-token-select-column"><input class="market-row-select mercado-token-row-select" type="checkbox" value="${tokenId}" aria-label="选择 ${escapeHtml(row.display_name || accountName)}" onchange="toggleMercadoStoreToken(${tokenId}, this.checked)" ${selected ? "checked" : ""}></td>
                         <td title="${escapeHtml(row.display_name || "")}">${escapeHtml(row.display_name || "-")}</td>
                         <td><div class="order-cell-stack">
                             <strong>${configuredSites.length ? `已配置 ${configuredSites.length} 个站点` : "尚未配置"}</strong>
@@ -12037,12 +12635,13 @@
                     </tr>
                 `;
             }).join("");
+            updateMercadoStoreTokenSelection();
         }
 
         async function loadMercadoStoreTokens(force = false) {
             if (!mercadoTokenBody || (mercadoStoreTokensLoaded && !force)) return;
             if (force) storeLinksLoaded = false;
-            mercadoTokenBody.innerHTML = '<tr><td class="empty-state" colspan="8">正在加载店铺授权...</td></tr>';
+            mercadoTokenBody.innerHTML = '<tr><td class="empty-state" colspan="9">正在加载店铺授权...</td></tr>';
             try {
                 const response = await fetch("/api/mercado-tokens", {cache: "no-store"});
                 const payload = await response.json();
@@ -12053,26 +12652,104 @@
                 mercadoStoreTokensLoaded = true;
             } catch (err) {
                 mercadoStoreTokensLoaded = false;
-                mercadoTokenBody.innerHTML = `<tr><td class="empty-state" colspan="8">加载失败：${escapeHtml(err.message || err)}</td></tr>`;
+                mercadoTokenBody.innerHTML = `<tr><td class="empty-state" colspan="9">加载失败：${escapeHtml(err.message || err)}</td></tr>`;
             }
+        }
+
+        function preSaleAvailableStores(rows = mercadoStoreTokenRows) {
+            return (Array.isArray(rows) ? rows : []).filter(row => (
+                Number(row.id || 0) > 0 && (row.status !== "expired" || row.has_refresh_token)
+            ));
+        }
+
+        function preSaleStoreAssignments(store) {
+            const settings = Array.isArray(store?.site_settings) ? store.site_settings : [];
+            if (settings.length) return settings;
+            return [{
+                site_id: store?.site_id || "",
+                salesperson: store?.salesperson || "",
+                group_name: store?.group_name || "",
+            }];
+        }
+
+        function preSaleScopeValue(value, emptyValue) {
+            const text = String(value || "").trim();
+            return text || emptyValue;
+        }
+
+        function renderPreSaleScopeFilters(rows = mercadoStoreTokenRows) {
+            const stores = preSaleAvailableStores(rows);
+            const previousSalesperson = String(preSaleSalesperson?.value || "");
+            const previousGroup = String(preSaleGroup?.value || "");
+            const salespeople = new Set();
+            const groups = new Set();
+            let hasUnassignedSalesperson = false;
+            let hasUngroupedStore = false;
+            stores.forEach(store => preSaleStoreAssignments(store).forEach(setting => {
+                const salesperson = String(setting.salesperson || "").trim();
+                const groupName = String(setting.group_name || "").trim();
+                if (salesperson) salespeople.add(salesperson);
+                else hasUnassignedSalesperson = true;
+                if (groupName) groups.add(groupName);
+                else hasUngroupedStore = true;
+            }));
+            if (preSaleSalesperson) {
+                const values = Array.from(salespeople).sort((left, right) => left.localeCompare(right, "zh-CN"));
+                preSaleSalesperson.innerHTML = [
+                    '<option value="">全部业务员</option>',
+                    ...values.map(value => `<option value="${escapeHtml(value)}">${escapeHtml(value)}</option>`),
+                    ...(hasUnassignedSalesperson ? ['<option value="__unassigned__">未分配业务员</option>'] : []),
+                ].join("");
+                if ([...values, "__unassigned__"].includes(previousSalesperson)) preSaleSalesperson.value = previousSalesperson;
+            }
+            if (preSaleGroup) {
+                const values = Array.from(groups).sort((left, right) => left.localeCompare(right, "zh-CN"));
+                preSaleGroup.innerHTML = [
+                    '<option value="">全部分组</option>',
+                    ...values.map(value => `<option value="${escapeHtml(value)}">${escapeHtml(value)}</option>`),
+                    ...(hasUngroupedStore ? ['<option value="__ungrouped__">未分组</option>'] : []),
+                ].join("");
+                if ([...values, "__ungrouped__"].includes(previousGroup)) preSaleGroup.value = previousGroup;
+            }
+        }
+
+        function preSaleStoreMatchesScope(store) {
+            const salesperson = String(preSaleSalesperson?.value || "");
+            const groupName = String(preSaleGroup?.value || "");
+            return preSaleStoreAssignments(store).some(setting => (
+                (!salesperson || preSaleScopeValue(setting.salesperson, "__unassigned__") === salesperson)
+                && (!groupName || preSaleScopeValue(setting.group_name, "__ungrouped__") === groupName)
+            ));
+        }
+
+        function preSaleMatchedStores(rows = mercadoStoreTokenRows) {
+            const selectedTokenId = Number(preSaleStore?.value || 0);
+            return preSaleAvailableStores(rows).filter(store => (
+                preSaleStoreMatchesScope(store)
+                && (!selectedTokenId || Number(store.id || 0) === selectedTokenId)
+            ));
         }
 
         function renderPreSaleStores(rows = mercadoStoreTokenRows) {
             if (!preSaleStore) return;
             const previous = String(preSaleStore.value || "");
-            const available = (Array.isArray(rows) ? rows : []).filter(row => (
-                Number(row.id || 0) > 0 && (row.status !== "expired" || row.has_refresh_token)
-            ));
+            const available = preSaleAvailableStores(rows).filter(preSaleStoreMatchesScope);
             preSaleStore.innerHTML = available.length
-                ? available.map(row => {
-                    const name = row.display_name || row.nickname || `账号 ${row.id}`;
-                    const meta = [row.site_id || "-", row.meli_user_id ? `ID ${row.meli_user_id}` : "待识别 ID"].join(" · ");
-                    return `<option value="${Number(row.id)}">${escapeHtml(name)} · ${escapeHtml(meta)}</option>`;
-                }).join("")
-                : '<option value="">暂无可用授权店铺</option>';
-            if (previous && available.some(row => String(row.id) === previous)) {
-                preSaleStore.value = previous;
-            }
+                ? [
+                    `<option value="">全部匹配账号（${available.length} 家）</option>`,
+                    ...available.map(row => {
+                        const name = row.display_name || row.nickname || `账号 ${row.id}`;
+                        const meta = [row.site_id || "-", row.meli_user_id ? `ID ${row.meli_user_id}` : "待识别 ID"].join(" · ");
+                        return `<option value="${Number(row.id)}">${escapeHtml(name)} · ${escapeHtml(meta)}</option>`;
+                    }),
+                ].join("")
+                : '<option value="">当前业务员/分组没有可用授权店铺</option>';
+            if (previous && available.some(row => String(row.id) === previous)) preSaleStore.value = previous;
+        }
+
+        function handlePreSaleScopeChange() {
+            renderPreSaleStores();
+            resetPreSaleView();
         }
 
         function setPreSaleMessage(message, isError = false) {
@@ -12084,9 +12761,10 @@
         async function loadPreSaleModule(force = false) {
             if (!preSaleStore || (preSaleLoaded && !force)) return;
             if (!mercadoStoreTokensLoaded || force) await loadMercadoStoreTokens(force);
+            renderPreSaleScopeFilters();
             renderPreSaleStores();
             preSaleLoaded = true;
-            if (!preSaleStore.value) {
+            if (!preSaleMatchedStores().length) {
                 setPreSaleMessage("暂无可用授权店铺，请先完成店铺授权", true);
             }
         }
@@ -12102,7 +12780,10 @@
             preSalePage = 1;
             preSalePages = 1;
             preSaleTotal = 0;
+            preSaleOfficialTotal = 0;
+            preSalePartialFailureCount = 0;
             preSaleSummaryKey = "";
+            preSaleQueryKey = "";
             selectedPreSaleQuestionIds.clear();
             resetPreSaleCounts();
             updatePreSaleBulkDelete();
@@ -12115,6 +12796,10 @@
             const item = document.getElementById("pre-sale-item-id");
             const buyer = document.getElementById("pre-sale-buyer-id");
             const search = document.getElementById("pre-sale-search");
+            if (preSaleSalesperson) preSaleSalesperson.value = "";
+            if (preSaleGroup) preSaleGroup.value = "";
+            renderPreSaleStores();
+            if (preSaleStore) preSaleStore.value = "";
             if (item) item.value = "";
             if (buyer) buyer.value = "";
             if (search) search.value = "";
@@ -12123,24 +12808,14 @@
                 button.classList.toggle("active", button.dataset.status === preSaleStatus);
             });
             resetPreSaleView();
-            if (preSaleStore?.value) loadPreSaleQuestions(1);
+            if (preSaleMatchedStores().length) loadPreSaleQuestions(1);
         }
 
-        function preSaleTokenId() {
-            const tokenId = Number(preSaleStore?.value || 0);
-            if (!tokenId) throw new Error("请先选择授权店铺");
-            return tokenId;
-        }
-
-        function preSaleSelectedStore() {
-            const tokenId = Number(preSaleStore?.value || 0);
-            return mercadoStoreTokenRows.find(row => Number(row.id || 0) === tokenId) || {};
-        }
-
-        async function preSaleRequest(action, {method = "GET", data = {}} = {}) {
-            const tokenId = preSaleTokenId();
+        async function preSaleRequest(action, {method = "GET", data = {}, tokenId = 0} = {}) {
+            const identifier = Number(tokenId || preSaleStore?.value || 0);
+            if (!identifier) throw new Error("缺少要操作的授权店铺");
             const options = {method, headers: {"Accept": "application/json"}, cache: "no-store"};
-            let url = `/api/mercado-communications/${tokenId}/${action}`;
+            let url = `/api/mercado-communications/${identifier}/${action}`;
             if (method === "GET") {
                 const query = new URLSearchParams();
                 Object.entries(data || {}).forEach(([key, value]) => {
@@ -12176,21 +12851,48 @@
             });
             selectedPreSaleQuestionIds.clear();
             updatePreSaleBulkDelete();
-            if (preSaleStore?.value) loadPreSaleQuestions(1);
+            if (preSaleMatchedStores().length) loadPreSaleQuestions(1);
+        }
+
+        async function runPreSaleStoreBatches(stores, worker, onProgress = null) {
+            const results = [];
+            const batchSize = 4;
+            for (let start = 0; start < stores.length; start += batchSize) {
+                const batch = stores.slice(start, start + batchSize);
+                const settled = await Promise.allSettled(batch.map(worker));
+                settled.forEach((outcome, index) => results.push({store: batch[index], outcome}));
+                if (onProgress) onProgress(Math.min(stores.length, start + batch.length), stores.length);
+            }
+            return results;
         }
 
         async function refreshPreSaleSummary() {
             const filters = preSaleFilterPayload();
-            const summaryKey = JSON.stringify([preSaleStore?.value || "", filters.item_id, filters.user_id]);
+            const stores = preSaleMatchedStores();
+            const summaryKey = JSON.stringify([stores.map(store => Number(store.id)), filters.item_id, filters.user_id]);
             if (summaryKey === preSaleSummaryKey) return;
             preSaleSummaryKey = summaryKey;
             resetPreSaleCounts();
             try {
-                const data = await preSaleRequest("pre-sale-summary", {data: filters});
-                const counts = data?.counts || {};
+                const results = await runPreSaleStoreBatches(
+                    stores,
+                    store => preSaleRequest("pre-sale-summary", {data: filters, tokenId: store.id}),
+                );
+                const aggregate = {total: 0, counts: {}};
+                let successCount = 0;
+                results.forEach(({outcome}) => {
+                    if (outcome.status !== "fulfilled") return;
+                    successCount += 1;
+                    const data = outcome.value || {};
+                    aggregate.total += Number(data.total || 0);
+                    Object.entries(data.counts || {}).forEach(([key, value]) => {
+                        aggregate.counts[key] = Number(aggregate.counts[key] || 0) + Number(value || 0);
+                    });
+                });
+                if (!successCount && stores.length) throw new Error("所选店铺的状态统计均读取失败");
                 document.querySelectorAll("#pre-sale-status-bar [data-count-status]").forEach(node => {
                     const key = node.dataset.countStatus;
-                    const value = key === "TOTAL" ? data?.total : counts[key];
+                    const value = key === "TOTAL" ? aggregate.total : aggregate.counts[key];
                     node.textContent = Number(value || 0).toLocaleString("zh-CN");
                 });
             } catch (error) {
@@ -12199,37 +12901,106 @@
             }
         }
 
-        async function loadPreSaleQuestions(page = 1) {
-            if (!preSaleLoad || !preSaleList) return;
-            const requestedPage = Math.max(1, Math.min(51, Number(page) || 1));
-            preSaleLoad.disabled = true;
-            preSaleLoad.textContent = "查询中...";
-            preSaleList.innerHTML = '<div class="customer-service-empty">正在读取 Mercado Libre 官方售前问题...</div>';
-            if (preSalePagination) preSalePagination.hidden = true;
-            setPreSaleMessage("正在查询官方售前问题...");
-            selectedPreSaleQuestionIds.clear();
-            updatePreSaleBulkDelete();
-            try {
-                const data = await preSaleRequest("pre-sale-list", {data: {
-                    ...preSaleFilterPayload(),
+        async function fetchPreSaleQuestionsForStore(store, filters) {
+            const rows = [];
+            let officialTotal = 0;
+            let offset = 0;
+            while (offset <= 1000) {
+                const data = await preSaleRequest("pre-sale-list", {tokenId: store.id, data: {
+                    ...filters,
                     status: preSaleStatus,
                     sort_fields: "date_created",
                     sort_types: "DESC",
-                    limit: preSalePageSize,
-                    offset: (requestedPage - 1) * preSalePageSize,
+                    limit: 100,
+                    offset,
                 }});
-                preSaleRows = Array.isArray(data?.questions) ? data.questions : [];
-                preSaleTotal = Math.max(0, Number(data?.total || 0));
-                preSalePages = Math.min(51, Math.max(1, Math.ceil(preSaleTotal / preSalePageSize)));
+                const questions = Array.isArray(data?.questions) ? data.questions : [];
+                officialTotal = Math.max(officialTotal, Number(data?.total || 0));
+                rows.push(...questions.map(question => ({
+                    ...question,
+                    _token_id: Number(store.id),
+                    _store: store,
+                })));
+                if (!questions.length || rows.length >= officialTotal) break;
+                offset += questions.length;
+                if (offset > 1000) break;
+            }
+            return {rows, officialTotal, truncated: rows.length < officialTotal};
+        }
+
+        async function loadPreSaleQuestions(page = 1, force = false) {
+            if (!preSaleLoad || !preSaleList) return;
+            const stores = preSaleMatchedStores();
+            if (!stores.length) {
+                preSaleList.innerHTML = '<div class="customer-service-empty">当前业务员/分组没有可查询的授权店铺</div>';
+                setPreSaleMessage("当前范围没有可用授权店铺", true);
+                return;
+            }
+            const filters = preSaleFilterPayload();
+            const queryKey = JSON.stringify([stores.map(store => Number(store.id)), filters, preSaleStatus]);
+            const requestedPage = Math.max(1, Number(page) || 1);
+            if (!force && preSaleRows.length && queryKey === preSaleQueryKey && requestedPage !== 1) {
                 preSalePage = Math.min(requestedPage, preSalePages);
+                selectedPreSaleQuestionIds.clear();
+                updatePreSaleBulkDelete();
                 renderPreSaleRows();
                 renderPreSalePagination();
-                setPreSaleMessage(`已读取第 ${preSalePage} 页，共 ${preSaleTotal.toLocaleString("zh-CN")} 条售前问题`);
+                const translationFailures = await translatePreSalePageRows();
+                renderPreSaleRows();
+                if (translationFailures) {
+                    setPreSaleMessage(`当前页有 ${translationFailures} 组消息中文翻译失败，已保留当地语言原文`, true);
+                }
+                return;
+            }
+            preSaleLoad.disabled = true;
+            preSaleLoad.textContent = "查询中...";
+            preSaleList.innerHTML = `<div class="customer-service-empty">正在读取 ${stores.length} 家店铺的 Mercado Libre 官方售前问题...</div>`;
+            if (preSalePagination) preSalePagination.hidden = true;
+            setPreSaleMessage(`正在聚合 ${stores.length} 家店铺的官方售前问题...`);
+            selectedPreSaleQuestionIds.clear();
+            updatePreSaleBulkDelete();
+            try {
+                const results = await runPreSaleStoreBatches(
+                    stores,
+                    store => fetchPreSaleQuestionsForStore(store, filters),
+                    (completed, total) => setPreSaleMessage(`正在聚合店铺 ${completed}/${total}...`),
+                );
+                const failures = results.filter(({outcome}) => outcome.status === "rejected");
+                const successes = results.filter(({outcome}) => outcome.status === "fulfilled");
+                if (!successes.length) {
+                    const firstError = failures[0]?.outcome?.reason;
+                    throw new Error(firstError?.message || firstError || "所选店铺均读取失败");
+                }
+                preSaleRows = successes.flatMap(({outcome}) => outcome.value.rows).sort((left, right) => (
+                    (Date.parse(right.date_created || "") || 0) - (Date.parse(left.date_created || "") || 0)
+                ));
+                preSaleOfficialTotal = successes.reduce((sum, {outcome}) => sum + Number(outcome.value.officialTotal || 0), 0);
+                preSalePartialFailureCount = failures.length;
+                const truncatedCount = successes.filter(({outcome}) => outcome.value.truncated).length;
+                preSaleTotal = preSaleRows.length;
+                preSalePages = Math.max(1, Math.ceil(preSaleTotal / preSalePageSize));
+                preSalePage = Math.min(requestedPage, preSalePages);
+                preSaleQueryKey = queryKey;
+                renderPreSaleRows();
+                renderPreSalePagination();
+                setPreSaleMessage(`已聚合消息，正在把当前页翻译成中文...`);
+                const translationFailures = await translatePreSalePageRows();
+                renderPreSaleRows();
+                const warnings = [];
+                if (failures.length) warnings.push(`${failures.length} 家店铺读取失败`);
+                if (truncatedCount) warnings.push(`${truncatedCount} 家超过官方可分页上限`);
+                if (translationFailures) warnings.push(`${translationFailures} 组消息中文翻译失败`);
+                setPreSaleMessage(
+                    `已聚合 ${successes.length}/${stores.length} 家店铺，加载 ${preSaleTotal.toLocaleString("zh-CN")} / 官方共 ${preSaleOfficialTotal.toLocaleString("zh-CN")} 条${warnings.length ? `；${warnings.join("；")}` : ""}`,
+                    Boolean(warnings.length),
+                );
                 void refreshPreSaleSummary();
             } catch (error) {
                 preSaleRows = [];
                 preSaleTotal = 0;
+                preSaleOfficialTotal = 0;
                 preSalePages = 1;
+                preSaleQueryKey = "";
                 preSaleList.innerHTML = `<div class="customer-service-empty">${escapeHtml(error.message || error)}</div>`;
                 setPreSaleMessage(error.message || error, true);
             } finally {
@@ -12257,21 +13028,115 @@
             return flags[String(siteId || "").toUpperCase()] || "🌐";
         }
 
+        function preSaleRowKey(row) {
+            const tokenId = Number(row?._token_id || 0);
+            const questionId = String(row?.id || "").replace(/\D/g, "");
+            return tokenId && questionId ? `${tokenId}:${questionId}` : "";
+        }
+
+        function preSaleStoreOwnerLabel(store, siteId = "") {
+            const settings = preSaleStoreAssignments(store);
+            const setting = settings.find(item => String(item.site_id || "").toUpperCase() === String(siteId || "").toUpperCase()) || settings[0] || {};
+            const salesperson = String(setting.salesperson || "").trim() || "未分配";
+            const groupName = String(setting.group_name || "").trim() || "未分组";
+            return `${salesperson} · ${groupName}`;
+        }
+
+        function preSaleSiteLanguage(siteId) {
+            return String(siteId || "").toUpperCase() === "MLB" ? "pt-BR" : "es";
+        }
+
+        function preSaleSiteLanguageLabel(siteId) {
+            return preSaleSiteLanguage(siteId) === "pt-BR" ? "巴西葡萄牙语" : "拉丁美洲西班牙语";
+        }
+
+        function preSaleLocalText(message) {
+            return String(message?.text_translated || message?.text || "").trim();
+        }
+
+        function preSaleTranslationMarkup(message, emptyText, originalPrefix = "当地语言：", chinesePrefix = "中文：") {
+            const localText = preSaleLocalText(message);
+            const chineseText = String(message?._text_zh || "").trim();
+            const primary = chineseText
+                ? `<span class="pre-sale-translation-label">${escapeHtml(chinesePrefix)}</span>${escapeHtml(chineseText)}`
+                : escapeHtml(localText || emptyText);
+            const original = localText && chineseText && localText !== chineseText
+                ? `<span class="pre-sale-original">${escapeHtml(originalPrefix)}${escapeHtml(localText)}</span>`
+                : "";
+            const warning = message?._translation_error
+                ? `<span class="pre-sale-original pre-sale-translation-warning">中文翻译失败：${escapeHtml(message._translation_error)}</span>`
+                : (!chineseText && localText ? '<span class="pre-sale-original">正在生成中文翻译…</span>' : "");
+            return `${primary}${original}${warning}`;
+        }
+
+        async function translatePreSalePageRows() {
+            const pageStart = (preSalePage - 1) * preSalePageSize;
+            const pageRows = preSaleRows.slice(pageStart, pageStart + preSalePageSize);
+            const groups = new Map();
+            pageRows.forEach(row => {
+                const tokenId = Number(row._token_id || row._store?.id || 0);
+                const siteId = String(row.site_id || row._store?.site_id || "").toUpperCase();
+                [row, row.answer].forEach(message => {
+                    if (!message || message._text_zh) return;
+                    const text = preSaleLocalText(message);
+                    if (!text) return;
+                    if (/[\u3400-\u9fff]/.test(text)) {
+                        message._text_zh = text;
+                        return;
+                    }
+                    const language = String(message.text_translated || "").trim()
+                        ? preSaleSiteLanguage(siteId)
+                        : "auto";
+                    const key = `${tokenId}:${language}`;
+                    if (!groups.has(key)) groups.set(key, {tokenId, siteId, language, items: []});
+                    groups.get(key).items.push({message, text});
+                });
+            });
+            if (!groups.size) return 0;
+            const settled = await Promise.allSettled(Array.from(groups.values()).map(async group => {
+                const result = await preSaleRequest("pre-sale-translate", {
+                    method: "POST",
+                    tokenId: group.tokenId,
+                    data: {
+                        texts: group.items.map(item => item.text),
+                        site_id: group.siteId,
+                        source_language: group.language,
+                        target_language: "zh-CN",
+                    },
+                });
+                const translations = Array.isArray(result?.translations) ? result.translations : [];
+                if (translations.length !== group.items.length) throw new Error("翻译结果数量不一致");
+                group.items.forEach((item, index) => {
+                    item.message._text_zh = String(translations[index] || "").trim();
+                    delete item.message._translation_error;
+                });
+            }));
+            let failureCount = 0;
+            settled.forEach((outcome, index) => {
+                if (outcome.status === "fulfilled") return;
+                failureCount += 1;
+                const group = Array.from(groups.values())[index];
+                const errorText = String(outcome.reason?.message || outcome.reason || "翻译服务不可用");
+                group.items.forEach(item => { item.message._translation_error = errorText; });
+            });
+            return failureCount;
+        }
+
         function renderPreSaleRows() {
             if (!preSaleList) return;
             const search = String(document.getElementById("pre-sale-search")?.value || "").trim().toLocaleLowerCase();
-            const visible = preSaleRows.map((row, index) => ({row, index})).filter(({row}) => {
+            const pageStart = (preSalePage - 1) * preSalePageSize;
+            const visible = preSaleRows.map((row, index) => ({row, index})).slice(pageStart, pageStart + preSalePageSize).filter(({row}) => {
                 if (!search) return true;
                 const answer = row.answer || {};
-                return [row.id, row.item_id, row.marketplace_item_id, row.text, row.text_translated, answer.text, answer.text_translated]
+                const store = row._store || {};
+                return [row.id, row.item_id, row.marketplace_item_id, row.text, row.text_translated, row._text_zh, answer.text, answer.text_translated, answer._text_zh, store.display_name, store.nickname]
                     .some(value => String(value || "").toLocaleLowerCase().includes(search));
             });
             if (!visible.length) {
                 preSaleList.innerHTML = `<div class="customer-service-empty">${preSaleRows.length ? "当前页没有匹配的内容" : "当前筛选条件下暂无售前问题"}</div>`;
                 return;
             }
-            const store = preSaleSelectedStore();
-            const accountName = store.display_name || store.nickname || `账号 ${store.id || "-"}`;
             const canManage = hasWorkbenchPermission("customer_service.manage");
             preSaleList.innerHTML = `
                 <table class="pre-sale-table">
@@ -12281,30 +13146,34 @@
                         <th class="status-cell">状态</th>
                         <th class="product-cell">产品编号</th>
                         <th class="time-cell">提问 / 回答</th>
-                        <th>问题 / 回复</th>
+                        <th>客户提问（中文翻译）/ 回复</th>
                         <th class="action-cell">操作</th>
                     </tr></thead>
                     <tbody>${visible.map(({row, index}) => {
                         const answer = row.answer || {};
+                        const store = row._store || {};
+                        const tokenId = Number(row._token_id || store.id || 0);
+                        const accountName = store.display_name || store.nickname || `账号 ${tokenId || "-"}`;
                         const [statusLabel, statusClass] = preSaleStatusPresentation(row.status);
                         const questionId = String(row.id || "").replace(/\D/g, "");
-                        const checked = questionId && selectedPreSaleQuestionIds.has(questionId);
-                        const deleteButton = canManage && questionId && String(row.status || "").toUpperCase() !== "DELETED"
-                            ? `<button class="pre-sale-delete-button" type="button" title="删除问题" aria-label="删除问题 ${questionId}" onclick="event.stopPropagation(); deletePreSaleQuestionForModule('${questionId}')">⌫</button>`
+                        const rowKey = preSaleRowKey(row);
+                        const checked = rowKey && selectedPreSaleQuestionIds.has(rowKey);
+                        const deleteButton = canManage && tokenId && questionId && String(row.status || "").toUpperCase() !== "DELETED"
+                            ? `<button class="pre-sale-delete-button" type="button" title="删除问题" aria-label="删除问题 ${questionId}" onclick="event.stopPropagation(); deletePreSaleQuestionForModule('${questionId}', ${tokenId})">⌫</button>`
                             : "-";
                         return `<tr data-index="${index}" onclick="openPreSaleQuestion(${index})">
-                            <td class="checkbox-cell"><input class="pre-sale-row-checkbox" type="checkbox" value="${escapeHtml(questionId)}" ${checked ? "checked" : ""} onclick="event.stopPropagation()" onchange="togglePreSaleQuestion('${questionId}', this.checked)"></td>
-                            <td><span class="pre-sale-primary pre-sale-account">${preSaleSiteFlag(row.site_id || store.site_id)} ${escapeHtml(accountName)}</span><span class="pre-sale-secondary">${escapeHtml(store.meli_user_id ? `账号 ${store.meli_user_id}` : (row.site_id || store.site_id || "-"))}</span></td>
+                            <td class="checkbox-cell"><input class="pre-sale-row-checkbox" type="checkbox" value="${escapeHtml(rowKey)}" ${checked ? "checked" : ""} onclick="event.stopPropagation()" onchange="togglePreSaleQuestion('${escapeHtml(rowKey)}', this.checked)"></td>
+                            <td><span class="pre-sale-primary pre-sale-account">${preSaleSiteFlag(row.site_id || store.site_id)} ${escapeHtml(accountName)}</span><span class="pre-sale-secondary">${escapeHtml(preSaleStoreOwnerLabel(store, row.site_id))}</span></td>
                             <td><span class="pre-sale-status-tag ${statusClass}">${escapeHtml(statusLabel)}</span></td>
                             <td><span class="pre-sale-primary">${escapeHtml(row.marketplace_item_id || row.item_id || "-")}</span><span class="pre-sale-secondary">${escapeHtml(row.item_id && row.marketplace_item_id ? row.item_id : `问题 #${row.id || "-"}`)}</span></td>
                             <td><span class="pre-sale-primary">${escapeHtml(customerServiceDate(row.date_created))}</span><span class="pre-sale-secondary">${answer.date_created ? `答：${escapeHtml(customerServiceDate(answer.date_created))}` : "尚未回答"}</span></td>
-                            <td><span class="pre-sale-question">${escapeHtml(row.text_translated || row.text || "无问题内容")}</span>${answer.text ? `<span class="pre-sale-answer">${escapeHtml(answer.text_translated || answer.text)}</span>` : ""}</td>
+                            <td><span class="pre-sale-question">${preSaleTranslationMarkup(row, "无问题内容")}</span>${preSaleLocalText(answer) ? `<span class="pre-sale-answer">${preSaleTranslationMarkup(answer, "无回复内容", "当地语言回复：", "中文回复：")}</span>` : ""}</td>
                             <td class="action-cell">${deleteButton}</td>
                         </tr>`;
                     }).join("")}</tbody>
                 </table>`;
             const selectAll = document.getElementById("pre-sale-select-all");
-            const visibleIds = visible.map(({row}) => String(row.id || "").replace(/\D/g, "")).filter(Boolean);
+            const visibleIds = visible.map(({row}) => preSaleRowKey(row)).filter(Boolean);
             const selectedCount = visibleIds.filter(id => selectedPreSaleQuestionIds.has(id)).length;
             if (selectAll) {
                 selectAll.checked = visibleIds.length > 0 && selectedCount === visibleIds.length;
@@ -12325,8 +13194,12 @@
                 pageButtons.push(`<button class="pre-sale-page${page === preSalePage ? " active" : ""}" type="button" onclick="loadPreSaleQuestions(${page})">${page}</button>`);
             }
             preSalePagination.hidden = false;
+            const officialCount = preSaleOfficialTotal > preSaleTotal
+                ? ` / 官方共 ${preSaleOfficialTotal.toLocaleString("zh-CN")} 条`
+                : "";
+            const failureNote = preSalePartialFailureCount ? ` · ${preSalePartialFailureCount} 家查询失败` : "";
             preSalePagination.innerHTML = `
-                <span>共 ${preSaleTotal.toLocaleString("zh-CN")} 条 · 第 ${preSalePage}/${preSalePages} 页${preSaleTotal > 1020 ? " · 仅支持前 1,020 条" : ""}</span>
+                <span>已加载 ${preSaleTotal.toLocaleString("zh-CN")} 条${officialCount} · 第 ${preSalePage}/${preSalePages} 页${failureNote}</span>
                 <div class="pre-sale-pagination-pages">
                     <button class="pre-sale-page" type="button" onclick="loadPreSaleQuestions(${Math.max(1, preSalePage - 1)})" ${preSalePage <= 1 ? "disabled" : ""}>上一页</button>
                     ${pageButtons.join("")}
@@ -12334,11 +13207,11 @@
                 </div>`;
         }
 
-        function togglePreSaleQuestion(questionId, checked) {
-            const id = String(questionId || "");
-            if (!id) return;
-            if (checked) selectedPreSaleQuestionIds.add(id);
-            else selectedPreSaleQuestionIds.delete(id);
+        function togglePreSaleQuestion(rowKey, checked) {
+            const key = String(rowKey || "");
+            if (!key) return;
+            if (checked) selectedPreSaleQuestionIds.add(key);
+            else selectedPreSaleQuestionIds.delete(key);
             updatePreSaleBulkDelete();
             renderPreSaleRows();
         }
@@ -12369,12 +13242,18 @@
             const question = preSaleRows[Number(index)];
             if (!question || !preSaleDetail) return;
             const answer = question.answer || {};
+            const store = question._store || {};
+            const tokenId = Number(question._token_id || store.id || 0);
+            const accountName = store.display_name || store.nickname || `账号 ${tokenId || "-"}`;
             const canManage = hasWorkbenchPermission("customer_service.manage");
             const questionId = String(question.id || "").replace(/\D/g, "");
+            const siteId = String(question.site_id || store.site_id || "").toUpperCase().replace(/[^A-Z]/g, "");
             const [statusLabel] = preSaleStatusPresentation(question.status);
-            preSaleDetailTitle.textContent = `售前问题 #${questionId || "-"}`;
+            preSaleDetailTitle.textContent = `${accountName} · 售前问题 #${questionId || "-"}`;
             preSaleDetail.innerHTML = `
                 <div class="customer-service-meta">
+                    <div><small>来源账号</small><strong>${escapeHtml(accountName)}</strong></div>
+                    <div><small>业务员 / 分组</small><strong>${escapeHtml(preSaleStoreOwnerLabel(store, question.site_id))}</strong></div>
                     <div><small>问题 ID</small><strong>${escapeHtml(question.id || "-")}</strong></div>
                     <div><small>买家 ID</small><strong>${escapeHtml(question.from?.id || "-")}</strong></div>
                     <div><small>全球 / 站点商品</small><strong>${escapeHtml(question.item_id || "-")} / ${escapeHtml(question.marketplace_item_id || "-")}</strong></div>
@@ -12383,47 +13262,90 @@
                     <div><small>回答时间</small><strong>${escapeHtml(customerServiceDate(answer.date_created))}</strong></div>
                 </div>
                 <div class="customer-service-chat">
-                    <div class="customer-service-bubble">${customerServiceText(question.text, question.text_translated)}</div>
-                    ${answer.text ? `<div class="customer-service-bubble outgoing">${customerServiceText(answer.text, answer.text_translated)}<small>${escapeHtml(customerServiceDate(answer.date_created))}</small></div>` : ""}
+                    <div class="customer-service-bubble">${preSaleTranslationMarkup(question, "无问题内容")}</div>
+                    ${preSaleLocalText(answer) ? `<div class="customer-service-bubble outgoing">${preSaleTranslationMarkup(answer, "无回复内容", "当地语言回复：", "中文回复：")}<small>${escapeHtml(customerServiceDate(answer.date_created))}</small></div>` : ""}
                 </div>
                 ${canManage && String(question.status || "").toUpperCase() === "UNANSWERED" ? `
                     <div class="customer-service-compose">
-                        <div class="field"><label for="pre-sale-reply-text">回复原文（必填，最多 2,000 字）</label><textarea id="pre-sale-reply-text" maxlength="2000" placeholder="输入英文或系统要求的原文回复"></textarea></div>
-                        <div class="field"><label for="pre-sale-reply-translated">买家语言翻译（可选）</label><textarea id="pre-sale-reply-translated" maxlength="2000" placeholder="例如西班牙语或葡萄牙语"></textarea></div>
-                        <div class="actions"><button class="danger" type="button" onclick="deletePreSaleQuestionForModule('${questionId}')">删除问题</button><button class="primary" id="pre-sale-send-answer" type="button" onclick="sendPreSaleAnswerForModule('${questionId}')">提交回复</button></div>
+                        <div class="field"><label for="pre-sale-reply-text">中文回复（必填，最多 2,000 字）</label><textarea id="pre-sale-reply-text" maxlength="2000" placeholder="请输入中文；提交时会自动翻译成${preSaleSiteLanguageLabel(siteId)}"></textarea></div>
+                        <div class="field"><label for="pre-sale-reply-preview">${preSaleSiteLanguageLabel(siteId)}预览</label><textarea class="pre-sale-reply-preview" id="pre-sale-reply-preview" readonly placeholder="点击“预览翻译”查看当地语言内容"></textarea></div>
+                        <div class="actions"><button class="secondary" id="pre-sale-preview-answer" type="button" onclick="previewPreSaleAnswerTranslation(${tokenId}, '${siteId}')">预览翻译</button><button class="danger" type="button" onclick="deletePreSaleQuestionForModule('${questionId}', ${tokenId})">删除问题</button><button class="primary" id="pre-sale-send-answer" type="button" onclick="sendPreSaleAnswerForModule('${questionId}', ${tokenId}, '${siteId}')">翻译并提交回复</button></div>
                     </div>` : (!canManage ? '<p class="token-sensitive-note">当前账号只有查看权限。</p>' : "")}
             `;
             if (preSaleDetailDialog && !preSaleDetailDialog.open) preSaleDetailDialog.showModal();
         }
 
-        async function sendPreSaleAnswerForModule(questionId) {
+        async function previewPreSaleAnswerTranslation(tokenId, siteId) {
             const text = document.getElementById("pre-sale-reply-text")?.value.trim() || "";
-            const translated = document.getElementById("pre-sale-reply-translated")?.value.trim() || "";
-            if (!text) return setPreSaleMessage("请输入售前回复内容", true);
-            const button = document.getElementById("pre-sale-send-answer");
-            if (button) button.disabled = true;
+            if (!text) return setPreSaleMessage("请先输入中文回复内容", true);
+            const button = document.getElementById("pre-sale-preview-answer");
+            const preview = document.getElementById("pre-sale-reply-preview");
+            if (button) {
+                button.disabled = true;
+                button.textContent = "翻译中...";
+            }
             try {
-                await preSaleRequest("pre-sale-answer", {method: "POST", data: {question_id: questionId, text, text_translated: translated}});
-                preSaleSummaryKey = "";
-                closePreSaleDetail();
-                setPreSaleMessage("售前回复已提交成功");
-                await loadPreSaleQuestions(preSalePage);
+                const data = await preSaleRequest("pre-sale-translate", {
+                    method: "POST",
+                    tokenId,
+                    data: {
+                        texts: [text],
+                        site_id: siteId,
+                        source_language: "zh-CN",
+                        target_language: preSaleSiteLanguage(siteId),
+                    },
+                });
+                if (preview) preview.value = String(data?.translations?.[0] || "");
+                setPreSaleMessage(`已生成${preSaleSiteLanguageLabel(siteId)}预览`);
             } catch (error) {
+                if (preview) preview.value = "";
                 setPreSaleMessage(error.message || error, true);
-                if (button) button.disabled = false;
+            } finally {
+                if (button) {
+                    button.disabled = false;
+                    button.textContent = "预览翻译";
+                }
             }
         }
 
-        async function deletePreSaleQuestionForModule(questionId) {
+        async function sendPreSaleAnswerForModule(questionId, tokenId, siteId) {
+            const text = document.getElementById("pre-sale-reply-text")?.value.trim() || "";
+            if (!text) return setPreSaleMessage("请输入中文回复内容", true);
+            const button = document.getElementById("pre-sale-send-answer");
+            if (button) {
+                button.disabled = true;
+                button.textContent = "翻译并提交中...";
+            }
+            try {
+                await preSaleRequest("pre-sale-answer", {method: "POST", tokenId, data: {
+                    question_id: questionId,
+                    text,
+                    site_id: siteId,
+                    auto_translate: true,
+                }});
+                preSaleSummaryKey = "";
+                closePreSaleDetail();
+                setPreSaleMessage(`中文回复已翻译成${preSaleSiteLanguageLabel(siteId)}并提交成功`);
+                await loadPreSaleQuestions(preSalePage, true);
+            } catch (error) {
+                setPreSaleMessage(error.message || error, true);
+                if (button) {
+                    button.disabled = false;
+                    button.textContent = "翻译并提交回复";
+                }
+            }
+        }
+
+        async function deletePreSaleQuestionForModule(questionId, tokenId) {
             const id = String(questionId || "");
             if (!id || !window.confirm(`确定删除售前问题 #${id} 吗？`)) return;
             try {
-                await preSaleRequest("pre-sale-delete", {method: "POST", data: {question_id: id}});
-                selectedPreSaleQuestionIds.delete(id);
+                await preSaleRequest("pre-sale-delete", {method: "POST", tokenId, data: {question_id: id}});
+                selectedPreSaleQuestionIds.delete(`${Number(tokenId || 0)}:${id}`);
                 preSaleSummaryKey = "";
                 closePreSaleDetail();
                 setPreSaleMessage(`售前问题 #${id} 已删除`);
-                await loadPreSaleQuestions(preSalePage);
+                await loadPreSaleQuestions(preSalePage, true);
             } catch (error) {
                 setPreSaleMessage(error.message || error, true);
             }
@@ -12435,37 +13357,102 @@
             if (preSaleBulkDelete) preSaleBulkDelete.disabled = true;
             const failures = [];
             for (let index = 0; index < ids.length; index += 1) {
-                const id = ids[index];
+                const rowKey = ids[index];
+                const [tokenText, id] = String(rowKey).split(":", 2);
+                const tokenId = Number(tokenText || 0);
                 setPreSaleMessage(`正在删除 ${index + 1}/${ids.length}：问题 #${id}`);
                 try {
-                    await preSaleRequest("pre-sale-delete", {method: "POST", data: {question_id: id}});
-                    selectedPreSaleQuestionIds.delete(id);
+                    if (!tokenId || !id) throw new Error("问题来源账号无效");
+                    await preSaleRequest("pre-sale-delete", {method: "POST", tokenId, data: {question_id: id}});
+                    selectedPreSaleQuestionIds.delete(rowKey);
                 } catch (error) {
                     failures.push(`#${id}：${error.message || error}`);
                 }
             }
             preSaleSummaryKey = "";
-            await loadPreSaleQuestions(preSalePage);
+            await loadPreSaleQuestions(preSalePage, true);
             if (failures.length) setPreSaleMessage(`有 ${failures.length} 条删除失败：${failures.join("；")}`, true);
             else setPreSaleMessage(`已删除 ${ids.length} 条售前问题`);
+        }
+
+        function customerServiceAvailableStores(rows = mercadoStoreTokenRows) {
+            return (Array.isArray(rows) ? rows : []).filter(row => (
+                Number(row.id || 0) > 0 && (row.status !== "expired" || row.has_refresh_token)
+            ));
+        }
+
+        function customerServiceStoreSettings(row) {
+            const settings = Array.isArray(row?.site_settings) ? row.site_settings : [];
+            return settings.length ? settings : [{}];
+        }
+
+        function customerServiceSettingValue(setting, field) {
+            const value = String(setting?.[field] || "").trim();
+            if (value) return value;
+            return field === "salesperson" ? "__unassigned__" : "__ungrouped__";
+        }
+
+        function renderCustomerServiceScopeFilters(rows = mercadoStoreTokenRows) {
+            const stores = customerServiceAvailableStores(rows);
+            const previousSalesperson = String(customerServiceSalesperson?.value || "");
+            const previousGroup = String(customerServiceGroup?.value || "");
+            const salespeople = new Set();
+            const groups = new Set();
+            for (const store of stores) {
+                for (const setting of customerServiceStoreSettings(store)) {
+                    salespeople.add(customerServiceSettingValue(setting, "salesperson"));
+                    groups.add(customerServiceSettingValue(setting, "group_name"));
+                }
+            }
+            if (customerServiceSalesperson) {
+                const values = Array.from(salespeople).sort((left, right) => left.localeCompare(right, "zh-CN"));
+                customerServiceSalesperson.innerHTML = '<option value="">全部业务员</option>' + values.map(value => (
+                    `<option value="${escapeHtml(value)}">${value === "__unassigned__" ? "未分配" : escapeHtml(value)}</option>`
+                )).join("");
+                customerServiceSalesperson.value = values.includes(previousSalesperson) ? previousSalesperson : "";
+            }
+            if (customerServiceGroup) {
+                const values = Array.from(groups).sort((left, right) => left.localeCompare(right, "zh-CN"));
+                customerServiceGroup.innerHTML = '<option value="">全部分组</option>' + values.map(value => (
+                    `<option value="${escapeHtml(value)}">${value === "__ungrouped__" ? "未分组" : escapeHtml(value)}</option>`
+                )).join("");
+                customerServiceGroup.value = values.includes(previousGroup) ? previousGroup : "";
+            }
+        }
+
+        function customerServiceStoreMatchesScope(row) {
+            const salesperson = String(customerServiceSalesperson?.value || "");
+            const groupName = String(customerServiceGroup?.value || "");
+            if (!salesperson && !groupName) return true;
+            return customerServiceStoreSettings(row).some(setting => (
+                (!salesperson || customerServiceSettingValue(setting, "salesperson") === salesperson)
+                && (!groupName || customerServiceSettingValue(setting, "group_name") === groupName)
+            ));
         }
 
         function renderCustomerServiceStores(rows = mercadoStoreTokenRows) {
             if (!customerServiceStore) return;
             const previous = String(customerServiceStore.value || "");
-            const available = (Array.isArray(rows) ? rows : []).filter(row => (
-                Number(row.id || 0) > 0 && (row.status !== "expired" || row.has_refresh_token)
-            ));
+            const available = customerServiceAvailableStores(rows).filter(customerServiceStoreMatchesScope);
             customerServiceStore.innerHTML = available.length
-                ? available.map(row => {
+                ? `<option value="">全部符合账号（${available.length}）</option>` + available.map(row => {
                     const name = row.display_name || row.nickname || `账号 ${row.id}`;
                     const meta = [row.site_id || "-", row.meli_user_id ? `ID ${row.meli_user_id}` : "待识别 ID"].join(" · ");
                     return `<option value="${Number(row.id)}">${escapeHtml(name)} · ${escapeHtml(meta)}</option>`;
                 }).join("")
-                : '<option value="">暂无可用授权店铺</option>';
-            if (previous && available.some(row => String(row.id) === previous)) {
-                customerServiceStore.value = previous;
-            }
+                : '<option value="">当前业务员 / 分组下暂无可用店铺</option>';
+            customerServiceStore.value = previous && available.some(row => String(row.id) === previous) ? previous : "";
+        }
+
+        function changeCustomerServiceScope() {
+            renderCustomerServiceStores();
+            resetCustomerServiceView();
+        }
+
+        function customerServiceTargetStores() {
+            const selectedTokenId = Number(customerServiceStore?.value || 0);
+            const stores = customerServiceAvailableStores().filter(customerServiceStoreMatchesScope);
+            return selectedTokenId ? stores.filter(row => Number(row.id || 0) === selectedTokenId) : stores;
         }
 
         function setCustomerServiceMessage(message, isError = false) {
@@ -12498,16 +13485,22 @@
         async function loadCustomerService(force = false) {
             if (!customerServiceStore || (customerServiceLoaded && !force)) return;
             if (!mercadoStoreTokensLoaded || force) await loadMercadoStoreTokens(force);
+            renderCustomerServiceScopeFilters();
             renderCustomerServiceStores();
             customerServiceLoaded = true;
             renderCustomerServiceQuickFilters();
-            if (!customerServiceStore.value) {
+            if (!customerServiceTargetStores().length) {
                 setCustomerServiceMessage("暂无可用授权店铺，请先完成店铺授权", true);
             }
         }
 
         function resetCustomerServiceView() {
             customerServiceRows = [];
+            customerServiceAllRows = [];
+            customerServiceLastQueryKey = "";
+            customerServicePartialFailureCount = 0;
+            customerServiceFailureMessages = [];
+            customerServiceClaimStatusTotals = {opened: 0, closed: 0};
             customerServiceSelectedIndex = -1;
             customerServiceClaimBundle = null;
             customerServicePage = 1;
@@ -12526,6 +13519,10 @@
             }
             customerServiceStatusFilter = "";
             customerServiceTypeFilter = "";
+            if (customerServiceSalesperson) customerServiceSalesperson.value = "";
+            if (customerServiceGroup) customerServiceGroup.value = "";
+            renderCustomerServiceStores();
+            if (customerServiceStore) customerServiceStore.value = "";
             resetCustomerServiceView();
         }
 
@@ -12548,12 +13545,13 @@
         function setCustomerServiceFilter(kind, value) {
             if (kind === "status") customerServiceStatusFilter = String(value || "");
             else customerServiceTypeFilter = String(value || "");
-            renderCustomerServiceQuickFilters();
-            loadCustomerServiceData(1);
+            if (customerServiceLastQueryKey && customerServiceMode === "claims") loadCustomerServiceData(1);
+            else if (customerServiceLastQueryKey) customerServiceApplyFilters(1);
+            else renderCustomerServiceQuickFilters();
         }
 
         function customerServiceCount(predicate) {
-            return customerServiceRows.filter(predicate).length;
+            return customerServiceAllRows.filter(predicate).length;
         }
 
         function renderCustomerServiceQuickFilters() {
@@ -12562,8 +13560,8 @@
                 const typeLinks = [["", "全部"], ...Object.entries(customerServiceClaimTypes)].map(([value, label]) => (
                     `<button class="customer-service-filter-link${customerServiceTypeFilter === value ? " active" : ""}" data-tone="purple" type="button" onclick="setCustomerServiceFilter('type','${value}')">${label}${value ? ` <span>(${customerServiceCount(row => row.type === value)})</span>` : ` <span>(${customerServiceTotal})</span>`}</button>`
                 )).join("");
-                const opened = customerServiceCount(row => row.status === "opened");
-                const closed = customerServiceCount(row => row.status === "closed");
+                const opened = Number(customerServiceClaimStatusTotals.opened || 0);
+                const closed = Number(customerServiceClaimStatusTotals.closed || 0);
                 customerServiceQuickFilters.innerHTML = `
                     <div class="customer-service-filter-group"><span class="customer-service-filter-label">类型：</span>${typeLinks}</div>
                     <div class="customer-service-filter-group"><span class="customer-service-filter-label">状态：</span>
@@ -12580,31 +13578,31 @@
             const cannotReply = customerServiceCount(row => row.reply_state === "blocked");
             customerServiceQuickFilters.innerHTML = `
                 <div class="customer-service-filter-group"><span class="customer-service-filter-label">状态：</span>
-                    <button class="customer-service-filter-link${customerServiceStatusFilter === "" ? " active" : ""}" type="button" onclick="setCustomerServiceFilter('status','')">全部 <span>(${customerServiceTotal})</span></button>
+                    <button class="customer-service-filter-link${customerServiceStatusFilter === "" ? " active" : ""}" type="button" onclick="setCustomerServiceFilter('status','')">全部 <span>(${customerServiceAllRows.length})</span></button>
                     <button class="customer-service-filter-link${customerServiceStatusFilter === "opened" ? " active" : ""}" data-tone="blue" type="button" onclick="setCustomerServiceFilter('status','opened')">开启 <span>(${opened})</span></button>
                     <button class="customer-service-filter-link${customerServiceStatusFilter === "blocked" ? " active" : ""}" type="button" onclick="setCustomerServiceFilter('status','blocked')">禁用 <span>(${blocked})</span></button>
                 </div>
                 <div class="customer-service-filter-group"><span class="customer-service-filter-label">回复：</span>
-                    <button class="customer-service-filter-link${customerServiceTypeFilter === "" ? " active" : ""}" type="button" onclick="setCustomerServiceFilter('type','')">全部 <span>(${customerServiceTotal})</span></button>
+                    <button class="customer-service-filter-link${customerServiceTypeFilter === "" ? " active" : ""}" type="button" onclick="setCustomerServiceFilter('type','')">全部 <span>(${customerServiceAllRows.length})</span></button>
                     <button class="customer-service-filter-link${customerServiceTypeFilter === "waiting" ? " active" : ""}" data-tone="purple" type="button" onclick="setCustomerServiceFilter('type','waiting')">待回复 <span>(${waiting})</span></button>
                     <button class="customer-service-filter-link${customerServiceTypeFilter === "replied" ? " active" : ""}" data-tone="blue" type="button" onclick="setCustomerServiceFilter('type','replied')">已回复 <span>(${replied})</span></button>
                     <button class="customer-service-filter-link${customerServiceTypeFilter === "blocked" ? " active" : ""}" type="button" onclick="setCustomerServiceFilter('type','blocked')">不可回复 <span>(${cannotReply})</span></button>
                 </div>`;
         }
 
-        function customerServiceTokenId() {
-            const tokenId = Number(customerServiceStore?.value || 0);
+        function customerServiceTokenId(explicitTokenId = 0) {
+            const tokenId = Number(explicitTokenId || customerServiceStore?.value || 0);
             if (!tokenId) throw new Error("请先选择授权店铺");
             return tokenId;
         }
 
-        function customerServiceSelectedStore() {
-            const tokenId = Number(customerServiceStore?.value || 0);
+        function customerServiceSelectedStore(explicitTokenId = 0) {
+            const tokenId = Number(explicitTokenId || customerServiceStore?.value || 0);
             return mercadoStoreTokenRows.find(row => Number(row.id || 0) === tokenId) || {};
         }
 
-        async function customerServiceRequest(action, {method = "GET", data = {}} = {}) {
-            const tokenId = customerServiceTokenId();
+        async function customerServiceRequest(action, {method = "GET", data = {}, tokenId = 0} = {}) {
+            tokenId = customerServiceTokenId(tokenId);
             const options = {method, headers: {"Accept": "application/json"}, cache: "no-store"};
             let url = `/api/mercado-communications/${tokenId}/${action}`;
             if (method === "GET") {
@@ -12643,8 +13641,8 @@
             return String(row?.pack_id || row?.resource || "").split("/").filter(Boolean).pop() || "";
         }
 
-        function customerServiceConversationRow(packId, unreadCount, bundle = {}, orderContext = {}) {
-            const store = customerServiceSelectedStore();
+        function customerServiceConversationRow(packId, unreadCount, bundle = {}, orderContext = {}, tokenId = 0) {
+            const store = customerServiceSelectedStore(tokenId);
             const sellerId = String(store.meli_user_id || "");
             const messages = Array.isArray(bundle.messages) ? bundle.messages : [];
             const dated = [...messages].sort((left, right) => String(left.message_date?.created || left.message_date?.received || "").localeCompare(String(right.message_date?.created || right.message_date?.received || "")));
@@ -12653,6 +13651,7 @@
             const blocked = conversation.status === "blocked" || Boolean(conversation.substatus) || latest.status === "blocked";
             const outgoing = String(latest.from?.user_id || "") === sellerId;
             return {
+                token_id: Number(tokenId || store.id || 0),
                 pack_id: String(packId || ""),
                 order_context: orderContext || {},
                 order_id: orderContext?.order_id || "",
@@ -12685,72 +13684,215 @@
             return results;
         }
 
+        function customerServiceQueryKey(stores, search, dateFrom, dateTo) {
+            return JSON.stringify({
+                mode: customerServiceMode,
+                token_ids: stores.map(row => Number(row.id || 0)).sort((left, right) => left - right),
+                search, date_from: dateFrom, date_to: dateTo,
+            });
+        }
+
+        function customerServiceApplyFilters(page = 1) {
+            const dateFrom = document.getElementById("customer-service-start-date")?.value || "";
+            const dateTo = document.getElementById("customer-service-end-date")?.value || "";
+            const filtered = customerServiceAllRows.filter(row => {
+                if (customerServiceMode === "claims") {
+                    if (customerServiceStatusFilter && row.status !== customerServiceStatusFilter) return false;
+                    if (customerServiceTypeFilter && row.type !== customerServiceTypeFilter) return false;
+                } else {
+                    if (customerServiceStatusFilter === "opened" && row.state === "blocked") return false;
+                    if (customerServiceStatusFilter === "blocked" && row.state !== "blocked") return false;
+                    if (customerServiceTypeFilter && row.reply_state !== customerServiceTypeFilter) return false;
+                }
+                const date = String(row.last_updated || row.date_created || row.latest_at || "").slice(0, 10);
+                if (dateFrom && date && date < dateFrom) return false;
+                if (dateTo && date && date > dateTo) return false;
+                return true;
+            });
+            filtered.sort((left, right) => String(
+                right.last_updated || right.date_created || right.latest_at || ""
+            ).localeCompare(String(left.last_updated || left.date_created || left.latest_at || "")));
+            customerServiceTotal = filtered.length;
+            customerServicePages = Math.max(1, Math.ceil(customerServiceTotal / customerServicePageSize));
+            customerServicePage = Math.min(Math.max(1, Number(page || 1)), customerServicePages);
+            const offset = (customerServicePage - 1) * customerServicePageSize;
+            customerServiceRows = filtered.slice(offset, offset + customerServicePageSize);
+            customerServiceSelectedIndex = -1;
+            renderCustomerServiceTable();
+            renderCustomerServiceQuickFilters();
+            renderCustomerServicePagination();
+        }
+
+        async function customerServiceFetchClaimsPage(store, filters, requiredRows) {
+            const rows = [];
+            const statusTotals = {opened: 0, closed: 0};
+            for (const status of ["opened", "closed"]) {
+                let offset = 0;
+                let total = 0;
+                const statusRows = [];
+                while (statusRows.length < requiredRows) {
+                    const limit = Math.min(100, requiredRows - statusRows.length);
+                    const data = await customerServiceRequest("claims-list", {
+                        tokenId: store.id,
+                        data: {...filters, status, limit, offset},
+                    });
+                    const batch = Array.isArray(data?.data) ? data.data : [];
+                    statusRows.push(...batch.map(row => ({...row, token_id: Number(store.id)})));
+                    total = Number(data?.paging?.total || statusRows.length);
+                    statusTotals[status] = total;
+                    if (!batch.length || offset + batch.length >= total) break;
+                    offset += batch.length;
+                }
+                if (!customerServiceStatusFilter || customerServiceStatusFilter === status) {
+                    rows.push(...statusRows);
+                }
+            }
+            return {
+                rows: Array.from(new Map(rows.map(row => (
+                    [`${Number(store.id)}:${String(row.id || "")}`, row]
+                ))).values()),
+                total: customerServiceStatusFilter
+                    ? Number(statusTotals[customerServiceStatusFilter] || 0)
+                    : Number(statusTotals.opened + statusTotals.closed),
+                status_totals: statusTotals,
+            };
+        }
+
+        function customerServiceFailureDetails(rows) {
+            return (rows || []).filter(row => row.load_error).map(row => {
+                const tokenId = Number(row.token_id || row.id || 0);
+                const store = customerServiceSelectedStore(tokenId);
+                const name = row.display_name || store.display_name || store.nickname || `账号 ${tokenId || "-"}`;
+                return `${name}：${row.load_error}`;
+            });
+        }
+
+        async function customerServiceLoadPostSale(stores, search) {
+            if (search) {
+                const results = await customerServiceMapLimit(stores, 4, async store => {
+                    const bundle = await customerServiceRequest("post-sale-messages", {
+                        tokenId: store.id,
+                        data: {pack_id: search, limit: 100},
+                    });
+                    return customerServiceConversationRow(search, 0, bundle || {}, {}, store.id);
+                });
+                customerServicePartialFailureCount = results.filter(row => row.load_error).length;
+                customerServiceFailureMessages = customerServiceFailureDetails(results);
+                return results.filter(row => !row.load_error);
+            }
+
+            const unreadResults = await customerServiceMapLimit(stores, 4, async store => {
+                const data = await customerServiceRequest("post-sale-unread", {tokenId: store.id});
+                return {token_id: Number(store.id), results: Array.isArray(data?.results) ? data.results : []};
+            });
+            customerServicePartialFailureCount = unreadResults.filter(row => row.load_error).length;
+            customerServiceFailureMessages = customerServiceFailureDetails(unreadResults);
+            const pendingRows = unreadResults.flatMap(result => (result.results || []).map(row => ({
+                token_id: Number(result.token_id || 0),
+                pack_id: customerServicePackId(row),
+                unread_count: Number(row.count || 0),
+                resource: row.resource,
+                order_context: row.order_context || {},
+            }))).filter(row => row.token_id && row.pack_id);
+            const conversations = await customerServiceMapLimit(pendingRows, 6, async row => {
+                const bundle = await customerServiceRequest("post-sale-messages", {
+                    tokenId: row.token_id,
+                    data: {pack_id: row.pack_id, limit: 100},
+                });
+                return customerServiceConversationRow(
+                    row.pack_id, row.unread_count, bundle || {}, row.order_context || {}, row.token_id
+                );
+            });
+            customerServicePartialFailureCount += conversations.filter(row => row.load_error).length;
+            customerServiceFailureMessages.push(...customerServiceFailureDetails(conversations));
+            return conversations.map(row => row.load_error ? {
+                ...row,
+                state: "opened",
+                reply_state: "waiting",
+                message_count: Number(row.unread_count || 0),
+                latest_text: `摘要读取失败：${row.load_error}`,
+                latest_at: row.order_context?.last_updated || "",
+            } : row);
+        }
+
         async function loadCustomerServiceData(page = 1) {
             if (!customerServiceLoad) return;
-            customerServicePage = Math.max(1, Number(page || 1));
-            customerServiceLoad.disabled = true;
-            customerServiceLoad.textContent = "查询中...";
-            customerServiceList.innerHTML = '<div class="customer-service-empty">正在读取 Mercado Libre 官方数据...</div>';
-            if (customerServicePagination) customerServicePagination.hidden = true;
-            setCustomerServiceMessage("正在查询，请稍候");
+            const requestedPage = Math.max(1, Number(page || 1));
             const search = document.getElementById("customer-service-search")?.value.trim() || "";
             const dateFrom = document.getElementById("customer-service-start-date")?.value || "";
             const dateTo = document.getElementById("customer-service-end-date")?.value || "";
             try {
+                const stores = customerServiceTargetStores();
+                if (!stores.length) throw new Error("当前业务员 / 分组下没有可用授权店铺");
+                const queryKey = customerServiceQueryKey(stores, search, dateFrom, dateTo);
+                if (customerServiceMode === "post-sale" && requestedPage > 1 && queryKey === customerServiceLastQueryKey) {
+                    customerServiceApplyFilters(page);
+                    return;
+                }
+
+                customerServiceLoad.disabled = true;
+                customerServiceLoad.textContent = "查询中...";
+                customerServiceList.innerHTML = `<div class="customer-service-empty">正在读取 ${stores.length} 个店铺的 Mercado Libre 官方数据...</div>`;
+                if (customerServicePagination) customerServicePagination.hidden = true;
+                setCustomerServiceMessage(`正在聚合 ${stores.length} 个店铺，请稍候`);
+                customerServicePartialFailureCount = 0;
+                customerServiceFailureMessages = [];
+
                 if (customerServiceMode === "post-sale") {
-                    if (search) {
-                        const bundle = await customerServiceRequest("post-sale-messages", {data: {pack_id: search, limit: 100}});
-                        customerServiceRows = [customerServiceConversationRow(search, 0, bundle || {})];
-                        customerServiceTotal = 1;
-                        customerServicePages = 1;
-                    } else {
-                        const unread = await customerServiceRequest("post-sale-unread");
-                        const all = (Array.isArray(unread?.results) ? unread.results : []).map(row => ({
-                            pack_id: customerServicePackId(row), unread_count: Number(row.count || 0), resource: row.resource,
-                            order_context: row.order_context || {},
-                        }));
-                        customerServiceTotal = all.length;
-                        customerServicePages = Math.max(1, Math.ceil(all.length / customerServicePageSize));
-                        customerServicePage = Math.min(customerServicePage, customerServicePages);
-                        const pageRows = all.slice((customerServicePage - 1) * customerServicePageSize, customerServicePage * customerServicePageSize);
-                        customerServiceRows = await customerServiceMapLimit(pageRows, 4, async row => {
-                            const bundle = await customerServiceRequest("post-sale-messages", {data: {pack_id: row.pack_id, limit: 100}});
-                            return customerServiceConversationRow(row.pack_id, row.unread_count, bundle || {}, row.order_context || {});
-                        });
-                    }
-                    customerServiceRows = customerServiceRows.filter(row => {
-                        if (customerServiceStatusFilter === "opened" && row.state === "blocked") return false;
-                        if (customerServiceStatusFilter === "blocked" && row.state !== "blocked") return false;
-                        if (customerServiceTypeFilter && row.reply_state !== customerServiceTypeFilter) return false;
-                        const date = String(row.latest_at || "").slice(0, 10);
-                        if (dateFrom && date && date < dateFrom) return false;
-                        if (dateTo && date && date > dateTo) return false;
-                        return true;
-                    });
-                    setCustomerServiceMessage(search ? `已读取 Pack ${search} 的完整会话` : `官方返回 ${customerServiceTotal} 个待处理会话，本页已加载 ${customerServiceRows.length} 个`);
+                    customerServiceAllRows = await customerServiceLoadPostSale(stores, search);
                 } else {
-                    const offset = (customerServicePage - 1) * customerServicePageSize;
-                    const data = await customerServiceRequest("claims-list", {data: {
-                        status: customerServiceStatusFilter,
+                    const filters = {
                         claim_type: customerServiceTypeFilter,
                         claim_id: search && search.length <= 12 ? search : "",
                         order_id: search && search.length > 12 ? search : "",
                         date_from: dateFrom,
                         date_to: dateTo,
-                        limit: customerServicePageSize,
-                        offset,
-                    }});
-                    customerServiceRows = Array.isArray(data?.data) ? data.data : [];
-                    customerServiceTotal = Number(data?.paging?.total || customerServiceRows.length);
+                    };
+                    const requiredRows = requestedPage * customerServicePageSize;
+                    const results = await customerServiceMapLimit(stores, 3, async store => ({
+                        token_id: Number(store.id),
+                        ...await customerServiceFetchClaimsPage(store, filters, requiredRows),
+                    }));
+                    customerServicePartialFailureCount = results.filter(row => row.load_error).length;
+                    customerServiceFailureMessages = customerServiceFailureDetails(results);
+                    const mergedRows = results.flatMap(result => result.rows || []);
+                    mergedRows.sort((left, right) => String(
+                        right.last_updated || right.date_created || ""
+                    ).localeCompare(String(left.last_updated || left.date_created || "")));
+                    customerServiceAllRows = mergedRows;
+                    customerServiceTotal = results.reduce((sum, result) => sum + Number(result.total || 0), 0);
+                    customerServiceClaimStatusTotals = results.reduce((totals, result) => ({
+                        opened: totals.opened + Number(result.status_totals?.opened || 0),
+                        closed: totals.closed + Number(result.status_totals?.closed || 0),
+                    }), {opened: 0, closed: 0});
                     customerServicePages = Math.max(1, Math.ceil(customerServiceTotal / customerServicePageSize));
-                    setCustomerServiceMessage(`已读取 ${customerServiceRows.length} 条订单索赔，共 ${customerServiceTotal} 条`);
+                    customerServicePage = Math.min(requestedPage, customerServicePages);
+                    const pageOffset = (customerServicePage - 1) * customerServicePageSize;
+                    customerServiceRows = mergedRows.slice(pageOffset, pageOffset + customerServicePageSize);
                 }
-                customerServiceSelectedIndex = -1;
-                renderCustomerServiceTable();
-                renderCustomerServiceQuickFilters();
-                renderCustomerServicePagination();
+
+                customerServiceLastQueryKey = queryKey;
+                if (customerServiceMode === "post-sale") {
+                    customerServiceApplyFilters(1);
+                } else {
+                    customerServiceSelectedIndex = -1;
+                    renderCustomerServiceTable();
+                    renderCustomerServiceQuickFilters();
+                    renderCustomerServicePagination();
+                }
+                const kind = customerServiceMode === "claims" ? "订单索赔" : (search ? `Pack ${search} 会话` : "待处理售后会话");
+                const resultCount = customerServiceMode === "claims" ? customerServiceTotal : customerServiceAllRows.length;
+                const failurePreview = customerServiceFailureMessages.slice(0, 3).join("；");
+                const moreFailures = customerServiceFailureMessages.length > 3 ? `；其余 ${customerServiceFailureMessages.length - 3} 个失败` : "";
+                const failureText = customerServicePartialFailureCount
+                    ? `，另有 ${customerServicePartialFailureCount} 个请求失败：${failurePreview}${moreFailures}`
+                    : "";
+                setCustomerServiceMessage(`已聚合 ${stores.length} 个店铺，共 ${resultCount} 条${kind}${failureText}`, Boolean(customerServicePartialFailureCount));
             } catch (error) {
                 customerServiceRows = [];
+                customerServiceAllRows = [];
+                customerServiceLastQueryKey = "";
+                customerServiceFailureMessages = [];
                 customerServiceTotal = 0;
                 customerServicePages = 1;
                 customerServiceList.innerHTML = `<div class="customer-service-empty">${escapeHtml(error.message || error)}</div>`;
@@ -12768,7 +13910,7 @@
         }
 
         function customerServiceAccountCell(row) {
-            const store = customerServiceSelectedStore();
+            const store = customerServiceSelectedStore(row.token_id);
             const name = row.order_context?.shop_name || store.display_name || store.nickname || `账号 ${store.id || "-"}`;
             const site = row.site_id || row.order_context?.site_id || store.site_id || "";
             const flag = customerServiceSiteFlags[site] || "🌐";
@@ -12842,29 +13984,31 @@
             if (!row) return;
             customerServiceSelectedIndex = Number(index);
             customerServiceList.querySelectorAll("tbody tr").forEach((tr, rowIndex) => tr.classList.toggle("active", rowIndex === customerServiceSelectedIndex));
+            const store = customerServiceSelectedStore(row.token_id);
+            const storeName = store.display_name || store.nickname || `账号 ${row.token_id || "-"}`;
             if (customerServiceMode === "claims") {
-                openCustomerServiceDetail(`订单索赔 #${row.id}`, `${customerServiceClaimTypes[row.type] || row.type || "索赔"} · ${customerServiceStageLabels[row.stage] || row.stage || "-"}`);
-                await loadClaimDetail(row.id);
+                openCustomerServiceDetail(`订单索赔 #${row.id}`, `${storeName} · ${customerServiceClaimTypes[row.type] || row.type || "索赔"} · ${customerServiceStageLabels[row.stage] || row.stage || "-"}`);
+                await loadClaimDetail(row.id, row.token_id);
                 return;
             }
-            openCustomerServiceDetail(`售后会话 · Pack ${row.pack_id}`, row.load_error ? `列表摘要读取失败：${row.load_error}` : "会话详情不会自动标记为已读");
+            openCustomerServiceDetail(`售后会话 · Pack ${row.pack_id}`, row.load_error ? `${storeName} · 列表摘要读取失败：${row.load_error}` : `${storeName} · 会话详情不会自动标记为已读`);
             if (row.messages?.length || row.conversation_status?.status) {
-                renderPostSaleDetail(row.pack_id, row.messages || [], row.conversation_status || {});
+                renderPostSaleDetail(row.pack_id, row.messages || [], row.conversation_status || {}, row.token_id);
                 return;
             }
             customerServiceDetail.innerHTML = '<div class="customer-service-empty">正在读取完整会话...</div>';
             try {
-                const data = await customerServiceRequest("post-sale-messages", {data: {pack_id: row.pack_id, limit: 100}});
+                const data = await customerServiceRequest("post-sale-messages", {tokenId: row.token_id, data: {pack_id: row.pack_id, limit: 100}});
                 row.messages = Array.isArray(data?.messages) ? data.messages : [];
                 row.conversation_status = data?.conversation_status || {};
-                renderPostSaleDetail(row.pack_id, row.messages, row.conversation_status);
+                renderPostSaleDetail(row.pack_id, row.messages, row.conversation_status, row.token_id);
             } catch (error) {
                 customerServiceDetail.innerHTML = `<div class="customer-service-empty">${escapeHtml(error.message || error)}</div>`;
             }
         }
 
-        function renderPostSaleDetail(packId, messages, conversationStatus) {
-            const store = customerServiceSelectedStore();
+        function renderPostSaleDetail(packId, messages, conversationStatus, tokenId) {
+            const store = customerServiceSelectedStore(tokenId);
             const sellerId = String(store.meli_user_id || "");
             const manage = hasWorkbenchPermission("customer_service.manage");
             const rows = Array.isArray(messages) ? messages : [];
@@ -12886,29 +14030,29 @@
                 ${manage && !blocked ? `<div class="customer-service-compose">
                     <div class="field"><label for="customer-service-post-text">回复原文</label><textarea id="customer-service-post-text" placeholder="输入要发送给买家的消息"></textarea></div>
                     <div class="field"><label for="customer-service-post-translated">买家语言翻译（可选）</label><textarea id="customer-service-post-translated"></textarea></div>
-                    <div class="actions"><button class="primary customer-service-manage-action" type="button" onclick="sendPostSaleMessage('${escapeHtml(packId)}')">发送售后消息</button></div>
+                    <div class="actions"><button class="primary customer-service-manage-action" type="button" onclick="sendPostSaleMessage('${escapeHtml(packId)}',${Number(tokenId || 0)})">发送售后消息</button></div>
                 </div>` : `<p class="token-sensitive-note">${blocked ? "官方已阻止此会话继续发送，请依据阻止原因处理关联索赔。" : "当前账号只有查看权限。"}</p>`}`;
         }
 
-        async function loadClaimDetail(claimId) {
+        async function loadClaimDetail(claimId, tokenId) {
             customerServiceDetail.innerHTML = '<div class="customer-service-empty">正在读取索赔详情、原因、声誉影响和沟通记录...</div>';
             try {
-                customerServiceClaimBundle = await customerServiceRequest("claims-detail", {data: {claim_id: claimId}});
-                renderClaimDetail(customerServiceClaimBundle || {});
+                customerServiceClaimBundle = await customerServiceRequest("claims-detail", {tokenId, data: {claim_id: claimId}});
+                renderClaimDetail(customerServiceClaimBundle || {}, tokenId);
             } catch (error) {
                 customerServiceDetail.innerHTML = `<div class="customer-service-empty">${escapeHtml(error.message || error)}</div>`;
                 setCustomerServiceMessage(error.message || error, true);
             }
         }
 
-        function renderClaimDetail(bundle) {
+        function renderClaimDetail(bundle, tokenId) {
             const claim = bundle.claim || {};
             const detail = bundle.detail || {};
             const reason = bundle.reason || {};
             const reputation = bundle.affects_reputation || {};
             const expectedResolutions = Array.isArray(bundle.expected_resolutions) ? bundle.expected_resolutions : [];
             const messages = Array.isArray(bundle.messages) ? bundle.messages : [];
-            const sellerId = String(customerServiceSelectedStore().meli_user_id || "");
+            const sellerId = String(customerServiceSelectedStore(tokenId).meli_user_id || "");
             const player = (claim.players || []).find(item => String(item.user_id || "") === sellerId) || (claim.players || []).find(item => item.type === "seller");
             const actionNames = (player?.available_actions || []).map(item => String(item.action || ""));
             const receiverRole = actionNames.includes("send_message_to_mediator") ? "mediator" : actionNames.includes("send_message_to_complainant") ? "complainant" : "";
@@ -12929,29 +14073,29 @@
                 }).join("") : '<div class="customer-service-empty">暂无索赔沟通记录</div>'}</div>
                 ${manage && receiverRole ? `<div class="customer-service-compose">
                     <div class="field"><label for="customer-service-claim-text">回复 ${receiverRole === "mediator" ? "平台调解员" : "买家"}</label><textarea id="customer-service-claim-text"></textarea></div>
-                    <div class="actions"><button class="primary customer-service-manage-action" type="button" onclick="sendClaimMessage('${escapeHtml(claim.id)}','${receiverRole}')">提交索赔回复</button></div>
+                    <div class="actions"><button class="primary customer-service-manage-action" type="button" onclick="sendClaimMessage('${escapeHtml(claim.id)}','${receiverRole}',${Number(tokenId || 0)})">提交索赔回复</button></div>
                 </div>` : `<p class="token-sensitive-note">${manage ? "当前索赔没有可用的 send_message 官方动作。" : "当前账号只有查看权限。"}</p>`}`;
         }
 
-        async function sendPostSaleMessage(packId) {
+        async function sendPostSaleMessage(packId, tokenId) {
             const text = document.getElementById("customer-service-post-text")?.value.trim() || "";
             const translated = document.getElementById("customer-service-post-translated")?.value.trim() || "";
             if (!text) return setCustomerServiceMessage("请输入售后消息内容", true);
             try {
-                await customerServiceRequest("post-sale-send", {method: "POST", data: {pack_id: packId, text, text_translated: translated}});
+                await customerServiceRequest("post-sale-send", {method: "POST", tokenId, data: {pack_id: packId, text, text_translated: translated}});
                 setCustomerServiceMessage("售后消息已发送");
-                const data = await customerServiceRequest("post-sale-messages", {data: {pack_id: packId, limit: 100}});
-                renderPostSaleDetail(packId, data?.messages || [], data?.conversation_status || {});
+                const data = await customerServiceRequest("post-sale-messages", {tokenId, data: {pack_id: packId, limit: 100}});
+                renderPostSaleDetail(packId, data?.messages || [], data?.conversation_status || {}, tokenId);
             } catch (error) { setCustomerServiceMessage(error.message || error, true); }
         }
 
-        async function sendClaimMessage(claimId, receiverRole) {
+        async function sendClaimMessage(claimId, receiverRole, tokenId) {
             const message = document.getElementById("customer-service-claim-text")?.value.trim() || "";
             if (!message) return setCustomerServiceMessage("请输入索赔回复内容", true);
             try {
-                await customerServiceRequest("claims-send", {method: "POST", data: {claim_id: claimId, receiver_role: receiverRole, message}});
+                await customerServiceRequest("claims-send", {method: "POST", tokenId, data: {claim_id: claimId, receiver_role: receiverRole, message}});
                 setCustomerServiceMessage("索赔回复已提交");
-                await loadClaimDetail(claimId);
+                await loadClaimDetail(claimId, tokenId);
             } catch (error) { setCustomerServiceMessage(error.message || error, true); }
         }
 
@@ -13368,6 +14512,7 @@
                     </div>
                 `;
             }).join("");
+            updateMercadoStoreTokenSelection();
         }
 
         function renderAppealPhraseRows() {
@@ -13607,6 +14752,11 @@
                     throw new Error(payload.message || `接口请求失败：${response.status}`);
                 }
                 const rows = Array.isArray(payload.data) ? payload.data : [];
+                zyingCollectionCategoryNames = new Map(rows.map(row => {
+                    const value = String(row.category_id || row.category_name || "").trim();
+                    const label = String(row.category_name || row.category_id || "未分类");
+                    return [value, label];
+                }));
                 zyingCollectionCategoryOptions.innerHTML = rows.map(row => {
                     const value = String(row.category_id || row.category_name || "").trim();
                     const label = String(row.category_name || row.category_id || "未分类");
@@ -13651,6 +14801,86 @@
                 : "本地 Edge 无需填写窗口名称";
         }
 
+        function zyingLoginPayload() {
+            return {
+                browser_type: zyingCollectionBrowserType?.value || "bitbrowser",
+                window_name: zyingCollectionWindowName?.value.trim() || "",
+            };
+        }
+
+        function renderZyingAuthStatus(auth = {}, requiresLogin = false) {
+            if (!zyingAuthStatus || !zyingAuthDetail) return;
+            const configured = Boolean(auth.configured);
+            if (configured && !requiresLogin) {
+                zyingAuthStatus.textContent = "智赢登录状态已保存";
+                zyingAuthDetail.textContent = auth.saved_at
+                    ? `最近保存：${auth.saved_at}；后台采集无需保持浏览器开启`
+                    : "已从运行环境读取凭证；后台采集无需保持浏览器开启";
+                if (zyingAuthPanel) zyingAuthPanel.style.borderColor = "var(--success)";
+            } else {
+                zyingAuthStatus.textContent = requiresLogin
+                    ? "智赢登录已失效，需要人工处理"
+                    : "尚未保存智赢登录状态";
+                zyingAuthDetail.textContent = "点击“打开登录窗口”完成登录，再点击“检测并保存登录状态”";
+                if (zyingAuthPanel) zyingAuthPanel.style.borderColor = "var(--danger)";
+            }
+        }
+
+        async function openZyingLoginWindow() {
+            if (!openZyingLoginBtn) return;
+            const originalText = openZyingLoginBtn.textContent;
+            openZyingLoginBtn.disabled = true;
+            openZyingLoginBtn.textContent = "正在打开...";
+            try {
+                const response = await fetch("/api/zying-collection/auth/open", {
+                    method: "POST",
+                    headers: {"Content-Type": "application/json"},
+                    body: JSON.stringify(zyingLoginPayload()),
+                });
+                const payload = await response.json();
+                if (!response.ok || payload.status !== "success") {
+                    throw new Error(payload.message || `接口请求失败：${response.status}`);
+                }
+                zyingAuthStatus.textContent = "登录窗口已打开";
+                zyingAuthDetail.textContent = "请在浏览器中完成智赢登录，然后返回这里保存登录状态";
+            } catch (err) {
+                zyingAuthStatus.textContent = "无法打开智赢登录窗口";
+                zyingAuthDetail.textContent = err.message || String(err);
+                alert(`打开智赢登录窗口失败：${err.message || err}`);
+            } finally {
+                openZyingLoginBtn.disabled = zyingCollectionRunning;
+                openZyingLoginBtn.textContent = originalText;
+            }
+        }
+
+        async function captureZyingLoginState() {
+            if (!captureZyingLoginBtn) return;
+            const originalText = captureZyingLoginBtn.textContent;
+            captureZyingLoginBtn.disabled = true;
+            captureZyingLoginBtn.textContent = "正在检测...";
+            try {
+                const response = await fetch("/api/zying-collection/auth/capture", {
+                    method: "POST",
+                    headers: {"Content-Type": "application/json"},
+                    body: JSON.stringify(zyingLoginPayload()),
+                });
+                const payload = await response.json();
+                if (!response.ok || payload.status !== "success") {
+                    throw new Error(payload.message || `接口请求失败：${response.status}`);
+                }
+                renderZyingAuthStatus(payload.data?.auth || {}, false);
+                zyingCollectionStatusText.textContent = payload.message || "登录状态已保存";
+                await loadZyingCollectionStatus();
+            } catch (err) {
+                renderZyingAuthStatus({}, true);
+                zyingAuthDetail.textContent = err.message || String(err);
+                alert(`智赢登录检测失败：${err.message || err}`);
+            } finally {
+                captureZyingLoginBtn.disabled = zyingCollectionRunning;
+                captureZyingLoginBtn.textContent = originalText;
+            }
+        }
+
         async function loadZyingCollectionStatus() {
             if (!zyingCollectionStatusText) return;
             try {
@@ -13670,6 +14900,7 @@
                 zyingCollectionDuplicates.textContent = Number(summary.duplicate_count || 0);
                 zyingCollectionFailed.textContent = Number(summary.detail_failed_count || 0);
                 renderZyingCollectionLogs(data.logs);
+                renderZyingAuthStatus(data.auth || {}, Boolean(data.requires_login));
                 if (!zyingCollectionBrowserType.dataset.defaultsLoaded) {
                     zyingCollectionBrowserType.value = defaults.browser_type || "bitbrowser";
                     zyingCollectionWindowName.value = defaults.window_name || "";
@@ -13681,6 +14912,8 @@
                 startZyingCollectionBtn.textContent = zyingCollectionRunning
                     ? "正在采集..."
                     : "启动产品采集";
+                if (openZyingLoginBtn) openZyingLoginBtn.disabled = zyingCollectionRunning;
+                if (captureZyingLoginBtn) captureZyingLoginBtn.disabled = zyingCollectionRunning;
                 [
                     zyingCollectionStartPage,
                     zyingCollectionEndPage,
@@ -13723,6 +14956,9 @@
                         start_page: startPage,
                         end_page: endPage,
                         category: zyingCollectionCategory?.value.trim() || "",
+                        category_name: zyingCollectionCategoryNames.get(
+                            zyingCollectionCategory?.value.trim() || ""
+                        ) || zyingCollectionCategory?.value.trim() || "",
                         browser_type: zyingCollectionBrowserType?.value || "bitbrowser",
                         window_name: zyingCollectionWindowName?.value.trim() || "",
                     }),
@@ -14985,10 +16221,31 @@
             return {
                 shops: selection.shops,
                 sites: selection.sites,
+                date_from: document.getElementById("order-print-date-from")?.value || "",
+                date_to: document.getElementById("order-print-date-to")?.value || "",
                 max_retries: Number(document.getElementById("order-print-retries").value || 3),
                 retry_delay_seconds: Number(document.getElementById("order-print-retry-delay").value || 3),
             };
         }
+
+        function orderPrintLocalDatetimeValue(value) {
+            const pad = number => String(number).padStart(2, "0");
+            return `${value.getFullYear()}-${pad(value.getMonth() + 1)}-${pad(value.getDate())}`
+                + `T${pad(value.getHours())}:${pad(value.getMinutes())}`;
+        }
+
+        function initializeOrderPrintRange() {
+            const startInput = document.getElementById("order-print-date-from");
+            const endInput = document.getElementById("order-print-date-to");
+            if (!startInput || !endInput || startInput.value || endInput.value) return;
+            const end = new Date();
+            end.setSeconds(0, 0);
+            const start = new Date(end.getTime() - 72 * 60 * 60 * 1000);
+            startInput.value = orderPrintLocalDatetimeValue(start);
+            endInput.value = orderPrintLocalDatetimeValue(end);
+        }
+
+        initializeOrderPrintRange();
 
         function orderPrintTargetKey(row) {
             return JSON.stringify([
@@ -15184,6 +16441,8 @@
             }
             const requestPayload = {
                 targets,
+                date_from: document.getElementById("order-print-date-from")?.value || "",
+                date_to: document.getElementById("order-print-date-to")?.value || "",
                 max_retries: Number(document.getElementById("order-print-retries").value || 3),
                 retry_delay_seconds: Number(document.getElementById("order-print-retry-delay").value || 3),
             };

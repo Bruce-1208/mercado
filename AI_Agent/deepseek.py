@@ -83,6 +83,7 @@ def chat_deepseek(
     model: str | None = None,
     temperature: float | None = None,
     max_tokens: int | None = None,
+    response_format: dict | None = None,
 ) -> str:
     kwargs = {
         "model": model or DEEPSEEK_MODEL,
@@ -92,6 +93,8 @@ def chat_deepseek(
         kwargs["temperature"] = temperature
     if max_tokens is not None:
         kwargs["max_tokens"] = max_tokens
+    if response_format is not None:
+        kwargs["response_format"] = response_format
 
     response = _get_client().chat.completions.create(**kwargs)
     return response.choices[0].message.content or ""

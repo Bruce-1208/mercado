@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from datetime import datetime
 from io import BytesIO
 
@@ -11,6 +12,32 @@ from mercado_api.client import MercadoAPIError, MercadoLibreClient
 
 class MercadoLabelError(RuntimeError):
     """The selected order cannot currently provide an official Mercado label."""
+
+
+class MercadoLabelUnavailable(MercadoLabelError):
+    """The shipment lifecycle says that an official label is unavailable."""
+
+    def __init__(self, message, *, shipment_status="", permanent=False):
+        super().__init__(message)
+        self.shipment_status = str(shipment_status or "").strip().lower()
+        self.permanent = bool(permanent)
+
+
+_FINAL_NONPRINTABLE_SHIPMENT_STATUSES = {
+    "cancelled",
+    "canceled",
+    "delivered",
+    "shipped",
+    "returned",
+    "returned_to_sender",
+    "not_delivered",
+}
+
+
+def _shipment_status_from_label_error(exc):
+    message = str(exc or "")
+    match = re.search(r"Shipment status is\s+['\"]([^'\"]+)['\"]", message, re.I)
+    return str(match.group(1) if match else "").strip().lower()
 
 
 def _refresh_store_token(token_id):
@@ -30,7 +57,7 @@ def _is_invalid_token_error(exc):
     )
 
 
-def _download_one(context):
+def _download_one(context, *, max_attempts=4, timeout=30):
     order_id = str(context.get("order_id") or "")
     shipment_id = str(context.get("shipping_id") or "").strip()
     if not shipment_id:
@@ -38,17 +65,45 @@ def _download_one(context):
     access_token = str(context.get("access_token") or "").strip()
     if not access_token:
         raise MercadoLabelError(f"订单 {order_id} 所属店铺缺少 Access Token")
+    # A print round already controls its retry count.  Keeping the HTTP client's
+    # four retries here would multiply three UI attempts into twelve requests.
     client = MercadoLibreClient(access_token)
+    if hasattr(client, "timeout"):
+        client.timeout = int(timeout or 30)
     try:
-        content = client.get_shipment_label(shipment_id)
+        content = (
+            client.get_shipment_label(shipment_id)
+            if int(max_attempts or 4) == 4
+            else client.get_shipment_label(shipment_id, max_attempts=max_attempts)
+        )
     except MercadoAPIError as exc:
+        shipment_status = _shipment_status_from_label_error(exc)
+        if shipment_status:
+            raise MercadoLabelUnavailable(
+                f"订单 {order_id} 的运单状态为 {shipment_status}，当前没有可打印面单",
+                shipment_status=shipment_status,
+                permanent=shipment_status in _FINAL_NONPRINTABLE_SHIPMENT_STATUSES,
+            ) from exc
         if not _is_invalid_token_error(exc) or not context.get("refresh_token"):
             raise MercadoLabelError(f"订单 {order_id}：{exc}") from exc
         refreshed = _refresh_store_token(context.get("token_id"))
         client = MercadoLibreClient(str((refreshed or {}).get("access_token") or ""))
+        if hasattr(client, "timeout"):
+            client.timeout = int(timeout or 30)
         try:
-            content = client.get_shipment_label(shipment_id)
+            content = (
+                client.get_shipment_label(shipment_id)
+                if int(max_attempts or 4) == 4
+                else client.get_shipment_label(shipment_id, max_attempts=max_attempts)
+            )
         except MercadoAPIError as retry_exc:
+            shipment_status = _shipment_status_from_label_error(retry_exc)
+            if shipment_status:
+                raise MercadoLabelUnavailable(
+                    f"订单 {order_id} 的运单状态为 {shipment_status}，当前没有可打印面单",
+                    shipment_status=shipment_status,
+                    permanent=shipment_status in _FINAL_NONPRINTABLE_SHIPMENT_STATUSES,
+                ) from retry_exc
             raise MercadoLabelError(f"订单 {order_id}：{retry_exc}") from retry_exc
     if not content.startswith(b"%PDF"):
         raise MercadoLabelError(f"订单 {order_id} 的美客多面单接口未返回有效 PDF")
