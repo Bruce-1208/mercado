@@ -215,7 +215,15 @@ def _is_unauthorized(exc):
     return "(401)" in message or " 401" in message or "invalid_token" in message
 
 
-def _scan_store_orders(job, *, fallback_hours, stop_event=None, logger=None):
+def _scan_store_orders(
+    job,
+    *,
+    fallback_hours,
+    start_at=None,
+    end_at=None,
+    stop_event=None,
+    logger=None,
+):
     """Refresh the local order snapshot directly from Mercado's orders API."""
 
     token_id = int(job["token_id"])
@@ -229,17 +237,55 @@ def _scan_store_orders(job, *, fallback_hours, stop_event=None, logger=None):
     state = bit_mysql.get_mercado_order_print_state(token_id)
     now_utc = datetime.now(timezone.utc)
     first_run = not state
-    tracking_since = (
-        now_utc - timedelta(hours=max(1, int(fallback_hours or DEFAULT_FALLBACK_HOURS)))
-        if first_run
-        else _as_utc(state.get("tracking_since"), now_utc - timedelta(hours=fallback_hours))
+    fallback_start = now_utc - timedelta(
+        hours=max(1, int(fallback_hours or DEFAULT_FALLBACK_HOURS))
     )
+    explicit_range = start_at not in (None, "") or end_at not in (None, "")
+    if explicit_range and (start_at in (None, "") or end_at in (None, "")):
+        raise ValueError("订单打印时间段必须同时包含开始和结束时间")
+
+    requested_start = _as_utc(start_at) if explicit_range else None
+    requested_end = _as_utc(end_at) if explicit_range else None
+    if explicit_range and (not requested_start or not requested_end):
+        raise ValueError("订单打印时间格式无效")
+    if explicit_range and requested_start > requested_end:
+        raise ValueError("订单打印开始时间不能晚于结束时间")
+
+    if explicit_range:
+        # A brand-new store has no trustworthy per-order print history.  Even
+        # when an older range is requested, keep that unknown-state fallback
+        # bounded to the most recent 72 hours as required by the print policy.
+        tracking_since = max(requested_start, fallback_start) if first_run else requested_start
+        scan_end = min(requested_end, now_utc)
+    else:
+        tracking_since = (
+            fallback_start
+            if first_run
+            else _as_utc(state.get("tracking_since"), fallback_start)
+        )
+        scan_end = now_utc
+    if tracking_since > scan_end:
+        raise ValueError("所选时间段没有可检查的历史订单")
+
     last_scan_at = None if first_run else _as_utc(state.get("last_scan_at"))
-    if last_scan_at:
+    if explicit_range:
+        filters = {
+            "sort": "date_asc",
+            "order.date_created.from": _iso_millis(tracking_since),
+            "order.date_created.to": _iso_millis(scan_end),
+        }
+        scope_message = (
+            "按所选时间检查订单："
+            f"{tracking_since.astimezone().strftime('%Y-%m-%d %H:%M')} 至 "
+            f"{scan_end.astimezone().strftime('%Y-%m-%d %H:%M')}"
+        )
+        if first_run and requested_start < tracking_since:
+            scope_message += f"（首次状态未知，已按最近 {fallback_hours} 小时保护范围收窄）"
+    elif last_scan_at:
         filters = {
             "sort": "updated_asc",
             "last_updated.from": _iso_millis(last_scan_at - timedelta(minutes=ORDER_SCAN_OVERLAP_MINUTES)),
-            "last_updated.to": _iso_millis(now_utc),
+            "last_updated.to": _iso_millis(scan_end),
         }
         scope_message = f"增量检查 {last_scan_at.astimezone().strftime('%Y-%m-%d %H:%M:%S')} 之后更新的订单"
     else:
@@ -271,7 +317,7 @@ def _scan_store_orders(job, *, fallback_hours, stop_event=None, logger=None):
                 saved = bit_mysql.upsert_mercado_synced_orders(record, batch)
                 inserted += int(saved.get("inserted") or 0)
                 updated += int(saved.get("updated") or 0)
-            bit_mysql.save_mercado_order_print_state(token_id, tracking_since, now_utc)
+            bit_mysql.save_mercado_order_print_state(token_id, tracking_since, scan_end)
             _emit(
                 logger,
                 f"{job['shop_name']}：API 订单同步完成，读取 {fetched}，新增 {inserted}，更新 {updated}",
@@ -280,6 +326,7 @@ def _scan_store_orders(job, *, fallback_hours, stop_event=None, logger=None):
                 "record": record,
                 "first_run": first_run,
                 "tracking_since": tracking_since,
+                "end_at": scan_end,
                 "fetched": fetched,
             }
         except PrintTaskStopped:
@@ -323,8 +370,16 @@ def _download_label(context, *, max_retries, retry_delay_seconds, stop_event, lo
         if stop_event is not None and stop_event.is_set():
             raise PrintTaskStopped("已收到停止请求")
         try:
-            shipment_id, content = bit_order_labels._download_one(context)
+            shipment_id, content = bit_order_labels._download_one(
+                context,
+                max_attempts=1,
+                timeout=15,
+            )
             return shipment_id, content, attempt
+        except bit_order_labels.MercadoLabelUnavailable:
+            # A shipment lifecycle response is deterministic. Retrying it does
+            # not create a label and was the main source of repeated errors.
+            raise
         except Exception as exc:
             last_error = exc
             order_id = str(context.get("order_id") or "")
@@ -345,12 +400,22 @@ def _record_printed_orders(order_ids):
     return recorded
 
 
+def _record_unavailable_orders(order_ids, exc):
+    return bit_mysql.record_mercado_order_label_unavailable(
+        order_ids,
+        shipment_status=getattr(exc, "shipment_status", ""),
+        reason=str(exc),
+    )
+
+
 def _run_shop_job(
     job,
     *,
     max_retries=3,
     retry_delay_seconds=3,
     fallback_hours=DEFAULT_FALLBACK_HOURS,
+    start_at=None,
+    end_at=None,
     stop_event=None,
     logger=None,
     document_sink=None,
@@ -367,6 +432,8 @@ def _run_shop_job(
         scan = _scan_store_orders(
             job,
             fallback_hours=fallback_hours,
+            start_at=start_at,
+            end_at=end_at,
             stop_event=stop_event,
             logger=logger,
         )
@@ -374,6 +441,7 @@ def _run_shop_job(
         contexts = bit_mysql.list_mercado_order_print_candidates(
             job["token_id"],
             tracking_since=scan["tracking_since"],
+            end_at=scan.get("end_at"),
             site_ids=selected_site_ids,
             include_previously_printed=scan["first_run"],
         )
@@ -415,6 +483,8 @@ def _run_shop_job(
         successful_orders = []
         successful_shipments = 0
         failed_messages = []
+        skipped_messages = []
+        skipped_count = 0
         attempts = 0
         for shipment_id, shipment_orders in shipments.items():
             key = (int(job["token_id"]), shipment_id)
@@ -436,6 +506,17 @@ def _run_shop_job(
                 successful_orders.extend(str(row.get("order_id") or "") for row in shipment_orders)
             except PrintTaskStopped:
                 break
+            except bit_order_labels.MercadoLabelUnavailable as exc:
+                order_ids = [str(row.get("order_id") or "") for row in shipment_orders]
+                skipped_count += 1
+                skipped_messages.append(
+                    f"{'、'.join(order_ids)}: {exc}"
+                )
+                if exc.permanent:
+                    try:
+                        _record_unavailable_orders(order_ids, exc)
+                    except Exception as record_exc:
+                        failed_messages.append(f"不可打印状态写入失败：{record_exc}")
             except Exception as exc:
                 order_ids = "、".join(str(row.get("order_id") or "") for row in shipment_orders)
                 failed_messages.append(f"{order_ids}: {exc}")
@@ -446,13 +527,25 @@ def _run_shop_job(
                 printed_order_sink.extend(successful_orders)
             except Exception as exc:
                 failed_messages.append(f"打印记录写入失败：{exc}")
-        failed_count = max(0, len(shipments) - successful_shipments)
+        failed_count = max(0, len(shipments) - successful_shipments - skipped_count)
         if failed_messages:
             message = (
-                f"已生成 {successful_shipments} 个面单，{failed_count} 个失败；"
+                f"已生成 {successful_shipments} 个面单，跳过 {skipped_count} 个，"
+                f"{failed_count} 个失败；"
                 + "；".join(failed_messages[:3])
             )
             status = "failed"
+        elif successful_shipments:
+            prefix = f"首次运行按最近 {fallback_hours} 小时回退；" if scan["first_run"] else ""
+            suffix = f"；跳过 {skipped_count} 个无可用面单运单" if skipped_count else ""
+            message = f"{prefix}已通过 API 生成 {successful_shipments} 个面单{suffix}"
+            status = "printed"
+        elif skipped_messages:
+            message = (
+                f"未生成面单，跳过 {skipped_count} 个当前不可打印运单；"
+                + "；".join(skipped_messages[:3])
+            )
+            status = "skipped"
         else:
             prefix = f"首次运行按最近 {fallback_hours} 小时回退；" if scan["first_run"] else ""
             message = f"{prefix}已通过 API 生成 {successful_shipments} 个面单"
@@ -526,6 +619,8 @@ def print_orders_all(
     max_retries=3,
     retry_delay_seconds=3,
     fallback_hours=DEFAULT_FALLBACK_HOURS,
+    start_at=None,
+    end_at=None,
     stop_event=None,
     logger=None,
     persist=True,
@@ -560,6 +655,8 @@ def print_orders_all(
                 max_retries=max_retries,
                 retry_delay_seconds=retry_delay_seconds,
                 fallback_hours=fallback_hours,
+                start_at=start_at,
+                end_at=end_at,
                 stop_event=stop_event,
                 logger=logger,
                 document_sink=documents,

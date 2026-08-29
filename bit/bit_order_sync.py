@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import json
 import threading
 import time
 import uuid
@@ -230,12 +231,42 @@ def _fetch_orders(client, seller_id, filters):
 
 
 def _item_image(item):
-    image_url = str(item.get("secure_thumbnail") or item.get("thumbnail") or "").strip()
-    if image_url:
-        return image_url
     pictures = item.get("pictures") or []
     first = pictures[0] if pictures and isinstance(pictures[0], dict) else {}
-    return str(first.get("secure_url") or first.get("url") or "").strip()
+    image_url = str(first.get("secure_url") or first.get("url") or "").strip()
+    if image_url:
+        return image_url
+    return str(item.get("secure_thumbnail") or item.get("thumbnail") or "").strip()
+
+
+def _variation_image(item, variation_id):
+    """Return the original-size picture assigned to the purchased variation."""
+
+    variation_id = str(variation_id or "").strip()
+    picture_ids = []
+    if variation_id:
+        for variation in item.get("variations") or []:
+            if str(variation.get("id") or "") == variation_id:
+                picture_ids = [
+                    str(value or "").strip()
+                    for value in (variation.get("picture_ids") or [])
+                    if str(value or "").strip()
+                ]
+                break
+    if picture_ids:
+        pictures = {
+            str(picture.get("id") or "").strip(): picture
+            for picture in (item.get("pictures") or [])
+            if isinstance(picture, dict)
+        }
+        for picture_id in picture_ids:
+            picture = pictures.get(picture_id) or {}
+            image_url = str(
+                picture.get("secure_url") or picture.get("url") or ""
+            ).strip()
+            if image_url:
+                return image_url
+    return _item_image(item)
 
 
 def _enrich_order_images(client, orders):
@@ -244,18 +275,19 @@ def _enrich_order_images(client, orders):
         for order_item in order.get("order_items") or []:
             product = order_item.get("item") if isinstance(order_item.get("item"), dict) else {}
             item_id = str(product.get("id") or "").strip()
-            if item_id and not (product.get("thumbnail") or product.get("secure_thumbnail")):
+            if item_id:
                 item_targets.setdefault(item_id, []).append(product)
     for item_id, products in item_targets.items():
         try:
             listing = client.get_marketplace_item(item_id)
-            image_url = _item_image(listing)
         except Exception as exc:
             _append_log(f"SKU {item_id} 图片读取失败：{exc}")
             continue
-        if not image_url:
-            continue
         for product in products:
+            image_url = _variation_image(listing, product.get("variation_id"))
+            if not image_url:
+                continue
+            product["sku_image_url"] = image_url
             product["secure_thumbnail"] = image_url
 
 
@@ -264,16 +296,33 @@ def backfill_order_images(token_ids=None, limit_per_store=200):
     for record in _token_records(token_ids):
         client, record = _client_and_token(record)
         token_id = int(record["id"])
-        rows = bit_mysql.list_mercado_missing_product_images(token_id, limit_per_store)
+        rows = bit_mysql.list_mercado_missing_order_images(token_id, limit_per_store)
         updated_products = updated_orders = failed = 0
+        listing_cache = {}
         for row in rows:
             item_id = str(row.get("product_id") or "").strip()
             try:
-                image_url = _item_image(client.get_marketplace_item(item_id))
+                raw_order = row.get("raw_json") or {}
+                if isinstance(raw_order, str):
+                    raw_order = json.loads(raw_order or "{}")
+                order_items = raw_order.get("order_items") or []
+                first_product = (
+                    (order_items[0].get("item") or {}) if order_items else {}
+                )
+                if item_id not in listing_cache:
+                    listing_cache[item_id] = client.get_marketplace_item(item_id)
+                image_url = _variation_image(
+                    listing_cache[item_id],
+                    first_product.get("variation_id"),
+                )
                 if not image_url:
                     failed += 1
                     continue
-                updated_orders += bit_mysql.update_mercado_product_image(token_id, item_id, image_url)
+                updated_orders += bit_mysql.update_mercado_order_image(
+                    token_id,
+                    row.get("order_id"),
+                    image_url,
+                )
                 updated_products += 1
             except Exception:
                 failed += 1
@@ -435,7 +484,7 @@ def run_order_sync(start_date="", end_date="", token_ids=None, mode="manual"):
         scheduled_filters = {"old_order_cutoff": old_order_cutoff}
 
     mode_messages = {
-        "manual": "正在拉取订单",
+        "manual": f"正在拉取订单：{start_text} 至 {end_text}",
         "automatic": "正在更新最近 72 小时订单",
         DAILY_STATUS_MODE: "正在执行每日老订单状态刷新",
     }
@@ -464,7 +513,10 @@ def run_order_sync(start_date="", end_date="", token_ids=None, mode="manual"):
     elif mode == DAILY_STATUS_MODE:
         _append_log(f"每日老订单状态刷新启动：更新 72 小时以前订单，共 {len(records)} 家店铺")
     else:
-        _append_log(f"手动订单任务启动，共 {len(records)} 家店铺")
+        _append_log(
+            f"手动订单任务启动：北京时间 {start_text} 至 {end_text}，"
+            f"共 {len(records)} 家店铺"
+        )
     results = []
     for index, record in enumerate(records, start=1):
         store_name = str(record.get("display_name") or record.get("nickname") or record.get("id"))
@@ -587,13 +639,15 @@ def _scheduler_loop(interval_seconds):
     while not _scheduler_stop_event.is_set():
         now_local = datetime.now(WORKBENCH_LOCAL_TIMEZONE)
         today = now_local.date().isoformat()
+        schedule_state_available = True
         try:
             last_daily_date = bit_mysql.get_mercado_order_sync_schedule_value(
                 DAILY_STATUS_STATE_KEY
             )
         except Exception:
+            schedule_state_available = False
             last_daily_date = str(_sync_state.get("daily_status_last_run_date") or "")
-        daily_due = last_daily_date != today
+        daily_due = schedule_state_available and last_daily_date != today
         task_busy = bool(_sync_state.get("running") or get_lock_owner(ORDER_SYNC_LOCK_KEY))
         if daily_due and not task_busy:
             start_order_sync(mode=DAILY_STATUS_MODE)

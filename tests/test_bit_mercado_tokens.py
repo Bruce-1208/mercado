@@ -429,6 +429,11 @@ def test_console_template_contains_store_token_module():
     assert 'id="mercado-authorization-url"' in body
     assert 'id="mercado-site-settings-dialog"' in body
     assert 'id="mercado-site-settings-body"' in body
+    assert 'id="mercado-token-select-all"' in body
+    assert 'id="mercado-token-bulk-settings"' in body
+    assert 'id="mercado-bulk-settings-dialog"' in body
+    assert 'id="mercado-bulk-salesperson"' in body
+    assert 'id="mercado-bulk-settings-body"' in body
     assert "折扣比例（%）" in body
     assert 'id="mercado-site-salesperson"' in body
     assert 'id="mercado-site-group-name"' in body
@@ -437,6 +442,10 @@ def test_console_template_contains_store_token_module():
     assert 'data-field="group_name"' not in body
     assert 'requestAccessApi("/api/access/users")' in body
     assert "业务员和分组对该店铺授权下的全部站点统一生效" in body
+    assert "每家店铺原有分组保持不变" in body
+    assert "toggleMercadoStoreToken" in body
+    assert "saveMercadoBulkSiteSettings" in body
+    assert "group_name: groupName" in body
     assert "global-selling.mercadolibre.com/authorization" in body
     assert "Access Token 和 Refresh Token 仅保存在数据库服务端" in body
 

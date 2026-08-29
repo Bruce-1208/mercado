@@ -7,6 +7,7 @@ from typing import Any
 
 import requests
 
+from erp.mercadolibre_translation import BatchTranslator, translate_texts
 from mercado_api.communications import (
     MercadoCommunicationError,
     MercadoCommunicationsClient,
@@ -49,6 +50,18 @@ PRE_SALE_SUMMARY_STATUSES = (
     "UNDER_REVIEW",
     "BANNED",
 )
+PRE_SALE_SPANISH_SITES = frozenset((
+    "MLM", "MLA", "MLC", "MCO", "MLU", "MPE", "MEC",
+))
+
+
+def _pre_sale_site_language(site_id: Any) -> str:
+    site = str(site_id or "").strip().upper()[:3]
+    if site == "MLB":
+        return "pt-BR"
+    if site in PRE_SALE_SPANISH_SITES:
+        return "es"
+    raise ValueError(f"无法识别站点 {site or '(empty)'} 的买家语言")
 
 
 def _store_client(
@@ -102,6 +115,7 @@ def execute_store_communication(
     get_order_contexts: GetOrderContexts | None = None,
     http: requests.Session | None = None,
     timeout: int = 30,
+    translator: BatchTranslator | None = None,
 ) -> Any:
     """执行白名单内的消息/投诉动作，确保密钥只在服务端读取。"""
     client, token = _store_client(
@@ -114,6 +128,26 @@ def execute_store_communication(
     data = dict(payload or {})
     seller_id = str(token.get("meli_user_id") or "").strip()
     normalized_action = str(action or "").strip().lower().replace("_", "-")
+
+    if normalized_action == "pre-sale-translate":
+        raw_texts = data.get("texts")
+        if not isinstance(raw_texts, list):
+            raise ValueError("待翻译内容必须是文本数组")
+        source_language = str(data.get("source_language") or "").strip()
+        if not source_language:
+            source_language = _pre_sale_site_language(data.get("site_id"))
+        target_language = str(data.get("target_language") or "zh-CN").strip()
+        translations = translate_texts(
+            raw_texts,
+            source_language,
+            target_language,
+            translator=translator,
+        )
+        return {
+            "translations": translations,
+            "source_language": source_language,
+            "target_language": target_language,
+        }
 
     if normalized_action == "pre-sale-list":
         if not seller_id and not str(data.get("item_id") or "").strip():
@@ -149,11 +183,34 @@ def execute_store_communication(
     if normalized_action == "pre-sale-detail":
         return client.get_question(data.get("question_id"))
     if normalized_action == "pre-sale-answer":
-        return client.answer_question(
+        reply_text = str(data.get("text") or "").strip()
+        translated_text = data.get("text_translated")
+        target_language = ""
+        if data.get("auto_translate"):
+            site_id = str(data.get("site_id") or "").strip().upper()
+            if not site_id:
+                question = client.get_question(data.get("question_id"))
+                site_id = str(question.get("site_id") or "").strip().upper()
+            target_language = _pre_sale_site_language(site_id)
+            translated_text = translate_texts(
+                [reply_text],
+                "zh-CN",
+                target_language,
+                translator=translator,
+            )[0]
+        result = client.answer_question(
             data.get("question_id"),
-            data.get("text", ""),
-            text_translated=data.get("text_translated"),
+            reply_text,
+            text_translated=translated_text,
         )
+        if isinstance(result, dict) and target_language:
+            result = dict(result)
+            result["translation"] = {
+                "source_language": "zh-CN",
+                "target_language": target_language,
+                "text_translated": translated_text,
+            }
+        return result
     if normalized_action == "pre-sale-delete":
         return client.delete_question(data.get("question_id"))
 
@@ -188,20 +245,99 @@ def execute_store_communication(
     if normalized_action == "claims-list":
         if not seller_id:
             raise ValueError("该授权没有 Seller ID，不能读取投诉")
-        result = client.search_claims(
-            seller_id,
-            status=data.get("status") or None,
-            stage=data.get("stage") or None,
-            claim_type=data.get("claim_type") or None,
-            claim_id=data.get("claim_id"),
-            order_id=data.get("order_id"),
-            pack_id=data.get("pack_id"),
-            date_from=data.get("date_from") or None,
-            date_to=data.get("date_to") or None,
-            limit=data.get("limit", 50),
-            offset=data.get("offset", 0),
+        claim_status = str(data.get("status") or "").strip().lower() or None
+        has_search_filter = any(
+            str(data.get(key) or "").strip()
+            for key in (
+                "stage", "claim_type", "claim_id", "order_id", "pack_id",
+                "date_from", "date_to",
+            )
         )
-        rows = [dict(row or {}) for row in result.get("data") or ()]
+        # Mercado Libre currently rejects /claims/search when only user_id is
+        # present (atLeastOneFilterProvided). Keep generic callers usable while
+        # the workbench explicitly requests opened and closed in two passes.
+        if not claim_status and not has_search_filter:
+            claim_status = "opened"
+        requested_limit = max(1, min(100, int(data.get("limit", 50) or 50)))
+        requested_offset = max(0, int(data.get("offset", 0) or 0))
+        seller_targets = [(str(token.get("site_id") or "").upper(), seller_id)]
+        if str(token.get("site_id") or "").strip().upper() == "CBT":
+            marketplace_data = client.request("GET", f"/marketplace/users/{seller_id}")
+            marketplaces = (
+                marketplace_data.get("marketplaces")
+                if isinstance(marketplace_data, Mapping)
+                else []
+            )
+            seller_targets = [
+                (
+                    str(marketplace.get("site_id") or "").strip().upper(),
+                    str(marketplace.get("user_id") or "").strip(),
+                )
+                for marketplace in marketplaces or ()
+                if str(marketplace.get("user_id") or "").strip()
+            ]
+            if not seller_targets:
+                raise ValueError("该 CBT 授权没有可用于索赔查询的站点子账号")
+
+        rows: list[dict[str, Any]] = []
+        official_total = 0
+        target_errors: list[dict[str, str]] = []
+        first_error: Exception | None = None
+        required_per_target = requested_offset + requested_limit
+        for site_id, target_seller_id in seller_targets:
+            target_rows: list[dict[str, Any]] = []
+            target_offset = 0
+            target_total = 0
+            try:
+                while len(target_rows) < required_per_target:
+                    page_limit = min(100, required_per_target - len(target_rows))
+                    page = client.search_claims(
+                        target_seller_id,
+                        status=claim_status,
+                        stage=data.get("stage") or None,
+                        claim_type=data.get("claim_type") or None,
+                        claim_id=data.get("claim_id"),
+                        order_id=data.get("order_id"),
+                        pack_id=data.get("pack_id"),
+                        date_from=data.get("date_from") or None,
+                        date_to=data.get("date_to") or None,
+                        limit=page_limit,
+                        offset=target_offset,
+                    )
+                    batch = [dict(row or {}) for row in page.get("data") or ()]
+                    target_total = int((page.get("paging") or {}).get("total") or 0)
+                    for row in batch:
+                        row.setdefault("site_id", site_id)
+                        row["marketplace_user_id"] = target_seller_id
+                    target_rows.extend(batch)
+                    target_offset += len(batch)
+                    if not batch or target_offset >= target_total:
+                        break
+                official_total += target_total
+                rows.extend(target_rows)
+            except Exception as exc:
+                if first_error is None:
+                    first_error = exc
+                target_errors.append({"site_id": site_id, "message": str(exc)})
+
+        if not rows and len(target_errors) == len(seller_targets) and first_error is not None:
+            raise first_error
+        rows.sort(
+            key=lambda row: str(row.get("last_updated") or row.get("date_created") or ""),
+            reverse=True,
+        )
+        deduplicated = list({str(row.get("id") or index): row for index, row in enumerate(rows)}.values())
+        rows = deduplicated[requested_offset:requested_offset + requested_limit]
+        result = {
+            "paging": {
+                "total": official_total,
+                "offset": requested_offset,
+                "limit": requested_limit,
+            },
+            "data": rows,
+        }
+        if target_errors:
+            result["marketplace_errors"] = target_errors
         identifiers = [str(row.get("resource_id") or "") for row in rows]
         result["data"] = _attach_order_contexts(
             int(token_id), rows, identifiers, get_order_contexts

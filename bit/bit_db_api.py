@@ -340,7 +340,7 @@ def list_orders(
     end_date="",
     origin="",
     page=1,
-    page_size=50,
+    page_size=200,
     store_ids=None,
     salespeople=None,
 ):
@@ -358,7 +358,7 @@ def list_orders(
         "end_date": end_date or "",
         "origin": origin or "",
         "page": int(page or 1),
-        "page_size": int(page_size or 50),
+        "page_size": int(page_size or 200),
     }
     if normalized_store_ids:
         local_params["store_ids"] = normalized_store_ids

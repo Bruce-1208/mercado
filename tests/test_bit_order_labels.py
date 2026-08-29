@@ -3,6 +3,7 @@ from io import BytesIO
 import pytest
 
 from bit import bit_order_labels
+from mercado_api.client import MercadoAPIError
 
 
 def _context(order_id="20001", shipment_id="30001"):
@@ -67,3 +68,23 @@ def test_download_order_labels_deduplicates_pack_shipment(monkeypatch):
 def test_download_order_labels_rejects_order_without_shipment():
     with pytest.raises(bit_order_labels.MercadoLabelError, match="Shipment ID"):
         bit_order_labels._download_one(_context(shipment_id=""))
+
+
+def test_cancelled_shipment_is_classified_as_permanently_unavailable(monkeypatch):
+    class Client:
+        def __init__(self, _access_token):
+            pass
+
+        def get_shipment_label(self, _shipment_id):
+            raise MercadoAPIError(
+                "GET labels 失败 (401): Unauthorized shipments: 30001: "
+                "Shipment status is 'cancelled'"
+            )
+
+    monkeypatch.setattr(bit_order_labels, "MercadoLibreClient", Client)
+
+    with pytest.raises(bit_order_labels.MercadoLabelUnavailable) as caught:
+        bit_order_labels._download_one(_context())
+
+    assert caught.value.shipment_status == "cancelled"
+    assert caught.value.permanent is True

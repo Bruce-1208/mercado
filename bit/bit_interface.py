@@ -78,7 +78,7 @@ from bit.bit_api import *
 # 引入数据库入库需要的模块
 import logging
 from decimal import Decimal
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 # from db_pool import get_db_connection  # 确保你的连接池文件在这个目录下
 
 
@@ -1273,7 +1273,7 @@ def _required_workbench_permissions(path, method):
     if path.startswith("/api/zying-collection/"):
         return (
             ("zying_collection.execute",)
-            if path.endswith("/start") and method == "POST"
+            if method == "POST"
             else ("zying_collection.view",)
         )
     if path == "/api/ai-appeal-records":
@@ -1285,9 +1285,10 @@ def _required_workbench_permissions(path, method):
             else ("shop_status.view",)
         )
     if path.startswith("/api/mercado-communications/"):
+        action = path.rstrip("/").rsplit("/", 1)[-1].strip().lower()
         return (
             ("customer_service.manage",)
-            if method == "POST"
+            if method == "POST" and action != "pre-sale-translate"
             else ("customer_service.view",)
         )
     return ()
@@ -1403,6 +1404,7 @@ _zying_collection_state = {
     "message": "等待启动",
     "params": {},
     "summary": {},
+    "requires_login": False,
 }
 _fund_collect_lock = threading.Lock()
 _fund_collect_state = {
@@ -2620,6 +2622,8 @@ def build_zying_collection_params(data):
         "start_page": start_page,
         "category": str(data.get("category") or "").strip()[:1024] or None,
     }
+    if "category_name" in data:
+        params["category_name"] = str(data.get("category_name") or "").strip()[:1024]
     # browser_type/window_name 是工作台的新参数；未提交时维持旧接口返回结构，
     # 兼容仍按 BitBrowser 窗口 ID 调用的脚本和客户端。
     if "browser_type" in data or "window_name" in data:
@@ -2632,6 +2636,18 @@ def build_zying_collection_params(data):
             }
         )
     return params
+
+
+def build_zying_login_params(data):
+    data = data if isinstance(data, dict) else {}
+    window_id = str(data.get("window_id") or "").strip()[:128]
+    return {
+        "browser_type": bit_zying_caiji.normalize_zying_browser_type(
+            data.get("browser_type")
+        ),
+        "window_id": window_id or bit_zying_caiji.DEFAULT_ZYING_WINDOW_ID,
+        "window_name": str(data.get("window_name") or "").strip()[:256],
+    }
 
 
 def _append_zying_collection_log(message):
@@ -2701,12 +2717,14 @@ def run_zying_collection_job(params, task_lock):
                     "status": "success",
                     "message": completion_message,
                     "summary": summary,
+                    "requires_login": False,
                 }
             )
     except Exception as exc:
         logging.error("智赢产品采集失败：%s", exc)
         traceback.print_exc()
         _append_zying_collection_log(f"采集失败：{exc}")
+        requires_login = isinstance(exc, bit_zying_caiji.ZyingAuthenticationError)
         with _zying_collection_state_lock:
             _zying_collection_state.update(
                 {
@@ -2715,6 +2733,7 @@ def run_zying_collection_job(params, task_lock):
                     "status": "error",
                     "message": str(exc),
                     "summary": {},
+                    "requires_login": requires_login,
                 }
             )
     finally:
@@ -3023,6 +3042,34 @@ def _refresh_order_print_site_last_runs(current_results=None):
 
 def build_order_print_params(data):
     data = data if isinstance(data, dict) else {}
+    local_tz = datetime.now().astimezone().tzinfo
+    local_now = datetime.now(local_tz)
+
+    def parse_range_value(name, label, default):
+        raw = str(data.get(name) or "").strip()
+        if not raw:
+            return default
+        try:
+            parsed = datetime.fromisoformat(raw.replace("Z", "+00:00"))
+        except ValueError as exc:
+            raise ValueError(f"{label}格式无效，请重新选择") from exc
+        if parsed.tzinfo is None:
+            parsed = parsed.replace(tzinfo=local_tz)
+        return parsed.astimezone(local_tz)
+
+    range_end = parse_range_value("date_to", "结束时间", local_now)
+    range_start = parse_range_value(
+        "date_from",
+        "开始时间",
+        range_end - timedelta(hours=bit_print.DEFAULT_FALLBACK_HOURS),
+    )
+    if range_end > local_now + timedelta(minutes=5):
+        range_end = local_now
+    if range_start >= range_end:
+        raise ValueError("订单打印开始时间必须早于结束时间")
+    if range_end - range_start > timedelta(days=31):
+        raise ValueError("单次订单打印时间段不能超过 31 天")
+
     raw_targets = data.get("targets")
     selected_targets = []
     if raw_targets is not None:
@@ -3094,6 +3141,14 @@ def build_order_print_params(data):
             data, "retry_delay_seconds", 3, min_value=0, max_value=60
         ),
         "fallback_hours": bit_print.DEFAULT_FALLBACK_HOURS,
+        "start_at": range_start.astimezone(timezone.utc).isoformat(),
+        "end_at": range_end.astimezone(timezone.utc).isoformat(),
+        "date_from": range_start.strftime("%Y-%m-%dT%H:%M"),
+        "date_to": range_end.strftime("%Y-%m-%dT%H:%M"),
+        "range_label": (
+            f"{range_start.strftime('%Y-%m-%d %H:%M')} 至 "
+            f"{range_end.strftime('%Y-%m-%d %H:%M')}"
+        ),
         "selected_shops": selected_shops,
         "selected_sites": selected_sites,
         "selected_targets": selected_targets,
@@ -3116,6 +3171,8 @@ def run_order_print_job(params, task_lock, stop_event):
             fallback_hours=params.get(
                 "fallback_hours", bit_print.DEFAULT_FALLBACK_HOURS
             ),
+            start_at=params.get("start_at"),
+            end_at=params.get("end_at"),
             stop_event=stop_event,
             logger=_append_order_print_log,
             task_id=params.get("task_id"),
@@ -4354,8 +4411,13 @@ def api_stop_order_print():
 @app.route('/api/order-print/status', methods=['GET'])
 @login_required
 def api_order_print_status():
-    _refresh_order_print_site_last_runs()
     state = _order_print_snapshot()
+    # Polling happens every two seconds while a task runs.  Re-querying token
+    # and history tables on every poll can make the status endpoint itself
+    # unavailable when the database or Mercado sync is busy.
+    if not state.get("site_last_runs"):
+        _refresh_order_print_site_last_runs()
+        state = _order_print_snapshot()
     external_owner = bit_print.get_order_print_lock_owner()
     if external_owner and not state.get("running"):
         state.update({
@@ -4527,7 +4589,7 @@ def _order_list_query_params(args):
         "end_date": str(args.get("end_date") or "").strip(),
         "origin": str(args.get("origin") or "").strip(),
         "page": _parse_int_param(args, "page", 1, 1, 1000000),
-        "page_size": _parse_int_param(args, "page_size", 50, 10, 200),
+        "page_size": _parse_int_param(args, "page_size", 200, 10, 200),
     }
     if len(salespeople) > 1:
         params["salespeople"] = salespeople
@@ -4986,6 +5048,51 @@ def api_zying_collection_categories():
         return jsonify({"status": "error", "message": str(exc)}), 500
 
 
+@app.route('/api/zying-collection/auth/open', methods=['POST'])
+@login_required
+def api_open_zying_collection_login():
+    try:
+        params = build_zying_login_params(request.get_json(silent=True) or {})
+        result = bit_zying_caiji.open_zying_login_window(**params)
+        return jsonify({
+            "status": "success",
+            "message": result.get("message") or "智赢登录窗口已打开",
+            "data": {
+                **result,
+                "auth": bit_zying_caiji.get_zying_auth_status(),
+            },
+        })
+    except Exception as exc:
+        logging.error("打开智赢登录窗口失败：%s", exc)
+        return jsonify({"status": "error", "message": str(exc)}), 400
+
+
+@app.route('/api/zying-collection/auth/capture', methods=['POST'])
+@login_required
+def api_capture_zying_collection_login():
+    try:
+        params = build_zying_login_params(request.get_json(silent=True) or {})
+        auth = bit_zying_caiji.capture_zying_login_from_browser(**params)
+        with _zying_collection_state_lock:
+            _zying_collection_state["requires_login"] = False
+            if not _zying_collection_state.get("running"):
+                _zying_collection_state["message"] = "智赢登录状态已保存，可以启动后台采集"
+        return jsonify({
+            "status": "success",
+            "message": "智赢登录状态有效，凭证已保存",
+            "data": {"auth": auth},
+        })
+    except bit_zying_caiji.ZyingAuthenticationError as exc:
+        return jsonify({
+            "status": "error",
+            "message": str(exc),
+            "requires_login": True,
+        }), 409
+    except Exception as exc:
+        logging.error("保存智赢登录状态失败：%s", exc)
+        return jsonify({"status": "error", "message": str(exc)}), 400
+
+
 @app.route('/api/zying-collection/start', methods=['POST'])
 @login_required
 def api_start_zying_collection():
@@ -5016,20 +5123,13 @@ def api_start_zying_collection():
                 "message": "正在启动智赢产品采集",
                 "params": dict(params),
                 "summary": {},
+                "requires_login": False,
             }
         )
-        browser_type = bit_zying_caiji.normalize_zying_browser_type(
-            params.get("browser_type")
-        )
-        if browser_type == "edge":
-            browser_label = "本地 Edge"
-        elif params.get("window_name"):
-            browser_label = f"比特浏览器窗口“{params['window_name']}”"
-        else:
-            browser_label = "默认比特浏览器窗口"
         _append_zying_collection_log(
             f"智赢采集任务已启动：第 {params['start_page']}-{params['number']} 页，"
-            f"分类 {params.get('category') or '全部'}，浏览器 {browser_label}；"
+            f"分类 {params.get('category_name') or params.get('category') or '全部'}，"
+            "模式 后台 API；"
             "数据库已有产品将直接跳过"
         )
         data = {
@@ -5067,6 +5167,7 @@ def api_zying_collection_status():
             "params": dict(_zying_collection_state.get("params") or {}),
             "summary": dict(_zying_collection_state.get("summary") or {}),
             "logs": list(_zying_collection_logs),
+            "auth": bit_zying_caiji.get_zying_auth_status(),
             "defaults": {
                 "window_id": bit_zying_caiji.DEFAULT_ZYING_WINDOW_ID,
                 "browser_type": bit_zying_caiji.normalize_zying_browser_type(
@@ -8741,6 +8842,9 @@ MERCADO_COMMUNICATION_WRITE_ACTIONS = frozenset((
     "post-sale-send",
     "claims-send",
 ))
+MERCADO_COMMUNICATION_VIEW_POST_ACTIONS = frozenset((
+    "pre-sale-translate",
+))
 
 
 @app.route(
@@ -8753,7 +8857,10 @@ def api_mercado_communication(token_id, action):
     allowed = (
         normalized_action in MERCADO_COMMUNICATION_READ_ACTIONS
         if request.method == "GET"
-        else normalized_action in MERCADO_COMMUNICATION_WRITE_ACTIONS
+        else normalized_action in (
+            MERCADO_COMMUNICATION_WRITE_ACTIONS
+            | MERCADO_COMMUNICATION_VIEW_POST_ACTIONS
+        )
     )
     if not allowed:
         return jsonify({"status": "error", "message": "不支持的美客多消息操作"}), 404
