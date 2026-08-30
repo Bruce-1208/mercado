@@ -706,22 +706,25 @@ def test_reputation_traffic_change_cells_use_thirty_percent_threshold():
     assert ".reputation-change-cell.change-red" in template
 
 
-def test_daily_task_console_exposes_mixed_mode_salesperson_and_rate_threshold():
+def test_daily_task_console_exposes_all_task_switches_and_shop_group():
     template = (
         Path(bit_interface.CURRENT_DIR) / "templates" / "index.html"
     ).read_text(encoding="utf-8")
 
-    assert 'id="daily-task-appeal-type"' in template
-    assert '<option value="侵权" selected>侵权</option>' in template
-    assert '<option value="延误率">延误率</option>' in template
-    assert '<option value="取消率">取消率</option>' in template
-    assert '<option value="投诉">投诉</option>' in template
-    assert '<option value="混合模式">混合模式（其他任务后执行侵权）</option>' in template
+    assert 'id="daily-task-switches"' in template
+    assert 'name="daily-task-appeal-type" value="侵权" checked' in template
+    assert 'name="daily-task-appeal-type" value="延误率"' in template
+    assert 'name="daily-task-appeal-type" value="投诉"' in template
+    assert 'name="daily-task-appeal-type" value="取消率"' in template
     assert 'id="daily-task-salesperson"' in template
     assert '<option value="">所有业务员</option>' in template
+    assert 'id="daily-task-group"' in template
+    assert '<option value="">所有店铺组</option>' in template
+    assert 'id="daily-task-top-n"' not in template
     assert 'id="daily-task-only-active"' not in template
     assert 'id="daily-task-min-rate"' in template
-    assert "appeal_type: document.getElementById(\"daily-task-appeal-type\").value" in template
+    assert "appeal_types: appealTypes" in template
+    assert "group_names: groupName ? [groupName] : []" in template
     assert "min_rate: `${minRatePercent}%`" in template
 
 
@@ -731,8 +734,14 @@ def test_build_daily_task_params_accepts_all_appeal_modes(appeal_type):
         {"appeal_type": appeal_type, "min_rate": "7.5%"}
     )
 
-    assert params["appeal_type"] == appeal_type
+    if appeal_type == "混合模式":
+        assert params["appeal_type"] == "多任务"
+        assert params["appeal_types"] == ["侵权", "延误率", "投诉", "取消率"]
+    else:
+        assert params["appeal_type"] == appeal_type
+        assert params["appeal_types"] == [appeal_type]
     assert params["min_rate"] == pytest.approx(0.075)
+    assert params["top_n"] == 0
 
 
 def test_build_daily_task_params_supports_one_or_all_salespeople():
@@ -746,6 +755,19 @@ def test_build_daily_task_params_supports_one_or_all_salespeople():
     assert selected["salespeople"] == ["张三"]
     assert all_salespeople["salespeople"] == []
     assert "only_active" not in selected
+
+
+def test_build_daily_task_params_supports_multiple_tasks_and_shop_group():
+    params = bit_interface.build_daily_task_params({
+        "appeal_types": ["投诉", "延误率", "投诉"],
+        "group_names": ["精品组", "精品组"],
+        "top_n": 1,
+    })
+
+    assert params["appeal_types"] == ["延误率", "投诉"]
+    assert params["appeal_type"] == "多任务"
+    assert params["group_names"] == ["精品组"]
+    assert params["top_n"] == 0
 
 
 def test_daily_task_options_returns_all_active_salespeople(monkeypatch):
@@ -762,7 +784,12 @@ def test_daily_task_options_returns_all_active_salespeople(monkeypatch):
         "list_mercado_store_tokens",
         lambda: {
             "rows": [
-                {"site_settings": [{"salesperson": "李四"}]},
+                {
+                    "site_settings": [
+                        {"salesperson": "李四", "group_name": "精品组"},
+                        {"salesperson": "", "group_name": "普通组"},
+                    ]
+                },
             ]
         },
     )
@@ -774,6 +801,7 @@ def test_daily_task_options_returns_all_active_salespeople(monkeypatch):
 
     assert response.status_code == 200
     assert response.get_json()["data"]["salespeople"] == ["张三", "李四"]
+    assert response.get_json()["data"]["groups"] == ["普通组", "精品组"]
 
 
 def test_build_daily_task_params_rejects_invalid_appeal_settings():
@@ -781,6 +809,8 @@ def test_build_daily_task_params_rejects_invalid_appeal_settings():
         bit_interface.build_daily_task_params({"appeal_type": "退款"})
     with pytest.raises(ValueError, match="min_rate"):
         bit_interface.build_daily_task_params({"min_rate": "101%"})
+    with pytest.raises(ValueError, match="至少开启一个任务"):
+        bit_interface.build_daily_task_params({"appeal_types": []})
 
 
 @pytest.mark.parametrize(
@@ -826,6 +856,34 @@ def test_daily_task_console_dispatches_selected_appeal_type(
     assert calls[0][1]["min_rate"] == pytest.approx(0.07)
     assert task_lock.released is True
     assert bit_interface._daily_task_state["status"] == "success"
+
+
+def test_daily_task_console_dispatches_multiple_tasks_and_group(monkeypatch):
+    calls = []
+
+    class FakeTaskLock:
+        def release(self):
+            return None
+
+    monkeypatch.setattr(
+        bit_interface.bit_daily_task,
+        "run_ai_appeal_once",
+        lambda *args, **kwargs: calls.append((args, kwargs)),
+    )
+    monkeypatch.setattr(
+        bit_interface,
+        "_daily_task_state",
+        {"running": True, "status": "running"},
+    )
+    params = bit_interface.build_daily_task_params({
+        "appeal_types": ["侵权", "投诉"],
+        "group_name": "精品组",
+    })
+
+    bit_interface.run_daily_task_job(params, FakeTaskLock())
+
+    assert calls[0][0] == (["侵权", "投诉"],)
+    assert calls[0][1]["group_names"] == ["精品组"]
 
 
 def test_resolve_selected_appeal_sites_and_remove_duplicates():

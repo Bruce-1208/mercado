@@ -3369,14 +3369,16 @@ def build_daily_task_params(data):
     mode = str(data.get("mode", "once")).strip().lower()
     if mode not in ("once", "loop"):
         mode = "once"
-    normalized_appeal_type = bit_daily_task.normalize_appeal_type(
-        data.get("appeal_type") or bit_daily_task.APPEAL_TYPE_INFRACTION
+    raw_appeal_types = (
+        data.get("appeal_types")
+        if "appeal_types" in data
+        else data.get("appeal_type") or bit_daily_task.APPEAL_TYPE_INFRACTION
     )
-    appeal_type = (
-        "延误率"
-        if normalized_appeal_type == bit_daily_task.APPEAL_TYPE_DELAY
-        else normalized_appeal_type
-    )
+    normalized_appeal_types = bit_daily_task.normalize_appeal_types(raw_appeal_types)
+    appeal_types = [
+        "延误率" if value == bit_daily_task.APPEAL_TYPE_DELAY else value
+        for value in normalized_appeal_types
+    ]
     raw_salespeople = data.get("salespeople", data.get("salesperson", []))
     if isinstance(raw_salespeople, str):
         raw_salespeople = [raw_salespeople]
@@ -3387,10 +3389,21 @@ def build_daily_task_params(data):
             continue
         if salesperson not in salespeople:
             salespeople.append(salesperson)
+    raw_group_names = data.get("group_names", data.get("group_name", []))
+    if isinstance(raw_group_names, str):
+        raw_group_names = [raw_group_names]
+    group_names = []
+    for value in raw_group_names or ():
+        group_name = str(value or "").strip()
+        if group_name in ("", "全部店铺组", "所有店铺组", "all", "*"):
+            continue
+        if group_name not in group_names:
+            group_names.append(group_name)
     return {
         "mode": mode,
-        "appeal_type": appeal_type,
-        "top_n": _parse_int_param(data, "top_n", bit_daily_task.DEFAULT_DAILY_TOP_N, 1, 100),
+        "appeal_types": appeal_types,
+        "appeal_type": appeal_types[0] if len(appeal_types) == 1 else "多任务",
+        "top_n": 0,
         "max_workers": _parse_int_param(data, "max_workers", bit_daily_task.DEFAULT_DAILY_MAX_WORKERS, 1, 60),
         "recent_days": _parse_int_param(
             data,
@@ -3403,6 +3416,7 @@ def build_daily_task_params(data):
         "site_pause": _parse_int_param(data, "site_pause", 30, 0, 3600),
         "stop_after_minutes": _parse_int_param(data, "stop_after_minutes", 360, 0, 24 * 60),
         "salespeople": salespeople,
+        "group_names": group_names,
         "min_rate": _parse_rate_param(data),
         "message": str(data.get("message", "") or ""),
     }
@@ -3411,14 +3425,18 @@ def build_daily_task_params(data):
 def run_daily_task_job(params, task_lock):
     try:
         print(f"{get_now_time()} 开始执行 daily_task：{params}<br>")
-        appeal_type = params.get("appeal_type", bit_daily_task.APPEAL_TYPE_INFRACTION)
+        appeal_types = params.get("appeal_types") or [
+            params.get("appeal_type", bit_daily_task.APPEAL_TYPE_INFRACTION)
+        ]
+        appeal_task = appeal_types[0] if len(appeal_types) == 1 else appeal_types
+        appeal_label = "、".join(appeal_types)
         min_rate = params.get("min_rate", 0)
         if params["mode"] == "loop":
             stop_at = None
             if params["stop_after_minutes"] > 0:
                 stop_at = datetime.now() + timedelta(minutes=params["stop_after_minutes"])
             bit_daily_task.loop_ai_appeal(
-                appeal_type,
+                appeal_task,
                 top_n=params["top_n"],
                 max_workers=params["max_workers"],
                 recent_days=params["recent_days"],
@@ -3427,13 +3445,14 @@ def run_daily_task_job(params, task_lock):
                 message=params["message"],
                 min_rate=min_rate,
                 salespeople=params["salespeople"],
+                group_names=params.get("group_names", []),
                 stop_at=stop_at,
                 _task_lock=task_lock,
             )
-            result_message = f"daily_task {appeal_type}申诉循环执行完成"
+            result_message = f"daily_task {appeal_label}任务循环执行完成"
         else:
             bit_daily_task.run_ai_appeal_once(
-                appeal_type,
+                appeal_task,
                 top_n=params["top_n"],
                 max_workers=params["max_workers"],
                 recent_days=params["recent_days"],
@@ -3441,9 +3460,10 @@ def run_daily_task_job(params, task_lock):
                 message=params["message"],
                 min_rate=min_rate,
                 salespeople=params["salespeople"],
+                group_names=params.get("group_names", []),
                 _task_lock=task_lock,
             )
-            result_message = f"daily_task {appeal_type}申诉单轮执行完成"
+            result_message = f"daily_task {appeal_label}任务单轮执行完成"
 
         with _daily_task_lock:
             _daily_task_state.update({
@@ -5065,6 +5085,7 @@ def api_start_daily_task():
 @login_required
 def api_daily_task_options():
     salespeople = []
+    groups = []
     try:
         users = _workbench_backend("list_workbench_users") or []
         salespeople.extend(
@@ -5079,15 +5100,23 @@ def api_daily_task_options():
         for token in token_data.get("rows") or ():
             for setting in token.get("site_settings") or ():
                 salespeople.append(str(setting.get("salesperson") or "").strip())
+                groups.append(str(setting.get("group_name") or "").strip())
     except Exception:
-        logging.exception("从店铺授权读取任务模块业务员失败")
+        logging.exception("从店铺授权读取任务模块业务员和店铺组失败")
     unique_salespeople = sorted(
         {name for name in salespeople if name},
         key=lambda value: value.casefold(),
     )
+    unique_groups = sorted(
+        {name for name in groups if name},
+        key=lambda value: value.casefold(),
+    )
     return jsonify({
         "status": "success",
-        "data": {"salespeople": unique_salespeople},
+        "data": {
+            "salespeople": unique_salespeople,
+            "groups": unique_groups,
+        },
     })
 
 

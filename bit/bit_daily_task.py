@@ -50,6 +50,12 @@ APPEAL_TYPE_DELAY = "延误"
 APPEAL_TYPE_CANCELLATION = "取消率"
 APPEAL_TYPE_COMPLAINT = "投诉"
 APPEAL_TYPE_MIXED = "混合模式"
+DAILY_APPEAL_TASK_TYPES = (
+    APPEAL_TYPE_INFRACTION,
+    APPEAL_TYPE_DELAY,
+    APPEAL_TYPE_COMPLAINT,
+    APPEAL_TYPE_CANCELLATION,
+)
 SUPPORTED_APPEAL_TYPES = (
     APPEAL_TYPE_INFRACTION,
     APPEAL_TYPE_DELAY,
@@ -143,12 +149,41 @@ def _appeal_type_label(appeal_type):
     return "延误率" if normalized == APPEAL_TYPE_DELAY else normalized
 
 
-def appeal_type_sequence(appeal_type):
-    """返回单轮的实际执行顺序；每个其他任务后都插入一次侵权任务。"""
-    normalized = normalize_appeal_type(appeal_type)
-    if normalized == APPEAL_TYPE_MIXED:
-        return MIXED_APPEAL_SEQUENCE
-    return (normalized,)
+def normalize_appeal_types(appeal_types):
+    """规范化任务开关值，并按任务模块的固定顺序去重。"""
+    raw_values = (
+        [appeal_types]
+        if isinstance(appeal_types, str)
+        else list(appeal_types or ())
+    )
+    selected = set()
+    for value in raw_values:
+        normalized = normalize_appeal_type(value)
+        if normalized == APPEAL_TYPE_MIXED:
+            selected.update(DAILY_APPEAL_TASK_TYPES)
+        else:
+            selected.add(normalized)
+    if not selected:
+        raise ValueError("请至少开启一个任务")
+    return tuple(
+        appeal_type
+        for appeal_type in DAILY_APPEAL_TASK_TYPES
+        if appeal_type in selected
+    )
+
+
+def appeal_type_sequence(appeal_types):
+    """返回单轮执行顺序；开启侵权时，每个其他任务后再执行一次侵权。"""
+    selected = normalize_appeal_types(appeal_types)
+    if len(selected) == 1:
+        return selected
+    if APPEAL_TYPE_INFRACTION not in selected:
+        return selected
+    sequence = [APPEAL_TYPE_INFRACTION]
+    for appeal_type in selected:
+        if appeal_type != APPEAL_TYPE_INFRACTION:
+            sequence.extend((appeal_type, APPEAL_TYPE_INFRACTION))
+    return tuple(sequence)
 
 
 def _normalize_salespeople(salespeople):
@@ -163,22 +198,39 @@ def _normalize_salespeople(salespeople):
     return tuple(selected)
 
 
+def _normalize_group_names(group_names):
+    raw_values = (
+        [group_names]
+        if isinstance(group_names, str)
+        else list(group_names or ())
+    )
+    selected = []
+    for value in raw_values:
+        name = str(value or "").strip()
+        if not name or name in ("全部店铺组", "所有店铺组", "all", "*"):
+            continue
+        if name not in selected:
+            selected.append(name)
+    return tuple(selected)
+
+
 def _setting_flag_enabled(value):
     if isinstance(value, str):
         return value.strip().casefold() not in ("", "0", "false", "no", "off")
     return bool(value)
 
 
-def load_authorized_appeal_shop_site_config(salespeople=None):
-    """从店铺授权读取允许申诉的店铺/站点，并按业务员缩小范围。"""
+def load_authorized_appeal_shop_site_config(salespeople=None, group_names=None):
+    """从店铺授权读取允许申诉的店铺/站点，并按业务员、店铺组缩小范围。"""
     selected_salespeople = set(_normalize_salespeople(salespeople))
+    selected_group_names = set(_normalize_group_names(group_names))
     token_data = list_mercado_store_tokens() or {}
     result = {}
     for token in token_data.get("rows") or ():
         settings = token.get("site_settings")
         if settings is None:
             # 兼容尚未升级站点开关的旧数据库 API；指定业务员时不能猜测归属。
-            if selected_salespeople:
+            if selected_salespeople or selected_group_names:
                 continue
             enabled_sites = set(ALL_APPEAL_SITE_CODES)
         else:
@@ -188,6 +240,9 @@ def load_authorized_appeal_shop_site_config(salespeople=None):
             for setting in settings:
                 salesperson = str(setting.get("salesperson") or "").strip()
                 if selected_salespeople and salesperson not in selected_salespeople:
+                    continue
+                group_name = str(setting.get("group_name") or "").strip()
+                if selected_group_names and group_name not in selected_group_names:
                     continue
                 if flag_supported and not _setting_flag_enabled(
                     setting.get("appeal_enabled")
@@ -205,9 +260,9 @@ def load_authorized_appeal_shop_site_config(salespeople=None):
     return result
 
 
-def _appeal_scope(only_active=None, salespeople=None):
+def _appeal_scope(only_active=None, salespeople=None, group_names=None):
     """旧参数只保留调用兼容性，站点范围始终由店铺授权开关决定。"""
-    return load_authorized_appeal_shop_site_config(salespeople)
+    return load_authorized_appeal_shop_site_config(salespeople, group_names)
 
 
 def _appeal_site_is_enabled(scope, shop_name, site_code):
@@ -333,11 +388,12 @@ def build_latest_infraction_appeal_plan(
     recent_days=DEFAULT_DAILY_RECENT_DAYS,
     only_active=None,
     salespeople=None,
+    group_names=None,
 ):
     """从最新侵权列表生成计划，并按店铺授权中的申诉开关筛选站点。"""
     data = get_latest_infraction_info(recent_days)
     summary_rows = data.get("summary") or []
-    enabled_scope = _appeal_scope(only_active, salespeople)
+    enabled_scope = _appeal_scope(only_active, salespeople, group_names)
     shop_map = {}
 
     for row in summary_rows:
@@ -386,6 +442,7 @@ def build_latest_reputation_appeal_plan(
     only_active=None,
     min_rate=0,
     salespeople=None,
+    group_names=None,
 ):
     """按最新声誉批次生成延误率、取消率或投诉申诉计划。
 
@@ -400,7 +457,7 @@ def build_latest_reputation_appeal_plan(
     threshold = max(0, _parse_rate(min_rate))
     data = get_latest_reputation_info()
     rows = data.get("rows") or []
-    enabled_scope = _appeal_scope(only_active, salespeople)
+    enabled_scope = _appeal_scope(only_active, salespeople, group_names)
     shop_map = {}
 
     for row in rows:
@@ -457,6 +514,7 @@ def build_appeal_plan(
     only_active=None,
     min_rate=0,
     salespeople=None,
+    group_names=None,
 ):
     """按申诉类型分发到侵权计划或声誉比率计划。"""
     normalized_type = normalize_appeal_type(appeal_type)
@@ -468,6 +526,7 @@ def build_appeal_plan(
             recent_days=recent_days,
             only_active=only_active,
             salespeople=salespeople,
+            group_names=group_names,
         )
     return build_latest_reputation_appeal_plan(
         normalized_type,
@@ -475,6 +534,7 @@ def build_appeal_plan(
         only_active=only_active,
         min_rate=min_rate,
         salespeople=salespeople,
+        group_names=group_names,
     )
 
 
@@ -790,24 +850,24 @@ def _run_ai_appeal_once_locked(
     only_active=None,
     min_rate=0,
     salespeople=None,
+    group_names=None,
 ):
-    """用多进程并发处理指定类型的 Top 店铺；店铺内部按站点指标降序串行处理。"""
-    normalized_type = normalize_appeal_type(appeal_type)
-    appeal_label = _appeal_type_label(normalized_type)
-    if normalized_type == APPEAL_TYPE_MIXED:
-        sequence = appeal_type_sequence(normalized_type)
+    """用多进程并发处理已开启的任务；店铺内部按站点指标降序串行处理。"""
+    selected_types = normalize_appeal_types(appeal_type)
+    sequence = appeal_type_sequence(selected_types)
+    if len(sequence) > 1:
         print(
-            f"{get_now_time()} 开始混合模式，执行顺序："
+            f"{get_now_time()} 开始多任务模式，执行顺序："
             f"{' → '.join(_appeal_type_label(item) for item in sequence)}<br>"
         )
-        mixed_results = []
+        task_results = []
         for index, current_type in enumerate(sequence, start=1):
             current_label = _appeal_type_label(current_type)
             print(
-                f"{get_now_time()} 混合模式第 {index}/{len(sequence)} 项："
+                f"{get_now_time()} 多任务第 {index}/{len(sequence)} 项："
                 f"{current_label}<br>"
             )
-            mixed_results.append({
+            task_results.append({
                 "appeal_type": current_label,
                 "results": _run_ai_appeal_once_locked(
                     current_type,
@@ -819,10 +879,13 @@ def _run_ai_appeal_once_locked(
                     only_active=only_active,
                     min_rate=min_rate,
                     salespeople=salespeople,
+                    group_names=group_names,
                 ),
             })
-        print(f"{get_now_time()} 混合模式一轮执行完成<br>")
-        return mixed_results
+        print(f"{get_now_time()} 多任务一轮执行完成<br>")
+        return task_results
+    normalized_type = selected_types[0]
+    appeal_label = _appeal_type_label(normalized_type)
     plan = build_appeal_plan(
         normalized_type,
         top_n=top_n,
@@ -830,6 +893,7 @@ def _run_ai_appeal_once_locked(
         only_active=only_active,
         min_rate=min_rate,
         salespeople=salespeople,
+        group_names=group_names,
     )
     if not plan:
         print(f"{get_now_time()} 没有找到可处理的{appeal_label}店铺<br>")
@@ -906,10 +970,11 @@ def run_ai_appeal_once(
     only_active=None,
     min_rate=0,
     salespeople=None,
+    group_names=None,
     _task_lock=None,
 ):
-    normalized_type = normalize_appeal_type(appeal_type)
-    appeal_label = _appeal_type_label(normalized_type)
+    selected_types = normalize_appeal_types(appeal_type)
+    appeal_label = "、".join(_appeal_type_label(item) for item in selected_types)
     owned_lock = None
     task_lock = _task_lock
     if task_lock is None:
@@ -923,7 +988,7 @@ def run_ai_appeal_once(
         raise DailyTaskAlreadyRunning(f"bit_daily_task 已在其他进程运行：{owner}")
     try:
         return _run_ai_appeal_once_locked(
-            normalized_type,
+            selected_types,
             top_n=top_n,
             max_workers=max_workers,
             recent_days=recent_days,
@@ -932,6 +997,7 @@ def run_ai_appeal_once(
             only_active=only_active,
             min_rate=min_rate,
             salespeople=salespeople,
+            group_names=group_names,
         )
     finally:
         if owned_lock is not None:
@@ -1022,13 +1088,14 @@ def _loop_ai_appeal_locked(
     only_active=None,
     min_rate=0,
     salespeople=None,
+    group_names=None,
     stop_at=None,
     max_rounds=None,
     task_lock=None,
 ):
-    """循环执行指定类型的 Top 店铺 AI 客服申诉。"""
-    normalized_type = normalize_appeal_type(appeal_type)
-    appeal_label = _appeal_type_label(normalized_type)
+    """循环执行已开启的店铺 AI 客服申诉任务。"""
+    selected_types = normalize_appeal_types(appeal_type)
+    appeal_label = "、".join(_appeal_type_label(item) for item in selected_types)
     round_limit = None if max_rounds is None else max(1, int(max_rounds))
     round_no = 1
     if round_limit is not None:
@@ -1057,7 +1124,7 @@ def _loop_ai_appeal_locked(
                 f"Top {appeal_label}店铺 AI 客服申诉<br>"
             )
             run_ai_appeal_once(
-                normalized_type,
+                selected_types,
                 top_n=top_n,
                 max_workers=max_workers,
                 recent_days=recent_days,
@@ -1066,6 +1133,7 @@ def _loop_ai_appeal_locked(
                 only_active=only_active,
                 min_rate=min_rate,
                 salespeople=salespeople,
+                group_names=group_names,
                 _task_lock=task_lock,
             )
         except Exception as e:
@@ -1136,12 +1204,13 @@ def loop_ai_appeal(
     only_active=None,
     min_rate=0,
     salespeople=None,
+    group_names=None,
     stop_at=None,
     max_rounds=None,
     _task_lock=None,
 ):
-    normalized_type = normalize_appeal_type(appeal_type)
-    appeal_label = _appeal_type_label(normalized_type)
+    selected_types = normalize_appeal_types(appeal_type)
+    appeal_label = "、".join(_appeal_type_label(item) for item in selected_types)
     owned_lock = None
     task_lock = _task_lock
     if task_lock is None:
@@ -1155,7 +1224,7 @@ def loop_ai_appeal(
         raise DailyTaskAlreadyRunning(f"bit_daily_task 已在其他进程运行：{owner}")
     try:
         return _loop_ai_appeal_locked(
-            normalized_type,
+            selected_types,
             top_n=top_n,
             max_workers=max_workers,
             recent_days=recent_days,
@@ -1165,6 +1234,7 @@ def loop_ai_appeal(
             only_active=only_active,
             min_rate=min_rate,
             salespeople=salespeople,
+            group_names=group_names,
             stop_at=stop_at,
             max_rounds=max_rounds,
             task_lock=task_lock,

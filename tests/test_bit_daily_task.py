@@ -35,6 +35,21 @@ def test_mixed_mode_runs_every_other_task_followed_by_infraction():
     )
 
 
+def test_task_switches_can_run_multiple_tasks_without_infraction():
+    assert bit_daily_task.appeal_type_sequence(["投诉", "延误率"]) == (
+        bit_daily_task.APPEAL_TYPE_DELAY,
+        bit_daily_task.APPEAL_TYPE_COMPLAINT,
+    )
+
+
+def test_task_switches_insert_infraction_after_each_other_selected_task():
+    assert bit_daily_task.appeal_type_sequence(["投诉", "侵权"]) == (
+        bit_daily_task.APPEAL_TYPE_INFRACTION,
+        bit_daily_task.APPEAL_TYPE_COMPLAINT,
+        bit_daily_task.APPEAL_TYPE_INFRACTION,
+    )
+
+
 def test_mixed_mode_dispatches_the_full_sequence(monkeypatch):
     calls = []
     monkeypatch.setattr(
@@ -65,16 +80,19 @@ def test_authorized_appeal_scope_uses_site_switches_and_salesperson(monkeypatch)
                         {
                             "site_id": "MLM",
                             "salesperson": "张三",
+                            "group_name": "精品组",
                             "appeal_enabled": True,
                         },
                         {
                             "site_id": "MLB",
                             "salesperson": "张三",
+                            "group_name": "普通组",
                             "appeal_enabled": False,
                         },
                         {
                             "site_id": "MLC",
                             "salesperson": "李四",
+                            "group_name": "普通组",
                             "appeal_enabled": True,
                         },
                     ],
@@ -85,10 +103,14 @@ def test_authorized_appeal_scope_uses_site_switches_and_salesperson(monkeypatch)
 
     all_scope = bit_daily_task.load_authorized_appeal_shop_site_config()
     owner_scope = bit_daily_task.load_authorized_appeal_shop_site_config(["张三"])
+    group_scope = bit_daily_task.load_authorized_appeal_shop_site_config(
+        group_names=["精品组"]
+    )
 
     assert all_scope["授权店铺"] == {"MX", "CL"}
     assert all_scope["store_alias"] == {"MX", "CL"}
     assert owner_scope["授权店铺"] == {"MX"}
+    assert group_scope["授权店铺"] == {"MX"}
 
 
 def test_default_infraction_plan_uses_authorization_switches_not_browser_sites(monkeypatch):

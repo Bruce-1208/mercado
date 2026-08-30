@@ -7537,16 +7537,15 @@
                         </div>
 
                         <div class="field">
-                            <label for="daily-task-appeal-type">申诉类型</label>
-                             <select id="daily-task-appeal-type">
-                                 <option value="侵权" selected>侵权</option>
-                                 <option value="延误率">延误率</option>
-                                 <option value="取消率">取消率</option>
-                                 <option value="投诉">投诉</option>
-                                 <option value="混合模式">混合模式（其他任务后执行侵权）</option>
-                             </select>
-                             <small class="shop-search-hint">混合模式顺序：侵权 → 延误率 → 侵权 → 投诉 → 侵权 → 取消率 → 侵权</small>
-                         </div>
+                            <label>任务开关（可同时开启多个）</label>
+                            <div class="site-picker" id="daily-task-switches">
+                                <label class="site-option"><input type="checkbox" role="switch" name="daily-task-appeal-type" value="侵权" checked><span>侵权</span></label>
+                                <label class="site-option"><input type="checkbox" role="switch" name="daily-task-appeal-type" value="延误率"><span>延误率</span></label>
+                                <label class="site-option"><input type="checkbox" role="switch" name="daily-task-appeal-type" value="投诉"><span>投诉</span></label>
+                                <label class="site-option"><input type="checkbox" role="switch" name="daily-task-appeal-type" value="取消率"><span>取消率</span></label>
+                            </div>
+                            <small class="shop-search-hint">开启侵权和其他任务时：先执行侵权，并在每个其他任务后再执行一次侵权。</small>
+                        </div>
 
                          <div class="field">
                              <label for="daily-task-salesperson">业务员</label>
@@ -7556,8 +7555,10 @@
                          </div>
 
                         <div class="field">
-                            <label for="daily-task-top-n">店铺数量</label>
-                            <input type="number" id="daily-task-top-n" value="30" min="1" max="100">
+                            <label for="daily-task-group">店铺组</label>
+                            <select id="daily-task-group">
+                                <option value="">所有店铺组</option>
+                            </select>
                         </div>
 
                         <div class="field">
@@ -9364,6 +9365,7 @@
         const aiAppealTotal = document.getElementById("ai-appeal-total");
         const startDailyTaskBtn = document.getElementById("start-daily-task-btn");
         const dailyTaskSalesperson = document.getElementById("daily-task-salesperson");
+        const dailyTaskGroup = document.getElementById("daily-task-group");
         const dailyTaskStatusBadge = document.getElementById("daily-task-status-badge");
         const dailyTaskStatusText = document.getElementById("daily-task-status-text");
         const dailyTaskStarted = document.getElementById("daily-task-started");
@@ -17513,24 +17515,33 @@
         function getDailyTaskPayload() {
             const minRatePercent = Number(document.getElementById("daily-task-min-rate").value || 0);
             const salesperson = String(dailyTaskSalesperson?.value || "").trim();
+            const groupName = String(dailyTaskGroup?.value || "").trim();
+            const appealTypes = Array.from(
+                document.querySelectorAll('input[name="daily-task-appeal-type"]:checked'),
+                input => input.value,
+            );
+            if (!appealTypes.length) {
+                throw new Error("请至少开启一个任务");
+            }
             return {
                 mode: document.getElementById("daily-task-mode").value,
-                appeal_type: document.getElementById("daily-task-appeal-type").value,
-                top_n: Number(document.getElementById("daily-task-top-n").value || 30),
+                appeal_types: appealTypes,
                 max_workers: Number(document.getElementById("daily-task-max-workers").value || 10),
                 recent_days: Number(document.getElementById("daily-task-recent-days").value || 100),
                 round_interval: Number(document.getElementById("daily-task-round-interval").value || 600),
                 site_pause: Number(document.getElementById("daily-task-site-pause").value || 30),
                 stop_after_minutes: Number(document.getElementById("daily-task-stop-after").value || 360),
                 salespeople: salesperson ? [salesperson] : [],
+                group_names: groupName ? [groupName] : [],
                 min_rate: `${minRatePercent}%`,
                 message: document.getElementById("daily-task-message").value || "",
             };
         }
 
         async function loadDailyTaskOptions() {
-            if (!dailyTaskSalesperson) return;
-            const selected = String(dailyTaskSalesperson.value || "");
+            if (!dailyTaskSalesperson && !dailyTaskGroup) return;
+            const selectedSalesperson = String(dailyTaskSalesperson?.value || "");
+            const selectedGroup = String(dailyTaskGroup?.value || "");
             try {
                 const response = await fetch("/api/tasks/daily/options", {cache: "no-store"});
                 const payload = await response.json();
@@ -17540,15 +17551,34 @@
                 const salespeople = Array.isArray(payload.data?.salespeople)
                     ? payload.data.salespeople
                     : [];
-                dailyTaskSalesperson.innerHTML = [
-                    '<option value="">所有业务员</option>',
-                    ...salespeople.map(name => (
-                        `<option value="${escapeHtml(name)}">${escapeHtml(name)}</option>`
-                    )),
-                ].join("");
-                dailyTaskSalesperson.value = salespeople.includes(selected) ? selected : "";
+                const groups = Array.isArray(payload.data?.groups) ? payload.data.groups : [];
+                if (dailyTaskSalesperson) {
+                    dailyTaskSalesperson.innerHTML = [
+                        '<option value="">所有业务员</option>',
+                        ...salespeople.map(name => (
+                            `<option value="${escapeHtml(name)}">${escapeHtml(name)}</option>`
+                        )),
+                    ].join("");
+                    dailyTaskSalesperson.value = salespeople.includes(selectedSalesperson)
+                        ? selectedSalesperson
+                        : "";
+                }
+                if (dailyTaskGroup) {
+                    dailyTaskGroup.innerHTML = [
+                        '<option value="">所有店铺组</option>',
+                        ...groups.map(name => (
+                            `<option value="${escapeHtml(name)}">${escapeHtml(name)}</option>`
+                        )),
+                    ].join("");
+                    dailyTaskGroup.value = groups.includes(selectedGroup) ? selectedGroup : "";
+                }
             } catch (_error) {
-                dailyTaskSalesperson.innerHTML = '<option value="">所有业务员</option>';
+                if (dailyTaskSalesperson) {
+                    dailyTaskSalesperson.innerHTML = '<option value="">所有业务员</option>';
+                }
+                if (dailyTaskGroup) {
+                    dailyTaskGroup.innerHTML = '<option value="">所有店铺组</option>';
+                }
             }
         }
 
