@@ -1,0 +1,60 @@
+{
+  "tested_at": "2026-08-26 01:32:50",
+  "summary": {
+    "shop_count": 1,
+    "site_count": 3,
+    "success_count": 0,
+    "failure_count": 3,
+    "partial_count": 0,
+    "failures": [
+      {
+        "shop": "钱程似锦2",
+        "site": "墨西哥",
+        "ok": false,
+        "status": "失败：打开比特浏览器窗口失败，已重试 2 次，最后返回：{'success': False, 'msg': '浏览器正在打开中'}",
+        "visits": []
+      },
+      {
+        "shop": "钱程似锦2",
+        "site": "巴西",
+        "ok": false,
+        "status": "失败：打开比特浏览器窗口失败，已重试 2 次，最后返回：{'success': False, 'msg': '浏览器正在打开中'}",
+        "visits": []
+      },
+      {
+        "shop": "钱程似锦2",
+        "site": "阿根廷",
+        "ok": false,
+        "status": "失败：打开比特浏览器窗口失败，已重试 2 次，最后返回：{'success': False, 'msg': '浏览器正在打开中'}",
+        "visits": []
+      }
+    ],
+    "partials": [],
+    "failure_reasons": {
+      "失败：打开比特浏览器窗口失败，已重试 2 次，最后返回：{'success': False, 'msg': '浏览器正在打开中'}": 3
+    }
+  },
+  "results": [
+    {
+      "shop": "钱程似锦2",
+      "site": "墨西哥",
+      "ok": false,
+      "status": "失败：打开比特浏览器窗口失败，已重试 2 次，最后返回：{'success': False, 'msg': '浏览器正在打开中'}",
+      "visits": []
+    },
+    {
+      "shop": "钱程似锦2",
+      "site": "巴西",
+      "ok": false,
+      "status": "失败：打开比特浏览器窗口失败，已重试 2 次，最后返回：{'success': False, 'msg': '浏览器正在打开中'}",
+      "visits": []
+    },
+    {
+      "shop": "钱程似锦2",
+      "site": "阿根廷",
+      "ok": false,
+      "status": "失败：打开比特浏览器窗口失败，已重试 2 次，最后返回：{'success': False, 'msg': '浏览器正在打开中'}",
+      "visits": []
+    }
+  ]
+}
