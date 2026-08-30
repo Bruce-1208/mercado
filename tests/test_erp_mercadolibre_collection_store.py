@@ -230,6 +230,52 @@ def test_delete_and_publish_selection_reject_empty_ids_before_database_connectio
         store.move_product_items_to_collection([], connection_factory=lambda: None)
 
 
+def test_weight_dimension_completeness_uses_current_values_not_scrape_status():
+    complete = {
+        "scrape_status": "partial",
+        "weight_g": "300.0 g",
+        "package_length_cm": Decimal("10"),
+        "package_width_cm": "20",
+        "package_height_cm": 5,
+    }
+
+    assert store.has_complete_weight_dimensions(complete) is True
+    assert store._json_safe_row(complete)["weight_dimensions_complete"] is True
+    assert store.has_complete_weight_dimensions({**complete, "weight_g": 0}) is False
+
+
+def test_profitability_updates_exact_collection_duplicate_and_only_newest_product():
+    connection = _FakeConnection(update_rowcount=1)
+    snapshot = {
+        "id": 1880,
+        "task_id": 77,
+        "listing_type_id": "gold_special",
+        "net_proceeds_usd": 12.34,
+    }
+
+    store.update_item_profitability(
+        "mlm2990352733",
+        snapshot,
+        connection_factory=lambda: connection,
+    )
+
+    updates = [
+        (query, params)
+        for query, params in connection.fake_cursor.queries
+        if query.startswith("UPDATE")
+    ]
+    collection_sql, collection_params = next(
+        item for item in updates if item[0].startswith(f"UPDATE `{store.COLLECTION_TABLE}`")
+    )
+    product_sql, product_params = next(
+        item for item in updates if item[0].startswith(f"UPDATE `{store.PRODUCT_TABLE}`")
+    )
+    assert "WHERE `id` = %s AND `source_item_id` = %s" in collection_sql
+    assert collection_params[-2:] == (1880, "MLM2990352733")
+    assert "newer.`id` > %s" in product_sql
+    assert product_params[-3:] == ("MLM2990352733", "MLM2990352733", 1880)
+
+
 def test_move_pulled_product_creates_collection_row_before_deleting_product():
     product_row = {
         "id": 21,
@@ -242,6 +288,9 @@ def test_move_pulled_product_creates_collection_row_before_deleting_product():
         "price": 100,
         "currency_id": "MXN",
         "weight_g": 300,
+        "package_length_cm": 10,
+        "package_width_cm": 20,
+        "package_height_cm": 5,
         "source_snapshot_json": json.dumps({
             "source": {"id": "MLM21"},
             "description": {"plain_text": "description"},
@@ -291,6 +340,7 @@ def test_move_pulled_product_creates_collection_row_before_deleting_product():
         "deleted": 1,
     }
     assert insert_params[0:3] == (0, "MLM21", "https://example/MLM21")
+    assert "ok" in insert_params
     assert "产品列表自动移回：审核状态未通过 1 件" in insert_params
     assert connection.committed is True
 

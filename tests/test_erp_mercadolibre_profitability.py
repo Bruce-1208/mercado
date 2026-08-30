@@ -79,18 +79,20 @@ class _OfficialApi:
             })
         if "/listing_prices" in url:
             quote = {
-                "listing_type_id": "gold_pro",
-                "listing_type_name": "Premium",
+                "listing_type_id": "gold_special",
+                "listing_type_name": "Classic",
                 "currency_id": "MXN",
                 "sale_fee_amount": 70,
                 "sale_fee_details": {"percentage_fee": 20},
             }
             return _Response(quote if self.single_listing_price else [quote])
+        if "/items/" in url:
+            return _Response({"shipping": {"free_shipping": True}})
         if "/shipping_options/free" in url:
             return _Response({
                 "coverage": {
                     "all_country": {
-                        "list_cost": 128,
+                        "list_cost": 128 if params.get("free_shipping") == "true" else 64,
                         "currency_id": "MXN",
                         "billable_weight": 1000,
                     }
@@ -99,15 +101,15 @@ class _OfficialApi:
         raise AssertionError(url)
 
 
-def test_billable_weight_ignores_volumetric_up_to_and_including_500g():
-    assert calculate_billable_weight_g(200, 9) == 200
-    assert calculate_billable_weight_g(500, 9) == 500
+def test_billable_weight_uses_global_selling_greater_weight_rule_at_all_weights():
+    assert calculate_billable_weight_g(200, 9) == 9000
+    assert calculate_billable_weight_g(500, 0.9) == 900
     assert shipping_dimensions_parameter({"weight_g": 500, "volumetric_weight_kg": 9}) == (
-        "1x1x1,500"
+        "1x1x1,9000"
     )
 
 
-def test_billable_weight_uses_larger_weight_only_above_500g():
+def test_billable_weight_uses_larger_gross_or_volumetric_weight():
     assert calculate_billable_weight_g(500.1, 0.8) == 800
     assert calculate_billable_weight_g(900, 0.8) == 900
     assert calculate_billable_weight_g(None, 1.2) is None
@@ -154,6 +156,9 @@ def test_official_estimate_calculates_usd_commission_shipping_and_net_proceeds()
     })
 
     assert result["category_id"] == "MLM455455"
+    assert result["listing_type_id"] == "gold_special"
+    assert result["listing_type_name"] == "Classic"
+    assert result["source_free_shipping"] is True
     assert result["sale_price_usd"] == 17.5
     assert result["commission_rate"] == 20
     assert result["commission_amount_usd"] == 3.5
@@ -162,6 +167,124 @@ def test_official_estimate_calculates_usd_commission_shipping_and_net_proceeds()
     assert result["net_proceeds_usd"] == 7.6
     shipping_call = next(call for call in http.calls if "/shipping_options/free" in call[0])
     assert shipping_call[1]["dimensions"] == "30x20x10,1000"
+    assert shipping_call[1]["free_shipping"] == "true"
+    listing_call = next(call for call in http.calls if "/listing_prices" in call[0])
+    assert listing_call[1]["listing_type_id"] == "gold_special"
+
+
+def test_non_free_shipping_uses_lower_buyer_paid_quote_and_keeps_classic():
+    http = _OfficialApi()
+    result = MercadoProfitabilityClient(
+        {"access_token": "secret", "meli_user_id": "111"},
+        http=http,
+        cache_store=False,
+    ).estimate({
+        "source_item_id": "MLM3016972321",
+        "title": "Mochila escolar",
+        "price": 350,
+        "currency_id": "MXN",
+        "weight_g": 600,
+        "volumetric_weight_kg": 1,
+        "package_length_cm": 10,
+        "package_width_cm": 20,
+        "package_height_cm": 30,
+        "source": {"shipping": {"free_shipping": False}},
+        "listing_type_id": "gold_pro",
+    })
+
+    shipping_call = next(call for call in http.calls if "/shipping_options/free" in call[0])
+    assert shipping_call[1]["free_shipping"] == "false"
+    assert result["shipping_fee_local"] == 64
+    assert result["shipping_fee_usd"] == 3.2
+    assert result["net_proceeds_usd"] == 10.8
+    assert result["listing_type_id"] == "gold_special"
+    assert result["shipping_weight_rule"].startswith("buyer_pays_shipping:")
+
+
+def test_global_selling_rate_card_uses_official_usd_without_local_conversion():
+    class RateStore:
+        def match(self, **quote):
+            assert quote == {
+                "site_id": "MLM",
+                "price_local": 100,
+                "billable_weight_g": 500,
+                "free_shipping": False,
+            }
+            return {
+                "shipping_amount_usd": 1.46,
+                "currency_id": "MXN",
+                "rate_kind": "below_threshold",
+                "price_label": "Listings below MXN 299",
+                "weight_label": "0.4 - 0.5",
+                "refreshed_at": "2026-08-30 00:00:00",
+            }
+
+    http = _OfficialApi()
+    client = MercadoProfitabilityClient(
+        {"access_token": "secret", "meli_user_id": "111"},
+        http=http,
+        cache_store=False,
+        shipping_rate_store=RateStore(),
+    )
+    result = client.estimate({
+        "source_item_id": "MLM3016972321",
+        "title": "Mochila escolar",
+        "price": 100,
+        "currency_id": "MXN",
+        "weight_g": 500,
+        "source_free_shipping": False,
+    })
+
+    assert result["shipping_fee_local"] == 1.46
+    assert result["shipping_currency_id"] == "USD"
+    assert result["shipping_fee_usd"] == 1.46
+    assert result["shipping_weight_rule"].endswith(
+        "official_global_selling_cainiao_rate_card"
+    )
+    assert result["profitability_source"] == (
+        "mercadolibre_global_selling_cainiao_rate_card_daily_database_cache"
+    )
+    assert not any("shipping_options/free" in url for url, _params in http.calls)
+
+
+def test_category_prediction_uses_captured_specs_when_cross_border_title_is_truncated():
+    class Api(_OfficialApi):
+        def get(self, url, *, headers, params, timeout):
+            if "/domain_discovery/search" in url:
+                self.calls.append((url, params))
+                if params.get("q") == "cosplay anime":
+                    return _Response([{
+                        "category_id": "MLM455862",
+                        "category_name": "Kits de Cosplay",
+                    }])
+                return _Response([])
+            return super().get(url, headers=headers, params=params, timeout=timeout)
+
+    http = Api()
+    result = MercadoProfitabilityClient(
+        {"access_token": "secret", "meli_user_id": "111"},
+        http=http,
+        cache_store=False,
+    ).estimate({
+        "source_item_id": "MLM2990352733",
+        "title": "Anime Masculino Blue Lock Reo Nagi Bachira Isagi Chigiri Zip",
+        "price": 224.93,
+        "currency_id": "MXN",
+        "weight_g": 338,
+        "package_length_cm": 20,
+        "package_width_cm": 20,
+        "package_height_cm": 5,
+        "page_snapshot_json": '{"specs":[{"name":"Cantidad de disfraces","value":"1"}]}',
+        "source_free_shipping": False,
+    })
+
+    queries = [params["q"] for url, params in http.calls if "/domain_discovery/search" in url]
+    assert queries == [
+        "Anime Masculino Blue Lock Reo Nagi Bachira Isagi Chigiri Zip",
+        "cosplay anime",
+    ]
+    assert result["category_id"] == "MLM455862"
+    assert result["listing_type_id"] == "gold_special"
 
 
 def test_listing_price_accepts_single_object_response_when_type_is_filtered():

@@ -63,6 +63,9 @@ def test_workbench_contains_order_management_ui():
     assert '<option value="200" selected>200 条/页</option>'.encode("utf-8") in response.data
     assert "合并单全部 SKU".encode("utf-8") in response.data
     assert "order-detail-sku-media".encode("utf-8") in response.data
+    assert b"function orderProductNameMarkup(item)" in response.data
+    assert b'class="order-product-link"' in response.data
+    assert "打开美客多前台商品".encode("utf-8") in response.data
 
 
 def test_order_api_requires_login():
@@ -274,10 +277,69 @@ def test_order_print_route_returns_pdf_and_records_operator_log():
     assert response.data.startswith(b"%PDF")
     assert response.headers["Cache-Control"] == "no-store"
     assert response.headers["X-Mercado-Shipment-Count"] == "1"
+    assert response.headers["X-Mercado-Printed-Order-Count"] == "1"
+    assert response.headers["X-Mercado-Result"] == "success"
     download_labels.assert_called_once_with(["20001"])
     record_logs.assert_called_once_with(
         ["20001"], operator_id=1, operator_name="测试用户"
     )
+
+
+def test_order_print_route_returns_partial_pdf_and_records_only_successful_orders():
+    with (
+        patch.object(
+            workbench.bit_db_api,
+            "download_order_labels",
+            return_value={
+                "content": b"%PDF-1.4\n%%EOF",
+                "filename": "mercado-label-30001.pdf",
+                "order_ids": ["20001"],
+                "shipment_count": 1,
+                "skipped_order_ids": ["20002"],
+                "failed_order_ids": ["20003"],
+            },
+        ),
+        patch.object(workbench.bit_db_api, "record_order_print_logs", return_value=1) as record_logs,
+    ):
+        response = _client().post(
+            "/api/orders/print",
+            json={"order_ids": ["20001", "20002", "20003"]},
+        )
+
+    assert response.status_code == 200
+    assert response.data.startswith(b"%PDF")
+    assert response.headers["X-Mercado-Result"] == "partial"
+    assert response.headers["X-Mercado-Printed-Order-Count"] == "1"
+    assert response.headers["X-Mercado-Skipped-Order-Count"] == "1"
+    assert response.headers["X-Mercado-Failed-Order-Count"] == "1"
+    record_logs.assert_called_once_with(
+        ["20001"], operator_id=1, operator_name="测试用户"
+    )
+
+
+def test_order_print_route_keeps_valid_pdf_when_print_log_write_fails():
+    with (
+        patch.object(
+            workbench.bit_db_api,
+            "download_order_labels",
+            return_value={
+                "content": b"%PDF-1.4\n%%EOF",
+                "filename": "mercado-label-30001.pdf",
+                "order_ids": ["20001"],
+                "shipment_count": 1,
+            },
+        ),
+        patch.object(
+            workbench.bit_db_api,
+            "record_order_print_logs",
+            side_effect=RuntimeError("数据库暂时不可用"),
+        ),
+    ):
+        response = _client().post("/api/orders/print", json={"order_ids": ["20001"]})
+
+    assert response.status_code == 200
+    assert response.data.startswith(b"%PDF")
+    assert response.headers["X-Mercado-Print-Log"] == "failed"
 
 
 def test_order_operation_logs_route_returns_audit_rows():

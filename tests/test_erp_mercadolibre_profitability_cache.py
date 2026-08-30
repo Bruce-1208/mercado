@@ -54,3 +54,20 @@ def test_quote_cache_keys_include_every_price_affecting_field():
     assert original != cache.DatabaseProfitabilityCache.commission_key(
         **{**base, "site_id": "MLB"}
     )
+
+    shipping = {
+        "site_id": "MLM",
+        "marketplace_user_id": "123",
+        "category_id": "MLM123",
+        "listing_type_id": "gold_special",
+        "price": 350.0,
+        "dimensions": "10x20x30,1000",
+        "logistic_type": "remote",
+        "shipping_mode": "me2",
+        "free_shipping": True,
+    }
+    free_key = cache.DatabaseProfitabilityCache.shipping_key(**shipping)
+    buyer_paid_key = cache.DatabaseProfitabilityCache.shipping_key(
+        **{**shipping, "free_shipping": False}
+    )
+    assert free_key != buyer_paid_key

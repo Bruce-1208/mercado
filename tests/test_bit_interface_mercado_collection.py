@@ -1,4 +1,5 @@
 from datetime import datetime
+from pathlib import Path
 from unittest.mock import patch
 
 import bit.bit_interface as workbench
@@ -138,8 +139,17 @@ def test_workbench_contains_collection_and_product_list_ui():
     assert "美元售价".encode("utf-8") in response.data
     assert "分类佣金".encode("utf-8") in response.data
     assert "最新运费".encode("utf-8") in response.data
+    assert b'data-tab="mercado-shipping-standards"' in response.data
+    assert b'id="tab-mercado-shipping-standards"' in response.data
+    assert b'id="mercado-shipping-rate-content"' in response.data
+    assert b'id="mercado-shipping-rate-refresh"' in response.data
+    assert "美客多运费标准".encode("utf-8") in response.data
+    assert "Global Selling 跨境运费公告".encode("utf-8") in response.data
+    assert "更新官方最新标准".encode("utf-8") in response.data
+    assert "不混用本地卖家信誉表".encode("utf-8") in response.data
+    assert b"loadMercadoShippingRates" in response.data
     assert "净收益".encode("utf-8") in response.data
-    assert "不超过500g：只按实重".encode("utf-8") in response.data
+    assert "Global Selling：毛重/体积重取较大".encode("utf-8") in response.data
     assert b'id="mercado-delete-selected"' in response.data
     assert b'id="mercado-publish-store"' in response.data
     assert b'id="mercado-publish-site"' in response.data
@@ -188,6 +198,41 @@ def test_workbench_contains_collection_and_product_list_ui():
     assert "不可上架，将自动移回采集列表".encode("utf-8") in response.data
     assert "最终上架净收益 = 产品净收益 ×".encode("utf-8") in response.data
     assert 'partial: "部分完成"'.encode("utf-8") in response.data
+
+
+def test_official_shipping_rate_endpoints_list_and_start_refresh(monkeypatch):
+    from erp import mercadolibre_shipping_rate_cards as cards
+
+    client = _client()
+    monkeypatch.setattr(
+        cards.OfficialShippingRateCardStore,
+        "list_rates",
+        lambda self, site_id="": {
+            "site_id": site_id,
+            "rows": [{"site_id": "MLM", "shipping_amount_usd": 1.76}],
+            "sites": [{"site_id": "MLM", "country_name": "墨西哥", "row_count": 1}],
+        },
+    )
+    with workbench._mercado_shipping_rate_refresh_lock:
+        workbench._mercado_shipping_rate_refresh_state.update(
+            running=False, status="idle", message="等待从官方更新"
+        )
+
+    response = client.get("/api/mercado-shipping-rates?site_id=MLM")
+
+    assert response.status_code == 200
+    assert response.get_json()["data"]["site_id"] == "MLM"
+    assert response.get_json()["data"]["rows"][0]["shipping_amount_usd"] == 1.76
+
+    monkeypatch.setattr(
+        workbench,
+        "_start_mercado_shipping_rate_refresh",
+        lambda **_kwargs: True,
+    )
+    response = client.post("/api/mercado-shipping-rates/refresh", json={})
+
+    assert response.status_code == 202
+    assert "已开始" in response.get_json()["message"]
 
 
 def test_collection_api_requires_login():
@@ -240,7 +285,15 @@ def test_collection_duration_is_live_then_stable_after_finish():
 
 def test_collection_quality_pass_retries_all_incomplete_plugin_rows():
     rows = [
-        {"source_item_id": "MLM1", "scrape_status": "ok", "error_message": ""},
+        {
+            "source_item_id": "MLM1",
+            "scrape_status": "partial",
+            "error_message": "旧状态未刷新",
+            "weight_g": 300,
+            "package_length_cm": 10,
+            "package_width_cm": 20,
+            "package_height_cm": 5,
+        },
         {
             "source_item_id": "MLM2",
             "scrape_status": "partial",
@@ -257,6 +310,11 @@ def test_collection_quality_pass_retries_all_incomplete_plugin_rows():
         row["source_item_id"]
         for row in workbench._mercado_collection_rows_needing_repair(rows)
     ] == ["MLM2", "MLM3"]
+
+    template = Path(workbench.app.template_folder, "index.html").read_text(
+        encoding="utf-8"
+    )
+    assert "row.weight_dimensions_complete || row.scrape_status" in template
 
 
 def test_collection_database_write_retries_transient_network_failure(monkeypatch):

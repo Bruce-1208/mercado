@@ -302,7 +302,6 @@ def _run_ai_appeal_loop(started_at):
                         max_workers=max_workers,
                         recent_days=recent_days,
                         site_pause=site_pause,
-                        only_active=True,
                         min_rate=min_rate,
                         _task_lock=task_lock,
                     )

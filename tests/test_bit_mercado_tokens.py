@@ -95,6 +95,31 @@ def test_token_summary_defensively_removes_both_secrets():
     assert summary["has_refresh_token"] is True
 
 
+def test_site_setting_rows_expose_appeal_and_visit_switches():
+    class Cursor:
+        def execute(self, *_args, **_kwargs):
+            return None
+
+        def fetchall(self):
+            return [
+                {
+                    "token_id": 9,
+                    "site_id": "MLM",
+                    "appeal_enabled": 1,
+                    "visit_stats_enabled": 0,
+                }
+            ]
+
+    rows = bit_mysql._mercado_store_site_setting_rows(Cursor(), 9)
+    mexico = next(row for row in rows if row["site_id"] == "MLM")
+    brazil = next(row for row in rows if row["site_id"] == "MLB")
+
+    assert mexico["appeal_enabled"] is True
+    assert mexico["visit_stats_enabled"] is False
+    assert brazil["appeal_enabled"] is False
+    assert brazil["visit_stats_enabled"] is False
+
+
 def test_default_oauth_client_does_not_inherit_system_proxy(monkeypatch):
     http = OAuthSession()
     http.trust_env = True
@@ -431,6 +456,10 @@ def test_console_template_contains_store_token_module():
     assert 'id="mercado-site-settings-body"' in body
     assert 'id="mercado-token-select-all"' in body
     assert 'id="mercado-token-bulk-settings"' in body
+    assert 'id="mercado-token-salesperson-filter"' in body
+    assert 'id="mercado-token-group-filter"' in body
+    assert "filteredMercadoStoreTokenRows" in body
+    assert "当前筛选条件下暂无授权店铺" in body
     assert 'id="mercado-bulk-settings-dialog"' in body
     assert 'id="mercado-bulk-salesperson"' in body
     assert 'id="mercado-bulk-settings-body"' in body
@@ -441,7 +470,11 @@ def test_console_template_contains_store_token_module():
     assert 'data-field="salesperson"' not in body
     assert 'data-field="group_name"' not in body
     assert 'requestAccessApi("/api/access/users")' in body
-    assert "业务员和分组对该店铺授权下的全部站点统一生效" in body
+    assert "勾选站点是否参与自动申诉和访问数据统计" in body
+    assert 'data-field="appeal_enabled"' in body
+    assert 'data-field="visit_stats_enabled"' in body
+    assert 'data-field="bulk_appeal_enabled"' in body
+    assert 'data-field="bulk_visit_stats_enabled"' in body
     assert "每家店铺原有分组保持不变" in body
     assert "toggleMercadoStoreToken" in body
     assert "saveMercadoBulkSiteSettings" in body

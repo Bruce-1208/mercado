@@ -52,8 +52,14 @@ def _refresh_store_token(token_id):
 
 def _is_invalid_token_error(exc):
     message = str(exc).lower()
-    return "(401)" in message and any(
-        marker in message for marker in ("invalid_token", "token_not_valid", "expired")
+    return any(
+        marker in message
+        for marker in (
+            "invalid_token",
+            "token_not_valid",
+            "malformed access_token",
+            "access token expired",
+        )
     )
 
 
@@ -128,37 +134,118 @@ def _merge_pdfs(documents):
 
 
 def download_order_labels(order_ids):
-    """Call Mercado's labels endpoint and return one printable PDF response."""
+    """Download every available label without letting one bad shipment abort a batch.
+
+    A paid order is not necessarily printable: its shipment may already be
+    shipped/cancelled, or Mercado may still be preparing the label.  Keep each
+    shipment isolated so a mixed batch can still return the valid PDFs and so
+    only successfully downloaded orders are recorded as printed.
+    """
     contexts = bit_mysql.get_mercado_order_label_contexts(order_ids)
     if not contexts:
         raise MercadoLabelError("没有找到当前授权店铺下可打印的订单")
-    requested = {str(value or "").strip() for value in order_ids or [] if str(value or "").strip()}
+    requested_order_ids = list(
+        dict.fromkeys(
+            str(value or "").strip()
+            for value in order_ids or []
+            if str(value or "").strip()
+        )
+    )
+    requested = set(requested_order_ids)
     found = {str(row.get("order_id") or "") for row in contexts}
     missing = sorted(requested - found)
     if missing:
         raise MercadoLabelError(f"以下订单不存在或不属于当前授权店铺：{', '.join(missing)}")
 
-    documents = []
-    printed_shipments = set()
-    printed_order_ids = []
+    shipment_groups = {}
     for context in contexts:
         shipment_id = str(context.get("shipping_id") or "").strip()
-        printed_order_ids.append(str(context.get("order_id") or ""))
-        if shipment_id and shipment_id in printed_shipments:
-            continue
-        shipment_id, content = _download_one(context)
-        printed_shipments.add(shipment_id)
-        documents.append(content)
+        order_id = str(context.get("order_id") or "").strip()
+        # Missing shipment IDs must remain isolated by order; grouping all of
+        # them under an empty key would report unrelated orders as one failure.
+        group_key = f"shipment:{shipment_id}" if shipment_id else f"order:{order_id}"
+        shipment_groups.setdefault(group_key, []).append(context)
+
+    documents = []
+    printed_shipments = []
+    printed_order_ids = []
+    skipped_order_ids = []
+    failed_order_ids = []
+    skipped = []
+    failures = []
+    warnings = []
+    for group in shipment_groups.values():
+        group_order_ids = list(
+            dict.fromkeys(
+                str(row.get("order_id") or "").strip()
+                for row in group
+                if str(row.get("order_id") or "").strip()
+            )
+        )
+        try:
+            shipment_id, content = _download_one(group[0])
+        except MercadoLabelUnavailable as exc:
+            skipped_order_ids.extend(group_order_ids)
+            skipped.append(
+                {
+                    "order_ids": group_order_ids,
+                    "shipment_id": str(group[0].get("shipping_id") or ""),
+                    "shipment_status": exc.shipment_status,
+                    "reason": str(exc),
+                    "permanent": exc.permanent,
+                }
+            )
+            if exc.permanent:
+                try:
+                    bit_mysql.record_mercado_order_label_unavailable(
+                        group_order_ids,
+                        shipment_status=exc.shipment_status,
+                        reason=str(exc),
+                    )
+                except Exception as record_exc:
+                    warnings.append(f"不可打印状态写入失败：{record_exc}")
+        except Exception as exc:
+            failed_order_ids.extend(group_order_ids)
+            failures.append(
+                {
+                    "order_ids": group_order_ids,
+                    "shipment_id": str(group[0].get("shipping_id") or ""),
+                    "reason": str(exc) or exc.__class__.__name__,
+                }
+            )
+        else:
+            printed_shipments.append(shipment_id)
+            printed_order_ids.extend(group_order_ids)
+            documents.append(content)
+
+    if not documents:
+        summary = []
+        if skipped_order_ids:
+            summary.append(f"{len(set(skipped_order_ids))} 个订单运单状态不可打印")
+        if failed_order_ids:
+            summary.append(f"{len(set(failed_order_ids))} 个订单下载失败")
+        details = [row["reason"] for row in [*skipped, *failures] if row.get("reason")]
+        message = "，".join(summary) or "没有可用面单"
+        if details:
+            message += "；" + "；".join(details[:3])
+        raise MercadoLabelError(f"所选订单均未生成面单：{message}")
+
     merged = _merge_pdfs(documents)
     timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
     filename = (
-        f"mercado-label-{next(iter(printed_shipments))}.pdf"
+        f"mercado-label-{printed_shipments[0]}.pdf"
         if len(printed_shipments) == 1
         else f"mercado-labels-{len(printed_shipments)}-{timestamp}.pdf"
     )
     return {
         "content": merged,
         "filename": filename,
-        "order_ids": printed_order_ids,
+        "order_ids": list(dict.fromkeys(printed_order_ids)),
+        "requested_order_ids": requested_order_ids,
         "shipment_count": len(printed_shipments),
+        "skipped_order_ids": list(dict.fromkeys(skipped_order_ids)),
+        "failed_order_ids": list(dict.fromkeys(failed_order_ids)),
+        "skipped": skipped,
+        "failures": failures,
+        "warnings": warnings,
     }

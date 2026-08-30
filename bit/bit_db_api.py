@@ -516,11 +516,24 @@ def download_order_labels(order_ids):
         except ValueError:
             message = (response.text or "")[:500]
         raise RuntimeError(message or f"美客多面单接口返回 {response.status_code}")
+    printed_header = response.headers.get("X-Mercado-Printed-Order-Ids", "")
+    printed_order_ids = [value for value in printed_header.split(",") if value]
+    if not printed_header:
+        # Compatibility with a database service that has not yet been updated
+        # to return partial-batch metadata.
+        printed_order_ids = payload["order_ids"]
     return {
         "content": bytes(response.content),
         "filename": response.headers.get("X-Mercado-Label-Filename") or "mercado-labels.pdf",
-        "order_ids": payload["order_ids"],
+        "order_ids": printed_order_ids,
+        "requested_order_ids": payload["order_ids"],
         "shipment_count": int(response.headers.get("X-Mercado-Shipment-Count") or 0),
+        "skipped_order_count": int(
+            response.headers.get("X-Mercado-Skipped-Order-Count") or 0
+        ),
+        "failed_order_count": int(
+            response.headers.get("X-Mercado-Failed-Order-Count") or 0
+        ),
     }
 
 

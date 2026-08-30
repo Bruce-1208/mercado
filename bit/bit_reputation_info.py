@@ -2197,7 +2197,7 @@ def _deduplicate_api_site_rows(rows):
 
 
 def _api_auxiliary_config_rows(tokens, api_rows):
-    """把浏览器配置名称映射到授权店铺，只保留 API 已返回的站点。"""
+    """用浏览器配置定位窗口，但站点范围完全取自店铺授权访问统计开关。"""
     canonical_by_alias = {}
     for token in tokens:
         canonical_name = str(
@@ -2208,13 +2208,14 @@ def _api_auxiliary_config_rows(tokens, api_rows):
             if alias_key:
                 canonical_by_alias[alias_key] = canonical_name
 
-    api_keys = {
-        (
-            str(row.get("store_name") or "").strip().casefold(),
-            _normalize_api_site_code(row.get("site_id") or row.get("site_name")),
-        )
-        for row in api_rows
-    }
+    api_sites_by_store = {}
+    for row in api_rows:
+        store_key = str(row.get("store_name") or "").strip().casefold()
+        site_code = _normalize_api_site_code(row.get("site_id") or row.get("site_name"))
+        if not store_key or not site_code:
+            continue
+        site_label = str(row.get("site_name") or site_code).strip()
+        api_sites_by_store.setdefault(store_key, {})[site_code] = site_label
     selected_rows = []
     claimed_sites = set()
     for raw_row in list_config_rows(include_ignored=False) or ():
@@ -2224,20 +2225,12 @@ def _api_auxiliary_config_rows(tokens, api_rows):
         canonical_name = canonical_by_alias.get(original_name.casefold())
         if not canonical_name:
             continue
-        sites = [
-            site
-            for site in _split_sites(raw_row[3])
-            if (
-                canonical_name.casefold(),
-                _normalize_api_site_code(site),
-            )
-            in api_keys
-            and (
-                canonical_name.casefold(),
-                _normalize_api_site_code(site),
-            )
-            not in claimed_sites
-        ]
+        canonical_key = canonical_name.casefold()
+        sites = []
+        for site_code, site_label in api_sites_by_store.get(canonical_key, {}).items():
+            claimed_key = (canonical_key, site_code)
+            if claimed_key not in claimed_sites:
+                sites.append(site_label)
         if not sites:
             continue
         row = list(raw_row)
@@ -2250,6 +2243,27 @@ def _api_auxiliary_config_rows(tokens, api_rows):
         )
         selected_rows.append(row)
     return selected_rows
+
+
+def _token_enabled_site_codes(token, setting_field):
+    """返回授权站点开关；None 表示兼容尚未提供该开关的旧接口。"""
+    settings = token.get("site_settings")
+    if settings is None:
+        return None
+    settings = [dict(setting or {}) for setting in settings]
+    if not any(setting_field in setting for setting in settings):
+        return None
+
+    def enabled(value):
+        if isinstance(value, str):
+            return value.strip().casefold() not in ("", "0", "false", "no", "off")
+        return bool(value)
+    return {
+        _normalize_api_site_code(setting.get("site_id"))
+        for setting in settings
+        if enabled(setting.get(setting_field))
+        and _normalize_api_site_code(setting.get("site_id"))
+    }
 
 
 def _merge_api_auxiliary_rows(api_rows, database_rows, auxiliary_rows):
@@ -2337,8 +2351,20 @@ def get_reputation_info_all(
             }
             & selected_shop_keys
         ]
+    if collect_browser_auxiliary:
+        visit_enabled_tokens = []
+        for token in tokens:
+            enabled_sites = _token_enabled_site_codes(token, "visit_stats_enabled")
+            if enabled_sites is not None:
+                if selected_site_codes:
+                    enabled_sites &= selected_site_codes
+                if not enabled_sites:
+                    continue
+                token["_visit_stats_site_codes"] = sorted(enabled_sites)
+            visit_enabled_tokens.append(token)
+        tokens = visit_enabled_tokens
     if (selected_shops or selected_sites) and not tokens:
-        raise ValueError("所选店铺没有可用的美客多 API 授权")
+        raise ValueError("所选店铺或站点未在店铺授权中开启访问数据统计")
 
     try:
         requested_workers = max(1, int(max_workers or 1))
@@ -2379,6 +2405,15 @@ def get_reputation_info_all(
                         for row in api_rows
                         if _normalize_api_site_code(row.get("site_id"))
                         in selected_site_codes
+                    ]
+                enabled_visit_sites = token.get("_visit_stats_site_codes")
+                if enabled_visit_sites is not None:
+                    enabled_visit_sites = set(enabled_visit_sites)
+                    api_rows = [
+                        row
+                        for row in api_rows
+                        if _normalize_api_site_code(row.get("site_id"))
+                        in enabled_visit_sites
                     ]
                 if not api_rows:
                     scope_text = "所选站点" if selected_site_codes else "任何站点"

@@ -764,6 +764,20 @@
             border: 0;
         }
 
+        .order-product-link {
+            color: #175cd3;
+            font-weight: 800;
+            line-height: 1.35;
+            overflow-wrap: anywhere;
+            text-decoration: none;
+        }
+
+        .order-product-link:hover,
+        .order-product-link:focus-visible {
+            color: #004eeb;
+            text-decoration: underline;
+        }
+
         .order-money {
             font-variant-numeric: tabular-nums;
             font-weight: 800;
@@ -2013,10 +2027,29 @@
             text-align: center !important;
         }
 
+        .mercado-token-filter-bar {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            align-items: end;
+            padding: 10px 12px;
+            border-bottom: 1px solid var(--line);
+            background: #f8fafc;
+        }
+
+        .mercado-token-filter-bar .field {
+            min-width: 180px;
+            margin: 0;
+        }
+
+        .mercado-token-filter-bar select {
+            width: 100%;
+        }
+
         .mercado-site-settings-table {
             width: 100%;
             border-collapse: collapse;
-            min-width: 420px;
+            min-width: 640px;
         }
 
         .mercado-site-settings-table th,
@@ -2047,6 +2080,12 @@
         .mercado-site-settings-table input {
             width: 100%;
             min-width: 130px;
+        }
+
+        .mercado-site-settings-table input[type="checkbox"] {
+            width: 18px;
+            min-width: 18px;
+            height: 18px;
         }
 
         .mercado-site-settings-message {
@@ -3210,14 +3249,17 @@
             content: "";
         }
 
-        #risk-check-log {
+        #risk-check-log,
+        #zying-collection-log {
             flex: 1;
             margin: 0;
             overflow-y: auto;
             padding: 9px 10px;
-            color: var(--log-text);
+            background: var(--log-bg);
+            color: #e6edf7;
             font-family: Consolas, "Courier New", monospace;
             font-size: 13px;
+            font-weight: 500;
             line-height: 1.55;
             white-space: pre-wrap;
             word-break: break-word;
@@ -5133,6 +5175,229 @@
             background: #f8fbff;
         }
 
+        .market-shipping-rate-panel {
+            margin-bottom: 14px;
+            overflow: hidden;
+            padding: 0;
+            border-color: #dfe7f1;
+            border-radius: 16px;
+            box-shadow: 0 10px 28px rgba(25, 50, 85, 0.065);
+        }
+
+        .mercado-shipping-standards {
+            --market-ink: #172033;
+            --market-muted: #68758a;
+            --market-line: #e4eaf2;
+        }
+
+        .mercado-shipping-heading {
+            display: flex;
+            align-items: flex-end;
+            justify-content: space-between;
+            gap: 18px;
+        }
+
+        .market-shipping-source-badge {
+            display: grid;
+            min-width: 250px;
+            gap: 3px;
+            padding: 11px 14px;
+            border: 1px solid #cfe0fb;
+            border-radius: 12px;
+            background: #f2f7ff;
+            color: #285aa8;
+            text-align: right;
+        }
+
+        .market-shipping-source-badge strong { font-size: 12px; }
+        .market-shipping-source-badge span { color: #6780a6; font-size: 10px; }
+
+        .market-shipping-rate-head {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 16px;
+            padding: 15px 18px;
+            border-bottom: 1px solid var(--market-line);
+            background: linear-gradient(90deg, #f8fbff, #fff);
+        }
+
+        .market-shipping-rate-head h3 {
+            margin: 0;
+            color: var(--market-ink);
+            font-size: 16px;
+        }
+
+        .market-shipping-rate-head p {
+            margin: 4px 0 0;
+            color: var(--market-muted);
+            font-size: 12px;
+        }
+
+        .market-shipping-rate-actions {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .market-shipping-rate-state {
+            max-width: 360px;
+            color: #627086;
+            font-size: 11px;
+            text-align: right;
+        }
+
+        .market-shipping-sites {
+            display: flex;
+            gap: 7px;
+            overflow-x: auto;
+            padding: 12px 18px;
+            border-bottom: 1px solid #e7edf5;
+            background: #fbfcfe;
+        }
+
+        .market-shipping-site {
+            min-width: 92px;
+            padding: 7px 11px;
+            border: 1px solid #d9e3f0;
+            border-radius: 9px;
+            background: #fff;
+            color: #53647b;
+            cursor: pointer;
+            font-size: 12px;
+            font-weight: 800;
+        }
+
+        .market-shipping-site.active {
+            border-color: #2f6ce1;
+            background: #edf4ff;
+            color: #245fcf;
+        }
+
+        .market-shipping-site.unavailable {
+            border-style: dashed;
+            background: #f8f9fb;
+            color: #8a94a4;
+        }
+
+        .market-shipping-site small {
+            display: block;
+            margin-top: 2px;
+            color: #8b98aa;
+            font-size: 9px;
+            font-weight: 700;
+        }
+
+        .market-shipping-rate-meta {
+            display: flex;
+            align-items: center;
+            gap: 10px 18px;
+            flex-wrap: wrap;
+            padding: 11px 18px;
+            color: #607187;
+            font-size: 11px;
+        }
+
+        .market-shipping-rate-meta a {
+            color: #2764e7;
+            font-weight: 800;
+            text-decoration: none;
+        }
+
+        .market-shipping-rate-content {
+            display: grid;
+            gap: 14px;
+            padding: 0 18px 18px;
+        }
+
+        .market-shipping-table-title {
+            display: flex;
+            justify-content: space-between;
+            gap: 10px;
+            margin: 0 0 7px;
+            color: #31445f;
+            font-size: 12px;
+        }
+
+        .market-shipping-table-title span {
+            color: #8794a6;
+            font-size: 10px;
+            font-weight: 600;
+        }
+
+        .market-shipping-table-wrap {
+            max-height: 390px;
+            overflow: auto;
+            border: 1px solid #e0e7f0;
+            border-radius: 10px;
+        }
+
+        .market-shipping-table {
+            width: max-content;
+            min-width: 100%;
+            border-collapse: separate;
+            border-spacing: 0;
+            font-size: 11px;
+        }
+
+        .market-shipping-table th,
+        .market-shipping-table td {
+            min-width: 112px;
+            padding: 8px 10px;
+            border-right: 1px solid #edf1f6;
+            border-bottom: 1px solid #edf1f6;
+            text-align: right;
+            white-space: nowrap;
+        }
+
+        .market-shipping-table th {
+            position: sticky;
+            top: 0;
+            z-index: 2;
+            background: #f4f7fb;
+            color: #53647b;
+        }
+
+        .market-shipping-table th:first-child,
+        .market-shipping-table td:first-child {
+            position: sticky;
+            left: 0;
+            z-index: 1;
+            min-width: 128px;
+            background: #fbfcfe;
+            color: #43556d;
+            text-align: left;
+            font-weight: 800;
+        }
+
+        .market-shipping-table th:first-child {
+            z-index: 3;
+            background: #eef3f9;
+        }
+
+        .market-shipping-empty {
+            padding: 28px 18px;
+            color: #7d8a9d;
+            text-align: center;
+            font-size: 12px;
+        }
+
+        .market-shipping-official-note {
+            display: grid;
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+            gap: 8px;
+        }
+
+        .market-shipping-official-note span {
+            padding: 9px 11px;
+            border: 1px solid #e3e9f2;
+            border-radius: 9px;
+            background: #fbfcfe;
+            color: #63738a;
+            font-size: 10px;
+            line-height: 1.45;
+        }
+
         @media (max-width: 900px) {
             .mercado-workbench-heading {
                 align-items: flex-start;
@@ -5172,6 +5437,25 @@
 
             .mercado-workbench .market-publish-controls {
                 grid-template-columns: repeat(2, minmax(0, 1fr));
+            }
+
+            .market-shipping-rate-head,
+            .market-shipping-rate-actions,
+            .mercado-shipping-heading {
+                align-items: flex-start;
+                flex-direction: column;
+            }
+
+            .market-shipping-source-badge {
+                width: 100%;
+                min-width: 0;
+                text-align: left;
+            }
+
+            .market-shipping-official-note { grid-template-columns: 1fr; }
+
+            .market-shipping-rate-state {
+                text-align: left;
             }
 
             .mercado-workbench .market-publish-field-account,
@@ -6107,6 +6391,7 @@
 
                 <p class="nav-title">商品中心</p>
                 <button class="tab-button" type="button" data-tab="mercado-collection" data-icon="◇" onclick="switchTab('mercado-collection')"><span class="nav-label">商品采集</span></button>
+                <button class="tab-button" type="button" data-tab="mercado-shipping-standards" data-icon="＄" onclick="switchTab('mercado-shipping-standards')"><span class="nav-label">美客多运费标准</span></button>
                 <button class="tab-button" type="button" data-tab="zying-collection" data-icon="⊞" data-permission="zying_collection.view" onclick="switchTab('zying-collection')"><span class="nav-label">智赢产品采集</span></button>
                 <button class="tab-button" type="button" data-tab="mercado-publish-records" data-icon="⇧" onclick="switchTab('mercado-publish-records')"><span class="nav-label">产品上架记录</span></button>
 
@@ -6871,7 +7156,7 @@
                                     <th>尺寸</th>
                                     <th>计泡重</th>
                                     <th>计费重量</th>
-                                    <th>分类佣金</th>
+                                    <th>分类佣金（Classic）</th>
                                     <th>最新运费</th>
                                     <th>净收益(USD)</th>
                                     <th>审核 / 上架状态</th>
@@ -6882,6 +7167,38 @@
                                 <tr><td class="empty-state" colspan="16">打开商品采集模块后加载数据</td></tr>
                             </tbody>
                         </table>
+                    </div>
+                </section>
+            </div>
+
+            <div class="tab-page mercado-shipping-standards" id="tab-mercado-shipping-standards">
+                <div class="tab-heading mercado-shipping-heading">
+                    <div>
+                        <span class="section-kicker">GLOBAL SELLING · OFFICIAL STANDARD</span>
+                        <h2>美客多运费标准</h2>
+                        <p>仅展示 Mercado Libre Global Selling 官方最新公告：从中国 / 香港通过 Cainiao 发往各站点的美元运费及官方汇率</p>
+                    </div>
+                    <div class="market-shipping-source-badge">
+                        <strong>官方公告原值</strong>
+                        <span>运费币种 USD · 不混用本地卖家信誉表</span>
+                    </div>
+                </div>
+
+                <section class="panel market-shipping-rate-panel" aria-label="美客多官方跨境运费标准">
+                    <div class="market-shipping-rate-head">
+                        <div>
+                            <h3>Global Selling 跨境运费公告</h3>
+                            <p>按目的国、本地售价门槛和计费重量匹配；计费重量取毛重与体积重（长×宽×高÷6000）的较大值</p>
+                        </div>
+                        <div class="market-shipping-rate-actions">
+                            <span class="market-shipping-rate-state" id="mercado-shipping-rate-state">正在读取官方标准...</span>
+                            <button class="primary" id="mercado-shipping-rate-refresh" type="button" onclick="refreshMercadoShippingRates()">更新官方最新标准</button>
+                        </div>
+                    </div>
+                    <div class="market-shipping-sites" id="mercado-shipping-sites" aria-label="运费标准站点"></div>
+                    <div class="market-shipping-rate-meta" id="mercado-shipping-rate-meta"></div>
+                    <div class="market-shipping-rate-content" id="mercado-shipping-rate-content">
+                        <div class="market-shipping-empty">正在加载 Global Selling 官方公告数据...</div>
                     </div>
                 </section>
             </div>
@@ -7210,13 +7527,22 @@
 
                         <div class="field">
                             <label for="daily-task-appeal-type">申诉类型</label>
-                            <select id="daily-task-appeal-type">
-                                <option value="侵权" selected>侵权</option>
-                                <option value="延误率">延误率</option>
-                                <option value="取消率">取消率</option>
-                                <option value="投诉">投诉</option>
-                            </select>
-                        </div>
+                             <select id="daily-task-appeal-type">
+                                 <option value="侵权" selected>侵权</option>
+                                 <option value="延误率">延误率</option>
+                                 <option value="取消率">取消率</option>
+                                 <option value="投诉">投诉</option>
+                                 <option value="混合模式">混合模式（其他任务后执行侵权）</option>
+                             </select>
+                             <small class="shop-search-hint">混合模式顺序：侵权 → 延误率 → 侵权 → 投诉 → 侵权 → 取消率 → 侵权</small>
+                         </div>
+
+                         <div class="field">
+                             <label for="daily-task-salesperson">业务员</label>
+                             <select id="daily-task-salesperson">
+                                 <option value="">所有业务员</option>
+                             </select>
+                         </div>
 
                         <div class="field">
                             <label for="daily-task-top-n">店铺数量</label>
@@ -7256,14 +7582,6 @@
                         <div class="field">
                             <label for="daily-task-stop-after">循环时长分钟</label>
                             <input type="number" id="daily-task-stop-after" value="360" min="0" max="1440">
-                        </div>
-
-                        <div class="field">
-                            <label for="daily-task-only-active">店铺配置过滤</label>
-                            <select id="daily-task-only-active">
-                                <option value="true" selected>只跑配置有效站点</option>
-                                <option value="false">不过滤配置</option>
-                            </select>
                         </div>
 
                         <div class="field">
@@ -7890,9 +8208,24 @@
                             </div>
                             <div class="header-actions">
                                 <span class="reputation-selection-summary" id="mercado-token-selection-summary">已选择 0 家</span>
-                                <button class="primary" id="mercado-token-bulk-settings" type="button" onclick="openMercadoBulkSiteSettings()" disabled>批量设置业务员 / 比例</button>
+                                <button class="primary" id="mercado-token-bulk-settings" type="button" onclick="openMercadoBulkSiteSettings()" disabled>批量设置业务员 / 站点任务</button>
                                 <button class="secondary" type="button" onclick="loadMercadoStoreTokens(true)">刷新列表</button>
                             </div>
+                        </div>
+                        <div class="mercado-token-filter-bar">
+                            <div class="field">
+                                <label for="mercado-token-salesperson-filter">业务员</label>
+                                <select id="mercado-token-salesperson-filter" onchange="applyMercadoStoreTokenFilters()">
+                                    <option value="">全部业务员</option>
+                                </select>
+                            </div>
+                            <div class="field">
+                                <label for="mercado-token-group-filter">分组</label>
+                                <select id="mercado-token-group-filter" onchange="applyMercadoStoreTokenFilters()">
+                                    <option value="">全部分组</option>
+                                </select>
+                            </div>
+                            <button class="secondary" type="button" onclick="clearMercadoStoreTokenFilters()">清除筛选</button>
                         </div>
                         <div class="table-wrap reputation-table-wrap">
                             <table class="reputation-table">
@@ -7921,11 +8254,11 @@
                     <div class="order-detail-header">
                         <div>
                             <h3 id="mercado-site-settings-title">店铺配置</h3>
-                            <p style="margin:3px 0 0;color:#667085;font-size:12px">业务员和分组统一设置，折扣比例按站点设置</p>
+                            <p style="margin:3px 0 0;color:#667085;font-size:12px">业务员和分组统一设置；申诉、访问统计和折扣按站点设置</p>
                         </div>
                         <button class="order-detail-close" type="button" aria-label="关闭店铺配置" onclick="document.getElementById('mercado-site-settings-dialog').close()">×</button>
                     </div>
-                    <p class="mercado-site-settings-intro">业务员和分组对该店铺授权下的全部站点统一生效；业务员仅可从“人员与权限”中的启用人员选择。</p>
+                    <p class="mercado-site-settings-intro">勾选站点是否参与自动申诉和访问数据统计；业务员和分组对全部站点统一生效。</p>
                     <div class="mercado-account-settings-grid">
                         <div class="field">
                             <label for="mercado-site-salesperson">业务员</label>
@@ -7938,13 +8271,13 @@
                     </div>
                     <div class="mercado-site-settings-wrap">
                         <table class="mercado-site-settings-table">
-                            <thead><tr><th>站点</th><th>折扣比例（%）</th></tr></thead>
+                            <thead><tr><th>站点</th><th>进行申诉</th><th>访问数据统计</th><th>折扣比例（%）</th></tr></thead>
                             <tbody id="mercado-site-settings-body"></tbody>
                         </table>
                     </div>
                     <p class="mercado-site-settings-message" id="mercado-site-settings-message" role="status"></p>
                     <div class="order-detail-footer">
-                        <span>订单统一归属业务员和分组，折扣按站点计算</span>
+                        <span>任务只运行已勾选的授权站点</span>
                         <div>
                             <button class="secondary" type="button" onclick="document.getElementById('mercado-site-settings-dialog').close()">取消</button>
                             <button class="primary" id="mercado-site-settings-save" type="button" onclick="saveMercadoSiteSettings()">保存配置</button>
@@ -7956,7 +8289,7 @@
                     <div class="order-detail-header">
                         <div>
                             <h3 id="mercado-bulk-settings-title">批量设置店铺配置</h3>
-                            <p style="margin:3px 0 0;color:#667085;font-size:12px">统一业务员，分别设置六个站点的折扣比例</p>
+                            <p style="margin:3px 0 0;color:#667085;font-size:12px">统一业务员，并批量设置六个站点的任务开关和折扣</p>
                         </div>
                         <button class="order-detail-close" type="button" aria-label="关闭批量配置" onclick="document.getElementById('mercado-bulk-settings-dialog').close()">×</button>
                     </div>
@@ -7969,7 +8302,7 @@
                     </div>
                     <div class="mercado-site-settings-wrap">
                         <table class="mercado-site-settings-table">
-                            <thead><tr><th>站点</th><th>折扣比例（%）</th></tr></thead>
+                            <thead><tr><th>站点</th><th>进行申诉</th><th>访问数据统计</th><th>折扣比例（%）</th></tr></thead>
                             <tbody id="mercado-bulk-settings-body"></tbody>
                         </table>
                     </div>
@@ -8196,7 +8529,7 @@
             <div class="tab-page" id="tab-zying-collection">
                 <div class="tab-heading">
                     <h2>智赢产品采集</h2>
-                    <p>后台通过智赢 API 采集列表、详情及上架属性；浏览器只用于登录或刷新凭证，数据库已有的产品编号会在详情采集前直接跳过</p>
+                    <p>后台通过智赢 API 采集列表、详情及上架属性；可视浏览器只用于登录，采集时由无头 Edge 加载智赢官方签名模块，数据库已有的产品编号会在详情采集前直接跳过</p>
                 </div>
 
                 <section class="panel infractions-panel">
@@ -8207,17 +8540,17 @@
                         </div>
                         <div class="header-actions">
                             <button class="primary" id="start-zying-collection-btn" type="button" onclick="startZyingCollection()">启动产品采集</button>
+                            <button class="danger" id="stop-zying-collection-btn" type="button" onclick="stopZyingCollection()" disabled>结束采集</button>
                             <button class="secondary" type="button" onclick="loadZyingCollectionStatus()">刷新状态</button>
                         </div>
                     </div>
                     <div id="zying-auth-panel" style="margin: 14px 0; padding: 14px 16px; border: 1px solid var(--border); border-radius: 12px; background: var(--panel-soft); display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap;">
                         <div>
-                            <strong id="zying-auth-status">正在检测智赢登录状态...</strong>
-                            <div id="zying-auth-detail" class="risk-check-mode-note" style="margin-top: 4px;">登录凭证仅保存在本机，不会显示在页面中</div>
+                            <strong id="zying-auth-status">启动采集时自动读取智赢登录状态</strong>
+                            <div id="zying-auth-detail" class="risk-check-mode-note" style="margin-top: 4px;">无需单独检测；请在下方选择浏览器，登录智赢后直接启动采集</div>
                         </div>
                         <div class="header-actions">
-                            <button class="secondary" id="open-zying-login-btn" type="button" onclick="openZyingLoginWindow()">打开登录窗口</button>
-                            <button class="primary" id="capture-zying-login-btn" type="button" onclick="captureZyingLoginState()">检测并保存登录状态</button>
+                            <button class="secondary" id="open-zying-login-btn" type="button" onclick="openZyingLoginWindow()">打开/切换智赢页面</button>
                         </div>
                     </div>
                     <div class="risk-check-task-layout">
@@ -8963,6 +9296,7 @@
         const infractionSummaryTitle = document.getElementById("infraction-summary-title");
         const collectInfractionsBtn = document.getElementById("collect-infractions-btn");
         const startZyingCollectionBtn = document.getElementById("start-zying-collection-btn");
+        const stopZyingCollectionBtn = document.getElementById("stop-zying-collection-btn");
         const zyingCollectionStartPage = document.getElementById("zying-collection-start-page");
         const zyingCollectionEndPage = document.getElementById("zying-collection-end-page");
         const zyingCollectionCategory = document.getElementById("zying-collection-category");
@@ -9018,6 +9352,7 @@
         const aiAppealLatestTime = document.getElementById("ai-appeal-latest-time");
         const aiAppealTotal = document.getElementById("ai-appeal-total");
         const startDailyTaskBtn = document.getElementById("start-daily-task-btn");
+        const dailyTaskSalesperson = document.getElementById("daily-task-salesperson");
         const dailyTaskStatusBadge = document.getElementById("daily-task-status-badge");
         const dailyTaskStatusText = document.getElementById("daily-task-status-text");
         const dailyTaskStarted = document.getElementById("daily-task-started");
@@ -9113,6 +9448,8 @@
         const mercadoTokenSelectAll = document.getElementById("mercado-token-select-all");
         const mercadoTokenSelectionSummary = document.getElementById("mercado-token-selection-summary");
         const mercadoTokenBulkSettings = document.getElementById("mercado-token-bulk-settings");
+        const mercadoTokenSalespersonFilter = document.getElementById("mercado-token-salesperson-filter");
+        const mercadoTokenGroupFilter = document.getElementById("mercado-token-group-filter");
         const mercadoSiteSettingsDialog = document.getElementById("mercado-site-settings-dialog");
         const mercadoSiteSettingsTitle = document.getElementById("mercado-site-settings-title");
         const mercadoSiteSalesperson = document.getElementById("mercado-site-salesperson");
@@ -9195,6 +9532,11 @@
         const mercadoCollectionCurrent = document.getElementById("mercado-collection-current");
         const mercadoCollectionProgress = document.getElementById("mercado-collection-progress");
         const mercadoCollectionMessage = document.getElementById("mercado-collection-message");
+        const mercadoShippingSites = document.getElementById("mercado-shipping-sites");
+        const mercadoShippingRateMeta = document.getElementById("mercado-shipping-rate-meta");
+        const mercadoShippingRateContent = document.getElementById("mercado-shipping-rate-content");
+        const mercadoShippingRateState = document.getElementById("mercado-shipping-rate-state");
+        const mercadoShippingRateRefresh = document.getElementById("mercado-shipping-rate-refresh");
         const mercadoCollectionActions = document.getElementById("mercado-collection-actions");
         const mercadoListBody = document.getElementById("mercado-list-body");
         const mercadoListSearch = document.getElementById("mercado-list-search");
@@ -9419,6 +9761,10 @@
         let mercadoCollectionRunning = false;
         let mercadoCollectionPollTimer = null;
         let mercadoCollectionLastProcessed = -1;
+        let mercadoShippingRateLoaded = false;
+        let mercadoShippingRateSite = "MLM";
+        let mercadoShippingRateData = {rows: [], sites: [], refresh: {}};
+        let mercadoShippingRatePollTimer = null;
         let mercadoListMode = "collection";
         let mercadoProductSource = "";
         let mercadoListRows = [];
@@ -9521,7 +9867,7 @@
                 "order_analysis.execute": ["#order-analysis-folder", "#import-order-analysis-btn"],
                 "shop_status.execute": ["#start-selected-mercado-login-btn", "#start-mercado-login-btn", "#stop-mercado-login-btn", ".header-worker-control"],
                 "funds.execute": ["#collect-funds-btn", "#stop-funds-btn"],
-                "zying_collection.execute": ["#start-zying-collection-btn"],
+                "zying_collection.execute": ["#start-zying-collection-btn", "#stop-zying-collection-btn"],
                 "risk_check.execute": ["#start-risk-check-btn"],
                 "infractions.execute": ["#collect-infractions-btn"],
                 "reputation.execute": ["#collect-reputation-btn", "#update-selected-reputation-btn"],
@@ -9633,6 +9979,7 @@
             }
             if (tabName === "tasks" && !tasksLoaded) {
                 loadDailyTaskStatus();
+                loadDailyTaskOptions();
             }
             if (tabName === "order-print") {
                 loadOrderPrintStatus();
@@ -9684,6 +10031,9 @@
                 loadMercadoCollectionStatus();
                 if (!mercadoPublishStoresLoaded) loadMercadoPublishStores();
                 loadMercadoPublishStatus();
+            }
+            if (tabName === "mercado-shipping-standards") {
+                loadMercadoShippingRates();
             }
             if (tabName === "mercado-publish-records") {
                 loadMercadoPublishRecords();
@@ -10028,6 +10378,7 @@
                 variation: "",
                 quantity: row?.quantity || 1,
                 image_url: row?.image_url || "",
+                product_url: row?.product_url || "",
             }];
         }
 
@@ -10069,12 +10420,21 @@
             return `<div class="${mediaClass}${imageUrl ? "" : " missing"}">${image}</div>`;
         }
 
+        function orderProductNameMarkup(item) {
+            const title = item?.title || "未记录商品标题";
+            const productUrl = item?.product_url ? mercadoSafeUrl(item.product_url) : "";
+            if (!productUrl) {
+                return `<strong title="${escapeHtml(title)}">${escapeHtml(title)}</strong>`;
+            }
+            return `<a class="order-product-link" href="${escapeHtml(productUrl)}" target="_blank" rel="noopener noreferrer" title="打开美客多前台商品">${escapeHtml(title)}</a>`;
+        }
+
         function orderProductMarkup(row) {
             return `<div class="order-product-list">${orderSkuItems(row).map(item => `
                 <div class="order-product">
                     ${orderSkuImageMarkup(item)}
                     <div class="order-cell-stack">
-                        <strong title="${escapeHtml(item.title || "")}">${escapeHtml(item.title || "未记录商品标题")}</strong>
+                        ${orderProductNameMarkup(item)}
                         <span>SKU ${escapeHtml(item.seller_sku || item.product_id || "-")} · 数量 ${escapeHtml(item.quantity || 1)}</span>
                         ${item.variation ? `<span>${escapeHtml(item.variation)}</span>` : ""}
                     </div>
@@ -10339,7 +10699,7 @@
                 return `
                     <div class="order-purchase-product">
                         ${imageUrl ? `<img src="${escapeHtml(imageUrl)}" alt="${escapeHtml(item.seller_sku || item.product_id || "SKU")}" referrerpolicy="no-referrer">` : '<span class="placeholder">SKU</span>'}
-                        <div><strong>${escapeHtml(item.title || "未记录商品标题")}</strong><span>订单 ${escapeHtml(item.order_id || row.id || row.order_number)} · SKU ${escapeHtml(item.seller_sku || item.product_id || "-")}</span><span>${escapeHtml(item.variation || row.shop_name || "未记录店铺")}</span></div>
+                        <div>${orderProductNameMarkup(item)}<span>订单 ${escapeHtml(item.order_id || row.id || row.order_number)} · SKU ${escapeHtml(item.seller_sku || item.product_id || "-")}</span><span>${escapeHtml(item.variation || row.shop_name || "未记录店铺")}</span></div>
                     </div>
                 `;
             })).join("");
@@ -10478,6 +10838,11 @@
                     const payload = await response.json().catch(() => ({}));
                     throw new Error(payload.message || `接口请求失败：${response.status}`);
                 }
+                const printedOrderCount = Number(response.headers.get("X-Mercado-Printed-Order-Count") || targetIds.length);
+                const shipmentCount = Number(response.headers.get("X-Mercado-Shipment-Count") || 0);
+                const skippedOrderCount = Number(response.headers.get("X-Mercado-Skipped-Order-Count") || 0);
+                const failedOrderCount = Number(response.headers.get("X-Mercado-Failed-Order-Count") || 0);
+                const printLogFailed = response.headers.get("X-Mercado-Print-Log") === "failed";
                 const blob = await response.blob();
                 const pdfUrl = URL.createObjectURL(blob);
                 if (previewWindow) {
@@ -10490,8 +10855,13 @@
                     link.click();
                 }
                 window.setTimeout(() => URL.revokeObjectURL(pdfUrl), 120000);
-                orderBulkMessage.textContent = `美客多面单已打开，共 ${targetIds.length} 个订单`;
-                if (orderDetailActionMessage) orderDetailActionMessage.textContent = "美客多面单已打开，可在 PDF 预览页直接打印";
+                const issueParts = [];
+                if (skippedOrderCount) issueParts.push(`跳过 ${skippedOrderCount} 个不可打印订单`);
+                if (failedOrderCount) issueParts.push(`${failedOrderCount} 个订单下载失败`);
+                if (printLogFailed) issueParts.push("打印记录保存失败，请勿立即重复打印");
+                const resultMessage = `美客多面单已打开：${printedOrderCount} 个订单，${shipmentCount} 个面单${issueParts.length ? `；${issueParts.join("，")}` : ""}`;
+                orderBulkMessage.textContent = resultMessage;
+                if (orderDetailActionMessage) orderDetailActionMessage.textContent = resultMessage;
                 if (orderDetailDialog?.open && orderDetailOrderId) {
                     await loadOrderOperationLogs(orderDetailOrderId);
                 }
@@ -10587,7 +10957,7 @@
                 <div class="order-detail-sku-grid">${orderSkuItems(row).map(item => `
                     <article class="order-detail-sku-card">
                         ${orderSkuImageMarkup(item, true)}
-                        <div><strong>${escapeHtml(item.title || "未记录商品标题")}</strong>
+                        <div>${orderProductNameMarkup(item)}
                             <span>SKU ${escapeHtml(item.seller_sku || item.product_id || "-")} · 数量 ${escapeHtml(item.quantity || 1)}</span>
                             ${item.variation ? `<span>${escapeHtml(item.variation)}</span>` : ""}
                             <span>子订单 ${escapeHtml(item.order_id || orderDetailOrderId)}</span>
@@ -11058,6 +11428,152 @@
             }
         }
 
+        function renderMercadoShippingTable(rows, activeSite) {
+            const sorted = [...rows].sort((a, b) => (
+                Number(a.weight_band_index || 0) - Number(b.weight_band_index || 0)
+                || Number(a.price_band_index || 0) - Number(b.price_band_index || 0)
+            ));
+            const byWeight = new Map();
+            sorted.forEach(row => {
+                const key = Number(row.weight_band_index || 0);
+                if (!byWeight.has(key)) byWeight.set(key, {});
+                byWeight.get(key)[String(row.rate_kind || "")] = row;
+            });
+            const aboveSample = sorted.find(row => row.rate_kind === "above_threshold");
+            const belowSample = sorted.find(row => row.rate_kind === "below_threshold");
+            const body = Array.from(byWeight.values()).map(group => {
+                const sample = group.above_threshold || group.below_threshold || {};
+                const above = group.above_threshold;
+                const below = group.below_threshold;
+                return `<tr>
+                    <td>${escapeHtml(sample.weight_label || "-")}</td>
+                    <td>${above ? `$${Number(above.shipping_amount_usd || 0).toFixed(2)}` : "—"}</td>
+                    <td>${below ? `$${Number(below.shipping_amount_usd || 0).toFixed(2)}` : "—"}</td>
+                </tr>`;
+            }).join("");
+            return `<section>
+                <h4 class="market-shipping-table-title">
+                    <strong>${escapeHtml(activeSite?.country_name || "")} · Cainiao 官方美元运费</strong>
+                    <span>公告值原样入库，不使用本地卖家信誉运费表</span>
+                </h4>
+                <div class="market-shipping-table-wrap">
+                    <table class="market-shipping-table">
+                        <thead><tr>
+                            <th>计费重量</th>
+                            <th title="${escapeHtml(aboveSample?.price_label || "")}">${escapeHtml(aboveSample?.price_label || "达到门槛")}</th>
+                            <th title="${escapeHtml(belowSample?.price_label || "")}">${escapeHtml(belowSample?.price_label || "低于门槛")}</th>
+                        </tr></thead>
+                        <tbody>${body}</tbody>
+                    </table>
+                </div>
+                <div class="market-shipping-official-note">
+                    <span><strong>发货地：</strong>中国 / 香港，通过 Cainiao 发货</span>
+                    <span><strong>计费重量：</strong>毛重与体积重（长×宽×高÷6000）取较大值</span>
+                    <span><strong>订单限制：</strong>官方公告要求每个订单最多 5 件商品</span>
+                </div>
+            </section>`;
+        }
+
+        function renderMercadoShippingRates(data) {
+            mercadoShippingRateData = data || {rows: [], sites: [], refresh: {}};
+            const sites = Array.isArray(data?.sites) ? data.sites : [];
+            const rows = Array.isArray(data?.rows) ? data.rows : [];
+            const activeSite = sites.find(site => site.site_id === mercadoShippingRateSite) || sites[0];
+            if (activeSite && activeSite.site_id !== mercadoShippingRateSite) {
+                mercadoShippingRateSite = activeSite.site_id;
+            }
+            mercadoShippingSites.innerHTML = sites.map(site => (
+                `<button class="market-shipping-site ${site.site_id === mercadoShippingRateSite ? "active" : ""} ${site.official_available ? "" : "unavailable"}" type="button" onclick="selectMercadoShippingRateSite('${site.site_id}')">
+                    ${escapeHtml(site.country_name || site.site_id)}
+                    <small>${site.official_available ? `${Number(site.weight_band_count || 0)} 个重量档` : "官方未公告"}</small>
+                </button>`
+            )).join("");
+
+            const refresh = data?.refresh || {};
+            mercadoShippingRateRefresh.disabled = Boolean(refresh.running);
+            mercadoShippingRateRefresh.textContent = refresh.running ? "正在更新官方公告..." : "更新官方最新标准";
+            mercadoShippingRateState.textContent = refresh.message || "每天自动检查一次，可随时手动更新";
+            if (activeSite) {
+                const sourceUrl = mercadoSafeUrl(activeSite.source_url);
+                if (activeSite.official_available) {
+                    const threshold = Number(activeSite.price_threshold_local || 0);
+                    const rateToUsd = Number(activeSite.exchange_rate_to_usd || 0);
+                    const rateFromUsd = Number(activeSite.exchange_rate_from_usd || 0);
+                    mercadoShippingRateMeta.innerHTML = `
+                        <strong>${escapeHtml(activeSite.country_name || activeSite.site_id)} · Global Selling</strong>
+                        <span>售价门槛：${escapeHtml(activeSite.currency_id || "")} ${threshold.toLocaleString("zh-CN")}</span>
+                        <span>官方汇率：1 ${escapeHtml(activeSite.currency_id || "")} = ${rateToUsd ? rateToUsd.toFixed(8) : "—"} USD；1 USD = ${rateFromUsd ? rateFromUsd.toFixed(4) : "—"} ${escapeHtml(activeSite.currency_id || "")}</span>
+                        <span>抓取时间：${escapeHtml(activeSite.refreshed_at || "尚未更新")}</span>
+                        ${sourceUrl ? `<a href="${escapeHtml(sourceUrl)}" target="_blank" rel="noopener noreferrer">查看官方公告</a>` : ""}`;
+                } else {
+                    mercadoShippingRateMeta.innerHTML = `
+                        <strong>${escapeHtml(activeSite.country_name || activeSite.site_id)}</strong>
+                        <span>Global Selling 当前未公布中国 / 香港 Cainiao 发往该站点的运费标准</span>
+                        ${sourceUrl ? `<a href="${escapeHtml(sourceUrl)}" target="_blank" rel="noopener noreferrer">查看官方物流目录</a>` : ""}`;
+                }
+            } else {
+                mercadoShippingRateMeta.textContent = "尚未生成站点运费表";
+            }
+            if (!rows.length) {
+                const emptyMessage = activeSite && !activeSite.official_available
+                    ? "官方当前未发布该站点的跨境 Cainiao 运费公告，因此不展示或估算非官方数据。"
+                    : "数据库暂无该站点官方标准。点击“更新官方最新标准”重新读取公告。";
+                mercadoShippingRateContent.innerHTML = `<div class="market-shipping-empty">${emptyMessage}</div>`;
+            } else {
+                mercadoShippingRateContent.innerHTML = renderMercadoShippingTable(rows, activeSite);
+            }
+            if (refresh.running) {
+                clearTimeout(mercadoShippingRatePollTimer);
+                mercadoShippingRatePollTimer = setTimeout(() => loadMercadoShippingRates(true), 2500);
+            }
+        }
+
+        async function loadMercadoShippingRates(polling = false) {
+            if (!mercadoShippingRateContent) return;
+            try {
+                const response = await fetch(`/api/mercado-shipping-rates?site_id=${encodeURIComponent(mercadoShippingRateSite)}`, {cache: "no-store"});
+                const payload = await response.json();
+                if (!response.ok || payload.status !== "success") {
+                    throw new Error(payload.message || `接口请求失败：${response.status}`);
+                }
+                renderMercadoShippingRates(payload.data || {});
+                mercadoShippingRateLoaded = true;
+                if (polling && !payload.data?.refresh?.running) await loadMercadoList();
+            } catch (error) {
+                mercadoShippingRateState.textContent = `运费表加载失败：${error.message || error}`;
+                if (!polling) {
+                    mercadoShippingRateContent.innerHTML = `<div class="market-shipping-empty">加载失败：${escapeHtml(error.message || error)}</div>`;
+                }
+            }
+        }
+
+        function selectMercadoShippingRateSite(siteId) {
+            mercadoShippingRateSite = String(siteId || "MLM");
+            loadMercadoShippingRates();
+        }
+
+        async function refreshMercadoShippingRates() {
+            mercadoShippingRateRefresh.disabled = true;
+            mercadoShippingRateState.textContent = "正在启动 Global Selling 官方公告更新...";
+            try {
+                const response = await fetch("/api/mercado-shipping-rates/refresh", {
+                    method: "POST",
+                    headers: {"Content-Type": "application/json"},
+                    body: "{}",
+                });
+                const payload = await response.json();
+                if (!response.ok || payload.status !== "success") {
+                    throw new Error(payload.message || `接口请求失败：${response.status}`);
+                }
+                renderMercadoShippingRates({...mercadoShippingRateData, refresh: payload.data || {}});
+                clearTimeout(mercadoShippingRatePollTimer);
+                mercadoShippingRatePollTimer = setTimeout(() => loadMercadoShippingRates(true), 1000);
+            } catch (error) {
+                mercadoShippingRateState.textContent = `启动更新失败：${error.message || error}`;
+                mercadoShippingRateRefresh.disabled = false;
+            }
+        }
+
         function renderMercadoListRows(rows) {
             mercadoListRows = Array.isArray(rows) ? rows : [];
             if (!mercadoListRows.length) {
@@ -11094,7 +11610,7 @@
                     if (alreadyAdded) {
                         status = "已加入产品列表";
                         statusClass = "added";
-                    } else if (row.scrape_status === "ok") {
+                    } else if (row.weight_dimensions_complete || row.scrape_status === "ok") {
                         status = "数据完整";
                         statusClass = "ok";
                     } else if (row.scrape_status === "failed") {
@@ -11134,19 +11650,24 @@
                     : "智赢实际重量";
                 const calculatedBillableWeight = actualWeight === null || actualWeight === undefined
                     ? null
-                    : Number(actualWeight) <= 500
-                        ? Number(actualWeight)
-                        : Math.max(Number(actualWeight), Number(volumetricWeight || 0) * 1000);
+                    : Math.max(Number(actualWeight), Number(volumetricWeight || 0) * 1000);
                 const billableWeight = row.billable_weight_g ?? calculatedBillableWeight;
-                const billableRule = Number(actualWeight) > 500
-                    ? "超过500g：实重/计泡取较大"
-                    : "不超过500g：只按实重";
+                const billableRule = "Global Selling：毛重/体积重取较大";
                 const commissionNote = row.commission_rate === null || row.commission_rate === undefined
-                    ? (row.category_name || "官网费用待更新")
-                    : `${mercadoMetric(row.commission_rate, "%")} · ${row.category_name || row.category_id || "官网分类"}`;
+                    ? `Classic · ${row.category_name || "官网费用待更新"}`
+                    : `Classic · ${mercadoMetric(row.commission_rate, "%")} · ${row.category_name || row.category_id || "官网分类"}`;
+                const shippingRule = String(row.shipping_weight_rule || "");
+                const shippingModeNote = shippingRule.startsWith("free_shipping:")
+                    ? "包邮"
+                    : shippingRule.startsWith("buyer_pays_shipping:")
+                        ? "不包邮"
+                        : "";
+                const shippingSourceNote = shippingRule.includes("official_global_selling_cainiao_rate_card")
+                    ? "Global Selling 官方表"
+                    : "官方接口";
                 const shippingNote = row.shipping_fee_local === null || row.shipping_fee_local === undefined
                     ? "官网运费待更新"
-                    : `${mercadoMetric(row.shipping_fee_local)} ${row.shipping_currency_id || row.currency_id || ""}`;
+                    : `${shippingModeNote ? `${shippingModeNote} · ` : ""}${shippingSourceNote} · ${mercadoMetric(row.shipping_fee_local)} ${row.shipping_currency_id || row.currency_id || ""}`;
                 const netProceeds = row.net_proceeds_usd;
                 const netClass = Number(netProceeds) < 0 ? "market-net-negative" : "";
                 const netProceedsNote = netProceeds === null || netProceeds === undefined || netProceeds === ""
@@ -12140,6 +12661,8 @@
                 return `
                     <tr data-site-id="${siteId}">
                         <td><strong>${escapeHtml(siteName)}</strong><span>${siteId}</span></td>
+                        <td><input class="market-row-select" data-field="appeal_enabled" type="checkbox" ${setting.appeal_enabled ? "checked" : ""} aria-label="${escapeHtml(siteName)}进行申诉"></td>
+                        <td><input class="market-row-select" data-field="visit_stats_enabled" type="checkbox" ${setting.visit_stats_enabled ? "checked" : ""} aria-label="${escapeHtml(siteName)}访问数据统计"></td>
                         <td><input data-field="discount_rate" type="number" min="0" max="100" step="0.01" value="${escapeHtml(discount)}" placeholder="例如 95"></td>
                     </tr>
                 `;
@@ -12157,7 +12680,7 @@
             mercadoSiteSalesperson.disabled = true;
             mercadoSiteGroupName.value = "";
             mercadoSiteGroupName.disabled = true;
-            mercadoSiteSettingsBody.innerHTML = '<tr><td class="empty-state" colspan="2">正在读取人员和最新配置...</td></tr>';
+            mercadoSiteSettingsBody.innerHTML = '<tr><td class="empty-state" colspan="4">正在读取人员和最新配置...</td></tr>';
             setMercadoSiteSettingsMessage("正在读取人员和最新配置…");
             mercadoSiteSettingsSave.disabled = false;
             if (typeof mercadoSiteSettingsDialog.showModal === "function" && !mercadoSiteSettingsDialog.open) {
@@ -12213,11 +12736,13 @@
                     discount_rate: discount,
                     salesperson,
                     group_name: groupName,
+                    appeal_enabled: Boolean(row.querySelector('[data-field="appeal_enabled"]')?.checked),
+                    visit_stats_enabled: Boolean(row.querySelector('[data-field="visit_stats_enabled"]')?.checked),
                 });
             }
             mercadoSiteSettingsSave.disabled = true;
             mercadoSiteSettingsSave.textContent = "保存中…";
-            setMercadoSiteSettingsMessage("正在保存统一业务员、分组和各站点折扣…");
+            setMercadoSiteSettingsMessage("正在保存业务员、分组、站点任务开关和折扣…");
             try {
                 const response = await fetch(`/api/mercado-tokens/${tokenId}/site-settings`, {
                     method: "PUT",
@@ -12259,7 +12784,7 @@
             return String(
                 (Array.isArray(account?.site_settings) ? account.site_settings : [])
                     .map(setting => String(setting.salesperson || "").trim())
-                    .find(Boolean) || "",
+                    .find(Boolean) || account?.salesperson || "",
             );
         }
 
@@ -12267,7 +12792,7 @@
             return String(
                 (Array.isArray(account?.site_settings) ? account.site_settings : [])
                     .map(setting => String(setting.group_name || "").trim())
-                    .find(Boolean) || "",
+                    .find(Boolean) || account?.group_name || "",
             );
         }
 
@@ -12287,9 +12812,23 @@
                         : String(setting.discount_rate);
                 });
                 const discount = values.length && new Set(values).size === 1 ? values[0] : "";
+                const appealValues = records.map(account => {
+                    const setting = (Array.isArray(account.site_settings) ? account.site_settings : [])
+                        .find(item => String(item.site_id || "").toUpperCase() === siteId);
+                    return Boolean(setting?.appeal_enabled);
+                });
+                const visitValues = records.map(account => {
+                    const setting = (Array.isArray(account.site_settings) ? account.site_settings : [])
+                        .find(item => String(item.site_id || "").toUpperCase() === siteId);
+                    return Boolean(setting?.visit_stats_enabled);
+                });
+                const appealEnabled = appealValues.length && appealValues.every(Boolean);
+                const visitStatsEnabled = visitValues.length && visitValues.every(Boolean);
                 return `
                     <tr data-site-id="${siteId}">
                         <td><strong>${escapeHtml(siteName)}</strong><span>${siteId}</span></td>
+                        <td><input class="market-row-select" data-field="bulk_appeal_enabled" type="checkbox" ${appealEnabled ? "checked" : ""} aria-label="${escapeHtml(siteName)}批量进行申诉"></td>
+                        <td><input class="market-row-select" data-field="bulk_visit_stats_enabled" type="checkbox" ${visitStatsEnabled ? "checked" : ""} aria-label="${escapeHtml(siteName)}批量访问数据统计"></td>
                         <td><input data-field="bulk_discount_rate" type="number" min="0" max="100" step="0.01" value="${escapeHtml(discount)}" placeholder="必填，0–100"></td>
                     </tr>
                 `;
@@ -12303,7 +12842,7 @@
             mercadoBulkSettingsSummary.textContent = `将应用到 ${accounts.length} 家店铺`;
             mercadoBulkSalesperson.innerHTML = '<option value="">正在读取人员...</option>';
             mercadoBulkSalesperson.disabled = true;
-            mercadoBulkSettingsBody.innerHTML = '<tr><td class="empty-state" colspan="2">正在读取人员和现有配置...</td></tr>';
+            mercadoBulkSettingsBody.innerHTML = '<tr><td class="empty-state" colspan="4">正在读取人员和现有配置...</td></tr>';
             mercadoBulkSettingsSave.disabled = true;
             setMercadoBulkSettingsMessage("正在准备批量配置…");
             if (typeof mercadoBulkSettingsDialog.showModal === "function" && !mercadoBulkSettingsDialog.open) {
@@ -12314,7 +12853,7 @@
                 renderMercadoBulkSiteSettings(accounts);
                 mercadoBulkSalesperson.disabled = false;
                 mercadoBulkSettingsSave.disabled = false;
-                setMercadoBulkSettingsMessage("请选择业务员并填写每个站点的比例");
+                setMercadoBulkSettingsMessage("请选择业务员，并确认每个站点的任务开关和比例");
             } catch (error) {
                 setMercadoBulkSettingsMessage(`读取人员失败：${error.message || error}`, true);
             }
@@ -12333,6 +12872,7 @@
                 return;
             }
             const discounts = new Map();
+            const sitePolicies = new Map();
             for (const row of mercadoBulkSettingsBody.querySelectorAll("tr[data-site-id]")) {
                 const siteId = String(row.dataset.siteId || "");
                 const input = row.querySelector('[data-field="bulk_discount_rate"]');
@@ -12344,6 +12884,10 @@
                     return;
                 }
                 discounts.set(siteId, discount);
+                sitePolicies.set(siteId, {
+                    appeal_enabled: Boolean(row.querySelector('[data-field="bulk_appeal_enabled"]')?.checked),
+                    visit_stats_enabled: Boolean(row.querySelector('[data-field="bulk_visit_stats_enabled"]')?.checked),
+                });
             }
             mercadoBulkSettingsSave.disabled = true;
             mercadoBulkSettingsSave.textContent = "保存中…";
@@ -12352,12 +12896,17 @@
             const saveAccount = async account => {
                 const tokenId = Number(account.id || 0);
                 const groupName = mercadoAccountGroup(account);
-                const settings = mercadoSiteDefinitions.map(([siteId]) => ({
-                    site_id: siteId,
-                    discount_rate: discounts.get(siteId),
-                    salesperson,
-                    group_name: groupName,
-                }));
+                const settings = mercadoSiteDefinitions.map(([siteId]) => {
+                    const policy = sitePolicies.get(siteId) || {};
+                    return {
+                        site_id: siteId,
+                        discount_rate: discounts.get(siteId),
+                        salesperson,
+                        group_name: groupName,
+                        appeal_enabled: Boolean(policy.appeal_enabled),
+                        visit_stats_enabled: Boolean(policy.visit_stats_enabled),
+                    };
+                });
                 const response = await fetch(`/api/mercado-tokens/${tokenId}/site-settings`, {
                     method: "PUT",
                     headers: {"Content-Type": "application/json"},
@@ -12397,7 +12946,7 @@
                     );
                 } else {
                     setMercadoBulkSettingsMessage(`已完成 ${succeededIds.length} 家店铺的批量配置`);
-                    showMercadoTokenMessage(`已批量设置 ${succeededIds.length} 家店铺的业务员和站点比例`);
+                    showMercadoTokenMessage(`已批量设置 ${succeededIds.length} 家店铺的业务员、站点任务和比例`);
                     mercadoBulkSettingsDialog.close();
                 }
             } finally {
@@ -12564,8 +13113,20 @@
             }
             if (mercadoTokenBulkSettings) mercadoTokenBulkSettings.disabled = selectedCount === 0;
             if (mercadoTokenSelectAll) {
-                mercadoTokenSelectAll.checked = validIds.size > 0 && selectedCount === validIds.size;
-                mercadoTokenSelectAll.indeterminate = selectedCount > 0 && selectedCount < validIds.size;
+                const visibleIds = new Set(
+                    filteredMercadoStoreTokenRows()
+                        .map(row => Number(row.id || 0))
+                        .filter(Boolean),
+                );
+                const visibleSelectedCount = Array.from(visibleIds).filter(
+                    tokenId => selectedMercadoStoreTokenIds.has(tokenId),
+                ).length;
+                mercadoTokenSelectAll.checked = (
+                    visibleIds.size > 0 && visibleSelectedCount === visibleIds.size
+                );
+                mercadoTokenSelectAll.indeterminate = (
+                    visibleSelectedCount > 0 && visibleSelectedCount < visibleIds.size
+                );
             }
         }
 
@@ -12578,7 +13139,7 @@
         }
 
         function toggleAllMercadoStoreTokens(checked) {
-            for (const row of mercadoStoreTokenRows) {
+            for (const row of filteredMercadoStoreTokenRows()) {
                 const tokenId = Number(row.id || 0);
                 if (!tokenId) continue;
                 if (checked) selectedMercadoStoreTokenIds.add(tokenId);
@@ -12590,17 +13151,76 @@
             updateMercadoStoreTokenSelection();
         }
 
-        function renderMercadoStoreTokens(rows) {
-            const records = Array.isArray(rows) ? rows : [];
-            mercadoStoreTokenRows = records;
-            renderMercadoPublishStores(records);
-            renderPreSaleScopeFilters(records);
-            renderPreSaleStores(records);
-            renderCustomerServiceScopeFilters(records);
-            renderCustomerServiceStores(records);
-            mercadoTokenTotal.textContent = `共 ${records.length} 家`;
+        function mercadoStoreTokenFilterOptions(values, selected, allLabel, emptyLabel, hasEmpty) {
+            const options = [`<option value="">${escapeHtml(allLabel)}</option>`];
+            if (hasEmpty) options.push(`<option value="__empty__">${escapeHtml(emptyLabel)}</option>`);
+            options.push(...values.map(value => (
+                `<option value="${escapeHtml(value)}">${escapeHtml(value)}</option>`
+            )));
+            const html = options.join("");
+            return {html, selected: values.includes(selected) || (selected === "__empty__" && hasEmpty) ? selected : ""};
+        }
+
+        function renderMercadoStoreTokenFilters(records) {
+            const rows = Array.isArray(records) ? records : [];
+            const previousSalesperson = String(mercadoTokenSalespersonFilter?.value || "");
+            const previousGroup = String(mercadoTokenGroupFilter?.value || "");
+            const salespeople = Array.from(new Set(
+                rows.map(mercadoAccountSalesperson).filter(Boolean),
+            )).sort((left, right) => left.localeCompare(right, "zh-CN"));
+            const groups = Array.from(new Set(
+                rows.map(mercadoAccountGroup).filter(Boolean),
+            )).sort((left, right) => left.localeCompare(right, "zh-CN"));
+            if (mercadoTokenSalespersonFilter) {
+                const options = mercadoStoreTokenFilterOptions(
+                    salespeople,
+                    previousSalesperson,
+                    "全部业务员",
+                    "未分配业务员",
+                    rows.some(row => !mercadoAccountSalesperson(row)),
+                );
+                mercadoTokenSalespersonFilter.innerHTML = options.html;
+                mercadoTokenSalespersonFilter.value = options.selected;
+            }
+            if (mercadoTokenGroupFilter) {
+                const options = mercadoStoreTokenFilterOptions(
+                    groups,
+                    previousGroup,
+                    "全部分组",
+                    "未分组",
+                    rows.some(row => !mercadoAccountGroup(row)),
+                );
+                mercadoTokenGroupFilter.innerHTML = options.html;
+                mercadoTokenGroupFilter.value = options.selected;
+            }
+        }
+
+        function filteredMercadoStoreTokenRows() {
+            const salesperson = String(mercadoTokenSalespersonFilter?.value || "");
+            const groupName = String(mercadoTokenGroupFilter?.value || "");
+            return mercadoStoreTokenRows.filter(row => {
+                const assignedSalesperson = mercadoAccountSalesperson(row);
+                const assignedGroup = mercadoAccountGroup(row);
+                const salespersonMatches = !salesperson || (
+                    salesperson === "__empty__" ? !assignedSalesperson : assignedSalesperson === salesperson
+                );
+                const groupMatches = !groupName || (
+                    groupName === "__empty__" ? !assignedGroup : assignedGroup === groupName
+                );
+                return salespersonMatches && groupMatches;
+            });
+        }
+
+        function renderMercadoStoreTokenTable() {
+            const records = filteredMercadoStoreTokenRows();
+            const total = mercadoStoreTokenRows.length;
+            mercadoTokenTotal.textContent = records.length === total
+                ? `共 ${total} 家`
+                : `共 ${total} 家 · 当前显示 ${records.length} 家`;
             if (!records.length) {
-                mercadoTokenBody.innerHTML = '<tr><td class="empty-state" colspan="9">暂无已授权店铺，请先添加</td></tr>';
+                mercadoTokenBody.innerHTML = total
+                    ? '<tr><td class="empty-state" colspan="9">当前筛选条件下暂无授权店铺</td></tr>'
+                    : '<tr><td class="empty-state" colspan="9">暂无已授权店铺，请先添加</td></tr>';
                 updateMercadoStoreTokenSelection();
                 return;
             }
@@ -12610,17 +13230,22 @@
                 const accountId = row.meli_user_id ? `ID: ${row.meli_user_id}` : "账号 ID 待验证";
                 const siteSettings = Array.isArray(row.site_settings) ? row.site_settings : [];
                 const configuredSites = siteSettings.filter(item => (
-                    item.salesperson || item.group_name ||
+                    item.appeal_enabled || item.visit_stats_enabled ||
                     (item.discount_rate !== null && item.discount_rate !== undefined)
                 ));
+                const appealSiteCount = siteSettings.filter(item => item.appeal_enabled).length;
+                const visitSiteCount = siteSettings.filter(item => item.visit_stats_enabled).length;
+                const salesperson = mercadoAccountSalesperson(row) || "未分配";
+                const groupName = mercadoAccountGroup(row) || "未分组";
                 const selected = selectedMercadoStoreTokenIds.has(tokenId);
                 return `
                     <tr>
                         <td class="mercado-token-select-column"><input class="market-row-select mercado-token-row-select" type="checkbox" value="${tokenId}" aria-label="选择 ${escapeHtml(row.display_name || accountName)}" onchange="toggleMercadoStoreToken(${tokenId}, this.checked)" ${selected ? "checked" : ""}></td>
                         <td title="${escapeHtml(row.display_name || "")}">${escapeHtml(row.display_name || "-")}</td>
                         <td><div class="order-cell-stack">
-                            <strong>${configuredSites.length ? `已配置 ${configuredSites.length} 个站点` : "尚未配置"}</strong>
-                            <button class="order-copy-link" type="button" onclick="openMercadoSiteSettings(${tokenId})">设置折扣 / 业务员 / 分组</button>
+                            <strong>${escapeHtml(salesperson)} · ${escapeHtml(groupName)}</strong>
+                            <span>${configuredSites.length ? `申诉 ${appealSiteCount} · 访问统计 ${visitSiteCount}` : "站点任务尚未配置"}</span>
+                            <button class="order-copy-link" type="button" onclick="openMercadoSiteSettings(${tokenId})">设置站点任务 / 折扣 / 业务员</button>
                         </div></td>
                         <td class="token-account-cell"><strong>${escapeHtml(accountName)}</strong><span>${escapeHtml(accountId)}</span></td>
                         <td>${escapeHtml(row.site_id || "-")}</td>
@@ -12636,6 +13261,28 @@
                 `;
             }).join("");
             updateMercadoStoreTokenSelection();
+        }
+
+        function applyMercadoStoreTokenFilters() {
+            renderMercadoStoreTokenTable();
+        }
+
+        function clearMercadoStoreTokenFilters() {
+            if (mercadoTokenSalespersonFilter) mercadoTokenSalespersonFilter.value = "";
+            if (mercadoTokenGroupFilter) mercadoTokenGroupFilter.value = "";
+            renderMercadoStoreTokenTable();
+        }
+
+        function renderMercadoStoreTokens(rows) {
+            const records = Array.isArray(rows) ? rows : [];
+            mercadoStoreTokenRows = records;
+            renderMercadoPublishStores(records);
+            renderPreSaleScopeFilters(records);
+            renderPreSaleStores(records);
+            renderCustomerServiceScopeFilters(records);
+            renderCustomerServiceStores(records);
+            renderMercadoStoreTokenFilters(records);
+            renderMercadoStoreTokenTable();
         }
 
         async function loadMercadoStoreTokens(force = false) {
@@ -14808,20 +15455,28 @@
             };
         }
 
+        function zyingLoginTargetLabel(login = zyingLoginPayload()) {
+            if (login.browser_type === "edge") return "当前页面选择的本地 Edge";
+            return login.window_name
+                ? `当前页面选择的比特浏览器“${login.window_name}”`
+                : "当前页面选择的默认比特浏览器窗口";
+        }
+
         function renderZyingAuthStatus(auth = {}, requiresLogin = false) {
             if (!zyingAuthStatus || !zyingAuthDetail) return;
-            const configured = Boolean(auth.configured);
-            if (configured && !requiresLogin) {
-                zyingAuthStatus.textContent = "智赢登录状态已保存";
+            if (!requiresLogin) {
+                zyingAuthStatus.textContent = "启动采集时自动读取智赢登录状态";
+                const savedTarget = zyingLoginTargetLabel({
+                    browser_type: auth.browser_type || "bitbrowser",
+                    window_name: auth.window_name || "",
+                });
                 zyingAuthDetail.textContent = auth.saved_at
-                    ? `最近保存：${auth.saved_at}；后台采集无需保持浏览器开启`
-                    : "已从运行环境读取凭证；后台采集无需保持浏览器开启";
+                    ? `最近自动读取：${auth.saved_at}；来源：${savedTarget}`
+                    : "无需单独检测；登录智赢后直接点击“启动产品采集”";
                 if (zyingAuthPanel) zyingAuthPanel.style.borderColor = "var(--success)";
             } else {
-                zyingAuthStatus.textContent = requiresLogin
-                    ? "智赢登录已失效，需要人工处理"
-                    : "尚未保存智赢登录状态";
-                zyingAuthDetail.textContent = "点击“打开登录窗口”完成登录，再点击“检测并保存登录状态”";
+                zyingAuthStatus.textContent = "本次采集未读取到可用的智赢登录状态";
+                zyingAuthDetail.textContent = "请在当前所选浏览器登录智赢，然后直接重新启动采集";
                 if (zyingAuthPanel) zyingAuthPanel.style.borderColor = "var(--danger)";
             }
         }
@@ -14829,20 +15484,24 @@
         async function openZyingLoginWindow() {
             if (!openZyingLoginBtn) return;
             const originalText = openZyingLoginBtn.textContent;
+            const login = zyingLoginPayload();
+            const targetLabel = zyingLoginTargetLabel(login);
             openZyingLoginBtn.disabled = true;
             openZyingLoginBtn.textContent = "正在打开...";
+            zyingAuthStatus.textContent = `正在切换到${targetLabel}`;
+            zyingAuthDetail.textContent = "将打开或激活该浏览器中的智赢页面";
             try {
                 const response = await fetch("/api/zying-collection/auth/open", {
                     method: "POST",
                     headers: {"Content-Type": "application/json"},
-                    body: JSON.stringify(zyingLoginPayload()),
+                    body: JSON.stringify(login),
                 });
                 const payload = await response.json();
                 if (!response.ok || payload.status !== "success") {
                     throw new Error(payload.message || `接口请求失败：${response.status}`);
                 }
                 zyingAuthStatus.textContent = "登录窗口已打开";
-                zyingAuthDetail.textContent = "请在浏览器中完成智赢登录，然后返回这里保存登录状态";
+                zyingAuthDetail.textContent = `已切换到${targetLabel}，请完成登录后返回这里保存登录状态`;
             } catch (err) {
                 zyingAuthStatus.textContent = "无法打开智赢登录窗口";
                 zyingAuthDetail.textContent = err.message || String(err);
@@ -14856,13 +15515,17 @@
         async function captureZyingLoginState() {
             if (!captureZyingLoginBtn) return;
             const originalText = captureZyingLoginBtn.textContent;
+            const login = zyingLoginPayload();
+            const targetLabel = zyingLoginTargetLabel(login);
             captureZyingLoginBtn.disabled = true;
             captureZyingLoginBtn.textContent = "正在检测...";
+            zyingAuthStatus.textContent = `正在检测${targetLabel}`;
+            zyingAuthDetail.textContent = "正在切换到该浏览器的智赢页面并读取登录状态";
             try {
                 const response = await fetch("/api/zying-collection/auth/capture", {
                     method: "POST",
                     headers: {"Content-Type": "application/json"},
-                    body: JSON.stringify(zyingLoginPayload()),
+                    body: JSON.stringify(login),
                 });
                 const payload = await response.json();
                 if (!response.ok || payload.status !== "success") {
@@ -14912,6 +15575,11 @@
                 startZyingCollectionBtn.textContent = zyingCollectionRunning
                     ? "正在采集..."
                     : "启动产品采集";
+                if (stopZyingCollectionBtn) {
+                    const stopping = data.status === "stopping";
+                    stopZyingCollectionBtn.disabled = !zyingCollectionRunning || stopping;
+                    stopZyingCollectionBtn.textContent = stopping ? "正在结束..." : "结束采集";
+                }
                 if (openZyingLoginBtn) openZyingLoginBtn.disabled = zyingCollectionRunning;
                 if (captureZyingLoginBtn) captureZyingLoginBtn.disabled = zyingCollectionRunning;
                 [
@@ -15760,6 +16428,34 @@
             return collectionShopOptions;
         }
 
+        async function stopZyingCollection() {
+            if (!stopZyingCollectionBtn || !zyingCollectionRunning) return;
+            stopZyingCollectionBtn.disabled = true;
+            stopZyingCollectionBtn.textContent = "正在结束...";
+            try {
+                const response = await fetch("/api/zying-collection/stop", {
+                    method: "POST",
+                    headers: {"Content-Type": "application/json"},
+                    body: "{}",
+                });
+                const payload = await response.json();
+                if (response.status === 409) {
+                    zyingCollectionRunning = Boolean(payload.data?.running);
+                    await loadZyingCollectionStatus();
+                    return;
+                }
+                if (!response.ok || payload.status !== "success") {
+                    throw new Error(payload.message || `接口请求失败：${response.status}`);
+                }
+                zyingCollectionStatusText.textContent = payload.data?.message || "正在安全结束采集";
+                renderZyingCollectionLogs(payload.data?.logs || []);
+                scheduleZyingCollectionStatusPoll();
+            } catch (err) {
+                alert(`结束智赢产品采集失败：${err.message || err}`);
+                await loadZyingCollectionStatus();
+            }
+        }
+
         function isCollectionRerun(prefix) {
             return prefix === "infraction" || prefix === "reputation";
         }
@@ -16257,6 +16953,7 @@
         function renderOrderPrintRunStatus(status) {
             const statusMap = {
                 printed: ["API 面单已生成", ""],
+                partial: ["部分成功", "partial"],
                 no_orders: ["无待打印订单", "empty"],
                 failed: ["失败", "fail"],
                 skipped: ["跳过", "empty"],
@@ -16349,7 +17046,7 @@
             orderPrintStatusText.textContent = data.message || (orderPrintRunning ? "运行中" : "等待启动");
             orderPrintStartedAt.textContent = data.started_at || "-";
             orderPrintCompletedAt.textContent = data.finished_at || "-";
-            orderPrintSuccessCount.textContent = `${data.printed || 0} / ${data.no_orders || 0}`;
+            orderPrintSuccessCount.textContent = `${(data.printed || 0) + (data.partial || 0)} / ${data.no_orders || 0}`;
             orderPrintFailureCount.textContent = `${data.printed_order_count || 0} / ${data.shipment_count || 0}`;
             orderPrintLog.textContent = data.log || data.message || "等待任务启动...";
             orderPrintLog.scrollTop = orderPrintLog.scrollHeight;
@@ -16793,6 +17490,7 @@
 
         function getDailyTaskPayload() {
             const minRatePercent = Number(document.getElementById("daily-task-min-rate").value || 0);
+            const salesperson = String(dailyTaskSalesperson?.value || "").trim();
             return {
                 mode: document.getElementById("daily-task-mode").value,
                 appeal_type: document.getElementById("daily-task-appeal-type").value,
@@ -16802,10 +17500,34 @@
                 round_interval: Number(document.getElementById("daily-task-round-interval").value || 600),
                 site_pause: Number(document.getElementById("daily-task-site-pause").value || 30),
                 stop_after_minutes: Number(document.getElementById("daily-task-stop-after").value || 360),
-                only_active: document.getElementById("daily-task-only-active").value === "true",
+                salespeople: salesperson ? [salesperson] : [],
                 min_rate: `${minRatePercent}%`,
                 message: document.getElementById("daily-task-message").value || "",
             };
+        }
+
+        async function loadDailyTaskOptions() {
+            if (!dailyTaskSalesperson) return;
+            const selected = String(dailyTaskSalesperson.value || "");
+            try {
+                const response = await fetch("/api/tasks/daily/options", {cache: "no-store"});
+                const payload = await response.json();
+                if (!response.ok || payload.status !== "success") {
+                    throw new Error(payload.message || `接口请求失败：${response.status}`);
+                }
+                const salespeople = Array.isArray(payload.data?.salespeople)
+                    ? payload.data.salespeople
+                    : [];
+                dailyTaskSalesperson.innerHTML = [
+                    '<option value="">所有业务员</option>',
+                    ...salespeople.map(name => (
+                        `<option value="${escapeHtml(name)}">${escapeHtml(name)}</option>`
+                    )),
+                ].join("");
+                dailyTaskSalesperson.value = salespeople.includes(selected) ? selected : "";
+            } catch (_error) {
+                dailyTaskSalesperson.innerHTML = '<option value="">所有业务员</option>';
+            }
         }
 
         function renderDailyTaskStatus(data) {

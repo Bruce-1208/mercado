@@ -1,6 +1,4 @@
 import argparse
-import hashlib
-import hmac
 import html
 import json
 import os
@@ -8,9 +6,12 @@ import re
 import socket
 import subprocess
 import sys
+import threading
 import time
+from contextlib import contextmanager
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime
+from functools import wraps
 from pathlib import Path
 
 
@@ -65,7 +66,7 @@ ZYING_PRODUCT_URL = os.environ.get(
 )
 ZYING_API_ORIGIN = os.environ.get(
     "BIT_ZYING_API_ORIGIN",
-    "https://seller.zying.net",
+    "https://meli.zying.net",
 ).rstrip("/")
 DEFAULT_ZYING_PAGE_COUNT = max(1, int(os.environ.get("BIT_ZYING_PAGES", "1")))
 DEFAULT_ZYING_START_PAGE = max(
@@ -87,6 +88,7 @@ ZYING_EDGE_PROFILE_DIR = Path(
 )
 ZYING_API_PAGE_SIZE = max(1, min(int(os.environ.get("BIT_ZYING_PAGE_SIZE", "60")), 500))
 ZYING_MELI_PLATFORM_ID = 8
+ZYING_COOKIE_CREDENTIAL_PREFIX = "cookie://"
 ZYING_DETAIL_WORKERS = max(1, int(os.environ.get("BIT_ZYING_DETAIL_WORKERS", "6")))
 ZYING_DETAIL_CLICK_TIMEOUT = max(
     5,
@@ -108,6 +110,327 @@ LOGIN_SELECTOR = "input[type='password'], #password"
 
 class ZyingAuthenticationError(RuntimeError):
     """智赢登录凭证缺失或已失效，需要用户在可视窗口中重新登录。"""
+
+
+class ZyingCollectionStopped(RuntimeError):
+    """智赢采集收到用户结束指令。"""
+
+
+_ZYING_STOP_STATE_LOCK = threading.RLock()
+_ZYING_ACTIVE_STOP_EVENT = None
+
+
+def _raise_if_zying_collection_stopped(stop_event=None):
+    with _ZYING_STOP_STATE_LOCK:
+        event = stop_event or _ZYING_ACTIVE_STOP_EVENT
+    if event is not None and event.is_set():
+        raise ZyingCollectionStopped("智赢产品采集已由用户结束")
+
+
+@contextmanager
+def _zying_collection_stop_scope(stop_event):
+    global _ZYING_ACTIVE_STOP_EVENT
+    with _ZYING_STOP_STATE_LOCK:
+        previous_event = _ZYING_ACTIVE_STOP_EVENT
+        _ZYING_ACTIVE_STOP_EVENT = stop_event
+    try:
+        yield
+    finally:
+        with _ZYING_STOP_STATE_LOCK:
+            if _ZYING_ACTIVE_STOP_EVENT is stop_event:
+                _ZYING_ACTIVE_STOP_EVENT = previous_event
+
+
+class _ZyingFrontendSigner:
+    """Use Zying's current browser-side WASM signer from a headless Edge page."""
+
+    SIGN_SCRIPT = r"""
+const requestConfig = arguments[0];
+const token = arguments[1];
+const done = arguments[arguments.length - 1];
+(async () => {
+  try {
+    const moduleScript = document.querySelector('script[type="module"][src]');
+    if (!moduleScript?.src) throw new Error('未找到智赢前端模块');
+    const frontend = await import(moduleScript.src);
+    if (typeof frontend.i !== 'function' || typeof frontend.a !== 'function') {
+      throw new Error('智赢前端签名模块已更新');
+    }
+    await frontend.i();
+    const signed = frontend.a(requestConfig, token);
+    if (
+      !Array.isArray(signed) || signed.length < 2 ||
+      !/^\d{10,13}$/.test(String(signed[0] || '')) ||
+      !/^[a-f\d]{64}$/i.test(String(signed[1] || ''))
+    ) {
+      throw new Error('智赢前端签名结果格式异常');
+    }
+    done({ok: true, timestamp: String(signed[0]), signature: String(signed[1])});
+  } catch (error) {
+    done({ok: false, error: error?.message || String(error)});
+  }
+})();
+"""
+
+    API_CALL_SCRIPT = r"""
+const prefix = arguments[0];
+const action = arguments[1];
+const payload = arguments[2];
+const done = arguments[arguments.length - 1];
+(async () => {
+  try {
+    const findApi = async () => {
+      if (
+        window.__mercadoZyingProductApi &&
+        typeof window.__mercadoZyingProductApi.handleProduct === 'function'
+      ) return window.__mercadoZyingProductApi;
+
+      const urls = new Set();
+      for (const entry of performance.getEntriesByType('resource')) {
+        if (entry.name && entry.name.includes('.js')) urls.add(entry.name);
+      }
+      for (const script of document.scripts) {
+        if (script.src && script.src.includes('.js')) urls.add(script.src);
+      }
+      for (const url of urls) {
+        let parsed;
+        try { parsed = new URL(url, location.href); } catch (_) { continue; }
+        if (parsed.origin !== location.origin) continue;
+        let source = '';
+        try {
+          source = await fetch(parsed.href, {credentials: 'same-origin'}).then(
+            response => response.ok ? response.text() : ''
+          );
+        } catch (_) { continue; }
+        if (!source.includes('handleProduct:')) continue;
+        try {
+          const module = await import(parsed.href);
+          const api = Object.values(module).find(
+            value => value && typeof value.handleProduct === 'function'
+          );
+          if (api) {
+            window.__mercadoZyingProductApi = api;
+            return api;
+          }
+        } catch (_) { continue; }
+      }
+      throw new Error('没有找到智赢前端产品接口模块');
+    };
+    const api = await findApi();
+    const response = await api.handleProduct(prefix, action, payload);
+    done({ok: true, response});
+  } catch (error) {
+    const responseData = error?.response?.data || error?.data || null;
+    done({
+      ok: false,
+      error: responseData?.message || responseData?.msg || error?.message || String(error),
+      status: error?.response?.status || error?.status || null,
+      responseData,
+    });
+  }
+})();
+"""
+
+    def __init__(self):
+        self.driver = None
+        self._lock = threading.RLock()
+        self._credential = ""
+
+    def start(self):
+        options = webdriver.EdgeOptions()
+        options.add_argument("--headless=new")
+        options.add_argument("--disable-gpu")
+        options.add_argument("--disable-extensions")
+        options.add_argument("--no-first-run")
+        options.add_argument("--window-size=1280,800")
+        edge_executable = _find_edge_executable()
+        if edge_executable:
+            options.binary_location = edge_executable
+        try:
+            self.driver = webdriver.Edge(options=options)
+            self.driver.set_page_load_timeout(45)
+            self.driver.set_script_timeout(60)
+            self.driver.get(f"{ZYING_API_ORIGIN}/")
+        except Exception as exc:
+            self.close()
+            raise RuntimeError(
+                "无法启动智赢后台签名组件，请确认本机 Edge 可以正常启动"
+            ) from exc
+        return self
+
+    def sign(self, token, path, payload):
+        if self.driver is None:
+            raise RuntimeError("智赢后台签名组件尚未启动")
+        config = {
+            "data": payload,
+            "method": "POST",
+            "url": f"{ZYING_API_ORIGIN}{path}",
+        }
+        with self._lock:
+            try:
+                result = self.driver.execute_async_script(
+                    self.SIGN_SCRIPT,
+                    config,
+                    token,
+                )
+            except Exception as exc:
+                raise RuntimeError(
+                    "智赢后台签名组件调用失败，请稍后重试"
+                ) from exc
+        if not isinstance(result, dict) or not result.get("ok"):
+            message = result.get("error") if isinstance(result, dict) else "未知错误"
+            raise RuntimeError(f"智赢后台签名失败：{message}")
+        return result["timestamp"], result["signature"]
+
+    def _configure_credential_locked(self, credential):
+        credential = _clean_text(credential)
+        if self._credential == credential:
+            return
+        auth_mode, auth_value = _split_zying_auth_credential(credential)
+        if not auth_value:
+            raise ZyingAuthenticationError("智赢登录凭证为空，请重新登录")
+        try:
+            self.driver.get(f"{ZYING_API_ORIGIN}/")
+            if auth_mode == "cookie":
+                self.driver.execute_script("localStorage.removeItem('token');")
+                self.driver.add_cookie(
+                    {
+                        "name": "token",
+                        "value": auth_value,
+                        "domain": ".zying.net",
+                        "path": "/",
+                    }
+                )
+            else:
+                self.driver.execute_script(
+                    "localStorage.setItem('token', JSON.stringify(arguments[0]));",
+                    auth_value,
+                )
+            self.driver.get(ZYING_PRODUCT_URL)
+            WebDriverWait(self.driver, 45).until(
+                lambda driver: bool(
+                    driver.execute_script(
+                        """
+                        return performance.getEntriesByType('resource')
+                          .filter(entry => entry.name.includes('.js')).length > 5
+                          && String(document.body?.innerText || '').length > 0;
+                        """
+                    )
+                )
+            )
+        except ZyingAuthenticationError:
+            raise
+        except Exception as exc:
+            raise RuntimeError("智赢后台页面初始化失败，请稍后重试") from exc
+        if "#/login" in str(self.driver.current_url or "").casefold():
+            raise ZyingAuthenticationError(
+                "智赢登录状态已失效，请重新打开登录窗口并保存登录状态"
+            )
+        self._credential = credential
+
+    def call_api(self, credential, command, payload):
+        if "." not in str(command or ""):
+            raise ValueError(f"智赢接口命令格式错误：{command!r}")
+        prefix, action = command.rsplit(".", 1)
+        _raise_if_zying_collection_stopped()
+        with self._lock:
+            _raise_if_zying_collection_stopped()
+            self._configure_credential_locked(credential)
+            try:
+                result = self.driver.execute_async_script(
+                    self.API_CALL_SCRIPT,
+                    prefix,
+                    action,
+                    payload,
+                )
+            except Exception as exc:
+                raise RuntimeError(f"智赢接口 {command} 后台调用失败") from exc
+        _raise_if_zying_collection_stopped()
+        if not isinstance(result, dict):
+            raise RuntimeError(f"智赢接口 {command} 没有返回可识别结果")
+        if not result.get("ok"):
+            status = result.get("status")
+            message = result.get("error") or "未知错误"
+            if status in (401, 403) or "登录" in message:
+                raise ZyingAuthenticationError(f"智赢登录状态已失效：{message}")
+            raise RuntimeError(f"智赢接口 {command} 请求失败：{message}")
+        response = result.get("response")
+        if not isinstance(response, dict):
+            raise RuntimeError(f"智赢接口 {command} 响应格式错误")
+        return response
+
+    def close(self):
+        driver, self.driver = self.driver, None
+        if driver is not None:
+            try:
+                driver.quit()
+            except Exception:
+                pass
+
+
+_ZYING_SIGNER_STATE_LOCK = threading.RLock()
+_ZYING_ACTIVE_SIGNER = None
+_ZYING_ACTIVE_SIGNER_USERS = 0
+_ZYING_ACTIVE_SIGNER_HOLDS = 0
+
+
+@contextmanager
+def _zying_frontend_signer_session():
+    """Share one headless signer across a collection and its detail workers."""
+    global _ZYING_ACTIVE_SIGNER, _ZYING_ACTIVE_SIGNER_USERS
+    with _ZYING_SIGNER_STATE_LOCK:
+        if _ZYING_ACTIVE_SIGNER is None:
+            _ZYING_ACTIVE_SIGNER = _ZyingFrontendSigner().start()
+        signer = _ZYING_ACTIVE_SIGNER
+        _ZYING_ACTIVE_SIGNER_USERS += 1
+    try:
+        yield signer
+    finally:
+        signer_to_close = None
+        with _ZYING_SIGNER_STATE_LOCK:
+            _ZYING_ACTIVE_SIGNER_USERS -= 1
+            if (
+                _ZYING_ACTIVE_SIGNER_USERS == 0
+                and _ZYING_ACTIVE_SIGNER_HOLDS == 0
+            ):
+                signer_to_close = _ZYING_ACTIVE_SIGNER
+                _ZYING_ACTIVE_SIGNER = None
+        if signer_to_close is not None:
+            signer_to_close.close()
+
+
+@contextmanager
+def _hold_zying_frontend_signer():
+    """Keep a lazily-created signer alive for one complete collection task."""
+    global _ZYING_ACTIVE_SIGNER, _ZYING_ACTIVE_SIGNER_HOLDS
+    with _ZYING_SIGNER_STATE_LOCK:
+        _ZYING_ACTIVE_SIGNER_HOLDS += 1
+    try:
+        yield
+    finally:
+        signer_to_close = None
+        with _ZYING_SIGNER_STATE_LOCK:
+            _ZYING_ACTIVE_SIGNER_HOLDS -= 1
+            if (
+                _ZYING_ACTIVE_SIGNER_HOLDS == 0
+                and _ZYING_ACTIVE_SIGNER_USERS == 0
+            ):
+                signer_to_close = _ZYING_ACTIVE_SIGNER
+                _ZYING_ACTIVE_SIGNER = None
+        if signer_to_close is not None:
+            signer_to_close.close()
+
+
+def _reuse_zying_frontend_signer(func):
+    @wraps(func)
+    def wrapped(*args, **kwargs):
+        with _zying_collection_stop_scope(kwargs.get("stop_event")):
+            with _hold_zying_frontend_signer():
+                return func(*args, **kwargs)
+
+    return wrapped
+
+
 DETAIL_ROOT_SELECTOR = ".curd-detail-wrap"
 DETAIL_CLICK_TARGET_SELECTOR = (
     ".f12.product-title, .product-title, a[href], button, "
@@ -340,6 +663,7 @@ def _read_zying_auth_record(auth_file=None):
     if configured_token:
         return {
             "token": configured_token,
+            "auth_mode": "header",
             "source": "environment",
             "saved_at": "",
             "browser_type": "",
@@ -360,12 +684,27 @@ def _read_zying_auth_record(auth_file=None):
 
 
 def load_zying_auth_token(auth_file=None, required=True):
-    token = _clean_text(_read_zying_auth_record(auth_file).get("token"))
+    record = _read_zying_auth_record(auth_file)
+    token = _clean_text(record.get("token"))
     if not token and required:
         raise ZyingAuthenticationError(
-            "尚未保存智赢登录凭证，请点击“打开登录窗口”，登录后点击“检测并保存登录状态”"
+            "未能读取智赢登录凭证，请在当前所选浏览器登录智赢后直接重新启动采集"
         )
-    return token
+    return _encode_zying_auth_credential(token, record.get("auth_mode"))
+
+
+def _encode_zying_auth_credential(value, auth_mode="header"):
+    value = _clean_text(value)
+    if value and _clean_text(auth_mode).casefold() == "cookie":
+        return f"{ZYING_COOKIE_CREDENTIAL_PREFIX}{value}"
+    return value
+
+
+def _split_zying_auth_credential(credential):
+    credential = _clean_text(credential)
+    if credential.startswith(ZYING_COOKIE_CREDENTIAL_PREFIX):
+        return "cookie", credential[len(ZYING_COOKIE_CREDENTIAL_PREFIX):]
+    return "header", credential
 
 
 def save_zying_auth_token(
@@ -376,13 +715,14 @@ def save_zying_auth_token(
     window_id="",
     auth_file=None,
 ):
-    token = _clean_text(token)
+    auth_mode, token = _split_zying_auth_credential(token)
     if not token:
         raise ZyingAuthenticationError("智赢登录凭证为空，请重新登录")
     path = Path(auth_file or ZYING_AUTH_FILE)
     path.parent.mkdir(parents=True, exist_ok=True)
     payload = {
         "token": token,
+        "auth_mode": auth_mode,
         "saved_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
         "browser_type": normalize_zying_browser_type(browser_type),
         "window_name": _clean_text(window_name)[:256],
@@ -409,6 +749,7 @@ def get_zying_auth_status(auth_file=None):
         "saved_at": _clean_text(record.get("saved_at")),
         "browser_type": _clean_text(record.get("browser_type")),
         "window_name": _clean_text(record.get("window_name")),
+        "auth_mode": _clean_text(record.get("auth_mode") or "header"),
     }
 
 
@@ -546,28 +887,73 @@ def _apply_zying_category_filter(driver, wait, requested_category):
     return selection
 
 
-def _browser_auth_token(driver):
-    stored_token = driver.execute_script("return localStorage.getItem('token');")
+def _normalize_browser_auth_token(stored_token):
     if not stored_token:
-        raise RuntimeError("未能从智赢页面读取登录凭证，请重新登录后再运行采集脚本。")
+        return ""
     try:
         token = json.loads(stored_token)
     except (TypeError, ValueError):
         token = stored_token
-    token = str(token or "").strip()
+    if isinstance(token, dict):
+        token = (
+            token.get("token")
+            or token.get("access_token")
+            or token.get("accessToken")
+            or ""
+        )
+    return str(token or "").strip()
+
+
+def _browser_auth_token(driver):
+    """Read both legacy localStorage and current Zying cookie credentials."""
+    stored_token = driver.execute_script("return localStorage.getItem('token');")
+    token = _normalize_browser_auth_token(stored_token)
+    auth_mode = "header"
     if not token:
-        raise RuntimeError("智赢登录凭证为空，请重新登录后再运行采集脚本。")
-    return token
+        try:
+            cookie = driver.get_cookie("token") or {}
+            token = _normalize_browser_auth_token(cookie.get("value"))
+            if token:
+                auth_mode = "cookie"
+        except Exception:
+            token = ""
+    if not token:
+        try:
+            cookie_token = driver.execute_script(
+                """
+                const item = document.cookie.split(';').map(value => value.trim())
+                  .find(value => value.startsWith('token='));
+                return item ? item.slice('token='.length) : '';
+                """
+            )
+            token = _normalize_browser_auth_token(cookie_token)
+            if token:
+                auth_mode = "cookie"
+        except Exception:
+            token = ""
+    if not token:
+        raise RuntimeError(
+            "未能从智赢页面的本地存储或 Cookie 读取登录凭证，"
+            "请重新登录后再运行采集脚本。"
+        )
+    return _encode_zying_auth_credential(token, auth_mode)
+
+
+def _browser_has_auth_token(driver):
+    try:
+        return bool(_browser_auth_token(driver))
+    except Exception:
+        return False
 
 
 def _signed_api_headers(token, path, body, timestamp=None):
-    timestamp = str(timestamp or int(time.time() + 0.5))
-    message = f"{body}POST{path}{timestamp}{token}v1"
-    signature = hmac.new(
-        ZYING_API_ORIGIN.encode("utf-8"),
-        message.encode("utf-8"),
-        hashlib.sha256,
-    ).hexdigest()
+    del timestamp  # Timestamp is generated inside Zying's current WASM signer.
+    try:
+        payload = json.loads(body)
+    except (TypeError, ValueError) as exc:
+        raise RuntimeError("智赢接口请求内容无法签名") from exc
+    with _zying_frontend_signer_session() as signer:
+        timestamp, signature = signer.sign(token, path, payload)
     return {
         "Accept": "application/json, text/plain, */*",
         "Content-Type": "application/json",
@@ -575,40 +961,35 @@ def _signed_api_headers(token, path, body, timestamp=None):
         "signature": signature,
         "timestamp": timestamp,
         "token": token,
-        "version": "v1",
+        "version": "v1.1",
     }
 
 
 def _zying_api_post(session, token, command, payload):
-    path = f"/api/CmdHandler?cmd={command}"
-    body = json.dumps(payload, ensure_ascii=False, separators=(",", ":"))
+    del session  # Requests are executed by Zying's own frontend inside headless Edge.
     last_error = None
-    for attempt in range(3):
-        try:
-            response = session.post(
-                f"{ZYING_API_ORIGIN}{path}",
-                data=body.encode("utf-8"),
-                headers=_signed_api_headers(token, path, body),
-                timeout=30,
-            )
-            response.raise_for_status()
-            result = response.json()
-            if result.get("code") == 200:
-                return result.get("data") or {}
-            message = result.get("message") or f"业务状态码 {result.get('code')}"
-            if result.get("code") == 401:
-                raise ZyingAuthenticationError(f"智赢登录状态已失效：{message}")
-            last_error = RuntimeError(f"智赢接口 {command} 请求失败：{message}")
-        except ZyingAuthenticationError:
-            raise
-        except (requests.RequestException, ValueError) as exc:
-            if getattr(getattr(exc, "response", None), "status_code", None) in (401, 403):
-                raise ZyingAuthenticationError(
-                    "智赢登录状态已失效，请重新打开登录窗口并保存登录状态"
-                ) from exc
-            last_error = RuntimeError(f"智赢接口 {command} 请求失败：{exc}")
-        if attempt < 2:
-            time.sleep(0.5 * (attempt + 1))
+    with _zying_frontend_signer_session() as frontend:
+        for attempt in range(3):
+            _raise_if_zying_collection_stopped()
+            try:
+                result = frontend.call_api(token, command, payload)
+                _raise_if_zying_collection_stopped()
+                if result.get("code") == 200:
+                    return result.get("data") or {}
+                message = result.get("message") or f"业务状态码 {result.get('code')}"
+                if result.get("code") == 401:
+                    raise ZyingAuthenticationError(f"智赢登录状态已失效：{message}")
+                last_error = RuntimeError(f"智赢接口 {command} 请求失败：{message}")
+            except (ZyingAuthenticationError, ZyingCollectionStopped):
+                raise
+            except Exception as exc:
+                last_error = (
+                    exc
+                    if isinstance(exc, RuntimeError)
+                    else RuntimeError(f"智赢接口 {command} 请求失败：{exc}")
+                )
+            if attempt < 2:
+                time.sleep(0.5 * (attempt + 1))
     raise last_error
 
 
@@ -1044,6 +1425,10 @@ def _enrich_product_categories(token, records):
                 category = future.result()
                 for record in category_records[key]:
                     _merge_category_record(record, category)
+            except ZyingCollectionStopped:
+                for pending in future_categories:
+                    pending.cancel()
+                raise
             except Exception as exc:
                 failures.append(f"{key[0]}{key[1]}: {exc}")
     if failures:
@@ -1401,6 +1786,10 @@ def _resolve_product_ids(token, records):
             record = future_records[future]
             try:
                 future.result()
+            except ZyingCollectionStopped:
+                for pending in future_records:
+                    pending.cancel()
+                raise
             except Exception as exc:
                 failures.append(f"{record.get('title')!r}: {exc}")
     if failures:
@@ -2003,6 +2392,49 @@ def _release_zying_browser_connection(browser_service, leased_window_id):
         releaseBrowserLease(leased_window_id)
 
 
+def _activate_zying_page(driver):
+    """Switch the selected browser to an existing Zying tab or open a new one."""
+    handles = list(driver.window_handles)
+    current_handle = ""
+    try:
+        current_handle = driver.current_window_handle
+    except Exception:
+        pass
+    ordered_handles = []
+    if current_handle in handles:
+        ordered_handles.append(current_handle)
+    ordered_handles.extend(
+        handle for handle in reversed(handles) if handle != current_handle
+    )
+
+    selected_handle = ""
+    for handle in ordered_handles:
+        try:
+            driver.switch_to.window(handle)
+            if "meli.zying.net" in str(driver.current_url or "").casefold():
+                selected_handle = handle
+                break
+        except Exception:
+            continue
+
+    if not selected_handle:
+        try:
+            driver.switch_to.new_window("tab")
+        except Exception:
+            driver.execute_script("window.open('about:blank', '_blank');")
+            driver.switch_to.window(driver.window_handles[-1])
+        driver.get(ZYING_PRODUCT_URL)
+
+    try:
+        driver.execute_cdp_cmd("Page.bringToFront", {})
+    except Exception:
+        try:
+            driver.execute_script("window.focus();")
+        except Exception:
+            pass
+    return str(driver.current_url or "")
+
+
 def open_zying_login_window(
     *,
     browser_type=DEFAULT_ZYING_BROWSER_TYPE,
@@ -2030,11 +2462,17 @@ def open_zying_login_window(
             window_name=window_name,
             edge_debugger_address=edge_debugger_address,
         )
-        driver.get(ZYING_PRODUCT_URL)
+        _activate_zying_page(driver)
+        target_name = _clean_text(window_name)
+        target_label = (
+            f"比特浏览器窗口“{target_name}”"
+            if browser_type == "bitbrowser" and target_name
+            else "所选浏览器"
+        )
         return {
             "browser_type": browser_type,
-            "window_name": _clean_text(window_name),
-            "message": "智赢登录窗口已打开，请完成登录",
+            "window_name": target_name,
+            "message": f"已切换到{target_label}的智赢页面，请完成登录",
         }
     finally:
         _release_zying_browser_connection(browser_service, leased_window_id)
@@ -2047,8 +2485,9 @@ def capture_zying_login_from_browser(
     window_name="",
     edge_debugger_address=DEFAULT_ZYING_EDGE_DEBUGGER_ADDRESS,
     auth_file=None,
+    validate=True,
 ):
-    """从可视浏览器读取 token、验证接口并保存为后台采集凭证。"""
+    """从当前所选浏览器读取凭证；可按需跳过独立登录检测。"""
     driver = browser_service = None
     leased_window_id = ""
     try:
@@ -2058,20 +2497,30 @@ def capture_zying_login_from_browser(
             window_name=window_name,
             edge_debugger_address=edge_debugger_address,
         )
-        if "meli.zying.net" not in str(driver.current_url or "").casefold():
-            driver.get(ZYING_PRODUCT_URL)
+        _activate_zying_page(driver)
+        target_name = _clean_text(window_name)
+        target_label = (
+            f"比特浏览器窗口“{target_name}”"
+            if browser_type == "bitbrowser" and target_name
+            else "当前页面所选浏览器"
+        )
+        if validate:
+            try:
+                WebDriverWait(driver, 10).until(_browser_has_auth_token)
+            except Exception as exc:
+                raise ZyingAuthenticationError(
+                    f"已切换到{target_label}的智赢页面，但尚未检测到登录状态；"
+                    "请在该窗口完成登录后重试"
+                ) from exc
         try:
-            WebDriverWait(driver, 10).until(
-                lambda current_driver: bool(
-                    current_driver.execute_script("return localStorage.getItem('token');")
-                )
-            )
+            token = _browser_auth_token(driver)
         except Exception as exc:
             raise ZyingAuthenticationError(
-                "尚未检测到智赢登录状态，请先在已打开的窗口中完成登录"
+                f"无法从{target_label}读取智赢登录凭证；"
+                "请在该窗口登录智赢后直接重新启动采集"
             ) from exc
-        token = _browser_auth_token(driver)
-        validate_zying_auth_token(token)
+        if validate:
+            validate_zying_auth_token(token)
         return save_zying_auth_token(
             token,
             browser_type=browser_type,
@@ -2129,6 +2578,7 @@ def _zying_api_record_matches_category(record, category_id):
     return not requested.isdigit() or actual == requested
 
 
+@_reuse_zying_frontend_signer
 def collect_zying_products_api(
     *,
     auth_token=None,
@@ -2140,8 +2590,9 @@ def collect_zying_products_api(
     existing_product_id_reader=None,
     product_mirror_writer=None,
     return_summary=False,
+    stop_event=None,
 ):
-    """完全通过智赢 API 采集；浏览器只在刷新登录凭证时使用。"""
+    """通过智赢 API 采集；无头 Edge 仅加载官方签名模块，不读取页面 DOM。"""
     page_count = max(1, int(DEFAULT_ZYING_PAGE_COUNT if number is None else number))
     start_page = max(1, int(start_page))
     if start_page > page_count:
@@ -2167,10 +2618,8 @@ def collect_zying_products_api(
     duplicate_count = 0
     category_mismatch_count = 0
     last_committed_page = start_page - 1
-    print("正在验证智赢后台采集凭证", flush=True)
-    validate_zying_auth_token(token)
     print(
-        f"智赢 API 后台采集已就绪：第 {start_page}-{page_count} 页，"
+        f"智赢 API 后台采集直接启动：第 {start_page}-{page_count} 页，"
         f"分类 {category_selection['category_path'] if category_selection else '全部'}",
         flush=True,
     )
@@ -2178,6 +2627,7 @@ def collect_zying_products_api(
     with requests.Session() as session:
         session.trust_env = False
         for page_number in range(start_page, page_count + 1):
+            _raise_if_zying_collection_stopped(stop_event)
             payload = {
                 "page": page_number,
                 "pagesize": ZYING_API_PAGE_SIZE,
@@ -2188,6 +2638,7 @@ def collect_zying_products_api(
                 # 智赢产品分类的 Cascader 末级值对应 sale_localid。
                 payload["localid"] = category_selection["category_id"]
             data = _zying_api_post(session, token, "sale.stat", payload)
+            _raise_if_zying_collection_stopped(stop_event)
             listing = data.get("list") if isinstance(data, dict) else None
             rows = listing.get("data") if isinstance(listing, dict) else None
             if not isinstance(rows, list):
@@ -2218,6 +2669,7 @@ def collect_zying_products_api(
             skipped_existing_count += skipped
             if page_records:
                 _enrich_product_records(None, page_records, token=token)
+            _raise_if_zying_collection_stopped(stop_event)
             if category_selection:
                 matched_records = [
                     record
@@ -2245,6 +2697,7 @@ def collect_zying_products_api(
             for record in page_records:
                 _attach_zying_category(record, category_selection)
                 _finalize_zying_listing_snapshot(record)
+            _raise_if_zying_collection_stopped(stop_event)
             inserted_count += _persist_zying_page(
                 page_records,
                 page_number,
@@ -2295,11 +2748,26 @@ def collect_zying_products(
     category_name="",
     auth_token=None,
     api_mode=True,
+    stop_event=None,
 ):
-    """采集智赢产品；默认使用无需常驻浏览器的后台 API 模式。"""
+    """采集智赢产品；默认使用后台 API 与无头官方签名模式。"""
     if api_mode:
+        _raise_if_zying_collection_stopped(stop_event)
+        resolved_auth_token = _clean_text(auth_token)
+        if not resolved_auth_token:
+            print("正在从当前页面所选浏览器读取智赢登录凭证", flush=True)
+            capture_zying_login_from_browser(
+                browser_type=browser_type,
+                window_id=window_id,
+                window_name=window_name,
+                edge_debugger_address=edge_debugger_address,
+                validate=False,
+            )
+            _raise_if_zying_collection_stopped(stop_event)
+            resolved_auth_token = load_zying_auth_token()
+            print("已读取智赢登录凭证，直接开始采集", flush=True)
         return collect_zying_products_api(
-            auth_token=auth_token,
+            auth_token=resolved_auth_token,
             number=number,
             start_page=start_page,
             category=DEFAULT_ZYING_CATEGORY if category is None else category,
@@ -2308,6 +2776,7 @@ def collect_zying_products(
             existing_product_id_reader=existing_product_id_reader,
             product_mirror_writer=product_mirror_writer,
             return_summary=return_summary,
+            stop_event=stop_event,
         )
     requested_pages = DEFAULT_ZYING_PAGE_COUNT if number is None else number
     page_count = max(1, int(requested_pages))

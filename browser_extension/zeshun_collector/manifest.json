@@ -1,0 +1,56 @@
+{
+  "manifest_version": 3,
+  "name": "泽顺商品采集助手",
+  "version": "1.1.1",
+  "description": "在 Mercado Libre 商品页一键采集商品到武汉泽顺综合服务台。",
+  "permissions": [
+    "alarms",
+    "contextMenus",
+    "storage",
+    "tabs"
+  ],
+  "host_permissions": [
+    "http://127.0.0.1/*",
+    "http://localhost/*",
+    "https://*.mercadolibre.com.mx/*",
+    "https://*.mercadolibre.com.br/*",
+    "https://*.mercadolivre.com.br/*",
+    "https://*.mercadolibre.com.ar/*",
+    "https://*.mercadolibre.cl/*",
+    "https://*.mercadolibre.com.co/*",
+    "https://*.mercadolibre.com.uy/*"
+  ],
+  "optional_host_permissions": [
+    "http://*/*",
+    "https://*/*"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "action": {
+    "default_title": "采集到泽顺控制台",
+    "default_popup": "popup.html"
+  },
+  "options_page": "options.html",
+  "content_scripts": [
+    {
+      "matches": [
+        "https://*.mercadolibre.com.mx/*",
+        "https://*.mercadolibre.com.br/*",
+        "https://*.mercadolivre.com.br/*",
+        "https://*.mercadolibre.com.ar/*",
+        "https://*.mercadolibre.cl/*",
+        "https://*.mercadolibre.com.co/*",
+        "https://*.mercadolibre.com.uy/*"
+      ],
+      "js": [
+        "collector-core.js",
+        "content.js"
+      ],
+      "css": [
+        "content.css"
+      ],
+      "run_at": "document_idle"
+    }
+  ]
+}

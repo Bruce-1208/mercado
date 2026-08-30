@@ -9,6 +9,8 @@ shipping-options quote.
 from __future__ import annotations
 
 import math
+import json
+import unicodedata
 import threading
 import time
 from datetime import datetime, timedelta
@@ -17,10 +19,11 @@ from typing import Any, Mapping
 import requests
 
 from erp.mercadolibre_profitability_cache import DatabaseProfitabilityCache
+from erp.mercadolibre_shipping_rate_cards import OfficialShippingRateCardStore
 
 
 API_BASE_URL = "https://api.mercadolibre.com"
-DEFAULT_LISTING_TYPE_ID = "gold_pro"
+DEFAULT_LISTING_TYPE_ID = "gold_special"
 PROFITABILITY_SOURCE = "mercadolibre_official_api_daily_database_cache"
 LIGHT_PACKAGE_LIMIT_G = 500.0
 SUPPORTED_SITE_CURRENCIES = {
@@ -60,28 +63,77 @@ def _positive(value: Any) -> float | None:
     return number if number is not None and number > 0 else None
 
 
+def _boolean(value: Any) -> bool | None:
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, (int, float)) and value in (0, 1):
+        return bool(value)
+    text = str(value or "").strip().lower()
+    if text in {"true", "1", "yes", "y", "si", "sí"}:
+        return True
+    if text in {"false", "0", "no", "n"}:
+        return False
+    return None
+
+
+def source_free_shipping(row: Mapping[str, Any]) -> bool | None:
+    """Read the source listing's shipping mode from current and stored snapshots."""
+
+    def loaded(value: Any) -> Mapping[str, Any]:
+        if isinstance(value, Mapping):
+            return value
+        try:
+            parsed = json.loads(str(value or "{}"))
+        except (TypeError, ValueError):
+            return {}
+        return parsed if isinstance(parsed, Mapping) else {}
+
+    candidates: list[Any] = [
+        row.get("source_free_shipping"),
+        row.get("free_shipping"),
+    ]
+    shipping_rule = str(row.get("shipping_weight_rule") or "").strip().lower()
+    if shipping_rule.startswith("free_shipping:"):
+        candidates.append(True)
+    elif shipping_rule.startswith("buyer_pays_shipping:"):
+        candidates.append(False)
+    for raw_source in (
+        row.get("source"),
+        row.get("source_json"),
+        row.get("source_snapshot_json"),
+    ):
+        source = loaded(raw_source)
+        nested_source = loaded(source.get("source"))
+        for value in (source, nested_source):
+            shipping = loaded(value.get("shipping"))
+            candidates.extend((
+                value.get("source_free_shipping"),
+                value.get("free_shipping"),
+                shipping.get("free_shipping"),
+            ))
+    for candidate in candidates:
+        normalized = _boolean(candidate)
+        if normalized is not None:
+            return normalized
+    return None
+
+
 def calculate_billable_weight_g(
     actual_weight_g: Any,
     volumetric_weight_kg: Any = None,
 ) -> float | None:
-    """Apply the workbench's 500 g dimensional-weight rule.
-
-    Up to and including 500 g, dimensions never increase the billed weight.
-    Above 500 g, the larger of actual and volumetric weight is used.
-    """
+    """Use the Global Selling rule: greater of gross and volumetric weight."""
 
     actual = _positive(actual_weight_g)
     if actual is None:
         return None
-    if actual <= LIGHT_PACKAGE_LIMIT_G:
-        return round(actual, 4)
     volumetric_kg = _positive(volumetric_weight_kg)
     volumetric_g = volumetric_kg * 1000 if volumetric_kg is not None else 0.0
     return round(max(actual, volumetric_g), 4)
 
 
 def shipping_dimensions_parameter(row: Mapping[str, Any]) -> str:
-    """Build the official quote parameter while enforcing the 500 g rule."""
+    """Build the official quote parameter from declared package dimensions."""
 
     actual = _positive(row.get("weight_g"))
     if actual is None:
@@ -89,16 +141,9 @@ def shipping_dimensions_parameter(row: Mapping[str, Any]) -> str:
     billable = calculate_billable_weight_g(actual, row.get("volumetric_weight_kg"))
     assert billable is not None
 
-    # Mercado Libre's quote accepts HxWxL,weight.  For light parcels we pass a
-    # neutral 1 cm package so the API cannot apply dimensional weight below the
-    # user-defined 500 g boundary.  Above the boundary, the already-calculated
-    # billable weight is quoted together with the actual dimensions.
-    if actual <= LIGHT_PACKAGE_LIMIT_G:
-        height = width = length = 1.0
-    else:
-        height = _positive(row.get("package_height_cm")) or 1.0
-        width = _positive(row.get("package_width_cm")) or 1.0
-        length = _positive(row.get("package_length_cm")) or 1.0
+    height = _positive(row.get("package_height_cm")) or 1.0
+    width = _positive(row.get("package_width_cm")) or 1.0
+    length = _positive(row.get("package_length_cm")) or 1.0
 
     def text(value: float) -> str:
         # The shipping-options endpoint accepts integer centimetres/grams.
@@ -203,6 +248,7 @@ class MercadoProfitabilityClient:
         http: requests.Session | None = None,
         timeout: int = 30,
         cache_store: Any = None,
+        shipping_rate_store: Any = None,
     ) -> None:
         self.token = dict(token)
         self.http = http or requests.Session()
@@ -211,6 +257,14 @@ class MercadoProfitabilityClient:
             DatabaseProfitabilityCache()
             if cache_store is None
             else (None if cache_store is False else cache_store)
+        )
+        # Explicit/in-memory cache stores are primarily used by tests and
+        # one-off callers. Only enable the database rate-card lookup by
+        # default together with the normal production cache.
+        self.shipping_rate_store = (
+            OfficialShippingRateCardStore()
+            if shipping_rate_store is None and cache_store is None
+            else (None if shipping_rate_store in (None, False) else shipping_rate_store)
         )
         self.headers = {
             "Accept": "application/json",
@@ -251,11 +305,51 @@ class MercadoProfitabilityClient:
                 return dict(marketplace)
         raise MercadoProfitabilityError(f"授权店铺未开通 {site_id} 站点")
 
-    def category(self, site_id: str, title: str) -> dict[str, str]:
-        payload = self._get(
-            f"/sites/{site_id}/domain_discovery/search",
-            params={"q": title},
+    def category(
+        self,
+        site_id: str,
+        title: str,
+        *,
+        row: Mapping[str, Any] | None = None,
+    ) -> dict[str, str]:
+        row = dict(row or {})
+        candidates = [str(title or "").strip()]
+
+        # Cross-border titles are frequently truncated before the actual
+        # product noun.  Use the already-captured specifications/description as
+        # a conservative second query when the official predictor returns no
+        # category for the raw title.
+        context = " ".join(
+            str(row.get(key) or "")
+            for key in (
+                "title",
+                "description_text",
+                "description_json",
+                "page_snapshot_json",
+            )
         )
+        context = "".join(
+            character
+            for character in unicodedata.normalize("NFKD", context).lower()
+            if not unicodedata.combining(character)
+        )
+        if any(term in context for term in (
+            "cantidad de disfraces", "cosplay", "disfraz", "costume",
+        )):
+            candidates.append("cosplay anime")
+        elif any(term in context for term in (
+            "action figure", "figura de accion", "model toy", "muneca",
+        )):
+            candidates.append("figura de accion anime")
+
+        payload: Any = []
+        for query in dict.fromkeys(candidate for candidate in candidates if candidate):
+            payload = self._get(
+                f"/sites/{site_id}/domain_discovery/search",
+                params={"q": query},
+            )
+            if isinstance(payload, list) and payload:
+                break
         if not isinstance(payload, list) or not payload:
             raise MercadoProfitabilityError("官网没有预测出对应商品分类")
         category = payload[0]
@@ -393,6 +487,8 @@ class MercadoProfitabilityClient:
         category_id: str,
         price: float,
         listing_type_id: str,
+        *,
+        free_shipping: bool,
     ) -> dict[str, Any]:
         child_user_id = str(marketplace.get("user_id") or "")
         if not child_user_id:
@@ -409,7 +505,35 @@ class MercadoProfitabilityClient:
             "dimensions": dimensions,
             "logistic_type": logistic_type,
             "shipping_mode": shipping_mode,
+            "free_shipping": bool(free_shipping),
         }
+        billable_weight_g = calculate_billable_weight_g(
+            row.get("weight_g"), row.get("volumetric_weight_kg")
+        )
+        if self.shipping_rate_store is not None and billable_weight_g is not None:
+            try:
+                matched = self.shipping_rate_store.match(
+                    site_id=quote["site_id"],
+                    price_local=price,
+                    billable_weight_g=billable_weight_g,
+                    free_shipping=bool(free_shipping),
+                )
+            except Exception:
+                matched = None
+            if matched:
+                return {
+                    # Global Selling publishes the Cainiao charge directly in
+                    # USD. Never convert a domestic reputation rate into USD
+                    # and present that derived value as an official standard.
+                    "amount": float(matched["shipping_amount_usd"]),
+                    "currency_id": "USD",
+                    "api_billable_weight_g": billable_weight_g,
+                    "rate_source": "official_global_selling_cainiao_rate_card",
+                    "rate_kind": str(matched.get("rate_kind") or ""),
+                    "rate_price_label": str(matched.get("price_label") or ""),
+                    "rate_weight_label": str(matched.get("weight_label") or ""),
+                    "refreshed_at": matched.get("refreshed_at"),
+                }
         cached = self.cache_store.get_shipping(**quote) if self.cache_store else None
         if cached:
             return cached
@@ -423,7 +547,7 @@ class MercadoProfitabilityClient:
                 "mode": shipping_mode,
                 "condition": "new",
                 "logistic_type": logistic_type,
-                "free_shipping": "true",
+                "free_shipping": "true" if free_shipping else "false",
                 "category_id": category_id,
             },
         )
@@ -436,11 +560,35 @@ class MercadoProfitabilityClient:
             "amount": amount,
             "currency_id": str(country.get("currency_id") or ""),
             "api_billable_weight_g": _number(country.get("billable_weight")),
+            "rate_source": "official_shipping_options_api",
             "payload": payload,
         }
         if self.cache_store is not None:
             self.cache_store.put_shipping(quote, value)
         return value
+
+    def source_listing_free_shipping(self, row: Mapping[str, Any]) -> bool:
+        explicit = source_free_shipping(row)
+        if explicit is not None:
+            return explicit
+        item_id = str(row.get("source_item_id") or "").strip().upper()
+        if not item_id:
+            return True
+        cache_key = f"source-free-shipping:{item_id}"
+        cached = _cache_get(cache_key)
+        if cached is not None:
+            return bool(cached)
+        try:
+            payload = self._get(f"/items/{item_id}", params={"attributes": "shipping"})
+            shipping = payload.get("shipping") if isinstance(payload, Mapping) else {}
+            detected = _boolean(
+                shipping.get("free_shipping") if isinstance(shipping, Mapping) else None
+            )
+        except Exception:
+            detected = None
+        # Unknown listings stay conservative: charge the free-shipping seller cost.
+        value = True if detected is None else detected
+        return bool(_cache_set(cache_key, value, 24 * 60 * 60))
 
     def pricing(self, row: Mapping[str, Any]) -> dict[str, Any]:
         """Convert the product price even when fee or shipping quotes later fail."""
@@ -467,7 +615,9 @@ class MercadoProfitabilityClient:
         site_id = _site_id(row)
         currency_id = str(row.get("currency_id") or "USD").upper()
         pricing = self.pricing(row)
-        listing_type_id = str(row.get("listing_type_id") or DEFAULT_LISTING_TYPE_ID)
+        # The workbench always publishes with the Classic plan.  Source listing
+        # types (for example Premium/gold_pro) must not affect our commission.
+        listing_type_id = DEFAULT_LISTING_TYPE_ID
         marketplace = self.marketplace(site_id)
         category_id = str(row.get("category_id") or "").strip()
         category = (
@@ -476,7 +626,7 @@ class MercadoProfitabilityClient:
                 "category_name": str(row.get("category_name") or ""),
             }
             if category_id
-            else self.category(site_id, title)
+            else self.category(site_id, title, row=row)
         )
         commission = self.commission(
             site_id,
@@ -487,12 +637,14 @@ class MercadoProfitabilityClient:
             marketplace=marketplace,
             row=row,
         )
+        free_shipping = self.source_listing_free_shipping(row)
         shipping = self.shipping(
             marketplace,
             row,
             category["category_id"],
             price,
             listing_type_id,
+            free_shipping=free_shipping,
         )
         exchange_rate = float(pricing["exchange_rate_to_usd"])
         commission_currency = commission["currency_id"] or currency_id
@@ -524,12 +676,22 @@ class MercadoProfitabilityClient:
             "shipping_fee_usd": shipping_fee_usd,
             "billable_weight_g": billable_weight,
             "shipping_api_billable_weight_g": shipping.get("api_billable_weight_g"),
-            "shipping_weight_rule": "actual_only_up_to_500g_else_max_actual_volumetric",
+            "shipping_weight_rule": (
+                f"{'free_shipping' if free_shipping else 'buyer_pays_shipping'}:"
+                "global_selling_max_gross_or_volumetric:"
+                f"{shipping.get('rate_source') or 'official_shipping_options_api'}"
+            ),
+            "source_free_shipping": free_shipping,
             "net_proceeds_usd": calculate_net_proceeds_usd(
                 sale_price_usd, commission_amount_usd, shipping_fee_usd
             ),
             "profitability_updated_at": _now_text(),
-            "profitability_source": PROFITABILITY_SOURCE,
+            "profitability_source": (
+                "mercadolibre_global_selling_cainiao_rate_card_daily_database_cache"
+                if shipping.get("rate_source")
+                == "official_global_selling_cainiao_rate_card"
+                else PROFITABILITY_SOURCE
+            ),
             "profitability_error": "",
         }
 
@@ -579,4 +741,5 @@ __all__ = [
     "enrich_profitability",
     "refresh_supported_exchange_rates",
     "shipping_dimensions_parameter",
+    "source_free_shipping",
 ]

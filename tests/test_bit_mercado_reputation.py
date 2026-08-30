@@ -451,7 +451,15 @@ def test_hybrid_collection_merges_browser_traffic_without_reputation_page(monkey
         "list_mercado_store_tokens",
         lambda: {
             "rows": [
-                {"id": 31, "display_name": "混合店铺", "nickname": "HYBRID"},
+                {
+                    "id": 31,
+                    "display_name": "混合店铺",
+                    "nickname": "HYBRID",
+                    "site_settings": [
+                        {"site_id": "MLM", "visit_stats_enabled": True},
+                        {"site_id": "MLB", "visit_stats_enabled": False},
+                    ],
+                },
             ]
         },
     )
@@ -468,7 +476,13 @@ def test_hybrid_collection_merges_browser_traffic_without_reputation_page(monkey
                     "claims_rate_percent": 1.2,
                     "delayed_handling_rate_percent": 2.3,
                     "cancellations_rate_percent": 0.4,
-                }
+                },
+                {
+                    "site_id": "MLB",
+                    "site_name": "巴西",
+                    "level_name": "黄色",
+                    "sales_completed": 99,
+                },
             ]
         },
     )
@@ -476,7 +490,8 @@ def test_hybrid_collection_merges_browser_traffic_without_reputation_page(monkey
         bit_reputation_info,
         "list_config_rows",
         lambda **_kwargs: [
-            ("window-31", "HYBRID", "", "墨西哥，巴西", "", "", ""),
+            # 浏览器配置只负责提供窗口，不再决定运行站点。
+            ("window-31", "HYBRID", "", "巴西", "", "", ""),
         ],
     )
 

@@ -609,6 +609,88 @@ def test_open_collection_browser_can_attach_local_edge_without_bitbrowser(monkey
     assert lease_id == ""
 
 
+def test_activate_zying_page_switches_selected_browser_to_existing_tab():
+    class SwitchTo:
+        def __init__(self, driver):
+            self.driver = driver
+
+        def window(self, handle):
+            self.driver.current_window_handle = handle
+
+        def new_window(self, kind):
+            raise AssertionError("已有智赢页面时不应新建标签页")
+
+    class Driver:
+        def __init__(self):
+            self.window_handles = ["mercado", "zying"]
+            self.current_window_handle = "mercado"
+            self.urls = {
+                "mercado": "https://www.mercadolibre.com.mx/item",
+                "zying": "https://meli.zying.net/#/product",
+            }
+            self.switch_to = SwitchTo(self)
+            self.brought_to_front = False
+
+        @property
+        def current_url(self):
+            return self.urls[self.current_window_handle]
+
+        def get(self, url):
+            raise AssertionError("已有智赢页面时不应覆盖当前业务标签页")
+
+        def execute_cdp_cmd(self, command, params):
+            assert command == "Page.bringToFront"
+            self.brought_to_front = True
+
+    driver = Driver()
+
+    current_url = bit_zying_caiji._activate_zying_page(driver)
+
+    assert driver.current_window_handle == "zying"
+    assert current_url == "https://meli.zying.net/#/product"
+    assert driver.brought_to_front is True
+
+
+def test_activate_zying_page_opens_new_tab_without_replacing_current_page():
+    class SwitchTo:
+        def __init__(self, driver):
+            self.driver = driver
+
+        def window(self, handle):
+            self.driver.current_window_handle = handle
+
+        def new_window(self, kind):
+            assert kind == "tab"
+            self.driver.window_handles.append("zying-new")
+            self.driver.current_window_handle = "zying-new"
+            self.driver.urls["zying-new"] = "about:blank"
+
+    class Driver:
+        def __init__(self):
+            self.window_handles = ["mercado"]
+            self.current_window_handle = "mercado"
+            self.urls = {"mercado": "https://www.mercadolibre.com.mx/item"}
+            self.switch_to = SwitchTo(self)
+
+        @property
+        def current_url(self):
+            return self.urls[self.current_window_handle]
+
+        def get(self, url):
+            self.urls[self.current_window_handle] = url
+
+        def execute_cdp_cmd(self, command, params):
+            return None
+
+    driver = Driver()
+
+    bit_zying_caiji._activate_zying_page(driver)
+
+    assert driver.urls["mercado"] == "https://www.mercadolibre.com.mx/item"
+    assert driver.current_window_handle == "zying-new"
+    assert driver.current_url == bit_zying_caiji.ZYING_PRODUCT_URL
+
+
 def test_mysql_existing_product_reader_returns_only_found_ids(monkeypatch):
     captured = {}
 
@@ -943,12 +1025,142 @@ def test_zying_auth_token_round_trip_uses_local_runtime_file(tmp_path, monkeypat
     assert "secret-token" not in str(status)
 
 
+def test_zying_cookie_credential_round_trip_preserves_auth_mode(tmp_path, monkeypatch):
+    auth_file = tmp_path / "zying_cookie_auth.json"
+    monkeypatch.delenv("BIT_ZYING_TOKEN", raising=False)
+    credential = bit_zying_caiji.ZYING_COOKIE_CREDENTIAL_PREFIX + "cookie-secret"
+
+    status = bit_zying_caiji.save_zying_auth_token(
+        credential,
+        browser_type="bitbrowser",
+        window_name="vngbjkk",
+        auth_file=auth_file,
+    )
+    payload = json.loads(auth_file.read_text(encoding="utf-8"))
+
+    assert payload["token"] == "cookie-secret"
+    assert payload["auth_mode"] == "cookie"
+    assert bit_zying_caiji.load_zying_auth_token(auth_file) == credential
+    assert status["auth_mode"] == "cookie"
+
+
+def test_browser_auth_token_accepts_wrapped_token_object():
+    class Driver:
+        def execute_script(self, script):
+            return json.dumps({"accessToken": "wrapped-secret-token"})
+
+    assert bit_zying_caiji._browser_auth_token(Driver()) == "wrapped-secret-token"
+
+
+def test_browser_auth_token_falls_back_to_current_zying_cookie():
+    class Driver:
+        def execute_script(self, script):
+            if "localStorage" in script:
+                return None
+            return ""
+
+        def get_cookie(self, name):
+            assert name == "token"
+            return {"name": "token", "value": "cookie-secret-token"}
+
+    driver = Driver()
+
+    assert bit_zying_caiji._browser_auth_token(driver) == (
+        bit_zying_caiji.ZYING_COOKIE_CREDENTIAL_PREFIX + "cookie-secret-token"
+    )
+    assert bit_zying_caiji._browser_has_auth_token(driver) is True
+
+
+def test_signed_headers_use_frontend_signer_and_current_protocol(monkeypatch):
+    captured = {}
+
+    class Signer:
+        def sign(self, token, path, payload):
+            captured.update(token=token, path=path, payload=payload)
+            return "1788000000", "a" * 64
+
+    class SignerSession:
+        def __enter__(self):
+            return Signer()
+
+        def __exit__(self, *args):
+            return False
+
+    monkeypatch.setattr(
+        bit_zying_caiji,
+        "_zying_frontend_signer_session",
+        lambda: SignerSession(),
+    )
+
+    headers = bit_zying_caiji._signed_api_headers(
+        "saved-token",
+        "/api/CmdHandler?cmd=sale.stat",
+        '{"page":1,"pagesize":1}',
+    )
+
+    assert captured == {
+        "token": "saved-token",
+        "path": "/api/CmdHandler?cmd=sale.stat",
+        "payload": {"page": 1, "pagesize": 1},
+    }
+    assert headers["version"] == "v1.1"
+    assert headers["timestamp"] == "1788000000"
+    assert headers["signature"] == "a" * 64
+
+
+def test_zying_api_post_uses_frontend_api_bridge(monkeypatch):
+    captured = {}
+
+    class Frontend:
+        def call_api(self, credential, command, payload):
+            captured.update(
+                credential=credential,
+                command=command,
+                payload=payload,
+            )
+            return {"code": 200, "data": {"list": {"data": []}}}
+
+    class FrontendSession:
+        def __enter__(self):
+            return Frontend()
+
+        def __exit__(self, *args):
+            return False
+
+    monkeypatch.setattr(
+        bit_zying_caiji,
+        "_zying_frontend_signer_session",
+        lambda: FrontendSession(),
+    )
+    credential = bit_zying_caiji.ZYING_COOKIE_CREDENTIAL_PREFIX + "cookie-secret"
+
+    result = bit_zying_caiji._zying_api_post(
+        object(),
+        credential,
+        "sale.stat",
+        {"page": 1},
+    )
+
+    assert result == {"list": {"data": []}}
+    assert captured == {
+        "credential": credential,
+        "command": "sale.stat",
+        "payload": {"page": 1},
+    }
+
+
 def test_api_collection_reads_list_and_details_without_opening_browser(monkeypatch):
     api_calls = []
     written = []
     mirrored = []
 
-    monkeypatch.setattr(bit_zying_caiji, "validate_zying_auth_token", lambda token: True)
+    monkeypatch.setattr(
+        bit_zying_caiji,
+        "validate_zying_auth_token",
+        lambda token: (_ for _ in ()).throw(
+            AssertionError("采集启动前不应再单独检测登录状态")
+        ),
+    )
     monkeypatch.setattr(
         bit_zying_caiji,
         "_zying_api_post",
@@ -1014,3 +1226,62 @@ def test_api_collection_reads_list_and_details_without_opening_browser(monkeypat
     assert written[0]["zying_category"] == "圆佑同步/家电类"
     assert written[0]["listing_snapshot"]["source"]["title"] == "API product"
     assert mirrored == written
+
+
+def test_collection_start_auto_reads_selected_browser_without_precheck(monkeypatch):
+    captured = {}
+    credential = bit_zying_caiji.ZYING_COOKIE_CREDENTIAL_PREFIX + "cookie-secret"
+
+    def capture(**kwargs):
+        captured["browser"] = kwargs
+        return {"configured": True}
+
+    def collect_api(**kwargs):
+        captured["api"] = kwargs
+        return {"collection_mode": "api"}
+
+    monkeypatch.setattr(
+        bit_zying_caiji,
+        "capture_zying_login_from_browser",
+        capture,
+    )
+    monkeypatch.setattr(
+        bit_zying_caiji,
+        "load_zying_auth_token",
+        lambda: credential,
+    )
+    monkeypatch.setattr(bit_zying_caiji, "collect_zying_products_api", collect_api)
+
+    result = bit_zying_caiji.collect_zying_products(
+        number=2,
+        browser_type="bitbrowser",
+        window_name="vngbjkk",
+    )
+
+    assert result == {"collection_mode": "api"}
+    assert captured["browser"]["window_name"] == "vngbjkk"
+    assert captured["browser"]["validate"] is False
+    assert captured["api"]["auth_token"] == credential
+
+
+def test_collection_honors_stop_event_before_opening_browser(monkeypatch):
+    stop_event = bit_zying_caiji.threading.Event()
+    stop_event.set()
+    monkeypatch.setattr(
+        bit_zying_caiji,
+        "capture_zying_login_from_browser",
+        lambda **kwargs: (_ for _ in ()).throw(
+            AssertionError("收到结束指令后不应再打开浏览器")
+        ),
+    )
+
+    with pytest.raises(
+        bit_zying_caiji.ZyingCollectionStopped,
+        match="已由用户结束",
+    ):
+        bit_zying_caiji.collect_zying_products(
+            number=2,
+            browser_type="bitbrowser",
+            window_name="vngbjkk",
+            stop_event=stop_event,
+        )

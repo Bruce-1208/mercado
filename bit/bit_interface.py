@@ -1,5 +1,6 @@
 import queue
 import json
+import re
 from collections import deque
 import functools
 import html
@@ -19,6 +20,7 @@ from urllib.parse import quote
 from urllib.request import urlopen
 
 from flask import Flask, Response, request, render_template, jsonify, send_file, session, redirect, url_for, g
+from itsdangerous import BadSignature, SignatureExpired, URLSafeTimedSerializer
 from openpyxl import Workbook
 from openpyxl.styles import Alignment, Font, PatternFill
 
@@ -1199,6 +1201,67 @@ def login_required(view_func):
     return wrapper
 
 
+BROWSER_EXTENSION_TOKEN_SALT = "zeshun-browser-extension-v1"
+
+
+def create_browser_extension_token(user):
+    """Create a signed, short-lived token for the Chrome/Edge collector."""
+    payload = {
+        "id": int(user.get("id") or 0),
+        "username": str(user.get("username") or ""),
+        "access_version": int(user.get("access_version") or 0),
+    }
+    return URLSafeTimedSerializer(
+        app.secret_key, salt=BROWSER_EXTENSION_TOKEN_SALT
+    ).dumps(payload)
+
+
+def _browser_extension_user_from_token(token):
+    try:
+        payload = URLSafeTimedSerializer(
+            app.secret_key, salt=BROWSER_EXTENSION_TOKEN_SALT
+        ).loads(
+            str(token or ""),
+            max_age=WORKBENCH_REMEMBER_HOURS * 60 * 60,
+        )
+    except (BadSignature, SignatureExpired):
+        return None
+    if not isinstance(payload, dict) or not payload.get("id"):
+        return None
+    if payload.get("access_version") != 1:
+        return payload
+    if USE_DB_API:
+        user = bit_db_api.get_workbench_session_user(payload.get("id"))
+    else:
+        row = get_workbench_user(user_id=payload.get("id"))
+        user = (
+            build_workbench_session_user(row)
+            if row and row.get("is_active")
+            else None
+        )
+    if not user or user.get("username") != payload.get("username"):
+        return None
+    return user
+
+
+def browser_extension_login_required(view_func):
+    @functools.wraps(view_func)
+    def wrapper(*args, **kwargs):
+        authorization = str(request.headers.get("Authorization") or "")
+        token = authorization[7:].strip() if authorization.lower().startswith("bearer ") else ""
+        try:
+            user = _browser_extension_user_from_token(token)
+        except Exception:
+            logging.exception("校验泽顺商品采集助手登录状态失败")
+            user = None
+        if not user:
+            return jsonify({"status": "error", "message": "插件登录已失效，请重新登录"}), 401
+        g.browser_extension_user = user
+        return view_func(*args, **kwargs)
+
+    return wrapper
+
+
 def internal_api_required(view_func):
     @functools.wraps(view_func)
     def wrapper(*args, **kwargs):
@@ -1394,6 +1457,7 @@ _risk_check_state = {
     "summary": {},
 }
 _zying_collection_lock = threading.Lock()
+_zying_collection_stop_event = threading.Event()
 _zying_collection_state_lock = threading.RLock()
 _zying_collection_logs = deque(maxlen=800)
 _zying_collection_state = {
@@ -1449,6 +1513,22 @@ _mercado_playwright_setup_state = {
 _mercado_profit_refresh_lock = threading.Lock()
 _mercado_profit_refresh_started = False
 _mercado_profit_refresh_stop_event = threading.Event()
+_mercado_shipping_rate_refresh_lock = threading.RLock()
+_mercado_shipping_rate_refresh_state = {
+    "running": False,
+    "status": "idle",
+    "message": "等待从官方更新",
+    "started_at": "",
+    "finished_at": "",
+    "elapsed_seconds": 0,
+    "success_sites": 0,
+    "failed_sites": 0,
+    "unavailable_site_count": 0,
+    "recalculation_count": 0,
+    "sites": [],
+    "errors": [],
+    "unavailable_sites": [],
+}
 _mercado_publish_lock = threading.RLock()
 _mercado_publish_state = {
     "running": False,
@@ -1496,6 +1576,7 @@ _order_print_state = {
     "message": "等待启动",
     "params": {},
     "printed": 0,
+    "partial": 0,
     "no_orders": 0,
     "failed": 0,
     "skipped": 0,
@@ -2688,6 +2769,7 @@ def run_zying_collection_job(params, task_lock):
     try:
         result = bit_zying_caiji.collect_zying_products(
             **params,
+            stop_event=_zying_collection_stop_event,
             product_writer=db_insert_zying_product_info,
             existing_product_id_reader=db_get_existing_zying_product_ids,
             product_mirror_writer=db_upsert_zying_products_to_products,
@@ -2717,6 +2799,20 @@ def run_zying_collection_job(params, task_lock):
                     "status": "success",
                     "message": completion_message,
                     "summary": summary,
+                    "requires_login": False,
+                }
+            )
+    except bit_zying_caiji.ZyingCollectionStopped as exc:
+        stopped_message = str(exc) or "智赢产品采集已由用户结束"
+        _append_zying_collection_log(stopped_message)
+        with _zying_collection_state_lock:
+            _zying_collection_state.update(
+                {
+                    "running": False,
+                    "finished_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                    "status": "stopped",
+                    "message": stopped_message,
+                    "summary": {},
                     "requires_login": False,
                 }
             )
@@ -2896,6 +2992,8 @@ def _order_print_history_status(outcome):
         return "no_orders"
     if text.startswith("成功"):
         return "printed"
+    if text.startswith("部分成功"):
+        return "partial"
     if text.startswith("跳过"):
         return "skipped"
     if text.startswith("失败"):
@@ -3182,6 +3280,7 @@ def run_order_print_job(params, task_lock, stop_event):
             _order_print_state.update(
                 {
                     "printed": summary.get("printed", 0),
+                    "partial": summary.get("partial", 0),
                     "no_orders": summary.get("no_orders", 0),
                     "failed": summary.get("failed", 0),
                     "skipped": summary.get("skipped", 0),
@@ -3196,21 +3295,35 @@ def run_order_print_job(params, task_lock, stop_event):
             )
 
         stopped = stop_event.is_set()
+        failed_sites = int(summary.get("failed") or 0)
+        partial_sites = int(summary.get("partial") or 0)
+        has_output = bool(summary.get("download_path"))
+        if stopped:
+            final_status = "stopped"
+            final_message = "API 订单打印已停止"
+        elif failed_sites and not has_output:
+            final_status = "error"
+            final_message = f"没有生成面单，{failed_sites} 个站点执行失败"
+        elif failed_sites or partial_sites:
+            final_status = "partial"
+            final_message = (
+                f"已生成 {summary.get('shipment_count', 0)} 个面单；"
+                f"{partial_sites} 个站点部分成功，{failed_sites} 个站点失败"
+            )
+        else:
+            final_status = "success"
+            final_message = (
+                f"API 面单已生成：{summary.get('shipment_count', 0)} 个"
+                if has_output
+                else "没有需要打印的订单"
+            )
         with _order_print_lock:
             _order_print_state.update(
                 {
                     "running": False,
                     "finished_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-                    "status": "stopped" if stopped else "success",
-                    "message": (
-                        "API 订单打印已停止"
-                        if stopped
-                        else (
-                            f"API 面单已生成：{summary.get('shipment_count', 0)} 个"
-                            if summary.get("download_path")
-                            else "没有需要打印的订单"
-                        )
-                    ),
+                    "status": final_status,
+                    "message": final_message,
                 }
             )
     except Exception as exc:
@@ -3263,6 +3376,16 @@ def build_daily_task_params(data):
         if normalized_appeal_type == bit_daily_task.APPEAL_TYPE_DELAY
         else normalized_appeal_type
     )
+    raw_salespeople = data.get("salespeople", data.get("salesperson", []))
+    if isinstance(raw_salespeople, str):
+        raw_salespeople = [raw_salespeople]
+    salespeople = []
+    for value in raw_salespeople or ():
+        salesperson = str(value or "").strip()
+        if salesperson in ("", "全部业务员", "所有业务员", "all", "*"):
+            continue
+        if salesperson not in salespeople:
+            salespeople.append(salesperson)
     return {
         "mode": mode,
         "appeal_type": appeal_type,
@@ -3278,7 +3401,7 @@ def build_daily_task_params(data):
         "round_interval": _parse_int_param(data, "round_interval", 600, 10, 86400),
         "site_pause": _parse_int_param(data, "site_pause", 30, 0, 3600),
         "stop_after_minutes": _parse_int_param(data, "stop_after_minutes", 360, 0, 24 * 60),
-        "only_active": _parse_bool_param(data, "only_active", True),
+        "salespeople": salespeople,
         "min_rate": _parse_rate_param(data),
         "message": str(data.get("message", "") or ""),
     }
@@ -3301,8 +3424,8 @@ def run_daily_task_job(params, task_lock):
                 round_interval=params["round_interval"],
                 site_pause=params["site_pause"],
                 message=params["message"],
-                only_active=params["only_active"],
                 min_rate=min_rate,
+                salespeople=params["salespeople"],
                 stop_at=stop_at,
                 _task_lock=task_lock,
             )
@@ -3315,8 +3438,8 @@ def run_daily_task_job(params, task_lock):
                 recent_days=params["recent_days"],
                 site_pause=params["site_pause"],
                 message=params["message"],
-                only_active=params["only_active"],
                 min_rate=min_rate,
+                salespeople=params["salespeople"],
                 _task_lock=task_lock,
             )
             result_message = f"daily_task {appeal_type}申诉单轮执行完成"
@@ -4346,6 +4469,7 @@ def api_start_order_print():
             "params": params,
             "task_id": params["task_id"],
             "printed": 0,
+            "partial": 0,
             "no_orders": 0,
             "failed": 0,
             "skipped": 0,
@@ -4670,17 +4794,26 @@ def api_print_orders_pdf():
         return jsonify({"status": "error", "message": "order_ids 必须是数组"}), 422
     try:
         result = bit_db_api.download_order_labels(order_ids)
-        user = session.get("workbench_user") or {}
-        bit_db_api.record_order_print_logs(
-            result.get("order_ids") or order_ids,
-            operator_id=user.get("id"),
-            operator_name=user.get("display_name") or user.get("username") or "",
-        )
     except ValueError as exc:
         return jsonify({"status": "error", "message": str(exc)}), 400
     except Exception as exc:
         logging.exception("美客多面单 PDF 下载失败")
         return jsonify({"status": "error", "message": f"美客多面单下载失败：{exc}"}), 502
+
+    print_log_error = ""
+    try:
+        user = session.get("workbench_user") or {}
+        bit_db_api.record_order_print_logs(
+            result.get("order_ids") or [],
+            operator_id=user.get("id"),
+            operator_name=user.get("display_name") or user.get("username") or "",
+        )
+    except Exception as exc:
+        # The PDF is already valid at this point.  Do not discard it just
+        # because the audit write failed; report the condition to the UI so
+        # operators can avoid immediately printing the same orders again.
+        print_log_error = str(exc) or exc.__class__.__name__
+        logging.exception("美客多面单已生成，但打印记录写入失败")
     response = send_file(
         BytesIO(result["content"]),
         mimetype="application/pdf",
@@ -4688,7 +4821,25 @@ def api_print_orders_pdf():
         download_name=result.get("filename") or "mercado-labels.pdf",
         max_age=0,
     )
+    successful_order_ids = [str(value) for value in result.get("order_ids") or []]
+    skipped_order_count = int(
+        result.get("skipped_order_count")
+        or len(result.get("skipped_order_ids") or [])
+    )
+    failed_order_count = int(
+        result.get("failed_order_count")
+        or len(result.get("failed_order_ids") or [])
+    )
     response.headers["X-Mercado-Shipment-Count"] = str(result.get("shipment_count") or 0)
+    response.headers["X-Mercado-Printed-Order-Count"] = str(len(successful_order_ids))
+    response.headers["X-Mercado-Printed-Order-Ids"] = ",".join(successful_order_ids)
+    response.headers["X-Mercado-Skipped-Order-Count"] = str(skipped_order_count)
+    response.headers["X-Mercado-Failed-Order-Count"] = str(failed_order_count)
+    response.headers["X-Mercado-Result"] = (
+        "partial" if skipped_order_count or failed_order_count else "success"
+    )
+    if print_log_error:
+        response.headers["X-Mercado-Print-Log"] = "failed"
     response.headers["Cache-Control"] = "no-store"
     return response
 
@@ -4909,6 +5060,36 @@ def api_start_daily_task():
     })
 
 
+@app.route('/api/tasks/daily/options', methods=['GET'])
+@login_required
+def api_daily_task_options():
+    salespeople = []
+    try:
+        users = _workbench_backend("list_workbench_users") or []
+        salespeople.extend(
+            str(user.get("display_name") or user.get("username") or "").strip()
+            for user in users
+            if user.get("is_active") is not False
+        )
+    except Exception:
+        logging.exception("读取任务模块业务员列表失败，回退到店铺授权配置")
+    try:
+        token_data = bit_db_api.list_mercado_store_tokens() or {}
+        for token in token_data.get("rows") or ():
+            for setting in token.get("site_settings") or ():
+                salespeople.append(str(setting.get("salesperson") or "").strip())
+    except Exception:
+        logging.exception("从店铺授权读取任务模块业务员失败")
+    unique_salespeople = sorted(
+        {name for name in salespeople if name},
+        key=lambda value: value.casefold(),
+    )
+    return jsonify({
+        "status": "success",
+        "data": {"salespeople": unique_salespeople},
+    })
+
+
 @app.route('/api/tasks/daily/status', methods=['GET'])
 @login_required
 def api_daily_task_status():
@@ -5113,6 +5294,7 @@ def api_start_zying_collection():
         }), 409
 
     with _zying_collection_state_lock:
+        _zying_collection_stop_event.clear()
         _zying_collection_logs.clear()
         _zying_collection_state.update(
             {
@@ -5179,6 +5361,38 @@ def api_zying_collection_status():
             },
         }
     return jsonify({"status": "success", "data": data})
+
+
+@app.route('/api/zying-collection/stop', methods=['POST'])
+@login_required
+def api_stop_zying_collection():
+    with _zying_collection_state_lock:
+        if not _zying_collection_state.get("running"):
+            return jsonify({
+                "status": "error",
+                "message": "当前没有正在运行的智赢产品采集任务",
+                "data": {
+                    **dict(_zying_collection_state),
+                    "logs": list(_zying_collection_logs),
+                },
+            }), 409
+        _zying_collection_stop_event.set()
+        _zying_collection_state.update(
+            {
+                "status": "stopping",
+                "message": "正在安全结束智赢产品采集，请等待当前接口或入库节点完成",
+            }
+        )
+        _append_zying_collection_log("已收到结束指令，正在安全停止采集")
+        data = {
+            **dict(_zying_collection_state),
+            "logs": list(_zying_collection_logs),
+        }
+    return jsonify({
+        "status": "success",
+        "message": "已发送结束指令",
+        "data": data,
+    })
 
 
 @app.route('/api/risk-check/start', methods=['POST'])
@@ -5311,6 +5525,115 @@ def _format_mercado_elapsed(seconds):
     return f"{seconds}秒"
 
 
+def _mercado_shipping_rate_refresh_snapshot():
+    with _mercado_shipping_rate_refresh_lock:
+        return {
+            **_mercado_shipping_rate_refresh_state,
+            "sites": [dict(row) for row in _mercado_shipping_rate_refresh_state.get("sites", [])],
+            "errors": [dict(row) for row in _mercado_shipping_rate_refresh_state.get("errors", [])],
+            "unavailable_sites": [
+                dict(row)
+                for row in _mercado_shipping_rate_refresh_state.get("unavailable_sites", [])
+            ],
+        }
+
+
+def _run_mercado_shipping_rate_refresh():
+    started_monotonic = time.monotonic()
+    started_at = datetime.now().replace(microsecond=0).strftime("%Y-%m-%d %H:%M:%S")
+    with _mercado_shipping_rate_refresh_lock:
+        _mercado_shipping_rate_refresh_state.update({
+            "running": True,
+            "status": "running",
+            "message": "正在读取 Global Selling 官方最新运费公告与汇率",
+            "started_at": started_at,
+            "finished_at": "",
+            "elapsed_seconds": 0,
+            "success_sites": 0,
+            "failed_sites": 0,
+            "unavailable_site_count": 0,
+            "recalculation_count": 0,
+            "sites": [],
+            "errors": [],
+            "unavailable_sites": [],
+        })
+    try:
+        from erp.mercadolibre_collection_store import mark_all_profitability_stale
+        from erp.mercadolibre_profitability import (
+            MercadoProfitabilityClient,
+            active_store_token,
+        )
+        from erp.mercadolibre_shipping_rate_cards import (
+            refresh_official_shipping_rate_cards,
+        )
+
+        # The announcements are public. Mercado Libre currently requires an
+        # authorized app token for its official currency-conversion endpoint.
+        result = refresh_official_shipping_rate_cards(
+            MercadoProfitabilityClient(active_store_token())
+        )
+        recalculation_count = mark_all_profitability_stale()
+        success_sites = int(result.get("success_sites") or 0)
+        failed_sites = int(result.get("failed_sites") or 0)
+        unavailable_site_count = int(result.get("unavailable_site_count") or 0)
+        status = "completed" if success_sites and not failed_sites else (
+            "partial" if success_sites else "failed"
+        )
+        message = (
+            f"官方标准更新完成：已更新 {success_sites} 个站点，"
+            f"官方未公布 {unavailable_site_count} 个，失败 {failed_sites} 个；"
+            f"已安排 {recalculation_count} 条商品成本重算"
+        )
+        with _mercado_shipping_rate_refresh_lock:
+            _mercado_shipping_rate_refresh_state.update({
+                "running": False,
+                "status": status,
+                "message": message,
+                "finished_at": datetime.now().replace(microsecond=0).strftime(
+                    "%Y-%m-%d %H:%M:%S"
+                ),
+                "elapsed_seconds": round(time.monotonic() - started_monotonic, 1),
+                "success_sites": success_sites,
+                "failed_sites": failed_sites,
+                "unavailable_site_count": unavailable_site_count,
+                "recalculation_count": recalculation_count,
+                "sites": list(result.get("sites") or []),
+                "errors": list(result.get("errors") or []),
+                "unavailable_sites": list(result.get("unavailable_sites") or []),
+            })
+    except Exception as exc:
+        logging.exception("从官方刷新 Mercado 运费表失败")
+        with _mercado_shipping_rate_refresh_lock:
+            _mercado_shipping_rate_refresh_state.update({
+                "running": False,
+                "status": "failed",
+                "message": f"Global Selling 官方标准更新失败：{exc}",
+                "finished_at": datetime.now().replace(microsecond=0).strftime(
+                    "%Y-%m-%d %H:%M:%S"
+                ),
+                "elapsed_seconds": round(time.monotonic() - started_monotonic, 1),
+                "failed_sites": 5,
+                "errors": [{"site_id": "", "country_name": "全部站点", "error": str(exc)}],
+            })
+
+
+def _start_mercado_shipping_rate_refresh(*, automatic=False):
+    with _mercado_shipping_rate_refresh_lock:
+        if _mercado_shipping_rate_refresh_state.get("running"):
+            return False
+        _mercado_shipping_rate_refresh_state.update({
+            "running": True,
+            "status": "queued",
+            "message": "官方标准已加入后台更新队列" if not automatic else "每日官方标准更新已加入队列",
+        })
+    threading.Thread(
+        target=_run_mercado_shipping_rate_refresh,
+        name="mercado-official-shipping-rate-refresh",
+        daemon=True,
+    ).start()
+    return True
+
+
 def _mercado_profit_refresh_loop():
     """Refresh stale official fee snapshots without blocking the workbench UI."""
 
@@ -5340,6 +5663,7 @@ def _mercado_profit_refresh_loop():
 
     next_reference_check = 0.0
     while not _mercado_profit_refresh_stop_event.is_set():
+        processed_rows = False
         try:
             stale_before = (datetime.now() - timedelta(hours=stale_hours)).strftime(
                 "%Y-%m-%d %H:%M:%S"
@@ -5357,20 +5681,49 @@ def _mercado_profit_refresh_loop():
                     for site_id, snapshot in site_rates.items()
                 })
                 refresh_usd_cny_daily_rates()
+                from erp.mercadolibre_shipping_rate_cards import (
+                    OfficialShippingRateCardStore,
+                )
+                if OfficialShippingRateCardStore().needs_refresh(max_age_hours=24):
+                    _start_mercado_shipping_rate_refresh(automatic=True)
                 # Refresh reference data and backfill converted prices once a day.
                 next_reference_check = time.monotonic() + 24 * 60 * 60
             if rows:
-                client = client or MercadoProfitabilityClient(active_store_token())
-                for row in rows:
-                    if _mercado_profit_refresh_stop_event.is_set():
-                        break
-                    enriched = enrich_profitability(row, client=client)
+                processed_rows = True
+                from concurrent.futures import ThreadPoolExecutor, as_completed
+
+                token = active_store_token()
+                worker_state = threading.local()
+
+                def refresh_row(row):
+                    row_client = getattr(worker_state, "client", None)
+                    if row_client is None:
+                        row_client = MercadoProfitabilityClient(token)
+                        worker_state.client = row_client
+                    enriched = enrich_profitability(row, client=row_client)
                     update_item_profitability(
                         str(row.get("source_item_id") or ""), enriched
                     )
+                    return str(row.get("source_item_id") or "")
+
+                worker_count = min(10, len(rows))
+                with ThreadPoolExecutor(
+                    max_workers=worker_count,
+                    thread_name_prefix="mercado-profit",
+                ) as executor:
+                    futures = [executor.submit(refresh_row, row) for row in rows]
+                    for future in as_completed(futures):
+                        if _mercado_profit_refresh_stop_event.is_set():
+                            break
+                        try:
+                            future.result()
+                        except Exception:
+                            logging.exception("Mercado 商品成本重算失败")
         except Exception:
             logging.exception("自动更新 Mercado 官网佣金、汇率和运费失败")
-        _mercado_profit_refresh_stop_event.wait(interval)
+        # Drain a recalculation backlog continuously in 50-row/10-thread
+        # batches. The long interval is only for the idle daily poll.
+        _mercado_profit_refresh_stop_event.wait(0.5 if processed_rows else interval)
 
 
 def ensure_mercado_profit_refresh_worker():
@@ -5401,8 +5754,10 @@ def _start_order_sync_scheduler():
 
 
 def _mercado_collection_rows_needing_repair(rows):
-    """Retry every incomplete row; plugin-visible rows can succeed once load drops."""
-    return [row for row in rows or [] if row.get("scrape_status") != "ok"]
+    """Retry only rows whose current weight/dimensions are actually incomplete."""
+    from erp.mercadolibre_collection_store import has_complete_weight_dimensions
+
+    return [row for row in rows or [] if not has_complete_weight_dimensions(row)]
 
 
 def _mercado_collection_db_call(operation, *args, attempts=6, **kwargs):
@@ -6585,6 +6940,35 @@ def api_mercado_product_publish_status():
     return response
 
 
+@app.route('/api/mercado-shipping-rates', methods=['GET'])
+@login_required
+def api_mercado_shipping_rates():
+    try:
+        from erp.mercadolibre_shipping_rate_cards import OfficialShippingRateCardStore
+
+        site_id = str(request.args.get("site_id") or "").strip().upper()
+        result = OfficialShippingRateCardStore().list_rates(site_id)
+        result["refresh"] = _mercado_shipping_rate_refresh_snapshot()
+        response = jsonify({"status": "success", "data": result})
+        response.headers["Cache-Control"] = "no-store"
+        return response
+    except Exception as exc:
+        logging.exception("读取 Mercado 官方运费表失败")
+        return jsonify({"status": "error", "message": f"读取官方运费表失败：{exc}"}), 500
+
+
+@app.route('/api/mercado-shipping-rates/refresh', methods=['POST'])
+@login_required
+def api_refresh_mercado_shipping_rates():
+    started = _start_mercado_shipping_rate_refresh()
+    data = _mercado_shipping_rate_refresh_snapshot()
+    return jsonify({
+        "status": "success",
+        "message": "已开始更新 Global Selling 官方最新标准" if started else "官方标准更新正在运行",
+        "data": data,
+    }), (202 if started else 200)
+
+
 @app.route('/api/mercado-publish-records', methods=['GET'])
 @login_required
 def api_mercado_product_publish_records():
@@ -7714,6 +8098,15 @@ def api_db_order_labels():
     )
     response.headers["X-Mercado-Label-Filename"] = result.get("filename") or "mercado-labels.pdf"
     response.headers["X-Mercado-Shipment-Count"] = str(result.get("shipment_count") or 0)
+    successful_order_ids = [str(value) for value in result.get("order_ids") or []]
+    response.headers["X-Mercado-Printed-Order-Ids"] = ",".join(successful_order_ids)
+    response.headers["X-Mercado-Printed-Order-Count"] = str(len(successful_order_ids))
+    response.headers["X-Mercado-Skipped-Order-Count"] = str(
+        len(result.get("skipped_order_ids") or [])
+    )
+    response.headers["X-Mercado-Failed-Order-Count"] = str(
+        len(result.get("failed_order_ids") or [])
+    )
     response.headers["Cache-Control"] = "no-store"
     return response
 
@@ -8991,6 +9384,111 @@ def api_login():
         "remember": remember,
         "expires_in": WORKBENCH_REMEMBER_HOURS * 60 * 60 if remember else None,
     })
+
+
+@app.route("/api/browser-extension/login", methods=["POST"])
+def api_browser_extension_login():
+    data = request.get_json(silent=True) or {}
+    username = str(data.get("username") or "").strip()
+    password = str(data.get("password") or "")
+    if not username or not password:
+        return jsonify({"status": "error", "message": "请输入泽顺控制台账号和密码"}), 400
+    try:
+        user = authenticate_workbench_user(username, password)
+    except Exception as exc:
+        logging.exception("泽顺商品采集助手登录失败")
+        return jsonify({"status": "error", "message": f"登录接口调用失败：{exc}"}), 500
+    if not user:
+        return jsonify({"status": "error", "message": "账号或密码错误"}), 401
+    return jsonify({
+        "status": "success",
+        "data": {
+            "token": create_browser_extension_token(user),
+            "user": user,
+            "expires_in": WORKBENCH_REMEMBER_HOURS * 60 * 60,
+        },
+    })
+
+
+@app.route("/api/browser-extension/session", methods=["GET"])
+@browser_extension_login_required
+def api_browser_extension_session():
+    return jsonify({"status": "success", "data": {"user": g.browser_extension_user}})
+
+
+@app.route("/api/browser-extension/collect", methods=["POST"])
+@browser_extension_login_required
+def api_browser_extension_collect():
+    from erp.mercadolibre_batch_collector import validate_collection_request
+
+    data = request.get_json(silent=True) or {}
+    product = data.get("product") if isinstance(data.get("product"), dict) else data
+    item_id = str(product.get("source_item_id") or "").strip().upper()
+    title = str(product.get("title") or "").strip()
+    source_url = str(product.get("source_url") or product.get("final_url") or "").strip()
+    if not re.fullmatch(r"(?:ML[A-Z]|CBT)\d{5,}", item_id):
+        return jsonify({"status": "error", "message": "未识别到有效的 Mercado Libre 商品编号"}), 400
+    if not title:
+        return jsonify({"status": "error", "message": "商品标题不能为空"}), 400
+    try:
+        source_url, _ = validate_collection_request(source_url, 1)
+    except ValueError as exc:
+        return jsonify({"status": "error", "message": str(exc)}), 400
+    product = dict(product)
+    product["source_item_id"] = item_id
+    product["source_url"] = source_url
+    created_by = str(
+        g.browser_extension_user.get("display_name")
+        or g.browser_extension_user.get("username")
+        or "浏览器插件"
+    )
+    task_id = None
+    try:
+        task_id = db_create_mercado_collection_task(
+            source_url, 1, f"浏览器插件：{created_by}"
+        )
+        db_upsert_mercado_collection_items(task_id, [product])
+        complete = str(product.get("scrape_status") or "partial") == "ok"
+        status = "completed" if complete else "partial"
+        message = (
+            "浏览器插件采集完成"
+            if complete
+            else "浏览器插件快速采集完成，重量尺寸或详情待补充"
+        )
+        db_update_mercado_collection_task(
+            task_id,
+            status=status,
+            message=message,
+            collected_count=1,
+            completed_count=1 if complete else 0,
+            failed_count=0 if complete else 1,
+            current_page=1,
+            started=True,
+            finished=True,
+        )
+    except Exception as exc:
+        if task_id:
+            try:
+                db_update_mercado_collection_task(
+                    task_id,
+                    status="error",
+                    message=f"浏览器插件采集失败：{exc}",
+                    failed_count=1,
+                    started=True,
+                    finished=True,
+                )
+            except Exception:
+                logging.exception("更新浏览器插件采集失败任务状态失败")
+        logging.exception("浏览器插件采集商品入库失败")
+        return jsonify({"status": "error", "message": f"商品入库失败：{exc}"}), 500
+    return jsonify({
+        "status": "success",
+        "data": {
+            "task_id": int(task_id),
+            "source_item_id": item_id,
+            "scrape_status": product.get("scrape_status") or "partial",
+        },
+    }), 201
 
 
 @app.route("/logout", methods=["GET", "POST"])

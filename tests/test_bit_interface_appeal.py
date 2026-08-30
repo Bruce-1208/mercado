@@ -706,7 +706,7 @@ def test_reputation_traffic_change_cells_use_thirty_percent_threshold():
     assert ".reputation-change-cell.change-red" in template
 
 
-def test_daily_task_console_exposes_four_appeal_types_and_rate_threshold():
+def test_daily_task_console_exposes_mixed_mode_salesperson_and_rate_threshold():
     template = (
         Path(bit_interface.CURRENT_DIR) / "templates" / "index.html"
     ).read_text(encoding="utf-8")
@@ -716,19 +716,64 @@ def test_daily_task_console_exposes_four_appeal_types_and_rate_threshold():
     assert '<option value="延误率">延误率</option>' in template
     assert '<option value="取消率">取消率</option>' in template
     assert '<option value="投诉">投诉</option>' in template
+    assert '<option value="混合模式">混合模式（其他任务后执行侵权）</option>' in template
+    assert 'id="daily-task-salesperson"' in template
+    assert '<option value="">所有业务员</option>' in template
+    assert 'id="daily-task-only-active"' not in template
     assert 'id="daily-task-min-rate"' in template
     assert "appeal_type: document.getElementById(\"daily-task-appeal-type\").value" in template
     assert "min_rate: `${minRatePercent}%`" in template
 
 
-@pytest.mark.parametrize("appeal_type", ["侵权", "延误率", "取消率", "投诉"])
-def test_build_daily_task_params_accepts_four_appeal_types(appeal_type):
+@pytest.mark.parametrize("appeal_type", ["侵权", "延误率", "取消率", "投诉", "混合模式"])
+def test_build_daily_task_params_accepts_all_appeal_modes(appeal_type):
     params = bit_interface.build_daily_task_params(
         {"appeal_type": appeal_type, "min_rate": "7.5%"}
     )
 
     assert params["appeal_type"] == appeal_type
     assert params["min_rate"] == pytest.approx(0.075)
+
+
+def test_build_daily_task_params_supports_one_or_all_salespeople():
+    selected = bit_interface.build_daily_task_params(
+        {"salespeople": ["张三", "张三"]}
+    )
+    all_salespeople = bit_interface.build_daily_task_params(
+        {"salesperson": "所有业务员"}
+    )
+
+    assert selected["salespeople"] == ["张三"]
+    assert all_salespeople["salespeople"] == []
+    assert "only_active" not in selected
+
+
+def test_daily_task_options_returns_all_active_salespeople(monkeypatch):
+    monkeypatch.setattr(
+        bit_interface,
+        "_workbench_backend",
+        lambda name: [
+            {"display_name": "张三", "is_active": True},
+            {"display_name": "停用人员", "is_active": False},
+        ],
+    )
+    monkeypatch.setattr(
+        bit_interface.bit_db_api,
+        "list_mercado_store_tokens",
+        lambda: {
+            "rows": [
+                {"site_settings": [{"salesperson": "李四"}]},
+            ]
+        },
+    )
+    client = bit_interface.app.test_client()
+    with client.session_transaction() as flask_session:
+        flask_session["workbench_user"] = {"id": 1, "username": "tester"}
+
+    response = client.get("/api/tasks/daily/options")
+
+    assert response.status_code == 200
+    assert response.get_json()["data"]["salespeople"] == ["张三", "李四"]
 
 
 def test_build_daily_task_params_rejects_invalid_appeal_settings():

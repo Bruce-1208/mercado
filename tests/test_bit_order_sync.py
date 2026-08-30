@@ -225,8 +225,34 @@ def test_mysql_builds_sku_items_with_variation_and_sku_image():
             "variation": "颜色: 白色 · 尺码: 33",
             "quantity": 2,
             "image_url": "https://img.example/white-33-O.jpg",
+            "product_url": "https://produto.mercadolivre.com.br/MLB-1-_JM",
         }
     ]
+
+
+def test_mysql_uses_store_link_assets_when_order_image_is_missing():
+    items = bit_mysql._mercado_order_sku_items(
+        {
+            "order_items": [
+                {
+                    "quantity": 1,
+                    "item": {"id": "MLM123456", "title": "测试商品"},
+                }
+            ]
+        },
+        product_assets={
+            "MLM123456": {
+                "site_id": "MLM",
+                "thumbnail_url": "http://http2.mlstatic.com/test.jpg",
+                "permalink": "http://articulo.mercadolibre.com.mx/MLM-123456-test-_JM",
+            }
+        },
+    )
+
+    assert items[0]["image_url"] == "https://http2.mlstatic.com/test.jpg"
+    assert items[0]["product_url"] == (
+        "https://articulo.mercadolibre.com.mx/MLM-123456-test-_JM"
+    )
 
 
 def test_automatic_sync_refreshes_recent_72_hours(monkeypatch):

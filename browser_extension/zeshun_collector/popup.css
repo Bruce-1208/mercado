@@ -1,0 +1,120 @@
+:root {
+  color-scheme: light;
+  font-family: "Microsoft YaHei", "PingFang SC", system-ui, sans-serif;
+  color: #1d2a3a;
+  background: #f5f8fc;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  width: 340px;
+  margin: 0;
+  background: linear-gradient(180deg, #f7faff 0, #fff 160px);
+}
+
+header {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  padding: 18px 18px 12px;
+}
+
+.logo {
+  display: grid;
+  place-items: center;
+  width: 42px;
+  height: 42px;
+  border-radius: 12px;
+  color: #fff;
+  background: linear-gradient(135deg, #1473e6, #0a48a5);
+  font-size: 22px;
+  font-weight: 800;
+  box-shadow: 0 8px 18px rgba(20, 90, 190, 0.25);
+}
+
+h1 { margin: 0; font-size: 17px; }
+header p { margin: 4px 0 0; color: #728096; font-size: 12px; }
+main { padding: 6px 18px 14px; }
+
+.auth-line {
+  margin-bottom: 9px;
+  color: #68778c;
+  font-size: 12px;
+}
+
+.auth-line.logged-in { color: #176b43; }
+
+.status {
+  min-height: 45px;
+  margin-bottom: 12px;
+  padding: 10px 12px;
+  border: 1px solid #dbe4f0;
+  border-radius: 9px;
+  background: #fff;
+  color: #526176;
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+button { font: inherit; }
+
+.primary {
+  width: 100%;
+  padding: 11px 14px;
+  border: 0;
+  border-radius: 9px;
+  color: #fff;
+  background: linear-gradient(135deg, #1368e8, #0b4db8);
+  cursor: pointer;
+  font-weight: 700;
+}
+
+.primary:disabled { cursor: not-allowed; opacity: 0.52; }
+
+.queue-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 12px;
+  color: #66758a;
+  font-size: 12px;
+}
+
+.link-button {
+  padding: 4px 0;
+  border: 0;
+  color: #0b5ccc;
+  background: transparent;
+  cursor: pointer;
+}
+
+.result {
+  margin-top: 10px;
+  padding: 9px 11px;
+  border-radius: 8px;
+  background: #e9f7ef;
+  color: #176b43;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.result.error { background: #fdecea; color: #a52b23; }
+.result.warning { background: #fff3db; color: #865a00; }
+
+footer {
+  display: grid;
+  grid-template-columns: 1fr 74px;
+  gap: 8px;
+  padding: 12px 18px 16px;
+  border-top: 1px solid #e3e9f2;
+}
+
+.secondary {
+  padding: 8px 10px;
+  border: 1px solid #ced8e6;
+  border-radius: 8px;
+  color: #36475e;
+  background: #fff;
+  cursor: pointer;
+}

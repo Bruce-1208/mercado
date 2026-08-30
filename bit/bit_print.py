@@ -534,7 +534,7 @@ def _run_shop_job(
                 f"{failed_count} 个失败；"
                 + "；".join(failed_messages[:3])
             )
-            status = "failed"
+            status = "partial" if successful_shipments else "failed"
         elif successful_shipments:
             prefix = f"首次运行按最近 {fallback_hours} 小时回退；" if scan["first_run"] else ""
             suffix = f"；跳过 {skipped_count} 个无可用面单运单" if skipped_count else ""
@@ -570,6 +570,8 @@ def _run_shop_job(
 def _task_record(result):
     if result["status"] == "printed":
         outcome = f"成功：API 生成 {result.get('shipment_count', 0)} 个面单"
+    elif result["status"] == "partial":
+        outcome = f"部分成功：{result['message']}"
     elif result["status"] == "no_orders":
         outcome = "成功：无待打印订单"
     elif result["status"] == "skipped":
@@ -597,6 +599,7 @@ def _write_output(documents, *, output_dir, task_id):
 def _summary(results, started_at, stopped=False):
     counts = {
         "printed": sum(result["status"] == "printed" for result in results),
+        "partial": sum(result["status"] == "partial" for result in results),
         "no_orders": sum(result["status"] == "no_orders" for result in results),
         "failed": sum(result["status"] == "failed" for result in results),
         "skipped": sum(result["status"] == "skipped" for result in results),

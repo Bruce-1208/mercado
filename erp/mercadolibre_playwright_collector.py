@@ -94,13 +94,15 @@ LISTING_DOM_SCRIPT = r"""() => {
     let price = fraction ? clean(fraction.textContent).replace(/\D/g, '') : '';
     if (price && cents) price += '.' + clean(cents.textContent).replace(/\D/g, '');
     const cardText = clean(root.innerText || root.textContent || '');
+    const hasFreeShipping = /env[ií]o\s+gratis|frete\s+gr[aá]tis|env[ií]o\s+sin\s+cargo/i.test(cardText);
     rows.push({
       href: link.href,
       title: clean((titleNode && titleNode.textContent) || link.textContent),
       main_image_url: imageUrl(img),
       price,
       currency_id: 'MXN',
-      is_cross_border: /(^|\s)internacional(\s|$)/i.test(cardText)
+      is_cross_border: /(^|\s)internacional(\s|$)/i.test(cardText),
+      free_shipping: hasFreeShipping
     });
   }
   const next = document.querySelector(
@@ -190,6 +192,15 @@ DETAIL_DOM_SCRIPT = r"""() => {
   if (visiblePrice && visibleCents) {
     visiblePrice += '.' + clean(visibleCents.textContent).replace(/\D/g, '');
   }
+  const pageText = clean(document.body ? document.body.innerText : '');
+  const shippingNode = first([
+    '[data-testid="shipping-message"]', '.ui-pdp-shipping__container',
+    '.ui-pdp-media__title', '.ui-pdp-color--GREEN'
+  ]);
+  const shippingText = clean(shippingNode && shippingNode.textContent);
+  const freeShipping = /env[ií]o\s+gratis|frete\s+gr[aá]tis|env[ií]o\s+sin\s+cargo/i.test(
+    shippingText || pageText
+  );
   return {
     final_url: location.href,
     title: clean(
@@ -200,7 +211,8 @@ DETAIL_DOM_SCRIPT = r"""() => {
     currency_id: (currency && currency.content) || offer.priceCurrency || 'MXN',
     pictures,
     specs,
-    body: clean(document.body ? document.body.innerText : '').slice(0, 1800),
+    free_shipping: freeShipping,
+    body: pageText.slice(0, 1800),
     page_title: document.title
   };
 }"""
@@ -1374,6 +1386,9 @@ async def _collect_detail(
         currency_id = str(
             details.get("currency_id") or candidate.get("currency_id") or "MXN"
         )
+        free_shipping = details.get("free_shipping")
+        if not isinstance(free_shipping, bool):
+            free_shipping = candidate.get("free_shipping")
         source = {
             "id": item_id,
             "site_id": item_id[:3],
@@ -1388,6 +1403,8 @@ async def _collect_detail(
             "variations": [],
             "sale_terms": [],
         }
+        if isinstance(free_shipping, bool):
+            source["shipping"] = {"free_shipping": free_shipping}
         return {
             "source_item_id": item_id,
             "source_url": str(candidate["source_url"]),
@@ -1402,6 +1419,7 @@ async def _collect_detail(
             "package_width_cm": metrics.get("package_width_cm"),
             "package_height_cm": metrics.get("package_height_cm"),
             "weight_basis": weight_basis,
+            "source_free_shipping": free_shipping if isinstance(free_shipping, bool) else None,
             "scrape_status": "ok" if complete else "partial",
             "error_message": "；".join(errors),
             "source": source,

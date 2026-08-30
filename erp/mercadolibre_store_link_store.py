@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import re
+import threading
 from datetime import datetime, timedelta
 from decimal import Decimal, InvalidOperation
 from typing import Any, Callable, Iterable, Mapping
@@ -11,6 +12,10 @@ from typing import Any, Callable, Iterable, Mapping
 
 STORE_LINK_TABLE = "erp_mercadolibre_store_links"
 STORE_LINK_SYNC_STATE_TABLE = "erp_mercadolibre_store_link_sync_state"
+
+_schema_lock = threading.RLock()
+_store_link_schema_ready = False
+_sync_state_schema_ready = False
 
 
 def _connect() -> Any:
@@ -51,7 +56,7 @@ def _ensure_column(cursor: Any, column: str, definition: str) -> bool:
     return True
 
 
-def ensure_store_link_table(cursor: Any) -> None:
+def _migrate_store_link_table(cursor: Any) -> None:
     cursor.execute(
         f"""
         CREATE TABLE IF NOT EXISTS `{STORE_LINK_TABLE}` (
@@ -122,7 +127,35 @@ def ensure_store_link_table(cursor: Any) -> None:
         )
 
 
-def ensure_store_link_sync_state_table(cursor: Any) -> None:
+def ensure_store_link_table(cursor: Any) -> None:
+    """Avoid repeated DDL against the large synchronized-listing table."""
+
+    global _store_link_schema_ready
+    if _store_link_schema_ready:
+        return
+    with _schema_lock:
+        if _store_link_schema_ready:
+            return
+        cursor.execute(
+            """
+            SELECT `COLUMN_NAME`
+            FROM `information_schema`.`COLUMNS`
+            WHERE `TABLE_SCHEMA` = DATABASE() AND `TABLE_NAME` = %s
+            """,
+            (STORE_LINK_TABLE,),
+        )
+        schema_rows = cursor.fetchall() if hasattr(cursor, "fetchall") else []
+        columns = {
+            str(row.get("COLUMN_NAME") or row.get("Column_name") or "")
+            for row in schema_rows or []
+            if isinstance(row, Mapping)
+        }
+        if not {"sync_marker", "net_proceeds_manual", "remote_json"}.issubset(columns):
+            _migrate_store_link_table(cursor)
+        _store_link_schema_ready = True
+
+
+def _migrate_store_link_sync_state_table(cursor: Any) -> None:
     """Keep automatic sync requests durable across service restarts."""
 
     cursor.execute(
@@ -142,18 +175,37 @@ def ensure_store_link_sync_state_table(cursor: Any) -> None:
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
         """
     )
-    # Seed stores synchronized before the scheduler existed. INSERT IGNORE also
-    # makes this safe to execute during every schema check.
-    cursor.execute(
-        f"""
-        INSERT IGNORE INTO `{STORE_LINK_SYNC_STATE_TABLE}` (
-            `token_id`, `last_started_at`, `last_completed_at`, `last_status`
+    # Do not backfill this state by scanning the million-row listing table.
+    # The scheduler's LEFT JOIN already treats a missing state row as due, and
+    # creates the compact state row when that store is actually synchronized.
+
+
+def ensure_store_link_sync_state_table(cursor: Any) -> None:
+    """Create/seed scheduler state once per process, then use a fast path."""
+
+    global _sync_state_schema_ready
+    if _sync_state_schema_ready:
+        return
+    with _schema_lock:
+        if _sync_state_schema_ready:
+            return
+        cursor.execute(
+            """
+            SELECT `COLUMN_NAME`
+            FROM `information_schema`.`COLUMNS`
+            WHERE `TABLE_SCHEMA` = DATABASE() AND `TABLE_NAME` = %s
+            """,
+            (STORE_LINK_SYNC_STATE_TABLE,),
         )
-        SELECT `token_id`, MAX(`last_synced_at`), MAX(`last_synced_at`), 'completed'
-        FROM `{STORE_LINK_TABLE}`
-        GROUP BY `token_id`
-        """
-    )
+        schema_rows = cursor.fetchall() if hasattr(cursor, "fetchall") else []
+        columns = {
+            str(row.get("COLUMN_NAME") or row.get("Column_name") or "")
+            for row in schema_rows or []
+            if isinstance(row, Mapping)
+        }
+        if not {"token_id", "last_completed_at", "last_error"}.issubset(columns):
+            _migrate_store_link_sync_state_table(cursor)
+        _sync_state_schema_ready = True
 
 
 def request_store_link_sync(
@@ -197,6 +249,61 @@ def request_store_link_sync(
         raise
     finally:
         connection.close()
+
+
+def order_store_link_token_ids_for_full_sync(
+    token_ids: Iterable[int],
+    *,
+    connection_factory: Callable[[], Any] | None = None,
+) -> list[int]:
+    """Put never-completed stores first, then the least recently synced stores."""
+
+    ids: list[int] = []
+    for value in token_ids or ():
+        try:
+            token_id = int(value)
+        except (TypeError, ValueError):
+            continue
+        if token_id > 0 and token_id not in ids:
+            ids.append(token_id)
+    if len(ids) < 2:
+        return ids
+
+    connection = (connection_factory or _connect)()
+    try:
+        with connection.cursor() as cursor:
+            ensure_store_link_table(cursor)
+            ensure_store_link_sync_state_table(cursor)
+            placeholders = ", ".join(["%s"] * len(ids))
+            cursor.execute(
+                f"""
+                SELECT `token_id`, `last_completed_at`
+                FROM `{STORE_LINK_SYNC_STATE_TABLE}`
+                WHERE `token_id` IN ({placeholders})
+                """,
+                tuple(ids),
+            )
+            rows = cursor.fetchall()
+        connection.commit()
+    finally:
+        connection.close()
+
+    completed_at_by_id = {
+        int(row["token_id"]): row.get("last_completed_at")
+        for row in rows
+        if row.get("token_id") is not None
+    }
+    original_positions = {token_id: index for index, token_id in enumerate(ids)}
+
+    def priority(token_id: int) -> tuple[bool, str, int]:
+        completed_at = completed_at_by_id.get(token_id)
+        return (
+            completed_at is not None,
+            str(completed_at or ""),
+            original_positions[token_id],
+        )
+
+    return sorted(ids, key=priority)
 
 
 def mark_store_link_sync_started(
@@ -817,6 +924,7 @@ __all__ = [
     "listing_record",
     "mark_store_link_sync_finished",
     "mark_store_link_sync_started",
+    "order_store_link_token_ids_for_full_sync",
     "request_store_link_sync",
     "replace_store_snapshot",
 ]

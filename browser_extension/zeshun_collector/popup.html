@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>泽顺商品采集助手</title>
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <header>
+    <div class="logo">泽</div>
+    <div>
+      <h1>泽顺商品采集助手</h1>
+      <p>Chrome / Edge 通用</p>
+    </div>
+  </header>
+  <main>
+    <div id="auth-status" class="auth-line">泽顺账号：正在检查…</div>
+    <div id="page-status" class="status">正在检查当前页面…</div>
+    <button id="collect" class="primary" type="button" disabled>采集当前商品</button>
+    <div class="queue-row">
+      <span>待传队列：<strong id="queue-count">0</strong></span>
+      <button id="retry" class="link-button" type="button">立即重试</button>
+    </div>
+    <div id="result" class="result" hidden></div>
+  </main>
+  <footer>
+    <button id="open-console" class="secondary" type="button">打开泽顺控制台</button>
+    <button id="settings" class="secondary" type="button">设置</button>
+  </footer>
+  <script src="popup.js"></script>
+</body>
+</html>

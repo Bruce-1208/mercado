@@ -15,6 +15,7 @@ from erp.mercadolibre_store_link_store import (
     list_due_store_link_token_ids,
     mark_store_link_sync_finished,
     mark_store_link_sync_started,
+    order_store_link_token_ids_for_full_sync,
     replace_store_snapshot,
     request_store_link_sync,
 )
@@ -127,6 +128,16 @@ def _token_ids(values) -> list[int]:
 def _token_records(selected_token_ids=None) -> list[dict]:
     selected = set(_token_ids(selected_token_ids))
     summaries = (bit_mysql.list_mercado_store_tokens() or {}).get("rows") or []
+    if not selected:
+        ordered_ids = order_store_link_token_ids_for_full_sync(
+            summary.get("id") for summary in summaries
+        )
+        summary_by_id = {
+            int(summary.get("id") or 0): summary
+            for summary in summaries
+            if int(summary.get("id") or 0) > 0
+        }
+        summaries = [summary_by_id[token_id] for token_id in ordered_ids if token_id in summary_by_id]
     records = []
     for summary in summaries:
         token_id = int(summary.get("id") or 0)
@@ -416,6 +427,8 @@ def run_store_link_sync(token_ids=None) -> dict:
         logs=[],
     )
     _append_log(f"任务启动，共 {len(records)} 家店铺")
+    if not _token_ids(token_ids):
+        _append_log("同步全部：未同步过的店铺优先，其余按最久未同步优先")
     results = []
     for index, record in enumerate(records, start=1):
         store_name = str(record.get("display_name") or record.get("nickname") or record.get("id"))

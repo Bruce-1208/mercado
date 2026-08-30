@@ -65,6 +65,70 @@ def test_download_order_labels_deduplicates_pack_shipment(monkeypatch):
     assert result["shipment_count"] == 1
 
 
+def test_download_order_labels_returns_partial_pdf_when_one_shipment_is_unavailable(
+    monkeypatch,
+):
+    contexts = [_context("20001", "30001"), _context("20002", "30002")]
+    monkeypatch.setattr(
+        bit_order_labels.bit_mysql,
+        "get_mercado_order_label_contexts",
+        lambda _ids: contexts,
+    )
+
+    def download(context):
+        if context["shipping_id"] == "30002":
+            raise bit_order_labels.MercadoLabelUnavailable(
+                "运单已发货",
+                shipment_status="shipped",
+                permanent=True,
+            )
+        return context["shipping_id"], b"%PDF-1.4\nprintable\n%%EOF"
+
+    recorded = []
+    monkeypatch.setattr(bit_order_labels, "_download_one", download)
+    monkeypatch.setattr(
+        bit_order_labels.bit_mysql,
+        "record_mercado_order_label_unavailable",
+        lambda order_ids, **_kwargs: recorded.extend(order_ids) or len(order_ids),
+    )
+
+    result = bit_order_labels.download_order_labels(["20001", "20002"])
+
+    assert result["content"].startswith(b"%PDF")
+    assert result["order_ids"] == ["20001"]
+    assert result["skipped_order_ids"] == ["20002"]
+    assert result["failed_order_ids"] == []
+    assert recorded == ["20002"]
+
+
+def test_download_order_labels_reports_all_unavailable_orders_together(monkeypatch):
+    contexts = [_context("20001", "30001"), _context("20002", "30002")]
+    monkeypatch.setattr(
+        bit_order_labels.bit_mysql,
+        "get_mercado_order_label_contexts",
+        lambda _ids: contexts,
+    )
+    monkeypatch.setattr(
+        bit_order_labels,
+        "_download_one",
+        lambda _context: (_ for _ in ()).throw(
+            bit_order_labels.MercadoLabelUnavailable(
+                "运单已发货",
+                shipment_status="shipped",
+                permanent=True,
+            )
+        ),
+    )
+    monkeypatch.setattr(
+        bit_order_labels.bit_mysql,
+        "record_mercado_order_label_unavailable",
+        lambda order_ids, **_kwargs: len(order_ids),
+    )
+
+    with pytest.raises(bit_order_labels.MercadoLabelError, match="2 个订单运单状态不可打印"):
+        bit_order_labels.download_order_labels(["20001", "20002"])
+
+
 def test_download_order_labels_rejects_order_without_shipment():
     with pytest.raises(bit_order_labels.MercadoLabelError, match="Shipment ID"):
         bit_order_labels._download_one(_context(shipment_id=""))
@@ -88,3 +152,11 @@ def test_cancelled_shipment_is_classified_as_permanently_unavailable(monkeypatch
 
     assert caught.value.shipment_status == "cancelled"
     assert caught.value.permanent is True
+
+
+def test_token_not_valid_400_is_recognized_for_refresh():
+    error = MercadoAPIError(
+        "GET labels 失败 (400): Malformed access_token: TOKEN_NOT_VALID"
+    )
+
+    assert bit_order_labels._is_invalid_token_error(error) is True

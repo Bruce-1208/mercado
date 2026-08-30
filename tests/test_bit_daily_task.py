@@ -15,10 +15,117 @@ from bit import bit_daily_task
         ("cancellation_rate", bit_daily_task.APPEAL_TYPE_CANCELLATION),
         ("投诉", bit_daily_task.APPEAL_TYPE_COMPLAINT),
         ("complaints", bit_daily_task.APPEAL_TYPE_COMPLAINT),
+        ("混合模式", bit_daily_task.APPEAL_TYPE_MIXED),
+        ("mixed", bit_daily_task.APPEAL_TYPE_MIXED),
     ],
 )
 def test_normalize_appeal_type(value, expected):
     assert bit_daily_task.normalize_appeal_type(value) == expected
+
+
+def test_mixed_mode_runs_every_other_task_followed_by_infraction():
+    assert bit_daily_task.appeal_type_sequence("混合模式") == (
+        bit_daily_task.APPEAL_TYPE_INFRACTION,
+        bit_daily_task.APPEAL_TYPE_DELAY,
+        bit_daily_task.APPEAL_TYPE_INFRACTION,
+        bit_daily_task.APPEAL_TYPE_COMPLAINT,
+        bit_daily_task.APPEAL_TYPE_INFRACTION,
+        bit_daily_task.APPEAL_TYPE_CANCELLATION,
+        bit_daily_task.APPEAL_TYPE_INFRACTION,
+    )
+
+
+def test_mixed_mode_dispatches_the_full_sequence(monkeypatch):
+    calls = []
+    monkeypatch.setattr(
+        bit_daily_task,
+        "build_appeal_plan",
+        lambda appeal_type, **_kwargs: calls.append(appeal_type) or [],
+    )
+
+    result = bit_daily_task._run_ai_appeal_once_locked("混合模式")
+
+    assert calls == list(bit_daily_task.MIXED_APPEAL_SEQUENCE)
+    assert [item["appeal_type"] for item in result] == [
+        bit_daily_task._appeal_type_label(item)
+        for item in bit_daily_task.MIXED_APPEAL_SEQUENCE
+    ]
+
+
+def test_authorized_appeal_scope_uses_site_switches_and_salesperson(monkeypatch):
+    monkeypatch.setattr(
+        bit_daily_task,
+        "list_mercado_store_tokens",
+        lambda: {
+            "rows": [
+                {
+                    "display_name": "授权店铺",
+                    "nickname": "STORE_ALIAS",
+                    "site_settings": [
+                        {
+                            "site_id": "MLM",
+                            "salesperson": "张三",
+                            "appeal_enabled": True,
+                        },
+                        {
+                            "site_id": "MLB",
+                            "salesperson": "张三",
+                            "appeal_enabled": False,
+                        },
+                        {
+                            "site_id": "MLC",
+                            "salesperson": "李四",
+                            "appeal_enabled": True,
+                        },
+                    ],
+                }
+            ]
+        },
+    )
+
+    all_scope = bit_daily_task.load_authorized_appeal_shop_site_config()
+    owner_scope = bit_daily_task.load_authorized_appeal_shop_site_config(["张三"])
+
+    assert all_scope["授权店铺"] == {"MX", "CL"}
+    assert all_scope["store_alias"] == {"MX", "CL"}
+    assert owner_scope["授权店铺"] == {"MX"}
+
+
+def test_default_infraction_plan_uses_authorization_switches_not_browser_sites(monkeypatch):
+    monkeypatch.setattr(
+        bit_daily_task,
+        "get_latest_infraction_info",
+        lambda _days: {
+            "summary": [
+                {"店铺名": "授权店铺", "站点": "墨西哥", "总数": 3},
+                {"店铺名": "授权店铺", "站点": "巴西", "总数": 9},
+            ]
+        },
+    )
+    monkeypatch.setattr(
+        bit_daily_task,
+        "list_mercado_store_tokens",
+        lambda: {
+            "rows": [
+                {
+                    "display_name": "授权店铺",
+                    "site_settings": [
+                        {"site_id": "MLM", "appeal_enabled": True},
+                        {"site_id": "MLB", "appeal_enabled": False},
+                    ],
+                }
+            ]
+        },
+    )
+    monkeypatch.setattr(
+        bit_daily_task.bit_appeal_ai,
+        "load_active_shop_site_config",
+        lambda: {"授权店铺": {"BR"}},
+    )
+
+    plan = bit_daily_task.build_latest_infraction_appeal_plan(top_n=10)
+
+    assert [site["site_code"] for site in plan[0]["sites"]] == ["MX"]
 
 
 def test_build_latest_delay_appeal_plan_filters_and_sorts(monkeypatch):
@@ -36,15 +143,30 @@ def test_build_latest_delay_appeal_plan_filters_and_sorts(monkeypatch):
         },
     )
     monkeypatch.setattr(
-        bit_daily_task.bit_appeal_ai,
-        "load_active_shop_site_config",
-        lambda: {"店铺甲": {"MX", "BR"}, "店铺乙": {"BR"}},
+        bit_daily_task,
+        "list_mercado_store_tokens",
+        lambda: {
+            "rows": [
+                {
+                    "display_name": "店铺甲",
+                    "site_settings": [
+                        {"site_id": "MLM", "appeal_enabled": True},
+                        {"site_id": "MLB", "appeal_enabled": True},
+                    ],
+                },
+                {
+                    "display_name": "店铺乙",
+                    "site_settings": [
+                        {"site_id": "MLB", "appeal_enabled": True},
+                    ],
+                },
+            ]
+        },
     )
 
     plan = bit_daily_task.build_latest_reputation_appeal_plan(
         "延误率",
         top_n=10,
-        only_active=True,
         min_rate="5%",
     )
 
@@ -63,11 +185,25 @@ def test_reputation_appeal_plan_top_n_zero_keeps_every_affected_shop(monkeypatch
         "get_latest_reputation_info",
         lambda: {"rows": rows},
     )
+    monkeypatch.setattr(
+        bit_daily_task,
+        "list_mercado_store_tokens",
+        lambda: {
+            "rows": [
+                {
+                    "display_name": f"店铺{index:02d}",
+                    "site_settings": [
+                        {"site_id": "MLM", "appeal_enabled": True},
+                    ],
+                }
+                for index in range(35)
+            ]
+        },
+    )
 
     plan = bit_daily_task.build_latest_reputation_appeal_plan(
         "投诉",
         top_n=0,
-        only_active=False,
     )
 
     assert len(plan) == 35
@@ -83,10 +219,24 @@ def test_infraction_appeal_plan_top_n_zero_keeps_every_affected_shop(monkeypatch
         "get_latest_infraction_info",
         lambda _recent_days: {"latest_submit_time": "2026-08-23 10:00:00", "summary": summary},
     )
+    monkeypatch.setattr(
+        bit_daily_task,
+        "list_mercado_store_tokens",
+        lambda: {
+            "rows": [
+                {
+                    "display_name": f"店铺{index:02d}",
+                    "site_settings": [
+                        {"site_id": "MLM", "appeal_enabled": True},
+                    ],
+                }
+                for index in range(35)
+            ]
+        },
+    )
 
     plan = bit_daily_task.build_latest_infraction_appeal_plan(
         top_n=0,
-        only_active=False,
     )
 
     assert len(plan) == 35
@@ -103,10 +253,22 @@ def test_build_latest_cancellation_plan_only_keeps_positive_rates(monkeypatch):
             ]
         },
     )
+    monkeypatch.setattr(
+        bit_daily_task,
+        "list_mercado_store_tokens",
+        lambda: {
+            "rows": [{
+                "display_name": "店铺甲",
+                "site_settings": [
+                    {"site_id": "MLM", "appeal_enabled": True},
+                    {"site_id": "MLB", "appeal_enabled": True},
+                ],
+            }]
+        },
+    )
 
     plan = bit_daily_task.build_latest_reputation_appeal_plan(
         "取消率",
-        only_active=False,
     )
 
     assert len(plan) == 1
@@ -124,10 +286,22 @@ def test_build_latest_complaint_plan_uses_complaint_rate(monkeypatch):
             ]
         },
     )
+    monkeypatch.setattr(
+        bit_daily_task,
+        "list_mercado_store_tokens",
+        lambda: {
+            "rows": [{
+                "display_name": "店铺甲",
+                "site_settings": [
+                    {"site_id": "MLM", "appeal_enabled": True},
+                    {"site_id": "MLB", "appeal_enabled": True},
+                ],
+            }]
+        },
+    )
 
     plan = bit_daily_task.build_latest_reputation_appeal_plan(
         "投诉",
-        only_active=False,
     )
 
     assert len(plan) == 1

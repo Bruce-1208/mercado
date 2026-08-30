@@ -295,6 +295,41 @@ def test_shop_job_skips_terminal_shipment_without_retrying_forever(monkeypatch):
     assert rows[0]["failed_count"] == 0
 
 
+def test_shop_job_marks_mixed_success_and_failure_as_partial(monkeypatch):
+    candidates = [_context("20001", "30001"), _context("20002", "30002")]
+    monkeypatch.setattr(
+        bit_print,
+        "_scan_store_orders",
+        lambda *_args, **_kwargs: {
+            "first_run": False,
+            "tracking_since": datetime.now(timezone.utc) - timedelta(days=1),
+            "end_at": datetime.now(timezone.utc),
+        },
+    )
+    monkeypatch.setattr(
+        bit_print.bit_mysql,
+        "list_mercado_order_print_candidates",
+        lambda *_args, **_kwargs: candidates,
+    )
+
+    def download(context, **_kwargs):
+        if context["shipping_id"] == "30002":
+            raise bit_print.bit_order_labels.MercadoLabelError("临时下载失败")
+        return context["shipping_id"], b"%PDF-1.4\nlabel\n%%EOF", 1
+
+    monkeypatch.setattr(bit_print, "_download_label", download)
+    monkeypatch.setattr(bit_print, "_record_printed_orders", lambda order_ids: len(order_ids))
+
+    rows = bit_print._run_shop_job(
+        {"token_id": 7, "shop_name": "店铺甲", "sites": ["墨西哥"]},
+        logger=lambda _message: None,
+    )
+
+    assert rows[0]["status"] == "partial"
+    assert rows[0]["shipment_count"] == 1
+    assert rows[0]["failed_count"] == 1
+
+
 def test_print_round_combines_multiple_selected_stores(monkeypatch, tmp_path):
     monkeypatch.setattr(
         bit_print,

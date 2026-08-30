@@ -184,6 +184,75 @@ def test_immediate_sync_request_is_persisted_for_new_store():
     assert "`requested_at` = VALUES(`requested_at`)" in batches[0][0]
 
 
+def test_full_sync_order_prioritizes_never_synced_then_oldest_completed():
+    queries = []
+
+    class Cursor:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args):
+            return False
+
+        def execute(self, sql, params=None):
+            self.sql = sql
+            queries.append((sql, params))
+
+        def fetchone(self):
+            return {"Field": "exists"} if "SHOW COLUMNS" in self.sql else None
+
+        def fetchall(self):
+            return [
+                {"token_id": 11, "last_completed_at": "2026-08-28 10:00:00"},
+                {"token_id": 12, "last_completed_at": None},
+                {"token_id": 13, "last_completed_at": "2026-08-20 10:00:00"},
+            ]
+
+    class Connection:
+        def cursor(self):
+            return Cursor()
+
+        def commit(self):
+            pass
+
+        def close(self):
+            pass
+
+    ordered = store.order_store_link_token_ids_for_full_sync(
+        [11, 12, 13, 14], connection_factory=Connection
+    )
+
+    assert ordered == [12, 14, 13, 11]
+    assert queries[-1][1] == (11, 12, 13, 14)
+
+
+def test_token_records_applies_priority_only_when_syncing_all(monkeypatch):
+    summaries = [{"id": 1}, {"id": 2}, {"id": 3}]
+    calls = []
+    monkeypatch.setattr(
+        bit_store_link_sync.bit_mysql,
+        "list_mercado_store_tokens",
+        lambda: {"rows": summaries},
+    )
+    monkeypatch.setattr(
+        bit_store_link_sync.bit_mysql,
+        "get_mercado_store_token",
+        lambda token_id: {"id": token_id, "display_name": f"店铺{token_id}"},
+    )
+    monkeypatch.setattr(
+        bit_store_link_sync,
+        "order_store_link_token_ids_for_full_sync",
+        lambda token_ids: calls.append(list(token_ids)) or [3, 1, 2],
+    )
+
+    all_records = bit_store_link_sync._token_records([])
+    selected_records = bit_store_link_sync._token_records([1, 3])
+
+    assert [row["id"] for row in all_records] == [3, 1, 2]
+    assert [row["id"] for row in selected_records] == [1, 3]
+    assert calls == [[1, 2, 3]]
+
+
 def test_replace_store_snapshot_marks_missing_links_and_upserts_current_rows():
     calls = []
     batches = []

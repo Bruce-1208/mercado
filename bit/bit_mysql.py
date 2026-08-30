@@ -17,6 +17,17 @@ config = {
     'port': int(os.environ.get('MYSQL_PORT', os.environ.get('DB_PORT', '3306'))),
     'cursorclass': pymysql.cursors.DictCursor  # 让查询结果以字典形式返回
 }
+
+_MERCADO_PUBLIC_ITEM_BASE_URLS = {
+    "MLM": "https://articulo.mercadolibre.com.mx",
+    "MLB": "https://produto.mercadolivre.com.br",
+    "MLC": "https://articulo.mercadolibre.cl",
+    "MCO": "https://articulo.mercadolibre.com.co",
+    "MLA": "https://articulo.mercadolibre.com.ar",
+    "MLU": "https://articulo.mercadolibre.com.uy",
+    "MPE": "https://articulo.mercadolibre.com.pe",
+    "MEC": "https://articulo.mercadolibre.com.ec",
+}
 # config = {
 #     'host': 'c766667e.natappfree.cc',
 #     'user': 'root',
@@ -1456,16 +1467,44 @@ def _mercado_order_datetime(value):
     return parsed.strftime("%Y-%m-%d %H:%M:%S")
 
 
-def _mercado_order_sku_items(raw_order, fallback_image=""):
+def _mercado_https_url(value):
+    text = str(value or "").strip()
+    if text.startswith("//"):
+        return f"https:{text}"
+    if text.lower().startswith("http://"):
+        return f"https://{text[7:]}"
+    if text.lower().startswith("https://"):
+        return text
+    return ""
+
+
+def _mercado_public_item_url(item_id, site_id=""):
+    item_id = str(item_id or "").strip().upper()
+    match = re.fullmatch(r"([A-Z]{3})-?(\d+)", item_id)
+    if not match:
+        return ""
+    item_site_id, digits = match.groups()
+    site_id = str(site_id or item_site_id).strip().upper()
+    base_url = _MERCADO_PUBLIC_ITEM_BASE_URLS.get(site_id)
+    if not base_url:
+        return ""
+    return f"{base_url}/{site_id}-{digits}-_JM"
+
+
+def _mercado_order_sku_items(raw_order, fallback_image="", product_assets=None):
     if isinstance(raw_order, str):
         try:
             raw_order = json.loads(raw_order or "{}")
         except (TypeError, ValueError):
             raw_order = {}
     raw_order = raw_order if isinstance(raw_order, dict) else {}
+    product_assets = product_assets if isinstance(product_assets, dict) else {}
     result = []
     for order_item in raw_order.get("order_items") or []:
         product = order_item.get("item") if isinstance(order_item.get("item"), dict) else {}
+        product_id = str(product.get("id") or "")
+        asset = product_assets.get(product_id)
+        asset = asset if isinstance(asset, dict) else {}
         attributes = []
         for attribute in product.get("variation_attributes") or []:
             value = str(attribute.get("value_name") or "").strip()
@@ -1474,7 +1513,7 @@ def _mercado_order_sku_items(raw_order, fallback_image=""):
                 attributes.append(f"{name}: {value}" if name else value)
         result.append(
             {
-                "product_id": str(product.get("id") or ""),
+                "product_id": product_id,
                 "seller_sku": str(
                     product.get("seller_sku")
                     or product.get("seller_custom_field")
@@ -1484,12 +1523,22 @@ def _mercado_order_sku_items(raw_order, fallback_image=""):
                 "variation_id": str(product.get("variation_id") or ""),
                 "variation": " · ".join(attributes),
                 "quantity": int(order_item.get("quantity") or 0),
-                "image_url": str(
+                "image_url": _mercado_https_url(
                     product.get("sku_image_url")
                     or product.get("secure_thumbnail")
                     or product.get("thumbnail")
+                    or asset.get("thumbnail_url")
                     or fallback_image
                     or ""
+                ),
+                "product_url": (
+                    _mercado_https_url(
+                        product.get("permalink") or asset.get("permalink")
+                    )
+                    or _mercado_public_item_url(
+                        product_id,
+                        asset.get("site_id") or str(product_id)[:3],
+                    )
                 ),
             }
         )
@@ -1837,11 +1886,16 @@ def list_orders(
                 EXCHANGE_RATE_TABLE,
                 ensure_profitability_cache_tables,
             )
+            from erp.mercadolibre_store_link_store import (
+                STORE_LINK_TABLE,
+                ensure_store_link_table,
+            )
 
             _ensure_mercado_synced_orders_table(cursor)
             _ensure_mercado_store_tokens_table(cursor)
             _ensure_mercado_store_site_settings_table(cursor)
             ensure_profitability_cache_tables(cursor)
+            ensure_store_link_table(cursor)
             connection.commit()
             order_date_sql = "DATE(DATE_ADD(synced.`date_created`, INTERVAL 8 HOUR))"
             currency_sql = (
@@ -2220,15 +2274,68 @@ def list_orders(
                     str(row.get("order_id") or ""): row.get("raw_json") or "{}"
                     for row in (cursor.fetchall() or [])
                 }
+
+            token_ids = set()
+            product_ids = set()
             for row in rows:
                 order_id = str(row.get("id") or "")
+                sku_items = _mercado_order_sku_items(raw_orders.get(order_id, "{}"))
+                if row.get("store_id"):
+                    token_ids.add(int(row["store_id"]))
+                product_ids.update(
+                    str(item.get("product_id") or "")
+                    for item in sku_items
+                    if str(item.get("product_id") or "")
+                )
+                if row.get("product_id"):
+                    product_ids.add(str(row["product_id"]))
+
+            product_assets = {}
+            if token_ids and product_ids:
+                token_placeholders = ",".join(["%s"] * len(token_ids))
+                product_placeholders = ",".join(["%s"] * len(product_ids))
+                cursor.execute(
+                    f"""
+                    SELECT `token_id`, `site_id`, `item_id`, `permalink`, `thumbnail_url`
+                    FROM `{STORE_LINK_TABLE}`
+                    WHERE `is_current` = 1
+                      AND `token_id` IN ({token_placeholders})
+                      AND `item_id` IN ({product_placeholders})
+                    """,
+                    [*sorted(token_ids), *sorted(product_ids)],
+                )
+                product_assets = {
+                    (str(asset.get("token_id") or ""), str(asset.get("item_id") or "")): asset
+                    for asset in (cursor.fetchall() or [])
+                }
+
+            for row in rows:
+                order_id = str(row.get("id") or "")
+                store_id = str(row.get("store_id") or "")
+                row_assets = {
+                    product_id: product_assets[(store_id, product_id)]
+                    for product_id in product_ids
+                    if (store_id, product_id) in product_assets
+                }
                 sku_items = _mercado_order_sku_items(
                     raw_orders.get(order_id, "{}"),
                     row.get("image_url") or "",
+                    row_assets,
                 )
                 for item in sku_items:
                     item["order_id"] = order_id
                 row["sku_items"] = sku_items
+                primary_asset = row_assets.get(str(row.get("product_id") or ""), {})
+                row["image_url"] = (
+                    _mercado_https_url(row.get("image_url"))
+                    or _mercado_https_url(primary_asset.get("thumbnail_url"))
+                    or (sku_items[0].get("image_url") if sku_items else "")
+                )
+                row["product_url"] = (
+                    _mercado_https_url(primary_asset.get("permalink"))
+                    or (sku_items[0].get("product_url") if sku_items else "")
+                    or _mercado_public_item_url(row.get("product_id"), row.get("site_id"))
+                )
                 row["merged_order_ids"] = [order_id] if order_id else []
             return {
                 "rows": rows, "total": total, "page": page, "page_size": page_size,
@@ -4532,6 +4639,8 @@ def _ensure_mercado_store_site_settings_table(cursor):
             `salesperson` VARCHAR(100) NULL,
             `discount_rate` DECIMAL(7,4) NULL,
             `group_name` VARCHAR(100) NULL,
+            `appeal_enabled` TINYINT(1) NOT NULL DEFAULT 0,
+            `visit_stats_enabled` TINYINT(1) NOT NULL DEFAULT 0,
             `created_at` DATETIME NOT NULL,
             `updated_at` DATETIME NOT NULL,
             PRIMARY KEY (`id`),
@@ -4541,12 +4650,25 @@ def _ensure_mercado_store_site_settings_table(cursor):
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
         """
     )
+    _ensure_column(
+        cursor,
+        "mercado_store_site_settings",
+        "appeal_enabled",
+        "TINYINT(1) NOT NULL DEFAULT 0",
+    )
+    _ensure_column(
+        cursor,
+        "mercado_store_site_settings",
+        "visit_stats_enabled",
+        "TINYINT(1) NOT NULL DEFAULT 0",
+    )
 
 
 def _mercado_store_site_setting_rows(cursor, token_id):
     cursor.execute(
         """
         SELECT `token_id`, `site_id`, `salesperson`, `discount_rate`, `group_name`,
+               `appeal_enabled`, `visit_stats_enabled`,
                `created_at`, `updated_at`
         FROM `mercado_store_site_settings`
         WHERE `token_id` = %s
@@ -4569,6 +4691,8 @@ def _mercado_store_site_setting_rows(cursor, token_id):
                     float(discount_rate) if discount_rate is not None else None
                 ),
                 "group_name": str(row.get("group_name") or ""),
+                "appeal_enabled": bool(row.get("appeal_enabled")),
+                "visit_stats_enabled": bool(row.get("visit_stats_enabled")),
                 "created_at": str(row["created_at"]) if row.get("created_at") else None,
                 "updated_at": str(row["updated_at"]) if row.get("updated_at") else None,
             }
@@ -4632,7 +4756,26 @@ def upsert_mercado_store_site_settings(token_id, settings):
             if discount_rate < 0 or discount_rate > 100:
                 raise ValueError(f"{site_id} 的折扣比例必须在 0 到 100 之间")
             discount_rate = discount_rate.quantize(Decimal("0.0001"))
-        normalized.append((site_id, salesperson, discount_rate, group_name))
+        appeal_enabled = raw.get("appeal_enabled", False)
+        visit_stats_enabled = raw.get("visit_stats_enabled", False)
+        if isinstance(appeal_enabled, str):
+            appeal_enabled = appeal_enabled.strip().lower() not in (
+                "", "0", "false", "no", "off",
+            )
+        if isinstance(visit_stats_enabled, str):
+            visit_stats_enabled = visit_stats_enabled.strip().lower() not in (
+                "", "0", "false", "no", "off",
+            )
+        normalized.append(
+            (
+                site_id,
+                salesperson,
+                discount_rate,
+                group_name,
+                1 if bool(appeal_enabled) else 0,
+                1 if bool(visit_stats_enabled) else 0,
+            )
+        )
 
     now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     connection = pymysql.connect(**config)
@@ -4646,8 +4789,21 @@ def upsert_mercado_store_site_settings(token_id, settings):
             )
             if not cursor.fetchone():
                 raise KeyError("店铺授权不存在")
-            for site_id, salesperson, discount_rate, group_name in normalized:
-                if not salesperson and discount_rate is None and not group_name:
+            for (
+                site_id,
+                salesperson,
+                discount_rate,
+                group_name,
+                appeal_enabled,
+                visit_stats_enabled,
+            ) in normalized:
+                if (
+                    not salesperson
+                    and discount_rate is None
+                    and not group_name
+                    and not appeal_enabled
+                    and not visit_stats_enabled
+                ):
                     cursor.execute(
                         "DELETE FROM `mercado_store_site_settings` WHERE `token_id` = %s AND `site_id` = %s",
                         (token_id, site_id),
@@ -4657,17 +4813,19 @@ def upsert_mercado_store_site_settings(token_id, settings):
                     """
                     INSERT INTO `mercado_store_site_settings` (
                         `token_id`, `site_id`, `salesperson`, `discount_rate`, `group_name`,
-                        `created_at`, `updated_at`
-                    ) VALUES (%s, %s, %s, %s, %s, %s, %s)
+                        `appeal_enabled`, `visit_stats_enabled`, `created_at`, `updated_at`
+                    ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
                     ON DUPLICATE KEY UPDATE
                         `salesperson` = VALUES(`salesperson`),
                         `discount_rate` = VALUES(`discount_rate`),
                         `group_name` = VALUES(`group_name`),
+                        `appeal_enabled` = VALUES(`appeal_enabled`),
+                        `visit_stats_enabled` = VALUES(`visit_stats_enabled`),
                         `updated_at` = VALUES(`updated_at`)
                     """,
                     (
                         token_id, site_id, salesperson or None, discount_rate,
-                        group_name or None, now, now,
+                        group_name or None, appeal_enabled, visit_stats_enabled, now, now,
                     ),
                 )
             rows = _mercado_store_site_setting_rows(cursor, token_id)

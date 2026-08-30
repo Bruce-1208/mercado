@@ -191,7 +191,34 @@ def _ensure_schema(connection: Any) -> None:
         if _schema_ready:
             return
         with connection.cursor() as cursor:
-            ensure_profitability_cache_tables(cursor)
+            required = {
+                (EXCHANGE_RATE_TABLE, "rate"),
+                (DAILY_EXCHANGE_RATE_TABLE, "snapshot_date"),
+                (COMMISSION_TABLE, "listing_type_id"),
+                (SHIPPING_RATE_TABLE, "dimensions"),
+            }
+            cursor.execute(
+                """
+                SELECT `TABLE_NAME`, `COLUMN_NAME`
+                FROM `information_schema`.`COLUMNS`
+                WHERE `TABLE_SCHEMA` = DATABASE()
+                  AND `TABLE_NAME` IN (%s, %s, %s, %s)
+                """,
+                (
+                    EXCHANGE_RATE_TABLE,
+                    DAILY_EXCHANGE_RATE_TABLE,
+                    COMMISSION_TABLE,
+                    SHIPPING_RATE_TABLE,
+                ),
+            )
+            existing = {
+                (str(row.get("TABLE_NAME") or row.get("Table_name") or ""),
+                 str(row.get("COLUMN_NAME") or row.get("Column_name") or ""))
+                for row in cursor.fetchall() or []
+                if isinstance(row, Mapping)
+            }
+            if not required.issubset(existing):
+                ensure_profitability_cache_tables(cursor)
         connection.commit()
         _schema_ready = True
 
@@ -487,6 +514,7 @@ class DatabaseProfitabilityCache:
         dimensions: str,
         logistic_type: str,
         shipping_mode: str,
+        free_shipping: bool,
     ) -> str:
         return _cache_key(locals())
 

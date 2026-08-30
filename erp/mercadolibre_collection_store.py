@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import re
+import threading
 from datetime import datetime, timedelta
 from decimal import Decimal
 from typing import Any, Callable, Iterable, Mapping
@@ -60,6 +61,9 @@ PRODUCT_WORKFLOW_COLUMN_DEFINITIONS = (
     ("description_text", "LONGTEXT NULL AFTER `title`"),
 )
 
+_schema_lock = threading.Lock()
+_schema_ready = False
+
 
 def _connect() -> Any:
     import pymysql
@@ -105,6 +109,26 @@ def _decimal_from_text(value: Any) -> Decimal | None:
     return number if number.is_finite() else None
 
 
+def has_complete_weight_dimensions(row: Mapping[str, Any]) -> bool:
+    """Return whether all four publish/shipping measurements are usable.
+
+    ``scrape_status`` is historical workflow state and can become stale after a
+    product is edited or moved between lists.  Weight completeness must always
+    be derived from the current values instead of that status flag.
+    """
+
+    for key in (
+        "weight_g",
+        "package_length_cm",
+        "package_width_cm",
+        "package_height_cm",
+    ):
+        value = _decimal_from_text(row.get(key))
+        if value is None or value <= 0:
+            return False
+    return True
+
+
 def _json_safe_row(row: Mapping[str, Any]) -> dict[str, Any]:
     result = dict(row)
     for key, value in tuple(result.items()):
@@ -115,6 +139,7 @@ def _json_safe_row(row: Mapping[str, Any]) -> dict[str, Any]:
         elif isinstance(value, bytes):
             result[key] = value.decode("utf-8", errors="replace")
     result["added_to_products"] = bool(result.get("added_to_products"))
+    result["weight_dimensions_complete"] = has_complete_weight_dimensions(result)
     return result
 
 
@@ -165,7 +190,7 @@ def _ensure_collection_task_unique_index(cursor: Any) -> bool:
     return True
 
 
-def ensure_collection_tables(cursor: Any) -> None:
+def _migrate_collection_tables(cursor: Any) -> None:
     cursor.execute(
         f"""
         CREATE TABLE IF NOT EXISTS `{TASK_TABLE}` (
@@ -407,6 +432,53 @@ def ensure_collection_tables(cursor: Any) -> None:
         )
 
 
+def _collection_schema_is_current(cursor: Any) -> bool:
+    required = {
+        (TASK_TABLE, "worker_count"),
+        (TASK_TABLE, "elapsed_seconds"),
+        (COLLECTION_TABLE, "volumetric_weight_kg"),
+        (COLLECTION_TABLE, "profitability_error"),
+        (COLLECTION_TABLE, "added_to_products"),
+        (PRODUCT_TABLE, "source_type"),
+        (PRODUCT_TABLE, "review_status"),
+        (PRODUCT_TABLE, "description_text"),
+        (PRODUCT_TABLE, "profitability_error"),
+        (PRODUCT_TABLE, "last_published_at"),
+        (PUBLISH_RECORD_TABLE, "failure_reason"),
+        (PUBLISH_RECORD_TABLE, "result_json"),
+    }
+    cursor.execute(
+        """
+        SELECT `TABLE_NAME`, `COLUMN_NAME`
+        FROM `information_schema`.`COLUMNS`
+        WHERE `TABLE_SCHEMA` = DATABASE()
+          AND `TABLE_NAME` IN (%s, %s, %s, %s)
+        """,
+        (TASK_TABLE, COLLECTION_TABLE, PRODUCT_TABLE, PUBLISH_RECORD_TABLE),
+    )
+    existing = {
+        (str(row.get("TABLE_NAME") or row.get("Table_name") or ""),
+         str(row.get("COLUMN_NAME") or row.get("Column_name") or ""))
+        for row in cursor.fetchall() or []
+        if isinstance(row, Mapping)
+    }
+    return required.issubset(existing)
+
+
+def ensure_collection_tables(cursor: Any) -> None:
+    """Run migrations once, avoiding repeated DDL on the large product table."""
+
+    global _schema_ready
+    if _schema_ready:
+        return
+    with _schema_lock:
+        if _schema_ready:
+            return
+        if not _collection_schema_is_current(cursor):
+            _migrate_collection_tables(cursor)
+        _schema_ready = True
+
+
 def create_collection_task(
     source_url: str,
     requested_count: int,
@@ -578,6 +650,10 @@ def upsert_collection_items(
                 for column in PROFITABILITY_COLUMNS
             )
             for row in records:
+                if has_complete_weight_dimensions(row):
+                    # A previous failed/partial pass must not keep a complete
+                    # item permanently labelled as waiting for measurements.
+                    row["scrape_status"] = "ok"
                 values = (
                     int(task_id),
                     str(row.get("source_item_id") or row.get("item_id") or ""),
@@ -1674,7 +1750,7 @@ def move_product_items_to_collection(
             )
             for row in product_rows:
                 cursor.execute(
-                    f"SELECT `id` FROM `{COLLECTION_TABLE}` "
+                    f"SELECT * FROM `{COLLECTION_TABLE}` "
                     "WHERE `id` = %s OR `source_item_id` = %s "
                     "ORDER BY (`id` = %s) DESC, `id` DESC LIMIT 1",
                     (
@@ -1684,6 +1760,16 @@ def move_product_items_to_collection(
                     ),
                 )
                 existing = cursor.fetchone() or {}
+                merged_metrics = {
+                    key: row.get(key) if row.get(key) not in (None, "") else existing.get(key)
+                    for key in (
+                        "weight_g",
+                        "package_length_cm",
+                        "package_width_cm",
+                        "package_height_cm",
+                    )
+                }
+                scrape_status = "ok" if has_complete_weight_dimensions(merged_metrics) else "partial"
                 if existing.get("id"):
                     cursor.execute(
                         f"""
@@ -1699,6 +1785,7 @@ def move_product_items_to_collection(
                             `package_height_cm` = COALESCE(%s, `package_height_cm`),
                             `weight_basis` = COALESCE(NULLIF(%s, ''), `weight_basis`),
                             `added_to_products` = 0,
+                            `scrape_status` = %s,
                             `error_message` = %s
                         WHERE `id` = %s
                         """,
@@ -1713,6 +1800,7 @@ def move_product_items_to_collection(
                             row.get("package_width_cm"),
                             row.get("package_height_cm"),
                             str(row.get("weight_basis") or ""),
+                            scrape_status,
                             f"产品列表自动移回：{reason_text}",
                             int(existing["id"]),
                         ),
@@ -1735,7 +1823,7 @@ def move_product_items_to_collection(
                         row.get("package_height_cm"),
                         str(row.get("weight_basis") or ""),
                         *(row.get(column) for column in PROFITABILITY_COLUMNS),
-                        "partial",
+                        scrape_status,
                         f"产品列表自动移回：{reason_text}",
                         _dumps(snapshot.get("source") or {}),
                         _dumps(snapshot.get("description") or {}),
@@ -1846,7 +1934,7 @@ def list_stale_profitability_items(
     limit: int = 50,
     connection_factory: Callable[[], Any] | None = None,
 ) -> list[dict[str, Any]]:
-    """Return collected and pulled rows whose cost snapshot needs refreshing."""
+    """Return captured rows whose official cost snapshot needs refreshing."""
 
     limit = max(1, min(int(limit), 500))
     connection = (connection_factory or _connect)()
@@ -1875,7 +1963,7 @@ def list_stale_profitability_items(
                 cursor.execute(
                     f"""
                     SELECT * FROM `{PRODUCT_TABLE}`
-                    WHERE `source_type` = 'pulled'
+                    WHERE `source_type` = 'collected'
                       AND (`profitability_updated_at` IS NULL
                            OR `profitability_updated_at` < %s)
                       AND `price` IS NOT NULL
@@ -1884,6 +1972,11 @@ def list_stale_profitability_items(
                       AND `title` <> ''
                       AND `weight_g` IS NOT NULL
                       AND `weight_g` > 0
+                      AND NOT EXISTS (
+                          SELECT 1 FROM `{COLLECTION_TABLE}` AS collection_item
+                          WHERE collection_item.`source_item_id` =
+                                `{PRODUCT_TABLE}`.`source_item_id`
+                      )
                     ORDER BY COALESCE(`profitability_updated_at`, '1970-01-01') ASC,
                              `id` ASC
                     LIMIT %s
@@ -1910,16 +2003,81 @@ def update_item_profitability(
         raise ValueError("商品编号不能为空")
     values = [snapshot.get(column) for column in PROFITABILITY_COLUMNS]
     assignments = ", ".join(f"`{column}` = %s" for column in PROFITABILITY_COLUMNS)
+    collection_item_id = None
+    if snapshot.get("task_id") is not None:
+        try:
+            collection_item_id = int(snapshot.get("id") or 0) or None
+        except (TypeError, ValueError):
+            collection_item_id = None
     connection = (connection_factory or _connect)()
     try:
         with connection.cursor() as cursor:
             ensure_collection_tables(cursor)
-            for table in (COLLECTION_TABLE, PRODUCT_TABLE):
+            if collection_item_id is not None:
                 cursor.execute(
-                    f"UPDATE `{table}` SET {assignments} WHERE `source_item_id` = %s",
-                    tuple(values + [item_id]),
+                    f"UPDATE `{COLLECTION_TABLE}` SET {assignments} "
+                    "WHERE `id` = %s AND `source_item_id` = %s",
+                    tuple(values + [collection_item_id, item_id]),
                 )
+                # The product list mirrors the newest captured snapshot only;
+                # an older duplicate task must never overwrite a newer price.
+                cursor.execute(
+                    f"""
+                    UPDATE `{PRODUCT_TABLE}`
+                    SET {assignments}
+                    WHERE `source_item_id` = %s
+                      AND NOT EXISTS (
+                          SELECT 1 FROM `{COLLECTION_TABLE}` AS newer
+                          WHERE newer.`source_item_id` = %s AND newer.`id` > %s
+                      )
+                    """,
+                    tuple(values + [item_id, item_id, collection_item_id]),
+                )
+            else:
+                for table in (COLLECTION_TABLE, PRODUCT_TABLE):
+                    cursor.execute(
+                        f"UPDATE `{table}` SET {assignments} WHERE `source_item_id` = %s",
+                        tuple(values + [item_id]),
+                    )
         connection.commit()
+    except BaseException:
+        connection.rollback()
+        raise
+    finally:
+        connection.close()
+
+
+def mark_all_profitability_stale(
+    *,
+    reason: str = "official_shipping_rate_card_refresh_pending",
+    connection_factory: Callable[[], Any] | None = None,
+) -> int:
+    """Queue every eligible collected row for recalculation after rate refresh."""
+
+    connection = (connection_factory or _connect)()
+    changed = 0
+    try:
+        with connection.cursor() as cursor:
+            ensure_collection_tables(cursor)
+            for table in (COLLECTION_TABLE, PRODUCT_TABLE):
+                product_scope = (
+                    " AND `source_type` = 'collected'" if table == PRODUCT_TABLE else ""
+                )
+                cursor.execute(
+                    f"""
+                    UPDATE `{table}`
+                    SET `profitability_updated_at` = NULL,
+                        `profitability_source` = %s,
+                        `profitability_error` = ''
+                    WHERE `price` IS NOT NULL AND `price` > 0
+                      AND `weight_g` IS NOT NULL AND `weight_g` > 0
+                      {product_scope}
+                    """,
+                    (str(reason or "")[:128],),
+                )
+                changed += max(0, int(cursor.rowcount or 0))
+        connection.commit()
+        return changed
     except BaseException:
         connection.rollback()
         raise
@@ -1962,6 +2120,10 @@ def backfill_item_exchange_prices(
         with connection.cursor() as cursor:
             ensure_collection_tables(cursor)
             for table in (COLLECTION_TABLE, PRODUCT_TABLE):
+                product_scope = (
+                    " AND `source_type` = 'collected'"
+                    if table == PRODUCT_TABLE else ""
+                )
                 for currency_id, (rate, updated_at) in normalized.items():
                     cursor.execute(
                         f"""
@@ -1972,6 +2134,7 @@ def backfill_item_exchange_prices(
                         WHERE UPPER(COALESCE(`currency_id`, '')) = %s
                           AND `price` IS NOT NULL
                           AND `price` > 0
+                          {product_scope}
                         """,
                         (rate, rate, updated_at, currency_id),
                     )

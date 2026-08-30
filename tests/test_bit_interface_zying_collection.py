@@ -27,8 +27,15 @@ def test_zying_collection_console_exposes_page_category_and_dedup_controls():
     assert "本地 Edge（9222）" in template
     assert "比特浏览器窗口名称" in template
     assert 'id="start-zying-collection-btn"' in template
+    assert 'id="stop-zying-collection-btn"' in template
+    assert 'id="capture-zying-login-btn"' not in template
+    assert "登录智赢后直接启动采集" in template
+    assert "#zying-collection-log {" in template
+    assert "color: #e6edf7;" in template
     assert "数据库已有的产品编号会在详情采集前直接跳过" in template
     assert 'fetch("/api/zying-collection/start"' in template
+    assert 'fetch("/api/zying-collection/stop"' in template
+    assert "function stopZyingCollection()" in template
     assert "function loadZyingCollectionStatus()" in template
 
 
@@ -271,6 +278,64 @@ def test_zying_collection_failure_marks_login_required(monkeypatch):
         assert bit_interface._zying_collection_state["status"] == "error"
         assert bit_interface._zying_collection_state["requires_login"] is True
         assert "登录已失效" in bit_interface._zying_collection_state["message"]
+    finally:
+        with bit_interface._zying_collection_state_lock:
+            bit_interface._zying_collection_state.clear()
+            bit_interface._zying_collection_state.update(previous_state)
+            bit_interface._zying_collection_logs.clear()
+            bit_interface._zying_collection_logs.extend(previous_logs)
+
+
+def test_zying_collection_stop_endpoint_sets_safe_stop_event():
+    with bit_interface._zying_collection_state_lock:
+        previous_state = dict(bit_interface._zying_collection_state)
+        previous_logs = list(bit_interface._zying_collection_logs)
+        previous_stop = bit_interface._zying_collection_stop_event.is_set()
+        bit_interface._zying_collection_stop_event.clear()
+        bit_interface._zying_collection_state.update(
+            {"running": True, "status": "running", "message": "采集中"}
+        )
+    try:
+        response = _logged_in_client().post("/api/zying-collection/stop", json={})
+
+        assert response.status_code == 200
+        assert bit_interface._zying_collection_stop_event.is_set()
+        assert bit_interface._zying_collection_state["status"] == "stopping"
+        assert any(
+            "结束指令" in line for line in bit_interface._zying_collection_logs
+        )
+    finally:
+        with bit_interface._zying_collection_state_lock:
+            bit_interface._zying_collection_state.clear()
+            bit_interface._zying_collection_state.update(previous_state)
+            bit_interface._zying_collection_logs.clear()
+            bit_interface._zying_collection_logs.extend(previous_logs)
+            if previous_stop:
+                bit_interface._zying_collection_stop_event.set()
+            else:
+                bit_interface._zying_collection_stop_event.clear()
+
+
+def test_zying_collection_job_records_user_stopped_status(monkeypatch):
+    monkeypatch.setattr(
+        bit_interface.bit_zying_caiji,
+        "collect_zying_products",
+        lambda **kwargs: (_ for _ in ()).throw(
+            bit_interface.bit_zying_caiji.ZyingCollectionStopped("用户结束采集")
+        ),
+    )
+    lock = bit_interface.threading.Lock()
+    lock.acquire()
+    with bit_interface._zying_collection_state_lock:
+        previous_state = dict(bit_interface._zying_collection_state)
+        previous_logs = list(bit_interface._zying_collection_logs)
+    try:
+        bit_interface.run_zying_collection_job({}, lock)
+
+        assert bit_interface._zying_collection_state["running"] is False
+        assert bit_interface._zying_collection_state["status"] == "stopped"
+        assert bit_interface._zying_collection_state["requires_login"] is False
+        assert "用户结束采集" in bit_interface._zying_collection_state["message"]
     finally:
         with bit_interface._zying_collection_state_lock:
             bit_interface._zying_collection_state.clear()
