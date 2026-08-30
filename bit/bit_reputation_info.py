@@ -58,6 +58,10 @@ from bit.bit_config import list_config_rows
 REPUTATION_URL = "https://global-selling.mercadolibre.com/reputation"
 SALES_SUMMARY_URL = "https://global-selling.mercadolibre.com/sales-summary"
 METRICS_URL = "https://global-selling.mercadolibre.com/metrics#sc-menu"
+ACCOUNT_RISK_URLS = {
+    "restrictions": "https://global-selling.mercadolibre.com/account-risk?filter=restrictions",
+    "warnings": "https://global-selling.mercadolibre.com/account-risk?filter=warnings",
+}
 LOGIN_TEXT_MARKERS = (
     "fill out your e-mail address to log in",
     "fill out your email address to log in",
@@ -92,6 +96,8 @@ SITE_CODE_MAP = {
     "MLU": "MLU",
 }
 COUNTRY_SWITCH_SELECTORS = (
+    "#nav-header-cbt__site-switcher-toggle",
+    ".nav-header-cbt__site-switcher-trigger",
     'button[aria-label="Select country"]',
     'button[aria-label*="country" i]',
     'button[aria-label*="país" i]',
@@ -104,6 +110,22 @@ COUNTRY_SWITCH_SELECTORS = (
     ".nav-header-cbt__site-switcher",
     '[data-testid*="site-switcher"]',
 )
+SITE_SHORT_CODE_MAP = {
+    "MLM": "MX",
+    "MLB": "BR",
+    "MCO": "CO",
+    "MLC": "CL",
+    "MLA": "AR",
+    "MLU": "UY",
+}
+SITE_LABEL_ALIASES = {
+    "MLM": ("mexico", "méxico"),
+    "MLB": ("brazil", "brasil"),
+    "MCO": ("colombia",),
+    "MLC": ("chile",),
+    "MLA": ("argentina",),
+    "MLU": ("uruguay",),
+}
 METRIC_LABEL_ALIASES = {
     "complaints": (
         "complaints",
@@ -364,7 +386,13 @@ def _deep_shadow_click(driver, selectors):
                     try { node = root.querySelector(selector); } catch (_) {}
                     if (node) {
                         node.scrollIntoView({block: 'center', inline: 'center'});
-                        node.click();
+                        for (const type of ['pointerdown', 'mousedown', 'pointerup', 'mouseup', 'click']) {
+                            node.dispatchEvent(new MouseEvent(type, {
+                                bubbles: true,
+                                cancelable: true,
+                                view: window
+                            }));
+                        }
                         return true;
                     }
                 }
@@ -378,6 +406,130 @@ def _deep_shadow_click(driver, selectors):
             list(selectors),
         )
     )
+
+
+def _get_country_selection_state(driver):
+    """读取顶部站点切换器的显式状态，兼容旧版 Header 和新版 Shadow DOM。"""
+    try:
+        return driver.execute_script(
+            """
+            function allNodes(root) {
+                const nodes = [...root.querySelectorAll('*')];
+                for (const node of [...nodes]) {
+                    if (node.shadowRoot) nodes.push(...allNodes(node.shadowRoot));
+                }
+                return nodes;
+            }
+
+            function classText(node) {
+                return String(node?.className?.baseVal || node?.className || '');
+            }
+
+            function clean(value) {
+                return String(value || '').replace(/\\s+/g, ' ').trim();
+            }
+
+            const nodes = allNodes(document);
+            const selected = nodes.find((node) =>
+                classText(node).includes('nav-header-cbt__option-selected') ||
+                (node.getAttribute('aria-selected') === 'true' && node.getAttribute('data-value'))
+            );
+            const trigger = nodes.find((node) =>
+                node.id === 'nav-header-cbt__site-switcher-toggle' ||
+                classText(node).includes('nav-header-cbt__site-switcher-trigger') ||
+                (node.matches?.('button[role="combobox"]') &&
+                    /country|site|pa[ií]s|国家|站点/i.test(clean([
+                        node.getAttribute('aria-label'),
+                        node.getAttribute('title'),
+                        node.innerText
+                    ].join(' '))))
+            );
+            const triggerNodes = trigger ? [trigger, ...allNodes(trigger)] : [];
+            const valueNode = triggerNodes.find((node) =>
+                classText(node).includes('nav-header-cbt__site-switcher-value') ||
+                classText(node).includes('nav-header-cbt__current-site')
+            );
+            const flag = triggerNodes.find((node) => node.tagName === 'IMG');
+            const available = nodes
+                .filter((node) => /^(MLM|MLB|MCO|MLC|MLA|MLU)-(remote|fulfillment)$/.test(
+                    node.getAttribute('data-value') || ''
+                ))
+                .map((node) => ({
+                    value: node.getAttribute('data-value') || '',
+                    text: clean(node.innerText || node.textContent || node.getAttribute('alt')),
+                    selected: node === selected || classText(node).includes('selected')
+                }))
+                .filter((item, index, items) =>
+                    items.findIndex((candidate) => candidate.value === item.value) === index
+                );
+            const scriptsText = [...document.scripts]
+                .map((script) => script.textContent || '')
+                .join('\\n');
+            const operatingMatch = scriptsText.match(
+                /operating_site_id["']?\\s*:\\s*["']([A-Z]{3})["']/
+            );
+
+            return {
+                selectedRemote: selected?.getAttribute('data-value') ||
+                    selected?.querySelector?.('[data-value]')?.getAttribute('data-value') || '',
+                selectedText: clean(selected?.innerText || selected?.textContent),
+                switcherValue: clean(valueNode?.innerText || valueNode?.textContent),
+                currentFlagAlt: clean(flag?.getAttribute('alt') || flag?.getAttribute('title')),
+                triggerText: clean(trigger?.innerText || trigger?.textContent),
+                operatingSiteId: operatingMatch ? operatingMatch[1] : '',
+                available,
+                currentUrl: location.href,
+                title: document.title
+            };
+            """
+        ) or {}
+    except Exception as exc:
+        return {"error": str(exc)}
+
+
+def _country_selection_state_matches(state, site):
+    state = state or {}
+    site_key = str(site or "").strip()
+    site_code = SITE_CODE_MAP.get(site_key) or SITE_CODE_MAP.get(site_key.upper())
+    if not site_code:
+        return False
+
+    target_remote = f"{site_code}-remote"
+    target_short = SITE_SHORT_CODE_MAP.get(site_code, "")
+    selected_remote = str(state.get("selectedRemote") or "").strip()
+    if selected_remote:
+        # 墨西哥 Full 与 Remote 共用 MX/国旗，存在显式 data-value 时必须严格区分。
+        return selected_remote == target_remote
+
+    country_aliases = SITE_LABEL_ALIASES.get(
+        site_code,
+        (_get_country_name(site_key).casefold(),),
+    )
+    explicit_text = " ".join(
+        str(state.get(key) or "")
+        for key in ("selectedText", "currentFlagAlt", "triggerText")
+    ).casefold()
+    return any(
+        (
+            str(state.get("operatingSiteId") or "").strip().upper() == site_code,
+            bool(target_short)
+            and str(state.get("switcherValue") or "").strip().upper() == target_short,
+            any(alias and alias in explicit_text for alias in country_aliases),
+        )
+    )
+
+
+def _wait_for_country_selection(driver, site, timeout=15, poll_seconds=1):
+    deadline = time.monotonic() + max(0, float(timeout or 0))
+    last_state = {}
+    while True:
+        last_state = _get_country_selection_state(driver)
+        if _country_selection_state_matches(last_state, site):
+            return last_state
+        _raise_if_mercado_unavailable(driver=driver, context=f"{site}切换站点后的页面")
+        if time.monotonic() >= deadline:
+            return last_state
+        time.sleep(max(0.05, float(poll_seconds or 0)))
 
 
 def _open_country_switch(driver, timeout=15, poll_seconds=1):
@@ -411,6 +563,11 @@ def _select_country(
     country = _get_country_name(site)
     for attempt in range(1, 4):
         try:
+            current_state = _get_country_selection_state(driver)
+            if _country_selection_state_matches(current_state, site):
+                print(get_now_time() + shop_name + "当前已是目标站点:", site)
+                return True
+
             opened = _open_country_switch(driver)
             if not opened:
                 opened = bool(oepn_country_switch(driver))
@@ -432,23 +589,18 @@ def _select_country(
             if not success and site_key != country:
                 success = force_select_country(driver, site_key)
             if success:
-                print(get_now_time() + shop_name + "成功选择站点:", site)
-                time.sleep(3)
+                selected_state = _wait_for_country_selection(driver, site)
                 state = _raise_if_mercado_unavailable(
                     driver=driver,
                     context=f"{shop_name}{site}切换站点后的页面",
                 )
-                try:
-                    WebDriverWait(driver, 10).until(
-                        EC.visibility_of_element_located(
-                            (By.CLASS_NAME, "title__page--cbt")
-                        )
-                    )
-                except Exception as exc:
+                if not _country_selection_state_matches(selected_state, site):
                     raise MercadoPageStructureError(
-                        f"{shop_name}{site}切换站点后{structure_context}结构不匹配："
-                        f"{state.get('current_url', '')}"
-                    ) from exc
+                        f"{shop_name}{site}切换站点后未确认目标站点，"
+                        f"{structure_context}：{state.get('current_url', '')}，"
+                        f"站点状态={selected_state}"
+                    )
+                print(get_now_time() + shop_name + "成功选择站点:", site)
                 return True
             raise MercadoPageStructureError(f"没有找到站点选项：{site}")
         except MercadoAuthenticationError:
@@ -1303,6 +1455,171 @@ def _parse_gradient(value):
     return direction, rate
 
 
+def _get_account_risk_links(driver):
+    try:
+        return driver.execute_script(
+            """
+            const roots = [...document.querySelectorAll(
+                '.andes-message__content, [role="alert"], [class*="message__content"]'
+            )];
+            return roots.flatMap((root) => [...root.querySelectorAll('a[href*="/account-risk"]')])
+                .map((node) => node.href || node.getAttribute('href') || '')
+                .filter((href, index, links) => href && links.indexOf(href) === index);
+            """
+        ) or []
+    except Exception:
+        return []
+
+
+def _account_risk_kinds_from_summary(summary_text, links=None):
+    sources = [str(summary_text or ""), *(str(link or "") for link in (links or []))]
+    text = "\n".join(sources)
+    kinds = []
+    if re.search(r"go\s+to\s+restrictions?|filter=restrictions?\b", text, re.IGNORECASE):
+        kinds.append("restrictions")
+    if re.search(r"go\s+to\s+warnings?|filter=warnings?\b", text, re.IGNORECASE):
+        kinds.append("warnings")
+    return kinds
+
+
+def _normalize_account_risk_details(raw_details):
+    generic_line = re.compile(
+        r"^(?:\d+\s*)?(?:go\s+to\s+)?(?:restrictions?|warnings?|"
+        r"restricciones?|restri(?:ç|c)[õo]es?|advertencias?|avisos?)$|"
+        r"^(?:account\s+risk|riesgo\s+de\s+la\s+cuenta|risco\s+da\s+conta|"
+        r"view\s+details?|see\s+details?|learn\s+more|back|all|loading\.\.\.|"
+        r"cargando\.\.\.|carregando\.\.\.)$",
+        re.IGNORECASE,
+    )
+    cleaned = []
+    for raw_detail in raw_details or []:
+        lines = []
+        for raw_line in str(raw_detail or "").splitlines():
+            line = re.sub(r"\s+", " ", raw_line).strip(" \t\r\n·•")
+            line = re.sub(
+                r"^(?:\d+\s*)?\[?go\s+to\s+(?:restrictions?|warnings?)\]?"
+                r"(?:\([^)]*\))?$",
+                "",
+                line,
+                flags=re.IGNORECASE,
+            ).strip()
+            if not line or generic_line.fullmatch(line) or re.fullmatch(r"\d+", line):
+                continue
+            if re.fullmatch(r"\d+\s+go\s+to\s+(?:restrictions?|warnings?)", line, re.IGNORECASE):
+                continue
+            lines.append(line)
+        detail = "\n".join(lines).strip()
+        if detail and detail not in cleaned:
+            cleaned.append(detail)
+
+    # 同一个卡片常会被父、子容器重复读取；优先保留更具体的子容器文本。
+    specific = []
+    for detail in cleaned:
+        if any(
+            other != detail and len(other) >= 8 and other in detail
+            for other in cleaned
+        ):
+            continue
+        specific.append(detail)
+    return specific or cleaned
+
+
+def _extract_account_risk_details(driver):
+    try:
+        return driver.execute_script(
+            """
+            function visible(node) {
+                const rect = node.getBoundingClientRect();
+                const style = getComputedStyle(node);
+                return rect.width > 0 && rect.height > 0 &&
+                    style.display !== 'none' && style.visibility !== 'hidden';
+            }
+            function clean(node) {
+                return String(node?.innerText || node?.textContent || '')
+                    .replace(/\\u00a0/g, ' ')
+                    .replace(/[ \\t]+/g, ' ')
+                    .replace(/\\n{3,}/g, '\\n\\n')
+                    .trim();
+            }
+            function values(root, selectors) {
+                const found = [];
+                for (const selector of selectors) {
+                    for (const node of root.querySelectorAll(selector)) {
+                        const text = visible(node) ? clean(node) : '';
+                        if (text && text.length >= 4 && !found.includes(text)) found.push(text);
+                    }
+                }
+                return found;
+            }
+
+            const root = document.querySelector('main') || document.body;
+            const specific = values(root, [
+                '[data-testid*="restriction-item" i]',
+                '[data-testid*="warning-item" i]',
+                '[data-testid*="restriction-card" i]',
+                '[data-testid*="warning-card" i]',
+                '[class*="restriction-card" i]',
+                '[class*="warning-card" i]'
+            ]);
+            if (specific.length) return specific;
+
+            const cards = values(root, [
+                'article',
+                '[role="listitem"]',
+                '.andes-card',
+                '[class*="risk-item" i]',
+                '[class*="risk-card" i]'
+            ]);
+            if (cards.length) return cards;
+
+            const mainText = clean(root);
+            return mainText ? [mainText] : [];
+            """
+        ) or []
+    except Exception:
+        return []
+
+
+def _wait_account_risk_details(driver, timeout=12, poll_seconds=1):
+    deadline = time.monotonic() + max(0, float(timeout or 0))
+    while True:
+        details = _normalize_account_risk_details(
+            _extract_account_risk_details(driver)
+        )
+        if details:
+            return details
+        _raise_if_mercado_unavailable(driver=driver, context="账户风险详情页面")
+        if time.monotonic() >= deadline:
+            return []
+        time.sleep(max(0.05, float(poll_seconds or 0)))
+
+
+def _collect_account_risk_detail_text(driver, kinds, window_id="", name="", site=""):
+    details = []
+    for kind in kinds:
+        url = ACCOUNT_RISK_URLS.get(kind)
+        if not url:
+            continue
+        _open_collection_backend_page(
+            driver,
+            url,
+            window_id=window_id,
+            name=name,
+            site=site,
+            context="账户限制详情" if kind == "restrictions" else "账户警告详情",
+            settle_seconds=3,
+        )
+        kind_details = _wait_account_risk_details(driver)
+        if not kind_details:
+            raise MercadoPageStructureError(
+                f"{name}{site}{'限制' if kind == 'restrictions' else '警告'}详情页面结构不匹配：{url}"
+            )
+        for detail in kind_details:
+            if detail not in details:
+                details.append(detail)
+    return "\n".join(details).strip()
+
+
 def get_reputation_auxiliary_info(
     window_id,
     name,
@@ -1348,6 +1665,10 @@ def get_reputation_auxiliary_info(
             )
         except Exception:
             data_warn = "正常"
+        account_risk_kinds = _account_risk_kinds_from_summary(
+            data_warn,
+            _get_account_risk_links(driver),
+        )
 
         try:
             data_gradient = WebDriverWait(driver, 10).until(
@@ -1359,6 +1680,16 @@ def get_reputation_auxiliary_info(
             data_gradient = "持平"
         print("近七天变化情况为:", data_gradient)
         direction, gradient_rate = _parse_gradient(data_gradient)
+        if account_risk_kinds:
+            data_warn = _collect_account_risk_detail_text(
+                driver,
+                account_risk_kinds,
+                window_id=window_id,
+                name=name,
+                site=site,
+            )
+            if not data_warn:
+                raise MercadoPageStructureError(f"{name}{site}账户风险详情为空")
     except Exception as exc:
         if select_site:
             raise

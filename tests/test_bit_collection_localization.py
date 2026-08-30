@@ -170,6 +170,88 @@ class ReputationLocalizationTests(unittest.TestCase):
         self.assertIn('button[aria-label*="país" i]', selectors)
         self.assertIn('button[role="combobox"]', selectors)
 
+    def test_current_header_state_accepts_new_sales_summary_markup(self):
+        self.assertTrue(
+            reputation._country_selection_state_matches(
+                {
+                    "selectedRemote": "MLB-remote",
+                    "switcherValue": "BR",
+                    "currentFlagAlt": "Brazil",
+                },
+                "巴西",
+            )
+        )
+        self.assertFalse(
+            reputation._country_selection_state_matches(
+                {
+                    "selectedRemote": "MLM-remote",
+                    "switcherValue": "MX",
+                    "currentFlagAlt": "Mexico",
+                },
+                "巴西",
+            )
+        )
+        self.assertFalse(
+            reputation._country_selection_state_matches(
+                {
+                    "selectedRemote": "MLM-fulfillment",
+                    "switcherValue": "MX",
+                    "currentFlagAlt": "Mexico",
+                },
+                "墨西哥",
+            )
+        )
+        self.assertTrue(
+            reputation._country_selection_state_matches(
+                {"switcherValue": "BR", "currentFlagAlt": "Brasil"},
+                "巴西",
+            )
+        )
+
+    def test_country_switch_uses_header_state_instead_of_removed_page_title(self):
+        driver = mock.Mock()
+        with (
+            mock.patch.object(
+                reputation,
+                "_get_country_selection_state",
+                side_effect=[
+                    {"selectedRemote": "MLM-remote"},
+                    {"selectedRemote": "MLB-remote", "switcherValue": "BR"},
+                ],
+            ),
+            mock.patch.object(reputation, "_open_country_switch", return_value=True),
+            mock.patch.object(reputation, "_deep_shadow_click", return_value=True),
+            mock.patch.object(
+                reputation,
+                "_raise_if_mercado_unavailable",
+                return_value={
+                    "current_url": "https://global-selling.mercadolibre.com/sales-summary"
+                },
+            ),
+        ):
+            self.assertTrue(
+                reputation._select_country(
+                    driver,
+                    "巴西",
+                    "测试店铺",
+                    recovery_url=reputation.SALES_SUMMARY_URL,
+                    structure_context="销售汇总页面",
+                )
+            )
+
+    def test_country_switch_skips_click_when_site_is_already_selected(self):
+        driver = mock.Mock()
+        with (
+            mock.patch.object(
+                reputation,
+                "_get_country_selection_state",
+                return_value={"selectedRemote": "MLB-remote"},
+            ),
+            mock.patch.object(reputation, "_open_country_switch") as open_switch,
+        ):
+            self.assertTrue(reputation._select_country(driver, "巴西", "测试店铺"))
+        open_switch.assert_not_called()
+
 
 class InfractionLocalizationTests(unittest.TestCase):
     def test_incomplete_infraction_total_is_not_reported_as_success(self):

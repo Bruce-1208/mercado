@@ -622,6 +622,107 @@ def test_auxiliary_browser_collector_opens_summary_not_reputation(monkeypatch):
     assert result["visits"] == "[101, 202, 303]"
 
 
+def test_account_risk_summary_detects_restrictions_and_warnings():
+    assert bit_reputation_info._account_risk_kinds_from_summary(
+        "1 Go to Restrictions\n1 go to warnings"
+    ) == ["restrictions", "warnings"]
+    assert bit_reputation_info._account_risk_kinds_from_summary(
+        "",
+        [
+            "https://global-selling.mercadolibre.com/account-risk?filter=warnings"
+        ],
+    ) == ["warnings"]
+
+
+def test_account_risk_details_remove_summary_and_parent_duplicates():
+    assert bit_reputation_info._normalize_account_risk_details(
+        [
+            "Restrictions\n1 Go to Restrictions\nListing paused because the brand is restricted",
+            "Listing paused because the brand is restricted",
+            "Warnings",
+            "1 [Go to Warnings](https://global-selling.mercadolibre.com/account-risk?filter=warnings)",
+        ]
+    ) == ["Listing paused because the brand is restricted"]
+
+
+def test_collect_account_risk_details_opens_each_filter_and_keeps_details_only(monkeypatch):
+    opened_urls = []
+    detail_batches = iter(
+        [
+            ["Restriction detail"],
+            ["Warning detail", "Restriction detail"],
+        ]
+    )
+    monkeypatch.setattr(
+        bit_reputation_info,
+        "_open_collection_backend_page",
+        lambda _driver, url, **_kwargs: opened_urls.append(url) or {},
+    )
+    monkeypatch.setattr(
+        bit_reputation_info,
+        "_wait_account_risk_details",
+        lambda _driver: next(detail_batches),
+    )
+
+    result = bit_reputation_info._collect_account_risk_detail_text(
+        object(),
+        ["restrictions", "warnings"],
+        window_id="window-id",
+        name="测试店铺",
+        site="巴西",
+    )
+
+    assert opened_urls == [
+        bit_reputation_info.ACCOUNT_RISK_URLS["restrictions"],
+        bit_reputation_info.ACCOUNT_RISK_URLS["warnings"],
+    ]
+    assert result == "Restriction detail\nWarning detail"
+
+
+def test_auxiliary_replaces_account_risk_count_with_details(monkeypatch):
+    wait_values = iter(["1 Go to Restrictions", "Decreased 4%"])
+
+    class WaitResult:
+        def __init__(self, text):
+            self.text = text
+
+    class FakeWait:
+        def __init__(self, *_args, **_kwargs):
+            pass
+
+        def until(self, _condition):
+            return WaitResult(next(wait_values))
+
+    monkeypatch.setattr(
+        bit_reputation_info,
+        "_open_collection_backend_page",
+        lambda *_args, **_kwargs: {},
+    )
+    monkeypatch.setattr(bit_reputation_info, "_select_country", lambda *_args, **_kwargs: True)
+    monkeypatch.setattr(bit_reputation_info, "WebDriverWait", FakeWait)
+    monkeypatch.setattr(
+        bit_reputation_info,
+        "_get_account_risk_links",
+        lambda _driver: [bit_reputation_info.ACCOUNT_RISK_URLS["restrictions"]],
+    )
+    monkeypatch.setattr(
+        bit_reputation_info,
+        "_collect_account_risk_detail_text",
+        lambda *_args, **_kwargs: "商品因受限品牌被暂停\n请移除相关品牌信息",
+    )
+    monkeypatch.setattr(bit_reputation_info, "get_visits_info", lambda *_args, **_kwargs: [])
+
+    result = bit_reputation_info.get_reputation_auxiliary_info(
+        "window-id",
+        "测试店铺",
+        "巴西",
+        driver=object(),
+    )
+
+    assert result["system_warning"] == "商品因受限品牌被暂停\n请移除相关品牌信息"
+    assert "Go to Restrictions" not in result["system_warning"]
+
+
 def test_legacy_summary_schedulers_delegate_to_official_api(monkeypatch):
     calls = []
     monkeypatch.setattr(

@@ -3403,7 +3403,7 @@
 
         .reputation-table th:nth-child(11),
         .reputation-table td:nth-child(11) {
-            width: 120px;
+            width: 320px;
         }
 
         .reputation-table th:nth-child(12),
@@ -3425,6 +3425,17 @@
         .reputation-table tbody td:nth-child(10) {
             padding-top: 4px;
             padding-bottom: 4px;
+        }
+
+        .reputation-table tbody td.reputation-warning-cell {
+            height: auto;
+            max-height: none;
+            min-width: 280px;
+            padding-top: 8px;
+            padding-bottom: 8px;
+            line-height: 1.45;
+            white-space: pre-wrap;
+            overflow-wrap: anywhere;
         }
 
         .order-print-table-wrap {
@@ -15567,6 +15578,17 @@
             return `<td class="reputation-change-cell ${className}" title="${escapeHtml(text)}">${escapeHtml(text)}</td>`;
         }
 
+        function renderReputationWarningCell(value) {
+            const text = String(value ?? "")
+                .replace(/\b\d+\s*\[?go\s+to\s+(?:restrictions?|warnings?)\]?(?:\([^)]*\))?/gi, "")
+                .split(/\r?\n/)
+                .map(line => line.trim())
+                .filter(line => line && !/^(?:restrictions?|warnings?)$/i.test(line))
+                .join("\n")
+                .trim() || "-";
+            return `<td class="reputation-warning-cell" title="${escapeHtml(text)}">${escapeHtml(text)}</td>`;
+        }
+
         function parseTrafficValues(value) {
             const text = String(value ?? "").trim();
             if (!text) return [];
@@ -17082,7 +17104,7 @@
                                 <canvas class="traffic-chart" data-values="${escapeHtml(JSON.stringify(trafficValues))}"></canvas>
                             </span>
                         </td>
-                        <td title="${escapeHtml(row["系统告警"])}">${escapeHtml(row["系统告警"])}</td>
+                        ${renderReputationWarningCell(row["系统告警"])}
                         <td title="${escapeHtml(row["更新时间"])}">${escapeHtml(row["更新时间"])}</td>
                     </tr>
                     `;
