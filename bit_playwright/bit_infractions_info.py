@@ -36,7 +36,11 @@ from bit.bit_mercado_login import (
     record_human_verification_anomaly,
 )
 from bit.bit_runtime_lock import create_window_lease
-from bit.bit_db_api import insert_task_record, inset_infraction_info
+from bit.bit_db_api import (
+    insert_task_record,
+    inset_infraction_info,
+    list_mercado_store_tokens,
+)
 from bit.bit_send_mail import send_info
 from bit.bit_utils import get_now_time
 from bit.mercado_click_delay import install_playwright_click_delay
@@ -70,6 +74,15 @@ SITE_PREFIX_MAP = {
     "乌拉圭": "MLU",
     "UY": "MLU",
     "MLU": "MLU",
+}
+
+SITE_NAME_BY_PREFIX = {
+    "MLM": "墨西哥",
+    "MLB": "巴西",
+    "MCO": "哥伦比亚",
+    "MLC": "智利",
+    "MLA": "阿根廷",
+    "MLU": "乌拉圭",
 }
 
 SITE_SWITCH_SELECTOR_MAP = {
@@ -269,6 +282,55 @@ def _is_ignored_config_value(value):
 
 def _split_sites(value):
     return [site.strip() for site in re.split(r"[，,、;；\n]+", str(value or "")) if site.strip()]
+
+
+def _setting_flag_enabled(value):
+    if isinstance(value, str):
+        return value.strip().casefold() not in ("", "0", "false", "no", "off")
+    return bool(value)
+
+
+def _authorized_visit_stats_scope(token_data=None):
+    """按授权店铺别名返回显式开启访问数据统计的站点。"""
+    if token_data is None:
+        token_data = list_mercado_store_tokens() or {}
+    scope = {}
+    for token in token_data.get("rows") or ():
+        enabled_sites = []
+        for setting in token.get("site_settings") or ():
+            setting = dict(setting or {})
+            if not _setting_flag_enabled(setting.get("visit_stats_enabled")):
+                continue
+            site_code = _site_prefix(setting.get("site_id"))
+            if site_code in SITE_NAME_BY_PREFIX and site_code not in enabled_sites:
+                enabled_sites.append(site_code)
+        if not enabled_sites:
+            continue
+        for alias in (token.get("display_name"), token.get("nickname")):
+            alias_key = str(alias or "").strip().casefold()
+            if not alias_key:
+                continue
+            target = scope.setdefault(alias_key, [])
+            for site_code in enabled_sites:
+                if site_code not in target:
+                    target.append(site_code)
+    return scope
+
+
+def _authorized_visit_stats_rows(rows, token_data=None):
+    """浏览器配置仅提供窗口；运行站点完全以授权开关为准。"""
+    scope = _authorized_visit_stats_scope(token_data)
+    selected = []
+    for raw_row in rows or ():
+        if not isinstance(raw_row, (list, tuple)) or len(raw_row) < 4:
+            continue
+        enabled_sites = scope.get(str(raw_row[1] or "").strip().casefold(), ())
+        if not enabled_sites:
+            continue
+        row = list(raw_row)
+        row[3] = "，".join(SITE_NAME_BY_PREFIX[site] for site in enabled_sites)
+        selected.append(tuple(row))
+    return selected
 
 
 def _failure_status(exc):
@@ -1296,13 +1358,14 @@ def get_infractions_info_all(
     rows = list_config_rows(include_ignored=False)
     rows = [row for row in rows if row and row[0]]
     rows = _deduplicate_config_rows(rows)
+    rows = _authorized_visit_stats_rows(rows)
     rows = filter_config_rows(
         rows,
         selected_shops=selected_shops,
         selected_sites=selected_sites,
     )
     if (selected_shops or selected_sites) and not rows:
-        raise ValueError("所选店铺和站点没有可执行的侵权采集配置")
+        raise ValueError("所选店铺或站点未在授权店铺中开启访问数据统计")
 
     outcomes = _execute_infraction_rows(
         rows,

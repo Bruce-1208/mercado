@@ -100,6 +100,78 @@ class ClientTests(unittest.TestCase):
         )
         self.assertEqual(session.calls[0][2]["headers"]["Authorization"], "Bearer token-value")
 
+    def test_get_shipment_costs_uses_required_new_format_header(self):
+        class Response:
+            status_code = 200
+            ok = True
+            headers = {}
+            text = ""
+
+            @staticmethod
+            def json():
+                return {
+                    "currency_id": "USD",
+                    "senders": [{"user_id": 7, "cost": 6.71}],
+                }
+
+        class Session:
+            def __init__(self):
+                self.calls = []
+
+            def request(self, method, url, **kwargs):
+                self.calls.append((method, url, kwargs))
+                return Response()
+
+        session = Session()
+        client = MercadoLibreClient("token-value", session=session)
+
+        result = client.get_shipment_costs("47888427867")
+
+        self.assertEqual(result["senders"][0]["cost"], 6.71)
+        self.assertEqual(
+            session.calls[0][1],
+            "https://api.mercadolibre.com/marketplace/shipments/47888427867/costs",
+        )
+        self.assertEqual(session.calls[0][2]["headers"]["x-format-new"], "true")
+        self.assertEqual(
+            session.calls[0][2]["headers"]["Authorization"], "Bearer token-value"
+        )
+
+    def test_update_global_item_sends_json_to_global_selling_endpoint(self):
+        class Response:
+            status_code = 200
+            ok = True
+            headers = {}
+            text = "{}"
+
+            @staticmethod
+            def json():
+                return {}
+
+        class Session:
+            def __init__(self):
+                self.calls = []
+
+            def request(self, method, url, **kwargs):
+                self.calls.append((method, url, kwargs))
+                return Response()
+
+        session = Session()
+        client = MercadoLibreClient("token-value", session=session)
+
+        result = client.update_global_item("mlm3308393921", {"net_proceeds": 10})
+
+        self.assertEqual(result, {})
+        self.assertEqual(session.calls[0][0], "PUT")
+        self.assertEqual(
+            session.calls[0][1],
+            "https://api.mercadolibre.com/global/items/MLM3308393921",
+        )
+        self.assertEqual(session.calls[0][2]["json"], {"net_proceeds": 10})
+        self.assertEqual(
+            session.calls[0][2]["headers"]["Authorization"], "Bearer token-value"
+        )
+
 
 class DatabaseTests(unittest.TestCase):
     def setUp(self):

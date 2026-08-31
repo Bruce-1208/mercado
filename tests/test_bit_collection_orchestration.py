@@ -107,6 +107,25 @@ class CollectionControlTests(unittest.TestCase):
 
 
 class CollectionOrchestrationTests(unittest.TestCase):
+    def test_infraction_scope_comes_from_explicit_authorization_switches(self):
+        rows = [("id-1", "店铺甲", "", "巴西", "", "", "")]
+        token_data = {
+            "rows": [
+                {
+                    "display_name": "店铺甲",
+                    "site_settings": [
+                        {"site_id": "MLM", "visit_stats_enabled": True},
+                        {"site_id": "MLB", "visit_stats_enabled": False},
+                    ],
+                }
+            ]
+        }
+
+        self.assertEqual(
+            infractions._authorized_visit_stats_rows(rows, token_data),
+            [("id-1", "店铺甲", "", "墨西哥", "", "", "")],
+        )
+
     def test_infraction_collector_executes_only_selected_shop_site_rows(self):
         rows = [
             ("id-1", "店铺甲", "", "墨西哥，巴西", "", "", ""),
@@ -120,6 +139,28 @@ class CollectionOrchestrationTests(unittest.TestCase):
 
         with (
             mock.patch.object(infractions, "list_config_rows", return_value=rows),
+            mock.patch.object(
+                infractions,
+                "list_mercado_store_tokens",
+                return_value={
+                    "rows": [
+                        {
+                            "display_name": "店铺甲",
+                            "site_settings": [
+                                {"site_id": "MLM", "visit_stats_enabled": True},
+                                {"site_id": "MLB", "visit_stats_enabled": True},
+                            ],
+                        },
+                        {
+                            "display_name": "店铺乙",
+                            "site_settings": [
+                                {"site_id": "MLB", "visit_stats_enabled": True},
+                                {"site_id": "MLC", "visit_stats_enabled": False},
+                            ],
+                        },
+                    ]
+                },
+            ),
             mock.patch.object(
                 infractions,
                 "_execute_infraction_rows",

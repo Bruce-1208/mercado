@@ -46,6 +46,14 @@ class MercadoCommunicationError(RuntimeError):
             )
         return "model 6" in text.casefold() or "forbidden for cbt" in text.casefold()
 
+    @property
+    def claims_1_restricted(self) -> bool:
+        """当前错误是否表示资源只能通过旧版 Claims 1.0 接口读取。"""
+        text = str(self)
+        if self.payload is not None:
+            text = " ".join((text, str(self.payload)))
+        return "claims 1.0" in text.casefold()
+
 
 def _required_identifier(value: Any, label: str) -> str:
     identifier = str(value or "").strip()
@@ -495,19 +503,43 @@ class MercadoCommunicationsClient:
             raise MercadoCommunicationError("投诉搜索接口返回格式错误", payload=result)
         return result
 
-    def get_claim(self, claim_id: Any) -> dict[str, Any]:
+    def _get_claim_compatible(self, claim_id: Any) -> tuple[dict[str, Any], bool]:
         claim = _required_identifier(claim_id, "投诉 ID")
-        result = self.request("GET", f"/marketplace/v2/claims/{claim}")
+        try:
+            result = self.request("GET", f"/marketplace/v2/claims/{claim}")
+            legacy = False
+        except MercadoCommunicationError as exc:
+            if not exc.claims_1_restricted:
+                raise
+            result = self.request("GET", f"/post-purchase/v1/claims/{claim}")
+            legacy = True
         if not isinstance(result, dict):
             raise MercadoCommunicationError("投诉详情接口返回格式错误", payload=result)
-        return result
+        return result, legacy
 
-    def get_claim_detail(self, claim_id: Any) -> dict[str, Any]:
+    def get_claim(self, claim_id: Any) -> dict[str, Any]:
+        return self._get_claim_compatible(claim_id)[0]
+
+    def _get_claim_detail_compatible(
+        self, claim_id: Any
+    ) -> tuple[dict[str, Any], bool]:
         claim = _required_identifier(claim_id, "投诉 ID")
-        result = self.request("GET", f"/marketplace/v2/claims/{claim}/detail")
+        try:
+            result = self.request("GET", f"/marketplace/v2/claims/{claim}/detail")
+            legacy = False
+        except MercadoCommunicationError as exc:
+            if not exc.claims_1_restricted:
+                raise
+            result = self.request(
+                "GET", f"/post-purchase/v1/claims/{claim}/detail"
+            )
+            legacy = True
         if not isinstance(result, dict):
             raise MercadoCommunicationError("投诉处理说明返回格式错误", payload=result)
-        return result
+        return result, legacy
+
+    def get_claim_detail(self, claim_id: Any) -> dict[str, Any]:
+        return self._get_claim_detail_compatible(claim_id)[0]
 
     def get_claim_reason(self, reason_id: Any) -> dict[str, Any]:
         reason = str(reason_id or "").strip()
@@ -518,12 +550,26 @@ class MercadoCommunicationsClient:
             raise MercadoCommunicationError("投诉原因接口返回格式错误", payload=result)
         return result
 
-    def get_claim_messages(self, claim_id: Any) -> list[dict[str, Any]]:
+    def _get_claim_messages_compatible(
+        self, claim_id: Any
+    ) -> tuple[list[dict[str, Any]], bool]:
         claim = _required_identifier(claim_id, "投诉 ID")
-        result = self.request("GET", f"/marketplace/v2/claims/{claim}/messages")
+        try:
+            result = self.request("GET", f"/marketplace/v2/claims/{claim}/messages")
+            legacy = False
+        except MercadoCommunicationError as exc:
+            if not exc.claims_1_restricted:
+                raise
+            result = self.request(
+                "GET", f"/post-purchase/v1/claims/{claim}/messages"
+            )
+            legacy = True
         if not isinstance(result, list):
             raise MercadoCommunicationError("投诉消息接口返回格式错误", payload=result)
-        return [message for message in result if isinstance(message, dict)]
+        return [message for message in result if isinstance(message, dict)], legacy
+
+    def get_claim_messages(self, claim_id: Any) -> list[dict[str, Any]]:
+        return self._get_claim_messages_compatible(claim_id)[0]
 
     def get_claim_affects_reputation(self, claim_id: Any) -> dict[str, Any]:
         claim = _required_identifier(claim_id, "投诉 ID")
@@ -543,15 +589,57 @@ class MercadoCommunicationsClient:
 
     def get_claim_bundle(self, claim_id: Any) -> dict[str, Any]:
         """返回工作台展示投诉所需的详情、处理说明、消息及声誉影响。"""
-        claim = self.get_claim(claim_id)
+        claim, claim_legacy = self._get_claim_compatible(claim_id)
         reason_id = claim.get("reason_id")
+        resource_errors: dict[str, str] = {}
+        used_legacy = claim_legacy
+
+        def optional_resource(name: str, default: Any, loader: Callable[[], Any]) -> Any:
+            nonlocal used_legacy
+            try:
+                value = loader()
+                if (
+                    isinstance(value, tuple)
+                    and len(value) == 2
+                    and isinstance(value[1], bool)
+                ):
+                    used_legacy = used_legacy or value[1]
+                    return value[0]
+                return value
+            except MercadoCommunicationError as exc:
+                resource_errors[name] = str(exc)
+                return default
+
+        detail = optional_resource(
+            "detail", {}, lambda: self._get_claim_detail_compatible(claim_id)
+        )
+        reason = (
+            optional_resource("reason", {}, lambda: self.get_claim_reason(reason_id))
+            if reason_id
+            else {}
+        )
+        messages = optional_resource(
+            "messages", [], lambda: self._get_claim_messages_compatible(claim_id)
+        )
+        affects_reputation = optional_resource(
+            "affects_reputation",
+            {},
+            lambda: self.get_claim_affects_reputation(claim_id),
+        )
+        expected_resolutions = optional_resource(
+            "expected_resolutions",
+            [],
+            lambda: self.get_claim_expected_resolutions(claim_id),
+        )
         return {
             "claim": claim,
-            "detail": self.get_claim_detail(claim_id),
-            "reason": self.get_claim_reason(reason_id) if reason_id else {},
-            "messages": self.get_claim_messages(claim_id),
-            "affects_reputation": self.get_claim_affects_reputation(claim_id),
-            "expected_resolutions": self.get_claim_expected_resolutions(claim_id),
+            "detail": detail,
+            "reason": reason,
+            "messages": messages,
+            "affects_reputation": affects_reputation,
+            "expected_resolutions": expected_resolutions,
+            "api_version": "claims_1" if used_legacy else "claims_2",
+            "resource_errors": resource_errors,
         }
 
     def send_claim_message(
@@ -573,11 +661,20 @@ class MercadoCommunicationsClient:
                 str(value).strip() for value in attachments or () if str(value).strip()
             ],
         }
-        return self.request(
-            "POST",
-            f"/marketplace/v2/claims/{claim}/actions/send-message",
-            json=payload,
-        )
+        try:
+            return self.request(
+                "POST",
+                f"/marketplace/v2/claims/{claim}/actions/send-message",
+                json=payload,
+            )
+        except MercadoCommunicationError as exc:
+            if not exc.claims_1_restricted:
+                raise
+            return self.request(
+                "POST",
+                f"/post-purchase/v1/claims/{claim}/messages",
+                json=payload,
+            )
 
     def upload_claim_attachment(
         self,

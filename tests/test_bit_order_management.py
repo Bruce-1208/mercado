@@ -43,7 +43,8 @@ def test_workbench_contains_order_management_ui():
     assert "结余".encode("utf-8") in response.data
     assert "每 15 分钟重新拉取".encode("utf-8") in response.data
     assert "最近 72 小时".encode("utf-8") in response.data
-    assert "每天北京时间凌晨".encode("utf-8") in response.data
+    assert "每天刷新老订单状态".encode("utf-8") in response.data
+    assert "Shipment Costs 实际运费".encode("utf-8") in response.data
     assert "Token 自动拉取".encode("utf-8") in response.data
     assert "智赢导入".encode("utf-8") not in response.data
     assert b'id="order-select-all"' in response.data
@@ -66,6 +67,21 @@ def test_workbench_contains_order_management_ui():
     assert b"function orderProductNameMarkup(item)" in response.data
     assert b'class="order-product-link"' in response.data
     assert "打开美客多前台商品".encode("utf-8") in response.data
+    assert "订单重量与重量表运费".encode("utf-8") in response.data
+    assert "官方重量表运费（美元）".encode("utf-8") in response.data
+    assert b"function loadOrderWeightQuote(orderIds)" in response.data
+    assert b'id="order-freight-variance-filter"' in response.data
+    assert "存在运费差价".encode("utf-8") in response.data
+    assert "标价 / 实际运费".encode("utf-8") in response.data
+
+
+def test_order_detail_contains_weight_quote_ui():
+    response = _client().get("/")
+
+    assert response.status_code == 200
+    assert "订单重量与重量表运费".encode("utf-8") in response.data
+    assert "官方重量表运费（美元）".encode("utf-8") in response.data
+    assert b"function loadOrderWeightQuote(orderIds)" in response.data
 
 
 def test_order_api_requires_login():
@@ -105,6 +121,7 @@ def test_order_api_passes_filters_and_pagination():
         start_date="2026-08-01",
         end_date="2026-08-23",
         origin="token",
+        freight_variance="",
         page=2,
         page_size=25,
     )
@@ -123,6 +140,43 @@ def test_order_api_caps_page_size():
 
     assert response.status_code == 200
     assert list_orders.call_args.kwargs["page_size"] == 200
+
+
+def test_order_api_passes_freight_variance_filter():
+    with patch.object(
+        workbench,
+        "db_list_orders",
+        return_value={"rows": [], "total": 0, "page": 1, "page_size": 200},
+    ) as list_orders:
+        response = _client().get("/api/orders?freight_variance=actual_higher")
+
+    assert response.status_code == 200
+    assert list_orders.call_args.kwargs["freight_variance"] == "actual_higher"
+
+
+def test_order_weight_quote_route_returns_weight_and_rate_card_freight():
+    quote = {
+        "order_ids": ["20001", "20002"],
+        "actual_weight_g": 1100,
+        "billable_weight_g": 1300,
+        "weight_complete": True,
+        "shipping_amount_usd": 12.34,
+        "rate_weight_label": "1.0 - 1.5 kg",
+    }
+    with patch.object(
+        workbench.bit_db_api,
+        "get_order_weight_quote",
+        return_value=quote,
+    ) as get_quote:
+        response = _client().post(
+            "/api/orders/weight-quote",
+            json={"order_ids": ["20001", "20002"]},
+        )
+
+    assert response.status_code == 200
+    assert response.headers["Cache-Control"] == "no-store"
+    assert response.get_json()["data"]["shipping_amount_usd"] == 12.34
+    get_quote.assert_called_once_with(["20001", "20002"])
 
 
 def test_order_api_passes_multiple_stores_and_salespeople():

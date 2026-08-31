@@ -25,7 +25,12 @@ from mercado_api.client import MercadoAPIError, MercadoLibreClient
 
 STORE_LINK_SYNC_LOCK_KEY = "mercado_store_link_sync_task"
 STORE_LINK_WRITE_BATCH_SIZE = 100
-STORE_LINK_DETAIL_WORKERS = 12
+STORE_LINK_STORE_WORKERS = max(
+    1, int(os.getenv("MERCADO_STORE_LINK_STORE_WORKERS", "4"))
+)
+STORE_LINK_DETAIL_WORKERS = max(
+    1, int(os.getenv("MERCADO_STORE_LINK_DETAIL_WORKERS", "6"))
+)
 STORE_LINK_AUTO_SYNC_DAYS = max(
     1, int(os.getenv("MERCADO_STORE_LINK_AUTO_SYNC_DAYS", "3"))
 )
@@ -64,6 +69,7 @@ _sync_state = {
     "total_stores": 0,
     "processed_stores": 0,
     "current_store": "",
+    "active_stores": [],
     "discovered_count": 0,
     "inserted_count": 0,
     "updated_count": 0,
@@ -85,6 +91,23 @@ def _now_text() -> str:
 def _state_update(**changes) -> None:
     with _state_guard:
         _sync_state.update(changes)
+
+
+def _state_increment(**deltas: int) -> None:
+    with _state_guard:
+        for field, value in deltas.items():
+            _sync_state[field] = int(_sync_state.get(field) or 0) + int(value or 0)
+
+
+def _set_store_active(store_name: str, active: bool) -> None:
+    with _state_guard:
+        names = list(_sync_state.get("active_stores") or [])
+        if active and store_name not in names:
+            names.append(store_name)
+        elif not active and store_name in names:
+            names.remove(store_name)
+        _sync_state["active_stores"] = names
+        _sync_state["current_store"] = "、".join(names[:STORE_LINK_STORE_WORKERS])
 
 
 def _append_log(message: str) -> None:
@@ -110,6 +133,8 @@ def store_link_sync_status() -> dict:
         )
     state["auto_sync_enabled"] = True
     state["auto_sync_days"] = STORE_LINK_AUTO_SYNC_DAYS
+    state["store_workers"] = STORE_LINK_STORE_WORKERS
+    state["detail_workers_per_store"] = STORE_LINK_DETAIL_WORKERS
     return state
 
 
@@ -294,12 +319,6 @@ def _sync_store(record: dict) -> dict:
 
     client, record = _client_and_token(record)
     refreshed_after_unauthorized = False
-    base_discovered = int(_sync_state.get("discovered_count") or 0)
-    base_inserted = int(_sync_state.get("inserted_count") or 0)
-    base_updated = int(_sync_state.get("updated_count") or 0)
-    base_details = int(_sync_state.get("detail_count") or 0)
-    base_detail_failures = int(_sync_state.get("detail_failed_count") or 0)
-    base_products = int(_sync_state.get("product_count") or 0)
     while True:
         try:
             marker = uuid.uuid4().hex
@@ -329,24 +348,31 @@ def _sync_store(record: dict) -> dict:
                     synced_at=_now_text(),
                 )
                 product_result = upsert_pulled_store_links_to_products(record, detailed_items)
-                totals["discovered"] += len(item_ids)
+                batch_discovered = len(item_ids)
+                batch_inserted = int(result.get("inserted") or 0)
+                batch_updated = int(result.get("updated") or 0)
+                batch_details = len(item_ids) - detail_failures
+                batch_products = int(product_result.get("count") or 0)
+                totals["discovered"] += batch_discovered
                 totals["stored"] += int(result.get("total") or 0)
-                totals["inserted"] += int(result.get("inserted") or 0)
-                totals["updated"] += int(result.get("updated") or 0)
-                totals["details"] += len(item_ids) - detail_failures
+                totals["inserted"] += batch_inserted
+                totals["updated"] += batch_updated
+                totals["details"] += batch_details
                 totals["failed"] += detail_failures
-                totals["products"] += int(product_result.get("count") or 0)
+                totals["products"] += batch_products
                 _state_update(
                     message=(
                         f"正在同步 {store_name}：链接 {totals['stored']} 条，"
                         f"详情 {totals['details']} 条，产品 {totals['products']} 件"
-                    ),
-                    discovered_count=base_discovered + totals["discovered"],
-                    inserted_count=base_inserted + totals["inserted"],
-                    updated_count=base_updated + totals["updated"],
-                    detail_count=base_details + totals["details"],
-                    detail_failed_count=base_detail_failures + totals["failed"],
-                    product_count=base_products + totals["products"],
+                    )
+                )
+                _state_increment(
+                    discovered_count=batch_discovered,
+                    inserted_count=batch_inserted,
+                    updated_count=batch_updated,
+                    detail_count=batch_details,
+                    detail_failed_count=detail_failures,
+                    product_count=batch_products,
                 )
                 _append_log(
                     f"{store_name} 批次完成：发现 {totals['discovered']}，"
@@ -414,6 +440,7 @@ def run_store_link_sync(token_ids=None) -> dict:
         total_stores=len(records),
         processed_stores=0,
         current_store="",
+        active_stores=[],
         discovered_count=0,
         inserted_count=0,
         updated_count=0,
@@ -426,19 +453,23 @@ def run_store_link_sync(token_ids=None) -> dict:
         results=[],
         logs=[],
     )
-    _append_log(f"任务启动，共 {len(records)} 家店铺")
+    worker_count = max(1, min(STORE_LINK_STORE_WORKERS, len(records)))
+    _append_log(
+        f"任务启动，共 {len(records)} 家店铺；{worker_count} 家店铺并行，"
+        f"每家最多 {STORE_LINK_DETAIL_WORKERS} 个详情线程"
+    )
     if not _token_ids(token_ids):
         _append_log("同步全部：未同步过的店铺优先，其余按最久未同步优先")
     results = []
-    for index, record in enumerate(records, start=1):
+
+    def sync_one_store(record: dict) -> dict:
         store_name = str(record.get("display_name") or record.get("nickname") or record.get("id"))
         token_id = int(record["id"])
-        _state_update(current_store=store_name, processed_stores=index - 1)
+        _set_store_active(store_name, True)
         _append_log(f"开始同步 {store_name}")
         try:
             mark_store_link_sync_started(token_id)
             result = _sync_store(record)
-            results.append(result)
             try:
                 mark_store_link_sync_finished(token_id, str(result.get("status") or "success"))
             except Exception as state_exc:
@@ -451,23 +482,28 @@ def run_store_link_sync(token_ids=None) -> dict:
             )
         except Exception as exc:
             result = {"store": store_name, "status": "error", "message": str(exc)}
-            results.append(result)
             try:
                 mark_store_link_sync_finished(token_id, "error", str(exc))
             except Exception as state_exc:
                 _append_log(f"{store_name} 同步状态写入失败：{state_exc}")
             _append_log(f"{store_name} 失败：{exc}")
-        _state_update(
-            processed_stores=index,
-            discovered_count=sum(int(row.get("discovered") or 0) for row in results),
-            inserted_count=sum(int(row.get("inserted") or 0) for row in results),
-            updated_count=sum(int(row.get("updated") or 0) for row in results),
-            detail_count=sum(int(row.get("details") or 0) for row in results),
-            detail_failed_count=sum(int(row.get("failed") or 0) for row in results),
-            product_count=sum(int(row.get("products") or 0) for row in results),
-            failed_count=sum(1 for row in results if row.get("status") == "error"),
-            results=list(results),
-        )
+        finally:
+            _set_store_active(store_name, False)
+        return result
+
+    with ThreadPoolExecutor(
+        max_workers=worker_count,
+        thread_name_prefix="mercado-store-sync",
+    ) as executor:
+        futures = [executor.submit(sync_one_store, record) for record in records]
+        for future in as_completed(futures):
+            result = future.result()
+            results.append(result)
+            _state_update(
+                processed_stores=len(results),
+                failed_count=sum(1 for row in results if row.get("status") == "error"),
+                results=list(results),
+            )
 
     failed = sum(1 for row in results if row.get("status") == "error")
     message = (
@@ -480,6 +516,7 @@ def run_store_link_sync(token_ids=None) -> dict:
         status="completed" if failed == 0 else "partial",
         message=message,
         current_store="",
+        active_stores=[],
         finished_at=_now_text(),
         results=list(results),
     )
@@ -510,6 +547,7 @@ def _run_background(token_ids) -> None:
             status="error",
             message=str(exc),
             current_store="",
+            active_stores=[],
             finished_at=_now_text(),
         )
         _append_log(f"任务失败：{exc}")
@@ -537,6 +575,7 @@ def start_store_link_sync(token_ids=None) -> tuple[bool, dict]:
             total_stores=0,
             processed_stores=0,
             current_store="",
+            active_stores=[],
             discovered_count=0,
             inserted_count=0,
             updated_count=0,

@@ -419,6 +419,41 @@ def test_product_content_update_validates_persists_and_invalidates_profitability
         )
 
 
+def test_bulk_product_content_update_uses_one_transaction_and_selected_fields_only():
+    connection = _FakeConnection(update_rowcount=3)
+
+    result = store.update_product_items(
+        [12, 7, 12, 9],
+        {"weight_g": 560, "category_id": "MLM999"},
+        connection_factory=lambda: connection,
+    )
+
+    product_sql, params = next(
+        (query, params)
+        for query, params in connection.fake_cursor.queries
+        if query.startswith(f"UPDATE `{store.PRODUCT_TABLE}` SET")
+    )
+    collection_sql, collection_params = next(
+        (query, params)
+        for query, params in connection.fake_cursor.queries
+        if query.startswith(f"UPDATE `{store.COLLECTION_TABLE}` AS c")
+    )
+    assert result == {
+        "requested": 3,
+        "changed": 3,
+        "updated_fields": ["category_id", "weight_g"],
+        "profitability_refresh_pending": True,
+    }
+    assert "`weight_g` = %s" in product_sql
+    assert "`category_id` = %s" in product_sql
+    assert "WHERE `id` IN (%s, %s, %s)" in product_sql
+    assert params[-3:] == (7, 9, 12)
+    assert "c.`weight_g` = p.`weight_g`" in collection_sql
+    assert "c.`category_id` = p.`category_id`" in collection_sql
+    assert collection_params == (7, 9, 12)
+    assert connection.committed is True
+
+
 def test_pulled_store_link_is_mirrored_as_publish_ready_unreviewed_product():
     connection = _FakeConnection()
     item = {

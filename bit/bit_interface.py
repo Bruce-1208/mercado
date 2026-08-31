@@ -15,6 +15,7 @@ import sys
 import threading
 import time
 import traceback
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from io import BytesIO
 from pathlib import Path
 from urllib.parse import quote
@@ -51,6 +52,8 @@ import bit.bit_check_risk as bit_check_risk
 import bit.bit_db_api as bit_db_api
 import bit.bit_daily_task as bit_daily_task
 import bit.bit_infractions_info as bit_infractions_info
+import bit.bit_infringement_knowledge_analysis as bit_infringement_knowledge_analysis
+import bit.bit_inventory as bit_inventory
 import bit.bit_pago_info as bit_pago_info
 try:
     import bit.bit_print as bit_print
@@ -60,6 +63,7 @@ except ModuleNotFoundError as exc:
     import bit_playwright.bit_print as bit_print
 import bit.bit_reputation_info as bit_reputation_info
 import bit.bit_order_sync as bit_order_sync
+import bit.bit_store_link_remote_update as bit_store_link_remote_update
 import bit.bit_store_link_sync as bit_store_link_sync
 import bit.bit_update_orders as bit_update_orders
 import bit.bit_zying_caiji as bit_zying_caiji
@@ -68,8 +72,8 @@ import bit.mercado_reputation as mercado_reputation
 import bit.mercado_tokens as mercado_tokens
 from bit.bit_appeal import *
 from bit.bit_collection_control import DEFAULT_COLLECTION_MAX_WORKERS
-from bit.bit_config import split_config_sites
-from bit.bit_runtime_lock import create_window_lease, get_lock_owner
+from bit.bit_config import list_shop_configs, split_config_sites
+from bit.bit_runtime_lock import InterProcessLock, create_window_lease, get_lock_owner
 from bit.bit_mercado_login import (
     MERCADO_LOGIN_JOB_LOCK_KEY,
     is_human_verification_result,
@@ -130,7 +134,20 @@ app.config.update(
     SESSION_COOKIE_SAMESITE="Lax",
     PERMANENT_SESSION_LIFETIME=timedelta(hours=WORKBENCH_REMEMBER_HOURS),
     SESSION_REFRESH_EACH_REQUEST=False,
+    TEMPLATES_AUTO_RELOAD=True,
+    SEND_FILE_MAX_AGE_DEFAULT=0,
 )
+
+
+@app.after_request
+def disable_workbench_html_cache(response):
+    """Keep browser-rendered pages in sync with template and style edits."""
+
+    if response.mimetype == "text/html":
+        response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate"
+        response.headers["Pragma"] = "no-cache"
+    return response
+
 
 # 配置日志
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -142,10 +159,12 @@ WORKBENCH_PERMISSION_GROUPS = (
     ("tasks", "任务模块", (("tasks.view", "查看"), ("tasks.execute", "启动任务"))),
     ("order_print", "订单打印", (("order_print.view", "查看"), ("order_print.execute", "执行/终止"))),
     ("order_analysis", "订单分析", (("order_analysis.view", "查看"), ("order_analysis.execute", "导入订单"))),
+    ("inventory", "库存管理", (("inventory.view", "查看"), ("inventory.execute", "出入库"), ("inventory.manage", "管理货架"))),
     ("shop_status", "店铺状态", (("shop_status.view", "查看"), ("shop_status.execute", "检测/处理"))),
     ("funds", "资金管理", (("funds.view", "查看"), ("funds.execute", "采集/终止"))),
     ("zying_collection", "智赢产品采集", (("zying_collection.view", "查看"), ("zying_collection.execute", "执行采集"))),
     ("risk_check", "侵权检测", (("risk_check.view", "查看"), ("risk_check.execute", "执行检测"))),
+    ("infringement_knowledge", "侵权知识库", (("infringement_knowledge.view", "查看"), ("infringement_knowledge.manage", "新增/修改/删除"))),
     ("infractions", "侵权数据", (("infractions.view", "查看/导出"), ("infractions.execute", "采集"))),
     ("reputation", "声誉数据", (("reputation.view", "查看/导出"), ("reputation.execute", "采集/更新"))),
     ("customer_service", "客户消息", (("customer_service.view", "查看"), ("customer_service.manage", "回复/删除"))),
@@ -304,6 +323,13 @@ if USE_DB_API:
     db_create_appeal_phrase = bit_db_api.create_appeal_phrase
     db_update_appeal_phrase = bit_db_api.update_appeal_phrase
     db_delete_appeal_phrase = bit_db_api.delete_appeal_phrase
+    db_list_infringement_knowledge = bit_db_api.list_infringement_knowledge
+    db_create_infringement_knowledge = bit_db_api.create_infringement_knowledge
+    db_update_infringement_knowledge = bit_db_api.update_infringement_knowledge
+    db_delete_infringement_knowledge = bit_db_api.delete_infringement_knowledge
+    db_bulk_create_infringement_knowledge = bit_db_api.bulk_create_infringement_knowledge
+    db_get_infringement_knowledge_analysis_sources = bit_db_api.get_infringement_knowledge_analysis_sources
+    db_upsert_analyzed_infringement_knowledge = bit_db_api.upsert_analyzed_infringement_knowledge
     db_get_window_anomalies = bit_db_api.get_window_anomalies
     db_insert_chat_info = bit_db_api.insert_chat_info
     db_insert_appeal_chat_record = bit_db_api.insert_appeal_chat_record
@@ -367,6 +393,13 @@ else:
         create_appeal_phrase,
         update_appeal_phrase,
         delete_appeal_phrase,
+        list_infringement_knowledge,
+        create_infringement_knowledge,
+        update_infringement_knowledge,
+        delete_infringement_knowledge,
+        bulk_create_infringement_knowledge,
+        get_infringement_knowledge_analysis_sources,
+        upsert_analyzed_infringement_knowledge,
         get_window_anomalies,
         insert_chat_info,
         insert_appeal_chat_record,
@@ -406,6 +439,13 @@ else:
     db_create_appeal_phrase = create_appeal_phrase
     db_update_appeal_phrase = update_appeal_phrase
     db_delete_appeal_phrase = delete_appeal_phrase
+    db_list_infringement_knowledge = list_infringement_knowledge
+    db_create_infringement_knowledge = create_infringement_knowledge
+    db_update_infringement_knowledge = update_infringement_knowledge
+    db_delete_infringement_knowledge = delete_infringement_knowledge
+    db_bulk_create_infringement_knowledge = bulk_create_infringement_knowledge
+    db_get_infringement_knowledge_analysis_sources = get_infringement_knowledge_analysis_sources
+    db_upsert_analyzed_infringement_knowledge = upsert_analyzed_infringement_knowledge
     db_get_window_anomalies = get_window_anomalies
     db_insert_chat_info = insert_chat_info
     db_insert_appeal_chat_record = insert_appeal_chat_record
@@ -445,6 +485,7 @@ else:
         update_product_publish_state as db_update_mercado_product_publish_state,
         update_product_publish_record as db_update_mercado_product_publish_record,
         update_product_item as db_update_mercado_product_item,
+        update_product_items as db_update_mercado_product_items,
         update_product_review_status as db_update_mercado_product_review_status,
         upsert_zying_products_to_products as db_upsert_zying_products_to_products,
         upsert_collection_items as db_upsert_mercado_collection_items,
@@ -1283,6 +1324,12 @@ def _required_workbench_permissions(path, method):
         return ("access.view",) if method == "GET" else ("access.manage",)
     if path.startswith("/api/appeal-phrases"):
         return ("appeal.view",) if method == "GET" else ("appeal.execute",)
+    if path.startswith("/api/infringement-knowledge"):
+        return (
+            ("infringement_knowledge.view",)
+            if method == "GET"
+            else ("infringement_knowledge.manage",)
+        )
     if path.startswith("/api/run_shensu"):
         return ("appeal.execute",)
     if path == "/api/collections/options":
@@ -1322,6 +1369,12 @@ def _required_workbench_permissions(path, method):
             if method == "POST"
             else ("order_analysis.view",)
         )
+    if path.startswith("/api/inventory/"):
+        if path.startswith("/api/inventory/shelves") and method != "GET":
+            return ("inventory.manage",)
+        if path == "/api/inventory/movements" and method == "POST":
+            return ("inventory.execute",)
+        return ("inventory.view",)
     if path.startswith("/api/tasks/daily/"):
         return (
             ("tasks.execute",)
@@ -1350,11 +1403,18 @@ def _required_workbench_permissions(path, method):
         )
     if path.startswith("/api/mercado-communications/"):
         action = path.rstrip("/").rsplit("/", 1)[-1].strip().lower()
+        view_post_actions = {
+            "customer-service-aggregate",
+            "pre-sale-aggregate",
+            "pre-sale-translate",
+        }
         return (
             ("customer_service.manage",)
-            if method == "POST" and action != "pre-sale-translate"
+            if method == "POST" and action not in view_post_actions
             else ("customer_service.view",)
         )
+    if path.startswith("/api/mercado-claims/"):
+        return ("customer_service.view",)
     return ()
 
 
@@ -1449,6 +1509,18 @@ _risk_check_lock = threading.Lock()
 _risk_check_state_lock = threading.RLock()
 _risk_check_logs = deque(maxlen=500)
 _risk_check_state = {
+    "running": False,
+    "started_at": "",
+    "finished_at": "",
+    "status": "idle",
+    "message": "等待启动",
+    "params": {},
+    "summary": {},
+}
+_infringement_knowledge_analysis_lock = threading.Lock()
+_infringement_knowledge_analysis_state_lock = threading.RLock()
+_infringement_knowledge_analysis_logs = deque(maxlen=600)
+_infringement_knowledge_analysis_state = {
     "running": False,
     "started_at": "",
     "finished_at": "",
@@ -1648,6 +1720,20 @@ _mercado_login_task_state = {
 }
 
 APPEAL_SITES = ("墨西哥", "巴西", "哥伦比亚", "智利", "阿根廷", "乌拉圭")
+MERCADO_AUTH_SITE_NAMES = {
+    "MLM": "墨西哥",
+    "MX": "墨西哥",
+    "MLB": "巴西",
+    "BR": "巴西",
+    "MCO": "哥伦比亚",
+    "CO": "哥伦比亚",
+    "MLC": "智利",
+    "CL": "智利",
+    "MLA": "阿根廷",
+    "AR": "阿根廷",
+    "MLU": "乌拉圭",
+    "UY": "乌拉圭",
+}
 APPEAL_FORMS = ("延误", "侵权", "取消率", "投诉")
 APPEAL_LOOP_COUNTS = (10, 20, 50)
 DEFAULT_APPEAL_LOOP_COUNT = 10
@@ -2386,30 +2472,101 @@ def _failed_collection_shop_options(shop_options, status_rows):
     ]
 
 
-def _collection_config_options(include_failures=False):
-    configs = db_list_bit_browser_configs(include_ignored=False) or []
-    shops_by_name = {}
-    site_order = []
+def _authorization_flag_enabled(value):
+    if isinstance(value, str):
+        return value.strip().casefold() not in ("", "0", "false", "no", "off")
+    return bool(value)
+
+
+def _authorized_task_shop_options(flag_name, configs=None, token_data=None):
+    """授权开关决定任务站点，浏览器配置只负责提供可执行窗口。"""
+    if configs is None:
+        configs = db_list_bit_browser_configs(include_ignored=False) or []
+    if token_data is None:
+        token_data = bit_db_api.list_mercado_store_tokens() or {}
+
+    configs_by_alias = {}
     for config in configs:
         shop_name = str(config.get("shop_name") or "").strip()
         window_id = str(config.get("window_id") or "").strip()
-        if not shop_name or not window_id:
+        if shop_name and window_id:
+            configs_by_alias.setdefault(shop_name.casefold(), config)
+
+    shops_by_name = {}
+    for token in token_data.get("rows") or ():
+        config = next(
+            (
+                configs_by_alias.get(str(alias or "").strip().casefold())
+                for alias in (token.get("display_name"), token.get("nickname"))
+                if str(alias or "").strip()
+                and configs_by_alias.get(str(alias or "").strip().casefold())
+            ),
+            None,
+        )
+        if config is None:
             continue
+        enabled_sites = []
+        relevant_settings = []
+        for raw_setting in token.get("site_settings") or ():
+            setting = dict(raw_setting or {})
+            if not _authorization_flag_enabled(setting.get(flag_name)):
+                continue
+            site_name = MERCADO_AUTH_SITE_NAMES.get(
+                str(setting.get("site_id") or "").strip().upper()
+            )
+            if not site_name:
+                continue
+            relevant_settings.append(setting)
+            if site_name not in enabled_sites:
+                enabled_sites.append(site_name)
+        if not enabled_sites:
+            continue
+
+        shop_name = str(config.get("shop_name") or "").strip()
         shop = shops_by_name.setdefault(
             shop_name,
             {
                 "shop_name": shop_name,
-                "salesperson": str(config.get("salesperson") or "").strip(),
+                "salesperson": next(
+                    (
+                        str(setting.get("salesperson") or "").strip()
+                        for setting in relevant_settings
+                        if str(setting.get("salesperson") or "").strip()
+                    ),
+                    str(config.get("salesperson") or "").strip(),
+                ),
                 "sites": [],
             },
         )
-        for site in split_config_sites(config.get("sites")):
-            if site not in shop["sites"]:
-                shop["sites"].append(site)
+        for site_name in enabled_sites:
+            if site_name not in shop["sites"]:
+                shop["sites"].append(site_name)
+    return list(shops_by_name.values())
+
+
+def _collection_config_options(include_failures=False):
+    configs = db_list_bit_browser_configs(include_ignored=False) or []
+    token_data = bit_db_api.list_mercado_store_tokens() or {}
+    shop_options = _authorized_task_shop_options(
+        "visit_stats_enabled",
+        configs=configs,
+        token_data=token_data,
+    )
+    appeal_shop_options = _authorized_task_shop_options(
+        "appeal_enabled",
+        configs=configs,
+        token_data=token_data,
+    )
+    site_order = []
+    for shop in shop_options:
+        for site in shop.get("sites") or ():
             if site not in site_order:
                 site_order.append(site)
-    shop_options = list(shops_by_name.values())
-    result = {"shops": shop_options, "sites": site_order}
+    result = {
+        "shops": shop_options,
+        "sites": site_order,
+        "appeal_shops": appeal_shop_options,
+    }
     if not include_failures:
         return result
 
@@ -2929,6 +3086,91 @@ def run_risk_check_job(params, task_lock):
         task_lock.release()
 
 
+def build_infringement_knowledge_analysis_params(data):
+    data = data if isinstance(data, dict) else {}
+    return {
+        "infraction_limit": _parse_int_param(
+            data, "infraction_limit", 10000, min_value=1, max_value=20000
+        ),
+        "active_limit": _parse_int_param(
+            data, "active_limit", 5000, min_value=1, max_value=10000
+        ),
+        "batch_size": _parse_int_param(
+            data, "batch_size", 300, min_value=20, max_value=300
+        ),
+    }
+
+
+def _append_infringement_knowledge_analysis_log(message):
+    text = str(message or "").strip()
+    if not text:
+        return
+    timestamp = datetime.now().strftime("%H:%M:%S")
+    with _infringement_knowledge_analysis_state_lock:
+        for line in text.splitlines():
+            line = line.strip()
+            if not line:
+                continue
+            _infringement_knowledge_analysis_logs.append(f"[{timestamp}] {line}")
+            if _infringement_knowledge_analysis_state.get("running"):
+                _infringement_knowledge_analysis_state["message"] = line
+
+
+def run_infringement_knowledge_analysis_job(params, task_lock):
+    try:
+        sources = db_get_infringement_knowledge_analysis_sources(
+            infraction_limit=params["infraction_limit"],
+            active_limit=params["active_limit"],
+        )
+        _append_infringement_knowledge_analysis_log(
+            f"读取侵权商品 {len(sources.get('infraction_rows') or [])}/"
+            f"{int(sources.get('infraction_total') or 0)} 个；"
+            f"活跃成交链接 {len(sources.get('active_rows') or [])}/"
+            f"{int(sources.get('active_total') or 0)} 条"
+        )
+        summary = bit_infringement_knowledge_analysis.analyze_knowledge_sources(
+            sources,
+            writer=db_upsert_analyzed_infringement_knowledge,
+            batch_size=params["batch_size"],
+            log_callback=_append_infringement_knowledge_analysis_log,
+        )
+        write_result = dict(summary.get("write_result") or {})
+        completion_message = (
+            f"自动分析完成：候选黑名单 {int(summary.get('blacklist_candidates') or 0)} 个，"
+            f"候选白名单 {int(summary.get('whitelist_candidates') or 0)} 个；"
+            f"新增 {int(write_result.get('inserted') or 0)} 个，"
+            f"更新 {int(write_result.get('updated') or 0)} 个，"
+            f"保护人工记录 {int(write_result.get('skipped_manual') or 0)} 个"
+        )
+        _append_infringement_knowledge_analysis_log(completion_message)
+        with _infringement_knowledge_analysis_state_lock:
+            _infringement_knowledge_analysis_state.update(
+                {
+                    "running": False,
+                    "finished_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                    "status": "success",
+                    "message": completion_message,
+                    "summary": summary,
+                }
+            )
+    except Exception as exc:
+        logging.error("侵权知识库自动分析失败：%s", exc)
+        traceback.print_exc()
+        _append_infringement_knowledge_analysis_log(f"自动分析失败：{exc}")
+        with _infringement_knowledge_analysis_state_lock:
+            _infringement_knowledge_analysis_state.update(
+                {
+                    "running": False,
+                    "finished_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                    "status": "error",
+                    "message": str(exc),
+                    "summary": {},
+                }
+            )
+    finally:
+        task_lock.release()
+
+
 def _risk_result_query_params(args, export=False):
     risk_level = str(args.get("risk_level") or "").strip().lower()
     if risk_level not in {"", "0", "1", "2", "unchecked"}:
@@ -3399,6 +3641,7 @@ def build_daily_task_params(data):
             continue
         if group_name not in group_names:
             group_names.append(group_name)
+    legacy_min_rate = _parse_rate_param(data)
     return {
         "mode": mode,
         "appeal_types": appeal_types,
@@ -3417,7 +3660,19 @@ def build_daily_task_params(data):
         "stop_after_minutes": _parse_int_param(data, "stop_after_minutes", 360, 0, 24 * 60),
         "salespeople": salespeople,
         "group_names": group_names,
-        "min_rate": _parse_rate_param(data),
+        "min_rate": legacy_min_rate,
+        "infraction_min_count": _parse_int_param(
+            data, "infraction_min_count", 0, 0, 1000000
+        ),
+        "delay_min_rate": _parse_rate_param(
+            data, "delay_min_rate", legacy_min_rate
+        ),
+        "cancellation_min_rate": _parse_rate_param(
+            data, "cancellation_min_rate", legacy_min_rate
+        ),
+        "complaint_min_rate": _parse_rate_param(
+            data, "complaint_min_rate", legacy_min_rate
+        ),
         "message": str(data.get("message", "") or ""),
     }
 
@@ -3431,6 +3686,12 @@ def run_daily_task_job(params, task_lock):
         appeal_task = appeal_types[0] if len(appeal_types) == 1 else appeal_types
         appeal_label = "、".join(appeal_types)
         min_rate = params.get("min_rate", 0)
+        execution_standards = {
+            "min_infraction_count": params.get("infraction_min_count", 0),
+            "min_delay_rate": params.get("delay_min_rate", min_rate),
+            "min_cancellation_rate": params.get("cancellation_min_rate", min_rate),
+            "min_complaint_rate": params.get("complaint_min_rate", min_rate),
+        }
         if params["mode"] == "loop":
             stop_at = None
             if params["stop_after_minutes"] > 0:
@@ -3444,6 +3705,7 @@ def run_daily_task_job(params, task_lock):
                 site_pause=params["site_pause"],
                 message=params["message"],
                 min_rate=min_rate,
+                **execution_standards,
                 salespeople=params["salespeople"],
                 group_names=params.get("group_names", []),
                 stop_at=stop_at,
@@ -3459,6 +3721,7 @@ def run_daily_task_job(params, task_lock):
                 site_pause=params["site_pause"],
                 message=params["message"],
                 min_rate=min_rate,
+                **execution_standards,
                 salespeople=params["salespeople"],
                 group_names=params.get("group_names", []),
                 _task_lock=task_lock,
@@ -3561,6 +3824,25 @@ def resolve_appeal_sites(sites):
     if not selected_sites:
         raise ValueError("请至少选择一个站点")
     return tuple(selected_sites)
+
+
+def validate_authorized_appeal_sites(shop_name, sites):
+    """拒绝未在授权店铺信息中显式勾选“进行申诉”的店铺站点。"""
+    name = str(shop_name or "").strip()
+    scope = bit_daily_task.load_authorized_appeal_shop_site_config()
+    allowed_sites = scope.get(name.casefold(), set())
+    if not allowed_sites:
+        raise ValueError(f"{name or '该店铺'}未在授权店铺信息中开启进行申诉")
+    unauthorized = [
+        site
+        for site in sites
+        if bit_appeal_ai.normalize_site_code(site) not in allowed_sites
+    ]
+    if unauthorized:
+        raise ValueError(
+            f"{name}以下站点未开启进行申诉：{'、'.join(unauthorized)}"
+        )
+    return tuple(sites)
 
 
 def resolve_appeal_forms(forms):
@@ -3808,6 +4090,7 @@ def api_run_shensu():
     name = request.args.get("name", "")
     try:
         sites = resolve_appeal_sites(request.args.getlist("site"))
+        sites = validate_authorized_appeal_sites(name, sites)
     except ValueError as exc:
         return jsonify({"status": "error", "message": str(exc)}), 400
     try:
@@ -3904,6 +4187,118 @@ def api_appeal_phrase_detail(phrase_id):
             )
         else:
             result = db_delete_appeal_phrase(phrase_id)
+        return jsonify({"status": "success", "data": result})
+    except ValueError as exc:
+        return jsonify({"status": "error", "message": str(exc)}), 400
+
+
+@app.route('/api/infringement-knowledge', methods=['GET', 'POST'])
+@login_required
+def api_infringement_knowledge():
+    try:
+        if request.method == "POST":
+            result = db_create_infringement_knowledge(
+                request.get_json(silent=True) or {}
+            )
+        else:
+            result = db_list_infringement_knowledge(
+                list_type=request.args.get("list_type", ""),
+                search=request.args.get("search", ""),
+                limit=request.args.get("limit", 2000),
+            )
+        return jsonify({"status": "success", "data": result})
+    except ValueError as exc:
+        return jsonify({"status": "error", "message": str(exc)}), 400
+
+
+@app.route('/api/infringement-knowledge/bulk', methods=['POST'])
+@login_required
+def api_bulk_infringement_knowledge():
+    from bit.bit_infringement_knowledge import parse_bulk_brand_lines
+
+    try:
+        data = request.get_json(silent=True) or {}
+        records = parse_bulk_brand_lines(
+            data.get("brands_text"),
+            data.get("list_type"),
+            data.get("notes", ""),
+        )
+        result = db_bulk_create_infringement_knowledge(records)
+        return jsonify({"status": "success", "data": result})
+    except ValueError as exc:
+        return jsonify({"status": "error", "message": str(exc)}), 400
+
+
+@app.route('/api/infringement-knowledge/analysis/start', methods=['POST'])
+@login_required
+def api_start_infringement_knowledge_analysis():
+    params = build_infringement_knowledge_analysis_params(
+        request.get_json(silent=True) or {}
+    )
+    if not _infringement_knowledge_analysis_lock.acquire(blocking=False):
+        with _infringement_knowledge_analysis_state_lock:
+            data = dict(_infringement_knowledge_analysis_state)
+        return jsonify(
+            {"status": "error", "message": "侵权知识库自动分析正在运行", "data": data}
+        ), 409
+
+    with _infringement_knowledge_analysis_state_lock:
+        _infringement_knowledge_analysis_logs.clear()
+        _infringement_knowledge_analysis_state.update(
+            {
+                "running": True,
+                "started_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                "finished_at": "",
+                "status": "running",
+                "message": "正在读取侵权记录和当前活跃成交链接",
+                "params": dict(params),
+                "summary": {},
+            }
+        )
+        _append_infringement_knowledge_analysis_log(
+            "自动分析已启动：侵权记录生成黑名单；active 且已有销量的链接生成白名单候选；黑名单优先"
+        )
+        data = {
+            **dict(_infringement_knowledge_analysis_state),
+            "logs": list(_infringement_knowledge_analysis_logs),
+        }
+    try:
+        threading.Thread(
+            target=run_infringement_knowledge_analysis_job,
+            args=(params, _infringement_knowledge_analysis_lock),
+            daemon=True,
+            name="infringement-knowledge-analysis",
+        ).start()
+    except Exception:
+        _infringement_knowledge_analysis_lock.release()
+        raise
+    return jsonify({"status": "success", "data": data})
+
+
+@app.route('/api/infringement-knowledge/analysis/status', methods=['GET'])
+@login_required
+def api_infringement_knowledge_analysis_status():
+    with _infringement_knowledge_analysis_state_lock:
+        data = {
+            **dict(_infringement_knowledge_analysis_state),
+            "params": dict(_infringement_knowledge_analysis_state.get("params") or {}),
+            "summary": dict(_infringement_knowledge_analysis_state.get("summary") or {}),
+            "logs": list(_infringement_knowledge_analysis_logs),
+        }
+    return jsonify({"status": "success", "data": data})
+
+
+@app.route('/api/infringement-knowledge/<int:record_id>', methods=['PUT', 'DELETE'])
+@login_required
+def api_infringement_knowledge_detail(record_id):
+    try:
+        if request.method == "PUT":
+            result = db_update_infringement_knowledge(
+                record_id,
+                request.get_json(silent=True) or {},
+            )
+        else:
+            result = db_delete_infringement_knowledge(record_id)
         return jsonify({"status": "success", "data": result})
     except ValueError as exc:
         return jsonify({"status": "error", "message": str(exc)}), 400
@@ -4074,7 +4469,7 @@ def api_export_latest_reputation():
         ws.title = "最新声誉数据"
 
         columns = [
-            "店铺名", "站点", "声誉颜色", "总单量", "投诉率", "延误率", "取消率",
+            "店铺名", "站点", "侵权数量", "权利人数量", "声誉颜色", "总单量", "投诉率", "延误率", "取消率",
             "增加或减少", "近七天变化率", "一周流量趋势", "系统告警",
             "更新时间", "提交时间"
         ]
@@ -4733,6 +5128,7 @@ def _order_list_query_params(args):
         "start_date": str(args.get("start_date") or "").strip(),
         "end_date": str(args.get("end_date") or "").strip(),
         "origin": str(args.get("origin") or "").strip(),
+        "freight_variance": str(args.get("freight_variance") or "").strip(),
         "page": _parse_int_param(args, "page", 1, 1, 1000000),
         "page_size": _parse_int_param(args, "page_size", 200, 10, 200),
     }
@@ -4757,6 +5153,30 @@ def api_orders():
             "message": f"订单列表加载失败：{exc}",
         }), 502
     response = jsonify({"status": "success", "data": data})
+    response.headers["Cache-Control"] = "no-store"
+    return response
+
+
+@app.route('/api/orders/weight-quote', methods=['POST'])
+@login_required
+def api_order_weight_quote():
+    data = request.get_json(silent=True) or {}
+    order_ids = data.get("order_ids") or []
+    if not isinstance(order_ids, list):
+        return jsonify({"status": "error", "message": "order_ids 必须是数组"}), 422
+    try:
+        quote = bit_db_api.get_order_weight_quote(order_ids)
+    except ValueError as exc:
+        return jsonify({"status": "error", "message": str(exc)}), 400
+    except KeyError as exc:
+        return jsonify({"status": "error", "message": str(exc).strip("'")}), 404
+    except Exception as exc:
+        logging.exception("订单重量和重量表运费计算失败")
+        return jsonify({
+            "status": "error",
+            "message": f"订单重量和重量表运费计算失败：{exc}",
+        }), 502
+    response = jsonify({"status": "success", "data": quote})
     response.headers["Cache-Control"] = "no-store"
     return response
 
@@ -4896,6 +5316,133 @@ def api_order_tracking(order_id):
     return response
 
 
+def _inventory_list_params(args):
+    shelf_text = str(args.get("shelf_id") or "").strip()
+    return {
+        "search": str(args.get("search") or "").strip(),
+        "shelf_id": int(shelf_text) if shelf_text else None,
+        "stock_status": str(args.get("stock_status") or "positive").strip(),
+        "page": _parse_int_param(args, "page", 1, 1, 1_000_000),
+        "page_size": _parse_int_param(args, "page_size", 50, 10, 200),
+    }
+
+
+@app.route('/api/inventory/stocks', methods=['GET'])
+@login_required
+def api_inventory_stocks():
+    try:
+        result = bit_db_api.list_inventory_stock(**_inventory_list_params(request.args))
+        response = jsonify({"status": "success", "data": result})
+        response.headers["Cache-Control"] = "no-store"
+        return response
+    except (TypeError, ValueError) as exc:
+        return jsonify({"status": "error", "message": str(exc)}), 400
+    except Exception as exc:
+        logging.exception("库存列表加载失败")
+        return jsonify({"status": "error", "message": f"库存列表加载失败：{exc}"}), 502
+
+
+@app.route('/api/inventory/shelves', methods=['GET', 'POST'])
+@login_required
+def api_inventory_shelves():
+    try:
+        if request.method == "GET":
+            include_inactive = str(request.args.get("include_inactive") or "1").lower() not in (
+                "0", "false", "no", "off",
+            )
+            result = bit_db_api.list_inventory_shelves(include_inactive=include_inactive)
+        else:
+            payload = request.get_json(silent=True)
+            if not isinstance(payload, dict):
+                return jsonify({"status": "error", "message": "货架内容必须是对象"}), 422
+            result = bit_db_api.create_inventory_shelf(payload)
+        response = jsonify({"status": "success", "data": result})
+        response.headers["Cache-Control"] = "no-store"
+        return response
+    except ValueError as exc:
+        return jsonify({"status": "error", "message": str(exc)}), 400
+    except Exception as exc:
+        logging.exception("货架操作失败")
+        return jsonify({"status": "error", "message": f"货架操作失败：{exc}"}), 502
+
+
+@app.route('/api/inventory/shelves/<int:shelf_id>', methods=['PATCH'])
+@login_required
+def api_update_inventory_shelf(shelf_id):
+    payload = request.get_json(silent=True)
+    if not isinstance(payload, dict):
+        return jsonify({"status": "error", "message": "货架内容必须是对象"}), 422
+    try:
+        result = bit_db_api.update_inventory_shelf(shelf_id, payload)
+        return jsonify({"status": "success", "data": result})
+    except KeyError as exc:
+        return jsonify({"status": "error", "message": str(exc)}), 404
+    except ValueError as exc:
+        return jsonify({"status": "error", "message": str(exc)}), 400
+    except Exception as exc:
+        logging.exception("更新货架失败")
+        return jsonify({"status": "error", "message": f"更新货架失败：{exc}"}), 502
+
+
+@app.route('/api/inventory/matches', methods=['GET'])
+@login_required
+def api_inventory_matches():
+    try:
+        result = bit_db_api.list_inventory_matches(
+            search=str(request.args.get("search") or "").strip(),
+            limit=_parse_int_param(request.args, "limit", 30, 1, 100),
+        )
+        response = jsonify({"status": "success", "data": result})
+        response.headers["Cache-Control"] = "no-store"
+        return response
+    except ValueError as exc:
+        return jsonify({"status": "error", "message": str(exc)}), 400
+    except Exception as exc:
+        logging.exception("库存入库匹配加载失败")
+        return jsonify({"status": "error", "message": f"订单和产品匹配失败：{exc}"}), 502
+
+
+def _inventory_movement_params(args):
+    shelf_text = str(args.get("shelf_id") or "").strip()
+    return {
+        "search": str(args.get("search") or "").strip(),
+        "movement_type": str(args.get("movement_type") or "").strip(),
+        "shelf_id": int(shelf_text) if shelf_text else None,
+        "date_from": str(args.get("date_from") or "").strip(),
+        "date_to": str(args.get("date_to") or "").strip(),
+        "page": _parse_int_param(args, "page", 1, 1, 1_000_000),
+        "page_size": _parse_int_param(args, "page_size", 50, 10, 200),
+    }
+
+
+@app.route('/api/inventory/movements', methods=['GET', 'POST'])
+@login_required
+def api_inventory_movements():
+    try:
+        if request.method == "GET":
+            result = bit_db_api.list_inventory_movements(
+                **_inventory_movement_params(request.args)
+            )
+        else:
+            payload = request.get_json(silent=True)
+            if not isinstance(payload, dict):
+                return jsonify({"status": "error", "message": "出入库内容必须是对象"}), 422
+            user = get_current_workbench_user() or {}
+            payload["operator_id"] = user.get("id")
+            payload["operator_name"] = (
+                user.get("display_name") or user.get("username") or ""
+            )
+            result = bit_db_api.create_inventory_movement(payload)
+        response = jsonify({"status": "success", "data": result})
+        response.headers["Cache-Control"] = "no-store"
+        return response
+    except ValueError as exc:
+        return jsonify({"status": "error", "message": str(exc)}), 400
+    except Exception as exc:
+        logging.exception("库存出入库操作失败")
+        return jsonify({"status": "error", "message": f"库存出入库操作失败：{exc}"}), 502
+
+
 @app.route('/api/order-sync/start', methods=['POST'])
 @login_required
 def api_start_order_sync():
@@ -4945,12 +5492,13 @@ def api_store_links():
             search=str(request.args.get("search") or "").strip(),
             token_id=int(token_text) if token_text else None,
             site_id=str(request.args.get("site_id") or "").strip(),
+            group_name=str(request.args.get("group_name") or "").strip(),
             status=str(request.args.get("status") or "").strip(),
             sales_sort=str(request.args.get("sales_sort") or "desc").strip(),
             current_only=str(request.args.get("current_only") or "1").strip().lower()
             not in ("0", "false", "no", "off"),
             page=_parse_int_param(request.args, "page", 1, 1, 1000000),
-            page_size=_parse_int_param(request.args, "page_size", 1000, 10, 1000),
+            page_size=1000,
         )
     except ValueError as exc:
         return jsonify({"status": "error", "message": str(exc)}), 400
@@ -4981,11 +5529,28 @@ def api_bulk_update_store_links():
     except Exception as exc:
         logging.exception("批量更新店铺链接失败")
         return jsonify({"status": "error", "message": f"批量更新店铺链接失败：{exc}"}), 502
+    started = bool(result.get("started"))
     return jsonify({
-        "status": "success",
-        "message": f"已更新 {int(result.get('matched') or 0)} 条店铺链接",
-        "data": result,
-    })
+        "status": "success" if started else "running",
+        "message": (
+            "美客多后台修改任务已启动"
+            if started else "已有美客多后台修改任务正在运行"
+        ),
+        "data": result.get("state") or {},
+    }), 202 if started else 409
+
+
+@app.route('/api/store-links/bulk-update/status', methods=['GET'])
+@login_required
+def api_store_link_remote_update_status():
+    try:
+        data = bit_db_api.get_mercado_store_link_remote_update_status() or {}
+        response = jsonify({"status": "success", "data": data})
+        response.headers["Cache-Control"] = "no-store"
+        return response
+    except Exception as exc:
+        logging.exception("读取美客多后台修改任务状态失败")
+        return jsonify({"status": "error", "message": f"读取后台修改状态失败：{exc}"}), 502
 
 
 @app.route('/api/store-links/sync/start', methods=['POST'])
@@ -5781,6 +6346,8 @@ def _start_mercado_profit_refresh_worker():
 def _start_order_sync_scheduler():
     if not USE_DB_API and not app.testing:
         bit_order_sync.ensure_order_sync_scheduler()
+        bit_order_sync.ensure_order_financial_backfill_worker()
+        bit_order_sync.ensure_order_image_backfill_worker()
 
 
 def _mercado_collection_rows_needing_repair(rows):
@@ -6365,6 +6932,41 @@ def api_update_mercado_product(product_item_id):
     except Exception as exc:
         logging.exception("修改 Mercado 产品内容失败")
         return jsonify({"status": "error", "message": f"修改产品失败：{exc}"}), 500
+
+
+@app.route('/api/mercado-products/bulk-edit', methods=['PATCH'])
+@login_required
+def api_bulk_update_mercado_products():
+    with _mercado_publish_lock:
+        if _mercado_publish_state.get("running"):
+            return jsonify({
+                "status": "error",
+                "message": "批量上架正在运行，完成后再修改产品",
+            }), 409
+    data = request.get_json(silent=True)
+    if not isinstance(data, dict):
+        return jsonify({"status": "error", "message": "批量修改内容必须是对象"}), 422
+    item_ids = data.get("product_item_ids") or []
+    changes = data.get("changes")
+    if not isinstance(item_ids, list):
+        return jsonify({"status": "error", "message": "product_item_ids 必须是数组"}), 422
+    if not isinstance(changes, dict):
+        return jsonify({"status": "error", "message": "changes 必须是对象"}), 422
+    allowed = {
+        "title", "description_text", "main_image_url", "category_id", "price",
+        "weight_g", "package_length_cm", "package_width_cm", "package_height_cm",
+    }
+    try:
+        result = db_update_mercado_product_items(
+            item_ids,
+            {key: value for key, value in changes.items() if key in allowed},
+        )
+        return jsonify({"status": "success", "data": result})
+    except ValueError as exc:
+        return jsonify({"status": "error", "message": str(exc)}), 400
+    except Exception as exc:
+        logging.exception("批量修改 Mercado 产品内容失败")
+        return jsonify({"status": "error", "message": f"批量修改产品失败：{exc}"}), 500
 
 
 @app.route('/api/mercado-products/review-status', methods=['POST'])
@@ -7961,6 +8563,97 @@ def api_db_zying_risk_results():
     })
 
 
+@app.route('/api/db/inventory/stocks', methods=['GET'])
+@internal_api_required
+def api_db_inventory_stocks():
+    blocked = reject_db_api_client_mode()
+    if blocked:
+        return blocked
+    try:
+        result = bit_inventory.list_inventory_stock(
+            **_inventory_list_params(request.args)
+        )
+    except ValueError as exc:
+        return jsonify({"status": "error", "message": str(exc)}), 400
+    return jsonify({"status": "success", "data": result})
+
+
+@app.route('/api/db/inventory/shelves', methods=['GET', 'POST'])
+@internal_api_required
+def api_db_inventory_shelves():
+    blocked = reject_db_api_client_mode()
+    if blocked:
+        return blocked
+    try:
+        if request.method == "GET":
+            include_inactive = str(request.args.get("include_inactive") or "1").lower() not in (
+                "0", "false", "no", "off",
+            )
+            result = bit_inventory.list_inventory_shelves(
+                include_inactive=include_inactive
+            )
+        else:
+            payload = request.get_json(silent=True)
+            if not isinstance(payload, dict):
+                return jsonify({"status": "error", "message": "record must be an object"}), 422
+            result = bit_inventory.create_inventory_shelf(payload)
+    except ValueError as exc:
+        return jsonify({"status": "error", "message": str(exc)}), 400
+    return jsonify({"status": "success", "data": result})
+
+
+@app.route('/api/db/inventory/shelves/<int:shelf_id>', methods=['PATCH'])
+@internal_api_required
+def api_db_update_inventory_shelf(shelf_id):
+    blocked = reject_db_api_client_mode()
+    if blocked:
+        return blocked
+    payload = request.get_json(silent=True)
+    if not isinstance(payload, dict):
+        return jsonify({"status": "error", "message": "record must be an object"}), 422
+    try:
+        result = bit_inventory.update_inventory_shelf(shelf_id, payload)
+    except KeyError as exc:
+        return jsonify({"status": "error", "message": str(exc)}), 404
+    except ValueError as exc:
+        return jsonify({"status": "error", "message": str(exc)}), 400
+    return jsonify({"status": "success", "data": result})
+
+
+@app.route('/api/db/inventory/matches', methods=['GET'])
+@internal_api_required
+def api_db_inventory_matches():
+    blocked = reject_db_api_client_mode()
+    if blocked:
+        return blocked
+    result = bit_inventory.list_inventory_matches(
+        search=str(request.args.get("search") or "").strip(),
+        limit=_parse_int_param(request.args, "limit", 30, 1, 100),
+    )
+    return jsonify({"status": "success", "data": result})
+
+
+@app.route('/api/db/inventory/movements', methods=['GET', 'POST'])
+@internal_api_required
+def api_db_inventory_movements():
+    blocked = reject_db_api_client_mode()
+    if blocked:
+        return blocked
+    try:
+        if request.method == "GET":
+            result = bit_inventory.list_inventory_movements(
+                **_inventory_movement_params(request.args)
+            )
+        else:
+            payload = request.get_json(silent=True)
+            if not isinstance(payload, dict):
+                return jsonify({"status": "error", "message": "record must be an object"}), 422
+            result = bit_inventory.create_inventory_movement(payload)
+    except ValueError as exc:
+        return jsonify({"status": "error", "message": str(exc)}), 400
+    return jsonify({"status": "success", "data": result})
+
+
 @app.route('/api/db/orders', methods=['GET'])
 @internal_api_required
 def api_db_list_orders():
@@ -7972,6 +8665,25 @@ def api_db_list_orders():
     except ValueError as exc:
         return jsonify({"status": "error", "message": str(exc)}), 400
     return jsonify({"status": "success", "data": data})
+
+
+@app.route('/api/db/orders/weight-quote', methods=['POST'])
+@internal_api_required
+def api_db_order_weight_quote():
+    blocked = reject_db_api_client_mode()
+    if blocked:
+        return blocked
+    data = request.get_json(silent=True) or {}
+    order_ids = data.get("order_ids") or []
+    if not isinstance(order_ids, list):
+        return jsonify({"status": "error", "message": "order_ids must be an array"}), 422
+    try:
+        quote = bit_order_sync.bit_mysql.get_mercado_order_weight_quote(order_ids)
+    except ValueError as exc:
+        return jsonify({"status": "error", "message": str(exc)}), 400
+    except KeyError as exc:
+        return jsonify({"status": "error", "message": str(exc).strip("'")}), 404
+    return jsonify({"status": "success", "data": quote})
 
 
 @app.route('/api/db/order-sync/start', methods=['POST'])
@@ -8017,12 +8729,13 @@ def api_db_store_links():
             search=str(request.args.get("search") or "").strip(),
             token_id=int(token_text) if token_text else None,
             site_id=str(request.args.get("site_id") or "").strip(),
+            group_name=str(request.args.get("group_name") or "").strip(),
             status=str(request.args.get("status") or "").strip(),
             sales_sort=str(request.args.get("sales_sort") or "desc").strip(),
             current_only=str(request.args.get("current_only") or "1").strip().lower()
             not in ("0", "false", "no", "off"),
             page=_parse_int_param(request.args, "page", 1, 1, 1000000),
-            page_size=_parse_int_param(request.args, "page_size", 1000, 10, 1000),
+            page_size=1000,
         )
     except ValueError as exc:
         return jsonify({"status": "error", "message": str(exc)}), 400
@@ -8041,10 +8754,24 @@ def api_db_bulk_update_store_links():
     if not isinstance(link_ids, list) or not isinstance(changes, dict):
         return jsonify({"status": "error", "message": "link_ids must be an array and changes an object"}), 422
     try:
-        result = db_bulk_update_mercado_store_links(link_ids, changes)
+        started, state = bit_store_link_remote_update.start_store_link_remote_update(
+            link_ids, changes
+        )
     except ValueError as exc:
         return jsonify({"status": "error", "message": str(exc)}), 400
-    return jsonify({"status": "success", "data": result})
+    return jsonify({"status": "success", "data": {"started": started, "state": state}})
+
+
+@app.route('/api/db/store-links/bulk-update/status', methods=['GET'])
+@internal_api_required
+def api_db_store_link_remote_update_status():
+    blocked = reject_db_api_client_mode()
+    if blocked:
+        return blocked
+    return jsonify({
+        "status": "success",
+        "data": bit_store_link_remote_update.store_link_remote_update_status(),
+    })
 
 
 @app.route('/api/db/store-links/sync/start', methods=['POST'])
@@ -8332,6 +9059,91 @@ def api_db_appeal_phrase_detail(phrase_id):
             )
         else:
             result = db_delete_appeal_phrase(phrase_id)
+        return jsonify({"status": "success", "data": result})
+    except ValueError as exc:
+        return jsonify({"status": "error", "message": str(exc)}), 400
+
+
+@app.route('/api/db/infringement-knowledge', methods=['GET', 'POST'])
+@internal_api_required
+def api_db_infringement_knowledge():
+    blocked = reject_db_api_client_mode()
+    if blocked:
+        return blocked
+    try:
+        if request.method == "POST":
+            result = db_create_infringement_knowledge(
+                request.get_json(silent=True) or {}
+            )
+        else:
+            result = db_list_infringement_knowledge(
+                list_type=request.args.get("list_type", ""),
+                search=request.args.get("search", ""),
+                limit=request.args.get("limit", 2000),
+            )
+        return jsonify({"status": "success", "data": result})
+    except ValueError as exc:
+        return jsonify({"status": "error", "message": str(exc)}), 400
+
+
+@app.route('/api/db/infringement-knowledge/bulk', methods=['POST'])
+@internal_api_required
+def api_db_bulk_infringement_knowledge():
+    blocked = reject_db_api_client_mode()
+    if blocked:
+        return blocked
+    try:
+        data = request.get_json(silent=True) or {}
+        result = db_bulk_create_infringement_knowledge(data.get("records") or [])
+        return jsonify({"status": "success", "data": result})
+    except ValueError as exc:
+        return jsonify({"status": "error", "message": str(exc)}), 400
+
+
+@app.route('/api/db/infringement-knowledge/analysis-sources', methods=['GET'])
+@internal_api_required
+def api_db_infringement_knowledge_analysis_sources():
+    blocked = reject_db_api_client_mode()
+    if blocked:
+        return blocked
+    try:
+        result = db_get_infringement_knowledge_analysis_sources(
+            infraction_limit=request.args.get("infraction_limit", 10000),
+            active_limit=request.args.get("active_limit", 5000),
+        )
+        return jsonify({"status": "success", "data": result})
+    except ValueError as exc:
+        return jsonify({"status": "error", "message": str(exc)}), 400
+
+
+@app.route('/api/db/infringement-knowledge/analyzed', methods=['POST'])
+@internal_api_required
+def api_db_upsert_analyzed_infringement_knowledge():
+    blocked = reject_db_api_client_mode()
+    if blocked:
+        return blocked
+    try:
+        data = request.get_json(silent=True) or {}
+        result = db_upsert_analyzed_infringement_knowledge(data.get("records") or [])
+        return jsonify({"status": "success", "data": result})
+    except ValueError as exc:
+        return jsonify({"status": "error", "message": str(exc)}), 400
+
+
+@app.route('/api/db/infringement-knowledge/<int:record_id>', methods=['PUT', 'DELETE'])
+@internal_api_required
+def api_db_infringement_knowledge_detail(record_id):
+    blocked = reject_db_api_client_mode()
+    if blocked:
+        return blocked
+    try:
+        if request.method == "PUT":
+            result = db_update_infringement_knowledge(
+                record_id,
+                request.get_json(silent=True) or {},
+            )
+        else:
+            result = db_delete_infringement_knowledge(record_id)
         return jsonify({"status": "success", "data": result})
     except ValueError as exc:
         return jsonify({"status": "error", "message": str(exc)}), 400
@@ -9250,6 +10062,315 @@ def api_mercado_token_reputation(token_id):
         return _mercado_token_error_response(exc)
 
 
+def _query_pre_sale_store_pages(token_id, filters):
+    rows = []
+    official_total = 0
+    offset = 0
+    while offset <= 1000:
+        page = bit_db_api.execute_mercado_store_communication(
+            int(token_id),
+            "pre-sale-list",
+            {
+                **filters,
+                "sort_fields": "date_created",
+                "sort_types": "DESC",
+                "limit": 100,
+                "offset": offset,
+            },
+        ) or {}
+        questions = [
+            dict(row) for row in (page.get("questions") or []) if isinstance(row, dict)
+        ]
+        rows.extend(questions)
+        official_total = max(official_total, int(page.get("total") or 0))
+        if not questions or len(rows) >= official_total:
+            break
+        offset += len(questions)
+        if offset > 1000:
+            break
+    return {
+        "token_id": int(token_id),
+        "questions": rows,
+        "official_total": official_total,
+        "truncated": len(rows) < official_total,
+    }
+
+
+@app.route('/api/mercado-communications/pre-sale-aggregate', methods=['POST'])
+@login_required
+def api_mercado_pre_sale_aggregate():
+    data = request.get_json(silent=True) or {}
+    raw_token_ids = data.get("token_ids")
+    if not isinstance(raw_token_ids, list):
+        return jsonify({"status": "error", "message": "店铺 ID 必须是数组"}), 400
+    try:
+        token_ids = list(dict.fromkeys(
+            int(value) for value in raw_token_ids if int(value) > 0
+        ))
+    except (TypeError, ValueError):
+        return jsonify({"status": "error", "message": "店铺 ID 格式错误"}), 400
+    if not token_ids:
+        return jsonify({"status": "error", "message": "请选择要查询的店铺"}), 400
+    if len(token_ids) > 100:
+        return jsonify({"status": "error", "message": "单次最多并发查询 100 家店铺"}), 400
+
+    filters = {
+        key: data.get(key)
+        for key in ("item_id", "user_id", "status")
+        if str(data.get(key) or "").strip()
+    }
+    requested_workers = data.get("workers", 8)
+    try:
+        worker_count = max(1, min(12, int(requested_workers), len(token_ids)))
+    except (TypeError, ValueError):
+        return jsonify({"status": "error", "message": "并发线程数格式错误"}), 400
+
+    started = time.perf_counter()
+    rows = []
+    failures = []
+    with ThreadPoolExecutor(
+        max_workers=worker_count,
+        thread_name_prefix="pre-sale-query",
+    ) as executor:
+        future_tokens = {
+            executor.submit(_query_pre_sale_store_pages, token_id, filters): token_id
+            for token_id in token_ids
+        }
+        for future in as_completed(future_tokens):
+            token_id = future_tokens[future]
+            try:
+                rows.append(future.result())
+            except Exception as exc:
+                failures.append({"token_id": token_id, "message": str(exc)})
+
+    order = {token_id: index for index, token_id in enumerate(token_ids)}
+    rows.sort(key=lambda row: order.get(int(row.get("token_id") or 0), len(order)))
+    failures.sort(key=lambda row: order.get(int(row.get("token_id") or 0), len(order)))
+    response = jsonify({
+        "status": "success",
+        "data": {
+            "stores": rows,
+            "failures": failures,
+            "total_stores": len(token_ids),
+            "success_stores": len(rows),
+            "failed_stores": len(failures),
+            "workers": worker_count,
+            "elapsed_seconds": round(time.perf_counter() - started, 3),
+        },
+    })
+    response.headers["Cache-Control"] = "no-store"
+    return response
+
+
+def _query_customer_service_claims_store(
+    token_id, filters, required_rows, status_filter=""
+):
+    rows = []
+    status_totals = {"opened": 0, "closed": 0}
+    truncated = False
+    marketplace_errors = []
+    for claim_status in ("opened", "closed"):
+        status_rows = []
+        offset = 0
+        while len(status_rows) < required_rows and offset <= 1000:
+            limit = min(100, required_rows - len(status_rows))
+            page = bit_db_api.execute_mercado_store_communication(
+                int(token_id),
+                "claims-list",
+                {
+                    **filters,
+                    "status": claim_status,
+                    "limit": limit,
+                    "offset": offset,
+                },
+            ) or {}
+            batch = [
+                dict(row) for row in (page.get("data") or [])
+                if isinstance(row, dict)
+            ]
+            for row in batch:
+                row["token_id"] = int(token_id)
+            status_rows.extend(batch)
+            total = int((page.get("paging") or {}).get("total") or 0)
+            status_totals[claim_status] = max(
+                status_totals[claim_status], total, len(status_rows)
+            )
+            marketplace_errors.extend(
+                dict(error) for error in (page.get("marketplace_errors") or [])
+                if isinstance(error, dict)
+            )
+            if not batch or offset + len(batch) >= total:
+                break
+            offset += len(batch)
+        if len(status_rows) < status_totals[claim_status] and offset > 1000:
+            truncated = True
+        if not status_filter or status_filter == claim_status:
+            rows.extend(status_rows)
+
+    deduplicated = list({
+        str(row.get("id") or index): row for index, row in enumerate(rows)
+    }.values())
+    return {
+        "token_id": int(token_id),
+        "rows": deduplicated,
+        "total": (
+            status_totals.get(status_filter, 0)
+            if status_filter
+            else status_totals["opened"] + status_totals["closed"]
+        ),
+        "status_totals": status_totals,
+        "marketplace_errors": marketplace_errors,
+        "truncated": truncated,
+    }
+
+
+def _query_customer_service_post_sale_store(token_id, search=""):
+    identifier = int(token_id)
+    pack_search = str(search or "").strip()
+    if pack_search:
+        bundle = bit_db_api.execute_mercado_store_communication(
+            identifier,
+            "post-sale-messages",
+            {"pack_id": pack_search, "limit": 100},
+        ) or {}
+        return {
+            "token_id": identifier,
+            "search_pack_id": pack_search,
+            "search_bundle": bundle,
+            "conversations": [],
+        }
+
+    unread = bit_db_api.execute_mercado_store_communication(
+        identifier, "post-sale-unread", {}
+    ) or {}
+    conversations = []
+    for row in unread.get("results") or []:
+        if not isinstance(row, dict):
+            continue
+        pack_id = str(row.get("resource") or "").rstrip("/").split("/")[-1].strip()
+        if not pack_id:
+            continue
+        conversation = {
+            "token_id": identifier,
+            "pack_id": pack_id,
+            "unread_count": int(row.get("count") or 0),
+            "resource": row.get("resource"),
+            "order_context": dict(row.get("order_context") or {}),
+        }
+        try:
+            conversation["bundle"] = (
+                bit_db_api.execute_mercado_store_communication(
+                    identifier,
+                    "post-sale-messages",
+                    {"pack_id": pack_id, "limit": 100},
+                ) or {}
+            )
+        except Exception as exc:
+            conversation["load_error"] = str(exc)
+        conversations.append(conversation)
+    return {
+        "token_id": identifier,
+        "unread_total": len(unread.get("results") or []),
+        "conversations": conversations,
+    }
+
+
+@app.route(
+    '/api/mercado-communications/customer-service-aggregate',
+    methods=['POST'],
+)
+@login_required
+def api_mercado_customer_service_aggregate():
+    data = request.get_json(silent=True) or {}
+    raw_token_ids = data.get("token_ids")
+    if not isinstance(raw_token_ids, list):
+        return jsonify({"status": "error", "message": "店铺 ID 必须是数组"}), 400
+    try:
+        token_ids = list(dict.fromkeys(
+            int(value) for value in raw_token_ids if int(value) > 0
+        ))
+    except (TypeError, ValueError):
+        return jsonify({"status": "error", "message": "店铺 ID 格式错误"}), 400
+    if not token_ids:
+        return jsonify({"status": "error", "message": "请选择要查询的店铺"}), 400
+    if len(token_ids) > 100:
+        return jsonify({"status": "error", "message": "单次最多并发查询 100 家店铺"}), 400
+
+    mode = str(data.get("mode") or "").strip().lower()
+    if mode not in ("claims", "post-sale"):
+        return jsonify({"status": "error", "message": "查询类型格式错误"}), 400
+    try:
+        worker_count = max(
+            1, min(12, int(data.get("workers", 8)), len(token_ids))
+        )
+    except (TypeError, ValueError):
+        return jsonify({"status": "error", "message": "并发线程数格式错误"}), 400
+
+    status_filter = str(data.get("status_filter") or "").strip().lower()
+    if status_filter not in ("", "opened", "closed"):
+        return jsonify({"status": "error", "message": "索赔状态格式错误"}), 400
+    try:
+        required_rows = max(1, min(1000, int(data.get("required_rows", 20))))
+    except (TypeError, ValueError):
+        return jsonify({"status": "error", "message": "查询数量格式错误"}), 400
+    raw_filters = data.get("filters") or {}
+    if not isinstance(raw_filters, dict):
+        return jsonify({"status": "error", "message": "筛选条件格式错误"}), 400
+    claim_filters = {
+        key: raw_filters.get(key)
+        for key in (
+            "claim_type", "claim_id", "order_id", "pack_id",
+            "date_from", "date_to",
+        )
+        if str(raw_filters.get(key) or "").strip()
+    }
+    search = str(data.get("search") or "").strip()
+
+    def query_store(token_id):
+        if mode == "claims":
+            return _query_customer_service_claims_store(
+                token_id, claim_filters, required_rows, status_filter
+            )
+        return _query_customer_service_post_sale_store(token_id, search)
+
+    started = time.perf_counter()
+    stores = []
+    failures = []
+    with ThreadPoolExecutor(
+        max_workers=worker_count,
+        thread_name_prefix="customer-service-query",
+    ) as executor:
+        future_tokens = {
+            executor.submit(query_store, token_id): token_id
+            for token_id in token_ids
+        }
+        for future in as_completed(future_tokens):
+            token_id = future_tokens[future]
+            try:
+                stores.append(future.result())
+            except Exception as exc:
+                failures.append({"token_id": token_id, "message": str(exc)})
+
+    order = {token_id: index for index, token_id in enumerate(token_ids)}
+    stores.sort(key=lambda row: order.get(int(row.get("token_id") or 0), len(order)))
+    failures.sort(key=lambda row: order.get(int(row.get("token_id") or 0), len(order)))
+    response = jsonify({
+        "status": "success",
+        "data": {
+            "mode": mode,
+            "stores": stores,
+            "failures": failures,
+            "total_stores": len(token_ids),
+            "success_stores": len(stores),
+            "failed_stores": len(failures),
+            "workers": worker_count,
+            "elapsed_seconds": round(time.perf_counter() - started, 3),
+        },
+    })
+    response.headers["Cache-Control"] = "no-store"
+    return response
+
+
 MERCADO_COMMUNICATION_READ_ACTIONS = frozenset((
     "pre-sale-list",
     "pre-sale-summary",
@@ -9268,6 +10389,113 @@ MERCADO_COMMUNICATION_WRITE_ACTIONS = frozenset((
 MERCADO_COMMUNICATION_VIEW_POST_ACTIONS = frozenset((
     "pre-sale-translate",
 ))
+
+
+def _open_mercado_claim_browser(token_id, claim_id="", shop_name_hint=""):
+    """按 Mercado 授权店铺精确匹配配置，并保留人工浏览器窗口打开。"""
+    identifier = int(token_id)
+    token_rows = list((bit_db_api.list_mercado_store_tokens() or {}).get("rows") or [])
+    token = next(
+        (row for row in token_rows if int(row.get("id") or 0) == identifier),
+        None,
+    )
+    if not token:
+        raise KeyError("店铺授权不存在")
+
+    candidate_names = list(dict.fromkeys(
+        str(value or "").strip()
+        for value in (
+            shop_name_hint,
+            token.get("display_name"),
+            token.get("nickname"),
+        )
+        if str(value or "").strip()
+    ))
+    if not candidate_names:
+        raise ValueError("该店铺授权没有名称，无法匹配比特浏览器窗口")
+
+    configs = [dict(row or {}) for row in list_shop_configs(include_ignored=True)]
+    selected = None
+    for candidate in candidate_names:
+        matches = [
+            row for row in configs
+            if str(row.get("shop_name") or "").strip().casefold()
+            == candidate.casefold()
+        ]
+        if len(matches) > 1:
+            raise ValueError(
+                f"存在 {len(matches)} 个店铺名为“{candidate}”的比特浏览器配置，"
+                "请先将店铺名称配置为唯一"
+            )
+        if matches:
+            selected = matches[0]
+            break
+    if not selected:
+        raise ValueError(
+            f"店铺授权“{candidate_names[0]}”未绑定比特浏览器窗口；"
+            "请让授权显示名称或 Mercado 昵称与比特浏览器店铺名完全一致"
+        )
+
+    window_id = str(selected.get("window_id") or "").strip()
+    shop_name = str(selected.get("shop_name") or candidate_names[0]).strip()
+    if not window_id:
+        raise ValueError(f"店铺“{shop_name}”的比特浏览器配置缺少窗口 ID")
+
+    try:
+        result = openBrowser(
+            window_id,
+            api_lock_timeout=5,
+            request_timeout=20,
+        )
+    finally:
+        # 人工处理只负责启动窗口，不应长期持有自动任务锁。
+        releaseBrowserLease(window_id)
+    if not isinstance(result, dict):
+        raise RuntimeError(f"比特浏览器启动接口返回格式异常：{result}")
+    if result.get("success") is False:
+        message = str(result.get("msg") or "启动失败").strip()
+        owner = result.get("lockOwner")
+        if owner:
+            message = f"{message}（当前任务：{owner}）"
+        raise RuntimeError(message)
+    return {
+        "token_id": identifier,
+        "claim_id": str(claim_id or "").strip(),
+        "shop_name": shop_name,
+        "window_id": window_id,
+    }
+
+
+@app.route(
+    '/api/mercado-claims/<int:token_id>/open-browser',
+    methods=['POST'],
+)
+@login_required
+def api_open_mercado_claim_browser(token_id):
+    data = request.get_json(silent=True) or {}
+    try:
+        result = _open_mercado_claim_browser(
+            token_id,
+            data.get("claim_id"),
+            data.get("shop_name"),
+        )
+        response = jsonify({
+            "status": "success",
+            "data": result,
+            "message": f"已启动 {result['shop_name']} 的比特浏览器窗口",
+        })
+        response.headers["Cache-Control"] = "no-store"
+        return response
+    except KeyError as exc:
+        return jsonify({"status": "error", "message": str(exc.args[0])}), 404
+    except ValueError as exc:
+        return jsonify({"status": "error", "message": str(exc)}), 400
+    except Exception as exc:
+        logging.exception("启动订单索赔对应的比特浏览器窗口失败")
+        return jsonify({
+            "status": "error",
+            "message": f"启动比特浏览器窗口失败：{exc}",
+        }), 502
 
 
 @app.route(
@@ -9731,8 +10959,99 @@ def start_store_link_scheduler_bootstrap():
     return scheduler_thread
 
 
-if __name__ == '__main__':
+def start_token_refresh_scheduler_bootstrap():
+    """Start proactive Mercado token renewal without delaying HTTP startup."""
+
+    def start_safely():
+        try:
+            mercado_tokens.start_token_auto_refresh_scheduler()
+            logging.info(
+                "店铺 Token 自动刷新已启动：到期前 %s 分钟刷新，每 %s 秒检查",
+                mercado_tokens.TOKEN_AUTO_REFRESH_BEFORE_MINUTES,
+                mercado_tokens.TOKEN_AUTO_REFRESH_CHECK_SECONDS,
+            )
+        except Exception:
+            logging.exception("启动店铺 Token 自动刷新失败")
+
+    scheduler_thread = threading.Thread(
+        target=start_safely,
+        name="mercado-token-refresh-scheduler-bootstrap",
+        daemon=True,
+    )
+    scheduler_thread.start()
+    return scheduler_thread
+
+
+def interface_hot_reload_enabled(value=None):
+    """Enable source reloading by default while allowing an explicit opt-out."""
+
+    configured = (
+        os.environ.get("BIT_INTERFACE_HOT_RELOAD", "1")
+        if value is None
+        else value
+    )
+    return _truthy_env(configured)
+
+
+def is_werkzeug_reloader_child(environ=None):
+    environment = os.environ if environ is None else environ
+    return str(environment.get("WERKZEUG_RUN_MAIN", "")).strip().lower() == "true"
+
+
+def start_interface_background_services():
     start_interrupted_collection_recovery()
     start_store_link_scheduler_bootstrap()
-    # 保持 5000 端口，多线程模式开启以防流式阻塞
-    app.run(host='0.0.0.0', port=5000, threaded=True)
+    start_token_refresh_scheduler_bootstrap()
+    if not USE_DB_API:
+        bit_order_sync.ensure_order_financial_backfill_worker()
+        bit_order_sync.ensure_order_image_backfill_worker()
+
+
+def run_interface_server():
+    hot_reload = interface_hot_reload_enabled()
+    reloader_child = hot_reload and is_werkzeug_reloader_child()
+    interface_lock = None
+
+    # The reloader parent owns the singleton lock for its whole lifetime. Its
+    # child process serves requests and is replaced automatically on edits.
+    if not reloader_child:
+        interface_lock = InterProcessLock(
+            "bit_interface_singleton",
+            owner="bit_interface.py",
+            metadata={
+                "port": 5000,
+                "project": str(PROJECT_ROOT),
+                "hot_reload": hot_reload,
+            },
+        )
+        if not interface_lock.acquire(timeout=0):
+            owner = interface_lock.read_owner()
+            logging.error(
+                "泽顺工作台服务已经运行，本次重复进程退出：pid=%s",
+                owner.get("pid") or "unknown",
+            )
+            return False
+
+    try:
+        if not hot_reload or reloader_child:
+            start_interface_background_services()
+        logging.info(
+            "代码热更新%s；修改 Python 或模板文件后服务会自动加载",
+            "已启用" if hot_reload else "已关闭",
+        )
+        app.run(
+            host="0.0.0.0",
+            port=5000,
+            threaded=True,
+            debug=False,
+            use_debugger=False,
+            use_reloader=hot_reload,
+        )
+        return True
+    finally:
+        if interface_lock is not None:
+            interface_lock.release()
+
+
+if __name__ == '__main__':
+    run_interface_server()

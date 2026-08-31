@@ -70,7 +70,6 @@ MIXED_APPEAL_SEQUENCE = (
     APPEAL_TYPE_COMPLAINT,
     APPEAL_TYPE_INFRACTION,
     APPEAL_TYPE_CANCELLATION,
-    APPEAL_TYPE_INFRACTION,
 )
 ALL_APPEAL_SITE_CODES = frozenset(("MX", "BR", "CL", "CO", "AR", "UY"))
 REPUTATION_RATE_FIELDS = {
@@ -156,13 +155,10 @@ def normalize_appeal_types(appeal_types):
         if isinstance(appeal_types, str)
         else list(appeal_types or ())
     )
-    selected = set()
-    for value in raw_values:
-        normalized = normalize_appeal_type(value)
-        if normalized == APPEAL_TYPE_MIXED:
-            selected.update(DAILY_APPEAL_TASK_TYPES)
-        else:
-            selected.add(normalized)
+    normalized_values = [normalize_appeal_type(value) for value in raw_values]
+    if APPEAL_TYPE_MIXED in normalized_values:
+        return (APPEAL_TYPE_MIXED,)
+    selected = set(normalized_values)
     if not selected:
         raise ValueError("请至少开启一个任务")
     return tuple(
@@ -173,8 +169,10 @@ def normalize_appeal_types(appeal_types):
 
 
 def appeal_type_sequence(appeal_types):
-    """返回单轮执行顺序；开启侵权时，每个其他任务后再执行一次侵权。"""
+    """返回单轮执行顺序；混合模式使用固定的六项任务序列。"""
     selected = normalize_appeal_types(appeal_types)
+    if selected == (APPEAL_TYPE_MIXED,):
+        return MIXED_APPEAL_SEQUENCE
     if len(selected) == 1:
         return selected
     if APPEAL_TYPE_INFRACTION not in selected:
@@ -227,30 +225,20 @@ def load_authorized_appeal_shop_site_config(salespeople=None, group_names=None):
     token_data = list_mercado_store_tokens() or {}
     result = {}
     for token in token_data.get("rows") or ():
-        settings = token.get("site_settings")
-        if settings is None:
-            # 兼容尚未升级站点开关的旧数据库 API；指定业务员时不能猜测归属。
-            if selected_salespeople or selected_group_names:
+        settings = [dict(setting or {}) for setting in (token.get("site_settings") or ())]
+        enabled_sites = set()
+        for setting in settings:
+            salesperson = str(setting.get("salesperson") or "").strip()
+            if selected_salespeople and salesperson not in selected_salespeople:
                 continue
-            enabled_sites = set(ALL_APPEAL_SITE_CODES)
-        else:
-            settings = [dict(setting or {}) for setting in settings]
-            flag_supported = any("appeal_enabled" in setting for setting in settings)
-            enabled_sites = set()
-            for setting in settings:
-                salesperson = str(setting.get("salesperson") or "").strip()
-                if selected_salespeople and salesperson not in selected_salespeople:
-                    continue
-                group_name = str(setting.get("group_name") or "").strip()
-                if selected_group_names and group_name not in selected_group_names:
-                    continue
-                if flag_supported and not _setting_flag_enabled(
-                    setting.get("appeal_enabled")
-                ):
-                    continue
-                site_code = bit_appeal_ai.normalize_site_code(setting.get("site_id"))
-                if site_code in ALL_APPEAL_SITE_CODES:
-                    enabled_sites.add(site_code)
+            group_name = str(setting.get("group_name") or "").strip()
+            if selected_group_names and group_name not in selected_group_names:
+                continue
+            if not _setting_flag_enabled(setting.get("appeal_enabled")):
+                continue
+            site_code = bit_appeal_ai.normalize_site_code(setting.get("site_id"))
+            if site_code in ALL_APPEAL_SITE_CODES:
+                enabled_sites.add(site_code)
         if not enabled_sites:
             continue
         for alias in (token.get("display_name"), token.get("nickname")):
@@ -285,6 +273,13 @@ def _parse_rate(value):
     except ValueError:
         return 0.0
     return number / 100 if "%" in text or number > 1 else number
+
+
+def _parse_nonnegative_count(value):
+    try:
+        return max(0, int(value or 0))
+    except (TypeError, ValueError):
+        return 0
 
 
 def acquire_daily_task_lock(owner="bit_daily_task", mode="once"):
@@ -389,8 +384,10 @@ def build_latest_infraction_appeal_plan(
     only_active=None,
     salespeople=None,
     group_names=None,
+    min_infraction_count=0,
 ):
-    """从最新侵权列表生成计划，并按店铺授权中的申诉开关筛选站点。"""
+    """生成侵权计划，仅保留侵权总数严格超过执行标准的店铺。"""
+    threshold = _parse_nonnegative_count(min_infraction_count)
     data = get_latest_infraction_info(recent_days)
     summary_rows = data.get("summary") or []
     enabled_scope = _appeal_scope(only_active, salespeople, group_names)
@@ -417,7 +414,7 @@ def build_latest_infraction_appeal_plan(
     plan = []
     for shop in shop_map.values():
         shop["sites"].sort(key=lambda item: item["count"], reverse=True)
-        if shop["sites"]:
+        if shop["sites"] and shop["total"] > threshold:
             plan.append(shop)
 
     plan.sort(
@@ -432,7 +429,10 @@ def build_latest_infraction_appeal_plan(
     selected = _select_appeal_plan(plan, limit)
     scope_label = "全部" if limit <= 0 else f"Top {limit}"
     print(f"{get_now_time()} 最新侵权数据时间：{data.get('latest_submit_time', '')}<br>")
-    print(f"{get_now_time()} {scope_label}侵权店铺计划：{selected}<br>")
+    print(
+        f"{get_now_time()} {scope_label}侵权店铺计划"
+        f"（侵权总数 > {threshold}）：{selected}<br>"
+    )
     return selected
 
 
@@ -446,7 +446,7 @@ def build_latest_reputation_appeal_plan(
 ):
     """按最新声誉批次生成延误率、取消率或投诉申诉计划。
 
-    只选择比率大于 0 且不低于 ``min_rate`` 的站点；同一店铺内按比率降序，
+    只选择比率严格大于 ``min_rate`` 的站点；同一店铺内按比率降序，
     店铺之间按最高站点比率和比率总和排序。
     """
     normalized_type = normalize_appeal_type(appeal_type)
@@ -465,7 +465,7 @@ def build_latest_reputation_appeal_plan(
         site = str(row.get("站点") or "").strip()
         rate_text = str(row.get(rate_field) or "").strip()
         rate = _parse_rate(rate_text)
-        if not name or not site or rate <= 0 or rate < threshold:
+        if not name or not site or rate <= threshold:
             continue
         site_code = bit_appeal_ai.normalize_site_code(site)
         if not _appeal_site_is_enabled(enabled_scope, name, site_code):
@@ -501,7 +501,7 @@ def build_latest_reputation_appeal_plan(
     label = _appeal_type_label(normalized_type)
     print(f"{get_now_time()} 最新声誉数据时间：{data.get('latest_submit_time', '')}<br>")
     print(
-        f"{get_now_time()} {scope_label}{label}店铺计划（最低比率 {threshold:.2%}）："
+        f"{get_now_time()} {scope_label}{label}店铺计划（比率 > {threshold:.2%}）："
         f"{selected}<br>"
     )
     return selected
@@ -513,6 +513,10 @@ def build_appeal_plan(
     recent_days=DEFAULT_DAILY_RECENT_DAYS,
     only_active=None,
     min_rate=0,
+    min_infraction_count=0,
+    min_delay_rate=None,
+    min_cancellation_rate=None,
+    min_complaint_rate=None,
     salespeople=None,
     group_names=None,
 ):
@@ -527,12 +531,21 @@ def build_appeal_plan(
             only_active=only_active,
             salespeople=salespeople,
             group_names=group_names,
+            min_infraction_count=min_infraction_count,
         )
+    task_rate_thresholds = {
+        APPEAL_TYPE_DELAY: min_delay_rate,
+        APPEAL_TYPE_CANCELLATION: min_cancellation_rate,
+        APPEAL_TYPE_COMPLAINT: min_complaint_rate,
+    }
+    task_min_rate = task_rate_thresholds.get(normalized_type)
+    if task_min_rate is None:
+        task_min_rate = min_rate
     return build_latest_reputation_appeal_plan(
         normalized_type,
         top_n=top_n,
         only_active=only_active,
-        min_rate=min_rate,
+        min_rate=task_min_rate,
         salespeople=salespeople,
         group_names=group_names,
     )
@@ -849,6 +862,10 @@ def _run_ai_appeal_once_locked(
     message="",
     only_active=None,
     min_rate=0,
+    min_infraction_count=0,
+    min_delay_rate=None,
+    min_cancellation_rate=None,
+    min_complaint_rate=None,
     salespeople=None,
     group_names=None,
 ):
@@ -878,6 +895,10 @@ def _run_ai_appeal_once_locked(
                     message=message,
                     only_active=only_active,
                     min_rate=min_rate,
+                    min_infraction_count=min_infraction_count,
+                    min_delay_rate=min_delay_rate,
+                    min_cancellation_rate=min_cancellation_rate,
+                    min_complaint_rate=min_complaint_rate,
                     salespeople=salespeople,
                     group_names=group_names,
                 ),
@@ -892,6 +913,10 @@ def _run_ai_appeal_once_locked(
         recent_days=recent_days,
         only_active=only_active,
         min_rate=min_rate,
+        min_infraction_count=min_infraction_count,
+        min_delay_rate=min_delay_rate,
+        min_cancellation_rate=min_cancellation_rate,
+        min_complaint_rate=min_complaint_rate,
         salespeople=salespeople,
         group_names=group_names,
     )
@@ -969,6 +994,10 @@ def run_ai_appeal_once(
     message="",
     only_active=None,
     min_rate=0,
+    min_infraction_count=0,
+    min_delay_rate=None,
+    min_cancellation_rate=None,
+    min_complaint_rate=None,
     salespeople=None,
     group_names=None,
     _task_lock=None,
@@ -996,6 +1025,10 @@ def run_ai_appeal_once(
             message=message,
             only_active=only_active,
             min_rate=min_rate,
+            min_infraction_count=min_infraction_count,
+            min_delay_rate=min_delay_rate,
+            min_cancellation_rate=min_cancellation_rate,
+            min_complaint_rate=min_complaint_rate,
             salespeople=salespeople,
             group_names=group_names,
         )
@@ -1087,6 +1120,10 @@ def _loop_ai_appeal_locked(
     message="",
     only_active=None,
     min_rate=0,
+    min_infraction_count=0,
+    min_delay_rate=None,
+    min_cancellation_rate=None,
+    min_complaint_rate=None,
     salespeople=None,
     group_names=None,
     stop_at=None,
@@ -1132,6 +1169,10 @@ def _loop_ai_appeal_locked(
                 message=message,
                 only_active=only_active,
                 min_rate=min_rate,
+                min_infraction_count=min_infraction_count,
+                min_delay_rate=min_delay_rate,
+                min_cancellation_rate=min_cancellation_rate,
+                min_complaint_rate=min_complaint_rate,
                 salespeople=salespeople,
                 group_names=group_names,
                 _task_lock=task_lock,
@@ -1203,6 +1244,10 @@ def loop_ai_appeal(
     message="",
     only_active=None,
     min_rate=0,
+    min_infraction_count=0,
+    min_delay_rate=None,
+    min_cancellation_rate=None,
+    min_complaint_rate=None,
     salespeople=None,
     group_names=None,
     stop_at=None,
@@ -1233,6 +1278,10 @@ def loop_ai_appeal(
             message=message,
             only_active=only_active,
             min_rate=min_rate,
+            min_infraction_count=min_infraction_count,
+            min_delay_rate=min_delay_rate,
+            min_cancellation_rate=min_cancellation_rate,
+            min_complaint_rate=min_complaint_rate,
             salespeople=salespeople,
             group_names=group_names,
             stop_at=stop_at,

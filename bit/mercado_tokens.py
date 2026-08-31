@@ -8,16 +8,35 @@ server-side data layer.
 from __future__ import annotations
 
 import os
+import logging
+import threading
 from datetime import datetime, timedelta
 from typing import Any, Mapping
 from urllib.parse import parse_qs, urlencode, urlparse
 
 import requests
 
+from bit.bit_runtime_lock import InterProcessLock
+
 
 API_BASE_URL = "https://api.mercadolibre.com"
 DEFAULT_AUTHORIZATION_URL = "https://global-selling.mercadolibre.com/authorization"
 DEFAULT_REDIRECT_URI = "https://zeshun.nat100.top/zs"
+TOKEN_AUTO_REFRESH_BEFORE_MINUTES = max(
+    5, int(os.environ.get("MERCADO_TOKEN_AUTO_REFRESH_BEFORE_MINUTES", "60"))
+)
+TOKEN_AUTO_REFRESH_RETRY_MINUTES = max(
+    1, int(os.environ.get("MERCADO_TOKEN_AUTO_REFRESH_RETRY_MINUTES", "15"))
+)
+TOKEN_AUTO_REFRESH_CHECK_SECONDS = max(
+    60, int(os.environ.get("MERCADO_TOKEN_AUTO_REFRESH_CHECK_SECONDS", "300"))
+)
+TOKEN_AUTO_REFRESH_SCAN_LOCK_KEY = "mercado_token_auto_refresh_scan"
+
+_token_refresh_locks_guard = threading.Lock()
+_token_refresh_locks: dict[int, Any] = {}
+_token_refresh_scheduler_guard = threading.Lock()
+_token_refresh_scheduler_thread: threading.Thread | None = None
 
 
 class MercadoTokenError(RuntimeError):
@@ -287,7 +306,7 @@ def exchange_and_save(
     }
 
 
-def refresh_and_save(
+def _refresh_and_save_unlocked(
     token_id: int,
     *,
     get_token,
@@ -361,3 +380,157 @@ def refresh_and_save(
         raise
     result["warning"] = profile_error
     return result
+
+
+def _token_refresh_lock(token_id: int):
+    normalized_id = int(token_id)
+    with _token_refresh_locks_guard:
+        return _token_refresh_locks.setdefault(normalized_id, threading.Lock())
+
+
+def refresh_and_save(
+    token_id: int,
+    *,
+    get_token,
+    update_token,
+    record_error=None,
+    http: requests.Session | None = None,
+    timeout: int = 30,
+) -> dict[str, Any]:
+    """Refresh one token safely even when manual and automatic jobs overlap."""
+
+    token_id = int(token_id)
+    with _token_refresh_lock(token_id):
+        process_lock = InterProcessLock(
+            f"mercado_store_token_refresh_{token_id}",
+            owner="mercado_token_refresh",
+            metadata={"token_id": token_id},
+        )
+        if not process_lock.acquire(timeout=max(5, int(timeout) + 5)):
+            raise MercadoTokenError("该店铺 Token 正在其他任务中刷新，请稍后重试")
+        try:
+            return _refresh_and_save_unlocked(
+                token_id,
+                get_token=get_token,
+                update_token=update_token,
+                record_error=record_error,
+                http=http,
+                timeout=timeout,
+            )
+        finally:
+            process_lock.release()
+
+
+def _token_datetime(value: Any) -> datetime | None:
+    if isinstance(value, datetime):
+        return value
+    text = str(value or "").strip()
+    if not text:
+        return None
+    try:
+        return datetime.fromisoformat(text.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+
+
+def _comparable_now(now: datetime, target: datetime) -> datetime:
+    if target.tzinfo is not None and now.tzinfo is None:
+        return now.replace(tzinfo=target.tzinfo)
+    if target.tzinfo is None and now.tzinfo is not None:
+        return now.replace(tzinfo=None)
+    return now
+
+
+def auto_refresh_due_store_tokens(
+    *,
+    list_tokens=None,
+    refresh_token=None,
+    now: datetime | None = None,
+    refresh_before_minutes: int = TOKEN_AUTO_REFRESH_BEFORE_MINUTES,
+    retry_minutes: int = TOKEN_AUTO_REFRESH_RETRY_MINUTES,
+) -> dict[str, Any]:
+    """Refresh every renewable store token approaching expiry."""
+
+    if list_tokens is None or refresh_token is None:
+        from bit import bit_db_api
+
+        list_tokens = list_tokens or bit_db_api.list_mercado_store_tokens
+        refresh_token = refresh_token or bit_db_api.refresh_mercado_store_token
+
+    current = now or datetime.now()
+    rows = list((list_tokens() or {}).get("rows") or [])
+    result: dict[str, Any] = {
+        "checked": len(rows),
+        "due": 0,
+        "refreshed": 0,
+        "failed": 0,
+        "retry_deferred": 0,
+        "failures": [],
+    }
+    for row in rows:
+        token_id = int(row.get("id") or 0)
+        expires_at = _token_datetime(row.get("expires_at"))
+        if not token_id or not row.get("has_refresh_token") or expires_at is None:
+            continue
+        row_now = _comparable_now(current, expires_at)
+        if expires_at > row_now + timedelta(minutes=max(5, int(refresh_before_minutes))):
+            continue
+        result["due"] += 1
+
+        updated_at = _token_datetime(row.get("updated_at"))
+        if row.get("last_error") and updated_at is not None:
+            updated_now = _comparable_now(current, updated_at)
+            if updated_at > updated_now - timedelta(minutes=max(1, int(retry_minutes))):
+                result["retry_deferred"] += 1
+                continue
+        try:
+            refresh_token(token_id)
+            result["refreshed"] += 1
+        except Exception as exc:
+            result["failed"] += 1
+            result["failures"].append({
+                "token_id": token_id,
+                "store_name": str(row.get("display_name") or row.get("nickname") or token_id),
+                "error": str(exc),
+            })
+    return result
+
+
+def _token_auto_refresh_loop() -> None:
+    while True:
+        scan_lock = InterProcessLock(
+            TOKEN_AUTO_REFRESH_SCAN_LOCK_KEY,
+            owner="mercado_token_auto_refresh_scheduler",
+        )
+        if scan_lock.acquire(timeout=0):
+            try:
+                result = auto_refresh_due_store_tokens()
+                if result["refreshed"] or result["failed"]:
+                    logging.info(
+                        "店铺 Token 自动刷新完成：检查 %s，需刷新 %s，成功 %s，失败 %s",
+                        result["checked"],
+                        result["due"],
+                        result["refreshed"],
+                        result["failed"],
+                    )
+            except Exception:
+                logging.exception("店铺 Token 自动刷新检查失败")
+            finally:
+                scan_lock.release()
+        threading.Event().wait(TOKEN_AUTO_REFRESH_CHECK_SECONDS)
+
+
+def start_token_auto_refresh_scheduler() -> bool:
+    """Start one background scheduler for proactive token renewal."""
+
+    global _token_refresh_scheduler_thread
+    with _token_refresh_scheduler_guard:
+        if _token_refresh_scheduler_thread and _token_refresh_scheduler_thread.is_alive():
+            return False
+        _token_refresh_scheduler_thread = threading.Thread(
+            target=_token_auto_refresh_loop,
+            name="mercado-token-auto-refresh",
+            daemon=True,
+        )
+        _token_refresh_scheduler_thread.start()
+        return True

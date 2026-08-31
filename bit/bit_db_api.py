@@ -44,6 +44,12 @@ def _local_interface_call(function_name, *args, **kwargs):
     return getattr(bit_interface, function_name)(*args, **kwargs)
 
 
+def _local_inventory_call(function_name, *args, **kwargs):
+    from bit import bit_inventory
+
+    return getattr(bit_inventory, function_name)(*args, **kwargs)
+
+
 def _headers():
     headers = {"Content-Type": "application/json"}
     if DB_API_TOKEN:
@@ -339,6 +345,7 @@ def list_orders(
     start_date="",
     end_date="",
     origin="",
+    freight_variance="",
     page=1,
     page_size=200,
     store_ids=None,
@@ -357,6 +364,7 @@ def list_orders(
         "start_date": start_date or "",
         "end_date": end_date or "",
         "origin": origin or "",
+        "freight_variance": freight_variance or "",
         "page": int(page or 1),
         "page_size": int(page_size or 200),
     }
@@ -381,6 +389,75 @@ def list_orders(
         if "404" not in message or path not in message:
             raise
         return _local_call("list_orders", **local_params)
+
+
+def get_order_weight_quote(order_ids):
+    payload = {
+        "order_ids": [
+            str(value or "").strip()
+            for value in order_ids or []
+            if str(value or "").strip()
+        ]
+    }
+    if DB_MODE == "mysql":
+        return _local_call("get_mercado_order_weight_quote", payload["order_ids"])
+    return _request("POST", "/api/db/orders/weight-quote", json=payload)
+
+
+def list_inventory_stock(**filters):
+    if DB_MODE == "mysql":
+        return _local_inventory_call("list_inventory_stock", **filters)
+    return _request("GET", "/api/db/inventory/stocks", params=filters)
+
+
+def list_inventory_shelves(include_inactive=True):
+    if DB_MODE == "mysql":
+        return _local_inventory_call(
+            "list_inventory_shelves", include_inactive=bool(include_inactive)
+        )
+    return _request(
+        "GET",
+        "/api/db/inventory/shelves",
+        params={"include_inactive": "1" if include_inactive else "0"},
+    )
+
+
+def create_inventory_shelf(record):
+    if DB_MODE == "mysql":
+        return _local_inventory_call("create_inventory_shelf", record or {})
+    return _request("POST", "/api/db/inventory/shelves", json=record or {})
+
+
+def update_inventory_shelf(shelf_id, record):
+    if DB_MODE == "mysql":
+        return _local_inventory_call(
+            "update_inventory_shelf", int(shelf_id), record or {}
+        )
+    return _request(
+        "PATCH", f"/api/db/inventory/shelves/{int(shelf_id)}", json=record or {}
+    )
+
+
+def list_inventory_matches(search="", limit=30):
+    if DB_MODE == "mysql":
+        return _local_inventory_call(
+            "list_inventory_matches", search=search, limit=limit
+        )
+    return _request(
+        "GET", "/api/db/inventory/matches", params={"search": search, "limit": limit}
+    )
+
+
+def create_inventory_movement(record):
+    if DB_MODE == "mysql":
+        return _local_inventory_call("create_inventory_movement", record or {})
+    return _request("POST", "/api/db/inventory/movements", json=record or {})
+
+
+def list_inventory_movements(**filters):
+    if DB_MODE == "mysql":
+        return _local_inventory_call("list_inventory_movements", **filters)
+    return _request("GET", "/api/db/inventory/movements", params=filters)
 
 
 def start_order_sync(start_date="", end_date="", token_ids=None, mode="manual"):
@@ -416,6 +493,7 @@ def list_mercado_store_links(
     search="",
     token_id=None,
     site_id="",
+    group_name="",
     status="",
     sales_sort="desc",
     current_only=True,
@@ -425,11 +503,12 @@ def list_mercado_store_links(
     params = {
         "search": search or "",
         "site_id": str(site_id or "").strip().upper(),
+        "group_name": str(group_name or "").strip(),
         "status": status or "",
         "sales_sort": "asc" if str(sales_sort or "").strip().lower() == "asc" else "desc",
         "current_only": "1" if current_only else "0",
         "page": int(page or 1),
-        "page_size": int(page_size or 1000),
+        "page_size": 1000,
     }
     if token_id not in (None, ""):
         params["token_id"] = int(token_id)
@@ -439,6 +518,7 @@ def list_mercado_store_links(
             search=params["search"],
             token_id=params.get("token_id"),
             site_id=params["site_id"],
+            group_name=params["group_name"],
             status=params["status"],
             sales_sort=params["sales_sort"],
             current_only=bool(current_only),
@@ -451,10 +531,19 @@ def list_mercado_store_links(
 def bulk_update_mercado_store_links(link_ids, **changes):
     payload = {"link_ids": [int(value) for value in link_ids or []], "changes": changes}
     if DB_MODE == "mysql":
-        return _store_link_store_call(
-            "bulk_update_store_links", payload["link_ids"], changes
-        )
+        from bit.bit_store_link_remote_update import start_store_link_remote_update
+
+        started, state = start_store_link_remote_update(payload["link_ids"], changes)
+        return {"started": bool(started), "state": state}
     return _request("POST", "/api/db/store-links/bulk-update", json=payload)
+
+
+def get_mercado_store_link_remote_update_status():
+    if DB_MODE == "mysql":
+        from bit.bit_store_link_remote_update import store_link_remote_update_status
+
+        return store_link_remote_update_status()
+    return _request("GET", "/api/db/store-links/bulk-update/status")
 
 
 def start_store_link_sync(token_ids=None):
@@ -657,6 +746,88 @@ def delete_appeal_phrase(phrase_id):
     if DB_MODE == "mysql":
         return _local_call("delete_appeal_phrase", phrase_id)
     return _request("DELETE", f"/api/db/appeal-phrases/{int(phrase_id)}")
+
+
+def list_infringement_knowledge(list_type="", search="", limit=2000):
+    if DB_MODE == "mysql":
+        return _local_call(
+            "list_infringement_knowledge",
+            list_type=list_type,
+            search=search,
+            limit=limit,
+        )
+    return _request(
+        "GET",
+        "/api/db/infringement-knowledge",
+        params={"list_type": list_type, "search": search, "limit": limit},
+    )
+
+
+def create_infringement_knowledge(record):
+    if DB_MODE == "mysql":
+        return _local_call("create_infringement_knowledge", record)
+    return _request("POST", "/api/db/infringement-knowledge", json=record or {})
+
+
+def update_infringement_knowledge(record_id, record):
+    if DB_MODE == "mysql":
+        return _local_call("update_infringement_knowledge", record_id, record)
+    return _request(
+        "PUT",
+        f"/api/db/infringement-knowledge/{int(record_id)}",
+        json=record or {},
+    )
+
+
+def delete_infringement_knowledge(record_id):
+    if DB_MODE == "mysql":
+        return _local_call("delete_infringement_knowledge", record_id)
+    return _request(
+        "DELETE",
+        f"/api/db/infringement-knowledge/{int(record_id)}",
+    )
+
+
+def bulk_create_infringement_knowledge(records):
+    if DB_MODE == "mysql":
+        return _local_call("bulk_create_infringement_knowledge", records)
+    return _request(
+        "POST",
+        "/api/db/infringement-knowledge/bulk",
+        json={"records": list(records or [])},
+    )
+
+
+def get_infringement_knowledge_analysis_sources(
+    infraction_limit=10000,
+    active_limit=5000,
+):
+    if DB_MODE == "mysql":
+        return _local_call(
+            "get_infringement_knowledge_analysis_sources",
+            infraction_limit=infraction_limit,
+            active_limit=active_limit,
+        )
+    return _request(
+        "GET",
+        "/api/db/infringement-knowledge/analysis-sources",
+        params={
+            "infraction_limit": infraction_limit,
+            "active_limit": active_limit,
+        },
+        timeout=120,
+    )
+
+
+def upsert_analyzed_infringement_knowledge(records):
+    if DB_MODE == "mysql":
+        return _local_call("upsert_analyzed_infringement_knowledge", records)
+    return _request(
+        "POST",
+        "/api/db/infringement-knowledge/analyzed",
+        json={"records": list(records or [])},
+        timeout=120,
+    )
 
 
 def get_latest_infraction_info(recent_days=30):

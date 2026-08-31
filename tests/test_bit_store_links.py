@@ -1,9 +1,11 @@
 from decimal import Decimal
+import threading
+import time
 from unittest.mock import patch
 
 import pytest
 
-from bit import bit_store_link_sync
+from bit import bit_store_link_remote_update, bit_store_link_sync
 import bit.bit_interface as workbench
 from erp import mercadolibre_store_link_store as store
 
@@ -30,12 +32,27 @@ def reset_sync_state():
             message="等待同步店铺链接",
             total_stores=0,
             processed_stores=0,
+            active_stores=[],
             discovered_count=0,
             inserted_count=0,
             updated_count=0,
             detail_count=0,
             detail_failed_count=0,
             product_count=0,
+            failed_count=0,
+            results=[],
+            logs=[],
+        )
+    with bit_store_link_remote_update._state_guard:
+        bit_store_link_remote_update._update_state.update(
+            running=False,
+            task_id="",
+            status="idle",
+            message="等待修改美客多后台链接",
+            total_links=0,
+            processed_links=0,
+            success_count=0,
+            partial_count=0,
             failed_count=0,
             results=[],
             logs=[],
@@ -86,6 +103,80 @@ def test_listing_record_extracts_link_weight_dimensions_and_sku():
     assert record["permalink"].startswith("https://")
 
 
+def test_remote_update_pushes_price_package_and_net_proceeds_then_updates_local(monkeypatch):
+    api_calls = []
+    local_calls = []
+
+    class FakeClient:
+        def __init__(self, token):
+            assert token == "token-value"
+
+        def update_global_item(self, item_id, payload):
+            api_calls.append((item_id, payload))
+            return {}
+
+        def get_marketplace_item(self, item_id, *, attributes=None):
+            assert item_id == "MLM3308393921"
+            assert "net_proceeds" in attributes
+            return {
+                "id": item_id,
+                "price": 12.5,
+                "currency_id": "USD",
+                "net_proceeds": {"amount": 10, "currency_id": "USD"},
+                "attributes": [
+                    {"id": "PACKAGE_WEIGHT", "value_name": "300 g"},
+                    {"id": "PACKAGE_LENGTH", "value_name": "30 cm"},
+                    {"id": "PACKAGE_WIDTH", "value_name": "20 cm"},
+                    {"id": "PACKAGE_HEIGHT", "value_name": "20 cm"},
+                ],
+            }
+
+    monkeypatch.setattr(bit_store_link_remote_update, "MercadoLibreClient", FakeClient)
+    monkeypatch.setattr(
+        bit_store_link_remote_update,
+        "bulk_update_store_links",
+        lambda ids, changes: local_calls.append(("links", ids, dict(changes))) or {"changed": 1},
+    )
+    monkeypatch.setattr(
+        bit_store_link_remote_update,
+        "sync_pulled_product_fields_from_store_links",
+        lambda ids, fields: local_calls.append(("products", ids, list(fields))) or 1,
+    )
+    row = {
+        "id": 18,
+        "token_id": 74,
+        "store_name": "测试店铺",
+        "item_id": "MLM3308393921",
+        "weight_g": 250,
+        "package_length_cm": 20,
+        "package_width_cm": 20,
+        "package_height_cm": 20,
+    }
+    changes = bit_store_link_remote_update._normalize_changes({
+        "price": 12.5,
+        "weight_g": 300,
+        "package_length_cm": 30,
+        "net_proceeds_usd": 10,
+    })
+
+    result = bit_store_link_remote_update._update_one_link(
+        row, {"id": 74, "access_token": "token-value"}, changes
+    )
+
+    assert result["status"] == "success"
+    assert api_calls[0] == ("MLM3308393921", {"price": 12.5})
+    assert api_calls[2] == ("MLM3308393921", {"net_proceeds": 10})
+    package_attributes = api_calls[1][1]["attributes"]
+    assert {row["id"] for row in package_attributes} == {
+        "PACKAGE_WEIGHT", "PACKAGE_LENGTH", "PACKAGE_WIDTH", "PACKAGE_HEIGHT",
+    }
+    assert next(row for row in package_attributes if row["id"] == "PACKAGE_WEIGHT")["value_name"] == "300 g"
+    assert next(row for row in package_attributes if row["id"] == "PACKAGE_LENGTH")["value_name"] == "30 cm"
+    assert local_calls[0][0] == "links"
+    assert local_calls[0][2]["net_proceeds_usd"] == Decimal("10")
+    assert local_calls[1][0] == "products"
+
+
 def test_sync_run_records_three_day_clock_for_completed_store(monkeypatch):
     events = []
     token = {"id": 8, "display_name": "自动同步店铺"}
@@ -122,6 +213,55 @@ def test_sync_run_records_three_day_clock_for_completed_store(monkeypatch):
 
     assert state["status"] == "completed"
     assert events == [("started", 8), ("finished", 8, "success", "")]
+
+
+def test_store_sync_processes_multiple_stores_in_parallel(monkeypatch):
+    records = [
+        {"id": token_id, "display_name": f"并行店铺{token_id}"}
+        for token_id in range(1, 5)
+    ]
+    activity_lock = threading.Lock()
+    active = 0
+    max_active = 0
+
+    def fake_sync(record):
+        nonlocal active, max_active
+        with activity_lock:
+            active += 1
+            max_active = max(max_active, active)
+        time.sleep(0.05)
+        with activity_lock:
+            active -= 1
+        return {
+            "store": record["display_name"],
+            "token_id": record["id"],
+            "status": "success",
+            "discovered": 0,
+            "stored": 0,
+            "inserted": 0,
+            "updated": 0,
+            "details": 0,
+            "failed": 0,
+            "products": 0,
+        }
+
+    monkeypatch.setattr(bit_store_link_sync, "STORE_LINK_STORE_WORKERS", 3)
+    monkeypatch.setattr(bit_store_link_sync, "get_lock_owner", lambda _key: None)
+    monkeypatch.setattr(bit_store_link_sync, "_token_records", lambda _ids: records)
+    monkeypatch.setattr(bit_store_link_sync, "_sync_store", fake_sync)
+    monkeypatch.setattr(bit_store_link_sync, "mark_store_link_sync_started", lambda _id: None)
+    monkeypatch.setattr(
+        bit_store_link_sync,
+        "mark_store_link_sync_finished",
+        lambda _id, _status, _error="": None,
+    )
+
+    state = bit_store_link_sync.run_store_link_sync([])
+
+    assert state["status"] == "completed"
+    assert state["processed_stores"] == 4
+    assert max_active >= 2
+    assert any("3 家店铺并行" in line for line in state["logs"])
 
 
 def test_due_scheduler_starts_only_returned_store_ids(monkeypatch):
@@ -384,14 +524,22 @@ def test_list_store_links_filters_site_and_defaults_to_sales_descending():
             return {"total": 2}
 
         def fetchall(self):
+            if "FROM `mercado_store_site_settings`" in self.sql:
+                return [{"token_id": 1, "site_id": "MLM", "group_name": "运营一组"}]
             if f"FROM `{store.STORE_LINK_TABLE}`" in self.sql and "LIMIT %s OFFSET %s" in self.sql:
-                return [{"id": 1, "site_id": "MLM", "sold_quantity": 20, "is_current": 1}]
+                return [{
+                    "id": 1,
+                    "token_id": 1,
+                    "site_id": "MLM",
+                    "sold_quantity": 20,
+                    "is_current": 1,
+                }]
             if "FROM `mercado_store_tokens` AS tokens" in self.sql:
                 return [
                     {"token_id": 1, "store_name": "店铺一", "link_count": 2},
                     {"token_id": 2, "store_name": "新授权店铺", "link_count": 0},
                 ]
-            if "GROUP BY `site_id`" in self.sql:
+            if "GROUP BY links.`site_id`" in self.sql:
                 return [{"site_id": "MLM", "link_count": 2}]
             return []
 
@@ -405,7 +553,12 @@ def test_list_store_links_filters_site_and_defaults_to_sales_descending():
         def close(self):
             pass
 
-    result = store.list_store_links(site_id="mlm", connection_factory=Connection)
+    result = store.list_store_links(
+        site_id="mlm",
+        group_name="运营一组",
+        page_size=25,
+        connection_factory=Connection,
+    )
 
     list_sql, params = next(
         (sql, params)
@@ -414,9 +567,14 @@ def test_list_store_links_filters_site_and_defaults_to_sales_descending():
     )
     assert "`site_id` = %s" in list_sql
     assert "`remote_json`" not in list_sql
-    assert "COALESCE(`sold_quantity`, 0) DESC" in list_sql
+    assert "INNER JOIN (" in list_sql
+    assert "links.`token_id` = %s AND links.`site_id` = %s" in list_sql
+    assert "ORDER BY links.`sold_quantity` DESC" in list_sql
     assert params[0] == "MLM"
+    assert params[1:3] == (1, "MLM")
+    assert params[-2:] == (1000, 0)
     assert result["page_size"] == 1000
+    assert result["rows"][0]["group_name"] == "运营一组"
     assert result["stores"][1] == {
         "token_id": 2,
         "store_name": "新授权店铺",
@@ -424,6 +582,10 @@ def test_list_store_links_filters_site_and_defaults_to_sales_descending():
         "is_current": False,
     }
     assert result["sites"] == [{"site_id": "MLM", "link_count": 2, "is_current": False}]
+    assert result["groups"] == [
+        {"group_name": "运营一组"},
+        {"group_name": "__ungrouped__"},
+    ]
 
 
 def test_sync_store_writes_listing_batches_incrementally(monkeypatch):
@@ -509,6 +671,9 @@ def test_sync_store_writes_listing_batches_incrementally(monkeypatch):
     assert result["details"] == 5
     assert result["failed"] == 0
     assert result["products"] == 5
+    assert bit_store_link_sync._sync_state["discovered_count"] == 5
+    assert bit_store_link_sync._sync_state["detail_count"] == 5
+    assert bit_store_link_sync._sync_state["product_count"] == 5
     assert any("开始扫描 MLM · active" in line for line in bit_store_link_sync._sync_state["logs"])
     assert any("批次完成" in line for line in bit_store_link_sync._sync_state["logs"])
     assert [len(batch["items"]) for batch in captured["batches"]] == [2, 2, 1]
@@ -528,7 +693,9 @@ def test_workbench_store_link_ui_and_routes():
     assert b'data-tab="store-links"' in response.data
     assert b'id="store-link-sync-all-button"' in response.data
     assert b'id="store-link-sync-button"' in response.data
+    assert b'id="store-link-group-filter"' in response.data
     assert b'id="store-link-site-filter"' in response.data
+    assert b'id="store-link-page-buttons"' in response.data
     assert b'id="store-link-sales-sort"' in response.data
     assert b'id="store-link-sync-log"' in response.data
     assert "同步所有店铺链接".encode("utf-8") in response.data
@@ -536,13 +703,16 @@ def test_workbench_store_link_ui_and_routes():
     assert "销量从高到低".encode("utf-8") in response.data
     assert "净收益(USD)".encode("utf-8") in response.data
     assert "任务执行日志".encode("utf-8") in response.data
+    assert "修改美客多后台".encode("utf-8") in response.data
+    assert "美客多后台修改日志".encode("utf-8") in response.data
     assert "每 3 天自动同步链接状态".encode("utf-8") in response.data
-    assert "每页最多 1,000 条".encode("utf-8") in response.data
+    assert "每页 1,000 条".encode("utf-8") in response.data
 
     listing_data = {
         "rows": [{"id": 1, "item_id": "MLM1"}],
         "stores": [],
         "sites": [{"site_id": "MLM", "link_count": 1}],
+        "groups": [{"group_name": "运营一组", "link_count": 1}],
         "summary": {},
         "total": 1,
         "page": 1,
@@ -550,25 +720,42 @@ def test_workbench_store_link_ui_and_routes():
         "page_size": 1000,
     }
     with patch.object(workbench.bit_db_api, "list_mercado_store_links", return_value=listing_data) as listing:
-        response = client.get("/api/store-links?search=MLM1&site_id=MLM&sales_sort=asc")
+        response = client.get(
+            "/api/store-links?search=MLM1&site_id=MLM&group_name="
+            "%E8%BF%90%E8%90%A5%E4%B8%80%E7%BB%84&sales_sort=asc&page_size=10"
+        )
     assert response.status_code == 200
     assert response.get_json()["data"]["rows"][0]["item_id"] == "MLM1"
     assert response.get_json()["data"]["sites"][0]["site_id"] == "MLM"
     assert listing.call_args.kwargs["site_id"] == "MLM"
+    assert listing.call_args.kwargs["group_name"] == "运营一组"
     assert listing.call_args.kwargs["sales_sort"] == "asc"
     assert listing.call_args.kwargs["page_size"] == 1000
 
     with patch.object(
         workbench.bit_db_api,
         "bulk_update_mercado_store_links",
-        return_value={"matched": 2, "changed": 2},
+        return_value={
+            "started": True,
+            "state": {"running": True, "task_id": "remote-update-1", "total_links": 2},
+        },
     ) as update:
         response = client.post(
             "/api/store-links/bulk-update",
             json={"link_ids": [1, 2], "price": 9.9, "weight_g": 500},
         )
-    assert response.status_code == 200
+    assert response.status_code == 202
+    assert response.get_json()["data"]["running"] is True
     update.assert_called_once_with([1, 2], price=9.9, weight_g=500)
+
+    with patch.object(
+        workbench.bit_db_api,
+        "get_mercado_store_link_remote_update_status",
+        return_value={"running": False, "status": "completed", "success_count": 2},
+    ):
+        response = client.get("/api/store-links/bulk-update/status")
+    assert response.status_code == 200
+    assert response.get_json()["data"]["success_count"] == 2
 
 
 def test_start_store_link_sync_route_starts_background_task():

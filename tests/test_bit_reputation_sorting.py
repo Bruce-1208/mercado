@@ -1,4 +1,5 @@
 import unittest
+from datetime import datetime, timedelta
 from unittest import mock
 
 from bit import bit_mysql
@@ -36,6 +37,42 @@ class _Connection:
 
 
 class ReputationSortingTests(unittest.TestCase):
+    def test_latest_infraction_counts_are_grouped_by_shop_site_and_type(self):
+        recent_date = (datetime.now() - timedelta(days=1)).strftime("%Y-%m-%d")
+        old_date = (datetime.now() - timedelta(days=40)).strftime("%Y-%m-%d")
+        rows = [
+            {"店铺名": "店铺甲", "站点": "墨西哥", "类型": "侵权", "侵权时间": recent_date},
+            {"店铺名": "店铺甲", "站点": "墨西哥", "类型": "权利人", "侵权时间": recent_date},
+            {"店铺名": "店铺甲", "站点": "墨西哥", "类型": "权利人", "侵权时间": recent_date},
+            {"店铺名": "店铺甲", "站点": "巴西", "类型": "侵权", "侵权时间": recent_date},
+            {"店铺名": "店铺甲", "站点": "墨西哥", "类型": "侵权", "侵权时间": old_date},
+        ]
+        with (
+            mock.patch.object(
+                bit_mysql,
+                "_latest_infraction_snapshot_rows",
+                return_value=rows,
+            ),
+            mock.patch.object(
+                bit_mysql,
+                "_active_collection_snapshot_rows",
+                side_effect=lambda value: value,
+            ),
+        ):
+            counts = bit_mysql._latest_infraction_counts_by_shop_site(
+                object(),
+                recent_days=30,
+            )
+
+        self.assertEqual(
+            counts[("店铺甲", "墨西哥")],
+            {"侵权数量": 1, "权利人数量": 2},
+        )
+        self.assertEqual(
+            counts[("店铺甲", "巴西")],
+            {"侵权数量": 1, "权利人数量": 0},
+        )
+
     def test_latest_reputation_is_sorted_by_shop_total_traffic_across_sites(self):
         rows = [
             {
@@ -75,6 +112,9 @@ class ReputationSortingTests(unittest.TestCase):
                 ("单站点店铺", "巴西"),
             ],
         )
+        self.assertTrue(all(row["侵权数量"] == 0 for row in data["rows"]))
+        self.assertTrue(all(row["权利人数量"] == 0 for row in data["rows"]))
+        self.assertTrue(all(row["侵权统计天数"] == 30 for row in data["rows"]))
 
     def test_latest_collection_task_status_keeps_latest_site_result(self):
         class StatusCursor:

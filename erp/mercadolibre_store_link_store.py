@@ -12,6 +12,8 @@ from typing import Any, Callable, Iterable, Mapping
 
 STORE_LINK_TABLE = "erp_mercadolibre_store_links"
 STORE_LINK_SYNC_STATE_TABLE = "erp_mercadolibre_store_link_sync_state"
+STORE_LINK_SALES_PAGE_INDEX = "idx_erp_meli_store_link_sales_page"
+STORE_LINK_SITE_PAGE_INDEX = "idx_erp_meli_store_link_site_page"
 
 _schema_lock = threading.RLock()
 _store_link_schema_ready = False
@@ -96,7 +98,10 @@ def _migrate_store_link_table(cursor: Any) -> None:
             PRIMARY KEY (`id`),
             UNIQUE KEY `uniq_erp_meli_store_link` (`token_id`, `item_id`),
             KEY `idx_erp_meli_store_link_current` (`is_current`, `status`, `last_synced_at`),
-            KEY `idx_erp_meli_store_link_store` (`token_id`, `is_current`, `item_id`)
+            KEY `idx_erp_meli_store_link_store` (`token_id`, `is_current`, `item_id`),
+            KEY `idx_erp_meli_store_link_sales_page`
+                (`is_current`, `sold_quantity`, `last_synced_at`, `id`),
+            KEY `idx_erp_meli_store_link_site_page` (`is_current`, `site_id`)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
         """
     )
@@ -152,6 +157,32 @@ def ensure_store_link_table(cursor: Any) -> None:
         }
         if not {"sync_marker", "net_proceeds_manual", "remote_json"}.issubset(columns):
             _migrate_store_link_table(cursor)
+        required_indexes = {
+            STORE_LINK_SALES_PAGE_INDEX:
+                "(`is_current`, `sold_quantity`, `last_synced_at`, `id`)",
+            STORE_LINK_SITE_PAGE_INDEX: "(`is_current`, `site_id`)",
+        }
+        for index_name, columns_sql in required_indexes.items():
+            cursor.execute(
+                """
+                SELECT 1
+                FROM `information_schema`.`STATISTICS`
+                WHERE `TABLE_SCHEMA` = DATABASE() AND `TABLE_NAME` = %s
+                  AND `INDEX_NAME` = %s
+                LIMIT 1
+                """,
+                (STORE_LINK_TABLE, index_name),
+            )
+            if not cursor.fetchone():
+                try:
+                    cursor.execute(
+                        f"ALTER TABLE `{STORE_LINK_TABLE}` ADD INDEX "
+                        f"`{index_name}` {columns_sql}"
+                    )
+                except Exception as exc:
+                    # Another hot-reload process may finish the same online index first.
+                    if not exc.args or exc.args[0] != 1061:
+                        raise
         _store_link_schema_ready = True
 
 
@@ -723,6 +754,7 @@ def list_store_links(
     search: str = "",
     token_id: int | None = None,
     site_id: str = "",
+    group_name: str = "",
     status: str = "",
     sales_sort: str = "desc",
     current_only: bool = True,
@@ -731,96 +763,182 @@ def list_store_links(
     connection_factory: Callable[[], Any] | None = None,
 ) -> dict[str, Any]:
     page = max(1, int(page or 1))
-    page_size = max(10, min(int(page_size or 1000), 1000))
+    page_size = 1000
     conditions: list[str] = []
     values: list[Any] = []
     if current_only:
-        conditions.append("`is_current` = 1")
+        conditions.append("links.`is_current` = 1")
     if token_id not in (None, ""):
-        conditions.append("`token_id` = %s")
+        conditions.append("links.`token_id` = %s")
         values.append(int(token_id))
     site_id = str(site_id or "").strip().upper()[:16]
     if site_id:
-        conditions.append("`site_id` = %s")
+        conditions.append("links.`site_id` = %s")
         values.append(site_id)
+    group_name = str(group_name or "").strip()[:100]
     status = str(status or "").strip()
     if status:
-        conditions.append("`status` = %s")
+        conditions.append("links.`status` = %s")
         values.append(status)
     search = str(search or "").strip()
     if search:
         pattern = f"%{search}%"
         conditions.append(
-            "(`item_id` LIKE %s OR `title` LIKE %s OR `seller_sku` LIKE %s OR `store_name` LIKE %s)"
+            "(links.`item_id` LIKE %s OR links.`title` LIKE %s OR "
+            "links.`seller_sku` LIKE %s OR links.`store_name` LIKE %s)"
         )
         values.extend([pattern] * 4)
-    where_sql = " WHERE " + " AND ".join(conditions) if conditions else ""
+    links_from_sql = f" FROM `{STORE_LINK_TABLE}` AS links"
     sales_direction = "ASC" if str(sales_sort or "").strip().lower() == "asc" else "DESC"
     connection = (connection_factory or _connect)()
     try:
         with connection.cursor() as cursor:
             ensure_store_link_table(cursor)
             cursor.execute(
-                f"SELECT COUNT(*) AS `total` FROM `{STORE_LINK_TABLE}`{where_sql}",
-                tuple(values),
+                """
+                SELECT `token_id`, `site_id`, COALESCE(`group_name`, '') AS `group_name`
+                FROM `mercado_store_site_settings`
+                """
+            )
+            site_settings = [dict(row) for row in cursor.fetchall()]
+            group_map = {
+                (int(row.get("token_id") or 0), str(row.get("site_id") or "").upper()):
+                str(row.get("group_name") or "")
+                for row in site_settings
+            }
+            groups = [
+                {"group_name": value}
+                for value in sorted(
+                    {name for name in group_map.values() if name},
+                    key=lambda name: name.casefold(),
+                )
+            ]
+            groups.append({"group_name": "__ungrouped__"})
+
+            filtered_conditions = list(conditions)
+            filtered_values = list(values)
+            if group_name:
+                if group_name == "__ungrouped__":
+                    grouped_pairs = [pair for pair, name in group_map.items() if name]
+                    if grouped_pairs:
+                        pair_sql = " OR ".join(
+                            "(links.`token_id` = %s AND links.`site_id` = %s)"
+                            for _pair in grouped_pairs
+                        )
+                        filtered_conditions.append(f"NOT ({pair_sql})")
+                        for token_value, site_value in grouped_pairs:
+                            filtered_values.extend([token_value, site_value])
+                else:
+                    matching_pairs = [
+                        pair for pair, name in group_map.items() if name == group_name
+                    ]
+                    if matching_pairs:
+                        pair_sql = " OR ".join(
+                            "(links.`token_id` = %s AND links.`site_id` = %s)"
+                            for _pair in matching_pairs
+                        )
+                        filtered_conditions.append(f"({pair_sql})")
+                        for token_value, site_value in matching_pairs:
+                            filtered_values.extend([token_value, site_value])
+                    else:
+                        filtered_conditions.append("1 = 0")
+            where_sql = (
+                " WHERE " + " AND ".join(filtered_conditions)
+                if filtered_conditions else ""
+            )
+            cursor.execute(
+                f"SELECT COUNT(*) AS `total`{links_from_sql}{where_sql}",
+                tuple(filtered_values),
             )
             total = int((cursor.fetchone() or {}).get("total") or 0)
             pages = max(1, (total + page_size - 1) // page_size)
             page = min(page, pages)
+            page_order_sql = (
+                f"links.`sold_quantity` {sales_direction}, "
+                f"links.`last_synced_at` {sales_direction}, links.`id` {sales_direction}"
+            )
+            outer_order_sql = (
+                f"full_links.`sold_quantity` {sales_direction}, "
+                f"full_links.`last_synced_at` {sales_direction}, "
+                f"full_links.`id` {sales_direction}"
+            )
             cursor.execute(
                 f"""
-                SELECT `id`, `token_id`, `store_name`, `seller_id`, `site_id`,
-                       `item_id`, `title`, `permalink`, `thumbnail_url`, `status`,
-                       `price`, `currency_id`, `available_quantity`, `sold_quantity`,
-                       `seller_sku`, `category_id`, `listing_type_id`, `weight_g`,
-                       `volumetric_weight_kg`, `package_length_cm`, `package_width_cm`,
-                       `package_height_cm`, `net_proceeds_usd`, `price_manual`,
-                       `weight_manual`, `dimensions_manual`, `net_proceeds_manual`, `is_current`,
-                       `last_synced_at`, `created_at`, `updated_at`
-                FROM `{STORE_LINK_TABLE}`{where_sql} """
-                f"ORDER BY COALESCE(`sold_quantity`, 0) {sales_direction}, "
-                "`last_synced_at` DESC, `store_name` ASC, `item_id` ASC LIMIT %s OFFSET %s",
-                tuple(values + [page_size, (page - 1) * page_size]),
+                SELECT full_links.`id`, full_links.`token_id`, full_links.`store_name`,
+                       full_links.`seller_id`, full_links.`site_id`, full_links.`item_id`,
+                       full_links.`title`, full_links.`permalink`, full_links.`thumbnail_url`,
+                       full_links.`status`, full_links.`price`, full_links.`currency_id`,
+                       full_links.`available_quantity`, full_links.`sold_quantity`,
+                       full_links.`seller_sku`, full_links.`category_id`,
+                       full_links.`listing_type_id`, full_links.`weight_g`,
+                       full_links.`volumetric_weight_kg`, full_links.`package_length_cm`,
+                       full_links.`package_width_cm`, full_links.`package_height_cm`,
+                       full_links.`net_proceeds_usd`, full_links.`price_manual`,
+                       full_links.`weight_manual`, full_links.`dimensions_manual`,
+                       full_links.`net_proceeds_manual`, full_links.`is_current`,
+                       full_links.`last_synced_at`, full_links.`created_at`,
+                       full_links.`updated_at`
+                FROM `{STORE_LINK_TABLE}` AS full_links
+                INNER JOIN (
+                    SELECT links.`id`{links_from_sql}{where_sql}
+                    ORDER BY {page_order_sql} LIMIT %s OFFSET %s
+                ) AS page_ids ON page_ids.`id` = full_links.`id`
+                ORDER BY {outer_order_sql}
+                """,
+                tuple(filtered_values + [page_size, (page - 1) * page_size]),
             )
             rows = [_json_safe_row(row) for row in cursor.fetchall()]
+            for row in rows:
+                row["group_name"] = group_map.get(
+                    (int(row.get("token_id") or 0), str(row.get("site_id") or "").upper()),
+                    "",
+                )
             cursor.execute(
-                f"""
+                """
                 SELECT tokens.`id` AS `token_id`,
                        tokens.`display_name` AS `store_name`,
-                       SUM(CASE WHEN links.`is_current` = 1 THEN 1 ELSE 0 END) AS `link_count`,
-                       MAX(CASE WHEN links.`is_current` = 1 THEN links.`last_synced_at` END)
-                           AS `last_synced_at`
+                       NULL AS `link_count`, NULL AS `last_synced_at`
                 FROM `mercado_store_tokens` AS tokens
-                LEFT JOIN `{STORE_LINK_TABLE}` AS links ON links.`token_id` = tokens.`id`
-                GROUP BY tokens.`id`, tokens.`display_name`
                 ORDER BY tokens.`display_name`, tokens.`id`
                 """
             )
             stores = [_json_safe_row(row) for row in cursor.fetchall()]
             cursor.execute(
                 f"""
-                SELECT `site_id`, COUNT(*) AS `link_count`
-                FROM `{STORE_LINK_TABLE}`
-                WHERE `is_current` = 1 AND `site_id` IS NOT NULL AND `site_id` <> ''
-                GROUP BY `site_id` ORDER BY `site_id`
+                SELECT links.`site_id`, COUNT(*) AS `link_count`
+                FROM `{STORE_LINK_TABLE}` AS links
+                WHERE links.`is_current` = 1
+                  AND links.`site_id` IS NOT NULL AND links.`site_id` <> ''
+                GROUP BY links.`site_id` ORDER BY links.`site_id`
                 """
             )
             sites = [_json_safe_row(row) for row in cursor.fetchall()]
             cursor.execute(
-                f"""
-                SELECT COUNT(*) AS `all_count`,
-                       SUM(CASE WHEN `is_current` = 1 THEN 1 ELSE 0 END) AS `current_count`,
-                       COUNT(DISTINCT CASE WHEN `is_current` = 1 THEN `token_id` END) AS `store_count`,
-                       MAX(`last_synced_at`) AS `last_synced_at`
-                FROM `{STORE_LINK_TABLE}`
-                """
+                f"SELECT COUNT(*) AS `all_count` FROM `{STORE_LINK_TABLE}`"
             )
-            summary = _json_safe_row(cursor.fetchone() or {})
+            summary = dict(cursor.fetchone() or {})
+            cursor.execute(
+                f"SELECT COUNT(*) AS `current_count` FROM `{STORE_LINK_TABLE}` "
+                "WHERE `is_current` = 1"
+            )
+            summary.update(cursor.fetchone() or {})
+            cursor.execute(
+                f"SELECT COUNT(DISTINCT `token_id`) AS `store_count` "
+                f"FROM `{STORE_LINK_TABLE}` WHERE `is_current` = 1"
+            )
+            summary.update(cursor.fetchone() or {})
+            cursor.execute(
+                f"SELECT MAX(`last_synced_at`) AS `last_synced_at` "
+                f"FROM `{STORE_LINK_TABLE}` WHERE `is_current` = 1"
+            )
+            summary.update(cursor.fetchone() or {})
+            summary = _json_safe_row(summary)
         connection.commit()
         return {
             "rows": rows,
             "stores": stores,
             "sites": sites,
+            "groups": groups,
             "summary": summary,
             "total": total,
             "page": page,
@@ -841,6 +959,51 @@ def _decimal_change(field: str, value: Any) -> Decimal | None:
     if field != "net_proceeds_usd" and number < 0:
         raise ValueError(f"{field} 不能小于 0")
     return number
+
+
+def get_store_links_by_ids(
+    link_ids: Iterable[int],
+    *,
+    connection_factory: Callable[[], Any] | None = None,
+) -> list[dict[str, Any]]:
+    """Load the fields required to update the corresponding remote listings."""
+
+    ids: list[int] = []
+    for value in link_ids or []:
+        try:
+            link_id = int(value)
+        except (TypeError, ValueError) as exc:
+            raise ValueError(f"店铺链接编号无效：{value!r}") from exc
+        if link_id > 0 and link_id not in ids:
+            ids.append(link_id)
+    ids.sort()
+    if not ids:
+        raise ValueError("请至少勾选一条店铺链接")
+    if len(ids) > 1000:
+        raise ValueError("每次最多更新 1000 条店铺链接")
+    placeholders = ", ".join(["%s"] * len(ids))
+    connection = (connection_factory or _connect)()
+    try:
+        with connection.cursor() as cursor:
+            ensure_store_link_table(cursor)
+            cursor.execute(
+                f"""
+                SELECT `id`, `token_id`, `store_name`, `item_id`, `site_id`, `status`,
+                       `currency_id`, `price`, `weight_g`, `package_length_cm`,
+                       `package_width_cm`, `package_height_cm`, `net_proceeds_usd`
+                FROM `{STORE_LINK_TABLE}`
+                WHERE `id` IN ({placeholders})
+                ORDER BY `id`
+                """,
+                tuple(ids),
+            )
+            rows = [_json_safe_row(row) for row in cursor.fetchall()]
+        missing = sorted(set(ids).difference(int(row["id"]) for row in rows))
+        if missing:
+            raise ValueError(f"店铺链接不存在：{', '.join(map(str, missing))}")
+        return rows
+    finally:
+        connection.close()
 
 
 def bulk_update_store_links(
@@ -919,6 +1082,7 @@ __all__ = [
     "ensure_store_link_table",
     "ensure_store_link_sync_state_table",
     "finalize_store_snapshot",
+    "get_store_links_by_ids",
     "list_store_links",
     "list_due_store_link_token_ids",
     "listing_record",

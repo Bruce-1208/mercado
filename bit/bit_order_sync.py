@@ -4,10 +4,13 @@ from __future__ import annotations
 
 import os
 import json
+import logging
 import threading
 import time
 import uuid
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timedelta, timezone
+from decimal import Decimal, InvalidOperation
 
 from bit import bit_mysql, mercado_tokens
 from bit.bit_runtime_lock import InterProcessLock, get_lock_owner
@@ -69,11 +72,19 @@ _sync_state = {
     "next_run_at": "",
     "recent_window_hours": RECENT_ORDER_WINDOW_HOURS,
     "daily_status_last_run_date": "",
+    "daily_status_run_date": "",
     "next_daily_status_at": "",
 }
 _scheduler_guard = threading.Lock()
 _scheduler_started = False
 _scheduler_stop_event = threading.Event()
+_recent_sync_due_event = threading.Event()
+_financial_backfill_guard = threading.Lock()
+_financial_backfill_started = False
+_financial_backfill_stop_event = threading.Event()
+_image_backfill_guard = threading.Lock()
+_image_backfill_started = False
+_image_backfill_stop_event = threading.Event()
 
 
 def _now_text():
@@ -156,6 +167,31 @@ def _iso_millis(value):
     return value.isoformat(timespec="milliseconds").replace("+00:00", "Z")
 
 
+def _as_utc(value):
+    if isinstance(value, str):
+        value = datetime.fromisoformat(value.replace("Z", "+00:00"))
+    if not isinstance(value, datetime):
+        raise ValueError("增量同步游标时间无效")
+    if value.tzinfo is None:
+        return value.replace(tzinfo=timezone.utc)
+    return value.astimezone(timezone.utc)
+
+
+def _daily_status_bootstrap_from(now_utc):
+    state = bit_mysql.get_mercado_order_sync_schedule_state(DAILY_STATUS_STATE_KEY) or {}
+    updated_at = state.get("updated_at")
+    if isinstance(updated_at, str):
+        try:
+            updated_at = datetime.fromisoformat(updated_at)
+        except ValueError:
+            updated_at = None
+    if isinstance(updated_at, datetime):
+        if updated_at.tzinfo is None:
+            updated_at = updated_at.replace(tzinfo=WORKBENCH_LOCAL_TIMEZONE)
+        return updated_at.astimezone(timezone.utc)
+    return now_utc - timedelta(days=1)
+
+
 def _sync_mode(value):
     value = str(value or "").strip().lower()
     if value == DAILY_STATUS_MODE:
@@ -225,9 +261,76 @@ def _client_and_token(record):
     return MercadoLibreClient(str(record.get("access_token") or "")), record
 
 
+def _parallel_api_results(
+    client,
+    values,
+    callback,
+    *,
+    workers_env="MERCADO_API_BACKFILL_WORKERS",
+    default_workers=6,
+):
+    """Run independent read-only Mercado API calls with one session per worker."""
+    values = list(dict.fromkeys(values or ()))
+    if not values:
+        return {}
+    try:
+        configured_workers = int(os.environ.get(workers_env, str(default_workers)))
+    except (TypeError, ValueError):
+        configured_workers = default_workers
+    max_workers = max(1, min(12, configured_workers, len(values)))
+    worker_local = threading.local()
+
+    def call(value):
+        worker_client = getattr(worker_local, "client", None)
+        if worker_client is None:
+            if isinstance(client, MercadoLibreClient):
+                worker_client = MercadoLibreClient(
+                    client.access_token,
+                    timeout=client.timeout,
+                )
+            else:
+                worker_client = client
+            worker_local.client = worker_client
+        return callback(worker_client, value)
+
+    if max_workers == 1:
+        results = {}
+        for value in values:
+            try:
+                results[value] = (call(value), None)
+            except Exception as exc:
+                results[value] = (None, exc)
+        return results
+
+    results = {}
+    with ThreadPoolExecutor(max_workers=max_workers) as executor:
+        future_values = {executor.submit(call, value): value for value in values}
+        for future in as_completed(future_values):
+            value = future_values[future]
+            try:
+                results[value] = (future.result(), None)
+            except Exception as exc:
+                results[value] = (None, exc)
+    return results
+
+
 def _fetch_orders(client, seller_id, filters):
-    for order_id in client.iter_order_ids(str(seller_id), **filters):
-        yield client.get_order(order_id)
+    order_ids = list(client.iter_order_ids(str(seller_id), **filters))
+    fetched = _parallel_api_results(
+        client,
+        order_ids,
+        lambda worker, order_id: worker.get_order(order_id),
+        workers_env="MERCADO_ORDER_STATUS_WORKERS",
+        default_workers=8,
+    )
+    for order_id in order_ids:
+        order, error = fetched.get(
+            order_id,
+            (None, RuntimeError("订单详情接口未返回结果")),
+        )
+        if error is not None:
+            raise error
+        yield order
 
 
 def _item_image(item):
@@ -291,6 +394,135 @@ def _enrich_order_images(client, orders):
             product["secure_thumbnail"] = image_url
 
 
+def _shipment_sender_cost(payload):
+    senders = payload.get("senders") if isinstance(payload, dict) else None
+    if not isinstance(senders, list) or not senders:
+        raise ValueError("运单成本响应缺少 senders")
+    total = Decimal("0")
+    for sender in senders:
+        try:
+            total += Decimal(str((sender or {}).get("cost") or 0))
+        except (InvalidOperation, TypeError, ValueError) as exc:
+            raise ValueError("运单成本响应包含无效的 sender.cost") from exc
+    return max(Decimal("0"), total)
+
+
+def _cached_cost_entry(row):
+    payload = row.get("payload_json") or "{}"
+    if isinstance(payload, str):
+        try:
+            payload = json.loads(payload)
+        except (TypeError, ValueError):
+            payload = {}
+    return {
+        "shipping_id": str(row.get("shipping_id") or ""),
+        "seller_cost": row.get("seller_cost"),
+        "currency_id": str(row.get("currency_id") or "").upper(),
+        "payload": payload,
+        "checked_at": row.get("checked_at"),
+        "error": str(row.get("last_error") or ""),
+    }
+
+
+def _cache_is_fresh(entry, hours=24):
+    checked_at = (entry or {}).get("checked_at")
+    if isinstance(checked_at, str):
+        try:
+            checked_at = datetime.fromisoformat(checked_at)
+        except ValueError:
+            return False
+    return isinstance(checked_at, datetime) and checked_at >= datetime.now() - timedelta(hours=hours)
+
+
+def _sync_order_financials(
+    client,
+    record,
+    orders,
+    shipment_cache=None,
+    *,
+    force_refresh=False,
+):
+    """Fetch official shipment costs and allocate each cost across merged orders."""
+    shipment_cache = shipment_cache if isinstance(shipment_cache, dict) else {}
+    shipping_ids = list(dict.fromkeys(
+        str(((order or {}).get("shipping") or {}).get("id") or "").strip()
+        for order in orders or ()
+        if str(((order or {}).get("shipping") or {}).get("id") or "").strip()
+    ))
+    if not shipping_ids:
+        return {"shipments": 0, "orders": 0, "failed": 0}
+
+    unknown_ids = [value for value in shipping_ids if value not in shipment_cache]
+    database_cache = bit_mysql.list_mercado_shipment_cost_cache(unknown_ids)
+    entries = []
+    failed = 0
+    fetch_metadata = {}
+    for shipping_id in shipping_ids:
+        cached = shipment_cache.get(shipping_id)
+        if cached is None and shipping_id in database_cache:
+            cached = _cached_cost_entry(database_cache[shipping_id])
+        cached_success = bool(
+            cached
+            and cached.get("seller_cost") is not None
+            and cached.get("currency_id")
+        )
+        if cached and not force_refresh and _cache_is_fresh(cached):
+            shipment_cache[shipping_id] = cached
+            if cached_success:
+                entries.append(cached)
+            else:
+                failed += 1
+            continue
+        fetch_metadata[shipping_id] = (cached, cached_success)
+
+    fetched_costs = _parallel_api_results(
+        client,
+        list(fetch_metadata),
+        lambda worker, shipping_id: worker.get_shipment_costs(shipping_id),
+    )
+    for shipping_id, (cached, cached_success) in fetch_metadata.items():
+        payload, fetch_error = fetched_costs.get(
+            shipping_id,
+            (None, RuntimeError("运单成本接口未返回结果")),
+        )
+        try:
+            if fetch_error is not None:
+                raise fetch_error
+            currency_id = str(payload.get("currency_id") or "").strip().upper()
+            if not currency_id:
+                raise ValueError("运单成本响应缺少 currency_id")
+            entry = {
+                "shipping_id": shipping_id,
+                "seller_cost": _shipment_sender_cost(payload),
+                "currency_id": currency_id,
+                "payload": payload,
+                "checked_at": datetime.now(),
+                "error": "",
+            }
+        except Exception as exc:
+            failed += 1
+            _append_log(f"Shipment {shipping_id} 运费读取失败：{exc}")
+            if cached_success:
+                entry = {
+                    **cached,
+                    "checked_at": datetime.now(),
+                    "error": str(exc),
+                }
+            else:
+                entry = {
+                    "shipping_id": shipping_id,
+                    "seller_cost": None,
+                    "currency_id": "",
+                    "payload": {},
+                    "checked_at": datetime.now(),
+                    "error": str(exc),
+                }
+        shipment_cache[shipping_id] = entry
+        entries.append(entry)
+    saved = bit_mysql.save_mercado_shipment_costs(int(record["id"]), entries)
+    return {**saved, "failed": failed}
+
+
 def backfill_order_images(token_ids=None, limit_per_store=200):
     results = []
     for record in _token_records(token_ids):
@@ -335,6 +567,254 @@ def backfill_order_images(token_ids=None, limit_per_store=200):
     return results
 
 
+def backfill_order_sku_images(limit=50):
+    """Fill original purchased-variation images for historical orders."""
+    pending = bit_mysql.list_mercado_pending_order_image_rows(limit=limit)
+    grouped = {}
+    for row in pending:
+        grouped.setdefault(int(row["token_id"]), []).append(row)
+    checked = updated = failed = 0
+    for token_id, rows in grouped.items():
+        record = bit_mysql.get_mercado_store_token(token_id)
+        results = []
+        if not record:
+            results = [
+                {
+                    "order_id": row.get("order_id"),
+                    "token_id": token_id,
+                    "error": "店铺授权不存在",
+                }
+                for row in rows
+            ]
+        else:
+            try:
+                client, record = _client_and_token(record)
+                product_ids = [
+                    str(row.get("product_id") or "").strip()
+                    for row in rows
+                    if str(row.get("product_id") or "").strip()
+                ]
+                listing_results = _parallel_api_results(
+                    client,
+                    product_ids,
+                    lambda worker, product_id: worker.get_marketplace_item(product_id),
+                )
+                for row in rows:
+                    order_id = str(row.get("order_id") or "")
+                    product_id = str(row.get("product_id") or "").strip()
+                    try:
+                        raw_order = row.get("raw_json") or {}
+                        if isinstance(raw_order, str):
+                            raw_order = json.loads(raw_order or "{}")
+                        if not isinstance(raw_order, dict):
+                            raise ValueError("订单原始数据无效")
+                        products = [
+                            item.get("item")
+                            for item in (raw_order.get("order_items") or [])
+                            if isinstance(item, dict) and isinstance(item.get("item"), dict)
+                        ]
+                        product = next(
+                            (
+                                value for value in products
+                                if str(value.get("id") or "") == product_id
+                            ),
+                            products[0] if products else None,
+                        )
+                        if not product:
+                            raise ValueError("订单缺少 SKU 数据")
+                        listing, listing_error = listing_results.get(
+                            product_id,
+                            (None, RuntimeError("商品接口未返回结果")),
+                        )
+                        if listing_error is not None:
+                            raise listing_error
+                        image_url = _variation_image(
+                            listing,
+                            product.get("variation_id"),
+                        )
+                        if not image_url:
+                            raise ValueError("商品接口未返回 SKU 图片")
+                        product["sku_image_url"] = image_url
+                        product["secure_thumbnail"] = image_url
+                        results.append({
+                            "order_id": order_id,
+                            "token_id": token_id,
+                            "image_url": image_url,
+                            "raw_order": raw_order,
+                            "error": "",
+                        })
+                    except Exception as exc:
+                        results.append({
+                            "order_id": order_id,
+                            "token_id": token_id,
+                            "error": str(exc),
+                        })
+            except Exception as exc:
+                results = [
+                    {
+                        "order_id": row.get("order_id"),
+                        "token_id": token_id,
+                        "error": str(exc),
+                    }
+                    for row in rows
+                ]
+        saved = bit_mysql.save_mercado_order_image_results(results)
+        checked += int(saved.get("checked") or 0)
+        updated += int(saved.get("updated") or 0)
+        failed += int(saved.get("failed") or 0)
+    return {
+        "requested": len(pending),
+        "checked": checked,
+        "updated": updated,
+        "failed": failed,
+    }
+
+
+def _image_backfill_loop():
+    lock = InterProcessLock(
+        "mercado_order_image_backfill",
+        owner="bit_order_sync",
+        metadata={"task": "order_sku_image_backfill"},
+    )
+    while not _image_backfill_stop_event.is_set():
+        if not lock.acquire(timeout=0):
+            _image_backfill_stop_event.wait(60)
+            continue
+        try:
+            result = backfill_order_sku_images(limit=50)
+            if result["requested"]:
+                logging.info(
+                    "订单 SKU 图补全：检查 %s，成功 %s，失败 %s",
+                    result["checked"], result["updated"], result["failed"],
+                )
+        except Exception:
+            logging.exception("历史订单 SKU 图补全任务失败")
+            result = {"requested": 0}
+        finally:
+            lock.release()
+        wait_seconds = 2 if int(result.get("requested") or 0) >= 50 else 6 * 60 * 60
+        _image_backfill_stop_event.wait(wait_seconds)
+
+
+def ensure_order_image_backfill_worker():
+    global _image_backfill_started
+    if str(os.environ.get("MERCADO_ORDER_IMAGE_BACKFILL_DISABLED") or "").strip().lower() in (
+        "1", "true", "yes", "on",
+    ):
+        return False
+    with _image_backfill_guard:
+        if _image_backfill_started:
+            return True
+        thread = threading.Thread(
+            target=_image_backfill_loop,
+            name="mercado-order-image-backfill",
+            daemon=True,
+        )
+        thread.start()
+        _image_backfill_started = True
+    return True
+
+
+def backfill_order_financials(limit=200):
+    """Fill official shipment costs for existing orders, newest shipments first."""
+    pending = bit_mysql.list_mercado_pending_shipment_cost_rows(limit=limit)
+    grouped = {}
+    for row in pending:
+        grouped.setdefault(int(row["token_id"]), []).append(str(row["shipping_id"]))
+    processed = failed = updated_orders = 0
+    for token_id, shipping_ids in grouped.items():
+        record = bit_mysql.get_mercado_store_token(token_id)
+        if not record:
+            failed += len(shipping_ids)
+            continue
+        try:
+            client, record = _client_and_token(record)
+            result = _sync_order_financials(
+                client,
+                record,
+                [{"shipping": {"id": value}} for value in shipping_ids],
+                {},
+                force_refresh=True,
+            )
+            processed += len(shipping_ids)
+            failed += int(result.get("failed") or 0)
+            updated_orders += int(result.get("orders") or 0)
+        except Exception:
+            failed += len(shipping_ids)
+            logging.exception("店铺 %s 历史订单费用补全失败", token_id)
+    return {
+        "requested": len(pending),
+        "processed": processed,
+        "failed": failed,
+        "updated_orders": updated_orders,
+    }
+
+
+def _financial_backfill_loop():
+    lock = InterProcessLock(
+        "mercado_order_financial_backfill",
+        owner="bit_order_sync",
+        metadata={"task": "shipment_cost_backfill"},
+    )
+    try:
+        fee_result = bit_mysql.backfill_mercado_order_sale_fees()
+        if fee_result.get("updated"):
+            logging.info("历史订单手续费补算：%s 笔", fee_result["updated"])
+    except Exception:
+        logging.exception("历史订单手续费补算失败")
+    while not _financial_backfill_stop_event.is_set():
+        if not lock.acquire(timeout=0):
+            _financial_backfill_stop_event.wait(60)
+            continue
+        try:
+            result = backfill_order_financials(limit=200)
+            quoted_result = bit_mysql.refresh_mercado_order_quoted_freight(limit=200)
+            if result["requested"]:
+                logging.info(
+                    "订单实际运费每日同步：运单 %s，订单 %s，失败 %s",
+                    result["processed"], result["updated_orders"], result["failed"],
+                )
+            if quoted_result["requested"]:
+                logging.info(
+                    "订单标价运费计算：运单 %s，命中 %s，缺少资料 %s，订单 %s",
+                    quoted_result["requested"],
+                    quoted_result["quoted_shipments"],
+                    quoted_result["missing_shipments"],
+                    quoted_result["updated_orders"],
+                )
+        except Exception:
+            logging.exception("历史订单手续费、运费补全任务失败")
+            result = {"requested": 0}
+            quoted_result = {"requested": 0}
+        finally:
+            lock.release()
+        has_full_batch = (
+            int(result.get("requested") or 0) >= 200
+            or int(quoted_result.get("requested") or 0) >= 200
+        )
+        wait_seconds = 2 if has_full_batch else 6 * 60 * 60
+        _financial_backfill_stop_event.wait(wait_seconds)
+
+
+def ensure_order_financial_backfill_worker():
+    global _financial_backfill_started
+    if str(os.environ.get("MERCADO_ORDER_FINANCIAL_BACKFILL_DISABLED") or "").strip().lower() in (
+        "1", "true", "yes", "on",
+    ):
+        return False
+    with _financial_backfill_guard:
+        if _financial_backfill_started:
+            return True
+        thread = threading.Thread(
+            target=_financial_backfill_loop,
+            name="mercado-order-financial-backfill",
+            daemon=True,
+        )
+        thread.start()
+        _financial_backfill_started = True
+    return True
+
+
 def _sync_store(record, filters, *, enrich_images=True):
     token_id = int(record["id"])
     display_name = str(record.get("display_name") or record.get("nickname") or token_id)
@@ -344,6 +824,7 @@ def _sync_store(record, filters, *, enrich_images=True):
 
     client, record = _client_and_token(record)
     refreshed_after_unauthorized = False
+    shipment_cost_cache = {}
     while True:
         try:
             orders = _fetch_orders(client, seller_id, filters)
@@ -356,6 +837,7 @@ def _sync_store(record, filters, *, enrich_images=True):
                     if enrich_images:
                         _enrich_order_images(client, batch)
                     result = bit_mysql.upsert_mercado_synced_orders(record, batch)
+                    _sync_order_financials(client, record, batch, shipment_cost_cache)
                     totals["inserted"] += int(result.get("inserted") or 0)
                     totals["updated"] += int(result.get("updated") or 0)
                     batch = []
@@ -368,6 +850,7 @@ def _sync_store(record, filters, *, enrich_images=True):
                 if enrich_images:
                     _enrich_order_images(client, batch)
                 result = bit_mysql.upsert_mercado_synced_orders(record, batch)
+                _sync_order_financials(client, record, batch, shipment_cost_cache)
                 totals["inserted"] += int(result.get("inserted") or 0)
                 totals["updated"] += int(result.get("updated") or 0)
                 _state_update(
@@ -386,67 +869,121 @@ def _sync_store(record, filters, *, enrich_images=True):
             refreshed_after_unauthorized = True
 
 
-def _sync_old_store_statuses(record, cutoff):
-    """Refresh locally stored old orders without searching the entire account history."""
+def _sync_old_store_statuses(
+    record,
+    cutoff,
+    *,
+    run_date,
+    default_from,
+    window_to,
+):
+    """Incrementally refresh old orders and checkpoint every search page."""
 
     token_id = int(record["id"])
     display_name = str(record.get("display_name") or record.get("nickname") or token_id)
-    order_ids = bit_mysql.list_mercado_order_ids_before(token_id, cutoff)
-    client, record = _client_and_token(record)
-    refreshed_after_unauthorized = False
-    batch = []
-    totals = {"fetched": 0, "inserted": 0, "updated": 0, "failed": 0}
+    seller_id = str(record.get("meli_user_id") or "").strip()
+    if not seller_id:
+        raise ValueError("店铺授权缺少 Seller ID，请刷新 Token 或重新授权")
+    checkpoint = bit_mysql.begin_mercado_order_status_window(
+        token_id,
+        run_date,
+        _as_utc(default_from).replace(tzinfo=None),
+        _as_utc(window_to).replace(tzinfo=None),
+    )
+    if (
+        str(checkpoint.get("run_date") or "") == str(run_date)
+        and int(checkpoint.get("completed_for_run") or 0)
+    ):
+        return {
+            "store": display_name,
+            "status": "success",
+            "fetched": 0,
+            "inserted": 0,
+            "updated": 0,
+            "failed": 0,
+            "skipped": True,
+        }
 
-    def save_batch():
-        if not batch:
-            return
-        batch_size = len(batch)
-        result = bit_mysql.upsert_mercado_synced_orders(record, list(batch))
-        totals["inserted"] += int(result.get("inserted") or 0)
-        totals["updated"] += int(result.get("updated") or 0)
+    client, record = _client_and_token(record)
+    offset = max(0, int(checkpoint.get("next_offset") or 0))
+    checked_count = max(0, int(checkpoint.get("checked_count") or 0))
+    saved_count = max(0, int(checkpoint.get("updated_count") or 0))
+    failed_count = max(0, int(checkpoint.get("failed_count") or 0))
+    totals = {"fetched": 0, "inserted": 0, "updated": 0, "failed": 0}
+    filters = {
+        "sort": "date_asc",
+        "last_updated.from": _iso_millis(_as_utc(checkpoint["window_from"])),
+        "last_updated.to": _iso_millis(_as_utc(checkpoint["window_to"])),
+        "date_created.to": _iso_millis(_as_utc(cutoff)),
+    }
+
+    while True:
+        if _recent_sync_due_event.is_set():
+            return {"store": display_name, "status": "paused", "yielded": True, **totals}
+        page = client.search_order_ids_page(
+            seller_id,
+            offset=offset,
+            limit=50,
+            **filters,
+        )
+        order_ids = list(page.get("order_ids") or [])
+        details = _parallel_api_results(
+            client,
+            order_ids,
+            lambda worker, order_id: worker.get_order(order_id),
+            workers_env="MERCADO_ORDER_STATUS_WORKERS",
+            default_workers=8,
+        )
+        orders = []
+        page_failed = 0
+        for order_id in order_ids:
+            order, error = details.get(
+                order_id,
+                (None, RuntimeError("订单详情接口未返回结果")),
+            )
+            if error is not None:
+                page_failed += 1
+                _append_log(f"{display_name} 订单 {order_id} 状态读取失败：{error}")
+                continue
+            orders.append(order)
+
+        result = (
+            bit_mysql.upsert_mercado_synced_orders(record, orders)
+            if orders else {"inserted": 0, "updated": 0}
+        )
+        batch_size = len(orders)
+        batch_inserted = int(result.get("inserted") or 0)
+        batch_updated = int(result.get("updated") or 0)
+        totals["fetched"] += batch_size
+        totals["inserted"] += batch_inserted
+        totals["updated"] += batch_updated
+        totals["failed"] += page_failed
+        checked_count += len(order_ids)
+        saved_count += batch_size
+        failed_count += page_failed
+        offset = int(page.get("next_offset") or offset)
+        bit_mysql.checkpoint_mercado_order_status_window(
+            token_id,
+            offset,
+            checked_count,
+            saved_count,
+            failed_count,
+        )
         _state_update(
             fetched_count=int(_sync_state.get("fetched_count") or 0) + batch_size,
-            inserted_count=int(_sync_state.get("inserted_count") or 0)
-            + int(result.get("inserted") or 0),
-            updated_count=int(_sync_state.get("updated_count") or 0)
-            + int(result.get("updated") or 0),
+            inserted_count=int(_sync_state.get("inserted_count") or 0) + batch_inserted,
+            updated_count=int(_sync_state.get("updated_count") or 0) + batch_updated,
         )
-        batch.clear()
 
-    for order_id in order_ids:
-        while True:
-            try:
-                order = client.get_order(order_id)
-                break
-            except MercadoAPIError as exc:
-                message = str(exc)
-                unauthorized = "401" in message or "access token" in message.lower()
-                if unauthorized and not refreshed_after_unauthorized and record.get("refresh_token"):
-                    record = _refresh_token(token_id)
-                    client = MercadoLibreClient(str(record.get("access_token") or ""))
-                    refreshed_after_unauthorized = True
-                    continue
-                totals["failed"] += 1
-                _append_log(f"{display_name} 订单 {order_id} 状态读取失败：{exc}")
-                order = None
-                break
-            except Exception as exc:
-                totals["failed"] += 1
-                _append_log(f"{display_name} 订单 {order_id} 状态读取失败：{exc}")
-                order = None
-                break
-        if not order:
-            continue
-        batch.append(order)
-        totals["fetched"] += 1
-        if len(batch) >= 50:
-            save_batch()
-    save_batch()
-    return {
-        "store": display_name,
-        "status": "success" if totals["failed"] == 0 else "error",
-        **totals,
-    }
+        if not int(page.get("result_count") or 0) or offset >= int(page.get("total") or 0):
+            bit_mysql.complete_mercado_order_status_window(token_id)
+            return {
+                "store": display_name,
+                "status": "success" if totals["failed"] == 0 else "error",
+                **totals,
+            }
+        if _recent_sync_due_event.is_set():
+            return {"store": display_name, "status": "paused", "yielded": True, **totals}
 
 
 def run_order_sync(start_date="", end_date="", token_ids=None, mode="manual"):
@@ -455,6 +992,7 @@ def run_order_sync(start_date="", end_date="", token_ids=None, mode="manual"):
     start_text = end_text = ""
     manual_filters = None
     scheduled_filters = None
+    daily_context = None
     now_utc = datetime.now(timezone.utc)
     if mode == "manual":
         start_text, end_text, start_at, end_at = _date_range(start_date, end_date)
@@ -478,10 +1016,16 @@ def run_order_sync(start_date="", end_date="", token_ids=None, mode="manual"):
         }
     else:
         old_order_cutoff = now_utc - timedelta(hours=RECENT_ORDER_WINDOW_HOURS)
+        daily_run_date = now_utc.astimezone(WORKBENCH_LOCAL_TIMEZONE).date().isoformat()
         end_text = old_order_cutoff.astimezone(WORKBENCH_LOCAL_TIMEZONE).strftime(
             "%Y-%m-%dT%H:%M"
         )
         scheduled_filters = {"old_order_cutoff": old_order_cutoff}
+        daily_context = {
+            "run_date": daily_run_date,
+            "default_from": _daily_status_bootstrap_from(now_utc),
+            "window_to": now_utc,
+        }
 
     mode_messages = {
         "manual": f"正在拉取订单：{start_text} 至 {end_text}",
@@ -505,6 +1049,7 @@ def run_order_sync(start_date="", end_date="", token_ids=None, mode="manual"):
         failed_stores=0,
         started_at=_now_text(),
         finished_at="",
+        daily_status_run_date=(daily_context or {}).get("run_date", ""),
         results=[],
         logs=[],
     )
@@ -518,7 +1063,11 @@ def run_order_sync(start_date="", end_date="", token_ids=None, mode="manual"):
             f"共 {len(records)} 家店铺"
         )
     results = []
+    paused_for_recent = False
     for index, record in enumerate(records, start=1):
+        if mode == DAILY_STATUS_MODE and _recent_sync_due_event.is_set():
+            paused_for_recent = True
+            break
         store_name = str(record.get("display_name") or record.get("nickname") or record.get("id"))
         _state_update(current_store=store_name, processed_stores=index - 1)
         _append_log(f"开始同步 {store_name}")
@@ -528,10 +1077,16 @@ def run_order_sync(start_date="", end_date="", token_ids=None, mode="manual"):
                 result = _sync_old_store_statuses(
                     record,
                     filters["old_order_cutoff"],
+                    **daily_context,
                 )
             else:
                 result = _sync_store(record, filters, enrich_images=True)
             results.append(result)
+            if result.get("yielded"):
+                paused_for_recent = True
+                _append_log(f"{store_name} 已保存增量断点，让出执行权给最近 72 小时任务")
+                _state_update(processed_stores=index - 1, results=list(results))
+                break
             _append_log(
                 f"{store_name} 完成：读取 {result['fetched']}，新增 {result['inserted']}，"
                 f"更新 {result['updated']}，失败 {result.get('failed', 0)}"
@@ -545,6 +1100,19 @@ def run_order_sync(start_date="", end_date="", token_ids=None, mode="manual"):
             failed_stores=sum(1 for row in results if row.get("status") == "error"),
             results=list(results),
         )
+
+    if paused_for_recent:
+        message = "每日老订单增量刷新已保存断点，正在让出执行权给十五分钟任务"
+        _state_update(
+            running=False,
+            status="paused",
+            message=message,
+            current_store="",
+            finished_at=_now_text(),
+            results=list(results),
+        )
+        _append_log(message)
+        return order_sync_status()
 
     failed = sum(1 for row in results if row.get("status") == "error")
     final_status = "completed" if failed == 0 else "partial"
@@ -580,9 +1148,15 @@ def _run_background(start_date, end_date, token_ids, mode):
         )
         return
     try:
-        state = run_order_sync(start_date, end_date, token_ids, mode)
-        if mode == DAILY_STATUS_MODE and state.get("status") in ("completed", "partial"):
-            run_date = datetime.now(WORKBENCH_LOCAL_TIMEZONE).date().isoformat()
+        run_order_sync(start_date, end_date, token_ids, mode)
+        with _state_guard:
+            final_status = str(_sync_state.get("status") or "")
+            daily_run_date = str(_sync_state.get("daily_status_run_date") or "")
+        if mode == DAILY_STATUS_MODE and final_status in ("completed", "partial"):
+            run_date = str(
+                daily_run_date
+                or datetime.now(WORKBENCH_LOCAL_TIMEZONE).date().isoformat()
+            )
             bit_mysql.set_mercado_order_sync_schedule_value(
                 DAILY_STATUS_STATE_KEY,
                 run_date,
@@ -648,13 +1222,25 @@ def _scheduler_loop(interval_seconds):
             schedule_state_available = False
             last_daily_date = str(_sync_state.get("daily_status_last_run_date") or "")
         daily_due = schedule_state_available and last_daily_date != today
-        task_busy = bool(_sync_state.get("running") or get_lock_owner(ORDER_SYNC_LOCK_KEY))
-        if daily_due and not task_busy:
-            start_order_sync(mode=DAILY_STATUS_MODE)
-        elif time.monotonic() >= next_recent_run and not task_busy:
+        lock_owner = get_lock_owner(ORDER_SYNC_LOCK_KEY)
+        task_busy = bool(_sync_state.get("running") or lock_owner)
+        recent_due = time.monotonic() >= next_recent_run
+        active_mode = str(
+            ((lock_owner or {}).get("metadata") or {}).get("mode")
+            or _sync_state.get("mode")
+            or ""
+        )
+        if recent_due and task_busy:
+            if active_mode == DAILY_STATUS_MODE:
+                _recent_sync_due_event.set()
+        elif recent_due and not task_busy:
+            _recent_sync_due_event.clear()
             started, _state = start_order_sync(mode="automatic")
             if started:
                 next_recent_run = time.monotonic() + interval_seconds
+        elif daily_due and not task_busy:
+            _recent_sync_due_event.clear()
+            start_order_sync(mode=DAILY_STATUS_MODE)
 
         seconds_to_recent = max(0, int(next_recent_run - time.monotonic()))
         next_recent_at = datetime.now() + timedelta(seconds=seconds_to_recent)

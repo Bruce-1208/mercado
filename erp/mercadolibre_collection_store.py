@@ -1210,20 +1210,7 @@ def update_product_review_status(
         connection.close()
 
 
-def update_product_item(
-    product_item_id: int,
-    changes: Mapping[str, Any],
-    *,
-    connection_factory: Callable[[], Any] | None = None,
-) -> dict[str, Any]:
-    """Update user-editable product content and invalidate derived costs."""
-
-    try:
-        row_id = int(product_item_id)
-    except (TypeError, ValueError) as exc:
-        raise ValueError("产品记录编号无效") from exc
-    if row_id <= 0:
-        raise ValueError("产品记录编号无效")
+def _normalize_product_content_changes(changes: Mapping[str, Any]) -> dict[str, Any]:
     if not isinstance(changes, Mapping):
         raise ValueError("产品内容必须是对象")
 
@@ -1267,10 +1254,20 @@ def update_product_item(
 
     if not normalized:
         raise ValueError("没有可保存的产品内容")
+    return normalized
+
+
+def _product_content_update_plan(
+    normalized: Mapping[str, Any],
+) -> tuple[list[str], list[Any], bool]:
+    numeric_fields = {
+        "price", "weight_g", "package_length_cm", "package_width_cm",
+        "package_height_cm",
+    }
 
     assignments = [f"`{field}` = %s" for field in normalized]
     values = list(normalized.values())
-    metric_fields = set(numeric_rules) | {"category_id"}
+    metric_fields = numeric_fields | {"category_id"}
     profitability_stale = bool(metric_fields.intersection(normalized))
     if "weight_g" in normalized:
         assignments.append("`weight_basis` = 'manual_edit'")
@@ -1303,6 +1300,25 @@ def update_product_item(
                 "`category_name` = NULL",
                 "`commission_rate` = NULL",
             ))
+    return assignments, values, profitability_stale
+
+
+def update_product_item(
+    product_item_id: int,
+    changes: Mapping[str, Any],
+    *,
+    connection_factory: Callable[[], Any] | None = None,
+) -> dict[str, Any]:
+    """Update user-editable product content and invalidate derived costs."""
+
+    try:
+        row_id = int(product_item_id)
+    except (TypeError, ValueError) as exc:
+        raise ValueError("产品记录编号无效") from exc
+    if row_id <= 0:
+        raise ValueError("产品记录编号无效")
+    normalized = _normalize_product_content_changes(changes)
+    assignments, values, profitability_stale = _product_content_update_plan(normalized)
 
     connection = (connection_factory or _connect)()
     try:
@@ -1372,6 +1388,89 @@ def update_product_item(
         return {
             "product_item_id": row_id,
             "changed": changed,
+            "profitability_refresh_pending": profitability_stale,
+        }
+    except BaseException:
+        connection.rollback()
+        raise
+    finally:
+        connection.close()
+
+
+def update_product_items(
+    product_item_ids: Iterable[int],
+    changes: Mapping[str, Any],
+    *,
+    connection_factory: Callable[[], Any] | None = None,
+) -> dict[str, Any]:
+    """Apply explicitly selected content fields to multiple products atomically."""
+
+    ids = _normalize_row_ids(product_item_ids, empty_message="请至少勾选一个产品")
+    normalized = _normalize_product_content_changes(changes)
+    assignments, values, profitability_stale = _product_content_update_plan(normalized)
+    placeholders = ", ".join(["%s"] * len(ids))
+    connection = (connection_factory or _connect)()
+    try:
+        with connection.cursor() as cursor:
+            ensure_collection_tables(cursor)
+            cursor.execute(
+                f"UPDATE `{PRODUCT_TABLE}` SET {', '.join(assignments)} "
+                f"WHERE `id` IN ({placeholders})",
+                tuple(values + ids),
+            )
+            changed = int(cursor.rowcount or 0)
+
+            mirrored_fields = [
+                field for field in normalized
+                if field in {
+                    "title", "main_image_url", "price", "weight_g", "category_id",
+                    "package_length_cm", "package_width_cm", "package_height_cm",
+                }
+            ]
+            if mirrored_fields:
+                collection_assignments = [
+                    f"c.`{field}` = p.`{field}`" for field in mirrored_fields
+                ]
+                if "weight_g" in normalized:
+                    collection_assignments.append("c.`weight_basis` = 'manual_edit'")
+                if set(normalized).intersection({
+                    "package_length_cm", "package_width_cm", "package_height_cm",
+                }):
+                    collection_assignments.append(
+                        "c.`volumetric_weight_kg` = p.`volumetric_weight_kg`"
+                    )
+                if profitability_stale:
+                    collection_assignments.extend((
+                        "c.`sale_price_usd` = NULL",
+                        "c.`commission_amount_local` = NULL",
+                        "c.`commission_amount_usd` = NULL",
+                        "c.`shipping_fee_local` = NULL",
+                        "c.`shipping_fee_usd` = NULL",
+                        "c.`billable_weight_g` = NULL",
+                        "c.`shipping_api_billable_weight_g` = NULL",
+                        "c.`net_proceeds_usd` = NULL",
+                        "c.`profitability_updated_at` = NULL",
+                        "c.`profitability_source` = 'manual_edit_pending'",
+                        "c.`profitability_error` = ''",
+                    ))
+                    if "category_id" in normalized:
+                        collection_assignments.extend((
+                            "c.`category_name` = NULL",
+                            "c.`commission_rate` = NULL",
+                        ))
+                cursor.execute(
+                    f"UPDATE `{COLLECTION_TABLE}` AS c "
+                    f"INNER JOIN `{PRODUCT_TABLE}` AS p "
+                    "ON c.`source_item_id` = p.`source_item_id` "
+                    f"SET {', '.join(collection_assignments)} "
+                    f"WHERE p.`id` IN ({placeholders})",
+                    tuple(ids),
+                )
+        connection.commit()
+        return {
+            "requested": len(ids),
+            "changed": changed,
+            "updated_fields": list(normalized),
             "profitability_refresh_pending": profitability_stale,
         }
     except BaseException:
@@ -1610,6 +1709,74 @@ def upsert_pulled_store_links_to_products(
             )
         connection.commit()
         return {"count": len(values), "skipped": skipped}
+    except BaseException:
+        connection.rollback()
+        raise
+    finally:
+        connection.close()
+
+
+def sync_pulled_product_fields_from_store_links(
+    link_ids: Iterable[int],
+    fields: Iterable[str],
+    *,
+    connection_factory: Callable[[], Any] | None = None,
+) -> int:
+    """Mirror confirmed remote listing edits into pulled product rows."""
+
+    ids = sorted({int(value) for value in link_ids or [] if int(value) > 0})
+    if not ids:
+        return 0
+    allowed = {
+        "price", "weight_g", "package_length_cm", "package_width_cm",
+        "package_height_cm", "net_proceeds_usd",
+    }
+    selected = [field for field in fields or [] if field in allowed]
+    if not selected:
+        return 0
+    assignments: list[str] = []
+    if "price" in selected:
+        assignments.extend([
+            "products.`price` = links.`price`",
+            "products.`sale_price_usd` = CASE WHEN links.`currency_id` = 'USD' "
+            "THEN links.`price` ELSE products.`sale_price_usd` END",
+        ])
+    if "weight_g" in selected:
+        assignments.append("products.`weight_g` = links.`weight_g`")
+    for field in ("package_length_cm", "package_width_cm", "package_height_cm"):
+        if field in selected:
+            assignments.append(f"products.`{field}` = links.`{field}`")
+    if {"package_length_cm", "package_width_cm", "package_height_cm"}.intersection(selected):
+        assignments.append("products.`volumetric_weight_kg` = links.`volumetric_weight_kg`")
+    if {"weight_g", "package_length_cm", "package_width_cm", "package_height_cm"}.intersection(selected):
+        assignments.append("products.`weight_basis` = 'mercado_remote_update'")
+    if "net_proceeds_usd" in selected:
+        assignments.extend([
+            "products.`net_proceeds_usd` = links.`net_proceeds_usd`",
+            "products.`profitability_source` = 'mercado_remote_update'",
+            "products.`profitability_updated_at` = CURRENT_TIMESTAMP",
+            "products.`profitability_error` = NULL",
+        ])
+    assignments.append("products.`updated_at` = CURRENT_TIMESTAMP")
+    placeholders = ", ".join(["%s"] * len(ids))
+    connection = (connection_factory or _connect)()
+    try:
+        with connection.cursor() as cursor:
+            ensure_collection_tables(cursor)
+            cursor.execute(
+                f"""
+                UPDATE `{PRODUCT_TABLE}` AS products
+                INNER JOIN `erp_mercadolibre_store_links` AS links
+                    ON links.`item_id` = products.`source_item_id`
+                SET {", ".join(assignments)}
+                WHERE links.`id` IN ({placeholders})
+                  AND products.`source_type` = 'pulled'
+                """,
+                tuple(ids),
+            )
+            changed = int(cursor.rowcount or 0)
+        connection.commit()
+        return changed
     except BaseException:
         connection.rollback()
         raise

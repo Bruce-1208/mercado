@@ -28,6 +28,78 @@ def test_login_page_contains_six_hour_remember_option():
     assert "zeshun-remembered-username" in template
 
 
+def test_zeshun_brand_logo_is_used_on_login_and_workbench():
+    template_dir = Path(bit_interface.app.template_folder)
+    login_template = (template_dir / "login.html").read_text(encoding="utf-8")
+    workbench_template = (template_dir / "index.html").read_text(encoding="utf-8")
+    logo_path = Path(bit_interface.app.static_folder, "images", "zeshun-monogram-gold.png")
+
+    for template in (login_template, workbench_template):
+        assert "images/zeshun-monogram-gold.png" in template
+        assert "武汉泽顺 Logo" in template
+
+    assert "武汉·泽顺商贸有限公司" in login_template
+    assert "Wuhan Zeshun Trading Co., Ltd." in login_template
+    assert logo_path.read_bytes().startswith(b"\x89PNG\r\n\x1a\n")
+
+
+def test_interface_hot_reload_defaults_to_enabled(monkeypatch):
+    monkeypatch.delenv("BIT_INTERFACE_HOT_RELOAD", raising=False)
+
+    assert bit_interface.interface_hot_reload_enabled() is True
+    assert bit_interface.interface_hot_reload_enabled("true") is True
+    assert bit_interface.interface_hot_reload_enabled("0") is False
+    assert bit_interface.is_werkzeug_reloader_child(
+        {"WERKZEUG_RUN_MAIN": "true"}
+    ) is True
+    assert bit_interface.is_werkzeug_reloader_child({}) is False
+    assert bit_interface.app.config["TEMPLATES_AUTO_RELOAD"] is True
+    assert bit_interface.app.config["SEND_FILE_MAX_AGE_DEFAULT"] == 0
+
+    response = bit_interface.app.test_client().get("/login")
+    assert response.headers["Cache-Control"] == "no-store, no-cache, must-revalidate"
+    assert response.headers["Pragma"] == "no-cache"
+
+
+def test_hot_reload_parent_owns_lock_and_child_starts_services(monkeypatch):
+    events = []
+    run_options = []
+
+    class FakeLock:
+        def __init__(self, *args, **kwargs):
+            events.append("lock-created")
+
+        def acquire(self, timeout=0):
+            events.append("lock-acquired")
+            return True
+
+        def release(self):
+            events.append("lock-released")
+
+    monkeypatch.setenv("BIT_INTERFACE_HOT_RELOAD", "1")
+    monkeypatch.delenv("WERKZEUG_RUN_MAIN", raising=False)
+    monkeypatch.setattr(bit_interface, "InterProcessLock", FakeLock)
+    monkeypatch.setattr(
+        bit_interface,
+        "start_interface_background_services",
+        lambda: events.append("services-started"),
+    )
+    monkeypatch.setattr(bit_interface.app, "run", lambda **kwargs: run_options.append(kwargs))
+
+    assert bit_interface.run_interface_server() is True
+    assert events == ["lock-created", "lock-acquired", "lock-released"]
+    assert run_options[0]["use_reloader"] is True
+    assert run_options[0]["use_debugger"] is False
+
+    events.clear()
+    run_options.clear()
+    monkeypatch.setenv("WERKZEUG_RUN_MAIN", "true")
+
+    assert bit_interface.run_interface_server() is True
+    assert events == ["services-started"]
+    assert run_options[0]["use_reloader"] is True
+
+
 def test_remembered_login_uses_six_hour_permanent_session(monkeypatch):
     monkeypatch.setattr(
         bit_interface,

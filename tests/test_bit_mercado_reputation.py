@@ -1,3 +1,4 @@
+import re
 from pathlib import Path
 
 from bit import bit_db_api
@@ -173,6 +174,38 @@ def test_console_template_keeps_old_reputation_and_adds_api_panel():
     assert "/api/mercado-reputation/refresh" in template
     assert "/api/mercado-reputation/status" in template
     assert 'id="api-reputation-store"' not in template
+    assert "近30天侵权" in template
+    assert "近30天权利人" in template
+    assert "row.infraction_count" in template
+    assert "row.rights_holder_count" in template
+    assert 'row["侵权数量"]' in template
+    assert 'row["权利人数量"]' in template
+    reputation_table = re.search(
+        r'<table class="reputation-table reputation-data-table">(.*?)</table>',
+        template,
+        re.DOTALL,
+    )
+    api_reputation_table = re.search(
+        r'<table class="reputation-table api-reputation-data-table">(.*?)</table>',
+        template,
+        re.DOTALL,
+    )
+    plain_reputation_tables = re.findall(
+        r'<table class="reputation-table">(.*?)</table>',
+        template,
+        re.DOTALL,
+    )
+    assert reputation_table is not None
+    assert 'id="reputation-body"' in reputation_table.group(1)
+    assert api_reputation_table is not None
+    assert 'id="api-reputation-body"' in api_reputation_table.group(1)
+    assert any(
+        'id="infraction-body"' in table for table in plain_reputation_tables
+    )
+    assert ".reputation-data-table td:nth-child(12) { width: 520px; }" in template
+    assert "Math.round(canvas.getBoundingClientRect().width || 0)" in template
+    assert ".reputation-data-table td:nth-child(10) { width: 72px; }" in template
+    assert ".reputation-data-table td:nth-child(11) { width: 84px; }" in template
 
 
 def test_console_reputation_route_returns_normalized_data_without_token(monkeypatch):
@@ -294,9 +327,16 @@ def test_default_reputation_collection_uses_api_and_writes_legacy_table(monkeypa
         bit_reputation_info,
         "list_mercado_store_tokens",
         lambda: {
-            "rows": [
-                {"id": 11, "display_name": "泽顺店铺", "nickname": "SELLER_A"},
-            ]
+                "rows": [
+                    {
+                        "id": 11,
+                        "display_name": "泽顺店铺",
+                        "nickname": "SELLER_A",
+                        "site_settings": [
+                            {"site_id": "MLM", "visit_stats_enabled": True},
+                        ],
+                    },
+                ]
         },
     )
 
@@ -320,6 +360,21 @@ def test_default_reputation_collection_uses_api_and_writes_legacy_table(monkeypa
         }
 
     monkeypatch.setattr(bit_reputation_info, "get_mercado_store_reputation", fetch)
+    monkeypatch.setattr(
+        bit_reputation_info,
+        "get_latest_infraction_info",
+        lambda _days: {
+            "recent_days": 30,
+            "summary": [
+                {
+                    "店铺名": "泽顺店铺",
+                    "站点": "墨西哥",
+                    "侵权": 3,
+                    "权利人": 2,
+                }
+            ],
+        },
+    )
     monkeypatch.setattr(
         bit_reputation_info,
         "_execute_reputation_rows",
@@ -358,6 +413,8 @@ def test_default_reputation_collection_uses_api_and_writes_legacy_table(monkeypa
     assert result["failed_stores"] == 0
     assert result["total_sites"] == 1
     assert result["api_rows"][0]["store_name"] == "泽顺店铺"
+    assert result["api_rows"][0]["infraction_count"] == 3
+    assert result["api_rows"][0]["rights_holder_count"] == 2
     assert database_calls[0][1] == {}
     legacy_row = database_calls[0][0][0]
     assert legacy_row[:7] == [
@@ -386,10 +443,25 @@ def test_selected_api_reputation_update_merges_only_returned_site(monkeypatch):
         bit_reputation_info,
         "list_mercado_store_tokens",
         lambda: {
-            "rows": [
-                {"id": 21, "display_name": "选定店铺", "nickname": "SELECTED"},
-                {"id": 22, "display_name": "其他店铺", "nickname": "OTHER"},
-            ]
+                "rows": [
+                    {
+                        "id": 21,
+                        "display_name": "选定店铺",
+                        "nickname": "SELECTED",
+                        "site_settings": [
+                            {"site_id": "MLM", "visit_stats_enabled": False},
+                            {"site_id": "MLB", "visit_stats_enabled": True},
+                        ],
+                    },
+                    {
+                        "id": 22,
+                        "display_name": "其他店铺",
+                        "nickname": "OTHER",
+                        "site_settings": [
+                            {"site_id": "MLB", "visit_stats_enabled": True},
+                        ],
+                    },
+                ]
         },
     )
     monkeypatch.setattr(
@@ -411,6 +483,11 @@ def test_selected_api_reputation_update_merges_only_returned_site(monkeypatch):
                 },
             ]
         },
+    )
+    monkeypatch.setattr(
+        bit_reputation_info,
+        "get_latest_infraction_info",
+        lambda _days: {"recent_days": 30, "summary": []},
     )
     monkeypatch.setattr(
         bit_reputation_info,
@@ -441,6 +518,23 @@ def test_selected_api_reputation_update_merges_only_returned_site(monkeypatch):
         "merge_latest": True,
         "replace_targets": [("选定店铺", "巴西")],
     }
+
+
+def test_reputation_scope_requires_explicit_visit_stats_switch():
+    assert bit_reputation_info._token_enabled_site_codes(
+        {"display_name": "无站点配置"},
+        "visit_stats_enabled",
+    ) == set()
+    assert bit_reputation_info._token_enabled_site_codes(
+        {
+            "site_settings": [
+                {"site_id": "MLM"},
+                {"site_id": "MLB", "visit_stats_enabled": False},
+                {"site_id": "MLC", "visit_stats_enabled": "true"},
+            ]
+        },
+        "visit_stats_enabled",
+    ) == {"MLC"}
 
 
 def test_hybrid_collection_merges_browser_traffic_without_reputation_page(monkeypatch):
@@ -484,6 +578,21 @@ def test_hybrid_collection_merges_browser_traffic_without_reputation_page(monkey
                     "sales_completed": 99,
                 },
             ]
+        },
+    )
+    monkeypatch.setattr(
+        bit_reputation_info,
+        "get_latest_infraction_info",
+        lambda _days: {
+            "recent_days": 30,
+            "summary": [
+                {
+                    "店铺名": "混合店铺",
+                    "站点": "墨西哥",
+                    "侵权": 7,
+                    "权利人": 4,
+                }
+            ],
         },
     )
     monkeypatch.setattr(
@@ -576,6 +685,8 @@ def test_hybrid_collection_merges_browser_traffic_without_reputation_page(monkey
         "[11, 22, 33]",
     ]
     assert result["api_rows"][0]["visits"] == "[11, 22, 33]"
+    assert result["api_rows"][0]["infraction_count"] == 7
+    assert result["api_rows"][0]["rights_holder_count"] == 4
     assert result["failed_stores"] == 0
 
 

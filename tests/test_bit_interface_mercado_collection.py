@@ -98,12 +98,25 @@ def _reset_publish_state():
         )
 
 
-def test_workbench_contains_collection_and_product_list_ui():
+def test_workbench_splits_collection_and_product_list_into_separate_modules():
     client = _client()
     response = client.get("/")
 
     assert response.status_code == 200
     assert b'data-tab="mercado-collection"' in response.data
+    assert b'data-tab="mercado-products"' in response.data
+    assert b'id="tab-mercado-collection"' in response.data
+    assert b'id="tab-mercado-products"' in response.data
+    assert b'id="mercado-list-collection-host"' in response.data
+    assert b'id="mercado-list-products-host"' in response.data
+    assert b'id="mercado-list-module"' in response.data
+    assert b'id="mercado-view-collection"' not in response.data
+    assert b'id="mercado-view-products"' not in response.data
+    assert "商品采集".encode("utf-8") in response.data
+    assert "产品资料库".encode("utf-8") in response.data
+    assert "审核工作区".encode("utf-8") in response.data
+    assert b'mountMercadoListModule("collection")' in response.data
+    assert b'mountMercadoListModule("products")' in response.data
     assert b'data-tab="mercado-publish-records"' in response.data
     assert b'id="tab-mercado-publish-records"' in response.data
     assert b'id="publish-record-body"' in response.data
@@ -116,8 +129,8 @@ def test_workbench_contains_collection_and_product_list_ui():
     assert b'class="tab-page mercado-workbench"' in response.data
     assert b'class="tab-heading mercado-workbench-heading"' in response.data
     assert b'class="market-flow-indicator"' in response.data
-    assert "采集商品".encode("utf-8") in response.data
-    assert "审核数据".encode("utf-8") in response.data
+    assert "创建任务".encode("utf-8") in response.data
+    assert "审核资料".encode("utf-8") in response.data
     assert b'class="market-task-dashboard"' in response.data
     assert b'class="market-collector-help"' in response.data
     assert b'id="mercado-add-selected"' in response.data
@@ -175,7 +188,17 @@ def test_workbench_contains_collection_and_product_list_ui():
     assert b'id="mercado-source-collected"' in response.data
     assert b'id="mercado-source-pulled"' in response.data
     assert b'id="mercado-source-zying"' in response.data
+    assert b'class="market-source-filter"' in response.data
+    assert b'class="market-source-option active" id="mercado-source-all"' in response.data
+    assert b'class="market-source-tag-icon"' in response.data
+    assert "美客多采集".encode("utf-8") in response.data
+    assert "店铺同步".encode("utf-8") in response.data
     assert "智赢采集".encode("utf-8") in response.data
+    assert b'id="mercado-list-pagination"' in response.data
+    assert b'id="mercado-page-size"' in response.data
+    assert b'<option value="500" selected>500' in response.data
+    assert b'offset: String((mercadoListPage - 1) * mercadoListPageSize)' in response.data
+    assert b'function goToMercadoListPage(page)' in response.data
     assert b'id="mercado-review-filter"' in response.data
     assert b'id="mercado-publish-filter"' in response.data
     assert b'id="mercado-weight-min"' in response.data
@@ -185,6 +208,14 @@ def test_workbench_contains_collection_and_product_list_ui():
     assert b'id="mercado-review-bulk"' in response.data
     assert b'id="mercado-product-edit-dialog"' in response.data
     assert b'id="mercado-product-edit-description"' in response.data
+    assert b'id="mercado-bulk-edit-selected"' in response.data
+    assert b'id="mercado-bulk-edit-dialog"' in response.data
+    assert b'id="mercado-bulk-edit-form"' in response.data
+    assert b'data-bulk-field="weight_g"' in response.data
+    assert b'data-bulk-field="dimensions"' in response.data
+    assert "只覆盖已勾选的字段".encode("utf-8") in response.data
+    assert "批量修改所选".encode("utf-8") in response.data
+    assert b'/api/mercado-products/bulk-edit' in response.data
     assert "修改产品".encode("utf-8") in response.data
     assert "采集原价".encode("utf-8") in response.data
     assert b".market-product-table th:nth-child(5)" in response.data
@@ -597,7 +628,7 @@ def test_product_list_filters_and_review_status_endpoint():
             "/api/mercado-products?search=bag&source_type=pulled&review_status=risk"
             "&publish_status=failed&weight_min=100&weight_max=500"
             "&price_min=200&price_max=900&net_proceeds_min=-5&net_proceeds_max=40"
-            "&date_from=2026-08-01&date_to=2026-08-25"
+            "&date_from=2026-08-01&date_to=2026-08-25&limit=500&offset=500"
         )
 
     assert response.status_code == 200
@@ -605,7 +636,7 @@ def test_product_list_filters_and_review_status_endpoint():
     list_products.assert_called_once_with(
         search="bag",
         limit=500,
-        offset=0,
+        offset=500,
         source_type="pulled",
         review_status="risk",
         publish_status="failed",
@@ -664,6 +695,42 @@ def test_product_content_update_endpoint():
     expected = dict(changes)
     expected.pop("unknown_field")
     update_product.assert_called_once_with(9, expected)
+
+
+def test_bulk_product_content_update_endpoint():
+    _reset_publish_state()
+    client = _client()
+    changes = {
+        "weight_g": 560,
+        "category_id": "MLM999",
+        "unknown_field": "ignored",
+    }
+    with patch.object(
+        workbench,
+        "db_update_mercado_product_items",
+        return_value={
+            "requested": 3,
+            "changed": 3,
+            "updated_fields": ["category_id", "weight_g"],
+            "profitability_refresh_pending": True,
+        },
+    ) as update_products:
+        response = client.patch(
+            "/api/mercado-products/bulk-edit",
+            json={"product_item_ids": [7, 9, 12], "changes": changes},
+        )
+
+    assert response.status_code == 200
+    assert response.get_json()["data"]["requested"] == 3
+    update_products.assert_called_once_with(
+        [7, 9, 12], {"weight_g": 560, "category_id": "MLM999"}
+    )
+
+    response = client.patch(
+        "/api/mercado-products/bulk-edit",
+        json={"product_item_ids": [7], "changes": []},
+    )
+    assert response.status_code == 422
 
 
 def test_collection_and_product_delete_endpoints():

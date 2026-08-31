@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import json
+import threading
+import time
 from pathlib import Path
 
 import pytest
@@ -209,6 +211,66 @@ def test_claim_message_validates_receiver_role_and_uses_action_endpoint():
     assert session.calls[0][2]["json"]["receiver_role"] == "complainant"
     with pytest.raises(ValueError, match="接收方"):
         client.send_claim_message(5294629673, "text", receiver_role="buyer")
+
+
+def test_claims_1_detail_and_messages_fall_back_to_post_purchase_api():
+    unavailable = {
+        "message": "This functionality is not available for Claims 1.0. Please see the documentation"
+    }
+    session = Session(
+        [
+            Response(payload={"id": 5568513900, "reason_id": "PDD9939"}),
+            Response(status_code=401, payload=unavailable),
+            Response(payload={"title": "Legacy claim detail"}),
+            Response(status_code=401, payload=unavailable),
+            Response(status_code=401, payload=unavailable),
+            Response(payload=[{"message": "Legacy buyer message"}]),
+            Response(status_code=401, payload=unavailable),
+            Response(status_code=401, payload=unavailable),
+        ]
+    )
+    client = MercadoCommunicationsClient("secret", session=session)
+
+    result = client.get_claim_bundle("5568513900")
+
+    assert result["detail"]["title"] == "Legacy claim detail"
+    assert result["messages"][0]["message"] == "Legacy buyer message"
+    assert result["api_version"] == "claims_1"
+    assert set(result["resource_errors"]) == {
+        "reason", "affects_reputation", "expected_resolutions"
+    }
+    urls = [call[1] for call in session.calls]
+    assert any(url.endswith("/post-purchase/v1/claims/5568513900/detail") for url in urls)
+    assert any(url.endswith("/post-purchase/v1/claims/5568513900/messages") for url in urls)
+
+
+def test_claims_1_reply_falls_back_to_legacy_messages_endpoint():
+    session = Session(
+        [
+            Response(
+                status_code=401,
+                payload={"message": "This functionality is not available for Claims 1.0."},
+            ),
+            Response(status_code=201, payload={"id": "legacy-message"}),
+        ]
+    )
+    client = MercadoCommunicationsClient("secret", session=session)
+
+    result = client.send_claim_message(
+        5568513900,
+        "We can help",
+        receiver_role="complainant",
+    )
+
+    assert result["id"] == "legacy-message"
+    assert session.calls[1][1].endswith(
+        "/post-purchase/v1/claims/5568513900/messages"
+    )
+    assert session.calls[1][2]["json"] == {
+        "receiver_role": "complainant",
+        "message": "We can help",
+        "attachments": [],
+    }
 
 
 def test_claim_search_supports_after_sale_type_and_date_filters():
@@ -500,6 +562,145 @@ def _workbench_user(*permissions):
     }
 
 
+def test_pre_sale_aggregate_queries_stores_with_thread_pool(monkeypatch):
+    lock = threading.Lock()
+    active = 0
+    max_active = 0
+    thread_names = set()
+
+    def fake_query(token_id, action, payload):
+        nonlocal active, max_active
+        assert action == "pre-sale-list"
+        assert payload["limit"] == 100
+        with lock:
+            active += 1
+            max_active = max(max_active, active)
+            thread_names.add(threading.current_thread().name)
+        time.sleep(0.04)
+        with lock:
+            active -= 1
+        return {
+            "total": 1,
+            "questions": [{"id": token_id * 100, "date_created": "2026-08-31"}],
+        }
+
+    monkeypatch.setattr(
+        bit_interface,
+        "get_current_workbench_user",
+        lambda: _workbench_user("customer_service.view"),
+    )
+    monkeypatch.setattr(
+        bit_interface.bit_db_api,
+        "execute_mercado_store_communication",
+        fake_query,
+    )
+
+    response = bit_interface.app.test_client().post(
+        "/api/mercado-communications/pre-sale-aggregate",
+        json={"token_ids": [1, 2, 3, 4], "status": "UNANSWERED", "workers": 4},
+    )
+
+    assert response.status_code == 200
+    data = response.get_json()["data"]
+    assert data["workers"] == 4
+    assert data["success_stores"] == 4
+    assert [row["token_id"] for row in data["stores"]] == [1, 2, 3, 4]
+    assert max_active > 1
+    assert len(thread_names) > 1
+
+
+def test_customer_service_aggregate_queries_claim_stores_with_thread_pool(monkeypatch):
+    lock = threading.Lock()
+    active = 0
+    max_active = 0
+    thread_names = set()
+
+    def fake_query(token_id, action, payload):
+        nonlocal active, max_active
+        assert action == "claims-list"
+        with lock:
+            active += 1
+            max_active = max(max_active, active)
+            thread_names.add(threading.current_thread().name)
+        time.sleep(0.04)
+        with lock:
+            active -= 1
+        status = payload["status"]
+        return {
+            "paging": {"total": 1},
+            "data": [{
+                "id": token_id * 100 + (1 if status == "opened" else 2),
+                "status": status,
+                "last_updated": "2026-08-31T10:00:00Z",
+            }],
+        }
+
+    monkeypatch.setattr(
+        bit_interface,
+        "get_current_workbench_user",
+        lambda: _workbench_user("customer_service.view"),
+    )
+    monkeypatch.setattr(
+        bit_interface.bit_db_api,
+        "execute_mercado_store_communication",
+        fake_query,
+    )
+
+    response = bit_interface.app.test_client().post(
+        "/api/mercado-communications/customer-service-aggregate",
+        json={
+            "mode": "claims",
+            "token_ids": [1, 2, 3, 4],
+            "required_rows": 20,
+            "workers": 4,
+        },
+    )
+
+    assert response.status_code == 200
+    data = response.get_json()["data"]
+    assert data["workers"] == 4
+    assert data["success_stores"] == 4
+    assert data["failed_stores"] == 0
+    assert [row["token_id"] for row in data["stores"]] == [1, 2, 3, 4]
+    assert all(row["total"] == 2 for row in data["stores"])
+    assert max_active > 1
+    assert len(thread_names) > 1
+
+
+def test_customer_service_aggregate_keeps_single_store_failure_isolated(monkeypatch):
+    def fake_query(token_id, action, payload):
+        assert action == "claims-list"
+        if token_id == 2:
+            raise RuntimeError("店铺接口暂不可用")
+        return {"paging": {"total": 0}, "data": []}
+
+    monkeypatch.setattr(
+        bit_interface,
+        "get_current_workbench_user",
+        lambda: _workbench_user("customer_service.view"),
+    )
+    monkeypatch.setattr(
+        bit_interface.bit_db_api,
+        "execute_mercado_store_communication",
+        fake_query,
+    )
+
+    response = bit_interface.app.test_client().post(
+        "/api/mercado-communications/customer-service-aggregate",
+        json={"mode": "claims", "token_ids": [1, 2], "workers": 2},
+    )
+
+    assert response.status_code == 200
+    data = response.get_json()["data"]
+    assert data["success_stores"] == 1
+    assert data["failed_stores"] == 1
+    assert data["stores"][0]["token_id"] == 1
+    assert data["failures"] == [{
+        "token_id": 2,
+        "message": "店铺接口暂不可用",
+    }]
+
+
 def test_customer_service_view_can_read_but_cannot_reply(monkeypatch):
     calls = []
     monkeypatch.setattr(
@@ -588,7 +789,9 @@ def test_pre_sale_workbench_module_has_filters_table_pagination_and_reply():
     assert 'pre-sale-answer' in template
     assert 'pre-sale-delete' in template
     assert 'function preSaleMatchedStores' in template
-    assert '_token_id: Number(store.id)' in template
+    assert 'pre-sale-aggregate' in template
+    assert '_token_id: tokenId' in template
+    assert '线程完成查询' in template
     assert 'sendPreSaleAnswerForModule(questionId, tokenId, siteId)' in template
     assert 'id="pre-sale-reply-preview"' in template
     assert 'auto_translate: true' in template
@@ -628,6 +831,122 @@ def test_customer_service_manager_can_send_claim_message(monkeypatch):
     assert calls[0][2]["receiver_role"] == "complainant"
 
 
+def test_customer_service_claim_can_open_exact_store_bit_browser(monkeypatch):
+    opened = []
+    released = []
+    monkeypatch.setattr(
+        bit_interface,
+        "get_current_workbench_user",
+        lambda: _workbench_user("customer_service.view"),
+    )
+    monkeypatch.setattr(
+        bit_interface.bit_db_api,
+        "list_mercado_store_tokens",
+        lambda: {"rows": [{
+            "id": 9,
+            "display_name": "张泽文888",
+            "nickname": "official-nickname",
+        }]},
+    )
+    monkeypatch.setattr(
+        bit_interface,
+        "list_shop_configs",
+        lambda include_ignored=True: [{
+            "shop_name": "张泽文888",
+            "window_id": "window-abc",
+            "status": "",
+        }],
+    )
+    monkeypatch.setattr(
+        bit_interface,
+        "openBrowser",
+        lambda window_id, **kwargs: opened.append((window_id, kwargs))
+        or {"success": True},
+    )
+    monkeypatch.setattr(
+        bit_interface,
+        "releaseBrowserLease",
+        lambda window_id: released.append(window_id),
+    )
+
+    response = bit_interface.app.test_client().post(
+        "/api/mercado-claims/9/open-browser",
+        json={"claim_id": "5568513900"},
+    )
+
+    assert response.status_code == 200
+    assert response.get_json()["data"]["window_id"] == "window-abc"
+    assert response.get_json()["data"]["claim_id"] == "5568513900"
+    assert opened == [(
+        "window-abc",
+        {"api_lock_timeout": 5, "request_timeout": 20},
+    )]
+    assert released == ["window-abc"]
+
+
+def test_customer_service_claim_browser_uses_order_shop_name_hint(monkeypatch):
+    opened = []
+    monkeypatch.setattr(
+        bit_interface,
+        "get_current_workbench_user",
+        lambda: _workbench_user("customer_service.view"),
+    )
+    monkeypatch.setattr(
+        bit_interface.bit_db_api,
+        "list_mercado_store_tokens",
+        lambda: {"rows": [{
+            "id": 9,
+            "display_name": "授权自定义名称",
+            "nickname": "official-nickname",
+        }]},
+    )
+    monkeypatch.setattr(
+        bit_interface,
+        "list_shop_configs",
+        lambda include_ignored=True: [{
+            "shop_name": "订单所属店铺",
+            "window_id": "window-from-order",
+        }],
+    )
+    monkeypatch.setattr(
+        bit_interface,
+        "openBrowser",
+        lambda window_id, **_kwargs: opened.append(window_id) or {"success": True},
+    )
+    monkeypatch.setattr(bit_interface, "releaseBrowserLease", lambda _window_id: None)
+
+    response = bit_interface.app.test_client().post(
+        "/api/mercado-claims/9/open-browser",
+        json={"claim_id": "5568513900", "shop_name": "订单所属店铺"},
+    )
+
+    assert response.status_code == 200
+    assert response.get_json()["data"]["window_id"] == "window-from-order"
+    assert opened == ["window-from-order"]
+
+
+def test_customer_service_claim_browser_requires_exact_store_binding(monkeypatch):
+    monkeypatch.setattr(
+        bit_interface,
+        "get_current_workbench_user",
+        lambda: _workbench_user("customer_service.view"),
+    )
+    monkeypatch.setattr(
+        bit_interface.bit_db_api,
+        "list_mercado_store_tokens",
+        lambda: {"rows": [{"id": 9, "display_name": "未绑定店铺"}]},
+    )
+    monkeypatch.setattr(bit_interface, "list_shop_configs", lambda **_kwargs: [])
+
+    response = bit_interface.app.test_client().post(
+        "/api/mercado-claims/9/open-browser",
+        json={"claim_id": "5568513900"},
+    )
+
+    assert response.status_code == 400
+    assert "未绑定比特浏览器窗口" in response.get_json()["message"]
+
+
 def test_customer_service_supports_owner_group_aggregation_and_row_store_replies():
     template = (
         Path(__file__).resolve().parents[1] / "bit" / "templates" / "index.html"
@@ -637,9 +956,15 @@ def test_customer_service_supports_owner_group_aggregation_and_row_store_replies
     assert 'id="customer-service-group"' in template
     assert "function customerServiceTargetStores()" in template
     assert "customerServiceAllRows = await customerServiceLoadPostSale(stores, search)" in template
-    assert 'for (const status of ["opened", "closed"])' in template
-    assert "customerServiceFailureDetails(results)" in template
+    assert "/api/mercado-communications/customer-service-aggregate" in template
+    assert "服务端 ${customerServiceQueryMetrics.workers} 线程" in template
     assert "token_id: Number(tokenId || store.id || 0)" in template
     assert 'customerServiceRequest("post-sale-send", {method: "POST", tokenId' in template
     assert 'customerServiceRequest("claims-send", {method: "POST", tokenId' in template
     assert "await loadClaimDetail(row.id, row.token_id)" in template
+    assert "openClaimBitBrowser(${index},this)" in template
+    assert "/api/mercado-claims/${tokenId}/open-browser" in template
+    assert 'class="claim-browser-status"' in template
+    assert 'shop_name: String(row.order_context?.shop_name || "")' in template
+    assert 'button.textContent = "↻ 重试"' in template
+    assert "旧版 Claims 1.0" in template

@@ -368,6 +368,527 @@ def delete_appeal_phrase(phrase_id):
         connection.close()
 
 
+def _ensure_infringement_knowledge_table(cursor):
+    cursor.execute(
+        """
+        CREATE TABLE IF NOT EXISTS `infringement_knowledge` (
+            `id` BIGINT NOT NULL AUTO_INCREMENT,
+            `brand_name` VARCHAR(255) NOT NULL,
+            `list_type` VARCHAR(16) NOT NULL,
+            `notes` VARCHAR(2000) NULL,
+            `source_type` VARCHAR(16) NOT NULL DEFAULT 'manual',
+            `evidence_count` INT NOT NULL DEFAULT 0,
+            `source_detail` VARCHAR(1000) NULL,
+            `created_at` DATETIME NOT NULL,
+            `updated_at` DATETIME NOT NULL,
+            `deleted_at` DATETIME NULL,
+            PRIMARY KEY (`id`),
+            UNIQUE KEY `uniq_infringement_knowledge_brand` (`brand_name`),
+            KEY `idx_infringement_knowledge_type` (`list_type`, `deleted_at`)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+        """
+    )
+    _ensure_column(
+        cursor,
+        "infringement_knowledge",
+        "source_type",
+        "VARCHAR(16) NOT NULL DEFAULT 'manual' AFTER `notes`",
+    )
+    _ensure_column(
+        cursor,
+        "infringement_knowledge",
+        "evidence_count",
+        "INT NOT NULL DEFAULT 0 AFTER `source_type`",
+    )
+    _ensure_column(
+        cursor,
+        "infringement_knowledge",
+        "source_detail",
+        "VARCHAR(1000) NULL AFTER `evidence_count`",
+    )
+
+
+def _serialize_infringement_knowledge_row(row):
+    from bit.bit_infringement_knowledge import list_type_label
+
+    result = dict(row or {})
+    result["id"] = int(result.get("id") or 0)
+    result["list_type_label"] = list_type_label(result.get("list_type"))
+    result["notes"] = str(result.get("notes") or "")
+    result["source_type"] = str(result.get("source_type") or "manual")
+    result["evidence_count"] = int(result.get("evidence_count") or 0)
+    result["source_detail"] = str(result.get("source_detail") or "")
+    for key in ("created_at", "updated_at"):
+        if result.get(key) is not None:
+            result[key] = str(result[key])
+    result.pop("deleted_at", None)
+    return result
+
+
+def list_infringement_knowledge(list_type="", search="", limit=2000):
+    from bit.bit_infringement_knowledge import normalize_list_type
+
+    normalized_type = normalize_list_type(list_type, allow_empty=True)
+    search = str(search or "").strip()
+    try:
+        limit = max(1, min(int(limit or 2000), 5000))
+    except (TypeError, ValueError):
+        limit = 2000
+
+    connection = pymysql.connect(**config)
+    try:
+        with connection.cursor() as cursor:
+            _ensure_infringement_knowledge_table(cursor)
+            cursor.execute(
+                """
+                SELECT COUNT(*) AS `total`,
+                       SUM(CASE WHEN `list_type` = 'whitelist' THEN 1 ELSE 0 END)
+                           AS `whitelist`,
+                       SUM(CASE WHEN `list_type` = 'blacklist' THEN 1 ELSE 0 END)
+                           AS `blacklist`
+                FROM `infringement_knowledge`
+                WHERE `deleted_at` IS NULL
+                """
+            )
+            summary_row = cursor.fetchone() or {}
+
+            conditions = ["`deleted_at` IS NULL"]
+            parameters = []
+            if normalized_type:
+                conditions.append("`list_type` = %s")
+                parameters.append(normalized_type)
+            if search:
+                conditions.append("(`brand_name` LIKE %s OR `notes` LIKE %s)")
+                keyword = f"%{search}%"
+                parameters.extend((keyword, keyword))
+            cursor.execute(
+                f"""
+                SELECT `id`, `brand_name`, `list_type`, `notes`, `source_type`,
+                       `evidence_count`, `source_detail`,
+                       `created_at`, `updated_at`
+                FROM `infringement_knowledge`
+                WHERE {' AND '.join(conditions)}
+                ORDER BY `updated_at` DESC, `id` DESC
+                LIMIT %s
+                """,
+                (*parameters, limit),
+            )
+            rows = [
+                _serialize_infringement_knowledge_row(row)
+                for row in (cursor.fetchall() or [])
+            ]
+        connection.commit()
+        return {
+            "summary": {
+                "total": int(summary_row.get("total") or 0),
+                "whitelist": int(summary_row.get("whitelist") or 0),
+                "blacklist": int(summary_row.get("blacklist") or 0),
+            },
+            "rows": rows,
+            "filtered_total": len(rows),
+        }
+    except Exception:
+        connection.rollback()
+        raise
+    finally:
+        connection.close()
+
+
+def create_infringement_knowledge(record):
+    from bit.bit_infringement_knowledge import normalize_knowledge_record
+
+    normalized = normalize_knowledge_record(record)
+    now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    connection = pymysql.connect(**config)
+    try:
+        with connection.cursor() as cursor:
+            _ensure_infringement_knowledge_table(cursor)
+            cursor.execute(
+                "SELECT `id`, `deleted_at` FROM `infringement_knowledge` "
+                "WHERE `brand_name` = %s LIMIT 1",
+                (normalized["brand_name"],),
+            )
+            existing = cursor.fetchone()
+            if existing and existing.get("deleted_at") is None:
+                raise ValueError("该品牌已存在于侵权知识库")
+            if existing:
+                record_id = int(existing["id"])
+                cursor.execute(
+                    """
+                    UPDATE `infringement_knowledge`
+                    SET `list_type` = %s, `notes` = %s, `source_type` = 'manual',
+                        `evidence_count` = 0, `source_detail` = NULL, `updated_at` = %s,
+                        `deleted_at` = NULL
+                    WHERE `id` = %s
+                    """,
+                    (
+                        normalized["list_type"],
+                        normalized["notes"],
+                        now,
+                        record_id,
+                    ),
+                )
+            else:
+                cursor.execute(
+                    """
+                    INSERT INTO `infringement_knowledge` (
+                        `brand_name`, `list_type`, `notes`, `source_type`,
+                        `evidence_count`, `created_at`, `updated_at`
+                    ) VALUES (%s, %s, %s, 'manual', 0, %s, %s)
+                    """,
+                    (
+                        normalized["brand_name"],
+                        normalized["list_type"],
+                        normalized["notes"],
+                        now,
+                        now,
+                    ),
+                )
+                record_id = int(cursor.lastrowid)
+        connection.commit()
+        return {"id": record_id}
+    except pymysql.err.IntegrityError as exc:
+        connection.rollback()
+        raise ValueError("该品牌已存在于侵权知识库") from exc
+    except Exception:
+        connection.rollback()
+        raise
+    finally:
+        connection.close()
+
+
+def update_infringement_knowledge(record_id, record):
+    from bit.bit_infringement_knowledge import normalize_knowledge_record
+
+    try:
+        record_id = int(record_id)
+    except (TypeError, ValueError) as exc:
+        raise ValueError("知识库记录编号无效") from exc
+    if record_id <= 0:
+        raise ValueError("知识库记录编号无效")
+    normalized = normalize_knowledge_record(record)
+    now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    connection = pymysql.connect(**config)
+    try:
+        with connection.cursor() as cursor:
+            _ensure_infringement_knowledge_table(cursor)
+            cursor.execute(
+                "SELECT `id` FROM `infringement_knowledge` "
+                "WHERE `id` = %s AND `deleted_at` IS NULL",
+                (record_id,),
+            )
+            if not cursor.fetchone():
+                raise ValueError("知识库记录不存在")
+            cursor.execute(
+                """
+                UPDATE `infringement_knowledge`
+                SET `brand_name` = %s, `list_type` = %s, `notes` = %s,
+                    `source_type` = 'manual', `evidence_count` = 0,
+                    `source_detail` = NULL, `updated_at` = %s
+                WHERE `id` = %s
+                """,
+                (
+                    normalized["brand_name"],
+                    normalized["list_type"],
+                    normalized["notes"],
+                    now,
+                    record_id,
+                ),
+            )
+        connection.commit()
+        return {"id": record_id}
+    except pymysql.err.IntegrityError as exc:
+        connection.rollback()
+        raise ValueError("该品牌已存在于侵权知识库") from exc
+    except Exception:
+        connection.rollback()
+        raise
+    finally:
+        connection.close()
+
+
+def delete_infringement_knowledge(record_id):
+    try:
+        record_id = int(record_id)
+    except (TypeError, ValueError) as exc:
+        raise ValueError("知识库记录编号无效") from exc
+    if record_id <= 0:
+        raise ValueError("知识库记录编号无效")
+    now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    connection = pymysql.connect(**config)
+    try:
+        with connection.cursor() as cursor:
+            _ensure_infringement_knowledge_table(cursor)
+            cursor.execute(
+                """
+                UPDATE `infringement_knowledge`
+                SET `deleted_at` = %s, `source_type` = 'manual', `updated_at` = %s
+                WHERE `id` = %s AND `deleted_at` IS NULL
+                """,
+                (now, now, record_id),
+            )
+            if cursor.rowcount == 0:
+                raise ValueError("知识库记录不存在")
+        connection.commit()
+        return {"id": record_id}
+    except Exception:
+        connection.rollback()
+        raise
+    finally:
+        connection.close()
+
+
+def bulk_create_infringement_knowledge(records):
+    from bit.bit_infringement_knowledge import normalize_knowledge_record
+
+    normalized_records = []
+    seen = set()
+    for record in records or ():
+        normalized = normalize_knowledge_record(record)
+        key = normalized["brand_name"].casefold()
+        if key not in seen:
+            seen.add(key)
+            normalized_records.append(normalized)
+    if not normalized_records:
+        raise ValueError("请至少输入一个品牌，每行一个")
+    if len(normalized_records) > 1000:
+        raise ValueError("单次最多新增 1000 个品牌")
+
+    now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    inserted = restored = skipped = 0
+    connection = pymysql.connect(**config)
+    try:
+        with connection.cursor() as cursor:
+            _ensure_infringement_knowledge_table(cursor)
+            for normalized in normalized_records:
+                cursor.execute(
+                    "SELECT `id`, `deleted_at` FROM `infringement_knowledge` "
+                    "WHERE `brand_name` = %s LIMIT 1",
+                    (normalized["brand_name"],),
+                )
+                existing = cursor.fetchone()
+                if existing and existing.get("deleted_at") is None:
+                    skipped += 1
+                    continue
+                if existing:
+                    cursor.execute(
+                        """
+                        UPDATE `infringement_knowledge`
+                        SET `list_type` = %s, `notes` = %s,
+                            `source_type` = 'manual', `evidence_count` = 0,
+                            `source_detail` = NULL, `updated_at` = %s,
+                            `deleted_at` = NULL
+                        WHERE `id` = %s
+                        """,
+                        (
+                            normalized["list_type"],
+                            normalized["notes"],
+                            now,
+                            int(existing["id"]),
+                        ),
+                    )
+                    restored += 1
+                    continue
+                cursor.execute(
+                    """
+                    INSERT INTO `infringement_knowledge` (
+                        `brand_name`, `list_type`, `notes`, `source_type`,
+                        `evidence_count`, `created_at`, `updated_at`
+                    ) VALUES (%s, %s, %s, 'manual', 0, %s, %s)
+                    """,
+                    (
+                        normalized["brand_name"],
+                        normalized["list_type"],
+                        normalized["notes"],
+                        now,
+                        now,
+                    ),
+                )
+                inserted += 1
+        connection.commit()
+        return {
+            "total": len(normalized_records),
+            "inserted": inserted,
+            "restored": restored,
+            "skipped": skipped,
+        }
+    except Exception:
+        connection.rollback()
+        raise
+    finally:
+        connection.close()
+
+
+def get_infringement_knowledge_analysis_sources(
+    infraction_limit=10000,
+    active_limit=5000,
+):
+    try:
+        infraction_limit = max(1, min(int(infraction_limit or 10000), 20000))
+        active_limit = max(1, min(int(active_limit or 5000), 10000))
+    except (TypeError, ValueError) as exc:
+        raise ValueError("自动分析条数必须是有效整数") from exc
+
+    connection = pymysql.connect(**config)
+    try:
+        with connection.cursor() as cursor:
+            from erp.mercadolibre_store_link_store import ensure_store_link_table
+
+            ensure_store_link_table(cursor)
+            cursor.execute(
+                """
+                SELECT CAST(`编号` AS CHAR) AS `item_id`, MAX(`标题`) AS `title`
+                FROM `infraction`
+                WHERE `编号` IS NOT NULL AND `编号` <> ''
+                  AND `标题` IS NOT NULL AND `标题` <> ''
+                GROUP BY `编号`
+                ORDER BY MAX(`提交时间`) DESC
+                LIMIT %s
+                """,
+                (infraction_limit,),
+            )
+            infraction_rows = list(cursor.fetchall() or [])
+            cursor.execute(
+                """
+                SELECT `item_id`, `title`, COALESCE(`sold_quantity`, 0) AS `sold_quantity`
+                FROM `erp_mercadolibre_store_links`
+                WHERE `is_current` = 1 AND `status` = 'active'
+                  AND COALESCE(`sold_quantity`, 0) > 0
+                  AND `title` IS NOT NULL AND `title` <> ''
+                ORDER BY COALESCE(`sold_quantity`, 0) DESC, `id` DESC
+                LIMIT %s
+                """,
+                (active_limit,),
+            )
+            active_rows = list(cursor.fetchall() or [])
+            cursor.execute(
+                """
+                SELECT COUNT(DISTINCT `编号`) AS `total`
+                FROM `infraction`
+                WHERE `编号` IS NOT NULL AND `编号` <> ''
+                """
+            )
+            infraction_total = int((cursor.fetchone() or {}).get("total") or 0)
+            cursor.execute(
+                """
+                SELECT COUNT(*) AS `total`
+                FROM `erp_mercadolibre_store_links`
+                WHERE `is_current` = 1 AND `status` = 'active'
+                  AND COALESCE(`sold_quantity`, 0) > 0
+                """
+            )
+            active_total = int((cursor.fetchone() or {}).get("total") or 0)
+        connection.commit()
+        return {
+            "infraction_rows": infraction_rows,
+            "active_rows": active_rows,
+            "infraction_total": infraction_total,
+            "active_total": active_total,
+        }
+    finally:
+        connection.close()
+
+
+def upsert_analyzed_infringement_knowledge(records):
+    from bit.bit_infringement_knowledge import normalize_knowledge_record
+
+    normalized_records = []
+    seen = set()
+    for record in records or ():
+        normalized = normalize_knowledge_record(record)
+        key = normalized["brand_name"].casefold()
+        if key in seen:
+            continue
+        seen.add(key)
+        try:
+            evidence_count = max(0, int(record.get("evidence_count") or 0))
+        except (TypeError, ValueError):
+            evidence_count = 0
+        normalized["evidence_count"] = evidence_count
+        normalized["source_detail"] = str(record.get("source_detail") or "").strip()[:1000]
+        normalized_records.append(normalized)
+
+    now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    inserted = updated = skipped_manual = skipped_blacklist = 0
+    connection = pymysql.connect(**config)
+    try:
+        with connection.cursor() as cursor:
+            _ensure_infringement_knowledge_table(cursor)
+            for normalized in normalized_records:
+                cursor.execute(
+                    """
+                    SELECT `id`, `list_type`, `source_type`, `deleted_at`
+                    FROM `infringement_knowledge`
+                    WHERE `brand_name` = %s LIMIT 1
+                    """,
+                    (normalized["brand_name"],),
+                )
+                existing = cursor.fetchone()
+                if existing:
+                    if (
+                        str(existing.get("source_type") or "manual") != "analysis"
+                        or existing.get("deleted_at") is not None
+                    ):
+                        skipped_manual += 1
+                        continue
+                    if (
+                        str(existing.get("list_type") or "") == "blacklist"
+                        and normalized["list_type"] == "whitelist"
+                    ):
+                        skipped_blacklist += 1
+                        continue
+                    cursor.execute(
+                        """
+                        UPDATE `infringement_knowledge`
+                        SET `list_type` = %s, `notes` = %s,
+                            `evidence_count` = %s, `source_detail` = %s,
+                            `updated_at` = %s, `deleted_at` = NULL
+                        WHERE `id` = %s
+                        """,
+                        (
+                            normalized["list_type"],
+                            normalized["notes"],
+                            normalized["evidence_count"],
+                            normalized["source_detail"],
+                            now,
+                            int(existing["id"]),
+                        ),
+                    )
+                    updated += 1
+                    continue
+                cursor.execute(
+                    """
+                    INSERT INTO `infringement_knowledge` (
+                        `brand_name`, `list_type`, `notes`, `source_type`,
+                        `evidence_count`, `source_detail`, `created_at`, `updated_at`
+                    ) VALUES (%s, %s, %s, 'analysis', %s, %s, %s, %s)
+                    """,
+                    (
+                        normalized["brand_name"],
+                        normalized["list_type"],
+                        normalized["notes"],
+                        normalized["evidence_count"],
+                        normalized["source_detail"],
+                        now,
+                        now,
+                    ),
+                )
+                inserted += 1
+        connection.commit()
+        return {
+            "total": len(normalized_records),
+            "inserted": inserted,
+            "updated": updated,
+            "skipped_manual": skipped_manual,
+            "skipped_blacklist": skipped_blacklist,
+        }
+    except Exception:
+        connection.rollback()
+        raise
+    finally:
+        connection.close()
+
+
 def _parse_number(value):
     text = str(value or "").replace(",", "").strip()
     number_text = "".join(ch for ch in text if ch.isdigit() or ch in ".-")
@@ -1123,6 +1644,31 @@ def get_latest_infraction_info(recent_days=30):
         connection.close()
 
 
+def _latest_infraction_counts_by_shop_site(cursor, recent_days=30):
+    """按最新侵权快照统计指定周期内每个店铺站点的两类数量。"""
+    cutoff = datetime.now() - timedelta(days=max(1, int(recent_days or 30)))
+    counts = {}
+    rows = _active_collection_snapshot_rows(
+        _latest_infraction_snapshot_rows(cursor)
+    )
+    for row in rows:
+        infraction_date = _parse_infraction_date(row.get("侵权时间"))
+        if not infraction_date or infraction_date < cutoff:
+            continue
+        key = (
+            str(row.get("店铺名") or "").strip(),
+            str(row.get("站点") or "").strip(),
+        )
+        if not key[0] or not key[1]:
+            continue
+        item = counts.setdefault(key, {"侵权数量": 0, "权利人数量": 0})
+        if str(row.get("类型") or "侵权").strip() == "权利人":
+            item["权利人数量"] += 1
+        else:
+            item["侵权数量"] += 1
+    return counts
+
+
 def get_latest_reputation_info():
     connection = pymysql.connect(**config)
 
@@ -1170,10 +1716,25 @@ def get_latest_reputation_info():
             rows = _active_collection_snapshot_rows(
                 _latest_reputation_snapshot_rows(cursor)
             )
+            try:
+                infraction_counts = _latest_infraction_counts_by_shop_site(
+                    cursor,
+                    recent_days=30,
+                )
+            except Exception as exc:
+                print(f"读取声誉关联侵权数量失败，将显示为 0: {exc}")
+                infraction_counts = {}
             for row in rows:
                 for key in ("更新时间", "提交时间"):
                     if row.get(key) is not None:
                         row[key] = str(row[key])
+                counts = infraction_counts.get((
+                    str(row.get("店铺名") or "").strip(),
+                    str(row.get("站点") or "").strip(),
+                )) or {}
+                row["侵权数量"] = int(counts.get("侵权数量") or 0)
+                row["权利人数量"] = int(counts.get("权利人数量") or 0)
+                row["侵权统计天数"] = 30
             shop_traffic_totals = {}
             for row in rows:
                 shop_name = str(row.get("店铺名") or "")
@@ -1370,9 +1931,20 @@ def _ensure_mercado_synced_orders_table(cursor):
             `product_id` VARCHAR(64) NULL,
             `title` TEXT NULL,
             `image_url` TEXT NULL,
+            `image_source` VARCHAR(32) NULL,
+            `image_checked_at` DATETIME NULL,
+            `image_last_error` TEXT NULL,
             `quantity` INT NULL,
             `sale_fee` DECIMAL(20, 4) NULL,
+            `sale_fee_source` VARCHAR(32) NULL,
             `freight` DECIMAL(20, 4) NULL,
+            `freight_currency_id` VARCHAR(16) NULL,
+            `freight_source` VARCHAR(32) NULL,
+            `freight_checked_at` DATETIME NULL,
+            `quoted_freight_usd` DECIMAL(20, 4) NULL,
+            `quoted_freight_weight_g` DECIMAL(20, 4) NULL,
+            `quoted_freight_source` VARCHAR(64) NULL,
+            `quoted_freight_checked_at` DATETIME NULL,
             `workflow_status` VARCHAR(32) NULL,
             `purchase_order` VARCHAR(255) NULL,
             `purchase_tracking` VARCHAR(255) NULL,
@@ -1403,7 +1975,37 @@ def _ensure_mercado_synced_orders_table(cursor):
     _ensure_column(cursor, "mercado_synced_orders", "tracking_checked_at", "DATETIME NULL")
     _ensure_column(cursor, "mercado_synced_orders", "manual_updated_at", "DATETIME NULL")
     _ensure_column(cursor, "mercado_synced_orders", "amount_currency_id", "VARCHAR(16) NULL")
+    _ensure_column(cursor, "mercado_synced_orders", "sale_fee_source", "VARCHAR(32) NULL")
+    _ensure_column(cursor, "mercado_synced_orders", "freight_currency_id", "VARCHAR(16) NULL")
+    _ensure_column(cursor, "mercado_synced_orders", "freight_source", "VARCHAR(32) NULL")
+    _ensure_column(cursor, "mercado_synced_orders", "freight_checked_at", "DATETIME NULL")
+    _ensure_column(cursor, "mercado_synced_orders", "quoted_freight_usd", "DECIMAL(20, 4) NULL")
+    _ensure_column(cursor, "mercado_synced_orders", "quoted_freight_weight_g", "DECIMAL(20, 4) NULL")
+    _ensure_column(cursor, "mercado_synced_orders", "quoted_freight_source", "VARCHAR(64) NULL")
+    _ensure_column(cursor, "mercado_synced_orders", "quoted_freight_checked_at", "DATETIME NULL")
+    _ensure_column(cursor, "mercado_synced_orders", "image_source", "VARCHAR(32) NULL")
+    _ensure_column(cursor, "mercado_synced_orders", "image_checked_at", "DATETIME NULL")
+    _ensure_column(cursor, "mercado_synced_orders", "image_last_error", "TEXT NULL")
+    _ensure_mercado_shipment_costs_table(cursor)
     _ensure_mercado_order_logs_table(cursor)
+
+
+def _ensure_mercado_shipment_costs_table(cursor):
+    cursor.execute(
+        """
+        CREATE TABLE IF NOT EXISTS `mercado_shipment_costs` (
+            `shipping_id` VARCHAR(64) NOT NULL,
+            `token_id` BIGINT NOT NULL,
+            `seller_cost` DECIMAL(20, 4) NULL,
+            `currency_id` VARCHAR(16) NULL,
+            `payload_json` LONGTEXT NULL,
+            `last_error` TEXT NULL,
+            `checked_at` DATETIME NOT NULL,
+            PRIMARY KEY (`shipping_id`),
+            KEY `idx_mercado_shipment_costs_token_checked` (`token_id`, `checked_at`)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+        """
+    )
 
 
 def _ensure_mercado_order_logs_table(cursor):
@@ -1577,7 +2179,12 @@ def upsert_mercado_synced_orders(token_record, orders):
                     f"{titles[0]} 等 {len(titles)} 件商品" if titles else ""
                 )
                 quantity = sum(int(item.get("quantity") or 0) for item in items)
-                sale_fee = sum(Decimal(str(item.get("sale_fee") or 0)) for item in items)
+                # Mercado Libre returns ``sale_fee`` per unit, not per line.
+                sale_fee = sum(
+                    Decimal(str(item.get("sale_fee") or 0))
+                    * max(0, int(item.get("quantity") or 0))
+                    for item in items
+                )
                 shipping = dict(order.get("shipping") or {})
                 buyer = dict(order.get("buyer") or {})
                 context = order.get("context") if isinstance(order.get("context"), dict) else {}
@@ -1593,6 +2200,22 @@ def upsert_mercado_synced_orders(token_record, orders):
                     site_id,
                     str(order.get("currency_id") or first_item.get("currency_id") or "").upper(),
                 )
+                raw_freight = (
+                    order.get("shipping_cost")
+                    if order.get("shipping_cost") is not None
+                    else shipping.get("cost") or 0
+                )
+                try:
+                    has_order_freight = Decimal(str(raw_freight or 0)) > 0
+                except (InvalidOperation, TypeError, ValueError):
+                    raw_freight = 0
+                    has_order_freight = False
+                order_image_url = str(
+                    product.get("sku_image_url")
+                    or product.get("secure_thumbnail")
+                    or product.get("thumbnail")
+                    or ""
+                )
                 rows.append(
                     (
                         str(order["id"]), token_id, shop_name, seller_id, site_id,
@@ -1607,18 +2230,16 @@ def upsert_mercado_synced_orders(token_record, orders):
                         str(shipping.get("id") or ""), str(buyer.get("id") or ""),
                         str(buyer.get("nickname") or buyer.get("first_name") or ""),
                         str(product.get("id") or ""), title,
-                        str(
-                            product.get("sku_image_url")
-                            or product.get("secure_thumbnail")
-                            or product.get("thumbnail")
-                            or ""
-                        ),
-                        quantity, sale_fee,
-                        order.get("shipping_cost")
-                        if order.get("shipping_cost") is not None
-                        else shipping.get("cost") or 0,
+                        order_image_url,
+                        quantity, sale_fee, "order_item_quantity",
+                        raw_freight, amount_currency_id if has_order_freight else "",
+                        "order_shipping_cost" if has_order_freight else "",
+                        now if has_order_freight else None,
                         json.dumps(order, ensure_ascii=False, separators=(",", ":")),
                         now, now, amount_currency_id,
+                        "marketplace_item" if order_image_url else "",
+                        now if order_image_url else None,
+                        "",
                     )
                 )
             cursor.executemany(
@@ -1628,11 +2249,14 @@ def upsert_mercado_synced_orders(token_record, orders):
                     `status`, `status_label`, `status_detail`, `date_created`, `date_closed`,
                     `last_updated`, `currency_id`, `total_amount`, `paid_amount`, `shipping_id`,
                     `buyer_id`, `buyer_name`, `product_id`, `title`, `image_url`, `quantity`,
-                    `sale_fee`, `freight`, `raw_json`, `first_synced_at`, `synced_at`,
-                    `amount_currency_id`
+                    `sale_fee`, `sale_fee_source`, `freight`, `freight_currency_id`,
+                    `freight_source`, `freight_checked_at`, `raw_json`, `first_synced_at`,
+                    `synced_at`, `amount_currency_id`, `image_source`, `image_checked_at`,
+                    `image_last_error`
                 ) VALUES (
                     %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
-                    %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s
+                    %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
+                    %s, %s, %s, %s, %s, %s, %s
                 ) ON DUPLICATE KEY UPDATE
                     `token_id` = VALUES(`token_id`), `shop_name` = VALUES(`shop_name`),
                     `seller_id` = VALUES(`seller_id`), `site_id` = VALUES(`site_id`),
@@ -1646,8 +2270,34 @@ def upsert_mercado_synced_orders(token_record, orders):
                     `buyer_name` = VALUES(`buyer_name`), `product_id` = VALUES(`product_id`),
                     `title` = VALUES(`title`),
                     `image_url` = COALESCE(NULLIF(VALUES(`image_url`), ''), `image_url`),
+                    `image_source` = CASE WHEN COALESCE(VALUES(`image_url`), '') <> ''
+                        THEN VALUES(`image_source`) ELSE `image_source` END,
+                    `image_checked_at` = CASE WHEN COALESCE(VALUES(`image_url`), '') <> ''
+                        THEN VALUES(`image_checked_at`) ELSE `image_checked_at` END,
+                    `image_last_error` = CASE WHEN COALESCE(VALUES(`image_url`), '') <> ''
+                        THEN '' ELSE `image_last_error` END,
                     `quantity` = VALUES(`quantity`), `sale_fee` = VALUES(`sale_fee`),
-                    `freight` = VALUES(`freight`), `raw_json` = VALUES(`raw_json`),
+                    `sale_fee_source` = VALUES(`sale_fee_source`),
+                    `freight` = CASE
+                        WHEN `freight_source` = 'shipment_costs' THEN `freight`
+                        WHEN COALESCE(VALUES(`freight_source`), '') <> '' THEN VALUES(`freight`)
+                        ELSE `freight` END,
+                    `freight_currency_id` = CASE
+                        WHEN `freight_source` = 'shipment_costs' THEN `freight_currency_id`
+                        WHEN COALESCE(VALUES(`freight_source`), '') <> ''
+                            THEN VALUES(`freight_currency_id`)
+                        ELSE `freight_currency_id` END,
+                    `freight_source` = CASE
+                        WHEN `freight_source` = 'shipment_costs' THEN `freight_source`
+                        WHEN COALESCE(VALUES(`freight_source`), '') <> ''
+                            THEN VALUES(`freight_source`)
+                        ELSE `freight_source` END,
+                    `freight_checked_at` = CASE
+                        WHEN `freight_source` = 'shipment_costs' THEN `freight_checked_at`
+                        WHEN COALESCE(VALUES(`freight_source`), '') <> ''
+                            THEN VALUES(`freight_checked_at`)
+                        ELSE `freight_checked_at` END,
+                    `raw_json` = VALUES(`raw_json`),
                     `synced_at` = VALUES(`synced_at`)
                 """,
                 rows,
@@ -1677,6 +2327,279 @@ def get_mercado_order_sync_cursor(token_id):
             if isinstance(value, datetime):
                 return value.replace(tzinfo=timezone.utc)
             return datetime.fromisoformat(str(value)).replace(tzinfo=timezone.utc)
+    finally:
+        connection.close()
+
+
+def backfill_mercado_order_sale_fees(batch_size=500):
+    """Recalculate historical per-unit sale fees with the purchased quantity."""
+    batch_size = max(1, min(2000, int(batch_size or 500)))
+    connection = pymysql.connect(**config)
+    checked = updated = 0
+    try:
+        with connection.cursor() as cursor:
+            _ensure_mercado_synced_orders_table(cursor)
+            while True:
+                cursor.execute(
+                    """
+                    SELECT `order_id`, `raw_json`
+                    FROM `mercado_synced_orders`
+                    WHERE COALESCE(`sale_fee_source`, '') <> 'order_item_quantity'
+                    ORDER BY `order_id`
+                    LIMIT %s
+                    """,
+                    (batch_size,),
+                )
+                rows = cursor.fetchall() or []
+                if not rows:
+                    break
+                values = []
+                for row in rows:
+                    raw_order = row.get("raw_json") or {}
+                    if isinstance(raw_order, str):
+                        try:
+                            raw_order = json.loads(raw_order or "{}")
+                        except (TypeError, ValueError):
+                            raw_order = {}
+                    fee = Decimal("0")
+                    for item in (
+                        raw_order.get("order_items") or []
+                        if isinstance(raw_order, dict) else []
+                    ):
+                        try:
+                            fee += Decimal(str((item or {}).get("sale_fee") or 0)) * max(
+                                0, int((item or {}).get("quantity") or 0)
+                            )
+                        except (InvalidOperation, TypeError, ValueError):
+                            continue
+                    values.append((fee, str(row.get("order_id") or "")))
+                cursor.executemany(
+                    """
+                    UPDATE `mercado_synced_orders`
+                    SET `sale_fee` = %s,
+                        `sale_fee_source` = 'order_item_quantity'
+                    WHERE `order_id` = %s
+                    """,
+                    values,
+                )
+                connection.commit()
+                checked += len(rows)
+                updated += len(values)
+        return {"checked": checked, "updated": updated}
+    except Exception:
+        connection.rollback()
+        raise
+    finally:
+        connection.close()
+
+
+def list_mercado_shipment_cost_cache(shipping_ids):
+    shipping_ids = list(dict.fromkeys(
+        str(value or "").strip() for value in shipping_ids or () if str(value or "").strip()
+    ))
+    if not shipping_ids:
+        return {}
+    connection = pymysql.connect(**config)
+    try:
+        with connection.cursor() as cursor:
+            _ensure_mercado_shipment_costs_table(cursor)
+            placeholders = ",".join(["%s"] * len(shipping_ids))
+            cursor.execute(
+                f"SELECT * FROM `mercado_shipment_costs` "
+                f"WHERE `shipping_id` IN ({placeholders})",
+                shipping_ids,
+            )
+            return {str(row["shipping_id"]): row for row in cursor.fetchall()}
+    finally:
+        connection.close()
+
+
+def save_mercado_shipment_costs(token_id, entries):
+    """Cache official shipment costs and allocate each shipment across its orders."""
+    token_id = int(token_id or 0)
+    normalized = []
+    now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    for entry in entries or ():
+        shipping_id = str((entry or {}).get("shipping_id") or "").strip()
+        if not shipping_id:
+            continue
+        raw_cost = (entry or {}).get("seller_cost")
+        try:
+            seller_cost = Decimal(str(raw_cost)) if raw_cost is not None else None
+        except (InvalidOperation, TypeError, ValueError):
+            seller_cost = None
+        if seller_cost is not None and seller_cost < 0:
+            seller_cost = Decimal("0")
+        payload = (entry or {}).get("payload")
+        normalized.append({
+            "shipping_id": shipping_id,
+            "seller_cost": seller_cost,
+            "currency_id": str((entry or {}).get("currency_id") or "").strip().upper(),
+            "payload_json": json.dumps(
+                payload if isinstance(payload, (dict, list)) else {},
+                ensure_ascii=False,
+                separators=(",", ":"),
+            ),
+            "last_error": str((entry or {}).get("error") or "").strip()[:2000],
+            "checked_at": (
+                (entry or {}).get("checked_at").strftime("%Y-%m-%d %H:%M:%S")
+                if isinstance((entry or {}).get("checked_at"), datetime)
+                else str((entry or {}).get("checked_at") or now)[:19]
+            ),
+        })
+    if not normalized:
+        return {"shipments": 0, "orders": 0}
+
+    connection = pymysql.connect(**config)
+    try:
+        with connection.cursor() as cursor:
+            _ensure_mercado_synced_orders_table(cursor)
+            cursor.executemany(
+                """
+                INSERT INTO `mercado_shipment_costs` (
+                    `shipping_id`, `token_id`, `seller_cost`, `currency_id`,
+                    `payload_json`, `last_error`, `checked_at`
+                ) VALUES (%s, %s, %s, %s, %s, %s, %s)
+                ON DUPLICATE KEY UPDATE
+                    `token_id` = VALUES(`token_id`),
+                    `seller_cost` = COALESCE(VALUES(`seller_cost`), `seller_cost`),
+                    `currency_id` = COALESCE(NULLIF(VALUES(`currency_id`), ''), `currency_id`),
+                    `payload_json` = CASE WHEN VALUES(`seller_cost`) IS NOT NULL
+                        THEN VALUES(`payload_json`) ELSE `payload_json` END,
+                    `last_error` = VALUES(`last_error`),
+                    `checked_at` = VALUES(`checked_at`)
+                """,
+                [
+                    (
+                        row["shipping_id"], token_id, row["seller_cost"],
+                        row["currency_id"], row["payload_json"], row["last_error"],
+                        row["checked_at"],
+                    )
+                    for row in normalized
+                ],
+            )
+            successful = {
+                row["shipping_id"]: row
+                for row in normalized
+                if row["seller_cost"] is not None and row["currency_id"]
+            }
+            updates = []
+            if successful:
+                placeholders = ",".join(["%s"] * len(successful))
+                cursor.execute(
+                    f"SELECT `order_id`, `shipping_id`, COALESCE(`total_amount`, 0) AS `weight` "
+                    f"FROM `mercado_synced_orders` WHERE `token_id` = %s "
+                    f"AND `shipping_id` IN ({placeholders}) "
+                    f"ORDER BY `shipping_id`, `order_id`",
+                    [token_id, *successful.keys()],
+                )
+                grouped = {}
+                for row in cursor.fetchall():
+                    grouped.setdefault(str(row["shipping_id"]), []).append(row)
+                quantum = Decimal("0.0001")
+                for shipping_id, orders in grouped.items():
+                    cost_row = successful[shipping_id]
+                    seller_cost = cost_row["seller_cost"]
+                    weights = [max(Decimal("0"), Decimal(str(row.get("weight") or 0))) for row in orders]
+                    total_weight = sum(weights, Decimal("0"))
+                    allocated = Decimal("0")
+                    for index, order in enumerate(orders):
+                        if index == len(orders) - 1:
+                            share = seller_cost - allocated
+                        elif total_weight > 0:
+                            share = (seller_cost * weights[index] / total_weight).quantize(quantum)
+                        else:
+                            share = (seller_cost / len(orders)).quantize(quantum)
+                        share = min(
+                            max(Decimal("0"), share),
+                            max(Decimal("0"), seller_cost - allocated),
+                        )
+                        allocated += share
+                        updates.append((
+                            share, cost_row["currency_id"], cost_row["checked_at"],
+                            str(order["order_id"]), token_id,
+                        ))
+                if updates:
+                    cursor.executemany(
+                        """
+                        UPDATE `mercado_synced_orders`
+                        SET `freight` = %s, `freight_currency_id` = %s,
+                            `freight_source` = 'shipment_costs', `freight_checked_at` = %s
+                        WHERE `order_id` = %s AND `token_id` = %s
+                        """,
+                        updates,
+                    )
+        connection.commit()
+        return {"shipments": len(normalized), "orders": len(updates)}
+    except Exception:
+        connection.rollback()
+        raise
+    finally:
+        connection.close()
+
+
+def list_mercado_pending_shipment_costs(token_id, limit=200):
+    limit = max(1, min(1000, int(limit or 200)))
+    connection = pymysql.connect(**config)
+    try:
+        with connection.cursor() as cursor:
+            _ensure_mercado_synced_orders_table(cursor)
+            cursor.execute(
+                """
+                SELECT synced.`shipping_id`, MAX(synced.`date_created`) AS `latest_order_at`
+                FROM `mercado_synced_orders` AS synced
+                LEFT JOIN `mercado_shipment_costs` AS costs
+                  ON costs.`shipping_id` = synced.`shipping_id`
+                WHERE synced.`token_id` = %s
+                  AND COALESCE(synced.`shipping_id`, '') <> ''
+                  AND (
+                      costs.`shipping_id` IS NULL
+                      OR (
+                          costs.`seller_cost` IS NULL
+                          AND costs.`checked_at` < DATE_SUB(NOW(), INTERVAL 6 HOUR)
+                      )
+                      OR costs.`checked_at` < CURDATE()
+                  )
+                GROUP BY synced.`shipping_id`
+                ORDER BY `latest_order_at` DESC
+                LIMIT %s
+                """,
+                (int(token_id), limit),
+            )
+            return [str(row["shipping_id"]) for row in cursor.fetchall()]
+    finally:
+        connection.close()
+
+
+def list_mercado_pending_shipment_cost_rows(limit=200):
+    limit = max(1, min(1000, int(limit or 200)))
+    connection = pymysql.connect(**config)
+    try:
+        with connection.cursor() as cursor:
+            _ensure_mercado_synced_orders_table(cursor)
+            cursor.execute(
+                """
+                SELECT synced.`token_id`, synced.`shipping_id`,
+                       MAX(synced.`date_created`) AS `latest_order_at`
+                FROM `mercado_synced_orders` AS synced
+                LEFT JOIN `mercado_shipment_costs` AS costs
+                  ON costs.`shipping_id` = synced.`shipping_id`
+                WHERE COALESCE(synced.`shipping_id`, '') <> ''
+                  AND (
+                      costs.`shipping_id` IS NULL
+                      OR (
+                          costs.`seller_cost` IS NULL
+                          AND costs.`checked_at` < DATE_SUB(NOW(), INTERVAL 6 HOUR)
+                      )
+                      OR costs.`checked_at` < CURDATE()
+                  )
+                GROUP BY synced.`token_id`, synced.`shipping_id`
+                ORDER BY `latest_order_at` DESC
+                LIMIT %s
+                """,
+                (limit,),
+            )
+            return cursor.fetchall()
     finally:
         connection.close()
 
@@ -1767,7 +2690,7 @@ def list_mercado_after_sale_order_contexts(token_id, resource_ids):
 
 def list_orders(
     country="", status="", salesperson="", group_name="", search="", start_date="", end_date="",
-    origin="", page=1, page_size=200, store_ids=None, salespeople=None,
+    origin="", freight_variance="", page=1, page_size=200, store_ids=None, salespeople=None,
 ):
     """分页查询当前已授权店铺的 Token 同步订单。"""
     page = max(1, int(page or 1))
@@ -1781,6 +2704,11 @@ def list_orders(
     origin = str(origin or "").strip().lower()
     if origin not in ("", "token", "zying"):
         origin = ""
+    freight_variance = str(freight_variance or "").strip().lower()
+    if freight_variance not in (
+        "", "different", "actual_higher", "actual_lower", "pending_actual", "pending_quote",
+    ):
+        raise ValueError("运费差异筛选参数无效")
 
     normalized_store_ids = []
     for value in store_ids or ():
@@ -1852,6 +2780,28 @@ def list_orders(
             else:
                 clauses.append(f"{column('group_name')} = %s")
                 params.append(group_name)
+        if freight_variance:
+            quoted = column("quoted_freight_usd")
+            actual = column("actual_freight_usd")
+            if freight_variance == "different":
+                clauses.append(
+                    f"{quoted} IS NOT NULL AND {actual} IS NOT NULL "
+                    f"AND ABS({actual} - {quoted}) > 0.01"
+                )
+            elif freight_variance == "actual_higher":
+                clauses.append(
+                    f"{quoted} IS NOT NULL AND {actual} IS NOT NULL "
+                    f"AND {actual} - {quoted} > 0.01"
+                )
+            elif freight_variance == "actual_lower":
+                clauses.append(
+                    f"{quoted} IS NOT NULL AND {actual} IS NOT NULL "
+                    f"AND {quoted} - {actual} > 0.01"
+                )
+            elif freight_variance == "pending_actual":
+                clauses.append(f"{quoted} IS NOT NULL AND {actual} IS NULL")
+            elif freight_variance == "pending_quote":
+                clauses.append(f"{quoted} IS NULL AND {actual} IS NOT NULL")
         if start_at:
             clauses.append(f"{column('ordered_at')} >= %s")
             params.append(start_at.strftime("%Y-%m-%d %H:%M:%S"))
@@ -1964,11 +2914,25 @@ def list_orders(
             usd_amount_sql = f"synced.`total_amount` * ({rate_sql})"
             fee_usd_sql = "COALESCE(synced.`sale_fee`, 0)"
             freight_local_sql = (
-                "COALESCE(NULLIF(synced.`freight`, 0), "
-                "CAST(NULLIF(JSON_UNQUOTE(JSON_EXTRACT(synced.`raw_json`, '$.shipping_cost')), "
-                "'null') AS DECIMAL(20, 4)), 0)"
+                "CASE WHEN COALESCE(synced.`freight_source`, '') <> '' "
+                "OR COALESCE(synced.`freight`, 0) > 0 THEN synced.`freight` "
+                "WHEN CAST(NULLIF(JSON_UNQUOTE(JSON_EXTRACT(synced.`raw_json`, "
+                "'$.shipping_cost')), 'null') AS DECIMAL(20, 4)) > 0 "
+                "THEN CAST(NULLIF(JSON_UNQUOTE(JSON_EXTRACT(synced.`raw_json`, "
+                "'$.shipping_cost')), 'null') AS DECIMAL(20, 4)) ELSE NULL END"
             )
-            freight_usd_sql = f"({freight_local_sql}) * ({rate_sql})"
+            freight_currency_sql = (
+                f"CASE WHEN COALESCE(synced.`freight_source`, '') <> '' "
+                f"OR COALESCE(synced.`freight`, 0) > 0 "
+                f"THEN UPPER(COALESCE(NULLIF(synced.`freight_currency_id`, ''), "
+                f"{currency_sql})) WHEN ({freight_local_sql}) IS NOT NULL "
+                f"THEN {currency_sql} ELSE NULL END"
+            )
+            freight_usd_sql = (
+                f"CASE WHEN ({freight_local_sql}) IS NULL THEN NULL "
+                f"WHEN ({freight_currency_sql}) = 'USD' THEN ({freight_local_sql}) "
+                f"ELSE ({freight_local_sql}) * ({rate_sql}) END"
+            )
             balance_usd_sql = (
                 f"({usd_amount_sql}) - ({fee_usd_sql}) - ({freight_usd_sql})"
             )
@@ -1987,7 +2951,7 @@ def list_orders(
                            synced.`status_label` AS `platform_status`, synced.`workflow_status`,
                            ROUND({usd_amount_sql}, 2) AS `amount`,
                            synced.`total_amount` AS `amount_local`,
-                           ROUND({fee_usd_sql}, 2) AS `fee`,
+                           ROUND({fee_usd_sql}, 2) AS `fee`, synced.`sale_fee_source`,
                            0 AS `refund`, ROUND({cny_income_sql}, 2) AS `income`,
                            synced.`paid_amount` AS `paid_amount_usd`,
                            COALESCE(synced.`purchase_cost`, 0) AS `cost`, synced.`purchase_order`,
@@ -2000,6 +2964,17 @@ def list_orders(
                            ROUND({freight_usd_sql}, 2) AS `freight`,
                            ROUND({balance_usd_sql}, 2) AS `balance`,
                            ({freight_local_sql}) AS `freight_local`,
+                           ({freight_currency_sql}) AS `freight_currency_id`,
+                           synced.`freight_source`, synced.`freight_checked_at`,
+                           synced.`quoted_freight_usd`,
+                           synced.`quoted_freight_weight_g`,
+                           synced.`quoted_freight_source`,
+                           synced.`quoted_freight_checked_at`,
+                           ROUND(({freight_usd_sql}) - synced.`quoted_freight_usd`, 2)
+                               AS `freight_variance_usd`,
+                           ROUND({freight_usd_sql}, 2) AS `actual_freight_usd`,
+                           CASE WHEN ({freight_local_sql}) IS NULL THEN 1 ELSE 0 END
+                               AS `freight_missing`,
                            synced.`status_detail` AS `remark`,
                            synced.`country`,
                            synced.`buyer_name` AS `buyer`, {currency_sql} AS `currency_id`,
@@ -2095,7 +3070,21 @@ def list_orders(
                            COALESCE(synced.`total_amount`, 0) AS `total_amount`,
                            COALESCE(synced.`paid_amount`, 0) AS `paid_amount`,
                            COALESCE(synced.`sale_fee`, 0) AS `sale_fee`,
-                           COALESCE(synced.`freight`, 0) AS `freight_local`,
+                           CASE WHEN COALESCE(synced.`freight_source`, '') <> ''
+                                      OR COALESCE(synced.`freight`, 0) > 0
+                                THEN synced.`freight` ELSE NULL END AS `freight_local`,
+                           UPPER(COALESCE(NULLIF(synced.`freight_currency_id`, ''),
+                                          {currency_sql})) AS `freight_currency_id`,
+                           CASE WHEN COALESCE(synced.`freight_source`, '') = ''
+                                      AND COALESCE(synced.`freight`, 0) = 0
+                                THEN 1 ELSE 0 END AS `freight_missing`,
+                           synced.`quoted_freight_usd`,
+                           CASE
+                               WHEN UPPER(COALESCE(synced.`freight_currency_id`, '')) = 'USD'
+                                    AND (COALESCE(synced.`freight_source`, '') <> ''
+                                         OR COALESCE(synced.`freight`, 0) > 0)
+                               THEN synced.`freight` ELSE NULL
+                           END AS `actual_freight_usd`,
                            COALESCE(synced.`purchase_cost`, 0) AS `purchase_cost`
                     FROM `mercado_synced_orders` AS synced
                     INNER JOIN `mercado_store_tokens` AS stores
@@ -2149,8 +3138,12 @@ def list_orders(
             summary_amount_sql = (
                 f"scoped.`total_amount` * ({summary_rate_sql})"
             )
+            summary_freight_rate_sql = (
+                "CASE WHEN scoped.`freight_currency_id` = 'USD' THEN 1 "
+                f"ELSE ({summary_rate_sql}) END"
+            )
             summary_freight_sql = (
-                f"scoped.`freight_local` * ({summary_rate_sql})"
+                f"scoped.`freight_local` * ({summary_freight_rate_sql})"
             )
             summary_income_sql = (
                 f"({summary_amount_sql}) * ({summary_cny_rate_sql})"
@@ -2171,7 +3164,8 @@ def list_orders(
                 f"AS `exchange_rate_missing_count`, "
                 f"COALESCE(SUM(CASE WHEN cny_daily_rate.`rate` IS NOT NULL "
                 f"OR cny_current_rate.`rate` IS NOT NULL THEN 0 ELSE 1 END),0) "
-                f"AS `cny_exchange_rate_missing_count` "
+                f"AS `cny_exchange_rate_missing_count`, "
+                f"COALESCE(SUM(scoped.`freight_missing`),0) AS `freight_missing_count` "
                 f"FROM {order_filter_table} AS scoped "
                 f"LEFT JOIN {rate_key_table} AS rate_keys "
                 f"ON rate_keys.`currency_id` = scoped.`currency_id` "
@@ -2348,6 +3342,505 @@ def list_orders(
             }
     finally:
         connection.close()
+
+
+def _positive_order_weight(value):
+    try:
+        number = Decimal(str(value))
+    except (InvalidOperation, TypeError, ValueError):
+        return None
+    return number if number > 0 else None
+
+
+def _build_mercado_order_weight_quote(order_rows, product_assets, rate_matcher=None):
+    """Aggregate listing weights and quote the matching official rate-card row."""
+
+    order_rows = [dict(row or {}) for row in order_rows or ()]
+    if not order_rows:
+        raise KeyError("没有找到可计算重量的授权店铺订单")
+    product_assets = product_assets if isinstance(product_assets, dict) else {}
+    order_ids = [str(row.get("order_id") or "") for row in order_rows]
+    site_ids = {
+        str(row.get("site_id") or "").strip().upper()
+        for row in order_rows
+        if str(row.get("site_id") or "").strip()
+    }
+    token_ids = {
+        str(row.get("token_id") or "")
+        for row in order_rows
+        if str(row.get("token_id") or "")
+    }
+    site_id = next(iter(site_ids)) if len(site_ids) == 1 else ""
+    price_local = sum(
+        (Decimal(str(row.get("total_amount") or 0)) for row in order_rows),
+        Decimal("0"),
+    )
+    sku_rows = []
+    actual_total = Decimal("0")
+    volumetric_total = Decimal("0")
+    billable_total = Decimal("0")
+    total_units = 0
+    missing_skus = []
+
+    for order_row in order_rows:
+        order_id = str(order_row.get("order_id") or "")
+        token_id = str(order_row.get("token_id") or "")
+        raw_order = order_row.get("raw_json") or "{}"
+        sku_items = _mercado_order_sku_items(raw_order)
+        if not sku_items and order_row.get("product_id"):
+            sku_items = [{
+                "product_id": str(order_row.get("product_id") or ""),
+                "seller_sku": "",
+                "title": str(order_row.get("title") or ""),
+                "quantity": int(order_row.get("quantity") or 1),
+            }]
+        for item in sku_items:
+            product_id = str(item.get("product_id") or "")
+            asset = product_assets.get((token_id, product_id), {})
+            asset = asset if isinstance(asset, dict) else {}
+            quantity = max(1, int(item.get("quantity") or 1))
+            actual = _positive_order_weight(asset.get("weight_g"))
+            volumetric_kg = _positive_order_weight(asset.get("volumetric_weight_kg"))
+            volumetric_g = volumetric_kg * 1000 if volumetric_kg is not None else None
+            # Order-management quotes intentionally use the listing's actual
+            # weight only.  Volumetric weight remains available for reference,
+            # but must not change the weight band selected here.
+            billable = actual
+            total_units += quantity
+            if actual is None:
+                missing_label = str(
+                    item.get("seller_sku") or product_id or item.get("title") or "未知 SKU"
+                )
+                if missing_label not in missing_skus:
+                    missing_skus.append(missing_label)
+            else:
+                actual_total += actual * quantity
+                volumetric_total += (volumetric_g or Decimal("0")) * quantity
+                billable_total += billable * quantity
+            sku_rows.append({
+                "order_id": order_id,
+                "product_id": product_id,
+                "seller_sku": str(
+                    item.get("seller_sku") or asset.get("seller_sku") or ""
+                ),
+                "title": str(item.get("title") or asset.get("title") or ""),
+                "quantity": quantity,
+                "unit_actual_weight_g": float(actual) if actual is not None else None,
+                "unit_volumetric_weight_g": (
+                    float(volumetric_g) if volumetric_g is not None else None
+                ),
+                "unit_billable_weight_g": (
+                    float(billable) if billable is not None else None
+                ),
+                "total_actual_weight_g": (
+                    float(actual * quantity) if actual is not None else None
+                ),
+                "total_billable_weight_g": (
+                    float(billable * quantity) if billable is not None else None
+                ),
+                "weight_missing": actual is None,
+            })
+
+    weight_complete = bool(sku_rows) and not missing_skus
+    matched = None
+    if (
+        weight_complete
+        and site_id
+        and len(token_ids) == 1
+        and billable_total > 0
+        and rate_matcher is not None
+    ):
+        matched = rate_matcher(
+            site_id=site_id,
+            price_local=float(price_local),
+            billable_weight_g=float(billable_total),
+            free_shipping=True,
+        )
+    matched = dict(matched or {})
+    refreshed_at = matched.get("refreshed_at")
+    if isinstance(refreshed_at, datetime):
+        refreshed_at = refreshed_at.strftime("%Y-%m-%d %H:%M:%S")
+    return {
+        "order_ids": order_ids,
+        "site_id": site_id,
+        "price_local": float(price_local),
+        "price_currency_id": _MERCADO_SITE_CURRENCIES.get(site_id, ""),
+        "total_units": total_units,
+        "sku_count": len(sku_rows),
+        "actual_weight_g": float(actual_total) if sku_rows else None,
+        "volumetric_weight_g": float(volumetric_total) if sku_rows else None,
+        "billable_weight_g": float(billable_total) if weight_complete else None,
+        "weight_complete": weight_complete,
+        "missing_skus": missing_skus,
+        "shipping_amount_usd": (
+            float(matched["shipping_amount_usd"])
+            if matched.get("shipping_amount_usd") is not None
+            else None
+        ),
+        "shipping_currency_id": "USD" if matched else "",
+        "rate_kind": str(matched.get("rate_kind") or ""),
+        "rate_price_label": str(matched.get("price_label") or ""),
+        "rate_weight_label": str(matched.get("weight_label") or ""),
+        "rate_source": (
+            "official_global_selling_cainiao_rate_card" if matched else ""
+        ),
+        "rate_source_url": str(matched.get("source_url") or ""),
+        "rate_refreshed_at": refreshed_at or "",
+        "sku_items": sku_rows,
+    }
+
+
+def _match_mercado_official_rate_rows(
+    rate_rows,
+    *,
+    site_id,
+    price_local,
+    billable_weight_g,
+    free_shipping=True,
+):
+    """Match a preloaded official rate card without opening one DB connection per order."""
+
+    del free_shipping
+    site_id = str(site_id or "").strip().upper()
+    site_rows = [
+        dict(row or {})
+        for row in rate_rows or ()
+        if str((row or {}).get("site_id") or "").strip().upper() == site_id
+    ]
+    if not site_rows:
+        return None
+    price = Decimal(str(price_local or 0))
+    weight = Decimal(str(billable_weight_g or 0))
+    above_thresholds = [
+        Decimal(str(row["price_min_local"]))
+        for row in site_rows
+        if row.get("rate_kind") == "above_threshold"
+        and row.get("price_min_local") is not None
+    ]
+    if not above_thresholds:
+        return None
+    rate_kind = (
+        "above_threshold" if price >= min(above_thresholds) else "below_threshold"
+    )
+    matches = []
+    for row in site_rows:
+        if str(row.get("rate_kind") or "") != rate_kind:
+            continue
+        minimum = _positive_order_weight(row.get("weight_min_g"))
+        maximum = _positive_order_weight(row.get("weight_max_g"))
+        if minimum is not None and weight < minimum:
+            continue
+        if maximum is not None and weight > maximum:
+            continue
+        matches.append(row)
+    matches.sort(
+        key=lambda row: (
+            row.get("weight_max_g") is None,
+            Decimal(str(row.get("weight_max_g") or "999999999")),
+        )
+    )
+    return matches[0] if matches else None
+
+
+def get_mercado_order_weight_quote(order_ids):
+    """Return total order weight and the official weight-table shipping quote."""
+
+    normalized_ids = []
+    for value in order_ids or ():
+        order_id = str(value or "").strip()
+        if order_id and order_id not in normalized_ids:
+            normalized_ids.append(order_id)
+    if not normalized_ids:
+        raise ValueError("请至少提供一个订单号")
+    if len(normalized_ids) > 100:
+        raise ValueError("单次最多计算 100 个订单")
+
+    from erp.mercadolibre_store_link_store import (
+        STORE_LINK_TABLE,
+        ensure_store_link_table,
+    )
+
+    connection = pymysql.connect(**config)
+    try:
+        with connection.cursor() as cursor:
+            _ensure_mercado_synced_orders_table(cursor)
+            _ensure_mercado_store_tokens_table(cursor)
+            ensure_store_link_table(cursor)
+            connection.commit()
+            placeholders = ",".join(["%s"] * len(normalized_ids))
+            cursor.execute(
+                f"""
+                SELECT synced.`order_id`, synced.`token_id`, synced.`site_id`,
+                       synced.`total_amount`, synced.`product_id`, synced.`title`,
+                       synced.`quantity`, synced.`raw_json`
+                FROM `mercado_synced_orders` AS synced
+                INNER JOIN `mercado_store_tokens` AS stores
+                  ON stores.`id` = synced.`token_id`
+                WHERE synced.`order_id` IN ({placeholders})
+                ORDER BY synced.`date_created` ASC, synced.`order_id` ASC
+                """,
+                normalized_ids,
+            )
+            order_rows = [dict(row or {}) for row in (cursor.fetchall() or [])]
+            if not order_rows:
+                raise KeyError("订单不存在或所属店铺已取消授权")
+
+            product_ids_by_token = {}
+            for order_row in order_rows:
+                token_id = str(order_row.get("token_id") or "")
+                sku_items = _mercado_order_sku_items(order_row.get("raw_json") or "{}")
+                product_ids = {
+                    str(item.get("product_id") or "")
+                    for item in sku_items
+                    if str(item.get("product_id") or "")
+                }
+                if order_row.get("product_id"):
+                    product_ids.add(str(order_row["product_id"]))
+                product_ids_by_token.setdefault(token_id, set()).update(product_ids)
+
+            asset_clauses = []
+            asset_params = []
+            for token_id, product_ids in product_ids_by_token.items():
+                if not product_ids:
+                    continue
+                asset_clauses.append(
+                    "(`token_id` = %s AND `item_id` IN ("
+                    + ",".join(["%s"] * len(product_ids))
+                    + "))"
+                )
+                asset_params.extend([int(token_id), *sorted(product_ids)])
+            product_assets = {}
+            if asset_clauses:
+                cursor.execute(
+                    f"""
+                    SELECT `token_id`, `item_id`, `site_id`, `title`, `seller_sku`,
+                           `weight_g`, `volumetric_weight_kg`
+                    FROM `{STORE_LINK_TABLE}`
+                    WHERE `is_current` = 1 AND ({' OR '.join(asset_clauses)})
+                    """,
+                    asset_params,
+                )
+                product_assets = {
+                    (str(row.get("token_id") or ""), str(row.get("item_id") or "")): dict(row)
+                    for row in (cursor.fetchall() or [])
+                }
+    finally:
+        connection.close()
+
+    from erp.mercadolibre_shipping_rate_cards import OfficialShippingRateCardStore
+
+    rate_store = OfficialShippingRateCardStore()
+    result = _build_mercado_order_weight_quote(
+        order_rows,
+        product_assets,
+        rate_matcher=rate_store.match,
+    )
+    result["missing_order_ids"] = [
+        order_id
+        for order_id in normalized_ids
+        if order_id not in set(result.get("order_ids") or ())
+    ]
+    return result
+
+
+def refresh_mercado_order_quoted_freight(limit=200):
+    """Persist weight-table freight for shipments so actual-vs-quoted can be filtered."""
+
+    limit = max(1, min(1000, int(limit or 200)))
+    from erp.mercadolibre_store_link_store import (
+        STORE_LINK_TABLE,
+        ensure_store_link_table,
+    )
+
+    connection = pymysql.connect(**config)
+    try:
+        with connection.cursor() as cursor:
+            _ensure_mercado_synced_orders_table(cursor)
+            ensure_store_link_table(cursor)
+            connection.commit()
+            cursor.execute(
+                """
+                SELECT `token_id`, `shipping_id`, MAX(`date_created`) AS `latest_order_at`
+                FROM `mercado_synced_orders`
+                WHERE COALESCE(`shipping_id`, '') <> ''
+                  AND `freight_source` = 'shipment_costs'
+                  AND (
+                      `quoted_freight_checked_at` IS NULL
+                      OR `quoted_freight_checked_at` < CURDATE()
+                  )
+                GROUP BY `token_id`, `shipping_id`
+                ORDER BY `latest_order_at` DESC
+                LIMIT %s
+                """,
+                (limit,),
+            )
+            candidates = [dict(row or {}) for row in (cursor.fetchall() or [])]
+            if not candidates:
+                return {
+                    "requested": 0,
+                    "quoted_shipments": 0,
+                    "missing_shipments": 0,
+                    "updated_orders": 0,
+                }
+
+            group_clauses = []
+            group_params = []
+            for candidate in candidates:
+                group_clauses.append("(`token_id` = %s AND `shipping_id` = %s)")
+                group_params.extend((
+                    int(candidate["token_id"]),
+                    str(candidate["shipping_id"]),
+                ))
+            cursor.execute(
+                """
+                SELECT `order_id`, `token_id`, `shipping_id`, `site_id`,
+                       `total_amount`, `product_id`, `title`, `quantity`, `raw_json`
+                FROM `mercado_synced_orders`
+                WHERE """ + " OR ".join(group_clauses) + " "
+                "ORDER BY `token_id`, `shipping_id`, `order_id`",
+                group_params,
+            )
+            order_rows = [dict(row or {}) for row in (cursor.fetchall() or [])]
+
+            product_ids_by_token = {}
+            for order_row in order_rows:
+                token_id = str(order_row.get("token_id") or "")
+                sku_items = _mercado_order_sku_items(order_row.get("raw_json") or "{}")
+                product_ids = {
+                    str(item.get("product_id") or "")
+                    for item in sku_items
+                    if str(item.get("product_id") or "")
+                }
+                if order_row.get("product_id"):
+                    product_ids.add(str(order_row["product_id"]))
+                product_ids_by_token.setdefault(token_id, set()).update(product_ids)
+
+            asset_clauses = []
+            asset_params = []
+            for token_id, product_ids in product_ids_by_token.items():
+                if not product_ids:
+                    continue
+                asset_clauses.append(
+                    "(`token_id` = %s AND `item_id` IN ("
+                    + ",".join(["%s"] * len(product_ids))
+                    + "))"
+                )
+                asset_params.extend([int(token_id), *sorted(product_ids)])
+            product_assets = {}
+            if asset_clauses:
+                cursor.execute(
+                    f"""
+                    SELECT `token_id`, `item_id`, `site_id`, `title`, `seller_sku`,
+                           `weight_g`, `volumetric_weight_kg`
+                    FROM `{STORE_LINK_TABLE}`
+                    WHERE `is_current` = 1 AND ({' OR '.join(asset_clauses)})
+                    """,
+                    asset_params,
+                )
+                product_assets = {
+                    (str(row.get("token_id") or ""), str(row.get("item_id") or "")): dict(row)
+                    for row in (cursor.fetchall() or [])
+                }
+    finally:
+        connection.close()
+
+    from erp.mercadolibre_shipping_rate_cards import OfficialShippingRateCardStore
+
+    rate_rows = (OfficialShippingRateCardStore().list_rates() or {}).get("rows") or []
+    grouped_orders = {}
+    for order_row in order_rows:
+        key = (
+            str(order_row.get("token_id") or ""),
+            str(order_row.get("shipping_id") or ""),
+        )
+        grouped_orders.setdefault(key, []).append(order_row)
+
+    now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    updates = []
+    quoted_shipments = missing_shipments = 0
+    quantum = Decimal("0.0001")
+    for group_rows in grouped_orders.values():
+        quote = _build_mercado_order_weight_quote(
+            group_rows,
+            product_assets,
+            rate_matcher=lambda **values: _match_mercado_official_rate_rows(
+                rate_rows, **values
+            ),
+        )
+        quoted_amount = quote.get("shipping_amount_usd")
+        if quoted_amount is None:
+            missing_shipments += 1
+            source = "weight_missing" if not quote.get("weight_complete") else "rate_missing"
+        else:
+            quoted_shipments += 1
+            source = "official_weight_rate_card"
+        weight_by_order = {}
+        for item in quote.get("sku_items") or ():
+            order_id = str(item.get("order_id") or "")
+            raw_weight = item.get("total_actual_weight_g")
+            if raw_weight is not None:
+                weight_by_order[order_id] = (
+                    weight_by_order.get(order_id, Decimal("0"))
+                    + Decimal(str(raw_weight))
+                )
+        allocation_weights = [
+            max(Decimal("0"), Decimal(str(row.get("total_amount") or 0)))
+            for row in group_rows
+        ]
+        allocation_total = sum(allocation_weights, Decimal("0"))
+        allocated = Decimal("0")
+        quoted_decimal = (
+            Decimal(str(quoted_amount)) if quoted_amount is not None else None
+        )
+        for index, order_row in enumerate(group_rows):
+            share = None
+            if quoted_decimal is not None:
+                if index == len(group_rows) - 1:
+                    share = quoted_decimal - allocated
+                elif allocation_total > 0:
+                    share = (
+                        quoted_decimal * allocation_weights[index] / allocation_total
+                    ).quantize(quantum)
+                else:
+                    share = (quoted_decimal / len(group_rows)).quantize(quantum)
+                allocated += share
+            order_id = str(order_row.get("order_id") or "")
+            updates.append((
+                share,
+                weight_by_order.get(order_id),
+                source,
+                now,
+                order_id,
+                int(order_row.get("token_id") or 0),
+            ))
+
+    save_connection = pymysql.connect(**config)
+    try:
+        with save_connection.cursor() as cursor:
+            if updates:
+                cursor.executemany(
+                    """
+                    UPDATE `mercado_synced_orders`
+                    SET `quoted_freight_usd` = %s,
+                        `quoted_freight_weight_g` = %s,
+                        `quoted_freight_source` = %s,
+                        `quoted_freight_checked_at` = %s
+                    WHERE `order_id` = %s AND `token_id` = %s
+                    """,
+                    updates,
+                )
+        save_connection.commit()
+    except Exception:
+        save_connection.rollback()
+        raise
+    finally:
+        save_connection.close()
+    return {
+        "requested": len(candidates),
+        "quoted_shipments": quoted_shipments,
+        "missing_shipments": missing_shipments,
+        "updated_orders": len(updates),
+    }
 
 
 def bulk_update_mercado_orders(
@@ -2604,6 +4097,22 @@ def get_mercado_order_sync_schedule_value(state_key):
         connection.close()
 
 
+def get_mercado_order_sync_schedule_state(state_key):
+    connection = pymysql.connect(**config)
+    try:
+        with connection.cursor() as cursor:
+            _ensure_mercado_order_sync_schedule_table(cursor)
+            cursor.execute(
+                "SELECT `state_value`, `updated_at` FROM `mercado_order_sync_schedule` "
+                "WHERE `state_key` = %s LIMIT 1",
+                (str(state_key or "")[:64],),
+            )
+            row = cursor.fetchone()
+            return dict(row) if row else None
+    finally:
+        connection.close()
+
+
 def set_mercado_order_sync_schedule_value(state_key, state_value):
     now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     connection = pymysql.connect(**config)
@@ -2620,6 +4129,154 @@ def set_mercado_order_sync_schedule_value(state_key, state_value):
                     `updated_at` = VALUES(`updated_at`)
                 """,
                 (str(state_key or "")[:64], str(state_value or "")[:255], now),
+            )
+        connection.commit()
+    except Exception:
+        connection.rollback()
+        raise
+    finally:
+        connection.close()
+
+
+def _ensure_mercado_order_status_cursors_table(cursor):
+    cursor.execute(
+        """
+        CREATE TABLE IF NOT EXISTS `mercado_order_status_cursors` (
+            `token_id` BIGINT NOT NULL,
+            `run_date` DATE NULL,
+            `completed_for_run` TINYINT(1) NOT NULL DEFAULT 0,
+            `completed_through` DATETIME NULL,
+            `window_from` DATETIME NULL,
+            `window_to` DATETIME NULL,
+            `next_offset` INT NOT NULL DEFAULT 0,
+            `checked_count` INT NOT NULL DEFAULT 0,
+            `updated_count` INT NOT NULL DEFAULT 0,
+            `failed_count` INT NOT NULL DEFAULT 0,
+            `updated_at` DATETIME NOT NULL,
+            PRIMARY KEY (`token_id`),
+            KEY `idx_order_status_cursors_run` (`run_date`, `completed_for_run`)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+        """
+    )
+
+
+def begin_mercado_order_status_window(token_id, run_date, default_from, window_to):
+    """Start or resume one store's bounded last_updated scan."""
+    token_id = int(token_id)
+    run_date = str(run_date or "")[:10]
+    default_from = default_from or (datetime.utcnow() - timedelta(days=1))
+    window_to = window_to or datetime.utcnow()
+    now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    connection = pymysql.connect(**config)
+    try:
+        with connection.cursor() as cursor:
+            _ensure_mercado_order_status_cursors_table(cursor)
+            cursor.execute(
+                "SELECT * FROM `mercado_order_status_cursors` "
+                "WHERE `token_id` = %s FOR UPDATE",
+                (token_id,),
+            )
+            existing = cursor.fetchone() or {}
+            active_window = bool(
+                existing
+                and not int(existing.get("completed_for_run") or 0)
+                and existing.get("window_from")
+                and existing.get("window_to")
+            )
+            completed_today = bool(
+                existing
+                and str(existing.get("run_date") or "") == run_date
+                and int(existing.get("completed_for_run") or 0)
+            )
+            if active_window or completed_today:
+                connection.commit()
+                return dict(existing)
+
+            base_from = existing.get("completed_through") or default_from
+            if isinstance(base_from, str):
+                base_from = datetime.fromisoformat(base_from)
+            scan_from = base_from - timedelta(minutes=5)
+            cursor.execute(
+                """
+                INSERT INTO `mercado_order_status_cursors` (
+                    `token_id`, `run_date`, `completed_for_run`, `completed_through`,
+                    `window_from`, `window_to`, `next_offset`, `checked_count`,
+                    `updated_count`, `failed_count`, `updated_at`
+                ) VALUES (%s, %s, 0, %s, %s, %s, 0, 0, 0, 0, %s)
+                ON DUPLICATE KEY UPDATE
+                    `run_date` = VALUES(`run_date`),
+                    `completed_for_run` = 0,
+                    `window_from` = VALUES(`window_from`),
+                    `window_to` = VALUES(`window_to`),
+                    `next_offset` = 0,
+                    `checked_count` = 0,
+                    `updated_count` = 0,
+                    `failed_count` = 0,
+                    `updated_at` = VALUES(`updated_at`)
+                """,
+                (
+                    token_id, run_date, existing.get("completed_through"),
+                    scan_from, window_to, now,
+                ),
+            )
+            cursor.execute(
+                "SELECT * FROM `mercado_order_status_cursors` WHERE `token_id` = %s",
+                (token_id,),
+            )
+            result = dict(cursor.fetchone() or {})
+        connection.commit()
+        return result
+    except Exception:
+        connection.rollback()
+        raise
+    finally:
+        connection.close()
+
+
+def checkpoint_mercado_order_status_window(
+    token_id, next_offset, checked_count, updated_count, failed_count,
+):
+    connection = pymysql.connect(**config)
+    try:
+        with connection.cursor() as cursor:
+            _ensure_mercado_order_status_cursors_table(cursor)
+            cursor.execute(
+                """
+                UPDATE `mercado_order_status_cursors`
+                SET `next_offset` = %s, `checked_count` = %s,
+                    `updated_count` = %s, `failed_count` = %s,
+                    `updated_at` = %s
+                WHERE `token_id` = %s AND `completed_for_run` = 0
+                """,
+                (
+                    max(0, int(next_offset or 0)), max(0, int(checked_count or 0)),
+                    max(0, int(updated_count or 0)), max(0, int(failed_count or 0)),
+                    datetime.now().strftime("%Y-%m-%d %H:%M:%S"), int(token_id),
+                ),
+            )
+        connection.commit()
+    except Exception:
+        connection.rollback()
+        raise
+    finally:
+        connection.close()
+
+
+def complete_mercado_order_status_window(token_id):
+    connection = pymysql.connect(**config)
+    try:
+        with connection.cursor() as cursor:
+            _ensure_mercado_order_status_cursors_table(cursor)
+            cursor.execute(
+                """
+                UPDATE `mercado_order_status_cursors`
+                SET `completed_for_run` = 1,
+                    `completed_through` = `window_to`,
+                    `window_from` = NULL, `window_to` = NULL,
+                    `next_offset` = 0, `updated_at` = %s
+                WHERE `token_id` = %s AND `completed_for_run` = 0
+                """,
+                (datetime.now().strftime("%Y-%m-%d %H:%M:%S"), int(token_id)),
             )
         connection.commit()
     except Exception:
@@ -3221,6 +4878,109 @@ def update_mercado_order_image(token_id, order_id, image_url):
             affected = int(cursor.rowcount)
         connection.commit()
         return affected
+    except Exception:
+        connection.rollback()
+        raise
+    finally:
+        connection.close()
+
+
+def list_mercado_pending_order_image_rows(limit=100):
+    """Return orders whose variation image has not been read from Marketplace Items."""
+    limit = max(1, min(500, int(limit or 100)))
+    pending_sql = """
+        COALESCE(`product_id`, '') <> ''
+        AND COALESCE(`image_source`, '') <> 'marketplace_item'
+        AND (
+            `image_checked_at` IS NULL
+            OR `image_checked_at` < DATE_SUB(NOW(), INTERVAL 24 HOUR)
+        )
+    """
+    connection = pymysql.connect(**config)
+    try:
+        with connection.cursor() as cursor:
+            _ensure_mercado_synced_orders_table(cursor)
+            cursor.execute(
+                f"""
+                SELECT `token_id`, `product_id`, MAX(`date_created`) AS `latest_order_at`
+                FROM `mercado_synced_orders`
+                WHERE {pending_sql}
+                GROUP BY `token_id`, `product_id`
+                ORDER BY `latest_order_at` DESC
+                LIMIT %s
+                """,
+                (limit,),
+            )
+            products = cursor.fetchall() or []
+            if not products:
+                return []
+            product_where = " OR ".join(
+                ["(`token_id` = %s AND `product_id` = %s)"] * len(products)
+            )
+            params = []
+            for row in products:
+                params.extend((int(row["token_id"]), str(row["product_id"])))
+            cursor.execute(
+                f"""
+                SELECT `order_id`, `token_id`, `product_id`, `raw_json`,
+                       `image_checked_at`, `image_last_error`
+                FROM `mercado_synced_orders`
+                WHERE {pending_sql} AND ({product_where})
+                ORDER BY `date_created` DESC, `order_id` DESC
+                """,
+                params,
+            )
+            return cursor.fetchall() or []
+    finally:
+        connection.close()
+
+
+def save_mercado_order_image_results(entries):
+    """Persist original variation images inside both the order row and raw payload."""
+    now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    rows = []
+    for entry in entries or ():
+        order_id = str((entry or {}).get("order_id") or "").strip()
+        if not order_id:
+            continue
+        image_url = _mercado_https_url((entry or {}).get("image_url"))
+        raw_order = (entry or {}).get("raw_order")
+        raw_json = (
+            json.dumps(raw_order, ensure_ascii=False, separators=(",", ":"))
+            if image_url and isinstance(raw_order, dict)
+            else None
+        )
+        rows.append((
+            image_url,
+            raw_json,
+            "marketplace_item" if image_url else "",
+            str((entry or {}).get("error") or "").strip()[:2000],
+            now,
+            order_id,
+            int((entry or {}).get("token_id") or 0),
+        ))
+    if not rows:
+        return {"checked": 0, "updated": 0, "failed": 0}
+    connection = pymysql.connect(**config)
+    try:
+        with connection.cursor() as cursor:
+            _ensure_mercado_synced_orders_table(cursor)
+            cursor.executemany(
+                """
+                UPDATE `mercado_synced_orders`
+                SET `image_url` = COALESCE(NULLIF(%s, ''), `image_url`),
+                    `raw_json` = COALESCE(%s, `raw_json`),
+                    `image_source` = CASE WHEN %s <> ''
+                        THEN 'marketplace_item' ELSE `image_source` END,
+                    `image_last_error` = %s,
+                    `image_checked_at` = %s
+                WHERE `order_id` = %s AND `token_id` = %s
+                """,
+                rows,
+            )
+        connection.commit()
+        updated = sum(1 for row in rows if row[0])
+        return {"checked": len(rows), "updated": updated, "failed": len(rows) - updated}
     except Exception:
         connection.rollback()
         raise

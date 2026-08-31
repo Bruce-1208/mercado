@@ -23,7 +23,7 @@ def test_normalize_appeal_type(value, expected):
     assert bit_daily_task.normalize_appeal_type(value) == expected
 
 
-def test_mixed_mode_runs_every_other_task_followed_by_infraction():
+def test_mixed_mode_runs_the_fixed_six_task_round():
     assert bit_daily_task.appeal_type_sequence("混合模式") == (
         bit_daily_task.APPEAL_TYPE_INFRACTION,
         bit_daily_task.APPEAL_TYPE_DELAY,
@@ -31,7 +31,6 @@ def test_mixed_mode_runs_every_other_task_followed_by_infraction():
         bit_daily_task.APPEAL_TYPE_COMPLAINT,
         bit_daily_task.APPEAL_TYPE_INFRACTION,
         bit_daily_task.APPEAL_TYPE_CANCELLATION,
-        bit_daily_task.APPEAL_TYPE_INFRACTION,
     )
 
 
@@ -111,6 +110,35 @@ def test_authorized_appeal_scope_uses_site_switches_and_salesperson(monkeypatch)
     assert all_scope["store_alias"] == {"MX", "CL"}
     assert owner_scope["授权店铺"] == {"MX"}
     assert group_scope["授权店铺"] == {"MX"}
+
+
+def test_authorized_appeal_scope_requires_explicit_enabled_switch(monkeypatch):
+    monkeypatch.setattr(
+        bit_daily_task,
+        "list_mercado_store_tokens",
+        lambda: {
+            "rows": [
+                {"display_name": "无站点配置"},
+                {
+                    "display_name": "未勾选店铺",
+                    "site_settings": [
+                        {"site_id": "MLM"},
+                        {"site_id": "MLB", "appeal_enabled": False},
+                    ],
+                },
+                {
+                    "display_name": "已勾选店铺",
+                    "site_settings": [
+                        {"site_id": "MLC", "appeal_enabled": True},
+                    ],
+                },
+            ]
+        },
+    )
+
+    assert bit_daily_task.load_authorized_appeal_shop_site_config() == {
+        "已勾选店铺": {"CL"}
+    }
 
 
 def test_default_infraction_plan_uses_authorization_switches_not_browser_sites(monkeypatch):
@@ -262,6 +290,92 @@ def test_infraction_appeal_plan_top_n_zero_keeps_every_affected_shop(monkeypatch
     )
 
     assert len(plan) == 35
+
+
+def test_infraction_execution_standard_uses_shop_total_and_is_strict(monkeypatch):
+    monkeypatch.setattr(
+        bit_daily_task,
+        "get_latest_infraction_info",
+        lambda _recent_days: {
+            "summary": [
+                {"店铺名": "刚好达标", "站点": "墨西哥", "总数": 2},
+                {"店铺名": "刚好达标", "站点": "巴西", "总数": 3},
+                {"店铺名": "超过标准", "站点": "墨西哥", "总数": 6},
+            ]
+        },
+    )
+    monkeypatch.setattr(
+        bit_daily_task,
+        "list_mercado_store_tokens",
+        lambda: {
+            "rows": [
+                {
+                    "display_name": name,
+                    "site_settings": [
+                        {"site_id": "MLM", "appeal_enabled": True},
+                        {"site_id": "MLB", "appeal_enabled": True},
+                    ],
+                }
+                for name in ("刚好达标", "超过标准")
+            ]
+        },
+    )
+
+    plan = bit_daily_task.build_latest_infraction_appeal_plan(
+        top_n=0,
+        min_infraction_count=5,
+    )
+
+    assert [shop["name"] for shop in plan] == ["超过标准"]
+
+
+@pytest.mark.parametrize(
+    ("appeal_type", "rate_field", "standard_name"),
+    [
+        ("延误率", "延误率", "min_delay_rate"),
+        ("投诉", "投诉率", "min_complaint_rate"),
+        ("取消率", "取消率", "min_cancellation_rate"),
+    ],
+)
+def test_reputation_execution_standards_are_independent_and_strict(
+    monkeypatch,
+    appeal_type,
+    rate_field,
+    standard_name,
+):
+    monkeypatch.setattr(
+        bit_daily_task,
+        "get_latest_reputation_info",
+        lambda: {
+            "rows": [
+                {"店铺名": "刚好达标", "站点": "墨西哥", rate_field: "5%"},
+                {"店铺名": "超过标准", "站点": "墨西哥", rate_field: "5.01%"},
+            ]
+        },
+    )
+    monkeypatch.setattr(
+        bit_daily_task,
+        "list_mercado_store_tokens",
+        lambda: {
+            "rows": [
+                {
+                    "display_name": name,
+                    "site_settings": [
+                        {"site_id": "MLM", "appeal_enabled": True},
+                    ],
+                }
+                for name in ("刚好达标", "超过标准")
+            ]
+        },
+    )
+
+    plan = bit_daily_task.build_appeal_plan(
+        appeal_type,
+        top_n=0,
+        **{standard_name: "5%"},
+    )
+
+    assert [shop["name"] for shop in plan] == ["超过标准"]
 
 
 def test_build_latest_cancellation_plan_only_keeps_positive_rates(monkeypatch):

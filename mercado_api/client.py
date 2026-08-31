@@ -87,7 +87,15 @@ class MercadoLibreClient:
         if self.token_store:
             self.token_store.save(data)
 
-    def request(self, method: str, path: str, *, params: dict[str, Any] | None = None) -> Any:
+    def request(
+        self,
+        method: str,
+        path: str,
+        *,
+        params: dict[str, Any] | None = None,
+        headers: dict[str, str] | None = None,
+        json_body: Any = None,
+    ) -> Any:
         """发送已认证请求，并处理 token 失效、限流及临时服务端错误。
 
         401 每次请求最多触发一次 token 刷新；网络中断、429 和 5xx 使用退避
@@ -97,8 +105,16 @@ class MercadoLibreClient:
         refreshed = False
         for attempt in range(4):
             try:
-                response = self.session.request(method, url, params=params,
-                    headers={"Authorization": f"Bearer {self.access_token}"}, timeout=self.timeout)
+                request_headers = dict(headers or {})
+                request_headers["Authorization"] = f"Bearer {self.access_token}"
+                response = self.session.request(
+                    method,
+                    url,
+                    params=params,
+                    headers=request_headers,
+                    json=json_body,
+                    timeout=self.timeout,
+                )
             except requests.RequestException as exc:
                 if attempt < 3:
                     delay = min(2**attempt, 8)
@@ -120,6 +136,21 @@ class MercadoLibreClient:
                 raise MercadoAPIError(f"{method} {path} 失败 ({response.status_code}): {response.text[:1000]}")
             return response.json()
         raise MercadoAPIError(f"{method} {path} 多次重试后仍失败")
+
+    def update_global_item(self, item_id: str, changes: dict[str, Any]) -> dict[str, Any]:
+        """Update a Global Selling marketplace listing through /global/items."""
+
+        item_id = str(item_id or "").strip().upper()
+        if not item_id:
+            raise ValueError("item_id 不能为空")
+        if not isinstance(changes, dict) or not changes:
+            raise ValueError("changes 不能为空")
+        result = self.request(
+            "PUT",
+            f"/global/items/{item_id}",
+            json_body=changes,
+        )
+        return dict(result or {})
 
     def request_bytes(
         self,
@@ -186,20 +217,56 @@ class MercadoLibreClient:
         """
         offset, limit = 0, 50
         while True:
-            # Global Selling 的生产接口使用 ``seller``；传 ``seller.id`` 会
-            # 返回 200 但 paging.total=0，容易被误判为店铺确实没有订单。
-            params = {"seller": seller_id, "limit": limit, "offset": offset, **filters}
-            page = self.request("GET", "/marketplace/orders/search", params=params)
-            results = page.get("results", [])
-            yield from self._order_ids(results)
-            offset += len(results)
-            total = int(page.get("paging", {}).get("total", offset))
-            if not results or offset >= total:
+            page = self.search_order_ids_page(
+                seller_id,
+                offset=offset,
+                limit=limit,
+                **filters,
+            )
+            yield from page["order_ids"]
+            offset = int(page["next_offset"])
+            if not page["result_count"] or offset >= int(page["total"]):
                 break
+
+    def search_order_ids_page(
+        self,
+        seller_id: str,
+        *,
+        offset: int = 0,
+        limit: int = 50,
+        **filters: Any,
+    ) -> dict[str, Any]:
+        """Read one resumable order-search page and expose the next top-level offset."""
+        offset = max(0, int(offset or 0))
+        limit = max(1, min(50, int(limit or 50)))
+        # Global Selling uses ``seller``. ``seller.id`` can return an empty page.
+        params = {"seller": seller_id, "limit": limit, "offset": offset, **filters}
+        page = self.request("GET", "/marketplace/orders/search", params=params)
+        results = list(page.get("results") or [])
+        result_count = len(results)
+        next_offset = offset + result_count
+        total = int((page.get("paging") or {}).get("total", next_offset))
+        return {
+            "order_ids": list(self._order_ids(results)),
+            "result_count": result_count,
+            "next_offset": next_offset,
+            "total": total,
+        }
 
     def get_order(self, order_id: str) -> dict[str, Any]:
         """读取单个订单的完整详情。"""
         return self.request("GET", f"/marketplace/orders/{order_id}")
+
+    def get_shipment_costs(self, shipment_id: str) -> dict[str, Any]:
+        """Read the official final sender/receiver costs for one shipment."""
+        shipment_id = str(shipment_id or "").strip()
+        if not shipment_id:
+            raise ValueError("shipment_id 不能为空")
+        return self.request(
+            "GET",
+            f"/marketplace/shipments/{shipment_id}/costs",
+            headers={"x-format-new": "true"},
+        )
 
     def get_marketplace_item(
         self,

@@ -716,16 +716,25 @@ def test_daily_task_console_exposes_all_task_switches_and_shop_group():
     assert 'name="daily-task-appeal-type" value="延误率"' in template
     assert 'name="daily-task-appeal-type" value="投诉"' in template
     assert 'name="daily-task-appeal-type" value="取消率"' in template
+    assert 'id="daily-task-mixed-mode"' in template
+    assert 'value="混合模式"' in template
     assert 'id="daily-task-salesperson"' in template
     assert '<option value="">所有业务员</option>' in template
     assert 'id="daily-task-group"' in template
     assert '<option value="">所有店铺组</option>' in template
     assert 'id="daily-task-top-n"' not in template
     assert 'id="daily-task-only-active"' not in template
-    assert 'id="daily-task-min-rate"' in template
+    assert 'id="daily-task-infraction-min-count"' in template
+    assert 'id="daily-task-delay-min-rate"' in template
+    assert 'id="daily-task-complaint-min-rate"' in template
+    assert 'id="daily-task-cancellation-min-rate"' in template
     assert "appeal_types: appealTypes" in template
     assert "group_names: groupName ? [groupName] : []" in template
-    assert "min_rate: `${minRatePercent}%`" in template
+    assert "infraction_min_count:" in template
+    assert "delay_min_rate:" in template
+    assert "complaint_min_rate:" in template
+    assert "cancellation_min_rate:" in template
+    assert "侵权 → 延误率 → 侵权 → 投诉 → 侵权 → 取消率" in template
 
 
 @pytest.mark.parametrize("appeal_type", ["侵权", "延误率", "取消率", "投诉", "混合模式"])
@@ -735,12 +744,15 @@ def test_build_daily_task_params_accepts_all_appeal_modes(appeal_type):
     )
 
     if appeal_type == "混合模式":
-        assert params["appeal_type"] == "多任务"
-        assert params["appeal_types"] == ["侵权", "延误率", "投诉", "取消率"]
+        assert params["appeal_type"] == "混合模式"
+        assert params["appeal_types"] == ["混合模式"]
     else:
         assert params["appeal_type"] == appeal_type
         assert params["appeal_types"] == [appeal_type]
     assert params["min_rate"] == pytest.approx(0.075)
+    assert params["delay_min_rate"] == pytest.approx(0.075)
+    assert params["complaint_min_rate"] == pytest.approx(0.075)
+    assert params["cancellation_min_rate"] == pytest.approx(0.075)
     assert params["top_n"] == 0
 
 
@@ -768,6 +780,20 @@ def test_build_daily_task_params_supports_multiple_tasks_and_shop_group():
     assert params["appeal_type"] == "多任务"
     assert params["group_names"] == ["精品组"]
     assert params["top_n"] == 0
+
+
+def test_build_daily_task_params_parses_independent_execution_standards():
+    params = bit_interface.build_daily_task_params({
+        "infraction_min_count": 8,
+        "delay_min_rate": "3.5%",
+        "complaint_min_rate": "1.25%",
+        "cancellation_min_rate": "2%",
+    })
+
+    assert params["infraction_min_count"] == 8
+    assert params["delay_min_rate"] == pytest.approx(0.035)
+    assert params["complaint_min_rate"] == pytest.approx(0.0125)
+    assert params["cancellation_min_rate"] == pytest.approx(0.02)
 
 
 def test_daily_task_options_returns_all_active_salespeople(monkeypatch):
@@ -811,6 +837,8 @@ def test_build_daily_task_params_rejects_invalid_appeal_settings():
         bit_interface.build_daily_task_params({"min_rate": "101%"})
     with pytest.raises(ValueError, match="至少开启一个任务"):
         bit_interface.build_daily_task_params({"appeal_types": []})
+    with pytest.raises(ValueError, match="delay_min_rate"):
+        bit_interface.build_daily_task_params({"delay_min_rate": "101%"})
 
 
 @pytest.mark.parametrize(
@@ -878,12 +906,20 @@ def test_daily_task_console_dispatches_multiple_tasks_and_group(monkeypatch):
     params = bit_interface.build_daily_task_params({
         "appeal_types": ["侵权", "投诉"],
         "group_name": "精品组",
+        "infraction_min_count": 5,
+        "delay_min_rate": "2%",
+        "complaint_min_rate": "3%",
+        "cancellation_min_rate": "4%",
     })
 
     bit_interface.run_daily_task_job(params, FakeTaskLock())
 
     assert calls[0][0] == (["侵权", "投诉"],)
     assert calls[0][1]["group_names"] == ["精品组"]
+    assert calls[0][1]["min_infraction_count"] == 5
+    assert calls[0][1]["min_delay_rate"] == pytest.approx(0.02)
+    assert calls[0][1]["min_complaint_rate"] == pytest.approx(0.03)
+    assert calls[0][1]["min_cancellation_rate"] == pytest.approx(0.04)
 
 
 def test_resolve_selected_appeal_sites_and_remove_duplicates():
@@ -1313,7 +1349,7 @@ def test_appeal_shop_name_supports_fuzzy_search_and_keyboard_selection():
         Path(bit_interface.__file__).resolve().parent / "templates" / "index.html"
     ).read_text(encoding="utf-8")
 
-    assert 'id="name" value="跃马扬鞭" placeholder="输入部分店铺名搜索"' in template
+    assert 'id="name" placeholder="输入部分店铺名搜索"' in template
     assert 'id="appeal-shop-options" role="listbox"' in template
     assert "function appealShopMatchScore(shopName, query)" in template
     assert "name.indexOf(keyword)" in template
@@ -1321,6 +1357,8 @@ def test_appeal_shop_name_supports_fuzzy_search_and_keyboard_selection():
     assert "function handleAppealShopKeydown(event)" in template
     assert 'event.key === "ArrowDown" || event.key === "ArrowUp"' in template
     assert "selectAppealShop(appealShopActiveIndex)" in template
+    assert "authorizedAppealShopOptions" in template
+    assert "syncAppealSiteOptions(shop)" in template
     assert 'name: shopName' in template
 
 
@@ -1380,6 +1418,28 @@ def test_collection_options_returns_active_shop_site_mapping(monkeypatch):
         ],
     )
     monkeypatch.setattr(
+        bit_interface.bit_db_api,
+        "list_mercado_store_tokens",
+        lambda: {
+            "rows": [
+                {
+                    "display_name": "店铺甲",
+                    "site_settings": [
+                        {"site_id": "MLM", "visit_stats_enabled": True, "appeal_enabled": True},
+                        {"site_id": "MLB", "visit_stats_enabled": True, "appeal_enabled": False},
+                    ],
+                },
+                {
+                    "display_name": "店铺乙",
+                    "site_settings": [
+                        {"site_id": "MLB", "visit_stats_enabled": True, "appeal_enabled": True},
+                        {"site_id": "MLC", "visit_stats_enabled": True, "appeal_enabled": True},
+                    ],
+                },
+            ]
+        },
+    )
+    monkeypatch.setattr(
         bit_interface,
         "db_get_latest_infraction_info",
         lambda _days=30: {
@@ -1433,6 +1493,18 @@ def test_collection_options_returns_active_shop_site_mapping(monkeypatch):
             },
         ],
         "sites": ["墨西哥", "巴西", "智利"],
+        "appeal_shops": [
+            {
+                "shop_name": "店铺甲",
+                "salesperson": "业务员甲",
+                "sites": ["墨西哥"],
+            },
+            {
+                "shop_name": "店铺乙",
+                "salesperson": "业务员乙",
+                "sites": ["巴西", "智利"],
+            },
+        ],
         "failed_shops": {
             "infraction": [
                 {
@@ -1498,6 +1570,27 @@ def test_collection_start_passes_selected_scope_and_defaults_to_ten_workers(
             },
         ],
     )
+    monkeypatch.setattr(
+        bit_interface.bit_db_api,
+        "list_mercado_store_tokens",
+        lambda: {
+            "rows": [
+                {
+                    "display_name": "店铺甲",
+                    "site_settings": [
+                        {"site_id": "MLM", "visit_stats_enabled": True},
+                        {"site_id": "MLB", "visit_stats_enabled": True},
+                    ],
+                },
+                {
+                    "display_name": "店铺乙",
+                    "site_settings": [
+                        {"site_id": "MLC", "visit_stats_enabled": True},
+                    ],
+                },
+            ]
+        },
+    )
     captured = {}
 
     class FakeThread:
@@ -1559,6 +1652,26 @@ def test_collection_start_rejects_shop_site_without_configured_intersection(monk
             },
         ],
     )
+    monkeypatch.setattr(
+        bit_interface.bit_db_api,
+        "list_mercado_store_tokens",
+        lambda: {
+            "rows": [
+                {
+                    "display_name": "店铺甲",
+                    "site_settings": [
+                        {"site_id": "MLM", "visit_stats_enabled": True},
+                    ],
+                },
+                {
+                    "display_name": "店铺乙",
+                    "site_settings": [
+                        {"site_id": "MLB", "visit_stats_enabled": True},
+                    ],
+                },
+            ]
+        },
+    )
     client = bit_interface.app.test_client()
     with client.session_transaction() as flask_session:
         flask_session["workbench_user"] = {"username": "tester"}
@@ -1590,6 +1703,11 @@ def test_run_appeal_api_accepts_multiple_site_and_form_parameters(monkeypatch):
         yield "完成\n"
 
     monkeypatch.setattr(bit_interface, "shensu_logic", fake_shensu_logic)
+    monkeypatch.setattr(
+        bit_interface.bit_daily_task,
+        "load_authorized_appeal_shop_site_config",
+        lambda: {"测试店铺": {"MX", "CL"}},
+    )
     client = bit_interface.app.test_client()
     with client.session_transaction() as flask_session:
         flask_session["workbench_user"] = {

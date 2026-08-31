@@ -261,6 +261,58 @@ def test_refresh_still_saves_rotated_token_when_profile_lookup_fails(oauth_env):
     assert result["warning"] == updated["record"]["last_error"]
 
 
+def test_auto_refresh_renews_only_due_tokens_and_defers_recent_failures():
+    now = mercado_tokens.datetime(2026, 8, 30, 12, 0, 0)
+    refreshed = []
+
+    result = mercado_tokens.auto_refresh_due_store_tokens(
+        list_tokens=lambda: {
+            "rows": [
+                {
+                    "id": 1,
+                    "display_name": "即将过期",
+                    "expires_at": "2026-08-30 12:30:00",
+                    "has_refresh_token": True,
+                },
+                {
+                    "id": 2,
+                    "display_name": "仍然有效",
+                    "expires_at": "2026-08-30 14:00:00",
+                    "has_refresh_token": True,
+                },
+                {
+                    "id": 3,
+                    "display_name": "无法续期",
+                    "expires_at": "2026-08-30 11:00:00",
+                    "has_refresh_token": False,
+                },
+                {
+                    "id": 4,
+                    "display_name": "等待重试",
+                    "expires_at": "2026-08-30 11:00:00",
+                    "has_refresh_token": True,
+                    "last_error": "temporary failure",
+                    "updated_at": "2026-08-30 11:55:00",
+                },
+            ]
+        },
+        refresh_token=lambda token_id: refreshed.append(token_id),
+        now=now,
+        refresh_before_minutes=60,
+        retry_minutes=15,
+    )
+
+    assert refreshed == [1]
+    assert result == {
+        "checked": 4,
+        "due": 2,
+        "refreshed": 1,
+        "failed": 0,
+        "retry_deferred": 1,
+        "failures": [],
+    }
+
+
 def _logged_in_client():
     client = bit_interface.app.test_client()
     with client.session_transaction() as flask_session:
@@ -460,6 +512,9 @@ def test_console_template_contains_store_token_module():
     assert 'id="mercado-token-group-filter"' in body
     assert "filteredMercadoStoreTokenRows" in body
     assert "当前筛选条件下暂无授权店铺" in body
+    assert "Token 临近到期时后台自动刷新" in body
+    assert "startMercadoTokenStatusPolling" in body
+    assert "loadMercadoStoreTokens(true, true)" in body
     assert 'id="mercado-bulk-settings-dialog"' in body
     assert 'id="mercado-bulk-salesperson"' in body
     assert 'id="mercado-bulk-settings-body"' in body

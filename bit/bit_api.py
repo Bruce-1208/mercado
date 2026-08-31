@@ -67,12 +67,18 @@ def _acquire_browser_api_mutation_slot(endpoint, browser_id, timeout):
         time.sleep(0.1)
 
 
-def _post_browser_mutation(endpoint, browser_id, request_timeout):
+def _post_browser_mutation(
+    endpoint, browser_id, request_timeout, *, api_lock_timeout=None
+):
     """限流调用 BitBrowser 窗口接口；窗口连接后的业务仍可多进程并行。"""
     api_lock = _acquire_browser_api_mutation_slot(
         endpoint,
         browser_id,
-        _BROWSER_API_LOCK_TIMEOUT,
+        (
+            _BROWSER_API_LOCK_TIMEOUT
+            if api_lock_timeout is None
+            else max(1, float(api_lock_timeout))
+        ),
     )
     try:
         return requests.post(
@@ -167,7 +173,9 @@ def getBrowserIdByName(name, page_size=100, max_pages=100):
     return browser_id
 
 
-def openBrowser(id):  # 直接指定ID打开窗口，也可以使用 createBrowser 方法返回的ID
+def openBrowser(
+    id, *, api_lock_timeout=None, request_timeout=None
+):  # 直接指定ID打开窗口，也可以使用 createBrowser 方法返回的ID
     auto_lease = None
     if current_thread_window_lease(id) is None:
         auto_lease = create_window_lease(
@@ -184,7 +192,12 @@ def openBrowser(id):  # 直接指定ID打开窗口，也可以使用 createBrows
         with _AUTO_LEASES_GUARD:
             _AUTO_LEASES[(threading.get_ident(), str(id))] = auto_lease
     try:
-        res = _post_browser_mutation("open", id, _BROWSER_OPEN_TIMEOUT)
+        res = _post_browser_mutation(
+            "open",
+            id,
+            _BROWSER_OPEN_TIMEOUT if request_timeout is None else request_timeout,
+            api_lock_timeout=api_lock_timeout,
+        )
         if auto_lease is not None and isinstance(res, dict) and res.get("success") is False:
             with _AUTO_LEASES_GUARD:
                 _AUTO_LEASES.pop((threading.get_ident(), str(id)), None)

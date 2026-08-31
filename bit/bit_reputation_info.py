@@ -47,6 +47,7 @@ import pandas as pd
 from datetime import datetime
 from pathlib import Path
 from bit.bit_db_api import (
+    get_latest_infraction_info,
     get_mercado_store_reputation,
     insert_task_record,
     inset_reputation_info,
@@ -2577,13 +2578,8 @@ def _api_auxiliary_config_rows(tokens, api_rows):
 
 
 def _token_enabled_site_codes(token, setting_field):
-    """返回授权站点开关；None 表示兼容尚未提供该开关的旧接口。"""
-    settings = token.get("site_settings")
-    if settings is None:
-        return None
-    settings = [dict(setting or {}) for setting in settings]
-    if not any(setting_field in setting for setting in settings):
-        return None
+    """只返回授权店铺中显式开启指定任务开关的站点。"""
+    settings = [dict(setting or {}) for setting in (token.get("site_settings") or ())]
 
     def enabled(value):
         if isinstance(value, str):
@@ -2592,7 +2588,8 @@ def _token_enabled_site_codes(token, setting_field):
     return {
         _normalize_api_site_code(setting.get("site_id"))
         for setting in settings
-        if enabled(setting.get(setting_field))
+        if setting_field in setting
+        and enabled(setting.get(setting_field))
         and _normalize_api_site_code(setting.get("site_id"))
     }
 
@@ -2639,6 +2636,42 @@ def _merge_api_auxiliary_rows(api_rows, database_rows, auxiliary_rows):
     return auxiliary_by_key
 
 
+def _attach_api_infraction_counts(api_rows, recent_days=30):
+    infraction_data = get_latest_infraction_info(recent_days) or {}
+    counts_by_key = {
+        (
+            str(row.get("店铺名") or "").strip().casefold(),
+            _normalize_api_site_code(row.get("站点")),
+        ): row
+        for row in (infraction_data.get("summary") or [])
+        if str(row.get("店铺名") or "").strip()
+        and str(row.get("站点") or "").strip()
+    }
+    for api_row in api_rows:
+        site_code = _normalize_api_site_code(
+            api_row.get("site_id") or api_row.get("site_name")
+        )
+        store_aliases = (
+            api_row.get("store_name"),
+            api_row.get("store_nickname"),
+        )
+        counts = next(
+            (
+                counts_by_key[(str(alias or "").strip().casefold(), site_code)]
+                for alias in store_aliases
+                if (str(alias or "").strip().casefold(), site_code)
+                in counts_by_key
+            ),
+            {},
+        )
+        api_row["infraction_count"] = int(counts.get("侵权") or 0)
+        api_row["rights_holder_count"] = int(counts.get("权利人") or 0)
+        api_row["infraction_recent_days"] = int(
+            infraction_data.get("recent_days") or recent_days
+        )
+    return api_rows
+
+
 def get_reputation_info_all(
     max_workers=DEFAULT_COLLECTION_MAX_WORKERS,
     stagger_min_seconds=None,
@@ -2682,18 +2715,16 @@ def get_reputation_info_all(
             }
             & selected_shop_keys
         ]
-    if collect_browser_auxiliary:
-        visit_enabled_tokens = []
-        for token in tokens:
-            enabled_sites = _token_enabled_site_codes(token, "visit_stats_enabled")
-            if enabled_sites is not None:
-                if selected_site_codes:
-                    enabled_sites &= selected_site_codes
-                if not enabled_sites:
-                    continue
-                token["_visit_stats_site_codes"] = sorted(enabled_sites)
-            visit_enabled_tokens.append(token)
-        tokens = visit_enabled_tokens
+    visit_enabled_tokens = []
+    for token in tokens:
+        enabled_sites = _token_enabled_site_codes(token, "visit_stats_enabled")
+        if selected_site_codes:
+            enabled_sites &= selected_site_codes
+        if not enabled_sites:
+            continue
+        token["_visit_stats_site_codes"] = sorted(enabled_sites)
+        visit_enabled_tokens.append(token)
+    tokens = visit_enabled_tokens
     if (selected_shops or selected_sites) and not tokens:
         raise ValueError("所选店铺或站点未在店铺授权中开启访问数据统计")
 
@@ -2923,6 +2954,15 @@ def get_reputation_info_all(
             str(row.get("site_id") or ""),
         )
     )
+    try:
+        _attach_api_infraction_counts(api_rows, recent_days=30)
+        _emit_api_collection_log("已合并各站点近 30 天侵权及权利人数量", log_callback)
+    except Exception as exc:
+        _emit_api_collection_log(f"读取侵权数量失败，本次显示为 0：{exc}", log_callback)
+        for api_row in api_rows:
+            api_row.setdefault("infraction_count", 0)
+            api_row.setdefault("rights_holder_count", 0)
+            api_row.setdefault("infraction_recent_days", 30)
     failure_report_path = write_unreadable_site_report("声誉API采集", task_rows)
     if failure_report_path:
         _emit_api_collection_log(
