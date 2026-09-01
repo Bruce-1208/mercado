@@ -71,17 +71,17 @@ def test_pago_single_shop_refreshes_every_configured_site_only(monkeypatch):
 def test_latest_pago_info_joins_owner_and_configured_sites(monkeypatch):
     monkeypatch.setattr(
         bit_mysql,
-        "list_bit_browser_configs",
-        lambda include_ignored=False: [
-            {
-                "window_id": "window-1",
-                "shop_name": "春风得意",
-                "status": "",
-                "sites": "墨西哥,巴西",
-                "sequence_no": "1",
-                "salesperson": "张三",
-            },
-        ],
+        "list_mercado_store_tokens",
+        lambda: {
+            "rows": [{
+                "id": 1,
+                "display_name": "春风得意",
+                "site_settings": [
+                    {"site_id": "MLM", "salesperson": "张三"},
+                    {"site_id": "MLB", "salesperson": "张三"},
+                ],
+            }],
+        },
     )
 
     class FakeCursor:
@@ -149,7 +149,7 @@ def test_funds_single_shop_api_starts_background_refresh(monkeypatch):
     started = []
     monkeypatch.setattr(
         bit_interface,
-        "db_list_bit_browser_configs",
+        "list_shop_configs",
         lambda include_ignored=False: [
             {
                 "shop_name": "春风得意",
@@ -203,7 +203,7 @@ def test_funds_all_shops_is_limited_to_selected_salesperson(monkeypatch):
     started = []
     monkeypatch.setattr(
         bit_interface,
-        "db_list_bit_browser_configs",
+        "list_shop_configs",
         lambda include_ignored=False: [
             {"shop_name": "春风得意", "window_id": "window-1", "salesperson": "张三"},
             {"shop_name": "龙凤呈祥", "window_id": "window-2", "salesperson": "李四"},

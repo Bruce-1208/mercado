@@ -1,3 +1,4 @@
+import re
 from pathlib import Path
 
 from bit import bit_interface, bit_mysql, bit_order_sync
@@ -8,10 +9,26 @@ def test_workbench_uses_minute_datetime_inputs_with_friendly_placeholders():
         encoding="utf-8"
     )
 
-    assert 'type="date"' not in template
-    assert template.count('type="datetime-local"') == 10
-    assert template.count('class="minute-datetime"') == 10
-    assert template.count('step="60"') >= 10
+    minute_filter_ids = (
+        "order-start-date",
+        "order-end-date",
+        "order-sync-start-date",
+        "order-sync-end-date",
+        "mercado-date-from",
+        "mercado-date-to",
+        "order-print-date-from",
+        "order-print-date-to",
+        "after-sale-date-from",
+        "after-sale-date-to",
+        "profit-date-from",
+        "profit-date-to",
+    )
+    for input_id in minute_filter_ids:
+        tag = re.search(rf'<input[^>]*id="{input_id}"[^>]*>', template)
+        assert tag, f"缺少分钟级时间筛选控件: {input_id}"
+        assert 'class="minute-datetime"' in tag.group(0)
+        assert 'type="datetime-local"' in tag.group(0)
+        assert 'step="60"' in tag.group(0)
     assert "datetime-placeholder" in template
     assert "选择起始时间" in template
     assert "选择结束时间" in template

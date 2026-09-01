@@ -564,6 +564,48 @@ def get_store_link_sync_status():
     return _request("GET", "/api/db/store-links/sync/status")
 
 
+def list_mercado_prohibited_listings(
+    search="",
+    token_id=None,
+    site_id="",
+    salesperson="",
+    page=1,
+    page_size=100,
+):
+    params = {
+        "search": str(search or "").strip(),
+        "site_id": str(site_id or "").strip().upper(),
+        "salesperson": str(salesperson or "").strip(),
+        "page": int(page or 1),
+        "page_size": max(20, min(int(page_size or 100), 500)),
+    }
+    if token_id not in (None, ""):
+        params["token_id"] = int(token_id)
+    if DB_MODE == "mysql":
+        from erp.mercadolibre_prohibited_store import list_prohibited_listings
+
+        return list_prohibited_listings(**params)
+    return _request("GET", "/api/db/prohibited-listings", params=params)
+
+
+def start_prohibited_listing_sync(token_ids=None):
+    payload = {"token_ids": [int(value) for value in token_ids or []]}
+    if DB_MODE == "mysql":
+        from bit.bit_prohibited_listing_sync import start_prohibited_listing_sync as local_start
+
+        started, state = local_start(payload["token_ids"])
+        return {"started": bool(started), "state": state}
+    return _request("POST", "/api/db/prohibited-listings/sync/start", json=payload)
+
+
+def get_prohibited_listing_sync_status():
+    if DB_MODE == "mysql":
+        from bit.bit_prohibited_listing_sync import prohibited_listing_sync_status
+
+        return prohibited_listing_sync_status()
+    return _request("GET", "/api/db/prohibited-listings/sync/status")
+
+
 def bulk_update_orders(order_ids, operator_id=None, operator_name="", **changes):
     payload = {"order_ids": [str(value) for value in order_ids or []]}
     for field in (
@@ -853,31 +895,16 @@ def get_latest_pago_info(salesperson=""):
 
 
 def list_bit_browser_configs(include_ignored=True):
-    if DB_MODE == "mysql":
-        return _local_call("list_bit_browser_configs", include_ignored)
-    return _request(
-        "GET",
-        "/api/db/browser-configs",
-        params={"include_ignored": "1" if include_ignored else "0"},
+    del include_ignored
+    raise RuntimeError(
+        "bit_browser_configs 已停用；请读取店铺授权及站点任务开关"
     )
 
 
 def get_bit_browser_config(shop_name="", window_id="", include_ignored=True):
-    if DB_MODE == "mysql":
-        return _local_call(
-            "get_bit_browser_config",
-            shop_name,
-            window_id,
-            include_ignored,
-        )
-    return _request(
-        "GET",
-        "/api/db/browser-configs/lookup",
-        params={
-            "shop_name": shop_name,
-            "window_id": window_id,
-            "include_ignored": "1" if include_ignored else "0",
-        },
+    del shop_name, window_id, include_ignored
+    raise RuntimeError(
+        "bit_browser_configs 已停用；请读取店铺授权及站点任务开关"
     )
 
 

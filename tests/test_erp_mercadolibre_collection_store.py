@@ -558,6 +558,41 @@ def test_collection_list_can_hide_items_already_added_to_products():
     assert "`added_to_products` = 0" in count_sql
 
 
+def test_collection_list_applies_weight_profit_and_collection_time_filters():
+    connection = _FakeConnection()
+    store.list_collection_items(
+        weight_min="100",
+        weight_max="500",
+        price_min="20",
+        price_max="80",
+        net_proceeds_min="1",
+        net_proceeds_max="40",
+        date_from="2026-08-25",
+        date_to="2026-08-30",
+        exclude_added=True,
+        connection_factory=lambda: connection,
+    )
+
+    count_sql, params = next(
+        (query, params)
+        for query, params in connection.fake_cursor.queries
+        if query.startswith(f"SELECT COUNT(*) AS total FROM `{store.COLLECTION_TABLE}`")
+    )
+    for clause in (
+        "`weight_g` >= %s",
+        "`weight_g` <= %s",
+        "`price` >= %s",
+        "`price` <= %s",
+        "`net_proceeds_usd` >= %s",
+        "`net_proceeds_usd` <= %s",
+        "`collected_at` >= %s",
+        "`collected_at` < %s",
+    ):
+        assert clause in count_sql
+    assert "`added_to_products` = 0" in count_sql
+    assert params[-2:] == ("2026-08-25 00:00:00", "2026-08-31 00:00:00")
+
+
 def test_product_list_applies_status_range_and_date_filters_in_database():
     connection = _FakeConnection()
     store.list_product_items(

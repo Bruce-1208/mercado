@@ -63,6 +63,18 @@ ACCOUNT_RISK_URLS = {
     "restrictions": "https://global-selling.mercadolibre.com/account-risk?filter=restrictions",
     "warnings": "https://global-selling.mercadolibre.com/account-risk?filter=warnings",
 }
+ACCOUNT_RISK_TIME_PATTERN = re.compile(
+    r"\b(?:"
+    r"Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|"
+    r"Jul(?:y)?|Aug(?:ust)?|Sep(?:t(?:ember)?)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?|"
+    r"enero|febrero|marzo|abril|mayo|junio|julio|agosto|"
+    r"septiembre|setiembre|octubre|noviembre|diciembre|"
+    r"janeiro|fevereiro|mar(?:ç|c)o|abril|maio|junho|julho|agosto|"
+    r"setembro|outubro|novembro|dezembro"
+    r")\.?\s+\d{1,2}(?:\s*,?\s*(?:at|a\s+las|à?s)\s+\d{1,2}:\d{2})?\b|"
+    r"\b\d{1,2}[/-]\d{1,2}(?:[/-]\d{2,4})?(?:\s+(?:at\s+)?\d{1,2}:\d{2})?\b",
+    re.IGNORECASE,
+)
 LOGIN_TEXT_MARKERS = (
     "fill out your e-mail address to log in",
     "fill out your email address to log in",
@@ -1476,9 +1488,28 @@ def _account_risk_kinds_from_summary(summary_text, links=None):
     sources = [str(summary_text or ""), *(str(link or "") for link in (links or []))]
     text = "\n".join(sources)
     kinds = []
-    if re.search(r"go\s+to\s+restrictions?|filter=restrictions?\b", text, re.IGNORECASE):
+
+    def summary_kind_is_active(kind):
+        patterns = (
+            rf"\b{kind}s?\b[^\d]{{0,24}}(\d+)",
+            rf"(\d+)[^\n\d]{{0,24}}(?:go\s+to\s+)?{kind}s?\b",
+        )
+        counts = [
+            int(match.group(1))
+            for pattern in patterns
+            for match in re.finditer(pattern, text, re.IGNORECASE)
+        ]
+        if counts:
+            return any(count > 0 for count in counts)
+        return bool(re.search(rf"\b{kind}s?\b", str(summary_text or ""), re.IGNORECASE))
+
+    if summary_kind_is_active("restriction") or re.search(
+        r"filter=restrictions?\b", text, re.IGNORECASE
+    ):
         kinds.append("restrictions")
-    if re.search(r"go\s+to\s+warnings?|filter=warnings?\b", text, re.IGNORECASE):
+    if summary_kind_is_active("warning") or re.search(
+        r"filter=warnings?\b", text, re.IGNORECASE
+    ):
         kinds.append("warnings")
     return kinds
 
@@ -1488,12 +1519,25 @@ def _normalize_account_risk_details(raw_details):
         r"^(?:\d+\s*)?(?:go\s+to\s+)?(?:restrictions?|warnings?|"
         r"restricciones?|restri(?:ç|c)[õo]es?|advertencias?|avisos?)$|"
         r"^(?:account\s+risk|riesgo\s+de\s+la\s+cuenta|risco\s+da\s+conta|"
-        r"view\s+details?|see\s+details?|learn\s+more|back|all|loading\.\.\.|"
+        r"active(?:\s+restrictions?)?|paused\s+features?|affected\s+features?|"
+        r"filter\s+and\s+sort|view\s+details?|see\s+details?|learn\s+more|"
+        r"back|all|loading\.\.\.|"
         r"cargando\.\.\.|carregando\.\.\.)$",
+        re.IGNORECASE,
+    )
+    action_line = re.compile(
+        r"^(?:edit|remove|delete|reactivate|resume|pause|review|appeal|contact|"
+        r"editar|eliminar|remover|reativar|revisar|apelar|contatar)\b.*",
         re.IGNORECASE,
     )
     cleaned = []
     for raw_detail in raw_details or []:
+        if isinstance(raw_detail, dict):
+            raw_detail = "\n".join(
+                str(raw_detail.get(key) or "").strip()
+                for key in ("title", "time", "date", "created_at")
+                if str(raw_detail.get(key) or "").strip()
+            )
         lines = []
         for raw_line in str(raw_detail or "").splitlines():
             line = re.sub(r"\s+", " ", raw_line).strip(" \t\r\n·•")
@@ -1504,25 +1548,39 @@ def _normalize_account_risk_details(raw_details):
                 line,
                 flags=re.IGNORECASE,
             ).strip()
-            if not line or generic_line.fullmatch(line) or re.fullmatch(r"\d+", line):
+            if (
+                not line
+                or generic_line.fullmatch(line)
+                or action_line.fullmatch(line)
+                or re.fullmatch(r"\d+", line)
+            ):
                 continue
             if re.fullmatch(r"\d+\s+go\s+to\s+(?:restrictions?|warnings?)", line, re.IGNORECASE):
                 continue
             lines.append(line)
-        detail = "\n".join(lines).strip()
-        if detail and detail not in cleaned:
-            cleaned.append(detail)
 
-    # 同一个卡片常会被父、子容器重复读取；优先保留更具体的子容器文本。
-    specific = []
-    for detail in cleaned:
-        if any(
-            other != detail and len(other) >= 8 and other in detail
-            for other in cleaned
-        ):
-            continue
-        specific.append(detail)
-    return specific or cleaned
+        dated_details = []
+        for index, line in enumerate(lines):
+            time_match = ACCOUNT_RISK_TIME_PATTERN.search(line)
+            if not time_match:
+                continue
+            title = next(
+                (
+                    candidate
+                    for candidate in reversed(lines[:index])
+                    if not ACCOUNT_RISK_TIME_PATTERN.search(candidate)
+                ),
+                "",
+            )
+            if title:
+                dated_details.append(f"{title} {time_match.group(0).strip()}")
+
+        candidates = dated_details or lines[:1]
+        for detail in candidates:
+            if detail and detail not in cleaned:
+                cleaned.append(detail)
+
+    return cleaned
 
 
 def _extract_account_risk_details(driver):
@@ -2205,7 +2263,12 @@ def _row_as_login_config(row):
 
 def _prepare_reputation_retry_rows(outcomes, permanent_login_failures=None):
     """修复可处理的登录/配置问题，并返回首轮失败店铺的最新配置。"""
-    latest_rows = _deduplicate_config_rows(list_config_rows(include_ignored=False))
+    latest_rows = _deduplicate_config_rows(
+        list_config_rows(
+            include_ignored=False,
+            authorization_flag="visit_stats_enabled",
+        )
+    )
     latest_by_name = {str(row[1]).strip(): row for row in latest_rows if row and row[1]}
     retry_plan = []
     permanent_login_failures = (
@@ -2290,7 +2353,10 @@ def get_reputation_info_all_browser(
     start = int(time.time())
     print(start)
     root_path = Path(__file__).resolve().parent
-    rows = list_config_rows(include_ignored=False)
+    rows = list_config_rows(
+        include_ignored=False,
+        authorization_flag="visit_stats_enabled",
+    )
     rows = [row for row in rows if row and row[0]]
     rows = _deduplicate_config_rows(rows)
     rows = filter_config_rows(
@@ -2529,7 +2595,7 @@ def _deduplicate_api_site_rows(rows):
 
 
 def _api_auxiliary_config_rows(tokens, api_rows):
-    """用浏览器配置定位窗口，但站点范围完全取自店铺授权访问统计开关。"""
+    """按授权店铺名称实时定位窗口，并仅保留已开启访问统计的站点。"""
     canonical_by_alias = {}
     for token in tokens:
         canonical_name = str(
@@ -2550,7 +2616,11 @@ def _api_auxiliary_config_rows(tokens, api_rows):
         api_sites_by_store.setdefault(store_key, {})[site_code] = site_label
     selected_rows = []
     claimed_sites = set()
-    for raw_row in list_config_rows(include_ignored=False) or ():
+    for raw_row in list_config_rows(
+        include_ignored=False,
+        authorization_flag="visit_stats_enabled",
+        token_data={"rows": tokens},
+    ) or ():
         if not raw_row or len(raw_row) < 4 or not str(raw_row[0] or "").strip():
             continue
         original_name = str(raw_row[1] or "").strip()
@@ -2636,7 +2706,7 @@ def _merge_api_auxiliary_rows(api_rows, database_rows, auxiliary_rows):
     return auxiliary_by_key
 
 
-def _attach_api_infraction_counts(api_rows, recent_days=30):
+def _attach_api_infraction_counts(api_rows, recent_days=100):
     infraction_data = get_latest_infraction_info(recent_days) or {}
     counts_by_key = {
         (
@@ -2884,7 +2954,7 @@ def get_reputation_info_all(
             auxiliary_configs = _api_auxiliary_config_rows(tokens, api_rows)
         except Exception as exc:
             auxiliary_configs = []
-            auxiliary_config_error = f"读取浏览器配置失败：{exc}"
+            auxiliary_config_error = f"匹配授权店铺浏览器窗口失败：{exc}"
             _emit_api_collection_log(auxiliary_config_error, log_callback)
 
         _emit_api_collection_log(
@@ -2955,14 +3025,14 @@ def get_reputation_info_all(
         )
     )
     try:
-        _attach_api_infraction_counts(api_rows, recent_days=30)
-        _emit_api_collection_log("已合并各站点近 30 天侵权及权利人数量", log_callback)
+        _attach_api_infraction_counts(api_rows, recent_days=100)
+        _emit_api_collection_log("已合并各站点近 100 天侵权及权利人数量", log_callback)
     except Exception as exc:
         _emit_api_collection_log(f"读取侵权数量失败，本次显示为 0：{exc}", log_callback)
         for api_row in api_rows:
             api_row.setdefault("infraction_count", 0)
             api_row.setdefault("rights_holder_count", 0)
-            api_row.setdefault("infraction_recent_days", 30)
+            api_row.setdefault("infraction_recent_days", 100)
     failure_report_path = write_unreadable_site_report("声誉API采集", task_rows)
     if failure_report_path:
         _emit_api_collection_log(

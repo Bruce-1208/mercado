@@ -968,3 +968,12 @@ def test_customer_service_supports_owner_group_aggregation_and_row_store_replies
     assert 'shop_name: String(row.order_context?.shop_name || "")' in template
     assert 'button.textContent = "↻ 重试"' in template
     assert "旧版 Claims 1.0" in template
+    assert 'id="customer-service-load" type="button" onclick="loadCustomerServiceData(1)">更新</button>' in template
+    assert 'id="customer-service-last-updated"' in template
+    assert "上次更新时间：尚未更新 · 每 12 小时自动更新" in template
+    assert "firstDay.setDate(today.getDate() - 6)" in template
+    assert "const customerServiceAutoUpdateInterval = 12 * 60 * 60 * 1000" in template
+    assert "await loadCustomerServiceData(1, {automatic: true})" in template
+    assert "recordCustomerServiceUpdatedAt()" in template
+    assert "index += 100" in template
+    assert "await Promise.all(storeBatches.map" in template

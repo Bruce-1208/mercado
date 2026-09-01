@@ -816,66 +816,67 @@ def _list_rows(
                 where.append("`last_publish_status` = %s")
                 params.append(publish_status)
 
-        def optional_decimal(value: Any, name: str, *, nonnegative: bool) -> Decimal | None:
-            if value in (None, ""):
-                return None
+    def optional_decimal(value: Any, name: str, *, nonnegative: bool) -> Decimal | None:
+        if value in (None, ""):
+            return None
+        try:
+            number = Decimal(str(value))
+        except Exception as exc:
+            raise ValueError(f"{name}必须是数字") from exc
+        if not number.is_finite() or (nonnegative and number < 0):
+            raise ValueError(f"{name}必须是{'非负' if nonnegative else '有效'}数字")
+        return number
+
+    ranges = (
+        ("weight_g", "重量", weight_min, weight_max, True),
+        ("price", "售价", price_min, price_max, True),
+        (
+            "net_proceeds_usd", "净收益", net_proceeds_min,
+            net_proceeds_max, False,
+        ),
+    )
+    for column, label, raw_min, raw_max, nonnegative in ranges:
+        minimum = optional_decimal(raw_min, f"最低{label}", nonnegative=nonnegative)
+        maximum = optional_decimal(raw_max, f"最高{label}", nonnegative=nonnegative)
+        if minimum is not None and maximum is not None and minimum > maximum:
+            raise ValueError(f"最低{label}不能大于最高{label}")
+        if minimum is not None:
+            where.append(f"`{column}` >= %s")
+            params.append(minimum)
+        if maximum is not None:
+            where.append(f"`{column}` <= %s")
+            params.append(maximum)
+
+    def parsed_datetime(value: Any, name: str) -> tuple[datetime | None, str]:
+        text = str(value or "").strip()
+        if not text:
+            return None, ""
+        normalized = text.replace("T", " ")
+        for date_format, precision in (
+            ("%Y-%m-%d", "day"),
+            ("%Y-%m-%d %H:%M", "minute"),
+            ("%Y-%m-%d %H:%M:%S", "minute"),
+        ):
             try:
-                number = Decimal(str(value))
-            except Exception as exc:
-                raise ValueError(f"{name}必须是数字") from exc
-            if not number.is_finite() or (nonnegative and number < 0):
-                raise ValueError(f"{name}必须是{'非负' if nonnegative else '有效'}数字")
-            return number
+                return datetime.strptime(normalized, date_format), precision
+            except ValueError:
+                continue
+        raise ValueError(f"{name}格式必须为 YYYY-MM-DD HH:MM")
 
-        ranges = (
-            ("weight_g", "重量", weight_min, weight_max, True),
-            ("price", "售价", price_min, price_max, True),
-            (
-                "net_proceeds_usd", "净收益", net_proceeds_min,
-                net_proceeds_max, False,
-            ),
+    start_date, _ = parsed_datetime(date_from, "开始时间")
+    end_date, end_precision = parsed_datetime(date_to, "结束时间")
+    if start_date and end_date and start_date > end_date:
+        raise ValueError("开始时间不能晚于结束时间")
+    time_column = "collected_at" if table == COLLECTION_TABLE else "added_at"
+    if start_date:
+        where.append(f"`{time_column}` >= %s")
+        params.append(start_date.strftime("%Y-%m-%d %H:%M:%S"))
+    if end_date:
+        where.append(f"`{time_column}` < %s")
+        end_exclusive = end_date + (
+            timedelta(days=1) if end_precision == "day" else timedelta(minutes=1)
         )
-        for column, label, raw_min, raw_max, nonnegative in ranges:
-            minimum = optional_decimal(raw_min, f"最低{label}", nonnegative=nonnegative)
-            maximum = optional_decimal(raw_max, f"最高{label}", nonnegative=nonnegative)
-            if minimum is not None and maximum is not None and minimum > maximum:
-                raise ValueError(f"最低{label}不能大于最高{label}")
-            if minimum is not None:
-                where.append(f"`{column}` >= %s")
-                params.append(minimum)
-            if maximum is not None:
-                where.append(f"`{column}` <= %s")
-                params.append(maximum)
-
-        def parsed_datetime(value: Any, name: str) -> tuple[datetime | None, str]:
-            text = str(value or "").strip()
-            if not text:
-                return None, ""
-            normalized = text.replace("T", " ")
-            for date_format, precision in (
-                ("%Y-%m-%d", "day"),
-                ("%Y-%m-%d %H:%M", "minute"),
-                ("%Y-%m-%d %H:%M:%S", "minute"),
-            ):
-                try:
-                    return datetime.strptime(normalized, date_format), precision
-                except ValueError:
-                    continue
-            raise ValueError(f"{name}格式必须为 YYYY-MM-DD HH:MM")
-
-        start_date, _ = parsed_datetime(date_from, "开始时间")
-        end_date, end_precision = parsed_datetime(date_to, "结束时间")
-        if start_date and end_date and start_date > end_date:
-            raise ValueError("开始时间不能晚于结束时间")
-        if start_date:
-            where.append("`added_at` >= %s")
-            params.append(start_date.strftime("%Y-%m-%d %H:%M:%S"))
-        if end_date:
-            where.append("`added_at` < %s")
-            end_exclusive = end_date + (
-                timedelta(days=1) if end_precision == "day" else timedelta(minutes=1)
-            )
-            params.append(end_exclusive.strftime("%Y-%m-%d %H:%M:%S"))
+        params.append(end_exclusive.strftime("%Y-%m-%d %H:%M:%S"))
     where_sql = f"WHERE {' AND '.join(where)}" if where else ""
     connection = (connection_factory or _connect)()
     try:

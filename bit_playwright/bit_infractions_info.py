@@ -318,7 +318,7 @@ def _authorized_visit_stats_scope(token_data=None):
 
 
 def _authorized_visit_stats_rows(rows, token_data=None):
-    """浏览器配置仅提供窗口；运行站点完全以授权开关为准。"""
+    """兼容旧调用：再次按店铺授权的访问统计开关收紧站点。"""
     scope = _authorized_visit_stats_scope(token_data)
     selected = []
     for raw_row in rows or ():
@@ -1262,7 +1262,12 @@ def _row_as_login_config(row):
 
 
 def _prepare_infraction_retry_rows(outcomes, permanent_login_failures=None):
-    latest_rows = _deduplicate_config_rows(list_config_rows(include_ignored=False))
+    latest_rows = _deduplicate_config_rows(
+        list_config_rows(
+            include_ignored=False,
+            authorization_flag="visit_stats_enabled",
+        )
+    )
     latest_by_name = {str(row[1]).strip(): row for row in latest_rows if row and row[1]}
     retry_plan = []
     permanent_login_failures = (
@@ -1355,10 +1360,12 @@ def get_infractions_info_all(
     start = int(time.time())
     print(start)
     bit_dir = Path(__file__).resolve().parent.parent / "bit"
-    rows = list_config_rows(include_ignored=False)
+    rows = list_config_rows(
+        include_ignored=False,
+        authorization_flag="visit_stats_enabled",
+    )
     rows = [row for row in rows if row and row[0]]
     rows = _deduplicate_config_rows(rows)
-    rows = _authorized_visit_stats_rows(rows)
     rows = filter_config_rows(
         rows,
         selected_shops=selected_shops,

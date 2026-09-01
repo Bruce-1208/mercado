@@ -103,6 +103,9 @@ def test_workbench_splits_collection_and_product_list_into_separate_modules():
     response = client.get("/")
 
     assert response.status_code == 200
+    assert b'data-ui-version="2026-09-01-mercado-filters-v2"' in response.data
+    assert b'window.location.protocol === "file:"' in response.data
+    assert b'window.location.replace("http://127.0.0.1:5000/")' in response.data
     assert b'data-tab="mercado-collection"' in response.data
     assert b'data-tab="mercado-products"' in response.data
     assert b'id="tab-mercado-collection"' in response.data
@@ -162,7 +165,9 @@ def test_workbench_splits_collection_and_product_list_into_separate_modules():
     assert "不混用本地卖家信誉表".encode("utf-8") in response.data
     assert b"loadMercadoShippingRates" in response.data
     assert "净收益".encode("utf-8") in response.data
+    assert "采集列表：只按实际重量".encode("utf-8") in response.data
     assert "Global Selling：毛重/体积重取较大".encode("utf-8") in response.data
+    assert b'mercadoListMode === "collection"' in response.data
     assert b'id="mercado-delete-selected"' in response.data
     assert b'id="mercado-publish-store"' in response.data
     assert b'id="mercado-publish-site"' in response.data
@@ -188,7 +193,7 @@ def test_workbench_splits_collection_and_product_list_into_separate_modules():
     assert b'id="mercado-source-collected"' in response.data
     assert b'id="mercado-source-pulled"' in response.data
     assert b'id="mercado-source-zying"' in response.data
-    assert b'class="market-source-filter"' in response.data
+    assert b'class="market-source-filter market-product-only-filter"' in response.data
     assert b'class="market-source-option active" id="mercado-source-all"' in response.data
     assert b'class="market-source-tag-icon"' in response.data
     assert "美客多采集".encode("utf-8") in response.data
@@ -201,6 +206,11 @@ def test_workbench_splits_collection_and_product_list_into_separate_modules():
     assert b'function goToMercadoListPage(page)' in response.data
     assert b'id="mercado-review-filter"' in response.data
     assert b'id="mercado-publish-filter"' in response.data
+    assert b'id="mercado-collection-filter-note"' in response.data
+    assert b'class="market-product-filters visible"' in response.data
+    assert b'.market-list-panel.collection-mode .market-product-filters' not in response.data
+    assert "采集列表支持重量、售价、收益和采集时间组合筛选".encode("utf-8") in response.data
+    assert b'onclick="switchTab(\'mercado-products\')"' in response.data
     assert b'id="mercado-weight-min"' in response.data
     assert b'id="mercado-price-min"' in response.data
     assert b'id="mercado-net-min"' in response.data
@@ -424,11 +434,28 @@ def test_collection_list_and_batch_add_endpoints():
     with patch.object(
         workbench, "db_list_mercado_collection_items", return_value=rows
     ) as list_collection:
-        response = client.get("/api/mercado-collection/items?search=Lonchera")
+        response = client.get(
+            "/api/mercado-collection/items?search=Lonchera"
+            "&weight_min=100&weight_max=500&price_min=20&price_max=80"
+            "&net_proceeds_min=1&net_proceeds_max=40"
+            "&date_from=2026-08-25&date_to=2026-08-30"
+        )
     assert response.status_code == 200
     assert response.get_json()["data"]["rows"][0]["weight_g"] == 333
     list_collection.assert_called_once_with(
-        search="Lonchera", limit=500, offset=0, task_id=None, exclude_added=True
+        search="Lonchera",
+        limit=500,
+        offset=0,
+        task_id=None,
+        weight_min="100",
+        weight_max="500",
+        price_min="20",
+        price_max="80",
+        net_proceeds_min="1",
+        net_proceeds_max="40",
+        date_from="2026-08-25",
+        date_to="2026-08-30",
+        exclude_added=True,
     )
 
     with patch.object(

@@ -199,69 +199,17 @@ def test_access_manager_can_create_role(monkeypatch):
     ]
 
 
-def test_access_view_can_list_but_cannot_modify_shop_configs(monkeypatch):
-    calls = []
-    monkeypatch.setattr(
-        bit_interface,
-        "get_current_workbench_user",
-        lambda: _access_user("access.view"),
-    )
-    monkeypatch.setattr(
-        bit_interface,
-        "db_list_bit_browser_configs",
-        lambda include_ignored=True: calls.append(include_ignored) or [{"id": 1}],
-    )
-    client = bit_interface.app.test_client()
-
-    list_response = client.get("/api/access/browser-configs")
-    create_response = client.post(
-        "/api/access/browser-configs",
-        json={"window_id": "window-1", "shop_name": "店铺"},
-    )
-
-    assert list_response.status_code == 200
-    assert list_response.get_json()["data"] == [{"id": 1}]
-    assert calls == [True]
-    assert create_response.status_code == 403
-
-
-def test_access_manager_can_create_update_and_delete_shop_configs(monkeypatch):
-    calls = []
+def test_retired_browser_config_access_routes_are_removed(monkeypatch):
     monkeypatch.setattr(
         bit_interface,
         "get_current_workbench_user",
         lambda: _access_user("access.view", "access.manage"),
     )
-    monkeypatch.setattr(
-        bit_interface,
-        "db_create_bit_browser_config",
-        lambda data: calls.append(("create", data)) or {"id": 5},
-    )
-    monkeypatch.setattr(
-        bit_interface,
-        "db_update_bit_browser_config",
-        lambda config_id, data: calls.append(("update", config_id, data)) or {"id": config_id},
-    )
-    monkeypatch.setattr(
-        bit_interface,
-        "db_delete_bit_browser_config",
-        lambda config_id: calls.append(("delete", config_id)) or {"id": config_id},
-    )
     client = bit_interface.app.test_client()
-    record = {"window_id": "window-1", "shop_name": "店铺"}
 
-    create_response = client.post("/api/access/browser-configs", json=record)
-    update_response = client.put("/api/access/browser-configs/5", json=record)
-    delete_response = client.delete("/api/access/browser-configs/5")
-
-    assert create_response.get_json()["data"] == {"id": 5}
-    assert update_response.status_code == 200
-    assert delete_response.status_code == 200
-    assert calls == [
-        ("create", record),
-        ("update", 5, record),
-        ("delete", 5),
-    ]
+    assert client.get("/api/access/browser-configs").status_code == 404
+    assert client.post("/api/access/browser-configs", json={}).status_code == 404
+    assert client.get("/api/db/browser-configs").status_code == 404
 
 
 def test_workbench_schema_migrates_roles_and_existing_users():
@@ -374,10 +322,11 @@ def test_access_management_page_contains_role_user_and_permission_controls():
     assert 'id="access-role-form"' in template
     assert 'id="access-user-form"' in template
     assert 'id="access-permission-grid"' in template
-    assert 'id="access-shop-form"' in template
-    assert 'id="access-shop-body"' in template
-    assert 'id="access-shop-search"' in template
-    assert 'requestAccessApi("/api/access/browser-configs")' in template
+    assert 'id="access-shop-form"' not in template
+    assert 'id="access-shop-body"' not in template
+    assert 'requestAccessApi("/api/access/browser-configs")' not in template
+    assert "访问数据统计”控制侵权与声誉读取" in template
+    assert "“进行申诉”控制申诉任务" in template
     assert "currentWorkbenchUser" in template
     assert "applyWorkbenchPermissions" in template
     assert '"reputation.execute"' in template

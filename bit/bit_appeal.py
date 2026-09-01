@@ -658,7 +658,10 @@ def shensu(name, site, form, message, mode="人工客服"):
     selected_phrase = select_appeal_phrase(form) if message == "" else ""
     if selected_phrase:
         print(f"{get_now_time()} {name} {site} 从{form}话术库随机选取：{selected_phrase}<br>")
-    window_id = get_window_id_by_shop_name(name)
+    window_id = get_window_id_by_shop_name(
+        name,
+        authorization_flag="appeal_enabled",
+    )
 
     res = openBrowser(window_id)  # 窗口ID从窗口配置界面中复制，或者api创建后返回
 

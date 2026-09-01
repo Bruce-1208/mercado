@@ -97,6 +97,20 @@ class ReputationSortingTests(unittest.TestCase):
         with (
             mock.patch.object(bit_mysql, "_ensure_column"),
             mock.patch.object(
+                bit_mysql,
+                "_load_authorized_shop_sites",
+                return_value=[
+                    {"店铺名": "多站点店铺", "站点": "墨西哥"},
+                    {"店铺名": "多站点店铺", "站点": "阿根廷"},
+                    {"店铺名": "单站点店铺", "站点": "巴西"},
+                ],
+            ),
+            mock.patch.object(
+                bit_mysql,
+                "_latest_infraction_counts_by_shop_site",
+                return_value={},
+            ) as infraction_counts,
+            mock.patch.object(
                 bit_mysql.pymysql,
                 "connect",
                 return_value=_Connection(rows),
@@ -114,7 +128,8 @@ class ReputationSortingTests(unittest.TestCase):
         )
         self.assertTrue(all(row["侵权数量"] == 0 for row in data["rows"]))
         self.assertTrue(all(row["权利人数量"] == 0 for row in data["rows"]))
-        self.assertTrue(all(row["侵权统计天数"] == 30 for row in data["rows"]))
+        self.assertTrue(all(row["侵权统计天数"] == 100 for row in data["rows"]))
+        infraction_counts.assert_called_once_with(mock.ANY, recent_days=100)
 
     def test_latest_collection_task_status_keeps_latest_site_result(self):
         class StatusCursor:

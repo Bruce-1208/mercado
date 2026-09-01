@@ -174,8 +174,8 @@ def test_console_template_keeps_old_reputation_and_adds_api_panel():
     assert "/api/mercado-reputation/refresh" in template
     assert "/api/mercado-reputation/status" in template
     assert 'id="api-reputation-store"' not in template
-    assert "近30天侵权" in template
-    assert "近30天权利人" in template
+    assert "近100天侵权" in template
+    assert "近100天权利人" in template
     assert "row.infraction_count" in template
     assert "row.rights_holder_count" in template
     assert 'row["侵权数量"]' in template
@@ -199,13 +199,26 @@ def test_console_template_keeps_old_reputation_and_adds_api_panel():
     assert 'id="reputation-body"' in reputation_table.group(1)
     assert api_reputation_table is not None
     assert 'id="api-reputation-body"' in api_reputation_table.group(1)
+    assert len(re.findall(r'data-sort-key="[^"]+"', api_reputation_table.group(1))) == 13
+    assert len(re.findall(r'data-filter-key="[^"]+"', api_reputation_table.group(1))) == 13
+    assert "function filterApiReputationColumn(key, value)" in template
+    assert "function sortApiReputationBy(key)" in template
+    assert "function resetApiReputationView()" in template
+    assert "zeshun-api-reputation-view-v1" in template
+    assert 'tabName === "api-reputation" && !apiReputationLoaded' in template
+    assert "正在读取上一次 API 声誉数据" in template
     assert any(
         'id="infraction-body"' in table for table in plain_reputation_tables
     )
-    assert ".reputation-data-table td:nth-child(12) { width: 520px; }" in template
+    assert ".reputation-data-table td:nth-child(12) { width: 360px; }" in template
     assert "Math.round(canvas.getBoundingClientRect().width || 0)" in template
     assert ".reputation-data-table td:nth-child(10) { width: 72px; }" in template
     assert ".reputation-data-table td:nth-child(11) { width: 84px; }" in template
+    assert "function conciseAccountRiskWarningText(value)" in template
+    assert "const text = conciseAccountRiskWarningText(value);" in template
+    assert 'id="reputation-warning-popover"' in template
+    assert "function showReputationWarningDetail(cell, event)" in template
+    assert "reputation-warning-preview" in template
 
 
 def test_console_reputation_route_returns_normalized_data_without_token(monkeypatch):
@@ -283,6 +296,7 @@ def test_full_refresh_keeps_successes_and_logs_failed_stores(monkeypatch):
         }
 
     monkeypatch.setattr(bit_interface.bit_reputation_info, "main", collect)
+    monkeypatch.setattr(bit_interface, "_persist_api_reputation_snapshot", lambda: True)
     with bit_interface._api_reputation_lock:
         bit_interface._api_reputation_logs.clear()
         bit_interface._api_reputation_state.update({
@@ -315,6 +329,98 @@ def test_full_refresh_keeps_successes_and_logs_failed_stores(monkeypatch):
     assert any("成功店铺：成功" in line for line in result["logs"])
     assert any("失败店铺：失败" in line for line in result["logs"])
     assert result["elapsed_seconds"] >= 0
+
+
+def test_api_reputation_last_snapshot_survives_service_restart(tmp_path):
+    state_path = tmp_path / "api-reputation.json"
+    with bit_interface._api_reputation_lock:
+        previous_state = dict(bit_interface._api_reputation_state)
+        previous_logs = list(bit_interface._api_reputation_logs)
+        bit_interface._api_reputation_state.update({
+            "running": False,
+            "status": "partial",
+            "message": "全量更新完成：成功 1 家，失败 1 家",
+            "started_at": "2026-08-31 20:00:00",
+            "finished_at": "2026-08-31 20:00:08",
+            "elapsed_seconds": 8,
+            "total_stores": 2,
+            "completed_stores": 2,
+            "success_stores": 1,
+            "failed_stores": 1,
+            "total_sites": 1,
+            "rows": [{"store_name": "上次店铺", "site_id": "MLM"}],
+            "failures": [{"store_name": "失败店铺", "error": "超时"}],
+        })
+        bit_interface._api_reputation_logs.clear()
+        bit_interface._api_reputation_logs.append("[20:00:08] 上次任务完成")
+
+    try:
+        assert bit_interface._persist_api_reputation_snapshot(state_path) is True
+        loaded = bit_interface._load_api_reputation_snapshot(state_path)
+    finally:
+        with bit_interface._api_reputation_lock:
+            bit_interface._api_reputation_state.clear()
+            bit_interface._api_reputation_state.update(previous_state)
+            bit_interface._api_reputation_logs.clear()
+            bit_interface._api_reputation_logs.extend(previous_logs)
+
+    assert loaded["running"] is False
+    assert loaded["status"] == "partial"
+    assert loaded["finished_at"] == "2026-08-31 20:00:08"
+    assert loaded["rows"] == [{"store_name": "上次店铺", "site_id": "MLM"}]
+    assert loaded["logs"] == ["[20:00:08] 上次任务完成"]
+
+
+def test_api_reputation_uses_latest_database_rows_before_first_manual_refresh(monkeypatch):
+    monkeypatch.setattr(
+        bit_interface,
+        "db_get_latest_reputation_info",
+        lambda: {
+            "latest_submit_time": "2026-08-31 21:30:00",
+            "rows": [
+                {
+                    "店铺名": "默认店铺",
+                    "站点": "墨西哥",
+                    "声誉颜色": "绿色",
+                    "总单量": 321,
+                    "投诉率": "1.25%",
+                    "延误率": "2.5%",
+                    "取消率": "0%",
+                    "侵权数量": 3,
+                    "权利人数量": 2,
+                }
+            ],
+        },
+    )
+    with bit_interface._api_reputation_lock:
+        previous_state = dict(bit_interface._api_reputation_state)
+        previous_attempted = bit_interface._api_reputation_database_hydration_attempted
+        bit_interface._api_reputation_state.clear()
+        bit_interface._api_reputation_state.update(bit_interface._api_reputation_default_state())
+        bit_interface._api_reputation_database_hydration_attempted = False
+
+    try:
+        assert bit_interface._hydrate_api_reputation_from_database() is True
+        loaded = bit_interface._api_reputation_snapshot()
+    finally:
+        with bit_interface._api_reputation_lock:
+            bit_interface._api_reputation_state.clear()
+            bit_interface._api_reputation_state.update(previous_state)
+            bit_interface._api_reputation_database_hydration_attempted = previous_attempted
+
+    assert loaded["message"] == "已展示上一次入库的 API 声誉数据"
+    assert loaded["finished_at"] == "2026-08-31 21:30:00"
+    assert loaded["rows"][0] == {
+        "store_name": "默认店铺",
+        "site_name": "墨西哥",
+        "level_name": "绿色",
+        "sales_completed": 321,
+        "claims_rate_percent": 1.25,
+        "delayed_handling_rate_percent": 2.5,
+        "cancellations_rate_percent": 0.0,
+        "infraction_count": 3,
+        "rights_holder_count": 2,
+    }
 
 
 def test_default_reputation_collection_uses_api_and_writes_legacy_table(monkeypatch):
@@ -364,7 +470,7 @@ def test_default_reputation_collection_uses_api_and_writes_legacy_table(monkeypa
         bit_reputation_info,
         "get_latest_infraction_info",
         lambda _days: {
-            "recent_days": 30,
+            "recent_days": 100,
             "summary": [
                 {
                     "店铺名": "泽顺店铺",
@@ -415,6 +521,7 @@ def test_default_reputation_collection_uses_api_and_writes_legacy_table(monkeypa
     assert result["api_rows"][0]["store_name"] == "泽顺店铺"
     assert result["api_rows"][0]["infraction_count"] == 3
     assert result["api_rows"][0]["rights_holder_count"] == 2
+    assert result["api_rows"][0]["infraction_recent_days"] == 100
     assert database_calls[0][1] == {}
     legacy_row = database_calls[0][0][0]
     assert legacy_row[:7] == [
@@ -487,7 +594,7 @@ def test_selected_api_reputation_update_merges_only_returned_site(monkeypatch):
     monkeypatch.setattr(
         bit_reputation_info,
         "get_latest_infraction_info",
-        lambda _days: {"recent_days": 30, "summary": []},
+        lambda _days: {"recent_days": 100, "summary": []},
     )
     monkeypatch.setattr(
         bit_reputation_info,
@@ -584,7 +691,7 @@ def test_hybrid_collection_merges_browser_traffic_without_reputation_page(monkey
         bit_reputation_info,
         "get_latest_infraction_info",
         lambda _days: {
-            "recent_days": 30,
+            "recent_days": 100,
             "summary": [
                 {
                     "店铺名": "混合店铺",
@@ -687,6 +794,7 @@ def test_hybrid_collection_merges_browser_traffic_without_reputation_page(monkey
     assert result["api_rows"][0]["visits"] == "[11, 22, 33]"
     assert result["api_rows"][0]["infraction_count"] == 7
     assert result["api_rows"][0]["rights_holder_count"] == 4
+    assert result["api_rows"][0]["infraction_recent_days"] == 100
     assert result["failed_stores"] == 0
 
 
@@ -758,6 +866,18 @@ def test_account_risk_summary_detects_restrictions_and_warnings():
             "https://global-selling.mercadolibre.com/account-risk?filter=warnings"
         ],
     ) == ["warnings"]
+    assert bit_reputation_info._account_risk_kinds_from_summary(
+        "Active restrictions\nRestrictions\n1\nWarnings\n0"
+    ) == ["restrictions"]
+    assert bit_reputation_info._account_risk_kinds_from_summary(
+        "Active restrictions\nRestrictions 0\nWarnings 2"
+    ) == ["warnings"]
+    assert bit_reputation_info._account_risk_kinds_from_summary(
+        "Account status\nRequires attention\nAvoid future restrictions."
+    ) == ["restrictions"]
+    assert bit_reputation_info._account_risk_kinds_from_summary(
+        "Restrictions 0\nWarnings 0"
+    ) == []
 
 
 def test_account_risk_details_remove_summary_and_parent_duplicates():
@@ -769,6 +889,17 @@ def test_account_risk_details_remove_summary_and_parent_duplicates():
             "1 [Go to Warnings](https://global-selling.mercadolibre.com/account-risk?filter=warnings)",
         ]
     ) == ["Listing paused because the brand is restricted"]
+
+
+def test_account_risk_details_keep_only_title_and_time():
+    assert bit_reputation_info._normalize_account_risk_details(
+        [
+            "Your account has been suspended from selling\n"
+            "August 11, at 00:30\n"
+            "Paused Features\n"
+            "Edit Mercado Libre listings"
+        ]
+    ) == ["Your account has been suspended from selling August 11, at 00:30"]
 
 
 def test_collect_account_risk_details_opens_each_filter_and_keeps_details_only(monkeypatch):

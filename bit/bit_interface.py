@@ -63,6 +63,7 @@ except ModuleNotFoundError as exc:
     import bit_playwright.bit_print as bit_print
 import bit.bit_reputation_info as bit_reputation_info
 import bit.bit_order_sync as bit_order_sync
+import bit.bit_prohibited_listing_sync as bit_prohibited_listing_sync
 import bit.bit_store_link_remote_update as bit_store_link_remote_update
 import bit.bit_store_link_sync as bit_store_link_sync
 import bit.bit_update_orders as bit_update_orders
@@ -73,7 +74,12 @@ import bit.mercado_tokens as mercado_tokens
 from bit.bit_appeal import *
 from bit.bit_collection_control import DEFAULT_COLLECTION_MAX_WORKERS
 from bit.bit_config import list_shop_configs, split_config_sites
-from bit.bit_runtime_lock import InterProcessLock, create_window_lease, get_lock_owner
+from bit.bit_runtime_lock import (
+    InterProcessLock,
+    RUNTIME_LOCK_DIR,
+    create_window_lease,
+    get_lock_owner,
+)
 from bit.bit_mercado_login import (
     MERCADO_LOGIN_JOB_LOCK_KEY,
     is_human_verification_result,
@@ -307,12 +313,6 @@ def _resolve_use_db_api():
 USE_DB_API = _resolve_use_db_api()
 
 if USE_DB_API:
-    db_list_bit_browser_configs = bit_db_api.list_bit_browser_configs
-    db_get_bit_browser_config = bit_db_api.get_bit_browser_config
-    db_upsert_bit_browser_configs = bit_db_api.upsert_bit_browser_configs
-    db_create_bit_browser_config = bit_db_api.create_bit_browser_config
-    db_update_bit_browser_config = bit_db_api.update_bit_browser_config
-    db_delete_bit_browser_config = bit_db_api.delete_bit_browser_config
     db_get_latest_infraction_info = bit_db_api.get_latest_infraction_info
     db_get_latest_order_print_records = bit_db_api.get_latest_order_print_records
     db_get_latest_pago_info = bit_db_api.get_latest_pago_info
@@ -377,12 +377,6 @@ else:
     import pymysql
     from bit.bit_mysql import config as mysql_config
     from bit.bit_mysql import (
-        list_bit_browser_configs,
-        get_bit_browser_config,
-        upsert_bit_browser_configs,
-        create_bit_browser_config,
-        update_bit_browser_config,
-        delete_bit_browser_config,
         get_latest_infraction_info,
         get_latest_order_print_records,
         get_latest_pago_info,
@@ -423,12 +417,6 @@ else:
         upsert_window_anomaly,
     )
 
-    db_list_bit_browser_configs = list_bit_browser_configs
-    db_get_bit_browser_config = get_bit_browser_config
-    db_upsert_bit_browser_configs = upsert_bit_browser_configs
-    db_create_bit_browser_config = create_bit_browser_config
-    db_update_bit_browser_config = update_bit_browser_config
-    db_delete_bit_browser_config = delete_bit_browser_config
     db_get_latest_infraction_info = get_latest_infraction_info
     db_get_latest_order_print_records = get_latest_order_print_records
     db_get_latest_pago_info = get_latest_pago_info
@@ -1488,23 +1476,73 @@ _reputation_collect_state = {
     "operation": "",
     "params": {},
 }
+API_REPUTATION_STATE_PATH = Path(
+    os.environ.get("BIT_API_REPUTATION_STATE_PATH")
+    or (RUNTIME_LOCK_DIR / "api_reputation_last_snapshot.json")
+)
+
+
+def _api_reputation_default_state():
+    return {
+        "running": False,
+        "status": "idle",
+        "message": "等待全量更新",
+        "started_at": "",
+        "finished_at": "",
+        "elapsed_seconds": 0,
+        "total_stores": 0,
+        "completed_stores": 0,
+        "success_stores": 0,
+        "failed_stores": 0,
+        "total_sites": 0,
+        "rows": [],
+        "failures": [],
+    }
+
+
+def _load_api_reputation_snapshot(state_path=None):
+    path = Path(state_path or API_REPUTATION_STATE_PATH)
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, TypeError, ValueError, json.JSONDecodeError):
+        return {**_api_reputation_default_state(), "logs": []}
+    if not isinstance(payload, dict):
+        return {**_api_reputation_default_state(), "logs": []}
+
+    state = _api_reputation_default_state()
+    state.update({key: payload.get(key, value) for key, value in state.items()})
+    state["running"] = False
+    state["rows"] = [
+        dict(row) for row in (state.get("rows") or []) if isinstance(row, dict)
+    ]
+    state["failures"] = [
+        dict(row) for row in (state.get("failures") or []) if isinstance(row, dict)
+    ]
+    if state["rows"] and state.get("status") not in {"success", "partial"}:
+        state["status"] = "success"
+    if state["rows"]:
+        state["message"] = str(state.get("message") or "已加载上一次 API 声誉数据")
+        try:
+            state["total_sites"] = int(state.get("total_sites") or len(state["rows"]))
+        except (TypeError, ValueError):
+            state["total_sites"] = len(state["rows"])
+    logs = payload.get("logs")
+    return {
+        **state,
+        "logs": [str(line) for line in logs[-1000:]] if isinstance(logs, list) else [],
+    }
+
+
 _api_reputation_lock = threading.Lock()
 _api_reputation_logs = deque(maxlen=1000)
+_persisted_api_reputation = _load_api_reputation_snapshot()
 _api_reputation_state = {
-    "running": False,
-    "status": "idle",
-    "message": "等待全量更新",
-    "started_at": "",
-    "finished_at": "",
-    "elapsed_seconds": 0,
-    "total_stores": 0,
-    "completed_stores": 0,
-    "success_stores": 0,
-    "failed_stores": 0,
-    "total_sites": 0,
-    "rows": [],
-    "failures": [],
+    key: value
+    for key, value in _persisted_api_reputation.items()
+    if key != "logs"
 }
+_api_reputation_logs.extend(_persisted_api_reputation.get("logs") or [])
+_api_reputation_database_hydration_attempted = False
 _risk_check_lock = threading.Lock()
 _risk_check_state_lock = threading.RLock()
 _risk_check_logs = deque(maxlen=500)
@@ -2478,32 +2516,17 @@ def _authorization_flag_enabled(value):
     return bool(value)
 
 
-def _authorized_task_shop_options(flag_name, configs=None, token_data=None):
-    """授权开关决定任务站点，浏览器配置只负责提供可执行窗口。"""
-    if configs is None:
-        configs = db_list_bit_browser_configs(include_ignored=False) or []
+def _authorized_task_shop_options(flag_name, token_data=None):
+    """直接从店铺授权开关生成任务店铺和站点选项。"""
     if token_data is None:
         token_data = bit_db_api.list_mercado_store_tokens() or {}
 
-    configs_by_alias = {}
-    for config in configs:
-        shop_name = str(config.get("shop_name") or "").strip()
-        window_id = str(config.get("window_id") or "").strip()
-        if shop_name and window_id:
-            configs_by_alias.setdefault(shop_name.casefold(), config)
-
     shops_by_name = {}
     for token in token_data.get("rows") or ():
-        config = next(
-            (
-                configs_by_alias.get(str(alias or "").strip().casefold())
-                for alias in (token.get("display_name"), token.get("nickname"))
-                if str(alias or "").strip()
-                and configs_by_alias.get(str(alias or "").strip().casefold())
-            ),
-            None,
-        )
-        if config is None:
+        shop_name = str(
+            token.get("display_name") or token.get("nickname") or ""
+        ).strip()
+        if not shop_name:
             continue
         enabled_sites = []
         relevant_settings = []
@@ -2522,7 +2545,6 @@ def _authorized_task_shop_options(flag_name, configs=None, token_data=None):
         if not enabled_sites:
             continue
 
-        shop_name = str(config.get("shop_name") or "").strip()
         shop = shops_by_name.setdefault(
             shop_name,
             {
@@ -2533,7 +2555,7 @@ def _authorized_task_shop_options(flag_name, configs=None, token_data=None):
                         for setting in relevant_settings
                         if str(setting.get("salesperson") or "").strip()
                     ),
-                    str(config.get("salesperson") or "").strip(),
+                    "",
                 ),
                 "sites": [],
             },
@@ -2545,16 +2567,13 @@ def _authorized_task_shop_options(flag_name, configs=None, token_data=None):
 
 
 def _collection_config_options(include_failures=False):
-    configs = db_list_bit_browser_configs(include_ignored=False) or []
     token_data = bit_db_api.list_mercado_store_tokens() or {}
     shop_options = _authorized_task_shop_options(
         "visit_stats_enabled",
-        configs=configs,
         token_data=token_data,
     )
     appeal_shop_options = _authorized_task_shop_options(
         "appeal_enabled",
-        configs=configs,
         token_data=token_data,
     )
     site_order = []
@@ -4674,7 +4693,7 @@ def api_collect_funds():
         return jsonify({"status": "error", "message": "单次最多选择 500 家店铺"}), 400
 
     try:
-        configs = db_list_bit_browser_configs(include_ignored=False) or []
+        configs = list_shop_configs(include_ignored=False) or []
     except Exception as e:
         return jsonify({
             "status": "error",
@@ -5587,6 +5606,78 @@ def api_store_link_sync_status():
     except Exception as exc:
         logging.exception("读取店铺链接同步状态失败")
         return jsonify({"status": "error", "message": f"读取店铺链接同步状态失败：{exc}"}), 502
+
+
+@app.route('/api/prohibited-listings', methods=['GET'])
+@login_required
+def api_prohibited_listings():
+    try:
+        token_text = str(request.args.get("token_id") or "").strip()
+        data = bit_db_api.list_mercado_prohibited_listings(
+            search=str(request.args.get("search") or "").strip(),
+            token_id=int(token_text) if token_text else None,
+            site_id=str(request.args.get("site_id") or "").strip(),
+            salesperson=str(request.args.get("salesperson") or "").strip(),
+            page=_parse_int_param(request.args, "page", 1, 1, 1000000),
+            page_size=_parse_int_param(request.args, "page_size", 100, 20, 500),
+        )
+    except ValueError as exc:
+        return jsonify({"status": "error", "message": str(exc)}), 400
+    except Exception as exc:
+        logging.exception("禁限售列表加载失败")
+        return jsonify({"status": "error", "message": f"禁限售列表加载失败：{exc}"}), 502
+    response = jsonify({"status": "success", "data": data})
+    response.headers["Cache-Control"] = "no-store"
+    return response
+
+
+@app.route('/api/prohibited-listings/sync/start', methods=['POST'])
+@login_required
+def api_start_prohibited_listing_sync():
+    data = request.get_json(silent=True) or {}
+    sync_all = data.get("sync_all") is True
+    token_ids = [] if sync_all else (data.get("token_ids") or [])
+    if not isinstance(token_ids, list):
+        return jsonify({"status": "error", "message": "token_ids 必须是数组"}), 422
+    try:
+        salesperson = str(data.get("salesperson") or "").strip()
+        if not sync_all and not token_ids and salesperson:
+            token_rows = (bit_db_api.list_mercado_store_tokens() or {}).get("rows") or []
+            token_ids = [
+                int(row["id"])
+                for row in token_rows
+                if any(
+                    str(setting.get("salesperson") or "").strip() == salesperson
+                    for setting in row.get("site_settings") or []
+                )
+            ]
+            if not token_ids:
+                raise ValueError(f"业务员“{salesperson}”暂无已授权店铺")
+        result = bit_db_api.start_prohibited_listing_sync(token_ids)
+    except ValueError as exc:
+        return jsonify({"status": "error", "message": str(exc)}), 400
+    except Exception as exc:
+        logging.exception("启动禁限售同步失败")
+        return jsonify({"status": "error", "message": f"启动禁限售同步失败：{exc}"}), 502
+    started = bool(result.get("started"))
+    return jsonify({
+        "status": "success" if started else "running",
+        "message": "禁限售同步已启动" if started else "已有禁限售同步任务正在运行",
+        "data": result.get("state") or {},
+    }), 202 if started else 409
+
+
+@app.route('/api/prohibited-listings/sync/status', methods=['GET'])
+@login_required
+def api_prohibited_listing_sync_status():
+    try:
+        data = bit_db_api.get_prohibited_listing_sync_status() or {}
+        response = jsonify({"status": "success", "data": data})
+        response.headers["Cache-Control"] = "no-store"
+        return response
+    except Exception as exc:
+        logging.exception("读取禁限售同步状态失败")
+        return jsonify({"status": "error", "message": f"读取禁限售同步状态失败：{exc}"}), 502
 
 
 @app.route('/api/tasks/daily/start', methods=['POST'])
@@ -6835,6 +6926,14 @@ def api_mercado_collection_items():
             limit=_parse_int_param(request.args, "limit", 500, 1, 1000),
             offset=_parse_int_param(request.args, "offset", 0, 0, 1000000),
             task_id=int(task_id) if str(task_id or "").strip() else None,
+            weight_min=str(request.args.get("weight_min") or "").strip(),
+            weight_max=str(request.args.get("weight_max") or "").strip(),
+            price_min=str(request.args.get("price_min") or "").strip(),
+            price_max=str(request.args.get("price_max") or "").strip(),
+            net_proceeds_min=str(request.args.get("net_proceeds_min") or "").strip(),
+            net_proceeds_max=str(request.args.get("net_proceeds_max") or "").strip(),
+            date_from=str(request.args.get("date_from") or "").strip(),
+            date_to=str(request.args.get("date_to") or "").strip(),
             exclude_added=True,
         )
         return jsonify({"status": "success", "data": result})
@@ -8165,88 +8264,6 @@ def api_db_latest_order_print_records():
     })
 
 
-@app.route('/api/db/browser-configs', methods=['GET', 'POST'])
-@internal_api_required
-def api_db_list_browser_configs():
-    blocked = reject_db_api_client_mode()
-    if blocked:
-        return blocked
-    if request.method == "POST":
-        try:
-            result = db_create_bit_browser_config(request.get_json(silent=True) or {})
-            return jsonify({"status": "success", "data": result})
-        except ValueError as exc:
-            return jsonify({"status": "error", "message": str(exc)}), 400
-    include_ignored = str(request.args.get("include_ignored", "1")).strip().lower() not in (
-        "0",
-        "false",
-        "no",
-    )
-    return jsonify(
-        {
-            "status": "success",
-            "data": db_list_bit_browser_configs(include_ignored),
-        }
-    )
-
-
-@app.route('/api/db/browser-configs/<int:config_id>', methods=['PUT', 'DELETE'])
-@internal_api_required
-def api_db_browser_config_detail(config_id):
-    blocked = reject_db_api_client_mode()
-    if blocked:
-        return blocked
-    try:
-        if request.method == "PUT":
-            result = db_update_bit_browser_config(
-                config_id,
-                request.get_json(silent=True) or {},
-            )
-        else:
-            result = db_delete_bit_browser_config(config_id)
-        return jsonify({"status": "success", "data": result})
-    except ValueError as exc:
-        return jsonify({"status": "error", "message": str(exc)}), 400
-
-
-@app.route('/api/db/browser-configs/lookup', methods=['GET'])
-@internal_api_required
-def api_db_get_browser_config():
-    blocked = reject_db_api_client_mode()
-    if blocked:
-        return blocked
-    shop_name = request.args.get("shop_name", "")
-    window_id = request.args.get("window_id", "")
-    if not str(shop_name or "").strip() and not str(window_id or "").strip():
-        return jsonify({"status": "error", "message": "Missing shop_name or window_id"}), 422
-    include_ignored = str(request.args.get("include_ignored", "1")).strip().lower() not in (
-        "0",
-        "false",
-        "no",
-    )
-    return jsonify(
-        {
-            "status": "success",
-            "data": db_get_bit_browser_config(shop_name, window_id, include_ignored),
-        }
-    )
-
-
-@app.route('/api/db/browser-configs/bulk', methods=['POST'])
-@internal_api_required
-def api_db_upsert_browser_configs():
-    blocked = reject_db_api_client_mode()
-    if blocked:
-        return blocked
-    data = request.get_json(silent=True) or {}
-    records = data.get("records") or []
-    if not isinstance(records, list):
-        return jsonify({"status": "error", "message": "records must be an array"}), 422
-    replace = bool(data.get("replace", False))
-    result = db_upsert_bit_browser_configs(records, replace)
-    return jsonify({"status": "success", "data": result})
-
-
 def _mercado_token_error_response(exc):
     if isinstance(exc, KeyError):
         return jsonify({"status": "error", "message": str(exc.args[0])}), 404
@@ -8801,6 +8818,59 @@ def api_db_store_link_sync_status():
     return jsonify({"status": "success", "data": bit_store_link_sync.store_link_sync_status()})
 
 
+@app.route('/api/db/prohibited-listings', methods=['GET'])
+@internal_api_required
+def api_db_prohibited_listings():
+    blocked = reject_db_api_client_mode()
+    if blocked:
+        return blocked
+    from erp.mercadolibre_prohibited_store import list_prohibited_listings
+
+    try:
+        token_text = str(request.args.get("token_id") or "").strip()
+        data = list_prohibited_listings(
+            search=str(request.args.get("search") or "").strip(),
+            token_id=int(token_text) if token_text else None,
+            site_id=str(request.args.get("site_id") or "").strip(),
+            salesperson=str(request.args.get("salesperson") or "").strip(),
+            page=_parse_int_param(request.args, "page", 1, 1, 1000000),
+            page_size=_parse_int_param(request.args, "page_size", 100, 20, 500),
+        )
+    except ValueError as exc:
+        return jsonify({"status": "error", "message": str(exc)}), 400
+    return jsonify({"status": "success", "data": data})
+
+
+@app.route('/api/db/prohibited-listings/sync/start', methods=['POST'])
+@internal_api_required
+def api_db_start_prohibited_listing_sync():
+    blocked = reject_db_api_client_mode()
+    if blocked:
+        return blocked
+    data = request.get_json(silent=True) or {}
+    sync_all = data.get("sync_all") is True
+    token_ids = [] if sync_all else (data.get("token_ids") or [])
+    if not isinstance(token_ids, list):
+        return jsonify({"status": "error", "message": "token_ids must be an array"}), 422
+    try:
+        started, state = bit_prohibited_listing_sync.start_prohibited_listing_sync(token_ids)
+    except ValueError as exc:
+        return jsonify({"status": "error", "message": str(exc)}), 400
+    return jsonify({"status": "success", "data": {"started": started, "state": state}})
+
+
+@app.route('/api/db/prohibited-listings/sync/status', methods=['GET'])
+@internal_api_required
+def api_db_prohibited_listing_sync_status():
+    blocked = reject_db_api_client_mode()
+    if blocked:
+        return blocked
+    return jsonify({
+        "status": "success",
+        "data": bit_prohibited_listing_sync.prohibited_listing_sync_status(),
+    })
+
+
 @app.route('/api/db/orders/bulk-update', methods=['POST'])
 @internal_api_required
 def api_db_bulk_update_orders():
@@ -9276,7 +9346,7 @@ def enrich_window_anomaly_salespersons(anomaly_data):
         return data
 
     try:
-        configs = db_list_bit_browser_configs(include_ignored=True) or []
+        configs = list_shop_configs(include_ignored=True) or []
     except Exception as exc:
         logging.warning("读取店铺归属人和邮箱失败：%s", exc)
         return data
@@ -9754,41 +9824,6 @@ def api_access_user_password(user_id):
         return jsonify({"status": "error", "message": str(exc)}), 500
 
 
-@app.route('/api/access/browser-configs', methods=['GET', 'POST'])
-@login_required
-def api_access_browser_configs():
-    try:
-        if request.method == "GET":
-            data = db_list_bit_browser_configs(include_ignored=True)
-        else:
-            data = db_create_bit_browser_config(request.get_json(silent=True) or {})
-        return jsonify({"status": "success", "data": data})
-    except ValueError as exc:
-        return jsonify({"status": "error", "message": str(exc)}), 400
-    except Exception as exc:
-        logging.exception("人员与权限店铺配置接口失败")
-        return jsonify({"status": "error", "message": str(exc)}), 500
-
-
-@app.route('/api/access/browser-configs/<int:config_id>', methods=['PUT', 'DELETE'])
-@login_required
-def api_access_browser_config_detail(config_id):
-    try:
-        if request.method == "PUT":
-            data = db_update_bit_browser_config(
-                config_id,
-                request.get_json(silent=True) or {},
-            )
-        else:
-            data = db_delete_bit_browser_config(config_id)
-        return jsonify({"status": "success", "data": data})
-    except ValueError as exc:
-        return jsonify({"status": "error", "message": str(exc)}), 400
-    except Exception as exc:
-        logging.exception("人员与权限店铺配置接口失败")
-        return jsonify({"status": "error", "message": str(exc)}), 500
-
-
 @app.route('/api/db/workbench/login', methods=['POST'])
 @internal_api_required
 def api_db_workbench_login():
@@ -9917,6 +9952,98 @@ def _api_reputation_snapshot():
     return data
 
 
+def _legacy_reputation_percentage(value):
+    match = re.search(r"-?\d+(?:\.\d+)?", str(value or "").replace(",", ""))
+    return float(match.group(0)) if match else None
+
+
+def _hydrate_api_reputation_from_database():
+    global _api_reputation_database_hydration_attempted
+    with _api_reputation_lock:
+        if (
+            _api_reputation_database_hydration_attempted
+            or _api_reputation_state.get("running")
+            or _api_reputation_state.get("rows")
+        ):
+            return False
+        _api_reputation_database_hydration_attempted = True
+
+    try:
+        latest = db_get_latest_reputation_info() or {}
+    except Exception as exc:
+        logging.warning("API 声誉读取上一次入库数据失败：%s", exc)
+        return False
+
+    database_rows = latest.get("rows") or []
+    rows = []
+    for source in database_rows:
+        if not isinstance(source, dict):
+            continue
+        rows.append({
+            "store_name": source.get("店铺名") or "",
+            "site_name": source.get("站点") or "",
+            "level_name": source.get("声誉颜色") or "",
+            "sales_completed": source.get("总单量"),
+            "claims_rate_percent": _legacy_reputation_percentage(source.get("投诉率")),
+            "delayed_handling_rate_percent": _legacy_reputation_percentage(source.get("延误率")),
+            "cancellations_rate_percent": _legacy_reputation_percentage(source.get("取消率")),
+            "infraction_count": int(_legacy_reputation_percentage(source.get("侵权数量")) or 0),
+            "rights_holder_count": int(_legacy_reputation_percentage(source.get("权利人数量")) or 0),
+        })
+    if not rows:
+        return False
+
+    store_count = len({str(row.get("store_name") or "") for row in rows})
+    finished_at = str(latest.get("latest_submit_time") or "")
+    with _api_reputation_lock:
+        if _api_reputation_state.get("running") or _api_reputation_state.get("rows"):
+            return False
+        _api_reputation_state.update({
+            "running": False,
+            "status": "success",
+            "message": "已展示上一次入库的 API 声誉数据",
+            "started_at": "",
+            "finished_at": finished_at,
+            "elapsed_seconds": 0,
+            "total_stores": store_count,
+            "completed_stores": store_count,
+            "success_stores": store_count,
+            "failed_stores": 0,
+            "total_sites": len(rows),
+            "rows": rows,
+            "failures": [],
+        })
+    return True
+
+
+def _persist_api_reputation_snapshot(state_path=None):
+    data = _api_reputation_snapshot()
+    if data.get("status") not in {"success", "partial"} or not data.get("rows"):
+        return False
+
+    data["running"] = False
+    path = Path(state_path or API_REPUTATION_STATE_PATH)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temporary_path = path.with_suffix(
+        f"{path.suffix}.{os.getpid()}.{threading.get_ident()}.tmp"
+    )
+    try:
+        temporary_path.write_text(
+            json.dumps(data, ensure_ascii=False, indent=2, default=str),
+            encoding="utf-8",
+        )
+        os.replace(temporary_path, path)
+        return True
+    except OSError as exc:
+        logging.warning("无法保存 API 声誉上次结果：%s", exc)
+        return False
+    finally:
+        try:
+            temporary_path.unlink()
+        except OSError:
+            pass
+
+
 def _run_all_api_reputation_refresh():
     started_monotonic = time.monotonic()
 
@@ -9985,6 +10112,7 @@ def _run_all_api_reputation_refresh():
                 "rows": rows,
                 "failures": failures,
             })
+        _persist_api_reputation_snapshot()
     except Exception as exc:
         logging.exception("API 声誉全量更新失败")
         with _api_reputation_lock:
@@ -10041,6 +10169,7 @@ def api_refresh_all_mercado_reputation():
 @app.route('/api/mercado-reputation/status', methods=['GET'])
 @login_required
 def api_mercado_reputation_status():
+    _hydrate_api_reputation_from_database()
     response = jsonify({"status": "success", "data": _api_reputation_snapshot()})
     response.headers["Cache-Control"] = "no-store"
     return response
@@ -10392,7 +10521,7 @@ MERCADO_COMMUNICATION_VIEW_POST_ACTIONS = frozenset((
 
 
 def _open_mercado_claim_browser(token_id, claim_id="", shop_name_hint=""):
-    """按 Mercado 授权店铺精确匹配配置，并保留人工浏览器窗口打开。"""
+    """按 Mercado 授权店铺名称实时匹配并打开 BitBrowser 窗口。"""
     identifier = int(token_id)
     token_rows = list((bit_db_api.list_mercado_store_tokens() or {}).get("rows") or [])
     token = next(
@@ -10414,32 +10543,52 @@ def _open_mercado_claim_browser(token_id, claim_id="", shop_name_hint=""):
     if not candidate_names:
         raise ValueError("该店铺授权没有名称，无法匹配比特浏览器窗口")
 
-    configs = [dict(row or {}) for row in list_shop_configs(include_ignored=True)]
-    selected = None
+    window_id = ""
+    matched_name = ""
+    errors = []
+    configured_windows = [
+        row for row in list_shop_configs(include_ignored=True)
+        if isinstance(row, dict)
+    ]
     for candidate in candidate_names:
-        matches = [
-            row for row in configs
-            if str(row.get("shop_name") or "").strip().casefold()
-            == candidate.casefold()
+        exact_matches = [
+            row for row in configured_windows
+            if str(row.get("shop_name") or "").strip() == candidate
         ]
-        if len(matches) > 1:
-            raise ValueError(
-                f"存在 {len(matches)} 个店铺名为“{candidate}”的比特浏览器配置，"
-                "请先将店铺名称配置为唯一"
-            )
-        if matches:
-            selected = matches[0]
+        if not exact_matches:
+            folded_candidate = candidate.casefold()
+            exact_matches = [
+                row for row in configured_windows
+                if str(row.get("shop_name") or "").strip().casefold()
+                == folded_candidate
+            ]
+        configured_ids = list(dict.fromkeys(
+            str(row.get("window_id") or "").strip()
+            for row in exact_matches
+            if str(row.get("window_id") or "").strip()
+        ))
+        if len(configured_ids) == 1:
+            window_id = configured_ids[0]
+            matched_name = candidate
             break
-    if not selected:
+        if len(configured_ids) > 1:
+            errors.append(
+                f"店铺“{candidate}”绑定了多个比特浏览器窗口，请先保留唯一绑定"
+            )
+            continue
+        try:
+            window_id = getBrowserIdByName(candidate)
+            matched_name = candidate
+            break
+        except RuntimeError as exc:
+            errors.append(str(exc))
+    if not window_id:
         raise ValueError(
             f"店铺授权“{candidate_names[0]}”未绑定比特浏览器窗口；"
-            "请让授权显示名称或 Mercado 昵称与比特浏览器店铺名完全一致"
+            "请让授权显示名称或 Mercado 昵称与比特浏览器窗口名称完全一致。"
+            f"{errors[-1] if errors else ''}"
         )
-
-    window_id = str(selected.get("window_id") or "").strip()
-    shop_name = str(selected.get("shop_name") or candidate_names[0]).strip()
-    if not window_id:
-        raise ValueError(f"店铺“{shop_name}”的比特浏览器配置缺少窗口 ID")
+    shop_name = str(token.get("display_name") or matched_name).strip()
 
     try:
         result = openBrowser(
@@ -10982,6 +11131,31 @@ def start_token_refresh_scheduler_bootstrap():
     return scheduler_thread
 
 
+def start_prohibited_listing_scheduler_bootstrap():
+    """Start the daily official-API prohibited-listing scheduler."""
+
+    if bit_db_api.DB_MODE != "mysql":
+        return None
+
+    def start_safely():
+        try:
+            bit_prohibited_listing_sync.start_prohibited_listing_auto_scheduler()
+            logging.info(
+                "禁限售列表自动同步调度已启动：每 %s 小时同步一次",
+                bit_prohibited_listing_sync.PROHIBITED_AUTO_SYNC_HOURS,
+            )
+        except Exception:
+            logging.exception("启动禁限售列表自动同步调度失败")
+
+    scheduler_thread = threading.Thread(
+        target=start_safely,
+        name="mercado-prohibited-scheduler-bootstrap",
+        daemon=True,
+    )
+    scheduler_thread.start()
+    return scheduler_thread
+
+
 def interface_hot_reload_enabled(value=None):
     """Enable source reloading by default while allowing an explicit opt-out."""
 
@@ -11001,6 +11175,7 @@ def is_werkzeug_reloader_child(environ=None):
 def start_interface_background_services():
     start_interrupted_collection_recovery()
     start_store_link_scheduler_bootstrap()
+    start_prohibited_listing_scheduler_bootstrap()
     start_token_refresh_scheduler_bootstrap()
     if not USE_DB_API:
         bit_order_sync.ensure_order_financial_backfill_worker()

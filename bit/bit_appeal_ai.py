@@ -383,8 +383,11 @@ def close_current_tab_keep_browser(driver, name="", site=""):
 
 
 def get_window_id_by_shop_name(name):
-    """根据店铺名从数据库配置中读取比特浏览器窗口 ID。"""
-    return get_config_window_id_by_shop_name(name)
+    """从已开启申诉的店铺授权匹配 BitBrowser 窗口 ID。"""
+    return get_config_window_id_by_shop_name(
+        name,
+        authorization_flag="appeal_enabled",
+    )
 
 
 def select_site(driver, name, site):
@@ -2792,9 +2795,12 @@ def _split_config_sites(value):
 
 
 def load_active_shop_site_config():
-    """从数据库读取未忽略的比特窗口配置，返回店铺可运行站点。"""
+    """从店铺授权读取已开启申诉的店铺站点。"""
     active = {}
-    for row in list_shop_configs(include_ignored=False):
+    for row in list_shop_configs(
+        include_ignored=False,
+        authorization_flag="appeal_enabled",
+    ):
         name = row["shop_name"]
         sites = _split_config_sites(row["sites"])
         active[str(name)] = {normalize_site_code(site) for site in sites}

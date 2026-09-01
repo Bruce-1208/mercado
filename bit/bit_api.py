@@ -126,12 +126,8 @@ def updateBrowser():  # 更新窗口，支持批量更新和按需更新，ids �
     print(res)
 
 
-def getBrowserIdByName(name, page_size=100, max_pages=100):
-    """按 BitBrowser 窗口名称查找 ID，优先且要求唯一的精确匹配。"""
-    wanted_name = str(name or "").strip()
-    if not wanted_name:
-        raise ValueError("请输入比特浏览器窗口名称")
-
+def listBrowsers(page_size=100, max_pages=100):
+    """读取 BitBrowser 窗口列表，供授权店铺按名称实时匹配窗口。"""
     browsers = []
     for page in range(max(1, int(max_pages))):
         response = requests.post(
@@ -149,6 +145,17 @@ def getBrowserIdByName(name, page_size=100, max_pages=100):
         browsers.extend(row for row in page_rows if isinstance(row, dict))
         if len(page_rows) < max(1, int(page_size)):
             break
+    return browsers
+
+
+def getBrowserIdByName(name, page_size=100, max_pages=100, browsers=None):
+    """按 BitBrowser 窗口名称查找 ID，优先且要求唯一的精确匹配。"""
+    wanted_name = str(name or "").strip()
+    if not wanted_name:
+        raise ValueError("请输入比特浏览器窗口名称")
+
+    if browsers is None:
+        browsers = listBrowsers(page_size=page_size, max_pages=max_pages)
 
     exact_matches = [
         row for row in browsers

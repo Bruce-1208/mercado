@@ -119,6 +119,9 @@ def test_request_mercado_login_task_stop_targets_only_requested_task(monkeypatch
 
 
 def test_terminate_mercado_login_process_tree_stops_process_group(monkeypatch):
+    if bit_interface.os.name == "nt":
+        pytest.skip("POSIX process-group behavior")
+
     class FakeProcess:
         pid = 456
 
@@ -136,13 +139,13 @@ def test_terminate_mercado_login_process_tree_stops_process_group(monkeypatch):
 
     process = FakeProcess()
     signals = []
-    monkeypatch.setattr(bit_interface.os, "getpgid", lambda pid: pid)
+    monkeypatch.setattr(bit_interface.os, "getpgid", lambda pid: pid, raising=False)
 
     def fake_killpg(pid, sent_signal):
         signals.append((pid, sent_signal))
         process.returncode = -sent_signal
 
-    monkeypatch.setattr(bit_interface.os, "killpg", fake_killpg)
+    monkeypatch.setattr(bit_interface.os, "killpg", fake_killpg, raising=False)
 
     bit_interface._terminate_mercado_login_process_tree(process)
 
@@ -556,7 +559,7 @@ def test_shop_status_rejects_selected_shop_that_is_no_longer_pending(monkeypatch
 def test_shop_status_enriches_salesperson_from_browser_configs(monkeypatch):
     monkeypatch.setattr(
         bit_interface,
-        "db_list_bit_browser_configs",
+        "list_shop_configs",
         lambda include_ignored=True: [
             {
                 "window_id": "window-1",
@@ -633,7 +636,7 @@ def test_shop_status_only_returns_human_verification_rows(monkeypatch):
     )
     monkeypatch.setattr(
         bit_interface,
-        "db_list_bit_browser_configs",
+        "list_shop_configs",
         lambda include_ignored=True: [],
     )
     client = bit_interface.app.test_client()
@@ -656,7 +659,7 @@ def test_shop_status_ui_uses_single_shop_auto_login_action():
         Path(bit_interface.CURRENT_DIR) / "templates" / "index.html"
     ).read_text(encoding="utf-8")
 
-    assert '>店铺状态</button>' in template
+    assert '>店铺状态</span>' in template
     assert "<h2>店铺状态</h2>" in template
     assert "重新检测" in template
     assert "startSingleShopAutoLogin" in template
@@ -1401,7 +1404,7 @@ def test_collection_page_uses_shop_status_style_checkbox_multiselect():
 def test_collection_options_returns_active_shop_site_mapping(monkeypatch):
     monkeypatch.setattr(
         bit_interface,
-        "db_list_bit_browser_configs",
+        "list_shop_configs",
         lambda include_ignored=False: [
             {
                 "window_id": "window-1",
@@ -1425,15 +1428,15 @@ def test_collection_options_returns_active_shop_site_mapping(monkeypatch):
                 {
                     "display_name": "店铺甲",
                     "site_settings": [
-                        {"site_id": "MLM", "visit_stats_enabled": True, "appeal_enabled": True},
-                        {"site_id": "MLB", "visit_stats_enabled": True, "appeal_enabled": False},
+                        {"site_id": "MLM", "salesperson": "业务员甲", "visit_stats_enabled": True, "appeal_enabled": True},
+                        {"site_id": "MLB", "salesperson": "业务员甲", "visit_stats_enabled": True, "appeal_enabled": False},
                     ],
                 },
                 {
                     "display_name": "店铺乙",
                     "site_settings": [
-                        {"site_id": "MLB", "visit_stats_enabled": True, "appeal_enabled": True},
-                        {"site_id": "MLC", "visit_stats_enabled": True, "appeal_enabled": True},
+                        {"site_id": "MLB", "salesperson": "业务员乙", "visit_stats_enabled": True, "appeal_enabled": True},
+                        {"site_id": "MLC", "salesperson": "业务员乙", "visit_stats_enabled": True, "appeal_enabled": True},
                     ],
                 },
             ]
@@ -1554,7 +1557,7 @@ def test_collection_start_passes_selected_scope_and_defaults_to_ten_workers(
 ):
     monkeypatch.setattr(
         bit_interface,
-        "db_list_bit_browser_configs",
+        "list_shop_configs",
         lambda include_ignored=False: [
             {
                 "window_id": "window-1",
@@ -1636,7 +1639,7 @@ def test_collection_start_passes_selected_scope_and_defaults_to_ten_workers(
 def test_collection_start_rejects_shop_site_without_configured_intersection(monkeypatch):
     monkeypatch.setattr(
         bit_interface,
-        "db_list_bit_browser_configs",
+        "list_shop_configs",
         lambda include_ignored=False: [
             {
                 "window_id": "window-1",

@@ -1,0 +1,196 @@
+{
+  "captured_at": "2026-09-01T02:33:32",
+  "current_url": "https://global-selling.mercadolibre.com/help/v2",
+  "chat_state": {
+    "ai_frame_count": 1,
+    "inline_aria_expanded": "false",
+    "inline_has_input": false,
+    "inline_open": true,
+    "inline_root_class": "assistant-chat show",
+    "inline_shell": true,
+    "legacy_frame_count": 1,
+    "shadow_ai_frame_count": 1,
+    "visible_ai_frame_count": 1
+  },
+  "dom_snapshot": {
+    "aiShells": [
+      {
+        "ariaExpanded": "false",
+        "className": "icon-button__wrapper icon-button__wrapper--closed",
+        "id": "sa-icon-button-wrapper",
+        "tag": "BUTTON",
+        "visible": true
+      },
+      {
+        "ariaExpanded": "",
+        "className": "assistant-chat show",
+        "id": "sa-assistant-chat",
+        "tag": "DIV",
+        "visible": true
+      }
+    ],
+    "frames": [
+      {
+        "className": "",
+        "height": 361,
+        "id": "",
+        "shadowHost": "sof-seller-assistant-frm-host",
+        "src": "https://global-selling.mercadolibre.com/maxwell/new-chat?flavor=seller-assistant&hideHeader=true&origin=sa&andes_ui=legacy&customLocale=en-US",
+        "title": "Meli AI Chat",
+        "visible": true,
+        "width": 340
+      },
+      {
+        "className": "",
+        "height": 0,
+        "id": "_hjSafeContext_81110443",
+        "shadowHost": "",
+        "src": "about:blank",
+        "title": "_hjSafeContext",
+        "visible": false,
+        "width": 0
+      }
+    ],
+    "readyState": "complete",
+    "shadowHosts": [
+      {
+        "className": "remote-module cx-contents-search-frontend-cx-search-frm",
+        "id": "remote-module-container-cx-contents-search-frontend-cx-search-frm-default",
+        "tag": "SECTION"
+      },
+      {
+        "className": "",
+        "id": "zying-global-react-host",
+        "tag": "DIV"
+      },
+      {
+        "className": "",
+        "id": "sof-seller-assistant-frm-host",
+        "tag": "DIV"
+      }
+    ],
+    "title": "帮助"
+  },
+  "browser_logs": [
+    {
+      "level": "SEVERE",
+      "message": "https://console.bitbrowser.net/?id=d9c266f18acb460891a96e566de443b3&locale=zh&port=54345 - Unchecked runtime.lastError: Could not establish connection. Receiving end does not exist.",
+      "source": "other",
+      "timestamp": 1788200973075
+    },
+    {
+      "level": "SEVERE",
+      "message": "https://www.zying.net/meli.htm?state=client_539959265&code=TG-6a86f76e9d5c6a0001383080-3616360530 5 Unchecked runtime.lastError: Could not establish connection. Receiving end does not exist.",
+      "source": "other",
+      "timestamp": 1788200973077
+    },
+    {
+      "level": "SEVERE",
+      "message": "https://zeshun.nat100.top/favicon.ico - Failed to load resource: the server responded with a status of 404 (NOT FOUND)",
+      "source": "network",
+      "timestamp": 1788200973080
+    },
+    {
+      "level": "SEVERE",
+      "message": "https://rum.hlx.page/.rum/@adobe/helix-rum-js@%5E2/dist/micro.js - Failed to load resource: net::ERR_CONNECTION_RESET",
+      "source": "network",
+      "timestamp": 1788200983177
+    },
+    {
+      "level": "SEVERE",
+      "message": "https://www.microsoft.com/golf/etc.clientlibs/microsoft/components/structure/page/clientlibs/custom-oneds.ACSHASH2b7224aac4ea4007cb4436ebcdc8cec8.min.js 0 Permissions policy violation: unload is not allowed in this document.",
+      "source": "violation",
+      "timestamp": 1788200985196
+    },
+    {
+      "level": "SEVERE",
+      "message": "https://www.microsoft.com/golf/etc.clientlibs/microsoft/components/structure/page/clientlibs/custom-oneds.ACSHASH2b7224aac4ea4007cb4436ebcdc8cec8.min.js 0 Permissions policy violation: unload is not allowed in this document.",
+      "source": "violation",
+      "timestamp": 1788200985196
+    },
+    {
+      "level": "SEVERE",
+      "message": "https://www.microsoft.com/golf/etc.clientlibs/microsoft/components/structure/page/clientlibs/custom-oneds.ACSHASH2b7224aac4ea4007cb4436ebcdc8cec8.min.js 0 Permissions policy violation: unload is not allowed in this document.",
+      "source": "violation",
+      "timestamp": 1788200985200
+    },
+    {
+      "level": "SEVERE",
+      "message": "https://www.microsoft.com/golf/etc.clientlibs/microsoft/components/structure/page/clientlibs/custom-oneds.ACSHASH2b7224aac4ea4007cb4436ebcdc8cec8.min.js 0 Permissions policy violation: unload is not allowed in this document.",
+      "source": "violation",
+      "timestamp": 1788200985200
+    },
+    {
+      "level": "SEVERE",
+      "message": "https://www.microsoft.com/videoplayer/ump.mjs 1305 Permissions policy violation: unload is not allowed in this document.",
+      "source": "violation",
+      "timestamp": 1788200985583
+    },
+    {
+      "level": "SEVERE",
+      "message": "https://www.microsoft.com/videoplayer/ump.mjs 1305 Permissions policy violation: unload is not allowed in this document.",
+      "source": "violation",
+      "timestamp": 1788200985584
+    },
+    {
+      "level": "SEVERE",
+      "message": "https://www.global-selling.mercadolibre.com/browser-assessment/s/assessment.js?mo=manual&fi=maxwell_user_message - Failed to load resource: net::ERR_SSL_VERSION_OR_CIPHER_MISMATCH",
+      "source": "network",
+      "timestamp": 1788200990286
+    },
+    {
+      "level": "SEVERE",
+      "message": "https://content.hotjar.io/?site_id=783944&gzip=1 - Failed to load resource: net::ERR_CONNECTION_RESET",
+      "source": "network",
+      "timestamp": 1788201001727
+    },
+    {
+      "level": "SEVERE",
+      "message": "https://id.rlcdn.com/464526.gif - Failed to load resource: net::ERR_CONNECTION_CLOSED",
+      "source": "network",
+      "timestamp": 1788201004531
+    },
+    {
+      "level": "SEVERE",
+      "message": "https://www.global-selling.mercadolibre.com/browser-assessment/s/assessment.js?mo=manual&fi=maxwell_user_message - Failed to load resource: net::ERR_SSL_VERSION_OR_CIPHER_MISMATCH",
+      "source": "network",
+      "timestamp": 1788201021801
+    },
+    {
+      "level": "SEVERE",
+      "message": "https://www.global-selling.mercadolibre.com/browser-assessment/s/assessment.js?mo=manual&fi=maxwell_user_message - Failed to load resource: net::ERR_SSL_VERSION_OR_CIPHER_MISMATCH",
+      "source": "network",
+      "timestamp": 1788201059353
+    },
+    {
+      "level": "SEVERE",
+      "message": "https://www.global-selling.mercadolibre.com/browser-assessment/s/assessment.js?mo=manual&fi=maxwell_user_message - Failed to load resource: net::ERR_SSL_VERSION_OR_CIPHER_MISMATCH",
+      "source": "network",
+      "timestamp": 1788201067284
+    },
+    {
+      "level": "SEVERE",
+      "message": "https://www.global-selling.mercadolibre.com/browser-assessment/s/assessment.js?mo=manual&fi=maxwell_user_message - Failed to load resource: net::ERR_SSL_VERSION_OR_CIPHER_MISMATCH",
+      "source": "network",
+      "timestamp": 1788201076795
+    },
+    {
+      "level": "SEVERE",
+      "message": "https://global-selling.mercadolibre.com/maxwell/api/sse/long-lived - Failed to load resource: net::ERR_CONNECTION_CLOSED",
+      "source": "network",
+      "timestamp": 1788201134126
+    },
+    {
+      "level": "SEVERE",
+      "message": "https://www.global-selling.mercadolibre.com/browser-assessment/s/assessment.js?mo=manual&fi=maxwell_user_message - Failed to load resource: net::ERR_SSL_VERSION_OR_CIPHER_MISMATCH",
+      "source": "network",
+      "timestamp": 1788201142629
+    },
+    {
+      "level": "SEVERE",
+      "message": "https://www.global-selling.mercadolibre.com/browser-assessment/s/assessment.js?mo=manual&fi=maxwell_user_message - Failed to load resource: net::ERR_SSL_VERSION_OR_CIPHER_MISMATCH",
+      "source": "network",
+      "timestamp": 1788201151776
+    }
+  ]
+}

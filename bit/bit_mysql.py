@@ -1040,13 +1040,13 @@ def _active_collection_snapshot_rows(rows):
     try:
         active_targets = {
             (item["店铺名"], item["站点"])
-            for item in _load_configured_shop_sites()
+            for item in _load_authorized_shop_sites("visit_stats_enabled")
         }
     except Exception as exc:
-        print(f"读取启用店铺范围失败，保留原快照：{exc}")
-        return rows
+        print(f"读取店铺授权访问统计范围失败，按空范围处理：{exc}")
+        return []
     if not active_targets:
-        return rows
+        return []
     return [
         row
         for row in rows
@@ -1464,19 +1464,43 @@ def _is_ignored_config_value(value):
     return "忽略" in str(value or "").strip()
 
 
-def _load_configured_shop_sites():
+def _authorization_flag_enabled(value):
+    if isinstance(value, str):
+        return value.strip().casefold() not in ("", "0", "false", "no", "off")
+    return bool(value)
+
+
+def _load_authorized_shop_sites(setting_field="visit_stats_enabled"):
+    """直接从店铺授权读取显式开启任务开关的店铺站点。"""
+    if setting_field not in ("appeal_enabled", "visit_stats_enabled"):
+        raise ValueError(f"不支持的店铺授权任务开关：{setting_field}")
     configured = []
     seen = set()
-    for row in list_bit_browser_configs(include_ignored=False):
-        name = str(row.get("shop_name") or "").strip()
+    token_data = list_mercado_store_tokens() or {}
+    for token in token_data.get("rows") or ():
+        name = str(token.get("display_name") or token.get("nickname") or "").strip()
         if not name:
             continue
-        for site in _split_config_sites(row.get("sites")):
+        for raw_setting in token.get("site_settings") or ():
+            setting = dict(raw_setting or {})
+            if not _authorization_flag_enabled(setting.get(setting_field)):
+                continue
+            site_id = str(setting.get("site_id") or "").strip().upper()
+            site = MERCADO_CONFIGURABLE_SITES.get(site_id)
+            if not site:
+                continue
             key = (name, site)
             if key in seen:
                 continue
             seen.add(key)
-            configured.append({"店铺名": name, "站点": site})
+            configured.append({
+                "token_id": int(token.get("id") or 0),
+                "店铺名": name,
+                "站点": site,
+                "site_id": site_id,
+                "业务员": str(setting.get("salesperson") or "").strip(),
+                "店铺组": str(setting.get("group_name") or "").strip(),
+            })
     return configured
 
 
@@ -1539,7 +1563,7 @@ def get_latest_infraction_info(recent_days=30):
             if not latest_submit_time:
                 task_status_map = _get_latest_infraction_task_status(cursor)
                 summary = []
-                for configured_site in _load_configured_shop_sites():
+                for configured_site in _load_authorized_shop_sites("visit_stats_enabled"):
                     key = (configured_site["店铺名"], configured_site["站点"])
                     task_status = task_status_map.get(key) or {}
                     summary.append({
@@ -1600,7 +1624,7 @@ def get_latest_infraction_info(recent_days=30):
                 item["状态"] = task_status.get("状态") or "成功"
                 item["状态时间"] = task_status.get("状态时间") or ""
 
-            for configured_site in _load_configured_shop_sites():
+            for configured_site in _load_authorized_shop_sites("visit_stats_enabled"):
                 key = (configured_site["店铺名"], configured_site["站点"])
                 if key in summary_map:
                     continue
@@ -1674,6 +1698,7 @@ def get_latest_reputation_info():
 
     try:
         with connection.cursor() as cursor:
+            authorized_sites = _load_authorized_shop_sites("visit_stats_enabled")
             _ensure_column(cursor, "reputation", "取消率", "VARCHAR(255) NULL")
             _ensure_column(cursor, "reputation", "一周流量趋势", "TEXT NULL")
             latest_submit_time = _latest_tracked_collection_snapshot(
@@ -1701,12 +1726,15 @@ def get_latest_reputation_info():
                     "total": 0,
                     "summary": [
                         {
-                            "店铺名": shop_name,
-                            "站点": site,
+                            "店铺名": configured_site["店铺名"],
+                            "站点": configured_site["站点"],
                             "状态": task_status.get("状态") or "未知",
                             "状态时间": task_status.get("状态时间") or "",
                         }
-                        for (shop_name, site), task_status in task_status_map.items()
+                        for configured_site in authorized_sites
+                        for task_status in [task_status_map.get((
+                            configured_site["店铺名"], configured_site["站点"]
+                        )) or {}]
                     ],
                     "rows": [],
                 }
@@ -1719,7 +1747,7 @@ def get_latest_reputation_info():
             try:
                 infraction_counts = _latest_infraction_counts_by_shop_site(
                     cursor,
-                    recent_days=30,
+                    recent_days=100,
                 )
             except Exception as exc:
                 print(f"读取声誉关联侵权数量失败，将显示为 0: {exc}")
@@ -1734,7 +1762,7 @@ def get_latest_reputation_info():
                 )) or {}
                 row["侵权数量"] = int(counts.get("侵权数量") or 0)
                 row["权利人数量"] = int(counts.get("权利人数量") or 0)
-                row["侵权统计天数"] = 30
+                row["侵权统计天数"] = 100
             shop_traffic_totals = {}
             for row in rows:
                 shop_name = str(row.get("店铺名") or "")
@@ -1756,12 +1784,15 @@ def get_latest_reputation_info():
             )
             summary = [
                 {
-                    "店铺名": shop_name,
-                    "站点": site,
+                    "店铺名": configured_site["店铺名"],
+                    "站点": configured_site["站点"],
                     "状态": task_status.get("状态") or "未知",
                     "状态时间": task_status.get("状态时间") or "",
                 }
-                for (shop_name, site), task_status in task_status_map.items()
+                for configured_site in authorized_sites
+                for task_status in [task_status_map.get((
+                    configured_site["店铺名"], configured_site["站点"]
+                )) or {}]
             ]
             return {
                 "latest_submit_time": str(latest_submit_time),
@@ -5267,29 +5298,46 @@ def _format_currency_decimal(value):
 
 
 def get_latest_pago_info(salesperson=""):
-    """返回每个有效店铺配置站点的最新款项数据，并补充店铺归属人。"""
+    """返回店铺授权中已配置站点的最新款项数据，并补充店铺归属人。"""
     owner_filter = str(salesperson or "").strip()
-    configs = list_bit_browser_configs(include_ignored=False) or []
     configured_rows = []
     owners = set()
-    for config_row in configs:
-        shop_name = str(config_row.get("shop_name") or "").strip()
-        window_id = str(config_row.get("window_id") or "").strip()
-        owner = str(config_row.get("salesperson") or "").strip()
-        display_owner = owner or "未分配"
-        if not shop_name or (owner_filter and display_owner != owner_filter):
+    token_data = list_mercado_store_tokens() or {}
+    for token in token_data.get("rows") or ():
+        shop_name = str(token.get("display_name") or token.get("nickname") or "").strip()
+        if not shop_name:
             continue
-        owners.add(display_owner)
-        sites = _split_config_sites(config_row.get("sites")) or [""]
-        for site in sites:
+        settings = []
+        for raw_setting in token.get("site_settings") or ():
+            setting = dict(raw_setting or {})
+            if any((
+                str(setting.get("salesperson") or "").strip(),
+                str(setting.get("group_name") or "").strip(),
+                setting.get("discount_rate") not in (None, ""),
+                _authorization_flag_enabled(setting.get("appeal_enabled")),
+                _authorization_flag_enabled(setting.get("visit_stats_enabled")),
+            )):
+                settings.append(setting)
+        if not settings:
+            token_site = str(token.get("site_id") or "").strip().upper()
+            if token_site in MERCADO_CONFIGURABLE_SITES:
+                settings = [{"site_id": token_site}]
+        for setting in settings:
+            owner = str(setting.get("salesperson") or "").strip()
+            display_owner = owner or "未分配"
+            if owner_filter and display_owner != owner_filter:
+                continue
+            owners.add(display_owner)
+            site_id = str(setting.get("site_id") or "").strip().upper()
+            site = MERCADO_CONFIGURABLE_SITES.get(site_id, site_id)
             configured_rows.append(
                 {
-                    "window_id": window_id,
+                    "window_id": "",
                     "店铺名": shop_name,
                     "店铺归属人": display_owner,
                     "站点": site,
-                    "配置状态": str(config_row.get("status") or "").strip(),
-                    "sequence_no": str(config_row.get("sequence_no") or "").strip(),
+                    "配置状态": "",
+                    "sequence_no": "",
                 }
             )
 
@@ -5991,12 +6039,6 @@ def update_bit_browser_config(config_id, record):
         with connection.cursor() as cursor:
             _ensure_bit_browser_configs_table(cursor)
             cursor.execute(
-                "SELECT `id` FROM `bit_browser_configs` WHERE `id` = %s",
-                (config_id,),
-            )
-            if not cursor.fetchone():
-                raise ValueError("店铺配置不存在")
-            cursor.execute(
                 """
                 UPDATE `bit_browser_configs`
                 SET `window_id` = %s, `shop_name` = %s, `status` = %s,
@@ -6056,63 +6098,17 @@ def delete_bit_browser_config(config_id):
 
 
 def list_bit_browser_configs(include_ignored=True):
-    connection = pymysql.connect(**config)
-    try:
-        with connection.cursor() as cursor:
-            _ensure_bit_browser_configs_table(cursor)
-            where = "" if include_ignored else "WHERE COALESCE(`status`, '') NOT LIKE '%忽略%'"
-            cursor.execute(
-                f"""
-                SELECT `id`, `window_id`, `shop_name`, `status`, `sites`, `sequence_no`,
-                       `salesperson`, `email`, `created_at`, `updated_at`
-                FROM `bit_browser_configs`
-                {where}
-                ORDER BY
-                    CASE WHEN `sequence_no` REGEXP '^[0-9]+$' THEN CAST(`sequence_no` AS UNSIGNED) ELSE 999999999 END,
-                    `id`
-                """
-            )
-            rows = cursor.fetchall()
-            return [_serialize_bit_browser_config_row(row) for row in rows]
-    finally:
-        connection.close()
+    del include_ignored
+    raise RuntimeError(
+        "bit_browser_configs 已停用；请读取店铺授权及站点任务开关"
+    )
 
 
 def get_bit_browser_config(shop_name="", window_id="", include_ignored=True):
-    shop_name = _config_text(shop_name)
-    window_id = _config_text(window_id)
-    if not shop_name and not window_id:
-        return None
-
-    clauses = []
-    params = []
-    if window_id:
-        clauses.append("`window_id` = %s")
-        params.append(window_id)
-    if shop_name:
-        clauses.append("`shop_name` = %s")
-        params.append(shop_name)
-    if not include_ignored:
-        clauses.append("COALESCE(`status`, '') NOT LIKE '%忽略%'")
-
-    connection = pymysql.connect(**config)
-    try:
-        with connection.cursor() as cursor:
-            _ensure_bit_browser_configs_table(cursor)
-            cursor.execute(
-                f"""
-                SELECT `id`, `window_id`, `shop_name`, `status`, `sites`, `sequence_no`,
-                       `salesperson`, `email`, `created_at`, `updated_at`
-                FROM `bit_browser_configs`
-                WHERE {' AND '.join(clauses)}
-                LIMIT 1
-                """,
-                tuple(params),
-            )
-            row = cursor.fetchone()
-            return _serialize_bit_browser_config_row(row)
-    finally:
-        connection.close()
+    del shop_name, window_id, include_ignored
+    raise RuntimeError(
+        "bit_browser_configs 已停用；请读取店铺授权及站点任务开关"
+    )
 
 
 def insert_chat_info(name, site, message, chat, response, time):

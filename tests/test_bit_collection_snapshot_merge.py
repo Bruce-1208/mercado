@@ -164,7 +164,7 @@ def test_infraction_zero_result_rerun_removes_only_selected_site():
 def test_active_snapshot_filter_removes_disabled_historical_shops():
     with mock.patch.object(
         bit_mysql,
-        "_load_configured_shop_sites",
+        "_load_authorized_shop_sites",
         return_value=[{"店铺名": "店铺甲", "站点": "墨西哥"}],
     ):
         rows = bit_mysql._active_collection_snapshot_rows(
@@ -206,6 +206,7 @@ def test_reputation_without_snapshot_marker_uses_latest_rows_per_shop():
             "_get_latest_collection_task_status",
             return_value={},
         ),
+        mock.patch.object(bit_mysql, "_load_authorized_shop_sites", return_value=[]),
         mock.patch.object(
             bit_mysql.pymysql,
             "connect",
@@ -267,7 +268,7 @@ def test_infraction_without_snapshot_marker_uses_latest_rows_per_shop():
             "_get_latest_infraction_task_status",
             return_value={},
         ),
-        mock.patch.object(bit_mysql, "_load_configured_shop_sites", return_value=[]),
+        mock.patch.object(bit_mysql, "_load_authorized_shop_sites", return_value=[]),
         mock.patch.object(
             bit_mysql.pymysql,
             "connect",
