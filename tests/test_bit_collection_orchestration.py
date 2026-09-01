@@ -203,6 +203,8 @@ class CollectionOrchestrationTests(unittest.TestCase):
                     "BIT_DAILY_ROUND_INTERVAL": "0",
                     "BIT_DAILY_MAX_WORKERS": "30",
                     "BIT_MAIN_BROWSER_WORKER_LIMIT": "30",
+                    # bit_main 必须忽略旧 Top N 限量，始终处理授权勾选的全部店铺。
+                    "BIT_DAILY_TOP_N": "1",
                 },
                 clear=True,
             ),
@@ -358,8 +360,7 @@ class CollectionOrchestrationTests(unittest.TestCase):
             mock.patch.object(
                 bit_main,
                 "_run_order_print_if_due",
-                side_effect=lambda: events.append("order_print") or {"status": "completed"},
-            ),
+            ) as order_print,
             mock.patch.object(
                 bit_main.bit_reputation_info,
                 "main",
@@ -388,9 +389,16 @@ class CollectionOrchestrationTests(unittest.TestCase):
 
         self.assertEqual(
             events,
-            ["order_print", "infraction", ("sleep", 240), "reputation", "appeal"],
+            ["infraction", ("sleep", 240), "reputation", "appeal"],
         )
-        self.assertEqual(result["order_print"], {"status": "completed"})
+        order_print.assert_not_called()
+        self.assertEqual(
+            result["order_print"],
+            {
+                "status": "disabled",
+                "reason": "not_scheduled_by_bit_main",
+            },
+        )
         self.assertEqual(result["ai_appeal"], {"ok": True})
         self.assertEqual(reputation_main.call_args.kwargs["max_workers"], 10)
         self.assertEqual(infraction_main.call_args.kwargs["max_workers"], 10)
@@ -440,11 +448,6 @@ class CollectionOrchestrationTests(unittest.TestCase):
 
         with (
             mock.patch.object(bit_main, "InterProcessLock", return_value=process_lock),
-            mock.patch.object(
-                bit_main,
-                "_run_order_print_if_due",
-                return_value={"status": "skipped", "reason": "within_24_hours"},
-            ),
             mock.patch.object(
                 bit_main.bit_infractions_info,
                 "main",

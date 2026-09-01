@@ -37,7 +37,7 @@ SCHEDULE_INTERVAL_HOURS = 2
 DEFAULT_CHAIN_REPEAT_SECONDS = 2 * 60 * 60
 DEFAULT_MAIN_BROWSER_WORKER_LIMIT = 15
 DEFAULT_MAIN_APPEAL_ROUNDS = 10
-# bit_main 默认处理全部符合条件的店铺；BIT_DAILY_TOP_N 设置为正数时仍可限量。
+# bit_main 始终处理店铺授权中勾选对应权限的全部店铺，不允许再按 Top N 缩小。
 DEFAULT_MAIN_TOP_N = 0
 ORDER_PRINT_INTERVAL_SECONDS = 24 * 60 * 60
 ORDER_PRINT_STATE_PATH = RUNTIME_LOCK_DIR / "bit_main_order_print_state.json"
@@ -236,7 +236,7 @@ def _run_ai_appeal_loop(started_at):
         )
         return None
 
-    top_n = _get_int_env("BIT_DAILY_TOP_N", DEFAULT_MAIN_TOP_N)
+    top_n = DEFAULT_MAIN_TOP_N
     max_workers = _get_int_env(
         "BIT_DAILY_MAX_WORKERS",
         bit_daily_task.DEFAULT_DAILY_MAX_WORKERS,
@@ -256,7 +256,7 @@ def _run_ai_appeal_loop(started_at):
     appeal_labels = " -> ".join(
         appeal_type for _step_key, appeal_type in MAIN_APPEAL_SEQUENCE
     )
-    appeal_scope = "全部符合条件的店铺" if top_n <= 0 else f"Top {top_n} 店铺"
+    appeal_scope = "店铺授权中勾选“进行申诉”的全部符合条件店铺/站点"
     print(
         f"{get_now_time()} 开始执行 AI 申诉循环：范围={appeal_scope}, "
         f"max_workers={max_workers}, recent_days={recent_days}, "
@@ -356,7 +356,7 @@ def _run_ai_appeal_loop(started_at):
 
 
 def run_infraction_reputation_then_appeal():
-    """到期订单打印 -> 侵权采集 -> 声誉采集 -> 四类 AI 申诉循环。"""
+    """侵权采集 -> 声誉采集 -> 四类 AI 申诉循环。"""
     if not SCHEDULE_LOCK.acquire(blocking=False):
         print(f"{get_now_time()} 本进程调度任务仍在运行，本次跳过<br>")
         return None
@@ -382,25 +382,23 @@ def run_infraction_reputation_then_appeal():
     reputation_options = _collection_options("REPUTATION")
     infraction_options = _collection_options("INFRACTION")
     print(
-        f"{get_now_time()} 定时任务开始：订单打印(每24小时最多一次) "
-        f"-> 侵权(并发{infraction_options['max_workers']}) "
-        f"-> 冷却 -> 声誉(并发{reputation_options['max_workers']}) "
+        f"{get_now_time()} 定时任务开始：授权“访问数据统计”店铺侵权采集"
+        f"(并发{infraction_options['max_workers']}) -> 冷却 -> "
+        f"授权“访问数据统计”店铺声誉采集"
+        f"(并发{reputation_options['max_workers']}) "
         f"-> 侵权为主的 AI 申诉 10 轮，"
         f"店铺错峰{infraction_options['stagger_min_seconds']:.0f}–"
         f"{infraction_options['stagger_max_seconds']:.0f}秒<br>"
     )
     try:
         phase_errors = {}
-        order_print_result = None
+        # 订单打印不再由 bit_main 调度；保留返回字段以兼容现有调用方。
+        order_print_result = {
+            "status": "disabled",
+            "reason": "not_scheduled_by_bit_main",
+        }
         reputation_result = None
         infraction_result = None
-
-        try:
-            order_print_result = _run_order_print_if_due()
-        except Exception as exc:
-            phase_errors["order_print"] = str(exc)
-            print(f"{get_now_time()} 订单打印异常，将继续执行侵权采集：{exc}<br>")
-            traceback.print_exc()
 
         print(f"{get_now_time()} 开始执行侵权采集：{infraction_options}<br>")
         try:
@@ -448,7 +446,7 @@ def run_infraction_reputation_then_appeal():
 
 
 def run_reputation_infraction_then_daily():
-    """兼容旧入口；实际执行到期订单打印、采集和四类 AI 申诉循环。"""
+    """兼容旧入口；实际执行采集和四类 AI 申诉循环。"""
     return run_infraction_reputation_then_appeal()
 
 
@@ -500,8 +498,7 @@ if __name__ == "__main__":
     print(f"{get_now_time()} bit_main 循环任务启动")
     print("启动后立即执行，每条完整任务链结束后休息 2 小时再重新执行")
     print(
-        "任务顺序：订单打印（每 24 小时最多一次）-> 侵权采集 -> "
-        "冷却 3–5 分钟 -> 声誉采集 -> "
+        "任务顺序：侵权采集 -> 冷却 3–5 分钟 -> 声誉采集 -> "
         "侵权 -> 延误 -> 侵权 -> 投诉 -> 侵权 -> 取消率 -> 侵权，"
         "共 10 轮，最多 15 个进程"
     )
