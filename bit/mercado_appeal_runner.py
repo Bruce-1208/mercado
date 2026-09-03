@@ -7,6 +7,7 @@ import urllib.parse
 import urllib.request
 from pathlib import Path
 
+from bit import bit_appeal_ai
 from bit.bit_mercado_limit import (
     get_mercado_backend_status,
     process_mercado_rate_limit,
@@ -32,7 +33,6 @@ except ImportError as exc:
 
 
 BIT_API = "http://127.0.0.1:54345"
-INFRACTIONS_URL = "https://global-selling.mercadolibre.com/noindex/pppi/infractions"
 HELP_URL = "https://global-selling.mercadolibre.com/help"
 HUB_URL = "https://global-selling.mercadolibre.com/help/hub/30928?source"
 DIRECT_CHAT_URL = "https://global-selling.mercadolibre.com/help/chat/v2"
@@ -338,110 +338,6 @@ def wait_until_site_switched(cdp: Cdp, site: str, timeout=10):
     return False
 
 
-def read_infractions_page(cdp: Cdp):
-    return cdp.js(
-        r"""
-        (() => {
-          function deepElements(root = document) {
-            const out = [];
-            const walk = node => {
-              const elements = node.querySelectorAll ? Array.from(node.querySelectorAll('*')) : [];
-              for (const el of elements) {
-                out.push(el);
-                if (el.shadowRoot) walk(el.shadowRoot);
-              }
-            };
-            walk(root);
-            return out;
-          }
-          const text = (document.body && document.body.innerText) || '';
-          const byClass = deepElements()
-            .filter(el => String(el.className || '').includes('infraction-item__id'))
-            .map(el => (el.innerText || el.textContent || '').replace(/\D/g, '').trim())
-            .filter(x => /^\d{8,12}$/.test(x));
-          const byText = (text.match(/#\s*(\d{8,12})/g) || []).map(x => x.replace(/\D/g, ''));
-          const ids = [...new Set([...byClass, ...byText])];
-          const activePage = (deepElements().find(el => {
-            const cls = String(el.className || '').toLowerCase();
-            return cls.includes('pagination') && cls.includes('active');
-          }) || {}).innerText || '';
-          return {
-            ids,
-            marker: ids.join(','),
-            count: ids.length,
-            url: location.href,
-            activePage: String(activePage).trim(),
-            text: text.slice(0, 2500)
-          };
-        })()
-        """
-    ) or {"ids": [], "marker": "", "count": 0, "url": "", "activePage": "", "text": ""}
-
-
-def wait_for_infractions_page(cdp: Cdp, previous_marker: str | None = None, timeout=30):
-    end = time.time() + timeout
-    last = None
-    while time.time() < end:
-        wait_for(cdp, "!!document.body", timeout=10, label="infractions body")
-        last = read_infractions_page(cdp)
-        marker = last.get("marker") or ""
-        if marker and marker != (previous_marker or ""):
-            return last
-        time.sleep(1)
-    return last
-
-
-def click_next_infractions_page(cdp: Cdp):
-    return cdp.js(
-        r"""
-        (() => {
-          function deepElements(root = document) {
-            const out = [];
-            const walk = node => {
-              const elements = node.querySelectorAll ? Array.from(node.querySelectorAll('*')) : [];
-              for (const el of elements) {
-                out.push(el);
-                if (el.shadowRoot) walk(el.shadowRoot);
-              }
-            };
-            walk(root);
-            return out;
-          }
-          const visible = el => !!(el.offsetWidth || el.offsetHeight || el.getClientRects().length);
-          const disabled = el => {
-            const cls = String(el.className || '').toLowerCase();
-            const parentCls = String(el.closest('li')?.className || '').toLowerCase();
-            return el.disabled || el.getAttribute('aria-disabled') === 'true' ||
-              cls.includes('disabled') || parentCls.includes('disabled');
-          };
-          const candidates = deepElements().filter(el => {
-            if (!visible(el) || disabled(el)) return false;
-            const tag = (el.tagName || '').toLowerCase();
-            if (!['a', 'button', 'span', 'li', 'div'].includes(tag)) return false;
-            const text = (el.innerText || el.textContent || '').trim();
-            const aria = (el.getAttribute('aria-label') || '').trim();
-            const title = (el.getAttribute('title') || '').trim();
-            const cls = String(el.className || '');
-            return /^next$/i.test(text) || /next/i.test(aria) || /next/i.test(title) ||
-              (cls.includes('andes-pagination') && /next|arrow/i.test(`${text} ${aria} ${title} ${cls}`));
-          });
-          const target = candidates.find(el => ['a', 'button'].includes((el.tagName || '').toLowerCase())) ||
-            candidates.map(el => el.closest('a,button')).find(Boolean);
-          if (!target || disabled(target)) return false;
-          target.scrollIntoView({block: 'center', inline: 'center'});
-          target.click();
-          return true;
-        })()
-        """
-    )
-
-
-def goto_infractions_offset(cdp: Cdp, offset: int, previous_marker: str | None = None):
-    url = f"{INFRACTIONS_URL}?tab=detections&offset={offset}"
-    open_cdp_mercado_backend_page(cdp, url)
-    return wait_for_infractions_page(cdp, previous_marker=previous_marker, timeout=30)
-
-
 def switch_site_if_needed(cdp: Cdp, site: str):
     site = site.upper()
     wait_for(cdp, "!!document.body", timeout=30, label="document body")
@@ -587,82 +483,24 @@ def switch_site_if_needed(cdp: Cdp, site: str):
         )
 
 
-def collect_infractions(cdp_http: str, site: str):
-    cdp = tab_for(cdp_http, INFRACTIONS_URL, "/noindex/pppi/infractions")
-    try:
-        open_cdp_mercado_backend_page(
-            cdp,
-            INFRACTIONS_URL + "?tab=detections&offset=0",
-        )
-        time.sleep(5)
-        switch_site_if_needed(cdp, site)
-        first_page = goto_infractions_offset(cdp, 0)
-        first = cdp.js("({url: location.href, title: document.title, text: (((document.body && document.body.innerText) || '').slice(0, 2500))})")
-        if not verify_site(cdp, site):
-            state = current_site_state(cdp)
-            raise RuntimeError(
-                f"Refusing to collect wrong site: expected={site} current={state.get('site')} "
-                f"title={state.get('title')} url={state.get('url')}"
-            )
-        print(first["text"][:500])
+def collect_infractions(cdp_http: str, site: str, window_name: str = ""):
+    """Read infringement IDs only through the official API; CDP is never used."""
 
-        total = cdp.js(
-            r"""
-            (() => {
-              const text = (document.body && document.body.innerText) || '';
-              const m = text.match(/(\d+)\s+infringements\s+detected in the platform/i);
-              return m ? Number(m[1]) : null;
-            })()
-            """
-        )
-        page_size = max(1, first_page.get("count") or 7)
-        max_pages = max(1, min(60, ((total or 0) + page_size - 1) // page_size if total else 60))
-        all_ids = []
-        seen = set()
-        data = first_page
-        for page in range(1, max_pages + 1):
-            if not verify_site(cdp, site):
-                state = current_site_state(cdp)
-                raise RuntimeError(
-                    f"Refusing to collect wrong site on page {page}: expected={site} "
-                    f"current={state.get('site')} title={state.get('title')} url={state.get('url')}"
-                )
-
-            marker = data.get("marker") or ""
-            ids = data.get("ids") or []
-            if not ids:
-                print(f"page {page}: no ids found; stop collecting")
-                break
-            if marker in seen:
-                print(f"page {page}: repeated page marker {marker}; stop collecting")
-                break
-
-            seen.add(marker)
-            all_ids.extend([x for x in ids if x not in all_ids])
-            print(f"page {page}: {', '.join(ids)}")
-            if total and len(all_ids) >= total:
-                break
-
-            previous_marker = marker
-            next_data = None
-            clicked = click_next_infractions_page(cdp)
-            if clicked:
-                next_data = wait_for_infractions_page(cdp, previous_marker=previous_marker, timeout=30)
-                if not next_data or next_data.get("marker") == previous_marker:
-                    print(f"page {page}: Next click did not change page; fallback to offset")
-                    next_data = None
-
-            if not next_data:
-                next_offset = page * page_size
-                next_data = goto_infractions_offset(cdp, next_offset, previous_marker=previous_marker)
-
-            if not next_data or not next_data.get("ids") or next_data.get("marker") == previous_marker:
-                print(f"page {page}: no next page after click/offset; stop collecting")
-                break
-            data = next_data
-        return first, all_ids
-    finally:
-        cdp.close()
+    del cdp_http
+    if not str(window_name or "").strip():
+        raise ValueError("API 侵权读取需要 BitBrowser 窗口名/店铺授权名")
+    ids = bit_appeal_ai.get_infraction_orders("", window_name, site)
+    summary = {
+        "url": "",
+        "title": "Mercado Moderations API",
+        "text": f"官方 API 返回 {len(ids)} 个侵权编号；权利人案件已排除",
+        "source": "mercado_moderations_api",
+    }
+    print(
+        f"{window_name} {site} official API returned {len(ids)} infringement IDs; "
+        "rights-holder cases excluded"
+    )
+    return summary, ids
 
 
 def chunks(items, size):
@@ -1105,9 +943,8 @@ def main():
 
     site = args.site.upper()
     prefix = f"{args.window}_{site}".replace("（", "_").replace("）", "").replace(" ", "_")
-    cdp_http = open_bitbrowser(args.window)
-    first, ids = collect_infractions(cdp_http, site)
-    ai_groups = list(chunks(ids, 3))
+    first, ids = collect_infractions("", site, args.window)
+    ai_groups = list(chunks(ids, 10))
     human_groups = list(chunks(ids, 10))
 
     payload = {"window": args.window, "site": site, "first": first, "ids": ids, "aiGroups": ai_groups, "humanGroups": human_groups}
@@ -1121,6 +958,10 @@ def main():
         encoding="utf-8",
     )
     print(f"Collected {len(ids)} IDs for {args.window} {site}.")
+
+    cdp_http = ""
+    if args.mode in ("ai", "human", "both"):
+        cdp_http = open_bitbrowser(args.window)
 
     if args.mode in ("ai", "both"):
         ai = open_ai_assistant(cdp_http)

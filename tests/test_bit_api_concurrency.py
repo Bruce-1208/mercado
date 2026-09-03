@@ -102,3 +102,26 @@ def test_get_browser_id_by_name_rejects_duplicate_exact_names(monkeypatch):
         assert "同名" in str(exc)
     else:
         raise AssertionError("duplicate browser names must be rejected")
+
+
+def test_get_browser_id_by_name_accepts_internal_space_difference():
+    browsers = [
+        {"id": "window-2", "name": "蒋学斌 2"},
+        {"id": "other", "name": "其他店铺"},
+    ]
+
+    assert bit_api.getBrowserIdByName("蒋学斌2", browsers=browsers) == "window-2"
+
+
+def test_get_browser_id_by_name_rejects_duplicate_compact_names():
+    browsers = [
+        {"id": "one", "name": "蒋学斌 2"},
+        {"id": "two", "name": "蒋 学斌2"},
+    ]
+
+    try:
+        bit_api.getBrowserIdByName("蒋学斌2", browsers=browsers)
+    except RuntimeError as exc:
+        assert "同名" in str(exc)
+    else:
+        raise AssertionError("duplicate compact browser names must be rejected")

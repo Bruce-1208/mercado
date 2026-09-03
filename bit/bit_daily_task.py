@@ -597,6 +597,7 @@ def build_latest_infraction_appeal_plan(
         for name, sites in collection_targets.items()
     }
     counts = {}
+    item_ids = {}
     seen_rows = set()
     for row_index, row in enumerate(live_rows):
         raw_name, raw_site, row_id, infraction_date, infraction_type = (
@@ -606,6 +607,15 @@ def build_latest_infraction_appeal_plan(
         name_key = name.casefold()
         site_code = bit_appeal_ai.normalize_site_code(raw_site)
         if not name or site_code not in target_lookup.get(name_key, set()):
+            continue
+        normalized_row_type = str(infraction_type or "侵权").strip().casefold()
+        if normalized_row_type not in {
+            "侵权",
+            "infringement",
+            "infringements",
+            "detection",
+            "detections",
+        }:
             continue
         parsed_date = _parse_live_infraction_date(infraction_date)
         if parsed_date is None or parsed_date < cutoff:
@@ -619,7 +629,11 @@ def build_latest_infraction_appeal_plan(
         if dedupe_key in seen_rows:
             continue
         seen_rows.add(dedupe_key)
-        counts[(name_key, site_code)] = counts.get((name_key, site_code), 0) + 1
+        target_key = (name_key, site_code)
+        counts[target_key] = counts.get(target_key, 0) + 1
+        normalized_item_id = str(row_id or "").strip().upper()
+        if normalized_item_id:
+            item_ids.setdefault(target_key, []).append(normalized_item_id)
 
     plan = []
     for name, authorized_sites in collection_targets.items():
@@ -633,6 +647,7 @@ def build_latest_infraction_appeal_plan(
                 "site": bit_appeal_ai.normalize_site_name(site_code),
                 "site_code": site_code,
                 "count": count,
+                "infraction_ids": list(item_ids.get((name_key, site_code), ())),
             }
             for site_code, count in all_site_counts.items()
             if count > threshold
@@ -854,12 +869,18 @@ def _appeal_one_shop_locked(
                     f"站点指标 {metric_text}，普通尝试 {general_attempt}/{site_retry_attempts}，"
                     f"限频重试 {rate_retry_count}/{rate_limit_retries}<br>"
                 )
+                appeal_kwargs = {"validate_open": True}
+                if (
+                    normalized_type == APPEAL_TYPE_INFRACTION
+                    and "infraction_ids" in site
+                ):
+                    appeal_kwargs["infraction_ids"] = site.get("infraction_ids")
                 result = bit_appeal_ai.shensu(
                     name,
                     site_code,
                     normalized_type,
                     message,
-                    validate_open=True,
+                    **appeal_kwargs,
                 )
             except Exception as e:
                 result = f"执行异常：{e}"
@@ -1025,6 +1046,10 @@ def appeal_one_shop(
     try:
         window_id = bit_appeal_ai.get_window_id_by_shop_name(name)
     except Exception as e:
+        print(
+            f"{get_now_time()} {name} 未能启动浏览器进程：{e}；"
+            "请核对店铺授权名称与 BitBrowser 窗口名称<br>"
+        )
         return {
             "name": name,
             "total": shop_plan.get("total", 0),
@@ -1118,6 +1143,10 @@ def _appeal_one_shop_worker_for_type(
                 "results": [],
                 "exit_reason": "已停止",
             }
+    print(
+        f"{get_now_time()} {shop.get('name', '')} 店铺 worker 已并发启动，"
+        "开始解析 BitBrowser 窗口<br>"
+    )
     return appeal_one_shop(
         shop,
         appeal_type=appeal_type,
@@ -1320,6 +1349,11 @@ def _run_ai_appeal_once_locked(
         else:
             executor.shutdown(wait=True, cancel_futures=True)
 
+    if normalized_type == APPEAL_TYPE_INFRACTION:
+        print(
+            f"{get_now_time()} {plan_scope}全部店铺、全部授权站点已发送完毕，"
+            "本轮侵权申诉完成<br>"
+        )
     print(f"{get_now_time()} {plan_scope} AI 客服申诉一轮完成：{results}<br>")
     return results
 
@@ -1533,9 +1567,14 @@ def _loop_ai_appeal_locked(
 
         started = time.time()
         try:
+            api_refresh_text = (
+                "，先重新读取官方 API 侵权列表"
+                if APPEAL_TYPE_INFRACTION in selected_types
+                else ""
+            )
             print(
                 f"{get_now_time()} 开始第 {round_no} 轮 "
-                f"{plan_scope} AI 客服申诉<br>"
+                f"{plan_scope} AI 客服申诉{api_refresh_text}<br>"
             )
             run_ai_appeal_once(
                 selected_types,
@@ -1586,9 +1625,14 @@ def _loop_ai_appeal_locked(
                 )
                 return
             sleep_seconds = min(sleep_seconds, remaining)
+        refresh_text = (
+            "重新读取官方 API 侵权列表并生成下一轮计划"
+            if APPEAL_TYPE_INFRACTION in selected_types
+            else f"重新计算{plan_scope}"
+        )
         print(
-            f"{get_now_time()} 第 {round_no} 轮结束，等待 {sleep_seconds:.1f} 秒后"
-            f"重新计算{plan_scope}<br>"
+            f"{get_now_time()} 第 {round_no} 轮全部站点结束，"
+            f"等待 {sleep_seconds:.1f} 秒后{refresh_text}<br>"
         )
         if stop_event is not None:
             if stop_event.wait(sleep_seconds):

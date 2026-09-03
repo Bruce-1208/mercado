@@ -230,6 +230,11 @@ def test_default_infraction_plan_uses_authorization_switches_not_browser_sites(m
     plan = bit_daily_task.build_latest_infraction_appeal_plan(top_n=10)
 
     assert [site["site_code"] for site in plan[0]["sites"]] == ["MX"]
+    assert plan[0]["sites"][0]["infraction_ids"] == [
+        "INF-授权店铺-墨西哥-0",
+        "INF-授权店铺-墨西哥-1",
+        "INF-授权店铺-墨西哥-2",
+    ]
     assert collection_calls[0][0] == [
         {
             "token_id": 7,
@@ -662,6 +667,37 @@ def test_shop_executor_sends_expected_form(monkeypatch, appeal_type, expected_fo
 
     assert calls == [("测试店铺", "MX", expected_form, "测试话术", True)]
     assert result["appeal_type"] == ("延误率" if expected_form == "延误" else expected_form)
+
+
+def test_infraction_shop_executor_passes_api_ids_directly(monkeypatch):
+    calls = []
+    monkeypatch.setattr(
+        bit_daily_task.bit_appeal_ai,
+        "shensu",
+        lambda *args, **kwargs: calls.append((args, kwargs)) or "完成",
+    )
+    monkeypatch.setattr(bit_daily_task, "_resolve_login_anomaly", lambda *args: None)
+
+    bit_daily_task._appeal_one_shop_locked(
+        {
+            "name": "测试店铺",
+            "total": 2,
+            "sites": [
+                {
+                    "site_code": "MX",
+                    "count": 2,
+                    "infraction_ids": ["MLM-1", "MLM-2"],
+                }
+            ],
+        },
+        "window-id",
+        object(),
+        appeal_type="侵权",
+        site_pause=0,
+    )
+
+    assert calls[0][1]["validate_open"] is True
+    assert calls[0][1]["infraction_ids"] == ["MLM-1", "MLM-2"]
 
 
 def _single_site_shop_plan():

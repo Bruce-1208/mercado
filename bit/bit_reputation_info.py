@@ -47,6 +47,7 @@ import pandas as pd
 from datetime import datetime
 from pathlib import Path
 from bit.bit_db_api import (
+    get_current_infraction_counts_by_token_site as current_infraction_counts_by_token_site,
     get_latest_infraction_info,
     get_mercado_store_reputation,
     insert_task_record,
@@ -2569,11 +2570,14 @@ def _api_reputation_database_row(store_name, api_row, updated_at):
         _format_api_percentage(api_row.get("claims_rate_percent")),
         _format_api_percentage(api_row.get("delayed_handling_rate_percent")),
         _format_api_percentage(api_row.get("cancellations_rate_percent")),
-        "",
-        "",
+        str(api_row.get("direction") or ""),
+        str(api_row.get("gradient_rate") or ""),
         "正常",
         updated_at,
         "[]",
+        str(api_row.get("site_status_display") or "未知"),
+        -1 if api_row.get("infraction_count") is None else api_row.get("infraction_count"),
+        -1 if api_row.get("rights_holder_count") is None else api_row.get("rights_holder_count"),
     ]
 
 
@@ -2688,18 +2692,24 @@ def _merge_api_auxiliary_rows(api_rows, database_rows, auxiliary_rows):
         auxiliary = auxiliary_by_key.get(key)
         if auxiliary is None:
             continue
+        uses_official_gradient = (
+            str(api_row.get("gradient_source") or "").strip()
+            == "official_orders_api"
+        )
         api_row.update({
-            "direction": auxiliary.get("direction") or "",
-            "gradient_rate": auxiliary.get("gradient_rate") or "",
             "system_warning": auxiliary.get("system_warning") or "正常",
             "updated_at": auxiliary.get("updated_at") or get_now_time(),
             "visits": auxiliary.get("visits") or "[]",
             "auxiliary_error": auxiliary.get("error") or "",
         })
+        if not uses_official_gradient:
+            api_row["direction"] = auxiliary.get("direction") or ""
+            api_row["gradient_rate"] = auxiliary.get("gradient_rate") or ""
         database_row = database_by_key.get(key)
         if database_row is not None:
-            database_row[7] = api_row["direction"]
-            database_row[8] = api_row["gradient_rate"]
+            if not uses_official_gradient:
+                database_row[7] = api_row["direction"]
+                database_row[8] = api_row["gradient_rate"]
             database_row[9] = api_row["system_warning"]
             database_row[10] = api_row["updated_at"]
             database_row[11] = api_row["visits"]
@@ -2739,6 +2749,34 @@ def _attach_api_infraction_counts(api_rows, recent_days=100):
         api_row["infraction_recent_days"] = int(
             infraction_data.get("recent_days") or recent_days
         )
+    return api_rows
+
+
+def _attach_latest_api_infraction_counts(api_rows, recent_days=100):
+    """使用最新 API 侵权列表的当前视图汇总，保证两个模块数字一致。"""
+
+    snapshot = current_infraction_counts_by_token_site(recent_days) or {}
+    counts = snapshot.get("counts") or {}
+    for api_row in api_rows:
+        key = (
+            int(api_row.get("token_id") or 0),
+            _normalize_api_site_code(
+                api_row.get("site_id") or api_row.get("site_name")
+            ),
+        )
+        current = counts.get(key) or {}
+        api_row["infraction_count"] = int(
+            current.get("infraction_count") or 0
+        )
+        api_row["rights_holder_count"] = int(
+            current.get("rights_holder_count") or 0
+        )
+        api_row["infraction_recent_days"] = int(
+            snapshot.get("days") or recent_days
+        )
+        api_row["infraction_source"] = "official_infraction_dashboard"
+        api_row["rights_holder_source"] = "official_infraction_dashboard"
+        api_row["infraction_last_synced_at"] = snapshot.get("last_synced_at")
     return api_rows
 
 
@@ -2862,6 +2900,17 @@ def get_reputation_info_all(
                         "store_nickname": str(token.get("nickname") or ""),
                     })
                     enriched_rows.append(enriched)
+                    official_errors = [
+                        str(value or "").strip()
+                        for value in (enriched.get("official_api_errors") or [])
+                        if str(value or "").strip()
+                    ]
+                    if official_errors:
+                        _emit_api_collection_log(
+                            f"{store_name}{enriched.get('site_name') or enriched.get('site_id') or ''}："
+                            f"官方附加指标部分失败：{'；'.join(official_errors)}",
+                            log_callback,
+                        )
                     database_rows.append(
                         _api_reputation_database_row(store_name, enriched, updated_at)
                     )
@@ -3024,15 +3073,69 @@ def get_reputation_info_all(
             str(row.get("site_id") or ""),
         )
     )
-    try:
-        _attach_api_infraction_counts(api_rows, recent_days=100)
-        _emit_api_collection_log("已合并各站点近 100 天侵权及权利人数量", log_callback)
-    except Exception as exc:
-        _emit_api_collection_log(f"读取侵权数量失败，本次显示为 0：{exc}", log_callback)
-        for api_row in api_rows:
-            api_row.setdefault("infraction_count", 0)
-            api_row.setdefault("rights_holder_count", 0)
-            api_row.setdefault("infraction_recent_days", 100)
+    dashboard_rows = [
+        row for row in api_rows
+        if str(row.get("infraction_source") or "").strip() in {
+            "official_api",
+            "official_infraction_dashboard",
+        }
+    ]
+    if dashboard_rows:
+        try:
+            _attach_latest_api_infraction_counts(dashboard_rows, recent_days=100)
+        except Exception as exc:
+            _emit_api_collection_log(
+                f"读取最新 API 侵权列表汇总失败：{exc}", log_callback
+            )
+            for row in dashboard_rows:
+                row["infraction_count"] = None
+                row["rights_holder_count"] = None
+                row["infraction_source"] = "official_infraction_dashboard"
+                row["rights_holder_source"] = "official_infraction_dashboard"
+
+    # 兼容控制台与数据库服务分开升级的短暂窗口；旧服务端没有来源标识时
+    # 暂时读取旧快照，新服务端始终使用最新 API 侵权列表。
+    legacy_rows = [
+        row for row in api_rows
+        if not str(row.get("infraction_source") or "").strip()
+    ]
+    if legacy_rows:
+        _attach_api_infraction_counts(legacy_rows, recent_days=100)
+    for api_row in api_rows:
+        api_row.setdefault("infraction_count", None)
+        api_row.setdefault("rights_holder_count", None)
+        api_row.setdefault("infraction_recent_days", 100)
+        api_row.setdefault("infraction_source", "official_api")
+        api_row.setdefault("rights_holder_source", "official_api")
+    database_by_key = {
+        (
+            str(row[0] or "").strip().casefold(),
+            _normalize_api_site_code(row[1]),
+        ): row
+        for row in reputation_rows
+        if len(row) >= 15
+    }
+    for api_row in api_rows:
+        database_row = database_by_key.get((
+            str(api_row.get("store_name") or "").strip().casefold(),
+            _normalize_api_site_code(
+                api_row.get("site_id") or api_row.get("site_name")
+            ),
+        ))
+        if database_row is None:
+            continue
+        database_row[13] = (
+            -1 if api_row.get("infraction_count") is None
+            else api_row.get("infraction_count")
+        )
+        database_row[14] = (
+            -1 if api_row.get("rights_holder_count") is None
+            else api_row.get("rights_holder_count")
+        )
+    _emit_api_collection_log(
+        "已按最新 API 侵权列表口径合并各站点近 100 天侵权及权利人数量",
+        log_callback,
+    )
     failure_report_path = write_unreadable_site_report("声誉API采集", task_rows)
     if failure_report_path:
         _emit_api_collection_log(
@@ -3086,6 +3189,9 @@ def get_reputation_info_all(
                 "系统告警",
                 "更新时间",
                 "一周流量趋势",
+                "站点状态",
+                "侵权数量",
+                "权利人数量",
             ],
         )
         post_steps.append(("导出声誉汇总", lambda: dataframe.to_excel(output_path, index=False)))

@@ -468,6 +468,14 @@ def upsert_infraction_records(
         reason_code = str(source.get("reason_code") or "").strip()[:64]
         if reason_code != "LEGACY_PAGE":
             official_items.add((source_type, item_id))
+        is_current = bool(source.get("is_current", True))
+        resolution_status = str(source.get("resolution_status") or "").strip()[:32]
+        if reason_code == "LEGACY_PAGE":
+            is_current = False
+            resolution_status = "historical"
+        elif not resolution_status:
+            resolution_status = "current" if is_current else "appeal_success"
+        resolved_at = source.get("resolved_at") or (None if is_current else checked_at)
         rows.append(
             (
                 token_id,
@@ -490,6 +498,11 @@ def upsert_infraction_records(
                 str(source.get("salesperson") or "")[:100],
                 str(source.get("group_name") or "")[:100],
                 json.dumps(source.get("raw_json") or source, ensure_ascii=False, default=str),
+                int(is_current),
+                resolution_status,
+                resolved_at,
+                checked_at,
+                1,
                 checked_at,
             )
         )
@@ -518,8 +531,10 @@ def upsert_infraction_records(
                     `token_id`, `store_name`, `seller_id`, `site_id`, `source_type`,
                     `source_id`, `item_id`, `title`, `thumbnail_url`, `permalink`,
                     `occurred_at`, `due_at`, `status`, `reason_code`, `reason`, `remedy`,
-                    `rights_holder`, `salesperson`, `group_name`, `raw_json`, `last_checked_at`
-                ) VALUES ({', '.join(['%s'] * 21)})
+                    `rights_holder`, `salesperson`, `group_name`, `raw_json`, `is_current`,
+                    `resolution_status`, `resolved_at`, `last_seen_at`, `seen_count`,
+                    `last_checked_at`
+                ) VALUES ({', '.join(['%s'] * 26)})
                 ON DUPLICATE KEY UPDATE
                     `store_name` = VALUES(`store_name`), `seller_id` = VALUES(`seller_id`),
                     `site_id` = VALUES(`site_id`), `item_id` = VALUES(`item_id`),
@@ -534,12 +549,91 @@ def upsert_infraction_records(
                     `remedy` = VALUES(`remedy`), `rights_holder` = VALUES(`rights_holder`),
                     `salesperson` = VALUES(`salesperson`), `group_name` = VALUES(`group_name`),
                     `raw_json` = VALUES(`raw_json`),
+                    `is_current` = VALUES(`is_current`),
+                    `resolution_status` = VALUES(`resolution_status`),
+                    `resolved_at` = VALUES(`resolved_at`),
+                    `last_seen_at` = VALUES(`last_seen_at`),
+                    `seen_count` = `seen_count` + 1,
                     `last_checked_at` = VALUES(`last_checked_at`)
                 """,
                 rows,
             )
         connection.commit()
         return len(rows)
+    except BaseException:
+        connection.rollback()
+        raise
+    finally:
+        connection.close()
+
+
+def reconcile_infraction_snapshot(
+    token_id: int,
+    source_type: str,
+    records: Iterable[Mapping[str, Any]],
+    *,
+    checked_at: str | None = None,
+    connection_factory: Callable[[], Any] | None = None,
+) -> int:
+    token_id = int(token_id or 0)
+    source_type = str(source_type or "").strip()[:32]
+    if token_id <= 0 or source_type not in {"detection", "rights_holder"}:
+        raise ValueError("侵权快照缺少有效店铺或来源")
+    checked_at = checked_at or _now()
+    states: dict[str, tuple[int, str, Any, str, int, str, str]] = {}
+    for record in records or ():
+        source_id = _stable_source_id(
+            {**dict(record), "source_type": source_type}
+        )
+        is_current = bool(record.get("is_current", True))
+        resolution_status = str(
+            record.get("resolution_status")
+            or ("current" if is_current else "appeal_success")
+        ).strip()[:32]
+        resolved_at = record.get("resolved_at") or (
+            None if is_current else checked_at
+        )
+        states[source_id] = (
+            int(is_current),
+            resolution_status,
+            resolved_at,
+            checked_at,
+            token_id,
+            source_type,
+            source_id,
+        )
+
+    connection = (connection_factory or _connect)()
+    try:
+        with connection.cursor() as cursor:
+            ensure_infraction_tables(cursor)
+            cursor.execute(
+                f"""
+                UPDATE `{INFRACTION_TABLE}`
+                SET `is_current` = 0,
+                    `resolution_status` = 'appeal_success',
+                    `resolved_at` = COALESCE(`resolved_at`, %s)
+                WHERE `token_id` = %s AND `source_type` = %s
+                  AND `reason_code` <> 'LEGACY_PAGE'
+                  AND `is_current` = 1
+                """,
+                (checked_at, token_id, source_type),
+            )
+            if states:
+                cursor.executemany(
+                    f"""
+                    UPDATE `{INFRACTION_TABLE}`
+                    SET `is_current` = %s,
+                        `resolution_status` = %s,
+                        `resolved_at` = %s,
+                        `last_seen_at` = %s
+                    WHERE `token_id` = %s AND `source_type` = %s
+                      AND `source_id` = %s
+                    """,
+                    list(states.values()),
+                )
+        connection.commit()
+        return len(states)
     except BaseException:
         connection.rollback()
         raise
@@ -673,6 +767,7 @@ def _build_group_tree(account_rows: Iterable[Mapping[str, Any]]) -> list[dict[st
 def list_infraction_dashboard(
     *,
     days: int = 30,
+    view_mode: str = "current",
     group_name: str = "",
     salesperson: str = "",
     source_type: str = "",
@@ -688,6 +783,9 @@ def list_infraction_dashboard(
     cutoff = (
         datetime.now().replace(microsecond=0) - timedelta(days=days)
     ).strftime("%Y-%m-%d %H:%M:%S")
+    view_mode = str(view_mode or "current").strip().lower()
+    if view_mode not in {"current", "history"}:
+        view_mode = "current"
     group_name = str(group_name or "").strip()
     salesperson = str(salesperson or "").strip()
     source_type = str(source_type or "").strip().lower()
@@ -700,8 +798,11 @@ def list_infraction_dashboard(
 
     ownership_group = "COALESCE(NULLIF(settings.`group_name`, ''), NULLIF(items.`group_name`, ''), '未分组')"
     ownership_person = "COALESCE(NULLIF(settings.`salesperson`, ''), NULLIF(items.`salesperson`, ''), '未分配')"
-    conditions = ["items.`occurred_at` >= %s"]
-    values: list[Any] = [cutoff]
+    conditions: list[str] = []
+    values: list[Any] = []
+    if view_mode == "current":
+        conditions.extend(["items.`occurred_at` >= %s", "items.`is_current` = 1"])
+        values.append(cutoff)
     if group_name:
         conditions.append(f"{ownership_group} = %s")
         values.append(group_name)
@@ -722,7 +823,7 @@ def list_infraction_dashboard(
     if detail_token_id:
         conditions.append("items.`token_id` = %s")
         values.append(detail_token_id)
-    where_sql = " WHERE " + " AND ".join(conditions)
+    where_sql = " WHERE " + " AND ".join(conditions) if conditions else ""
     settings_join = """
         LEFT JOIN `mercado_store_site_settings` AS settings
           ON settings.`token_id` = items.`token_id`
@@ -766,7 +867,10 @@ def list_infraction_dashboard(
                        items.`occurred_at`, items.`due_at`, items.`status`,
                        items.`reason_code`, items.`reason`, items.`remedy`,
                        items.`rights_holder`, {ownership_group} AS `group_name`,
-                       {ownership_person} AS `salesperson`, items.`last_checked_at`
+                       {ownership_person} AS `salesperson`, items.`is_current`,
+                       items.`resolution_status`, items.`resolved_at`,
+                       items.`first_seen_at`, items.`last_seen_at`, items.`seen_count`,
+                       items.`last_checked_at`
                 FROM `{INFRACTION_TABLE}` AS items
                 {settings_join}
                 {where_sql}
@@ -795,11 +899,19 @@ def list_infraction_dashboard(
                 )
                 account_values.append(salesperson)
             account_where = " WHERE " + " AND ".join(account_conditions)
-            source_clause = ""
-            aggregate_values: list[Any] = [cutoff]
+            aggregate_conditions: list[str] = []
+            aggregate_values: list[Any] = []
+            if view_mode == "current":
+                aggregate_conditions.extend(
+                    ["`occurred_at` >= %s", "`is_current` = 1"]
+                )
+                aggregate_values.append(cutoff)
             if source_type:
-                source_clause = " AND `source_type` = %s"
+                aggregate_conditions.append("`source_type` = %s")
                 aggregate_values.append(source_type)
+            aggregate_where = (
+                " AND ".join(aggregate_conditions) if aggregate_conditions else "1 = 1"
+            )
             cursor.execute(
                 f"""
                 SELECT tokens.`id` AS `token_id`, tokens.`display_name` AS `store_name`,
@@ -821,7 +933,7 @@ def list_infraction_dashboard(
                                AS `rights_holder_count`,
                            MAX(`occurred_at`) AS `latest_infraction_at`
                     FROM `{INFRACTION_TABLE}`
-                    WHERE `occurred_at` >= %s {source_clause}
+                    WHERE {aggregate_where}
                     GROUP BY `token_id`, `site_id`
                 ) AS counts ON counts.`token_id` = tokens.`id`
                            AND counts.`site_id` = settings.`site_id`
@@ -895,6 +1007,7 @@ def list_infraction_dashboard(
             "rows": rows,
             "filters": {
                 "days": days,
+                "view_mode": view_mode,
                 "group_name": group_name,
                 "salesperson": salesperson,
                 "source_type": source_type,
@@ -910,6 +1023,39 @@ def list_infraction_dashboard(
         }
     finally:
         connection.close()
+
+
+def current_infraction_counts_by_token_site(days: int = 100) -> dict[str, Any]:
+    """返回与“最新 API 侵权列表”当前视图完全相同的站点汇总口径。"""
+
+    dashboard = list_infraction_dashboard(
+        days=days,
+        view_mode="current",
+        page=1,
+        page_size=20,
+    )
+    counts: dict[tuple[int, str], dict[str, Any]] = {}
+    for group in dashboard.get("account_groups") or []:
+        for person in group.get("salespeople") or []:
+            for store in person.get("stores") or []:
+                token_id = int(store.get("token_id") or 0)
+                for site in store.get("sites") or []:
+                    site_id = str(site.get("site_id") or "").strip().upper()
+                    if token_id <= 0 or not site_id:
+                        continue
+                    counts[(token_id, site_id)] = {
+                        "infraction_count": int(site.get("detection_count") or 0),
+                        "rights_holder_count": int(
+                            site.get("rights_holder_count") or 0
+                        ),
+                        "latest_infraction_at": site.get("latest_infraction_at"),
+                    }
+    return {
+        "days": int(days),
+        "view_mode": "current",
+        "last_synced_at": (dashboard.get("summary") or {}).get("last_synced_at"),
+        "counts": counts,
+    }
 
 
 def list_missing_infraction_media(
@@ -1008,6 +1154,7 @@ __all__ = [
     "list_missing_infraction_media",
     "mark_infraction_sync_finished",
     "mark_infraction_sync_started",
+    "reconcile_infraction_snapshot",
     "request_infraction_sync",
     "upsert_infraction_records",
     "update_infraction_media",

@@ -1,0 +1,5 @@
+{
+  "role": "server",
+  "db_host": "192.168.1.11",
+  "api_token": "replace-with-the-same-long-random-token-used-by-clients"
+}

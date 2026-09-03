@@ -21,12 +21,17 @@ import math
 
 
 # 允许脚本被直接运行时也能正常导入项目内的 bit、AI_Agent 等包。
+# 项目根目录必须排在 bit 目录之前，否则 ``bit_playwright`` 会误解析成
+# ``bit/bit_playwright.py``，而不是同名 package。
 SCRIPT_DIR = Path(__file__).resolve().parent
 PROJECT_ROOT = SCRIPT_DIR.parent
-if str(SCRIPT_DIR) not in sys.path:
-    sys.path.insert(0, str(SCRIPT_DIR))
-if str(PROJECT_ROOT) not in sys.path:
-    sys.path.insert(0, str(PROJECT_ROOT))
+project_root_text = str(PROJECT_ROOT)
+script_dir_text = str(SCRIPT_DIR)
+for import_path in (project_root_text, script_dir_text):
+    while import_path in sys.path:
+        sys.path.remove(import_path)
+sys.path.insert(0, script_dir_text)
+sys.path.insert(0, project_root_text)
 
 import requests
 from pydantic.v1.datetime_parse import parse_date
@@ -61,7 +66,11 @@ from bit.bit_mercado_login import (
 )
 from bit.bit_mercado_limit import MERCADO_RATE_LIMIT_TEXT
 from bit.bit_download import download_relay_mail
-from bit.bit_db_api import get_latest_infraction_info, insert_ai_appeal_record
+from bit import mercado_infraction_sync
+from bit.bit_db_api import (
+    insert_ai_appeal_record,
+    list_mercado_store_tokens,
+)
 from bit.bit_reputation_info import get_cancellation_orders, get_complaint_orders
 from AI_Agent.qianwen import *
 import pandas as pd
@@ -71,7 +80,6 @@ from AI_Agent.deepseek import *
 import re
 from openpyxl import load_workbook
 import traceback
-from bit_infractions_info import *
 
 try:
     from bit.chat_log import (
@@ -2387,30 +2395,48 @@ def send_infraction_message_with_retry(
             )
             return
 
-        if is_cancellation:
-            followup = build_deepseek_cancellation_reply(
-                infraction_ids,
-                site,
-                huashu,
-                latest_messages,
-                auto_reply_count + 1,
+        try:
+            if is_cancellation:
+                followup = build_deepseek_cancellation_reply(
+                    infraction_ids,
+                    site,
+                    huashu,
+                    latest_messages,
+                    auto_reply_count + 1,
+                )
+            elif is_complaint:
+                followup = build_deepseek_complaint_reply(
+                    infraction_ids,
+                    site,
+                    huashu,
+                    latest_messages,
+                    auto_reply_count + 1,
+                )
+            else:
+                followup = build_deepseek_infraction_reply(
+                    infraction_ids,
+                    site,
+                    huashu,
+                    latest_messages,
+                    auto_reply_count + 1,
+                )
+        except Exception as exc:
+            # 外部模型余额不足或临时不可用，不应把已经发送成功的店铺申诉
+            # 判为失败，更不能影响同一批次的其他店铺。
+            print(
+                f"{get_now_time()} {name} {site} DeepSeek 自动追问不可用：{exc}；"
+                "保留当前客服回复并结束本组<br>"
             )
-        elif is_complaint:
-            followup = build_deepseek_complaint_reply(
-                infraction_ids,
+            append_chat_log(
+                name,
                 site,
-                huashu,
-                latest_messages,
-                auto_reply_count + 1,
+                f"{event_name}_deepseek_unavailable",
+                message=huashu,
+                response=response,
+                chat=latest_messages,
+                extra={**base_extra, "error": str(exc)},
             )
-        else:
-            followup = build_deepseek_infraction_reply(
-                infraction_ids,
-                site,
-                huashu,
-                latest_messages,
-                auto_reply_count + 1,
-            )
+            return
 
         print(
             f"{get_now_time()} {name} {site} send DeepSeek reply "
@@ -2926,49 +2952,23 @@ def load_active_shop_site_config():
     return active
 
 
-def build_top_infraction_shop_plan(top_shops=5, recent_days=30):
-    """按最新侵权数据选择侵权数最多的店铺，并按站点数量降序生成执行计划。"""
-    active_config = load_active_shop_site_config()
-    data = get_latest_infraction_info(recent_days)
-    rows = data.get("rows") or []
-    shop_map = {}
+def build_top_infraction_shop_plan(
+    top_shops=5,
+    recent_days=30,
+    max_workers=8,
+):
+    """通过官方 API 重新读取侵权，并生成带完整编号的授权站点计划。"""
 
-    for row in rows:
-        name = str(row.get("店铺名") or "").strip()
-        site = str(row.get("站点") or "").strip()
-        if not name or not site or name not in active_config:
-            continue
-        site_code = normalize_site_code(site)
-        if active_config[name] and site_code not in active_config[name]:
-            continue
+    # 延迟导入避免 bit_daily_task -> bit_appeal_ai 的模块循环；调用发生时
+    # 两个模块均已初始化。任务模块与自动 AI 因而共用同一套 API 筛选规则。
+    from bit import bit_daily_task
 
-        item = shop_map.setdefault(name, {"name": name, "total": 0, "sites": {}})
-        site_item = item["sites"].setdefault(
-            site_code,
-            {"site": site, "site_code": site_code, "count": 0},
-        )
-        item["total"] += 1
-        site_item["count"] += 1
-
-    plan = []
-    for item in shop_map.values():
-        sites = sorted(
-            item["sites"].values(),
-            key=lambda site_item: site_item["count"],
-            reverse=True,
-        )
-        if sites:
-            plan.append({"name": item["name"], "total": item["total"], "sites": sites})
-
-    plan.sort(
-        key=lambda item: (
-            item["total"],
-            max(site["count"] for site in item["sites"]),
-            item["name"],
-        ),
-        reverse=True,
+    return bit_daily_task.build_latest_infraction_appeal_plan(
+        top_n=top_shops,
+        recent_days=recent_days,
+        min_infraction_count=0,
+        max_workers=max_workers,
     )
-    return plan[:top_shops]
 
 
 def run_top_infraction_shop_once(shop_plan, site_pause=30):
@@ -2980,7 +2980,13 @@ def run_top_infraction_shop_once(shop_plan, site_pause=30):
         count = site["count"]
         try:
             print(f"{get_now_time()} {name} {site_code} 开始处理侵权，当前站点侵权数 {count}<br>")
-            result = shensu(name, site_code, "侵权", "")
+            result = shensu(
+                name,
+                site_code,
+                "侵权",
+                "",
+                infraction_ids=site.get("infraction_ids") or (),
+            )
             results.append({"site": site_code, "count": count, "result": result})
             print(f"{get_now_time()} {name} {site_code} 侵权处理完成：{result}<br>")
         except Exception as e:
@@ -2994,8 +3000,13 @@ def run_top_infraction_shop_once(shop_plan, site_pause=30):
 
 def run_top_infraction_appeal_round(max_windows=5, top_shops=5, recent_days=30, site_pause=30):
     """执行一轮：选择侵权最多的店铺，最多同时打开 max_windows 个窗口处理。"""
-    plan = build_top_infraction_shop_plan(top_shops=top_shops, recent_days=recent_days)
-    print(f"{get_now_time()} 本轮侵权店铺计划：{plan}<br>")
+    print(f"{get_now_time()} 本轮开始，重新通过官方 API 读取全部授权站点侵权<br>")
+    plan = build_top_infraction_shop_plan(
+        top_shops=top_shops,
+        recent_days=recent_days,
+        max_workers=max_windows,
+    )
+    print(f"{get_now_time()} 本轮 API 侵权店铺计划：{plan}<br>")
     if not plan:
         print(f"{get_now_time()} 没有找到可处理的侵权店铺<br>")
         return []
@@ -3010,6 +3021,7 @@ def run_top_infraction_appeal_round(max_windows=5, top_shops=5, recent_days=30, 
             except Exception as e:
                 results.append({"error": str(e)})
                 traceback.print_exc()
+    print(f"{get_now_time()} 本轮所有店铺、全部授权站点侵权编号已处理完毕<br>")
     return results
 
 
@@ -3025,7 +3037,10 @@ def auto_appeal_top_infractions_loop(
     while True:
         started = time.time()
         try:
-            print(f"{get_now_time()} 开始第 {round_no} 轮 Top 侵权店铺 AI 申诉<br>")
+            print(
+                f"{get_now_time()} 开始第 {round_no} 轮 Top 侵权店铺 AI 申诉，"
+                "先重新读取 API 侵权列表<br>"
+            )
             results = run_top_infraction_appeal_round(
                 max_windows=max_windows,
                 top_shops=top_shops,
@@ -3038,7 +3053,10 @@ def auto_appeal_top_infractions_loop(
             traceback.print_exc()
 
         sleep_seconds = max(0, int(round_interval) - (time.time() - started))
-        print(f"{get_now_time()} 第 {round_no} 轮结束，等待 {sleep_seconds:.1f} 秒后重新计算 Top 店铺<br>")
+        print(
+            f"{get_now_time()} 第 {round_no} 轮全部站点结束，等待 {sleep_seconds:.1f} 秒后"
+            "重新读取 API 侵权列表<br>"
+        )
         time.sleep(sleep_seconds)
         round_no += 1
 
@@ -3282,7 +3300,14 @@ def save_ai_appeal_group_record(
 
 
 # 申诉
-def shensu(name, site, form, message, validate_open=False):
+def shensu(
+    name,
+    site,
+    form,
+    message,
+    validate_open=False,
+    infraction_ids=None,
+):
     """AI 客服申诉主入口，根据 form 分发到延误、侵权、取消率或投诉。"""
     print(f"{name} {site} 开始进行{form}申诉，自定义话术为{message}<br>")
     appeal_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
@@ -3346,7 +3371,15 @@ def shensu(name, site, form, message, validate_open=False):
                 return
 
             if form == "侵权":
-                handle_infraction(window_id, driver, name, site_name, message, nickname)
+                handle_infraction(
+                    window_id,
+                    driver,
+                    name,
+                    site_name,
+                    message,
+                    nickname,
+                    infraction_ids=infraction_ids,
+                )
                 return
 
             if form == "取消率":
@@ -3405,16 +3438,35 @@ def shensu(name, site, form, message, validate_open=False):
             owned_window_lease.release()
 
 
-def handle_infraction(window_id, driver, name, site, message, nickname):
-    """处理侵权申诉：读取侵权编号，按固定数量分组，并逐组发送给 AI 客服。"""
+def handle_infraction(
+    window_id,
+    driver,
+    name,
+    site,
+    message,
+    nickname,
+    infraction_ids=None,
+):
+    """处理侵权申诉：直接使用 API 编号，按最多 10 个逐组发送。"""
     group = 10
-    inf_list = get_infraction_orders(window_id, name, site)
+    inf_list = []
+    seen_ids = set()
+    for raw_id in infraction_ids or ():
+        item_id = str(raw_id or "").strip().upper()
+        if item_id and item_id not in seen_ids:
+            seen_ids.add(item_id)
+            inf_list.append(item_id)
+    if not inf_list:
+        inf_list = get_infraction_orders(window_id, name, site)
     if not inf_list:
         print(f"{get_now_time()} {name} {site} 没有可以申诉的侵权编号<br>")
         return
 
     groups = [inf_list[i:i + group] for i in range(0, len(inf_list), group)]
-    print(f"{get_now_time()} {name} {site} 侵权编号共 {len(inf_list)} 个，按每组 {group} 个分为 {len(groups)} 组<br>")
+    print(
+        f"{get_now_time()} {name} {site} API侵权编号共 {len(inf_list)} 个，"
+        f"每次对话最多 {group} 个，共 {len(groups)} 组<br>"
+    )
 
     appeal_suffix = (
         f"这几个产品是通用品牌产品，并非侵权产品，这是系统误判，"
@@ -4022,48 +4074,106 @@ def _is_ai_infringement_record(record):
 
 
 def get_infraction_orders_random(window_id, name, site, nums):
-    """仅从 infringements 列表中随机抽取指定数量的侵权编号。"""
-    inf_list = []
+    """仅从官方 API 的侵权列表中随机抽取指定数量的编号。"""
     try:
-        infos = get_infractions_info(
-            window_id,
-            name,
-            site,
-            0,
-            include_rights_holder=False,
+        inf_list = get_infraction_orders(window_id, name, site)
+        selected = (
+            random.sample(inf_list, nums)
+            if len(inf_list) > nums
+            else inf_list
         )
-        for i in infos:
-            if not _is_ai_infringement_record(i):
-                continue
-            inf_list.append(i[2])
-        if len(inf_list) >= nums:
-            inf_list = str(random.sample(inf_list, nums))
-        else:
-            inf_list = str(inf_list)
-        print(get_now_time() + name + site + "随机得到的侵权单号为", inf_list)
+        inf_list = "、".join(str(item) for item in selected)
+        print(
+            get_now_time() + name + site
+            + f"从官方 API 随机得到 {len(selected)} 个侵权编号：",
+            inf_list,
+        )
     except Exception as e:
         print("获取侵权订单信息失败", e)
     return inf_list
 
 
+def _appeal_setting_enabled(value):
+    if isinstance(value, str):
+        return value.strip().casefold() not in ("", "0", "false", "no", "off")
+    return bool(value)
+
+
+def _find_infraction_api_target(name, site):
+    """Resolve the authorized token/site used by the direct moderation API."""
+
+    requested_name = str(name or "").strip().casefold()
+    site_name = normalize_site_name(site)
+    site_id = SITE_ID_MAP.get(site_name, "")
+    for token in (list_mercado_store_tokens() or {}).get("rows") or ():
+        if not bool(token.get("enabled", True)):
+            continue
+        aliases = [
+            str(value or "").strip()
+            for value in (token.get("display_name"), token.get("nickname"))
+            if str(value or "").strip()
+        ]
+        if not requested_name or not any(
+            alias.casefold() == requested_name for alias in aliases
+        ):
+            continue
+        enabled_sites = {
+            str(setting.get("site_id") or "").strip().upper()
+            for setting in (token.get("site_settings") or ())
+            if _appeal_setting_enabled(setting.get("appeal_enabled"))
+        }
+        if site_id not in enabled_sites:
+            return None
+        try:
+            token_id = int(token.get("id") or 0)
+        except (TypeError, ValueError):
+            return None
+        if token_id <= 0:
+            return None
+        return {
+            "token_id": token_id,
+            "name": aliases[0] if aliases else str(name or "").strip(),
+            "aliases": aliases,
+            "site_ids": [site_id],
+        }
+    return None
+
+
 def get_infraction_orders(window_id, name, site):
-    """读取当前店铺、站点下全部 infringements 编号。"""
+    """直接从官方 Moderations API 读取侵权编号，绝不读取侵权网页。"""
+
+    del window_id
     inf_list = []
     try:
-        infos = get_infractions_info(
-            window_id,
-            name,
-            site,
-            0,
-            include_rights_holder=False,
+        target = _find_infraction_api_target(name, site)
+        if not target:
+            print(
+                f"{get_now_time()} {name} {site} 未找到已开启申诉的店铺授权站点，"
+                "不读取侵权网页<br>"
+            )
+            return []
+        site_id = target["site_ids"][0]
+        result = mercado_infraction_sync.collect_live_detection_infractions(
+            [target],
+            recent_days=100,
+            max_workers=1,
         )
-        for i in infos:
-            if not _is_ai_infringement_record(i):
+        seen_ids = set()
+        for row in result.get("data") or ():
+            if not _is_ai_infringement_record(row):
                 continue
-            inf_list.append(i[2])
-        print(get_now_time() + name + site + "得到的侵权编号为", inf_list)
+            if str(row.get("站点") or "").strip().upper() != site_id:
+                continue
+            item_id = str(row.get("编号") or "").strip().upper()
+            if item_id and item_id not in seen_ids:
+                seen_ids.add(item_id)
+                inf_list.append(item_id)
+        print(
+            f"{get_now_time()} {name} {site} API得到侵权编号 {len(inf_list)} 个；"
+            "已排除权利人案件<br>"
+        )
     except Exception as e:
-        print("获取侵权订单信息失败", e)
+        print(f"{get_now_time()} {name} {site} API获取侵权订单信息失败：{e}<br>")
     return inf_list
 
 

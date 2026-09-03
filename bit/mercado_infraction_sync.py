@@ -22,6 +22,7 @@ from erp.mercadolibre_infraction_store import (
     list_missing_infraction_media,
     mark_infraction_sync_finished,
     mark_infraction_sync_started,
+    reconcile_infraction_snapshot,
     request_infraction_sync,
     upsert_infraction_records,
     update_infraction_media,
@@ -69,7 +70,7 @@ LIVE_INFRACTION_REQUEST_TIMEOUT_SECONDS = _env_int(
     "MERCADO_DAILY_INFRACTION_REQUEST_TIMEOUT_SECONDS", 10, 5, 60
 )
 LIVE_INFRACTION_STORE_TIMEOUT_SECONDS = _env_int(
-    "MERCADO_DAILY_INFRACTION_STORE_TIMEOUT_SECONDS", 180, 30, 900
+    "MERCADO_DAILY_INFRACTION_STORE_TIMEOUT_SECONDS", 300, 30, 900
 )
 INFRACTION_IMAGE_BACKFILL_LIMIT = _env_int(
     "MERCADO_INFRACTION_IMAGE_BACKFILL_LIMIT", 500, 20, 5000
@@ -390,11 +391,12 @@ def _fetch_detection_pages(
             raise TimeoutError("单店侵权 API 读取超过最长等待时间")
         params: dict[str, Any] = {
             "element_type": "ITM",
-            "date_created_since": date_created_since,
             "limit": DETECTION_PAGE_SIZE,
             "offset": offset,
             "sort": "date_created_desc",
         }
+        if date_created_since:
+            params["date_created_since"] = date_created_since
         if filter_subgroup:
             params["filter_subgroup"] = filter_subgroup
         page = client.request(
@@ -436,26 +438,29 @@ def _collect_live_detection_records(
     store_name: str,
     stop_event: Any = None,
     deadline: float | None = None,
-) -> tuple[list[dict], int, bool]:
+) -> tuple[list[dict], int, bool, list[str], int]:
     """Lightweight moderation reader for the daily task; never requests item details."""
 
-    records = []
-    scanned_total = 0
-    truncated = False
+    account_list = [dict(account) for account in accounts]
 
-    def progress(pages: int, scanned: int, matched: int) -> None:
-        if pages % 10 == 0:
-            print(
-                f"{_now_text()} {store_name} API侵权分页进度："
-                f"{pages} 页，扫描 {scanned} 条，命中 {matched} 条"
-            )
-
-    for account in accounts:
+    def collect_account(account: dict) -> tuple[list[dict], int, bool]:
         seller_id = str(account.get("user_id") or "").strip()
         site_id = str(account.get("site_id") or "").strip().upper()
+
+        def progress(pages: int, scanned: int, matched: int) -> None:
+            if pages % 10 == 0:
+                print(
+                    f"{_now_text()} {store_name} {site_id} API侵权分页进度："
+                    f"{pages} 页，扫描 {scanned} 条，命中 {matched} 条"
+                )
+
+        account_client = MercadoLibreClient(
+            client.access_token,
+            timeout=client.timeout,
+        )
         try:
             matches, scanned, capped = _fetch_detection_pages(
-                client,
+                account_client,
                 seller_id,
                 date_created_since=date_created_since,
                 filter_subgroup=BRAND_PROTECTION_SUBGROUP,
@@ -467,20 +472,19 @@ def _collect_live_detection_records(
             matches, scanned, capped = [], 0, False
         if not matches:
             matches, scanned, capped = _fetch_detection_pages(
-                client,
+                account_client,
                 seller_id,
                 date_created_since=date_created_since,
                 stop_event=stop_event,
                 deadline=deadline,
                 progress=progress,
             )
-        scanned_total += scanned
-        truncated = truncated or capped
+        account_records = []
         for row in matches:
             item_id = _item_id(row)
             if not item_id:
                 continue
-            records.append(
+            account_records.append(
                 {
                     "source_id": str(row.get("id") or ""),
                     "site_id": str(row.get("site_id") or site_id or item_id[:3]).upper(),
@@ -489,7 +493,37 @@ def _collect_live_detection_records(
                     "occurred_at": _mysql_datetime(row.get("date_created")),
                 }
             )
-    return records, scanned_total, truncated
+        return account_records, scanned, capped
+
+    if not account_list:
+        return [], 0, False, [], 0
+    records = []
+    scanned_total = 0
+    truncated = False
+    errors = []
+    successful_accounts = 0
+    with ThreadPoolExecutor(
+        max_workers=min(len(account_list), 6),
+        thread_name_prefix="meli-live-infraction-sites",
+    ) as executor:
+        future_map = {
+            executor.submit(collect_account, account): account
+            for account in account_list
+        }
+        for future in as_completed(future_map):
+            account = future_map[future]
+            site_id = str(account.get("site_id") or "").strip().upper()
+            try:
+                account_records, scanned, capped = future.result()
+                records.extend(account_records)
+                scanned_total += scanned
+                truncated = truncated or capped
+                successful_accounts += 1
+            except Exception as exc:
+                if _is_unauthorized_error(exc):
+                    raise
+                errors.append(f"{site_id or '未知站点'}：{exc}")
+    return records, scanned_total, truncated, errors, successful_accounts
 
 
 def _item_id(source: Mapping[str, Any]) -> str:
@@ -636,6 +670,8 @@ def _collect_detection_records(
                 ),
                 "reason": _plain_text(row.get("reason")),
                 "remedy": _plain_text(row.get("remedy")),
+                "is_current": True,
+                "resolution_status": "current",
                 "salesperson": setting.get("salesperson") or "",
                 "group_name": setting.get("group_name") or "",
                 "raw_json": row,
@@ -747,6 +783,10 @@ def _collect_rights_holder_records(
             continue
         site_id = item_id[:3].upper()
         setting = settings.get(site_id) or {}
+        current_status = str(
+            detail.get("current_status") or case.get("current_status") or ""
+        ).strip().upper()
+        state = _rights_holder_state(current_status)
         normalized.append(
             {
                 "source_type": "rights_holder",
@@ -761,15 +801,20 @@ def _collect_rights_holder_records(
                     detail.get("date_created") or case.get("date_created")
                 ),
                 "due_at": _mysql_datetime(detail.get("due_date") or case.get("due_date")),
-                "status": str(
-                    detail.get("current_status") or case.get("current_status") or ""
-                ),
+                "status": current_status,
                 "reason_code": str(detail.get("reason_id") or "PPPI"),
                 "reason": _plain_text(
                     detail.get("reason_text") or case.get("reason_text")
                 ),
                 "remedy": "",
                 "rights_holder": str(detail.get("public_member_name") or ""),
+                "is_current": state["is_current"],
+                "resolution_status": state["resolution_status"],
+                "resolved_at": (
+                    _mysql_datetime(detail.get("last_updated") or case.get("last_updated"))
+                    if not state["is_current"]
+                    else None
+                ),
                 "salesperson": setting.get("salesperson") or "",
                 "group_name": setting.get("group_name") or "",
                 "raw_json": {"case": case, "detail": detail},
@@ -778,20 +823,30 @@ def _collect_rights_holder_records(
     return normalized, truncated
 
 
+_RIGHTS_HOLDER_APPEAL_SUCCESS_STATUSES = {
+    "DOCUMENTATION_APPROVED",
+    "MEMBER_NOT_RESPOND",
+    "ROLLBACK",
+}
+_RIGHTS_HOLDER_APPEAL_FAILED_STATUSES = {
+    "DOCUMENTATION_NOT_APPROVED",
+    "DOCUMENTATION_NOT_PRESENTED",
+}
+
+
+def _rights_holder_state(status: Any) -> dict[str, Any]:
+    normalized = str(status or "").strip().upper()
+    if normalized in _RIGHTS_HOLDER_APPEAL_SUCCESS_STATUSES:
+        return {"is_current": False, "resolution_status": "appeal_success"}
+    if normalized in _RIGHTS_HOLDER_APPEAL_FAILED_STATUSES:
+        return {"is_current": False, "resolution_status": "appeal_failed"}
+    return {"is_current": True, "resolution_status": "current"}
+
+
 def _sync_start_dates(context: Mapping[str, Any]) -> tuple[str, str]:
-    last_completed = context.get("last_completed_at")
-    if last_completed:
-        try:
-            parsed = datetime.fromisoformat(str(last_completed))
-            since = (parsed - timedelta(days=1)).strftime("%Y-%m-%d")
-            return since, since
-        except ValueError:
-            pass
-    now = datetime.now()
-    return (
-        (now - timedelta(days=INFRACTION_INITIAL_DETECTION_DAYS)).strftime("%Y-%m-%d"),
-        (now - timedelta(days=INFRACTION_INITIAL_RIGHTS_HOLDER_DAYS)).strftime("%Y-%m-%d"),
-    )
+    # Reconciliation is only safe against a complete snapshot. Empty dates ask
+    # both official endpoints for their full available history.
+    return "", ""
 
 
 def _sync_store_once(client: MercadoLibreClient, record: dict) -> dict:
@@ -809,7 +864,7 @@ def _sync_store_once(client: MercadoLibreClient, record: dict) -> dict:
     scanned = 0
 
     try:
-        _append_log(f"{store_name} 读取 {detection_since} 起的平台侵权检测")
+        _append_log(f"{store_name} 读取完整平台侵权快照")
         detection_records, scanned, capped = _collect_detection_records(
             client,
             record,
@@ -819,13 +874,15 @@ def _sync_store_once(client: MercadoLibreClient, record: dict) -> dict:
         if capped:
             errors.append("平台检测记录超过本轮安全分页上限")
         upsert_infraction_records(record, detection_records)
+        if not capped:
+            reconcile_infraction_snapshot(token_id, "detection", detection_records)
     except Exception as exc:
         if _is_unauthorized_error(exc):
             raise
         errors.append(f"平台检测：{exc}")
 
     try:
-        _append_log(f"{store_name} 读取 {rights_since} 起的权利人举报")
+        _append_log(f"{store_name} 读取完整权利人举报快照")
         rights_records, capped = _collect_rights_holder_records(
             client,
             record,
@@ -834,6 +891,8 @@ def _sync_store_once(client: MercadoLibreClient, record: dict) -> dict:
         if capped:
             errors.append("权利人举报超过本轮安全分页上限")
         upsert_infraction_records(record, rights_records)
+        if not capped:
+            reconcile_infraction_snapshot(token_id, "rights_holder", rights_records)
     except Exception as exc:
         if _is_unauthorized_error(exc):
             raise
@@ -948,13 +1007,15 @@ def _collect_live_detection_target(
                 }
 
             deadline = time.monotonic() + LIVE_INFRACTION_STORE_TIMEOUT_SECONDS
-            records, scanned, capped = _collect_live_detection_records(
-                client,
-                accounts,
-                date_created_since=date_created_since,
-                store_name=store_name,
-                stop_event=stop_event,
-                deadline=deadline,
+            records, scanned, capped, site_errors, successful_accounts = (
+                _collect_live_detection_records(
+                    client,
+                    accounts,
+                    date_created_since=date_created_since,
+                    store_name=store_name,
+                    stop_event=stop_event,
+                    deadline=deadline,
+                )
             )
             rows = []
             seen_items: set[tuple[str, str]] = set()
@@ -980,13 +1041,20 @@ def _collect_live_detection_target(
                         "source_id": str(source.get("source_id") or ""),
                     }
                 )
+            message_parts = list(site_errors)
+            if capped:
+                message_parts.append("API 分页达到安全上限")
             return {
                 "store": store_name,
                 "token_id": token_id,
-                "status": "partial" if capped else "success",
+                "status": (
+                    "error"
+                    if site_errors and successful_accounts == 0
+                    else ("partial" if site_errors or capped else "success")
+                ),
                 "rows": rows,
                 "scanned": scanned,
-                "message": "API 分页达到安全上限" if capped else "",
+                "message": "；".join(message_parts),
             }
         except Exception as exc:
             if (

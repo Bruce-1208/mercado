@@ -1,6 +1,10 @@
 import os
 import requests
 
+from bit.workbench_runtime import bootstrap_runtime
+
+
+RUNTIME_SETTINGS = bootstrap_runtime()
 
 DB_API_BASE_URL = os.environ.get("BIT_DB_API_BASE_URL", "http://zeshun.nat100.top").rstrip("/")
 DB_API_TOKEN = os.environ.get("BIT_DB_API_TOKEN", "")
@@ -9,20 +13,7 @@ DB_API_SESSION.trust_env = False
 
 
 def _resolve_db_mode():
-    """默认直连局域网 MySQL；显式设置 ``api`` 时才请求数据库服务端。"""
-    mode = (
-        os.environ.get("BIT_DB_MODE")
-        or os.environ.get("BIT_INTERFACE_DB_MODE")
-        or ""
-    ).strip().lower()
-    if mode in ("direct", "local", "server", "mysql"):
-        return "mysql"
-    if mode in ("api", "client", "remote"):
-        return "api"
-    legacy_use_api = os.environ.get("BIT_INTERFACE_USE_DB_API")
-    if legacy_use_api is not None:
-        return "api" if str(legacy_use_api).strip().lower() in ("1", "true", "yes", "on") else "mysql"
-    return "mysql"
+    return "api" if RUNTIME_SETTINGS.is_client else "mysql"
 
 
 DB_MODE = _resolve_db_mode()
@@ -90,6 +81,72 @@ def get_latest_order_print_records():
     if DB_MODE == "mysql":
         return _local_call("get_latest_order_print_records")
     return _request("GET", "/api/db/task-records/order-print/latest")
+
+
+def get_database_api_health():
+    if DB_MODE == "mysql":
+        from bit.bit_mysql import config
+
+        return {"role": "server", "database_host": config.get("host")}
+    return _request("GET", "/api/db/health", timeout=10)
+
+
+def list_official_infraction_dashboard(**filters):
+    if DB_MODE == "mysql":
+        from erp.mercadolibre_infraction_store import list_infraction_dashboard
+
+        return list_infraction_dashboard(**filters)
+    return _request(
+        "GET",
+        "/api/db/official-infractions/dashboard",
+        params={key: value for key, value in filters.items() if value is not None},
+    )
+
+
+def get_current_infraction_counts_by_token_site(days=100):
+    if DB_MODE == "mysql":
+        from erp.mercadolibre_infraction_store import (
+            current_infraction_counts_by_token_site,
+        )
+
+        return current_infraction_counts_by_token_site(days)
+    data = _request(
+        "GET",
+        "/api/db/official-infractions/current-counts",
+        params={"days": days},
+    ) or {}
+    rows = data.pop("count_rows", [])
+    data["counts"] = {
+        (int(row.get("token_id") or 0), str(row.get("site_id") or "").upper()): {
+            "infraction_count": int(row.get("infraction_count") or 0),
+            "rights_holder_count": int(row.get("rights_holder_count") or 0),
+            "latest_infraction_at": row.get("latest_infraction_at"),
+        }
+        for row in rows
+        if int(row.get("token_id") or 0) > 0 and str(row.get("site_id") or "").strip()
+    }
+    return data
+
+
+def start_official_infraction_sync(token_ids=None):
+    if DB_MODE == "mysql":
+        from bit import mercado_infraction_sync
+
+        return mercado_infraction_sync.start_official_infraction_sync(token_ids or [])
+    data = _request(
+        "POST",
+        "/api/db/official-infractions/sync",
+        json={"token_ids": list(token_ids or [])},
+    ) or {}
+    return bool(data.get("started")), dict(data.get("state") or {})
+
+
+def get_official_infraction_sync_status():
+    if DB_MODE == "mysql":
+        from bit import mercado_infraction_sync
+
+        return mercado_infraction_sync.official_infraction_sync_status()
+    return _request("GET", "/api/db/official-infractions/sync/status")
 
 
 def inset_reputation_info(

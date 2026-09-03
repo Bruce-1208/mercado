@@ -513,7 +513,7 @@ class CollectionOrchestrationTests(unittest.TestCase):
         self.assertEqual(run_once.call_count, 20)
         self.assertEqual(sleep.call_count, 19)
 
-    def test_scheduler_runs_infraction_then_cooldown_then_reputation_then_appeal(self):
+    def test_scheduler_updates_infraction_and_reputation_by_api_then_runs_appeal(self):
         events = []
         process_lock = mock.Mock()
         process_lock.acquire.return_value = True
@@ -525,22 +525,15 @@ class CollectionOrchestrationTests(unittest.TestCase):
                 "_run_order_print_if_due",
             ) as order_print,
             mock.patch.object(
+                bit_main.mercado_infraction_sync,
+                "run_official_infraction_sync",
+                side_effect=lambda: events.append("infraction_api") or {"ok": True},
+            ) as infraction_sync,
+            mock.patch.object(
                 bit_main.bit_reputation_info,
                 "main",
-                side_effect=lambda **_kwargs: events.append("reputation") or {"ok": True},
+                side_effect=lambda **_kwargs: events.append("reputation_api") or {"ok": True},
             ) as reputation_main,
-            mock.patch.object(
-                bit_main.bit_infractions_info,
-                "main",
-                side_effect=lambda **_kwargs: events.append("infraction") or {"ok": True},
-            ) as infraction_main,
-            mock.patch.object(bit_main.random, "uniform", return_value=240),
-            mock.patch.object(
-                bit_main.time,
-                "sleep",
-                side_effect=lambda seconds: events.append(("sleep", seconds)),
-            ),
-            mock.patch.object(bit_main, "wait_for_batch_resume"),
             mock.patch.object(
                 bit_main,
                 "_run_ai_appeal_loop",
@@ -552,7 +545,7 @@ class CollectionOrchestrationTests(unittest.TestCase):
 
         self.assertEqual(
             events,
-            ["infraction", ("sleep", 240), "reputation", "appeal"],
+            ["infraction_api", "reputation_api", "appeal"],
         )
         order_print.assert_not_called()
         self.assertEqual(
@@ -564,9 +557,11 @@ class CollectionOrchestrationTests(unittest.TestCase):
         )
         self.assertEqual(result["ai_appeal"], {"ok": True})
         self.assertEqual(reputation_main.call_args.kwargs["max_workers"], 10)
-        self.assertEqual(infraction_main.call_args.kwargs["max_workers"], 10)
-        self.assertEqual(reputation_main.call_args.kwargs["stagger_min_seconds"], 5)
-        self.assertEqual(reputation_main.call_args.kwargs["stagger_max_seconds"], 10)
+        self.assertIs(
+            reputation_main.call_args.kwargs["collect_browser_auxiliary"],
+            False,
+        )
+        infraction_sync.assert_called_once_with()
         self.assertEqual(result["errors"], {})
         process_lock.release.assert_called_once_with()
 
@@ -575,33 +570,28 @@ class CollectionOrchestrationTests(unittest.TestCase):
             "os.environ",
             {
                 "BIT_REPUTATION_MAX_WORKERS": "12",
-                "BIT_INFRACTION_MAX_WORKERS": "9",
                 "BIT_MAIN_BROWSER_WORKER_LIMIT": "2",
             },
             clear=True,
         ):
-            reputation_options = bit_main._collection_options("REPUTATION")
-            infraction_options = bit_main._collection_options("INFRACTION")
+            reputation_options = bit_main._reputation_api_options()
 
         self.assertEqual(reputation_options["max_workers"], 2)
-        self.assertEqual(infraction_options["max_workers"], 2)
+        self.assertIs(reputation_options["collect_browser_auxiliary"], False)
 
     def test_scheduler_never_exceeds_fifteen_workers(self):
         with mock.patch.dict(
             "os.environ",
             {
                 "BIT_REPUTATION_MAX_WORKERS": "30",
-                "BIT_INFRACTION_MAX_WORKERS": "30",
                 "BIT_MAIN_BROWSER_WORKER_LIMIT": "30",
                 "BIT_DAILY_MAX_WORKERS": "30",
             },
             clear=True,
         ):
-            reputation_options = bit_main._collection_options("REPUTATION")
-            infraction_options = bit_main._collection_options("INFRACTION")
+            reputation_options = bit_main._reputation_api_options()
 
         self.assertEqual(reputation_options["max_workers"], 15)
-        self.assertEqual(infraction_options["max_workers"], 15)
         self.assertEqual(bit_main._main_browser_worker_limit(), 15)
 
     def test_reputation_and_appeal_still_run_when_infraction_fails(self):
@@ -612,8 +602,8 @@ class CollectionOrchestrationTests(unittest.TestCase):
         with (
             mock.patch.object(bit_main, "InterProcessLock", return_value=process_lock),
             mock.patch.object(
-                bit_main.bit_infractions_info,
-                "main",
+                bit_main.mercado_infraction_sync,
+                "run_official_infraction_sync",
                 side_effect=RuntimeError("侵权数据库写入失败"),
             ),
             mock.patch.object(
@@ -621,7 +611,6 @@ class CollectionOrchestrationTests(unittest.TestCase):
                 "main",
                 side_effect=lambda **_kwargs: events.append("reputation") or {"ok": True},
             ),
-            mock.patch.object(bit_main, "_wait_between_collections"),
             mock.patch.object(
                 bit_main,
                 "_run_ai_appeal_loop",

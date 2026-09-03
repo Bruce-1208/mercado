@@ -33,7 +33,6 @@ from AI_Agent.deepseek import *
 import re
 from openpyxl import load_workbook
 import traceback
-from bit_infractions_info import *
 
 
 CHAT_INFO_API_URL = "https://zeshun.nat100.top/api/v1/chat"
@@ -951,19 +950,27 @@ def get_delay_orders_for_human_service(window_id, name, site, nums=10):
 
 
 def get_infraction_orders_random(window_id,name, site, nums):
-    inf_list=[]
+    """人工客服旧入口也统一从官方 API 读取，网页采集器不再参与。"""
+
     try:
-        infos=get_infractions_info(window_id,name,site,1)
-        for i in infos:
-            inf_list.append(i[2])
-        if len(inf_list) >= nums:
-            inf_list = str(random.sample(inf_list, nums))
-        else:
-            inf_list = str(inf_list)
-        print(get_now_time() + name + site + "随机得到的侵权单号为", inf_list)
+        from bit.bit_appeal_ai import get_infraction_orders as get_api_infraction_orders
+
+        inf_list = get_api_infraction_orders(window_id, name, site)
+        selected = (
+            random.sample(inf_list, nums)
+            if len(inf_list) > nums
+            else inf_list
+        )
+        result = "、".join(str(item) for item in selected)
+        print(
+            get_now_time() + name + site
+            + f"从官方 API 随机得到 {len(selected)} 个侵权编号：",
+            result,
+        )
+        return result
     except Exception as e:
-        print("获取侵权订单信息失败",e)
-    return inf_list
+        print("通过官方 API 获取侵权订单信息失败",e)
+        return ""
 
 
 # 检查聊天是否结束

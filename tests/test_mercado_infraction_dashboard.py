@@ -5,6 +5,7 @@ import pytest
 from bit import bit_interface
 from bit import mercado_infraction_sync as sync
 from erp.mercadolibre_infraction_store import _build_group_tree
+from erp import mercadolibre_infraction_store as infraction_store
 
 
 @pytest.mark.parametrize(
@@ -87,6 +88,39 @@ def test_detection_pages_use_reason_fallback_and_deduplicate():
     assert capped is False
 
 
+def test_full_detection_snapshot_omits_empty_date_filter():
+    class Client:
+        def request(self, _method, _path, *, params):
+            assert "date_created_since" not in params
+            return {"infractions": [], "paging": {"total": 0}}
+
+    rows, scanned, capped = sync._fetch_detection_pages(
+        Client(),
+        "123",
+        date_created_since="",
+    )
+
+    assert rows == []
+    assert scanned == 0
+    assert capped is False
+
+
+@pytest.mark.parametrize(
+    ("status", "expected"),
+    [
+        ("DOCUMENTATION_APPROVED", (False, "appeal_success")),
+        ("MEMBER_NOT_RESPOND", (False, "appeal_success")),
+        ("ROLLBACK", (False, "appeal_success")),
+        ("DOCUMENTATION_NOT_APPROVED", (False, "appeal_failed")),
+        ("WAITING_DOCUMENTATION", (True, "current")),
+    ],
+)
+def test_rights_holder_status_maps_to_dashboard_state(status, expected):
+    state = sync._rights_holder_state(status)
+
+    assert (state["is_current"], state["resolution_status"]) == expected
+
+
 def test_live_api_collection_filters_authorized_sites_and_isolates_failures(
     monkeypatch,
 ):
@@ -111,7 +145,7 @@ def test_live_api_collection_filters_authorized_sites_and_isolates_failures(
         ],
     )
 
-    def fake_client(record):
+    def fake_client(record, **_kwargs):
         if record["id"] == 2:
             raise RuntimeError("Token 已失效")
         return object(), record
@@ -166,6 +200,8 @@ def test_live_api_collection_filters_authorized_sites_and_isolates_failures(
             ],
             3,
             False,
+            [],
+            1,
         )
 
     monkeypatch.setattr(sync, "_collect_live_detection_records", fake_collect)
@@ -277,6 +313,37 @@ def test_group_tree_nests_account_group_salesperson_and_store():
     assert tree[1]["salespeople"][0]["salesperson"] == "未分配"
 
 
+def test_current_count_snapshot_flattens_same_dashboard_tree(monkeypatch):
+    monkeypatch.setattr(
+        infraction_store,
+        "list_infraction_dashboard",
+        lambda **kwargs: {
+            "summary": {"last_synced_at": "2026-09-04 09:00:00"},
+            "account_groups": [{
+                "salespeople": [{
+                    "stores": [{
+                        "token_id": 8,
+                        "sites": [{
+                            "site_id": "MLM",
+                            "detection_count": 5,
+                            "rights_holder_count": 3,
+                        }],
+                    }],
+                }],
+            }],
+        },
+    )
+
+    result = infraction_store.current_infraction_counts_by_token_site(100)
+
+    assert result["counts"][(8, "MLM")] == {
+        "infraction_count": 5,
+        "rights_holder_count": 3,
+        "latest_infraction_at": None,
+    }
+    assert result["last_synced_at"] == "2026-09-04 09:00:00"
+
+
 def _client(monkeypatch):
     user = {
         "id": 1,
@@ -312,15 +379,18 @@ def test_independent_dashboard_page_and_data_api(monkeypatch):
     client = _client(monkeypatch)
 
     page_response = client.get("/infringement-dashboard")
+    embedded_response = client.get("/infringement-dashboard?embedded=1")
     api_response = client.get(
-        "/api/official-infractions/dashboard?days=30&detail_token_id=7"
+        "/api/official-infractions/dashboard?days=30&view_mode=history&detail_token_id=7"
     )
 
     assert page_response.status_code == 200
     assert "按账户组与业务员查看侵权" in page_response.get_data(as_text=True)
+    assert '<body class="embedded">' in embedded_response.get_data(as_text=True)
     assert api_response.status_code == 200
     assert api_response.get_json()["data"] == dashboard
     assert received["detail_token_id"] == "7"
+    assert received["view_mode"] == "history"
 
 
 def test_dashboard_sync_endpoint_starts_background_job(monkeypatch):
@@ -347,7 +417,10 @@ def test_console_template_links_to_independent_dashboard():
     ).read_text(encoding="utf-8")
 
     assert "/infringement-dashboard" in source
-    assert "独立分组看板" in source
+    assert '<span class="nav-label">侵权总览</span>' in source
+    assert 'data-src="/infringement-dashboard?embedded=1"' in source
+    assert 'id="infraction-dashboard-frame"' in source
+    assert 'window.location.assign("/infringement-dashboard")' not in source
 
 
 def test_dashboard_template_supports_store_detail_drilldown():
@@ -360,3 +433,6 @@ def test_dashboard_template_supports_store_detail_drilldown():
     assert "查看全部明细" in source
     assert "产品图" in source
     assert "thumbnail_url" in source
+    assert "当前侵权" in source
+    assert "全部历史（去重）" in source
+    assert "申诉成功" in source

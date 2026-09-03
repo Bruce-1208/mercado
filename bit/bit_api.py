@@ -180,6 +180,16 @@ def getBrowserIdByName(name, page_size=100, max_pages=100, browsers=None):
             if str(row.get("name") or "").strip().casefold() == folded_name
         ]
     if not exact_matches:
+        # 授权名称常写成“蒋学斌2”，而 BitBrowser 窗口可能是“蒋学斌 2”。
+        # 仅忽略空白字符，并且仍要求唯一，避免模糊匹配到错误店铺。
+        compact_name = "".join(wanted_name.split()).casefold()
+        exact_matches = [
+            row
+            for row in browsers
+            if "".join(str(row.get("name") or "").split()).casefold()
+            == compact_name
+        ]
+    if not exact_matches:
         raise RuntimeError(f"未找到名称为“{wanted_name}”的比特浏览器窗口")
     if len(exact_matches) > 1:
         raise RuntimeError(

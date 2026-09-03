@@ -1,5 +1,40 @@
 # mercado
 
+## 工作台服务端 / 客户端运行角色
+
+同一套工作台可以在每台电脑上灵活指定运行角色：
+
+- `server`：直接连接 `192.168.1.11:3306`，同时提供受令牌保护的 `/api/db/*` 数据库接口；
+- `client`：禁止直连 MySQL，所有数据库读写都通过指定服务端的 HTTP 接口完成。
+
+启动参数的优先级最高，适合临时切换：
+
+```powershell
+# 两端必须使用同一个接口令牌
+$env:BIT_DB_API_TOKEN="replace-with-a-long-random-token"
+
+# 任意能访问 192.168.1.11 的电脑都可作为服务端
+python -m bit.bit_interface --role server
+
+# 客户端指向任意一台已启动的服务端
+python -m bit.bit_interface --role client --api-base-url http://database-server.local:5000
+
+# 打包后的程序使用相同参数
+.\MercadoWorkbench.exe --role client --api-base-url http://database-server.local:5000
+```
+
+若要让某台电脑长期固定角色，把对应示例复制为程序旁的 `workbench-runtime.json`：
+
+```powershell
+Copy-Item .\workbench-server.example.json .\workbench-runtime.json
+# 或
+Copy-Item .\workbench-client.example.json .\workbench-runtime.json
+```
+
+服务端和客户端配置中的 `api_token` 必须使用同一个足够长的随机值。也可用 `BIT_RUNTIME_ROLE`、`BIT_DB_API_BASE_URL`、`BIT_DB_API_TOKEN` 和 `MYSQL_HOST` 环境变量部署。控制优先级依次为：启动参数、环境变量、`workbench-runtime.json`、兼容旧版的数据库模式变量。切换角色后需要重启程序。
+
+客户端可通过服务端的 `GET /api/db/health` 验证接口角色和数据库目标。多台电脑可以同时设为服务端；如果启用后台定时任务，应确认同一任务不会在多台服务端重复调度。
+
 ## 库存管理
 
 工作台“库存管理”提供库存明细、出入库日志和货架管理三个视图。入库时必须从已同步的美客多订单中匹配具体产品，并记录货架、数量、单位成本、业务时间和参考单据；重复入库按移动加权法更新单位成本。出库会在数据库事务内锁定库存记录，库存不足时拒绝操作，成功后保留操作前后数量、成本和操作人。
@@ -72,12 +107,12 @@ Access Token 和 Refresh Token 仍只在数据库服务端使用；接口遇到 
 
 ## 比特浏览器配置
 
-店铺窗口配置统一保存在 MySQL 的 `bit_browser_configs` 表中。业务代码通过 `bit.bit_config` 读取，并根据 `BIT_DB_MODE` 选择直连 MySQL 或数据库 HTTP 接口，不再在运行时读取 `比特配置文件.xlsx`。
+店铺窗口配置统一保存在 MySQL 的 `bit_browser_configs` 表中。业务代码通过 `bit.bit_config` 读取，并根据 `BIT_RUNTIME_ROLE` 选择服务端直连 MySQL 或客户端使用数据库 HTTP 接口，不再在运行时读取 `比特配置文件.xlsx`。
 
 首次迁移或需要用 Excel 完整覆盖数据库时执行：
 
 ```powershell
-$env:BIT_DB_MODE="mysql"
+$env:BIT_RUNTIME_ROLE="server"
 py -3.12 -m bit.bit_config --import-excel "bit\比特配置文件.xlsx"
 ```
 

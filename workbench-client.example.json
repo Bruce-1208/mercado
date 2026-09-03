@@ -1,0 +1,5 @@
+{
+  "role": "client",
+  "api_base_url": "http://database-server.local:5000",
+  "api_token": "replace-with-the-same-long-random-token-used-by-server"
+}

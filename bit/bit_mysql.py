@@ -7,6 +7,23 @@ from decimal import Decimal, InvalidOperation
 
 import pymysql
 
+from bit.workbench_runtime import bootstrap_runtime
+
+
+RUNTIME_SETTINGS = bootstrap_runtime()
+
+
+def _blocked_client_mysql_connect(*args, **kwargs):
+    raise RuntimeError(
+        "客户端模式禁止直连 MySQL；请通过 bit.bit_db_api 调用服务端的 /api/db/* 接口"
+    )
+
+
+# 一些旧业务模块仍会导入 bit_mysql。客户端进程允许导入这些模块以保持
+# 界面可启动，但任何遗漏的直连路径都会在真正连接前被明确拦截。
+if RUNTIME_SETTINGS.is_client and os.environ.get("BIT_DB_DIRECT_DISABLED") == "1":
+    pymysql.connect = _blocked_client_mysql_connect
+
 # 1. 配置数据库连接信息
 config = {
     'host': os.environ.get('MYSQL_HOST', os.environ.get('DB_HOST', '192.168.1.11')),
@@ -1128,7 +1145,7 @@ def _latest_reputation_snapshot_rows(cursor):
     column_names = (
         "店铺名", "站点", "声誉颜色", "总单量", "投诉率", "延误率",
         "取消率", "增加或减少", "近七天变化率", "系统告警", "更新时间",
-        "一周流量趋势", "提交时间",
+        "一周流量趋势", "站点状态", "侵权数量", "权利人数量", "提交时间",
     )
     columns = ", ".join(f"`{name}`" for name in column_names)
     if latest_submit_time:
@@ -1225,6 +1242,9 @@ def _merge_reputation_snapshot_rows(
             row.get("系统告警"),
             row.get("更新时间"),
             row.get("一周流量趋势"),
+            row.get("站点状态"),
+            row.get("侵权数量"),
+            row.get("权利人数量"),
             submit_time,
         ]
     for row in collected_rows:
@@ -1280,6 +1300,9 @@ def inset_reputation_info(
         with connection.cursor() as cursor:
             _ensure_column(cursor, "reputation", "取消率", "VARCHAR(255) NULL")
             _ensure_column(cursor, "reputation", "一周流量趋势", "TEXT NULL")
+            _ensure_column(cursor, "reputation", "站点状态", "VARCHAR(255) NULL")
+            _ensure_column(cursor, "reputation", "侵权数量", "INT NULL")
+            _ensure_column(cursor, "reputation", "权利人数量", "INT NULL")
             submit_time = _next_collection_submit_time(
                 cursor,
                 "reputation",
@@ -1308,14 +1331,10 @@ def inset_reputation_info(
                     row = row[:6] + [""] + row[6:] + [""]
                 elif len(row) == 11:
                     row = row[:6] + [""] + row[6:]
-                elif len(row) > 13:
-                    row = row[:13]
                 if len(row) < 12:
                     row.extend([""] * (12 - len(row)))
-                if len(row) == 12:
-                    row.append(submit_time)
-                elif len(row) == 13:
-                    row[12] = submit_time
+                extras = row[12:15] if len(row) >= 15 else ["", None, None]
+                row = row[:12] + extras + [submit_time]
                 normalized_list.append(row)
             if merge_latest:
                 normalized_list = _merge_reputation_snapshot_rows(
@@ -1333,8 +1352,9 @@ def inset_reputation_info(
     INSERT INTO reputation (
          店铺名, 站点, 声誉颜色, 总单量, 
         投诉率, 延误率, 取消率, 增加或减少, 近七天变化率,
-        系统告警, 更新时间, 一周流量趋势, 提交时间
-    ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+        系统告警, 更新时间, 一周流量趋势, 站点状态, 侵权数量,
+        权利人数量, 提交时间
+    ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
     """
             if normalized_list:
                 cursor.executemany(sql_insert, normalized_list)
@@ -1703,6 +1723,9 @@ def get_latest_reputation_info():
             authorized_sites = _load_authorized_shop_sites("visit_stats_enabled")
             _ensure_column(cursor, "reputation", "取消率", "VARCHAR(255) NULL")
             _ensure_column(cursor, "reputation", "一周流量趋势", "TEXT NULL")
+            _ensure_column(cursor, "reputation", "站点状态", "VARCHAR(255) NULL")
+            _ensure_column(cursor, "reputation", "侵权数量", "INT NULL")
+            _ensure_column(cursor, "reputation", "权利人数量", "INT NULL")
             latest_submit_time = _latest_tracked_collection_snapshot(
                 cursor,
                 "reputation",
@@ -1762,8 +1785,14 @@ def get_latest_reputation_info():
                     str(row.get("店铺名") or "").strip(),
                     str(row.get("站点") or "").strip(),
                 )) or {}
-                row["侵权数量"] = int(counts.get("侵权数量") or 0)
-                row["权利人数量"] = int(counts.get("权利人数量") or 0)
+                if row.get("侵权数量") in (None, ""):
+                    row["侵权数量"] = int(counts.get("侵权数量") or 0)
+                else:
+                    row["侵权数量"] = int(row.get("侵权数量") or 0)
+                if row.get("权利人数量") in (None, ""):
+                    row["权利人数量"] = int(counts.get("权利人数量") or 0)
+                else:
+                    row["权利人数量"] = int(row.get("权利人数量") or 0)
                 row["侵权统计天数"] = 100
             shop_traffic_totals = {}
             for row in rows:

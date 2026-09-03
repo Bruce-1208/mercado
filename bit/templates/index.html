@@ -2724,6 +2724,26 @@
             overflow: hidden;
         }
 
+        .infraction-dashboard-module {
+            height: calc(100vh - var(--topbar-height) - 92px);
+            min-height: 720px;
+            overflow: hidden;
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            background: #edf2f8;
+            box-shadow: 0 10px 26px rgba(30, 47, 76, .08);
+        }
+
+        .infraction-dashboard-frame {
+            display: block;
+            width: 100%;
+            height: 100%;
+            border: 0;
+            background: #edf2f8;
+        }
+
+        .legacy-infractions-module[hidden] { display: none !important; }
+
         .infractions-header {
             display: flex;
             align-items: center;
@@ -2905,7 +2925,7 @@
         .reputation-update-bar {
             display: flex;
             align-items: center;
-            justify-content: flex-end;
+            justify-content: flex-start;
             gap: 8px;
             border-top: 1px solid var(--border);
             padding: 7px 10px;
@@ -2913,8 +2933,38 @@
         }
 
         .reputation-selection-summary {
+            margin-left: auto;
             color: var(--muted);
             font-size: 13px;
+            font-weight: 700;
+        }
+
+        .reputation-filter-controls {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+
+        .reputation-filter-controls label {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            margin: 0;
+            color: var(--muted);
+            font-size: 12px;
+            font-weight: 700;
+        }
+
+        .reputation-filter-controls select {
+            min-width: 140px;
+            height: 32px;
+            padding: 4px 28px 4px 9px;
+        }
+
+        #reputation-filter-summary {
+            color: var(--muted);
+            font-size: 12px;
             font-weight: 700;
         }
 
@@ -3716,7 +3766,7 @@
         }
 
         .reputation-data-table {
-            min-width: 1476px;
+            min-width: 1666px;
         }
 
         .reputation-data-table th:nth-child(1),
@@ -3747,6 +3797,40 @@
         .reputation-data-table td:nth-child(13) { width: 190px; }
         .reputation-data-table th:nth-child(14),
         .reputation-data-table td:nth-child(14) { width: 140px; }
+        .reputation-data-table th:nth-child(15),
+        .reputation-data-table td:nth-child(15) { width: 90px; }
+        .reputation-data-table th:nth-child(16),
+        .reputation-data-table td:nth-child(16) { width: 100px; }
+
+        .reputation-site-status {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            min-width: 54px;
+            padding: 3px 8px;
+            border-radius: 999px;
+            background: #eef2f6;
+            color: #475467;
+            font-size: 12px;
+            font-weight: 700;
+            white-space: nowrap;
+        }
+
+        .reputation-site-status.normal {
+            background: #dcfae6;
+            color: #067647;
+        }
+
+        .reputation-site-status.risk {
+            background: #fee4e2;
+            color: #b42318;
+        }
+
+        .reputation-open-browser-button {
+            padding: 5px 9px;
+            font-size: 12px;
+            white-space: nowrap;
+        }
 
         .reputation-data-table .traffic-cell {
             width: 100%;
@@ -8071,7 +8155,7 @@
                 <button class="tab-button" type="button" data-tab="tasks" data-icon="✓" data-permission="tasks.view" onclick="switchTab('tasks')"><span class="nav-label">任务模块</span></button>
                 <button class="tab-button" type="button" data-tab="risk-check" data-icon="◎" data-permission="risk_check.view" onclick="switchTab('risk-check')"><span class="nav-label">侵权检测</span></button>
                 <button class="tab-button" type="button" data-tab="infringement-knowledge" data-icon="◆" data-permission="infringement_knowledge.view" onclick="switchTab('infringement-knowledge')"><span class="nav-label">侵权知识库</span></button>
-                <button class="tab-button" type="button" data-tab="infractions" data-icon="!" data-permission="infractions.view" onclick="switchTab('infractions')"><span class="nav-label">侵权数据</span></button>
+                <button class="tab-button" type="button" data-tab="infractions" data-icon="!" data-permission="infractions.view" onclick="switchTab('infractions')"><span class="nav-label">侵权总览</span></button>
                 <button class="tab-button" type="button" data-tab="reputation" data-icon="☆" data-permission="reputation.view" onclick="switchTab('reputation')"><span class="nav-label">声誉数据</span></button>
                 <button class="tab-button" type="button" data-tab="api-reputation" data-icon="◎" data-permission="reputation.view" onclick="switchTab('api-reputation')"><span class="nav-label">API 声誉</span></button>
                 <button class="tab-button" type="button" data-tab="ai-appeals" data-icon="◫" data-permission="ai_appeals.view" onclick="switchTab('ai-appeals')"><span class="nav-label">AI 申诉记录</span></button>
@@ -10988,6 +11072,16 @@
             </div>
 
             <div class="tab-page" id="tab-infractions">
+                <section class="infraction-dashboard-module" aria-label="侵权总览">
+                    <iframe
+                        class="infraction-dashboard-frame"
+                        id="infraction-dashboard-frame"
+                        title="侵权总览"
+                        data-src="/infringement-dashboard?embedded=1"
+                        src="about:blank"
+                    ></iframe>
+                </section>
+                <div class="legacy-infractions-module" hidden aria-hidden="true">
                 <div class="tab-heading">
                     <h2>侵权数据</h2>
                     <p id="infraction-heading-desc">统计最新一次提交批次的全部侵权数量，并展示最近 30 天新增明细</p>
@@ -11093,12 +11187,13 @@
                         </table>
                     </div>
                 </section>
+                </div>
             </div>
 
             <div class="tab-page" id="tab-reputation">
                 <div class="tab-heading">
                     <h2>声誉数据</h2>
-                    <p>展示 reputation 表最近一次提交的最新声誉数据</p>
+                    <p>七天变化率由官方订单 API 自算；数值可能因取消单、退款、时区和平台内部统计口径而与后台略有差异。</p>
                 </div>
 
                 <section class="panel infractions-panel">
@@ -11156,6 +11251,19 @@
                         </div>
                     </div>
                     <div class="reputation-update-bar">
+                        <div class="reputation-filter-controls">
+                            <label>业务员
+                                <select id="reputation-salesperson-filter" onchange="applyReputationFilters()">
+                                    <option value="">全部业务员</option>
+                                </select>
+                            </label>
+                            <label>账户组
+                                <select id="reputation-group-filter" onchange="applyReputationFilters()">
+                                    <option value="">全部账户组</option>
+                                </select>
+                            </label>
+                            <span id="reputation-filter-summary">显示全部声誉记录</span>
+                        </div>
                         <span class="reputation-selection-summary" id="reputation-selection-summary">已选择 0 家店铺</span>
                         <button class="primary" id="update-selected-reputation-btn" type="button" onclick="runSelectedReputationUpdate()" disabled>更新所选店铺</button>
                     </div>
@@ -11177,10 +11285,12 @@
                                     <th>流量趋势</th>
                                     <th>系统告警</th>
                                     <th>更新时间</th>
+                                    <th>站点状态</th>
+                                    <th>操作</th>
                                 </tr>
                             </thead>
                             <tbody id="reputation-body">
-                                <tr><td class="empty-state" colspan="14">正在加载最新声誉数据...</td></tr>
+                                <tr><td class="empty-state" colspan="16">正在加载最新声誉数据...</td></tr>
                             </tbody>
                         </table>
                     </div>
@@ -11190,7 +11300,7 @@
             <div class="tab-page" id="tab-api-reputation">
                 <div class="tab-heading">
                     <h2>API 声誉</h2>
-                    <p>声誉指标通过 Mercado Libre 官方 API 获取；流量趋势、近七天变化及系统提示继续通过浏览器采集并合并入库</p>
+                    <p>声誉、站点状态、近七天订单变化、侵权及权利人数量通过官方 API 获取；流量趋势和系统提示继续通过浏览器采集</p>
                 </div>
 
                 <section class="panel infractions-panel">
@@ -11269,7 +11379,7 @@
                         <span class="status" id="api-reputation-status-badge"><span class="status-dot"></span><span id="api-reputation-status-text">等待启动</span></span>
                     </div>
                     <pre id="api-reputation-log" aria-live="polite" style="max-height: 260px; min-height: 120px;">等待全量更新任务启动...</pre>
-                    <p class="token-sensitive-note">数据来自 <code>/global/users/seller_reputation</code>；Access Token 和 Refresh Token 始终只在数据库服务端使用。</p>
+                    <p class="token-sensitive-note">数据来自官方声誉、订单、用户状态、Moderations 与 Brand Protection 接口；Access Token 和 Refresh Token 始终只在数据库服务端使用。</p>
                 </section>
             </div>
 
@@ -11540,6 +11650,9 @@
         const reputationTotal = document.getElementById("reputation-total");
         const reputationGreen = document.getElementById("reputation-green");
         const reputationRisk = document.getElementById("reputation-risk");
+        const reputationSalespersonFilter = document.getElementById("reputation-salesperson-filter");
+        const reputationGroupFilter = document.getElementById("reputation-group-filter");
+        const reputationFilterSummary = document.getElementById("reputation-filter-summary");
         const collectReputationBtn = document.getElementById("collect-reputation-btn");
         const reputationSelectAll = document.getElementById("reputation-select-all");
         const reputationSelectionSummary = document.getElementById("reputation-selection-summary");
@@ -11936,6 +12049,7 @@
         let riskResultSortBy = "risk_level";
         let riskResultSortDir = "desc";
         let reputationLoaded = false;
+        let reputationRows = [];
         let apiReputationLoaded = false;
         let apiReputationRows = [];
         let apiReputationSortKey = "store";
@@ -12282,8 +12396,12 @@
             });
             syncWorkspaceTabs(tabName);
             window.scrollTo({top: 0, behavior: "smooth"});
-            if (tabName === "infractions" && !infractionsLoaded) {
-                loadLatestInfractions();
+            if (tabName === "infractions") {
+                const frame = document.getElementById("infraction-dashboard-frame");
+                if (frame && frame.dataset.loaded !== "1") {
+                    frame.src = frame.dataset.src;
+                    frame.dataset.loaded = "1";
+                }
             }
             if (tabName === "appeal" && !appealPhrasesLoaded) {
                 loadAppealPhrases();
@@ -12303,7 +12421,7 @@
                 loadZyingCollectionCategories();
                 loadZyingCollectionStatus();
             }
-            if (tabName === "infractions" || tabName === "reputation" || tabName === "order-print") {
+            if (tabName === "reputation" || tabName === "order-print") {
                 loadCollectionOptions();
             }
             if (tabName === "reputation" && !reputationLoaded) {
@@ -16515,6 +16633,18 @@
             return Number.isFinite(number) ? number : null;
         }
 
+        function apiReputationOfficialCount(value) {
+            const number = apiReputationNumericValue(value);
+            return number === null || number < 0
+                ? "-"
+                : number.toLocaleString("zh-CN");
+        }
+
+        function apiReputationOfficialCountNumber(value) {
+            const number = apiReputationNumericValue(value);
+            return number === null || number < 0 ? null : number;
+        }
+
         function apiReputationColumnValue(row, key) {
             const logistics = API_REPUTATION_LOGISTIC_NAMES[String(row.logistic_type || "").toLowerCase()]
                 || row.logistic_type || "";
@@ -16529,8 +16659,8 @@
                     text: [row.site_name, row.site_id, row.user_id].filter(value => value !== null && value !== undefined && value !== "").join(" "),
                     number: null,
                 },
-                infraction_count: {text: String(row.infraction_count ?? 0), number: apiReputationNumericValue(row.infraction_count ?? 0)},
-                rights_holder_count: {text: String(row.rights_holder_count ?? 0), number: apiReputationNumericValue(row.rights_holder_count ?? 0)},
+                infraction_count: {text: apiReputationOfficialCount(row.infraction_count), number: apiReputationOfficialCountNumber(row.infraction_count)},
+                rights_holder_count: {text: apiReputationOfficialCount(row.rights_holder_count), number: apiReputationOfficialCountNumber(row.rights_holder_count)},
                 logistics: {text: [logistics, row.logistic_type].filter(Boolean).join(" "), number: null},
                 level: {text: [level, row.level_id].filter(Boolean).join(" "), number: null},
                 sales: {
@@ -16730,8 +16860,8 @@
                     <tr>
                         <td><div class="order-cell-stack"><strong>${escapeHtml(row.store_name || "-")}</strong><span>${escapeHtml(row.store_nickname || `Token ${row.token_id || "-"}`)}</span></div></td>
                         <td><div class="order-cell-stack"><strong>${escapeHtml(row.site_name || row.site_id || "-")}</strong><span>${escapeHtml(row.site_id || "-")} · ID ${escapeHtml(row.user_id || "-")}</span></div></td>
-                        <td>${escapeHtml(apiReputationNumber(row.infraction_count || 0))}</td>
-                        <td>${escapeHtml(apiReputationNumber(row.rights_holder_count || 0))}</td>
+                        <td>${escapeHtml(apiReputationOfficialCount(row.infraction_count))}</td>
+                        <td>${escapeHtml(apiReputationOfficialCount(row.rights_holder_count))}</td>
                         <td title="${escapeHtml(row.logistic_type || "")}">${escapeHtml(logistics)}</td>
                         <td title="${escapeHtml(row.level_id || "")}">${renderReputationColor(level)}</td>
                         <td><div class="order-cell-stack"><strong>${escapeHtml(salesCompleted)}</strong><span>${escapeHtml(row.sales_period || "-")}</span></div></td>
@@ -19266,7 +19396,7 @@
                     ? `<img src="${escapeHtml(row.thumbnail_url)}" alt="" loading="lazy" style="width:42px;height:42px;object-fit:cover;border-radius:7px;margin-right:8px;vertical-align:middle">`
                     : "";
                 const link = row.permalink
-                    ? `<a href="${escapeHtml(row.permalink)}" target="_blank" rel="noopener">${needsReply ? "立即处理" : "打开商品"}</a>`
+                    ? `<a href="${escapeHtml(row.permalink)}" target="_blank" rel="noopener">打开商品</a>`
                     : "-";
                 const riskBadge = needsReply
                     ? '<span class="status-tag" style="background:#ffedd5;color:#9a3412">待回复权利人</span>'
@@ -22462,7 +22592,7 @@
         }
 
         async function loadLatestReputation() {
-            reputationBody.innerHTML = '<tr><td class="empty-state" colspan="14">正在加载最新声誉数据...</td></tr>';
+            reputationBody.innerHTML = '<tr><td class="empty-state" colspan="16">正在加载最新声誉数据...</td></tr>';
             if (reputationSelectAll) reputationSelectAll.disabled = true;
             try {
                 const response = await fetch("/api/reputation/latest");
@@ -22474,23 +22604,83 @@
                 const data = payload.data || {};
                 const rows = data.rows || [];
                 reputationLoaded = true;
-                const greenCount = rows.filter(row => String(row["声誉颜色"] || "").includes("绿")).length;
-                const riskCount = rows.length - greenCount;
-
                 reputationTime.textContent = data.latest_submit_time || "-";
-                reputationTotal.textContent = data.total || rows.length || 0;
-                reputationGreen.textContent = greenCount;
-                reputationRisk.textContent = riskCount;
+                reputationRows = rows.map(row => ({...row}));
+                updateReputationFilterOptions(reputationRows);
 
                 if (!rows.length) {
-                    reputationBody.innerHTML = '<tr><td class="empty-state" colspan="14">暂无最新声誉数据</td></tr>';
+                    reputationBody.innerHTML = '<tr><td class="empty-state" colspan="16">暂无最新声誉数据</td></tr>';
+                    reputationTotal.textContent = "0";
+                    reputationGreen.textContent = "0";
+                    reputationRisk.textContent = "0";
+                    if (reputationFilterSummary) reputationFilterSummary.textContent = "显示 0 / 0 条";
                     selectedReputationShops.clear();
                     updateReputationTableSelection();
                     await loadCollectionOptions(true);
                     return;
                 }
+                renderLatestReputationRows();
+                await loadCollectionOptions(true);
+            } catch (err) {
+                reputationRows = [];
+                reputationBody.innerHTML = `<tr><td class="empty-state" colspan="16">加载失败：${escapeHtml(err.message || err)}</td></tr>`;
+                updateReputationTableSelection();
+            }
+        }
 
-                reputationBody.innerHTML = rows.map(row => {
+        function updateReputationFilterOptions(rows) {
+            const populate = (select, values, allLabel) => {
+                if (!select) return;
+                const current = select.value;
+                const unique = [...new Set(values.map(value => String(value || "").trim()).filter(Boolean))]
+                    .sort((left, right) => left.localeCompare(right, "zh-CN", {numeric: true}));
+                select.innerHTML = [
+                    `<option value="">${escapeHtml(allLabel)}</option>`,
+                    ...unique.map(value => `<option value="${escapeHtml(value)}">${escapeHtml(value)}</option>`),
+                ].join("");
+                select.value = unique.includes(current) ? current : "";
+            };
+            populate(
+                reputationSalespersonFilter,
+                rows.map(row => row["业务员"] || "未分配"),
+                "全部业务员",
+            );
+            populate(
+                reputationGroupFilter,
+                rows.map(row => row["账户组"] || "未分组"),
+                "全部账户组",
+            );
+        }
+
+        function filteredReputationRows() {
+            const salesperson = String(reputationSalespersonFilter?.value || "").trim();
+            const groupName = String(reputationGroupFilter?.value || "").trim();
+            return reputationRows.filter(row => (
+                (!salesperson || String(row["业务员"] || "未分配") === salesperson)
+                && (!groupName || String(row["账户组"] || "未分组") === groupName)
+            ));
+        }
+
+        function applyReputationFilters() {
+            selectedReputationShops.clear();
+            renderLatestReputationRows();
+        }
+
+        function renderLatestReputationRows() {
+            const rows = filteredReputationRows();
+            const greenCount = rows.filter(row => String(row["声誉颜色"] || "").includes("绿")).length;
+            reputationTotal.textContent = rows.length.toLocaleString("zh-CN");
+            reputationGreen.textContent = greenCount.toLocaleString("zh-CN");
+            reputationRisk.textContent = (rows.length - greenCount).toLocaleString("zh-CN");
+            if (reputationFilterSummary) {
+                reputationFilterSummary.textContent = `显示 ${rows.length.toLocaleString("zh-CN")} / ${reputationRows.length.toLocaleString("zh-CN")} 条`;
+            }
+            if (!rows.length) {
+                reputationBody.innerHTML = '<tr><td class="empty-state" colspan="16">暂无符合业务员和账户组筛选条件的声誉数据</td></tr>';
+                updateReputationTableSelection();
+                return;
+            }
+            reputationBody.innerHTML = rows.map(row => {
                     const trafficRaw = row["一周流量趋势"];
                     const trafficValues = parseTrafficValues(trafficRaw);
                     const trafficTooltipText = formatTrafficTooltip(trafficRaw);
@@ -22499,8 +22689,8 @@
                     <tr>
                         <td title="${escapeHtml(shopName)}"><label class="reputation-shop-select-label"><input class="reputation-shop-select reputation-row-select" type="checkbox" value="${escapeHtml(shopName)}" aria-label="选择店铺 ${escapeHtml(shopName)}" onchange="toggleReputationShopSelection(this.value, this.checked)" ${shopName ? "" : "disabled"}><span>${escapeHtml(shopName || "-")}</span></label></td>
                         <td title="${escapeHtml(row["站点"])}">${escapeHtml(row["站点"])}</td>
-                        <td>${escapeHtml(Number(row["侵权数量"] || 0).toLocaleString("zh-CN"))}</td>
-                        <td>${escapeHtml(Number(row["权利人数量"] || 0).toLocaleString("zh-CN"))}</td>
+                        <td>${renderReputationOfficialCount(row["侵权数量"])}</td>
+                        <td>${renderReputationOfficialCount(row["权利人数量"])}</td>
                         <td title="${escapeHtml(row["声誉颜色"])}">${renderReputationColor(row["声誉颜色"])}</td>
                         <td title="${escapeHtml(row["总单量"])}">${escapeHtml(row["总单量"])}</td>
                         ${renderReputationRateCell("投诉率", row["投诉率"])}
@@ -22515,16 +22705,62 @@
                         </td>
                         ${renderReputationWarningCell(row["系统告警"])}
                         <td title="${escapeHtml(row["更新时间"])}">${escapeHtml(row["更新时间"])}</td>
+                        <td>${renderReputationSiteStatus(row["站点状态"])}</td>
+                        <td><button class="secondary reputation-open-browser-button" type="button" data-token-id="${escapeHtml(row.token_id || "")}" data-shop-name="${escapeHtml(shopName)}" onclick="openReputationBrowser(this)" ${Number(row.token_id || 0) > 0 ? "" : "disabled"}>打开店铺</button></td>
                     </tr>
                     `;
                 }).join("");
-                updateReputationTableSelection();
-                renderTrafficCharts();
-                bindTrafficTooltips();
-                await loadCollectionOptions(true);
-            } catch (err) {
-                reputationBody.innerHTML = `<tr><td class="empty-state" colspan="14">加载失败：${escapeHtml(err.message || err)}</td></tr>`;
-                updateReputationTableSelection();
+            updateReputationTableSelection();
+            renderTrafficCharts();
+            bindTrafficTooltips();
+        }
+
+        function renderReputationOfficialCount(value) {
+            const number = Number(value);
+            if (value === null || value === undefined || value === "" || !Number.isFinite(number) || number < 0) {
+                return '<span title="官方接口读取失败">-</span>';
+            }
+            return escapeHtml(number.toLocaleString("zh-CN"));
+        }
+
+        function renderReputationSiteStatus(value) {
+            const text = String(value || "待全量更新").trim() || "待全量更新";
+            const normalized = text.toLocaleLowerCase("zh-CN");
+            const state = ["正常", "active", "enabled", "ok"].includes(normalized)
+                ? "normal"
+                : (["未知", "unknown", "待全量更新"].includes(normalized) ? "" : "risk");
+            return `<span class="reputation-site-status ${state}" title="${escapeHtml(text)}">${escapeHtml(text)}</span>`;
+        }
+
+        async function openReputationBrowser(button) {
+            const tokenId = Number(button?.dataset?.tokenId || 0);
+            const shopName = String(button?.dataset?.shopName || "").trim();
+            if (!tokenId) {
+                alert("该声誉记录未匹配到店铺授权，无法打开比特浏览器");
+                return;
+            }
+            const originalText = button.textContent;
+            button.disabled = true;
+            button.textContent = "打开中...";
+            try {
+                const response = await fetch(`/api/reputation/${tokenId}/open-browser`, {
+                    method: "POST",
+                    headers: {"Content-Type": "application/json"},
+                    body: JSON.stringify({shop_name: shopName}),
+                });
+                const payload = await parseApiReputationResponse(response);
+                if (!response.ok || payload.status !== "success") {
+                    throw new Error(payload.message || `接口请求失败：${response.status}`);
+                }
+                button.textContent = "已打开";
+                window.setTimeout(() => {
+                    button.textContent = originalText;
+                    button.disabled = false;
+                }, 1800);
+            } catch (error) {
+                button.textContent = originalText;
+                button.disabled = false;
+                alert(error.message || error);
             }
         }
 

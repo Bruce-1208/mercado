@@ -1,4 +1,6 @@
 import re
+import json
+from datetime import datetime, timezone
 from pathlib import Path
 
 from bit import bit_db_api
@@ -7,7 +9,11 @@ from bit import bit_reputation_info
 from bit import bit_summary_info
 from bit_playwright import bit_summary_info as playwright_summary_info
 from bit.mercado_reputation import (
+    ORDERS_SEARCH_PATH,
     REPUTATION_PATH,
+    RIGHTS_HOLDER_CASES_PATH,
+    SEVEN_DAY_RATE_DISCLAIMER,
+    enrich_reputation_with_official_data,
     fetch_reputation_payload,
     fetch_store_reputation,
 )
@@ -144,6 +150,138 @@ def test_payload_request_uses_direct_client_contract():
     assert http.gets[0][1]["headers"]["Accept"] == "application/json"
 
 
+def test_official_supplement_uses_orders_status_infractions_and_rights_holder_apis():
+    http = FakeSession([
+        FakeResponse({
+            "cases": [
+                {"case_id": "case-1", "item_id": "MLM123"},
+                {"case_id": "case-2", "item_id": "MLB456"},
+            ],
+            "paging": {"total": 2, "limit": 50},
+        }),
+        FakeResponse({
+            "site_status": "active",
+            "status": {"sell": {"allow": True}, "list": {"allow": True}},
+        }),
+        FakeResponse({"paging": {"total": 10}}),
+        FakeResponse({"paging": {"total": 15}}),
+        FakeResponse({"paging": {"total": 3}}),
+    ])
+    rows = [{"user_id": "seller-mlm", "site_id": "MLM"}]
+
+    enrich_reputation_with_official_data(
+        rows,
+        "official-token",
+        now=datetime(2026, 9, 4, 0, 0, tzinfo=timezone.utc),
+        http=http,
+    )
+
+    row = rows[0]
+    assert row["site_status_display"] == "正常"
+    assert row["orders_previous_7d"] == 10
+    assert row["orders_current_7d"] == 15
+    assert row["direction"] == "增长"
+    assert row["gradient_rate"] == "50%"
+    assert row["gradient_source"] == "official_orders_api"
+    assert row["gradient_disclaimer"] == SEVEN_DAY_RATE_DISCLAIMER
+    assert row["infraction_count"] == 3
+    assert row["rights_holder_count"] == 1
+    assert row["infraction_recent_days"] == 100
+    requested_paths = [call[0] for call in http.gets]
+    assert requested_paths[0].endswith(RIGHTS_HOLDER_CASES_PATH)
+    assert requested_paths[1].endswith("/users/seller-mlm")
+    assert requested_paths[2].endswith(ORDERS_SEARCH_PATH)
+    assert requested_paths[3].endswith(ORDERS_SEARCH_PATH)
+    assert requested_paths[4].endswith(
+        "/marketplace/moderations/infractions/seller-mlm"
+    )
+    assert http.gets[2][1]["params"]["seller"] == "seller-mlm"
+    assert http.gets[4][1]["params"]["date_created_since"] == "2026-05-27"
+
+
+def test_official_gradient_is_not_overwritten_by_browser_auxiliary():
+    api_rows = [{
+        "store_name": "官方店铺",
+        "site_id": "MLM",
+        "direction": "增长",
+        "gradient_rate": "25%",
+        "gradient_source": "official_orders_api",
+    }]
+    database_rows = [["官方店铺", "墨西哥", "绿色", 1, "0%", "0%", "0%", "增长", "25%", "正常", "", "[]"]]
+    auxiliary_rows = [{
+        "store_name": "官方店铺",
+        "site": "墨西哥",
+        "direction": "下滑",
+        "gradient_rate": "-99%",
+        "system_warning": "正常",
+        "updated_at": "2026-09-04 00:00:00",
+        "visits": "[1,2,3]",
+    }]
+
+    bit_reputation_info._merge_api_auxiliary_rows(
+        api_rows, database_rows, auxiliary_rows
+    )
+
+    assert api_rows[0]["direction"] == "增长"
+    assert api_rows[0]["gradient_rate"] == "25%"
+    assert database_rows[0][7:9] == ["增长", "25%"]
+    assert database_rows[0][11] == "[1,2,3]"
+
+
+def test_reputation_counts_follow_latest_api_infraction_dashboard(monkeypatch):
+    monkeypatch.setattr(
+        bit_reputation_info,
+        "current_infraction_counts_by_token_site",
+        lambda days: {
+            "days": days,
+            "last_synced_at": "2026-09-04 08:00:00",
+            "counts": {
+                (7, "MLM"): {
+                    "infraction_count": 4,
+                    "rights_holder_count": 2,
+                },
+            },
+        },
+    )
+    rows = [{
+        "token_id": 7,
+        "site_id": "MLM",
+        "infraction_count": 99,
+        "rights_holder_count": 88,
+    }]
+
+    bit_reputation_info._attach_latest_api_infraction_counts(rows, 100)
+
+    assert rows[0]["infraction_count"] == 4
+    assert rows[0]["rights_holder_count"] == 2
+    assert rows[0]["infraction_source"] == "official_infraction_dashboard"
+    assert rows[0]["infraction_last_synced_at"] == "2026-09-04 08:00:00"
+
+
+def test_latest_reputation_rows_include_salesperson_and_account_group(monkeypatch):
+    monkeypatch.setattr(
+        bit_interface.bit_db_api,
+        "list_mercado_store_tokens",
+        lambda: {"rows": [{
+            "id": 7,
+            "display_name": "分组店铺",
+            "nickname": "GROUPED",
+            "site_settings": [{
+                "site_id": "MLM",
+                "salesperson": "张三",
+                "group_name": "精品组",
+            }],
+        }]},
+    )
+    data = {"rows": [{"店铺名": "分组店铺", "站点": "墨西哥"}]}
+
+    bit_interface._attach_reputation_token_ids(data)
+
+    assert data["rows"][0]["token_id"] == 7
+    assert data["rows"][0]["业务员"] == "张三"
+    assert data["rows"][0]["账户组"] == "精品组"
+
+
 def test_remote_database_client_calls_server_side_reputation_endpoint(monkeypatch):
     calls = []
     monkeypatch.setattr(bit_db_api, "DB_MODE", "api")
@@ -219,6 +357,14 @@ def test_console_template_keeps_old_reputation_and_adds_api_panel():
     assert 'id="reputation-warning-popover"' in template
     assert "function showReputationWarningDetail(cell, event)" in template
     assert "reputation-warning-preview" in template
+    assert "七天变化率由官方订单 API 自算" in template
+    assert "站点状态" in reputation_table.group(1)
+    assert "openReputationBrowser(this)" in template
+    assert "/api/reputation/${tokenId}/open-browser" in template
+    assert 'id="reputation-salesperson-filter"' in template
+    assert 'id="reputation-group-filter"' in template
+    assert "function applyReputationFilters()" in template
+    assert "暂无符合业务员和账户组筛选条件的声誉数据" in template
 
 
 def test_console_reputation_route_returns_normalized_data_without_token(monkeypatch):
@@ -246,6 +392,89 @@ def test_console_reputation_route_returns_normalized_data_without_token(monkeypa
     payload = response.get_json()
     assert payload["data"]["token_id"] == 22
     assert "access_token" not in response.get_data(as_text=True)
+
+
+def test_reputation_button_opens_matching_bitbrowser_on_reputation_page(monkeypatch):
+    opened = []
+    released = []
+    debugger_requests = []
+
+    class DebuggerResponse:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args):
+            return False
+
+        @staticmethod
+        def read():
+            return json.dumps({
+                "webSocketDebuggerUrl": "ws://127.0.0.1/devtools/page/1"
+            }).encode("utf-8")
+
+    monkeypatch.setattr(
+        bit_interface.bit_db_api,
+        "list_mercado_store_tokens",
+        lambda: {"rows": [{
+            "id": 22,
+            "display_name": "控制台店铺",
+            "nickname": "SELLER_22",
+        }]},
+    )
+    monkeypatch.setattr(
+        bit_interface,
+        "list_shop_configs",
+        lambda include_ignored=True: [{
+            "shop_name": "控制台店铺",
+            "window_id": "window-22",
+        }],
+    )
+    monkeypatch.setattr(
+        bit_interface,
+        "openBrowser",
+        lambda window_id, **kwargs: opened.append((window_id, kwargs)) or {
+            "success": True,
+            "data": {"http": "127.0.0.1:9222"},
+        },
+    )
+    monkeypatch.setattr(
+        bit_interface,
+        "releaseBrowserLease",
+        lambda window_id: released.append(window_id),
+    )
+
+    def open_debugger(request, timeout):
+        debugger_requests.append((request, timeout))
+        return DebuggerResponse()
+
+    monkeypatch.setattr(bit_interface, "urlopen", open_debugger)
+    client = bit_interface.app.test_client()
+    with client.session_transaction() as flask_session:
+        flask_session["workbench_user"] = {
+            "id": 1,
+            "username": "tester",
+            "display_name": "测试员",
+        }
+
+    response = client.post(
+        "/api/reputation/22/open-browser",
+        json={"shop_name": "控制台店铺"},
+    )
+
+    assert response.status_code == 200
+    payload = response.get_json()
+    assert payload["data"]["window_id"] == "window-22"
+    assert payload["data"]["target_url"] == bit_reputation_info.REPUTATION_URL
+    assert opened == [(
+        "window-22",
+        {"api_lock_timeout": 5, "request_timeout": 20},
+    )]
+    assert released == ["window-22"]
+    request, timeout = debugger_requests[0]
+    assert request.get_method() == "PUT"
+    assert timeout == 10
+    assert request.full_url.startswith("http://127.0.0.1:9222/json/new?")
+    assert "global-selling.mercadolibre.com%2Freputation" in request.full_url
 
 
 def test_full_refresh_keeps_successes_and_logs_failed_stores(monkeypatch):

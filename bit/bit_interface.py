@@ -20,7 +20,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from io import BytesIO
 from pathlib import Path
 from urllib.parse import quote
-from urllib.request import urlopen
+from urllib.request import Request, urlopen
 
 from flask import Flask, Response, request, render_template, jsonify, send_file, session, redirect, url_for, g
 from itsdangerous import BadSignature, SignatureExpired, URLSafeTimedSerializer
@@ -32,6 +32,12 @@ PROJECT_ROOT = CURRENT_DIR.parent
 for path in (str(CURRENT_DIR), str(PROJECT_ROOT)):
     if path not in sys.path:
         sys.path.insert(0, path)
+
+# 必须在导入 bit_db_api、bit_mysql 及业务模块前确定角色；这些模块会在
+# 导入时固定本进程使用 MySQL 还是数据库 HTTP 接口。
+from bit.workbench_runtime import bootstrap_runtime
+
+RUNTIME_SETTINGS = bootstrap_runtime()
 
 
 def resolve_template_dir():
@@ -73,7 +79,10 @@ import bit.mercado_communications as mercado_communications
 import bit.mercado_infraction_sync as mercado_infraction_sync
 import bit.mercado_reputation as mercado_reputation
 import bit.mercado_tokens as mercado_tokens
-from erp.mercadolibre_infraction_store import list_infraction_dashboard
+from erp.mercadolibre_infraction_store import (
+    current_infraction_counts_by_token_site,
+    list_infraction_dashboard,
+)
 from bit.bit_appeal import *
 from bit.bit_collection_control import DEFAULT_COLLECTION_MAX_WORKERS
 from bit.bit_config import list_shop_configs, split_config_sites
@@ -174,7 +183,7 @@ WORKBENCH_PERMISSION_GROUPS = (
     ("zying_collection", "智赢产品采集", (("zying_collection.view", "查看"), ("zying_collection.execute", "执行采集"))),
     ("risk_check", "侵权检测", (("risk_check.view", "查看"), ("risk_check.execute", "执行检测"))),
     ("infringement_knowledge", "侵权知识库", (("infringement_knowledge.view", "查看"), ("infringement_knowledge.manage", "新增/修改/删除"))),
-    ("infractions", "侵权数据", (("infractions.view", "查看/导出"), ("infractions.execute", "采集"))),
+    ("infractions", "侵权总览", (("infractions.view", "查看/导出"), ("infractions.execute", "采集"))),
     ("reputation", "声誉数据", (("reputation.view", "查看/导出"), ("reputation.execute", "采集/更新"))),
     ("customer_service", "客户消息", (("customer_service.view", "查看"), ("customer_service.manage", "回复/删除"))),
     ("ai_appeals", "AI 申诉记录", (("ai_appeals.view", "查看"),)),
@@ -298,19 +307,7 @@ def _truthy_env(value):
 
 
 def _resolve_use_db_api():
-    mode = os.environ.get("BIT_INTERFACE_DB_MODE", "").strip().lower()
-    if mode in ("direct", "local", "server", "mysql"):
-        return False
-    if mode in ("api", "client", "remote"):
-        return True
-
-    use_db_api = os.environ.get("BIT_INTERFACE_USE_DB_API")
-    if use_db_api is not None:
-        return _truthy_env(use_db_api)
-
-    # 武汉泽顺工作台当前直接连接局域网 MySQL（192.168.1.11）。需要恢复
-    # 服务端 API 时可显式设置 BIT_INTERFACE_DB_MODE=api。
-    return False
+    return RUNTIME_SETTINGS.is_client
 
 
 USE_DB_API = _resolve_use_db_api()
@@ -1456,15 +1453,23 @@ def reject_db_api_client_mode():
     if USE_DB_API:
         return jsonify({
             "status": "error",
-            "message": "当前 bit_interface 是数据库接口客户端模式；数据库服务器端请设置 BIT_INTERFACE_DB_MODE=direct 后再启动。"
+            "message": "当前工作台是客户端模式，不提供数据库服务端接口；请在任一可访问数据库的电脑上以 --role server 启动。"
         }), 503
     return None
 
 
 if USE_DB_API:
-    logging.info("bit_interface 使用数据库接口模式：%s", bit_db_api.DB_API_BASE_URL)
+    logging.info(
+        "工作台运行角色=client，数据库只通过接口访问：%s（配置来源：%s）",
+        bit_db_api.DB_API_BASE_URL,
+        RUNTIME_SETTINGS.source,
+    )
 else:
-    logging.info("bit_interface 使用本地 MySQL 直连模式：%s", mysql_config.get("host"))
+    logging.info(
+        "工作台运行角色=server，MySQL 直连地址：%s（配置来源：%s）",
+        mysql_config.get("host"),
+        RUNTIME_SETTINGS.source,
+    )
     try:
         ensure_workbench_user_table()
     except Exception as e:
@@ -4574,6 +4579,8 @@ def official_infraction_dashboard_page():
     return render_template(
         'infraction_dashboard.html',
         current_user=user or {},
+        embedded=str(request.args.get("embedded") or "").strip().lower()
+        in {"1", "true", "yes", "on"},
     )
 
 
@@ -4581,15 +4588,21 @@ def official_infraction_dashboard_page():
 @login_required
 def api_official_infraction_dashboard():
     try:
-        data = list_infraction_dashboard(
-            days=request.args.get("days", 30),
-            group_name=request.args.get("group_name", ""),
-            salesperson=request.args.get("salesperson", ""),
-            source_type=request.args.get("source_type", ""),
-            search=request.args.get("search", ""),
-            detail_token_id=request.args.get("detail_token_id", 0),
-            page=request.args.get("page", 1),
-            page_size=request.args.get("page_size", 100),
+        filters = {
+            "days": request.args.get("days", 30),
+            "view_mode": request.args.get("view_mode", "current"),
+            "group_name": request.args.get("group_name", ""),
+            "salesperson": request.args.get("salesperson", ""),
+            "source_type": request.args.get("source_type", ""),
+            "search": request.args.get("search", ""),
+            "detail_token_id": request.args.get("detail_token_id", 0),
+            "page": request.args.get("page", 1),
+            "page_size": request.args.get("page_size", 100),
+        }
+        data = (
+            bit_db_api.list_official_infraction_dashboard(**filters)
+            if USE_DB_API
+            else list_infraction_dashboard(**filters)
         )
         return jsonify({"status": "success", "data": data})
     except (TypeError, ValueError) as exc:
@@ -4607,7 +4620,12 @@ def api_start_official_infraction_sync():
     if not isinstance(token_ids, list):
         return jsonify({"status": "error", "message": "token_ids 必须是数组"}), 400
     try:
-        started, state = mercado_infraction_sync.start_official_infraction_sync(token_ids)
+        start_operation = (
+            bit_db_api.start_official_infraction_sync
+            if USE_DB_API
+            else mercado_infraction_sync.start_official_infraction_sync
+        )
+        started, state = start_operation(token_ids)
     except ValueError as exc:
         return jsonify({"status": "error", "message": str(exc)}), 400
     except Exception as exc:
@@ -4631,7 +4649,11 @@ def api_start_official_infraction_sync():
 def api_official_infraction_sync_status():
     return jsonify({
         "status": "success",
-        "data": mercado_infraction_sync.official_infraction_sync_status(),
+        "data": (
+            bit_db_api.get_official_infraction_sync_status()
+            if USE_DB_API
+            else mercado_infraction_sync.official_infraction_sync_status()
+        ),
     })
 
 
@@ -4639,9 +4661,12 @@ def api_official_infraction_sync_status():
 @login_required
 def api_latest_reputation():
     try:
+        data = db_get_latest_reputation_info()
+        _attach_reputation_token_ids(data)
+        _attach_latest_reputation_infraction_counts(data)
         return jsonify({
             "status": "success",
-            "data": db_get_latest_reputation_info()
+            "data": data,
         })
     except Exception as e:
         logging.error(f"Latest reputation query failed: {str(e)}")
@@ -4651,18 +4676,90 @@ def api_latest_reputation():
         }), 500
 
 
+def _attach_reputation_token_ids(data):
+    """按授权显示名/昵称给旧声誉表补充打开浏览器所需的 token_id。"""
+    rows = (data or {}).get("rows") or []
+    try:
+        tokens = (bit_db_api.list_mercado_store_tokens() or {}).get("rows") or []
+    except Exception as exc:
+        logging.warning("声誉数据匹配店铺授权失败：%s", exc)
+        return data
+    candidates = {}
+    settings_by_token_site = {}
+    duplicate_aliases = set()
+    for token in tokens:
+        token_id = int(token.get("id") or 0)
+        if not token_id:
+            continue
+        for value in (token.get("display_name"), token.get("nickname")):
+            alias = str(value or "").strip().casefold()
+            if not alias:
+                continue
+            if alias in candidates and candidates[alias] != token_id:
+                duplicate_aliases.add(alias)
+            else:
+                candidates[alias] = token_id
+        for setting in token.get("site_settings") or []:
+            site_id = str(setting.get("site_id") or "").strip().upper()
+            if site_id:
+                settings_by_token_site[(token_id, site_id)] = dict(setting)
+    for alias in duplicate_aliases:
+        candidates.pop(alias, None)
+    for row in rows:
+        alias = str(row.get("店铺名") or "").strip().casefold()
+        token_id = int(candidates.get(alias) or 0)
+        site_id = bit_reputation_info._normalize_api_site_code(row.get("站点"))
+        setting = settings_by_token_site.get((token_id, site_id)) or {}
+        row["token_id"] = token_id
+        row["业务员"] = str(setting.get("salesperson") or "").strip() or "未分配"
+        row["账户组"] = str(setting.get("group_name") or "").strip() or "未分组"
+    return data
+
+
+def _attach_latest_reputation_infraction_counts(data, recent_days=100):
+    """让声誉表数量实时对齐最新 API 侵权列表的当前视图。"""
+    rows = (data or {}).get("rows") or []
+    try:
+        snapshot = (
+            bit_db_api.get_current_infraction_counts_by_token_site(recent_days)
+            if USE_DB_API
+            else current_infraction_counts_by_token_site(recent_days)
+        ) or {}
+    except Exception as exc:
+        logging.warning("声誉数据读取最新 API 侵权汇总失败：%s", exc)
+        return data
+    counts = snapshot.get("counts") or {}
+    for row in rows:
+        token_id = int(row.get("token_id") or 0)
+        if token_id <= 0:
+            continue
+        key = (
+            token_id,
+            bit_reputation_info._normalize_api_site_code(row.get("站点")),
+        )
+        current = counts.get(key) or {}
+        row["侵权数量"] = int(current.get("infraction_count") or 0)
+        row["权利人数量"] = int(current.get("rights_holder_count") or 0)
+        row["侵权统计天数"] = int(snapshot.get("days") or recent_days)
+        row["侵权数据来源"] = "official_infraction_dashboard"
+        row["侵权列表同步时间"] = str(snapshot.get("last_synced_at") or "")
+    return data
+
+
 @app.route('/api/reputation/latest/export', methods=['GET'])
 @login_required
 def api_export_latest_reputation():
     try:
         data = db_get_latest_reputation_info()
+        _attach_reputation_token_ids(data)
+        _attach_latest_reputation_infraction_counts(data)
         rows = data.get("rows") or []
         wb = Workbook()
         ws = wb.active
         ws.title = "最新声誉数据"
 
         columns = [
-            "店铺名", "站点", "侵权数量", "权利人数量", "声誉颜色", "总单量", "投诉率", "延误率", "取消率",
+            "店铺名", "站点", "站点状态", "侵权数量", "权利人数量", "声誉颜色", "总单量", "投诉率", "延误率", "取消率",
             "增加或减少", "近七天变化率", "一周流量趋势", "系统告警",
             "更新时间", "提交时间"
         ]
@@ -6650,7 +6747,11 @@ def _mercado_profit_refresh_loop():
 
 def ensure_mercado_profit_refresh_worker():
     global _mercado_profit_refresh_started
-    if app.testing or _truthy_env(os.environ.get("MERCADO_PROFIT_REFRESH_DISABLED")):
+    if (
+        USE_DB_API
+        or app.testing
+        or _truthy_env(os.environ.get("MERCADO_PROFIT_REFRESH_DISABLED"))
+    ):
         return
     with _mercado_profit_refresh_lock:
         if _mercado_profit_refresh_started:
@@ -8581,6 +8682,98 @@ def api_db_latest_order_print_records():
     })
 
 
+@app.route('/api/db/health', methods=['GET'])
+@internal_api_required
+def api_db_health():
+    """Let clients verify that they reached the database-owning process."""
+    blocked = reject_db_api_client_mode()
+    if blocked:
+        return blocked
+    return jsonify({
+        "status": "success",
+        "data": {
+            "role": "server",
+            "database_host": mysql_config.get("host"),
+        },
+    })
+
+
+@app.route('/api/db/official-infractions/dashboard', methods=['GET'])
+@internal_api_required
+def api_db_official_infraction_dashboard():
+    blocked = reject_db_api_client_mode()
+    if blocked:
+        return blocked
+    try:
+        data = list_infraction_dashboard(
+            days=request.args.get("days", 30),
+            view_mode=request.args.get("view_mode", "current"),
+            group_name=request.args.get("group_name", ""),
+            salesperson=request.args.get("salesperson", ""),
+            source_type=request.args.get("source_type", ""),
+            search=request.args.get("search", ""),
+            detail_token_id=request.args.get("detail_token_id", 0),
+            page=request.args.get("page", 1),
+            page_size=request.args.get("page_size", 100),
+        )
+        return jsonify({"status": "success", "data": data})
+    except (TypeError, ValueError) as exc:
+        return jsonify({"status": "error", "message": str(exc)}), 400
+
+
+@app.route('/api/db/official-infractions/current-counts', methods=['GET'])
+@internal_api_required
+def api_db_official_infraction_current_counts():
+    blocked = reject_db_api_client_mode()
+    if blocked:
+        return blocked
+    snapshot = current_infraction_counts_by_token_site(
+        request.args.get("days", 100)
+    ) or {}
+    count_rows = []
+    for (token_id, site_id), values in (snapshot.get("counts") or {}).items():
+        count_rows.append({
+            "token_id": int(token_id),
+            "site_id": str(site_id),
+            **dict(values or {}),
+        })
+    data = {key: value for key, value in snapshot.items() if key != "counts"}
+    data["count_rows"] = count_rows
+    return jsonify({"status": "success", "data": data})
+
+
+@app.route('/api/db/official-infractions/sync', methods=['POST'])
+@internal_api_required
+def api_db_start_official_infraction_sync():
+    blocked = reject_db_api_client_mode()
+    if blocked:
+        return blocked
+    payload = request.get_json(silent=True) or {}
+    token_ids = payload.get("token_ids") or []
+    if not isinstance(token_ids, list):
+        return jsonify({"status": "error", "message": "token_ids 必须是数组"}), 400
+    try:
+        started, state = mercado_infraction_sync.start_official_infraction_sync(token_ids)
+        return jsonify({
+            "status": "success",
+            "data": {"started": bool(started), "state": state},
+        })
+    except ValueError as exc:
+        return jsonify({"status": "error", "message": str(exc)}), 400
+
+
+@app.route('/api/db/official-infractions/sync/status', methods=['GET'])
+@internal_api_required
+def api_db_official_infraction_sync_status():
+    blocked = reject_db_api_client_mode()
+    if blocked:
+        return blocked
+    return jsonify({
+        "status": "success",
+        "data": mercado_infraction_sync.official_infraction_sync_status(),
+    })
+
+
 def _mercado_token_error_response(exc):
     if isinstance(exc, KeyError):
         return jsonify({"status": "error", "message": str(exc.args[0])}), 404
@@ -10366,6 +10559,8 @@ def _hydrate_api_reputation_from_database():
 
     try:
         latest = db_get_latest_reputation_info() or {}
+        _attach_reputation_token_ids(latest)
+        _attach_latest_reputation_infraction_counts(latest)
     except Exception as exc:
         logging.warning("API 声誉读取上一次入库数据失败：%s", exc)
         return False
@@ -10375,7 +10570,7 @@ def _hydrate_api_reputation_from_database():
     for source in database_rows:
         if not isinstance(source, dict):
             continue
-        rows.append({
+        hydrated_row = {
             "store_name": source.get("店铺名") or "",
             "site_name": source.get("站点") or "",
             "level_name": source.get("声誉颜色") or "",
@@ -10385,7 +10580,15 @@ def _hydrate_api_reputation_from_database():
             "cancellations_rate_percent": _legacy_reputation_percentage(source.get("取消率")),
             "infraction_count": int(_legacy_reputation_percentage(source.get("侵权数量")) or 0),
             "rights_holder_count": int(_legacy_reputation_percentage(source.get("权利人数量")) or 0),
-        })
+        }
+        if "站点状态" in source:
+            hydrated_row.update({
+                "direction": source.get("增加或减少") or "",
+                "gradient_rate": source.get("近七天变化率") or "",
+                "site_status_display": source.get("站点状态") or "未知",
+                "token_id": int(source.get("token_id") or 0),
+            })
+        rows.append(hydrated_row)
     if not rows:
         return False
 
@@ -10916,7 +11119,41 @@ MERCADO_COMMUNICATION_VIEW_POST_ACTIONS = frozenset((
 ))
 
 
-def _open_mercado_claim_browser(token_id, claim_id="", shop_name_hint=""):
+def _open_bitbrowser_page(open_result, target_url):
+    target = str(target_url or "").strip()
+    if not target:
+        return None
+    data = open_result.get("data") if isinstance(open_result, dict) else None
+    debugger_address = str(
+        data.get("http") if isinstance(data, dict) else ""
+    ).strip()
+    if not debugger_address:
+        raise RuntimeError("比特浏览器未返回调试地址，无法打开指定页面")
+    debugger_url = (
+        debugger_address
+        if debugger_address.startswith(("http://", "https://"))
+        else f"http://{debugger_address}"
+    )
+    request_url = (
+        f"{debugger_url.rstrip('/')}/json/new?{quote(target, safe='')}"
+    )
+    try:
+        request = Request(request_url, method="PUT")
+        with urlopen(request, timeout=10) as response:
+            payload = json.loads(response.read().decode("utf-8"))
+    except Exception as exc:
+        raise RuntimeError(f"比特浏览器已启动，但打开目标页面失败：{exc}") from exc
+    if not isinstance(payload, dict) or not payload.get("webSocketDebuggerUrl"):
+        raise RuntimeError("比特浏览器已启动，但目标页面未成功创建")
+    return payload
+
+
+def _open_mercado_claim_browser(
+    token_id,
+    claim_id="",
+    shop_name_hint="",
+    target_url="",
+):
     """按 Mercado 授权店铺名称实时匹配并打开 BitBrowser 窗口。"""
     identifier = int(token_id)
     token_rows = list((bit_db_api.list_mercado_store_tokens() or {}).get("rows") or [])
@@ -10992,22 +11229,24 @@ def _open_mercado_claim_browser(token_id, claim_id="", shop_name_hint=""):
             api_lock_timeout=5,
             request_timeout=20,
         )
+        if not isinstance(result, dict):
+            raise RuntimeError(f"比特浏览器启动接口返回格式异常：{result}")
+        if result.get("success") is False:
+            message = str(result.get("msg") or "启动失败").strip()
+            owner = result.get("lockOwner")
+            if owner:
+                message = f"{message}（当前任务：{owner}）"
+            raise RuntimeError(message)
+        _open_bitbrowser_page(result, target_url)
     finally:
-        # 人工处理只负责启动窗口，不应长期持有自动任务锁。
+        # 人工处理只负责启动窗口和页面，不应长期持有自动任务锁。
         releaseBrowserLease(window_id)
-    if not isinstance(result, dict):
-        raise RuntimeError(f"比特浏览器启动接口返回格式异常：{result}")
-    if result.get("success") is False:
-        message = str(result.get("msg") or "启动失败").strip()
-        owner = result.get("lockOwner")
-        if owner:
-            message = f"{message}（当前任务：{owner}）"
-        raise RuntimeError(message)
     return {
         "token_id": identifier,
         "claim_id": str(claim_id or "").strip(),
         "shop_name": shop_name,
         "window_id": window_id,
+        "target_url": str(target_url or "").strip(),
     }
 
 
@@ -11040,6 +11279,38 @@ def api_open_mercado_claim_browser(token_id):
         return jsonify({
             "status": "error",
             "message": f"启动比特浏览器窗口失败：{exc}",
+        }), 502
+
+
+@app.route(
+    '/api/reputation/<int:token_id>/open-browser',
+    methods=['POST'],
+)
+@login_required
+def api_open_reputation_browser(token_id):
+    data = request.get_json(silent=True) or {}
+    try:
+        result = _open_mercado_claim_browser(
+            token_id,
+            shop_name_hint=data.get("shop_name"),
+            target_url=bit_reputation_info.REPUTATION_URL,
+        )
+        response = jsonify({
+            "status": "success",
+            "data": result,
+            "message": f"已打开 {result['shop_name']} 的声誉页面",
+        })
+        response.headers["Cache-Control"] = "no-store"
+        return response
+    except KeyError as exc:
+        return jsonify({"status": "error", "message": str(exc.args[0])}), 404
+    except ValueError as exc:
+        return jsonify({"status": "error", "message": str(exc)}), 400
+    except Exception as exc:
+        logging.exception("打开声誉对应的比特浏览器页面失败")
+        return jsonify({
+            "status": "error",
+            "message": f"打开比特浏览器声誉页面失败：{exc}",
         }), 502
 
 
@@ -11635,15 +11906,20 @@ def is_werkzeug_reloader_child(environ=None):
 
 
 def start_interface_background_services():
+    # 客户端只承载本机界面与浏览器自动化。所有会读取数据库、刷新 Token
+    # 或维护中心数据的后台线程统一由服务端进程运行。
+    if USE_DB_API:
+        logging.info("客户端模式不启动数据库维护与中心调度线程")
+        return
+
     start_interrupted_collection_recovery()
     start_store_link_scheduler_bootstrap()
     start_prohibited_listing_scheduler_bootstrap()
     start_official_infraction_scheduler_bootstrap()
     start_token_refresh_scheduler_bootstrap()
     start_store_email_sync_scheduler_bootstrap()
-    if not USE_DB_API:
-        bit_order_sync.ensure_order_financial_backfill_worker()
-        bit_order_sync.ensure_order_image_backfill_worker()
+    bit_order_sync.ensure_order_financial_backfill_worker()
+    bit_order_sync.ensure_order_image_backfill_worker()
 
 
 def run_interface_server():
@@ -11661,6 +11937,7 @@ def run_interface_server():
                 "port": 5000,
                 "project": str(PROJECT_ROOT),
                 "hot_reload": hot_reload,
+                "runtime_role": RUNTIME_SETTINGS.role,
             },
         )
         if not interface_lock.acquire(timeout=0):
@@ -11675,7 +11952,8 @@ def run_interface_server():
         if not hot_reload or reloader_child:
             start_interface_background_services()
         logging.info(
-            "代码热更新%s；修改 Python 或模板文件后服务会自动加载",
+            "工作台以 %s 角色启动；代码热更新%s",
+            RUNTIME_SETTINGS.role,
             "已启用" if hot_reload else "已关闭",
         )
         app.run(

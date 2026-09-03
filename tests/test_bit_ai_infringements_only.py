@@ -50,38 +50,144 @@ def test_new_infraction_page_receives_extended_default_timeouts():
 def test_ai_infraction_orders_requests_infringements_only(monkeypatch):
     captured = {}
 
-    def get_infos(*args, **kwargs):
-        captured["args"] = args
+    monkeypatch.setattr(
+        bit_appeal_ai,
+        "list_mercado_store_tokens",
+        lambda: {
+            "rows": [
+                {
+                    "id": 7,
+                    "display_name": "店铺",
+                    "nickname": "shop",
+                    "enabled": True,
+                    "site_settings": [
+                        {"site_id": "MLM", "appeal_enabled": True},
+                    ],
+                }
+            ]
+        },
+    )
+
+    def collect(targets, **kwargs):
+        captured["targets"] = targets
         captured["kwargs"] = kwargs
-        return [
-            ["店铺", "墨西哥", "INF-1", "title", "", "", "", "侵权"],
-            ["店铺", "墨西哥", "REPORT-1", "title", "", "", "", "权利人"],
-            ["店铺", "墨西哥", "REPORT-2", "title", "", "", "", "reports"],
-            ["店铺", "墨西哥", "INF-2"],
-        ]
+        return {
+            "data": [
+                {"店铺名": "店铺", "站点": "MLM", "编号": "INF-1", "类型": "侵权"},
+                {"店铺名": "店铺", "站点": "MLM", "编号": "REPORT-1", "类型": "权利人"},
+                {"店铺名": "店铺", "站点": "MLB", "编号": "INF-2", "类型": "侵权"},
+            ]
+        }
 
-    monkeypatch.setattr(bit_appeal_ai, "get_infractions_info", get_infos)
-
+    monkeypatch.setattr(
+        bit_appeal_ai.mercado_infraction_sync,
+        "collect_live_detection_infractions",
+        collect,
+    )
     result = bit_appeal_ai.get_infraction_orders("window", "店铺", "墨西哥")
 
-    assert result == ["INF-1", "INF-2"]
-    assert captured["args"] == ("window", "店铺", "墨西哥", 0)
-    assert captured["kwargs"] == {"include_rights_holder": False}
+    assert result == ["INF-1"]
+    assert captured["targets"] == [
+        {
+            "token_id": 7,
+            "name": "店铺",
+            "aliases": ["店铺", "shop"],
+            "site_ids": ["MLM"],
+        }
+    ]
+    assert captured["kwargs"] == {"recent_days": 100, "max_workers": 1}
 
 
 def test_ai_random_infraction_orders_requests_infringements_only(monkeypatch):
-    captured = {}
-
-    def get_infos(*args, **kwargs):
-        captured["kwargs"] = kwargs
-        return [["店铺", "巴西", "INF-1", "title", "", "", "", "infringements"]]
-
-    monkeypatch.setattr(bit_appeal_ai, "get_infractions_info", get_infos)
+    monkeypatch.setattr(
+        bit_appeal_ai,
+        "get_infraction_orders",
+        lambda *args: ["INF-1"],
+    )
 
     result = bit_appeal_ai.get_infraction_orders_random("window", "店铺", "巴西", 10)
 
     assert "INF-1" in result
-    assert captured["kwargs"] == {"include_rights_holder": False}
+
+
+def test_infraction_appeal_uses_api_ids_and_sends_at_most_ten(monkeypatch):
+    sent_groups = []
+
+    monkeypatch.setattr(
+        bit_appeal_ai,
+        "get_infraction_orders",
+        lambda *args, **kwargs: (_ for _ in ()).throw(
+            AssertionError("已有 API 编号时不应重新读取")
+        ),
+    )
+    monkeypatch.setattr(bit_appeal_ai, "open_ai_contact_window", lambda *args: None)
+    monkeypatch.setattr(bit_appeal_ai, "get_current_appeal_phrase", lambda: "")
+    monkeypatch.setattr(bit_appeal_ai, "get_appeal_log_records", lambda: [])
+    monkeypatch.setattr(bit_appeal_ai, "_filter_group_log_records", lambda *args: [])
+    monkeypatch.setattr(bit_appeal_ai, "save_ai_appeal_group_record", lambda *args, **kwargs: None)
+    monkeypatch.setattr(bit_appeal_ai.time, "sleep", lambda _seconds: None)
+
+    def send(_driver, _message, ids, *_args):
+        sent_groups.append(ids.split("、"))
+
+    monkeypatch.setattr(bit_appeal_ai, "send_infraction_message_with_retry", send)
+
+    bit_appeal_ai.handle_infraction(
+        "window",
+        object(),
+        "店铺",
+        "墨西哥",
+        "",
+        "Bruce",
+        infraction_ids=[f"MLM-{index}" for index in range(1, 22)],
+    )
+
+    assert [len(group) for group in sent_groups] == [10, 10, 1]
+    assert all(len(group) <= 10 for group in sent_groups)
+
+
+def test_deepseek_failure_does_not_fail_sent_infraction_group(monkeypatch):
+    sent = []
+    logs = []
+
+    monkeypatch.setattr(bit_appeal_ai, "safe_get_agent_messages", lambda _driver: [])
+    monkeypatch.setattr(
+        bit_appeal_ai,
+        "send_ai_chat_message",
+        lambda _driver, message: sent.append(message),
+    )
+    monkeypatch.setattr(
+        bit_appeal_ai,
+        "wait_for_ai_agent_reply",
+        lambda *args, **kwargs: ("客服已经完成核查", ["客服已经完成核查"]),
+    )
+    monkeypatch.setattr(
+        bit_appeal_ai,
+        "build_deepseek_infraction_reply",
+        lambda *args, **kwargs: (_ for _ in ()).throw(RuntimeError("Insufficient Balance")),
+    )
+    monkeypatch.setattr(
+        bit_appeal_ai,
+        "append_chat_log",
+        lambda *args, **kwargs: logs.append((args, kwargs)),
+    )
+
+    bit_appeal_ai.send_infraction_message_with_retry(
+        object(),
+        "MLM-1 请核查",
+        "MLM-1",
+        "店铺",
+        "墨西哥",
+        1,
+        1,
+    )
+
+    assert sent == ["MLM-1 请核查"]
+    assert any(
+        "deepseek_unavailable" in str(value)
+        for args, _kwargs in logs
+        for value in args
+    )
 
 
 def test_collector_skips_reports_tab_when_disabled(monkeypatch):

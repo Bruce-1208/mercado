@@ -102,6 +102,13 @@
             margin: 28px auto 48px;
         }
 
+        body.embedded .topbar { display: none; }
+        body.embedded .page {
+            width: 100%;
+            margin: 0;
+            padding: 18px;
+        }
+
         .page-heading {
             display: flex;
             justify-content: space-between;
@@ -180,7 +187,7 @@
             padding: 16px;
             box-shadow: var(--shadow);
             display: grid;
-            grid-template-columns: 1.15fr repeat(4, minmax(150px, .7fr));
+            grid-template-columns: 1.15fr repeat(5, minmax(140px, .7fr));
             gap: 12px;
             align-items: end;
         }
@@ -364,6 +371,10 @@
         .pill.rights_holder { color: #9e241b; background: var(--red-soft); }
         .pill.ok { color: var(--green); background: var(--green-soft); }
         .pill.problem { color: var(--red); background: var(--red-soft); }
+        .pill.current { color: #283d9b; background: var(--indigo-soft); }
+        .pill.appeal_success { color: var(--green); background: var(--green-soft); }
+        .pill.appeal_failed { color: var(--red); background: var(--red-soft); }
+        .pill.historical { color: #526078; background: #edf1f6; }
 
         .detail-button {
             min-height: 34px;
@@ -442,7 +453,7 @@
         }
     </style>
 </head>
-<body>
+<body{% if embedded %} class="embedded"{% endif %}>
     <header class="topbar">
         <div class="topbar-inner">
             <div class="brand">
@@ -480,6 +491,13 @@
             <div class="field search">
                 <label for="search-input">搜索商品、店铺、原因或权利人</label>
                 <input id="search-input" type="search" autocomplete="off" placeholder="输入商品编号或关键词">
+            </div>
+            <div class="field">
+                <label for="view-mode-select">展示模式</label>
+                <select id="view-mode-select">
+                    <option value="current" selected>当前侵权</option>
+                    <option value="history">全部历史（去重）</option>
+                </select>
             </div>
             <div class="field">
                 <label for="days-select">统计范围</label>
@@ -596,6 +614,7 @@
         };
         const elements = {
             search: document.getElementById("search-input"),
+            viewMode: document.getElementById("view-mode-select"),
             days: document.getElementById("days-select"),
             group: document.getElementById("group-select"),
             salesperson: document.getElementById("salesperson-select"),
@@ -642,13 +661,15 @@
             if ([...select.options].some(option => option.value === selected)) select.value = selected;
         }
 
-        function renderMetrics(summary, days) {
+        function renderMetrics(summary, days, viewMode) {
             document.getElementById("metric-total").textContent = number(summary.total);
             document.getElementById("metric-detection").textContent = number(summary.detection_count);
             document.getElementById("metric-rights").textContent = number(summary.rights_holder_count);
             document.getElementById("metric-stores").textContent = number(summary.store_count);
             document.getElementById("metric-people").textContent = number(summary.salesperson_count);
-            document.getElementById("metric-range").textContent = `最近 ${days} 天`;
+            document.getElementById("metric-range").textContent = viewMode === "history"
+                ? "全部历史 · 已去重"
+                : `最近 ${days} 天 · 当前侵权`;
             document.getElementById("metric-groups").textContent = `${number(summary.site_count)} 个账户站点 · ${number(summary.group_count)} 个组`;
             const problems = Number(summary.problem_stores || 0);
             document.getElementById("metric-problems").textContent = problems ? `${problems} 个账户需重试` : "同步状态正常";
@@ -707,6 +728,17 @@
             return `<span class="pill ${escapeHtml(type)}">${label}</span>`;
         }
 
+        function resolutionPill(status) {
+            const labels = {
+                current: "当前侵权",
+                appeal_success: "申诉成功",
+                appeal_failed: "申诉失败",
+                historical: "历史记录",
+            };
+            const key = Object.hasOwn(labels, status) ? status : "historical";
+            return `<span class="pill ${escapeHtml(key)}">${labels[key]}</span>`;
+        }
+
         function safeHttpUrl(value) {
             try {
                 const url = new URL(String(value || ""), window.location.origin);
@@ -730,9 +762,10 @@
 
         function renderRows(rows, total) {
             const hasStoreFilter = Boolean(state.detailTokenId);
+            const modeLabel = elements.viewMode.value === "history" ? "全部历史（已去重）" : "当前侵权";
             elements.detailCount.textContent = hasStoreFilter
-                ? `当前店铺共 ${number(total)} 条`
-                : `共 ${number(total)} 条`;
+                ? `${modeLabel} · 当前店铺共 ${number(total)} 条`
+                : `${modeLabel} · 共 ${number(total)} 条`;
             elements.storeFilterChip.textContent = hasStoreFilter ? `店铺：${state.detailStoreName}` : "";
             elements.storeFilterChip.classList.toggle("visible", hasStoreFilter);
             elements.clearDetailButton.classList.toggle("visible", hasStoreFilter);
@@ -753,7 +786,7 @@
                         <td>${sourcePill(row.source_type)}</td>
                         <td><span class="item-id">${escapeHtml(row.item_id)}</span></td>
                         <td class="title-cell">${escapeHtml(row.title || "—")}</td>
-                        <td class="reason-cell">${escapeHtml(row.reason || "—")}${holder}${status}${due}</td>
+                        <td class="reason-cell"><div>${resolutionPill(row.resolution_status)}</div>${escapeHtml(row.reason || "—")}${holder}${status}${due}</td>
                     </tr>`;
             }).join("");
         }
@@ -763,6 +796,7 @@
             state.loading = true;
             const params = new URLSearchParams({
                 days: elements.days.value,
+                view_mode: elements.viewMode.value,
                 group_name: elements.group.value,
                 salesperson: elements.salesperson.value,
                 source_type: elements.source.value,
@@ -778,7 +812,10 @@
                 const data = payload.data || {};
                 state.page = Number(data.page || 1);
                 state.pages = Number(data.pages || 1);
-                renderMetrics(data.summary || {}, Number(data.filters?.days || elements.days.value));
+                const viewMode = data.filters?.view_mode === "history" ? "history" : "current";
+                elements.viewMode.value = viewMode;
+                elements.days.disabled = viewMode === "history";
+                renderMetrics(data.summary || {}, Number(data.filters?.days || elements.days.value), viewMode);
                 renderGroups(data.account_groups || []);
                 renderRows(data.rows || [], data.total || 0);
                 fillSelect(elements.group, data.filters?.groups || [], "全部账户组");
@@ -846,7 +883,7 @@
             clearTimeout(searchTimer);
             searchTimer = setTimeout(() => { state.page = 1; loadData(); }, 400);
         });
-        [elements.days, elements.group, elements.salesperson, elements.source].forEach(select => {
+        [elements.viewMode, elements.days, elements.group, elements.salesperson, elements.source].forEach(select => {
             select.addEventListener("change", () => { state.page = 1; loadData(); });
         });
         elements.prev.addEventListener("click", () => { if (state.page > 1) { state.page -= 1; loadData(); } });

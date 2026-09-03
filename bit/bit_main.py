@@ -1,6 +1,5 @@
 import json
 import os
-import random
 import sys
 import threading
 import time
@@ -20,13 +19,11 @@ if PROJECT_ROOT not in sys.path:
 from apscheduler.schedulers.blocking import BlockingScheduler
 
 from bit import bit_daily_task
-from bit import bit_infractions_info
 from bit import bit_print
 from bit import bit_reputation_info
+from bit import mercado_infraction_sync
 from bit.bit_collection_control import (
     DEFAULT_COLLECTION_MAX_WORKERS,
-    env_float,
-    wait_for_batch_resume,
 )
 from bit.bit_runtime_lock import InterProcessLock, RUNTIME_LOCK_DIR
 from bit.bit_utils import get_now_time
@@ -92,39 +89,20 @@ def get_next_run_boundary(started_at=None):
     return started_at + timedelta(hours=SCHEDULE_INTERVAL_HOURS)
 
 
-def _collection_options(prefix):
+def _reputation_api_options():
     requested_workers = max(
         1,
         _get_int_env(
-            f"BIT_{prefix}_MAX_WORKERS",
+            "BIT_REPUTATION_MAX_WORKERS",
             DEFAULT_COLLECTION_MAX_WORKERS,
         ),
     )
     return {
         "max_workers": _memory_safe_worker_count(requested_workers),
-        "stagger_min_seconds": env_float("BIT_COLLECTION_STAGGER_MIN_SECONDS", 5),
-        "stagger_max_seconds": env_float("BIT_COLLECTION_STAGGER_MAX_SECONDS", 10),
         "retry_failed": True,
+        # bit_main 的声誉阶段只允许官方 API；不得再附带打开浏览器读取流量等辅助数据。
+        "collect_browser_auxiliary": False,
     }
-
-
-def _wait_between_collections():
-    legacy_lower = env_float("BIT_REPUTATION_INFRACTION_WAIT_MIN_SECONDS", 180)
-    legacy_upper = env_float("BIT_REPUTATION_INFRACTION_WAIT_MAX_SECONDS", 300)
-    lower = env_float("BIT_INFRACTION_REPUTATION_WAIT_MIN_SECONDS", legacy_lower)
-    upper = env_float("BIT_INFRACTION_REPUTATION_WAIT_MAX_SECONDS", legacy_upper)
-    if upper < lower:
-        lower, upper = upper, lower
-    delay = random.uniform(lower, upper) if upper > lower else lower
-    print(
-        f"{get_now_time()} 侵权采集完成，等待 {delay:.1f} 秒后启动声誉采集<br>",
-        flush=True,
-    )
-    if delay > 0:
-        time.sleep(delay)
-    # 若侵权末尾触发过全局限频，3–5 分钟冷却仍不足时继续等到批次熔断解除。
-    wait_for_batch_resume("声誉启动")
-    return delay
 
 
 def _load_order_print_last_started_at():
@@ -274,6 +252,7 @@ def _run_ai_appeal_loop(started_at):
         )
 
     all_rounds = []
+    infraction_round_no = 0
     try:
         for round_no in range(1, appeal_rounds + 1):
             round_started = time.time()
@@ -291,6 +270,12 @@ def _run_ai_appeal_loop(started_at):
                 start=1,
             ):
                 try:
+                    if appeal_type == bit_daily_task.APPEAL_TYPE_INFRACTION:
+                        infraction_round_no += 1
+                        print(
+                            f"{get_now_time()} bit_main 侵权第 {infraction_round_no} 轮开始："
+                            "重新读取官方 API 侵权列表，随后处理全部授权站点<br>"
+                        )
                     print(
                         f"{get_now_time()} 第 {round_no}/{appeal_rounds} 轮"
                         f"第 {step_no}/{len(MAIN_APPEAL_SEQUENCE)} 步开始 "
@@ -314,6 +299,11 @@ def _run_ai_appeal_loop(started_at):
                         f"第 {step_no}/{len(MAIN_APPEAL_SEQUENCE)} 步"
                         f"{appeal_type} AI 申诉完成<br>"
                     )
+                    if appeal_type == bit_daily_task.APPEAL_TYPE_INFRACTION:
+                        print(
+                            f"{get_now_time()} bit_main 侵权第 {infraction_round_no} 轮完成："
+                            "全部店铺、全部授权站点已发送完毕；下一侵权轮将重新读取 API<br>"
+                        )
                 except Exception as exc:
                     round_result["errors"][step_key] = {
                         "appeal_type": appeal_type,
@@ -356,7 +346,7 @@ def _run_ai_appeal_loop(started_at):
 
 
 def run_infraction_reputation_then_appeal():
-    """侵权采集 -> 声誉采集 -> 四类 AI 申诉循环。"""
+    """官方 API 侵权同步 -> 官方 API 声誉更新 -> 四类 AI 申诉循环。"""
     if not SCHEDULE_LOCK.acquire(blocking=False):
         print(f"{get_now_time()} 本进程调度任务仍在运行，本次跳过<br>")
         return None
@@ -379,16 +369,11 @@ def run_infraction_reputation_then_appeal():
         return None
 
     started_at = datetime.now()
-    reputation_options = _collection_options("REPUTATION")
-    infraction_options = _collection_options("INFRACTION")
+    reputation_options = _reputation_api_options()
     print(
-        f"{get_now_time()} 定时任务开始：授权“访问数据统计”店铺侵权采集"
-        f"(并发{infraction_options['max_workers']}) -> 冷却 -> "
-        f"授权“访问数据统计”店铺声誉采集"
-        f"(并发{reputation_options['max_workers']}) "
-        f"-> 侵权为主的 AI 申诉 10 轮，"
-        f"店铺错峰{infraction_options['stagger_min_seconds']:.0f}–"
-        f"{infraction_options['stagger_max_seconds']:.0f}秒<br>"
+        f"{get_now_time()} 定时任务开始：官方 API 侵权同步 -> "
+        f"官方 API 声誉更新(并发{reputation_options['max_workers']}) -> "
+        "侵权为主的 AI 申诉 10 轮；侵权、声誉阶段均不启动浏览器<br>"
     )
     try:
         phase_errors = {}
@@ -400,24 +385,22 @@ def run_infraction_reputation_then_appeal():
         reputation_result = None
         infraction_result = None
 
-        print(f"{get_now_time()} 开始执行侵权采集：{infraction_options}<br>")
+        print(f"{get_now_time()} 开始执行官方 API 侵权同步<br>")
         try:
-            infraction_result = bit_infractions_info.main(**infraction_options)
-            print(f"{get_now_time()} 侵权采集执行完成<br>")
+            infraction_result = mercado_infraction_sync.run_official_infraction_sync()
+            print(f"{get_now_time()} 官方 API 侵权同步完成<br>")
         except Exception as exc:
             phase_errors["infraction"] = str(exc)
-            print(f"{get_now_time()} 侵权采集异常，将继续执行声誉采集：{exc}<br>")
+            print(f"{get_now_time()} 官方 API 侵权同步异常，将继续更新声誉：{exc}<br>")
             traceback.print_exc()
 
-        _wait_between_collections()
-
-        print(f"{get_now_time()} 开始执行声誉采集：{reputation_options}<br>")
+        print(f"{get_now_time()} 开始执行官方 API 声誉更新：{reputation_options}<br>")
         try:
             reputation_result = bit_reputation_info.main(**reputation_options)
-            print(f"{get_now_time()} 声誉采集执行完成<br>")
+            print(f"{get_now_time()} 官方 API 声誉更新完成<br>")
         except Exception as exc:
             phase_errors["reputation"] = str(exc)
-            print(f"{get_now_time()} 声誉采集异常，将继续执行 AI 申诉循环：{exc}<br>")
+            print(f"{get_now_time()} 官方 API 声誉更新异常，将继续执行 AI 申诉循环：{exc}<br>")
             traceback.print_exc()
 
         appeal_result = None
@@ -446,7 +429,7 @@ def run_infraction_reputation_then_appeal():
 
 
 def run_reputation_infraction_then_daily():
-    """兼容旧入口；实际执行采集和四类 AI 申诉循环。"""
+    """兼容旧入口；实际执行 API 更新和四类 AI 申诉循环。"""
     return run_infraction_reputation_then_appeal()
 
 
@@ -498,8 +481,8 @@ if __name__ == "__main__":
     print(f"{get_now_time()} bit_main 循环任务启动")
     print("启动后立即执行，每条完整任务链结束后休息 2 小时再重新执行")
     print(
-        "任务顺序：侵权采集 -> 冷却 3–5 分钟 -> 声誉采集 -> "
+        "任务顺序：官方 API 侵权同步 -> 官方 API 声誉更新 -> "
         "侵权 -> 延误 -> 侵权 -> 投诉 -> 侵权 -> 取消率 -> 侵权，"
-        "共 10 轮，最多 15 个进程"
+        "共 10 轮；侵权、声誉更新不启动浏览器"
     )
     run_main_loop()

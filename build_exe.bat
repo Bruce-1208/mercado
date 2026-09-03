@@ -12,6 +12,9 @@ if errorlevel 1 (
     exit /b 1
 )
 
+copy /Y "workbench-server.example.json" "dist\MercadoWorkbench\workbench-server.example.json" >nul
+copy /Y "workbench-client.example.json" "dist\MercadoWorkbench\workbench-client.example.json" >nul
+
 echo.
 echo Build succeeded.
 echo Output: %~dp0dist\MercadoWorkbench\MercadoWorkbench.exe
