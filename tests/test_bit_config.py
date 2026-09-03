@@ -12,6 +12,7 @@ def _token_data():
                 "id": 7,
                 "display_name": "授权店铺",
                 "nickname": "MELI_ALIAS",
+                "email": "authorized@example.com",
                 "site_settings": [
                     {
                         "site_id": "MLM",
@@ -56,11 +57,23 @@ def test_authorization_switches_independently_define_browser_task_rows():
     )
 
     assert stats_rows == [
-        ("window-1", "授权店铺", "", "墨西哥", "", "张三", "")
+        ("window-1", "授权店铺", "", "墨西哥", "", "张三", "authorized@example.com")
     ]
     assert appeal_rows == [
-        ("window-1", "授权店铺", "", "巴西", "", "李四", "")
+        ("window-1", "授权店铺", "", "巴西", "", "李四", "authorized@example.com")
     ]
+
+
+def test_disabled_authorization_never_becomes_browser_task():
+    token_data = _token_data()
+    token_data["rows"][0]["enabled"] = False
+
+    assert bit_config.list_shop_configs(
+        include_ignored=True,
+        authorization_flag="appeal_enabled",
+        token_data=token_data,
+        browsers=[{"id": "window-1", "name": "MELI_ALIAS"}],
+    ) == []
 
 
 def test_window_lookup_accepts_authorization_nickname(monkeypatch):

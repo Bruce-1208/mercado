@@ -2773,7 +2773,7 @@ def get_reputation_info_all(
     tokens = [
         dict(row)
         for row in (token_data.get("rows") or [])
-        if int(row.get("id") or 0) > 0
+        if int(row.get("id") or 0) > 0 and bool(row.get("enabled", True))
     ]
     if selected_shop_keys:
         tokens = [

@@ -209,7 +209,11 @@ def active_store_token() -> dict[str, Any]:
     from bit import bit_mysql
     from bit import mercado_tokens
 
-    summaries = list((bit_mysql.list_mercado_store_tokens() or {}).get("rows") or [])
+    summaries = [
+        row
+        for row in ((bit_mysql.list_mercado_store_tokens() or {}).get("rows") or [])
+        if bool(row.get("enabled", True))
+    ]
     if not summaries:
         raise MercadoProfitabilityError("没有可用的 Mercado Libre 授权店铺")
     now = datetime.now()

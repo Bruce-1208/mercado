@@ -30,6 +30,13 @@ _BROWSER_API_MUTATION_CONCURRENCY = max(
 )
 _BROWSER_OPEN_TIMEOUT = int(os.environ.get("BIT_BROWSER_OPEN_TIMEOUT", "60"))
 _BROWSER_CLOSE_TIMEOUT = int(os.environ.get("BIT_BROWSER_CLOSE_TIMEOUT", "30"))
+try:
+    _BROWSER_OPEN_COOLDOWN_SECONDS = max(
+        0.0,
+        float(os.environ.get("BIT_BROWSER_OPEN_COOLDOWN_SECONDS", "2")),
+    )
+except (TypeError, ValueError):
+    _BROWSER_OPEN_COOLDOWN_SECONDS = 2.0
 
 
 def _browser_api_slot_order(browser_id, slot_count=None):
@@ -88,6 +95,11 @@ def _post_browser_mutation(
             timeout=max(1, int(request_timeout)),
         ).json()
     finally:
+        # BitBrowser's local API rejects back-to-back window starts even when the
+        # HTTP calls are serialized. Keep a small cross-process gap; once opened,
+        # all browser business work still runs concurrently.
+        if endpoint == "open" and _BROWSER_OPEN_COOLDOWN_SECONDS:
+            time.sleep(_BROWSER_OPEN_COOLDOWN_SECONDS)
         api_lock.release()
 
 
@@ -227,7 +239,14 @@ def releaseBrowserLease(id):
         auto_lease.release()
 
 
-def closeBrowser(id, lease=None):  # 关闭窗口
+def closeBrowser(id, lease=None, force=False, request_timeout=None):  # 关闭窗口
+    close_timeout = (
+        _BROWSER_CLOSE_TIMEOUT
+        if request_timeout is None
+        else max(1, int(request_timeout))
+    )
+    if force:
+        return _post_browser_mutation("close", id, close_timeout)
     active_lease = lease or current_thread_window_lease(id)
     auto_lease_key = (threading.get_ident(), str(id))
     with _AUTO_LEASES_GUARD:
@@ -247,7 +266,7 @@ def closeBrowser(id, lease=None):  # 关闭窗口
                 "lockOwner": get_lock_owner(window_lock_key(id)),
             }
     try:
-        return _post_browser_mutation("close", id, _BROWSER_CLOSE_TIMEOUT)
+        return _post_browser_mutation("close", id, close_timeout)
     finally:
         if temporary_lease is not None:
             temporary_lease.release()

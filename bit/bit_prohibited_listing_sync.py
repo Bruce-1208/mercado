@@ -145,8 +145,17 @@ def _token_ids(values: Iterable[Any]) -> list[int]:
 def _token_records(selected_token_ids: Iterable[Any] | None = None) -> list[dict]:
     selected = set(_token_ids(selected_token_ids or ()))
     summaries = (bit_mysql.list_mercado_store_tokens() or {}).get("rows") or []
+    disabled = {
+        int(summary.get("id") or 0)
+        for summary in summaries
+        if not bool(summary.get("enabled", True))
+    } & selected
+    if disabled:
+        raise ValueError(f"选择的店铺已关闭：{', '.join(map(str, sorted(disabled)))}")
     records = []
     for summary in summaries:
+        if not bool(summary.get("enabled", True)):
+            continue
         token_id = int(summary.get("id") or 0)
         if selected and token_id not in selected:
             continue
@@ -585,13 +594,17 @@ def start_prohibited_listing_sync(
     token_ids: Iterable[Any] | None = None,
 ) -> tuple[bool, dict[str, Any]]:
     selected_ids = _token_ids(token_ids or ())
+    if selected_ids:
+        _token_records(selected_ids)
     with _state_guard:
         if _sync_state.get("running"):
             return False, prohibited_listing_sync_status()
     if get_lock_owner(PROHIBITED_SYNC_LOCK_KEY):
         return False, prohibited_listing_sync_status()
     queued_ids = selected_ids or _token_ids(
-        row.get("id") for row in ((bit_mysql.list_mercado_store_tokens() or {}).get("rows") or [])
+        row.get("id")
+        for row in ((bit_mysql.list_mercado_store_tokens() or {}).get("rows") or [])
+        if bool(row.get("enabled", True))
     )
     if queued_ids:
         request_prohibited_sync(queued_ids)

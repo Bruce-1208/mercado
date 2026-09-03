@@ -118,7 +118,10 @@ class BitPlaywrightSession:
         from selenium import webdriver
         from selenium.webdriver.chrome.service import Service
 
-        from bit.bit_mercado_login import login_mercado_with_saved_password
+        from bit.bit_mercado_login import (
+            load_shop_login_config,
+            login_mercado_with_saved_password,
+        )
 
         data = self.open_result.get("data") or {}
         driver_path = data.get("driver")
@@ -135,12 +138,17 @@ class BitPlaywrightSession:
         service = Service(driver_path)
         driver = None
         try:
+            login_config = load_shop_login_config(
+                self.shop_name,
+                window_id=self.window_id,
+            )
             driver = webdriver.Chrome(service=service, options=options)
             driver.implicitly_wait(2)
             return login_mercado_with_saved_password(
                 driver,
                 self.shop_name,
                 window_id=self.window_id,
+                email=str(login_config.get("email") or "").strip(),
                 wait_seconds=max(1, int(wait_seconds)),
             )
         except Exception as exc:

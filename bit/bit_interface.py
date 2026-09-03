@@ -7,6 +7,7 @@ import functools
 import html
 import hashlib
 import hmac
+import multiprocessing
 import os
 import secrets
 import signal
@@ -69,8 +70,10 @@ import bit.bit_store_link_sync as bit_store_link_sync
 import bit.bit_update_orders as bit_update_orders
 import bit.bit_zying_caiji as bit_zying_caiji
 import bit.mercado_communications as mercado_communications
+import bit.mercado_infraction_sync as mercado_infraction_sync
 import bit.mercado_reputation as mercado_reputation
 import bit.mercado_tokens as mercado_tokens
+from erp.mercadolibre_infraction_store import list_infraction_dashboard
 from bit.bit_appeal import *
 from bit.bit_collection_control import DEFAULT_COLLECTION_MAX_WORKERS
 from bit.bit_config import list_shop_configs, split_config_sites
@@ -371,6 +374,11 @@ if USE_DB_API:
     db_list_mercado_product_publish_records = bit_db_api.list_mercado_product_publish_records
     db_update_mercado_product_review_status = bit_db_api.update_mercado_product_review_status
     db_update_mercado_product_item = bit_db_api.update_mercado_product_item
+    db_list_mercado_management_categories = bit_db_api.list_mercado_management_categories
+    db_create_mercado_management_category = bit_db_api.create_mercado_management_category
+    db_update_mercado_management_category = bit_db_api.update_mercado_management_category
+    db_delete_mercado_management_category = bit_db_api.delete_mercado_management_category
+    db_assign_mercado_management_category = bit_db_api.assign_mercado_management_category
     db_list_mercado_store_links = bit_db_api.list_mercado_store_links
     db_bulk_update_mercado_store_links = bit_db_api.bulk_update_mercado_store_links
 else:
@@ -469,6 +477,11 @@ else:
         list_product_publish_records as db_list_mercado_product_publish_records,
         list_collection_items as db_list_mercado_collection_items,
         list_product_items as db_list_mercado_product_items,
+        list_management_categories as db_list_mercado_management_categories,
+        create_management_category as db_create_mercado_management_category,
+        update_management_category as db_update_mercado_management_category,
+        delete_management_category as db_delete_mercado_management_category,
+        assign_management_category as db_assign_mercado_management_category,
         update_collection_task as db_update_mercado_collection_task,
         update_product_publish_state as db_update_mercado_product_publish_state,
         update_product_publish_record as db_update_mercado_product_publish_record,
@@ -1333,6 +1346,12 @@ def _required_workbench_permissions(path, method):
             if path == "/api/infractions/collect" and method == "POST"
             else ("infractions.view",)
         )
+    if path.startswith("/api/official-infractions/"):
+        return (
+            ("infractions.execute",)
+            if path == "/api/official-infractions/sync" and method == "POST"
+            else ("infractions.view",)
+        )
     if path.startswith("/api/reputation/"):
         return (
             ("reputation.execute",)
@@ -1366,7 +1385,7 @@ def _required_workbench_permissions(path, method):
     if path.startswith("/api/tasks/daily/"):
         return (
             ("tasks.execute",)
-            if path.endswith("/start") and method == "POST"
+            if path.endswith(("/start", "/stop")) and method == "POST"
             else ("tasks.view",)
         )
     if path.startswith("/api/risk-check/"):
@@ -1702,14 +1721,64 @@ _order_print_state = {
 }
 _order_analysis_import_lock = threading.Lock()
 _daily_task_lock = threading.Lock()
+_daily_task_stop_event = None
+_daily_task_stop_manager = None
+_daily_task_log_lock = threading.Lock()
+_daily_task_log_path = Path(
+    os.environ.get("BIT_DAILY_TASK_LOG_PATH")
+    or (Path(CURRENT_DIR) / "logs" / "bit_daily_task_console.log")
+)
 _daily_task_state = {
     "running": False,
     "started_at": "",
     "finished_at": "",
     "status": "idle",
     "message": "等待启动",
+    "stop_requested": False,
     "params": {},
 }
+
+
+def _reset_daily_task_log():
+    with _daily_task_log_lock:
+        _daily_task_log_path.parent.mkdir(parents=True, exist_ok=True)
+        _daily_task_log_path.write_text("", encoding="utf-8")
+
+
+def _append_daily_task_log(text):
+    text = str(text or "")
+    if not text:
+        return
+    with _daily_task_log_lock:
+        _daily_task_log_path.parent.mkdir(parents=True, exist_ok=True)
+        with _daily_task_log_path.open("a", encoding="utf-8") as log_file:
+            log_file.write(text)
+            log_file.flush()
+
+
+def _read_daily_task_log(max_bytes=512 * 1024, max_lines=2000):
+    try:
+        with _daily_task_log_path.open("rb") as log_file:
+            log_file.seek(0, os.SEEK_END)
+            size = log_file.tell()
+            start = max(0, size - max_bytes)
+            log_file.seek(start, os.SEEK_SET)
+            content = log_file.read().decode("utf-8", errors="replace")
+        if start:
+            content = content.partition("\n")[2]
+        lines = content.splitlines()[-max_lines:]
+        content = "\n".join(lines)
+        for marker in ("<br>", "<br/>", "<br />"):
+            content = content.replace(f"{marker}\r\n", "\n")
+            content = content.replace(f"{marker}\n", "\n")
+        return format_log_text(content).strip()
+    except OSError:
+        return ""
+
+
+class DailyTaskLogSink:
+    def put(self, text):
+        _append_daily_task_log(text)
 _mercado_login_task_lock = threading.RLock()
 _mercado_login_task_process = None
 _mercado_login_task_processes = {}
@@ -3627,9 +3696,9 @@ def _parse_rate_param(data, name="min_rate", default=0):
 
 
 def build_daily_task_params(data):
-    mode = str(data.get("mode", "once")).strip().lower()
+    mode = str(data.get("mode", "loop")).strip().lower()
     if mode not in ("once", "loop"):
-        mode = "once"
+        mode = "loop"
     raw_appeal_types = (
         data.get("appeal_types")
         if "appeal_types" in data
@@ -3696,7 +3765,10 @@ def build_daily_task_params(data):
     }
 
 
-def run_daily_task_job(params, task_lock):
+def run_daily_task_job(params, task_lock, stop_event=None):
+    global _daily_task_stop_event, _daily_task_stop_manager
+    stop_event = stop_event or threading.Event()
+    register_thread_log_queue(DailyTaskLogSink())
     try:
         print(f"{get_now_time()} 开始执行 daily_task：{params}<br>")
         appeal_types = params.get("appeal_types") or [
@@ -3728,9 +3800,15 @@ def run_daily_task_job(params, task_lock):
                 salespeople=params["salespeople"],
                 group_names=params.get("group_names", []),
                 stop_at=stop_at,
+                stop_event=stop_event,
+                log_path=str(_daily_task_log_path),
                 _task_lock=task_lock,
             )
-            result_message = f"daily_task {appeal_label}任务循环执行完成"
+            result_message = (
+                f"daily_task {appeal_label}任务已停止"
+                if stop_event.is_set()
+                else f"daily_task {appeal_label}任务循环执行完成"
+            )
         else:
             bit_daily_task.run_ai_appeal_once(
                 appeal_task,
@@ -3743,31 +3821,53 @@ def run_daily_task_job(params, task_lock):
                 **execution_standards,
                 salespeople=params["salespeople"],
                 group_names=params.get("group_names", []),
+                stop_event=stop_event,
+                log_path=str(_daily_task_log_path),
                 _task_lock=task_lock,
             )
-            result_message = f"daily_task {appeal_label}任务单轮执行完成"
+            result_message = (
+                f"daily_task {appeal_label}任务已停止"
+                if stop_event.is_set()
+                else f"daily_task {appeal_label}任务单轮执行完成"
+            )
 
         with _daily_task_lock:
             _daily_task_state.update({
                 "running": False,
                 "finished_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-                "status": "success",
+                "status": "stopped" if stop_event.is_set() else "success",
                 "message": result_message,
+                "stop_requested": stop_event.is_set(),
             })
         print(f"{get_now_time()} {result_message}<br>")
     except Exception as e:
         logging.error("daily_task failed: %s", e)
+        _append_daily_task_log(f"\ndaily_task 运行失败：{e}\n")
         traceback.print_exc()
+        stopped = stop_event.is_set()
         with _daily_task_lock:
             _daily_task_state.update({
                 "running": False,
                 "finished_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-                "status": "error",
-                "message": str(e),
+                "status": "stopped" if stopped else "error",
+                "message": "daily_task 已停止" if stopped else str(e),
+                "stop_requested": stopped,
             })
     finally:
         if task_lock is not None:
             task_lock.release()
+        stop_manager = None
+        with _daily_task_lock:
+            if _daily_task_stop_event is stop_event:
+                _daily_task_stop_event = None
+                stop_manager = _daily_task_stop_manager
+                _daily_task_stop_manager = None
+        if stop_manager is not None:
+            try:
+                stop_manager.shutdown()
+            except Exception:
+                pass
+        unregister_thread_log_queue()
 
 
 def format_log_text(text):
@@ -4459,6 +4559,80 @@ def api_collect_infractions_status():
             "status": "success",
             "data": dict(_infraction_collect_state),
         })
+
+
+@app.route('/infringement-dashboard', methods=['GET'])
+@login_required
+def official_infraction_dashboard_page():
+    user = get_current_workbench_user()
+    if not workbench_user_has_permission(user, "infractions.view"):
+        return Response(
+            "当前账号没有查看侵权数据的权限",
+            status=403,
+            content_type="text/plain; charset=utf-8",
+        )
+    return render_template(
+        'infraction_dashboard.html',
+        current_user=user or {},
+    )
+
+
+@app.route('/api/official-infractions/dashboard', methods=['GET'])
+@login_required
+def api_official_infraction_dashboard():
+    try:
+        data = list_infraction_dashboard(
+            days=request.args.get("days", 30),
+            group_name=request.args.get("group_name", ""),
+            salesperson=request.args.get("salesperson", ""),
+            source_type=request.args.get("source_type", ""),
+            search=request.args.get("search", ""),
+            detail_token_id=request.args.get("detail_token_id", 0),
+            page=request.args.get("page", 1),
+            page_size=request.args.get("page_size", 100),
+        )
+        return jsonify({"status": "success", "data": data})
+    except (TypeError, ValueError) as exc:
+        return jsonify({"status": "error", "message": str(exc)}), 400
+    except Exception as exc:
+        logging.exception("读取官方侵权分组看板失败")
+        return jsonify({"status": "error", "message": f"读取侵权数据失败：{exc}"}), 500
+
+
+@app.route('/api/official-infractions/sync', methods=['POST'])
+@login_required
+def api_start_official_infraction_sync():
+    payload = request.get_json(silent=True) or {}
+    token_ids = payload.get("token_ids") or []
+    if not isinstance(token_ids, list):
+        return jsonify({"status": "error", "message": "token_ids 必须是数组"}), 400
+    try:
+        started, state = mercado_infraction_sync.start_official_infraction_sync(token_ids)
+    except ValueError as exc:
+        return jsonify({"status": "error", "message": str(exc)}), 400
+    except Exception as exc:
+        logging.exception("启动官方侵权同步失败")
+        return jsonify({"status": "error", "message": f"启动同步失败：{exc}"}), 500
+    if not started:
+        return jsonify({
+            "status": "running",
+            "message": state.get("message") or "官方侵权数据正在同步",
+            "data": state,
+        }), 409
+    return jsonify({
+        "status": "success",
+        "message": "官方侵权数据同步已在后台启动",
+        "data": state,
+    }), 202
+
+
+@app.route('/api/official-infractions/sync/status', methods=['GET'])
+@login_required
+def api_official_infraction_sync_status():
+    return jsonify({
+        "status": "success",
+        "data": mercado_infraction_sync.official_infraction_sync_status(),
+    })
 
 
 @app.route('/api/reputation/latest', methods=['GET'])
@@ -5618,6 +5792,7 @@ def api_prohibited_listings():
             token_id=int(token_text) if token_text else None,
             site_id=str(request.args.get("site_id") or "").strip(),
             salesperson=str(request.args.get("salesperson") or "").strip(),
+            risk_type=str(request.args.get("risk_type") or "").strip(),
             page=_parse_int_param(request.args, "page", 1, 1, 1000000),
             page_size=_parse_int_param(request.args, "page_size", 100, 20, 500),
         )
@@ -5683,6 +5858,7 @@ def api_prohibited_listing_sync_status():
 @app.route('/api/tasks/daily/start', methods=['POST'])
 @login_required
 def api_start_daily_task():
+    global _daily_task_stop_event, _daily_task_stop_manager
     data = request.get_json(silent=True) or {}
     try:
         params = build_daily_task_params(data)
@@ -5708,32 +5884,91 @@ def api_start_daily_task():
                 "message": "daily_task 已通过其他进程或启动方式运行"
             }), 409
 
+        try:
+            _reset_daily_task_log()
+        except OSError as exc:
+            task_lock.release()
+            return jsonify({
+                "status": "error",
+                "message": f"无法创建 daily_task 运行日志：{exc}",
+            }), 500
         started_at = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        try:
+            stop_manager = multiprocessing.Manager()
+            stop_event = stop_manager.Event()
+        except Exception:
+            task_lock.release()
+            raise
+        _daily_task_stop_manager = stop_manager
+        _daily_task_stop_event = stop_event
         _daily_task_state.update({
             "running": True,
             "started_at": started_at,
             "finished_at": "",
             "status": "running",
             "message": "daily_task 已启动",
+            "stop_requested": False,
+            "log_path": str(_daily_task_log_path),
             "params": params,
         })
 
     try:
         task_thread = threading.Thread(
             target=run_daily_task_job,
-            args=(params, task_lock),
+            args=(params, task_lock, stop_event),
             daemon=True,
         )
         task_thread.start()
     except Exception:
         task_lock.release()
+        stop_manager = None
         with _daily_task_lock:
+            if _daily_task_stop_event is stop_event:
+                _daily_task_stop_event = None
+                stop_manager = _daily_task_stop_manager
+                _daily_task_stop_manager = None
             _daily_task_state.update({"running": False, "status": "error", "message": "daily_task 启动失败"})
+        if stop_manager is not None:
+            try:
+                stop_manager.shutdown()
+            except Exception:
+                pass
         raise
     return jsonify({
         "status": "success",
         "data": dict(_daily_task_state),
         "message": "daily_task 已在后台启动"
+    })
+
+
+@app.route('/api/tasks/daily/stop', methods=['POST'])
+@login_required
+def api_stop_daily_task():
+    global _daily_task_stop_event
+    with _daily_task_lock:
+        if not _daily_task_state.get("running"):
+            return jsonify({
+                "status": "idle",
+                "data": dict(_daily_task_state),
+                "message": "daily_task 当前未运行",
+            }), 409
+        if _daily_task_stop_event is None:
+            return jsonify({
+                "status": "error",
+                "data": dict(_daily_task_state),
+                "message": "该任务由其他进程启动，无法从当前控制台停止",
+            }), 409
+        _daily_task_stop_event.set()
+        _daily_task_state.update({
+            "status": "stopping",
+            "message": "已请求停止，正在立即终止任务进程并关闭浏览器窗口",
+            "stop_requested": True,
+        })
+        state = dict(_daily_task_state)
+    return jsonify({
+        "status": "success",
+        "data": state,
+        "message": "daily_task 停止请求已提交",
     })
 
 
@@ -5781,19 +6016,20 @@ def api_daily_task_options():
 def api_daily_task_status():
     with _daily_task_lock:
         data = dict(_daily_task_state)
-        external_owner = bit_daily_task.get_daily_task_lock_owner()
-        if external_owner and not data.get("running"):
-            data.update({
-                "running": True,
-                "status": "running",
-                "message": "daily_task 正在其他进程中运行",
-                "started_at": external_owner.get("acquired_at", ""),
-                "lock_owner": external_owner,
-            })
-        return jsonify({
-            "status": "success",
-            "data": data,
+    external_owner = bit_daily_task.get_daily_task_lock_owner()
+    if external_owner and not data.get("running"):
+        data.update({
+            "running": True,
+            "status": "running",
+            "message": "daily_task 正在其他进程中运行",
+            "started_at": external_owner.get("acquired_at", ""),
+            "lock_owner": external_owner,
         })
+    data["log"] = _read_daily_task_log()
+    return jsonify({
+        "status": "success",
+        "data": data,
+    })
 
 
 @app.route('/api/risk-check/categories', methods=['GET'])
@@ -6934,6 +7170,9 @@ def api_mercado_collection_items():
             net_proceeds_max=str(request.args.get("net_proceeds_max") or "").strip(),
             date_from=str(request.args.get("date_from") or "").strip(),
             date_to=str(request.args.get("date_to") or "").strip(),
+            management_category_id=str(
+                request.args.get("management_category_id") or ""
+            ).strip(),
             exclude_added=True,
         )
         return jsonify({"status": "success", "data": result})
@@ -6976,6 +7215,9 @@ def api_mercado_products():
             net_proceeds_max=str(request.args.get("net_proceeds_max") or "").strip(),
             date_from=str(request.args.get("date_from") or "").strip(),
             date_to=str(request.args.get("date_to") or "").strip(),
+            management_category_id=str(
+                request.args.get("management_category_id") or ""
+            ).strip(),
         )
         return jsonify({"status": "success", "data": result})
     except ValueError as exc:
@@ -6983,6 +7225,65 @@ def api_mercado_products():
     except Exception as exc:
         logging.exception("读取 Mercado 产品列表失败")
         return jsonify({"status": "error", "message": f"读取产品列表失败：{exc}"}), 500
+
+
+@app.route('/api/mercado-management-categories', methods=['GET', 'POST'])
+@login_required
+def api_mercado_management_categories():
+    try:
+        if request.method == "GET":
+            result = db_list_mercado_management_categories()
+        else:
+            data = request.get_json(silent=True) or {}
+            result = db_create_mercado_management_category(data.get("name", ""))
+        return jsonify({"status": "success", "data": result})
+    except ValueError as exc:
+        return jsonify({"status": "error", "message": str(exc)}), 400
+    except Exception as exc:
+        logging.exception("管理 Mercado 运营分类失败")
+        return jsonify({"status": "error", "message": f"分类管理失败：{exc}"}), 500
+
+
+@app.route('/api/mercado-management-categories/<int:category_id>', methods=['PATCH', 'DELETE'])
+@login_required
+def api_mercado_management_category(category_id):
+    try:
+        if request.method == "DELETE":
+            result = db_delete_mercado_management_category(category_id)
+        else:
+            data = request.get_json(silent=True) or {}
+            result = db_update_mercado_management_category(
+                category_id, data.get("name", "")
+            )
+        return jsonify({"status": "success", "data": result})
+    except ValueError as exc:
+        return jsonify({"status": "error", "message": str(exc)}), 400
+    except KeyError as exc:
+        return jsonify({"status": "error", "message": exc.args[0]}), 404
+    except Exception as exc:
+        logging.exception("修改 Mercado 运营分类失败")
+        return jsonify({"status": "error", "message": f"分类管理失败：{exc}"}), 500
+
+
+@app.route('/api/mercado-management-categories/assign', methods=['POST'])
+@login_required
+def api_assign_mercado_management_category():
+    data = request.get_json(silent=True) or {}
+    item_ids = data.get("item_ids") or []
+    if not isinstance(item_ids, list):
+        return jsonify({"status": "error", "message": "item_ids 必须是数组"}), 422
+    try:
+        result = db_assign_mercado_management_category(
+            data.get("item_type", ""), item_ids, data.get("category_id")
+        )
+        return jsonify({"status": "success", "data": result})
+    except ValueError as exc:
+        return jsonify({"status": "error", "message": str(exc)}), 400
+    except KeyError as exc:
+        return jsonify({"status": "error", "message": exc.args[0]}), 404
+    except Exception as exc:
+        logging.exception("设置 Mercado 商品运营分类失败")
+        return jsonify({"status": "error", "message": f"设置分类失败：{exc}"}), 500
 
 
 @app.route('/api/mercado-products/add', methods=['POST'])
@@ -7967,6 +8268,19 @@ def api_db_mercado_collection_items():
             limit=_parse_int_param(request.args, "limit", 500, 1, 1000),
             offset=_parse_int_param(request.args, "offset", 0, 0, 1000000),
             task_id=int(task_id) if str(task_id or "").strip() else None,
+            weight_min=str(request.args.get("weight_min") or "").strip(),
+            weight_max=str(request.args.get("weight_max") or "").strip(),
+            price_min=str(request.args.get("price_min") or "").strip(),
+            price_max=str(request.args.get("price_max") or "").strip(),
+            net_proceeds_min=str(request.args.get("net_proceeds_min") or "").strip(),
+            net_proceeds_max=str(request.args.get("net_proceeds_max") or "").strip(),
+            date_from=str(request.args.get("date_from") or "").strip(),
+            date_to=str(request.args.get("date_to") or "").strip(),
+            management_category_id=str(
+                request.args.get("management_category_id") or ""
+            ).strip(),
+            exclude_added=str(request.args.get("exclude_added") or "").lower()
+            in {"1", "true", "yes"},
         )
         return jsonify({"status": "success", "data": result})
     data = request.get_json(silent=True) or {}
@@ -7998,6 +8312,9 @@ def api_db_mercado_products():
         net_proceeds_max=str(request.args.get("net_proceeds_max") or "").strip(),
         date_from=str(request.args.get("date_from") or "").strip(),
         date_to=str(request.args.get("date_to") or "").strip(),
+        management_category_id=str(
+            request.args.get("management_category_id") or ""
+        ).strip(),
     )
     return jsonify({"status": "success", "data": result})
 
@@ -8411,9 +8728,16 @@ def api_db_update_mercado_token(token_id):
                 raise KeyError("店铺授权不存在")
             return jsonify({"status": "success", "data": {"deleted": affected}})
         data = request.get_json(silent=True) or {}
-        result = bit_db_api.rename_mercado_store_token(
-            token_id, data.get("display_name", "")
-        )
+        if "enabled" in data:
+            if not isinstance(data.get("enabled"), bool):
+                raise ValueError("店铺启用状态必须是布尔值")
+            result = bit_db_api.set_mercado_store_token_enabled(
+                token_id, data["enabled"]
+            )
+        else:
+            result = bit_db_api.rename_mercado_store_token(
+                token_id, data.get("display_name", "")
+            )
         return jsonify({"status": "success", "data": result})
     except Exception as exc:
         return _mercado_token_error_response(exc)
@@ -8593,6 +8917,65 @@ def api_db_inventory_stocks():
     except ValueError as exc:
         return jsonify({"status": "error", "message": str(exc)}), 400
     return jsonify({"status": "success", "data": result})
+
+
+@app.route('/api/db/mercado-management-categories', methods=['GET', 'POST'])
+@internal_api_required
+def api_db_mercado_management_categories():
+    blocked = reject_db_api_client_mode()
+    if blocked:
+        return blocked
+    try:
+        if request.method == "GET":
+            result = db_list_mercado_management_categories()
+        else:
+            data = request.get_json(silent=True) or {}
+            result = db_create_mercado_management_category(data.get("name", ""))
+        return jsonify({"status": "success", "data": result})
+    except ValueError as exc:
+        return jsonify({"status": "error", "message": str(exc)}), 400
+
+
+@app.route('/api/db/mercado-management-categories/<int:category_id>', methods=['PATCH', 'DELETE'])
+@internal_api_required
+def api_db_mercado_management_category(category_id):
+    blocked = reject_db_api_client_mode()
+    if blocked:
+        return blocked
+    try:
+        if request.method == "DELETE":
+            result = db_delete_mercado_management_category(category_id)
+        else:
+            data = request.get_json(silent=True) or {}
+            result = db_update_mercado_management_category(
+                category_id, data.get("name", "")
+            )
+        return jsonify({"status": "success", "data": result})
+    except ValueError as exc:
+        return jsonify({"status": "error", "message": str(exc)}), 400
+    except KeyError as exc:
+        return jsonify({"status": "error", "message": exc.args[0]}), 404
+
+
+@app.route('/api/db/mercado-management-categories/assign', methods=['POST'])
+@internal_api_required
+def api_db_assign_mercado_management_category():
+    blocked = reject_db_api_client_mode()
+    if blocked:
+        return blocked
+    data = request.get_json(silent=True) or {}
+    item_ids = data.get("item_ids") or []
+    if not isinstance(item_ids, list):
+        return jsonify({"status": "error", "message": "item_ids 必须是数组"}), 422
+    try:
+        result = db_assign_mercado_management_category(
+            data.get("item_type", ""), item_ids, data.get("category_id")
+        )
+        return jsonify({"status": "success", "data": result})
+    except ValueError as exc:
+        return jsonify({"status": "error", "message": str(exc)}), 400
+    except KeyError as exc:
+        return jsonify({"status": "error", "message": exc.args[0]}), 404
 
 
 @app.route('/api/db/inventory/shelves', methods=['GET', 'POST'])
@@ -8833,6 +9216,7 @@ def api_db_prohibited_listings():
             token_id=int(token_text) if token_text else None,
             site_id=str(request.args.get("site_id") or "").strip(),
             salesperson=str(request.args.get("salesperson") or "").strip(),
+            risk_type=str(request.args.get("risk_type") or "").strip(),
             page=_parse_int_param(request.args, "page", 1, 1, 1000000),
             page_size=_parse_int_param(request.args, "page_size", 100, 20, 500),
         )
@@ -8854,9 +9238,19 @@ def api_db_start_prohibited_listing_sync():
         return jsonify({"status": "error", "message": "token_ids must be an array"}), 422
     try:
         started, state = bit_prohibited_listing_sync.start_prohibited_listing_sync(token_ids)
+        rights_started, rights_state = mercado_infraction_sync.start_official_infraction_sync(token_ids)
     except ValueError as exc:
         return jsonify({"status": "error", "message": str(exc)}), 400
-    return jsonify({"status": "success", "data": {"started": started, "state": state}})
+    combined_state = dict(state or {})
+    combined_state["prohibited_running"] = bool(combined_state.get("running"))
+    combined_state["rights_holder_sync"] = dict(rights_state or {})
+    combined_state["running"] = bool(
+        combined_state.get("prohibited_running") or rights_state.get("running")
+    )
+    return jsonify({
+        "status": "success",
+        "data": {"started": bool(started or rights_started), "state": combined_state},
+    })
 
 
 @app.route('/api/db/prohibited-listings/sync/status', methods=['GET'])
@@ -8865,10 +9259,12 @@ def api_db_prohibited_listing_sync_status():
     blocked = reject_db_api_client_mode()
     if blocked:
         return blocked
-    return jsonify({
-        "status": "success",
-        "data": bit_prohibited_listing_sync.prohibited_listing_sync_status(),
-    })
+    state = dict(bit_prohibited_listing_sync.prohibited_listing_sync_status() or {})
+    rights_state = dict(mercado_infraction_sync.official_infraction_sync_status() or {})
+    state["prohibited_running"] = bool(state.get("running"))
+    state["rights_holder_sync"] = rights_state
+    state["running"] = bool(state.get("prohibited_running") or rights_state.get("running"))
+    return jsonify({"status": "success", "data": state})
 
 
 @app.route('/api/db/orders/bulk-update', methods=['POST'])
@@ -9891,7 +10287,7 @@ def api_exchange_mercado_token():
         response_data = dict(result or {})
         token_id = int(response_data.get("id") or 0)
         auto_sync = {"started": False, "queued": False}
-        if token_id:
+        if token_id and response_data.get("enabled", True):
             try:
                 sync_result = bit_db_api.start_store_link_sync([token_id]) or {}
                 auto_sync = {
@@ -10686,13 +11082,22 @@ def api_update_mercado_token(token_id):
                 raise KeyError("店铺授权不存在")
             return jsonify({"status": "success", "data": {"deleted": affected}})
         data = request.get_json(silent=True) or {}
-        result = bit_db_api.rename_mercado_store_token(
-            token_id, data.get("display_name", "")
-        )
+        if "enabled" in data:
+            if not isinstance(data.get("enabled"), bool):
+                raise ValueError("店铺启用状态必须是布尔值")
+            result = bit_db_api.set_mercado_store_token_enabled(
+                token_id, data["enabled"]
+            )
+            message = "店铺已启用" if data["enabled"] else "店铺已关闭，所有业务操作将跳过"
+        else:
+            result = bit_db_api.rename_mercado_store_token(
+                token_id, data.get("display_name", "")
+            )
+            message = "店铺名称已更新"
         return jsonify({
             "status": "success",
             "data": result,
-            "message": "店铺名称已更新",
+            "message": message,
         })
     except Exception as exc:
         return _mercado_token_error_response(exc)
@@ -11131,6 +11536,31 @@ def start_token_refresh_scheduler_bootstrap():
     return scheduler_thread
 
 
+def start_store_email_sync_scheduler_bootstrap():
+    """Backfill seller emails for existing local store authorizations."""
+
+    if bit_db_api.DB_MODE != "mysql":
+        return None
+
+    def start_safely():
+        try:
+            mercado_tokens.start_store_email_sync_scheduler()
+            logging.info(
+                "店铺邮箱自动同步已启动：每 %s 秒补读缺失邮箱",
+                mercado_tokens.STORE_EMAIL_SYNC_INTERVAL_SECONDS,
+            )
+        except Exception:
+            logging.exception("启动店铺邮箱自动同步失败")
+
+    scheduler_thread = threading.Thread(
+        target=start_safely,
+        name="mercado-store-email-sync-bootstrap",
+        daemon=True,
+    )
+    scheduler_thread.start()
+    return scheduler_thread
+
+
 def start_prohibited_listing_scheduler_bootstrap():
     """Start the daily official-API prohibited-listing scheduler."""
 
@@ -11156,8 +11586,40 @@ def start_prohibited_listing_scheduler_bootstrap():
     return scheduler_thread
 
 
+def start_official_infraction_scheduler_bootstrap():
+    """Start the 12-hour official infringement scheduler."""
+
+    if bit_db_api.DB_MODE != "mysql":
+        return None
+
+    def start_safely():
+        try:
+            mercado_infraction_sync.start_official_infraction_auto_scheduler()
+            logging.info(
+                "官方侵权数据自动同步已启动：每 %s 小时同步一次",
+                mercado_infraction_sync.INFRACTION_AUTO_SYNC_HOURS,
+            )
+        except Exception:
+            logging.exception("启动官方侵权数据自动同步失败")
+
+    scheduler_thread = threading.Thread(
+        target=start_safely,
+        name="mercado-official-infraction-scheduler-bootstrap",
+        daemon=True,
+    )
+    scheduler_thread.start()
+    return scheduler_thread
+
+
 def interface_hot_reload_enabled(value=None):
-    """Enable source reloading by default while allowing an explicit opt-out."""
+    """Enable source reloading for source runs, never for frozen executables."""
+
+    # Werkzeug's reloader passes a listening socket to its child process via a
+    # file descriptor.  That descriptor hand-off is not reliable for a frozen
+    # Windows executable (and is unnecessary because bundled sources cannot be
+    # hot-reloaded), where it can fail with WinError 10038 in socket.fromfd().
+    if getattr(sys, "frozen", False):
+        return False
 
     configured = (
         os.environ.get("BIT_INTERFACE_HOT_RELOAD", "1")
@@ -11176,7 +11638,9 @@ def start_interface_background_services():
     start_interrupted_collection_recovery()
     start_store_link_scheduler_bootstrap()
     start_prohibited_listing_scheduler_bootstrap()
+    start_official_infraction_scheduler_bootstrap()
     start_token_refresh_scheduler_bootstrap()
+    start_store_email_sync_scheduler_bootstrap()
     if not USE_DB_API:
         bit_order_sync.ensure_order_financial_backfill_worker()
         bit_order_sync.ensure_order_image_backfill_worker()
@@ -11228,5 +11692,15 @@ def run_interface_server():
             interface_lock.release()
 
 
+def run_interface_main():
+    """Prepare frozen multiprocessing support before starting the server."""
+
+    # PyInstaller replaces this helper so ProcessPoolExecutor worker command
+    # lines are dispatched to multiprocessing instead of re-running the Flask
+    # entry point.  Calling it is harmless for normal source runs.
+    multiprocessing.freeze_support()
+    return run_interface_server()
+
+
 if __name__ == '__main__':
-    run_interface_server()
+    run_interface_main()

@@ -49,6 +49,27 @@ def env_float(name, default, minimum=0.0):
         return max(minimum, float(default))
 
 
+def terminate_process_pool(executor, join_timeout=1.0):
+    """立即终止进程池，供用户主动停止长时间浏览器任务时使用。"""
+    processes = list((getattr(executor, "_processes", None) or {}).values())
+    for process in processes:
+        try:
+            if process.is_alive():
+                process.terminate()
+        except Exception:
+            continue
+    deadline = time.monotonic() + max(0, float(join_timeout))
+    for process in processes:
+        try:
+            process.join(timeout=max(0, deadline - time.monotonic()))
+        except Exception:
+            continue
+    try:
+        executor.shutdown(wait=False, cancel_futures=True)
+    except Exception:
+        pass
+
+
 def is_rate_limited_text(value):
     """兼容旧调用点；限频识别统一交给 ``bit_mercado_limit``。"""
     return is_mercado_rate_limited_text(value)

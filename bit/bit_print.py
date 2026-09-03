@@ -138,6 +138,8 @@ def build_print_jobs(rows=None, selected_shops=None, selected_sites=None, select
     for row in rows:
         if not isinstance(row, dict):
             continue
+        if not bool(row.get("enabled", True)):
+            continue
         token_id = int(row.get("id") or row.get("token_id") or 0)
         shop_name = str(
             row.get("display_name") or row.get("shop_name") or row.get("nickname") or ""
@@ -213,6 +215,17 @@ def _client_and_record(record):
 def _is_unauthorized(exc):
     message = str(exc or "").lower()
     return "(401)" in message or " 401" in message or "invalid_token" in message
+
+
+def _is_order_legally_unavailable(exc):
+    """Return whether Mercado permanently hides one order with HTTP 451."""
+
+    message = str(exc or "").lower()
+    return (
+        "(451)" in message
+        or '"status":451' in message.replace(" ", "")
+        or "unavailable for legal reasons" in message
+    )
 
 
 def _scan_store_orders(
@@ -303,10 +316,23 @@ def _scan_store_orders(
         try:
             batch = []
             fetched = inserted = updated = 0
+            legally_unavailable_order_ids = []
             for order_id in client.iter_order_ids(seller_id, **filters):
                 if stop_event is not None and stop_event.is_set():
                     raise PrintTaskStopped("已收到停止请求")
-                batch.append(client.get_order(order_id))
+                try:
+                    order = client.get_order(order_id)
+                except MercadoAPIError as exc:
+                    if not _is_order_legally_unavailable(exc):
+                        raise
+                    legally_unavailable_order_ids.append(str(order_id))
+                    _emit(
+                        logger,
+                        f"{job['shop_name']}：订单 {order_id} 被美客多以 451 限制，"
+                        "已跳过并继续处理同店铺其他订单",
+                    )
+                    continue
+                batch.append(order)
                 fetched += 1
                 if len(batch) >= 50:
                     saved = bit_mysql.upsert_mercado_synced_orders(record, batch)
@@ -320,7 +346,13 @@ def _scan_store_orders(
             bit_mysql.save_mercado_order_print_state(token_id, tracking_since, scan_end)
             _emit(
                 logger,
-                f"{job['shop_name']}：API 订单同步完成，读取 {fetched}，新增 {inserted}，更新 {updated}",
+                f"{job['shop_name']}：API 订单同步完成，读取 {fetched}，"
+                f"新增 {inserted}，更新 {updated}"
+                + (
+                    f"，跳过 {len(legally_unavailable_order_ids)} 个 451 受限订单"
+                    if legally_unavailable_order_ids
+                    else ""
+                ),
             )
             return {
                 "record": record,
@@ -328,6 +360,7 @@ def _scan_store_orders(
                 "tracking_since": tracking_since,
                 "end_at": scan_end,
                 "fetched": fetched,
+                "legally_unavailable_order_ids": legally_unavailable_order_ids,
             }
         except PrintTaskStopped:
             raise
@@ -466,12 +499,16 @@ def _run_shop_job(
             break
         site_contexts = by_site.get(site) or []
         if not site_contexts:
+            restricted_count = len(scan.get("legally_unavailable_order_ids") or [])
+            message = "没有未打印订单"
+            if restricted_count:
+                message += f"；本店已跳过 {restricted_count} 个美客多 451 受限订单"
             results.append(
                 _result_row(
                     shop_name,
                     site,
                     "no_orders",
-                    "没有未打印订单",
+                    message,
                     fallback_used=scan["first_run"],
                 )
             )

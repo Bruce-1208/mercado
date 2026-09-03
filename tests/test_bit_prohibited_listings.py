@@ -134,6 +134,9 @@ def test_prohibited_listing_ui_and_list_route():
     assert b'id="tab-prohibited-listings"' in response.data
     assert "禁限售列表".encode("utf-8") in response.data
     assert b"The product is prohibited." in response.data
+    assert b'id="prohibited-risk-type-filter"' in response.data
+    assert b'id="prohibited-reply-count"' in response.data
+    assert "待回复权利人".encode("utf-8") in response.data
     assert b"startProhibitedListingSync" in response.data
 
     listing_data = {
@@ -141,7 +144,11 @@ def test_prohibited_listing_ui_and_list_route():
         "groups": [],
         "stores": [],
         "salespersons": [],
-        "summary": {"current_count": 1},
+        "summary": {
+            "current_count": 2,
+            "prohibited_count": 1,
+            "rights_holder_reply_count": 1,
+        },
         "total": 1,
         "page": 1,
         "pages": 1,
@@ -154,13 +161,15 @@ def test_prohibited_listing_ui_and_list_route():
     ) as listing:
         response = client.get(
             "/api/prohibited-listings?token_id=7&site_id=MLM&salesperson="
-            "%E4%B8%9A%E5%8A%A1%E5%91%98%E7%94%B2&search=MLM1&page=1&page_size=100"
+            "%E4%B8%9A%E5%8A%A1%E5%91%98%E7%94%B2&risk_type=rights_holder_reply"
+            "&search=MLM1&page=1&page_size=100"
         )
     assert response.status_code == 200
     assert response.get_json()["data"]["rows"][0]["item_id"] == "MLM1"
     assert listing.call_args.kwargs["token_id"] == 7
     assert listing.call_args.kwargs["site_id"] == "MLM"
     assert listing.call_args.kwargs["salesperson"] == "业务员甲"
+    assert listing.call_args.kwargs["risk_type"] == "rights_holder_reply"
 
 
 def test_manual_prohibited_sync_route_can_target_one_store():

@@ -1,8 +1,10 @@
+import contextlib
 import importlib
 import re
 import sys
+import threading
 import time
-from concurrent.futures import ProcessPoolExecutor, as_completed
+from concurrent.futures import FIRST_COMPLETED, ProcessPoolExecutor, wait
 from datetime import datetime
 from pathlib import Path
 
@@ -21,6 +23,7 @@ from bit.bit_collection_control import (
     outcome_is_permanent_failure,
     row_key,
     stagger_sleep,
+    terminate_process_pool,
     trip_batch_rate_limit,
     wait_for_batch_resume,
     write_unreadable_site_report,
@@ -75,6 +78,24 @@ SITE_PREFIX_MAP = {
     "UY": "MLU",
     "MLU": "MLU",
 }
+
+# 美客多页面在店铺并发运行时偶尔需要较长时间才能完成首屏、站点切换和分页。
+# 这些值是“最长等待上限”，页面提前就绪会立即继续，不会固定等待到超时。
+INFRACTIONS_ELEMENT_TIMEOUT_MS = env_int(
+    "BIT_DAILY_ELEMENT_TIMEOUT_MS",
+    60_000,
+    minimum=1_000,
+)
+INFRACTIONS_PAGE_READY_TIMEOUT_MS = env_int(
+    "BIT_DAILY_PAGE_READY_TIMEOUT_MS",
+    90_000,
+    minimum=1_000,
+)
+INFRACTIONS_NAVIGATION_TIMEOUT_MS = env_int(
+    "BIT_DAILY_NAVIGATION_TIMEOUT_MS",
+    120_000,
+    minimum=1_000,
+)
 
 SITE_NAME_BY_PREFIX = {
     "MLM": "墨西哥",
@@ -290,12 +311,34 @@ def _setting_flag_enabled(value):
     return bool(value)
 
 
+def _stop_requested(stop_event=None):
+    try:
+        return bool(stop_event is not None and stop_event.is_set())
+    except (BrokenPipeError, EOFError, OSError):
+        return True
+
+
+def _wait_or_stop(seconds, stop_event=None):
+    seconds = max(0, float(seconds or 0))
+    if _stop_requested(stop_event):
+        return True
+    if stop_event is not None:
+        try:
+            return bool(stop_event.wait(seconds))
+        except (BrokenPipeError, EOFError, OSError):
+            return True
+    time.sleep(seconds)
+    return False
+
+
 def _authorized_visit_stats_scope(token_data=None):
     """按授权店铺别名返回显式开启访问数据统计的站点。"""
     if token_data is None:
         token_data = list_mercado_store_tokens() or {}
     scope = {}
     for token in token_data.get("rows") or ():
+        if not bool(token.get("enabled", True)):
+            continue
         enabled_sites = []
         for setting in token.get("site_settings") or ():
             setting = dict(setting or {})
@@ -329,6 +372,46 @@ def _authorized_visit_stats_rows(rows, token_data=None):
             continue
         row = list(raw_row)
         row[3] = "，".join(SITE_NAME_BY_PREFIX[site] for site in enabled_sites)
+        selected.append(tuple(row))
+    return selected
+
+
+def _filter_rows_by_shop_sites(rows, selected_shop_sites=None):
+    """按“店铺 -> 站点”精确缩小采集范围，避免全局站点交叉匹配。"""
+    if not selected_shop_sites:
+        return list(rows or ())
+    scope = {}
+    for shop_name, sites in dict(selected_shop_sites).items():
+        shop_key = str(shop_name or "").strip().casefold()
+        if not shop_key:
+            continue
+        if isinstance(sites, str):
+            sites = (sites,)
+        normalized_sites = {
+            SITE_NAME_BY_PREFIX[site_code]
+            for site in sites or ()
+            for site_code in (_site_prefix(site),)
+            if site_code in SITE_NAME_BY_PREFIX
+        }
+        if normalized_sites:
+            scope.setdefault(shop_key, set()).update(normalized_sites)
+
+    selected = []
+    for raw_row in rows or ():
+        if not isinstance(raw_row, (list, tuple)) or len(raw_row) < 4:
+            continue
+        allowed_sites = scope.get(str(raw_row[1] or "").strip().casefold())
+        if not allowed_sites:
+            continue
+        target_sites = [
+            site
+            for site in _split_sites(raw_row[3])
+            if site in allowed_sites
+        ]
+        if not target_sites:
+            continue
+        row = list(raw_row)
+        row[3] = "，".join(target_sites)
         selected.append(tuple(row))
     return selected
 
@@ -415,7 +498,7 @@ def _open_bitbrowser(
     )
 
 
-def _text_list(page, selector, timeout=30000):
+def _text_list(page, selector, timeout=INFRACTIONS_ELEMENT_TIMEOUT_MS):
     try:
         page.wait_for_selector(selector, timeout=timeout)
     except Exception:
@@ -432,7 +515,7 @@ def _get_page_signature(page):
         return tuple()
 
 
-def _wait_infractions_ready(page, timeout=30000):
+def _wait_infractions_ready(page, timeout=INFRACTIONS_PAGE_READY_TIMEOUT_MS):
     try:
         page.wait_for_load_state("domcontentloaded", timeout=timeout)
     except Exception:
@@ -449,7 +532,7 @@ def _wait_infractions_ready(page, timeout=30000):
         pass
 
  
-def _safe_goto_infractions(page, url, timeout=60000):
+def _safe_goto_infractions(page, url, timeout=INFRACTIONS_NAVIGATION_TIMEOUT_MS):
     try:
         response = page.goto(url, wait_until="domcontentloaded", timeout=timeout)
         if response is not None and response.status in (401, 403):
@@ -590,7 +673,11 @@ def _extract_last_submit_times(page):
 
 
 def _read_current_infractions_page(page, name, site, infraction_type="侵权"):
-    ids = _text_list(page, ".infraction-item__id", timeout=30000)
+    ids = _text_list(
+        page,
+        ".infraction-item__id",
+        timeout=INFRACTIONS_ELEMENT_TIMEOUT_MS,
+    )
     titles = _text_list(page, ".infraction-item__title", timeout=5000)
     dates = _text_list(page, ".infraction-denounce__date", timeout=5000)
     submit_times = _extract_last_submit_times(page)
@@ -691,7 +778,7 @@ def _goto_next_offset(page, previous_signature):
         }
         """,
         arg=list(previous_signature),
-        timeout=30000,
+        timeout=INFRACTIONS_PAGE_READY_TIMEOUT_MS,
     )
     return True
 
@@ -769,7 +856,10 @@ def _open_rights_holder_report_tab(page):
         return False
 
     try:
-        page.wait_for_load_state("domcontentloaded", timeout=30000)
+        page.wait_for_load_state(
+            "domcontentloaded",
+            timeout=INFRACTIONS_PAGE_READY_TIMEOUT_MS,
+        )
     except Exception:
         pass
     time.sleep(3)
@@ -806,7 +896,10 @@ def _open_detected_report_tab(page):
         return False
 
     try:
-        page.wait_for_load_state("domcontentloaded", timeout=30000)
+        page.wait_for_load_state(
+            "domcontentloaded",
+            timeout=INFRACTIONS_PAGE_READY_TIMEOUT_MS,
+        )
     except Exception:
         pass
     time.sleep(3)
@@ -836,8 +929,8 @@ def _click_next_page(page, previous_signature, page_no):
                 print("当前已经是最后一页，翻页结束")
                 return False
 
-            next_button.scroll_into_view_if_needed(timeout=10000)
-            next_button.click(timeout=10000)
+            next_button.scroll_into_view_if_needed(timeout=INFRACTIONS_ELEMENT_TIMEOUT_MS)
+            next_button.click(timeout=INFRACTIONS_ELEMENT_TIMEOUT_MS)
             page.wait_for_function(
                 """
                 ([previous, previousUrl]) => {
@@ -849,7 +942,7 @@ def _click_next_page(page, previous_signature, page_no):
                 }
                 """,
                 arg=[list(previous_signature), previous_url],
-                timeout=30000,
+                timeout=INFRACTIONS_PAGE_READY_TIMEOUT_MS,
             )
             page.wait_for_function(
                 """
@@ -861,7 +954,7 @@ def _click_next_page(page, previous_signature, page_no):
                 }
                 """,
                 arg=list(previous_signature),
-                timeout=30000,
+                timeout=INFRACTIONS_PAGE_READY_TIMEOUT_MS,
             )
             _validate_infractions_page(page)
             print(f"成功点击下一页，当前第{page_no + 1}页")
@@ -888,11 +981,16 @@ def _switch_site_if_needed(page, name, site, retries=3):
 
     for attempt in range(1, retries + 1):
         try:
-            page.locator(".nav-header-cbt__site-switcher").click(timeout=10000)
+            page.locator(".nav-header-cbt__site-switcher").click(
+                timeout=INFRACTIONS_ELEMENT_TIMEOUT_MS
+            )
             print(f"{name}打开站点选择器")
-            page.locator(selector).click(timeout=30000)
+            page.locator(selector).click(timeout=INFRACTIONS_ELEMENT_TIMEOUT_MS)
             try:
-                page.reload(wait_until="domcontentloaded", timeout=60000)
+                page.reload(
+                    wait_until="domcontentloaded",
+                    timeout=INFRACTIONS_NAVIGATION_TIMEOUT_MS,
+                )
             except Exception:
                 current_url = page.url or ""
                 if "/noindex/pppi/infractions" not in current_url:
@@ -924,6 +1022,8 @@ def _connect_bitbrowser_with_playwright(playwright, open_result):
     browser = playwright.chromium.connect_over_cdp(endpoint)
     context = browser.contexts[0] if browser.contexts else browser.new_context()
     page = context.new_page()
+    page.set_default_timeout(INFRACTIONS_ELEMENT_TIMEOUT_MS)
+    page.set_default_navigation_timeout(INFRACTIONS_NAVIGATION_TIMEOUT_MS)
     return browser, page
 
 
@@ -1045,7 +1145,7 @@ def get_infractions_info(
                 pass
 
 
-def _run_infractions_for_browser_locked(row):
+def _run_infractions_for_browser_locked(row, stop_event=None):
     browser_id = row[0]
     name = row[1]
     remark = row[2]
@@ -1075,6 +1175,9 @@ def _run_infractions_for_browser_locked(row):
                 )
                 try:
                     for site in site_list:
+                        if _stop_requested(stop_event):
+                            print(get_now_time() + name + "收到停止请求，结束侵权遍历")
+                            break
                         wait_for_batch_resume(f"侵权采集:{name}")
                         if fatal_profile_error is not None:
                             result.append(
@@ -1091,6 +1194,8 @@ def _run_infractions_for_browser_locked(row):
                         succeeded = False
                         last_error = None
                         for attempt in range(1, 4):
+                            if _stop_requested(stop_event):
+                                break
                             wait_for_batch_resume(f"侵权采集:{name}")
                             try:
                                 infraction_info = _collect_site_infractions(
@@ -1151,7 +1256,8 @@ def _run_infractions_for_browser_locked(row):
                                     if is_rate_limited:
                                         wait_for_batch_resume(f"侵权采集:{name}")
                                     else:
-                                        time.sleep(5)
+                                        if _wait_or_stop(5, stop_event):
+                                            break
                         if not succeeded:
                             result.append(
                                 (
@@ -1184,9 +1290,27 @@ def _run_infractions_for_browser_locked(row):
     return infraction_info_sum, result
 
 
-def _run_infractions_for_browser(row, lease_wait_seconds=0):
+def _run_infractions_for_browser(
+    row,
+    lease_wait_seconds=0,
+    log_path=None,
+    stop_event=None,
+):
+    if log_path:
+        with open(log_path, "a", encoding="utf-8", buffering=1) as log_file:
+            with contextlib.redirect_stdout(log_file), contextlib.redirect_stderr(log_file):
+                return _run_infractions_for_browser(
+                    row,
+                    lease_wait_seconds,
+                    stop_event=stop_event,
+                )
     browser_id = row[0]
     name = row[1]
+    if _stop_requested(stop_event):
+        return [], [
+            ("获取侵权信息", name, site, "已停止", get_now_time())
+            for site in (_split_sites(row[3]) or [""])
+        ]
     wait_for_batch_resume(f"侵权采集:{name}")
     lease = create_window_lease(
         browser_id,
@@ -1202,9 +1326,28 @@ def _run_infractions_for_browser(row, lease_wait_seconds=0):
             for site in sites
         ]
     try:
-        return _run_infractions_for_browser_locked(row)
+        return _run_infractions_for_browser_locked(row, stop_event=stop_event)
     finally:
         lease.release()
+
+
+def _force_close_infraction_windows(rows):
+    browser_ids = list(dict.fromkeys(str(row[0] or "") for row in (rows or ())))
+
+    def close_windows():
+        for browser_id in browser_ids:
+            if not browser_id:
+                continue
+            try:
+                closeBrowser(browser_id, force=True, request_timeout=3)
+            except Exception as exc:
+                print(get_now_time() + f"停止时关闭窗口 {browser_id} 失败：{exc}")
+
+    threading.Thread(
+        target=close_windows,
+        name="infraction-window-cleanup",
+        daemon=True,
+    ).start()
 
 
 def _execute_infraction_rows(
@@ -1213,38 +1356,67 @@ def _execute_infraction_rows(
     stagger_min_seconds,
     stagger_max_seconds,
     lease_wait_seconds=0,
+    log_path=None,
+    stop_event=None,
 ):
     outcomes = {}
     worker_count = max(1, min(int(max_workers), len(rows))) if rows else 1
-    with ProcessPoolExecutor(max_workers=worker_count) as executor:
-        future_map = {}
-        for index, row in enumerate(rows):
-            future = executor.submit(
-                _run_infractions_for_browser,
-                row,
-                lease_wait_seconds,
-            )
-            future_map[future] = row
-            if index < len(rows) - 1:
-                delay = stagger_sleep(stagger_min_seconds, stagger_max_seconds)
-                print(f"{get_now_time()}侵权店铺错峰启动，下一家等待 {delay:.1f} 秒")
+    print(
+        f"{get_now_time()}侵权遍历使用 {worker_count} 个进程并发处理 "
+        f"{len(rows)} 家店铺"
+    )
+    executor = ProcessPoolExecutor(max_workers=worker_count)
+    future_map = {}
+    for index, row in enumerate(rows):
+        future = executor.submit(
+            _run_infractions_for_browser,
+            row,
+            lease_wait_seconds,
+            log_path,
+            stop_event,
+        )
+        future_map[future] = row
+        if index < len(rows) - 1:
+            delay = stagger_sleep(stagger_min_seconds, stagger_max_seconds)
+            print(f"{get_now_time()}侵权店铺错峰启动，下一家等待 {delay:.1f} 秒")
 
-        for future in as_completed(future_map):
-            row = future_map[future]
-            name = row[1]
-            try:
-                browser_infractions, browser_result = future.result()
-            except Exception as exc:
-                print(get_now_time() + name + "窗口任务异常", exc)
-                status = _failure_status(exc)
-                sites = _split_sites(row[3]) or [""]
-                browser_infractions = []
-                browser_result = [
-                    ("获取侵权信息", name, site, status, get_now_time())
-                    for site in sites
-                ]
-            outcomes[row_key(row)] = (row, browser_infractions, browser_result)
-            print(get_now_time() + name + "窗口任务完成")
+    pending = set(future_map)
+    forced_stop = False
+    try:
+        while pending:
+            completed, pending = wait(
+                pending,
+                timeout=0.25,
+                return_when=FIRST_COMPLETED,
+            )
+            for future in completed:
+                row = future_map[future]
+                name = row[1]
+                try:
+                    browser_infractions, browser_result = future.result()
+                except Exception as exc:
+                    print(get_now_time() + name + "窗口任务异常", exc)
+                    status = _failure_status(exc)
+                    sites = _split_sites(row[3]) or [""]
+                    browser_infractions = []
+                    browser_result = [
+                        ("获取侵权信息", name, site, status, get_now_time())
+                        for site in sites
+                    ]
+                outcomes[row_key(row)] = (row, browser_infractions, browser_result)
+                print(get_now_time() + name + "窗口任务完成")
+            if _stop_requested(stop_event):
+                for future in pending:
+                    future.cancel()
+                print(get_now_time() + "收到停止请求，立即终止侵权遍历进程")
+                forced_stop = True
+                break
+    finally:
+        if forced_stop:
+            terminate_process_pool(executor)
+            _force_close_infraction_windows(rows)
+        else:
+            executor.shutdown(wait=True, cancel_futures=True)
     return outcomes
 
 
@@ -1261,11 +1433,15 @@ def _row_as_login_config(row):
     return {field: row[index] if index < len(row) else "" for index, field in enumerate(fields)}
 
 
-def _prepare_infraction_retry_rows(outcomes, permanent_login_failures=None):
+def _prepare_infraction_retry_rows(
+    outcomes,
+    permanent_login_failures=None,
+    authorization_flag="visit_stats_enabled",
+):
     latest_rows = _deduplicate_config_rows(
         list_config_rows(
             include_ignored=False,
-            authorization_flag="visit_stats_enabled",
+            authorization_flag=authorization_flag,
         )
     )
     latest_by_name = {str(row[1]).strip(): row for row in latest_rows if row and row[1]}
@@ -1355,35 +1531,44 @@ def get_infractions_info_all(
     retry_failed=True,
     selected_shops=None,
     selected_sites=None,
+    selected_shop_sites=None,
+    authorization_flag="visit_stats_enabled",
+    persist=True,
+    log_path=None,
+    stop_event=None,
 ):
-    """并发采集侵权；修复已识别问题后只补跑失败店铺，最后统一入库。"""
+    """并发采集侵权；支持按店铺站点精确限定范围及仅返回本轮实时数据。"""
     start = int(time.time())
     print(start)
     bit_dir = Path(__file__).resolve().parent.parent / "bit"
     rows = list_config_rows(
         include_ignored=False,
-        authorization_flag="visit_stats_enabled",
+        authorization_flag=authorization_flag,
     )
     rows = [row for row in rows if row and row[0]]
     rows = _deduplicate_config_rows(rows)
+    rows = _filter_rows_by_shop_sites(rows, selected_shop_sites)
     rows = filter_config_rows(
         rows,
         selected_shops=selected_shops,
         selected_sites=selected_sites,
     )
-    if (selected_shops or selected_sites) and not rows:
-        raise ValueError("所选店铺或站点未在授权店铺中开启访问数据统计")
+    if (selected_shops or selected_sites or selected_shop_sites) and not rows:
+        switch_label = "申诉" if authorization_flag == "appeal_enabled" else "访问数据统计"
+        raise ValueError(f"所选店铺或站点未在授权店铺中开启{switch_label}")
 
     outcomes = _execute_infraction_rows(
         rows,
         max_workers=max_workers,
         stagger_min_seconds=stagger_min_seconds,
         stagger_max_seconds=stagger_max_seconds,
+        log_path=log_path,
+        stop_event=stop_event,
     )
 
     retry_rounds = (
         env_int("BIT_COLLECTION_RETRY_ROUNDS", 2, 0)
-        if retry_failed
+        if retry_failed and not _stop_requested(stop_event)
         else 0
     )
     permanent_login_failures = set()
@@ -1391,6 +1576,7 @@ def get_infractions_info_all(
         retry_plan = _prepare_infraction_retry_rows(
             outcomes,
             permanent_login_failures=permanent_login_failures,
+            authorization_flag=authorization_flag,
         )
         if not retry_plan:
             break
@@ -1410,6 +1596,8 @@ def get_infractions_info_all(
                 "BIT_RETRY_WINDOW_LOCK_WAIT_SECONDS",
                 DEFAULT_RETRY_LOCK_WAIT_SECONDS,
             ),
+            log_path=log_path,
+            stop_event=stop_event,
         )
         for original_key, retry_row in retry_plan:
             retry_outcome = retry_outcomes.get(row_key(retry_row))
@@ -1434,60 +1622,61 @@ def get_infractions_info_all(
     if failure_report_path:
         print(f"{get_now_time()}无法读取站点已记录：{failure_report_path}")
 
-    df = pd.DataFrame(
-        infraction_info_sum,
-        columns=["店铺名", "站点", "编号", "标题", "侵权时间", "提交时间", "执行时间", "类型"],
-    )
-
-    scoped_collection = bool(selected_shops or selected_sites)
-    replace_targets = [
-        (str(row[1] or "").strip(), site)
-        for row in rows
-        for site in _split_sites(row[3])
-        if str(row[1] or "").strip() and site
-    ]
-    date_str = datetime.now().strftime(
-        "%Y-%m-%d-%H%M%S" if scoped_collection else "%Y-%m-%d-%H"
-    )
-    scope_suffix = "-选定范围" if scoped_collection else ""
-    output_path = bit_dir / f"美客多-武汉泽顺店铺侵权信息汇总{scope_suffix}-{date_str}.xlsx"
-    post_errors = []
-    for step_name, action in (
-        (
-            "写入侵权数据",
-            lambda: (
-                inset_infraction_info(
-                    infraction_info_sum,
-                    merge_latest=True,
-                    replace_targets=replace_targets,
-                )
-                if scoped_collection
-                else inset_infraction_info(infraction_info_sum)
-            ),
-        ),
-        ("写入侵权任务记录", lambda: insert_task_record(result)),
-        ("导出侵权汇总", lambda: df.to_excel(output_path, index=False)),
-    ):
-        try:
-            action()
-        except Exception as exc:
-            post_errors.append(f"{step_name}失败：{exc}")
-            print(f"{get_now_time()}{step_name}失败：{exc}")
-
+    output_path = ""
     email_sent = False
-    if output_path.exists():
-        email_sent = bool(
-            send_info(
-                "美客多所有店铺侵权汇总",
-                infraction_info_sum_str,
-                output_path,
-                output_path.name,
-            )
+    if persist and not _stop_requested(stop_event):
+        df = pd.DataFrame(
+            infraction_info_sum,
+            columns=["店铺名", "站点", "编号", "标题", "侵权时间", "提交时间", "执行时间", "类型"],
         )
-        print(get_now_time() + ("发送邮件成功" if email_sent else "发送邮件失败，汇总文件已保留"))
+        scoped_collection = bool(selected_shops or selected_sites or selected_shop_sites)
+        replace_targets = [
+            (str(row[1] or "").strip(), site)
+            for row in rows
+            for site in _split_sites(row[3])
+            if str(row[1] or "").strip() and site
+        ]
+        date_str = datetime.now().strftime(
+            "%Y-%m-%d-%H%M%S" if scoped_collection else "%Y-%m-%d-%H"
+        )
+        scope_suffix = "-选定范围" if scoped_collection else ""
+        output_path = bit_dir / f"美客多-武汉泽顺店铺侵权信息汇总{scope_suffix}-{date_str}.xlsx"
+        post_errors = []
+        for step_name, action in (
+            (
+                "写入侵权数据",
+                lambda: (
+                    inset_infraction_info(
+                        infraction_info_sum,
+                        merge_latest=True,
+                        replace_targets=replace_targets,
+                    )
+                    if scoped_collection
+                    else inset_infraction_info(infraction_info_sum)
+                ),
+            ),
+            ("写入侵权任务记录", lambda: insert_task_record(result)),
+            ("导出侵权汇总", lambda: df.to_excel(output_path, index=False)),
+        ):
+            try:
+                action()
+            except Exception as exc:
+                post_errors.append(f"{step_name}失败：{exc}")
+                print(f"{get_now_time()}{step_name}失败：{exc}")
 
-    if post_errors:
-        raise RuntimeError("；".join(post_errors))
+        if output_path.exists():
+            email_sent = bool(
+                send_info(
+                    "美客多所有店铺侵权汇总",
+                    infraction_info_sum_str,
+                    output_path,
+                    output_path.name,
+                )
+            )
+            print(get_now_time() + ("发送邮件成功" if email_sent else "发送邮件失败，汇总文件已保留"))
+
+        if post_errors:
+            raise RuntimeError("；".join(post_errors))
     return {
         "data": infraction_info_sum,
         "results": result,
@@ -1496,6 +1685,7 @@ def get_infractions_info_all(
         "email_sent": email_sent,
         "selected_shops": list(selected_shops or ()),
         "selected_sites": list(selected_sites or ()),
+        "selected_shop_sites": dict(selected_shop_sites or {}),
         "max_workers": max_workers,
         "failed_shops": sorted(
             {

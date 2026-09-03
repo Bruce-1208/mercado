@@ -14,6 +14,7 @@ TASK_TABLE = "erp_mercadolibre_collection_tasks"
 COLLECTION_TABLE = "erp_mercadolibre_collection_items"
 PRODUCT_TABLE = "erp_mercadolibre_products"
 PUBLISH_RECORD_TABLE = "erp_mercadolibre_publish_records"
+MANAGEMENT_CATEGORY_TABLE = "erp_mercadolibre_management_categories"
 
 PROFITABILITY_COLUMN_DEFINITIONS = (
     ("sale_price_usd", "DECIMAL(20,4) NULL"),
@@ -239,6 +240,7 @@ def _migrate_collection_tables(cursor: Any) -> None:
             `exchange_rate_updated_at` VARCHAR(64) NULL,
             `category_id` VARCHAR(64) NULL,
             `category_name` VARCHAR(255) NULL,
+            `management_category_id` BIGINT NULL,
             `listing_type_id` VARCHAR(64) NULL,
             `listing_type_name` VARCHAR(128) NULL,
             `commission_rate` DECIMAL(10,4) NULL,
@@ -267,7 +269,8 @@ def _migrate_collection_tables(cursor: Any) -> None:
             PRIMARY KEY (`id`),
             UNIQUE KEY `uniq_erp_meli_collection_item` (`task_id`, `source_item_id`),
             KEY `idx_erp_meli_collection_task` (`task_id`, `collected_at`),
-            KEY `idx_erp_meli_collection_status` (`scrape_status`, `collected_at`)
+            KEY `idx_erp_meli_collection_status` (`scrape_status`, `collected_at`),
+            KEY `idx_erp_meli_collection_management_category` (`management_category_id`, `id`)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
         """
     )
@@ -295,6 +298,7 @@ def _migrate_collection_tables(cursor: Any) -> None:
             `exchange_rate_updated_at` VARCHAR(64) NULL,
             `category_id` VARCHAR(64) NULL,
             `category_name` VARCHAR(255) NULL,
+            `management_category_id` BIGINT NULL,
             `listing_type_id` VARCHAR(64) NULL,
             `listing_type_name` VARCHAR(128) NULL,
             `commission_rate` DECIMAL(10,4) NULL,
@@ -325,7 +329,20 @@ def _migrate_collection_tables(cursor: Any) -> None:
             UNIQUE KEY `uniq_erp_meli_product_item` (`source_item_id`),
             KEY `idx_erp_meli_product_added` (`added_at`),
             KEY `idx_erp_meli_product_source` (`source_type`, `id`),
-            KEY `idx_erp_meli_product_review` (`review_status`, `id`)
+            KEY `idx_erp_meli_product_review` (`review_status`, `id`),
+            KEY `idx_erp_meli_product_management_category` (`management_category_id`, `id`)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+        """
+    )
+    cursor.execute(
+        f"""
+        CREATE TABLE IF NOT EXISTS `{MANAGEMENT_CATEGORY_TABLE}` (
+            `id` BIGINT NOT NULL AUTO_INCREMENT,
+            `name` VARCHAR(64) NOT NULL,
+            `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            `updated_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            PRIMARY KEY (`id`),
+            UNIQUE KEY `uniq_erp_meli_management_category_name` (`name`)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
         """
     )
@@ -383,6 +400,13 @@ def _migrate_collection_tables(cursor: Any) -> None:
         _ensure_column(cursor, PRODUCT_TABLE, column, definition)
     for column, definition in PRODUCT_WORKFLOW_COLUMN_DEFINITIONS:
         _ensure_column(cursor, PRODUCT_TABLE, column, definition)
+    for table in (COLLECTION_TABLE, PRODUCT_TABLE):
+        _ensure_column(
+            cursor,
+            table,
+            "management_category_id",
+            "BIGINT NULL AFTER `category_name`",
+        )
     _ensure_collection_task_unique_index(cursor)
     _ensure_index(
         cursor, PRODUCT_TABLE, "idx_erp_meli_product_source", "(`source_type`, `id`)"
@@ -400,6 +424,18 @@ def _migrate_collection_tables(cursor: Any) -> None:
     _ensure_index(cursor, PRODUCT_TABLE, "idx_erp_meli_product_price", "(`price`)")
     _ensure_index(
         cursor, PRODUCT_TABLE, "idx_erp_meli_product_net", "(`net_proceeds_usd`)"
+    )
+    _ensure_index(
+        cursor,
+        COLLECTION_TABLE,
+        "idx_erp_meli_collection_management_category",
+        "(`management_category_id`, `id`)",
+    )
+    _ensure_index(
+        cursor,
+        PRODUCT_TABLE,
+        "idx_erp_meli_product_management_category",
+        "(`management_category_id`, `id`)",
     )
     if collection_volumetric_added:
         cursor.execute(
@@ -439,11 +475,14 @@ def _collection_schema_is_current(cursor: Any) -> bool:
         (COLLECTION_TABLE, "volumetric_weight_kg"),
         (COLLECTION_TABLE, "profitability_error"),
         (COLLECTION_TABLE, "added_to_products"),
+        (COLLECTION_TABLE, "management_category_id"),
         (PRODUCT_TABLE, "source_type"),
         (PRODUCT_TABLE, "review_status"),
         (PRODUCT_TABLE, "description_text"),
         (PRODUCT_TABLE, "profitability_error"),
         (PRODUCT_TABLE, "last_published_at"),
+        (PRODUCT_TABLE, "management_category_id"),
+        (MANAGEMENT_CATEGORY_TABLE, "name"),
         (PUBLISH_RECORD_TABLE, "failure_reason"),
         (PUBLISH_RECORD_TABLE, "result_json"),
     }
@@ -452,9 +491,15 @@ def _collection_schema_is_current(cursor: Any) -> bool:
         SELECT `TABLE_NAME`, `COLUMN_NAME`
         FROM `information_schema`.`COLUMNS`
         WHERE `TABLE_SCHEMA` = DATABASE()
-          AND `TABLE_NAME` IN (%s, %s, %s, %s)
+          AND `TABLE_NAME` IN (%s, %s, %s, %s, %s)
         """,
-        (TASK_TABLE, COLLECTION_TABLE, PRODUCT_TABLE, PUBLISH_RECORD_TABLE),
+        (
+            TASK_TABLE,
+            COLLECTION_TABLE,
+            PRODUCT_TABLE,
+            PUBLISH_RECORD_TABLE,
+            MANAGEMENT_CATEGORY_TABLE,
+        ),
     )
     existing = {
         (str(row.get("TABLE_NAME") or row.get("Table_name") or ""),
@@ -768,6 +813,7 @@ def _list_rows(
     source_type: str = "",
     review_status: str = "",
     publish_status: str = "",
+    management_category_id: Any = None,
     weight_min: Any = None,
     weight_max: Any = None,
     price_min: Any = None,
@@ -793,6 +839,18 @@ def _list_rows(
         params.append(int(task_id))
     if table == COLLECTION_TABLE and exclude_added:
         where.append("`added_to_products` = 0")
+    category_filter = str(management_category_id or "").strip().lower()
+    if category_filter in {"uncategorized", "unclassified", "none"}:
+        where.append("`management_category_id` IS NULL")
+    elif category_filter:
+        try:
+            normalized_category_id = int(category_filter)
+        except (TypeError, ValueError) as exc:
+            raise ValueError("运营分类编号无效") from exc
+        if normalized_category_id <= 0:
+            raise ValueError("运营分类编号无效")
+        where.append("`management_category_id` = %s")
+        params.append(normalized_category_id)
     if table == PRODUCT_TABLE:
         source_type = str(source_type or "").strip().lower()
         review_status = str(review_status or "").strip().lower()
@@ -885,7 +943,10 @@ def _list_rows(
             cursor.execute(f"SELECT COUNT(*) AS total FROM `{table}` {where_sql}", tuple(params))
             total = int((cursor.fetchone() or {}).get("total") or 0)
             cursor.execute(
-                f"SELECT * FROM `{table}` {where_sql} ORDER BY `id` DESC LIMIT %s OFFSET %s",
+                f"SELECT `{table}`.*, category.`name` AS `management_category_name` "
+                f"FROM `{table}` LEFT JOIN `{MANAGEMENT_CATEGORY_TABLE}` AS category "
+                f"ON category.`id` = `{table}`.`management_category_id` "
+                f"{where_sql} ORDER BY `{table}`.`id` DESC LIMIT %s OFFSET %s",
                 tuple(params + [limit, offset]),
             )
             rows = [_json_safe_row(row) for row in cursor.fetchall()]
@@ -902,6 +963,239 @@ def list_collection_items(**kwargs: Any) -> dict[str, Any]:
 def list_product_items(**kwargs: Any) -> dict[str, Any]:
     kwargs.pop("task_id", None)
     return _list_rows(PRODUCT_TABLE, **kwargs)
+
+
+def _normalize_management_category_name(value: Any) -> str:
+    name = re.sub(r"\s+", " ", str(value or "").strip())
+    if not name:
+        raise ValueError("请输入分类名称")
+    if len(name) > 64:
+        raise ValueError("分类名称不能超过 64 个字符")
+    return name
+
+
+def list_management_categories(
+    *,
+    connection_factory: Callable[[], Any] | None = None,
+) -> dict[str, Any]:
+    """Return user-managed product categories with list usage counts."""
+
+    connection = (connection_factory or _connect)()
+    try:
+        with connection.cursor() as cursor:
+            ensure_collection_tables(cursor)
+            cursor.execute(
+                f"""
+                SELECT category.`id`, category.`name`, category.`created_at`,
+                       category.`updated_at`,
+                       (SELECT COUNT(*) FROM `{COLLECTION_TABLE}` AS collection_item
+                        WHERE collection_item.`management_category_id` = category.`id`)
+                           AS `collection_count`,
+                       (SELECT COUNT(*) FROM `{PRODUCT_TABLE}` AS product_item
+                        WHERE product_item.`management_category_id` = category.`id`)
+                           AS `product_count`
+                FROM `{MANAGEMENT_CATEGORY_TABLE}` AS category
+                ORDER BY category.`name` ASC, category.`id` ASC
+                """
+            )
+            rows = []
+            for raw_row in cursor.fetchall():
+                row = _json_safe_row(raw_row)
+                row.pop("added_to_products", None)
+                row.pop("weight_dimensions_complete", None)
+                rows.append(row)
+        connection.commit()
+        return {"total": len(rows), "rows": rows}
+    finally:
+        connection.close()
+
+
+def create_management_category(
+    name: str,
+    *,
+    connection_factory: Callable[[], Any] | None = None,
+) -> dict[str, Any]:
+    normalized_name = _normalize_management_category_name(name)
+    connection = (connection_factory or _connect)()
+    try:
+        with connection.cursor() as cursor:
+            ensure_collection_tables(cursor)
+            cursor.execute(
+                f"SELECT `id` FROM `{MANAGEMENT_CATEGORY_TABLE}` WHERE `name` = %s",
+                (normalized_name,),
+            )
+            if cursor.fetchone():
+                raise ValueError("分类名称已存在")
+            cursor.execute(
+                f"INSERT INTO `{MANAGEMENT_CATEGORY_TABLE}` (`name`) VALUES (%s)",
+                (normalized_name,),
+            )
+            category_id = int(cursor.lastrowid)
+        connection.commit()
+        return {"id": category_id, "name": normalized_name}
+    except BaseException:
+        connection.rollback()
+        raise
+    finally:
+        connection.close()
+
+
+def update_management_category(
+    category_id: int,
+    name: str,
+    *,
+    connection_factory: Callable[[], Any] | None = None,
+) -> dict[str, Any]:
+    try:
+        normalized_id = int(category_id)
+    except (TypeError, ValueError) as exc:
+        raise ValueError("运营分类编号无效") from exc
+    if normalized_id <= 0:
+        raise ValueError("运营分类编号无效")
+    normalized_name = _normalize_management_category_name(name)
+    connection = (connection_factory or _connect)()
+    try:
+        with connection.cursor() as cursor:
+            ensure_collection_tables(cursor)
+            cursor.execute(
+                f"SELECT `id` FROM `{MANAGEMENT_CATEGORY_TABLE}` "
+                "WHERE `name` = %s AND `id` <> %s",
+                (normalized_name, normalized_id),
+            )
+            if cursor.fetchone():
+                raise ValueError("分类名称已存在")
+            cursor.execute(
+                f"UPDATE `{MANAGEMENT_CATEGORY_TABLE}` SET `name` = %s WHERE `id` = %s",
+                (normalized_name, normalized_id),
+            )
+            changed = int(cursor.rowcount or 0)
+            if changed == 0:
+                cursor.execute(
+                    f"SELECT 1 FROM `{MANAGEMENT_CATEGORY_TABLE}` WHERE `id` = %s",
+                    (normalized_id,),
+                )
+                if not cursor.fetchone():
+                    raise KeyError("运营分类不存在")
+        connection.commit()
+        return {"id": normalized_id, "name": normalized_name, "changed": changed}
+    except BaseException:
+        connection.rollback()
+        raise
+    finally:
+        connection.close()
+
+
+def delete_management_category(
+    category_id: int,
+    *,
+    connection_factory: Callable[[], Any] | None = None,
+) -> dict[str, Any]:
+    try:
+        normalized_id = int(category_id)
+    except (TypeError, ValueError) as exc:
+        raise ValueError("运营分类编号无效") from exc
+    if normalized_id <= 0:
+        raise ValueError("运营分类编号无效")
+    connection = (connection_factory or _connect)()
+    try:
+        with connection.cursor() as cursor:
+            ensure_collection_tables(cursor)
+            cursor.execute(
+                f"SELECT `id` FROM `{MANAGEMENT_CATEGORY_TABLE}` WHERE `id` = %s",
+                (normalized_id,),
+            )
+            if not cursor.fetchone():
+                raise KeyError("运营分类不存在")
+            cleared = 0
+            for table in (COLLECTION_TABLE, PRODUCT_TABLE):
+                cursor.execute(
+                    f"UPDATE `{table}` SET `management_category_id` = NULL "
+                    "WHERE `management_category_id` = %s",
+                    (normalized_id,),
+                )
+                cleared += max(0, int(cursor.rowcount or 0))
+            cursor.execute(
+                f"DELETE FROM `{MANAGEMENT_CATEGORY_TABLE}` WHERE `id` = %s",
+                (normalized_id,),
+            )
+        connection.commit()
+        return {"id": normalized_id, "deleted": 1, "cleared_items": cleared}
+    except BaseException:
+        connection.rollback()
+        raise
+    finally:
+        connection.close()
+
+
+def assign_management_category(
+    item_type: str,
+    item_ids: Iterable[int],
+    category_id: int | None,
+    *,
+    connection_factory: Callable[[], Any] | None = None,
+) -> dict[str, Any]:
+    normalized_type = str(item_type or "").strip().lower()
+    table_by_type = {"collection": COLLECTION_TABLE, "products": PRODUCT_TABLE}
+    if normalized_type not in table_by_type:
+        raise ValueError("商品列表类型无效")
+    ids = _normalize_row_ids(item_ids, empty_message="请至少勾选一个商品")
+    normalized_category_id: int | None = None
+    if category_id not in (None, ""):
+        try:
+            normalized_category_id = int(category_id)
+        except (TypeError, ValueError) as exc:
+            raise ValueError("运营分类编号无效") from exc
+        if normalized_category_id <= 0:
+            raise ValueError("运营分类编号无效")
+    placeholders = ", ".join(["%s"] * len(ids))
+    connection = (connection_factory or _connect)()
+    try:
+        with connection.cursor() as cursor:
+            ensure_collection_tables(cursor)
+            if normalized_category_id is not None:
+                cursor.execute(
+                    f"SELECT 1 FROM `{MANAGEMENT_CATEGORY_TABLE}` WHERE `id` = %s",
+                    (normalized_category_id,),
+                )
+                if not cursor.fetchone():
+                    raise KeyError("运营分类不存在")
+            target_table = table_by_type[normalized_type]
+            cursor.execute(
+                f"UPDATE `{target_table}` SET `management_category_id` = %s "
+                f"WHERE `id` IN ({placeholders})",
+                tuple([normalized_category_id] + ids),
+            )
+            changed = int(cursor.rowcount or 0)
+            if normalized_type == "collection":
+                cursor.execute(
+                    f"UPDATE `{PRODUCT_TABLE}` AS product "
+                    f"INNER JOIN `{COLLECTION_TABLE}` AS collection_item "
+                    "ON collection_item.`source_item_id` = product.`source_item_id` "
+                    "SET product.`management_category_id` = %s "
+                    f"WHERE collection_item.`id` IN ({placeholders})",
+                    tuple([normalized_category_id] + ids),
+                )
+            else:
+                cursor.execute(
+                    f"UPDATE `{COLLECTION_TABLE}` AS collection_item "
+                    f"INNER JOIN `{PRODUCT_TABLE}` AS product "
+                    "ON collection_item.`source_item_id` = product.`source_item_id` "
+                    "SET collection_item.`management_category_id` = %s "
+                    f"WHERE product.`id` IN ({placeholders})",
+                    tuple([normalized_category_id] + ids),
+                )
+        connection.commit()
+        return {
+            "item_type": normalized_type,
+            "requested": len(ids),
+            "changed": changed,
+            "category_id": normalized_category_id,
+        }
+    except BaseException:
+        connection.rollback()
+        raise
+    finally:
+        connection.close()
 
 
 def create_product_publish_records(
@@ -1952,6 +2246,7 @@ def move_product_items_to_collection(
                             `package_width_cm` = COALESCE(%s, `package_width_cm`),
                             `package_height_cm` = COALESCE(%s, `package_height_cm`),
                             `weight_basis` = COALESCE(NULLIF(%s, ''), `weight_basis`),
+                            `management_category_id` = COALESCE(%s, `management_category_id`),
                             `added_to_products` = 0,
                             `scrape_status` = %s,
                             `error_message` = %s
@@ -1968,6 +2263,7 @@ def move_product_items_to_collection(
                             row.get("package_width_cm"),
                             row.get("package_height_cm"),
                             str(row.get("weight_basis") or ""),
+                            row.get("management_category_id"),
                             scrape_status,
                             f"产品列表自动移回：{reason_text}",
                             int(existing["id"]),
@@ -1990,6 +2286,7 @@ def move_product_items_to_collection(
                         row.get("package_width_cm"),
                         row.get("package_height_cm"),
                         str(row.get("weight_basis") or ""),
+                        row.get("management_category_id"),
                         *(row.get(column) for column in PROFITABILITY_COLUMNS),
                         scrape_status,
                         f"产品列表自动移回：{reason_text}",
@@ -2006,7 +2303,8 @@ def move_product_items_to_collection(
                             `main_image_url`, `title`, `price`, `currency_id`,
                             `weight_g`, `volumetric_weight_kg`, `package_length_cm`,
                             `package_width_cm`, `package_height_cm`, `weight_basis`,
-                            {profitability_columns_sql}, `scrape_status`, `error_message`,
+                            `management_category_id`, {profitability_columns_sql},
+                            `scrape_status`, `error_message`,
                             `source_json`, `description_json`, `page_snapshot_json`,
                             `plugin_snapshot_json`, `collected_at`
                         ) VALUES ({", ".join(["%s"] * len(values))})
@@ -2385,6 +2683,7 @@ def add_collection_items_to_products(
                     row.get("volumetric_weight_kg"),
                     row.get("package_length_cm"), row.get("package_width_cm"),
                     row.get("package_height_cm"), row.get("weight_basis"),
+                    row.get("management_category_id"),
                     *(row.get(column) for column in PROFITABILITY_COLUMNS),
                     _dumps(snapshot), _now(),
                 )
@@ -2397,7 +2696,7 @@ def add_collection_items_to_products(
                         `currency_id`, `weight_g`,
                         `volumetric_weight_kg`,
                         `package_length_cm`, `package_width_cm`, `package_height_cm`,
-                        `weight_basis`, {profitability_columns_sql},
+                        `weight_basis`, `management_category_id`, {profitability_columns_sql},
                         `source_snapshot_json`, `added_at`
                     ) VALUES ({", ".join(["%s"] * len(values))})
                     ON DUPLICATE KEY UPDATE
@@ -2415,6 +2714,9 @@ def add_collection_items_to_products(
                         `package_width_cm` = VALUES(`package_width_cm`),
                         `package_height_cm` = VALUES(`package_height_cm`),
                         `weight_basis` = VALUES(`weight_basis`),
+                        `management_category_id` = COALESCE(
+                            VALUES(`management_category_id`), `management_category_id`
+                        ),
                         {profitability_updates_sql},
                         `source_snapshot_json` = VALUES(`source_snapshot_json`),
                         `updated_at` = CURRENT_TIMESTAMP

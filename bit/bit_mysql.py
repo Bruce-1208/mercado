@@ -1478,6 +1478,8 @@ def _load_authorized_shop_sites(setting_field="visit_stats_enabled"):
     seen = set()
     token_data = list_mercado_store_tokens() or {}
     for token in token_data.get("rows") or ():
+        if not bool(token.get("enabled", True)):
+            continue
         name = str(token.get("display_name") or token.get("nickname") or "").strip()
         if not name:
             continue
@@ -6291,7 +6293,7 @@ def insert_ai_appeal_record(record):
         return record_id
     except Exception as e:
         connection.rollback()
-        print(f"AI申诉汇总记录写入失败，已回滚: {e}")
+        print(f"AI申诉记录写入失败，已回滚: {e}")
         raise
     finally:
         connection.close()
@@ -6352,9 +6354,11 @@ def _ensure_mercado_store_tokens_table(cursor):
         CREATE TABLE IF NOT EXISTS `mercado_store_tokens` (
             `id` BIGINT NOT NULL AUTO_INCREMENT,
             `display_name` VARCHAR(100) NOT NULL,
+            `enabled` TINYINT(1) NOT NULL DEFAULT 1,
             `meli_user_id` VARCHAR(64) NULL,
             `nickname` VARCHAR(255) NULL,
             `site_id` VARCHAR(32) NULL,
+            `email` VARCHAR(255) NULL,
             `client_id` VARCHAR(64) NULL,
             `access_token` LONGTEXT NOT NULL,
             `refresh_token` LONGTEXT NULL,
@@ -6372,6 +6376,18 @@ def _ensure_mercado_store_tokens_table(cursor):
             KEY `idx_mercado_store_expires_at` (`expires_at`)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
         """
+    )
+    _ensure_column(
+        cursor,
+        "mercado_store_tokens",
+        "enabled",
+        "TINYINT(1) NOT NULL DEFAULT 1 AFTER `display_name`",
+    )
+    _ensure_column(
+        cursor,
+        "mercado_store_tokens",
+        "email",
+        "VARCHAR(255) NULL AFTER `site_id`",
     )
 
 
@@ -6608,6 +6624,7 @@ def _mercado_token_record(record):
         "meli_user_id": str(record.get("meli_user_id") or "").strip() or None,
         "nickname": str(record.get("nickname") or "").strip(),
         "site_id": str(record.get("site_id") or "").strip(),
+        "email": str(record.get("email") or "").strip(),
         "client_id": str(record.get("client_id") or "").strip(),
         "access_token": str(record.get("access_token") or "").strip(),
         "refresh_token": str(record.get("refresh_token") or "").strip(),
@@ -6622,6 +6639,8 @@ def _mercado_token_record(record):
         raise ValueError("店铺授权缺少自定义名称")
     if len(normalized["display_name"]) > 100:
         raise ValueError("自定义店铺名称不能超过 100 个字符")
+    if len(normalized["email"]) > 255:
+        raise ValueError("店铺邮箱不能超过 255 个字符")
     if not normalized["access_token"]:
         raise ValueError("店铺授权缺少 Access Token")
     return normalized
@@ -6656,6 +6675,7 @@ def _mercado_token_summary(row, now=None):
         status = "warning"
         status_text = "需检查"
     result["has_refresh_token"] = has_refresh_token
+    result["enabled"] = bool(result.get("enabled", True))
     result["status"] = status
     result["status_text"] = status_text
     for key in (
@@ -6693,6 +6713,7 @@ def upsert_mercado_store_token(record):
                 token["meli_user_id"],
                 token["nickname"],
                 token["site_id"],
+                token["email"],
                 token["client_id"],
                 token["access_token"],
                 token["refresh_token"],
@@ -6710,7 +6731,7 @@ def upsert_mercado_store_token(record):
                     """
                     UPDATE `mercado_store_tokens`
                     SET `display_name` = %s, `meli_user_id` = %s, `nickname` = %s,
-                        `site_id` = %s, `client_id` = %s, `access_token` = %s,
+                        `site_id` = %s, `email` = %s, `client_id` = %s, `access_token` = %s,
                         `refresh_token` = %s, `token_type` = %s, `scope` = %s,
                         `expires_at` = %s, `last_verified_at` = %s,
                         `last_refreshed_at` = %s, `last_error` = %s, `updated_at` = %s
@@ -6722,11 +6743,11 @@ def upsert_mercado_store_token(record):
                 cursor.execute(
                     """
                     INSERT INTO `mercado_store_tokens` (
-                        `display_name`, `meli_user_id`, `nickname`, `site_id`, `client_id`,
+                        `display_name`, `meli_user_id`, `nickname`, `site_id`, `email`, `client_id`,
                         `access_token`, `refresh_token`, `token_type`, `scope`, `expires_at`,
                         `last_verified_at`, `last_refreshed_at`, `last_error`, `created_at`,
                         `updated_at`
-                    ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                    ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                     """,
                     values + (now,),
                 )
@@ -6748,7 +6769,7 @@ def list_mercado_store_tokens():
             _ensure_mercado_store_site_settings_table(cursor)
             cursor.execute(
                 """
-                SELECT `id`, `display_name`, `meli_user_id`, `nickname`, `site_id`,
+                SELECT `id`, `display_name`, `enabled`, `meli_user_id`, `nickname`, `site_id`, `email`,
                        `client_id`, `token_type`, `scope`, `expires_at`,
                        `last_verified_at`, `last_refreshed_at`, `last_error`,
                        `created_at`, `updated_at`,
@@ -6773,7 +6794,7 @@ def get_mercado_store_token_summary(token_id):
             _ensure_mercado_store_site_settings_table(cursor)
             cursor.execute(
                 """
-                SELECT `id`, `display_name`, `meli_user_id`, `nickname`, `site_id`,
+                SELECT `id`, `display_name`, `enabled`, `meli_user_id`, `nickname`, `site_id`, `email`,
                        `client_id`, `token_type`, `scope`, `expires_at`,
                        `last_verified_at`, `last_refreshed_at`, `last_error`,
                        `created_at`, `updated_at`,
@@ -6792,7 +6813,7 @@ def get_mercado_store_token_summary(token_id):
         connection.close()
 
 
-def get_mercado_store_token(token_id):
+def get_mercado_store_token(token_id, include_disabled=False):
     """Return secrets for server-side refresh/API use; never expose via UI routes."""
     connection = pymysql.connect(**config)
     try:
@@ -6803,7 +6824,10 @@ def get_mercado_store_token(token_id):
                 "SELECT * FROM `mercado_store_tokens` WHERE `id` = %s LIMIT 1",
                 (int(token_id),),
             )
-            return cursor.fetchone()
+            row = cursor.fetchone()
+            if row and not include_disabled and not bool(row.get("enabled", 1)):
+                raise ValueError("该店铺已关闭，任何业务操作均不会执行")
+            return row
     finally:
         connection.close()
 
@@ -6819,7 +6843,7 @@ def update_mercado_store_token(token_id, record):
             cursor.execute(
                 """
                 UPDATE `mercado_store_tokens`
-                SET `meli_user_id` = %s, `nickname` = %s, `site_id` = %s,
+                SET `meli_user_id` = %s, `nickname` = %s, `site_id` = %s, `email` = %s,
                     `client_id` = %s, `access_token` = %s, `refresh_token` = %s,
                     `token_type` = %s, `scope` = %s, `expires_at` = %s,
                     `last_verified_at` = %s, `last_refreshed_at` = %s,
@@ -6827,7 +6851,7 @@ def update_mercado_store_token(token_id, record):
                 WHERE `id` = %s
                 """,
                 (
-                    token["meli_user_id"], token["nickname"], token["site_id"],
+                    token["meli_user_id"], token["nickname"], token["site_id"], token["email"],
                     token["client_id"], token["access_token"], token["refresh_token"],
                     token["token_type"], token["scope"], token["expires_at"],
                     token["last_verified_at"], token["last_refreshed_at"],
@@ -6836,6 +6860,77 @@ def update_mercado_store_token(token_id, record):
             )
             if cursor.rowcount == 0:
                 cursor.execute("SELECT 1 FROM `mercado_store_tokens` WHERE `id` = %s", (token_id,))
+                if not cursor.fetchone():
+                    raise KeyError("店铺授权不存在")
+        connection.commit()
+        return get_mercado_store_token_summary(token_id)
+    except Exception:
+        connection.rollback()
+        raise
+    finally:
+        connection.close()
+
+
+def update_mercado_store_token_email(token_id, email):
+    """Persist email read from /users/me without touching rotating token secrets."""
+    token_id = int(token_id)
+    email = str(email or "").strip()
+    if not email:
+        raise ValueError("店铺身份接口未返回邮箱")
+    if len(email) > 255:
+        raise ValueError("店铺邮箱不能超过 255 个字符")
+    now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    connection = pymysql.connect(**config)
+    try:
+        with connection.cursor() as cursor:
+            _ensure_mercado_store_tokens_table(cursor)
+            cursor.execute(
+                """
+                UPDATE `mercado_store_tokens`
+                SET `email` = %s, `last_verified_at` = %s, `last_error` = '',
+                    `updated_at` = %s
+                WHERE `id` = %s
+                """,
+                (email, now, now, token_id),
+            )
+            if cursor.rowcount == 0:
+                cursor.execute(
+                    "SELECT 1 FROM `mercado_store_tokens` WHERE `id` = %s",
+                    (token_id,),
+                )
+                if not cursor.fetchone():
+                    raise KeyError("店铺授权不存在")
+        connection.commit()
+        return get_mercado_store_token_summary(token_id)
+    except Exception:
+        connection.rollback()
+        raise
+    finally:
+        connection.close()
+
+
+def set_mercado_store_token_enabled(token_id, enabled):
+    """Enable or disable every business operation for one authorized store."""
+    token_id = int(token_id)
+    enabled = bool(enabled)
+    now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    connection = pymysql.connect(**config)
+    try:
+        with connection.cursor() as cursor:
+            _ensure_mercado_store_tokens_table(cursor)
+            cursor.execute(
+                """
+                UPDATE `mercado_store_tokens`
+                SET `enabled` = %s, `updated_at` = %s
+                WHERE `id` = %s
+                """,
+                (1 if enabled else 0, now, token_id),
+            )
+            if cursor.rowcount == 0:
+                cursor.execute(
+                    "SELECT 1 FROM `mercado_store_tokens` WHERE `id` = %s",
+                    (token_id,),
+                )
                 if not cursor.fetchone():
                     raise KeyError("店铺授权不存在")
         connection.commit()

@@ -2,6 +2,51 @@ from bit import bit_appeal_ai
 from bit_playwright import bit_infractions_info
 
 
+def test_infraction_pages_use_extended_wait_limits():
+    assert bit_infractions_info.INFRACTIONS_ELEMENT_TIMEOUT_MS >= 60_000
+    assert bit_infractions_info.INFRACTIONS_PAGE_READY_TIMEOUT_MS >= 90_000
+    assert bit_infractions_info.INFRACTIONS_NAVIGATION_TIMEOUT_MS >= 120_000
+
+
+def test_new_infraction_page_receives_extended_default_timeouts():
+    calls = []
+
+    class FakePage:
+        def set_default_timeout(self, timeout):
+            calls.append(("element", timeout))
+
+        def set_default_navigation_timeout(self, timeout):
+            calls.append(("navigation", timeout))
+
+    page = FakePage()
+
+    class FakeContext:
+        def new_page(self):
+            return page
+
+    class FakeBrowser:
+        contexts = [FakeContext()]
+
+    class FakeChromium:
+        def connect_over_cdp(self, endpoint):
+            assert endpoint == "http://127.0.0.1:9222"
+            return FakeBrowser()
+
+    class FakePlaywright:
+        chromium = FakeChromium()
+
+    _browser, connected_page = bit_infractions_info._connect_bitbrowser_with_playwright(
+        FakePlaywright(),
+        {"data": {"http": "127.0.0.1:9222"}},
+    )
+
+    assert connected_page is page
+    assert calls == [
+        ("element", bit_infractions_info.INFRACTIONS_ELEMENT_TIMEOUT_MS),
+        ("navigation", bit_infractions_info.INFRACTIONS_NAVIGATION_TIMEOUT_MS),
+    ]
+
+
 def test_ai_infraction_orders_requests_infringements_only(monkeypatch):
     captured = {}
 

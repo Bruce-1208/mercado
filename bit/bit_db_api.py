@@ -569,6 +569,7 @@ def list_mercado_prohibited_listings(
     token_id=None,
     site_id="",
     salesperson="",
+    risk_type="",
     page=1,
     page_size=100,
 ):
@@ -576,6 +577,7 @@ def list_mercado_prohibited_listings(
         "search": str(search or "").strip(),
         "site_id": str(site_id or "").strip().upper(),
         "salesperson": str(salesperson or "").strip(),
+        "risk_type": str(risk_type or "").strip().lower(),
         "page": int(page or 1),
         "page_size": max(20, min(int(page_size or 100), 500)),
     }
@@ -592,17 +594,31 @@ def start_prohibited_listing_sync(token_ids=None):
     payload = {"token_ids": [int(value) for value in token_ids or []]}
     if DB_MODE == "mysql":
         from bit.bit_prohibited_listing_sync import start_prohibited_listing_sync as local_start
+        from bit.mercado_infraction_sync import start_official_infraction_sync
 
         started, state = local_start(payload["token_ids"])
-        return {"started": bool(started), "state": state}
+        rights_started, rights_state = start_official_infraction_sync(payload["token_ids"])
+        combined_state = dict(state or {})
+        combined_state["prohibited_running"] = bool(combined_state.get("running"))
+        combined_state["rights_holder_sync"] = dict(rights_state or {})
+        combined_state["running"] = bool(
+            combined_state.get("prohibited_running") or rights_state.get("running")
+        )
+        return {"started": bool(started or rights_started), "state": combined_state}
     return _request("POST", "/api/db/prohibited-listings/sync/start", json=payload)
 
 
 def get_prohibited_listing_sync_status():
     if DB_MODE == "mysql":
         from bit.bit_prohibited_listing_sync import prohibited_listing_sync_status
+        from bit.mercado_infraction_sync import official_infraction_sync_status
 
-        return prohibited_listing_sync_status()
+        state = dict(prohibited_listing_sync_status() or {})
+        rights_state = dict(official_infraction_sync_status() or {})
+        state["prohibited_running"] = bool(state.get("running"))
+        state["rights_holder_sync"] = rights_state
+        state["running"] = bool(state.get("prohibited_running") or rights_state.get("running"))
+        return state
     return _request("GET", "/api/db/prohibited-listings/sync/status")
 
 
@@ -1138,6 +1154,20 @@ def rename_mercado_store_token(token_id, display_name):
         return _local_call("rename_mercado_store_token", int(token_id), display_name)
 
 
+def set_mercado_store_token_enabled(token_id, enabled):
+    token_id = int(token_id)
+    enabled = bool(enabled)
+    if DB_MODE == "mysql":
+        return _local_call("set_mercado_store_token_enabled", token_id, enabled)
+    path = f"/api/db/mercado-tokens/{token_id}"
+    try:
+        return _request("PATCH", path, json={"enabled": enabled})
+    except RuntimeError as exc:
+        if not _mercado_token_route_missing(exc, path):
+            raise
+        return _local_call("set_mercado_store_token_enabled", token_id, enabled)
+
+
 def delete_mercado_store_token(token_id):
     if DB_MODE == "mysql":
         return _local_call("delete_mercado_store_token", int(token_id))
@@ -1274,34 +1304,47 @@ def upsert_mercado_collection_items(task_id, rows):
     return int(data.get("count") or 0)
 
 
-def list_mercado_collection_items(search="", limit=500, offset=0, task_id=None):
-    if DB_MODE == "mysql":
-        return _collection_store_call(
-            "list_collection_items",
-            search=search,
-            limit=limit,
-            offset=offset,
-            task_id=task_id,
-        )
-    params = {"search": search, "limit": limit, "offset": offset}
+def list_mercado_collection_items(
+    search="", limit=500, offset=0, task_id=None,
+    weight_min=None, weight_max=None, price_min=None, price_max=None,
+    net_proceeds_min=None, net_proceeds_max=None, date_from="", date_to="",
+    exclude_added=False, management_category_id=None,
+):
+    params = {
+        "search": search,
+        "limit": limit,
+        "offset": offset,
+        "weight_min": weight_min,
+        "weight_max": weight_max,
+        "price_min": price_min,
+        "price_max": price_max,
+        "net_proceeds_min": net_proceeds_min,
+        "net_proceeds_max": net_proceeds_max,
+        "date_from": str(date_from or "").strip(),
+        "date_to": str(date_to or "").strip(),
+        "exclude_added": bool(exclude_added),
+        "management_category_id": management_category_id,
+    }
     if task_id not in (None, ""):
         params["task_id"] = int(task_id)
+    if DB_MODE == "mysql":
+        return _collection_store_call(
+            "list_collection_items", **params
+        )
     path = "/api/db/mercado-collection/items"
     try:
         return _request("GET", path, params=params)
     except RuntimeError as exc:
         if not _collection_route_missing(exc, path):
             raise
-        return _collection_store_call(
-            "list_collection_items", search=search, limit=limit, offset=offset, task_id=task_id
-        )
+        return _collection_store_call("list_collection_items", **params)
 
 
 def list_mercado_product_items(
     search="", limit=500, offset=0, source_type="", review_status="",
     publish_status="", weight_min=None, weight_max=None, price_min=None,
     price_max=None, net_proceeds_min=None, net_proceeds_max=None,
-    date_from="", date_to="",
+    date_from="", date_to="", management_category_id=None,
 ):
     params = {
         "search": search,
@@ -1318,6 +1361,7 @@ def list_mercado_product_items(
         "net_proceeds_max": net_proceeds_max,
         "date_from": str(date_from or "").strip(),
         "date_to": str(date_to or "").strip(),
+        "management_category_id": management_category_id,
     }
     if DB_MODE == "mysql":
         return _collection_store_call(
@@ -1334,6 +1378,89 @@ def list_mercado_product_items(
             raise
         return _collection_store_call(
             "list_product_items", **params
+        )
+
+
+def list_mercado_management_categories():
+    if DB_MODE == "mysql":
+        return _collection_store_call("list_management_categories")
+    path = "/api/db/mercado-management-categories"
+    try:
+        return _request("GET", path)
+    except RuntimeError as exc:
+        if not _collection_route_missing(exc, path):
+            raise
+        return _collection_store_call("list_management_categories")
+
+
+def create_mercado_management_category(name):
+    payload = {"name": str(name or "")}
+    if DB_MODE == "mysql":
+        return _collection_store_call("create_management_category", payload["name"])
+    path = "/api/db/mercado-management-categories"
+    try:
+        return _request("POST", path, json=payload)
+    except RuntimeError as exc:
+        if not _collection_route_missing(exc, path):
+            raise
+        return _collection_store_call("create_management_category", payload["name"])
+
+
+def update_mercado_management_category(category_id, name):
+    normalized_id = int(category_id)
+    payload = {"name": str(name or "")}
+    if DB_MODE == "mysql":
+        return _collection_store_call(
+            "update_management_category", normalized_id, payload["name"]
+        )
+    path = f"/api/db/mercado-management-categories/{normalized_id}"
+    try:
+        return _request("PATCH", path, json=payload)
+    except RuntimeError as exc:
+        if not _collection_route_missing(exc, path):
+            raise
+        return _collection_store_call(
+            "update_management_category", normalized_id, payload["name"]
+        )
+
+
+def delete_mercado_management_category(category_id):
+    normalized_id = int(category_id)
+    if DB_MODE == "mysql":
+        return _collection_store_call("delete_management_category", normalized_id)
+    path = f"/api/db/mercado-management-categories/{normalized_id}"
+    try:
+        return _request("DELETE", path)
+    except RuntimeError as exc:
+        if not _collection_route_missing(exc, path):
+            raise
+        return _collection_store_call("delete_management_category", normalized_id)
+
+
+def assign_mercado_management_category(item_type, item_ids, category_id=None):
+    payload = {
+        "item_type": str(item_type or ""),
+        "item_ids": [int(value) for value in item_ids or []],
+        "category_id": category_id,
+    }
+    if DB_MODE == "mysql":
+        return _collection_store_call(
+            "assign_management_category",
+            payload["item_type"],
+            payload["item_ids"],
+            payload["category_id"],
+        )
+    path = "/api/db/mercado-management-categories/assign"
+    try:
+        return _request("POST", path, json=payload)
+    except RuntimeError as exc:
+        if not _collection_route_missing(exc, path):
+            raise
+        return _collection_store_call(
+            "assign_management_category",
+            payload["item_type"],
+            payload["item_ids"],
+            payload["category_id"],
         )
 
 

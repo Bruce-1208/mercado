@@ -30,6 +30,7 @@ class OAuthSession:
             "id": 123456,
             "nickname": "SELLER_TEST",
             "site_id": "CBT",
+            "email": "seller@example.com",
         }
         self.posts = []
         self.gets = []
@@ -86,6 +87,8 @@ def test_token_summary_defensively_removes_both_secrets():
             "display_name": "店铺",
             "access_token": "must-not-leak",
             "refresh_token": "must-not-leak-either",
+            "email": "seller@example.com",
+            "enabled": 0,
             "has_refresh_token": 1,
         }
     )
@@ -93,6 +96,39 @@ def test_token_summary_defensively_removes_both_secrets():
     assert "access_token" not in summary
     assert "refresh_token" not in summary
     assert summary["has_refresh_token"] is True
+    assert summary["email"] == "seller@example.com"
+    assert summary["enabled"] is False
+
+
+def test_server_side_token_access_rejects_disabled_store(monkeypatch):
+    class Cursor:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args):
+            return False
+
+        def execute(self, sql, _params=None):
+            self.sql = sql
+
+        def fetchone(self):
+            if "SHOW COLUMNS" in self.sql:
+                return {"Field": "enabled"}
+            if "SELECT *" in self.sql:
+                return {"id": 8, "enabled": 0, "access_token": "secret"}
+            return None
+
+    class Connection:
+        def cursor(self):
+            return Cursor()
+
+        def close(self):
+            return None
+
+    monkeypatch.setattr(bit_mysql.pymysql, "connect", lambda **_kwargs: Connection())
+
+    with pytest.raises(ValueError, match="店铺已关闭"):
+        bit_mysql.get_mercado_store_token(8)
 
 
 def test_site_setting_rows_expose_appeal_and_visit_switches():
@@ -181,6 +217,7 @@ def test_exchange_identifies_store_and_passes_tokens_only_to_database(oauth_env)
     assert captured["meli_user_id"] == "123456"
     assert captured["nickname"] == "SELLER_TEST"
     assert captured["site_id"] == "CBT"
+    assert captured["email"] == "seller@example.com"
     assert captured["access_token"] == "access-secret"
     assert captured["refresh_token"] == "refresh-secret"
     assert result["id"] == 7
@@ -247,6 +284,7 @@ def test_refresh_still_saves_rotated_token_when_profile_lookup_fails(oauth_env):
             "meli_user_id": "123456",
             "nickname": "KNOWN_NAME",
             "site_id": "CBT",
+            "email": "known@example.com",
             "refresh_token": "old-refresh",
         },
         update_token=lambda token_id, record: (
@@ -257,8 +295,55 @@ def test_refresh_still_saves_rotated_token_when_profile_lookup_fails(oauth_env):
 
     assert updated["record"]["refresh_token"] == "rotated-refresh"
     assert updated["record"]["nickname"] == "KNOWN_NAME"
+    assert updated["record"]["email"] == "known@example.com"
     assert "读取授权店铺失败" in updated["record"]["last_error"]
     assert result["warning"] == updated["record"]["last_error"]
+
+
+def test_sync_missing_store_emails_reads_profile_and_persists_email():
+    http = OAuthSession()
+    updates = []
+
+    result = mercado_tokens.sync_missing_store_emails(
+        list_tokens=lambda: {
+            "rows": [{"id": 12, "display_name": "旧店铺", "email": ""}]
+        },
+        get_token=lambda token_id: {
+            "id": token_id,
+            "access_token": "existing-access",
+            "refresh_token": "existing-refresh",
+            "expires_at": "2026-09-03 18:00:00",
+        },
+        update_email=lambda token_id, email: updates.append((token_id, email)),
+        refresh_token=lambda _token_id: pytest.fail("有效 Token 不应被刷新"),
+        http=http,
+        now=mercado_tokens.datetime(2026, 9, 3, 12, 0, 0),
+    )
+
+    assert updates == [(12, "seller@example.com")]
+    assert result == {
+        "checked": 1,
+        "missing": 1,
+        "synced": 1,
+        "unavailable": 0,
+        "failed": 0,
+        "failures": [],
+    }
+
+
+def test_sync_missing_store_emails_skips_disabled_stores():
+    result = mercado_tokens.sync_missing_store_emails(
+        list_tokens=lambda: {
+            "rows": [{"id": 13, "display_name": "关闭店铺", "email": "", "enabled": False}]
+        },
+        get_token=lambda _token_id: pytest.fail("关闭店铺不应读取 Token"),
+        update_email=lambda *_args: pytest.fail("关闭店铺不应写入邮箱"),
+        refresh_token=lambda _token_id: pytest.fail("关闭店铺不应刷新 Token"),
+    )
+
+    assert result["checked"] == 1
+    assert result["missing"] == 0
+    assert result["synced"] == 0
 
 
 def test_auto_refresh_renews_only_due_tokens_and_defers_recent_failures():
@@ -294,6 +379,13 @@ def test_auto_refresh_renews_only_due_tokens_and_defers_recent_failures():
                     "last_error": "temporary failure",
                     "updated_at": "2026-08-30 11:55:00",
                 },
+                {
+                    "id": 5,
+                    "display_name": "已关闭",
+                    "enabled": False,
+                    "expires_at": "2026-08-30 11:00:00",
+                    "has_refresh_token": True,
+                },
             ]
         },
         refresh_token=lambda token_id: refreshed.append(token_id),
@@ -304,7 +396,7 @@ def test_auto_refresh_renews_only_due_tokens_and_defers_recent_failures():
 
     assert refreshed == [1]
     assert result == {
-        "checked": 4,
+        "checked": 5,
         "due": 2,
         "refreshed": 1,
         "failed": 0,
@@ -330,6 +422,7 @@ def test_browser_routes_return_metadata_and_accept_management_actions(monkeypatc
         "display_name": "店铺二",
         "meli_user_id": "9988",
         "status": "active",
+        "enabled": True,
         "has_refresh_token": True,
         "site_settings": [],
     }
@@ -362,6 +455,14 @@ def test_browser_routes_return_metadata_and_accept_management_actions(monkeypatc
     )
     monkeypatch.setattr(
         bit_interface.bit_db_api,
+        "set_mercado_store_token_enabled",
+        lambda token_id, enabled: calls.append(("enabled", token_id, enabled)) or {
+            **summary,
+            "enabled": enabled,
+        },
+    )
+    monkeypatch.setattr(
+        bit_interface.bit_db_api,
         "delete_mercado_store_token",
         lambda token_id: calls.append(("delete", token_id)) or 1,
     )
@@ -388,6 +489,9 @@ def test_browser_routes_return_metadata_and_accept_management_actions(monkeypatc
     rename_response = client.patch(
         "/api/mercado-tokens/2", json={"display_name": "新名字"}
     )
+    disable_response = client.patch(
+        "/api/mercado-tokens/2", json={"enabled": False}
+    )
     site_list_response = client.get("/api/mercado-tokens/2/site-settings")
     site_save_response = client.put(
         "/api/mercado-tokens/2/site-settings",
@@ -409,6 +513,8 @@ def test_browser_routes_return_metadata_and_accept_management_actions(monkeypatc
     assert "自动拉取全部链接" in exchange_response.get_json()["message"]
     assert refresh_response.status_code == 200
     assert rename_response.status_code == 200
+    assert disable_response.status_code == 200
+    assert disable_response.get_json()["data"]["enabled"] is False
     assert site_list_response.status_code == 200
     assert site_save_response.status_code == 200
     assert delete_response.status_code == 200
@@ -417,6 +523,7 @@ def test_browser_routes_return_metadata_and_accept_management_actions(monkeypatc
         ("sync-links", [2]),
         ("refresh", 2),
         ("rename", 2, "新名字"),
+        ("enabled", 2, False),
         ("list-sites", 2),
         ("save-sites", 2, [{
             "site_id": "MLM",
@@ -443,6 +550,7 @@ def test_database_api_client_uses_remote_token_endpoints(monkeypatch):
     bit_db_api.exchange_mercado_store_token("店铺", "TG-code")
     bit_db_api.refresh_mercado_store_token(3)
     bit_db_api.rename_mercado_store_token(3, "改名")
+    bit_db_api.set_mercado_store_token_enabled(3, False)
     bit_db_api.delete_mercado_store_token(3)
 
     assert [(method, path) for method, path, _ in calls] == [
@@ -451,6 +559,7 @@ def test_database_api_client_uses_remote_token_endpoints(monkeypatch):
         ("PUT", "/api/db/mercado-tokens/3/site-settings"),
         ("POST", "/api/db/mercado-tokens/exchange"),
         ("POST", "/api/db/mercado-tokens/3/refresh"),
+        ("PATCH", "/api/db/mercado-tokens/3"),
         ("PATCH", "/api/db/mercado-tokens/3"),
         ("DELETE", "/api/db/mercado-tokens/3"),
     ]
@@ -513,10 +622,17 @@ def test_console_template_contains_store_token_module():
     assert "filteredMercadoStoreTokenRows" in body
     assert "当前筛选条件下暂无授权店铺" in body
     assert "Token 临近到期时后台自动刷新" in body
+    assert "<th>邮箱</th>" in body
+    assert "<th>店铺开关</th>" in body
+    assert 'row.email || "待读取"' in body
+    assert "setMercadoStoreEnabled" in body
+    assert "自动登录、同步、采集、刊登等业务操作均不执行" in body
     assert "startMercadoTokenStatusPolling" in body
     assert "loadMercadoStoreTokens(true, true)" in body
     assert 'id="mercado-bulk-settings-dialog"' in body
     assert 'id="mercado-bulk-salesperson"' in body
+    assert 'id="mercado-bulk-group-name"' in body
+    assert 'id="mercado-bulk-group-save"' in body
     assert 'id="mercado-bulk-settings-body"' in body
     assert "折扣比例（%）" in body
     assert 'id="mercado-site-salesperson"' in body
@@ -530,9 +646,14 @@ def test_console_template_contains_store_token_module():
     assert 'data-field="visit_stats_enabled"' in body
     assert 'data-field="bulk_appeal_enabled"' in body
     assert 'data-field="bulk_visit_stats_enabled"' in body
-    assert "每家店铺原有分组保持不变" in body
+    assert "留空则保留每家店铺原分组" in body
     assert "toggleMercadoStoreToken" in body
     assert "saveMercadoBulkSiteSettings" in body
+    assert "saveMercadoSiteSettingsRequest" in body
+    assert "保存响应中断，正在自动重试" in body
+    assert "bulkGroupName || mercadoAccountGroup(account)" in body
+    assert "saveMercadoBulkSiteSettings(true)" in body
+    assert "discount_rate: existing.discount_rate ?? null" in body
     assert "group_name: groupName" in body
     assert "global-selling.mercadolibre.com/authorization" in body
     assert "Access Token 和 Refresh Token 仅保存在数据库服务端" in body

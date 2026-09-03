@@ -1,8 +1,21 @@
+import threading
+from datetime import datetime
 from unittest import mock
 
 import pytest
 
 from bit import bit_daily_task
+
+
+def _live_infraction_rows(*site_counts):
+    today = datetime.now().strftime("%Y-%m-%d")
+    rows = []
+    for shop_name, site_name, count in site_counts:
+        rows.extend(
+            [shop_name, site_name, f"INF-{shop_name}-{site_name}-{index}", "", today, "", "", "侵权"]
+            for index in range(count)
+        )
+    return rows
 
 
 @pytest.mark.parametrize(
@@ -47,6 +60,45 @@ def test_task_switches_insert_infraction_after_each_other_selected_task():
         bit_daily_task.APPEAL_TYPE_COMPLAINT,
         bit_daily_task.APPEAL_TYPE_INFRACTION,
     )
+
+
+def test_loop_task_stops_before_starting_next_round(monkeypatch):
+    stop_event = threading.Event()
+    stop_event.set()
+    monkeypatch.setattr(
+        bit_daily_task,
+        "run_ai_appeal_once",
+        lambda *args, **kwargs: pytest.fail("停止后不应启动申诉轮次"),
+    )
+
+    result = bit_daily_task._loop_ai_appeal_locked(
+        "侵权",
+        stop_event=stop_event,
+    )
+
+    assert result is None
+
+
+def test_daily_task_worker_writes_output_to_shared_log(monkeypatch, tmp_path):
+    log_path = tmp_path / "daily-task.log"
+
+    def fake_appeal(*_args, **_kwargs):
+        print("飞黄腾达 墨西哥申诉完成<br>")
+        return {"status": "success"}
+
+    monkeypatch.setattr(bit_daily_task, "appeal_one_shop", fake_appeal)
+
+    result = bit_daily_task._appeal_one_shop_worker_for_type(
+        {"name": "飞黄腾达"},
+        "侵权",
+        0,
+        "",
+        0,
+        str(log_path),
+    )
+
+    assert result == {"status": "success"}
+    assert "飞黄腾达 墨西哥申诉完成" in log_path.read_text(encoding="utf-8")
 
 
 def test_mixed_mode_dispatches_the_full_sequence(monkeypatch):
@@ -142,14 +194,15 @@ def test_authorized_appeal_scope_requires_explicit_enabled_switch(monkeypatch):
 
 
 def test_default_infraction_plan_uses_authorization_switches_not_browser_sites(monkeypatch):
+    collection_calls = []
     monkeypatch.setattr(
-        bit_daily_task,
-        "get_latest_infraction_info",
-        lambda _days: {
-            "summary": [
-                {"店铺名": "授权店铺", "站点": "墨西哥", "总数": 3},
-                {"店铺名": "授权店铺", "站点": "巴西", "总数": 9},
-            ]
+        bit_daily_task.mercado_infraction_sync,
+        "collect_live_detection_infractions",
+        lambda targets, **kwargs: collection_calls.append((targets, kwargs)) or {
+            "data": _live_infraction_rows(
+                ("授权店铺", "墨西哥", 3),
+                ("授权店铺", "巴西", 9),
+            )
         },
     )
     monkeypatch.setattr(
@@ -158,6 +211,7 @@ def test_default_infraction_plan_uses_authorization_switches_not_browser_sites(m
         lambda: {
             "rows": [
                 {
+                    "id": 7,
                     "display_name": "授权店铺",
                     "site_settings": [
                         {"site_id": "MLM", "appeal_enabled": True},
@@ -176,6 +230,15 @@ def test_default_infraction_plan_uses_authorization_switches_not_browser_sites(m
     plan = bit_daily_task.build_latest_infraction_appeal_plan(top_n=10)
 
     assert [site["site_code"] for site in plan[0]["sites"]] == ["MX"]
+    assert collection_calls[0][0] == [
+        {
+            "token_id": 7,
+            "name": "授权店铺",
+            "aliases": ["授权店铺"],
+            "site_ids": ["MLM"],
+        }
+    ]
+    assert collection_calls[0][1]["recent_days"] == 100
 
 
 def test_build_latest_delay_appeal_plan_filters_and_sorts(monkeypatch):
@@ -260,14 +323,15 @@ def test_reputation_appeal_plan_top_n_zero_keeps_every_affected_shop(monkeypatch
 
 
 def test_infraction_appeal_plan_top_n_zero_keeps_every_affected_shop(monkeypatch):
-    summary = [
-        {"店铺名": f"店铺{index:02d}", "站点": "墨西哥", "总数": 1}
-        for index in range(35)
-    ]
     monkeypatch.setattr(
-        bit_daily_task,
-        "get_latest_infraction_info",
-        lambda _recent_days: {"latest_submit_time": "2026-08-23 10:00:00", "summary": summary},
+        bit_daily_task.mercado_infraction_sync,
+        "collect_live_detection_infractions",
+        lambda _targets, **_kwargs: {
+            "data": _live_infraction_rows(*(
+                (f"店铺{index:02d}", "墨西哥", 1)
+                for index in range(35)
+            ))
+        },
     )
     monkeypatch.setattr(
         bit_daily_task,
@@ -275,6 +339,7 @@ def test_infraction_appeal_plan_top_n_zero_keeps_every_affected_shop(monkeypatch
         lambda: {
             "rows": [
                 {
+                    "id": index + 1,
                     "display_name": f"店铺{index:02d}",
                     "site_settings": [
                         {"site_id": "MLM", "appeal_enabled": True},
@@ -292,16 +357,15 @@ def test_infraction_appeal_plan_top_n_zero_keeps_every_affected_shop(monkeypatch
     assert len(plan) == 35
 
 
-def test_infraction_execution_standard_uses_shop_total_and_is_strict(monkeypatch):
+def test_infraction_execution_standard_uses_each_site_count_and_is_strict(monkeypatch):
     monkeypatch.setattr(
-        bit_daily_task,
-        "get_latest_infraction_info",
-        lambda _recent_days: {
-            "summary": [
-                {"店铺名": "刚好达标", "站点": "墨西哥", "总数": 2},
-                {"店铺名": "刚好达标", "站点": "巴西", "总数": 3},
-                {"店铺名": "超过标准", "站点": "墨西哥", "总数": 6},
-            ]
+        bit_daily_task.mercado_infraction_sync,
+        "collect_live_detection_infractions",
+        lambda _targets, **_kwargs: {
+            "data": _live_infraction_rows(
+                ("刚好达标", "墨西哥", 5),
+                ("超过标准", "墨西哥", 6),
+            )
         },
     )
     monkeypatch.setattr(
@@ -310,13 +374,14 @@ def test_infraction_execution_standard_uses_shop_total_and_is_strict(monkeypatch
         lambda: {
             "rows": [
                 {
+                    "id": index + 1,
                     "display_name": name,
                     "site_settings": [
                         {"site_id": "MLM", "appeal_enabled": True},
                         {"site_id": "MLB", "appeal_enabled": True},
                     ],
                 }
-                for name in ("刚好达标", "超过标准")
+                for index, name in enumerate(("刚好达标", "超过标准"))
             ]
         },
     )
@@ -327,6 +392,97 @@ def test_infraction_execution_standard_uses_shop_total_and_is_strict(monkeypatch
     )
 
     assert [shop["name"] for shop in plan] == ["超过标准"]
+
+
+def test_live_infraction_scan_traverses_all_authorized_sites_then_filters_zero(monkeypatch):
+    collection_calls = []
+    monkeypatch.setattr(
+        bit_daily_task.mercado_infraction_sync,
+        "collect_live_detection_infractions",
+        lambda targets, **kwargs: collection_calls.append((targets, kwargs)) or {
+            "data": _live_infraction_rows(
+                ("多站点店铺", "墨西哥", 6),
+                ("多站点店铺", "巴西", 20),
+            )
+        },
+    )
+    monkeypatch.setattr(
+        bit_daily_task,
+        "list_mercado_store_tokens",
+        lambda: {
+            "rows": [
+                {
+                    "id": 9,
+                    "display_name": "多站点店铺",
+                    "site_settings": [
+                        {"site_id": "MLM", "appeal_enabled": True},
+                        {"site_id": "MLC", "appeal_enabled": True},
+                        {"site_id": "MCO", "appeal_enabled": True},
+                        {"site_id": "MLB", "appeal_enabled": False},
+                    ],
+                }
+            ]
+        },
+    )
+
+    plan = bit_daily_task.build_latest_infraction_appeal_plan(
+        top_n=0,
+        min_infraction_count=5,
+        max_workers=7,
+        log_path="task-runtime.log",
+    )
+
+    assert [shop["name"] for shop in plan] == ["多站点店铺"]
+    assert {site["site_code"] for site in plan[0]["sites"]} == {"MX"}
+    assert {site["site_code"]: site["count"] for site in plan[0]["sites"]} == {
+        "MX": 6,
+    }
+    assert plan[0]["total"] == 6
+    assert collection_calls[0][0][0]["token_id"] == 9
+    assert set(collection_calls[0][0][0]["site_ids"]) == {"MLM", "MLC", "MCO"}
+    assert collection_calls[0][1]["max_workers"] == 7
+
+
+def test_infraction_plan_reports_when_every_api_store_fails(monkeypatch):
+    monkeypatch.setattr(
+        bit_daily_task,
+        "list_mercado_store_tokens",
+        lambda: {
+            "rows": [
+                {
+                    "id": 7,
+                    "display_name": "失效店铺",
+                    "site_settings": [
+                        {"site_id": "MLM", "appeal_enabled": True},
+                    ],
+                }
+            ]
+        },
+    )
+    monkeypatch.setattr(
+        bit_daily_task.mercado_infraction_sync,
+        "collect_live_detection_infractions",
+        lambda *_args, **_kwargs: {
+            "data": [],
+            "results": [
+                {
+                    "store": "失效店铺",
+                    "status": "error",
+                    "message": "Access Token 已失效",
+                }
+            ],
+            "failed_stores": [
+                {
+                    "store": "失效店铺",
+                    "status": "error",
+                    "message": "Access Token 已失效",
+                }
+            ],
+        },
+    )
+
+    with pytest.raises(RuntimeError, match="全部店铺的侵权 API 读取失败"):
+        bit_daily_task.build_latest_infraction_appeal_plan(top_n=0)
 
 
 @pytest.mark.parametrize(
@@ -543,6 +699,128 @@ def test_appeal_one_shop_always_closes_browser_window(monkeypatch):
 def test_daily_appeal_worker_limit_defaults_to_fifteen(monkeypatch):
     monkeypatch.delenv("BIT_DAILY_BROWSER_WORKER_LIMIT", raising=False)
     assert bit_daily_task._daily_browser_worker_limit() == 15
+
+
+def test_parallel_appeal_shop_failure_does_not_stop_other_shops(monkeypatch):
+    submitted = []
+    start_delays = []
+
+    class FakeFuture:
+        def __init__(self, shop):
+            self.shop = shop
+
+        def result(self):
+            if self.shop["name"] == "失败店铺":
+                raise RuntimeError("店铺页面异常")
+            return {"name": self.shop["name"], "results": [{"result": "完成"}]}
+
+        def cancel(self):
+            return False
+
+    class FakeExecutor:
+        def __init__(self, max_workers):
+            self.max_workers = max_workers
+
+        def submit(
+            self,
+            _worker,
+            shop,
+            _appeal_type,
+            _site_pause,
+            _message,
+            start_delay,
+            _log_path,
+            _stop_event,
+        ):
+            submitted.append(shop["name"])
+            start_delays.append(start_delay)
+            return FakeFuture(shop)
+
+        def shutdown(self, **_kwargs):
+            return None
+
+    plan = [
+        {"name": "失败店铺", "total": 1, "sites": []},
+        {"name": "正常店铺", "total": 1, "sites": []},
+    ]
+    monkeypatch.setattr(bit_daily_task, "build_appeal_plan", lambda *a, **k: plan)
+    monkeypatch.setattr(bit_daily_task, "ProcessPoolExecutor", FakeExecutor)
+    monkeypatch.setattr(bit_daily_task, "DEFAULT_START_STAGGER_SECONDS", 0)
+    monkeypatch.setattr(
+        bit_daily_task,
+        "wait",
+        lambda pending, **_kwargs: (set(pending), set()),
+    )
+
+    results = bit_daily_task._run_ai_appeal_once_locked(
+        "侵权",
+        max_workers=2,
+    )
+
+    assert submitted == ["失败店铺", "正常店铺"]
+    assert start_delays == [0, 0]
+    assert {item["name"] for item in results} == {"失败店铺", "正常店铺"}
+    assert next(item for item in results if item["name"] == "失败店铺")["error"] == "店铺页面异常"
+    assert next(item for item in results if item["name"] == "正常店铺")["results"] == [
+        {"result": "完成"}
+    ]
+
+
+def test_stop_request_terminates_appeal_pool_without_waiting(monkeypatch):
+    stop_event = threading.Event()
+    terminated = []
+    closed = []
+
+    class FakeFuture:
+        def cancel(self):
+            return True
+
+    class FakeExecutor:
+        def __init__(self, max_workers):
+            self.max_workers = max_workers
+
+        def submit(self, *_args):
+            return FakeFuture()
+
+        def shutdown(self, **kwargs):
+            pytest.fail(f"停止时不应等待进程池自然结束：{kwargs}")
+
+    plan = [{"name": "正在运行店铺", "total": 1, "sites": []}]
+
+    def stop_on_wait(pending, **_kwargs):
+        stop_event.set()
+        return set(), set(pending)
+
+    monkeypatch.setattr(bit_daily_task, "build_appeal_plan", lambda *a, **k: plan)
+    monkeypatch.setattr(bit_daily_task, "ProcessPoolExecutor", FakeExecutor)
+    monkeypatch.setattr(bit_daily_task, "wait", stop_on_wait)
+    monkeypatch.setattr(
+        bit_daily_task,
+        "terminate_process_pool",
+        lambda executor: terminated.append(executor),
+    )
+    monkeypatch.setattr(
+        bit_daily_task,
+        "_force_close_appeal_plan_windows",
+        lambda value: closed.extend(value),
+    )
+
+    result = bit_daily_task._run_ai_appeal_once_locked(
+        "侵权",
+        max_workers=1,
+        stop_event=stop_event,
+    )
+
+    assert result == []
+    assert len(terminated) == 1
+    assert closed == plan
+
+
+def test_stop_signal_interrupts_long_retry_wait_immediately():
+    stop_event = threading.Event()
+    stop_event.set()
+
+    assert bit_daily_task._wait_or_stop(300, stop_event) is True
 
 
 def test_shop_executor_closes_browser_when_auto_login_is_triggered(monkeypatch):

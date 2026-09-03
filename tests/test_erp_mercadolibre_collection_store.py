@@ -558,6 +558,76 @@ def test_collection_list_can_hide_items_already_added_to_products():
     assert "`added_to_products` = 0" in count_sql
 
 
+def test_lists_filter_by_management_category_and_include_category_name():
+    categorized = _FakeConnection()
+    store.list_collection_items(
+        management_category_id="12",
+        connection_factory=lambda: categorized,
+    )
+    count_sql, count_params = next(
+        (query, params)
+        for query, params in categorized.fake_cursor.queries
+        if query.startswith(f"SELECT COUNT(*) AS total FROM `{store.COLLECTION_TABLE}`")
+    )
+    row_sql, _row_params = next(
+        (query, params)
+        for query, params in categorized.fake_cursor.queries
+        if query.startswith(f"SELECT `{store.COLLECTION_TABLE}`.*")
+    )
+    assert "`management_category_id` = %s" in count_sql
+    assert count_params == (12,)
+    assert store.MANAGEMENT_CATEGORY_TABLE in row_sql
+    assert "`management_category_name`" in row_sql
+
+    uncategorized = _FakeConnection()
+    store.list_product_items(
+        management_category_id="uncategorized",
+        connection_factory=lambda: uncategorized,
+    )
+    product_count_sql, product_params = next(
+        (query, params)
+        for query, params in uncategorized.fake_cursor.queries
+        if query.startswith(f"SELECT COUNT(*) AS total FROM `{store.PRODUCT_TABLE}`")
+    )
+    assert "`management_category_id` IS NULL" in product_count_sql
+    assert product_params == ()
+
+
+def test_assign_management_category_updates_selected_list_and_mirrors_source_items():
+    connection = _FakeConnection(update_rowcount=2)
+
+    result = store.assign_management_category(
+        "collection",
+        [8, 7],
+        3,
+        connection_factory=lambda: connection,
+    )
+
+    updates = [
+        (query, params)
+        for query, params in connection.fake_cursor.queries
+        if query.startswith("UPDATE")
+    ]
+    assert result == {
+        "item_type": "collection",
+        "requested": 2,
+        "changed": 2,
+        "category_id": 3,
+    }
+    assert updates[0][0].startswith(f"UPDATE `{store.COLLECTION_TABLE}`")
+    assert updates[0][1] == (3, 7, 8)
+    assert f"INNER JOIN `{store.COLLECTION_TABLE}`" in updates[1][0]
+    assert updates[1][1] == (3, 7, 8)
+    assert connection.committed is True
+
+
+def test_management_category_name_validation_happens_before_connecting():
+    with pytest.raises(ValueError, match="请输入分类名称"):
+        store.create_management_category("   ", connection_factory=lambda: None)
+    with pytest.raises(ValueError, match="不能超过 64"):
+        store.update_management_category(1, "x" * 65, connection_factory=lambda: None)
+
+
 def test_collection_list_applies_weight_profit_and_collection_time_filters():
     connection = _FakeConnection()
     store.list_collection_items(

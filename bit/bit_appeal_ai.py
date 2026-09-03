@@ -42,6 +42,7 @@ import random
 
 from bit.bit_utils import get_latest_modified_file, get_bit_path, parser_delay_date, get_now_time, getWindowidByName
 from bit.bit_api import *
+from bit.bit_collection_control import env_int
 from bit.bit_runtime_lock import create_window_lease, current_thread_window_lease
 from bit.bit_appeal_phrases import (
     get_current_appeal_phrase,
@@ -98,7 +99,31 @@ AI_FRAME_URL_MARKERS = ("meli-ai-chat", "maxwell/new-chat")
 AI_FRAME_MARKERS = ("meli-ai-chat", "maxwell", "new-chat", "ai chat", "assistant", "chat", "meli")
 AI_CHAT_MODE_INLINE = "inline_dom"
 AI_CHAT_MODE_IFRAME = "legacy_iframe"
-AI_AGENT_REPLY_TIMEOUT_SECONDS = 180
+AI_BACKEND_SETTLE_SECONDS = env_int(
+    "BIT_DAILY_BACKEND_SETTLE_SECONDS",
+    12,
+    minimum=5,
+)
+AI_CHAT_READY_TIMEOUT_SECONDS = env_int(
+    "BIT_DAILY_AI_CHAT_READY_TIMEOUT_SECONDS",
+    45,
+    minimum=15,
+)
+AI_CHAT_ENTRY_TIMEOUT_SECONDS = env_int(
+    "BIT_DAILY_AI_CHAT_ENTRY_TIMEOUT_SECONDS",
+    30,
+    minimum=12,
+)
+AI_CHAT_INPUT_TIMEOUT_SECONDS = env_int(
+    "BIT_DAILY_AI_CHAT_INPUT_TIMEOUT_SECONDS",
+    45,
+    minimum=15,
+)
+AI_AGENT_REPLY_TIMEOUT_SECONDS = env_int(
+    "BIT_DAILY_AI_REPLY_TIMEOUT_SECONDS",
+    300,
+    minimum=180,
+)
 AI_AGENT_REPLY_POLL_SECONDS = 10
 AI_HELP_URLS = (
     HELP_URL,
@@ -227,14 +252,18 @@ def insert_chat_info_by_api(name, site, message, chat, response, time):
 def connect_bit_browser(window_id):
     """打开指定比特浏览器窗口，并通过 Selenium 连接到该窗口的调试端口。"""
     last_res = None
-    for attempt in range(1, 4):
+    max_attempts = 5
+    for attempt in range(1, max_attempts + 1):
         try:
             res = openBrowser(window_id)
         except Exception as e:
             last_res = {"success": False, "msg": str(e)}
-            print(f"{get_now_time()} 打开比特浏览器失败，第 {attempt}/3 次: {e}<br>")
-            if attempt < 3:
-                time.sleep(3)
+            print(
+                f"{get_now_time()} 打开比特浏览器失败，"
+                f"第 {attempt}/{max_attempts} 次: {e}<br>"
+            )
+            if attempt < max_attempts:
+                time.sleep(8 if "频率" in str(e) or "正在打开" in str(e) else 3)
             continue
 
         print(res)
@@ -258,9 +287,18 @@ def connect_bit_browser(window_id):
             driver.implicitly_wait(10)
             return driver, res
 
-        print(f"{get_now_time()} 比特浏览器返回异常，第 {attempt}/3 次: {res}<br>")
-        if attempt < 3:
-            time.sleep(3)
+        print(
+            f"{get_now_time()} 比特浏览器返回异常，"
+            f"第 {attempt}/{max_attempts} 次: {res}<br>"
+        )
+        if attempt < max_attempts:
+            response_text = str(res or "")
+            retry_delay = (
+                8
+                if "降低接口请求频率" in response_text or "正在打开" in response_text
+                else 3
+            )
+            time.sleep(retry_delay)
 
     raise RuntimeError(f"打开比特浏览器失败，窗口ID={window_id}，返回={last_res}")
 
@@ -321,7 +359,7 @@ def open_help_page_with_daily_validation(
         HELP_URL,
         name,
         window_id,
-        settle_seconds=8,
+        settle_seconds=AI_BACKEND_SETTLE_SECONDS,
         max_rate_limit_retries=max_hongkong_switches,
         rate_limit_retry_wait_seconds=switch_wait_seconds,
         anomaly_site=site,
@@ -399,16 +437,16 @@ def select_site(driver, name, site):
         return True
 
     try:
-        WebDriverWait(driver, 5).until(
+        WebDriverWait(driver, AI_CHAT_ENTRY_TIMEOUT_SECONDS).until(
             EC.element_to_be_clickable((By.CLASS_NAME, "nav-header-cbt__site-switcher"))
         ).click()
         path = SITE_SWITCH_SELECTOR_MAP.get(site_name, 'div[data-value="MLM-remote"]')
-        WebDriverWait(driver, 8).until(
+        WebDriverWait(driver, AI_CHAT_ENTRY_TIMEOUT_SECONDS).until(
             EC.element_to_be_clickable((By.CSS_SELECTOR, path))
         ).click()
         driver.refresh()
         matched = False
-        for _ in range(12):
+        for _ in range(AI_CHAT_READY_TIMEOUT_SECONDS):
             time.sleep(1)
             if verify_selected_site(driver, site_name):
                 matched = True
@@ -570,7 +608,7 @@ def select_mercado_site_by_cookie(driver, name, site):
             remote_value,
         )
         driver.refresh()
-        for _ in range(15):
+        for _ in range(AI_CHAT_READY_TIMEOUT_SECONDS):
             time.sleep(1)
             if verify_selected_site(driver, site_name):
                 print(f"{get_now_time()} {name} {site_name} cookie 切换站点成功<br>")
@@ -678,7 +716,7 @@ def select_mercado_site_fast(driver, name, site):
     if str(result or "").startswith("clicked"):
         time.sleep(3)
         driver.refresh()
-        for _ in range(12):
+        for _ in range(AI_CHAT_READY_TIMEOUT_SECONDS):
             time.sleep(1)
             if verify_selected_site(driver, site_name):
                 return True
@@ -917,7 +955,7 @@ def detect_ai_chat_variant(driver):
     return classify_ai_chat_variant(get_ai_chat_dom_state(driver))
 
 
-def find_inline_chat_input(driver, timeout=15):
+def find_inline_chat_input(driver, timeout=AI_CHAT_INPUT_TIMEOUT_SECONDS):
     """只在新版 #sa-assistant-chat 内查找输入框，避免误命中帮助页顶部搜索框。"""
     try:
         driver.switch_to.default_content()
@@ -989,7 +1027,12 @@ def find_inline_chat_input(driver, timeout=15):
     return None
 
 
-def click_inline_ai_assistant_entry(driver, name="", site="", timeout=12):
+def click_inline_ai_assistant_entry(
+    driver,
+    name="",
+    site="",
+    timeout=AI_CHAT_ENTRY_TIMEOUT_SECONDS,
+):
     """点击新版助手入口，并用内嵌输入框或 Shadow DOM iframe 验证结果。"""
     try:
         driver.switch_to.default_content()
@@ -1459,7 +1502,11 @@ def dump_ai_chat_mode_debug_info(driver):
         print(f"{get_now_time()} 获取AI聊天模式探测信息失败：{e}<br>")
 
 
-def find_chat_input(driver, timeout=30, allow_default_content=False):
+def find_chat_input(
+    driver,
+    timeout=AI_CHAT_INPUT_TIMEOUT_SECONDS,
+    allow_default_content=False,
+):
     """在当前 iframe 内查找 AI 客服真正的 textarea 输入框。
 
     这里优先匹配 id=chat-input、aria-label、placeholder，并给页面下半部分元素更高分，
@@ -1547,7 +1594,13 @@ def find_chat_input(driver, timeout=30, allow_default_content=False):
     return None
 
 
-def recover_expired_ai_conversation(driver, name="", site="", timeout=25, force=False):
+def recover_expired_ai_conversation(
+    driver,
+    name="",
+    site="",
+    timeout=AI_CHAT_READY_TIMEOUT_SECONDS,
+    force=False,
+):
     """AI 会话过期时优先使用页面提供的 New conversation 链接进入新对话。"""
     try:
         result = driver.execute_script(
@@ -1780,15 +1833,30 @@ def send_ai_chat_message(driver, message):
         raise RuntimeError("没有找到 AI 客服聊天窗口")
 
     if mode == AI_CHAT_MODE_INLINE:
-        input_box = find_inline_chat_input(driver, timeout=8)
+        input_box = find_inline_chat_input(
+            driver,
+            timeout=AI_CHAT_INPUT_TIMEOUT_SECONDS,
+        )
     else:
         recover_expired_ai_conversation(driver)
-        input_box = find_chat_input(driver, timeout=5, allow_default_content=False)
+        input_box = find_chat_input(
+            driver,
+            timeout=AI_CHAT_INPUT_TIMEOUT_SECONDS,
+            allow_default_content=False,
+        )
         if input_box is None and recover_expired_ai_conversation(driver):
-            input_box = find_chat_input(driver, timeout=8, allow_default_content=False)
+            input_box = find_chat_input(
+                driver,
+                timeout=AI_CHAT_INPUT_TIMEOUT_SECONDS,
+                allow_default_content=False,
+            )
         if input_box is None and recover_expired_ai_conversation(driver, force=True):
             switch_to_ai_chat_frame(driver, require_input=False)
-            input_box = find_chat_input(driver, timeout=8, allow_default_content=False)
+            input_box = find_chat_input(
+                driver,
+                timeout=AI_CHAT_INPUT_TIMEOUT_SECONDS,
+                allow_default_content=False,
+            )
     if input_box is None:
         raise RuntimeError("没有找到 AI 客服输入框")
 
@@ -1876,7 +1944,12 @@ def safe_get_agent_messages(driver):
         return []
 
 
-def wait_for_ai_agent_reply(driver, previous_messages, timeout=60, poll_interval=5):
+def wait_for_ai_agent_reply(
+    driver,
+    previous_messages,
+    timeout=AI_AGENT_REPLY_TIMEOUT_SECONDS,
+    poll_interval=AI_AGENT_REPLY_POLL_SECONDS,
+):
     """等待 AI 客服出现相对 previous_messages 的新回复。"""
     previous_messages = previous_messages or []
     previous_count = len(previous_messages)
@@ -2112,7 +2185,12 @@ def build_infraction_followup_message(infraction_ids, site):
     )
 
 
-def reply_site_option_menu_if_present(driver, name, site, timeout=20):
+def reply_site_option_menu_if_present(
+    driver,
+    name,
+    site,
+    timeout=AI_CHAT_READY_TIMEOUT_SECONDS,
+):
     """只要当前 AI 窗口文本包含完整站点选项菜单，就按当前站点自动回复。"""
     end_time = time.time() + timeout
     while time.time() < end_time:
@@ -2192,11 +2270,12 @@ def send_infraction_message_with_retry(
     """按侵权申诉规则发送一组编号，并使用 DeepSeek 回复新的客服消息。
 
     取消率和投诉复用同一套分组、重试、等待回复和最多自动追问两次的规则。
-    每 30 秒读取一次，连续 3 分钟没有新回复则结束当前组；DeepSeek 最多回复 2 次。
+    每 30 秒读取一次，达到配置的最长等待时间仍没有新回复则结束当前组；
+    DeepSeek 最多回复 2 次。
     """
     max_attempts = 4
     max_auto_replies = 2
-    reply_timeout = 180
+    reply_timeout = AI_AGENT_REPLY_TIMEOUT_SECONDS
     poll_interval = 30
     previous_messages = safe_get_agent_messages(driver)
     is_cancellation = appeal_kind == "取消率"
@@ -2273,7 +2352,7 @@ def send_infraction_message_with_retry(
         if not response:
             print(
                 f"{get_now_time()} {name} {site} 第 {group_index}/{total_groups} 组"
-                f"连续 3 分钟没有客服新回复，终止本组<br>"
+                f"连续 {reply_timeout} 秒没有客服新回复，终止本组<br>"
             )
             append_chat_log(
                 name,
@@ -2574,7 +2653,7 @@ def is_top_level_human_customer_service_page(driver):
     return "/help/chat" in current_url or "/maxwell/new-chat" in current_url
 
 
-def wait_for_ai_chat_frame(driver, timeout=15):
+def wait_for_ai_chat_frame(driver, timeout=AI_CHAT_READY_TIMEOUT_SECONDS):
     """在限定时间内等待 AI 客服 iframe 出现并可切换。"""
     end_time = time.time() + timeout
     while time.time() < end_time:
@@ -2587,7 +2666,11 @@ def wait_for_ai_chat_frame(driver, timeout=15):
     return False
 
 
-def wait_for_ai_chat_ready(driver, timeout=15, require_input=False):
+def wait_for_ai_chat_ready(
+    driver,
+    timeout=AI_CHAT_READY_TIMEOUT_SECONDS,
+    require_input=False,
+):
     """等待任一受支持的聊天结构就绪，并返回对应模式。"""
     end_time = time.time() + timeout
     while time.time() < end_time:
@@ -2629,7 +2712,7 @@ def open_ai_contact_window(driver, name, site, window_id=""):
             url,
             name,
             window_id,
-            settle_seconds=5,
+            settle_seconds=AI_BACKEND_SETTLE_SECONDS,
             anomaly_site=site,
             anomaly_source="AI申诉",
         )
@@ -2653,7 +2736,11 @@ def open_ai_contact_window(driver, name, site, window_id=""):
                 f"探测模式={variant or 'unknown'}<br>"
             )
 
-            opened_mode = wait_for_ai_chat_ready(driver, timeout=2, require_input=True)
+            opened_mode = wait_for_ai_chat_ready(
+                driver,
+                timeout=min(10, AI_CHAT_READY_TIMEOUT_SECONDS),
+                require_input=True,
+            )
             if opened_mode:
                 break
 
@@ -2663,7 +2750,11 @@ def open_ai_contact_window(driver, name, site, window_id=""):
                 print(
                     f"{get_now_time()} {name} {site} AI客服面板已展开，等待 iframe 输入框加载<br>"
                 )
-                opened_mode = wait_for_ai_chat_ready(driver, timeout=10, require_input=True)
+                opened_mode = wait_for_ai_chat_ready(
+                    driver,
+                    timeout=AI_CHAT_READY_TIMEOUT_SECONDS,
+                    require_input=True,
+                )
                 if opened_mode:
                     break
                 driver.switch_to.default_content()
@@ -2671,7 +2762,12 @@ def open_ai_contact_window(driver, name, site, window_id=""):
                 continue
 
             if variant == AI_CHAT_MODE_INLINE:
-                opened_mode = click_inline_ai_assistant_entry(driver, name, site, timeout=12)
+                opened_mode = click_inline_ai_assistant_entry(
+                    driver,
+                    name,
+                    site,
+                    timeout=AI_CHAT_ENTRY_TIMEOUT_SECONDS,
+                )
                 if opened_mode:
                     break
                 driver.switch_to.default_content()
@@ -2683,7 +2779,11 @@ def open_ai_contact_window(driver, name, site, window_id=""):
                     entered_human_page = True
                     print(f"{get_now_time()} {name} {site} 点击 Assistant 后进入人工客服页面，不按 AI 悬浮窗处理<br>")
                     break
-                opened_mode = wait_for_ai_chat_ready(driver, timeout=6, require_input=False)
+                opened_mode = wait_for_ai_chat_ready(
+                    driver,
+                    timeout=AI_CHAT_READY_TIMEOUT_SECONDS,
+                    require_input=False,
+                )
                 if opened_mode:
                     break
 
@@ -2692,7 +2792,11 @@ def open_ai_contact_window(driver, name, site, window_id=""):
                     entered_human_page = True
                     print(f"{get_now_time()} {name} {site} 兜底点击后进入人工客服页面，不按 AI 悬浮窗处理<br>")
                     break
-                opened_mode = wait_for_ai_chat_ready(driver, timeout=6, require_input=False)
+                opened_mode = wait_for_ai_chat_ready(
+                    driver,
+                    timeout=AI_CHAT_READY_TIMEOUT_SECONDS,
+                    require_input=False,
+                )
                 if opened_mode:
                     break
 
@@ -2716,7 +2820,10 @@ def open_ai_contact_window(driver, name, site, window_id=""):
     setattr(driver, "_mercado_ai_chat_mode", opened_mode)
     if opened_mode == AI_CHAT_MODE_INLINE:
         driver.switch_to.default_content()
-        input_box = find_inline_chat_input(driver, timeout=15)
+        input_box = find_inline_chat_input(
+            driver,
+            timeout=AI_CHAT_INPUT_TIMEOUT_SECONDS,
+        )
     else:
         if not switch_to_ai_chat_frame(driver, require_input=False):
             dump_iframe_debug_info(driver)
@@ -2725,12 +2832,24 @@ def open_ai_contact_window(driver, name, site, window_id=""):
             save_ai_open_debug_artifacts(driver, name, site)
             raise RuntimeError("没有切换到旧版 AI 客服 iframe")
         recover_expired_ai_conversation(driver, name, site)
-        input_box = find_chat_input(driver, timeout=15, allow_default_content=False)
+        input_box = find_chat_input(
+            driver,
+            timeout=AI_CHAT_INPUT_TIMEOUT_SECONDS,
+            allow_default_content=False,
+        )
         if not input_box and recover_expired_ai_conversation(driver, name, site):
-            input_box = find_chat_input(driver, timeout=8, allow_default_content=False)
+            input_box = find_chat_input(
+                driver,
+                timeout=AI_CHAT_ENTRY_TIMEOUT_SECONDS,
+                allow_default_content=False,
+            )
         if not input_box and recover_expired_ai_conversation(driver, name, site, force=True):
             switch_to_ai_chat_frame(driver, require_input=False)
-            input_box = find_chat_input(driver, timeout=10, allow_default_content=False)
+            input_box = find_chat_input(
+                driver,
+                timeout=AI_CHAT_ENTRY_TIMEOUT_SECONDS,
+                allow_default_content=False,
+            )
     if not input_box:
         dump_iframe_debug_info(driver)
         dump_ai_entry_debug_info(driver)
@@ -2993,81 +3112,27 @@ def _collect_appeal_record_fields(log_records, final_agent_messages=None):
     }
 
 
-def _parse_ai_summary_json(text):
-    raw = str(text or "").strip()
-    if not raw:
-        raise ValueError("empty summary")
-    match = re.search(r"\{.*\}", raw, flags=re.S)
-    if match:
-        raw = match.group(0)
-    data = json.loads(raw)
-    return {
-        "summary": str(data.get("summary") or "").strip(),
-        "success_ids": _unique_text_list(data.get("success_ids") or []),
-        "failed_ids": _unique_text_list(data.get("failed_ids") or []),
-        "status": str(data.get("status") or "").strip(),
-    }
-
-
 def summarize_ai_appeal_result(appeal_type, identifiers, appeal_content, ai_replies, force=False):
+    """整理申诉记录，不再调用外部模型判断或总结申诉结果。
+
+    客服原始回复仍会完整保存在 ``ai_replies`` 字段。这里仅把最后一条回复复制到
+    列表页原有的摘要字段，方便查看；结果和成功/失败编号留待人工确认，避免本地
+    规则误判客服语义。
+    """
     identifiers = _unique_text_list(identifiers)
     ai_replies = _unique_text_list(ai_replies)
-    if not ai_replies and not force:
-        return {
-            "status": "待确认",
-            "summary": "未读取到 AI 客服回复，无法判断申诉结果。",
-            "success_ids": [],
-            "failed_ids": identifiers,
-            "error": "",
-        }
-
-    prompt = f"""
-你是武汉泽顺综合服务台的申诉结果分析助手。
-请只根据下面的 AI 客服回复判断申诉结果，不要补充外部信息。
-
-任务类型：{appeal_type}
-申诉编号列表：{json.dumps(identifiers, ensure_ascii=False)}
-申诉内容：
-{appeal_content}
-
-AI 客服全部回复：
-{json.dumps(ai_replies[-80:], ensure_ascii=False, indent=2)}
-
-请输出严格 JSON，不要 Markdown，不要解释：
-{{
-  "status": "成功/部分成功/失败/待确认",
-  "success_ids": ["明确被接受、已移除、已处理成功的编号"],
-  "failed_ids": ["明确被拒绝、无法处理、维持原判或需要继续跟进的编号"],
-  "summary": "用中文简短总结客服回复和判断依据"
-}}
-如果客服只是说正在处理、需要等待、没有明确结果，status 用“待确认”，不要把编号放入 success_ids。
-如果客服对多个编号统一回复成功或失败，请把对应列表里的编号都归类。
-"""
-    try:
-        content = chat_deepseek(
-            [{"role": "user", "content": prompt}],
-            temperature=0,
-            max_tokens=1200,
-        )
-        parsed = _parse_ai_summary_json(content)
-        status = parsed["status"] or "待确认"
-        if status not in ("成功", "部分成功", "失败", "待确认"):
-            status = "待确认"
-        return {
-            "status": status,
-            "summary": parsed["summary"],
-            "success_ids": parsed["success_ids"],
-            "failed_ids": parsed["failed_ids"],
-            "error": "",
-        }
-    except Exception as e:
-        return {
-            "status": "待确认",
-            "summary": "AI 总结失败，已保留原始客服回复供人工查看。",
-            "success_ids": [],
-            "failed_ids": [],
-            "error": f"AI总结失败：{e}",
-        }
+    latest_reply = ai_replies[-1] if ai_replies else ""
+    return {
+        "status": "待确认",
+        "summary": (
+            f"客服最后回复：{latest_reply}"
+            if latest_reply
+            else "未读取到 AI 客服回复，无法判断申诉结果。"
+        ),
+        "success_ids": [],
+        "failed_ids": [],
+        "error": "",
+    }
 
 
 def save_ai_appeal_record(
@@ -3111,9 +3176,9 @@ def save_ai_appeal_record(
     }
     try:
         insert_ai_appeal_record(record)
-        print(f"{get_now_time()} {shop_name} {site} AI申诉汇总记录已入库<br>")
+        print(f"{get_now_time()} {shop_name} {site} AI申诉记录已入库（未调用DeepSeek总结）<br>")
     except Exception as e:
-        print(f"{get_now_time()} {shop_name} {site} AI申诉汇总记录入库失败：{e}<br>")
+        print(f"{get_now_time()} {shop_name} {site} AI申诉记录入库失败：{e}<br>")
     return record
 
 
@@ -3177,7 +3242,7 @@ def save_ai_appeal_group_record(
     error="",
     appeal_kind="侵权",
 ):
-    """每组侵权/取消率申诉结束后立即总结并写入 AI 申诉记录表。"""
+    """每组侵权/取消率申诉结束后写入原始结果，不调用 DeepSeek 总结。"""
     identifiers = _extract_identifiers_from_text(infraction_ids)
     ai_replies = _collect_group_ai_replies(group_records)
     appeal_type = f"{appeal_kind}-第{group_index}/{total_groups}组"
@@ -3209,10 +3274,10 @@ def save_ai_appeal_group_record(
         insert_ai_appeal_record(record)
         print(
             f"{get_now_time()} {shop_name} {site} 第{group_index}/{total_groups}组"
-            f"AI申诉总结已入库：成功={summary['success_ids']}，失败={summary['failed_ids']}<br>"
+            "AI申诉记录已入库（未调用DeepSeek总结）<br>"
         )
     except Exception as e:
-        print(f"{get_now_time()} {shop_name} {site} 第{group_index}/{total_groups}组AI申诉总结入库失败：{e}<br>")
+        print(f"{get_now_time()} {shop_name} {site} 第{group_index}/{total_groups}组AI申诉记录入库失败：{e}<br>")
     return record
 
 
@@ -3486,7 +3551,7 @@ def handle_delay(window_id, driver, name, site, message, nickname):
         else:
             print(
                 f"{get_now_time()} {name} {site} 第 {index}/{len(groups)} 组"
-                f"连续 3 分钟没有读取到 AI 客服新回复<br>"
+                f"连续 {AI_AGENT_REPLY_TIMEOUT_SECONDS} 秒没有读取到 AI 客服新回复<br>"
             )
         if index < len(groups):
             time.sleep(20)

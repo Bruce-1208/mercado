@@ -8,6 +8,7 @@ from bit import bit_api, bit_runtime_lock
 def test_browser_api_mutations_can_be_serialized_across_workers(monkeypatch, tmp_path):
     monkeypatch.setattr(bit_runtime_lock, "RUNTIME_LOCK_DIR", tmp_path / "locks")
     monkeypatch.setattr(bit_api, "_BROWSER_API_MUTATION_CONCURRENCY", 1)
+    monkeypatch.setattr(bit_api, "_BROWSER_OPEN_COOLDOWN_SECONDS", 0)
 
     guard = threading.Lock()
     active = 0

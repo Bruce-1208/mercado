@@ -3,6 +3,7 @@ from pathlib import Path
 from unittest import mock
 
 from bit import bit_print
+from mercado_api.client import MercadoAPIError
 
 
 def _token(token_id, name):
@@ -106,6 +107,85 @@ def test_first_scan_falls_back_to_last_72_hours_and_saves_tracking_state(monkeyp
         datetime.now(timezone.utc) - calls["tracking_since"]
     ).total_seconds() / 3600 <= 72.1
     assert calls["token_id"] == 7
+
+
+def test_scan_skips_one_451_order_and_continues_same_store(monkeypatch):
+    calls = {"saved_orders": [], "log": []}
+
+    class Client:
+        def iter_order_ids(self, _seller_id, **_filters):
+            return iter(["blocked-order", "good-order"])
+
+        def get_order(self, order_id):
+            if order_id == "blocked-order":
+                raise MercadoAPIError(
+                    'GET /marketplace/orders/blocked-order 失败 (451): '
+                    '{"message":"user not available for legal reasons","status":451}'
+                )
+            return {"id": order_id}
+
+    record = {
+        "id": 7,
+        "display_name": "店铺甲",
+        "meli_user_id": "seller-7",
+        "access_token": "token",
+    }
+    monkeypatch.setattr(bit_print.bit_mysql, "get_mercado_store_token", lambda _id: record)
+    monkeypatch.setattr(bit_print.bit_mysql, "get_mercado_order_print_state", lambda _id: None)
+    monkeypatch.setattr(bit_print, "_client_and_record", lambda row: (Client(), row))
+    monkeypatch.setattr(
+        bit_print.bit_mysql,
+        "upsert_mercado_synced_orders",
+        lambda _record, orders: calls["saved_orders"].extend(orders)
+        or {"inserted": len(orders), "updated": 0},
+    )
+    monkeypatch.setattr(
+        bit_print.bit_mysql,
+        "save_mercado_order_print_state",
+        lambda *_args: None,
+    )
+
+    result = bit_print._scan_store_orders(
+        {"token_id": 7, "shop_name": "店铺甲", "sites": ["墨西哥", "巴西"]},
+        fallback_hours=72,
+        logger=calls["log"].append,
+    )
+
+    assert calls["saved_orders"] == [{"id": "good-order"}]
+    assert result["fetched"] == 1
+    assert result["legally_unavailable_order_ids"] == ["blocked-order"]
+    assert any("已跳过并继续处理" in line for line in calls["log"])
+
+
+def test_scan_does_not_swallow_non_451_api_errors(monkeypatch):
+    class Client:
+        def iter_order_ids(self, _seller_id, **_filters):
+            return iter(["broken-order"])
+
+        def get_order(self, _order_id):
+            raise MercadoAPIError("GET /marketplace/orders/broken-order 失败 (500)")
+
+    record = {
+        "id": 7,
+        "display_name": "店铺甲",
+        "meli_user_id": "seller-7",
+        "access_token": "token",
+    }
+    monkeypatch.setattr(bit_print.bit_mysql, "get_mercado_store_token", lambda _id: record)
+    monkeypatch.setattr(bit_print.bit_mysql, "get_mercado_order_print_state", lambda _id: None)
+    monkeypatch.setattr(bit_print, "_client_and_record", lambda row: (Client(), row))
+
+    with mock.patch.object(bit_print.bit_mysql, "save_mercado_order_print_state"):
+        try:
+            bit_print._scan_store_orders(
+                {"token_id": 7, "shop_name": "店铺甲", "sites": ["墨西哥"]},
+                fallback_hours=72,
+                logger=lambda _message: None,
+            )
+        except MercadoAPIError as exc:
+            assert "(500)" in str(exc)
+        else:
+            raise AssertionError("非 451 API 错误不应被跳过")
 
 
 def test_subsequent_scan_uses_incremental_api_window(monkeypatch):
@@ -247,6 +327,33 @@ def test_shop_job_downloads_only_candidate_orders_and_records_success(monkeypatc
     assert seen["candidate_args"][1]["include_previously_printed"] is False
     assert seen["recorded"] == ["20001", "20002", "20003"]
     assert len(documents) == 2
+
+
+def test_shop_job_does_not_expand_skipped_451_order_into_site_failures(monkeypatch):
+    monkeypatch.setattr(
+        bit_print,
+        "_scan_store_orders",
+        lambda *_args, **_kwargs: {
+            "first_run": False,
+            "tracking_since": datetime.now(timezone.utc) - timedelta(days=1),
+            "end_at": datetime.now(timezone.utc),
+            "legally_unavailable_order_ids": ["blocked-order"],
+        },
+    )
+    monkeypatch.setattr(
+        bit_print.bit_mysql,
+        "list_mercado_order_print_candidates",
+        lambda *_args, **_kwargs: [],
+    )
+
+    rows = bit_print._run_shop_job(
+        {"token_id": 7, "shop_name": "店铺甲", "sites": ["墨西哥", "巴西"]},
+        logger=lambda _message: None,
+    )
+
+    assert [row["status"] for row in rows] == ["no_orders", "no_orders"]
+    assert all("451 受限订单" in row["message"] for row in rows)
+    assert not any(row["status"] == "failed" for row in rows)
 
 
 def test_shop_job_skips_terminal_shipment_without_retrying_forever(monkeypatch):

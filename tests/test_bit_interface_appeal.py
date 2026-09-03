@@ -715,6 +715,9 @@ def test_daily_task_console_exposes_all_task_switches_and_shop_group():
     ).read_text(encoding="utf-8")
 
     assert 'id="daily-task-switches"' in template
+    assert 'data-tab="tasks"' in template
+    assert '<option value="loop" selected>循环执行</option>' in template
+    assert '<option value="once" selected>' not in template
     assert 'name="daily-task-appeal-type" value="侵权" checked' in template
     assert 'name="daily-task-appeal-type" value="延误率"' in template
     assert 'name="daily-task-appeal-type" value="投诉"' in template
@@ -738,6 +741,12 @@ def test_daily_task_console_exposes_all_task_switches_and_shop_group():
     assert "complaint_min_rate:" in template
     assert "cancellation_min_rate:" in template
     assert "侵权 → 延误率 → 侵权 → 投诉 → 侵权 → 取消率" in template
+    assert "每轮先实时遍历店铺授权中勾选的全部站点" in template
+    assert "只执行本站点侵权数超过标准的站点" in template
+    assert 'id="stop-daily-task-btn"' in template
+    assert 'fetch("/api/tasks/daily/stop"' in template
+    assert 'const runtimeLog = String(state.log || "").trim()' in template
+    assert "dailyTaskStatusPollTimer = window.setTimeout(loadDailyTaskStatus, 2000)" in template
 
 
 @pytest.mark.parametrize("appeal_type", ["侵权", "延误率", "取消率", "投诉", "混合模式"])
@@ -757,6 +766,7 @@ def test_build_daily_task_params_accepts_all_appeal_modes(appeal_type):
     assert params["complaint_min_rate"] == pytest.approx(0.075)
     assert params["cancellation_min_rate"] == pytest.approx(0.075)
     assert params["top_n"] == 0
+    assert params["mode"] == "loop"
 
 
 def test_build_daily_task_params_supports_one_or_all_salespeople():
@@ -833,6 +843,62 @@ def test_daily_task_options_returns_all_active_salespeople(monkeypatch):
     assert response.get_json()["data"]["groups"] == ["普通组", "精品组"]
 
 
+def test_daily_task_stop_endpoint_sets_stop_event(monkeypatch):
+    stop_event = bit_interface.threading.Event()
+    monkeypatch.setattr(
+        bit_interface,
+        "get_current_workbench_user",
+        lambda: {"id": 1, "permissions": ["tasks.view", "tasks.execute"]},
+    )
+    monkeypatch.setattr(
+        bit_interface,
+        "_daily_task_state",
+        {"running": True, "status": "running", "message": "daily_task 已启动"},
+    )
+    monkeypatch.setattr(bit_interface, "_daily_task_stop_event", stop_event)
+
+    response = bit_interface.app.test_client().post("/api/tasks/daily/stop", json={})
+
+    payload = response.get_json()
+    assert response.status_code == 200
+    assert payload["status"] == "success"
+    assert payload["data"]["status"] == "stopping"
+    assert payload["data"]["stop_requested"] is True
+    assert stop_event.is_set()
+
+
+def test_daily_task_log_is_normalized_for_status_window(monkeypatch, tmp_path):
+    log_path = tmp_path / "daily-task.log"
+    monkeypatch.setattr(bit_interface, "_daily_task_log_path", log_path)
+
+    bit_interface._reset_daily_task_log()
+    bit_interface._append_daily_task_log("第一行<br>\n第二行<br/>")
+
+    assert bit_interface._read_daily_task_log() == "第一行\n第二行"
+
+
+def test_daily_task_status_returns_runtime_log(monkeypatch, tmp_path):
+    log_path = tmp_path / "daily-task.log"
+    log_path.write_text("店铺运行日志<br>\n", encoding="utf-8")
+    monkeypatch.setattr(bit_interface, "_daily_task_log_path", log_path)
+    monkeypatch.setattr(
+        bit_interface,
+        "get_current_workbench_user",
+        lambda: {"id": 1, "permissions": ["tasks.view"]},
+    )
+    monkeypatch.setattr(bit_interface.bit_daily_task, "get_daily_task_lock_owner", lambda: None)
+    monkeypatch.setattr(
+        bit_interface,
+        "_daily_task_state",
+        {"running": True, "status": "running", "message": "运行中"},
+    )
+
+    response = bit_interface.app.test_client().get("/api/tasks/daily/status")
+
+    assert response.status_code == 200
+    assert response.get_json()["data"]["log"] == "店铺运行日志"
+
+
 def test_build_daily_task_params_rejects_invalid_appeal_settings():
     with pytest.raises(ValueError, match="不支持的申诉类型"):
         bit_interface.build_daily_task_params({"appeal_type": "退款"})
@@ -907,6 +973,7 @@ def test_daily_task_console_dispatches_multiple_tasks_and_group(monkeypatch):
         {"running": True, "status": "running"},
     )
     params = bit_interface.build_daily_task_params({
+        "mode": "once",
         "appeal_types": ["侵权", "投诉"],
         "group_name": "精品组",
         "infraction_min_count": 5,

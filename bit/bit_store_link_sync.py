@@ -153,6 +153,14 @@ def _token_ids(values) -> list[int]:
 def _token_records(selected_token_ids=None) -> list[dict]:
     selected = set(_token_ids(selected_token_ids))
     summaries = (bit_mysql.list_mercado_store_tokens() or {}).get("rows") or []
+    disabled = {
+        int(summary.get("id") or 0)
+        for summary in summaries
+        if not bool(summary.get("enabled", True))
+    } & selected
+    if disabled:
+        raise ValueError(f"选择的店铺已关闭：{', '.join(map(str, sorted(disabled)))}")
+    summaries = [summary for summary in summaries if bool(summary.get("enabled", True))]
     if not selected:
         ordered_ids = order_store_link_token_ids_for_full_sync(
             summary.get("id") for summary in summaries
@@ -557,10 +565,14 @@ def _run_background(token_ids) -> None:
 
 def start_store_link_sync(token_ids=None) -> tuple[bool, dict]:
     selected_ids = _token_ids(token_ids)
+    if selected_ids:
+        _token_records(selected_ids)
     queued_ids = selected_ids
     if not queued_ids:
         queued_ids = _token_ids(
-            row.get("id") for row in ((bit_mysql.list_mercado_store_tokens() or {}).get("rows") or [])
+            row.get("id")
+            for row in ((bit_mysql.list_mercado_store_tokens() or {}).get("rows") or [])
+            if bool(row.get("enabled", True))
         )
     if queued_ids:
         request_store_link_sync(queued_ids)

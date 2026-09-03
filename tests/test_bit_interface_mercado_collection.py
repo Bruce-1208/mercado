@@ -137,6 +137,10 @@ def test_workbench_splits_collection_and_product_list_into_separate_modules():
     assert b'class="market-task-dashboard"' in response.data
     assert b'class="market-collector-help"' in response.data
     assert b'id="mercado-add-selected"' in response.data
+    assert b'id="mercado-management-category-filter"' in response.data
+    assert b'id="mercado-management-category-bulk"' in response.data
+    assert b'id="mercado-category-dialog"' in response.data
+    assert "运营分类管理".encode("utf-8") in response.data
     assert b'id="mercado-collection-workers"' in response.data
     assert b'id="mercado-collection-success"' in response.data
     assert b'id="mercado-collection-failed"' in response.data
@@ -455,6 +459,7 @@ def test_collection_list_and_batch_add_endpoints():
         net_proceeds_max="40",
         date_from="2026-08-25",
         date_to="2026-08-30",
+        management_category_id="",
         exclude_added=True,
     )
 
@@ -469,6 +474,71 @@ def test_collection_list_and_batch_add_endpoints():
     assert response.status_code == 200
     assert response.get_json()["data"]["count"] == 1
     add_products.assert_called_once_with([7])
+
+
+def test_management_category_endpoints_support_crud_assignment_and_filtering():
+    client = _client()
+    category_rows = {
+        "total": 1,
+        "rows": [{"id": 3, "name": "高利润", "collection_count": 2, "product_count": 4}],
+    }
+    with patch.object(
+        workbench, "db_list_mercado_management_categories", return_value=category_rows
+    ):
+        response = client.get("/api/mercado-management-categories")
+    assert response.status_code == 200
+    assert response.get_json()["data"]["rows"][0]["name"] == "高利润"
+
+    with patch.object(
+        workbench,
+        "db_create_mercado_management_category",
+        return_value={"id": 5, "name": "待测款"},
+    ) as create_category:
+        response = client.post(
+            "/api/mercado-management-categories", json={"name": "待测款"}
+        )
+    assert response.status_code == 200
+    create_category.assert_called_once_with("待测款")
+
+    with patch.object(
+        workbench,
+        "db_update_mercado_management_category",
+        return_value={"id": 5, "name": "重点款", "changed": 1},
+    ) as update_category:
+        response = client.patch(
+            "/api/mercado-management-categories/5", json={"name": "重点款"}
+        )
+    assert response.status_code == 200
+    update_category.assert_called_once_with(5, "重点款")
+
+    with patch.object(
+        workbench,
+        "db_assign_mercado_management_category",
+        return_value={"requested": 2, "changed": 2, "category_id": 5},
+    ) as assign_category:
+        response = client.post(
+            "/api/mercado-management-categories/assign",
+            json={"item_type": "collection", "item_ids": [7, 8], "category_id": 5},
+        )
+    assert response.status_code == 200
+    assign_category.assert_called_once_with("collection", [7, 8], 5)
+
+    with patch.object(
+        workbench, "db_delete_mercado_management_category",
+        return_value={"id": 5, "deleted": 1, "cleared_items": 2},
+    ) as delete_category:
+        response = client.delete("/api/mercado-management-categories/5")
+    assert response.status_code == 200
+    delete_category.assert_called_once_with(5)
+
+    with patch.object(
+        workbench, "db_list_mercado_product_items", return_value={"total": 0, "rows": []}
+    ) as list_products:
+        response = client.get(
+            "/api/mercado-products?management_category_id=uncategorized"
+        )
+    assert response.status_code == 200
+    assert list_products.call_args.kwargs["management_category_id"] == "uncategorized"
 
 
 def test_product_publish_record_list_endpoint_supports_filters():
@@ -675,6 +745,7 @@ def test_product_list_filters_and_review_status_endpoint():
         net_proceeds_max="40",
         date_from="2026-08-01",
         date_to="2026-08-25",
+        management_category_id="",
     )
 
     with patch.object(

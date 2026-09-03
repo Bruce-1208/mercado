@@ -45,6 +45,7 @@ def test_zeshun_brand_logo_is_used_on_login_and_workbench():
 
 def test_interface_hot_reload_defaults_to_enabled(monkeypatch):
     monkeypatch.delenv("BIT_INTERFACE_HOT_RELOAD", raising=False)
+    monkeypatch.delattr(bit_interface.sys, "frozen", raising=False)
 
     assert bit_interface.interface_hot_reload_enabled() is True
     assert bit_interface.interface_hot_reload_enabled("true") is True
@@ -59,6 +60,31 @@ def test_interface_hot_reload_defaults_to_enabled(monkeypatch):
     response = bit_interface.app.test_client().get("/login")
     assert response.headers["Cache-Control"] == "no-store, no-cache, must-revalidate"
     assert response.headers["Pragma"] == "no-cache"
+
+
+def test_interface_hot_reload_is_disabled_for_frozen_executable(monkeypatch):
+    monkeypatch.setattr(bit_interface.sys, "frozen", True, raising=False)
+    monkeypatch.setenv("BIT_INTERFACE_HOT_RELOAD", "1")
+
+    assert bit_interface.interface_hot_reload_enabled() is False
+    assert bit_interface.interface_hot_reload_enabled("true") is False
+
+
+def test_interface_main_enables_frozen_multiprocessing_support(monkeypatch):
+    events = []
+    monkeypatch.setattr(
+        bit_interface.multiprocessing,
+        "freeze_support",
+        lambda: events.append("freeze-support"),
+    )
+    monkeypatch.setattr(
+        bit_interface,
+        "run_interface_server",
+        lambda: events.append("server") or True,
+    )
+
+    assert bit_interface.run_interface_main() is True
+    assert events == ["freeze-support", "server"]
 
 
 def test_hot_reload_parent_owns_lock_and_child_starts_services(monkeypatch):

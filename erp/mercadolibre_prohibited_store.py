@@ -259,7 +259,8 @@ def list_due_prohibited_token_ids(
                 FROM `mercado_store_tokens` AS tokens
                 LEFT JOIN `{PROHIBITED_SYNC_STATE_TABLE}` AS state
                   ON state.`token_id` = tokens.`id`
-                WHERE (
+                WHERE tokens.`enabled` = 1
+                  AND (
                     state.`requested_at` IS NOT NULL
                     OR state.`last_completed_at` IS NULL
                     OR state.`last_completed_at` <= %s
@@ -398,13 +399,17 @@ def list_prohibited_listings(
     token_id: int | None = None,
     site_id: str = "",
     salesperson: str = "",
+    risk_type: str = "",
     page: int = 1,
     page_size: int = 100,
     connection_factory: Callable[[], Any] | None = None,
 ) -> dict[str, Any]:
     page = max(1, int(page or 1))
     page_size = max(20, min(int(page_size or 100), 500))
-    conditions = ["items.`is_current` = 1"]
+    risk_type = str(risk_type or "").strip().lower()
+    if risk_type not in {"", "prohibited", "rights_holder_reply"}:
+        risk_type = ""
+    conditions = ["1 = 1"]
     values: list[Any] = []
     if token_id not in (None, ""):
         conditions.append("items.`token_id` = %s")
@@ -417,26 +422,68 @@ def list_prohibited_listings(
     if salesperson:
         conditions.append("COALESCE(settings.`salesperson`, items.`salesperson`, '') = %s")
         values.append(salesperson)
+    if risk_type:
+        conditions.append("items.`risk_type` = %s")
+        values.append(risk_type)
     search = str(search or "").strip()
     if search:
         pattern = f"%{search}%"
         conditions.append(
             "(items.`item_id` LIKE %s OR items.`global_item_id` LIKE %s "
-            "OR items.`title` LIKE %s OR items.`store_name` LIKE %s)"
+            "OR items.`title` LIKE %s OR items.`store_name` LIKE %s "
+            "OR items.`rights_holder` LIKE %s)"
         )
-        values.extend([pattern] * 4)
+        values.extend([pattern] * 5)
     where_sql = " WHERE " + " AND ".join(conditions)
+    risk_union_sql = f"""
+        SELECT CONCAT('P-', prohibited.`id`) AS `record_id`,
+               'prohibited' AS `risk_type`, prohibited.`token_id`,
+               prohibited.`store_name`, prohibited.`salesperson`, prohibited.`group_name`,
+               prohibited.`seller_id`, prohibited.`site_id`, prohibited.`item_id`,
+               prohibited.`global_item_id`, prohibited.`family_id`, prohibited.`title`,
+               prohibited.`permalink`, prohibited.`thumbnail_url`, prohibited.`status`,
+               prohibited.`sub_status`, prohibited.`infraction_id`,
+               prohibited.`infraction_reason`, prohibited.`remedy`,
+               '' AS `rights_holder`, NULL AS `due_at`,
+               prohibited.`infraction_date`, prohibited.`last_checked_at`
+        FROM `{PROHIBITED_TABLE}` AS prohibited
+        WHERE prohibited.`is_current` = 1
+        UNION ALL
+        SELECT CONCAT('R-', reports.`id`) AS `record_id`,
+               'rights_holder_reply' AS `risk_type`, reports.`token_id`,
+               reports.`store_name`, reports.`salesperson`, reports.`group_name`,
+               reports.`seller_id`, reports.`site_id`, reports.`item_id`,
+               '' AS `global_item_id`, '' AS `family_id`, reports.`title`,
+               COALESCE(NULLIF(reports.`permalink`, ''), NULLIF(links.`permalink`, ''))
+                   AS `permalink`,
+               COALESCE(NULLIF(reports.`thumbnail_url`, ''), NULLIF(links.`thumbnail_url`, ''))
+                   AS `thumbnail_url`,
+               reports.`status`, 'waiting_for_rights_holder_reply' AS `sub_status`,
+               reports.`source_id` AS `infraction_id`, reports.`reason` AS `infraction_reason`,
+               '请在截止时间前回复权利人' AS `remedy`, reports.`rights_holder`,
+               reports.`due_at`, reports.`occurred_at` AS `infraction_date`,
+               reports.`last_checked_at`
+        FROM `erp_mercadolibre_infractions` AS reports
+        LEFT JOIN `erp_mercadolibre_store_links` AS links
+          ON links.`token_id` = reports.`token_id`
+         AND links.`item_id` = reports.`item_id`
+        WHERE reports.`source_type` = 'rights_holder'
+          AND reports.`status` = 'WAITING_DOCUMENTATION'
+    """
     settings_join = """
         LEFT JOIN `mercado_store_site_settings` AS settings
           ON settings.`token_id` = items.`token_id` AND settings.`site_id` = items.`site_id`
     """
+    risks_from_sql = f" FROM ({risk_union_sql}) AS items {settings_join}"
     connection = (connection_factory or _connect)()
     try:
         with connection.cursor() as cursor:
             ensure_prohibited_tables(cursor)
+            from erp.mercadolibre_infraction_store import ensure_infraction_tables
+
+            ensure_infraction_tables(cursor)
             cursor.execute(
-                f"SELECT COUNT(*) AS `total` FROM `{PROHIBITED_TABLE}` AS items "
-                f"{settings_join}{where_sql}",
+                f"SELECT COUNT(*) AS `total`{risks_from_sql}{where_sql}",
                 tuple(values),
             )
             total = int((cursor.fetchone() or {}).get("total") or 0)
@@ -444,28 +491,38 @@ def list_prohibited_listings(
             page = min(page, pages)
             cursor.execute(
                 f"""
-                SELECT items.`id`, items.`token_id`, items.`store_name`,
+                SELECT items.`record_id` AS `id`, items.`risk_type`, items.`token_id`,
+                       items.`store_name`,
                        COALESCE(settings.`salesperson`, items.`salesperson`, '') AS `salesperson`,
                        COALESCE(settings.`group_name`, items.`group_name`, '') AS `group_name`,
                        items.`seller_id`, items.`site_id`, items.`item_id`,
                        items.`global_item_id`, items.`family_id`, items.`title`,
                        items.`permalink`, items.`thumbnail_url`, items.`status`,
                        items.`sub_status`, items.`infraction_id`, items.`infraction_reason`,
-                       items.`remedy`, items.`infraction_date`, items.`last_checked_at`,
-                       counts.`prohibited_count`, state.`last_completed_at` AS `store_last_synced_at`
-                FROM `{PROHIBITED_TABLE}` AS items
-                {settings_join}
+                       items.`remedy`, items.`rights_holder`, items.`due_at`,
+                       items.`infraction_date`, items.`last_checked_at`,
+                       counts.`risk_count`, counts.`prohibited_count`,
+                       counts.`rights_holder_reply_count`,
+                       state.`last_completed_at` AS `store_last_synced_at`
+                {risks_from_sql}
                 INNER JOIN (
-                    SELECT `token_id`, `site_id`, COUNT(*) AS `prohibited_count`
-                    FROM `{PROHIBITED_TABLE}` WHERE `is_current` = 1
+                    SELECT `token_id`, `site_id`, COUNT(*) AS `risk_count`,
+                           SUM(CASE WHEN `risk_type` = 'prohibited' THEN 1 ELSE 0 END)
+                               AS `prohibited_count`,
+                           SUM(CASE WHEN `risk_type` = 'rights_holder_reply' THEN 1 ELSE 0 END)
+                               AS `rights_holder_reply_count`
+                    FROM ({risk_union_sql}) AS all_risks
                     GROUP BY `token_id`, `site_id`
                 ) AS counts ON counts.`token_id` = items.`token_id`
                            AND counts.`site_id` = items.`site_id`
                 LEFT JOIN `{PROHIBITED_SYNC_STATE_TABLE}` AS state
                   ON state.`token_id` = items.`token_id`
                 {where_sql}
-                ORDER BY counts.`prohibited_count` DESC, items.`infraction_date` DESC,
-                         items.`last_checked_at` DESC, items.`id` DESC
+                ORDER BY CASE WHEN items.`risk_type` = 'rights_holder_reply' THEN 0 ELSE 1 END,
+                         COALESCE(items.`due_at`, '9999-12-31 23:59:59') ASC,
+                         counts.`risk_count` DESC,
+                         items.`infraction_date` DESC, items.`last_checked_at` DESC,
+                         items.`record_id` DESC
                 LIMIT %s OFFSET %s
                 """,
                 tuple(values + [page_size, (page - 1) * page_size]),
@@ -476,18 +533,23 @@ def list_prohibited_listings(
                 SELECT items.`token_id`, items.`store_name`, items.`site_id`,
                        COALESCE(settings.`salesperson`, items.`salesperson`, '') AS `salesperson`,
                        COALESCE(settings.`group_name`, items.`group_name`, '') AS `group_name`,
-                       COUNT(*) AS `prohibited_count`, MAX(items.`infraction_date`) AS `latest_infraction_at`,
-                       MAX(state.`last_completed_at`) AS `last_synced_at`
-                FROM `{PROHIBITED_TABLE}` AS items
-                {settings_join}
+                       COUNT(*) AS `risk_count`,
+                       SUM(CASE WHEN items.`risk_type` = 'prohibited' THEN 1 ELSE 0 END)
+                           AS `prohibited_count`,
+                       SUM(CASE WHEN items.`risk_type` = 'rights_holder_reply' THEN 1 ELSE 0 END)
+                           AS `rights_holder_reply_count`,
+                       MAX(items.`infraction_date`) AS `latest_infraction_at`,
+                       MAX(items.`last_checked_at`) AS `last_synced_at`
+                {risks_from_sql}
                 LEFT JOIN `{PROHIBITED_SYNC_STATE_TABLE}` AS state
                   ON state.`token_id` = items.`token_id`
-                WHERE items.`is_current` = 1
+                {where_sql}
                 GROUP BY items.`token_id`, items.`store_name`, items.`site_id`,
                          COALESCE(settings.`salesperson`, items.`salesperson`, ''),
                          COALESCE(settings.`group_name`, items.`group_name`, '')
-                ORDER BY `prohibited_count` DESC, items.`store_name`, items.`site_id`
-                """
+                ORDER BY `risk_count` DESC, items.`store_name`, items.`site_id`
+                """,
+                tuple(values),
             )
             groups = [_json_safe_row(row) for row in cursor.fetchall()]
             cursor.execute(
@@ -512,10 +574,17 @@ def list_prohibited_listings(
             salespersons = [_json_safe_row(row) for row in cursor.fetchall()]
             cursor.execute(
                 f"""
-                SELECT COUNT(*) AS `current_count`, COUNT(DISTINCT `token_id`) AS `store_count`,
-                       COUNT(DISTINCT `site_id`) AS `site_count`,
-                       MAX(`last_checked_at`) AS `last_checked_at`
-                FROM `{PROHIBITED_TABLE}` WHERE `is_current` = 1
+                SELECT COUNT(*) AS `current_count`,
+                       SUM(CASE WHEN items.`risk_type` = 'prohibited' THEN 1 ELSE 0 END)
+                           AS `prohibited_count`,
+                       SUM(CASE WHEN items.`risk_type` = 'rights_holder_reply' THEN 1 ELSE 0 END)
+                           AS `rights_holder_reply_count`,
+                       COUNT(DISTINCT items.`token_id`) AS `store_count`,
+                       COUNT(DISTINCT items.`site_id`) AS `site_count`,
+                       MAX(items.`last_checked_at`) AS `last_checked_at`,
+                       MIN(CASE WHEN items.`risk_type` = 'rights_holder_reply'
+                                THEN items.`due_at` ELSE NULL END) AS `next_due_at`
+                FROM ({risk_union_sql}) AS items
                 """
             )
             summary = _json_safe_row(cursor.fetchone() or {})

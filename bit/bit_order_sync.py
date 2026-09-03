@@ -214,8 +214,17 @@ def _token_ids(values):
 def _token_records(selected_token_ids=None):
     selected = set(_token_ids(selected_token_ids))
     summaries = (bit_mysql.list_mercado_store_tokens() or {}).get("rows") or []
+    disabled = {
+        int(summary.get("id") or 0)
+        for summary in summaries
+        if not bool(summary.get("enabled", True))
+    } & selected
+    if disabled:
+        raise ValueError(f"选择的店铺已关闭：{', '.join(map(str, sorted(disabled)))}")
     records = []
     for summary in summaries:
+        if not bool(summary.get("enabled", True)):
+            continue
         token_id = int(summary.get("id") or 0)
         if selected and token_id not in selected:
             continue
@@ -1180,6 +1189,8 @@ def start_order_sync(start_date="", end_date="", token_ids=None, mode="manual"):
     if mode == "manual":
         _date_range(start_date, end_date)
     selected_ids = _token_ids(token_ids)
+    if selected_ids:
+        _token_records(selected_ids)
     with _state_guard:
         if _sync_state.get("running"):
             return False, order_sync_status()

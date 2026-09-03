@@ -107,6 +107,62 @@ class CollectionControlTests(unittest.TestCase):
 
 
 class CollectionOrchestrationTests(unittest.TestCase):
+    def test_infraction_shop_site_scope_keeps_each_shop_pair_independent(self):
+        rows = [
+            ("id-1", "店铺甲", "", "墨西哥，巴西", "", "", ""),
+            ("id-2", "店铺乙", "", "墨西哥，巴西", "", "", ""),
+        ]
+
+        selected = infractions._filter_rows_by_shop_sites(
+            rows,
+            {
+                "店铺甲": ["墨西哥"],
+                "店铺乙": ["巴西"],
+            },
+        )
+
+        self.assertEqual(
+            selected,
+            [
+                ("id-1", "店铺甲", "", "墨西哥", "", "", ""),
+                ("id-2", "店铺乙", "", "巴西", "", "", ""),
+            ],
+        )
+
+    def test_live_infraction_collection_uses_appeal_scope_without_persisting(self):
+        row = ("id-1", "店铺甲", "", "墨西哥", "", "", "")
+        live_row = ["店铺甲", "墨西哥", "INF-1", "", "2026-09-03", "", "", "侵权"]
+        outcomes = {
+            control.row_key(row): (
+                row,
+                [live_row],
+                [("获取侵权信息", "店铺甲", "墨西哥", "成功", "now")],
+            )
+        }
+        with (
+            mock.patch.object(infractions, "list_config_rows", return_value=[row]) as configs,
+            mock.patch.object(infractions, "_execute_infraction_rows", return_value=outcomes),
+            mock.patch.object(infractions, "write_unreadable_site_report", return_value=None),
+            mock.patch.object(infractions, "inset_infraction_info") as persist_rows,
+            mock.patch.object(infractions, "insert_task_record") as persist_status,
+            mock.patch.object(infractions, "send_info") as send_email,
+        ):
+            result = infractions.get_infractions_info_all(
+                selected_shop_sites={"店铺甲": ["墨西哥"]},
+                authorization_flag="appeal_enabled",
+                retry_failed=False,
+                persist=False,
+            )
+
+        configs.assert_called_once_with(
+            include_ignored=False,
+            authorization_flag="appeal_enabled",
+        )
+        self.assertEqual(result["data"], [live_row])
+        persist_rows.assert_not_called()
+        persist_status.assert_not_called()
+        send_email.assert_not_called()
+
     def test_infraction_scope_comes_from_explicit_authorization_switches(self):
         rows = [("id-1", "店铺甲", "", "巴西", "", "", "")]
         token_data = {
@@ -177,6 +233,113 @@ class CollectionOrchestrationTests(unittest.TestCase):
             captured,
             [("id-2", "店铺乙", "", "巴西", "", "", "")],
         )
+
+    def test_parallel_infraction_shop_failure_does_not_stop_other_shops(self):
+        failed_row = ("id-1", "失败店铺", "", "墨西哥", "", "", "")
+        healthy_row = ("id-2", "正常店铺", "", "巴西", "", "", "")
+        healthy_data = [["正常店铺", "巴西", "INF-1", "", "2026-09-03", "", "", "侵权"]]
+
+        class FakeFuture:
+            def __init__(self, row):
+                self.row = row
+
+            def result(self):
+                if self.row[1] == "失败店铺":
+                    raise RuntimeError("浏览器页面异常")
+                return healthy_data, [
+                    ("获取侵权信息", "正常店铺", "巴西", "成功", "now")
+                ]
+
+        class FakeExecutor:
+            def __init__(self, max_workers):
+                self.max_workers = max_workers
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *_args):
+                return False
+
+            def submit(self, _worker, row, *_args):
+                return FakeFuture(row)
+
+            def shutdown(self, **_kwargs):
+                return None
+
+        with (
+            mock.patch.object(infractions, "ProcessPoolExecutor", FakeExecutor),
+            mock.patch.object(
+                infractions,
+                "wait",
+                side_effect=lambda pending, **_kwargs: (set(pending), set()),
+            ),
+            mock.patch.object(infractions, "stagger_sleep", return_value=0),
+        ):
+            outcomes = infractions._execute_infraction_rows(
+                [failed_row, healthy_row],
+                max_workers=2,
+                stagger_min_seconds=0,
+                stagger_max_seconds=0,
+            )
+
+        failed_outcome = outcomes[control.row_key(failed_row)]
+        healthy_outcome = outcomes[control.row_key(healthy_row)]
+        self.assertIn("浏览器页面异常", failed_outcome[2][0][3])
+        self.assertEqual(healthy_outcome[1], healthy_data)
+        self.assertEqual(healthy_outcome[2][0][3], "成功")
+
+    def test_stop_request_terminates_infraction_pool_and_closes_windows(self):
+        import threading
+
+        row = ("window-stop", "停止店铺", "", "墨西哥", "", "", "")
+        stop_event = threading.Event()
+        terminated = []
+        closed_rows = []
+
+        class FakeFuture:
+            def cancel(self):
+                return True
+
+        class FakeExecutor:
+            def __init__(self, max_workers):
+                self.max_workers = max_workers
+
+            def submit(self, *_args):
+                return FakeFuture()
+
+            def shutdown(self, **kwargs):
+                self.fail(f"停止时不应等待进程池自然结束：{kwargs}")
+
+        def stop_on_wait(pending, **_kwargs):
+            stop_event.set()
+            return set(), set(pending)
+
+        with (
+            mock.patch.object(infractions, "ProcessPoolExecutor", FakeExecutor),
+            mock.patch.object(infractions, "wait", side_effect=stop_on_wait),
+            mock.patch.object(infractions, "stagger_sleep", return_value=0),
+            mock.patch.object(
+                infractions,
+                "terminate_process_pool",
+                side_effect=lambda executor: terminated.append(executor),
+            ),
+            mock.patch.object(
+                infractions,
+                "_force_close_infraction_windows",
+                side_effect=lambda rows: closed_rows.extend(rows),
+            ),
+        ):
+            outcomes = infractions._execute_infraction_rows(
+                [row],
+                max_workers=1,
+                stagger_min_seconds=0,
+                stagger_max_seconds=0,
+                stop_event=stop_event,
+            )
+
+        self.assertEqual(outcomes, {})
+        self.assertEqual(len(terminated), 1)
+        self.assertEqual(closed_rows, [row])
 
     def test_infraction_focused_appeal_sequence_runs_ten_rounds(self):
         started_at = bit_main.datetime.now()

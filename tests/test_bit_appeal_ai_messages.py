@@ -1,6 +1,14 @@
 from bit import bit_appeal_ai
 
 
+def test_ai_customer_service_uses_extended_wait_limits():
+    assert bit_appeal_ai.AI_BACKEND_SETTLE_SECONDS >= 12
+    assert bit_appeal_ai.AI_CHAT_READY_TIMEOUT_SECONDS >= 45
+    assert bit_appeal_ai.AI_CHAT_ENTRY_TIMEOUT_SECONDS >= 30
+    assert bit_appeal_ai.AI_CHAT_INPUT_TIMEOUT_SECONDS >= 45
+    assert bit_appeal_ai.AI_AGENT_REPLY_TIMEOUT_SECONDS >= 300
+
+
 class FakeMessageElement:
     def __init__(self, text, displayed=True):
         self.text = text

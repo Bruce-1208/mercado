@@ -32,11 +32,17 @@ TOKEN_AUTO_REFRESH_CHECK_SECONDS = max(
     60, int(os.environ.get("MERCADO_TOKEN_AUTO_REFRESH_CHECK_SECONDS", "300"))
 )
 TOKEN_AUTO_REFRESH_SCAN_LOCK_KEY = "mercado_token_auto_refresh_scan"
+STORE_EMAIL_SYNC_INTERVAL_SECONDS = max(
+    900, int(os.environ.get("MERCADO_STORE_EMAIL_SYNC_INTERVAL_SECONDS", "21600"))
+)
+STORE_EMAIL_SYNC_SCAN_LOCK_KEY = "mercado_store_email_sync_scan"
 
 _token_refresh_locks_guard = threading.Lock()
 _token_refresh_locks: dict[int, Any] = {}
 _token_refresh_scheduler_guard = threading.Lock()
 _token_refresh_scheduler_thread: threading.Thread | None = None
+_store_email_sync_scheduler_guard = threading.Lock()
+_store_email_sync_scheduler_thread: threading.Thread | None = None
 
 
 class MercadoTokenError(RuntimeError):
@@ -225,6 +231,13 @@ def _normalize_display_name(display_name: str) -> str:
     return value
 
 
+def _store_enabled(record: Mapping[str, Any]) -> bool:
+    value = record.get("enabled", True)
+    if isinstance(value, str):
+        return value.strip().casefold() not in ("", "0", "false", "no", "off")
+    return bool(value)
+
+
 def _token_record(
     display_name: str,
     token_data: Mapping[str, Any],
@@ -244,6 +257,7 @@ def _token_record(
         "meli_user_id": str(user_id).strip() if user_id not in (None, "") else None,
         "nickname": str(profile.get("nickname") or "").strip(),
         "site_id": str(profile.get("site_id") or "").strip(),
+        "email": str(profile.get("email") or "").strip(),
         "client_id": client_id,
         "access_token": str(token_data["access_token"]),
         "refresh_token": str(token_data.get("refresh_token") or ""),
@@ -352,6 +366,7 @@ def _refresh_and_save_unlocked(
         "id": existing.get("meli_user_id"),
         "nickname": existing.get("nickname"),
         "site_id": existing.get("site_id"),
+        "email": existing.get("email"),
     }
     profile_error = ""
     try:
@@ -441,6 +456,104 @@ def _comparable_now(now: datetime, target: datetime) -> datetime:
     return now
 
 
+def sync_missing_store_emails(
+    *,
+    list_tokens=None,
+    get_token=None,
+    update_email=None,
+    refresh_token=None,
+    http: requests.Session | None = None,
+    now: datetime | None = None,
+    timeout: int = 30,
+) -> dict[str, Any]:
+    """Backfill missing seller emails without exposing or rewriting token secrets."""
+
+    if any(callback is None for callback in (list_tokens, get_token, update_email, refresh_token)):
+        from bit import bit_mysql
+
+        list_tokens = list_tokens or bit_mysql.list_mercado_store_tokens
+        get_token = get_token or bit_mysql.get_mercado_store_token
+        update_email = update_email or bit_mysql.update_mercado_store_token_email
+
+        if refresh_token is None:
+            def refresh_token(identifier):
+                return refresh_and_save(
+                    int(identifier),
+                    get_token=bit_mysql.get_mercado_store_token,
+                    update_token=bit_mysql.update_mercado_store_token,
+                    record_error=bit_mysql.record_mercado_store_token_error,
+                    http=http,
+                    timeout=timeout,
+                )
+
+    current = now or datetime.now()
+    rows = list((list_tokens() or {}).get("rows") or [])
+    missing_rows = [
+        row for row in rows
+        if _store_enabled(row)
+        and not str(row.get("email") or "").strip()
+    ]
+    result: dict[str, Any] = {
+        "checked": len(rows),
+        "missing": len(missing_rows),
+        "synced": 0,
+        "unavailable": 0,
+        "failed": 0,
+        "failures": [],
+    }
+
+    for row in missing_rows:
+        token_id = int(row.get("id") or 0)
+        store_name = str(row.get("display_name") or row.get("nickname") or token_id)
+        if not token_id:
+            result["failed"] += 1
+            result["failures"].append({"token_id": 0, "store_name": store_name, "error": "店铺授权 ID 无效"})
+            continue
+        try:
+            existing = dict(get_token(token_id) or {})
+            access_token = str(existing.get("access_token") or "").strip()
+            expires_at = _token_datetime(existing.get("expires_at"))
+            expired = expires_at is not None and expires_at <= _comparable_now(current, expires_at)
+
+            profile: dict[str, Any] = {}
+            if access_token and not expired:
+                try:
+                    profile = _seller_profile(access_token, http=http, timeout=timeout)
+                except MercadoTokenError as exc:
+                    if "HTTP 401" not in str(exc) or not existing.get("refresh_token"):
+                        raise
+
+            if not profile and existing.get("refresh_token"):
+                refreshed = dict(refresh_token(token_id) or {})
+                email = str(refreshed.get("email") or "").strip()
+                if not email:
+                    latest = dict(get_token(token_id) or {})
+                    email = str(latest.get("email") or "").strip()
+                if email:
+                    result["synced"] += 1
+                else:
+                    result["unavailable"] += 1
+                continue
+
+            if not profile:
+                raise MercadoTokenError("该店铺 Token 已失效且无法自动刷新")
+
+            email = str(profile.get("email") or "").strip()
+            if not email:
+                result["unavailable"] += 1
+                continue
+            update_email(token_id, email)
+            result["synced"] += 1
+        except Exception as exc:
+            result["failed"] += 1
+            result["failures"].append({
+                "token_id": token_id,
+                "store_name": store_name,
+                "error": str(exc),
+            })
+    return result
+
+
 def auto_refresh_due_store_tokens(
     *,
     list_tokens=None,
@@ -469,6 +582,8 @@ def auto_refresh_due_store_tokens(
     }
     for row in rows:
         token_id = int(row.get("id") or 0)
+        if not _store_enabled(row):
+            continue
         expires_at = _token_datetime(row.get("expires_at"))
         if not token_id or not row.get("has_refresh_token") or expires_at is None:
             continue
@@ -533,4 +648,48 @@ def start_token_auto_refresh_scheduler() -> bool:
             daemon=True,
         )
         _token_refresh_scheduler_thread.start()
+        return True
+
+
+def _store_email_sync_loop() -> None:
+    while True:
+        scan_lock = InterProcessLock(
+            STORE_EMAIL_SYNC_SCAN_LOCK_KEY,
+            owner="mercado_store_email_sync_scheduler",
+        )
+        if scan_lock.acquire(timeout=0):
+            try:
+                result = sync_missing_store_emails()
+                if result["missing"]:
+                    logging.info(
+                        "店铺邮箱同步完成：检查 %s，待补读 %s，成功 %s，平台未返回 %s，失败 %s",
+                        result["checked"],
+                        result["missing"],
+                        result["synced"],
+                        result["unavailable"],
+                        result["failed"],
+                    )
+            except Exception:
+                logging.exception("店铺邮箱同步检查失败")
+            finally:
+                scan_lock.release()
+        threading.Event().wait(STORE_EMAIL_SYNC_INTERVAL_SECONDS)
+
+
+def start_store_email_sync_scheduler() -> bool:
+    """Start one scheduler that backfills email for existing authorizations."""
+
+    global _store_email_sync_scheduler_thread
+    with _store_email_sync_scheduler_guard:
+        if (
+            _store_email_sync_scheduler_thread
+            and _store_email_sync_scheduler_thread.is_alive()
+        ):
+            return False
+        _store_email_sync_scheduler_thread = threading.Thread(
+            target=_store_email_sync_loop,
+            name="mercado-store-email-sync",
+            daemon=True,
+        )
+        _store_email_sync_scheduler_thread.start()
         return True

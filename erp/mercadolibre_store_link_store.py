@@ -449,7 +449,8 @@ def list_due_store_link_token_ids(
                 FROM `mercado_store_tokens` AS tokens
                 LEFT JOIN `{STORE_LINK_SYNC_STATE_TABLE}` AS sync_state
                   ON sync_state.`token_id` = tokens.`id`
-                WHERE (
+                WHERE tokens.`enabled` = 1
+                  AND (
                     sync_state.`requested_at` IS NOT NULL
                     OR sync_state.`last_completed_at` IS NULL
                     OR sync_state.`last_completed_at` <= %s

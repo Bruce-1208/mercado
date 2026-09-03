@@ -64,6 +64,10 @@ def _flag_enabled(value):
     return bool(value)
 
 
+def _store_enabled(token):
+    return "enabled" not in token or _flag_enabled(token.get("enabled"))
+
+
 def _authorization_aliases(token):
     return tuple(
         dict.fromkeys(
@@ -113,10 +117,14 @@ def list_shop_configs(
     browsers=None,
 ):
     """Convert authorized stores into the seven fields legacy scripts expect."""
-    del include_ignored  # Authorizations have no retired "ignored" status.
+    del include_ignored  # A disabled authorization is never an executable target.
     if token_data is None:
         token_data = bit_db_api.list_mercado_store_tokens() or {}
-    tokens = [dict(row or {}) for row in (token_data.get("rows") or ())]
+    tokens = [
+        dict(row or {})
+        for row in (token_data.get("rows") or ())
+        if _store_enabled(dict(row or {}))
+    ]
     scoped = [
         (token, _relevant_site_settings(token, authorization_flag))
         for token in tokens
@@ -156,7 +164,7 @@ def list_shop_configs(
                     "sites": "，".join(sites),
                     "sequence_no": "",
                     "salesperson": "、".join(salespeople),
-                    "email": "",
+                    "email": _text(token.get("email")),
                 }
             )
         )
