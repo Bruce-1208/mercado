@@ -2,6 +2,8 @@ import json
 import hashlib
 import os
 import re
+import threading
+import random
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal, InvalidOperation
 
@@ -92,8 +94,9 @@ def _filter_datetime_bounds(date_from="", date_to=""):
 def _ensure_column(cursor, table_name, column_name, column_definition):
     cursor.execute(f"SHOW COLUMNS FROM `{table_name}` LIKE %s", (column_name,))
     if cursor.fetchone():
-        return
+        return False
     cursor.execute(f"ALTER TABLE `{table_name}` ADD COLUMN `{column_name}` {column_definition}")
+    return True
 
 
 def _appeal_phrase_hash(content):
@@ -122,6 +125,50 @@ def _normalize_appeal_phrase_record(record, require_active=False):
             value = value.strip().lower() not in ("0", "false", "no", "off", "")
         normalized["is_active"] = 1 if bool(value) else 0
     return normalized
+
+
+_APPEAL_SCHEMA_READY = False
+_APPEAL_SCHEMA_GUARD = threading.Lock()
+
+
+def _appeal_connection():
+    options = dict(config)
+    options.update(connect_timeout=5, read_timeout=10, write_timeout=10)
+    return pymysql.connect(**options)
+
+
+def initialize_appeal_storage():
+    """Initialize once per process under a server-side lock, outside business transactions."""
+    global _APPEAL_SCHEMA_READY
+    if _APPEAL_SCHEMA_READY:
+        return
+    with _APPEAL_SCHEMA_GUARD:
+        if _APPEAL_SCHEMA_READY:
+            return
+        connection = _appeal_connection()
+        try:
+            with connection.cursor() as cursor:
+                cursor.execute("SELECT GET_LOCK('mercado_appeal_schema_v2', 10) AS acquired")
+                if (cursor.fetchone() or {}).get("acquired") != 1:
+                    raise RuntimeError("等待申诉数据库初始化锁超时")
+                try:
+                    _ensure_appeal_phrases_table(cursor)
+                    _ensure_appeal_chat_records_table(cursor)
+                    _ensure_ai_appeal_records_table(cursor)
+                    for table in ("appeal_chat_records", "ai_appeal_records"):
+                        _ensure_column(cursor, table, "event_id", "CHAR(32) NULL")
+                        cursor.execute(f"SHOW INDEX FROM `{table}` WHERE Key_name = 'uniq_appeal_event'")
+                        if not cursor.fetchone():
+                            cursor.execute(f"ALTER TABLE `{table}` ADD UNIQUE KEY uniq_appeal_event (event_id)")
+                    connection.commit()
+                    _APPEAL_SCHEMA_READY = True
+                finally:
+                    cursor.execute("SELECT RELEASE_LOCK('mercado_appeal_schema_v2')")
+        except Exception:
+            connection.rollback()
+            raise
+        finally:
+            connection.close()
 
 
 def _ensure_appeal_phrases_table(cursor):
@@ -185,17 +232,17 @@ def _serialize_appeal_phrase_row(row):
 def list_appeal_phrases():
     from bit.bit_appeal_phrases import APPEAL_TYPES
 
-    connection = pymysql.connect(**config)
+    initialize_appeal_storage()
+    connection = _appeal_connection()
     try:
         with connection.cursor() as cursor:
-            _ensure_appeal_phrases_table(cursor)
             cursor.execute(
                 """
                 SELECT `id`, `appeal_type`, `content`, `is_active`,
                        `created_at`, `updated_at`
                 FROM `appeal_phrases`
                 WHERE `deleted_at` IS NULL
-                ORDER BY FIELD(`appeal_type`, '延误', '侵权', '取消率', '投诉'), `id`
+                ORDER BY FIELD(`appeal_type`, '延误', '侵权', '禁限售', '取消率', '投诉'), `id`
                 """
             )
             rows = [_serialize_appeal_phrase_row(row) for row in cursor.fetchall()]
@@ -222,22 +269,22 @@ def get_random_appeal_phrase(appeal_type):
     from bit.bit_appeal_phrases import normalize_appeal_type
 
     appeal_type = normalize_appeal_type(appeal_type)
-    connection = pymysql.connect(**config)
+    initialize_appeal_storage()
+    connection = _appeal_connection()
     try:
         with connection.cursor() as cursor:
-            _ensure_appeal_phrases_table(cursor)
             cursor.execute(
                 """
                 SELECT `id`, `appeal_type`, `content`, `is_active`,
                        `created_at`, `updated_at`
                 FROM `appeal_phrases`
                 WHERE `appeal_type` = %s AND `is_active` = 1 AND `deleted_at` IS NULL
-                ORDER BY RAND()
-                LIMIT 1
+                ORDER BY id
                 """,
                 (appeal_type,),
             )
-            row = cursor.fetchone()
+            rows = cursor.fetchall()
+            row = random.choice(rows) if rows else None
         connection.commit()
         return _serialize_appeal_phrase_row(row) if row else None
     except Exception:
@@ -250,10 +297,10 @@ def get_random_appeal_phrase(appeal_type):
 def create_appeal_phrase(record):
     normalized = _normalize_appeal_phrase_record(record, require_active=True)
     now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    connection = pymysql.connect(**config)
+    initialize_appeal_storage()
+    connection = _appeal_connection()
     try:
         with connection.cursor() as cursor:
-            _ensure_appeal_phrases_table(cursor)
             cursor.execute(
                 """
                 SELECT `id`, `deleted_at`
@@ -316,10 +363,10 @@ def update_appeal_phrase(phrase_id, record):
         raise ValueError("话术编号无效")
     normalized = _normalize_appeal_phrase_record(record, require_active=True)
     now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    connection = pymysql.connect(**config)
+    initialize_appeal_storage()
+    connection = _appeal_connection()
     try:
         with connection.cursor() as cursor:
-            _ensure_appeal_phrases_table(cursor)
             cursor.execute(
                 "SELECT `id` FROM `appeal_phrases` WHERE `id` = %s AND `deleted_at` IS NULL",
                 (phrase_id,),
@@ -362,10 +409,10 @@ def delete_appeal_phrase(phrase_id):
     if phrase_id <= 0:
         raise ValueError("话术编号无效")
     now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    connection = pymysql.connect(**config)
+    initialize_appeal_storage()
+    connection = _appeal_connection()
     try:
         with connection.cursor() as cursor:
-            _ensure_appeal_phrases_table(cursor)
             cursor.execute(
                 """
                 UPDATE `appeal_phrases`
@@ -1308,6 +1355,18 @@ def inset_reputation_info(
                 "reputation",
                 "reputation",
             )
+            previous_snapshot_rows = _active_collection_snapshot_rows(
+                _latest_reputation_snapshot_rows(cursor)
+            )
+            previous_traffic_by_target = {
+                (
+                    str(row.get("店铺名") or "").strip(),
+                    str(row.get("站点") or "").strip(),
+                ): row.get("一周流量趋势")
+                for row in previous_snapshot_rows
+                if str(row.get("一周流量趋势") or "").strip()
+                not in ("", "[]")
+            }
             normalized_list = []
             for row in reputation_list:
                 row = list(row)
@@ -1333,14 +1392,19 @@ def inset_reputation_info(
                     row = row[:6] + [""] + row[6:]
                 if len(row) < 12:
                     row.extend([""] * (12 - len(row)))
+                if str(row[11] or "").strip() in ("", "[]"):
+                    previous_traffic = previous_traffic_by_target.get((
+                        str(row[0] or "").strip(),
+                        str(row[1] or "").strip(),
+                    ))
+                    if previous_traffic not in (None, ""):
+                        row[11] = previous_traffic
                 extras = row[12:15] if len(row) >= 15 else ["", None, None]
                 row = row[:12] + extras + [submit_time]
                 normalized_list.append(row)
             if merge_latest:
                 normalized_list = _merge_reputation_snapshot_rows(
-                    _active_collection_snapshot_rows(
-                        _latest_reputation_snapshot_rows(cursor)
-                    ),
+                    previous_snapshot_rows,
                     normalized_list,
                     replace_targets,
                     submit_time,
@@ -1492,7 +1556,11 @@ def _authorization_flag_enabled(value):
 
 def _load_authorized_shop_sites(setting_field="visit_stats_enabled"):
     """直接从店铺授权读取显式开启任务开关的店铺站点。"""
-    if setting_field not in ("appeal_enabled", "visit_stats_enabled"):
+    if setting_field not in (
+        "appeal_enabled",
+        "reputation_update_enabled",
+        "visit_stats_enabled",
+    ):
         raise ValueError(f"不支持的店铺授权任务开关：{setting_field}")
     configured = []
     seen = set()
@@ -1720,7 +1788,9 @@ def get_latest_reputation_info():
 
     try:
         with connection.cursor() as cursor:
-            authorized_sites = _load_authorized_shop_sites("visit_stats_enabled")
+            authorized_sites = _load_authorized_shop_sites(
+                "reputation_update_enabled"
+            )
             _ensure_column(cursor, "reputation", "取消率", "VARCHAR(255) NULL")
             _ensure_column(cursor, "reputation", "一周流量趋势", "TEXT NULL")
             _ensure_column(cursor, "reputation", "站点状态", "VARCHAR(255) NULL")
@@ -5346,6 +5416,9 @@ def get_latest_pago_info(salesperson=""):
                 str(setting.get("group_name") or "").strip(),
                 setting.get("discount_rate") not in (None, ""),
                 _authorization_flag_enabled(setting.get("appeal_enabled")),
+                _authorization_flag_enabled(
+                    setting.get("reputation_update_enabled")
+                ),
                 _authorization_flag_enabled(setting.get("visit_stats_enabled")),
             )):
                 settings.append(setting)
@@ -6200,10 +6273,10 @@ def _ensure_appeal_chat_records_table(cursor):
 
 
 def insert_appeal_chat_record(record):
-    connection = pymysql.connect(**config)
+    initialize_appeal_storage()
+    connection = _appeal_connection()
     try:
         with connection.cursor() as cursor:
-            _ensure_appeal_chat_records_table(cursor)
             record = dict(record or {})
             record_time = record.get("time") or None
             sql_insert = """
@@ -6217,8 +6290,9 @@ def insert_appeal_chat_record(record):
                     `chat_json`,
                     `extra_json`,
                     `raw_json`,
-                    `created_at`
-                ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                    `created_at`, `event_id`
+                ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                ON DUPLICATE KEY UPDATE id=LAST_INSERT_ID(id)
             """
             cursor.execute(
                 sql_insert,
@@ -6233,6 +6307,7 @@ def insert_appeal_chat_record(record):
                     json.dumps(record.get("extra", {}), ensure_ascii=False),
                     json.dumps(record, ensure_ascii=False),
                     datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                    record.get("event_id") or None,
                 ),
             )
             record_id = cursor.lastrowid
@@ -6275,10 +6350,10 @@ def _ensure_ai_appeal_records_table(cursor):
 
 
 def insert_ai_appeal_record(record):
-    connection = pymysql.connect(**config)
+    initialize_appeal_storage()
+    connection = _appeal_connection()
     try:
         with connection.cursor() as cursor:
-            _ensure_ai_appeal_records_table(cursor)
             record = dict(record or {})
             sql_insert = """
                 INSERT INTO `ai_appeal_records` (
@@ -6295,8 +6370,9 @@ def insert_ai_appeal_record(record):
                     `ai_summary`,
                     `error`,
                     `raw_json`,
-                    `created_at`
-                ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                    `created_at`, `event_id`
+                ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                ON DUPLICATE KEY UPDATE id=LAST_INSERT_ID(id)
             """
             cursor.execute(
                 sql_insert,
@@ -6315,6 +6391,7 @@ def insert_ai_appeal_record(record):
                     record.get("error", ""),
                     json.dumps(record, ensure_ascii=False),
                     datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                    record.get("event_id") or None,
                 ),
             )
             record_id = cursor.lastrowid
@@ -6334,10 +6411,10 @@ def get_ai_appeal_records(limit=100):
     except (TypeError, ValueError):
         limit = 100
 
-    connection = pymysql.connect(**config)
+    initialize_appeal_storage()
+    connection = _appeal_connection()
     try:
         with connection.cursor() as cursor:
-            _ensure_ai_appeal_records_table(cursor)
             cursor.execute(
                 """
                 SELECT
@@ -6441,6 +6518,7 @@ def _ensure_mercado_store_site_settings_table(cursor):
             `discount_rate` DECIMAL(7,4) NULL,
             `group_name` VARCHAR(100) NULL,
             `appeal_enabled` TINYINT(1) NOT NULL DEFAULT 0,
+            `reputation_update_enabled` TINYINT(1) NOT NULL DEFAULT 0,
             `visit_stats_enabled` TINYINT(1) NOT NULL DEFAULT 0,
             `created_at` DATETIME NOT NULL,
             `updated_at` DATETIME NOT NULL,
@@ -6457,6 +6535,30 @@ def _ensure_mercado_store_site_settings_table(cursor):
         "appeal_enabled",
         "TINYINT(1) NOT NULL DEFAULT 0",
     )
+    reputation_switch_added = _ensure_column(
+        cursor,
+        "mercado_store_site_settings",
+        "reputation_update_enabled",
+        "TINYINT(1) NOT NULL DEFAULT 0",
+    )
+    if reputation_switch_added:
+        # 升级已有配置时沿用原“访问数据统计”的声誉执行范围；之后两个
+        # 开关完全独立，用户可以只更新官方 API 数据而不启动浏览器流量采集。
+        cursor.execute(
+            """
+            UPDATE `mercado_store_site_settings`
+            SET `reputation_update_enabled` = `visit_stats_enabled`
+            WHERE `visit_stats_enabled` = 1
+            """
+        )
+        # 通过 DDL 的隐式提交固化一次性迁移；读取配置的连接通常不会显式 commit。
+        cursor.execute(
+            """
+            ALTER TABLE `mercado_store_site_settings`
+            MODIFY COLUMN `reputation_update_enabled`
+                TINYINT(1) NOT NULL DEFAULT 0
+            """
+        )
     _ensure_column(
         cursor,
         "mercado_store_site_settings",
@@ -6469,7 +6571,7 @@ def _mercado_store_site_setting_rows(cursor, token_id):
     cursor.execute(
         """
         SELECT `token_id`, `site_id`, `salesperson`, `discount_rate`, `group_name`,
-               `appeal_enabled`, `visit_stats_enabled`,
+               `appeal_enabled`, `reputation_update_enabled`, `visit_stats_enabled`,
                `created_at`, `updated_at`
         FROM `mercado_store_site_settings`
         WHERE `token_id` = %s
@@ -6493,6 +6595,9 @@ def _mercado_store_site_setting_rows(cursor, token_id):
                 ),
                 "group_name": str(row.get("group_name") or ""),
                 "appeal_enabled": bool(row.get("appeal_enabled")),
+                "reputation_update_enabled": bool(
+                    row.get("reputation_update_enabled")
+                ),
                 "visit_stats_enabled": bool(row.get("visit_stats_enabled")),
                 "created_at": str(row["created_at"]) if row.get("created_at") else None,
                 "updated_at": str(row["updated_at"]) if row.get("updated_at") else None,
@@ -6558,6 +6663,9 @@ def upsert_mercado_store_site_settings(token_id, settings):
                 raise ValueError(f"{site_id} 的折扣比例必须在 0 到 100 之间")
             discount_rate = discount_rate.quantize(Decimal("0.0001"))
         appeal_enabled = raw.get("appeal_enabled", False)
+        reputation_update_enabled = raw.get(
+            "reputation_update_enabled", False
+        )
         visit_stats_enabled = raw.get("visit_stats_enabled", False)
         if isinstance(appeal_enabled, str):
             appeal_enabled = appeal_enabled.strip().lower() not in (
@@ -6567,6 +6675,11 @@ def upsert_mercado_store_site_settings(token_id, settings):
             visit_stats_enabled = visit_stats_enabled.strip().lower() not in (
                 "", "0", "false", "no", "off",
             )
+        if isinstance(reputation_update_enabled, str):
+            reputation_update_enabled = (
+                reputation_update_enabled.strip().lower()
+                not in ("", "0", "false", "no", "off")
+            )
         normalized.append(
             (
                 site_id,
@@ -6574,6 +6687,7 @@ def upsert_mercado_store_site_settings(token_id, settings):
                 discount_rate,
                 group_name,
                 1 if bool(appeal_enabled) else 0,
+                1 if bool(reputation_update_enabled) else 0,
                 1 if bool(visit_stats_enabled) else 0,
             )
         )
@@ -6596,6 +6710,7 @@ def upsert_mercado_store_site_settings(token_id, settings):
                 discount_rate,
                 group_name,
                 appeal_enabled,
+                reputation_update_enabled,
                 visit_stats_enabled,
             ) in normalized:
                 if (
@@ -6603,6 +6718,7 @@ def upsert_mercado_store_site_settings(token_id, settings):
                     and discount_rate is None
                     and not group_name
                     and not appeal_enabled
+                    and not reputation_update_enabled
                     and not visit_stats_enabled
                 ):
                     cursor.execute(
@@ -6614,19 +6730,22 @@ def upsert_mercado_store_site_settings(token_id, settings):
                     """
                     INSERT INTO `mercado_store_site_settings` (
                         `token_id`, `site_id`, `salesperson`, `discount_rate`, `group_name`,
-                        `appeal_enabled`, `visit_stats_enabled`, `created_at`, `updated_at`
-                    ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+                        `appeal_enabled`, `reputation_update_enabled`, `visit_stats_enabled`,
+                        `created_at`, `updated_at`
+                    ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                     ON DUPLICATE KEY UPDATE
                         `salesperson` = VALUES(`salesperson`),
                         `discount_rate` = VALUES(`discount_rate`),
                         `group_name` = VALUES(`group_name`),
                         `appeal_enabled` = VALUES(`appeal_enabled`),
+                        `reputation_update_enabled` = VALUES(`reputation_update_enabled`),
                         `visit_stats_enabled` = VALUES(`visit_stats_enabled`),
                         `updated_at` = VALUES(`updated_at`)
                     """,
                     (
                         token_id, site_id, salesperson or None, discount_rate,
-                        group_name or None, appeal_enabled, visit_stats_enabled, now, now,
+                        group_name or None, appeal_enabled,
+                        reputation_update_enabled, visit_stats_enabled, now, now,
                     ),
                 )
             rows = _mercado_store_site_setting_rows(cursor, token_id)

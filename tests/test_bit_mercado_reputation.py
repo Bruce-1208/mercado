@@ -363,8 +363,11 @@ def test_console_template_keeps_old_reputation_and_adds_api_panel():
     assert "/api/reputation/${tokenId}/open-browser" in template
     assert 'id="reputation-salesperson-filter"' in template
     assert 'id="reputation-group-filter"' in template
+    assert 'id="reputation-name-search"' in template
     assert "function applyReputationFilters()" in template
-    assert "暂无符合业务员和账户组筛选条件的声誉数据" in template
+    assert "暂无符合业务员、账号组和名字筛选条件的声誉数据" in template
+    assert 'data-field="reputation_update_enabled"' in template
+    assert 'data-field="bulk_reputation_update_enabled"' in template
 
 
 def test_console_reputation_route_returns_normalized_data_without_token(monkeypatch):
@@ -668,7 +671,11 @@ def test_default_reputation_collection_uses_api_and_writes_legacy_table(monkeypa
                         "display_name": "泽顺店铺",
                         "nickname": "SELLER_A",
                         "site_settings": [
-                            {"site_id": "MLM", "visit_stats_enabled": True},
+                            {
+                                "site_id": "MLM",
+                                "reputation_update_enabled": True,
+                                "visit_stats_enabled": True,
+                            },
                         ],
                     },
                 ]
@@ -752,7 +759,9 @@ def test_default_reputation_collection_uses_api_and_writes_legacy_table(monkeypa
     assert result["api_rows"][0]["rights_holder_count"] == 2
     assert result["api_rows"][0]["infraction_recent_days"] == 100
     assert database_calls[0][1] == {}
-    legacy_row = database_calls[0][0][0]
+    legacy_row = next(
+        row for row in database_calls[0][0] if row[1] == "墨西哥"
+    )
     assert legacy_row[:7] == [
         "泽顺店铺",
         "墨西哥",
@@ -785,8 +794,8 @@ def test_selected_api_reputation_update_merges_only_returned_site(monkeypatch):
                         "display_name": "选定店铺",
                         "nickname": "SELECTED",
                         "site_settings": [
-                            {"site_id": "MLM", "visit_stats_enabled": False},
-                            {"site_id": "MLB", "visit_stats_enabled": True},
+                            {"site_id": "MLM", "reputation_update_enabled": True, "visit_stats_enabled": False},
+                            {"site_id": "MLB", "reputation_update_enabled": True, "visit_stats_enabled": True},
                         ],
                     },
                     {
@@ -794,7 +803,7 @@ def test_selected_api_reputation_update_merges_only_returned_site(monkeypatch):
                         "display_name": "其他店铺",
                         "nickname": "OTHER",
                         "site_settings": [
-                            {"site_id": "MLB", "visit_stats_enabled": True},
+                            {"site_id": "MLB", "reputation_update_enabled": True, "visit_stats_enabled": True},
                         ],
                     },
                 ]
@@ -873,6 +882,73 @@ def test_reputation_scope_requires_explicit_visit_stats_switch():
     ) == {"MLC"}
 
 
+def test_reputation_scope_requires_explicit_reputation_update_switch():
+    assert bit_reputation_info._token_enabled_site_codes(
+        {
+            "site_settings": [
+                {"site_id": "MLM", "visit_stats_enabled": True},
+                {"site_id": "MLB", "reputation_update_enabled": False},
+                {"site_id": "MLC", "reputation_update_enabled": "true"},
+            ]
+        },
+        "reputation_update_enabled",
+    ) == {"MLC"}
+
+
+def test_system_warning_is_derived_from_official_api_status_and_errors():
+    assert bit_reputation_info._official_api_system_warning({
+        "site_status_display": "暂停销售",
+        "official_api_errors": ["七天变化率：接口限频"],
+    }) == "站点状态：暂停销售；七天变化率：接口限频"
+    assert bit_reputation_info._official_api_system_warning({
+        "site_status_display": "正常",
+    }) == "正常"
+
+
+def test_collection_options_keep_reputation_and_traffic_switches_independent(monkeypatch):
+    monkeypatch.setattr(
+        bit_interface.bit_db_api,
+        "list_mercado_store_tokens",
+        lambda: {
+            "rows": [
+                {
+                    "id": 41,
+                    "display_name": "仅声誉店铺",
+                    "site_settings": [
+                        {
+                            "site_id": "MLM",
+                            "reputation_update_enabled": True,
+                            "visit_stats_enabled": False,
+                        }
+                    ],
+                },
+                {
+                    "id": 42,
+                    "display_name": "仅流量店铺",
+                    "site_settings": [
+                        {
+                            "site_id": "MLB",
+                            "reputation_update_enabled": False,
+                            "visit_stats_enabled": True,
+                        }
+                    ],
+                },
+            ]
+        },
+    )
+
+    options = bit_interface._collection_config_options()
+
+    assert [row["shop_name"] for row in options["shops"]] == ["仅声誉店铺"]
+    assert [row["shop_name"] for row in options["infraction_shops"]] == ["仅流量店铺"]
+    parsed = bit_interface._parse_collection_request(
+        {"shops": ["仅声誉店铺"], "sites": ["墨西哥"]},
+        authorization_flag="reputation_update_enabled",
+    )
+    assert parsed["selected_shops"] == ("仅声誉店铺",)
+    assert parsed["selected_sites"] == ("墨西哥",)
+
+
 def test_hybrid_collection_merges_browser_traffic_without_reputation_page(monkeypatch):
     database_calls = []
     captured_browser_rows = []
@@ -886,8 +962,16 @@ def test_hybrid_collection_merges_browser_traffic_without_reputation_page(monkey
                     "display_name": "混合店铺",
                     "nickname": "HYBRID",
                     "site_settings": [
-                        {"site_id": "MLM", "visit_stats_enabled": True},
-                        {"site_id": "MLB", "visit_stats_enabled": False},
+                        {
+                            "site_id": "MLM",
+                            "reputation_update_enabled": True,
+                            "visit_stats_enabled": True,
+                        },
+                        {
+                            "site_id": "MLB",
+                            "reputation_update_enabled": True,
+                            "visit_stats_enabled": False,
+                        },
                     ],
                 },
             ]
@@ -906,6 +990,10 @@ def test_hybrid_collection_merges_browser_traffic_without_reputation_page(monkey
                     "claims_rate_percent": 1.2,
                     "delayed_handling_rate_percent": 2.3,
                     "cancellations_rate_percent": 0.4,
+                    "direction": "增长",
+                    "gradient_rate": "12%",
+                    "gradient_source": "official_orders_api",
+                    "site_status_display": "正常",
                 },
                 {
                     "site_id": "MLB",
@@ -935,8 +1023,8 @@ def test_hybrid_collection_merges_browser_traffic_without_reputation_page(monkey
         bit_reputation_info,
         "list_config_rows",
         lambda **_kwargs: [
-            # 浏览器配置只负责提供窗口，不再决定运行站点。
-            ("window-31", "HYBRID", "", "巴西", "", "", ""),
+            # 浏览器配置只负责提供窗口，不再决定 API 声誉运行站点。
+            ("window-31", "HYBRID", "", "墨西哥", "", "", ""),
         ],
     )
 
@@ -947,12 +1035,12 @@ def test_hybrid_collection_merges_browser_traffic_without_reputation_page(monkey
             bit_reputation_info.row_key(row): (
                 row,
                 [
-                    {
-                        "store_name": "混合店铺",
-                        "site": "墨西哥",
-                        "direction": "增长",
-                        "gradient_rate": "12%",
-                        "system_warning": "正常",
+                        {
+                            "store_name": "混合店铺",
+                            "site": "墨西哥",
+                            "direction": "浏览器方向不应使用",
+                            "gradient_rate": "99%",
+                            "system_warning": "浏览器告警不应使用",
                         "updated_at": "2026-08-27 23:10:00",
                         "visits": "[11, 22, 33]",
                         "error": "",
@@ -1003,7 +1091,9 @@ def test_hybrid_collection_merges_browser_traffic_without_reputation_page(monkey
     assert captured_browser_rows == [
         ("window-31", "混合店铺", "", "墨西哥", "", "", ""),
     ]
-    legacy_row = database_calls[0][0][0]
+    legacy_row = next(
+        row for row in database_calls[0][0] if row[1] == "墨西哥"
+    )
     assert legacy_row[:7] == [
         "混合店铺",
         "墨西哥",
@@ -1013,17 +1103,20 @@ def test_hybrid_collection_merges_browser_traffic_without_reputation_page(monkey
         "2.3%",
         "0.4%",
     ]
-    assert legacy_row[7:12] == [
+    assert legacy_row[7:10] == [
         "增长",
         "12%",
         "正常",
-        "2026-08-27 23:10:00",
-        "[11, 22, 33]",
     ]
-    assert result["api_rows"][0]["visits"] == "[11, 22, 33]"
-    assert result["api_rows"][0]["infraction_count"] == 7
-    assert result["api_rows"][0]["rights_holder_count"] == 4
-    assert result["api_rows"][0]["infraction_recent_days"] == 100
+    assert legacy_row[10] != "2026-08-27 23:10:00"
+    assert legacy_row[11] == "[11, 22, 33]"
+    mexico_api_row = next(
+        row for row in result["api_rows"] if row["site_id"] == "MLM"
+    )
+    assert mexico_api_row["visits"] == "[11, 22, 33]"
+    assert mexico_api_row["infraction_count"] == 7
+    assert mexico_api_row["rights_holder_count"] == 4
+    assert mexico_api_row["infraction_recent_days"] == 100
     assert result["failed_stores"] == 0
 
 
@@ -1083,6 +1176,48 @@ def test_auxiliary_browser_collector_opens_summary_not_reputation(monkeypatch):
     assert result["gradient_rate"] == "6%"
     assert result["system_warning"] == "库存提醒"
     assert result["visits"] == "[101, 202, 303]"
+
+
+def test_traffic_collector_only_opens_metrics_page(monkeypatch):
+    opened_urls = []
+    selected = []
+    monkeypatch.setattr(
+        bit_reputation_info,
+        "_open_collection_backend_page",
+        lambda _driver, url, **_kwargs: opened_urls.append(url) or {},
+    )
+    monkeypatch.setattr(
+        bit_reputation_info,
+        "_select_country",
+        lambda _driver, site, name, **kwargs: selected.append((site, name, kwargs)),
+    )
+    monkeypatch.setattr(
+        bit_reputation_info,
+        "get_visits_info",
+        lambda *_args, **_kwargs: [101, 202, 303],
+    )
+
+    result = bit_reputation_info.get_reputation_traffic_info(
+        "window-id",
+        "测试店铺",
+        "墨西哥",
+        driver=object(),
+    )
+
+    assert opened_urls == [bit_reputation_info.METRICS_URL]
+    assert selected == [
+        (
+            "墨西哥",
+            "测试店铺",
+            {
+                "recovery_url": bit_reputation_info.METRICS_URL,
+                "structure_context": "流量页面",
+            },
+        )
+    ]
+    assert result["visits"] == "[101, 202, 303]"
+    assert "system_warning" not in result
+    assert "direction" not in result
 
 
 def test_account_risk_summary_detects_restrictions_and_warnings():

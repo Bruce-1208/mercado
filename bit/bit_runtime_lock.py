@@ -194,7 +194,13 @@ def window_lock_key(window_id):
     return f"bit_window_{_safe_lock_name(window_id)}"
 
 
-def create_window_lease(window_id, owner, shop_name="", task_type=""):
+def create_window_lease(
+    window_id,
+    owner,
+    shop_name="",
+    task_type="",
+    task_id="",
+):
     return InterProcessLock(
         window_lock_key(window_id),
         owner=owner,
@@ -202,6 +208,7 @@ def create_window_lease(window_id, owner, shop_name="", task_type=""):
             "window_id": str(window_id or ""),
             "shop_name": str(shop_name or ""),
             "task_type": str(task_type or ""),
+            "task_id": str(task_id or ""),
         },
     )
 

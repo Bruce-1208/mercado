@@ -56,6 +56,29 @@ def test_browser_api_slot_order_is_stable_and_covers_every_slot(monkeypatch):
     assert set(first) == {0, 1, 2}
 
 
+def test_close_browser_forwards_short_api_lock_timeout(monkeypatch):
+    calls = []
+
+    class Lease:
+        acquired = True
+
+    monkeypatch.setattr(
+        bit_api,
+        "_post_browser_mutation",
+        lambda *args, **kwargs: calls.append((args, kwargs)) or {"success": True},
+    )
+
+    result = bit_api.closeBrowser(
+        "window-1",
+        lease=Lease(),
+        request_timeout=3,
+        api_lock_timeout=5,
+    )
+
+    assert result == {"success": True}
+    assert calls == [(("close", "window-1", 3), {"api_lock_timeout": 5})]
+
+
 def test_get_browser_id_by_name_uses_unique_exact_window_name(monkeypatch):
     calls = []
 

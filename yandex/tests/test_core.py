@@ -11,6 +11,7 @@ from yandex.app.database import Database
 from yandex.app.exchange_rate import parse_cbr_daily_xml
 from yandex.app.product_media import normalize_product_pictures
 from yandex.app.schemas import (
+    OrderListRequest,
     ProductRecord,
     PublishRequest,
     SearchRequest,
@@ -129,6 +130,23 @@ class ApiPayloadTests(unittest.TestCase):
             initial_stock=10,
         )
         self.assertEqual(default_publish.price_percent, 200)
+
+    def test_order_filters_normalize_and_limit_date_range(self) -> None:
+        payload = OrderListRequest(
+            store_id=7,
+            statuses=[" processing ", "PROCESSING", "delivery"],
+            date_from="2026-08-07",
+            date_to="2026-09-05",
+            page_token=" next-page ",
+        )
+        self.assertEqual(payload.statuses, ["PROCESSING", "DELIVERY"])
+        self.assertEqual(payload.page_token, "next-page")
+        with self.assertRaisesRegex(ValueError, "不能超过 30 天"):
+            OrderListRequest(
+                store_id=7,
+                date_from="2026-08-01",
+                date_to="2026-09-05",
+            )
 
     def test_zeshun_authorization_payload_and_token_extraction(self) -> None:
         store = ZeshunStoreCreateRequest(
@@ -400,6 +418,43 @@ class DatabaseTests(unittest.TestCase):
 
 
 class ContentApiTests(unittest.IsolatedAsyncioTestCase):
+    async def test_uses_business_orders_api_with_store_filters(self) -> None:
+        client = YandexSellerClient("test-token")
+        client._request = AsyncMock(
+            return_value={
+                "orders": [{"orderId": 501, "status": "PROCESSING", "items": []}],
+                "paging": {"nextPageToken": "page-2"},
+            }
+        )
+
+        result = await client.get_orders(
+            101,
+            campaign_id=202,
+            statuses=["PROCESSING"],
+            date_from="2026-08-07",
+            date_to="2026-09-05",
+            page_token="page-1",
+        )
+
+        self.assertEqual(result["orders"][0]["orderId"], 501)
+        self.assertEqual(result["paging"]["nextPageToken"], "page-2")
+        call = client._request.await_args
+        self.assertEqual(call.args[0], "POST")
+        self.assertIn("/v1/businesses/101/orders?", call.args[1])
+        self.assertIn("pageToken=page-1", call.args[1])
+        self.assertEqual(
+            call.kwargs["json_body"],
+            {
+                "fake": False,
+                "campaignIds": [202],
+                "statuses": ["PROCESSING"],
+                "dates": {
+                    "creationDateFrom": "2026-08-07",
+                    "creationDateTo": "2026-09-05",
+                },
+            },
+        )
+
     async def test_publish_fetches_category_parameters_and_submits_values(self) -> None:
         client = YandexSellerClient("test-token")
         client._request = AsyncMock(

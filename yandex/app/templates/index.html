@@ -3,194 +3,128 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>武汉泽顺控制台</title>
-  <link rel="stylesheet" href="{{ url_for('static', path='/styles.css') }}?v=20260823-7">
+  <title>Yandex 运营工作台</title>
+  <link rel="stylesheet" href="{{ url_for('static', path='/styles.css') }}?v=20260906-3">
 </head>
 <body class="{% if embedded %}embedded{% endif %}">
-  <div class="shell">
-    <header class="hero">
-      <div>
-        <p class="eyebrow">WUHAN ZESHUN · YANDEX MARKET</p>
-        <h1>武汉泽顺控制台</h1>
-        <p class="subtitle">店铺授权与 token 管理、关键词搜品、国外商品识别、SQLite 入库，再挂载到你的 Yandex 商品卡。</p>
-      </div>
-      <div id="connectionBadge" class="badge neutral"><span></span>未选择店铺</div>
-    </header>
+  <div class="app-shell">
+    <aside class="sidebar">
+      <div class="brand"><span class="brand-mark">Y</span><div><strong>Yandex</strong><small>运营工作台</small></div></div>
+      <nav class="main-nav" aria-label="Yandex 模块导航">
+        <button class="nav-item active" type="button" data-view-target="orders"><span class="nav-icon">订</span><span>订单中心</span></button>
+        <button class="nav-item" type="button" data-view-target="inventory"><span class="nav-icon">库</span><span>商品库存</span></button>
+        <button class="nav-item" type="button" data-view-target="returns"><span class="nav-icon">退</span><span>退货管理</span></button>
+        <button class="nav-item" type="button" data-view-target="feedback"><span class="nav-icon">客</span><span>客户声音</span></button>
+        <button class="nav-item" type="button" data-view-target="products"><span class="nav-icon">品</span><span>搜品上架</span></button>
+        <button class="nav-item" type="button" data-view-target="stores"><span class="nav-icon">店</span><span>店铺管理</span></button>
+      </nav>
+      <div class="sidebar-note"><span class="live-dot"></span><div><strong>本地安全运行</strong><small>token 仅加密保存在本机</small></div></div>
+    </aside>
 
-    <main>
-      <section class="panel authorization-panel">
-        <div class="section-heading">
-          <div>
-            <p class="eyebrow">STORE AUTHORIZATION</p>
-            <h2>店铺授权管理 <span id="zeshunStoreCount" class="muted-count">0</span></h2>
-          </div>
-          <p class="section-help">按 TG 码维护店铺，授权后粘贴返回链接更新 token</p>
+    <main class="workspace">
+      <header class="topbar">
+        <div class="page-copy"><p id="pageEyebrow" class="eyebrow">ORDER OPERATIONS</p><h1 id="pageTitle">订单中心</h1><p id="pageSubtitle">查看店铺最近 30 天订单，并快速定位待处理状态。</p></div>
+        <div class="store-context">
+          <label for="globalStoreSelect">当前店铺</label>
+          <select id="globalStoreSelect" aria-label="当前店铺"><option value="">暂无已连接店铺</option></select>
+          <div id="connectionBadge" class="badge neutral"><span></span>未选择店铺</div>
         </div>
+      </header>
 
-        <form id="zeshunStoreForm" class="authorization-create-form">
-          <div class="field">
-            <label for="zeshunStoreAlias">自定义店铺名</label>
-            <input id="zeshunStoreAlias" type="text" maxlength="80" placeholder="例如：俄罗斯 01 店" required>
+      <section id="ordersView" class="app-view active" data-view="orders">
+        <div class="metric-grid finance-metrics" aria-label="本页金额概览">
+          <article class="metric-card accent"><span>链接价格合计</span><strong id="orderListingTotal">—</strong><small id="orderListingCoverage">当前店铺设置价 × 数量</small></article>
+          <article class="metric-card"><span>买家付款 · 商品</span><strong id="orderRevenue">—</strong><small id="orderPaymentCoverage">现金付款金额，积分与运费另列</small></article>
+          <article class="metric-card"><span>卖家结余 · 估算</span><strong id="orderSellerNet">—</strong><small id="orderNetCoverage">扣除已返回的平台费用</small></article>
+          <article class="metric-card"><span>卖家运费</span><strong id="orderShippingTotal">—</strong><small id="orderShippingCoverage">平台列出的物流费用</small></article>
+        </div>
+        <section class="panel order-panel">
+          <form id="orderFilterForm" class="order-filters">
+            <div class="field filter-grow"><label for="orderStatus">订单状态</label><select id="orderStatus"><option value="">全部状态</option><option value="PENDING">待处理</option><option value="PROCESSING">处理中</option><option value="DELIVERY">配送中</option><option value="PICKUP">待取货</option><option value="DELIVERED">已送达</option><option value="CANCELLED">已取消</option><option value="PARTIALLY_RETURNED">部分退货</option><option value="RETURNED">已退货</option></select></div>
+            <div class="field"><label for="orderFrom">下单日期从</label><input id="orderFrom" type="date"></div>
+            <div class="field"><label for="orderTo">到</label><input id="orderTo" type="date"></div>
+            <button id="orderRefreshButton" class="button primary" type="submit">刷新订单</button>
+          </form>
+          <div id="ordersLoading" class="orders-state hidden"><span class="spinner"></span><strong>正在读取 Yandex 订单…</strong></div>
+          <div id="ordersNoStore" class="orders-state hidden"><span class="state-icon">店</span><strong>先连接一家 Yandex 店铺</strong><p>订单会按当前店铺展示，token 需要具备订单查看权限。</p><button class="button secondary" type="button" data-view-link="stores">去店铺管理</button></div>
+          <div id="ordersError" class="orders-state error-state hidden"></div>
+          <div id="ordersEmpty" class="orders-state hidden"><span class="state-icon">✓</span><strong>这个范围内没有订单</strong><p>可以更换状态或日期后重新查询。</p></div>
+          <div id="ordersContent" class="orders-content hidden">
+            <div class="order-summary-bar"><span>本页 <strong id="orderTotal">—</strong> 单 · 待处理 <strong id="orderPending">—</strong> 单</span><span>读取时间 <time id="orderUpdatedAt">—</time></span></div>
+            <div class="order-table-wrap"><table class="order-table"><thead><tr><th>订单 / 商品</th><th>履约 / 状态</th><th>链接价格</th><th>买家付款</th><th>卖家结余</th><th>运费</th></tr></thead><tbody id="orderTableBody"></tbody></table></div>
+            <div class="order-pagination"><span id="orderPageLabel">第 1 页 · 每页最多 50 条</span><div><button id="orderPrevButton" class="button ghost" type="button" disabled>上一页</button><button id="orderNextButton" class="button ghost" type="button" disabled>下一页</button></div></div>
           </div>
-          <div class="field">
-            <label for="zeshunTgCode">TG 码</label>
-            <input id="zeshunTgCode" type="text" maxlength="120" autocomplete="off" spellcheck="false" placeholder="输入唯一 TG 码" required>
-            <small>TG 码在数据库中唯一维护</small>
-          </div>
-          <div class="field">
-            <label for="zeshunAuthorizationUrl">授权链接（可选）</label>
-            <input id="zeshunAuthorizationUrl" type="url" maxlength="4000" placeholder="未填写时使用系统配置的授权链接">
-            <small>支持用 {tg_code} 作为 TG 码占位符</small>
-          </div>
-          <button id="addZeshunStoreButton" class="button primary" type="submit">新增店铺</button>
-        </form>
-
-        <div id="zeshunStoreList" class="authorization-list"></div>
-        <div id="zeshunStoreEmpty" class="empty-state">还没有授权店铺。填写自定义名称和 TG 码新增第一家店铺。</div>
-        <p class="authorization-security">授权返回链接和 token 均通过 Windows DPAPI 加密保存；接口和页面不会返回明文 token。</p>
+        </section>
       </section>
 
-      <section class="panel stores-panel">
-        <div class="section-heading">
-          <div>
-            <p class="eyebrow">STORE DIRECTORY</p>
-            <h2>Yandex 上传店铺 <span id="storeCount" class="muted-count">0</span></h2>
-          </div>
-          <p class="section-help">选择一个店铺作为商品上传目标</p>
+      <section id="inventoryView" class="app-view" data-view="inventory">
+        <div class="metric-grid ops-metrics">
+          <article class="metric-card accent"><span>本页 SKU</span><strong id="inventorySkuCount">—</strong><small>跨仓库去重统计</small></article>
+          <article class="metric-card"><span>可售库存</span><strong id="inventoryAvailableCount">—</strong><small>AVAILABLE / FIT 合计</small></article>
+          <article class="metric-card"><span>零库存 SKU</span><strong id="inventoryZeroCount">—</strong><small>建议及时补货或检查状态</small></article>
         </div>
-
-        <form id="storeForm" class="store-form">
-          <div class="field alias-field">
-            <label for="storeAlias">自定义店铺名</label>
-            <input id="storeAlias" type="text" maxlength="80" placeholder="例如：俄罗斯主店" required>
-          </div>
-          <div class="field add-token-field">
-            <label for="storeToken">店铺 API-Key token</label>
-            <div class="token-row">
-              <input id="storeToken" type="password" autocomplete="off" spellcheck="false" placeholder="ACMA:…" required>
-              <button id="toggleStoreToken" type="button" class="icon-button" aria-label="显示或隐藏 token">显示</button>
-            </div>
-            <small>通过 Windows DPAPI 加密，仅当前 Windows 用户可以解密</small>
-          </div>
-          <button id="addStoreButton" class="button primary" type="submit">添加店铺</button>
-        </form>
-
-        <div id="storeList" class="store-list"></div>
-        <div id="storeEmpty" class="empty-state">还没有店铺。输入自定义名称和 token 添加第一家店铺。</div>
+        <section class="panel ops-panel">
+          <div class="panel-heading"><div><p class="eyebrow">INVENTORY CONTROL</p><h2>库存巡检与调整</h2></div><p>自动识别独立仓库或仓库组；库存更新会直接写入当前店铺。</p></div>
+          <form id="inventoryFilterForm" class="ops-filters"><div class="field filter-grow"><label for="inventorySkuFilter">SKU（可填多个）</label><input id="inventorySkuFilter" type="text" placeholder="用逗号、空格或换行分隔"></div><div class="field"><label for="inventoryArchived">商品范围</label><select id="inventoryArchived"><option value="false">在售目录</option><option value="true">已归档</option></select></div><button class="button primary" type="submit">查询库存</button></form>
+          <div id="inventoryState" class="ops-state">选择店铺后查询库存。</div>
+          <div id="inventoryContent" class="hidden"><div class="ops-summary"><span id="inventorySource">—</span><span id="inventoryWarning"></span></div><div class="ops-table-wrap"><table class="ops-table"><thead><tr><th>商品 / SKU</th><th>仓库</th><th>库存构成</th><th>目录价格</th><th>调整可售库存</th></tr></thead><tbody id="inventoryTableBody"></tbody></table></div><div class="order-pagination"><span id="inventoryPageLabel">第 1 页</span><div><button id="inventoryPrevButton" class="button ghost" type="button" disabled>上一页</button><button id="inventoryNextButton" class="button ghost" type="button" disabled>下一页</button></div></div></div>
+        </section>
       </section>
 
-      <section class="panel control-panel">
-        <div class="field keyword-field">
-          <label for="keyword">搜索关键词</label>
-          <input id="keyword" type="text" value="行车记录仪" placeholder="例如：行车记录仪">
-        </div>
-        <div class="field count-field">
-          <label for="count">商品个数</label>
-          <input id="count" type="number" value="200" min="1" max="{{ max_products }}">
-          <small>默认 200，最多 {{ max_products }}</small>
-        </div>
-        <div class="field price-field">
-          <label for="pricePercent">上架价格比例</label>
-          <div class="percent-row">
-            <input id="pricePercent" type="number" value="200" min="1" max="1000" step="0.01">
-            <span>%</span>
-          </div>
-          <small class="rate-help">
-            <span>200% = 抓取价 × 2</span>
-            <span id="exchangeRateText">正在读取 RUB/CNY 汇率…</span>
-            <button id="refreshExchangeRate" type="button" class="inline-link">刷新</button>
-          </small>
-        </div>
-        <div class="actions">
-          <button id="searchButton" class="button primary" type="button">搜索国外商品</button>
-        </div>
+      <section id="returnsView" class="app-view" data-view="returns">
+        <div class="metric-grid ops-metrics"><article class="metric-card accent"><span>本页退货/未取件</span><strong id="returnCount">—</strong><small>按当前筛选统计</small></article><article class="metric-card"><span>等待处理</span><strong id="returnDecisionCount">—</strong><small>需要卖家作出决定</small></article><article class="metric-card"><span>可领取</span><strong id="returnPickupCount">—</strong><small>物流状态 READY_FOR_PICKUP</small></article></div>
+        <section class="panel ops-panel"><div class="panel-heading"><div><p class="eyebrow">RETURNS & UNREDEEMED</p><h2>退货与未取件</h2></div><p>跟踪退款和逆向物流状态，优先处理等待决定与待领取记录。</p></div>
+          <form id="returnFilterForm" class="ops-filters"><div class="field"><label for="returnType">类型</label><select id="returnType"><option value="">全部</option><option value="RETURN">退货</option><option value="UNREDEEMED">未取件</option></select></div><div class="field filter-grow"><label for="returnStatus">退款状态</label><select id="returnStatus"><option value="">全部</option><option value="PREMODERATION_DECISION_WAITING">等待决定 · FBY/FBS/Express</option><option value="WAITING_FOR_DECISION">等待决定 · DBS</option><option value="PREMODERATION_DISPUTE">争议中</option><option value="REFUND_IN_PROGRESS">退款处理中</option><option value="REFUNDED">已退款</option><option value="FAILED">退款失败</option><option value="CANCELLED">已取消</option></select></div><div class="field"><label for="returnFrom">更新日期从</label><input id="returnFrom" type="date"></div><div class="field"><label for="returnTo">到</label><input id="returnTo" type="date"></div><button class="button primary" type="submit">刷新记录</button></form>
+          <div id="returnsState" class="ops-state">选择店铺后读取退货记录。</div><div id="returnsContent" class="hidden"><div id="returnList" class="ops-card-list"></div><div class="order-pagination"><span id="returnPageLabel">第 1 页</span><div><button id="returnPrevButton" class="button ghost" type="button" disabled>上一页</button><button id="returnNextButton" class="button ghost" type="button" disabled>下一页</button></div></div></div>
+        </section>
       </section>
 
-      <section class="panel package-panel">
-        <div class="package-heading">
-          <div>
-            <p class="eyebrow">FULFILLMENT PROFILE</p>
-            <h2>包装与初始库存</h2>
-          </div>
-          <p>用于本批所有选中商品。包装和库存都必须填写真实数据；上传后会向所选 FBS 仓库写入库存。</p>
-        </div>
-        <div class="package-fields">
-          <div class="field">
-            <label for="packageLength">长度（cm）</label>
-            <input id="packageLength" type="number" min="0.001" max="1000" step="0.001" placeholder="例如 30">
-          </div>
-          <div class="field">
-            <label for="packageWidth">宽度（cm）</label>
-            <input id="packageWidth" type="number" min="0.001" max="1000" step="0.001" placeholder="例如 20">
-          </div>
-          <div class="field">
-            <label for="packageHeight">高度（cm）</label>
-            <input id="packageHeight" type="number" min="0.001" max="1000" step="0.001" placeholder="例如 10">
-          </div>
-          <div class="field">
-            <label for="packageWeight">毛重（kg）</label>
-            <input id="packageWeight" type="number" min="0.001" max="1000" step="0.001" placeholder="例如 0.5">
-          </div>
-          <div class="field">
-            <label for="initialStock">初始可售库存（件）</label>
-            <input id="initialStock" type="number" min="1" max="2000000000" step="1" placeholder="例如 10">
-          </div>
-        </div>
-        <p id="packageStatus" class="package-status">上传前必须填写包装四项和真实库存，不能使用猜测值。</p>
+      <section id="feedbackView" class="app-view" data-view="feedback">
+        <div class="segmented-tabs" role="tablist"><button class="active" type="button" data-feedback-tab="reviews">商品评价</button><button type="button" data-feedback-tab="questions">商品问答</button></div>
+        <section id="reviewsPanel" class="panel ops-panel feedback-panel"><div class="panel-heading"><div><p class="eyebrow">PRODUCT REVIEWS</p><h2>评价回复</h2></div><p>查看商品评价、筛选待回复内容，并直接提交卖家回复。</p></div>
+          <form id="feedbackFilterForm" class="ops-filters"><div class="field"><label for="feedbackReaction">处理状态</label><select id="feedbackReaction"><option value="NEED_REACTION">待回复</option><option value="ALL">全部评价</option></select></div><div class="field"><label for="feedbackRating">星级</label><select id="feedbackRating"><option value="">全部</option><option value="1">1 星</option><option value="2">2 星</option><option value="3">3 星</option><option value="4">4 星</option><option value="5">5 星</option></select></div><div class="field filter-grow"><label for="feedbackSku">SKU</label><input id="feedbackSku" type="text" placeholder="可选，最多 20 个"></div><button class="button primary" type="submit">刷新评价</button></form>
+          <div id="feedbackState" class="ops-state">选择店铺后读取评价。</div><div id="feedbackContent" class="hidden"><div class="ops-summary"><span>本页 <strong id="feedbackCount">0</strong> 条</span><span>待回复 <strong id="feedbackNeedCount">0</strong> 条</span></div><div id="feedbackList" class="ops-card-list"></div><div class="order-pagination"><span id="feedbackPageLabel">第 1 页</span><div><button id="feedbackPrevButton" class="button ghost" type="button" disabled>上一页</button><button id="feedbackNextButton" class="button ghost" type="button" disabled>下一页</button></div></div></div>
+        </section>
+        <section id="questionsPanel" class="panel ops-panel feedback-panel hidden"><div class="panel-heading"><div><p class="eyebrow">PRODUCT QUESTIONS</p><h2>商品问答</h2></div><p>读取买家问题，筛选待回答内容，并以店铺身份回复。</p></div>
+          <form id="questionFilterForm" class="ops-filters"><div class="field"><label for="questionNeedAnswer">处理状态</label><select id="questionNeedAnswer"><option value="true">待回答</option><option value="false">全部问题</option></select></div><div class="field"><label for="questionFrom">提问日期从</label><input id="questionFrom" type="date"></div><div class="field"><label for="questionTo">到</label><input id="questionTo" type="date"></div><button class="button primary" type="submit">刷新问题</button></form>
+          <div id="questionsState" class="ops-state">选择店铺后读取商品问题。</div><div id="questionsContent" class="hidden"><div class="ops-summary"><span>本页 <strong id="questionCount">0</strong> 条</span><span id="questionTotal">符合条件 — 条</span></div><div id="questionList" class="ops-card-list"></div><div class="order-pagination"><span id="questionPageLabel">第 1 页</span><div><button id="questionPrevButton" class="button ghost" type="button" disabled>上一页</button><button id="questionNextButton" class="button ghost" type="button" disabled>下一页</button></div></div></div>
+        </section>
       </section>
 
-      <section id="statusPanel" class="panel status-panel hidden" aria-live="polite">
-        <div class="status-head">
-          <div>
-            <p class="eyebrow">任务状态</p>
-            <h2 id="statusTitle">准备中</h2>
+      <section id="productsView" class="app-view" data-view="products">
+        <ol class="workflow-strip" aria-label="上架流程"><li class="current"><span>1</span><div><strong>搜索商品</strong><small>只保留国外发货</small></div></li><li><span>2</span><div><strong>补充履约</strong><small>包装、库存与价格</small></div></li><li><span>3</span><div><strong>确认上架</strong><small>选择后批量提交</small></div></li></ol>
+        <section class="panel sourcing-panel">
+          <div class="panel-heading"><div><p class="eyebrow">PRODUCT DISCOVERY</p><h2>搜索国外商品</h2></div><p>输入俄文或中文关键词，后台将抓取带“Из-за рубежа”标记的商品。</p></div>
+          <div class="control-panel"><div class="field keyword-field"><label for="keyword">搜索关键词</label><input id="keyword" type="text" value="行车记录仪" placeholder="例如：行车记录仪"></div><div class="field count-field"><label for="count">商品个数</label><input id="count" type="number" value="200" min="1" max="{{ max_products }}"><small>最多 {{ max_products }}</small></div><button id="searchButton" class="button primary" type="button">开始搜索</button></div>
+        </section>
+        <section class="panel fulfillment-panel">
+          <div class="panel-heading"><div><p class="eyebrow">FULFILLMENT PROFILE</p><h2>本批上架参数</h2></div><p>统一用于本批选中的商品。请填写真实包装与可履约库存。</p></div>
+          <div class="fulfillment-grid">
+            <div class="price-block"><div class="field price-field"><label for="pricePercent">上架价格比例</label><div class="percent-row"><input id="pricePercent" type="number" value="200" min="1" max="1000" step="0.01"><span>%</span></div></div><small class="rate-help"><span>抓取价 × 汇率 × 比例</span><span id="exchangeRateText">正在读取 RUB/CNY 汇率…</span><button id="refreshExchangeRate" type="button" class="inline-link">刷新</button></small></div>
+            <div class="package-fields"><div class="field"><label for="packageLength">长 cm</label><input id="packageLength" type="number" min="0.001" max="1000" step="0.001" placeholder="30"></div><div class="field"><label for="packageWidth">宽 cm</label><input id="packageWidth" type="number" min="0.001" max="1000" step="0.001" placeholder="20"></div><div class="field"><label for="packageHeight">高 cm</label><input id="packageHeight" type="number" min="0.001" max="1000" step="0.001" placeholder="10"></div><div class="field"><label for="packageWeight">毛重 kg</label><input id="packageWeight" type="number" min="0.001" max="1000" step="0.001" placeholder="0.5"></div><div class="field"><label for="initialStock">库存 件</label><input id="initialStock" type="number" min="1" max="2000000000" step="1" placeholder="10"></div></div>
           </div>
-          <div id="statusCount" class="status-count">0 / 200</div>
-        </div>
-        <div class="progress-track"><div id="progressBar" class="progress-bar"></div></div>
-        <p id="statusMessage" class="status-message"></p>
+          <p id="packageStatus" class="package-status">上传前必须填写包装四项和真实库存。</p>
+        </section>
+        <section id="statusPanel" class="panel status-panel hidden" aria-live="polite"><div class="status-head"><div><p class="eyebrow">SEARCH PROGRESS</p><h2 id="statusTitle">准备中</h2></div><div id="statusCount" class="status-count">0 / 200</div></div><div class="progress-track"><div id="progressBar" class="progress-bar"></div></div><p id="statusMessage" class="status-message"></p></section>
+        <section id="resultsSection" class="results hidden"><div class="results-toolbar"><div><p class="eyebrow">PRODUCT DATABASE</p><h2><span id="resultCount">0</span> 个国外商品</h2></div><div class="toolbar-actions"><label class="select-all"><input id="selectAll" type="checkbox"> 全选可发布</label><button id="publishButton" class="button dark" type="button" disabled>上传选中商品</button></div></div><div id="productGrid" class="product-grid"></div></section>
+        <section id="publishPanel" class="panel publish-panel hidden" aria-live="polite"><div class="status-head"><div><p class="eyebrow">UPLOAD PROGRESS</p><h2 id="publishTitle">正在上传商品</h2><p id="publishStoreName" class="status-message"></p></div><div id="publishCount" class="status-count">0 / 0</div></div><div class="progress-track"><div id="publishProgressBar" class="progress-bar"></div></div><div class="publish-stats"><span class="stat processing">已处理 <strong id="publishProcessed">0</strong></span><span class="stat success">成功 <strong id="publishSucceeded">0</strong></span><span class="stat failure">失败 <strong id="publishFailed">0</strong></span></div><div id="publishResults" class="publish-results"></div></section>
       </section>
 
-      <section id="resultsSection" class="results hidden">
-        <div class="results-toolbar">
-          <div>
-            <p class="eyebrow">商品数据库</p>
-            <h2><span id="resultCount">0</span> 个国外商品</h2>
-          </div>
-          <div class="toolbar-actions">
-            <label class="select-all"><input id="selectAll" type="checkbox"> 全选可发布</label>
-            <button id="publishButton" class="button danger" type="button" disabled>上传选中商品</button>
-          </div>
-        </div>
-        <div id="productGrid" class="product-grid"></div>
-      </section>
-
-      <section id="publishPanel" class="panel publish-panel hidden" aria-live="polite">
-        <div class="status-head">
-          <div>
-            <p class="eyebrow">UPLOAD PROGRESS</p>
-            <h2 id="publishTitle">正在上传商品</h2>
-            <p id="publishStoreName" class="status-message"></p>
-          </div>
-          <div id="publishCount" class="status-count">0 / 0</div>
-        </div>
-        <div class="progress-track"><div id="publishProgressBar" class="progress-bar"></div></div>
-        <div class="publish-stats">
-          <span class="stat processing">已处理 <strong id="publishProcessed">0</strong></span>
-          <span class="stat success">成功 <strong id="publishSucceeded">0</strong></span>
-          <span class="stat failure">失败 <strong id="publishFailed">0</strong></span>
-        </div>
-        <div id="publishResults" class="publish-results"></div>
-      </section>
-
-      <section class="panel notice-panel">
-        <strong>说明</strong>
-        <p>程序只识别页面上带“Из-за рубежа”标记的商品。只提交 Yandex 商品 CDN 的合规主图，过滤二维码、广告和统计图片。上传价格按俄罗斯央行 RUB/CNY 日汇率换算并以人民币 CNY 提交，再应用你设置的价格比例。包装尺寸和毛重按本页填写值提交；错误数据会影响物流费用，请按商品厂包装如实填写。</p>
+      <section id="storesView" class="app-view" data-view="stores">
+        <section class="panel stores-panel">
+          <div class="panel-heading"><div><p class="eyebrow">CONNECTED STORES</p><h2>Yandex 店铺 <span id="storeCount" class="muted-count">0</span></h2></div><p>保存 API-Key 后自动读取店铺与业务信息。</p></div>
+          <form id="storeForm" class="store-form"><div class="field alias-field"><label for="storeAlias">自定义店铺名</label><input id="storeAlias" type="text" maxlength="80" placeholder="例如：俄罗斯主店" required></div><div class="field add-token-field"><label for="storeToken">API-Key token</label><div class="token-row"><input id="storeToken" type="password" autocomplete="off" spellcheck="false" placeholder="ACMA:…" required><button id="toggleStoreToken" type="button" class="icon-button">显示</button></div><small>通过 Windows DPAPI 加密</small></div><button id="addStoreButton" class="button primary" type="submit">连接店铺</button></form>
+          <div id="storeList" class="store-list"></div><div id="storeEmpty" class="empty-state">还没有已连接店铺。</div>
+        </section>
+        <section class="panel authorization-panel">
+          <div class="panel-heading"><div><p class="eyebrow">STORE AUTHORIZATION</p><h2>TG 授权记录 <span id="zeshunStoreCount" class="muted-count">0</span></h2></div><p>通过 TG 码维护授权入口并更新 token。</p></div>
+          <form id="zeshunStoreForm" class="authorization-create-form"><div class="field"><label for="zeshunStoreAlias">自定义店铺名</label><input id="zeshunStoreAlias" type="text" maxlength="80" placeholder="例如：俄罗斯 01 店" required></div><div class="field"><label for="zeshunTgCode">TG 码</label><input id="zeshunTgCode" type="text" maxlength="120" autocomplete="off" spellcheck="false" placeholder="唯一 TG 码" required></div><div class="field"><label for="zeshunAuthorizationUrl">授权链接（可选）</label><input id="zeshunAuthorizationUrl" type="url" maxlength="4000" placeholder="支持 {tg_code} 占位符"></div><button id="addZeshunStoreButton" class="button secondary" type="submit">新增记录</button></form>
+          <div id="zeshunStoreList" class="authorization-list"></div><div id="zeshunStoreEmpty" class="empty-state">还没有授权记录。</div><p class="authorization-security">授权返回链接和 token 均加密保存，接口和页面不会返回明文。</p>
+        </section>
       </section>
     </main>
   </div>
-
   <div id="toast" class="toast" role="status"></div>
-  <script src="{{ url_for('static', path='/app.js') }}?v=20260824-1" defer></script>
+  <script src="{{ url_for('static', path='/app.js') }}?v=20260906-3" defer></script>
 </body>
 </html>

@@ -5,7 +5,8 @@ def test_appeal_result_uses_latest_reply_without_calling_deepseek(monkeypatch):
     def unexpected_deepseek_call(*args, **kwargs):
         raise AssertionError("申诉结果整理不应调用 DeepSeek")
 
-    monkeypatch.setattr(bit_appeal_ai, "chat_deepseek", unexpected_deepseek_call)
+    from AI_Agent import deepseek
+    monkeypatch.setattr(deepseek, "chat_deepseek", unexpected_deepseek_call)
 
     result = bit_appeal_ai.summarize_ai_appeal_result(
         "侵权-第1/1组",

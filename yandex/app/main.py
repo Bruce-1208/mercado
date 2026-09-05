@@ -12,7 +12,17 @@ from yandex.app.config import settings
 from yandex.app.database import database
 from yandex.app.exchange_rate import ExchangeRateError, exchange_rate_service
 from yandex.app.schemas import (
+    FeedbackListRequest,
+    FeedbackReplyRequest,
+    FeedbackSkipRequest,
+    InventoryListRequest,
+    InventoryStockUpdateRequest,
+    OrderActionRequest,
+    OrderListRequest,
     PublishRequest,
+    QuestionListRequest,
+    QuestionReplyRequest,
+    ReturnListRequest,
     SearchRequest,
     StoreCreateRequest,
     StoreUpdateRequest,
@@ -37,7 +47,7 @@ async def lifespan(_: FastAPI):
 
 app = FastAPI(
     title="Yandex Market 跟卖助手",
-    version="0.3.0",
+    version="0.4.0",
     lifespan=lifespan,
 )
 
@@ -62,6 +72,22 @@ async def index(request: Request) -> HTMLResponse:
 @app.get("/api/health")
 async def health() -> dict[str, str]:
     return {"status": "ok", "service": "yandex-console", "version": app.version}
+
+
+async def _store_operation(operation) -> tuple[dict, dict]:
+    try:
+        return await operation
+    except LookupError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    except SecretStoreError as exc:
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+    except YandexApiError as exc:
+        raise HTTPException(
+            status_code=exc.status_code or status.HTTP_400_BAD_REQUEST,
+            detail=str(exc),
+        ) from exc
 
 
 @app.post("/api/token/validate")
@@ -231,6 +257,136 @@ async def get_search(run_id: int) -> dict:
         raise HTTPException(status_code=404, detail="搜索任务不存在")
     products = database.list_products_for_run(run_id)
     return {"run": run, "products": products}
+
+
+@app.post("/api/orders")
+async def list_orders(payload: OrderListRequest) -> dict:
+    try:
+        result, store = await task_service.get_orders(
+            payload.store_id,
+            statuses=payload.statuses,
+            date_from=payload.date_from.isoformat() if payload.date_from else None,
+            date_to=payload.date_to.isoformat() if payload.date_to else None,
+            page_token=payload.page_token,
+            limit=payload.limit,
+        )
+    except LookupError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except SecretStoreError as exc:
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+    except YandexApiError as exc:
+        raise HTTPException(
+            status_code=exc.status_code or status.HTTP_400_BAD_REQUEST,
+            detail=str(exc),
+        ) from exc
+    return {"store": store, **result}
+
+
+@app.post("/api/orders/action")
+async def update_order(payload: OrderActionRequest) -> dict:
+    result, store = await _store_operation(
+        task_service.update_order(payload.store_id, payload.order_id, payload.action)
+    )
+    return {"ok": True, "store": store, "result": result}
+
+
+@app.post("/api/inventory")
+async def list_inventory(payload: InventoryListRequest) -> dict:
+    result, store = await _store_operation(
+        task_service.get_inventory(
+            payload.store_id,
+            offer_ids=payload.offer_ids,
+            archived=payload.archived,
+            page_token=payload.page_token,
+            limit=payload.limit,
+        )
+    )
+    return {"store": store, **result}
+
+
+@app.put("/api/inventory/stock")
+async def update_inventory_stock(payload: InventoryStockUpdateRequest) -> dict:
+    result, store = await _store_operation(
+        task_service.update_inventory_stock(
+            payload.store_id, payload.offer_id, payload.count
+        )
+    )
+    return {"ok": True, "store": store, **result}
+
+
+@app.post("/api/returns")
+async def list_returns(payload: ReturnListRequest) -> dict:
+    result, store = await _store_operation(
+        task_service.get_returns(
+            payload.store_id,
+            return_type=payload.return_type,
+            statuses=payload.statuses,
+            shipment_statuses=payload.shipment_statuses,
+            date_from=payload.date_from.isoformat() if payload.date_from else None,
+            date_to=payload.date_to.isoformat() if payload.date_to else None,
+            page_token=payload.page_token,
+            limit=payload.limit,
+        )
+    )
+    return {"store": store, **result}
+
+
+@app.post("/api/feedback")
+async def list_feedback(payload: FeedbackListRequest) -> dict:
+    result, store = await _store_operation(
+        task_service.get_feedbacks(
+            payload.store_id,
+            reaction_status=payload.reaction_status,
+            rating_values=payload.rating_values,
+            offer_ids=payload.offer_ids,
+            page_token=payload.page_token,
+            limit=payload.limit,
+        )
+    )
+    return {"store": store, **result}
+
+
+@app.post("/api/feedback/reply")
+async def reply_to_feedback(payload: FeedbackReplyRequest) -> dict:
+    result, store = await _store_operation(
+        task_service.reply_to_feedback(
+            payload.store_id, payload.feedback_id, payload.text
+        )
+    )
+    return {"ok": True, "store": store, "comment": result}
+
+
+@app.post("/api/feedback/skip")
+async def skip_feedback(payload: FeedbackSkipRequest) -> dict:
+    _, store = await _store_operation(
+        task_service.skip_feedbacks(payload.store_id, payload.feedback_ids)
+    )
+    return {"ok": True, "store": store}
+
+
+@app.post("/api/questions")
+async def list_questions(payload: QuestionListRequest) -> dict:
+    result, store = await _store_operation(
+        task_service.get_questions(
+            payload.store_id,
+            need_answer=payload.need_answer,
+            date_from=payload.date_from.isoformat() if payload.date_from else None,
+            date_to=payload.date_to.isoformat() if payload.date_to else None,
+            page_token=payload.page_token,
+            limit=payload.limit,
+        )
+    )
+    return {"store": store, **result}
+
+
+@app.post("/api/questions/reply")
+async def reply_to_question(payload: QuestionReplyRequest) -> dict:
+    result, store = await _store_operation(
+        task_service.reply_to_question(
+            payload.store_id, payload.question_id, payload.text
+        )
+    )
+    return {"ok": True, "store": store, "result": result}
 
 
 @app.post("/api/publish", status_code=status.HTTP_202_ACCEPTED)

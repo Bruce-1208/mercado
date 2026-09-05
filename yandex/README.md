@@ -1,6 +1,6 @@
 # mercado.yandex — 武汉泽顺 Yandex Market 控制台
 
-`mercado` 项目中的独立 Python 包。它提供本地中文 Web 控制台：保存并管理多个 Yandex Market 店铺，输入关键词和商品数量（默认 200），抓取买家页中带 `Из-за рубежа`（国外发货）标记的商品，结构化保存到 SQLite，再选择目标店铺批量挂载商品卡。
+`mercado` 项目中的独立 Python 包。它提供本地中文 Web 工作台：查看多个 Yandex Market 店铺的订单，管理店铺授权，输入关键词和商品数量（默认 200），抓取买家页中带 `Из-за рубежа`（国外发货）标记的商品，结构化保存到 SQLite，再选择目标店铺批量挂载商品卡。
 
 完成首次依赖安装后，推荐直接登录 `mercado` 的“武汉泽顺综合服务台”，点击“Yandex 店铺”标签使用。综合服务台会自动启动该包并以内嵌模式加载，无需单独打开另一个页面。
 
@@ -43,6 +43,80 @@ start.cmd
 ```
 
 ## 使用流程
+
+页面按“订单中心 / 商品库存 / 退货管理 / 客户声音 / 搜品上架 / 店铺管理”划分工作区，右上角的当前店铺会同时作用于所有读取、回复、库存调整、订单履约和商品上传操作。
+
+### 订单中心
+
+1. 在右上角选择已经连接的店铺。
+2. 选择订单状态和下单日期（单次最多 30 天），点击“刷新订单”。
+3. 页面通过官方 `POST /v1/businesses/{businessId}/orders` 接口展示订单号、商品、履约方式、状态和更新时间，并支持 `pageToken` 翻页。
+4. token 需要包含 `inventory-and-order-processing:read-only`、`inventory-and-order-processing`、`finance-and-accounting` 或 `all-methods` 等可读取订单的权限。
+
+订单列表展示商品缩略图、标题和 SKU，点击标题或缩略图会在新标签页打开 Yandex 官方返回的前台商品链接；展开价格明细可查看全部商品，不限于列表预览的前两个。图片与前台链接复用同一批商品目录请求，不会每个 SKU 单独请求。图片缺失或加载失败时显示占位；链接未返回时标题保持普通文本，不根据 SKU 猜测地址。官方 B2C 链接是商品前台链接，不保证锁定某个卖家报价。
+
+“查看订单与履约详情”按组展示更多平台已返回的信息：
+
+- 订单号、外部订单号、店铺 API 编号、履约模式、状态及子状态、商品行数/件数、取消申请和测试标记。
+- 付款类型、支付方式、买家类型、来源平台；付款类型不等于实际付款状态。
+- 下单/更新时间、发货日期/时间、配送日期和时间窗口、实际送达日期；自提订单的送达提货点日期不代表买家已签收。
+- 承运商、配送主体、交付方式、仓库与发货批次编号、运单号、包裹条码、包内商品及拆分件数。
+- 收货地区与地址、自提点和保管期限、订单备注、上楼服务；商品行状态、增值税、商品标签和合规标记按返回数据展示。
+
+缺少权限、履约模式不支持或平台暂未返回的字段会显示“未返回”。不会额外逐单获取买家姓名、电话等个人资料。所有动态文本均转义；前台链接仅接受 Yandex Market 的 HTTPS 地址，图片仅接受 HTTP(S)。
+
+订单金额按不同口径分别展示，点击每单下方的“查看价格与结算明细”可查看所有 SKU：
+
+- **链接价格**：当前店铺设置的商品单价及其按订单数量计算的合计，不作为历史下单价。店铺单独设置价优先于统一基础价。
+- **买家付款**：商品现金付款金额；积分抵扣、卖家补贴与买家运费分开显示。订单商品行的付款、积分及补贴字段已经是全部数量的合计，不会再次乘数量。
+- **卖家结余**：结合订单统计接口中的资金流水与平台费用，只在资料足以核算时显示扣费估算。缺少结算凭证、费用不完整或涉及尚未核实的补贴抵扣时显示待结算。卖家补贴不直接当作结余，最终到账以结算账单为准。
+- **运费**：区分买家支付的运费、配送补贴、配送金额合计与平台列出的卖家物流费用；卖家物流费用已包含在平台费用中，不重复扣除。
+
+金额保留 API 返回的币种，CNY 与 RUB 分开汇总；缺失值显示 `—`，已确认的零金额显示 `0.00`。概览显示当前页有金额数据的订单数，避免将部分数据当作完整合计。价格或财务接口暂时失败时仍显示订单，并在明细中提示缺失来源。
+
+对于处于 `PROCESSING / STARTED` 的订单，页面提供两项官方状态操作：
+
+- **标记备货完成**：提交 `PROCESSING / READY_TO_SHIP`；仅在商品已经完成备货并可交付承运方时使用。
+- **无法履约并取消**：提交 `CANCELLED / SHOP_FAILED`；操作前会再次确认，卖家原因取消可能影响履约指标。
+
+字段参考：[订单金额说明](https://yandex.ru/dev/market/partner-api/doc/ru/reference/orders/getBusinessOrders)、[订单统计与费用](https://yandex.ru/dev/market/partner-api/doc/ru/reference/orders-stats/getOrdersStats)、[店铺设置价](https://yandex.ru/dev/market/partner-api/doc/ru/reference/prices/getPricesByOfferIds)、[统一基础价](https://www.yandex.ru/dev/market/partner-api/doc/ru/reference/business-offer-mappings/getOfferMappings)。
+
+### 商品库存
+
+- 按店铺浏览商品 SKU、商品名、目录价、仓库和库存构成，也可以用逗号、空格或换行批量查询指定 SKU。
+- 自动识别仓库形态：独立仓库使用 `POST /v3/businesses/{businessId}/offers/stocks`，仓库组或平台仓使用 `POST /v2/campaigns/{campaignId}/offers/stocks`。
+- 可直接修改单个 SKU 的可售库存；支持填 `0` 设为售罄。写入前会显示旧值、新值和目标店铺并要求确认。
+- 支持切换查看在售目录和已归档商品，所有长列表都使用官方 `pageToken` 翻页。
+
+接口参考：[库存与周转](https://yandex.ru/dev/market/partner-api/doc/ru/reference/stocks/getStocks)、[独立仓库库存](https://yandex.ru/dev/market/partner-api/doc/ru/reference/stocks/getStocksOnPartnerWarehouses)。
+
+### 退货管理
+
+- 浏览所有退货和未取件记录，按类型、退款状态和更新时间筛选。
+- 汇总本页待决定和待领取数量，并展示退款金额、商品 SKU、逆向物流状态、领取点和截止时间。
+- 页面优先提供 `PREMODERATION_DECISION_WAITING`（FBY/FBS/Express）和 `WAITING_FOR_DECISION`（DBS）筛选，方便识别有处理时限的记录。
+
+接口参考：[退货和未取件列表](https://yandex.ru/dev/market/partner-api/doc/ru/reference/returns/getReturns)。当前版本先提供读取与巡检；涉及退款金额、拒绝理由和争议证据的决定仍应在核实商品及材料后到卖家后台处理。
+
+### 客户声音
+
+“客户声音”包含“商品评价”和“商品问答”两个工作区：
+
+- 评价可按待回复、星级和 SKU 筛选，展示买家文字、图片和评分；可以直接回复，或明确标记为已处理且不回复。
+- 问答可按待回答和最近 31 天筛选，并直接以当前店铺身份提交公开回答。
+- 所有写操作都绑定当前选择的店铺、要求二次确认，并遵守官方 4096/5000 字符限制。
+
+接口参考：[商品评价](https://yandex.ru/dev/market/partner-api/doc/ru/reference/goods-feedback/getGoodsFeedbacks)、[评价回复](https://yandex.ru/dev/market/partner-api/doc/ru/reference/goods-feedback/updateGoodsFeedbackComment)、[商品问题](https://yandex.ru/dev/market/partner-api/doc/ru/reference/goods-questions/getGoodsQuestions)、[回答问题](https://yandex.ru/dev/market/partner-api/doc/ru/reference/goods-questions/updateGoodsQuestionTextEntity)。
+
+### Token 权限
+
+工作台允许保存只读 token，并按具体功能检查权限：
+
+- 订单和退货读取：`inventory-and-order-processing:read-only` 或更高权限；订单状态修改需要可写的 `inventory-and-order-processing`。
+- 商品和库存读取：`offers-and-cards-management:read-only` 或更高权限；上架及库存修改需要可写的 `offers-and-cards-management`。
+- 评价和问答：读取与回复需要 `communication`；`all-methods` 可覆盖全部写操作，`all-methods:read-only` 只允许读取。
+
+### 搜品上架
 
 1. 在“店铺授权管理”中填写自定义店铺名和唯一 TG 码。授权链接可以随店铺填写，也可以通过 `ZESHUN_AUTHORIZATION_URL_TEMPLATE` 统一配置；模板支持 `{tg_code}` 占位符。
 2. 打开模块显示的授权链接。授权完成后，把浏览器中的完整返回链接粘贴回来；程序会读取链接 query 或 fragment 中的 `access_token`、`token`、`api_key`。如果返回链接里没有 token，可在旁边手动填写。
@@ -94,6 +168,10 @@ start.cmd
 
 ```powershell
 .\yandex\.venv\Scripts\python.exe -m unittest yandex.tests.test_core -v
+.\yandex\.venv\Scripts\python.exe -m unittest yandex.tests.test_order_finance -v
+.\yandex\.venv\Scripts\python.exe -m unittest yandex.tests.test_operations_api -v
+.\yandex\.venv\Scripts\python.exe -m unittest yandex.tests.test_operations_ui -v
+.\yandex\.venv\Scripts\python.exe -m unittest yandex.tests.test_order_media -v
 ```
 
-测试不会调用真实上传接口。
+订单展示的离线浏览器回归可在已安装 pytest、Playwright 及 Chrome 的环境运行 `python -m pytest yandex/tests/test_order_finance_ui.py -q`。覆盖缺失金额与零值、币种分组、SKU 明细、图片占位、安全前台跳转、履约信息、HTML 转义和手机布局。测试不会调用真实上传接口。

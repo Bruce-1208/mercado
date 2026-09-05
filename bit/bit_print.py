@@ -10,8 +10,10 @@ creates one combined PDF for the user to print.
 from __future__ import annotations
 
 import argparse
+import os
 import time
 import uuid
+from concurrent.futures import CancelledError, ThreadPoolExecutor, as_completed
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Callable, Iterable
@@ -26,6 +28,9 @@ from mercado_api.client import MercadoAPIError, MercadoLibreClient
 ORDER_PRINT_LOCK_KEY = "bit_order_print_task"
 DEFAULT_FALLBACK_HOURS = 72
 ORDER_SCAN_OVERLAP_MINUTES = 5
+DEFAULT_STORE_WORKERS = 6
+MAX_STORE_WORKERS = 12
+STORE_WORKERS_ENV = "MERCADO_ORDER_PRINT_STORE_WORKERS"
 ORDER_PRINT_OUTPUT_DIR = Path(__file__).resolve().parent.parent / "outputs" / "order_print"
 
 SITE_IDS = {
@@ -126,7 +131,13 @@ def _store_sites(row):
     return sites or list(SITE_IDS)
 
 
-def build_print_jobs(rows=None, selected_shops=None, selected_sites=None, selected_targets=None):
+def build_print_jobs(
+    rows=None,
+    selected_shops=None,
+    selected_sites=None,
+    selected_targets=None,
+    selected_token_ids=None,
+):
     """Build API jobs from Mercado token authorizations, not browser windows."""
 
     if rows is None:
@@ -134,6 +145,11 @@ def build_print_jobs(rows=None, selected_shops=None, selected_sites=None, select
     shop_filter = set(_normalized_selection(selected_shops))
     site_filter = set(_normalized_selection(selected_sites))
     target_filter = set(_normalized_targets(selected_targets))
+    token_filter = {
+        int(value)
+        for value in (selected_token_ids or ())
+        if str(value or "").strip().isdigit() and int(value) > 0
+    }
     jobs = []
     for row in rows:
         if not isinstance(row, dict):
@@ -144,7 +160,12 @@ def build_print_jobs(rows=None, selected_shops=None, selected_sites=None, select
         shop_name = str(
             row.get("display_name") or row.get("shop_name") or row.get("nickname") or ""
         ).strip()
-        if not token_id or not shop_name or (shop_filter and shop_name not in shop_filter):
+        if (
+            not token_id
+            or not shop_name
+            or (token_filter and token_id not in token_filter)
+            or (shop_filter and shop_name not in shop_filter)
+        ):
             continue
         sites = []
         for site in _store_sites(row):
@@ -226,6 +247,17 @@ def _is_order_legally_unavailable(exc):
         or '"status":451' in message.replace(" ", "")
         or "unavailable for legal reasons" in message
     )
+
+
+def _store_worker_count(requested, job_count):
+    value = requested
+    if value in (None, ""):
+        value = os.environ.get(STORE_WORKERS_ENV, DEFAULT_STORE_WORKERS)
+    try:
+        value = int(value)
+    except (TypeError, ValueError):
+        value = DEFAULT_STORE_WORKERS
+    return max(1, min(MAX_STORE_WORKERS, max(1, int(job_count or 1)), value))
 
 
 def _scan_store_orders(
@@ -322,7 +354,7 @@ def _scan_store_orders(
                     raise PrintTaskStopped("已收到停止请求")
                 try:
                     order = client.get_order(order_id)
-                except MercadoAPIError as exc:
+                except Exception as exc:
                     if not _is_order_legally_unavailable(exc):
                         raise
                     legally_unavailable_order_ids.append(str(order_id))
@@ -423,12 +455,13 @@ def _download_label(context, *, max_retries, retry_delay_seconds, stop_event, lo
     raise bit_order_labels.MercadoLabelError(str(last_error or "面单下载失败"))
 
 
-def _record_printed_orders(order_ids):
+def _record_printed_orders(order_ids, operator_name="订单打印/API"):
     normalized = list(dict.fromkeys(str(value) for value in order_ids if str(value or "").strip()))
     recorded = 0
     for offset in range(0, len(normalized), 100):
         recorded += bit_mysql.record_mercado_order_print_logs(
-            normalized[offset : offset + 100], operator_name="订单打印/API"
+            normalized[offset : offset + 100],
+            operator_name=str(operator_name or "").strip() or "订单打印/API",
         )
     return recorded
 
@@ -453,6 +486,9 @@ def _run_shop_job(
     logger=None,
     document_sink=None,
     printed_order_sink=None,
+    operator_name="订单打印/API",
+    candidate_start_at=None,
+    include_first_run_backlog=True,
     **_legacy_options,
 ):
     """Generate labels for one API-authorized store and return per-site rows."""
@@ -471,12 +507,23 @@ def _run_shop_job(
             logger=logger,
         )
         selected_site_ids = [SITE_IDS[site] for site in sites if site in SITE_IDS]
+        candidate_tracking_since = scan["tracking_since"]
+        if candidate_start_at not in (None, ""):
+            candidate_floor = _as_utc(candidate_start_at)
+            if candidate_floor is None:
+                raise ValueError("自动打印启用时间无效")
+            # Automatic printing owns a separate, durable activation boundary.
+            # Do not let a later manual-print tracking point hide orders that
+            # became printable after automatic printing was enabled.
+            candidate_tracking_since = candidate_floor
         contexts = bit_mysql.list_mercado_order_print_candidates(
             job["token_id"],
-            tracking_since=scan["tracking_since"],
+            tracking_since=candidate_tracking_since,
             end_at=scan.get("end_at"),
             site_ids=selected_site_ids,
-            include_previously_printed=scan["first_run"],
+            include_previously_printed=(
+                scan["first_run"] and bool(include_first_run_backlog)
+            ),
         )
     except PrintTaskStopped:
         _emit(logger, f"{shop_name} 已在安全边界停止")
@@ -560,7 +607,10 @@ def _run_shop_job(
 
         if successful_orders:
             try:
-                _record_printed_orders(successful_orders)
+                _record_printed_orders(
+                    successful_orders,
+                    operator_name=operator_name,
+                )
                 printed_order_sink.extend(successful_orders)
             except Exception as exc:
                 failed_messages.append(f"打印记录写入失败：{exc}")
@@ -604,17 +654,22 @@ def _run_shop_job(
     return results
 
 
-def _task_record(result):
+def _task_record(result, operator_name=""):
+    source = (
+        "系统自动打印，"
+        if str(operator_name or "").strip() == "系统自动打印"
+        else ""
+    )
     if result["status"] == "printed":
-        outcome = f"成功：API 生成 {result.get('shipment_count', 0)} 个面单"
+        outcome = f"成功：{source}API 生成 {result.get('shipment_count', 0)} 个面单"
     elif result["status"] == "partial":
-        outcome = f"部分成功：{result['message']}"
+        outcome = f"部分成功：{source}{result['message']}"
     elif result["status"] == "no_orders":
-        outcome = "成功：无待打印订单"
+        outcome = f"成功：{source}无待打印订单"
     elif result["status"] == "skipped":
-        outcome = f"跳过：{result['message']}"
+        outcome = f"跳过：{source}{result['message']}"
     else:
-        outcome = f"失败：{result['message']}"
+        outcome = f"失败：{source}{result['message']}"
     return ("后台打印订单", result["shop_name"], result["site"], outcome, result["finished_at"])
 
 
@@ -655,6 +710,7 @@ def print_orders_all(
     selected_shops=None,
     selected_sites=None,
     selected_targets=None,
+    selected_token_ids=None,
     *,
     max_retries=3,
     retry_delay_seconds=3,
@@ -666,6 +722,10 @@ def print_orders_all(
     persist=True,
     output_dir=None,
     task_id=None,
+    store_workers=None,
+    operator_name="订单打印/API",
+    candidate_start_by_token=None,
+    include_first_run_backlog=True,
     **_legacy_options,
 ):
     """Run one API-only print round and create a combined official-label PDF."""
@@ -676,40 +736,115 @@ def print_orders_all(
         selected_shops=selected_shops,
         selected_sites=selected_sites,
         selected_targets=selected_targets,
+        selected_token_ids=selected_token_ids,
     )
     if not jobs:
         raise ValueError("没有匹配的美客多授权店铺，请先完成店铺 API 授权")
+    worker_count = _store_worker_count(store_workers, len(jobs))
     _emit(
         logger,
-        f"开始 API 订单打印：{len(jobs)} 家授权店铺；只处理未打印订单，首次无法判断时回退最近 {fallback_hours} 小时",
+        f"开始 API 订单打印：{len(jobs)} 家授权店铺，店铺并发 {worker_count}；"
+        f"只处理未打印订单，首次无法判断时回退最近 {fallback_hours} 小时",
     )
     results = []
     documents = []
     printed_order_ids = []
-    for job in jobs:
-        if stop_event is not None and stop_event.is_set():
-            break
-        results.extend(
-            _run_shop_job(
-                job,
-                max_retries=max_retries,
-                retry_delay_seconds=retry_delay_seconds,
-                fallback_hours=fallback_hours,
-                start_at=start_at,
-                end_at=end_at,
-                stop_event=stop_event,
-                logger=logger,
-                document_sink=documents,
-                printed_order_sink=printed_order_ids,
-            )
+    candidate_start_by_token = dict(candidate_start_by_token or {})
+
+    def run_store(job_index, job):
+        store_documents = []
+        store_printed_order_ids = []
+        store_results = _run_shop_job(
+            job,
+            max_retries=max_retries,
+            retry_delay_seconds=retry_delay_seconds,
+            fallback_hours=fallback_hours,
+            start_at=start_at,
+            end_at=end_at,
+            stop_event=stop_event,
+            logger=logger,
+            document_sink=store_documents,
+            printed_order_sink=store_printed_order_ids,
+            operator_name=operator_name,
+            candidate_start_at=(
+                candidate_start_by_token.get(job["token_id"])
+                or candidate_start_by_token.get(str(job["token_id"]))
+            ),
+            include_first_run_backlog=include_first_run_backlog,
         )
+        return job_index, store_results, store_documents, store_printed_order_ids
+
+    store_outputs = {}
+    completed_jobs = 0
+    cancellation_started = False
+    with ThreadPoolExecutor(
+        max_workers=worker_count,
+        thread_name_prefix="mercado-order-print",
+    ) as executor:
+        futures = {
+            executor.submit(run_store, job_index, job): (job_index, job)
+            for job_index, job in enumerate(jobs)
+        }
+        for future in as_completed(futures):
+            if (
+                not cancellation_started
+                and stop_event is not None
+                and stop_event.is_set()
+            ):
+                cancellation_started = True
+                for pending in futures:
+                    if pending is not future:
+                        pending.cancel()
+            job_index, job = futures[future]
+            try:
+                output = future.result()
+            except CancelledError:
+                continue
+            except Exception as exc:
+                message = str(exc) or exc.__class__.__name__
+                _emit(logger, f"{job['shop_name']} 店铺任务异常：{message}")
+                output = (
+                    job_index,
+                    [
+                        _result_row(job["shop_name"], site, "failed", message)
+                        for site in (job.get("sites") or SITE_IDS)
+                    ],
+                    [],
+                    [],
+                )
+            store_outputs[job_index] = output
+            completed_jobs += 1
+            _emit(
+                logger,
+                f"{job['shop_name']}：店铺任务完成（{completed_jobs}/{len(jobs)}）",
+            )
+
+    for job_index in sorted(store_outputs):
+        _, store_results, store_documents, store_printed_order_ids = store_outputs[job_index]
+        results.extend(store_results)
+        documents.extend(store_documents)
+        printed_order_ids.extend(store_printed_order_ids)
 
     output_path, output_name = _write_output(
         documents, output_dir=output_dir, task_id=task_id
     )
     if persist and results:
         try:
-            insert_task_record([_task_record(result) for result in results])
+            persisted_results = [
+                result
+                for result in results
+                if not (
+                    str(operator_name or "").strip() == "系统自动打印"
+                    and result.get("status") == "no_orders"
+                )
+            ]
+            if persisted_results:
+                insert_task_record(
+                    [
+                        _task_record(result, operator_name=operator_name)
+                        for result in persisted_results
+                    ]
+                )
         except Exception as exc:
             _emit(logger, f"打印结果写入任务记录失败：{exc}")
 
@@ -725,6 +860,7 @@ def print_orders_all(
             "download_name": output_name or "",
             "printed_order_count": len(set(printed_order_ids)),
             "shipment_count": len(documents),
+            "store_worker_count": worker_count,
             "fallback_store_count": len(
                 {row["shop_name"] for row in results if row.get("fallback_used")}
             ),
@@ -756,6 +892,15 @@ def main(argv=None):
     parser.add_argument("--site", action="append", default=[], help="指定站点，可重复")
     parser.add_argument("--max-retries", type=int, default=3, choices=(1, 2, 3))
     parser.add_argument("--retry-delay-seconds", type=int, default=3)
+    parser.add_argument(
+        "--store-workers",
+        type=int,
+        default=None,
+        help=(
+            f"店铺并发数，默认读取 {STORE_WORKERS_ENV}"
+            f"（缺省 {DEFAULT_STORE_WORKERS}，最高 {MAX_STORE_WORKERS}）"
+        ),
+    )
     args = parser.parse_args(argv)
 
     task_lock = acquire_order_print_lock(owner="bit_print.py", mode="once")
@@ -767,6 +912,7 @@ def main(argv=None):
             selected_sites=args.site or None,
             max_retries=args.max_retries,
             retry_delay_seconds=max(0, args.retry_delay_seconds),
+            store_workers=args.store_workers,
         )
         if summary.get("download_path"):
             print(f"合并面单：{summary['download_path']}")

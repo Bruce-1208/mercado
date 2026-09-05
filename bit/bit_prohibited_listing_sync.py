@@ -27,7 +27,7 @@ from mercado_api.client import MercadoAPIError, MercadoLibreClient
 PROHIBITED_REASON = "The product is prohibited."
 PROHIBITED_SYNC_LOCK_KEY = "mercado_prohibited_listing_sync_task"
 PROHIBITED_AUTO_SYNC_HOURS = max(
-    1, int(os.getenv("MERCADO_PROHIBITED_AUTO_SYNC_HOURS", "24"))
+    1, int(os.getenv("MERCADO_PROHIBITED_AUTO_SYNC_HOURS", "12"))
 )
 PROHIBITED_AUTO_RETRY_MINUTES = max(
     1, int(os.getenv("MERCADO_PROHIBITED_AUTO_RETRY_MINUTES", "60"))

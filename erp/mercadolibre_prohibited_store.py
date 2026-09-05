@@ -380,7 +380,9 @@ def get_prohibited_sync_context(
             cursor.execute(
                 f"""
                 SELECT `item_id`, `seller_id`, `site_id`, `infraction_id`,
-                       `infraction_reason`, `remedy`, `infraction_date`
+                       `infraction_reason`, `remedy`, `infraction_date`,
+                       `title`, `thumbnail_url`, `permalink`, `status`, `sub_status`,
+                       `global_item_id`, `family_id`, `last_checked_at`
                 FROM `{PROHIBITED_TABLE}`
                 WHERE `token_id` = %s AND `is_current` = 1
                 ORDER BY `id`

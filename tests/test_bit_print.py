@@ -1,5 +1,7 @@
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
+import threading
+import time
 from unittest import mock
 
 from bit import bit_print
@@ -54,6 +56,17 @@ def test_build_print_jobs_supports_exact_store_site_targets():
     assert jobs == [
         {"token_id": 7, "shop_name": "店铺甲", "sites": ["墨西哥"]},
         {"token_id": 8, "shop_name": "店铺乙", "sites": ["巴西"]},
+    ]
+
+
+def test_build_print_jobs_can_select_automatic_sync_token_ids():
+    jobs = bit_print.build_print_jobs(
+        [_token(7, "店铺甲"), _token(8, "店铺乙")],
+        selected_token_ids=[8],
+    )
+
+    assert jobs == [
+        {"token_id": 8, "shop_name": "店铺乙", "sites": ["墨西哥", "巴西"]}
     ]
 
 
@@ -155,6 +168,52 @@ def test_scan_skips_one_451_order_and_continues_same_store(monkeypatch):
     assert result["fetched"] == 1
     assert result["legally_unavailable_order_ids"] == ["blocked-order"]
     assert any("已跳过并继续处理" in line for line in calls["log"])
+
+
+def test_scan_skips_wrapped_451_error_and_continues_same_store(monkeypatch):
+    saved = []
+
+    class Client:
+        def iter_order_ids(self, _seller_id, **_filters):
+            return iter(["blocked-order", "good-order"])
+
+        def get_order(self, order_id):
+            if order_id == "blocked-order":
+                raise RuntimeError(
+                    '代理调用失败：GET /marketplace/orders/blocked-order (451) '
+                    '{"message":"Unavailable For Legal Reasons"}'
+                )
+            return {"id": order_id}
+
+    record = {
+        "id": 7,
+        "display_name": "店铺甲",
+        "meli_user_id": "seller-7",
+        "access_token": "token",
+    }
+    monkeypatch.setattr(bit_print.bit_mysql, "get_mercado_store_token", lambda _id: record)
+    monkeypatch.setattr(bit_print.bit_mysql, "get_mercado_order_print_state", lambda _id: None)
+    monkeypatch.setattr(bit_print, "_client_and_record", lambda row: (Client(), row))
+    monkeypatch.setattr(
+        bit_print.bit_mysql,
+        "upsert_mercado_synced_orders",
+        lambda _record, orders: saved.extend(orders)
+        or {"inserted": len(orders), "updated": 0},
+    )
+    monkeypatch.setattr(
+        bit_print.bit_mysql,
+        "save_mercado_order_print_state",
+        lambda *_args: None,
+    )
+
+    result = bit_print._scan_store_orders(
+        {"token_id": 7, "shop_name": "店铺甲", "sites": ["墨西哥"]},
+        fallback_hours=72,
+        logger=lambda _message: None,
+    )
+
+    assert saved == [{"id": "good-order"}]
+    assert result["legally_unavailable_order_ids"] == ["blocked-order"]
 
 
 def test_scan_does_not_swallow_non_451_api_errors(monkeypatch):
@@ -282,7 +341,7 @@ def test_shop_job_downloads_only_candidate_orders_and_records_success(monkeypatc
         _context("20002", "30001"),
         _context("20003", "30002"),
     ]
-    seen = {"candidate_args": None, "recorded": []}
+    seen = {"candidate_args": None, "recorded": [], "operator_name": ""}
     monkeypatch.setattr(
         bit_print,
         "_scan_store_orders",
@@ -309,7 +368,11 @@ def test_shop_job_downloads_only_candidate_orders_and_records_success(monkeypatc
     monkeypatch.setattr(
         bit_print,
         "_record_printed_orders",
-        lambda order_ids: seen["recorded"].extend(order_ids) or len(order_ids),
+        lambda order_ids, operator_name="": (
+            seen["recorded"].extend(order_ids),
+            seen.update(operator_name=operator_name),
+            len(order_ids),
+        )[-1],
     )
     documents = []
     printed_orders = []
@@ -326,7 +389,66 @@ def test_shop_job_downloads_only_candidate_orders_and_records_success(monkeypatc
     assert rows[0]["shipment_count"] == 2
     assert seen["candidate_args"][1]["include_previously_printed"] is False
     assert seen["recorded"] == ["20001", "20002", "20003"]
+    assert seen["operator_name"] == "订单打印/API"
     assert len(documents) == 2
+
+
+def test_automatic_shop_job_uses_activation_floor_and_system_operator(monkeypatch):
+    scan_start = datetime(2026, 9, 5, 8, 30, tzinfo=timezone.utc)
+    activation_start = datetime(2026, 9, 5, 8, 0, tzinfo=timezone.utc)
+    seen = {}
+    monkeypatch.setattr(
+        bit_print,
+        "_scan_store_orders",
+        lambda *_args, **_kwargs: {
+            "first_run": True,
+            "tracking_since": scan_start,
+            "end_at": datetime(2026, 9, 5, 9, 0, tzinfo=timezone.utc),
+        },
+    )
+
+    def list_candidates(_token_id, **kwargs):
+        seen["candidate_args"] = kwargs
+        return [_context("20001", "30001")]
+
+    monkeypatch.setattr(
+        bit_print.bit_mysql,
+        "list_mercado_order_print_candidates",
+        list_candidates,
+    )
+    monkeypatch.setattr(
+        bit_print,
+        "_download_label",
+        lambda context, **_kwargs: (
+            context["shipping_id"],
+            b"%PDF-1.4\nlabel\n%%EOF",
+            1,
+        ),
+    )
+    monkeypatch.setattr(
+        bit_print,
+        "_record_printed_orders",
+        lambda order_ids, operator_name="": seen.update(
+            order_ids=list(order_ids),
+            operator_name=operator_name,
+        ) or len(order_ids),
+    )
+
+    rows = bit_print._run_shop_job(
+        {"token_id": 7, "shop_name": "店铺甲", "sites": ["墨西哥"]},
+        candidate_start_at=activation_start,
+        include_first_run_backlog=False,
+        operator_name="系统自动打印",
+    )
+
+    assert rows[0]["status"] == "printed"
+    assert seen["candidate_args"]["tracking_since"] == activation_start
+    assert seen["candidate_args"]["include_previously_printed"] is False
+    assert seen["order_ids"] == ["20001"]
+    assert seen["operator_name"] == "系统自动打印"
+    assert "系统自动打印" in bit_print._task_record(
+        rows[0], operator_name="系统自动打印"
+    )[3]
 
 
 def test_shop_job_does_not_expand_skipped_451_order_into_site_failures(monkeypatch):
@@ -425,7 +547,11 @@ def test_shop_job_marks_mixed_success_and_failure_as_partial(monkeypatch):
         return context["shipping_id"], b"%PDF-1.4\nlabel\n%%EOF", 1
 
     monkeypatch.setattr(bit_print, "_download_label", download)
-    monkeypatch.setattr(bit_print, "_record_printed_orders", lambda order_ids: len(order_ids))
+    monkeypatch.setattr(
+        bit_print,
+        "_record_printed_orders",
+        lambda order_ids, **_kwargs: len(order_ids),
+    )
 
     rows = bit_print._run_shop_job(
         {"token_id": 7, "shop_name": "店铺甲", "sites": ["墨西哥"]},
@@ -473,6 +599,94 @@ def test_print_round_combines_multiple_selected_stores(monkeypatch, tmp_path):
     assert summary["printed_order_count"] == 2
     assert summary["shipment_count"] == 2
     assert summary["download_name"] == "labels.pdf"
+
+
+def test_print_round_runs_stores_in_parallel_with_isolated_outputs(monkeypatch, tmp_path):
+    jobs = [
+        {"token_id": index, "shop_name": f"店铺{index}", "sites": ["墨西哥"]}
+        for index in range(1, 5)
+    ]
+    monkeypatch.setattr(bit_print, "build_print_jobs", lambda **_kwargs: jobs)
+    monkeypatch.setattr(bit_print, "insert_task_record", mock.Mock())
+    monkeypatch.setattr(
+        bit_print,
+        "_write_output",
+        lambda documents, **_kwargs: (tmp_path / "labels.pdf", "labels.pdf"),
+    )
+    guard = threading.Lock()
+    active = 0
+    max_active = 0
+
+    def run_store(job, document_sink, printed_order_sink, **_kwargs):
+        nonlocal active, max_active
+        with guard:
+            active += 1
+            max_active = max(max_active, active)
+        time.sleep(0.05)
+        document_sink.append(f"pdf-{job['token_id']}".encode())
+        printed_order_sink.append(f"order-{job['token_id']}")
+        with guard:
+            active -= 1
+        return [
+            bit_print._result_row(
+                job["shop_name"],
+                "墨西哥",
+                "printed",
+                "API 已生成",
+                shipment_count=1,
+            )
+        ]
+
+    monkeypatch.setattr(bit_print, "_run_shop_job", run_store)
+
+    summary = bit_print.print_orders_all(
+        store_workers=2,
+        logger=lambda _message: None,
+    )
+
+    assert max_active == 2
+    assert summary["store_worker_count"] == 2
+    assert summary["printed"] == 4
+    assert summary["printed_order_count"] == 4
+    assert summary["shipment_count"] == 4
+
+
+def test_store_worker_count_is_bounded(monkeypatch):
+    monkeypatch.setenv(bit_print.STORE_WORKERS_ENV, "999")
+
+    assert bit_print._store_worker_count(None, 100) == bit_print.MAX_STORE_WORKERS
+    assert bit_print._store_worker_count(8, 3) == 3
+    assert bit_print._store_worker_count("invalid", 100) == bit_print.DEFAULT_STORE_WORKERS
+
+
+def test_automatic_no_order_round_does_not_flood_task_history(monkeypatch):
+    monkeypatch.setattr(
+        bit_print,
+        "build_print_jobs",
+        lambda **_kwargs: [
+            {"token_id": 7, "shop_name": "店铺甲", "sites": ["墨西哥"]}
+        ],
+    )
+    monkeypatch.setattr(
+        bit_print,
+        "_run_shop_job",
+        lambda job, **_kwargs: [
+            bit_print._result_row(
+                job["shop_name"],
+                "墨西哥",
+                "no_orders",
+                "没有未打印订单",
+            )
+        ],
+    )
+    monkeypatch.setattr(bit_print, "_write_output", lambda *_args, **_kwargs: (None, None))
+    insert_record = mock.Mock()
+    monkeypatch.setattr(bit_print, "insert_task_record", insert_record)
+
+    summary = bit_print.print_orders_all(operator_name="系统自动打印")
+
+    assert summary["no_orders"] == 1
+    insert_record.assert_not_called()
 
 
 def test_order_print_source_has_no_browser_automation_dependency():

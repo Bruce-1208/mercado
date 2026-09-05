@@ -325,7 +325,8 @@ def test_access_management_page_contains_role_user_and_permission_controls():
     assert 'id="access-shop-form"' not in template
     assert 'id="access-shop-body"' not in template
     assert 'requestAccessApi("/api/access/browser-configs")' not in template
-    assert "访问数据统计”控制侵权与声誉读取" in template
+    assert "更新声誉”控制官方 API 声誉读取" in template
+    assert "七天流量”控制浏览器流量读取" in template
     assert "“进行申诉”控制申诉任务" in template
     assert "currentWorkbenchUser" in template
     assert "applyWorkbenchPermissions" in template

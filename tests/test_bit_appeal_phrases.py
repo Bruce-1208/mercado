@@ -21,10 +21,15 @@ def test_existing_phrases_are_seeded_and_grouped_by_appeal_type():
     rows = default_phrase_rows()
     counts = {
         appeal_type: sum(1 for row in rows if row["appeal_type"] == appeal_type)
-        for appeal_type in ("延误", "侵权", "取消率", "投诉")
+        for appeal_type in ("延误", "侵权", "取消率", "投诉", "禁限售")
     }
 
-    assert counts == {"延误": 3, "侵权": 4, "取消率": 3, "投诉": 2}
+    assert counts == {"延误": 3, "侵权": 4, "取消率": 3, "投诉": 2, "禁限售": 1}
+    assert any(
+        row["appeal_type"] == "禁限售"
+        and row["content"] == "亲爱客服，这个产品不是禁限售产品，他被系统误判了，麻烦你帮我恢复"
+        for row in rows
+    )
     assert len({row["source_key"] for row in rows}) == len(rows)
 
 
@@ -43,6 +48,7 @@ def test_phrase_renderer_replaces_placeholders_without_duplicating_order_ids():
 
 
 def test_ai_delay_uses_phrase_selected_from_library(monkeypatch):
+    monkeypatch.setattr(bit_appeal_ai, "save_ai_appeal_group_record", lambda *args, **kwargs: None)
     sent_messages = []
     monkeypatch.setattr(
         bit_appeal_ai,

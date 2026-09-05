@@ -22,6 +22,8 @@ def _live_infraction_rows(*site_counts):
     ("value", "expected"),
     [
         ("侵权", bit_daily_task.APPEAL_TYPE_INFRACTION),
+        ("禁限售", bit_daily_task.APPEAL_TYPE_PROHIBITED),
+        ("prohibited", bit_daily_task.APPEAL_TYPE_PROHIBITED),
         ("延误率", bit_daily_task.APPEAL_TYPE_DELAY),
         ("delay", bit_daily_task.APPEAL_TYPE_DELAY),
         ("取消率", bit_daily_task.APPEAL_TYPE_CANCELLATION),
@@ -54,6 +56,12 @@ def test_task_switches_can_run_multiple_tasks_without_infraction():
     )
 
 
+def test_task_switches_do_not_repeat_prohibited_after_infraction_split():
+    assert bit_daily_task.appeal_type_sequence(["侵权", "禁限售"]) == (
+        bit_daily_task.APPEAL_TYPE_INFRACTION,
+    )
+
+
 def test_task_switches_insert_infraction_after_each_other_selected_task():
     assert bit_daily_task.appeal_type_sequence(["投诉", "侵权"]) == (
         bit_daily_task.APPEAL_TYPE_INFRACTION,
@@ -76,7 +84,7 @@ def test_loop_task_stops_before_starting_next_round(monkeypatch):
         stop_event=stop_event,
     )
 
-    assert result is None
+    assert result == {"execution_counts": {}}
 
 
 def test_daily_task_worker_writes_output_to_shared_log(monkeypatch, tmp_path):
@@ -244,6 +252,111 @@ def test_default_infraction_plan_uses_authorization_switches_not_browser_sites(m
         }
     ]
     assert collection_calls[0][1]["recent_days"] == 100
+
+
+def test_infraction_plan_splits_prohibited_into_independent_appeal(monkeypatch):
+    today = datetime.now().strftime("%Y-%m-%d")
+    monkeypatch.setattr(
+        bit_daily_task.mercado_infraction_sync,
+        "collect_live_detection_infractions",
+        lambda _targets, **_kwargs: {
+            "data": [
+                {
+                    "店铺名": "授权店铺",
+                    "站点": "MLM",
+                    "编号": "MLM-PROHIBITED",
+                    "侵权时间": today,
+                    "类型": "侵权",
+                    "侵权原因": "The product is prohibited.",
+                },
+                {
+                    "店铺名": "授权店铺",
+                    "站点": "MLM",
+                    "编号": "MLM-GENERIC",
+                    "侵权时间": today,
+                    "类型": "侵权",
+                    "侵权原因": "The product's brand is not generic.",
+                },
+            ]
+        },
+    )
+    monkeypatch.setattr(
+        bit_daily_task,
+        "list_mercado_store_tokens",
+        lambda: {
+            "rows": [
+                {
+                    "id": 7,
+                    "display_name": "授权店铺",
+                    "site_settings": [
+                        {"site_id": "MLM", "appeal_enabled": True},
+                    ],
+                }
+            ]
+        },
+    )
+
+    plan = bit_daily_task.build_latest_infraction_appeal_plan(top_n=10)
+
+    assert plan[0]["sites"] == [
+        {
+            "site": "墨西哥",
+            "site_code": "MX",
+            "count": 1,
+            "appeal_type": bit_daily_task.APPEAL_TYPE_PROHIBITED,
+            "prohibited_ids": ["MLM-PROHIBITED"],
+        }
+    ]
+
+
+def test_prohibited_plan_reads_current_list_and_filters_authorized_sites(monkeypatch):
+    monkeypatch.setattr(
+        bit_daily_task,
+        "list_mercado_store_tokens",
+        lambda: {
+            "rows": [
+                {
+                    "id": 7,
+                    "display_name": "授权店铺",
+                    "enabled": True,
+                    "site_settings": [
+                        {"site_id": "MLM", "appeal_enabled": True},
+                        {"site_id": "MLB", "appeal_enabled": False},
+                    ],
+                }
+            ]
+        },
+    )
+    monkeypatch.setattr(
+        bit_daily_task,
+        "list_mercado_prohibited_listings",
+        lambda **_kwargs: {
+            "rows": [
+                {"site_id": "MLM", "item_id": "MLM-1"},
+                {"site_id": "MLM", "item_id": "MLM-2"},
+                {"site_id": "MLB", "item_id": "MLB-1"},
+            ],
+            "pages": 1,
+        },
+    )
+
+    plan = bit_daily_task.build_latest_prohibited_appeal_plan(top_n=0)
+
+    assert plan == [
+        {
+            "name": "授权店铺",
+            "total": 2,
+            "sites": [
+                {
+                    "site": "墨西哥",
+                    "site_code": "MX",
+                    "count": 2,
+                    "appeal_type": bit_daily_task.APPEAL_TYPE_PROHIBITED,
+                    "prohibited_ids": ["MLM-1", "MLM-2"],
+                }
+            ],
+        }
+    ]
 
 
 def test_build_latest_delay_appeal_plan_filters_and_sorts(monkeypatch):
@@ -609,6 +722,7 @@ def test_build_latest_complaint_plan_uses_complaint_rate(monkeypatch):
     ("method_name", "expected_type"),
     [
         ("auto_appeal_infraction", bit_daily_task.APPEAL_TYPE_INFRACTION),
+        ("auto_appeal_prohibited", bit_daily_task.APPEAL_TYPE_PROHIBITED),
         ("auto_appeal_delay", bit_daily_task.APPEAL_TYPE_DELAY),
         ("auto_appeal_cancellation", bit_daily_task.APPEAL_TYPE_CANCELLATION),
         ("auto_appeal_complaint", bit_daily_task.APPEAL_TYPE_COMPLAINT),
@@ -636,6 +750,7 @@ def test_auto_appeal_methods_dispatch_independently(
     ("appeal_type", "expected_form"),
     [
         ("侵权", "侵权"),
+        ("禁限售", "禁限售"),
         ("延误率", "延误"),
         ("取消率", "取消率"),
         ("投诉", "投诉"),
@@ -700,6 +815,45 @@ def test_infraction_shop_executor_passes_api_ids_directly(monkeypatch):
     assert calls[0][1]["infraction_ids"] == ["MLM-1", "MLM-2"]
 
 
+def test_infraction_plan_opens_prohibited_as_independent_form(monkeypatch):
+    calls = []
+    monkeypatch.setattr(
+        bit_daily_task.bit_appeal_ai,
+        "shensu",
+        lambda *args, **kwargs: calls.append((args, kwargs)) or "完成",
+    )
+    monkeypatch.setattr(bit_daily_task, "_resolve_login_anomaly", lambda *args: None)
+
+    bit_daily_task._appeal_one_shop_locked(
+        {
+            "name": "测试店铺",
+            "total": 2,
+            "sites": [
+                {
+                    "site_code": "MX",
+                    "count": 1,
+                    "appeal_type": "侵权",
+                    "infraction_ids": ["MLM-INF"],
+                },
+                {
+                    "site_code": "MX",
+                    "count": 1,
+                    "appeal_type": "禁限售",
+                    "prohibited_ids": ["MLM-PROHIBITED"],
+                },
+            ],
+        },
+        "window-id",
+        object(),
+        appeal_type="侵权",
+        site_pause=0,
+    )
+
+    assert [call[0][2] for call in calls] == ["侵权", "禁限售"]
+    assert calls[0][1]["infraction_ids"] == ["MLM-INF"]
+    assert calls[1][1]["prohibited_ids"] == ["MLM-PROHIBITED"]
+
+
 def _single_site_shop_plan():
     return {
         "name": "测试店铺",
@@ -729,6 +883,78 @@ def test_appeal_one_shop_always_closes_browser_window(monkeypatch):
 
     assert result["name"] == "测试店铺"
     close_browser.assert_called_once_with("window-id", lease=lease)
+    lease.release.assert_called_once_with()
+
+
+def test_appeal_one_shop_tracks_owned_window_and_task_id(monkeypatch):
+    lease = mock.Mock()
+    lease.acquire.return_value = True
+    lease_kwargs = []
+    owned_window_ids = {}
+    monkeypatch.setattr(
+        bit_daily_task.bit_appeal_ai,
+        "get_window_id_by_shop_name",
+        lambda _name: "window-id",
+    )
+    monkeypatch.setattr(
+        bit_daily_task,
+        "create_window_lease",
+        lambda *args, **kwargs: lease_kwargs.append(kwargs) or lease,
+    )
+    monkeypatch.setattr(
+        bit_daily_task,
+        "_appeal_one_shop_locked",
+        lambda *args, **kwargs: {"name": "测试店铺", "results": []},
+    )
+    monkeypatch.setattr(
+        bit_daily_task,
+        "closeBrowser",
+        lambda *_args, **_kwargs: {"success": True},
+    )
+
+    result = bit_daily_task.appeal_one_shop(
+        _single_site_shop_plan(),
+        task_id="task-a",
+        owned_window_ids=owned_window_ids,
+    )
+
+    assert result["name"] == "测试店铺"
+    assert lease_kwargs[0]["task_id"] == "task-a"
+    assert "task-a" in lease_kwargs[0]["owner"]
+    assert owned_window_ids == {}
+
+
+def test_appeal_one_shop_fails_closed_when_owned_window_registration_fails(
+    monkeypatch,
+):
+    lease = mock.Mock()
+    lease.acquire.return_value = True
+
+    class BrokenRegistry:
+        def __setitem__(self, _key, _value):
+            raise BrokenPipeError("manager unavailable")
+
+    monkeypatch.setattr(
+        bit_daily_task.bit_appeal_ai,
+        "get_window_id_by_shop_name",
+        lambda _name: "window-id",
+    )
+    monkeypatch.setattr(
+        bit_daily_task,
+        "create_window_lease",
+        lambda *args, **kwargs: lease,
+    )
+    run_locked = mock.Mock()
+    monkeypatch.setattr(bit_daily_task, "_appeal_one_shop_locked", run_locked)
+
+    result = bit_daily_task.appeal_one_shop(
+        _single_site_shop_plan(),
+        task_id="task-a",
+        owned_window_ids=BrokenRegistry(),
+    )
+
+    assert result["exit_reason"] == "窗口登记失败"
+    run_locked.assert_not_called()
     lease.release.assert_called_once_with()
 
 
@@ -767,6 +993,8 @@ def test_parallel_appeal_shop_failure_does_not_stop_other_shops(monkeypatch):
             start_delay,
             _log_path,
             _stop_event,
+            _task_id,
+            _owned_window_ids,
         ):
             submitted.append(shop["name"])
             start_delays.append(start_delay)
@@ -805,7 +1033,7 @@ def test_parallel_appeal_shop_failure_does_not_stop_other_shops(monkeypatch):
 def test_stop_request_terminates_appeal_pool_without_waiting(monkeypatch):
     stop_event = threading.Event()
     terminated = []
-    closed = []
+    cleanup_calls = []
 
     class FakeFuture:
         def cancel(self):
@@ -838,18 +1066,100 @@ def test_stop_request_terminates_appeal_pool_without_waiting(monkeypatch):
     monkeypatch.setattr(
         bit_daily_task,
         "_force_close_appeal_plan_windows",
-        lambda value: closed.extend(value),
+        lambda value, **kwargs: cleanup_calls.append((value, kwargs)),
     )
+
+    owned_window_ids = {"window-1": "正在运行店铺"}
 
     result = bit_daily_task._run_ai_appeal_once_locked(
         "侵权",
         max_workers=1,
         stop_event=stop_event,
+        task_id="task-a",
+        owned_window_ids=owned_window_ids,
     )
 
     assert result == []
     assert len(terminated) == 1
-    assert closed == plan
+    assert cleanup_calls == [
+        (
+            plan,
+            {
+                "log_path": None,
+                "task_id": "task-a",
+                "owned_window_ids": owned_window_ids,
+            },
+        )
+    ]
+
+
+def test_submit_failure_terminates_partial_pool_and_cleans_owned_windows(monkeypatch):
+    executors = []
+    terminated = []
+    cleanup_calls = []
+
+    class FakeFuture:
+        def __init__(self):
+            self.cancelled = False
+
+        def cancel(self):
+            self.cancelled = True
+            return True
+
+    class FakeExecutor:
+        def __init__(self, max_workers):
+            self.max_workers = max_workers
+            self.future = FakeFuture()
+            self.submit_count = 0
+            executors.append(self)
+
+        def submit(self, *_args):
+            self.submit_count += 1
+            if self.submit_count == 2:
+                raise RuntimeError("submit failed")
+            return self.future
+
+        def shutdown(self, **kwargs):
+            pytest.fail(f"提交异常时不应等待进程池自然结束：{kwargs}")
+
+    plan = [
+        {"name": "已提交店铺", "total": 1, "sites": []},
+        {"name": "提交失败店铺", "total": 1, "sites": []},
+    ]
+    owned_window_ids = {"window-1": "已提交店铺"}
+    monkeypatch.setattr(bit_daily_task, "build_appeal_plan", lambda *a, **k: plan)
+    monkeypatch.setattr(bit_daily_task, "ProcessPoolExecutor", FakeExecutor)
+    monkeypatch.setattr(
+        bit_daily_task,
+        "terminate_process_pool",
+        lambda executor: terminated.append(executor),
+    )
+    monkeypatch.setattr(
+        bit_daily_task,
+        "_force_close_appeal_plan_windows",
+        lambda value, **kwargs: cleanup_calls.append((value, kwargs)),
+    )
+
+    with pytest.raises(RuntimeError, match="submit failed"):
+        bit_daily_task._run_ai_appeal_once_locked(
+            "侵权",
+            max_workers=2,
+            task_id="task-a",
+            owned_window_ids=owned_window_ids,
+        )
+
+    assert terminated == executors
+    assert executors[0].future.cancelled is True
+    assert cleanup_calls == [
+        (
+            plan,
+            {
+                "log_path": None,
+                "task_id": "task-a",
+                "owned_window_ids": owned_window_ids,
+            },
+        )
+    ]
 
 
 def test_stop_signal_interrupts_long_retry_wait_immediately():
@@ -859,12 +1169,132 @@ def test_stop_signal_interrupts_long_retry_wait_immediately():
     assert bit_daily_task._wait_or_stop(300, stop_event) is True
 
 
-def test_shop_executor_closes_browser_when_auto_login_is_triggered(monkeypatch):
+def test_daily_task_instance_lock_keys_allow_independent_jobs():
+    assert bit_daily_task.daily_task_lock_key() == bit_daily_task.DAILY_TASK_LOCK_KEY
+    assert bit_daily_task.daily_task_lock_key("task-a") != bit_daily_task.daily_task_lock_key("task-b")
+    assert bit_daily_task.daily_task_lock_key("task-a").endswith("_task-a")
+
+
+def test_stop_cleanup_never_closes_window_owned_by_another_task(monkeypatch, tmp_path):
+    close_calls = []
+    leases = []
+
+    class Lease:
+        def __init__(self, window_id):
+            self.window_id = window_id
+            self.released = False
+
+        def acquire(self, timeout=0):
+            return self.window_id != "busy-window"
+
+        def release(self):
+            self.released = True
+
+    class ImmediateThread:
+        def __init__(self, target, **_kwargs):
+            self.target = target
+
+        def start(self):
+            self.target()
+
+    def make_lease(window_id, **_kwargs):
+        lease = Lease(window_id)
+        leases.append(lease)
+        return lease
+
+    monkeypatch.setattr(bit_daily_task, "create_window_lease", make_lease)
+    monkeypatch.setattr(
+        bit_daily_task,
+        "closeBrowser",
+        lambda window_id, **kwargs: close_calls.append((window_id, kwargs)),
+    )
+    monkeypatch.setattr(bit_daily_task.threading, "Thread", ImmediateThread)
+    monkeypatch.setattr(
+        bit_daily_task,
+        "get_lock_owner",
+        lambda _key: {"metadata": {"task_id": "task-b"}},
+    )
+
+    log_path = tmp_path / "cleanup.log"
+    bit_daily_task._force_close_appeal_plan_windows(
+        [{"name": "计划中但未打开的店铺"}],
+        log_path=log_path,
+        task_id="task-a",
+        owned_window_ids={
+            "busy-window": "其他任务店铺",
+            "free-window": "当前任务空闲店铺",
+        },
+    )
+
+    assert [window_id for window_id, _kwargs in close_calls] == ["free-window"]
+    assert "force" not in close_calls[0][1]
+    assert close_calls[0][1]["lease"].window_id == "free-window"
+    assert close_calls[0][1]["api_lock_timeout"] == 5
+    assert next(lease for lease in leases if lease.window_id == "free-window").released
+    cleanup_log = log_path.read_text(encoding="utf-8")
+    assert "窗口正由其他任务使用" in cleanup_log
+    assert "关闭对应浏览器窗口" in cleanup_log
+
+
+def test_stop_cleanup_retries_briefly_for_same_task_stale_window(monkeypatch):
+    attempts = []
+    close_calls = []
+
+    class Lease:
+        def __init__(self, acquired):
+            self.should_acquire = acquired
+            self.acquired = False
+
+        def acquire(self, timeout=0):
+            self.acquired = self.should_acquire
+            return self.acquired
+
+        def release(self):
+            self.acquired = False
+
+    class ImmediateThread:
+        def __init__(self, target, **_kwargs):
+            self.target = target
+
+        def start(self):
+            self.target()
+
+    def make_lease(*_args, **_kwargs):
+        lease = Lease(acquired=bool(attempts))
+        attempts.append(lease)
+        return lease
+
+    monkeypatch.setattr(bit_daily_task, "create_window_lease", make_lease)
+    monkeypatch.setattr(
+        bit_daily_task,
+        "get_lock_owner",
+        lambda _key: {"metadata": {"task_id": "task-a"}},
+    )
+    monkeypatch.setattr(bit_daily_task.time, "sleep", lambda _seconds: None)
+    monkeypatch.setattr(bit_daily_task.threading, "Thread", ImmediateThread)
+    monkeypatch.setattr(
+        bit_daily_task,
+        "closeBrowser",
+        lambda window_id, **_kwargs: close_calls.append(window_id)
+        or {"success": True},
+    )
+
+    bit_daily_task._force_close_appeal_plan_windows(
+        [],
+        task_id="task-a",
+        owned_window_ids={"window-a": "店铺甲"},
+    )
+
+    assert len(attempts) == 2
+    assert close_calls == ["window-a"]
+
+
+def test_shop_executor_closes_browser_when_auto_login_fails(monkeypatch):
     close_calls = []
     monkeypatch.setattr(
         bit_daily_task.bit_appeal_ai,
         "shensu",
-        lambda *args, **kwargs: "登录态失效并触发自动登录，已终止自动找客服",
+        lambda *args, **kwargs: "未登录，自动登录未成功：需要验证码",
     )
     monkeypatch.setattr(
         bit_daily_task,
@@ -951,33 +1381,7 @@ def test_shop_executor_closes_browser_on_unexpected_appeal_error(monkeypatch):
     assert result["results"][0]["result"] == "执行异常：客服页面崩溃"
 
 
-@pytest.mark.parametrize(
-    "backend_result",
-    [
-        {
-            "ok": True,
-            "status": "ready",
-            "message": "自动登录后业务页已就绪",
-            "login_retry_count": 1,
-        },
-        {
-            "ok": True,
-            "status": "ready",
-            "message": "切换节点后业务页已就绪",
-            "rate_limit_retry_count": 1,
-        },
-    ],
-)
-def test_ai_appeal_aborts_after_backend_recovery(backend_result):
-    with pytest.raises(RuntimeError, match="终止自动找客服"):
-        bit_daily_task.bit_appeal_ai._abort_ai_appeal_after_backend_recovery(
-            backend_result,
-            "测试店铺",
-            "墨西哥",
-        )
-
-
-def test_manual_ai_appeal_can_continue_after_successful_backend_recovery():
+def test_ai_appeal_continues_after_successful_auto_login(capsys):
     backend_result = {
         "ok": True,
         "status": "ready",
@@ -989,7 +1393,43 @@ def test_manual_ai_appeal_can_continue_after_successful_backend_recovery():
         backend_result,
         "测试店铺",
         "墨西哥",
-        abort_on_recovery=False,
+    )
+
+    assert result is backend_result
+    output = capsys.readouterr().out
+    assert "自动登录成功" in output
+    assert "继续当前申诉" in output
+
+
+def test_ai_appeal_aborts_after_rate_limit_recovery():
+    backend_result = {
+        "ok": True,
+        "status": "ready",
+        "message": "切换节点后业务页已就绪",
+        "rate_limit_retry_count": 1,
+    }
+
+    with pytest.raises(RuntimeError, match="终止自动找客服"):
+        bit_daily_task.bit_appeal_ai._abort_ai_appeal_after_backend_recovery(
+            backend_result,
+            "测试店铺",
+            "墨西哥",
+        )
+
+
+def test_manual_ai_appeal_can_continue_after_successful_rate_limit_recovery():
+    backend_result = {
+        "ok": True,
+        "status": "ready",
+        "message": "切换节点后业务页已就绪",
+        "rate_limit_retry_count": 1,
+    }
+
+    result = bit_daily_task.bit_appeal_ai._abort_ai_appeal_after_backend_recovery(
+        backend_result,
+        "测试店铺",
+        "墨西哥",
+        abort_after_rate_limit_recovery=False,
     )
 
     assert result is backend_result

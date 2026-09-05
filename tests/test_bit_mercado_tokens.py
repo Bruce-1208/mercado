@@ -142,6 +142,7 @@ def test_site_setting_rows_expose_appeal_and_visit_switches():
                     "token_id": 9,
                     "site_id": "MLM",
                     "appeal_enabled": 1,
+                    "reputation_update_enabled": 1,
                     "visit_stats_enabled": 0,
                 }
             ]
@@ -151,9 +152,34 @@ def test_site_setting_rows_expose_appeal_and_visit_switches():
     brazil = next(row for row in rows if row["site_id"] == "MLB")
 
     assert mexico["appeal_enabled"] is True
+    assert mexico["reputation_update_enabled"] is True
     assert mexico["visit_stats_enabled"] is False
     assert brazil["appeal_enabled"] is False
+    assert brazil["reputation_update_enabled"] is False
     assert brazil["visit_stats_enabled"] is False
+
+
+def test_site_settings_schema_migrates_existing_visit_scope_to_reputation_switch():
+    class Cursor:
+        def __init__(self):
+            self.statements = []
+            self.last_params = ()
+
+        def execute(self, sql, params=()):
+            self.statements.append(" ".join(str(sql).split()))
+            self.last_params = params
+
+        def fetchone(self):
+            column_name = self.last_params[0] if self.last_params else ""
+            return None if column_name == "reputation_update_enabled" else {"Field": column_name}
+
+    cursor = Cursor()
+    bit_mysql._ensure_mercado_store_site_settings_table(cursor)
+
+    statements = "\n".join(cursor.statements)
+    assert "ADD COLUMN `reputation_update_enabled`" in statements
+    assert "SET `reputation_update_enabled` = `visit_stats_enabled`" in statements
+    assert "MODIFY COLUMN `reputation_update_enabled`" in statements
 
 
 def test_default_oauth_client_does_not_inherit_system_proxy(monkeypatch):
@@ -617,9 +643,11 @@ def test_console_template_contains_store_token_module():
     assert 'id="mercado-site-settings-body"' in body
     assert 'id="mercado-token-select-all"' in body
     assert 'id="mercado-token-bulk-settings"' in body
+    assert 'id="mercado-token-name-search"' in body
     assert 'id="mercado-token-salesperson-filter"' in body
     assert 'id="mercado-token-group-filter"' in body
     assert "filteredMercadoStoreTokenRows" in body
+    assert "name.includes(nameQuery)" in body
     assert "当前筛选条件下暂无授权店铺" in body
     assert "Token 临近到期时后台自动刷新" in body
     assert "<th>邮箱</th>" in body
@@ -641,10 +669,12 @@ def test_console_template_contains_store_token_module():
     assert 'data-field="salesperson"' not in body
     assert 'data-field="group_name"' not in body
     assert 'requestAccessApi("/api/access/users")' in body
-    assert "勾选站点是否参与自动申诉和访问数据统计" in body
+    assert "更新声誉”通过官方 API 更新声誉和站点状态" in body
     assert 'data-field="appeal_enabled"' in body
+    assert 'data-field="reputation_update_enabled"' in body
     assert 'data-field="visit_stats_enabled"' in body
     assert 'data-field="bulk_appeal_enabled"' in body
+    assert 'data-field="bulk_reputation_update_enabled"' in body
     assert 'data-field="bulk_visit_stats_enabled"' in body
     assert "留空则保留每家店铺原分组" in body
     assert "toggleMercadoStoreToken" in body

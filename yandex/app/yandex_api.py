@@ -6,6 +6,7 @@ import unicodedata
 from dataclasses import dataclass
 from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 from typing import Any
+from urllib.parse import urlencode
 
 import httpx
 
@@ -186,8 +187,21 @@ class YandexSellerClient:
             raise YandexApiError("Yandex API 未返回 businessId 或 campaignId")
         scopes = token_info["auth_scopes"]
         normalized_scopes = {str(scope).lower().replace("_", "-") for scope in scopes}
-        if not ({"all-methods", "offers-and-cards-management"} & normalized_scopes):
-            raise YandexApiError("token 缺少“商品和卡片管理”写入权限")
+        supported_scopes = {
+            "all-methods",
+            "all-methods:read-only",
+            "offers-and-cards-management",
+            "offers-and-cards-management:read-only",
+            "inventory-and-order-processing",
+            "inventory-and-order-processing:read-only",
+            "communication",
+            "finance-and-accounting",
+            "finance-and-accounting:read-only",
+            "pricing",
+            "pricing:read-only",
+        }
+        if not (supported_scopes & normalized_scopes):
+            raise YandexApiError("token 没有本工作台支持的卖家 API 权限")
         if campaign.get("apiAvailability") != "AVAILABLE":
             raise YandexApiError(
                 f"店铺 API 当前不可用：{campaign.get('apiAvailability', 'UNKNOWN')}"
@@ -432,6 +446,344 @@ class YandexSellerClient:
         cards = result.get("offerCards") or response.get("offerCards") or []
         return [item for item in cards if isinstance(item, dict)]
 
+    async def get_orders(
+        self,
+        business_id: int,
+        *,
+        campaign_id: int | None = None,
+        statuses: list[str] | None = None,
+        date_from: str | None = None,
+        date_to: str | None = None,
+        page_token: str = "",
+        limit: int = 50,
+    ) -> dict[str, Any]:
+        """Return one page from the current business-level orders API."""
+        query: dict[str, str | int] = {"limit": max(1, min(int(limit), 50))}
+        if page_token:
+            query["pageToken"] = page_token
+        body: dict[str, Any] = {"fake": False}
+        if campaign_id:
+            body["campaignIds"] = [int(campaign_id)]
+        if statuses:
+            body["statuses"] = list(dict.fromkeys(str(value).upper() for value in statuses))
+        dates = {
+            key: value
+            for key, value in {
+                "creationDateFrom": date_from,
+                "creationDateTo": date_to,
+            }.items()
+            if value
+        }
+        if dates:
+            body["dates"] = dates
+        response = await self._request(
+            "POST",
+            f"/v1/businesses/{int(business_id)}/orders?{urlencode(query)}",
+            json_body=body,
+        )
+        if str(response.get("status", "OK")).upper() not in {"OK", "SUCCESS"}:
+            raise YandexApiError(_api_message(response), details=response)
+        result = response.get("result") or response
+        orders = result.get("orders") or []
+        paging = result.get("paging") or {}
+        return {
+            "orders": [item for item in orders if isinstance(item, dict)],
+            "paging": {"nextPageToken": str(paging.get("nextPageToken") or "")},
+        }
+
+    async def update_order_status(
+        self,
+        campaign_id: int,
+        order_id: int,
+        *,
+        status: str,
+        substatus: str,
+    ) -> dict[str, Any]:
+        response = await self._request(
+            "PUT",
+            f"/v2/campaigns/{int(campaign_id)}/orders/{int(order_id)}/status",
+            json_body={"order": {"status": status, "substatus": substatus}},
+        )
+        if str(response.get("status", "OK")).upper() not in {"OK", "SUCCESS"}:
+            raise YandexApiError(_api_message(response), details=response)
+        return response
+
+    async def get_offer_stocks(
+        self,
+        business_id: int,
+        campaign_id: int,
+        target: StockTarget,
+        *,
+        offer_ids: list[str] | None = None,
+        archived: bool = False,
+        page_token: str = "",
+        limit: int = 100,
+    ) -> dict[str, Any]:
+        unique_ids = list(dict.fromkeys(str(value).strip() for value in offer_ids or [] if str(value).strip()))
+        if len(unique_ids) > 500:
+            raise YandexApiError("每次查询库存最多包含 500 个 SKU")
+        query: dict[str, str | int] = {}
+        if not unique_ids:
+            query["limit"] = max(1, min(int(limit), 100))
+            if page_token:
+                query["pageToken"] = page_token
+        suffix = f"?{urlencode(query)}" if query else ""
+        body: dict[str, Any] = {"offerIds": unique_ids} if unique_ids else {"archived": bool(archived)}
+
+        if target.method == "business":
+            if not target.warehouse_id:
+                raise YandexApiError("库存查询缺少独立仓库 ID")
+            body["partnerWarehouseId"] = int(target.warehouse_id)
+            response = await self._request(
+                "POST",
+                f"/v3/businesses/{int(business_id)}/offers/stocks{suffix}",
+                json_body=body,
+            )
+            result = response.get("result") or response
+            warehouses = [{
+                "warehouseId": result.get("partnerWarehouseId") or target.warehouse_id,
+                "warehouseName": target.warehouse_name,
+                "offers": [item for item in result.get("offers") or [] if isinstance(item, dict)],
+            }]
+        elif target.method == "campaign":
+            response = await self._request(
+                "POST",
+                f"/v2/campaigns/{int(campaign_id)}/offers/stocks{suffix}",
+                json_body=body,
+            )
+            result = response.get("result") or response
+            warehouses = [item for item in result.get("warehouses") or [] if isinstance(item, dict)]
+            for warehouse in warehouses:
+                warehouse.setdefault("warehouseName", target.warehouse_name)
+        else:
+            raise YandexApiError(f"未知库存接口类型：{target.method}")
+        if str(response.get("status", "OK")).upper() not in {"OK", "SUCCESS"}:
+            raise YandexApiError(_api_message(response), details=response)
+        return {
+            "warehouses": warehouses,
+            "paging": {
+                "nextPageToken": str(((result.get("paging") or {}).get("nextPageToken") or ""))
+            },
+            "stockMethod": target.method,
+        }
+
+    async def get_returns(
+        self,
+        campaign_id: int,
+        *,
+        return_type: str = "",
+        statuses: list[str] | None = None,
+        shipment_statuses: list[str] | None = None,
+        date_from: str | None = None,
+        date_to: str | None = None,
+        page_token: str = "",
+        limit: int = 100,
+    ) -> dict[str, Any]:
+        query: dict[str, str | int] = {"limit": max(1, min(int(limit), 100))}
+        if return_type:
+            query["type"] = return_type
+        if statuses:
+            query["statuses"] = ",".join(dict.fromkeys(statuses))
+        if shipment_statuses:
+            query["shipmentStatuses"] = ",".join(dict.fromkeys(shipment_statuses))
+        if date_from:
+            query["fromDate"] = date_from
+        if date_to:
+            query["toDate"] = date_to
+        if page_token:
+            query["pageToken"] = page_token
+        response = await self._request(
+            "GET", f"/v2/campaigns/{int(campaign_id)}/returns?{urlencode(query)}"
+        )
+        if str(response.get("status", "OK")).upper() not in {"OK", "SUCCESS"}:
+            raise YandexApiError(_api_message(response), details=response)
+        result = response.get("result") or response
+        return {
+            "returns": [item for item in result.get("returns") or [] if isinstance(item, dict)],
+            "paging": {"nextPageToken": str((result.get("paging") or {}).get("nextPageToken") or "")},
+        }
+
+    async def get_feedbacks(
+        self,
+        business_id: int,
+        *,
+        reaction_status: str = "ALL",
+        rating_values: list[int] | None = None,
+        offer_ids: list[str] | None = None,
+        page_token: str = "",
+        limit: int = 50,
+    ) -> dict[str, Any]:
+        query: dict[str, str | int] = {"limit": max(1, min(int(limit), 50))}
+        if page_token:
+            query["pageToken"] = page_token
+        body: dict[str, Any] = {"reactionStatus": reaction_status}
+        if rating_values:
+            body["ratingValues"] = list(dict.fromkeys(int(value) for value in rating_values))
+        if offer_ids:
+            body["offerIds"] = list(dict.fromkeys(str(value) for value in offer_ids))
+        response = await self._request(
+            "POST",
+            f"/v2/businesses/{int(business_id)}/goods-feedback?{urlencode(query)}",
+            json_body=body,
+        )
+        if str(response.get("status", "OK")).upper() not in {"OK", "SUCCESS"}:
+            raise YandexApiError(_api_message(response), details=response)
+        result = response.get("result") or response
+        return {
+            "feedbacks": [item for item in result.get("feedbacks") or [] if isinstance(item, dict)],
+            "paging": {"nextPageToken": str((result.get("paging") or {}).get("nextPageToken") or "")},
+        }
+
+    async def reply_to_feedback(
+        self, business_id: int, feedback_id: int, text: str
+    ) -> dict[str, Any]:
+        response = await self._request(
+            "POST",
+            f"/v2/businesses/{int(business_id)}/goods-feedback/comments/update?sourceType=SELLER",
+            json_body={"feedbackId": int(feedback_id), "comment": {"text": text}},
+        )
+        if str(response.get("status", "OK")).upper() not in {"OK", "SUCCESS"}:
+            raise YandexApiError(_api_message(response), details=response)
+        return response.get("result") or response
+
+    async def skip_feedbacks(
+        self, business_id: int, feedback_ids: list[int]
+    ) -> dict[str, Any]:
+        response = await self._request(
+            "POST",
+            f"/v2/businesses/{int(business_id)}/goods-feedback/skip-reaction?sourceType=SELLER",
+            json_body={"feedbackIds": list(dict.fromkeys(int(value) for value in feedback_ids))},
+        )
+        if str(response.get("status", "OK")).upper() not in {"OK", "SUCCESS"}:
+            raise YandexApiError(_api_message(response), details=response)
+        return response
+
+    async def get_questions(
+        self,
+        business_id: int,
+        *,
+        need_answer: bool = False,
+        date_from: str | None = None,
+        date_to: str | None = None,
+        page_token: str = "",
+        limit: int = 50,
+    ) -> dict[str, Any]:
+        query: dict[str, str | int] = {"limit": max(1, min(int(limit), 50))}
+        if page_token:
+            query["pageToken"] = page_token
+        body: dict[str, Any] = {"needAnswer": bool(need_answer), "sort": "CREATED_AT_DESC"}
+        if date_from:
+            body["dateFrom"] = date_from
+        if date_to:
+            body["dateTo"] = date_to
+        response = await self._request(
+            "POST",
+            f"/v1/businesses/{int(business_id)}/goods-questions?{urlencode(query)}",
+            json_body=body,
+        )
+        if str(response.get("status", "OK")).upper() not in {"OK", "SUCCESS"}:
+            raise YandexApiError(_api_message(response), details=response)
+        result = response.get("result") or response
+        return {
+            "questions": [item for item in result.get("questions") or [] if isinstance(item, dict)],
+            "totalCount": int(result.get("totalCount") or 0),
+            "paging": {"nextPageToken": str((result.get("paging") or {}).get("nextPageToken") or "")},
+        }
+
+    async def reply_to_question(
+        self, business_id: int, question_id: int, text: str
+    ) -> dict[str, Any]:
+        response = await self._request(
+            "POST",
+            f"/v1/businesses/{int(business_id)}/goods-questions/update",
+            json_body={
+                "parentEntityId": {"id": int(question_id), "type": "QUESTION"},
+                "text": text,
+                "operationType": "CREATE",
+            },
+        )
+        if str(response.get("status", "OK")).upper() not in {"OK", "SUCCESS"}:
+            raise YandexApiError(_api_message(response), details=response)
+        return response.get("result") or response
+
+    async def get_campaign_offer_prices(
+        self, campaign_id: int, offer_ids: list[str]
+    ) -> list[dict[str, Any]]:
+        """Read campaign overrides; explicit SKU requests must not use pagination."""
+        unique_ids = list(dict.fromkeys(str(value) for value in offer_ids if value))
+        if not unique_ids or len(unique_ids) > 500:
+            raise YandexApiError("每次查询店铺价格必须包含 1–500 个商品")
+        response = await self._request(
+            "POST", f"/v2/campaigns/{int(campaign_id)}/offer-prices",
+            json_body={"offerIds": unique_ids}, attempts=1,
+        )
+        if str(response.get("status", "OK")).upper() not in {"OK", "SUCCESS"}:
+            raise YandexApiError(_api_message(response), details=response)
+        result = response.get("result") or response
+        return [item for item in result.get("offers") or [] if isinstance(item, dict)]
+
+    async def get_business_offer_prices(
+        self, business_id: int, offer_ids: list[str]
+    ) -> list[dict[str, Any]]:
+        """Read catalogue prices and media together, not buyer-discounted prices."""
+        unique_ids = list(dict.fromkeys(str(value) for value in offer_ids if value))
+        if not unique_ids or len(unique_ids) > 100:
+            raise YandexApiError("每次查询目录价格必须包含 1–100 个商品")
+        response = await self._request(
+            "POST", f"/v2/businesses/{int(business_id)}/offer-mappings",
+            json_body={"offerIds": unique_ids}, attempts=1,
+        )
+        if str(response.get("status", "OK")).upper() not in {"OK", "SUCCESS"}:
+            raise YandexApiError(_api_message(response), details=response)
+        result = response.get("result") or response
+        return [
+            {
+                "offerId": item["offer"].get("offerId"),
+                "price": item["offer"].get("basicPrice"),
+                "name": item["offer"].get("name"),
+                "vendor": item["offer"].get("vendor"),
+                "archived": item["offer"].get("archived"),
+                "pictures": item["offer"].get("pictures"),
+                "mediaFiles": item["offer"].get("mediaFiles"),
+                "campaigns": item["offer"].get("campaigns"),
+                "mapping": item.get("mapping"),
+                "showcaseUrls": item.get("showcaseUrls"),
+            }
+            for item in result.get("offerMappings") or []
+            if isinstance(item, dict) and isinstance(item.get("offer"), dict)
+        ]
+
+    async def get_order_stats(
+        self, campaign_id: int, order_ids: list[int]
+    ) -> list[dict[str, Any]]:
+        """Read the financial statistics for the orders already on the current page."""
+        unique_ids = list(dict.fromkeys(int(value) for value in order_ids))
+        if not unique_ids or len(unique_ids) > 200:
+            raise YandexApiError("每次查询订单统计必须包含 1–200 个订单")
+        collected: dict[int, dict[str, Any]] = {}
+        page_token = ""
+        seen_tokens: set[str] = set()
+        while True:
+            query: dict[str, str | int] = {"limit": 200}
+            if page_token:
+                query["pageToken"] = page_token
+            response = await self._request(
+                "POST", f"/v2/campaigns/{int(campaign_id)}/stats/orders?{urlencode(query)}",
+                json_body={"orders": unique_ids}, attempts=1,
+            )
+            if str(response.get("status", "OK")).upper() not in {"OK", "SUCCESS"}:
+                raise YandexApiError(_api_message(response), details=response)
+            result = response.get("result") or response
+            for item in result.get("orders") or []:
+                if isinstance(item, dict) and item.get("id") in unique_ids:
+                    collected[int(item["id"])] = item
+            page_token = str((result.get("paging") or {}).get("nextPageToken") or "")
+            if not page_token or len(collected) == len(unique_ids):
+                return list(collected.values())
+            if page_token in seen_tokens or len(seen_tokens) >= len(unique_ids):
+                raise YandexApiError("订单统计分页异常，请刷新重试")
+            seen_tokens.add(page_token)
+
     async def resolve_stock_target(
         self,
         business_id: int,
@@ -471,12 +823,36 @@ class YandexSellerClient:
                 )
         except YandexApiError as exc:
             v3_error = exc
-            if exc.status_code not in {400, 404}:
+            if exc.status_code not in {400, 404, 420}:
                 raise
 
-        # 仓库组柜台不能使用 v3 库存接口；旧列表仍是官方推荐的识别方式。
+        # 仓库组柜台不能使用 v3 库存接口；当前官方列表通过 v2 返回 groupInfo。
         try:
-            response = await self._request("GET", f"/v2/businesses/{business_id}/warehouses")
+            response = await self._request(
+                "POST",
+                f"/v2/businesses/{business_id}/warehouses",
+                json_body={"campaignIds": [int(campaign_id)]},
+            )
+            warehouses = ((response.get("result") or {}).get("warehouses") or [])
+            for warehouse in warehouses:
+                if not isinstance(warehouse, dict):
+                    continue
+                if int(warehouse.get("campaignId") or 0) != int(campaign_id):
+                    continue
+                group_info = warehouse.get("groupInfo") or {}
+                if not group_info:
+                    continue
+                return StockTarget(
+                    method="campaign",
+                    warehouse_id=int(warehouse["id"]) if warehouse.get("id") else None,
+                    warehouse_name=str(
+                        group_info.get("name")
+                        or warehouse.get("name")
+                        or "统一库存仓库组"
+                    ),
+                )
+
+            # 兼容 Yandex 旧响应，避免已经启用仓库组的店铺在过渡期中断。
             groups = ((response.get("result") or {}).get("warehouseGroups") or [])
             for group in groups:
                 main_warehouse = group.get("mainWarehouse") or {}
@@ -498,8 +874,6 @@ class YandexSellerClient:
                         ),
                     )
         except YandexApiError:
-            if v3_error:
-                raise v3_error
             raise
 
         if v3_error:
@@ -554,8 +928,8 @@ class YandexSellerClient:
         count: int,
         target: StockTarget,
     ) -> dict[str, Any]:
-        if count < 1 or count > 2_000_000_000:
-            raise YandexApiError("初始库存必须在 1–2000000000 件之间")
+        if count < 0 or count > 2_000_000_000:
+            raise YandexApiError("库存必须在 0–2000000000 件之间")
         unique_offer_ids = list(dict.fromkeys(str(value) for value in offer_ids if value))
         if not unique_offer_ids or len(unique_offer_ids) > 2000:
             raise YandexApiError("每次库存更新必须包含 1–2000 个商品")

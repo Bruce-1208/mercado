@@ -249,14 +249,25 @@ def releaseBrowserLease(id):
         auto_lease.release()
 
 
-def closeBrowser(id, lease=None, force=False, request_timeout=None):  # 关闭窗口
+def closeBrowser(
+    id,
+    lease=None,
+    force=False,
+    request_timeout=None,
+    api_lock_timeout=None,
+):  # 关闭窗口
     close_timeout = (
         _BROWSER_CLOSE_TIMEOUT
         if request_timeout is None
         else max(1, int(request_timeout))
     )
     if force:
-        return _post_browser_mutation("close", id, close_timeout)
+        return _post_browser_mutation(
+            "close",
+            id,
+            close_timeout,
+            api_lock_timeout=api_lock_timeout,
+        )
     active_lease = lease or current_thread_window_lease(id)
     auto_lease_key = (threading.get_ident(), str(id))
     with _AUTO_LEASES_GUARD:
@@ -276,7 +287,12 @@ def closeBrowser(id, lease=None, force=False, request_timeout=None):  # 关闭�
                 "lockOwner": get_lock_owner(window_lock_key(id)),
             }
     try:
-        return _post_browser_mutation("close", id, close_timeout)
+        return _post_browser_mutation(
+            "close",
+            id,
+            close_timeout,
+            api_lock_timeout=api_lock_timeout,
+        )
     finally:
         if temporary_lease is not None:
             temporary_lease.release()
