@@ -23,6 +23,8 @@ deepseek_key.txt
 AI_Agent/deepseek_key.txt
 
 bit/ai_chat_records.jsonl
+bit/ai_chat_records.jsonl.lock
+bit/ai_chat_records_*.jsonl
 mercado_api/*.sqlite3*
 mercado_api/tokens.json*
 erp/tokens.json*

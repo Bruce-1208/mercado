@@ -21,11 +21,18 @@ from bit.bit_api import closeBrowser
 from bit.bit_collection_control import terminate_process_pool
 from bit.bit_db_api import (
     get_latest_reputation_info,
+    list_mercado_prohibited_listings,
     list_mercado_store_tokens,
     resolve_window_anomaly,
 )
-from bit.bit_runtime_lock import InterProcessLock, create_window_lease, get_lock_owner
+from bit.bit_runtime_lock import (
+    InterProcessLock,
+    create_window_lease,
+    get_lock_owner,
+    window_lock_key,
+)
 from bit.bit_mercado_limit import is_mercado_rate_limited_text
+from bit.bit_appeal_state import task_execution_counts
 from bit.bit_mercado_login import (
     is_human_verification_result,
     is_login_blocking_result,
@@ -48,18 +55,21 @@ DEFAULT_START_STAGGER_SECONDS = float(os.getenv("BIT_DAILY_START_STAGGER_SECONDS
 DAILY_TASK_LOCK_KEY = "bit_daily_task_singleton"
 
 APPEAL_TYPE_INFRACTION = "侵权"
+APPEAL_TYPE_PROHIBITED = "禁限售"
 APPEAL_TYPE_DELAY = "延误"
 APPEAL_TYPE_CANCELLATION = "取消率"
 APPEAL_TYPE_COMPLAINT = "投诉"
 APPEAL_TYPE_MIXED = "混合模式"
 DAILY_APPEAL_TASK_TYPES = (
     APPEAL_TYPE_INFRACTION,
+    APPEAL_TYPE_PROHIBITED,
     APPEAL_TYPE_DELAY,
     APPEAL_TYPE_COMPLAINT,
     APPEAL_TYPE_CANCELLATION,
 )
 SUPPORTED_APPEAL_TYPES = (
     APPEAL_TYPE_INFRACTION,
+    APPEAL_TYPE_PROHIBITED,
     APPEAL_TYPE_DELAY,
     APPEAL_TYPE_CANCELLATION,
     APPEAL_TYPE_COMPLAINT,
@@ -120,6 +130,10 @@ def normalize_appeal_type(appeal_type):
         "侵权": APPEAL_TYPE_INFRACTION,
         "infraction": APPEAL_TYPE_INFRACTION,
         "infringement": APPEAL_TYPE_INFRACTION,
+        "禁限售": APPEAL_TYPE_PROHIBITED,
+        "禁限售申诉": APPEAL_TYPE_PROHIBITED,
+        "prohibited": APPEAL_TYPE_PROHIBITED,
+        "prohibited_listing": APPEAL_TYPE_PROHIBITED,
         "延误": APPEAL_TYPE_DELAY,
         "延误率": APPEAL_TYPE_DELAY,
         "delay": APPEAL_TYPE_DELAY,
@@ -140,7 +154,7 @@ def normalize_appeal_type(appeal_type):
     normalized = aliases.get(text.casefold())
     if normalized is None:
         raise ValueError(
-            f"不支持的申诉类型：{appeal_type}，仅支持侵权、延误率、取消率、投诉、混合模式"
+            f"不支持的申诉类型：{appeal_type}，仅支持侵权、禁限售、延误率、取消率、投诉、混合模式"
         )
     return normalized
 
@@ -175,6 +189,17 @@ def appeal_type_sequence(appeal_types):
     selected = normalize_appeal_types(appeal_types)
     if selected == (APPEAL_TYPE_MIXED,):
         return MIXED_APPEAL_SEQUENCE
+    if (
+        APPEAL_TYPE_INFRACTION in selected
+        and APPEAL_TYPE_PROHIBITED in selected
+    ):
+        # 侵权计划已把其中的禁限售编号拆成独立会话；同时勾选时不再
+        # 额外重跑一次完整禁限售列表。
+        selected = tuple(
+            appeal_type
+            for appeal_type in selected
+            if appeal_type != APPEAL_TYPE_PROHIBITED
+        )
     if len(selected) == 1:
         return selected
     if APPEAL_TYPE_INFRACTION not in selected:
@@ -381,22 +406,34 @@ def _wait_or_stop(seconds, stop_event=None):
     return False
 
 
-def acquire_daily_task_lock(owner="bit_daily_task", mode="once"):
+def daily_task_lock_key(task_id=""):
+    """返回任务锁键；带 task_id 时允许多个独立任务并行。"""
+    task_id = re.sub(r"[^0-9A-Za-z_.-]+", "_", str(task_id or "").strip())
+    return f"{DAILY_TASK_LOCK_KEY}_{task_id}" if task_id else DAILY_TASK_LOCK_KEY
+
+
+def acquire_daily_task_lock(owner="bit_daily_task", mode="once", task_id=""):
     lock = InterProcessLock(
-        DAILY_TASK_LOCK_KEY,
+        daily_task_lock_key(task_id),
         owner=owner,
-        metadata={"task_type": "bit_daily_task", "mode": mode},
+        metadata={
+            "task_type": "bit_daily_task",
+            "mode": mode,
+            "task_id": str(task_id or ""),
+        },
     )
     if not lock.acquire(timeout=0):
         return None
     return lock
 
 
-def get_daily_task_lock_owner():
-    return get_lock_owner(DAILY_TASK_LOCK_KEY)
+def get_daily_task_lock_owner(task_id=""):
+    return get_lock_owner(daily_task_lock_key(task_id))
 
 
 def _is_login_required_result(value):
+    if isinstance(value, dict) and value.get("execution_status"):
+        return value["execution_status"] == "login_required"
     text = str(value or "")
     return (
         is_login_blocking_result(text)
@@ -409,6 +446,8 @@ def _is_login_required_result(value):
 
 
 def _is_retryable_site_result(value):
+    if isinstance(value, dict) and value.get("execution_status"):
+        return bool(value.get("retryable")) and not value.get("sent")
     text = str(value or "")
     retry_markers = (
         "AI 客服悬浮窗",
@@ -436,10 +475,14 @@ def _is_retryable_site_result(value):
 
 
 def _is_rate_limited_result(value):
+    if isinstance(value, dict) and value.get("execution_status"):
+        return value["execution_status"] == "rate_limited" and not value.get("sent")
     return is_mercado_rate_limited_text(value)
 
 
 def _is_failed_appeal_result(value):
+    if isinstance(value, dict) and value.get("execution_status"):
+        return value["execution_status"] not in {"replied", "no_data"}
     text = str(value or "").strip().casefold()
     if not text:
         return False
@@ -598,8 +641,11 @@ def build_latest_infraction_appeal_plan(
     }
     counts = {}
     item_ids = {}
+    prohibited_ids = {}
     seen_rows = set()
     for row_index, row in enumerate(live_rows):
+        if not mercado_infraction_sync.is_auto_appeal_eligible_detection(row):
+            continue
         raw_name, raw_site, row_id, infraction_date, infraction_type = (
             _live_infraction_row_values(row)
         )
@@ -633,7 +679,12 @@ def build_latest_infraction_appeal_plan(
         counts[target_key] = counts.get(target_key, 0) + 1
         normalized_item_id = str(row_id or "").strip().upper()
         if normalized_item_id:
-            item_ids.setdefault(target_key, []).append(normalized_item_id)
+            target_ids = (
+                prohibited_ids
+                if mercado_infraction_sync.is_prohibited_detection(row)
+                else item_ids
+            )
+            target_ids.setdefault(target_key, []).append(normalized_item_id)
 
     plan = []
     for name, authorized_sites in collection_targets.items():
@@ -642,20 +693,36 @@ def build_latest_infraction_appeal_plan(
             site_code: counts.get((name_key, site_code), 0)
             for site_code in authorized_sites
         }
-        sites = [
-            {
-                "site": bit_appeal_ai.normalize_site_name(site_code),
-                "site_code": site_code,
-                "count": count,
-                "infraction_ids": list(item_ids.get((name_key, site_code), ())),
-            }
-            for site_code, count in all_site_counts.items()
-            if count > threshold
-        ]
-        sites.sort(
-            key=lambda item: (item["count"], item["site_code"]),
+        ranked_sites = sorted(
+            (
+                (site_code, count)
+                for site_code, count in all_site_counts.items()
+                if count > threshold
+            ),
+            key=lambda item: (item[1], item[0]),
             reverse=True,
         )
+        sites = []
+        for site_code, _combined_count in ranked_sites:
+            target_key = (name_key, site_code)
+            current_infraction_ids = list(item_ids.get(target_key, ()))
+            current_prohibited_ids = list(prohibited_ids.get(target_key, ()))
+            if current_infraction_ids:
+                sites.append({
+                    "site": bit_appeal_ai.normalize_site_name(site_code),
+                    "site_code": site_code,
+                    "count": len(current_infraction_ids),
+                    "appeal_type": APPEAL_TYPE_INFRACTION,
+                    "infraction_ids": current_infraction_ids,
+                })
+            if current_prohibited_ids:
+                sites.append({
+                    "site": bit_appeal_ai.normalize_site_name(site_code),
+                    "site_code": site_code,
+                    "count": len(current_prohibited_ids),
+                    "appeal_type": APPEAL_TYPE_PROHIBITED,
+                    "prohibited_ids": current_prohibited_ids,
+                })
         if sites:
             plan.append({
                 "name": name,
@@ -676,7 +743,88 @@ def build_latest_infraction_appeal_plan(
     scope_label = "全部" if limit <= 0 else f"Top {limit}"
     print(
         f"{get_now_time()} 官方 API 遍历完成，{scope_label}侵权店铺计划"
-        f"（各站点最近 {recent_days} 天侵权数 > {threshold}）：{selected}<br>"
+        f"（各站点最近 {recent_days} 天侵权及禁限售合计 > {threshold}；"
+        f"禁限售将独立开启申诉）：{selected}<br>"
+    )
+    return selected
+
+
+def build_latest_prohibited_appeal_plan(
+    top_n=DEFAULT_DAILY_TOP_N,
+    only_active=None,
+    salespeople=None,
+    group_names=None,
+    min_infraction_count=0,
+    **_kwargs,
+):
+    """从当前禁限售列表生成申诉计划，不再混用普通侵权话术。"""
+    del only_active
+    threshold = _parse_nonnegative_count(min_infraction_count)
+    api_targets = load_authorized_appeal_api_targets(salespeople, group_names)
+    if not api_targets:
+        print(f"{get_now_time()} 店铺授权中没有符合筛选条件的禁限售申诉站点<br>")
+        return []
+
+    plan = []
+    for target in api_targets:
+        token_id = int(target["token_id"])
+        authorized_sites = {
+            bit_appeal_ai.normalize_site_code(site_id)
+            for site_id in target.get("site_ids") or ()
+        }
+        ids_by_site = {}
+        page = 1
+        while True:
+            data = list_mercado_prohibited_listings(
+                token_id=token_id,
+                risk_type="prohibited",
+                page=page,
+                page_size=500,
+            ) or {}
+            for row in data.get("rows") or ():
+                site_code = bit_appeal_ai.normalize_site_code(row.get("site_id"))
+                if site_code not in authorized_sites:
+                    continue
+                item_id = str(row.get("item_id") or "").strip().upper()
+                if item_id and item_id not in ids_by_site.setdefault(site_code, []):
+                    ids_by_site[site_code].append(item_id)
+            if page >= max(1, int(data.get("pages") or 1)):
+                break
+            page += 1
+
+        sites = [
+            {
+                "site": bit_appeal_ai.normalize_site_name(site_code),
+                "site_code": site_code,
+                "count": len(item_ids),
+                "appeal_type": APPEAL_TYPE_PROHIBITED,
+                "prohibited_ids": item_ids,
+            }
+            for site_code, item_ids in ids_by_site.items()
+            if len(item_ids) > threshold
+        ]
+        sites.sort(key=lambda item: (item["count"], item["site_code"]), reverse=True)
+        if sites:
+            plan.append({
+                "name": target["name"],
+                "total": sum(site["count"] for site in sites),
+                "sites": sites,
+            })
+
+    plan.sort(
+        key=lambda item: (
+            item["total"],
+            item["sites"][0]["count"] if item["sites"] else 0,
+            item["name"],
+        ),
+        reverse=True,
+    )
+    limit = _normalize_appeal_plan_limit(top_n)
+    selected = _select_appeal_plan(plan, limit)
+    scope_label = "全部" if limit <= 0 else f"Top {limit} "
+    print(
+        f"{get_now_time()} 当前禁限售列表读取完成，{scope_label}禁限售店铺计划"
+        f"（各站点当前禁限售数 > {threshold}）：{selected}<br>"
     )
     return selected
 
@@ -784,6 +932,14 @@ def build_appeal_plan(
             log_path=log_path,
             stop_event=stop_event,
         )
+    if normalized_type == APPEAL_TYPE_PROHIBITED:
+        return build_latest_prohibited_appeal_plan(
+            top_n=top_n,
+            only_active=only_active,
+            salespeople=salespeople,
+            group_names=group_names,
+            min_infraction_count=min_infraction_count,
+        )
     task_rate_thresholds = {
         APPEAL_TYPE_DELAY: min_delay_rate,
         APPEAL_TYPE_CANCELLATION: min_cancellation_rate,
@@ -852,6 +1008,10 @@ def _appeal_one_shop_locked(
             break
 
         site_code = site["site_code"]
+        site_appeal_type = normalize_appeal_type(
+            site.get("appeal_type") or normalized_type
+        )
+        site_appeal_label = _appeal_type_label(site_appeal_type)
         count = site["count"]
         metric_text = site.get("rate_text") or count
         general_attempt = 1
@@ -865,20 +1025,27 @@ def _appeal_one_shop_locked(
                 break
             try:
                 print(
-                    f"{get_now_time()} {name} {site_code} 开始 AI 客服{appeal_label}申诉，"
+                    f"{get_now_time()} {name} {site_code} 开始 AI 客服{site_appeal_label}申诉，"
                     f"站点指标 {metric_text}，普通尝试 {general_attempt}/{site_retry_attempts}，"
                     f"限频重试 {rate_retry_count}/{rate_limit_retries}<br>"
                 )
                 appeal_kwargs = {"validate_open": True}
+                if stop_event is not None:
+                    appeal_kwargs["stop_event"] = stop_event
                 if (
-                    normalized_type == APPEAL_TYPE_INFRACTION
+                    site_appeal_type == APPEAL_TYPE_INFRACTION
                     and "infraction_ids" in site
                 ):
                     appeal_kwargs["infraction_ids"] = site.get("infraction_ids")
+                if (
+                    site_appeal_type == APPEAL_TYPE_PROHIBITED
+                    and "prohibited_ids" in site
+                ):
+                    appeal_kwargs["prohibited_ids"] = site.get("prohibited_ids")
                 result = bit_appeal_ai.shensu(
                     name,
                     site_code,
-                    normalized_type,
+                    site_appeal_type,
                     message,
                     **appeal_kwargs,
                 )
@@ -887,10 +1054,15 @@ def _appeal_one_shop_locked(
                 traceback.print_exc()
 
             if _is_login_required_result(result):
-                results.append({"site": site_code, "count": count, "result": result})
+                results.append({
+                    "site": site_code,
+                    "appeal_type": site_appeal_label,
+                    "count": count,
+                    "result": result,
+                })
                 print(
-                    f"{get_now_time()} {name} {site_code} 检测到登录失效，"
-                    f"立即终止该店铺任务<br>"
+                    f"{get_now_time()} {name} {site_code} 自动登录未成功，"
+                    f"立即终止该店铺任务；其他店铺继续运行<br>"
                 )
                 _close_ai_appeal_browser(
                     window_id,
@@ -922,6 +1094,7 @@ def _appeal_one_shop_locked(
                     continue
                 results.append({
                     "site": site_code,
+                    "appeal_type": site_appeal_label,
                     "count": count,
                     "result": result,
                     "rate_limit_retries": rate_retry_count,
@@ -952,6 +1125,7 @@ def _appeal_one_shop_locked(
 
             results.append({
                 "site": site_code,
+                "appeal_type": site_appeal_label,
                 "count": count,
                 "result": result,
                 "site_attempts": general_attempt,
@@ -974,7 +1148,7 @@ def _appeal_one_shop_locked(
                 _resolve_login_anomaly(window_id, name)
                 print(
                     f"{get_now_time()} {name} {site_code} "
-                    f"AI 客服{appeal_label}申诉完成：{result}<br>"
+                        f"AI 客服{site_appeal_label}执行结果（非申诉批准结果）：{result}<br>"
                 )
             break
 
@@ -1029,9 +1203,13 @@ def appeal_one_shop(
     rate_limit_retries=DEFAULT_RATE_LIMIT_RETRIES,
     rate_limit_retry_seconds=DEFAULT_RATE_LIMIT_RETRY_SECONDS,
     stop_event=None,
+    task_id="",
+    owned_window_ids=None,
 ):
     """按店铺执行 AI 申诉；整个店铺期间独占该浏览器窗口。"""
-    del login_retry_attempts, login_retry_seconds  # 登录失效现在立即终止，不再原地重试。
+    # 单次申诉内部会在检测到未登录时执行共享自动登录流程；如果自动登录已经
+    # 明确失败（验证码、人机验证、密码失败等），不再从任务层重复提交登录表单。
+    del login_retry_attempts, login_retry_seconds
     normalized_type = normalize_appeal_type(appeal_type)
     appeal_label = _appeal_type_label(normalized_type)
     name = shop_plan["name"]
@@ -1060,9 +1238,14 @@ def appeal_one_shop(
 
     lease = create_window_lease(
         window_id,
-        owner=f"bit_daily_task:{appeal_label}:{name}",
+        owner=(
+            f"bit_daily_task:{task_id}:{appeal_label}:{name}"
+            if task_id
+            else f"bit_daily_task:{appeal_label}:{name}"
+        ),
         shop_name=name,
         task_type=f"bit_daily_task:{appeal_label}",
+        task_id=task_id,
     )
     if not lease.acquire(timeout=0):
         print(f"{get_now_time()} {name} 窗口已被其他任务占用，跳过本店铺<br>")
@@ -1073,6 +1256,22 @@ def appeal_one_shop(
             "results": [],
             "exit_reason": "窗口被其他任务占用",
         }
+    if owned_window_ids is not None:
+        try:
+            owned_window_ids[str(window_id)] = name
+        except Exception as exc:
+            print(
+                f"{get_now_time()} {name} 无法登记已占用窗口，"
+                f"为避免停止时遗留窗口，本店铺不再启动：{exc}<br>"
+            )
+            lease.release()
+            return {
+                "name": name,
+                "total": shop_plan.get("total", 0),
+                "appeal_type": appeal_label,
+                "results": [{"error": str(exc)}],
+                "exit_reason": "窗口登记失败",
+            }
     try:
         return _appeal_one_shop_locked(
             shop_plan,
@@ -1096,6 +1295,14 @@ def appeal_one_shop(
             name,
             "店铺 AI 申诉任务结束",
         )
+        if owned_window_ids is not None:
+            try:
+                owned_window_ids.pop(str(window_id), None)
+            except Exception:
+                # The registry is only bookkeeping for force-stop cleanup.  A
+                # dead Manager proxy must never prevent releasing the actual
+                # cross-process window lease below.
+                pass
         lease.release()
 
 
@@ -1123,6 +1330,8 @@ def _appeal_one_shop_worker_for_type(
     start_delay,
     log_path=None,
     stop_event=None,
+    task_id="",
+    owned_window_ids=None,
 ):
     if log_path:
         with open(log_path, "a", encoding="utf-8", buffering=1) as log_file:
@@ -1134,6 +1343,8 @@ def _appeal_one_shop_worker_for_type(
                     message,
                     start_delay,
                     stop_event=stop_event,
+                    task_id=task_id,
+                    owned_window_ids=owned_window_ids,
                 )
     if start_delay > 0:
         print(f"{get_now_time()} {shop.get('name', '')} 启动错峰等待 {start_delay:.1f} 秒<br>")
@@ -1153,6 +1364,8 @@ def _appeal_one_shop_worker_for_type(
         site_pause=site_pause,
         message=message,
         stop_event=stop_event,
+        task_id=task_id,
+        owned_window_ids=owned_window_ids,
     )
 
 
@@ -1167,18 +1380,102 @@ def _appeal_one_shop_worker(shop, site_pause, message, start_delay):
     )
 
 
-def _force_close_appeal_plan_windows(plan):
-    shops = [dict(shop) for shop in (plan or ())]
+def _force_close_appeal_plan_windows(
+    plan,
+    log_path=None,
+    task_id="",
+    owned_window_ids=None,
+    retry_seconds=3.0,
+):
+    # plan 仅保留旧调用签名。多任务模式绝不能扫描整份计划，否则会关闭
+    # 本任务从未打开的空闲/手工窗口；只清理由 worker 实际登记的窗口。
+    del plan
+    try:
+        tracked_windows = [
+            (str(window_id or ""), str(shop_name or ""))
+            for window_id, shop_name in dict(owned_window_ids or {}).items()
+            if str(window_id or "")
+        ]
+    except Exception:
+        # A broken/malformed registry must fail safe: clean up no windows rather
+        # than falling back to scanning the task plan and risking another task.
+        tracked_windows = []
+
+    def write_cleanup_log(message):
+        text = f"{get_now_time()} {message}<br>\n"
+        if log_path:
+            try:
+                with open(log_path, "a", encoding="utf-8", buffering=1) as log_file:
+                    log_file.write(text)
+                return
+            except OSError:
+                pass
+        print(text, end="")
 
     def close_windows():
-        for shop in shops:
-            name = str(shop.get("name") or "")
+        if not tracked_windows:
+            write_cleanup_log("停止清理：本任务没有登记需关闭的浏览器窗口")
+            return
+        for window_id, name in tracked_windows:
+            cleanup_lease = None
             try:
-                window_id = bit_appeal_ai.get_window_id_by_shop_name(name)
-                closeBrowser(window_id, force=True, request_timeout=3)
-                print(f"{get_now_time()} {name} 停止任务并强制关闭浏览器窗口<br>")
+                deadline = time.monotonic() + max(0.0, float(retry_seconds or 0))
+                while True:
+                    cleanup_lease = create_window_lease(
+                        window_id,
+                        owner=f"bit_daily_task:stop_cleanup:{task_id or name}",
+                        shop_name=name,
+                        task_type="bit_daily_task:stop_cleanup",
+                        task_id=task_id,
+                    )
+                    if cleanup_lease.acquire(timeout=0):
+                        break
+
+                    owner = get_lock_owner(window_lock_key(window_id)) or {}
+                    if not owner:
+                        if time.monotonic() >= deadline:
+                            write_cleanup_log(
+                                f"{name} 停止清理超时：未能取得窗口锁"
+                            )
+                            cleanup_lease = None
+                            break
+                        time.sleep(0.1)
+                        continue
+                    owner_task_id = str(
+                        (owner.get("metadata") or {}).get("task_id") or ""
+                    )
+                    # 只等待本任务刚被终止的 worker 释放/变成 stale；任何其他
+                    # 或无法识别的 owner 都立即跳过，绝不误伤。
+                    if not task_id or owner_task_id != str(task_id):
+                        write_cleanup_log(
+                            f"{name} 停止清理跳过：窗口正由其他任务使用"
+                        )
+                        cleanup_lease = None
+                        break
+                    if time.monotonic() >= deadline:
+                        write_cleanup_log(
+                            f"{name} 停止清理超时：未能取得本任务的窗口锁"
+                        )
+                        cleanup_lease = None
+                        break
+                    time.sleep(0.2)
+
+                if cleanup_lease is None:
+                    continue
+                close_result = closeBrowser(
+                    window_id,
+                    lease=cleanup_lease,
+                    request_timeout=3,
+                    api_lock_timeout=5,
+                )
+                write_cleanup_log(
+                    f"{name} 停止任务并关闭对应浏览器窗口：{close_result}"
+                )
             except Exception as exc:
-                print(f"{get_now_time()} {name} 停止时关闭浏览器窗口失败：{exc}<br>")
+                write_cleanup_log(f"{name} 停止时关闭浏览器窗口失败：{exc}")
+            finally:
+                if cleanup_lease is not None:
+                    cleanup_lease.release()
 
     threading.Thread(
         target=close_windows,
@@ -1204,6 +1501,8 @@ def _run_ai_appeal_once_locked(
     group_names=None,
     stop_event=None,
     log_path=None,
+    task_id="",
+    owned_window_ids=None,
 ):
     """用多进程并发处理已开启的任务；店铺内部按站点指标降序串行处理。"""
     selected_types = normalize_appeal_types(appeal_type)
@@ -1245,6 +1544,8 @@ def _run_ai_appeal_once_locked(
                     group_names=group_names,
                     stop_event=stop_event,
                     log_path=log_path,
+                    task_id=task_id,
+                    owned_window_ids=owned_window_ids,
                 ),
             })
         print(f"{get_now_time()} 多任务一轮执行完成<br>")
@@ -1298,23 +1599,33 @@ def _run_ai_appeal_once_locked(
         f"{get_now_time()} bit_daily_task 本轮使用 {worker_count} 个进程"
         f"并发处理 {len(plan)} 个{appeal_label}店铺<br>"
     )
-    executor = ProcessPoolExecutor(max_workers=worker_count)
-    future_map = {
-        executor.submit(
-            _appeal_one_shop_worker_for_type,
-            shop,
-            normalized_type,
-            site_pause,
-            message,
-            index * max(0, DEFAULT_START_STAGGER_SECONDS),
-            log_path,
-            stop_event,
-        ): shop
-        for index, shop in enumerate(plan)
-    }
-    pending = set(future_map)
+    if worker_count > 1:
+        print(
+            f"{get_now_time()} BitBrowser 仅窗口打开/关闭接口会短暂排队限流；"
+            f"窗口连接后 {worker_count} 个店铺进程仍并发执行<br>"
+        )
+    executor = None
+    future_map = {}
+    pending = set()
     forced_stop = False
+    completed_normally = False
     try:
+        executor = ProcessPoolExecutor(max_workers=worker_count)
+        for index, shop in enumerate(plan):
+            future = executor.submit(
+                _appeal_one_shop_worker_for_type,
+                shop,
+                normalized_type,
+                site_pause,
+                message,
+                index * max(0, DEFAULT_START_STAGGER_SECONDS),
+                log_path,
+                stop_event,
+                task_id,
+                owned_window_ids,
+            )
+            future_map[future] = shop
+            pending.add(future)
         while pending:
             completed, pending = wait(
                 pending,
@@ -1342,19 +1653,34 @@ def _run_ai_appeal_once_locked(
                 )
                 forced_stop = True
                 break
+        completed_normally = not forced_stop
     finally:
-        if forced_stop:
-            terminate_process_pool(executor)
-            _force_close_appeal_plan_windows(plan)
-        else:
-            executor.shutdown(wait=True, cancel_futures=True)
+        if executor is not None:
+            if forced_stop or not completed_normally:
+                for future in pending:
+                    future.cancel()
+                if not forced_stop:
+                    print(
+                        f"{get_now_time()} {appeal_label}店铺进程提交或等待异常，"
+                        "正在终止已启动的进程并清理本任务窗口<br>"
+                    )
+                terminate_process_pool(executor)
+                _force_close_appeal_plan_windows(
+                    plan,
+                    log_path=log_path,
+                    task_id=task_id,
+                    owned_window_ids=owned_window_ids,
+                )
+            else:
+                executor.shutdown(wait=True, cancel_futures=True)
 
     if normalized_type == APPEAL_TYPE_INFRACTION:
         print(
-            f"{get_now_time()} {plan_scope}全部店铺、全部授权站点已发送完毕，"
-            "本轮侵权申诉完成<br>"
+            f"{get_now_time()} {plan_scope}本轮店铺、授权站点处理结束，"
+            "实际发送与失败情况请查看执行统计<br>"
         )
-    print(f"{get_now_time()} {plan_scope} AI 客服申诉一轮完成：{results}<br>")
+    print(f"{get_now_time()} {plan_scope} 申诉执行统计：{task_execution_counts(results)}<br>")
+    print(f"{get_now_time()} {plan_scope} AI 客服申诉一轮结束：{results}<br>")
     return results
 
 
@@ -1396,6 +1722,8 @@ def run_ai_appeal_once(
     stop_event=None,
     log_path=None,
     _task_lock=None,
+    task_id="",
+    owned_window_ids=None,
 ):
     selected_types = normalize_appeal_types(appeal_type)
     appeal_label = "、".join(_appeal_type_label(item) for item in selected_types)
@@ -1428,6 +1756,8 @@ def run_ai_appeal_once(
             group_names=group_names,
             stop_event=stop_event,
             log_path=log_path,
+            task_id=task_id,
+            owned_window_ids=owned_window_ids,
         )
     finally:
         if owned_lock is not None:
@@ -1459,6 +1789,11 @@ def run_top_infraction_ai_appeal_once(
 def auto_appeal_infraction(**kwargs):
     """自动对侵权进行一轮申诉。"""
     return run_ai_appeal_once(APPEAL_TYPE_INFRACTION, **kwargs)
+
+
+def auto_appeal_prohibited(**kwargs):
+    """自动读取禁限售列表并进行一轮独立申诉。"""
+    return run_ai_appeal_once(APPEAL_TYPE_PROHIBITED, **kwargs)
 
 
 def auto_appeal_delay(**kwargs):
@@ -1528,6 +1863,8 @@ def _loop_ai_appeal_locked(
     task_lock=None,
     stop_event=None,
     log_path=None,
+    task_id="",
+    owned_window_ids=None,
 ):
     """循环执行已开启的店铺 AI 客服申诉任务。"""
     selected_types = normalize_appeal_types(appeal_type)
@@ -1540,6 +1877,7 @@ def _loop_ai_appeal_locked(
     )
     round_limit = None if max_rounds is None else max(1, int(max_rounds))
     round_no = 1
+    execution_counts = {}
     if round_limit is not None:
         print(
             f"{get_now_time()} {plan_scope} AI 客服申诉循环"
@@ -1556,14 +1894,14 @@ def _loop_ai_appeal_locked(
                 f"{get_now_time()} 已收到停止请求，"
                 f"结束{plan_scope} AI 客服申诉循环<br>"
             )
-            return
+            return {"execution_counts": execution_counts}
         remaining = _seconds_until_stop(stop_at)
         if remaining is not None and remaining <= 0:
             print(
                 f"{get_now_time()} 已到达停止时间，"
                 f"结束{plan_scope} AI 客服申诉循环<br>"
             )
-            return
+            return {"execution_counts": execution_counts}
 
         started = time.time()
         try:
@@ -1576,7 +1914,7 @@ def _loop_ai_appeal_locked(
                 f"{get_now_time()} 开始第 {round_no} 轮 "
                 f"{plan_scope} AI 客服申诉{api_refresh_text}<br>"
             )
-            run_ai_appeal_once(
+            round_result = run_ai_appeal_once(
                 selected_types,
                 top_n=top_n,
                 max_workers=max_workers,
@@ -1594,8 +1932,13 @@ def _loop_ai_appeal_locked(
                 stop_event=stop_event,
                 log_path=log_path,
                 _task_lock=task_lock,
+                task_id=task_id,
+                owned_window_ids=owned_window_ids,
             )
+            for key, count in task_execution_counts(round_result).items():
+                execution_counts[key] = execution_counts.get(key, 0) + count
         except Exception as e:
+            execution_counts["failed"] = execution_counts.get("failed", 0) + 1
             print(
                 f"{get_now_time()} 第 {round_no} 轮{plan_scope} "
                 f"AI 客服申诉异常：{e}<br>"
@@ -1607,13 +1950,13 @@ def _loop_ai_appeal_locked(
                 f"{get_now_time()} 已完成 {round_limit} 轮，"
                 f"结束{plan_scope} AI 客服申诉循环<br>"
             )
-            return
+            return {"execution_counts": execution_counts}
         if stop_event is not None and stop_event.is_set():
             print(
                 f"{get_now_time()} 已收到停止请求，"
                 f"结束{plan_scope} AI 客服申诉循环<br>"
             )
-            return
+            return {"execution_counts": execution_counts}
 
         sleep_seconds = max(0, int(round_interval) - (time.time() - started))
         remaining = _seconds_until_stop(stop_at)
@@ -1623,7 +1966,7 @@ def _loop_ai_appeal_locked(
                     f"{get_now_time()} 已到达停止时间，"
                     f"结束{plan_scope} AI 客服申诉循环<br>"
                 )
-                return
+                return {"execution_counts": execution_counts}
             sleep_seconds = min(sleep_seconds, remaining)
         refresh_text = (
             "重新读取官方 API 侵权列表并生成下一轮计划"
@@ -1640,7 +1983,7 @@ def _loop_ai_appeal_locked(
                     f"{get_now_time()} 已收到停止请求，"
                     f"结束{plan_scope} AI 客服申诉循环<br>"
                 )
-                return
+                return {"execution_counts": execution_counts}
         else:
             time.sleep(sleep_seconds)
         round_no += 1
@@ -1699,6 +2042,8 @@ def loop_ai_appeal(
     stop_event=None,
     log_path=None,
     _task_lock=None,
+    task_id="",
+    owned_window_ids=None,
 ):
     selected_types = normalize_appeal_types(appeal_type)
     appeal_label = "、".join(_appeal_type_label(item) for item in selected_types)
@@ -1735,6 +2080,8 @@ def loop_ai_appeal(
             task_lock=task_lock,
             stop_event=stop_event,
             log_path=log_path,
+            task_id=task_id,
+            owned_window_ids=owned_window_ids,
         )
     finally:
         if owned_lock is not None:

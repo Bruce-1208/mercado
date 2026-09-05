@@ -1779,6 +1779,42 @@ def get_reputation_auxiliary_info(
     }
 
 
+def get_reputation_traffic_info(
+    window_id,
+    name,
+    site,
+    driver=None,
+    select_site=True,
+):
+    """浏览器只读取官方 API 尚未提供的七天流量趋势。"""
+    if driver is None:
+        driver = _connect_browser(window_id)
+    _open_collection_backend_page(
+        driver,
+        METRICS_URL,
+        window_id=window_id,
+        name=name,
+        site=site,
+        context="流量页面",
+        settle_seconds=3,
+    )
+    if select_site:
+        _select_country(
+            driver,
+            site,
+            name,
+            recovery_url=METRICS_URL,
+            structure_context="流量页面",
+        )
+    return {
+        "store_name": name,
+        "site": site,
+        "updated_at": get_now_time(),
+        "visits": str(get_visits_info(driver, window_id, name, site, 8)),
+        "error": "",
+    }
+
+
 def get_reputation_info(
     window_id,
     name,
@@ -2028,7 +2064,7 @@ def _run_reputation_for_browser(row, lease_wait_seconds=0):
 
 
 def _run_reputation_auxiliary_for_browser(row, lease_wait_seconds=0):
-    """每家店共用一个浏览器，只采集销售汇总和流量页面。"""
+    """每家店共用一个浏览器，只采集七天流量。"""
     window_id = row[0]
     name = row[1]
     remark = row[2]
@@ -2096,7 +2132,7 @@ def _run_reputation_auxiliary_for_browser(row, lease_wait_seconds=0):
             last_error = None
             for attempt in range(1, 4):
                 try:
-                    auxiliary = get_reputation_auxiliary_info(
+                    auxiliary = get_reputation_traffic_info(
                         window_id,
                         name,
                         site,
@@ -2557,6 +2593,20 @@ def _emit_api_collection_progress(callback, event, **payload):
         print(f"{get_now_time()} 声誉进度回调失败：{exc}")
 
 
+def _official_api_system_warning(api_row):
+    warnings = []
+    site_status = str(api_row.get("site_status_display") or "").strip()
+    if site_status and site_status.casefold() not in (
+        "正常", "active", "enabled", "ok"
+    ):
+        warnings.append(f"站点状态：{site_status}")
+    for value in api_row.get("official_api_errors") or ():
+        text = str(value or "").strip()
+        if text and text not in warnings:
+            warnings.append(text)
+    return "；".join(warnings) or "正常"
+
+
 def _api_reputation_database_row(store_name, api_row, updated_at):
     site_name = str(api_row.get("site_name") or api_row.get("site_id") or "").strip()
     total_orders = api_row.get("sales_completed")
@@ -2572,7 +2622,7 @@ def _api_reputation_database_row(store_name, api_row, updated_at):
         _format_api_percentage(api_row.get("cancellations_rate_percent")),
         str(api_row.get("direction") or ""),
         str(api_row.get("gradient_rate") or ""),
-        "正常",
+        _official_api_system_warning(api_row),
         updated_at,
         "[]",
         str(api_row.get("site_status_display") or "未知"),
@@ -2632,10 +2682,15 @@ def _api_auxiliary_config_rows(tokens, api_rows):
         if not canonical_name:
             continue
         canonical_key = canonical_name.casefold()
+        visit_site_codes = {
+            _normalize_api_site_code(value)
+            for value in _split_sites(raw_row[3])
+            if _normalize_api_site_code(value)
+        }
         sites = []
         for site_code, site_label in api_sites_by_store.get(canonical_key, {}).items():
             claimed_key = (canonical_key, site_code)
-            if claimed_key not in claimed_sites:
+            if site_code in visit_site_codes and claimed_key not in claimed_sites:
                 sites.append(site_label)
         if not sites:
             continue
@@ -2692,26 +2747,12 @@ def _merge_api_auxiliary_rows(api_rows, database_rows, auxiliary_rows):
         auxiliary = auxiliary_by_key.get(key)
         if auxiliary is None:
             continue
-        uses_official_gradient = (
-            str(api_row.get("gradient_source") or "").strip()
-            == "official_orders_api"
-        )
         api_row.update({
-            "system_warning": auxiliary.get("system_warning") or "正常",
-            "updated_at": auxiliary.get("updated_at") or get_now_time(),
             "visits": auxiliary.get("visits") or "[]",
-            "auxiliary_error": auxiliary.get("error") or "",
+            "traffic_error": auxiliary.get("error") or "",
         })
-        if not uses_official_gradient:
-            api_row["direction"] = auxiliary.get("direction") or ""
-            api_row["gradient_rate"] = auxiliary.get("gradient_rate") or ""
         database_row = database_by_key.get(key)
         if database_row is not None:
-            if not uses_official_gradient:
-                database_row[7] = api_row["direction"]
-                database_row[8] = api_row["gradient_rate"]
-            database_row[9] = api_row["system_warning"]
-            database_row[10] = api_row["updated_at"]
             database_row[11] = api_row["visits"]
     return auxiliary_by_key
 
@@ -2823,18 +2864,20 @@ def get_reputation_info_all(
             }
             & selected_shop_keys
         ]
-    visit_enabled_tokens = []
+    reputation_enabled_tokens = []
     for token in tokens:
-        enabled_sites = _token_enabled_site_codes(token, "visit_stats_enabled")
+        enabled_sites = _token_enabled_site_codes(
+            token, "reputation_update_enabled"
+        )
         if selected_site_codes:
             enabled_sites &= selected_site_codes
         if not enabled_sites:
             continue
-        token["_visit_stats_site_codes"] = sorted(enabled_sites)
-        visit_enabled_tokens.append(token)
-    tokens = visit_enabled_tokens
+        token["_reputation_site_codes"] = sorted(enabled_sites)
+        reputation_enabled_tokens.append(token)
+    tokens = reputation_enabled_tokens
     if (selected_shops or selected_sites) and not tokens:
-        raise ValueError("所选店铺或站点未在店铺授权中开启访问数据统计")
+        raise ValueError("所选店铺或站点未在店铺授权中开启声誉更新")
 
     try:
         requested_workers = max(1, int(max_workers or 1))
@@ -2876,14 +2919,14 @@ def get_reputation_info_all(
                         if _normalize_api_site_code(row.get("site_id"))
                         in selected_site_codes
                     ]
-                enabled_visit_sites = token.get("_visit_stats_site_codes")
-                if enabled_visit_sites is not None:
-                    enabled_visit_sites = set(enabled_visit_sites)
+                enabled_reputation_sites = token.get("_reputation_site_codes")
+                if enabled_reputation_sites is not None:
+                    enabled_reputation_sites = set(enabled_reputation_sites)
                     api_rows = [
                         row
                         for row in api_rows
                         if _normalize_api_site_code(row.get("site_id"))
-                        in enabled_visit_sites
+                        in enabled_reputation_sites
                     ]
                 if not api_rows:
                     scope_text = "所选站点" if selected_site_codes else "任何站点"
@@ -2999,6 +3042,21 @@ def get_reputation_info_all(
     auxiliary_task_rows = []
     auxiliary_config_error = ""
     if collect_browser_auxiliary and api_rows:
+        traffic_enabled_keys = {
+            (
+                str(
+                    token.get("display_name")
+                    or token.get("nickname")
+                    or token.get("id")
+                    or ""
+                ).strip().casefold(),
+                site_code,
+            )
+            for token in tokens
+            for site_code in _token_enabled_site_codes(
+                token, "visit_stats_enabled"
+            )
+        }
         try:
             auxiliary_configs = _api_auxiliary_config_rows(tokens, api_rows)
         except Exception as exc:
@@ -3007,8 +3065,8 @@ def get_reputation_info_all(
             _emit_api_collection_log(auxiliary_config_error, log_callback)
 
         _emit_api_collection_log(
-            f"开始浏览器辅助采集：{len(auxiliary_configs)} 家店铺，"
-            "仅访问销售汇总和流量页面，不访问 reputation 页面",
+            f"开始七天流量采集：{len(auxiliary_configs)} 家店铺，"
+            "只访问流量页面；其余声誉字段全部来自官方 API",
             log_callback,
         )
         if auxiliary_configs:
@@ -3035,6 +3093,8 @@ def get_reputation_info_all(
             )
             site_name = str(api_row.get("site_name") or site_id).strip()
             key = (store_name.casefold(), site_id)
+            if key not in traffic_enabled_keys:
+                continue
             auxiliary = auxiliary_by_key.get(key)
             if auxiliary is None:
                 error_text = auxiliary_config_error or "未找到匹配的浏览器店铺/站点配置"
@@ -3057,13 +3117,13 @@ def get_reputation_info_all(
                 }
                 failures.append(failure)
                 _emit_api_collection_log(
-                    f"{store_name}{site_name}：声誉 API 成功，浏览器辅助数据失败，"
+                    f"{store_name}{site_name}：声誉 API 成功，七天流量读取失败，"
                     f"{error_text}",
                     log_callback,
                 )
             else:
                 _emit_api_collection_log(
-                    f"{store_name}{site_name}：流量趋势及辅助数据合并完成",
+                    f"{store_name}{site_name}：七天流量趋势合并完成",
                     log_callback,
                 )
 

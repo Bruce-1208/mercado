@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from typing import Any
+from datetime import date, timedelta
+from typing import Any, Literal
 
 from pydantic import BaseModel, Field, SecretStr, field_validator, model_validator
 from urllib.parse import urlsplit
@@ -138,6 +139,204 @@ class PublishRequest(BaseModel):
     price_percent: float = Field(default=200, ge=1, le=1000, allow_inf_nan=False)
     package: PackageDimensions
     initial_stock: int = Field(ge=1, le=2_000_000_000)
+
+
+class OrderListRequest(BaseModel):
+    store_id: int = Field(gt=0)
+    statuses: list[str] = Field(default_factory=list, max_length=12)
+    date_from: date | None = None
+    date_to: date | None = None
+    page_token: str = Field(default="", max_length=1000)
+    limit: int = Field(default=50, ge=1, le=50)
+
+    @field_validator("statuses")
+    @classmethod
+    def normalize_statuses(cls, values: list[str]) -> list[str]:
+        normalized = []
+        for value in values:
+            status = str(value).strip().upper()
+            if status and status not in normalized:
+                normalized.append(status)
+        return normalized
+
+    @field_validator("page_token")
+    @classmethod
+    def normalize_page_token(cls, value: str) -> str:
+        return value.strip()
+
+    @model_validator(mode="after")
+    def validate_date_range(self) -> "OrderListRequest":
+        if self.date_from and self.date_to:
+            if self.date_from > self.date_to:
+                raise ValueError("订单开始日期不能晚于结束日期")
+            if self.date_to - self.date_from > timedelta(days=29):
+                raise ValueError("订单查询时间范围不能超过 30 天")
+        return self
+
+
+class OrderActionRequest(BaseModel):
+    store_id: int = Field(gt=0)
+    order_id: int = Field(gt=0)
+    action: Literal["READY_TO_SHIP", "CANCEL"]
+
+
+class InventoryListRequest(BaseModel):
+    store_id: int = Field(gt=0)
+    offer_ids: list[str] = Field(default_factory=list, max_length=500)
+    archived: bool = False
+    page_token: str = Field(default="", max_length=1000)
+    limit: int = Field(default=100, ge=1, le=100)
+
+    @field_validator("offer_ids")
+    @classmethod
+    def normalize_offer_ids(cls, values: list[str]) -> list[str]:
+        normalized: list[str] = []
+        for value in values:
+            offer_id = str(value).strip()
+            if not offer_id:
+                continue
+            if len(offer_id) > 255:
+                raise ValueError("SKU 不能超过 255 个字符")
+            if offer_id not in normalized:
+                normalized.append(offer_id)
+        return normalized
+
+    @field_validator("page_token")
+    @classmethod
+    def normalize_page_token(cls, value: str) -> str:
+        return value.strip()
+
+
+class InventoryStockUpdateRequest(BaseModel):
+    store_id: int = Field(gt=0)
+    offer_id: str = Field(min_length=1, max_length=255)
+    count: int = Field(ge=0, le=2_000_000_000)
+
+    @field_validator("offer_id")
+    @classmethod
+    def normalize_offer_id(cls, value: str) -> str:
+        value = value.strip()
+        if not value:
+            raise ValueError("SKU 不能为空")
+        return value
+
+
+class ReturnListRequest(BaseModel):
+    store_id: int = Field(gt=0)
+    return_type: Literal["", "RETURN", "UNREDEEMED"] = ""
+    statuses: list[str] = Field(default_factory=list, max_length=16)
+    shipment_statuses: list[str] = Field(default_factory=list, max_length=16)
+    date_from: date | None = None
+    date_to: date | None = None
+    page_token: str = Field(default="", max_length=1000)
+    limit: int = Field(default=100, ge=1, le=100)
+
+    @field_validator("statuses", "shipment_statuses")
+    @classmethod
+    def normalize_return_statuses(cls, values: list[str]) -> list[str]:
+        return list(dict.fromkeys(str(value).strip().upper() for value in values if str(value).strip()))
+
+    @field_validator("page_token")
+    @classmethod
+    def normalize_return_page_token(cls, value: str) -> str:
+        return value.strip()
+
+    @model_validator(mode="after")
+    def validate_return_date_range(self) -> "ReturnListRequest":
+        if self.date_from and self.date_to and self.date_from > self.date_to:
+            raise ValueError("退货开始日期不能晚于结束日期")
+        return self
+
+
+class FeedbackListRequest(BaseModel):
+    store_id: int = Field(gt=0)
+    reaction_status: Literal["ALL", "NEED_REACTION"] = "ALL"
+    rating_values: list[int] = Field(default_factory=list, max_length=5)
+    offer_ids: list[str] = Field(default_factory=list, max_length=20)
+    page_token: str = Field(default="", max_length=1000)
+    limit: int = Field(default=50, ge=1, le=50)
+
+    @field_validator("rating_values")
+    @classmethod
+    def validate_rating_values(cls, values: list[int]) -> list[int]:
+        normalized = list(dict.fromkeys(int(value) for value in values))
+        if any(value < 1 or value > 5 for value in normalized):
+            raise ValueError("评价星级必须在 1–5 之间")
+        return normalized
+
+    @field_validator("offer_ids")
+    @classmethod
+    def normalize_feedback_offer_ids(cls, values: list[str]) -> list[str]:
+        return InventoryListRequest.normalize_offer_ids(values)
+
+    @field_validator("page_token")
+    @classmethod
+    def normalize_feedback_page_token(cls, value: str) -> str:
+        return value.strip()
+
+
+class FeedbackReplyRequest(BaseModel):
+    store_id: int = Field(gt=0)
+    feedback_id: int = Field(gt=0)
+    text: str = Field(min_length=1, max_length=4096)
+
+    @field_validator("text")
+    @classmethod
+    def normalize_feedback_text(cls, value: str) -> str:
+        value = value.strip()
+        if not value:
+            raise ValueError("回复内容不能为空")
+        return value
+
+
+class FeedbackSkipRequest(BaseModel):
+    store_id: int = Field(gt=0)
+    feedback_ids: list[int] = Field(min_length=1, max_length=50)
+
+    @field_validator("feedback_ids")
+    @classmethod
+    def normalize_feedback_ids(cls, values: list[int]) -> list[int]:
+        normalized = list(dict.fromkeys(int(value) for value in values))
+        if any(value <= 0 for value in normalized):
+            raise ValueError("评价 ID 必须大于 0")
+        return normalized
+
+
+class QuestionListRequest(BaseModel):
+    store_id: int = Field(gt=0)
+    need_answer: bool = False
+    date_from: date | None = None
+    date_to: date | None = None
+    page_token: str = Field(default="", max_length=1000)
+    limit: int = Field(default=50, ge=1, le=50)
+
+    @field_validator("page_token")
+    @classmethod
+    def normalize_question_page_token(cls, value: str) -> str:
+        return value.strip()
+
+    @model_validator(mode="after")
+    def validate_question_date_range(self) -> "QuestionListRequest":
+        if self.date_from and self.date_to:
+            if self.date_from > self.date_to:
+                raise ValueError("问题开始日期不能晚于结束日期")
+            if self.date_to - self.date_from > timedelta(days=30):
+                raise ValueError("问题查询时间范围不能超过 31 天")
+        return self
+
+
+class QuestionReplyRequest(BaseModel):
+    store_id: int = Field(gt=0)
+    question_id: int = Field(gt=0)
+    text: str = Field(min_length=1, max_length=5000)
+
+    @field_validator("text")
+    @classmethod
+    def normalize_question_text(cls, value: str) -> str:
+        value = value.strip()
+        if not value:
+            raise ValueError("回答内容不能为空")
+        return value
 
 
 class ProductRecord(BaseModel):

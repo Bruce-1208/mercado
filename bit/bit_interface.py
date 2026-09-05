@@ -19,10 +19,10 @@ import traceback
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from io import BytesIO
 from pathlib import Path
-from urllib.parse import quote
+from urllib.parse import quote, urlsplit
 from urllib.request import Request, urlopen
 
-from flask import Flask, Response, request, render_template, jsonify, send_file, session, redirect, url_for, g
+from flask import Flask, Response, request, render_template, jsonify, send_file, session, redirect, url_for, g, has_request_context
 from itsdangerous import BadSignature, SignatureExpired, URLSafeTimedSerializer
 from openpyxl import Workbook
 from openpyxl.styles import Alignment, Font, PatternFill
@@ -156,6 +156,41 @@ app.config.update(
     SEND_FILE_MAX_AGE_DEFAULT=0,
 )
 
+LOCAL_EXECUTOR_TOKEN_SALT = "zeshun-local-executor-v1"
+LOCAL_EXECUTOR_TOKEN_MAX_AGE_SECONDS = 5 * 60
+LOCAL_EXECUTOR_BROWSER_URL = str(
+    os.environ.get("BIT_LOCAL_EXECUTOR_URL") or "http://127.0.0.1:5000"
+).strip().rstrip("/")
+LOCAL_EXECUTOR_PERMISSIONS = frozenset(
+    ("appeal.execute", "tasks.view", "tasks.execute")
+)
+
+
+def _configured_local_executor_origins():
+    configured = str(
+        os.environ.get("BIT_LOCAL_EXECUTOR_ALLOWED_ORIGINS") or ""
+    ).strip()
+    origins = {
+        "https://zeshun.nat100.top",
+        "http://zeshun.nat100.top",
+    }
+    if configured:
+        origins.update(
+            value.strip().rstrip("/")
+            for value in configured.split(",")
+            if value.strip()
+        )
+    try:
+        parsed = urlsplit(RUNTIME_SETTINGS.api_base_url)
+        if parsed.scheme and parsed.netloc:
+            origins.add(f"{parsed.scheme}://{parsed.netloc}")
+    except ValueError:
+        pass
+    return frozenset(origins)
+
+
+LOCAL_EXECUTOR_ALLOWED_ORIGINS = _configured_local_executor_origins()
+
 
 @app.after_request
 def disable_workbench_html_cache(response):
@@ -164,6 +199,28 @@ def disable_workbench_html_cache(response):
     if response.mimetype == "text/html":
         response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate"
         response.headers["Pragma"] = "no-cache"
+    return response
+
+
+@app.after_request
+def allow_local_executor_browser_requests(response):
+    """Allow the authenticated public workbench to reach this loopback bridge."""
+
+    if not request.path.startswith("/api/local-executor/"):
+        return response
+    origin = str(request.headers.get("Origin") or "").strip().rstrip("/")
+    if origin and origin in LOCAL_EXECUTOR_ALLOWED_ORIGINS:
+        response.headers["Access-Control-Allow-Origin"] = origin
+        response.headers["Vary"] = "Origin"
+        response.headers["Access-Control-Allow-Methods"] = "GET, POST, OPTIONS"
+        response.headers["Access-Control-Allow-Headers"] = (
+            "Authorization, Content-Type"
+        )
+        response.headers["Access-Control-Max-Age"] = "300"
+        if str(
+            request.headers.get("Access-Control-Request-Private-Network") or ""
+        ).strip().lower() == "true":
+            response.headers["Access-Control-Allow-Private-Network"] = "true"
     return response
 
 
@@ -183,7 +240,7 @@ WORKBENCH_PERMISSION_GROUPS = (
     ("zying_collection", "智赢产品采集", (("zying_collection.view", "查看"), ("zying_collection.execute", "执行采集"))),
     ("risk_check", "侵权检测", (("risk_check.view", "查看"), ("risk_check.execute", "执行检测"))),
     ("infringement_knowledge", "侵权知识库", (("infringement_knowledge.view", "查看"), ("infringement_knowledge.manage", "新增/修改/删除"))),
-    ("infractions", "侵权总览", (("infractions.view", "查看/导出"), ("infractions.execute", "采集"))),
+    ("infractions", "违规商品总览", (("infractions.view", "查看/导出"), ("infractions.execute", "采集"))),
     ("reputation", "声誉数据", (("reputation.view", "查看/导出"), ("reputation.execute", "采集/更新"))),
     ("customer_service", "客户消息", (("customer_service.view", "查看"), ("customer_service.manage", "回复/删除"))),
     ("ai_appeals", "AI 申诉记录", (("ai_appeals.view", "查看"),)),
@@ -1302,6 +1359,96 @@ def browser_extension_login_required(view_func):
     return wrapper
 
 
+def create_local_executor_token(user, permission):
+    permission = str(permission or "").strip()
+    if permission not in LOCAL_EXECUTOR_PERMISSIONS:
+        raise ValueError("不支持的本机执行权限")
+    shared_secret = str(os.environ.get("BIT_DB_API_TOKEN") or "").strip()
+    if not shared_secret:
+        raise RuntimeError(
+            "尚未配置 BIT_DB_API_TOKEN，无法安全连接本机执行端"
+        )
+    payload = {
+        "id": int(user.get("id") or 0),
+        "username": str(user.get("username") or ""),
+        "permission": permission,
+    }
+    return URLSafeTimedSerializer(
+        shared_secret,
+        salt=LOCAL_EXECUTOR_TOKEN_SALT,
+    ).dumps(payload)
+
+
+def _local_executor_user_from_token(token):
+    shared_secret = str(os.environ.get("BIT_DB_API_TOKEN") or "").strip()
+    if not shared_secret:
+        return None
+    try:
+        payload = URLSafeTimedSerializer(
+            shared_secret,
+            salt=LOCAL_EXECUTOR_TOKEN_SALT,
+        ).loads(
+            str(token or ""),
+            max_age=LOCAL_EXECUTOR_TOKEN_MAX_AGE_SECONDS,
+        )
+    except (BadSignature, SignatureExpired):
+        return None
+    if (
+        not isinstance(payload, dict)
+        or not payload.get("id")
+        or payload.get("permission") not in LOCAL_EXECUTOR_PERMISSIONS
+    ):
+        return None
+    return payload
+
+
+def local_executor_required(*accepted_permissions):
+    accepted = frozenset(
+        str(permission or "").strip()
+        for permission in accepted_permissions
+        if str(permission or "").strip()
+    )
+
+    def decorator(view_func):
+        @functools.wraps(view_func)
+        def wrapper(*args, **kwargs):
+            if request.method == "OPTIONS":
+                return Response(status=204)
+            if not USE_DB_API:
+                return jsonify({
+                    "status": "error",
+                    "message": "该地址不是本机客户端执行端",
+                }), 409
+            if request.remote_addr not in ("127.0.0.1", "::1", "localhost"):
+                return jsonify({"status": "error", "message": "Forbidden"}), 403
+            origin = str(request.headers.get("Origin") or "").strip().rstrip("/")
+            if origin and origin not in LOCAL_EXECUTOR_ALLOWED_ORIGINS:
+                return jsonify({"status": "error", "message": "Forbidden"}), 403
+            authorization = str(request.headers.get("Authorization") or "")
+            token = (
+                authorization[7:].strip()
+                if authorization.lower().startswith("bearer ")
+                else ""
+            )
+            user = _local_executor_user_from_token(token)
+            if not user:
+                return jsonify({
+                    "status": "error",
+                    "message": "本机执行凭证无效或已过期，请重试",
+                }), 401
+            if accepted and user.get("permission") not in accepted:
+                return jsonify({
+                    "status": "error",
+                    "message": "本机执行凭证没有该操作权限",
+                }), 403
+            g.local_executor_user = user
+            return view_func(*args, **kwargs)
+
+        return wrapper
+
+    return decorator
+
+
 def internal_api_required(view_func):
     @functools.wraps(view_func)
     def wrapper(*args, **kwargs):
@@ -1725,7 +1872,9 @@ _order_print_state = {
     "site_last_runs": [],
 }
 _order_analysis_import_lock = threading.Lock()
-_daily_task_lock = threading.Lock()
+# 每次点击“启动”都会创建独立任务实例。RLock 允许状态辅助函数在 API
+# 已持锁时安全复用；真正的同一店铺窗口冲突仍由 window lease 控制。
+_daily_task_lock = threading.RLock()
 _daily_task_stop_event = None
 _daily_task_stop_manager = None
 _daily_task_log_lock = threading.Lock()
@@ -1742,28 +1891,63 @@ _daily_task_state = {
     "stop_requested": False,
     "params": {},
 }
+_daily_tasks = {}
+_daily_task_controls = {}
+DAILY_TASK_HISTORY_LIMIT = 50
+DEFAULT_DAILY_TASK_MAX_CONCURRENT = 8
 
 
-def _reset_daily_task_log():
+def _daily_task_max_concurrent():
+    try:
+        return max(
+            1,
+            int(
+                os.environ.get(
+                    "BIT_DAILY_TASK_MAX_CONCURRENT",
+                    DEFAULT_DAILY_TASK_MAX_CONCURRENT,
+                )
+            ),
+        )
+    except (TypeError, ValueError):
+        return DEFAULT_DAILY_TASK_MAX_CONCURRENT
+
+
+def _daily_task_log_file(task_id=""):
+    task_id = re.sub(r"[^0-9A-Za-z_.-]+", "_", str(task_id or "").strip())
+    if not task_id:
+        return Path(_daily_task_log_path)
+    base_path = Path(_daily_task_log_path)
+    suffix = base_path.suffix or ".log"
+    return base_path.with_name(f"{base_path.stem}_{task_id}{suffix}")
+
+
+def _reset_daily_task_log(log_path=None):
+    target_path = Path(log_path or _daily_task_log_path)
     with _daily_task_log_lock:
-        _daily_task_log_path.parent.mkdir(parents=True, exist_ok=True)
-        _daily_task_log_path.write_text("", encoding="utf-8")
+        target_path.parent.mkdir(parents=True, exist_ok=True)
+        target_path.write_text("", encoding="utf-8")
 
 
-def _append_daily_task_log(text):
+def _append_daily_task_log(text, log_path=None):
     text = str(text or "")
     if not text:
         return
+    target_path = Path(log_path or _daily_task_log_path)
     with _daily_task_log_lock:
-        _daily_task_log_path.parent.mkdir(parents=True, exist_ok=True)
-        with _daily_task_log_path.open("a", encoding="utf-8") as log_file:
+        target_path.parent.mkdir(parents=True, exist_ok=True)
+        with target_path.open("a", encoding="utf-8") as log_file:
             log_file.write(text)
             log_file.flush()
 
 
-def _read_daily_task_log(max_bytes=512 * 1024, max_lines=2000):
+def _read_daily_task_log(
+    max_bytes=512 * 1024,
+    max_lines=2000,
+    log_path=None,
+):
+    target_path = Path(log_path or _daily_task_log_path)
     try:
-        with _daily_task_log_path.open("rb") as log_file:
+        with target_path.open("rb") as log_file:
             log_file.seek(0, os.SEEK_END)
             size = log_file.tell()
             start = max(0, size - max_bytes)
@@ -1782,8 +1966,163 @@ def _read_daily_task_log(max_bytes=512 * 1024, max_lines=2000):
 
 
 class DailyTaskLogSink:
+    def __init__(self, log_path=None):
+        self.log_path = Path(log_path or _daily_task_log_path)
+
     def put(self, text):
-        _append_daily_task_log(text)
+        _append_daily_task_log(text, self.log_path)
+
+
+def _daily_task_display_name(params):
+    params = dict(params or {})
+    group_names = [str(value).strip() for value in params.get("group_names") or () if str(value).strip()]
+    salespeople = [str(value).strip() for value in params.get("salespeople") or () if str(value).strip()]
+    appeal_types = [str(value).strip() for value in params.get("appeal_types") or () if str(value).strip()]
+    scope = (
+        "店铺组：" + "、".join(group_names)
+        if group_names
+        else "业务员：" + "、".join(salespeople)
+        if salespeople
+        else "全部授权店铺"
+    )
+    task_type = "、".join(appeal_types) or str(params.get("appeal_type") or "自动申诉")
+    mode = "循环" if params.get("mode") == "loop" else "单轮"
+    execution_label = (
+        "本机比特浏览器"
+        if params.get("execution_target") == "local"
+        else "服务器比特浏览器"
+    )
+    return f"{execution_label}｜{scope}｜{task_type}｜{mode}"
+
+
+def _update_daily_task_state(task_id, **updates):
+    """更新一个任务实例；无 task_id 时保留旧调用的兼容行为。"""
+    task_id = str(task_id or "").strip()
+    with _daily_task_lock:
+        if not task_id:
+            _daily_task_state.update(updates)
+            return dict(_daily_task_state)
+        state = _daily_tasks.get(task_id)
+        if state is None:
+            return {}
+        state.update(updates)
+        if str(_daily_task_state.get("task_id") or "") == task_id:
+            _daily_task_state.update(updates)
+        return dict(state)
+
+
+def _prune_daily_task_history():
+    """只裁剪已结束的旧记录，运行中的任务绝不移除。"""
+    removed = []
+    with _daily_task_lock:
+        if len(_daily_tasks) <= DAILY_TASK_HISTORY_LIMIT:
+            return
+        for task_id in list(_daily_tasks):
+            if len(_daily_tasks) <= DAILY_TASK_HISTORY_LIMIT:
+                break
+            if not _daily_tasks[task_id].get("running"):
+                state = _daily_tasks.pop(task_id, None) or {}
+                control = _daily_task_controls.pop(task_id, None) or {}
+                removed.append((state.get("log_path"), control.get("stop_manager")))
+
+    # 文件删除和 Manager 关闭都可能阻塞，不能占着状态锁执行。
+    base_log_path = Path(_daily_task_log_path)
+    for log_path, stop_manager in removed:
+        if stop_manager is not None:
+            try:
+                stop_manager.shutdown()
+            except Exception:
+                pass
+        try:
+            target_path = Path(log_path) if log_path else None
+            if target_path and target_path != base_log_path:
+                target_path.unlink(missing_ok=True)
+        except OSError:
+            pass
+
+
+def _daily_task_snapshot(task_id, include_log=True):
+    task_id = str(task_id or "").strip()
+    with _daily_task_lock:
+        state = dict(_daily_tasks.get(task_id) or {})
+        if (
+            not state
+            and task_id == "legacy-daily-task"
+            and not _daily_tasks
+            and (_daily_task_state.get("running") or _daily_task_state.get("started_at"))
+        ):
+            state = dict(_daily_task_state)
+            state.setdefault("task_id", "legacy-daily-task")
+            state.setdefault("name", "daily_task")
+            state.setdefault("can_stop", _daily_task_stop_event is not None)
+    if not state:
+        return {}
+    state.setdefault(
+        "execution_target",
+        "local" if RUNTIME_SETTINGS.is_client else "server",
+    )
+    if include_log:
+        state["log"] = _read_daily_task_log(log_path=state.get("log_path"))
+    else:
+        state.pop("log", None)
+    return state
+
+
+def _daily_tasks_snapshot():
+    with _daily_task_lock:
+        task_ids = list(_daily_tasks)
+        legacy_state = dict(_daily_task_state)
+    # 最新任务在页面顶部；列表只返回摘要，单任务详情才读取独立日志。
+    tasks = [
+        snapshot
+        for task_id in reversed(task_ids)
+        if (snapshot := _daily_task_snapshot(task_id, include_log=False))
+    ]
+    if not tasks and (legacy_state.get("running") or legacy_state.get("started_at")):
+        legacy_state.setdefault("task_id", "legacy-daily-task")
+        legacy_state.setdefault("name", "daily_task")
+        legacy_state.setdefault("can_stop", _daily_task_stop_event is not None)
+        legacy_state.setdefault(
+            "execution_target",
+            "local" if RUNTIME_SETTINGS.is_client else "server",
+        )
+        legacy_state.pop("log", None)
+        tasks.append(legacy_state)
+
+    result = {
+        "tasks": tasks,
+        "running": any(task.get("running") for task in tasks),
+        "running_count": sum(1 for task in tasks if task.get("running")),
+        "total_count": len(tasks),
+    }
+    if tasks:
+        # 兼容仍按旧单任务结构读取 status 的客户端。
+        compatibility_task = next(
+            (task for task in tasks if task.get("running")),
+            tasks[0],
+        )
+        result.update(compatibility_task)
+        result["tasks"] = tasks
+        result["running"] = any(task.get("running") for task in tasks)
+        result["running_count"] = sum(1 for task in tasks if task.get("running"))
+        result["total_count"] = len(tasks)
+    return result
+
+
+def _resolve_daily_task_id_for_stop(requested_task_id=""):
+    requested_task_id = str(requested_task_id or "").strip()
+    with _daily_task_lock:
+        if requested_task_id:
+            return requested_task_id if requested_task_id in _daily_tasks else ""
+        running_ids = [
+            task_id
+            for task_id, state in _daily_tasks.items()
+            if state.get("running")
+        ]
+    # 兼容旧客户端：只有一个任务运行时允许省略 task_id。
+    return running_ids[0] if len(running_ids) == 1 else ""
+
+
 _mercado_login_task_lock = threading.RLock()
 _mercado_login_task_process = None
 _mercado_login_task_processes = {}
@@ -1846,7 +2185,7 @@ MERCADO_AUTH_SITE_NAMES = {
     "MLU": "乌拉圭",
     "UY": "乌拉圭",
 }
-APPEAL_FORMS = ("延误", "侵权", "取消率", "投诉")
+APPEAL_FORMS = ("延误", "侵权", "禁限售", "取消率", "投诉")
 APPEAL_LOOP_COUNTS = (10, 20, 50)
 DEFAULT_APPEAL_LOOP_COUNT = 10
 PERMANENT_APPEAL_LOOP_COUNT = 0
@@ -2642,8 +2981,12 @@ def _authorized_task_shop_options(flag_name, token_data=None):
 
 def _collection_config_options(include_failures=False):
     token_data = bit_db_api.list_mercado_store_tokens() or {}
-    shop_options = _authorized_task_shop_options(
+    infraction_shop_options = _authorized_task_shop_options(
         "visit_stats_enabled",
+        token_data=token_data,
+    )
+    reputation_shop_options = _authorized_task_shop_options(
+        "reputation_update_enabled",
         token_data=token_data,
     )
     appeal_shop_options = _authorized_task_shop_options(
@@ -2651,13 +2994,14 @@ def _collection_config_options(include_failures=False):
         token_data=token_data,
     )
     site_order = []
-    for shop in shop_options:
+    for shop in reputation_shop_options:
         for site in shop.get("sites") or ():
             if site not in site_order:
                 site_order.append(site)
     result = {
-        "shops": shop_options,
+        "shops": reputation_shop_options,
         "sites": site_order,
+        "infraction_shops": infraction_shop_options,
         "appeal_shops": appeal_shop_options,
     }
     if not include_failures:
@@ -2691,11 +3035,11 @@ def _collection_config_options(include_failures=False):
 
     result["failed_shops"] = {
         "infraction": _failed_collection_shop_options(
-            shop_options,
+            infraction_shop_options,
             infraction_status_rows,
         ),
         "reputation": _failed_collection_shop_options(
-            shop_options,
+            reputation_shop_options,
             reputation_status_rows,
         ),
     }
@@ -2721,7 +3065,7 @@ def _normalized_collection_list(data, key):
     return values
 
 
-def _parse_collection_request(data):
+def _parse_collection_request(data, authorization_flag="visit_stats_enabled"):
     data = data if isinstance(data, dict) else {}
     shops = _normalized_collection_list(data, "shops")
     sites = _normalized_collection_list(data, "sites")
@@ -2732,12 +3076,17 @@ def _parse_collection_request(data):
         min_value=1,
         max_value=10,
     )
-    options = _collection_config_options()
-    configured = {shop["shop_name"]: shop for shop in options["shops"]}
+    configured_options = _authorized_task_shop_options(authorization_flag)
+    configured = {shop["shop_name"]: shop for shop in configured_options}
     unknown_shops = [shop for shop in shops if shop not in configured]
     if unknown_shops:
         raise ValueError("店铺不存在或已被忽略：" + "、".join(unknown_shops))
-    unknown_sites = [site for site in sites if site not in options["sites"]]
+    configured_sites = {
+        site
+        for shop in configured_options
+        for site in (shop.get("sites") or ())
+    }
+    unknown_sites = [site for site in sites if site not in configured_sites]
     if unknown_sites:
         raise ValueError("站点不存在：" + "、".join(unknown_sites))
 
@@ -3300,6 +3649,24 @@ def _append_order_print_log(message):
 
 def _order_print_snapshot():
     with _order_print_lock:
+        runtime_log = "".join(_order_print_logs).rstrip()
+        automatic_history = [
+            row
+            for row in (_order_print_state.get("site_last_runs") or [])
+            if str(row.get("source") or "") == "系统自动打印"
+        ]
+        history_log = "\n".join(
+            f"{row.get('finished_at') or '-'} "
+            f"{row.get('shop_name') or '-'} / {row.get('site') or '-'}："
+            f"{row.get('outcome') or '系统自动打印'}"
+            for row in automatic_history
+        )
+        combined_log = runtime_log
+        if history_log:
+            automatic_section = "===== 系统自动打印最近记录 =====\n" + history_log
+            combined_log = "\n\n".join(
+                value for value in (runtime_log, automatic_section) if value
+            )
         snapshot = {
             **dict(_order_print_state),
             "params": dict(_order_print_state.get("params") or {}),
@@ -3307,7 +3674,7 @@ def _order_print_snapshot():
             "site_last_runs": [
                 dict(row) for row in (_order_print_state.get("site_last_runs") or [])
             ],
-            "log": "".join(_order_print_logs),
+            "log": combined_log,
             "can_stop": bool(
                 _order_print_state.get("running")
                 and _order_print_stop_event is not None
@@ -3360,11 +3727,14 @@ def _load_order_print_site_last_runs(current_results=None):
         site = str(record.get("site") or "").strip()
         if not shop_name or not site:
             continue
+        outcome = str(record.get("outcome") or "")
         latest_by_key[(shop_name, site)] = {
             "shop_name": shop_name,
             "site": site,
-            "status": _order_print_history_status(record.get("outcome")),
+            "status": _order_print_history_status(outcome),
             "finished_at": str(record.get("finished_at") or ""),
+            "outcome": outcome,
+            "source": "系统自动打印" if "系统自动打印" in outcome else "",
         }
     for result in current_results:
         shop_name = str(result.get("shop_name") or "").strip()
@@ -3381,6 +3751,8 @@ def _load_order_print_site_last_runs(current_results=None):
             "site": site,
             "status": str(result.get("status") or "unknown"),
             "finished_at": finished_at,
+            "outcome": str(result.get("message") or ""),
+            "source": str(result.get("source") or ""),
         }
 
     rows = []
@@ -3402,6 +3774,8 @@ def _load_order_print_site_last_runs(current_results=None):
                         "site": site,
                         "status": "not_run",
                         "finished_at": "",
+                        "outcome": "",
+                        "source": "",
                     },
                 )
             )
@@ -3700,6 +4074,15 @@ def _parse_rate_param(data, name="min_rate", default=0):
     return rate
 
 
+def _request_execution_target(data=None):
+    if (
+        has_request_context()
+        and getattr(g, "local_executor_user", None)
+    ) or RUNTIME_SETTINGS.is_client:
+        return "local"
+    return "server"
+
+
 def build_daily_task_params(data):
     mode = str(data.get("mode", "loop")).strip().lower()
     if mode not in ("once", "loop"):
@@ -3736,6 +4119,7 @@ def build_daily_task_params(data):
             group_names.append(group_name)
     legacy_min_rate = _parse_rate_param(data)
     return {
+        "execution_target": _request_execution_target(data),
         "mode": mode,
         "appeal_types": appeal_types,
         "appeal_type": appeal_types[0] if len(appeal_types) == 1 else "多任务",
@@ -3770,10 +4154,19 @@ def build_daily_task_params(data):
     }
 
 
-def run_daily_task_job(params, task_lock, stop_event=None):
+def run_daily_task_job(
+    params,
+    task_lock,
+    stop_event=None,
+    task_id="",
+    log_path=None,
+    owned_window_ids=None,
+):
     global _daily_task_stop_event, _daily_task_stop_manager
+    task_id = str(task_id or "").strip()
+    effective_log_path = Path(log_path or _daily_task_log_file(task_id))
     stop_event = stop_event or threading.Event()
-    register_thread_log_queue(DailyTaskLogSink())
+    register_thread_log_queue(DailyTaskLogSink(effective_log_path))
     try:
         print(f"{get_now_time()} 开始执行 daily_task：{params}<br>")
         appeal_types = params.get("appeal_types") or [
@@ -3792,7 +4185,7 @@ def run_daily_task_job(params, task_lock, stop_event=None):
             stop_at = None
             if params["stop_after_minutes"] > 0:
                 stop_at = datetime.now() + timedelta(minutes=params["stop_after_minutes"])
-            bit_daily_task.loop_ai_appeal(
+            execution_result = bit_daily_task.loop_ai_appeal(
                 appeal_task,
                 top_n=params["top_n"],
                 max_workers=params["max_workers"],
@@ -3806,8 +4199,10 @@ def run_daily_task_job(params, task_lock, stop_event=None):
                 group_names=params.get("group_names", []),
                 stop_at=stop_at,
                 stop_event=stop_event,
-                log_path=str(_daily_task_log_path),
+                log_path=str(effective_log_path),
                 _task_lock=task_lock,
+                task_id=task_id,
+                owned_window_ids=owned_window_ids,
             )
             result_message = (
                 f"daily_task {appeal_label}任务已停止"
@@ -3815,7 +4210,7 @@ def run_daily_task_job(params, task_lock, stop_event=None):
                 else f"daily_task {appeal_label}任务循环执行完成"
             )
         else:
-            bit_daily_task.run_ai_appeal_once(
+            execution_result = bit_daily_task.run_ai_appeal_once(
                 appeal_task,
                 top_n=params["top_n"],
                 max_workers=params["max_workers"],
@@ -3827,8 +4222,10 @@ def run_daily_task_job(params, task_lock, stop_event=None):
                 salespeople=params["salespeople"],
                 group_names=params.get("group_names", []),
                 stop_event=stop_event,
-                log_path=str(_daily_task_log_path),
+                log_path=str(effective_log_path),
                 _task_lock=task_lock,
+                task_id=task_id,
+                owned_window_ids=owned_window_ids,
             )
             result_message = (
                 f"daily_task {appeal_label}任务已停止"
@@ -3836,43 +4233,61 @@ def run_daily_task_job(params, task_lock, stop_event=None):
                 else f"daily_task {appeal_label}任务单轮执行完成"
             )
 
-        with _daily_task_lock:
-            _daily_task_state.update({
-                "running": False,
-                "finished_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-                "status": "stopped" if stop_event.is_set() else "success",
-                "message": result_message,
-                "stop_requested": stop_event.is_set(),
-            })
+        execution_counts = bit_daily_task.task_execution_counts(execution_result)
+        needs_attention = any(count and key not in {"replied", "no_data"}
+                              for key, count in execution_counts.items())
+        result_message += f"；执行统计：{execution_counts}；客服回复不代表申诉已批准"
         print(f"{get_now_time()} {result_message}<br>")
+        _update_daily_task_state(
+            task_id,
+            running=False,
+            finished_at=datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            status="stopped" if stop_event.is_set() else ("partial" if needs_attention else "success"),
+            execution_counts=execution_counts,
+            message=result_message,
+            stop_requested=stop_event.is_set(),
+            can_stop=False,
+        )
     except Exception as e:
         logging.error("daily_task failed: %s", e)
-        _append_daily_task_log(f"\ndaily_task 运行失败：{e}\n")
+        _append_daily_task_log(
+            f"\ndaily_task 运行失败：{e}\n",
+            effective_log_path,
+        )
         traceback.print_exc()
         stopped = stop_event.is_set()
-        with _daily_task_lock:
-            _daily_task_state.update({
-                "running": False,
-                "finished_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-                "status": "stopped" if stopped else "error",
-                "message": "daily_task 已停止" if stopped else str(e),
-                "stop_requested": stopped,
-            })
+        _update_daily_task_state(
+            task_id,
+            running=False,
+            finished_at=datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            status="stopped" if stopped else "error",
+            message="daily_task 已停止" if stopped else str(e),
+            stop_requested=stopped,
+            can_stop=False,
+        )
     finally:
         if task_lock is not None:
             task_lock.release()
         stop_manager = None
-        with _daily_task_lock:
-            if _daily_task_stop_event is stop_event:
-                _daily_task_stop_event = None
-                stop_manager = _daily_task_stop_manager
-                _daily_task_stop_manager = None
+        if task_id:
+            with _daily_task_lock:
+                control = _daily_task_controls.get(task_id) or {}
+                if control.get("stop_event") is stop_event:
+                    _daily_task_controls.pop(task_id, None)
+                    stop_manager = control.get("stop_manager")
+        else:
+            with _daily_task_lock:
+                if _daily_task_stop_event is stop_event:
+                    _daily_task_stop_event = None
+                    stop_manager = _daily_task_stop_manager
+                    _daily_task_stop_manager = None
         if stop_manager is not None:
             try:
                 stop_manager.shutdown()
             except Exception:
                 pass
         unregister_thread_log_queue()
+        _prune_daily_task_history()
 
 
 def format_log_text(text):
@@ -4125,9 +4540,10 @@ def shensu_logic(
                             )
                             return
                         if mode == "AI客服":
-                            task_result["value"] = bit_appeal_ai.shensu(
-                                name, run_site, run_form, message
-                            )
+                            with bit_appeal_ai.appeal_controls(stop_event):
+                                task_result["value"] = bit_appeal_ai.shensu(
+                                    name, run_site, run_form, message
+                                )
                         else:
                             task_result["value"] = shensu(
                                 name, run_site, run_form, message, "人工客服"
@@ -4160,7 +4576,7 @@ def shensu_logic(
                     )
                     return
 
-                if is_login_blocking_result(task_result.get("value")):
+                if bit_daily_task._is_login_required_result(task_result.get("value")):
                     yield (
                         f"{get_now_time()} {name} {current_site} "
                         f"{task_result.get('value')}，已停止该店铺后续站点、"
@@ -4212,6 +4628,11 @@ def shensu_logic(
 def api_run_shensu():
     # 获取前端传入的参数
     name = request.args.get("name", "")
+    execution_target = (
+        "local"
+        if getattr(g, "local_executor_user", None) or RUNTIME_SETTINGS.is_client
+        else "server"
+    )
     try:
         sites = resolve_appeal_sites(request.args.getlist("site"))
         sites = validate_authorized_appeal_sites(name, sites)
@@ -4241,6 +4662,7 @@ def api_run_shensu():
             "form": forms[0] if len(forms) == 1 else "、".join(forms),
             "forms": list(forms),
             "mode": mode,
+            "execution_target": execution_target,
         },
     )
     if stop_event is None:
@@ -4249,6 +4671,14 @@ def api_run_shensu():
     def generate():
         try:
             yield f"{get_now_time()} 申诉任务编号：{task_id}\n"
+            yield (
+                f"{get_now_time()} 执行端："
+                + (
+                    "本机比特浏览器\n"
+                    if execution_target == "local"
+                    else "服务器比特浏览器\n"
+                )
+            )
             yield from shensu_logic(
                 name,
                 sites,
@@ -4267,6 +4697,7 @@ def api_run_shensu():
     response.headers["Cache-Control"] = "no-cache"
     response.headers["X-Accel-Buffering"] = "no"
     response.headers["X-Appeal-Task-ID"] = task_id
+    response.headers["X-Execution-Target"] = execution_target
     return response
 
 
@@ -4572,7 +5003,7 @@ def official_infraction_dashboard_page():
     user = get_current_workbench_user()
     if not workbench_user_has_permission(user, "infractions.view"):
         return Response(
-            "当前账号没有查看侵权数据的权限",
+            "当前账号没有查看违规商品数据的权限",
             status=403,
             content_type="text/plain; charset=utf-8",
         )
@@ -4594,6 +5025,7 @@ def api_official_infraction_dashboard():
             "group_name": request.args.get("group_name", ""),
             "salesperson": request.args.get("salesperson", ""),
             "source_type": request.args.get("source_type", ""),
+            "category": request.args.get("category", ""),
             "search": request.args.get("search", ""),
             "detail_token_id": request.args.get("detail_token_id", 0),
             "page": request.args.get("page", 1),
@@ -4608,8 +5040,8 @@ def api_official_infraction_dashboard():
     except (TypeError, ValueError) as exc:
         return jsonify({"status": "error", "message": str(exc)}), 400
     except Exception as exc:
-        logging.exception("读取官方侵权分组看板失败")
-        return jsonify({"status": "error", "message": f"读取侵权数据失败：{exc}"}), 500
+        logging.exception("读取官方违规商品分组看板失败")
+        return jsonify({"status": "error", "message": f"读取违规商品数据失败：{exc}"}), 500
 
 
 @app.route('/api/official-infractions/sync', methods=['POST'])
@@ -4634,12 +5066,12 @@ def api_start_official_infraction_sync():
     if not started:
         return jsonify({
             "status": "running",
-            "message": state.get("message") or "官方侵权数据正在同步",
+            "message": state.get("message") or "官方违规商品数据正在同步",
             "data": state,
         }), 409
     return jsonify({
         "status": "success",
-        "message": "官方侵权数据同步已在后台启动",
+        "message": "官方违规商品数据同步已在后台启动",
         "data": state,
     }), 202
 
@@ -4813,7 +5245,10 @@ def api_export_latest_reputation():
 @login_required
 def api_collect_reputation():
     try:
-        params = _parse_collection_request(request.get_json(silent=True) or {})
+        params = _parse_collection_request(
+            request.get_json(silent=True) or {},
+            authorization_flag="reputation_update_enabled",
+        )
     except ValueError as exc:
         return jsonify({"status": "error", "message": str(exc)}), 400
     except Exception as exc:
@@ -4827,7 +5262,10 @@ def api_collect_reputation():
 @login_required
 def api_update_selected_reputation():
     try:
-        params = _parse_collection_request(request.get_json(silent=True) or {})
+        params = _parse_collection_request(
+            request.get_json(silent=True) or {},
+            authorization_flag="reputation_update_enabled",
+        )
     except ValueError as exc:
         return jsonify({"status": "error", "message": str(exc)}), 400
     except Exception as exc:
@@ -5245,7 +5683,7 @@ def api_order_print_status():
     # Polling happens every two seconds while a task runs.  Re-querying token
     # and history tables on every poll can make the status endpoint itself
     # unavailable when the database or Mercado sync is busy.
-    if not state.get("site_last_runs"):
+    if not state.get("site_last_runs") or not state.get("running"):
         _refresh_order_print_site_last_runs()
         state = _order_print_snapshot()
     external_owner = bit_print.get_order_print_lock_owner()
@@ -5955,86 +6393,192 @@ def api_prohibited_listing_sync_status():
 @app.route('/api/tasks/daily/start', methods=['POST'])
 @login_required
 def api_start_daily_task():
-    global _daily_task_stop_event, _daily_task_stop_manager
     data = request.get_json(silent=True) or {}
     try:
         params = build_daily_task_params(data)
     except ValueError as exc:
         return jsonify({"status": "error", "message": str(exc)}), 400
+
+    max_concurrent = _daily_task_max_concurrent()
     with _daily_task_lock:
-        if _daily_task_state.get("running"):
-            return jsonify({
-                "status": "running",
-                "data": dict(_daily_task_state),
-                "message": "daily_task 正在运行中"
-            }), 409
-
-        task_lock = bit_daily_task.acquire_daily_task_lock(
-            owner="bit_interface.py",
-            mode=params["mode"],
+        running_count = sum(
+            1 for state in _daily_tasks.values() if state.get("running")
         )
-        if task_lock is None:
-            owner = bit_daily_task.get_daily_task_lock_owner()
-            return jsonify({
-                "status": "running",
-                "data": {**dict(_daily_task_state), "lock_owner": owner},
-                "message": "daily_task 已通过其他进程或启动方式运行"
-            }), 409
+        if running_count >= max_concurrent:
+            limit_reached = True
+            task_id = ""
+            task_log_path = None
+        else:
+            limit_reached = False
+            task_id = secrets.token_hex(8)
+            while task_id in _daily_tasks:
+                task_id = secrets.token_hex(8)
+            task_log_path = _daily_task_log_file(task_id)
+            started_at = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            task_state = {
+                "task_id": task_id,
+                "name": _daily_task_display_name(params),
+                "execution_target": params["execution_target"],
+                "running": True,
+                "started_at": started_at,
+                "finished_at": "",
+                "status": "starting",
+                "message": "daily_task 正在启动",
+                "stop_requested": False,
+                "can_stop": False,
+                "log_path": str(task_log_path),
+                "params": params,
+            }
+            # 在同一把锁内占住并发名额，避免两个并发 start 同时越过上限。
+            _daily_tasks[task_id] = task_state
+            _daily_task_state.update(task_state)
 
-        try:
-            _reset_daily_task_log()
-        except OSError as exc:
-            task_lock.release()
-            return jsonify({
-                "status": "error",
-                "message": f"无法创建 daily_task 运行日志：{exc}",
-            }), 500
-        started_at = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        try:
-            stop_manager = multiprocessing.Manager()
-            stop_event = stop_manager.Event()
-        except Exception:
-            task_lock.release()
-            raise
-        _daily_task_stop_manager = stop_manager
-        _daily_task_stop_event = stop_event
-        _daily_task_state.update({
-            "running": True,
-            "started_at": started_at,
-            "finished_at": "",
+    if limit_reached:
+        return jsonify({
             "status": "running",
-            "message": "daily_task 已启动",
-            "stop_requested": False,
-            "log_path": str(_daily_task_log_path),
-            "params": params,
-        })
+            "data": _daily_tasks_snapshot(),
+            "message": (
+                f"同时运行的 daily_task 已达到上限 {max_concurrent}，"
+                "请先停止或等待现有任务结束"
+            ),
+        }), 409
+
+    task_lock = bit_daily_task.acquire_daily_task_lock(
+        owner=f"bit_interface.py:{task_id}",
+        mode=params["mode"],
+        task_id=task_id,
+    )
+    if task_lock is None:
+        owner = bit_daily_task.get_daily_task_lock_owner(task_id)
+        _update_daily_task_state(
+            task_id,
+            running=False,
+            finished_at=datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            status="error",
+            message="无法创建独立任务锁，请重试",
+            can_stop=False,
+        )
+        _prune_daily_task_history()
+        return jsonify({
+            "status": "error",
+            "data": {
+                **_daily_task_snapshot(task_id),
+                "lock_owner": owner,
+            },
+            "message": "无法创建独立任务锁，请重试",
+        }), 409
 
     try:
-        task_thread = threading.Thread(
-            target=run_daily_task_job,
-            args=(params, task_lock, stop_event),
-            daemon=True,
-        )
-        task_thread.start()
-    except Exception:
+        _reset_daily_task_log(task_log_path)
+    except OSError as exc:
         task_lock.release()
-        stop_manager = None
-        with _daily_task_lock:
-            if _daily_task_stop_event is stop_event:
-                _daily_task_stop_event = None
-                stop_manager = _daily_task_stop_manager
-                _daily_task_stop_manager = None
-            _daily_task_state.update({"running": False, "status": "error", "message": "daily_task 启动失败"})
+        _update_daily_task_state(
+            task_id,
+            running=False,
+            finished_at=datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            status="error",
+            message=f"无法创建 daily_task 运行日志：{exc}",
+            can_stop=False,
+        )
+        _prune_daily_task_history()
+        return jsonify({
+            "status": "error",
+            "data": _daily_task_snapshot(task_id),
+            "message": f"无法创建 daily_task 运行日志：{exc}",
+        }), 500
+
+    stop_manager = None
+    try:
+        stop_manager = multiprocessing.Manager()
+        stop_event = stop_manager.Event()
+        owned_window_ids = stop_manager.dict()
+    except Exception as exc:
+        task_lock.release()
         if stop_manager is not None:
             try:
                 stop_manager.shutdown()
             except Exception:
                 pass
-        raise
+        _append_daily_task_log(
+            f"daily_task 停止控制初始化失败：{exc}\n",
+            task_log_path,
+        )
+        _update_daily_task_state(
+            task_id,
+            running=False,
+            finished_at=datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            status="error",
+            message=f"daily_task 停止控制初始化失败：{exc}",
+            can_stop=False,
+        )
+        _prune_daily_task_history()
+        return jsonify({
+            "status": "error",
+            "data": _daily_task_snapshot(task_id),
+            "message": f"daily_task 启动失败：{exc}",
+        }), 500
+
+    with _daily_task_lock:
+        task_state = _daily_tasks[task_id]
+        task_state.update({
+            "status": "running",
+            "message": "daily_task 已启动",
+            "can_stop": True,
+        })
+        _daily_task_controls[task_id] = {
+            "stop_event": stop_event,
+            "stop_manager": stop_manager,
+            "task_lock": task_lock,
+            "thread": None,
+            "owned_window_ids": owned_window_ids,
+        }
+        _daily_task_state.update(task_state)
+    _prune_daily_task_history()
+
+    try:
+        task_thread = threading.Thread(
+            target=run_daily_task_job,
+            args=(
+                params,
+                task_lock,
+                stop_event,
+                task_id,
+                task_log_path,
+                owned_window_ids,
+            ),
+            name=f"daily-task-{task_id}",
+            daemon=True,
+        )
+        task_thread.start()
+        with _daily_task_lock:
+            control = _daily_task_controls.get(task_id)
+            if control is not None:
+                control["thread"] = task_thread
+    except Exception as exc:
+        task_lock.release()
+        with _daily_task_lock:
+            _daily_task_controls.pop(task_id, None)
+        _update_daily_task_state(
+            task_id,
+            running=False,
+            finished_at=datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            status="error",
+            message=f"daily_task 启动失败：{exc}",
+            can_stop=False,
+        )
+        try:
+            stop_manager.shutdown()
+        except Exception:
+            pass
+        return jsonify({
+            "status": "error",
+            "data": _daily_task_snapshot(task_id),
+            "message": f"daily_task 启动失败：{exc}",
+        }), 500
     return jsonify({
         "status": "success",
-        "data": dict(_daily_task_state),
-        "message": "daily_task 已在后台启动"
+        "data": _daily_task_snapshot(task_id),
+        "message": f"{task_state['name']} 已在后台启动",
     })
 
 
@@ -6042,30 +6586,80 @@ def api_start_daily_task():
 @login_required
 def api_stop_daily_task():
     global _daily_task_stop_event
+    data = request.get_json(silent=True) or {}
+    requested_task_id = str(data.get("task_id") or request.args.get("task_id") or "").strip()
+    task_id = _resolve_daily_task_id_for_stop(requested_task_id)
+    if not task_id:
+        with _daily_task_lock:
+            running_count = sum(
+                1 for state in _daily_tasks.values() if state.get("running")
+            )
+            legacy_running = bool(
+                not _daily_tasks and _daily_task_state.get("running")
+            )
+            legacy_stop_event = _daily_task_stop_event
+        if not requested_task_id and legacy_running:
+            if legacy_stop_event is None:
+                return jsonify({
+                    "status": "error",
+                    "data": _daily_tasks_snapshot(),
+                    "message": "该任务无法从当前控制台停止",
+                }), 409
+            legacy_stop_event.set()
+            with _daily_task_lock:
+                _daily_task_state.update({
+                    "status": "stopping",
+                    "message": "已请求停止，正在终止任务进程并关闭浏览器窗口",
+                    "stop_requested": True,
+                })
+            return jsonify({
+                "status": "success",
+                "data": _daily_tasks_snapshot(),
+                "message": "daily_task 停止请求已提交",
+            })
+        message = (
+            "没有找到指定任务"
+            if requested_task_id
+            else "daily_task 当前没有正在运行的任务"
+            if running_count == 0
+            else "有多个任务正在运行，请指定要停止的任务"
+        )
+        return jsonify({
+            "status": "error",
+            "data": _daily_tasks_snapshot(),
+            "message": message,
+        }), 404 if requested_task_id else 409
+
     with _daily_task_lock:
-        if not _daily_task_state.get("running"):
+        task_state = _daily_tasks.get(task_id)
+        if not task_state or not task_state.get("running"):
             return jsonify({
                 "status": "idle",
-                "data": dict(_daily_task_state),
-                "message": "daily_task 当前未运行",
+                "data": _daily_task_snapshot(task_id),
+                "message": "该 daily_task 当前未运行",
             }), 409
-        if _daily_task_stop_event is None:
+        control = _daily_task_controls.get(task_id) or {}
+        stop_event = control.get("stop_event")
+        if stop_event is None:
             return jsonify({
                 "status": "error",
-                "data": dict(_daily_task_state),
-                "message": "该任务由其他进程启动，无法从当前控制台停止",
+                "data": _daily_task_snapshot(task_id),
+                "message": "该任务无法从当前控制台停止",
             }), 409
-        _daily_task_stop_event.set()
-        _daily_task_state.update({
+        stop_event.set()
+        task_state.update({
             "status": "stopping",
-            "message": "已请求停止，正在立即终止任务进程并关闭浏览器窗口",
+            "message": "已请求停止该任务，正在终止其进程并关闭空闲窗口",
             "stop_requested": True,
         })
-        state = dict(_daily_task_state)
+        if str(_daily_task_state.get("task_id") or "") == task_id:
+            _daily_task_state.update(task_state)
+        state = dict(task_state)
+    state["log"] = _read_daily_task_log(log_path=state.get("log_path"))
     return jsonify({
         "status": "success",
         "data": state,
-        "message": "daily_task 停止请求已提交",
+        "message": f"{state.get('name') or task_id} 停止请求已提交",
     })
 
 
@@ -6111,22 +6705,108 @@ def api_daily_task_options():
 @app.route('/api/tasks/daily/status', methods=['GET'])
 @login_required
 def api_daily_task_status():
-    with _daily_task_lock:
-        data = dict(_daily_task_state)
-    external_owner = bit_daily_task.get_daily_task_lock_owner()
-    if external_owner and not data.get("running"):
-        data.update({
-            "running": True,
-            "status": "running",
-            "message": "daily_task 正在其他进程中运行",
-            "started_at": external_owner.get("acquired_at", ""),
-            "lock_owner": external_owner,
-        })
-    data["log"] = _read_daily_task_log()
+    requested_task_id = str(request.args.get("task_id") or "").strip()
+    if requested_task_id:
+        task = _daily_task_snapshot(requested_task_id)
+        if not task:
+            return jsonify({
+                "status": "error",
+                "message": "没有找到指定任务",
+            }), 404
+        data = task
+    else:
+        data = _daily_tasks_snapshot()
+        # 保留独立脚本/bit_main 的全局锁提示，但它不阻止页面新建独立任务。
+        external_owner = bit_daily_task.get_daily_task_lock_owner()
+        if external_owner:
+            external_task = {
+                "task_id": "external-daily-task",
+                "name": "外部 daily_task",
+                "execution_target": (
+                    "local" if RUNTIME_SETTINGS.is_client else "server"
+                ),
+                "running": True,
+                "status": "running",
+                "message": "daily_task 正在其他进程中运行",
+                "started_at": external_owner.get("acquired_at", ""),
+                "finished_at": "",
+                "stop_requested": False,
+                "lock_owner": external_owner,
+                "can_stop": False,
+                "params": {},
+            }
+            local_tasks = list(data.get("tasks") or ())
+            local_running = any(task.get("running") for task in local_tasks)
+            data["external_task"] = external_task
+            data["running"] = True
+            data["running_count"] = int(data.get("running_count") or 0) + 1
+            data["total_count"] = int(data.get("total_count") or 0) + 1
+            if not local_running:
+                # 旧客户端只读取顶层单任务字段；没有本地运行任务时应投影
+                # 外部任务，同时保留新列表客户端需要的聚合字段。
+                tasks = data.get("tasks", [])
+                running_count = data["running_count"]
+                total_count = data["total_count"]
+                data.update(external_task)
+                data.update({
+                    "tasks": tasks,
+                    "external_task": external_task,
+                    "running": True,
+                    "running_count": running_count,
+                    "total_count": total_count,
+                })
     return jsonify({
         "status": "success",
         "data": data,
     })
+
+
+@app.route('/api/local-executor/health', methods=['GET', 'OPTIONS'])
+@local_executor_required(
+    "appeal.execute",
+    "tasks.view",
+    "tasks.execute",
+)
+def api_local_executor_health():
+    return jsonify({
+        "status": "success",
+        "data": {
+            "ready": True,
+            "runtime_role": RUNTIME_SETTINGS.role,
+            "execution_target": "local",
+            "label": "本机比特浏览器",
+        },
+    })
+
+
+@app.route('/api/local-executor/run_shensu', methods=['GET', 'OPTIONS'])
+@local_executor_required("appeal.execute")
+def api_local_executor_run_shensu():
+    return api_run_shensu.__wrapped__()
+
+
+@app.route('/api/local-executor/run_shensu/stop', methods=['POST', 'OPTIONS'])
+@local_executor_required("appeal.execute")
+def api_local_executor_stop_shensu():
+    return api_stop_shensu.__wrapped__()
+
+
+@app.route('/api/local-executor/tasks/daily/start', methods=['POST', 'OPTIONS'])
+@local_executor_required("tasks.execute")
+def api_local_executor_start_daily_task():
+    return api_start_daily_task.__wrapped__()
+
+
+@app.route('/api/local-executor/tasks/daily/stop', methods=['POST', 'OPTIONS'])
+@local_executor_required("tasks.execute")
+def api_local_executor_stop_daily_task():
+    return api_stop_daily_task.__wrapped__()
+
+
+@app.route('/api/local-executor/tasks/daily/status', methods=['GET', 'OPTIONS'])
+@local_executor_required("tasks.view", "tasks.execute")
+def api_local_executor_daily_task_status():
+    return api_daily_task_status.__wrapped__()
 
 
 @app.route('/api/risk-check/categories', methods=['GET'])
@@ -8711,6 +9391,7 @@ def api_db_official_infraction_dashboard():
             group_name=request.args.get("group_name", ""),
             salesperson=request.args.get("salesperson", ""),
             source_type=request.args.get("source_type", ""),
+            category=request.args.get("category", ""),
             search=request.args.get("search", ""),
             detail_token_id=request.args.get("detail_token_id", 0),
             page=request.args.get("page", 1),
@@ -10653,9 +11334,9 @@ def _run_all_api_reputation_refresh():
                 total_stores = int(progress.get("total_stores") or 0)
                 _api_reputation_state["total_stores"] = total_stores
                 _api_reputation_state["message"] = (
-                    f"正在更新 {total_stores} 家授权店铺"
+                    f"正在更新 {total_stores} 家已开启声誉更新的店铺"
                     if total_stores
-                    else "没有可更新的授权店铺"
+                    else "没有开启声誉更新的店铺"
                 )
             elif event == "store_success":
                 rows = [dict(row) for row in (progress.get("rows") or [])]
@@ -10699,7 +11380,7 @@ def _run_all_api_reputation_refresh():
                 "message": (
                     f"全量更新完成：成功 {success_count} 家，失败 {failed_count} 家"
                     if total_stores
-                    else "没有可更新的授权店铺"
+                    else "没有开启声誉更新的店铺"
                 ),
                 "finished_at": finished_at,
                 "elapsed_seconds": max(0, int(time.monotonic() - started_monotonic)),
@@ -11425,6 +12106,7 @@ def index():
         'index.html',
         current_user=session.get("workbench_user") or {},
         mercado_authorization=mercado_tokens.authorization_info(),
+        runtime_role=RUNTIME_SETTINGS.role,
     )
 
 
@@ -11466,6 +12148,36 @@ def api_login():
         "data": session["workbench_user"],
         "remember": remember,
         "expires_in": WORKBENCH_REMEMBER_HOURS * 60 * 60 if remember else None,
+    })
+
+
+@app.route("/api/execution-targets/local-token", methods=["POST"])
+@login_required
+def api_local_executor_token():
+    data = request.get_json(silent=True) or {}
+    permission = str(data.get("permission") or "").strip()
+    if permission not in LOCAL_EXECUTOR_PERMISSIONS:
+        return jsonify({
+            "status": "error",
+            "message": "不支持的本机执行权限",
+        }), 400
+    user = get_current_workbench_user()
+    if not workbench_user_has_permission(user, permission):
+        return jsonify({
+            "status": "error",
+            "message": "当前账号没有执行该操作的权限",
+        }), 403
+    try:
+        token = create_local_executor_token(user, permission)
+    except RuntimeError as exc:
+        return jsonify({"status": "error", "message": str(exc)}), 503
+    return jsonify({
+        "status": "success",
+        "data": {
+            "token": token,
+            "base_url": LOCAL_EXECUTOR_BROWSER_URL,
+            "expires_in": LOCAL_EXECUTOR_TOKEN_MAX_AGE_SECONDS,
+        },
     })
 
 
@@ -11918,6 +12630,7 @@ def start_interface_background_services():
     start_official_infraction_scheduler_bootstrap()
     start_token_refresh_scheduler_bootstrap()
     start_store_email_sync_scheduler_bootstrap()
+    bit_order_sync.ensure_order_sync_scheduler()
     bit_order_sync.ensure_order_financial_backfill_worker()
     bit_order_sync.ensure_order_image_backfill_worker()
 

@@ -2704,7 +2704,6 @@
         }
 
         #log-container,
-        #daily-task-state-log,
         #order-print-log,
         #api-reputation-log {
             flex: 1;
@@ -2715,6 +2714,108 @@
             overflow-y: auto;
             font-family: Consolas, "Courier New", monospace;
             font-size: 13px;
+            line-height: 1.55;
+            white-space: pre-wrap;
+            word-break: break-word;
+        }
+
+        .daily-task-list {
+            flex: 1;
+            display: grid;
+            align-content: start;
+            gap: 10px;
+            min-height: 0;
+            overflow-y: auto;
+            background: #f3f6fa;
+            padding: 10px;
+        }
+
+        .daily-task-card {
+            overflow: hidden;
+            border: 1px solid var(--border);
+            border-radius: 9px;
+            background: #fff;
+            box-shadow: 0 2px 8px rgba(15, 23, 42, .05);
+        }
+
+        .daily-task-card-header {
+            display: flex;
+            align-items: flex-start;
+            justify-content: space-between;
+            gap: 10px;
+            padding: 10px;
+        }
+
+        .daily-task-card-header > div {
+            flex: 1;
+            min-width: 0;
+        }
+
+        .daily-task-card-header .status {
+            justify-content: flex-end;
+            min-width: 0;
+            max-width: 58%;
+            text-align: right;
+        }
+
+        .daily-task-card-header [data-role="status-text"] {
+            overflow-wrap: anywhere;
+        }
+
+        .daily-task-card-title {
+            margin: 0;
+            color: #1f2937;
+            font-size: 14px;
+            line-height: 1.45;
+            word-break: break-word;
+        }
+
+        .daily-task-card-id,
+        .daily-task-card-meta {
+            color: var(--muted);
+            font-size: 11px;
+            line-height: 1.5;
+        }
+
+        .daily-task-card-summary {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            flex-wrap: wrap;
+            gap: 8px;
+            border-top: 1px solid var(--border);
+            padding: 8px 10px;
+        }
+
+        .daily-task-card-actions {
+            display: flex;
+            align-items: center;
+            gap: 7px;
+        }
+
+        .daily-task-log-details {
+            border-top: 1px solid var(--border);
+        }
+
+        .daily-task-log-details > summary {
+            cursor: pointer;
+            padding: 8px 10px;
+            color: #475467;
+            font-size: 12px;
+            font-weight: 700;
+        }
+
+        .daily-task-card-log {
+            max-height: 330px;
+            min-height: 110px;
+            margin: 0;
+            overflow-y: auto;
+            border-top: 1px solid var(--border);
+            background: var(--log-bg);
+            color: var(--log-text);
+            padding: 9px 10px;
+            font-family: Consolas, "Courier New", monospace;
+            font-size: 12px;
             line-height: 1.55;
             white-space: pre-wrap;
             word-break: break-word;
@@ -2956,7 +3057,8 @@
             font-weight: 700;
         }
 
-        .reputation-filter-controls select {
+        .reputation-filter-controls select,
+        .reputation-filter-controls input {
             min-width: 140px;
             height: 32px;
             padding: 4px 28px 4px 9px;
@@ -7130,6 +7232,27 @@
         }
 
         @media (max-width: 560px) {
+            .daily-task-card-header {
+                align-items: stretch;
+                flex-direction: column;
+            }
+
+            .daily-task-card-header .status {
+                justify-content: flex-start;
+                max-width: 100%;
+                text-align: left;
+            }
+
+            .daily-task-card-summary {
+                align-items: stretch;
+                flex-direction: column;
+            }
+
+            .daily-task-card-actions,
+            .daily-task-card-actions button {
+                width: 100%;
+            }
+
             .mercado-shipping-heading {
                 align-items: flex-start;
                 flex-direction: column;
@@ -8155,7 +8278,7 @@
                 <button class="tab-button" type="button" data-tab="tasks" data-icon="✓" data-permission="tasks.view" onclick="switchTab('tasks')"><span class="nav-label">任务模块</span></button>
                 <button class="tab-button" type="button" data-tab="risk-check" data-icon="◎" data-permission="risk_check.view" onclick="switchTab('risk-check')"><span class="nav-label">侵权检测</span></button>
                 <button class="tab-button" type="button" data-tab="infringement-knowledge" data-icon="◆" data-permission="infringement_knowledge.view" onclick="switchTab('infringement-knowledge')"><span class="nav-label">侵权知识库</span></button>
-                <button class="tab-button" type="button" data-tab="infractions" data-icon="!" data-permission="infractions.view" onclick="switchTab('infractions')"><span class="nav-label">侵权总览</span></button>
+                <button class="tab-button" type="button" data-tab="infractions" data-icon="!" data-permission="infractions.view" onclick="switchTab('infractions')"><span class="nav-label">违规商品总览</span></button>
                 <button class="tab-button" type="button" data-tab="reputation" data-icon="☆" data-permission="reputation.view" onclick="switchTab('reputation')"><span class="nav-label">声誉数据</span></button>
                 <button class="tab-button" type="button" data-tab="api-reputation" data-icon="◎" data-permission="reputation.view" onclick="switchTab('api-reputation')"><span class="nav-label">API 声誉</span></button>
                 <button class="tab-button" type="button" data-tab="ai-appeals" data-icon="◫" data-permission="ai_appeals.view" onclick="switchTab('ai-appeals')"><span class="nav-label">AI 申诉记录</span></button>
@@ -9434,6 +9557,15 @@
                         <h2 class="panel-title">任务参数</h2>
 
                         <div class="field">
+                            <label for="appeal-execution-target">执行位置</label>
+                            <select id="appeal-execution-target">
+                                <option value="local" selected>本机比特浏览器（默认）</option>
+                                <option value="server">服务器比特浏览器</option>
+                            </select>
+                            <small class="shop-search-hint" id="appeal-local-executor-hint">默认由当前电脑运行；请保持本机客户端工作台已启动。</small>
+                        </div>
+
+                        <div class="field">
                             <label for="name">店铺名</label>
                             <div class="shop-combobox">
                                 <input type="text" id="name" placeholder="输入部分店铺名搜索" autocomplete="off" role="combobox" aria-autocomplete="list" aria-controls="appeal-shop-options" aria-expanded="false" onfocus="openAppealShopOptions()" oninput="renderAppealShopOptions()" onkeydown="handleAppealShopKeydown(event)" onblur="window.setTimeout(closeAppealShopOptions, 120)">
@@ -9458,10 +9590,12 @@
                             <label id="form-label">任务类型（点击选择，可多选）</label>
                             <div class="site-picker" id="form-picker" role="group" aria-labelledby="form-label">
                                 <label class="site-option"><input type="checkbox" name="form" value="延误" checked><span>延误</span></label>
-                                <label class="site-option"><input type="checkbox" name="form" value="侵权"><span>侵权</span></label>
+                                <label class="site-option"><input type="checkbox" name="form" value="侵权" onchange="syncProhibitedAppealSelection(this)"><span>侵权</span></label>
+                                <label class="site-option"><input type="checkbox" name="form" value="禁限售"><span>禁限售</span></label>
                                 <label class="site-option"><input type="checkbox" name="form" value="取消率"><span>取消率</span></label>
                                 <label class="site-option"><input type="checkbox" name="form" value="投诉"><span>投诉</span></label>
                             </div>
+                            <small class="shop-search-hint">选择侵权时，禁限售产品会自动使用禁限售话术独立开启申诉。</small>
                         </div>
 
                         <div class="field">
@@ -9520,6 +9654,7 @@
                     <div class="summary-row" id="appeal-phrase-summary">
                         <div class="metric"><div class="metric-label">延误</div><div class="metric-value">-</div></div>
                         <div class="metric"><div class="metric-label">侵权</div><div class="metric-value">-</div></div>
+                        <div class="metric"><div class="metric-label">禁限售</div><div class="metric-value">-</div></div>
                         <div class="metric"><div class="metric-label">取消率</div><div class="metric-value">-</div></div>
                         <div class="metric"><div class="metric-label">投诉</div><div class="metric-value">-</div></div>
                     </div>
@@ -9532,6 +9667,7 @@
                                     <select id="appeal-phrase-type" required>
                                         <option value="延误">延误</option>
                                         <option value="侵权">侵权</option>
+                                        <option value="禁限售">禁限售</option>
                                         <option value="取消率">取消率</option>
                                         <option value="投诉">投诉</option>
                                     </select>
@@ -9581,6 +9717,15 @@
                         <h2 class="panel-title">daily_task 参数</h2>
 
                         <div class="field">
+                            <label for="daily-task-execution-target">执行位置</label>
+                            <select id="daily-task-execution-target">
+                                <option value="local" selected>本机比特浏览器（默认）</option>
+                                <option value="server">服务器比特浏览器</option>
+                            </select>
+                            <small class="shop-search-hint" id="daily-task-local-executor-hint">默认由当前电脑运行；本机未连接时不会自动改用服务器。</small>
+                        </div>
+
+                        <div class="field">
                             <label for="daily-task-mode">执行模式</label>
                             <select id="daily-task-mode">
                                 <option value="once">单轮执行</option>
@@ -9592,12 +9737,13 @@
                             <label>任务开关（可同时开启多个）</label>
                             <div class="site-picker" id="daily-task-switches">
                                 <label class="site-option"><input type="checkbox" role="switch" name="daily-task-appeal-type" value="侵权" checked onchange="updateDailyTaskAppealSwitch(this)"><span>侵权</span></label>
+                                <label class="site-option"><input type="checkbox" role="switch" name="daily-task-appeal-type" value="禁限售" onchange="updateDailyTaskAppealSwitch(this)"><span>禁限售</span></label>
                                 <label class="site-option"><input type="checkbox" role="switch" name="daily-task-appeal-type" value="延误率" onchange="updateDailyTaskAppealSwitch(this)"><span>延误率</span></label>
                                 <label class="site-option"><input type="checkbox" role="switch" name="daily-task-appeal-type" value="投诉" onchange="updateDailyTaskAppealSwitch(this)"><span>投诉</span></label>
                                 <label class="site-option"><input type="checkbox" role="switch" name="daily-task-appeal-type" value="取消率" onchange="updateDailyTaskAppealSwitch(this)"><span>取消率</span></label>
                                 <label class="site-option"><input id="daily-task-mixed-mode" type="checkbox" role="switch" name="daily-task-appeal-type" value="混合模式" onchange="updateDailyTaskAppealSwitch(this)"><span>混合模式</span></label>
                             </div>
-                            <small class="shop-search-hint">混合模式一轮：侵权 → 延误率 → 侵权 → 投诉 → 侵权 → 取消率；混合模式与自定义任务互斥。侵权任务不限制 Top N；每轮先实时遍历店铺授权中勾选的全部站点，再只执行本站点侵权数超过标准的站点。</small>
+                            <small class="shop-search-hint">混合模式一轮：侵权 → 延误率 → 侵权 → 投诉 → 侵权 → 取消率；混合模式与自定义任务互斥。侵权任务不限制 Top N；每轮先实时遍历店铺授权中勾选的全部站点，再只执行本站点侵权数超过标准的站点。识别出的禁限售产品会使用禁限售话术独立开启申诉；也可单独开启禁限售任务并读取当前禁限售列表。</small>
                         </div>
 
                          <div class="field">
@@ -9630,7 +9776,7 @@
                         </div>
 
                         <div class="field">
-                            <label for="daily-task-infraction-min-count">侵权个数标准（超过才执行）</label>
+                            <label for="daily-task-infraction-min-count">侵权/禁限售个数标准（超过才执行）</label>
                             <input type="number" id="daily-task-infraction-min-count" value="0" min="0" max="1000000" step="1">
                         </div>
 
@@ -9671,14 +9817,14 @@
 
                         <div class="actions">
                             <button class="primary" id="start-daily-task-btn" type="button" onclick="startDailyTask()">启动 daily_task</button>
-                            <button class="danger" id="stop-daily-task-btn" type="button" onclick="stopDailyTask()" disabled>停止任务</button>
                             <button class="secondary" id="refresh-daily-task-status-btn" type="button" onclick="loadDailyTaskStatus()">刷新状态</button>
                         </div>
+                        <small class="shop-search-hint">可重复修改店铺组或业务员并启动新任务；每项任务独立运行、独立记录日志，并可单独停止。同一店铺窗口同时只会被一项任务占用。</small>
                     </section>
 
                     <section class="panel log-panel">
                         <div class="log-header">
-                            <h2 class="panel-title" style="margin: 0;">daily_task 运行日志</h2>
+                            <h2 class="panel-title" style="margin: 0;">全部 daily_task 任务</h2>
                             <span class="status" id="daily-task-status-badge">
                                 <span class="status-dot"></span>
                                 <span id="daily-task-status-text">等待启动</span>
@@ -9686,15 +9832,21 @@
                         </div>
                         <div class="summary-row">
                             <div class="metric">
-                                <div class="metric-label">开始时间</div>
-                                <div class="metric-value" id="daily-task-started">-</div>
+                                <div class="metric-label">本机运行中</div>
+                                <div class="metric-value" id="daily-task-local-running-count">0</div>
                             </div>
                             <div class="metric">
-                                <div class="metric-label">结束时间</div>
-                                <div class="metric-value" id="daily-task-finished">-</div>
+                                <div class="metric-label">服务器运行中</div>
+                                <div class="metric-value" id="daily-task-server-running-count">0</div>
+                            </div>
+                            <div class="metric">
+                                <div class="metric-label">任务总数</div>
+                                <div class="metric-value" id="daily-task-total-count">0</div>
                             </div>
                         </div>
-                        <pre id="daily-task-state-log">等待任务启动...</pre>
+                        <div class="daily-task-list" id="daily-task-list">
+                            <div class="empty-state">等待任务启动...</div>
+                        </div>
                     </section>
                 </div>
             </div>
@@ -10403,6 +10555,10 @@
                         </div>
                         <div class="mercado-token-filter-bar">
                             <div class="field">
+                                <label for="mercado-token-name-search">店铺名</label>
+                                <input id="mercado-token-name-search" type="search" placeholder="输入部分店铺名" oninput="applyMercadoStoreTokenFilters()">
+                            </div>
+                            <div class="field">
                                 <label for="mercado-token-salesperson-filter">业务员</label>
                                 <select id="mercado-token-salesperson-filter" onchange="applyMercadoStoreTokenFilters()">
                                     <option value="">全部业务员</option>
@@ -10445,11 +10601,11 @@
                     <div class="order-detail-header">
                         <div>
                             <h3 id="mercado-site-settings-title">店铺配置</h3>
-                            <p style="margin:3px 0 0;color:#667085;font-size:12px">业务员和分组统一设置；申诉、访问统计和折扣按站点设置</p>
+                            <p style="margin:3px 0 0;color:#667085;font-size:12px">业务员和分组统一设置；申诉、声誉更新、七天流量和折扣按站点设置</p>
                         </div>
                         <button class="order-detail-close" type="button" aria-label="关闭店铺配置" onclick="document.getElementById('mercado-site-settings-dialog').close()">×</button>
                     </div>
-                    <p class="mercado-site-settings-intro">勾选站点是否参与自动申诉和访问数据统计；业务员和分组对全部站点统一生效。</p>
+                    <p class="mercado-site-settings-intro">“更新声誉”通过官方 API 更新声誉和站点状态；“七天流量”才会启动浏览器。业务员和分组对全部站点统一生效。</p>
                     <div class="mercado-account-settings-grid">
                         <div class="field">
                             <label for="mercado-site-salesperson">业务员</label>
@@ -10462,7 +10618,7 @@
                     </div>
                     <div class="mercado-site-settings-wrap">
                         <table class="mercado-site-settings-table">
-                            <thead><tr><th>站点</th><th>进行申诉</th><th>访问数据统计</th><th>折扣比例（%）</th></tr></thead>
+                            <thead><tr><th>站点</th><th>进行申诉</th><th>更新声誉</th><th>七天流量</th><th>折扣比例（%）</th></tr></thead>
                             <tbody id="mercado-site-settings-body"></tbody>
                         </table>
                     </div>
@@ -10497,7 +10653,7 @@
                     </div>
                     <div class="mercado-site-settings-wrap">
                         <table class="mercado-site-settings-table">
-                            <thead><tr><th>站点</th><th>进行申诉</th><th>访问数据统计</th><th>折扣比例（%）</th></tr></thead>
+                            <thead><tr><th>站点</th><th>进行申诉</th><th>更新声誉</th><th>七天流量</th><th>折扣比例（%）</th></tr></thead>
                             <tbody id="mercado-bulk-settings-body"></tbody>
                         </table>
                     </div>
@@ -11072,11 +11228,11 @@
             </div>
 
             <div class="tab-page" id="tab-infractions">
-                <section class="infraction-dashboard-module" aria-label="侵权总览">
+                <section class="infraction-dashboard-module" aria-label="违规商品总览">
                     <iframe
                         class="infraction-dashboard-frame"
                         id="infraction-dashboard-frame"
-                        title="侵权总览"
+                        title="违规商品总览"
                         data-src="/infringement-dashboard?embedded=1"
                         src="about:blank"
                     ></iframe>
@@ -11257,10 +11413,13 @@
                                     <option value="">全部业务员</option>
                                 </select>
                             </label>
-                            <label>账户组
+                            <label>账号组
                                 <select id="reputation-group-filter" onchange="applyReputationFilters()">
-                                    <option value="">全部账户组</option>
+                                    <option value="">全部账号组</option>
                                 </select>
+                            </label>
+                            <label>名字
+                                <input id="reputation-name-search" type="search" placeholder="模糊查询店铺名" oninput="applyReputationFilters()">
                             </label>
                             <span id="reputation-filter-summary">显示全部声誉记录</span>
                         </div>
@@ -11300,17 +11459,17 @@
             <div class="tab-page" id="tab-api-reputation">
                 <div class="tab-heading">
                     <h2>API 声誉</h2>
-                    <p>声誉、站点状态、近七天订单变化、侵权及权利人数量通过官方 API 获取；流量趋势和系统提示继续通过浏览器采集</p>
+                    <p>声誉、站点状态、近七天订单变化、侵权、权利人数量及系统提示通过官方 API 获取；仅七天流量趋势通过浏览器采集</p>
                 </div>
 
                 <section class="panel infractions-panel">
                     <div class="infractions-header">
                         <div>
                             <h2 class="panel-title" style="margin: 0;">官方卖家声誉</h2>
-                            <p id="api-reputation-message" style="margin: 3px 0 0; color: var(--muted); font-size: 13px;">等待全量更新全部已授权店铺</p>
+                            <p id="api-reputation-message" style="margin: 3px 0 0; color: var(--muted); font-size: 13px;">等待更新已开启声誉更新的店铺</p>
                         </div>
                         <div class="header-actions">
-                            <button class="primary" id="api-reputation-fetch" type="button" onclick="startApiReputationRefresh()">全量更新全部店铺</button>
+                            <button class="primary" id="api-reputation-fetch" type="button" onclick="startApiReputationRefresh()">更新已开启店铺</button>
                         </div>
                     </div>
                     <div class="summary-row">
@@ -11386,7 +11545,7 @@
             <div class="tab-page" id="tab-ai-appeals">
                 <div class="tab-heading">
                     <h2>AI申诉记录</h2>
-                    <p>按组保存 AI 客服原始回复；新记录不再调用 DeepSeek 总结，结果需人工确认</p>
+                    <p>按组保存客服原始回复与执行状态；申诉不调用 DeepSeek，仅自动回答站点选择。收到回复不代表申诉获批，超时和发送状态不明会单独标记。</p>
                 </div>
 
                 <section class="panel infractions-panel">
@@ -11546,7 +11705,7 @@
                         <h2 class="panel-title" style="margin: 0;">店铺任务范围</h2>
                         <p class="panel-subtitle">
                             店铺、业务员、店铺组和站点任务范围已统一迁移到“店铺授权”。
-                            “访问数据统计”控制侵权与声誉读取，“进行申诉”控制申诉任务；
+                            “更新声誉”控制官方 API 声誉读取，“七天流量”控制浏览器流量读取，“进行申诉”控制申诉任务；
                             BitBrowser 窗口按授权显示名称或 Mercado 昵称实时匹配。
                         </p>
                     </section>
@@ -11565,6 +11724,7 @@
 
     <script>
         const currentWorkbenchUser = {{ current_user | tojson }};
+        const workbenchRuntimeRole = {{ (runtime_role or 'server') | tojson }};
         const currentWorkbenchPermissions = new Set(
             Array.isArray(currentWorkbenchUser.permissions)
                 ? currentWorkbenchUser.permissions
@@ -11579,6 +11739,8 @@
         const logContainer = document.getElementById("log-container");
         const startBtn = document.getElementById("start-btn");
         const stopBtn = document.getElementById("stop-btn");
+        const appealExecutionTarget = document.getElementById("appeal-execution-target");
+        const appealLocalExecutorHint = document.getElementById("appeal-local-executor-hint");
         const appealShopInput = document.getElementById("name");
         const appealShopOptions = document.getElementById("appeal-shop-options");
         const statusBox = document.getElementById("status");
@@ -11652,6 +11814,7 @@
         const reputationRisk = document.getElementById("reputation-risk");
         const reputationSalespersonFilter = document.getElementById("reputation-salesperson-filter");
         const reputationGroupFilter = document.getElementById("reputation-group-filter");
+        const reputationNameSearch = document.getElementById("reputation-name-search");
         const reputationFilterSummary = document.getElementById("reputation-filter-summary");
         const collectReputationBtn = document.getElementById("collect-reputation-btn");
         const reputationSelectAll = document.getElementById("reputation-select-all");
@@ -11676,14 +11839,16 @@
         const aiAppealLatestTime = document.getElementById("ai-appeal-latest-time");
         const aiAppealTotal = document.getElementById("ai-appeal-total");
         const startDailyTaskBtn = document.getElementById("start-daily-task-btn");
-        const stopDailyTaskBtn = document.getElementById("stop-daily-task-btn");
+        const dailyTaskExecutionTarget = document.getElementById("daily-task-execution-target");
+        const dailyTaskLocalExecutorHint = document.getElementById("daily-task-local-executor-hint");
         const dailyTaskSalesperson = document.getElementById("daily-task-salesperson");
         const dailyTaskGroup = document.getElementById("daily-task-group");
         const dailyTaskStatusBadge = document.getElementById("daily-task-status-badge");
         const dailyTaskStatusText = document.getElementById("daily-task-status-text");
-        const dailyTaskStarted = document.getElementById("daily-task-started");
-        const dailyTaskFinished = document.getElementById("daily-task-finished");
-        const dailyTaskStateLog = document.getElementById("daily-task-state-log");
+        const dailyTaskLocalRunningCount = document.getElementById("daily-task-local-running-count");
+        const dailyTaskServerRunningCount = document.getElementById("daily-task-server-running-count");
+        const dailyTaskTotalCount = document.getElementById("daily-task-total-count");
+        const dailyTaskList = document.getElementById("daily-task-list");
         const startOrderPrintBtn = document.getElementById("start-order-print-btn");
         const stopOrderPrintBtn = document.getElementById("stop-order-print-btn");
         const downloadOrderPrintBtn = document.getElementById("download-order-print-btn");
@@ -11771,6 +11936,7 @@
         const mercadoTokenSelectAll = document.getElementById("mercado-token-select-all");
         const mercadoTokenSelectionSummary = document.getElementById("mercado-token-selection-summary");
         const mercadoTokenBulkSettings = document.getElementById("mercado-token-bulk-settings");
+        const mercadoTokenNameSearch = document.getElementById("mercado-token-name-search");
         const mercadoTokenSalespersonFilter = document.getElementById("mercado-token-salesperson-filter");
         const mercadoTokenGroupFilter = document.getElementById("mercado-token-group-filter");
         const mercadoSiteSettingsDialog = document.getElementById("mercado-site-settings-dialog");
@@ -12060,6 +12226,13 @@
         let aiAppealsLoaded = false;
         let tasksLoaded = false;
         let dailyTaskStatusPollTimer = null;
+        let dailyTaskStatusRequestSequence = 0;
+        let dailyTaskAutoLogCursor = 0;
+        const dailyTaskPendingStopIds = new Set();
+        const dailyTaskLogRequests = new Map();
+        const dailyTaskLogLastFetchedAt = new Map();
+        const DAILY_TASK_AUTO_LOG_BATCH_SIZE = 2;
+        const DAILY_TASK_LOG_MIN_INTERVAL_MS = 3500;
         let orderPrintLoaded = false;
         let orderPrintRunning = false;
         let orderPrintStopping = false;
@@ -12156,7 +12329,9 @@
         let selectedReputationUpdateRunning = false;
         let selectedReputationUpdatePollTimer = null;
         let activeAppealTaskId = "";
+        let activeAppealExecutionTarget = "local";
         let appealStopRequested = false;
+        const localExecutorCredentials = new Map();
         let appealPhrasesLoaded = false;
         let appealPhraseRows = [];
         let infringementKnowledgeLoaded = false;
@@ -12300,8 +12475,8 @@
                 button.hidden = !hasWorkbenchPermission(button.dataset.permission);
             });
             const actionSelectors = {
-                "appeal.execute": ["#start-btn", "#stop-btn", "#add-appeal-phrase-btn", "#save-appeal-phrase-btn"],
-                "tasks.execute": ["#start-daily-task-btn", "#stop-daily-task-btn"],
+                "appeal.execute": ["#start-btn", "#stop-btn", "#appeal-execution-target", "#add-appeal-phrase-btn", "#save-appeal-phrase-btn"],
+                "tasks.execute": ["#start-daily-task-btn", "#daily-task-execution-target"],
                 "order_print.execute": ["#start-order-print-btn", "#stop-order-print-btn", "#rerun-selected-order-print-btn"],
                 "order_analysis.execute": ["#order-analysis-folder", "#import-order-analysis-btn"],
                 "shop_status.execute": ["#start-selected-mercado-login-btn", "#start-mercado-login-btn", "#stop-mercado-login-btn", ".header-worker-control"],
@@ -12406,6 +12581,9 @@
             if (tabName === "appeal" && !appealPhrasesLoaded) {
                 loadAppealPhrases();
             }
+            if (tabName === "appeal" && appealExecutionTarget?.value === "local") {
+                refreshLocalExecutorHint(appealLocalExecutorHint, "appeal.execute");
+            }
             if (tabName === "risk-check") {
                 loadRiskCategories();
                 loadRiskCheckStatus();
@@ -12433,9 +12611,9 @@
             if (tabName === "ai-appeals" && !aiAppealsLoaded) {
                 loadAiAppealRecords();
             }
-            if (tabName === "tasks" && !tasksLoaded) {
+            if (tabName === "tasks") {
                 loadDailyTaskStatus();
-                loadDailyTaskOptions();
+                if (!tasksLoaded) loadDailyTaskOptions();
             }
             if (tabName === "order-print") {
                 loadOrderPrintStatus();
@@ -16275,7 +16453,8 @@
                     <tr data-site-id="${siteId}">
                         <td><strong>${escapeHtml(siteName)}</strong><span>${siteId}</span></td>
                         <td><input class="market-row-select" data-field="appeal_enabled" type="checkbox" ${setting.appeal_enabled ? "checked" : ""} aria-label="${escapeHtml(siteName)}进行申诉"></td>
-                        <td><input class="market-row-select" data-field="visit_stats_enabled" type="checkbox" ${setting.visit_stats_enabled ? "checked" : ""} aria-label="${escapeHtml(siteName)}访问数据统计"></td>
+                        <td><input class="market-row-select" data-field="reputation_update_enabled" type="checkbox" ${setting.reputation_update_enabled ? "checked" : ""} aria-label="${escapeHtml(siteName)}更新声誉"></td>
+                        <td><input class="market-row-select" data-field="visit_stats_enabled" type="checkbox" ${setting.visit_stats_enabled ? "checked" : ""} aria-label="${escapeHtml(siteName)}七天流量"></td>
                         <td><input data-field="discount_rate" type="number" min="0" max="100" step="0.01" value="${escapeHtml(discount)}" placeholder="例如 95"></td>
                     </tr>
                 `;
@@ -16293,7 +16472,7 @@
             mercadoSiteSalesperson.disabled = true;
             mercadoSiteGroupName.value = "";
             mercadoSiteGroupName.disabled = true;
-            mercadoSiteSettingsBody.innerHTML = '<tr><td class="empty-state" colspan="4">正在读取人员和最新配置...</td></tr>';
+            mercadoSiteSettingsBody.innerHTML = '<tr><td class="empty-state" colspan="5">正在读取人员和最新配置...</td></tr>';
             setMercadoSiteSettingsMessage("正在读取人员和最新配置…");
             mercadoSiteSettingsSave.disabled = true;
             if (typeof mercadoSiteSettingsDialog.showModal === "function" && !mercadoSiteSettingsDialog.open) {
@@ -16351,6 +16530,7 @@
                     salesperson,
                     group_name: groupName,
                     appeal_enabled: Boolean(row.querySelector('[data-field="appeal_enabled"]')?.checked),
+                    reputation_update_enabled: Boolean(row.querySelector('[data-field="reputation_update_enabled"]')?.checked),
                     visit_stats_enabled: Boolean(row.querySelector('[data-field="visit_stats_enabled"]')?.checked),
                 });
             }
@@ -16370,6 +16550,7 @@
                 setMercadoSiteSettingsMessage(payload.message || "店铺配置已保存");
                 showMercadoTokenMessage(payload.message || "店铺配置已保存");
                 await loadMercadoStoreTokens(true);
+                collectionOptionsLoaded = false;
             } catch (error) {
                 setMercadoSiteSettingsMessage(`保存失败：${error.message || error}`, true);
             } finally {
@@ -16438,13 +16619,20 @@
                         .find(item => String(item.site_id || "").toUpperCase() === siteId);
                     return Boolean(setting?.visit_stats_enabled);
                 });
+                const reputationValues = records.map(account => {
+                    const setting = (Array.isArray(account.site_settings) ? account.site_settings : [])
+                        .find(item => String(item.site_id || "").toUpperCase() === siteId);
+                    return Boolean(setting?.reputation_update_enabled);
+                });
                 const appealEnabled = appealValues.length && appealValues.every(Boolean);
+                const reputationUpdateEnabled = reputationValues.length && reputationValues.every(Boolean);
                 const visitStatsEnabled = visitValues.length && visitValues.every(Boolean);
                 return `
                     <tr data-site-id="${siteId}">
                         <td><strong>${escapeHtml(siteName)}</strong><span>${siteId}</span></td>
                         <td><input class="market-row-select" data-field="bulk_appeal_enabled" type="checkbox" ${appealEnabled ? "checked" : ""} aria-label="${escapeHtml(siteName)}批量进行申诉"></td>
-                        <td><input class="market-row-select" data-field="bulk_visit_stats_enabled" type="checkbox" ${visitStatsEnabled ? "checked" : ""} aria-label="${escapeHtml(siteName)}批量访问数据统计"></td>
+                        <td><input class="market-row-select" data-field="bulk_reputation_update_enabled" type="checkbox" ${reputationUpdateEnabled ? "checked" : ""} aria-label="${escapeHtml(siteName)}批量更新声誉"></td>
+                        <td><input class="market-row-select" data-field="bulk_visit_stats_enabled" type="checkbox" ${visitStatsEnabled ? "checked" : ""} aria-label="${escapeHtml(siteName)}批量七天流量"></td>
                         <td><input data-field="bulk_discount_rate" type="number" min="0" max="100" step="0.01" value="${escapeHtml(discount)}" placeholder="必填，0–100"></td>
                     </tr>
                 `;
@@ -16460,7 +16648,7 @@
             mercadoBulkSalesperson.disabled = true;
             mercadoBulkGroupName.value = "";
             mercadoBulkGroupName.disabled = true;
-            mercadoBulkSettingsBody.innerHTML = '<tr><td class="empty-state" colspan="4">正在读取人员和现有配置...</td></tr>';
+            mercadoBulkSettingsBody.innerHTML = '<tr><td class="empty-state" colspan="5">正在读取人员和现有配置...</td></tr>';
             mercadoBulkGroupSave.disabled = true;
             mercadoBulkSettingsSave.disabled = true;
             setMercadoBulkSettingsMessage("正在准备批量配置…");
@@ -16513,6 +16701,7 @@
                 discounts.set(siteId, discount);
                 sitePolicies.set(siteId, {
                     appeal_enabled: Boolean(row.querySelector('[data-field="bulk_appeal_enabled"]')?.checked),
+                    reputation_update_enabled: Boolean(row.querySelector('[data-field="bulk_reputation_update_enabled"]')?.checked),
                     visit_stats_enabled: Boolean(row.querySelector('[data-field="bulk_visit_stats_enabled"]')?.checked),
                 });
             }
@@ -16535,6 +16724,7 @@
                             salesperson: String(existing.salesperson || "").trim(),
                             group_name: bulkGroupName,
                             appeal_enabled: Boolean(existing.appeal_enabled),
+                            reputation_update_enabled: Boolean(existing.reputation_update_enabled),
                             visit_stats_enabled: Boolean(existing.visit_stats_enabled),
                         };
                     }
@@ -16545,6 +16735,7 @@
                         salesperson,
                         group_name: groupName,
                         appeal_enabled: Boolean(policy.appeal_enabled),
+                        reputation_update_enabled: Boolean(policy.reputation_update_enabled),
                         visit_stats_enabled: Boolean(policy.visit_stats_enabled),
                     };
                 });
@@ -16575,6 +16766,7 @@
                 }
                 succeededIds.forEach(tokenId => selectedMercadoStoreTokenIds.delete(tokenId));
                 await loadMercadoStoreTokens(true);
+                collectionOptionsLoaded = false;
                 if (failures.length) {
                     const preview = failures.slice(0, 3).map(item => `${item.name}：${item.message}`).join("；");
                     setMercadoBulkSettingsMessage(
@@ -16893,7 +17085,7 @@
             const timing = [data?.started_at ? `开始 ${data.started_at}` : "", data?.finished_at ? `结束 ${data.finished_at}` : ""].filter(Boolean).join(" · ");
             apiReputationMessage.textContent = [data?.message || "等待全量更新", timing].filter(Boolean).join(" · ");
             apiReputationFetch.disabled = Boolean(data?.running);
-            apiReputationFetch.textContent = data?.running ? "全量更新中..." : "全量更新全部店铺";
+            apiReputationFetch.textContent = data?.running ? "全量更新中..." : "更新已开启店铺";
             apiReputationStatusText.textContent = data?.running
                 ? "运行中"
                 : data?.status === "success" ? "已完成"
@@ -16970,7 +17162,7 @@
                 scheduleApiReputationPoll(true);
             } catch (error) {
                 apiReputationFetch.disabled = false;
-                apiReputationFetch.textContent = "全量更新全部店铺";
+                apiReputationFetch.textContent = "更新已开启店铺";
                 apiReputationMessage.textContent = `启动失败：${error.message || error}`;
                 apiReputationLog.textContent = `启动失败：${error.message || error}`;
             }
@@ -17079,9 +17271,13 @@
         }
 
         function filteredMercadoStoreTokenRows() {
+            const nameQuery = String(mercadoTokenNameSearch?.value || "").trim().toLocaleLowerCase("zh-CN");
             const salesperson = String(mercadoTokenSalespersonFilter?.value || "");
             const groupName = String(mercadoTokenGroupFilter?.value || "");
             return mercadoStoreTokenRows.filter(row => {
+                const shopNames = [row.display_name, row.nickname]
+                    .map(value => String(value || "").toLocaleLowerCase("zh-CN"));
+                const nameMatches = !nameQuery || shopNames.some(name => name.includes(nameQuery));
                 const assignedSalesperson = mercadoAccountSalesperson(row);
                 const assignedGroup = mercadoAccountGroup(row);
                 const salespersonMatches = !salesperson || (
@@ -17090,7 +17286,7 @@
                 const groupMatches = !groupName || (
                     groupName === "__empty__" ? !assignedGroup : assignedGroup === groupName
                 );
-                return salespersonMatches && groupMatches;
+                return nameMatches && salespersonMatches && groupMatches;
             });
         }
 
@@ -17113,10 +17309,11 @@
                 const accountId = row.meli_user_id ? `ID: ${row.meli_user_id}` : "账号 ID 待验证";
                 const siteSettings = Array.isArray(row.site_settings) ? row.site_settings : [];
                 const configuredSites = siteSettings.filter(item => (
-                    item.appeal_enabled || item.visit_stats_enabled ||
+                    item.appeal_enabled || item.reputation_update_enabled || item.visit_stats_enabled ||
                     (item.discount_rate !== null && item.discount_rate !== undefined)
                 ));
                 const appealSiteCount = siteSettings.filter(item => item.appeal_enabled).length;
+                const reputationSiteCount = siteSettings.filter(item => item.reputation_update_enabled).length;
                 const visitSiteCount = siteSettings.filter(item => item.visit_stats_enabled).length;
                 const salesperson = mercadoAccountSalesperson(row) || "未分配";
                 const groupName = mercadoAccountGroup(row) || "未分组";
@@ -17128,7 +17325,7 @@
                         <td title="${escapeHtml(row.display_name || "")}">${escapeHtml(row.display_name || "-")}</td>
                         <td><div class="order-cell-stack">
                             <strong>${escapeHtml(salesperson)} · ${escapeHtml(groupName)}</strong>
-                            <span>${configuredSites.length ? `申诉 ${appealSiteCount} · 访问统计 ${visitSiteCount}` : "站点任务尚未配置"}</span>
+                            <span>${configuredSites.length ? `申诉 ${appealSiteCount} · 声誉 ${reputationSiteCount} · 七天流量 ${visitSiteCount}` : "站点任务尚未配置"}</span>
                             <button class="order-copy-link" type="button" onclick="openMercadoSiteSettings(${tokenId})" ${enabled ? "" : "disabled"}>设置站点任务 / 折扣 / 业务员</button>
                         </div></td>
                         <td class="token-account-cell"><strong>${escapeHtml(accountName)}</strong><span>${escapeHtml(accountId)}</span></td>
@@ -17154,6 +17351,7 @@
         }
 
         function clearMercadoStoreTokenFilters() {
+            if (mercadoTokenNameSearch) mercadoTokenNameSearch.value = "";
             if (mercadoTokenSalespersonFilter) mercadoTokenSalespersonFilter.value = "";
             if (mercadoTokenGroupFilter) mercadoTokenGroupFilter.value = "";
             renderMercadoStoreTokenTable();
@@ -19597,7 +19795,7 @@
             const byType = new Map(
                 (Array.isArray(summary) ? summary : []).map(item => [item.appeal_type, item])
             );
-            appealPhraseSummary.innerHTML = ["延误", "侵权", "取消率", "投诉"].map(type => {
+            appealPhraseSummary.innerHTML = ["延误", "侵权", "禁限售", "取消率", "投诉"].map(type => {
                 const item = byType.get(type) || {};
                 const total = Number(item.total || 0);
                 const active = Number(item.active || 0);
@@ -21466,7 +21664,7 @@
             if (!collectReputationBtn) return;
             let requestPayload;
             try {
-                await loadCollectionOptions();
+                await loadCollectionOptions(true);
                 requestPayload = collectionRequestPayload("reputation");
             } catch (err) {
                 alert(`无法启动：${err.message || err}`);
@@ -21592,7 +21790,9 @@
                 return;
             }
             try {
-                await loadCollectionOptions();
+                // 更新开关可能刚在店铺配置中保存，执行前必须重新读取服务端授权，
+                // 避免使用页面初始化时缓存的旧店铺范围。
+                await loadCollectionOptions(true);
                 const selectedShopSet = new Set(shops);
                 const selectedConfigs = collectionShopOptions.filter(shop => (
                     selectedShopSet.has(String(shop.shop_name || "").trim())
@@ -21789,7 +21989,7 @@
                         <td><input class="collection-checkbox order-print-target-select" type="checkbox" data-target-index="${index}" aria-label="选择 ${escapeHtml(row.shop_name || "")} ${escapeHtml(row.site || "")}" onchange="toggleOrderPrintSiteTarget(${index}, this.checked)"></td>
                         <td>${escapeHtml(row.shop_name || "-")}</td>
                         <td>${escapeHtml(row.site || "-")}</td>
-                        <td>${renderOrderPrintRunStatus(row.status)}</td>
+                        <td>${renderOrderPrintRunStatus(row.status)}${row.source ? `<div class="inventory-cell-meta">${escapeHtml(row.source)}</div>` : ""}</td>
                         <td>${escapeHtml(row.finished_at || "尚未执行")}</td>
                     </tr>`;
             }).join("");
@@ -22247,6 +22447,108 @@
             }
         }
 
+        function executionTargetLabel(target) {
+            return target === "local" ? "本机比特浏览器" : "服务器比特浏览器";
+        }
+
+        async function getLocalExecutorCredential(permission, force = false) {
+            const cached = localExecutorCredentials.get(permission);
+            if (!force && cached && cached.expiresAt > Date.now()) return cached;
+            const response = await fetch("/api/execution-targets/local-token", {
+                method: "POST",
+                headers: {"Content-Type": "application/json"},
+                body: JSON.stringify({permission}),
+            });
+            const payload = await response.json();
+            if (!response.ok || payload.status !== "success") {
+                throw new Error(payload.message || `无法取得本机执行凭证：${response.status}`);
+            }
+            const data = payload.data || {};
+            const credential = {
+                token: String(data.token || ""),
+                baseUrl: String(data.base_url || "http://127.0.0.1:5000").replace(/\/$/, ""),
+                expiresAt: Date.now() + Math.max(30, Number(data.expires_in || 300) - 30) * 1000,
+            };
+            if (!credential.token) throw new Error("服务端未返回本机执行凭证");
+            localExecutorCredentials.set(permission, credential);
+            return credential;
+        }
+
+        async function fetchLocalExecutor(path, options = {}, permission, retry = true) {
+            const credential = await getLocalExecutorCredential(permission, !retry);
+            const localPath = path.startsWith("/api/")
+                ? `/api/local-executor/${path.slice(5)}`
+                : `/api/local-executor/${String(path || "").replace(/^\//, "")}`;
+            const headers = new Headers(options.headers || {});
+            headers.set("Authorization", `Bearer ${credential.token}`);
+            let response;
+            try {
+                response = await fetch(`${credential.baseUrl}${localPath}`, {
+                    ...options,
+                    headers,
+                    credentials: "omit",
+                    mode: "cors",
+                    targetAddressSpace: "local",
+                });
+            } catch (_error) {
+                throw new Error(
+                    "无法连接本机执行端。请先在这台电脑以 client 角色启动工作台、确认本机 5000 端口可用，并允许浏览器访问本地网络。"
+                );
+            }
+            if (response.status === 401 && retry) {
+                localExecutorCredentials.delete(permission);
+                return fetchLocalExecutor(path, options, permission, false);
+            }
+            return response;
+        }
+
+        function fetchExecutionTarget(target, path, options = {}, permission) {
+            if (target === "local") {
+                if (workbenchRuntimeRole === "client") return fetch(path, options);
+                return fetchLocalExecutor(path, options, permission);
+            }
+            if (workbenchRuntimeRole === "client") {
+                throw new Error("本机客户端页面不能直接启动服务器任务，请在公网工作台操作");
+            }
+            return fetch(path, options);
+        }
+
+        async function refreshLocalExecutorHint(hintElement, permission) {
+            if (!hintElement) return false;
+            if (workbenchRuntimeRole === "client") {
+                hintElement.textContent = "本机执行端已连接；任务将使用这台电脑的比特浏览器。";
+                return true;
+            }
+            hintElement.textContent = "正在检测本机执行端...";
+            try {
+                const response = await fetchLocalExecutor(
+                    "/api/health",
+                    {cache: "no-store"},
+                    permission,
+                );
+                const payload = await response.json();
+                if (!response.ok || payload.status !== "success") {
+                    throw new Error(payload.message || `接口请求失败：${response.status}`);
+                }
+                hintElement.textContent = "本机执行端已连接；任务将使用这台电脑的比特浏览器。";
+                return true;
+            } catch (error) {
+                hintElement.textContent = "本机执行端未连接。请启动 client 工作台并允许浏览器访问本地网络；任务不会自动转到服务器。";
+                return false;
+            }
+        }
+
+        function syncExecutionTargetHint(selectElement, hintElement, permission) {
+            if (!selectElement || !hintElement) return;
+            if (selectElement.value === "local") {
+                refreshLocalExecutorHint(hintElement, permission);
+                return;
+            }
+            hintElement.textContent = workbenchRuntimeRole === "client"
+                ? "服务器任务请从公网工作台启动。"
+                : "已选择服务器执行，将使用服务器上的比特浏览器。";
+        }
+
         function updateDailyTaskAppealSwitch(changedSwitch) {
             if (!changedSwitch?.checked) return;
             const switches = Array.from(
@@ -22273,6 +22575,7 @@
                 throw new Error("请至少开启一个任务");
             }
             return {
+                execution_target: String(dailyTaskExecutionTarget?.value || "local"),
                 mode: document.getElementById("daily-task-mode").value,
                 appeal_types: appealTypes,
                 max_workers: Number(document.getElementById("daily-task-max-workers").value || 10),
@@ -22334,55 +22637,380 @@
             }
         }
 
-        function renderDailyTaskStatus(data) {
-            if (!dailyTaskStateLog) return;
+        function normalizeDailyTaskCollection(data, executionTarget = "server") {
             const state = data || {};
-            const params = state.params || {};
-            const status = String(state.status || "idle");
-            const running = Boolean(state.running);
-            const statusClass = status === "error" ? "error" : (running ? "running" : "");
-            dailyTaskStatusBadge.className = `status ${statusClass}`.trim();
-            dailyTaskStatusText.textContent = state.message || (running ? "运行中" : "等待启动");
-            dailyTaskStarted.textContent = state.started_at || "-";
-            dailyTaskFinished.textContent = state.finished_at || "-";
-            startDailyTaskBtn.disabled = running;
-            stopDailyTaskBtn.disabled = !running || Boolean(state.stop_requested);
-            const runtimeLog = String(state.log || "").trim();
-            dailyTaskStateLog.textContent = runtimeLog || [
-                `状态：${state.status || "idle"}`,
-                `消息：${state.message || "-"}`,
-                `开始时间：${state.started_at || "-"}`,
-                `结束时间：${state.finished_at || "-"}`,
-                "",
-                "等待运行日志...",
-                "",
-                "参数：",
-                JSON.stringify(params, null, 2),
-            ].join("\n");
-            dailyTaskStateLog.scrollTop = dailyTaskStateLog.scrollHeight;
-            if (dailyTaskStatusPollTimer) {
-                window.clearTimeout(dailyTaskStatusPollTimer);
+            const tasks = Array.isArray(state.tasks)
+                ? state.tasks.slice()
+                : (state.task_id ? [state] : []);
+            if (state.external_task) {
+                tasks.push({
+                    ...state.external_task,
+                    task_id: "external-daily-task",
+                    name: "外部 daily_task",
+                    is_external_task: true,
+                    log: "该任务由独立脚本或 bit_main 启动，请在对应控制台查看日志。",
+                });
+            }
+            return tasks.map(task => ({
+                ...task,
+                execution_target: task.execution_target || executionTarget,
+            }));
+        }
+
+        function dailyTaskRuntimeKey(taskOrId, executionTarget = "server") {
+            if (taskOrId && typeof taskOrId === "object") {
+                return `${taskOrId.execution_target || executionTarget}:${taskOrId.task_id || ""}`;
+            }
+            return `${executionTarget}:${taskOrId || ""}`;
+        }
+
+        function createDailyTaskCard(taskKey) {
+            const card = document.createElement("article");
+            card.className = "daily-task-card";
+            card.dataset.taskKey = taskKey;
+            card.innerHTML = `
+                <div class="daily-task-card-header">
+                    <div>
+                        <h3 class="daily-task-card-title" data-role="title"></h3>
+                        <div class="daily-task-card-id" data-role="task-id"></div>
+                    </div>
+                    <span class="status" data-role="status-badge">
+                        <span class="status-dot"></span>
+                        <span data-role="status-text"></span>
+                    </span>
+                </div>
+                <div class="daily-task-card-summary">
+                    <div class="daily-task-card-meta" data-role="meta"></div>
+                    <div class="daily-task-card-actions">
+                        <button class="danger daily-task-stop-btn" type="button">停止此任务</button>
+                    </div>
+                </div>
+                <details>
+                    <summary style="cursor:pointer;padding:7px 10px;color:#475467;font-size:12px;">查看任务参数</summary>
+                    <pre data-role="params" style="margin:0;padding:0 10px 9px;white-space:pre-wrap;font-size:11px;color:#475467;"></pre>
+                </details>
+                <details class="daily-task-log-details" data-role="log-details">
+                    <summary data-role="log-summary">运行日志（展开加载）</summary>
+                    <pre class="daily-task-card-log" data-role="log">展开后加载此任务日志...</pre>
+                </details>
+            `;
+            card.querySelector(".daily-task-stop-btn").addEventListener("click", event => {
+                stopDailyTask(taskKey, event.currentTarget);
+            });
+            card.querySelector('[data-role="log-details"]').addEventListener("toggle", event => {
+                const details = event.currentTarget;
+                if (details.dataset.autoOpening === "true") {
+                    delete details.dataset.autoOpening;
+                    return;
+                }
+                if (!details.open || card.dataset.externalTask === "true") return;
+                const firstOpen = details.dataset.opened !== "true";
+                details.dataset.opened = "true";
+                loadDailyTaskLog(taskKey, {force: true}).then(() => {
+                    const logElement = card.querySelector('[data-role="log"]');
+                    if (firstOpen && details.open && logElement) {
+                        logElement.scrollTop = logElement.scrollHeight;
+                    }
+                });
+            });
+            return card;
+        }
+
+        function updateDailyTaskCard(card, task) {
+            const taskId = String(task.task_id || "");
+            const executionTarget = String(task.execution_target || "server");
+            const taskKey = dailyTaskRuntimeKey(task);
+            const status = String(task.status || "idle");
+            const running = Boolean(task.running);
+            const stopping = status === "stopping" || Boolean(task.stop_requested && running);
+            const hadRunningState = card.dataset.running !== undefined;
+            const wasRunning = card.dataset.running === "true";
+            let stopPending = dailyTaskPendingStopIds.has(taskKey);
+            if (stopPending && (stopping || !running)) {
+                dailyTaskPendingStopIds.delete(taskKey);
+                stopPending = false;
+            }
+            const stoppingOrPending = stopping || stopPending;
+            const statusClass = status === "error"
+                ? "error"
+                : stoppingOrPending ? "stopping" : running ? "running" : "";
+            card.dataset.running = running ? "true" : "false";
+            card.dataset.externalTask = task.is_external_task ? "true" : "false";
+            card.dataset.taskKey = taskKey;
+            card.dataset.taskId = taskId;
+            card.dataset.executionTarget = executionTarget;
+            card.querySelector('[data-role="title"]').textContent = task.name || "daily_task";
+            card.querySelector('[data-role="task-id"]').textContent = (
+                `执行端：${executionTargetLabel(executionTarget)}　任务 ID：${taskId || "-"}`
+            );
+            const badge = card.querySelector('[data-role="status-badge"]');
+            badge.className = `status ${statusClass}`.trim();
+            card.querySelector('[data-role="status-text"]').textContent = task.message || status;
+            card.querySelector('[data-role="meta"]').textContent = [
+                `位置：${executionTargetLabel(executionTarget)}`,
+                `开始：${task.started_at || "-"}`,
+                `结束：${task.finished_at || "-"}`,
+            ].join("　");
+            card.querySelector('[data-role="params"]').textContent = JSON.stringify(task.params || {}, null, 2);
+
+            const stopButton = card.querySelector(".daily-task-stop-btn");
+            stopButton.hidden = !hasWorkbenchPermission("tasks.execute") || task.can_stop === false;
+            stopButton.disabled = !running || stoppingOrPending;
+            stopButton.textContent = stoppingOrPending ? "停止中..." : "停止此任务";
+
+            const logElement = card.querySelector('[data-role="log"]');
+            const logSummary = card.querySelector('[data-role="log-summary"]');
+            const logDetails = card.querySelector('[data-role="log-details"]');
+            if (task.is_external_task) {
+                logElement.textContent = String(task.log || "").trim() || "请在对应控制台查看日志。";
+                logSummary.textContent = "运行日志说明";
+            } else {
+                logSummary.textContent = running
+                    ? "运行日志（自动轮询，展开可立即刷新）"
+                    : "运行日志（展开加载）";
+            }
+            if (running && !hadRunningState) {
+                logDetails.dataset.autoOpening = "true";
+                logDetails.open = true;
+            }
+            return hadRunningState && wasRunning && !running && !task.is_external_task;
+        }
+
+        function renderDailyTaskStatuses(data) {
+            if (!dailyTaskList) return;
+            const tasks = Array.isArray(data)
+                ? data.slice()
+                : normalizeDailyTaskCollection(data);
+            const runningCount = tasks.filter(task => task.running).length;
+            const localRunningCount = tasks.filter(task => (
+                task.running && task.execution_target === "local"
+            )).length;
+            const serverRunningCount = tasks.filter(task => (
+                task.running && task.execution_target !== "local"
+            )).length;
+            dailyTaskLocalRunningCount.textContent = String(localRunningCount);
+            dailyTaskServerRunningCount.textContent = String(serverRunningCount);
+            dailyTaskTotalCount.textContent = String(tasks.length);
+            dailyTaskStatusBadge.className = `status ${runningCount ? "running" : ""}`.trim();
+            dailyTaskStatusText.textContent = runningCount
+                ? `${runningCount} 项任务运行中`
+                : tasks.length ? "暂无运行任务" : "等待启动";
+
+            const taskKeys = new Set(tasks.map(task => dailyTaskRuntimeKey(task)));
+            dailyTaskList.querySelectorAll(".daily-task-card").forEach(card => {
+                const taskKey = String(card.dataset.taskKey || "");
+                if (!taskKeys.has(taskKey)) {
+                    card.remove();
+                    dailyTaskPendingStopIds.delete(taskKey);
+                    dailyTaskLogLastFetchedAt.delete(taskKey);
+                }
+            });
+            dailyTaskList.querySelectorAll(".empty-state").forEach(node => node.remove());
+
+            if (!tasks.length) {
+                const empty = document.createElement("div");
+                empty.className = "empty-state";
+                empty.textContent = "暂无任务，可在左侧配置后启动。";
+                dailyTaskList.appendChild(empty);
+                return;
+            }
+
+            const existingCards = new Map(
+                Array.from(dailyTaskList.querySelectorAll(".daily-task-card"), card => [
+                    String(card.dataset.taskKey || ""),
+                    card,
+                ]),
+            );
+            tasks.forEach((task, index) => {
+                const taskKey = dailyTaskRuntimeKey(task);
+                let card = existingCards.get(taskKey);
+                if (!card) card = createDailyTaskCard(taskKey);
+                const cardAtPosition = dailyTaskList.children[index] || null;
+                if (cardAtPosition !== card) {
+                    dailyTaskList.insertBefore(card, cardAtPosition);
+                }
+                const needsFinalLog = updateDailyTaskCard(card, task);
+                if (needsFinalLog) {
+                    const logDetails = card.querySelector('[data-role="log-details"]');
+                    const logElement = card.querySelector('[data-role="log"]');
+                    if (logDetails?.open || logElement?.dataset.loaded === "true") {
+                        loadDailyTaskLog(taskKey, {force: true});
+                    }
+                }
+            });
+            scheduleDailyTaskAutoLogRefresh(tasks);
+        }
+
+        function findDailyTaskCard(taskKey) {
+            return Array.from(dailyTaskList?.querySelectorAll(".daily-task-card") || [])
+                .find(card => String(card.dataset.taskKey || "") === String(taskKey || "")) || null;
+        }
+
+        async function loadDailyTaskLog(taskKey, {force = false} = {}) {
+            taskKey = String(taskKey || "");
+            const card = findDailyTaskCard(taskKey);
+            const taskId = String(card?.dataset.taskId || "");
+            const executionTarget = String(card?.dataset.executionTarget || "server");
+            if (!taskId || !card || card.dataset.externalTask === "true") return false;
+            const inFlight = dailyTaskLogRequests.get(taskKey);
+            if (inFlight) return inFlight;
+            const now = Date.now();
+            const lastFetchedAt = Number(dailyTaskLogLastFetchedAt.get(taskKey) || 0);
+            if (!force && now - lastFetchedAt < DAILY_TASK_LOG_MIN_INTERVAL_MS) return false;
+            dailyTaskLogLastFetchedAt.set(taskKey, now);
+
+            const requestPromise = (async () => {
+                try {
+                    const response = await fetchExecutionTarget(
+                        executionTarget,
+                        `/api/tasks/daily/status?task_id=${encodeURIComponent(taskId)}`,
+                        {cache: "no-store"},
+                        "tasks.view",
+                    );
+                    const payload = await response.json();
+                    if (!response.ok || payload.status !== "success") {
+                        throw new Error(payload.message || `接口请求失败：${response.status}`);
+                    }
+                    const currentCard = findDailyTaskCard(taskKey);
+                    if (!currentCard) return false;
+                    const task = payload.data || {};
+                    const logElement = currentCard.querySelector('[data-role="log"]');
+                    const logSummary = currentCard.querySelector('[data-role="log-summary"]');
+                    const firstLoad = logElement.dataset.loaded !== "true";
+                    const nearBottom = firstLoad || (
+                        logElement.scrollHeight - logElement.scrollTop - logElement.clientHeight
+                    ) < 45;
+                    const nextLog = String(task.log || "").trim() || "等待运行日志...";
+                    if (logElement.textContent !== nextLog) {
+                        logElement.textContent = nextLog;
+                        logElement.dataset.loaded = "true";
+                        if (nearBottom) {
+                            window.requestAnimationFrame(() => {
+                                if (currentCard.isConnected) {
+                                    logElement.scrollTop = logElement.scrollHeight;
+                                }
+                            });
+                        }
+                    }
+                    logSummary.textContent = task.running
+                        ? "运行日志（自动轮询，展开可立即刷新）"
+                        : "运行日志";
+                    return true;
+                } catch (err) {
+                    const currentCard = findDailyTaskCard(taskKey);
+                    const logDetails = currentCard?.querySelector('[data-role="log-details"]');
+                    const logElement = currentCard?.querySelector('[data-role="log"]');
+                    if (logDetails?.open && logElement?.dataset.loaded !== "true") {
+                        logElement.textContent = `日志加载失败：${err.message || err}`;
+                    }
+                    return false;
+                }
+            })();
+            dailyTaskLogRequests.set(taskKey, requestPromise);
+            requestPromise.then(
+                () => {
+                    if (dailyTaskLogRequests.get(taskKey) === requestPromise) {
+                        dailyTaskLogRequests.delete(taskKey);
+                    }
+                },
+                () => {
+                    if (dailyTaskLogRequests.get(taskKey) === requestPromise) {
+                        dailyTaskLogRequests.delete(taskKey);
+                    }
+                },
+            );
+            return requestPromise;
+        }
+
+        function scheduleDailyTaskAutoLogRefresh(tasks) {
+            const runningTaskKeys = (tasks || [])
+                .filter(task => task?.running && !task.is_external_task)
+                .map(task => dailyTaskRuntimeKey(task))
+                .filter(Boolean);
+            if (!runningTaskKeys.length) {
+                dailyTaskAutoLogCursor = 0;
+                return;
+            }
+
+            const now = Date.now();
+            const startIndex = dailyTaskAutoLogCursor % runningTaskKeys.length;
+            let examined = 0;
+            let queued = 0;
+            while (examined < runningTaskKeys.length && queued < DAILY_TASK_AUTO_LOG_BATCH_SIZE) {
+                const taskKey = runningTaskKeys[(startIndex + examined) % runningTaskKeys.length];
+                examined += 1;
+                const lastFetchedAt = Number(dailyTaskLogLastFetchedAt.get(taskKey) || 0);
+                if (
+                    !dailyTaskLogRequests.has(taskKey)
+                    && now - lastFetchedAt >= DAILY_TASK_LOG_MIN_INTERVAL_MS
+                ) {
+                    loadDailyTaskLog(taskKey);
+                    queued += 1;
+                }
+            }
+            dailyTaskAutoLogCursor = (
+                startIndex + Math.max(1, examined)
+            ) % runningTaskKeys.length;
+        }
+
+        function scheduleDailyTaskStatusPoll(delay = 2000) {
+            if (dailyTaskStatusPollTimer) window.clearTimeout(dailyTaskStatusPollTimer);
+            dailyTaskStatusPollTimer = window.setTimeout(() => {
                 dailyTaskStatusPollTimer = null;
-            }
-            if (running) {
-                dailyTaskStatusPollTimer = window.setTimeout(loadDailyTaskStatus, 2000);
-            }
+                const taskPage = document.getElementById("tab-tasks");
+                if (taskPage?.classList.contains("active")) loadDailyTaskStatus();
+            }, delay);
         }
 
         async function loadDailyTaskStatus() {
-            if (!dailyTaskStateLog) return;
+            if (!dailyTaskList) return;
+            const requestSequence = ++dailyTaskStatusRequestSequence;
             try {
-                const response = await fetch("/api/tasks/daily/status");
-                const payload = await response.json();
-                if (!response.ok || payload.status !== "success") {
-                    throw new Error(payload.message || `接口请求失败：${response.status}`);
+                const targets = workbenchRuntimeRole === "client"
+                    ? ["local"]
+                    : ["local", "server"];
+                const results = await Promise.allSettled(targets.map(async target => {
+                    const response = await fetchExecutionTarget(
+                        target,
+                        "/api/tasks/daily/status?include_logs=0",
+                        {cache: "no-store"},
+                        "tasks.view",
+                    );
+                    const payload = await response.json();
+                    if (!response.ok || payload.status !== "success") {
+                        throw new Error(payload.message || `接口请求失败：${response.status}`);
+                    }
+                    return normalizeDailyTaskCollection(payload.data || {}, target);
+                }));
+                if (requestSequence !== dailyTaskStatusRequestSequence) return false;
+                const tasks = [];
+                const errors = [];
+                results.forEach((result, index) => {
+                    if (result.status === "fulfilled") {
+                        tasks.push(...result.value);
+                        if (targets[index] === "local" && dailyTaskLocalExecutorHint) {
+                            dailyTaskLocalExecutorHint.textContent = "本机执行端已连接；任务将使用这台电脑的比特浏览器。";
+                        }
+                    } else {
+                        errors.push(result.reason);
+                        if (targets[index] === "local" && dailyTaskLocalExecutorHint) {
+                            dailyTaskLocalExecutorHint.textContent = "本机执行端未连接。请启动 client 工作台并允许浏览器访问本地网络；任务不会自动转到服务器。";
+                        }
+                    }
+                });
+                if (results.every(result => result.status === "rejected")) {
+                    throw errors[0] || new Error("无法读取任务状态");
                 }
                 tasksLoaded = true;
-                renderDailyTaskStatus(payload.data || {});
+                renderDailyTaskStatuses(tasks);
+                scheduleDailyTaskStatusPoll(2000);
+                return true;
             } catch (err) {
-                dailyTaskStateLog.textContent = `加载失败：${err.message || err}`;
-                dailyTaskStatusText.textContent = "状态加载失败";
+                if (requestSequence !== dailyTaskStatusRequestSequence) return false;
+                dailyTaskStatusText.textContent = `状态加载失败：${err.message || err}`;
                 dailyTaskStatusBadge.className = "status error";
+                scheduleDailyTaskStatusPoll(5000);
+                return false;
             }
         }
 
@@ -22391,55 +23019,86 @@
             startDailyTaskBtn.disabled = true;
             startDailyTaskBtn.textContent = "启动中...";
             try {
-                const response = await fetch("/api/tasks/daily/start", {
-                    method: "POST",
-                    headers: {"Content-Type": "application/json"},
-                    body: JSON.stringify(getDailyTaskPayload()),
-                });
+                const payloadData = getDailyTaskPayload();
+                const executionTarget = payloadData.execution_target;
+                const response = await fetchExecutionTarget(
+                    executionTarget,
+                    "/api/tasks/daily/start",
+                    {
+                        method: "POST",
+                        headers: {"Content-Type": "application/json"},
+                        body: JSON.stringify(payloadData),
+                    },
+                    "tasks.execute",
+                );
                 const payload = await response.json();
-                if (response.status === 409) {
-                    renderDailyTaskStatus(payload.data || {});
-                    alert(payload.message || "daily_task 正在运行中");
-                    return;
-                }
                 if (!response.ok || payload.status !== "success") {
                     throw new Error(payload.message || `接口请求失败：${response.status}`);
                 }
                 tasksLoaded = true;
-                renderDailyTaskStatus(payload.data || {});
-                alert(payload.message || "daily_task 已启动");
+                alert(
+                    `${executionTargetLabel(executionTarget)}：`
+                    + (payload.message || "daily_task 已启动")
+                );
+                await loadDailyTaskStatus();
             } catch (err) {
                 alert(`启动失败：${err.message || err}`);
                 await loadDailyTaskStatus();
             } finally {
                 setTimeout(() => {
                     startDailyTaskBtn.textContent = "启动 daily_task";
-                    loadDailyTaskStatus();
+                    startDailyTaskBtn.disabled = false;
                 }, 1500);
             }
         }
 
-        async function stopDailyTask() {
-            if (!stopDailyTaskBtn || stopDailyTaskBtn.disabled) return;
-            if (!window.confirm("确定停止当前 daily_task 吗？系统会立即终止任务进程并关闭本批浏览器窗口。")) return;
-            stopDailyTaskBtn.disabled = true;
-            stopDailyTaskBtn.textContent = "停止中...";
+        async function stopDailyTask(taskKey, stopButton = null) {
+            const card = findDailyTaskCard(taskKey);
+            const taskId = String(card?.dataset.taskId || "");
+            const executionTarget = String(card?.dataset.executionTarget || "server");
+            if (!taskId || stopButton?.disabled) return;
+            if (!window.confirm("确定停止这项 daily_task 吗？其他并行任务会继续运行。")) return;
+            dailyTaskPendingStopIds.add(taskKey);
+            if (stopButton) {
+                stopButton.disabled = true;
+                stopButton.textContent = "停止中...";
+            }
             try {
-                const response = await fetch("/api/tasks/daily/stop", {
-                    method: "POST",
-                    headers: {"Content-Type": "application/json"},
-                    body: "{}",
-                });
+                const response = await fetchExecutionTarget(
+                    executionTarget,
+                    "/api/tasks/daily/stop",
+                    {
+                        method: "POST",
+                        headers: {"Content-Type": "application/json"},
+                        body: JSON.stringify({task_id: taskId}),
+                    },
+                    "tasks.execute",
+                );
                 const payload = await response.json();
-                renderDailyTaskStatus(payload.data || {});
                 if (!response.ok || payload.status !== "success") {
                     throw new Error(payload.message || `接口请求失败：${response.status}`);
                 }
+                const responseTask = payload.data || {};
+                const currentCard = findDailyTaskCard(taskKey);
+                if (currentCard && String(responseTask.task_id || "") === String(taskId)) {
+                    updateDailyTaskCard(currentCard, {
+                        ...responseTask,
+                        execution_target: executionTarget,
+                    });
+                }
+                await loadDailyTaskStatus();
             } catch (err) {
+                dailyTaskPendingStopIds.delete(taskKey);
                 alert(`停止失败：${err.message || err}`);
+                const refreshed = await loadDailyTaskStatus();
+                if (!refreshed && stopButton?.isConnected) {
+                    const currentCard = findDailyTaskCard(taskKey);
+                    const running = currentCard?.dataset.running === "true";
+                    stopButton.disabled = !running;
+                    stopButton.textContent = "停止此任务";
+                }
             } finally {
-                stopDailyTaskBtn.textContent = "停止任务";
-                setTimeout(loadDailyTaskStatus, 1500);
+                scheduleDailyTaskStatusPoll(1000);
             }
         }
 
@@ -22648,16 +23307,18 @@
             populate(
                 reputationGroupFilter,
                 rows.map(row => row["账户组"] || "未分组"),
-                "全部账户组",
+                "全部账号组",
             );
         }
 
         function filteredReputationRows() {
             const salesperson = String(reputationSalespersonFilter?.value || "").trim();
             const groupName = String(reputationGroupFilter?.value || "").trim();
+            const nameQuery = String(reputationNameSearch?.value || "").trim().toLocaleLowerCase("zh-CN");
             return reputationRows.filter(row => (
                 (!salesperson || String(row["业务员"] || "未分配") === salesperson)
                 && (!groupName || String(row["账户组"] || "未分组") === groupName)
+                && (!nameQuery || String(row["店铺名"] || "").toLocaleLowerCase("zh-CN").includes(nameQuery))
             ));
         }
 
@@ -22676,7 +23337,7 @@
                 reputationFilterSummary.textContent = `显示 ${rows.length.toLocaleString("zh-CN")} / ${reputationRows.length.toLocaleString("zh-CN")} 条`;
             }
             if (!rows.length) {
-                reputationBody.innerHTML = '<tr><td class="empty-state" colspan="16">暂无符合业务员和账户组筛选条件的声誉数据</td></tr>';
+                reputationBody.innerHTML = '<tr><td class="empty-state" colspan="16">暂无符合业务员、账号组和名字筛选条件的声誉数据</td></tr>';
                 updateReputationTableSelection();
                 return;
             }
@@ -22889,6 +23550,14 @@
             }
         }
 
+        function syncProhibitedAppealSelection(changedInput) {
+            if (!changedInput?.checked || changedInput.value !== "侵权") return;
+            const prohibitedInput = document.querySelector(
+                '#form-picker input[name="form"][value="禁限售"]'
+            );
+            if (prohibitedInput) prohibitedInput.checked = true;
+        }
+
         async function startTask() {
             const shopName = String(appealShopInput?.value || "").trim();
             if (!shopName) {
@@ -22925,26 +23594,44 @@
 
             startBtn.disabled = true;
             stopBtn.disabled = false;
+            if (appealExecutionTarget) appealExecutionTarget.disabled = true;
             appealStopRequested = false;
             activeAppealTaskId = createAppealTaskId();
+            activeAppealExecutionTarget = String(appealExecutionTarget?.value || "local");
             logContainer.textContent = "";
-            setStatus("任务运行中", "running");
-            appendLog("正在建立连接...\n");
+            setStatus(`${executionTargetLabel(activeAppealExecutionTarget)}任务运行中`, "running");
+            appendLog(`正在连接${executionTargetLabel(activeAppealExecutionTarget)}...\n`);
 
             const params = new URLSearchParams({
                 name: shopName,
                 mode: document.getElementById("mode").value,
                 loop_count: document.getElementById("loop-count").value,
                 message: document.getElementById("message").value,
-                task_id: activeAppealTaskId
+                task_id: activeAppealTaskId,
+                execution_target: activeAppealExecutionTarget,
             });
             selectedSites.forEach(site => params.append("site", site));
             selectedForms.forEach(form => params.append("form", form));
 
             try {
-                const response = await fetch(`/api/run_shensu?${params.toString()}`);
-                if (!response.ok || !response.body) {
-                    throw new Error(`接口请求失败：${response.status}`);
+                const response = await fetchExecutionTarget(
+                    activeAppealExecutionTarget,
+                    `/api/run_shensu?${params.toString()}`,
+                    {},
+                    "appeal.execute",
+                );
+                if (!response.ok) {
+                    let message = `接口请求失败：${response.status}`;
+                    try {
+                        const payload = await response.json();
+                        message = payload.message || message;
+                    } catch (_error) {
+                        // Non-JSON upstream errors retain the HTTP status message.
+                    }
+                    throw new Error(message);
+                }
+                if (!response.body) {
+                    throw new Error("执行端未返回任务日志流");
                 }
 
                 const reader = response.body.getReader();
@@ -22970,6 +23657,9 @@
             } finally {
                 startBtn.disabled = false;
                 stopBtn.disabled = true;
+                if (appealExecutionTarget && hasWorkbenchPermission("appeal.execute")) {
+                    appealExecutionTarget.disabled = false;
+                }
                 activeAppealTaskId = "";
             }
         }
@@ -23572,11 +24262,16 @@
             appendLog("\n>>> 正在提交终结请求...\n");
 
             try {
-                const response = await fetch("/api/run_shensu/stop", {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({ task_id: activeAppealTaskId })
-                });
+                const response = await fetchExecutionTarget(
+                    activeAppealExecutionTarget,
+                    "/api/run_shensu/stop",
+                    {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({ task_id: activeAppealTaskId })
+                    },
+                    "appeal.execute",
+                );
                 const payload = await response.json();
                 if (!response.ok || payload.status !== "success") {
                     throw new Error(payload.message || `接口请求失败：${response.status}`);
@@ -23597,6 +24292,20 @@
         sidebarToggle?.addEventListener("click", () => {
             const collapsed = document.body.classList.toggle("sidebar-collapsed");
             window.localStorage.setItem("zeshun-sidebar-collapsed", collapsed ? "1" : "0");
+        });
+        appealExecutionTarget?.addEventListener("change", () => {
+            syncExecutionTargetHint(
+                appealExecutionTarget,
+                appealLocalExecutorHint,
+                "appeal.execute",
+            );
+        });
+        dailyTaskExecutionTarget?.addEventListener("change", () => {
+            syncExecutionTargetHint(
+                dailyTaskExecutionTarget,
+                dailyTaskLocalExecutorHint,
+                "tasks.view",
+            );
         });
         restoreApiReputationViewState();
         initializeMinuteDateTimeInputs();

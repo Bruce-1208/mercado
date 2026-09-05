@@ -771,6 +771,7 @@ def list_infraction_dashboard(
     group_name: str = "",
     salesperson: str = "",
     source_type: str = "",
+    category: str = "",
     search: str = "",
     detail_token_id: int | str = 0,
     page: int = 1,
@@ -791,6 +792,7 @@ def list_infraction_dashboard(
     source_type = str(source_type or "").strip().lower()
     if source_type not in {"", "detection", "rights_holder"}:
         source_type = ""
+    category = str(category or "").strip()
     search = str(search or "").strip()
     detail_token_id = int(detail_token_id or 0)
     if detail_token_id < 0:
@@ -812,6 +814,9 @@ def list_infraction_dashboard(
     if source_type:
         conditions.append("items.`source_type` = %s")
         values.append(source_type)
+    if category:
+        conditions.append("items.`reason` = %s")
+        values.append(category)
     if search:
         pattern = f"%{search}%"
         conditions.append(
@@ -909,6 +914,9 @@ def list_infraction_dashboard(
             if source_type:
                 aggregate_conditions.append("`source_type` = %s")
                 aggregate_values.append(source_type)
+            if category:
+                aggregate_conditions.append("`reason` = %s")
+                aggregate_values.append(category)
             aggregate_where = (
                 " AND ".join(aggregate_conditions) if aggregate_conditions else "1 = 1"
             )
@@ -962,6 +970,34 @@ def list_infraction_dashboard(
                 """
             )
             salespeople = [str(row.get("value") or "") for row in cursor.fetchall()]
+            category_conditions = ["COALESCE(`reason`, '') <> ''"]
+            category_values: list[Any] = []
+            if view_mode == "current":
+                category_conditions.extend(
+                    ["`occurred_at` >= %s", "`is_current` = 1"]
+                )
+                category_values.append(cutoff)
+            if source_type:
+                category_conditions.append("`source_type` = %s")
+                category_values.append(source_type)
+            cursor.execute(
+                f"""
+                SELECT `reason` AS `value`, COUNT(*) AS `count`
+                FROM `{INFRACTION_TABLE}`
+                WHERE {" AND ".join(category_conditions)}
+                GROUP BY `reason`
+                ORDER BY `count` DESC, `value`
+                LIMIT 200
+                """,
+                tuple(category_values),
+            )
+            categories = [
+                {
+                    "value": str(row.get("value") or ""),
+                    "count": int(row.get("count") or 0),
+                }
+                for row in cursor.fetchall()
+            ]
             cursor.execute(
                 f"""
                 SELECT MAX(`last_completed_at`) AS `last_synced_at`,
@@ -1011,10 +1047,12 @@ def list_infraction_dashboard(
                 "group_name": group_name,
                 "salesperson": salesperson,
                 "source_type": source_type,
+                "category": category,
                 "search": search,
                 "detail_token_id": detail_token_id,
                 "groups": groups,
                 "salespeople": salespeople,
+                "categories": categories,
             },
             "total": total,
             "page": page,

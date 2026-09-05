@@ -3,7 +3,7 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>侵权数据总览 · 武汉泽顺</title>
+    <title>违规商品总览 · 武汉泽顺</title>
     <style>
         :root {
             color-scheme: light;
@@ -187,7 +187,7 @@
             padding: 16px;
             box-shadow: var(--shadow);
             display: grid;
-            grid-template-columns: 1.15fr repeat(5, minmax(140px, .7fr));
+            grid-template-columns: 1.15fr repeat(6, minmax(135px, .7fr));
             gap: 12px;
             align-items: end;
         }
@@ -459,7 +459,7 @@
             <div class="brand">
                 <div class="brand-mark" aria-hidden="true">盾</div>
                 <div>
-                    <div class="brand-title">侵权数据总览</div>
+                    <div class="brand-title">违规商品总览</div>
                     <div class="brand-meta">Mercado Libre 官方 API</div>
                 </div>
             </div>
@@ -473,8 +473,8 @@
     <main class="page">
         <div class="page-heading">
             <div>
-                <h1>按账户组与业务员查看侵权</h1>
-                <p class="heading-note">平台检测与权利人举报分开统计；后台每 12 小时自动同步一次。</p>
+                <h1>按账户组与业务员查看违规商品</h1>
+                <p class="heading-note">平台违规检测、禁限售与权利人举报统一统计；后台每 12 小时自动同步一次。</p>
             </div>
             <div class="sync-cluster">
                 <div class="sync-copy">
@@ -487,7 +487,7 @@
 
         <div class="status-strip" id="status-strip" role="status"></div>
 
-        <section class="filter-panel" aria-label="侵权数据筛选">
+        <section class="filter-panel" aria-label="违规商品筛选">
             <div class="field search">
                 <label for="search-input">搜索商品、店铺、原因或权利人</label>
                 <input id="search-input" type="search" autocomplete="off" placeholder="输入商品编号或关键词">
@@ -495,7 +495,7 @@
             <div class="field">
                 <label for="view-mode-select">展示模式</label>
                 <select id="view-mode-select">
-                    <option value="current" selected>当前侵权</option>
+                    <option value="current" selected>当前违规商品</option>
                     <option value="history">全部历史（去重）</option>
                 </select>
             </div>
@@ -517,18 +517,24 @@
                 <select id="salesperson-select"><option value="">全部业务员</option></select>
             </div>
             <div class="field">
-                <label for="source-select">侵权来源</label>
+                <label for="source-select">违规来源</label>
                 <select id="source-select">
                     <option value="">全部来源</option>
                     <option value="detection">平台检测</option>
                     <option value="rights_holder">权利人举报</option>
                 </select>
             </div>
+            <div class="field">
+                <label for="category-select">违规类型</label>
+                <select id="category-select">
+                    <option value="">全部违规类型</option>
+                </select>
+            </div>
         </section>
 
-        <section class="metrics" aria-label="侵权统计摘要">
+        <section class="metrics" aria-label="违规商品统计摘要">
             <article class="metric total">
-                <div class="metric-label">侵权总数</div>
+                <div class="metric-label">违规商品总数</div>
                 <div class="metric-value" id="metric-total">—</div>
                 <div class="metric-foot" id="metric-range">最近 30 天</div>
             </article>
@@ -567,7 +573,7 @@
         <section class="section" id="detail-section">
             <div class="section-heading">
                 <div class="section-heading-main">
-                    <h2>侵权明细</h2>
+                    <h2>违规商品明细</h2>
                     <span id="detail-count">正在加载</span>
                 </div>
                 <div class="section-heading-actions">
@@ -576,10 +582,10 @@
                 </div>
             </div>
             <div class="table-wrap">
-                <table aria-label="侵权明细">
+                <table aria-label="违规商品明细">
                     <thead>
                         <tr>
-                            <th>侵权时间</th>
+                            <th>违规时间</th>
                             <th>产品图</th>
                             <th>账户组 / 业务员</th>
                             <th>店铺 / 站点</th>
@@ -590,7 +596,7 @@
                         </tr>
                     </thead>
                     <tbody id="detail-body">
-                        <tr><td colspan="8" class="loading-state">正在加载侵权明细…</td></tr>
+                        <tr><td colspan="8" class="loading-state">正在加载违规商品明细…</td></tr>
                     </tbody>
                 </table>
             </div>
@@ -619,6 +625,7 @@
             group: document.getElementById("group-select"),
             salesperson: document.getElementById("salesperson-select"),
             source: document.getElementById("source-select"),
+            category: document.getElementById("category-select"),
             groups: document.getElementById("group-container"),
             details: document.getElementById("detail-body"),
             detailCount: document.getElementById("detail-count"),
@@ -661,6 +668,22 @@
             if ([...select.options].some(option => option.value === selected)) select.value = selected;
         }
 
+        function fillCategorySelect(categories) {
+            const selected = elements.category.value;
+            const options = ['<option value="">全部违规类型</option>'].concat(
+                (categories || []).map(category => {
+                    const value = String(category?.value || "");
+                    const count = number(category?.count || 0);
+                    return `<option value="${escapeHtml(value)}">${escapeHtml(value)}（${count}）</option>`;
+                })
+            );
+            elements.category.innerHTML = options.join("");
+            if ([...elements.category.options].some(option => option.value === selected)) {
+                elements.category.value = selected;
+            }
+            elements.category.title = elements.category.selectedOptions[0]?.textContent || "全部违规类型";
+        }
+
         function renderMetrics(summary, days, viewMode) {
             document.getElementById("metric-total").textContent = number(summary.total);
             document.getElementById("metric-detection").textContent = number(summary.detection_count);
@@ -669,7 +692,7 @@
             document.getElementById("metric-people").textContent = number(summary.salesperson_count);
             document.getElementById("metric-range").textContent = viewMode === "history"
                 ? "全部历史 · 已去重"
-                : `最近 ${days} 天 · 当前侵权`;
+                : `最近 ${days} 天 · 当前违规商品`;
             document.getElementById("metric-groups").textContent = `${number(summary.site_count)} 个账户站点 · ${number(summary.group_count)} 个组`;
             const problems = Number(summary.problem_stores || 0);
             document.getElementById("metric-problems").textContent = problems ? `${problems} 个账户需重试` : "同步状态正常";
@@ -699,11 +722,11 @@
                         <div class="person-block">
                             <div class="person-heading">
                                 <div class="person-title">${escapeHtml(person.salesperson)}</div>
-                                <div class="person-counts">${number(person.store_count)} 个店铺 · ${number(person.site_count)} 个站点 · ${number(person.total)} 条侵权</div>
+                                <div class="person-counts">${number(person.store_count)} 个店铺 · ${number(person.site_count)} 个站点 · ${number(person.total)} 条违规</div>
                             </div>
                             <div class="table-wrap">
                                 <table>
-                                    <thead><tr><th>店铺</th><th>站点</th><th>平台检测</th><th>权利人</th><th>合计</th><th>最近侵权</th><th>同步</th><th>操作</th></tr></thead>
+                                    <thead><tr><th>店铺</th><th>站点</th><th>平台检测</th><th>权利人</th><th>合计</th><th>最近违规</th><th>同步</th><th>操作</th></tr></thead>
                                     <tbody>${stores}</tbody>
                                 </table>
                             </div>
@@ -713,7 +736,7 @@
                     <details class="group-card" ${groupIndex === 0 ? "open" : ""}>
                         <summary>
                             <div class="group-name">${escapeHtml(group.group_name)}</div>
-                            <div class="summary-number"><strong>${number(group.total)}</strong><span>侵权合计</span></div>
+                            <div class="summary-number"><strong>${number(group.total)}</strong><span>违规合计</span></div>
                             <div class="summary-number"><strong>${number(group.detection_count)}</strong><span>平台检测</span></div>
                             <div class="summary-number"><strong>${number(group.rights_holder_count)}</strong><span>权利人</span></div>
                             <div class="summary-number"><strong>${number(group.store_count)}</strong><span>${number(group.site_count)} 个站点</span></div>
@@ -730,7 +753,7 @@
 
         function resolutionPill(status) {
             const labels = {
-                current: "当前侵权",
+                current: "当前违规商品",
                 appeal_success: "申诉成功",
                 appeal_failed: "申诉失败",
                 historical: "历史记录",
@@ -762,7 +785,7 @@
 
         function renderRows(rows, total) {
             const hasStoreFilter = Boolean(state.detailTokenId);
-            const modeLabel = elements.viewMode.value === "history" ? "全部历史（已去重）" : "当前侵权";
+            const modeLabel = elements.viewMode.value === "history" ? "全部历史（已去重）" : "当前违规商品";
             elements.detailCount.textContent = hasStoreFilter
                 ? `${modeLabel} · 当前店铺共 ${number(total)} 条`
                 : `${modeLabel} · 共 ${number(total)} 条`;
@@ -770,7 +793,7 @@
             elements.storeFilterChip.classList.toggle("visible", hasStoreFilter);
             elements.clearDetailButton.classList.toggle("visible", hasStoreFilter);
             if (!rows || !rows.length) {
-                elements.details.innerHTML = `<tr><td colspan="8" class="empty-state">${hasStoreFilter ? "该店铺" : "当前筛选范围内"}暂无侵权明细。</td></tr>`;
+                elements.details.innerHTML = `<tr><td colspan="8" class="empty-state">${hasStoreFilter ? "该店铺" : "当前筛选范围内"}暂无违规商品明细。</td></tr>`;
                 return;
             }
             elements.details.innerHTML = rows.map(row => {
@@ -800,6 +823,7 @@
                 group_name: elements.group.value,
                 salesperson: elements.salesperson.value,
                 source_type: elements.source.value,
+                category: elements.category.value,
                 search: elements.search.value.trim(),
                 detail_token_id: state.detailTokenId,
                 page: String(state.page),
@@ -808,7 +832,7 @@
             try {
                 const response = await fetch(`/api/official-infractions/dashboard?${params.toString()}`);
                 const payload = await response.json();
-                if (!response.ok || payload.status !== "success") throw new Error(payload.message || "读取侵权数据失败");
+                if (!response.ok || payload.status !== "success") throw new Error(payload.message || "读取违规商品数据失败");
                 const data = payload.data || {};
                 state.page = Number(data.page || 1);
                 state.pages = Number(data.pages || 1);
@@ -820,6 +844,7 @@
                 renderRows(data.rows || [], data.total || 0);
                 fillSelect(elements.group, data.filters?.groups || [], "全部账户组");
                 fillSelect(elements.salesperson, data.filters?.salespeople || [], "全部业务员");
+                fillCategorySelect(data.filters?.categories || []);
                 elements.pageLabel.textContent = `第 ${state.page} / ${state.pages} 页`;
                 elements.prev.disabled = state.page <= 1;
                 elements.next.disabled = state.page >= state.pages;
@@ -830,8 +855,8 @@
                 showStatus("");
             } catch (error) {
                 showStatus(error.message || String(error), true);
-                elements.groups.innerHTML = '<div class="empty-state">侵权分组加载失败，请稍后重试。</div>';
-                elements.details.innerHTML = '<tr><td colspan="8" class="empty-state">侵权明细加载失败。</td></tr>';
+                elements.groups.innerHTML = '<div class="empty-state">违规商品分组加载失败，请稍后重试。</div>';
+                elements.details.innerHTML = '<tr><td colspan="8" class="empty-state">违规商品明细加载失败。</td></tr>';
             } finally {
                 state.loading = false;
             }
@@ -869,7 +894,7 @@
                 });
                 const payload = await response.json();
                 if (!response.ok && response.status !== 409) throw new Error(payload.message || "启动同步失败");
-                showStatus(payload.message || "官方侵权数据同步已启动");
+                showStatus(payload.message || "官方违规商品数据同步已启动");
                 state.wasSyncing = true;
                 await loadSyncStatus();
             } catch (error) {
@@ -883,8 +908,12 @@
             clearTimeout(searchTimer);
             searchTimer = setTimeout(() => { state.page = 1; loadData(); }, 400);
         });
-        [elements.viewMode, elements.days, elements.group, elements.salesperson, elements.source].forEach(select => {
-            select.addEventListener("change", () => { state.page = 1; loadData(); });
+        [elements.viewMode, elements.days, elements.group, elements.salesperson, elements.source, elements.category].forEach(select => {
+            select.addEventListener("change", () => {
+                select.title = select.selectedOptions[0]?.textContent || "";
+                state.page = 1;
+                loadData();
+            });
         });
         elements.prev.addEventListener("click", () => { if (state.page > 1) { state.page -= 1; loadData(); } });
         elements.next.addEventListener("click", () => { if (state.page < state.pages) { state.page += 1; loadData(); } });

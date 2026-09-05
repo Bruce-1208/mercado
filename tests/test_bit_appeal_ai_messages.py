@@ -44,6 +44,7 @@ def test_get_agent_messages_supports_new_maxwell_assistant_nodes(monkeypatch):
 
 
 def test_handle_delay_waits_for_and_records_each_group_reply(monkeypatch):
+    monkeypatch.setattr(bit_appeal_ai, "save_ai_appeal_group_record", lambda *args, **kwargs: None)
     sent_messages = []
     records = []
     wait_calls = []
@@ -93,8 +94,10 @@ def test_handle_delay_waits_for_and_records_each_group_reply(monkeypatch):
             bit_appeal_ai.AI_AGENT_REPLY_POLL_SECONDS,
         )
     ]
-    assert records[-1][0] == "delay_agent_reply"
-    assert records[-1][1]["response"] == "本组处理完成"
+    assert records[-2][0] == "delay_agent_reply"
+    assert records[-2][1]["response"] == "本组处理完成"
+    assert records[-1][0] == "group_result"
+    assert records[-1][1]["extra"]["result"]["status"] == "replied"
 
 
 def test_classify_ai_chat_variant_prefers_visible_shadow_iframe():

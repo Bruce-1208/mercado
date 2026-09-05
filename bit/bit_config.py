@@ -1,6 +1,6 @@
 """Build browser task configuration from Mercado store authorizations.
 
-Store/site scope comes only from the two task switches in
+Store/site scope comes only from the task switches in
 ``mercado_store_site_settings``. BitBrowser window IDs are resolved live by
 matching the authorization display name or Mercado nickname; the retired
 browser configuration table is never read.
@@ -29,7 +29,11 @@ AUTHORIZATION_SITE_NAMES = {
     "MLA": "阿根廷",
     "MLU": "乌拉圭",
 }
-AUTHORIZATION_FLAGS = frozenset(("appeal_enabled", "visit_stats_enabled"))
+AUTHORIZATION_FLAGS = frozenset((
+    "appeal_enabled",
+    "reputation_update_enabled",
+    "visit_stats_enabled",
+))
 
 
 def _text(value):

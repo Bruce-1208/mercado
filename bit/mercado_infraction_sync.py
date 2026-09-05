@@ -27,6 +27,7 @@ from erp.mercadolibre_infraction_store import (
     upsert_infraction_records,
     update_infraction_media,
 )
+from erp.mercadolibre_prohibited_store import get_prohibited_sync_context
 from mercado_api.client import MercadoAPIError, MercadoLibreClient
 
 
@@ -79,6 +80,13 @@ INFRACTION_IMAGE_BACKFILL_LIMIT = _env_int(
 DETECTION_PAGE_SIZE = 20
 CASE_PAGE_SIZE = 50
 BRAND_PROTECTION_SUBGROUP = "BRAND_PROTECTION"
+PROHIBITED_REASON = "The product is prohibited."
+PROHIBITED_REASON_CODE = "PROHIBITED_REASON"
+AUTO_APPEAL_EXCLUDED_REASONS = frozenset(
+    {
+        "the product's brand is not generic.",
+    }
+)
 
 _BRAND_PROTECTION_PATTERNS = tuple(
     re.compile(pattern, re.IGNORECASE)
@@ -185,7 +193,10 @@ def official_infraction_sync_status() -> dict[str, Any]:
         auto_sync_enabled=True,
         auto_sync_hours=INFRACTION_AUTO_SYNC_HOURS,
         store_workers=INFRACTION_STORE_WORKERS,
-        source="Mercado Libre Moderations API + Brand Protection API",
+        source=(
+            "Mercado Libre Moderations API + Brand Protection API "
+            "+ official prohibited snapshot"
+        ),
     )
     return state
 
@@ -236,6 +247,36 @@ def is_brand_protection_detection(infraction: Mapping[str, Any]) -> bool:
         for key in ("reason", "remedy", "name")
     )
     return any(pattern.search(text) for pattern in _BRAND_PROTECTION_PATTERNS)
+
+
+def is_prohibited_detection(infraction: Mapping[str, Any]) -> bool:
+    """Return whether an official moderation is a prohibited-product record."""
+
+    if not isinstance(infraction, Mapping):
+        return False
+    reason = _plain_text(
+        infraction.get("reason")
+        or infraction.get("infraction_reason")
+        or infraction.get("侵权原因")
+        or ""
+    )
+    return reason.casefold() == PROHIBITED_REASON.casefold()
+
+
+def is_auto_appeal_eligible_detection(infraction: Mapping[str, Any]) -> bool:
+    """Return whether a moderation detection may enter automated appeals."""
+
+    if not isinstance(infraction, Mapping):
+        # Legacy list rows do not carry the official moderation reason. Current
+        # API rows are mappings and are filtered before reaching appeal tasks.
+        return True
+    reason = _plain_text(
+        infraction.get("reason")
+        or infraction.get("侵权原因")
+        or infraction.get("category")
+        or ""
+    ).casefold()
+    return reason not in AUTO_APPEAL_EXCLUDED_REASONS
 
 
 def _token_ids(values: Iterable[Any]) -> list[int]:
@@ -481,6 +522,8 @@ def _collect_live_detection_records(
             )
         account_records = []
         for row in matches:
+            if not is_auto_appeal_eligible_detection(row):
+                continue
             item_id = _item_id(row)
             if not item_id:
                 continue
@@ -491,6 +534,7 @@ def _collect_live_detection_records(
                     "item_id": item_id,
                     "title": str(row.get("title") or ""),
                     "occurred_at": _mysql_datetime(row.get("date_created")),
+                    "reason": _plain_text(row.get("reason")),
                 }
             )
         return account_records, scanned, capped
@@ -606,6 +650,72 @@ def _item_titles(client: MercadoLibreClient, item_ids: Iterable[str]) -> dict[st
     }
 
 
+def _prohibited_snapshot_records(
+    record: Mapping[str, Any],
+    *,
+    date_created_since: str = "",
+) -> list[dict]:
+    """Normalize the current official prohibited snapshot as infringement rows."""
+
+    token_id = int(record.get("id") or 0)
+    if token_id <= 0:
+        return []
+    settings = _site_setting_map(record)
+    context = get_prohibited_sync_context(token_id)
+    normalized = []
+    for source in context.get("rows") or ():
+        reason = _plain_text(source.get("infraction_reason")) or PROHIBITED_REASON
+        if not is_prohibited_detection({"reason": reason}):
+            continue
+        item_id = str(source.get("item_id") or "").strip().upper()
+        if not item_id:
+            continue
+        occurred_at = _mysql_datetime(source.get("infraction_date"))
+        if (
+            date_created_since
+            and occurred_at
+            and occurred_at[:10] < date_created_since
+        ):
+            continue
+        site_id = str(source.get("site_id") or item_id[:3]).strip().upper()
+        setting = settings.get(site_id) or {}
+        source_id = str(source.get("infraction_id") or "").strip()
+        if not source_id:
+            source_id = hashlib.sha1(
+                f"prohibited|{item_id}|{occurred_at or ''}".encode(
+                    "utf-8", errors="replace"
+                )
+            ).hexdigest()
+        normalized.append(
+            {
+                "source_type": "detection",
+                "source_id": source_id,
+                "seller_id": str(
+                    source.get("seller_id") or record.get("meli_user_id") or ""
+                ),
+                "site_id": site_id,
+                "item_id": item_id,
+                "title": str(source.get("title") or ""),
+                "thumbnail_url": _http_url(source.get("thumbnail_url")),
+                "permalink": _http_url(source.get("permalink")),
+                "occurred_at": occurred_at,
+                "status": str(source.get("status") or "under_review"),
+                "reason_code": PROHIBITED_REASON_CODE,
+                "reason": reason,
+                "remedy": _plain_text(source.get("remedy")),
+                "is_current": True,
+                "resolution_status": "current",
+                "salesperson": setting.get("salesperson") or "",
+                "group_name": setting.get("group_name") or "",
+                "raw_json": {
+                    "source": "official_prohibited_snapshot",
+                    "snapshot": dict(source),
+                },
+            }
+        )
+    return normalized
+
+
 def _collect_detection_records(
     client: MercadoLibreClient,
     record: Mapping[str, Any],
@@ -666,7 +776,11 @@ def _collect_detection_records(
                 "reason_code": str(
                     row.get("filter_subgroup")
                     or row.get("subgroup")
-                    or "BRAND_PROTECTION_REASON"
+                    or (
+                        PROHIBITED_REASON_CODE
+                        if is_prohibited_detection(row)
+                        else "BRAND_PROTECTION_REASON"
+                    )
                 ),
                 "reason": _plain_text(row.get("reason")),
                 "remedy": _plain_text(row.get("remedy")),
@@ -677,6 +791,12 @@ def _collect_detection_records(
                 "raw_json": row,
             }
         )
+    normalized.extend(
+        _prohibited_snapshot_records(
+            record,
+            date_created_since=date_created_since,
+        )
+    )
     return normalized, scanned_total, truncated
 
 
@@ -1017,6 +1137,15 @@ def _collect_live_detection_target(
                     deadline=deadline,
                 )
             )
+            prohibited_records = []
+            try:
+                prohibited_records = _prohibited_snapshot_records(
+                    current_record,
+                    date_created_since=date_created_since,
+                )
+                records.extend(prohibited_records)
+            except Exception as exc:
+                site_errors.append(f"禁限售快照：{exc}")
             rows = []
             seen_items: set[tuple[str, str]] = set()
             for source in records:
@@ -1038,22 +1167,25 @@ def _collect_live_detection_target(
                         "提交时间": "",
                         "执行时间": _now_text(),
                         "类型": "侵权",
+                        "侵权原因": str(source.get("reason") or ""),
                         "source_id": str(source.get("source_id") or ""),
                     }
                 )
             message_parts = list(site_errors)
             if capped:
                 message_parts.append("API 分页达到安全上限")
+            has_usable_source = successful_accounts > 0 or bool(prohibited_records)
             return {
                 "store": store_name,
                 "token_id": token_id,
                 "status": (
                     "error"
-                    if site_errors and successful_accounts == 0
+                    if site_errors and not has_usable_source
                     else ("partial" if site_errors or capped else "success")
                 ),
                 "rows": rows,
                 "scanned": scanned,
+                "prohibited": len(prohibited_records),
                 "message": "；".join(message_parts),
             }
         except Exception as exc:
@@ -1082,8 +1214,9 @@ def collect_live_detection_infractions(
 
     ``targets`` contains token IDs, display names and the authorized site IDs. Each
     store is isolated: a stale token or unsupported account does not cancel other
-    stores. Only official moderation detections are returned; no page DOM, paging
-    buttons or browser profile configuration participates in this path.
+    stores. Brand-protection rows come from the live official API and current
+    prohibited-product rows come from the official prohibited snapshot. No page
+    DOM, paging buttons or browser profile configuration participates in this path.
     """
 
     normalized_targets = []
@@ -1132,7 +1265,7 @@ def collect_live_detection_infractions(
         min(int(max_workers or 1), len(normalized_targets), 8),
     )
     print(
-        f"{_now_text()} 侵权列表改用 Mercado Moderations API，"
+        f"{_now_text()} 侵权列表使用 Mercado Moderations API + 官方禁限售快照，"
         f"{worker_count} 线程并发读取 {len(normalized_targets)} 家店铺"
     )
     results = []
@@ -1598,11 +1731,16 @@ def start_official_infraction_auto_scheduler() -> bool:
 
 
 __all__ = [
+    "AUTO_APPEAL_EXCLUDED_REASONS",
     "BRAND_PROTECTION_SUBGROUP",
     "INFRACTION_AUTO_SYNC_HOURS",
+    "PROHIBITED_REASON",
+    "PROHIBITED_REASON_CODE",
     "backfill_infraction_images",
     "collect_live_detection_infractions",
+    "is_auto_appeal_eligible_detection",
     "is_brand_protection_detection",
+    "is_prohibited_detection",
     "official_infraction_sync_status",
     "run_official_infraction_sync",
     "seed_legacy_infraction_snapshot",

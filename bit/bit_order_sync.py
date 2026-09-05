@@ -5,6 +5,7 @@ from __future__ import annotations
 import os
 import json
 import logging
+import sys
 import threading
 import time
 import uuid
@@ -12,7 +13,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal, InvalidOperation
 
-from bit import bit_mysql, mercado_tokens
+from bit import bit_mysql, bit_print, mercado_tokens
 from bit.bit_runtime_lock import InterProcessLock, get_lock_owner
 from mercado_api.client import MercadoAPIError, MercadoLibreClient
 
@@ -23,6 +24,10 @@ RECENT_ORDER_WINDOW_HOURS = 72
 WORKBENCH_LOCAL_TIMEZONE = timezone(timedelta(hours=8))
 DAILY_STATUS_MODE = "daily_status"
 DAILY_STATUS_STATE_KEY = "last_daily_old_order_status_refresh"
+AUTO_PRINT_OPERATOR_NAME = "系统自动打印"
+AUTO_PRINT_STATE_KEY_PREFIX = "order_auto_print_started_at"
+AUTO_PRINT_DISABLED_ENV = "MERCADO_ORDER_AUTO_PRINT_DISABLED"
+AUTO_PRINT_LOOKBACK_ENV = "MERCADO_ORDER_AUTO_PRINT_BOOTSTRAP_LOOKBACK_SECONDS"
 
 SITE_COUNTRIES = {
     "MLM": "墨西哥",
@@ -74,6 +79,7 @@ _sync_state = {
     "daily_status_last_run_date": "",
     "daily_status_run_date": "",
     "next_daily_status_at": "",
+    "auto_print": {},
 }
 _scheduler_guard = threading.Lock()
 _scheduler_started = False
@@ -85,6 +91,33 @@ _financial_backfill_stop_event = threading.Event()
 _image_backfill_guard = threading.Lock()
 _image_backfill_started = False
 _image_backfill_stop_event = threading.Event()
+_background_shutdown_event = threading.Event()
+
+
+class _InterpreterShutdownRequested(RuntimeError):
+    """Stop daemon work quietly once Python has begun interpreter shutdown."""
+
+
+def _request_background_shutdown():
+    _background_shutdown_event.set()
+    _scheduler_stop_event.set()
+    _financial_backfill_stop_event.set()
+    _image_backfill_stop_event.set()
+
+
+def _interpreter_shutting_down():
+    return bool(sys.is_finalizing())
+
+
+def _is_interpreter_shutdown_error(exc):
+    message = str(exc or "").casefold()
+    return "cannot schedule new futures after interpreter shutdown" in message
+
+
+def _raise_if_interpreter_shutting_down():
+    if _background_shutdown_event.is_set() or _interpreter_shutting_down():
+        _request_background_shutdown()
+        raise _InterpreterShutdownRequested("Python 解释器正在退出")
 
 
 def _now_text():
@@ -118,6 +151,124 @@ def order_sync_status():
             lock_owner=owner,
         )
     return state
+
+
+def _env_disabled(name):
+    return str(os.environ.get(name) or "").strip().casefold() in {
+        "1", "true", "yes", "on",
+    }
+
+
+def _automatic_print_lookback_seconds(value=None):
+    if value is None:
+        value = os.environ.get(AUTO_PRINT_LOOKBACK_ENV, DEFAULT_SYNC_INTERVAL_SECONDS)
+    try:
+        seconds = int(value)
+    except (TypeError, ValueError):
+        seconds = DEFAULT_SYNC_INTERVAL_SECONDS
+    return max(60, min(24 * 60 * 60, seconds))
+
+
+def _automatic_print_state_key(token_id):
+    return f"{AUTO_PRINT_STATE_KEY_PREFIX}:{int(token_id)}"
+
+
+def _automatic_print_candidate_starts(jobs, *, now=None, lookback_seconds=None):
+    """Persist when automatic printing begins so historical orders are not reprinted."""
+
+    now = _as_utc(now or datetime.now(timezone.utc))
+    initial_start = now - timedelta(
+        seconds=_automatic_print_lookback_seconds(lookback_seconds)
+    )
+    starts = {}
+    for job in jobs or ():
+        token_id = int(job["token_id"])
+        state_key = _automatic_print_state_key(token_id)
+        stored = bit_mysql.get_mercado_order_sync_schedule_value(state_key)
+        started_at = None
+        if stored:
+            try:
+                started_at = _as_utc(stored)
+            except (TypeError, ValueError):
+                started_at = None
+        if started_at is None:
+            started_at = initial_start
+            bit_mysql.set_mercado_order_sync_schedule_value(
+                state_key,
+                _iso_millis(started_at),
+            )
+        starts[token_id] = started_at
+    return starts
+
+
+def _run_automatic_order_print(
+    token_ids=None,
+    *,
+    now=None,
+    bootstrap_lookback_seconds=None,
+):
+    """Generate labels for new synchronized orders without blocking future retries."""
+
+    if _env_disabled(AUTO_PRINT_DISABLED_ENV):
+        result = {"status": "disabled", "reason": "disabled_by_environment"}
+        _append_log("系统自动打印已通过环境变量关闭")
+        return result
+
+    try:
+        selected_ids = _token_ids(token_ids)
+        jobs = bit_print.build_print_jobs(selected_token_ids=selected_ids or None)
+        if not jobs:
+            raise ValueError("没有可自动打印的美客多授权店铺")
+        candidate_starts = _automatic_print_candidate_starts(
+            jobs,
+            now=now,
+            lookback_seconds=bootstrap_lookback_seconds,
+        )
+    except Exception as exc:
+        logging.exception("初始化新订单系统自动打印失败")
+        _append_log(f"系统自动打印初始化失败：{exc}")
+        return {
+            "status": "error",
+            "message": str(exc) or exc.__class__.__name__,
+        }
+
+    task_lock = bit_print.acquire_order_print_lock(
+        owner="bit_order_sync.py:automatic_new_orders",
+        mode="automatic_new_orders",
+    )
+    if task_lock is None:
+        owner = bit_print.get_order_print_lock_owner()
+        _append_log(f"系统自动打印本轮跳过：打印任务正在运行 {owner or ''}".rstrip())
+        return {"status": "busy", "lock_owner": owner}
+
+    try:
+        _append_log(
+            f"系统自动打印开始：检查 {len(jobs)} 家店铺在启用自动打印后新增、"
+            "且尚未成功打印的订单"
+        )
+        summary = bit_print.print_orders_all(
+            selected_token_ids=[job["token_id"] for job in jobs],
+            operator_name=AUTO_PRINT_OPERATOR_NAME,
+            candidate_start_by_token=candidate_starts,
+            include_first_run_backlog=False,
+            logger=lambda message: _append_log(f"系统自动打印：{message}"),
+        )
+        result = {"status": "completed", **summary}
+        _append_log(
+            f"系统自动打印完成：订单 {summary.get('printed_order_count', 0)}，"
+            f"面单 {summary.get('shipment_count', 0)}，"
+            f"失败站点 {summary.get('failed', 0)}"
+        )
+        return result
+    except Exception as exc:
+        logging.exception("新订单系统自动打印失败")
+        _append_log(f"系统自动打印失败：{exc}")
+        return {
+            "status": "error",
+            "message": str(exc) or exc.__class__.__name__,
+        }
+    finally:
+        task_lock.release()
 
 
 def _date_range(start_date, end_date):
@@ -282,6 +433,7 @@ def _parallel_api_results(
     values = list(dict.fromkeys(values or ()))
     if not values:
         return {}
+    _raise_if_interpreter_shutting_down()
     try:
         configured_workers = int(os.environ.get(workers_env, str(default_workers)))
     except (TypeError, ValueError):
@@ -305,21 +457,47 @@ def _parallel_api_results(
     if max_workers == 1:
         results = {}
         for value in values:
+            _raise_if_interpreter_shutting_down()
             try:
                 results[value] = (call(value), None)
+            except _InterpreterShutdownRequested:
+                raise
             except Exception as exc:
                 results[value] = (None, exc)
         return results
 
     results = {}
-    with ThreadPoolExecutor(max_workers=max_workers) as executor:
-        future_values = {executor.submit(call, value): value for value in values}
+    executor = ThreadPoolExecutor(max_workers=max_workers)
+    shutdown_requested = False
+    try:
+        future_values = {}
+        for value in values:
+            _raise_if_interpreter_shutting_down()
+            try:
+                future_values[executor.submit(call, value)] = value
+            except RuntimeError as exc:
+                if not _is_interpreter_shutdown_error(exc):
+                    raise
+                _request_background_shutdown()
+                raise _InterpreterShutdownRequested(
+                    "Python 解释器正在退出"
+                ) from exc
         for future in as_completed(future_values):
             value = future_values[future]
             try:
                 results[value] = (future.result(), None)
+            except _InterpreterShutdownRequested:
+                raise
             except Exception as exc:
                 results[value] = (None, exc)
+    except _InterpreterShutdownRequested:
+        shutdown_requested = True
+        raise
+    finally:
+        executor.shutdown(
+            wait=not shutdown_requested,
+            cancel_futures=shutdown_requested,
+        )
     return results
 
 
@@ -658,6 +836,8 @@ def backfill_order_sku_images(limit=50):
                             "token_id": token_id,
                             "error": str(exc),
                         })
+            except _InterpreterShutdownRequested:
+                raise
             except Exception as exc:
                 results = [
                     {
@@ -696,6 +876,8 @@ def _image_backfill_loop():
                     "订单 SKU 图补全：检查 %s，成功 %s，失败 %s",
                     result["checked"], result["updated"], result["failed"],
                 )
+        except _InterpreterShutdownRequested:
+            break
         except Exception:
             logging.exception("历史订单 SKU 图补全任务失败")
             result = {"requested": 0}
@@ -707,6 +889,9 @@ def _image_backfill_loop():
 
 def ensure_order_image_backfill_worker():
     global _image_backfill_started
+    if _background_shutdown_event.is_set() or _interpreter_shutting_down():
+        _request_background_shutdown()
+        return False
     if str(os.environ.get("MERCADO_ORDER_IMAGE_BACKFILL_DISABLED") or "").strip().lower() in (
         "1", "true", "yes", "on",
     ):
@@ -748,6 +933,8 @@ def backfill_order_financials(limit=200):
             processed += len(shipping_ids)
             failed += int(result.get("failed") or 0)
             updated_orders += int(result.get("orders") or 0)
+        except _InterpreterShutdownRequested:
+            raise
         except Exception:
             failed += len(shipping_ids)
             logging.exception("店铺 %s 历史订单费用补全失败", token_id)
@@ -791,6 +978,8 @@ def _financial_backfill_loop():
                     quoted_result["missing_shipments"],
                     quoted_result["updated_orders"],
                 )
+        except _InterpreterShutdownRequested:
+            break
         except Exception:
             logging.exception("历史订单手续费、运费补全任务失败")
             result = {"requested": 0}
@@ -807,6 +996,9 @@ def _financial_backfill_loop():
 
 def ensure_order_financial_backfill_worker():
     global _financial_backfill_started
+    if _background_shutdown_event.is_set() or _interpreter_shutting_down():
+        _request_background_shutdown()
+        return False
     if str(os.environ.get("MERCADO_ORDER_FINANCIAL_BACKFILL_DISABLED") or "").strip().lower() in (
         "1", "true", "yes", "on",
     ):
@@ -1059,6 +1251,7 @@ def run_order_sync(start_date="", end_date="", token_ids=None, mode="manual"):
         started_at=_now_text(),
         finished_at="",
         daily_status_run_date=(daily_context or {}).get("run_date", ""),
+        auto_print={},
         results=[],
         logs=[],
     )
@@ -1100,6 +1293,8 @@ def run_order_sync(start_date="", end_date="", token_ids=None, mode="manual"):
                 f"{store_name} 完成：读取 {result['fetched']}，新增 {result['inserted']}，"
                 f"更新 {result['updated']}，失败 {result.get('failed', 0)}"
             )
+        except _InterpreterShutdownRequested:
+            raise
         except Exception as exc:
             result = {"store": store_name, "status": "error", "message": str(exc)}
             results.append(result)
@@ -1161,6 +1356,9 @@ def _run_background(start_date, end_date, token_ids, mode):
         with _state_guard:
             final_status = str(_sync_state.get("status") or "")
             daily_run_date = str(_sync_state.get("daily_status_run_date") or "")
+        if mode == "automatic" and final_status in ("completed", "partial"):
+            auto_print_result = _run_automatic_order_print(token_ids)
+            _state_update(auto_print=auto_print_result)
         if mode == DAILY_STATUS_MODE and final_status in ("completed", "partial"):
             run_date = str(
                 daily_run_date
@@ -1171,6 +1369,14 @@ def _run_background(start_date, end_date, token_ids, mode):
                 run_date,
             )
             _state_update(daily_status_last_run_date=run_date)
+    except _InterpreterShutdownRequested:
+        _state_update(
+            running=False,
+            status="stopped",
+            message="程序正在退出，订单同步已停止",
+            current_store="",
+            finished_at=_now_text(),
+        )
     except Exception as exc:
         _state_update(
             running=False,
@@ -1185,6 +1391,9 @@ def _run_background(start_date, end_date, token_ids, mode):
 
 
 def start_order_sync(start_date="", end_date="", token_ids=None, mode="manual"):
+    if _background_shutdown_event.is_set() or _interpreter_shutting_down():
+        _request_background_shutdown()
+        return False, order_sync_status()
     mode = _sync_mode(mode)
     if mode == "manual":
         _date_range(start_date, end_date)
@@ -1278,6 +1487,9 @@ def _scheduler_loop(interval_seconds):
 
 def ensure_order_sync_scheduler():
     global _scheduler_started
+    if _background_shutdown_event.is_set() or _interpreter_shutting_down():
+        _request_background_shutdown()
+        return False
     if str(os.environ.get("MERCADO_ORDER_SYNC_DISABLED") or "").strip().lower() in (
         "1", "true", "yes", "on",
     ):

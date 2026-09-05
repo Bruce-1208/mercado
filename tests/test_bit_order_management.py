@@ -414,3 +414,40 @@ def test_order_operation_logs_route_returns_audit_rows():
     assert response.headers["Cache-Control"] == "no-store"
     assert response.get_json()["data"]["rows"][0]["action_label"] == "修改采购单"
     list_logs.assert_called_once_with("20001", limit=100)
+
+
+def test_order_print_history_marks_system_automatic_print_in_page_log():
+    with (
+        patch.object(
+            workbench,
+            "_order_print_config_options",
+            return_value={
+                "shops": [{"shop_name": "店铺甲", "sites": ["墨西哥"]}],
+                "sites": ["墨西哥"],
+            },
+        ),
+        patch.object(
+            workbench,
+            "db_get_latest_order_print_records",
+            return_value=[{
+                "shop_name": "店铺甲",
+                "site": "墨西哥",
+                "outcome": "成功：系统自动打印，API 生成 1 个面单",
+                "finished_at": "2026-09-05 09:15:00",
+            }],
+        ),
+    ):
+        rows = workbench._load_order_print_site_last_runs()
+
+    assert rows[0]["source"] == "系统自动打印"
+    assert rows[0]["status"] == "printed"
+    with workbench._order_print_lock:
+        previous_rows = workbench._order_print_state.get("site_last_runs")
+        workbench._order_print_state["site_last_runs"] = rows
+    try:
+        snapshot = workbench._order_print_snapshot()
+    finally:
+        with workbench._order_print_lock:
+            workbench._order_print_state["site_last_runs"] = previous_rows
+    assert "系统自动打印最近记录" in snapshot["log"]
+    assert "店铺甲 / 墨西哥" in snapshot["log"]

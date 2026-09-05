@@ -7,6 +7,7 @@ from urllib.parse import parse_qs, quote, urlencode, urlsplit, urlunsplit
 
 from yandex.app.config import settings
 from yandex.app.database import database
+from yandex.app.order_finance import enrich_order_finances
 from yandex.app.schemas import ProductRecord
 from yandex.app.scraper import CaptchaRequired, ScraperError, scraper
 from yandex.app.secret_store import protect_secret, secret_fingerprint, unprotect_secret
@@ -24,6 +25,26 @@ def _card_quality_summary(card: dict[str, Any]) -> dict[str, Any]:
         "errors": card.get("errors") or [],
         "warnings": card.get("warnings") or [],
     }
+
+
+def _require_scope(
+    store: StoreContext,
+    scopes: set[str],
+    feature: str,
+    *,
+    read_only: bool = False,
+) -> None:
+    normalized = {
+        str(scope).strip().lower().replace("_", "-") for scope in store.auth_scopes
+    }
+    accepted = set(scopes)
+    if read_only:
+        accepted.update(f"{scope}:read-only" for scope in scopes)
+        accepted.add("all-methods:read-only")
+    if "all-methods" in normalized or normalized & accepted:
+        return
+    permission = "读取" if read_only else "管理"
+    raise YandexApiError(f"token 缺少“{feature}”{permission}权限")
 
 
 class TaskService:
@@ -155,11 +176,190 @@ class TaskService:
         refreshed = database.update_store_connection(store_id, context.public_dict()) or stored
         return token, context, refreshed
 
+    async def get_orders(
+        self,
+        store_id: int,
+        *,
+        statuses: list[str] | None = None,
+        date_from: str | None = None,
+        date_to: str | None = None,
+        page_token: str = "",
+        limit: int = 50,
+    ) -> tuple[dict[str, Any], dict[str, Any]]:
+        token, store, stored = await self.resolve_store(store_id)
+        _require_scope(
+            store, {"inventory-and-order-processing"}, "订单", read_only=True
+        )
+        client = YandexSellerClient(token)
+        orders = await client.get_orders(
+            store.business_id,
+            campaign_id=store.campaign_id,
+            statuses=statuses,
+            date_from=date_from,
+            date_to=date_to,
+            page_token=page_token,
+            limit=limit,
+        )
+        orders["orders"] = await enrich_order_finances(
+            client, store.business_id, store.campaign_id, orders["orders"],
+        )
+        return orders, stored
+
+    async def update_order(
+        self, store_id: int, order_id: int, action: str
+    ) -> tuple[dict[str, Any], dict[str, Any]]:
+        token, store, stored = await self.resolve_store(store_id)
+        _require_scope(store, {"inventory-and-order-processing"}, "订单")
+        transitions = {
+            "READY_TO_SHIP": ("PROCESSING", "READY_TO_SHIP"),
+            "CANCEL": ("CANCELLED", "SHOP_FAILED"),
+        }
+        if action not in transitions:
+            raise ValueError("不支持的订单操作")
+        order_status, substatus = transitions[action]
+        result = await YandexSellerClient(token).update_order_status(
+            store.campaign_id,
+            order_id,
+            status=order_status,
+            substatus=substatus,
+        )
+        return result, stored
+
+    async def get_inventory(
+        self,
+        store_id: int,
+        *,
+        offer_ids: list[str] | None = None,
+        archived: bool = False,
+        page_token: str = "",
+        limit: int = 100,
+    ) -> tuple[dict[str, Any], dict[str, Any]]:
+        token, store, stored = await self.resolve_store(store_id)
+        _require_scope(
+            store, {"offers-and-cards-management"}, "商品和库存", read_only=True
+        )
+        client = YandexSellerClient(token)
+        if store.placement_type.strip().upper() in {"FBS", "DBS", "EXPRESS"}:
+            target = await client.resolve_stock_target(
+                store.business_id, store.campaign_id, store.placement_type
+            )
+        else:
+            target = StockTarget(
+                method="campaign", warehouse_id=None, warehouse_name="Yandex 仓库"
+            )
+        result = await client.get_offer_stocks(
+            store.business_id,
+            store.campaign_id,
+            target,
+            offer_ids=offer_ids,
+            archived=archived,
+            page_token=page_token,
+            limit=limit,
+        )
+        stock_offer_ids = list(
+            dict.fromkeys(
+                str(offer.get("offerId"))
+                for warehouse in result["warehouses"]
+                for offer in warehouse.get("offers") or []
+                if isinstance(offer, dict) and offer.get("offerId")
+            )
+        )
+        details: list[dict[str, Any]] = []
+        warning = ""
+        try:
+            for index in range(0, len(stock_offer_ids), 100):
+                details.extend(
+                    await client.get_business_offer_prices(
+                        store.business_id, stock_offer_ids[index : index + 100]
+                    )
+                )
+        except YandexApiError as exc:
+            warning = f"商品名称和价格暂未补全：{exc}"
+        details_by_id = {str(item.get("offerId")): item for item in details}
+        for warehouse in result["warehouses"]:
+            for offer in warehouse.get("offers") or []:
+                if isinstance(offer, dict):
+                    offer["details"] = details_by_id.get(str(offer.get("offerId")), {})
+        result["target"] = target.public_dict()
+        result["warning"] = warning
+        return result, stored
+
+    async def update_inventory_stock(
+        self, store_id: int, offer_id: str, count: int
+    ) -> tuple[dict[str, Any], dict[str, Any]]:
+        token, store, stored = await self.resolve_store(store_id)
+        _require_scope(store, {"offers-and-cards-management"}, "商品和库存")
+        client = YandexSellerClient(token)
+        target = await client.resolve_stock_target(
+            store.business_id, store.campaign_id, store.placement_type
+        )
+        result = await client.update_offer_stock(
+            store.business_id, store.campaign_id, offer_id, count, target
+        )
+        return {"response": result, "target": target.public_dict()}, stored
+
+    async def get_returns(
+        self, store_id: int, **filters: Any
+    ) -> tuple[dict[str, Any], dict[str, Any]]:
+        token, store, stored = await self.resolve_store(store_id)
+        _require_scope(
+            store, {"inventory-and-order-processing"}, "退货", read_only=True
+        )
+        result = await YandexSellerClient(token).get_returns(store.campaign_id, **filters)
+        return result, stored
+
+    async def get_feedbacks(
+        self, store_id: int, **filters: Any
+    ) -> tuple[dict[str, Any], dict[str, Any]]:
+        token, store, stored = await self.resolve_store(store_id)
+        _require_scope(store, {"communication"}, "客户沟通", read_only=True)
+        result = await YandexSellerClient(token).get_feedbacks(store.business_id, **filters)
+        return result, stored
+
+    async def reply_to_feedback(
+        self, store_id: int, feedback_id: int, text: str
+    ) -> tuple[dict[str, Any], dict[str, Any]]:
+        token, store, stored = await self.resolve_store(store_id)
+        _require_scope(store, {"communication"}, "客户沟通")
+        result = await YandexSellerClient(token).reply_to_feedback(
+            store.business_id, feedback_id, text
+        )
+        return result, stored
+
+    async def skip_feedbacks(
+        self, store_id: int, feedback_ids: list[int]
+    ) -> tuple[dict[str, Any], dict[str, Any]]:
+        token, store, stored = await self.resolve_store(store_id)
+        _require_scope(store, {"communication"}, "客户沟通")
+        result = await YandexSellerClient(token).skip_feedbacks(
+            store.business_id, feedback_ids
+        )
+        return result, stored
+
+    async def get_questions(
+        self, store_id: int, **filters: Any
+    ) -> tuple[dict[str, Any], dict[str, Any]]:
+        token, store, stored = await self.resolve_store(store_id)
+        _require_scope(store, {"communication"}, "客户沟通", read_only=True)
+        result = await YandexSellerClient(token).get_questions(store.business_id, **filters)
+        return result, stored
+
+    async def reply_to_question(
+        self, store_id: int, question_id: int, text: str
+    ) -> tuple[dict[str, Any], dict[str, Any]]:
+        token, store, stored = await self.resolve_store(store_id)
+        _require_scope(store, {"communication"}, "客户沟通")
+        result = await YandexSellerClient(token).reply_to_question(
+            store.business_id, question_id, text
+        )
+        return result, stored
+
     async def resolve_stock_target(
         self,
         token: str,
         store: StoreContext,
     ) -> StockTarget:
+        _require_scope(store, {"offers-and-cards-management"}, "商品和库存")
         return await YandexSellerClient(token).resolve_stock_target(
             store.business_id,
             store.campaign_id,

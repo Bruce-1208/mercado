@@ -1,6 +1,7 @@
 import pytest
 from collections import deque
 from pathlib import Path
+import threading
 
 from bit import bit_interface
 
@@ -719,6 +720,7 @@ def test_daily_task_console_exposes_all_task_switches_and_shop_group():
     assert '<option value="loop" selected>循环执行</option>' in template
     assert '<option value="once" selected>' not in template
     assert 'name="daily-task-appeal-type" value="侵权" checked' in template
+    assert 'name="daily-task-appeal-type" value="禁限售"' in template
     assert 'name="daily-task-appeal-type" value="延误率"' in template
     assert 'name="daily-task-appeal-type" value="投诉"' in template
     assert 'name="daily-task-appeal-type" value="取消率"' in template
@@ -743,13 +745,19 @@ def test_daily_task_console_exposes_all_task_switches_and_shop_group():
     assert "侵权 → 延误率 → 侵权 → 投诉 → 侵权 → 取消率" in template
     assert "每轮先实时遍历店铺授权中勾选的全部站点" in template
     assert "只执行本站点侵权数超过标准的站点" in template
-    assert 'id="stop-daily-task-btn"' in template
-    assert 'fetch("/api/tasks/daily/stop"' in template
-    assert 'const runtimeLog = String(state.log || "").trim()' in template
-    assert "dailyTaskStatusPollTimer = window.setTimeout(loadDailyTaskStatus, 2000)" in template
+    assert 'id="daily-task-list"' in template
+    assert 'class="danger daily-task-stop-btn"' in template
+    assert 'id="daily-task-execution-target"' in template
+    assert '<option value="local" selected>本机比特浏览器（默认）</option>' in template
+    assert '"/api/tasks/daily/stop"' in template
+    assert "fetchExecutionTarget(" in template
+    assert "body: JSON.stringify({task_id: taskId})" in template
+    assert "function renderDailyTaskStatuses(data)" in template
+    assert "scheduleDailyTaskStatusPoll(2000)" in template
+    assert "startDailyTaskBtn.disabled = running" not in template
 
 
-@pytest.mark.parametrize("appeal_type", ["侵权", "延误率", "取消率", "投诉", "混合模式"])
+@pytest.mark.parametrize("appeal_type", ["侵权", "禁限售", "延误率", "取消率", "投诉", "混合模式"])
 def test_build_daily_task_params_accepts_all_appeal_modes(appeal_type):
     params = bit_interface.build_daily_task_params(
         {"appeal_type": appeal_type, "min_rate": "7.5%"}
@@ -843,6 +851,497 @@ def test_daily_task_options_returns_all_active_salespeople(monkeypatch):
     assert response.get_json()["data"]["groups"] == ["普通组", "精品组"]
 
 
+def test_daily_task_api_starts_multiple_instances_and_stops_only_selected(
+    monkeypatch,
+    tmp_path,
+):
+    class FakeEvent:
+        def __init__(self):
+            self.value = False
+
+        def set(self):
+            self.value = True
+
+        def is_set(self):
+            return self.value
+
+    class FakeManager:
+        def __init__(self):
+            self.event = FakeEvent()
+
+        def Event(self):
+            return self.event
+
+        def dict(self):
+            return {}
+
+        def shutdown(self):
+            return None
+
+    class FakeTaskLock:
+        acquired = True
+
+        def release(self):
+            return None
+
+    class FakeThread:
+        def __init__(self, *args, **kwargs):
+            self.name = kwargs.get("name", "")
+
+        def start(self):
+            return None
+
+    task_ids = iter(("task-a", "task-b"))
+    managers = []
+    lock_calls = []
+
+    def make_manager():
+        manager = FakeManager()
+        managers.append(manager)
+        return manager
+
+    monkeypatch.setattr(
+        bit_interface,
+        "get_current_workbench_user",
+        lambda: {"id": 1, "permissions": ["tasks.view", "tasks.execute"]},
+    )
+    monkeypatch.setattr(bit_interface, "_daily_tasks", {})
+    monkeypatch.setattr(bit_interface, "_daily_task_controls", {})
+    monkeypatch.setattr(
+        bit_interface,
+        "_daily_task_state",
+        {"running": False, "status": "idle", "message": "等待启动"},
+    )
+    monkeypatch.setattr(
+        bit_interface,
+        "_daily_task_log_path",
+        tmp_path / "daily-task.log",
+    )
+    monkeypatch.setattr(bit_interface.secrets, "token_hex", lambda _size: next(task_ids))
+    monkeypatch.setattr(bit_interface.multiprocessing, "Manager", make_manager)
+    monkeypatch.setattr(bit_interface.threading, "Thread", FakeThread)
+    monkeypatch.setattr(
+        bit_interface.bit_daily_task,
+        "acquire_daily_task_lock",
+        lambda **kwargs: lock_calls.append(kwargs) or FakeTaskLock(),
+    )
+    monkeypatch.setattr(
+        bit_interface.bit_daily_task,
+        "get_daily_task_lock_owner",
+        lambda *args, **kwargs: None,
+    )
+
+    client = bit_interface.app.test_client()
+    first = client.post(
+        "/api/tasks/daily/start",
+        json={"group_names": ["八月新号组"], "appeal_type": "侵权"},
+    )
+    second = client.post(
+        "/api/tasks/daily/start",
+        json={"salespeople": ["张三"], "appeal_type": "投诉"},
+    )
+
+    assert first.status_code == 200
+    assert second.status_code == 200
+    assert first.get_json()["data"]["task_id"] == "task-a"
+    assert second.get_json()["data"]["task_id"] == "task-b"
+    assert [call["task_id"] for call in lock_calls] == ["task-a", "task-b"]
+    assert len(bit_interface._daily_tasks) == 2
+    assert bit_interface._daily_tasks["task-a"]["log_path"] != bit_interface._daily_tasks["task-b"]["log_path"]
+
+    status = client.get("/api/tasks/daily/status").get_json()["data"]
+    assert status["running_count"] == 2
+    assert {task["task_id"] for task in status["tasks"]} == {"task-a", "task-b"}
+    assert any("八月新号组" in task["name"] for task in status["tasks"])
+    assert any("张三" in task["name"] for task in status["tasks"])
+
+    stopped = client.post("/api/tasks/daily/stop", json={"task_id": "task-a"})
+
+    assert stopped.status_code == 200
+    assert managers[0].event.is_set() is True
+    assert managers[1].event.is_set() is False
+    assert bit_interface._daily_tasks["task-a"]["status"] == "stopping"
+    assert bit_interface._daily_tasks["task-b"]["status"] == "running"
+
+
+def test_daily_task_start_enforces_global_running_limit(monkeypatch):
+    monkeypatch.setattr(
+        bit_interface,
+        "get_current_workbench_user",
+        lambda: {"id": 1, "permissions": ["tasks.view", "tasks.execute"]},
+    )
+    monkeypatch.setattr(bit_interface, "_daily_task_max_concurrent", lambda: 2)
+    monkeypatch.setattr(
+        bit_interface,
+        "_daily_tasks",
+        {
+            "one": {"task_id": "one", "running": True, "status": "running"},
+            "two": {"task_id": "two", "running": True, "status": "running"},
+        },
+    )
+    acquire = []
+    monkeypatch.setattr(
+        bit_interface.bit_daily_task,
+        "acquire_daily_task_lock",
+        lambda **kwargs: acquire.append(kwargs),
+    )
+
+    response = bit_interface.app.test_client().post(
+        "/api/tasks/daily/start",
+        json={"appeal_type": "侵权"},
+    )
+
+    assert response.status_code == 409
+    assert "上限 2" in response.get_json()["message"]
+    assert acquire == []
+
+
+@pytest.mark.parametrize("fail_stage", ["event", "registry"])
+def test_daily_task_manager_control_failure_is_cleaned_up(
+    monkeypatch,
+    tmp_path,
+    fail_stage,
+):
+    class BrokenManager:
+        def __init__(self):
+            self.shutdown_called = False
+
+        def Event(self):
+            if fail_stage == "event":
+                raise RuntimeError("event failed")
+            return threading.Event()
+
+        def dict(self):
+            raise RuntimeError("registry failed")
+
+        def shutdown(self):
+            self.shutdown_called = True
+
+    class FakeTaskLock:
+        def __init__(self):
+            self.released = False
+
+        def release(self):
+            self.released = True
+
+    manager = BrokenManager()
+    task_lock = FakeTaskLock()
+    monkeypatch.setattr(
+        bit_interface,
+        "get_current_workbench_user",
+        lambda: {"id": 1, "permissions": ["tasks.view", "tasks.execute"]},
+    )
+    monkeypatch.setattr(bit_interface, "_daily_tasks", {})
+    monkeypatch.setattr(bit_interface, "_daily_task_controls", {})
+    monkeypatch.setattr(
+        bit_interface,
+        "_daily_task_state",
+        {"running": False, "status": "idle", "message": "等待启动"},
+    )
+    monkeypatch.setattr(bit_interface, "_daily_task_log_path", tmp_path / "daily.log")
+    monkeypatch.setattr(bit_interface.secrets, "token_hex", lambda _size: "broken")
+    monkeypatch.setattr(bit_interface.multiprocessing, "Manager", lambda: manager)
+    monkeypatch.setattr(
+        bit_interface.bit_daily_task,
+        "acquire_daily_task_lock",
+        lambda **_kwargs: task_lock,
+    )
+
+    response = bit_interface.app.test_client().post(
+        "/api/tasks/daily/start",
+        json={"appeal_type": "侵权"},
+    )
+
+    assert response.status_code == 500
+    assert response.get_json()["status"] == "error"
+    assert manager.shutdown_called is True
+    assert task_lock.released is True
+    assert bit_interface._daily_tasks["broken"]["running"] is False
+    assert bit_interface._daily_tasks["broken"]["can_stop"] is False
+
+
+def test_daily_task_status_legacy_projection_prefers_running_task(monkeypatch):
+    monkeypatch.setattr(
+        bit_interface,
+        "_daily_tasks",
+        {
+            "older-running": {
+                "task_id": "older-running",
+                "running": True,
+                "status": "running",
+                "message": "仍在运行",
+            },
+            "newer-finished": {
+                "task_id": "newer-finished",
+                "running": False,
+                "status": "success",
+                "message": "已完成",
+            },
+        },
+    )
+
+    snapshot = bit_interface._daily_tasks_snapshot()
+
+    assert snapshot["running"] is True
+    assert snapshot["task_id"] == "older-running"
+    assert snapshot["status"] == "running"
+    assert [task["task_id"] for task in snapshot["tasks"]] == [
+        "newer-finished",
+        "older-running",
+    ]
+
+
+def test_daily_task_status_projects_external_task_when_no_local_task(monkeypatch):
+    monkeypatch.setattr(
+        bit_interface,
+        "get_current_workbench_user",
+        lambda: {"id": 1, "permissions": ["tasks.view"]},
+    )
+    monkeypatch.setattr(bit_interface, "_daily_tasks", {})
+    monkeypatch.setattr(
+        bit_interface,
+        "_daily_task_state",
+        {"running": False, "status": "idle", "message": "等待启动"},
+    )
+    monkeypatch.setattr(
+        bit_interface.bit_daily_task,
+        "get_daily_task_lock_owner",
+        lambda: {"acquired_at": "2026-09-05 10:00:00", "owner": "bit_main"},
+    )
+
+    response = bit_interface.app.test_client().get("/api/tasks/daily/status")
+    data = response.get_json()["data"]
+
+    assert response.status_code == 200
+    assert data["running"] is True
+    assert data["status"] == "running"
+    assert data["task_id"] == "external-daily-task"
+    assert data["running_count"] == 1
+
+
+def test_daily_task_history_pruning_removes_log_and_stale_control(
+    monkeypatch,
+    tmp_path,
+):
+    old_log = tmp_path / "old.log"
+    old_log.write_text("old", encoding="utf-8")
+
+    class Manager:
+        def __init__(self):
+            self.shutdown_called = False
+
+        def shutdown(self):
+            self.shutdown_called = True
+
+    manager = Manager()
+    monkeypatch.setattr(bit_interface, "DAILY_TASK_HISTORY_LIMIT", 1)
+    monkeypatch.setattr(bit_interface, "_daily_task_log_path", tmp_path / "base.log")
+    monkeypatch.setattr(
+        bit_interface,
+        "_daily_tasks",
+        {
+            "old": {
+                "task_id": "old",
+                "running": False,
+                "log_path": str(old_log),
+            },
+            "current": {"task_id": "current", "running": True},
+        },
+    )
+    monkeypatch.setattr(
+        bit_interface,
+        "_daily_task_controls",
+        {"old": {"stop_manager": manager}},
+    )
+
+    bit_interface._prune_daily_task_history()
+
+    assert set(bit_interface._daily_tasks) == {"current"}
+    assert "old" not in bit_interface._daily_task_controls
+    assert manager.shutdown_called is True
+    assert not old_log.exists()
+
+
+def test_daily_task_status_keeps_instance_logs_separate(monkeypatch, tmp_path):
+    first_log = tmp_path / "first.log"
+    second_log = tmp_path / "second.log"
+    first_log.write_text("八月新号组日志<br>\n", encoding="utf-8")
+    second_log.write_text("其他业务员日志<br>\n", encoding="utf-8")
+    monkeypatch.setattr(
+        bit_interface,
+        "get_current_workbench_user",
+        lambda: {"id": 1, "permissions": ["tasks.view"]},
+    )
+    monkeypatch.setattr(
+        bit_interface,
+        "_daily_tasks",
+        {
+            "first": {
+                "task_id": "first",
+                "name": "八月新号组",
+                "running": True,
+                "status": "running",
+                "log_path": str(first_log),
+            },
+            "second": {
+                "task_id": "second",
+                "name": "其他业务员",
+                "running": True,
+                "status": "running",
+                "log_path": str(second_log),
+            },
+        },
+    )
+    monkeypatch.setattr(bit_interface, "_daily_task_controls", {})
+    monkeypatch.setattr(
+        bit_interface.bit_daily_task,
+        "get_daily_task_lock_owner",
+        lambda *args, **kwargs: None,
+    )
+
+    client = bit_interface.app.test_client()
+    response = client.get("/api/tasks/daily/status")
+    tasks = response.get_json()["data"]["tasks"]
+
+    assert all("log" not in task for task in tasks)
+    first = client.get("/api/tasks/daily/status?task_id=first").get_json()["data"]
+    second = client.get("/api/tasks/daily/status?task_id=second").get_json()["data"]
+    assert first["log"] == "八月新号组日志"
+    assert second["log"] == "其他业务员日志"
+
+
+def test_daily_task_jobs_run_concurrently_with_independent_state_and_logs(
+    monkeypatch,
+    tmp_path,
+):
+    barrier = threading.Barrier(2)
+    observed_task_context = {}
+
+    class FakeTaskLock:
+        acquired = True
+
+        def __init__(self):
+            self.released = False
+
+        def release(self):
+            self.released = True
+
+    class FakeManager:
+        def __init__(self):
+            self.shutdown_called = False
+
+        def shutdown(self):
+            self.shutdown_called = True
+
+    def run_once(_appeal_type, **kwargs):
+        scope = kwargs["group_names"][0]
+        observed_task_context[scope] = (
+            kwargs["task_id"],
+            kwargs["owned_window_ids"],
+        )
+        print(f"{scope} 独立任务日志")
+        barrier.wait(timeout=3)
+
+    first_params = bit_interface.build_daily_task_params({
+        "mode": "once",
+        "appeal_type": "侵权",
+        "group_names": ["八月新号组"],
+    })
+    second_params = bit_interface.build_daily_task_params({
+        "mode": "once",
+        "appeal_type": "投诉",
+        "group_names": ["其他组"],
+    })
+    first_log = tmp_path / "first-task.log"
+    second_log = tmp_path / "second-task.log"
+    first_lock = FakeTaskLock()
+    second_lock = FakeTaskLock()
+    first_manager = FakeManager()
+    second_manager = FakeManager()
+    first_owned_windows = {}
+    second_owned_windows = {}
+    monkeypatch.setattr(bit_interface.bit_daily_task, "run_ai_appeal_once", run_once)
+    monkeypatch.setattr(
+        bit_interface.sys,
+        "stdout",
+        bit_interface.ThreadLogStream(bit_interface.sys.stdout),
+    )
+    monkeypatch.setattr(
+        bit_interface,
+        "_daily_tasks",
+        {
+            "first": {"task_id": "first", "running": True, "status": "running"},
+            "second": {"task_id": "second", "running": True, "status": "running"},
+        },
+    )
+    monkeypatch.setattr(
+        bit_interface,
+        "_daily_task_controls",
+        {
+            "first": {
+                "stop_event": None,
+                "stop_manager": first_manager,
+                "task_lock": first_lock,
+                "owned_window_ids": first_owned_windows,
+            },
+            "second": {
+                "stop_event": None,
+                "stop_manager": second_manager,
+                "task_lock": second_lock,
+                "owned_window_ids": second_owned_windows,
+            },
+        },
+    )
+    first_event = threading.Event()
+    second_event = threading.Event()
+    bit_interface._daily_task_controls["first"]["stop_event"] = first_event
+    bit_interface._daily_task_controls["second"]["stop_event"] = second_event
+
+    first_thread = threading.Thread(
+        target=bit_interface.run_daily_task_job,
+        args=(
+            first_params,
+            first_lock,
+            first_event,
+            "first",
+            first_log,
+            first_owned_windows,
+        ),
+    )
+    second_thread = threading.Thread(
+        target=bit_interface.run_daily_task_job,
+        args=(
+            second_params,
+            second_lock,
+            second_event,
+            "second",
+            second_log,
+            second_owned_windows,
+        ),
+    )
+    first_thread.start()
+    second_thread.start()
+    first_thread.join(timeout=5)
+    second_thread.join(timeout=5)
+
+    assert first_thread.is_alive() is False
+    assert second_thread.is_alive() is False
+    assert bit_interface._daily_tasks["first"]["status"] == "success"
+    assert bit_interface._daily_tasks["second"]["status"] == "success"
+    assert first_lock.released is True
+    assert second_lock.released is True
+    assert first_manager.shutdown_called is True
+    assert second_manager.shutdown_called is True
+    assert "八月新号组 独立任务日志" in first_log.read_text(encoding="utf-8")
+    assert "其他组 独立任务日志" not in first_log.read_text(encoding="utf-8")
+    assert "其他组 独立任务日志" in second_log.read_text(encoding="utf-8")
+    assert "八月新号组 独立任务日志" not in second_log.read_text(encoding="utf-8")
+    assert observed_task_context == {
+        "八月新号组": ("first", first_owned_windows),
+        "其他组": ("second", second_owned_windows),
+    }
+
+
 def test_daily_task_stop_endpoint_sets_stop_event(monkeypatch):
     stop_event = bit_interface.threading.Event()
     monkeypatch.setattr(
@@ -893,7 +1392,9 @@ def test_daily_task_status_returns_runtime_log(monkeypatch, tmp_path):
         {"running": True, "status": "running", "message": "运行中"},
     )
 
-    response = bit_interface.app.test_client().get("/api/tasks/daily/status")
+    response = bit_interface.app.test_client().get(
+        "/api/tasks/daily/status?task_id=legacy-daily-task"
+    )
 
     assert response.status_code == 200
     assert response.get_json()["data"]["log"] == "店铺运行日志"
@@ -1008,6 +1509,10 @@ def test_resolve_selected_appeal_forms_and_use_fixed_execution_order():
         "延误", "取消率"
     )
     assert bit_interface.resolve_appeal_forms("投诉") == ("投诉",)
+    assert bit_interface.resolve_appeal_forms(["禁限售", "侵权"]) == (
+        "侵权",
+        "禁限售",
+    )
     with pytest.raises(ValueError, match="至少选择一个任务类型"):
         bit_interface.resolve_appeal_forms([])
     with pytest.raises(ValueError, match="不支持的任务类型"):
@@ -1030,7 +1535,7 @@ def test_normalize_appeal_loop_count():
     ("mode", "expected_interval"),
     [("AI客服", 60), ("人工客服", 600)],
 )
-@pytest.mark.parametrize("form", ["侵权", "延误", "取消率", "投诉"])
+@pytest.mark.parametrize("form", ["侵权", "禁限售", "延误", "取消率", "投诉"])
 def test_selected_sites_run_sequentially_for_every_mode_and_form(
     monkeypatch,
     mode,
@@ -1396,7 +1901,9 @@ def test_appeal_page_contains_stop_button_and_handler():
 
     assert 'id="stop-btn"' in template
     assert 'onclick="stopTask()"' in template
-    assert 'fetch("/api/run_shensu/stop"' in template
+    assert 'id="appeal-execution-target"' in template
+    assert '<option value="local" selected>本机比特浏览器（默认）</option>' in template
+    assert '"/api/run_shensu/stop"' in template
     assert '<div class="site-picker" id="site-picker"' in template
     assert 'input type="checkbox" name="site" value="墨西哥" checked' in template
     assert 'input[name="site"]:checked' in template
@@ -1404,6 +1911,8 @@ def test_appeal_page_contains_stop_button_and_handler():
     assert 'params.append("site", site)' in template
     assert '<div class="site-picker" id="form-picker"' in template
     assert 'input type="checkbox" name="form" value="延误" checked' in template
+    assert 'input type="checkbox" name="form" value="禁限售"' in template
+    assert "syncProhibitedAppealSelection" in template
     assert 'input[name="form"]:checked' in template
     assert 'params.append("form", form)' in template
     assert '<select id="loop-count">' in template
@@ -1466,6 +1975,11 @@ def test_collection_page_uses_shop_status_style_checkbox_multiselect():
     assert 'class="reputation-shop-select reputation-row-select"' in template
     assert 'fetch("/api/reputation/update-selected"' in template
     assert "toggleReputationShopSelection(this.value, this.checked)" in template
+    selected_update_source = template.split(
+        "async function runSelectedReputationUpdate()", 1
+    )[1].split("function exportLatestInfractions()", 1)[0]
+    assert "await loadCollectionOptions(true)" in selected_update_source
+    assert template.count("collectionOptionsLoaded = false;") >= 2
 
 
 def test_collection_options_returns_active_shop_site_mapping(monkeypatch):
@@ -1495,15 +2009,15 @@ def test_collection_options_returns_active_shop_site_mapping(monkeypatch):
                 {
                     "display_name": "店铺甲",
                     "site_settings": [
-                        {"site_id": "MLM", "salesperson": "业务员甲", "visit_stats_enabled": True, "appeal_enabled": True},
-                        {"site_id": "MLB", "salesperson": "业务员甲", "visit_stats_enabled": True, "appeal_enabled": False},
+                        {"site_id": "MLM", "salesperson": "业务员甲", "reputation_update_enabled": True, "visit_stats_enabled": True, "appeal_enabled": True},
+                        {"site_id": "MLB", "salesperson": "业务员甲", "reputation_update_enabled": True, "visit_stats_enabled": True, "appeal_enabled": False},
                     ],
                 },
                 {
                     "display_name": "店铺乙",
                     "site_settings": [
-                        {"site_id": "MLB", "salesperson": "业务员乙", "visit_stats_enabled": True, "appeal_enabled": True},
-                        {"site_id": "MLC", "salesperson": "业务员乙", "visit_stats_enabled": True, "appeal_enabled": True},
+                        {"site_id": "MLB", "salesperson": "业务员乙", "reputation_update_enabled": True, "visit_stats_enabled": True, "appeal_enabled": True},
+                        {"site_id": "MLC", "salesperson": "业务员乙", "reputation_update_enabled": True, "visit_stats_enabled": True, "appeal_enabled": True},
                     ],
                 },
             ]
@@ -1563,6 +2077,18 @@ def test_collection_options_returns_active_shop_site_mapping(monkeypatch):
             },
         ],
         "sites": ["墨西哥", "巴西", "智利"],
+        "infraction_shops": [
+            {
+                "shop_name": "店铺甲",
+                "salesperson": "业务员甲",
+                "sites": ["墨西哥", "巴西"],
+            },
+            {
+                "shop_name": "店铺乙",
+                "salesperson": "业务员乙",
+                "sites": ["巴西", "智利"],
+            },
+        ],
         "appeal_shops": [
             {
                 "shop_name": "店铺甲",
@@ -1648,14 +2174,14 @@ def test_collection_start_passes_selected_scope_and_defaults_to_ten_workers(
                 {
                     "display_name": "店铺甲",
                     "site_settings": [
-                        {"site_id": "MLM", "visit_stats_enabled": True},
-                        {"site_id": "MLB", "visit_stats_enabled": True},
+                        {"site_id": "MLM", "reputation_update_enabled": True, "visit_stats_enabled": True},
+                        {"site_id": "MLB", "reputation_update_enabled": True, "visit_stats_enabled": True},
                     ],
                 },
                 {
                     "display_name": "店铺乙",
                     "site_settings": [
-                        {"site_id": "MLC", "visit_stats_enabled": True},
+                        {"site_id": "MLC", "reputation_update_enabled": True, "visit_stats_enabled": True},
                     ],
                 },
             ]
@@ -1730,13 +2256,13 @@ def test_collection_start_rejects_shop_site_without_configured_intersection(monk
                 {
                     "display_name": "店铺甲",
                     "site_settings": [
-                        {"site_id": "MLM", "visit_stats_enabled": True},
+                        {"site_id": "MLM", "reputation_update_enabled": True, "visit_stats_enabled": True},
                     ],
                 },
                 {
                     "display_name": "店铺乙",
                     "site_settings": [
-                        {"site_id": "MLB", "visit_stats_enabled": True},
+                        {"site_id": "MLB", "reputation_update_enabled": True, "visit_stats_enabled": True},
                     ],
                 },
             ]

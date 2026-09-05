@@ -18,6 +18,10 @@ import sys
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 import math
+import uuid
+from contextvars import ContextVar
+from contextlib import contextmanager
+from bit.chat_log import write_local_record
 
 
 # 允许脚本被直接运行时也能正常导入项目内的 bit、AI_Agent 等包。
@@ -69,14 +73,15 @@ from bit.bit_download import download_relay_mail
 from bit import mercado_infraction_sync
 from bit.bit_db_api import (
     insert_ai_appeal_record,
+    list_mercado_prohibited_listings,
     list_mercado_store_tokens,
 )
 from bit.bit_reputation_info import get_cancellation_orders, get_complaint_orders
-from AI_Agent.qianwen import *
 import pandas as pd
 from datetime import datetime, timedelta
 from datetime import datetime
-from AI_Agent.deepseek import *
+from bit.bit_appeal_state import AppealExecutionError, execution_result, result_from_logs, STATUS_LABELS
+from bit.bit_ai_chat_protocol import ChatMessages, read_snapshot, new_messages, normalized_text
 import re
 from openpyxl import load_workbook
 import traceback
@@ -132,7 +137,21 @@ AI_AGENT_REPLY_TIMEOUT_SECONDS = env_int(
     300,
     minimum=180,
 )
-AI_AGENT_REPLY_POLL_SECONDS = 10
+AI_AGENT_REPLY_POLL_SECONDS = 2
+AI_SEND_CONFIRM_TIMEOUT_SECONDS = env_int("BIT_AI_SEND_CONFIRM_TIMEOUT_SECONDS", 30, minimum=5)
+AI_SITE_BUDGET_SECONDS = env_int("BIT_AI_SITE_BUDGET_SECONDS", 7200, minimum=60)
+AI_GROUPS_PER_CONVERSATION = env_int("BIT_AI_GROUPS_PER_CONVERSATION", 3, minimum=1)
+_APPEAL_STOP_EVENT = ContextVar("appeal_stop_event", default=None)
+
+
+@contextmanager
+def appeal_controls(stop_event):
+    token = _APPEAL_STOP_EVENT.set(stop_event)
+    try:
+        yield
+    finally:
+        _APPEAL_STOP_EVENT.reset(token)
+
 AI_HELP_URLS = (
     HELP_URL,
     "https://global-selling.mercadolibre.com/help/v2",
@@ -292,7 +311,9 @@ def connect_bit_browser(window_id):
 
             chrome_service = Service(driver_path)
             driver = webdriver.Chrome(service=chrome_service, options=chrome_options)
-            driver.implicitly_wait(10)
+            driver.implicitly_wait(0)
+            driver.set_page_load_timeout(60)
+            driver.set_script_timeout(30)
             return driver, res
 
         print(
@@ -320,13 +341,14 @@ def _abort_ai_appeal_after_backend_recovery(
     result,
     name="",
     site="",
-    abort_on_recovery=True,
+    abort_after_rate_limit_recovery=True,
 ):
-    """自动找客服遇到限频或自动登录后立即结束本次浏览器任务。
+    """校验业务页恢复结果；自动登录成功时继续当前申诉。
 
-    ``open_mercado_backend_page`` 会尝试自动恢复限频和登录态。自动找客服的
-    并发量较大，即使恢复成功也不应继续长期占用窗口；把恢复记录转成明确的
-    异常结果，交给 ``bit_daily_task`` 立即关闭完整 BitBrowser 窗口。
+    ``open_mercado_backend_page`` 会在未登录时使用店铺授权邮箱和浏览器保存的
+    默认密码自动登录，并在成功后重新打开原业务页。因此 ``login_retry_count``
+    大于零且状态为 ``ready`` 是可继续的成功状态，不能再被任务模块当成失败。
+    限频恢复仍可按调用方策略结束本次浏览器任务。
     """
     if not isinstance(result, dict):
         raise RuntimeError(f"{name} {site} 美客多后台返回无效结果：{result}")
@@ -336,19 +358,25 @@ def _abort_ai_appeal_after_backend_recovery(
     rate_limit_retry_count = int(result.get("rate_limit_retry_count") or 0)
     login_retry_count = int(result.get("login_retry_count") or 0)
 
-    if status == "rate_limited" or (abort_on_recovery and rate_limit_retry_count):
+    if status == "rate_limited" or (
+        abort_after_rate_limit_recovery and rate_limit_retry_count
+    ):
         raise RuntimeError(
             f"{name} {site} 检测到访问限频（{MERCADO_RATE_LIMIT_TEXT}），"
             "已终止自动找客服并准备关闭浏览器"
         )
-    if status == "logged_out" or (abort_on_recovery and login_retry_count):
+    if status == "logged_out":
         raise RuntimeError(
-            f"{name} {site} 检测到登录态失效并触发自动登录，"
-            "已终止自动找客服并准备关闭浏览器："
+            f"{name} {site} 检测到登录态失效，自动登录未成功："
             f"{message}"
         )
     if not result.get("ok"):
         raise RuntimeError(f"{name} {site} 窗口页面打开验证失败：{message}")
+    if login_retry_count:
+        print(
+            f"{get_now_time()} {name} {site} 自动登录成功，"
+            "已重新打开原业务页，继续当前申诉<br>"
+        )
     return result
 
 
@@ -359,7 +387,7 @@ def open_help_page_with_daily_validation(
     max_hongkong_switches=3,
     switch_wait_seconds=8,
     window_id="",
-    abort_on_recovery=None,
+    abort_after_rate_limit_recovery=None,
 ):
     """打开帮助页，统一处理限频、退出登录和页面有效性。"""
     result = open_mercado_backend_page(
@@ -373,15 +401,15 @@ def open_help_page_with_daily_validation(
         anomaly_site=site,
         anomaly_source="AI申诉",
     )
-    if abort_on_recovery is None:
-        abort_on_recovery = bool(
-            getattr(driver, "_bit_abort_ai_on_backend_recovery", False)
+    if abort_after_rate_limit_recovery is None:
+        abort_after_rate_limit_recovery = bool(
+            getattr(driver, "_bit_abort_ai_after_rate_limit_recovery", False)
         )
     _abort_ai_appeal_after_backend_recovery(
         result,
         name,
         site,
-        abort_on_recovery=abort_on_recovery,
+        abort_after_rate_limit_recovery=abort_after_rate_limit_recovery,
     )
 
     state = result.get("state") or {}
@@ -544,6 +572,13 @@ def _site_state_matches(state, site):
     selected_text = str(state.get("selectedText") or "").lower()
     current_text = str(state.get("currentText") or "").lower()
     current_flag_alt = str(state.get("currentFlagAlt") or "").lower()
+    # Reject contradictory explicit signals even if one of them matches.
+    for actual, expected in ((selected_remote, remote_value),
+                             (operating_site_id, site_id),
+                             (current_short, short_code),
+                             (page_site_id if page_site_id != "CBT" else "", site_id)):
+        if actual and expected and actual != expected:
+            return False
     explicit_match = any(
         [
             remote_value and selected_remote == remote_value,
@@ -1819,15 +1854,9 @@ def click_send_button(driver, mode=AI_CHAT_MODE_IFRAME):
     )
     if not button:
         return False
-    try:
-        driver.execute_script("arguments[0].click();", button)
-        return True
-    except Exception:
-        try:
-            button.click()
-            return True
-        except Exception:
-            return False
+    # The browser may have accepted the click even when its response is lost.
+    driver.execute_script("arguments[0].click();", button)
+    return True
 
 
 def send_ai_chat_message(driver, message):
@@ -1892,8 +1921,8 @@ def send_ai_chat_message(driver, message):
         )
         current_value = driver.execute_script("return arguments[0].value || '';", input_box)
         if current_value != message:
-            driver.execute_script("arguments[0].focus();", input_box)
-            ActionChains(driver).send_keys(message).perform()
+            input_box.clear()
+            input_box.send_keys(message)
     else:
         try:
             input_box.click()
@@ -1934,146 +1963,84 @@ def send_ai_chat_message(driver, message):
                 input_box,
                 message,
             )
-    time.sleep(1)
-    if not click_send_button(driver, mode=mode):
-        try:
+    before_send = read_snapshot(driver)
+    _check_appeal_control(driver)
+    try:
+        if not click_send_button(driver, mode=mode):
             input_box.send_keys(Keys.ENTER)
-        except Exception:
-            ActionChains(driver).send_keys(Keys.ENTER).perform()
-    time.sleep(3)
+        deadline = time.monotonic() + AI_SEND_CONFIRM_TIMEOUT_SECONDS
+        while time.monotonic() < deadline:
+            _check_appeal_control(driver)
+            try:
+                after_send = read_snapshot(driver)
+                echoed = [m for m in new_messages(before_send, after_send, "user")
+                          if normalized_text(m["text"]) == normalized_text(message)]
+                current_value = driver.execute_script(
+                    "return arguments[0].value || arguments[0].innerText || '';", input_box,
+                )
+                if echoed and not normalized_text(current_value):
+                    return {"acknowledged": True, "reply_baseline": ChatMessages(before_send),
+                            "message_id": echoed[-1]["id"],
+                            "conversation_id": after_send.get("conversation_id", "")}
+            except AppealExecutionError:
+                raise
+            except Exception:
+                pass
+            _appeal_pause(driver, 0.5)
+        raise AppealExecutionError("已执行发送，但未确认消息气泡和输入框状态", "sent_unknown", sent=True)
+    except AppealExecutionError as exc:
+        # Stop/deadline after the click must still preserve possible submission.
+        exc.sent = True
+        raise
+    except Exception as exc:
+        raise AppealExecutionError(f"发送结果不确定：{exc}", "sent_unknown", sent=True) from exc
 
 
 def safe_get_agent_messages(driver):
-    """安全读取 AI 客服消息，读取失败时返回空列表，避免打断主流程。"""
-    try:
-        return get_agent_messages(driver)
-    except Exception as e:
-        print(f"{get_now_time()} 获取AI客服消息失败：{e}<br>")
-        return []
+    """读取失败不能伪装成空列表，否则旧回复可能成为下一组的新回复。"""
+    if not activate_ai_chat_context(driver, require_input=False):
+        raise RuntimeError("没有找到 AI 客服聊天窗口")
+    return ChatMessages(read_snapshot(driver))
 
 
 def wait_for_ai_agent_reply(
-    driver,
-    previous_messages,
-    timeout=AI_AGENT_REPLY_TIMEOUT_SECONDS,
+    driver, previous_messages, timeout=AI_AGENT_REPLY_TIMEOUT_SECONDS,
     poll_interval=AI_AGENT_REPLY_POLL_SECONDS,
 ):
-    """等待 AI 客服出现相对 previous_messages 的新回复。"""
+    before = getattr(previous_messages, "snapshot", None)
     previous_messages = previous_messages or []
-    previous_count = len(previous_messages)
-    previous_last = previous_messages[-1] if previous_messages else ""
-    end_time = time.time() + timeout
-    latest_messages = previous_messages
-    while time.time() < end_time:
-        latest_messages = safe_get_agent_messages(driver)
-        if len(latest_messages) > previous_count:
-            new_messages = latest_messages[previous_count:]
-            for message in reversed(new_messages):
-                if is_site_option_question(message):
-                    return message, latest_messages
-            return new_messages[-1], latest_messages
-        if latest_messages and latest_messages[-1] != previous_last:
-            for message in reversed(latest_messages[-5:]):
-                if is_site_option_question(message):
-                    return message, latest_messages
-            return latest_messages[-1], latest_messages
-        remaining = end_time - time.time()
-        if remaining > 0:
-            time.sleep(min(poll_interval, remaining))
-    return "", latest_messages
-
-
-def build_deepseek_infraction_reply(infraction_ids, site, appeal_message, agent_messages, reply_round):
-    """根据最新 AI 客服回复生成下一句侵权申诉回复。"""
-    site_option = build_site_option_reply(site)
-    prompt = f"""
-你正在代表 Mercado Libre 卖家与平台 AI 客服沟通侵权误判申诉。
-请根据客服的最新回复生成下一句中文回复，只输出要发送的回复正文，不要解释、不要 Markdown。
-
-要求：
-1. 回复要简短、礼貌、直接推进复核，不超过 120 个中文字。
-2. 商品是通用品牌/通用款，卖家主张未使用他人品牌商标，希望复查并删除误判记录。
-3. 如果客服询问站点，必须明确回复：{site_option}。
-4. 不要虚构证明、处理结果、商品信息或客服没有提到的事实。
-5. 不要说“如果你愿意”“回复继续”等引导语。
-
-商品编号：{infraction_ids}
-原始申诉：{appeal_message}
-当前是第 {reply_round} 次自动回复（最多两次）。
-客服消息记录：
-{json.dumps((agent_messages or [])[-20:], ensure_ascii=False, indent=2)}
-"""
-    reply = chat_deepseek(
-        [{"role": "user", "content": prompt}],
-        temperature=0.2,
-        max_tokens=300,
-    ).strip()
-    reply = re.sub(r"^```(?:\w+)?\s*|\s*```$", "", reply, flags=re.S).strip()
-    if not reply:
-        raise ValueError("DeepSeek 未生成侵权申诉回复")
-    return reply
-
-
-def build_deepseek_cancellation_reply(order_ids, site, appeal_message, agent_messages, reply_round):
-    """根据 AI 客服回复生成下一句取消率申诉回复。"""
-    site_option = build_site_option_reply(site)
-    prompt = f"""
-你正在代表 Mercado Libre 卖家与平台 AI 客服沟通取消率申诉。
-请根据客服的最新回复生成下一句中文回复，只输出要发送的回复正文，不要解释、不要 Markdown。
-
-要求：
-1. 回复要简短、礼貌、直接推进复核，不超过 120 个中文字。
-2. 卖家主张这些订单并非因卖家责任取消，希望复查订单记录并移除对店铺取消率的影响。
-3. 如果客服询问站点，必须明确回复：{site_option}。
-4. 只能使用原始申诉和客服消息中已有的信息，不要虚构取消原因、证明或处理结果。
-5. 不要重复整组订单号，不要说“如果你愿意”“回复继续”等引导语。
-
-取消订单号：{order_ids}
-原始申诉：{appeal_message}
-当前是第 {reply_round} 次自动回复（最多两次）。
-客服消息记录：
-{json.dumps((agent_messages or [])[-20:], ensure_ascii=False, indent=2)}
-"""
-    reply = chat_deepseek(
-        [{"role": "user", "content": prompt}],
-        temperature=0.2,
-        max_tokens=300,
-    ).strip()
-    reply = re.sub(r"^```(?:\w+)?\s*|\s*```$", "", reply, flags=re.S).strip()
-    if not reply:
-        raise ValueError("DeepSeek 未生成取消率申诉回复")
-    return reply
-
-
-def build_deepseek_complaint_reply(order_ids, site, appeal_message, agent_messages, reply_round):
-    """根据 AI 客服回复生成下一句投诉申诉回复。"""
-    site_option = build_site_option_reply(site)
-    prompt = f"""
-你正在代表 Mercado Libre 卖家与平台 AI 客服沟通商品质量投诉申诉。
-请根据客服的最新回复生成下一句中文回复，只输出要发送的回复正文，不要解释、不要 Markdown。
-
-要求：
-1. 回复要简短、礼貌、直接推进复核，不超过 120 个中文字。
-2. 卖家主张当前没有证据证明商品存在质量问题，希望复查相关销售单并移除对店铺声誉的影响。
-3. 如果客服询问站点，必须明确回复：{site_option}。
-4. 只能使用原始申诉和客服消息中已有的信息，不要虚构检测报告、证据、商品信息或处理结果。
-5. 不要重复整组销售单号，不要说“如果你愿意”“回复继续”等引导语。
-
-销售单号：{order_ids}
-原始申诉：{appeal_message}
-当前是第 {reply_round} 次自动回复（最多两次）。
-客服消息记录：
-{json.dumps((agent_messages or [])[-20:], ensure_ascii=False, indent=2)}
-"""
-    reply = chat_deepseek(
-        [{"role": "user", "content": prompt}],
-        temperature=0.2,
-        max_tokens=300,
-    ).strip()
-    reply = re.sub(r"^```(?:\w+)?\s*|\s*```$", "", reply, flags=re.S).strip()
-    if not reply:
-        raise ValueError("DeepSeek 未生成投诉申诉回复")
-    return reply
+    deadline = time.monotonic() + timeout
+    latest = previous_messages
+    candidate, stable_since = "", None
+    while time.monotonic() < deadline:
+        _check_appeal_control(driver)
+        try:
+            latest = safe_get_agent_messages(driver)
+            after = getattr(latest, "snapshot", None)
+            if before is not None and after is not None:
+                changes = new_messages(before, after, "assistant")
+                response = changes[-1]["text"] if changes else ""
+                busy = after.get("busy", False)
+            else:
+                response = latest[-1] if latest and (
+                    len(latest) > len(previous_messages)
+                    or latest[-1] != (previous_messages[-1] if previous_messages else "")
+                ) else ""
+                busy = False
+            if response and not busy:
+                if response != candidate:
+                    candidate, stable_since = response, time.monotonic()
+                elif stable_since is not None and time.monotonic() - stable_since >= 2:
+                    return response, latest
+            else:
+                candidate, stable_since = "", None
+        except AppealExecutionError:
+            raise
+        except Exception as exc:
+            candidate, stable_since = "", None
+            print(f"{get_now_time()} 读取客服回复暂时失败：{exc}<br>")
+        _appeal_pause(driver, min(poll_interval, max(0, deadline - time.monotonic())))
+    return "", latest
 
 
 def should_intervene_ai_response(response_text):
@@ -2102,7 +2069,9 @@ def build_site_option_reply(site):
         "AR": "Argentina",
         "UY": "Uruguay",
     }
-    return option_map.get(site_code, "Mexico (Direct to consumer)")
+    if site_code not in option_map:
+        raise AppealExecutionError(f"无法确认客服所需站点：{site}", "needs_human")
+    return option_map[site_code]
 
 
 def contains_site_option_menu(response_text):
@@ -2158,25 +2127,31 @@ def is_site_option_question(response_text):
         "argentina",
         "uruguay",
         "可选",
-        "it's helpful",
-        "it's not helpful",
     ]
     question_markers = [
         "which country",
-        "country",
-        "option",
-        "site",
-        "站点",
-        "对应的是",
+        "which site",
+        "which option",
+        "select a country",
+        "select your country",
+        "choose a country",
+        "confirm your country",
+        "confirm the country",
+        "select a site",
+        "choose a site",
+        "qual país",
+        "qual pais",
+        "qué país",
+        "que país",
+        "qué sitio",
         "哪个国家",
         "哪个站点",
         "针对哪个",
         "哪个选项",
-        "这条咨询",
-        "请问你是",
-        "选项",
-        "确认",
-        "Mexico (Direct to consumer)、Mexico (Fulfillment)、Brazil、Chile、Colombia、Argentina、Uruguay"
+        "请选择站点",
+        "请选择国家",
+        "请确认站点",
+        "请确认国家",
     ]
     return (
         any(marker in lower_text for marker in option_markers)
@@ -2221,272 +2196,173 @@ def reply_site_option_menu_if_present(
     return False, "", []
 
 
-def send_infraction_message_with_retry(driver, huashu, infraction_ids, name, site, group_index, total_groups):
-    """旧版侵权分组发送逻辑；后面同名函数会覆盖此定义。"""
-    max_attempts = 4
-    previous_messages = safe_get_agent_messages(driver)
-    for attempt in range(1, max_attempts + 1):
-        try:
-            print(f"{get_now_time()} {name} {site} 尝试发送第 {group_index}/{total_groups} 组，第 {attempt} 次<br>")
-            send_ai_chat_message(driver, huashu)
-            print(f"{get_now_time()} {name} {site} 第 {group_index}/{total_groups} 组发送成功<br>")
-            break
-        except Exception as e:
-            print(f"{get_now_time()} {name} {site} 第 {group_index}/{total_groups} 组发送失败，第 {attempt} 次：{e}<br>")
-            if attempt == max_attempts:
-                raise
-            time.sleep(12 * attempt)
+def _check_appeal_control(driver):
+    stop_event = getattr(driver, "_bit_appeal_stop_event", None)
+    if stop_event is not None and stop_event.is_set():
+        raise AppealExecutionError("已收到停止请求", "stopped")
+    deadline = getattr(driver, "_bit_appeal_deadline", None)
+    if deadline is not None and time.monotonic() >= deadline:
+        raise AppealExecutionError("本站点超过执行时间预算", "deadline_exceeded")
 
-    response, latest_messages = wait_for_ai_agent_reply(driver, previous_messages, timeout=90)
-    if not response:
-        print(f"{get_now_time()} {name} {site} 第 {group_index}/{total_groups} 组暂未等到AI回复，等待后继续<br>")
-        time.sleep(20)
-        return
 
-    print(f"{get_now_time()} {name} {site} AI最新回复：{response}<br>")
-    if not should_intervene_ai_response(response):
-        return
+def _appeal_pause(driver, seconds):
+    remaining = max(0, seconds)
+    while remaining > 0:
+        _check_appeal_control(driver)
+        interval = min(0.5, remaining)
+        time.sleep(interval)
+        remaining -= interval
 
-    if is_site_option_question(response):
-        followup = build_site_option_reply(site)
+
+def _prepare_group_conversation(driver, name, site, group_index):
+    _check_appeal_control(driver)
+    if getattr(driver, "_bit_target_site", ""):
+        driver.switch_to.default_content()
+        if not verify_selected_site(driver, site):
+            raise AppealExecutionError("发送前校验发现站点已经改变", "pre_send_failed")
+    if getattr(driver, "_bit_ai_reset_before_group", False) or (
+        group_index > 1 and (group_index - 1) % AI_GROUPS_PER_CONVERSATION == 0
+    ):
+        if not restart_ai_conversation(driver, name, site):
+            raise AppealExecutionError("未能建立新的客服会话", "pre_send_failed")
+        setattr(driver, "_bit_ai_reset_before_group", False)
+        print(f"{get_now_time()} {name} {site} 已为第 {group_index} 组建立新会话<br>")
+
+
+def restart_ai_conversation(driver, name, site):
+    """Confirm a new session; never navigate the top-level inline page to human chat."""
+    mode = activate_ai_chat_context(driver, require_input=False)
+    if not mode:
+        return False
+    before = read_snapshot(driver)
+    if mode == AI_CHAT_MODE_IFRAME:
+        if not recover_expired_ai_conversation(driver, name, site, force=True):
+            return False
     else:
-        followup = build_infraction_followup_message(infraction_ids, site)
-    print(f"{get_now_time()} {name} {site} AI回复需要介入，补充说明：{followup}<br>")
-    for attempt in range(1, max_attempts + 1):
+        clicked = driver.execute_script(r"""
+            function all(root) {
+                const out = [];
+                for (const el of root.querySelectorAll('*')) {
+                    out.push(el);
+                    if (el.shadowRoot) out.push(...all(el.shadowRoot));
+                }
+                return out;
+            }
+            const root = all(document).find(el => el.id === 'sa-assistant-chat');
+            if (!root) return false;
+            const entry = all(root).find(el => {
+                const r = el.getBoundingClientRect();
+                return r.width && r.height && el.matches('button, a, [role="button"]') &&
+                    /new conversation|new chat|iniciar otra consulta|nova conversa|发起新咨询|新的对话/i.test(
+                        el.innerText || el.getAttribute('aria-label') || '');
+            });
+            if (!entry) return false;
+            entry.click();
+            return true;
+        """)
+        if not clicked:
+            return False
+    deadline = time.monotonic() + AI_CHAT_READY_TIMEOUT_SECONDS
+    while time.monotonic() < deadline:
+        _check_appeal_control(driver)
         try:
-            send_ai_chat_message(driver, followup)
-            print(f"{get_now_time()} {name} {site} 第 {group_index}/{total_groups} 组补充说明发送成功<br>")
-            time.sleep(8)
-            return
-        except Exception as e:
-            print(f"{get_now_time()} {name} {site} 补充说明发送失败，第 {attempt} 次：{e}<br>")
-            if attempt == max_attempts:
-                raise
-            time.sleep(12 * attempt)
+            if activate_ai_chat_context(driver, require_input=True):
+                after = read_snapshot(driver)
+                if (after.get("epoch") != before.get("epoch")
+                        or after.get("conversation_id") != before.get("conversation_id")
+                        or (before["messages"] and not after["messages"])):
+                    return True
+        except Exception:
+            pass
+        _appeal_pause(driver, 0.5)
+    return False
 
 
 def send_infraction_message_with_retry(
-    driver,
-    huashu,
-    infraction_ids,
-    name,
-    site,
-    group_index,
-    total_groups,
+    driver, huashu, infraction_ids, name, site, group_index, total_groups,
     appeal_kind="侵权",
 ):
-    """按侵权申诉规则发送一组编号，并使用 DeepSeek 回复新的客服消息。
-
-    取消率和投诉复用同一套分组、重试、等待回复和最多自动追问两次的规则。
-    每 30 秒读取一次，达到配置的最长等待时间仍没有新回复则结束当前组；
-    DeepSeek 最多回复 2 次。
-    """
-    max_attempts = 4
-    max_auto_replies = 2
-    reply_timeout = AI_AGENT_REPLY_TIMEOUT_SECONDS
-    poll_interval = 30
-    previous_messages = safe_get_agent_messages(driver)
-    is_cancellation = appeal_kind == "取消率"
-    is_complaint = appeal_kind == "投诉"
-    identifier_key = (
-        "cancellation_ids"
-        if is_cancellation
-        else ("complaint_order_ids" if is_complaint else "infraction_ids")
-    )
-    event_name = (
-        "cancellation"
-        if is_cancellation
-        else ("complaint" if is_complaint else "infraction")
-    )
-    base_extra = {
-        "group_index": group_index,
-        "total_groups": total_groups,
-        identifier_key: infraction_ids,
-        "appeal_kind": appeal_kind,
-    }
-
-    for attempt in range(1, max_attempts + 1):
-        try:
-            print(f"{get_now_time()} {name} {site} send group {group_index}/{total_groups}, attempt {attempt}<br>")
-            send_ai_chat_message(driver, huashu)
-            append_chat_log(
-                name,
-                site,
-                f"send_{event_name}",
-                message=huashu,
-                chat=previous_messages,
-                extra={**base_extra, "attempt": attempt},
-            )
-            print(f"{get_now_time()} {name} {site} group {group_index}/{total_groups} sent<br>")
-            break
-        except Exception as e:
-            append_chat_log(
-                name,
-                site,
-                f"send_{event_name}_error",
-                message=huashu,
-                chat=previous_messages,
-                extra={**base_extra, "attempt": attempt, "error": str(e)},
-            )
-            print(f"{get_now_time()} {name} {site} send group {group_index}/{total_groups} failed: {e}<br>")
-            if attempt == max_attempts:
-                raise
-            time.sleep(12 * attempt)
-
-    auto_reply_count = 0
-    reply_round = 0
-    while True:
-        reply_round += 1
-        response, latest_messages = wait_for_ai_agent_reply(
-            driver,
-            previous_messages,
-            timeout=reply_timeout,
-            poll_interval=poll_interval,
-        )
-        append_chat_log(
-            name,
-            site,
-            "agent_reply" if reply_round == 1 else "agent_reply_after_auto_reply",
-            message=huashu,
-            response=response,
-            chat=latest_messages,
-            extra={
-                **base_extra,
-                "reply_round": reply_round,
-                "auto_reply_count": auto_reply_count,
-                "max_auto_replies": max_auto_replies,
-            },
-        )
-        if not response:
-            print(
-                f"{get_now_time()} {name} {site} 第 {group_index}/{total_groups} 组"
-                f"连续 {reply_timeout} 秒没有客服新回复，终止本组<br>"
-            )
-            append_chat_log(
-                name,
-                site,
-                f"{event_name}_reply_timeout",
-                message=huashu,
-                chat=latest_messages,
-                extra={**base_extra, "timeout_seconds": reply_timeout},
-            )
-            return
-
-        print(f"{get_now_time()} {name} {site} AI reply round {reply_round}: {response}<br>")
-        previous_messages = latest_messages
-
-        if auto_reply_count >= max_auto_replies:
-            print(
-                f"{get_now_time()} {name} {site} 第 {group_index}/{total_groups} 组已收到客服新回复，"
-                f"但 DeepSeek 回复已达 {max_auto_replies} 次，结束当前组<br>"
-            )
-            append_chat_log(
-                name,
-                site,
-                f"{event_name}_auto_reply_limit_reached",
-                message=huashu,
-                response=response,
-                chat=latest_messages,
-                extra={
-                    **base_extra,
-                    "auto_reply_count": auto_reply_count,
-                    "max_auto_replies": max_auto_replies,
-                },
-            )
-            return
-
-        try:
-            if is_cancellation:
-                followup = build_deepseek_cancellation_reply(
-                    infraction_ids,
-                    site,
-                    huashu,
-                    latest_messages,
-                    auto_reply_count + 1,
-                )
-            elif is_complaint:
-                followup = build_deepseek_complaint_reply(
-                    infraction_ids,
-                    site,
-                    huashu,
-                    latest_messages,
-                    auto_reply_count + 1,
-                )
-            else:
-                followup = build_deepseek_infraction_reply(
-                    infraction_ids,
-                    site,
-                    huashu,
-                    latest_messages,
-                    auto_reply_count + 1,
-                )
-        except Exception as exc:
-            # 外部模型余额不足或临时不可用，不应把已经发送成功的店铺申诉
-            # 判为失败，更不能影响同一批次的其他店铺。
-            print(
-                f"{get_now_time()} {name} {site} DeepSeek 自动追问不可用：{exc}；"
-                "保留当前客服回复并结束本组<br>"
-            )
-            append_chat_log(
-                name,
-                site,
-                f"{event_name}_deepseek_unavailable",
-                message=huashu,
-                response=response,
-                chat=latest_messages,
-                extra={**base_extra, "error": str(exc)},
-            )
-            return
-
-        print(
-            f"{get_now_time()} {name} {site} send DeepSeek reply "
-            f"{auto_reply_count + 1}/{max_auto_replies}: {followup}<br>"
-        )
-        sent = False
-        for attempt in range(1, max_attempts + 1):
-            try:
-                send_ai_chat_message(driver, followup)
-                auto_reply_count += 1
-                append_chat_log(
-                    name,
-                    site,
-                    "send_followup",
-                    message=followup,
-                    response=response,
-                    chat=latest_messages,
-                    extra={
-                        **base_extra,
-                        "attempt": attempt,
-                        "auto_reply_count": auto_reply_count,
-                        "max_auto_replies": max_auto_replies,
-                        "generated_by": "deepseek",
-                    },
-                )
-                print(
-                    f"{get_now_time()} {name} {site} auto reply {auto_reply_count}/"
-                    f"{max_auto_replies} sent for group {group_index}/{total_groups}<br>"
-                )
-                sent = True
-                break
-            except Exception as e:
-                append_chat_log(
-                    name,
-                    site,
-                    "send_followup_error",
-                    message=followup,
-                    response=response,
-                    chat=latest_messages,
-                    extra={**base_extra, "attempt": attempt, "error": str(e)},
-                )
-                print(f"{get_now_time()} {name} {site} followup failed: {e}<br>")
-                if attempt == max_attempts:
+    """只重试发送前失败；站点问答采用确定性规则，不调用外部模型。"""
+    identifier_key, event_name = {
+        "取消率": ("cancellation_ids", "cancellation"),
+        "投诉": ("complaint_order_ids", "complaint"),
+        "禁限售": ("prohibited_ids", "prohibited"),
+        "延误": ("delay_ids", "delay"),
+    }.get(appeal_kind, ("infraction_ids", "infraction"))
+    base_extra = {"group_index": group_index, "total_groups": total_groups,
+                  identifier_key: infraction_ids, "appeal_kind": appeal_kind}
+    result = execution_result("pre_send_failed")
+    try:
+        _prepare_group_conversation(driver, name, site, group_index)
+        message, site_answers = huashu, 0
+        while True:
+            _check_appeal_control(driver)
+            before = safe_get_agent_messages(driver)
+            for attempt in range(1, 3):
+                try:
+                    ack = send_ai_chat_message(driver, message)
+                    break
+                except AppealExecutionError:
                     raise
-                time.sleep(12 * attempt)
-
-        if not sent:
-            return
-        previous_messages = latest_messages
-        time.sleep(8)
+                except Exception as exc:
+                    append_chat_log(name, site, f"send_{event_name}_error", message=message,
+                                    extra={**base_extra, "attempt": attempt, "error": str(exc)})
+                    if attempt == 2:
+                        raise AppealExecutionError(str(exc), "pre_send_failed") from exc
+                    _appeal_pause(driver, 5 * attempt + random.uniform(0, 2))
+            result.update(sent=True, acknowledged=True)
+            if isinstance(ack, dict):
+                before = ack.get("reply_baseline", before)
+                result.update(conversation_id=ack.get("conversation_id", ""),
+                              message_id=ack.get("message_id", ""))
+            append_chat_log(
+                name, site,
+                ("send_delay_group" if appeal_kind == "延误" else f"send_{event_name}")
+                if site_answers == 0 else "send_followup",
+                message=message, extra={**base_extra, "generated_by": "local_rule", "acknowledged": True},
+            )
+            response, latest = wait_for_ai_agent_reply(
+                driver, before, timeout=AI_AGENT_REPLY_TIMEOUT_SECONDS,
+                poll_interval=AI_AGENT_REPLY_POLL_SECONDS,
+            )
+            append_chat_log(
+                name, site,
+                ("delay_agent_reply" if appeal_kind == "延误" else "agent_reply")
+                if site_answers == 0 else "agent_reply_after_site_option",
+                message=huashu, response=response, chat=latest, extra=base_extra,
+            )
+            if not response:
+                result.update(status="reply_timeout", execution_status="reply_timeout",
+                              message=STATUS_LABELS["reply_timeout"], error="未读到客服完整新回复")
+                append_chat_log(name, site, f"{event_name}_reply_timeout", message=huashu,
+                                extra={**base_extra, "timeout_seconds": AI_AGENT_REPLY_TIMEOUT_SECONDS})
+                break
+            result.update(status="replied", execution_status="replied",
+                          message=STATUS_LABELS["replied"], response=response, reply_received=True)
+            if not is_site_option_question(response):
+                break
+            if site_answers >= 2:
+                result.update(status="needs_human", execution_status="needs_human",
+                              message=STATUS_LABELS["needs_human"])
+                break
+            message = build_site_option_reply(site)
+            site_answers += 1
+    except AppealExecutionError as exc:
+        result.update(status=exc.status, execution_status=exc.status,
+                      message=STATUS_LABELS.get(exc.status, exc.status),
+                      error=str(exc), sent=result["sent"] or exc.sent, retryable=exc.retryable)
+        if exc.status in {"stopped", "deadline_exceeded"}:
+            raise
+    except Exception as exc:
+        result.update(status="failed", execution_status="failed", error=str(exc),
+                      message=STATUS_LABELS["failed"])
+    finally:
+        append_chat_log(name, site, "group_result", message=huashu,
+                        response=result.get("response", ""), extra={**base_extra, "result": result})
+    print(f"{get_now_time()} {name} {site} 第 {group_index}/{total_groups} 组：{result['message']}<br>")
+    if result["status"] not in {"replied"}:
+        setattr(driver, "_bit_ai_reset_before_group", True)
+    return result
 
 
 def click_contact_us(driver, name, site):
@@ -2683,6 +2559,7 @@ def wait_for_ai_chat_frame(driver, timeout=AI_CHAT_READY_TIMEOUT_SECONDS):
     """在限定时间内等待 AI 客服 iframe 出现并可切换。"""
     end_time = time.time() + timeout
     while time.time() < end_time:
+        _check_appeal_control(driver)
         if is_top_level_human_customer_service_page(driver):
             return False
         if switch_to_ai_chat_frame(driver):
@@ -2700,6 +2577,7 @@ def wait_for_ai_chat_ready(
     """等待任一受支持的聊天结构就绪，并返回对应模式。"""
     end_time = time.time() + timeout
     while time.time() < end_time:
+        _check_appeal_control(driver)
         variant = detect_ai_chat_variant(driver)
         if variant == AI_CHAT_MODE_INLINE:
             state = get_ai_chat_dom_state(driver)
@@ -2732,6 +2610,7 @@ def open_ai_contact_window(driver, name, site, window_id=""):
     entered_human_page = False
     last_variant = ""
     for url in AI_HELP_URLS:
+        _check_appeal_control(driver)
         driver.switch_to.default_content()
         backend_result = open_mercado_backend_page(
             driver,
@@ -2746,13 +2625,14 @@ def open_ai_contact_window(driver, name, site, window_id=""):
             backend_result,
             name,
             site,
-            abort_on_recovery=bool(
-                getattr(driver, "_bit_abort_ai_on_backend_recovery", False)
+            abort_after_rate_limit_recovery=bool(
+                getattr(driver, "_bit_abort_ai_after_rate_limit_recovery", False)
             ),
         )
         print(f"{get_now_time()} {name} {site} 打开AI客服入口页面：{url}<br>")
 
         for attempt in range(1, 5):
+            _check_appeal_control(driver)
             variant = detect_ai_chat_variant(driver)
             state = get_ai_chat_dom_state(driver)
             if variant:
@@ -2978,20 +2858,42 @@ def run_top_infraction_shop_once(shop_plan, site_pause=30):
     for site in shop_plan["sites"]:
         site_code = site["site_code"]
         count = site["count"]
+        appeal_type = str(site.get("appeal_type") or "侵权")
         try:
-            print(f"{get_now_time()} {name} {site_code} 开始处理侵权，当前站点侵权数 {count}<br>")
+            print(
+                f"{get_now_time()} {name} {site_code} 开始处理{appeal_type}，"
+                f"当前站点数量 {count}<br>"
+            )
+            appeal_kwargs = {}
+            if appeal_type == "禁限售":
+                appeal_kwargs["prohibited_ids"] = site.get("prohibited_ids") or ()
+            else:
+                appeal_kwargs["infraction_ids"] = site.get("infraction_ids") or ()
             result = shensu(
                 name,
                 site_code,
-                "侵权",
+                appeal_type,
                 "",
-                infraction_ids=site.get("infraction_ids") or (),
+                **appeal_kwargs,
             )
-            results.append({"site": site_code, "count": count, "result": result})
-            print(f"{get_now_time()} {name} {site_code} 侵权处理完成：{result}<br>")
+            results.append({
+                "site": site_code,
+                "appeal_type": appeal_type,
+                "count": count,
+                "result": result,
+            })
+            print(
+                f"{get_now_time()} {name} {site_code} {appeal_type}处理完成："
+                f"{result}<br>"
+            )
         except Exception as e:
-            results.append({"site": site_code, "count": count, "error": str(e)})
-            print(f"{get_now_time()} {name} {site_code} 侵权处理失败：{e}<br>")
+            results.append({
+                "site": site_code,
+                "appeal_type": appeal_type,
+                "count": count,
+                "error": str(e),
+            })
+            print(f"{get_now_time()} {name} {site_code} {appeal_type}处理失败：{e}<br>")
             traceback.print_exc()
         if site_pause > 0:
             time.sleep(site_pause)
@@ -3099,16 +3001,12 @@ def _collect_appeal_record_fields(log_records, final_agent_messages=None):
         if response:
             ai_replies.append(response)
 
-        chat = record.get("chat")
-        if isinstance(chat, list):
-            ai_replies.extend(chat)
-        elif chat:
-            ai_replies.append(chat)
 
         extra = record.get("extra") or {}
         if isinstance(extra, dict):
             for key in (
                 "infraction_ids",
+                "prohibited_ids",
                 "cancellation_ids",
                 "complaint_order_ids",
                 "delay_ids",
@@ -3122,6 +3020,7 @@ def _collect_appeal_record_fields(log_records, final_agent_messages=None):
                 elif isinstance(value, (list, tuple, set)):
                     identifiers.extend(value)
 
+    # Whole-window snapshots contain previous groups; only explicit response events are authoritative.
     ai_replies.extend(final_agent_messages or [])
     return {
         "appeal_content": "\n".join(_unique_text_list(appeal_messages)),
@@ -3161,6 +3060,7 @@ def save_ai_appeal_record(
     log_records,
     final_agent_messages=None,
     error="",
+    execution=None,
 ):
     fields = _collect_appeal_record_fields(log_records, final_agent_messages)
     if str(error or "").strip() == "未登录":
@@ -3179,6 +3079,7 @@ def save_ai_appeal_record(
             fields["ai_replies"],
         )
     record = {
+        "event_id": uuid.uuid4().hex,
         "appeal_time": appeal_time,
         "appeal_type": appeal_type,
         "shop_name": shop_name,
@@ -3192,9 +3093,13 @@ def save_ai_appeal_record(
         "ai_summary": summary["summary"],
         "error": "\n".join(_unique_text_list([error, summary.get("error", "")])),
     }
+    if execution:
+        record["status"] = execution["message"]
+        record["execution"] = execution
+    write_local_record({"event": "appeal_record", "event_id": record["event_id"], "record": record})
     try:
         insert_ai_appeal_record(record)
-        print(f"{get_now_time()} {shop_name} {site} AI申诉记录已入库（未调用DeepSeek总结）<br>")
+        print(f"{get_now_time()} {shop_name} {site} AI申诉记录已入库<br>")
     except Exception as e:
         print(f"{get_now_time()} {shop_name} {site} AI申诉记录入库失败：{e}<br>")
     return record
@@ -3203,6 +3108,8 @@ def save_ai_appeal_record(
 def _collect_group_ai_replies(group_records):
     replies = []
     response_events = {
+        "group_result",
+        "delay_agent_reply",
         "agent_reply",
         "agent_reply_after_auto_reply",
         "agent_reply_after_site_option",
@@ -3272,6 +3179,7 @@ def save_ai_appeal_group_record(
         force=True,
     )
     record = {
+        "event_id": uuid.uuid4().hex,
         "appeal_time": appeal_time,
         "appeal_type": appeal_type,
         "shop_name": shop_name,
@@ -3288,12 +3196,14 @@ def save_ai_appeal_group_record(
         "group_index": group_index,
         "total_groups": total_groups,
     }
+    execution = result_from_logs(group_records, error=error)
+    record["execution"] = execution
+    record["status"] = execution["message"]
+    record["error"] = error or "\n".join(g.get("error", "") for g in execution["groups"] if g.get("error"))
+    write_local_record({"event": "appeal_record", "event_id": record["event_id"], "record": record})
     try:
         insert_ai_appeal_record(record)
-        print(
-            f"{get_now_time()} {shop_name} {site} 第{group_index}/{total_groups}组"
-            "AI申诉记录已入库（未调用DeepSeek总结）<br>"
-        )
+        print(f"{get_now_time()} {shop_name} {site} 第{group_index}/{total_groups}组AI申诉记录已入库<br>")
     except Exception as e:
         print(f"{get_now_time()} {shop_name} {site} 第{group_index}/{total_groups}组AI申诉记录入库失败：{e}<br>")
     return record
@@ -3301,141 +3211,98 @@ def save_ai_appeal_group_record(
 
 # 申诉
 def shensu(
-    name,
-    site,
-    form,
-    message,
-    validate_open=False,
-    infraction_ids=None,
+    name, site, form, message, validate_open=False, infraction_ids=None,
+    prohibited_ids=None, stop_event=None,
 ):
-    """AI 客服申诉主入口，根据 form 分发到延误、侵权、取消率或投诉。"""
+    """返回执行状态；收到回复不等于平台已批准申诉。"""
     print(f"{name} {site} 开始进行{form}申诉，自定义话术为{message}<br>")
     appeal_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     start_appeal_log_collection()
     site_name = normalize_site_name(site)
-    driver = None
-    appeal_error = ""
-    window_id = ""
-    owned_window_lease = None
+    driver, owned_window_lease = None, None
+    window_id, appeal_error, failure_status = "", "", ""
     skip_close_tab = False
-
-    nickname_list = ["Bruce", "Jack", "Lucy", "James"]
-    nickname = random.choice(nickname_list)
-    selected_phrase = select_appeal_phrase(form) if not str(message or "").strip() else ""
-    if selected_phrase:
-        print(f"{get_now_time()} {name} {site} 从{form}话术库随机选取：{selected_phrase}<br>")
-
+    outcome = execution_result("no_data")
+    started = time.monotonic()
     try:
+        nickname = random.choice(["Bruce", "Jack", "Lucy", "James"])
+        selected_phrase = select_appeal_phrase(form) if not str(message or "").strip() else ""
         window_id = get_window_id_by_shop_name(name)
         if current_thread_window_lease(window_id) is None:
             owned_window_lease = create_window_lease(
-                window_id,
-                owner=f"ai_appeal:{name}",
-                shop_name=name,
-                task_type="ai_appeal",
+                window_id, owner=f"ai_appeal:{name}", shop_name=name, task_type="ai_appeal",
             )
             if not owned_window_lease.acquire(timeout=0):
-                appeal_error = "窗口正在被其他任务占用"
-                print(f"{get_now_time()} {name} {site_name} {appeal_error}，本次不执行申诉<br>")
-                return appeal_error
+                raise AppealExecutionError("窗口正在被其他任务占用", "window_busy")
         driver, res = connect_bit_browser(window_id)
         name = res.get("data", {}).get("name") or name
-        setattr(
-            driver,
-            "_bit_abort_ai_on_backend_recovery",
-            bool(validate_open),
-        )
+        driver._bit_appeal_stop_event = stop_event if stop_event is not None else _APPEAL_STOP_EVENT.get()
+        driver._bit_appeal_deadline = started + AI_SITE_BUDGET_SECONDS
+        driver._bit_abort_ai_after_rate_limit_recovery = bool(validate_open)
+        _check_appeal_control(driver)
         try:
-            open_help_page_with_daily_validation(
-                driver,
-                name,
-                site_name,
-                window_id=window_id,
-            )
-        except Exception as exc:
-            appeal_error = str(exc) or "美客多后台不可用"
+            open_help_page_with_daily_validation(driver, name, site_name, window_id=window_id)
+        except Exception:
             skip_close_tab = True
-            print(
-                f"{get_now_time()} {name} {site_name} {appeal_error}<br>"
-            )
-            return appeal_error
-        print(
-            f"{get_now_time()} {name} {site_name} "
-            "后台限频和登录态验证通过，继续执行 AI 客服申诉<br>"
-        )
+            raise
         select_site(driver, name, site_name)
-
+        driver._bit_target_site = site_name
         with use_appeal_phrase(selected_phrase):
-            if form == "延误":
-                handle_delay(window_id, driver, name, site_name, message, nickname)
-                return
-
             if form == "侵权":
-                handle_infraction(
-                    window_id,
-                    driver,
-                    name,
-                    site_name,
-                    message,
-                    nickname,
-                    infraction_ids=infraction_ids,
-                )
-                return
-
-            if form == "取消率":
+                handle_infraction(window_id, driver, name, site_name, message, nickname,
+                                  infraction_ids=infraction_ids)
+            elif form == "禁限售":
+                handle_prohibited(window_id, driver, name, site_name, message, nickname,
+                                  prohibited_ids=prohibited_ids)
+            elif form == "延误":
+                handle_delay(window_id, driver, name, site_name, message, nickname)
+            elif form == "取消率":
                 handle_cancellation(window_id, driver, name, site_name, message, nickname)
-                return
-
-            if form == "投诉":
+            elif form == "投诉":
                 handle_complaint(window_id, driver, name, site_name, message, nickname)
-                return
-
-            huashu = build_appeal_message(window_id, name, site_name, form, message, nickname)
-            if huashu == "":
-                print(f"{get_now_time()} {name} {site} 没有可以申诉的数据<br>")
-                return "没有可以申诉的数据"
-
-            open_ai_contact_window(driver, name, site_name, window_id)
-            send_ai_chat_message(driver, huashu)
-            append_chat_log(
-                name,
-                site_name,
-                "send_initial_appeal",
-                message=huashu,
-                extra={"form": form, "window_id": window_id},
-            )
-            print(f"{get_now_time()} {name} {site} 自动发送AI客服申诉话术：{huashu}<br>")
-        # chat_ai(driver, name, site, form, huashu, nickname)
-    except Exception as e:
-        appeal_error = str(e)
-        print(f"{get_now_time()} {name} {site} AI客服申诉执行失败<br>")
-        print(e)
-        traceback.print_exc()
-        return f"执行失败：{appeal_error}"
+            else:
+                raise ValueError(f"不支持的申诉类型：{form}")
+    except Exception as exc:
+        appeal_error = str(exc)
+        if isinstance(exc, AppealExecutionError):
+            failure_status = exc.status
+        elif "登录" in appeal_error:
+            failure_status = "login_required"
+        elif MERCADO_RATE_LIMIT_TEXT in appeal_error or "限频" in appeal_error:
+            failure_status = "rate_limited"
+        else:
+            failure_status = "failed"
+        print(f"{get_now_time()} {name} {site} 申诉执行异常：{appeal_error}<br>")
     finally:
-        final_messages = []
-        if driver is not None and not skip_close_tab:
+        try:
+            records = get_appeal_log_records()
+            outcome.update(result_from_logs(records, error=appeal_error, status=failure_status))
+            outcome["elapsed_seconds"] = round(time.monotonic() - started, 2)
+            # Retry only before any message might have been submitted.
+            outcome["retryable"] = bool(appeal_error and not outcome["sent"]
+                                        and failure_status in {"failed", "rate_limited"})
+            save_ai_appeal_record(appeal_time, form, name, site_name, records,
+                                 error=appeal_error, execution=outcome)
+            print(f"{get_now_time()} {name} {site} {outcome['message']}：{outcome['metrics']}<br>")
+        except Exception as exc:
+            print(f"{get_now_time()} 保存申诉执行结果失败：{exc}<br>")
+        finally:
+            stop_appeal_log_collection()
             try:
-                final_messages = safe_get_agent_messages(driver)
-            except Exception:
-                final_messages = []
-        log_records = get_appeal_log_records()
-        if log_records or final_messages or appeal_error:
-            save_ai_appeal_record(
-                appeal_time,
-                form,
-                name,
-                site_name,
-                log_records,
-                final_agent_messages=final_messages,
-                error=appeal_error,
-            )
-        stop_appeal_log_collection()
-        print(f"{get_now_time()} {name}{site}AI客服申诉执行完毕<br>")
-        if driver is not None and not skip_close_tab:
-            close_current_tab_keep_browser(driver, name, site)
-        if owned_window_lease is not None:
-            owned_window_lease.release()
+                if driver is not None:
+                    if not skip_close_tab:
+                        close_current_tab_keep_browser(driver, name, site)
+                    # Stop the driver service without quitting the user's BitBrowser.
+                    service = getattr(driver, "service", None)
+                    if service is not None:
+                        try:
+                            service.stop()
+                        except Exception as exc:
+                            print(f"{get_now_time()} {name} {site} 驱动服务清理失败：{exc}<br>")
+            finally:
+                if owned_window_lease is not None:
+                    owned_window_lease.release()
+    return outcome
 
 
 def handle_infraction(
@@ -3456,7 +3323,7 @@ def handle_infraction(
         if item_id and item_id not in seen_ids:
             seen_ids.add(item_id)
             inf_list.append(item_id)
-    if not inf_list:
+    if infraction_ids is None:
         inf_list = get_infraction_orders(window_id, name, site)
     if not inf_list:
         print(f"{get_now_time()} {name} {site} 没有可以申诉的侵权编号<br>")
@@ -3520,93 +3387,146 @@ def handle_infraction(
             )
         print(f"{get_now_time()} {name} {site} 第 {index}/{len(groups)} 组侵权申诉处理完成<br>")
         if index < len(groups):
-            time.sleep(20)
+            _appeal_pause(driver, 20)
+
+
+def handle_prohibited(
+    window_id,
+    driver,
+    name,
+    site,
+    message,
+    nickname,
+    prohibited_ids=None,
+):
+    """处理禁限售申诉：读取禁限售列表，按最多 10 个编号独立发送。"""
+    group_size = 10
+    item_ids = []
+    seen_ids = set()
+    for raw_id in prohibited_ids or ():
+        item_id = str(raw_id or "").strip().upper()
+        if item_id and item_id not in seen_ids:
+            seen_ids.add(item_id)
+            item_ids.append(item_id)
+    if prohibited_ids is None:
+        item_ids = get_prohibited_listing_ids(name, site)
+    if not item_ids:
+        print(f"{get_now_time()} {name} {site} 禁限售列表没有可以申诉的产品编号<br>")
+        return
+
+    groups = [
+        item_ids[index:index + group_size]
+        for index in range(0, len(item_ids), group_size)
+    ]
+    print(
+        f"{get_now_time()} {name} {site} 禁限售列表编号共 {len(item_ids)} 个，"
+        f"每次对话最多 {group_size} 个，共 {len(groups)} 组；"
+        "与普通侵权申诉分开处理<br>"
+    )
+    default_message = "亲爱客服，这个产品不是禁限售产品，他被系统误判了，麻烦你帮我恢复"
+    selected_phrase = get_current_appeal_phrase()
+
+    open_ai_contact_window(driver, name, site, window_id)
+    for index, current_group in enumerate(groups, start=1):
+        group_ids = "、".join(current_group)
+        huashu = (
+            f"{group_ids}{message}"
+            if message
+            else render_appeal_phrase(
+                selected_phrase,
+                nickname=nickname,
+                order_ids=group_ids,
+                appeal_type="禁限售",
+            )
+            if selected_phrase
+            else f"{group_ids}{default_message}"
+        )
+        print(
+            f"{get_now_time()} {name} {site} 开始发送第 {index}/{len(groups)} 组"
+            f"禁限售申诉：{huashu}<br>"
+        )
+        group_appeal_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        group_log_start = len(get_appeal_log_records())
+        group_error = ""
+        try:
+            send_infraction_message_with_retry(
+                driver,
+                huashu,
+                group_ids,
+                name,
+                site,
+                index,
+                len(groups),
+                appeal_kind="禁限售",
+            )
+        except Exception as exc:
+            group_error = str(exc)
+            raise
+        finally:
+            group_records = _filter_group_log_records(
+                get_appeal_log_records()[group_log_start:],
+                name,
+                site,
+                index,
+                len(groups),
+                group_ids,
+                identifier_key="prohibited_ids",
+            )
+            save_ai_appeal_group_record(
+                group_appeal_time,
+                name,
+                site,
+                index,
+                len(groups),
+                group_ids,
+                huashu,
+                group_records,
+                error=group_error,
+                appeal_kind="禁限售",
+            )
+        print(
+            f"{get_now_time()} {name} {site} 第 {index}/{len(groups)} 组"
+            "禁限售申诉处理完成<br>"
+        )
+        if index < len(groups):
+            _appeal_pause(driver, 20)
 
 
 
 def handle_delay(window_id, driver, name, site, message, nickname):
-    """处理延误申诉：按每 5 个订单一组发送，并逐组等待、记录 AI 客服回复。"""
-    group_size = 5
-    delay_orders = get_delay_orders_download_list(window_id, name, site)
-    if not delay_orders:
-        print(f"{get_now_time()} {name} {site} 没有可以申诉的延误订单<br>")
+    """延误与其他申诉共用发送确认、站点问答和结果记录。"""
+    orders = get_delay_orders_download_list(window_id, name, site)
+    if not orders:
         return
-
-    groups = [delay_orders[i:i + group_size] for i in range(0, len(delay_orders), group_size)]
-    print(f"{get_now_time()} {name} {site} 延误订单共 {len(delay_orders)} 个，按每组 {group_size} 个分为 {len(groups)} 组<br>")
-
-    default_message = (
-        f"亲爱的客服，我叫{nickname}！这些订单因为菜鸟物流原因，并非我这边发货延误，"
-        f"麻烦您帮忙处理一下，消除对店铺声誉的影响，非常感谢！"
-    )
+    groups = [orders[i:i + 5] for i in range(0, len(orders), 5)]
     selected_phrase = get_current_appeal_phrase()
-    appeal_suffix = message or (
-        render_appeal_phrase(selected_phrase, nickname=nickname)
-        if selected_phrase
-        else default_message
-    )
-
     open_ai_contact_window(driver, name, site, window_id)
-    for index, current_group in enumerate(groups, start=1):
-        delay_ids = "、".join(str(item) for item in current_group)
-        huashu = (
-            render_appeal_phrase(
-                selected_phrase,
-                nickname=nickname,
-                order_ids=delay_ids,
-                appeal_type="延误",
+    for index, group in enumerate(groups, 1):
+        ids = "、".join(str(item) for item in group)
+        text = f"{ids}{message}" if message else render_appeal_phrase(
+            selected_phrase or "请核查这些订单的延误责任，并复核对店铺声誉的影响。",
+            nickname=nickname, order_ids=ids, appeal_type="延误",
+        )
+        group_started = len(get_appeal_log_records())
+        error = ""
+        try:
+            send_infraction_message_with_retry(
+                driver, text, ids, name, site, index, len(groups), appeal_kind="延误",
             )
-            if selected_phrase and not message
-            else f"{delay_ids}{appeal_suffix}"
-        )
-        print(f"{get_now_time()} {name} {site} 开始发送第 {index}/{len(groups)} 组延误申诉：{huashu}<br>")
-        before_messages = safe_get_agent_messages(driver)
-        send_ai_chat_message(driver, huashu)
-        append_chat_log(
-            name,
-            site,
-            "send_delay_group",
-            message=huashu,
-            extra={
-                "group_index": index,
-                "total_groups": len(groups),
-                "delay_ids": current_group,
-                "before_messages": before_messages,
-            },
-        )
-        print(f"{get_now_time()} {name} {site} 第 {index}/{len(groups)} 组延误申诉发送完成<br>")
-        response, latest_messages = wait_for_ai_agent_reply(
-            driver,
-            before_messages,
-            timeout=AI_AGENT_REPLY_TIMEOUT_SECONDS,
-            poll_interval=AI_AGENT_REPLY_POLL_SECONDS,
-        )
-        append_chat_log(
-            name,
-            site,
-            "delay_agent_reply" if response else "delay_reply_timeout",
-            message=huashu,
-            response=response,
-            chat=latest_messages,
-            extra={
-                "group_index": index,
-                "total_groups": len(groups),
-                "delay_ids": current_group,
-                "timeout_seconds": AI_AGENT_REPLY_TIMEOUT_SECONDS,
-            },
-        )
-        if response:
-            print(
-                f"{get_now_time()} {name} {site} 第 {index}/{len(groups)} 组"
-                f"AI 客服回复：{response}<br>"
+        except Exception as exc:
+            error = str(exc)
+            raise
+        finally:
+            records = _filter_group_log_records(
+                get_appeal_log_records()[group_started:], name, site, index, len(groups),
+                ids, identifier_key="delay_ids",
             )
-        else:
-            print(
-                f"{get_now_time()} {name} {site} 第 {index}/{len(groups)} 组"
-                f"连续 {AI_AGENT_REPLY_TIMEOUT_SECONDS} 秒没有读取到 AI 客服新回复<br>"
+            save_ai_appeal_group_record(
+                datetime.now().strftime("%Y-%m-%d %H:%M:%S"), name, site,
+                index, len(groups), ids, text, records, error=error, appeal_kind="延误",
             )
         if index < len(groups):
-            time.sleep(20)
+            _appeal_pause(driver, 20)
 
 
 def handle_cancellation(window_id, driver, name, site, message, nickname):
@@ -3702,7 +3622,7 @@ def handle_cancellation(window_id, driver, name, site, message, nickname):
             "取消率申诉处理完成<br>"
         )
         if index < len(groups):
-            time.sleep(20)
+            _appeal_pause(driver, 20)
 
 
 def handle_complaint(window_id, driver, name, site, message, nickname):
@@ -3796,7 +3716,7 @@ def handle_complaint(window_id, driver, name, site, message, nickname):
             "投诉申诉处理完成<br>"
         )
         if index < len(groups):
-            time.sleep(20)
+            _appeal_pause(driver, 20)
 
 
 def handle_complain(driver, name, site, message, nickname):
@@ -3848,15 +3768,13 @@ def get_delay_orders_download_list(window_id, name, site):
         print(get_now_time() + name + site + "延误报表下载结果:", message)
 
         if message != "下载文件成功":
-            print(get_now_time() + name + site + "没有下载到新的延误报表")
-            return []
+            raise RuntimeError(f"延误报表下载失败：{message}")
 
         delay_file_path = save_latest_delay_report_to_excel(
             window_id, name, site, download_start_time
         )
         if delay_file_path is None:
-            print(get_now_time() + name + site + "没有找到刚下载的延误报表")
-            return []
+            raise RuntimeError("没有找到刚下载的延误报表")
 
         fifteen_days_ago = datetime.now() - timedelta(days=15)
         df = pd.read_excel(delay_file_path, engine='openpyxl')
@@ -3873,7 +3791,7 @@ def get_delay_orders_download_list(window_id, name, site):
                     order_list.append(str(order_num).strip().lstrip("'"))
         print(get_now_time() + name + site + "最近15天的延误个数:", len(order_list))
     except Exception as e:
-        print("获取延误表格信息失败", e)
+        raise RuntimeError(f"获取延误表格信息失败：{e}") from e
     return order_list
 
 
@@ -4139,6 +4057,44 @@ def _find_infraction_api_target(name, site):
     return None
 
 
+def get_prohibited_listing_ids(name, site):
+    """从当前禁限售列表读取指定店铺、站点的全部产品编号。"""
+    target = _find_infraction_api_target(name, site)
+    if not target:
+        print(
+            f"{get_now_time()} {name} {site} 未找到已开启申诉的店铺授权站点，"
+            "不读取禁限售列表<br>"
+        )
+        return []
+
+    site_code = normalize_site_code(site)
+    item_ids = []
+    seen_ids = set()
+    page = 1
+    while True:
+        data = list_mercado_prohibited_listings(
+            token_id=target["token_id"],
+            risk_type="prohibited",
+            page=page,
+            page_size=500,
+        ) or {}
+        for row in data.get("rows") or ():
+            if normalize_site_code(row.get("site_id")) != site_code:
+                continue
+            item_id = str(row.get("item_id") or "").strip().upper()
+            if item_id and item_id not in seen_ids:
+                seen_ids.add(item_id)
+                item_ids.append(item_id)
+        if page >= max(1, int(data.get("pages") or 1)):
+            break
+        page += 1
+    print(
+        f"{get_now_time()} {name} {site} 当前禁限售列表得到产品编号 "
+        f"{len(item_ids)} 个<br>"
+    )
+    return item_ids
+
+
 def get_infraction_orders(window_id, name, site):
     """直接从官方 Moderations API 读取侵权编号，绝不读取侵权网页。"""
 
@@ -4158,9 +4114,15 @@ def get_infraction_orders(window_id, name, site):
             recent_days=100,
             max_workers=1,
         )
+        if result.get("failed_stores"):
+            raise RuntimeError(f"侵权 API 采集不完整：{result['failed_stores']}")
         seen_ids = set()
         for row in result.get("data") or ():
             if not _is_ai_infringement_record(row):
+                continue
+            if not mercado_infraction_sync.is_auto_appeal_eligible_detection(row):
+                continue
+            if mercado_infraction_sync.is_prohibited_detection(row):
                 continue
             if str(row.get("站点") or "").strip().upper() != site_id:
                 continue
@@ -4170,10 +4132,10 @@ def get_infraction_orders(window_id, name, site):
                 inf_list.append(item_id)
         print(
             f"{get_now_time()} {name} {site} API得到侵权编号 {len(inf_list)} 个；"
-            "已排除权利人案件<br>"
+            "已排除权利人案件及禁限售产品；禁限售将独立申诉<br>"
         )
     except Exception as e:
-        print(f"{get_now_time()} {name} {site} API获取侵权订单信息失败：{e}<br>")
+        raise RuntimeError(f"{name} {site} API获取侵权订单信息失败：{e}") from e
     return inf_list
 
 

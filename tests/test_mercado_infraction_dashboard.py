@@ -24,6 +24,74 @@ def test_brand_protection_detection_classifier(payload, expected):
     assert sync.is_brand_protection_detection(payload) is expected
 
 
+@pytest.mark.parametrize(
+    ("reason", "expected"),
+    [
+        ("The product's brand is not generic.", False),
+        ("  THE PRODUCT'S BRAND IS NOT GENERIC.  ", False),
+        ("The product could be counterfeit.", True),
+        ("", True),
+    ],
+)
+def test_auto_appeal_excludes_non_generic_brand_reason(reason, expected):
+    assert sync.is_auto_appeal_eligible_detection({"reason": reason}) is expected
+
+
+def test_prohibited_product_is_classified_for_infringement_appeal():
+    payload = {"reason": " The product is prohibited. "}
+
+    assert sync.is_prohibited_detection(payload) is True
+    assert sync.is_auto_appeal_eligible_detection(payload) is True
+
+
+def test_prohibited_snapshot_is_normalized_and_respects_recent_window(monkeypatch):
+    monkeypatch.setattr(
+        sync,
+        "get_prohibited_sync_context",
+        lambda _token_id: {
+            "rows": [
+                {
+                    "item_id": "MLM123",
+                    "site_id": "MLM",
+                    "seller_id": "seller-mx",
+                    "infraction_id": "prohibited-1",
+                    "infraction_reason": "The product is prohibited.",
+                    "infraction_date": "2026-09-03 10:20:30",
+                    "title": "禁限售商品",
+                    "thumbnail_url": "http://http2.mlstatic.com/test.jpg",
+                    "permalink": "https://articulo.mercadolibre.com.mx/MLM123",
+                    "status": "under_review",
+                    "remedy": "Check our policies.",
+                }
+            ]
+        },
+    )
+    record = {
+        "id": 7,
+        "meli_user_id": "root-seller",
+        "site_settings": [
+            {"site_id": "MLM", "salesperson": "张三", "group_name": "一组"}
+        ],
+    }
+
+    rows = sync._prohibited_snapshot_records(
+        record,
+        date_created_since="2026-09-01",
+    )
+
+    assert len(rows) == 1
+    assert rows[0]["source_id"] == "prohibited-1"
+    assert rows[0]["item_id"] == "MLM123"
+    assert rows[0]["reason_code"] == sync.PROHIBITED_REASON_CODE
+    assert rows[0]["reason"] == sync.PROHIBITED_REASON
+    assert rows[0]["thumbnail_url"].startswith("https://")
+    assert rows[0]["salesperson"] == "张三"
+    assert sync._prohibited_snapshot_records(
+        record,
+        date_created_since="2026-09-04",
+    ) == []
+
+
 def test_case_rows_separates_api_paging_metadata():
     rows, paging = sync._case_rows(
         [
@@ -103,6 +171,46 @@ def test_full_detection_snapshot_omits_empty_date_filter():
     assert rows == []
     assert scanned == 0
     assert capped is False
+
+
+def test_live_appeal_collection_excludes_non_generic_brand_reason(monkeypatch):
+    monkeypatch.setattr(
+        sync,
+        "_fetch_detection_pages",
+        lambda *_args, **_kwargs: (
+            [
+                {
+                    "id": "excluded",
+                    "related_item_id": "MLM1",
+                    "date_created": "2026-09-04",
+                    "reason": "The product's brand is not generic.",
+                },
+                {
+                    "id": "eligible",
+                    "related_item_id": "MLM2",
+                    "date_created": "2026-09-04",
+                    "reason": "The product could be counterfeit.",
+                },
+            ],
+            2,
+            False,
+        ),
+    )
+
+    class Client:
+        access_token = "token"
+        timeout = 10
+
+    records, scanned, capped, errors, successful = sync._collect_live_detection_records(
+        Client(),
+        [{"user_id": "seller", "site_id": "MLM"}],
+        date_created_since="2026-09-01",
+        store_name="店铺",
+    )
+
+    assert [row["item_id"] for row in records] == ["MLM2"]
+    assert records[0]["reason"] == "The product could be counterfeit."
+    assert (scanned, capped, errors, successful) == (2, False, [], 1)
 
 
 @pytest.mark.parametrize(
@@ -205,6 +313,24 @@ def test_live_api_collection_filters_authorized_sites_and_isolates_failures(
         )
 
     monkeypatch.setattr(sync, "_collect_live_detection_records", fake_collect)
+    monkeypatch.setattr(
+        sync,
+        "_prohibited_snapshot_records",
+        lambda record, **_kwargs: (
+            [
+                {
+                    "source_id": "prohibited-1",
+                    "site_id": "MLM",
+                    "item_id": "MLM-PROHIBITED",
+                    "title": "禁限售商品",
+                    "occurred_at": "2026-09-03 13:00:00",
+                    "reason": "The product is prohibited.",
+                }
+            ]
+            if record["id"] == 1
+            else []
+        ),
+    )
 
     result = sync.collect_live_detection_infractions(
         [
@@ -216,8 +342,10 @@ def test_live_api_collection_filters_authorized_sites_and_isolates_failures(
     )
 
     assert [(row["店铺名"], row["站点"], row["编号"]) for row in result["data"]] == [
-        ("正常店铺", "MLM", "MLM123")
+        ("正常店铺", "MLM", "MLM123"),
+        ("正常店铺", "MLM", "MLM-PROHIBITED"),
     ]
+    assert result["data"][1]["侵权原因"] == "The product is prohibited."
     assert result["source"] == "mercado_moderations_api"
     assert result["failed_stores"][0]["store"] == "异常店铺"
     assert "Token 已失效" in result["failed_stores"][0]["message"]
@@ -381,16 +509,17 @@ def test_independent_dashboard_page_and_data_api(monkeypatch):
     page_response = client.get("/infringement-dashboard")
     embedded_response = client.get("/infringement-dashboard?embedded=1")
     api_response = client.get(
-        "/api/official-infractions/dashboard?days=30&view_mode=history&detail_token_id=7"
+        "/api/official-infractions/dashboard?days=30&view_mode=history&category=counterfeit&detail_token_id=7"
     )
 
     assert page_response.status_code == 200
-    assert "按账户组与业务员查看侵权" in page_response.get_data(as_text=True)
+    assert "按账户组与业务员查看违规商品" in page_response.get_data(as_text=True)
     assert '<body class="embedded">' in embedded_response.get_data(as_text=True)
     assert api_response.status_code == 200
     assert api_response.get_json()["data"] == dashboard
     assert received["detail_token_id"] == "7"
     assert received["view_mode"] == "history"
+    assert received["category"] == "counterfeit"
 
 
 def test_dashboard_sync_endpoint_starts_background_job(monkeypatch):
@@ -417,7 +546,7 @@ def test_console_template_links_to_independent_dashboard():
     ).read_text(encoding="utf-8")
 
     assert "/infringement-dashboard" in source
-    assert '<span class="nav-label">侵权总览</span>' in source
+    assert '<span class="nav-label">违规商品总览</span>' in source
     assert 'data-src="/infringement-dashboard?embedded=1"' in source
     assert 'id="infraction-dashboard-frame"' in source
     assert 'window.location.assign("/infringement-dashboard")' not in source
@@ -433,6 +562,8 @@ def test_dashboard_template_supports_store_detail_drilldown():
     assert "查看全部明细" in source
     assert "产品图" in source
     assert "thumbnail_url" in source
-    assert "当前侵权" in source
+    assert "当前违规商品" in source
     assert "全部历史（去重）" in source
     assert "申诉成功" in source
+    assert "违规类型" in source
+    assert "category-select" in source

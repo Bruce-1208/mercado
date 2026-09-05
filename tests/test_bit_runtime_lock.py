@@ -24,3 +24,20 @@ def test_stale_lock_from_dead_process_is_reclaimed(tmp_path, monkeypatch):
     assert lock.read_owner()["pid"] == os.getpid()
     lock.release()
     assert not lock.lock_path.exists()
+
+
+def test_window_lease_records_optional_task_id(tmp_path, monkeypatch):
+    monkeypatch.setattr(bit_runtime_lock, "RUNTIME_LOCK_DIR", tmp_path)
+    lease = bit_runtime_lock.create_window_lease(
+        "window-1",
+        owner="daily-task",
+        shop_name="店铺甲",
+        task_type="appeal",
+        task_id="task-a",
+    )
+
+    assert lease.acquire(timeout=0) is True
+    try:
+        assert lease.read_owner()["metadata"]["task_id"] == "task-a"
+    finally:
+        lease.release()

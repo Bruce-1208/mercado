@@ -557,6 +557,105 @@ def test_daily_background_records_completed_run_from_shared_state(monkeypatch):
     assert bit_order_sync._sync_state["daily_status_last_run_date"] == "2026-08-31"
 
 
+def test_automatic_print_persists_activation_floor_and_uses_system_operator(monkeypatch):
+    now = datetime(2026, 9, 5, 9, 0, tzinfo=timezone.utc)
+    saved_states = []
+    print_options = {}
+
+    class FakeLock:
+        @staticmethod
+        def release():
+            print_options["released"] = True
+
+    monkeypatch.setattr(
+        bit_order_sync.bit_print,
+        "acquire_order_print_lock",
+        lambda **_kwargs: FakeLock(),
+    )
+    monkeypatch.setattr(
+        bit_order_sync.bit_print,
+        "build_print_jobs",
+        lambda **_kwargs: [
+            {"token_id": 7, "shop_name": "店铺甲", "sites": ["墨西哥"]}
+        ],
+    )
+    monkeypatch.setattr(
+        bit_order_sync.bit_mysql,
+        "get_mercado_order_sync_schedule_value",
+        lambda _key: "",
+    )
+    monkeypatch.setattr(
+        bit_order_sync.bit_mysql,
+        "set_mercado_order_sync_schedule_value",
+        lambda key, value: saved_states.append((key, value)),
+    )
+
+    def fake_print(**kwargs):
+        print_options.update(kwargs)
+        return {
+            "printed_order_count": 1,
+            "shipment_count": 1,
+            "failed": 0,
+            "results": [],
+        }
+
+    monkeypatch.setattr(bit_order_sync.bit_print, "print_orders_all", fake_print)
+
+    result = bit_order_sync._run_automatic_order_print(
+        token_ids=[7],
+        now=now,
+        bootstrap_lookback_seconds=900,
+    )
+
+    expected_start = now - timedelta(minutes=15)
+    assert result["status"] == "completed"
+    assert saved_states == [
+        (
+            bit_order_sync._automatic_print_state_key(7),
+            bit_order_sync._iso_millis(expected_start),
+        )
+    ]
+    assert print_options["selected_token_ids"] == [7]
+    assert print_options["operator_name"] == "系统自动打印"
+    assert print_options["include_first_run_backlog"] is False
+    assert print_options["candidate_start_by_token"] == {7: expected_start}
+    assert print_options["released"] is True
+
+
+def test_automatic_background_sync_triggers_auto_print(monkeypatch):
+    class FakeLock:
+        def __init__(self, *_args, **_kwargs):
+            pass
+
+        @staticmethod
+        def acquire(timeout=0):
+            assert timeout == 0
+            return True
+
+        @staticmethod
+        def release():
+            pass
+
+    def fake_sync(*_args, **_kwargs):
+        with bit_order_sync._state_guard:
+            bit_order_sync._sync_state.update(status="completed")
+
+    automatic_print = []
+    monkeypatch.setattr(bit_order_sync, "InterProcessLock", FakeLock)
+    monkeypatch.setattr(bit_order_sync, "run_order_sync", fake_sync)
+    monkeypatch.setattr(
+        bit_order_sync,
+        "_run_automatic_order_print",
+        lambda token_ids: automatic_print.append(token_ids)
+        or {"status": "completed", "printed_order_count": 1},
+    )
+
+    bit_order_sync._run_background("", "", [7], "automatic")
+
+    assert automatic_print == [[7]]
+    assert bit_order_sync._sync_state["auto_print"]["printed_order_count"] == 1
+
+
 def test_old_status_sync_uses_last_updated_checkpoint_and_parallel_details(monkeypatch):
     token = {
         "id": 8,
@@ -806,6 +905,89 @@ def test_shipment_sender_cost_sums_all_seller_parts():
     assert bit_order_sync._shipment_sender_cost(
         {"senders": [{"cost": 6.71}, {"cost": "1.29"}]}
     ) == bit_order_sync.Decimal("8.00")
+
+
+def test_parallel_api_results_stops_workers_during_interpreter_shutdown(monkeypatch):
+    shutdown_calls = []
+
+    class RejectingExecutor:
+        def __init__(self, max_workers):
+            assert max_workers == 2
+
+        def submit(self, _callback, _value):
+            raise RuntimeError(
+                "cannot schedule new futures after interpreter shutdown"
+            )
+
+        def shutdown(self, *, wait, cancel_futures):
+            shutdown_calls.append((wait, cancel_futures))
+
+    stop_events = [threading.Event() for _ in range(4)]
+    for name, event in zip(
+        (
+            "_background_shutdown_event",
+            "_scheduler_stop_event",
+            "_financial_backfill_stop_event",
+            "_image_backfill_stop_event",
+        ),
+        stop_events,
+    ):
+        monkeypatch.setattr(bit_order_sync, name, event)
+    monkeypatch.setattr(bit_order_sync, "ThreadPoolExecutor", RejectingExecutor)
+
+    with pytest.raises(bit_order_sync._InterpreterShutdownRequested):
+        bit_order_sync._parallel_api_results(
+            object(),
+            ["shipment-1", "shipment-2"],
+            lambda _client, value: value,
+            default_workers=2,
+        )
+
+    assert all(event.is_set() for event in stop_events)
+    assert shutdown_calls == [(False, True)]
+
+
+def test_financial_backfill_loop_exits_quietly_during_shutdown(monkeypatch):
+    events = []
+
+    class Lock:
+        def acquire(self, timeout=0):
+            assert timeout == 0
+            events.append("acquire")
+            return True
+
+        def release(self):
+            events.append("release")
+
+    monkeypatch.setattr(bit_order_sync, "InterProcessLock", lambda *_args, **_kwargs: Lock())
+    monkeypatch.setattr(
+        bit_order_sync.bit_mysql,
+        "backfill_mercado_order_sale_fees",
+        lambda: {},
+    )
+    monkeypatch.setattr(
+        bit_order_sync,
+        "backfill_order_financials",
+        lambda limit=200: (_ for _ in ()).throw(
+            bit_order_sync._InterpreterShutdownRequested()
+        ),
+    )
+    logged_errors = []
+    monkeypatch.setattr(
+        bit_order_sync.logging,
+        "exception",
+        lambda *args, **kwargs: logged_errors.append((args, kwargs)),
+    )
+    monkeypatch.setattr(
+        bit_order_sync,
+        "_financial_backfill_stop_event",
+        threading.Event(),
+    )
+
+    bit_order_sync._financial_backfill_loop()
+
+    assert events == ["acquire", "release"]
+    assert logged_errors == []
 
 
 def test_sync_order_financials_reads_official_shipment_cost(monkeypatch):

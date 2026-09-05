@@ -1,5 +1,7 @@
 # mercado
 
+AI 自动申诉的执行状态、故障恢复和配置说明见 [申诉稳定性说明](docs/ai_appeal_reliability.md)。
+
 ## 工作台服务端 / 客户端运行角色
 
 同一套工作台可以在每台电脑上灵活指定运行角色：
@@ -35,6 +37,22 @@ Copy-Item .\workbench-client.example.json .\workbench-runtime.json
 
 客户端可通过服务端的 `GET /api/db/health` 验证接口角色和数据库目标。多台电脑可以同时设为服务端；如果启用后台定时任务，应确认同一任务不会在多台服务端重复调度。
 
+### 从公网工作台调用本机比特浏览器
+
+“自动化 AI 申诉”和“任务模块”的执行位置默认是“本机比特浏览器”。即使页面从 `https://zeshun.nat100.top/` 打开，任务也会通过浏览器发送到当前电脑的 `127.0.0.1:5000`，不会在本机未连接时自动改由服务器执行。需要服务器执行时，在页面上明确选择“服务器比特浏览器”。
+
+使用本机执行前，请在当前电脑保持 client 工作台运行，并确保 client 与 server 配置相同的 `BIT_DB_API_TOKEN`：
+
+```powershell
+$env:BIT_RUNTIME_ROLE="client"
+$env:BIT_DB_API_BASE_URL="https://zeshun.nat100.top"
+$env:BIT_DB_API_TOKEN="replace-with-the-same-long-random-token"
+python -m bit.bit_interface
+```
+
+本机桥接只接受来自回环地址、持有短时权限凭证且网页来源在白名单内的请求。公网域名变化时，可用 `BIT_LOCAL_EXECUTOR_ALLOWED_ORIGINS` 配置允许来源；多个来源使用英文逗号分隔。任务模块会合并显示本机和服务器任务，并在每张任务卡片上标出执行端。
+浏览器首次从公网工作台连接 `127.0.0.1` 时，如出现“访问本地网络”权限提示，需要选择允许。
+
 ## 库存管理
 
 工作台“库存管理”提供库存明细、出入库日志和货架管理三个视图。入库时必须从已同步的美客多订单中匹配具体产品，并记录货架、数量、单位成本、业务时间和参考单据；重复入库按移动加权法更新单位成本。出库会在数据库事务内锁定库存记录，库存不足时拒绝操作，成功后保留操作前后数量、成本和操作人。
@@ -43,7 +61,7 @@ Copy-Item .\workbench-client.example.json .\workbench-runtime.json
 
 ## Yandex Market 控制台
 
-Yandex 店铺授权、token 管理、国外商品抓取和商品卡发布功能位于独立的 `yandex` 包。首次运行会在包内创建隔离的虚拟环境和 `.data` 数据目录：
+Yandex 店铺授权、订单与结算、商品库存、退货、评价、问答、国外商品抓取和商品卡发布功能位于独立的 `yandex` 包。首次运行会在包内创建隔离的虚拟环境和 `.data` 数据目录：
 
 ```powershell
 .\yandex\run.ps1
@@ -91,6 +109,8 @@ print(result.database_path)
 工作台“订单打印”已改为使用美客多官方 Orders 与 Shipment Labels API，不再打开 BitBrowser 或操作订单网页。页面支持选择订单开始/结束时间、多选已授权店铺和站点，任务完成后可下载一份合并 PDF。单次时间范围最多 31 天，页面默认最近 72 小时。
 
 每个店铺首次执行时，如果没有可靠的逐单打印状态，只读取最近 72 小时内可取得 Shipment ID 的订单；API 同步成功后建立追踪起点，后续仅处理没有成功打印记录的已付款订单。成功生成面单后会写入订单操作日志；已取消、已完成等永久不可打印运单会记录为跳过，网络或临时接口失败的订单会保留到下一次重试。
+
+服务端每 15 分钟同步最近订单后，会自动为启用自动打印以来的新订单生成面单；暂时尚未就绪的面单会在后续同步中继续重试。自动生成成功的订单会在操作日志中显示操作人为“系统自动打印”，订单打印页的最近记录和运行日志也会标出“系统自动打印”。首次启用默认只回看最近 15 分钟，避免重打历史订单；可通过 `MERCADO_ORDER_AUTO_PRINT_DISABLED=1` 关闭，或用 `MERCADO_ORDER_AUTO_PRINT_BOOTSTRAP_LOOKBACK_SECONDS` 调整首次回看秒数。
 
 ## 美客多售后处理 API
 

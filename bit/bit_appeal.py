@@ -25,11 +25,9 @@ from bit.bit_mercado_limit import is_mercado_rate_limited_page
 from bit.bit_mercado_login import open_mercado_backend_page
 from bit.bit_appeal_phrases import render_appeal_phrase, select_appeal_phrase
 from bit.bit_reputation_info import get_cancellation_orders
-from AI_Agent.qianwen import *
 import pandas as pd
 from datetime import datetime, timedelta
 from datetime import datetime
-from AI_Agent.deepseek import *
 import re
 from openpyxl import load_workbook
 import traceback
@@ -717,6 +715,11 @@ def shensu(name, site, form, message, mode="人工客服"):
             f"亲爱的客服，我叫{nickname}！这些产品是通用品牌产品，他们被系统误检测为侵权产品，你能帮我消除记录吗？",
         ]
 
+    if form == "禁限售":
+        words = [
+            "亲爱客服，这个产品不是禁限售产品，他被系统误判了，麻烦你帮我恢复",
+        ]
+
     if form == "取消率":
         words = [
             f"亲爱的客服，我叫{nickname}！这些订单并非因卖家责任取消，麻烦您重新核查订单记录，并移除这些订单对店铺取消率和声誉的影响，非常感谢！",
@@ -746,6 +749,7 @@ def shensu(name, site, form, message, mode="人工客服"):
             print(f"{get_now_time()} {name} {site} '选择站点失败，继续使用当前页面': {e}<br>")
     orders_random=""
     infraction_random=""
+    prohibited_random=""
     cancellation_random=""
     initial_huashu = ""
 
@@ -756,6 +760,11 @@ def shensu(name, site, form, message, mode="人工客服"):
             return "没有可以申诉的订单"
     if should_load_infraction_orders(form, message):
         infraction_random = get_infraction_orders_random(window_id,name, site, 10)
+    if form == "禁限售" and message == "":
+        prohibited_random = get_prohibited_orders_for_human_service(name, site, 10)
+        if not prohibited_random:
+            close_appeal_tabs(driver, appeal_base_handles, name, site)
+            return "禁限售列表没有可以申诉的产品"
     if form == "取消率" and message == "":
         cancellation_orders = get_cancellation_orders(driver, name, site)
         if not cancellation_orders:
@@ -827,6 +836,27 @@ def shensu(name, site, form, message, mode="人工客服"):
                 chat_ai(
                     driver, name, site, form, initial_huashu, nickname
                 )
+            if form == "禁限售":
+                initial_huashu = (
+                    render_appeal_phrase(
+                        selected_phrase,
+                        nickname=nickname,
+                        order_ids=prohibited_random,
+                        appeal_type=form,
+                    )
+                    if selected_phrase
+                    else prohibited_random + words_random
+                )
+                get_human_chat_input(driver, 30).send_keys(initial_huashu)
+                time.sleep(3)
+                click_human_send_button(driver, 30)
+                print(
+                    f"{get_now_time()} {name} {site} 发送禁限售产品编号："
+                    f"{initial_huashu}<br>"
+                )
+                chat_ai(
+                    driver, name, site, form, initial_huashu, nickname
+                )
             if form == "取消率":
                 initial_huashu = (
                     render_appeal_phrase(
@@ -893,8 +923,8 @@ def shensu(name, site, form, message, mode="人工客服"):
         chat_ai(driver, name, site, form, initial_huashu, nickname)
     finally:
         print(f"{get_now_time()} {name}{site}找客服执行完毕<br>")
-        close_appeal_tabs(driver, appeal_base_handles, name, site)
-        print(f"{get_now_time()} {name}{site} 关闭浏览器<br>")
+        if not getattr(driver, "_bit_human_needs_manual", False):
+            close_appeal_tabs(driver, appeal_base_handles, name, site)
 
 
 def get_delay_orders_random(name, site, nums):
@@ -973,6 +1003,24 @@ def get_infraction_orders_random(window_id,name, site, nums):
         return ""
 
 
+def get_prohibited_orders_for_human_service(name, site, nums=10):
+    """人工客服禁限售申诉也统一读取当前禁限售列表。"""
+    try:
+        from bit.bit_appeal_ai import get_prohibited_listing_ids
+
+        item_ids = get_prohibited_listing_ids(name, site)
+        selected = item_ids[:max(1, int(nums or 10))]
+        result = "、".join(selected)
+        print(
+            f"{get_now_time()} {name} {site} 从禁限售列表读取 "
+            f"{len(selected)} 个产品编号：{result}<br>"
+        )
+        return result
+    except Exception as exc:
+        print(f"读取禁限售列表失败：{exc}<br>")
+        return ""
+
+
 # 检查聊天是否结束
 def checkChatEnd(driver, name, site):
     try:
@@ -1023,122 +1071,16 @@ def get_human_chat_context(driver):
     return "\n".join(lines)
 
 
-def get_deepseek_human_service_reply(context, form, nickname):
-    task_map = {
-        "延误": "我正在申诉延误订单，希望客服消除对店铺声誉的影响。",
-        "侵权": "我正在申诉侵权记录，希望客服认可这是通用品牌产品并消除记录。",
-        "取消率": "我正在申诉取消订单，希望客服复核并消除这些订单对店铺取消率和声誉的影响。",
-        "投诉": "我正在申诉投诉订单，希望客服消除对店铺声誉的影响。",
-    }
-    messages = [
-        {
-            "role": "system",
-            "content": (
-                "你正在帮助卖家和 Mercado Libre 人工客服对话。"
-                "每次必须根据完整上下文判断下一句回复。"
-                "如果客服已经明确拒绝继续处理、明确表示无法移除/无法申诉/最终决定不变，rejected 返回 true。"
-                "如果只是询问信息、要求订单号、解释流程或还没明确拒绝，rejected 返回 false。"
-                "只返回 JSON，不要返回 Markdown。格式：{\"reply\":\"不超过40个中文字的自然回复\",\"rejected\":false,\"reason\":\"简短判断依据\"}"
-            ),
-        },
-        {
-            "role": "user",
-            "content": (
-                f"我的英文名/称呼是 {nickname}。\n"
-                f"当前业务：{task_map.get(form, form)}\n"
-                "如果 rejected=true，reply 必须是在礼貌接受结果后，请客服帮忙关闭聊天窗口。\n"
-                "如果 rejected=false，reply 需要继续推进申诉，不要重复已经发过的订单号。\n\n"
-                f"完整聊天上下文：\n{context}"
-            ),
-        },
-    ]
-    raw = chat_deepseek(messages, temperature=0.2, max_tokens=300)
-    try:
-        data = json.loads(raw.strip())
-    except Exception:
-        match = re.search(r"\{.*\}", raw, re.S)
-        data = json.loads(match.group(0)) if match else {"reply": raw, "rejected": False, "reason": "非 JSON 返回"}
-
-    reply = str(data.get("reply", "")).strip()
-    rejected = bool(data.get("rejected", False))
-    reason = str(data.get("reason", "")).strip()
-    if rejected:
-        reply = "好的，我明白了。麻烦您帮我关闭聊天窗口，谢谢。"
-    if not reply:
-        reply = "麻烦您再帮我确认一下，谢谢。"
-    return reply, rejected, reason, raw
-
-
 def chat_ai(driver, name, site, form, huashu, nickname):
-    last_context = ""
-    idle_times = 0
-    chat_logs = []
-    i = 0
-    while True:
-        i += 1
-        context = ""
-        response = ""
-        should_stop = False
-        isEnd = checkChatEnd(driver, name, site)
-        if isEnd:
-            break
-
+    """初始申诉提交后保存当前人工会话，交由用户继续沟通。"""
+    context = get_human_chat_context(driver)
+    driver._bit_human_needs_manual = True
+    if context:
         try:
-            print(f"{get_now_time()} {name}{site} 进入人工客服处理流程，第{i}轮读取上下文<br>")
-            context = get_human_chat_context(driver)
-            print(f"{get_now_time()} {name}{site} 聊天上下文：<br>{context}<br>")
-            if not context:
-                print(f"{get_now_time()} {name}{site} 暂未读取到聊天内容，继续等待<br>")
-                idle_times += 1
-                continue
-
-            if context == last_context:
-                idle_times += 1
-                print(f"{get_now_time()} {name}{site} 客服暂无新回复，第{idle_times}次等待<br>")
-                continue
-
-            idle_times = 0
-            last_context = context
-            response, rejected, reason, raw_response = get_deepseek_human_service_reply(context, form, nickname)
-            chat_logs.append({
-                "round": i,
-                "context": context,
-                "response": response,
-                "rejected": rejected,
-                "reason": reason,
-                "raw_response": raw_response,
-            })
-            print(f"{get_now_time()} {name}{site} DeepSeek判断：rejected={rejected}, reason={reason}<br>")
-            print(f"{get_now_time()} {name}{site} DeepSeek回复：{response}<br>")
-            try:
-                # 发消息
-                get_human_chat_input(driver, 30).send_keys(response)
-                time.sleep(3)
-                click_human_send_button(driver, 30)
-                print(f"{get_now_time()} {name}{site}自动发送消息:{response}<br>")
-                # 聊天记录插入数据库
-                result = insert_chat_info_by_api(name, site, huashu, context, response, get_now_time())
-                print(f"{get_now_time()} {name}{site}聊天记录接口入库成功:{result}<br>")
-
-            except Exception as e:
-                print(f"{get_now_time()} {name}{site}发送消息失败<br>")
-                print(e)
-                traceback.print_exc()
-
-            if rejected:
-                print(f"{get_now_time()} {name}{site}客服已明确拒绝，已请求客服关闭聊天窗口<br>")
-                should_stop = True
-                break
-        except Exception as e:
-            print(e)
-            traceback.print_exc()
-        finally:
-            if not should_stop:
-                print(f"{get_now_time()} {name}{site}等待客服回复，120秒后继续轮询<br>")
-                time.sleep(120)
-
-    print(f"{get_now_time()} {name}{site}聊天日志：{json.dumps(chat_logs, ensure_ascii=False)}<br>")
-    print(f"{get_now_time()} {name}{site}结束AI客服回复<br>")
+            insert_chat_info_by_api(name, site, huashu, context, "", get_now_time())
+        except Exception as exc:
+            print(f"{get_now_time()} 人工客服聊天记录保存失败：{exc}<br>")
+    print(f"{get_now_time()} {name} {site} 已提交申诉并保留人工客服页面，请继续人工沟通；不再生成自动追问<br>")
 
 
 def chat_script(driver):
