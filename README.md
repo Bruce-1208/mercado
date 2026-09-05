@@ -41,14 +41,17 @@ Copy-Item .\workbench-client.example.json .\workbench-runtime.json
 
 “自动化 AI 申诉”和“任务模块”的执行位置默认是“本机比特浏览器”。即使页面从 `https://zeshun.nat100.top/` 打开，任务也会通过浏览器发送到当前电脑的 `127.0.0.1:5000`，不会在本机未连接时自动改由服务器执行。需要服务器执行时，在页面上明确选择“服务器比特浏览器”。
 
-使用本机执行前，请在当前电脑保持 client 工作台运行，并确保 client 与 server 配置相同的 `BIT_DB_API_TOKEN`：
+使用本机执行前，请在当前电脑保持 client 工作台运行，并指向登录时使用的公网工作台：
 
 ```powershell
 $env:BIT_RUNTIME_ROLE="client"
 $env:BIT_DB_API_BASE_URL="https://zeshun.nat100.top"
-$env:BIT_DB_API_TOKEN="replace-with-the-same-long-random-token"
 python -m bit.bit_interface
 ```
+
+本机连接凭证有效期为 5 分钟。服务端未配置 `BIT_DB_API_TOKEN` 时，会使用已有的持久化登录密钥签发凭证，本机通过 HTTPS 向配置的服务端核验账号和权限，无需为了建立本机连接再手工配置共享密钥。服务端已配置共享令牌时继续兼容原来的校验方式，两端使用相同令牌。
+
+数据接口的认证独立于本机连接：如果 `/api/db/*` 要求共享令牌，仍需按上文为两端配置相同的 `BIT_DB_API_TOKEN`。启动本机申诉或日常任务前会检查数据接口连接，避免任务启动后才因无法读取授权店铺而失败。升级后请更新并重启服务端和本机客户端；未配置共享令牌的本机客户端需将服务端地址设为 HTTPS。
 
 本机桥接只接受来自回环地址、持有短时权限凭证且网页来源在白名单内的请求。公网域名变化时，可用 `BIT_LOCAL_EXECUTOR_ALLOWED_ORIGINS` 配置允许来源；多个来源使用英文逗号分隔。任务模块会合并显示本机和服务器任务，并在每张任务卡片上标出执行端。
 浏览器首次从公网工作台连接 `127.0.0.1` 时，如出现“访问本地网络”权限提示，需要选择允许。
