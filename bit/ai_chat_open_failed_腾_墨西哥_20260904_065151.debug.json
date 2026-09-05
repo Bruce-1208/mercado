@@ -1,0 +1,53 @@
+{
+  "captured_at": "2026-09-04T06:51:51",
+  "current_url": "https://global-selling.mercadolibre.com/help/v2",
+  "chat_state": {
+    "ai_frame_count": 0,
+    "inline_aria_expanded": "",
+    "inline_has_input": false,
+    "inline_open": false,
+    "inline_root_class": "",
+    "inline_shell": false,
+    "legacy_frame_count": 0,
+    "shadow_ai_frame_count": 0,
+    "visible_ai_frame_count": 0
+  },
+  "dom_snapshot": {
+    "aiShells": [],
+    "frames": [
+      {
+        "className": "",
+        "height": 0,
+        "id": "_hjSafeContext_50403697",
+        "shadowHost": "",
+        "src": "about:blank",
+        "title": "_hjSafeContext",
+        "visible": false,
+        "width": 0
+      }
+    ],
+    "readyState": "complete",
+    "shadowHosts": [],
+    "title": "Help"
+  },
+  "browser_logs": [
+    {
+      "level": "SEVERE",
+      "message": "https://global-selling.mercadolibre.com/totp/H4sIAAAAAAAEA-2Wy66jOBCG3-UsetXpYMAYWmqNIJA7IYFcgA2ysSGE-yUQGM27T7pb6s08wUjHG1vl-stlWfr8__2R46QIaPlz-vj-EWclwdmsZVmWFPG3nDUhpmWWkIZ9C8v84-tHw2jSsLALnk32Fty7rmq_z-fDMPwne_7I23lIunkWT_O8zeZZGSfFfC22G_X3MNSJP_G8NFmasxRG141Aazn-4bIqeeekxmm-9c9qbdriU4vjybgU2qKcPeHjludPYs0UAKQIKMwEep4bdout9ZMMF6qHm8ZH5qzdnFcI5NxV9AZh12736xsZFJjmx_HwWgF2GggmvQsOibDziGO4Z9x5TDyEhiJ7SS2lqCiql9i4oRZpGozs3DgpZ0v0zh1ozvsmWDqC3JsrawrUVdUzT1y86u2jfU58x-zNAATa7x0O1duFf1w7J4MLRhjnHPYnV3NOz4hDlVTTpykj4bIML722jlo0trkRLCOUe-Tp43FxI1GE7sJr3N9eeQoZ7FXLDaetbUzu4RjtkbLbcUvPadusH4cbV9a6r-tZVemFLM-C45a3QkE4rAy4H_X4vlbHC17kfGstxXIUF82aSi-_GioU1L7atUt7ufaUrT9RqI_4YTFB3W79GU4eYAFcqp_tl6x68XPyUFWUd3VbVS5ctVSZYpQuxR4_x9N0sCpZf0E5SvMN6xDt7nE9VHYY62mnH060WTfJy-aTaNLjeLNNlyfeZLJtmdxN6l4O2BeVFssDecSPk50VhwPg9NQH4o62qChDV1ZFdvNckfevbFqfw8rfBZV2DXLdxg4tjTx9nYvh1flddag0bmU7tbcqJRNeHV0Dmqld--MWXC1Xuy6TBq72d41ABFTnIT0mfE00XZKUWbgrVehI9GyanjVJ_JDivFpIehWwwjSF60G72ws1GZILWKNU6nZVvKu5482GUX21blcrtu9xU7uzVHMOlr4qPFkIZo-VWt4nk7OdQt8pgpNmLAmLAheHy2Ya62YWqqkG-4JunurRlvM-Z5fg0V_rdchRHNNszHP-bD6WwEaHkQSppmY-0E6SjfllPMPjcriQ4QZyb0aM5n35oOoLEknuukOGfDKEFGYySjBJZhaqXosBHsfR3ryf1UhqjzneQjrTuKcdYmdLPi7343O60nQLe2JlDmbl_YxBumoTN7N76X7MnM56Ne6LT-9dYknjvbHrE3tYeBkL4LJbZX4SD1uRLUchonsb3CpX2VYLVO_7uwIXhEUgWrS3_fleo3UcBcYVduujfzPKI6sbxpA2OCS3jk75LAuBaE9xzee8tRsZvEm0sYj6vEzBfqkmTFwRcWoPVwFTp-8S9zQFKOjFY7rZSNzqZLyxM-_KrpqHOMsIDtO_aNX-wE1eNt8gBhFikcSJlEQKZAjxRBREKnOKwEUQilyIIkWgSBFCCmVJVngFyEQBDMsCwliAIhEkGMmUFwWmhALAlOMiBmXCoMRRQXmXC0NRDhUJIwoVDvHKW4IBFCTAE4kHUEGUoxRCGcshz0k44mVeBhyKpBCLmCeCzDE5CgFHIUcjJUQ8QowIyk_lN5mDEKKIw0yG70aBiN7wfrcnAAm889mXhuTtjy_4B_nF8ceb4klZfIL8E-SfIP8E-SfI_4cg_xLgoh1Y8-NN9K55r_Fvpif07c3f7mp7twByuf2iZsgXrv56a-7a3Htk0n51-PMLYJKxj-8Rzlr29YMVTZllbVB2d9YEuKr-7CTt_qeBN49_Im3SseDXWQvt_C5XZbiLyib_HTP3H__8CwQqDvFhDAAA/validation - Unchecked runtime.lastError: Could not establish connection. Receiving end does not exist.",
+      "source": "other",
+      "timestamp": 1788475773081
+    },
+    {
+      "level": "SEVERE",
+      "message": "https://console.bitbrowser.net/?id=6af1cc457342417db4e7235d7a062f2f&locale=zh&port=54345 - Unchecked runtime.lastError: Could not establish connection. Receiving end does not exist.",
+      "source": "other",
+      "timestamp": 1788475773082
+    },
+    {
+      "level": "SEVERE",
+      "message": "https://global-selling.mercadolibre.com/help/v2 - Unchecked runtime.lastError: Could not establish connection. Receiving end does not exist.",
+      "source": "other",
+      "timestamp": 1788475850285
+    }
+  ]
+}

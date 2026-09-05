@@ -1,0 +1,239 @@
+{
+  "captured_at": "2026-09-03T03:24:33",
+  "current_url": "https://global-selling.mercadolibre.com/help/v2",
+  "chat_state": {
+    "ai_frame_count": 1,
+    "inline_aria_expanded": "false",
+    "inline_has_input": false,
+    "inline_open": true,
+    "inline_root_class": "assistant-chat show expanded relative-height",
+    "inline_shell": true,
+    "legacy_frame_count": 1,
+    "shadow_ai_frame_count": 1,
+    "visible_ai_frame_count": 1
+  },
+  "dom_snapshot": {
+    "aiShells": [
+      {
+        "ariaExpanded": "false",
+        "className": "icon-button__wrapper icon-button__wrapper--closed",
+        "id": "sa-icon-button-wrapper",
+        "tag": "BUTTON",
+        "visible": true
+      },
+      {
+        "ariaExpanded": "",
+        "className": "assistant-chat show expanded relative-height",
+        "id": "sa-assistant-chat",
+        "tag": "DIV",
+        "visible": true
+      }
+    ],
+    "frames": [
+      {
+        "className": "",
+        "height": 369,
+        "id": "",
+        "shadowHost": "sof-seller-assistant-frm-host",
+        "src": "https://global-selling.mercadolibre.com/maxwell/new-chat?flavor=seller-assistant&hideHeader=true&origin=sa&andes_ui=legacy&customLocale=en-US",
+        "title": "Meli AI Chat",
+        "visible": true,
+        "width": 460
+      },
+      {
+        "className": "",
+        "height": 0,
+        "id": "_hjSafeContext_20403998",
+        "shadowHost": "",
+        "src": "about:blank",
+        "title": "_hjSafeContext",
+        "visible": false,
+        "width": 0
+      }
+    ],
+    "readyState": "complete",
+    "shadowHosts": [
+      {
+        "className": "remote-module cx-contents-search-frontend-cx-search-frm",
+        "id": "remote-module-container-cx-contents-search-frontend-cx-search-frm-default",
+        "tag": "SECTION"
+      },
+      {
+        "className": "",
+        "id": "sof-seller-assistant-frm-host",
+        "tag": "DIV"
+      }
+    ],
+    "title": "Help"
+  },
+  "browser_logs": [
+    {
+      "level": "SEVERE",
+      "message": "https://console.bitbrowser.net/?id=55d3db6471dc4262aa5dd2de190e2422&locale=zh&port=54345 - Unchecked runtime.lastError: Could not establish connection. Receiving end does not exist.",
+      "source": "other",
+      "timestamp": 1788376823336
+    },
+    {
+      "level": "SEVERE",
+      "message": "https://www.global-selling.mercadolibre.com/browser-assessment/s/assessment.js?mo=manual&fi=maxwell_user_message - Failed to load resource: net::ERR_SSL_VERSION_OR_CIPHER_MISMATCH",
+      "source": "network",
+      "timestamp": 1788376834782
+    },
+    {
+      "level": "SEVERE",
+      "message": "https://www.global-selling.mercadolibre.com/browser-assessment/s/assessment.js?mo=manual&fi=maxwell_user_message - Failed to load resource: net::ERR_SSL_VERSION_OR_CIPHER_MISMATCH",
+      "source": "network",
+      "timestamp": 1788376843846
+    },
+    {
+      "level": "SEVERE",
+      "message": "https://www.global-selling.mercadolibre.com/browser-assessment/s/assessment.js?mo=manual&fi=maxwell_user_message - Failed to load resource: net::ERR_SSL_VERSION_OR_CIPHER_MISMATCH",
+      "source": "network",
+      "timestamp": 1788376932638
+    },
+    {
+      "level": "SEVERE",
+      "message": "https://www.global-selling.mercadolibre.com/browser-assessment/s/assessment.js?mo=manual&fi=maxwell_user_message - Failed to load resource: net::ERR_SSL_VERSION_OR_CIPHER_MISMATCH",
+      "source": "network",
+      "timestamp": 1788376940571
+    },
+    {
+      "level": "SEVERE",
+      "message": "https://global-selling.mercadolibre.com/maxwell/new-chat?flavor=seller-assistant&hideHeader=true&lifecycle=inactivity_expiration&origin=cx-support-home-hub-frontend&andes_ui=legacy&customLocale=en-US&conversation_id=2af0277a-41fb-41c4-bf4e-b657cd9ead97 - Access to XMLHttpRequest at 'https://www.mercadolibre.com/jms/lgz/background/etid' from origin 'https://global-selling.mercadolibre.com' has been blocked by CORS policy: No 'Access-Control-Allow-Origin' header is present on the requested resource.",
+      "source": "javascript",
+      "timestamp": 1788376940571
+    },
+    {
+      "level": "SEVERE",
+      "message": "https://www.mercadolibre.com/jms/lgz/background/etid - Failed to load resource: net::ERR_FAILED",
+      "source": "network",
+      "timestamp": 1788376940571
+    },
+    {
+      "level": "SEVERE",
+      "message": "https://www.mercadolibre.com/jms/lgz/background?dps=armor.c30d99491ef66a4b212cb67f428c9f848df1e2bf02445316a96ce5e87b62536dac612c6ecf2e1f41651229bf5367bb3f98e17b458f5210bf0d1d9755ee0c14a6cf0b099244a8eae7c50187743f17da59b45810de89b1c173ea9d70f03d2e4b45.80253154f7f75d90d4d844301faf6aae - Failed to load resource: the server responded with a status of 403 ()",
+      "source": "network",
+      "timestamp": 1788376940571
+    },
+    {
+      "level": "SEVERE",
+      "message": "https://global-selling.mercadolibre.com/maxwell/new-chat?flavor=seller-assistant&hideHeader=true&lifecycle=inactivity_expiration&origin=cx-support-home-hub-frontend&andes_ui=legacy&customLocale=en-US&conversation_id=2af0277a-41fb-41c4-bf4e-b657cd9ead97 - Access to fetch at 'https://www.mercadolibre.com/jms/lgz/background/session/armor.c30d99491ef66a4b212cb67f428c9f848df1e2bf02445316a96ce5e87b62536dac612c6ecf2e1f41651229bf5367bb3f98e17b458f5210bf0d1d9755ee0c14a6cf0b099244a8eae7c50187743f17da59b45810de89b1c173ea9d70f03d2e4b45.80253154f7f75d90d4d844301faf6aae?background=armor.c30d99491ef66a4b212cb67f428c9f848df1e2bf02445316a96ce5e87b62536dac612c6ecf2e1f41651229bf5367bb3f98e17b458f5210bf0d1d9755ee0c14a6cf0b099244a8eae7c50187743f17da59b45810de89b1c173ea9d70f03d2e4b45.80253154f7f75d90d4d844301faf6aae&message=eyJqc190eXBlIjoianNfY29va2llIiwidmFsdWUiOiJ4IiwianNfb3BlcmF0aW9uIjoianNfcmVhZCJ9' from origin 'https://global-selling.mercadolibre.com' has been blocked by CORS policy: No 'Access-Control-Allow-Origin' header is present on the requested resource.",
+      "source": "javascript",
+      "timestamp": 1788376940571
+    },
+    {
+      "level": "SEVERE",
+      "message": "https://www.mercadolibre.com/jms/lgz/background/session/armor.c30d99491ef66a4b212cb67f428c9f848df1e2bf02445316a96ce5e87b62536dac612c6ecf2e1f41651229bf5367bb3f98e17b458f5210bf0d1d9755ee0c14a6cf0b099244a8eae7c50187743f17da59b45810de89b1c173ea9d70f03d2e4b45.80253154f7f75d90d4d844301faf6aae?background=armor.c30d99491ef66a4b212cb67f428c9f848df1e2bf02445316a96ce5e87b62536dac612c6ecf2e1f41651229bf5367bb3f98e17b458f5210bf0d1d9755ee0c14a6cf0b099244a8eae7c50187743f17da59b45810de89b1c173ea9d70f03d2e4b45.80253154f7f75d90d4d844301faf6aae&message=eyJqc190eXBlIjoianNfY29va2llIiwidmFsdWUiOiJ4IiwianNfb3BlcmF0aW9uIjoianNfcmVhZCJ9 - Failed to load resource: net::ERR_FAILED",
+      "source": "network",
+      "timestamp": 1788376940571
+    },
+    {
+      "level": "SEVERE",
+      "message": "https://www.global-selling.mercadolibre.com/browser-assessment/s/assessment.js?mo=manual&fi=maxwell_user_message - Failed to load resource: net::ERR_SSL_VERSION_OR_CIPHER_MISMATCH",
+      "source": "network",
+      "timestamp": 1788376944878
+    },
+    {
+      "level": "SEVERE",
+      "message": "https://global-selling.mercadolibre.com/maxwell/new-chat?flavor=seller-assistant&hideHeader=true&origin=sa&andes_ui=legacy&customLocale=en-US&conversation_id=2af0277a-41fb-41c4-bf4e-b657cd9ead97 - Access to XMLHttpRequest at 'https://www.mercadolibre.com/jms/lgz/background/etid' from origin 'https://global-selling.mercadolibre.com' has been blocked by CORS policy: No 'Access-Control-Allow-Origin' header is present on the requested resource.",
+      "source": "javascript",
+      "timestamp": 1788376944878
+    },
+    {
+      "level": "SEVERE",
+      "message": "https://www.mercadolibre.com/jms/lgz/background/etid - Failed to load resource: net::ERR_FAILED",
+      "source": "network",
+      "timestamp": 1788376944878
+    },
+    {
+      "level": "SEVERE",
+      "message": "https://global-selling.mercadolibre.com/maxwell/new-chat?flavor=seller-assistant&hideHeader=true&origin=sa&andes_ui=legacy&customLocale=en-US&conversation_id=2af0277a-41fb-41c4-bf4e-b657cd9ead97 - Access to fetch at 'https://www.mercadolibre.com/jms/lgz/background/session/armor.d5f3a258d3532cc7923c7c22b1260a8f2215a4d1922c1c2ad40d55a6e500f882b7ff8a4b8979853490c057cbc089751bb83faf8725f9f463a3a8d47027aab3674c46632bf21ecd8b102ac3e41eccc2329bab2a1d8d8aa8821dd04ca2818cede1.5f56ce02d264462aa7e8edea2fb61b01?background=armor.d5f3a258d3532cc7923c7c22b1260a8f2215a4d1922c1c2ad40d55a6e500f882b7ff8a4b8979853490c057cbc089751bb83faf8725f9f463a3a8d47027aab3674c46632bf21ecd8b102ac3e41eccc2329bab2a1d8d8aa8821dd04ca2818cede1.5f56ce02d264462aa7e8edea2fb61b01&message=eyJqc190eXBlIjoianNfY29va2llIiwidmFsdWUiOiJ4IiwianNfb3BlcmF0aW9uIjoianNfcmVhZCJ9' from origin 'https://global-selling.mercadolibre.com' has been blocked by CORS policy: No 'Access-Control-Allow-Origin' header is present on the requested resource.",
+      "source": "javascript",
+      "timestamp": 1788376944878
+    },
+    {
+      "level": "SEVERE",
+      "message": "https://www.mercadolibre.com/jms/lgz/background/session/armor.d5f3a258d3532cc7923c7c22b1260a8f2215a4d1922c1c2ad40d55a6e500f882b7ff8a4b8979853490c057cbc089751bb83faf8725f9f463a3a8d47027aab3674c46632bf21ecd8b102ac3e41eccc2329bab2a1d8d8aa8821dd04ca2818cede1.5f56ce02d264462aa7e8edea2fb61b01?background=armor.d5f3a258d3532cc7923c7c22b1260a8f2215a4d1922c1c2ad40d55a6e500f882b7ff8a4b8979853490c057cbc089751bb83faf8725f9f463a3a8d47027aab3674c46632bf21ecd8b102ac3e41eccc2329bab2a1d8d8aa8821dd04ca2818cede1.5f56ce02d264462aa7e8edea2fb61b01&message=eyJqc190eXBlIjoianNfY29va2llIiwidmFsdWUiOiJ4IiwianNfb3BlcmF0aW9uIjoianNfcmVhZCJ9 - Failed to load resource: net::ERR_FAILED",
+      "source": "network",
+      "timestamp": 1788376944878
+    },
+    {
+      "level": "SEVERE",
+      "message": "https://www.mercadolibre.com/jms/lgz/background?dps=armor.d5f3a258d3532cc7923c7c22b1260a8f2215a4d1922c1c2ad40d55a6e500f882b7ff8a4b8979853490c057cbc089751bb83faf8725f9f463a3a8d47027aab3674c46632bf21ecd8b102ac3e41eccc2329bab2a1d8d8aa8821dd04ca2818cede1.5f56ce02d264462aa7e8edea2fb61b01 - Failed to load resource: the server responded with a status of 403 ()",
+      "source": "network",
+      "timestamp": 1788376944878
+    },
+    {
+      "level": "SEVERE",
+      "message": "https://www.global-selling.mercadolibre.com/browser-assessment/s/assessment.js?mo=manual&fi=maxwell_user_message - Failed to load resource: net::ERR_SSL_VERSION_OR_CIPHER_MISMATCH",
+      "source": "network",
+      "timestamp": 1788377010921
+    },
+    {
+      "level": "SEVERE",
+      "message": "https://global-selling.mercadolibre.com/maxwell/new-chat?flavor=seller-assistant&hideHeader=true&lifecycle=inactivity_expiration&origin=cx-support-home-hub-frontend&andes_ui=legacy&customLocale=en-US&conversation_id=2af0277a-41fb-41c4-bf4e-b657cd9ead97 - Access to XMLHttpRequest at 'https://www.mercadolibre.com/jms/lgz/background/etid' from origin 'https://global-selling.mercadolibre.com' has been blocked by CORS policy: No 'Access-Control-Allow-Origin' header is present on the requested resource.",
+      "source": "javascript",
+      "timestamp": 1788377010921
+    },
+    {
+      "level": "SEVERE",
+      "message": "https://www.mercadolibre.com/jms/lgz/background/etid - Failed to load resource: net::ERR_FAILED",
+      "source": "network",
+      "timestamp": 1788377010921
+    },
+    {
+      "level": "SEVERE",
+      "message": "https://www.mercadolibre.com/jms/lgz/background?dps=armor.b1968db03854ccdb7d92b92094d067fb0b76ae7b4ca59f6946d4e33ece82bc8f1935364bace513a7fbb17b209e1bf74d9ad9669c761e648d36a06825d5173ae9fa6e3db8d3f28efd6fbf1bffd8c916d6aecb00e0c9fd3936c63174362745e74e.9f345103105ce85d264f7ef9060277dc - Failed to load resource: the server responded with a status of 403 ()",
+      "source": "network",
+      "timestamp": 1788377010921
+    },
+    {
+      "level": "SEVERE",
+      "message": "https://global-selling.mercadolibre.com/maxwell/new-chat?flavor=seller-assistant&hideHeader=true&lifecycle=inactivity_expiration&origin=cx-support-home-hub-frontend&andes_ui=legacy&customLocale=en-US&conversation_id=2af0277a-41fb-41c4-bf4e-b657cd9ead97 - Access to fetch at 'https://www.mercadolibre.com/jms/lgz/background/session/armor.b1968db03854ccdb7d92b92094d067fb0b76ae7b4ca59f6946d4e33ece82bc8f1935364bace513a7fbb17b209e1bf74d9ad9669c761e648d36a06825d5173ae9fa6e3db8d3f28efd6fbf1bffd8c916d6aecb00e0c9fd3936c63174362745e74e.9f345103105ce85d264f7ef9060277dc?background=armor.b1968db03854ccdb7d92b92094d067fb0b76ae7b4ca59f6946d4e33ece82bc8f1935364bace513a7fbb17b209e1bf74d9ad9669c761e648d36a06825d5173ae9fa6e3db8d3f28efd6fbf1bffd8c916d6aecb00e0c9fd3936c63174362745e74e.9f345103105ce85d264f7ef9060277dc&message=eyJqc190eXBlIjoianNfY29va2llIiwidmFsdWUiOiJ4IiwianNfb3BlcmF0aW9uIjoianNfcmVhZCJ9' from origin 'https://global-selling.mercadolibre.com' has been blocked by CORS policy: No 'Access-Control-Allow-Origin' header is present on the requested resource.",
+      "source": "javascript",
+      "timestamp": 1788377010921
+    },
+    {
+      "level": "SEVERE",
+      "message": "https://www.mercadolibre.com/jms/lgz/background/session/armor.b1968db03854ccdb7d92b92094d067fb0b76ae7b4ca59f6946d4e33ece82bc8f1935364bace513a7fbb17b209e1bf74d9ad9669c761e648d36a06825d5173ae9fa6e3db8d3f28efd6fbf1bffd8c916d6aecb00e0c9fd3936c63174362745e74e.9f345103105ce85d264f7ef9060277dc?background=armor.b1968db03854ccdb7d92b92094d067fb0b76ae7b4ca59f6946d4e33ece82bc8f1935364bace513a7fbb17b209e1bf74d9ad9669c761e648d36a06825d5173ae9fa6e3db8d3f28efd6fbf1bffd8c916d6aecb00e0c9fd3936c63174362745e74e.9f345103105ce85d264f7ef9060277dc&message=eyJqc190eXBlIjoianNfY29va2llIiwidmFsdWUiOiJ4IiwianNfb3BlcmF0aW9uIjoianNfcmVhZCJ9 - Failed to load resource: net::ERR_FAILED",
+      "source": "network",
+      "timestamp": 1788377010921
+    },
+    {
+      "level": "SEVERE",
+      "message": "https://www.global-selling.mercadolibre.com/browser-assessment/s/assessment.js?mo=manual&fi=maxwell_user_message - Failed to load resource: net::ERR_SSL_VERSION_OR_CIPHER_MISMATCH",
+      "source": "network",
+      "timestamp": 1788377015209
+    },
+    {
+      "level": "SEVERE",
+      "message": "https://global-selling.mercadolibre.com/maxwell/new-chat?flavor=seller-assistant&hideHeader=true&origin=sa&andes_ui=legacy&customLocale=en-US&conversation_id=2af0277a-41fb-41c4-bf4e-b657cd9ead97 - Access to XMLHttpRequest at 'https://www.mercadolibre.com/jms/lgz/background/etid' from origin 'https://global-selling.mercadolibre.com' has been blocked by CORS policy: No 'Access-Control-Allow-Origin' header is present on the requested resource.",
+      "source": "javascript",
+      "timestamp": 1788377015209
+    },
+    {
+      "level": "SEVERE",
+      "message": "https://www.mercadolibre.com/jms/lgz/background/etid - Failed to load resource: net::ERR_FAILED",
+      "source": "network",
+      "timestamp": 1788377015209
+    },
+    {
+      "level": "SEVERE",
+      "message": "https://www.mercadolibre.com/jms/lgz/background?dps=armor.94604a173d04f3b487110c2fefa16f0f633b4f856b924fc25c7c7f89d2c1a057b2422efa23fff3698f49dec766d356703c0694cda217b114d01533ed963cfe52bf7b2d3f80f1911273444395b01c1d751719165c9bc10ff6ba5cb736d5d13d09.5aed4f668be63c75ee9d59cb302c7344 - Failed to load resource: the server responded with a status of 403 ()",
+      "source": "network",
+      "timestamp": 1788377015209
+    },
+    {
+      "level": "SEVERE",
+      "message": "https://global-selling.mercadolibre.com/maxwell/new-chat?flavor=seller-assistant&hideHeader=true&origin=sa&andes_ui=legacy&customLocale=en-US&conversation_id=2af0277a-41fb-41c4-bf4e-b657cd9ead97 - Access to fetch at 'https://www.mercadolibre.com/jms/lgz/background/session/armor.94604a173d04f3b487110c2fefa16f0f633b4f856b924fc25c7c7f89d2c1a057b2422efa23fff3698f49dec766d356703c0694cda217b114d01533ed963cfe52bf7b2d3f80f1911273444395b01c1d751719165c9bc10ff6ba5cb736d5d13d09.5aed4f668be63c75ee9d59cb302c7344?background=armor.94604a173d04f3b487110c2fefa16f0f633b4f856b924fc25c7c7f89d2c1a057b2422efa23fff3698f49dec766d356703c0694cda217b114d01533ed963cfe52bf7b2d3f80f1911273444395b01c1d751719165c9bc10ff6ba5cb736d5d13d09.5aed4f668be63c75ee9d59cb302c7344&message=eyJqc190eXBlIjoianNfY29va2llIiwidmFsdWUiOiJ4IiwianNfb3BlcmF0aW9uIjoianNfcmVhZCJ9' from origin 'https://global-selling.mercadolibre.com' has been blocked by CORS policy: No 'Access-Control-Allow-Origin' header is present on the requested resource.",
+      "source": "javascript",
+      "timestamp": 1788377015209
+    },
+    {
+      "level": "SEVERE",
+      "message": "https://www.mercadolibre.com/jms/lgz/background/session/armor.94604a173d04f3b487110c2fefa16f0f633b4f856b924fc25c7c7f89d2c1a057b2422efa23fff3698f49dec766d356703c0694cda217b114d01533ed963cfe52bf7b2d3f80f1911273444395b01c1d751719165c9bc10ff6ba5cb736d5d13d09.5aed4f668be63c75ee9d59cb302c7344?background=armor.94604a173d04f3b487110c2fefa16f0f633b4f856b924fc25c7c7f89d2c1a057b2422efa23fff3698f49dec766d356703c0694cda217b114d01533ed963cfe52bf7b2d3f80f1911273444395b01c1d751719165c9bc10ff6ba5cb736d5d13d09.5aed4f668be63c75ee9d59cb302c7344&message=eyJqc190eXBlIjoianNfY29va2llIiwidmFsdWUiOiJ4IiwianNfb3BlcmF0aW9uIjoianNfcmVhZCJ9 - Failed to load resource: net::ERR_FAILED",
+      "source": "network",
+      "timestamp": 1788377015209
+    }
+  ]
+}

@@ -732,9 +732,9 @@ def test_appeal_one_shop_always_closes_browser_window(monkeypatch):
     lease.release.assert_called_once_with()
 
 
-def test_daily_appeal_worker_limit_defaults_to_fifteen(monkeypatch):
+def test_daily_appeal_worker_limit_defaults_to_thirty(monkeypatch):
     monkeypatch.delenv("BIT_DAILY_BROWSER_WORKER_LIMIT", raising=False)
-    assert bit_daily_task._daily_browser_worker_limit() == 15
+    assert bit_daily_task._daily_browser_worker_limit() == 30
 
 
 def test_parallel_appeal_shop_failure_does_not_stop_other_shops(monkeypatch):

@@ -1,0 +1,109 @@
+{
+  "captured_at": "2026-09-04T03:45:50",
+  "current_url": "https://global-selling.mercadolibre.com/help/v2",
+  "chat_state": {
+    "ai_frame_count": 0,
+    "inline_aria_expanded": "false",
+    "inline_has_input": false,
+    "inline_open": true,
+    "inline_root_class": "assistant-chat show",
+    "inline_shell": true,
+    "legacy_frame_count": 0,
+    "shadow_ai_frame_count": 0,
+    "visible_ai_frame_count": 0
+  },
+  "dom_snapshot": {
+    "aiShells": [
+      {
+        "ariaExpanded": "false",
+        "className": "icon-button__wrapper icon-button__wrapper--closed",
+        "id": "sa-icon-button-wrapper",
+        "tag": "BUTTON",
+        "visible": true
+      },
+      {
+        "ariaExpanded": "",
+        "className": "assistant-chat show",
+        "id": "sa-assistant-chat",
+        "tag": "DIV",
+        "visible": true
+      }
+    ],
+    "frames": [
+      {
+        "className": "",
+        "height": 0,
+        "id": "_hjSafeContext_77613639",
+        "shadowHost": "",
+        "src": "about:blank",
+        "title": "_hjSafeContext",
+        "visible": false,
+        "width": 0
+      }
+    ],
+    "readyState": "complete",
+    "shadowHosts": [
+      {
+        "className": "remote-module cx-contents-search-frontend-cx-search-frm",
+        "id": "remote-module-container-cx-contents-search-frontend-cx-search-frm-default",
+        "tag": "SECTION"
+      },
+      {
+        "className": "",
+        "id": "sof-seller-assistant-frm-host",
+        "tag": "DIV"
+      }
+    ],
+    "title": "Help"
+  },
+  "browser_logs": [
+    {
+      "level": "SEVERE",
+      "message": "https://www.googletagmanager.com/gtm.js?id=GTM-XRHR 328 Refused to load the script 'https://s.pinimg.com/ct/core.js' because it violates the following Content Security Policy directive: \"script-src 'self' 'unsafe-inline' 'unsafe-eval' blob: mercadolibre.com.ar *.mercadolibre.com.ar credithub.com.br *.credithub.com.br siteintercept.qualtrics.com *.siteintercept.qualtrics.com http2.mlstatic.com *.http2.mlstatic.com adminml.com *.adminml.com facebook.net *.facebook.net googletagmanager.com *.googletagmanager.com js-agent.newrelic.com *.js-agent.newrelic.com googleapis.com *.googleapis.com jsdelivr.net *.jsdelivr.net static.hotjar.com *.static.hotjar.com hotjar.com *.hotjar.com tiktok.com *.tiktok.com creativecdn.com *.creativecdn.com bing.com *.bing.com ads-twitter.com *.ads-twitter.com segreencolumn.com *.segreencolumn.com googlesyndication.com *.googlesyndication.com googleadservices.com *.googleadservices.com doubleclick.net *.doubleclick.net mercadolivre.com.br *.mercadolivre.com.br mercadolibre.com.mx *.mercadolibre.com.mx mercadolibre.com *.mercadolibre.com mercadolibre.cl *.mercadolibre.cl mercadolibre.com.co *.mercadolibre.com.co mercadolibre.com.uy *.mercadolibre.com.uy mercadolibre.com.pe *.mercadolibre.com.pe mercadolibre.com.ec *.mercadolibre.com.ec newrelic.com *.newrelic.com google.com *.google.com\". Note that 'script-src-elem' was not explicitly set, so 'script-src' is used as a fallback.\n",
+      "source": "security",
+      "timestamp": 1788464331724
+    },
+    {
+      "level": "SEVERE",
+      "message": "https://ad.doubleclick.net/ccm/s/collect?auid=367018892.1782889503&gtm=45He6920v576886za200zd576886xea&fmt=8 - Failed to load resource: net::ERR_CONNECTION_CLOSED",
+      "source": "network",
+      "timestamp": 1788464331724
+    },
+    {
+      "level": "SEVERE",
+      "message": "https://console.bitbrowser.net/?id=04f8351f2dd04afcad3a488dc53a4482&locale=zh&port=54345 - Unchecked runtime.lastError: Could not establish connection. Receiving end does not exist.",
+      "source": "other",
+      "timestamp": 1788464331725
+    },
+    {
+      "level": "SEVERE",
+      "message": "https://global-selling.mercadolibre.com/sof-seller-assistant-frm/modules/__resolve_props?module=seller-assistant&consumer=cx-support-home-hub-frontend - Failed to load resource: the server responded with a status of 500 ()",
+      "source": "network",
+      "timestamp": 1788464346667
+    },
+    {
+      "level": "SEVERE",
+      "message": "https://global-selling.mercadolibre.com/sof-seller-assistant-frm/modules/__resolve_props?module=seller-assistant&consumer=cx-support-home-hub-frontend - Failed to load resource: the server responded with a status of 500 ()",
+      "source": "network",
+      "timestamp": 1788464351997
+    },
+    {
+      "level": "SEVERE",
+      "message": "https://global-selling.mercadolibre.com/sof-seller-assistant-frm/modules/__resolve_props?module=seller-assistant&consumer=cx-support-home-hub-frontend - Failed to load resource: the server responded with a status of 500 ()",
+      "source": "network",
+      "timestamp": 1788464355824
+    },
+    {
+      "level": "SEVERE",
+      "message": "https://global-selling.mercadolibre.com/sof-seller-assistant-frm/modules/__resolve_props?module=seller-assistant&consumer=cx-support-home-hub-frontend - Failed to load resource: the server responded with a status of 500 ()",
+      "source": "network",
+      "timestamp": 1788464370537
+    },
+    {
+      "level": "SEVERE",
+      "message": "https://global-selling.mercadolibre.com/sof-seller-assistant-frm/modules/__resolve_props?module=seller-assistant&consumer=cx-support-home-hub-frontend - Failed to load resource: the server responded with a status of 500 ()",
+      "source": "network",
+      "timestamp": 1788464568557
+    }
+  ]
+}

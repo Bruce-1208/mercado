@@ -1,0 +1,47 @@
+{
+  "captured_at": "2026-09-04T08:09:34",
+  "current_url": "https://global-selling.mercadolibre.com/help/v2",
+  "chat_state": {
+    "ai_frame_count": 0,
+    "inline_aria_expanded": "",
+    "inline_has_input": false,
+    "inline_open": false,
+    "inline_root_class": "",
+    "inline_shell": false,
+    "legacy_frame_count": 0,
+    "shadow_ai_frame_count": 0,
+    "visible_ai_frame_count": 0
+  },
+  "dom_snapshot": {
+    "aiShells": [],
+    "frames": [
+      {
+        "className": "",
+        "height": 0,
+        "id": "_hjSafeContext_2445122",
+        "shadowHost": "",
+        "src": "about:blank",
+        "title": "_hjSafeContext",
+        "visible": false,
+        "width": 0
+      }
+    ],
+    "readyState": "complete",
+    "shadowHosts": [],
+    "title": "Help"
+  },
+  "browser_logs": [
+    {
+      "level": "SEVERE",
+      "message": "https://global-selling.mercadolibre.com/login/challenges?schema_id=W3VQkPfyCWp3x3ibWbPlA4clabkzaRBMU0Qyhf-2aibGRrdDJrfkwwbbLUt3OzzPGtEsnOUuAuSG3FN25OCgZSI368E%3DWRLA&platform_id=ml&redirect_url=https%3A%2F%2Fwww.mercadolibre.com%2Fjms%2Fcbt%2Flgz%2Fmsl%2Flogin%2FH4sIAAAAAAAEAz2QXXOyOhSF_4vXry0CvmrvqqBAJSigImfOMCGJEAwfQihIp__9hHbm3MHea-31ZH1NWJnQIuLPikzeJqSvGEWUT_5MKgb5razziGKxyJkYNZST318U_0hgDXPCSd1M3r7GQwnBayJM4ylet0R4YMvT6MbKTox-osSMNhHpha2ALOpI_EnJuL1B1vzvqMmjJY3QiAUtPiGjOKrGOGFPSjFMOa-at9fXhJUxZNOGMEaL5CUnNYK4ZDSuyQsq89cGMtJMmzbPYf2cfP8RMQ2PeA3RffI2MgrEanw05LQsfl_3V15K0kJeLMTHfC4vRSYmSNwnoop__hVFNALha8IpuhMuYMjTSuMdog61vNNgzgA1GzPnVbgx_5psDVw9Zd6OyxcdH0LZyi9bEITyubA1dyD62Q93s-dZAjO_wB9oy2ZAYbtTlqxM2lFssM7MSuoxfDIL6WXMEvoqZqtPbLxTJw_T2ABsv7FSHLhlIIdNrPywpFcZMKTYVOwYGbWZrjqaPjj-UQXaSTCyFAtG20cqyFBna0cJeB2FARjGTBxYrZNvZ3iXcCSfnzg_P51ivAmqWJ4PIx8s3GrU2pnLwss2A7nJQ43lYCNJ9kWX9_69u16OHAz4fs3uc8e31TA_KqMXyUwKz6vfnnJABUtjFmCAnugtMxVwCTNbO-f7y7G_DjoH2paFdJbaQ5rtfXMAWpqFmtDkLrN_vbMrFd7i_IyzajYyo6Ec7MxU7ewo2QPqfzqMWsVqU9Ps69CYccDVj_cOeb66oun-Hgxmz9S1W90rfZOfPySzSdKussHfU7On6-S61ZU6jBsV3VdmWewKXOokclZYm63uBtCK1d7psuFz1Xtzlt3cmhuWwdaGpPTNY6Fz9RG7xlNTHoMUKVbabz4syg3R8BH6a99eBIpUf0gwowHa1sa08HaeXGxCyV0oG-vyWMaH7rR9BkQnnhS0WNIWsEi6XuPdBR3Q1no2dhlsM3pzEnhUdDXk00-0V9btow1oNNBTZHnpgMopniomUbB79LB0u0C4yN4PeG_tb3frKPmu0_YaedfNw3oJ_ahXC37wl1FtLs6mkclOEM-XJIl3JwKqZ3Gr3yff3_8BEAv67U8EAAA%2Fchooser%2Fcallback%3Fdps%3Darmor.d188effbe3354216591a8a66e1b6e07cca8363c9491e77985cac754d4eb1e7e7cf4a262052e95dfbd35cc99ca4d2c9c7d372cd08e69dffe624268ea270969f3356bd568dc0d6ab6c97619b8d78e13eb688cf78119c0f218bcbaa0a7694f31762.3ef42b89c7a909ee6d6057815568c6c3%26rbms%3D - Unchecked runtime.lastError: Could not establish connection. Receiving end does not exist.",
+      "source": "other",
+      "timestamp": 1788480435255
+    },
+    {
+      "level": "SEVERE",
+      "message": "https://console.bitbrowser.net/?id=8282ffc163ee46c783cc5b4db71f7479&locale=zh&port=54345 - Unchecked runtime.lastError: Could not establish connection. Receiving end does not exist.",
+      "source": "other",
+      "timestamp": 1788480435256
+    }
+  ]
+}

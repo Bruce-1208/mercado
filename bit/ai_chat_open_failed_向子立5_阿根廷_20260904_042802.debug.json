@@ -1,0 +1,95 @@
+{
+  "captured_at": "2026-09-04T04:28:02",
+  "current_url": "https://global-selling.mercadolibre.com/help/v2",
+  "chat_state": {
+    "ai_frame_count": 0,
+    "inline_aria_expanded": "",
+    "inline_has_input": false,
+    "inline_open": false,
+    "inline_root_class": "",
+    "inline_shell": false,
+    "legacy_frame_count": 0,
+    "shadow_ai_frame_count": 0,
+    "visible_ai_frame_count": 0
+  },
+  "dom_snapshot": {
+    "aiShells": [],
+    "frames": [
+      {
+        "className": "",
+        "height": 0,
+        "id": "_hjSafeContext_375082",
+        "shadowHost": "",
+        "src": "about:blank",
+        "title": "_hjSafeContext",
+        "visible": false,
+        "width": 0
+      }
+    ],
+    "readyState": "complete",
+    "shadowHosts": [],
+    "title": "Help"
+  },
+  "browser_logs": [
+    {
+      "level": "SEVERE",
+      "message": "https://www.mercadolibre.com/jms/cbt/lgz/login?platform_id=ML&go=https%3A%2F%2Fglobal-selling.mercadolibre.com%2Forders%2Fomni%2Flist%3Ffilters%3DTAB_TODAY_CBT%26subFilters%3D%26sellerCBTParent%3Dtrue%26callers%3D3336173546%26limit%3D50%26offset%3D0%26startPeriod%3DWITH_DATE_CLOSED_6M_OLD%26sort%3DDATE_CLOSED_DESC%26search%3D&loginType=explicit&client_id=6280072776285528 0 Loading the script 'https://www.recaptcha.net/recaptcha/enterprise.js?onload=onloadCallback&render=6LeetcMeAAAAAHBLMG_uCF4A7QLR8ZHg8u4ulR5z&hl=en' violates the following Content Security Policy directive: \"script-src 'nonce-B8+3jy4atrOjTslxUYKtZg==' 'strict-dynamic' 'unsafe-inline' https: 'report-sample'\". Note that 'strict-dynamic' is present, so host-based allowlisting is disabled. Note that 'script-src-elem' was not explicitly set, so 'script-src' is used as a fallback. The action has been blocked.",
+      "source": "security",
+      "timestamp": 1788467138040
+    },
+    {
+      "level": "SEVERE",
+      "message": "https://www.mercadolibre.com/jms/cbt/lgz/login?platform_id=ML&go=https%3A%2F%2Fglobal-selling.mercadolibre.com%2Fnoindex%2Fpppi%2Finfractions&loginType=explicit&client_id=6280072776285528 0 Loading the script 'https://www.recaptcha.net/recaptcha/enterprise.js?onload=onloadCallback&render=6LeetcMeAAAAAHBLMG_uCF4A7QLR8ZHg8u4ulR5z&hl=en' violates the following Content Security Policy directive: \"script-src 'nonce-gECDM9VKK3vCu29wa/AIlA==' 'strict-dynamic' 'unsafe-inline' https: 'report-sample'\". Note that 'strict-dynamic' is present, so host-based allowlisting is disabled. Note that 'script-src-elem' was not explicitly set, so 'script-src' is used as a fallback. The action has been blocked.",
+      "source": "security",
+      "timestamp": 1788467138066
+    },
+    {
+      "level": "SEVERE",
+      "message": "https://undefined/v3/security.js - Failed to load resource: net::ERR_CONNECTION_CLOSED",
+      "source": "network",
+      "timestamp": 1788467138066
+    },
+    {
+      "level": "SEVERE",
+      "message": "https://console.bitbrowser.net/?id=5906b74f859f4a71989fc1c87e186652&locale=zh&port=54345 - Unchecked runtime.lastError: Could not establish connection. Receiving end does not exist.",
+      "source": "other",
+      "timestamp": 1788467138069
+    },
+    {
+      "level": "SEVERE",
+      "message": "https://www.mercadolibre.com/jms/cbt/lgz/login?platform_id=ML&go=https%3A%2F%2Fglobal-selling.mercadolibre.com%2Forders%2Fomni%2Flist%3Ffilters%3D%26subFilters%3D%26sellerCBTParent%3Dtrue%26callers%3D3336172558%26limit%3D50%26offset%3D0%26startPeriod%3DWITH_DATE_CLOSED_6M_OLD%26sort%3DDATE_CLOSED_DESC%26search%3D%26selectedTab%3DTAB_TODAY_CBT&loginType=explicit&client_id=6280072776285528 0 Loading the script 'https://www.recaptcha.net/recaptcha/enterprise.js?onload=onloadCallback&render=6LeetcMeAAAAAHBLMG_uCF4A7QLR8ZHg8u4ulR5z&hl=en' violates the following Content Security Policy directive: \"script-src 'nonce-DYAQ7puNSwIlzaJWsKbfXw==' 'strict-dynamic' 'unsafe-inline' https: 'report-sample'\". Note that 'strict-dynamic' is present, so host-based allowlisting is disabled. Note that 'script-src-elem' was not explicitly set, so 'script-src' is used as a fallback. The action has been blocked.",
+      "source": "security",
+      "timestamp": 1788467138070
+    },
+    {
+      "level": "SEVERE",
+      "message": "https://undefined/v3/security.js - Failed to load resource: net::ERR_CONNECTION_CLOSED",
+      "source": "network",
+      "timestamp": 1788467138071
+    },
+    {
+      "level": "SEVERE",
+      "message": "https://www.mercadolibre.com/jms/cbt/lgz/login?platform_id=ML&go=https%3A%2F%2Fglobal-selling.mercadolibre.com%2Forders%2Fomni%2Flist%3Ffilters%3DTAB_TODAY_CBT%26subFilters%3D%26sellerCBTParent%3Dtrue%26callers%3D3336172560%26limit%3D50%26offset%3D0%26startPeriod%3DWITH_DATE_CLOSED_6M_OLD%26sort%3DDATE_CLOSED_DESC%26search%3D&loginType=explicit&client_id=6280072776285528 0 Loading the script 'https://www.recaptcha.net/recaptcha/enterprise.js?onload=onloadCallback&render=6LeetcMeAAAAAHBLMG_uCF4A7QLR8ZHg8u4ulR5z&hl=en' violates the following Content Security Policy directive: \"script-src 'nonce-Ka5hY8tkNkj4Y/9BQcGlSQ==' 'strict-dynamic' 'unsafe-inline' https: 'report-sample'\". Note that 'strict-dynamic' is present, so host-based allowlisting is disabled. Note that 'script-src-elem' was not explicitly set, so 'script-src' is used as a fallback. The action has been blocked.",
+      "source": "security",
+      "timestamp": 1788467138073
+    },
+    {
+      "level": "SEVERE",
+      "message": "https://undefined/v3/security.js - Failed to load resource: net::ERR_CONNECTION_CLOSED",
+      "source": "network",
+      "timestamp": 1788467138225
+    },
+    {
+      "level": "SEVERE",
+      "message": "https://undefined/v3/security.js - Failed to load resource: net::ERR_CONNECTION_CLOSED",
+      "source": "network",
+      "timestamp": 1788467138564
+    },
+    {
+      "level": "SEVERE",
+      "message": "https://global-selling.mercadolibre.com/help/v2 - Unchecked runtime.lastError: Could not establish connection. Receiving end does not exist.",
+      "source": "other",
+      "timestamp": 1788467221593
+    }
+  ]
+}

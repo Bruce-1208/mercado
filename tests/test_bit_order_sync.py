@@ -888,6 +888,73 @@ def test_daily_financial_sync_bypasses_fresh_shipment_cache(monkeypatch):
     assert saved_entries[0]["seller_cost"] == bit_order_sync.Decimal("8.25")
 
 
+def test_historical_financial_backfill_propagates_interpreter_shutdown(monkeypatch):
+    shutdown_error = RuntimeError(
+        "cannot schedule new futures after interpreter shutdown"
+    )
+    monkeypatch.setattr(
+        bit_order_sync.bit_mysql,
+        "list_mercado_pending_shipment_cost_rows",
+        lambda limit=200: [{"token_id": 25, "shipping_id": "shipment-25"}],
+    )
+    monkeypatch.setattr(
+        bit_order_sync.bit_mysql,
+        "get_mercado_store_token",
+        lambda token_id: {"id": token_id, "access_token": "secret"},
+    )
+    monkeypatch.setattr(
+        bit_order_sync,
+        "_client_and_token",
+        lambda record: (object(), record),
+    )
+    monkeypatch.setattr(
+        bit_order_sync,
+        "_sync_order_financials",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(shutdown_error),
+    )
+
+    with pytest.raises(RuntimeError, match="interpreter shutdown"):
+        bit_order_sync.backfill_order_financials()
+
+
+def test_financial_backfill_loop_stops_during_interpreter_shutdown(monkeypatch):
+    shutdown_error = RuntimeError(
+        "cannot schedule new futures after interpreter shutdown"
+    )
+
+    class Lock:
+        released = False
+
+        def acquire(self, timeout=0):
+            return True
+
+        def release(self):
+            self.released = True
+
+    lock = Lock()
+    monkeypatch.setattr(bit_order_sync, "InterProcessLock", lambda *_a, **_k: lock)
+    monkeypatch.setattr(
+        bit_order_sync.bit_mysql,
+        "backfill_mercado_order_sale_fees",
+        lambda: {"updated": 0},
+    )
+    monkeypatch.setattr(
+        bit_order_sync,
+        "backfill_order_financials",
+        lambda limit=200: (_ for _ in ()).throw(shutdown_error),
+    )
+    monkeypatch.setattr(
+        bit_order_sync.bit_mysql,
+        "refresh_mercado_order_quoted_freight",
+        lambda limit=200: pytest.fail("退出期间不应继续补算标价运费"),
+    )
+    monkeypatch.setattr(bit_order_sync, "_financial_backfill_stop_event", threading.Event())
+
+    bit_order_sync._financial_backfill_loop()
+
+    assert lock.released is True
+
+
 def test_historical_image_backfill_saves_purchased_variation(monkeypatch):
     saved_entries = []
     raw_order = {

@@ -734,6 +734,7 @@ def test_daily_task_console_exposes_all_task_switches_and_shop_group():
     assert 'id="daily-task-delay-min-rate"' in template
     assert 'id="daily-task-complaint-min-rate"' in template
     assert 'id="daily-task-cancellation-min-rate"' in template
+    assert 'id="daily-task-max-workers" value="10" min="1" max="30"' in template
     assert "appeal_types: appealTypes" in template
     assert "group_names: groupName ? [groupName] : []" in template
     assert "infraction_min_count:" in template
@@ -807,6 +808,11 @@ def test_build_daily_task_params_parses_independent_execution_standards():
     assert params["delay_min_rate"] == pytest.approx(0.035)
     assert params["complaint_min_rate"] == pytest.approx(0.0125)
     assert params["cancellation_min_rate"] == pytest.approx(0.02)
+
+
+def test_build_daily_task_params_allows_at_most_thirty_workers():
+    assert bit_interface.build_daily_task_params({"max_workers": 30})["max_workers"] == 30
+    assert bit_interface.build_daily_task_params({"max_workers": 31})["max_workers"] == 30
 
 
 def test_daily_task_options_returns_all_active_salespeople(monkeypatch):

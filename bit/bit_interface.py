@@ -3740,7 +3740,13 @@ def build_daily_task_params(data):
         "appeal_types": appeal_types,
         "appeal_type": appeal_types[0] if len(appeal_types) == 1 else "多任务",
         "top_n": 0,
-        "max_workers": _parse_int_param(data, "max_workers", bit_daily_task.DEFAULT_DAILY_MAX_WORKERS, 1, 60),
+        "max_workers": _parse_int_param(
+            data,
+            "max_workers",
+            bit_daily_task.DEFAULT_DAILY_MAX_WORKERS,
+            1,
+            bit_daily_task.MAX_DAILY_TASK_WORKERS,
+        ),
         "recent_days": _parse_int_param(
             data,
             "recent_days",

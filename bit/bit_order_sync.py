@@ -5,6 +5,7 @@ from __future__ import annotations
 import os
 import json
 import logging
+import sys
 import threading
 import time
 import uuid
@@ -321,6 +322,14 @@ def _parallel_api_results(
             except Exception as exc:
                 results[value] = (None, exc)
     return results
+
+
+def _is_interpreter_shutdown_error(exc):
+    """Return whether a background worker raced with Python interpreter exit."""
+    return sys.is_finalizing() or (
+        isinstance(exc, RuntimeError)
+        and "cannot schedule new futures after interpreter shutdown" in str(exc)
+    )
 
 
 def _fetch_orders(client, seller_id, filters):
@@ -748,7 +757,9 @@ def backfill_order_financials(limit=200):
             processed += len(shipping_ids)
             failed += int(result.get("failed") or 0)
             updated_orders += int(result.get("orders") or 0)
-        except Exception:
+        except Exception as exc:
+            if _is_interpreter_shutdown_error(exc):
+                raise
             failed += len(shipping_ids)
             logging.exception("店铺 %s 历史订单费用补全失败", token_id)
     return {
@@ -791,7 +802,10 @@ def _financial_backfill_loop():
                     quoted_result["missing_shipments"],
                     quoted_result["updated_orders"],
                 )
-        except Exception:
+        except Exception as exc:
+            if _is_interpreter_shutdown_error(exc):
+                logging.info("服务进程正在退出，停止历史订单费用补全")
+                return
             logging.exception("历史订单手续费、运费补全任务失败")
             result = {"requested": 0}
             quoted_result = {"requested": 0}
