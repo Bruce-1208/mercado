@@ -8,6 +8,10 @@ from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
+from yandex.app.central_authorization import (
+    AuthorizationStoreError,
+    authorization_store,
+)
 from yandex.app.config import settings
 from yandex.app.database import database
 from yandex.app.exchange_rate import ExchangeRateError, exchange_rate_service
@@ -17,6 +21,9 @@ from yandex.app.schemas import (
     FeedbackSkipRequest,
     InventoryListRequest,
     InventoryStockUpdateRequest,
+    ListingDeleteRequest,
+    ListingListRequest,
+    ListingPriceUpdateRequest,
     OrderActionRequest,
     OrderListRequest,
     PublishRequest,
@@ -41,13 +48,14 @@ from yandex.app.yandex_api import YandexApiError
 async def lifespan(_: FastAPI):
     settings.data_dir.mkdir(parents=True, exist_ok=True)
     database.initialize()
+    authorization_store.initialize()
     yield
     await scraper.close()
 
 
 app = FastAPI(
     title="Yandex Market 跟卖助手",
-    version="0.4.0",
+    version="0.5.0",
     lifespan=lifespan,
 )
 
@@ -83,6 +91,8 @@ async def _store_operation(operation) -> tuple[dict, dict]:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     except SecretStoreError as exc:
         raise HTTPException(status_code=500, detail=str(exc)) from exc
+    except AuthorizationStoreError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
     except YandexApiError as exc:
         raise HTTPException(
             status_code=exc.status_code or status.HTTP_400_BAD_REQUEST,
@@ -104,12 +114,18 @@ async def validate_token(payload: TokenRequest) -> dict:
 
 @app.get("/api/stores")
 async def list_stores() -> dict:
-    return {"stores": database.list_stores()}
+    try:
+        return {"stores": authorization_store.list_stores()}
+    except AuthorizationStoreError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
 
 
 @app.get("/api/zeshun-stores")
 async def list_zeshun_stores() -> dict:
-    return {"stores": database.list_zeshun_authorizations()}
+    try:
+        return {"stores": authorization_store.list_zeshun_authorizations()}
+    except AuthorizationStoreError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
 
 
 @app.post("/api/zeshun-stores", status_code=status.HTTP_201_CREATED)
@@ -119,13 +135,15 @@ async def create_zeshun_store(payload: ZeshunStoreCreateRequest) -> dict:
         payload.authorization_url,
     )
     try:
-        store = database.create_zeshun_authorization(
+        store = authorization_store.create_zeshun_authorization(
             alias=payload.alias,
             tg_code=payload.tg_code,
             authorization_url=authorization_url,
         )
     except ValueError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
+    except AuthorizationStoreError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
     return {"ok": True, "store": store}
 
 
@@ -134,18 +152,24 @@ async def update_zeshun_store(
     authorization_id: int,
     payload: ZeshunStoreUpdateRequest,
 ) -> dict:
-    existing = database.get_zeshun_authorization(authorization_id)
+    try:
+        existing = authorization_store.get_zeshun_authorization(authorization_id)
+    except AuthorizationStoreError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
     if not existing:
         raise HTTPException(status_code=404, detail="授权店铺不存在")
     authorization_url = task_service.build_zeshun_authorization_url(
         existing["tg_code"],
         payload.authorization_url,
     )
-    store = database.update_zeshun_authorization(
-        authorization_id,
-        alias=payload.alias,
-        authorization_url=authorization_url,
-    )
+    try:
+        store = authorization_store.update_zeshun_authorization(
+            authorization_id,
+            alias=payload.alias,
+            authorization_url=authorization_url,
+        )
+    except AuthorizationStoreError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
     return {"ok": True, "store": store}
 
 
@@ -171,6 +195,8 @@ async def authorize_zeshun_store(
         ) from exc
     except SecretStoreError as exc:
         raise HTTPException(status_code=500, detail=str(exc)) from exc
+    except AuthorizationStoreError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
     return {
         "ok": True,
         "created": created,
@@ -181,8 +207,11 @@ async def authorize_zeshun_store(
 
 @app.delete("/api/zeshun-stores/{authorization_id}")
 async def delete_zeshun_store(authorization_id: int) -> dict:
-    if not database.delete_zeshun_authorization(authorization_id):
-        raise HTTPException(status_code=404, detail="授权店铺不存在")
+    try:
+        if not authorization_store.delete_zeshun_authorization(authorization_id):
+            raise HTTPException(status_code=404, detail="授权店铺不存在")
+    except AuthorizationStoreError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
     return {"ok": True}
 
 
@@ -209,12 +238,17 @@ async def create_store(payload: StoreCreateRequest) -> dict:
         ) from exc
     except SecretStoreError as exc:
         raise HTTPException(status_code=500, detail=str(exc)) from exc
+    except AuthorizationStoreError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
     return {"ok": True, "created": created, "store": store}
 
 
 @app.patch("/api/stores/{store_id}")
 async def update_store(store_id: int, payload: StoreUpdateRequest) -> dict:
-    store = database.update_store_alias(store_id, payload.alias)
+    try:
+        store = authorization_store.update_store_alias(store_id, payload.alias)
+    except AuthorizationStoreError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
     if not store:
         raise HTTPException(status_code=404, detail="店铺不存在")
     return {"ok": True, "store": store}
@@ -233,13 +267,18 @@ async def refresh_store(store_id: int) -> dict:
         ) from exc
     except SecretStoreError as exc:
         raise HTTPException(status_code=500, detail=str(exc)) from exc
+    except AuthorizationStoreError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
     return {"ok": True, "store": store}
 
 
 @app.delete("/api/stores/{store_id}")
 async def delete_store(store_id: int) -> dict:
-    if not database.delete_store(store_id):
-        raise HTTPException(status_code=404, detail="店铺不存在")
+    try:
+        if not authorization_store.delete_store(store_id):
+            raise HTTPException(status_code=404, detail="店铺不存在")
+    except AuthorizationStoreError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
     return {"ok": True}
 
 
@@ -274,6 +313,8 @@ async def list_orders(payload: OrderListRequest) -> dict:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     except SecretStoreError as exc:
         raise HTTPException(status_code=500, detail=str(exc)) from exc
+    except AuthorizationStoreError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
     except YandexApiError as exc:
         raise HTTPException(
             status_code=exc.status_code or status.HTTP_400_BAD_REQUEST,
@@ -312,6 +353,42 @@ async def update_inventory_stock(payload: InventoryStockUpdateRequest) -> dict:
         )
     )
     return {"ok": True, "store": store, **result}
+
+
+@app.post("/api/listings")
+async def list_links(payload: ListingListRequest) -> dict:
+    result, store = await _store_operation(
+        task_service.get_listings(
+            payload.store_id,
+            offer_ids=payload.offer_ids,
+            statuses=payload.statuses,
+            page_token=payload.page_token,
+            limit=payload.limit,
+        )
+    )
+    return {"store": store, **result}
+
+
+@app.put("/api/listings/price")
+async def update_link_price(payload: ListingPriceUpdateRequest) -> dict:
+    result, store = await _store_operation(
+        task_service.update_listing_price(
+            payload.store_id,
+            payload.offer_id,
+            value=payload.value,
+            currency_id=payload.currency_id,
+            discount_base=payload.discount_base,
+        )
+    )
+    return {"ok": True, "store": store, **result}
+
+
+@app.post("/api/listings/delete")
+async def delete_links(payload: ListingDeleteRequest) -> dict:
+    result, store = await _store_operation(
+        task_service.delete_listings(payload.store_id, payload.offer_ids)
+    )
+    return {"ok": not result["notDeletedOfferIds"], "store": store, **result}
 
 
 @app.post("/api/returns")
@@ -406,6 +483,8 @@ async def publish(payload: PublishRequest) -> dict:
         ) from exc
     except SecretStoreError as exc:
         raise HTTPException(status_code=500, detail=str(exc)) from exc
+    except AuthorizationStoreError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
     try:
         quote = await exchange_rate_service.get_rub_to_cny()
     except ExchangeRateError as exc:

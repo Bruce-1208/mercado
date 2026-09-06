@@ -221,6 +221,82 @@ class InventoryStockUpdateRequest(BaseModel):
         return value
 
 
+class ListingListRequest(BaseModel):
+    store_id: int = Field(gt=0)
+    offer_ids: list[str] = Field(default_factory=list, max_length=200)
+    statuses: list[str] = Field(default_factory=list, max_length=10)
+    page_token: str = Field(default="", max_length=1000)
+    limit: int = Field(default=100, ge=1, le=200)
+
+    @field_validator("offer_ids")
+    @classmethod
+    def normalize_listing_offer_ids(cls, values: list[str]) -> list[str]:
+        return InventoryListRequest.normalize_offer_ids(values)
+
+    @field_validator("statuses")
+    @classmethod
+    def normalize_listing_statuses(cls, values: list[str]) -> list[str]:
+        allowed = {
+            "PUBLISHED", "CHECKING", "DISABLED_BY_PARTNER",
+            "DISABLED_AUTOMATICALLY", "REJECTED_BY_MARKET", "CREATING_CARD",
+            "NO_CARD", "NO_STOCKS", "ARCHIVED", "READY_FOR_PUBLICATION",
+        }
+        normalized = list(
+            dict.fromkeys(str(value).strip().upper() for value in values if str(value).strip())
+        )
+        unknown = [value for value in normalized if value not in allowed]
+        if unknown:
+            raise ValueError(f"不支持的链接状态：{', '.join(unknown)}")
+        return normalized
+
+    @field_validator("page_token")
+    @classmethod
+    def normalize_listing_page_token(cls, value: str) -> str:
+        return value.strip()
+
+
+class ListingPriceUpdateRequest(BaseModel):
+    store_id: int = Field(gt=0)
+    offer_id: str = Field(min_length=1, max_length=255)
+    value: float = Field(gt=0, le=100_000_000, allow_inf_nan=False)
+    currency_id: str = Field(min_length=3, max_length=3)
+    discount_base: float | None = Field(
+        default=None, gt=0, le=100_000_000, allow_inf_nan=False
+    )
+
+    @field_validator("offer_id")
+    @classmethod
+    def normalize_listing_offer_id(cls, value: str) -> str:
+        return InventoryStockUpdateRequest.normalize_offer_id(value)
+
+    @field_validator("currency_id")
+    @classmethod
+    def normalize_listing_currency(cls, value: str) -> str:
+        value = value.strip().upper()
+        if not value.isalpha():
+            raise ValueError("价格币种必须是三位字母代码")
+        return value
+
+    @model_validator(mode="after")
+    def validate_listing_discount(self) -> "ListingPriceUpdateRequest":
+        if self.discount_base is None:
+            return self
+        discount = 1 - (self.value / self.discount_base)
+        if discount < 0.05 or discount > 0.99:
+            raise ValueError("划线价对应的折扣必须在 5%–99% 之间")
+        return self
+
+
+class ListingDeleteRequest(BaseModel):
+    store_id: int = Field(gt=0)
+    offer_ids: list[str] = Field(min_length=1, max_length=500)
+
+    @field_validator("offer_ids")
+    @classmethod
+    def normalize_listing_delete_ids(cls, values: list[str]) -> list[str]:
+        return InventoryListRequest.normalize_offer_ids(values)
+
+
 class ReturnListRequest(BaseModel):
     store_id: int = Field(gt=0)
     return_type: Literal["", "RETURN", "UNREDEEMED"] = ""

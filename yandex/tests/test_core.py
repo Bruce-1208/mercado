@@ -6,6 +6,7 @@ import unittest
 from pathlib import Path
 from unittest.mock import AsyncMock, patch
 
+from yandex.app.central_authorization import migrate_legacy_authorizations
 from yandex.app.config import _env_bool, _env_int, settings
 from yandex.app.database import Database
 from yandex.app.exchange_rate import parse_cbr_daily_xml
@@ -416,6 +417,54 @@ class DatabaseTests(unittest.TestCase):
             self.assertEqual(listed[0]["store_name"], "Yandex Test Store")
             self.assertIsNotNone(listed[0]["token_updated_at"])
 
+    def test_local_authorizations_migrate_then_are_removed(self) -> None:
+        class CentralStub:
+            def __init__(self):
+                self.tokens = []
+                self.zeshun = []
+
+            def save_store(self, **values):
+                self.tokens.append(values)
+                return {"id": 900, "alias": values["alias"]}, True
+
+            def import_zeshun_authorization(self, **values):
+                self.zeshun.append(values)
+
+        with tempfile.TemporaryDirectory() as directory:
+            db = Database(Path(directory) / "legacy.db")
+            db.initialize()
+            store, _ = db.save_store(
+                alias="旧授权",
+                encrypted_token=b"dpapi-token",
+                token_fingerprint="legacy-fingerprint",
+                store={
+                    "business_id": 101,
+                    "business_name": "Business",
+                    "campaign_id": 202,
+                    "store_name": "Store",
+                    "placement_type": "FBS",
+                    "api_availability": "AVAILABLE",
+                    "auth_scopes": ["all-methods"],
+                },
+            )
+            authorization = db.create_zeshun_authorization(
+                alias="旧授权", tg_code="TG-OLD", authorization_url="https://auth.example/start"
+            )
+            db.complete_zeshun_authorization(
+                authorization["id"], store_id=store["id"], encrypted_authorized_url=b"callback"
+            )
+            central = CentralStub()
+            with patch("yandex.app.central_authorization.authorization_store", central), patch(
+                "yandex.app.secret_store.unprotect_secret", return_value="ACMA:central-token"
+            ):
+                result = migrate_legacy_authorizations(db)
+
+            self.assertEqual(result, {"stores": 1, "zeshun": 1})
+            self.assertEqual(central.tokens[0]["token"], "ACMA:central-token")
+            self.assertEqual(central.zeshun[0]["store_id"], 900)
+            self.assertEqual(db.list_stores(), [])
+            self.assertEqual(db.list_zeshun_authorizations(), [])
+
 
 class ContentApiTests(unittest.IsolatedAsyncioTestCase):
     async def test_uses_business_orders_api_with_store_filters(self) -> None:
@@ -582,10 +631,7 @@ class ZeshunAuthorizationServiceTests(unittest.IsolatedAsyncioTestCase):
                 "https://console.example.com/callback"
                 "#access_token=ACMA%3Anew-token-123456789&state=TG-001"
             )
-            with patch("yandex.app.service.database", db), patch(
-                "yandex.app.service.protect_secret",
-                return_value=b"encrypted-callback-url",
-            ):
+            with patch("yandex.app.service.authorization_store", db):
                 updated, store, created = await service.authorize_zeshun_store(
                     authorization["id"],
                     authorized_url=callback_url,

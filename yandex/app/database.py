@@ -278,6 +278,20 @@ class Database:
             ).fetchall()
         return [self._decode_store(row) for row in rows]
 
+    def list_legacy_stores_with_secrets(self) -> list[dict[str, Any]]:
+        """Read pre-0.5 local authorizations for one-time central migration only."""
+        with self.connect() as db:
+            rows = db.execute(
+                "SELECT * FROM stores ORDER BY alias COLLATE NOCASE, id"
+            ).fetchall()
+        return [self._decode_store(row, include_secret=True) for row in rows]
+
+    def clear_legacy_authorizations(self) -> None:
+        """Remove local credentials after every row has reached central MySQL."""
+        with self.connect() as db:
+            db.execute("DELETE FROM zeshun_store_authorizations")
+            db.execute("DELETE FROM stores")
+
     def get_store(self, store_id: int, *, include_secret: bool = False) -> dict[str, Any] | None:
         with self.connect() as db:
             row = db.execute("SELECT * FROM stores WHERE id = ?", (store_id,)).fetchone()
@@ -417,7 +431,7 @@ class Database:
         authorization_id: int,
         *,
         store_id: int,
-        encrypted_authorized_url: bytes | None,
+        encrypted_authorized_url: bytes | None = None,
     ) -> dict[str, Any] | None:
         now = utc_now()
         with self.connect() as db:

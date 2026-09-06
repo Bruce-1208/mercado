@@ -8262,6 +8262,7 @@
                 <button class="tab-button" type="button" data-tab="mercado-products" data-icon="▦" onclick="switchTab('mercado-products')"><span class="nav-label">产品列表</span></button>
                 <button class="tab-button" type="button" data-tab="mercado-shipping-standards" data-icon="＄" onclick="switchTab('mercado-shipping-standards')"><span class="nav-label">美客多运费标准</span></button>
                 <button class="tab-button" type="button" data-tab="zying-collection" data-icon="⊞" data-permission="zying_collection.view" onclick="switchTab('zying-collection')"><span class="nav-label">智赢产品采集</span></button>
+                <button class="tab-button" type="button" data-tab="ai-weight-price" data-icon="⚖" data-permission="ai_weight_price.view" onclick="switchTab('ai-weight-price')"><span class="nav-label">AI核重核价</span></button>
                 <button class="tab-button" type="button" data-tab="mercado-publish-records" data-icon="⇧" onclick="switchTab('mercado-publish-records')"><span class="nav-label">产品上架记录</span></button>
 
                 <p class="nav-title">店铺管理</p>
@@ -10879,6 +10880,9 @@
                 </section>
             </div>
 
+            <div class="tab-page" id="tab-ai-weight-price">
+                <iframe id="ai-weight-price-frame" title="AI核重核价" data-src="/ai-weight-price" style="width:100%;height:calc(100vh - 180px);min-height:760px;border:0;border-radius:12px;background:#f5f7fb"></iframe>
+            </div>
             <div class="tab-page" id="tab-zying-collection">
                 <div class="tab-heading">
                     <h2>智赢产品采集</h2>
@@ -12571,6 +12575,13 @@
             });
             syncWorkspaceTabs(tabName);
             window.scrollTo({top: 0, behavior: "smooth"});
+            if (tabName === "ai-weight-price") {
+                const frame = document.getElementById("ai-weight-price-frame");
+                if (frame && !frame.dataset.loaded) {
+                    frame.src = frame.dataset.src;
+                    frame.dataset.loaded = "1";
+                }
+            }
             if (tabName === "infractions") {
                 const frame = document.getElementById("infraction-dashboard-frame");
                 if (frame && frame.dataset.loaded !== "1") {

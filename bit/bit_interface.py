@@ -157,6 +157,8 @@ app.config.update(
 )
 
 LOCAL_EXECUTOR_TOKEN_SALT = "zeshun-local-executor-v1"
+LOCAL_EXECUTOR_SESSION_TOKEN_SALT = "zeshun-local-executor-session-v2"
+LOCAL_EXECUTOR_SESSION_TOKEN_PREFIX = "session:"
 LOCAL_EXECUTOR_TOKEN_MAX_AGE_SECONDS = 5 * 60
 LOCAL_EXECUTOR_BROWSER_URL = str(
     os.environ.get("BIT_LOCAL_EXECUTOR_URL") or "http://127.0.0.1:5000"
@@ -238,6 +240,7 @@ WORKBENCH_PERMISSION_GROUPS = (
     ("shop_status", "店铺状态", (("shop_status.view", "查看"), ("shop_status.execute", "检测/处理"))),
     ("funds", "资金管理", (("funds.view", "查看"), ("funds.execute", "采集/终止"))),
     ("zying_collection", "智赢产品采集", (("zying_collection.view", "查看"), ("zying_collection.execute", "执行采集"))),
+    ("ai_weight_price", "AI核重核价", (("ai_weight_price.view", "查看/导出"), ("ai_weight_price.execute", "采集/咨询/回写/配置"))),
     ("risk_check", "侵权检测", (("risk_check.view", "查看"), ("risk_check.execute", "执行检测"))),
     ("infringement_knowledge", "侵权知识库", (("infringement_knowledge.view", "查看"), ("infringement_knowledge.manage", "新增/修改/删除"))),
     ("infractions", "违规商品总览", (("infractions.view", "查看/导出"), ("infractions.execute", "采集"))),
@@ -1371,22 +1374,113 @@ def create_local_executor_token(user, permission):
     if permission not in LOCAL_EXECUTOR_PERMISSIONS:
         raise ValueError("不支持的本机执行权限")
     shared_secret = str(os.environ.get("BIT_DB_API_TOKEN") or "").strip()
-    if not shared_secret:
-        raise RuntimeError(
-            "尚未配置 BIT_DB_API_TOKEN，无法安全连接本机执行端"
-        )
     payload = {
         "id": int(user.get("id") or 0),
         "username": str(user.get("username") or ""),
         "permission": permission,
     }
+    if not shared_secret:
+        # The public workbench already has a persisted login signing key. Keep
+        # it on the server; clients verify this token with that server over TLS.
+        return LOCAL_EXECUTOR_SESSION_TOKEN_PREFIX + URLSafeTimedSerializer(
+            app.secret_key,
+            salt=LOCAL_EXECUTOR_SESSION_TOKEN_SALT,
+        ).dumps(payload)
     return URLSafeTimedSerializer(
         shared_secret,
         salt=LOCAL_EXECUTOR_TOKEN_SALT,
     ).dumps(payload)
 
 
+def _valid_local_executor_identity(payload):
+    return (
+        isinstance(payload, dict)
+        and type(payload.get("id")) is int
+        and payload["id"] > 0
+        and isinstance(payload.get("username"), str)
+        and bool(payload["username"].strip())
+        and isinstance(payload.get("permission"), str)
+        and payload["permission"] in LOCAL_EXECUTOR_PERMISSIONS
+    )
+
+
+def _verify_local_executor_session_token(token):
+    """Server-only validation, including current account status and permissions."""
+    if USE_DB_API or not str(token or "").startswith(LOCAL_EXECUTOR_SESSION_TOKEN_PREFIX):
+        return None
+    try:
+        payload = URLSafeTimedSerializer(
+            app.secret_key,
+            salt=LOCAL_EXECUTOR_SESSION_TOKEN_SALT,
+        ).loads(
+            token[len(LOCAL_EXECUTOR_SESSION_TOKEN_PREFIX) :],
+            max_age=LOCAL_EXECUTOR_TOKEN_MAX_AGE_SECONDS,
+        )
+    except (BadSignature, SignatureExpired):
+        return None
+    if not _valid_local_executor_identity(payload):
+        return None
+    row = get_workbench_user(user_id=payload["id"])
+    if not row or not row.get("is_active") or row.get("username") != payload["username"]:
+        return None
+    user = build_workbench_session_user(row)
+    if not workbench_user_has_permission(user, payload["permission"]):
+        return None
+    return {key: payload[key] for key in ("id", "username", "permission")}
+
+
+def _verify_local_executor_token_with_server(token):
+    # Never use an address supplied by the page/token or follow a redirect with
+    # a bearer credential. The client's configured data server is the authority.
+    base_url = str(RUNTIME_SETTINGS.api_base_url or "").strip().rstrip("/")
+    try:
+        parsed = urlsplit(base_url)
+        if (
+            not parsed.hostname
+            or parsed.username
+            or parsed.password
+            or parsed.query
+            or parsed.fragment
+        ):
+            raise ValueError("invalid server address")
+        if parsed.scheme == "http" and parsed.netloc == "zeshun.nat100.top":
+            base_url = "https://" + base_url[len("http://") :]
+        elif parsed.scheme != "https" and not (
+            parsed.scheme == "http" and parsed.hostname in ("127.0.0.1", "::1", "localhost")
+        ):
+            raise ValueError("HTTPS required")
+    except ValueError as exc:
+        raise RuntimeError("请将本机客户端的服务端地址配置为 HTTPS，以验证登录凭证") from exc
+    try:
+        response = bit_db_api.DB_API_SESSION.post(
+            f"{base_url}/api/execution-targets/local-token/verify",
+            headers={"Authorization": f"Bearer {token}"},
+            timeout=10,
+            allow_redirects=False,
+        )
+        if response.status_code in (401, 403):
+            return None
+        if response.status_code != 200:
+            raise RuntimeError("请确认服务端已更新并重启，本机客户端指向同一工作台")
+        result = response.json()
+    except (bit_db_api.requests.RequestException, ValueError) as exc:
+        raise RuntimeError("本机无法向服务端验证登录凭证，请检查客户端的服务端地址和连接") from exc
+    payload = result.get("data") if isinstance(result, dict) else None
+    if (
+        not isinstance(result, dict)
+        or result.get("status") != "success"
+        or not _valid_local_executor_identity(payload)
+    ):
+        raise RuntimeError("服务端返回的本机执行凭证校验结果无效，请确认两端版本一致")
+    return {key: payload[key] for key in ("id", "username", "permission")}
+
+
 def _local_executor_user_from_token(token):
+    token = str(token or "")
+    if token.startswith(LOCAL_EXECUTOR_SESSION_TOKEN_PREFIX):
+        if USE_DB_API:
+            return _verify_local_executor_token_with_server(token)
+        return _verify_local_executor_session_token(token)
     shared_secret = str(os.environ.get("BIT_DB_API_TOKEN") or "").strip()
     if not shared_secret:
         return None
@@ -1437,7 +1531,10 @@ def local_executor_required(*accepted_permissions):
                 if authorization.lower().startswith("bearer ")
                 else ""
             )
-            user = _local_executor_user_from_token(token)
+            try:
+                user = _local_executor_user_from_token(token)
+            except RuntimeError as exc:
+                return jsonify({"status": "error", "message": str(exc)}), 503
             if not user:
                 return jsonify({
                     "status": "error",
@@ -1472,6 +1569,8 @@ def internal_api_required(view_func):
 
 def _required_workbench_permissions(path, method):
     method = str(method or "GET").upper()
+    if path.startswith("/api/ai-weight-price/"):
+        return ("ai_weight_price.view",) if method == "GET" else ("ai_weight_price.execute",)
     if path.startswith("/api/access/"):
         return ("access.view",) if method == "GET" else ("access.manage",)
     if path.startswith("/api/appeal-phrases"):
@@ -1628,6 +1727,23 @@ else:
         ensure_workbench_user_table()
     except Exception as e:
         logging.error("初始化工作台登录表失败: %s", e)
+
+
+def _authorize_ai_weight_price(permission):
+    user = get_current_workbench_user()
+    if not user:
+        return jsonify({"message": "请先登录泽顺控制台"}), 401
+    if not workbench_user_has_permission(user, permission):
+        return jsonify({"message": "当前账号没有AI核重核价操作权限"}), 403
+    return None
+
+
+from erp.ai_weight_price.config import data_dir as ai_weight_price_data_dir
+from erp.ai_weight_price.service import Service as AIWeightPriceService
+from erp.ai_weight_price.web import create_blueprint as create_ai_weight_price_blueprint
+
+ai_weight_price_service = AIWeightPriceService(ai_weight_price_data_dir())
+app.register_blueprint(create_ai_weight_price_blueprint(ai_weight_price_service, _authorize_ai_weight_price))
 
 
 # 1. 核心逻辑方法：改造成生成器
@@ -6774,6 +6890,24 @@ def api_daily_task_status():
     })
 
 
+def _local_executor_database_preflight():
+    """Check the existing data connection before accepting a browser job."""
+    try:
+        health = bit_db_api.get_database_api_health() or {}
+        if health.get("role") != "server":
+            raise RuntimeError("客户端配置的地址不是数据服务端")
+    except Exception:
+        return jsonify({
+            "status": "error",
+            "message": (
+                "本机执行端已连接，但无法访问服务端数据接口。"
+                "请检查客户端服务端地址；数据接口启用令牌认证时，"
+                "两端需配置相同的 BIT_DB_API_TOKEN。"
+            ),
+        }), 503
+    return None
+
+
 @app.route('/api/local-executor/health', methods=['GET', 'OPTIONS'])
 @local_executor_required(
     "appeal.execute",
@@ -6795,6 +6929,9 @@ def api_local_executor_health():
 @app.route('/api/local-executor/run_shensu', methods=['GET', 'OPTIONS'])
 @local_executor_required("appeal.execute")
 def api_local_executor_run_shensu():
+    blocked = _local_executor_database_preflight()
+    if blocked is not None:
+        return blocked
     return api_run_shensu.__wrapped__()
 
 
@@ -6807,6 +6944,9 @@ def api_local_executor_stop_shensu():
 @app.route('/api/local-executor/tasks/daily/start', methods=['POST', 'OPTIONS'])
 @local_executor_required("tasks.execute")
 def api_local_executor_start_daily_task():
+    blocked = _local_executor_database_preflight()
+    if blocked is not None:
+        return blocked
     return api_start_daily_task.__wrapped__()
 
 
@@ -12184,7 +12324,7 @@ def api_local_executor_token():
         token = create_local_executor_token(user, permission)
     except RuntimeError as exc:
         return jsonify({"status": "error", "message": str(exc)}), 503
-    return jsonify({
+    response = jsonify({
         "status": "success",
         "data": {
             "token": token,
@@ -12192,6 +12332,26 @@ def api_local_executor_token():
             "expires_in": LOCAL_EXECUTOR_TOKEN_MAX_AGE_SECONDS,
         },
     })
+    response.headers["Cache-Control"] = "no-store"
+    return response
+
+
+@app.route("/api/execution-targets/local-token/verify", methods=["POST"])
+def api_verify_local_executor_token():
+    if USE_DB_API:
+        return jsonify({"status": "error", "message": "请向服务端验证本机执行凭证"}), 503
+    authorization = str(request.headers.get("Authorization") or "")
+    token = authorization[7:].strip() if authorization.lower().startswith("bearer ") else ""
+    try:
+        user = _verify_local_executor_session_token(token)
+    except Exception:
+        logging.exception("验证本机执行凭证失败")
+        return jsonify({"status": "error", "message": "服务端暂时无法校验账号权限，请重试"}), 503
+    if not user:
+        return jsonify({"status": "error", "message": "本机执行凭证无效、已过期或账号权限已变更"}), 401
+    response = jsonify({"status": "success", "data": user})
+    response.headers["Cache-Control"] = "no-store"
+    return response
 
 
 @app.route("/api/browser-extension/login", methods=["POST"])

@@ -1,5 +1,12 @@
 # mercado
 
+## AI核重核价
+
+泽顺控制台「商品管理 → AI核重核价」已接入本地任务管理、参数设置、异常处理、日志与 CSV 导出。
+也可以不依赖 MySQL 单独启动：`python -m erp.ai_weight_price`，访问 `http://127.0.0.1:5018/ai-weight-price`。
+任务页可直接打开 Edge 智赢登录窗口；人工登录后点击「我已成功登录」，选择分类（可留空）和起止页，再采集、处理所选范围。首次使用仍需配置当前页面 DOM 字段与模型密钥；默认关闭真实 ERP 回写。
+部署、页面适配、校验语义及模型/硬件选型见 [AI核重核价说明](docs/ai_weight_price.md)。
+
 AI 自动申诉的执行状态、故障恢复和配置说明见 [申诉稳定性说明](docs/ai_appeal_reliability.md)。
 
 ## 工作台服务端 / 客户端运行角色
@@ -41,14 +48,17 @@ Copy-Item .\workbench-client.example.json .\workbench-runtime.json
 
 “自动化 AI 申诉”和“任务模块”的执行位置默认是“本机比特浏览器”。即使页面从 `https://zeshun.nat100.top/` 打开，任务也会通过浏览器发送到当前电脑的 `127.0.0.1:5000`，不会在本机未连接时自动改由服务器执行。需要服务器执行时，在页面上明确选择“服务器比特浏览器”。
 
-使用本机执行前，请在当前电脑保持 client 工作台运行，并确保 client 与 server 配置相同的 `BIT_DB_API_TOKEN`：
+使用本机执行前，请在当前电脑保持 client 工作台运行，并指向登录时使用的公网工作台：
 
 ```powershell
 $env:BIT_RUNTIME_ROLE="client"
 $env:BIT_DB_API_BASE_URL="https://zeshun.nat100.top"
-$env:BIT_DB_API_TOKEN="replace-with-the-same-long-random-token"
 python -m bit.bit_interface
 ```
+
+本机连接凭证有效期为 5 分钟。服务端未配置 `BIT_DB_API_TOKEN` 时，会使用已有的持久化登录密钥签发凭证，本机通过 HTTPS 向配置的服务端核验账号和权限，无需为了建立本机连接再手工配置共享密钥。服务端已配置共享令牌时继续兼容原来的校验方式，两端使用相同令牌。
+
+数据接口的认证独立于本机连接：如果 `/api/db/*` 要求共享令牌，仍需按上文为两端配置相同的 `BIT_DB_API_TOKEN`。启动本机申诉或日常任务前会检查数据接口连接，避免任务启动后才因无法读取授权店铺而失败。升级后请更新并重启服务端和本机客户端；未配置共享令牌的本机客户端需将服务端地址设为 HTTPS。
 
 本机桥接只接受来自回环地址、持有短时权限凭证且网页来源在白名单内的请求。公网域名变化时，可用 `BIT_LOCAL_EXECUTOR_ALLOWED_ORIGINS` 配置允许来源；多个来源使用英文逗号分隔。任务模块会合并显示本机和服务器任务，并在每张任务卡片上标出执行端。
 浏览器首次从公网工作台连接 `127.0.0.1` 时，如出现“访问本地网络”权限提示，需要选择允许。
@@ -61,7 +71,7 @@ python -m bit.bit_interface
 
 ## Yandex Market 控制台
 
-Yandex 店铺授权、订单与结算、商品库存、退货、评价、问答、国外商品抓取和商品卡发布功能位于独立的 `yandex` 包。首次运行会在包内创建隔离的虚拟环境和 `.data` 数据目录。
+Yandex 店铺授权、订单与结算、店铺链接改价/删除、商品库存、退货、评价、问答、国外商品抓取和商品卡发布功能位于独立的 `yandex` 包。店铺授权统一保存在项目中央 MySQL，`.data` 仅保存搜索商品和上传任务；首次运行会在包内创建隔离的虚拟环境和数据目录。
 
 macOS / Linux：
 

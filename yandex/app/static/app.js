@@ -15,6 +15,12 @@ const state = {
   orderPageIndex: 0,
   orderNextToken: "",
   orderRequestId: 0,
+  listings: [],
+  listingSelection: new Set(),
+  listingPageTokens: [""],
+  listingPageIndex: 0,
+  listingNextToken: "",
+  listingRequestId: 0,
   inventoryPageTokens: [""],
   inventoryPageIndex: 0,
   inventoryNextToken: "",
@@ -85,6 +91,7 @@ function selectedStore() {
 
 const VIEW_COPY = {
   orders: ["ORDER OPERATIONS", "订单中心", "查看店铺最近 30 天订单，并快速定位待处理状态。"],
+  listings: ["STORE LISTINGS", "链接管理", "查看当前店铺全部商品链接，并执行改价或删除。"],
   inventory: ["INVENTORY CONTROL", "商品库存", "巡检各仓库库存并直接调整可售数量。"],
   returns: ["RETURNS OPERATIONS", "退货管理", "跟踪未取件、退货、退款决定和逆向物流。"],
   feedback: ["CUSTOMER VOICE", "客户声音", "集中处理商品评价与买家问答。"],
@@ -108,6 +115,7 @@ function switchView(view) {
   $("pageTitle").textContent = title;
   $("pageSubtitle").textContent = subtitle;
   if (view === "orders" && selectedStore() && !state.orders.length) loadOrders({ resetPage: true });
+  if (view === "listings" && selectedStore()) loadListings({ resetPage: true });
   if (view === "inventory" && selectedStore()) loadInventory({ resetPage: true });
   if (view === "returns" && selectedStore()) loadReturns({ resetPage: true });
   if (view === "feedback" && selectedStore()) loadFeedback({ resetPage: true });
@@ -548,6 +556,155 @@ function splitSkuValues(value, maximum = 500) {
   if (values.length > maximum) throw new Error(`一次最多输入 ${maximum} 个 SKU`);
   return values;
 }
+
+const LISTING_STATUS = {
+  PUBLISHED: "正常销售", CHECKING: "审核中", DISABLED_BY_PARTNER: "已手动隐藏",
+  DISABLED_AUTOMATICALLY: "平台自动隐藏", REJECTED_BY_MARKET: "平台拒绝",
+  CREATING_CARD: "正在建卡", NO_CARD: "缺少商品卡", NO_STOCKS: "无库存",
+  ARCHIVED: "已归档", READY_FOR_PUBLICATION: "待店铺上线",
+};
+
+function listingShowcaseUrl(details) {
+  const urls = (details?.showcaseUrls || []).filter(Boolean);
+  const preferred = urls.find((item) => item?.showcaseType === "B2C") || urls[0];
+  return safeOrderUrl(typeof preferred === "string" ? preferred : preferred?.showcaseUrl, true);
+}
+
+function listingPicture(details) {
+  const first = (details?.pictures || [])[0];
+  return safeOrderUrl(typeof first === "string" ? first : first?.url);
+}
+
+function updateListingSelection() {
+  const visible = new Set(state.listings.map((item) => String(item.offerId || "")));
+  for (const value of [...state.listingSelection]) {
+    if (!visible.has(value)) state.listingSelection.delete(value);
+  }
+  $("listingSelectedCount").textContent = String(state.listingSelection.size);
+  $("listingDeleteSelected").disabled = state.listingSelection.size === 0;
+  const boxes = [...document.querySelectorAll("[data-listing-select]")];
+  const selected = boxes.filter((box) => box.checked).length;
+  $("listingSelectAll").checked = boxes.length > 0 && selected === boxes.length;
+  $("listingSelectAll").indeterminate = selected > 0 && selected < boxes.length;
+}
+
+function renderListings(data) {
+  const records = data.offers || [];
+  state.listings = records;
+  state.listingSelection.clear();
+  $("listingCount").textContent = String(records.length);
+  $("listingPublishedCount").textContent = String(records.filter((item) => item.status === "PUBLISHED").length);
+  $("listingIssueCount").textContent = String(records.filter((item) => item.status !== "PUBLISHED" || (item.errors || []).length).length);
+  $("listingWarning").textContent = data.warning || "改价通常会在数分钟后生效；价格跳变过大可能进入价格隔离。";
+  $("listingTableBody").innerHTML = records.map((item) => {
+    const details = item.details || {};
+    const name = details.name || item.offerId || "商品";
+    const url = listingShowcaseUrl(details);
+    const picture = listingPicture(details);
+    const product = url ? `<a href="${escapeHtml(url)}" target="_blank" rel="noopener noreferrer">${escapeHtml(name)}</a>` : `<strong>${escapeHtml(name)}</strong>`;
+    const base = item.basicPrice || {};
+    const campaign = item.campaignPrice || {};
+    const active = campaign.value !== null && campaign.value !== undefined && campaign.value !== "" ? campaign : base;
+    const currency = active.currencyId || base.currencyId || campaign.currencyId || "RUR";
+    const current = Number(active.value);
+    const discount = active.discountBase;
+    const errors = [...(item.errors || []), ...(item.warnings || [])].filter(Boolean).map((entry) => entry.message || entry.comment).filter(Boolean);
+    return `<tr data-listing-row="${escapeHtml(item.offerId)}"><td><input type="checkbox" data-listing-select value="${escapeHtml(item.offerId)}" aria-label="选择 SKU ${escapeHtml(item.offerId)}"></td><td><div class="inventory-product listing-product">${picture ? `<img src="${escapeHtml(picture)}" alt="" loading="lazy" referrerpolicy="no-referrer">` : `<span class="inventory-placeholder">链</span>`}<div>${product}<small>SKU ${escapeHtml(item.offerId || "—")}${details.vendor ? ` · ${escapeHtml(details.vendor)}` : ""}</small>${url ? `<small class="listing-url">${escapeHtml(url)}</small>` : `<small>Yandex 暂未返回前台链接</small>`}</div></div></td><td><span class="status-pill listing-status ${item.status === "PUBLISHED" ? "ok" : ""}">${escapeHtml(LISTING_STATUS[item.status] || item.status || "状态未知")}</span><small>${item.available === false ? "当前不可售" : ""}</small>${errors.length ? `<small class="listing-errors">${escapeHtml(errors.join("；"))}</small>` : ""}</td><td><strong>${escapeHtml(formatMoney(base.value, base.currencyId))}</strong><small>${base.updatedAt ? `更新 ${formatDateTime(base.updatedAt)}` : "所有店铺默认价"}</small></td><td><strong>${escapeHtml(formatMoney(campaign.value, campaign.currencyId))}</strong><small>${campaign.value === null || campaign.value === undefined ? "当前使用统一价格" : `店铺单独价格${campaign.updatedAt ? ` · ${formatDateTime(campaign.updatedAt)}` : ""}`}</small></td><td><form class="listing-price-form" data-listing-price data-offer-id="${escapeHtml(item.offerId)}" data-currency="${escapeHtml(currency)}"><label>售价<input type="number" min="0.01" max="100000000" step="0.01" required value="${Number.isFinite(current) ? escapeHtml(current) : ""}"></label><label>划线价<input data-discount-base type="number" min="0.01" max="100000000" step="0.01" value="${discount ? escapeHtml(discount) : ""}" placeholder="可选"></label><div><button class="button secondary" type="submit">保存价格</button><button class="button ghost danger-button" type="button" data-listing-delete data-offer-id="${escapeHtml(item.offerId)}">删除</button></div></form></td></tr>`;
+  }).join("");
+  $("listingPageLabel").textContent = `第 ${state.listingPageIndex + 1} 页 · 本页 ${records.length} 条`;
+  $("listingPrevButton").disabled = state.listingPageIndex === 0;
+  $("listingNextButton").disabled = !state.listingNextToken;
+  $("listingsState").classList.toggle("hidden", records.length > 0);
+  $("listingsState").textContent = records.length ? "" : "当前筛选下没有商品链接。";
+  $("listingsContent").classList.toggle("hidden", !records.length);
+  updateListingSelection();
+}
+
+async function loadListings({ resetPage = false, pageToken = null } = {}) {
+  const store = selectedStore();
+  if (!store) {
+    $("listingsState").textContent = "请先选择店铺。";
+    $("listingsState").classList.remove("hidden");
+    $("listingsContent").classList.add("hidden");
+    return;
+  }
+  let offerIds;
+  try { offerIds = splitSkuValues($("listingSkuFilter").value, 200); } catch (error) { return toast(error.message, true); }
+  if (resetPage) {
+    state.listingPageTokens = [""]; state.listingPageIndex = 0; state.listingNextToken = "";
+  }
+  const token = pageToken === null ? state.listingPageTokens[state.listingPageIndex] || "" : pageToken;
+  const requestId = ++state.listingRequestId;
+  $("listingsState").textContent = "正在读取店铺商品链接…";
+  $("listingsState").classList.remove("hidden");
+  $("listingsContent").classList.add("hidden");
+  try {
+    const status = $("listingStatus").value;
+    const data = await api("/api/listings", { method: "POST", body: JSON.stringify({ store_id: store.id, offer_ids: offerIds, statuses: status ? [status] : [], page_token: offerIds.length ? "" : token, limit: 100 }) });
+    if (requestId !== state.listingRequestId) return;
+    state.listingNextToken = data.paging?.nextPageToken || "";
+    renderListings(data);
+  } catch (error) {
+    if (requestId !== state.listingRequestId) return;
+    $("listingsState").textContent = `链接读取失败：${error.message}`;
+    toast(error.message, true);
+  }
+}
+
+async function deleteListings(offerIds) {
+  const store = selectedStore();
+  if (!store || !offerIds.length) return;
+  if (!window.confirm(`确定从店铺“${store.alias}”删除 ${offerIds.length} 条商品链接？其他店铺和总商品目录不受影响。`)) return;
+  try {
+    const data = await api("/api/listings/delete", { method: "POST", body: JSON.stringify({ store_id: store.id, offer_ids: offerIds }) });
+    const failed = data.notDeletedOfferIds || [];
+    toast(failed.length ? `${data.deleted.length} 条已删除，${failed.length} 条因平台仓库存等原因未删除` : `${data.deleted.length} 条链接已从当前店铺删除`, failed.length > 0);
+    await loadListings();
+  } catch (error) { toast(error.message, true); }
+}
+
+$("listingFilterForm").addEventListener("submit", (event) => { event.preventDefault(); loadListings({ resetPage: true }); });
+$("listingPrevButton").addEventListener("click", () => { if (state.listingPageIndex > 0) { state.listingPageIndex -= 1; loadListings({ pageToken: state.listingPageTokens[state.listingPageIndex] || "" }); } });
+$("listingNextButton").addEventListener("click", () => { if (state.listingNextToken) { state.listingPageIndex += 1; state.listingPageTokens[state.listingPageIndex] = state.listingNextToken; loadListings({ pageToken: state.listingNextToken }); } });
+$("listingSelectAll").addEventListener("change", (event) => {
+  document.querySelectorAll("[data-listing-select]").forEach((box) => {
+    box.checked = event.target.checked;
+    if (box.checked) state.listingSelection.add(box.value); else state.listingSelection.delete(box.value);
+  });
+  updateListingSelection();
+});
+$("listingTableBody").addEventListener("change", (event) => {
+  const box = event.target.closest("[data-listing-select]");
+  if (!box) return;
+  if (box.checked) state.listingSelection.add(box.value); else state.listingSelection.delete(box.value);
+  updateListingSelection();
+});
+$("listingDeleteSelected").addEventListener("click", () => deleteListings([...state.listingSelection]));
+$("listingTableBody").addEventListener("click", (event) => {
+  const button = event.target.closest("[data-listing-delete]");
+  if (button) deleteListings([button.dataset.offerId]);
+});
+$("listingTableBody").addEventListener("submit", async (event) => {
+  const form = event.target.closest("[data-listing-price]");
+  if (!form) return;
+  event.preventDefault();
+  const store = selectedStore();
+  const value = Number(form.querySelector("input[required]").value);
+  const discountText = form.querySelector("[data-discount-base]").value.trim();
+  const discountBase = discountText ? Number(discountText) : null;
+  if (!Number.isFinite(value) || value <= 0) return toast("请输入有效售价", true);
+  if (discountBase !== null) {
+    const discount = 1 - value / discountBase;
+    if (!Number.isFinite(discountBase) || discount < 0.05 || discount > 0.99) return toast("划线价对应折扣必须在 5%–99% 之间", true);
+  }
+  if (!window.confirm(`把店铺“${store.alias}”中 SKU ${form.dataset.offerId} 的价格改为 ${formatMoney(value, form.dataset.currency)}？`)) return;
+  const button = form.querySelector("button[type=submit]"); button.disabled = true;
+  try {
+    const data = await api("/api/listings/price", { method: "PUT", body: JSON.stringify({ store_id: store.id, offer_id: form.dataset.offerId, value, currency_id: form.dataset.currency, discount_base: discountBase }) });
+    toast(data.priceScope === "business" ? "该柜台仅支持统一价格，已更新所有店铺默认价" : "当前店铺价格已提交更新");
+    await loadListings();
+  } catch (error) { toast(error.message, true); button.disabled = false; }
+});
 
 function initializeOpsDates() {
   const today = new Date();
@@ -1145,6 +1302,7 @@ async function loadStores(preferredId = null) {
   }
   renderStores();
   if (state.currentView === "orders") await loadOrders({ resetPage: true });
+  if (state.currentView === "listings") await loadListings({ resetPage: true });
   if (state.currentView === "inventory") await loadInventory({ resetPage: true });
   if (state.currentView === "returns") await loadReturns({ resetPage: true });
   if (state.currentView === "feedback") await loadFeedback({ resetPage: true });
@@ -1155,12 +1313,16 @@ $("globalStoreSelect").addEventListener("change", () => {
   if (nextId === state.selectedStoreId) return;
   state.selectedStoreId = nextId;
   state.orders = [];
+  state.listings = [];
+  state.listingSelection.clear();
+  state.listingRequestId += 1;
   state.inventoryRequestId += 1;
   state.returnRequestId += 1;
   state.feedbackRequestId += 1;
   state.questionRequestId += 1;
   renderStores();
   if (state.currentView === "orders") loadOrders({ resetPage: true });
+  if (state.currentView === "listings") loadListings({ resetPage: true });
   if (state.currentView === "inventory") loadInventory({ resetPage: true });
   if (state.currentView === "returns") loadReturns({ resetPage: true });
   if (state.currentView === "feedback") loadFeedback({ resetPage: true });
@@ -1218,7 +1380,7 @@ $("storeList").addEventListener("click", async (event) => {
     return;
   }
   if (action === "delete") {
-    if (!window.confirm(`确定删除店铺“${store.alias}”吗？本地保存的加密 token 也会删除。`)) return;
+    if (!window.confirm(`确定删除店铺“${store.alias}”吗？中央数据库中的授权 token 也会删除。`)) return;
     try {
       await api(`/api/stores/${storeId}`, { method: "DELETE" });
       if (state.selectedStoreId === storeId) state.selectedStoreId = null;

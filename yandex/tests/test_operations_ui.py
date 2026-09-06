@@ -1,4 +1,4 @@
-"""Offline browser smoke test for inventory, returns, reviews and questions."""
+"""Offline browser smoke test for links, inventory, returns, reviews and questions."""
 
 from __future__ import annotations
 
@@ -64,6 +64,19 @@ class OperationsBrowserTests(unittest.TestCase):
             "/api/zeshun-stores": {"stores": []},
             "/api/exchange-rate": {"exchange_rate": {"rate": 0.08, "effective_date": "2026-09-06"}},
             "/api/orders": {"orders": [], "paging": {}},
+            "/api/listings": {
+                "offers": [{
+                    "offerId": "SKU-1", "status": "PUBLISHED", "available": True,
+                    "basicPrice": {"value": 199, "currencyId": "CNY"},
+                    "campaignPrice": {"value": 189, "currencyId": "CNY"},
+                    "details": {
+                        "name": "测试记录仪链接", "vendor": "Fixture",
+                        "pictures": [],
+                        "showcaseUrls": [{"showcaseType": "B2C", "showcaseUrl": "https://market.yandex.ru/product--fixture/123"}],
+                    },
+                }],
+                "paging": {}, "warning": "",
+            },
             "/api/inventory": {
                 "stockMethod": "business",
                 "warning": "",
@@ -90,6 +103,8 @@ class OperationsBrowserTests(unittest.TestCase):
             "/api/feedback/skip": {"ok": True},
             "/api/questions/reply": {"ok": True, "result": {"entity": {"id": 82}}},
             "/api/orders/action": {"ok": True},
+            "/api/listings/price": {"ok": True, "priceScope": "campaign"},
+            "/api/listings/delete": {"ok": True, "deleted": ["SKU-1"], "notDeletedOfferIds": []},
         }
 
         def route_request(route):
@@ -117,6 +132,13 @@ class OperationsBrowserTests(unittest.TestCase):
     def test_all_new_operations_render_and_submit_scoped_writes(self):
         self.open_console()
 
+        self.page.locator('[data-view-target="listings"]').click()
+        expect(self.page.locator("#listingTableBody")).to_contain_text("测试记录仪链接")
+        expect(self.page.locator("#listingPublishedCount")).to_have_text("1")
+        self.page.locator("[data-listing-price] input[required]").fill("179")
+        self.page.locator("[data-listing-price] button[type=submit]").click()
+        self.page.locator("[data-listing-delete]").click()
+
         self.page.locator('[data-view-target="inventory"]').click()
         expect(self.page.locator("#inventoryTableBody")).to_contain_text("测试记录仪")
         expect(self.page.locator("#inventoryAvailableCount")).to_have_text("7")
@@ -139,6 +161,9 @@ class OperationsBrowserTests(unittest.TestCase):
         self.page.locator("[data-question-reply] button[type=submit]").click()
 
         writes = dict(self.writes)
+        self.assertEqual(writes["/api/listings/price"]["offer_id"], "SKU-1")
+        self.assertEqual(writes["/api/listings/price"]["value"], 179)
+        self.assertEqual(writes["/api/listings/delete"], {"store_id": 1, "offer_ids": ["SKU-1"]})
         self.assertEqual(writes["/api/inventory/stock"], {"store_id": 1, "offer_id": "SKU-1", "count": 0})
         self.assertEqual(writes["/api/feedback/reply"]["feedback_id"], 71)
         self.assertEqual(writes["/api/questions/reply"]["question_id"], 81)

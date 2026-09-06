@@ -8,6 +8,9 @@ from yandex.app.schemas import (
     FeedbackReplyRequest,
     InventoryListRequest,
     InventoryStockUpdateRequest,
+    ListingDeleteRequest,
+    ListingListRequest,
+    ListingPriceUpdateRequest,
     OrderActionRequest,
     QuestionListRequest,
     ReturnListRequest,
@@ -47,6 +50,28 @@ class OperationsSchemaTests(unittest.TestCase):
             "谢谢反馈",
         )
 
+        listings = ListingListRequest(
+            store_id=1,
+            offer_ids=[" sku-1 ", "sku-1"],
+            statuses=[" published ", "PUBLISHED"],
+        )
+        self.assertEqual(listings.offer_ids, ["sku-1"])
+        self.assertEqual(listings.statuses, ["PUBLISHED"])
+        self.assertEqual(
+            ListingDeleteRequest(store_id=1, offer_ids=[" a ", "a"]).offer_ids,
+            ["a"],
+        )
+        self.assertEqual(
+            ListingPriceUpdateRequest(
+                store_id=1, offer_id=" sku-1 ", value=95, currency_id="cny", discount_base=100
+            ).currency_id,
+            "CNY",
+        )
+        with self.assertRaisesRegex(ValueError, "折扣必须"):
+            ListingPriceUpdateRequest(
+                store_id=1, offer_id="sku-1", value=99, currency_id="CNY", discount_base=100
+            )
+
     def test_dates_and_order_actions_are_constrained(self) -> None:
         returns = ReturnListRequest(
             store_id=1,
@@ -75,6 +100,72 @@ class OperationsSchemaTests(unittest.TestCase):
 
 
 class OperationsClientTests(unittest.IsolatedAsyncioTestCase):
+    async def test_lists_store_links_with_status_and_page_token(self) -> None:
+        client = YandexSellerClient("test-token")
+        client._request = AsyncMock(
+            return_value={
+                "status": "OK",
+                "result": {
+                    "offers": [{"offerId": "sku-1", "status": "PUBLISHED"}],
+                    "paging": {"nextPageToken": "next"},
+                },
+            }
+        )
+        result = await client.get_campaign_offers(
+            20, statuses=["PUBLISHED"], page_token="page-1", limit=200
+        )
+        self.assertEqual(result["offers"][0]["offerId"], "sku-1")
+        self.assertEqual(result["paging"]["nextPageToken"], "next")
+        call = client._request.await_args
+        self.assertIn("/v2/campaigns/20/offers?", call.args[1])
+        self.assertIn("pageToken=page-1", call.args[1])
+        self.assertEqual(call.kwargs["json_body"], {"statuses": ["PUBLISHED"]})
+
+    async def test_updates_store_or_business_price_from_official_setting(self) -> None:
+        client = YandexSellerClient("test-token")
+        client._request = AsyncMock(
+            side_effect=[
+                {"status": "OK", "result": {"settings": {"onlyDefaultPrice": False, "currency": "CNY"}}},
+                {"status": "OK"},
+                {"status": "OK", "result": {"settings": {"onlyDefaultPrice": True, "currency": "CNY"}}},
+                {"status": "OK"},
+            ]
+        )
+        campaign = await client.update_listing_price(
+            10, 20, "sku-1", value=95, currency_id="CNY", discount_base=100
+        )
+        business = await client.update_listing_price(
+            10, 20, "sku-1", value=88, currency_id="CNY"
+        )
+        self.assertEqual(campaign["priceScope"], "campaign")
+        self.assertEqual(business["priceScope"], "business")
+        self.assertEqual(
+            client._request.await_args_list[1].args[1],
+            "/v2/campaigns/20/offer-prices/updates",
+        )
+        self.assertEqual(
+            client._request.await_args_list[1].kwargs["json_body"],
+            {"offers": [{"offerId": "sku-1", "price": {"value": 95, "currencyId": "CNY", "discountBase": 100}}]},
+        )
+        self.assertEqual(
+            client._request.await_args_list[3].args[1],
+            "/v2/businesses/10/offer-prices/updates",
+        )
+
+    async def test_deletes_links_only_from_selected_store(self) -> None:
+        client = YandexSellerClient("test-token")
+        client._request = AsyncMock(
+            return_value={"status": "OK", "result": {"notDeletedOfferIds": ["sku-2"]}}
+        )
+        result = await client.delete_campaign_offers(20, ["sku-1", "sku-2"])
+        self.assertEqual(result["deleted"], ["sku-1"])
+        self.assertEqual(result["notDeletedOfferIds"], ["sku-2"])
+        client._request.assert_awaited_once_with(
+            "POST",
+            "/v2/campaigns/20/offers/delete",
+            json_body={"offerIds": ["sku-1", "sku-2"]},
+        )
+
     async def test_reads_independent_warehouse_stock(self) -> None:
         client = YandexSellerClient("test-token")
         client._request = AsyncMock(

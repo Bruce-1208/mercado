@@ -722,6 +722,117 @@ class YandexSellerClient:
         result = response.get("result") or response
         return [item for item in result.get("offers") or [] if isinstance(item, dict)]
 
+    async def get_campaign_offers(
+        self,
+        campaign_id: int,
+        *,
+        offer_ids: list[str] | None = None,
+        statuses: list[str] | None = None,
+        page_token: str = "",
+        limit: int = 100,
+    ) -> dict[str, Any]:
+        """Return products placed in one selected store, including sale status."""
+        unique_ids = list(
+            dict.fromkeys(str(value).strip() for value in offer_ids or [] if str(value).strip())
+        )
+        if len(unique_ids) > 200:
+            raise YandexApiError("每次精确查询最多包含 200 个 SKU")
+        body: dict[str, Any] = {}
+        query: dict[str, str | int] = {}
+        if unique_ids:
+            body["offerIds"] = unique_ids
+        else:
+            query["limit"] = max(1, min(int(limit), 200))
+            if page_token:
+                query["pageToken"] = page_token
+            if statuses:
+                body["statuses"] = list(dict.fromkeys(str(value).upper() for value in statuses))
+        suffix = f"?{urlencode(query)}" if query else ""
+        response = await self._request(
+            "POST",
+            f"/v2/campaigns/{int(campaign_id)}/offers{suffix}",
+            json_body=body,
+        )
+        if str(response.get("status", "OK")).upper() not in {"OK", "SUCCESS"}:
+            raise YandexApiError(_api_message(response), details=response)
+        result = response.get("result") or response
+        offers = [item for item in result.get("offers") or [] if isinstance(item, dict)]
+        if unique_ids and statuses:
+            allowed = {str(value).upper() for value in statuses}
+            offers = [item for item in offers if str(item.get("status") or "").upper() in allowed]
+        return {
+            "offers": offers,
+            "paging": {
+                "nextPageToken": str((result.get("paging") or {}).get("nextPageToken") or "")
+            },
+        }
+
+    async def get_business_settings(self, business_id: int) -> dict[str, Any]:
+        response = await self._request(
+            "POST", f"/v2/businesses/{int(business_id)}/settings", json_body={}
+        )
+        if str(response.get("status", "OK")).upper() not in {"OK", "SUCCESS"}:
+            raise YandexApiError(_api_message(response), details=response)
+        result = response.get("result") or response
+        return dict(result.get("settings") or {})
+
+    async def update_listing_price(
+        self,
+        business_id: int,
+        campaign_id: int,
+        offer_id: str,
+        *,
+        value: float,
+        currency_id: str,
+        discount_base: float | None = None,
+    ) -> dict[str, Any]:
+        settings = await self.get_business_settings(business_id)
+        price: dict[str, Any] = {
+            "value": value,
+            "currencyId": currency_id,
+        }
+        if discount_base is not None:
+            price["discountBase"] = discount_base
+        business_wide = bool(settings.get("onlyDefaultPrice"))
+        path = (
+            f"/v2/businesses/{int(business_id)}/offer-prices/updates"
+            if business_wide
+            else f"/v2/campaigns/{int(campaign_id)}/offer-prices/updates"
+        )
+        response = await self._request(
+            "POST", path, json_body={"offers": [{"offerId": offer_id, "price": price}]}
+        )
+        if str(response.get("status", "OK")).upper() not in {"OK", "SUCCESS"}:
+            raise YandexApiError(_api_message(response), details=response)
+        return {
+            "response": response,
+            "priceScope": "business" if business_wide else "campaign",
+            "currency": str(settings.get("currency") or currency_id),
+        }
+
+    async def delete_campaign_offers(
+        self, campaign_id: int, offer_ids: list[str]
+    ) -> dict[str, Any]:
+        unique_ids = list(
+            dict.fromkeys(str(value).strip() for value in offer_ids if str(value).strip())
+        )
+        if not unique_ids or len(unique_ids) > 500:
+            raise YandexApiError("每次删除必须包含 1–500 个 SKU")
+        response = await self._request(
+            "POST",
+            f"/v2/campaigns/{int(campaign_id)}/offers/delete",
+            json_body={"offerIds": unique_ids},
+        )
+        if str(response.get("status", "OK")).upper() not in {"OK", "SUCCESS"}:
+            raise YandexApiError(_api_message(response), details=response)
+        result = response.get("result") or {}
+        failed = [str(value) for value in result.get("notDeletedOfferIds") or []]
+        return {
+            "requested": unique_ids,
+            "deleted": [value for value in unique_ids if value not in set(failed)],
+            "notDeletedOfferIds": failed,
+        }
+
     async def get_business_offer_prices(
         self, business_id: int, offer_ids: list[str]
     ) -> list[dict[str, Any]]:

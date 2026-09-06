@@ -57,7 +57,7 @@ start.cmd
 
 ## 使用流程
 
-页面按“订单中心 / 商品库存 / 退货管理 / 客户声音 / 搜品上架 / 店铺管理”划分工作区，右上角的当前店铺会同时作用于所有读取、回复、库存调整、订单履约和商品上传操作。
+页面按“订单中心 / 链接管理 / 商品库存 / 退货管理 / 客户声音 / 搜品上架 / 店铺管理”划分工作区，右上角的当前店铺会同时作用于所有读取、改价、删除、回复、库存调整、订单履约和商品上传操作。
 
 ### 订单中心
 
@@ -93,6 +93,14 @@ start.cmd
 - **无法履约并取消**：提交 `CANCELLED / SHOP_FAILED`；操作前会再次确认，卖家原因取消可能影响履约指标。
 
 字段参考：[订单金额说明](https://yandex.ru/dev/market/partner-api/doc/ru/reference/orders/getBusinessOrders)、[订单统计与费用](https://yandex.ru/dev/market/partner-api/doc/ru/reference/orders-stats/getOrdersStats)、[店铺设置价](https://yandex.ru/dev/market/partner-api/doc/ru/reference/prices/getPricesByOfferIds)、[统一基础价](https://www.yandex.ru/dev/market/partner-api/doc/ru/reference/business-offer-mappings/getOfferMappings)。
+
+### 链接管理
+
+- 使用店铺级商品接口读取当前店铺全部链接，展示 SKU、商品名、图片、前台链接、销售状态、统一价格、店铺单独价格、错误和警告，并支持状态、SKU 与 `pageToken` 分页筛选。
+- 可直接修改售价和可选划线价。程序先读取柜台 `onlyDefaultPrice` 设置：支持单店价时只修改当前店铺；只支持统一价格时会明确提示并改为更新柜台内所有店铺的默认价。
+- 支持单条或批量删除。删除调用店铺级接口，只从当前选择的店铺移除链接，不影响其他店铺或柜台总商品目录；平台仓仍有库存的商品可能无法删除，失败 SKU 会原样返回。
+
+接口参考：[店铺链接列表](https://yandex.ru/dev/market/partner-api/doc/ru/reference/offers/getCampaignOffers)、[修改店铺价格](https://www.yandex.ru/dev/market/partner-api/doc/ru/reference/prices/updatePrices)、[柜台价格规则](https://www.yandex.ru/dev/market/partner-api/doc/ru/reference/businesses/getBusinessSettings)、[从店铺删除商品](https://yandex.ru/dev/market/partner-api/doc/ru/reference/offers/deleteCampaignOffers)。
 
 ### 商品库存
 
@@ -133,7 +141,7 @@ start.cmd
 
 1. 在“店铺授权管理”中填写自定义店铺名和唯一 TG 码。授权链接可以随店铺填写，也可以通过 `ZESHUN_AUTHORIZATION_URL_TEMPLATE` 统一配置；模板支持 `{tg_code}` 占位符。
 2. 打开模块显示的授权链接。授权完成后，把浏览器中的完整返回链接粘贴回来；程序会读取链接 query 或 fragment 中的 `access_token`、`token`、`api_key`。如果返回链接里没有 token，可在旁边手动填写。
-3. 程序验证 token 后，通过 Windows DPAPI 加密入库，并把授权记录连接到 Yandex 上传店铺。以后在同一授权记录中再次提交即可更新 token。
+3. 程序验证 token 后，把授权记录和 token 保存到项目使用的中央 MySQL 数据库，并把授权记录连接到 Yandex 上传店铺。以后在同一授权记录中再次提交即可更新 token；页面和公开接口均不会返回 token。
 4. 也可以直接在“Yandex 上传店铺”中输入自定义店铺名和卖家后台生成的 API-Key token。程序会验证 token，并通过 `GET /v2/campaigns` 自动读取 Yandex 店铺名、`businessId` 和 `campaignId`。
 5. 在店铺列表里选择本次上传的目标店铺，然后输入关键词和商品个数。设置上架价格比例，例如 `200%` 表示换算后的价格再乘以 2。
 6. 填写本批商品统一使用的厂包装长度、宽度、高度（厘米）、毛重（千克），以及每个商品的真实初始可售库存。这些数据会保存在当前浏览器；错误库存可能造成超卖，不能使用猜测值。
@@ -153,7 +161,8 @@ start.cmd
 
 ## 数据和安全
 
-- TG 码在本机 SQLite 中按店铺唯一维护。token 和授权后的返回链接通过当前 Windows 用户的 DPAPI 加密保存；数据库中没有明文 token，页面和 API 也不会返回 token 或授权返回链接。
+- 新增和更新的店铺、TG 码与 token 统一保存在中央 MySQL 的 `yandex_store_authorizations` 和 `yandex_zeshun_authorizations` 表中，不再写入本机 SQLite。项目提供旧 DPAPI/SQLite 授权的一次性迁移；迁移只应在确认中央数据库目标后执行，并且只会在全部写入成功后清除本机副本。
+- 完整授权回调链接可能带有 token，因此程序提取 token 后不会保存回调链接；页面和 API 也不会返回 token。请限制中央数据库账号仅供受信任的后端服务使用，并做好数据库访问控制与备份。
 - RUB/CNY 汇率来自俄罗斯央行每日汇率接口，在程序内缓存 6 小时；可在首页手动刷新。每个上传任务会保存当次汇率、汇率日期和价格比例，原始抓取价格不会被覆盖。
 - 数据库保存标题、描述、品牌、货号、分类、价格、图片、规格、卖家、评分、来源 URL、Yandex SKU、国外商品识别证据和原始结构化数据。
 - 程序不会绕过 Yandex 验证码。搜索页和商品详情默认都使用无头模式，商品详情由 6 个独立 Chromium 子进程并行采集；每个进程复用自己的浏览器并保持至少 1.2 秒请求间隔。子进程遇到验证码、页面错误或缺少上传必需字段时，会回退到主浏览器重试。需要人工处理验证码时可临时切换到可见模式。
@@ -174,7 +183,8 @@ start.cmd
 - `YANDEX_WORKER_HEADLESS=true`：详情采集子进程默认使用无头 Chromium；改为 `false` 可切回有界面模式。无头子进程拿到验证码、页面错误或缺少上传必需字段时，会回退到主浏览器重试。
 - `YANDEX_REQUEST_DELAY_MS=1200`：详情页访问间隔。
 - `YANDEX_MAX_PRODUCTS=500`：单次抓取上限。
-- `YANDEX_DB_PATH=.data/yandex_reseller.db`：SQLite 路径。
+- `YANDEX_DB_PATH=.data/yandex_reseller.db`：搜索商品和上传任务的本机 SQLite 路径，不包含店铺授权。
+- `YANDEX_MYSQL_HOST`、`YANDEX_MYSQL_PORT`、`YANDEX_MYSQL_USER`、`YANDEX_MYSQL_PASSWORD`、`YANDEX_MYSQL_DATABASE`：中央授权数据库；未单独配置时复用项目 `bit.bit_mysql` 的 MySQL 连接。
 - `ZESHUN_AUTHORIZATION_URL_TEMPLATE=https://...{tg_code}`：授权入口模板；没有 `{tg_code}` 时程序会自动追加 `tg_code` 查询参数。也可在页面中按店铺填写。
 
 ## 测试

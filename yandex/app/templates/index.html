@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Yandex 运营工作台</title>
-  <link rel="stylesheet" href="{{ url_for('static', path='/styles.css') }}?v=20260906-3">
+  <link rel="stylesheet" href="{{ url_for('static', path='/styles.css') }}?v=20260906-4">
 </head>
 <body class="{% if embedded %}embedded{% endif %}">
   <div class="app-shell">
@@ -12,13 +12,14 @@
       <div class="brand"><span class="brand-mark">Y</span><div><strong>Yandex</strong><small>运营工作台</small></div></div>
       <nav class="main-nav" aria-label="Yandex 模块导航">
         <button class="nav-item active" type="button" data-view-target="orders"><span class="nav-icon">订</span><span>订单中心</span></button>
+        <button class="nav-item" type="button" data-view-target="listings"><span class="nav-icon">链</span><span>链接管理</span></button>
         <button class="nav-item" type="button" data-view-target="inventory"><span class="nav-icon">库</span><span>商品库存</span></button>
         <button class="nav-item" type="button" data-view-target="returns"><span class="nav-icon">退</span><span>退货管理</span></button>
         <button class="nav-item" type="button" data-view-target="feedback"><span class="nav-icon">客</span><span>客户声音</span></button>
         <button class="nav-item" type="button" data-view-target="products"><span class="nav-icon">品</span><span>搜品上架</span></button>
         <button class="nav-item" type="button" data-view-target="stores"><span class="nav-icon">店</span><span>店铺管理</span></button>
       </nav>
-      <div class="sidebar-note"><span class="live-dot"></span><div><strong>本地安全运行</strong><small>token 仅加密保存在本机</small></div></div>
+      <div class="sidebar-note"><span class="live-dot"></span><div><strong>数据库统一授权</strong><small>token 仅供服务端调用</small></div></div>
     </aside>
 
     <main class="workspace">
@@ -54,6 +55,20 @@
             <div class="order-table-wrap"><table class="order-table"><thead><tr><th>订单 / 商品</th><th>履约 / 状态</th><th>链接价格</th><th>买家付款</th><th>卖家结余</th><th>运费</th></tr></thead><tbody id="orderTableBody"></tbody></table></div>
             <div class="order-pagination"><span id="orderPageLabel">第 1 页 · 每页最多 50 条</span><div><button id="orderPrevButton" class="button ghost" type="button" disabled>上一页</button><button id="orderNextButton" class="button ghost" type="button" disabled>下一页</button></div></div>
           </div>
+        </section>
+      </section>
+
+      <section id="listingsView" class="app-view" data-view="listings">
+        <div class="metric-grid ops-metrics">
+          <article class="metric-card accent"><span>本页链接</span><strong id="listingCount">—</strong><small>当前店铺商品链接</small></article>
+          <article class="metric-card"><span>正常销售</span><strong id="listingPublishedCount">—</strong><small>状态 PUBLISHED</small></article>
+          <article class="metric-card"><span>需处理</span><strong id="listingIssueCount">—</strong><small>错误、缺货或审核问题</small></article>
+        </div>
+        <section class="panel ops-panel">
+          <div class="panel-heading"><div><p class="eyebrow">STORE LISTINGS</p><h2>店铺链接管理</h2></div><p>读取当前店铺全部商品链接；可改单店价格，也可只从当前店铺删除链接。</p></div>
+          <form id="listingFilterForm" class="ops-filters"><div class="field filter-grow"><label for="listingSkuFilter">SKU（可填多个）</label><input id="listingSkuFilter" type="text" placeholder="留空查看全部；支持逗号、空格或换行"></div><div class="field"><label for="listingStatus">链接状态</label><select id="listingStatus"><option value="">全部状态</option><option value="PUBLISHED">正常销售</option><option value="CHECKING">审核中</option><option value="NO_STOCKS">无库存</option><option value="DISABLED_BY_PARTNER">已手动隐藏</option><option value="DISABLED_AUTOMATICALLY">平台自动隐藏</option><option value="REJECTED_BY_MARKET">平台拒绝</option><option value="NO_CARD">缺少商品卡</option><option value="CREATING_CARD">正在建卡</option><option value="ARCHIVED">已归档</option><option value="READY_FOR_PUBLICATION">待店铺上线</option></select></div><button class="button primary" type="submit">查询链接</button></form>
+          <div id="listingsState" class="ops-state">选择店铺后读取商品链接。</div>
+          <div id="listingsContent" class="hidden"><div class="ops-summary listing-summary"><span id="listingWarning"></span><div><span>已选择 <strong id="listingSelectedCount">0</strong> 条</span><button id="listingDeleteSelected" class="button ghost danger-button" type="button" disabled>删除选中链接</button></div></div><div class="ops-table-wrap"><table class="ops-table listing-table"><thead><tr><th><input id="listingSelectAll" type="checkbox" aria-label="全选本页链接"></th><th>商品链接 / SKU</th><th>状态</th><th>统一价格</th><th>当前店铺价格</th><th>操作</th></tr></thead><tbody id="listingTableBody"></tbody></table></div><div class="order-pagination"><span id="listingPageLabel">第 1 页</span><div><button id="listingPrevButton" class="button ghost" type="button" disabled>上一页</button><button id="listingNextButton" class="button ghost" type="button" disabled>下一页</button></div></div></div>
         </section>
       </section>
 
@@ -112,19 +127,19 @@
 
       <section id="storesView" class="app-view" data-view="stores">
         <section class="panel stores-panel">
-          <div class="panel-heading"><div><p class="eyebrow">CONNECTED STORES</p><h2>Yandex 店铺 <span id="storeCount" class="muted-count">0</span></h2></div><p>保存 API-Key 后自动读取店铺与业务信息。</p></div>
-          <form id="storeForm" class="store-form"><div class="field alias-field"><label for="storeAlias">自定义店铺名</label><input id="storeAlias" type="text" maxlength="80" placeholder="例如：俄罗斯主店" required></div><div class="field add-token-field"><label for="storeToken">API-Key token</label><div class="token-row"><input id="storeToken" type="password" autocomplete="off" spellcheck="false" placeholder="ACMA:…" required><button id="toggleStoreToken" type="button" class="icon-button">显示</button></div><small>通过 Windows DPAPI 加密</small></div><button id="addStoreButton" class="button primary" type="submit">连接店铺</button></form>
+          <div class="panel-heading"><div><p class="eyebrow">CONNECTED STORES</p><h2>Yandex 店铺 <span id="storeCount" class="muted-count">0</span></h2></div><p>API-Key 和授权信息统一保存到中央数据库，页面不会返回 token。</p></div>
+          <form id="storeForm" class="store-form"><div class="field alias-field"><label for="storeAlias">自定义店铺名</label><input id="storeAlias" type="text" maxlength="80" placeholder="例如：俄罗斯主店" required></div><div class="field add-token-field"><label for="storeToken">API-Key token</label><div class="token-row"><input id="storeToken" type="password" autocomplete="off" spellcheck="false" placeholder="ACMA:…" required><button id="toggleStoreToken" type="button" class="icon-button">显示</button></div><small>仅提交给服务端并保存到中央数据库</small></div><button id="addStoreButton" class="button primary" type="submit">连接店铺</button></form>
           <div id="storeList" class="store-list"></div><div id="storeEmpty" class="empty-state">还没有已连接店铺。</div>
         </section>
         <section class="panel authorization-panel">
           <div class="panel-heading"><div><p class="eyebrow">STORE AUTHORIZATION</p><h2>TG 授权记录 <span id="zeshunStoreCount" class="muted-count">0</span></h2></div><p>通过 TG 码维护授权入口并更新 token。</p></div>
           <form id="zeshunStoreForm" class="authorization-create-form"><div class="field"><label for="zeshunStoreAlias">自定义店铺名</label><input id="zeshunStoreAlias" type="text" maxlength="80" placeholder="例如：俄罗斯 01 店" required></div><div class="field"><label for="zeshunTgCode">TG 码</label><input id="zeshunTgCode" type="text" maxlength="120" autocomplete="off" spellcheck="false" placeholder="唯一 TG 码" required></div><div class="field"><label for="zeshunAuthorizationUrl">授权链接（可选）</label><input id="zeshunAuthorizationUrl" type="url" maxlength="4000" placeholder="支持 {tg_code} 占位符"></div><button id="addZeshunStoreButton" class="button secondary" type="submit">新增记录</button></form>
-          <div id="zeshunStoreList" class="authorization-list"></div><div id="zeshunStoreEmpty" class="empty-state">还没有授权记录。</div><p class="authorization-security">授权返回链接和 token 均加密保存，接口和页面不会返回明文。</p>
+          <div id="zeshunStoreList" class="authorization-list"></div><div id="zeshunStoreEmpty" class="empty-state">还没有授权记录。</div><p class="authorization-security">授权记录与 token 统一保存在中央数据库；完整授权回调链接不会保留，接口和页面不会返回 token。</p>
         </section>
       </section>
     </main>
   </div>
   <div id="toast" class="toast" role="status"></div>
-  <script src="{{ url_for('static', path='/app.js') }}?v=20260906-3" defer></script>
+  <script src="{{ url_for('static', path='/app.js') }}?v=20260906-4" defer></script>
 </body>
 </html>
