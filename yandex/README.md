@@ -6,6 +6,19 @@
 
 ## 启动
 
+macOS / Linux：
+
+```bash
+cd /path/to/mercado
+./yandex/run.sh
+```
+
+首次启动会安装 Python 依赖和 Chromium。以后再次使用时可直接运行：
+
+```bash
+./yandex/start.sh
+```
+
 Windows PowerShell：
 
 ```powershell

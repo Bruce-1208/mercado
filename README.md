@@ -61,7 +61,15 @@ python -m bit.bit_interface
 
 ## Yandex Market 控制台
 
-Yandex 店铺授权、订单与结算、商品库存、退货、评价、问答、国外商品抓取和商品卡发布功能位于独立的 `yandex` 包。首次运行会在包内创建隔离的虚拟环境和 `.data` 数据目录：
+Yandex 店铺授权、订单与结算、商品库存、退货、评价、问答、国外商品抓取和商品卡发布功能位于独立的 `yandex` 包。首次运行会在包内创建隔离的虚拟环境和 `.data` 数据目录。
+
+macOS / Linux：
+
+```bash
+./yandex/run.sh
+```
+
+Windows PowerShell：
 
 ```powershell
 .\yandex\run.ps1
@@ -71,11 +79,19 @@ Yandex 店铺授权、订单与结算、商品库存、退货、评价、问答�
 
 安装完成后可以使用快速启动脚本：
 
+```bash
+./yandex/start.sh
+```
+
 ```powershell
 .\yandex\start.ps1
 ```
 
 也可以在 `mercado` 根目录通过 Python 模块启动：
+
+```bash
+./yandex/.venv/bin/python -m yandex
+```
 
 ```powershell
 .\yandex\.venv\Scripts\python.exe -m yandex

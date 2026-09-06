@@ -44,6 +44,16 @@ class YandexWorkbenchIntegrationTests(unittest.TestCase):
         self.assertTrue(payload["data"]["running"])
         self.assertTrue(payload["data"]["url"].endswith("/?embedded=1"))
 
+    def test_yandex_setup_command_matches_platform(self) -> None:
+        self.assertEqual(
+            workbench._yandex_console_setup_command("nt"),
+            r".\yandex\run.ps1",
+        )
+        self.assertEqual(
+            workbench._yandex_console_setup_command("posix"),
+            "./yandex/run.sh",
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

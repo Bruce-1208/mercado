@@ -312,6 +312,12 @@ def _yandex_console_python():
     return YANDEX_PACKAGE_ROOT / ".venv" / "bin" / "python"
 
 
+def _yandex_console_setup_command(platform_name=None):
+    if (platform_name or os.name) == "nt":
+        return r".\yandex\run.ps1"
+    return "./yandex/run.sh"
+
+
 def ensure_yandex_console():
     global _yandex_console_process
     if _yandex_console_health():
@@ -322,7 +328,8 @@ def ensure_yandex_console():
             return True, "Yandex 控制台已运行"
         python_executable = _yandex_console_python()
         if not python_executable.exists():
-            return False, "Yandex 运行环境不存在，请先执行 .\\yandex\\run.ps1 完成安装"
+            setup_command = _yandex_console_setup_command()
+            return False, f"Yandex 运行环境不存在，请先执行 {setup_command} 完成安装"
         if not (YANDEX_PACKAGE_ROOT / "__main__.py").exists():
             return False, "mercado/yandex 包不完整，缺少 __main__.py"
 
