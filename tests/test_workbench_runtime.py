@@ -3,6 +3,7 @@ import json
 import pytest
 
 from bit.workbench_runtime import (
+    DEFAULT_DB_API_BASE_URL,
     DEFAULT_SERVER_DB_HOST,
     RuntimeSettings,
     apply_runtime_settings,
@@ -29,6 +30,13 @@ def test_normalize_runtime_role(value, expected):
 def test_invalid_runtime_role_is_rejected():
     with pytest.raises(ValueError, match="server 或 client"):
         normalize_runtime_role("hybrid")
+
+
+def test_default_public_database_api_uses_https():
+    settings = resolve_runtime_settings(argv=["--role", "client"], environment={})
+
+    assert DEFAULT_DB_API_BASE_URL == "https://zeshun.nat100.top"
+    assert settings.api_base_url == DEFAULT_DB_API_BASE_URL
 
 
 def test_command_line_can_temporarily_override_persistent_role(tmp_path):

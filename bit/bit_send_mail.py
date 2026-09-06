@@ -7,12 +7,22 @@ from email import encoders
 from email.policy import default  # 引入策略控制
 
 
-def send_info(subject, body, local_file_path, display_filename):
+def send_info(
+    subject,
+    body,
+    local_file_path="",
+    display_filename="",
+    receiver_email=None,
+):
     smtp_server = "smtp.qq.com"
     smtp_port = 465
     sender_email = "1013459852@qq.com"
     password = "cfocdnqwmauxbdec"
-    receiver_email = "1013459852@qq.com"
+    receiver_email = str(
+        receiver_email
+        or os.environ.get("BIT_MAIL_RECEIVER")
+        or "1013459852@qq.com"
+    ).strip()
 
     # 使用 policy=default 是 Python 3 处理中文邮件的金标准
     message = MIMEMultipart(policy=default)
@@ -22,7 +32,7 @@ def send_info(subject, body, local_file_path, display_filename):
 
     message.attach(MIMEText(body, "plain", "utf-8"))
 
-    if os.path.exists(local_file_path):
+    if local_file_path and os.path.exists(local_file_path):
         with open(local_file_path, "rb") as attachment:
             part = MIMEBase("application", "octet-stream")
             part.set_payload(attachment.read())

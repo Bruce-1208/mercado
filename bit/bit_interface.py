@@ -1,6 +1,7 @@
 
 import queue
 import json
+import ipaddress
 import re
 from collections import deque
 import functools
@@ -79,6 +80,13 @@ import bit.mercado_communications as mercado_communications
 import bit.mercado_infraction_sync as mercado_infraction_sync
 import bit.mercado_reputation as mercado_reputation
 import bit.mercado_tokens as mercado_tokens
+from bit.local_agent_bundle import build_business_bundle
+from bit.local_agent_distribution import build_agent_distribution
+from bit.local_agent_hub import (
+    LocalAgentStore,
+    TERMINAL_JOB_STATUSES,
+    normalize_agent_id,
+)
 from erp.mercadolibre_infraction_store import (
     current_infraction_counts_by_token_site,
     list_infraction_dashboard,
@@ -166,6 +174,73 @@ LOCAL_EXECUTOR_BROWSER_URL = str(
 LOCAL_EXECUTOR_PERMISSIONS = frozenset(
     ("appeal.execute", "tasks.view", "tasks.execute")
 )
+LOCAL_AGENT_ENROLLMENT_TOKEN_SALT = "zeshun-local-agent-enrollment-v1"
+LOCAL_AGENT_CREDENTIAL_TOKEN_SALT = "zeshun-local-agent-credential-v1"
+LOCAL_AGENT_ENROLLMENT_MAX_AGE_SECONDS = 24 * 60 * 60
+LOCAL_AGENT_CREDENTIAL_MAX_AGE_SECONDS = 180 * 24 * 60 * 60
+LOCAL_AGENT_ONLINE_SECONDS = max(
+    15,
+    int(os.environ.get("BIT_LOCAL_AGENT_ONLINE_SECONDS", "45")),
+)
+LOCAL_AGENT_HUB_PATH = Path(
+    os.environ.get("BIT_LOCAL_AGENT_HUB_PATH")
+    or (PROJECT_ROOT / ".data" / "local-agent-hub.sqlite3")
+)
+_local_agent_store_instance = None
+_local_agent_store_lock = threading.Lock()
+_local_agent_bundle_snapshot = None
+_local_agent_bundle_snapshot_at = 0.0
+_local_agent_bundle_lock = threading.Lock()
+
+
+def get_local_agent_store():
+    global _local_agent_store_instance
+    if _local_agent_store_instance is None:
+        with _local_agent_store_lock:
+            if _local_agent_store_instance is None:
+                _local_agent_store_instance = LocalAgentStore(LOCAL_AGENT_HUB_PATH)
+    return _local_agent_store_instance
+
+
+def current_local_agent_bundle(force=False):
+    global _local_agent_bundle_snapshot, _local_agent_bundle_snapshot_at
+    now = time.monotonic()
+    if (
+        not force
+        and _local_agent_bundle_snapshot is not None
+        and now - _local_agent_bundle_snapshot_at < 10
+    ):
+        return _local_agent_bundle_snapshot
+    with _local_agent_bundle_lock:
+        now = time.monotonic()
+        if (
+            force
+            or _local_agent_bundle_snapshot is None
+            or now - _local_agent_bundle_snapshot_at >= 10
+        ):
+            _local_agent_bundle_snapshot = build_business_bundle(PROJECT_ROOT)
+            _local_agent_bundle_snapshot_at = now
+        return _local_agent_bundle_snapshot
+
+
+def local_executor_target_address_space(base_url=None):
+    """Describe the browser-visible executor address for Chromium LNA."""
+
+    try:
+        hostname = urlsplit(
+            str(base_url or LOCAL_EXECUTOR_BROWSER_URL).strip()
+        ).hostname
+    except ValueError:
+        hostname = None
+    normalized = str(hostname or "").strip().casefold()
+    if normalized == "localhost":
+        return "loopback"
+    try:
+        if ipaddress.ip_address(normalized).is_loopback:
+            return "loopback"
+    except ValueError:
+        pass
+    return "local"
 
 
 def _configured_local_executor_origins():
@@ -1503,6 +1578,106 @@ def _local_executor_user_from_token(token):
     return payload
 
 
+def create_local_agent_enrollment_token(user):
+    payload = {
+        "id": int((user or {}).get("id") or 0),
+        "username": str((user or {}).get("username") or ""),
+        "permission": "appeal.execute",
+    }
+    if not _valid_local_executor_identity(payload):
+        raise ValueError("无法为当前账号创建 Agent 注册凭证")
+    return URLSafeTimedSerializer(
+        app.secret_key,
+        salt=LOCAL_AGENT_ENROLLMENT_TOKEN_SALT,
+    ).dumps(payload)
+
+
+def _local_agent_enrollment_user(token):
+    if USE_DB_API:
+        return None
+    try:
+        payload = URLSafeTimedSerializer(
+            app.secret_key,
+            salt=LOCAL_AGENT_ENROLLMENT_TOKEN_SALT,
+        ).loads(
+            str(token or ""),
+            max_age=LOCAL_AGENT_ENROLLMENT_MAX_AGE_SECONDS,
+        )
+    except (BadSignature, SignatureExpired):
+        return None
+    if not _valid_local_executor_identity(payload):
+        return None
+    row = get_workbench_user(user_id=payload["id"])
+    if not row or not row.get("is_active") or row.get("username") != payload["username"]:
+        return None
+    user = build_workbench_session_user(row)
+    if not workbench_user_has_permission(user, "appeal.execute"):
+        return None
+    return payload
+
+
+def create_local_agent_credential(agent_id, user_id=0):
+    agent_id = normalize_agent_id(agent_id)
+    signed = URLSafeTimedSerializer(
+        app.secret_key,
+        salt=LOCAL_AGENT_CREDENTIAL_TOKEN_SALT,
+    ).dumps({"agent_id": agent_id, "user_id": int(user_id or 0)})
+    return "agent:" + signed
+
+
+def _verify_local_agent_credential(token):
+    token = str(token or "")
+    if not token.startswith("agent:"):
+        return None
+    try:
+        payload, issued_at = URLSafeTimedSerializer(
+            app.secret_key,
+            salt=LOCAL_AGENT_CREDENTIAL_TOKEN_SALT,
+        ).loads(
+            token[len("agent:") :],
+            max_age=LOCAL_AGENT_CREDENTIAL_MAX_AGE_SECONDS,
+            return_timestamp=True,
+        )
+    except (BadSignature, SignatureExpired):
+        return None
+    try:
+        agent = get_local_agent_store().get_agent(payload.get("agent_id"))
+    except (KeyError, ValueError):
+        return None
+    if not agent:
+        return None
+    return {
+        "agent_id": agent["agent_id"],
+        "user_id": int(payload.get("user_id") or 0),
+        "issued_at": issued_at.timestamp(),
+    }
+
+
+def local_agent_required(view_func):
+    @functools.wraps(view_func)
+    def wrapper(*args, **kwargs):
+        if USE_DB_API:
+            return jsonify({
+                "status": "error",
+                "message": "Agent 必须连接服务端工作台",
+            }), 503
+        request_token = str(request.headers.get("X-Local-Agent-Token") or "")
+        shared_token = str(
+            os.environ.get("BIT_LOCAL_AGENT_TOKEN")
+            or os.environ.get("BIT_DB_API_TOKEN")
+            or ""
+        )
+        claims = _verify_local_agent_credential(request_token)
+        if not claims and shared_token and hmac.compare_digest(shared_token, request_token):
+            claims = {"agent_id": "*", "user_id": 0}
+        if not claims:
+            return jsonify({"status": "error", "message": "Agent 凭证无效"}), 401
+        g.local_agent_claims = claims
+        return view_func(*args, **kwargs)
+
+    return wrapper
+
+
 def local_executor_required(*accepted_permissions):
     accepted = frozenset(
         str(permission or "").strip()
@@ -1560,6 +1735,8 @@ def internal_api_required(view_func):
         request_token = request.headers.get("X-Internal-Token", "")
         if token and hmac.compare_digest(token, request_token):
             return view_func(*args, **kwargs)
+        if _verify_local_agent_credential(request_token):
+            return view_func(*args, **kwargs)
         if request.remote_addr in ("127.0.0.1", "::1", "localhost"):
             return view_func(*args, **kwargs)
         return jsonify({"status": "error", "message": "Forbidden"}), 403
@@ -1582,6 +1759,10 @@ def _required_workbench_permissions(path, method):
             else ("infringement_knowledge.manage",)
         )
     if path.startswith("/api/run_shensu"):
+        return ("appeal.execute",)
+    if path == "/api/execution-agents":
+        return ("appeal.view",)
+    if path == "/api/local-agents/download":
         return ("appeal.execute",)
     if path == "/api/collections/options":
         return (
@@ -4757,9 +4938,14 @@ def shensu_logic(
 def api_run_shensu():
     # 获取前端传入的参数
     name = request.args.get("name", "")
+    requested_execution_target = str(
+        request.args.get("execution_target") or ""
+    ).strip().lower()
     execution_target = (
         "local"
         if getattr(g, "local_executor_user", None) or RUNTIME_SETTINGS.is_client
+        else "agent"
+        if requested_execution_target == "agent"
         else "server"
     )
     try:
@@ -4782,6 +4968,17 @@ def api_run_shensu():
     task_id = normalize_appeal_task_id(request.args.get("task_id", ""))
     if not task_id:
         task_id = secrets.token_hex(16)
+    if execution_target == "agent":
+        return enqueue_local_agent_appeal(
+            task_id=task_id,
+            agent_id=request.args.get("agent_id", ""),
+            name=name,
+            sites=sites,
+            forms=forms,
+            message=message,
+            mode=mode,
+            loop_count=loop_count,
+        )
     stop_event = register_appeal_task(
         task_id,
         {
@@ -4837,6 +5034,17 @@ def api_stop_shensu():
     task_id = normalize_appeal_task_id(data.get("task_id"))
     if not task_id:
         return jsonify({"status": "error", "message": "缺少有效任务编号"}), 400
+    try:
+        agent_job = get_local_agent_store().get_job(task_id)
+    except ValueError:
+        agent_job = None
+    if agent_job and agent_job.get("job_type") == "appeal":
+        if get_local_agent_store().request_cancel(task_id):
+            return jsonify({
+                "status": "success",
+                "message": "本机 Agent 申诉停止请求已提交",
+            })
+        return jsonify({"status": "error", "message": "任务已结束"}), 409
     if not request_appeal_task_stop(task_id):
         return jsonify({"status": "error", "message": "任务已结束或不存在"}), 404
     return jsonify(
@@ -6906,6 +7114,261 @@ def _local_executor_database_preflight():
             ),
         }), 503
     return None
+
+
+def _agent_request_identity(data):
+    agent_id = normalize_agent_id((data or {}).get("agent_id"))
+    claims = getattr(g, "local_agent_claims", {}) or {}
+    if claims.get("agent_id") not in ("*", agent_id):
+        raise PermissionError("Agent 凭证与电脑编号不匹配")
+    return agent_id
+
+
+@app.route("/api/local-agents/enroll", methods=["POST"])
+def api_local_agent_enroll():
+    if USE_DB_API:
+        return jsonify({"status": "error", "message": "请连接服务端工作台"}), 503
+    authorization = str(request.headers.get("Authorization") or "")
+    token = authorization[7:].strip() if authorization.lower().startswith("bearer ") else ""
+    user_claims = _local_agent_enrollment_user(token)
+    if not user_claims:
+        return jsonify({
+            "status": "error",
+            "message": "Agent 注册链接无效或已过期，请从泽顺控制台重新下载",
+        }), 401
+    data = request.get_json(silent=True) or {}
+    try:
+        agent_id = normalize_agent_id(data.get("agent_id"))
+        agent = get_local_agent_store().heartbeat(
+            agent_id,
+            name=data.get("name"),
+            hostname=data.get("hostname"),
+            platform=data.get("platform"),
+            agent_version=data.get("agent_version"),
+            business_version="",
+            capabilities=data.get("capabilities") or ("appeal",),
+        )
+    except ValueError as exc:
+        return jsonify({"status": "error", "message": str(exc)}), 400
+    credential = create_local_agent_credential(agent_id, user_claims.get("id"))
+    return jsonify({
+        "status": "success",
+        "data": {"agent": agent, "agent_token": credential},
+    })
+
+
+@app.route("/api/local-agents/heartbeat", methods=["POST"])
+@local_agent_required
+def api_local_agent_heartbeat():
+    data = request.get_json(silent=True) or {}
+    try:
+        agent_id = _agent_request_identity(data)
+        agent = get_local_agent_store().heartbeat(
+            agent_id,
+            name=data.get("name"),
+            hostname=data.get("hostname"),
+            platform=data.get("platform"),
+            agent_version=data.get("agent_version"),
+            business_version=data.get("business_version"),
+            capabilities=data.get("capabilities") or ("appeal",),
+        )
+        bundle = current_local_agent_bundle()
+        claims = getattr(g, "local_agent_claims", {}) or {}
+        refreshed_credential = ""
+        if time.time() - float(claims.get("issued_at") or 0) >= 30 * 24 * 60 * 60:
+            refreshed_credential = create_local_agent_credential(
+                agent_id, claims.get("user_id")
+            )
+        return jsonify({
+            "status": "success",
+            "data": {
+                "agent": agent,
+                "agent_token": refreshed_credential,
+                "cancel_job_ids": get_local_agent_store().cancellation_job_ids(agent_id),
+                "bundle": {
+                    "version": bundle["version"],
+                    "sha256": bundle["sha256"],
+                    "size": bundle["size"],
+                },
+            },
+        })
+    except PermissionError as exc:
+        return jsonify({"status": "error", "message": str(exc)}), 403
+    except ValueError as exc:
+        return jsonify({"status": "error", "message": str(exc)}), 400
+
+
+@app.route("/api/local-agents/jobs/claim", methods=["POST"])
+@local_agent_required
+def api_local_agent_claim_job():
+    data = request.get_json(silent=True) or {}
+    try:
+        agent_id = _agent_request_identity(data)
+        job = get_local_agent_store().claim_job(agent_id)
+        return jsonify({"status": "success", "data": {"job": job}})
+    except PermissionError as exc:
+        return jsonify({"status": "error", "message": str(exc)}), 403
+    except ValueError as exc:
+        return jsonify({"status": "error", "message": str(exc)}), 400
+
+
+@app.route("/api/local-agents/jobs/<job_id>/events", methods=["POST"])
+@local_agent_required
+def api_local_agent_job_event(job_id):
+    data = request.get_json(silent=True) or {}
+    try:
+        agent_id = _agent_request_identity(data)
+        job = get_local_agent_store().append_event(
+            job_id,
+            agent_id,
+            content=data.get("content"),
+            event_type=data.get("event_type") or "log",
+            status=data.get("status"),
+            message=data.get("message"),
+            result=data.get("result"),
+        )
+        return jsonify({"status": "success", "data": {"job": job}})
+    except PermissionError as exc:
+        return jsonify({"status": "error", "message": str(exc)}), 403
+    except KeyError as exc:
+        return jsonify({"status": "error", "message": str(exc)}), 404
+    except ValueError as exc:
+        return jsonify({"status": "error", "message": str(exc)}), 400
+
+
+@app.route("/api/local-agents/business-bundle", methods=["GET"])
+@local_agent_required
+def api_local_agent_business_bundle():
+    bundle = current_local_agent_bundle()
+    response = send_file(
+        BytesIO(bundle["content"]),
+        mimetype="application/zip",
+        as_attachment=True,
+        download_name=f"mercado-business-{bundle['version']}.zip",
+        max_age=0,
+    )
+    response.headers["X-Business-Version"] = bundle["version"]
+    response.headers["X-Bundle-SHA256"] = bundle["sha256"]
+    response.headers["Cache-Control"] = "no-store"
+    return response
+
+
+@app.route("/api/execution-agents", methods=["GET"])
+@login_required
+def api_execution_agents():
+    agents = get_local_agent_store().list_agents(
+        online_seconds=LOCAL_AGENT_ONLINE_SECONDS,
+        capability="appeal",
+    )
+    response = jsonify({"status": "success", "data": {"agents": agents}})
+    response.headers["Cache-Control"] = "no-store"
+    return response
+
+
+@app.route("/api/local-agents/download", methods=["GET"])
+@login_required
+def api_download_local_agent():
+    user = get_current_workbench_user()
+    if not workbench_user_has_permission(user, "appeal.execute"):
+        return jsonify({"status": "error", "message": "当前账号没有申诉执行权限"}), 403
+    enrollment_token = create_local_agent_enrollment_token(user)
+    public_url = str(
+        os.environ.get("BIT_PUBLIC_WORKBENCH_URL")
+        or RUNTIME_SETTINGS.api_base_url
+        or request.url_root
+    ).strip().rstrip("/")
+    package = build_agent_distribution(
+        PROJECT_ROOT,
+        server_url=public_url,
+        enrollment_token=enrollment_token,
+    )
+    response = send_file(
+        BytesIO(package["content"]),
+        mimetype="application/zip",
+        as_attachment=True,
+        download_name="Zeshun-MercadoLocalAgent.zip",
+        max_age=0,
+    )
+    response.headers["X-Agent-Package-Format"] = package["format"]
+    response.headers["Cache-Control"] = "no-store"
+    return response
+
+
+def stream_local_agent_job(job_id):
+    event_id = 0
+    last_heartbeat = time.monotonic()
+    while True:
+        events = get_local_agent_store().events_after(job_id, event_id)
+        for event in events:
+            event_id = max(event_id, int(event["event_id"]))
+            if event.get("content"):
+                yield str(event["content"])
+        job = get_local_agent_store().get_job(job_id)
+        if not job:
+            yield "Agent 任务记录不存在\n"
+            return
+        if job.get("status") in TERMINAL_JOB_STATUSES and not events:
+            if job.get("status") == "error" and job.get("message"):
+                yield f"任务失败：{job['message']}\n"
+            return
+        now = time.monotonic()
+        if not events and now - last_heartbeat >= APPEAL_STREAM_HEARTBEAT_SECONDS:
+            yield "\n"
+            last_heartbeat = now
+        time.sleep(0.5)
+
+
+def enqueue_local_agent_appeal(
+    *, task_id, agent_id, name, sites, forms, message, mode, loop_count
+):
+    try:
+        agent_id = normalize_agent_id(agent_id)
+        agent = get_local_agent_store().get_agent(
+            agent_id, online_seconds=LOCAL_AGENT_ONLINE_SECONDS
+        )
+    except ValueError as exc:
+        return jsonify({"status": "error", "message": str(exc)}), 400
+    if not agent or not agent.get("online"):
+        return jsonify({
+            "status": "error",
+            "message": "所选本机 Agent 当前不在线，请刷新电脑列表或启动 Agent",
+        }), 409
+    if "appeal" not in agent.get("capabilities", ()):
+        return jsonify({"status": "error", "message": "所选 Agent 不支持申诉任务"}), 409
+    user = get_current_workbench_user() or {}
+    bundle = current_local_agent_bundle()
+    payload = {
+        "name": name,
+        "sites": list(sites),
+        "forms": list(forms),
+        "message": message,
+        "mode": mode,
+        "loop_count": "永久" if loop_count == PERMANENT_APPEAL_LOOP_COUNT else loop_count,
+    }
+    try:
+        get_local_agent_store().enqueue_job(
+            task_id,
+            agent_id,
+            "appeal",
+            payload,
+            required_version=bundle["version"],
+            created_by_id=user.get("id"),
+            created_by_name=user.get("display_name") or user.get("username") or "",
+        )
+    except Exception as exc:
+        logging.exception("创建本机 Agent 申诉任务失败")
+        return jsonify({
+            "status": "error",
+            "message": f"创建本机 Agent 任务失败：{exc}",
+        }), 409
+
+    response = Response(stream_local_agent_job(task_id), mimetype="text/plain; charset=utf-8")
+    response.headers["Cache-Control"] = "no-cache"
+    response.headers["X-Accel-Buffering"] = "no"
+    response.headers["X-Appeal-Task-ID"] = task_id
+    response.headers["X-Execution-Target"] = "agent"
+    response.headers["X-Execution-Agent-ID"] = agent_id
+    return response
 
 
 @app.route('/api/local-executor/health', methods=['GET', 'OPTIONS'])
@@ -12329,6 +12792,7 @@ def api_local_executor_token():
         "data": {
             "token": token,
             "base_url": LOCAL_EXECUTOR_BROWSER_URL,
+            "target_address_space": local_executor_target_address_space(),
             "expires_in": LOCAL_EXECUTOR_TOKEN_MAX_AGE_SECONDS,
         },
     })

@@ -9560,10 +9560,23 @@
                         <div class="field">
                             <label for="appeal-execution-target">执行位置</label>
                             <select id="appeal-execution-target">
-                                <option value="local" selected>本机比特浏览器（默认）</option>
+                                <option value="agent" selected>本机 Agent（免更新客户端）</option>
+                                <option value="local">旧版 client 工作台（兼容）</option>
                                 <option value="server">服务器比特浏览器</option>
                             </select>
-                            <small class="shop-search-hint" id="appeal-local-executor-hint">默认由当前电脑运行；请保持本机客户端工作台已启动。</small>
+                            <small class="shop-search-hint" id="appeal-local-executor-hint">请选择已安装并在线的本机 Agent。</small>
+                        </div>
+
+                        <div class="field" id="appeal-agent-field">
+                            <label for="appeal-agent-id">执行电脑</label>
+                            <select id="appeal-agent-id">
+                                <option value="">正在读取在线电脑...</option>
+                            </select>
+                            <div class="actions" style="margin-top: 8px;">
+                                <button class="secondary" type="button" id="refresh-execution-agents">刷新电脑</button>
+                                <button class="secondary" type="button" id="download-local-agent">下载本机 Agent</button>
+                            </div>
+                            <small class="shop-search-hint" id="appeal-agent-hint">Agent 安装一次后会自动同步最新业务代码。</small>
                         </div>
 
                         <div class="field">
@@ -11745,6 +11758,11 @@
         const stopBtn = document.getElementById("stop-btn");
         const appealExecutionTarget = document.getElementById("appeal-execution-target");
         const appealLocalExecutorHint = document.getElementById("appeal-local-executor-hint");
+        const appealAgentField = document.getElementById("appeal-agent-field");
+        const appealAgentId = document.getElementById("appeal-agent-id");
+        const appealAgentHint = document.getElementById("appeal-agent-hint");
+        const refreshExecutionAgentsBtn = document.getElementById("refresh-execution-agents");
+        const downloadLocalAgentBtn = document.getElementById("download-local-agent");
         const appealShopInput = document.getElementById("name");
         const appealShopOptions = document.getElementById("appeal-shop-options");
         const statusBox = document.getElementById("status");
@@ -12479,7 +12497,7 @@
                 button.hidden = !hasWorkbenchPermission(button.dataset.permission);
             });
             const actionSelectors = {
-                "appeal.execute": ["#start-btn", "#stop-btn", "#appeal-execution-target", "#add-appeal-phrase-btn", "#save-appeal-phrase-btn"],
+                "appeal.execute": ["#start-btn", "#stop-btn", "#appeal-execution-target", "#appeal-agent-id", "#refresh-execution-agents", "#download-local-agent", "#add-appeal-phrase-btn", "#save-appeal-phrase-btn"],
                 "tasks.execute": ["#start-daily-task-btn", "#daily-task-execution-target"],
                 "order_print.execute": ["#start-order-print-btn", "#stop-order-print-btn", "#rerun-selected-order-print-btn"],
                 "order_analysis.execute": ["#order-analysis-folder", "#import-order-analysis-btn"],
@@ -12594,6 +12612,9 @@
             }
             if (tabName === "appeal" && appealExecutionTarget?.value === "local") {
                 refreshLocalExecutorHint(appealLocalExecutorHint, "appeal.execute");
+            }
+            if (tabName === "appeal" && appealExecutionTarget?.value === "agent") {
+                loadExecutionAgents();
             }
             if (tabName === "risk-check") {
                 loadRiskCategories();
@@ -22459,7 +22480,74 @@
         }
 
         function executionTargetLabel(target) {
-            return target === "local" ? "本机比特浏览器" : "服务器比特浏览器";
+            if (target === "agent") {
+                const option = appealAgentId?.selectedOptions?.[0];
+                return option?.textContent?.trim() || "本机 Agent";
+            }
+            return target === "local" ? "旧版 client 本机浏览器" : "服务器比特浏览器";
+        }
+
+        let executionAgents = [];
+
+        function selectedExecutionAgent() {
+            const agentId = String(appealAgentId?.value || "").trim();
+            return executionAgents.find(agent => String(agent.agent_id || "") === agentId) || null;
+        }
+
+        function renderExecutionAgents(agents) {
+            executionAgents = Array.isArray(agents) ? agents : [];
+            if (!appealAgentId) return;
+            const previous = String(
+                appealAgentId.value
+                || window.localStorage.getItem("zeshun-execution-agent-id")
+                || ""
+            );
+            appealAgentId.innerHTML = "";
+            const onlineAgents = executionAgents.filter(agent => agent.online);
+            if (!onlineAgents.length) {
+                const option = document.createElement("option");
+                option.value = "";
+                option.textContent = "没有在线的本机 Agent";
+                appealAgentId.appendChild(option);
+                appealAgentHint.textContent = "请在目标电脑安装并启动 Agent，然后刷新电脑列表。";
+                return;
+            }
+            onlineAgents.forEach(agent => {
+                const option = document.createElement("option");
+                option.value = String(agent.agent_id || "");
+                const activeJobs = Number(agent.active_jobs || 0);
+                option.textContent = `${agent.name || agent.hostname || agent.agent_id}${activeJobs ? `（${activeJobs} 个任务）` : ""}`;
+                appealAgentId.appendChild(option);
+            });
+            if (onlineAgents.some(agent => String(agent.agent_id) === previous)) {
+                appealAgentId.value = previous;
+            }
+            const selected = selectedExecutionAgent();
+            if (selected) {
+                window.localStorage.setItem("zeshun-execution-agent-id", selected.agent_id);
+                appealAgentHint.textContent = `在线 · Agent ${selected.agent_version || "未知版本"} · 业务代码 ${selected.business_version || "正在同步"}`;
+            }
+        }
+
+        async function loadExecutionAgents() {
+            if (!appealAgentId) return [];
+            if (refreshExecutionAgentsBtn) refreshExecutionAgentsBtn.disabled = true;
+            appealAgentHint.textContent = "正在读取在线电脑...";
+            try {
+                const response = await fetch("/api/execution-agents", {cache: "no-store"});
+                const payload = await response.json();
+                if (!response.ok || payload.status !== "success") {
+                    throw new Error(payload.message || `接口请求失败：${response.status}`);
+                }
+                renderExecutionAgents(payload.data?.agents || []);
+                return executionAgents;
+            } catch (error) {
+                renderExecutionAgents([]);
+                appealAgentHint.textContent = `读取 Agent 失败：${error.message || error}`;
+                return [];
+            } finally {
+                if (refreshExecutionAgentsBtn) refreshExecutionAgentsBtn.disabled = false;
+            }
         }
 
         async function getLocalExecutorCredential(permission, force = false) {
@@ -22478,6 +22566,7 @@
             const credential = {
                 token: String(data.token || ""),
                 baseUrl: String(data.base_url || "http://127.0.0.1:5000").replace(/\/$/, ""),
+                targetAddressSpace: String(data.target_address_space || "loopback"),
                 expiresAt: Date.now() + Math.max(30, Number(data.expires_in || 300) - 30) * 1000,
             };
             if (!credential.token) throw new Error("服务端未返回本机执行凭证");
@@ -22499,7 +22588,9 @@
                     headers,
                     credentials: "omit",
                     mode: "cors",
-                    targetAddressSpace: "local",
+                    // 127.0.0.1 is the loopback address space. Chromium rejects
+                    // the request before connecting when it is mislabeled "local".
+                    targetAddressSpace: credential.targetAddressSpace,
                 });
             } catch (_error) {
                 throw new Error(
@@ -22517,6 +22608,12 @@
             if (target === "local") {
                 if (workbenchRuntimeRole === "client") return fetch(path, options);
                 return fetchLocalExecutor(path, options, permission);
+            }
+            if (target === "agent") {
+                if (workbenchRuntimeRole === "client") {
+                    throw new Error("请在公网泽顺控制台选择本机 Agent");
+                }
+                return fetch(path, options);
             }
             if (workbenchRuntimeRole === "client") {
                 throw new Error("本机客户端页面不能直接启动服务器任务，请在公网工作台操作");
@@ -22551,6 +22648,15 @@
 
         function syncExecutionTargetHint(selectElement, hintElement, permission) {
             if (!selectElement || !hintElement) return;
+            if (selectElement.value === "agent") {
+                if (appealAgentField) appealAgentField.hidden = false;
+                hintElement.textContent = "任务将由所选在线电脑的 Agent 执行。";
+                loadExecutionAgents();
+                return;
+            }
+            if (selectElement === appealExecutionTarget && appealAgentField) {
+                appealAgentField.hidden = true;
+            }
             if (selectElement.value === "local") {
                 refreshLocalExecutorHint(hintElement, permission);
                 return;
@@ -23608,7 +23714,17 @@
             if (appealExecutionTarget) appealExecutionTarget.disabled = true;
             appealStopRequested = false;
             activeAppealTaskId = createAppealTaskId();
-            activeAppealExecutionTarget = String(appealExecutionTarget?.value || "local");
+            activeAppealExecutionTarget = String(appealExecutionTarget?.value || "agent");
+            const selectedAgentId = String(appealAgentId?.value || "").trim();
+            if (activeAppealExecutionTarget === "agent" && !selectedAgentId) {
+                alert("没有可用的本机 Agent，请先下载并在目标电脑启动 Agent");
+                startBtn.disabled = false;
+                stopBtn.disabled = true;
+                if (appealExecutionTarget && hasWorkbenchPermission("appeal.execute")) {
+                    appealExecutionTarget.disabled = false;
+                }
+                return;
+            }
             logContainer.textContent = "";
             setStatus(`${executionTargetLabel(activeAppealExecutionTarget)}任务运行中`, "running");
             appendLog(`正在连接${executionTargetLabel(activeAppealExecutionTarget)}...\n`);
@@ -23620,6 +23736,7 @@
                 message: document.getElementById("message").value,
                 task_id: activeAppealTaskId,
                 execution_target: activeAppealExecutionTarget,
+                agent_id: selectedAgentId,
             });
             selectedSites.forEach(site => params.append("site", site));
             selectedForms.forEach(form => params.append("form", form));
@@ -24311,6 +24428,16 @@
                 "appeal.execute",
             );
         });
+        appealAgentId?.addEventListener("change", () => {
+            const agent = selectedExecutionAgent();
+            if (!agent) return;
+            window.localStorage.setItem("zeshun-execution-agent-id", agent.agent_id);
+            appealAgentHint.textContent = `在线 · Agent ${agent.agent_version || "未知版本"} · 业务代码 ${agent.business_version || "正在同步"}`;
+        });
+        refreshExecutionAgentsBtn?.addEventListener("click", loadExecutionAgents);
+        downloadLocalAgentBtn?.addEventListener("click", () => {
+            window.location.assign("/api/local-agents/download");
+        });
         dailyTaskExecutionTarget?.addEventListener("change", () => {
             syncExecutionTargetHint(
                 dailyTaskExecutionTarget,
@@ -24324,6 +24451,11 @@
         applyWorkbenchPermissions();
         if (hasWorkbenchPermission("appeal.view")) {
             loadAppealPhrases();
+            syncExecutionTargetHint(
+                appealExecutionTarget,
+                appealLocalExecutorHint,
+                "appeal.execute",
+            );
         }
 
     </script>

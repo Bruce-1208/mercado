@@ -15,6 +15,7 @@
 dist/
 build/
 *.spec
+!MercadoLocalAgent.spec
 
 __pycache__/
 *.pyc
@@ -34,5 +35,7 @@ tmp/
 output/
 outputs/
 bit/runtime_locks/
+.data/local-agent-hub.sqlite3*
+.data/local-agent/
 cache/mercado_playwright_profile/
 *.log

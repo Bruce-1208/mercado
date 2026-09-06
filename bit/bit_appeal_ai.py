@@ -14,6 +14,8 @@
 import time
 import traceback
 import json
+import os
+import socket
 import sys
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
@@ -3052,6 +3054,17 @@ def summarize_ai_appeal_result(appeal_type, identifiers, appeal_content, ai_repl
     }
 
 
+def appeal_executor_metadata():
+    """Identify the machine that performed an appeal without exposing addresses."""
+    runtime_role = str(os.environ.get("BIT_RUNTIME_ROLE") or "server").strip().lower()
+    execution_target = "local" if runtime_role == "client" else "server"
+    return {
+        "runtime_role": runtime_role,
+        "execution_target": execution_target,
+        "hostname": socket.gethostname(),
+    }
+
+
 def save_ai_appeal_record(
     appeal_time,
     appeal_type,
@@ -3092,6 +3105,7 @@ def save_ai_appeal_record(
         "ai_replies": fields["ai_replies"],
         "ai_summary": summary["summary"],
         "error": "\n".join(_unique_text_list([error, summary.get("error", "")])),
+        "executor": appeal_executor_metadata(),
     }
     if execution:
         record["status"] = execution["message"]
@@ -3195,6 +3209,7 @@ def save_ai_appeal_group_record(
         "record_scope": "group",
         "group_index": group_index,
         "total_groups": total_groups,
+        "executor": appeal_executor_metadata(),
     }
     execution = result_from_logs(group_records, error=error)
     record["execution"] = execution

@@ -1,3 +1,5 @@
+from pathlib import Path
+
 from flask import g
 
 from bit import bit_db_api, bit_interface
@@ -61,6 +63,7 @@ def test_public_workbench_issues_short_lived_local_executor_token(monkeypatch):
     assert response.status_code == 200
     data = response.get_json()["data"]
     assert data["base_url"] == bit_interface.LOCAL_EXECUTOR_BROWSER_URL
+    assert data["target_address_space"] == "loopback"
     assert bit_interface._local_executor_user_from_token(data["token"]) == {
         "id": 7,
         "username": "operator",
@@ -108,6 +111,30 @@ def test_local_executor_bridge_only_accepts_loopback_client_requests(monkeypatch
     assert denied.status_code == 403
     assert preflight.status_code == 204
     assert preflight.headers["Access-Control-Allow-Private-Network"] == "true"
+
+
+def test_local_executor_target_address_space_matches_browser_destination():
+    assert (
+        bit_interface.local_executor_target_address_space("http://127.0.0.1:5000")
+        == "loopback"
+    )
+    assert (
+        bit_interface.local_executor_target_address_space("http://localhost:5000")
+        == "loopback"
+    )
+    assert (
+        bit_interface.local_executor_target_address_space("http://192.168.1.50:5000")
+        == "local"
+    )
+
+
+def test_public_workbench_labels_loopback_fetch_with_server_target_space():
+    template = Path(bit_interface.app.template_folder, "index.html").read_text(
+        encoding="utf-8"
+    )
+
+    assert "targetAddressSpace: credential.targetAddressSpace" in template
+    assert 'targetAddressSpace: "local"' not in template
 
 
 def test_local_executor_context_forces_daily_task_to_local(monkeypatch):

@@ -6431,6 +6431,7 @@ def get_ai_appeal_records(limit=100):
                     `ai_replies_json`,
                     `ai_summary`,
                     `error`,
+                    `raw_json`,
                     `created_at`
                 FROM `ai_appeal_records`
                 ORDER BY `appeal_time` DESC, `id` DESC
@@ -6449,6 +6450,23 @@ def get_ai_appeal_records(limit=100):
                         row[json_key] = json.loads(value) if value else []
                     except Exception:
                         row[json_key] = []
+                try:
+                    raw_record = json.loads(row.pop("raw_json") or "{}")
+                except (TypeError, ValueError):
+                    raw_record = {}
+                if not isinstance(raw_record, dict):
+                    raw_record = {}
+                row["execution"] = (
+                    dict(raw_record.get("execution") or {})
+                    if isinstance(raw_record.get("execution"), dict)
+                    else {}
+                )
+                row["executor"] = (
+                    dict(raw_record.get("executor") or {})
+                    if isinstance(raw_record.get("executor"), dict)
+                    else {}
+                )
+                row["record_scope"] = str(raw_record.get("record_scope") or "")
             return {"total": len(rows), "rows": rows}
     finally:
         connection.close()
