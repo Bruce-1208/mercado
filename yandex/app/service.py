@@ -5,12 +5,13 @@ from decimal import Decimal, ROUND_HALF_UP
 from typing import Any
 from urllib.parse import parse_qs, quote, urlencode, urlsplit, urlunsplit
 
+from yandex.app.central_authorization import authorization_store
 from yandex.app.config import settings
 from yandex.app.database import database
 from yandex.app.order_finance import enrich_order_finances
 from yandex.app.schemas import ProductRecord
 from yandex.app.scraper import CaptchaRequired, ScraperError, scraper
-from yandex.app.secret_store import protect_secret, secret_fingerprint, unprotect_secret
+from yandex.app.secret_store import secret_fingerprint
 from yandex.app.yandex_api import StockTarget, StoreContext, YandexApiError, YandexSellerClient
 
 
@@ -106,9 +107,9 @@ class TaskService:
     async def add_store(self, alias: str, token: str) -> tuple[dict[str, Any], bool]:
         normalized_token = token.strip()
         context = await self.validate_token(normalized_token)
-        return database.save_store(
+        return authorization_store.save_store(
             alias=alias,
-            encrypted_token=protect_secret(normalized_token),
+            token=normalized_token,
             token_fingerprint=secret_fingerprint(normalized_token),
             store=context.public_dict(),
         )
@@ -149,31 +150,33 @@ class TaskService:
         authorized_url: str,
         token: str | None,
     ) -> tuple[dict[str, Any], dict[str, Any], bool]:
-        authorization = database.get_zeshun_authorization(authorization_id)
+        authorization = authorization_store.get_zeshun_authorization(authorization_id)
         if not authorization:
             raise LookupError("授权店铺不存在")
         normalized_token = (token or self.token_from_authorized_url(authorized_url) or "").strip()
         if not normalized_token:
             raise ValueError("授权链接中未找到 token，请在 token 输入框中手动填写")
         store, created = await self.add_store(authorization["alias"], normalized_token)
-        encrypted_url = protect_secret(authorized_url) if authorized_url else None
-        updated = database.complete_zeshun_authorization(
+        updated = authorization_store.complete_zeshun_authorization(
             authorization_id,
             store_id=int(store["id"]),
-            encrypted_authorized_url=encrypted_url,
         )
         if not updated:
             raise LookupError("授权店铺不存在")
         return updated, store, created
 
     async def resolve_store(self, store_id: int) -> tuple[str, StoreContext, dict[str, Any]]:
-        stored = database.get_store(store_id, include_secret=True)
+        stored = authorization_store.get_store(store_id, include_secret=True)
         if not stored:
             raise LookupError("店铺不存在")
-        encrypted = stored.get("encrypted_token")
-        token = unprotect_secret(bytes(encrypted))
+        token = str(stored.get("access_token") or "")
+        if not token:
+            raise LookupError("店铺授权缺少 token，请重新授权")
         context = await self.validate_token(token)
-        refreshed = database.update_store_connection(store_id, context.public_dict()) or stored
+        refreshed = (
+            authorization_store.update_store_connection(store_id, context.public_dict())
+            or stored
+        )
         return token, context, refreshed
 
     async def get_orders(
@@ -297,6 +300,86 @@ class TaskService:
             store.business_id, store.campaign_id, offer_id, count, target
         )
         return {"response": result, "target": target.public_dict()}, stored
+
+    async def get_listings(
+        self,
+        store_id: int,
+        *,
+        offer_ids: list[str] | None = None,
+        statuses: list[str] | None = None,
+        page_token: str = "",
+        limit: int = 100,
+    ) -> tuple[dict[str, Any], dict[str, Any]]:
+        token, store, stored = await self.resolve_store(store_id)
+        _require_scope(
+            store, {"offers-and-cards-management"}, "链接", read_only=True
+        )
+        client = YandexSellerClient(token)
+        result = await client.get_campaign_offers(
+            store.campaign_id,
+            offer_ids=offer_ids,
+            statuses=statuses,
+            page_token=page_token,
+            limit=limit,
+        )
+        ids = list(
+            dict.fromkeys(
+                str(item.get("offerId"))
+                for item in result["offers"]
+                if item.get("offerId")
+            )
+        )
+        details: list[dict[str, Any]] = []
+        warning = ""
+        try:
+            for index in range(0, len(ids), 100):
+                details.extend(
+                    await client.get_business_offer_prices(
+                        store.business_id, ids[index : index + 100]
+                    )
+                )
+        except YandexApiError as exc:
+            warning = f"商品名称、图片或前台链接暂未补全：{exc}"
+        detail_by_id = {str(item.get("offerId")): item for item in details}
+        for item in result["offers"]:
+            item["details"] = detail_by_id.get(str(item.get("offerId")), {})
+        result["warning"] = warning
+        result["statusCounts"] = {
+            status: sum(1 for item in result["offers"] if item.get("status") == status)
+            for status in sorted({str(item.get("status")) for item in result["offers"] if item.get("status")})
+        }
+        return result, stored
+
+    async def update_listing_price(
+        self,
+        store_id: int,
+        offer_id: str,
+        *,
+        value: float,
+        currency_id: str,
+        discount_base: float | None = None,
+    ) -> tuple[dict[str, Any], dict[str, Any]]:
+        token, store, stored = await self.resolve_store(store_id)
+        _require_scope(store, {"pricing"}, "链接价格")
+        result = await YandexSellerClient(token).update_listing_price(
+            store.business_id,
+            store.campaign_id,
+            offer_id,
+            value=value,
+            currency_id=currency_id,
+            discount_base=discount_base,
+        )
+        return result, stored
+
+    async def delete_listings(
+        self, store_id: int, offer_ids: list[str]
+    ) -> tuple[dict[str, Any], dict[str, Any]]:
+        token, store, stored = await self.resolve_store(store_id)
+        _require_scope(store, {"offers-and-cards-management"}, "链接")
+        result = await YandexSellerClient(token).delete_campaign_offers(
+            store.campaign_id, offer_ids
+        )
+        return result, stored
 
     async def get_returns(
         self, store_id: int, **filters: Any

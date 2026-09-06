@@ -240,6 +240,7 @@ WORKBENCH_PERMISSION_GROUPS = (
     ("shop_status", "店铺状态", (("shop_status.view", "查看"), ("shop_status.execute", "检测/处理"))),
     ("funds", "资金管理", (("funds.view", "查看"), ("funds.execute", "采集/终止"))),
     ("zying_collection", "智赢产品采集", (("zying_collection.view", "查看"), ("zying_collection.execute", "执行采集"))),
+    ("ai_weight_price", "AI核重核价", (("ai_weight_price.view", "查看/导出"), ("ai_weight_price.execute", "采集/咨询/回写/配置"))),
     ("risk_check", "侵权检测", (("risk_check.view", "查看"), ("risk_check.execute", "执行检测"))),
     ("infringement_knowledge", "侵权知识库", (("infringement_knowledge.view", "查看"), ("infringement_knowledge.manage", "新增/修改/删除"))),
     ("infractions", "违规商品总览", (("infractions.view", "查看/导出"), ("infractions.execute", "采集"))),
@@ -1561,6 +1562,8 @@ def internal_api_required(view_func):
 
 def _required_workbench_permissions(path, method):
     method = str(method or "GET").upper()
+    if path.startswith("/api/ai-weight-price/"):
+        return ("ai_weight_price.view",) if method == "GET" else ("ai_weight_price.execute",)
     if path.startswith("/api/access/"):
         return ("access.view",) if method == "GET" else ("access.manage",)
     if path.startswith("/api/appeal-phrases"):
@@ -1717,6 +1720,23 @@ else:
         ensure_workbench_user_table()
     except Exception as e:
         logging.error("初始化工作台登录表失败: %s", e)
+
+
+def _authorize_ai_weight_price(permission):
+    user = get_current_workbench_user()
+    if not user:
+        return jsonify({"message": "请先登录泽顺控制台"}), 401
+    if not workbench_user_has_permission(user, permission):
+        return jsonify({"message": "当前账号没有AI核重核价操作权限"}), 403
+    return None
+
+
+from erp.ai_weight_price.config import data_dir as ai_weight_price_data_dir
+from erp.ai_weight_price.service import Service as AIWeightPriceService
+from erp.ai_weight_price.web import create_blueprint as create_ai_weight_price_blueprint
+
+ai_weight_price_service = AIWeightPriceService(ai_weight_price_data_dir())
+app.register_blueprint(create_ai_weight_price_blueprint(ai_weight_price_service, _authorize_ai_weight_price))
 
 
 # 1. 核心逻辑方法：改造成生成器
