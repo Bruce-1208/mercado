@@ -415,7 +415,7 @@ def test_open_edge_launches_visible_installed_app_with_exact_login_url(tmp_path,
     assert edge.open_edge("http://127.0.0.1:9222",tmp_path)=="edge1"
     command=calls[0][0][0]
     assert command[0]=="C:/Edge/msedge.exe"
-    assert command[-1]=="https://seller.zying.net/#/login"
+    assert command[-1]=="https://meli.zying.net/#/login"
     assert "--remote-debugging-address=127.0.0.1" in command
     assert not any("headless" in arg for arg in command)
 
@@ -479,7 +479,7 @@ def test_collection_only_reads_selected_pages_and_resumes_matching_scope(service
 
 def test_clear_category_does_not_leave_previous_filter(monkeypatch):
     from erp.ai_weight_price.browser import Browser,CATEGORY_READ
-    browser=Browser(validate({}),threading.Event(),lambda *args:None)
+    browser=Browser(validate({}),threading.Event(),lambda *args,**kwargs:None)
     class Control:
         selected=["a"]
         @property
@@ -493,17 +493,18 @@ def test_clear_category_does_not_leave_previous_filter(monkeypatch):
         def count(self):return 1
         def click(self):clicks.append("search")
     class Page:
-        url="https://seller.zying.net/#/product"
+        url="https://meli.zying.net/#/product"
         def locator(self,*args):return control
         def get_by_role(self,*args,**kwargs):return Search()
     monkeypatch.setattr(browser,"delay",lambda *args:None)
     monkeypatch.setattr(browser,"check",lambda *args:None)
+    monkeypatch.setattr(browser,"category_control",lambda *args:control)
     assert browser.apply_category(Page(),"")=="全部分类"
     assert control.selected==[] and clicks==["search"]
 
 
 def test_category_tree_preserves_depth_order_and_duplicate_names():
-    from erp.ai_weight_price.browser import category_paths
+    from erp.ai_weight_price.browser import category_control_score,category_paths
     paths=category_paths([
         {"value":"a","label":"服饰","children":[{"value":"b","label":"配件","children":[{"value":"c","label":"帽子"}]}]},
         {"value":"d","label":"家居","disabled":True,"children":[{"value":"b","label":"配件"}]}])
@@ -511,20 +512,31 @@ def test_category_tree_preserves_depth_order_and_duplicate_names():
     assert paths[2]["label"]=="服饰 / 配件 / 帽子"
     assert paths[2]["depth"]==3 and paths[2]["parent_value"]=="a/b"
     assert paths[4]["disabled"] and not paths[1]["disabled"]
+    product={"label":"商品分类","placeholder":"请选择分类","text":""}
+    shop={"label":"店铺 / 国家","placeholder":"","text":"武汉泽顺跟卖 / 巴西"}
+    assert category_control_score(product,[{"value":"a","label":"服饰"}]) > category_control_score(shop,[{"value":"br","label":"巴西"}])
+
+
+def test_config_only_accepts_mercado_zying_product_page():
+    assert validate({})["erp_list_url"]=="https://meli.zying.net/#/product"
+    with pytest.raises(ValueError):
+        validate({"erp_list_url":"https://seller.zying.net/#/product/myproduct/productlist"})
 
 
 def test_category_reader_waits_for_async_tree(monkeypatch):
     from erp.ai_weight_price.browser import Browser
     from types import SimpleNamespace
-    browser=Browser(validate({}),threading.Event(),lambda *args:None)
+    browser=Browser(validate({}),threading.Event(),lambda *args,**kwargs:None)
     monkeypatch.setattr(browser,"check",lambda *args:None)
     monkeypatch.setattr(browser.stop,"wait",lambda *args:False)
     tree=[{"value":"1","label":"家居","children":[{"value":"2","label":"厨房"}]}]
     values=iter([[],[],tree,tree])
     control=SimpleNamespace(evaluate=lambda *args:{"options":next(values),"value":[]})
-    assert browser.read_categories(SimpleNamespace(url="https://seller.zying.net/#/product"),control)["options"]==tree
+    assert browser.read_categories(SimpleNamespace(url="https://meli.zying.net/#/product"),control)["options"]==tree
+    timeout_control=SimpleNamespace(evaluate=lambda *args:{"tag":"DIV","classes":"ant-cascader","react":True,
+                                                            "vue":False,"placeholder":"分类","text":""})
     with pytest.raises(ValueError,match="未更新"):
-        browser.read_categories(SimpleNamespace(),control,timeout=0)
+        browser.read_categories(SimpleNamespace(url="https://meli.zying.net/#/product"),timeout_control,timeout=0)
 
 
 def test_category_refresh_failure_keeps_snapshot_then_replaces_with_new_tree(service,client,monkeypatch):

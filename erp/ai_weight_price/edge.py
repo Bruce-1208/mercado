@@ -12,7 +12,7 @@ from urllib.request import ProxyHandler, build_opener
 
 from .config import safe_url
 
-LOGIN_URL = "https://seller.zying.net/#/login"
+LOGIN_URL = "https://meli.zying.net/#/login"
 
 
 def edge_executable():

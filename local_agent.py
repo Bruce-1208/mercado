@@ -10,6 +10,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import multiprocessing
 import os
 import platform
 import queue
@@ -29,7 +30,7 @@ from urllib.parse import urlsplit
 import requests
 
 
-AGENT_VERSION = "1.0.0"
+AGENT_VERSION = "1.1.0"
 DEFAULT_SERVER_URL = "https://zeshun.nat100.top"
 DEFAULT_POLL_SECONDS = 2.0
 DEFAULT_HEARTBEAT_SECONDS = 10.0
@@ -242,7 +243,7 @@ class AgentProcessLock:
 
 
 class LocalAgent:
-    capabilities = ("appeal",)
+    capabilities = ("appeal", "daily_task")
 
     def __init__(self, config):
         self.config = config
@@ -460,6 +461,8 @@ class LocalAgent:
         job_dir.mkdir(parents=True, exist_ok=True)
         job_file = job_dir / "job.json"
         cancel_file = job_dir / "cancel.requested"
+        result_file = job_dir / "result.json"
+        result_file.unlink(missing_ok=True)
         if cancel_file.exists():
             cancel_file.unlink()
         job_file.write_text(json.dumps(job, ensure_ascii=False), encoding="utf-8")
@@ -502,6 +505,7 @@ class LocalAgent:
         cancel_started = 0.0
         reader_done = False
         pending_logs = ""
+        last_log_flush = time.monotonic()
         while process.poll() is None or not reader_done:
             try:
                 item = output_queue.get(timeout=0.25)
@@ -511,7 +515,10 @@ class LocalAgent:
                     pending_logs += item
             except queue.Empty:
                 pass
-            if len(pending_logs) >= 32 * 1024:
+            if pending_logs and (
+                len(pending_logs) >= 32 * 1024
+                or time.monotonic() - last_log_flush >= 2
+            ):
                 # 64K characters stay below the server's 512 KiB UTF-8 limit,
                 # even when every code point uses four bytes.
                 chunk = pending_logs[: 64 * 1024]
@@ -521,6 +528,7 @@ class LocalAgent:
                     print(f"任务日志暂时无法上传，将继续保留并重试：{exc}", flush=True)
                 else:
                     pending_logs = pending_logs[len(chunk) :]
+                    last_log_flush = time.monotonic()
             now = time.monotonic()
             if now - last_heartbeat >= self.config.heartbeat_seconds:
                 last_heartbeat = now
@@ -546,6 +554,7 @@ class LocalAgent:
             self.send_event_until_success(job_id, content=chunk)
             pending_logs = pending_logs[len(chunk) :]
         return_code = int(process.wait())
+        result = _load_json(result_file)
         stopped = cancel_file.exists() or return_code == 2
         status = "stopped" if stopped else "success" if return_code == 0 else "error"
         message = (
@@ -558,8 +567,8 @@ class LocalAgent:
         self.send_event_until_success(
             job_id,
             status=status,
-            message=message,
-            result={"return_code": return_code},
+            message=message if stopped or return_code else result.get("message") or message,
+            result={**result, "return_code": return_code},
         )
 
     def run(self):
@@ -658,4 +667,5 @@ def main(argv=None):
 
 
 if __name__ == "__main__":
+    multiprocessing.freeze_support()
     raise SystemExit(main())

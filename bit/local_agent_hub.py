@@ -436,3 +436,20 @@ class LocalAgentStore:
             ).fetchall()
         return [dict(row) for row in rows]
 
+    def recent_log(self, job_id, *, max_chars=512 * 1024):
+        """Read the newest log chunks, including logs after the first 500 events."""
+        job_id = normalize_job_id(job_id)
+        chunks = []
+        size = 0
+        with self._connect() as connection:
+            rows = connection.execute(
+                "SELECT content FROM local_agent_events WHERE job_id = ? ORDER BY event_id DESC",
+                (job_id,),
+            )
+            for row in rows:
+                chunks.append(row["content"])
+                size += len(row["content"])
+                if size >= max_chars:
+                    break
+        return "".join(reversed(chunks))[-max_chars:]
+

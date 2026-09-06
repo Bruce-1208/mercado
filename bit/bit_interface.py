@@ -1579,10 +1579,15 @@ def _local_executor_user_from_token(token):
 
 
 def create_local_agent_enrollment_token(user):
+    permission = next(
+        (value for value in ("appeal.execute", "tasks.execute")
+         if workbench_user_has_permission(user, value)),
+        "",
+    )
     payload = {
         "id": int((user or {}).get("id") or 0),
         "username": str((user or {}).get("username") or ""),
-        "permission": "appeal.execute",
+        "permission": permission,
     }
     if not _valid_local_executor_identity(payload):
         raise ValueError("无法为当前账号创建 Agent 注册凭证")
@@ -1611,7 +1616,7 @@ def _local_agent_enrollment_user(token):
     if not row or not row.get("is_active") or row.get("username") != payload["username"]:
         return None
     user = build_workbench_session_user(row)
-    if not workbench_user_has_permission(user, "appeal.execute"):
+    if not workbench_user_has_permission(user, payload["permission"]):
         return None
     return payload
 
@@ -1761,9 +1766,9 @@ def _required_workbench_permissions(path, method):
     if path.startswith("/api/run_shensu"):
         return ("appeal.execute",)
     if path == "/api/execution-agents":
-        return ("appeal.view",)
+        return ("appeal.view", "tasks.view", "tasks.execute")
     if path == "/api/local-agents/download":
-        return ("appeal.execute",)
+        return ("appeal.execute", "tasks.execute")
     if path == "/api/collections/options":
         return (
             "appeal.view",
@@ -2292,7 +2297,9 @@ def _daily_task_display_name(params):
     task_type = "、".join(appeal_types) or str(params.get("appeal_type") or "自动申诉")
     mode = "循环" if params.get("mode") == "loop" else "单轮"
     execution_label = (
-        "本机比特浏览器"
+        str(params.get("agent_name") or "本机 Agent")
+        if params.get("execution_target") == "agent"
+        else "本机比特浏览器"
         if params.get("execution_target") == "local"
         else "服务器比特浏览器"
     )
@@ -4384,6 +4391,8 @@ def _request_execution_target(data=None):
         and getattr(g, "local_executor_user", None)
     ) or RUNTIME_SETTINGS.is_client:
         return "local"
+    if (data or {}).get("execution_target") == "agent":
+        return "agent"
     return "server"
 
 
@@ -4464,6 +4473,84 @@ def build_daily_task_params(data):
     }
 
 
+def execute_daily_task(params, task_lock, stop_event, task_id, effective_log_path, owned_window_ids):
+    """Run daily_task business logic in either a workbench or an Agent worker."""
+    appeal_types = params.get("appeal_types") or [
+        params.get("appeal_type", bit_daily_task.APPEAL_TYPE_INFRACTION)
+    ]
+    appeal_task = appeal_types[0] if len(appeal_types) == 1 else appeal_types
+    appeal_label = "、".join(appeal_types)
+    min_rate = params.get("min_rate", 0)
+    execution_standards = {
+        "min_infraction_count": params.get("infraction_min_count", 0),
+        "min_delay_rate": params.get("delay_min_rate", min_rate),
+        "min_cancellation_rate": params.get("cancellation_min_rate", min_rate),
+        "min_complaint_rate": params.get("complaint_min_rate", min_rate),
+    }
+    if params["mode"] == "loop":
+        stop_at = None
+        if params["stop_after_minutes"] > 0:
+            stop_at = datetime.now() + timedelta(minutes=params["stop_after_minutes"])
+        execution_result = bit_daily_task.loop_ai_appeal(
+            appeal_task,
+            top_n=params["top_n"],
+            max_workers=params["max_workers"],
+            recent_days=params["recent_days"],
+            round_interval=params["round_interval"],
+            site_pause=params["site_pause"],
+            message=params["message"],
+            min_rate=min_rate,
+            **execution_standards,
+            salespeople=params["salespeople"],
+            group_names=params.get("group_names", []),
+            stop_at=stop_at,
+            stop_event=stop_event,
+            log_path=str(effective_log_path),
+            _task_lock=task_lock,
+            task_id=task_id,
+            owned_window_ids=owned_window_ids,
+        )
+        result_message = (
+            f"daily_task {appeal_label}任务已停止"
+            if stop_event.is_set()
+            else f"daily_task {appeal_label}任务循环执行完成"
+        )
+    else:
+        execution_result = bit_daily_task.run_ai_appeal_once(
+            appeal_task,
+            top_n=params["top_n"],
+            max_workers=params["max_workers"],
+            recent_days=params["recent_days"],
+            site_pause=params["site_pause"],
+            message=params["message"],
+            min_rate=min_rate,
+            **execution_standards,
+            salespeople=params["salespeople"],
+            group_names=params.get("group_names", []),
+            stop_event=stop_event,
+            log_path=str(effective_log_path),
+            _task_lock=task_lock,
+            task_id=task_id,
+            owned_window_ids=owned_window_ids,
+        )
+        result_message = (
+            f"daily_task {appeal_label}任务已停止"
+            if stop_event.is_set()
+            else f"daily_task {appeal_label}任务单轮执行完成"
+        )
+
+    execution_counts = bit_daily_task.task_execution_counts(execution_result)
+    needs_attention = any(count and key not in {"sent", "replied", "no_data"}
+                          for key, count in execution_counts.items())
+    result_message += f"；执行统计：{execution_counts}；话术发送成功不代表申诉已批准"
+    print(f"{get_now_time()} {result_message}<br>")
+    return {
+        "status": "stopped" if stop_event.is_set() else ("partial" if needs_attention else "success"),
+        "execution_counts": execution_counts,
+        "message": result_message,
+    }
+
+
 def run_daily_task_job(
     params,
     task_lock,
@@ -4479,82 +4566,16 @@ def run_daily_task_job(
     register_thread_log_queue(DailyTaskLogSink(effective_log_path))
     try:
         print(f"{get_now_time()} 开始执行 daily_task：{params}<br>")
-        appeal_types = params.get("appeal_types") or [
-            params.get("appeal_type", bit_daily_task.APPEAL_TYPE_INFRACTION)
-        ]
-        appeal_task = appeal_types[0] if len(appeal_types) == 1 else appeal_types
-        appeal_label = "、".join(appeal_types)
-        min_rate = params.get("min_rate", 0)
-        execution_standards = {
-            "min_infraction_count": params.get("infraction_min_count", 0),
-            "min_delay_rate": params.get("delay_min_rate", min_rate),
-            "min_cancellation_rate": params.get("cancellation_min_rate", min_rate),
-            "min_complaint_rate": params.get("complaint_min_rate", min_rate),
-        }
-        if params["mode"] == "loop":
-            stop_at = None
-            if params["stop_after_minutes"] > 0:
-                stop_at = datetime.now() + timedelta(minutes=params["stop_after_minutes"])
-            execution_result = bit_daily_task.loop_ai_appeal(
-                appeal_task,
-                top_n=params["top_n"],
-                max_workers=params["max_workers"],
-                recent_days=params["recent_days"],
-                round_interval=params["round_interval"],
-                site_pause=params["site_pause"],
-                message=params["message"],
-                min_rate=min_rate,
-                **execution_standards,
-                salespeople=params["salespeople"],
-                group_names=params.get("group_names", []),
-                stop_at=stop_at,
-                stop_event=stop_event,
-                log_path=str(effective_log_path),
-                _task_lock=task_lock,
-                task_id=task_id,
-                owned_window_ids=owned_window_ids,
-            )
-            result_message = (
-                f"daily_task {appeal_label}任务已停止"
-                if stop_event.is_set()
-                else f"daily_task {appeal_label}任务循环执行完成"
-            )
-        else:
-            execution_result = bit_daily_task.run_ai_appeal_once(
-                appeal_task,
-                top_n=params["top_n"],
-                max_workers=params["max_workers"],
-                recent_days=params["recent_days"],
-                site_pause=params["site_pause"],
-                message=params["message"],
-                min_rate=min_rate,
-                **execution_standards,
-                salespeople=params["salespeople"],
-                group_names=params.get("group_names", []),
-                stop_event=stop_event,
-                log_path=str(effective_log_path),
-                _task_lock=task_lock,
-                task_id=task_id,
-                owned_window_ids=owned_window_ids,
-            )
-            result_message = (
-                f"daily_task {appeal_label}任务已停止"
-                if stop_event.is_set()
-                else f"daily_task {appeal_label}任务单轮执行完成"
-            )
-
-        execution_counts = bit_daily_task.task_execution_counts(execution_result)
-        needs_attention = any(count and key not in {"sent", "replied", "no_data"}
-                              for key, count in execution_counts.items())
-        result_message += f"；执行统计：{execution_counts}；话术发送成功不代表申诉已批准"
-        print(f"{get_now_time()} {result_message}<br>")
+        result = execute_daily_task(
+            params, task_lock, stop_event, task_id, effective_log_path, owned_window_ids
+        )
         _update_daily_task_state(
             task_id,
             running=False,
             finished_at=datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-            status="stopped" if stop_event.is_set() else ("partial" if needs_attention else "success"),
-            execution_counts=execution_counts,
-            message=result_message,
+            status=result["status"],
+            execution_counts=result["execution_counts"],
+            message=result["message"],
             stop_requested=stop_event.is_set(),
             can_stop=False,
         )
@@ -6742,6 +6763,11 @@ def api_start_daily_task():
     except ValueError as exc:
         return jsonify({"status": "error", "message": str(exc)}), 400
 
+    if data.get("execution_target") == "agent":
+        if params["execution_target"] != "agent":
+            return jsonify({"status": "error", "message": "请在公网工作台选择 Agent"}), 400
+        return enqueue_local_agent_daily_task(data.get("agent_id"), params)
+
     max_concurrent = _daily_task_max_concurrent()
     with _daily_task_lock:
         running_count = sum(
@@ -6931,6 +6957,17 @@ def api_stop_daily_task():
     global _daily_task_stop_event
     data = request.get_json(silent=True) or {}
     requested_task_id = str(data.get("task_id") or request.args.get("task_id") or "").strip()
+    if request.args.get("execution_target") == "agent" or data.get("execution_target") == "agent":
+        try:
+            job = get_local_agent_store().get_job(requested_task_id)
+        except ValueError as exc:
+            return jsonify({"status": "error", "message": str(exc)}), 400
+        if not job or job["job_type"] != "daily_task":
+            return jsonify({"status": "error", "message": "没有找到指定 Agent 任务"}), 404
+        get_local_agent_store().request_cancel(requested_task_id)
+        job = get_local_agent_store().get_job(requested_task_id)
+        return jsonify({"status": "success", "data": daily_agent_task_snapshot(job),
+                        "message": "Agent 任务停止请求已提交"})
     task_id = _resolve_daily_task_id_for_stop(requested_task_id)
     if not task_id:
         with _daily_task_lock:
@@ -7049,6 +7086,21 @@ def api_daily_task_options():
 @login_required
 def api_daily_task_status():
     requested_task_id = str(request.args.get("task_id") or "").strip()
+    if request.args.get("execution_target") == "agent":
+        if requested_task_id:
+            try:
+                job = get_local_agent_store().get_job(requested_task_id)
+            except ValueError as exc:
+                return jsonify({"status": "error", "message": str(exc)}), 400
+            if not job or job["job_type"] != "daily_task":
+                return jsonify({"status": "error", "message": "没有找到指定 Agent 任务"}), 404
+            data = daily_agent_task_snapshot(job, include_log=True)
+        else:
+            tasks = [daily_agent_task_snapshot(job) for job in
+                     get_local_agent_store().list_jobs(job_type="daily_task", limit=500)]
+            data = {"tasks": tasks, "running": any(task["running"] for task in tasks),
+                    "running_count": sum(task["running"] for task in tasks), "total_count": len(tasks)}
+        return jsonify({"status": "success", "data": data})
     if requested_task_id:
         task = _daily_task_snapshot(requested_task_id)
         if not task:
@@ -7264,7 +7316,7 @@ def api_local_agent_business_bundle():
 def api_execution_agents():
     agents = get_local_agent_store().list_agents(
         online_seconds=LOCAL_AGENT_ONLINE_SECONDS,
-        capability="appeal",
+        capability=str(request.args.get("capability") or "appeal"),
     )
     response = jsonify({"status": "success", "data": {"agents": agents}})
     response.headers["Cache-Control"] = "no-store"
@@ -7275,8 +7327,9 @@ def api_execution_agents():
 @login_required
 def api_download_local_agent():
     user = get_current_workbench_user()
-    if not workbench_user_has_permission(user, "appeal.execute"):
-        return jsonify({"status": "error", "message": "当前账号没有申诉执行权限"}), 403
+    if not any(workbench_user_has_permission(user, permission)
+               for permission in ("appeal.execute", "tasks.execute")):
+        return jsonify({"status": "error", "message": "当前账号没有 Agent 任务执行权限"}), 403
     enrollment_token = create_local_agent_enrollment_token(user)
     public_url = str(
         os.environ.get("BIT_PUBLIC_WORKBENCH_URL")
@@ -7322,6 +7375,52 @@ def stream_local_agent_job(job_id):
             yield "\n"
             last_heartbeat = now
         time.sleep(0.5)
+
+
+def daily_agent_task_snapshot(job, *, include_log=False):
+    params = dict(job.get("payload") or {})
+    result = job.get("result") or {}
+    running = job["status"] not in TERMINAL_JOB_STATUSES
+    def timestamp(value):
+        return datetime.fromtimestamp(value).strftime("%Y-%m-%d %H:%M:%S") if value else ""
+    state = {
+        "task_id": job["job_id"], "agent_id": job["agent_id"],
+        "agent_name": params.get("agent_name") or job["agent_id"],
+        "name": _daily_task_display_name(params), "execution_target": "agent",
+        "running": running, "can_stop": running,
+        "status": "partial" if job["status"] == "success" and result.get("status") == "partial" else job["status"],
+        "message": job["message"], "stop_requested": job["cancel_requested"],
+        "started_at": timestamp(job.get("started_at")),
+        "created_at": timestamp(job.get("created_at")),
+        "finished_at": timestamp(job.get("finished_at")),
+        "params": params, "execution_counts": result.get("execution_counts", {}),
+    }
+    if include_log:
+        state["log"] = get_local_agent_store().recent_log(job["job_id"])
+    return state
+
+
+def enqueue_local_agent_daily_task(agent_id, params):
+    store = get_local_agent_store()
+    try:
+        agent_id = normalize_agent_id(agent_id)
+        agent = store.get_agent(agent_id, online_seconds=LOCAL_AGENT_ONLINE_SECONDS)
+    except ValueError as exc:
+        return jsonify({"status": "error", "message": str(exc)}), 400
+    if not agent or not agent["online"]:
+        return jsonify({"status": "error", "message": "所选 Agent 不在线，请启动 Agent 并刷新电脑"}), 409
+    if "daily_task" not in agent.get("capabilities", ()):
+        return jsonify({"status": "error", "message": "请将所选电脑的 Agent 更新至 1.1.0 或更高版本"}), 409
+    params = {**params, "execution_target": "agent", "agent_id": agent_id, "agent_name": agent["name"]}
+    user = get_current_workbench_user() or {}
+    job = store.enqueue_job(
+        secrets.token_hex(16), agent_id, "daily_task", params,
+        required_version=current_local_agent_bundle()["version"],
+        created_by_id=user.get("id"),
+        created_by_name=user.get("display_name") or user.get("username") or "",
+    )
+    return jsonify({"status": "success", "data": daily_agent_task_snapshot(job),
+                    "message": f"任务已提交到 {agent['name']}，等待 Agent 执行"})
 
 
 def enqueue_local_agent_appeal(

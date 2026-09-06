@@ -103,3 +103,37 @@ def test_agent_rejects_zip_path_traversal(tmp_path):
         agent._safe_extract(archive_path, destination)
 
     assert not (tmp_path / "outside.py").exists()
+
+
+def test_agent_uploads_live_logs_and_worker_result(tmp_path, monkeypatch):
+    config = SimpleNamespace(data_dir=tmp_path, server_url="https://workbench.example",
+                             agent_token="", db_api_token="test-only", heartbeat_seconds=0.1)
+    agent = LocalAgent(config)
+    agent.current_release = "runtime-test"
+    release = tmp_path / "releases" / agent.current_release
+    release.mkdir(parents=True)
+    (release / "local_agent_worker.py").write_text('''
+import argparse, json, time
+from pathlib import Path
+parser = argparse.ArgumentParser()
+parser.add_argument('--job-file')
+parser.add_argument('--cancel-file')
+args = parser.parse_args()
+print('live daily progress', flush=True)
+time.sleep(2.5)
+Path(args.job_file).with_name('result.json').write_text(json.dumps({
+    'status': 'partial', 'message': 'one task needs attention', 'execution_counts': {'failed': 1}
+}), encoding='utf-8')
+''', encoding="utf-8")
+    events = []
+    def event(job_id, **data):
+        events.append(data)
+        if data.get("content"):
+            assert not (tmp_path / "jobs" / job_id / "result.json").exists(), "Small logs must arrive before the worker exits"
+    monkeypatch.setattr(agent, "heartbeat", lambda: {})
+    monkeypatch.setattr(agent, "send_event", event)
+    agent.run_job({"job_id": "daily-runtime-job", "job_type": "daily_task", "payload": {}})
+    assert "live daily progress" in events[0]["content"]
+    assert events[-1]["result"]["execution_counts"] == {"failed": 1}
+    assert events[-1]["result"]["return_code"] == 0
+    assert events[-1]["message"] == "one task needs attention"

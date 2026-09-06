@@ -9737,10 +9737,21 @@
                         <div class="field">
                             <label for="daily-task-execution-target">执行位置</label>
                             <select id="daily-task-execution-target">
-                                <option value="local" selected>本机比特浏览器（默认）</option>
+                                <option value="agent" {% if runtime_role != 'client' %}selected{% endif %}>本机 Agent</option>
+                                <option value="local" {% if runtime_role == 'client' %}selected{% endif %}>旧版 client 工作台（兼容）</option>
                                 <option value="server">服务器比特浏览器</option>
                             </select>
-                            <small class="shop-search-hint" id="daily-task-local-executor-hint">默认由当前电脑运行；本机未连接时不会自动改用服务器。</small>
+                            <small class="shop-search-hint" id="daily-task-local-executor-hint">选择在线电脑，由该电脑的 Agent 执行任务。</small>
+                        </div>
+
+                        <div class="field" id="daily-task-agent-field">
+                            <label for="daily-task-agent-id">执行电脑</label>
+                            <select id="daily-task-agent-id"><option value="">正在读取在线电脑...</option></select>
+                            <div class="actions" style="margin-top: 8px;">
+                                <button class="secondary" type="button" id="refresh-daily-task-agents">刷新电脑</button>
+                                <button class="secondary" type="button" id="download-daily-task-agent">下载本机 Agent</button>
+                            </div>
+                            <small class="shop-search-hint" id="daily-task-agent-hint">请在执行电脑启动 Agent 1.1.0 或更高版本。</small>
                         </div>
 
                         <div class="field">
@@ -11877,6 +11888,10 @@
         const aiAppealTotal = document.getElementById("ai-appeal-total");
         const startDailyTaskBtn = document.getElementById("start-daily-task-btn");
         const dailyTaskExecutionTarget = document.getElementById("daily-task-execution-target");
+        const dailyTaskAgentId = document.getElementById("daily-task-agent-id");
+        const dailyTaskAgentField = document.getElementById("daily-task-agent-field");
+        const dailyTaskAgentHint = document.getElementById("daily-task-agent-hint");
+        const refreshDailyTaskAgentsBtn = document.getElementById("refresh-daily-task-agents");
         const dailyTaskLocalExecutorHint = document.getElementById("daily-task-local-executor-hint");
         const dailyTaskSalesperson = document.getElementById("daily-task-salesperson");
         const dailyTaskGroup = document.getElementById("daily-task-group");
@@ -12516,7 +12531,7 @@
             });
             const actionSelectors = {
                 "appeal.execute": ["#start-btn", "#stop-btn", "#appeal-execution-target", "#appeal-agent-id", "#refresh-execution-agents", "#download-local-agent", "#add-appeal-phrase-btn", "#save-appeal-phrase-btn"],
-                "tasks.execute": ["#start-daily-task-btn", "#daily-task-execution-target"],
+                "tasks.execute": ["#start-daily-task-btn", "#daily-task-execution-target", "#daily-task-agent-id", "#download-daily-task-agent"],
                 "order_print.execute": ["#start-order-print-btn", "#stop-order-print-btn", "#rerun-selected-order-print-btn"],
                 "order_analysis.execute": ["#order-analysis-folder", "#import-order-analysis-btn"],
                 "shop_status.execute": ["#start-selected-mercado-login-btn", "#start-mercado-login-btn", "#stop-mercado-login-btn", ".header-worker-control"],
@@ -12662,6 +12677,7 @@
                 loadAiAppealRecords();
             }
             if (tabName === "tasks") {
+                syncExecutionTargetHint(dailyTaskExecutionTarget, dailyTaskLocalExecutorHint, "tasks.view");
                 loadDailyTaskStatus();
                 if (!tasksLoaded) loadDailyTaskOptions();
             }
@@ -22511,8 +22527,9 @@
             }
         }
 
-        function executionTargetLabel(target) {
+        function executionTargetLabel(target, agentName = "") {
             if (target === "agent") {
+                if (agentName) return `本机 Agent · ${agentName}`;
                 const option = appealAgentId?.selectedOptions?.[0];
                 return option?.textContent?.trim() || "本机 Agent";
             }
@@ -22520,6 +22537,33 @@
         }
 
         let executionAgents = [];
+        let dailyTaskAgents = [];
+
+        async function loadDailyTaskAgents() {
+            if (!dailyTaskAgentId) return;
+            refreshDailyTaskAgentsBtn.disabled = true;
+            dailyTaskAgentHint.textContent = "正在读取在线电脑...";
+            const previous = dailyTaskAgentId.value || window.localStorage.getItem("zeshun-daily-task-agent-id") || "";
+            try {
+                const response = await fetch("/api/execution-agents?capability=daily_task", {cache: "no-store"});
+                const payload = await response.json();
+                if (!response.ok || payload.status !== "success") throw new Error(payload.message || "读取电脑失败");
+                dailyTaskAgents = (payload.data?.agents || []).filter(agent => agent.online);
+                dailyTaskAgentId.innerHTML = dailyTaskAgents.length
+                    ? dailyTaskAgents.map(agent => `<option value="${escapeHtml(agent.agent_id)}">${escapeHtml(agent.name || agent.hostname || agent.agent_id)}${agent.active_jobs ? `（${Number(agent.active_jobs)} 个任务）` : ""}</option>`).join("")
+                    : '<option value="">没有支持 daily_task 的在线 Agent</option>';
+                if (dailyTaskAgents.some(agent => agent.agent_id === previous)) dailyTaskAgentId.value = previous;
+                dailyTaskAgentHint.textContent = dailyTaskAgents.length
+                    ? "同一电脑的任务依次执行；循环任务结束或停止后才会执行下一项。"
+                    : "请在目标电脑启动 Agent 1.1.0 或更高版本，然后刷新电脑。";
+            } catch (error) {
+                dailyTaskAgents = [];
+                dailyTaskAgentId.innerHTML = '<option value="">读取电脑失败</option>';
+                dailyTaskAgentHint.textContent = String(error.message || error);
+            } finally {
+                refreshDailyTaskAgentsBtn.disabled = false;
+            }
+        }
 
         function selectedExecutionAgent() {
             const agentId = String(appealAgentId?.value || "").trim();
@@ -22645,7 +22689,9 @@
                 if (workbenchRuntimeRole === "client") {
                     throw new Error("请在公网泽顺控制台选择本机 Agent");
                 }
-                return fetch(path, options);
+                const agentUrl = new URL(path, window.location.origin);
+                agentUrl.searchParams.set("execution_target", "agent");
+                return fetch(agentUrl, options);
             }
             if (workbenchRuntimeRole === "client") {
                 throw new Error("本机客户端页面不能直接启动服务器任务，请在公网工作台操作");
@@ -22680,10 +22726,17 @@
 
         function syncExecutionTargetHint(selectElement, hintElement, permission) {
             if (!selectElement || !hintElement) return;
+            if (selectElement === dailyTaskExecutionTarget && dailyTaskAgentField) {
+                dailyTaskAgentField.hidden = selectElement.value !== "agent";
+            }
             if (selectElement.value === "agent") {
-                if (appealAgentField) appealAgentField.hidden = false;
                 hintElement.textContent = "任务将由所选在线电脑的 Agent 执行。";
-                loadExecutionAgents();
+                if (selectElement === dailyTaskExecutionTarget) {
+                    loadDailyTaskAgents();
+                } else {
+                    if (appealAgentField) appealAgentField.hidden = false;
+                    loadExecutionAgents();
+                }
                 return;
             }
             if (selectElement === appealExecutionTarget && appealAgentField) {
@@ -22724,7 +22777,8 @@
                 throw new Error("请至少开启一个任务");
             }
             return {
-                execution_target: String(dailyTaskExecutionTarget?.value || "local"),
+                execution_target: String(dailyTaskExecutionTarget?.value || "agent"),
+                agent_id: String(dailyTaskAgentId?.value || ""),
                 mode: document.getElementById("daily-task-mode").value,
                 appeal_types: appealTypes,
                 max_workers: Number(document.getElementById("daily-task-max-workers").value || 10),
@@ -22890,13 +22944,13 @@
             card.dataset.executionTarget = executionTarget;
             card.querySelector('[data-role="title"]').textContent = task.name || "daily_task";
             card.querySelector('[data-role="task-id"]').textContent = (
-                `执行端：${executionTargetLabel(executionTarget)}　任务 ID：${taskId || "-"}`
+                `执行端：${executionTargetLabel(executionTarget, task.agent_name)}　任务 ID：${taskId || "-"}`
             );
             const badge = card.querySelector('[data-role="status-badge"]');
             badge.className = `status ${statusClass}`.trim();
             card.querySelector('[data-role="status-text"]').textContent = task.message || status;
             card.querySelector('[data-role="meta"]').textContent = [
-                `位置：${executionTargetLabel(executionTarget)}`,
+                `位置：${executionTargetLabel(executionTarget, task.agent_name)}`,
                 `开始：${task.started_at || "-"}`,
                 `结束：${task.finished_at || "-"}`,
             ].join("　");
@@ -22932,10 +22986,10 @@
                 : normalizeDailyTaskCollection(data);
             const runningCount = tasks.filter(task => task.running).length;
             const localRunningCount = tasks.filter(task => (
-                task.running && task.execution_target === "local"
+                task.running && ["local", "agent"].includes(task.execution_target)
             )).length;
             const serverRunningCount = tasks.filter(task => (
-                task.running && task.execution_target !== "local"
+                task.running && task.execution_target === "server"
             )).length;
             dailyTaskLocalRunningCount.textContent = String(localRunningCount);
             dailyTaskServerRunningCount.textContent = String(serverRunningCount);
@@ -23117,7 +23171,7 @@
             try {
                 const targets = workbenchRuntimeRole === "client"
                     ? ["local"]
-                    : ["local", "server"];
+                    : (dailyTaskExecutionTarget?.value === "local" ? ["agent", "server", "local"] : ["agent", "server"]);
                 const results = await Promise.allSettled(targets.map(async target => {
                     const response = await fetchExecutionTarget(
                         target,
@@ -23170,6 +23224,9 @@
             try {
                 const payloadData = getDailyTaskPayload();
                 const executionTarget = payloadData.execution_target;
+                if (executionTarget === "agent" && !payloadData.agent_id) {
+                    throw new Error("请先启动 Agent 1.1.0 或更高版本，刷新电脑并选择执行电脑");
+                }
                 const response = await fetchExecutionTarget(
                     executionTarget,
                     "/api/tasks/daily/start",
@@ -23186,7 +23243,7 @@
                 }
                 tasksLoaded = true;
                 alert(
-                    `${executionTargetLabel(executionTarget)}：`
+                    `${executionTargetLabel(executionTarget, dailyTaskAgents.find(agent => agent.agent_id === payloadData.agent_id)?.name)}：`
                     + (payload.message || "daily_task 已启动")
                 );
                 await loadDailyTaskStatus();
@@ -24476,6 +24533,14 @@
                 dailyTaskLocalExecutorHint,
                 "tasks.view",
             );
+            loadDailyTaskStatus();
+        });
+        refreshDailyTaskAgentsBtn?.addEventListener("click", loadDailyTaskAgents);
+        dailyTaskAgentId?.addEventListener("change", () => {
+            window.localStorage.setItem("zeshun-daily-task-agent-id", dailyTaskAgentId.value);
+        });
+        document.getElementById("download-daily-task-agent")?.addEventListener("click", () => {
+            window.location.assign("/api/local-agents/download");
         });
         restoreApiReputationViewState();
         initializeMinuteDateTimeInputs();
