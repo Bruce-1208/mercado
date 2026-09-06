@@ -57,11 +57,11 @@ Copy-Item .\workbench-client.example.json .\workbench-runtime.json
 
 Agent 只主动通过 HTTPS 连接公网控制台，不监听本机端口。服务器磁盘上的业务源码变化后会生成新的业务版本；Agent 在下一次心跳时下载 ZIP、校验 SHA-256、原子切换版本并保留上一版，因此普通业务逻辑更新无需重新安装 Agent。Agent 协议或新增 Python 依赖发生变化时，才需要重新构建并下载 Agent。
 
-当前 Agent 承接“自动化 AI 申诉”；“任务模块”暂时继续使用旧版 client 工作台。服务端部署、Windows EXE 构建和故障排查见 [本机 Agent 部署说明](docs/local_agent.md)。
+Agent 1.1.0 起同时承接“自动化 AI 申诉”和“任务模块”的 daily_task。在任务模块选择“本机 Agent”、刷新电脑并选中在线终端即可启动，状态、日志和停止请求都通过公网工作台传递。同一终端的 Agent 依次执行队列任务；循环任务结束或停止后才会执行下一项。服务端部署、Windows EXE 构建和故障排查见 [本机 Agent 部署说明](docs/local_agent.md)。
 
 ### 旧版 client 工作台（兼容）
 
-需要继续使用浏览器到 `127.0.0.1:5000` 的旧链路，或执行尚未迁移的“任务模块”时，在当前电脑保持 client 工作台运行，并指向公网工作台：
+需要继续使用浏览器到 `127.0.0.1:5000` 的旧链路时，选择“旧版 client 工作台（兼容）”，在当前电脑保持 client 工作台运行，并指向公网工作台：
 
 ```powershell
 $env:BIT_RUNTIME_ROLE="client"

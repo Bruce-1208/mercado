@@ -53,9 +53,10 @@ class Service:
         with self.idle():
             self.store.set_state("login", {"confirmed": False, "opened_at": time.time()})
             config = self.config.load()
-            # Migrate the previous built-in URL to the login site explicitly requested by the user.
-            if config["erp_list_url"] == "https://meli.zying.net/#/product":
-                config["erp_list_url"] = "https://seller.zying.net/#/product"
+            # Migrate older installations from the general Zying console to the
+            # Mercado-specific product console.
+            if config["erp_list_url"] != "https://meli.zying.net/#/product":
+                config["erp_list_url"] = "https://meli.zying.net/#/product"
                 self.config.save(config)
             open_edge(config["cdp_url"], self.store.root)
             try:

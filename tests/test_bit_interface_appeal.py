@@ -749,7 +749,8 @@ def test_daily_task_console_exposes_all_task_switches_and_shop_group():
     assert 'id="daily-task-list"' in template
     assert 'class="danger daily-task-stop-btn"' in template
     assert 'id="daily-task-execution-target"' in template
-    assert '<option value="local" selected>本机比特浏览器（默认）</option>' in template
+    assert 'id="daily-task-agent-id"' in template
+    assert 'id="download-daily-task-agent"' in template
     assert '"/api/tasks/daily/stop"' in template
     assert "fetchExecutionTarget(" in template
     assert "body: JSON.stringify({task_id: taskId})" in template
@@ -1908,7 +1909,7 @@ def test_appeal_page_contains_stop_button_and_handler():
     assert 'id="stop-btn"' in template
     assert 'onclick="stopTask()"' in template
     assert 'id="appeal-execution-target"' in template
-    assert '<option value="local" selected>本机比特浏览器（默认）</option>' in template
+    assert '<option value="agent" selected>本机 Agent（免更新客户端）</option>' in template
     assert '"/api/run_shensu/stop"' in template
     assert '<div class="site-picker" id="site-picker"' in template
     assert 'input type="checkbox" name="site" value="墨西哥" checked' in template

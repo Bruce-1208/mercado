@@ -18,7 +18,7 @@ DEFAULTS = {
                 "你好，想问下这款商品连包装的重量是多少g？",
                 "咨询下，这个货品打包完成包装重量多少克？"],
     "cdp_url": "http://127.0.0.1:9222",
-    "erp_list_url": "https://seller.zying.net/#/product",
+    "erp_list_url": "https://meli.zying.net/#/product",
     "supplier_home_url": "https://www.1688.com/",
     "api_base_url": "https://dashscope.aliyuncs.com/compatible-mode/v1",
     "api_key_env": "DASHSCOPE_API_KEY", "model": "qwen3-vl-flash",
@@ -99,7 +99,9 @@ def validate(value):
         if not isinstance(val, str) or len(val) > 2000:
             raise ValueError(f"DOM 字段 {key} 无效")
     safe_url(result["cdp_url"], local=True)
-    safe_url(result["erp_list_url"])
+    safe_url(result["erp_list_url"], host="meli.zying.net")
+    if result["erp_list_url"] != "https://meli.zying.net/#/product":
+        raise ValueError("智赢商品页固定使用美客多版 https://meli.zying.net/#/product")
     safe_url(result["supplier_home_url"], host="1688.com")
     safe_url(result["api_base_url"])
     if urlsplit(result["api_base_url"]).scheme != "https":
@@ -139,7 +141,12 @@ class Config:
         self.path = Path(root) / "config.json"
 
     def load(self):
-        return validate(json.loads(self.path.read_text(encoding="utf-8")) if self.path.exists() else {})
+        value = json.loads(self.path.read_text(encoding="utf-8")) if self.path.exists() else {}
+        # Existing installations may still contain the general-console URL.
+        # Migrate it before strict validation so no workflow can return there.
+        if value.get("erp_list_url") != DEFAULTS["erp_list_url"]:
+            value["erp_list_url"] = DEFAULTS["erp_list_url"]
+        return validate(value)
 
     def save(self, value):
         result = validate(value)

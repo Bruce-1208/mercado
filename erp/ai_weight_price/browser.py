@@ -57,6 +57,17 @@ def category_paths(options, parents=()):
     return result
 
 
+def category_control_score(diagnostic, options):
+    """Prefer the product-category cascader over shop/site cascaders."""
+    context = " ".join(str(diagnostic.get(k, "")) for k in ("label", "placeholder", "text"))
+    score = len(category_paths(options)) * 10
+    if re.search(r"商品分类|产品分类|商品类目|产品类目|分类|类目", context):
+        score += 100000
+    if re.search(r"店铺|站点|国家|平台|公司|武汉泽顺|巴西", context):
+        score -= 100000
+    return score
+
+
 class CircuitOpen(RuntimeError):
     pass
 
@@ -174,7 +185,7 @@ class Browser:
 
     def open_login(self):
         from .edge import LOGIN_URL
-        pages = [p for p in self.context.pages if urlsplit(p.url).hostname == "seller.zying.net"]
+        pages = [p for p in self.context.pages if urlsplit(p.url).hostname == "meli.zying.net"]
         if pages:
             page = pages[-1]
         else:
@@ -186,7 +197,7 @@ class Browser:
     def confirm_login(self):
         for page in reversed(self.context.pages):
             host = urlsplit(page.url).hostname or ""
-            if host != "zying.net" and not host.endswith(".zying.net"):
+            if host != "meli.zying.net":
                 continue
             if "login" in page.url.lower() or page.locator("input[type='password']:visible").count():
                 continue
@@ -205,12 +216,49 @@ class Browser:
         try:
             if "login" in page.url.lower():
                 raise ValueError("智赢登录已失效，请重新登录并确认")
-            control = self.unique(page, "erp_category_control")
+            control = self.category_control(page)
             options = category_paths(self.read_categories(page, control)["options"])
             self.log(f"已从智赢商品页刷新分类：{len(options)} 个，最深 {max(o['depth'] for o in options)} 级")
             return options
         finally:
             self.release(page)
+
+    def category_control(self, page, timeout=20):
+        selector = self.s["erp_category_control"]
+        if not selector:
+            raise ValueError("请配置DOM字段：erp_category_control")
+        controls = page.locator(selector)
+        controls.first.wait_for(state="visible")
+        candidates = [control for control in controls.all() if control.is_visible()]
+        if not candidates:
+            raise ValueError("智赢商品页没有可见的分类控件")
+        if len(candidates) == 1:
+            return candidates[0]
+        diagnostics = []
+        for control in candidates:
+            diagnostics.append(control.evaluate("""e => {
+              const item=e.closest('.ant-form-item')||e.parentElement;
+              return {label:item?.querySelector('.ant-form-item-label,label')?.innerText?.trim()||'',
+                placeholder:e.querySelector('input')?.placeholder||'',text:e.innerText?.trim().slice(0,120)||''};
+            }"""))
+        deadline = time.monotonic() + timeout
+        snapshots = [[] for _ in candidates]
+        while time.monotonic() < deadline:
+            for index, control in enumerate(candidates):
+                snapshots[index] = control.evaluate(CATEGORY_READ).get("options", [])
+            scores = [category_control_score(diagnostic, options)
+                      for diagnostic, options in zip(diagnostics, snapshots)]
+            ranked = sorted(range(len(scores)), key=lambda index: scores[index], reverse=True)
+            if scores[ranked[0]] > scores[ranked[1]] and (snapshots[ranked[0]] or scores[ranked[0]] >= 100000):
+                chosen = ranked[0]
+                self.log(f"智赢页面有 {len(candidates)} 个级联框，已识别商品分类控件：{diagnostics[chosen]}")
+                return candidates[chosen]
+            if self.stop.wait(.5):
+                raise Stopped("操作已停止")
+        safe_diagnostics = [{**d, "option_count": len(category_paths(o))}
+                            for d, o in zip(diagnostics, snapshots)]
+        self.log("分类控件识别失败：" + json.dumps(safe_diagnostics, ensure_ascii=False), level="ERROR")
+        raise ValueError("页面存在多个级联框，无法区分商品分类与店铺/站点，请在参数设置中缩小分类控件选择器")
 
     def read_categories(self, page, control, timeout=20):
         deadline = time.monotonic() + timeout
@@ -235,13 +283,7 @@ class Browser:
         raise ValueError("智赢分类尚未加载完成或当前页面无分类，未更新分类列表。请确认商品列表页后重试")
 
     def apply_category(self, page, category):
-        selector = self.s["erp_category_control"]
-        controls = page.locator(selector) if selector else None
-        if not controls or not controls.count():
-            raise ValueError("未找到分类控件，无法确认筛选范围，请检查erp_category_control")
-        if controls.count() != 1:
-            raise ValueError("存在多个分类控件，请缩小erp_category_control选择器")
-        control = controls.first
+        control = self.category_control(page)
         current = self.read_categories(page, control)
         paths = category_paths(current["options"])
         target = next((p for p in paths if p["value"] == category), None) if category else None
