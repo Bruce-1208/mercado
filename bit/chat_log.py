@@ -13,7 +13,6 @@ from bit.bit_file_lock import locked_file
 
 DEFAULT_CHAT_LOG = Path(__file__).resolve().parent / "ai_chat_records.jsonl"
 MAX_CHAT_LOG_BYTES = int(os.getenv("MERCADO_AI_CHAT_LOG_MAX_MB", "50")) * 1024 * 1024
-MAX_FIELD_CHARS = int(os.getenv("MERCADO_AI_CHAT_LOG_FIELD_CHARS", "2000"))
 CHAT_DB_ENABLED = os.getenv("MERCADO_AI_CHAT_DB_ENABLED", "1").strip().lower() not in ("0", "false", "no")
 _COLLECTOR = threading.local()
 _DB_QUEUE = queue.Queue(maxsize=500)
@@ -52,16 +51,24 @@ def _sanitize_text(value):
     return text.strip()
 
 
-def _truncate_value(value, limit=MAX_FIELD_CHARS):
+def _sanitize_chat_history(value):
+    """Preserve the complete observed transcript, including user messages.
+
+    ``ChatMessages`` is a compatibility list containing assistant text only, but
+    it carries the original role-aware snapshot on ``snapshot``.  Prefer that
+    snapshot before checking truthiness because a user-only snapshot is backed
+    by an empty compatibility list.
+    """
+    snapshot = getattr(value, "snapshot", None)
+    if isinstance(snapshot, dict):
+        value = snapshot
     if isinstance(value, str):
-        value = _sanitize_text(value)
-        return value if len(value) <= limit else value[:limit] + "...[truncated]"
+        return _sanitize_text(value)
     if isinstance(value, list):
-        cleaned = [_truncate_value(item, limit) for item in value[-20:]]
-        return [item for item in cleaned if item]
+        return [_sanitize_chat_history(item) for item in value]
     if isinstance(value, dict):
-        return {key: _truncate_value(item, limit) for key, item in value.items()}
-    return value
+        return {str(key): _sanitize_chat_history(item) for key, item in value.items()}
+    return value if value is not None else []
 
 
 def _rotate_log_if_needed(log_path):
@@ -164,7 +171,9 @@ def append_chat_log(window, site, event, message="", response="", chat=None, ext
         "event": str(event or ""),
         "message": _sanitize_text(message or ""),
         "response": _sanitize_text(response or ""),
-        "chat": _truncate_value(chat or []),
+        # Chat is intentionally not length/count truncated: this is the durable
+        # source for the complete transcript observed during the appeal.
+        "chat": _sanitize_chat_history(chat),
         "extra": extra or {},
     }
     records = getattr(_COLLECTOR, "records", None)

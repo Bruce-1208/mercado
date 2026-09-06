@@ -138,9 +138,12 @@ def test_workbench_splits_collection_and_product_list_into_separate_modules():
     assert b'class="market-collector-help"' in response.data
     assert b'id="mercado-add-selected"' in response.data
     assert b'id="mercado-management-category-filter"' in response.data
+    assert b'id="mercado-platform-category-filter"' in response.data
     assert b'id="mercado-management-category-bulk"' in response.data
     assert b'id="mercado-category-dialog"' in response.data
     assert "运营分类管理".encode("utf-8") in response.data
+    assert "全部产品分类".encode("utf-8") in response.data
+    assert "美客多分类".encode("utf-8") in response.data
     assert b'id="mercado-collection-workers"' in response.data
     assert b'id="mercado-collection-success"' in response.data
     assert b'id="mercado-collection-failed"' in response.data
@@ -725,7 +728,8 @@ def test_product_list_filters_and_review_status_endpoint():
             "/api/mercado-products?search=bag&source_type=pulled&review_status=risk"
             "&publish_status=failed&weight_min=100&weight_max=500"
             "&price_min=200&price_max=900&net_proceeds_min=-5&net_proceeds_max=40"
-            "&date_from=2026-08-01&date_to=2026-08-25&limit=500&offset=500"
+            "&date_from=2026-08-01&date_to=2026-08-25&mercado_category=MLM123"
+            "&limit=500&offset=500"
         )
 
     assert response.status_code == 200
@@ -746,6 +750,7 @@ def test_product_list_filters_and_review_status_endpoint():
         date_from="2026-08-01",
         date_to="2026-08-25",
         management_category_id="",
+        mercado_category="MLM123",
     )
 
     with patch.object(

@@ -32,7 +32,7 @@ from bit.bit_runtime_lock import (
     window_lock_key,
 )
 from bit.bit_mercado_limit import is_mercado_rate_limited_text
-from bit.bit_appeal_state import task_execution_counts
+from bit.bit_appeal_state import SUCCESS_STATUSES, task_execution_counts
 from bit.bit_mercado_login import (
     is_human_verification_result,
     is_login_blocking_result,
@@ -483,7 +483,7 @@ def _is_rate_limited_result(value):
 
 def _is_failed_appeal_result(value):
     if isinstance(value, dict) and value.get("execution_status"):
-        return value["execution_status"] not in {"replied", "no_data"}
+        return value["execution_status"] not in SUCCESS_STATUSES | {"no_data"}
     text = str(value or "").strip().casefold()
     if not text:
         return False

@@ -97,7 +97,8 @@ def test_handle_delay_waits_for_and_records_each_group_reply(monkeypatch):
     assert records[-2][0] == "delay_agent_reply"
     assert records[-2][1]["response"] == "本组处理完成"
     assert records[-1][0] == "group_result"
-    assert records[-1][1]["extra"]["result"]["status"] == "replied"
+    assert records[-1][1]["extra"]["result"]["status"] == "sent"
+    assert records[-1][1]["extra"]["result"]["reply_status"] == "replied"
 
 
 def test_classify_ai_chat_variant_prefers_visible_shadow_iframe():

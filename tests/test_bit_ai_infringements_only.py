@@ -251,7 +251,8 @@ def test_infraction_never_calls_deepseek_or_follows_up_on_final_reply(monkeypatc
     )
 
     assert sent == ["MLM-1 请核查"]
-    assert result["status"] == "replied"
+    assert result["status"] == "sent"
+    assert result["reply_status"] == "replied"
     assert result["reply_received"] is True
 
 

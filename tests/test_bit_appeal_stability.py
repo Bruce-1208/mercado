@@ -72,7 +72,8 @@ def test_only_site_question_gets_local_reply(monkeypatch):
     ])
     result = ai.send_infraction_message_with_retry(SimpleNamespace(), "MLB123456 请复核", "MLB123456", "店", "巴西", 1, 1)
     assert sent == ["MLB123456 请复核", "Brazil"]
-    assert result["status"] == "replied"
+    assert result["status"] == "sent"
+    assert result["reply_status"] == "replied"
     assert result_from_logs(records)["metrics"]["replied"] == 1
 
 
@@ -81,12 +82,14 @@ def test_timeout_is_preserved_and_forces_new_conversation(monkeypatch):
     driver = SimpleNamespace()
     result = ai.send_infraction_message_with_retry(driver, "请复核", "MLB123456", "店", "巴西", 1, 2)
     assert len(sent) == 1
-    assert result["status"] == "reply_timeout"
+    assert result["status"] == "sent"
+    assert result["reply_status"] == "reply_timeout"
     assert result["sent"] and result["acknowledged"]
     assert driver._bit_ai_reset_before_group
     assert not daily._is_retryable_site_result(result)
-    assert daily._is_failed_appeal_result(result)
-    assert result_from_logs(records)["status"] == "reply_timeout"
+    assert not daily._is_failed_appeal_result(result)
+    assert result_from_logs(records)["status"] == "sent"
+    assert result_from_logs(records)["metrics"]["reply_timeout"] == 1
 
 
 def test_ambiguous_submit_is_never_retried_in_same_group(monkeypatch):
@@ -254,15 +257,44 @@ def test_driver_cleanup_failure_preserves_outcome_and_releases_lease(monkeypatch
     assert calls == ["close", "release"]
 
 
-def test_stop_during_reply_propagates_and_records_group(monkeypatch):
+def test_stop_during_reply_keeps_confirmed_send_success(monkeypatch):
     sent, records = group_setup(monkeypatch, [])
     def stop(*args, **kwargs):
         raise AppealExecutionError("已停止", "stopped")
     monkeypatch.setattr(ai, "wait_for_ai_agent_reply", stop)
-    with pytest.raises(AppealExecutionError):
-        ai.send_infraction_message_with_retry(SimpleNamespace(), "请复核", "MLB123456", "店", "巴西", 1, 1)
-    assert result_from_logs(records)["status"] == "stopped"
+    result = ai.send_infraction_message_with_retry(
+        SimpleNamespace(), "请复核", "MLB123456", "店", "巴西", 1, 1,
+    )
+    assert result["status"] == "sent"
+    assert result["post_send_status"] == "stopped"
+    assert result_from_logs(records)["status"] == "sent"
     assert result_from_logs(records)["sent"]
+
+
+def test_complete_role_aware_chat_is_not_truncated(monkeypatch):
+    messages = [
+        {"role": "user" if index % 2 else "assistant", "id": str(index), "text": "x" * 2500}
+        for index in range(25)
+    ]
+    transcript = ChatMessages({
+        "epoch": "epoch-1",
+        "conversation_id": "case-1",
+        "busy": False,
+        "messages": messages,
+    })
+    chat_log.start_appeal_log_collection()
+    try:
+        chat_log.append_chat_log("店", "BR", "sent", chat=transcript)
+        record = chat_log.get_appeal_log_records()[0]
+    finally:
+        chat_log.stop_appeal_log_collection()
+
+    assert len(record["chat"]["messages"]) == 25
+    assert record["chat"]["messages"][0]["role"] == "assistant"
+    assert len(record["chat"]["messages"][0]["text"]) == 2500
+    history = ai._collect_full_chat_history([record])
+    assert len(history) == 1
+    assert len(history[0]["messages"]) == 25
 
 
 def test_human_chat_hands_off_without_generated_followups(monkeypatch):
@@ -319,6 +351,26 @@ def test_initialized_log_insert_has_no_ddl_and_uses_event_id(monkeypatch, functi
     assert "ON DUPLICATE KEY" in sql
     assert params[-1] == event_id
     assert connection.commits == connection.closes == 1
+
+
+def test_ai_appeal_summary_persists_complete_chat_json(monkeypatch):
+    from bit import bit_mysql as db
+    connection = FakeConnection()
+    monkeypatch.setattr(db, "_APPEAL_SCHEMA_READY", True)
+    monkeypatch.setattr(db, "_appeal_connection", lambda: connection)
+    chat_history = [{
+        "conversation_id": "case-1",
+        "epoch": "epoch-1",
+        "messages": [
+            {"id": "u1", "role": "user", "text": "请复核"},
+            {"id": "a1", "role": "assistant", "text": "已收到"},
+        ],
+    }]
+
+    db.insert_ai_appeal_record({"event_id": "b" * 32, "chat_history": chat_history})
+
+    _, params = connection.cur.calls[0]
+    assert json.loads(params[10]) == chat_history
 
 
 def test_schema_failure_is_not_cached_and_releases_server_lock(monkeypatch):

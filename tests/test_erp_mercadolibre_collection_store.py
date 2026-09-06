@@ -670,6 +670,7 @@ def test_product_list_applies_status_range_and_date_filters_in_database():
         source_type="collected",
         review_status="approved",
         publish_status="failed",
+        mercado_category="Costumes",
         weight_min="100",
         weight_max="500",
         price_min="200",
@@ -689,6 +690,7 @@ def test_product_list_applies_status_range_and_date_filters_in_database():
     for clause in (
         "`review_status` = %s",
         "`last_publish_status` = %s",
+        "(`category_id` = %s OR `category_name` LIKE %s)",
         "`weight_g` >= %s",
         "`weight_g` <= %s",
         "`price` >= %s",
@@ -700,7 +702,8 @@ def test_product_list_applies_status_range_and_date_filters_in_database():
     ):
         assert clause in count_sql
     assert params == (
-        "%cosplay%", "%cosplay%", "collected", "approved", "failed",
+        "%cosplay%", "%cosplay%", "Costumes", "%Costumes%",
+        "collected", "approved", "failed",
         Decimal("100"), Decimal("500"), Decimal("200"), Decimal("900"),
         Decimal("-5"), Decimal("40"),
         "2026-08-01 00:00:00", "2026-08-26 00:00:00",

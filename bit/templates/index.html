@@ -8962,11 +8962,15 @@
                             <button class="secondary" type="button" onclick="switchTab('mercado-products')">筛选审核 / 上架状态 →</button>
                         </div>
                         <div class="market-filter-field">
-                            <label for="mercado-management-category-filter">运营分类</label>
+                            <label for="mercado-management-category-filter">产品分类</label>
                             <select id="mercado-management-category-filter" onchange="applyMercadoProductFilters()">
-                                <option value="">全部运营分类</option>
+                                <option value="">全部产品分类</option>
                                 <option value="uncategorized">未分类</option>
                             </select>
+                        </div>
+                        <div class="market-filter-field market-product-only-filter" hidden>
+                            <label for="mercado-platform-category-filter">美客多分类</label>
+                            <input id="mercado-platform-category-filter" type="search" placeholder="分类名称或编号" onkeydown="if(event.key === 'Enter') applyMercadoProductFilters()">
                         </div>
                         <div class="market-source-filter market-product-only-filter" hidden>
                             <div class="market-source-filter-heading">
@@ -9271,7 +9275,7 @@
                 <section class="market-products-overview" aria-label="产品列表操作说明">
                     <button class="market-product-overview-card is-primary" type="button" onclick="focusMercadoProductWorkspace()">
                         <span class="market-product-overview-icon">▦</span>
-                        <span><small>PRODUCT LIBRARY</small><strong>产品资料库</strong><em>按来源、状态、重量和收益组合筛选</em></span>
+                        <span><small>PRODUCT LIBRARY</small><strong>产品资料库</strong><em>按来源、产品分类、美客多分类、状态和收益组合筛选</em></span>
                         <b>查看商品 →</b>
                     </button>
                     <button class="market-product-overview-card" type="button" onclick="focusMercadoProductWorkspace('unreviewed')">
@@ -10346,6 +10350,17 @@
                                 <option value="closed">已结束</option>
                                 <option value="under_review">审核中</option>
                             </select>
+                        </div>
+                        <div class="order-filter-field">
+                            <label for="store-link-product-category-filter">产品分类</label>
+                            <select id="store-link-product-category-filter" onchange="loadStoreLinks(1)">
+                                <option value="">全部产品分类</option>
+                                <option value="uncategorized">未分类</option>
+                            </select>
+                        </div>
+                        <div class="order-filter-field">
+                            <label for="store-link-mercado-category-filter">美客多分类</label>
+                            <input id="store-link-mercado-category-filter" type="search" placeholder="分类名称或编号" onkeydown="if(event.key === 'Enter') loadStoreLinks(1)">
                         </div>
                         <div class="order-filter-field">
                             <label for="store-link-sales-sort">销量排序</label>
@@ -11562,7 +11577,7 @@
             <div class="tab-page" id="tab-ai-appeals">
                 <div class="tab-heading">
                     <h2>AI申诉记录</h2>
-                    <p>按组保存客服原始回复与执行状态；申诉不调用 DeepSeek，仅自动回答站点选择。收到回复不代表申诉获批，超时和发送状态不明会单独标记。</p>
+                    <p>话术成功发送即记为执行成功；用户与客服的完整聊天记录按组入库。发送成功不代表申诉获批，未确认发送会单独标记。</p>
                 </div>
 
                 <section class="panel infractions-panel">
@@ -12013,6 +12028,8 @@
         const storeLinkGroupFilter = document.getElementById("store-link-group-filter");
         const storeLinkSiteFilter = document.getElementById("store-link-site-filter");
         const storeLinkStatusFilter = document.getElementById("store-link-status-filter");
+        const storeLinkProductCategoryFilter = document.getElementById("store-link-product-category-filter");
+        const storeLinkMercadoCategoryFilter = document.getElementById("store-link-mercado-category-filter");
         const storeLinkSalesSort = document.getElementById("store-link-sales-sort");
         const storeLinkSearch = document.getElementById("store-link-search");
         const storeLinkSelectAll = document.getElementById("store-link-select-all");
@@ -12115,6 +12132,7 @@
         const mercadoReviewFilter = document.getElementById("mercado-review-filter");
         const mercadoPublishFilter = document.getElementById("mercado-publish-filter");
         const mercadoManagementCategoryFilter = document.getElementById("mercado-management-category-filter");
+        const mercadoPlatformCategoryFilter = document.getElementById("mercado-platform-category-filter");
         const mercadoManagementCategoryBulk = document.getElementById("mercado-management-category-bulk");
         const mercadoManagementCategoryAssign = document.getElementById("mercado-management-category-assign");
         const mercadoWeightMin = document.getElementById("mercado-weight-min");
@@ -12675,6 +12693,7 @@
                 startMercadoTokenStatusPolling();
             }
             if (tabName === "store-links") {
+                loadMercadoManagementCategories();
                 if (!storeLinksLoaded) loadStoreLinks(1);
                 loadStoreLinkSyncStatus();
                 loadStoreLinkRemoteUpdateStatus();
@@ -15033,8 +15052,8 @@
         function mercadoManagementCategoryOptions(selectedId, {filter = false, bulk = false} = {}) {
             const selected = selectedId === null || selectedId === undefined ? "" : String(selectedId);
             const options = [];
-            if (filter) options.push(["", "全部运营分类"]);
-            if (bulk) options.push(["", "选择运营分类"]);
+            if (filter) options.push(["", "全部产品分类"]);
+            if (bulk) options.push(["", "选择产品分类"]);
             options.push(["uncategorized", bulk ? "移出分类" : "未分类"]);
             mercadoManagementCategories.forEach(category => {
                 options.push([String(category.id), String(category.name || `分类 ${category.id}`)]);
@@ -15047,13 +15066,20 @@
         function syncMercadoManagementCategoryOptions() {
             const filterValue = mercadoManagementCategoryFilter.value;
             const bulkValue = mercadoManagementCategoryBulk.value;
+            const storeFilterValue = storeLinkProductCategoryFilter?.value || "";
             mercadoManagementCategoryFilter.innerHTML = mercadoManagementCategoryOptions(filterValue, {filter: true});
             mercadoManagementCategoryBulk.innerHTML = mercadoManagementCategoryOptions(bulkValue, {bulk: true});
+            if (storeLinkProductCategoryFilter) {
+                storeLinkProductCategoryFilter.innerHTML = mercadoManagementCategoryOptions(storeFilterValue, {filter: true});
+            }
             if (!Array.from(mercadoManagementCategoryFilter.options).some(option => option.value === filterValue)) {
                 mercadoManagementCategoryFilter.value = "";
             }
             if (!Array.from(mercadoManagementCategoryBulk.options).some(option => option.value === bulkValue)) {
                 mercadoManagementCategoryBulk.value = "";
+            }
+            if (storeLinkProductCategoryFilter && !Array.from(storeLinkProductCategoryFilter.options).some(option => option.value === storeFilterValue)) {
+                storeLinkProductCategoryFilter.value = "";
             }
             updateMercadoSelection();
         }
@@ -15441,6 +15467,9 @@
                 if (mercadoProductSource) query.set("source_type", mercadoProductSource);
                 if (mercadoReviewFilter.value) query.set("review_status", mercadoReviewFilter.value);
                 if (mercadoPublishFilter.value) query.set("publish_status", mercadoPublishFilter.value);
+                if (mercadoPlatformCategoryFilter.value.trim()) {
+                    query.set("mercado_category", mercadoPlatformCategoryFilter.value.trim());
+                }
             }
             if (mercadoManagementCategoryFilter.value) {
                 query.set("management_category_id", mercadoManagementCategoryFilter.value);
@@ -15516,7 +15545,7 @@
             mercadoProductFilters.classList.add("visible");
             mercadoCollectionFilterNote.hidden = productMode;
             mercadoFilterHint.textContent = productMode
-                ? "支持审核、上架状态、重量、售价、收益和时间组合筛选"
+                ? "支持产品分类、美客多分类、审核、上架状态和收益组合筛选"
                 : "采集列表支持重量、售价、收益和采集时间组合筛选";
             mercadoProductFilters.querySelectorAll(".market-product-only-filter").forEach(element => {
                 element.hidden = !productMode;
@@ -15549,6 +15578,7 @@
         function resetMercadoProductFilters() {
             [
                 mercadoReviewFilter, mercadoPublishFilter, mercadoManagementCategoryFilter,
+                mercadoPlatformCategoryFilter,
                 mercadoWeightMin, mercadoWeightMax,
                 mercadoPriceMin, mercadoPriceMax,
                 mercadoNetMin, mercadoNetMax,
@@ -19319,6 +19349,8 @@
                 site_id: storeLinkSiteFilter.value,
                 group_name: storeLinkGroupFilter.value,
                 status: storeLinkStatusFilter.value,
+                management_category_id: storeLinkProductCategoryFilter.value,
+                mercado_category: storeLinkMercadoCategoryFilter.value.trim(),
                 sales_sort: storeLinkSalesSort.value || "desc",
                 page: String(requestedPage),
                 page_size: "1000",

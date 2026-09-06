@@ -9,13 +9,12 @@ from collections import defaultdict
 from datetime import datetime, timedelta
 from typing import Iterable
 
-from bit.bit_appeal_state import STATUS_LABELS
+from bit.bit_appeal_state import STATUS_LABELS, SUCCESS_STATUSES
 
 
 DEFAULT_REPORT_HOURS = 6
 DEFAULT_REPORT_RECIPIENT = "1013459852@qq.com"
 DEFAULT_RECORD_LIMIT = 500
-SUCCESS_STATUSES = frozenset(("replied",))
 SKIPPED_STATUSES = frozenset(("no_data",))
 GROUP_APPEAL_MARKER = "组"
 
@@ -193,7 +192,7 @@ def render_report(summary, *, truncated=False):
         f"执行失败/需处理：{overall['failed']} 条",
         f"无可申诉数据：{overall['no_data']} 条",
         f"执行成功率：{_rate_text(overall)}",
-        "说明：成功表示 AI 客服已回复；不代表平台已经批准申诉。",
+        "说明：成功表示申诉话术已成功发送；不代表平台已经批准申诉。",
     ]
     if truncated:
         lines.append("数据提醒：数据库仅返回最新 500 条记录，本时段结果可能不完整。")

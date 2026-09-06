@@ -155,6 +155,12 @@ def initialize_appeal_storage():
                     _ensure_appeal_phrases_table(cursor)
                     _ensure_appeal_chat_records_table(cursor)
                     _ensure_ai_appeal_records_table(cursor)
+                    _ensure_column(
+                        cursor,
+                        "ai_appeal_records",
+                        "chat_json",
+                        "LONGTEXT NULL AFTER `ai_replies_json`",
+                    )
                     for table in ("appeal_chat_records", "ai_appeal_records"):
                         _ensure_column(cursor, table, "event_id", "CHAR(32) NULL")
                         cursor.execute(f"SHOW INDEX FROM `{table}` WHERE Key_name = 'uniq_appeal_event'")
@@ -6278,6 +6284,8 @@ def insert_appeal_chat_record(record):
     try:
         with connection.cursor() as cursor:
             record = dict(record or {})
+            raw_record = dict(record)
+            raw_record.pop("chat", None)
             record_time = record.get("time") or None
             sql_insert = """
                 INSERT INTO `appeal_chat_records` (
@@ -6305,7 +6313,7 @@ def insert_appeal_chat_record(record):
                     record.get("response", ""),
                     json.dumps(record.get("chat", []), ensure_ascii=False),
                     json.dumps(record.get("extra", {}), ensure_ascii=False),
-                    json.dumps(record, ensure_ascii=False),
+                    json.dumps(raw_record, ensure_ascii=False),
                     datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
                     record.get("event_id") or None,
                 ),
@@ -6336,6 +6344,7 @@ def _ensure_ai_appeal_records_table(cursor):
             `success_ids_json` LONGTEXT NULL,
             `failed_ids_json` LONGTEXT NULL,
             `ai_replies_json` LONGTEXT NULL,
+            `chat_json` LONGTEXT NULL,
             `ai_summary` LONGTEXT NULL,
             `error` LONGTEXT NULL,
             `raw_json` LONGTEXT NULL,
@@ -6355,6 +6364,8 @@ def insert_ai_appeal_record(record):
     try:
         with connection.cursor() as cursor:
             record = dict(record or {})
+            raw_record = dict(record)
+            raw_record.pop("chat_history", None)
             sql_insert = """
                 INSERT INTO `ai_appeal_records` (
                     `appeal_time`,
@@ -6367,11 +6378,12 @@ def insert_ai_appeal_record(record):
                     `success_ids_json`,
                     `failed_ids_json`,
                     `ai_replies_json`,
+                    `chat_json`,
                     `ai_summary`,
                     `error`,
                     `raw_json`,
                     `created_at`, `event_id`
-                ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                 ON DUPLICATE KEY UPDATE id=LAST_INSERT_ID(id)
             """
             cursor.execute(
@@ -6387,9 +6399,10 @@ def insert_ai_appeal_record(record):
                     json.dumps(record.get("success_ids", []), ensure_ascii=False),
                     json.dumps(record.get("failed_ids", []), ensure_ascii=False),
                     json.dumps(record.get("ai_replies", []), ensure_ascii=False),
+                    json.dumps(record.get("chat_history", []), ensure_ascii=False),
                     record.get("ai_summary", ""),
                     record.get("error", ""),
-                    json.dumps(record, ensure_ascii=False),
+                    json.dumps(raw_record, ensure_ascii=False),
                     datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
                     record.get("event_id") or None,
                 ),
@@ -6429,6 +6442,7 @@ def get_ai_appeal_records(limit=100):
                     `success_ids_json`,
                     `failed_ids_json`,
                     `ai_replies_json`,
+                    `chat_json`,
                     `ai_summary`,
                     `error`,
                     `raw_json`,
@@ -6444,7 +6458,13 @@ def get_ai_appeal_records(limit=100):
                 for time_key in ("appeal_time", "created_at"):
                     if row.get(time_key) is not None:
                         row[time_key] = str(row[time_key])
-                for json_key in ("identifiers_json", "success_ids_json", "failed_ids_json", "ai_replies_json"):
+                for json_key in (
+                    "identifiers_json",
+                    "success_ids_json",
+                    "failed_ids_json",
+                    "ai_replies_json",
+                    "chat_json",
+                ):
                     value = row.get(json_key)
                     try:
                         row[json_key] = json.loads(value) if value else []

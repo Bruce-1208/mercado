@@ -12,6 +12,8 @@ from typing import Any, Callable, Iterable, Mapping
 
 STORE_LINK_TABLE = "erp_mercadolibre_store_links"
 STORE_LINK_SYNC_STATE_TABLE = "erp_mercadolibre_store_link_sync_state"
+PRODUCT_TABLE = "erp_mercadolibre_products"
+MANAGEMENT_CATEGORY_TABLE = "erp_mercadolibre_management_categories"
 STORE_LINK_SALES_PAGE_INDEX = "idx_erp_meli_store_link_sales_page"
 STORE_LINK_SITE_PAGE_INDEX = "idx_erp_meli_store_link_site_page"
 
@@ -757,6 +759,8 @@ def list_store_links(
     site_id: str = "",
     group_name: str = "",
     status: str = "",
+    management_category_id: Any = None,
+    mercado_category: str = "",
     sales_sort: str = "desc",
     current_only: bool = True,
     page: int = 1,
@@ -781,6 +785,36 @@ def list_store_links(
     if status:
         conditions.append("links.`status` = %s")
         values.append(status)
+    category_filter = str(management_category_id or "").strip().lower()
+    if category_filter in {"uncategorized", "unclassified", "none"}:
+        conditions.append(
+            f"NOT EXISTS (SELECT 1 FROM `{PRODUCT_TABLE}` AS categorized_product "
+            "WHERE categorized_product.`source_item_id` = links.`item_id` "
+            "AND categorized_product.`management_category_id` IS NOT NULL)"
+        )
+    elif category_filter:
+        try:
+            normalized_category_id = int(category_filter)
+        except (TypeError, ValueError) as exc:
+            raise ValueError("产品分类编号无效") from exc
+        if normalized_category_id <= 0:
+            raise ValueError("产品分类编号无效")
+        conditions.append(
+            f"EXISTS (SELECT 1 FROM `{PRODUCT_TABLE}` AS categorized_product "
+            "WHERE categorized_product.`source_item_id` = links.`item_id` "
+            "AND categorized_product.`management_category_id` = %s)"
+        )
+        values.append(normalized_category_id)
+    mercado_category = str(mercado_category or "").strip()[:255]
+    if mercado_category:
+        conditions.append(
+            f"(links.`category_id` = %s OR EXISTS ("
+            f"SELECT 1 FROM `{PRODUCT_TABLE}` AS mercado_product "
+            "WHERE mercado_product.`source_item_id` = links.`item_id` "
+            "AND (mercado_product.`category_id` = %s "
+            "OR mercado_product.`category_name` LIKE %s)))"
+        )
+        values.extend((mercado_category, mercado_category, f"%{mercado_category}%"))
     search = str(search or "").strip()
     if search:
         pattern = f"%{search}%"
@@ -878,8 +912,14 @@ def list_store_links(
                        full_links.`weight_manual`, full_links.`dimensions_manual`,
                        full_links.`net_proceeds_manual`, full_links.`is_current`,
                        full_links.`last_synced_at`, full_links.`created_at`,
-                       full_links.`updated_at`
+                       full_links.`updated_at`,
+                       product.`category_name`, product.`management_category_id`,
+                       management_category.`name` AS `management_category_name`
                 FROM `{STORE_LINK_TABLE}` AS full_links
+                LEFT JOIN `{PRODUCT_TABLE}` AS product
+                  ON product.`source_item_id` = full_links.`item_id`
+                LEFT JOIN `{MANAGEMENT_CATEGORY_TABLE}` AS management_category
+                  ON management_category.`id` = product.`management_category_id`
                 INNER JOIN (
                     SELECT links.`id`{links_from_sql}{where_sql}
                     ORDER BY {page_order_sql} LIMIT %s OFFSET %s

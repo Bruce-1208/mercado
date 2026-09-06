@@ -552,6 +552,8 @@ def list_mercado_store_links(
     site_id="",
     group_name="",
     status="",
+    management_category_id=None,
+    mercado_category="",
     sales_sort="desc",
     current_only=True,
     page=1,
@@ -562,6 +564,8 @@ def list_mercado_store_links(
         "site_id": str(site_id or "").strip().upper(),
         "group_name": str(group_name or "").strip(),
         "status": status or "",
+        "management_category_id": management_category_id,
+        "mercado_category": str(mercado_category or "").strip(),
         "sales_sort": "asc" if str(sales_sort or "").strip().lower() == "asc" else "desc",
         "current_only": "1" if current_only else "0",
         "page": int(page or 1),
@@ -577,6 +581,8 @@ def list_mercado_store_links(
             site_id=params["site_id"],
             group_name=params["group_name"],
             status=params["status"],
+            management_category_id=params["management_category_id"],
+            mercado_category=params["mercado_category"],
             sales_sort=params["sales_sort"],
             current_only=bool(current_only),
             page=params["page"],
@@ -1402,6 +1408,7 @@ def list_mercado_product_items(
     publish_status="", weight_min=None, weight_max=None, price_min=None,
     price_max=None, net_proceeds_min=None, net_proceeds_max=None,
     date_from="", date_to="", management_category_id=None,
+    mercado_category="",
 ):
     params = {
         "search": search,
@@ -1419,6 +1426,7 @@ def list_mercado_product_items(
         "date_from": str(date_from or "").strip(),
         "date_to": str(date_to or "").strip(),
         "management_category_id": management_category_id,
+        "mercado_category": str(mercado_category or "").strip(),
     }
     if DB_MODE == "mysql":
         return _collection_store_call(

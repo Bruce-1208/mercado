@@ -89,7 +89,7 @@ def test_six_hour_report_groups_executor_site_and_failure_reason():
     assert "执行成功率：50.0%" in body
     assert "服务器比特浏览器（appeal-server-1）" in body
     assert "店铺乙｜巴西｜投诉｜执行失败｜客服入口未找到" in body
-    assert "成功表示 AI 客服已回复；不代表平台已经批准申诉" in body
+    assert "成功表示申诉话术已成功发送；不代表平台已经批准申诉" in body
 
 
 def test_report_with_no_attempts_does_not_claim_zero_percent():
@@ -98,6 +98,29 @@ def test_report_with_no_attempts_does_not_claim_zero_percent():
 
     assert summary["overall"]["success_rate"] is None
     assert "执行成功率：无可计算执行" in report.render_report(summary)
+
+
+def test_report_counts_confirmed_send_as_success_without_reply():
+    until = datetime(2026, 9, 6, 18, 0, 0)
+    summary = report.summarize_appeal_records(
+        [{
+            "appeal_time": "2026-09-06 17:00:00",
+            "appeal_type": "侵权",
+            "shop_name": "店铺甲",
+            "site": "墨西哥",
+            "status": "话术发送成功",
+            "execution": {
+                "execution_status": "sent",
+                "reply_status": "reply_timeout",
+                "reply_received": False,
+            },
+        }],
+        since=until - timedelta(hours=6),
+        until=until,
+    )
+
+    assert summary["overall"]["success"] == 1
+    assert summary["overall"]["failed"] == 0
 
 
 def test_send_recent_report_uses_requested_recipient(monkeypatch):

@@ -1983,7 +1983,8 @@ def send_ai_chat_message(driver, message):
                 if echoed and not normalized_text(current_value):
                     return {"acknowledged": True, "reply_baseline": ChatMessages(before_send),
                             "message_id": echoed[-1]["id"],
-                            "conversation_id": after_send.get("conversation_id", "")}
+                            "conversation_id": after_send.get("conversation_id", ""),
+                            "chat_snapshot": after_send}
             except AppealExecutionError:
                 raise
             except Exception:
@@ -2284,7 +2285,11 @@ def send_infraction_message_with_retry(
     driver, huashu, infraction_ids, name, site, group_index, total_groups,
     appeal_kind="侵权",
 ):
-    """只重试发送前失败；站点问答采用确定性规则，不调用外部模型。"""
+    """话术回显即视为申诉成功；客服回复只作为附加记录。
+
+    只重试发送前失败。发送成功后仍等待并记录回复，但回复超时、
+    站点追问或后续读取失败不再把已发送的申诉改判为失败。
+    """
     identifier_key, event_name = {
         "取消率": ("cancellation_ids", "cancellation"),
         "投诉": ("complaint_order_ids", "complaint"),
@@ -2294,12 +2299,14 @@ def send_infraction_message_with_retry(
     base_extra = {"group_index": group_index, "total_groups": total_groups,
                   identifier_key: infraction_ids, "appeal_kind": appeal_kind}
     result = execution_result("pre_send_failed")
+    latest_chat = []
     try:
         _prepare_group_conversation(driver, name, site, group_index)
         message, site_answers = huashu, 0
         while True:
             _check_appeal_control(driver)
             before = safe_get_agent_messages(driver)
+            latest_chat = before
             for attempt in range(1, 3):
                 try:
                     ack = send_ai_chat_message(driver, message)
@@ -2312,57 +2319,102 @@ def send_infraction_message_with_retry(
                     if attempt == 2:
                         raise AppealExecutionError(str(exc), "pre_send_failed") from exc
                     _appeal_pause(driver, 5 * attempt + random.uniform(0, 2))
-            result.update(sent=True, acknowledged=True)
+            # The initial appeal phrase is the success boundary. Site-option
+            # follow-ups enrich the conversation but cannot revoke this result.
+            if site_answers == 0:
+                result.update(
+                    status="sent",
+                    execution_status="sent",
+                    message=STATUS_LABELS["sent"],
+                    sent=True,
+                    acknowledged=True,
+                    retryable=False,
+                )
             if isinstance(ack, dict):
                 before = ack.get("reply_baseline", before)
-                result.update(conversation_id=ack.get("conversation_id", ""),
-                              message_id=ack.get("message_id", ""))
+                latest_chat = ack.get("chat_snapshot") or latest_chat
+                if site_answers == 0:
+                    result.update(conversation_id=ack.get("conversation_id", ""),
+                                  message_id=ack.get("message_id", ""))
             append_chat_log(
                 name, site,
                 ("send_delay_group" if appeal_kind == "延误" else f"send_{event_name}")
                 if site_answers == 0 else "send_followup",
-                message=message, extra={**base_extra, "generated_by": "local_rule", "acknowledged": True},
+                message=message,
+                chat=latest_chat,
+                extra={
+                    **base_extra,
+                    "generated_by": "local_rule",
+                    "acknowledged": True,
+                    "conversation_id": ack.get("conversation_id", "") if isinstance(ack, dict) else "",
+                },
             )
             response, latest = wait_for_ai_agent_reply(
                 driver, before, timeout=AI_AGENT_REPLY_TIMEOUT_SECONDS,
                 poll_interval=AI_AGENT_REPLY_POLL_SECONDS,
             )
+            if getattr(latest, "snapshot", None) is not None or latest:
+                latest_chat = latest
             append_chat_log(
                 name, site,
                 ("delay_agent_reply" if appeal_kind == "延误" else "agent_reply")
                 if site_answers == 0 else "agent_reply_after_site_option",
-                message=huashu, response=response, chat=latest, extra=base_extra,
+                message=huashu, response=response, chat=latest_chat, extra=base_extra,
             )
             if not response:
-                result.update(status="reply_timeout", execution_status="reply_timeout",
-                              message=STATUS_LABELS["reply_timeout"], error="未读到客服完整新回复")
-                append_chat_log(name, site, f"{event_name}_reply_timeout", message=huashu,
-                                extra={**base_extra, "timeout_seconds": AI_AGENT_REPLY_TIMEOUT_SECONDS})
+                result.update(reply_status="reply_timeout", reply_timed_out=True)
+                append_chat_log(
+                    name,
+                    site,
+                    f"{event_name}_reply_timeout",
+                    message=huashu,
+                    chat=latest_chat,
+                    extra={**base_extra, "timeout_seconds": AI_AGENT_REPLY_TIMEOUT_SECONDS},
+                )
                 break
-            result.update(status="replied", execution_status="replied",
-                          message=STATUS_LABELS["replied"], response=response, reply_received=True)
+            result.update(response=response, reply_received=True, reply_status="replied")
             if not is_site_option_question(response):
                 break
             if site_answers >= 2:
-                result.update(status="needs_human", execution_status="needs_human",
-                              message=STATUS_LABELS["needs_human"])
+                result.update(reply_status="needs_human", needs_human=True)
                 break
             message = build_site_option_reply(site)
             site_answers += 1
     except AppealExecutionError as exc:
-        result.update(status=exc.status, execution_status=exc.status,
-                      message=STATUS_LABELS.get(exc.status, exc.status),
-                      error=str(exc), sent=result["sent"] or exc.sent, retryable=exc.retryable)
-        if exc.status in {"stopped", "deadline_exceeded"}:
-            raise
+        if result.get("acknowledged"):
+            result.update(
+                status="sent",
+                execution_status="sent",
+                message=STATUS_LABELS["sent"],
+                post_send_status=exc.status,
+                post_send_error=str(exc),
+                retryable=False,
+            )
+        else:
+            result.update(status=exc.status, execution_status=exc.status,
+                          message=STATUS_LABELS.get(exc.status, exc.status),
+                          error=str(exc), sent=result["sent"] or exc.sent, retryable=exc.retryable)
+            if exc.status in {"stopped", "deadline_exceeded"}:
+                raise
     except Exception as exc:
-        result.update(status="failed", execution_status="failed", error=str(exc),
-                      message=STATUS_LABELS["failed"])
+        if result.get("acknowledged"):
+            result.update(
+                status="sent",
+                execution_status="sent",
+                message=STATUS_LABELS["sent"],
+                post_send_status="failed",
+                post_send_error=str(exc),
+                retryable=False,
+            )
+        else:
+            result.update(status="failed", execution_status="failed", error=str(exc),
+                          message=STATUS_LABELS["failed"])
     finally:
         append_chat_log(name, site, "group_result", message=huashu,
-                        response=result.get("response", ""), extra={**base_extra, "result": result})
+                        response=result.get("response", ""), chat=latest_chat,
+                        extra={**base_extra, "result": result})
     print(f"{get_now_time()} {name} {site} 第 {group_index}/{total_groups} 组：{result['message']}<br>")
-    if result["status"] not in {"replied"}:
+    if result.get("reply_status") in {"reply_timeout", "needs_human"} or result.get("post_send_status"):
         setattr(driver, "_bit_ai_reset_before_group", True)
     return result
 
@@ -2988,6 +3040,84 @@ def _extract_identifiers_from_text(text):
     return _unique_text_list(values)
 
 
+def _chat_snapshot(value):
+    snapshot = getattr(value, "snapshot", None)
+    if isinstance(snapshot, dict):
+        return snapshot
+    if isinstance(value, dict) and isinstance(value.get("messages"), list):
+        return value
+    if isinstance(value, list):
+        messages = []
+        for index, item in enumerate(value):
+            if isinstance(item, dict):
+                messages.append(dict(item))
+            elif str(item or "").strip():
+                messages.append({
+                    "id": f"legacy-{index}",
+                    "role": "assistant",
+                    "text": str(item).strip(),
+                })
+        return {"conversation_id": "", "epoch": "", "messages": messages}
+    return None
+
+
+def _collect_full_chat_history(log_records, final_agent_messages=None):
+    """Merge overlapping DOM snapshots into complete, role-aware conversations."""
+    sessions = {}
+    values = [record.get("chat") for record in (log_records or [])]
+    if final_agent_messages is not None:
+        values.append(final_agent_messages)
+
+    for snapshot_index, value in enumerate(values):
+        snapshot = _chat_snapshot(value)
+        if not snapshot:
+            continue
+        conversation_id = str(snapshot.get("conversation_id") or "")
+        epoch = str(snapshot.get("epoch") or "")
+        session_key = (conversation_id, epoch)
+        if not any(session_key):
+            session_key = ("legacy", "")
+        session = sessions.setdefault(session_key, {
+            "conversation_id": conversation_id,
+            "epoch": epoch,
+            "messages": [],
+            "_message_indexes": {},
+            "_fallback_keys": set(),
+        })
+        for position, original in enumerate(snapshot.get("messages") or []):
+            if not isinstance(original, dict):
+                continue
+            message = {
+                "id": str(original.get("id") or ""),
+                "role": str(original.get("role") or ""),
+                "text": str(original.get("text") or ""),
+            }
+            if not message["text"].strip():
+                continue
+            if message["id"]:
+                identity = (message["role"], message["id"])
+                existing_index = session["_message_indexes"].get(identity)
+                if existing_index is None:
+                    session["_message_indexes"][identity] = len(session["messages"])
+                    session["messages"].append(message)
+                else:
+                    # Streaming responses keep one DOM id while the text grows.
+                    session["messages"][existing_index] = message
+            else:
+                fallback = (snapshot_index, position, message["role"], message["text"])
+                if fallback not in session["_fallback_keys"]:
+                    session["_fallback_keys"].add(fallback)
+                    session["messages"].append(message)
+
+    result = []
+    for session in sessions.values():
+        session.pop("_message_indexes", None)
+        session.pop("_fallback_keys", None)
+        if session["messages"]:
+            result.append(session)
+    return result
+
+
 def _collect_appeal_record_fields(log_records, final_agent_messages=None):
     appeal_messages = []
     identifiers = []
@@ -3028,6 +3158,7 @@ def _collect_appeal_record_fields(log_records, final_agent_messages=None):
         "appeal_content": "\n".join(_unique_text_list(appeal_messages)),
         "identifiers": _unique_text_list(identifiers),
         "ai_replies": _unique_text_list(ai_replies),
+        "chat_history": _collect_full_chat_history(log_records, final_agent_messages),
     }
 
 
@@ -3103,6 +3234,7 @@ def save_ai_appeal_record(
         "success_ids": summary["success_ids"],
         "failed_ids": summary["failed_ids"],
         "ai_replies": fields["ai_replies"],
+        "chat_history": fields["chat_history"],
         "ai_summary": summary["summary"],
         "error": "\n".join(_unique_text_list([error, summary.get("error", "")])),
         "executor": appeal_executor_metadata(),
@@ -3184,6 +3316,7 @@ def save_ai_appeal_group_record(
     """每组侵权/取消率申诉结束后写入原始结果，不调用 DeepSeek 总结。"""
     identifiers = _extract_identifiers_from_text(infraction_ids)
     ai_replies = _collect_group_ai_replies(group_records)
+    chat_history = _collect_full_chat_history(group_records)
     appeal_type = f"{appeal_kind}-第{group_index}/{total_groups}组"
     summary = summarize_ai_appeal_result(
         appeal_type,
@@ -3204,6 +3337,7 @@ def save_ai_appeal_group_record(
         "success_ids": summary["success_ids"],
         "failed_ids": summary["failed_ids"],
         "ai_replies": ai_replies,
+        "chat_history": chat_history,
         "ai_summary": f"第{group_index}/{total_groups}组：{summary['summary']}",
         "error": "\n".join(_unique_text_list([error, summary.get("error", "")])),
         "record_scope": "group",

@@ -2,6 +2,7 @@
 
 STATUS_LABELS = {
     "no_data": "无可申诉数据",
+    "sent": "话术发送成功",
     "replied": "已收到回复，结果待确认",
     "needs_human": "需要人工处理",
     "reply_timeout": "回复超时",
@@ -15,6 +16,10 @@ STATUS_LABELS = {
     "login_required": "需要登录",
     "rate_limited": "访问限频",
 }
+
+# ``replied`` is kept as a success state for records created before send
+# acknowledgement became the appeal success boundary.
+SUCCESS_STATUSES = frozenset(("sent", "replied"))
 
 
 class AppealExecutionError(RuntimeError):
@@ -46,9 +51,12 @@ def result_from_logs(records, error="", status=""):
               and isinstance((r.get("extra") or {}).get("result"), dict)]
     if not status:
         states = {g["status"] for g in groups}
-        status = "failed" if error else (
-            next(iter(states)) if len(states) == 1 else "partial" if states else "no_data"
-        )
+        if error:
+            status = "failed"
+        elif states and states.issubset(SUCCESS_STATUSES):
+            status = "sent" if "sent" in states else "replied"
+        else:
+            status = next(iter(states)) if len(states) == 1 else "partial" if states else "no_data"
     result = execution_result(
         status, sent=any(g.get("sent") for g in groups),
         acknowledged=bool(groups) and all(g.get("acknowledged") for g in groups),
@@ -58,8 +66,12 @@ def result_from_logs(records, error="", status=""):
     result["metrics"] = {
         "groups": len(groups),
         "sent_confirmed": sum(bool(g.get("acknowledged")) for g in groups),
+        "successful": sum(g.get("status") in SUCCESS_STATUSES for g in groups),
         "replied": sum(bool(g.get("reply_received")) for g in groups),
-        "reply_timeout": sum(g.get("status") == "reply_timeout" for g in groups),
+        "reply_timeout": sum(
+            g.get("status") == "reply_timeout" or g.get("reply_status") == "reply_timeout"
+            for g in groups
+        ),
         "sent_unknown": sum(g.get("status") == "sent_unknown" for g in groups),
     }
     return result

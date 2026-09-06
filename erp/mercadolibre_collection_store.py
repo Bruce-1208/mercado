@@ -814,6 +814,7 @@ def _list_rows(
     review_status: str = "",
     publish_status: str = "",
     management_category_id: Any = None,
+    mercado_category: str = "",
     weight_min: Any = None,
     weight_max: Any = None,
     price_min: Any = None,
@@ -851,6 +852,10 @@ def _list_rows(
             raise ValueError("运营分类编号无效")
         where.append("`management_category_id` = %s")
         params.append(normalized_category_id)
+    mercado_category = str(mercado_category or "").strip()[:255]
+    if mercado_category:
+        where.append("(`category_id` = %s OR `category_name` LIKE %s)")
+        params.extend((mercado_category, f"%{mercado_category}%"))
     if table == PRODUCT_TABLE:
         source_type = str(source_type or "").strip().lower()
         review_status = str(review_status or "").strip().lower()

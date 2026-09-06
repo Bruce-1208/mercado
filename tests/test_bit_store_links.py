@@ -556,6 +556,8 @@ def test_list_store_links_filters_site_and_defaults_to_sales_descending():
     result = store.list_store_links(
         site_id="mlm",
         group_name="运营一组",
+        management_category_id="12",
+        mercado_category="Toys",
         page_size=25,
         connection_factory=Connection,
     )
@@ -569,9 +571,13 @@ def test_list_store_links_filters_site_and_defaults_to_sales_descending():
     assert "`remote_json`" not in list_sql
     assert "INNER JOIN (" in list_sql
     assert "links.`token_id` = %s AND links.`site_id` = %s" in list_sql
+    assert "categorized_product.`management_category_id` = %s" in list_sql
+    assert "links.`category_id` = %s" in list_sql
+    assert "mercado_product.`category_name` LIKE %s" in list_sql
     assert "ORDER BY links.`sold_quantity` DESC" in list_sql
     assert params[0] == "MLM"
-    assert params[1:3] == (1, "MLM")
+    assert params[1:5] == (12, "Toys", "Toys", "%Toys%")
+    assert params[5:7] == (1, "MLM")
     assert params[-2:] == (1000, 0)
     assert result["page_size"] == 1000
     assert result["rows"][0]["group_name"] == "运营一组"
@@ -695,12 +701,16 @@ def test_workbench_store_link_ui_and_routes():
     assert b'id="store-link-sync-button"' in response.data
     assert b'id="store-link-group-filter"' in response.data
     assert b'id="store-link-site-filter"' in response.data
+    assert b'id="store-link-product-category-filter"' in response.data
+    assert b'id="store-link-mercado-category-filter"' in response.data
     assert b'id="store-link-page-buttons"' in response.data
     assert b'id="store-link-sales-sort"' in response.data
     assert b'id="store-link-sync-log"' in response.data
     assert "同步所有店铺链接".encode("utf-8") in response.data
     assert "同步当前店铺".encode("utf-8") in response.data
     assert "销量从高到低".encode("utf-8") in response.data
+    assert "产品分类".encode("utf-8") in response.data
+    assert "美客多分类".encode("utf-8") in response.data
     assert "净收益(USD)".encode("utf-8") in response.data
     assert "任务执行日志".encode("utf-8") in response.data
     assert "修改美客多后台".encode("utf-8") in response.data
@@ -722,13 +732,16 @@ def test_workbench_store_link_ui_and_routes():
     with patch.object(workbench.bit_db_api, "list_mercado_store_links", return_value=listing_data) as listing:
         response = client.get(
             "/api/store-links?search=MLM1&site_id=MLM&group_name="
-            "%E8%BF%90%E8%90%A5%E4%B8%80%E7%BB%84&sales_sort=asc&page_size=10"
+            "%E8%BF%90%E8%90%A5%E4%B8%80%E7%BB%84&management_category_id=12"
+            "&mercado_category=MLM123&sales_sort=asc&page_size=10"
         )
     assert response.status_code == 200
     assert response.get_json()["data"]["rows"][0]["item_id"] == "MLM1"
     assert response.get_json()["data"]["sites"][0]["site_id"] == "MLM"
     assert listing.call_args.kwargs["site_id"] == "MLM"
     assert listing.call_args.kwargs["group_name"] == "运营一组"
+    assert listing.call_args.kwargs["management_category_id"] == "12"
+    assert listing.call_args.kwargs["mercado_category"] == "MLM123"
     assert listing.call_args.kwargs["sales_sort"] == "asc"
     assert listing.call_args.kwargs["page_size"] == 1000
 

@@ -4544,9 +4544,9 @@ def run_daily_task_job(
             )
 
         execution_counts = bit_daily_task.task_execution_counts(execution_result)
-        needs_attention = any(count and key not in {"replied", "no_data"}
+        needs_attention = any(count and key not in {"sent", "replied", "no_data"}
                               for key, count in execution_counts.items())
-        result_message += f"；执行统计：{execution_counts}；客服回复不代表申诉已批准"
+        result_message += f"；执行统计：{execution_counts}；话术发送成功不代表申诉已批准"
         print(f"{get_now_time()} {result_message}<br>")
         _update_daily_task_state(
             task_id,
@@ -6559,6 +6559,12 @@ def api_store_links():
             site_id=str(request.args.get("site_id") or "").strip(),
             group_name=str(request.args.get("group_name") or "").strip(),
             status=str(request.args.get("status") or "").strip(),
+            management_category_id=str(
+                request.args.get("management_category_id") or ""
+            ).strip(),
+            mercado_category=str(
+                request.args.get("mercado_category") or ""
+            ).strip(),
             sales_sort=str(request.args.get("sales_sort") or "desc").strip(),
             current_only=str(request.args.get("current_only") or "1").strip().lower()
             not in ("0", "false", "no", "off"),
@@ -8615,6 +8621,9 @@ def api_mercado_products():
             management_category_id=str(
                 request.args.get("management_category_id") or ""
             ).strip(),
+            mercado_category=str(
+                request.args.get("mercado_category") or ""
+            ).strip(),
         )
         return jsonify({"status": "success", "data": result})
     except ValueError as exc:
@@ -9712,6 +9721,9 @@ def api_db_mercado_products():
         management_category_id=str(
             request.args.get("management_category_id") or ""
         ).strip(),
+        mercado_category=str(
+            request.args.get("mercado_category") or ""
+        ).strip(),
     )
     return jsonify({"status": "success", "data": result})
 
@@ -10621,6 +10633,12 @@ def api_db_store_links():
             site_id=str(request.args.get("site_id") or "").strip(),
             group_name=str(request.args.get("group_name") or "").strip(),
             status=str(request.args.get("status") or "").strip(),
+            management_category_id=str(
+                request.args.get("management_category_id") or ""
+            ).strip(),
+            mercado_category=str(
+                request.args.get("mercado_category") or ""
+            ).strip(),
             sales_sort=str(request.args.get("sales_sort") or "desc").strip(),
             current_only=str(request.args.get("current_only") or "1").strip().lower()
             not in ("0", "false", "no", "off"),
