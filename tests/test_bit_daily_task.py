@@ -761,8 +761,8 @@ def test_shop_executor_sends_expected_form(monkeypatch, appeal_type, expected_fo
     monkeypatch.setattr(
         bit_daily_task.bit_appeal_ai,
         "shensu",
-        lambda name, site, form, message, validate_open=False: calls.append(
-            (name, site, form, message, validate_open)
+        lambda name, site, form, message, **kwargs: calls.append(
+            (name, site, form, message, kwargs)
         ) or "完成",
     )
     monkeypatch.setattr(bit_daily_task, "_resolve_login_anomaly", lambda *args: None)
@@ -780,7 +780,15 @@ def test_shop_executor_sends_expected_form(monkeypatch, appeal_type, expected_fo
         message="测试话术",
     )
 
-    assert calls == [("测试店铺", "MX", expected_form, "测试话术", True)]
+    assert calls == [
+        (
+            "测试店铺",
+            "MX",
+            expected_form,
+            "测试话术",
+            {"validate_open": True, "window_id": "window-id"},
+        )
+    ]
     assert result["appeal_type"] == ("延误率" if expected_form == "延误" else expected_form)
 
 
@@ -812,6 +820,7 @@ def test_infraction_shop_executor_passes_api_ids_directly(monkeypatch):
     )
 
     assert calls[0][1]["validate_open"] is True
+    assert calls[0][1]["window_id"] == "window-id"
     assert calls[0][1]["infraction_ids"] == ["MLM-1", "MLM-2"]
 
 
@@ -963,6 +972,109 @@ def test_daily_appeal_worker_limit_defaults_to_thirty(monkeypatch):
     assert bit_daily_task._daily_browser_worker_limit() == 30
 
 
+def test_daily_plan_resolves_thirty_window_ids_from_one_browser_snapshot(monkeypatch):
+    plan = [
+        {"name": f"店铺{index}", "total": 1, "sites": []}
+        for index in range(30)
+    ]
+    token_data = {
+        "rows": [
+            {
+                "id": index + 1,
+                "display_name": f"店铺{index}",
+                "enabled": True,
+                "site_settings": [
+                    {"site_id": "MLM", "appeal_enabled": True}
+                ],
+            }
+            for index in range(30)
+        ]
+    }
+    browser_calls = []
+    monkeypatch.setattr(
+        bit_daily_task,
+        "list_mercado_store_tokens",
+        lambda: token_data,
+    )
+    monkeypatch.setattr(
+        bit_daily_task.bit_config,
+        "listBrowsers",
+        lambda: browser_calls.append(True) or [
+            {"id": f"window-{index}", "name": f"店铺{index}"}
+            for index in range(30)
+        ],
+    )
+
+    resolved = bit_daily_task._resolve_appeal_plan_window_ids(plan)
+
+    assert len(browser_calls) == 1
+    assert [shop["window_id"] for shop in resolved] == [
+        f"window-{index}" for index in range(30)
+    ]
+
+
+def test_browser_snapshot_retries_explicit_api_rate_limit(monkeypatch):
+    calls = []
+    waits = []
+
+    def list_browsers():
+        calls.append(True)
+        if len(calls) == 1:
+            raise RuntimeError("请求太过频繁，每秒最多可以发起 10 个请求")
+        return [{"id": "window-1", "name": "店铺1"}]
+
+    monkeypatch.setattr(bit_daily_task.bit_config, "listBrowsers", list_browsers)
+    monkeypatch.setattr(bit_daily_task, "DEFAULT_BROWSER_LIST_RETRY_ATTEMPTS", 3)
+    monkeypatch.setattr(bit_daily_task, "DEFAULT_BROWSER_LIST_RETRY_SECONDS", 0.5)
+    monkeypatch.setattr(
+        bit_daily_task,
+        "_wait_or_stop",
+        lambda seconds, _stop_event=None: waits.append(seconds) or False,
+    )
+
+    assert bit_daily_task._load_bit_browser_snapshot() == [
+        {"id": "window-1", "name": "店铺1"}
+    ]
+    assert len(calls) == 2
+    assert waits == [0.5]
+
+
+def test_appeal_one_shop_uses_pre_resolved_window_id(monkeypatch):
+    plan = _single_site_shop_plan()
+    plan["window_id"] = "window-from-parent"
+    lease = mock.Mock()
+    lease.acquire.return_value = True
+    monkeypatch.setattr(
+        bit_daily_task.bit_appeal_ai,
+        "get_window_id_by_shop_name",
+        lambda _name: pytest.fail("worker 不应重新读取窗口列表"),
+    )
+    monkeypatch.setattr(
+        bit_daily_task,
+        "create_window_lease",
+        lambda window_id, **_kwargs: (
+            lease
+            if window_id == "window-from-parent"
+            else pytest.fail("worker 使用了错误的窗口 ID")
+        ),
+    )
+    monkeypatch.setattr(
+        bit_daily_task,
+        "_appeal_one_shop_locked",
+        lambda *args, **kwargs: {"name": "测试店铺", "results": []},
+    )
+    monkeypatch.setattr(
+        bit_daily_task,
+        "closeBrowser",
+        lambda *_args, **_kwargs: {"success": True},
+    )
+
+    result = bit_daily_task.appeal_one_shop(plan)
+
+    assert result["name"] == "测试店铺"
+    lease.release.assert_called_once_with()
+
+
 def test_parallel_appeal_shop_failure_does_not_stop_other_shops(monkeypatch):
     submitted = []
     start_delays = []
@@ -1008,6 +1120,11 @@ def test_parallel_appeal_shop_failure_does_not_stop_other_shops(monkeypatch):
         {"name": "正常店铺", "total": 1, "sites": []},
     ]
     monkeypatch.setattr(bit_daily_task, "build_appeal_plan", lambda *a, **k: plan)
+    monkeypatch.setattr(
+        bit_daily_task,
+        "_resolve_appeal_plan_window_ids",
+        lambda value, **_kwargs: value,
+    )
     monkeypatch.setattr(bit_daily_task, "ProcessPoolExecutor", FakeExecutor)
     monkeypatch.setattr(bit_daily_task, "DEFAULT_START_STAGGER_SECONDS", 0)
     monkeypatch.setattr(
@@ -1056,6 +1173,11 @@ def test_stop_request_terminates_appeal_pool_without_waiting(monkeypatch):
         return set(), set(pending)
 
     monkeypatch.setattr(bit_daily_task, "build_appeal_plan", lambda *a, **k: plan)
+    monkeypatch.setattr(
+        bit_daily_task,
+        "_resolve_appeal_plan_window_ids",
+        lambda value, **_kwargs: value,
+    )
     monkeypatch.setattr(bit_daily_task, "ProcessPoolExecutor", FakeExecutor)
     monkeypatch.setattr(bit_daily_task, "wait", stop_on_wait)
     monkeypatch.setattr(
@@ -1128,6 +1250,11 @@ def test_submit_failure_terminates_partial_pool_and_cleans_owned_windows(monkeyp
     ]
     owned_window_ids = {"window-1": "已提交店铺"}
     monkeypatch.setattr(bit_daily_task, "build_appeal_plan", lambda *a, **k: plan)
+    monkeypatch.setattr(
+        bit_daily_task,
+        "_resolve_appeal_plan_window_ids",
+        lambda value, **_kwargs: value,
+    )
     monkeypatch.setattr(bit_daily_task, "ProcessPoolExecutor", FakeExecutor)
     monkeypatch.setattr(
         bit_daily_task,

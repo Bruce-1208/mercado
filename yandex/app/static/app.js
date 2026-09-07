@@ -55,6 +55,7 @@ const packageInputs = {
 };
 const initialStockInput = $("initialStock");
 const PACKAGE_STORAGE_KEY = "yandex-reseller-package-v1";
+const YANDEX_BASE_PATH = String(window.YANDEX_BASE_PATH || "").replace(/\/+$/, "");
 
 function toast(message, isError = false) {
   const element = $("toast");
@@ -67,7 +68,8 @@ function toast(message, isError = false) {
 async function api(path, options = {}) {
   let response;
   try {
-    response = await fetch(path, {
+    const normalizedPath = path.startsWith("/") ? path : `/${path}`;
+    response = await fetch(`${YANDEX_BASE_PATH}${normalizedPath}`, {
       ...options,
       headers: { "Content-Type": "application/json", ...(options.headers || {}) },
     });

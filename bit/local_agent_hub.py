@@ -436,6 +436,24 @@ class LocalAgentStore:
             ).fetchall()
         return [dict(row) for row in rows]
 
+    @staticmethod
+    def render_event_content(event):
+        event = dict(event or {})
+        content = str(event.get("content") or "")
+        if not content:
+            return ""
+        try:
+            created_at = float(event.get("created_at"))
+            timestamp = time.strftime(
+                "%Y-%m-%d %H:%M:%S", time.localtime(created_at)
+            )
+        except (TypeError, ValueError, OverflowError, OSError):
+            return content
+        return "".join(
+            f"[{timestamp}] {line}" if line.rstrip("\r\n") else line
+            for line in content.splitlines(keepends=True)
+        )
+
     def recent_log(self, job_id, *, max_chars=512 * 1024):
         """Read the newest log chunks, including logs after the first 500 events."""
         job_id = normalize_job_id(job_id)
@@ -443,13 +461,18 @@ class LocalAgentStore:
         size = 0
         with self._connect() as connection:
             rows = connection.execute(
-                "SELECT content FROM local_agent_events WHERE job_id = ? ORDER BY event_id DESC",
+                """
+                SELECT content, created_at
+                FROM local_agent_events
+                WHERE job_id = ?
+                ORDER BY event_id DESC
+                """,
                 (job_id,),
             )
             for row in rows:
-                chunks.append(row["content"])
-                size += len(row["content"])
+                rendered = self.render_event_content(row)
+                chunks.append(rendered)
+                size += len(rendered)
                 if size >= max_chars:
                     break
         return "".join(reversed(chunks))[-max_chars:]
-

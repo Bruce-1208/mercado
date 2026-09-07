@@ -5,6 +5,8 @@ from __future__ import annotations
 import argparse
 import json
 import multiprocessing
+import os
+import socket
 import sys
 import threading
 import time
@@ -24,6 +26,25 @@ def _write_log(text):
     text = str(text or "").replace("<br>", "\n").replace("<br/>", "\n").replace("<br />", "\n")
     if text:
         print(text, end="" if text.endswith("\n") else "\n", flush=True)
+
+
+def configure_execution_context(job):
+    """把 Agent 身份传给业务模块及其后续创建的子进程。"""
+    job = dict(job or {})
+    payload = dict(job.get("payload") or {})
+    agent_id = str(job.get("agent_id") or payload.get("agent_id") or "").strip()
+    agent_name = str(payload.get("agent_name") or "").strip()
+    hostname = str(socket.gethostname() or "未知主机").strip()
+    os.environ["BIT_EXECUTION_TARGET"] = "agent"
+    os.environ["BIT_EXECUTION_AGENT_ID"] = agent_id
+    os.environ["BIT_EXECUTION_AGENT_NAME"] = agent_name
+    os.environ["BIT_EXECUTION_HOSTNAME"] = hostname
+    return {
+        "target": "agent",
+        "agent_id": agent_id,
+        "agent_name": agent_name,
+        "hostname": hostname,
+    }
 
 
 def run_appeal(payload, stop_event):
@@ -100,6 +121,7 @@ def main(argv=None):
     parser.add_argument("--cancel-file", required=True)
     args = parser.parse_args(argv)
     job = json.loads(Path(args.job_file).read_text(encoding="utf-8"))
+    configure_execution_context(job)
     stop_event = threading.Event()
     threading.Thread(
         target=_watch_cancel,
@@ -128,4 +150,3 @@ def main(argv=None):
 
 if __name__ == "__main__":
     raise SystemExit(main())
-

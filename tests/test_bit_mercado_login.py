@@ -324,15 +324,21 @@ def test_login_results_are_synced_to_window_anomalies(monkeypatch):
 
     assert resolved == [
         "window-success",
-        "window-rate-limit",
-        "window-verification",
     ]
-    assert summary["resolved_count"] == 3
-    assert summary["anomaly_count"] == 1
-    assert summary["skipped_count"] == 1
-    assert len(upserts) == 1
-    assert upserts[0][1]["anomaly_type"] == mercado_login.LOGIN_CAPTCHA_REQUIRED
-    assert upserts[0][1]["source"] == "bit_mercado_login"
+    assert summary["resolved_count"] == 1
+    assert summary["anomaly_count"] == 3
+    assert summary["skipped_count"] == 2
+    assert len(upserts) == 3
+    assert [call[1]["anomaly_type"] for call in upserts] == [
+        mercado_login.LOGIN_LOGGED_OUT,
+        mercado_login.LOGIN_LOGGED_OUT,
+        mercado_login.LOGIN_CAPTCHA_REQUIRED,
+    ]
+    assert all(
+        call[1]["source"].startswith("bit_mercado_login｜服务器:")
+        for call in upserts
+    )
+    assert all("执行端：服务器：" in call[1]["reason"] for call in upserts)
 
 
 def test_login_check_always_uses_global_selling_home(monkeypatch):
@@ -564,12 +570,23 @@ def test_backend_page_relogs_and_reopens_original_url(monkeypatch):
     ]
     navigations = []
     login_calls = []
+    status_events = []
     monkeypatch.setattr(
         mercado_login,
         "get_mercado_page_state",
         lambda _driver: states[len(navigations) - 1],
     )
     monkeypatch.setattr(mercado_login, "is_mercado_login_page", lambda _driver: False)
+    monkeypatch.setattr(
+        mercado_login.bit_db_api,
+        "upsert_window_anomaly",
+        lambda *args, **kwargs: status_events.append(("recorded", args, kwargs)),
+    )
+    monkeypatch.setattr(
+        mercado_login.bit_db_api,
+        "resolve_window_anomaly",
+        lambda window_id: status_events.append(("resolved", window_id)),
+    )
 
     result = mercado_login.open_mercado_backend_page(
         object(),
@@ -586,6 +603,99 @@ def test_backend_page_relogs_and_reopens_original_url(monkeypatch):
     assert result["login_retry_count"] == 1
     assert navigations == [target_url, target_url]
     assert len(login_calls) == 1
+    assert status_events[0][0] == "recorded"
+    assert status_events[0][2]["anomaly_type"] == mercado_login.LOGIN_LOGGED_OUT
+    assert status_events[1] == ("resolved", "window-1")
+
+
+def test_backend_page_records_logged_out_when_auto_login_fails(monkeypatch):
+    target_url = "https://global-selling.mercadolibre.com/orders"
+    recorded = []
+    monkeypatch.setattr(
+        mercado_login,
+        "get_mercado_page_state",
+        lambda _driver: {
+            "current_url": "https://www.mercadolibre.com/jms/cbt/lgz/login",
+            "title": "Log in",
+            "page_text": "Fill out your e-mail address to log in",
+        },
+    )
+    monkeypatch.setattr(mercado_login, "is_mercado_login_page", lambda _driver: False)
+    monkeypatch.setattr(
+        mercado_login.bit_db_api,
+        "upsert_window_anomaly",
+        lambda *args, **kwargs: recorded.append((args, kwargs)),
+    )
+
+    result = mercado_login.open_mercado_backend_page(
+        object(),
+        target_url,
+        "退出登录店铺",
+        "window-logged-out",
+        settle_seconds=0,
+        navigate=lambda _url: None,
+        login_handler=lambda *args: {
+            "ok": False,
+            "status": mercado_login.LOGIN_SAVED_PASSWORD_INCORRECT,
+            "message": "默认密码错误",
+        },
+        anomaly_site="巴西",
+        anomaly_source="订单任务",
+    )
+
+    assert result["status"] == "logged_out"
+    assert len(recorded) == 1
+    assert recorded[0][0][:3] == (
+        "window-logged-out",
+        "退出登录店铺",
+        "巴西",
+    )
+    assert recorded[0][1]["anomaly_type"] == mercado_login.LOGIN_LOGGED_OUT
+    assert recorded[0][1]["source"].startswith("订单任务｜服务器:")
+    assert "执行端：服务器：" in recorded[0][1]["reason"]
+
+
+def test_logged_out_result_does_not_misclassify_rate_limit_or_timeout():
+    assert mercado_login.is_logged_out_result(
+        {"status": mercado_login.LOGIN_VERIFICATION_REQUIRED, "login_stage": "verification"}
+    )
+    assert not mercado_login.is_logged_out_result(
+        {
+            "status": mercado_login.LOGIN_FAILED,
+            "login_stage": "rate_limited",
+            "message": "切换节点后仍然限频",
+        }
+    )
+    assert not mercado_login.is_logged_out_result(
+        {"status": mercado_login.LOGIN_FAILED, "message": "timeout of 30000ms exceeded"}
+    )
+
+
+def test_logged_out_log_records_agent_name_id_and_hostname(monkeypatch):
+    recorded = []
+    monkeypatch.setenv("BIT_EXECUTION_TARGET", "agent")
+    monkeypatch.setenv("BIT_EXECUTION_AGENT_ID", "agent-office-01")
+    monkeypatch.setenv("BIT_EXECUTION_AGENT_NAME", "办公室电脑")
+    monkeypatch.setenv("BIT_EXECUTION_HOSTNAME", "OFFICE-PC")
+    monkeypatch.setattr(
+        mercado_login.bit_db_api,
+        "upsert_window_anomaly",
+        lambda *args, **kwargs: recorded.append((args, kwargs)),
+    )
+
+    assert mercado_login.record_logged_out_anomaly(
+        "window-agent",
+        "Agent 店铺",
+        "墨西哥",
+        "侵权采集",
+        "检测到登录页",
+    )
+
+    assert recorded[0][1]["source"] == "侵权采集｜Agent:办公室电脑"
+    assert (
+        recorded[0][1]["reason"]
+        == "检测到登录页；执行端：Agent：办公室电脑；ID agent-office-01；主机 OFFICE-PC"
+    )
 
 
 def test_backend_page_records_captcha_with_task_source(monkeypatch):
@@ -633,7 +743,8 @@ def test_backend_page_records_captcha_with_task_source(monkeypatch):
         "墨西哥",
     )
     assert recorded[0][1]["anomaly_type"] == mercado_login.LOGIN_CAPTCHA_REQUIRED
-    assert recorded[0][1]["source"] == "声誉采集"
+    assert recorded[0][1]["source"].startswith("声誉采集｜服务器:")
+    assert "执行端：服务器：" in recorded[0][1]["reason"]
 
 
 def test_backend_page_handles_designated_limit_before_reopening(monkeypatch):

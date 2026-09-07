@@ -1219,6 +1219,18 @@ def collect_live_detection_infractions(
     DOM, paging buttons or browser profile configuration participates in this path.
     """
 
+    # Local Agents never own the database or Mercado token secrets. Run the
+    # complete official-API read on the database server and return only rows.
+    from bit import bit_db_api
+
+    if bit_db_api.DB_MODE == "api":
+        return bit_db_api.collect_live_detection_infractions(
+            targets,
+            recent_days=recent_days,
+            max_workers=max_workers,
+            stop_event=stop_event,
+        )
+
     normalized_targets = []
     seen_token_ids: set[int] = set()
     for raw_target in targets or ():

@@ -10,6 +10,11 @@ from bit.bit_mercado_limit import (
     get_playwright_mercado_page_state,
     process_mercado_rate_limit,
 )
+from bit import bit_db_api
+from bit.bit_mercado_login import (
+    is_human_verification_result,
+    try_record_login_anomaly,
+)
 
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
@@ -169,11 +174,16 @@ def open_mercado_backend_page(
     max_rate_limit_retries=2,
     rate_limit_retry_wait_seconds=30,
     max_login_retries=1,
+    site="",
+    source="Playwright业务任务",
 ):
     """Playwright 业务页入口：限频换节点，退出登录后自动重登。"""
     page = session.page
+    window_id = str(getattr(session, "window_id", "") or "").strip()
+    shop_name = str(getattr(session, "shop_name", "") or window_id).strip()
     rate_retry_count = 0
     login_retry_count = 0
+    first_logged_out_state = {}
     while True:
         navigation_error = ""
         try:
@@ -185,6 +195,8 @@ def open_mercado_backend_page(
 
         state = get_playwright_mercado_page_state(page)
         status = get_mercado_backend_status(state=state)
+        if status == "logged_out" and not first_logged_out_state:
+            first_logged_out_state = dict(state or {})
         if status == "ready":
             if navigation_error:
                 return {
@@ -193,7 +205,7 @@ def open_mercado_backend_page(
                     "message": f"{session.shop_name} 打开 Mercado 业务页失败：{navigation_error}",
                     "state": state,
                 }
-            return {
+            result = {
                 "ok": True,
                 "status": "ready",
                 "message": f"{session.shop_name} Mercado 业务页已就绪",
@@ -201,6 +213,28 @@ def open_mercado_backend_page(
                 "rate_limit_retry_count": rate_retry_count,
                 "login_retry_count": login_retry_count,
             }
+            if login_retry_count:
+                detected_url = str(first_logged_out_state.get("current_url") or "").strip()
+                recovered = {
+                    "status": "logged_out",
+                    "message": (
+                        f"{shop_name} Playwright 任务检测到美客多账号退出登录"
+                        f"{f'：{detected_url}' if detected_url else ''}；"
+                        f"自动登录 {login_retry_count} 次后已恢复"
+                    ),
+                }
+                if try_record_login_anomaly(
+                    recovered,
+                    window_id,
+                    shop_name,
+                    site,
+                    source,
+                ):
+                    try:
+                        bit_db_api.resolve_window_anomaly(window_id)
+                    except Exception as exc:
+                        print(f"{shop_name} 自动登录已恢复，但解除店铺状态失败：{exc}")
+            return result
 
         if status == "rate_limited":
             result = process_mercado_rate_limit(
@@ -224,16 +258,24 @@ def open_mercado_backend_page(
             continue
 
         if login_retry_count >= max(0, int(max_login_retries)):
-            return {
+            result = {
                 "ok": False,
                 "status": "logged_out",
                 "message": f"{session.shop_name} Mercado 登录态失效",
                 "state": state,
             }
+            try_record_login_anomaly(
+                result,
+                window_id,
+                shop_name,
+                site,
+                source,
+            )
+            return result
         login_retry_count += 1
         login_result = session.auto_login_mercado()
         if not login_result.get("ok"):
-            return {
+            result = {
                 "ok": False,
                 "status": "logged_out",
                 "message": (
@@ -243,6 +285,14 @@ def open_mercado_backend_page(
                 "state": state,
                 "login_result": login_result,
             }
+            try_record_login_anomaly(
+                login_result if is_human_verification_result(login_result) else result,
+                window_id,
+                shop_name,
+                site,
+                source,
+            )
+            return result
 
 
 def deep_click(page, selector):

@@ -601,12 +601,12 @@ def test_shop_status_enriches_salesperson_from_browser_configs(monkeypatch):
     ]
 
 
-def test_shop_status_only_returns_human_verification_rows(monkeypatch):
+def test_shop_status_returns_logged_out_and_human_verification_rows(monkeypatch):
     monkeypatch.setattr(
         bit_interface,
         "db_get_window_anomalies",
         lambda active_only=True, limit=500: {
-            "total": 4,
+            "total": 5,
             "rows": [
                 {
                     "window_id": "window-captcha",
@@ -625,6 +625,12 @@ def test_shop_status_only_returns_human_verification_rows(monkeypatch):
                     "window_name": "验证码店铺",
                     "anomaly_type": "需要验证码",
                     "reason": "需要邮箱验证码",
+                },
+                {
+                    "window_id": "window-logged-out",
+                    "window_name": "退出登录店铺",
+                    "anomaly_type": "美客多账号退出登录",
+                    "reason": "声誉采集时跳转登录页",
                 },
                 {
                     "window_id": "window-limit",
@@ -648,10 +654,12 @@ def test_shop_status_only_returns_human_verification_rows(monkeypatch):
 
     assert response.status_code == 200
     data = response.get_json()["data"]
-    assert data["total"] == 2
+    assert data["total"] == 4
     assert [row["window_id"] for row in data["rows"]] == [
         "window-captcha",
         "window-legacy-captcha",
+        "window-code",
+        "window-logged-out",
     ]
 
 
@@ -662,10 +670,13 @@ def test_shop_status_ui_uses_single_shop_auto_login_action():
 
     assert '>店铺状态</span>' in template
     assert "<h2>店铺状态</h2>" in template
+    assert "Bit 浏览器任务中检测到美客多账号退出登录" in template
+    assert "待处理登录异常" in template
     assert "重新检测" in template
     assert "startSingleShopAutoLogin" in template
     assert "startSelectedShopsAutoLogin" in template
     assert "window-anomaly-select-all" in template
+    assert "来源 / 执行端" in template
     assert "重新检测所选店铺" in template
     assert 'id="mercado-login-workers" type="number" min="1" max="10" value="3"' in template
     assert "selectedMercadoLoginWorkerCount" in template
@@ -747,6 +758,13 @@ def test_daily_task_console_exposes_all_task_switches_and_shop_group():
     assert "每轮先实时遍历店铺授权中勾选的全部站点" in template
     assert "只执行本站点侵权数超过标准的站点" in template
     assert 'id="daily-task-list"' in template
+    assert 'id="daily-task-status-filter"' in template
+    assert 'id="daily-task-computer-filter"' in template
+    assert 'id="daily-task-filter-summary"' in template
+    assert "function dailyTaskStatusCategory(task)" in template
+    assert "function dailyTaskComputerKey(task)" in template
+    assert "function applyDailyTaskFilters()" in template
+    assert "没有符合当前筛选条件的任务。" in template
     assert 'class="danger daily-task-stop-btn"' in template
     assert 'id="daily-task-execution-target"' in template
     assert 'id="daily-task-agent-id"' in template

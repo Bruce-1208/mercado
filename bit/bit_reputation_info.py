@@ -34,7 +34,11 @@ from bit.bit_mercado_limit import (
     is_mercado_logged_out_state,
     is_mercado_rate_limited_text,
 )
-from bit.bit_mercado_login import open_mercado_backend_page
+from bit.bit_mercado_login import (
+    bind_mercado_shop_context,
+    open_mercado_backend_page,
+    try_record_login_anomaly,
+)
 from selenium.webdriver.common.desired_capabilities import DesiredCapabilities
 from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.common.by import By
@@ -276,6 +280,7 @@ def _connect_browser(
     chrome_service = Service(driverPath)
     driver = webdriver.Chrome(service=chrome_service, options=chrome_options)
     driver.implicitly_wait(10)
+    bind_mercado_shop_context(driver, window_id=window_id, source="声誉采集")
     return driver
 
 
@@ -294,6 +299,17 @@ def _is_mercado_login_state(state):
 def _raise_if_mercado_unavailable(driver=None, state=None, context="页面"):
     state = state or _get_mercado_page_state(driver)
     if _is_mercado_login_state(state):
+        try_record_login_anomaly(
+            {
+                "status": "logged_out",
+                "message": (
+                    f"{context}检测到美客多账号退出登录："
+                    f"{state.get('current_url', '')}"
+                ),
+            },
+            source="声誉采集",
+            driver=driver,
+        )
         raise MercadoAuthenticationError(
             f"{context}登录态失效，已跳转登录页：{state.get('current_url', '')}"
         )
@@ -2338,12 +2354,17 @@ def _prepare_reputation_retry_rows(outcomes, permanent_login_failures=None):
                     LOGIN_SAVED_PASSWORD_INCORRECT,
                     LOGIN_SAVED_PASSWORD_MISSING,
                     login_one_database_shop,
+                    sync_login_results_to_window_anomalies,
                 )
 
                 login_result = login_one_database_shop(
                     _row_as_login_config(current_row),
                     wait_seconds=int(env_float("BIT_LOGIN_REPAIR_WAIT_SECONDS", 60, 1)),
                     page_load_timeout=int(env_float("BIT_LOGIN_REPAIR_PAGE_TIMEOUT", 20, 1)),
+                )
+                sync_login_results_to_window_anomalies(
+                    [login_result],
+                    source="声誉采集",
                 )
             except Exception as exc:
                 print(f"{get_now_time()}{name} 登录修复异常，本轮不重试：{exc}")

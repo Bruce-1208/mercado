@@ -20,6 +20,7 @@ import traceback
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from io import BytesIO
 from pathlib import Path
+from urllib.error import HTTPError, URLError
 from urllib.parse import quote, urlsplit
 from urllib.request import Request, urlopen
 
@@ -102,8 +103,8 @@ from bit.bit_runtime_lock import (
 )
 from bit.bit_mercado_login import (
     MERCADO_LOGIN_JOB_LOCK_KEY,
-    is_human_verification_result,
     is_login_blocking_result,
+    is_shop_status_anomaly,
 )
 from bit.bit_utils import *
 from bit.bit_api import *
@@ -363,6 +364,7 @@ except ValueError:
     YANDEX_CONSOLE_PORT = 8011
 YANDEX_CONSOLE_HOST = "127.0.0.1"
 YANDEX_CONSOLE_BASE_URL = f"http://{YANDEX_CONSOLE_HOST}:{YANDEX_CONSOLE_PORT}"
+YANDEX_CONSOLE_PROXY_PATH = "/yandex-console"
 YANDEX_PACKAGE_ROOT = PROJECT_ROOT / "yandex"
 _yandex_console_lock = threading.Lock()
 _yandex_console_process = None
@@ -442,6 +444,84 @@ def ensure_yandex_console():
                 break
             time.sleep(0.25)
         return False, f"Yandex 控制台启动失败，请检查日志：{log_path}"
+
+
+def _yandex_console_public_urls():
+    return {
+        "url": f"{YANDEX_CONSOLE_PROXY_PATH}/?embedded=1",
+        "external_url": f"{YANDEX_CONSOLE_PROXY_PATH}/",
+    }
+
+
+def _yandex_console_upstream_url(proxy_path):
+    safe_path = quote(str(proxy_path or ""), safe="/-._~")
+    target = f"{YANDEX_CONSOLE_BASE_URL}/{safe_path}"
+    if request.query_string:
+        target = f"{target}?{request.query_string.decode('latin-1')}"
+    return target
+
+
+def _proxy_yandex_console_request(proxy_path):
+    request_headers = {
+        "Accept": request.headers.get("Accept", "*/*"),
+        "X-Forwarded-Prefix": YANDEX_CONSOLE_PROXY_PATH,
+    }
+    for header_name in (
+        "Content-Type",
+        "If-Modified-Since",
+        "If-None-Match",
+        "Range",
+    ):
+        if request.headers.get(header_name):
+            request_headers[header_name] = request.headers[header_name]
+
+    body = (
+        request.get_data()
+        if request.method in {"POST", "PUT", "PATCH", "DELETE"}
+        else None
+    )
+    upstream_request = Request(
+        _yandex_console_upstream_url(proxy_path),
+        data=body,
+        headers=request_headers,
+        method=request.method,
+    )
+    try:
+        upstream = urlopen(upstream_request, timeout=300)
+    except HTTPError as exc:
+        upstream = exc
+    except (URLError, TimeoutError):
+        return jsonify({"detail": "Yandex 控制台暂时不可用，请重新加载后重试"}), 502
+
+    try:
+        payload = b"" if request.method == "HEAD" else upstream.read()
+        content_type = str(upstream.headers.get("Content-Type") or "")
+        if content_type.lower().startswith("text/html"):
+            prefix = YANDEX_CONSOLE_PROXY_PATH.encode("utf-8")
+            payload = payload.replace(b'href="/static/', b'href="' + prefix + b'/static/')
+            payload = payload.replace(b'src="/static/', b'src="' + prefix + b'/static/')
+            payload = payload.replace(
+                b'window.YANDEX_BASE_PATH = "";',
+                b"window.YANDEX_BASE_PATH = " + json.dumps(
+                    YANDEX_CONSOLE_PROXY_PATH
+                ).encode("utf-8") + b";",
+            )
+        response = Response(payload, status=upstream.status)
+        for header_name in (
+            "Content-Type",
+            "Cache-Control",
+            "Content-Disposition",
+            "Content-Range",
+            "Accept-Ranges",
+            "ETag",
+            "Last-Modified",
+        ):
+            value = upstream.headers.get(header_name)
+            if value:
+                response.headers[header_name] = value
+        return response
+    finally:
+        upstream.close()
 
 
 def _truthy_env(value):
@@ -1376,7 +1456,7 @@ def login_required(view_func):
     def wrapper(*args, **kwargs):
         if get_current_workbench_user():
             return view_func(*args, **kwargs)
-        if request.path.startswith("/api/"):
+        if request.path.startswith(("/api/", f"{YANDEX_CONSOLE_PROXY_PATH}/api/")):
             return jsonify({"status": "error", "message": "请先登录"}), 401
         return redirect(url_for("login_page", next=request.full_path))
 
@@ -1960,6 +2040,8 @@ API_REPUTATION_STATE_PATH = Path(
     os.environ.get("BIT_API_REPUTATION_STATE_PATH")
     or (RUNTIME_LOCK_DIR / "api_reputation_last_snapshot.json")
 )
+API_REPUTATION_AUTO_REFRESH_HOURS = (0, 12)
+API_REPUTATION_MAX_WORKERS = 10
 
 
 def _api_reputation_default_state():
@@ -2023,6 +2105,9 @@ _api_reputation_state = {
 }
 _api_reputation_logs.extend(_persisted_api_reputation.get("logs") or [])
 _api_reputation_database_hydration_attempted = False
+_api_reputation_scheduler_guard = threading.Lock()
+_api_reputation_scheduler_thread = None
+_api_reputation_scheduler_stop_event = threading.Event()
 _risk_check_lock = threading.Lock()
 _risk_check_state_lock = threading.RLock()
 _risk_check_logs = deque(maxlen=500)
@@ -2960,7 +3045,7 @@ def _mercado_login_selected_target(selected_shops):
     preview = "、".join(names[:3])
     if len(names) > 3:
         preview += "等"
-    return f"所选 {len(shops)} 家待处理人机验证店铺" + (f"（{preview}）" if preview else "")
+    return f"所选 {len(shops)} 家待处理登录异常店铺" + (f"（{preview}）" if preview else "")
 
 
 def run_mercado_login_console_job(
@@ -7361,7 +7446,7 @@ def stream_local_agent_job(job_id):
         for event in events:
             event_id = max(event_id, int(event["event_id"]))
             if event.get("content"):
-                yield str(event["content"])
+                yield get_local_agent_store().render_event_content(event)
         job = get_local_agent_store().get_job(job_id)
         if not job:
             yield "Agent 任务记录不存在\n"
@@ -7411,7 +7496,12 @@ def enqueue_local_agent_daily_task(agent_id, params):
         return jsonify({"status": "error", "message": "所选 Agent 不在线，请启动 Agent 并刷新电脑"}), 409
     if "daily_task" not in agent.get("capabilities", ()):
         return jsonify({"status": "error", "message": "请将所选电脑的 Agent 更新至 1.1.0 或更高版本"}), 409
-    params = {**params, "execution_target": "agent", "agent_id": agent_id, "agent_name": agent["name"]}
+    params = {
+        **params,
+        "execution_target": "agent",
+        "agent_id": agent_id,
+        "agent_name": agent["name"],
+    }
     user = get_current_workbench_user() or {}
     job = store.enqueue_job(
         secrets.token_hex(16), agent_id, "daily_task", params,
@@ -7449,6 +7539,9 @@ def enqueue_local_agent_appeal(
         "message": message,
         "mode": mode,
         "loop_count": "永久" if loop_count == PERMANENT_APPEAL_LOOP_COUNT else loop_count,
+        "execution_target": "agent",
+        "agent_id": agent_id,
+        "agent_name": agent["name"],
     }
     try:
         get_local_agent_store().enqueue_job(
@@ -10150,6 +10243,27 @@ def api_db_official_infraction_current_counts():
     return jsonify({"status": "success", "data": data})
 
 
+@app.route('/api/db/official-infractions/live', methods=['POST'])
+@internal_api_required
+def api_db_collect_live_official_infractions():
+    blocked = reject_db_api_client_mode()
+    if blocked:
+        return blocked
+    payload = request.get_json(silent=True) or {}
+    targets = payload.get("targets") or []
+    if not isinstance(targets, list):
+        return jsonify({"status": "error", "message": "targets 必须是数组"}), 400
+    try:
+        data = mercado_infraction_sync.collect_live_detection_infractions(
+            targets,
+            recent_days=payload.get("recent_days", 100),
+            max_workers=payload.get("max_workers", 8),
+        )
+        return jsonify({"status": "success", "data": data})
+    except (TypeError, ValueError) as exc:
+        return jsonify({"status": "error", "message": str(exc)}), 400
+
+
 @app.route('/api/db/official-infractions/sync', methods=['POST'])
 @internal_api_required
 def api_db_start_official_infraction_sync():
@@ -11313,7 +11427,7 @@ def api_window_anomalies():
     try:
         active_only = str(request.args.get("active_only", "1")).strip().lower() not in ("0", "false", "no")
         limit = request.args.get("limit", 500)
-        anomaly_data = filter_human_verification_anomalies(
+        anomaly_data = filter_shop_status_anomalies(
             db_get_window_anomalies(active_only, limit)
         )
         response = jsonify({
@@ -11327,17 +11441,22 @@ def api_window_anomalies():
         return jsonify({"status": "error", "message": f"Database error: {str(e)}"}), 500
 
 
-def filter_human_verification_anomalies(anomaly_data):
-    """店铺状态页只展示明确需要人工处理的人机验证。"""
+def filter_shop_status_anomalies(anomaly_data):
+    """店铺状态展示美客多退出登录和需要人工处理的人机验证。"""
     data = dict(anomaly_data or {})
     rows = [
         dict(row)
         for row in (data.get("rows") or [])
-        if is_human_verification_result(row)
+        if is_shop_status_anomaly(row)
     ]
     data["rows"] = rows
     data["total"] = len(rows)
     return data
+
+
+def filter_human_verification_anomalies(anomaly_data):
+    """兼容旧调用名；店铺状态现同时包含退出登录。"""
+    return filter_shop_status_anomalies(anomaly_data)
 
 
 def enrich_window_anomaly_salespersons(anomaly_data):
@@ -11480,14 +11599,14 @@ def api_start_mercado_login_console():
         )
         if not window_ids:
             return jsonify(
-                {"status": "error", "message": "请至少选择一个待处理人机验证店铺"}
+                {"status": "error", "message": "请至少选择一个待处理登录异常店铺"}
             ), 400
         if len(window_ids) > 500:
             return jsonify(
-                {"status": "error", "message": "单次最多选择 500 个待处理人机验证店铺"}
+                {"status": "error", "message": "单次最多选择 500 个待处理登录异常店铺"}
             ), 400
         try:
-            anomaly_data = filter_human_verification_anomalies(
+            anomaly_data = filter_shop_status_anomalies(
                 db_get_window_anomalies(active_only=True, limit=1000) or {}
             )
         except Exception as exc:
@@ -11525,7 +11644,7 @@ def api_start_mercado_login_console():
             ), 422
     elif window_id:
         try:
-            anomaly_data = filter_human_verification_anomalies(
+            anomaly_data = filter_shop_status_anomalies(
                 db_get_window_anomalies(active_only=True, limit=1000) or {}
             )
             anomaly = next(
@@ -11942,16 +12061,44 @@ def _append_api_reputation_log(message):
         _api_reputation_logs.append(line)
 
 
+def _next_api_reputation_run(now=None):
+    """Return the next local 00:00/12:00 reputation refresh boundary."""
+
+    current = now or datetime.now()
+    candidates = []
+    for hour in API_REPUTATION_AUTO_REFRESH_HOURS:
+        candidate = current.replace(hour=hour, minute=0, second=0, microsecond=0)
+        if candidate <= current:
+            candidate += timedelta(days=1)
+        candidates.append(candidate)
+    return min(candidates)
+
+
+def _api_reputation_snapshot_unlocked():
+    """Copy mutable state while the caller already owns the state lock."""
+
+    data = dict(_api_reputation_state)
+    data["rows"] = [dict(row) for row in _api_reputation_state.get("rows", [])]
+    data["failures"] = [
+        dict(row) for row in _api_reputation_state.get("failures", [])
+    ]
+    data["logs"] = list(_api_reputation_logs)
+    return data
+
+
 def _api_reputation_snapshot():
     with _api_reputation_lock:
-        data = dict(_api_reputation_state)
-        data["rows"] = [dict(row) for row in _api_reputation_state.get("rows", [])]
-        data["failures"] = [
-            dict(row) for row in _api_reputation_state.get("failures", [])
-        ]
-        data["logs"] = list(_api_reputation_logs)
+        data = _api_reputation_snapshot_unlocked()
     if data.get("running"):
         data["elapsed_seconds"] = _mercado_collection_elapsed_seconds(data)
+    data.update({
+        "auto_refresh_enabled": not USE_DB_API,
+        "auto_refresh_hours": list(API_REPUTATION_AUTO_REFRESH_HOURS),
+        "max_workers": API_REPUTATION_MAX_WORKERS,
+        "next_auto_refresh_at": _next_api_reputation_run().strftime(
+            "%Y-%m-%d %H:%M:%S"
+        ),
+    })
     return data
 
 
@@ -12088,10 +12235,13 @@ def _run_all_api_reputation_refresh():
 
     try:
         result = bit_reputation_info.main(
-            max_workers=4,
+            max_workers=API_REPUTATION_MAX_WORKERS,
             retry_failed=True,
             send_email=False,
             export_excel=False,
+            # 流量只能从后台页面读取；其余声誉、订单趋势、站点状态等
+            # 均继续通过 Mercado Libre 官方 API 刷新。
+            collect_browser_auxiliary=True,
             log_callback=_append_api_reputation_log,
             progress_callback=update_progress,
         ) or {}
@@ -12139,23 +12289,19 @@ def _run_all_api_reputation_refresh():
         _append_api_reputation_log(f"任务异常终止：{exc}")
 
 
-@app.route('/api/mercado-reputation/refresh', methods=['POST'])
-@login_required
-def api_refresh_all_mercado_reputation():
+def _start_api_reputation_refresh(*, automatic=False):
     with _api_reputation_lock:
         if _api_reputation_state.get("running"):
-            data = dict(_api_reputation_state)
-            data["logs"] = list(_api_reputation_logs)
-            return jsonify({
-                "status": "running",
-                "data": data,
-                "message": "API 声誉全量更新任务正在运行",
-            }), 409
+            return False
         _api_reputation_logs.clear()
         _api_reputation_state.update({
             "running": True,
             "status": "running",
-            "message": "正在读取授权店铺",
+            "message": (
+                "定时任务正在读取授权店铺"
+                if automatic
+                else "正在读取授权店铺"
+            ),
             "started_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
             "finished_at": "",
             "elapsed_seconds": 0,
@@ -12169,9 +12315,67 @@ def api_refresh_all_mercado_reputation():
         })
     threading.Thread(
         target=_run_all_api_reputation_refresh,
-        name="api-reputation-refresh",
+        name=(
+            "api-reputation-auto-refresh"
+            if automatic
+            else "api-reputation-refresh"
+        ),
         daemon=True,
     ).start()
+    if automatic:
+        _append_api_reputation_log(
+            f"定时刷新已启动：流量并发 {API_REPUTATION_MAX_WORKERS}，"
+            "其余数据使用官方 API"
+        )
+    return True
+
+
+def _api_reputation_auto_refresh_loop(stop_event=None):
+    stop_event = stop_event or _api_reputation_scheduler_stop_event
+    while not stop_event.is_set():
+        now = datetime.now()
+        next_run = _next_api_reputation_run(now)
+        wait_seconds = max(0.0, (next_run - now).total_seconds())
+        if stop_event.wait(wait_seconds):
+            return
+        if not _start_api_reputation_refresh(automatic=True):
+            logging.warning("API 声誉定时刷新到点时已有任务运行，本轮跳过")
+
+
+def start_api_reputation_scheduler_bootstrap():
+    """Start the central 00:00/12:00 mixed reputation refresh scheduler."""
+
+    global _api_reputation_scheduler_thread
+    with _api_reputation_scheduler_guard:
+        if (
+            _api_reputation_scheduler_thread
+            and _api_reputation_scheduler_thread.is_alive()
+        ):
+            return None
+        _api_reputation_scheduler_stop_event.clear()
+        _api_reputation_scheduler_thread = threading.Thread(
+            target=_api_reputation_auto_refresh_loop,
+            name="api-reputation-auto-scheduler",
+            daemon=True,
+        )
+        _api_reputation_scheduler_thread.start()
+        logging.info(
+            "API 声誉自动刷新调度已启动：每天 00:00、12:00，流量并发 %s，"
+            "其余数据使用官方 API",
+            API_REPUTATION_MAX_WORKERS,
+        )
+        return _api_reputation_scheduler_thread
+
+
+@app.route('/api/mercado-reputation/refresh', methods=['POST'])
+@login_required
+def api_refresh_all_mercado_reputation():
+    if not _start_api_reputation_refresh():
+        return jsonify({
+            "status": "running",
+            "data": _api_reputation_snapshot(),
+            "message": "API 声誉全量更新任务正在运行",
+        }), 409
     return jsonify({
         "status": "success",
         "data": _api_reputation_snapshot(),
@@ -12792,13 +12996,13 @@ def api_update_mercado_token(token_id):
 @login_required
 def api_yandex_console_status():
     running = _yandex_console_health()
+    public_urls = _yandex_console_public_urls()
     return jsonify(
         {
             "status": "success",
             "data": {
                 "running": running,
-                "url": f"{YANDEX_CONSOLE_BASE_URL}/?embedded=1",
-                "external_url": f"{YANDEX_CONSOLE_BASE_URL}/",
+                **public_urls,
                 "port": YANDEX_CONSOLE_PORT,
                 "pid": (
                     _yandex_console_process.pid
@@ -12815,6 +13019,7 @@ def api_yandex_console_status():
 @login_required
 def api_yandex_console_start():
     running, message = ensure_yandex_console()
+    public_urls = _yandex_console_public_urls()
     return (
         jsonify(
             {
@@ -12822,14 +13027,31 @@ def api_yandex_console_start():
                 "message": message,
                 "data": {
                     "running": running,
-                    "url": f"{YANDEX_CONSOLE_BASE_URL}/?embedded=1",
-                    "external_url": f"{YANDEX_CONSOLE_BASE_URL}/",
+                    **public_urls,
                     "port": YANDEX_CONSOLE_PORT,
                 },
             }
         ),
         200 if running else 503,
     )
+
+
+@app.route(
+    f"{YANDEX_CONSOLE_PROXY_PATH}/",
+    defaults={"proxy_path": ""},
+    methods=["GET", "HEAD"],
+)
+@app.route(
+    f"{YANDEX_CONSOLE_PROXY_PATH}/<path:proxy_path>",
+    methods=["GET", "POST", "PUT", "PATCH", "DELETE", "HEAD"],
+)
+@login_required
+def proxy_yandex_console(proxy_path):
+    if not proxy_path:
+        running, message = ensure_yandex_console()
+        if not running:
+            return jsonify({"detail": message}), 503
+    return _proxy_yandex_console_request(proxy_path)
 
 
 @app.route("/")
@@ -13382,6 +13604,7 @@ def start_interface_background_services():
     start_store_link_scheduler_bootstrap()
     start_prohibited_listing_scheduler_bootstrap()
     start_official_infraction_scheduler_bootstrap()
+    start_api_reputation_scheduler_bootstrap()
     start_token_refresh_scheduler_bootstrap()
     start_store_email_sync_scheduler_bootstrap()
     bit_order_sync.ensure_order_sync_scheduler()

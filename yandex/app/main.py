@@ -64,6 +64,15 @@ templates = Jinja2Templates(directory=str(APP_DIR / "templates"))
 app.mount("/static", StaticFiles(directory=str(APP_DIR / "static")), name="static")
 
 
+def _forwarded_prefix(request: Request) -> str:
+    prefix = request.headers.get("x-forwarded-prefix", "").strip().rstrip("/")
+    if not prefix or not prefix.startswith("/"):
+        return ""
+    if any(part in {"", ".", ".."} for part in prefix.split("/")[1:]):
+        return ""
+    return prefix
+
+
 @app.get("/", response_class=HTMLResponse)
 async def index(request: Request) -> HTMLResponse:
     return templates.TemplateResponse(
@@ -73,6 +82,7 @@ async def index(request: Request) -> HTMLResponse:
             "max_products": settings.max_products,
             "embedded": request.query_params.get("embedded", "").lower()
             in {"1", "true", "yes"},
+            "base_path": _forwarded_prefix(request),
         },
     )
 

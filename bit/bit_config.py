@@ -199,14 +199,19 @@ def get_shop_config(
     window_id="",
     include_ignored=True,
     authorization_flag=None,
+    *,
+    token_data=None,
+    browsers=None,
 ):
     shop_name = _text(shop_name)
     window_id = _text(window_id)
-    token_data = bit_db_api.list_mercado_store_tokens() or {}
+    if token_data is None:
+        token_data = bit_db_api.list_mercado_store_tokens() or {}
     records = list_shop_configs(
         include_ignored=include_ignored,
         authorization_flag=authorization_flag,
         token_data=token_data,
+        browsers=browsers,
     )
 
     canonical_names = {shop_name.casefold()} if shop_name else set()
@@ -243,12 +248,17 @@ def require_shop_config(
     window_id="",
     include_ignored=True,
     authorization_flag=None,
+    *,
+    token_data=None,
+    browsers=None,
 ):
     record = get_shop_config(
         shop_name,
         window_id,
         include_ignored,
         authorization_flag,
+        token_data=token_data,
+        browsers=browsers,
     )
     if record:
         if not record["window_id"]:
@@ -258,8 +268,16 @@ def require_shop_config(
     raise RuntimeError(f"未在店铺授权中找到已开启任务的店铺：{identifier}")
 
 
-def get_window_id_by_shop_name(shop_name, authorization_flag=None):
+def get_window_id_by_shop_name(
+    shop_name,
+    authorization_flag=None,
+    *,
+    token_data=None,
+    browsers=None,
+):
     return require_shop_config(
         shop_name=shop_name,
         authorization_flag=authorization_flag,
+        token_data=token_data,
+        browsers=browsers,
     )["window_id"]

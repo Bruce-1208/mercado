@@ -3361,7 +3361,7 @@ def save_ai_appeal_group_record(
 # 申诉
 def shensu(
     name, site, form, message, validate_open=False, infraction_ids=None,
-    prohibited_ids=None, stop_event=None,
+    prohibited_ids=None, stop_event=None, window_id=None,
 ):
     """返回执行状态；收到回复不等于平台已批准申诉。"""
     print(f"{name} {site} 开始进行{form}申诉，自定义话术为{message}<br>")
@@ -3369,14 +3369,16 @@ def shensu(
     start_appeal_log_collection()
     site_name = normalize_site_name(site)
     driver, owned_window_lease = None, None
-    window_id, appeal_error, failure_status = "", "", ""
+    window_id = str(window_id or "").strip()
+    appeal_error, failure_status = "", ""
     skip_close_tab = False
     outcome = execution_result("no_data")
     started = time.monotonic()
     try:
         nickname = random.choice(["Bruce", "Jack", "Lucy", "James"])
         selected_phrase = select_appeal_phrase(form) if not str(message or "").strip() else ""
-        window_id = get_window_id_by_shop_name(name)
+        if not window_id:
+            window_id = get_window_id_by_shop_name(name)
         if current_thread_window_lease(window_id) is None:
             owned_window_lease = create_window_lease(
                 window_id, owner=f"ai_appeal:{name}", shop_name=name, task_type="ai_appeal",

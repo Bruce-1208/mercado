@@ -2730,6 +2730,29 @@
             padding: 10px;
         }
 
+        .daily-task-filter-bar {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr)) auto;
+            align-items: end;
+            gap: 10px;
+            border-bottom: 1px solid var(--border);
+            background: #fff;
+            padding: 10px;
+        }
+
+        .daily-task-filter-bar .field {
+            margin: 0;
+        }
+
+        .daily-task-filter-summary {
+            align-self: center;
+            min-width: 90px;
+            color: var(--muted);
+            font-size: 12px;
+            text-align: right;
+            white-space: nowrap;
+        }
+
         .daily-task-card {
             overflow: hidden;
             border: 1px solid var(--border);
@@ -7232,6 +7255,14 @@
         }
 
         @media (max-width: 560px) {
+            .daily-task-filter-bar {
+                grid-template-columns: 1fr;
+            }
+
+            .daily-task-filter-summary {
+                text-align: left;
+            }
+
             .daily-task-card-header {
                 align-items: stretch;
                 flex-direction: column;
@@ -9859,6 +9890,28 @@
                                 <span id="daily-task-status-text">等待启动</span>
                             </span>
                         </div>
+                        <div class="daily-task-filter-bar">
+                            <div class="field">
+                                <label for="daily-task-status-filter">任务状态</label>
+                                <select id="daily-task-status-filter" onchange="applyDailyTaskFilters()">
+                                    <option value="">全部状态</option>
+                                    <option value="running">运行中</option>
+                                    <option value="queued">排队中</option>
+                                    <option value="stopping">停止中</option>
+                                    <option value="completed">已完成</option>
+                                    <option value="partial">部分完成</option>
+                                    <option value="stopped">已停止</option>
+                                    <option value="error">失败</option>
+                                </select>
+                            </div>
+                            <div class="field">
+                                <label for="daily-task-computer-filter">执行电脑</label>
+                                <select id="daily-task-computer-filter" onchange="applyDailyTaskFilters()">
+                                    <option value="">全部电脑</option>
+                                </select>
+                            </div>
+                            <div class="daily-task-filter-summary" id="daily-task-filter-summary">显示 0 项</div>
+                        </div>
                         <div class="summary-row">
                             <div class="metric">
                                 <div class="metric-label">本机运行中</div>
@@ -10230,7 +10283,7 @@
             <div class="tab-page" id="tab-window-anomalies">
                 <div class="tab-heading">
                     <h2>店铺状态</h2>
-                    <p>仅展示各类任务中遇到、需要人工处理人机验证的店铺</p>
+                    <p>展示各类 Bit 浏览器任务中检测到美客多账号退出登录或人机验证的店铺</p>
                 </div>
 
                 <section class="panel infractions-panel">
@@ -10245,7 +10298,7 @@
                     </div>
                     <div class="summary-row">
                         <div class="metric">
-                            <div class="metric-label">待处理人机验证</div>
+                            <div class="metric-label">待处理登录异常</div>
                             <div class="metric-value" id="window-anomaly-total">0</div>
                         </div>
                         <div class="metric">
@@ -10257,14 +10310,14 @@
                         <table class="reputation-table window-anomaly-table">
                             <thead>
                                 <tr>
-                                    <th><input class="window-anomaly-select" id="window-anomaly-select-all" type="checkbox" aria-label="选择全部待处理人机验证店铺" onchange="toggleAllWindowAnomalies(this.checked)"></th>
+                                    <th><input class="window-anomaly-select" id="window-anomaly-select-all" type="checkbox" aria-label="选择全部待处理登录异常店铺" onchange="toggleAllWindowAnomalies(this.checked)"></th>
                                     <th>店铺名</th>
                                     <th>店铺归属人</th>
                                     <th>邮箱</th>
                                     <th>窗口 ID</th>
                                     <th>站点</th>
                                     <th>店铺状态</th>
-                                    <th>来源</th>
+                                    <th>来源 / 执行端</th>
                                     <th>原因</th>
                                     <th>检测次数</th>
                                     <th>首次检测</th>
@@ -11502,7 +11555,7 @@
             <div class="tab-page" id="tab-api-reputation">
                 <div class="tab-heading">
                     <h2>API 声誉</h2>
-                    <p>声誉、站点状态、近七天订单变化、侵权、权利人数量及系统提示通过官方 API 获取；仅七天流量趋势通过浏览器采集</p>
+                    <p>每天 00:00（24 点）和 12:00 自动刷新，并发 10；仅七天流量趋势通过浏览器采集，其余声誉数据通过官方 API 获取</p>
                 </div>
 
                 <section class="panel infractions-panel">
@@ -11900,6 +11953,9 @@
         const dailyTaskLocalRunningCount = document.getElementById("daily-task-local-running-count");
         const dailyTaskServerRunningCount = document.getElementById("daily-task-server-running-count");
         const dailyTaskTotalCount = document.getElementById("daily-task-total-count");
+        const dailyTaskStatusFilter = document.getElementById("daily-task-status-filter");
+        const dailyTaskComputerFilter = document.getElementById("daily-task-computer-filter");
+        const dailyTaskFilterSummary = document.getElementById("daily-task-filter-summary");
         const dailyTaskList = document.getElementById("daily-task-list");
         const startOrderPrintBtn = document.getElementById("start-order-print-btn");
         const stopOrderPrintBtn = document.getElementById("stop-order-print-btn");
@@ -12283,6 +12339,7 @@
         let dailyTaskStatusPollTimer = null;
         let dailyTaskStatusRequestSequence = 0;
         let dailyTaskAutoLogCursor = 0;
+        let dailyTaskItems = [];
         const dailyTaskPendingStopIds = new Set();
         const dailyTaskLogRequests = new Map();
         const dailyTaskLogLastFetchedAt = new Map();
@@ -17161,7 +17218,10 @@
             ).toLocaleString("zh-CN");
             apiReputationFailed.textContent = failedStores.toLocaleString("zh-CN");
             const timing = [data?.started_at ? `开始 ${data.started_at}` : "", data?.finished_at ? `结束 ${data.finished_at}` : ""].filter(Boolean).join(" · ");
-            apiReputationMessage.textContent = [data?.message || "等待全量更新", timing].filter(Boolean).join(" · ");
+            const nextAutoRefresh = data?.auto_refresh_enabled && data?.next_auto_refresh_at
+                ? `下次自动刷新 ${data.next_auto_refresh_at}`
+                : "";
+            apiReputationMessage.textContent = [data?.message || "等待全量更新", timing, nextAutoRefresh].filter(Boolean).join(" · ");
             apiReputationFetch.disabled = Boolean(data?.running);
             apiReputationFetch.textContent = data?.running ? "全量更新中..." : "更新已开启店铺";
             apiReputationStatusText.textContent = data?.running
@@ -22867,6 +22927,58 @@
             return `${executionTarget}:${taskOrId || ""}`;
         }
 
+        function dailyTaskStatusCategory(task) {
+            const status = String(task?.status || "").trim().toLowerCase();
+            if (status === "queued" || status === "pending") return "queued";
+            if (status === "stopping" || Boolean(task?.stop_requested && task?.running)) {
+                return "stopping";
+            }
+            if (Boolean(task?.running) || status === "running" || status === "starting") {
+                return "running";
+            }
+            if (status === "success" || status === "completed") return "completed";
+            if (status === "partial") return "partial";
+            if (status === "stopped" || status === "cancelled") return "stopped";
+            if (status === "error" || status === "failed") return "error";
+            return status || "unknown";
+        }
+
+        function dailyTaskComputerKey(task) {
+            const executionTarget = String(task?.execution_target || "server");
+            if (executionTarget !== "agent") return executionTarget;
+            const identity = String(task?.agent_id || task?.agent_name || "unknown").trim();
+            return `agent:${identity}`;
+        }
+
+        function syncDailyTaskComputerFilter(tasks) {
+            if (!dailyTaskComputerFilter) return;
+            const previousValue = dailyTaskComputerFilter.value;
+            const computers = new Map();
+            (tasks || []).forEach(task => {
+                const key = dailyTaskComputerKey(task);
+                if (computers.has(key)) return;
+                computers.set(
+                    key,
+                    executionTargetLabel(task.execution_target || "server", task.agent_name),
+                );
+            });
+            const allOption = document.createElement("option");
+            allOption.value = "";
+            allOption.textContent = "全部电脑";
+            const options = Array.from(computers, ([value, label]) => {
+                const option = document.createElement("option");
+                option.value = value;
+                option.textContent = label;
+                return option;
+            }).sort((left, right) => left.textContent.localeCompare(right.textContent, "zh-CN"));
+            dailyTaskComputerFilter.replaceChildren(allOption, ...options);
+            dailyTaskComputerFilter.value = computers.has(previousValue) ? previousValue : "";
+        }
+
+        function applyDailyTaskFilters() {
+            renderDailyTaskStatuses(dailyTaskItems);
+        }
+
         function createDailyTaskCard(taskKey) {
             const card = document.createElement("article");
             card.className = "daily-task-card";
@@ -22984,6 +23096,14 @@
             const tasks = Array.isArray(data)
                 ? data.slice()
                 : normalizeDailyTaskCollection(data);
+            dailyTaskItems = tasks;
+            syncDailyTaskComputerFilter(tasks);
+            const statusFilter = String(dailyTaskStatusFilter?.value || "");
+            const computerFilter = String(dailyTaskComputerFilter?.value || "");
+            const visibleTasks = tasks.filter(task => (
+                (!statusFilter || dailyTaskStatusCategory(task) === statusFilter)
+                && (!computerFilter || dailyTaskComputerKey(task) === computerFilter)
+            ));
             const runningCount = tasks.filter(task => task.running).length;
             const localRunningCount = tasks.filter(task => (
                 task.running && ["local", "agent"].includes(task.execution_target)
@@ -22994,26 +23114,36 @@
             dailyTaskLocalRunningCount.textContent = String(localRunningCount);
             dailyTaskServerRunningCount.textContent = String(serverRunningCount);
             dailyTaskTotalCount.textContent = String(tasks.length);
+            if (dailyTaskFilterSummary) {
+                dailyTaskFilterSummary.textContent = (statusFilter || computerFilter)
+                    ? `显示 ${visibleTasks.length} / ${tasks.length} 项`
+                    : `显示 ${tasks.length} 项`;
+            }
             dailyTaskStatusBadge.className = `status ${runningCount ? "running" : ""}`.trim();
             dailyTaskStatusText.textContent = runningCount
                 ? `${runningCount} 项任务运行中`
                 : tasks.length ? "暂无运行任务" : "等待启动";
 
-            const taskKeys = new Set(tasks.map(task => dailyTaskRuntimeKey(task)));
+            const taskKeys = new Set(visibleTasks.map(task => dailyTaskRuntimeKey(task)));
+            const allTaskKeys = new Set(tasks.map(task => dailyTaskRuntimeKey(task)));
             dailyTaskList.querySelectorAll(".daily-task-card").forEach(card => {
                 const taskKey = String(card.dataset.taskKey || "");
                 if (!taskKeys.has(taskKey)) {
                     card.remove();
-                    dailyTaskPendingStopIds.delete(taskKey);
-                    dailyTaskLogLastFetchedAt.delete(taskKey);
+                    if (!allTaskKeys.has(taskKey)) {
+                        dailyTaskPendingStopIds.delete(taskKey);
+                        dailyTaskLogLastFetchedAt.delete(taskKey);
+                    }
                 }
             });
             dailyTaskList.querySelectorAll(".empty-state").forEach(node => node.remove());
 
-            if (!tasks.length) {
+            if (!visibleTasks.length) {
                 const empty = document.createElement("div");
                 empty.className = "empty-state";
-                empty.textContent = "暂无任务，可在左侧配置后启动。";
+                empty.textContent = tasks.length
+                    ? "没有符合当前筛选条件的任务。"
+                    : "暂无任务，可在左侧配置后启动。";
                 dailyTaskList.appendChild(empty);
                 return;
             }
@@ -23024,7 +23154,7 @@
                     card,
                 ]),
             );
-            tasks.forEach((task, index) => {
+            visibleTasks.forEach((task, index) => {
                 const taskKey = dailyTaskRuntimeKey(task);
                 let card = existingCards.get(taskKey);
                 if (!card) card = createDailyTaskCard(taskKey);
@@ -23041,7 +23171,7 @@
                     }
                 }
             });
-            scheduleDailyTaskAutoLogRefresh(tasks);
+            scheduleDailyTaskAutoLogRefresh(visibleTasks);
         }
 
         function findDailyTaskCard(taskKey) {
@@ -23658,7 +23788,7 @@
                 windowAnomalyLatestTime.textContent = rows.length ? (rows[0].last_detected_at || "-") : "-";
 
                 if (!rows.length) {
-                    windowAnomalyBody.innerHTML = '<tr><td class="empty-state" colspan="13">当前没有需要人工处理人机验证的店铺</td></tr>';
+                    windowAnomalyBody.innerHTML = '<tr><td class="empty-state" colspan="13">当前没有待处理的登录异常店铺</td></tr>';
                     updateWindowAnomalySelection();
                     return;
                 }
@@ -24045,7 +24175,7 @@
         async function startSelectedShopsAutoLogin() {
             const windowIds = selectedWindowAnomalyIds();
             if (!windowIds.length) {
-                alert("请至少选择一个待处理人机验证店铺");
+                alert("请至少选择一个待处理登录异常店铺");
                 return;
             }
             const workers = selectedMercadoLoginWorkerCount();

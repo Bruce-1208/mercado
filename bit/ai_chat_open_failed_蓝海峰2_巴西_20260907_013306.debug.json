@@ -1,0 +1,53 @@
+{
+  "captured_at": "2026-09-07T01:33:06",
+  "current_url": "https://global-selling.mercadolibre.com/help/v2",
+  "chat_state": {
+    "ai_frame_count": 0,
+    "inline_aria_expanded": "",
+    "inline_has_input": false,
+    "inline_open": false,
+    "inline_root_class": "",
+    "inline_shell": false,
+    "legacy_frame_count": 0,
+    "shadow_ai_frame_count": 0,
+    "visible_ai_frame_count": 0
+  },
+  "dom_snapshot": {
+    "aiShells": [],
+    "frames": [
+      {
+        "className": "",
+        "height": 0,
+        "id": "_hjSafeContext_75880243",
+        "shadowHost": "",
+        "src": "about:blank",
+        "title": "_hjSafeContext",
+        "visible": false,
+        "width": 0
+      }
+    ],
+    "readyState": "complete",
+    "shadowHosts": [],
+    "title": "Help"
+  },
+  "browser_logs": [
+    {
+      "level": "SEVERE",
+      "message": "https://global-selling.mercadolibre.com/login/identification?challenge_id=d1dd786a-2a2f-4b97-9f74-4c6049621804&platform_id=ml&redirect_url=https%3A%2F%2Fwww.mercadolibre.com%2Fjms%2Fcbt%2Flgz%2Fmsl%2Flogin%2FH4sIAAAAAAAEA1WQzY7CMAyE3yVnoKgSW9TjvsZqFbmpW6x1mmzs8iPEu-PAiVsy428mzt1xmmnxesvoeofXzBRI3cZlBp1SiZ5GMyKbJKT4vobhNQIFIioWcf29Bs04fqNBNWoCFjQIVj35idPFtFeXaSQer8YtwP6Cw5mwuh9Ewf8VxWbMoOUMTKPPtc_wOZl4Us3SN83MaQDeCjLTMu8ilgBjYhoK7kKKjQCjbGWNEcrNPTZWI-q1QPhzvZYV7Ym5bg1KaXmv99Ue9_uu7To7HA7t0TpHDJaP9hc_v48nNO6ERTYBAAA%2Fidentification_challenge%2Fcallback%3Fdps%3D%26rbms%3D - Unchecked runtime.lastError: Could not establish connection. Receiving end does not exist.",
+      "source": "other",
+      "timestamp": 1788715845586
+    },
+    {
+      "level": "SEVERE",
+      "message": "https://console.bitbrowser.net/?id=e08ba401d53445d39e5db2944f153c2f&locale=zh&port=54345 - Unchecked runtime.lastError: Could not establish connection. Receiving end does not exist.",
+      "source": "other",
+      "timestamp": 1788715845591
+    },
+    {
+      "level": "SEVERE",
+      "message": "https://global-selling.mercadolibre.com/help/v2 - Unchecked runtime.lastError: Could not establish connection. Receiving end does not exist.",
+      "source": "other",
+      "timestamp": 1788715925814
+    }
+  ]
+}

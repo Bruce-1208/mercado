@@ -9,6 +9,7 @@ from datetime import datetime
 from pathlib import Path
 
 from bit.bit_mercado_limit import get_mercado_backend_status, process_mercado_rate_limit
+from bit.bit_mercado_login import try_record_login_anomaly
 from bit.mercado_click_delay import javascript_contains_click, mercado_click_cooldown
 
 try:
@@ -222,7 +223,7 @@ def put(url, cdp_http):
     return put_json(cdp_http + "/json/new?" + urllib.parse.quote(url, safe=""))
 
 
-def help_tab(cdp_http):
+def help_tab(cdp_http, window="", site=""):
     tabs = get("/json/list", cdp_http)
     help_tabs = [t for t in tabs if t.get("type") == "page" and t.get("url") == HELP_URL]
     tab = help_tabs[0] if help_tabs else None
@@ -245,6 +246,18 @@ def help_tab(cdp_http):
         if status == "ready":
             return c
         if status == "logged_out":
+            try_record_login_anomaly(
+                {
+                    "status": "logged_out",
+                    "message": (
+                        f"{window} {site} 稳定申诉循环检测到美客多账号退出登录："
+                        f"{state.get('current_url', '')}"
+                    ),
+                },
+                shop_name=window,
+                site=site,
+                source="稳定申诉循环",
+            )
             raise RuntimeError("Mercado 登录态失效，请先完成登录后重试")
         limit_result = process_mercado_rate_limit(
             state=state,
@@ -556,7 +569,7 @@ def send_group(c, group_no, group, round_no, window="", site="MX"):
 
 
 def run_once(cdp_http, start, rounds, continuous, delay, round_delay, max_groups, window="", site="MX"):
-    c = help_tab(cdp_http)
+    c = help_tab(cdp_http, window, site)
     try:
         ensure_assistant_open(c)
         first_start = max(1, start)

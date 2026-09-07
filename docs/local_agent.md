@@ -14,6 +14,8 @@
 
 从 Agent 1.0.0 升级时，需要更新并重启服务端工作台代码，将新 EXE 放入服务端 `dist/MercadoLocalAgent.exe`，然后在终端退出旧 Agent、替换为 1.1.0 并启动。可以保留原来的 `local-agent.json` 和本机身份数据。仅更新业务源码不能给旧 EXE 增加 Windows 多进程启动支持。
 
+Agent 1.1.1 降低公网连接频率，并在日志上传失败时执行退避重试。1.1.0 升级到 1.1.1 也需要重新构建并替换 Agent EXE；服务端会为已有历史日志补显示事件时间。
+
 Agent 默认数据目录为 `%LOCALAPPDATA%\Zeshun\MercadoLocalAgent`，其中包含电脑身份、业务版本和运行日志所需的临时任务数据。Agent 保留最近两个业务版本。
 
 ## 服务端部署
@@ -59,6 +61,7 @@ py -3 -m pip install pyinstaller
 - 控制台没有电脑：确认 Agent 窗口中没有注册/HTTPS 错误，并重新下载包以刷新过期注册凭证。
 - 任务模块提示“无法连接本机执行端”或“该地址不是本机客户端执行端”：页面正在使用旧 client 链路。更新并重启服务端工作台、刷新页面，在执行位置选择“本机 Agent”并选择运行 1.1.0 或更高版本的电脑。
 - 电脑显示离线：确认目标电脑能访问公网域名，且系统时间准确；默认超过 45 秒未心跳即离线。
+- Agent 出现 `Connections Exceed`、HTTP 429 或 HTTP 502：公网隧道的一分钟连接数已超限。1.1.1 安装包默认每 10 秒轮询，日志上传失败会退避重试；请更新 Agent，避免旧版本持续快速重试。
 - 任务无法打开比特浏览器：确认比特浏览器客户端已启动，店铺窗口配置存在，且该电脑可以访问比特浏览器本地 API。
 - 更新后业务报缺少模块：说明新增了第三方依赖，需要在 Windows 构建机重新运行 `build_local_agent.bat` 并替换服务器上的 EXE。
 - 重新注册电脑：停止 Agent，删除 `%LOCALAPPDATA%\Zeshun\MercadoLocalAgent\identity.json`，然后使用新下载的安装包启动。

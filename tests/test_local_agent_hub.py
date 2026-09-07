@@ -1,6 +1,7 @@
 import hashlib
 import io
 import json
+import time
 import zipfile
 from pathlib import Path
 
@@ -53,6 +54,8 @@ def test_agent_heartbeat_queue_claim_log_and_completion(tmp_path):
     assert "申诉日志" in "".join(
         event["content"] for event in store.events_after("appeal-test-job")
     )
+    event_time = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(103))
+    assert f"[{event_time}] 申诉日志" in store.recent_log("appeal-test-job")
 
 
 def test_agent_cancel_is_reported_to_claimed_agent(tmp_path):
@@ -97,6 +100,7 @@ def test_download_package_embeds_server_and_enrollment_token(monkeypatch, tmp_pa
         config = json.loads(archive.read("local-agent.json"))
         assert config["server_url"] == "https://workbench.example"
         assert config["enrollment_token"] == "one-time-enrollment"
+        assert config["poll_seconds"] == 10
         assert "install-agent.ps1" in archive.namelist()
 
 

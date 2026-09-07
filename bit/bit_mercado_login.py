@@ -2,6 +2,8 @@
 
 import json
 import hashlib
+import os
+import socket
 import sys
 import threading
 import time
@@ -294,6 +296,7 @@ LOGIN_SUCCESS = "登录成功"
 LOGIN_NOT_LOGGED_IN = "未登录"
 LOGIN_VERIFICATION_REQUIRED = "需要验证码"
 LOGIN_CAPTCHA_REQUIRED = "需要人机验证"
+LOGIN_LOGGED_OUT = "美客多账号退出登录"
 LOGIN_FAILED = "登录状态检测失败"
 LOGIN_EMAIL_MISSING = "数据库未配置邮箱"
 LOGIN_EMAIL_REJECTED = "数据库邮箱未通过登录页校验"
@@ -322,6 +325,7 @@ RATE_LIMIT_RETRY_WAIT_SECONDS = 30
 LOGIN_EVENT_LOG_PATH = get_bit_path() / "logs" / "mercado_unlogged_shops.jsonl"
 LOGIN_REPORT_DIR = get_bit_path() / "登录状态汇总"
 _LOGIN_EVENT_LOG_GUARD = threading.Lock()
+WINDOW_ANOMALY_SOURCE_MAX_LENGTH = 64
 SAVED_PASSWORD_SUBMITTED_DETAIL = "已提交浏览器保存的默认密码"
 SAVED_PASSWORD_SELECTION_ATTEMPTED_DETAIL = "已尝试选择浏览器保存的默认密码并提交"
 
@@ -705,6 +709,310 @@ def is_human_verification_result(value):
     )
 
 
+def is_logged_out_result(value):
+    """只识别已确认的退出登录，不把限频、超时等任务失败误报为未登录。"""
+    if isinstance(value, dict):
+        initial_status = str(value.get("initial_login_status") or "").strip()
+        result_category = str(value.get("result_category") or "").strip()
+        status = str(value.get("status") or value.get("anomaly_type") or "").strip()
+        stage = str(value.get("login_stage") or "").strip().casefold()
+        if initial_status == INITIAL_LOGIN_INACTIVE:
+            return True
+        if result_category.startswith("未登录，"):
+            return True
+        if status in {
+            LOGIN_LOGGED_OUT,
+            LOGIN_NOT_LOGGED_IN,
+            LOGIN_SUCCESS,
+            LOGIN_VERIFICATION_REQUIRED,
+            LOGIN_CAPTCHA_REQUIRED,
+            LOGIN_EMAIL_MISSING,
+            LOGIN_EMAIL_REJECTED,
+            LOGIN_SAVED_PASSWORD_MISSING,
+            LOGIN_SAVED_PASSWORD_INCORRECT,
+            "需要登录",
+            "logged_out",
+        }:
+            return True
+        if stage in {"email", "password", "verification", "captcha", "login"}:
+            return True
+        return any(
+            is_logged_out_result(value.get(key))
+            for key in ("message", "reason", "detail", "login_result", "result", "error")
+            if key in value
+        )
+    if isinstance(value, (list, tuple, set)):
+        return any(is_logged_out_result(item) for item in value)
+
+    text = str(value or "").strip().casefold()
+    if not text:
+        return False
+    return any(
+        marker in text
+        for marker in (
+            LOGIN_LOGGED_OUT.casefold(),
+            "退出登录",
+            "未登录",
+            "登录态失效",
+            "登录失效",
+            "logged out",
+            "login expired",
+            "session expired",
+        )
+    )
+
+
+def is_shop_status_anomaly(value):
+    """店铺状态展示人机验证和已确认的美客多退出登录。"""
+    return is_human_verification_result(value) or is_logged_out_result(value)
+
+
+def get_execution_identity():
+    """返回当前店铺任务的执行端，Agent 子进程通过环境变量传入身份。"""
+    target = str(os.environ.get("BIT_EXECUTION_TARGET") or "").strip().casefold()
+    agent_id = str(os.environ.get("BIT_EXECUTION_AGENT_ID") or "").strip()
+    agent_name = str(os.environ.get("BIT_EXECUTION_AGENT_NAME") or "").strip()
+    hostname = str(
+        os.environ.get("BIT_EXECUTION_HOSTNAME") or socket.gethostname() or "未知主机"
+    ).strip()
+
+    if target == "agent" or agent_id:
+        actor = agent_name or agent_id or hostname or "未知 Agent"
+        details = [actor]
+        if agent_id and agent_id != actor:
+            details.append(f"ID {agent_id}")
+        if hostname and hostname != actor:
+            details.append(f"主机 {hostname}")
+        return {
+            "target": "agent",
+            "short_label": f"Agent:{actor}",
+            "label": "Agent：" + "；".join(details),
+            "agent_id": agent_id,
+            "agent_name": agent_name,
+            "hostname": hostname,
+        }
+
+    if target == "local":
+        return {
+            "target": "local",
+            "short_label": f"本机:{hostname}",
+            "label": f"本机执行端：{hostname}",
+            "agent_id": "",
+            "agent_name": "",
+            "hostname": hostname,
+        }
+
+    return {
+        "target": "server",
+        "short_label": f"服务器:{hostname}",
+        "label": f"服务器：{hostname}",
+        "agent_id": "",
+        "agent_name": "",
+        "hostname": hostname,
+    }
+
+
+def execution_aware_anomaly_source(source, identity=None):
+    """在来源列保留任务名称和执行端，并确保不超过数据库字段长度。"""
+    base = str(source or "业务任务").strip() or "业务任务"
+    identity = dict(identity or get_execution_identity())
+    short_label = str(identity.get("short_label") or "执行端:未知").strip()
+    suffix = f"｜{short_label}"
+    if len(suffix) >= WINDOW_ANOMALY_SOURCE_MAX_LENGTH:
+        return suffix[1:WINDOW_ANOMALY_SOURCE_MAX_LENGTH]
+    return f"{base[:WINDOW_ANOMALY_SOURCE_MAX_LENGTH - len(suffix)]}{suffix}"
+
+
+def execution_aware_anomaly_reason(reason, identity=None):
+    """在原因中持久化完整 Agent ID/名称/主机或服务器主机名。"""
+    text = str(reason or "").strip()
+    identity = dict(identity or get_execution_identity())
+    executor = str(identity.get("label") or "执行端：未知").strip()
+    marker = f"执行端：{executor}"
+    if marker in text:
+        return text
+    return f"{text}；{marker}" if text else marker
+
+
+def bind_mercado_shop_context(
+    driver,
+    window_id="",
+    shop_name="",
+    site="",
+    source="业务任务",
+):
+    """给浏览器连接绑定店铺上下文，供页面中途检测到退出登录时记录。"""
+    if not driver:
+        return driver
+    values = {
+        "_bit_mercado_window_id": window_id,
+        "_bit_mercado_shop_name": shop_name,
+        "_bit_mercado_site": site,
+        "_bit_mercado_source": source,
+    }
+    for attribute, value in values.items():
+        normalized = str(value or "").strip()
+        if not normalized:
+            continue
+        try:
+            setattr(driver, attribute, normalized)
+        except Exception:
+            pass
+    return driver
+
+
+def _mercado_shop_context(driver=None, window_id="", shop_name="", site="", source=""):
+    def context_value(attribute, explicit=""):
+        explicit = str(explicit or "").strip()
+        if explicit:
+            return explicit
+        try:
+            return str(getattr(driver, attribute, "") or "").strip()
+        except Exception:
+            return ""
+
+    resolved = {
+        "window_id": context_value("_bit_mercado_window_id", window_id),
+        "shop_name": context_value("_bit_mercado_shop_name", shop_name),
+        "site": context_value("_bit_mercado_site", site),
+        "source": context_value("_bit_mercado_source", source) or "业务任务",
+    }
+    if not resolved["window_id"] and resolved["shop_name"]:
+        try:
+            config = require_shop_config(shop_name=resolved["shop_name"])
+            resolved["window_id"] = str(config.get("window_id") or "").strip()
+            resolved["shop_name"] = str(
+                config.get("shop_name") or resolved["shop_name"]
+            ).strip()
+        except Exception:
+            pass
+    return resolved
+
+
+def record_logged_out_anomaly(
+    window_id="",
+    shop_name="",
+    site="",
+    source="业务任务",
+    reason="",
+    *,
+    driver=None,
+):
+    """把已确认的美客多退出登录写入店铺状态。"""
+    context = _mercado_shop_context(
+        driver,
+        window_id=window_id,
+        shop_name=shop_name,
+        site=site,
+        source=source,
+    )
+    if not context["window_id"]:
+        return False
+    reason = str(reason or "").strip() or (
+        f"{context['shop_name'] or context['window_id']} 检测到美客多账号已退出登录"
+    )
+    identity = get_execution_identity()
+    bit_db_api.upsert_window_anomaly(
+        context["window_id"],
+        context["shop_name"],
+        context["site"],
+        anomaly_type=LOGIN_LOGGED_OUT,
+        reason=execution_aware_anomaly_reason(reason, identity),
+        source=execution_aware_anomaly_source(context["source"], identity),
+    )
+    return True
+
+
+def record_login_anomaly(
+    result,
+    window_id="",
+    shop_name="",
+    site="",
+    source="业务任务",
+    *,
+    driver=None,
+):
+    """统一记录人机验证或美客多退出登录。"""
+    context = _mercado_shop_context(
+        driver,
+        window_id=window_id,
+        shop_name=shop_name,
+        site=site,
+        source=source,
+    )
+    if is_human_verification_result(result):
+        return record_human_verification_anomaly(
+            result,
+            context["window_id"],
+            context["shop_name"],
+            site=context["site"],
+            source=context["source"],
+        )
+    if not is_logged_out_result(result):
+        return False
+    if isinstance(result, dict):
+        reason = str(
+            result.get("message")
+            or result.get("reason")
+            or result.get("detail")
+            or result.get("status")
+            or LOGIN_LOGGED_OUT
+        ).strip()
+    else:
+        reason = str(result or LOGIN_LOGGED_OUT).strip()
+    return record_logged_out_anomaly(
+        context["window_id"],
+        context["shop_name"],
+        context["site"],
+        context["source"],
+        reason,
+        driver=driver,
+    )
+
+
+def try_record_login_anomaly(
+    result,
+    window_id="",
+    shop_name="",
+    site="",
+    source="业务任务",
+    *,
+    driver=None,
+):
+    """业务任务不应因店铺状态接口短暂失败而中断。"""
+    context = _mercado_shop_context(
+        driver,
+        window_id=window_id,
+        shop_name=shop_name,
+        site=site,
+        source=source,
+    )
+    try:
+        recorded = record_login_anomaly(
+            result,
+            context["window_id"],
+            context["shop_name"],
+            context["site"],
+            context["source"],
+            driver=driver,
+        )
+        if recorded:
+            print(
+                f"{get_now_time()} {context['shop_name'] or context['window_id']} "
+                f"已将登录异常记录到店铺状态"
+                f"（来源：{context['source']}）",
+                flush=True,
+            )
+        return recorded
+    except Exception as exc:
+        print(
+            f"{get_now_time()} {context['shop_name'] or context['window_id']} "
+            f"登录异常写入店铺状态失败：{exc}",
+            flush=True,
+        )
+        return False
+
+
 def record_human_verification_anomaly(
     result,
     window_id,
@@ -724,13 +1032,14 @@ def record_human_verification_anomaly(
         ).strip()
     else:
         reason = str(result or LOGIN_CAPTCHA_REQUIRED).strip()
+    identity = get_execution_identity()
     bit_db_api.upsert_window_anomaly(
         window_id,
         str(shop_name or "").strip(),
         str(site or "").strip(),
         anomaly_type=LOGIN_CAPTCHA_REQUIRED,
-        reason=reason,
-        source=str(source or "业务任务").strip(),
+        reason=execution_aware_anomaly_reason(reason, identity),
+        source=execution_aware_anomaly_source(source, identity),
     )
     return True
 
@@ -771,8 +1080,8 @@ def _merge_window_anomaly_sync_summary(target, update):
     return target
 
 
-def sync_login_results_to_window_anomalies(results):
-    """店铺状态只保留人机验证；其余确定性结果会解除旧记录。"""
+def sync_login_results_to_window_anomalies(results, source="bit_mercado_login"):
+    """同步登录检测结果：退出登录和人机验证进入店铺状态。"""
     summary = _new_window_anomaly_sync_summary()
     for raw_result in results or []:
         result = _normalize_login_judgement(raw_result)
@@ -791,23 +1100,38 @@ def sync_login_results_to_window_anomalies(results):
                     flush=True,
                 )
                 continue
-            if is_human_verification_result(result):
-                record_human_verification_anomaly(
-                    result,
+            detected_logged_out = is_logged_out_result(raw_result)
+            if is_human_verification_result(result) or (
+                detected_logged_out and not result.get("ok")
+            ):
+                record_login_anomaly(
+                    result if is_human_verification_result(result) else raw_result,
                     window_id,
                     shop_name,
                     str(result.get("sites") or result.get("site") or "").strip(),
-                    source="bit_mercado_login",
+                    source=source,
                 )
                 summary["anomaly_count"] += 1
                 continue
 
-            # 已完成判断且当前并非人机验证时，解除可能遗留的旧人机验证。
-            # 邮箱验证码、密码失败、限频等状态不再写入店铺状态页。
-            if result_category != LOGIN_OUTCOME_NOT_DETERMINED:
+            # 程序登录成功时仍先留下一次退出登录的历史，再解除当前待处理状态。
+            if detected_logged_out:
+                record_login_anomaly(
+                    raw_result,
+                    window_id,
+                    shop_name,
+                    str(result.get("sites") or result.get("site") or "").strip(),
+                    source=source,
+                )
+                summary["anomaly_count"] += 1
+
+            # 只有确认当前已登录才解除旧异常；限频、页面故障等
+            # 非登录失败不能反过来当作“登录已恢复”。
+            if result.get("ok"):
                 bit_db_api.resolve_window_anomaly(window_id)
                 summary["resolved_count"] += 1
                 continue
+            summary["skipped_count"] += 1
         except Exception as exc:
             summary["error_count"] += 1
             summary["errors"].append(
@@ -823,7 +1147,7 @@ def sync_login_results_to_window_anomalies(results):
             )
     print(
         f"{get_now_time()} bit_mercado_login 店铺状态同步完成："
-        f"人机验证 {summary['anomaly_count']} 家，解除 {summary['resolved_count']} 家，"
+        f"登录异常 {summary['anomaly_count']} 家，解除 {summary['resolved_count']} 家，"
         f"跳过 {summary['skipped_count']} 家，失败 {summary['error_count']} 家",
         flush=True,
     )
@@ -2111,7 +2435,15 @@ def open_mercado_backend_page(
     login_retry_count = 0
     node_switch_results = []
     last_login_result = {}
+    first_logged_out_state = {}
     sleeper = time.sleep if sleep is None else sleep
+    bind_mercado_shop_context(
+        driver,
+        window_id,
+        shop_name,
+        anomaly_site,
+        anomaly_source,
+    )
 
     while True:
         navigation_error = ""
@@ -2132,6 +2464,8 @@ def open_mercado_backend_page(
         # 因此保留登录模块现有的 DOM 检测作为补充。
         if backend_status == "ready" and is_mercado_login_page(driver):
             backend_status = "logged_out"
+        if backend_status == "logged_out" and not first_logged_out_state:
+            first_logged_out_state = dict(state or {})
 
         if backend_status == "ready":
             if navigation_error:
@@ -2146,7 +2480,7 @@ def open_mercado_backend_page(
                     "node_switch_results": node_switch_results,
                     "login_result": last_login_result,
                 }
-            return {
+            result = {
                 "ok": True,
                 "status": "ready",
                 "message": f"{shop_name} 美客多业务页已就绪",
@@ -2157,6 +2491,34 @@ def open_mercado_backend_page(
                 "node_switch_results": node_switch_results,
                 "login_result": last_login_result,
             }
+            if login_retry_count:
+                detected_url = str(first_logged_out_state.get("current_url") or "").strip()
+                recovered_log = {
+                    "status": "logged_out",
+                    "initial_login_status": INITIAL_LOGIN_INACTIVE,
+                    "message": (
+                        f"{shop_name} 检测到美客多账号退出登录"
+                        f"{f'：{detected_url}' if detected_url else ''}；"
+                        f"自动登录 {login_retry_count} 次后已恢复"
+                    ),
+                }
+                if try_record_login_anomaly(
+                    recovered_log,
+                    window_id,
+                    shop_name,
+                    anomaly_site,
+                    anomaly_source,
+                    driver=driver,
+                ):
+                    try:
+                        bit_db_api.resolve_window_anomaly(window_id)
+                    except Exception as exc:
+                        print(
+                            f"{get_now_time()} {shop_name or window_id} "
+                            f"自动登录已恢复，但解除店铺状态失败：{exc}",
+                            flush=True,
+                        )
+            return result
 
         if backend_status == "rate_limited":
             limit_result = process_mercado_rate_limit(
@@ -2188,7 +2550,7 @@ def open_mercado_backend_page(
             continue
 
         if login_retry_count >= max_login_retries:
-            return {
+            result = {
                 "ok": False,
                 "status": "logged_out",
                 "message": (
@@ -2202,6 +2564,15 @@ def open_mercado_backend_page(
                 "node_switch_results": node_switch_results,
                 "login_result": last_login_result,
             }
+            try_record_login_anomaly(
+                result,
+                window_id,
+                shop_name,
+                anomaly_site,
+                anomaly_source,
+                driver=driver,
+            )
+            return result
 
         login_retry_count += 1
         print(
@@ -2231,27 +2602,8 @@ def open_mercado_backend_page(
                 "message": str(exc),
                 "action": "执行异常",
             }
-        if is_human_verification_result(last_login_result):
-            try:
-                record_human_verification_anomaly(
-                    last_login_result,
-                    window_id,
-                    shop_name,
-                    site=anomaly_site,
-                    source=anomaly_source,
-                )
-                print(
-                    f"{get_now_time()} {shop_name} 检测到人机验证，"
-                    f"已登记到店铺状态（来源：{anomaly_source}）",
-                    flush=True,
-                )
-            except Exception as exc:
-                print(
-                    f"{get_now_time()} {shop_name} 登记人机验证状态失败：{exc}",
-                    flush=True,
-                )
         if not last_login_result.get("ok"):
-            return {
+            result = {
                 "ok": False,
                 "status": "logged_out",
                 "message": (
@@ -2265,6 +2617,17 @@ def open_mercado_backend_page(
                 "node_switch_results": node_switch_results,
                 "login_result": last_login_result,
             }
+            try_record_login_anomaly(
+                last_login_result
+                if is_human_verification_result(last_login_result)
+                else result,
+                window_id,
+                shop_name,
+                anomaly_site,
+                anomaly_source,
+                driver=driver,
+            )
+            return result
         # 登录流程最后会停留在首页，下一轮重新打开原业务页。
 
 

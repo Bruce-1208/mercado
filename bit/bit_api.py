@@ -24,9 +24,20 @@ _AUTO_LEASES = {}
 _AUTO_LEASES_GUARD = threading.Lock()
 _BROWSER_API_MUTATION_LOCK_KEY = "bit_browser_api_mutation"
 _BROWSER_API_LOCK_TIMEOUT = int(os.environ.get("BIT_BROWSER_API_LOCK_TIMEOUT", "180"))
+# Three launch slots keep the request rate well below BitBrowser's 10/s limit
+# while preventing one slow browser start from stalling every daily-task worker.
+DEFAULT_BROWSER_API_MUTATION_CONCURRENCY = 3
 _BROWSER_API_MUTATION_CONCURRENCY = max(
     1,
-    min(int(os.environ.get("BIT_BROWSER_API_MUTATION_CONCURRENCY", "1")), 8),
+    min(
+        int(
+            os.environ.get(
+                "BIT_BROWSER_API_MUTATION_CONCURRENCY",
+                str(DEFAULT_BROWSER_API_MUTATION_CONCURRENCY),
+            )
+        ),
+        8,
+    ),
 )
 _BROWSER_OPEN_TIMEOUT = int(os.environ.get("BIT_BROWSER_OPEN_TIMEOUT", "60"))
 _BROWSER_CLOSE_TIMEOUT = int(os.environ.get("BIT_BROWSER_CLOSE_TIMEOUT", "30"))
@@ -50,7 +61,7 @@ def _browser_api_slot_order(browser_id, slot_count=None):
 
 
 def _acquire_browser_api_mutation_slot(endpoint, browser_id, timeout):
-    """限制跨进程窗口操作；默认串行，避免 BitBrowser 并发启动超时。"""
+    """限制跨进程窗口操作，避免 BitBrowser 窗口启动请求失控。"""
     timeout = max(1, float(timeout))
     deadline = time.monotonic() + timeout
     slot_order = _browser_api_slot_order(browser_id)

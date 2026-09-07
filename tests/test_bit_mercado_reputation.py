@@ -358,6 +358,8 @@ def test_console_template_keeps_old_reputation_and_adds_api_panel():
     assert "function showReputationWarningDetail(cell, event)" in template
     assert "reputation-warning-preview" in template
     assert "七天变化率由官方订单 API 自算" in template
+    assert "每天 00:00（24 点）和 12:00 自动刷新，并发 10" in template
+    assert "下次自动刷新 ${data.next_auto_refresh_at}" in template
     assert "站点状态" in reputation_table.group(1)
     assert "openReputationBrowser(this)" in template
     assert "/api/reputation/${tokenId}/open-browser" in template
@@ -481,7 +483,10 @@ def test_reputation_button_opens_matching_bitbrowser_on_reputation_page(monkeypa
 
 
 def test_full_refresh_keeps_successes_and_logs_failed_stores(monkeypatch):
+    collection_options = {}
+
     def collect(**kwargs):
+        collection_options.update(kwargs)
         kwargs["log_callback"]("成功店铺：成功，返回 1 个站点")
         kwargs["log_callback"]("失败店铺：失败，授权已失效")
         kwargs["progress_callback"]({"event": "initialized", "total_stores": 2})
@@ -561,6 +566,20 @@ def test_full_refresh_keeps_successes_and_logs_failed_stores(monkeypatch):
     assert any("成功店铺：成功" in line for line in result["logs"])
     assert any("失败店铺：失败" in line for line in result["logs"])
     assert result["elapsed_seconds"] >= 0
+    assert collection_options["max_workers"] == 10
+    assert collection_options["collect_browser_auxiliary"] is True
+
+
+def test_api_reputation_auto_refresh_boundaries_are_noon_and_midnight():
+    assert bit_interface._next_api_reputation_run(
+        datetime(2026, 9, 7, 11, 59, 59)
+    ) == datetime(2026, 9, 7, 12, 0, 0)
+    assert bit_interface._next_api_reputation_run(
+        datetime(2026, 9, 7, 12, 0, 0)
+    ) == datetime(2026, 9, 8, 0, 0, 0)
+    assert bit_interface._next_api_reputation_run(
+        datetime(2026, 9, 7, 23, 59, 59)
+    ) == datetime(2026, 9, 8, 0, 0, 0)
 
 
 def test_api_reputation_last_snapshot_survives_service_restart(tmp_path):

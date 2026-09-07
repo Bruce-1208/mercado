@@ -30,10 +30,12 @@ from urllib.parse import urlsplit
 import requests
 
 
-AGENT_VERSION = "1.1.0"
+AGENT_VERSION = "1.1.1"
 DEFAULT_SERVER_URL = "https://zeshun.nat100.top"
-DEFAULT_POLL_SECONDS = 2.0
+DEFAULT_POLL_SECONDS = 10.0
 DEFAULT_HEARTBEAT_SECONDS = 10.0
+LOG_FLUSH_SECONDS = 2.0
+LOG_UPLOAD_MIN_INTERVAL_SECONDS = 5.0
 
 
 def _default_data_dir():
@@ -165,7 +167,7 @@ class AgentConfig:
             socket.gethostname(),
         )[:120]
         self.poll_seconds = max(
-            0.5,
+            10.0,
             float(_first_nonempty(payload.get("poll_seconds"), DEFAULT_POLL_SECONDS)),
         )
         self.heartbeat_seconds = max(
@@ -433,12 +435,16 @@ class LocalAgent:
                 raise
             except Exception as exc:
                 failures += 1
-                delay = min(30.0, max(2.0, failures * 2.0))
+                delay = self._retry_delay(failures)
                 print(
                     f"任务 {job_id} 的结果暂时无法上传：{exc}；{delay:.0f} 秒后重试",
                     flush=True,
                 )
                 time.sleep(delay)
+
+    @staticmethod
+    def _retry_delay(failures):
+        return min(30.0, max(2.0, int(failures) * 2.0))
 
     def _worker_command(self, release_dir, job_file, cancel_file):
         arguments = [
@@ -472,6 +478,14 @@ class LocalAgent:
                 "BIT_RUNTIME_ROLE": "client",
                 "BIT_DB_API_BASE_URL": self.config.server_url,
                 "BIT_DB_API_TOKEN": self.config.db_api_token,
+                "BIT_EXECUTION_TARGET": "agent",
+                "BIT_EXECUTION_AGENT_ID": str(
+                    getattr(self.config, "agent_id", "") or job.get("agent_id") or ""
+                ),
+                "BIT_EXECUTION_AGENT_NAME": str(
+                    getattr(self.config, "name", "") or ""
+                ),
+                "BIT_EXECUTION_HOSTNAME": socket.gethostname(),
                 "PYTHONUNBUFFERED": "1",
                 "PYTHONIOENCODING": "utf-8",
             }
@@ -506,6 +520,8 @@ class LocalAgent:
         reader_done = False
         pending_logs = ""
         last_log_flush = time.monotonic()
+        next_log_upload_at = last_log_flush
+        log_upload_failures = 0
         while process.poll() is None or not reader_done:
             try:
                 item = output_queue.get(timeout=0.25)
@@ -515,9 +531,14 @@ class LocalAgent:
                     pending_logs += item
             except queue.Empty:
                 pass
-            if pending_logs and (
-                len(pending_logs) >= 32 * 1024
-                or time.monotonic() - last_log_flush >= 2
+            now = time.monotonic()
+            if (
+                pending_logs
+                and now >= next_log_upload_at
+                and (
+                    len(pending_logs) >= 32 * 1024
+                    or now - last_log_flush >= LOG_FLUSH_SECONDS
+                )
             ):
                 # 64K characters stay below the server's 512 KiB UTF-8 limit,
                 # even when every code point uses four bytes.
@@ -525,11 +546,19 @@ class LocalAgent:
                 try:
                     self.send_event(job_id, content=chunk)
                 except Exception as exc:
-                    print(f"任务日志暂时无法上传，将继续保留并重试：{exc}", flush=True)
+                    log_upload_failures += 1
+                    delay = self._retry_delay(log_upload_failures)
+                    next_log_upload_at = now + delay
+                    print(
+                        "任务日志暂时无法上传，将继续保留并重试："
+                        f"{exc}；{delay:.0f} 秒后重试",
+                        flush=True,
+                    )
                 else:
                     pending_logs = pending_logs[len(chunk) :]
-                    last_log_flush = time.monotonic()
-            now = time.monotonic()
+                    last_log_flush = now
+                    next_log_upload_at = now + LOG_UPLOAD_MIN_INTERVAL_SECONDS
+                    log_upload_failures = 0
             if now - last_heartbeat >= self.config.heartbeat_seconds:
                 last_heartbeat = now
                 try:

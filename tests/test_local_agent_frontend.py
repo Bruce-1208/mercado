@@ -35,3 +35,38 @@ assert.throws(() => fetchExecutionTarget('agent', '/api/tasks/daily/start'));
 assert.equal(calls.length, 3);
 '''
     subprocess.run([node, "-"], input=script, encoding="utf-8", check=True, capture_output=True)
+
+
+def test_daily_task_filters_group_statuses_and_keep_agent_computers_separate():
+    node = shutil.which("node")
+    if not node:
+        pytest.skip("Node.js is needed to exercise task filter JavaScript")
+    template = (Path(__file__).resolve().parents[1] / "bit/templates/index.html").read_text(
+        encoding="utf-8"
+    )
+    start = template.index("        function dailyTaskStatusCategory(task)")
+    end = template.index("        function syncDailyTaskComputerFilter(tasks)", start)
+    helpers = template[start:end]
+    script = """
+const assert = require('node:assert/strict');
+""" + helpers + """
+assert.equal(dailyTaskStatusCategory({status: 'queued', running: true}), 'queued');
+assert.equal(dailyTaskStatusCategory({status: 'starting', running: true}), 'running');
+assert.equal(dailyTaskStatusCategory({status: 'running', running: true, stop_requested: true}), 'stopping');
+assert.equal(dailyTaskStatusCategory({status: 'success', running: false}), 'completed');
+assert.equal(dailyTaskStatusCategory({status: 'completed', running: false}), 'completed');
+assert.equal(dailyTaskStatusCategory({status: 'partial', running: false}), 'partial');
+assert.equal(dailyTaskStatusCategory({status: 'stopped', running: false}), 'stopped');
+assert.equal(dailyTaskStatusCategory({status: 'error', running: false}), 'error');
+assert.equal(dailyTaskComputerKey({execution_target: 'server'}), 'server');
+assert.equal(dailyTaskComputerKey({execution_target: 'local'}), 'local');
+assert.equal(
+    dailyTaskComputerKey({execution_target: 'agent', agent_id: 'pc-a', agent_name: '电脑 A'}),
+    'agent:pc-a',
+);
+assert.equal(
+    dailyTaskComputerKey({execution_target: 'agent', agent_id: 'pc-b', agent_name: '电脑 A'}),
+    'agent:pc-b',
+);
+"""
+    subprocess.run([node, "-"], input=script, encoding="utf-8", check=True, capture_output=True)

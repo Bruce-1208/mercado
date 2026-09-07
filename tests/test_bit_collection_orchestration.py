@@ -823,17 +823,16 @@ class CollectionOrchestrationTests(unittest.TestCase):
                 },
             ),
             mock.patch.object(
-                infractions,
-                "record_human_verification_anomaly",
-                side_effect=lambda *args, **kwargs: recorded.append((args, kwargs)),
+                bit_mercado_login,
+                "sync_login_results_to_window_anomalies",
+                side_effect=lambda *args, **kwargs: recorded.append((args, kwargs)) or {},
             ),
         ):
             retry_plan = infractions._prepare_infraction_retry_rows(outcomes)
 
         self.assertEqual(retry_plan, [])
         self.assertEqual(len(recorded), 1)
-        self.assertEqual(recorded[0][0][1:3], ("window-captcha", "人机验证店铺"))
-        self.assertEqual(recorded[0][1]["site"], "墨西哥")
+        self.assertEqual(recorded[0][0][0][0]["status"], bit_mercado_login.LOGIN_CAPTCHA_REQUIRED)
         self.assertEqual(recorded[0][1]["source"], "侵权采集")
 
 

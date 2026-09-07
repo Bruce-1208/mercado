@@ -1,10 +1,34 @@
 import json
+import os
 import threading
 
 import pytest
 
 from bit import bit_interface
+import local_agent_worker
 from local_agent_worker import run_daily_task
+
+
+def test_worker_exports_agent_identity_for_business_processes(monkeypatch):
+    monkeypatch.setattr(local_agent_worker.socket, "gethostname", lambda: "OFFICE-PC")
+
+    identity = local_agent_worker.configure_execution_context(
+        {
+            "agent_id": "agent-office-01",
+            "payload": {"agent_name": "办公室电脑"},
+        }
+    )
+
+    assert identity == {
+        "target": "agent",
+        "agent_id": "agent-office-01",
+        "agent_name": "办公室电脑",
+        "hostname": "OFFICE-PC",
+    }
+    assert os.environ["BIT_EXECUTION_TARGET"] == "agent"
+    assert os.environ["BIT_EXECUTION_AGENT_ID"] == "agent-office-01"
+    assert os.environ["BIT_EXECUTION_AGENT_NAME"] == "办公室电脑"
+    assert os.environ["BIT_EXECUTION_HOSTNAME"] == "OFFICE-PC"
 
 
 @pytest.mark.parametrize("stop", [False, True])

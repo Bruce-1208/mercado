@@ -12,6 +12,7 @@ from bit.bit_mercado_limit import (
     get_mercado_backend_status,
     process_mercado_rate_limit,
 )
+from bit.bit_mercado_login import try_record_login_anomaly
 from bit.mercado_click_delay import javascript_contains_click, mercado_click_cooldown
 
 try:
@@ -274,6 +275,8 @@ def open_cdp_mercado_backend_page(
     url: str,
     *,
     name="",
+    site="",
+    source="CDP申诉",
     max_rate_limit_retries=2,
     retry_wait_seconds=30,
 ):
@@ -298,6 +301,18 @@ def open_cdp_mercado_backend_page(
         if status == "ready":
             return state
         if status == "logged_out":
+            try_record_login_anomaly(
+                {
+                    "status": "logged_out",
+                    "message": (
+                        f"{name} {site} CDP 任务检测到美客多账号退出登录："
+                        f"{state.get('url', '')}"
+                    ),
+                },
+                shop_name=name,
+                site=site,
+                source=source,
+            )
             raise RuntimeError(
                 f"{name} Mercado 登录态失效，请先完成登录后重试："
                 f"{state.get('url', '')}"
@@ -714,9 +729,9 @@ def maybe_reply_site_option(cdp: Cdp, site: str, window: str = "", timeout=25):
     return ""
 
 
-def open_ai_assistant(cdp_http: str) -> Cdp:
+def open_ai_assistant(cdp_http: str, window_name="", site="") -> Cdp:
     cdp = tab_for(cdp_http, HELP_URL, "/help", exact_url=HELP_URL)
-    open_cdp_mercado_backend_page(cdp, HELP_URL)
+    open_cdp_mercado_backend_page(cdp, HELP_URL, name=window_name, site=site)
     time.sleep(4)
     for _ in range(3):
         if ai_frame_id(cdp):
@@ -836,14 +851,14 @@ def send_ai_groups(cdp: Cdp, groups, prefix: str, site: str = "MX", window: str 
         print(f"AI group {idx} sent ({result}): {message}")
 
 
-def open_human_chat(cdp_http: str) -> Cdp:
+def open_human_chat(cdp_http: str, window_name="", site="") -> Cdp:
     # Prefer already-open direct chat.
     tabs = get_json(f"{cdp_http}/json/list")
     tab = next((t for t in tabs if t.get("type") == "page" and "/help/chat/v2" in t.get("url", "")), None)
     if not tab:
         hub = tab_for(cdp_http, HUB_URL, "/help/hub/30928")
         try:
-            open_cdp_mercado_backend_page(hub, HUB_URL)
+            open_cdp_mercado_backend_page(hub, HUB_URL, name=window_name, site=site)
             time.sleep(4)
             hub.js(
                 r"""
@@ -869,7 +884,7 @@ def open_human_chat(cdp_http: str) -> Cdp:
     cdp.call("Page.enable")
     cdp.call("Runtime.enable")
     cdp.call("Page.bringToFront")
-    open_cdp_mercado_backend_page(cdp, DIRECT_CHAT_URL)
+    open_cdp_mercado_backend_page(cdp, DIRECT_CHAT_URL, name=window_name, site=site)
     return cdp
 
 
@@ -964,7 +979,7 @@ def main():
         cdp_http = open_bitbrowser(args.window)
 
     if args.mode in ("ai", "both"):
-        ai = open_ai_assistant(cdp_http)
+        ai = open_ai_assistant(cdp_http, args.window, site)
         try:
             send_ai_groups(ai, ai_groups, prefix, site, args.window)
         finally:
@@ -972,7 +987,7 @@ def main():
 
     if args.mode in ("human", "both") and human_groups:
         idx = max(1, args.human_group_index) - 1
-        human = open_human_chat(cdp_http)
+        human = open_human_chat(cdp_http, args.window, site)
         try:
             send_human_group(human, human_groups[idx], prefix, site, args.window, idx + 1)
         finally:

@@ -1,6 +1,7 @@
 import hashlib
 import io
 import json
+import time
 import zipfile
 from types import SimpleNamespace
 
@@ -137,3 +138,49 @@ Path(args.job_file).with_name('result.json').write_text(json.dumps({
     assert events[-1]["result"]["execution_counts"] == {"failed": 1}
     assert events[-1]["result"]["return_code"] == 0
     assert events[-1]["message"] == "one task needs attention"
+
+
+def test_agent_log_upload_failure_uses_backoff_without_dropping_content(
+    tmp_path, monkeypatch
+):
+    config = SimpleNamespace(
+        data_dir=tmp_path,
+        server_url="https://workbench.example",
+        agent_token="",
+        db_api_token="test-only",
+        heartbeat_seconds=10,
+        agent_id="agent-test",
+        name="测试电脑",
+    )
+    agent = LocalAgent(config)
+    agent.current_release = "runtime-backoff-test"
+    release = tmp_path / "releases" / agent.current_release
+    release.mkdir(parents=True)
+    (release / "local_agent_worker.py").write_text('''
+import argparse, json, time
+from pathlib import Path
+parser = argparse.ArgumentParser()
+parser.add_argument('--job-file')
+parser.add_argument('--cancel-file')
+args = parser.parse_args()
+print('x' * 40000, flush=True)
+time.sleep(0.8)
+Path(args.job_file).with_name('result.json').write_text(json.dumps({}), encoding='utf-8')
+''', encoding="utf-8")
+    content_attempts = []
+
+    def event(_job_id, **data):
+        if data.get("content"):
+            content_attempts.append((time.monotonic(), data["content"]))
+            if len(content_attempts) == 1:
+                raise RuntimeError("temporary 502")
+
+    monkeypatch.setattr(agent, "heartbeat", lambda: {})
+    monkeypatch.setattr(agent, "send_event", event)
+    monkeypatch.setattr(agent, "_retry_delay", lambda _failures: 0.3)
+
+    agent.run_job({"job_id": "daily-backoff-job", "job_type": "daily_task", "payload": {}})
+
+    assert len(content_attempts) == 2
+    assert content_attempts[1][0] - content_attempts[0][0] >= 0.25
+    assert content_attempts[1][1] == content_attempts[0][1]

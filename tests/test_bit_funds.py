@@ -3,6 +3,34 @@ from pathlib import Path
 from bit import bit_interface, bit_mercado_login, bit_mysql, bit_pago_info
 
 
+def test_pago_logout_is_recorded_in_shop_status(monkeypatch):
+    recorded = []
+    monkeypatch.setattr(bit_pago_info, "_open_pago_home_with_retry", lambda *args, **kwargs: True)
+    monkeypatch.setattr(bit_pago_info, "_is_not_logged_in", lambda driver: True)
+    monkeypatch.setattr(
+        bit_pago_info,
+        "try_record_login_anomaly",
+        lambda *args, **kwargs: recorded.append((args, kwargs)) or True,
+    )
+
+    row = bit_pago_info.get_pago_info(
+        "window-pago",
+        "款项店铺",
+        "墨西哥",
+        driver=object(),
+    )
+
+    assert row[4] == "未登录"
+    assert len(recorded) == 1
+    assert recorded[0][0][1:5] == (
+        "window-pago",
+        "款项店铺",
+        "墨西哥",
+        "资金采集",
+    )
+    assert recorded[0][0][0]["status"] == "logged_out"
+
+
 def test_pago_all_jobs_can_bypass_default_shop_limit_and_use_configured_sites(monkeypatch):
     monkeypatch.setattr(
         bit_pago_info,

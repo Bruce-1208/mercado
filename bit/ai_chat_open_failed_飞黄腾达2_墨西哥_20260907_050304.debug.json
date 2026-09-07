@@ -1,0 +1,59 @@
+{
+  "captured_at": "2026-09-07T05:03:04",
+  "current_url": "https://global-selling.mercadolibre.com/help/v2",
+  "chat_state": {
+    "ai_frame_count": 0,
+    "inline_aria_expanded": "",
+    "inline_has_input": false,
+    "inline_open": false,
+    "inline_root_class": "",
+    "inline_shell": false,
+    "legacy_frame_count": 0,
+    "shadow_ai_frame_count": 0,
+    "visible_ai_frame_count": 0
+  },
+  "dom_snapshot": {
+    "aiShells": [],
+    "frames": [
+      {
+        "className": "",
+        "height": 0,
+        "id": "_hjSafeContext_13955845",
+        "shadowHost": "",
+        "src": "about:blank",
+        "title": "_hjSafeContext",
+        "visible": false,
+        "width": 0
+      }
+    ],
+    "readyState": "complete",
+    "shadowHosts": [],
+    "title": "Help"
+  },
+  "browser_logs": [
+    {
+      "level": "SEVERE",
+      "message": "https://undefined/v3/security.js - Failed to load resource: net::ERR_CONNECTION_CLOSED",
+      "source": "network",
+      "timestamp": 1788728440040
+    },
+    {
+      "level": "SEVERE",
+      "message": "https://console.bitbrowser.net/?id=3f97a677aba2418081db3f9ca8120fb6&locale=zh&port=54345 - Unchecked runtime.lastError: Could not establish connection. Receiving end does not exist.",
+      "source": "other",
+      "timestamp": 1788728440041
+    },
+    {
+      "level": "SEVERE",
+      "message": "https://www.mercadolibre.com/jms/cbt/lgz/msl/login?navigation=H4sIAAAAAAAEAz2QXXOyOhSF_4vXr30BRUvvbFWIleAHgnDmDAMkQiAQPqICnf73E9qZc5GZZO-91nqyvyaUJaQMeF_hydsEdxUlMeGTP5OKhvzGmiIgSDQKKkot4fj3GUc_I2ETFpjjpp28fY1GCUbvWIhGK97csdCEd54GN8qeovQTJWqkDXAnZGVIgyeOHgSP3VtI2_8VDa7vuBUzokHKR0gJCqoxTsgTJoop51X79vdvQlkU0mmLKSVl8lLgJg4RoyRq8EvMir-CryFxK2QNTsjoiMV_RrjvPyKy5QFvwjifvP3EC95q3EDICSt_v7pQXiVpqSyX4qKqyqtwQjgWYaPPP_-KrbSC52vCSZxjLshwv0sjPSYW2Z0vA5AhAS0oeOV_gAWg7_C0SelZ54q7QQdf2RXuFl59xSnN9WnAG8f2dbl3JCjbJfqMt1SGM6pfskQD5EmQQZ8gY-RM0QWU0suYJeariGoPZKyIVfhpZEC6_9il6HpiV8Vvo9kPS-opkMYzk4gexeNstplba7Mzh3xm2RfBSFMkGE07FvWjBG1ThecnCa9wGDPRdXe3iq2M9ITHitOjwumtcvSEVaSow8gXlqdqnIXulpi2X5hrwMWZeUSSvAFIe3ebWrrJPTuX_AwRqHuS78J01MYKlXxH-91TAYlgaUEJh_As9lZsBpidUs-Ou71Nc08BHOqn3DtLqp-BYW8nnWWbc882BzOLO-v8o5U9IrSl00dZJY_M8cBEH8zN7NjBDMjjDg8YpkrWTmsl-TAqIM2DvGWXj7rrJXq7kWOzWULQmPH8oa520WFhAzxY66DXjAEqOFpN18ZD3sees53uae3R6mJt7v3nYJ2XMXVy9vSz_lWfI2wVlabU_Llx7cIt7-jqNovodaWG0cfynT4Q2y1eC0lGbGqYEXItI78-tNPsyapd1Lnle8k_jRPe37SycQ-rucpUnz2uMnFX9SIDvhxdo-WsaI8d-OyTPVFD7bzbxqD2biysl8ySj65U33ZHPTWKE53ztbJehzOeV8G90A5dvtJw-ygUDSyfAD_8burWaZsHZlG3zr66weLqsJV6n0Z83h3304XxmcV3Pbd8NiQ2ocHaHZCELuXhGDbJ5Pv7PzLKrWtcBAAA&dps=armor.365ba2e34789677af2e0406bf1035e4fc7d598221803ef82eb2cd7dce56de267de17e392db35815aeb4d63ccda44c5c4725ec572035e2d7dd6955a112a3e8360683527a6d5a5ddbda857ca4a6182f61f02747a92653978c3d716c3713d4e7798.09dc6aa7af1c1a4acebab3fb6ad1e064 0 Refused to load the script 'https://www.recaptcha.net/recaptcha/enterprise.js?onload=onloadCallback&render=6LeetcMeAAAAAHBLMG_uCF4A7QLR8ZHg8u4ulR5z&hl=en' because it violates the following Content Security Policy directive: \"script-src 'nonce-lU5wn70LZzWhfzdMx4hPIA==' 'strict-dynamic' 'unsafe-inline' https: 'report-sample'\". Note that 'strict-dynamic' is present, so host-based allowlisting is disabled. Note that 'script-src-elem' was not explicitly set, so 'script-src' is used as a fallback.\n",
+      "source": "security",
+      "timestamp": 1788728452766
+    },
+    {
+      "level": "SEVERE",
+      "message": "https://undefined/v3/security.js - Failed to load resource: net::ERR_CONNECTION_CLOSED",
+      "source": "network",
+      "timestamp": 1788728452766
+    }
+  ]
+}

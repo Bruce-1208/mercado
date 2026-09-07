@@ -142,7 +142,7 @@ class _FakePlaywrightPage:
         return self.state.get("page_source", "")
 
 
-def test_playwright_backend_page_relogs_and_reopens_target():
+def test_playwright_backend_page_relogs_reopens_and_records_shop_status(monkeypatch):
     target_url = "https://global-selling.mercadolibre.com/orders"
     page = _FakePlaywrightPage(
         [
@@ -162,6 +162,7 @@ def test_playwright_backend_page_relogs_and_reopens_target():
     class Session:
         def __init__(self, current_page):
             self.shop_name = "Playwright店铺"
+            self.window_id = "window-playwright"
             self.page = current_page
             self.login_calls = 0
 
@@ -170,6 +171,17 @@ def test_playwright_backend_page_relogs_and_reopens_target():
             return {"ok": True}
 
     session = Session(page)
+    status_events = []
+    monkeypatch.setattr(
+        playwright_common,
+        "try_record_login_anomaly",
+        lambda *args, **kwargs: status_events.append(("recorded", args, kwargs)) or True,
+    )
+    monkeypatch.setattr(
+        playwright_common.bit_db_api,
+        "resolve_window_anomaly",
+        lambda window_id: status_events.append(("resolved", window_id)),
+    )
     result = playwright_common.open_mercado_backend_page(
         session,
         target_url,
@@ -180,3 +192,11 @@ def test_playwright_backend_page_relogs_and_reopens_target():
     assert result["login_retry_count"] == 1
     assert session.login_calls == 1
     assert page.goto_calls == [target_url, target_url]
+    assert status_events[0][0] == "recorded"
+    assert status_events[0][1][1:5] == (
+        "window-playwright",
+        "Playwright店铺",
+        "",
+        "Playwright业务任务",
+    )
+    assert status_events[1] == ("resolved", "window-playwright")

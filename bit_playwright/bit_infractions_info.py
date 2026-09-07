@@ -36,7 +36,7 @@ from bit.bit_mercado_limit import (
 )
 from bit.bit_mercado_login import (
     is_human_verification_result,
-    record_human_verification_anomaly,
+    try_record_login_anomaly,
 )
 from bit.bit_runtime_lock import create_window_lease
 from bit.bit_db_api import (
@@ -203,10 +203,27 @@ def _raise_if_page_unavailable(page, context="侵权页面"):
         }
     )
     if is_human_verification_result(body_text):
+        try_record_login_anomaly(
+            body_text,
+            getattr(page, "_bit_mercado_window_id", ""),
+            getattr(page, "_bit_mercado_shop_name", ""),
+            getattr(page, "_bit_mercado_site", ""),
+            "侵权采集",
+        )
         raise MercadoAuthenticationError(
             f"{context}检测到人机验证，需要人工处理：{body_text[:300]}"
         )
     if backend_status == "logged_out":
+        try_record_login_anomaly(
+            {
+                "status": "logged_out",
+                "message": f"{context}检测到美客多账号退出登录：{current_url}",
+            },
+            getattr(page, "_bit_mercado_window_id", ""),
+            getattr(page, "_bit_mercado_shop_name", ""),
+            getattr(page, "_bit_mercado_site", ""),
+            "侵权采集",
+        )
         raise MercadoAuthenticationError(f"{context}登录态失效，已跳转登录页：{current_url}")
     if backend_status == "rate_limited":
         raise MercadoRateLimitError(f"Mercado 页面限频：{current_url} {body_text[:300]}")
@@ -1031,6 +1048,7 @@ def _collect_site_infractions(
     page,
     name,
     site,
+    window_id="",
     switch_site=True,
     include_rights_holder=True,
 ):
@@ -1039,6 +1057,15 @@ def _collect_site_infractions(
     ``include_rights_holder=False`` 时只读取 detections/infringements，
     不打开 denounces/reports 权利人举报标签。
     """
+    for attribute, value in (
+        ("_bit_mercado_window_id", window_id),
+        ("_bit_mercado_shop_name", name),
+        ("_bit_mercado_site", site),
+    ):
+        try:
+            setattr(page, attribute, str(value or "").strip())
+        except Exception:
+            pass
     _safe_goto_infractions(page, INFRACTIONS_URL)
     time.sleep(5)
     _validate_infractions_page(page)
@@ -1135,6 +1162,7 @@ def get_infractions_info(
                 page,
                 name,
                 site,
+                window_id=window_id,
                 switch_site=isSwitch == 1,
                 include_rights_holder=include_rights_holder,
             )
@@ -1202,6 +1230,7 @@ def _run_infractions_for_browser_locked(row, stop_event=None):
                                     page,
                                     name,
                                     site,
+                                    window_id=browser_id,
                                     switch_site=True,
                                 )
                                 infraction_info_sum.extend(infraction_info)
@@ -1220,23 +1249,6 @@ def _run_infractions_for_browser_locked(row, stop_event=None):
                             except Exception as exc:
                                 last_error = exc
                                 print(get_now_time() + name + site + "执行失败", exc)
-                                if is_human_verification_result(exc):
-                                    try:
-                                        record_human_verification_anomaly(
-                                            exc,
-                                            browser_id,
-                                            name,
-                                            site=site,
-                                            source="侵权采集",
-                                        )
-                                    except Exception as record_exc:
-                                        print(
-                                            get_now_time()
-                                            + name
-                                            + site
-                                            + "登记人机验证失败："
-                                            + str(record_exc)
-                                        )
                                 if isinstance(
                                     exc,
                                     (MercadoAuthenticationError, BitBrowserWindowError),
@@ -1476,6 +1488,7 @@ def _prepare_infraction_retry_rows(
                     LOGIN_SAVED_PASSWORD_INCORRECT,
                     LOGIN_SAVED_PASSWORD_MISSING,
                     login_one_database_shop,
+                    sync_login_results_to_window_anomalies,
                 )
 
                 login_result = login_one_database_shop(
@@ -1483,14 +1496,10 @@ def _prepare_infraction_retry_rows(
                     wait_seconds=int(env_float("BIT_LOGIN_REPAIR_WAIT_SECONDS", 60, 1)),
                     page_load_timeout=int(env_float("BIT_LOGIN_REPAIR_PAGE_TIMEOUT", 20, 1)),
                 )
-                if is_human_verification_result(login_result):
-                    record_human_verification_anomaly(
-                        login_result,
-                        current_row[0],
-                        name,
-                        site=current_row[3],
-                        source="侵权采集",
-                    )
+                sync_login_results_to_window_anomalies(
+                    [login_result],
+                    source="侵权采集",
+                )
             except Exception as exc:
                 print(f"{get_now_time()}{name} 登录修复异常，本轮不重试：{exc}")
                 continue

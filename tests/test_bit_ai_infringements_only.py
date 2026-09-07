@@ -1,3 +1,5 @@
+import pytest
+
 from bit import bit_appeal_ai
 from bit_playwright import bit_infractions_info
 
@@ -6,6 +8,41 @@ def test_infraction_pages_use_extended_wait_limits():
     assert bit_infractions_info.INFRACTIONS_ELEMENT_TIMEOUT_MS >= 60_000
     assert bit_infractions_info.INFRACTIONS_PAGE_READY_TIMEOUT_MS >= 90_000
     assert bit_infractions_info.INFRACTIONS_NAVIGATION_TIMEOUT_MS >= 120_000
+
+
+def test_playwright_infraction_logout_is_recorded_with_bound_shop(monkeypatch):
+    recorded = []
+
+    class Body:
+        def inner_text(self, timeout=0):
+            return "Fill out your email address to log in"
+
+    class Page:
+        url = "https://www.mercadolibre.com/jms/cbt/lgz/login"
+        _bit_mercado_window_id = "window-infractions"
+        _bit_mercado_shop_name = "侵权店铺"
+        _bit_mercado_site = "墨西哥"
+
+        def locator(self, selector):
+            assert selector == "body"
+            return Body()
+
+    monkeypatch.setattr(
+        bit_infractions_info,
+        "try_record_login_anomaly",
+        lambda *args, **kwargs: recorded.append((args, kwargs)) or True,
+    )
+
+    with pytest.raises(bit_infractions_info.MercadoAuthenticationError):
+        bit_infractions_info._raise_if_page_unavailable(Page())
+
+    assert len(recorded) == 1
+    assert recorded[0][0][1:5] == (
+        "window-infractions",
+        "侵权店铺",
+        "墨西哥",
+        "侵权采集",
+    )
 
 
 def test_new_infraction_page_receives_extended_default_timeouts():

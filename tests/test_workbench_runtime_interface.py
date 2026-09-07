@@ -159,6 +159,7 @@ def test_client_mode_skips_all_central_background_services(monkeypatch):
         "start_store_link_scheduler_bootstrap",
         "start_prohibited_listing_scheduler_bootstrap",
         "start_official_infraction_scheduler_bootstrap",
+        "start_api_reputation_scheduler_bootstrap",
         "start_token_refresh_scheduler_bootstrap",
         "start_store_email_sync_scheduler_bootstrap",
     )
@@ -174,7 +175,7 @@ def test_client_mode_skips_all_central_background_services(monkeypatch):
     assert called == []
 
 
-def test_server_mode_starts_order_sync_scheduler(monkeypatch):
+def test_server_mode_starts_reputation_and_order_sync_schedulers(monkeypatch):
     monkeypatch.setattr(bit_interface, "USE_DB_API", False)
     for name in (
         "start_interrupted_collection_recovery",
@@ -186,6 +187,11 @@ def test_server_mode_starts_order_sync_scheduler(monkeypatch):
     ):
         monkeypatch.setattr(bit_interface, name, lambda: None)
     started = []
+    monkeypatch.setattr(
+        bit_interface,
+        "start_api_reputation_scheduler_bootstrap",
+        lambda: started.append("api_reputation"),
+    )
     monkeypatch.setattr(
         bit_interface.bit_order_sync,
         "ensure_order_sync_scheduler",
@@ -204,7 +210,7 @@ def test_server_mode_starts_order_sync_scheduler(monkeypatch):
 
     bit_interface.start_interface_background_services()
 
-    assert started == ["order_sync"]
+    assert started == ["api_reputation", "order_sync"]
 
 
 def test_database_api_health_client_uses_http_route(monkeypatch):
@@ -272,3 +278,82 @@ def test_official_infraction_counts_rebuild_tuple_keys_from_http(monkeypatch):
         "rights_holder_count": 2,
         "latest_infraction_at": "2026-09-03 10:00:00",
     }
+
+
+def test_live_infraction_collection_client_uses_server_route(monkeypatch):
+    calls = []
+    monkeypatch.setattr(bit_db_api, "DB_MODE", "api")
+    monkeypatch.setattr(
+        bit_db_api,
+        "_request",
+        lambda method, path, **kwargs: calls.append((method, path, kwargs))
+        or {"data": [], "results": [], "failed_stores": []},
+    )
+    targets = [{"token_id": 7, "name": "授权店铺", "site_ids": ["MLM"]}]
+
+    result = bit_db_api.collect_live_detection_infractions(
+        targets,
+        recent_days=30,
+        max_workers=3,
+    )
+
+    assert result["data"] == []
+    assert calls == [(
+        "POST",
+        "/api/db/official-infractions/live",
+        {
+            "timeout": 960,
+            "json": {
+                "targets": targets,
+                "recent_days": 30,
+                "max_workers": 3,
+            },
+        },
+    )]
+
+
+def test_live_infraction_collection_transparently_delegates_in_client_mode(
+    monkeypatch,
+):
+    calls = []
+    monkeypatch.setattr(bit_db_api, "DB_MODE", "api")
+    monkeypatch.setattr(
+        bit_db_api,
+        "collect_live_detection_infractions",
+        lambda targets, **kwargs: calls.append((targets, kwargs))
+        or {"data": [{"编号": "MLM123"}]},
+    )
+    targets = [{"token_id": 7, "site_ids": ["MLM"]}]
+
+    result = bit_interface.mercado_infraction_sync.collect_live_detection_infractions(
+        targets,
+        recent_days=45,
+        max_workers=2,
+    )
+
+    assert result == {"data": [{"编号": "MLM123"}]}
+    assert calls == [(
+        targets,
+        {"recent_days": 45, "max_workers": 2, "stop_event": None},
+    )]
+
+
+def test_live_infraction_server_route_reads_tokens_on_server(monkeypatch):
+    calls = []
+    monkeypatch.setattr(bit_interface, "USE_DB_API", False)
+    monkeypatch.setattr(
+        bit_interface.mercado_infraction_sync,
+        "collect_live_detection_infractions",
+        lambda targets, **kwargs: calls.append((targets, kwargs))
+        or {"data": [{"编号": "MLM123"}], "results": []},
+    )
+    targets = [{"token_id": 7, "name": "授权店铺", "site_ids": ["MLM"]}]
+
+    response = bit_interface.app.test_client().post(
+        "/api/db/official-infractions/live",
+        json={"targets": targets, "recent_days": 30, "max_workers": 4},
+    )
+
+    assert response.status_code == 200
+    assert response.get_json()["data"]["data"] == [{"编号": "MLM123"}]
+    assert calls == [(targets, {"recent_days": 30, "max_workers": 4})]

@@ -139,6 +139,8 @@ def test_public_appeal_is_queued_for_selected_agent_and_streamed(agent_interface
     queued = store.get_job("agent-appeal-job")
     assert queued["status"] == "queued"
     assert queued["payload"]["name"] == "测试店铺"
+    assert queued["payload"]["agent_id"] == "agent-appeal-pc"
+    assert queued["payload"]["agent_name"] == "申诉电脑"
 
     claimed = store.claim_job("agent-appeal-pc")
     assert claimed["status"] == "running"
@@ -192,6 +194,7 @@ def test_daily_task_uses_agent_queue_and_reports_logs(daily_agent_interface, mon
     assert task["execution_target"] == "agent"
     assert task["status"] == "queued"
     assert store.get_job(job_id)["payload"]["max_workers"] == 4
+    assert store.get_job(job_id)["payload"]["agent_name"] == "任务电脑"
     claimed = store.claim_job("agent-daily-pc")
     assert claimed["job_type"] == "daily_task"
     store.append_event(job_id, "agent-daily-pc", content="来自执行电脑的日志\n", status="success",

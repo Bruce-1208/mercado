@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Yandex 运营工作台</title>
-  <link rel="stylesheet" href="{{ url_for('static', path='/styles.css') }}?v=20260906-4">
+  <link rel="stylesheet" href="{{ base_path | default('') }}/static/styles.css?v=20260907-1">
 </head>
 <body class="{% if embedded %}embedded{% endif %}">
   <div class="app-shell">
@@ -140,6 +140,7 @@
     </main>
   </div>
   <div id="toast" class="toast" role="status"></div>
-  <script src="{{ url_for('static', path='/app.js') }}?v=20260906-4" defer></script>
+  <script>window.YANDEX_BASE_PATH = {{ (base_path | default('')) | tojson }};</script>
+  <script src="{{ base_path | default('') }}/static/app.js?v=20260907-1" defer></script>
 </body>
 </html>

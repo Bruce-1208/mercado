@@ -244,7 +244,11 @@ def test_driver_cleanup_failure_preserves_outcome_and_releases_lease(monkeypatch
     lease = SimpleNamespace(acquire=lambda **kw: True, release=lambda: calls.append("release"))
     driver = SimpleNamespace(service=SimpleNamespace(
         stop=lambda: (_ for _ in ()).throw(RuntimeError("service already gone"))))
-    monkeypatch.setattr(ai, "get_window_id_by_shop_name", lambda n: "window")
+    monkeypatch.setattr(
+        ai,
+        "get_window_id_by_shop_name",
+        lambda _name: pytest.fail("已有 window_id 时不应重新读取窗口列表"),
+    )
     monkeypatch.setattr(ai, "current_thread_window_lease", lambda w: None)
     monkeypatch.setattr(ai, "create_window_lease", lambda *a, **kw: lease)
     monkeypatch.setattr(ai, "connect_bit_browser", lambda w: (driver, {}))
@@ -252,7 +256,7 @@ def test_driver_cleanup_failure_preserves_outcome_and_releases_lease(monkeypatch
     monkeypatch.setattr(ai, "select_site", lambda *a: None)
     monkeypatch.setattr(ai, "handle_infraction", lambda *a, **kw: None)
     monkeypatch.setattr(ai, "close_current_tab_keep_browser", lambda *a: calls.append("close"))
-    result = ai.shensu("店", "BR", "侵权", "请复核")
+    result = ai.shensu("店", "BR", "侵权", "请复核", window_id="window")
     assert result["status"] == "no_data"
     assert calls == ["close", "release"]
 

@@ -16,7 +16,7 @@ if CURRENT_DIR not in sys.path:
 if PROJECT_ROOT not in sys.path:
     sys.path.insert(0, PROJECT_ROOT)
 
-from bit import bit_appeal_ai, mercado_infraction_sync
+from bit import bit_appeal_ai, bit_config, mercado_infraction_sync
 from bit.bit_api import closeBrowser
 from bit.bit_collection_control import terminate_process_pool
 from bit.bit_db_api import (
@@ -34,9 +34,9 @@ from bit.bit_runtime_lock import (
 from bit.bit_mercado_limit import is_mercado_rate_limited_text
 from bit.bit_appeal_state import SUCCESS_STATUSES, task_execution_counts
 from bit.bit_mercado_login import (
-    is_human_verification_result,
     is_login_blocking_result,
-    record_human_verification_anomaly,
+    is_shop_status_anomaly,
+    record_login_anomaly,
 )
 from bit.bit_utils import get_now_time
 
@@ -53,6 +53,14 @@ DEFAULT_SITE_RETRY_SECONDS = int(os.getenv("BIT_DAILY_SITE_RETRY_SECONDS", "25")
 DEFAULT_RATE_LIMIT_RETRIES = int(os.getenv("BIT_DAILY_RATE_LIMIT_RETRIES", "3"))
 DEFAULT_RATE_LIMIT_RETRY_SECONDS = int(os.getenv("BIT_DAILY_RATE_LIMIT_RETRY_SECONDS", "300"))
 DEFAULT_START_STAGGER_SECONDS = float(os.getenv("BIT_DAILY_START_STAGGER_SECONDS", "0"))
+DEFAULT_BROWSER_LIST_RETRY_ATTEMPTS = max(
+    1,
+    int(os.getenv("BIT_DAILY_BROWSER_LIST_RETRY_ATTEMPTS", "3")),
+)
+DEFAULT_BROWSER_LIST_RETRY_SECONDS = max(
+    0.1,
+    float(os.getenv("BIT_DAILY_BROWSER_LIST_RETRY_SECONDS", "1")),
+)
 DAILY_TASK_LOCK_KEY = "bit_daily_task_singleton"
 
 APPEAL_TYPE_INFRACTION = "侵权"
@@ -122,6 +130,83 @@ def _daily_browser_worker_limit():
         )
     except (TypeError, ValueError):
         return DEFAULT_DAILY_BROWSER_WORKER_LIMIT
+
+
+def _is_bit_browser_list_rate_limited(value):
+    text = str(value or "").strip().casefold()
+    return any(
+        marker in text
+        for marker in (
+            "请求太过频繁",
+            "请求频率",
+            "too many requests",
+            "rate limit",
+        )
+    )
+
+
+def _load_bit_browser_snapshot(stop_event=None):
+    """读取一次窗口列表；只对 BitBrowser 明确的接口限频做短暂退避。"""
+    for attempt in range(1, DEFAULT_BROWSER_LIST_RETRY_ATTEMPTS + 1):
+        if _stop_requested(stop_event):
+            return None
+        try:
+            return bit_config.listBrowsers()
+        except Exception as exc:
+            if (
+                not _is_bit_browser_list_rate_limited(exc)
+                or attempt >= DEFAULT_BROWSER_LIST_RETRY_ATTEMPTS
+            ):
+                raise
+            retry_seconds = DEFAULT_BROWSER_LIST_RETRY_SECONDS * attempt
+            print(
+                f"{get_now_time()} BitBrowser 窗口列表触发限频，"
+                f"{retry_seconds:.1f} 秒后重试 "
+                f"{attempt + 1}/{DEFAULT_BROWSER_LIST_RETRY_ATTEMPTS}<br>"
+            )
+            if _wait_or_stop(retry_seconds, stop_event):
+                return None
+    return None
+
+
+def _resolve_appeal_plan_window_ids(plan, stop_event=None):
+    """在父进程用同一份授权和窗口快照解析整轮计划。"""
+    if not plan:
+        return plan
+    try:
+        token_data = list_mercado_store_tokens() or {}
+        browsers = _load_bit_browser_snapshot(stop_event)
+        if browsers is None:
+            return None
+    except Exception as exc:
+        error = str(exc)
+        print(f"{get_now_time()} 批量读取 BitBrowser 窗口失败：{error}<br>")
+        for shop in plan:
+            shop["window_id"] = ""
+            shop["window_lookup_error"] = error
+        return plan
+
+    resolved_count = 0
+    for shop in plan:
+        name = str(shop.get("name") or "").strip()
+        try:
+            shop["window_id"] = bit_config.get_window_id_by_shop_name(
+                name,
+                authorization_flag="appeal_enabled",
+                token_data=token_data,
+                browsers=browsers,
+            )
+            shop.pop("window_lookup_error", None)
+            resolved_count += 1
+        except Exception as exc:
+            shop["window_id"] = ""
+            shop["window_lookup_error"] = str(exc)
+    print(
+        f"{get_now_time()} 已用 1 次 BitBrowser 窗口列表快照批量解析 "
+        f"{len(plan)} 家店铺，成功 {resolved_count} 家，"
+        f"未匹配 {len(plan) - resolved_count} 家<br>"
+    )
+    return plan
 
 
 def normalize_appeal_type(appeal_type):
@@ -960,11 +1045,11 @@ def build_appeal_plan(
 
 
 def _save_login_anomaly(window_id, name, site_code, reason):
-    """兼容旧调用：只允许人机验证进入店铺状态。"""
-    if not is_human_verification_result(reason):
+    """兼容旧调用：退出登录或人机验证进入店铺状态。"""
+    if not is_shop_status_anomaly(reason):
         return False
     try:
-        return record_human_verification_anomaly(
+        return record_login_anomaly(
             reason,
             window_id,
             name,
@@ -1031,6 +1116,7 @@ def _appeal_one_shop_locked(
                     f"限频重试 {rate_retry_count}/{rate_limit_retries}<br>"
                 )
                 appeal_kwargs = {"validate_open": True}
+                appeal_kwargs["window_id"] = window_id
                 if stop_event is not None:
                     appeal_kwargs["stop_event"] = stop_event
                 if (
@@ -1223,7 +1309,16 @@ def appeal_one_shop(
             "exit_reason": "已停止",
         }
     try:
-        window_id = bit_appeal_ai.get_window_id_by_shop_name(name)
+        if "window_id" in shop_plan:
+            window_id = str(shop_plan.get("window_id") or "").strip()
+            if not window_id:
+                raise RuntimeError(
+                    shop_plan.get("window_lookup_error")
+                    or f"未找到名称为“{name}”的比特浏览器窗口"
+                )
+        else:
+            # 保留单店和旧调用方兼容；daily_task 批量入口会在父进程预解析。
+            window_id = bit_appeal_ai.get_window_id_by_shop_name(name)
     except Exception as e:
         print(
             f"{get_now_time()} {name} 未能启动浏览器进程：{e}；"
@@ -1580,6 +1675,11 @@ def _run_ai_appeal_once_locked(
         return []
     if stop_event is not None and stop_event.is_set():
         print(f"{get_now_time()} 已收到停止请求，{appeal_label}任务不再启动<br>")
+        return []
+
+    plan = _resolve_appeal_plan_window_ids(plan, stop_event=stop_event)
+    if plan is None or _stop_requested(stop_event):
+        print(f"{get_now_time()} 已收到停止请求，{appeal_label}任务不再解析窗口<br>")
         return []
 
     requested_workers = (

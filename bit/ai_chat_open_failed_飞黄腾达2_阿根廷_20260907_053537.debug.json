@@ -1,0 +1,53 @@
+{
+  "captured_at": "2026-09-07T05:35:37",
+  "current_url": "https://global-selling.mercadolibre.com/help/v2",
+  "chat_state": {
+    "ai_frame_count": 0,
+    "inline_aria_expanded": "",
+    "inline_has_input": false,
+    "inline_open": false,
+    "inline_root_class": "",
+    "inline_shell": false,
+    "legacy_frame_count": 0,
+    "shadow_ai_frame_count": 0,
+    "visible_ai_frame_count": 0
+  },
+  "dom_snapshot": {
+    "aiShells": [],
+    "frames": [
+      {
+        "className": "",
+        "height": 0,
+        "id": "_hjSafeContext_79575581",
+        "shadowHost": "",
+        "src": "about:blank",
+        "title": "_hjSafeContext",
+        "visible": false,
+        "width": 0
+      }
+    ],
+    "readyState": "complete",
+    "shadowHosts": [],
+    "title": "Help"
+  },
+  "browser_logs": [
+    {
+      "level": "SEVERE",
+      "message": "https://www.mercadolibre.com/jms/cbt/lgz/msl/login/H4sIAAAAAAAEAz2QXXOqPBSF_4vXxxZQtPbOVoVYCX4gCGfOMEAiBALhIyrQ6X9_g515LzKT7L3XWk_294iymBQ-70o8eh_htqQkInz0Z1TSgF9ZnfsEiUZORakhHP8-o_A5EtRBjjmum9H792AUY_SBhWiw4vUNC01w44l_pewhSs8oUSONj1shKwLqP3B4J3joXgPa_K-ocXXDjZgRDVLcA0qQXw5xQh4zUUw4L5v319eYsjCg4wZTSor4Jcd1FCBGSVjjl4jlr4KvJlEjZDWOyeCIh_886X7-iNCG-7wOomz0_gQQxOWwg4ATVvx-dqa8SdJcmc_FRVWVN-GFcCTiBqe__8ReGkH0PeIkyjAX5rjbJqEWEZNsT-ceyJCABuS89D7BDNAPeFwn9KRxxVmjvadsc2cDL55iF8bq2OO1bXma3NkSlK0CfUUbKsMJ1c5pvADkQZBOHyBl5ETRGRTSy5Al5suQLu5IXxIz95JQh3T3uU3Q5cguiteEkydL4iqQRhODiB7Fw2y6nporozX6bGJaZ8FIEyQYDSsS9YMELUOFpwcJLrAfMtFlezPzjYy0mEeK3aHc7sxi8IRlqKj9wBcUx3KYhc6GGJaXGyvAxZm4RJLcHkg7Z5OYmsFdK5O8FBGouZLnwGTQRgqVPHvxu6ccEsHSgAL2wUnsLV_3MD0mrhW1O4tmrgI41I6Ze5JULwX9zopb0zKmrmX0Rhq15umplV0itIXdhWkpD8xRz0QfTI300MIUyMMO9xgmStqMKyX-1EsgTf2sYefPqu0ker2SQ72eQ1Ab0fSuLrfhfmYB3Jsrv1voPVRwuByv9Lu8i1x7M97RyqXl2Vzfuq_ePM0jamfs4aXdmzZF2MzLhVLxx9qxcqe4oYtTz8K3pRqEn_MPekdsO3vLJRmxsW6EyDH17HJfHCcPVm7D1ik-Cv6lH_HuuihqZ7-cqkz12P0iE2dZzVLgyeElnE_y5tCCry7eETVYnLabCFTulQXVnJnywZGq6_agJXp-pFO-UlarYMKz0r_li32bLRe4uefKAswfAN-9duxUSZP5Rl419q68wvxis6V6G4d82h5245n-lUY3LTM91scWof7K6ZGEzsX-ENTx6OfnP1Q633xeBAAA/legacy-user 0 Refused to load the script 'https://www.recaptcha.net/recaptcha/enterprise.js?onload=onloadCallback&render=6LeetcMeAAAAAHBLMG_uCF4A7QLR8ZHg8u4ulR5z&hl=en' because it violates the following Content Security Policy directive: \"script-src 'nonce-jyFeD955cONfRzYnjpLdyw==' 'strict-dynamic' 'unsafe-inline' https: 'report-sample'\". Note that 'strict-dynamic' is present, so host-based allowlisting is disabled. Note that 'script-src-elem' was not explicitly set, so 'script-src' is used as a fallback.\n",
+      "source": "security",
+      "timestamp": 1788730399349
+    },
+    {
+      "level": "SEVERE",
+      "message": "https://undefined/v3/security.js - Failed to load resource: net::ERR_CONNECTION_CLOSED",
+      "source": "network",
+      "timestamp": 1788730399350
+    },
+    {
+      "level": "SEVERE",
+      "message": "https://console.bitbrowser.net/?id=3f97a677aba2418081db3f9ca8120fb6&locale=zh&port=54345 - Unchecked runtime.lastError: Could not establish connection. Receiving end does not exist.",
+      "source": "other",
+      "timestamp": 1788730399389
+    }
+  ]
+}

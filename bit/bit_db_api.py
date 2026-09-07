@@ -128,6 +128,44 @@ def get_current_infraction_counts_by_token_site(days=100):
     return data
 
 
+def collect_live_detection_infractions(
+    targets,
+    *,
+    recent_days=100,
+    max_workers=8,
+    stop_event=None,
+):
+    """Read live infringement data where the Mercado tokens are stored."""
+
+    if stop_event is not None and stop_event.is_set():
+        return {
+            "data": [],
+            "results": [],
+            "failed_stores": [],
+            "source": "mercado_moderations_api",
+            "recent_days": max(1, int(recent_days or 1)),
+        }
+    if DB_MODE == "mysql":
+        from bit import mercado_infraction_sync
+
+        return mercado_infraction_sync.collect_live_detection_infractions(
+            targets,
+            recent_days=recent_days,
+            max_workers=max_workers,
+            stop_event=stop_event,
+        )
+    return _request(
+        "POST",
+        "/api/db/official-infractions/live",
+        timeout=960,
+        json={
+            "targets": [dict(target or {}) for target in (targets or ())],
+            "recent_days": recent_days,
+            "max_workers": max_workers,
+        },
+    )
+
+
 def start_official_infraction_sync(token_ids=None):
     if DB_MODE == "mysql":
         from bit import mercado_infraction_sync

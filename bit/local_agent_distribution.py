@@ -73,7 +73,7 @@ def build_agent_distribution(project_root, *, server_url, enrollment_token):
         "server_url": str(server_url).rstrip("/"),
         "enrollment_token": str(enrollment_token),
         "name": "",
-        "poll_seconds": 2,
+        "poll_seconds": 10,
         "heartbeat_seconds": 10,
     }
     source_notice = (

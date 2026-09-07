@@ -25,6 +25,10 @@ from bit.bit_mercado_limit import (
     get_mercado_page_state,
     is_mercado_rate_limited_text,
 )
+from bit.bit_mercado_login import (
+    bind_mercado_shop_context,
+    try_record_login_anomaly,
+)
 from bit.bit_runtime_lock import create_window_lease
 from bit.bit_db_api import inset_pago_info as api_inset_pago_info
 from bit.bit_db_api import insert_task_record as api_insert_task_record
@@ -209,6 +213,7 @@ def _connect_browser(
     driver = webdriver.Chrome(service=chrome_service, options=chrome_options)
     driver.implicitly_wait(10)
     driver.set_page_load_timeout(45)
+    bind_mercado_shop_context(driver, window_id=window_id, source="资金采集")
     return driver
 
 
@@ -777,6 +782,24 @@ def _is_not_logged_in(driver):
     return any(marker in text for marker in login_markers)
 
 
+def _record_pago_logged_out(driver, window_id, name, site, detail=""):
+    detail = str(detail or "").strip()
+    return try_record_login_anomaly(
+        {
+            "status": "logged_out",
+            "message": (
+                f"{name}{site} 检测到美客多账号退出登录"
+                f"{f'：{detail}' if detail else ''}"
+            ),
+        },
+        window_id,
+        name,
+        site,
+        "资金采集",
+        driver=driver,
+    )
+
+
 def _wait_pago_home_ready(driver, stop_event=None):
     WebDriverWait(driver, 30).until(EC.presence_of_element_located((By.TAG_NAME, "body")))
     for _ in range(30):
@@ -1108,6 +1131,7 @@ def get_pago_info(
             stop_event=stop_event,
             batch_source=batch_source,
         )
+    bind_mercado_shop_context(driver, window_id, name, site, "资金采集")
 
     _open_pago_home_with_retry(
         driver,
@@ -1118,6 +1142,7 @@ def get_pago_info(
     )
     if _is_not_logged_in(driver):
         print(get_now_time() + name + site + "未登录 Mercado Pago")
+        _record_pago_logged_out(driver, window_id, name, site, "打开 Pago 首页后进入登录页")
         return [
             name,
             site,
@@ -1138,6 +1163,13 @@ def get_pago_info(
     if not switch_result.get("ok"):
         if _is_not_logged_in(driver):
             print(get_now_time() + name + site + "未登录 Mercado Pago")
+            _record_pago_logged_out(
+                driver,
+                window_id,
+                name,
+                site,
+                switch_result.get("detail", "") or "切换站点时进入登录页",
+            )
             return [
                 name,
                 site,
@@ -1167,6 +1199,7 @@ def get_pago_info(
     )
     if _is_not_logged_in(driver):
         print(get_now_time() + name + site + "未登录 Mercado Pago")
+        _record_pago_logged_out(driver, window_id, name, site, "读取款项前刷新后进入登录页")
         return [
             name,
             site,
@@ -1506,13 +1539,17 @@ def _repair_pago_logins(outcomes, stop_event=None):
         name = str(row[1] or "").strip()
         print(f"{get_now_time()}{name} 开始串行修复 Mercado 登录态")
         try:
-            from bit.bit_mercado_login import login_one_database_shop
+            from bit.bit_mercado_login import (
+                login_one_database_shop,
+                sync_login_results_to_window_anomalies,
+            )
 
             login_result = login_one_database_shop(
                 _row_as_login_config(row),
                 wait_seconds=int(env_float("BIT_LOGIN_REPAIR_WAIT_SECONDS", 60, 1)),
                 page_load_timeout=int(env_float("BIT_LOGIN_REPAIR_PAGE_TIMEOUT", 20, 1)),
             )
+            sync_login_results_to_window_anomalies([login_result], source="资金采集")
         except Exception as e:
             print(f"{get_now_time()}{name} 登录修复异常，本轮不重试：{e}")
             continue
