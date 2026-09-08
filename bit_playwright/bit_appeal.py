@@ -6,7 +6,7 @@ from bit_playwright.common import (
 )
 
 
-CHAT_INFO_API_URL = "https://zeshun.nat100.top/api/v1/chat"
+CHAT_INFO_API_URL = "https://zeshun.cc.cd/api/v1/chat"
 
 
 def shensu(name, site, form, message, mode="人工客服"):

@@ -1,0 +1,77 @@
+{
+  "captured_at": "2026-09-08T16:13:10",
+  "current_url": "https://global-selling.mercadolibre.com/help/v2",
+  "chat_state": {
+    "ai_frame_count": 0,
+    "inline_aria_expanded": "",
+    "inline_has_input": false,
+    "inline_open": false,
+    "inline_root_class": "",
+    "inline_shell": false,
+    "legacy_frame_count": 0,
+    "shadow_ai_frame_count": 0,
+    "visible_ai_frame_count": 0
+  },
+  "dom_snapshot": {
+    "aiShells": [],
+    "frames": [
+      {
+        "className": "",
+        "height": 0,
+        "id": "_hjSafeContext_9405530",
+        "shadowHost": "",
+        "src": "about:blank",
+        "title": "_hjSafeContext",
+        "visible": false,
+        "width": 0
+      }
+    ],
+    "readyState": "complete",
+    "shadowHosts": [],
+    "title": "Help"
+  },
+  "browser_logs": [
+    {
+      "level": "SEVERE",
+      "message": "https://undefined/v3/security.js - Failed to load resource: net::ERR_CONNECTION_CLOSED",
+      "source": "network",
+      "timestamp": 1788855048418
+    },
+    {
+      "level": "SEVERE",
+      "message": "https://www.mercadolibre.com/jms/lgz/background/session/armor.a7cc4feb820f9f311cd8ca8f2e94fb938894acb585b703c80709e4642d7f6c0c13c0f18718b17b109f0cb832a92ae23d0e77ee2caee42bbf1240f04775fb323fd0e4e8b0ccfb78baf9b27173e5e7283d592f111aadd6557b2cbf6f2b9ec091a8.5b5782fefe6e72643a565ed4a92f4c6c?background=armor.a7cc4feb820f9f311cd8ca8f2e94fb938894acb585b703c80709e4642d7f6c0c13c0f18718b17b109f0cb832a92ae23d0e77ee2caee42bbf1240f04775fb323fd0e4e8b0ccfb78baf9b27173e5e7283d592f111aadd6557b2cbf6f2b9ec091a8.5b5782fefe6e72643a565ed4a92f4c6c&message=eyJqc190eXBlIjoianNfY29va2llIiwidmFsdWUiOiJ4In0%3D - Failed to load resource: the server responded with a status of 403 ()",
+      "source": "network",
+      "timestamp": 1788855048418
+    },
+    {
+      "level": "SEVERE",
+      "message": "https://www.mercadolibre.com/jms/lgz/background?dps=armor.a7cc4feb820f9f311cd8ca8f2e94fb938894acb585b703c80709e4642d7f6c0c13c0f18718b17b109f0cb832a92ae23d0e77ee2caee42bbf1240f04775fb323fd0e4e8b0ccfb78baf9b27173e5e7283d592f111aadd6557b2cbf6f2b9ec091a8.5b5782fefe6e72643a565ed4a92f4c6c - Failed to load resource: the server responded with a status of 403 ()",
+      "source": "network",
+      "timestamp": 1788855048418
+    },
+    {
+      "level": "SEVERE",
+      "message": "https://console.bitbrowser.net/?id=9db3976d84ec44abb07c75af556c5243&locale=zh&port=54345 - Unchecked runtime.lastError: Could not establish connection. Receiving end does not exist.",
+      "source": "other",
+      "timestamp": 1788855048419
+    },
+    {
+      "level": "SEVERE",
+      "message": "https://www.mercadolibre.com/jms/lgz/background/session/armor.a7cc4feb820f9f311cd8ca8f2e94fb938894acb585b703c80709e4642d7f6c0c13c0f18718b17b109f0cb832a92ae23d0e77ee2caee42bbf1240f04775fb323fd0e4e8b0ccfb78baf9b27173e5e7283d592f111aadd6557b2cbf6f2b9ec091a8.5b5782fefe6e72643a565ed4a92f4c6c?background=armor.a7cc4feb820f9f311cd8ca8f2e94fb938894acb585b703c80709e4642d7f6c0c13c0f18718b17b109f0cb832a92ae23d0e77ee2caee42bbf1240f04775fb323fd0e4e8b0ccfb78baf9b27173e5e7283d592f111aadd6557b2cbf6f2b9ec091a8.5b5782fefe6e72643a565ed4a92f4c6c&message=eyJhZF9ibG9jayI6ZmFsc2UsImNhbnZhcyI6IjliNzczOGQ4NGRkMjZhNDM0MzJkMDU3NzZjMGZhMTkzIiwiY29ubmVjdGlvbiI6eyJkb3dubGluayI6IjEuNyIsInJ0dCI6IjUwIiwidHlwZSI6IjRnIn0sImNvb2tpZV9lbmFibGVkIjp0cnVlLCJkZXZpY2VfbWVtb3J5Ijo4LCJkb19ub3RfdHJhY2siOm51bGwsImV0YWciOiJiY2QxMmZjOC1iMTJkLTQ4OTctOGI1MC05NWY5ZjJlNjZmNDQtMTc4ODcwOTI3MzYzNSIsImZvbnRzIjp7Im9zIjo3Mjc3NTg1NDIsIm90aGVyX29zIjoiW1wie1xcXCJMdWNpZGEgR3JhbmRlXFxcIiA6MX1cIixcIntcXFwiSGVsdmV0aWNhIE5ldWVcXFwiIDoxfVwiLFwie1xcXCJHaWxsIFNhbnNcXFwiIDoxfVwiLFwie1xcXCJHZW5ldmFcXFwiIDoxfVwiLFwie1xcXCJNb25hY29cXFwiIDoxfVwiLFwie1xcXCJTa2lhXFxcIiA6MX1cIixcIntcXFwiSGVsdmV0aWNhXFxcIiA6M31cIixcIntcXFwiQ291cmllclxcXCIgOjN9XCJdIiwibm90X29zIjoyMDc3NDk2NTAwfSwiaGFyZHdhcmVfY29uY3VycmVuY3kiOjE2LCJoaXN0b3J5IjoxLCJpbmNvZ25pdG8iOmZhbHNlLCJpc19tc2hvcHMiOmZhbHNlLCJqc190eXBlIjoianNfaGFzaCIsImxhbmciOiJ6aC1DTiIsImxhbmd1YWdlcyI6WyJ6aC1DTiIsInpoIl0sImxpdGVyYWxfY29sb3JzIjoxNTYzODUxNzc1LCJsb2NhbF9zdG9yYWdlIjp0cnVlLCJtYXRoX251bWJlciI6MTEwMjMuMzg3NDA2MTUwOTQsIm9wZW5fZGF0YWJhc2UiOmZhbHNlLCJwaXhlbF9yYXRpbyI6MSwicGxhdGZvcm0iOiJXaW4zMiIsIndlYmdsIjp7ImltYWdlIjoiZDI2YzQ5YTQ5NTgzMzVhZjhiMzcyNzI5ODk0ZGQxZTQiLCJyZXBvcnQiOiJlYzgxMDg0MzIxZWVlZTg3YTQxYmU2ZTU4MDEyNDcxNCIsInZlbmRvciI6Ikdvb2dsZSBJbmMuIChBTUQpIiwicmVuZGVyZXIiOiJBTkdMRSAoQU1ELCBSYWRlb24gUlg1NTAvNTUwIFNlcmllcyBEaXJlY3QzRDExIHZzXzVfMCBwc181XzAsIEQzRDExLTMwLjAuMjEwMjMuMTAxNSkifSwicGx1Z2lucyI6e30sInJlc29sdXRpb24iOiIxMDgweDE5MjB4MjQiLCJzY3JlZW4iOnsib3JpZW50YXRpb24iOjAsInR5cGUiOiJsYW5kc2NhcGUtcHJpbWFyeSIsImF2YWlsX2hlaWdodCI6OTczLCJhdmFpbF9sZWZ0IjowLCJhdmFpbF90b3AiOjMwLCJhdmFpbF93aWR0aCI6MTkyMH0sInNlc3Npb25fc3RvcmFnZSI6dHJ1ZSwidGltZSI6eyJjYW52YXMiOjQ2LCJ3ZWJnbCI6MTIsInVzZXJmb250cyI6NzUsImJyb3dzZXJwbHVnaW5zIjoxLCJwbHVnaW5zIjowLCJpbnN0YWxsZWRmb250cyI6MTYsImhhc2giOjE2NSwidG90YWwiOjE2NX0sInRpbWVfYmFzZWRfZnAiOm51bGwsInRpbWVfem9uZV9uYW1lIjoiQXNpYS9TaGFuZ2hhaSIsInRpbWVfem9uZV9vZmZzZXQiOi00ODAsInRvdWNoX3BvaW50cyI6MCwidXNlcl9hZ2VudCI6Ik1vemlsbGEvNS4wIChXaW5kb3dzIE5UIDEwLjA7IFdpbjY0OyB4NjQpIEFwcGxlV2ViS2l0LzUzNy4zNiAoS0hUTUwsIGxpa2UgR2Vja28pIENocm9tZS8xMzkuMC4wLjAgU2FmYXJpLzUzNy4zNiIsInZlbmRvciI6Ikdvb2dsZSBJbmMuIiwid2luZG93X3NpemUiOnsiaW5uZXIiOiI1OTl4MTI4MCIsIm91dGVyIjoiMHgwIn0sIndlYmRyaXZlciI6ZmFsc2UsImluc3RhbGxlZF9mb250cyI6WyJBbmRhbGUgTW9ubyIsIkFyaWFsIEhlYnJldyIsIkFyaWFsIFJvdW5kZWQgTVQgQm9sZCIsIkFyaWFsIFVuaWNvZGUgTVMiLCJBVkVOSVIiLCJCYXNrZXJ2aWxsZSIsIkJpZyBDYXNsb24iLCJCb2RvbmkgNzIiLCJCcnVzaCBTY3JpcHQgTVQiLCJDb3BwZXJwbGF0ZSIsIkRpZG90IiwiRnV0dXJhIiwiSG9lZmxlciBUZXh0IiwiTWljcm9zb2Z0IFNhbnMgU2VyaWYiLCJQYWxhdGlubyIsIlBhcHlydXMiLCJSb2Nrd2VsbCIsIlRpbWVzIiwiV2luZ2RpbmdzIiwiV2luZ2RpbmdzIDIiLCJXaW5nZGluZ3MgMyJdLCJpbnN0YWxsZWRfcGx1Z2lucyI6WyJQREYgVmlld2VyOjpQb3J0YWJsZSBEb2N1bWVudCBGb3JtYXQ6OmFwcGxpY2F0aW9uL3BkZn5wZGYsdGV4dC9wZGZ%2BcGRmIiwiQ2hyb21lIFBERiBWaWV3ZXI6OlBvcnRhYmxlIERvY3VtZW50IEZvcm1hdDo6YXBwbGljYXRpb24vcGRmfnBkZix0ZXh0L3BkZn5wZGYiLCJDaHJvbWl1bSBQREYgVmlld2VyOjpQb3J0YWJsZSBEb2N1bWVudCBGb3JtYXQ6OmFwcGxpY2F0aW9uL3BkZn5wZGYsdGV4dC9wZGZ%2BcGRmIiwiTWljcm9zb2Z0IEVkZ2UgUERGIFZpZXdlcjo6UG9ydGFibGUgRG9jdW1lbnQgRm9ybWF0OjphcHBsaWNhdGlvbi9wZGZ%2BcGRmLHRleHQvcGRmfnBkZiIsIldlYktpdCBidWlsdC1pbiBQREY6OlBvcnRhYmxlIERvY3VtZW50IEZvcm1hdDo6YXBwbGljYXRpb24vcGRmfnBkZix0ZXh0L3BkZn5wZGYiXSwibGlnaHRfdmVyc2lvbiI6ZmFsc2UsInJlZmVyZXIiOm51bGwsIndlYmNhbSI6ZmFsc2UsImRlcHJlY2F0aW9uX2xhYmVsIjpmYWxzZSwicndzX3NjcmlwdCI6ZmFsc2UsInNlbmRfdGltZSI6OTk5LCJoYXNfc2Vzc2lvbl9pZCI6dHJ1ZX0%3D - Failed to load resource: the server responded with a status of 403 ()",
+      "source": "network",
+      "timestamp": 1788855049073
+    },
+    {
+      "level": "SEVERE",
+      "message": "https://www.mercadolibre.com/jms/cbt/lgz/msl/login?client_id=6280072776285528&go=https%3A%2F%2Fglobal-selling.mercadolibre.com%2Fsales-summary&loginType=explicit&platform_id=ML&dps=armor.a7cc4feb820f9f311cd8ca8f2e94fb938894acb585b703c80709e4642d7f6c0c13c0f18718b17b109f0cb832a92ae23d0e77ee2caee42bbf1240f04775fb323fd0e4e8b0ccfb78baf9b27173e5e7283d592f111aadd6557b2cbf6f2b9ec091a8.5b5782fefe6e72643a565ed4a92f4c6c - Failed to load resource: the server responded with a status of 403 ()",
+      "source": "network",
+      "timestamp": 1788855061264
+    },
+    {
+      "level": "SEVERE",
+      "message": "https://www.mercadolibre.com/favicon.ico - Failed to load resource: the server responded with a status of 403 ()",
+      "source": "network",
+      "timestamp": 1788855061264
+    }
+  ]
+}

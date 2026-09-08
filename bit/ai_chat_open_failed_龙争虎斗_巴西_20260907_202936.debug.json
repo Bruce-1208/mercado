@@ -1,0 +1,65 @@
+{
+  "captured_at": "2026-09-07T20:29:36",
+  "current_url": "https://global-selling.mercadolibre.com/help/v2",
+  "chat_state": {
+    "ai_frame_count": 0,
+    "inline_aria_expanded": "",
+    "inline_has_input": false,
+    "inline_open": false,
+    "inline_root_class": "",
+    "inline_shell": false,
+    "legacy_frame_count": 0,
+    "shadow_ai_frame_count": 0,
+    "visible_ai_frame_count": 0
+  },
+  "dom_snapshot": {
+    "aiShells": [],
+    "frames": [
+      {
+        "className": "",
+        "height": 0,
+        "id": "_hjSafeContext_67076551",
+        "shadowHost": "",
+        "src": "about:blank",
+        "title": "_hjSafeContext",
+        "visible": false,
+        "width": 0
+      }
+    ],
+    "readyState": "complete",
+    "shadowHosts": [],
+    "title": "Help"
+  },
+  "browser_logs": [
+    {
+      "level": "SEVERE",
+      "message": "https://undefined/v3/security.js - Failed to load resource: net::ERR_CONNECTION_CLOSED",
+      "source": "network",
+      "timestamp": 1788784037480
+    },
+    {
+      "level": "SEVERE",
+      "message": "https://console.bitbrowser.net/?id=df2d33b20d0b4d72949fc490f7ff075a&locale=zh&port=54345 - Unchecked runtime.lastError: Could not establish connection. Receiving end does not exist.",
+      "source": "other",
+      "timestamp": 1788784037482
+    },
+    {
+      "level": "SEVERE",
+      "message": "https://www.mercadolibre.com/jms/cbt/lgz/msl/login?client_id=6280072776285528&go=https%3A%2F%2Fglobal-selling.mercadolibre.com%2Fsales-summary&loginType=explicit&platform_id=ML&dps=armor.666f5630c12239612300141afcc2ad1e7e0c3642a639c707f960d780d9c2e3388c51c4e7ae5daae0583a245bec1effc89e0bacefbf40d7adfa24b25a67dea8d0f1482fa009ce4ec0acfefc4cfd5841262e6f27220675514917fea503b74864fa.0263373d3bd4d4f704d717c825a4b52b 0 Refused to load the script 'https://www.recaptcha.net/recaptcha/enterprise.js?onload=onloadCallback&render=6LeetcMeAAAAAHBLMG_uCF4A7QLR8ZHg8u4ulR5z&hl=en' because it violates the following Content Security Policy directive: \"script-src 'nonce-JpyaWRhXoH2wvobRt2CCYQ==' 'strict-dynamic' 'unsafe-inline' https: 'report-sample'\". Note that 'strict-dynamic' is present, so host-based allowlisting is disabled. Note that 'script-src-elem' was not explicitly set, so 'script-src' is used as a fallback.\n",
+      "source": "security",
+      "timestamp": 1788784051451
+    },
+    {
+      "level": "SEVERE",
+      "message": "https://undefined/v3/security.js - Failed to load resource: net::ERR_CONNECTION_CLOSED",
+      "source": "network",
+      "timestamp": 1788784051451
+    },
+    {
+      "level": "SEVERE",
+      "message": "https://global-selling.mercadolibre.com/help/v2 - Unchecked runtime.lastError: Could not establish connection. Receiving end does not exist.",
+      "source": "other",
+      "timestamp": 1788784115439
+    }
+  ]
+}

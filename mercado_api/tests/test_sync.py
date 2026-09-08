@@ -11,6 +11,16 @@ from mercado_api.database import MercadoDatabase
 
 
 class ClientTests(unittest.TestCase):
+    def test_default_session_does_not_inherit_system_proxy(self):
+        session = requests.Session()
+        session.trust_env = True
+
+        with patch("mercado_api.client.requests.Session", return_value=session):
+            client = MercadoLibreClient("token")
+
+        self.assertIs(client.session, session)
+        self.assertFalse(client.session.trust_env)
+
     def test_extracts_real_order_ids_from_cart_results(self):
         results = [
             {"id": 999, "orders": [{"id": 101}, {"id": 102}]},

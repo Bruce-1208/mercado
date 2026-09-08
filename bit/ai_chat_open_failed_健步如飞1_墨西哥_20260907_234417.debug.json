@@ -1,0 +1,54 @@
+{
+  "captured_at": "2026-09-07T23:44:17",
+  "current_url": "https://global-selling.mercadolibre.com/help/v2",
+  "chat_state": {
+    "ai_frame_count": 0,
+    "inline_aria_expanded": "",
+    "inline_has_input": false,
+    "inline_open": false,
+    "inline_root_class": "",
+    "inline_shell": false,
+    "legacy_frame_count": 0,
+    "shadow_ai_frame_count": 0,
+    "visible_ai_frame_count": 0
+  },
+  "dom_snapshot": {
+    "aiShells": [],
+    "frames": [],
+    "readyState": "complete",
+    "shadowHosts": [],
+    "title": "Help"
+  },
+  "browser_logs": [
+    {
+      "level": "SEVERE",
+      "message": "https://console.bitbrowser.net/?id=6190adcc6a3543a8b5fdb7189dfc3802&locale=zh&port=54345 - Unchecked runtime.lastError: Could not establish connection. Receiving end does not exist.",
+      "source": "other",
+      "timestamp": 1788795625652
+    },
+    {
+      "level": "SEVERE",
+      "message": "https://static.hotjar.com/c/hotjar-783944.js?sv=5 - Failed to load resource: net::ERR_CONNECTION_CLOSED",
+      "source": "network",
+      "timestamp": 1788795657937
+    },
+    {
+      "level": "SEVERE",
+      "message": "https://static.hotjar.com/c/hotjar-783944.js?sv=5 - Failed to load resource: net::ERR_CONNECTION_CLOSED",
+      "source": "network",
+      "timestamp": 1788795701713
+    },
+    {
+      "level": "SEVERE",
+      "message": "https://global-selling.mercadolibre.com/help/v2 0 Unchecked runtime.lastError: Could not establish connection. Receiving end does not exist.",
+      "source": "other",
+      "timestamp": 1788795764618
+    },
+    {
+      "level": "SEVERE",
+      "message": "https://static.hotjar.com/c/hotjar-783944.js?sv=5 - Failed to load resource: net::ERR_CONNECTION_CLOSED",
+      "source": "network",
+      "timestamp": 1788795795395
+    }
+  ]
+}

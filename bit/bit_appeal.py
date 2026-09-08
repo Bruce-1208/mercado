@@ -33,7 +33,7 @@ from openpyxl import load_workbook
 import traceback
 
 
-CHAT_INFO_API_URL = "https://zeshun.nat100.top/api/v1/chat"
+CHAT_INFO_API_URL = "https://zeshun.cc.cd/api/v1/chat"
 HUMAN_SERVICE_HUB_URL = "https://global-selling.mercadolibre.com/help/hub/30928?source"
 HUMAN_SERVICE_CHAT_V2_URL = "https://global-selling.mercadolibre.com/help/chat/v2"
 SITE_REMOTE_VALUE_MAP = {

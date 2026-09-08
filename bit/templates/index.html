@@ -9806,18 +9806,38 @@
                             <small class="shop-search-hint">混合模式一轮：侵权 → 延误率 → 侵权 → 投诉 → 侵权 → 取消率；混合模式与自定义任务互斥。侵权任务不限制 Top N；每轮先实时遍历店铺授权中勾选的全部站点，再只执行本站点侵权数超过标准的站点。识别出的禁限售产品会使用禁限售话术独立开启申诉；也可单独开启禁限售任务并读取当前禁限售列表。</small>
                         </div>
 
-                         <div class="field">
-                             <label for="daily-task-salesperson">业务员</label>
-                             <select id="daily-task-salesperson">
-                                 <option value="">所有业务员</option>
-                             </select>
-                         </div>
+                        <div class="field">
+                            <label for="daily-task-salesperson-trigger">业务员（可多选）</label>
+                            <div class="market-multi-picker" id="daily-task-salesperson-picker" data-placeholder="所有业务员">
+                                <button class="market-multi-trigger" id="daily-task-salesperson-trigger" type="button" aria-haspopup="listbox" aria-expanded="false" onclick="toggleMercadoPublishPicker('daily-task-salesperson-picker', event)">
+                                    <span class="market-multi-summary placeholder">所有业务员</span>
+                                    <span class="market-multi-count">0</span>
+                                    <span class="market-multi-chevron">⌄</span>
+                                </button>
+                                <div class="market-multi-panel">
+                                    <div class="market-multi-panel-head"><span>勾选任务业务员</span><div class="market-multi-panel-actions"><button type="button" onclick="selectAllMercadoPublishOptions('daily-task-salesperson', true, event)">全选</button><button type="button" onclick="selectAllMercadoPublishOptions('daily-task-salesperson', false, event)">清空</button></div></div>
+                                    <div class="market-multi-options" data-select-id="daily-task-salesperson"></div>
+                                </div>
+                                <select class="market-publish-native" id="daily-task-salesperson" multiple onchange="syncMercadoPublishPicker(this)"></select>
+                            </div>
+                            <small class="shop-search-hint">不勾选表示所有业务员。</small>
+                        </div>
 
                         <div class="field">
-                            <label for="daily-task-group">店铺组</label>
-                            <select id="daily-task-group">
-                                <option value="">所有店铺组</option>
-                            </select>
+                            <label for="daily-task-group-trigger">店铺组（可多选）</label>
+                            <div class="market-multi-picker" id="daily-task-group-picker" data-placeholder="所有店铺组">
+                                <button class="market-multi-trigger" id="daily-task-group-trigger" type="button" aria-haspopup="listbox" aria-expanded="false" onclick="toggleMercadoPublishPicker('daily-task-group-picker', event)">
+                                    <span class="market-multi-summary placeholder">所有店铺组</span>
+                                    <span class="market-multi-count">0</span>
+                                    <span class="market-multi-chevron">⌄</span>
+                                </button>
+                                <div class="market-multi-panel">
+                                    <div class="market-multi-panel-head"><span>勾选任务店铺组</span><div class="market-multi-panel-actions"><button type="button" onclick="selectAllMercadoPublishOptions('daily-task-group', true, event)">全选</button><button type="button" onclick="selectAllMercadoPublishOptions('daily-task-group', false, event)">清空</button></div></div>
+                                    <div class="market-multi-options" data-select-id="daily-task-group"></div>
+                                </div>
+                                <select class="market-publish-native" id="daily-task-group" multiple onchange="syncMercadoPublishPicker(this)"></select>
+                            </div>
+                            <small class="shop-search-hint">不勾选表示所有店铺组。</small>
                         </div>
 
                         <div class="field">
@@ -10610,7 +10630,7 @@
                         <div class="field">
                             <label for="mercado-authorization-url">授权链接</label>
                             <div class="token-auth-link">
-                                <input id="mercado-authorization-url" type="text" readonly value="{{ (mercado_authorization|default({})).get('authorization_url') or 'https://global-selling.mercadolibre.com/authorization?response_type=code&client_id=2845198883767774&redirect_uri=https%3A%2F%2Fzeshun.nat100.top%2Fzs' }}">
+                                <input id="mercado-authorization-url" type="text" readonly value="{{ (mercado_authorization|default({})).get('authorization_url') or 'https://global-selling.mercadolibre.com/authorization?response_type=code&client_id=2845198883767774&redirect_uri=https%3A%2F%2Fzeshun.cc.cd%2Fzs' }}">
                                 <button class="secondary" id="copy-mercado-auth-btn" type="button" onclick="copyMercadoAuthorizationUrl()">复制</button>
                                 <button class="primary" id="open-mercado-auth-btn" type="button" onclick="openMercadoAuthorizationUrl()">打开</button>
                             </div>
@@ -12362,7 +12382,8 @@
         let mercadoLoginAllRunning = false;
         let activeMercadoLoginTaskId = "";
         let mercadoLoginStopRequested = false;
-        let lastMercadoLoginWindowRefreshAt = 0;
+        let mercadoLoginStatusPollTimer = null;
+        let mercadoLoginStatusLoading = false;
         let activeMercadoLoginWindowIds = new Set();
         let fundsLoaded = false;
         let fundRows = [];
@@ -22831,8 +22852,8 @@
         }
 
         function getDailyTaskPayload() {
-            const salesperson = String(dailyTaskSalesperson?.value || "").trim();
-            const groupName = String(dailyTaskGroup?.value || "").trim();
+            const salespeople = mercadoSelectedValues(dailyTaskSalesperson);
+            const groupNames = mercadoSelectedValues(dailyTaskGroup);
             const appealTypes = Array.from(
                 document.querySelectorAll('input[name="daily-task-appeal-type"]:checked'),
                 input => input.value,
@@ -22850,8 +22871,8 @@
                 round_interval: Number(document.getElementById("daily-task-round-interval").value || 600),
                 site_pause: Number(document.getElementById("daily-task-site-pause").value || 30),
                 stop_after_minutes: Number(document.getElementById("daily-task-stop-after").value || 360),
-                salespeople: salesperson ? [salesperson] : [],
-                group_names: groupName ? [groupName] : [],
+                salespeople,
+                group_names: groupNames,
                 infraction_min_count: Number(document.getElementById("daily-task-infraction-min-count").value || 0),
                 delay_min_rate: `${Number(document.getElementById("daily-task-delay-min-rate").value || 0)}%`,
                 complaint_min_rate: `${Number(document.getElementById("daily-task-complaint-min-rate").value || 0)}%`,
@@ -22862,8 +22883,8 @@
 
         async function loadDailyTaskOptions() {
             if (!dailyTaskSalesperson && !dailyTaskGroup) return;
-            const selectedSalesperson = String(dailyTaskSalesperson?.value || "");
-            const selectedGroup = String(dailyTaskGroup?.value || "");
+            const selectedSalespeople = new Set(mercadoSelectedValues(dailyTaskSalesperson));
+            const selectedGroups = new Set(mercadoSelectedValues(dailyTaskGroup));
             try {
                 const response = await fetch("/api/tasks/daily/options", {cache: "no-store"});
                 const payload = await response.json();
@@ -22875,31 +22896,25 @@
                     : [];
                 const groups = Array.isArray(payload.data?.groups) ? payload.data.groups : [];
                 if (dailyTaskSalesperson) {
-                    dailyTaskSalesperson.innerHTML = [
-                        '<option value="">所有业务员</option>',
-                        ...salespeople.map(name => (
-                            `<option value="${escapeHtml(name)}">${escapeHtml(name)}</option>`
-                        )),
-                    ].join("");
-                    dailyTaskSalesperson.value = salespeople.includes(selectedSalesperson)
-                        ? selectedSalesperson
-                        : "";
+                    dailyTaskSalesperson.innerHTML = salespeople.map(name => (
+                        `<option value="${escapeHtml(name)}" ${selectedSalespeople.has(name) ? "selected" : ""}>${escapeHtml(name)}</option>`
+                    )).join("");
+                    renderMercadoPublishPicker(dailyTaskSalesperson);
                 }
                 if (dailyTaskGroup) {
-                    dailyTaskGroup.innerHTML = [
-                        '<option value="">所有店铺组</option>',
-                        ...groups.map(name => (
-                            `<option value="${escapeHtml(name)}">${escapeHtml(name)}</option>`
-                        )),
-                    ].join("");
-                    dailyTaskGroup.value = groups.includes(selectedGroup) ? selectedGroup : "";
+                    dailyTaskGroup.innerHTML = groups.map(name => (
+                        `<option value="${escapeHtml(name)}" ${selectedGroups.has(name) ? "selected" : ""}>${escapeHtml(name)}</option>`
+                    )).join("");
+                    renderMercadoPublishPicker(dailyTaskGroup);
                 }
             } catch (_error) {
                 if (dailyTaskSalesperson) {
-                    dailyTaskSalesperson.innerHTML = '<option value="">所有业务员</option>';
+                    dailyTaskSalesperson.innerHTML = "";
+                    renderMercadoPublishPicker(dailyTaskSalesperson);
                 }
                 if (dailyTaskGroup) {
-                    dailyTaskGroup.innerHTML = '<option value="">所有店铺组</option>';
+                    dailyTaskGroup.innerHTML = "";
+                    renderMercadoPublishPicker(dailyTaskGroup);
                 }
             }
         }
@@ -23787,7 +23802,6 @@
                 const data = payload.data || {};
                 const rows = data.rows || [];
                 windowAnomaliesLoaded = true;
-                lastMercadoLoginWindowRefreshAt = Date.now();
                 windowAnomalyTotal.textContent = data.total || rows.length || 0;
                 windowAnomalyLatestTime.textContent = rows.length ? (rows[0].last_detected_at || "-") : "-";
 
@@ -24048,6 +24062,13 @@
 
         async function loadMercadoLoginStatus() {
             if (!mercadoLoginLog) return;
+            if (mercadoLoginStatusLoading) return;
+            mercadoLoginStatusLoading = true;
+            if (mercadoLoginStatusPollTimer !== null) {
+                window.clearTimeout(mercadoLoginStatusPollTimer);
+                mercadoLoginStatusPollTimer = null;
+            }
+            const wasRunning = mercadoLoginRunning;
             try {
                 const response = await fetch(
                     "/api/window-anomalies/mercado-login/status",
@@ -24087,15 +24108,15 @@
                     : (mercadoLoginRunning
                         ? "等待单店检测结束"
                         : "重新检测全部店铺");
-                const shouldRefreshWindowStatus = windowAnomaliesLoaded && (
-                    !state.running
-                    || Date.now() - lastMercadoLoginWindowRefreshAt >= 4000
-                );
-                if (shouldRefreshWindowStatus) {
+                const loginTaskFinished = wasRunning && !mercadoLoginRunning;
+                if (windowAnomaliesLoaded && loginTaskFinished) {
                     await loadWindowAnomalies();
                 }
                 if (state.running) {
-                    window.setTimeout(loadMercadoLoginStatus, 2000);
+                    mercadoLoginStatusPollTimer = window.setTimeout(() => {
+                        mercadoLoginStatusPollTimer = null;
+                        loadMercadoLoginStatus();
+                    }, 2000);
                 }
             } catch (err) {
                 mercadoLoginRunning = false;
@@ -24108,6 +24129,8 @@
                 startMercadoLoginBtn.disabled = false;
                 stopMercadoLoginBtn.disabled = true;
                 updateWindowAnomalySelection();
+            } finally {
+                mercadoLoginStatusLoading = false;
             }
         }
 

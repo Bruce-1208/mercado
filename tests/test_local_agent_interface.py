@@ -54,7 +54,7 @@ def test_console_download_enroll_heartbeat_and_list(agent_interface, monkeypatch
     assert download.headers["X-Agent-Package-Format"] == "python-source"
     with zipfile.ZipFile(io.BytesIO(download.data)) as archive:
         config = json.loads(archive.read("local-agent.json"))
-    assert config["server_url"] == "https://zeshun.nat100.top"
+    assert config["server_url"] == "https://zeshun.cc.cd"
 
     enrollment_token = config["enrollment_token"]
     enrolled = client.post(

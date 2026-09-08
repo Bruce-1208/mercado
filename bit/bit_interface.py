@@ -161,7 +161,7 @@ app.config.update(
     SESSION_COOKIE_SAMESITE="Lax",
     PERMANENT_SESSION_LIFETIME=timedelta(hours=WORKBENCH_REMEMBER_HOURS),
     SESSION_REFRESH_EACH_REQUEST=False,
-    TEMPLATES_AUTO_RELOAD=True,
+    TEMPLATES_AUTO_RELOAD=False,
     SEND_FILE_MAX_AGE_DEFAULT=0,
 )
 
@@ -249,8 +249,8 @@ def _configured_local_executor_origins():
         os.environ.get("BIT_LOCAL_EXECUTOR_ALLOWED_ORIGINS") or ""
     ).strip()
     origins = {
-        "https://zeshun.nat100.top",
-        "http://zeshun.nat100.top",
+        "https://zeshun.cc.cd",
+        "http://zeshun.cc.cd",
     }
     if configured:
         origins.update(
@@ -1598,7 +1598,7 @@ def _verify_local_executor_token_with_server(token):
             or parsed.fragment
         ):
             raise ValueError("invalid server address")
-        if parsed.scheme == "http" and parsed.netloc == "zeshun.nat100.top":
+        if parsed.scheme == "http" and parsed.netloc == "zeshun.cc.cd":
             base_url = "https://" + base_url[len("http://") :]
         elif parsed.scheme != "https" and not (
             parsed.scheme == "http" and parsed.hostname in ("127.0.0.1", "::1", "localhost")
@@ -13591,26 +13591,64 @@ def start_official_infraction_scheduler_bootstrap():
 
 
 def interface_hot_reload_enabled(value=None):
-    """Enable source reloading for source runs, never for frozen executables."""
+    """The production WSGI server never enables Flask's source reloader."""
 
-    # Werkzeug's reloader passes a listening socket to its child process via a
-    # file descriptor.  That descriptor hand-off is not reliable for a frozen
-    # Windows executable (and is unnecessary because bundled sources cannot be
-    # hot-reloaded), where it can fail with WinError 10038 in socket.fromfd().
-    if getattr(sys, "frozen", False):
-        return False
-
-    configured = (
-        os.environ.get("BIT_INTERFACE_HOT_RELOAD", "1")
-        if value is None
-        else value
-    )
-    return _truthy_env(configured)
+    return False
 
 
 def is_werkzeug_reloader_child(environ=None):
     environment = os.environ if environ is None else environ
     return str(environment.get("WERKZEUG_RUN_MAIN", "")).strip().lower() == "true"
+
+
+def _wsgi_env_int(name, default, minimum, maximum):
+    try:
+        value = int(os.environ.get(name, default))
+    except (TypeError, ValueError):
+        value = int(default)
+    return max(int(minimum), min(int(maximum), value))
+
+
+def serve_wsgi_application(serve=None):
+    """Serve the workbench with Waitress instead of Flask's development server."""
+
+    if serve is None:
+        try:
+            from waitress import serve
+        except ModuleNotFoundError as exc:
+            raise RuntimeError(
+                "缺少 Waitress；请运行 python -m pip install -r bit/requirements-server.txt"
+            ) from exc
+
+    threads = _wsgi_env_int("BIT_WSGI_THREADS", 16, 4, 64)
+    connection_limit = _wsgi_env_int("BIT_WSGI_CONNECTION_LIMIT", 200, 32, 1000)
+    backlog = _wsgi_env_int("BIT_WSGI_BACKLOG", 1024, 64, 4096)
+    logging.info(
+        "Waitress WSGI 服务启动：线程 %s，连接上限 %s，等待队列 %s",
+        threads,
+        connection_limit,
+        backlog,
+    )
+    serve(
+        app,
+        host="0.0.0.0",
+        port=5000,
+        threads=threads,
+        connection_limit=connection_limit,
+        backlog=backlog,
+        channel_timeout=120,
+        cleanup_interval=30,
+        ident="Zeshun-WSGI",
+        trusted_proxy="127.0.0.1",
+        trusted_proxy_count=1,
+        trusted_proxy_headers={
+            "x-forwarded-for",
+            "x-forwarded-host",
+            "x-forwarded-proto",
+            "x-forwarded-port",
+        },
+        clear_untrusted_proxy_headers=True,
+    )
 
 
 def start_interface_background_services():
@@ -13634,51 +13672,32 @@ def start_interface_background_services():
 
 
 def run_interface_server():
-    hot_reload = interface_hot_reload_enabled()
-    reloader_child = hot_reload and is_werkzeug_reloader_child()
-    interface_lock = None
-
-    # The reloader parent owns the singleton lock for its whole lifetime. Its
-    # child process serves requests and is replaced automatically on edits.
-    if not reloader_child:
-        interface_lock = InterProcessLock(
-            "bit_interface_singleton",
-            owner="bit_interface.py",
-            metadata={
-                "port": 5000,
-                "project": str(PROJECT_ROOT),
-                "hot_reload": hot_reload,
-                "runtime_role": RUNTIME_SETTINGS.role,
-            },
+    interface_lock = InterProcessLock(
+        "bit_interface_singleton",
+        owner="bit_interface.py",
+        metadata={
+            "port": 5000,
+            "project": str(PROJECT_ROOT),
+            "server": "waitress",
+            "hot_reload": False,
+            "runtime_role": RUNTIME_SETTINGS.role,
+        },
+    )
+    if not interface_lock.acquire(timeout=0):
+        owner = interface_lock.read_owner()
+        logging.error(
+            "泽顺工作台服务已经运行，本次重复进程退出：pid=%s",
+            owner.get("pid") or "unknown",
         )
-        if not interface_lock.acquire(timeout=0):
-            owner = interface_lock.read_owner()
-            logging.error(
-                "泽顺工作台服务已经运行，本次重复进程退出：pid=%s",
-                owner.get("pid") or "unknown",
-            )
-            return False
+        return False
 
     try:
-        if not hot_reload or reloader_child:
-            start_interface_background_services()
-        logging.info(
-            "工作台以 %s 角色启动；代码热更新%s",
-            RUNTIME_SETTINGS.role,
-            "已启用" if hot_reload else "已关闭",
-        )
-        app.run(
-            host="0.0.0.0",
-            port=5000,
-            threaded=True,
-            debug=False,
-            use_debugger=False,
-            use_reloader=hot_reload,
-        )
+        start_interface_background_services()
+        logging.info("工作台以 %s 角色启动；Flask 热更新已关闭", RUNTIME_SETTINGS.role)
+        serve_wsgi_application()
         return True
     finally:
-        if interface_lock is not None:
-            interface_lock.release()
+        interface_lock.release()
 
 
 def run_interface_main():

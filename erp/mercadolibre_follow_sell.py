@@ -32,7 +32,7 @@ from erp.mercadolibre_translation import (
 
 
 API_BASE_URL = "https://api.mercadolibre.com"
-DEFAULT_REDIRECT_URI = "https://zeshun.nat100.top/zs"
+DEFAULT_REDIRECT_URI = "https://zeshun.cc.cd/zs"
 DEFAULT_TOKEN_FILE = Path(__file__).with_name("tokens.json")
 ITEM_ID_PATTERN = re.compile(r"\b(ML[A-Z]|CBT)-?(\d+)\b", re.IGNORECASE)
 

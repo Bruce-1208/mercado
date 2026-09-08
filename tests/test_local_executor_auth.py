@@ -132,7 +132,7 @@ def test_view_token_cannot_start_or_stop_local_tasks(monkeypatch, executor_user)
         lambda: pytest.fail("Denied permissions must not reach database preflight"),
     )
     client = bit_interface.app.test_client()
-    headers = {"Authorization": f"Bearer {token}", "Origin": "https://zeshun.nat100.top"}
+    headers = {"Authorization": f"Bearer {token}", "Origin": "https://zeshun.cc.cd"}
     for action in ("start", "stop"):
         response = client.post(
             f"/api/local-executor/tasks/daily/{action}",
@@ -147,7 +147,7 @@ def test_view_token_cannot_start_or_stop_local_tasks(monkeypatch, executor_user)
     ("server_url", "expected_base"),
     [
         ("https://workbench.example", "https://workbench.example"),
-        ("http://zeshun.nat100.top", "https://zeshun.nat100.top"),
+        ("http://zeshun.cc.cd", "https://zeshun.cc.cd"),
         ("http://127.0.0.1:5001", "http://127.0.0.1:5001"),
     ],
 )
@@ -309,7 +309,7 @@ def test_database_preflight_blocks_launch_before_creating_job(
     response = bit_interface.app.test_client().open(
         path,
         method=method,
-        headers={"Authorization": f"Bearer {token}", "Origin": "https://zeshun.nat100.top"},
+        headers={"Authorization": f"Bearer {token}", "Origin": "https://zeshun.cc.cd"},
         environ_overrides={"REMOTE_ADDR": "127.0.0.1"},
     )
     assert response.status_code == 503
@@ -370,7 +370,7 @@ def test_distinct_server_and_client_keys_integrate_through_real_bridge(
             json={},
             headers={
                 "Authorization": f"Bearer {submitted_token}",
-                "Origin": "https://zeshun.nat100.top",
+                "Origin": "https://zeshun.cc.cd",
             },
             environ_overrides={"REMOTE_ADDR": "127.0.0.1"},
         )

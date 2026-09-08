@@ -1,0 +1,89 @@
+{
+  "captured_at": "2026-09-07T22:33:39",
+  "current_url": "https://global-selling.mercadolibre.com/help/v2",
+  "chat_state": {
+    "ai_frame_count": 0,
+    "inline_aria_expanded": "",
+    "inline_has_input": false,
+    "inline_open": false,
+    "inline_root_class": "",
+    "inline_shell": false,
+    "legacy_frame_count": 0,
+    "shadow_ai_frame_count": 0,
+    "visible_ai_frame_count": 0
+  },
+  "dom_snapshot": {
+    "aiShells": [],
+    "frames": [
+      {
+        "className": "",
+        "height": 0,
+        "id": "_hjSafeContext_77387755",
+        "shadowHost": "",
+        "src": "about:blank",
+        "title": "_hjSafeContext",
+        "visible": false,
+        "width": 0
+      }
+    ],
+    "readyState": "complete",
+    "shadowHosts": [],
+    "title": "Help"
+  },
+  "browser_logs": [
+    {
+      "level": "SEVERE",
+      "message": "https://undefined/v3/security.js - Failed to load resource: net::ERR_CONNECTION_CLOSED",
+      "source": "network",
+      "timestamp": 1788791477410
+    },
+    {
+      "level": "SEVERE",
+      "message": "https://console.bitbrowser.net/?id=0480d1e8bd84425b9288a8de5fefa1d8&locale=zh&port=54345 - Unchecked runtime.lastError: Could not establish connection. Receiving end does not exist.",
+      "source": "other",
+      "timestamp": 1788791477411
+    },
+    {
+      "level": "SEVERE",
+      "message": "https://api.mercadolibre.com/tracks - Failed to load resource: net::ERR_CONNECTION_CLOSED",
+      "source": "network",
+      "timestamp": 1788791493139
+    },
+    {
+      "level": "SEVERE",
+      "message": "https://api.mercadolibre.com/melidata/tracks - Failed to load resource: net::ERR_CONNECTION_CLOSED",
+      "source": "network",
+      "timestamp": 1788791493396
+    },
+    {
+      "level": "SEVERE",
+      "message": "https://api.mercadolibre.com/tracks - Failed to load resource: net::ERR_CONNECTION_CLOSED",
+      "source": "network",
+      "timestamp": 1788791494930
+    },
+    {
+      "level": "SEVERE",
+      "message": "https://api.mercadolibre.com/tracks - Failed to load resource: net::ERR_CONNECTION_CLOSED",
+      "source": "network",
+      "timestamp": 1788791508293
+    },
+    {
+      "level": "SEVERE",
+      "message": "https://api.mercadolibre.com/tracks - Failed to load resource: net::ERR_CONNECTION_CLOSED",
+      "source": "network",
+      "timestamp": 1788791508293
+    },
+    {
+      "level": "SEVERE",
+      "message": "https://api.mercadolibre.com/tracks - Failed to load resource: net::ERR_CONNECTION_CLOSED",
+      "source": "network",
+      "timestamp": 1788791573381
+    },
+    {
+      "level": "SEVERE",
+      "message": "https://api.mercadolibre.com/tracks - Failed to load resource: net::ERR_CONNECTION_CLOSED",
+      "source": "network",
+      "timestamp": 1788791573381
+    }
+  ]
+}

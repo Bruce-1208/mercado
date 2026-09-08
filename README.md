@@ -11,6 +11,16 @@ AI 自动申诉的执行状态、故障恢复和配置说明见 [申诉稳定性
 
 ## 工作台服务端 / 客户端运行角色
 
+工作台使用 Waitress WSGI 服务运行，默认关闭 Flask 代码及模板热更新。首次启动前安装服务端依赖：
+
+```powershell
+python -m pip install -r bit/requirements-server.txt
+```
+
+默认使用 16 个请求线程、200 个连接和 1024 个等待连接。可分别通过
+`BIT_WSGI_THREADS`、`BIT_WSGI_CONNECTION_LIMIT` 和 `BIT_WSGI_BACKLOG`
+调整；自动化任务仍由独立的后台并发限制控制。
+
 同一套工作台可以在每台电脑上灵活指定运行角色：
 
 - `server`：直接连接 `192.168.1.11:3306`，同时提供受令牌保护的 `/api/db/*` 数据库接口；
@@ -50,7 +60,7 @@ Copy-Item .\workbench-client.example.json .\workbench-runtime.json
 
 首次使用只需：
 
-1. 登录 `https://zeshun.nat100.top/`，打开“自动化 AI 申诉”，点击“下载本机 Agent”；
+1. 登录 `https://zeshun.cc.cd/`，打开“自动化 AI 申诉”，点击“下载本机 Agent”；
 2. 在需要运行比特浏览器的 Windows 电脑解压下载包；
 3. 双击 `start-agent.bat` 启动，或运行 `install-agent.ps1` 安装为登录后自动启动；
 4. 保持比特浏览器客户端运行，回到控制台刷新“执行电脑”并选择该电脑。
@@ -65,7 +75,7 @@ Agent 1.1.0 起同时承接“自动化 AI 申诉”和“任务模块”的 dai
 
 ```powershell
 $env:BIT_RUNTIME_ROLE="client"
-$env:BIT_DB_API_BASE_URL="https://zeshun.nat100.top"
+$env:BIT_DB_API_BASE_URL="https://zeshun.cc.cd"
 python -m bit.bit_interface
 ```
 

@@ -63,7 +63,13 @@ class MercadoLibreClient:
         self.client_secret = client_secret
         self.token_store = token_store
         self.timeout = timeout
-        self.session = session or requests.Session()
+        if session is None:
+            self.session = requests.Session()
+            # Scheduled/local-agent jobs must not depend on a desktop proxy
+            # process that may be stopped or restarted independently.
+            self.session.trust_env = False
+        else:
+            self.session = session
         if token_store:
             saved = token_store.load()
             self.access_token = saved.get("access_token", self.access_token)

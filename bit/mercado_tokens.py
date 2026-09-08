@@ -21,7 +21,7 @@ from bit.bit_runtime_lock import InterProcessLock
 
 API_BASE_URL = "https://api.mercadolibre.com"
 DEFAULT_AUTHORIZATION_URL = "https://global-selling.mercadolibre.com/authorization"
-DEFAULT_REDIRECT_URI = "https://zeshun.nat100.top/zs"
+DEFAULT_REDIRECT_URI = "https://zeshun.cc.cd/zs"
 TOKEN_AUTO_REFRESH_BEFORE_MINUTES = max(
     5, int(os.environ.get("MERCADO_TOKEN_AUTO_REFRESH_BEFORE_MINUTES", "60"))
 )
