@@ -9,16 +9,23 @@ import pytest
 from flask import Flask, jsonify
 
 from erp.ai_weight_price.browser import CircuitOpen
-from erp.ai_weight_price.config import Config, validate
+from erp.ai_weight_price.config import Config, validate as validate_config
 from erp.ai_weight_price.models import Models, parse_price, validate_weight
 from erp.ai_weight_price.service import Service
 from erp.ai_weight_price.store import CHINA, Store
 from erp.ai_weight_price.web import create_blueprint
 
+def validate(value):
+    """Legacy consultation coverage; image-first behavior has dedicated tests."""
+    return validate_config({"workflow_mode": "legacy_consult", **value})
+
 
 @pytest.fixture
-def service(tmp_path):
-    return Service(tmp_path)
+def service(tmp_path, monkeypatch):
+    service = Service(tmp_path)
+    service.config.save(validate({}))
+    monkeypatch.setattr(service, "exchange_rate", lambda config: {"cny_per_usd": config.get("usd_cny_rate") or "7.2", "date": "2026-09-07", "source": "manual"})
+    return service
 
 
 def task(store, key="g1", merchant="m1", matched=False, **extra):
@@ -159,6 +166,8 @@ class FakeBrowser:
         self.sent=[];self.written=[];self.reply=[];self.fail_write=False;self.risk=False
     def prepare_chat(self,task):
         return object(),"https://air.1688.com/chat/"+task["merchant_id"],[]
+    def supplier_page(self,task):
+        return ""
     def send(self,page,task,text):
         if self.risk:
             raise CircuitOpen("验证码")
@@ -168,10 +177,11 @@ class FakeBrowser:
     def replies(self,task):
         return self.reply
     def write(self,task,before_save):
-        before_save({"cost_price":"10","weight_g":"400"})
+        before_save({"net_income_usd":"10","weight_g":"400"})
         if self.fail_write:
             raise ValueError("保存失败")
         self.written.append(task)
+        return {"net_income_usd":task["net_income_usd"],"weight_g":task["weight_g"]}
 
 
 class FakeModel:
@@ -188,10 +198,44 @@ def test_flow_matched_send_poll_validate_save(service):
     assert waiting["status"]=="waiting_merchant_reply" and len(browser.sent)==1
     assert "蓝色500ml" in browser.sent[0]
     browser.reply=[{"id":"r1","text":"这一只带包装450g","at":waiting["sent_at"]+1}]
-    service.poll(waiting,browser,model,config,waiting["next_poll_at"])
+    service.poll(waiting,browser,model,config,waiting["deadline"])
     saved=service.store.get("g1")
     assert saved["status"]=="success" and saved["weight_g"]=="450"
-    assert len(browser.written)==1 and saved["erp_before"]["cost_price"]=="10"
+    assert len(browser.written)==1 and saved["erp_before"]["net_income_usd"]=="10"
+    assert saved["cost_price"] == "12.50" and saved["net_income_usd"] == "2"
+    assert saved["write_intent"]["net_income_usd"] == "2"
+
+
+def test_selected_variant_final_price_is_used_instead_of_minimum(service):
+    row = task(service.store, weight_g="450")
+    browser = FakeBrowser()
+    candidate = {"merchant_id": "m1", "url": "https://detail.1688.com/offer/1.html", "skus": [
+        {"id": "cheap", "label": "small", "price": "1"},
+        {"id": "s1", "label": "blue 500ml", "price": "22", "base_price_cny": "20", "variant_surcharge_cny": "2"}]}
+    browser.candidates = lambda task: [candidate]
+    model = FakeModel()
+    model.match = lambda *args: ({**candidate, "selected_sku": candidate["skus"][1], "confidence": .97}, [{"same_product": True}])
+    service.process(row, browser, model, validate({"writeback_enabled": True}))
+    saved = service.store.get("g1")
+    assert saved["status"] == "success"
+    assert saved["cost_price"] == "22" and saved["net_income_usd"] == "4"
+    assert saved["supplier_price_evidence"]["variant_surcharge_cny"] == "2"
+    assert len(browser.written) == 1
+
+
+def test_exchange_failure_never_writes_and_edit_clears_old_conversion(service, monkeypatch):
+    row = task(service.store, matched=True, weight_g="450", net_income_usd="999", pricing={"old": True})
+    browser = FakeBrowser()
+    def fail(config): raise RuntimeError("exchange rate unavailable")
+    monkeypatch.setattr(service, "exchange_rate", fail)
+    service.finish(row, browser, validate({"writeback_enabled": True}))
+    saved = service.store.get("g1")
+    assert saved["exception_reason"] == "美元成本换算失败" and saved["net_income_usd"] is None
+    assert not browser.written
+    service.store.update("g1", net_income_usd="2", pricing={"old": True})
+    service.edit("g1", {"cost_price": "22"}, "tester")
+    saved = service.store.get("g1")
+    assert saved["cost_price"] == "22" and saved["pricing"] is None and saved["net_income_usd"] is None
 
 
 @pytest.mark.parametrize("weight,reference,writeback,fail_write,reason",[
@@ -207,7 +251,7 @@ def test_exception_branches_never_report_success(service,weight,reference,writeb
     service.process(row,browser,model,config)
     waiting=service.store.get("g1")
     browser.reply=[{"id":"r","text":"包装450g","at":waiting["sent_at"]+1}]
-    service.poll(waiting,browser,model,config,waiting["next_poll_at"])
+    service.poll(waiting,browser,model,config,waiting["deadline"])
     assert service.store.get("g1")["exception_reason"]==reason
     assert not browser.written
 
@@ -237,8 +281,46 @@ def test_retry_preserves_blacklist_and_raw_reply(service):
 
 def test_dom_preflight_no_browser_side_effect(service):
     with pytest.raises(ValueError,match="DOM"):
-        service.preflight(service.config.load(), "process")
+        service.preflight(validate({"supplier_auto_adapt": False}), "process")
     assert service.thread is None
+
+
+def test_auto_adaptation_preflight_keeps_upload_writeback_and_key_checks(service, monkeypatch):
+    config = validate({"api_base_url": "http://localhost:11434/v1"})
+    service.preflight(config, "pipeline")
+    config["selectors"]["image_search_upload"] = ""
+    with pytest.raises(ValueError, match="image_search_upload"):
+        service.preflight(config, "pipeline")
+    config = validate({"api_base_url": "http://localhost:11434/v1", "writeback_enabled": True})
+    with pytest.raises(ValueError, match="erp_edit_sku"):
+        service.preflight(config, "pipeline")
+    monkeypatch.delenv("DASHSCOPE_API_KEY", raising=False)
+    monkeypatch.setattr("erp.ai_weight_price.credentials.windows_user_environment", lambda name: "")
+    with pytest.raises(ValueError, match="模型密钥"):
+        service.preflight(validate({}), "process")
+
+
+def test_supplier_adaptation_switch_requires_boolean():
+    with pytest.raises(ValueError, match="自动适配"):
+        validate({"supplier_auto_adapt": "true"})
+
+
+def test_supplier_adaptation_failure_stops_item_and_preserves_report_reason(service):
+    from erp.ai_weight_price.service import ItemBlocked
+    from erp.ai_weight_price.supplier_adapter import SupplierAdaptationError
+    class UnreadableSupplier:
+        def candidates(self, row):
+            raise SupplierAdaptationError("1688详情页自动适配失败：SKU缺少稳定ID")
+    task(service.store)
+    config = validate({})
+    config["run_id"] = "adapt-failure"
+    service.store.save_run({"run_id": config["run_id"]})
+    with pytest.raises(ItemBlocked):
+        service.complete_one("g1", UnreadableSupplier(), None, config)
+    _, rows = service.store.run_report(config["run_id"])
+    assert rows[0]["status"] == "exception"
+    assert rows[0]["execution_reason"].endswith("SKU缺少稳定ID")
+    assert any("SKU缺少稳定ID" in log["message"] for log in service.store.logs())
 
 
 def test_mutations_locked_while_running(service):
@@ -278,6 +360,16 @@ def test_api_visual_config_reports_and_invalid_requests(client,service):
     assert "本机控制台" in client.get("/ai-weight-price",base_url="https://zeshun.example.com").text
 
 
+def test_continue_endpoint_requires_switch_and_resumes(service, client, monkeypatch):
+    calls = []
+    monkeypatch.setattr(service, "continue_after_human", lambda: calls.append("continued"))
+    headers = {"X-AWP-Request": "1"}
+    denied = client.post("/api/ai-weight-price/continue", json={"acknowledged": False}, headers=headers)
+    assert denied.status_code == 400 and not calls
+    accepted = client.post("/api/ai-weight-price/continue", json={"acknowledged": True}, headers=headers)
+    assert accepted.status_code == 200 and calls == ["continued"]
+
+
 def test_readonly_role_cannot_edit(service):
     app=Flask(__name__)
     def authorize(permission):
@@ -305,13 +397,13 @@ def test_retry_endpoint_starts_only_selected_task(service,client,monkeypatch):
     assert started==[("process","g1")]
 
 
-def test_queue_deferred_front_page_does_not_starve_later_tasks(service,monkeypatch):
+def test_queue_never_skips_deferred_current_product(service,monkeypatch):
     for i in range(101):
         task(service.store,"g"+str(i),next_attempt_at=9999999999 if i<100 else 0)
     seen=[]
     monkeypatch.setattr(service,"process",lambda row,*args:seen.append(row["erp_goods_id"]))
     service.tick(FakeBrowser(),FakeModel(),validate({}))
-    assert seen==["g100"]
+    assert seen==[]
 
 
 def test_sent_lower_bound_does_not_lose_immediate_reply(service):
@@ -471,6 +563,7 @@ def test_collection_only_reads_selected_pages_and_resumes_matching_scope(service
         if key=="erp_id":read.append(row.n);return str(row.n)
         return {"erp_title":f"product {row.n}","erp_image":"https://image.example/1.jpg"}.get(key,"")
     monkeypatch.setattr(browser,"value",value)
+    monkeypatch.setattr(browser,"erp_goods_id",lambda page,row,record:value(row,"erp_id"))
     browser.collect(service.store)
     assert read==expected and categories==["a/b"]
     assert service.store.list(scope=scope)["total"]==len(expected)
@@ -499,6 +592,7 @@ def test_clear_category_does_not_leave_previous_filter(monkeypatch):
     monkeypatch.setattr(browser,"delay",lambda *args:None)
     monkeypatch.setattr(browser,"check",lambda *args:None)
     monkeypatch.setattr(browser,"category_control",lambda *args:control)
+    monkeypatch.setattr(browser,"category_search",lambda *args:Search())
     assert browser.apply_category(Page(),"")=="全部分类"
     assert control.selected==[] and clicks==["search"]
 
@@ -590,3 +684,83 @@ assert.equal(set(element,[]),true);assert.deepEqual(selected,[]);
 """.replace('READ',CATEGORY_READ).replace('SET',CATEGORY_SET)
     result=subprocess.run([node,'-e',script],capture_output=True,text=True,encoding='utf-8',timeout=10)
     assert result.returncode==0,result.stderr
+
+
+def test_start_rejection_is_persistent_and_visible_in_status(service, client, monkeypatch):
+    monkeypatch.setattr(service, "require_login", lambda *args: None)
+    response = client.post("/api/ai-weight-price/start", json={
+        "mode": "process", "selection": {"start_page": 1, "end_page": 2}}, headers={"X-AWP-Request": "1"})
+    assert response.status_code == 400
+    reason = response.json["message"]
+    assert "尚无采集任务" in reason
+    status = client.get("/api/ai-weight-price/status")
+    assert status.json["action_error"]["message"] == reason
+    assert status.headers["Cache-Control"] == "no-store"
+    assert any(reason in row["message"] and row["level"] == "ERROR" for row in Store(service.store.root).logs())
+    assert not status.json["running"] and service.thread is None
+
+
+def test_legacy_worker_error_returned_even_without_outcome(service, client):
+    service.store.set_state("run", {"mode": "collect", "message": "已停止"})
+    service.store.set_state("run_error", "未找到唯一的智赢分类搜索按钮")
+    assert client.get("/api/ai-weight-price/status").json["run_error"] == "未找到唯一的智赢分类搜索按钮"
+
+
+def test_rejected_cross_site_request_does_not_change_visible_error(service, client):
+    previous = {"message": "keep local error", "at": 1}
+    service.store.set_state("action_error", previous)
+    response = client.post("/api/ai-weight-price/start", json={},
+                           headers={"X-AWP-Request": "1", "Origin": "https://evil.example"})
+    assert response.status_code == 403
+    assert service.store.state("action_error") == previous
+    assert not service.store.logs()
+
+
+def test_corrected_config_clears_last_action_error(service, client):
+    headers = {"X-AWP-Request": "1"}
+    assert client.put("/api/ai-weight-price/config", json={"max_waiting": 3}, headers=headers).status_code == 400
+    assert service.store.state("action_error")
+    assert client.put("/api/ai-weight-price/config", json={"max_waiting": 2}, headers=headers).status_code == 200
+    assert service.store.state("action_error") is None
+
+
+@pytest.mark.parametrize("failure", [None, "分类搜索失败"])
+def test_worker_start_finish_logs_and_preserved_selection(service, monkeypatch, failure):
+    entered, release = threading.Event(), threading.Event()
+    class CollectBrowser:
+        def __init__(self, *args): pass
+        def __enter__(self):
+            entered.set()
+            if not release.wait(5): raise RuntimeError("test timed out")
+            return self
+        def __exit__(self, *args): pass
+        def confirm_login(self): pass
+        def collect(self, store):
+            if failure: raise ValueError(failure)
+    service.browser_factory = CollectBrowser
+    monkeypatch.setattr(service, "require_login", lambda *args: None)
+    selection = {"category": "", "start_page": 1, "end_page": 2}
+    service.start("collect", selection=selection)
+    try:
+        assert entered.wait(2)
+        assert service.status()["running"]
+        assert any("采集已启动" in row["message"] for row in service.store.logs())
+    finally:
+        release.set()
+        service.thread.join(5)
+    status = service.status()
+    assert not service.thread.is_alive() and not status["running"]
+    assert status["run"]["selection"] == selection and status["run"]["started_at"]
+    assert status["run"]["outcome"] == ("failed" if failure else "completed")
+    assert status["run_error"] == failure
+    assert (failure or "采集完成") in service.store.logs()[-1]["message"]
+
+
+def test_failed_thread_start_releases_lock_and_reports_failure(service, monkeypatch):
+    def fail_start(self): raise RuntimeError("cannot start thread")
+    monkeypatch.setattr(threading.Thread, "start", fail_start)
+    with pytest.raises(RuntimeError, match="cannot start"):
+        service.start("probe")
+    assert not service.status()["running"]
+    assert service.status()["run"]["outcome"] == "failed"
+    assert "cannot start" in service.store.logs()[-1]["message"]

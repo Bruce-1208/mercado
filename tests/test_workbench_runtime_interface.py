@@ -162,6 +162,7 @@ def test_client_mode_skips_all_central_background_services(monkeypatch):
         "start_api_reputation_scheduler_bootstrap",
         "start_token_refresh_scheduler_bootstrap",
         "start_store_email_sync_scheduler_bootstrap",
+        "ensure_mercado_profit_refresh_worker",
     )
     for name in service_names:
         monkeypatch.setattr(
@@ -193,6 +194,11 @@ def test_server_mode_starts_reputation_and_order_sync_schedulers(monkeypatch):
         lambda: started.append("api_reputation"),
     )
     monkeypatch.setattr(
+        bit_interface,
+        "ensure_mercado_profit_refresh_worker",
+        lambda: started.append("profitability"),
+    )
+    monkeypatch.setattr(
         bit_interface.bit_order_sync,
         "ensure_order_sync_scheduler",
         lambda: started.append("order_sync"),
@@ -210,7 +216,7 @@ def test_server_mode_starts_reputation_and_order_sync_schedulers(monkeypatch):
 
     bit_interface.start_interface_background_services()
 
-    assert started == ["api_reputation", "order_sync"]
+    assert started == ["api_reputation", "profitability", "order_sync"]
 
 
 def test_database_api_health_client_uses_http_route(monkeypatch):

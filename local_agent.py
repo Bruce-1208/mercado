@@ -10,10 +10,12 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import math
 import multiprocessing
 import os
 import platform
 import queue
+import random
 import runpy
 import shutil
 import socket
@@ -24,18 +26,39 @@ import threading
 import time
 import uuid
 import zipfile
+from email.utils import parsedate_to_datetime
 from pathlib import Path
 from urllib.parse import urlsplit
 
 import requests
 
 
-AGENT_VERSION = "1.1.1"
+AGENT_VERSION = "1.1.2"
 DEFAULT_SERVER_URL = "https://zeshun.nat100.top"
 DEFAULT_POLL_SECONDS = 10.0
 DEFAULT_HEARTBEAT_SECONDS = 10.0
 LOG_FLUSH_SECONDS = 2.0
 LOG_UPLOAD_MIN_INTERVAL_SECONDS = 5.0
+RATE_LIMIT_MIN_SECONDS = 60.0
+RETRY_MAX_SECONDS = 300.0
+
+
+class AgentRateLimitError(RuntimeError):
+    def __init__(self, message, retry_after):
+        super().__init__(message)
+        self.retry_after = retry_after
+
+
+def _retry_after_seconds(value):
+    value = str(value or "").strip()
+    try:
+        seconds = float(value)
+    except ValueError:
+        try:
+            seconds = parsedate_to_datetime(value).timestamp() - time.time()
+        except (TypeError, ValueError, OverflowError, OSError):
+            return 0.0
+    return max(0.0, seconds) if math.isfinite(seconds) else 0.0
 
 
 def _default_data_dir():
@@ -255,12 +278,16 @@ class LocalAgent:
         if config.agent_token:
             self.session.headers["X-Local-Agent-Token"] = config.agent_token
         self.current_release = self._read_current_release()
+        self._rate_limit_until = 0.0
+        self._rate_limit_failures = 0
+        self._rate_limit_message = ""
 
     def ensure_enrolled(self):
         if self.config.agent_token:
             return
-        response = self.session.post(
-            self.config.server_url + "/api/local-agents/enroll",
+        data = self._request(
+            "POST",
+            "/api/local-agents/enroll",
             headers={"Authorization": f"Bearer {self.config.enrollment_token}"},
             json={
                 "agent_id": self.config.agent_id,
@@ -272,31 +299,58 @@ class LocalAgent:
             },
             timeout=30,
         )
-        try:
-            payload = response.json()
-        except ValueError as exc:
-            raise RuntimeError("Agent 注册接口返回无效内容") from exc
-        if response.status_code >= 400 or payload.get("status") != "success":
-            raise RuntimeError(payload.get("message") or "Agent 注册失败")
-        token = str((payload.get("data") or {}).get("agent_token") or "")
+        token = str(data.get("agent_token") or "")
         if not token:
             raise RuntimeError("Agent 注册接口未返回长期凭证")
         self.config.save_agent_token(token)
         self.session.headers["X-Local-Agent-Token"] = token
 
+    def _cooldown_remaining(self):
+        return max(0.0, self._rate_limit_until - time.monotonic())
+
+    def _check_cooldown(self):
+        remaining = self._cooldown_remaining()
+        if remaining:
+            # Do not sleep here: the worker monitor must keep draining stdout
+            # and handling local cancellation while server requests are paused.
+            raise AgentRateLimitError(self._rate_limit_message, remaining)
+
+    def _check_response(self, response):
+        if response.status_code < 400:
+            return
+        try:
+            payload = response.json()
+            message = payload.get("message") if isinstance(payload, dict) else ""
+        except (TypeError, ValueError):
+            message = ""
+        tunnel_limit = response.status_code in (502, 503) and (
+            "connections exceed" in response.text.lower()
+        )
+        if response.status_code == 429 or tunnel_limit:
+            self._rate_limit_failures += 1
+            backoff = min(
+                RETRY_MAX_SECONDS,
+                RATE_LIMIT_MIN_SECONDS * 2 ** min(self._rate_limit_failures - 1, 3),
+            )
+            delay = max(backoff, _retry_after_seconds(response.headers.get("Retry-After")))
+            delay += random.uniform(0.0, 5.0)
+            self._rate_limit_until = time.monotonic() + delay
+            reason = "公网隧道连接数超限" if tunnel_limit else "服务端或公网隧道请求限流"
+            self._rate_limit_message = f"{reason}：HTTP {response.status_code}"
+            if message:
+                self._rate_limit_message += f"；{message}"
+            raise AgentRateLimitError(self._rate_limit_message, delay)
+        raise RuntimeError(message or f"服务端请求失败：HTTP {response.status_code}")
+
     def _request(self, method, path, **kwargs):
+        self._check_cooldown()
         response = self.session.request(
             method,
             self.config.server_url + path,
             timeout=kwargs.pop("timeout", 30),
             **kwargs,
         )
-        if response.status_code >= 400:
-            try:
-                message = response.json().get("message")
-            except (TypeError, ValueError):
-                message = ""
-            raise RuntimeError(message or f"服务端请求失败：HTTP {response.status_code}")
+        self._check_response(response)
         try:
             payload = response.json()
         except ValueError as exc:
@@ -354,11 +408,12 @@ class LocalAgent:
             return release_dir
 
         self.config.data_dir.mkdir(parents=True, exist_ok=True)
+        self._check_cooldown()
         response = self.session.get(
             self.config.server_url + "/api/local-agents/business-bundle",
             timeout=120,
         )
-        response.raise_for_status()
+        self._check_response(response)
         content = response.content
         actual_sha = hashlib.sha256(content).hexdigest()
         response_version = str(response.headers.get("X-Business-Version") or wanted_version)
@@ -435,7 +490,7 @@ class LocalAgent:
                 raise
             except Exception as exc:
                 failures += 1
-                delay = self._retry_delay(failures)
+                delay = self._retry_delay_with_cooldown(failures)
                 print(
                     f"任务 {job_id} 的结果暂时无法上传：{exc}；{delay:.0f} 秒后重试",
                     flush=True,
@@ -444,7 +499,10 @@ class LocalAgent:
 
     @staticmethod
     def _retry_delay(failures):
-        return min(30.0, max(2.0, int(failures) * 2.0))
+        return min(RETRY_MAX_SECONDS, 10.0 * 2 ** min(5, max(0, int(failures) - 1)))
+
+    def _retry_delay_with_cooldown(self, failures):
+        return max(self._retry_delay(failures), self._cooldown_remaining())
 
     def _worker_command(self, release_dir, job_file, cancel_file):
         arguments = [
@@ -515,7 +573,8 @@ class LocalAgent:
             name=f"agent-output-{job_id}",
             daemon=True,
         ).start()
-        last_heartbeat = 0.0
+        next_heartbeat_at = 0.0
+        heartbeat_failures = 0
         cancel_started = 0.0
         reader_done = False
         pending_logs = ""
@@ -547,8 +606,8 @@ class LocalAgent:
                     self.send_event(job_id, content=chunk)
                 except Exception as exc:
                     log_upload_failures += 1
-                    delay = self._retry_delay(log_upload_failures)
-                    next_log_upload_at = now + delay
+                    delay = self._retry_delay_with_cooldown(log_upload_failures)
+                    next_log_upload_at = time.monotonic() + delay
                     print(
                         "任务日志暂时无法上传，将继续保留并重试："
                         f"{exc}；{delay:.0f} 秒后重试",
@@ -559,23 +618,25 @@ class LocalAgent:
                     last_log_flush = now
                     next_log_upload_at = now + LOG_UPLOAD_MIN_INTERVAL_SECONDS
                     log_upload_failures = 0
-            if now - last_heartbeat >= self.config.heartbeat_seconds:
-                last_heartbeat = now
+            if now >= next_heartbeat_at:
                 try:
                     heartbeat = self.heartbeat()
                 except Exception as exc:
-                    print(f"任务运行中，心跳暂时失败：{exc}", flush=True)
+                    heartbeat_failures += 1
+                    delay = self._retry_delay_with_cooldown(heartbeat_failures)
+                    next_heartbeat_at = time.monotonic() + delay
+                    print(f"任务运行中，心跳暂时失败：{exc}；{delay:.0f} 秒后重试", flush=True)
                 else:
+                    heartbeat_failures = 0
+                    next_heartbeat_at = time.monotonic() + self.config.heartbeat_seconds
+                    if not pending_logs:
+                        self._rate_limit_failures = 0
                     cancel_ids = set(heartbeat.get("cancel_job_ids") or ())
                     if job_id in cancel_ids and not cancel_file.exists():
                         cancel_file.write_text("stop", encoding="utf-8")
                         cancel_started = now
-                    if (
-                        cancel_started
-                        and process.poll() is None
-                        and now - cancel_started > 45
-                    ):
-                        process.terminate()
+            if cancel_started and process.poll() is None and now - cancel_started > 45:
+                process.terminate()
             if process.poll() is not None and reader_done:
                 break
         while pending_logs:
@@ -601,14 +662,14 @@ class LocalAgent:
         )
 
     def run(self):
-        self.ensure_enrolled()
         print(
-            f"泽顺本机 Agent 已启动：{self.config.name} ({self.config.agent_id})",
+            f"泽顺本机 Agent {AGENT_VERSION} 已启动：{self.config.name} ({self.config.agent_id})",
             flush=True,
         )
         failures = 0
         while True:
             try:
+                self.ensure_enrolled()
                 heartbeat = self.heartbeat()
                 previous_release = self.current_release
                 self.ensure_release(heartbeat.get("bundle") or {})
@@ -631,6 +692,7 @@ class LocalAgent:
                             result={"agent_error": str(exc)},
                         )
                 failures = 0
+                self._rate_limit_failures = 0
                 if self.config.once:
                     return 0
                 time.sleep(self.config.poll_seconds)
@@ -639,10 +701,12 @@ class LocalAgent:
                 return 0
             except Exception as exc:
                 failures += 1
-                print(f"Agent 连接异常：{exc}", flush=True)
                 if self.config.once:
+                    print(f"Agent 连接异常：{exc}", flush=True)
                     return 1
-                time.sleep(min(30.0, max(2.0, failures * 2.0)))
+                delay = self._retry_delay_with_cooldown(failures)
+                print(f"Agent 连接异常：{exc}；{delay:.0f} 秒后重试", flush=True)
+                time.sleep(delay)
 
 
 def _run_external_worker(args):

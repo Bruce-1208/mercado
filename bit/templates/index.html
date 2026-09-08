@@ -15413,9 +15413,10 @@
                 const billableRule = mercadoListMode === "collection"
                     ? "采集列表：只按实际重量"
                     : "Global Selling：毛重/体积重取较大";
-                const commissionNote = row.commission_rate === null || row.commission_rate === undefined
-                    ? `Classic · ${row.category_name || "官网费用待更新"}`
-                    : `Classic · ${mercadoMetric(row.commission_rate, "%")} · ${row.category_name || row.category_id || "官网分类"}`;
+                const hasCommission = row.commission_amount_usd != null || row.commission_amount_local != null;
+                const commissionNote = hasCommission
+                    ? ["Classic", row.commission_rate != null ? mercadoMetric(row.commission_rate, "%") : "", row.category_name || row.category_id || ""].filter(Boolean).join(" · ")
+                    : `Classic · ${row.profitability_error ? "佣金补算异常" : "佣金待后台补算"}`;
                 const shippingRule = String(row.shipping_weight_rule || "");
                 const shippingModeNote = shippingRule.startsWith("free_shipping:")
                     ? "包邮"
@@ -15425,9 +15426,12 @@
                 const shippingSourceNote = shippingRule.includes("official_global_selling_cainiao_rate_card")
                     ? "Global Selling 官方表"
                     : "官方接口";
-                const shippingNote = row.shipping_fee_local === null || row.shipping_fee_local === undefined
-                    ? "官网运费待更新"
-                    : `${shippingModeNote ? `${shippingModeNote} · ` : ""}${shippingSourceNote} · ${mercadoMetric(row.shipping_fee_local)} ${row.shipping_currency_id || row.currency_id || ""}`;
+                const shippingAmount = row.shipping_fee_local ?? row.shipping_fee_usd;
+                const shippingCurrency = row.shipping_fee_local != null
+                    ? (row.shipping_currency_id || row.currency_id || "") : "USD";
+                const shippingNote = shippingAmount == null
+                    ? (actualWeight == null || Number(actualWeight) <= 0 ? "缺少实际重量" : row.profitability_error ? "运费补算异常" : "运费待后台补算")
+                    : `${shippingModeNote ? `${shippingModeNote} · ` : ""}${shippingSourceNote} · ${mercadoMetric(shippingAmount)} ${shippingCurrency}`;
                 const netProceeds = row.net_proceeds_usd;
                 const netClass = Number(netProceeds) < 0 ? "market-net-negative" : "";
                 const netProceedsNote = netProceeds === null || netProceeds === undefined || netProceeds === ""

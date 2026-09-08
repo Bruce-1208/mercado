@@ -391,3 +391,84 @@ def test_supported_country_exchange_refresh_covers_all_publish_sites():
 
     assert set(result) == {"MLM", "MLB", "MLA", "MLC", "MCO", "MLU"}
     assert calls == ["MXN", "BRL", "ARS", "CLP", "COP", "UYU"]
+
+
+class _DatabaseRateCard:
+    def __init__(self):
+        self.quotes = []
+
+    def match(self, **quote):
+        self.quotes.append(quote)
+        return {"shipping_amount_usd": 6.4}
+
+
+def test_cached_commission_and_rate_card_need_no_live_store_or_official_request():
+    with profitability._cache_lock:
+        profitability._cache.clear()
+    cache = _MemoryProfitabilityCache()
+    cache.put_exchange_rate("MXN", "USD", {"ratio": 0.05})
+    cache.put_commission({
+        "site_id": "MLM", "category_id": "MLM455455",
+        "listing_type_id": "gold_special", "price": 350.0,
+        "currency_id": "MXN", "logistic_type": "remote",
+        "shipping_mode": "me2", "billable_weight_g": 600.0,
+    }, {"amount": 70, "rate": 20, "currency_id": "MXN"})
+    http = _OfficialApi()
+    result = MercadoProfitabilityClient(
+        {}, http=http, cache_store=cache, shipping_rate_store=_DatabaseRateCard(),
+    ).estimate({
+        "source_item_id": "MLM1", "category_id": "MLM455455",
+        "price": 350, "currency_id": "MXN", "weight_g": 600,
+    })
+    assert result["net_proceeds_usd"] == 7.6
+    assert http.calls == []
+
+
+def test_usd_product_price_is_converted_before_matching_local_shipping_band():
+    card = _DatabaseRateCard()
+    client = MercadoProfitabilityClient(
+        {}, http=_OfficialApi(), cache_store=False, shipping_rate_store=card,
+    )
+    result = client.shipping({}, {
+        "source_item_id": "MLM1", "currency_id": "USD", "weight_g": 500,
+    }, "", 20, "gold_special", free_shipping=True)
+    assert card.quotes[0]["price_local"] == 400
+    assert result["amount"] == 6.4
+    assert result["currency_id"] == "USD"
+
+
+def test_failed_category_does_not_block_database_shipping_or_keep_old_net_proceeds():
+    class Api(_OfficialApi):
+        def get(self, url, **kwargs):
+            if "/domain_discovery/" in url:
+                return _Response([])
+            return super().get(url, **kwargs)
+
+    http = Api()
+    result = enrich_profitability({
+        "source_item_id": "MLM1", "title": "Unknown product",
+        "price": 350, "currency_id": "MXN", "weight_g": 600,
+        "net_proceeds_usd": 100,
+    }, client=MercadoProfitabilityClient(
+        {}, http=http, cache_store=False, shipping_rate_store=_DatabaseRateCard(),
+    ))
+    assert result["shipping_fee_usd"] == 6.4
+    assert result["sale_price_usd"] == 17.5
+    assert result["net_proceeds_usd"] is None
+    assert "分类" in result["profitability_error"]
+    assert not any("/marketplace/users/" in url for url, _ in http.calls)
+
+
+def test_missing_weight_keeps_successful_category_and_commission_for_next_retry():
+    result = enrich_profitability({
+        "source_item_id": "MLM1", "title": "Mochila escolar",
+        "price": 350, "currency_id": "MXN",
+    }, client=MercadoProfitabilityClient(
+        {}, http=_OfficialApi(), cache_store=False,
+        shipping_rate_store=_DatabaseRateCard(),
+    ))
+    assert result["category_id"] == "MLM455455"
+    assert result["commission_amount_usd"] == 3.5
+    assert result["commission_rate"] == 20
+    assert result["net_proceeds_usd"] is None
+    assert "实际重量" in result["profitability_error"]

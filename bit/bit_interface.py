@@ -8187,25 +8187,45 @@ def _mercado_profit_refresh_loop():
             )
             client = None
             if time.monotonic() >= next_reference_check:
-                client = MercadoProfitabilityClient(active_store_token())
-                site_rates = refresh_supported_exchange_rates(client)
-                backfill_item_exchange_prices({
-                    SUPPORTED_SITE_CURRENCIES[site_id]: snapshot
-                    for site_id, snapshot in site_rates.items()
-                })
-                refresh_usd_cny_daily_rates()
+                reference_failed = False
+                try:
+                    client = MercadoProfitabilityClient(active_store_token())
+                    site_rates = refresh_supported_exchange_rates(client)
+                    backfill_item_exchange_prices({
+                        SUPPORTED_SITE_CURRENCIES[site_id]: snapshot
+                        for site_id, snapshot in site_rates.items()
+                    })
+                except Exception:
+                    reference_failed = True
+                    logging.exception("更新 Mercado 站点汇率失败，继续商品成本补算")
+                try:
+                    refresh_usd_cny_daily_rates()
+                except Exception:
+                    reference_failed = True
+                    logging.exception("更新人民币汇率失败，继续商品成本补算")
                 from erp.mercadolibre_shipping_rate_cards import (
                     OfficialShippingRateCardStore,
                 )
-                if OfficialShippingRateCardStore().needs_refresh(max_age_hours=24):
-                    _start_mercado_shipping_rate_refresh(automatic=True)
-                # Refresh reference data and backfill converted prices once a day.
-                next_reference_check = time.monotonic() + 24 * 60 * 60
+                try:
+                    if OfficialShippingRateCardStore().needs_refresh(max_age_hours=24):
+                        _start_mercado_shipping_rate_refresh(automatic=True)
+                except Exception:
+                    reference_failed = True
+                    logging.exception("检查官方运费表失败，继续商品成本补算")
+                next_reference_check = time.monotonic() + (
+                    interval if reference_failed else 24 * 60 * 60
+                )
             if rows:
                 processed_rows = True
                 from concurrent.futures import ThreadPoolExecutor, as_completed
 
-                token = active_store_token()
+                try:
+                    token = client.token if client is not None else active_store_token()
+                except Exception:
+                    # Already persisted rates and quotes remain usable even if
+                    # OAuth is unavailable; individual cache misses record errors.
+                    logging.exception("获取授权失败，继续读取数据库中的商品费用")
+                    token = {}
                 worker_state = threading.local()
 
                 def refresh_row(row):
@@ -13607,6 +13627,7 @@ def start_interface_background_services():
     start_api_reputation_scheduler_bootstrap()
     start_token_refresh_scheduler_bootstrap()
     start_store_email_sync_scheduler_bootstrap()
+    ensure_mercado_profit_refresh_worker()
     bit_order_sync.ensure_order_sync_scheduler()
     bit_order_sync.ensure_order_financial_backfill_worker()
     bit_order_sync.ensure_order_image_backfill_worker()

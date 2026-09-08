@@ -11,6 +11,8 @@ from local_agent import LocalAgent
 
 
 class BundleResponse:
+    status_code = 200
+
     def __init__(self, content, version, sha256):
         self.content = content
         self.headers = {

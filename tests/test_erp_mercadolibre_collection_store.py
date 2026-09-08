@@ -274,6 +274,74 @@ def test_profitability_updates_exact_collection_duplicate_and_only_newest_produc
     assert collection_params[-2:] == (1880, "MLM2990352733")
     assert "newer.`id` > %s" in product_sql
     assert product_params[-3:] == ("MLM2990352733", "MLM2990352733", 1880)
+    assert "`source_type` = 'collected'" in product_sql
+
+
+@pytest.mark.parametrize("source_type", ["collected", "pulled", "zying"])
+def test_product_profitability_updates_do_not_overwrite_collection_history(source_type):
+    connection = _FakeConnection(update_rowcount=1)
+    store.update_item_profitability("MLM1", {
+        "id": 15, "source_type": source_type, "shipping_fee_usd": 6.4,
+    }, connection_factory=lambda: connection)
+    updates = [(sql, params) for sql, params in connection.fake_cursor.queries
+               if sql.startswith("UPDATE")]
+    assert len(updates) == 1
+    sql, params = updates[0]
+    assert sql.startswith(f"UPDATE `{store.PRODUCT_TABLE}`")
+    assert "WHERE `id` = %s AND `source_item_id` = %s" in sql
+    assert params[-2:] == (15, "MLM1")
+
+
+def test_profitability_queue_includes_all_sources_and_retries_incomplete_rows():
+    connection = _FakeConnection()
+    batches = iter([
+        [{"id": 1, "source_type": "pulled"}, {"id": 2, "source_type": "zying"}],
+        [{"id": 3, "task_id": 10}],
+    ])
+    connection.fake_cursor.fetchall = lambda: next(batches)
+    with patch.object(store, "ensure_collection_tables"):
+        rows = store.list_stale_profitability_items(
+            stale_before="2026-09-06 12:00:00", retry_before="2026-09-07 11:55:00",
+            limit=10, connection_factory=lambda: connection,
+        )
+    assert [row["id"] for row in rows] == [1, 2, 3]
+    product_sql, product_params = connection.fake_cursor.queries[0]
+    collection_sql, collection_params = connection.fake_cursor.queries[1]
+    assert store.PRODUCT_TABLE in product_sql
+    assert store.COLLECTION_TABLE in collection_sql
+    assert product_params == ("2026-09-06 12:00:00", "2026-09-07 11:55:00", 5)
+    assert collection_params[-1] == 8
+    for sql in (product_sql, collection_sql):
+        assert "`source_type` =" not in sql
+        assert "`weight_g` > 0" not in sql
+        assert "`commission_amount_usd` IS NULL" in sql
+        assert "`shipping_fee_usd` IS NULL" in sql
+        assert "`net_proceeds_usd` IS NULL" in sql
+
+
+def test_reference_refresh_queues_all_sources_without_erasing_existing_costs():
+    connection = _FakeConnection(update_rowcount=2)
+    with patch.object(store, "ensure_collection_tables"):
+        assert store.mark_all_profitability_stale(connection_factory=lambda: connection) == 4
+    for sql, _ in connection.fake_cursor.queries:
+        assert "`source_type` =" not in sql
+        assert "`profitability_updated_at` = NULL" in sql
+        assert "`commission_amount_usd` = NULL" not in sql
+        assert "`shipping_fee_usd` = NULL" not in sql
+
+
+def test_existing_schema_still_installs_refresh_indexes_once(monkeypatch):
+    indexes = []
+    monkeypatch.setattr(store, "_schema_ready", False)
+    monkeypatch.setattr(store, "_collection_schema_is_current", lambda cursor: True)
+    monkeypatch.setattr(store, "_ensure_index", lambda cursor, table, name, definition:
+                        indexes.append((table, definition)))
+    store.ensure_collection_tables(_FakeCursor())
+    store.ensure_collection_tables(_FakeCursor())
+    assert indexes == [
+        (store.COLLECTION_TABLE, "(`profitability_updated_at`, `id`)"),
+        (store.PRODUCT_TABLE, "(`profitability_updated_at`, `id`)"),
+    ]
 
 
 def test_move_pulled_product_creates_collection_row_before_deleting_product():
