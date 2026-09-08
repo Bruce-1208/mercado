@@ -1,0 +1,66 @@
+{
+  "captured_at": "2026-09-07T23:44:14",
+  "current_url": "https://global-selling.mercadolibre.com/help/v2",
+  "chat_state": {
+    "ai_frame_count": 0,
+    "inline_aria_expanded": "",
+    "inline_has_input": false,
+    "inline_open": false,
+    "inline_root_class": "",
+    "inline_shell": false,
+    "legacy_frame_count": 0,
+    "shadow_ai_frame_count": 0,
+    "visible_ai_frame_count": 0
+  },
+  "dom_snapshot": {
+    "aiShells": [],
+    "frames": [],
+    "readyState": "complete",
+    "shadowHosts": [],
+    "title": "Help"
+  },
+  "browser_logs": [
+    {
+      "level": "SEVERE",
+      "message": "https://console.bitbrowser.net/?id=6ae1546ec1a54940b1408636e2f57bc9&locale=zh&port=54345 - Unchecked runtime.lastError: Could not establish connection. Receiving end does not exist.",
+      "source": "other",
+      "timestamp": 1788795568105
+    },
+    {
+      "level": "SEVERE",
+      "message": "https://static.hotjar.com/c/hotjar-783944.js?sv=5 - Failed to load resource: net::ERR_CONNECTION_CLOSED",
+      "source": "network",
+      "timestamp": 1788795598300
+    },
+    {
+      "level": "SEVERE",
+      "message": "https://static.hotjar.com/c/hotjar-783944.js?sv=5 - Failed to load resource: net::ERR_CONNECTION_CLOSED",
+      "source": "network",
+      "timestamp": 1788795619793
+    },
+    {
+      "level": "SEVERE",
+      "message": "https://static.hotjar.com/c/hotjar-783944.js?sv=5 - Failed to load resource: net::ERR_CONNECTION_CLOSED",
+      "source": "network",
+      "timestamp": 1788795666388
+    },
+    {
+      "level": "SEVERE",
+      "message": "https://static.hotjar.com/c/hotjar-783944.js?sv=5 - Failed to load resource: net::ERR_CONNECTION_CLOSED",
+      "source": "network",
+      "timestamp": 1788795698891
+    },
+    {
+      "level": "SEVERE",
+      "message": "https://global-selling.mercadolibre.com/help/v2 - Unchecked runtime.lastError: Could not establish connection. Receiving end does not exist.",
+      "source": "other",
+      "timestamp": 1788795761639
+    },
+    {
+      "level": "SEVERE",
+      "message": "https://static.hotjar.com/c/hotjar-783944.js?sv=5 - Failed to load resource: net::ERR_CONNECTION_CLOSED",
+      "source": "network",
+      "timestamp": 1788795792318
+    }
+  ]
+}

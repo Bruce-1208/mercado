@@ -43,18 +43,18 @@ def test_zeshun_brand_logo_is_used_on_login_and_workbench():
     assert logo_path.read_bytes().startswith(b"\x89PNG\r\n\x1a\n")
 
 
-def test_interface_hot_reload_defaults_to_enabled(monkeypatch):
+def test_interface_hot_reload_is_always_disabled(monkeypatch):
     monkeypatch.delenv("BIT_INTERFACE_HOT_RELOAD", raising=False)
     monkeypatch.delattr(bit_interface.sys, "frozen", raising=False)
 
-    assert bit_interface.interface_hot_reload_enabled() is True
-    assert bit_interface.interface_hot_reload_enabled("true") is True
+    assert bit_interface.interface_hot_reload_enabled() is False
+    assert bit_interface.interface_hot_reload_enabled("true") is False
     assert bit_interface.interface_hot_reload_enabled("0") is False
     assert bit_interface.is_werkzeug_reloader_child(
         {"WERKZEUG_RUN_MAIN": "true"}
     ) is True
     assert bit_interface.is_werkzeug_reloader_child({}) is False
-    assert bit_interface.app.config["TEMPLATES_AUTO_RELOAD"] is True
+    assert bit_interface.app.config["TEMPLATES_AUTO_RELOAD"] is False
     assert bit_interface.app.config["SEND_FILE_MAX_AGE_DEFAULT"] == 0
 
     response = bit_interface.app.test_client().get("/login")
@@ -87,9 +87,8 @@ def test_interface_main_enables_frozen_multiprocessing_support(monkeypatch):
     assert events == ["freeze-support", "server"]
 
 
-def test_hot_reload_parent_owns_lock_and_child_starts_services(monkeypatch):
+def test_wsgi_server_owns_lock_and_starts_services_once(monkeypatch):
     events = []
-    run_options = []
 
     class FakeLock:
         def __init__(self, *args, **kwargs):
@@ -102,28 +101,45 @@ def test_hot_reload_parent_owns_lock_and_child_starts_services(monkeypatch):
         def release(self):
             events.append("lock-released")
 
-    monkeypatch.setenv("BIT_INTERFACE_HOT_RELOAD", "1")
-    monkeypatch.delenv("WERKZEUG_RUN_MAIN", raising=False)
     monkeypatch.setattr(bit_interface, "InterProcessLock", FakeLock)
     monkeypatch.setattr(
         bit_interface,
         "start_interface_background_services",
         lambda: events.append("services-started"),
     )
-    monkeypatch.setattr(bit_interface.app, "run", lambda **kwargs: run_options.append(kwargs))
+    monkeypatch.setattr(
+        bit_interface,
+        "serve_wsgi_application",
+        lambda: events.append("wsgi-served"),
+    )
 
     assert bit_interface.run_interface_server() is True
-    assert events == ["lock-created", "lock-acquired", "lock-released"]
-    assert run_options[0]["use_reloader"] is True
-    assert run_options[0]["use_debugger"] is False
+    assert events == [
+        "lock-created",
+        "lock-acquired",
+        "services-started",
+        "wsgi-served",
+        "lock-released",
+    ]
 
-    events.clear()
-    run_options.clear()
-    monkeypatch.setenv("WERKZEUG_RUN_MAIN", "true")
 
-    assert bit_interface.run_interface_server() is True
-    assert events == ["services-started"]
-    assert run_options[0]["use_reloader"] is True
+def test_wsgi_server_uses_bounded_production_options(monkeypatch):
+    options = []
+    monkeypatch.setenv("BIT_WSGI_THREADS", "20")
+    monkeypatch.setenv("BIT_WSGI_CONNECTION_LIMIT", "300")
+    monkeypatch.setenv("BIT_WSGI_BACKLOG", "2048")
+
+    bit_interface.serve_wsgi_application(
+        serve=lambda application, **kwargs: options.append((application, kwargs))
+    )
+
+    application, kwargs = options[0]
+    assert application is bit_interface.app
+    assert kwargs["threads"] == 20
+    assert kwargs["connection_limit"] == 300
+    assert kwargs["backlog"] == 2048
+    assert kwargs["trusted_proxy"] == "127.0.0.1"
+    assert kwargs["clear_untrusted_proxy_headers"] is True
 
 
 def test_remembered_login_uses_six_hour_permanent_session(monkeypatch):

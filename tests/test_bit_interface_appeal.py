@@ -475,14 +475,17 @@ def test_stop_window_login_tasks_does_not_stop_other_or_grouped_tasks(monkeypatc
     assert stopped == ["matching"]
 
 
-def test_shop_status_ui_uses_selected_worker_count_for_batch():
+def test_shop_status_ui_refreshes_rows_once_after_login_task_finishes():
     template = (
         Path(bit_interface.CURRENT_DIR) / "templates" / "index.html"
     ).read_text(encoding="utf-8")
 
     assert "JSON.stringify({window_ids: windowIds, workers})" in template
-    assert "lastMercadoLoginWindowRefreshAt" in template
-    assert "Date.now() - lastMercadoLoginWindowRefreshAt >= 4000" in template
+    assert "let mercadoLoginStatusPollTimer = null" in template
+    assert "let mercadoLoginStatusLoading = false" in template
+    assert "const loginTaskFinished = wasRunning && !mercadoLoginRunning" in template
+    assert "if (windowAnomaliesLoaded && loginTaskFinished)" in template
+    assert "Date.now() - lastMercadoLoginWindowRefreshAt" not in template
     assert "await loadWindowAnomalies()" in template
     assert "已人工处理并移除" in template
     assert "await loadMercadoLoginStatus();" in template
@@ -737,10 +740,12 @@ def test_daily_task_console_exposes_all_task_switches_and_shop_group():
     assert 'name="daily-task-appeal-type" value="取消率"' in template
     assert 'id="daily-task-mixed-mode"' in template
     assert 'value="混合模式"' in template
-    assert 'id="daily-task-salesperson"' in template
-    assert '<option value="">所有业务员</option>' in template
-    assert 'id="daily-task-group"' in template
-    assert '<option value="">所有店铺组</option>' in template
+    assert "业务员（可多选）" in template
+    assert 'id="daily-task-salesperson" multiple' in template
+    assert 'data-select-id="daily-task-salesperson"' in template
+    assert "店铺组（可多选）" in template
+    assert 'id="daily-task-group" multiple' in template
+    assert 'data-select-id="daily-task-group"' in template
     assert 'id="daily-task-top-n"' not in template
     assert 'id="daily-task-only-active"' not in template
     assert 'id="daily-task-infraction-min-count"' in template
@@ -749,7 +754,10 @@ def test_daily_task_console_exposes_all_task_switches_and_shop_group():
     assert 'id="daily-task-cancellation-min-rate"' in template
     assert 'id="daily-task-max-workers" value="10" min="1" max="30"' in template
     assert "appeal_types: appealTypes" in template
-    assert "group_names: groupName ? [groupName] : []" in template
+    assert "const salespeople = mercadoSelectedValues(dailyTaskSalesperson)" in template
+    assert "const groupNames = mercadoSelectedValues(dailyTaskGroup)" in template
+    assert "salespeople," in template
+    assert "group_names: groupNames" in template
     assert "infraction_min_count:" in template
     assert "delay_min_rate:" in template
     assert "complaint_min_rate:" in template
@@ -799,13 +807,13 @@ def test_build_daily_task_params_accepts_all_appeal_modes(appeal_type):
 
 def test_build_daily_task_params_supports_one_or_all_salespeople():
     selected = bit_interface.build_daily_task_params(
-        {"salespeople": ["张三", "张三"]}
+        {"salespeople": ["张三", "李四", "张三"]}
     )
     all_salespeople = bit_interface.build_daily_task_params(
         {"salesperson": "所有业务员"}
     )
 
-    assert selected["salespeople"] == ["张三"]
+    assert selected["salespeople"] == ["张三", "李四"]
     assert all_salespeople["salespeople"] == []
     assert "only_active" not in selected
 
@@ -813,13 +821,13 @@ def test_build_daily_task_params_supports_one_or_all_salespeople():
 def test_build_daily_task_params_supports_multiple_tasks_and_shop_group():
     params = bit_interface.build_daily_task_params({
         "appeal_types": ["投诉", "延误率", "投诉"],
-        "group_names": ["精品组", "精品组"],
+        "group_names": ["精品组", "普通组", "精品组"],
         "top_n": 1,
     })
 
     assert params["appeal_types"] == ["延误率", "投诉"]
     assert params["appeal_type"] == "多任务"
-    assert params["group_names"] == ["精品组"]
+    assert params["group_names"] == ["精品组", "普通组"]
     assert params["top_n"] == 0
 
 

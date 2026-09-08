@@ -43,7 +43,7 @@ def get_mercadolibre_token(app_id, client_secret, tg_code, redirect_url):
 APP_ID = "2845198883767774"
 CLIENT_SECRET = "NFHcM0V3qHFWz8KEoT4ckkGx5d3giqVQ"
 TG_CODE = "TG-69ea247989e44e0001b12ccd-1742669993"
-REDIRECT_URL = "https://zeshun.nat100.top/zs"
+REDIRECT_URL = "https://zeshun.cc.cd/zs"
 
 
 if __name__ == "__main__":

@@ -80,7 +80,7 @@ def test_local_executor_bridge_only_accepts_loopback_client_requests(monkeypatch
     )
     headers = {
         "Authorization": f"Bearer {token}",
-        "Origin": "https://zeshun.nat100.top",
+        "Origin": "https://zeshun.cc.cd",
     }
     client = bit_interface.app.test_client()
 
@@ -97,7 +97,7 @@ def test_local_executor_bridge_only_accepts_loopback_client_requests(monkeypatch
     preflight = client.options(
         "/api/local-executor/health",
         headers={
-            "Origin": "https://zeshun.nat100.top",
+            "Origin": "https://zeshun.cc.cd",
             "Access-Control-Request-Method": "GET",
             "Access-Control-Request-Headers": "authorization",
             "Access-Control-Request-Private-Network": "true",
@@ -107,7 +107,7 @@ def test_local_executor_bridge_only_accepts_loopback_client_requests(monkeypatch
 
     assert allowed.status_code == 200
     assert allowed.get_json()["data"]["execution_target"] == "local"
-    assert allowed.headers["Access-Control-Allow-Origin"] == "https://zeshun.nat100.top"
+    assert allowed.headers["Access-Control-Allow-Origin"] == "https://zeshun.cc.cd"
     assert denied.status_code == 403
     assert preflight.status_code == 204
     assert preflight.headers["Access-Control-Allow-Private-Network"] == "true"

@@ -31,7 +31,7 @@ import requests
 
 
 AGENT_VERSION = "1.1.1"
-DEFAULT_SERVER_URL = "https://zeshun.nat100.top"
+DEFAULT_SERVER_URL = "https://zeshun.cc.cd"
 DEFAULT_POLL_SECONDS = 10.0
 DEFAULT_HEARTBEAT_SECONDS = 10.0
 LOG_FLUSH_SECONDS = 2.0

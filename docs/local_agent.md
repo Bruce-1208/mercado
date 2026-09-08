@@ -1,6 +1,6 @@
 # 泽顺本机 Agent 部署说明
 
-本机 Agent 用于让公网泽顺控制台把申诉任务派发到指定 Windows 电脑。它是一个常驻的出站客户端：只访问 `https://zeshun.nat100.top`，不开放本机 HTTP 端口，也不依赖浏览器的“本地网络访问”权限。
+本机 Agent 用于让公网泽顺控制台把申诉任务派发到指定 Windows 电脑。它是一个常驻的出站客户端：只访问 `https://zeshun.cc.cd`，不开放本机 HTTP 端口，也不依赖浏览器的“本地网络访问”权限。
 
 ## 工作方式
 
@@ -24,7 +24,7 @@ Agent 默认数据目录为 `%LOCALAPPDATA%\Zeshun\MercadoLocalAgent`，其中�
 
 ```bash
 export BIT_RUNTIME_ROLE=server
-export BIT_PUBLIC_WORKBENCH_URL=https://zeshun.nat100.top
+export BIT_PUBLIC_WORKBENCH_URL=https://zeshun.cc.cd
 export BIT_INTERFACE_HOT_RELOAD=0
 export WORKBENCH_SECRET_KEY='replace-with-a-long-stable-random-secret'
 python -m bit.bit_interface --role server

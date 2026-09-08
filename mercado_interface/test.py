@@ -1,7 +1,7 @@
 import requests
 import json
 
-url = "zeshun.nat100.top/api/v1/records"
+url = "zeshun.cc.cd/api/v1/records"
 
 # 爬虫抓取到或者大模型识别出的数据样例
 payload = {
