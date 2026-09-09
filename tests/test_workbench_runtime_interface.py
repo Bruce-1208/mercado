@@ -162,6 +162,7 @@ def test_client_mode_skips_all_central_background_services(monkeypatch):
         "start_api_reputation_scheduler_bootstrap",
         "start_token_refresh_scheduler_bootstrap",
         "start_store_email_sync_scheduler_bootstrap",
+        "start_yandex_console_bootstrap",
         "ensure_mercado_profit_refresh_worker",
     )
     for name in service_names:
@@ -185,6 +186,7 @@ def test_server_mode_starts_reputation_and_order_sync_schedulers(monkeypatch):
         "start_official_infraction_scheduler_bootstrap",
         "start_token_refresh_scheduler_bootstrap",
         "start_store_email_sync_scheduler_bootstrap",
+        "start_yandex_console_bootstrap",
     ):
         monkeypatch.setattr(bit_interface, name, lambda: None)
     started = []
@@ -289,11 +291,22 @@ def test_official_infraction_counts_rebuild_tuple_keys_from_http(monkeypatch):
 def test_live_infraction_collection_client_uses_server_route(monkeypatch):
     calls = []
     monkeypatch.setattr(bit_db_api, "DB_MODE", "api")
+    monkeypatch.setattr(bit_db_api.time, "sleep", lambda _seconds: None)
+
+    def request(method, path, **kwargs):
+        calls.append((method, path, kwargs))
+        if method == "POST":
+            return {"job_id": "job-123", "status": "queued"}
+        return {
+            "job_id": "job-123",
+            "status": "completed",
+            "result": {"data": [], "results": [], "failed_stores": []},
+        }
+
     monkeypatch.setattr(
         bit_db_api,
         "_request",
-        lambda method, path, **kwargs: calls.append((method, path, kwargs))
-        or {"data": [], "results": [], "failed_stores": []},
+        request,
     )
     targets = [{"token_id": 7, "name": "授权店铺", "site_ids": ["MLM"]}]
 
@@ -304,18 +317,48 @@ def test_live_infraction_collection_client_uses_server_route(monkeypatch):
     )
 
     assert result["data"] == []
-    assert calls == [(
-        "POST",
-        "/api/db/official-infractions/live",
-        {
-            "timeout": 960,
-            "json": {
-                "targets": targets,
-                "recent_days": 30,
-                "max_workers": 3,
+    assert calls == [
+        (
+            "POST",
+            "/api/db/official-infractions/live/jobs",
+            {
+                "timeout": 30,
+                "json": {
+                    "targets": targets,
+                    "recent_days": 30,
+                    "max_workers": 3,
+                },
             },
-        },
-    )]
+        ),
+        (
+            "GET",
+            "/api/db/official-infractions/live/jobs/job-123",
+            {"timeout": 30},
+        ),
+    ]
+
+
+def test_live_infraction_collection_falls_back_during_rolling_deployment(monkeypatch):
+    calls = []
+    monkeypatch.setattr(bit_db_api, "DB_MODE", "api")
+
+    def request(method, path, **kwargs):
+        calls.append((method, path, kwargs))
+        if path.endswith("/live/jobs"):
+            raise RuntimeError("数据库接口返回非 JSON，状态码：404")
+        return {"data": [], "results": [], "failed_stores": []}
+
+    monkeypatch.setattr(bit_db_api, "_request", request)
+
+    result = bit_db_api.collect_live_detection_infractions(
+        [{"token_id": 7}], recent_days=30, max_workers=1
+    )
+
+    assert result["data"] == []
+    assert [path for _method, path, _kwargs in calls] == [
+        "/api/db/official-infractions/live/jobs",
+        "/api/db/official-infractions/live",
+    ]
 
 
 def test_live_infraction_collection_transparently_delegates_in_client_mode(
@@ -363,3 +406,38 @@ def test_live_infraction_server_route_reads_tokens_on_server(monkeypatch):
     assert response.status_code == 200
     assert response.get_json()["data"]["data"] == [{"编号": "MLM123"}]
     assert calls == [(targets, {"recent_days": 30, "max_workers": 4})]
+
+
+def test_live_infraction_background_job_avoids_long_http_request(monkeypatch):
+    calls = []
+    monkeypatch.setattr(bit_interface, "USE_DB_API", False)
+    monkeypatch.setattr(
+        bit_interface.mercado_infraction_sync,
+        "collect_live_detection_infractions",
+        lambda targets, **kwargs: calls.append((targets, kwargs))
+        or {"data": [{"编号": "MLM456"}], "results": []},
+    )
+    targets = [{"token_id": 8, "name": "授权店铺二", "site_ids": ["MLM"]}]
+    client = bit_interface.app.test_client()
+
+    start_response = client.post(
+        "/api/db/official-infractions/live/jobs",
+        json={"targets": targets, "recent_days": 45, "max_workers": 2},
+    )
+    assert start_response.status_code == 200
+    job_id = start_response.get_json()["data"]["job_id"]
+
+    state = None
+    for _ in range(100):
+        status_response = client.get(
+            f"/api/db/official-infractions/live/jobs/{job_id}"
+        )
+        assert status_response.status_code == 200
+        state = status_response.get_json()["data"]
+        if state["status"] in {"completed", "failed"}:
+            break
+        bit_interface.time.sleep(0.01)
+
+    assert state["status"] == "completed"
+    assert state["result"]["data"] == [{"编号": "MLM456"}]
+    assert calls == [(targets, {"recent_days": 45, "max_workers": 2})]

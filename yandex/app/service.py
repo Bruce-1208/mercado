@@ -1,9 +1,13 @@
 from __future__ import annotations
 
 import asyncio
+import logging
+from contextlib import suppress
+from datetime import UTC, datetime, timedelta
 from decimal import Decimal, ROUND_HALF_UP
 from typing import Any
 from urllib.parse import parse_qs, quote, urlencode, urlsplit, urlunsplit
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from yandex.app.central_authorization import authorization_store
 from yandex.app.config import settings
@@ -51,6 +55,8 @@ def _require_scope(
 class TaskService:
     def __init__(self) -> None:
         self._tasks: set[asyncio.Task[Any]] = set()
+        self._order_sync_runner: asyncio.Task[Any] | None = None
+        self._order_sync_locks: dict[int, asyncio.Lock] = {}
 
     def _track(self, coroutine: Any) -> None:
         task = asyncio.create_task(coroutine)
@@ -59,6 +65,213 @@ class TaskService:
 
     def start_search(self, run_id: int, keyword: str, count: int) -> None:
         self._track(self._run_search(run_id, keyword, count))
+
+    def start_order_sync_scheduler(self) -> bool:
+        if not settings.order_sync_enabled:
+            return False
+        if self._order_sync_runner and not self._order_sync_runner.done():
+            return True
+        self._order_sync_runner = asyncio.create_task(
+            self._order_sync_loop(), name="yandex-order-sync"
+        )
+        return True
+
+    async def stop_order_sync_scheduler(self) -> None:
+        runner = self._order_sync_runner
+        self._order_sync_runner = None
+        if not runner:
+            return
+        runner.cancel()
+        with suppress(asyncio.CancelledError):
+            await runner
+
+    async def _order_sync_loop(self) -> None:
+        while True:
+            try:
+                await self.run_due_order_syncs()
+            except asyncio.CancelledError:
+                raise
+            except Exception:
+                logging.exception("Yandex 订单后台调度失败，下个检查周期会重试")
+            await asyncio.sleep(settings.order_sync_poll_seconds)
+
+    @staticmethod
+    def _elapsed_seconds(value: Any, now: datetime) -> float | None:
+        text = str(value or "").strip()
+        if not text:
+            return None
+        try:
+            parsed = datetime.fromisoformat(text.replace("Z", "+00:00"))
+        except ValueError:
+            return None
+        if parsed.tzinfo is None:
+            parsed = parsed.replace(tzinfo=UTC)
+        return max(0.0, (now - parsed.astimezone(UTC)).total_seconds())
+
+    @staticmethod
+    def _stored_context(stored: dict[str, Any]) -> StoreContext:
+        return StoreContext(
+            business_id=int(stored["business_id"]),
+            business_name=str(stored.get("business_name") or ""),
+            campaign_id=int(stored["campaign_id"]),
+            store_name=str(stored.get("store_name") or ""),
+            placement_type=str(stored.get("placement_type") or ""),
+            api_availability=str(stored.get("api_availability") or ""),
+            auth_scopes=list(stored.get("auth_scopes") or []),
+        )
+
+    async def run_due_order_syncs(self, *, now: datetime | None = None) -> list[dict[str, Any]]:
+        """Run the independent 15-minute discovery and 12-hour status jobs."""
+        current = (now or datetime.now(UTC)).astimezone(UTC)
+        stores = await asyncio.to_thread(authorization_store.list_stores)
+        semaphore = asyncio.Semaphore(3)
+
+        async def run(stored: dict[str, Any]) -> dict[str, Any] | None:
+            store_id = int(stored["id"])
+            state = database.get_order_sync_state(store_id)
+            retry_elapsed = self._elapsed_seconds(state.get("updated_at"), current)
+            if (
+                state.get("last_error")
+                and retry_elapsed is not None
+                and retry_elapsed < settings.order_sync_retry_seconds
+            ):
+                return None
+            new_elapsed = self._elapsed_seconds(state.get("new_orders_synced_at"), current)
+            old_elapsed = self._elapsed_seconds(state.get("old_orders_synced_at"), current)
+            new_due = new_elapsed is None or new_elapsed >= settings.order_new_sync_seconds
+            old_due = old_elapsed is None or old_elapsed >= settings.order_status_sync_seconds
+            if not new_due and not old_due:
+                return None
+            mode = "full" if new_due and old_due else ("insert" if new_due else "update")
+            async with semaphore:
+                try:
+                    return await self.sync_store_orders(store_id, mode=mode, now=current)
+                except Exception as exc:
+                    logging.warning(
+                        "Yandex 店铺 %s 订单同步失败：%s",
+                        stored.get("alias") or store_id,
+                        exc,
+                    )
+                    return {"store_id": store_id, "mode": mode, "error": str(exc)[:500]}
+
+        results = await asyncio.gather(*(run(store) for store in stores))
+        return [result for result in results if result is not None]
+
+    async def _fetch_recent_orders(
+        self,
+        token: str,
+        store: StoreContext,
+        *,
+        today: datetime,
+    ) -> list[dict[str, Any]]:
+        client = YandexSellerClient(token)
+        try:
+            market_timezone = ZoneInfo(settings.timezone)
+        except ZoneInfoNotFoundError:
+            market_timezone = UTC
+        date_to = today.astimezone(market_timezone).date()
+        date_from = date_to - timedelta(days=29)
+        page_token = ""
+        seen_tokens: set[str] = set()
+        orders: list[dict[str, Any]] = []
+        for _ in range(500):
+            page = await client.get_orders(
+                store.business_id,
+                campaign_id=store.campaign_id,
+                date_from=date_from.isoformat(),
+                date_to=date_to.isoformat(),
+                page_token=page_token,
+                limit=50,
+            )
+            orders.extend(page.get("orders") or [])
+            next_token = str((page.get("paging") or {}).get("nextPageToken") or "")
+            if not next_token:
+                return orders
+            if next_token in seen_tokens:
+                raise YandexApiError("订单接口返回了重复分页标记，已停止本轮同步")
+            seen_tokens.add(next_token)
+            page_token = next_token
+        raise YandexApiError("订单分页超过 500 页，已停止本轮同步")
+
+    async def sync_store_orders(
+        self,
+        store_id: int,
+        *,
+        mode: str,
+        now: datetime | None = None,
+    ) -> dict[str, Any]:
+        lock = self._order_sync_locks.setdefault(int(store_id), asyncio.Lock())
+        async with lock:
+            current = (now or datetime.now(UTC)).astimezone(UTC)
+            try:
+                sync_state = database.get_order_sync_state(store_id)
+                new_elapsed = self._elapsed_seconds(
+                    sync_state.get("new_orders_synced_at"), current
+                )
+                old_elapsed = self._elapsed_seconds(
+                    sync_state.get("old_orders_synced_at"), current
+                )
+                new_due = (
+                    new_elapsed is None
+                    or new_elapsed >= settings.order_new_sync_seconds
+                )
+                old_due = (
+                    old_elapsed is None
+                    or old_elapsed >= settings.order_status_sync_seconds
+                )
+                if database.count_cached_orders(store_id) == 0:
+                    mode = "full"
+                elif mode == "full":
+                    mode = (
+                        "full"
+                        if new_due and old_due
+                        else ("insert" if new_due else ("update" if old_due else ""))
+                    )
+                elif mode == "insert" and not new_due:
+                    mode = ""
+                elif mode == "update" and not old_due:
+                    mode = ""
+                if not mode:
+                    return {
+                        "store_id": int(store_id),
+                        "mode": "skipped",
+                        "fetched": 0,
+                        "inserted": 0,
+                        "updated": 0,
+                    }
+                stored = await asyncio.to_thread(
+                    authorization_store.get_store, store_id, include_secret=True
+                )
+                if not stored:
+                    raise LookupError("店铺不存在")
+                token = str(stored.get("access_token") or "")
+                if not token:
+                    raise LookupError("店铺授权缺少 token，请重新授权")
+                context = self._stored_context(stored)
+                _require_scope(
+                    context,
+                    {"inventory-and-order-processing"},
+                    "订单",
+                    read_only=True,
+                )
+                orders = await self._fetch_recent_orders(token, context, today=current)
+                changes = database.cache_orders(store_id, orders, mode=mode)
+                timestamp = current.isoformat(timespec="seconds")
+                state_updates: dict[str, Any] = {"last_error": ""}
+                if mode in {"insert", "full"}:
+                    state_updates["new_orders_synced_at"] = timestamp
+                if mode in {"update", "full"}:
+                    state_updates["old_orders_synced_at"] = timestamp
+                database.update_order_sync_state(store_id, **state_updates)
+                return {
+                    "store_id": int(store_id),
+                    "mode": mode,
+                    "fetched": len(orders),
+                    **changes,
+                }
+            except Exception as exc:
+                database.update_order_sync_state(store_id, last_error=str(exc)[:1000])
+                raise
 
     async def _run_search(self, run_id: int, keyword: str, count: int) -> None:
         database.update_search_run(run_id, status="running", message="正在启动浏览器")
@@ -193,19 +406,44 @@ class TaskService:
         _require_scope(
             store, {"inventory-and-order-processing"}, "订单", read_only=True
         )
-        client = YandexSellerClient(token)
-        orders = await client.get_orders(
-            store.business_id,
-            campaign_id=store.campaign_id,
+        sync_state = database.get_order_sync_state(store_id)
+        current = datetime.now(UTC)
+        new_elapsed = self._elapsed_seconds(sync_state.get("new_orders_synced_at"), current)
+        old_elapsed = self._elapsed_seconds(sync_state.get("old_orders_synced_at"), current)
+        new_due = new_elapsed is None or new_elapsed >= settings.order_new_sync_seconds
+        old_due = old_elapsed is None or old_elapsed >= settings.order_status_sync_seconds
+        if database.count_cached_orders(store_id) == 0 or (new_due and old_due):
+            await self.sync_store_orders(store_id, mode="full", now=current)
+        elif new_due:
+            await self.sync_store_orders(store_id, mode="insert", now=current)
+        elif old_due:
+            await self.sync_store_orders(store_id, mode="update", now=current)
+        offset = 0
+        if str(page_token).startswith("cache:"):
+            try:
+                offset = max(0, int(str(page_token).split(":", 1)[1]))
+            except ValueError:
+                offset = 0
+        page_size = max(1, min(int(limit), 50))
+        cached_orders, has_more = database.list_cached_orders(
+            store_id,
             statuses=statuses,
             date_from=date_from,
             date_to=date_to,
-            page_token=page_token,
-            limit=limit,
+            offset=offset,
+            limit=page_size,
         )
-        orders["orders"] = await enrich_order_finances(
-            client, store.business_id, store.campaign_id, orders["orders"],
+        client = YandexSellerClient(token)
+        cached_orders = await enrich_order_finances(
+            client, store.business_id, store.campaign_id, cached_orders,
         )
+        orders = {
+            "orders": cached_orders,
+            "paging": {
+                "nextPageToken": f"cache:{offset + page_size}" if has_more else ""
+            },
+            "sync": database.get_order_sync_state(store_id),
+        }
         return orders, stored
 
     async def update_order(
@@ -222,6 +460,12 @@ class TaskService:
         order_status, substatus = transitions[action]
         result = await YandexSellerClient(token).update_order_status(
             store.campaign_id,
+            order_id,
+            status=order_status,
+            substatus=substatus,
+        )
+        database.patch_cached_order_status(
+            store_id,
             order_id,
             status=order_status,
             substatus=substatus,
@@ -330,7 +574,7 @@ class TaskService:
             )
         )
         details: list[dict[str, Any]] = []
-        warning = ""
+        warnings: list[str] = []
         try:
             for index in range(0, len(ids), 100):
                 details.extend(
@@ -339,11 +583,20 @@ class TaskService:
                     )
                 )
         except YandexApiError as exc:
-            warning = f"商品名称、图片或前台链接暂未补全：{exc}"
+            warnings.append(f"商品名称、图片或前台链接暂未补全：{exc}")
         detail_by_id = {str(item.get("offerId")): item for item in details}
         for item in result["offers"]:
             item["details"] = detail_by_id.get(str(item.get("offerId")), {})
-        result["warning"] = warning
+        if ids:
+            try:
+                hidden_ids = set(
+                    await client.get_hidden_offer_ids(store.campaign_id, ids)
+                )
+                for item in result["offers"]:
+                    item["paused"] = str(item.get("offerId")) in hidden_ids
+            except YandexApiError as exc:
+                warnings.append(f"商品暂停状态暂未补全：{exc}")
+        result["warning"] = "；".join(warnings)
         result["statusCounts"] = {
             status: sum(1 for item in result["offers"] if item.get("status") == status)
             for status in sorted({str(item.get("status")) for item in result["offers"] if item.get("status")})
@@ -371,6 +624,46 @@ class TaskService:
         )
         return result, stored
 
+    async def update_listing_dimensions(
+        self,
+        store_id: int,
+        offer_id: str,
+        package: dict[str, float],
+    ) -> tuple[dict[str, Any], dict[str, Any]]:
+        token, store, stored = await self.resolve_store(store_id)
+        _require_scope(store, {"offers-and-cards-management"}, "商品包装和重量")
+        result = await YandexSellerClient(token).update_listing_dimensions(
+            store.business_id,
+            offer_id,
+            length=package["length"],
+            width=package["width"],
+            height=package["height"],
+            weight=package["weight"],
+        )
+        return result, stored
+
+    async def update_listing_visibility(
+        self,
+        store_id: int,
+        offer_ids: list[str],
+        *,
+        paused: bool,
+    ) -> tuple[dict[str, Any], dict[str, Any]]:
+        token, store, stored = await self.resolve_store(store_id)
+        _require_scope(store, {"offers-and-cards-management"}, "链接销售状态")
+        client = YandexSellerClient(token)
+        response = (
+            await client.pause_offer_displays(store.campaign_id, offer_ids)
+            if paused
+            else await client.resume_offer_displays(store.campaign_id, offer_ids)
+        )
+        return {
+            "response": response,
+            "offerIds": offer_ids,
+            "paused": paused,
+            "visibilityScope": "campaign",
+        }, stored
+
     async def delete_listings(
         self, store_id: int, offer_ids: list[str]
     ) -> tuple[dict[str, Any], dict[str, Any]]:
@@ -389,6 +682,44 @@ class TaskService:
             store, {"inventory-and-order-processing"}, "退货", read_only=True
         )
         result = await YandexSellerClient(token).get_returns(store.campaign_id, **filters)
+        return result, stored
+
+    async def get_chats(
+        self, store_id: int, **filters: Any
+    ) -> tuple[dict[str, Any], dict[str, Any]]:
+        token, store, stored = await self.resolve_store(store_id)
+        _require_scope(store, {"communication"}, "客户消息", read_only=True)
+        result = await YandexSellerClient(token).get_chats(store.business_id, **filters)
+        return result, stored
+
+    async def get_chat_history(
+        self, store_id: int, chat_id: int, **filters: Any
+    ) -> tuple[dict[str, Any], dict[str, Any]]:
+        token, store, stored = await self.resolve_store(store_id)
+        _require_scope(store, {"communication"}, "客户消息", read_only=True)
+        result = await YandexSellerClient(token).get_chat_history(
+            store.business_id, chat_id, **filters
+        )
+        return result, stored
+
+    async def send_chat_message(
+        self, store_id: int, chat_id: int, text: str
+    ) -> tuple[dict[str, Any], dict[str, Any]]:
+        token, store, stored = await self.resolve_store(store_id)
+        _require_scope(store, {"communication"}, "客户消息")
+        result = await YandexSellerClient(token).send_chat_message(
+            store.business_id, chat_id, text
+        )
+        return result, stored
+
+    async def create_chat(
+        self, store_id: int, context_type: str, context_id: int
+    ) -> tuple[dict[str, Any], dict[str, Any]]:
+        token, store, stored = await self.resolve_store(store_id)
+        _require_scope(store, {"communication"}, "客户消息")
+        result = await YandexSellerClient(token).create_chat(
+            store.business_id, context_type, context_id
+        )
         return result, stored
 
     async def get_feedbacks(

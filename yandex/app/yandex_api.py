@@ -603,6 +603,99 @@ class YandexSellerClient:
             "paging": {"nextPageToken": str((result.get("paging") or {}).get("nextPageToken") or "")},
         }
 
+    async def get_chats(
+        self,
+        business_id: int,
+        *,
+        statuses: list[str] | None = None,
+        context_types: list[str] | None = None,
+        types: list[str] | None = None,
+        page_token: str = "",
+        limit: int = 20,
+    ) -> dict[str, Any]:
+        query: dict[str, str | int] = {"limit": max(1, min(int(limit), 20))}
+        if page_token:
+            query["pageToken"] = page_token
+        body: dict[str, Any] = {}
+        if statuses:
+            body["statuses"] = list(dict.fromkeys(statuses))
+        if context_types:
+            body["contextTypes"] = list(dict.fromkeys(context_types))
+        if types:
+            body["types"] = list(dict.fromkeys(types))
+        response = await self._request(
+            "POST",
+            f"/v2/businesses/{int(business_id)}/chats?{urlencode(query)}",
+            json_body=body,
+        )
+        if str(response.get("status", "OK")).upper() not in {"OK", "SUCCESS"}:
+            raise YandexApiError(_api_message(response), details=response)
+        result = response.get("result") or response
+        return {
+            "chats": [item for item in result.get("chats") or [] if isinstance(item, dict)],
+            "paging": {
+                "nextPageToken": str((result.get("paging") or {}).get("nextPageToken") or "")
+            },
+        }
+
+    async def get_chat_history(
+        self,
+        business_id: int,
+        chat_id: int,
+        *,
+        page_token: str = "",
+        message_id_from: int | None = None,
+        limit: int = 100,
+    ) -> dict[str, Any]:
+        query: dict[str, str | int] = {
+            "chatId": int(chat_id),
+            "limit": max(1, min(int(limit), 100)),
+        }
+        if page_token:
+            query["pageToken"] = page_token
+        body = {"messageIdFrom": int(message_id_from)} if message_id_from else {}
+        response = await self._request(
+            "POST",
+            f"/v2/businesses/{int(business_id)}/chats/history?{urlencode(query)}",
+            json_body=body,
+        )
+        if str(response.get("status", "OK")).upper() not in {"OK", "SUCCESS"}:
+            raise YandexApiError(_api_message(response), details=response)
+        result = response.get("result") or response
+        return {
+            "context": result.get("context") or {},
+            "messages": [item for item in result.get("messages") or [] if isinstance(item, dict)],
+            "paging": {
+                "nextPageToken": str((result.get("paging") or {}).get("nextPageToken") or "")
+            },
+        }
+
+    async def send_chat_message(
+        self, business_id: int, chat_id: int, text: str
+    ) -> dict[str, Any]:
+        response = await self._request(
+            "POST",
+            f"/v2/businesses/{int(business_id)}/chats/message?{urlencode({'chatId': int(chat_id)})}",
+            json_body={"message": text},
+        )
+        if str(response.get("status", "OK")).upper() not in {"OK", "SUCCESS"}:
+            raise YandexApiError(_api_message(response), details=response)
+        return response.get("result") or response
+
+    async def create_chat(
+        self, business_id: int, context_type: str, context_id: int
+    ) -> dict[str, Any]:
+        response = await self._request(
+            "POST",
+            f"/v2/businesses/{int(business_id)}/chats/new",
+            json_body={
+                "context": {"type": str(context_type).upper(), "id": int(context_id)}
+            },
+        )
+        if str(response.get("status", "OK")).upper() not in {"OK", "SUCCESS"}:
+            raise YandexApiError(_api_message(response), details=response)
+        return response.get("result") or response
+
     async def get_feedbacks(
         self,
         business_id: int,
@@ -810,6 +903,44 @@ class YandexSellerClient:
             "currency": str(settings.get("currency") or currency_id),
         }
 
+    async def update_listing_dimensions(
+        self,
+        business_id: int,
+        offer_id: str,
+        *,
+        length: float,
+        width: float,
+        height: float,
+        weight: float,
+    ) -> dict[str, Any]:
+        dimensions = {
+            "length": float(length),
+            "width": float(width),
+            "height": float(height),
+            "weight": float(weight),
+        }
+        if any(value <= 0 or value > 1000 for value in dimensions.values()):
+            raise YandexApiError("包装长宽高和毛重必须大于 0，且不能超过 1000")
+        response = await self._request(
+            "POST",
+            f"/v2/businesses/{int(business_id)}/offer-mappings/update",
+            json_body={
+                "offerMappings": [{
+                    "offer": {
+                        "offerId": str(offer_id).strip(),
+                        "weightDimensions": dimensions,
+                    }
+                }],
+                "onlyPartnerMediaContent": False,
+            },
+        )
+        if str(response.get("status", "OK")).upper() not in {"OK", "SUCCESS"}:
+            raise YandexApiError(_api_message(response), details=response)
+        results = response.get("results") or []
+        if any(item.get("errors") for item in results if isinstance(item, dict)):
+            raise YandexApiError(_api_message(response), details=response)
+        return {"response": response, "dimensionsScope": "business"}
+
     async def delete_campaign_offers(
         self, campaign_id: int, offer_ids: list[str]
     ) -> dict[str, Any]:
@@ -856,6 +987,7 @@ class YandexSellerClient:
                 "archived": item["offer"].get("archived"),
                 "pictures": item["offer"].get("pictures"),
                 "mediaFiles": item["offer"].get("mediaFiles"),
+                "weightDimensions": item["offer"].get("weightDimensions"),
                 "campaigns": item["offer"].get("campaigns"),
                 "mapping": item.get("mapping"),
                 "showcaseUrls": item.get("showcaseUrls"),
@@ -993,6 +1125,56 @@ class YandexSellerClient:
             f"没有找到可通过 API 写库存的 {normalized_placement} 仓库；请先在卖家后台启用仓库 API"
         )
 
+    async def get_hidden_offer_ids(
+        self,
+        campaign_id: int,
+        offer_ids: list[str],
+    ) -> list[str]:
+        unique_offer_ids = list(
+            dict.fromkeys(str(value).strip() for value in offer_ids if str(value).strip())
+        )
+        if not unique_offer_ids or len(unique_offer_ids) > 500:
+            raise YandexApiError("每次查询暂停状态必须包含 1–500 个商品")
+        query = urlencode(
+            [("offer_id", offer_id) for offer_id in unique_offer_ids]
+            + [("limit", len(unique_offer_ids))]
+        )
+        response = await self._request(
+            "GET",
+            f"/v2/campaigns/{int(campaign_id)}/hidden-offers?{query}",
+            attempts=1,
+        )
+        if str(response.get("status", "OK")).upper() not in {"OK", "SUCCESS"}:
+            raise YandexApiError(_api_message(response), details=response)
+        result = response.get("result") or response
+        requested = set(unique_offer_ids)
+        return [
+            str(item.get("offerId"))
+            for item in result.get("hiddenOffers") or []
+            if isinstance(item, dict) and str(item.get("offerId")) in requested
+        ]
+
+    async def pause_offer_displays(
+        self,
+        campaign_id: int,
+        offer_ids: list[str],
+    ) -> dict[str, Any]:
+        unique_offer_ids = list(
+            dict.fromkeys(str(value).strip() for value in offer_ids if str(value).strip())
+        )
+        if not unique_offer_ids or len(unique_offer_ids) > 500:
+            raise YandexApiError("每次暂停销售必须包含 1–500 个商品")
+        response = await self._request(
+            "POST",
+            f"/v2/campaigns/{int(campaign_id)}/hidden-offers",
+            json_body={
+                "hiddenOffers": [{"offerId": offer_id} for offer_id in unique_offer_ids]
+            },
+        )
+        if str(response.get("status", "OK")).upper() not in {"OK", "SUCCESS"}:
+            raise YandexApiError(_api_message(response), details=response)
+        return response
+
     async def resume_offer_display(self, campaign_id: int, offer_id: str) -> dict[str, Any]:
         return await self.resume_offer_displays(campaign_id, [offer_id])
 
@@ -1001,17 +1183,19 @@ class YandexSellerClient:
         campaign_id: int,
         offer_ids: list[str],
     ) -> dict[str, Any]:
-        unique_offer_ids = list(dict.fromkeys(str(value) for value in offer_ids if value))
+        unique_offer_ids = list(
+            dict.fromkeys(str(value).strip() for value in offer_ids if str(value).strip())
+        )
         if not unique_offer_ids or len(unique_offer_ids) > 500:
             raise YandexApiError("每次恢复展示必须包含 1–500 个商品")
         response = await self._request(
             "POST",
-            f"/v2/campaigns/{campaign_id}/hidden-offers/delete",
+            f"/v2/campaigns/{int(campaign_id)}/hidden-offers/delete",
             json_body={
                 "hiddenOffers": [{"offerId": offer_id} for offer_id in unique_offer_ids]
             },
         )
-        if str(response.get("status", "OK")).upper() != "OK":
+        if str(response.get("status", "OK")).upper() not in {"OK", "SUCCESS"}:
             raise YandexApiError(_api_message(response), details=response)
         return response
 

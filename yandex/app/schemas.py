@@ -297,6 +297,28 @@ class ListingDeleteRequest(BaseModel):
         return InventoryListRequest.normalize_offer_ids(values)
 
 
+class ListingDimensionsUpdateRequest(BaseModel):
+    store_id: int = Field(gt=0)
+    offer_id: str = Field(min_length=1, max_length=255)
+    package: PackageDimensions
+
+    @field_validator("offer_id")
+    @classmethod
+    def normalize_listing_dimensions_offer_id(cls, value: str) -> str:
+        return InventoryStockUpdateRequest.normalize_offer_id(value)
+
+
+class ListingVisibilityUpdateRequest(BaseModel):
+    store_id: int = Field(gt=0)
+    offer_ids: list[str] = Field(min_length=1, max_length=500)
+    paused: bool
+
+    @field_validator("offer_ids")
+    @classmethod
+    def normalize_listing_visibility_ids(cls, values: list[str]) -> list[str]:
+        return InventoryListRequest.normalize_offer_ids(values)
+
+
 class ReturnListRequest(BaseModel):
     store_id: int = Field(gt=0)
     return_type: Literal["", "RETURN", "UNREDEEMED"] = ""
@@ -322,6 +344,71 @@ class ReturnListRequest(BaseModel):
         if self.date_from and self.date_to and self.date_from > self.date_to:
             raise ValueError("退货开始日期不能晚于结束日期")
         return self
+
+
+class ChatListRequest(BaseModel):
+    store_id: int = Field(gt=0)
+    statuses: list[
+        Literal[
+            "NEW",
+            "WAITING_FOR_CUSTOMER",
+            "WAITING_FOR_PARTNER",
+            "WAITING_FOR_ARBITER",
+            "WAITING_FOR_MARKET",
+            "FINISHED",
+        ]
+    ] = Field(default_factory=list, max_length=6)
+    context_types: list[Literal["ORDER", "RETURN", "DIRECT"]] = Field(
+        default_factory=list, max_length=3
+    )
+    types: list[Literal["CHAT", "ARBITRAGE"]] = Field(
+        default_factory=list, max_length=2
+    )
+    page_token: str = Field(default="", max_length=1000)
+    limit: int = Field(default=20, ge=1, le=20)
+
+    @field_validator("statuses", "context_types", "types")
+    @classmethod
+    def unique_chat_filters(cls, values: list[str]) -> list[str]:
+        return list(dict.fromkeys(values))
+
+    @field_validator("page_token")
+    @classmethod
+    def normalize_chat_page_token(cls, value: str) -> str:
+        return value.strip()
+
+
+class ChatHistoryRequest(BaseModel):
+    store_id: int = Field(gt=0)
+    chat_id: int = Field(gt=0)
+    page_token: str = Field(default="", max_length=1000)
+    message_id_from: int | None = Field(default=None, gt=0)
+    limit: int = Field(default=100, ge=1, le=100)
+
+    @field_validator("page_token")
+    @classmethod
+    def normalize_chat_history_page_token(cls, value: str) -> str:
+        return value.strip()
+
+
+class ChatReplyRequest(BaseModel):
+    store_id: int = Field(gt=0)
+    chat_id: int = Field(gt=0)
+    text: str = Field(min_length=1, max_length=4096)
+
+    @field_validator("text")
+    @classmethod
+    def normalize_chat_reply_text(cls, value: str) -> str:
+        value = value.strip()
+        if not value:
+            raise ValueError("消息内容不能为空")
+        return value
+
+
+class ChatCreateRequest(BaseModel):
+    store_id: int = Field(gt=0)
+    context_type: Literal["ORDER", "RETURN"]
+    context_id: int = Field(gt=0)
 
 
 class FeedbackListRequest(BaseModel):

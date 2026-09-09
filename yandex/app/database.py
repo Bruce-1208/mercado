@@ -143,6 +143,32 @@ class Database:
                     response_json TEXT NOT NULL DEFAULT '{}',
                     created_at TEXT NOT NULL
                 );
+
+                CREATE TABLE IF NOT EXISTS yandex_orders (
+                    store_id INTEGER NOT NULL,
+                    order_id TEXT NOT NULL,
+                    status TEXT NOT NULL DEFAULT '',
+                    creation_date TEXT NOT NULL DEFAULT '',
+                    update_date TEXT NOT NULL DEFAULT '',
+                    raw_json TEXT NOT NULL DEFAULT '{}',
+                    first_seen_at TEXT NOT NULL,
+                    status_synced_at TEXT NOT NULL,
+                    cached_at TEXT NOT NULL,
+                    PRIMARY KEY (store_id, order_id)
+                );
+
+                CREATE INDEX IF NOT EXISTS idx_yandex_orders_store_creation
+                    ON yandex_orders(store_id, creation_date DESC, order_id DESC);
+                CREATE INDEX IF NOT EXISTS idx_yandex_orders_store_status
+                    ON yandex_orders(store_id, status, creation_date DESC);
+
+                CREATE TABLE IF NOT EXISTS yandex_order_sync_state (
+                    store_id INTEGER PRIMARY KEY,
+                    new_orders_synced_at TEXT NOT NULL DEFAULT '',
+                    old_orders_synced_at TEXT NOT NULL DEFAULT '',
+                    last_error TEXT NOT NULL DEFAULT '',
+                    updated_at TEXT NOT NULL
+                );
                 """
             )
             publish_columns = {
@@ -184,6 +210,222 @@ class Database:
                 db.execute(
                     "ALTER TABLE publish_jobs ADD COLUMN stock_method TEXT NOT NULL DEFAULT ''"
                 )
+
+    def cache_orders(
+        self,
+        store_id: int,
+        orders: Sequence[dict[str, Any]],
+        *,
+        mode: str,
+    ) -> dict[str, int]:
+        """Persist one store's orders without mixing the two refresh cadences.
+
+        ``insert`` only discovers new order IDs, ``update`` only refreshes rows
+        already in the cache, and ``full`` performs both operations during the
+        first/bootstrap pass.
+        """
+        if mode not in {"insert", "update", "full"}:
+            raise ValueError("订单缓存模式无效")
+        now = utc_now()
+        inserted = 0
+        updated = 0
+        with self.connect() as db:
+            for order in orders:
+                if not isinstance(order, dict):
+                    continue
+                order_id = str(order.get("orderId") or order.get("id") or "").strip()
+                if not order_id:
+                    continue
+                values = (
+                    str(order.get("status") or "").upper(),
+                    str(order.get("creationDate") or ""),
+                    str(order.get("updateDate") or order.get("creationDate") or ""),
+                    json.dumps(order, ensure_ascii=False, separators=(",", ":")),
+                )
+                if mode == "insert":
+                    cursor = db.execute(
+                        """
+                        INSERT OR IGNORE INTO yandex_orders (
+                            store_id, order_id, status, creation_date, update_date,
+                            raw_json, first_seen_at, status_synced_at, cached_at
+                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        """,
+                        (int(store_id), order_id, *values, now, now, now),
+                    )
+                    inserted += max(0, cursor.rowcount)
+                elif mode == "update":
+                    cursor = db.execute(
+                        """
+                        UPDATE yandex_orders SET
+                            status = ?, creation_date = ?, update_date = ?,
+                            raw_json = ?, status_synced_at = ?, cached_at = ?
+                        WHERE store_id = ? AND order_id = ?
+                        """,
+                        (*values, now, now, int(store_id), order_id),
+                    )
+                    updated += max(0, cursor.rowcount)
+                else:
+                    existed = db.execute(
+                        "SELECT 1 FROM yandex_orders WHERE store_id = ? AND order_id = ?",
+                        (int(store_id), order_id),
+                    ).fetchone()
+                    db.execute(
+                        """
+                        INSERT INTO yandex_orders (
+                            store_id, order_id, status, creation_date, update_date,
+                            raw_json, first_seen_at, status_synced_at, cached_at
+                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        ON CONFLICT(store_id, order_id) DO UPDATE SET
+                            status = excluded.status,
+                            creation_date = excluded.creation_date,
+                            update_date = excluded.update_date,
+                            raw_json = excluded.raw_json,
+                            status_synced_at = excluded.status_synced_at,
+                            cached_at = excluded.cached_at
+                        """,
+                        (int(store_id), order_id, *values, now, now, now),
+                    )
+                    if existed:
+                        updated += 1
+                    else:
+                        inserted += 1
+        return {"inserted": inserted, "updated": updated}
+
+    def count_cached_orders(self, store_id: int) -> int:
+        with self.connect() as db:
+            row = db.execute(
+                "SELECT COUNT(*) AS total FROM yandex_orders WHERE store_id = ?",
+                (int(store_id),),
+            ).fetchone()
+        return int(row["total"] if row else 0)
+
+    def list_cached_orders(
+        self,
+        store_id: int,
+        *,
+        statuses: Sequence[str] | None = None,
+        date_from: str | None = None,
+        date_to: str | None = None,
+        offset: int = 0,
+        limit: int = 50,
+    ) -> tuple[list[dict[str, Any]], bool]:
+        clauses = ["store_id = ?"]
+        values: list[Any] = [int(store_id)]
+        normalized_statuses = list(
+            dict.fromkeys(str(value).strip().upper() for value in statuses or [] if str(value).strip())
+        )
+        if normalized_statuses:
+            clauses.append(f"status IN ({','.join('?' for _ in normalized_statuses)})")
+            values.extend(normalized_statuses)
+        if date_from:
+            clauses.append("substr(creation_date, 1, 10) >= ?")
+            values.append(str(date_from))
+        if date_to:
+            clauses.append("substr(creation_date, 1, 10) <= ?")
+            values.append(str(date_to))
+        page_size = max(1, min(int(limit), 50))
+        page_offset = max(0, int(offset))
+        values.extend((page_size + 1, page_offset))
+        with self.connect() as db:
+            rows = db.execute(
+                f"""
+                SELECT raw_json FROM yandex_orders
+                WHERE {' AND '.join(clauses)}
+                ORDER BY creation_date DESC, order_id DESC
+                LIMIT ? OFFSET ?
+                """,
+                values,
+            ).fetchall()
+        result: list[dict[str, Any]] = []
+        for row in rows[:page_size]:
+            try:
+                order = json.loads(row["raw_json"] or "{}")
+            except (TypeError, ValueError):
+                continue
+            if isinstance(order, dict):
+                result.append(order)
+        return result, len(rows) > page_size
+
+    def get_order_sync_state(self, store_id: int) -> dict[str, Any]:
+        with self.connect() as db:
+            row = db.execute(
+                "SELECT * FROM yandex_order_sync_state WHERE store_id = ?",
+                (int(store_id),),
+            ).fetchone()
+        return dict(row) if row else {
+            "store_id": int(store_id),
+            "new_orders_synced_at": "",
+            "old_orders_synced_at": "",
+            "last_error": "",
+            "updated_at": "",
+        }
+
+    def update_order_sync_state(self, store_id: int, **fields: Any) -> dict[str, Any]:
+        allowed = {"new_orders_synced_at", "old_orders_synced_at", "last_error"}
+        updates = {key: str(value or "") for key, value in fields.items() if key in allowed}
+        now = utc_now()
+        with self.connect() as db:
+            db.execute(
+                """
+                INSERT OR IGNORE INTO yandex_order_sync_state (store_id, updated_at)
+                VALUES (?, ?)
+                """,
+                (int(store_id), now),
+            )
+            if updates:
+                updates["updated_at"] = now
+                assignment = ", ".join(f"{key} = ?" for key in updates)
+                db.execute(
+                    f"UPDATE yandex_order_sync_state SET {assignment} WHERE store_id = ?",
+                    (*updates.values(), int(store_id)),
+                )
+        return self.get_order_sync_state(store_id)
+
+    def patch_cached_order_status(
+        self,
+        store_id: int,
+        order_id: int,
+        *,
+        status: str,
+        substatus: str,
+    ) -> bool:
+        now = utc_now()
+        with self.connect() as db:
+            row = db.execute(
+                "SELECT raw_json FROM yandex_orders WHERE store_id = ? AND order_id = ?",
+                (int(store_id), str(order_id)),
+            ).fetchone()
+            if not row:
+                return False
+            try:
+                order = json.loads(row["raw_json"] or "{}")
+            except (TypeError, ValueError):
+                order = {}
+            order.update({"status": status, "substatus": substatus, "updateDate": now})
+            db.execute(
+                """
+                UPDATE yandex_orders SET status = ?, update_date = ?, raw_json = ?,
+                    status_synced_at = ?, cached_at = ?
+                WHERE store_id = ? AND order_id = ?
+                """,
+                (
+                    status,
+                    now,
+                    json.dumps(order, ensure_ascii=False, separators=(",", ":")),
+                    now,
+                    now,
+                    int(store_id),
+                    str(order_id),
+                ),
+            )
+        return True
+
+    def delete_order_cache(self, store_id: int) -> None:
+        with self.connect() as db:
+            db.execute("DELETE FROM yandex_orders WHERE store_id = ?", (int(store_id),))
+            db.execute(
+                "DELETE FROM yandex_order_sync_state WHERE store_id = ?", (int(store_id),)
+            )
 
     @staticmethod
     def _decode_store(row: sqlite3.Row, *, include_secret: bool = False) -> dict[str, Any]:

@@ -147,6 +147,45 @@ class ClientTests(unittest.TestCase):
             session.calls[0][2]["headers"]["Authorization"], "Bearer token-value"
         )
 
+    def test_split_shipment_uses_global_selling_endpoint_and_two_pack_body(self):
+        class Response:
+            status_code = 200
+            ok = True
+            headers = {}
+            text = ""
+            content = b""
+
+        class Session:
+            def __init__(self):
+                self.calls = []
+
+            def request(self, method, url, **kwargs):
+                self.calls.append((method, url, kwargs))
+                return Response()
+
+        session = Session()
+        client = MercadoLibreClient("token-value", session=session)
+        packs = [
+            {"orders": [{"id": "20001", "quantity": 1}]},
+            {"orders": [{"id": "20001", "quantity": 1}]},
+        ]
+
+        result = client.split_shipment(
+            "47888427867", reason="dimensions_exceeded", packs=packs
+        )
+
+        self.assertEqual(result, {})
+        self.assertEqual(session.calls[0][0], "POST")
+        self.assertEqual(
+            session.calls[0][1],
+            "https://api.mercadolibre.com/marketplace/shipments/47888427867/split",
+        )
+        self.assertEqual(session.calls[0][2]["headers"]["x-format-new"], "true")
+        self.assertEqual(
+            session.calls[0][2]["json"],
+            {"reason": "DIMENSIONS_EXCEEDED", "packs": packs},
+        )
+
     def test_update_global_item_sends_json_to_global_selling_endpoint(self):
         class Response:
             status_code = 200

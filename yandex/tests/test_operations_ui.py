@@ -1,4 +1,4 @@
-"""Offline browser smoke test for links, inventory, returns, reviews and questions."""
+"""Offline browser smoke test for listings, inventory, returns and customer communication."""
 
 from __future__ import annotations
 
@@ -50,6 +50,7 @@ class OperationsBrowserTests(unittest.TestCase):
         self.errors = []
         self.unexpected_requests = []
         self.writes = []
+        self.reads = []
         self.page.on("pageerror", lambda error: self.errors.append(str(error)))
         self.page.on("dialog", lambda dialog: dialog.accept())
 
@@ -57,10 +58,10 @@ class OperationsBrowserTests(unittest.TestCase):
         self.assertEqual(self.errors, [], "Browser JavaScript errors")
         self.assertEqual(self.unexpected_requests, [], "All requests must stay mocked")
 
-    def open_console(self):
+    def open_console(self, stores=None):
         static_responses = {
             "/api/health": {"status": "ok"},
-            "/api/stores": {"stores": [{"id": 1, "alias": "运营测试店", "store_name": "Fixture", "placement_type": "FBS"}]},
+            "/api/stores": {"stores": stores or [{"id": 1, "alias": "运营测试店", "store_name": "Fixture", "placement_type": "FBS"}]},
             "/api/zeshun-stores": {"stores": []},
             "/api/exchange-rate": {"exchange_rate": {"rate": 0.08, "effective_date": "2026-09-06"}},
             "/api/orders": {"orders": [], "paging": {}},
@@ -72,6 +73,7 @@ class OperationsBrowserTests(unittest.TestCase):
                     "details": {
                         "name": "测试记录仪链接", "vendor": "Fixture",
                         "pictures": [],
+                        "weightDimensions": {"length": 30, "width": 20, "height": 10, "weight": 0.5},
                         "showcaseUrls": [{"showcaseType": "B2C", "showcaseUrl": "https://market.yandex.ru/product--fixture/123"}],
                     },
                 }],
@@ -85,6 +87,15 @@ class OperationsBrowserTests(unittest.TestCase):
             },
             "/api/returns": {
                 "returns": [{"id": 31, "orderId": 101, "returnType": "RETURN", "refundStatus": "PREMODERATION_DECISION_WAITING", "shipmentStatus": "READY_FOR_PICKUP", "creationDate": "2026-09-05T09:00:00Z", "updateDate": "2026-09-06T09:00:00Z", "amount": {"value": 199, "currencyId": "CNY"}, "items": [{"shopSku": "SKU-1", "count": 1}]}],
+                "paging": {},
+            },
+            "/api/chats": {
+                "chats": [{"chatId": 91, "context": {"type": "RETURN", "returnId": 31, "orderId": 101, "customer": {"name": "售后买家"}}, "type": "CHAT", "status": "WAITING_FOR_PARTNER", "createdAt": "2026-09-05T09:00:00Z", "updatedAt": "2026-09-06T10:00:00Z"}],
+                "paging": {},
+            },
+            "/api/chats/history": {
+                "context": {"type": "RETURN", "returnId": 31, "orderId": 101, "customer": {"name": "售后买家"}},
+                "messages": [{"messageId": 1, "sender": "CUSTOMER", "message": "退货后什么时候退款？", "createdAt": "2026-09-06T10:00:00Z"}],
                 "paging": {},
             },
             "/api/feedback": {
@@ -102,8 +113,12 @@ class OperationsBrowserTests(unittest.TestCase):
             "/api/feedback/reply": {"ok": True, "comment": {"id": 72}},
             "/api/feedback/skip": {"ok": True},
             "/api/questions/reply": {"ok": True, "result": {"entity": {"id": 82}}},
+            "/api/chats/create": {"ok": True, "chatId": 91},
+            "/api/chats/reply": {"ok": True},
             "/api/orders/action": {"ok": True},
             "/api/listings/price": {"ok": True, "priceScope": "campaign"},
+            "/api/listings/dimensions": {"ok": True, "dimensionsScope": "business"},
+            "/api/listings/visibility": {"ok": True, "paused": True, "visibilityScope": "campaign"},
             "/api/listings/delete": {"ok": True, "deleted": ["SKU-1"], "notDeletedOfferIds": []},
         }
 
@@ -122,6 +137,8 @@ class OperationsBrowserTests(unittest.TestCase):
                 self.writes.append((parsed.path, json.loads(request.post_data or "{}")))
                 return route.fulfill(content_type="application/json", body=json.dumps(write_responses[parsed.path]))
             if parsed.path in static_responses:
+                if request.method == "POST":
+                    self.reads.append((parsed.path, json.loads(request.post_data or "{}")))
                 return route.fulfill(content_type="application/json", body=json.dumps(static_responses[parsed.path]))
             self.unexpected_requests.append(request.url)
             return route.abort()
@@ -137,6 +154,9 @@ class OperationsBrowserTests(unittest.TestCase):
         expect(self.page.locator("#listingPublishedCount")).to_have_text("1")
         self.page.locator("[data-listing-price] input[required]").fill("179")
         self.page.locator("[data-listing-price] button[type=submit]").click()
+        self.page.locator('[data-listing-dimensions] [data-dimension="weight"]').fill("0.65")
+        self.page.locator("[data-listing-dimensions] button[type=submit]").click()
+        self.page.locator("[data-listing-visibility]").click()
         self.page.locator("[data-listing-delete]").click()
 
         self.page.locator('[data-view-target="inventory"]').click()
@@ -149,6 +169,10 @@ class OperationsBrowserTests(unittest.TestCase):
         self.page.locator('[data-view-target="returns"]').click()
         expect(self.page.locator("#returnList")).to_contain_text("等待卖家决定")
         expect(self.page.locator("#returnPickupCount")).to_have_text("1")
+        self.page.locator("[data-return-chat]").click()
+        expect(self.page.locator("#chatMessageList")).to_contain_text("退货后什么时候退款？")
+        self.page.locator("#chatReplyText").fill("已收到退货，正在核实退款进度")
+        self.page.locator("#chatReplyForm button[type=submit]").click()
 
         self.page.locator('[data-view-target="feedback"]').click()
         expect(self.page.locator("#feedbackList")).to_contain_text("清晰好用")
@@ -163,10 +187,36 @@ class OperationsBrowserTests(unittest.TestCase):
         writes = dict(self.writes)
         self.assertEqual(writes["/api/listings/price"]["offer_id"], "SKU-1")
         self.assertEqual(writes["/api/listings/price"]["value"], 179)
+        self.assertEqual(writes["/api/listings/dimensions"]["package"], {"length": 30, "width": 20, "height": 10, "weight": 0.65})
+        self.assertEqual(writes["/api/listings/visibility"], {"store_id": 1, "offer_ids": ["SKU-1"], "paused": True})
         self.assertEqual(writes["/api/listings/delete"], {"store_id": 1, "offer_ids": ["SKU-1"]})
         self.assertEqual(writes["/api/inventory/stock"], {"store_id": 1, "offer_id": "SKU-1", "count": 0})
+        self.assertEqual(writes["/api/chats/create"]["context_type"], "RETURN")
+        self.assertEqual(writes["/api/chats/create"]["context_id"], 31)
+        self.assertEqual(writes["/api/chats/reply"]["chat_id"], 91)
         self.assertEqual(writes["/api/feedback/reply"]["feedback_id"], 71)
         self.assertEqual(writes["/api/questions/reply"]["question_id"], 81)
+
+    def test_store_scope_defaults_to_all_stores(self):
+        self.open_console([
+            {"id": 1, "alias": "一店", "store_name": "Fixture 1", "placement_type": "FBS"},
+            {"id": 2, "alias": "二店", "store_name": "Fixture 2", "placement_type": "FBY"},
+        ])
+
+        expect(self.page.locator("#globalStoreSelect")).to_have_value("")
+        expect(self.page.locator("#globalStoreSelect option").first).to_have_text("全部店铺")
+        expect(self.page.locator("#connectionBadge")).to_contain_text("全部店铺 · 2 家")
+        self.assertEqual(
+            {payload["store_id"] for path, payload in self.reads if path == "/api/orders"},
+            {1, 2},
+        )
+        self.page.locator('[data-view-target="listings"]').click()
+        expect(self.page.locator("#listingTableBody tr")).to_have_count(2)
+        expect(self.page.locator("#listingTableBody .record-store")).to_have_text(["一店", "二店"])
+        self.assertEqual(
+            {payload["store_id"] for path, payload in self.reads if path == "/api/listings"},
+            {1, 2},
+        )
 
 
 if __name__ == "__main__":

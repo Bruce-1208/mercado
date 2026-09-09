@@ -156,6 +156,20 @@ class OrderFinanceBrowserTests(unittest.TestCase):
         self.assertIn("0/1 单有数据", self.page.locator("#orderListingCoverage").inner_text())
         self.assertIn("1/1 单有数据", self.page.locator("#orderPaymentCoverage").inner_text())
 
+    def test_order_statuses_are_parallel_buttons_and_submit_the_selected_status(self):
+        self.open_orders([order_fixture()])
+        status_group = self.page.locator("#orderStatus")
+        self.assertEqual(status_group.evaluate("element => getComputedStyle(element).display"), "flex")
+        self.assertEqual(status_group.locator("label").count(), 9)
+        self.assertEqual(self.page.locator("select#orderStatus").count(), 0)
+        self.assertTrue(status_group.locator('input[value=""]').is_checked())
+
+        status_group.get_by_text("配送中", exact=True).click()
+        with self.page.expect_request(lambda request: urlparse(request.url).path == "/api/orders") as request_info:
+            self.page.locator("#orderRefreshButton").click()
+
+        self.assertEqual(json.loads(request_info.value.post_data)["statuses"], ["DELIVERY"])
+
     def test_each_summary_groups_currency_and_reports_coverage(self):
         fields = ("listing_total", "buyer_payment", "seller_net", "seller_shipping")
         orders = [

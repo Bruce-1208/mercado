@@ -368,6 +368,8 @@ YANDEX_CONSOLE_PROXY_PATH = "/yandex-console"
 YANDEX_PACKAGE_ROOT = PROJECT_ROOT / "yandex"
 _yandex_console_lock = threading.Lock()
 _yandex_console_process = None
+_yandex_console_bootstrap_lock = threading.Lock()
+_yandex_console_bootstrap_started = False
 
 
 def _yandex_console_health():
@@ -444,6 +446,31 @@ def ensure_yandex_console():
                 break
             time.sleep(0.25)
         return False, f"Yandex 控制台启动失败，请检查日志：{log_path}"
+
+
+def start_yandex_console_bootstrap():
+    """Keep the Yandex worker alive even when nobody has opened its page yet."""
+    global _yandex_console_bootstrap_started
+    if USE_DB_API or app.testing:
+        return False
+    with _yandex_console_bootstrap_lock:
+        if _yandex_console_bootstrap_started:
+            return True
+        _yandex_console_bootstrap_started = True
+
+    def run():
+        running, message = ensure_yandex_console()
+        if running:
+            logging.info(message)
+        else:
+            logging.warning(message)
+
+    threading.Thread(
+        target=run,
+        name="yandex-console-bootstrap",
+        daemon=True,
+    ).start()
+    return True
 
 
 def _yandex_console_public_urls():
@@ -6352,6 +6379,57 @@ def api_order_weight_quote():
     return response
 
 
+@app.route('/api/orders/split/preview', methods=['POST'])
+@login_required
+def api_order_split_preview():
+    data = request.get_json(silent=True) or {}
+    order_ids = data.get("order_ids") or []
+    if not isinstance(order_ids, list):
+        return jsonify({"status": "error", "message": "order_ids 必须是数组"}), 422
+    try:
+        preview = bit_db_api.preview_order_split(order_ids)
+    except (ValueError, RuntimeError) as exc:
+        return jsonify({"status": "error", "message": str(exc)}), 400
+    except Exception as exc:
+        logging.exception("读取美客多拆分发货信息失败")
+        return jsonify({"status": "error", "message": f"拆分预检失败：{exc}"}), 502
+    response = jsonify({"status": "success", "data": preview})
+    response.headers["Cache-Control"] = "no-store"
+    return response
+
+
+@app.route('/api/orders/split', methods=['POST'])
+@login_required
+def api_order_split():
+    data = request.get_json(silent=True) or {}
+    order_ids = data.get("order_ids") or []
+    packs = data.get("packs") or []
+    if not isinstance(order_ids, list):
+        return jsonify({"status": "error", "message": "order_ids 必须是数组"}), 422
+    if not isinstance(packs, list):
+        return jsonify({"status": "error", "message": "packs 必须是数组"}), 422
+    user = session.get("workbench_user") or {}
+    try:
+        result = bit_db_api.split_order_shipment(
+            order_ids,
+            shipment_id=data.get("shipment_id"),
+            reason=data.get("reason"),
+            packs=packs,
+            operator_id=user.get("id"),
+            operator_name=user.get("display_name") or user.get("username") or "",
+        )
+    except (ValueError, RuntimeError) as exc:
+        return jsonify({"status": "error", "message": str(exc)}), 400
+    except Exception as exc:
+        logging.exception("美客多拆分发货失败")
+        return jsonify({"status": "error", "message": f"拆分发货失败：{exc}"}), 502
+    return jsonify({
+        "status": "success",
+        "message": result.get("message") or "拆分请求已提交",
+        "data": result,
+    })
+
+
 @app.route('/api/order-sync/options', methods=['GET'])
 @login_required
 def api_order_sync_options():
@@ -10263,6 +10341,111 @@ def api_db_official_infraction_current_counts():
     return jsonify({"status": "success", "data": data})
 
 
+_live_infraction_jobs = {}
+_live_infraction_jobs_lock = threading.Lock()
+
+
+def _live_infraction_job_public_state(state):
+    return {
+        key: value
+        for key, value in dict(state or {}).items()
+        if not str(key).startswith("_")
+    }
+
+
+def _prune_live_infraction_jobs():
+    cutoff = time.monotonic() - 3600
+    with _live_infraction_jobs_lock:
+        stale_ids = [
+            job_id
+            for job_id, state in _live_infraction_jobs.items()
+            if state.get("status") in {"completed", "failed"}
+            and float(state.get("_finished_monotonic") or 0) < cutoff
+        ]
+        for job_id in stale_ids:
+            _live_infraction_jobs.pop(job_id, None)
+
+
+def _start_live_infraction_job(targets, recent_days=100, max_workers=8):
+    _prune_live_infraction_jobs()
+    job_id = secrets.token_urlsafe(18)
+    started_at = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    with _live_infraction_jobs_lock:
+        _live_infraction_jobs[job_id] = {
+            "job_id": job_id,
+            "status": "queued",
+            "started_at": started_at,
+            "finished_at": "",
+            "target_count": len(targets),
+        }
+
+    def worker():
+        with _live_infraction_jobs_lock:
+            state = _live_infraction_jobs.get(job_id)
+            if state is not None:
+                state["status"] = "running"
+        try:
+            result = mercado_infraction_sync.collect_live_detection_infractions(
+                targets,
+                recent_days=recent_days,
+                max_workers=max_workers,
+            )
+            update = {"status": "completed", "result": result, "error": ""}
+        except Exception as exc:
+            logging.exception("服务端实时侵权读取任务失败：%s", job_id)
+            update = {"status": "failed", "error": str(exc), "result": None}
+        update["finished_at"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        update["_finished_monotonic"] = time.monotonic()
+        with _live_infraction_jobs_lock:
+            state = _live_infraction_jobs.get(job_id)
+            if state is not None:
+                state.update(update)
+
+    threading.Thread(
+        target=worker,
+        name=f"live-infraction-job-{job_id[:8]}",
+        daemon=True,
+    ).start()
+    with _live_infraction_jobs_lock:
+        return _live_infraction_job_public_state(_live_infraction_jobs[job_id])
+
+
+@app.route('/api/db/official-infractions/live/jobs', methods=['POST'])
+@internal_api_required
+def api_db_start_live_official_infraction_job():
+    blocked = reject_db_api_client_mode()
+    if blocked:
+        return blocked
+    payload = request.get_json(silent=True) or {}
+    targets = payload.get("targets") or []
+    if not isinstance(targets, list):
+        return jsonify({"status": "error", "message": "targets 必须是数组"}), 400
+    try:
+        data = _start_live_infraction_job(
+            targets,
+            recent_days=payload.get("recent_days", 100),
+            max_workers=payload.get("max_workers", 8),
+        )
+        return jsonify({"status": "success", "data": data})
+    except (TypeError, ValueError) as exc:
+        return jsonify({"status": "error", "message": str(exc)}), 400
+
+
+@app.route('/api/db/official-infractions/live/jobs/<job_id>', methods=['GET'])
+@internal_api_required
+def api_db_live_official_infraction_job_status(job_id):
+    blocked = reject_db_api_client_mode()
+    if blocked:
+        return blocked
+    _prune_live_infraction_jobs()
+    with _live_infraction_jobs_lock:
+        state = _live_infraction_jobs.get(str(job_id or ""))
+        data = _live_infraction_job_public_state(state) if state else None
+    if data is None:
+        return jsonify({"status": "error", "message": "实时侵权读取任务不存在或已过期"}), 404
+    return jsonify({"status": "success", "data": data})
+
+
 @app.route('/api/db/official-infractions/live', methods=['POST'])
 @internal_api_required
 def api_db_collect_live_official_infractions():
@@ -10369,6 +10552,49 @@ def api_db_list_mercado_tokens():
     if blocked:
         return blocked
     return jsonify({"status": "success", "data": bit_db_api.list_mercado_store_tokens()})
+
+
+@app.route('/api/db/mercado-account-groups', methods=['GET', 'POST'])
+@internal_api_required
+def api_db_mercado_account_groups():
+    blocked = reject_db_api_client_mode()
+    if blocked:
+        return blocked
+    try:
+        if request.method == "GET":
+            result = bit_db_api.list_mercado_account_groups()
+        else:
+            data = request.get_json(silent=True) or {}
+            result = bit_db_api.create_mercado_account_group(
+                data.get("name", ""),
+                data.get("description", ""),
+                data.get("token_ids", []),
+            )
+        return jsonify({"status": "success", "data": result})
+    except Exception as exc:
+        return _mercado_token_error_response(exc)
+
+
+@app.route('/api/db/mercado-account-groups/<int:group_id>', methods=['PUT', 'DELETE'])
+@internal_api_required
+def api_db_mercado_account_group(group_id):
+    blocked = reject_db_api_client_mode()
+    if blocked:
+        return blocked
+    try:
+        if request.method == "DELETE":
+            result = {"deleted": bit_db_api.delete_mercado_account_group(group_id)}
+        else:
+            data = request.get_json(silent=True) or {}
+            result = bit_db_api.update_mercado_account_group(
+                group_id,
+                data.get("name", ""),
+                data.get("description", ""),
+                data.get("token_ids") if "token_ids" in data else None,
+            )
+        return jsonify({"status": "success", "data": result})
+    except Exception as exc:
+        return _mercado_token_error_response(exc)
 
 
 @app.route('/api/db/mercado-tokens/<int:token_id>/site-settings', methods=['GET', 'PUT'])
@@ -10819,6 +11045,52 @@ def api_db_order_weight_quote():
     except KeyError as exc:
         return jsonify({"status": "error", "message": str(exc).strip("'")}), 404
     return jsonify({"status": "success", "data": quote})
+
+
+@app.route('/api/db/orders/split/preview', methods=['POST'])
+@internal_api_required
+def api_db_order_split_preview():
+    blocked = reject_db_api_client_mode()
+    if blocked:
+        return blocked
+    data = request.get_json(silent=True) or {}
+    order_ids = data.get("order_ids") or []
+    if not isinstance(order_ids, list):
+        return jsonify({"status": "error", "message": "order_ids must be an array"}), 422
+    from bit.bit_order_split import preview_order_split
+
+    try:
+        preview = preview_order_split(order_ids)
+    except (ValueError, RuntimeError) as exc:
+        return jsonify({"status": "error", "message": str(exc)}), 400
+    return jsonify({"status": "success", "data": preview})
+
+
+@app.route('/api/db/orders/split', methods=['POST'])
+@internal_api_required
+def api_db_order_split():
+    blocked = reject_db_api_client_mode()
+    if blocked:
+        return blocked
+    data = request.get_json(silent=True) or {}
+    order_ids = data.get("order_ids") or []
+    packs = data.get("packs") or []
+    if not isinstance(order_ids, list) or not isinstance(packs, list):
+        return jsonify({"status": "error", "message": "order_ids and packs must be arrays"}), 422
+    from bit.bit_order_split import split_order_shipment
+
+    try:
+        result = split_order_shipment(
+            order_ids,
+            shipment_id=data.get("shipment_id"),
+            reason=data.get("reason"),
+            packs=packs,
+            operator_id=data.get("operator_id"),
+            operator_name=data.get("operator_name") or "",
+        )
+    except (ValueError, RuntimeError) as exc:
+        return jsonify({"status": "error", "message": str(exc)}), 400
+    return jsonify({"status": "success", "data": result})
 
 
 @app.route('/api/db/order-sync/start', methods=['POST'])
@@ -12000,6 +12272,47 @@ def api_list_mercado_tokens():
     try:
         data = bit_db_api.list_mercado_store_tokens()
         return jsonify({"status": "success", "data": data})
+    except Exception as exc:
+        return _mercado_token_error_response(exc)
+
+
+@app.route('/api/mercado-account-groups', methods=['GET', 'POST'])
+@login_required
+def api_mercado_account_groups():
+    try:
+        if request.method == "GET":
+            result = bit_db_api.list_mercado_account_groups()
+            message = ""
+        else:
+            data = request.get_json(silent=True) or {}
+            result = bit_db_api.create_mercado_account_group(
+                data.get("name", ""),
+                data.get("description", ""),
+                data.get("token_ids", []),
+            )
+            message = "账号分组已新增"
+        return jsonify({"status": "success", "data": result, "message": message})
+    except Exception as exc:
+        return _mercado_token_error_response(exc)
+
+
+@app.route('/api/mercado-account-groups/<int:group_id>', methods=['PUT', 'DELETE'])
+@login_required
+def api_mercado_account_group(group_id):
+    try:
+        if request.method == "DELETE":
+            result = {"deleted": bit_db_api.delete_mercado_account_group(group_id)}
+            message = "账号分组已删除，原有账号已移至未分组"
+        else:
+            data = request.get_json(silent=True) or {}
+            result = bit_db_api.update_mercado_account_group(
+                group_id,
+                data.get("name", ""),
+                data.get("description", ""),
+                data.get("token_ids") if "token_ids" in data else None,
+            )
+            message = "账号分组已保存"
+        return jsonify({"status": "success", "data": result, "message": message})
     except Exception as exc:
         return _mercado_token_error_response(exc)
 
@@ -13665,6 +13978,7 @@ def start_interface_background_services():
     start_api_reputation_scheduler_bootstrap()
     start_token_refresh_scheduler_bootstrap()
     start_store_email_sync_scheduler_bootstrap()
+    start_yandex_console_bootstrap()
     ensure_mercado_profit_refresh_worker()
     bit_order_sync.ensure_order_sync_scheduler()
     bit_order_sync.ensure_order_financial_backfill_worker()

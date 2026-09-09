@@ -1,4 +1,5 @@
 import os
+import time
 import requests
 
 from bit.workbench_runtime import bootstrap_runtime
@@ -154,16 +155,66 @@ def collect_live_detection_infractions(
             max_workers=max_workers,
             stop_event=stop_event,
         )
-    return _request(
-        "POST",
-        "/api/db/official-infractions/live",
-        timeout=960,
-        json={
-            "targets": [dict(target or {}) for target in (targets or ())],
-            "recent_days": recent_days,
-            "max_workers": max_workers,
-        },
-    )
+    payload = {
+        "targets": [dict(target or {}) for target in (targets or ())],
+        "recent_days": recent_days,
+        "max_workers": max_workers,
+    }
+    job_path = "/api/db/official-infractions/live/jobs"
+    try:
+        started = _request("POST", job_path, timeout=30, json=payload) or {}
+    except RuntimeError as exc:
+        # Rolling deployments may briefly pair a new client with an older server.
+        message = str(exc or "")
+        route_missing = (
+            "404" in message
+            or "not found" in message.lower()
+            or "不存在" in message
+        )
+        if not route_missing:
+            raise
+        return _request(
+            "POST",
+            "/api/db/official-infractions/live",
+            timeout=960,
+            json=payload,
+        )
+
+    job_id = str(started.get("job_id") or "").strip()
+    if not job_id:
+        raise RuntimeError("官方侵权读取任务未返回任务编号")
+    status_path = f"{job_path}/{job_id}"
+    deadline = time.monotonic() + 960
+    transient_failures = 0
+    while time.monotonic() < deadline:
+        if stop_event is not None and stop_event.is_set():
+            return {
+                "data": [],
+                "results": [],
+                "failed_stores": [],
+                "source": "mercado_moderations_api",
+                "recent_days": max(1, int(recent_days or 1)),
+                "stopped": True,
+            }
+        try:
+            state = _request("GET", status_path, timeout=30) or {}
+            transient_failures = 0
+        except RuntimeError:
+            transient_failures += 1
+            if transient_failures >= 3:
+                raise
+            time.sleep(2)
+            continue
+        status = str(state.get("status") or "").strip().lower()
+        if status == "completed":
+            return dict(state.get("result") or {})
+        if status == "failed":
+            raise RuntimeError(
+                "官方侵权读取服务端任务失败："
+                + str(state.get("error") or "未知错误")
+            )
+        time.sleep(2)
+    raise RuntimeError("官方侵权读取服务端任务超时（超过 16 分钟）")
 
 
 def start_official_infraction_sync(token_ids=None):
@@ -497,6 +548,52 @@ def get_order_weight_quote(order_ids):
     if DB_MODE == "mysql":
         return _local_call("get_mercado_order_weight_quote", payload["order_ids"])
     return _request("POST", "/api/db/orders/weight-quote", json=payload)
+
+
+def preview_order_split(order_ids):
+    payload = {
+        "order_ids": [
+            str(value or "").strip()
+            for value in order_ids or []
+            if str(value or "").strip()
+        ]
+    }
+    if DB_MODE == "mysql":
+        from bit.bit_order_split import preview_order_split as local_preview
+
+        return local_preview(payload["order_ids"])
+    return _request("POST", "/api/db/orders/split/preview", json=payload)
+
+
+def split_order_shipment(
+    order_ids,
+    *,
+    shipment_id,
+    reason,
+    packs,
+    operator_id=None,
+    operator_name="",
+):
+    payload = {
+        "order_ids": [
+            str(value or "").strip()
+            for value in order_ids or []
+            if str(value or "").strip()
+        ],
+        "shipment_id": str(shipment_id or "").strip(),
+        "reason": str(reason or "").strip(),
+        "packs": list(packs or []),
+        "operator_id": operator_id,
+        "operator_name": str(operator_name or ""),
+    }
+    if DB_MODE == "mysql":
+        from bit.bit_order_split import split_order_shipment as local_split
+
+        return local_split(
+            payload.pop("order_ids"),
+            **payload,
+        )
+    return _request("POST", "/api/db/orders/split", json=payload, timeout=120)
 
 
 def list_inventory_stock(**filters):
@@ -1105,6 +1202,64 @@ def update_mercado_store_site_settings(token_id, settings):
         if not _mercado_token_route_missing(exc, path):
             raise
         return _local_call("upsert_mercado_store_site_settings", token_id, settings)
+
+
+def list_mercado_account_groups():
+    if DB_MODE == "mysql":
+        return _local_call("list_mercado_account_groups")
+    path = "/api/db/mercado-account-groups"
+    try:
+        return _request("GET", path)
+    except RuntimeError as exc:
+        if not _mercado_token_route_missing(exc, path):
+            raise
+        return _local_call("list_mercado_account_groups")
+
+
+def create_mercado_account_group(name, description="", token_ids=None):
+    payload = {
+        "name": name,
+        "description": description,
+        "token_ids": list(token_ids or []),
+    }
+    if DB_MODE == "mysql":
+        return _local_call("create_mercado_account_group", **payload)
+    path = "/api/db/mercado-account-groups"
+    try:
+        return _request("POST", path, json=payload)
+    except RuntimeError as exc:
+        if not _mercado_token_route_missing(exc, path):
+            raise
+        return _local_call("create_mercado_account_group", **payload)
+
+
+def update_mercado_account_group(group_id, name, description="", token_ids=None):
+    group_id = int(group_id)
+    payload = {"name": name, "description": description}
+    if token_ids is not None:
+        payload["token_ids"] = list(token_ids)
+    if DB_MODE == "mysql":
+        return _local_call("update_mercado_account_group", group_id, **payload)
+    path = f"/api/db/mercado-account-groups/{group_id}"
+    try:
+        return _request("PUT", path, json=payload)
+    except RuntimeError as exc:
+        if not _mercado_token_route_missing(exc, path):
+            raise
+        return _local_call("update_mercado_account_group", group_id, **payload)
+
+
+def delete_mercado_account_group(group_id):
+    group_id = int(group_id)
+    if DB_MODE == "mysql":
+        return _local_call("delete_mercado_account_group", group_id)
+    path = f"/api/db/mercado-account-groups/{group_id}"
+    try:
+        return _request("DELETE", path)
+    except RuntimeError as exc:
+        if not _mercado_token_route_missing(exc, path):
+            raise
+        return _local_call("delete_mercado_account_group", group_id)
 
 
 def exchange_mercado_store_token(display_name, callback_or_code):

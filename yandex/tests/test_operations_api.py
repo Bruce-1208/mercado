@@ -4,13 +4,19 @@ import unittest
 from unittest.mock import AsyncMock
 
 from yandex.app.schemas import (
+    ChatCreateRequest,
+    ChatHistoryRequest,
+    ChatListRequest,
+    ChatReplyRequest,
     FeedbackListRequest,
     FeedbackReplyRequest,
     InventoryListRequest,
     InventoryStockUpdateRequest,
     ListingDeleteRequest,
+    ListingDimensionsUpdateRequest,
     ListingListRequest,
     ListingPriceUpdateRequest,
+    ListingVisibilityUpdateRequest,
     OrderActionRequest,
     QuestionListRequest,
     ReturnListRequest,
@@ -71,6 +77,17 @@ class OperationsSchemaTests(unittest.TestCase):
             ListingPriceUpdateRequest(
                 store_id=1, offer_id="sku-1", value=99, currency_id="CNY", discount_base=100
             )
+        dimensions = ListingDimensionsUpdateRequest(
+            store_id=1,
+            offer_id=" sku-1 ",
+            package={"length": 30, "width": 20, "height": 10, "weight": 0.5},
+        )
+        self.assertEqual(dimensions.offer_id, "sku-1")
+        self.assertEqual(dimensions.package.weight, 0.5)
+        visibility = ListingVisibilityUpdateRequest(
+            store_id=1, offer_ids=[" sku-1 ", "sku-1"], paused=True
+        )
+        self.assertEqual(visibility.offer_ids, ["sku-1"])
 
     def test_dates_and_order_actions_are_constrained(self) -> None:
         returns = ReturnListRequest(
@@ -88,6 +105,21 @@ class OperationsSchemaTests(unittest.TestCase):
         self.assertEqual(
             OrderActionRequest(store_id=1, order_id=2, action="READY_TO_SHIP").action,
             "READY_TO_SHIP",
+        )
+        chats = ChatListRequest(
+            store_id=1,
+            statuses=["WAITING_FOR_PARTNER", "WAITING_FOR_PARTNER"],
+            context_types=["RETURN"],
+        )
+        self.assertEqual(chats.statuses, ["WAITING_FOR_PARTNER"])
+        self.assertEqual(ChatHistoryRequest(store_id=1, chat_id=8).limit, 100)
+        self.assertEqual(
+            ChatReplyRequest(store_id=1, chat_id=8, text=" 售后问题已收到 ").text,
+            "售后问题已收到",
+        )
+        self.assertEqual(
+            ChatCreateRequest(store_id=1, context_type="RETURN", context_id=31).context_id,
+            31,
         )
 
     def test_read_only_tokens_can_connect_but_cannot_mutate(self) -> None:
@@ -165,6 +197,59 @@ class OperationsClientTests(unittest.IsolatedAsyncioTestCase):
             "/v2/campaigns/20/offers/delete",
             json_body={"offerIds": ["sku-1", "sku-2"]},
         )
+
+    async def test_updates_catalogue_dimensions_with_complete_package(self) -> None:
+        client = YandexSellerClient("test-token")
+        client._request = AsyncMock(return_value={"status": "OK", "results": [{}]})
+
+        result = await client.update_listing_dimensions(
+            10, " sku-1 ", length=30, width=20, height=10, weight=0.5
+        )
+
+        self.assertEqual(result["dimensionsScope"], "business")
+        client._request.assert_awaited_once_with(
+            "POST",
+            "/v2/businesses/10/offer-mappings/update",
+            json_body={
+                "offerMappings": [{
+                    "offer": {
+                        "offerId": "sku-1",
+                        "weightDimensions": {
+                            "length": 30.0,
+                            "width": 20.0,
+                            "height": 10.0,
+                            "weight": 0.5,
+                        },
+                    }
+                }],
+                "onlyPartnerMediaContent": False,
+            },
+        )
+
+    async def test_reads_and_changes_store_scoped_pause_state(self) -> None:
+        client = YandexSellerClient("test-token")
+        client._request = AsyncMock(
+            side_effect=[
+                {"status": "OK", "result": {"hiddenOffers": [{"offerId": "sku-1"}]}},
+                {"status": "OK"},
+                {"status": "OK"},
+            ]
+        )
+
+        hidden = await client.get_hidden_offer_ids(20, ["sku-1", "sku-2"])
+        await client.pause_offer_displays(20, ["sku-1", "sku-1"])
+        await client.resume_offer_displays(20, ["sku-1"])
+
+        self.assertEqual(hidden, ["sku-1"])
+        calls = client._request.await_args_list
+        self.assertEqual(calls[0].args[0], "GET")
+        self.assertIn("/v2/campaigns/20/hidden-offers?", calls[0].args[1])
+        self.assertIn("offer_id=sku-1", calls[0].args[1])
+        self.assertEqual(
+            calls[1].kwargs["json_body"],
+            {"hiddenOffers": [{"offerId": "sku-1"}]},
+        )
+        self.assertEqual(calls[2].args[1], "/v2/campaigns/20/hidden-offers/delete")
 
     async def test_reads_independent_warehouse_stock(self) -> None:
         client = YandexSellerClient("test-token")
@@ -266,6 +351,42 @@ class OperationsClientTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn("fromDate=2026-08-01", path)
         self.assertIn("toDate=2026-09-01", path)
         self.assertIn("type=RETURN", path)
+
+    async def test_chat_list_history_reply_and_create_payloads(self) -> None:
+        client = YandexSellerClient("test-token")
+        client._request = AsyncMock(
+            side_effect=[
+                {"status": "OK", "result": {"chats": [{"chatId": 9}], "paging": {"nextPageToken": "next"}}},
+                {"status": "OK", "result": {"context": {"type": "RETURN", "returnId": 31}, "messages": [{"messageId": 2, "sender": "CUSTOMER", "message": "什么时候退款"}], "paging": {}}},
+                {"status": "OK"},
+                {"status": "OK", "result": {"chatId": 9}},
+            ]
+        )
+
+        listed = await client.get_chats(
+            10,
+            statuses=["WAITING_FOR_PARTNER"],
+            context_types=["RETURN"],
+            types=["CHAT"],
+            page_token="page-1",
+        )
+        history = await client.get_chat_history(10, 9)
+        await client.send_chat_message(10, 9, "已为您核实")
+        created = await client.create_chat(10, "RETURN", 31)
+
+        self.assertEqual(listed["paging"]["nextPageToken"], "next")
+        self.assertEqual(history["messages"][0]["sender"], "CUSTOMER")
+        self.assertEqual(created["chatId"], 9)
+        calls = client._request.await_args_list
+        self.assertIn("/v2/businesses/10/chats?", calls[0].args[1])
+        self.assertIn("pageToken=page-1", calls[0].args[1])
+        self.assertEqual(calls[0].kwargs["json_body"], {
+            "statuses": ["WAITING_FOR_PARTNER"], "contextTypes": ["RETURN"], "types": ["CHAT"]
+        })
+        self.assertIn("chatId=9", calls[1].args[1])
+        self.assertEqual(calls[1].kwargs["json_body"], {})
+        self.assertEqual(calls[2].kwargs["json_body"], {"message": "已为您核实"})
+        self.assertEqual(calls[3].kwargs["json_body"], {"context": {"type": "RETURN", "id": 31}})
 
     async def test_feedback_list_reply_and_skip_payloads(self) -> None:
         client = YandexSellerClient("test-token")

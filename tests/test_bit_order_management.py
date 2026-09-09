@@ -1,7 +1,8 @@
+import inspect
 from unittest.mock import patch
 
 import bit.bit_interface as workbench
-from bit import bit_db_api
+from bit import bit_db_api, bit_mysql
 
 
 def _client():
@@ -35,7 +36,7 @@ def test_workbench_contains_order_management_ui():
     assert b"orderSyncStartDate.disabled = manualSyncRunning" in response.data
     assert b"start.setDate(start.getDate() - 6)" not in response.data
     assert b'data-origin="token"' in response.data
-    assert "商品名、采购备注和订单备注均支持模糊查询".encode("utf-8") in response.data
+    assert "打包单号和子订单号都支持搜索".encode("utf-8") in response.data
     assert "下单时间（北京时间）".encode("utf-8") in response.data
     assert "预计利润 / 利润率".encode("utf-8") in response.data
     assert "手续费".encode("utf-8") in response.data
@@ -82,6 +83,39 @@ def test_order_detail_contains_weight_quote_ui():
     assert "订单重量与重量表运费".encode("utf-8") in response.data
     assert "官方重量表运费（美元）".encode("utf-8") in response.data
     assert b"function loadOrderWeightQuote(orderIds)" in response.data
+
+
+def test_order_management_displays_pack_number_without_exposing_child_number():
+    response = _client().get("/")
+
+    assert response.status_code == 200
+    assert "<th>打包单号</th><th>商品</th><th>店铺</th>".encode("utf-8") in response.data
+    assert b"function orderDisplayNumber(row)" in response.data
+    assert b'return String(row?.pack_id || row?.order_number || "");' in response.data
+    assert b"copyOrderNumber('${encodedDisplayNumber}', this)" in response.data
+    assert '["子订单号",'.encode("utf-8") not in response.data
+    assert '<span>子订单 ${'.encode("utf-8") not in response.data
+
+
+def test_order_query_displays_pack_id_but_keeps_child_order_id_searchable():
+    source = inspect.getsource(bit_mysql.list_orders)
+
+    assert source.count("AS `order_number`") >= 2
+    assert source.count("JSON_EXTRACT(synced.`raw_json`, '$.pack_id')") >= 3
+    assert "CAST({column('id')} AS CHAR) LIKE %s" in source
+    assert "{column('order_number')} LIKE %s" in source
+
+
+def test_order_management_contains_shipment_split_ui():
+    response = _client().get("/")
+
+    assert response.status_code == 200
+    assert b'id="order-split-dialog"' in response.data
+    assert b'id="order-detail-split-button"' in response.data
+    assert b'/api/orders/split/preview' in response.data
+    assert b'/api/orders/split' in response.data
+    assert "确认拆成两个包裹".encode("utf-8") in response.data
+    assert "仅支持 ME2 drop-off / cross-docking".encode("utf-8") in response.data
 
 
 def test_order_api_requires_login():
@@ -177,6 +211,93 @@ def test_order_weight_quote_route_returns_weight_and_rate_card_freight():
     assert response.headers["Cache-Control"] == "no-store"
     assert response.get_json()["data"]["shipping_amount_usd"] == 12.34
     get_quote.assert_called_once_with(["20001", "20002"])
+
+
+def test_order_split_preview_route_returns_live_quantities():
+    preview = {
+        "shipment_id": "30001",
+        "order_ids": ["20001"],
+        "orders": [{"order_id": "20001", "quantity": 2, "items": []}],
+        "total_quantity": 2,
+        "eligible": True,
+    }
+    with patch.object(
+        workbench.bit_db_api, "preview_order_split", return_value=preview
+    ) as preview_split:
+        response = _client().post(
+            "/api/orders/split/preview", json={"order_ids": ["20001"]}
+        )
+
+    assert response.status_code == 200
+    assert response.headers["Cache-Control"] == "no-store"
+    assert response.get_json()["data"]["total_quantity"] == 2
+    preview_split.assert_called_once_with(["20001"])
+
+
+def test_order_split_route_forwards_operator_and_exact_two_pack_plan():
+    packs = [
+        {"orders": [{"id": "20001", "quantity": 1}]},
+        {"orders": [{"id": "20001", "quantity": 1}]},
+    ]
+    result = {
+        "submitted": True,
+        "shipment_id": "30001",
+        "order_ids": ["20001"],
+        "message": "拆分请求已提交",
+    }
+    with patch.object(
+        workbench.bit_db_api, "split_order_shipment", return_value=result
+    ) as split_shipment:
+        response = _client().post(
+            "/api/orders/split",
+            json={
+                "order_ids": ["20001"],
+                "shipment_id": "30001",
+                "reason": "FRAGILE",
+                "packs": packs,
+            },
+        )
+
+    assert response.status_code == 200
+    assert response.get_json()["data"]["submitted"] is True
+    split_shipment.assert_called_once_with(
+        ["20001"],
+        shipment_id="30001",
+        reason="FRAGILE",
+        packs=packs,
+        operator_id=1,
+        operator_name="测试用户",
+    )
+
+
+def test_order_split_db_api_forwards_to_database_service(monkeypatch):
+    captured = {}
+    packs = [
+        {"orders": [{"id": "20001", "quantity": 1}]},
+        {"orders": [{"id": "20001", "quantity": 1}]},
+    ]
+
+    def fake_request(method, path, **kwargs):
+        captured.update(method=method, path=path, **kwargs)
+        return {"submitted": True}
+
+    monkeypatch.setattr(bit_db_api, "DB_MODE", "api")
+    monkeypatch.setattr(bit_db_api, "_request", fake_request)
+
+    result = bit_db_api.split_order_shipment(
+        ["20001"],
+        shipment_id="30001",
+        reason="FRAGILE",
+        packs=packs,
+        operator_id=1,
+        operator_name="测试用户",
+    )
+
+    assert result["submitted"] is True
+    assert captured["method"] == "POST"
+    assert captured["path"] == "/api/db/orders/split"
+    assert captured["json"]["packs"] == packs
+    assert captured["json"]["operator_name"] == "测试用户"
 
 
 def test_order_api_passes_multiple_stores_and_salespeople():
