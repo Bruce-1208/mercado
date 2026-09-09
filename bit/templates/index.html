@@ -1119,6 +1119,53 @@
             gap: 8px;
         }
 
+        .order-split-dialog {
+            width: min(760px, calc(100vw - 32px));
+            border: 0;
+            border-radius: 18px;
+            padding: 0;
+            color: #172033;
+            box-shadow: 0 24px 80px rgba(16, 24, 40, .28);
+        }
+
+        .order-split-dialog::backdrop { background: rgba(16, 24, 40, .56); }
+        .order-split-body { display: grid; gap: 16px; padding: 0 24px 22px; }
+        .order-split-notice {
+            padding: 12px 14px;
+            border: 1px solid #fedf89;
+            border-radius: 10px;
+            background: #fffaeb;
+            color: #7a2e0e;
+            font-size: 12px;
+            line-height: 1.65;
+        }
+        .order-split-meta { display: flex; flex-wrap: wrap; gap: 8px; }
+        .order-split-meta span { padding: 5px 9px; border-radius: 999px; background: #f2f4f7; color: #475467; font-size: 11px; }
+        .order-split-reason label { display: block; margin-bottom: 6px; color: #475467; font-size: 12px; }
+        .order-split-reason select { width: 100%; }
+        .order-split-items { display: grid; gap: 9px; }
+        .order-split-item {
+            display: grid;
+            grid-template-columns: minmax(0, 1fr) 90px 90px;
+            align-items: center;
+            gap: 12px;
+            padding: 12px 14px;
+            border: 1px solid #eaecf0;
+            border-radius: 11px;
+            background: #fff;
+        }
+        .order-split-item strong, .order-split-item span { display: block; overflow-wrap: anywhere; }
+        .order-split-item span { margin-top: 3px; color: #667085; font-size: 11px; }
+        .order-split-quantity label { display: block; margin-bottom: 4px; color: #667085; font-size: 10px; }
+        .order-split-quantity input { width: 100%; padding: 7px 8px; }
+        .order-split-quantity output { display: block; min-height: 36px; padding: 9px 8px; border-radius: 7px; background: #f2f4f7; text-align: center; }
+        .order-split-summary { display: flex; justify-content: space-between; gap: 12px; color: #475467; font-size: 12px; }
+        .order-split-message { min-height: 20px; color: #667085; font-size: 12px; }
+        .order-split-message.error { color: #b42318; }
+        @media (max-width: 640px) {
+            .order-split-item { grid-template-columns: 1fr 78px 78px; }
+        }
+
         .order-sync-dialog {
             width: min(780px, calc(100vw - 28px));
             max-height: calc(100vh - 40px);
@@ -2127,6 +2174,86 @@
 
         .mercado-token-filter-bar select {
             width: 100%;
+        }
+
+        .mercado-group-dialog {
+            width: min(980px, calc(100vw - 28px));
+        }
+
+        .mercado-group-layout {
+            display: grid;
+            grid-template-columns: minmax(250px, 0.8fr) minmax(0, 1.4fr);
+            min-height: 460px;
+        }
+
+        .mercado-group-sidebar {
+            padding: 14px;
+            border-right: 1px solid var(--line);
+            background: #f8fafc;
+        }
+
+        .mercado-group-sidebar-head {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 10px;
+        }
+
+        .mercado-group-list { display: grid; gap: 8px; }
+        .mercado-group-card {
+            width: 100%;
+            padding: 11px 12px;
+            border: 1px solid var(--line);
+            border-radius: 8px;
+            background: #fff;
+            color: var(--text);
+            text-align: left;
+        }
+        .mercado-group-card:hover,
+        .mercado-group-card.active { border-color: #84adff; background: #eff6ff; }
+        .mercado-group-card strong,
+        .mercado-group-card span { display: block; }
+        .mercado-group-card span { margin-top: 4px; color: var(--muted); font-size: 12px; }
+
+        .mercado-group-editor { padding: 16px; }
+        .mercado-group-description { min-height: 82px; resize: vertical; }
+        .mercado-group-account-list {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 8px;
+            max-height: 250px;
+            overflow: auto;
+            padding: 10px;
+            border: 1px solid var(--line);
+            border-radius: 8px;
+            background: #f8fafc;
+        }
+        .mercado-group-account-option {
+            display: flex;
+            align-items: flex-start;
+            gap: 8px;
+            padding: 9px;
+            border: 1px solid #e4e7ec;
+            border-radius: 7px;
+            background: #fff;
+            cursor: pointer;
+        }
+        .mercado-group-account-option input { margin-top: 3px; }
+        .mercado-group-account-option strong,
+        .mercado-group-account-option span { display: block; }
+        .mercado-group-account-option span { margin-top: 2px; color: var(--muted); font-size: 11px; }
+        .mercado-group-editor-actions {
+            display: flex;
+            justify-content: space-between;
+            gap: 10px;
+            margin-top: 14px;
+        }
+
+        @media (max-width: 760px) {
+            .mercado-group-layout { grid-template-columns: 1fr; }
+            .mercado-group-sidebar { border-right: 0; border-bottom: 1px solid var(--line); }
+            .mercado-group-account-list { grid-template-columns: 1fr; }
         }
 
         .mercado-site-settings-table {
@@ -8535,8 +8662,8 @@
                             </div>
                         </div>
                         <div class="order-filter-field search">
-                            <label for="order-search-input">订单、采购单、运单、商品名或备注关键词</label>
-                            <input id="order-search-input" type="search" placeholder="商品名、采购备注和订单备注均支持模糊查询">
+                            <label for="order-search-input">打包单、子订单、采购单、运单、商品名或备注关键词</label>
+                            <input id="order-search-input" type="search" placeholder="打包单号和子订单号都支持搜索">
                         </div>
                         <div class="order-filter-actions">
                             <button class="primary" type="submit">搜索</button>
@@ -8565,7 +8692,7 @@
                             <thead>
                                 <tr>
                                     <th><input class="order-row-checkbox" type="checkbox" aria-label="全选本页订单" onchange="toggleAllVisibleOrders(this.checked)"></th>
-                                    <th>订单号</th><th>商品</th><th>销售单号</th><th>金额（美元）</th>
+                                    <th>打包单号</th><th>商品</th><th>店铺</th><th>金额（美元）</th>
                                     <th>手续费</th><th>标价 / 实际运费</th><th>结余</th><th>成本</th>
                                     <th>利润</th><th>利润率</th><th>状态</th><th>备货</th><th>签收/发货</th>
                                     <th>运单</th><th>买家 / 备注</th><th>下单时间（北京时间）</th>
@@ -8611,8 +8738,37 @@
                     <div class="order-detail-footer">
                         <span id="order-detail-action-message">可打印当前订单或维护采购信息</span>
                         <div>
+                            <button class="secondary" id="order-detail-split-button" type="button" onclick="openOrderSplitDialog(orderDetailOrderIds)">拆分发货</button>
                             <button class="secondary" type="button" onclick="printOrders(orderDetailOrderIds)">打印美客多面单</button>
                             <button class="primary" type="button" onclick="editOrderPurchaseFromDetail()">添加 / 修改采购单</button>
+                        </div>
+                    </div>
+                </dialog>
+
+                <dialog class="order-split-dialog" id="order-split-dialog" onclick="if(event.target === this && !orderSplitSubmitting) closeOrderSplitDialog()">
+                    <div class="order-detail-header">
+                        <div>
+                            <h3>拆分发货</h3>
+                            <p style="margin:3px 0 0;color:#667085;font-size:12px">通过美客多官方 Shipment Split 接口拆成两个新包裹</p>
+                        </div>
+                        <button class="order-detail-close" type="button" aria-label="关闭拆分发货" onclick="closeOrderSplitDialog()">×</button>
+                    </div>
+                    <div class="order-split-body">
+                        <div class="order-split-notice">提交后原 Pack、订单和 Shipment 会被美客多取消并标记为已拆分，新订单与新 Shipment ID 将异步生成。一个 Shipment 只能拆分一次，请确认数量无误。</div>
+                        <div class="order-split-meta" id="order-split-meta"></div>
+                        <div class="order-split-reason">
+                            <label for="order-split-reason">拆分原因</label>
+                            <select id="order-split-reason"></select>
+                        </div>
+                        <div class="order-split-items" id="order-split-items"><div class="empty-state">正在向美客多读取运单商品…</div></div>
+                        <div class="order-split-summary"><strong id="order-split-pack-one-total">包裹 1：0 件</strong><strong id="order-split-pack-two-total">包裹 2：0 件</strong></div>
+                        <div class="order-split-message" id="order-split-message">正在检查运单是否支持拆分…</div>
+                    </div>
+                    <div class="order-detail-footer" style="padding:0 24px 22px">
+                        <span>仅支持 ME2 drop-off / cross-docking，不支持 Full</span>
+                        <div>
+                            <button class="secondary" type="button" onclick="closeOrderSplitDialog()">取消</button>
+                            <button class="primary" id="order-split-submit" type="button" onclick="submitOrderSplit()" disabled>确认拆成两个包裹</button>
                         </div>
                     </div>
                 </dialog>
@@ -10662,6 +10818,7 @@
                             </div>
                             <div class="header-actions">
                                 <span class="reputation-selection-summary" id="mercado-token-selection-summary">已选择 0 家</span>
+                                <button class="secondary" id="mercado-account-group-manage" type="button" onclick="openMercadoAccountGroupManager()">管理账号分组</button>
                                 <button class="primary" id="mercado-token-bulk-settings" type="button" onclick="openMercadoBulkSiteSettings()" disabled>批量设置业务员 / 分组 / 站点任务</button>
                                 <button class="secondary" type="button" onclick="loadMercadoStoreTokens(true)">刷新列表</button>
                             </div>
@@ -10726,7 +10883,7 @@
                         </div>
                         <div class="field">
                             <label for="mercado-site-group-name">分组</label>
-                            <input id="mercado-site-group-name" type="text" maxlength="100" placeholder="例如 A组 / 精品组">
+                            <input id="mercado-site-group-name" type="text" maxlength="100" list="mercado-account-group-options" placeholder="例如 A组 / 精品组">
                         </div>
                     </div>
                     <div class="mercado-site-settings-wrap">
@@ -10761,7 +10918,7 @@
                         </div>
                         <div class="field">
                             <label for="mercado-bulk-group-name">统一分组</label>
-                            <input id="mercado-bulk-group-name" type="text" maxlength="100" placeholder="留空则保留各店原分组">
+                            <input id="mercado-bulk-group-name" type="text" maxlength="100" list="mercado-account-group-options" placeholder="留空则保留各店原分组">
                         </div>
                     </div>
                     <div class="mercado-site-settings-wrap">
@@ -10778,6 +10935,49 @@
                             <button class="secondary" id="mercado-bulk-group-save" type="button" onclick="saveMercadoBulkSiteSettings(true)">仅保存分组</button>
                             <button class="primary" id="mercado-bulk-settings-save" type="button" onclick="saveMercadoBulkSiteSettings()">批量保存</button>
                         </div>
+                    </div>
+                </dialog>
+
+                <datalist id="mercado-account-group-options"></datalist>
+                <dialog class="order-detail-dialog mercado-group-dialog" id="mercado-account-group-dialog" onclick="if(event.target === this) this.close()">
+                    <div class="order-detail-header">
+                        <div>
+                            <h3>账号分组管理</h3>
+                            <p style="margin:3px 0 0;color:#667085;font-size:12px">维护分组名称、说明，并选择该组显示的授权账号</p>
+                        </div>
+                        <button class="order-detail-close" type="button" aria-label="关闭账号分组管理" onclick="document.getElementById('mercado-account-group-dialog').close()">×</button>
+                    </div>
+                    <div class="mercado-group-layout">
+                        <aside class="mercado-group-sidebar">
+                            <div class="mercado-group-sidebar-head">
+                                <strong>全部分组 <span id="mercado-account-group-count">0</span></strong>
+                                <button class="secondary" type="button" onclick="startNewMercadoAccountGroup()">新增分组</button>
+                            </div>
+                            <div class="mercado-group-list" id="mercado-account-group-list"></div>
+                        </aside>
+                        <section class="mercado-group-editor">
+                            <input id="mercado-account-group-id" type="hidden" value="">
+                            <div class="field">
+                                <label for="mercado-account-group-name">分组名称</label>
+                                <input id="mercado-account-group-name" type="text" maxlength="100" placeholder="例如：精品组" autocomplete="off">
+                            </div>
+                            <div class="field">
+                                <label for="mercado-account-group-description">分组描述</label>
+                                <textarea class="mercado-group-description" id="mercado-account-group-description" maxlength="500" placeholder="可填写负责人、用途或运营规则"></textarea>
+                            </div>
+                            <div class="field">
+                                <label>组内账号 <span id="mercado-account-group-selection-summary" class="muted-count">0</span></label>
+                                <div class="mercado-group-account-list" id="mercado-account-group-accounts"></div>
+                            </div>
+                            <p class="mercado-site-settings-message" id="mercado-account-group-message" role="status"></p>
+                            <div class="mercado-group-editor-actions">
+                                <button class="danger" id="mercado-account-group-delete" type="button" onclick="deleteMercadoAccountGroup()" hidden>删除分组</button>
+                                <div style="margin-left:auto;display:flex;gap:8px">
+                                    <button class="secondary" type="button" onclick="document.getElementById('mercado-account-group-dialog').close()">取消</button>
+                                    <button class="primary" id="mercado-account-group-save" type="button" onclick="saveMercadoAccountGroup()">新增分组</button>
+                                </div>
+                            </div>
+                        </section>
                     </div>
                 </dialog>
             </div>
@@ -12067,6 +12267,18 @@
         const mercadoTokenNameSearch = document.getElementById("mercado-token-name-search");
         const mercadoTokenSalespersonFilter = document.getElementById("mercado-token-salesperson-filter");
         const mercadoTokenGroupFilter = document.getElementById("mercado-token-group-filter");
+        const mercadoAccountGroupDialog = document.getElementById("mercado-account-group-dialog");
+        const mercadoAccountGroupOptions = document.getElementById("mercado-account-group-options");
+        const mercadoAccountGroupList = document.getElementById("mercado-account-group-list");
+        const mercadoAccountGroupCount = document.getElementById("mercado-account-group-count");
+        const mercadoAccountGroupId = document.getElementById("mercado-account-group-id");
+        const mercadoAccountGroupName = document.getElementById("mercado-account-group-name");
+        const mercadoAccountGroupDescription = document.getElementById("mercado-account-group-description");
+        const mercadoAccountGroupAccounts = document.getElementById("mercado-account-group-accounts");
+        const mercadoAccountGroupSelectionSummary = document.getElementById("mercado-account-group-selection-summary");
+        const mercadoAccountGroupMessage = document.getElementById("mercado-account-group-message");
+        const mercadoAccountGroupDelete = document.getElementById("mercado-account-group-delete");
+        const mercadoAccountGroupSave = document.getElementById("mercado-account-group-save");
         const mercadoSiteSettingsDialog = document.getElementById("mercado-site-settings-dialog");
         const mercadoSiteSettingsTitle = document.getElementById("mercado-site-settings-title");
         const mercadoSiteSalesperson = document.getElementById("mercado-site-salesperson");
@@ -12325,6 +12537,15 @@
         const orderTrackingExternal = document.getElementById("order-tracking-external");
         const orderDetailLogList = document.getElementById("order-detail-log-list");
         const orderDetailActionMessage = document.getElementById("order-detail-action-message");
+        const orderDetailSplitButton = document.getElementById("order-detail-split-button");
+        const orderSplitDialog = document.getElementById("order-split-dialog");
+        const orderSplitMeta = document.getElementById("order-split-meta");
+        const orderSplitReason = document.getElementById("order-split-reason");
+        const orderSplitItems = document.getElementById("order-split-items");
+        const orderSplitPackOneTotal = document.getElementById("order-split-pack-one-total");
+        const orderSplitPackTwoTotal = document.getElementById("order-split-pack-two-total");
+        const orderSplitMessage = document.getElementById("order-split-message");
+        const orderSplitSubmit = document.getElementById("order-split-submit");
         const orderSyncDialog = document.getElementById("order-sync-dialog");
         const orderSyncStartDate = document.getElementById("order-sync-start-date");
         const orderSyncEndDate = document.getElementById("order-sync-end-date");
@@ -12337,6 +12558,8 @@
         let orderDetailOrderId = "";
         let orderDetailOrderIds = [];
         let orderDetailWeightRequestKey = "";
+        let orderSplitPreview = null;
+        let orderSplitSubmitting = false;
         let infractionDays = 30;
         let infractionsLoaded = false;
         let riskCheckLoaded = false;
@@ -12512,6 +12735,8 @@
         const selectedMercadoStoreTokenIds = new Set();
         let mercadoSiteSettingsTokenId = 0;
         let mercadoSalespeople = [];
+        let mercadoAccountGroups = [];
+        let mercadoAccountGroupsLoaded = false;
         const mercadoSiteDefinitions = [
             ["MLM", "墨西哥"], ["MLB", "巴西"], ["MLC", "智利"],
             ["MCO", "哥伦比亚"], ["MLA", "阿根廷"], ["MLU", "乌拉圭"],
@@ -13621,6 +13846,21 @@
             return [...new Set(values.map(value => String(value || "")).filter(Boolean))];
         }
 
+        function orderDisplayNumber(row) {
+            return String(row?.pack_id || row?.order_number || "");
+        }
+
+        function orderDisplayNumberForOrderIds(orderIds) {
+            const identifiers = new Set(
+                (Array.isArray(orderIds) ? orderIds : [])
+                    .map(value => String(value || "")).filter(Boolean)
+            );
+            const row = orderRows.find(candidate =>
+                orderRowIds(candidate).some(orderId => identifiers.has(orderId))
+            );
+            return orderDisplayNumber(row);
+        }
+
         function orderSkuItems(row) {
             if (Array.isArray(row?.sku_items) && row.sku_items.length) return row.sku_items;
             return [{
@@ -13731,6 +13971,9 @@
                 const margin = income ? profit * 100 / income : 0;
                 const encodedId = encodeURIComponent(String(row.id || row.order_number || ""));
                 const orderId = String(row.id || row.order_number || "");
+                const displayNumber = orderDisplayNumber(row);
+                const displayLabel = displayNumber || "未生成";
+                const encodedDisplayNumber = encodeURIComponent(displayNumber);
                 const mergedOrderIds = orderRowIds(row);
                 const encodedOrderIds = encodeURIComponent(JSON.stringify(mergedOrderIds));
                 const allSelected = mergedOrderIds.every(value => selectedOrderIds.has(value));
@@ -13756,18 +13999,19 @@
                 ].filter(Boolean).join(" · ");
                 return `
                     <tr class="${allSelected ? "selected" : ""}" onclick="showOrderDetail(${index})" tabindex="0" onkeydown="if(event.key === 'Enter') showOrderDetail(${index})">
-                        <td onclick="event.stopPropagation()"><input class="order-row-checkbox" type="checkbox" value="${escapeHtml(orderId)}" data-order-ids="${escapeHtml(mergedOrderIds.join(','))}" aria-label="选择订单 ${escapeHtml(mergedOrderIds.join('、'))}" onchange="toggleOrderGroupSelection(this.dataset.orderIds, this.checked, this.closest('tr'))" ${allSelected ? "checked" : ""}></td>
+                        <td onclick="event.stopPropagation()"><input class="order-row-checkbox" type="checkbox" value="${escapeHtml(orderId)}" data-order-ids="${escapeHtml(mergedOrderIds.join(','))}" aria-label="选择打包单 ${escapeHtml(displayLabel)}" onchange="toggleOrderGroupSelection(this.dataset.orderIds, this.checked, this.closest('tr'))" ${allSelected ? "checked" : ""}></td>
                         <td><div class="order-cell-stack">
-                            <button class="order-copy-link" type="button" title="复制订单号" onclick="event.stopPropagation(); copyOrderNumber('${encodedId}', this)">
-                                ${escapeHtml(row.is_merged ? `合并单 ${row.pack_id}` : (row.id || "-"))} <span aria-hidden="true">⧉</span>
+                            <button class="order-copy-link" type="button" title="${displayNumber ? "复制打包单号" : "尚未生成打包单号"}" onclick="event.stopPropagation(); copyOrderNumber('${encodedDisplayNumber}', this)" ${displayNumber ? "" : "disabled"}>
+                                ${escapeHtml(displayLabel)} ${displayNumber ? '<span aria-hidden="true">⧉</span>' : ""}
                             </button>
                             ${row.is_merged ? `<span>${mergedOrderIds.length} 个子订单</span>` : ""}
                             <button class="order-copy-link" type="button" title="调用美客多接口打印发货面单" onclick="event.stopPropagation(); printOrders(JSON.parse(decodeURIComponent('${encodedOrderIds}')))">打印面单</button>
+                            ${row.platform_shipping_id ? `<button class="order-copy-link" type="button" title="拆成两个美客多包裹" onclick="event.stopPropagation(); openOrderSplitDialog(JSON.parse(decodeURIComponent('${encodedOrderIds}')))">拆分发货</button>` : ""}
                             <span class="order-country-tag">${escapeHtml(row.country || "未分类")}</span>
                             <span class="order-origin-tag token">Token 拉取</span>
                         </div></td>
                         <td>${orderProductMarkup(row)}</td>
-                        <td><div class="order-cell-stack"><strong>${escapeHtml(row.order_number || "-")}</strong><span>${escapeHtml(row.shop_name || row.source || "美客多")}</span></div></td>
+                        <td><div class="order-cell-stack"><strong>${escapeHtml(row.shop_name || row.source || "美客多")}</strong><span>Token 拉取</span></div></td>
                         <td><div class="order-cell-stack"><strong class="order-money">${escapeHtml(orderAmount(row.amount))}</strong><span title="${escapeHtml(orderExchangeDescription(row))}">${escapeHtml(orderExchangeDescription(row))}</span><span title="${escapeHtml(orderCnyExchangeDescription(row))}">人民币收入 ${escapeHtml(orderCnyIncome(row.income))}</span></div></td>
                         <td><span class="order-money">${escapeHtml(orderAmount(row.fee ?? 0))}</span></td>
                         <td><div class="order-cell-stack" title="${escapeHtml(`标价更新时间 ${row.quoted_freight_checked_at || '待计算'} · 实际运费更新时间 ${row.freight_checked_at || '待同步'}`)}">
@@ -13991,7 +14235,7 @@
                 return `
                     <div class="order-purchase-product">
                         ${imageUrl ? `<a class="order-sku-image-link" href="${escapeHtml(imageUrl)}" target="_blank" rel="noopener noreferrer" title="打开 SKU 原图"><img src="${escapeHtml(imageUrl)}" alt="${escapeHtml(item.seller_sku || item.product_id || "SKU")}" referrerpolicy="no-referrer"></a>` : '<span class="placeholder">SKU</span>'}
-                        <div>${orderProductNameMarkup(item)}<span>订单 ${escapeHtml(item.order_id || row.id || row.order_number)} · SKU ${escapeHtml(item.seller_sku || item.product_id || "-")}</span><span>${escapeHtml(item.variation || row.shop_name || "未记录店铺")}</span></div>
+                        <div>${orderProductNameMarkup(item)}<span>打包单 ${escapeHtml(orderDisplayNumber(row) || "-")} · SKU ${escapeHtml(item.seller_sku || item.product_id || "-")}</span><span>${escapeHtml(item.variation || row.shop_name || "未记录店铺")}</span></div>
                     </div>
                 `;
             })).join("");
@@ -14165,6 +14409,160 @@
             }
         }
 
+        function closeOrderSplitDialog() {
+            if (!orderSplitSubmitting && orderSplitDialog?.open) orderSplitDialog.close();
+        }
+
+        function orderSplitDescription(order) {
+            const descriptions = (Array.isArray(order?.items) ? order.items : [])
+                .map(item => item.description || item.item_id).filter(Boolean);
+            return descriptions.join("、") || "美客多运单商品";
+        }
+
+        function updateOrderSplitTotals() {
+            if (!orderSplitPreview) return;
+            let packOneTotal = 0;
+            let packTwoTotal = 0;
+            orderSplitItems.querySelectorAll(".order-split-item").forEach(row => {
+                const total = Number(row.dataset.total || 0);
+                const input = row.querySelector("input");
+                let packOne = Math.trunc(Number(input?.value || 0));
+                packOne = Math.max(0, Math.min(total, Number.isFinite(packOne) ? packOne : 0));
+                if (input) input.value = String(packOne);
+                const packTwo = total - packOne;
+                const output = row.querySelector("output");
+                if (output) output.textContent = String(packTwo);
+                packOneTotal += packOne;
+                packTwoTotal += packTwo;
+            });
+            orderSplitPackOneTotal.textContent = `包裹 1：${packOneTotal} 件`;
+            orderSplitPackTwoTotal.textContent = `包裹 2：${packTwoTotal} 件`;
+            const valid = packOneTotal > 0 && packTwoTotal > 0;
+            orderSplitSubmit.disabled = orderSplitSubmitting || !valid;
+            orderSplitMessage.className = `order-split-message${valid ? "" : " error"}`;
+            orderSplitMessage.textContent = valid
+                ? "两箱合计数量与原运单一致，可以提交拆分。"
+                : "两个包裹都必须至少包含 1 件商品。";
+        }
+
+        function renderOrderSplitPreview(preview) {
+            orderSplitPreview = preview;
+            const orders = Array.isArray(preview?.orders) ? preview.orders : [];
+            const displayNumber = orderDisplayNumberForOrderIds(preview?.order_ids);
+            orderSplitMeta.innerHTML = [
+                displayNumber ? `打包单 ${displayNumber}` : "",
+                `Shipment ${preview.shipment_id || "-"}`,
+                preview.mode ? String(preview.mode).toUpperCase() : "ME2",
+                preview.logistic_type || "物流类型待接口校验",
+                `共 ${Number(preview.total_quantity || 0)} 件`,
+            ].filter(Boolean).map(value => `<span>${escapeHtml(value)}</span>`).join("");
+            orderSplitReason.innerHTML = (preview.reasons || []).map(reason =>
+                `<option value="${escapeHtml(reason.value)}">${escapeHtml(reason.label)}（${escapeHtml(reason.value)}）</option>`
+            ).join("");
+            orderSplitItems.innerHTML = orders.map((order, index) => {
+                const total = Math.max(0, Number(order.quantity || 0));
+                const initialPackOne = index === 0 ? (orders.length === 1 ? 1 : total) : 0;
+                return `<div class="order-split-item" data-order-id="${escapeHtml(order.order_id)}" data-total="${total}">
+                    <div><strong>${escapeHtml(displayNumber ? `打包单 ${displayNumber}` : `商品 ${index + 1}`)}</strong><span>${escapeHtml(orderSplitDescription(order))} · 原数量 ${total}</span></div>
+                    <div class="order-split-quantity"><label>包裹 1 数量</label><input type="number" min="0" max="${total}" step="1" value="${initialPackOne}" oninput="updateOrderSplitTotals()"></div>
+                    <div class="order-split-quantity"><label>包裹 2 数量</label><output>${total - initialPackOne}</output></div>
+                </div>`;
+            }).join("");
+            updateOrderSplitTotals();
+        }
+
+        async function openOrderSplitDialog(orderIds = null) {
+            const targetIds = (Array.isArray(orderIds) ? orderIds : [])
+                .map(value => String(value || "").trim()).filter(Boolean);
+            if (!targetIds.length || !orderSplitDialog) {
+                orderBulkMessage.textContent = "请先打开一个需要拆分的订单";
+                return;
+            }
+            orderSplitPreview = null;
+            orderSplitSubmit.disabled = true;
+            orderSplitMeta.innerHTML = "";
+            orderSplitReason.innerHTML = "";
+            orderSplitItems.innerHTML = '<div class="empty-state"><span class="order-loading-dot"></span>正在向美客多读取运单商品…</div>';
+            orderSplitMessage.className = "order-split-message";
+            orderSplitMessage.textContent = "正在检查运单是否支持拆分…";
+            if (typeof orderSplitDialog.showModal === "function" && !orderSplitDialog.open) orderSplitDialog.showModal();
+            try {
+                const response = await fetch("/api/orders/split/preview", {
+                    method: "POST",
+                    headers: {"Content-Type": "application/json"},
+                    cache: "no-store",
+                    body: JSON.stringify({order_ids: targetIds}),
+                });
+                const payload = await response.json();
+                if (!response.ok || payload.status !== "success") {
+                    throw new Error(payload.message || `接口请求失败：${response.status}`);
+                }
+                renderOrderSplitPreview(payload.data || {});
+            } catch (error) {
+                orderSplitPreview = null;
+                orderSplitItems.innerHTML = '<div class="empty-state">当前运单不能拆分</div>';
+                orderSplitMessage.className = "order-split-message error";
+                orderSplitMessage.textContent = error.message || String(error);
+                orderSplitSubmit.disabled = true;
+            }
+        }
+
+        function buildOrderSplitPacks() {
+            const packs = [{orders: []}, {orders: []}];
+            orderSplitItems.querySelectorAll(".order-split-item").forEach(row => {
+                const orderId = String(row.dataset.orderId || "");
+                const total = Number(row.dataset.total || 0);
+                const packOne = Math.max(0, Math.min(total, Math.trunc(Number(row.querySelector("input")?.value || 0))));
+                const packTwo = total - packOne;
+                if (packOne > 0) packs[0].orders.push({id: orderId, quantity: packOne});
+                if (packTwo > 0) packs[1].orders.push({id: orderId, quantity: packTwo});
+            });
+            return packs;
+        }
+
+        async function submitOrderSplit() {
+            if (orderSplitSubmitting || !orderSplitPreview) return;
+            const packs = buildOrderSplitPacks();
+            if (packs.some(pack => !pack.orders.length)) {
+                updateOrderSplitTotals();
+                return;
+            }
+            if (!window.confirm(`确认将 Shipment ${orderSplitPreview.shipment_id} 拆成两个包裹吗？该操作不能撤销。`)) return;
+            orderSplitSubmitting = true;
+            orderSplitSubmit.disabled = true;
+            orderSplitMessage.className = "order-split-message";
+            orderSplitMessage.textContent = "正在向美客多提交拆分，请勿重复操作…";
+            try {
+                const response = await fetch("/api/orders/split", {
+                    method: "POST",
+                    headers: {"Content-Type": "application/json"},
+                    body: JSON.stringify({
+                        order_ids: orderSplitPreview.order_ids || [],
+                        shipment_id: orderSplitPreview.shipment_id,
+                        reason: String(orderSplitReason.value || ""),
+                        packs,
+                    }),
+                });
+                const payload = await response.json();
+                if (!response.ok || payload.status !== "success") {
+                    throw new Error(payload.message || `接口请求失败：${response.status}`);
+                }
+                const warnings = Array.isArray(payload.data?.warnings) ? payload.data.warnings : [];
+                const message = `${payload.message || "拆分请求已提交"}。新订单会在后续自动拉取中出现${warnings.length ? `；${warnings.join("；")}` : ""}`;
+                orderBulkMessage.textContent = message;
+                if (orderDetailActionMessage) orderDetailActionMessage.textContent = message;
+                orderSplitDialog.close();
+                await loadOrders(orderPage);
+                if (orderDetailOrderId) await loadOrderOperationLogs(orderDetailOrderId);
+            } catch (error) {
+                orderSplitMessage.className = "order-split-message error";
+                orderSplitMessage.textContent = `拆分失败：${error.message || error}`;
+            } finally {
+                orderSplitSubmitting = false;
+                if (orderSplitDialog?.open) updateOrderSplitTotals();
+            }
+        }
+
         function logDisplayValue(value) {
             if (value === null || value === undefined || String(value) === "") return "空";
             return String(value);
@@ -14301,15 +14699,13 @@
             if (!row || !orderDetailDialog) return;
             orderDetailOrderId = String(row.id || row.order_number || "");
             orderDetailOrderIds = orderRowIds(row);
+            const displayNumber = orderDisplayNumber(row);
             const profit = orderNumberValue(row.profit);
             const income = orderNumberValue(row.income);
             const margin = income ? profit * 100 / income : 0;
-            orderDetailTitle.textContent = row.is_merged
-                ? `合并单 ${row.pack_id} · ${orderDetailOrderIds.length} 个子订单`
-                : `订单 ${row.id || row.order_number || "详情"}`;
+            orderDetailTitle.textContent = `打包单 ${displayNumber || "详情"}`;
             const items = [
-                ["子订单号", orderDetailOrderIds.join("、"), true],
-                ["销售单号", row.order_number || "-"], ["国家地区", row.country || "-"],
+                ["打包单号", displayNumber || "-"], ["国家地区", row.country || "-"],
                 ["处理状态", row.status || "未分类"], ["平台状态", row.platform_status || row.status || "未分类"],
                 ["数据来源", "Token 自动拉取"], ["店铺", row.shop_name || "-"],
                 ["业务员", row.salesperson || "未分配"], ["自定义组别", row.group_name || "未分组"],
@@ -14341,7 +14737,7 @@
                         <div>${orderProductNameMarkup(item)}
                             <span>SKU ${escapeHtml(item.seller_sku || item.product_id || "-")} · 数量 ${escapeHtml(item.quantity || 1)}</span>
                             ${item.variation ? `<span>${escapeHtml(item.variation)}</span>` : ""}
-                            <span>子订单 ${escapeHtml(item.order_id || orderDetailOrderId)}</span>
+                            <span>打包单 ${escapeHtml(displayNumber || "-")}</span>
                         </div>
                     </article>
                 `).join("")}</div>
@@ -14351,6 +14747,12 @@
                 <div class="order-detail-item${wide ? " wide" : ""}"><span>${escapeHtml(label)}</span><strong>${escapeHtml(value)}</strong></div>
             `).join("");
             orderDetailActionMessage.textContent = "可打印当前订单或维护采购信息";
+            if (orderDetailSplitButton) {
+                orderDetailSplitButton.disabled = !row.platform_shipping_id;
+                orderDetailSplitButton.title = row.platform_shipping_id
+                    ? "调用美客多官方接口拆成两个包裹"
+                    : "订单尚未生成 Shipment ID";
+            }
             if (typeof orderDetailDialog.showModal === "function") orderDetailDialog.showModal();
             loadOrderOperationLogs(orderDetailOrderId);
             loadOrderWeightQuote(orderDetailOrderIds);
@@ -15434,9 +15836,10 @@
                 const billableRule = mercadoListMode === "collection"
                     ? "采集列表：只按实际重量"
                     : "Global Selling：毛重/体积重取较大";
-                const commissionNote = row.commission_rate === null || row.commission_rate === undefined
-                    ? `Classic · ${row.category_name || "官网费用待更新"}`
-                    : `Classic · ${mercadoMetric(row.commission_rate, "%")} · ${row.category_name || row.category_id || "官网分类"}`;
+                const hasCommission = row.commission_amount_usd != null || row.commission_amount_local != null;
+                const commissionNote = hasCommission
+                    ? ["Classic", row.commission_rate != null ? mercadoMetric(row.commission_rate, "%") : "", row.category_name || row.category_id || ""].filter(Boolean).join(" · ")
+                    : `Classic · ${row.profitability_error ? "佣金补算异常" : "佣金待后台补算"}`;
                 const shippingRule = String(row.shipping_weight_rule || "");
                 const shippingModeNote = shippingRule.startsWith("free_shipping:")
                     ? "包邮"
@@ -15446,9 +15849,12 @@
                 const shippingSourceNote = shippingRule.includes("official_global_selling_cainiao_rate_card")
                     ? "Global Selling 官方表"
                     : "官方接口";
-                const shippingNote = row.shipping_fee_local === null || row.shipping_fee_local === undefined
-                    ? "官网运费待更新"
-                    : `${shippingModeNote ? `${shippingModeNote} · ` : ""}${shippingSourceNote} · ${mercadoMetric(row.shipping_fee_local)} ${row.shipping_currency_id || row.currency_id || ""}`;
+                const shippingAmount = row.shipping_fee_local ?? row.shipping_fee_usd;
+                const shippingCurrency = row.shipping_fee_local != null
+                    ? (row.shipping_currency_id || row.currency_id || "") : "USD";
+                const shippingNote = shippingAmount == null
+                    ? (actualWeight == null || Number(actualWeight) <= 0 ? "缺少实际重量" : row.profitability_error ? "运费补算异常" : "运费待后台补算")
+                    : `${shippingModeNote ? `${shippingModeNote} · ` : ""}${shippingSourceNote} · ${mercadoMetric(shippingAmount)} ${shippingCurrency}`;
                 const netProceeds = row.net_proceeds_usd;
                 const netClass = Number(netProceeds) < 0 ? "market-net-negative" : "";
                 const netProceedsNote = netProceeds === null || netProceeds === undefined || netProceeds === ""
@@ -16557,6 +16963,215 @@
             throw lastError || new Error("保存请求失败");
         }
 
+        function setMercadoAccountGroupMessage(message, isError = false) {
+            if (!mercadoAccountGroupMessage) return;
+            mercadoAccountGroupMessage.textContent = String(message || "");
+            mercadoAccountGroupMessage.classList.toggle("error", Boolean(isError));
+        }
+
+        function renderMercadoAccountGroupOptions() {
+            if (!mercadoAccountGroupOptions) return;
+            mercadoAccountGroupOptions.innerHTML = mercadoAccountGroups.map(group => (
+                `<option value="${escapeHtml(group.name || "")}">${escapeHtml(group.description || "")}</option>`
+            )).join("");
+        }
+
+        function renderMercadoAccountGroupList(activeId = Number(mercadoAccountGroupId?.value || 0)) {
+            if (!mercadoAccountGroupList) return;
+            if (mercadoAccountGroupCount) mercadoAccountGroupCount.textContent = String(mercadoAccountGroups.length);
+            if (!mercadoAccountGroups.length) {
+                mercadoAccountGroupList.innerHTML = '<div class="empty-state">还没有账号分组</div>';
+                return;
+            }
+            mercadoAccountGroupList.innerHTML = mercadoAccountGroups.map(group => {
+                const accounts = Array.isArray(group.accounts) ? group.accounts : [];
+                const preview = accounts.slice(0, 3).map(account => account.display_name || account.nickname).filter(Boolean).join("、");
+                const accountText = accounts.length
+                    ? `${accounts.length} 个账号${preview ? ` · ${preview}${accounts.length > 3 ? "…" : ""}` : ""}`
+                    : "暂无账号";
+                return `
+                    <button class="mercado-group-card ${Number(group.id) === Number(activeId) ? "active" : ""}" type="button" onclick="editMercadoAccountGroup(${Number(group.id || 0)})">
+                        <strong>${escapeHtml(group.name || "未命名分组")}</strong>
+                        <span>${escapeHtml(group.description || "暂无描述")}</span>
+                        <span>${escapeHtml(accountText)}</span>
+                    </button>
+                `;
+            }).join("");
+        }
+
+        function updateMercadoAccountGroupSelectionSummary() {
+            const count = mercadoAccountGroupAccounts?.querySelectorAll('input[type="checkbox"]:checked').length || 0;
+            if (mercadoAccountGroupSelectionSummary) {
+                mercadoAccountGroupSelectionSummary.textContent = `已选 ${count} 个`;
+            }
+        }
+
+        function renderMercadoAccountGroupAccounts(group = null) {
+            if (!mercadoAccountGroupAccounts) return;
+            const selectedIds = new Set(
+                (Array.isArray(group?.accounts) ? group.accounts : []).map(account => Number(account.id || 0)),
+            );
+            const rows = [...mercadoStoreTokenRows].sort((left, right) => (
+                String(left.display_name || left.nickname || "").localeCompare(
+                    String(right.display_name || right.nickname || ""), "zh-CN",
+                )
+            ));
+            if (!rows.length) {
+                mercadoAccountGroupAccounts.innerHTML = '<div class="empty-state">暂无授权账号</div>';
+            } else {
+                mercadoAccountGroupAccounts.innerHTML = rows.map(account => {
+                    const tokenId = Number(account.id || 0);
+                    const currentGroup = mercadoAccountGroup(account);
+                    const extra = currentGroup && currentGroup !== group?.name
+                        ? `当前属于：${currentGroup}`
+                        : (account.enabled === false ? "店铺已关闭" : (account.nickname || "授权账号"));
+                    return `
+                        <label class="mercado-group-account-option">
+                            <input class="market-row-select" type="checkbox" value="${tokenId}" ${selectedIds.has(tokenId) ? "checked" : ""} onchange="updateMercadoAccountGroupSelectionSummary()">
+                            <span><strong>${escapeHtml(account.display_name || account.nickname || `账号 ${tokenId}`)}</strong><span>${escapeHtml(extra)}</span></span>
+                        </label>
+                    `;
+                }).join("");
+            }
+            updateMercadoAccountGroupSelectionSummary();
+        }
+
+        function startNewMercadoAccountGroup() {
+            if (mercadoAccountGroupId) mercadoAccountGroupId.value = "";
+            if (mercadoAccountGroupName) mercadoAccountGroupName.value = "";
+            if (mercadoAccountGroupDescription) mercadoAccountGroupDescription.value = "";
+            if (mercadoAccountGroupDelete) mercadoAccountGroupDelete.hidden = true;
+            if (mercadoAccountGroupSave) mercadoAccountGroupSave.textContent = "新增分组";
+            renderMercadoAccountGroupList(0);
+            renderMercadoAccountGroupAccounts(null);
+            setMercadoAccountGroupMessage("选择需要显示在这个组中的账号；账号同时只能属于一个分组");
+            mercadoAccountGroupName?.focus();
+        }
+
+        function editMercadoAccountGroup(groupId) {
+            const group = mercadoAccountGroups.find(item => Number(item.id || 0) === Number(groupId || 0));
+            if (!group) return;
+            mercadoAccountGroupId.value = String(group.id || "");
+            mercadoAccountGroupName.value = String(group.name || "");
+            mercadoAccountGroupDescription.value = String(group.description || "");
+            mercadoAccountGroupDelete.hidden = false;
+            mercadoAccountGroupSave.textContent = "保存修改";
+            renderMercadoAccountGroupList(group.id);
+            renderMercadoAccountGroupAccounts(group);
+            setMercadoAccountGroupMessage(`当前分组共 ${Number(group.account_count || 0)} 个账号`);
+        }
+
+        async function loadMercadoAccountGroups(force = false, silent = false) {
+            if (mercadoAccountGroupsLoaded && !force) return mercadoAccountGroups;
+            try {
+                const response = await fetch("/api/mercado-account-groups", {cache: "no-store"});
+                const payload = await response.json();
+                if (!response.ok || payload.status !== "success") {
+                    throw new Error(payload.message || `接口请求失败：${response.status}`);
+                }
+                mercadoAccountGroups = Array.isArray(payload.data?.rows) ? payload.data.rows : [];
+                mercadoAccountGroupsLoaded = true;
+                renderMercadoAccountGroupOptions();
+                renderMercadoAccountGroupList();
+                return mercadoAccountGroups;
+            } catch (error) {
+                mercadoAccountGroupsLoaded = false;
+                if (!silent) setMercadoAccountGroupMessage(`读取分组失败：${error.message || error}`, true);
+                throw error;
+            }
+        }
+
+        async function openMercadoAccountGroupManager() {
+            if (!mercadoAccountGroupDialog) return;
+            if (typeof mercadoAccountGroupDialog.showModal === "function" && !mercadoAccountGroupDialog.open) {
+                mercadoAccountGroupDialog.showModal();
+            }
+            setMercadoAccountGroupMessage("正在读取账号分组…");
+            try {
+                await loadMercadoStoreTokens(false, true);
+                await loadMercadoAccountGroups(true);
+                const activeId = Number(mercadoAccountGroupId?.value || 0);
+                const activeGroup = mercadoAccountGroups.find(group => Number(group.id || 0) === activeId);
+                if (activeGroup) editMercadoAccountGroup(activeGroup.id);
+                else startNewMercadoAccountGroup();
+            } catch (error) {
+                setMercadoAccountGroupMessage(`读取失败：${error.message || error}`, true);
+            }
+        }
+
+        async function saveMercadoAccountGroup() {
+            const groupId = Number(mercadoAccountGroupId?.value || 0);
+            const name = String(mercadoAccountGroupName?.value || "").trim();
+            const description = String(mercadoAccountGroupDescription?.value || "").trim();
+            if (!name) {
+                setMercadoAccountGroupMessage("请输入分组名称", true);
+                mercadoAccountGroupName?.focus();
+                return;
+            }
+            const tokenIds = Array.from(
+                mercadoAccountGroupAccounts?.querySelectorAll('input[type="checkbox"]:checked') || [],
+            ).map(input => Number(input.value || 0)).filter(Boolean);
+            mercadoAccountGroupSave.disabled = true;
+            if (mercadoAccountGroupDelete) mercadoAccountGroupDelete.disabled = true;
+            setMercadoAccountGroupMessage("正在保存分组和账号成员…");
+            try {
+                const response = await fetch(
+                    groupId ? `/api/mercado-account-groups/${groupId}` : "/api/mercado-account-groups",
+                    {
+                        method: groupId ? "PUT" : "POST",
+                        headers: {"Content-Type": "application/json"},
+                        body: JSON.stringify({name, description, token_ids: tokenIds}),
+                    },
+                );
+                const payload = await response.json();
+                if (!response.ok || payload.status !== "success") {
+                    throw new Error(payload.message || `接口请求失败：${response.status}`);
+                }
+                mercadoAccountGroupsLoaded = false;
+                await loadMercadoStoreTokens(true, true);
+                await loadMercadoAccountGroups(true);
+                const savedId = Number(payload.data?.id || groupId || 0);
+                if (savedId) editMercadoAccountGroup(savedId);
+                setMercadoAccountGroupMessage(payload.message || "账号分组已保存");
+                showMercadoTokenMessage(payload.message || "账号分组已保存");
+                collectionOptionsLoaded = false;
+            } catch (error) {
+                setMercadoAccountGroupMessage(`保存失败：${error.message || error}`, true);
+            } finally {
+                mercadoAccountGroupSave.disabled = false;
+                if (mercadoAccountGroupDelete) mercadoAccountGroupDelete.disabled = false;
+            }
+        }
+
+        async function deleteMercadoAccountGroup() {
+            const groupId = Number(mercadoAccountGroupId?.value || 0);
+            const group = mercadoAccountGroups.find(item => Number(item.id || 0) === groupId);
+            if (!group) return;
+            if (!window.confirm(`确定删除账号分组“${group.name}”吗？组内账号会变为未分组，店铺授权不会删除。`)) return;
+            mercadoAccountGroupSave.disabled = true;
+            mercadoAccountGroupDelete.disabled = true;
+            setMercadoAccountGroupMessage("正在删除分组…");
+            try {
+                const response = await fetch(`/api/mercado-account-groups/${groupId}`, {method: "DELETE"});
+                const payload = await response.json();
+                if (!response.ok || payload.status !== "success") {
+                    throw new Error(payload.message || `接口请求失败：${response.status}`);
+                }
+                mercadoAccountGroupsLoaded = false;
+                await loadMercadoStoreTokens(true, true);
+                await loadMercadoAccountGroups(true);
+                startNewMercadoAccountGroup();
+                setMercadoAccountGroupMessage(payload.message || "账号分组已删除");
+                showMercadoTokenMessage(payload.message || "账号分组已删除");
+                collectionOptionsLoaded = false;
+            } catch (error) {
+                setMercadoAccountGroupMessage(`删除失败：${error.message || error}`, true);
+            } finally {
+                mercadoAccountGroupSave.disabled = false;
+                mercadoAccountGroupDelete.disabled = false;
+            }
+        }
+
         async function loadMercadoSalespeople() {
             const users = await requestAccessApi("/api/access/users");
             mercadoSalespeople = Array.from(new Set(
@@ -17543,6 +18158,7 @@
                 }
                 renderMercadoStoreTokens(payload.data?.rows || []);
                 mercadoStoreTokensLoaded = true;
+                await loadMercadoAccountGroups(true, true).catch(() => []);
             } catch (err) {
                 mercadoStoreTokensLoaded = false;
                 if (!silent) {

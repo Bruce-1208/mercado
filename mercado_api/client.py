@@ -101,6 +101,7 @@ class MercadoLibreClient:
         params: dict[str, Any] | None = None,
         headers: dict[str, str] | None = None,
         json_body: Any = None,
+        max_attempts: int = 4,
     ) -> Any:
         """发送已认证请求，并处理 token 失效、限流及临时服务端错误。
 
@@ -109,7 +110,8 @@ class MercadoLibreClient:
         """
         url = path if path.startswith("http") else f"{self.BASE_URL}{path}"
         refreshed = False
-        for attempt in range(4):
+        attempts = max(1, min(4, int(max_attempts or 1)))
+        for attempt in range(attempts):
             try:
                 request_headers = dict(headers or {})
                 request_headers["Authorization"] = f"Bearer {self.access_token}"
@@ -122,7 +124,7 @@ class MercadoLibreClient:
                     timeout=self.timeout,
                 )
             except requests.RequestException as exc:
-                if attempt < 3:
+                if attempt < attempts - 1:
                     delay = min(2**attempt, 8)
                     LOGGER.warning("API 网络请求中断，%s 秒后重试：%s", delay, exc)
                     time.sleep(delay)
@@ -133,13 +135,15 @@ class MercadoLibreClient:
                 refreshed = True
                 continue
             if response.status_code == 429 or response.status_code >= 500:
-                if attempt < 3:
+                if attempt < attempts - 1:
                     delay = min(float(response.headers.get("Retry-After", 2**attempt)), 30)
                     LOGGER.warning("API 暂时不可用 (%s)，%.1f 秒后重试", response.status_code, delay)
                     time.sleep(delay)
                     continue
             if not response.ok:
                 raise MercadoAPIError(f"{method} {path} 失败 ({response.status_code}): {response.text[:1000]}")
+            if response.status_code == 204 or getattr(response, "content", None) == b"":
+                return {}
             return response.json()
         raise MercadoAPIError(f"{method} {path} 多次重试后仍失败")
 
@@ -273,6 +277,55 @@ class MercadoLibreClient:
             f"/marketplace/shipments/{shipment_id}/costs",
             headers={"x-format-new": "true"},
         )
+
+    def get_shipment(self, shipment_id: str) -> dict[str, Any]:
+        """Read the live shipment used to validate split eligibility."""
+        shipment_id = str(shipment_id or "").strip()
+        if not shipment_id:
+            raise ValueError("shipment_id 不能为空")
+        return self.request(
+            "GET",
+            f"/marketplace/shipments/{shipment_id}",
+            headers={"x-format-new": "true"},
+        )
+
+    def get_shipment_items(self, shipment_id: str) -> list[dict[str, Any]]:
+        """Return the authoritative order quantities attached to a shipment."""
+        shipment_id = str(shipment_id or "").strip()
+        if not shipment_id:
+            raise ValueError("shipment_id 不能为空")
+        result = self.request(
+            "GET",
+            f"/marketplace/shipments/{shipment_id}/items",
+            headers={"x-format-new": "true"},
+        )
+        return list(result or [])
+
+    def split_shipment(
+        self,
+        shipment_id: str,
+        *,
+        reason: str,
+        packs: Iterable[dict[str, Any]],
+    ) -> dict[str, Any]:
+        """Create exactly two additional packages through the official API."""
+        shipment_id = str(shipment_id or "").strip()
+        if not shipment_id:
+            raise ValueError("shipment_id 不能为空")
+        reason = str(reason or "").strip().upper()
+        normalized_packs = [dict(pack or {}) for pack in packs or ()]
+        if len(normalized_packs) != 2:
+            raise ValueError("拆分发货必须且只能生成 2 个包裹")
+        result = self.request(
+            "POST",
+            f"/marketplace/shipments/{shipment_id}/split",
+            headers={"x-format-new": "true"},
+            json_body={"reason": reason, "packs": normalized_packs},
+            # A timed-out mutation is ambiguous.  Do not automatically repeat
+            # an irreversible split; let the caller re-read shipment state.
+            max_attempts=1,
+        )
+        return dict(result or {})
 
     def get_marketplace_item(
         self,

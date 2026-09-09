@@ -9,11 +9,14 @@ from urllib.parse import urlsplit
 
 
 DEFAULTS = {
+    "workflow_mode": "image_first",
     "daily_limit": 25, "consult_interval_seconds": 60, "max_waiting": 2,
     "poll_minutes": 15, "timeout_minutes": 30,
     "small_tolerance_g": 50, "large_tolerance_g": 30,
     "reference_mode": "erp", "match_threshold": 0.95,
     "writeback_enabled": False, "max_candidates": 5, "max_pages": 100,
+    "supplier_auto_adapt": True,
+    "sku_price_mode": "final", "usd_cny_rate": None,
     "phrases": ["您好，请问这款产品包装好之后重量大概多少克呢？",
                 "你好，想问下这款商品连包装的重量是多少g？",
                 "咨询下，这个货品打包完成包装重量多少克？"],
@@ -29,14 +32,18 @@ DEFAULTS = {
         "erp_title": ".product-title", "erp_image": "img.product-pic",
         "erp_description": "", "erp_sku": "", "erp_reference": "",
         "erp_edit_link": "", "erp_next": "li.ant-pagination-next:not(.ant-pagination-disabled) button",
-        "erp_category_control": ".ant-cascader", "erp_page_active": "li.ant-pagination-item-active",
+        "erp_category_control": ".ant-cascader", "erp_search": "", "erp_page_active": "li.ant-pagination-item-active",
         "erp_page_first": "li.ant-pagination-item[title='1']",
-        "erp_edit_id": "", "erp_edit_sku": "", "erp_cost_input": "",
-        "erp_weight_input": "", "erp_save": "", "erp_saved": "",
+        "erp_edit_id": ".curd-detail-wrap .crud-detail-header .h1", "erp_edit_sku": "", "erp_cost_input": "",
+        "erp_net_income_input": ".curd-detail-wrap #netproceed",
+        "erp_weight_input": ".curd-detail-wrap #weight", "erp_save": "", "erp_saved": "",
         "search_input": "", "search_button": "", "result_links": "a[href*='detail.1688.com/offer/']",
+        "image_search_open": "", "image_search_upload": "input[type='file']", "image_search_submit": "",
         "supplier_title": "", "supplier_image": "", "supplier_description": "",
+        "supplier_weight": "", "sku_weight": "",
         "supplier_merchant": "", "supplier_merchant_attribute": "data-member-id",
         "sku_rows": "", "sku_id_attribute": "data-sku-id", "sku_label": "", "sku_price": "",
+        "sku_surcharge": "",
         "chat_open": "", "chat_identity": "", "chat_identity_attribute": "data-member-id",
         "chat_input": "", "chat_send": "", "chat_messages": "",
         "chat_message_id_attribute": "data-message-id", "chat_message_time_attribute": "data-timestamp",
@@ -85,8 +92,19 @@ def validate(value):
         raise ValueError("匹配门槛必须 ≥0.95 且 <1；仅严格高于门槛才通过")
     if result["reference_mode"] not in ("erp", "manual", "disabled"):
         raise ValueError("重量对照模式无效")
+    if result["workflow_mode"] not in ("image_first", "legacy_consult"):
+        raise ValueError("核重核价流程模式无效")
     if type(result["writeback_enabled"]) is not bool:
         raise ValueError("回写开关必须是布尔值")
+    if type(result["supplier_auto_adapt"]) is not bool:
+        raise ValueError("1688自动适配开关必须是布尔值")
+    if result["sku_price_mode"] not in ("final", "base_plus_surcharge"):
+        raise ValueError("变体价格模式必须为最终单价或基础价加变体加价")
+    if result["usd_cny_rate"] not in (None, ""):
+        from .models import number
+        result["usd_cny_rate"] = str(number(result["usd_cny_rate"]))
+    else:
+        result["usd_cny_rate"] = None
     phrases = result["phrases"]
     if not isinstance(phrases, list) or not 2 <= len(phrases) <= 100 or any(not isinstance(p, str) or not p.strip() or len(p) > 300 for p in phrases) or len(set(phrases)) < 2:
         raise ValueError("请提供至少两条不同的咨询话术，每条不超过300字")

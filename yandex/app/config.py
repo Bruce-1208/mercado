@@ -35,6 +35,22 @@ class Settings:
     )
     worker_headless: bool = _env_bool("YANDEX_WORKER_HEADLESS", True)
     max_products: int = int(os.getenv("YANDEX_MAX_PRODUCTS", "500"))
+    order_new_sync_seconds: int = _env_int(
+        "YANDEX_NEW_ORDER_SYNC_SECONDS", 15 * 60, minimum=60, maximum=24 * 60 * 60
+    )
+    order_status_sync_seconds: int = _env_int(
+        "YANDEX_OLD_ORDER_STATUS_SYNC_SECONDS",
+        12 * 60 * 60,
+        minimum=5 * 60,
+        maximum=7 * 24 * 60 * 60,
+    )
+    order_sync_poll_seconds: int = _env_int(
+        "YANDEX_ORDER_SYNC_POLL_SECONDS", 30, minimum=5, maximum=5 * 60
+    )
+    order_sync_retry_seconds: int = _env_int(
+        "YANDEX_ORDER_SYNC_RETRY_SECONDS", 5 * 60, minimum=30, maximum=60 * 60
+    )
+    order_sync_enabled: bool = not _env_bool("YANDEX_ORDER_SYNC_DISABLED", False)
     locale: str = os.getenv("YANDEX_LOCALE", "ru-RU")
     timezone: str = os.getenv("YANDEX_TIMEZONE", "Europe/Moscow")
     market_base_url: str = "https://market.yandex.ru"

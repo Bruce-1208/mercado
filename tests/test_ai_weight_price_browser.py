@@ -1,0 +1,489 @@
+"""Offline browser regressions; only synthetic HTML and Flask's test client are used."""
+import os
+import threading
+from pathlib import Path
+from urllib.parse import urlsplit
+
+import pytest
+from flask import Flask
+
+from erp.ai_weight_price.browser import Browser, CircuitOpen, NoExactMatch
+from erp.ai_weight_price.config import validate
+from erp.ai_weight_price.service import Service
+from erp.ai_weight_price.store import Store
+from erp.ai_weight_price.web import create_blueprint
+from erp.ai_weight_price.supplier_adapter import DOM_SNAPSHOT, SupplierAdaptationError, verified_selectors
+
+
+@pytest.fixture(scope="module")
+def chromium():
+    playwright = pytest.importorskip("playwright.sync_api")
+    with playwright.sync_playwright() as pw:
+        executable = os.environ.get("AWP_TEST_BROWSER_EXECUTABLE") or pw.chromium.executable_path
+        if not Path(executable).is_file():
+            pytest.skip("Install a Playwright browser or set AWP_TEST_BROWSER_EXECUTABLE")
+        browser = pw.chromium.launch(executable_path=executable, headless=True)
+        try:
+            yield browser
+        finally:
+            browser.close()
+
+
+@pytest.fixture
+def page(chromium):
+    context = chromium.new_context()
+    # No external requests are allowed, even if a fixture accidentally references one.
+    context.route("**/*", lambda route: route.abort())
+    page = context.new_page()
+    try:
+        yield page
+    finally:
+        context.close()
+
+
+SUPPLIER_HTML = '''<meta charset="utf-8"><main><h1>不锈钢杯</h1><img src="https://img.example/main.jpg" width="120" height="120">
+<div data-member-id="seller1">杯具工厂</div><section>
+<article data-sku-id="blue"><span>蓝色500ml一只</span><b>￥12.50</b><p>含包装450克</p></article>
+<article data-sku-id="red"><span>红色500ml一只</span><b>￥15.50</b><p>含包装460克</p></article>
+</section></main>'''
+
+
+def test_empty_image_search_keeps_visible_browser_steps_without_screenshots_or_dashboard(page, monkeypatch, tmp_path):
+    import base64
+    picture = base64.b64decode("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aD1kAAAAASUVORK5CYII=")
+    page.route("https://www.1688.com/", lambda route: route.fulfill(body='''<meta charset="utf-8"><body>
+        <h1>以图搜货（离线测试页面）</h1><input type="file" hidden><div id="result">等待上传主图</div>
+        <script>document.querySelector('input').onchange=()=>document.getElementById('result').textContent='未找到相关商品';</script></body>''', content_type="text/html"))
+    page.goto("https://www.1688.com/")
+    service = Service(tmp_path)
+    service.store.add({"erp_goods_id": "visual-1", "title": "离线测试商品 · 蓝色水杯", "main_image_url": "https://img.example/main.png"})
+    service.store.set_state("run", {"run_id": "visual-test", "mode": "pipeline", "outcome": "completed"})
+    adapter = Browser(validate({}), threading.Event(), service.store.log)
+    adapter.context = page.context
+    adapter.record_visual = service.record_visual
+    monkeypatch.setattr(adapter, "image_payload", lambda task: {"name": "product-main.png", "mimeType": "image/png", "buffer": picture})
+    focused = []
+    original_focus = page.bring_to_front
+    monkeypatch.setattr(page, "bring_to_front", lambda: (focused.append(page.url), original_focus())[1])
+    with pytest.raises(NoExactMatch, match="空结果"):
+        adapter.image_search(page, service.store.get("visual-1"))
+    events = service.store.get("visual-1")["visual_history"]
+    assert [e["step"] for e in events] == ["supplier_home", "uploading", "uploaded", "search_empty"]
+    assert len(focused) == 4
+    assert all(not e.get("screenshot_url") for e in events)
+    assert page.locator('input').evaluate('e=>e.files[0].name') == 'product-main.png'
+    service.store.skip("visual-1", "1688返回空搜索结果")
+    service.record_visual("visual-1", "skipped", "未完全匹配，已记录并跳过，继续下一件")
+    service.circuit(CircuitOpen("1688需要登录"))
+    app = Flask(__name__); app.register_blueprint(create_blueprint(service)); client = app.test_client()
+    assert client.get('/api/ai-weight-price/visuals/config.json').status_code == 404
+    def respond(route):
+        url = urlsplit(route.request.url)
+        response = client.get(url.path + ('?' + url.query if url.query else ''), base_url='http://127.0.0.1:5018')
+        route.fulfill(status=response.status_code, headers=dict(response.headers), body=response.data)
+    page.route('http://127.0.0.1:5018/**', respond)
+    page.route('https://img.example/main.png', lambda route: route.fulfill(body=picture, content_type='image/png'))
+    page.set_viewport_size({"width": 1300, "height": 1080})
+    page.goto('http://127.0.0.1:5018/ai-weight-price')
+    expect = pytest.importorskip('playwright.sync_api').expect
+    expect(page.locator('#n-skipped')).to_have_text('1')
+    expect(page.locator('#visual-progress')).to_have_count(0)
+    expect(page.get_by_text('主图搜货 · 可视化过程')).to_have_count(0)
+    expect(page.locator('#circuit')).to_be_visible()
+    expect(page.locator('#resume-switch')).to_be_visible()
+
+
+def test_1688_login_and_human_review_are_resumable_pauses(page):
+    adapter = Browser(validate({}), threading.Event(), lambda *args: None)
+    page.route('https://login.taobao.com/**', lambda route: route.fulfill(
+        body='<body>1688 登录</body>', content_type='text/html'))
+    page.goto('https://login.taobao.com/member/login.jhtml')
+    with pytest.raises(CircuitOpen, match='1688需要登录'):
+        adapter.check(page)
+    page.route('https://www.1688.com/**', lambda route: route.fulfill(
+        body='<meta charset="utf-8"><body>请按住滑块完成人机验证</body>', content_type='text/html'))
+    page.goto('https://www.1688.com/')
+    with pytest.raises(CircuitOpen, match='人机审核'):
+        adapter.check(page)
+
+
+def observed_supplier_answer(snapshot):
+    nodes = snapshot["nodes"]
+    node = lambda predicate: next(n["n"] for n in nodes if predicate(n))
+    return {"certain": True, "title": node(lambda n: n["text"] == "不锈钢杯"),
+            "image": node(lambda n: n["tag"] == "img"),
+            "merchant": {"node": node(lambda n: "data-member-id" in n["attrs"]), "attribute": "data-member-id"},
+            "sku_attribute": "data-sku-id", "skus": [
+                {"row": node(lambda n: n["attrs"].get("data-sku-id") == "blue"),
+                 "label": node(lambda n: n["text"] == "蓝色500ml一只")},
+                {"row": node(lambda n: n["attrs"].get("data-sku-id") == "red"),
+                 "label": node(lambda n: n["text"] == "红色500ml一只")} ]}
+
+
+def test_supplier_auto_adaptation_uses_real_nodes_and_records_evidence(page, tmp_path):
+    page.route("https://detail.1688.com/offer/1.html", lambda route: route.fulfill(body=SUPPLIER_HTML, content_type="text/html"))
+    page.goto("https://detail.1688.com/offer/1.html")
+    service = Service(tmp_path)
+    service.store.add({"erp_goods_id": "g1", "title": "杯"})
+    config = validate({})
+    adapter = Browser(config, threading.Event(), service.store.log)
+    adapter.adapt_supplier = observed_supplier_answer
+    adapter.record_supplier_adaptation = service.record_supplier_adaptation
+    adapter.ensure_supplier_detail(page, "g1")
+    assert adapter.value(page, "supplier_title", required=True) == "不锈钢杯"
+    rows = page.locator(adapter.s["sku_rows"])
+    assert rows.count() == 2
+    assert [adapter.value(row, "sku_label", required=True) for row in rows.all()] == ["蓝色500ml一只", "红色500ml一只"]
+    event = Store(tmp_path).get("g1")["supplier_adaptations"][-1]
+    assert event["ok"] and event["evidence"]["merchant_id"] == "seller1"
+    assert [sku["id"] for sku in event["evidence"]["skus"]] == ["blue", "red"]
+    assert any("自动适配通过" in log["message"] for log in service.store.logs())
+    assert config["selectors"]["supplier_title"] == ""  # no positional paths saved globally
+    # A second page must be observed again, even if it happens to have the same layout.
+    adapter.adapt_supplier = lambda _: {"certain": False}
+    with pytest.raises(SupplierAdaptationError, match="无法确认"):
+        adapter.ensure_supplier_detail(page, "g1")
+    assert len(service.store.get("g1")["supplier_adaptations"]) == 2
+    assert service.store.state("supplier_adaptation")["ok"] is False
+    assert adapter.s["supplier_title"] == ""
+
+
+@pytest.mark.parametrize("problem", ["unknown_node", "outside_label", "duplicate_sku", "invented_attribute", "uncertain", "changed_page", "hidden_node"])
+def test_supplier_auto_adaptation_rejects_unverifiable_results(page, problem):
+    page.set_content(SUPPLIER_HTML)
+    snapshot = page.evaluate(DOM_SNAPSHOT)
+    answer = observed_supplier_answer(snapshot)
+    if problem == "unknown_node":
+        answer["title"] = 99999
+    elif problem == "outside_label":
+        answer["skus"][0]["label"] = answer["title"]
+    elif problem == "duplicate_sku":
+        answer["skus"][1] = answer["skus"][0]
+    elif problem == "invented_attribute":
+        answer["merchant"]["attribute"] = "data-secret-token"
+    elif problem == "uncertain":
+        answer["certain"] = False
+    elif problem == "changed_page":
+        page.locator("h1").evaluate("e=>e.textContent='另一商品'")
+    elif problem == "hidden_node":
+        page.locator("h1").evaluate("e=>e.hidden=true")
+    with pytest.raises(SupplierAdaptationError):
+        verified_selectors(page, snapshot, answer)
+
+
+def test_supplier_snapshot_excludes_credentials_hidden_text_and_scripts(page):
+    page.set_content(SUPPLIER_HTML + '''<input value="private-input"><textarea>private-textarea</textarea>
+        <header>private-header</header><div hidden>private-hidden</div>
+        <script>window.privateToken='private-script'</script><div data-token="private-data">普通说明</div>''')
+    import json
+    serialized = json.dumps(page.evaluate(DOM_SNAPSHOT), ensure_ascii=False)
+    assert "普通说明" in serialized
+    assert "private-" not in serialized
+
+
+def test_risk_check_ignores_only_child_frame_detached_during_inspection(monkeypatch):
+    from types import SimpleNamespace
+    adapter = Browser(validate({}), threading.Event(), lambda *a: None)
+    main = SimpleNamespace(is_detached=lambda: False)
+    detached = [False]
+    child = SimpleNamespace(is_detached=lambda: detached[0])
+    page = SimpleNamespace(frames=[main, child], main_frame=main)
+    def check(frame):
+        if frame is child:
+            detached[0] = True
+            raise RuntimeError('Frame was detached')
+    monkeypatch.setattr(adapter, 'check_frame', check)
+    adapter.check(page)
+    monkeypatch.setattr(adapter, 'check_frame', lambda frame: (_ for _ in ()).throw(RuntimeError('main failed')))
+    with pytest.raises(RuntimeError, match='main failed'):
+        adapter.check(page)
+
+
+@pytest.mark.parametrize("label", ["搜索", "搜 索", "搜\u00a0索", '<span role="img" aria-label="search"></span><span>搜 索</span>'])
+def test_category_search_handles_ant_spacing_icons_and_nearby_filter(page, label):
+    page.set_content(f'<button>搜索</button><section><div id="category"></div><button id="wanted">{label}</button></section>')
+    adapter = Browser(validate({}), threading.Event(), lambda *args, **kwargs: None)
+    assert adapter.category_search(page, page.locator("#category"), timeout=0).get_attribute("id") == "wanted"
+
+
+def test_category_search_ignores_hidden_buttons_and_rejects_ambiguity(page):
+    logs = []
+    adapter = Browser(validate({}), threading.Event(), lambda message, **kwargs: logs.append(message))
+    page.set_content('<section><div id="category"></div><button hidden>搜索</button><button id="wanted">搜索</button></section>')
+    assert adapter.category_search(page, page.locator("#category"), timeout=0).get_attribute("id") == "wanted"
+    page.set_content('<section><div id="category"></div><button>搜索</button><button>搜 索</button></section>')
+    with pytest.raises(ValueError, match="可见匹配 2"):
+        adapter.category_search(page, page.locator("#category"), timeout=0)
+    assert '"visible_matches": 2' in logs[-1]
+
+
+def test_category_search_accepts_explicit_selector_and_waits_until_enabled(page):
+    page.set_content('<div id="category"></div><button id="query" disabled>查询商品</button>')
+    adapter = Browser(validate({"selectors": {"erp_search": "#query"}}), threading.Event(), lambda *args, **kwargs: None)
+    page.evaluate("setTimeout(()=>document.getElementById('query').disabled=false, 100)")
+    assert adapter.category_search(page, page.locator("#category")).get_attribute("id") == "query"
+
+
+@pytest.mark.parametrize("duplicate_hidden", [False, True])
+def test_image_search_uploads_task_image_and_waits_for_new_results(page, monkeypatch, duplicate_hidden):
+    import base64
+    page.route("https://www.1688.com/", lambda route: route.fulfill(body='''<body>
+        <input type="file" hidden id="picture"><a href="https://detail.1688.com/offer/old.html">旧推荐</a>
+        <script>document.getElementById('picture').onchange=()=>setTimeout(()=>{
+          document.querySelector('a').href='https://detail.1688.com/offer/new.html';},150);</script></body>''', content_type="text/html"))
+    page.goto("https://www.1688.com/")
+    if duplicate_hidden:
+        page.evaluate("document.body.insertAdjacentHTML('afterbegin', '<div hidden><input type=file id=inactive-upload></div>')")
+    adapter = Browser(validate({}), threading.Event(), lambda *args, **kwargs: None)
+    adapter.context = page.context
+    received = []
+    def payload(task):
+        received.append(task["main_image_url"])
+        return {"name": "main.png", "mimeType": "image/png", "buffer": base64.b64decode("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aD1kAAAAASUVORK5CYII=")}
+    monkeypatch.setattr(adapter, "image_payload", payload)
+    result = adapter.image_search(page, {"erp_goods_id": "g1", "main_image_url": "https://img.example/actual.png"})
+    assert received == ["https://img.example/actual.png"]
+    assert result.locator("a").get_attribute("href").endswith("new.html")
+    assert page.locator("#picture").evaluate("el => el.files[0].name") == "main.png"
+    if duplicate_hidden:
+        assert page.locator("#inactive-upload").evaluate("el => el.files.length") == 0
+
+
+def test_image_search_rejects_ambiguous_uploads_before_upload(page, monkeypatch):
+    page.set_content('<input type="file" hidden><input type="file" hidden>')
+    adapter = Browser(validate({}), threading.Event(), lambda *args, **kwargs: None)
+    with pytest.raises(ValueError, match="实际 2 个"):
+        adapter.image_search(page, {"erp_goods_id": "g1"})
+
+
+def test_image_search_clicks_uploaded_preview_submit_and_reads_only_first_n_images(page, monkeypatch):
+    import base64
+    page.route('https://www.1688.com/', lambda route: route.fulfill(body='''<meta charset="utf-8"><body>
+      <input type="file" hidden><button hidden id="submit">搜索图片</button><div id="results"></div>
+      <script>document.querySelector('input').onchange=()=>setTimeout(()=>document.querySelector('#submit').hidden=false,50);
+      document.querySelector('#submit').onclick=()=>{window.submitted=true;document.querySelector('#submit').hidden=true;
+      document.querySelector('#results').innerHTML=Array.from({length:4},(_,i)=>`<a href="https://detail.1688.com/offer/${i+1}.html"><img width="100" height="100" src="https://img.example/${i+1}.jpg" alt="候选${i+1}"></a>`).join('');};</script></body>''', content_type='text/html'))
+    page.goto('https://www.1688.com/')
+    adapter = Browser(validate({'max_candidates': 2}), threading.Event(), lambda *a: None)
+    adapter.context = page.context
+    monkeypatch.setattr(adapter, 'page', lambda *a: page)
+    monkeypatch.setattr(adapter, 'delay', lambda *a: None)
+    monkeypatch.setattr(adapter, 'image_payload', lambda task: {'name': 'main.png', 'mimeType': 'image/png', 'buffer': base64.b64decode('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aD1kAAAAASUVORK5CYII=')})
+    cards = adapter.search_images({'erp_goods_id': '1'})
+    assert page.evaluate('window.submitted') is True
+    assert [c['url'] for c in cards] == ['https://detail.1688.com/offer/1.html', 'https://detail.1688.com/offer/2.html']
+    assert cards[1]['main_image_url'] == 'https://img.example/2.jpg'
+
+
+def test_clickable_1688_cards_without_offer_hrefs_exclude_preview_and_open_real_detail(page, monkeypatch):
+    page.route('https://air.1688.com/**', lambda route: route.fulfill(body='''<meta charset="utf-8"><body>
+      <img src="https://img.example/preview.jpg" width="120" height="120"><div>找到以下货源</div>
+      <div style="display:flex"><article><img src="https://img.example/one.jpg" width="120" height="120" onclick="window.open('https://detail.1688.com/offer/123.html')"><p>蓝色杯 ￥22</p></article>
+      <article><img src="https://img.example/two.jpg" width="120" height="120"><p>红色杯 ￥25</p></article></div></body>''', content_type='text/html'))
+    page.context.route('https://detail.1688.com/offer/123.html', lambda route: route.fulfill(body=SUPPLIER_HTML, content_type='text/html'))
+    page.goto('https://air.1688.com/kapp/1688-search/pc-image-search/?imageId=fixture')
+    adapter = Browser(validate({'selectors': {'sku_price': 'b'}}), threading.Event(), lambda *a: None)
+    adapter.context = page.context
+    adapter.search_results['1'] = page
+    adapter.adapt_supplier = observed_supplier_answer
+    monkeypatch.setattr(adapter, 'delay', lambda *a: None)
+    cards = adapter.result_image_cards(page)
+    assert [c['main_image_url'] for c in cards] == ['https://img.example/one.jpg', 'https://img.example/two.jpg']
+    offer = adapter.read_offer({'erp_goods_id': '1'}, cards[0])
+    assert offer['url'] == 'https://detail.1688.com/offer/123.html'
+    assert offer['skus'][0]['price'] == '12.50'
+    assert len(page.context.pages) == 1  # supplier detail closed, search retained until this product finishes
+
+
+@pytest.mark.parametrize('status,profit', [('屏蔽', None), ('风险', '4')])
+def test_partial_erp_write_preserves_weight_and_verifies_status_after_reload(page, monkeypatch, status, profit):
+    html = '''<meta charset="utf-8"><div class="curd-detail-wrap"><div class="crud-detail-header"><div class="h1">产品编号：101</div></div>
+      <input id="netproceed" value="9.5"><input id="weight" value="430">
+      <label><input type="radio" name="stat" value="3000" checked>待审核</label>
+      <label><input type="radio" name="stat" value="8000">屏蔽</label><label><input type="radio" name="stat" value="9000">风险</label>
+      <button id="save">保存</button><p id="saved" hidden>保存成功</p></div><script>
+      const old=JSON.parse(localStorage.getItem('saved')||'null');if(old){document.querySelector('#netproceed').value=old.net;document.querySelector('#weight').value=old.weight;document.querySelector(`[value="${old.status}"]`).checked=true;}
+      document.querySelector('#weight').oninput=()=>localStorage.setItem('weightEdited','yes');
+      document.querySelector('#save').onclick=()=>{localStorage.setItem('saved',JSON.stringify({net:document.querySelector('#netproceed').value,weight:document.querySelector('#weight').value,status:document.querySelector('input[name=stat]:checked').value}));document.querySelector('#saved').hidden=false;};</script>'''
+    page.route('https://meli.zying.net/**', lambda route: route.fulfill(body=html, content_type='text/html'))
+    page.goto('https://meli.zying.net/#/product/101')
+    adapter = Browser(validate({}), threading.Event(), lambda *a: None)
+    monkeypatch.setattr(adapter, 'page', lambda *a: page)
+    changes = {'review_status': status}
+    if profit:
+        changes['net_income_usd'] = profit
+    before = []
+    actual = adapter.write_patch({'erp_goods_id': '101', 'erp_edit_url': page.url}, changes, before.append)
+    assert before == [{'weight_g': '430', 'net_income_usd': '9.5', 'review_status': '待审核'}]
+    assert actual == {'weight_g': '430', 'net_income_usd': profit or '9.5', 'review_status': status}
+    assert page.evaluate("localStorage.getItem('weightEdited')") is None
+
+
+def test_image_search_timeout_keeps_evidence_and_rejects_stale_home_recommendations(page, monkeypatch, tmp_path):
+    import base64
+    page.route("https://www.1688.com/", lambda route: route.fulfill(body='''<meta charset="utf-8"><body>
+        <h1>以图搜货（离线测试页面）</h1><input type="file" hidden>
+        <a href="https://detail.1688.com/offer/123.html">首页旧推荐</a></body>''', content_type="text/html"))
+    page.goto("https://www.1688.com/")
+    service = Service(tmp_path)
+    service.store.add({"erp_goods_id": "timeout-1", "title": "离线测试商品"})
+    adapter = Browser(validate({}), threading.Event(), service.store.log)
+    adapter.context = page.context
+    adapter.record_visual = service.record_visual
+    monkeypatch.setattr(adapter, "image_payload", lambda task: {"name": "main.png", "mimeType": "image/png", "buffer": base64.b64decode("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aD1kAAAAASUVORK5CYII=")})
+    with pytest.raises(NoExactMatch, match="搜索超时.*无法确认完全匹配"):
+        adapter.image_search(page, service.store.get("timeout-1"), timeout=.1)
+    events = service.store.get("timeout-1")["visual_history"]
+    assert events[-1]["step"] == "search_timeout"
+    assert not events[-1].get("screenshot_url")
+    assert not any(event["step"] == "search_results" for event in events)
+
+
+def test_console_shows_worker_error_and_logs_on_task_page(page, tmp_path, monkeypatch):
+    service = Service(tmp_path)
+    service.config.save(validate({"supplier_auto_adapt": False}))
+    service.store.set_state("login", {"confirmed": True})
+    service.store.set_state("run_selection", {"category": "", "start_page": 1, "end_page": 2})
+    service.store.set_state("run", {"mode": "collect", "message": "已停止"})
+    reason = "未找到唯一的智赢分类搜索按钮"
+    service.store.set_state("run_error", reason)
+    service.store.log(reason, level="ERROR")
+    monkeypatch.setattr(service, "require_login", lambda *args: None)
+    app = Flask(__name__)
+    app.register_blueprint(create_blueprint(service))
+    client = app.test_client()
+    def respond(route):
+        request = route.request
+        url = urlsplit(request.url)
+        response = client.open(url.path + ("?" + url.query if url.query else ""), method=request.method,
+                               data=request.post_data, headers=request.headers, base_url="http://127.0.0.1:5018")
+        route.fulfill(status=response.status_code, headers=dict(response.headers), body=response.data)
+    page.route("http://127.0.0.1:5018/**", respond)
+    errors = []
+    page.on("pageerror", lambda error: errors.append(str(error)))
+    page.goto("http://127.0.0.1:5018/ai-weight-price")
+    expect = pytest.importorskip("playwright.sync_api").expect
+    expect(page.locator("#run-summary")).to_have_text("采集失败")
+    expect(page.locator("#run-message")).to_have_text(reason)
+    expect(page.locator("#latest-event")).to_contain_text(reason)
+    expect(page.locator("#view-logs")).to_be_hidden()
+    page.locator("#process-range").click()
+    expect(page.locator("#run-summary")).to_have_text("最近操作失败")
+    expect(page.locator("#run-message")).to_contain_text("缺少DOM字段")
+    expect(page.locator("#latest-event")).to_contain_text("缺少DOM字段")
+    page.locator("#run-progress button").click()
+    expect(page.locator("#view-logs")).to_be_visible()
+    expect(page.locator("#logs")).to_contain_text("缺少DOM字段")
+    page.get_by_role("button", name="参数设置", exact=True).click()
+    page.locator("#sku-price-mode").select_option("base_plus_surcharge")
+    page.locator("#usd-cny-rate").fill("7.2")
+    page.get_by_role("button", name="保存配置", exact=True).click()
+    expect(page.locator("#toast")).to_have_text("配置已保存，下次启动生效")
+    assert service.config.load()["sku_price_mode"] == "base_plus_surcharge"
+    assert service.config.load()["usd_cny_rate"] == "7.2"
+    assert not errors
+
+
+def product_detail_fixture(page):
+    page.set_content('''
+      <li class="ant-pagination-item-active">1</li>
+      <div class="product-item"><div class="product-title" onclick="showProduct(101, 'blue cup')">blue cup</div>
+        <img class="product-pic" src="data:image/gif;base64,R0lGODlhAQABAAD/ACwAAAAAAQABAAACADs="></div>
+      <div class="product-item"><div class="product-title" onclick="showProduct(102, 'red cup')">red cup</div>
+        <img class="product-pic" src="data:image/gif;base64,R0lGODlhAQABAAD/ACwAAAAAAQABAAACADs="></div>
+      <div class="curd-detail-wrap"><div class="crud-detail-header"><div class="h1"></div></div>
+        <textarea placeholder="请输入内容"></textarea></div>
+      <script>
+        window.clicked=0;
+        function showProduct(id,title){window.clicked++;document.querySelector('.h1').textContent='产品编号：'+id;
+          document.querySelector('textarea').value=title;}
+      </script>''')
+    return {"title": "blue cup", "main_image_url": ""}
+
+
+def test_missing_card_id_reads_verified_detail_and_collects_each_product(page, tmp_path, monkeypatch):
+    from erp.ai_weight_price.config import selection_key
+    product_detail_fixture(page)
+    config = validate({})
+    config["run_selection"] = {"category": "", "start_page": 1, "end_page": 1}
+    store = Store(tmp_path)
+    adapter = Browser(config, threading.Event(), store.log)
+    monkeypatch.setattr(adapter, "page", lambda *args: page)
+    monkeypatch.setattr(adapter, "release", lambda *args: None)
+    monkeypatch.setattr(adapter, "apply_category", lambda *args: "全部分类")
+    assert adapter.collect(store) == 1
+    assert page.evaluate("window.clicked") == 2
+    assert store.get("101")["title"] == "blue cup"
+    assert store.get("102")["title"] == "red cup"
+    assert store.list(scope=selection_key(config["run_selection"], config))["total"] == 2
+    assert store.state("collection")["complete"]
+    assert any("已从智赢详情读取产品编号：102" in event["message"] for event in store.logs())
+
+
+@pytest.mark.parametrize("selector", ["", ".product-id"])
+def test_empty_or_default_card_id_uses_detail_fallback(page, selector):
+    record = product_detail_fixture(page)
+    adapter = Browser(validate({"selectors": {"erp_id": selector}}), threading.Event(), lambda *args: None)
+    assert adapter.erp_goods_id(page, page.locator(".product-item").first, record) == "101"
+
+
+@pytest.mark.parametrize("scenario", ["stale", "wrong_product", "non_erp_id", "ambiguous"])
+def test_detail_fallback_never_accepts_wrong_or_stale_id(page, scenario):
+    record = product_detail_fixture(page)
+    if scenario == "stale":
+        page.evaluate("showProduct(101, 'blue cup'); window.showProduct=()=>{}")
+    elif scenario == "wrong_product":
+        page.evaluate("window.showProduct=()=>{document.querySelector('.h1').textContent='202';document.querySelector('textarea').value='different product'}")
+    elif scenario == "non_erp_id":
+        page.evaluate("window.showProduct=()=>{document.querySelector('.h1').textContent='MLM123456';document.querySelector('textarea').value='blue cup'}")
+    else:
+        page.evaluate("document.body.append(document.querySelector('.curd-detail-wrap').cloneNode(true))")
+    adapter = Browser(validate({}), threading.Event(), lambda *args: None)
+    with pytest.raises(ValueError):
+        adapter.erp_goods_id(page, page.locator(".product-item").first, record, timeout=.3)
+
+
+def test_explicit_card_id_is_used_and_bad_custom_selector_is_not_ignored(page):
+    record = product_detail_fixture(page)
+    page.evaluate("document.querySelector('.product-item').insertAdjacentHTML('beforeend','<span class=custom-id>商品ID：201</span>')")
+    adapter = Browser(validate({"selectors": {"erp_id": ".custom-id"}}), threading.Event(), lambda *args: None)
+    assert adapter.erp_goods_id(page, page.locator(".product-item").first, record) == "201"
+    assert page.evaluate("window.clicked") == 0
+    with pytest.raises(ValueError, match="实际 0"):
+        adapter.erp_goods_id(page, page.locator(".product-item").last, record)
+    page.evaluate("document.querySelector('.product-item').insertAdjacentHTML('beforeend','<span class=custom-id>202</span>')")
+    with pytest.raises(ValueError, match="实际 2"):
+        adapter.erp_goods_id(page, page.locator(".product-item").first, record)
+    assert page.evaluate("window.clicked") == 0
+
+
+@pytest.mark.parametrize("wrong_saved_value", [False, True])
+def test_write_fills_integer_dollar_net_proceeds_and_verifies_after_reload(page, monkeypatch, wrong_saved_value):
+    html = '''<div class="curd-detail-wrap"><div id="goods">101</div><div id="sku">blue cup</div>
+      <input id="cost" value="99"><input id="netproceed" value="5"><input id="weight" value="400">
+      <button id="save">保存</button><span id="saved" hidden>已保存</span></div>
+      <script>
+        const previous=JSON.parse(sessionStorage.getItem('saved')||'null');
+        if(previous){document.querySelector('#netproceed').value=previous.net;document.querySelector('#weight').value=previous.weight;}
+        document.querySelector('#save').onclick=()=>{sessionStorage.setItem('saved',JSON.stringify({
+          net:WRONG?'777':document.querySelector('#netproceed').value,weight:document.querySelector('#weight').value}));
+          document.querySelector('#saved').hidden=false;};
+      </script>'''.replace("WRONG", "true" if wrong_saved_value else "false")
+    page.route("https://meli.zying.net/**", lambda route: route.fulfill(body=html, content_type="text/html"))
+    page.goto("https://meli.zying.net/#/product/101")
+    config = validate({"selectors": {"erp_edit_id": "#goods", "erp_edit_sku": "#sku", "erp_cost_input": "#cost",
+                                     "erp_weight_input": "#weight", "erp_save": "#save", "erp_saved": "#saved"}})
+    adapter = Browser(config, threading.Event(), lambda *args: None)
+    monkeypatch.setattr(adapter, "page", lambda *args: page)
+    monkeypatch.setattr(adapter, "release", lambda *args: None)
+    task = {"erp_edit_url": page.url, "erp_goods_id": "101", "erp_sku": "blue cup", "cost_price": "22", "net_income_usd": "4", "weight_g": "450"}
+    before = []
+    if wrong_saved_value:
+        with pytest.raises(ValueError, match="美元净收益"):
+            adapter.write(task, before.append)
+    else:
+        adapter.write(task, before.append)
+        assert page.locator("#netproceed").input_value() == "4"
+    assert before == [{"net_income_usd": "5", "weight_g": "400"}]
+    assert page.locator("#cost").input_value() == "99"
+    assert page.locator("#weight").input_value() == "450"

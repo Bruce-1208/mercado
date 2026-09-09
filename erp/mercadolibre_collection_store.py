@@ -417,6 +417,10 @@ def _migrate_collection_tables(cursor: Any) -> None:
     _ensure_index(
         cursor, COLLECTION_TABLE, "idx_erp_meli_collection_added", "(`added_to_products`, `id`)"
     )
+    for table in (COLLECTION_TABLE, PRODUCT_TABLE):
+        _ensure_index(
+            cursor, table, "idx_erp_meli_profit_refresh", "(`profitability_updated_at`, `id`)"
+        )
     _ensure_index(
         cursor, PRODUCT_TABLE, "idx_erp_meli_product_publish", "(`last_publish_status`, `id`)"
     )
@@ -521,6 +525,13 @@ def ensure_collection_tables(cursor: Any) -> None:
             return
         if not _collection_schema_is_current(cursor):
             _migrate_collection_tables(cursor)
+        else:
+            # Column-only schema checks must not skip a newly added queue index.
+            for table in (COLLECTION_TABLE, PRODUCT_TABLE):
+                _ensure_index(
+                    cursor, table, "idx_erp_meli_profit_refresh",
+                    "(`profitability_updated_at`, `id`)",
+                )
         _schema_ready = True
 
 
@@ -2402,57 +2413,46 @@ def update_product_publish_state(
 def list_stale_profitability_items(
     *,
     stale_before: str,
+    retry_before: str | None = None,
     limit: int = 50,
     connection_factory: Callable[[], Any] | None = None,
 ) -> list[dict[str, Any]]:
-    """Return captured rows whose official cost snapshot needs refreshing."""
+    """Refresh every product source and retry incomplete snapshots after a delay."""
 
     limit = max(1, min(int(limit), 500))
+    retry_before = retry_before or (datetime.now() - timedelta(minutes=5)).strftime(
+        "%Y-%m-%d %H:%M:%S"
+    )
     connection = (connection_factory or _connect)()
     try:
+        rows = []
         with connection.cursor() as cursor:
             ensure_collection_tables(cursor)
-            cursor.execute(
-                f"""
-                SELECT * FROM `{COLLECTION_TABLE}`
-                WHERE (`profitability_updated_at` IS NULL
-                       OR `profitability_updated_at` < %s)
-                  AND `price` IS NOT NULL
-                  AND `price` > 0
-                  AND `title` IS NOT NULL
-                  AND `title` <> ''
-                  AND `weight_g` IS NOT NULL
-                  AND `weight_g` > 0
-                ORDER BY COALESCE(`profitability_updated_at`, '1970-01-01') ASC, `id` ASC
-                LIMIT %s
-                """,
-                (stale_before, limit),
-            )
-            rows = [_json_safe_row(row) for row in cursor.fetchall()]
-            remaining = limit - len(rows)
-            if remaining > 0:
+            # Reserve space for both lists so a large import cannot starve new
+            # collections, and old collection tasks cannot starve products.
+            for table, batch_limit in (
+                (PRODUCT_TABLE, max(1, limit // 2)),
+                (COLLECTION_TABLE, None),
+            ):
+                batch_limit = batch_limit or (limit - len(rows))
+                if batch_limit <= 0:
+                    continue
                 cursor.execute(
                     f"""
-                    SELECT * FROM `{PRODUCT_TABLE}`
-                    WHERE `source_type` = 'collected'
+                    SELECT * FROM `{table}`
+                    WHERE `price` IS NOT NULL AND `price` > 0
                       AND (`profitability_updated_at` IS NULL
-                           OR `profitability_updated_at` < %s)
-                      AND `price` IS NOT NULL
-                      AND `price` > 0
-                      AND `title` IS NOT NULL
-                      AND `title` <> ''
-                      AND `weight_g` IS NOT NULL
-                      AND `weight_g` > 0
-                      AND NOT EXISTS (
-                          SELECT 1 FROM `{COLLECTION_TABLE}` AS collection_item
-                          WHERE collection_item.`source_item_id` =
-                                `{PRODUCT_TABLE}`.`source_item_id`
-                      )
-                    ORDER BY COALESCE(`profitability_updated_at`, '1970-01-01') ASC,
-                             `id` ASC
+                           OR `profitability_updated_at` < %s
+                           OR (`profitability_updated_at` < %s AND (
+                               `commission_amount_usd` IS NULL
+                               OR `shipping_fee_usd` IS NULL
+                               OR `net_proceeds_usd` IS NULL
+                               OR COALESCE(`profitability_error`, '') <> ''
+                           )))
+                    ORDER BY `profitability_updated_at` ASC, `id` ASC
                     LIMIT %s
                     """,
-                    (stale_before, remaining),
+                    (stale_before, retry_before, batch_limit),
                 )
                 rows.extend(_json_safe_row(row) for row in cursor.fetchall())
         connection.commit()
@@ -2484,7 +2484,15 @@ def update_item_profitability(
     try:
         with connection.cursor() as cursor:
             ensure_collection_tables(cursor)
-            if collection_item_id is not None:
+            if snapshot.get("source_type") and snapshot.get("id") and collection_item_id is None:
+                # A product may have a different price/category from historical
+                # captures of the same listing. Persist its own quote only.
+                cursor.execute(
+                    f"UPDATE `{PRODUCT_TABLE}` SET {assignments} "
+                    "WHERE `id` = %s AND `source_item_id` = %s",
+                    tuple(values + [int(snapshot["id"]), item_id]),
+                )
+            elif collection_item_id is not None:
                 cursor.execute(
                     f"UPDATE `{COLLECTION_TABLE}` SET {assignments} "
                     "WHERE `id` = %s AND `source_item_id` = %s",
@@ -2497,6 +2505,7 @@ def update_item_profitability(
                     UPDATE `{PRODUCT_TABLE}`
                     SET {assignments}
                     WHERE `source_item_id` = %s
+                      AND `source_type` = 'collected'
                       AND NOT EXISTS (
                           SELECT 1 FROM `{COLLECTION_TABLE}` AS newer
                           WHERE newer.`source_item_id` = %s AND newer.`id` > %s
@@ -2523,7 +2532,7 @@ def mark_all_profitability_stale(
     reason: str = "official_shipping_rate_card_refresh_pending",
     connection_factory: Callable[[], Any] | None = None,
 ) -> int:
-    """Queue every eligible collected row for recalculation after rate refresh."""
+    """Queue every product source after reference data changes, keeping old costs."""
 
     connection = (connection_factory or _connect)()
     changed = 0
@@ -2531,9 +2540,6 @@ def mark_all_profitability_stale(
         with connection.cursor() as cursor:
             ensure_collection_tables(cursor)
             for table in (COLLECTION_TABLE, PRODUCT_TABLE):
-                product_scope = (
-                    " AND `source_type` = 'collected'" if table == PRODUCT_TABLE else ""
-                )
                 cursor.execute(
                     f"""
                     UPDATE `{table}`
@@ -2541,8 +2547,6 @@ def mark_all_profitability_stale(
                         `profitability_source` = %s,
                         `profitability_error` = ''
                     WHERE `price` IS NOT NULL AND `price` > 0
-                      AND `weight_g` IS NOT NULL AND `weight_g` > 0
-                      {product_scope}
                     """,
                     (str(reason or "")[:128],),
                 )

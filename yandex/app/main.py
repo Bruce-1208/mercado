@@ -16,14 +16,20 @@ from yandex.app.config import settings
 from yandex.app.database import database
 from yandex.app.exchange_rate import ExchangeRateError, exchange_rate_service
 from yandex.app.schemas import (
+    ChatCreateRequest,
+    ChatHistoryRequest,
+    ChatListRequest,
+    ChatReplyRequest,
     FeedbackListRequest,
     FeedbackReplyRequest,
     FeedbackSkipRequest,
     InventoryListRequest,
     InventoryStockUpdateRequest,
     ListingDeleteRequest,
+    ListingDimensionsUpdateRequest,
     ListingListRequest,
     ListingPriceUpdateRequest,
+    ListingVisibilityUpdateRequest,
     OrderActionRequest,
     OrderListRequest,
     PublishRequest,
@@ -49,8 +55,12 @@ async def lifespan(_: FastAPI):
     settings.data_dir.mkdir(parents=True, exist_ok=True)
     database.initialize()
     authorization_store.initialize()
-    yield
-    await scraper.close()
+    task_service.start_order_sync_scheduler()
+    try:
+        yield
+    finally:
+        await task_service.stop_order_sync_scheduler()
+        await scraper.close()
 
 
 app = FastAPI(
@@ -287,6 +297,7 @@ async def delete_store(store_id: int) -> dict:
     try:
         if not authorization_store.delete_store(store_id):
             raise HTTPException(status_code=404, detail="店铺不存在")
+        database.delete_order_cache(store_id)
     except AuthorizationStoreError as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc
     return {"ok": True}
@@ -393,6 +404,30 @@ async def update_link_price(payload: ListingPriceUpdateRequest) -> dict:
     return {"ok": True, "store": store, **result}
 
 
+@app.put("/api/listings/dimensions")
+async def update_link_dimensions(payload: ListingDimensionsUpdateRequest) -> dict:
+    result, store = await _store_operation(
+        task_service.update_listing_dimensions(
+            payload.store_id,
+            payload.offer_id,
+            payload.package.model_dump(),
+        )
+    )
+    return {"ok": True, "store": store, **result}
+
+
+@app.put("/api/listings/visibility")
+async def update_link_visibility(payload: ListingVisibilityUpdateRequest) -> dict:
+    result, store = await _store_operation(
+        task_service.update_listing_visibility(
+            payload.store_id,
+            payload.offer_ids,
+            paused=payload.paused,
+        )
+    )
+    return {"ok": True, "store": store, **result}
+
+
 @app.post("/api/listings/delete")
 async def delete_links(payload: ListingDeleteRequest) -> dict:
     result, store = await _store_operation(
@@ -416,6 +451,53 @@ async def list_returns(payload: ReturnListRequest) -> dict:
         )
     )
     return {"store": store, **result}
+
+
+@app.post("/api/chats")
+async def list_chats(payload: ChatListRequest) -> dict:
+    result, store = await _store_operation(
+        task_service.get_chats(
+            payload.store_id,
+            statuses=payload.statuses,
+            context_types=payload.context_types,
+            types=payload.types,
+            page_token=payload.page_token,
+            limit=payload.limit,
+        )
+    )
+    return {"store": store, **result}
+
+
+@app.post("/api/chats/history")
+async def get_chat_history(payload: ChatHistoryRequest) -> dict:
+    result, store = await _store_operation(
+        task_service.get_chat_history(
+            payload.store_id,
+            payload.chat_id,
+            page_token=payload.page_token,
+            message_id_from=payload.message_id_from,
+            limit=payload.limit,
+        )
+    )
+    return {"store": store, **result}
+
+
+@app.post("/api/chats/reply")
+async def reply_to_chat(payload: ChatReplyRequest) -> dict:
+    result, store = await _store_operation(
+        task_service.send_chat_message(payload.store_id, payload.chat_id, payload.text)
+    )
+    return {"ok": True, "store": store, "result": result}
+
+
+@app.post("/api/chats/create")
+async def create_chat(payload: ChatCreateRequest) -> dict:
+    result, store = await _store_operation(
+        task_service.create_chat(
+            payload.store_id, payload.context_type, payload.context_id
+        )
+    )
+    return {"ok": True, "store": store, **result}
 
 
 @app.post("/api/feedback")

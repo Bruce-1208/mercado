@@ -504,6 +504,30 @@ def test_browser_routes_return_metadata_and_accept_management_actions(monkeypatc
         lambda token_id, settings: calls.append(("save-sites", token_id, settings))
         or {"token_id": token_id, "rows": settings},
     )
+    monkeypatch.setattr(
+        bit_interface.bit_db_api,
+        "list_mercado_account_groups",
+        lambda: {"total": 1, "rows": [{"id": 4, "name": "精品组", "accounts": []}]},
+    )
+    monkeypatch.setattr(
+        bit_interface.bit_db_api,
+        "create_mercado_account_group",
+        lambda name, description, token_ids: calls.append(
+            ("create-group", name, description, token_ids)
+        ) or {"id": 5, "name": name},
+    )
+    monkeypatch.setattr(
+        bit_interface.bit_db_api,
+        "update_mercado_account_group",
+        lambda group_id, name, description, token_ids: calls.append(
+            ("update-group", group_id, name, description, token_ids)
+        ) or {"id": group_id, "name": name},
+    )
+    monkeypatch.setattr(
+        bit_interface.bit_db_api,
+        "delete_mercado_account_group",
+        lambda group_id: calls.append(("delete-group", group_id)) or 1,
+    )
     client = _logged_in_client()
 
     list_response = client.get("/api/mercado-tokens")
@@ -530,6 +554,16 @@ def test_browser_routes_return_metadata_and_accept_management_actions(monkeypatc
             }]
         },
     )
+    group_list_response = client.get("/api/mercado-account-groups")
+    group_create_response = client.post(
+        "/api/mercado-account-groups",
+        json={"name": "新品组", "description": "新品测试", "token_ids": [2]},
+    )
+    group_update_response = client.put(
+        "/api/mercado-account-groups/4",
+        json={"name": "核心组", "description": "核心账号", "token_ids": [2]},
+    )
+    group_delete_response = client.delete("/api/mercado-account-groups/4")
     delete_response = client.delete("/api/mercado-tokens/2")
 
     assert list_response.status_code == 200
@@ -543,6 +577,10 @@ def test_browser_routes_return_metadata_and_accept_management_actions(monkeypatc
     assert disable_response.get_json()["data"]["enabled"] is False
     assert site_list_response.status_code == 200
     assert site_save_response.status_code == 200
+    assert group_list_response.status_code == 200
+    assert group_create_response.status_code == 200
+    assert group_update_response.status_code == 200
+    assert group_delete_response.status_code == 200
     assert delete_response.status_code == 200
     assert calls == [
         ("exchange", "店铺二", "TG-code"),
@@ -557,6 +595,9 @@ def test_browser_routes_return_metadata_and_accept_management_actions(monkeypatc
             "salesperson": "张三",
             "group_name": "精品组",
         }]),
+        ("create-group", "新品组", "新品测试", [2]),
+        ("update-group", 4, "核心组", "核心账号", [2]),
+        ("delete-group", 4),
         ("delete", 2),
     ]
 
@@ -589,6 +630,34 @@ def test_database_api_client_uses_remote_token_endpoints(monkeypatch):
         ("PATCH", "/api/db/mercado-tokens/3"),
         ("DELETE", "/api/db/mercado-tokens/3"),
     ]
+
+
+def test_database_api_client_uses_remote_account_group_endpoints(monkeypatch):
+    calls = []
+    monkeypatch.setattr(bit_db_api, "DB_MODE", "api")
+    monkeypatch.setattr(
+        bit_db_api,
+        "_request",
+        lambda method, path, **kwargs: calls.append((method, path, kwargs)) or {},
+    )
+
+    bit_db_api.list_mercado_account_groups()
+    bit_db_api.create_mercado_account_group("精品组", "重点账号", [2, 3])
+    bit_db_api.update_mercado_account_group(7, "核心组", "核心账号", [3])
+    bit_db_api.delete_mercado_account_group(7)
+
+    assert [(method, path) for method, path, _ in calls] == [
+        ("GET", "/api/db/mercado-account-groups"),
+        ("POST", "/api/db/mercado-account-groups"),
+        ("PUT", "/api/db/mercado-account-groups/7"),
+        ("DELETE", "/api/db/mercado-account-groups/7"),
+    ]
+    assert calls[1][2]["json"]["token_ids"] == [2, 3]
+    assert calls[2][2]["json"] == {
+        "name": "核心组",
+        "description": "核心账号",
+        "token_ids": [3],
+    }
 
 
 def test_token_list_falls_back_to_direct_mysql_when_cloud_route_is_old(monkeypatch):
@@ -646,6 +715,14 @@ def test_console_template_contains_store_token_module():
     assert 'id="mercado-token-name-search"' in body
     assert 'id="mercado-token-salesperson-filter"' in body
     assert 'id="mercado-token-group-filter"' in body
+    assert 'id="mercado-account-group-dialog"' in body
+    assert 'id="mercado-account-group-name"' in body
+    assert 'id="mercado-account-group-description"' in body
+    assert 'id="mercado-account-group-accounts"' in body
+    assert "openMercadoAccountGroupManager" in body
+    assert "saveMercadoAccountGroup" in body
+    assert "deleteMercadoAccountGroup" in body
+    assert "组内账号会变为未分组，店铺授权不会删除" in body
     assert "filteredMercadoStoreTokenRows" in body
     assert "name.includes(nameQuery)" in body
     assert "当前筛选条件下暂无授权店铺" in body
@@ -703,3 +780,11 @@ def test_site_settings_reject_discount_outside_percentage_range():
             2,
             [{"site_id": "MLM", "discount_rate": 101}],
         )
+
+
+def test_account_group_validation_rejects_blank_name_and_invalid_members():
+    with pytest.raises(ValueError, match="请输入账号分组名称"):
+        bit_mysql.create_mercado_account_group("  ")
+
+    with pytest.raises(ValueError, match="分组中包含无效账号"):
+        bit_mysql.create_mercado_account_group("精品组", token_ids=["bad-id"])

@@ -39,6 +39,10 @@ SUPPORTED_SITE_CURRENCIES = {
 class MercadoProfitabilityError(RuntimeError):
     """An official profitability estimate could not be produced."""
 
+    def __init__(self, message: str, *, snapshot: Mapping[str, Any] | None = None):
+        super().__init__(message)
+        self.snapshot = dict(snapshot or {})
+
 
 _cache_lock = threading.RLock()
 _cache: dict[str, tuple[float, Any]] = {}
@@ -484,6 +488,45 @@ class MercadoProfitabilityClient:
             self.cache_store.put_commission(quote, value)
         return value
 
+    def shipping_from_rate_card(
+        self, row: Mapping[str, Any], price: float, *, free_shipping: bool,
+    ) -> dict[str, Any] | None:
+        """Read the official database table without requiring a category or store."""
+
+        if self.shipping_rate_store is None:
+            return None
+        billable_weight_g = calculate_billable_weight_g(
+            row.get("weight_g"), row.get("volumetric_weight_kg")
+        )
+        if billable_weight_g is None:
+            raise MercadoProfitabilityError("缺少智赢实际重量，暂时无法计算运费")
+        site_id = _site_id(row)
+        local_currency = SUPPORTED_SITE_CURRENCIES.get(site_id)
+        currency_id = str(row.get("currency_id") or "USD").upper()
+        price_local = price
+        if local_currency and local_currency != currency_id:
+            price_local = (
+                price * float(self.conversion_to_usd(currency_id)["ratio"])
+                / float(self.conversion_to_usd(local_currency)["ratio"])
+            )
+        matched = self.shipping_rate_store.match(
+            site_id=site_id, price_local=price_local,
+            billable_weight_g=billable_weight_g, free_shipping=free_shipping,
+        )
+        if not matched:
+            return None
+        return {
+            "amount": float(matched["shipping_amount_usd"]),
+            "currency_id": "USD",
+            "api_billable_weight_g": billable_weight_g,
+            "rate_source": "official_global_selling_cainiao_rate_card",
+            "rate_kind": str(matched.get("rate_kind") or ""),
+            "rate_price_label": str(matched.get("price_label") or ""),
+            "rate_weight_label": str(matched.get("weight_label") or ""),
+            "refreshed_at": matched.get("refreshed_at"),
+            "free_shipping": free_shipping,
+        }
+
     def shipping(
         self,
         marketplace: Mapping[str, Any],
@@ -494,10 +537,19 @@ class MercadoProfitabilityClient:
         *,
         free_shipping: bool,
     ) -> dict[str, Any]:
+        matched = self.shipping_from_rate_card(row, price, free_shipping=free_shipping)
+        if matched:
+            return matched
+        dimensions = shipping_dimensions_parameter(row)
+        # Only the API fallback needs an authorized marketplace and category.
+        if not category_id:
+            raise MercadoProfitabilityError("缺少商品分类，数据库运费表未命中，无法查询接口运费")
+        marketplace = marketplace or self.marketplace(_site_id(row))
         child_user_id = str(marketplace.get("user_id") or "")
         if not child_user_id:
             raise MercadoProfitabilityError("授权店铺站点缺少子账号编号")
-        dimensions = shipping_dimensions_parameter(row)
+        if source_free_shipping(row) is None:
+            free_shipping = self.source_listing_free_shipping(row)
         logistic_type = str(marketplace.get("logistic_type") or "remote")
         shipping_mode = "me2"
         quote = {
@@ -511,36 +563,9 @@ class MercadoProfitabilityClient:
             "shipping_mode": shipping_mode,
             "free_shipping": bool(free_shipping),
         }
-        billable_weight_g = calculate_billable_weight_g(
-            row.get("weight_g"), row.get("volumetric_weight_kg")
-        )
-        if self.shipping_rate_store is not None and billable_weight_g is not None:
-            try:
-                matched = self.shipping_rate_store.match(
-                    site_id=quote["site_id"],
-                    price_local=price,
-                    billable_weight_g=billable_weight_g,
-                    free_shipping=bool(free_shipping),
-                )
-            except Exception:
-                matched = None
-            if matched:
-                return {
-                    # Global Selling publishes the Cainiao charge directly in
-                    # USD. Never convert a domestic reputation rate into USD
-                    # and present that derived value as an official standard.
-                    "amount": float(matched["shipping_amount_usd"]),
-                    "currency_id": "USD",
-                    "api_billable_weight_g": billable_weight_g,
-                    "rate_source": "official_global_selling_cainiao_rate_card",
-                    "rate_kind": str(matched.get("rate_kind") or ""),
-                    "rate_price_label": str(matched.get("price_label") or ""),
-                    "rate_weight_label": str(matched.get("weight_label") or ""),
-                    "refreshed_at": matched.get("refreshed_at"),
-                }
         cached = self.cache_store.get_shipping(**quote) if self.cache_store else None
         if cached:
-            return cached
+            return {**cached, "free_shipping": free_shipping}
         payload = self._get(
             f"/users/{child_user_id}/shipping_options/free",
             params={
@@ -565,6 +590,7 @@ class MercadoProfitabilityClient:
             "currency_id": str(country.get("currency_id") or ""),
             "api_billable_weight_g": _number(country.get("billable_weight")),
             "rate_source": "official_shipping_options_api",
+            "free_shipping": free_shipping,
             "payload": payload,
         }
         if self.cache_store is not None:
@@ -613,91 +639,99 @@ class MercadoProfitabilityClient:
         price = _positive(row.get("price"))
         if price is None:
             raise MercadoProfitabilityError("商品缺少有效售价")
-        title = str(row.get("title") or "").strip()
-        if not title:
-            raise MercadoProfitabilityError("商品缺少标题，无法预测分类")
         site_id = _site_id(row)
         currency_id = str(row.get("currency_id") or "USD").upper()
-        pricing = self.pricing(row)
-        # The workbench always publishes with the Classic plan.  Source listing
-        # types (for example Premium/gold_pro) must not affect our commission.
         listing_type_id = DEFAULT_LISTING_TYPE_ID
-        marketplace = self.marketplace(site_id)
-        category_id = str(row.get("category_id") or "").strip()
-        category = (
-            {
-                "category_id": category_id,
-                "category_name": str(row.get("category_name") or ""),
-            }
-            if category_id
-            else self.category(site_id, title, row=row)
-        )
-        commission = self.commission(
-            site_id,
-            category["category_id"],
-            price,
-            listing_type_id,
-            currency_id=currency_id,
-            marketplace=marketplace,
-            row=row,
-        )
-        free_shipping = self.source_listing_free_shipping(row)
-        shipping = self.shipping(
-            marketplace,
-            row,
-            category["category_id"],
-            price,
-            listing_type_id,
-            free_shipping=free_shipping,
-        )
-        exchange_rate = float(pricing["exchange_rate_to_usd"])
-        commission_currency = commission["currency_id"] or currency_id
-        shipping_currency = shipping["currency_id"] or currency_id
-        commission_rate = exchange_rate
-        if commission_currency != currency_id:
-            commission_rate = float(self.conversion_to_usd(commission_currency)["ratio"])
-        shipping_rate = exchange_rate
-        if shipping_currency != currency_id:
-            shipping_rate = float(self.conversion_to_usd(shipping_currency)["ratio"])
-        sale_price_usd = float(pricing["sale_price_usd"])
-        commission_amount_usd = round(float(commission["amount"]) * commission_rate, 2)
-        shipping_fee_usd = round(float(shipping["amount"]) * shipping_rate, 2)
-        billable_weight = calculate_billable_weight_g(
-            row.get("weight_g"), row.get("volumetric_weight_kg")
-        )
-        return {
-            **pricing,
-            "category_id": category["category_id"],
-            "category_name": category["category_name"],
+        snapshot: dict[str, Any] = {
             "listing_type_id": listing_type_id,
-            "listing_type_name": commission.get("listing_type_name") or "",
-            "commission_rate": commission.get("rate"),
-            "commission_amount_local": commission["amount"],
-            "commission_currency_id": commission_currency,
-            "commission_amount_usd": commission_amount_usd,
-            "shipping_fee_local": shipping["amount"],
-            "shipping_currency_id": shipping_currency,
-            "shipping_fee_usd": shipping_fee_usd,
-            "billable_weight_g": billable_weight,
-            "shipping_api_billable_weight_g": shipping.get("api_billable_weight_g"),
-            "shipping_weight_rule": (
-                f"{'free_shipping' if free_shipping else 'buyer_pays_shipping'}:"
-                "global_selling_max_gross_or_volumetric:"
-                f"{shipping.get('rate_source') or 'official_shipping_options_api'}"
+            "listing_type_name": "Classic",
+            "billable_weight_g": calculate_billable_weight_g(
+                row.get("weight_g"), row.get("volumetric_weight_kg")
             ),
-            "source_free_shipping": free_shipping,
-            "net_proceeds_usd": calculate_net_proceeds_usd(
-                sale_price_usd, commission_amount_usd, shipping_fee_usd
-            ),
+            "net_proceeds_usd": None,
             "profitability_updated_at": _now_text(),
-            "profitability_source": (
-                "mercadolibre_global_selling_cainiao_rate_card_daily_database_cache"
-                if shipping.get("rate_source")
-                == "official_global_selling_cainiao_rate_card"
-                else PROFITABILITY_SOURCE
-            ),
-            "profitability_error": "",
+            "profitability_source": PROFITABILITY_SOURCE,
         }
+        errors = []
+        try:
+            snapshot.update(self.pricing(row))
+        except Exception as exc:
+            errors.append(f"售价换算：{exc}")
+
+        category_id = str(row.get("category_id") or "").strip()
+        if category_id:
+            snapshot.update(category_id=category_id, category_name=row.get("category_name") or "")
+        else:
+            try:
+                title = str(row.get("title") or "").strip()
+                if not title:
+                    raise MercadoProfitabilityError("商品缺少标题，无法预测分类")
+                snapshot.update(self.category(site_id, title, row=row))
+                category_id = snapshot["category_id"]
+            except Exception as exc:
+                errors.append(f"分类：{exc}")
+
+        if category_id:
+            try:
+                # The Classic remote quote is shared reference data, so a cached
+                # commission does not need a live marketplace/account lookup.
+                commission = self.commission(
+                    site_id, category_id, price, listing_type_id,
+                    currency_id=currency_id, row=row,
+                )
+                commission_currency = commission["currency_id"] or currency_id
+                snapshot.update(
+                    listing_type_name=commission.get("listing_type_name") or "Classic",
+                    commission_rate=commission.get("rate"),
+                    commission_amount_local=commission["amount"],
+                    commission_currency_id=commission_currency,
+                    commission_amount_usd=None,
+                )
+                rate = float(self.conversion_to_usd(commission_currency)["ratio"])
+                snapshot["commission_amount_usd"] = round(float(commission["amount"]) * rate, 2)
+            except Exception as exc:
+                errors.append(f"佣金：{exc}")
+
+        # Shipping from the official table only depends on site, local price
+        # band and weight. A failed category/commission must not discard it.
+        try:
+            free_shipping = source_free_shipping(row)
+            shipping = self.shipping(
+                {}, row, category_id, price, listing_type_id,
+                free_shipping=True if free_shipping is None else free_shipping,
+            )
+            free_shipping = shipping.get("free_shipping", free_shipping)
+            shipping_currency = shipping["currency_id"] or currency_id
+            snapshot.update(
+                shipping_fee_local=shipping["amount"],
+                shipping_currency_id=shipping_currency,
+                shipping_fee_usd=None,
+                shipping_api_billable_weight_g=shipping.get("api_billable_weight_g"),
+                shipping_weight_rule=(
+                    f"{'free_shipping' if free_shipping else 'buyer_pays_shipping'}:"
+                    "global_selling_max_gross_or_volumetric:"
+                    f"{shipping.get('rate_source') or 'official_shipping_options_api'}"
+                ),
+                source_free_shipping=free_shipping,
+            )
+            rate = float(self.conversion_to_usd(shipping_currency)["ratio"])
+            snapshot["shipping_fee_usd"] = round(float(shipping["amount"]) * rate, 2)
+            if shipping.get("rate_source") == "official_global_selling_cainiao_rate_card":
+                snapshot["profitability_source"] = (
+                    "mercadolibre_global_selling_cainiao_rate_card_daily_database_cache"
+                )
+        except Exception as exc:
+            errors.append(f"运费：{exc}")
+
+        if not errors:
+            snapshot["net_proceeds_usd"] = calculate_net_proceeds_usd(
+                snapshot.get("sale_price_usd"), snapshot.get("commission_amount_usd"),
+                snapshot.get("shipping_fee_usd"),
+            )
+        snapshot["profitability_error"] = "；".join(errors)[:2000]
+        if errors:
+            raise MercadoProfitabilityError(snapshot["profitability_error"], snapshot=snapshot)
+        return snapshot
 
 
 def enrich_profitability(
@@ -711,11 +745,15 @@ def enrich_profitability(
     try:
         result.update(calculator.estimate(result))
     except Exception as exc:
+        if isinstance(exc, MercadoProfitabilityError) and exc.snapshot:
+            result.update(exc.snapshot)
+            return result
         try:
             result.update(calculator.pricing(result))
         except Exception:
             pass
         result.update(
+            net_proceeds_usd=None,
             profitability_updated_at=_now_text(),
             profitability_source=PROFITABILITY_SOURCE,
             profitability_error=str(exc)[:2000],

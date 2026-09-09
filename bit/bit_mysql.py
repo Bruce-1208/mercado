@@ -3084,7 +3084,11 @@ def list_orders(
             cny_income_sql = f"({usd_amount_sql}) * ({cny_rate_sql})"
             source_sql = f"""
                 (
-                    SELECT synced.`order_id` AS `id`, synced.`order_id` AS `order_number`,
+                    SELECT synced.`order_id` AS `id`,
+                           NULLIF(
+                               JSON_UNQUOTE(JSON_EXTRACT(synced.`raw_json`, '$.pack_id')),
+                               'null'
+                           ) AS `order_number`,
                            synced.`token_id` AS `store_id`,
                            DATE_ADD(synced.`date_created`, INTERVAL 8 HOUR) AS `ordered_at`,
                            site_settings.`salesperson`,
@@ -3199,7 +3203,11 @@ def list_orders(
             # summary and only for the 200 rows returned by the current page.
             filter_source_sql = f"""
                 (
-                    SELECT synced.`order_id` AS `id`, synced.`order_id` AS `order_number`,
+                    SELECT synced.`order_id` AS `id`,
+                           NULLIF(
+                               JSON_UNQUOTE(JSON_EXTRACT(synced.`raw_json`, '$.pack_id')),
+                               'null'
+                           ) AS `order_number`,
                            synced.`token_id` AS `store_id`,
                            DATE_ADD(synced.`date_created`, INTERVAL 8 HOUR) AS `ordered_at`,
                            site_settings.`salesperson`, site_settings.`group_name`,
@@ -4213,6 +4221,67 @@ def get_mercado_order_label_contexts(order_ids):
         connection.close()
 
 
+def get_mercado_order_split_contexts(order_ids):
+    """Resolve one selected order group to every order on the same shipment."""
+    normalized_ids = []
+    for value in order_ids or []:
+        order_id = str(value or "").strip()
+        if order_id and order_id not in normalized_ids:
+            normalized_ids.append(order_id)
+    if not normalized_ids:
+        raise ValueError("请至少选择一个订单")
+    if len(normalized_ids) > 100:
+        raise ValueError("单次最多校验 100 个订单")
+    placeholders = ",".join(["%s"] * len(normalized_ids))
+    connection = pymysql.connect(**config)
+    try:
+        with connection.cursor() as cursor:
+            _ensure_mercado_synced_orders_table(cursor)
+            _ensure_mercado_store_tokens_table(cursor)
+            cursor.execute(
+                f"""
+                SELECT synced.`order_id`, synced.`shipping_id`, synced.`token_id`
+                FROM `mercado_synced_orders` AS synced
+                INNER JOIN `mercado_store_tokens` AS stores ON stores.`id` = synced.`token_id`
+                WHERE synced.`order_id` IN ({placeholders})
+                """,
+                normalized_ids,
+            )
+            selected = list(cursor.fetchall() or [])
+            found = {str(row.get("order_id") or "") for row in selected}
+            missing = [order_id for order_id in normalized_ids if order_id not in found]
+            if missing:
+                raise ValueError(
+                    "以下订单不存在或不属于当前授权店铺：" + "、".join(missing)
+                )
+            token_ids = {int(row.get("token_id") or 0) for row in selected}
+            shipment_ids = {
+                str(row.get("shipping_id") or "").strip() for row in selected
+            }
+            if len(token_ids) != 1 or len(shipment_ids) != 1:
+                raise ValueError("一次只能拆分同一店铺、同一 Shipment 的订单")
+            shipment_id = next(iter(shipment_ids))
+            if not shipment_id:
+                raise ValueError("所选订单尚未生成 Shipment ID，不能拆分发货")
+            token_id = next(iter(token_ids))
+            cursor.execute(
+                """
+                SELECT synced.`order_id`, synced.`shipping_id`, synced.`token_id`,
+                       synced.`shop_name`, synced.`status`, synced.`status_label`,
+                       synced.`raw_json`, stores.`access_token`, stores.`refresh_token`,
+                       stores.`expires_at`
+                FROM `mercado_synced_orders` AS synced
+                INNER JOIN `mercado_store_tokens` AS stores ON stores.`id` = synced.`token_id`
+                WHERE synced.`token_id` = %s AND synced.`shipping_id` = %s
+                ORDER BY synced.`date_created` ASC, synced.`order_id` ASC
+                """,
+                (token_id, shipment_id),
+            )
+            return list(cursor.fetchall() or [])
+    finally:
+        connection.close()
+
+
 def _ensure_mercado_order_sync_schedule_table(cursor):
     cursor.execute(
         """
@@ -4653,6 +4722,76 @@ def list_mercado_order_operation_logs(order_id, limit=100):
                 if isinstance(row.get("created_at"), datetime):
                     row["created_at"] = row["created_at"].strftime("%Y-%m-%d %H:%M:%S")
             return rows
+    finally:
+        connection.close()
+
+
+def record_mercado_order_split_logs(
+    order_ids,
+    *,
+    shipment_id,
+    reason,
+    packs,
+    operator_id=None,
+    operator_name="",
+):
+    """Record a successful external split request for each affected order."""
+    normalized_ids = list(dict.fromkeys(
+        str(value or "").strip()
+        for value in order_ids or ()
+        if str(value or "").strip()
+    ))
+    if not normalized_ids:
+        return 0
+    actor_id = int(operator_id) if str(operator_id or "").isdigit() else None
+    actor_name = str(operator_name or "").strip()[:100] or "系统"
+    shipment_id = str(shipment_id or "").strip()
+    reason = str(reason or "").strip().upper()
+    payload = {
+        "shipment_id": shipment_id,
+        "reason": reason,
+        "packs": list(packs or []),
+    }
+    changes = {
+        "shipment_split": {
+            "label": "拆分发货",
+            "before": f"Shipment {shipment_id}",
+            "after": "已提交拆成 2 个包裹",
+        },
+        "split_reason": {
+            "label": "拆分原因",
+            "before": "",
+            "after": reason,
+        },
+    }
+    now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    connection = pymysql.connect(**config)
+    try:
+        with connection.cursor() as cursor:
+            _ensure_mercado_synced_orders_table(cursor)
+            _ensure_mercado_order_logs_table(cursor)
+            cursor.executemany(
+                """
+                INSERT INTO `mercado_order_operation_logs` (
+                    `order_id`, `action_type`, `action_label`, `operator_id`, `operator_name`,
+                    `changes_json`, `before_json`, `after_json`, `created_at`
+                ) VALUES (%s, 'shipment_split', '拆分发货', %s, %s, %s, NULL, %s, %s)
+                """,
+                [
+                    (
+                        order_id, actor_id, actor_name,
+                        json.dumps(changes, ensure_ascii=False, separators=(",", ":")),
+                        json.dumps(payload, ensure_ascii=False, separators=(",", ":")),
+                        now,
+                    )
+                    for order_id in normalized_ids
+                ],
+            )
+        connection.commit()
+        return len(normalized_ids)
+    except Exception:
+        connection.rollback()
+        raise
     finally:
         connection.close()
 
@@ -6620,6 +6759,308 @@ def _ensure_mercado_store_site_settings_table(cursor):
         "visit_stats_enabled",
         "TINYINT(1) NOT NULL DEFAULT 0",
     )
+
+
+def _ensure_mercado_account_groups_table(cursor):
+    """Create the managed account-group catalogue used by store authorization."""
+    cursor.execute(
+        """
+        CREATE TABLE IF NOT EXISTS `mercado_account_groups` (
+            `id` BIGINT NOT NULL AUTO_INCREMENT,
+            `name` VARCHAR(100) NOT NULL,
+            `description` VARCHAR(500) NULL,
+            `created_at` DATETIME NOT NULL,
+            `updated_at` DATETIME NOT NULL,
+            PRIMARY KEY (`id`),
+            UNIQUE KEY `uniq_mercado_account_group_name` (`name`)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+        """
+    )
+
+
+def _normalize_mercado_account_group(name, description=""):
+    name = str(name or "").strip()
+    description = str(description or "").strip()
+    if not name:
+        raise ValueError("请输入账号分组名称")
+    if len(name) > 100:
+        raise ValueError("账号分组名称不能超过 100 个字符")
+    if len(description) > 500:
+        raise ValueError("账号分组描述不能超过 500 个字符")
+    return name, description
+
+
+def _normalize_mercado_group_token_ids(token_ids):
+    if token_ids is None:
+        return None
+    if not isinstance(token_ids, list):
+        raise ValueError("分组账号必须是数组")
+    result = []
+    seen = set()
+    for value in token_ids:
+        try:
+            token_id = int(value)
+        except (TypeError, ValueError) as exc:
+            raise ValueError("分组中包含无效账号") from exc
+        if token_id <= 0:
+            raise ValueError("分组中包含无效账号")
+        if token_id not in seen:
+            seen.add(token_id)
+            result.append(token_id)
+    return result
+
+
+def _mercado_account_group_rows(cursor):
+    cursor.execute(
+        """
+        SELECT `id`, `name`, `description`, `created_at`, `updated_at`
+        FROM `mercado_account_groups`
+        ORDER BY `name` ASC, `id` ASC
+        """
+    )
+    groups = [dict(row) for row in (cursor.fetchall() or [])]
+    cursor.execute(
+        """
+        SELECT DISTINCT settings.`group_name`, tokens.`id`, tokens.`display_name`,
+               tokens.`nickname`, tokens.`meli_user_id`, tokens.`enabled`
+        FROM `mercado_store_site_settings` AS settings
+        INNER JOIN `mercado_store_tokens` AS tokens ON tokens.`id` = settings.`token_id`
+        WHERE COALESCE(settings.`group_name`, '') <> ''
+        ORDER BY tokens.`display_name` ASC, tokens.`id` ASC
+        """
+    )
+    accounts_by_name = {}
+    for row in cursor.fetchall() or []:
+        accounts_by_name.setdefault(str(row.get("group_name") or ""), []).append(
+            {
+                "id": int(row["id"]),
+                "display_name": str(row.get("display_name") or ""),
+                "nickname": str(row.get("nickname") or ""),
+                "meli_user_id": str(row.get("meli_user_id") or ""),
+                "enabled": bool(row.get("enabled", 1)),
+            }
+        )
+    for group in groups:
+        group["id"] = int(group["id"])
+        group["description"] = str(group.get("description") or "")
+        group["created_at"] = _mercado_token_datetime(group.get("created_at"))
+        group["updated_at"] = _mercado_token_datetime(group.get("updated_at"))
+        group["accounts"] = accounts_by_name.get(str(group.get("name") or ""), [])
+        group["account_count"] = len(group["accounts"])
+    return groups
+
+
+def _sync_mercado_account_group_members(cursor, group_name, token_ids, now):
+    token_ids = _normalize_mercado_group_token_ids(token_ids)
+    if token_ids is None:
+        return
+    if token_ids:
+        placeholders = ", ".join(["%s"] * len(token_ids))
+        cursor.execute(
+            f"SELECT `id` FROM `mercado_store_tokens` WHERE `id` IN ({placeholders})",
+            tuple(token_ids),
+        )
+        existing_ids = {int(row["id"]) for row in (cursor.fetchall() or [])}
+        missing_ids = [str(token_id) for token_id in token_ids if token_id not in existing_ids]
+        if missing_ids:
+            raise ValueError(f"以下授权账号不存在：{', '.join(missing_ids)}")
+        cursor.execute(
+            f"""
+            UPDATE `mercado_store_site_settings`
+            SET `group_name` = NULL, `updated_at` = %s
+            WHERE `group_name` = %s AND `token_id` NOT IN ({placeholders})
+            """,
+            (now, group_name, *token_ids),
+        )
+    else:
+        cursor.execute(
+            """
+            UPDATE `mercado_store_site_settings`
+            SET `group_name` = NULL, `updated_at` = %s
+            WHERE `group_name` = %s
+            """,
+            (now, group_name),
+        )
+
+    for token_id in token_ids:
+        for site_id in MERCADO_CONFIGURABLE_SITES:
+            cursor.execute(
+                """
+                INSERT INTO `mercado_store_site_settings` (
+                    `token_id`, `site_id`, `group_name`, `created_at`, `updated_at`
+                ) VALUES (%s, %s, %s, %s, %s)
+                ON DUPLICATE KEY UPDATE
+                    `group_name` = VALUES(`group_name`),
+                    `updated_at` = VALUES(`updated_at`)
+                """,
+                (token_id, site_id, group_name, now, now),
+            )
+    cursor.execute(
+        """
+        DELETE FROM `mercado_store_site_settings`
+        WHERE COALESCE(`salesperson`, '') = ''
+          AND `discount_rate` IS NULL
+          AND COALESCE(`group_name`, '') = ''
+          AND `appeal_enabled` = 0
+          AND `reputation_update_enabled` = 0
+          AND `visit_stats_enabled` = 0
+        """
+    )
+
+
+def list_mercado_account_groups():
+    connection = pymysql.connect(**config)
+    try:
+        with connection.cursor() as cursor:
+            _ensure_mercado_store_tokens_table(cursor)
+            _ensure_mercado_store_site_settings_table(cursor)
+            _ensure_mercado_account_groups_table(cursor)
+            now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            # Existing free-text groups become manageable without a manual migration.
+            cursor.execute(
+                """
+                INSERT INTO `mercado_account_groups` (`name`, `description`, `created_at`, `updated_at`)
+                SELECT DISTINCT `group_name`, NULL, %s, %s
+                FROM `mercado_store_site_settings`
+                WHERE COALESCE(`group_name`, '') <> ''
+                ON DUPLICATE KEY UPDATE `name` = VALUES(`name`)
+                """,
+                (now, now),
+            )
+            rows = _mercado_account_group_rows(cursor)
+        connection.commit()
+        return {"total": len(rows), "rows": rows}
+    except Exception:
+        connection.rollback()
+        raise
+    finally:
+        connection.close()
+
+
+def create_mercado_account_group(name, description="", token_ids=None):
+    name, description = _normalize_mercado_account_group(name, description)
+    token_ids = _normalize_mercado_group_token_ids(token_ids)
+    now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    connection = pymysql.connect(**config)
+    try:
+        with connection.cursor() as cursor:
+            _ensure_mercado_store_tokens_table(cursor)
+            _ensure_mercado_store_site_settings_table(cursor)
+            _ensure_mercado_account_groups_table(cursor)
+            cursor.execute(
+                "SELECT `id` FROM `mercado_account_groups` WHERE `name` = %s LIMIT 1",
+                (name,),
+            )
+            if cursor.fetchone():
+                raise ValueError("账号分组名称已存在")
+            cursor.execute(
+                """
+                INSERT INTO `mercado_account_groups`
+                    (`name`, `description`, `created_at`, `updated_at`)
+                VALUES (%s, %s, %s, %s)
+                """,
+                (name, description or None, now, now),
+            )
+            group_id = int(cursor.lastrowid)
+            _sync_mercado_account_group_members(cursor, name, token_ids or [], now)
+        connection.commit()
+        return next(
+            row for row in list_mercado_account_groups()["rows"]
+            if int(row["id"]) == group_id
+        )
+    except Exception:
+        connection.rollback()
+        raise
+    finally:
+        connection.close()
+
+
+def update_mercado_account_group(group_id, name, description="", token_ids=None):
+    group_id = int(group_id)
+    name, description = _normalize_mercado_account_group(name, description)
+    token_ids = _normalize_mercado_group_token_ids(token_ids)
+    now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    connection = pymysql.connect(**config)
+    try:
+        with connection.cursor() as cursor:
+            _ensure_mercado_store_tokens_table(cursor)
+            _ensure_mercado_store_site_settings_table(cursor)
+            _ensure_mercado_account_groups_table(cursor)
+            cursor.execute(
+                "SELECT `name` FROM `mercado_account_groups` WHERE `id` = %s FOR UPDATE",
+                (group_id,),
+            )
+            row = cursor.fetchone()
+            if not row:
+                raise KeyError("账号分组不存在")
+            old_name = str(row.get("name") or "")
+            cursor.execute(
+                "SELECT `id` FROM `mercado_account_groups` WHERE `name` = %s AND `id` <> %s LIMIT 1",
+                (name, group_id),
+            )
+            if cursor.fetchone():
+                raise ValueError("账号分组名称已存在")
+            cursor.execute(
+                """
+                UPDATE `mercado_account_groups`
+                SET `name` = %s, `description` = %s, `updated_at` = %s
+                WHERE `id` = %s
+                """,
+                (name, description or None, now, group_id),
+            )
+            if old_name != name:
+                cursor.execute(
+                    """
+                    UPDATE `mercado_store_site_settings`
+                    SET `group_name` = %s, `updated_at` = %s
+                    WHERE `group_name` = %s
+                    """,
+                    (name, now, old_name),
+                )
+            _sync_mercado_account_group_members(cursor, name, token_ids, now)
+        connection.commit()
+        return next(
+            row for row in list_mercado_account_groups()["rows"]
+            if int(row["id"]) == group_id
+        )
+    except Exception:
+        connection.rollback()
+        raise
+    finally:
+        connection.close()
+
+
+def delete_mercado_account_group(group_id):
+    group_id = int(group_id)
+    now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    connection = pymysql.connect(**config)
+    try:
+        with connection.cursor() as cursor:
+            _ensure_mercado_store_site_settings_table(cursor)
+            _ensure_mercado_account_groups_table(cursor)
+            cursor.execute(
+                "SELECT `name` FROM `mercado_account_groups` WHERE `id` = %s FOR UPDATE",
+                (group_id,),
+            )
+            row = cursor.fetchone()
+            if not row:
+                raise KeyError("账号分组不存在")
+            cursor.execute(
+                """
+                UPDATE `mercado_store_site_settings`
+                SET `group_name` = NULL, `updated_at` = %s
+                WHERE `group_name` = %s
+                """,
+                (now, str(row.get("name") or "")),
+            )
+            cursor.execute("DELETE FROM `mercado_account_groups` WHERE `id` = %s", (group_id,))
+        connection.commit()
+        return 1
+    except Exception:
+        connection.rollback()
+        raise
+    finally:
+        connection.close()
 
 
 def _mercado_store_site_setting_rows(cursor, token_id):

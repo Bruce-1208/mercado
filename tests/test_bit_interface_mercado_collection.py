@@ -34,6 +34,49 @@ def test_startup_maintenance_runs_in_daemon_threads(monkeypatch):
     assert all(thread.daemon and thread.started for thread in created_threads)
 
 
+def test_profitability_worker_continues_when_reference_refresh_fails(monkeypatch):
+    from erp import ecb_exchange_rates, mercadolibre_collection_store as store
+    from erp import mercadolibre_profitability as profitability
+    from erp import mercadolibre_shipping_rate_cards as cards
+
+    class StopAfterBatch:
+        stopped = False
+
+        def is_set(self):
+            return self.stopped
+
+        def wait(self, seconds):
+            self.stopped = True
+
+    class Client:
+        def __init__(self, token):
+            self.token = token
+
+        def estimate(self, row):
+            return {"shipping_fee_usd": 6.4, "commission_amount_usd": 3.5}
+
+    def unavailable(*args, **kwargs):
+        raise RuntimeError("reference endpoint unavailable")
+
+    saved = []
+    monkeypatch.setattr(workbench, "_mercado_profit_refresh_stop_event", StopAfterBatch())
+    monkeypatch.setattr(profitability, "MercadoProfitabilityClient", Client)
+    monkeypatch.setattr(profitability, "active_store_token", lambda: {"access_token": "test"})
+    monkeypatch.setattr(profitability, "refresh_supported_exchange_rates", unavailable)
+    monkeypatch.setattr(ecb_exchange_rates, "refresh_usd_cny_daily_rates", unavailable)
+    monkeypatch.setattr(cards.OfficialShippingRateCardStore, "needs_refresh", lambda *a, **k: False)
+    monkeypatch.setattr(store, "list_stale_profitability_items", lambda **kwargs: [
+        {"id": 1, "source_type": "pulled", "source_item_id": "MLM1"},
+    ])
+    monkeypatch.setattr(store, "update_item_profitability", lambda item_id, row: saved.append(row))
+
+    workbench._mercado_profit_refresh_loop()
+
+    assert len(saved) == 1
+    assert saved[0]["source_type"] == "pulled"
+    assert saved[0]["shipping_fee_usd"] == 6.4
+
+
 def _client():
     workbench.app.config.update(TESTING=True, SECRET_KEY="test-secret")
     client = workbench.app.test_client()

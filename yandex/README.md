@@ -57,14 +57,22 @@ start.cmd
 
 ## 使用流程
 
-页面按“订单中心 / 链接管理 / 商品库存 / 退货管理 / 客户声音 / 搜品上架 / 店铺管理”划分工作区，右上角的当前店铺会同时作用于所有读取、改价、删除、回复、库存调整、订单履约和商品上传操作。
+页面按“订单中心 / 链接管理 / 商品库存 / 退货管理 / 客户消息 / 客户声音 / 搜品上架 / 店铺管理”划分工作区，右上角的当前店铺会同时作用于所有读取、改价、包装重量修改、暂停/恢复、删除、回复、库存调整、订单履约和商品上传操作。
 
 ### 订单中心
 
 1. 在右上角选择已经连接的店铺。
-2. 选择订单状态和下单日期（单次最多 30 天），点击“刷新订单”。
+2. 在横向状态按钮中选择订单状态，并选择下单日期（单次最多 30 天），点击“刷新订单”。
 3. 页面通过官方 `POST /v1/businesses/{businessId}/orders` 接口展示订单号、商品、履约方式、状态和更新时间，并支持 `pageToken` 翻页。
 4. token 需要包含 `inventory-and-order-processing:read-only`、`inventory-and-order-processing`、`finance-and-accounting` 或 `all-methods` 等可读取订单的权限。
+
+服务启动后会把最近 30 天订单缓存到本机 SQLite，并按两个互不干扰的频率维护：
+
+- 每 15 分钟查询一次新订单；这一路只插入此前未见过的订单号，不会提前覆盖老订单状态。
+- 每 12 小时刷新一次缓存中已有订单的状态和订单明细。
+- 打开的订单页面每 15 分钟自动读取一次最新缓存；切回订单首页后仍可随时点击“刷新订单”。服务重启后会根据数据库里的上次成功时间继续调度，首次运行则立即建立缓存。
+
+Yandex 订单接口一次最多查询 30 天，因此自动缓存和状态刷新覆盖最近 30 天；更早且已经离开该窗口的历史订单会保留最后一次成功同步的状态。
 
 订单列表展示商品缩略图、标题和 SKU，点击标题或缩略图会在新标签页打开 Yandex 官方返回的前台商品链接；展开价格明细可查看全部商品，不限于列表预览的前两个。图片与前台链接复用同一批商品目录请求，不会每个 SKU 单独请求。图片缺失或加载失败时显示占位；链接未返回时标题保持普通文本，不根据 SKU 猜测地址。官方 B2C 链接是商品前台链接，不保证锁定某个卖家报价。
 
@@ -98,9 +106,11 @@ start.cmd
 
 - 使用店铺级商品接口读取当前店铺全部链接，展示 SKU、商品名、图片、前台链接、销售状态、统一价格、店铺单独价格、错误和警告，并支持状态、SKU 与 `pageToken` 分页筛选。
 - 可直接修改售价和可选划线价。程序先读取柜台 `onlyDefaultPrice` 设置：支持单店价时只修改当前店铺；只支持统一价格时会明确提示并改为更新柜台内所有店铺的默认价。
+- 可修改包装长、宽、高和毛重。Yandex 将这组数据保存在柜台商品目录中，因此修改会影响同一柜台下所有店铺；页面会在确认框中明确提示这一作用域。
+- 支持单条或批量暂停、恢复销售。暂停使用店铺级隐藏接口，只影响选中的店铺链接，不会删除商品；页面读取官方隐藏列表来显示实际暂停状态。
 - 支持单条或批量删除。删除调用店铺级接口，只从当前选择的店铺移除链接，不影响其他店铺或柜台总商品目录；平台仓仍有库存的商品可能无法删除，失败 SKU 会原样返回。
 
-接口参考：[店铺链接列表](https://yandex.ru/dev/market/partner-api/doc/ru/reference/offers/getCampaignOffers)、[修改店铺价格](https://www.yandex.ru/dev/market/partner-api/doc/ru/reference/prices/updatePrices)、[柜台价格规则](https://www.yandex.ru/dev/market/partner-api/doc/ru/reference/businesses/getBusinessSettings)、[从店铺删除商品](https://yandex.ru/dev/market/partner-api/doc/ru/reference/offers/deleteCampaignOffers)。
+接口参考：[店铺链接列表](https://yandex.ru/dev/market/partner-api/doc/ru/reference/offers/getCampaignOffers)、[修改店铺价格](https://www.yandex.ru/dev/market/partner-api/doc/ru/reference/prices/updatePrices)、[柜台价格规则](https://www.yandex.ru/dev/market/partner-api/doc/ru/reference/businesses/getBusinessSettings)、[修改商品包装重量](https://yandex.ru/dev/market/partner-api/doc/ru/reference/business-offer-mappings/updateOfferMappings)、[暂停销售](https://yandex.ru/dev/market/partner-api/doc/ru/reference/hidden-offers/addHiddenOffers)、[恢复销售](https://yandex.ru/dev/market/partner-api/doc/ru/reference/hidden-offers/deleteHiddenOffers)、[从店铺删除商品](https://yandex.ru/dev/market/partner-api/doc/ru/reference/offers/deleteCampaignOffers)。
 
 ### 商品库存
 
@@ -117,7 +127,15 @@ start.cmd
 - 汇总本页待决定和待领取数量，并展示退款金额、商品 SKU、逆向物流状态、领取点和截止时间。
 - 页面优先提供 `PREMODERATION_DECISION_WAITING`（FBY/FBS/Express）和 `WAITING_FOR_DECISION`（DBS）筛选，方便识别有处理时限的记录。
 
-接口参考：[退货和未取件列表](https://yandex.ru/dev/market/partner-api/doc/ru/reference/returns/getReturns)。当前版本先提供读取与巡检；涉及退款金额、拒绝理由和争议证据的决定仍应在核实商品及材料后到卖家后台处理。
+每条退货记录可以点击“联系买家 / 回复售后”，程序会创建或复用对应退货会话；DBS 和未取件记录会使用关联订单会话。接口参考：[退货和未取件列表](https://yandex.ru/dev/market/partner-api/doc/ru/reference/returns/getReturns)。当前版本不直接提交退款或拒绝决定；涉及退款金额、拒绝理由和争议证据时仍应先核实商品及材料。
+
+### 客户消息
+
+- 汇总订单沟通、退货售后、买家主动咨询和售后争议会话，可按处理状态、消息来源和会话类型筛选。
+- 打开会话后显示买家、店铺、平台或仲裁发送的消息历史，并可直接以对应店铺身份回复。
+- 默认展示“等待店铺回复”，支持翻阅会话及消息历史；从退货记录发起沟通时会自动进入对应会话。
+
+接口参考：[客户聊天操作说明](https://yandex.ru/dev/market/partner-api/doc/ru/step-by-step/chats)、[会话列表](https://yandex.ru/dev/market/partner-api/doc/ru/reference/chats/getChats)、[消息历史](https://yandex.ru/dev/market/partner-api/doc/ru/reference/chats/getChatHistory)、[发送消息](https://yandex.ru/dev/market/partner-api/doc/ru/reference/chats/sendMessageToChat)。
 
 ### 客户声音
 
@@ -135,7 +153,7 @@ start.cmd
 
 - 订单和退货读取：`inventory-and-order-processing:read-only` 或更高权限；订单状态修改需要可写的 `inventory-and-order-processing`。
 - 商品和库存读取：`offers-and-cards-management:read-only` 或更高权限；上架及库存修改需要可写的 `offers-and-cards-management`。
-- 评价和问答：读取与回复需要 `communication`；`all-methods` 可覆盖全部写操作，`all-methods:read-only` 只允许读取。
+- 客户消息、评价和问答：读取需要 `communication` 或 `all-methods:read-only`，回复需要 `communication` 或 `all-methods`。
 
 ### 搜品上架
 
@@ -183,7 +201,11 @@ start.cmd
 - `YANDEX_WORKER_HEADLESS=true`：详情采集子进程默认使用无头 Chromium；改为 `false` 可切回有界面模式。无头子进程拿到验证码、页面错误或缺少上传必需字段时，会回退到主浏览器重试。
 - `YANDEX_REQUEST_DELAY_MS=1200`：详情页访问间隔。
 - `YANDEX_MAX_PRODUCTS=500`：单次抓取上限。
-- `YANDEX_DB_PATH=.data/yandex_reseller.db`：搜索商品和上传任务的本机 SQLite 路径，不包含店铺授权。
+- `YANDEX_NEW_ORDER_SYNC_SECONDS=900`：新订单发现间隔，默认 15 分钟。
+- `YANDEX_OLD_ORDER_STATUS_SYNC_SECONDS=43200`：已有订单状态刷新间隔，默认 12 小时。
+- `YANDEX_ORDER_SYNC_POLL_SECONDS=30`：后台调度器检查到期任务的间隔；`YANDEX_ORDER_SYNC_DISABLED=true` 可停用订单自动同步。
+- `YANDEX_ORDER_SYNC_RETRY_SECONDS=300`：单店同步失败后的后台重试间隔，默认 5 分钟。
+- `YANDEX_DB_PATH=.data/yandex_reseller.db`：订单缓存、同步状态、搜索商品和上传任务的本机 SQLite 路径，不包含店铺授权。
 - `YANDEX_MYSQL_HOST`、`YANDEX_MYSQL_PORT`、`YANDEX_MYSQL_USER`、`YANDEX_MYSQL_PASSWORD`、`YANDEX_MYSQL_DATABASE`：中央授权数据库；未单独配置时复用项目 `bit.bit_mysql` 的 MySQL 连接。
 - `ZESHUN_AUTHORIZATION_URL_TEMPLATE=https://...{tg_code}`：授权入口模板；没有 `{tg_code}` 时程序会自动追加 `tg_code` 查询参数。也可在页面中按店铺填写。
 

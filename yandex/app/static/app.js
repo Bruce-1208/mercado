@@ -29,6 +29,16 @@ const state = {
   returnPageIndex: 0,
   returnNextToken: "",
   returnRequestId: 0,
+  chats: [],
+  chatPageTokens: [""],
+  chatPageIndex: 0,
+  chatNextToken: "",
+  chatRequestId: 0,
+  activeChat: null,
+  chatMessages: [],
+  chatHistoryNextToken: "",
+  chatHistoryRequestId: 0,
+  pendingChat: null,
   feedbackPageTokens: [""],
   feedbackPageIndex: 0,
   feedbackNextToken: "",
@@ -56,6 +66,7 @@ const packageInputs = {
 const initialStockInput = $("initialStock");
 const PACKAGE_STORAGE_KEY = "yandex-reseller-package-v1";
 const YANDEX_BASE_PATH = String(window.YANDEX_BASE_PATH || "").replace(/\/+$/, "");
+const ORDER_AUTO_REFRESH_MS = 15 * 60 * 1000;
 
 function toast(message, isError = false) {
   const element = $("toast");
@@ -91,11 +102,69 @@ function selectedStore() {
   return state.stores.find((store) => store.id === state.selectedStoreId) || null;
 }
 
+function selectedStores() {
+  const store = selectedStore();
+  return store ? [store] : state.stores;
+}
+
+function storeForRecord(record) {
+  return state.stores.find((store) => store.id === Number(record?._storeId)) || selectedStore();
+}
+
+function hasPageToken(token) {
+  if (!token) return false;
+  if (typeof token === "object") return Object.values(token).some(Boolean);
+  return true;
+}
+
+function recordStoreTag(record) {
+  if (selectedStore() || !record?._storeAlias) return "";
+  return `<span class="record-store">${escapeHtml(record._storeAlias)}</span>`;
+}
+
+async function readSelectedStorePages(path, pageToken, buildBody, collectionKey) {
+  const singleStore = selectedStore();
+  const stores = selectedStores();
+  if (!stores.length) throw new Error("还没有已连接店铺");
+  const tokenMap = pageToken && typeof pageToken === "object" ? pageToken : null;
+  const activeStores = tokenMap
+    ? stores.filter((store) => Boolean(tokenMap[String(store.id)]))
+    : stores;
+  const results = await Promise.allSettled(activeStores.map(async (store) => {
+    const token = tokenMap ? tokenMap[String(store.id)] : String(pageToken || "");
+    const data = await api(path, {
+      method: "POST",
+      body: JSON.stringify(buildBody(store, token)),
+    });
+    return { store, data };
+  }));
+  const succeeded = results.filter((result) => result.status === "fulfilled").map((result) => result.value);
+  const failed = results.filter((result) => result.status === "rejected");
+  if (!succeeded.length && failed.length) throw failed[0].reason;
+  const records = succeeded.flatMap(({ store, data }) => (data[collectionKey] || []).map((record) => ({
+    ...record,
+    _storeId: store.id,
+    _storeAlias: store.alias,
+  })));
+  const nextTokens = Object.fromEntries(succeeded
+    .map(({ store, data }) => [String(store.id), data.paging?.nextPageToken || ""])
+    .filter(([, token]) => token));
+  const warnings = succeeded.map(({ data }) => data.warning).filter(Boolean);
+  if (failed.length) warnings.push(`${failed.length} 家店铺读取失败`);
+  return {
+    records,
+    responses: succeeded,
+    warning: [...new Set(warnings)].join("；"),
+    paging: { nextPageToken: singleStore ? (succeeded[0]?.data.paging?.nextPageToken || "") : nextTokens },
+  };
+}
+
 const VIEW_COPY = {
   orders: ["ORDER OPERATIONS", "订单中心", "查看店铺最近 30 天订单，并快速定位待处理状态。"],
   listings: ["STORE LISTINGS", "链接管理", "查看当前店铺全部商品链接，并执行改价或删除。"],
   inventory: ["INVENTORY CONTROL", "商品库存", "巡检各仓库库存并直接调整可售数量。"],
   returns: ["RETURNS OPERATIONS", "退货管理", "跟踪未取件、退货、退款决定和逆向物流。"],
+  chats: ["CUSTOMER MESSAGES", "客户消息", "集中查看订单咨询、退货售后和争议消息并直接回复。"],
   feedback: ["CUSTOMER VOICE", "客户声音", "集中处理商品评价与买家问答。"],
   products: ["PRODUCT OPERATIONS", "搜品上架", "搜索国外商品，补充履约数据并批量挂载到当前店铺。"],
   stores: ["STORE CONNECTIONS", "店铺管理", "管理 API-Key、TG 授权记录和当前操作店铺。"],
@@ -116,11 +185,12 @@ function switchView(view) {
   $("pageEyebrow").textContent = eyebrow;
   $("pageTitle").textContent = title;
   $("pageSubtitle").textContent = subtitle;
-  if (view === "orders" && selectedStore() && !state.orders.length) loadOrders({ resetPage: true });
-  if (view === "listings" && selectedStore()) loadListings({ resetPage: true });
-  if (view === "inventory" && selectedStore()) loadInventory({ resetPage: true });
-  if (view === "returns" && selectedStore()) loadReturns({ resetPage: true });
-  if (view === "feedback" && selectedStore()) loadFeedback({ resetPage: true });
+  if (view === "orders" && selectedStores().length && !state.orders.length) loadOrders({ resetPage: true });
+  if (view === "listings" && selectedStores().length) loadListings({ resetPage: true });
+  if (view === "inventory" && selectedStores().length) loadInventory({ resetPage: true });
+  if (view === "returns" && selectedStores().length) loadReturns({ resetPage: true });
+  if (view === "chats" && selectedStores().length) loadChats({ resetPage: true });
+  if (view === "feedback" && selectedStores().length) loadFeedback({ resetPage: true });
 }
 
 document.addEventListener("click", (event) => {
@@ -422,7 +492,7 @@ function renderOrderActions(order) {
   if (status !== "PROCESSING" || substatus !== "STARTED") return "";
   const orderId = order.orderId ?? order.id;
   if (!orderId) return "";
-  return `<div class="order-quick-actions"><button type="button" data-order-action="READY_TO_SHIP" data-order-id="${escapeHtml(orderId)}">标记备货完成</button><button type="button" class="danger-link" data-order-action="CANCEL" data-order-id="${escapeHtml(orderId)}">无法履约并取消</button></div>`;
+  return `<div class="order-quick-actions"><button type="button" data-order-action="READY_TO_SHIP" data-order-id="${escapeHtml(orderId)}" data-store-id="${escapeHtml(order._storeId || "")}">标记备货完成</button><button type="button" class="danger-link" data-order-action="CANCEL" data-order-id="${escapeHtml(orderId)}" data-store-id="${escapeHtml(order._storeId || "")}">无法履约并取消</button></div>`;
 }
 
 function renderOrders(orders) {
@@ -440,7 +510,7 @@ function renderOrders(orders) {
     const finance = order.finance || {};
     const orderId = order.orderId ?? order.id ?? "—";
     return `<tr class="order-main-row">
-      <td><div class="order-id"><strong>#${escapeHtml(orderId)}</strong><span>${escapeHtml(PROGRAM_LABEL[order.programType] || order.programType || "模式未知")} · ${formatDateTime(order.creationDate)}</span>${order.fake ? `<span>测试订单</span>` : ""}</div><div class="order-items">${renderOrderItems(order.items)}</div></td>
+      <td><div class="order-id"><strong>#${escapeHtml(orderId)}</strong>${recordStoreTag(order)}<span>${escapeHtml(PROGRAM_LABEL[order.programType] || order.programType || "模式未知")} · ${formatDateTime(order.creationDate)}</span>${order.fake ? `<span>测试订单</span>` : ""}</div><div class="order-items">${renderOrderItems(order.items)}</div></td>
       <td><span class="status-pill ${escapeHtml(status.toLowerCase())}">${escapeHtml(ORDER_STATUS[status] || status)}</span><div class="delivery-cell"><strong>${escapeHtml(delivery.type)}</strong><span class="delivery-detail">${escapeHtml(delivery.detail)}</span>${order.delivery?.serviceName ? `<span class="delivery-detail">${escapeHtml(order.delivery.serviceName)}</span>` : ""}</div>${order.substatus ? `<span class="order-substatus">${escapeHtml(orderEnum(order.substatus, ORDER_SUBSTATUS))}</span>` : ""}${order.cancelRequested ? `<span class="cancel-alert">买家申请取消</span>` : ""}${renderOrderActions(order)}<span class="order-date">更新 ${formatDateTime(order.updateDate || order.creationDate)}</span></td>
       <td class="finance-cell" data-label="链接价格"><div class="money-cell">${financeMoney(finance.listing_total)}</div><small>当前设置价 × 数量</small></td>
       <td class="finance-cell" data-label="买家付款"><div class="money-cell">${financeMoney(finance.buyer_payment)}</div><small>商品付款</small>${financeLine("积分", finance.cashback)}${order.paymentType === "POSTPAID" ? `<small>货到付款</small>` : ""}</td>
@@ -450,7 +520,7 @@ function renderOrders(orders) {
   }).join("");
   $("orderPageLabel").textContent = `第 ${state.orderPageIndex + 1} 页 · 本页 ${orders.length} 条`;
   $("orderPrevButton").disabled = state.orderPageIndex === 0;
-  $("orderNextButton").disabled = !state.orderNextToken;
+  $("orderNextButton").disabled = !hasPageToken(state.orderNextToken);
 }
 
 function showOrderState(name, message = "") {
@@ -464,8 +534,8 @@ function resetOrderMetrics() {
 }
 
 async function loadOrders({ resetPage = false, pageToken = null } = {}) {
-  const store = selectedStore();
-  if (!store) {
+  const stores = selectedStores();
+  if (!stores.length) {
     state.orderRequestId += 1;
     state.orders = [];
     resetOrderMetrics();
@@ -496,14 +566,14 @@ async function loadOrders({ resetPage = false, pageToken = null } = {}) {
   $("orderRefreshButton").disabled = true;
   $("orderRefreshButton").textContent = "读取中…";
   try {
-    const status = $("orderStatus").value;
-    const data = await api("/api/orders", {
-      method: "POST",
-      body: JSON.stringify({ store_id: store.id, statuses: status ? [status] : [], date_from: from || null, date_to: to || null, page_token: token, limit: 50 }),
-    });
+    const status = document.querySelector('input[name="orderStatus"]:checked')?.value || "";
+    const data = await readSelectedStorePages("/api/orders", token, (store, storeToken) => ({
+      store_id: store.id, statuses: status ? [status] : [], date_from: from || null,
+      date_to: to || null, page_token: storeToken, limit: 50,
+    }), "orders");
     if (requestId !== state.orderRequestId) return;
     state.orderNextToken = data.paging?.nextPageToken || "";
-    const orders = data.orders || [];
+    const orders = data.records.sort((left, right) => String(right.creationDate || "").localeCompare(String(left.creationDate || "")));
     renderOrders(orders);
     showOrderState(orders.length ? "ordersContent" : "ordersEmpty");
   } catch (error) {
@@ -525,7 +595,7 @@ $("orderPrevButton").addEventListener("click", () => {
   loadOrders({ pageToken: state.orderPageTokens[state.orderPageIndex] || "" });
 });
 $("orderNextButton").addEventListener("click", () => {
-  if (!state.orderNextToken) return;
+  if (!hasPageToken(state.orderNextToken)) return;
   state.orderPageIndex += 1;
   state.orderPageTokens[state.orderPageIndex] = state.orderNextToken;
   loadOrders({ pageToken: state.orderNextToken });
@@ -534,7 +604,7 @@ $("ordersError").addEventListener("click", (event) => { if (event.target.closest
 $("orderTableBody").addEventListener("click", async (event) => {
   const button = event.target.closest("[data-order-action]");
   if (!button) return;
-  const store = selectedStore();
+  const store = state.stores.find((item) => item.id === Number(button.dataset.storeId)) || selectedStore();
   if (!store) return toast("请先选择店铺", true);
   const action = button.dataset.orderAction;
   const orderId = Number(button.dataset.orderId);
@@ -577,13 +647,24 @@ function listingPicture(details) {
   return safeOrderUrl(typeof first === "string" ? first : first?.url);
 }
 
+function listingSelectionKey(item) {
+  return `${item._storeId || selectedStore()?.id || ""}:${item.offerId || ""}`;
+}
+
+function parseListingSelectionKey(value) {
+  const separator = String(value).indexOf(":");
+  return { storeId: Number(String(value).slice(0, separator)), offerId: String(value).slice(separator + 1) };
+}
+
 function updateListingSelection() {
-  const visible = new Set(state.listings.map((item) => String(item.offerId || "")));
+  const visible = new Set(state.listings.map(listingSelectionKey));
   for (const value of [...state.listingSelection]) {
     if (!visible.has(value)) state.listingSelection.delete(value);
   }
   $("listingSelectedCount").textContent = String(state.listingSelection.size);
   $("listingDeleteSelected").disabled = state.listingSelection.size === 0;
+  $("listingPauseSelected").disabled = state.listingSelection.size === 0;
+  $("listingResumeSelected").disabled = state.listingSelection.size === 0;
   const boxes = [...document.querySelectorAll("[data-listing-select]")];
   const selected = boxes.filter((box) => box.checked).length;
   $("listingSelectAll").checked = boxes.length > 0 && selected === boxes.length;
@@ -597,7 +678,7 @@ function renderListings(data) {
   $("listingCount").textContent = String(records.length);
   $("listingPublishedCount").textContent = String(records.filter((item) => item.status === "PUBLISHED").length);
   $("listingIssueCount").textContent = String(records.filter((item) => item.status !== "PUBLISHED" || (item.errors || []).length).length);
-  $("listingWarning").textContent = data.warning || "改价通常会在数分钟后生效；价格跳变过大可能进入价格隔离。";
+  $("listingWarning").textContent = data.warning || "改价、包装重量及暂停状态通常会在数分钟后生效。";
   $("listingTableBody").innerHTML = records.map((item) => {
     const details = item.details || {};
     const name = details.name || item.offerId || "商品";
@@ -610,12 +691,23 @@ function renderListings(data) {
     const currency = active.currencyId || base.currencyId || campaign.currencyId || "RUR";
     const current = Number(active.value);
     const discount = active.discountBase;
+    const dimensions = details.weightDimensions || {};
+    const paused = item.paused === true || item.status === "DISABLED_BY_PARTNER";
+    const selectionKey = listingSelectionKey(item);
     const errors = [...(item.errors || []), ...(item.warnings || [])].filter(Boolean).map((entry) => entry.message || entry.comment).filter(Boolean);
-    return `<tr data-listing-row="${escapeHtml(item.offerId)}"><td><input type="checkbox" data-listing-select value="${escapeHtml(item.offerId)}" aria-label="选择 SKU ${escapeHtml(item.offerId)}"></td><td><div class="inventory-product listing-product">${picture ? `<img src="${escapeHtml(picture)}" alt="" loading="lazy" referrerpolicy="no-referrer">` : `<span class="inventory-placeholder">链</span>`}<div>${product}<small>SKU ${escapeHtml(item.offerId || "—")}${details.vendor ? ` · ${escapeHtml(details.vendor)}` : ""}</small>${url ? `<small class="listing-url">${escapeHtml(url)}</small>` : `<small>Yandex 暂未返回前台链接</small>`}</div></div></td><td><span class="status-pill listing-status ${item.status === "PUBLISHED" ? "ok" : ""}">${escapeHtml(LISTING_STATUS[item.status] || item.status || "状态未知")}</span><small>${item.available === false ? "当前不可售" : ""}</small>${errors.length ? `<small class="listing-errors">${escapeHtml(errors.join("；"))}</small>` : ""}</td><td><strong>${escapeHtml(formatMoney(base.value, base.currencyId))}</strong><small>${base.updatedAt ? `更新 ${formatDateTime(base.updatedAt)}` : "所有店铺默认价"}</small></td><td><strong>${escapeHtml(formatMoney(campaign.value, campaign.currencyId))}</strong><small>${campaign.value === null || campaign.value === undefined ? "当前使用统一价格" : `店铺单独价格${campaign.updatedAt ? ` · ${formatDateTime(campaign.updatedAt)}` : ""}`}</small></td><td><form class="listing-price-form" data-listing-price data-offer-id="${escapeHtml(item.offerId)}" data-currency="${escapeHtml(currency)}"><label>售价<input type="number" min="0.01" max="100000000" step="0.01" required value="${Number.isFinite(current) ? escapeHtml(current) : ""}"></label><label>划线价<input data-discount-base type="number" min="0.01" max="100000000" step="0.01" value="${discount ? escapeHtml(discount) : ""}" placeholder="可选"></label><div><button class="button secondary" type="submit">保存价格</button><button class="button ghost danger-button" type="button" data-listing-delete data-offer-id="${escapeHtml(item.offerId)}">删除</button></div></form></td></tr>`;
+    return `<tr data-listing-row="${escapeHtml(item.offerId)}">
+      <td><input type="checkbox" data-listing-select value="${escapeHtml(selectionKey)}" aria-label="选择 SKU ${escapeHtml(item.offerId)}"></td>
+      <td><div class="inventory-product listing-product">${picture ? `<img src="${escapeHtml(picture)}" alt="" loading="lazy" referrerpolicy="no-referrer">` : `<span class="inventory-placeholder">链</span>`}<div>${product}${recordStoreTag(item)}<small>SKU ${escapeHtml(item.offerId || "—")}${details.vendor ? ` · ${escapeHtml(details.vendor)}` : ""}</small>${url ? `<small class="listing-url">${escapeHtml(url)}</small>` : `<small>Yandex 暂未返回前台链接</small>`}</div></div></td>
+      <td><span class="status-pill listing-status ${item.status === "PUBLISHED" && !paused ? "ok" : ""}">${escapeHtml(paused ? "已暂停销售" : (LISTING_STATUS[item.status] || item.status || "状态未知"))}</span><small>${item.available === false ? "当前不可售" : ""}</small>${errors.length ? `<small class="listing-errors">${escapeHtml(errors.join("；"))}</small>` : ""}</td>
+      <td><strong>${escapeHtml(formatMoney(base.value, base.currencyId))}</strong><small>${base.updatedAt ? `更新 ${formatDateTime(base.updatedAt)}` : "所有店铺默认价"}</small></td>
+      <td><strong>${escapeHtml(formatMoney(campaign.value, campaign.currencyId))}</strong><small>${campaign.value === null || campaign.value === undefined ? "当前使用统一价格" : `店铺单独价格${campaign.updatedAt ? ` · ${formatDateTime(campaign.updatedAt)}` : ""}`}</small></td>
+      <td><form class="listing-dimensions-form" data-listing-dimensions data-store-id="${escapeHtml(item._storeId || "")}" data-offer-id="${escapeHtml(item.offerId)}"><div class="dimension-inputs"><label>长 cm<input data-dimension="length" type="number" min="0.01" max="1000" step="0.01" required value="${escapeHtml(dimensions.length ?? "")}"></label><label>宽 cm<input data-dimension="width" type="number" min="0.01" max="1000" step="0.01" required value="${escapeHtml(dimensions.width ?? "")}"></label><label>高 cm<input data-dimension="height" type="number" min="0.01" max="1000" step="0.01" required value="${escapeHtml(dimensions.height ?? "")}"></label><label>毛重 kg<input data-dimension="weight" type="number" min="0.001" max="1000" step="0.001" required value="${escapeHtml(dimensions.weight ?? "")}"></label></div><button class="button secondary" type="submit">保存包装重量</button><small>目录级数据，会影响柜台内所有店铺</small></form></td>
+      <td><form class="listing-price-form" data-listing-price data-store-id="${escapeHtml(item._storeId || "")}" data-offer-id="${escapeHtml(item.offerId)}" data-currency="${escapeHtml(currency)}"><label>售价<input type="number" min="0.01" max="100000000" step="0.01" required value="${Number.isFinite(current) ? escapeHtml(current) : ""}"></label><label>划线价<input data-discount-base type="number" min="0.01" max="100000000" step="0.01" value="${discount ? escapeHtml(discount) : ""}" placeholder="可选"></label><div><button class="button secondary" type="submit">保存价格</button><button class="button ghost" type="button" data-listing-visibility data-store-id="${escapeHtml(item._storeId || "")}" data-paused="${paused ? "false" : "true"}" data-offer-id="${escapeHtml(item.offerId)}">${paused ? "恢复销售" : "暂停销售"}</button><button class="button ghost danger-button" type="button" data-listing-delete data-store-id="${escapeHtml(item._storeId || "")}" data-offer-id="${escapeHtml(item.offerId)}">删除</button></div></form></td>
+    </tr>`;
   }).join("");
   $("listingPageLabel").textContent = `第 ${state.listingPageIndex + 1} 页 · 本页 ${records.length} 条`;
   $("listingPrevButton").disabled = state.listingPageIndex === 0;
-  $("listingNextButton").disabled = !state.listingNextToken;
+  $("listingNextButton").disabled = !hasPageToken(state.listingNextToken);
   $("listingsState").classList.toggle("hidden", records.length > 0);
   $("listingsState").textContent = records.length ? "" : "当前筛选下没有商品链接。";
   $("listingsContent").classList.toggle("hidden", !records.length);
@@ -623,8 +715,7 @@ function renderListings(data) {
 }
 
 async function loadListings({ resetPage = false, pageToken = null } = {}) {
-  const store = selectedStore();
-  if (!store) {
+  if (!selectedStores().length) {
     $("listingsState").textContent = "请先选择店铺。";
     $("listingsState").classList.remove("hidden");
     $("listingsContent").classList.add("hidden");
@@ -642,10 +733,10 @@ async function loadListings({ resetPage = false, pageToken = null } = {}) {
   $("listingsContent").classList.add("hidden");
   try {
     const status = $("listingStatus").value;
-    const data = await api("/api/listings", { method: "POST", body: JSON.stringify({ store_id: store.id, offer_ids: offerIds, statuses: status ? [status] : [], page_token: offerIds.length ? "" : token, limit: 100 }) });
+    const result = await readSelectedStorePages("/api/listings", token, (store, storeToken) => ({ store_id: store.id, offer_ids: offerIds, statuses: status ? [status] : [], page_token: offerIds.length ? "" : storeToken, limit: 100 }), "offers");
     if (requestId !== state.listingRequestId) return;
-    state.listingNextToken = data.paging?.nextPageToken || "";
-    renderListings(data);
+    state.listingNextToken = result.paging?.nextPageToken || "";
+    renderListings({ offers: result.records, warning: result.warning });
   } catch (error) {
     if (requestId !== state.listingRequestId) return;
     $("listingsState").textContent = `链接读取失败：${error.message}`;
@@ -653,21 +744,47 @@ async function loadListings({ resetPage = false, pageToken = null } = {}) {
   }
 }
 
-async function deleteListings(offerIds) {
-  const store = selectedStore();
-  if (!store || !offerIds.length) return;
-  if (!window.confirm(`确定从店铺“${store.alias}”删除 ${offerIds.length} 条商品链接？其他店铺和总商品目录不受影响。`)) return;
+async function deleteListings(items) {
+  if (!items.length) return;
+  const groups = new Map();
+  for (const item of items) {
+    if (!groups.has(item.storeId)) groups.set(item.storeId, []);
+    groups.get(item.storeId).push(item.offerId);
+  }
+  const aliases = [...groups.keys()].map((id) => state.stores.find((store) => store.id === id)?.alias || id);
+  if (!window.confirm(`确定从${aliases.length === 1 ? `店铺“${aliases[0]}”` : `${aliases.length} 家店铺`}删除 ${items.length} 条商品链接？总商品目录不受影响。`)) return;
   try {
-    const data = await api("/api/listings/delete", { method: "POST", body: JSON.stringify({ store_id: store.id, offer_ids: offerIds }) });
-    const failed = data.notDeletedOfferIds || [];
-    toast(failed.length ? `${data.deleted.length} 条已删除，${failed.length} 条因平台仓库存等原因未删除` : `${data.deleted.length} 条链接已从当前店铺删除`, failed.length > 0);
+    const results = await Promise.all([...groups].map(([storeId, offerIds]) => api("/api/listings/delete", { method: "POST", body: JSON.stringify({ store_id: storeId, offer_ids: offerIds }) })));
+    const deleted = results.reduce((count, data) => count + (data.deleted || []).length, 0);
+    const failed = results.reduce((count, data) => count + (data.notDeletedOfferIds || []).length, 0);
+    toast(failed ? `${deleted} 条已删除，${failed} 条因平台仓库存等原因未删除` : `${deleted} 条链接已删除`, failed > 0);
+    await loadListings();
+  } catch (error) { toast(error.message, true); }
+}
+
+async function updateListingVisibility(items, paused) {
+  if (!items.length) return;
+  const groups = new Map();
+  for (const item of items) {
+    if (!groups.has(item.storeId)) groups.set(item.storeId, []);
+    groups.get(item.storeId).push(item.offerId);
+  }
+  const action = paused ? "暂停销售" : "恢复销售";
+  const aliases = [...groups.keys()].map((id) => state.stores.find((store) => store.id === id)?.alias || id);
+  if (!window.confirm(`确定在${aliases.length === 1 ? `店铺“${aliases[0]}”` : `${aliases.length} 家店铺`}中${action} ${items.length} 条商品链接？该操作不会删除商品。`)) return;
+  try {
+    await Promise.all([...groups].map(([storeId, offerIds]) => api("/api/listings/visibility", {
+      method: "PUT",
+      body: JSON.stringify({ store_id: storeId, offer_ids: offerIds, paused }),
+    })));
+    toast(`${items.length} 条链接已提交${action}`);
     await loadListings();
   } catch (error) { toast(error.message, true); }
 }
 
 $("listingFilterForm").addEventListener("submit", (event) => { event.preventDefault(); loadListings({ resetPage: true }); });
 $("listingPrevButton").addEventListener("click", () => { if (state.listingPageIndex > 0) { state.listingPageIndex -= 1; loadListings({ pageToken: state.listingPageTokens[state.listingPageIndex] || "" }); } });
-$("listingNextButton").addEventListener("click", () => { if (state.listingNextToken) { state.listingPageIndex += 1; state.listingPageTokens[state.listingPageIndex] = state.listingNextToken; loadListings({ pageToken: state.listingNextToken }); } });
+$("listingNextButton").addEventListener("click", () => { if (hasPageToken(state.listingNextToken)) { state.listingPageIndex += 1; state.listingPageTokens[state.listingPageIndex] = state.listingNextToken; loadListings({ pageToken: state.listingNextToken }); } });
 $("listingSelectAll").addEventListener("change", (event) => {
   document.querySelectorAll("[data-listing-select]").forEach((box) => {
     box.checked = event.target.checked;
@@ -681,16 +798,26 @@ $("listingTableBody").addEventListener("change", (event) => {
   if (box.checked) state.listingSelection.add(box.value); else state.listingSelection.delete(box.value);
   updateListingSelection();
 });
-$("listingDeleteSelected").addEventListener("click", () => deleteListings([...state.listingSelection]));
+$("listingDeleteSelected").addEventListener("click", () => deleteListings([...state.listingSelection].map(parseListingSelectionKey)));
+$("listingPauseSelected").addEventListener("click", () => updateListingVisibility([...state.listingSelection].map(parseListingSelectionKey), true));
+$("listingResumeSelected").addEventListener("click", () => updateListingVisibility([...state.listingSelection].map(parseListingSelectionKey), false));
 $("listingTableBody").addEventListener("click", (event) => {
+  const visibility = event.target.closest("[data-listing-visibility]");
+  if (visibility) {
+    updateListingVisibility(
+      [{ storeId: Number(visibility.dataset.storeId) || selectedStore()?.id, offerId: visibility.dataset.offerId }],
+      visibility.dataset.paused === "true",
+    );
+    return;
+  }
   const button = event.target.closest("[data-listing-delete]");
-  if (button) deleteListings([button.dataset.offerId]);
+  if (button) deleteListings([{ storeId: Number(button.dataset.storeId) || selectedStore()?.id, offerId: button.dataset.offerId }]);
 });
 $("listingTableBody").addEventListener("submit", async (event) => {
   const form = event.target.closest("[data-listing-price]");
   if (!form) return;
   event.preventDefault();
-  const store = selectedStore();
+  const store = state.stores.find((item) => item.id === Number(form.dataset.storeId)) || selectedStore();
   const value = Number(form.querySelector("input[required]").value);
   const discountText = form.querySelector("[data-discount-base]").value.trim();
   const discountBase = discountText ? Number(discountText) : null;
@@ -704,6 +831,27 @@ $("listingTableBody").addEventListener("submit", async (event) => {
   try {
     const data = await api("/api/listings/price", { method: "PUT", body: JSON.stringify({ store_id: store.id, offer_id: form.dataset.offerId, value, currency_id: form.dataset.currency, discount_base: discountBase }) });
     toast(data.priceScope === "business" ? "该柜台仅支持统一价格，已更新所有店铺默认价" : "当前店铺价格已提交更新");
+    await loadListings();
+  } catch (error) { toast(error.message, true); button.disabled = false; }
+});
+
+$("listingTableBody").addEventListener("submit", async (event) => {
+  const form = event.target.closest("[data-listing-dimensions]");
+  if (!form) return;
+  event.preventDefault();
+  const store = state.stores.find((item) => item.id === Number(form.dataset.storeId)) || selectedStore();
+  if (!store) return toast("请先选择店铺", true);
+  const packageData = {};
+  for (const name of ["length", "width", "height", "weight"]) {
+    const value = Number(form.querySelector(`[data-dimension="${name}"]`).value);
+    if (!Number.isFinite(value) || value <= 0 || value > 1000) return toast("包装长宽高和毛重必须大于 0，且不能超过 1000", true);
+    packageData[name] = value;
+  }
+  if (!window.confirm(`把 SKU ${form.dataset.offerId} 的包装改为 ${packageData.length}×${packageData.width}×${packageData.height} cm、毛重 ${packageData.weight} kg？该目录数据会影响柜台内所有店铺。`)) return;
+  const button = form.querySelector("button[type=submit]"); button.disabled = true;
+  try {
+    await api("/api/listings/dimensions", { method: "PUT", body: JSON.stringify({ store_id: store.id, offer_id: form.dataset.offerId, package: packageData }) });
+    toast("包装尺寸和毛重已提交更新");
     await loadListings();
   } catch (error) { toast(error.message, true); button.disabled = false; }
 });
@@ -731,16 +879,16 @@ function renderInventory(data) {
   const skuCounts = new Map();
   for (const warehouse of data.warehouses || []) {
     for (const offer of warehouse.offers || []) {
-      const id = String(offer.offerId || "");
+      const id = `${warehouse._storeId || ""}:${offer.offerId || ""}`;
       const current = availableStock(offer);
       skuCounts.set(id, (skuCounts.get(id) || 0) + current);
-      rows.push({ warehouse, offer, current });
+      rows.push({ warehouse, offer: { ...offer, _storeId: warehouse._storeId, _storeAlias: warehouse._storeAlias }, current });
     }
   }
   $("inventorySkuCount").textContent = String(skuCounts.size);
   $("inventoryAvailableCount").textContent = String([...skuCounts.values()].reduce((sum, count) => sum + count, 0));
   $("inventoryZeroCount").textContent = String([...skuCounts.values()].filter((count) => count <= 0).length);
-  $("inventorySource").textContent = `${data.stockMethod === "business" ? "独立仓库库存接口" : "仓库组 / 平台仓库库存接口"} · ${(data.warehouses || []).length} 个仓库`;
+  $("inventorySource").textContent = `${data.stockMethod === "multiple" ? "全部店铺库存" : (data.stockMethod === "business" ? "独立仓库库存接口" : "仓库组 / 平台仓库库存接口")} · ${(data.warehouses || []).length} 个仓库`;
   $("inventoryWarning").textContent = data.warning || "";
   $("inventoryTableBody").innerHTML = rows.map(({ warehouse, offer, current }) => {
     const details = offer.details || {};
@@ -751,11 +899,11 @@ function renderInventory(data) {
     const title = showcase ? `<a href="${escapeHtml(showcase)}" target="_blank" rel="noopener noreferrer">${escapeHtml(name)}</a>` : `<strong>${escapeHtml(name)}</strong>`;
     const stocks = (offer.stocks || []).filter(Boolean).map((stock) => `<span><b>${escapeHtml(stock.type || "UNKNOWN")}</b> ${escapeHtml(stock.count ?? "—")}</span>`).join("");
     const price = details.price || {};
-    return `<tr><td><div class="inventory-product">${picture ? `<img src="${escapeHtml(picture)}" alt="" loading="lazy" referrerpolicy="no-referrer">` : `<span class="inventory-placeholder">品</span>`}<div>${title}<small>SKU ${escapeHtml(offer.offerId || "—")}${details.vendor ? ` · ${escapeHtml(details.vendor)}` : ""}</small></div></div></td><td><strong>${escapeHtml(warehouse.warehouseName || `仓库 ${warehouse.warehouseId || "—"}`)}</strong><small>ID ${escapeHtml(warehouse.warehouseId || "—")}</small></td><td><div class="stock-chips">${stocks || "未返回库存构成"}</div><small>更新 ${formatDateTime(offer.updatedAt)}</small></td><td>${formatMoney(price.value, price.currencyId || price.currency)}</td><td><div class="stock-update"><input type="number" min="0" max="2000000000" step="1" value="${escapeHtml(current)}" aria-label="SKU ${escapeHtml(offer.offerId)} 新库存"><button class="button secondary" type="button" data-stock-update data-offer-id="${escapeHtml(offer.offerId)}" data-current-stock="${escapeHtml(current)}">保存</button></div><small>填 0 可设为售罄</small></td></tr>`;
+    return `<tr><td><div class="inventory-product">${picture ? `<img src="${escapeHtml(picture)}" alt="" loading="lazy" referrerpolicy="no-referrer">` : `<span class="inventory-placeholder">品</span>`}<div>${title}${recordStoreTag(offer)}<small>SKU ${escapeHtml(offer.offerId || "—")}${details.vendor ? ` · ${escapeHtml(details.vendor)}` : ""}</small></div></div></td><td><strong>${escapeHtml(warehouse.warehouseName || `仓库 ${warehouse.warehouseId || "—"}`)}</strong><small>ID ${escapeHtml(warehouse.warehouseId || "—")}</small></td><td><div class="stock-chips">${stocks || "未返回库存构成"}</div><small>更新 ${formatDateTime(offer.updatedAt)}</small></td><td>${formatMoney(price.value, price.currencyId || price.currency)}</td><td><div class="stock-update"><input type="number" min="0" max="2000000000" step="1" value="${escapeHtml(current)}" aria-label="SKU ${escapeHtml(offer.offerId)} 新库存"><button class="button secondary" type="button" data-stock-update data-store-id="${escapeHtml(offer._storeId || "")}" data-offer-id="${escapeHtml(offer.offerId)}" data-current-stock="${escapeHtml(current)}">保存</button></div><small>填 0 可设为售罄</small></td></tr>`;
   }).join("");
   $("inventoryPageLabel").textContent = `第 ${state.inventoryPageIndex + 1} 页 · ${skuCounts.size} 个 SKU`;
   $("inventoryPrevButton").disabled = state.inventoryPageIndex === 0;
-  $("inventoryNextButton").disabled = !state.inventoryNextToken;
+  $("inventoryNextButton").disabled = !hasPageToken(state.inventoryNextToken);
   $("inventoryState").classList.add("hidden");
   $("inventoryContent").classList.remove("hidden");
   if (!rows.length) {
@@ -766,9 +914,8 @@ function renderInventory(data) {
 }
 
 async function loadInventory({ resetPage = false, pageToken = null } = {}) {
-  const store = selectedStore();
-  if (!store) {
-    $("inventoryState").textContent = "请先选择店铺。";
+  if (!selectedStores().length) {
+    $("inventoryState").textContent = "请先连接店铺。";
     $("inventoryState").classList.remove("hidden");
     $("inventoryContent").classList.add("hidden");
     return;
@@ -784,10 +931,10 @@ async function loadInventory({ resetPage = false, pageToken = null } = {}) {
   $("inventoryState").classList.remove("hidden");
   $("inventoryContent").classList.add("hidden");
   try {
-    const data = await api("/api/inventory", { method: "POST", body: JSON.stringify({ store_id: store.id, offer_ids: offerIds, archived: $("inventoryArchived").value === "true", page_token: token, limit: 100 }) });
+    const result = await readSelectedStorePages("/api/inventory", token, (store, storeToken) => ({ store_id: store.id, offer_ids: offerIds, archived: $("inventoryArchived").value === "true", page_token: storeToken, limit: 100 }), "warehouses");
     if (requestId !== state.inventoryRequestId) return;
-    state.inventoryNextToken = data.paging?.nextPageToken || "";
-    renderInventory(data);
+    state.inventoryNextToken = result.paging?.nextPageToken || "";
+    renderInventory({ warehouses: result.records, stockMethod: selectedStore() ? result.responses[0]?.data.stockMethod : "multiple", warning: result.warning });
   } catch (error) {
     if (requestId !== state.inventoryRequestId) return;
     $("inventoryState").textContent = `库存读取失败：${error.message}`;
@@ -797,11 +944,11 @@ async function loadInventory({ resetPage = false, pageToken = null } = {}) {
 
 $("inventoryFilterForm").addEventListener("submit", (event) => { event.preventDefault(); loadInventory({ resetPage: true }); });
 $("inventoryPrevButton").addEventListener("click", () => { if (state.inventoryPageIndex > 0) { state.inventoryPageIndex -= 1; loadInventory({ pageToken: state.inventoryPageTokens[state.inventoryPageIndex] || "" }); } });
-$("inventoryNextButton").addEventListener("click", () => { if (state.inventoryNextToken) { state.inventoryPageIndex += 1; state.inventoryPageTokens[state.inventoryPageIndex] = state.inventoryNextToken; loadInventory({ pageToken: state.inventoryNextToken }); } });
+$("inventoryNextButton").addEventListener("click", () => { if (hasPageToken(state.inventoryNextToken)) { state.inventoryPageIndex += 1; state.inventoryPageTokens[state.inventoryPageIndex] = state.inventoryNextToken; loadInventory({ pageToken: state.inventoryNextToken }); } });
 $("inventoryTableBody").addEventListener("click", async (event) => {
   const button = event.target.closest("[data-stock-update]");
   if (!button) return;
-  const store = selectedStore();
+  const store = state.stores.find((item) => item.id === Number(button.dataset.storeId)) || selectedStore();
   const input = button.parentElement.querySelector("input");
   const count = Number(input.value);
   const current = Number(button.dataset.currentStock);
@@ -825,6 +972,16 @@ const RETURN_STATUS = {
 };
 const RETURN_SHIPMENT = { CREATED: "已创建", RECEIVED: "已接收", IN_TRANSIT: "运输中", READY_FOR_PICKUP: "可领取", PICKED: "已领取", LOST: "丢失", EXPIRED: "已过期", CANCELLED: "已取消", FULFILMENT_RECEIVED: "平台仓已接收", UTILIZED: "已销毁" };
 
+function renderReturnContact(item) {
+  const store = storeForRecord(item);
+  if (!store) return "";
+  const canUseReturnContext = item.returnType === "RETURN" && String(store.placement_type || "").toUpperCase() !== "DBS";
+  const contextType = canUseReturnContext ? "RETURN" : "ORDER";
+  const contextId = canUseReturnContext ? Number(item.id) : Number(item.orderId);
+  if (!Number.isInteger(contextId) || contextId <= 0) return "";
+  return `<div class="return-actions"><button class="button secondary" type="button" data-return-chat data-store-id="${escapeHtml(store.id)}" data-context-type="${contextType}" data-context-id="${escapeHtml(contextId)}" data-return-id="${escapeHtml(item.id || "")}" data-order-id="${escapeHtml(item.orderId || "")}">联系买家 / 回复售后</button><small>${contextType === "RETURN" ? "进入本次退货的售后会话" : "通过关联订单会话联系买家"}</small></div>`;
+}
+
 function renderReturns(data) {
   const records = data.returns || [];
   const decisionStatuses = new Set(["WAITING_FOR_DECISION", "PREMODERATION_DECISION_WAITING"]);
@@ -837,35 +994,192 @@ function renderReturns(data) {
     const point = item.logisticPickupPoint || {};
     const address = point.address || {};
     const pointText = [point.name, address.city, address.street, address.house].filter(Boolean).join(" · ");
-    return `<article class="ops-card return-card"><div class="ops-card-head"><div><span class="ops-kicker">${item.returnType === "UNREDEEMED" ? "未取件" : "退货"}</span><h3>退货 #${escapeHtml(item.id)} · 订单 #${escapeHtml(item.orderId)}</h3></div><div class="ops-status-stack"><span class="status-pill">${escapeHtml(RETURN_STATUS[item.refundStatus] || item.refundStatus || "状态未知")}</span><span>${escapeHtml(RETURN_SHIPMENT[item.shipmentStatus] || item.shipmentStatus || "物流未知")}</span></div></div><div class="return-meta"><span>创建 ${formatDateTime(item.creationDate)}</span><span>更新 ${formatDateTime(item.updateDate)}</span><strong>${formatMoney(amount.value ?? item.refundAmount, amount.currencyId || amount.currency || "RUR")}</strong>${item.fastReturn ? `<span class="fast-return">快速退款</span>` : ""}</div><ul class="return-items">${products || "<li>商品明细未返回</li>"}</ul>${pointText ? `<p class="pickup-point"><strong>领取点：</strong>${escapeHtml(pointText)}${item.pickupTillDate ? ` · 截止 ${formatDateTime(item.pickupTillDate)}` : ""}</p>` : ""}</article>`;
+    return `<article class="ops-card return-card"><div class="ops-card-head"><div><span class="ops-kicker">${item.returnType === "UNREDEEMED" ? "未取件" : "退货"}</span>${recordStoreTag(item)}<h3>退货 #${escapeHtml(item.id)} · 订单 #${escapeHtml(item.orderId)}</h3></div><div class="ops-status-stack"><span class="status-pill">${escapeHtml(RETURN_STATUS[item.refundStatus] || item.refundStatus || "状态未知")}</span><span>${escapeHtml(RETURN_SHIPMENT[item.shipmentStatus] || item.shipmentStatus || "物流未知")}</span></div></div><div class="return-meta"><span>创建 ${formatDateTime(item.creationDate)}</span><span>更新 ${formatDateTime(item.updateDate)}</span><strong>${formatMoney(amount.value ?? item.refundAmount, amount.currencyId || amount.currency || "RUR")}</strong>${item.fastReturn ? `<span class="fast-return">快速退款</span>` : ""}</div><ul class="return-items">${products || "<li>商品明细未返回</li>"}</ul>${pointText ? `<p class="pickup-point"><strong>领取点：</strong>${escapeHtml(pointText)}${item.pickupTillDate ? ` · 截止 ${formatDateTime(item.pickupTillDate)}` : ""}</p>` : ""}${renderReturnContact(item)}</article>`;
   }).join("");
   $("returnPageLabel").textContent = `第 ${state.returnPageIndex + 1} 页 · 本页 ${records.length} 条`;
   $("returnPrevButton").disabled = state.returnPageIndex === 0;
-  $("returnNextButton").disabled = !state.returnNextToken;
+  $("returnNextButton").disabled = !hasPageToken(state.returnNextToken);
   $("returnsState").classList.toggle("hidden", records.length > 0);
   $("returnsState").textContent = records.length ? "" : "当前筛选下没有退货或未取件记录。";
   $("returnsContent").classList.toggle("hidden", !records.length);
 }
 
 async function loadReturns({ resetPage = false, pageToken = null } = {}) {
-  const store = selectedStore();
-  if (!store) { $("returnsState").textContent = "请先选择店铺。"; $("returnsState").classList.remove("hidden"); $("returnsContent").classList.add("hidden"); return; }
+  if (!selectedStores().length) { $("returnsState").textContent = "请先连接店铺。"; $("returnsState").classList.remove("hidden"); $("returnsContent").classList.add("hidden"); return; }
   if (resetPage) { state.returnPageTokens = [""]; state.returnPageIndex = 0; state.returnNextToken = ""; }
   const token = pageToken === null ? state.returnPageTokens[state.returnPageIndex] || "" : pageToken;
   const requestId = ++state.returnRequestId;
   $("returnsState").textContent = "正在读取退货与未取件…"; $("returnsState").classList.remove("hidden"); $("returnsContent").classList.add("hidden");
   try {
     const status = $("returnStatus").value;
-    const data = await api("/api/returns", { method: "POST", body: JSON.stringify({ store_id: store.id, return_type: $("returnType").value, statuses: status ? [status] : [], date_from: $("returnFrom").value || null, date_to: $("returnTo").value || null, page_token: token, limit: 100 }) });
+    const result = await readSelectedStorePages("/api/returns", token, (store, storeToken) => ({ store_id: store.id, return_type: $("returnType").value, statuses: status ? [status] : [], date_from: $("returnFrom").value || null, date_to: $("returnTo").value || null, page_token: storeToken, limit: 100 }), "returns");
     if (requestId !== state.returnRequestId) return;
-    state.returnNextToken = data.paging?.nextPageToken || "";
-    renderReturns(data);
+    state.returnNextToken = result.paging?.nextPageToken || "";
+    renderReturns({ returns: result.records.sort((left, right) => String(right.updateDate || "").localeCompare(String(left.updateDate || ""))) });
   } catch (error) { if (requestId === state.returnRequestId) { $("returnsState").textContent = `读取失败：${error.message}`; toast(error.message, true); } }
 }
 
 $("returnFilterForm").addEventListener("submit", (event) => { event.preventDefault(); loadReturns({ resetPage: true }); });
 $("returnPrevButton").addEventListener("click", () => { if (state.returnPageIndex > 0) { state.returnPageIndex -= 1; loadReturns({ pageToken: state.returnPageTokens[state.returnPageIndex] || "" }); } });
-$("returnNextButton").addEventListener("click", () => { if (state.returnNextToken) { state.returnPageIndex += 1; state.returnPageTokens[state.returnPageIndex] = state.returnNextToken; loadReturns({ pageToken: state.returnNextToken }); } });
+$("returnNextButton").addEventListener("click", () => { if (hasPageToken(state.returnNextToken)) { state.returnPageIndex += 1; state.returnPageTokens[state.returnPageIndex] = state.returnNextToken; loadReturns({ pageToken: state.returnNextToken }); } });
+
+const CHAT_STATUS = {
+  NEW: "新会话", WAITING_FOR_CUSTOMER: "等待买家回复", WAITING_FOR_PARTNER: "等待店铺回复",
+  WAITING_FOR_ARBITER: "等待仲裁", WAITING_FOR_MARKET: "等待平台", FINISHED: "已结束",
+};
+const CHAT_CONTEXT = { ORDER: "订单沟通", RETURN: "退货售后", DIRECT: "买家主动咨询" };
+
+function chatKey(chat) {
+  return `${chat?._storeId || ""}:${chat?.chatId || ""}`;
+}
+
+function chatContextTitle(chat) {
+  const context = chat?.context || {};
+  if (chat?.type === "ARBITRAGE") return context.returnId ? `售后争议 · 退货 #${context.returnId}` : "售后争议";
+  if (context.type === "RETURN") return `退货售后 #${context.returnId || "—"}`;
+  if (context.type === "ORDER") return `订单 #${context.orderId || chat.orderId || "—"}`;
+  return "买家主动咨询";
+}
+
+function renderChatList() {
+  $("chatList").innerHTML = state.chats.map((chat) => {
+    const context = chat.context || {};
+    const customer = context.customer || {};
+    const selected = chatKey(chat) === chatKey(state.activeChat);
+    const needsReply = chat.status === "WAITING_FOR_PARTNER" || chat.status === "NEW";
+    return `<button class="chat-list-item${selected ? " selected" : ""}" type="button" data-chat-id="${escapeHtml(chat.chatId)}" data-store-id="${escapeHtml(chat._storeId || "")}"><span class="chat-list-top"><strong>${escapeHtml(customer.name || chatContextTitle(chat))}</strong>${needsReply ? `<span class="need-reaction">待回复</span>` : ""}</span><span>${escapeHtml(chatContextTitle(chat))}${recordStoreTag(chat)}</span><small>${escapeHtml(CHAT_STATUS[chat.status] || chat.status || "状态未知")} · ${formatDateTime(chat.updatedAt || chat.createdAt)}</small></button>`;
+  }).join("");
+}
+
+function renderChats(data) {
+  state.chats = data.chats || [];
+  $("chatCount").textContent = String(state.chats.length);
+  $("chatWaitingCount").textContent = String(state.chats.filter((chat) => ["NEW", "WAITING_FOR_PARTNER"].includes(chat.status)).length);
+  $("chatAfterSaleCount").textContent = String(state.chats.filter((chat) => chat.type === "ARBITRAGE" || chat.context?.type === "RETURN").length);
+  $("chatPageLabel").textContent = `第 ${state.chatPageIndex + 1} 页 · 本页 ${state.chats.length} 条`;
+  $("chatPrevButton").disabled = state.chatPageIndex === 0;
+  $("chatNextButton").disabled = !hasPageToken(state.chatNextToken);
+  $("chatsState").classList.toggle("hidden", state.chats.length > 0);
+  $("chatsState").textContent = state.chats.length ? "" : "当前筛选下没有客户会话。";
+  $("chatsContent").classList.toggle("hidden", !state.chats.length);
+  const existing = state.chats.find((chat) => chatKey(chat) === chatKey(state.activeChat));
+  const next = state.pendingChat || existing || state.chats[0] || null;
+  state.pendingChat = null;
+  state.activeChat = next;
+  renderChatList();
+  if (next) openChat(next);
+  else {
+    $("chatConversationEmpty").classList.remove("hidden");
+    $("chatConversation").classList.add("hidden");
+  }
+}
+
+async function loadChats({ resetPage = false, pageToken = null } = {}) {
+  if (!selectedStores().length) { $("chatsState").textContent = "请先连接店铺。"; $("chatsState").classList.remove("hidden"); $("chatsContent").classList.add("hidden"); return; }
+  if (resetPage) { state.chatPageTokens = [""]; state.chatPageIndex = 0; state.chatNextToken = ""; }
+  const token = pageToken === null ? state.chatPageTokens[state.chatPageIndex] || "" : pageToken;
+  const requestId = ++state.chatRequestId;
+  $("chatsState").textContent = "正在读取客户消息…"; $("chatsState").classList.remove("hidden"); $("chatsContent").classList.add("hidden");
+  try {
+    const status = $("chatStatus").value;
+    const contextType = $("chatContextType").value;
+    const type = $("chatType").value;
+    const result = await readSelectedStorePages("/api/chats", token, (store, storeToken) => ({ store_id: store.id, statuses: status ? [status] : [], context_types: contextType ? [contextType] : [], types: type ? [type] : [], page_token: storeToken, limit: 20 }), "chats");
+    if (requestId !== state.chatRequestId) return;
+    state.chatNextToken = result.paging?.nextPageToken || "";
+    renderChats({ chats: result.records.sort((left, right) => String(right.updatedAt || "").localeCompare(String(left.updatedAt || ""))) });
+  } catch (error) { if (requestId === state.chatRequestId) { $("chatsState").textContent = `读取失败：${error.message}`; toast(error.message, true); } }
+}
+
+function chatAttachmentSummary(payload) {
+  const items = Array.isArray(payload) ? payload.filter((item) => item && typeof item === "object") : [];
+  return items.map((item, index) => `<span class="chat-attachment">附件 ${index + 1}${item.name || item.fileName ? ` · ${escapeHtml(item.name || item.fileName)}` : ""}</span>`).join("");
+}
+
+function renderChatMessages() {
+  $("chatMessageList").innerHTML = state.chatMessages.length ? state.chatMessages.map((message) => {
+    const sender = String(message.sender || "").toUpperCase();
+    const own = sender === "PARTNER";
+    const senderLabel = { PARTNER: "店铺", CUSTOMER: "买家", ARBITER: "仲裁", MARKET: "Yandex" }[sender] || sender || "系统";
+    return `<article class="chat-message${own ? " own" : ""}"><div><strong>${escapeHtml(senderLabel)}</strong><time>${formatDateTime(message.createdAt)}</time></div>${message.message ? `<p>${escapeHtml(message.message)}</p>` : ""}${chatAttachmentSummary(message.payload)}</article>`;
+  }).join("") : `<div class="ops-state"><strong>暂无消息内容</strong><p>可以从下方发送第一条消息。</p></div>`;
+  $("chatHistoryMore").classList.toggle("hidden", !state.chatHistoryNextToken);
+  $("chatMessageList").scrollTop = $("chatMessageList").scrollHeight;
+}
+
+async function openChat(chat, { pageToken = "", append = false } = {}) {
+  const store = storeForRecord(chat);
+  if (!store || !chat?.chatId) return toast("无法确定会话所属店铺", true);
+  state.activeChat = { ...chat, _storeId: store.id, _storeAlias: store.alias };
+  renderChatList();
+  $("chatConversationEmpty").classList.add("hidden");
+  $("chatConversation").classList.remove("hidden");
+  $("chatContextLabel").textContent = CHAT_CONTEXT[chat.context?.type] || (chat.type === "ARBITRAGE" ? "售后争议" : "客户消息");
+  $("chatConversationTitle").textContent = chatContextTitle(chat);
+  $("chatConversationMeta").textContent = `${store.alias} · 会话 #${chat.chatId} · 更新 ${formatDateTime(chat.updatedAt || chat.createdAt)}`;
+  $("chatConversationStatus").textContent = CHAT_STATUS[chat.status] || chat.status || "状态未知";
+  if (!append) { state.chatMessages = []; state.chatHistoryNextToken = ""; $("chatMessageList").innerHTML = `<div class="ops-state"><span class="spinner"></span><strong>正在读取消息历史…</strong></div>`; }
+  const requestId = ++state.chatHistoryRequestId;
+  try {
+    const data = await api("/api/chats/history", { method: "POST", body: JSON.stringify({ store_id: store.id, chat_id: Number(chat.chatId), page_token: pageToken, message_id_from: null, limit: 100 }) });
+    if (requestId !== state.chatHistoryRequestId || chatKey(state.activeChat) !== chatKey(chat)) return;
+    state.activeChat.context = { ...(state.activeChat.context || {}), ...(data.context || {}) };
+    const combined = append ? [...state.chatMessages, ...(data.messages || [])] : (data.messages || []);
+    const byId = new Map(combined.map((message, index) => [String(message.messageId || `${message.createdAt}:${index}`), message]));
+    state.chatMessages = [...byId.values()].sort((left, right) => Number(left.messageId || 0) - Number(right.messageId || 0) || String(left.createdAt || "").localeCompare(String(right.createdAt || "")));
+    state.chatHistoryNextToken = data.paging?.nextPageToken || "";
+    $("chatContextLabel").textContent = CHAT_CONTEXT[state.activeChat.context?.type] || (chat.type === "ARBITRAGE" ? "售后争议" : "客户消息");
+    $("chatConversationTitle").textContent = chatContextTitle(state.activeChat);
+    renderChatMessages();
+  } catch (error) { if (requestId === state.chatHistoryRequestId) $("chatMessageList").innerHTML = `<div class="ops-state error-state"><strong>消息历史读取失败</strong><p>${escapeHtml(error.message)}</p></div>`; }
+}
+
+$("chatFilterForm").addEventListener("submit", (event) => { event.preventDefault(); state.activeChat = null; loadChats({ resetPage: true }); });
+$("chatPrevButton").addEventListener("click", () => { if (state.chatPageIndex > 0) { state.chatPageIndex -= 1; loadChats({ pageToken: state.chatPageTokens[state.chatPageIndex] || "" }); } });
+$("chatNextButton").addEventListener("click", () => { if (hasPageToken(state.chatNextToken)) { state.chatPageIndex += 1; state.chatPageTokens[state.chatPageIndex] = state.chatNextToken; loadChats({ pageToken: state.chatNextToken }); } });
+$("chatList").addEventListener("click", (event) => {
+  const button = event.target.closest("[data-chat-id]");
+  if (!button) return;
+  const chat = state.chats.find((item) => Number(item.chatId) === Number(button.dataset.chatId) && Number(item._storeId || selectedStore()?.id) === Number(button.dataset.storeId || selectedStore()?.id));
+  if (chat) openChat(chat);
+});
+$("chatHistoryMore").addEventListener("click", () => { if (state.activeChat && state.chatHistoryNextToken) openChat(state.activeChat, { pageToken: state.chatHistoryNextToken, append: true }); });
+$("chatReplyForm").addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const chat = state.activeChat;
+  const store = storeForRecord(chat);
+  const text = $("chatReplyText").value.trim();
+  if (!chat || !store) return toast("请先选择会话", true);
+  if (!text) return toast("请输入回复内容", true);
+  if (!window.confirm(`以“${store.alias}”回复会话 #${chat.chatId}？`)) return;
+  const button = $("chatReplyForm").querySelector("button[type=submit]"); button.disabled = true;
+  try {
+    await api("/api/chats/reply", { method: "POST", body: JSON.stringify({ store_id: store.id, chat_id: Number(chat.chatId), text }) });
+    $("chatReplyText").value = "";
+    toast("客户消息已发送");
+    await openChat(chat);
+  } catch (error) { toast(error.message, true); } finally { button.disabled = false; }
+});
+
+$("returnList").addEventListener("click", async (event) => {
+  const button = event.target.closest("[data-return-chat]");
+  if (!button) return;
+  button.disabled = true;
+  try {
+    const storeId = Number(button.dataset.storeId);
+    const contextType = button.dataset.contextType;
+    const contextId = Number(button.dataset.contextId);
+    const data = await api("/api/chats/create", { method: "POST", body: JSON.stringify({ store_id: storeId, context_type: contextType, context_id: contextId }) });
+    state.pendingChat = {
+      chatId: Number(data.chatId), _storeId: storeId,
+      context: { type: contextType, orderId: Number(button.dataset.orderId) || undefined, returnId: Number(button.dataset.returnId) || undefined },
+      type: "CHAT", status: "NEW", updatedAt: new Date().toISOString(),
+    };
+    $("chatStatus").value = "";
+    $("chatContextType").value = "";
+    switchView("chats");
+  } catch (error) { toast(error.message, true); button.disabled = false; }
+});
 
 function reviewMedia(media) {
   return (media?.photos || []).slice(0, 4).map((value) => safeOrderUrl(value)).filter(Boolean).map((url) => `<a href="${escapeHtml(url)}" target="_blank" rel="noopener noreferrer"><img src="${escapeHtml(url)}" alt="评价图片" loading="lazy" referrerpolicy="no-referrer"></a>`).join("");
@@ -881,19 +1195,18 @@ function renderFeedback(data) {
     const ids = item.identifiers || {};
     const stars = "★".repeat(Number(stats.rating || 0)) + "☆".repeat(Math.max(0, 5 - Number(stats.rating || 0)));
     const fields = [["优点", description.advantages], ["不足", description.disadvantages], ["评价", description.comment]].filter(([, value]) => value).map(([label, value]) => `<p><strong>${label}</strong>${escapeHtml(value)}</p>`).join("");
-    return `<article class="ops-card feedback-card" data-feedback-id="${escapeHtml(item.feedbackId)}"><div class="ops-card-head"><div><span class="review-stars" aria-label="${escapeHtml(stats.rating || 0)} 星">${stars}</span><h3>${escapeHtml(item.author || "匿名买家")}</h3><small>评价 #${escapeHtml(item.feedbackId)} · SKU ${escapeHtml(ids.offerId || "—")} · ${formatDateTime(item.createdAt)}</small></div>${item.needReaction ? `<span class="need-reaction">待回复</span>` : `<span class="handled">已处理</span>`}</div><div class="review-copy">${fields || "<p>买家未填写文字评价</p>"}</div>${reviewMedia(item.media) ? `<div class="review-media">${reviewMedia(item.media)}</div>` : ""}<form class="inline-reply-form" data-feedback-reply><textarea maxlength="4096" required placeholder="输入店铺回复；不得包含店铺联系方式或非 Yandex 链接"></textarea><div><span>${escapeHtml(stats.commentsCount || 0)} 条店铺回复</span><button class="button primary" type="submit">提交回复</button>${item.needReaction ? `<button class="button ghost" type="button" data-feedback-skip>仅标记已处理</button>` : ""}</div></form></article>`;
+    return `<article class="ops-card feedback-card" data-feedback-id="${escapeHtml(item.feedbackId)}" data-store-id="${escapeHtml(item._storeId || "")}"><div class="ops-card-head"><div><span class="review-stars" aria-label="${escapeHtml(stats.rating || 0)} 星">${stars}</span>${recordStoreTag(item)}<h3>${escapeHtml(item.author || "匿名买家")}</h3><small>评价 #${escapeHtml(item.feedbackId)} · SKU ${escapeHtml(ids.offerId || "—")} · ${formatDateTime(item.createdAt)}</small></div>${item.needReaction ? `<span class="need-reaction">待回复</span>` : `<span class="handled">已处理</span>`}</div><div class="review-copy">${fields || "<p>买家未填写文字评价</p>"}</div>${reviewMedia(item.media) ? `<div class="review-media">${reviewMedia(item.media)}</div>` : ""}<form class="inline-reply-form" data-feedback-reply><textarea maxlength="4096" required placeholder="输入店铺回复；不得包含店铺联系方式或非 Yandex 链接"></textarea><div><span>${escapeHtml(stats.commentsCount || 0)} 条店铺回复</span><button class="button primary" type="submit">提交回复</button>${item.needReaction ? `<button class="button ghost" type="button" data-feedback-skip>仅标记已处理</button>` : ""}</div></form></article>`;
   }).join("");
   $("feedbackPageLabel").textContent = `第 ${state.feedbackPageIndex + 1} 页 · 本页 ${records.length} 条`;
   $("feedbackPrevButton").disabled = state.feedbackPageIndex === 0;
-  $("feedbackNextButton").disabled = !state.feedbackNextToken;
+  $("feedbackNextButton").disabled = !hasPageToken(state.feedbackNextToken);
   $("feedbackState").classList.toggle("hidden", records.length > 0);
   $("feedbackState").textContent = records.length ? "" : "当前筛选下没有评价。";
   $("feedbackContent").classList.toggle("hidden", !records.length);
 }
 
 async function loadFeedback({ resetPage = false, pageToken = null } = {}) {
-  const store = selectedStore();
-  if (!store) { $("feedbackState").textContent = "请先选择店铺。"; $("feedbackState").classList.remove("hidden"); $("feedbackContent").classList.add("hidden"); return; }
+  if (!selectedStores().length) { $("feedbackState").textContent = "请先连接店铺。"; $("feedbackState").classList.remove("hidden"); $("feedbackContent").classList.add("hidden"); return; }
   let offerIds;
   try { offerIds = splitSkuValues($("feedbackSku").value, 20); } catch (error) { return toast(error.message, true); }
   if (resetPage) { state.feedbackPageTokens = [""]; state.feedbackPageIndex = 0; state.feedbackNextToken = ""; }
@@ -902,22 +1215,23 @@ async function loadFeedback({ resetPage = false, pageToken = null } = {}) {
   $("feedbackState").textContent = "正在读取商品评价…"; $("feedbackState").classList.remove("hidden"); $("feedbackContent").classList.add("hidden");
   try {
     const rating = Number($("feedbackRating").value);
-    const data = await api("/api/feedback", { method: "POST", body: JSON.stringify({ store_id: store.id, reaction_status: $("feedbackReaction").value, rating_values: rating ? [rating] : [], offer_ids: offerIds, page_token: token, limit: 50 }) });
+    const result = await readSelectedStorePages("/api/feedback", token, (store, storeToken) => ({ store_id: store.id, reaction_status: $("feedbackReaction").value, rating_values: rating ? [rating] : [], offer_ids: offerIds, page_token: storeToken, limit: 50 }), "feedbacks");
     if (requestId !== state.feedbackRequestId) return;
-    state.feedbackNextToken = data.paging?.nextPageToken || "";
-    renderFeedback(data);
+    state.feedbackNextToken = result.paging?.nextPageToken || "";
+    renderFeedback({ feedbacks: result.records.sort((left, right) => String(right.createdAt || "").localeCompare(String(left.createdAt || ""))) });
   } catch (error) { if (requestId === state.feedbackRequestId) { $("feedbackState").textContent = `读取失败：${error.message}`; toast(error.message, true); } }
 }
 
 $("feedbackFilterForm").addEventListener("submit", (event) => { event.preventDefault(); loadFeedback({ resetPage: true }); });
 $("feedbackPrevButton").addEventListener("click", () => { if (state.feedbackPageIndex > 0) { state.feedbackPageIndex -= 1; loadFeedback({ pageToken: state.feedbackPageTokens[state.feedbackPageIndex] || "" }); } });
-$("feedbackNextButton").addEventListener("click", () => { if (state.feedbackNextToken) { state.feedbackPageIndex += 1; state.feedbackPageTokens[state.feedbackPageIndex] = state.feedbackNextToken; loadFeedback({ pageToken: state.feedbackNextToken }); } });
+$("feedbackNextButton").addEventListener("click", () => { if (hasPageToken(state.feedbackNextToken)) { state.feedbackPageIndex += 1; state.feedbackPageTokens[state.feedbackPageIndex] = state.feedbackNextToken; loadFeedback({ pageToken: state.feedbackNextToken }); } });
 $("feedbackList").addEventListener("submit", async (event) => {
   const form = event.target.closest("[data-feedback-reply]");
   if (!form) return;
   event.preventDefault();
-  const store = selectedStore();
-  const feedbackId = Number(form.closest("[data-feedback-id]").dataset.feedbackId);
+  const card = form.closest("[data-feedback-id]");
+  const store = state.stores.find((item) => item.id === Number(card.dataset.storeId)) || selectedStore();
+  const feedbackId = Number(card.dataset.feedbackId);
   const text = form.querySelector("textarea").value.trim();
   if (!text) return toast("请输入回复内容", true);
   if (!window.confirm(`以“${store.alias}”回复评价 #${feedbackId}？`)) return;
@@ -927,8 +1241,9 @@ $("feedbackList").addEventListener("submit", async (event) => {
 $("feedbackList").addEventListener("click", async (event) => {
   const button = event.target.closest("[data-feedback-skip]");
   if (!button) return;
-  const store = selectedStore();
-  const feedbackId = Number(button.closest("[data-feedback-id]").dataset.feedbackId);
+  const card = button.closest("[data-feedback-id]");
+  const store = state.stores.find((item) => item.id === Number(card.dataset.storeId)) || selectedStore();
+  const feedbackId = Number(card.dataset.feedbackId);
   if (!window.confirm(`将评价 #${feedbackId} 标记为已处理且不回复？`)) return;
   button.disabled = true;
   try { await api("/api/feedback/skip", { method: "POST", body: JSON.stringify({ store_id: store.id, feedback_ids: [feedbackId] }) }); toast("评价已标记为处理"); await loadFeedback(); } catch (error) { toast(error.message, true); button.disabled = false; }
@@ -943,19 +1258,18 @@ function renderQuestions(data) {
     const ids = item.questionIdentifiers || {};
     const author = item.author || {};
     const votes = item.votes || {};
-    return `<article class="ops-card question-card" data-question-id="${escapeHtml(ids.id)}"><div class="ops-card-head"><div><span class="ops-kicker">SKU ${escapeHtml(ids.offerId || "—")}</span><h3>${escapeHtml(author.name || "买家")} 的问题</h3><small>问题 #${escapeHtml(ids.id || "—")} · ${formatDateTime(item.createdAt)} · 👍 ${escapeHtml(votes.likes || 0)} / 👎 ${escapeHtml(votes.dislikes || 0)}</small></div>${pendingOnly ? `<span class="need-reaction">待回答</span>` : ""}</div><blockquote>${escapeHtml(item.text || "")}</blockquote><form class="inline-reply-form" data-question-reply><textarea maxlength="5000" required placeholder="输入准确、清晰的商品回答"></textarea><div><span>回复将公开展示在商品问答中</span><button class="button primary" type="submit">提交回答</button></div></form></article>`;
+    return `<article class="ops-card question-card" data-question-id="${escapeHtml(ids.id)}" data-store-id="${escapeHtml(item._storeId || "")}"><div class="ops-card-head"><div><span class="ops-kicker">SKU ${escapeHtml(ids.offerId || "—")}</span>${recordStoreTag(item)}<h3>${escapeHtml(author.name || "买家")} 的问题</h3><small>问题 #${escapeHtml(ids.id || "—")} · ${formatDateTime(item.createdAt)} · 👍 ${escapeHtml(votes.likes || 0)} / 👎 ${escapeHtml(votes.dislikes || 0)}</small></div>${pendingOnly ? `<span class="need-reaction">待回答</span>` : ""}</div><blockquote>${escapeHtml(item.text || "")}</blockquote><form class="inline-reply-form" data-question-reply><textarea maxlength="5000" required placeholder="输入准确、清晰的商品回答"></textarea><div><span>回复将公开展示在商品问答中</span><button class="button primary" type="submit">提交回答</button></div></form></article>`;
   }).join("");
   $("questionPageLabel").textContent = `第 ${state.questionPageIndex + 1} 页 · 本页 ${records.length} 条`;
   $("questionPrevButton").disabled = state.questionPageIndex === 0;
-  $("questionNextButton").disabled = !state.questionNextToken;
+  $("questionNextButton").disabled = !hasPageToken(state.questionNextToken);
   $("questionsState").classList.toggle("hidden", records.length > 0);
   $("questionsState").textContent = records.length ? "" : "当前筛选下没有商品问题。";
   $("questionsContent").classList.toggle("hidden", !records.length);
 }
 
 async function loadQuestions({ resetPage = false, pageToken = null } = {}) {
-  const store = selectedStore();
-  if (!store) { $("questionsState").textContent = "请先选择店铺。"; $("questionsState").classList.remove("hidden"); $("questionsContent").classList.add("hidden"); return; }
+  if (!selectedStores().length) { $("questionsState").textContent = "请先连接店铺。"; $("questionsState").classList.remove("hidden"); $("questionsContent").classList.add("hidden"); return; }
   const from = $("questionFrom").value; const to = $("questionTo").value;
   if (from && to) {
     const days = Math.round((new Date(`${to}T00:00:00`) - new Date(`${from}T00:00:00`)) / 86400000);
@@ -966,22 +1280,24 @@ async function loadQuestions({ resetPage = false, pageToken = null } = {}) {
   const requestId = ++state.questionRequestId;
   $("questionsState").textContent = "正在读取商品问题…"; $("questionsState").classList.remove("hidden"); $("questionsContent").classList.add("hidden");
   try {
-    const data = await api("/api/questions", { method: "POST", body: JSON.stringify({ store_id: store.id, need_answer: $("questionNeedAnswer").value === "true", date_from: from || null, date_to: to || null, page_token: token, limit: 50 }) });
+    const result = await readSelectedStorePages("/api/questions", token, (store, storeToken) => ({ store_id: store.id, need_answer: $("questionNeedAnswer").value === "true", date_from: from || null, date_to: to || null, page_token: storeToken, limit: 50 }), "questions");
     if (requestId !== state.questionRequestId) return;
-    state.questionNextToken = data.paging?.nextPageToken || "";
-    renderQuestions(data);
+    state.questionNextToken = result.paging?.nextPageToken || "";
+    const totalCount = result.responses.reduce((total, item) => total + Number(item.data.totalCount || 0), 0);
+    renderQuestions({ questions: result.records.sort((left, right) => String(right.createdAt || "").localeCompare(String(left.createdAt || ""))), totalCount });
   } catch (error) { if (requestId === state.questionRequestId) { $("questionsState").textContent = `读取失败：${error.message}`; toast(error.message, true); } }
 }
 
 $("questionFilterForm").addEventListener("submit", (event) => { event.preventDefault(); loadQuestions({ resetPage: true }); });
 $("questionPrevButton").addEventListener("click", () => { if (state.questionPageIndex > 0) { state.questionPageIndex -= 1; loadQuestions({ pageToken: state.questionPageTokens[state.questionPageIndex] || "" }); } });
-$("questionNextButton").addEventListener("click", () => { if (state.questionNextToken) { state.questionPageIndex += 1; state.questionPageTokens[state.questionPageIndex] = state.questionNextToken; loadQuestions({ pageToken: state.questionNextToken }); } });
+$("questionNextButton").addEventListener("click", () => { if (hasPageToken(state.questionNextToken)) { state.questionPageIndex += 1; state.questionPageTokens[state.questionPageIndex] = state.questionNextToken; loadQuestions({ pageToken: state.questionNextToken }); } });
 $("questionList").addEventListener("submit", async (event) => {
   const form = event.target.closest("[data-question-reply]");
   if (!form) return;
   event.preventDefault();
-  const store = selectedStore();
-  const questionId = Number(form.closest("[data-question-id]").dataset.questionId);
+  const card = form.closest("[data-question-id]");
+  const store = state.stores.find((item) => item.id === Number(card.dataset.storeId)) || selectedStore();
+  const questionId = Number(card.dataset.questionId);
   const text = form.querySelector("textarea").value.trim();
   if (!text) return toast("请输入回答内容", true);
   if (!window.confirm(`以“${store.alias}”回答问题 #${questionId}？`)) return;
@@ -1241,13 +1557,15 @@ pricePercentInput.addEventListener("input", updatePublishButton);
 function setStoreBadge() {
   const badge = $("connectionBadge");
   const store = selectedStore();
-  if (!store) {
+  if (!state.stores.length) {
     badge.className = "badge neutral";
     badge.innerHTML = "<span></span>未选择店铺";
     return;
   }
   badge.className = "badge connected";
-  badge.innerHTML = `<span></span>${escapeHtml(store.alias)} · ${escapeHtml(store.store_name || store.business_name)}`;
+  badge.innerHTML = store
+    ? `<span></span>${escapeHtml(store.alias)} · ${escapeHtml(store.store_name || store.business_name)}`
+    : `<span></span>全部店铺 · ${state.stores.length} 家`;
 }
 
 function renderGlobalStoreSelect() {
@@ -1258,7 +1576,7 @@ function renderGlobalStoreSelect() {
     return;
   }
   select.disabled = false;
-  select.innerHTML = state.stores.map((store) => `<option value="${store.id}">${escapeHtml(store.alias)} · ${escapeHtml(store.placement_type || "Yandex")}</option>`).join("");
+  select.innerHTML = `<option value="">全部店铺</option>` + state.stores.map((store) => `<option value="${store.id}">${escapeHtml(store.alias)} · ${escapeHtml(store.placement_type || "Yandex")}</option>`).join("");
   select.value = state.selectedStoreId ? String(state.selectedStoreId) : "";
 }
 
@@ -1297,16 +1615,13 @@ async function loadStores(preferredId = null) {
   const data = await api("/api/stores");
   state.stores = data.stores || [];
   const candidate = preferredId ?? state.selectedStoreId;
-  if (state.stores.some((store) => store.id === candidate)) {
-    state.selectedStoreId = candidate;
-  } else {
-    state.selectedStoreId = state.stores[0]?.id || null;
-  }
+  state.selectedStoreId = state.stores.some((store) => store.id === candidate) ? candidate : null;
   renderStores();
   if (state.currentView === "orders") await loadOrders({ resetPage: true });
   if (state.currentView === "listings") await loadListings({ resetPage: true });
   if (state.currentView === "inventory") await loadInventory({ resetPage: true });
   if (state.currentView === "returns") await loadReturns({ resetPage: true });
+  if (state.currentView === "chats") await loadChats({ resetPage: true });
   if (state.currentView === "feedback") await loadFeedback({ resetPage: true });
 }
 
@@ -1320,6 +1635,10 @@ $("globalStoreSelect").addEventListener("change", () => {
   state.listingRequestId += 1;
   state.inventoryRequestId += 1;
   state.returnRequestId += 1;
+  state.chatRequestId += 1;
+  state.chatHistoryRequestId += 1;
+  state.activeChat = null;
+  state.chatMessages = [];
   state.feedbackRequestId += 1;
   state.questionRequestId += 1;
   renderStores();
@@ -1327,6 +1646,7 @@ $("globalStoreSelect").addEventListener("change", () => {
   if (state.currentView === "listings") loadListings({ resetPage: true });
   if (state.currentView === "inventory") loadInventory({ resetPage: true });
   if (state.currentView === "returns") loadReturns({ resetPage: true });
+  if (state.currentView === "chats") loadChats({ resetPage: true });
   if (state.currentView === "feedback") loadFeedback({ resetPage: true });
 });
 
@@ -1424,7 +1744,7 @@ function updatePublishButton() {
   const stockValid = validInitialStock();
   publishButton.disabled = state.selectedProducts.size === 0 || !store || !state.exchangeRate || !ratioValid || !packageValid || !stockValid;
   if (!store) {
-    publishButton.textContent = "请先选择店铺";
+    publishButton.textContent = state.stores.length ? "请选择单个店铺" : "请先连接店铺";
   } else if (!state.exchangeRate) {
     publishButton.textContent = "人民币汇率未就绪";
   } else if (!ratioValid) {
@@ -1620,7 +1940,7 @@ async function pollPublish(jobId) {
 
 publishButton.addEventListener("click", async () => {
   const store = selectedStore();
-  if (!store) return toast("请先选择上传店铺", true);
+  if (!store) return toast(state.stores.length ? "上架前请先选择一个具体店铺" : "请先连接上传店铺", true);
   if (!state.selectedProducts.size) return;
   let pricePercent;
   try { pricePercent = pricePercentValue(); } catch (error) { return toast(error.message, true); }
@@ -1675,3 +1995,8 @@ initializeOrderDates();
 initializeOpsDates();
 restorePackageValues();
 Promise.all([checkBackend(), loadZeshunStores(), loadStores(), loadExchangeRate()]).catch((error) => toast(error.message, true));
+window.setInterval(() => {
+  if (state.currentView !== "orders" || !selectedStores().length || document.hidden) return;
+  if ($("orderRefreshButton").disabled) return;
+  loadOrders({ resetPage: true });
+}, ORDER_AUTO_REFRESH_MS);

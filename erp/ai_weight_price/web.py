@@ -1,8 +1,10 @@
 import socket
+import re
+import time
 from pathlib import Path
 from urllib.parse import urlsplit
 
-from flask import Blueprint, Response, jsonify, render_template, request
+from flask import Blueprint, Response, g, jsonify, render_template, request, send_file
 
 
 def create_blueprint(service, authorize=None):
@@ -26,6 +28,7 @@ def create_blueprint(service, authorize=None):
             origin = request.headers.get("Origin")
             if origin and origin != request.host_url.rstrip("/"):
                 return jsonify(message="不允许跨站请求"), 403
+            g.awp_action = True
             if not isinstance(request.get_json(silent=True), dict):
                 raise ValueError("请求体必须是 JSON 对象")
 
@@ -37,6 +40,18 @@ def create_blueprint(service, authorize=None):
     def not_found(exc):
         return jsonify(message=str(exc)), 404
 
+    @bp.after_request
+    def record_result(response):
+        response.headers["Cache-Control"] = "no-store"
+        if getattr(g, "awp_action", False) and response.status_code >= 400:
+            body = response.get_json(silent=True) or {}
+            message = body.get("message") or f"服务请求失败（HTTP {response.status_code}），请检查本机服务日志"
+            service.store.log(f"操作失败 [{request.path}]：{message}", level="ERROR")
+            service.store.set_state("action_error", {"message": message, "at": time.time(), "path": request.path})
+        elif getattr(g, "awp_action", False) and response.status_code < 400:
+            service.store.set_state("action_error", None)
+        return response
+
     @bp.get("/ai-weight-price")
     def page():
         can_execute = not authorize or authorize("ai_weight_price.execute") is None
@@ -45,6 +60,19 @@ def create_blueprint(service, authorize=None):
     @bp.get("/api/ai-weight-price/status")
     def status():
         return jsonify(**service.status(), computer=socket.gethostname())
+
+    @bp.post("/api/ai-weight-price/model/check")
+    def check_model():
+        return jsonify(service.check_model_connection())
+
+    @bp.get("/api/ai-weight-price/visuals/<filename>")
+    def visual_frame(filename):
+        if not re.fullmatch(r"[0-9a-f]{32}\.jpg", filename):
+            return jsonify(message="画面不存在"), 404
+        path = service.store.root / "visuals" / filename
+        if not path.is_file():
+            return jsonify(message="画面不存在"), 404
+        return send_file(path, mimetype="image/jpeg")
 
     @bp.post("/api/ai-weight-price/login/open")
     def open_login():
@@ -56,6 +84,11 @@ def create_blueprint(service, authorize=None):
         if request.get_json().get("acknowledged") is not True:
             raise ValueError("请先人工完成登录，再点击“我已成功登录”")
         return jsonify(message="登录已确认，请选择分类（可留空）和页码范围", login=service.confirm_login())
+
+    @bp.post("/api/ai-weight-price/supplier/login/open")
+    def open_supplier_login():
+        service.open_supplier_login()
+        return jsonify(message="已在同一Edge窗口打开1688，请完成登录后继续；不影响智赢登录状态")
 
     @bp.post("/api/ai-weight-price/categories/refresh")
     def categories():
@@ -77,7 +110,7 @@ def create_blueprint(service, authorize=None):
             if any(old[key] != result[key] for key in ("cdp_url", "erp_list_url")):
                 service.store.set_state("login", {"confirmed": False})
                 service.store.set_state("categories", [])
-            service.store.log("已保存可视化配置")
+            service.store.log("已保存核重核价配置")
         return jsonify(result)
 
     @bp.get("/api/ai-weight-price/tasks")
@@ -107,11 +140,11 @@ def create_blueprint(service, authorize=None):
     @bp.post("/api/ai-weight-price/start")
     def start():
         body = request.get_json()
-        mode = body.get("mode", "process")
+        mode = body.get("mode", "pipeline")
         if mode != "probe" and not body.get("task_id"):
             from .config import selection_params
             selection_params(body.get("selection"), service.config.load())
-        service.start(mode, body.get("task_id"), body.get("selection"))
+        service.start(mode, body.get("task_id"), body.get("selection"), body.get("max_items", 10))
         return jsonify(message="任务已启动")
 
     @bp.post("/api/ai-weight-price/stop")
@@ -119,14 +152,12 @@ def create_blueprint(service, authorize=None):
         service.stop()
         return jsonify(message="停止请求已记录，当前操作结束后保留进度退出")
 
-    @bp.post("/api/ai-weight-price/circuit/reset")
-    def reset():
+    @bp.post("/api/ai-weight-price/continue")
+    def continue_after_human():
         if request.get_json().get("acknowledged") is not True:
-            raise ValueError("请先处理浏览器验证码/限制，并勾选确认")
-        with service.idle():
-            service.store.set_state("circuit", None)
-            service.store.log("人工确认已处理页面限制，解除聊天熔断；去重和限额继续保留", level="WARNING")
-        return jsonify(message="已解除熔断，请手动开始处理")
+            raise ValueError("请先在可见Edge完成1688登录或人机审核，并打开确认开关")
+        service.continue_after_human()
+        return jsonify(message="已从暂停的当前商品继续执行")
 
     @bp.get("/api/ai-weight-price/logs")
     def logs():
@@ -135,6 +166,21 @@ def create_blueprint(service, authorize=None):
     @bp.get("/api/ai-weight-price/export")
     def export():
         status = request.args.get("status", "")
+        if request.args.get("format") == "xlsx":
+            from .reports import execution_xlsx
+            run_id = request.args.get("run_id", "")
+            if run_id == "latest":
+                run_id = service.store.state("latest_run_id")
+                if not run_id:
+                    raise ValueError("暂无执行批次，请先启动一次任务")
+            if run_id:
+                batch, rows = service.store.run_report(run_id)
+                rows = [row for row in rows if not status or row["status"] == status]
+            else:
+                batch = {}
+                rows = service.store.list(status, page_size=1000000)["rows"]
+            return Response(execution_xlsx(rows, batch), content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                            headers={"Content-Disposition": 'attachment; filename="ai-weight-price-execution.xlsx"'})
         return Response(service.store.csv(status), content_type="text/csv; charset=utf-8",
                         headers={"Content-Disposition": f'attachment; filename="ai-weight-price-{status or "all"}.csv"'})
 

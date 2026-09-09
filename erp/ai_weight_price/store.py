@@ -7,7 +7,8 @@ from contextlib import contextmanager
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
-STATUSES = ("pending", "waiting_merchant_reply", "success", "exception")
+STATUSES = ("pending", "waiting_merchant_reply", "success", "exception", "skipped", "blocked", "risk")
+COMPLETED = ("success", "skipped", "blocked", "risk")
 CHINA = timezone(timedelta(hours=8))
 
 
@@ -39,6 +40,9 @@ class Store:
                   id INTEGER PRIMARY KEY AUTOINCREMENT, at REAL NOT NULL,
                   level TEXT NOT NULL, task_id TEXT, message TEXT NOT NULL);
                 CREATE TABLE IF NOT EXISTS state (key TEXT PRIMARY KEY, value TEXT NOT NULL);
+                CREATE TABLE IF NOT EXISTS runs (run_id TEXT PRIMARY KEY, payload TEXT NOT NULL);
+                CREATE TABLE IF NOT EXISTS run_items (run_id TEXT NOT NULL, erp_goods_id TEXT NOT NULL,
+                  sequence INTEGER NOT NULL, payload TEXT NOT NULL, PRIMARY KEY(run_id, erp_goods_id));
             """)
 
     @contextmanager
@@ -72,6 +76,28 @@ class Store:
     def set_state(self, key, value):
         with self.connect() as db:
             db.execute("INSERT OR REPLACE INTO state VALUES(?,?)", (key, json.dumps(value, ensure_ascii=False)))
+
+    def save_run(self, run):
+        with self.connect() as db:
+            db.execute("INSERT OR REPLACE INTO runs VALUES(?,?)", (run["run_id"], json.dumps(run, ensure_ascii=False)))
+        self.set_state("latest_run_id", run["run_id"])
+
+    def record_run_item(self, run_id, key, **details):
+        if not run_id:
+            return
+        payload = {**self.get(key), **details}
+        with self.connect() as db:
+            db.execute("INSERT INTO run_items VALUES(?,?,(SELECT COUNT(*)+1 FROM run_items WHERE run_id=?),?) "
+                       "ON CONFLICT(run_id,erp_goods_id) DO UPDATE SET payload=excluded.payload",
+                       (run_id, key, run_id, json.dumps(payload, ensure_ascii=False)))
+
+    def run_report(self, run_id):
+        with self.connect() as db:
+            run = db.execute("SELECT payload FROM runs WHERE run_id=?", (run_id,)).fetchone()
+            if not run:
+                raise ValueError("执行批次不存在")
+            rows = db.execute("SELECT payload FROM run_items WHERE run_id=? ORDER BY sequence", (run_id,)).fetchall()
+        return json.loads(run[0]), [json.loads(row[0]) for row in rows]
 
     @staticmethod
     def decode(row):
@@ -114,6 +140,11 @@ class Store:
     def exception(self, key, reason, detail=""):
         self.update(key, status="exception", exception_reason=reason, exception_detail=str(detail))
         self.log(reason + ("：" + str(detail) if detail else ""), key, "ERROR")
+
+    def skip(self, key, reason):
+        self.update(key, status="skipped", stage="no_exact_match", skip_reason=str(reason),
+                    skipped_at=time.time(), exception_reason="", exception_detail="")
+        self.log("未完全匹配，已跳过：" + str(reason) + "；继续下一件", key, "WARNING")
 
     def list(self, status="", search="", page=1, page_size=50, scope=None):
         if status and status not in STATUSES:
@@ -201,8 +232,9 @@ class Store:
             self.exception(row["erp_goods_id"], "上次操作中断，发送或保存结果不确定，请人工核对", row["stage"])
 
     def csv(self, status=""):
-        fields = ["erp_goods_id", "title", "main_image_url", "description", "erp_sku", "cost_price", "weight_g",
-                  "reference_weight_g", "measured_weight_g", "status", "exception_reason", "exception_detail",
+        fields = ["erp_goods_id", "title", "main_image_url", "description", "erp_sku", "cost_price", "net_income_usd", "pricing", "weight_g",
+                  "erp_before", "write_intent", "erp_after", "write_verified", "write_history",
+                  "reference_weight_g", "measured_weight_g", "status", "decision_status", "decision_reason", "skip_reason", "skipped_at", "exception_reason", "exception_detail",
                   "supplier_url", "supplier_sku_id", "supplier_sku", "merchant_id", "match_confidence",
                   "conversation_id", "merchant_reply", "validation", "created_at", "updated_at", "raw_json"]
         output = io.StringIO(newline="")
@@ -231,7 +263,7 @@ class Store:
             return
         folder = self.root / "reports"
         folder.mkdir(exist_ok=True)
-        for status, name in [("", "all"), ("success", "success"), ("exception", "exceptions")]:
+        for status, name in [("", "all"), ("success", "success"), ("exception", "exceptions"), ("skipped", "skipped"), ("blocked", "blocked"), ("risk", "risk")]:
             target = folder / (name + ".csv")
             temp = target.with_suffix(".tmp")
             temp.write_bytes(self.csv(status))
