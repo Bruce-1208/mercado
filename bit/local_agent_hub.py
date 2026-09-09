@@ -88,6 +88,8 @@ class LocalAgentStore:
                 );
                 CREATE INDEX IF NOT EXISTS idx_local_agent_jobs_claim
                     ON local_agent_jobs(agent_id, status, created_at);
+                CREATE INDEX IF NOT EXISTS idx_local_agent_jobs_history
+                    ON local_agent_jobs(job_type, status, finished_at);
 
                 CREATE TABLE IF NOT EXISTS local_agent_events (
                     event_id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -293,8 +295,15 @@ class LocalAgentStore:
             claimed = connection.execute(
                 "SELECT * FROM local_agent_jobs WHERE job_id = ?", (job_id,)
             ).fetchone()
+            job = self._job_row(claimed)
+            stored_payload = dict(job.get("payload") or {})
+            if stored_payload.pop("deepseek_api_key", None) is not None:
+                connection.execute(
+                    "UPDATE local_agent_jobs SET payload_json = ? WHERE job_id = ?",
+                    (json.dumps(stored_payload, ensure_ascii=False), job_id),
+                )
             connection.commit()
-            return self._job_row(claimed)
+            return job
         finally:
             connection.close()
 
@@ -420,6 +429,37 @@ class LocalAgentStore:
                 params,
             ).fetchall()
         return [self._job_row(row) for row in rows]
+
+    def prune_job_history(self, *, retention_seconds, job_type="", now=None):
+        """Remove terminal jobs and their server-side logs after the retention window."""
+        now = time.time() if now is None else float(now)
+        retention_seconds = max(0, float(retention_seconds))
+        clauses = ["status IN ('success', 'error', 'stopped')"]
+        params = []
+        if job_type:
+            clauses.append("job_type = ?")
+            params.append(str(job_type))
+        clauses.append("COALESCE(finished_at, updated_at) < ?")
+        params.append(now - retention_seconds)
+        where = " AND ".join(clauses)
+        with self._connect() as connection:
+            rows = connection.execute(
+                f"SELECT job_id FROM local_agent_jobs WHERE {where}",
+                params,
+            ).fetchall()
+            job_ids = [row["job_id"] for row in rows]
+            if not job_ids:
+                return 0
+            placeholders = ",".join("?" for _ in job_ids)
+            connection.execute(
+                f"DELETE FROM local_agent_events WHERE job_id IN ({placeholders})",
+                job_ids,
+            )
+            connection.execute(
+                f"DELETE FROM local_agent_jobs WHERE job_id IN ({placeholders})",
+                job_ids,
+            )
+        return len(job_ids)
 
     def events_after(self, job_id, after_id=0, *, limit=500):
         job_id = normalize_job_id(job_id)

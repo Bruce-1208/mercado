@@ -28,6 +28,11 @@ from erp.mercadolibre_infraction_store import (
     update_infraction_media,
 )
 from erp.mercadolibre_prohibited_store import get_prohibited_sync_context
+from erp.mercadolibre_overview_sync_settings import (
+    AUTO_SYNC_HOURS,
+    OFFICIAL_INFRACTIONS_SCOPE,
+    get_overview_sync_settings,
+)
 from mercado_api.client import MercadoAPIError, MercadoLibreClient
 
 
@@ -40,9 +45,7 @@ def _env_int(name: str, default: int, minimum: int, maximum: int) -> int:
 
 
 INFRACTION_SYNC_LOCK_KEY = "mercado_official_infraction_sync_task"
-INFRACTION_AUTO_SYNC_HOURS = _env_int(
-    "MERCADO_INFRACTION_AUTO_SYNC_HOURS", 12, 1, 168
-)
+INFRACTION_AUTO_SYNC_HOURS = AUTO_SYNC_HOURS
 INFRACTION_AUTO_RETRY_MINUTES = _env_int(
     "MERCADO_INFRACTION_AUTO_RETRY_MINUTES", 60, 5, 1440
 )
@@ -50,10 +53,10 @@ INFRACTION_AUTO_CHECK_SECONDS = _env_int(
     "MERCADO_INFRACTION_AUTO_CHECK_SECONDS", 300, 60, 3600
 )
 INFRACTION_STORE_WORKERS = _env_int(
-    "MERCADO_INFRACTION_STORE_WORKERS", 2, 1, 8
+    "MERCADO_INFRACTION_STORE_WORKERS", 8, 1, 8
 )
 INFRACTION_DETAIL_WORKERS = _env_int(
-    "MERCADO_INFRACTION_DETAIL_WORKERS", 6, 1, 12
+    "MERCADO_INFRACTION_DETAIL_WORKERS", 12, 1, 12
 )
 INFRACTION_INITIAL_DETECTION_DAYS = _env_int(
     "MERCADO_INFRACTION_INITIAL_DETECTION_DAYS", 2, 1, 30
@@ -189,9 +192,14 @@ def official_infraction_sync_status() -> dict[str, Any]:
             message="官方侵权数据正在其他进程同步",
             lock_owner=owner,
         )
+    try:
+        auto_sync = get_overview_sync_settings(OFFICIAL_INFRACTIONS_SCOPE)
+    except Exception as exc:
+        auto_sync = {"enabled": True, "settings_error": str(exc)}
     state.update(
-        auto_sync_enabled=True,
+        auto_sync_enabled=bool(auto_sync.get("enabled", True)),
         auto_sync_hours=INFRACTION_AUTO_SYNC_HOURS,
+        auto_sync_settings_updated_at=auto_sync.get("settings_updated_at", ""),
         store_workers=INFRACTION_STORE_WORKERS,
         source=(
             "Mercado Libre Moderations API + Brand Protection API "
@@ -1695,6 +1703,18 @@ def start_official_infraction_sync(
 
 
 def start_due_official_infraction_sync() -> dict[str, Any]:
+    try:
+        auto_sync = get_overview_sync_settings(OFFICIAL_INFRACTIONS_SCOPE)
+    except Exception as exc:
+        _append_log(f"读取全量更新开关失败，保持自动更新：{exc}")
+        auto_sync = {"enabled": True}
+    if not auto_sync.get("enabled", True):
+        return {
+            "started": False,
+            "disabled": True,
+            "due_token_ids": [],
+            "state": official_infraction_sync_status(),
+        }
     if get_lock_owner(INFRACTION_SYNC_LOCK_KEY):
         return {
             "started": False,

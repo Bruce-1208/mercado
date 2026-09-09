@@ -1443,6 +1443,65 @@ def test_shop_executor_closes_browser_when_auto_login_fails(monkeypatch):
     assert result["exit_reason"] == "未登录"
 
 
+def test_login_anomaly_circuit_breaker_skips_shop_before_browser_worker(monkeypatch):
+    monkeypatch.setattr(
+        bit_daily_task,
+        "get_window_anomalies",
+        lambda **_kwargs: {
+            "rows": [
+                {
+                    "window_id": "window-blocked",
+                    "window_name": "熔断店铺",
+                    "anomaly_type": bit_daily_task.LOGIN_LOGGED_OUT,
+                    "reason": "检测到登录页",
+                }
+            ]
+        },
+    )
+
+    runnable, paused = bit_daily_task._split_login_paused_shops(
+        [
+            {"name": "熔断店铺", "window_id": "window-blocked", "total": 2},
+            {"name": "正常店铺", "window_id": "window-ready", "total": 1},
+        ],
+        "侵权",
+    )
+
+    assert [shop["name"] for shop in runnable] == ["正常店铺"]
+    assert paused[0]["name"] == "熔断店铺"
+    assert paused[0]["exit_reason"] == "登录异常熔断"
+    assert paused[0]["results"][0]["status"] == "login_circuit_open"
+
+
+def test_daily_appeal_validation_stops_on_logout_without_auto_login(monkeypatch):
+    captured = {}
+
+    def fake_open_backend(*_args, **kwargs):
+        captured.update(kwargs)
+        return {
+            "ok": False,
+            "status": "logged_out",
+            "message": "已退出登录",
+        }
+
+    monkeypatch.setattr(
+        bit_daily_task.bit_appeal_ai,
+        "open_mercado_backend_page",
+        fake_open_backend,
+    )
+
+    with pytest.raises(RuntimeError, match="登录态失效"):
+        bit_daily_task.bit_appeal_ai.open_help_page_with_daily_validation(
+            object(),
+            "熔断店铺",
+            "墨西哥",
+            window_id="window-blocked",
+            stop_on_logout=True,
+        )
+
+    assert captured["max_login_retries"] == 0
+
+
 def test_shop_executor_closes_browser_before_rate_limit_retry(monkeypatch):
     close_calls = []
     appeal_results = iter(

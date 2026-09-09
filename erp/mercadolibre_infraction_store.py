@@ -13,6 +13,9 @@ from typing import Any, Callable, Iterable, Mapping
 
 INFRACTION_TABLE = "erp_mercadolibre_infractions"
 INFRACTION_SYNC_STATE_TABLE = "erp_mercadolibre_infraction_sync_state"
+PPPI_SCOPE = "pppi"
+PROHIBITED_REASON = "The product is prohibited."
+PROHIBITED_REASON_CODE = "PROHIBITED_REASON"
 
 SITE_NAMES = {
     "MLM": "墨西哥",
@@ -711,18 +714,19 @@ def _build_group_tree(account_rows: Iterable[Mapping[str, Any]]) -> list[dict[st
         store["detection_count"] += detection_count
         store["rights_holder_count"] += rights_holder_count
         store["total"] += total
-        store["site_count"] += 1
-        store["site_names"].append(site_name)
-        store["sites"].append(
-            {
-                "site_id": site_id,
-                "site_name": site_name,
-                "detection_count": detection_count,
-                "rights_holder_count": rights_holder_count,
-                "total": total,
-                "latest_infraction_at": row.get("latest_infraction_at"),
-            }
-        )
+        if site_id:
+            store["site_count"] += 1
+            store["site_names"].append(site_name)
+            store["sites"].append(
+                {
+                    "site_id": site_id,
+                    "site_name": site_name,
+                    "detection_count": detection_count,
+                    "rights_holder_count": rights_holder_count,
+                    "total": total,
+                    "latest_infraction_at": row.get("latest_infraction_at"),
+                }
+            )
         for timestamp_key in ("latest_infraction_at", "last_synced_at"):
             candidate = row.get(timestamp_key)
             if candidate and (
@@ -738,7 +742,7 @@ def _build_group_tree(account_rows: Iterable[Mapping[str, Any]]) -> list[dict[st
             target["total"] += total
             target["detection_count"] += detection_count
             target["rights_holder_count"] += rights_holder_count
-            target["site_count"] += 1
+            target["site_count"] += int(bool(site_id))
 
     result = []
     for group in groups.values():
@@ -764,6 +768,84 @@ def _build_group_tree(account_rows: Iterable[Mapping[str, Any]]) -> list[dict[st
     return result
 
 
+def _build_store_rankings(group_tree: Iterable[Mapping[str, Any]]) -> list[dict[str, Any]]:
+    """Flatten grouped dashboard data into one cross-group store ranking."""
+
+    stores = [
+        dict(store)
+        for group in group_tree or ()
+        for person in group.get("salespeople") or ()
+        for store in person.get("stores") or ()
+    ]
+    stores.sort(key=lambda item: str(item.get("store_name") or ""))
+    stores.sort(
+        key=lambda item: (
+            int(item.get("total") or 0),
+            int(item.get("rights_holder_count") or 0),
+            str(item.get("latest_infraction_at") or ""),
+        ),
+        reverse=True,
+    )
+    for rank, store in enumerate(stores, start=1):
+        store["rank"] = rank
+    return stores
+
+
+def _pppi_only_condition(alias: str = "") -> str:
+    """Exclude prohibited-list snapshots that never appear in the PPPI page."""
+
+    prefix = f"{alias}." if alias else ""
+    return (
+        f"({prefix}`source_type` = 'rights_holder' OR ("
+        f"{prefix}`source_type` = 'detection' AND NOT ("
+        f"{prefix}`reason_code` = '{PROHIBITED_REASON_CODE}' OR "
+        f"LOWER(TRIM(COALESCE({prefix}`reason`, ''))) = "
+        f"LOWER('{PROHIBITED_REASON}'))))"
+    )
+
+
+def _pppi_product_key(items_alias: str = "items", links_alias: str = "links") -> str:
+    """Return the row identity used by Global Selling's current PPPI list.
+
+    Detection events are emitted once per marketplace child listing and may be
+    repeated for the same global product.  The website groups those rows by the
+    current global SKU.  Rights-holder cases remain separate cases.
+    """
+
+    return (
+        f"CASE WHEN {items_alias}.`source_type` = 'detection' THEN "
+        f"CONCAT('detection:', COALESCE(NULLIF({links_alias}.`seller_sku`, ''), "
+        f"{items_alias}.`item_id`)) ELSE CONCAT('rights_holder:', "
+        f"{items_alias}.`source_id`) END"
+    )
+
+
+def _pppi_current_listing_condition(
+    items_alias: str = "items",
+    links_alias: str = "links",
+) -> str:
+    """Keep only detection rows belonging to a currently visible listing."""
+
+    return (
+        f"({items_alias}.`source_type` = 'rights_holder' OR ("
+        f"{items_alias}.`source_type` = 'detection' AND "
+        f"{links_alias}.`is_current` = 1 AND "
+        f"LOWER(COALESCE({links_alias}.`status`, '')) IN "
+        f"('active', 'under_review')))"
+    )
+
+
+def _dashboard_account_conditions(scope: str) -> list[str]:
+    conditions = ["tokens.`enabled` = 1"]
+    if scope != PPPI_SCOPE:
+        conditions.append(
+            "(settings.`appeal_enabled` = 1 "
+            "OR settings.`visit_stats_enabled` = 1 "
+            "OR counts.`token_id` IS NOT NULL)"
+        )
+    return conditions
+
+
 def list_infraction_dashboard(
     *,
     days: int = 30,
@@ -772,15 +854,23 @@ def list_infraction_dashboard(
     salesperson: str = "",
     source_type: str = "",
     category: str = "",
+    scope: str = "",
     search: str = "",
     detail_token_id: int | str = 0,
     page: int = 1,
     page_size: int = 100,
+    rows_only: bool | str = False,
     connection_factory: Callable[[], Any] | None = None,
 ) -> dict[str, Any]:
     days = max(1, min(int(days or 30), 3650))
     page = max(1, int(page or 1))
-    page_size = max(20, min(int(page_size or 100), 500))
+    rows_only = (
+        rows_only
+        if isinstance(rows_only, bool)
+        else str(rows_only or "").strip().lower() in {"1", "true", "yes", "on"}
+    )
+    page_size_limit = 50000 if rows_only else 500
+    page_size = max(20, min(int(page_size or 100), page_size_limit))
     cutoff = (
         datetime.now().replace(microsecond=0) - timedelta(days=days)
     ).strftime("%Y-%m-%d %H:%M:%S")
@@ -793,6 +883,10 @@ def list_infraction_dashboard(
     if source_type not in {"", "detection", "rights_holder"}:
         source_type = ""
     category = str(category or "").strip()
+    scope = str(scope or "").strip().lower()
+    if scope not in {"", PPPI_SCOPE}:
+        scope = ""
+    pppi_current = scope == PPPI_SCOPE and view_mode == "current"
     search = str(search or "").strip()
     detail_token_id = int(detail_token_id or 0)
     if detail_token_id < 0:
@@ -817,6 +911,10 @@ def list_infraction_dashboard(
     if category:
         conditions.append("items.`reason` = %s")
         values.append(category)
+    if scope == PPPI_SCOPE:
+        conditions.append(_pppi_only_condition("items"))
+        if pppi_current:
+            conditions.append(_pppi_current_listing_condition())
     if search:
         pattern = f"%{search}%"
         conditions.append(
@@ -838,20 +936,38 @@ def list_infraction_dashboard(
          AND links.`item_id` = items.`item_id`
     """
 
+    pppi_store_counts: dict[int, dict[str, Any]] = {}
     connection = (connection_factory or _connect)()
     try:
         with connection.cursor() as cursor:
             ensure_infraction_tables(cursor)
-            cursor.execute(
-                f"SELECT COUNT(*) AS `total` FROM `{INFRACTION_TABLE}` AS items "
-                f"{settings_join}{where_sql}",
-                tuple(values),
-            )
+            if pppi_current:
+                cursor.execute(
+                    f"""
+                    SELECT COUNT(*) AS `total`
+                    FROM (
+                        SELECT ROW_NUMBER() OVER (
+                            PARTITION BY items.`token_id`, {_pppi_product_key()}
+                            ORDER BY items.`occurred_at` DESC, items.`id` DESC
+                        ) AS `_pppi_rank`
+                        FROM `{INFRACTION_TABLE}` AS items
+                        {settings_join}
+                        {where_sql}
+                    ) AS ranked
+                    WHERE ranked.`_pppi_rank` = 1
+                    """,
+                    tuple(values),
+                )
+            else:
+                cursor.execute(
+                    f"SELECT COUNT(*) AS `total` FROM `{INFRACTION_TABLE}` AS items "
+                    f"{settings_join}{where_sql}",
+                    tuple(values),
+                )
             total = int((cursor.fetchone() or {}).get("total") or 0)
             pages = max(1, (total + page_size - 1) // page_size)
             page = min(page, pages)
-            cursor.execute(
-                f"""
+            row_columns = f"""
                 SELECT items.`id`, items.`token_id`, items.`store_name`, items.`seller_id`,
                        items.`site_id`, items.`source_type`, items.`source_id`, items.`item_id`,
                        items.`title`,
@@ -876,6 +992,31 @@ def list_infraction_dashboard(
                        items.`resolution_status`, items.`resolved_at`,
                        items.`first_seen_at`, items.`last_seen_at`, items.`seen_count`,
                        items.`last_checked_at`
+            """
+            if pppi_current:
+                cursor.execute(
+                    f"""
+                    SELECT *
+                    FROM (
+                        {row_columns},
+                        ROW_NUMBER() OVER (
+                            PARTITION BY items.`token_id`, {_pppi_product_key()}
+                            ORDER BY items.`occurred_at` DESC, items.`id` DESC
+                        ) AS `_pppi_rank`
+                        FROM `{INFRACTION_TABLE}` AS items
+                        {settings_join}
+                        {where_sql}
+                    ) AS ranked
+                    WHERE ranked.`_pppi_rank` = 1
+                    ORDER BY ranked.`occurred_at` DESC, ranked.`id` DESC
+                    LIMIT %s OFFSET %s
+                    """,
+                    tuple(values + [page_size, (page - 1) * page_size]),
+                )
+            else:
+                cursor.execute(
+                    f"""
+                {row_columns}
                 FROM `{INFRACTION_TABLE}` AS items
                 {settings_join}
                 {where_sql}
@@ -883,15 +1024,19 @@ def list_infraction_dashboard(
                 LIMIT %s OFFSET %s
                 """,
                 tuple(values + [page_size, (page - 1) * page_size]),
-            )
+                )
             rows = [_json_safe_row(row) for row in cursor.fetchall()]
 
-            account_conditions = [
-                "tokens.`enabled` = 1",
-                "(settings.`appeal_enabled` = 1 "
-                "OR settings.`visit_stats_enabled` = 1 "
-                "OR counts.`token_id` IS NOT NULL)",
-            ]
+            if rows_only:
+                return {
+                    "rows": rows,
+                    "total": total,
+                    "page": page,
+                    "page_size": page_size,
+                    "pages": pages,
+                }
+
+            account_conditions = _dashboard_account_conditions(scope)
             account_values: list[Any] = []
             if group_name:
                 account_conditions.append(
@@ -917,8 +1062,19 @@ def list_infraction_dashboard(
             if category:
                 aggregate_conditions.append("`reason` = %s")
                 aggregate_values.append(category)
+            if scope == PPPI_SCOPE:
+                aggregate_conditions.append(_pppi_only_condition())
             aggregate_where = (
                 " AND ".join(aggregate_conditions) if aggregate_conditions else "1 = 1"
+            )
+            settings_account_join = (
+                "LEFT JOIN" if scope == PPPI_SCOPE else "INNER JOIN"
+            )
+            counts_site_join = (
+                "(counts.`site_id` = settings.`site_id` "
+                "OR settings.`site_id` IS NULL)"
+                if scope == PPPI_SCOPE
+                else "counts.`site_id` = settings.`site_id`"
             )
             cursor.execute(
                 f"""
@@ -931,7 +1087,7 @@ def list_infraction_dashboard(
                        counts.`latest_infraction_at`, state.`last_completed_at` AS `last_synced_at`,
                        state.`last_status`, state.`last_error`
                 FROM `mercado_store_tokens` AS tokens
-                INNER JOIN `mercado_store_site_settings` AS settings
+                {settings_account_join} `mercado_store_site_settings` AS settings
                   ON settings.`token_id` = tokens.`id`
                 LEFT JOIN (
                     SELECT `token_id`, `site_id`,
@@ -944,7 +1100,7 @@ def list_infraction_dashboard(
                     WHERE {aggregate_where}
                     GROUP BY `token_id`, `site_id`
                 ) AS counts ON counts.`token_id` = tokens.`id`
-                           AND counts.`site_id` = settings.`site_id`
+                           AND {counts_site_join}
                 LEFT JOIN `{INFRACTION_SYNC_STATE_TABLE}` AS state
                   ON state.`token_id` = tokens.`id`
                 {account_where}
@@ -953,6 +1109,33 @@ def list_infraction_dashboard(
                 tuple(aggregate_values + account_values),
             )
             account_rows = [_json_safe_row(row) for row in cursor.fetchall()]
+
+            if pppi_current:
+                cursor.execute(
+                    f"""
+                    SELECT ranked.`token_id`,
+                           SUM(ranked.`source_type` = 'detection') AS `detection_count`,
+                           SUM(ranked.`source_type` = 'rights_holder') AS `rights_holder_count`,
+                           MAX(ranked.`occurred_at`) AS `latest_infraction_at`
+                    FROM (
+                        SELECT items.`token_id`, items.`source_type`, items.`occurred_at`,
+                               ROW_NUMBER() OVER (
+                                   PARTITION BY items.`token_id`, {_pppi_product_key()}
+                                   ORDER BY items.`occurred_at` DESC, items.`id` DESC
+                               ) AS `_pppi_rank`
+                        FROM `{INFRACTION_TABLE}` AS items
+                        {settings_join}
+                        {where_sql}
+                    ) AS ranked
+                    WHERE ranked.`_pppi_rank` = 1
+                    GROUP BY ranked.`token_id`
+                    """,
+                    tuple(values),
+                )
+                pppi_store_counts = {
+                    int(row.get("token_id") or 0): _json_safe_row(row)
+                    for row in cursor.fetchall()
+                }
 
             cursor.execute(
                 """
@@ -970,22 +1153,46 @@ def list_infraction_dashboard(
                 """
             )
             salespeople = [str(row.get("value") or "") for row in cursor.fetchall()]
-            category_conditions = ["COALESCE(`reason`, '') <> ''"]
+            category_alias = "category_items" if pppi_current else ""
+            category_prefix = f"{category_alias}." if category_alias else ""
+            category_conditions = [f"COALESCE({category_prefix}`reason`, '') <> ''"]
             category_values: list[Any] = []
             if view_mode == "current":
                 category_conditions.extend(
-                    ["`occurred_at` >= %s", "`is_current` = 1"]
+                    [
+                        f"{category_prefix}`occurred_at` >= %s",
+                        f"{category_prefix}`is_current` = 1",
+                    ]
                 )
                 category_values.append(cutoff)
             if source_type:
-                category_conditions.append("`source_type` = %s")
+                category_conditions.append(f"{category_prefix}`source_type` = %s")
                 category_values.append(source_type)
+            if scope == PPPI_SCOPE:
+                category_conditions.append(_pppi_only_condition(category_alias))
+                if pppi_current:
+                    category_conditions.append(
+                        _pppi_current_listing_condition(
+                            "category_items", "category_links"
+                        )
+                    )
+            category_count = (
+                f"COUNT(DISTINCT {_pppi_product_key('category_items', 'category_links')})"
+                if pppi_current
+                else "COUNT(*)"
+            )
+            category_from = f"`{INFRACTION_TABLE}`"
+            if pppi_current:
+                category_from = f"""`{INFRACTION_TABLE}` AS category_items
+                    LEFT JOIN `erp_mercadolibre_store_links` AS category_links
+                      ON category_links.`token_id` = category_items.`token_id`
+                     AND category_links.`item_id` = category_items.`item_id`"""
             cursor.execute(
                 f"""
-                SELECT `reason` AS `value`, COUNT(*) AS `count`
-                FROM `{INFRACTION_TABLE}`
+                SELECT {category_prefix}`reason` AS `value`, {category_count} AS `count`
+                FROM {category_from}
                 WHERE {" AND ".join(category_conditions)}
-                GROUP BY `reason`
+                GROUP BY {category_prefix}`reason`
                 ORDER BY `count` DESC, `value`
                 LIMIT 200
                 """,
@@ -1010,6 +1217,29 @@ def list_infraction_dashboard(
             sync_summary = _json_safe_row(cursor.fetchone() or {})
 
         tree = _build_group_tree(account_rows)
+        store_rankings = _build_store_rankings(tree)
+        if pppi_current:
+            for store in store_rankings:
+                counts = pppi_store_counts.get(int(store.get("token_id") or 0), {})
+                store["detection_count"] = int(counts.get("detection_count") or 0)
+                store["rights_holder_count"] = int(
+                    counts.get("rights_holder_count") or 0
+                )
+                store["total"] = (
+                    store["detection_count"] + store["rights_holder_count"]
+                )
+                store["latest_infraction_at"] = counts.get("latest_infraction_at")
+            store_rankings.sort(key=lambda item: str(item.get("store_name") or ""))
+            store_rankings.sort(
+                key=lambda item: (
+                    int(item.get("total") or 0),
+                    int(item.get("rights_holder_count") or 0),
+                    str(item.get("latest_infraction_at") or ""),
+                ),
+                reverse=True,
+            )
+            for rank, store in enumerate(store_rankings, start=1):
+                store["rank"] = rank
         if any(group.get("group_name") == "未分组" for group in tree):
             groups = ["未分组", *[value for value in groups if value != "未分组"]]
         if any(
@@ -1037,9 +1267,21 @@ def list_infraction_dashboard(
             ),
             **sync_summary,
         }
+        if pppi_current:
+            summary["detection_count"] = sum(
+                int(row.get("detection_count") or 0) for row in pppi_store_counts.values()
+            )
+            summary["rights_holder_count"] = sum(
+                int(row.get("rights_holder_count") or 0)
+                for row in pppi_store_counts.values()
+            )
+            summary["total"] = (
+                summary["detection_count"] + summary["rights_holder_count"]
+            )
         return {
             "summary": summary,
             "account_groups": tree,
+            "store_rankings": store_rankings,
             "rows": rows,
             "filters": {
                 "days": days,
@@ -1048,6 +1290,7 @@ def list_infraction_dashboard(
                 "salesperson": salesperson,
                 "source_type": source_type,
                 "category": category,
+                "scope": scope,
                 "search": search,
                 "detail_token_id": detail_token_id,
                 "groups": groups,

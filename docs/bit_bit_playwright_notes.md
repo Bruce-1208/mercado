@@ -50,7 +50,7 @@ flowchart LR
 | `bit_print.py` | 订单/打印相关操作。 | `print_orders`, `print_orders_all` | 独立业务脚本。 |
 | `bit_update_orders.py` | 订单数据更新入库。 | `update_order_mysql` | 直连 MySQL 更新订单。 |
 | `bit_switch_country.py` | 国家/站点切换辅助。 | `force_select_country`, `oepn_country_switch` | 旧版或局部复用的站点切换实现。 |
-| `bit_clash.py` | Clash 代理节点控制。 | `switch_random_hongkong_node`, `get_public_ip` | 用于代理/IP 切换。 |
+| `bit_clash.py` | Clash 代理节点诊断工具。 | `switch_random_hongkong_node`, `get_public_ip` | 仅保留人工调试；Mercado 自动任务限频时保持当前出口，不再切换全局节点。 |
 | `bit_utils.py` | 通用工具函数。 | `get_bit_path`, `get_now_time`, `getWindowidByName` | 多数脚本依赖这里定位配置和格式化时间。 |
 | `bit_playwright.py` | 简单 Playwright 打开页面测试入口。 | `run`, `main` | 和 `bit_playwright/` 目录不同，属于 `bit` 内的独立测试脚本。 |
 | `bit_selenium.py` | Selenium 连接测试/预留。 | 无主要业务函数 | 当前业务不应优先依赖。 |

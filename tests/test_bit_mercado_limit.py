@@ -63,7 +63,7 @@ def test_backend_status_detects_logged_out_before_rate_limit():
     ) == "rate_limited"
 
 
-def test_limit_processor_only_switches_for_designated_spanish_page():
+def test_limit_processor_never_switches_and_retries_on_same_egress():
     switches = []
     sleeps = []
 
@@ -90,8 +90,12 @@ def test_limit_processor_only_switches_for_designated_spanish_page():
     assert designated_error["rate_limited"] is True
     assert designated_error["retry"] is True
     assert designated_error["retry_count"] == 1
-    assert switches == ["switched"]
+    assert switches == []
     assert sleeps == [7]
+    assert designated_error["node_switch_result"] == {
+        "switched": False,
+        "reason": "automatic_node_switch_disabled",
+    }
 
 
 def test_limit_processor_does_not_switch_after_retry_budget_is_exhausted():

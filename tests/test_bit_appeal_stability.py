@@ -26,6 +26,83 @@ def snapshot(*messages, epoch="one", busy=False):
             "messages": [{"role": role, "id": key, "text": text} for role, key, text in messages]}
 
 
+def test_legacy_ai_shop_loop_stops_immediately_when_login_circuit_opens(monkeypatch):
+    calls = []
+    monkeypatch.setattr(
+        ai,
+        "shensu",
+        lambda *args, **kwargs: calls.append((args, kwargs))
+        or {"execution_status": "login_required"},
+    )
+    monkeypatch.setattr(
+        ai.time,
+        "sleep",
+        lambda _seconds: pytest.fail("login circuit must not sleep and retry"),
+    )
+
+    ai.use_one_browser_run_task(("熔断店铺", "MX", "侵权", ""))
+
+    assert len(calls) == 1
+    assert calls[0][1]["validate_open"] is True
+
+
+def test_legacy_human_shop_loop_stops_without_waiting_for_next_round(monkeypatch):
+    from bit import bit_appeal
+
+    calls = []
+    monkeypatch.setattr(
+        bit_appeal,
+        "shensu",
+        lambda *args, **kwargs: calls.append((args, kwargs)) or "Mercado 登录态失效",
+    )
+    monkeypatch.setattr(bit_appeal, "getWindowidByName", lambda _name: "window-1")
+    monkeypatch.setattr(bit_appeal, "closeBrowser", lambda _window_id: {"success": True})
+    monkeypatch.setattr(
+        bit_appeal.time,
+        "sleep",
+        lambda _seconds: pytest.fail("login circuit must not sleep and retry"),
+    )
+
+    bit_appeal.use_one_browser_run_task(("熔断店铺", "MX", "侵权", ""))
+
+    assert len(calls) == 1
+
+
+def test_yuema_continuous_loop_does_not_reconnect_after_logged_out(monkeypatch):
+    from bit import yuema_ai_stable_loop as stable_loop
+
+    events = []
+    args = SimpleNamespace(
+        window="熔断店铺",
+        cdp="http://127.0.0.1:60012",
+        start=1,
+        rounds=1,
+        continuous=True,
+        delay=0,
+        round_delay=0,
+        retry_delay=30,
+        max_groups=0,
+    )
+    monkeypatch.setattr(stable_loop.argparse.ArgumentParser, "parse_args", lambda _self: args)
+    monkeypatch.setattr(stable_loop, "log", events.append)
+    monkeypatch.setattr(
+        stable_loop,
+        "run_once",
+        lambda *args, **kwargs: (_ for _ in ()).throw(
+            stable_loop.MercadoLoginCircuitOpen("已退出登录")
+        ),
+    )
+    monkeypatch.setattr(
+        stable_loop.time,
+        "sleep",
+        lambda _seconds: pytest.fail("continuous mode must not reconnect after logout"),
+    )
+
+    stable_loop.main()
+
+    assert any("LOGIN CIRCUIT OPEN" in event for event in events)
+
+
 def test_duplicate_text_with_new_message_id_survives_virtual_list_truncation():
     before = snapshot(("assistant", "old", "请确认站点"))
     after = snapshot(("assistant", "new", "请确认站点"))

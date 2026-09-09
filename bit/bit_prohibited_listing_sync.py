@@ -22,13 +22,16 @@ from erp.mercadolibre_prohibited_store import (
     request_prohibited_sync,
 )
 from mercado_api.client import MercadoAPIError, MercadoLibreClient
+from erp.mercadolibre_overview_sync_settings import (
+    AUTO_SYNC_HOURS,
+    PROHIBITED_LISTINGS_SCOPE,
+    get_overview_sync_settings,
+)
 
 
 PROHIBITED_REASON = "The product is prohibited."
 PROHIBITED_SYNC_LOCK_KEY = "mercado_prohibited_listing_sync_task"
-PROHIBITED_AUTO_SYNC_HOURS = max(
-    1, int(os.getenv("MERCADO_PROHIBITED_AUTO_SYNC_HOURS", "12"))
-)
+PROHIBITED_AUTO_SYNC_HOURS = AUTO_SYNC_HOURS
 PROHIBITED_AUTO_RETRY_MINUTES = max(
     1, int(os.getenv("MERCADO_PROHIBITED_AUTO_RETRY_MINUTES", "60"))
 )
@@ -36,10 +39,10 @@ PROHIBITED_AUTO_CHECK_SECONDS = max(
     60, int(os.getenv("MERCADO_PROHIBITED_AUTO_CHECK_SECONDS", "300"))
 )
 PROHIBITED_STORE_WORKERS = max(
-    1, int(os.getenv("MERCADO_PROHIBITED_STORE_WORKERS", "2"))
+    1, min(8, int(os.getenv("MERCADO_PROHIBITED_STORE_WORKERS", "8")))
 )
 PROHIBITED_DETAIL_WORKERS = max(
-    1, int(os.getenv("MERCADO_PROHIBITED_DETAIL_WORKERS", "6"))
+    1, min(12, int(os.getenv("MERCADO_PROHIBITED_DETAIL_WORKERS", "12")))
 )
 PROHIBITED_PAGE_SIZE = 20
 PROHIBITED_DETAIL_ATTRIBUTES = (
@@ -119,9 +122,14 @@ def prohibited_listing_sync_status() -> dict[str, Any]:
             message="禁限售列表正在其他进程同步",
             lock_owner=owner,
         )
+    try:
+        auto_sync = get_overview_sync_settings(PROHIBITED_LISTINGS_SCOPE)
+    except Exception as exc:
+        auto_sync = {"enabled": True, "settings_error": str(exc)}
     state.update(
-        auto_sync_enabled=True,
+        auto_sync_enabled=bool(auto_sync.get("enabled", True)),
         auto_sync_hours=PROHIBITED_AUTO_SYNC_HOURS,
+        auto_sync_settings_updated_at=auto_sync.get("settings_updated_at", ""),
         store_workers=PROHIBITED_STORE_WORKERS,
         detail_workers_per_store=PROHIBITED_DETAIL_WORKERS,
         target_reason=PROHIBITED_REASON,
@@ -627,6 +635,18 @@ def start_prohibited_listing_sync(
 
 
 def start_due_prohibited_listing_sync() -> dict[str, Any]:
+    try:
+        auto_sync = get_overview_sync_settings(PROHIBITED_LISTINGS_SCOPE)
+    except Exception as exc:
+        _append_log(f"读取全量更新开关失败，保持自动更新：{exc}")
+        auto_sync = {"enabled": True}
+    if not auto_sync.get("enabled", True):
+        return {
+            "started": False,
+            "disabled": True,
+            "due_token_ids": [],
+            "state": prohibited_listing_sync_status(),
+        }
     if get_lock_owner(PROHIBITED_SYNC_LOCK_KEY):
         return {
             "started": False,

@@ -9,6 +9,53 @@ def test_ai_customer_service_uses_extended_wait_limits():
     assert bit_appeal_ai.AI_AGENT_REPLY_TIMEOUT_SECONDS >= 300
 
 
+def test_ai_script_mode_groups_three_products_and_records_generated_copy(monkeypatch):
+    generated_groups = []
+    sent_messages = []
+    saved_records = []
+    monkeypatch.setattr(bit_appeal_ai, "open_ai_contact_window", lambda *args: None)
+    monkeypatch.setattr(bit_appeal_ai, "get_appeal_log_records", lambda: [])
+    monkeypatch.setattr(bit_appeal_ai, "_appeal_pause", lambda *args: None)
+
+    def generate(appeal_type, product_ids, api_key):
+        generated_groups.append((appeal_type, list(product_ids), api_key))
+        return {
+            "message": "产品编号：" + "、".join(product_ids) + "\n请按实际用途人工复核。",
+            "products": [{"product_id": product_id} for product_id in product_ids],
+        }
+
+    monkeypatch.setattr(bit_appeal_ai, "generate_ai_appeal_copy", generate)
+    monkeypatch.setattr(
+        bit_appeal_ai,
+        "send_infraction_message_with_retry",
+        lambda driver, message, *args, **kwargs: sent_messages.append(message),
+    )
+    monkeypatch.setattr(
+        bit_appeal_ai,
+        "save_ai_appeal_group_record",
+        lambda *args, **kwargs: saved_records.append((args, kwargs)),
+    )
+
+    bit_appeal_ai.handle_infraction(
+        "window-id",
+        object(),
+        "测试店铺",
+        "墨西哥",
+        "",
+        "Bruce",
+        infraction_ids=["MLM1", "MLM2", "MLM3", "MLM4"],
+        ai_script_mode=True,
+        deepseek_api_key="manual-secret",
+    )
+
+    assert [group[1] for group in generated_groups] == [
+        ["MLM1", "MLM2", "MLM3"],
+        ["MLM4"],
+    ]
+    assert len(sent_messages) == 2
+    assert [record[0][6] for record in saved_records] == sent_messages
+
+
 class FakeMessageElement:
     def __init__(self, text, displayed=True):
         self.text = text

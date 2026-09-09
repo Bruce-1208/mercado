@@ -22,7 +22,7 @@ from bit.bit_utils import get_latest_modified_file, get_bit_path, parser_delay_d
 from bit.bit_api import *
 from bit.bit_config import get_window_id_by_shop_name
 from bit.bit_mercado_limit import is_mercado_rate_limited_page
-from bit.bit_mercado_login import open_mercado_backend_page
+from bit.bit_mercado_login import is_login_blocking_result, open_mercado_backend_page
 from bit.bit_appeal_phrases import render_appeal_phrase, select_appeal_phrase
 from bit.bit_reputation_info import get_cancellation_orders
 import pandas as pd
@@ -180,6 +180,7 @@ def open_human_service_hub_with_ip_retry(
         name,
         window_id,
         settle_seconds=3,
+        # 参数名保留用于兼容旧调用；核心限频处理已禁止换节点。
         max_rate_limit_retries=max_hongkong_switches,
         rate_limit_retry_wait_seconds=0,
         navigate=lambda url: fast_navigate(driver, url, stop_after=3),
@@ -625,8 +626,15 @@ def use_one_browser_run_task(info):
             while True:
                 print("ip检测通过，打开店铺平台主页")
 
+                login_circuit_open = False
                 try:
-                    shensu(name, site, form, message,"人工客服")
+                    result = shensu(name, site, form, message,"人工客服")
+                    if is_login_blocking_result(result):
+                        login_circuit_open = True
+                        print(
+                            f"{get_now_time()} {name}{site} 登录异常熔断已打开，"
+                            "停止该店铺循环，等待人工登录复检<br>"
+                        )
                 except Exception as e:
                     traceback.print_exc()
                     print("申诉执行异常", e)
@@ -635,8 +643,12 @@ def use_one_browser_run_task(info):
                     try:
                         closeBrowser(window_id)
                     except Exception as e:
-                        continue
-                    time.sleep(1800)
+                        if not login_circuit_open:
+                            continue
+                    if not login_circuit_open:
+                        time.sleep(1800)
+                if login_circuit_open:
+                    break
 
         else:
             print("ip检测不通过，请检查")

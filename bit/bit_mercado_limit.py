@@ -1,4 +1,4 @@
-"""Mercado 后台限频识别与节点切换的唯一入口。
+"""Mercado 后台限频识别与同出口退避的唯一入口。
 
 只有页面出现 Mercado 指定的西班牙语错误文案时才视为限频。
 HTTP 429、``Too Many Requests``、``Access denied`` 等其他文案都不在
@@ -9,7 +9,6 @@ import re
 import time
 import unicodedata
 
-from bit.bit_clash import switch_random_hongkong_node
 from bit.bit_utils import get_now_time
 
 
@@ -193,7 +192,8 @@ def process_mercado_rate_limit(
     """检测并处理一次 Mercado 限频。
 
     返回值中 ``retry`` 表示调用方应重新打开页面；``exhausted``
-    表示已用完允许的节点切换次数。非指定西语页不切换 IP。
+    表示已用完允许的同出口退避次数。为保持账户登录环境稳定，
+    即使调用方传入旧版 ``switcher`` 回调也绝不自动切换 IP。
     """
     retry_count = max(0, int(retry_count))
     max_retries = max(0, int(max_retries))
@@ -218,26 +218,19 @@ def process_mercado_rate_limit(
     label = " ".join(
         part for part in (str(name or "").strip(), str(site or "").strip()) if part
     )
+    # 保留旧参数仅为了不破坏外部调用签名。过去这里会切换全局
+    # Clash 节点，导致所有 noproxy 窗口的公网 IP、时区和位置一起变化。
+    # 现在限频只在原网络出口上等待后重试。
+    del switcher, after_switch
     print(
         f"{get_now_time()} {label} 检测到指定西语限频页，"
-        "正在切换香港节点".strip(),
+        "保持当前网络出口并退避等待".strip(),
         flush=True,
     )
-    switcher = switch_random_hongkong_node if switcher is None else switcher
-    try:
-        node_switch_result = switcher() or {}
-    except Exception as exc:
-        node_switch_result = {
-            "switched": False,
-            "reason": "exception",
-            "error": str(exc),
-        }
-    if after_switch is not None:
-        try:
-            after_switch()
-        except Exception as exc:
-            node_switch_result = dict(node_switch_result)
-            node_switch_result["after_switch_error"] = str(exc)
+    node_switch_result = {
+        "switched": False,
+        "reason": "automatic_node_switch_disabled",
+    }
 
     next_retry_count = retry_count + 1
     wait_seconds = max(0, float(retry_wait_seconds))

@@ -28,6 +28,7 @@ from flask import Flask, Response, request, render_template, jsonify, send_file,
 from itsdangerous import BadSignature, SignatureExpired, URLSafeTimedSerializer
 from openpyxl import Workbook
 from openpyxl.styles import Alignment, Font, PatternFill
+from openpyxl.utils import get_column_letter
 
 CURRENT_DIR = Path(__file__).resolve().parent
 PROJECT_ROOT = CURRENT_DIR.parent
@@ -1895,6 +1896,14 @@ def _required_workbench_permissions(path, method):
             if path == "/api/official-infractions/sync" and method == "POST"
             else ("infractions.view",)
         )
+    if path.startswith("/api/official-ip-rights/"):
+        return ("infractions.view",)
+    if path.startswith("/api/overview-auto-sync"):
+        return (
+            ("infractions.execute",)
+            if method in {"POST", "PUT", "PATCH", "DELETE"}
+            else ("infractions.view",)
+        )
     if path.startswith("/api/reputation/"):
         return (
             ("reputation.execute",)
@@ -2196,6 +2205,9 @@ _mercado_collection_state = {
     "source_site_id": "MLM",
     "source_site_name": "墨西哥",
     "collection_scope": "all",
+    "browser_type": "bitbrowser",
+    "window_id": "",
+    "window_name": "采集专用（墨西哥）",
     "requested_count": 0,
     "worker_count": 4,
     "candidate_count": 0,
@@ -2212,6 +2224,9 @@ _mercado_playwright_setup_state = {
     "running": False,
     "status": "idle",
     "message": "采集浏览器尚未打开",
+    "browser_type": "bitbrowser",
+    "window_id": "",
+    "window_name": "采集专用（墨西哥）",
 }
 _mercado_profit_refresh_lock = threading.Lock()
 _mercado_profit_refresh_started = False
@@ -2314,7 +2329,7 @@ _daily_task_state = {
 }
 _daily_tasks = {}
 _daily_task_controls = {}
-DAILY_TASK_HISTORY_LIMIT = 50
+DEFAULT_DAILY_TASK_LOG_RETENTION_DAYS = 3
 DEFAULT_DAILY_TASK_MAX_CONCURRENT = 8
 
 
@@ -2331,6 +2346,29 @@ def _daily_task_max_concurrent():
         )
     except (TypeError, ValueError):
         return DEFAULT_DAILY_TASK_MAX_CONCURRENT
+
+
+def _daily_task_log_retention_days():
+    try:
+        return max(
+            1,
+            int(
+                os.environ.get(
+                    "BIT_DAILY_TASK_LOG_RETENTION_DAYS",
+                    DEFAULT_DAILY_TASK_LOG_RETENTION_DAYS,
+                )
+            ),
+        )
+    except (TypeError, ValueError):
+        return DEFAULT_DAILY_TASK_LOG_RETENTION_DAYS
+
+
+def _daily_task_history_file():
+    configured = str(os.environ.get("BIT_DAILY_TASK_HISTORY_PATH") or "").strip()
+    if configured:
+        return Path(configured)
+    base_path = Path(_daily_task_log_path)
+    return base_path.with_name(f"{base_path.stem}_history.json")
 
 
 def _daily_task_log_file(task_id=""):
@@ -2431,26 +2469,115 @@ def _update_daily_task_state(task_id, **updates):
         state.update(updates)
         if str(_daily_task_state.get("task_id") or "") == task_id:
             _daily_task_state.update(updates)
-        return dict(state)
+        snapshot = dict(state)
+    _persist_daily_task_history()
+    return snapshot
 
 
-def _prune_daily_task_history():
-    """只裁剪已结束的旧记录，运行中的任务绝不移除。"""
+def _daily_task_history_timestamp(state, log_path=None):
+    for key in ("finished_at", "started_at"):
+        value = str((state or {}).get(key) or "").strip()
+        if not value:
+            continue
+        try:
+            return datetime.strptime(value, "%Y-%m-%d %H:%M:%S").timestamp()
+        except ValueError:
+            pass
+    try:
+        return Path(log_path).stat().st_mtime if log_path else None
+    except OSError:
+        return None
+
+
+def _persist_daily_task_history():
+    """Persist task summaries so retained logs remain discoverable after restart."""
+    history_path = _daily_task_history_file()
+    with _daily_task_lock:
+        states = []
+        for state in _daily_tasks.values():
+            task_id = str(state.get("task_id") or "").strip()
+            log_path = state.get("log_path")
+            if not task_id or Path(log_path or "") != _daily_task_log_file(task_id):
+                continue
+            persisted = dict(state)
+            persisted.pop("log", None)
+            states.append(persisted)
+        if not states:
+            try:
+                history_path.unlink(missing_ok=True)
+            except OSError:
+                logging.exception("清理空的 daily_task 日志索引失败")
+            return
+        payload = {
+            "version": 1,
+            "retention_days": _daily_task_log_retention_days(),
+            "tasks": states,
+        }
+        try:
+            history_path.parent.mkdir(parents=True, exist_ok=True)
+            temporary_path = history_path.with_name(f"{history_path.name}.tmp")
+            temporary_path.write_text(
+                json.dumps(payload, ensure_ascii=False, indent=2, default=str),
+                encoding="utf-8",
+            )
+            os.replace(temporary_path, history_path)
+        except OSError:
+            logging.exception("保存 daily_task 日志索引失败")
+
+
+def _restore_daily_task_history():
+    history_path = _daily_task_history_file()
+    try:
+        payload = json.loads(history_path.read_text(encoding="utf-8"))
+    except (OSError, TypeError, ValueError):
+        return
+    if not isinstance(payload, dict):
+        return
+    restored_at = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    changed = False
+    with _daily_task_lock:
+        for saved_state in payload.get("tasks") or ():
+            if not isinstance(saved_state, dict):
+                continue
+            task_id = str(saved_state.get("task_id") or "").strip()
+            if not task_id or task_id in _daily_tasks:
+                continue
+            state = dict(saved_state)
+            # 日志路径由任务编号重新计算，不信任磁盘索引中的任意路径。
+            state["log_path"] = str(_daily_task_log_file(task_id))
+            if state.get("running"):
+                state.update({
+                    "running": False,
+                    "status": "error",
+                    "message": "服务进程已重启，任务运行状态已中断",
+                    "finished_at": state.get("finished_at") or restored_at,
+                    "can_stop": False,
+                })
+                changed = True
+            _daily_tasks[task_id] = state
+    if changed:
+        _persist_daily_task_history()
+
+
+def _prune_daily_task_history(now=None):
+    """保留三天内的已结束任务及日志；运行中的任务绝不移除。"""
+    now = time.time() if now is None else float(now)
+    cutoff = now - (_daily_task_log_retention_days() * 24 * 60 * 60)
     removed = []
     with _daily_task_lock:
-        if len(_daily_tasks) <= DAILY_TASK_HISTORY_LIMIT:
-            return
         for task_id in list(_daily_tasks):
-            if len(_daily_tasks) <= DAILY_TASK_HISTORY_LIMIT:
-                break
-            if not _daily_tasks[task_id].get("running"):
-                state = _daily_tasks.pop(task_id, None) or {}
-                control = _daily_task_controls.pop(task_id, None) or {}
-                removed.append((state.get("log_path"), control.get("stop_manager")))
+            state = _daily_tasks[task_id]
+            log_path = state.get("log_path")
+            timestamp = _daily_task_history_timestamp(state, log_path)
+            if state.get("running") or timestamp is None or timestamp >= cutoff:
+                continue
+            state = _daily_tasks.pop(task_id, None) or {}
+            control = _daily_task_controls.pop(task_id, None) or {}
+            removed.append((task_id, state.get("log_path"), control.get("stop_manager")))
 
     # 文件删除和 Manager 关闭都可能阻塞，不能占着状态锁执行。
     base_log_path = Path(_daily_task_log_path)
-    for log_path, stop_manager in removed:
+    for task_id, log_path, stop_manager in removed:
         if stop_manager is not None:
             try:
                 stop_manager.shutdown()
@@ -2458,10 +2585,28 @@ def _prune_daily_task_history():
                 pass
         try:
             target_path = Path(log_path) if log_path else None
-            if target_path and target_path != base_log_path:
+            expected_path = _daily_task_log_file(task_id)
+            if target_path == expected_path and target_path != base_log_path:
                 target_path.unlink(missing_ok=True)
         except OSError:
             pass
+
+    # 清理索引之外遗留的过期独立日志（例如旧版本或异常重启产生的文件）。
+    orphan_removed = False
+    try:
+        suffix = base_log_path.suffix or ".log"
+        pattern = f"{base_log_path.stem}_*{suffix}"
+        for target_path in base_log_path.parent.glob(pattern):
+            try:
+                if target_path.stat().st_mtime < cutoff:
+                    target_path.unlink(missing_ok=True)
+                    orphan_removed = True
+            except OSError:
+                pass
+    except OSError:
+        pass
+    if removed or orphan_removed:
+        _persist_daily_task_history()
 
 
 def _daily_task_snapshot(task_id, include_log=True):
@@ -2530,6 +2675,10 @@ def _daily_tasks_snapshot():
         result["running_count"] = sum(1 for task in tasks if task.get("running"))
         result["total_count"] = len(tasks)
     return result
+
+
+_restore_daily_task_history()
+_prune_daily_task_history()
 
 
 def _resolve_daily_task_id_for_stop(requested_task_id=""):
@@ -2609,6 +2758,7 @@ MERCADO_AUTH_SITE_NAMES = {
     "UY": "乌拉圭",
 }
 APPEAL_FORMS = ("延误", "侵权", "禁限售", "取消率", "投诉")
+APPEAL_MODES = ("AI客服", "AI话术模式", "人工客服")
 APPEAL_LOOP_COUNTS = (10, 20, 50)
 DEFAULT_APPEAL_LOOP_COUNT = 10
 PERMANENT_APPEAL_LOOP_COUNT = 0
@@ -3731,12 +3881,20 @@ def build_zying_collection_params(data):
     # browser_type/window_name 是工作台的新参数；未提交时维持旧接口返回结构，
     # 兼容仍按 BitBrowser 窗口 ID 调用的脚本和客户端。
     if "browser_type" in data or "window_name" in data:
+        browser_type = bit_zying_caiji.normalize_zying_browser_type(
+            data.get("browser_type")
+        )
         params.update(
             {
-                "browser_type": bit_zying_caiji.normalize_zying_browser_type(
-                    data.get("browser_type")
+                "browser_type": browser_type,
+                "window_name": (
+                    str(
+                        data.get("window_name")
+                        or bit_zying_caiji.DEFAULT_ZYING_WINDOW_NAME
+                    ).strip()[:256]
+                    if browser_type == "bitbrowser"
+                    else ""
                 ),
-                "window_name": str(data.get("window_name") or "").strip()[:256],
             }
         )
     return params
@@ -3745,12 +3903,20 @@ def build_zying_collection_params(data):
 def build_zying_login_params(data):
     data = data if isinstance(data, dict) else {}
     window_id = str(data.get("window_id") or "").strip()[:128]
+    browser_type = bit_zying_caiji.normalize_zying_browser_type(
+        data.get("browser_type")
+    )
     return {
-        "browser_type": bit_zying_caiji.normalize_zying_browser_type(
-            data.get("browser_type")
-        ),
+        "browser_type": browser_type,
         "window_id": window_id or bit_zying_caiji.DEFAULT_ZYING_WINDOW_ID,
-        "window_name": str(data.get("window_name") or "").strip()[:256],
+        "window_name": (
+            str(
+                data.get("window_name")
+                or bit_zying_caiji.DEFAULT_ZYING_WINDOW_NAME
+            ).strip()[:256]
+            if browser_type == "bitbrowser"
+            else ""
+        ),
     }
 
 
@@ -4849,6 +5015,13 @@ def resolve_appeal_forms(forms):
     )
 
 
+def normalize_appeal_mode(value):
+    mode = str(value or "人工客服").strip()
+    if mode not in APPEAL_MODES:
+        raise ValueError("客服模式只支持：" + "、".join(APPEAL_MODES))
+    return mode
+
+
 def normalize_appeal_loop_count(value):
     """返回申诉轮数；0 表示永久循环，其他值只允许 10、20、50。"""
     text = str(value if value is not None else DEFAULT_APPEAL_LOOP_COUNT).strip()
@@ -4865,7 +5038,7 @@ def normalize_appeal_loop_count(value):
 
 def get_appeal_round_interval(mode):
     """AI 客服每轮间隔 1 分钟，人工客服每轮间隔 10 分钟。"""
-    if mode == "AI客服":
+    if mode in {"AI客服", "AI话术模式"}:
         return AI_APPEAL_ROUND_INTERVAL_SECONDS
     return MANUAL_APPEAL_ROUND_INTERVAL_SECONDS
 
@@ -4917,9 +5090,13 @@ def shensu_logic(
     mode,
     loop_count=DEFAULT_APPEAL_LOOP_COUNT,
     stop_event=None,
+    deepseek_api_key="",
 ):
+    mode = normalize_appeal_mode(mode)
     target_sites = resolve_appeal_sites(sites)
     target_forms = resolve_appeal_forms(form)
+    if mode == "AI话术模式" and not str(deepseek_api_key or "").strip():
+        raise ValueError("AI话术模式必须手动填写 DeepSeek Token")
     round_limit = normalize_appeal_loop_count(loop_count)
     multiple_tasks_selected = len(target_sites) > 1 or len(target_forms) > 1
     round_interval_seconds = get_appeal_round_interval(mode)
@@ -4982,11 +5159,21 @@ def shensu_logic(
                                 f"{task_result['value']}，本轮已跳过"
                             )
                             return
-                        if mode == "AI客服":
+                        if mode in {"AI客服", "AI话术模式"}:
                             with bit_appeal_ai.appeal_controls(stop_event):
-                                task_result["value"] = bit_appeal_ai.shensu(
-                                    name, run_site, run_form, message
-                                )
+                                if mode == "AI话术模式":
+                                    task_result["value"] = bit_appeal_ai.shensu(
+                                        name,
+                                        run_site,
+                                        run_form,
+                                        message,
+                                        ai_script_mode=True,
+                                        deepseek_api_key=deepseek_api_key,
+                                    )
+                                else:
+                                    task_result["value"] = bit_appeal_ai.shensu(
+                                        name, run_site, run_form, message
+                                    )
                         else:
                             task_result["value"] = shensu(
                                 name, run_site, run_form, message, "人工客服"
@@ -5066,13 +5253,15 @@ def shensu_logic(
             return
 
 
-@app.route('/api/run_shensu', methods=['GET'])
+@app.route('/api/run_shensu', methods=['GET', 'POST'])
 @login_required
 def api_run_shensu():
     # 获取前端传入的参数
-    name = request.args.get("name", "")
+    data = request.get_json(silent=True) if request.method == "POST" else None
+    data = data if isinstance(data, dict) else {}
+    name = str(data.get("name", "") if data else request.args.get("name", ""))
     requested_execution_target = str(
-        request.args.get("execution_target") or ""
+        (data.get("execution_target") if data else request.args.get("execution_target")) or ""
     ).strip().lower()
     execution_target = (
         "local"
@@ -5082,35 +5271,63 @@ def api_run_shensu():
         else "server"
     )
     try:
-        sites = resolve_appeal_sites(request.args.getlist("site"))
+        sites = resolve_appeal_sites(
+            data.get("sites", data.get("site", []))
+            if data
+            else request.args.getlist("site")
+        )
         sites = validate_authorized_appeal_sites(name, sites)
     except ValueError as exc:
         return jsonify({"status": "error", "message": str(exc)}), 400
     try:
-        forms = resolve_appeal_forms(request.args.getlist("form"))
+        forms = resolve_appeal_forms(
+            data.get("forms", data.get("form", []))
+            if data
+            else request.args.getlist("form")
+        )
     except ValueError as exc:
         return jsonify({"status": "error", "message": str(exc)}), 400
     try:
         loop_count = normalize_appeal_loop_count(
-            request.args.get("loop_count", DEFAULT_APPEAL_LOOP_COUNT)
+            data.get("loop_count", DEFAULT_APPEAL_LOOP_COUNT)
+            if data
+            else request.args.get("loop_count", DEFAULT_APPEAL_LOOP_COUNT)
         )
     except ValueError as exc:
         return jsonify({"status": "error", "message": str(exc)}), 400
-    message = request.args.get("message", "")
-    mode = request.args.get("mode", "人工客服")
-    task_id = normalize_appeal_task_id(request.args.get("task_id", ""))
+    message = str(data.get("message", "") if data else request.args.get("message", ""))
+    try:
+        mode = normalize_appeal_mode(
+            data.get("mode", "人工客服") if data else request.args.get("mode", "人工客服")
+        )
+    except ValueError as exc:
+        return jsonify({"status": "error", "message": str(exc)}), 400
+    deepseek_api_key = str(
+        data.get("deepseek_api_key", "")
+        if data
+        else request.args.get("deepseek_api_key", "")
+    ).strip()
+    if mode == "AI话术模式" and not deepseek_api_key:
+        return jsonify({
+            "status": "error",
+            "message": "AI话术模式必须手动填写 DeepSeek Token",
+        }), 400
+    task_id = normalize_appeal_task_id(
+        data.get("task_id", "") if data else request.args.get("task_id", "")
+    )
     if not task_id:
         task_id = secrets.token_hex(16)
     if execution_target == "agent":
         return enqueue_local_agent_appeal(
             task_id=task_id,
-            agent_id=request.args.get("agent_id", ""),
+            agent_id=data.get("agent_id", "") if data else request.args.get("agent_id", ""),
             name=name,
             sites=sites,
             forms=forms,
             message=message,
             mode=mode,
             loop_count=loop_count,
+            deepseek_api_key=deepseek_api_key,
         )
     stop_event = register_appeal_task(
         task_id,
@@ -5138,14 +5355,14 @@ def api_run_shensu():
                     else "服务器比特浏览器\n"
                 )
             )
+            shensu_kwargs = {
+                "loop_count": loop_count,
+                "stop_event": stop_event,
+            }
+            if mode == "AI话术模式":
+                shensu_kwargs["deepseek_api_key"] = deepseek_api_key
             yield from shensu_logic(
-                name,
-                sites,
-                forms,
-                message,
-                mode,
-                loop_count=loop_count,
-                stop_event=stop_event,
+                name, sites, forms, message, mode, **shensu_kwargs
             )
         finally:
             stop_event.set()
@@ -5482,6 +5699,26 @@ def official_infraction_dashboard_page():
         current_user=user or {},
         embedded=str(request.args.get("embedded") or "").strip().lower()
         in {"1", "true", "yes", "on"},
+        ip_rights_mode=False,
+    )
+
+
+@app.route('/ip-rights-dashboard', methods=['GET'])
+@login_required
+def official_ip_rights_dashboard_page():
+    user = get_current_workbench_user()
+    if not workbench_user_has_permission(user, "infractions.view"):
+        return Response(
+            "当前账号没有查看侵权和权利人数据的权限",
+            status=403,
+            content_type="text/plain; charset=utf-8",
+        )
+    return render_template(
+        'infraction_dashboard.html',
+        current_user=user or {},
+        embedded=str(request.args.get("embedded") or "").strip().lower()
+        in {"1", "true", "yes", "on"},
+        ip_rights_mode=True,
     )
 
 
@@ -5512,6 +5749,191 @@ def api_official_infraction_dashboard():
     except Exception as exc:
         logging.exception("读取官方违规商品分组看板失败")
         return jsonify({"status": "error", "message": f"读取违规商品数据失败：{exc}"}), 500
+
+
+@app.route('/api/official-ip-rights/dashboard', methods=['GET'])
+@login_required
+def api_official_ip_rights_dashboard():
+    """Return only the infringement types visible on Mercado Libre's PPPI page."""
+
+    try:
+        filters = {
+            "days": request.args.get("days", 30),
+            "view_mode": request.args.get("view_mode", "current"),
+            "salesperson": request.args.get("salesperson", ""),
+            "source_type": request.args.get("source_type", ""),
+            "category": request.args.get("category", ""),
+            "scope": "pppi",
+            "search": request.args.get("search", ""),
+            "detail_token_id": request.args.get("detail_token_id", 0),
+            "page": request.args.get("page", 1),
+            "page_size": request.args.get("page_size", 100),
+        }
+        data = (
+            bit_db_api.list_official_infraction_dashboard(**filters)
+            if USE_DB_API
+            else list_infraction_dashboard(**filters)
+        )
+        data = dict(data or {})
+        data.pop("account_groups", None)
+        summary = dict(data.get("summary") or {})
+        summary.pop("group_count", None)
+        data["summary"] = summary
+        applied_filters = dict(data.get("filters") or {})
+        applied_filters.pop("group_name", None)
+        applied_filters.pop("groups", None)
+        data["filters"] = applied_filters
+        return jsonify({"status": "success", "data": data})
+    except (TypeError, ValueError) as exc:
+        return jsonify({"status": "error", "message": str(exc)}), 400
+    except Exception as exc:
+        logging.exception("读取侵权和权利人店铺排行失败")
+        return jsonify({"status": "error", "message": f"读取侵权和权利人数据失败：{exc}"}), 500
+
+
+def _excel_safe_text(value):
+    text = str(value or "")
+    return f"'{text}" if text.lstrip().startswith(("=", "+", "-", "@")) else text
+
+
+def _excel_datetime(value):
+    text = str(value or "").strip()
+    if not text:
+        return None
+    try:
+        return datetime.fromisoformat(text.replace("Z", "+00:00")).replace(tzinfo=None)
+    except ValueError:
+        return _excel_safe_text(text)
+
+
+def _ip_rights_export_rows(filters):
+    rows = []
+    page = 1
+    pages = 1
+    while page <= pages:
+        page_filters = {
+            **filters,
+            "page": page,
+            "page_size": 50000,
+            "rows_only": True,
+        }
+        dashboard = (
+            bit_db_api.list_official_infraction_dashboard(
+                **page_filters,
+                _request_timeout=300,
+            )
+            if USE_DB_API
+            else list_infraction_dashboard(**page_filters)
+        ) or {}
+        rows.extend(dashboard.get("rows") or [])
+        pages = max(1, int(dashboard.get("pages") or 1))
+        page += 1
+    return rows
+
+
+@app.route('/api/official-ip-rights/export', methods=['GET'])
+@login_required
+def api_export_official_ip_rights():
+    """Export all PPPI rows matching the dashboard's current filters."""
+
+    try:
+        filters = {
+            "days": request.args.get("days", 30),
+            "view_mode": request.args.get("view_mode", "current"),
+            "salesperson": request.args.get("salesperson", ""),
+            "source_type": request.args.get("source_type", ""),
+            "category": request.args.get("category", ""),
+            "scope": "pppi",
+            "search": request.args.get("search", ""),
+            "detail_token_id": request.args.get("detail_token_id", 0),
+        }
+        rows = _ip_rights_export_rows(filters)
+
+        workbook = Workbook()
+        worksheet = workbook.active
+        worksheet.title = "侵权和权利人明细"
+        columns = [
+            ("违规时间", "occurred_at"),
+            ("店铺", "store_name"),
+            ("站点", "site_id"),
+            ("业务员", "salesperson"),
+            ("来源", "source_type"),
+            ("商品编号", "item_id"),
+            ("商品标题", "title"),
+            ("侵权原因", "reason"),
+            ("权利人", "rights_holder"),
+            ("平台状态", "status"),
+            ("处理状态", "resolution_status"),
+            ("处理截止时间", "due_at"),
+            ("商品链接", "permalink"),
+            ("图片链接", "thumbnail_url"),
+        ]
+        worksheet.append([label for label, _key in columns])
+        source_labels = {"detection": "平台侵权", "rights_holder": "权利人举报"}
+        resolution_labels = {
+            "current": "当前违规商品",
+            "appeal_success": "申诉成功",
+            "appeal_failed": "申诉失败",
+            "historical": "历史记录",
+        }
+        date_keys = {"occurred_at", "due_at"}
+        for row in rows:
+            values = []
+            for _label, key in columns:
+                value = row.get(key)
+                if key in date_keys:
+                    value = _excel_datetime(value)
+                elif key == "source_type":
+                    value = source_labels.get(str(value or ""), str(value or ""))
+                elif key == "resolution_status":
+                    value = resolution_labels.get(str(value or ""), str(value or ""))
+                else:
+                    value = _excel_safe_text(value)
+                values.append(value)
+            worksheet.append(values)
+
+        header_fill = PatternFill("solid", fgColor="DCE5FF")
+        header_font = Font(bold=True, color="172033")
+        for cell in worksheet[1]:
+            cell.fill = header_fill
+            cell.font = header_font
+            cell.alignment = Alignment(horizontal="center", vertical="center")
+        worksheet.row_dimensions[1].height = 26
+        worksheet.freeze_panes = "A2"
+        worksheet.auto_filter.ref = f"A1:{get_column_letter(len(columns))}{max(1, worksheet.max_row)}"
+        worksheet.sheet_view.showGridLines = False
+        widths = [20, 20, 10, 14, 14, 18, 42, 48, 24, 20, 16, 20, 42, 42]
+        for index, width in enumerate(widths, start=1):
+            worksheet.column_dimensions[get_column_letter(index)].width = width
+        for row_cells in worksheet.iter_rows(min_row=2):
+            for cell in row_cells:
+                cell.alignment = Alignment(vertical="top", wrap_text=True)
+        for row_index in range(2, worksheet.max_row + 1):
+            for column_index in (1, 12):
+                cell = worksheet.cell(row=row_index, column=column_index)
+                if isinstance(cell.value, datetime):
+                    cell.number_format = "yyyy-mm-dd hh:mm:ss"
+
+        output = BytesIO()
+        workbook.save(output)
+        output.seek(0)
+        timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
+        filename = f"侵权和权利人明细_{timestamp}.xlsx"
+        response = send_file(
+            output,
+            mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            as_attachment=True,
+            download_name=filename,
+        )
+        response.headers["Content-Disposition"] = (
+            f"attachment; filename*=UTF-8''{quote(filename)}"
+        )
+        return response
+    except (TypeError, ValueError) as exc:
+        return jsonify({"status": "error", "message": str(exc)}), 400
+    except Exception as exc:
+        logging.exception("导出侵权和权利人明细失败")
+        return jsonify({"status": "error", "message": f"导出失败：{exc}"}), 500
 
 
 @app.route('/api/official-infractions/sync', methods=['POST'])
@@ -5557,6 +5979,36 @@ def api_official_infraction_sync_status():
             else mercado_infraction_sync.official_infraction_sync_status()
         ),
     })
+
+
+@app.route('/api/overview-auto-sync', methods=['GET', 'PUT'])
+@login_required
+def api_overview_auto_sync():
+    payload = request.get_json(silent=True) or {}
+    scope = str(
+        (payload.get("scope") if request.method == "PUT" else request.args.get("scope"))
+        or ""
+    ).strip().lower()
+    try:
+        if request.method == "GET":
+            data = bit_db_api.get_overview_auto_sync_settings(scope)
+        else:
+            if not isinstance(payload.get("enabled"), bool):
+                raise ValueError("enabled 必须是布尔值")
+            data = bit_db_api.set_overview_auto_sync_enabled(scope, payload["enabled"])
+            if payload["enabled"] and not USE_DB_API:
+                if scope == "official_infractions":
+                    mercado_infraction_sync.start_due_official_infraction_sync()
+                elif scope == "prohibited_listings":
+                    bit_prohibited_listing_sync.start_due_prohibited_listing_sync()
+        response = jsonify({"status": "success", "data": data})
+        response.headers["Cache-Control"] = "no-store"
+        return response
+    except ValueError as exc:
+        return jsonify({"status": "error", "message": str(exc)}), 400
+    except Exception as exc:
+        logging.exception("读取或保存总览全量更新开关失败")
+        return jsonify({"status": "error", "message": f"保存全量更新开关失败：{exc}"}), 502
 
 
 @app.route('/api/reputation/latest', methods=['GET'])
@@ -6964,6 +7416,8 @@ def api_start_daily_task():
             # 在同一把锁内占住并发名额，避免两个并发 start 同时越过上限。
             _daily_tasks[task_id] = task_state
             _daily_task_state.update(task_state)
+    if not limit_reached:
+        _persist_daily_task_history()
 
     if limit_reached:
         return jsonify({
@@ -7065,6 +7519,7 @@ def api_start_daily_task():
             "owned_window_ids": owned_window_ids,
         }
         _daily_task_state.update(task_state)
+    _persist_daily_task_history()
     _prune_daily_task_history()
 
     try:
@@ -7198,6 +7653,7 @@ def api_stop_daily_task():
         if str(_daily_task_state.get("task_id") or "") == task_id:
             _daily_task_state.update(task_state)
         state = dict(task_state)
+    _persist_daily_task_history()
     state["log"] = _read_daily_task_log(log_path=state.get("log_path"))
     return jsonify({
         "status": "success",
@@ -7250,6 +7706,10 @@ def api_daily_task_options():
 def api_daily_task_status():
     requested_task_id = str(request.args.get("task_id") or "").strip()
     if request.args.get("execution_target") == "agent":
+        get_local_agent_store().prune_job_history(
+            retention_seconds=_daily_task_log_retention_days() * 24 * 60 * 60,
+            job_type="daily_task",
+        )
         if requested_task_id:
             try:
                 job = get_local_agent_store().get_job(requested_task_id)
@@ -7264,6 +7724,7 @@ def api_daily_task_status():
             data = {"tasks": tasks, "running": any(task["running"] for task in tasks),
                     "running_count": sum(task["running"] for task in tasks), "total_count": len(tasks)}
         return jsonify({"status": "success", "data": data})
+    _prune_daily_task_history()
     if requested_task_id:
         task = _daily_task_snapshot(requested_task_id)
         if not task:
@@ -7592,7 +8053,8 @@ def enqueue_local_agent_daily_task(agent_id, params):
 
 
 def enqueue_local_agent_appeal(
-    *, task_id, agent_id, name, sites, forms, message, mode, loop_count
+    *, task_id, agent_id, name, sites, forms, message, mode, loop_count,
+    deepseek_api_key="",
 ):
     try:
         agent_id = normalize_agent_id(agent_id)
@@ -7621,6 +8083,8 @@ def enqueue_local_agent_appeal(
         "agent_id": agent_id,
         "agent_name": agent["name"],
     }
+    if mode == "AI话术模式":
+        payload["deepseek_api_key"] = str(deepseek_api_key or "").strip()
     try:
         get_local_agent_store().enqueue_job(
             task_id,
@@ -7665,7 +8129,7 @@ def api_local_executor_health():
     })
 
 
-@app.route('/api/local-executor/run_shensu', methods=['GET', 'OPTIONS'])
+@app.route('/api/local-executor/run_shensu', methods=['GET', 'POST', 'OPTIONS'])
 @local_executor_required("appeal.execute")
 def api_local_executor_run_shensu():
     blocked = _local_executor_database_preflight()
@@ -7946,7 +8410,7 @@ def api_zying_collection_status():
                 "browser_type": bit_zying_caiji.normalize_zying_browser_type(
                     bit_zying_caiji.DEFAULT_ZYING_BROWSER_TYPE
                 ),
-                "window_name": "",
+                "window_name": bit_zying_caiji.DEFAULT_ZYING_WINDOW_NAME,
                 "start_page": bit_zying_caiji.DEFAULT_ZYING_START_PAGE,
                 "end_page": bit_zying_caiji.DEFAULT_ZYING_PAGE_COUNT,
             },
@@ -8397,12 +8861,53 @@ def _mercado_collection_db_call(operation, *args, attempts=6, **kwargs):
             time.sleep(delay)
 
 
+def build_mercado_collection_browser_params(data):
+    """Validate the browser selected for Mercado product collection."""
+    from erp.mercadolibre_batch_collector import (
+        DEFAULT_COLLECTION_WINDOW_NAME,
+        DEFAULT_ZYING_WINDOW_ID,
+        normalize_collection_browser_type,
+    )
+
+    data = data if isinstance(data, dict) else {}
+    browser_type = normalize_collection_browser_type(
+        data.get("browser_type") or "bitbrowser"
+    )
+    if browser_type == "edge":
+        return {
+            "browser_type": "edge",
+            "window_id": "",
+            "window_name": "",
+        }
+
+    window_name = str(
+        data.get("window_name") or DEFAULT_COLLECTION_WINDOW_NAME
+    ).strip()[:256]
+    window_id = str(data.get("window_id") or "").strip()[:128]
+    if not window_id:
+        if window_name == DEFAULT_COLLECTION_WINDOW_NAME:
+            window_id = DEFAULT_ZYING_WINDOW_ID
+        else:
+            window_id = getBrowserIdByName(window_name)
+    return {
+        "browser_type": "bitbrowser",
+        "window_id": window_id,
+        "window_name": window_name,
+    }
+
+
 def _run_mercado_collection_task(
-    task_id, source_url, requested_count, worker_count, collection_scope
+    task_id,
+    source_url,
+    requested_count,
+    worker_count,
+    collection_scope,
+    browser_type="bitbrowser",
+    window_id="",
+    window_name="",
 ):
     from erp.mercadolibre_batch_collector import (
         CollectionStopped,
-        DEFAULT_ZYING_WINDOW_ID,
         collect_marketplace_listing,
     )
     counters = {"candidate": 0, "processed": 0, "completed": 0, "failed": 0}
@@ -8539,6 +9044,8 @@ def _run_mercado_collection_task(
         result = collect_marketplace_listing(
             source_url,
             requested_count,
+            browser_mode=browser_type,
+            window_id=window_id,
             max_workers=worker_count,
             collection_scope=collection_scope,
             on_page=on_page,
@@ -8558,7 +9065,7 @@ def _run_mercado_collection_task(
             )
             repair_marketplace_items_playwright(
                 incomplete_rows,
-                window_id=DEFAULT_ZYING_WINDOW_ID,
+                window_id=window_id if browser_type == "bitbrowser" else "",
                 plugin_timeout=15.0,
                 attempts=1,
                 on_item=on_item,
@@ -8677,7 +9184,10 @@ def api_start_mercado_collection():
         worker_count = normalize_collection_workers(
             data.get("worker_count", DEFAULT_COLLECTION_WORKERS)
         )
+        browser = build_mercado_collection_browser_params(data)
     except ValueError as exc:
+        return jsonify({"status": "error", "message": str(exc)}), 400
+    except Exception as exc:
         return jsonify({"status": "error", "message": str(exc)}), 400
 
     with _mercado_collection_lock:
@@ -8718,6 +9228,9 @@ def api_start_mercado_collection():
                 "source_site_id": source_site_id,
                 "source_site_name": source_site_name,
                 "collection_scope": collection_scope,
+                "browser_type": browser["browser_type"],
+                "window_id": browser["window_id"],
+                "window_name": browser["window_name"],
                 "requested_count": requested_count,
                 "worker_count": worker_count,
                 "candidate_count": 0,
@@ -8739,6 +9252,9 @@ def api_start_mercado_collection():
                 requested_count,
                 worker_count,
                 collection_scope,
+                browser["browser_type"],
+                browser["window_id"],
+                browser["window_name"],
             ),
             name=f"mercado-collection-{task_id}",
             daemon=True,
@@ -8754,16 +9270,23 @@ def api_start_mercado_collection():
     })
 
 
-def _run_mercado_playwright_setup():
+def _run_mercado_playwright_setup(browser_type, window_id, window_name):
     try:
-        from erp.mercadolibre_playwright_collector import open_playwright_login_setup
+        from erp.mercadolibre_playwright_collector import (
+            DEFAULT_CDP_URL,
+            open_playwright_login_setup,
+        )
 
-        open_playwright_login_setup()
+        if browser_type == "edge":
+            bit_zying_caiji.ensure_visible_zying_edge_login_window(DEFAULT_CDP_URL)
+        open_playwright_login_setup(
+            window_id=window_id if browser_type == "bitbrowser" else ""
+        )
         with _mercado_collection_lock:
             _mercado_playwright_setup_state.update({
                 "running": False,
                 "status": "completed",
-                "message": "采集浏览器已关闭，可以开始采集",
+                "message": "登录页已关闭，可以开始采集",
             })
     except Exception as exc:
         logging.exception("打开 Playwright 智赢登录窗口失败")
@@ -8775,9 +9298,53 @@ def _run_mercado_playwright_setup():
             })
 
 
+@app.route('/api/mercado-collection/browser-windows', methods=['GET'])
+@login_required
+def api_mercado_collection_browser_windows():
+    from erp.mercadolibre_batch_collector import (
+        DEFAULT_COLLECTION_WINDOW_NAME,
+        DEFAULT_ZYING_WINDOW_ID,
+    )
+
+    try:
+        rows = []
+        seen_ids = set()
+        for browser in listBrowsers():
+            window_id = str(browser.get("id") or "").strip()
+            window_name = str(browser.get("name") or "").strip()
+            if not window_id or window_id in seen_ids:
+                continue
+            seen_ids.add(window_id)
+            rows.append({"window_id": window_id, "window_name": window_name or window_id})
+        rows.sort(
+            key=lambda row: (
+                row["window_id"] != DEFAULT_ZYING_WINDOW_ID,
+                row["window_name"].casefold(),
+            )
+        )
+        return jsonify({
+            "status": "success",
+            "data": {
+                "rows": rows,
+                "default_browser_type": "bitbrowser",
+                "default_window_id": DEFAULT_ZYING_WINDOW_ID,
+                "default_window_name": DEFAULT_COLLECTION_WINDOW_NAME,
+            },
+        })
+    except Exception as exc:
+        logging.error("读取 Mercado 采集浏览器窗口失败：%s", exc)
+        return jsonify({"status": "error", "message": str(exc)}), 503
+
+
 @app.route('/api/mercado-collection/playwright-setup', methods=['POST'])
 @login_required
 def api_open_mercado_playwright_setup():
+    try:
+        browser = build_mercado_collection_browser_params(
+            request.get_json(silent=True) or {}
+        )
+    except Exception as exc:
+        return jsonify({"status": "error", "message": str(exc)}), 400
     with _mercado_collection_lock:
         if _mercado_collection_state.get("running"):
             return jsonify({
@@ -8792,10 +9359,20 @@ def api_open_mercado_playwright_setup():
         _mercado_playwright_setup_state.update({
             "running": True,
             "status": "starting",
-            "message": "正在打开 Playwright 采集浏览器",
+            "message": (
+                "正在打开本地 Edge 登录页"
+                if browser["browser_type"] == "edge"
+                else f"正在打开比特窗口“{browser['window_name']}”登录页"
+            ),
+            **browser,
         })
         worker = threading.Thread(
             target=_run_mercado_playwright_setup,
+            args=(
+                browser["browser_type"],
+                browser["window_id"],
+                browser["window_name"],
+            ),
             name="mercado-playwright-login-setup",
             daemon=True,
         )
@@ -10310,10 +10887,12 @@ def api_db_official_infraction_dashboard():
             salesperson=request.args.get("salesperson", ""),
             source_type=request.args.get("source_type", ""),
             category=request.args.get("category", ""),
+            scope=request.args.get("scope", ""),
             search=request.args.get("search", ""),
             detail_token_id=request.args.get("detail_token_id", 0),
             page=request.args.get("page", 1),
             page_size=request.args.get("page_size", 100),
+            rows_only=request.args.get("rows_only", ""),
         )
         return jsonify({"status": "success", "data": data})
     except (TypeError, ValueError) as exc:
@@ -10497,6 +11076,39 @@ def api_db_official_infraction_sync_status():
         "status": "success",
         "data": mercado_infraction_sync.official_infraction_sync_status(),
     })
+
+
+@app.route('/api/db/overview-auto-sync', methods=['GET', 'PUT'])
+@internal_api_required
+def api_db_overview_auto_sync():
+    blocked = reject_db_api_client_mode()
+    if blocked:
+        return blocked
+    from erp.mercadolibre_overview_sync_settings import (
+        get_overview_sync_settings,
+        set_overview_sync_enabled,
+    )
+
+    payload = request.get_json(silent=True) or {}
+    scope = str(
+        (payload.get("scope") if request.method == "PUT" else request.args.get("scope"))
+        or ""
+    ).strip().lower()
+    try:
+        if request.method == "GET":
+            data = get_overview_sync_settings(scope)
+        else:
+            if not isinstance(payload.get("enabled"), bool):
+                raise ValueError("enabled 必须是布尔值")
+            data = set_overview_sync_enabled(scope, payload["enabled"])
+            if payload["enabled"]:
+                if scope == "official_infractions":
+                    mercado_infraction_sync.start_due_official_infraction_sync()
+                elif scope == "prohibited_listings":
+                    bit_prohibited_listing_sync.start_due_prohibited_listing_sync()
+        return jsonify({"status": "success", "data": data})
+    except ValueError as exc:
+        return jsonify({"status": "error", "message": str(exc)}), 400
 
 
 def _mercado_token_error_response(exc):

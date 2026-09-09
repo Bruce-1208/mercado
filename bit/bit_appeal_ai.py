@@ -61,6 +61,7 @@ from bit.bit_appeal_phrases import (
     select_appeal_phrase,
     use_appeal_phrase,
 )
+from bit.bit_ai_appeal_copy import MAX_PRODUCTS_PER_APPEAL, generate_ai_appeal_copy
 from bit.bit_config import (
     get_shop_config,
     get_window_id_by_shop_name as get_config_window_id_by_shop_name,
@@ -390,16 +391,21 @@ def open_help_page_with_daily_validation(
     switch_wait_seconds=8,
     window_id="",
     abort_after_rate_limit_recovery=None,
+    stop_on_logout=None,
 ):
     """打开帮助页，统一处理限频、退出登录和页面有效性。"""
+    if stop_on_logout is None:
+        stop_on_logout = bool(getattr(driver, "_bit_stop_on_logout", False))
     result = open_mercado_backend_page(
         driver,
         HELP_URL,
         name,
         window_id,
         settle_seconds=AI_BACKEND_SETTLE_SECONDS,
+        # 参数名保留用于兼容旧调用；核心限频处理已禁止换节点。
         max_rate_limit_retries=max_hongkong_switches,
         rate_limit_retry_wait_seconds=switch_wait_seconds,
+        max_login_retries=0 if stop_on_logout else 1,
         anomaly_site=site,
         anomaly_source="AI申诉",
     )
@@ -2672,6 +2678,9 @@ def open_ai_contact_window(driver, name, site, window_id=""):
             name,
             window_id,
             settle_seconds=AI_BACKEND_SETTLE_SECONDS,
+            max_login_retries=(
+                0 if getattr(driver, "_bit_stop_on_logout", False) else 1
+            ),
             anomaly_site=site,
             anomaly_source="AI申诉",
         )
@@ -2835,7 +2844,22 @@ def use_one_browser_run_task(info):
                 print("ip检测通过，打开店铺平台主页")
 
                 try:
-                    shensu(name, site, form, message)
+                    result = shensu(
+                        name,
+                        site,
+                        form,
+                        message,
+                        validate_open=True,
+                    )
+                    if (
+                        isinstance(result, dict)
+                        and result.get("execution_status") == "login_required"
+                    ):
+                        print(
+                            f"{get_now_time()} {name}{site} 登录异常熔断已打开，"
+                            "停止该店铺循环，等待人工登录复检<br>"
+                        )
+                        break
                 except Exception as e:
                     traceback.print_exc()
                     print("申诉执行异常", e)
@@ -3362,6 +3386,7 @@ def save_ai_appeal_group_record(
 def shensu(
     name, site, form, message, validate_open=False, infraction_ids=None,
     prohibited_ids=None, stop_event=None, window_id=None,
+    ai_script_mode=False, deepseek_api_key="",
 ):
     """返回执行状态；收到回复不等于平台已批准申诉。"""
     print(f"{name} {site} 开始进行{form}申诉，自定义话术为{message}<br>")
@@ -3376,7 +3401,12 @@ def shensu(
     started = time.monotonic()
     try:
         nickname = random.choice(["Bruce", "Jack", "Lucy", "James"])
-        selected_phrase = select_appeal_phrase(form) if not str(message or "").strip() else ""
+        selected_phrase = (
+            select_appeal_phrase(form)
+            if not str(message or "").strip()
+            and not (ai_script_mode and form in {"侵权", "禁限售"})
+            else ""
+        )
         if not window_id:
             window_id = get_window_id_by_shop_name(name)
         if current_thread_window_lease(window_id) is None:
@@ -3390,9 +3420,16 @@ def shensu(
         driver._bit_appeal_stop_event = stop_event if stop_event is not None else _APPEAL_STOP_EVENT.get()
         driver._bit_appeal_deadline = started + AI_SITE_BUDGET_SECONDS
         driver._bit_abort_ai_after_rate_limit_recovery = bool(validate_open)
+        driver._bit_stop_on_logout = bool(validate_open)
         _check_appeal_control(driver)
         try:
-            open_help_page_with_daily_validation(driver, name, site_name, window_id=window_id)
+            open_help_page_with_daily_validation(
+                driver,
+                name,
+                site_name,
+                window_id=window_id,
+                stop_on_logout=bool(validate_open),
+            )
         except Exception:
             skip_close_tab = True
             raise
@@ -3401,10 +3438,14 @@ def shensu(
         with use_appeal_phrase(selected_phrase):
             if form == "侵权":
                 handle_infraction(window_id, driver, name, site_name, message, nickname,
-                                  infraction_ids=infraction_ids)
+                                  infraction_ids=infraction_ids,
+                                  ai_script_mode=ai_script_mode,
+                                  deepseek_api_key=deepseek_api_key)
             elif form == "禁限售":
                 handle_prohibited(window_id, driver, name, site_name, message, nickname,
-                                  prohibited_ids=prohibited_ids)
+                                  prohibited_ids=prohibited_ids,
+                                  ai_script_mode=ai_script_mode,
+                                  deepseek_api_key=deepseek_api_key)
             elif form == "延误":
                 handle_delay(window_id, driver, name, site_name, message, nickname)
             elif form == "取消率":
@@ -3464,9 +3505,11 @@ def handle_infraction(
     message,
     nickname,
     infraction_ids=None,
+    ai_script_mode=False,
+    deepseek_api_key="",
 ):
-    """处理侵权申诉：直接使用 API 编号，按最多 10 个逐组发送。"""
-    group = 10
+    """处理侵权申诉：普通模式每组 10 个，AI 话术模式每组最多 3 个。"""
+    group = MAX_PRODUCTS_PER_APPEAL if ai_script_mode else 10
     inf_list = []
     seen_ids = set()
     for raw_id in infraction_ids or ():
@@ -3495,18 +3538,28 @@ def handle_infraction(
     open_ai_contact_window(driver, name, site, window_id)
     for index, current_group in enumerate(groups, start=1):
         infraction_ids = "、".join(str(item) for item in current_group)
-        huashu = (
-            f"{infraction_ids}{message}"
-            if message
-            else render_appeal_phrase(
-                selected_phrase,
-                nickname=nickname,
-                order_ids=infraction_ids,
-                appeal_type="侵权",
+        if ai_script_mode:
+            generated = generate_ai_appeal_copy(
+                "侵权", current_group, deepseek_api_key
             )
-            if selected_phrase
-            else f"{infraction_ids}{appeal_suffix}"
-        )
+            huashu = generated["message"]
+            print(
+                f"{get_now_time()} {name} {site} 第 {index}/{len(groups)} 组"
+                f"已根据 {len(generated['products'])} 个产品的标题和描述生成 AI 话术<br>"
+            )
+        else:
+            huashu = (
+                f"{infraction_ids}{message}"
+                if message
+                else render_appeal_phrase(
+                    selected_phrase,
+                    nickname=nickname,
+                    order_ids=infraction_ids,
+                    appeal_type="侵权",
+                )
+                if selected_phrase
+                else f"{infraction_ids}{appeal_suffix}"
+            )
         print(f"{get_now_time()} {name} {site} 开始发送第 {index}/{len(groups)} 组侵权申诉：{huashu}<br>")
         group_appeal_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         group_log_start = len(get_appeal_log_records())
@@ -3549,9 +3602,11 @@ def handle_prohibited(
     message,
     nickname,
     prohibited_ids=None,
+    ai_script_mode=False,
+    deepseek_api_key="",
 ):
-    """处理禁限售申诉：读取禁限售列表，按最多 10 个编号独立发送。"""
-    group_size = 10
+    """处理禁限售申诉：普通模式每组 10 个，AI 话术模式每组最多 3 个。"""
+    group_size = MAX_PRODUCTS_PER_APPEAL if ai_script_mode else 10
     item_ids = []
     seen_ids = set()
     for raw_id in prohibited_ids or ():
@@ -3580,18 +3635,28 @@ def handle_prohibited(
     open_ai_contact_window(driver, name, site, window_id)
     for index, current_group in enumerate(groups, start=1):
         group_ids = "、".join(current_group)
-        huashu = (
-            f"{group_ids}{message}"
-            if message
-            else render_appeal_phrase(
-                selected_phrase,
-                nickname=nickname,
-                order_ids=group_ids,
-                appeal_type="禁限售",
+        if ai_script_mode:
+            generated = generate_ai_appeal_copy(
+                "禁限售", current_group, deepseek_api_key
             )
-            if selected_phrase
-            else f"{group_ids}{default_message}"
-        )
+            huashu = generated["message"]
+            print(
+                f"{get_now_time()} {name} {site} 第 {index}/{len(groups)} 组"
+                f"已根据 {len(generated['products'])} 个产品的标题和描述生成 AI 话术<br>"
+            )
+        else:
+            huashu = (
+                f"{group_ids}{message}"
+                if message
+                else render_appeal_phrase(
+                    selected_phrase,
+                    nickname=nickname,
+                    order_ids=group_ids,
+                    appeal_type="禁限售",
+                )
+                if selected_phrase
+                else f"{group_ids}{default_message}"
+            )
         print(
             f"{get_now_time()} {name} {site} 开始发送第 {index}/{len(groups)} 组"
             f"禁限售申诉：{huashu}<br>"

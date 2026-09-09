@@ -50,8 +50,12 @@ from bit.bit_mysql import (
 
 DEFAULT_ZYING_WINDOW_ID = os.environ.get(
     "BIT_ZYING_WINDOW_ID",
-    "9812f185f7ab49d98f3988994d9e8ebf",
+    "e27ab66368b141a993f9c6847f51222b",
 )
+DEFAULT_ZYING_WINDOW_NAME = os.environ.get(
+    "BIT_ZYING_WINDOW_NAME",
+    "采集专用（墨西哥）",
+).strip()
 DEFAULT_ZYING_BROWSER_TYPE = os.environ.get(
     "BIT_ZYING_BROWSER_TYPE",
     "bitbrowser",
@@ -2439,7 +2443,7 @@ def open_zying_login_window(
     *,
     browser_type=DEFAULT_ZYING_BROWSER_TYPE,
     window_id=DEFAULT_ZYING_WINDOW_ID,
-    window_name="",
+    window_name=DEFAULT_ZYING_WINDOW_NAME,
     edge_debugger_address=DEFAULT_ZYING_EDGE_DEBUGGER_ADDRESS,
 ):
     """打开可视登录页；浏览器保持打开，WebDriver 连接立即释放。"""
@@ -2482,7 +2486,7 @@ def capture_zying_login_from_browser(
     *,
     browser_type=DEFAULT_ZYING_BROWSER_TYPE,
     window_id=DEFAULT_ZYING_WINDOW_ID,
-    window_name="",
+    window_name=DEFAULT_ZYING_WINDOW_NAME,
     edge_debugger_address=DEFAULT_ZYING_EDGE_DEBUGGER_ADDRESS,
     auth_file=None,
     validate=True,
@@ -2743,7 +2747,7 @@ def collect_zying_products(
     product_mirror_writer=None,
     return_summary=False,
     browser_type=DEFAULT_ZYING_BROWSER_TYPE,
-    window_name="",
+    window_name=DEFAULT_ZYING_WINDOW_NAME,
     edge_debugger_address=DEFAULT_ZYING_EDGE_DEBUGGER_ADDRESS,
     category_name="",
     auth_token=None,
@@ -2985,7 +2989,7 @@ def check_yuanyou_title(
     window_id=DEFAULT_ZYING_WINDOW_ID,
     category=None,
     browser_type=DEFAULT_ZYING_BROWSER_TYPE,
-    window_name="",
+    window_name=DEFAULT_ZYING_WINDOW_NAME,
 ):
     """保留旧函数名，兼容已有的手工调用方式。"""
     return collect_zying_products(
@@ -3027,7 +3031,11 @@ def main():
         choices=("bitbrowser", "edge"),
         help="采集浏览器：bitbrowser 或 edge",
     )
-    parser.add_argument("--window-name", default="", help="比特浏览器窗口名称（优先于窗口 ID）")
+    parser.add_argument(
+        "--window-name",
+        default=DEFAULT_ZYING_WINDOW_NAME,
+        help="比特浏览器窗口名称（优先于窗口 ID）",
+    )
     parser.add_argument(
         "--edge-debugger-address",
         default=DEFAULT_ZYING_EDGE_DEBUGGER_ADDRESS,

@@ -93,14 +93,20 @@ def get_database_api_health():
 
 
 def list_official_infraction_dashboard(**filters):
+    request_timeout = filters.pop("_request_timeout", None)
     if DB_MODE == "mysql":
         from erp.mercadolibre_infraction_store import list_infraction_dashboard
 
         return list_infraction_dashboard(**filters)
+    request_kwargs = {
+        "params": {key: value for key, value in filters.items() if value is not None}
+    }
+    if request_timeout is not None:
+        request_kwargs["timeout"] = request_timeout
     return _request(
         "GET",
         "/api/db/official-infractions/dashboard",
-        params={key: value for key, value in filters.items() if value is not None},
+        **request_kwargs,
     )
 
 
@@ -236,6 +242,36 @@ def get_official_infraction_sync_status():
 
         return mercado_infraction_sync.official_infraction_sync_status()
     return _request("GET", "/api/db/official-infractions/sync/status")
+
+
+def get_overview_auto_sync_settings(scope):
+    scope = str(scope or "").strip().lower()
+    if DB_MODE == "mysql":
+        from erp.mercadolibre_overview_sync_settings import (
+            get_overview_sync_settings,
+        )
+
+        return get_overview_sync_settings(scope)
+    return _request(
+        "GET",
+        "/api/db/overview-auto-sync",
+        params={"scope": scope},
+    )
+
+
+def set_overview_auto_sync_enabled(scope, enabled):
+    scope = str(scope or "").strip().lower()
+    if DB_MODE == "mysql":
+        from erp.mercadolibre_overview_sync_settings import (
+            set_overview_sync_enabled,
+        )
+
+        return set_overview_sync_enabled(scope, enabled)
+    return _request(
+        "PUT",
+        "/api/db/overview-auto-sync",
+        json={"scope": scope, "enabled": enabled},
+    )
 
 
 def inset_reputation_info(

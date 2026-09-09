@@ -39,3 +39,4 @@ bit/runtime_locks/
 .data/local-agent/
 cache/mercado_playwright_profile/
 *.log
+bit/logs/*_history.json

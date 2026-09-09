@@ -102,6 +102,8 @@ def test_ten_products_strict_order_persistent_database_logs_and_excel(tmp_path, 
     assert all(row["erp_after"] == {"weight_g": "450", "net_income_usd": "4"} and row["write_verified"] for row in rows)
     assert sum("回填前：" in log["message"] for log in persisted.logs(limit=1000)) == 10
     assert sum("保存成功并回读确认" in log["message"] for log in persisted.logs(limit=1000)) == 10
+    assert [log["task_id"] for log in persisted.logs(limit=1000)
+            if log["message"].startswith("开始逐件核对第 ")] == list(map(str, range(1, 11)))
     sheet = load_workbook(io.BytesIO(execution_xlsx(rows, run))).active
     assert sheet.max_row == 15 and sheet.freeze_panes == "C6"
     assert sheet["I6"].value == 430 and sheet["J6"].value == 9.5

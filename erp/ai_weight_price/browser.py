@@ -198,11 +198,23 @@ class Browser:
         if self.stop.wait(seconds):
             raise Stopped("操作已停止")
 
+    @staticmethod
+    def focus(page):
+        """Select a real Playwright page; tolerate lightweight offline fakes."""
+        bring_to_front = getattr(page, "bring_to_front", None)
+        if bring_to_front:
+            bring_to_front()
+
     def page(self, url, host=None):
         safe_url(url, host=host)
         page = self.context.new_page()
         self.owned.append(page)
+        # Every business step must be observable in the dedicated Edge window.
+        # A CDP-created tab is not guaranteed to become the selected tab when
+        # Edge is already in use, so focus it both before and after navigation.
+        page.bring_to_front()
         page.goto(url, wait_until="domcontentloaded")
+        page.bring_to_front()
         try:
             safe_url(page.url, host=host)
         except ValueError:
@@ -414,10 +426,29 @@ class Browser:
         raise ValueError(f"智赢分类搜索按钮无法确定（可见匹配 {len(matches)} 个），请在参数设置中配置 erp_search")
 
     def current_page(self, page):
-        text = self.value(page, "erp_page_active", required=True)
-        if not text.isdigit():
+        selector = self.s["erp_page_active"]
+        if not selector:
+            raise ValueError("请配置DOM字段：erp_page_active")
+        visible = [item for item in page.locator(selector).all() if item.is_visible()]
+        if len(visible) == 1:
+            text = visible[0].inner_text().strip()
+            if text.isdigit():
+                return int(text)
             raise ValueError("无法确认当前页码，已停止采集")
-        return int(text)
+        if len(visible) > 1:
+            raise ValueError(f"DOM字段 erp_page_active 必须唯一，实际 {len(visible)} 个")
+
+        # Ant Design omits pagination entirely for a one-page result set in
+        # some Zying builds. Accept page 1 only when no enabled previous/next
+        # navigation and no multiple numbered pages can contradict it.
+        numbered = [item for item in page.locator("li.ant-pagination-item").all() if item.is_visible()]
+        previous = [item for item in page.locator(
+            "li.ant-pagination-prev:not(.ant-pagination-disabled) button").all() if item.is_visible()]
+        following = [item for item in page.locator(self.s["erp_next"]).all() if item.is_visible()]
+        if len(numbered) <= 1 and not previous and not following:
+            self.log("智赢当前结果仅一页，页面未渲染活动页码；按第 1 页继续逐件核对")
+            return 1
+        raise ValueError("无法唯一确认智赢当前页码，已停止采集")
 
     def first_page(self, page):
         if self.current_page(page) != 1:
@@ -511,6 +542,10 @@ class Browser:
                 count = 0
                 for row in rows.all():
                     self.check(page)
+                    # Supplier matching and writeback open temporary tabs. Bring
+                    # the retained Zying list back before reading the next card,
+                    # keeping the one-product-at-a-time sequence visible.
+                    self.focus(page)
                     raw = row.inner_text()
                     image = self.value(row, "erp_image", "src", required=True)
                     record = {"title": self.value(row, "erp_title", required=True),
@@ -538,6 +573,8 @@ class Browser:
                     if on_task:
                         # Do not read the next card or advance the page checkpoint
                         # until this item's save has been verified.
+                        self.visual(store.get(key), "erp_item",
+                                    f"正在逐件核对智赢商品 {key}：{record['title']}", page)
                         on_task(key)
                         self.check(page)
                 store.log(f"ERP第 {page_number} 页采集完成，新增 {count} 条；已存在记录保留原进度")
