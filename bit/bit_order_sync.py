@@ -765,7 +765,7 @@ def backfill_order_sku_images(limit=50):
         grouped.setdefault(int(row["token_id"]), []).append(row)
     checked = updated = failed = 0
     for token_id, rows in grouped.items():
-        record = bit_mysql.get_mercado_store_token(token_id)
+        record = bit_mysql.get_mercado_store_token(token_id, include_disabled=True)
         results = []
         if not record:
             results = [
@@ -773,6 +773,15 @@ def backfill_order_sku_images(limit=50):
                     "order_id": row.get("order_id"),
                     "token_id": token_id,
                     "error": "店铺授权不存在",
+                }
+                for row in rows
+            ]
+        elif not bool(record.get("enabled", 1)):
+            results = [
+                {
+                    "order_id": row.get("order_id"),
+                    "token_id": token_id,
+                    "error": "店铺已关闭，跳过历史订单 SKU 图补全",
                 }
                 for row in rows
             ]
@@ -920,8 +929,8 @@ def backfill_order_financials(limit=200):
         grouped.setdefault(int(row["token_id"]), []).append(str(row["shipping_id"]))
     processed = failed = updated_orders = 0
     for token_id, shipping_ids in grouped.items():
-        record = bit_mysql.get_mercado_store_token(token_id)
-        if not record:
+        record = bit_mysql.get_mercado_store_token(token_id, include_disabled=True)
+        if not record or not bool(record.get("enabled", 1)):
             failed += len(shipping_ids)
             continue
         try:

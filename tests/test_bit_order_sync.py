@@ -1082,7 +1082,10 @@ def test_historical_financial_backfill_propagates_interpreter_shutdown(monkeypat
     monkeypatch.setattr(
         bit_order_sync.bit_mysql,
         "get_mercado_store_token",
-        lambda token_id: {"id": token_id, "access_token": "secret"},
+        lambda token_id, include_disabled=False: {
+            "id": token_id,
+            "access_token": "secret",
+        },
     )
     monkeypatch.setattr(
         bit_order_sync,
@@ -1169,7 +1172,10 @@ def test_historical_image_backfill_saves_purchased_variation(monkeypatch):
     monkeypatch.setattr(
         bit_order_sync.bit_mysql,
         "get_mercado_store_token",
-        lambda token_id: {"id": token_id, "access_token": "secret"},
+        lambda token_id, include_disabled=False: {
+            "id": token_id,
+            "access_token": "secret",
+        },
     )
     monkeypatch.setattr(
         bit_order_sync,
@@ -1189,6 +1195,74 @@ def test_historical_image_backfill_saves_purchased_variation(monkeypatch):
     assert saved_entries[0]["image_url"] == "https://img.example/blue-O.jpg"
     product = saved_entries[0]["raw_order"]["order_items"][0]["item"]
     assert product["sku_image_url"] == "https://img.example/blue-O.jpg"
+
+
+def test_historical_image_backfill_skips_disabled_store(monkeypatch):
+    saved_entries = []
+    monkeypatch.setattr(
+        bit_order_sync.bit_mysql,
+        "list_mercado_pending_order_image_rows",
+        lambda limit=50: [{
+            "order_id": "101",
+            "token_id": 9,
+            "product_id": "MLM-1",
+            "raw_json": {},
+        }],
+    )
+    monkeypatch.setattr(
+        bit_order_sync.bit_mysql,
+        "get_mercado_store_token",
+        lambda token_id, include_disabled=False: {
+            "id": token_id,
+            "enabled": 0,
+        },
+    )
+    monkeypatch.setattr(
+        bit_order_sync,
+        "_client_and_token",
+        lambda _record: pytest.fail("已关闭店铺不应创建 API 客户端"),
+    )
+    monkeypatch.setattr(
+        bit_order_sync.bit_mysql,
+        "save_mercado_order_image_results",
+        lambda entries: saved_entries.extend(entries)
+        or {"checked": 1, "updated": 0, "failed": 1},
+    )
+
+    result = bit_order_sync.backfill_order_sku_images(limit=50)
+
+    assert result == {"requested": 1, "checked": 1, "updated": 0, "failed": 1}
+    assert saved_entries[0]["error"] == "店铺已关闭，跳过历史订单 SKU 图补全"
+
+
+def test_historical_financial_backfill_skips_disabled_store(monkeypatch):
+    monkeypatch.setattr(
+        bit_order_sync.bit_mysql,
+        "list_mercado_pending_shipment_cost_rows",
+        lambda limit=200: [{"token_id": 9, "shipping_id": "shipment-9"}],
+    )
+    monkeypatch.setattr(
+        bit_order_sync.bit_mysql,
+        "get_mercado_store_token",
+        lambda token_id, include_disabled=False: {
+            "id": token_id,
+            "enabled": 0,
+        },
+    )
+    monkeypatch.setattr(
+        bit_order_sync,
+        "_client_and_token",
+        lambda _record: pytest.fail("已关闭店铺不应创建 API 客户端"),
+    )
+
+    result = bit_order_sync.backfill_order_financials(limit=200)
+
+    assert result == {
+        "requested": 1,
+        "processed": 0,
+        "failed": 1,
+        "updated_orders": 0,
+    }
 
 
 def test_mysql_bulk_update_changes_only_authorized_store_orders(monkeypatch):
