@@ -1,6 +1,7 @@
 import hashlib
 import io
 import json
+import re
 import time
 import zipfile
 from types import SimpleNamespace
@@ -46,6 +47,21 @@ def make_bundle(version="business-v1", files=None):
         )
     content = buffer.getvalue()
     return content, hashlib.sha256(content).hexdigest()
+
+
+def test_agent_runtime_messages_have_local_time_and_persist(tmp_path, capsys):
+    config = SimpleNamespace(
+        data_dir=tmp_path,
+        server_url="https://workbench.example",
+        agent_token="",
+    )
+    agent = LocalAgent(config)
+
+    agent.log("Agent 测试日志")
+
+    output = capsys.readouterr().out.strip()
+    assert re.fullmatch(r"\[\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\] Agent 测试日志", output)
+    assert (tmp_path / "agent.log").read_text(encoding="utf-8").strip() == output
 
 
 def test_agent_downloads_verifies_and_atomically_activates_release(tmp_path):
@@ -137,9 +153,17 @@ Path(args.job_file).with_name('result.json').write_text(json.dumps({
     monkeypatch.setattr(agent, "send_event", event)
     agent.run_job({"job_id": "daily-runtime-job", "job_type": "daily_task", "payload": {}})
     assert "live daily progress" in events[0]["content"]
+    assert not events[0]["content"].startswith("[")
     assert events[-1]["result"]["execution_counts"] == {"failed": 1}
     assert events[-1]["result"]["return_code"] == 0
     assert events[-1]["message"] == "one task needs attention"
+    local_log = (tmp_path / "agent.log").read_text(encoding="utf-8")
+    assert re.search(
+        r"\[\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\] "
+        r"任务 daily-runtime-job｜live daily progress",
+        local_log,
+    )
+    assert "任务 daily-runtime-job 已结束：one task needs attention" in local_log
 
 
 def test_agent_log_upload_failure_uses_backoff_without_dropping_content(

@@ -24,6 +24,10 @@ except Exception:
 import websocket
 
 
+class MercadoLoginCircuitOpen(RuntimeError):
+    """已确认退出登录，持续模式也不得重新打开该店铺。"""
+
+
 BIT_API = "http://127.0.0.1:54345"
 DEFAULT_WINDOW = "\u8dc3\u9a6c\u626c\u97ad\uff08fti\uff09"
 DEFAULT_CDP = "http://127.0.0.1:60012"
@@ -258,7 +262,10 @@ def help_tab(cdp_http, window="", site=""):
                 site=site,
                 source="稳定申诉循环",
             )
-            raise RuntimeError("Mercado 登录态失效，请先完成登录后重试")
+            raise MercadoLoginCircuitOpen(
+                "Mercado 登录态失效，已停止该店铺循环；"
+                "请先完成人工登录和复检"
+            )
         limit_result = process_mercado_rate_limit(
             state=state,
             name=DEFAULT_WINDOW,
@@ -267,7 +274,7 @@ def help_tab(cdp_http, window="", site=""):
             retry_wait_seconds=30,
         )
         if limit_result["exhausted"]:
-            raise RuntimeError("Mercado 限频，切换节点重试 2 次仍未恢复")
+            raise RuntimeError("Mercado 限频，保持当前网络出口退避重试 2 次仍未恢复")
         retry_count = limit_result["retry_count"]
 
 
@@ -621,6 +628,9 @@ def main():
             break
         except Exception as exc:
             log(f"ERROR {type(exc).__name__}: {exc}")
+            if isinstance(exc, MercadoLoginCircuitOpen):
+                log("LOGIN CIRCUIT OPEN; continuous retry disabled until manual recovery")
+                break
             if not args.continuous:
                 raise
             time.sleep(args.retry_delay)

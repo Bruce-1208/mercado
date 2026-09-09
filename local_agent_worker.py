@@ -57,14 +57,19 @@ def run_appeal(payload, stop_event):
         raise ValueError("申诉任务缺少店铺、站点或任务类型")
     loop_count = bit_interface.normalize_appeal_loop_count(payload.get("loop_count"))
     _write_log(f"本机 Agent 开始执行申诉：{name} / {'、'.join(sites)} / {'、'.join(forms)}\n")
+    mode = str(payload.get("mode") or "人工客服")
+    shensu_kwargs = {"loop_count": loop_count, "stop_event": stop_event}
+    if mode == "AI话术模式":
+        shensu_kwargs["deepseek_api_key"] = str(
+            payload.get("deepseek_api_key") or ""
+        )
     for chunk in bit_interface.shensu_logic(
         name,
         sites,
         forms,
         str(payload.get("message") or ""),
-        str(payload.get("mode") or "人工客服"),
-        loop_count=loop_count,
-        stop_event=stop_event,
+        mode,
+        **shensu_kwargs,
     ):
         _write_log(chunk)
 
@@ -120,7 +125,15 @@ def main(argv=None):
     parser.add_argument("--job-file", required=True)
     parser.add_argument("--cancel-file", required=True)
     args = parser.parse_args(argv)
-    job = json.loads(Path(args.job_file).read_text(encoding="utf-8"))
+    job_path = Path(args.job_file)
+    job = json.loads(job_path.read_text(encoding="utf-8"))
+    payload = dict(job.get("payload") or {})
+    if payload.pop("deepseek_api_key", None) is not None:
+        sanitized_job = dict(job)
+        sanitized_job["payload"] = payload
+        job_path.write_text(
+            json.dumps(sanitized_job, ensure_ascii=False), encoding="utf-8"
+        )
     configure_execution_context(job)
     stop_event = threading.Event()
     threading.Thread(

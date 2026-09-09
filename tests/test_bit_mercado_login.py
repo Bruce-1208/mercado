@@ -437,7 +437,7 @@ def test_rate_limit_detection_only_matches_designated_spanish_message():
     )
 
 
-def test_home_login_check_switches_node_before_each_rate_limit_retry(monkeypatch):
+def test_home_login_check_keeps_same_egress_for_rate_limit_retry(monkeypatch):
     states = [
         {
             "page_text": "Hubo un error accediendo a esta página",
@@ -480,12 +480,6 @@ def test_home_login_check_switches_node_before_each_rate_limit_retry(monkeypatch
         lambda value: states[value.navigation_count - 1],
     )
     monkeypatch.setattr(mercado_login, "is_mercado_login_page", lambda value: False)
-    monkeypatch.setattr(
-        mercado_limit,
-        "switch_random_hongkong_node",
-        lambda: switch_calls.append(True)
-        or {"switched": True, "reason": "switched", "new_node": "香港测试节点"},
-    )
 
     result = mercado_login.ensure_mercado_login_from_home(
         driver,
@@ -497,9 +491,12 @@ def test_home_login_check_switches_node_before_each_rate_limit_retry(monkeypatch
     assert result["status"] == mercado_login.LOGIN_ALREADY_ACTIVE
     assert result["rate_limited"] is True
     assert result["rate_limit_retry_count"] == 2
-    assert result["node_switch_result"]["switched"] is True
+    assert result["node_switch_result"] == {
+        "switched": False,
+        "reason": "automatic_node_switch_disabled",
+    }
     assert driver.navigation_count == 3
-    assert len(switch_calls) == 2
+    assert switch_calls == []
     assert len(result["node_switch_results"]) == 2
     assert sleep_calls == [30, 30]
 
@@ -529,12 +526,6 @@ def test_home_login_check_reports_failure_after_two_rate_limit_retries(monkeypat
             "current_url": mercado_login.MERCADO_HOME_URL,
         },
     )
-    monkeypatch.setattr(
-        mercado_limit,
-        "switch_random_hongkong_node",
-        lambda: switch_calls.append(True)
-        or {"switched": False, "reason": "switch_failed"},
-    )
 
     result = mercado_login.ensure_mercado_login_from_home(
         driver,
@@ -548,9 +539,9 @@ def test_home_login_check_reports_failure_after_two_rate_limit_retries(monkeypat
     assert result["login_stage"] == "rate_limited"
     assert result["rate_limit_retry_count"] == 2
     assert "重试 2 次仍未恢复" in result["message"]
-    assert result["node_switch_result"]["reason"] == "switch_failed"
+    assert result["node_switch_result"]["reason"] == "automatic_node_switch_disabled"
     assert driver.navigation_count == 3
-    assert len(switch_calls) == 2
+    assert switch_calls == []
     assert len(result["node_switch_results"]) == 2
 
 
@@ -769,11 +760,6 @@ def test_backend_page_handles_designated_limit_before_reopening(monkeypatch):
         lambda _driver: states[len(navigations) - 1],
     )
     monkeypatch.setattr(mercado_login, "is_mercado_login_page", lambda _driver: False)
-    monkeypatch.setattr(
-        mercado_limit,
-        "switch_random_hongkong_node",
-        lambda: switches.append(True) or {"switched": True},
-    )
 
     result = mercado_login.open_mercado_backend_page(
         object(),
@@ -788,7 +774,7 @@ def test_backend_page_handles_designated_limit_before_reopening(monkeypatch):
     assert result["ok"] is True
     assert result["rate_limit_retry_count"] == 1
     assert navigations == [target_url, target_url]
-    assert switches == [True]
+    assert switches == []
 
 
 def test_separate_auto_login_uses_email_then_saved_password(monkeypatch):
@@ -2057,6 +2043,11 @@ def test_selected_auto_login_rechecks_closes_then_rewrites_status(monkeypatch):
         "closeBrowser",
         lambda window_id, lease=None: events.append("browser_closed")
         or {"success": True},
+    )
+    monkeypatch.setattr(
+        mercado_login.bit_db_api,
+        "upsert_window_anomaly",
+        lambda *args, **kwargs: events.append("status_recorded"),
     )
     monkeypatch.setattr(
         mercado_login.bit_db_api,

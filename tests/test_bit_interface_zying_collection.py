@@ -24,8 +24,10 @@ def test_zying_collection_console_exposes_page_category_and_dedup_controls():
     assert 'id="zying-collection-category"' in template
     assert 'id="zying-collection-browser-type"' in template
     assert 'id="zying-collection-window-name"' in template
+    assert 'id="zying-collection-window-options"' in template
     assert "本地 Edge（9222）" in template
-    assert "比特浏览器窗口名称" in template
+    assert "比特浏览器窗口" in template
+    assert "采集专用（墨西哥）" in template
     assert 'id="start-zying-collection-btn"' in template
     assert 'id="stop-zying-collection-btn"' in template
     assert 'id="capture-zying-login-btn"' not in template
@@ -81,6 +83,14 @@ def test_build_zying_collection_params_accepts_edge_or_bitbrowser_name():
     assert edge["window_name"] == ""
     assert bitbrowser["browser_type"] == "bitbrowser"
     assert bitbrowser["window_name"] == "智赢专用窗口"
+
+
+def test_zying_login_defaults_to_mexico_collection_window():
+    params = bit_interface.build_zying_login_params({})
+
+    assert params["browser_type"] == "bitbrowser"
+    assert params["window_id"] == bit_interface.bit_zying_caiji.DEFAULT_ZYING_WINDOW_ID
+    assert params["window_name"] == bit_interface.bit_zying_caiji.DEFAULT_ZYING_WINDOW_NAME
 
 
 def test_zying_collection_start_runs_script_with_database_dedup(monkeypatch):

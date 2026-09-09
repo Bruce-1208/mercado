@@ -58,6 +58,9 @@ assert.equal(dailyTaskStatusCategory({status: 'completed', running: false}), 'co
 assert.equal(dailyTaskStatusCategory({status: 'partial', running: false}), 'partial');
 assert.equal(dailyTaskStatusCategory({status: 'stopped', running: false}), 'stopped');
 assert.equal(dailyTaskStatusCategory({status: 'error', running: false}), 'error');
+assert.equal(dailyTaskMatchesStatusFilter({status: 'queued', running: true}, 'active'), true);
+assert.equal(dailyTaskMatchesStatusFilter({status: 'stopping', running: true}, 'active'), true);
+assert.equal(dailyTaskMatchesStatusFilter({status: 'success', running: false}, 'active'), false);
 assert.equal(dailyTaskComputerKey({execution_target: 'server'}), 'server');
 assert.equal(dailyTaskComputerKey({execution_target: 'local'}), 'local');
 assert.equal(

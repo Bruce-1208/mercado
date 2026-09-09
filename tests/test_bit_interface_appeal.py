@@ -767,6 +767,7 @@ def test_daily_task_console_exposes_all_task_switches_and_shop_group():
     assert "只执行本站点侵权数超过标准的站点" in template
     assert 'id="daily-task-list"' in template
     assert 'id="daily-task-status-filter"' in template
+    assert '<option value="active" selected>运行中</option>' in template
     assert 'id="daily-task-computer-filter"' in template
     assert 'id="daily-task-filter-summary"' in template
     assert "function dailyTaskStatusCategory(task)" in template
@@ -1156,9 +1157,6 @@ def test_daily_task_history_pruning_removes_log_and_stale_control(
     monkeypatch,
     tmp_path,
 ):
-    old_log = tmp_path / "old.log"
-    old_log.write_text("old", encoding="utf-8")
-
     class Manager:
         def __init__(self):
             self.shutdown_called = False
@@ -1167,8 +1165,10 @@ def test_daily_task_history_pruning_removes_log_and_stale_control(
             self.shutdown_called = True
 
     manager = Manager()
-    monkeypatch.setattr(bit_interface, "DAILY_TASK_HISTORY_LIMIT", 1)
+    monkeypatch.setattr(bit_interface, "_daily_task_log_retention_days", lambda: 3)
     monkeypatch.setattr(bit_interface, "_daily_task_log_path", tmp_path / "base.log")
+    old_log = bit_interface._daily_task_log_file("old")
+    old_log.write_text("old", encoding="utf-8")
     monkeypatch.setattr(
         bit_interface,
         "_daily_tasks",
@@ -1177,6 +1177,7 @@ def test_daily_task_history_pruning_removes_log_and_stale_control(
                 "task_id": "old",
                 "running": False,
                 "log_path": str(old_log),
+                "finished_at": "2026-01-01 00:00:00",
             },
             "current": {"task_id": "current", "running": True},
         },
@@ -1187,12 +1188,44 @@ def test_daily_task_history_pruning_removes_log_and_stale_control(
         {"old": {"stop_manager": manager}},
     )
 
-    bit_interface._prune_daily_task_history()
+    bit_interface._prune_daily_task_history(
+        bit_interface.datetime(2026, 1, 5, 0, 0, 1).timestamp()
+    )
 
     assert set(bit_interface._daily_tasks) == {"current"}
     assert "old" not in bit_interface._daily_task_controls
     assert manager.shutdown_called is True
     assert not old_log.exists()
+
+
+def test_daily_task_history_restores_log_index_after_server_restart(monkeypatch, tmp_path):
+    monkeypatch.setattr(bit_interface, "_daily_task_log_path", tmp_path / "daily.log")
+    log_path = bit_interface._daily_task_log_file("restored-task")
+    log_path.write_text("可追溯日志\n", encoding="utf-8")
+    monkeypatch.setattr(
+        bit_interface,
+        "_daily_tasks",
+        {
+            "restored-task": {
+                "task_id": "restored-task",
+                "running": True,
+                "status": "running",
+                "started_at": "2026-01-01 00:00:00",
+                "finished_at": "",
+                "log_path": str(log_path),
+                "params": {},
+            }
+        },
+    )
+    bit_interface._persist_daily_task_history()
+
+    bit_interface._daily_tasks.clear()
+    bit_interface._restore_daily_task_history()
+
+    restored = bit_interface._daily_task_snapshot("restored-task")
+    assert restored["running"] is False
+    assert restored["status"] == "error"
+    assert restored["log"] == "可追溯日志"
 
 
 def test_daily_task_status_keeps_instance_logs_separate(monkeypatch, tmp_path):
@@ -1562,6 +1595,25 @@ def test_normalize_appeal_loop_count():
     assert bit_interface.normalize_appeal_loop_count("永久") == 0
     with pytest.raises(ValueError, match="循环次数只支持"):
         bit_interface.normalize_appeal_loop_count("5")
+
+
+def test_ai_script_mode_is_supported_and_uses_ai_interval():
+    assert bit_interface.normalize_appeal_mode("AI话术模式") == "AI话术模式"
+    assert bit_interface.get_appeal_round_interval("AI话术模式") == 60
+    with pytest.raises(ValueError, match="客服模式只支持"):
+        bit_interface.normalize_appeal_mode("未知模式")
+
+
+def test_appeal_console_exposes_manual_deepseek_token_without_query_string():
+    template = (
+        Path(bit_interface.CURRENT_DIR) / "templates" / "index.html"
+    ).read_text(encoding="utf-8")
+
+    assert '<option value="AI话术模式">AI 话术模式</option>' in template
+    assert 'id="deepseek-api-key" type="password"' in template
+    assert "每次最多 3 个产品，理由不超过 50 个字" in template
+    assert 'deepseek_api_key: deepseekApiKey' in template
+    assert 'method: "POST"' in template
 
 
 @pytest.mark.parametrize(
@@ -1941,13 +1993,13 @@ def test_appeal_page_contains_stop_button_and_handler():
     assert 'input type="checkbox" name="site" value="墨西哥" checked' in template
     assert 'input[name="site"]:checked' in template
     assert '<option value="全部站点">' not in template
-    assert 'params.append("site", site)' in template
+    assert "sites: selectedSites" in template
     assert '<div class="site-picker" id="form-picker"' in template
     assert 'input type="checkbox" name="form" value="延误" checked' in template
     assert 'input type="checkbox" name="form" value="禁限售"' in template
     assert "syncProhibitedAppealSelection" in template
     assert 'input[name="form"]:checked' in template
-    assert 'params.append("form", form)' in template
+    assert "forms: selectedForms" in template
     assert '<select id="loop-count">' in template
     assert '<option value="取消率">取消率</option>' in template
     assert '<option value="10" selected>10 次</option>' in template
@@ -2364,3 +2416,68 @@ def test_run_appeal_api_accepts_multiple_site_and_form_parameters(monkeypatch):
     assert captured["sites"] == ("墨西哥", "智利")
     assert captured["forms"] == ("侵权", "取消率")
     assert captured["loop_count"] == 20
+
+
+def test_run_appeal_api_passes_manual_token_only_to_ai_script_mode(monkeypatch):
+    captured = {}
+
+    def fake_shensu_logic(name, sites, forms, message, mode, **kwargs):
+        captured.update({"mode": mode, **kwargs})
+        yield "完成\n"
+
+    monkeypatch.setattr(bit_interface, "shensu_logic", fake_shensu_logic)
+    monkeypatch.setattr(
+        bit_interface.bit_daily_task,
+        "load_authorized_appeal_shop_site_config",
+        lambda: {"测试店铺": {"MX"}},
+    )
+    client = bit_interface.app.test_client()
+    with client.session_transaction() as flask_session:
+        flask_session["workbench_user"] = {
+            "id": 1,
+            "username": "tester",
+            "display_name": "Tester",
+        }
+
+    response = client.post(
+        "/api/run_shensu",
+        json={
+            "name": "测试店铺",
+            "sites": ["墨西哥"],
+            "forms": ["侵权"],
+            "mode": "AI话术模式",
+            "deepseek_api_key": "manual-secret",
+            "loop_count": 10,
+            "task_id": "ai-script-api-test",
+            "execution_target": "server",
+        },
+        buffered=True,
+    )
+
+    assert response.status_code == 200
+    assert captured["mode"] == "AI话术模式"
+    assert captured["deepseek_api_key"] == "manual-secret"
+
+
+def test_run_appeal_api_requires_token_for_ai_script_mode(monkeypatch):
+    monkeypatch.setattr(
+        bit_interface.bit_daily_task,
+        "load_authorized_appeal_shop_site_config",
+        lambda: {"测试店铺": {"MX"}},
+    )
+    client = bit_interface.app.test_client()
+    with client.session_transaction() as flask_session:
+        flask_session["workbench_user"] = {"username": "tester"}
+
+    response = client.post(
+        "/api/run_shensu",
+        json={
+            "name": "测试店铺",
+            "sites": ["墨西哥"],
+            "forms": ["禁限售"],
+            "mode": "AI话术模式",
+        },
+    )
+
+    assert response.status_code == 400
+    assert "手动填写 DeepSeek Token" in response.get_json()["message"]

@@ -1,10 +1,19 @@
+from io import BytesIO
 from pathlib import Path
 
 import pytest
+from openpyxl import load_workbook
 
 from bit import bit_interface
 from bit import mercado_infraction_sync as sync
-from erp.mercadolibre_infraction_store import _build_group_tree
+from erp.mercadolibre_infraction_store import (
+    _build_group_tree,
+    _build_store_rankings,
+    _dashboard_account_conditions,
+    _pppi_current_listing_condition,
+    _pppi_only_condition,
+    _pppi_product_key,
+)
 from erp import mercadolibre_infraction_store as infraction_store
 
 
@@ -441,6 +450,64 @@ def test_group_tree_nests_account_group_salesperson_and_store():
     assert tree[1]["salespeople"][0]["salesperson"] == "未分配"
 
 
+def test_store_rankings_ignore_group_boundaries_and_sort_all_stores():
+    tree = _build_group_tree(
+        [
+            {
+                "token_id": 1,
+                "store_name": "店铺一",
+                "site_id": "MLM",
+                "group_name": "一组",
+                "salesperson": "张三",
+                "detection_count": 2,
+                "rights_holder_count": 0,
+            },
+            {
+                "token_id": 2,
+                "store_name": "店铺二",
+                "site_id": "MLB",
+                "group_name": "二组",
+                "salesperson": "李四",
+                "detection_count": 1,
+                "rights_holder_count": 4,
+            },
+        ]
+    )
+
+    rankings = _build_store_rankings(tree)
+
+    assert [(row["rank"], row["store_name"], row["total"]) for row in rankings] == [
+        (1, "店铺二", 5),
+        (2, "店铺一", 2),
+    ]
+
+
+def test_pppi_scope_excludes_prohibited_snapshot_rows():
+    condition = _pppi_only_condition("items")
+
+    assert "items.`reason_code` = 'PROHIBITED_REASON'" in condition
+    assert "The product is prohibited." in condition
+
+
+def test_current_pppi_matches_global_selling_product_identity():
+    condition = _pppi_current_listing_condition()
+    product_key = _pppi_product_key()
+
+    assert "links.`is_current` = 1" in condition
+    assert "'active', 'under_review'" in condition
+    assert "links.`seller_sku`" in product_key
+    assert "rights_holder:" in product_key
+
+
+def test_pppi_store_ranking_keeps_every_enabled_store():
+    conditions = _dashboard_account_conditions("pppi")
+
+    assert conditions == ["tokens.`enabled` = 1"]
+    assert _dashboard_account_conditions("")[1].startswith(
+        "(settings.`appeal_enabled` = 1"
+    )
+
+
 def test_current_count_snapshot_flattens_same_dashboard_tree(monkeypatch):
     monkeypatch.setattr(
         infraction_store,
@@ -497,10 +564,10 @@ def test_independent_dashboard_page_and_data_api(monkeypatch):
         "page_size": 100,
         "pages": 1,
     }
-    received = {}
+    received = []
 
     def fake_dashboard(**kwargs):
-        received.update(kwargs)
+        received.append(kwargs)
         return dashboard
 
     monkeypatch.setattr(bit_interface, "list_infraction_dashboard", fake_dashboard)
@@ -511,15 +578,28 @@ def test_independent_dashboard_page_and_data_api(monkeypatch):
     api_response = client.get(
         "/api/official-infractions/dashboard?days=30&view_mode=history&category=counterfeit&detail_token_id=7"
     )
+    ip_page_response = client.get("/ip-rights-dashboard?embedded=1")
+    ip_api_response = client.get(
+        "/api/official-ip-rights/dashboard?days=90&salesperson=张三"
+    )
 
     assert page_response.status_code == 200
     assert "按账户组与业务员查看违规商品" in page_response.get_data(as_text=True)
     assert '<body class="embedded">' in embedded_response.get_data(as_text=True)
     assert api_response.status_code == 200
     assert api_response.get_json()["data"] == dashboard
-    assert received["detail_token_id"] == "7"
-    assert received["view_mode"] == "history"
-    assert received["category"] == "counterfeit"
+    assert received[0]["detail_token_id"] == "7"
+    assert received[0]["view_mode"] == "history"
+    assert received[0]["category"] == "counterfeit"
+    assert ip_page_response.status_code == 200
+    assert "全部店铺侵权和权利人排名" in ip_page_response.get_data(as_text=True)
+    assert 'id="group-select"' not in ip_page_response.get_data(as_text=True)
+    assert ip_api_response.status_code == 200
+    assert "account_groups" not in ip_api_response.get_json()["data"]
+    assert "group_count" not in ip_api_response.get_json()["data"]["summary"]
+    assert received[1]["scope"] == "pppi"
+    assert received[1]["salesperson"] == "张三"
+    assert "group_name" not in received[1]
 
 
 def test_dashboard_sync_endpoint_starts_background_job(monkeypatch):
@@ -540,6 +620,116 @@ def test_dashboard_sync_endpoint_starts_background_job(monkeypatch):
     assert response.get_json()["data"]["token_ids"] == [2, 3]
 
 
+def test_overview_auto_sync_switch_is_persisted_through_db_api(monkeypatch):
+    saved = {}
+    monkeypatch.setattr(bit_interface, "USE_DB_API", True)
+    monkeypatch.setattr(
+        bit_interface.bit_db_api,
+        "get_overview_auto_sync_settings",
+        lambda scope: {"scope": scope, "enabled": saved.get(scope, True), "interval_hours": 12},
+    )
+
+    def save(scope, enabled):
+        saved[scope] = enabled
+        return {"scope": scope, "enabled": enabled, "interval_hours": 12}
+
+    monkeypatch.setattr(
+        bit_interface.bit_db_api,
+        "set_overview_auto_sync_enabled",
+        save,
+    )
+    client = _client(monkeypatch)
+
+    response = client.put(
+        "/api/overview-auto-sync",
+        json={"scope": "official_infractions", "enabled": False},
+    )
+    read_response = client.get(
+        "/api/overview-auto-sync?scope=official_infractions"
+    )
+
+    assert response.status_code == 200
+    assert response.get_json()["data"]["enabled"] is False
+    assert read_response.get_json()["data"]["enabled"] is False
+
+
+def test_due_infraction_sync_respects_disabled_full_refresh_switch(monkeypatch):
+    monkeypatch.setattr(
+        sync,
+        "get_overview_sync_settings",
+        lambda _scope: {"enabled": False},
+    )
+    monkeypatch.setattr(
+        sync,
+        "list_due_infraction_token_ids",
+        lambda **_kwargs: pytest.fail("disabled scheduler must not query due stores"),
+    )
+
+    result = sync.start_due_official_infraction_sync()
+
+    assert result["disabled"] is True
+    assert result["started"] is False
+
+
+def test_ip_rights_export_keeps_filters_and_exports_all_pages(monkeypatch):
+    received = []
+
+    def fake_dashboard(**kwargs):
+        received.append(kwargs)
+        page = int(kwargs["page"])
+        return {
+            "rows": [{
+                "occurred_at": f"2026-09-0{page} 10:20:30",
+                "store_name": f"店铺{page}",
+                "site_id": "MLM",
+                "salesperson": "张三",
+                "source_type": "detection" if page == 1 else "rights_holder",
+                "item_id": f"MLM{page}",
+                "title": '=HYPERLINK("bad")' if page == 1 else "普通标题",
+                "reason": "The product could be counterfeit.",
+                "rights_holder": "" if page == 1 else "权利人甲",
+                "status": "CREATED",
+                "resolution_status": "current",
+                "due_at": "2026-09-20 00:00:00",
+                "permalink": f"https://example.test/item/{page}",
+                "thumbnail_url": f"https://example.test/image/{page}.jpg",
+            }],
+            "page": page,
+            "pages": 2,
+        }
+
+    monkeypatch.setattr(bit_interface, "list_infraction_dashboard", fake_dashboard)
+    response = _client(monkeypatch).get(
+        "/api/official-ip-rights/export",
+        query_string={
+            "days": 90,
+            "view_mode": "history",
+            "salesperson": "张三",
+            "source_type": "detection",
+            "category": "counterfeit",
+            "search": "商品",
+            "detail_token_id": 7,
+        },
+    )
+
+    assert response.status_code == 200
+    assert len(received) == 2
+    assert received[0]["scope"] == "pppi"
+    assert received[0]["salesperson"] == "张三"
+    assert received[0]["page_size"] == 50000
+    assert received[0]["rows_only"] is True
+    assert received[1]["page"] == 2
+    workbook = load_workbook(BytesIO(response.data))
+    sheet = workbook["侵权和权利人明细"]
+    assert sheet.max_row == 3
+    assert sheet["E2"].value == "平台侵权"
+    assert sheet["E3"].value == "权利人举报"
+    assert sheet["G2"].value.startswith("'=HYPERLINK")
+    assert sheet["A2"].number_format == "yyyy-mm-dd hh:mm:ss"
+    assert sheet.freeze_panes == "A2"
+    assert sheet.auto_filter.ref == "A1:N3"
+
+
 def test_console_template_links_to_independent_dashboard():
     source = (
         Path(bit_interface.resolve_template_dir()) / "index.html"
@@ -549,6 +739,9 @@ def test_console_template_links_to_independent_dashboard():
     assert '<span class="nav-label">违规商品总览</span>' in source
     assert 'data-src="/infringement-dashboard?embedded=1"' in source
     assert 'id="infraction-dashboard-frame"' in source
+    assert '<span class="nav-label">侵权和权利人总览</span>' in source
+    assert 'data-src="/ip-rights-dashboard?embedded=1"' in source
+    assert 'id="ip-rights-dashboard-frame"' in source
     assert 'window.location.assign("/infringement-dashboard")' not in source
 
 
@@ -567,3 +760,11 @@ def test_dashboard_template_supports_store_detail_drilldown():
     assert "申诉成功" in source
     assert "违规类型" in source
     assert "category-select" in source
+    assert "导出当前筛选明细 Excel" in source
+    assert "/api/official-ip-rights/export" in source
+    assert 'elements.exportButton.textContent = "正在导出…"' in source
+    assert "await response.blob()" in source
+    assert "导出失败，请稍后重试" in source
+    assert 'id="auto-sync-enabled"' in source
+    assert "最新更新时间" in source
+    assert 'scope: "official_infractions"' in source

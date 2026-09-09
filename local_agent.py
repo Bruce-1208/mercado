@@ -33,7 +33,7 @@ from urllib.parse import urlsplit
 import requests
 
 
-AGENT_VERSION = "1.1.2"
+AGENT_VERSION = "1.1.3"
 DEFAULT_SERVER_URL = "https://zeshun.cc.cd"
 DEFAULT_POLL_SECONDS = 10.0
 DEFAULT_HEARTBEAT_SECONDS = 10.0
@@ -41,6 +41,53 @@ LOG_FLUSH_SECONDS = 2.0
 LOG_UPLOAD_MIN_INTERVAL_SECONDS = 5.0
 RATE_LIMIT_MIN_SECONDS = 60.0
 RETRY_MAX_SECONDS = 300.0
+AGENT_LOG_MAX_BYTES = 5 * 1024 * 1024
+AGENT_LOG_BACKUP_COUNT = 3
+
+
+class AgentRuntimeLog:
+    """Timestamp Agent control-plane messages and keep a small local history."""
+
+    def __init__(self, path):
+        self.path = Path(path)
+        self._lock = threading.Lock()
+
+    @staticmethod
+    def _render(message):
+        timestamp = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())
+        lines = str(message or "").rstrip("\r\n").splitlines() or [""]
+        return "\n".join(f"[{timestamp}] {line}" for line in lines)
+
+    def _rotate(self, incoming_bytes):
+        try:
+            current_size = self.path.stat().st_size
+        except FileNotFoundError:
+            return
+        if current_size + incoming_bytes <= AGENT_LOG_MAX_BYTES:
+            return
+        oldest = self.path.with_name(f"{self.path.name}.{AGENT_LOG_BACKUP_COUNT}")
+        oldest.unlink(missing_ok=True)
+        for index in range(AGENT_LOG_BACKUP_COUNT - 1, 0, -1):
+            source = self.path.with_name(f"{self.path.name}.{index}")
+            if source.exists():
+                os.replace(source, self.path.with_name(f"{self.path.name}.{index + 1}"))
+        os.replace(self.path, self.path.with_name(f"{self.path.name}.1"))
+
+    def write(self, message):
+        rendered = self._render(message)
+        encoded = (rendered + "\n").encode("utf-8")
+        with self._lock:
+            print(rendered, flush=True)
+            try:
+                self.path.parent.mkdir(parents=True, exist_ok=True)
+                self._rotate(len(encoded))
+                with self.path.open("ab") as stream:
+                    stream.write(encoded)
+                    stream.flush()
+            except OSError:
+                # A read-only/full disk must not stop task polling; the timestamped
+                # console copy remains available to the operator.
+                pass
 
 
 class AgentRateLimitError(RuntimeError):
@@ -272,6 +319,7 @@ class LocalAgent:
 
     def __init__(self, config):
         self.config = config
+        self.runtime_log = AgentRuntimeLog(config.data_dir / "agent.log")
         self.session = requests.Session()
         self.session.trust_env = False
         self.session.headers.update({"User-Agent": f"MercadoLocalAgent/{AGENT_VERSION}"})
@@ -281,6 +329,9 @@ class LocalAgent:
         self._rate_limit_until = 0.0
         self._rate_limit_failures = 0
         self._rate_limit_message = ""
+
+    def log(self, message):
+        self.runtime_log.write(message)
 
     def ensure_enrolled(self):
         if self.config.agent_token:
@@ -441,7 +492,7 @@ class LocalAgent:
             shutil.rmtree(temporary_dir, ignore_errors=True)
         self._activate_release(response_version)
         self._prune_releases(keep=2)
-        print(f"业务代码已更新到版本 {response_version}", flush=True)
+        self.log(f"业务代码已更新到版本 {response_version}")
         return releases_dir / response_version
 
     def _activate_release(self, version):
@@ -491,10 +542,7 @@ class LocalAgent:
             except Exception as exc:
                 failures += 1
                 delay = self._retry_delay_with_cooldown(failures)
-                print(
-                    f"任务 {job_id} 的结果暂时无法上传：{exc}；{delay:.0f} 秒后重试",
-                    flush=True,
-                )
+                self.log(f"任务 {job_id} 的结果暂时无法上传：{exc}；{delay:.0f} 秒后重试")
                 time.sleep(delay)
 
     @staticmethod
@@ -564,6 +612,8 @@ class LocalAgent:
         def read_output():
             try:
                 for line in process.stdout or ():
+                    if line.strip():
+                        self.log(f"任务 {job_id}｜{line.rstrip()}")
                     output_queue.put(line)
             finally:
                 output_queue.put(None)
@@ -608,10 +658,9 @@ class LocalAgent:
                     log_upload_failures += 1
                     delay = self._retry_delay_with_cooldown(log_upload_failures)
                     next_log_upload_at = time.monotonic() + delay
-                    print(
+                    self.log(
                         "任务日志暂时无法上传，将继续保留并重试："
-                        f"{exc}；{delay:.0f} 秒后重试",
-                        flush=True,
+                        f"{exc}；{delay:.0f} 秒后重试"
                     )
                 else:
                     pending_logs = pending_logs[len(chunk) :]
@@ -625,7 +674,7 @@ class LocalAgent:
                     heartbeat_failures += 1
                     delay = self._retry_delay_with_cooldown(heartbeat_failures)
                     next_heartbeat_at = time.monotonic() + delay
-                    print(f"任务运行中，心跳暂时失败：{exc}；{delay:.0f} 秒后重试", flush=True)
+                    self.log(f"任务运行中，心跳暂时失败：{exc}；{delay:.0f} 秒后重试")
                 else:
                     heartbeat_failures = 0
                     next_heartbeat_at = time.monotonic() + self.config.heartbeat_seconds
@@ -654,17 +703,19 @@ class LocalAgent:
             if return_code == 0
             else f"本机业务进程异常退出：{return_code}"
         )
+        final_message = message if stopped or return_code else result.get("message") or message
+        self.log(f"任务 {job_id} 已结束：{final_message}")
         self.send_event_until_success(
             job_id,
             status=status,
-            message=message if stopped or return_code else result.get("message") or message,
+            message=final_message,
             result={**result, "return_code": return_code},
         )
 
     def run(self):
-        print(
-            f"泽顺本机 Agent {AGENT_VERSION} 已启动：{self.config.name} ({self.config.agent_id})",
-            flush=True,
+        self.log(
+            f"泽顺本机 Agent {AGENT_VERSION} 已启动：{self.config.name} "
+            f"({self.config.agent_id})；本地日志：{self.runtime_log.path}"
         )
         failures = 0
         while True:
@@ -677,14 +728,14 @@ class LocalAgent:
                     self.heartbeat()
                 job = self.claim_job()
                 if job:
-                    print(f"收到任务 {job.get('job_id')}：{job.get('job_type')}", flush=True)
+                    self.log(f"收到任务 {job.get('job_id')}：{job.get('job_type')}")
                     try:
                         self.run_job(job)
                     except KeyboardInterrupt:
                         raise
                     except Exception as exc:
                         job_id = str(job.get("job_id") or "")
-                        print(f"任务 {job_id} 启动或监控失败：{exc}", flush=True)
+                        self.log(f"任务 {job_id} 启动或监控失败：{exc}")
                         self.send_event_until_success(
                             job_id,
                             status="error",
@@ -697,15 +748,15 @@ class LocalAgent:
                     return 0
                 time.sleep(self.config.poll_seconds)
             except KeyboardInterrupt:
-                print("Agent 已停止", flush=True)
+                self.log("Agent 已停止")
                 return 0
             except Exception as exc:
                 failures += 1
                 if self.config.once:
-                    print(f"Agent 连接异常：{exc}", flush=True)
+                    self.log(f"Agent 连接异常：{exc}")
                     return 1
                 delay = self._retry_delay_with_cooldown(failures)
-                print(f"Agent 连接异常：{exc}；{delay:.0f} 秒后重试", flush=True)
+                self.log(f"Agent 连接异常：{exc}；{delay:.0f} 秒后重试")
                 time.sleep(delay)
 
 
@@ -749,12 +800,13 @@ def main(argv=None):
     if args.worker:
         return _run_external_worker(args)
     config = AgentConfig(args)
+    agent = LocalAgent(config)
     process_lock = AgentProcessLock(config.data_dir / "agent.lock")
     if not process_lock.acquire():
-        print("泽顺本机 Agent 已在运行，本次重复启动退出。")
+        agent.log("泽顺本机 Agent 已在运行，本次重复启动退出。")
         return 2
     try:
-        return LocalAgent(config).run()
+        return agent.run()
     finally:
         process_lock.release()
 

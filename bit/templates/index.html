@@ -8438,6 +8438,7 @@
                 <button class="tab-button" type="button" data-tab="risk-check" data-icon="◎" data-permission="risk_check.view" onclick="switchTab('risk-check')"><span class="nav-label">侵权检测</span></button>
                 <button class="tab-button" type="button" data-tab="infringement-knowledge" data-icon="◆" data-permission="infringement_knowledge.view" onclick="switchTab('infringement-knowledge')"><span class="nav-label">侵权知识库</span></button>
                 <button class="tab-button" type="button" data-tab="infractions" data-icon="!" data-permission="infractions.view" onclick="switchTab('infractions')"><span class="nav-label">违规商品总览</span></button>
+                <button class="tab-button" type="button" data-tab="ip-rights" data-icon="盾" data-permission="infractions.view" onclick="switchTab('ip-rights')"><span class="nav-label">侵权和权利人总览</span></button>
                 <button class="tab-button" type="button" data-tab="reputation" data-icon="☆" data-permission="reputation.view" onclick="switchTab('reputation')"><span class="nav-label">声誉数据</span></button>
                 <button class="tab-button" type="button" data-tab="api-reputation" data-icon="◎" data-permission="reputation.view" onclick="switchTab('api-reputation')"><span class="nav-label">API 声誉</span></button>
                 <button class="tab-button" type="button" data-tab="ai-appeals" data-icon="◫" data-permission="ai_appeals.view" onclick="switchTab('ai-appeals')"><span class="nav-label">AI 申诉记录</span></button>
@@ -9071,6 +9072,19 @@
                                 </select>
                             </div>
                             <div class="field">
+                                <label for="mercado-collection-browser-type">登录/采集浏览器</label>
+                                <select id="mercado-collection-browser-type" onchange="syncMercadoCollectionBrowserFields()">
+                                    <option value="bitbrowser" selected>比特浏览器</option>
+                                    <option value="edge">本地 Edge（9222）</option>
+                                </select>
+                            </div>
+                            <div class="field" id="mercado-collection-window-field">
+                                <label for="mercado-collection-window">比特浏览器窗口</label>
+                                <select id="mercado-collection-window">
+                                    <option value="e27ab66368b141a993f9c6847f51222b" data-window-name="采集专用（墨西哥）" selected>采集专用（墨西哥）</option>
+                                </select>
+                            </div>
+                            <div class="field">
                                 <label for="mercado-collection-count">数量</label>
                                 <input id="mercado-collection-count" type="number" min="1" max="500" value="20">
                             </div>
@@ -9079,7 +9093,7 @@
                                 <input id="mercado-collection-workers" type="number" min="1" max="10" value="6">
                             </div>
                             <div class="market-collector-actions">
-                                <button class="secondary" id="mercado-playwright-setup" type="button" onclick="openMercadoPlaywrightSetup()">登录采集浏览器</button>
+                                <button class="secondary" id="mercado-playwright-setup" type="button" onclick="openMercadoPlaywrightSetup()">打开登录页</button>
                                 <button class="primary" id="mercado-collection-start" type="button" onclick="startMercadoCollection()">开始采集</button>
                                 <button class="danger" id="mercado-collection-stop" type="button" onclick="stopMercadoCollection()" disabled>停止任务</button>
                             </div>
@@ -9088,7 +9102,7 @@
                             <summary>采集规则与浏览器说明</summary>
                             <div class="market-collector-help-copy">
                                 <p class="market-collector-hint">跨境专区只保留带 Internacional 标识的商品，同时兼容直接粘贴列表或详情链接。<a class="market-collector-front-link" id="mercado-collection-front-link" href="#" target="_blank" rel="noopener" hidden>打开对应前台</a></p>
-                                <p class="market-collector-hint">详情通过 Playwright 和智赢插件 DOM 读取，不使用键鼠 RPA、截图或 OCR；优先复用已登录浏览器，重量与尺寸不读取智赢产品库。</p>
+                                <p class="market-collector-hint">详情通过 Playwright 和智赢插件 DOM 读取，不使用键鼠 RPA、截图或 OCR；可选择本地 Edge 或任一比特窗口，默认使用“采集专用（墨西哥）”，重量与尺寸不读取智赢产品库。</p>
                             </div>
                         </details>
                     </div>
@@ -9805,10 +9819,17 @@
 
                         <div class="field">
                             <label for="mode">客服模式</label>
-                            <select id="mode">
+                            <select id="mode" onchange="updateAppealModeFields()">
                                 <option value="AI客服">找 AI 客服</option>
+                                <option value="AI话术模式">AI 话术模式</option>
                                 <option value="人工客服">人工客服申诉</option>
                             </select>
+                        </div>
+
+                        <div class="field" id="deepseek-token-field" hidden>
+                            <label for="deepseek-api-key">DeepSeek Token</label>
+                            <input id="deepseek-api-key" type="password" autocomplete="off" placeholder="手动填写本次任务使用的 DeepSeek Token">
+                            <small class="shop-search-hint">仅 AI 话术模式使用；侵权和禁限售每次最多 3 个产品，理由不超过 50 个字。</small>
                         </div>
 
                         <div class="field">
@@ -10060,7 +10081,7 @@
 
                     <section class="panel log-panel">
                         <div class="log-header">
-                            <h2 class="panel-title" style="margin: 0;">全部 daily_task 任务</h2>
+                            <h2 class="panel-title" style="margin: 0;">daily_task 任务</h2>
                             <span class="status" id="daily-task-status-badge">
                                 <span class="status-dot"></span>
                                 <span id="daily-task-status-text">等待启动</span>
@@ -10071,7 +10092,7 @@
                                 <label for="daily-task-status-filter">任务状态</label>
                                 <select id="daily-task-status-filter" onchange="applyDailyTaskFilters()">
                                     <option value="">全部状态</option>
-                                    <option value="running">运行中</option>
+                                    <option value="active" selected>运行中</option>
                                     <option value="queued">排队中</option>
                                     <option value="stopping">停止中</option>
                                     <option value="completed">已完成</option>
@@ -10088,6 +10109,7 @@
                             </div>
                             <div class="daily-task-filter-summary" id="daily-task-filter-summary">显示 0 项</div>
                         </div>
+                        <small class="shop-search-hint">默认仅显示运行中的任务；切换状态可查看最近 3 天历史任务及其服务器日志。</small>
                         <div class="summary-row">
                             <div class="metric">
                                 <div class="metric-label">本机运行中</div>
@@ -10678,6 +10700,10 @@
                         <p>通过 Mercado Libre 官方 API 汇总当前禁售商品，以及必须在截止时间前回复权利人的案件</p>
                     </div>
                     <div class="header-actions">
+                        <label class="inventory-switch" title="开启后每 12 小时通过官方 API 自动全量更新">
+                            <input id="prohibited-auto-sync-enabled" type="checkbox" checked onchange="updateProhibitedAutoSync(this.checked)">
+                            <i></i><em id="prohibited-auto-sync-label">全量更新已开启</em>
+                        </label>
                         <button class="primary" id="prohibited-sync-all-button" type="button" onclick="startProhibitedListingSync(true)">同步所有店铺</button>
                         <button class="secondary" id="prohibited-sync-store-button" type="button" onclick="startProhibitedListingSync(false)">同步当前店铺</button>
                         <button class="secondary" id="prohibited-sync-salesperson-button" type="button" onclick="startProhibitedSalespersonSync()">同步当前业务员</button>
@@ -10689,14 +10715,14 @@
                     <div class="store-link-sync-strip" style="grid-template-columns:minmax(220px,1.5fr) repeat(6,minmax(100px,.55fr))">
                         <div class="store-link-sync-main">
                             <span>同步状态</span>
-                            <strong id="prohibited-sync-state">禁售每日更新；权利人案件每 12 小时更新</strong>
+                            <strong id="prohibited-sync-state">每 12 小时自动全量更新</strong>
                         </div>
                         <div class="store-link-sync-metric"><span>风险合计</span><strong id="prohibited-total-count">0</strong></div>
                         <div class="store-link-sync-metric"><span>当前禁售</span><strong id="prohibited-count">0</strong></div>
                         <div class="store-link-sync-metric"><span>待回复权利人</span><strong id="prohibited-reply-count" style="color:#b45309">0</strong></div>
                         <div class="store-link-sync-metric"><span>涉及店铺</span><strong id="prohibited-store-count">0</strong></div>
                         <div class="store-link-sync-metric"><span>涉及站点</span><strong id="prohibited-site-count">0</strong></div>
-                        <div class="store-link-sync-metric"><span>最近核验</span><strong id="prohibited-last-sync" style="font-size:13px">-</strong></div>
+                        <div class="store-link-sync-metric"><span>最新更新时间</span><strong id="prohibited-last-sync" style="font-size:13px">-</strong></div>
                     </div>
 
                     <div class="store-link-filters">
@@ -10740,7 +10766,7 @@
 
                     <details class="store-link-sync-log-panel">
                         <summary><span>官方 API 同步日志</span></summary>
-                        <pre id="prohibited-sync-log">等待每天自动同步或手动同步...</pre>
+                        <pre id="prohibited-sync-log">等待每 12 小时自动全量更新或手动同步...</pre>
                     </details>
 
                     <div class="store-link-table-wrap">
@@ -11246,8 +11272,11 @@
                                     </select>
                                 </div>
                                 <div class="field">
-                                    <label for="zying-collection-window-name">比特浏览器窗口名称（仅登录）</label>
-                                    <input id="zying-collection-window-name" type="text" maxlength="256" placeholder="直接输入窗口名称；留空使用默认窗口">
+                                    <label for="zying-collection-window-name">比特浏览器窗口（仅登录）</label>
+                                    <input id="zying-collection-window-name" type="text" list="zying-collection-window-options" maxlength="256" value="采集专用（墨西哥）" placeholder="选择或输入比特窗口名称">
+                                    <datalist id="zying-collection-window-options">
+                                        <option value="采集专用（墨西哥）"></option>
+                                    </datalist>
                                 </div>
                             </div>
                             <div class="summary-row risk-check-summary-row">
@@ -11660,6 +11689,18 @@
                     </div>
                 </section>
                 </div>
+            </div>
+
+            <div class="tab-page" id="tab-ip-rights">
+                <section class="infraction-dashboard-module" aria-label="侵权和权利人总览">
+                    <iframe
+                        class="infraction-dashboard-frame"
+                        id="ip-rights-dashboard-frame"
+                        title="侵权和权利人总览"
+                        data-src="/ip-rights-dashboard?embedded=1"
+                        src="about:blank"
+                    ></iframe>
+                </section>
             </div>
 
             <div class="tab-page" id="tab-reputation">
@@ -12103,6 +12144,7 @@
         const zyingCollectionCategoryOptions = document.getElementById("zying-collection-category-options");
         const zyingCollectionBrowserType = document.getElementById("zying-collection-browser-type");
         const zyingCollectionWindowName = document.getElementById("zying-collection-window-name");
+        const zyingCollectionWindowOptions = document.getElementById("zying-collection-window-options");
         const zyingAuthPanel = document.getElementById("zying-auth-panel");
         const zyingAuthStatus = document.getElementById("zying-auth-status");
         const zyingAuthDetail = document.getElementById("zying-auth-detail");
@@ -12350,6 +12392,8 @@
         const prohibitedSyncAllButton = document.getElementById("prohibited-sync-all-button");
         const prohibitedSyncStoreButton = document.getElementById("prohibited-sync-store-button");
         const prohibitedSyncSalespersonButton = document.getElementById("prohibited-sync-salesperson-button");
+        const prohibitedAutoSyncEnabled = document.getElementById("prohibited-auto-sync-enabled");
+        const prohibitedAutoSyncLabel = document.getElementById("prohibited-auto-sync-label");
         const prohibitedSyncState = document.getElementById("prohibited-sync-state");
         const prohibitedTotalCount = document.getElementById("prohibited-total-count");
         const prohibitedCount = document.getElementById("prohibited-count");
@@ -12376,6 +12420,9 @@
         const mercadoCollectionUrl = document.getElementById("mercado-collection-url");
         const mercadoCollectionSite = document.getElementById("mercado-collection-site");
         const mercadoCollectionScope = document.getElementById("mercado-collection-scope");
+        const mercadoCollectionBrowserType = document.getElementById("mercado-collection-browser-type");
+        const mercadoCollectionWindowField = document.getElementById("mercado-collection-window-field");
+        const mercadoCollectionWindow = document.getElementById("mercado-collection-window");
         const mercadoCollectionFrontLink = document.getElementById("mercado-collection-front-link");
         const mercadoCollectionCount = document.getElementById("mercado-collection-count");
         const mercadoCollectionWorkers = document.getElementById("mercado-collection-workers");
@@ -12617,6 +12664,7 @@
         let zyingCollectionRunning = false;
         let zyingCollectionPollTimer = null;
         let zyingCollectionCategoriesLoaded = false;
+        let zyingCollectionBrowserWindowsLoaded = false;
         let zyingCollectionCategoryNames = new Map();
         let fundStatusPollTimer = null;
         let mercadoTokenAuthorizationLoaded = Boolean(mercadoAuthorizationUrl?.value);
@@ -12702,6 +12750,7 @@
         let yandexConsoleLoading = false;
         let yandexConsoleExternalUrl = "";
         let mercadoCollectionLoaded = false;
+        let mercadoCollectionBrowserWindowsLoaded = false;
         let mercadoCollectionRunning = false;
         let mercadoCollectionPollTimer = null;
         let mercadoCollectionLastProcessed = -1;
@@ -12943,6 +12992,13 @@
                     frame.dataset.loaded = "1";
                 }
             }
+            if (tabName === "ip-rights") {
+                const frame = document.getElementById("ip-rights-dashboard-frame");
+                if (frame && frame.dataset.loaded !== "1") {
+                    frame.src = frame.dataset.src;
+                    frame.dataset.loaded = "1";
+                }
+            }
             if (tabName === "appeal" && !appealPhrasesLoaded) {
                 loadAppealPhrases();
             }
@@ -12965,6 +13021,7 @@
             }
             if (tabName === "zying-collection") {
                 loadZyingCollectionCategories();
+                loadZyingCollectionBrowserWindows();
                 loadZyingCollectionStatus();
             }
             if (tabName === "reputation" || tabName === "order-print") {
@@ -13041,6 +13098,7 @@
             }
             if (tabName === "mercado-collection") {
                 mountMercadoListModule("collection");
+                loadMercadoCollectionBrowserWindows();
                 loadMercadoCollectionStatus();
             }
             if (tabName === "mercado-products") {
@@ -16671,6 +16729,63 @@
                 .join(":");
         }
 
+        function syncMercadoCollectionBrowserFields() {
+            const usesBitBrowser = mercadoCollectionBrowserType?.value !== "edge";
+            if (mercadoCollectionWindow) {
+                mercadoCollectionWindow.disabled = !usesBitBrowser || mercadoCollectionRunning;
+            }
+            if (mercadoCollectionWindowField) {
+                mercadoCollectionWindowField.style.opacity = usesBitBrowser ? "1" : ".55";
+            }
+        }
+
+        function mercadoCollectionBrowserPayload() {
+            const browserType = String(mercadoCollectionBrowserType?.value || "bitbrowser");
+            if (browserType === "edge") {
+                return {browser_type: "edge", window_id: "", window_name: ""};
+            }
+            const selectedOption = mercadoCollectionWindow?.selectedOptions?.[0];
+            return {
+                browser_type: "bitbrowser",
+                window_id: String(mercadoCollectionWindow?.value || ""),
+                window_name: String(selectedOption?.dataset?.windowName || selectedOption?.textContent || "").trim(),
+            };
+        }
+
+        async function loadMercadoCollectionBrowserWindows(force = false) {
+            if (!mercadoCollectionWindow || (mercadoCollectionBrowserWindowsLoaded && !force)) return;
+            const previousValue = mercadoCollectionWindow.value;
+            try {
+                const response = await fetch("/api/mercado-collection/browser-windows", {cache: "no-store"});
+                const payload = await response.json();
+                if (!response.ok || payload.status !== "success") {
+                    throw new Error(payload.message || `接口请求失败：${response.status}`);
+                }
+                const data = payload.data || {};
+                const defaultId = String(data.default_window_id || "e27ab66368b141a993f9c6847f51222b");
+                const defaultName = String(data.default_window_name || "采集专用（墨西哥）");
+                const rows = Array.isArray(data.rows) ? [...data.rows] : [];
+                if (!rows.some(row => String(row.window_id || "") === defaultId)) {
+                    rows.unshift({window_id: defaultId, window_name: defaultName});
+                }
+                mercadoCollectionWindow.innerHTML = rows.map(row => {
+                    const windowId = String(row.window_id || "");
+                    const windowName = String(row.window_name || windowId);
+                    return `<option value="${escapeHtml(windowId)}" data-window-name="${escapeHtml(windowName)}">${escapeHtml(windowName)}</option>`;
+                }).join("");
+                const nextValue = rows.some(row => String(row.window_id || "") === previousValue)
+                    ? previousValue
+                    : defaultId;
+                mercadoCollectionWindow.value = nextValue;
+                mercadoCollectionBrowserType.value = data.default_browser_type || "bitbrowser";
+                mercadoCollectionBrowserWindowsLoaded = true;
+            } catch (error) {
+                console.error("加载比特浏览器窗口失败", error);
+            } finally {
+                syncMercadoCollectionBrowserFields();
+            }
+        }
+
         function renderMercadoCollectionStatus(data) {
             const requested = Number(data.requested_count || data.task?.requested_count || 0);
             const candidates = Number(data.candidate_count || data.task?.collected_count || 0);
@@ -16708,6 +16823,8 @@
             mercadoCollectionProgress.style.width = `${Math.min(100, Math.round(processed * 100 / denominator))}%`;
             mercadoCollectionStart.disabled = mercadoCollectionRunning;
             mercadoCollectionStop.disabled = !mercadoCollectionRunning;
+            if (mercadoCollectionBrowserType) mercadoCollectionBrowserType.disabled = mercadoCollectionRunning;
+            syncMercadoCollectionBrowserFields();
         }
 
         async function loadMercadoCollectionStatus() {
@@ -16776,6 +16893,7 @@
             const sourceInput = mercadoCollectionUrl.value.trim();
             const requestedCount = Number(mercadoCollectionCount.value || 0);
             const workerCount = Number(mercadoCollectionWorkers.value || 0);
+            const browser = mercadoCollectionBrowserPayload();
             if (!sourceInput) {
                 mercadoCollectionMessage.textContent = "请先输入采集关键词或 Mercado 商品列表链接";
                 mercadoCollectionUrl.focus();
@@ -16804,6 +16922,7 @@
                         collection_scope: String(mercadoCollectionScope.value || "cross_border"),
                         requested_count: requestedCount,
                         worker_count: workerCount,
+                        ...browser,
                     }),
                 });
                 const payload = await response.json();
@@ -16822,19 +16941,23 @@
 
         async function openMercadoPlaywrightSetup() {
             const button = document.getElementById("mercado-playwright-setup");
+            const browser = mercadoCollectionBrowserPayload();
+            const browserLabel = browser.browser_type === "edge"
+                ? "本地 Edge"
+                : `比特窗口“${browser.window_name || "采集专用（墨西哥）"}”`;
             button.disabled = true;
-            mercadoCollectionMessage.textContent = "正在打开 Playwright 采集浏览器...";
+            mercadoCollectionMessage.textContent = `正在打开${browserLabel}登录页...`;
             try {
                 const response = await fetch("/api/mercado-collection/playwright-setup", {
                     method: "POST",
                     headers: {"Content-Type": "application/json"},
-                    body: "{}",
+                    body: JSON.stringify(browser),
                 });
                 const payload = await response.json();
                 if (!response.ok || payload.status !== "success") {
                     throw new Error(payload.message || `接口请求失败：${response.status}`);
                 }
-                mercadoCollectionMessage.textContent = "采集浏览器已打开：请在其中登录智赢，确认登录成功后关闭该窗口，再点击开始采集。只需首次设置一次。";
+                mercadoCollectionMessage.textContent = `${browserLabel}登录页已打开：请确认 Mercado 与智赢插件均已登录，完成后关闭新打开的标签页，再点击开始采集。`;
             } catch (error) {
                 mercadoCollectionMessage.textContent = `打开失败：${error.message || error}`;
             } finally {
@@ -20426,7 +20549,7 @@
                 prohibitedReplyCount.textContent = Number(summary.rights_holder_reply_count || 0).toLocaleString();
                 prohibitedStoreCount.textContent = Number(summary.store_count || 0).toLocaleString();
                 prohibitedSiteCount.textContent = Number(summary.site_count || 0).toLocaleString();
-                prohibitedLastSync.textContent = summary.last_checked_at || "-";
+                prohibitedLastSync.textContent = summary.last_updated_at || summary.last_checked_at || "-";
                 updateProhibitedSelect(
                     prohibitedStoreFilter, Array.isArray(data.stores) ? data.stores : [],
                     "token_id", "store_name", "全部店铺"
@@ -20457,12 +20580,17 @@
         function renderProhibitedSyncStatus(data) {
             const wasRunning = prohibitedSyncRunning;
             prohibitedSyncRunning = Boolean(data?.running);
+            const autoEnabled = data?.auto_sync_enabled !== false;
+            prohibitedAutoSyncEnabled.checked = autoEnabled;
+            prohibitedAutoSyncLabel.textContent = autoEnabled ? "全量更新已开启" : "全量更新已关闭";
             const processed = Number(data?.processed_stores || 0);
             const total = Number(data?.total_stores || 0);
             const rightsState = data?.rights_holder_sync || {};
             prohibitedSyncState.textContent = prohibitedSyncRunning
                 ? `${data?.message || "正在同步禁售"}${total ? ` · 店铺 ${processed}/${total}` : ""} · 当前禁售 ${Number(data?.prohibited_count || 0)}；${rightsState?.message || "正在同步权利人案件"} · 待回复 ${Number(rightsState?.rights_holder_count || 0)}`
-                : `禁售每日更新；权利人案件每 12 小时更新 · 官方 API · ${data?.target_reason || "The product is prohibited."}`;
+                : (autoEnabled
+                    ? `每 ${Number(data?.auto_sync_hours || 12)} 小时自动全量更新 · ${Number(data?.store_workers || 0)} 个店铺线程 · 官方 API`
+                    : "自动全量更新已关闭，可继续手动同步");
             const logs = Array.isArray(data?.logs) ? data.logs : [];
             const rightsLogs = Array.isArray(rightsState?.logs)
                 ? rightsState.logs.map(line => `[权利人] ${line}`)
@@ -21032,6 +21160,28 @@
             }
         }
 
+        async function loadZyingCollectionBrowserWindows(force = false) {
+            if (!zyingCollectionWindowOptions || (zyingCollectionBrowserWindowsLoaded && !force)) return;
+            try {
+                const response = await fetch("/api/mercado-collection/browser-windows", {cache: "no-store"});
+                const payload = await response.json();
+                if (!response.ok || payload.status !== "success") {
+                    throw new Error(payload.message || `接口请求失败：${response.status}`);
+                }
+                const data = payload.data || {};
+                const rows = Array.isArray(data.rows) ? data.rows : [];
+                const defaultName = String(data.default_window_name || "采集专用（墨西哥）");
+                const names = rows.map(row => String(row.window_name || "").trim()).filter(Boolean);
+                if (!names.includes(defaultName)) names.unshift(defaultName);
+                zyingCollectionWindowOptions.innerHTML = [...new Set(names)].map(name => (
+                    `<option value="${escapeHtml(name)}"></option>`
+                )).join("");
+                zyingCollectionBrowserWindowsLoaded = true;
+            } catch (error) {
+                console.error("加载智赢产品采集比特窗口失败", error);
+            }
+        }
+
         function renderZyingCollectionLogs(logs) {
             if (!zyingCollectionLog) return;
             const entries = Array.isArray(logs) ? logs : [];
@@ -21061,7 +21211,7 @@
             const usesBitBrowser = zyingCollectionBrowserType.value === "bitbrowser";
             zyingCollectionWindowName.disabled = !usesBitBrowser || zyingCollectionRunning;
             zyingCollectionWindowName.placeholder = usesBitBrowser
-                ? "直接输入窗口名称；留空使用默认窗口"
+                ? "选择或输入比特窗口名称"
                 : "本地 Edge 无需填写窗口名称";
         }
 
@@ -23574,6 +23724,43 @@
             return status || "unknown";
         }
 
+        async function updateProhibitedAutoSync(enabled) {
+            if (!prohibitedAutoSyncEnabled) return;
+            prohibitedAutoSyncEnabled.disabled = true;
+            prohibitedAutoSyncLabel.textContent = "正在保存…";
+            try {
+                const response = await fetch("/api/overview-auto-sync", {
+                    method: "PUT",
+                    headers: {"Content-Type": "application/json"},
+                    body: JSON.stringify({scope: "prohibited_listings", enabled: Boolean(enabled)}),
+                });
+                const payload = await response.json();
+                if (!response.ok || payload.status !== "success") {
+                    throw new Error(payload.message || `接口请求失败：${response.status}`);
+                }
+                prohibitedAutoSyncEnabled.checked = payload.data?.enabled !== false;
+                prohibitedAutoSyncLabel.textContent = prohibitedAutoSyncEnabled.checked
+                    ? "全量更新已开启" : "全量更新已关闭";
+                prohibitedMessage.textContent = prohibitedAutoSyncEnabled.checked
+                    ? "已开启每 12 小时自动全量更新" : "已关闭自动全量更新";
+                await loadProhibitedListingSyncStatus();
+            } catch (error) {
+                prohibitedAutoSyncEnabled.checked = !enabled;
+                prohibitedAutoSyncLabel.textContent = prohibitedAutoSyncEnabled.checked
+                    ? "全量更新已开启" : "全量更新已关闭";
+                prohibitedMessage.textContent = `保存全量更新开关失败：${error.message || error}`;
+            } finally {
+                prohibitedAutoSyncEnabled.disabled = false;
+            }
+        }
+
+        function dailyTaskMatchesStatusFilter(task, statusFilter) {
+            statusFilter = String(statusFilter || "");
+            if (!statusFilter) return true;
+            if (statusFilter === "active") return Boolean(task?.running);
+            return dailyTaskStatusCategory(task) === statusFilter;
+        }
+
         function dailyTaskComputerKey(task) {
             const executionTarget = String(task?.execution_target || "server");
             if (executionTarget !== "agent") return executionTarget;
@@ -23732,7 +23919,7 @@
             const statusFilter = String(dailyTaskStatusFilter?.value || "");
             const computerFilter = String(dailyTaskComputerFilter?.value || "");
             const visibleTasks = tasks.filter(task => (
-                (!statusFilter || dailyTaskStatusCategory(task) === statusFilter)
+                dailyTaskMatchesStatusFilter(task, statusFilter)
                 && (!computerFilter || dailyTaskComputerKey(task) === computerFilter)
             ));
             const runningCount = tasks.filter(task => task.running).length;
@@ -24524,6 +24711,15 @@
             if (prohibitedInput) prohibitedInput.checked = true;
         }
 
+        function updateAppealModeFields() {
+            const aiScriptMode = document.getElementById("mode")?.value === "AI话术模式";
+            const tokenField = document.getElementById("deepseek-token-field");
+            const tokenInput = document.getElementById("deepseek-api-key");
+            if (tokenField) tokenField.hidden = !aiScriptMode;
+            if (tokenInput) tokenInput.required = aiScriptMode;
+        }
+        updateAppealModeFields();
+
         async function startTask() {
             const shopName = String(appealShopInput?.value || "").trim();
             if (!shopName) {
@@ -24557,6 +24753,15 @@
                 alert("请至少选择一个任务类型");
                 return;
             }
+            const appealMode = document.getElementById("mode").value;
+            const deepseekApiKey = String(
+                document.getElementById("deepseek-api-key")?.value || ""
+            ).trim();
+            if (appealMode === "AI话术模式" && !deepseekApiKey) {
+                alert("AI话术模式必须手动填写 DeepSeek Token");
+                document.getElementById("deepseek-api-key")?.focus();
+                return;
+            }
 
             startBtn.disabled = true;
             stopBtn.disabled = false;
@@ -24578,23 +24783,28 @@
             setStatus(`${executionTargetLabel(activeAppealExecutionTarget)}任务运行中`, "running");
             appendLog(`正在连接${executionTargetLabel(activeAppealExecutionTarget)}...\n`);
 
-            const params = new URLSearchParams({
+            const requestPayload = {
                 name: shopName,
-                mode: document.getElementById("mode").value,
+                mode: appealMode,
                 loop_count: document.getElementById("loop-count").value,
                 message: document.getElementById("message").value,
                 task_id: activeAppealTaskId,
                 execution_target: activeAppealExecutionTarget,
                 agent_id: selectedAgentId,
-            });
-            selectedSites.forEach(site => params.append("site", site));
-            selectedForms.forEach(form => params.append("form", form));
+                sites: selectedSites,
+                forms: selectedForms,
+                deepseek_api_key: deepseekApiKey,
+            };
 
             try {
                 const response = await fetchExecutionTarget(
                     activeAppealExecutionTarget,
-                    `/api/run_shensu?${params.toString()}`,
-                    {},
+                    "/api/run_shensu",
+                    {
+                        method: "POST",
+                        headers: {"Content-Type": "application/json"},
+                        body: JSON.stringify(requestPayload),
+                    },
                     "appeal.execute",
                 );
                 if (!response.ok) {

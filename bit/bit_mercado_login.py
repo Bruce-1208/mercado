@@ -1201,7 +1201,7 @@ def ensure_mercado_login_from_home(
     max_rate_limit_retries=2,
     rate_limit_retry_wait_seconds=RATE_LIMIT_RETRY_WAIT_SECONDS,
 ):
-    """访问首页；每次遇到限频都切换香港节点，等待后最多重试两次。"""
+    """访问首页；遇到限频时保持当前出口，退避等待后最多重试两次。"""
     max_rate_limit_retries = max(0, int(max_rate_limit_retries))
     rate_limit_retry_count = 0
     rate_limit_detected = False
@@ -1281,8 +1281,8 @@ def ensure_mercado_login_from_home(
                 False,
                 LOGIN_FAILED,
                 f"{shop_name} 检测到美客多限频"
-                f"（{MERCADO_RATE_LIMIT_TEXT}），切换节点后重试 "
-                f"{rate_limit_retry_count} 次仍未恢复（节点切换：{switch_reason}）",
+                f"（{MERCADO_RATE_LIMIT_TEXT}），保持当前网络出口退避重试 "
+                f"{rate_limit_retry_count} 次仍未恢复（自动换节点：{switch_reason}）",
                 login_stage="rate_limited",
                 action="限频重试失败",
                 rate_limited=True,
@@ -2422,7 +2422,7 @@ def open_mercado_backend_page(
 ):
     """打开 Mercado 业务页，统一处理限频和退出登录。
 
-    遇到指定西语限频页时切换香港节点后重开目标页；遇到
+    遇到指定西语限频页时保持当前网络出口退避后重开目标页；遇到
     登录页时使用数据库邮箱和浏览器保存的默认密码自动登录，
     成功后重开原业务页。调用方必须检查返回值的 ``ok``。
     """
@@ -2536,7 +2536,7 @@ def open_mercado_backend_page(
                     "status": "rate_limited",
                     "message": (
                         f"{shop_name} 美客多限频（{MERCADO_RATE_LIMIT_TEXT}），"
-                        f"切换节点重试 {rate_retry_count} 次仍未恢复"
+                        f"保持当前网络出口退避重试 {rate_retry_count} 次仍未恢复"
                     ),
                     "state": state,
                     "target_url": target_url,

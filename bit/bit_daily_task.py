@@ -21,6 +21,7 @@ from bit.bit_api import closeBrowser
 from bit.bit_collection_control import terminate_process_pool
 from bit.bit_db_api import (
     get_latest_reputation_info,
+    get_window_anomalies,
     list_mercado_prohibited_listings,
     list_mercado_store_tokens,
     resolve_window_anomaly,
@@ -34,6 +35,7 @@ from bit.bit_runtime_lock import (
 from bit.bit_mercado_limit import is_mercado_rate_limited_text
 from bit.bit_appeal_state import SUCCESS_STATUSES, task_execution_counts
 from bit.bit_mercado_login import (
+    LOGIN_LOGGED_OUT,
     is_login_blocking_result,
     is_shop_status_anomaly,
     record_login_anomaly,
@@ -1068,6 +1070,65 @@ def _resolve_login_anomaly(window_id, name):
         print(f"{get_now_time()} {name} 更新窗口登录状态失败：{e}<br>")
 
 
+def _split_login_paused_shops(plan, appeal_label):
+    """把已有待处理登录异常的店铺从执行计划中移除。
+
+    退出登录会由 worker 写入持久化窗口异常。循环的下一轮、多任务的
+    下一项都会在打开浏览器前执行本检查，直到人工登录复检成功或在
+    店铺状态页人工解除。
+    """
+    plan = list(plan or [])
+    if not plan:
+        return [], []
+    try:
+        payload = get_window_anomalies(active_only=True, limit=1000) or {}
+        rows = payload.get("rows") if isinstance(payload, dict) else payload
+        blocked = {
+            str(row.get("window_id") or "").strip(): row
+            for row in (rows or [])
+            if isinstance(row, dict)
+            and str(row.get("window_id") or "").strip()
+            and is_shop_status_anomaly(row)
+        }
+    except Exception as exc:
+        print(
+            f"{get_now_time()} 读取店铺登录熔断状态失败，"
+            f"本轮仅依赖运行时登录检测：{exc}<br>"
+        )
+        return plan, []
+
+    runnable = []
+    paused = []
+    for shop in plan:
+        window_id = str(shop.get("window_id") or "").strip()
+        anomaly = blocked.get(window_id)
+        if anomaly is None:
+            runnable.append(shop)
+            continue
+        name = str(shop.get("name") or anomaly.get("window_name") or window_id)
+        anomaly_type = str(anomaly.get("anomaly_type") or LOGIN_LOGGED_OUT)
+        reason = str(anomaly.get("reason") or anomaly_type)
+        print(
+            f"{get_now_time()} {name} 存在待处理的{anomaly_type}，"
+            "已熔断跳过本店铺；请人工登录并复检后再恢复任务<br>"
+        )
+        paused.append(
+            {
+                "name": name,
+                "total": shop.get("total", 0),
+                "appeal_type": appeal_label,
+                "results": [
+                    {
+                        "status": "login_circuit_open",
+                        "result": reason,
+                    }
+                ],
+                "exit_reason": "登录异常熔断",
+            }
+        )
+    return runnable, paused
+
+
 def _appeal_one_shop_locked(
     shop_plan,
     window_id,
@@ -1682,6 +1743,14 @@ def _run_ai_appeal_once_locked(
         print(f"{get_now_time()} 已收到停止请求，{appeal_label}任务不再解析窗口<br>")
         return []
 
+    plan, paused_results = _split_login_paused_shops(plan, appeal_label)
+    if not plan:
+        print(
+            f"{get_now_time()} 本轮{appeal_label}店铺均因待处理登录异常被熔断，"
+            "未打开任何浏览器窗口<br>"
+        )
+        return paused_results
+
     requested_workers = (
         max_workers if max_workers is not None else DEFAULT_DAILY_MAX_WORKERS
     )
@@ -1695,7 +1764,7 @@ def _run_ai_appeal_once_locked(
             f"{get_now_time()} AI 申诉并发已从 {requested_workers} 限制为 "
             f"{worker_count}，可通过 BIT_DAILY_BROWSER_WORKER_LIMIT 调整<br>"
         )
-    results = []
+    results = list(paused_results)
     print(
         f"{get_now_time()} bit_daily_task 本轮使用 {worker_count} 个进程"
         f"并发处理 {len(plan)} 个{appeal_label}店铺<br>"

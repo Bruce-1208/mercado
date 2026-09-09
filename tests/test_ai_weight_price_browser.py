@@ -224,6 +224,16 @@ def test_category_search_accepts_explicit_selector_and_waits_until_enabled(page)
     assert adapter.category_search(page, page.locator("#category")).get_attribute("id") == "query"
 
 
+def test_current_page_accepts_missing_pagination_only_for_an_unambiguous_single_page(page):
+    adapter = Browser(validate({}), threading.Event(), lambda *args, **kwargs: None)
+    page.set_content('<main>唯一一页商品</main>')
+    assert adapter.current_page(page) == 1
+    page.set_content('''<ul class="ant-pagination"><li class="ant-pagination-item">1</li>
+        <li class="ant-pagination-item">2</li><li class="ant-pagination-next"><button>下一页</button></li></ul>''')
+    with pytest.raises(ValueError, match="无法唯一确认"):
+        adapter.current_page(page)
+
+
 @pytest.mark.parametrize("duplicate_hidden", [False, True])
 def test_image_search_uploads_task_image_and_waits_for_new_results(page, monkeypatch, duplicate_hidden):
     import base64
@@ -366,6 +376,8 @@ def test_console_shows_worker_error_and_logs_on_task_page(page, tmp_path, monkey
     expect(page.locator("#run-summary")).to_have_text("采集失败")
     expect(page.locator("#run-message")).to_have_text(reason)
     expect(page.locator("#latest-event")).to_contain_text(reason)
+    expect(page.locator("#live-console")).to_be_visible()
+    expect(page.locator("#live-log-list")).to_contain_text(reason)
     expect(page.locator("#view-logs")).to_be_hidden()
     page.locator("#process-range").click()
     expect(page.locator("#run-summary")).to_have_text("最近操作失败")

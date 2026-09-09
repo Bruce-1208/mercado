@@ -71,6 +71,49 @@ def test_agent_cancel_is_reported_to_claimed_agent(tmp_path):
     assert store.get_job("appeal-cancel-job")["status"] == "stopping"
 
 
+def test_claimed_deepseek_token_is_delivered_once_then_redacted(tmp_path):
+    store = LocalAgentStore(tmp_path / "hub.sqlite3")
+    store.heartbeat("agent-secret-pc", name="密钥测试", now=100)
+    store.enqueue_job(
+        "appeal-secret-job",
+        "agent-secret-pc",
+        "appeal",
+        {"mode": "AI话术模式", "deepseek_api_key": "manual-secret"},
+        now=101,
+    )
+
+    claimed = store.claim_job("agent-secret-pc", now=102)
+
+    assert claimed["payload"]["deepseek_api_key"] == "manual-secret"
+    assert "deepseek_api_key" not in store.get_job("appeal-secret-job")["payload"]
+
+
+def test_daily_agent_history_is_pruned_after_retention_window(tmp_path):
+    store = LocalAgentStore(tmp_path / "hub.sqlite3")
+    store.heartbeat("agent-retention-pc", name="日志保留测试", now=100)
+    for job_id, finished_at in (("daily-old-job", 110), ("daily-current-job", 290)):
+        store.enqueue_job(job_id, "agent-retention-pc", "daily_task", {}, now=finished_at - 2)
+        store.claim_job("agent-retention-pc", now=finished_at - 1)
+        store.append_event(
+            job_id,
+            "agent-retention-pc",
+            content=f"{job_id} 日志\n",
+            status="success",
+            now=finished_at,
+        )
+
+    removed = store.prune_job_history(
+        retention_seconds=100,
+        job_type="daily_task",
+        now=300,
+    )
+
+    assert removed == 1
+    assert store.get_job("daily-old-job") is None
+    assert store.events_after("daily-old-job") == []
+    assert store.get_job("daily-current-job") is not None
+
+
 def test_business_bundle_is_versioned_and_contains_worker(tmp_path):
     (tmp_path / "bit").mkdir()
     (tmp_path / "bit" / "__init__.py").write_text("", encoding="utf-8")

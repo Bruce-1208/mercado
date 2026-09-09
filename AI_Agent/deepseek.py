@@ -65,8 +65,8 @@ def _get_deepseek_api_key() -> str:
     return ""
 
 
-def _get_client() -> OpenAI:
-    api_key = _get_deepseek_api_key()
+def _get_client(api_key: str | None = None) -> OpenAI:
+    api_key = str(api_key or "").strip() or _get_deepseek_api_key()
     if not api_key:
         raise RuntimeError(
             "缺少 DeepSeek API Key。请任选一种方式配置："
@@ -84,6 +84,7 @@ def chat_deepseek(
     temperature: float | None = None,
     max_tokens: int | None = None,
     response_format: dict | None = None,
+    api_key: str | None = None,
 ) -> str:
     kwargs = {
         "model": model or DEEPSEEK_MODEL,
@@ -96,7 +97,7 @@ def chat_deepseek(
     if response_format is not None:
         kwargs["response_format"] = response_format
 
-    response = _get_client().chat.completions.create(**kwargs)
+    response = _get_client(api_key=api_key).chat.completions.create(**kwargs)
     return response.choices[0].message.content or ""
 
 

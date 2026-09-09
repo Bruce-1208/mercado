@@ -590,6 +590,12 @@ def list_prohibited_listings(
                 """
             )
             summary = _json_safe_row(cursor.fetchone() or {})
+            cursor.execute(
+                f"SELECT MAX(`last_completed_at`) AS `last_updated_at` "
+                f"FROM `{PROHIBITED_SYNC_STATE_TABLE}`"
+            )
+            latest_sync = _json_safe_row(cursor.fetchone() or {})
+            summary["last_updated_at"] = latest_sync.get("last_updated_at")
         return {
             "rows": rows, "groups": groups, "stores": stores,
             "salespersons": salespersons, "summary": summary,

@@ -2064,8 +2064,9 @@ def repair_marketplace_items_playwright(
     )
 
 
-async def _open_login_setup_async(start_url: str) -> None:
-    runtime = await _open_runtime()
+async def _open_login_setup_async(start_url: str, window_id: str = "") -> None:
+    window_id = str(window_id or "").strip()
+    runtime = await (_open_runtime(window_id) if window_id else _open_runtime())
     page = await _new_page(runtime)
     try:
         try:
@@ -2082,13 +2083,15 @@ async def _open_login_setup_async(start_url: str) -> None:
 
 def open_playwright_login_setup(
     start_url: str = DEFAULT_SETUP_URL,
+    *,
+    window_id: str = "",
 ) -> None:
-    """Open the persistent collector profile for a one-time ZYing login.
+    """Open the selected Edge/BitBrowser profile for a one-time ZYing login.
 
     The function returns after the operator closes the setup page.  It is
     intended to run in a background thread owned by the workbench.
     """
-    asyncio.run(_open_login_setup_async(start_url))
+    asyncio.run(_open_login_setup_async(start_url, window_id=window_id))
 
 
 __all__ = [

@@ -136,6 +136,9 @@ def test_prohibited_listing_ui_and_list_route():
     assert b"The product is prohibited." in response.data
     assert b'id="prohibited-risk-type-filter"' in response.data
     assert b'id="prohibited-reply-count"' in response.data
+    assert b'id="prohibited-auto-sync-enabled"' in response.data
+    assert "最新更新时间".encode("utf-8") in response.data
+    assert b'scope: "prohibited_listings"' in response.data
     assert "待回复权利人".encode("utf-8") in response.data
     assert b"startProhibitedListingSync" in response.data
 
@@ -186,6 +189,24 @@ def test_manual_prohibited_sync_route_can_target_one_store():
     assert response.status_code == 202
     assert response.get_json()["data"]["running"] is True
     start.assert_called_once_with([7])
+
+
+def test_due_prohibited_sync_respects_disabled_full_refresh_switch(monkeypatch):
+    monkeypatch.setattr(
+        sync,
+        "get_overview_sync_settings",
+        lambda _scope: {"enabled": False},
+    )
+    monkeypatch.setattr(
+        sync,
+        "list_due_prohibited_token_ids",
+        lambda **_kwargs: pytest.fail("disabled scheduler must not query due stores"),
+    )
+
+    result = sync.start_due_prohibited_listing_sync()
+
+    assert result["disabled"] is True
+    assert result["started"] is False
 
 
 def test_all_store_prohibited_sync_ignores_selected_ids():

@@ -244,6 +244,7 @@ class Service:
                 self.store.set_state("run", {"mode": mode, "selection": selection, "started_at": time.time(),
                                              "task_id": task_id,
                                              "run_id": config.get("run_id"), "max_items": config.get("max_items"), "processed_items": 0,
+                                             "current_item_index": 0,
                                              "success_items": 0, "skipped_items": 0, "blocked_items": 0, "risk_items": 0,
                                              "outcome": "running", "message": "正在连接本机Edge"})
                 if config.get("run_id"):
@@ -448,6 +449,12 @@ class Service:
                 self.store.set_state("pipeline_current", None)
             return
         run_id = config.get("run_id")
+        run = self.store.state("run", {})
+        ordinal = int(run.get("processed_items") or 0) + 1
+        maximum = int(config.get("max_items") or run.get("max_items") or ordinal)
+        self.store.set_state("run", {**run, "current_task_id": key,
+                                     "current_item_index": ordinal, "max_items": maximum})
+        self.store.log(f"开始逐件核对第 {ordinal}/{maximum} 件商品", key)
         self.store.record_run_item(run_id, key, execution_result="执行中")
         try:
             self._complete_one(key, browser, models, config)

@@ -261,6 +261,32 @@ def test_official_infraction_dashboard_client_uses_http_route(monkeypatch):
     )]
 
 
+def test_official_infraction_dashboard_client_supports_long_export_timeout(monkeypatch):
+    calls = []
+    monkeypatch.setattr(bit_db_api, "DB_MODE", "api")
+    monkeypatch.setattr(
+        bit_db_api,
+        "_request",
+        lambda method, path, **kwargs: calls.append((method, path, kwargs))
+        or {"rows": []},
+    )
+
+    bit_db_api.list_official_infraction_dashboard(
+        rows_only=True,
+        page_size=50000,
+        _request_timeout=300,
+    )
+
+    assert calls == [(
+        "GET",
+        "/api/db/official-infractions/dashboard",
+        {
+            "params": {"rows_only": True, "page_size": 50000},
+            "timeout": 300,
+        },
+    )]
+
+
 def test_official_infraction_counts_rebuild_tuple_keys_from_http(monkeypatch):
     monkeypatch.setattr(bit_db_api, "DB_MODE", "api")
     monkeypatch.setattr(

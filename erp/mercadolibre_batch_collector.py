@@ -25,6 +25,10 @@ DEFAULT_ZYING_WINDOW_ID = os.environ.get(
     "BIT_ZYING_WINDOW_ID",
     "e27ab66368b141a993f9c6847f51222b",
 )
+DEFAULT_COLLECTION_WINDOW_NAME = os.environ.get(
+    "MERCADO_COLLECTION_WINDOW_NAME",
+    "采集专用（墨西哥）",
+).strip()
 DEFAULT_BROWSER_MODE = os.environ.get(
     "MERCADO_COLLECTION_BROWSER",
     "bitbrowser",
@@ -162,6 +166,27 @@ def normalize_collection_workers(value: Any) -> int:
     if workers < 1 or workers > MAX_COLLECTION_WORKERS:
         raise ValueError(f"并发数必须在 1-{MAX_COLLECTION_WORKERS} 之间")
     return workers
+
+
+def normalize_collection_browser_type(value: Any) -> str:
+    """Normalize the workbench browser selector to a supported collector mode."""
+    normalized = str(value or "bitbrowser").strip().lower()
+    aliases = {
+        "bit": "bitbrowser",
+        "bit_browser": "bitbrowser",
+        "bit-browser": "bitbrowser",
+        "比特": "bitbrowser",
+        "比特浏览器": "bitbrowser",
+        "local_edge": "edge",
+        "local-edge": "edge",
+        "msedge": "edge",
+        "本地edge": "edge",
+        "本地 edge": "edge",
+    }
+    normalized = aliases.get(normalized, normalized)
+    if normalized not in {"edge", "bitbrowser"}:
+        raise ValueError("采集浏览器只能选择本地 Edge 或比特浏览器")
+    return normalized
 
 
 def _number(value: Any) -> float | None:
@@ -1658,6 +1683,7 @@ def collect_marketplace_listing(
 __all__ = [
     "CollectionStopped",
     "DEFAULT_BROWSER_MODE",
+    "DEFAULT_COLLECTION_WINDOW_NAME",
     "DEFAULT_COLLECTION_WORKERS",
     "DEFAULT_ZYING_WINDOW_ID",
     "MAX_COLLECTION_COUNT",
@@ -1671,6 +1697,7 @@ __all__ = [
     "merge_listing_candidates",
     "normalize_collection_workers",
     "normalize_collection_scope",
+    "normalize_collection_browser_type",
     "ocr_plugin_image",
     "parse_plugin_metrics",
     "parse_detail_html",

@@ -196,6 +196,11 @@ def test_workbench_splits_collection_and_product_list_into_separate_modules():
     assert b'id="mercado-collection-workers" type="number" min="1" max="10"' in response.data
     assert b'id="mercado-collection-site"' in response.data
     assert b'id="mercado-collection-scope"' in response.data
+    assert b'id="mercado-collection-browser-type"' in response.data
+    assert b'id="mercado-collection-window"' in response.data
+    assert "本地 Edge（9222）".encode("utf-8") in response.data
+    assert "采集专用（墨西哥）".encode("utf-8") in response.data
+    assert b'/api/mercado-collection/browser-windows' in response.data
     assert b'id="mercado-collection-front-link"' in response.data
     assert "跨境卖家专区".encode("utf-8") in response.data
     assert b'id="mercado-playwright-setup"' in response.data
@@ -464,6 +469,101 @@ def test_playwright_login_setup_starts_background_window():
         "测试用户",
         worker_count=10,
     )
+    _reset_state()
+
+
+def test_collection_browser_params_default_to_mexico_bit_window(monkeypatch):
+    from erp import mercadolibre_batch_collector as collector
+
+    default_browser = workbench.build_mercado_collection_browser_params({})
+    edge_browser = workbench.build_mercado_collection_browser_params(
+        {"browser_type": "edge", "window_id": "ignored"}
+    )
+    monkeypatch.setattr(workbench, "getBrowserIdByName", lambda name: "window-custom")
+    custom_browser = workbench.build_mercado_collection_browser_params(
+        {"browser_type": "bitbrowser", "window_name": "另一个采集窗口"}
+    )
+
+    assert default_browser == {
+        "browser_type": "bitbrowser",
+        "window_id": collector.DEFAULT_ZYING_WINDOW_ID,
+        "window_name": "采集专用（墨西哥）",
+    }
+    assert edge_browser == {
+        "browser_type": "edge",
+        "window_id": "",
+        "window_name": "",
+    }
+    assert custom_browser["window_id"] == "window-custom"
+
+
+def test_collection_browser_windows_endpoint_returns_safe_choices(monkeypatch):
+    monkeypatch.setattr(
+        workbench,
+        "listBrowsers",
+        lambda: [
+            {"id": "window-other", "name": "其他窗口", "proxy": "secret"},
+            {
+                "id": "e27ab66368b141a993f9c6847f51222b",
+                "name": "采集专用（墨西哥）",
+                "proxy": "secret",
+            },
+        ],
+    )
+
+    response = _client().get("/api/mercado-collection/browser-windows")
+
+    assert response.status_code == 200
+    data = response.get_json()["data"]
+    assert data["default_browser_type"] == "bitbrowser"
+    assert data["default_window_name"] == "采集专用（墨西哥）"
+    assert data["rows"][0] == {
+        "window_id": "e27ab66368b141a993f9c6847f51222b",
+        "window_name": "采集专用（墨西哥）",
+    }
+    assert "proxy" not in data["rows"][0]
+
+
+def test_collection_login_setup_uses_selected_edge_browser():
+    _reset_state()
+    with patch.object(workbench.threading, "Thread") as thread_class:
+        response = _client().post(
+            "/api/mercado-collection/playwright-setup",
+            json={"browser_type": "edge"},
+        )
+
+    assert response.status_code == 200
+    assert thread_class.call_args.kwargs["args"] == ("edge", "", "")
+    assert response.get_json()["data"]["browser_type"] == "edge"
+    thread_class.return_value.start.assert_called_once()
+    _reset_state()
+
+
+def test_start_collection_passes_selected_browser_to_worker():
+    _reset_state()
+    with patch.object(
+        workbench, "db_create_mercado_collection_task", return_value=44
+    ), patch.object(workbench.threading, "Thread") as thread_class:
+        response = _client().post(
+            "/api/mercado-collection/start",
+            json={
+                "keyword": "bolsa",
+                "site_id": "MLM",
+                "requested_count": 5,
+                "worker_count": 2,
+                "browser_type": "bitbrowser",
+                "window_id": "window-selected",
+                "window_name": "选中的窗口",
+            },
+        )
+
+    assert response.status_code == 200
+    assert thread_class.call_args.kwargs["args"][-3:] == (
+        "bitbrowser",
+        "window-selected",
+        "选中的窗口",
+    )
+    thread_class.return_value.start.assert_called_once()
     _reset_state()
 
 
