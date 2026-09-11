@@ -179,18 +179,19 @@ def test_only_missing_fields_use_chat_and_preserve_page_facts(tmp_path, monkeypa
         assert saved["info_sources"]["weight_g"] == "1688页面"
 
 
-def test_failure_pauses_before_next_collection_and_resume_does_not_skip(tmp_path, monkeypatch):
+def test_failure_isolated_to_item_and_next_collection_continues(tmp_path, monkeypatch):
     service, browser, config = setup(tmp_path, monkeypatch)
     browser.fail_write = True
     lock = service.lock(); assert lock.acquire()
     service.run(config, "pipeline", None, lock)
-    assert service.store.list()["total"] == 1
-    assert service.store.state("run")["outcome"] == "blocked"
+    assert service.store.list()["total"] == 10
+    assert service.store.state("run")["outcome"] == "completed"
+    assert service.store.state("run")["processed_items"] == 10
+    assert service.store.get("1")["status"] == "skipped"
     assert service.store.get("1")["erp_before"]["weight_g"] == "430"
     assert service.store.get("1")["erp_after"] is None
     assert not service.store.get("1")["write_verified"]
-    with pytest.raises(ItemBlocked):
-        service.complete_one("1", browser, PageModel(), config)
+    assert [key for step, key in browser.operations if step == "collect"] == list(map(str, range(1, 11)))
 
 
 def test_waiting_current_item_never_processes_next_item(tmp_path, monkeypatch):

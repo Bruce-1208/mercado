@@ -596,6 +596,10 @@ if USE_DB_API:
     db_update_zying_product_risks = bit_db_api.update_zying_product_risks
     db_list_zying_risk_categories = bit_db_api.list_zying_risk_categories
     db_get_zying_risk_results = bit_db_api.get_zying_risk_results
+    db_get_infringement_risk_candidates = bit_db_api.get_infringement_risk_candidates
+    db_update_infringement_product_risks = bit_db_api.update_infringement_product_risks
+    db_get_infringement_risk_results = bit_db_api.get_infringement_risk_results
+    db_list_infringement_risk_scope_options = bit_db_api.list_infringement_risk_scope_options
     db_resolve_window_anomaly = bit_db_api.resolve_window_anomaly
     db_upsert_window_anomaly = bit_db_api.upsert_window_anomaly
     db_inset_delay_info = bit_db_api.inset_delay_info
@@ -664,6 +668,10 @@ else:
         update_zying_product_risks,
         list_zying_risk_categories,
         get_zying_risk_results,
+        get_infringement_risk_candidates,
+        update_infringement_product_risks,
+        get_infringement_risk_results,
+        list_infringement_risk_scope_options,
         resolve_window_anomaly,
         inset_delay_info,
         inset_infraction_info,
@@ -704,6 +712,10 @@ else:
     db_update_zying_product_risks = update_zying_product_risks
     db_list_zying_risk_categories = list_zying_risk_categories
     db_get_zying_risk_results = get_zying_risk_results
+    db_get_infringement_risk_candidates = get_infringement_risk_candidates
+    db_update_infringement_product_risks = update_infringement_product_risks
+    db_get_infringement_risk_results = get_infringement_risk_results
+    db_list_infringement_risk_scope_options = list_infringement_risk_scope_options
     db_resolve_window_anomaly = resolve_window_anomaly
     db_upsert_window_anomaly = upsert_window_anomaly
     db_inset_delay_info = inset_delay_info
@@ -2432,6 +2444,12 @@ class DailyTaskLogSink:
         _append_daily_task_log(text, self.log_path)
 
 
+def _sanitize_daily_task_params(params):
+    sanitized = dict(params or {})
+    sanitized.pop("deepseek_api_key", None)
+    return sanitized
+
+
 def _daily_task_display_name(params):
     params = dict(params or {})
     group_names = [str(value).strip() for value in params.get("group_names") or () if str(value).strip()]
@@ -2453,7 +2471,11 @@ def _daily_task_display_name(params):
         if params.get("execution_target") == "local"
         else "服务器比特浏览器"
     )
-    return f"{execution_label}｜{scope}｜{task_type}｜{mode}"
+    copy_mode = bit_daily_task.normalize_appeal_copy_mode(
+        params.get("appeal_copy_mode", bit_daily_task.APPEAL_COPY_MODE_NORMAL)
+    )
+    copy_label = "｜AI话术" if copy_mode == bit_daily_task.APPEAL_COPY_MODE_AI else ""
+    return f"{execution_label}｜{scope}｜{task_type}｜{mode}{copy_label}"
 
 
 def _update_daily_task_state(task_id, **updates):
@@ -2758,7 +2780,7 @@ MERCADO_AUTH_SITE_NAMES = {
     "UY": "乌拉圭",
 }
 APPEAL_FORMS = ("延误", "侵权", "禁限售", "取消率", "投诉")
-APPEAL_MODES = ("AI客服", "AI话术模式", "人工客服")
+APPEAL_MODES = ("AI客服", "人工客服")
 APPEAL_LOOP_COUNTS = (10, 20, 50)
 DEFAULT_APPEAL_LOOP_COUNT = 10
 PERMANENT_APPEAL_LOOP_COUNT = 0
@@ -4032,7 +4054,7 @@ def build_risk_check_params(data):
     data = data if isinstance(data, dict) else {}
     category = str(data.get("category") or "").strip()[:1024]
     model = str(data.get("model") or "").strip()[:128] or None
-    return {
+    params = {
         "zying_category": category or None,
         "hours": _parse_int_param(data, "hours", 0, min_value=0, max_value=87600),
         "limit": _parse_int_param(data, "limit", 0, min_value=0, max_value=50000),
@@ -4054,6 +4076,37 @@ def build_risk_check_params(data):
         "recheck": _parse_bool_param(data, "recheck", False),
         "dry_run": _parse_bool_param(data, "dry_run", False),
     }
+    if "sources" in data:
+        raw_sources = data.get("sources")
+        if not isinstance(raw_sources, list):
+            raise ValueError("产品来源必须是数组")
+        allowed_sources = set(bit_check_risk.SOURCE_LABELS)
+        sources = list(dict.fromkeys(
+            str(value or "").strip().lower() for value in raw_sources
+            if str(value or "").strip().lower() in allowed_sources
+        ))
+        if not sources:
+            raise ValueError("请至少选择一种产品来源")
+        params["sources"] = sources
+        for input_key, output_key in (
+            ("salespeople", "salesperson"),
+            ("group_names", "group_name"),
+        ):
+            values = data.get(input_key) or []
+            if not isinstance(values, list):
+                raise ValueError(f"{input_key} 必须是数组")
+            params[output_key] = list(dict.fromkeys(
+                str(value or "").strip()[:100]
+                for value in values if str(value or "").strip()
+            ))
+        token_ids = data.get("token_ids") or []
+        if not isinstance(token_ids, list):
+            raise ValueError("token_ids 必须是数组")
+        params["token_ids"] = list(dict.fromkeys(
+            int(value) for value in token_ids
+            if str(value or "").strip().isdigit() and int(value) > 0
+        ))
+    return params
 
 
 def _append_risk_check_log(message):
@@ -4073,10 +4126,25 @@ def _append_risk_check_log(message):
 def run_risk_check_job(params, task_lock):
     """在后台线程执行侵权检测，并更新控制台任务状态。"""
     try:
+        generic_scan = "sources" in params
+        scan_params = dict(params)
+        if generic_scan:
+            knowledge_data = db_list_infringement_knowledge(limit=5000) or {}
+            scan_params["knowledge_records"] = list(knowledge_data.get("rows") or [])
+            _append_risk_check_log(
+                f"已加载侵权知识库：黑名单 {int((knowledge_data.get('summary') or {}).get('blacklist') or 0)} 个，"
+                f"白名单 {int((knowledge_data.get('summary') or {}).get('whitelist') or 0)} 个；黑名单优先"
+            )
         summary = bit_check_risk.scan_products(
-            **params,
-            candidate_reader=db_get_zying_risk_candidates,
-            risk_writer=db_update_zying_product_risks,
+            **scan_params,
+            candidate_reader=(
+                db_get_infringement_risk_candidates if generic_scan
+                else db_get_zying_risk_candidates
+            ),
+            risk_writer=(
+                db_update_infringement_product_risks if generic_scan
+                else db_update_zying_product_risks
+            ),
             log_callback=_append_risk_check_log,
         )
         public_summary = {
@@ -4218,7 +4286,7 @@ def _risk_result_query_params(args, export=False):
     }:
         sort_by = "risk_level"
     sort_dir = "asc" if str(args.get("sort_dir") or "").lower() == "asc" else "desc"
-    return {
+    params = {
         "zying_category": str(args.get("category") or "").strip()[:1024] or None,
         "risk_level": risk_level or None,
         "search": str(args.get("search") or "").strip()[:200],
@@ -4226,6 +4294,18 @@ def _risk_result_query_params(args, export=False):
         "sort_dir": sort_dir,
         "limit": 0 if export else _parse_int_param(args, "limit", 1000, 1, 5000),
     }
+    raw_sources = str(args.get("sources") or "").strip()
+    if raw_sources:
+        sources = [
+            value for value in dict.fromkeys(
+                part.strip().lower() for part in raw_sources.split(",")
+            )
+            if value in bit_check_risk.SOURCE_LABELS
+        ]
+        if not sources:
+            raise ValueError("产品来源无效")
+        params["sources"] = sources
+    return params
 
 
 def _append_order_print_log(message):
@@ -4678,6 +4758,14 @@ def build_daily_task_params(data):
     mode = str(data.get("mode", "loop")).strip().lower()
     if mode not in ("once", "loop"):
         mode = "loop"
+    appeal_copy_mode = bit_daily_task.normalize_appeal_copy_mode(
+        data.get("appeal_copy_mode", bit_daily_task.APPEAL_COPY_MODE_NORMAL)
+    )
+    deepseek_api_key = str(data.get("deepseek_api_key") or "").strip()
+    if appeal_copy_mode == bit_daily_task.APPEAL_COPY_MODE_AI and not deepseek_api_key:
+        raise ValueError("AI话术模式必须手动填写 DeepSeek Token")
+    if appeal_copy_mode != bit_daily_task.APPEAL_COPY_MODE_AI:
+        deepseek_api_key = ""
     raw_appeal_types = (
         data.get("appeal_types")
         if "appeal_types" in data
@@ -4712,6 +4800,8 @@ def build_daily_task_params(data):
     return {
         "execution_target": _request_execution_target(data),
         "mode": mode,
+        "appeal_copy_mode": appeal_copy_mode,
+        "deepseek_api_key": deepseek_api_key,
         "appeal_types": appeal_types,
         "appeal_type": appeal_types[0] if len(appeal_types) == 1 else "多任务",
         "top_n": 0,
@@ -4787,6 +4877,10 @@ def execute_daily_task(params, task_lock, stop_event, task_id, effective_log_pat
             _task_lock=task_lock,
             task_id=task_id,
             owned_window_ids=owned_window_ids,
+            appeal_copy_mode=params.get(
+                "appeal_copy_mode", bit_daily_task.APPEAL_COPY_MODE_NORMAL
+            ),
+            deepseek_api_key=params.get("deepseek_api_key", ""),
         )
         result_message = (
             f"daily_task {appeal_label}任务已停止"
@@ -4810,6 +4904,10 @@ def execute_daily_task(params, task_lock, stop_event, task_id, effective_log_pat
             _task_lock=task_lock,
             task_id=task_id,
             owned_window_ids=owned_window_ids,
+            appeal_copy_mode=params.get(
+                "appeal_copy_mode", bit_daily_task.APPEAL_COPY_MODE_NORMAL
+            ),
+            deepseek_api_key=params.get("deepseek_api_key", ""),
         )
         result_message = (
             f"daily_task {appeal_label}任务已停止"
@@ -4843,7 +4941,10 @@ def run_daily_task_job(
     stop_event = stop_event or threading.Event()
     register_thread_log_queue(DailyTaskLogSink(effective_log_path))
     try:
-        print(f"{get_now_time()} 开始执行 daily_task：{params}<br>")
+        print(
+            f"{get_now_time()} 开始执行 daily_task："
+            f"{_sanitize_daily_task_params(params)}<br>"
+        )
         result = execute_daily_task(
             params, task_lock, stop_event, task_id, effective_log_path, owned_window_ids
         )
@@ -5038,7 +5139,7 @@ def normalize_appeal_loop_count(value):
 
 def get_appeal_round_interval(mode):
     """AI 客服每轮间隔 1 分钟，人工客服每轮间隔 10 分钟。"""
-    if mode in {"AI客服", "AI话术模式"}:
+    if mode == "AI客服":
         return AI_APPEAL_ROUND_INTERVAL_SECONDS
     return MANUAL_APPEAL_ROUND_INTERVAL_SECONDS
 
@@ -5091,11 +5192,18 @@ def shensu_logic(
     loop_count=DEFAULT_APPEAL_LOOP_COUNT,
     stop_event=None,
     deepseek_api_key="",
+    appeal_copy_mode=bit_daily_task.APPEAL_COPY_MODE_NORMAL,
 ):
     mode = normalize_appeal_mode(mode)
+    appeal_copy_mode = bit_daily_task.normalize_appeal_copy_mode(appeal_copy_mode)
     target_sites = resolve_appeal_sites(sites)
     target_forms = resolve_appeal_forms(form)
-    if mode == "AI话术模式" and not str(deepseek_api_key or "").strip():
+    if appeal_copy_mode == bit_daily_task.APPEAL_COPY_MODE_AI and mode != "AI客服":
+        raise ValueError("AI话术模式只能配合 AI 客服使用")
+    if (
+        appeal_copy_mode == bit_daily_task.APPEAL_COPY_MODE_AI
+        and not str(deepseek_api_key or "").strip()
+    ):
         raise ValueError("AI话术模式必须手动填写 DeepSeek Token")
     round_limit = normalize_appeal_loop_count(loop_count)
     multiple_tasks_selected = len(target_sites) > 1 or len(target_forms) > 1
@@ -5159,9 +5267,9 @@ def shensu_logic(
                                 f"{task_result['value']}，本轮已跳过"
                             )
                             return
-                        if mode in {"AI客服", "AI话术模式"}:
+                        if mode == "AI客服":
                             with bit_appeal_ai.appeal_controls(stop_event):
-                                if mode == "AI话术模式":
+                                if appeal_copy_mode == bit_daily_task.APPEAL_COPY_MODE_AI:
                                     task_result["value"] = bit_appeal_ai.shensu(
                                         name,
                                         run_site,
@@ -5302,12 +5410,27 @@ def api_run_shensu():
         )
     except ValueError as exc:
         return jsonify({"status": "error", "message": str(exc)}), 400
+    try:
+        appeal_copy_mode = bit_daily_task.normalize_appeal_copy_mode(
+            data.get("appeal_copy_mode", bit_daily_task.APPEAL_COPY_MODE_NORMAL)
+            if data
+            else request.args.get(
+                "appeal_copy_mode", bit_daily_task.APPEAL_COPY_MODE_NORMAL
+            )
+        )
+    except ValueError as exc:
+        return jsonify({"status": "error", "message": str(exc)}), 400
     deepseek_api_key = str(
         data.get("deepseek_api_key", "")
         if data
         else request.args.get("deepseek_api_key", "")
     ).strip()
-    if mode == "AI话术模式" and not deepseek_api_key:
+    if appeal_copy_mode == bit_daily_task.APPEAL_COPY_MODE_AI and mode != "AI客服":
+        return jsonify({
+            "status": "error",
+            "message": "AI话术模式只能配合 AI 客服使用",
+        }), 400
+    if appeal_copy_mode == bit_daily_task.APPEAL_COPY_MODE_AI and not deepseek_api_key:
         return jsonify({
             "status": "error",
             "message": "AI话术模式必须手动填写 DeepSeek Token",
@@ -5328,6 +5451,7 @@ def api_run_shensu():
             mode=mode,
             loop_count=loop_count,
             deepseek_api_key=deepseek_api_key,
+            appeal_copy_mode=appeal_copy_mode,
         )
     stop_event = register_appeal_task(
         task_id,
@@ -5338,6 +5462,7 @@ def api_run_shensu():
             "form": forms[0] if len(forms) == 1 else "、".join(forms),
             "forms": list(forms),
             "mode": mode,
+            "appeal_copy_mode": appeal_copy_mode,
             "execution_target": execution_target,
         },
     )
@@ -5359,8 +5484,9 @@ def api_run_shensu():
                 "loop_count": loop_count,
                 "stop_event": stop_event,
             }
-            if mode == "AI话术模式":
+            if appeal_copy_mode == bit_daily_task.APPEAL_COPY_MODE_AI:
                 shensu_kwargs["deepseek_api_key"] = deepseek_api_key
+                shensu_kwargs["appeal_copy_mode"] = appeal_copy_mode
             yield from shensu_logic(
                 name, sites, forms, message, mode, **shensu_kwargs
             )
@@ -7411,7 +7537,7 @@ def api_start_daily_task():
                 "stop_requested": False,
                 "can_stop": False,
                 "log_path": str(task_log_path),
-                "params": params,
+                "params": _sanitize_daily_task_params(params),
             }
             # 在同一把锁内占住并发名额，避免两个并发 start 同时越过上限。
             _daily_tasks[task_id] = task_state
@@ -8002,7 +8128,7 @@ def stream_local_agent_job(job_id):
 
 
 def daily_agent_task_snapshot(job, *, include_log=False):
-    params = dict(job.get("payload") or {})
+    params = _sanitize_daily_task_params(job.get("payload"))
     result = job.get("result") or {}
     running = job["status"] not in TERMINAL_JOB_STATUSES
     def timestamp(value):
@@ -8054,7 +8180,7 @@ def enqueue_local_agent_daily_task(agent_id, params):
 
 def enqueue_local_agent_appeal(
     *, task_id, agent_id, name, sites, forms, message, mode, loop_count,
-    deepseek_api_key="",
+    deepseek_api_key="", appeal_copy_mode=bit_daily_task.APPEAL_COPY_MODE_NORMAL,
 ):
     try:
         agent_id = normalize_agent_id(agent_id)
@@ -8078,12 +8204,13 @@ def enqueue_local_agent_appeal(
         "forms": list(forms),
         "message": message,
         "mode": mode,
+        "appeal_copy_mode": appeal_copy_mode,
         "loop_count": "永久" if loop_count == PERMANENT_APPEAL_LOOP_COUNT else loop_count,
         "execution_target": "agent",
         "agent_id": agent_id,
         "agent_name": agent["name"],
     }
-    if mode == "AI话术模式":
+    if appeal_copy_mode == bit_daily_task.APPEAL_COPY_MODE_AI:
         payload["deepseek_api_key"] = str(deepseek_api_key or "").strip()
     try:
         get_local_agent_store().enqueue_job(
@@ -8178,14 +8305,31 @@ def api_risk_check_categories():
         return jsonify({"status": "error", "message": str(exc)}), 500
 
 
+@app.route('/api/risk-check/options', methods=['GET'])
+@login_required
+def api_risk_check_options():
+    try:
+        return jsonify({
+            "status": "success",
+            "data": db_list_infringement_risk_scope_options(),
+        })
+    except Exception as exc:
+        logging.error("读取侵权检测筛选项失败：%s", exc)
+        return jsonify({"status": "error", "message": str(exc)}), 500
+
+
 @app.route('/api/risk-check/results', methods=['GET'])
 @login_required
 def api_risk_check_results():
     try:
         params = _risk_result_query_params(request.args)
+        reader = (
+            db_get_infringement_risk_results
+            if "sources" in params else db_get_zying_risk_results
+        )
         return jsonify({
             "status": "success",
-            "data": db_get_zying_risk_results(**params),
+            "data": reader(**params),
         })
     except ValueError as exc:
         return jsonify({"status": "error", "message": str(exc)}), 400
@@ -8199,7 +8343,11 @@ def api_risk_check_results():
 def api_export_risk_check_results():
     try:
         params = _risk_result_query_params(request.args, export=True)
-        data = db_get_zying_risk_results(**params) or {}
+        reader = (
+            db_get_infringement_risk_results
+            if "sources" in params else db_get_zying_risk_results
+        )
+        data = reader(**params) or {}
         rows = data.get("rows") or []
 
         wb = Workbook()
@@ -8218,6 +8366,8 @@ def api_export_risk_check_results():
             ("采集时间", "collected_at"),
             ("提交时间", "submitted_at"),
         ]
+        if "sources" in params:
+            columns.insert(0, ("产品来源", "source_type_label"))
         ws.append([label for label, _ in columns])
         risk_labels = {
             "0": "0 - 无可疑",
@@ -8225,6 +8375,10 @@ def api_export_risk_check_results():
             "2": "2 - 侵权",
         }
         for row in rows:
+            row = dict(row)
+            row["source_type_label"] = bit_check_risk.SOURCE_LABELS.get(
+                str(row.get("source_type") or "zying"), "智赢采集产品"
+            )
             values = []
             for _, key in columns:
                 value = row.get(key, "")
@@ -8905,12 +9059,19 @@ def _run_mercado_collection_task(
     browser_type="bitbrowser",
     window_id="",
     window_name="",
+    keyword="",
 ):
     from erp.mercadolibre_batch_collector import (
         CollectionStopped,
         collect_marketplace_listing,
     )
-    counters = {"candidate": 0, "processed": 0, "completed": 0, "failed": 0}
+    counters = {
+        "candidate": 0,
+        "processed": 0,
+        "completed": 0,
+        "failed": 0,
+        "skipped_us": 0,
+    }
     counters_lock = threading.Lock()
     item_statuses = {}
     pending_rows = []
@@ -8926,6 +9087,7 @@ def _run_mercado_collection_task(
         return (
             f"{message} · 成功 {counters['completed']} 件 · "
             f"失败 {counters['failed']} 件 · 并发 {worker_count} · "
+            f"跳过美国自发货 {counters['skipped_us']} 件 · "
             f"耗时 {_format_mercado_elapsed(elapsed_seconds())}"
         )
 
@@ -9048,11 +9210,13 @@ def _run_mercado_collection_task(
             window_id=window_id,
             max_workers=worker_count,
             collection_scope=collection_scope,
+            keyword=keyword,
             on_page=on_page,
             on_item=on_item,
             on_progress=on_progress,
             stop_event=_mercado_collection_stop_event,
         )
+        counters["skipped_us"] = int(result.get("skipped_us_count") or 0)
         buffer_collection_row(None, force=True)
         incomplete_rows = _mercado_collection_rows_needing_repair(result.get("rows"))
         if incomplete_rows and not _mercado_collection_stop_event.is_set():
@@ -9256,6 +9420,7 @@ def api_start_mercado_collection():
                 browser["window_id"],
                 browser["window_name"],
             ),
+            kwargs={"keyword": keyword},
             name=f"mercado-collection-{task_id}",
             daemon=True,
         )
@@ -9432,6 +9597,8 @@ def api_mercado_collection_items():
             limit=_parse_int_param(request.args, "limit", 500, 1, 1000),
             offset=_parse_int_param(request.args, "offset", 0, 0, 1000000),
             task_id=int(task_id) if str(task_id or "").strip() else None,
+            review_status=str(request.args.get("review_status") or "").strip(),
+            publish_status=str(request.args.get("publish_status") or "").strip(),
             weight_min=str(request.args.get("weight_min") or "").strip(),
             weight_max=str(request.args.get("weight_max") or "").strip(),
             price_min=str(request.args.get("price_min") or "").strip(),
@@ -10541,6 +10708,8 @@ def api_db_mercado_collection_items():
             limit=_parse_int_param(request.args, "limit", 500, 1, 1000),
             offset=_parse_int_param(request.args, "offset", 0, 0, 1000000),
             task_id=int(task_id) if str(task_id or "").strip() else None,
+            review_status=str(request.args.get("review_status") or "").strip(),
+            publish_status=str(request.args.get("publish_status") or "").strip(),
             weight_min=str(request.args.get("weight_min") or "").strip(),
             weight_max=str(request.args.get("weight_max") or "").strip(),
             price_min=str(request.args.get("price_min") or "").strip(),
@@ -11474,6 +11643,74 @@ def api_db_zying_risk_results():
     return jsonify({
         "status": "success",
         "data": db_get_zying_risk_results(**params),
+    })
+
+
+@app.route('/api/db/infringement-risk/candidates', methods=['POST'])
+@internal_api_required
+def api_db_infringement_risk_candidates():
+    blocked = reject_db_api_client_mode()
+    if blocked:
+        return blocked
+    data = request.get_json(silent=True) or {}
+    try:
+        params = build_risk_check_params(data)
+        if "sources" not in params:
+            raise ValueError("请至少选择一种产品来源")
+        rows = db_get_infringement_risk_candidates(**{
+            key: params.get(key) for key in (
+                "hours", "limit", "zying_category", "sources",
+                "salesperson", "group_name", "token_ids",
+            )
+        }, include_checked=bool(params.get("recheck")))
+        return jsonify({"status": "success", "data": rows})
+    except ValueError as exc:
+        return jsonify({"status": "error", "message": str(exc)}), 400
+
+
+@app.route('/api/db/infringement-risk/bulk', methods=['POST'])
+@internal_api_required
+def api_db_update_infringement_risks():
+    blocked = reject_db_api_client_mode()
+    if blocked:
+        return blocked
+    data = request.get_json(silent=True) or {}
+    results = data.get("results") or []
+    if not isinstance(results, list):
+        return jsonify({"status": "error", "message": "results 必须是数组"}), 422
+    count = db_update_infringement_product_risks(results)
+    return jsonify({"status": "success", "data": {"count": count}})
+
+
+@app.route('/api/db/infringement-risk/results', methods=['GET'])
+@internal_api_required
+def api_db_infringement_risk_results():
+    blocked = reject_db_api_client_mode()
+    if blocked:
+        return blocked
+    try:
+        params = _risk_result_query_params(
+            request.args,
+            export=str(request.args.get("limit") or "").strip() == "0",
+        )
+        params.setdefault("sources", list(bit_check_risk.SOURCE_LABELS))
+        return jsonify({
+            "status": "success",
+            "data": db_get_infringement_risk_results(**params),
+        })
+    except ValueError as exc:
+        return jsonify({"status": "error", "message": str(exc)}), 400
+
+
+@app.route('/api/db/infringement-risk/options', methods=['GET'])
+@internal_api_required
+def api_db_infringement_risk_options():
+    blocked = reject_db_api_client_mode()
+    if blocked:
+        return blocked
+    return jsonify({
+        "status": "success",
+        "data": db_list_infringement_risk_scope_options(),
     })
 
 

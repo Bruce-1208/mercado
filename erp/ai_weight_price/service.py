@@ -40,7 +40,21 @@ class Service:
 
     def _migrate_browser_attention_pause(self):
         """Expose old login-redirect exceptions through the resumable pause UI."""
-        if self.store.state("circuit"):
+        pause = self.store.state("circuit")
+        if pause:
+            reason = str(pause.get("reason") or "") if isinstance(pause, dict) else str(pause)
+            # Older builds classified any browser-internal URL without a host as
+            # a captcha. That false pause survives a service restart and disables
+            # the normal Start button, even though no manual action is possible.
+            if "1688搜图进入登录或人机审核页面（未知域名）" in reason:
+                self.store.set_state("circuit", None)
+                run = self.store.state("run", {}) or {}
+                if run.get("outcome") == "blocked":
+                    self.store.set_state("run", {**run, "outcome": "stopped",
+                                                 "message": "旧版1688未知域名误暂停已清除，可按当前选择重新开始"})
+                current = (self.store.state("pipeline_current", {}) or {}).get("task_id")
+                self.store.log("已清除旧版“未知域名”误判暂停；当前商品进度保留，开始按钮已恢复",
+                               current, "WARNING")
             return
         current = self.store.state("pipeline_current", {}) or {}
         key = current.get("task_id")
@@ -195,7 +209,7 @@ class Service:
         if mode in ("process", "pipeline") and (config["workflow_mode"] == "image_first" or not task.get("supplier_sku_id") or self.missing_info(task)) and urlsplit(config["api_base_url"]).hostname not in ("localhost", "127.0.0.1", "::1") and not api_key(config["api_key_env"]):
             raise ValueError("请在本机环境变量 " + config["api_key_env"] + " 中设置模型密钥")
 
-    def start(self, mode="pipeline", task_id=None, selection=None, max_items=10):
+    def start(self, mode="pipeline", task_id=None, selection=None, max_items=10, resume=False):
         if not isinstance(mode, str) or mode not in ("collect", "process", "pipeline", "probe"):
             raise ValueError("运行模式无效")
         if type(max_items) is not int or not 1 <= max_items <= 10000:
@@ -203,7 +217,11 @@ class Service:
         label = {"collect": "采集", "process": "核重核价处理", "pipeline": "逐件采集核重核价", "probe": "Edge连接检查"}[mode]
         self.store.log(f"收到{label}启动请求，正在检查运行条件", task_id)
         with self.guard:
+            previous_run = self.store.state("run", {}) or {}
             config = self.config.load()
+            if config["workflow_mode"] == "image_first":
+                # This workflow always judges the first five 1688 result images.
+                config["max_candidates"] = 5
             if mode != "probe":
                 self.require_login(config)
                 if self.store.state("circuit"):
@@ -217,7 +235,7 @@ class Service:
                     if mode == "process" and not self.store.list(scope=config["run_scope"])["total"]:
                         raise ValueError("所选分类及页码范围尚无采集任务，请先点击“采集所选范围”")
                 config["max_items"] = 1 if task_id else max_items
-                config["run_id"] = uuid.uuid4().hex
+                config["run_id"] = previous_run.get("run_id") if resume and previous_run.get("run_id") else uuid.uuid4().hex
                 batch = {"run_id": config["run_id"], "mode": mode, "selection": selection,
                          "max_items": config["max_items"], "started_at": time.time(), "outcome": "preflight"}
                 try:
@@ -241,12 +259,18 @@ class Service:
                 self.store.set_state("action_error", None)
                 if selection:
                     self.store.set_state("run_selection", selection)
-                self.store.set_state("run", {"mode": mode, "selection": selection, "started_at": time.time(),
-                                             "task_id": task_id,
-                                             "run_id": config.get("run_id"), "max_items": config.get("max_items"), "processed_items": 0,
-                                             "current_item_index": 0,
-                                             "success_items": 0, "skipped_items": 0, "blocked_items": 0, "risk_items": 0,
-                                             "outcome": "running", "message": "正在连接本机Edge"})
+                if resume and previous_run.get("run_id") == config.get("run_id"):
+                    run_state = {**previous_run, "mode": mode, "selection": selection,
+                                 "started_at": time.time(), "finished_at": None,
+                                 "outcome": "running", "message": "正在连接本机Edge，继续处理下一件商品"}
+                else:
+                    run_state = {"mode": mode, "selection": selection, "started_at": time.time(),
+                                 "task_id": task_id,
+                                 "run_id": config.get("run_id"), "max_items": config.get("max_items"), "processed_items": 0,
+                                 "current_item_index": 0,
+                                 "success_items": 0, "skipped_items": 0, "blocked_items": 0, "risk_items": 0,
+                                 "outcome": "running", "message": "正在连接本机Edge"}
+                self.store.set_state("run", run_state)
                 if config.get("run_id"):
                     self.store.save_run(self.store.state("run"))
                 self.store.log(f"{label}已启动，正在连接本机Edge", task_id)
@@ -280,6 +304,20 @@ class Service:
                         "stage": task["stage"]})
         self.store.update(key, **changes, retry_history=history)
 
+    def _requeue_transient_collection_failure(self, key):
+        """Retry safe pre-write failures when the product is visible again."""
+        task = self.store.get(key)
+        no_external_side_effect = (task.get("stage") in ("collected", "no_exact_match")
+                                   and not task.get("write_intent") and not task.get("conversation_url"))
+        timed_out_search = (task.get("status") == "skipped"
+                            and re.search(r"搜索超时|未返回搜索结果", task.get("skip_reason", "")))
+        safe_exception = task.get("status") == "exception" and no_external_side_effect
+        if not (timed_out_search or safe_exception):
+            return False
+        self._requeue(key)
+        self.store.log("检测到上次1688搜索/读取阶段的技术失败，已从当前页面位置自动重新处理", key, "WARNING")
+        return True
+
     def continue_after_human(self):
         """Clear a browser-attention pause and resume from the retained item."""
         with self.idle():
@@ -306,9 +344,56 @@ class Service:
             self.store.set_state("stop_requested", False)
             self.store.log("人工确认已完成1688登录或人机审核；从当前商品继续执行", current_id, "WARNING")
         try:
-            self.start(mode, task_id, selection, remaining)
+            # Keep the original run id so the current-run list and its
+            # progress remain intact after a human login/captcha pause.
+            self.start(mode, task_id, selection, remaining, True)
         except Exception:
             self.store.set_state("circuit", pause)
+            raise
+        return self.status()
+
+    def skip_current_exception(self):
+        """Mark the paused exception as manually skipped and resume this batch."""
+        with self.idle():
+            run = self.store.state("run", {}) or {}
+            current = self.store.state("pipeline_current", {}) or {}
+            key = current.get("task_id") or run.get("current_task_id")
+            if not key:
+                raise ValueError("当前没有可跳过的异常商品")
+            task = self.store.get(key)
+            if task["status"] != "exception":
+                raise ValueError("当前商品不是异常状态，不能执行跳过")
+            reason = "：".join(str(task.get(field) or "") for field in ("exception_reason", "exception_detail") if task.get(field))
+            if not reason:
+                reason = "未记录具体异常原因"
+            skip_reason = "人工跳过异常：" + reason
+            self.store.update(key, status="skipped", stage="exception_skipped",
+                              skip_reason=skip_reason, decision_status="skipped",
+                              decision_reason=skip_reason)
+            processed = int(run.get("processed_items") or 0) + 1
+            run = {**run, "processed_items": processed,
+                   "current_item_index": processed + 1,
+                   "skipped_items": int(run.get("skipped_items") or 0) + 1,
+                   "message": f"已跳过异常商品 {key}，准备继续下一件商品"}
+            self.store.set_state("pipeline_current", None)
+            self.store.set_state("run", run)
+            self.store.record_run_item(run.get("run_id"), key,
+                                       execution_result="异常已跳过", execution_reason=skip_reason)
+            self.store.log(skip_reason + "；保留原始数据，继续下一件", key, "WARNING")
+            mode = run.get("mode") if run.get("mode") in ("pipeline", "process") else "pipeline"
+            selection = run.get("selection") or self.store.state("run_selection")
+            maximum = int(run.get("max_items") or processed)
+        if processed >= maximum:
+            self.store.set_state("run", {**run, "outcome": "completed", "finished_at": time.time(),
+                                          "message": "已跳过最后一件异常商品，本次任务处理完成"})
+            return self.status()
+        try:
+            self.start(mode, None, selection, maximum, resume=True)
+        except Exception:
+            # The item remains safely skipped; leave the batch resumable if the
+            # next browser start itself cannot pass preflight.
+            self.store.set_state("run", {**run, "outcome": "blocked", "finished_at": time.time(),
+                                          "message": "当前异常已跳过，但继续启动下一件失败，请查看日志"})
             raise
         return self.status()
 
@@ -336,10 +421,14 @@ class Service:
                 browser.record_visual = self.record_visual
                 if mode == "pipeline":
                     if config["workflow_mode"] == "image_first":
+                        def process_visible_item(key):
+                            self._requeue_transient_collection_failure(key)
+                            self.complete_one(key, browser, models, config)
+
                         current = self.store.state("pipeline_current", {}) or {}
                         if current.get("scope") == config.get("run_scope") and current.get("task_id"):
-                            self.complete_one(current["task_id"], browser, models, config)
-                        browser.collect(self.store, on_task=lambda key: self.complete_one(key, browser, models, config))
+                            process_visible_item(current["task_id"])
+                        browser.collect(self.store, on_task=process_visible_item)
                         message = self.completion_message("所选范围处理完成")
                         return
                     current = self.store.state("pipeline_current", {}) or {}
@@ -442,6 +531,39 @@ class Service:
         self.store.set_state("run", {**self.store.state("run", {}), "current_task_id": key, "message": message})
         self.store.log(message, key)
 
+    @staticmethod
+    def _needs_human_attention(reason):
+        """Return whether an item error needs the operator's browser attention.
+
+        Browser challenge/login errors are the only item failures that must
+        retain the current item and pause the serial pipeline.  Other DOM,
+        model, parsing, timeout, and ERP write errors are isolated to the
+        current item and can be marked skipped without blocking later items.
+        """
+        return bool(re.search(
+            r"登录|未登录|登录页|登录状态|人机|验证码|安全验证|风控|人工|待复核|请核对|不确定|passport|login(?:\.taobao)?",
+            str(reason or ""), re.I))
+
+    def _auto_skip_exception(self, key, reason):
+        """Convert a non-human item exception into a resumable skip.
+
+        The original exception fields remain intact for diagnostics; the
+        execution decision is recorded separately so the next product may be
+        processed in the same serial batch.
+        """
+        task = self.store.get(key)
+        if task.get("status") != "exception":
+            return
+        skip_reason = "自动跳过异常：" + (str(reason) if reason else "未记录具体异常原因")
+        self.store.update(key, status="skipped", stage="exception_skipped",
+                          skip_reason=skip_reason, decision_status="skipped",
+                          decision_reason=skip_reason)
+        current = self.store.state("pipeline_current", {}) or {}
+        if current.get("task_id") == key:
+            self.store.set_state("pipeline_current", None)
+        self.store.log(skip_reason + "；保留原始数据，继续下一件", key, "WARNING")
+        self.record_visual(key, "exception_skipped", skip_reason + "；继续下一件")
+
     def complete_one(self, key, browser, models, config):
         if self.store.get(key)["status"] in COMPLETED:
             current = self.store.state("pipeline_current", {}) or {}
@@ -449,6 +571,7 @@ class Service:
                 self.store.set_state("pipeline_current", None)
             return
         run_id = config.get("run_id")
+        execution_started_at = time.time()
         run = self.store.state("run", {})
         ordinal = int(run.get("processed_items") or 0) + 1
         maximum = int(config.get("max_items") or run.get("max_items") or ordinal)
@@ -459,6 +582,10 @@ class Service:
         try:
             self._complete_one(key, browser, models, config)
         finally:
+            execution_finished_at = time.time()
+            self.store.update(key, execution_started_at=execution_started_at,
+                              execution_finished_at=execution_finished_at,
+                              execution_duration_seconds=round(max(0, execution_finished_at - execution_started_at), 3))
             current = self.store.get(key)
             result = {"success": "处理成功", "blocked": "屏蔽", "risk": "风险", "exception": "异常", "skipped": "已跳过（未完全匹配）", "waiting_merchant_reply": "等待商家回复", "pending": "待处理"}[current["status"]]
             reason = ("：".join(str(current.get(field) or "") for field in ("exception_reason", "exception_detail") if current.get(field))
@@ -493,7 +620,12 @@ class Service:
                 return
             if task["status"] == "exception":
                 reason = "：".join(str(task.get(field) or "") for field in ("exception_reason", "exception_detail") if task.get(field))
-                raise ItemBlocked(f"商品 {key} 未完成，已暂停后续商品：{reason}。请处理异常后继续")
+                if self.store.state("circuit") or self._needs_human_attention(reason):
+                    if not self.store.state("circuit"):
+                        self.circuit(f"商品 {key} 需要人工处理：{reason}")
+                    raise ItemBlocked(f"商品 {key} 等待人工处理1688登录或人机审核；保留当前进度")
+                self._auto_skip_exception(key, reason)
+                return
             self.tick(browser, models, config, key)
             self.store.export()
             task = self.store.get(key)
@@ -686,7 +818,7 @@ class Service:
             if task["status"] == "exception":
                 raise ValueError("异常任务禁止回写")
             confidence = number(task.get("match_confidence"))
-            if not number(config["match_threshold"]) < confidence <= 1 or not task.get("supplier_sku_id") or not task.get("match_evidence"):
+            if not number(config["match_threshold"]) <= confidence <= 1 or not task.get("supplier_sku_id") or not task.get("match_evidence"):
                 raise ValueError("同款或SKU审核证据不完整")
             number(task.get("cost_price"))
             validation = validate_weight(task, config)

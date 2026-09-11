@@ -56,6 +56,10 @@ PRODUCT_REVIEW_STATUSES = {
 PRODUCT_PUBLISH_RECORD_STATUSES = {"pending", "publishing", "published", "failed"}
 PRODUCT_PUBLISH_RETRYABLE_STATUSES = {"pending", "publishing", "failed"}
 PRODUCT_PUBLISH_FILTER_STATUSES = PRODUCT_PUBLISH_RECORD_STATUSES | {"unpublished"}
+COLLECTION_WORKFLOW_COLUMN_DEFINITIONS = (
+    ("review_status", "VARCHAR(32) NOT NULL DEFAULT 'unreviewed' AFTER `added_to_products`"),
+    ("last_publish_status", "VARCHAR(32) NULL AFTER `review_status`"),
+)
 PRODUCT_WORKFLOW_COLUMN_DEFINITIONS = (
     ("source_type", "VARCHAR(32) NOT NULL DEFAULT 'collected' AFTER `collection_item_id`"),
     ("review_status", "VARCHAR(32) NOT NULL DEFAULT 'unreviewed' AFTER `source_type`"),
@@ -264,6 +268,8 @@ def _migrate_collection_tables(cursor: Any) -> None:
             `page_snapshot_json` LONGTEXT NULL,
             `plugin_snapshot_json` LONGTEXT NULL,
             `added_to_products` TINYINT(1) NOT NULL DEFAULT 0,
+            `review_status` VARCHAR(32) NOT NULL DEFAULT 'unreviewed',
+            `last_publish_status` VARCHAR(32) NULL,
             `collected_at` DATETIME NOT NULL,
             `updated_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
             PRIMARY KEY (`id`),
@@ -398,6 +404,8 @@ def _migrate_collection_tables(cursor: Any) -> None:
             _ensure_column(cursor, table, column, definition)
     for column, definition in PRODUCT_PUBLISH_COLUMN_DEFINITIONS:
         _ensure_column(cursor, PRODUCT_TABLE, column, definition)
+    for column, definition in COLLECTION_WORKFLOW_COLUMN_DEFINITIONS:
+        _ensure_column(cursor, COLLECTION_TABLE, column, definition)
     for column, definition in PRODUCT_WORKFLOW_COLUMN_DEFINITIONS:
         _ensure_column(cursor, PRODUCT_TABLE, column, definition)
     for table in (COLLECTION_TABLE, PRODUCT_TABLE):
@@ -416,6 +424,12 @@ def _migrate_collection_tables(cursor: Any) -> None:
     )
     _ensure_index(
         cursor, COLLECTION_TABLE, "idx_erp_meli_collection_added", "(`added_to_products`, `id`)"
+    )
+    _ensure_index(
+        cursor, COLLECTION_TABLE, "idx_erp_meli_collection_review", "(`review_status`, `id`)"
+    )
+    _ensure_index(
+        cursor, COLLECTION_TABLE, "idx_erp_meli_collection_publish", "(`last_publish_status`, `id`)"
     )
     for table in (COLLECTION_TABLE, PRODUCT_TABLE):
         _ensure_index(
@@ -479,6 +493,8 @@ def _collection_schema_is_current(cursor: Any) -> bool:
         (COLLECTION_TABLE, "volumetric_weight_kg"),
         (COLLECTION_TABLE, "profitability_error"),
         (COLLECTION_TABLE, "added_to_products"),
+        (COLLECTION_TABLE, "review_status"),
+        (COLLECTION_TABLE, "last_publish_status"),
         (COLLECTION_TABLE, "management_category_id"),
         (PRODUCT_TABLE, "source_type"),
         (PRODUCT_TABLE, "review_status"),
@@ -869,26 +885,26 @@ def _list_rows(
         params.extend((mercado_category, f"%{mercado_category}%"))
     if table == PRODUCT_TABLE:
         source_type = str(source_type or "").strip().lower()
-        review_status = str(review_status or "").strip().lower()
         if source_type:
             if source_type not in PRODUCT_SOURCE_TYPES:
                 raise ValueError(f"不支持的产品来源: {source_type}")
             where.append("`source_type` = %s")
             params.append(source_type)
-        if review_status:
-            if review_status not in PRODUCT_REVIEW_STATUSES:
-                raise ValueError(f"不支持的审核状态: {review_status}")
-            where.append("`review_status` = %s")
-            params.append(review_status)
-        publish_status = str(publish_status or "").strip().lower()
-        if publish_status:
-            if publish_status not in PRODUCT_PUBLISH_FILTER_STATUSES:
-                raise ValueError(f"不支持的上架状态: {publish_status}")
-            if publish_status == "unpublished":
-                where.append("(`last_publish_status` IS NULL OR `last_publish_status` = '')")
-            else:
-                where.append("`last_publish_status` = %s")
-                params.append(publish_status)
+    review_status = str(review_status or "").strip().lower()
+    if review_status:
+        if review_status not in PRODUCT_REVIEW_STATUSES:
+            raise ValueError(f"不支持的审核状态: {review_status}")
+        where.append("`review_status` = %s")
+        params.append(review_status)
+    publish_status = str(publish_status or "").strip().lower()
+    if publish_status:
+        if publish_status not in PRODUCT_PUBLISH_FILTER_STATUSES:
+            raise ValueError(f"不支持的上架状态: {publish_status}")
+        if publish_status == "unpublished":
+            where.append("(`last_publish_status` IS NULL OR `last_publish_status` = '')")
+        else:
+            where.append("`last_publish_status` = %s")
+            params.append(publish_status)
 
     def optional_decimal(value: Any, name: str, *, nonnegative: bool) -> Decimal | None:
         if value in (None, ""):
@@ -2171,25 +2187,28 @@ def delete_product_items(
         with connection.cursor() as cursor:
             ensure_collection_tables(cursor)
             cursor.execute(
-                f"SELECT `source_item_id` FROM `{PRODUCT_TABLE}` WHERE `id` IN ({placeholders})",
+                f"SELECT `source_item_id`, `review_status`, `last_publish_status` "
+                f"FROM `{PRODUCT_TABLE}` WHERE `id` IN ({placeholders})",
                 tuple(ids),
             )
-            source_ids = [
-                str(row.get("source_item_id") or "")
-                for row in cursor.fetchall()
-                if row.get("source_item_id")
+            product_states = [
+                dict(row) for row in cursor.fetchall() if row.get("source_item_id")
             ]
             cursor.execute(
                 f"DELETE FROM `{PRODUCT_TABLE}` WHERE `id` IN ({placeholders})",
                 tuple(ids),
             )
             deleted = int(cursor.rowcount or 0)
-            if source_ids:
-                source_placeholders = ", ".join(["%s"] * len(source_ids))
+            for row in product_states:
                 cursor.execute(
-                    f"UPDATE `{COLLECTION_TABLE}` SET `added_to_products` = 0 "
-                    f"WHERE `source_item_id` IN ({source_placeholders})",
-                    tuple(source_ids),
+                    f"UPDATE `{COLLECTION_TABLE}` SET `added_to_products` = 0, "
+                    "`review_status` = %s, `last_publish_status` = %s "
+                    "WHERE `source_item_id` = %s",
+                    (
+                        str(row.get("review_status") or "unreviewed"),
+                        row.get("last_publish_status"),
+                        str(row.get("source_item_id") or ""),
+                    ),
                 )
         connection.commit()
         return {"requested": len(ids), "deleted": deleted}
@@ -2264,6 +2283,8 @@ def move_product_items_to_collection(
                             `weight_basis` = COALESCE(NULLIF(%s, ''), `weight_basis`),
                             `management_category_id` = COALESCE(%s, `management_category_id`),
                             `added_to_products` = 0,
+                            `review_status` = %s,
+                            `last_publish_status` = %s,
                             `scrape_status` = %s,
                             `error_message` = %s
                         WHERE `id` = %s
@@ -2280,6 +2301,8 @@ def move_product_items_to_collection(
                             row.get("package_height_cm"),
                             str(row.get("weight_basis") or ""),
                             row.get("management_category_id"),
+                            str(row.get("review_status") or "unreviewed"),
+                            row.get("last_publish_status"),
                             scrape_status,
                             f"产品列表自动移回：{reason_text}",
                             int(existing["id"]),
@@ -2304,6 +2327,8 @@ def move_product_items_to_collection(
                         str(row.get("weight_basis") or ""),
                         row.get("management_category_id"),
                         *(row.get(column) for column in PROFITABILITY_COLUMNS),
+                        str(row.get("review_status") or "unreviewed"),
+                        row.get("last_publish_status"),
                         scrape_status,
                         f"产品列表自动移回：{reason_text}",
                         _dumps(snapshot.get("source") or {}),
@@ -2320,12 +2345,15 @@ def move_product_items_to_collection(
                             `weight_g`, `volumetric_weight_kg`, `package_length_cm`,
                             `package_width_cm`, `package_height_cm`, `weight_basis`,
                             `management_category_id`, {profitability_columns_sql},
+                            `review_status`, `last_publish_status`,
                             `scrape_status`, `error_message`,
                             `source_json`, `description_json`, `page_snapshot_json`,
                             `plugin_snapshot_json`, `collected_at`
                         ) VALUES ({", ".join(["%s"] * len(values))})
                         ON DUPLICATE KEY UPDATE
                             `added_to_products` = 0,
+                            `review_status` = VALUES(`review_status`),
+                            `last_publish_status` = VALUES(`last_publish_status`),
                             `error_message` = VALUES(`error_message`),
                             `updated_at` = CURRENT_TIMESTAMP
                         """,
@@ -2683,8 +2711,13 @@ def add_collection_items_to_products(
                     or (snapshot.get("description") or {}).get("text")
                     or ""
                 ).strip()
+                collection_review_status = str(
+                    row.get("review_status") or "unreviewed"
+                ).strip().lower()
+                if collection_review_status not in PRODUCT_REVIEW_STATUSES:
+                    collection_review_status = "unreviewed"
                 values = (
-                    row["id"], "collected", "unreviewed",
+                    row["id"], "collected", collection_review_status,
                     row["source_item_id"], row["source_url"],
                     row.get("main_image_url"), row.get("title"), description_text,
                     row.get("price"),

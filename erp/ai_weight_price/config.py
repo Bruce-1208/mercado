@@ -89,7 +89,7 @@ def validate(value):
         result[key] = int(number)
     threshold = result["match_threshold"]
     if isinstance(threshold, bool) or not isinstance(threshold, (int, float)) or not .95 <= threshold < 1:
-        raise ValueError("匹配门槛必须 ≥0.95 且 <1；仅严格高于门槛才通过")
+        raise ValueError("匹配门槛必须 ≥0.95 且 <1；达到门槛即可通过")
     if result["reference_mode"] not in ("erp", "manual", "disabled"):
         raise ValueError("重量对照模式无效")
     if result["workflow_mode"] not in ("image_first", "legacy_consult"):
@@ -129,8 +129,8 @@ def validate(value):
 
 def selection_params(value, config):
     if not isinstance(value, dict):
-        raise ValueError("请先选择分类（可留空）、起始页和结束页")
-    if set(value) - {"category", "start_page", "end_page"}:
+        raise ValueError("请先选择分类（可留空）、起始页、结束页和页内起始商品")
+    if set(value) - {"category", "start_page", "end_page", "start_item"}:
         raise ValueError("任务参数字段不正确")
     category = value.get("category", "")
     if not isinstance(category, str) or len(category) > 500:
@@ -141,6 +141,14 @@ def selection_params(value, config):
         if type(num) is not int or not 1 <= num <= 10000:
             raise ValueError("起始页和结束页必须是1–10000的整数")
         result[field] = num
+    # Keep old saved selections compatible while allowing a deterministic
+    # one-based item offset on the first selected page.  The UI always sends
+    # this field; old API callers may omit it and therefore mean item 1.
+    if "start_item" in value:
+        num = value.get("start_item")
+        if type(num) is not int or not 1 <= num <= 10000:
+            raise ValueError("本页起始商品序号必须是1–10000的整数")
+        result["start_item"] = num
     if result["end_page"] < result["start_page"]:
         raise ValueError("结束页不能小于起始页")
     if result["end_page"] - result["start_page"] + 1 > config["max_pages"]:

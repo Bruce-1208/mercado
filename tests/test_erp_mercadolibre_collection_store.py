@@ -359,6 +359,8 @@ def test_move_pulled_product_creates_collection_row_before_deleting_product():
         "package_length_cm": 10,
         "package_width_cm": 20,
         "package_height_cm": 5,
+        "review_status": "risk",
+        "last_publish_status": "failed",
         "source_snapshot_json": json.dumps({
             "source": {"id": "MLM21"},
             "description": {"plain_text": "description"},
@@ -408,6 +410,9 @@ def test_move_pulled_product_creates_collection_row_before_deleting_product():
         "deleted": 1,
     }
     assert insert_params[0:3] == (0, "MLM21", "https://example/MLM21")
+    assert "`review_status`, `last_publish_status`" in insert_sql
+    assert "risk" in insert_params
+    assert "failed" in insert_params
     assert "ok" in insert_params
     assert "产品列表自动移回：审核状态未通过 1 件" in insert_params
     assert connection.committed is True
@@ -699,6 +704,8 @@ def test_management_category_name_validation_happens_before_connecting():
 def test_collection_list_applies_weight_profit_and_collection_time_filters():
     connection = _FakeConnection()
     store.list_collection_items(
+        review_status="risk",
+        publish_status="failed",
         weight_min="100",
         weight_max="500",
         price_min="20",
@@ -717,6 +724,8 @@ def test_collection_list_applies_weight_profit_and_collection_time_filters():
         if query.startswith(f"SELECT COUNT(*) AS total FROM `{store.COLLECTION_TABLE}`")
     )
     for clause in (
+        "`review_status` = %s",
+        "`last_publish_status` = %s",
         "`weight_g` >= %s",
         "`weight_g` <= %s",
         "`price` >= %s",
@@ -728,6 +737,7 @@ def test_collection_list_applies_weight_profit_and_collection_time_filters():
     ):
         assert clause in count_sql
     assert "`added_to_products` = 0" in count_sql
+    assert params[:2] == ("risk", "failed")
     assert params[-2:] == ("2026-08-25 00:00:00", "2026-08-31 00:00:00")
 
 

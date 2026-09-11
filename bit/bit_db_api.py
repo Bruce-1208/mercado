@@ -410,6 +410,62 @@ def update_zying_product_risks(results):
     return int((data or {}).get("count", 0))
 
 
+def get_infringement_risk_candidates(
+    hours=0, limit=0, zying_category=None, include_checked=False,
+    sources=None, salesperson=None, group_name=None, token_ids=None,
+):
+    payload = {
+        "hours": hours,
+        "limit": limit,
+        "category": zying_category or "",
+        "include_checked": bool(include_checked),
+        "recheck": bool(include_checked),
+        "sources": list(sources or []),
+        "salespeople": salesperson or [],
+        "group_names": group_name or [],
+        "token_ids": list(token_ids or []),
+    }
+    if DB_MODE == "mysql":
+        return _local_call("get_infringement_risk_candidates", **{
+            "hours": hours, "limit": limit, "zying_category": zying_category,
+            "include_checked": include_checked, "sources": sources,
+            "salesperson": salesperson, "group_name": group_name, "token_ids": token_ids,
+        })
+    return _request("POST", "/api/db/infringement-risk/candidates", json=payload)
+
+
+def update_infringement_product_risks(results):
+    if DB_MODE == "mysql":
+        return _local_call("update_infringement_product_risks", results)
+    data = _request(
+        "POST", "/api/db/infringement-risk/bulk", json={"results": results or []}
+    )
+    return int((data or {}).get("count", 0))
+
+
+def get_infringement_risk_results(
+    zying_category=None, risk_level=None, search="", sort_by="risk_level",
+    sort_dir="desc", limit=1000, sources=None,
+):
+    if DB_MODE == "mysql":
+        return _local_call(
+            "get_infringement_risk_results", zying_category=zying_category,
+            risk_level=risk_level, search=search, sort_by=sort_by,
+            sort_dir=sort_dir, limit=limit, sources=sources,
+        )
+    return _request("GET", "/api/db/infringement-risk/results", params={
+        "category": zying_category or "", "risk_level": risk_level or "",
+        "search": search or "", "sort_by": sort_by, "sort_dir": sort_dir,
+        "limit": limit, "sources": ",".join(sources or []),
+    })
+
+
+def list_infringement_risk_scope_options():
+    if DB_MODE == "mysql":
+        return _local_call("list_infringement_risk_scope_options")
+    return _request("GET", "/api/db/infringement-risk/options")
+
+
 def list_zying_risk_categories():
     if DB_MODE == "mysql":
         return _local_call("list_zying_risk_categories")
@@ -1598,6 +1654,7 @@ def upsert_mercado_collection_items(task_id, rows):
 
 def list_mercado_collection_items(
     search="", limit=500, offset=0, task_id=None,
+    review_status="", publish_status="",
     weight_min=None, weight_max=None, price_min=None, price_max=None,
     net_proceeds_min=None, net_proceeds_max=None, date_from="", date_to="",
     exclude_added=False, management_category_id=None,
@@ -1606,6 +1663,8 @@ def list_mercado_collection_items(
         "search": search,
         "limit": limit,
         "offset": offset,
+        "review_status": str(review_status or "").strip().lower(),
+        "publish_status": str(publish_status or "").strip().lower(),
         "weight_min": weight_min,
         "weight_max": weight_max,
         "price_min": price_min,

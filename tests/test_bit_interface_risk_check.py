@@ -27,6 +27,14 @@ def test_risk_check_console_exposes_start_sort_and_export_controls():
     assert "function sortRiskResults(column)" in template
     assert "function exportRiskResults()" in template
     assert "/api/risk-check/results/export" in template
+    assert 'value="product_list"' in template
+    assert 'value="collection_list"' in template
+    assert 'value="pulled"' in template
+    assert 'value="zying"' in template
+    assert 'id="risk-check-salesperson"' in template
+    assert 'id="risk-check-group"' in template
+    assert 'id="risk-check-account"' in template
+    assert "黑名单优先" in template
 
 
 def test_build_risk_check_params_clamps_console_values():
@@ -49,6 +57,20 @@ def test_build_risk_check_params_clamps_console_values():
     assert "min_ocr_confidence" not in params
     assert params["retries"] == 5
     assert params["recheck"] is True
+
+
+def test_build_risk_check_params_accepts_multisource_store_scope():
+    params = bit_interface.build_risk_check_params({
+        "sources": ["pulled", "zying", "pulled", "invalid"],
+        "salespeople": ["业务员甲"],
+        "group_names": ["账户组 A"],
+        "token_ids": [7, "8", -1, "bad"],
+    })
+
+    assert params["sources"] == ["pulled", "zying"]
+    assert params["salesperson"] == ["业务员甲"]
+    assert params["group_name"] == ["账户组 A"]
+    assert params["token_ids"] == [7, 8]
 
 
 def test_risk_check_results_api_passes_filters_and_sort(monkeypatch):
@@ -185,6 +207,44 @@ def test_risk_check_start_runs_in_background_and_updates_status(monkeypatch):
     assert any("开始标题审核批次 1/1" in line for line in status["logs"])
 
 
+def test_multisource_job_uses_unified_store_and_knowledge(monkeypatch):
+    captured = {}
+
+    class Lock:
+        released = False
+
+        def release(self):
+            self.released = True
+
+    monkeypatch.setattr(
+        bit_interface,
+        "db_list_infringement_knowledge",
+        lambda **kwargs: {
+            "summary": {"blacklist": 2, "whitelist": 3},
+            "rows": [{"brand_name": "Nike", "list_type": "blacklist"}],
+        },
+    )
+
+    def scan_products(**kwargs):
+        captured.update(kwargs)
+        return {
+            "checked": 1, "risk_0": 0, "risk_1": 0, "risk_2": 1,
+            "updated": 1, "results": [],
+        }
+
+    monkeypatch.setattr(bit_interface.bit_check_risk, "scan_products", scan_products)
+    lock = Lock()
+    bit_interface.run_risk_check_job(
+        {"sources": ["pulled"], "hours": 0, "limit": 1},
+        lock,
+    )
+
+    assert captured["candidate_reader"] is bit_interface.db_get_infringement_risk_candidates
+    assert captured["risk_writer"] is bit_interface.db_update_infringement_product_risks
+    assert captured["knowledge_records"][0]["brand_name"] == "Nike"
+    assert lock.released is True
+
+
 def test_bit_db_api_forwards_risk_result_sorting(monkeypatch):
     captured = {}
     monkeypatch.setattr(bit_db_api, "DB_MODE", "api")
@@ -206,3 +266,28 @@ def test_bit_db_api_forwards_risk_result_sorting(monkeypatch):
     assert captured["path"] == "/api/db/zying-risk/results"
     assert captured["params"]["category"] == "玩具类"
     assert captured["params"]["sort_by"] == "keywords"
+
+
+def test_bit_db_api_forwards_multisource_candidate_scope(monkeypatch):
+    captured = {}
+    monkeypatch.setattr(bit_db_api, "DB_MODE", "api")
+
+    def request(method, path, **kwargs):
+        captured.update({"method": method, "path": path, **kwargs})
+        return []
+
+    monkeypatch.setattr(bit_db_api, "_request", request)
+    bit_db_api.get_infringement_risk_candidates(
+        sources=["pulled"],
+        salesperson=["业务员甲"],
+        group_name=["账户组 A"],
+        token_ids=[9],
+        include_checked=True,
+    )
+
+    assert captured["path"] == "/api/db/infringement-risk/candidates"
+    assert captured["json"]["sources"] == ["pulled"]
+    assert captured["json"]["salespeople"] == ["业务员甲"]
+    assert captured["json"]["group_names"] == ["账户组 A"]
+    assert captured["json"]["token_ids"] == [9]
+    assert captured["json"]["recheck"] is True

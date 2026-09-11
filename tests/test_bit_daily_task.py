@@ -824,6 +824,36 @@ def test_infraction_shop_executor_passes_api_ids_directly(monkeypatch):
     assert calls[0][1]["infraction_ids"] == ["MLM-1", "MLM-2"]
 
 
+@pytest.mark.parametrize("appeal_type", ["侵权", "禁限售"])
+def test_shop_executor_passes_ai_copy_mode_only_for_supported_types(
+    monkeypatch, appeal_type
+):
+    calls = []
+    monkeypatch.setattr(
+        bit_daily_task.bit_appeal_ai,
+        "shensu",
+        lambda *args, **kwargs: calls.append((args, kwargs)) or "完成",
+    )
+    monkeypatch.setattr(bit_daily_task, "_resolve_login_anomaly", lambda *args: None)
+
+    bit_daily_task._appeal_one_shop_locked(
+        {
+            "name": "测试店铺",
+            "total": 1,
+            "sites": [{"site_code": "MX", "count": 1}],
+        },
+        "window-id",
+        object(),
+        appeal_type=appeal_type,
+        site_pause=0,
+        appeal_copy_mode="AI话术模式",
+        deepseek_api_key="manual-secret",
+    )
+
+    assert calls[0][1]["ai_script_mode"] is True
+    assert calls[0][1]["deepseek_api_key"] == "manual-secret"
+
+
 def test_infraction_plan_opens_prohibited_as_independent_form(monkeypatch):
     calls = []
     monkeypatch.setattr(

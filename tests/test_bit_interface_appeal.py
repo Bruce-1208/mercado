@@ -832,6 +832,28 @@ def test_build_daily_task_params_supports_multiple_tasks_and_shop_group():
     assert params["top_n"] == 0
 
 
+def test_build_daily_task_params_supports_independent_ai_copy_mode():
+    params = bit_interface.build_daily_task_params({
+        "appeal_type": "侵权",
+        "appeal_copy_mode": "AI话术模式",
+        "deepseek_api_key": "manual-secret",
+    })
+
+    assert params["appeal_copy_mode"] == "AI话术模式"
+    assert params["deepseek_api_key"] == "manual-secret"
+    with pytest.raises(ValueError, match="手动填写 DeepSeek Token"):
+        bit_interface.build_daily_task_params({
+            "appeal_type": "禁限售",
+            "appeal_copy_mode": "AI话术模式",
+        })
+    normal = bit_interface.build_daily_task_params({
+        "appeal_copy_mode": "普通模式",
+        "deepseek_api_key": "must-not-be-retained",
+    })
+    assert normal["deepseek_api_key"] == ""
+    assert "deepseek_api_key" not in bit_interface._sanitize_daily_task_params(params)
+
+
 def test_build_daily_task_params_parses_independent_execution_standards():
     params = bit_interface.build_daily_task_params({
         "infraction_min_count": 8,
@@ -1510,6 +1532,8 @@ def test_daily_task_console_dispatches_selected_appeal_type(
             "appeal_type": "延误率",
             "min_rate": "7%",
             "stop_after_minutes": 0,
+            "appeal_copy_mode": "AI话术模式",
+            "deepseek_api_key": "manual-secret",
         }
     )
     task_lock = FakeTaskLock()
@@ -1518,6 +1542,8 @@ def test_daily_task_console_dispatches_selected_appeal_type(
 
     assert calls[0][0] == ("延误率",)
     assert calls[0][1]["min_rate"] == pytest.approx(0.07)
+    assert calls[0][1]["appeal_copy_mode"] == "AI话术模式"
+    assert calls[0][1]["deepseek_api_key"] == "manual-secret"
     assert task_lock.released is True
     assert bit_interface._daily_task_state["status"] == "success"
 
@@ -1597,9 +1623,15 @@ def test_normalize_appeal_loop_count():
         bit_interface.normalize_appeal_loop_count("5")
 
 
-def test_ai_script_mode_is_supported_and_uses_ai_interval():
-    assert bit_interface.normalize_appeal_mode("AI话术模式") == "AI话术模式"
-    assert bit_interface.get_appeal_round_interval("AI话术模式") == 60
+def test_ai_script_mode_is_independent_from_customer_service_mode():
+    assert bit_interface.normalize_appeal_mode("AI客服") == "AI客服"
+    assert bit_interface.get_appeal_round_interval("AI客服") == 60
+    assert (
+        bit_interface.bit_daily_task.normalize_appeal_copy_mode("AI话术模式")
+        == "AI话术模式"
+    )
+    with pytest.raises(ValueError, match="客服模式只支持"):
+        bit_interface.normalize_appeal_mode("AI话术模式")
     with pytest.raises(ValueError, match="客服模式只支持"):
         bit_interface.normalize_appeal_mode("未知模式")
 
@@ -1609,9 +1641,16 @@ def test_appeal_console_exposes_manual_deepseek_token_without_query_string():
         Path(bit_interface.CURRENT_DIR) / "templates" / "index.html"
     ).read_text(encoding="utf-8")
 
-    assert '<option value="AI话术模式">AI 话术模式</option>' in template
+    customer_mode_options = template.split('<select id="mode"', 1)[1].split(
+        "</select>", 1
+    )[0]
+    assert "AI话术模式" not in customer_mode_options
+    assert 'id="appeal-copy-mode"' in template
+    assert 'id="daily-task-copy-mode"' in template
     assert 'id="deepseek-api-key" type="password"' in template
+    assert 'id="daily-task-deepseek-api-key" type="password"' in template
     assert "每次最多 3 个产品，理由不超过 50 个字" in template
+    assert 'appeal_copy_mode: appealCopyMode' in template
     assert 'deepseek_api_key: deepseekApiKey' in template
     assert 'method: "POST"' in template
 
@@ -2445,7 +2484,8 @@ def test_run_appeal_api_passes_manual_token_only_to_ai_script_mode(monkeypatch):
             "name": "测试店铺",
             "sites": ["墨西哥"],
             "forms": ["侵权"],
-            "mode": "AI话术模式",
+            "mode": "AI客服",
+            "appeal_copy_mode": "AI话术模式",
             "deepseek_api_key": "manual-secret",
             "loop_count": 10,
             "task_id": "ai-script-api-test",
@@ -2455,7 +2495,8 @@ def test_run_appeal_api_passes_manual_token_only_to_ai_script_mode(monkeypatch):
     )
 
     assert response.status_code == 200
-    assert captured["mode"] == "AI话术模式"
+    assert captured["mode"] == "AI客服"
+    assert captured["appeal_copy_mode"] == "AI话术模式"
     assert captured["deepseek_api_key"] == "manual-secret"
 
 
@@ -2475,7 +2516,8 @@ def test_run_appeal_api_requires_token_for_ai_script_mode(monkeypatch):
             "name": "测试店铺",
             "sites": ["墨西哥"],
             "forms": ["禁限售"],
-            "mode": "AI话术模式",
+            "mode": "AI客服",
+            "appeal_copy_mode": "AI话术模式",
         },
     )
 

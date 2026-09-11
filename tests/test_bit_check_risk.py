@@ -138,6 +138,79 @@ def test_scan_products_filters_category_and_writes_all_risk_levels(monkeypatch):
     assert any("风险审核完成" in line for line in logs)
 
 
+def test_multisource_scan_uses_blacklist_before_deepseek(monkeypatch):
+    captured = {}
+
+    def get_candidates(**kwargs):
+        captured["query"] = kwargs
+        return [{
+            "row_id": 8,
+            "source_row_id": 8,
+            "record_key": "pulled:8",
+            "source_type": "pulled",
+            "product_id": "MLM8",
+            "title": "Nike running shoes",
+            "token_id": 12,
+            "account_name": "MX 店铺",
+        }]
+
+    def unexpected_ai(*args, **kwargs):
+        raise AssertionError("黑名单命中不应再调用 DeepSeek")
+
+    monkeypatch.setattr(bit_check_risk, "classify_risk_records", unexpected_ai)
+    written = []
+    summary = bit_check_risk.scan_products(
+        sources=["pulled"],
+        salesperson=["业务员甲"],
+        group_name=["一组"],
+        token_ids=[12],
+        candidate_reader=get_candidates,
+        risk_writer=lambda results: written.extend(results) or len(results),
+        knowledge_records=[
+            {"brand_name": "Nike", "list_type": "whitelist"},
+            {"brand_name": "Nike", "list_type": "blacklist"},
+        ],
+    )
+
+    assert captured["query"]["sources"] == ["pulled"]
+    assert captured["query"]["token_ids"] == [12]
+    assert written[0]["source_type"] == "pulled"
+    assert written[0]["risk_level"] == 2
+    assert written[0]["keywords"] == ["Nike"]
+    assert written[0]["reason"] == "命中侵权知识库黑名单"
+    assert summary["risk_2"] == 1
+
+
+def test_whitelist_match_is_sent_to_deepseek_as_non_infringing_constraint(monkeypatch):
+    captured = {}
+
+    def fake_chat(messages, **kwargs):
+        captured["messages"] = messages
+        return json.dumps([{
+            "row_id": "product_list:3",
+            "risk_level": 0,
+            "keywords": [],
+            "reason": "白名单品牌",
+        }])
+
+    monkeypatch.setattr(bit_check_risk, "chat_deepseek", fake_chat)
+    result = bit_check_risk.classify_risk_records(
+        [{
+            "row_id": 3,
+            "source_row_id": 3,
+            "record_key": "product_list:3",
+            "source_type": "product_list",
+            "title": "GenericCo storage bag",
+        }],
+        retries=0,
+        knowledge_records=[{"brand_name": "GenericCo", "list_type": "whitelist"}],
+    )
+
+    assert '"whitelist": ["GenericCo"]' in captured["messages"][1]["content"]
+    assert result[0]["source_type"] == "product_list"
+    assert result[0]["risk_level"] == 0
+
+
 def test_update_zying_product_risks_clears_keywords_for_level_zero(monkeypatch):
     calls = []
 
