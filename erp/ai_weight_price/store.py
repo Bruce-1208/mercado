@@ -99,6 +99,38 @@ class Store:
             rows = db.execute("SELECT payload FROM run_items WHERE run_id=? ORDER BY sequence", (run_id,)).fetchall()
         return json.loads(run[0]), [json.loads(row[0]) for row in rows]
 
+    def run_items(self, run_id, status="", search="", page=1, page_size=50):
+        """Return the latest task state for items belonging to one execution run."""
+        if status and status not in STATUSES:
+            raise ValueError("状态无效")
+        clauses, args = ["ri.run_id=?"], [run_id]
+        if status:
+            clauses.append("t.status=?")
+            args.append(status)
+        if search:
+            clauses.append("(t.erp_goods_id LIKE ? OR json_extract(t.payload,'$.title') LIKE ?)")
+            args.extend(["%" + search + "%"] * 2)
+        where = " WHERE " + " AND ".join(clauses)
+        with self.connect() as db:
+            run = db.execute("SELECT payload FROM runs WHERE run_id=?", (run_id,)).fetchone()
+            if not run:
+                raise ValueError("执行批次不存在")
+            total = db.execute("SELECT COUNT(*) FROM run_items ri JOIN tasks t ON t.erp_goods_id=ri.erp_goods_id" + where,
+                               args).fetchone()[0]
+            rows = db.execute("SELECT ri.sequence,ri.payload run_payload,t.* FROM run_items ri "
+                              "JOIN tasks t ON t.erp_goods_id=ri.erp_goods_id" + where
+                              + " ORDER BY ri.sequence LIMIT ? OFFSET ?",
+                              args + [page_size, (page - 1) * page_size]).fetchall()
+        result = []
+        for row in rows:
+            snapshot = json.loads(row["run_payload"])
+            current = self.decode(row)
+            result.append({**snapshot, **current,
+                           "execution_result": snapshot.get("execution_result", ""),
+                           "execution_reason": snapshot.get("execution_reason", ""),
+                           "run_sequence": row["sequence"]})
+        return {"run": json.loads(run[0]), "total": total, "rows": result}
+
     @staticmethod
     def decode(row):
         return {**json.loads(row["payload"]), **{k: row[k] for k in ("erp_goods_id", "status", "stage", "created_at", "updated_at")}}
@@ -162,7 +194,14 @@ class Store:
         where = " WHERE " + " AND ".join(clauses) if clauses else ""
         with self.connect() as db:
             total = db.execute("SELECT COUNT(*) FROM tasks" + where, args).fetchone()[0]
-            rows = db.execute("SELECT * FROM tasks" + where + " ORDER BY created_at,erp_goods_id LIMIT ? OFFSET ?",
+            # A task's database creation time is not the user's visible page
+            # order: old collections and retries can interleave records.  When
+            # available, follow the source page and one-based card position so
+            # processing starts at the first product on the selected page.
+            rows = db.execute("SELECT * FROM tasks" + where +
+                              " ORDER BY COALESCE(CAST(json_extract(payload,'$.source_page') AS INTEGER),2147483647),"
+                              " COALESCE(CAST(json_extract(payload,'$.source_index') AS INTEGER),2147483647),"
+                              " created_at,erp_goods_id LIMIT ? OFFSET ?",
                               args + [page_size, (page - 1) * page_size]).fetchall()
         return {"total": total, "rows": [self.decode(row) for row in rows]}
 

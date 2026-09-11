@@ -118,6 +118,22 @@ def create_blueprint(service, authorize=None):
         return jsonify(service.store.list(request.args.get("status", ""), request.args.get("search", ""),
                                           max(1, int(request.args.get("page", 1))), 50))
 
+    @bp.get("/api/ai-weight-price/run-items")
+    def run_items():
+        current = service.store.state("run", {}) or {}
+        run_id = current.get("run_id") or service.store.state("latest_run_id")
+        if not run_id:
+            return jsonify(run={}, total=0, rows=[])
+        data = service.store.run_items(run_id, request.args.get("status", ""),
+                                       request.args.get("search", ""),
+                                       max(1, int(request.args.get("page", 1))), 50)
+        if not service.status()["running"]:
+            for row in data["rows"]:
+                if row.get("execution_result") == "执行中" and row.get("status") == "pending":
+                    row["execution_result"] = "待重试"
+                    row["execution_reason"] = "上次运行已中断，商品进度已保留，可点击重试"
+        return jsonify(data)
+
     @bp.route("/api/ai-weight-price/tasks/<key>", methods=["GET", "PATCH"])
     def task(key):
         if request.method == "PATCH":
@@ -129,13 +145,16 @@ def create_blueprint(service, authorize=None):
     @bp.post("/api/ai-weight-price/tasks/<key>/retry")
     def retry(key):
         run = request.get_json().get("run", True)
+        pending = service.store.get(key)["status"] == "pending"
         if run:
             service.require_login(service.config.load())
             service.preflight(service.config.load(), "process", key)
-        service.retry(key)
+        if not pending:
+            service.retry(key)
         if run:
             service.start("process", key)
-        return jsonify(message="已启动此任务重试；不会重复咨询商家" if run else "已重新排队")
+        return jsonify(message=("已启动此待处理商品" if pending else "已启动此任务重试；不会重复咨询商家")
+                       if run else ("任务已是待处理状态" if pending else "已重新排队"))
 
     @bp.post("/api/ai-weight-price/start")
     def start():
@@ -144,7 +163,8 @@ def create_blueprint(service, authorize=None):
         if mode != "probe" and not body.get("task_id"):
             from .config import selection_params
             selection_params(body.get("selection"), service.config.load())
-        service.start(mode, body.get("task_id"), body.get("selection"), body.get("max_items", 10))
+        service.start(mode, body.get("task_id"), body.get("selection"), body.get("max_items", 10),
+                      resume=body.get("resume") is True)
         return jsonify(message="任务已启动")
 
     @bp.post("/api/ai-weight-price/stop")
@@ -159,9 +179,15 @@ def create_blueprint(service, authorize=None):
         service.continue_after_human()
         return jsonify(message="已从暂停的当前商品继续执行")
 
+    @bp.post("/api/ai-weight-price/skip-current")
+    def skip_current():
+        service.skip_current_exception()
+        return jsonify(message="已跳过当前异常商品，继续执行下一件")
+
     @bp.get("/api/ai-weight-price/logs")
     def logs():
-        return jsonify(service.store.logs(max(0, int(request.args.get("after", 0)))))
+        limit = min(10000, max(1, int(request.args.get("limit", 200))))
+        return jsonify(service.store.logs(max(0, int(request.args.get("after", 0))), limit))
 
     @bp.get("/api/ai-weight-price/export")
     def export():

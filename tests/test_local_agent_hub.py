@@ -78,7 +78,11 @@ def test_claimed_deepseek_token_is_delivered_once_then_redacted(tmp_path):
         "appeal-secret-job",
         "agent-secret-pc",
         "appeal",
-        {"mode": "AI话术模式", "deepseek_api_key": "manual-secret"},
+        {
+            "mode": "AI客服",
+            "appeal_copy_mode": "AI话术模式",
+            "deepseek_api_key": "manual-secret",
+        },
         now=101,
     )
 

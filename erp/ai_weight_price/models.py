@@ -125,14 +125,33 @@ class Models:
         prompt = ("对比商品主图。第一张图片是智赢目标商品，其余图片按index从1开始依次为1688以图搜货候选。"
                   "分别判断外观、款式、颜色、图案、配件是否同款；不要仅因同类商品就给高分。"
                   "只根据可见证据评分，不猜测图片里看不到的重量和售价。必须为每张候选给出一个结果。"
+                  "confidence表示同款匹配分数，不是对判断本身的确信度；判定非同款时必须给出低于同款门槛的分数。"
                   '只输出JSON：{"matches":[{"index":1,"same_product":true或false,"confidence":0到1,"reason":"差异或同款证据"}]}。\n'
                   + json.dumps({"target": {k: task.get(k) for k in ("title", "erp_sku")},
                                 "candidates": [{"index": i, "title": c.get("title", "")} for i, c in enumerate(candidates, 1)]}, ensure_ascii=False))
         answer = self.call(self.config["model"], prompt,
                            [task["main_image_url"], *(c["main_image_url"] for c in candidates)], True)
         matches = answer.get("matches") if isinstance(answer, dict) else None
-        if not isinstance(matches, list) or len(matches) != len(candidates):
-            raise ValueError("图片比对未返回全部候选的评分")
+        if not isinstance(matches, list) or not matches or len(matches) > len(candidates):
+            raise ValueError("图片比对评分结果格式错误")
+        # Vision responses can be cut short even when the JSON itself is
+        # valid (for example, a busy model returns the first 4 of 5 rows).
+        # Treat only the missing rows as unconfirmed candidates instead of
+        # turning a transport/length quirk into a batch-stopping exception.
+        # Every candidate still gets explicit evidence and therefore can never
+        # be approved without a real model score.
+        returned_indexes = {
+            item.get("index") for item in matches if isinstance(item, dict)
+        }
+        missing_indexes = [index for index in range(1, len(candidates) + 1)
+                           if index not in returned_indexes]
+        if missing_indexes:
+            self.log(f"图片比对模型少返回 {len(missing_indexes)} 个候选评分，缺失项按未确认处理")
+            matches = [*matches, *[
+                {"index": index, "same_product": False, "confidence": 0,
+                 "reason": "模型未返回该候选评分，按未确认处理"}
+                for index in missing_indexes
+            ]]
         seen, evidence, approved = set(), [], []
         for result in matches:
             if not isinstance(result, dict):
@@ -145,7 +164,7 @@ class Models:
             seen.add(index)
             item = {"candidate": candidates[index - 1], "review": result}
             evidence.append(item)
-            if result.get("same_product") is True and score > self.config["match_threshold"]:
+            if result.get("same_product") is True and score >= self.config["match_threshold"]:
                 approved.append({**candidates[index - 1], "image_confidence": score, "image_review": result})
         return sorted(approved, key=lambda c: c["image_confidence"], reverse=True), evidence
 
@@ -167,7 +186,7 @@ class Models:
         confidence = result.get("confidence")
         return (result.get("same_product") is True and result.get("specs_confirmed") is True
                 and type(confidence) in (int, float) and math.isfinite(confidence)
-                and self.config["match_threshold"] < confidence <= 1)
+                and self.config["match_threshold"] <= confidence <= 1)
 
     def weight(self, text):
         prompt = ("请从下面商家回复文本提取商品包装重量，只输出数字，单位g；没有识别到则输出null。"

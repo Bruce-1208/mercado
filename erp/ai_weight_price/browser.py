@@ -64,6 +64,98 @@ ERP_DETAIL_ID_READ = """(page, expected) => {
     image_match:!!expected.main_image_url&&images.includes(expected.main_image_url)};
 }"""
 
+# The current 1688 detail page exposes the complete SKU list in the React data
+# backing its official SKU module.  Read only the fields needed by this task and
+# cross-check them against the independently rendered packaging data.  This is
+# deliberately narrower than serialising the whole page (which also contains a
+# large recommendation feed and used to trip the DOM snapshot size guard).
+CURRENT_1688_DETAIL = r"""candidateImage => {
+  const clean=value=>String(value||'').replace(/\s+/g,' ').trim();
+  const visible=e=>!!e&&e.getClientRects().length>0&&getComputedStyle(e).visibility!=='hidden';
+  const titleNodes=[...document.querySelectorAll('#productTitle .title-content h1')].filter(visible);
+  const merchantNodes=[...document.querySelectorAll('#shopNavigation a.shop-company-name[href]')].filter(visible);
+  const selection=document.querySelector('#skuSelection[data-module="od_sku_selection"]');
+  const recognized=!!(document.querySelector('#productTitle[data-module="od_title"]')||selection);
+  if(!recognized)return {recognized:false};
+  if(titleNodes.length!==1||merchantNodes.length!==1||!selection)
+    return {recognized:true,ready:false,error:'1688新版详情的标题、商家或SKU模块尚未完整加载'};
+
+  const arrays=(element,predicate)=>{
+    const key=Object.keys(element).find(name=>name.startsWith('__reactFiber$'));
+    let fiber=key?element[key]:null;const found=[],seen=new WeakSet();
+    const scan=(value,depth)=>{
+      if(!value||typeof value!=='object'||depth>9||seen.has(value))return;
+      seen.add(value);
+      if(Array.isArray(value)&&predicate(value)){found.push(value);return;}
+      for(const [name,child] of Object.entries(value)){
+        if(name==='_owner'||name==='stateNode'||name==='return'||name==='child'||name==='sibling')continue;
+        if(child&&typeof child==='object'&&!child.$$typeof)scan(child,depth+1);
+      }
+    };
+    for(let depth=0;fiber&&depth<18;depth++,fiber=fiber.return)scan(fiber.memoizedProps,0);
+    return found;
+  };
+  const priceOf=item=>{
+    for(const key of ['discountPrice','currentPrice','priceNum','price']){
+      const value=item[key];
+      if(value!==null&&value!==undefined&&/^\d+(?:\.\d{1,4})?$/.test(String(value))&&Number(value)>0)
+        return String(value);
+    }
+    return '';
+  };
+  const decode=value=>{const box=document.createElement('textarea');box.innerHTML=String(value||'');return clean(box.value.replace(/>/g,' / '));};
+  const normalizeSkus=list=>list.map(item=>({id:String(item.skuId||''),label:decode(item.specAttrs),price:priceOf(item)}))
+    .filter(item=>/^\d+$/.test(item.id)&&item.label&&item.price).sort((a,b)=>a.id.localeCompare(b.id));
+  const skuSets=arrays(selection,list=>list.length>0&&list.length<=500&&list.every(item=>item&&typeof item==='object'&&item.skuId&&item.specAttrs))
+    .map(normalizeSkus).filter(list=>list.length);
+  if(!skuSets.length)return {recognized:true,ready:false,error:'1688新版详情的完整SKU价格数据尚未加载'};
+  const largest=Math.max(...skuSets.map(list=>list.length));
+  const distinct=new Map(skuSets.filter(list=>list.length===largest).map(list=>[JSON.stringify(list),list]));
+  if(distinct.size!==1)return {recognized:true,ready:false,error:'1688新版详情返回了不一致的SKU价格数据'};
+  const skus=[...distinct.values()][0];
+
+  const pack=document.querySelector('#productPackInfo[data-module="od_product_pack_info"]');
+  const normalizeWeights=list=>list.map(item=>({id:String(item.skuId||''),weight:item.weight}))
+    .filter(item=>/^\d+$/.test(item.id)&&Number.isFinite(Number(item.weight))&&Number(item.weight)>0)
+    .sort((a,b)=>a.id.localeCompare(b.id));
+  const weightSets=pack?arrays(pack,list=>list.length>0&&list.length<=500&&list.every(item=>item&&typeof item==='object'&&item.skuId&&'weight' in item))
+    .map(normalizeWeights).filter(list=>list.length):[];
+  let weights=new Map();
+  if(weightSets.length){
+    const most=Math.max(...weightSets.map(list=>list.length));
+    const choices=new Map(weightSets.filter(list=>list.length===most).map(list=>[JSON.stringify(list),list]));
+    if(choices.size!==1)return {recognized:true,ready:false,error:'1688新版详情返回了不一致的SKU包装重量数据'};
+    weights=new Map([...choices.values()][0].map(item=>[item.id,String(item.weight)]));
+  }
+
+  let merchantId='';
+  try{
+    const host=new URL(merchantNodes[0].href).hostname.toLowerCase();
+    if(/^[a-z0-9-]+\.1688\.com$/.test(host))merchantId=host.slice(0,-'.1688.com'.length);
+  }catch(_){}
+  if(!merchantId)return {recognized:true,ready:false,error:'1688新版详情缺少可核验的商家标识'};
+  const pictures=[...document.querySelectorAll('#gallery img.preview-img')]
+    .map(image=>image.currentSrc||image.src).filter(src=>/^https?:\/\//i.test(src));
+  const asset=url=>String(url||'').match(/\/([^/]+?)_!!/)?.[1]||'';
+  const wanted=asset(candidateImage);
+  const mainImage=(wanted&&pictures.find(src=>asset(src)===wanted))||pictures[0]||'';
+  if(!mainImage)return {recognized:true,ready:false,error:'1688新版详情主图尚未加载'};
+  const skuIds=new Set(skus.map(sku=>sku.id));
+  if([...weights.keys()].some(id=>!skuIds.has(id)))
+    return {recognized:true,ready:false,error:'1688新版详情的价格与包装SKU标识不一致'};
+  const rows=skus.map(sku=>{
+    const weight=weights.get(sku.id)||'';
+    return {...sku,raw_price:'¥'+sku.price,raw_surcharge:'',raw_weight:weight?weight+'g':'',
+      raw_text:sku.label+'；页面单价 ¥'+sku.price+(weight?'；包装重量 '+weight+'g':'')};
+  });
+  // Keep the detail-page read deliberately narrow: pricing, variant labels and
+  // package weights only. Title/shop/image are retained solely for ownership
+  // and product-identity checks elsewhere in the pipeline.
+  const description='';
+  return {recognized:true,ready:true,offer:{title:clean(titleNodes[0].innerText),main_image_url:mainImage,
+    description,raw_weight:'',merchant_id:merchantId,skus:rows}};
+}"""
+
 
 def category_paths(options, parents=()):
     result = []
@@ -164,22 +256,28 @@ class Browser:
             self.pw.stop()
 
     def check(self, page):
-        if self.stop.is_set():
-            raise Stopped("操作已停止")
-        for frame in page.frames:
-            try:
-                if frame is not page.main_frame and frame.is_detached():
-                    continue
-                self.check_frame(frame)
-            except (CircuitOpen, Stopped):
-                raise
-            except Exception:
-                # 1688 replaces ad/login frames while the main page loads.
-                # Only a removed child frame can be ignored; keep main-frame
-                # failures and every live captcha/risk signal blocking.
-                if frame is not page.main_frame and frame.is_detached():
-                    continue
-                raise
+        try:
+            if self.stop.is_set():
+                raise Stopped("操作已停止")
+            for frame in page.frames:
+                try:
+                    if frame is not page.main_frame and frame.is_detached():
+                        continue
+                    self.check_frame(frame)
+                except (CircuitOpen, Stopped):
+                    raise
+                except Exception:
+                    # 1688 replaces ad/login frames while the main page loads.
+                    # Only a removed child frame can be ignored; keep main-frame
+                    # failures and every live captcha/risk signal blocking.
+                    if frame is not page.main_frame and frame.is_detached():
+                        continue
+                    raise
+        except CircuitOpen:
+            # A real login/captcha page is the user's recovery surface. Detach it
+            # from automatic cleanup so it remains visible after this worker exits.
+            self.retain(page)
+            raise
 
     def check_frame(self, frame):
         host = (urlsplit(frame.url).hostname or "").lower()
@@ -188,8 +286,32 @@ class Browser:
         risk = self.s["risk"]
         if risk and frame.locator(risk).count() and frame.locator(risk).first.is_visible():
             raise CircuitOpen("1688出现验证码或人机审核；请在可见Edge中处理后返回控制台继续执行")
-        text = frame.locator("body").inner_text(timeout=3000) if frame.locator("body").count() else ""
-        if re.search(r"操作[太过]?于?频繁|发言受限|发送[太过]?于?频繁|滑动验证|人机(?:审核|验证)|请(?:按住|拖动).*滑块|请完成.*验证|安全验证|访问受限", text):
+        # Check visible text nodes in-place and stop at the first match. Pulling
+        # the complete body text across CDP made every upload poll serialize the
+        # large 1688 home page and also increased false positives.
+        text_risk = frame.locator("body").evaluate(r"""body => {
+          const pattern=/操作[太过]?于?频繁|发言受限|发送[太过]?于?频繁|滑动验证|人机(?:审核|验证)|请(?:按住|拖动).*滑块|请完成.*验证|安全验证|访问受限/;
+          const visible=element=>{
+            if(!element||!element.getClientRects().length)return false;
+            const style=getComputedStyle(element);
+            return style.display!=='none'&&style.visibility!=='hidden'&&style.opacity!=='0';
+          };
+          const walker=document.createTreeWalker(body,NodeFilter.SHOW_TEXT);
+          let inspected=0;
+          for(let node=walker.nextNode();node&&inspected<4000;node=walker.nextNode(),inspected++){
+            const value=String(node.nodeValue||'').replace(/\s+/g,' ').trim();
+            if(value&&value.length<=240&&pattern.test(value)&&visible(node.parentElement))return true;
+          }
+          const labelled=body.querySelectorAll('[aria-label],[title],input[value]');
+          for(let index=0;index<labelled.length&&index<1000;index++){
+            const element=labelled[index];
+            if(!visible(element))continue;
+            const value=[element.getAttribute('aria-label'),element.title,element.value].filter(Boolean).join(' ');
+            if(value.length<=240&&pattern.test(value))return true;
+          }
+          return false;
+        }""") if frame.locator("body").count() else False
+        if text_risk:
             raise CircuitOpen("1688出现登录、验证码或人机审核提示；请在可见Edge中处理后返回控制台继续执行")
 
     def delay(self, low=1, high=3):
@@ -232,6 +354,15 @@ class Browser:
         if page in self.owned:
             page.close()
             self.owned.remove(page)
+
+    def retain(self, page):
+        """Leave a login/review page open for the user to handle manually."""
+        if page in self.owned:
+            self.owned.remove(page)
+        try:
+            page.bring_to_front()
+        except Exception:
+            pass
 
     def value(self, root, key, attribute=None, required=False):
         selector = self.s[key]
@@ -294,7 +425,19 @@ class Browser:
             has_token = page.evaluate("() => !!localStorage.getItem('token')")
             has_cookie = any(c["name"] == "token" and c.get("value") for c in self.context.cookies([page.url]))
             shell = page.locator(".ant-layout-sider, .ant-menu, .product-title")
-            if not (has_token or has_cookie) or not shell.count():
+            # Newer Zying builds keep the authenticated session in a
+            # namespaced/local encrypted store instead of the old `token`
+            # cookie.  A visible product shell at the protected product route
+            # is the authoritative signal in that case; an unauthenticated
+            # visit remains on #/login and is rejected above.
+            authenticated_shell = ("#/product" in page.url.lower() and shell.count() > 0)
+            # Some deployed builds render the shell with generated class names
+            # that do not match the compatibility selectors above.  The
+            # protected product route itself is still an authoritative signal:
+            # unauthenticated sessions are redirected to #/login before this
+            # loop reaches the check.
+            product_route = "#/product" in page.url.lower()
+            if not (has_token or has_cookie or authenticated_shell or product_route):
                 continue
             # No credentials leave the browser adapter or enter our task database.
             return {"page_url": page.url, "confirmed_at": time.time()}
@@ -525,7 +668,9 @@ class Browser:
             category_label = self.apply_category(page, selection["category"])
             self.first_page(page)
             first = max(selection["start_page"], resume_after + 1)
-            store.log(f"本次采集：{category_label}，第 {selection['start_page']}–{selection['end_page']} 页")
+            start_item = int(selection.get("start_item") or 1)
+            store.log(f"本次采集：{category_label}，第 {selection['start_page']}–{selection['end_page']} 页；"
+                      f"第 {start_item} 件开始（仅首个选中页生效）")
             for page_number in range(1, selection["end_page"] + 1):
                 self.check(page)
                 if page_number < first:
@@ -540,7 +685,14 @@ class Browser:
                     raise ValueError("翻页后商品未变化，采集已停止")
                 seen.add(fingerprint)
                 count = 0
-                for row in rows.all():
+                row_list = rows.all()
+                item_offset = start_item if page_number == selection["start_page"] else 1
+                if page_number == selection["start_page"] and item_offset > len(row_list):
+                    raise ValueError(f"智赢第 {page_number} 页只有 {len(row_list)} 件商品，"
+                                     f"无法从第 {item_offset} 件开始")
+                for item_index, row in enumerate(row_list, 1):
+                    if item_index < item_offset:
+                        continue
                     self.check(page)
                     # Supplier matching and writeback open temporary tabs. Bring
                     # the retained Zying list back before reading the next card,
@@ -552,7 +704,8 @@ class Browser:
                               "main_image_url": urljoin(page.url, image),
                               "description": self.value(row, "erp_description") or raw,
                               "erp_sku": self.value(row, "erp_sku"), "raw_erp": raw,
-                              "source_page": page_number, "source_category": selection["category"],
+                              "source_page": page_number, "source_index": item_index,
+                              "source_category": selection["category"],
                               "source_category_label": category_label}
                     link = self.value(row, "erp_edit_link", "href")
                     if link:
@@ -567,7 +720,15 @@ class Browser:
                     # the list, so values cannot come from the next card.
                     key = self.erp_goods_id(page, row, record)
                     record["erp_goods_id"] = key
-                    count += store.add(record)
+                    added = store.add(record)
+                    if not added:
+                        # Existing tasks retain their decision/progress, but
+                        # refresh the source position so a later run cannot be
+                        # reordered by the original database creation time.
+                        store.update(key, source_page=page_number, source_index=item_index,
+                                     source_category=selection["category"],
+                                     source_category_label=category_label)
+                    count += added
                     store.include_in_scope(scope, key, page_number)
                     store.log(f"已采集商品 {key}：{record['title']}", key)
                     if on_task:
@@ -618,6 +779,92 @@ class Browser:
         extension, mime = formats[kind]
         return {"name": "product-main." + extension, "mimeType": mime, "buffer": data}
 
+    @staticmethod
+    def image_submit_button(page):
+        """Find the one upload-dialog action without relying on one site class.
+
+        1688 has used several labels for the same action.  Strong image-search
+        labels are safe anywhere; generic submit/confirm labels are accepted
+        only inside a local component that also owns an image file input.
+        """
+        matches = []
+        for frame in page.frames:
+            if frame.is_detached():
+                continue
+            try:
+                buttons = frame.locator("button, [role='button']")
+                candidates = buttons.evaluate_all(r"""elements => elements.map((element,index) => {
+                      const style=getComputedStyle(element),box=element.getBoundingClientRect();
+                      if(!element.getClientRects().length||style.visibility==='hidden'||box.width<=0||box.height<=0||
+                         element.disabled||element.getAttribute('aria-disabled')==='true')return null;
+                      const clean=value=>String(value||'').replace(/\s+/g,'').trim();
+                      const label=clean(element.innerText||element.getAttribute('aria-label')||element.title);
+                      const className=String(element.className||'');
+                      const strong=/^(搜索图片|图片搜索|开始搜索|立即搜索|以图搜货|开始搜图|立即搜图|确认上传)$/;
+                      const generic=/^(提交|确定|确认|搜索)$/;
+                      const dialog=element.closest('[role="dialog"],.ant-modal,.next-dialog,.dialog,.modal');
+                      let owner=element.parentElement,distance=0,upload=null;
+                      while(owner&&owner!==document.body&&owner!==document.documentElement&&distance<8){
+                        upload=owner.querySelector(':scope input[type="file"]');
+                        if(upload)break;
+                        owner=owner.parentElement;distance++;
+                      }
+                      const ownsUpload=!!upload;
+                      const ownsImageUpload=ownsUpload&&(!upload.accept||/(image|jpg|jpeg|png|bmp|webp)/i.test(upload.accept));
+                      const hasSelectedFile=ownsImageUpload&&!!upload.files&&upload.files.length>0;
+                      // The ordinary keyword-search button lives in the same
+                      // header as the image file input on some 1688 builds.
+                      // A real image-search action also has the uploaded
+                      // preview (blob/data image or canvas) in its component.
+                      const hasImagePreview=!!(owner&&owner.querySelector('img[src^="blob:"],img[src^="data:image"],canvas'));
+                      // After a file is uploaded, current 1688 renders both the
+                      // ordinary header search and an image-preview primary
+                      // action.  Only the latter submits the uploaded picture.
+                      const imagePreviewPrimary=/(^|\s)action--[^\s]+/.test(className)&&/(^|\s)actionPrimary--[^\s]+/.test(className);
+                      if(strong.test(label))return {index,label,priority:imagePreviewPrimary?6:dialog?5:ownsImageUpload?2:1};
+                      if(!generic.test(label))return null;
+                      // Never click a plain header keyword-search button merely
+                      // because it is near a file input.  It is safe only after
+                      // the uploaded file is present or the page has mounted an
+                      // image-preview primary action.  The live 1688 homepage
+                      // replaces the file input after upload, so files.length
+                      // can be zero even though the preview action is ready.
+                      if(!ownsImageUpload||(!hasSelectedFile&&!hasImagePreview&&!dialog&&!imagePreviewPrimary))return null;
+                      return {index,label,priority:imagePreviewPrimary?6:dialog?5:3};
+                    }).filter(Boolean)""")
+                for detail in candidates:
+                    button = buttons.nth(detail["index"])
+                    if detail:
+                        matches.append((button, detail))
+            except Exception as exc:
+                if frame.is_detached() or "Frame was detached" in str(exc):
+                    continue
+                raise
+        if matches:
+            priority = max(detail["priority"] for _, detail in matches)
+            matches = [match for match in matches if match[1]["priority"] == priority]
+        if len(matches) > 1:
+            raise ValueError("1688图片上传后出现多个提交按钮，无法确认当前主图的提交入口")
+        return matches[0] if matches else (None, None)
+
+    def current_supplier_offer(self, page, candidate, timeout=12):
+        """Read only current 1688 SKU prices and per-SKU package weights."""
+        deadline = time.monotonic() + timeout
+        last = None
+        while time.monotonic() < deadline:
+            self.check(page)
+            last = page.evaluate(CURRENT_1688_DETAIL, candidate.get("main_image_url", ""))
+            if not last.get("recognized"):
+                return None
+            if last.get("ready"):
+                offer = last["offer"]
+                if not offer.get("skus"):
+                    raise SupplierAdaptationError("1688新版详情没有可读取的SKU价格")
+                return {"url": page.url, **offer}
+            if self.stop.wait(.35):
+                raise Stopped("操作已停止")
+        raise SupplierAdaptationError((last or {}).get("error") or "1688新版详情的SKU价格和重量尚未加载")
+
     def image_search(self, page, task, timeout=30):
         self.log("使用当前商品主图在1688以图搜货", task["erp_goods_id"])
         self.visual(task, "supplier_home", "已打开1688首页，准备上传当前商品主图", page)
@@ -646,6 +893,11 @@ class Browser:
                 raise ValueError(f"DOM字段 image_search_upload 必须唯一，实际 {count} 个，当前可见区域 {len(active)} 个")
             upload = active[0]
             self.log(f"页面存在 {count} 个上传控件，已定位当前可见区域的唯一上传控件", task["erp_goods_id"])
+        else:
+            # Freeze the verified element. 1688 may append another file input
+            # while the preview dialog is mounting; retaining the broad locator
+            # would then make set_input_files fail strict-mode validation.
+            upload = upload.first
         self.check(page)
         previous = list(self.context.pages)
         previous_url = page.url
@@ -664,15 +916,13 @@ class Browser:
         result = page
         while time.monotonic() < deadline:
             if not submitted:
-                buttons = [b for b in page.get_by_text("搜索图片", exact=True).all() if b.is_visible()]
-                if len(buttons) > 1:
-                    raise ValueError("1688搜索图片按钮不唯一，无法确认当前主图的提交入口")
-                if buttons and buttons[0].is_enabled():
+                button, detail = self.image_submit_button(page)
+                if button is not None:
                     self.check(page)
-                    buttons[0].click()
+                    button.click()
                     submitted = True
                     deadline = time.monotonic() + timeout
-                    self.visual(task, "search_submitted", "已点击搜索图片，开始1688以图搜货", page)
+                    self.visual(task, "search_submitted", f"已点击1688“{detail['label']}”，开始以图搜货", page)
             for opened in self.context.pages:
                 if opened not in previous and opened not in self.owned:
                     self.owned.append(opened)
@@ -685,22 +935,26 @@ class Browser:
                 try:
                     safe_url(result.url, "1688.com")
                 except ValueError:
-                    host = urlsplit(result.url).hostname or "未知域名"
-                    result.bring_to_front()
-                    raise CircuitOpen("1688搜图进入登录或人机审核页面（" + host + "）；请处理后返回控制台继续执行") from None
-                links = result.locator(self.s["result_links"]).evaluate_all("els => els.map(e => e.href)")
-                if links and (result is not page or result.url != previous_url or links != previous_links):
-                    self.visual(task, "search_results", f"1688已返回以图搜货结果，页面含 {len(links)} 个候选链接", result)
-                    return result
-                if "/1688-search/pc-image-search/" in urlsplit(result.url).path:
-                    cards = self.result_image_cards(result)
-                    if cards:
-                        self.visual(task, "search_results", f"1688已返回以图搜货结果，读取到 {len(cards)} 个商品卡片", result)
+                    # A browser-internal/transient/foreign URL is not evidence of
+                    # login or human review. check() above has already tested the
+                    # explicit login hosts and visible captcha/risk signals. Give
+                    # redirects time to settle; otherwise this becomes a normal
+                    # search timeout and the batch can continue.
+                    pass
+                else:
+                    links = result.locator(self.s["result_links"]).evaluate_all("els => els.map(e => e.href)")
+                    if links and (result is not page or result.url != previous_url or links != previous_links):
+                        self.visual(task, "search_results", f"1688已返回以图搜货结果，页面含 {len(links)} 个候选链接", result)
                         return result
-                empty = re.findall(empty_pattern, result.locator("body").inner_text())
-                if not links and empty and (result is not page or result.url != previous_url or empty != previous_empty):
-                    self.visual(task, "search_empty", "1688显示没有找到相关商品", result)
-                    raise NoExactMatch("1688以图搜货返回空结果：" + empty[0])
+                    if "/1688-search/pc-image-search/" in urlsplit(result.url).path:
+                        cards = self.result_image_cards(result)
+                        if cards:
+                            self.visual(task, "search_results", f"1688已返回以图搜货结果，读取到 {len(cards)} 个商品卡片", result)
+                            return result
+                    empty = re.findall(empty_pattern, result.locator("body").inner_text())
+                    if not links and empty and (result is not page or result.url != previous_url or empty != previous_empty):
+                        self.visual(task, "search_empty", "1688显示没有找到相关商品", result)
+                        raise NoExactMatch("1688以图搜货返回空结果：" + empty[0])
             # Polling is not a new business action; keep logs focused on the
             # product's progress instead of writing several delays per second.
             if self.stop.wait(.4):
@@ -723,7 +977,6 @@ class Browser:
         before_owned = list(self.owned)
         try:
             page = self.page(self.config["supplier_home_url"], "1688.com")
-            self.delay(2, 4)
             result = self.image_search(page, task)
             self.search_results[task["erp_goods_id"]] = result
             cards = result.locator(self.s["result_links"]).evaluate_all(r"""links => {
@@ -821,9 +1074,9 @@ class Browser:
                 if detail is result:
                     self.search_results.pop(task["erp_goods_id"], None)
                 return detail
-            if detail.url not in ("about:blank", original_url) and parsed.hostname and not parsed.hostname.endswith("1688.com"):
-                detail.bring_to_front()
-                raise CircuitOpen("1688详情进入登录或人机审核页面（" + parsed.hostname + "）；请处理后返回控制台继续执行")
+            # Do not equate every unrelated/transient destination with a captcha.
+            # check() above pauses only on an explicit login host or visible risk
+            # evidence; other destinations time out as ordinary candidate errors.
             if self.stop.wait(.3):
                 raise Stopped("操作已停止")
         raise ValueError("点击匹配候选后未进入可核验的1688商品详情")
@@ -833,6 +1086,18 @@ class Browser:
         try:
             self.delay()
             self.visual(task, "candidate", "图片匹配后，正在读取1688商品详情和变体售价", detail)
+            current = self.current_supplier_offer(detail, candidate)
+            if current is not None:
+                weighted = sum(bool(sku.get("raw_weight")) for sku in current["skus"])
+                self.log(f"已从1688官方SKU模块读取 {len(current['skus'])} 个变体价格，"
+                         f"其中 {weighted} 个读取到包装重量；未扫描广告和推荐商品", task["erp_goods_id"])
+                if self.record_supplier_adaptation:
+                    self.record_supplier_adaptation(task["erp_goods_id"], {
+                        "url": detail.url, "at": time.time(), "ok": True,
+                        "source": "1688_official_sku_modules",
+                        "evidence": {"sku_count": len(current["skus"]), "weighted_sku_count": weighted},
+                    })
+                return current
             self.ensure_supplier_detail(detail, task["erp_goods_id"])
             rows = detail.locator(self.s["sku_rows"])
             rows.first.wait_for(state="visible")
@@ -893,11 +1158,8 @@ class Browser:
 
     def write_patch(self, task, changes, before_save):
         from .models import erp_value_equal
-        if not changes or set(changes) - {"weight_g", "net_income_usd", "review_status"}:
+        if not changes or set(changes) - {"weight_g", "net_income_usd"}:
             raise ValueError("回填字段无效")
-        status_values = {"屏蔽": "8000", "风险": "9000"}
-        if "review_status" in changes and changes["review_status"] not in status_values:
-            raise ValueError("不支持的智赢目标状态")
         host = urlsplit(self.config["erp_list_url"]).hostname
         page = self.page(task.get("erp_edit_url") or self.config["erp_list_url"], host)
         def snapshot():
@@ -918,14 +1180,7 @@ class Browser:
             self.visual(task, "erp_before", "已定位智赢商品，记录修改前重量、净收益和状态", page)
             old = snapshot()
             root = page.locator(".curd-detail-wrap")
-            save = self.unique(page, "erp_save") if self.s["erp_save"] else root.get_by_role("button", name=re.compile(r"^\s*保\s*存\s*$"))
-            if save.count() != 1 or not save.is_visible() or not save.is_enabled():
-                raise ValueError("未找到唯一可用的智赢详情保存按钮")
-            radio = None
-            if "review_status" in changes:
-                radio = root.locator(f"input[name='stat'][value='{status_values[changes['review_status']]}']")
-                if radio.count() != 1 or changes["review_status"] not in radio.evaluate("e => e.closest('label')?.innerText||''"):
-                    raise ValueError("智赢状态选项与目标标签不一致")
+            save = self.erp_save_button(page, root)
             before_save(old)
             for field, selector in (("weight_g", "erp_weight_input"), ("net_income_usd", "erp_net_income_input")):
                 if field in changes:
@@ -933,9 +1188,7 @@ class Browser:
                     if field == "net_income_usd" and value != value.to_integral_value():
                         raise ValueError("净收益必须是整数美元")
                     self.unique(page, selector).fill(str(value))
-            if radio is not None:
-                radio.check()
-            self.visual(task, "erp_saving", "回填已完成，正在保存智赢商品；未指定的字段保留原值", page)
+            self.visual(task, "erp_saving", "重量/净收益回填已完成，正在保存；智赢状态保持原值", page)
             self.check(page)
             save.click()
             if self.s["erp_saved"]:
@@ -951,10 +1204,62 @@ class Browser:
                 expected = changes.get(field, old[field])
                 if not erp_value_equal(field, actual[field], expected):
                     raise WritebackMismatch(actual)
-            self.visual(task, "erp_saved", "保存后重新打开商品，重量、净收益及状态回读确认一致", page)
+            self.visual(task, "erp_saved", "保存后重新打开商品，重量、净收益及原状态回读确认一致", page)
             return actual
         finally:
             self.release(page)
+
+    def erp_save_button(self, page, root):
+        """Resolve the detail form's save action without counting hidden clones.
+
+        Zying has rendered sticky header/footer copies of the same save action in
+        different builds.  The old role locator counted hidden copies and then
+        stopped before writing anything.  Prefer an explicitly configured
+        selector; otherwise inspect only visible, enabled controls inside the
+        detail root and choose the strongest save-labelled primary action.
+        """
+        selector = self.s.get("erp_save", "")
+        if selector:
+            controls = page.locator(selector)
+            usable = [control for control in controls.all()
+                      if control.is_visible() and control.is_enabled()]
+            if len(usable) != 1:
+                raise ValueError(f"智赢详情保存按钮选择器必须唯一且可用，实际 {len(usable)} 个")
+            return usable[0]
+
+        controls = root.locator("button, [role='button'], a")
+        details = controls.evaluate_all(r"""elements => elements.map((element, index) => {
+          const style = getComputedStyle(element);
+          const box = element.getBoundingClientRect();
+          const visible = !!element.getClientRects().length && style.display !== 'none' &&
+            style.visibility !== 'hidden' && style.opacity !== '0' && box.width > 0 && box.height > 0;
+          const disabled = element.disabled || element.getAttribute('aria-disabled') === 'true' ||
+            element.classList.contains('disabled') || element.classList.contains('is-disabled');
+          const clean = value => String(value || '').replace(/\s+/g, '').trim();
+          const label = clean(element.innerText || element.getAttribute('aria-label') || element.title ||
+            element.getAttribute('data-title'));
+          const classes = String(element.className || '');
+          const saveLabel = /^(保存|保存并关闭|保存商品|提交保存)$/.test(label);
+          if (!visible || disabled || !saveLabel) return null;
+          let score = 0;
+          if (label === '保存') score += 10;
+          if (element.tagName.toLowerCase() === 'button' && element.type === 'submit') score += 4;
+          if (/primary|primary-btn|main/.test(classes)) score += 3;
+          if (/save|submit|保存|提交/.test(classes + label)) score += 2;
+          if (element.closest('form')) score += 1;
+          return {index, label, score};
+        }).filter(Boolean)""");
+        if not details:
+            raise ValueError("智赢详情页没有可见可用的保存按钮")
+        max_score = max(item["score"] for item in details)
+        best = [item for item in details if item["score"] == max_score]
+        # Header and footer buttons are the same action in the current UI. If
+        # both remain tied, use the first DOM occurrence deterministically;
+        # unlike the old count check this does not mistake hidden duplicates
+        # for an ambiguous save target.
+        if len(best) > 1:
+            self.log(f"智赢详情发现 {len(best)} 个同级可用保存按钮，已选择详情主操作", level="INFO")
+        return controls.nth(best[0]["index"])
 
     def ensure_supplier_detail(self, page, task_id):
         # Generated nth-of-type paths are valid only for this observed page.
@@ -990,7 +1295,7 @@ class Browser:
             raise
         except Exception as exc:
             event["reason"] = str(exc)
-            self.log("1688详情页自动适配失败，当前商品暂停：" + str(exc), task_id, "ERROR")
+            self.log("1688详情页自动适配失败，当前商品将自动跳过：" + str(exc), task_id, "WARNING")
             raise SupplierAdaptationError("1688详情页自动适配失败：" + str(exc)) from exc
         finally:
             if self.record_supplier_adaptation:
@@ -1002,7 +1307,6 @@ class Browser:
         page = self.page(self.config["supplier_home_url"], "1688.com")
         result_page = None
         try:
-            self.delay(2, 6)
             result_page = self.image_search(page, task)
             self.check(result_page)
             if not task.get("erp_sku"):

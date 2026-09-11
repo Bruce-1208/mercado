@@ -13,6 +13,7 @@ from erp.ai_weight_price.service import Service
 from erp.ai_weight_price.store import Store
 from erp.ai_weight_price.web import create_blueprint
 from erp.ai_weight_price.supplier_adapter import DOM_SNAPSHOT, SupplierAdaptationError, verified_selectors
+from erp import mercadolibre_playwright_collector
 
 
 @pytest.fixture(scope="module")
@@ -39,6 +40,25 @@ def page(chromium):
         yield page
     finally:
         context.close()
+
+
+def test_zying_origin_scripts_ignore_us_icon_outside_plugin_shadow_root(page):
+    page.set_content('<img src="/assets/US.svg"><div id="zying-host"></div>')
+    page.evaluate('''() => {
+      const root = document.querySelector('#zying-host').attachShadow({mode: 'open'});
+      root.innerHTML = '<div class="zying-meli-detail-metric-line">重量：509g</div><img src="/assets/CN.svg">';
+      root.querySelector('.zying-meli-detail-metric-line').__reactFiber$fixture = {
+        memoizedProps: {data: {weight: 509}}, return: null
+      };
+    }''')
+
+    lines = page.evaluate(mercadolibre_playwright_collector.SHADOW_PLUGIN_TEXT_SCRIPT)
+    payload = page.evaluate(mercadolibre_playwright_collector.PLUGIN_REACT_METRICS_SCRIPT)
+
+    assert '__ZYING_SELF_SHIP_ORIGIN__:US' not in lines
+    assert '__ZYING_SELF_SHIP_ORIGIN__:CN' in lines
+    assert payload['data']['self_ship_origin'] == 'CN'
+    assert payload['data']['weight_g'] == 509
 
 
 SUPPLIER_HTML = '''<meta charset="utf-8"><main><h1>不锈钢杯</h1><img src="https://img.example/main.jpg" width="120" height="120">
@@ -95,16 +115,40 @@ def test_empty_image_search_keeps_visible_browser_steps_without_screenshots_or_d
 
 def test_1688_login_and_human_review_are_resumable_pauses(page):
     adapter = Browser(validate({}), threading.Event(), lambda *args: None)
+    adapter.owned.append(page)
     page.route('https://login.taobao.com/**', lambda route: route.fulfill(
         body='<body>1688 登录</body>', content_type='text/html'))
     page.goto('https://login.taobao.com/member/login.jhtml')
     with pytest.raises(CircuitOpen, match='1688需要登录'):
         adapter.check(page)
+    assert page not in adapter.owned
+    assert not page.is_closed()
+    adapter.owned.append(page)
     page.route('https://www.1688.com/**', lambda route: route.fulfill(
         body='<meta charset="utf-8"><body>请按住滑块完成人机验证</body>', content_type='text/html'))
     page.goto('https://www.1688.com/')
     with pytest.raises(CircuitOpen, match='人机审核'):
         adapter.check(page)
+    assert page not in adapter.owned
+    assert not page.is_closed()
+
+
+def test_image_search_foreign_redirect_without_review_evidence_is_not_a_manual_pause(page, monkeypatch):
+    import base64
+    page.route('https://www.1688.com/', lambda route: route.fulfill(body='''<body>
+      <input type="file" hidden><script>document.querySelector('input').onchange=()=>
+      window.open('https://redirect.example/transient');</script></body>''', content_type='text/html'))
+    page.context.route('https://redirect.example/**', lambda route: route.fulfill(
+        body='<body>临时跳转页面</body>', content_type='text/html'))
+    page.goto('https://www.1688.com/')
+    adapter = Browser(validate({}), threading.Event(), lambda *args: None)
+    adapter.context = page.context
+    monkeypatch.setattr(adapter, 'image_payload', lambda task: {
+        'name': 'main.png', 'mimeType': 'image/png',
+        'buffer': base64.b64decode('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aD1kAAAAASUVORK5CYII=')})
+    with pytest.raises(NoExactMatch, match='搜索超时') as error:
+        adapter.image_search(page, {'erp_goods_id': '1'}, timeout=.2)
+    assert not isinstance(error.value, CircuitOpen)
 
 
 def observed_supplier_answer(snapshot):
@@ -259,6 +303,30 @@ def test_image_search_uploads_task_image_and_waits_for_new_results(page, monkeyp
         assert page.locator("#inactive-upload").evaluate("el => el.files.length") == 0
 
 
+def test_image_search_keeps_verified_upload_when_page_adds_another_input(page, monkeypatch):
+    import base64
+    page.route("https://www.1688.com/", lambda route: route.fulfill(body='''<input type="file" hidden id="picture"><div id="result"></div>
+      <script>picture.onchange=()=>result.innerHTML='<a href="https://detail.1688.com/offer/55.html">结果</a>'</script>''', content_type="text/html"))
+    page.goto("https://www.1688.com/")
+    adapter = Browser(validate({}), threading.Event(), lambda *args, **kwargs: None)
+    adapter.context = page.context
+    monkeypatch.setattr(adapter, "image_payload", lambda task: {
+        "name": "main.png", "mimeType": "image/png",
+        "buffer": base64.b64decode("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aD1kAAAAASUVORK5CYII=")})
+    original_visual = adapter.visual
+    def visual(task, step, message, target=None):
+        if step == "uploading":
+            page.evaluate("document.body.insertAdjacentHTML('beforeend','<input type=file id=late-upload>')")
+        original_visual(task, step, message, target)
+    monkeypatch.setattr(adapter, "visual", visual)
+
+    result = adapter.image_search(page, {"erp_goods_id": "g1"})
+
+    assert result is page
+    assert page.locator("#picture").evaluate("element => element.files.length") == 1
+    assert page.locator("#late-upload").evaluate("element => element.files.length") == 0
+
+
 def test_image_search_rejects_ambiguous_uploads_before_upload(page, monkeypatch):
     page.set_content('<input type="file" hidden><input type="file" hidden>')
     adapter = Browser(validate({}), threading.Event(), lambda *args, **kwargs: None)
@@ -285,6 +353,76 @@ def test_image_search_clicks_uploaded_preview_submit_and_reads_only_first_n_imag
     assert cards[1]['main_image_url'] == 'https://img.example/2.jpg'
 
 
+def test_image_search_clicks_generic_submit_inside_upload_dialog(page, monkeypatch):
+    import base64
+    page.route('https://www.1688.com/', lambda route: route.fulfill(body='''<meta charset="utf-8"><button>提交</button><div role="dialog">
+      <input type="file" hidden><button hidden id="submit">提 交</button></div><div id="results"></div>
+      <script>document.querySelector('input').onchange=()=>setTimeout(()=>document.querySelector('#submit').hidden=false,40);
+      document.querySelector('#submit').onclick=()=>{window.submitted=true;document.querySelector('#results').innerHTML='<a href="https://detail.1688.com/offer/9.html">新结果</a>';};</script>''',
+      content_type='text/html'))
+    page.goto('https://www.1688.com/')
+    adapter = Browser(validate({}), threading.Event(), lambda *a: None)
+    adapter.context = page.context
+    monkeypatch.setattr(adapter, 'image_payload', lambda task: {
+        'name': 'main.png', 'mimeType': 'image/png',
+        'buffer': base64.b64decode('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aD1kAAAAASUVORK5CYII=')})
+    result = adapter.image_search(page, {'erp_goods_id': '1'})
+    assert result is page
+    assert page.evaluate('window.submitted') is True
+
+
+def test_image_search_clicks_search_in_same_component_as_image_upload(page, monkeypatch):
+    import base64
+    page.route('https://www.1688.com/', lambda route: route.fulfill(body='''<meta charset="utf-8">
+      <section id="image-search"><input type="file" accept=".jpg,.jpeg,.png,.webp" hidden>
+      <button id="ordinary-search" class="searchBtn--fixture">搜索</button>
+      <div><div><button id="image-submit" class="action--fixture actionPrimary--fixture">搜索</button></div></div></section><div id="results"></div>
+      <script>document.querySelector('#ordinary-search').onclick=()=>window.wrongButton=true;
+      document.querySelector('#image-submit').onclick=()=>{window.submitted=true;
+      document.querySelector('#results').innerHTML='<a href="https://detail.1688.com/offer/19.html">新结果</a>';};</script>''',
+      content_type='text/html'))
+    page.goto('https://www.1688.com/')
+    adapter = Browser(validate({}), threading.Event(), lambda *a: None)
+    adapter.context = page.context
+    monkeypatch.setattr(adapter, 'image_payload', lambda task: {
+        'name': 'main.png', 'mimeType': 'image/png',
+        'buffer': base64.b64decode('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aD1kAAAAASUVORK5CYII=')})
+    result = adapter.image_search(page, {'erp_goods_id': '1'})
+    assert result is page
+    assert page.evaluate('window.submitted') is True
+    assert page.evaluate('Boolean(window.wrongButton)') is False
+
+
+def test_current_1688_detail_reads_only_official_sku_prices_and_weights(page):
+    page.set_content('''<div id="productTitle" data-module="od_title"><div class="title-content"><h1>测试收纳袋</h1></div></div>
+      <div id="shopNavigation"><a class="shop-company-name" href="https://shop123.1688.com">测试工厂</a></div>
+      <div id="gallery"><img class="preview-img" src="https://img.example/O1CNother_!!1.jpg">
+        <img class="preview-img" src="https://img.example/O1CNtarget_!!1.jpg"></div>
+      <div id="skuSelection" data-module="od_sku_selection">SKU</div>
+      <div id="productPackInfo" data-module="od_product_pack_info">包装信息</div>
+      <div id="productAttributes">材质 尼龙</div>''')
+    page.evaluate('''() => {
+      document.querySelector('#skuSelection').__reactFiber$fixture = {memoizedProps: {dataManager: {params: {skuItems: [
+        {skuId: 22, specAttrs: '黑色&gt;大号', discountPrice: '2.50', price: '3.00'},
+        {skuId: 11, specAttrs: '黄色&gt;小号', discountPrice: '1.25', price: '2.00'}
+      ]}}}, return: null};
+      document.querySelector('#productPackInfo').__reactFiber$fixture = {memoizedProps: {packInfoData: {skuInfo: [
+        {skuId: 11, weight: 40}, {skuId: 22, weight: 55}
+      ]}}, return: null};
+    }''')
+    adapter = Browser(validate({}), threading.Event(), lambda *a: None)
+    offer = adapter.current_supplier_offer(page, {'main_image_url': 'https://img.example/O1CNtarget_!!9.webp'}, timeout=.2)
+    assert offer['title'] == '测试收纳袋'
+    assert offer['main_image_url'].endswith('O1CNtarget_!!1.jpg')
+    assert offer['merchant_id'] == 'shop123'
+    assert offer['skus'] == [
+        {'id': '11', 'label': '黄色 / 小号', 'price': '1.25', 'raw_price': '¥1.25',
+         'raw_surcharge': '', 'raw_weight': '40g', 'raw_text': '黄色 / 小号；页面单价 ¥1.25；包装重量 40g'},
+        {'id': '22', 'label': '黑色 / 大号', 'price': '2.50', 'raw_price': '¥2.50',
+         'raw_surcharge': '', 'raw_weight': '55g', 'raw_text': '黑色 / 大号；页面单价 ¥2.50；包装重量 55g'},
+    ]
+
+
 def test_clickable_1688_cards_without_offer_hrefs_exclude_preview_and_open_real_detail(page, monkeypatch):
     page.route('https://air.1688.com/**', lambda route: route.fulfill(body='''<meta charset="utf-8"><body>
       <img src="https://img.example/preview.jpg" width="120" height="120"><div>找到以下货源</div>
@@ -305,8 +443,7 @@ def test_clickable_1688_cards_without_offer_hrefs_exclude_preview_and_open_real_
     assert len(page.context.pages) == 1  # supplier detail closed, search retained until this product finishes
 
 
-@pytest.mark.parametrize('status,profit', [('屏蔽', None), ('风险', '4')])
-def test_partial_erp_write_preserves_weight_and_verifies_status_after_reload(page, monkeypatch, status, profit):
+def test_partial_erp_write_preserves_weight_and_status_after_reload(page, monkeypatch):
     html = '''<meta charset="utf-8"><div class="curd-detail-wrap"><div class="crud-detail-header"><div class="h1">产品编号：101</div></div>
       <input id="netproceed" value="9.5"><input id="weight" value="430">
       <label><input type="radio" name="stat" value="3000" checked>待审核</label>
@@ -319,14 +456,56 @@ def test_partial_erp_write_preserves_weight_and_verifies_status_after_reload(pag
     page.goto('https://meli.zying.net/#/product/101')
     adapter = Browser(validate({}), threading.Event(), lambda *a: None)
     monkeypatch.setattr(adapter, 'page', lambda *a: page)
-    changes = {'review_status': status}
-    if profit:
-        changes['net_income_usd'] = profit
+    changes = {'net_income_usd': '4'}
     before = []
     actual = adapter.write_patch({'erp_goods_id': '101', 'erp_edit_url': page.url}, changes, before.append)
     assert before == [{'weight_g': '430', 'net_income_usd': '9.5', 'review_status': '待审核'}]
-    assert actual == {'weight_g': '430', 'net_income_usd': profit or '9.5', 'review_status': status}
+    assert actual == {'weight_g': '430', 'net_income_usd': '4', 'review_status': '待审核'}
     assert page.evaluate("localStorage.getItem('weightEdited')") is None
+
+
+def test_erp_write_patch_ignores_hidden_save_clones(page, monkeypatch):
+    html = '''<meta charset="utf-8"><div class="curd-detail-wrap"><div class="crud-detail-header"><div class="h1">产品编号：101</div></div>
+      <input id="netproceed" value="9.5"><input id="weight" value="430">
+      <label><input type="radio" name="stat" value="3000" checked>待审核</label>
+      <button id="hidden-save" hidden>保存</button><button id="save">保存</button><p id="saved" hidden>保存成功</p><script>
+      const old=JSON.parse(localStorage.getItem('save-hidden')||'null');if(old)document.querySelector('#netproceed').value=old.net;
+      document.querySelector('#save').onclick=()=>{localStorage.setItem('save-hidden',JSON.stringify({net:document.querySelector('#netproceed').value}));document.querySelector('#saved').hidden=false;};
+    </script></div>'''
+    page.route('https://meli.zying.net/**', lambda route: route.fulfill(body=html, content_type='text/html'))
+    page.goto('https://meli.zying.net/#/product/101')
+    adapter = Browser(validate({}), threading.Event(), lambda *a: None)
+    monkeypatch.setattr(adapter, 'page', lambda *a: page)
+    actual = adapter.write_patch({'erp_goods_id': '101', 'erp_edit_url': page.url},
+                                 {'net_income_usd': '4'}, lambda _old: None)
+    assert actual == {'weight_g': '430', 'net_income_usd': '4', 'review_status': '待审核'}
+
+
+def test_erp_write_patch_selects_primary_when_save_buttons_are_duplicated(page, monkeypatch):
+    html = '''<meta charset="utf-8"><div class="curd-detail-wrap"><div class="crud-detail-header"><div class="h1">产品编号：101</div></div>
+      <input id="netproceed" value="9.5"><input id="weight" value="430">
+      <label><input type="radio" name="stat" value="3000" checked>待审核</label>
+      <button id="top-save">保存</button><button id="main-save" class="primary" style="margin-top:1px">保存</button><p id="saved" hidden>保存成功</p><script>
+      const old=JSON.parse(localStorage.getItem('save-duplicate')||'null');if(old)document.querySelector('#netproceed').value=old.net;
+      document.querySelectorAll('button').forEach(button => button.onclick=()=>{localStorage.setItem('save-duplicate',JSON.stringify({net:document.querySelector('#netproceed').value}));document.querySelector('#saved').hidden=false;});
+    </script></div>'''
+    page.route('https://meli.zying.net/**', lambda route: route.fulfill(body=html, content_type='text/html'))
+    page.goto('https://meli.zying.net/#/product/101')
+    adapter = Browser(validate({}), threading.Event(), lambda *a: None)
+    monkeypatch.setattr(adapter, 'page', lambda *a: page)
+    actual = adapter.write_patch({'erp_goods_id': '101', 'erp_edit_url': page.url},
+                                 {'net_income_usd': '4'}, lambda _old: None)
+    assert actual == {'weight_g': '430', 'net_income_usd': '4', 'review_status': '待审核'}
+
+
+def test_erp_write_patch_rejects_review_status_changes():
+    adapter = Browser(validate({}), threading.Event(), lambda *a: None)
+    with pytest.raises(ValueError, match='回填字段无效'):
+        adapter.write_patch(
+            {'erp_goods_id': '101'},
+            {'review_status': '风险'},
+            lambda _old: None,
+        )
 
 
 def test_image_search_timeout_keeps_evidence_and_rejects_stale_home_recommendations(page, monkeypatch, tmp_path):
@@ -430,6 +609,26 @@ def test_missing_card_id_reads_verified_detail_and_collects_each_product(page, t
     assert store.list(scope=selection_key(config["run_selection"], config))["total"] == 2
     assert store.state("collection")["complete"]
     assert any("已从智赢详情读取产品编号：102" in event["message"] for event in store.logs())
+
+
+def test_collect_starts_at_configured_item_on_first_selected_page(page, tmp_path, monkeypatch):
+    from erp.ai_weight_price.config import selection_key
+    page.set_content('''<li class="ant-pagination-item-active">1</li>
+      <div class="product-item"><span class="product-id">101</span><div class="product-title">first</div><img class="product-pic" src="https://img.example/1.jpg"></div>
+      <div class="product-item"><span class="product-id">102</span><div class="product-title">second</div><img class="product-pic" src="https://img.example/2.jpg"></div>
+      <div class="product-item"><span class="product-id">103</span><div class="product-title">third</div><img class="product-pic" src="https://img.example/3.jpg"></div>''')
+    config = validate({})
+    config["run_selection"] = {"category": "", "start_page": 1, "end_page": 1, "start_item": 2}
+    store = Store(tmp_path)
+    adapter = Browser(config, threading.Event(), store.log)
+    monkeypatch.setattr(adapter, "page", lambda *args: page)
+    monkeypatch.setattr(adapter, "release", lambda *args: None)
+    monkeypatch.setattr(adapter, "apply_category", lambda *args: "全部分类")
+    assert adapter.collect(store) == 1
+    scope = selection_key(config["run_selection"], config)
+    rows = store.list(scope=scope)["rows"]
+    assert [row["erp_goods_id"] for row in rows] == ["102", "103"]
+    assert [row["source_index"] for row in rows] == [2, 3]
 
 
 @pytest.mark.parametrize("selector", ["", ".product-id"])

@@ -45,10 +45,16 @@ DEFAULT_CDP_URL = os.environ.get(
 ZYING_EXTENSION_ID = "gmnnicmdgiafgenphemmdcigkpolabhb"
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_PROFILE_DIR = PROJECT_ROOT / "cache" / "mercado_playwright_profile"
-DEFAULT_SETUP_URL = (
-    "https://www.mercadolibre.com.mx/"
-    "trendy-shingeki-no-kyojin-attack-on-titan-pendant-necklace/p/MLM2030103189"
-)
+DEFAULT_SETUP_URL = "https://www.mercadolibre.com/"
+
+MARKETPLACE_FRONT_URLS_BY_LIST_HOST = {
+    "listado.mercadolibre.com.mx": "https://www.mercadolibre.com.mx/",
+    "lista.mercadolivre.com.br": "https://www.mercadolivre.com.br/",
+    "listado.mercadolibre.com.ar": "https://www.mercadolibre.com.ar/",
+    "listado.mercadolibre.cl": "https://www.mercadolibre.cl/",
+    "listado.mercadolibre.com.co": "https://www.mercadolibre.com.co/",
+    "listado.mercadolibre.com.uy": "https://www.mercadolibre.com.uy/",
+}
 
 LISTING_DOM_SCRIPT = r"""() => {
   const clean = value => String(value || '').replace(/\s+/g, ' ').trim();
@@ -95,6 +101,8 @@ LISTING_DOM_SCRIPT = r"""() => {
     if (price && cents) price += '.' + clean(cents.textContent).replace(/\D/g, '');
     const cardText = clean(root.innerText || root.textContent || '');
     const hasFreeShipping = /env[ií]o\s+gratis|frete\s+gr[aá]tis|env[ií]o\s+sin\s+cargo/i.test(cardText);
+    const isUsOrigin = /(?:internacional.{0,24}(?:usa|eua|estados unidos|united states))|(?:(?:usa|eua|estados unidos|united states).{0,24}internacional)/i.test(cardText);
+    const isChinaOrigin = /(?:internacional.{0,24}china)|(?:china.{0,24}internacional)/i.test(cardText);
     rows.push({
       href: link.href,
       title: clean((titleNode && titleNode.textContent) || link.textContent),
@@ -102,6 +110,7 @@ LISTING_DOM_SCRIPT = r"""() => {
       price,
       currency_id: 'MXN',
       is_cross_border: /(^|\s)internacional(\s|$)/i.test(cardText),
+      shipping_origin_country: isUsOrigin ? 'US' : (isChinaOrigin ? 'CN' : ''),
       free_shipping: hasFreeShipping
     });
   }
@@ -226,10 +235,31 @@ SHADOW_PLUGIN_TEXT_SCRIPT = r"""() => {
   };
   const walk = root => {
     if (!root || !root.querySelectorAll) return;
+    const pluginRoot = !!root.querySelector(
+      '.zying-meli-detail-metric-line, .zying-meli-detail-metric-column'
+    );
     for (const node of root.querySelectorAll('*')) {
       if (node.matches && node.matches(
         '.zying-meli-detail-metric-line, .zying-meli-detail-metric-column'
       )) add(node.innerText || node.textContent);
+      if (pluginRoot) {
+        const assetValues = [
+          node.getAttribute && node.getAttribute('src'),
+          node.getAttribute && node.getAttribute('data-src'),
+          node.getAttribute && node.getAttribute('href'),
+          node.getAttribute && node.getAttribute('xlink:href'),
+          node.getAttribute && node.getAttribute('data'),
+          node.style && node.style.backgroundImage
+        ];
+        for (const asset of assetValues) {
+          if (/(?:^|[\\/])US\.svg(?:[?#"')]|$)/i.test(String(asset || ''))) {
+            add('__ZYING_SELF_SHIP_ORIGIN__:US');
+          }
+          if (/(?:^|[\\/])CN\.svg(?:[?#"')]|$)/i.test(String(asset || ''))) {
+            add('__ZYING_SELF_SHIP_ORIGIN__:CN');
+          }
+        }
+      }
       if (node.shadowRoot) walk(node.shadowRoot);
     }
   };
@@ -259,6 +289,10 @@ class _DetailPageSlot:
     react_reader: Any
 
 
+class USSelfShipSkipped(RuntimeError):
+    """Raised when ZYing identifies an Internacional item as US self-ship."""
+
+
 PLUGIN_REACT_METRICS_SCRIPT = r"""(() => {
   const roots = [];
   const visitedRoots = new Set();
@@ -273,9 +307,13 @@ PLUGIN_REACT_METRICS_SCRIPT = r"""(() => {
     }
   };
   walkRoots(document);
+  const metricSelector = '.zying-meli-detail-metric-line, .zying-meli-detail-metric-column';
+  const pluginRoots = roots.filter(root => {
+    try { return !!root.querySelector(metricSelector); } catch (_) { return false; }
+  });
   const reactNodes = [];
   const visitedNodes = new Set();
-  for (const root of roots) {
+  for (const root of pluginRoots) {
     let nodes = [];
     try { nodes = root.querySelectorAll('*'); } catch (_) {}
     for (const node of nodes) {
@@ -290,6 +328,32 @@ PLUGIN_REACT_METRICS_SCRIPT = r"""(() => {
     }
   }
   const result = {found: reactNodes.length > 0, metrics: {}, data: {}};
+  for (const root of pluginRoots) {
+    let nodes = [];
+    try { nodes = root.querySelectorAll('*'); } catch (_) {}
+    for (const node of nodes) {
+      const assetValues = [
+        node.getAttribute && node.getAttribute('src'),
+        node.getAttribute && node.getAttribute('data-src'),
+        node.getAttribute && node.getAttribute('href'),
+        node.getAttribute && node.getAttribute('xlink:href'),
+        node.getAttribute && node.getAttribute('data'),
+        node.style && node.style.backgroundImage
+      ];
+      for (const asset of assetValues) {
+        if (/(?:^|[\\/])US\.svg(?:[?#"')]|$)/i.test(String(asset || ''))) {
+          result.data.self_ship_origin = 'US';
+          result.data.origin_icon_url = String(asset || '');
+        } else if (
+          !result.data.self_ship_origin &&
+          /(?:^|[\\/])CN\.svg(?:[?#"')]|$)/i.test(String(asset || ''))
+        ) {
+          result.data.self_ship_origin = 'CN';
+          result.data.origin_icon_url = String(asset || '');
+        }
+      }
+    }
+  }
   const finite = value => {
     const number = Number(value);
     return Number.isFinite(number) ? number : null;
@@ -464,6 +528,54 @@ def _headless_enabled() -> bool:
     }
 
 
+async def _connect_bitbrowser_over_cdp(playwright: Any, cdp_url: str) -> Any:
+    """Wait for BitBrowser's CDP listener after its open API returns.
+
+    BitBrowser can report the allocated debugging address a few seconds before
+    Chromium starts listening on it.  A single ``connect_over_cdp`` therefore
+    fails intermittently with ECONNREFUSED even though the window opens
+    normally moments later.
+    """
+    try:
+        ready_timeout = max(
+            1.0,
+            min(
+                float(
+                    os.environ.get(
+                        "MERCADO_BITBROWSER_CDP_READY_TIMEOUT_SECONDS", "30"
+                    )
+                ),
+                120.0,
+            ),
+        )
+    except (TypeError, ValueError):
+        ready_timeout = 30.0
+    loop = asyncio.get_running_loop()
+    deadline = loop.time() + ready_timeout
+    attempt = 0
+    last_error: BaseException | None = None
+    while loop.time() < deadline:
+        attempt += 1
+        remaining_ms = max(250, int((deadline - loop.time()) * 1000))
+        try:
+            browser = await playwright.chromium.connect_over_cdp(
+                cdp_url,
+                timeout=min(5000, remaining_ms),
+            )
+            if browser.contexts:
+                return browser
+            last_error = RuntimeError("比特采集窗口没有可用的浏览器上下文")
+        except Exception as exc:
+            last_error = exc
+        remaining = deadline - loop.time()
+        if remaining <= 0:
+            break
+        await asyncio.sleep(min(0.25 * attempt, 2.0, remaining))
+    raise RuntimeError(
+        f"等待比特采集窗口调试端口就绪超时（{ready_timeout:g} 秒）：{last_error}"
+    ) from last_error
+
+
 async def _open_runtime(bitbrowser_window_id: str = "") -> _PlaywrightRuntime:
     from playwright.async_api import async_playwright
 
@@ -486,11 +598,7 @@ async def _open_runtime(bitbrowser_window_id: str = "") -> _PlaywrightRuntime:
         if not cdp_url.startswith(("http://", "https://")):
             cdp_url = f"http://{cdp_url}"
         try:
-            browser = await playwright.chromium.connect_over_cdp(
-                cdp_url, timeout=30000
-            )
-            if not browser.contexts:
-                raise RuntimeError("比特采集窗口没有可用的浏览器上下文")
+            browser = await _connect_bitbrowser_over_cdp(playwright, cdp_url)
         except Exception:
             releaseBrowserLease(bitbrowser_window_id)
             await playwright.stop()
@@ -806,6 +914,132 @@ async def _wait_for_listing_dom(page: Any, timeout: float = 4.0) -> None:
         await asyncio.sleep(0.35)
 
 
+async def _run_keyword_search_flow(
+    page: Any,
+    source_url: str,
+    keyword: str,
+    *,
+    collection_scope: str,
+    on_page: Callable[[dict[str, Any]], None] | None,
+    stop_event: threading.Event | None,
+) -> str:
+    """Search on the selected country frontend, then enter Internacional.
+
+    Keyword collection used to jump directly to a synthesized result URL. A
+    Mercado redirect could discard that path, leaving the browser on an
+    unrelated page. Drive the site's own search form and shipping-origin facet
+    so the visible browser and the collected DOM share the same query.
+    """
+    normalized_keyword = re.sub(r"\s+", " ", str(keyword or "")).strip()
+    if not normalized_keyword:
+        return source_url
+
+    list_host = (urlsplit(source_url).hostname or "").lower()
+    front_url = MARKETPLACE_FRONT_URLS_BY_LIST_HOST.get(list_host)
+    if not front_url:
+        raise RuntimeError("无法识别关键词对应的 Mercado 国家前台")
+
+    _check_stop(stop_event)
+    if on_page:
+        on_page({
+            "stage": "keyword_search",
+            "page": 0,
+            "page_url": front_url,
+            "page_items": 0,
+            "candidate_count": 0,
+            "message": f"正在指定国家的 Mercado 前台搜索：{normalized_keyword}",
+        })
+    await _goto(page, front_url, wait_until="domcontentloaded")
+    search_input = page.locator(
+        'input[name="as_word"], input.nav-search-input'
+    ).first
+    try:
+        await search_input.wait_for(state="visible", timeout=10000)
+        await search_input.fill(normalized_keyword)
+        previous_url = str(page.url or "")
+        try:
+            async with page.expect_navigation(
+                wait_until="domcontentloaded", timeout=20000
+            ):
+                await search_input.press("Enter")
+        except Exception:
+            # Mercado sometimes completes the navigation before Playwright can
+            # attach its waiter. Only accept that timeout when the URL moved.
+            if str(page.url or "") == previous_url:
+                raise
+    except Exception as exc:
+        raise RuntimeError(
+            f"未能在所选国家的 Mercado 前台搜索关键词：{normalized_keyword}"
+        ) from exc
+
+    try:
+        await page.wait_for_load_state("domcontentloaded", timeout=5000)
+    except Exception:
+        pass
+    searched_url = str(page.url or "")
+    if on_page:
+        on_page({
+            "stage": "keyword_search_complete",
+            "page": 0,
+            "page_url": searched_url,
+            "page_items": 0,
+            "candidate_count": 0,
+            "message": f"已在 Mercado 前台搜索：{normalized_keyword}",
+        })
+
+    if collection_scope != "cross_border":
+        return searched_url or source_url
+
+    _check_stop(stop_event)
+    if on_page:
+        on_page({
+            "stage": "cross_border_filter",
+            "page": 0,
+            "page_url": searched_url,
+            "page_items": 0,
+            "candidate_count": 0,
+            "message": "正在进入 Origen del envío → Internacional 卖家专区",
+        })
+    international_link = page.locator(
+        'a[href*="SHIPPING*ORIGIN_10215069"], '
+        'a[href*="SHIPPING%2AORIGIN_10215069"], '
+        'a[href*="SHIPPING_ORIGIN_10215069"]'
+    ).first
+    try:
+        await international_link.wait_for(state="visible", timeout=10000)
+        previous_url = str(page.url or "")
+        try:
+            async with page.expect_navigation(
+                wait_until="domcontentloaded", timeout=20000
+            ):
+                await international_link.click()
+        except Exception:
+            if str(page.url or "") == previous_url:
+                raise
+    except Exception as exc:
+        raise RuntimeError(
+            "搜索结果左侧没有 Internacional 选项，采集任务已停止"
+        ) from exc
+
+    try:
+        await page.wait_for_load_state("domcontentloaded", timeout=5000)
+    except Exception:
+        pass
+    filtered_url = str(page.url or source_url)
+    if not marketplace_url_has_cross_border_filter(filtered_url):
+        raise RuntimeError("Mercado 未成功进入 Internacional，采集任务已停止")
+    if on_page:
+        on_page({
+            "stage": "cross_border_filter_complete",
+            "page": 0,
+            "page_url": filtered_url,
+            "page_items": 0,
+            "candidate_count": 0,
+            "message": "已进入 Mercado Internacional 国际卖家专区",
+        })
+    return filtered_url
+
+
 def _synthesized_listing_page_url(source_url: str, page_number: int) -> str:
     """Build Mercado's 48-item offset URL when NoIndex hides pagination links."""
     offset = max(1, (int(page_number) - 1) * 48 + 1)
@@ -826,6 +1060,7 @@ async def _listing_candidates(
     requested_count: int,
     *,
     collection_scope: str = "all",
+    keyword: str = "",
     on_page: Callable[[dict[str, Any]], None] | None,
     stop_event: threading.Event | None,
 ) -> list[dict[str, Any]]:
@@ -837,10 +1072,22 @@ async def _listing_candidates(
     visited_pages: set[str] = set()
     page_url = source_url
     page_number = 0
+    first_page_prepared = False
     try:
         direct_source_item_id = extract_listing_item_id(source_url)
     except ValueError:
         direct_source_item_id = ""
+
+    if keyword and not direct_source_item_id:
+        page_url = await _run_keyword_search_flow(
+            page,
+            source_url,
+            keyword,
+            collection_scope=collection_scope,
+            on_page=on_page,
+            stop_event=stop_event,
+        )
+        first_page_prepared = True
 
     while (
         page_url
@@ -851,7 +1098,8 @@ async def _listing_candidates(
         _check_stop(stop_event)
         visited_pages.add(page_url)
         page_number += 1
-        await _goto(page, page_url, wait_until="domcontentloaded")
+        if not (first_page_prepared and page_number == 1):
+            await _goto(page, page_url, wait_until="domcontentloaded")
         try:
             await page.wait_for_selector(
                 'li.ui-search-layout__item, .poly-card, h1.ui-pdp-title, h1',
@@ -1124,7 +1372,23 @@ def _metrics_from_react_payload(
             else volume_display
         )
         lines.append(f"计抛：{rendered_volume}")
+    self_ship_origin = str(data.get("self_ship_origin") or "").strip().upper()
+    if self_ship_origin in {"CN", "US"}:
+        lines.append(f"__ZYING_SELF_SHIP_ORIGIN__:{self_ship_origin}")
     return metrics, lines
+
+
+def _plugin_self_ship_origin(lines: Iterable[Any]) -> str:
+    """Return the country encoded by ZYing's CN.svg/US.svg origin icon."""
+    combined = " ".join(str(value or "") for value in lines)
+    match = re.search(r"__ZYING_SELF_SHIP_ORIGIN__:(CN|US)\b", combined, re.I)
+    if match:
+        return match.group(1).upper()
+    if re.search(r"(?:^|[\\/])US\.svg(?:[?#\s\"')]|$)", combined, re.I):
+        return "US"
+    if re.search(r"(?:^|[\\/])CN\.svg(?:[?#\s\"')]|$)", combined, re.I):
+        return "CN"
+    return ""
 
 
 def _plugin_text_is_visually_protected(lines: Iterable[Any]) -> bool:
@@ -1156,6 +1420,8 @@ async def _wait_for_plugin_metrics(
             if react_lines:
                 last_lines = react_lines
                 last_metrics = react_metrics
+            if _plugin_self_ship_origin(react_lines) == "US":
+                return react_metrics, react_lines
             if (
                 react_metrics.get("weight_g") is not None
                 and react_metrics.get("package_length_cm") is not None
@@ -1168,6 +1434,8 @@ async def _wait_for_plugin_metrics(
         if not last_lines or poll_number % 3 == 0:
             last_lines = await _plugin_dom_lines(page)
             dom_metrics = parse_plugin_metrics(" ".join(last_lines))
+            if _plugin_self_ship_origin(last_lines) == "US":
+                return dom_metrics, last_lines
             if any(dom_metrics.get(key) is not None for key in (
                 "weight_g", "package_length_cm", "package_width_cm", "package_height_cm"
             )):
@@ -1293,6 +1561,11 @@ async def _collect_detail(
             stop_event,
             react_reader=react_reader,
         )
+        self_ship_origin = _plugin_self_ship_origin(plugin_lines)
+        if self_ship_origin == "US":
+            raise USSelfShipSkipped(
+                "智赢插件检测到 US.svg：美国自发货商品已跳过，不写入采集列表"
+            )
         ocr_snapshot: dict[str, Any] = {}
         metric_keys = (
             "weight_g",
@@ -1448,6 +1721,7 @@ async def _collect_detail(
                 "plugin_volumetric_display": metrics.get("plugin_volumetric_display"),
                 "volumetric_formula": "length_cm * width_cm * height_cm / 6000",
                 "volumetric_weight_kg": metrics.get("volumetric_weight_kg"),
+                "self_ship_origin": self_ship_origin or "non_us",
             },
             "collected_at": datetime.now().replace(microsecond=0).strftime("%Y-%m-%d %H:%M:%S"),
         }
@@ -1502,7 +1776,7 @@ async def _repair_items_async(
         await detail_page_pool.get() if detail_page_pool is not None else None
     )
     repaired: list[dict[str, Any]] = []
-    completed = failed = 0
+    completed = failed = skipped_us = 0
     consecutive_failures = 0
     try:
         failure_limit = max(
@@ -1534,10 +1808,26 @@ async def _repair_items_async(
                     raise
                 except Exception as exc:
                     value = exc
+                if isinstance(value, USSelfShipSkipped):
+                    break
                 if isinstance(value, Mapping) and value.get("scrape_status") == "ok":
                     break
                 if attempt + 1 < attempts:
                     await asyncio.sleep(1.0)
+            if isinstance(value, USSelfShipSkipped):
+                skipped_us += 1
+                if on_progress:
+                    on_progress({
+                        "stage": "us_self_ship_skipped",
+                        "current": index,
+                        "total": len(candidates),
+                        "item_id": candidate["source_item_id"],
+                        "message": (
+                            f"已跳过 {candidate['source_item_id']}："
+                            "智赢插件显示 US.svg（美国自发货）"
+                        ),
+                    })
+                continue
             row = _failure_row(candidate, value) if isinstance(value, Exception) else dict(value)
             repaired.append(row)
             if row.get("scrape_status") == "ok":
@@ -1582,6 +1872,7 @@ async def _repair_items_async(
             "skipped_count": len(candidates) - len(repaired),
             "completed_count": completed,
             "failed_count": failed,
+            "skipped_us_count": skipped_us,
             "browser_connection": runtime.connection_mode,
             "rows": repaired,
         }
@@ -1597,6 +1888,7 @@ async def _collect_async(
     requested_count: int,
     *,
     collection_scope: str = "all",
+    keyword: str = "",
     window_id: str = "",
     max_workers: int,
     plugin_timeout: float,
@@ -1610,7 +1902,7 @@ async def _collect_async(
 
     runtime = await open_runtime()
     results: list[dict[str, Any]] = []
-    completed = failed = 0
+    completed = failed = skipped_us = 0
     detail_page_pool: asyncio.Queue[_DetailPageSlot] | None = None
     try:
         try:
@@ -1619,6 +1911,7 @@ async def _collect_async(
                 source_url,
                 requested_count,
                 collection_scope=collection_scope,
+                keyword=keyword,
                 on_page=on_page,
                 stop_event=stop_event,
             )
@@ -1632,6 +1925,7 @@ async def _collect_async(
                 source_url,
                 requested_count,
                 collection_scope=collection_scope,
+                keyword=keyword,
                 on_page=on_page,
                 stop_event=stop_event,
             )
@@ -1888,6 +2182,8 @@ async def _collect_async(
                         )
                         if not isinstance(value, Exception) and not incomplete:
                             break
+                        if isinstance(value, USSelfShipSkipped):
+                            break
                         if isinstance(value, Exception) and _is_browser_closed_error(value):
                             break
                         blocked = is_verification_failure(value)
@@ -1916,9 +2212,23 @@ async def _collect_async(
         async def save_result(
             candidate: Mapping[str, Any], value: Any, current: int
         ) -> None:
-            nonlocal completed, failed
+            nonlocal completed, failed, skipped_us
             if isinstance(value, CollectionStopped):
                 raise value
+            if isinstance(value, USSelfShipSkipped):
+                skipped_us += 1
+                if on_progress:
+                    on_progress({
+                        "stage": "us_self_ship_skipped",
+                        "current": current,
+                        "total": len(candidates),
+                        "item_id": candidate["source_item_id"],
+                        "message": (
+                            f"已跳过 {candidate['source_item_id']}："
+                            "智赢插件显示 US.svg（美国自发货）"
+                        ),
+                    })
+                return
             row = _failure_row(candidate, value) if isinstance(value, Exception) else value
             if row["scrape_status"] == "ok":
                 completed += 1
@@ -1997,6 +2307,7 @@ async def _collect_async(
             "candidate_count": len(candidates),
             "completed_count": completed,
             "failed_count": failed,
+            "skipped_us_count": skipped_us,
             "browser_mode": "playwright",
             "browser_connection": runtime.connection_mode,
             "collection_scope": collection_scope,
@@ -2014,6 +2325,7 @@ def collect_marketplace_listing_playwright(
     max_workers: int,
     window_id: str = "",
     collection_scope: str = "all",
+    keyword: str = "",
     plugin_timeout: float,
     on_page: Callable[[dict[str, Any]], None] | None = None,
     on_item: Callable[[dict[str, Any]], None] | None = None,
@@ -2030,6 +2342,7 @@ def collect_marketplace_listing_playwright(
             requested_count,
             window_id=window_id,
             collection_scope=collection_scope,
+            keyword=keyword,
             max_workers=max_workers,
             plugin_timeout=plugin_timeout,
             on_page=on_page,

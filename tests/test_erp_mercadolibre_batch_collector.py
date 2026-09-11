@@ -104,6 +104,7 @@ def test_collection_request_requires_mercado_host_and_bounded_count():
 
 
 def test_keyword_builds_country_frontend_search_urls():
+    assert playwright_collector.DEFAULT_SETUP_URL == "https://www.mercadolibre.com/"
     assert build_marketplace_search_url("bolsas para mujer", "MLM") == (
         "https://listado.mercadolibre.com.mx/bolsas-para-mujer"
     )
@@ -144,9 +145,16 @@ def test_cross_border_scope_only_keeps_international_cards():
                 "href": "https://articulo.mercadolibre.com.mx/MLM-3016972321",
                 "title": "Producto internacional",
                 "is_cross_border": True,
+                "shipping_origin_country": "CN",
             },
             {
                 "href": "https://articulo.mercadolibre.com.mx/MLM-3016972322",
+                "title": "Producto internacional USA",
+                "is_cross_border": True,
+                "shipping_origin_country": "US",
+            },
+            {
+                "href": "https://articulo.mercadolibre.com.mx/MLM-3016972323",
                 "title": "Producto local",
                 "is_cross_border": False,
             },
@@ -157,6 +165,7 @@ def test_cross_border_scope_only_keeps_international_cards():
 
     assert [row["source_item_id"] for row in rows] == ["MLM3016972321"]
     assert rows[0]["is_cross_border"] is True
+    assert rows[0]["shipping_origin_country"] == "CN"
     assert rows[0]["listing_url"].endswith("/MLM-3016972321")
 
 
@@ -169,7 +178,11 @@ def test_listing_html_marks_international_seller_cards():
             <h2>Bolsa</h2><span>China Internacional China</span>
           </li>
           <li class="ui-search-layout__item">
-            <a class="ui-search-link" href="/MLM-3016972322">Local</a>
+            <a class="ui-search-link" href="/MLM-3016972322">USA</a>
+            <h2>USA</h2><span>Internacional Estados Unidos</span>
+          </li>
+          <li class="ui-search-layout__item">
+            <a class="ui-search-link" href="/MLM-3016972323">Local</a>
             <h2>Local</h2><span>Llega mañana</span>
           </li>
         </ol></body></html>
@@ -177,7 +190,8 @@ def test_listing_html_marks_international_seller_cards():
         "https://listado.mercadolibre.com.mx/bolsas",
     )
 
-    assert [row["is_cross_border"] for row in listing["rows"]] == [True, False]
+    assert [row["is_cross_border"] for row in listing["rows"]] == [True, True, False]
+    assert [row["shipping_origin_country"] for row in listing["rows"]] == ["CN", "US", ""]
 
 
 def test_playwright_listing_pages_keep_images_needed_by_lazy_result_grid():
@@ -228,6 +242,176 @@ def test_playwright_listing_pages_keep_images_needed_by_lazy_result_grid():
 
     assert result is page
     assert page.route_calls == 0
+
+
+def test_playwright_waits_for_bitbrowser_cdp_listener(monkeypatch):
+    calls = []
+    browser = type("Browser", (), {"contexts": [object()]})()
+
+    class Chromium:
+        async def connect_over_cdp(self, url, timeout):
+            calls.append((url, timeout))
+            if len(calls) < 3:
+                raise RuntimeError("connect ECONNREFUSED 127.0.0.1:60228")
+            return browser
+
+    playwright = type("Playwright", (), {"chromium": Chromium()})()
+    monkeypatch.setenv("MERCADO_BITBROWSER_CDP_READY_TIMEOUT_SECONDS", "5")
+
+    result = asyncio.run(
+        playwright_collector._connect_bitbrowser_over_cdp(
+            playwright, "http://127.0.0.1:60228"
+        )
+    )
+
+    assert result is browser
+    assert len(calls) == 3
+    assert all(url == "http://127.0.0.1:60228" for url, _ in calls)
+
+
+def test_playwright_keyword_flow_searches_selected_frontend_and_enters_international():
+    events = []
+
+    class Navigation:
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *_args):
+            return False
+
+    class Locator:
+        def __init__(self, page, kind):
+            self.page = page
+            self.kind = kind
+
+        @property
+        def first(self):
+            return self
+
+        async def wait_for(self, **_kwargs):
+            return None
+
+        async def fill(self, value):
+            assert self.kind == "search"
+            self.page.searched_keyword = value
+
+        async def press(self, key):
+            assert self.kind == "search"
+            assert key == "Enter"
+            self.page.url = "https://listado.mercadolibre.com.mx/cosplay"
+
+        async def click(self):
+            assert self.kind == "international"
+            self.page.url = (
+                "https://listado.mercadolibre.com.mx/"
+                "cosplay_NoIndex_True_SHIPPING*ORIGIN_10215069"
+            )
+
+    class Page:
+        def __init__(self):
+            self.url = "about:blank"
+            self.visited = []
+            self.searched_keyword = ""
+
+        async def goto(self, url, **_kwargs):
+            self.visited.append(url)
+            self.url = url
+
+        def locator(self, selector):
+            return Locator(
+                self,
+                "search" if 'name="as_word"' in selector else "international",
+            )
+
+        def expect_navigation(self, **_kwargs):
+            return Navigation()
+
+        async def wait_for_load_state(self, *_args, **_kwargs):
+            return None
+
+    page = Page()
+    result = asyncio.run(
+        playwright_collector._run_keyword_search_flow(
+            page,
+            (
+                "https://listado.mercadolibre.com.mx/"
+                "cosplay_NoIndex_True_SHIPPING*ORIGIN_10215069"
+            ),
+            "  cosplay  ",
+            collection_scope="cross_border",
+            on_page=events.append,
+            stop_event=None,
+        )
+    )
+
+    assert page.visited == ["https://www.mercadolibre.com.mx/"]
+    assert page.searched_keyword == "cosplay"
+    assert marketplace_url_has_cross_border_filter(result)
+    assert [event["stage"] for event in events] == [
+        "keyword_search",
+        "keyword_search_complete",
+        "cross_border_filter",
+        "cross_border_filter_complete",
+    ]
+
+
+def test_playwright_keyword_flow_stops_when_international_facet_is_missing():
+    class Navigation:
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *_args):
+            return False
+
+    class Locator:
+        def __init__(self, page, search):
+            self.page = page
+            self.search = search
+
+        @property
+        def first(self):
+            return self
+
+        async def wait_for(self, **_kwargs):
+            if not self.search:
+                raise TimeoutError("facet missing")
+
+        async def fill(self, value):
+            self.page.keyword = value
+
+        async def press(self, _key):
+            self.page.url = "https://listado.mercadolibre.com.mx/cosplay"
+
+    class Page:
+        url = "about:blank"
+        keyword = ""
+
+        async def goto(self, url, **_kwargs):
+            self.url = url
+
+        def locator(self, selector):
+            return Locator(self, 'name="as_word"' in selector)
+
+        def expect_navigation(self, **_kwargs):
+            return Navigation()
+
+        async def wait_for_load_state(self, *_args, **_kwargs):
+            return None
+
+    page = Page()
+    with pytest.raises(RuntimeError, match="左侧没有 Internacional.*已停止"):
+        asyncio.run(
+            playwright_collector._run_keyword_search_flow(
+                page,
+                "https://listado.mercadolibre.com.mx/cosplay",
+                "cosplay",
+                collection_scope="cross_border",
+                on_page=None,
+                stop_event=None,
+            )
+        )
+    assert page.keyword == "cosplay"
+    assert page.url == "https://listado.mercadolibre.com.mx/cosplay"
 
 
 def test_listing_dom_scripts_prefer_original_price_over_current_price():
@@ -455,6 +639,7 @@ def test_playwright_decodes_plugin_metrics_from_extension_react_props():
                 "weight_g": 509,
                 "size_cm": [31, 26, 7],
                 "volume_weight_g": 940.3333333333334,
+                "self_ship_origin": "CN",
             },
             "metrics": {
                 "weight": {"value": "509g"},
@@ -468,7 +653,76 @@ def test_playwright_decodes_plugin_metrics_from_extension_react_props():
     assert metrics["package_width_cm"] == 26
     assert metrics["package_height_cm"] == 7
     assert metrics["volumetric_weight_kg"] == pytest.approx(0.9403)
-    assert lines == ["重量：509g", "尺寸：31 × 26 × 7", "计抛：940.333g"]
+    assert lines == [
+        "重量：509g",
+        "尺寸：31 × 26 × 7",
+        "计抛：940.333g",
+        "__ZYING_SELF_SHIP_ORIGIN__:CN",
+    ]
+    assert playwright_collector._plugin_self_ship_origin(lines) == "CN"
+    assert playwright_collector._plugin_self_ship_origin(
+        ["chrome-extension://example/assets/US.svg"]
+    ) == "US"
+
+
+def test_playwright_skips_us_self_ship_without_persisting_or_retrying(monkeypatch):
+    monkeypatch.setenv("MERCADO_PLAYWRIGHT_NAVIGATION_STAGGER_SECONDS", "0")
+    monkeypatch.setenv("MERCADO_PLAYWRIGHT_RETRY_SECONDS", "0")
+    candidates = [
+        {
+            "source_item_id": "MLM3016972321",
+            "source_url": "https://example.test/us",
+            "title": "US item",
+        },
+        {
+            "source_item_id": "MLM3016972322",
+            "source_url": "https://example.test/cn",
+            "title": "CN item",
+        },
+    ]
+    runtime = type("Runtime", (), {"connection_mode": "test"})()
+    attempts = []
+    saved = []
+
+    async def fake_open():
+        return runtime
+
+    async def fake_close(_runtime):
+        return None
+
+    async def fake_candidates(*_args, **_kwargs):
+        return candidates
+
+    async def fake_detail(_runtime, candidate, **_kwargs):
+        attempts.append(candidate["source_item_id"])
+        if candidate["source_item_id"].endswith("321"):
+            raise playwright_collector.USSelfShipSkipped("US.svg")
+        return {**candidate, "scrape_status": "ok", "main_image_url": "image"}
+
+    monkeypatch.setattr(playwright_collector, "_open_runtime", fake_open)
+    monkeypatch.setattr(playwright_collector, "_close_runtime", fake_close)
+    monkeypatch.setattr(playwright_collector, "_listing_candidates", fake_candidates)
+    monkeypatch.setattr(playwright_collector, "_collect_detail", fake_detail)
+
+    result = asyncio.run(
+        playwright_collector._collect_async(
+            "https://example.test/list",
+            2,
+            max_workers=2,
+            plugin_timeout=1,
+            on_page=None,
+            on_item=saved.append,
+            on_progress=None,
+            stop_event=None,
+        )
+    )
+
+    assert attempts.count("MLM3016972321") == 1
+    assert result["completed_count"] == 1
+    assert result["failed_count"] == 0
+    assert result["skipped_us_count"] == 1
+    assert [row["source_item_id"] for row in result["rows"]] == ["MLM3016972322"]
+    assert [row["source_item_id"] for row in saved] == ["MLM3016972322"]
 
 
 def test_playwright_retries_one_transient_detail_failure(monkeypatch):

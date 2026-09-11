@@ -71,6 +71,12 @@ APPEAL_TYPE_DELAY = "延误"
 APPEAL_TYPE_CANCELLATION = "取消率"
 APPEAL_TYPE_COMPLAINT = "投诉"
 APPEAL_TYPE_MIXED = "混合模式"
+APPEAL_COPY_MODE_NORMAL = "普通模式"
+APPEAL_COPY_MODE_AI = "AI话术模式"
+SUPPORTED_APPEAL_COPY_MODES = (
+    APPEAL_COPY_MODE_NORMAL,
+    APPEAL_COPY_MODE_AI,
+)
 DAILY_APPEAL_TASK_TYPES = (
     APPEAL_TYPE_INFRACTION,
     APPEAL_TYPE_PROHIBITED,
@@ -100,6 +106,15 @@ REPUTATION_RATE_FIELDS = {
     APPEAL_TYPE_CANCELLATION: "取消率",
     APPEAL_TYPE_COMPLAINT: "投诉率",
 }
+
+
+def normalize_appeal_copy_mode(value):
+    mode = str(value or APPEAL_COPY_MODE_NORMAL).strip()
+    if mode not in SUPPORTED_APPEAL_COPY_MODES:
+        raise ValueError(
+            "话术模式只支持：" + "、".join(SUPPORTED_APPEAL_COPY_MODES)
+        )
+    return mode
 
 
 class DailyTaskAlreadyRunning(RuntimeError):
@@ -1141,6 +1156,8 @@ def _appeal_one_shop_locked(
     rate_limit_retries=DEFAULT_RATE_LIMIT_RETRIES,
     rate_limit_retry_seconds=DEFAULT_RATE_LIMIT_RETRY_SECONDS,
     stop_event=None,
+    appeal_copy_mode=APPEAL_COPY_MODE_NORMAL,
+    deepseek_api_key="",
 ):
     normalized_type = normalize_appeal_type(appeal_type)
     appeal_label = _appeal_type_label(normalized_type)
@@ -1190,6 +1207,16 @@ def _appeal_one_shop_locked(
                     and "prohibited_ids" in site
                 ):
                     appeal_kwargs["prohibited_ids"] = site.get("prohibited_ids")
+                if (
+                    normalize_appeal_copy_mode(appeal_copy_mode)
+                    == APPEAL_COPY_MODE_AI
+                    and site_appeal_type
+                    in (APPEAL_TYPE_INFRACTION, APPEAL_TYPE_PROHIBITED)
+                ):
+                    appeal_kwargs["ai_script_mode"] = True
+                    appeal_kwargs["deepseek_api_key"] = str(
+                        deepseek_api_key or ""
+                    ).strip()
                 result = bit_appeal_ai.shensu(
                     name,
                     site_code,
@@ -1353,6 +1380,8 @@ def appeal_one_shop(
     stop_event=None,
     task_id="",
     owned_window_ids=None,
+    appeal_copy_mode=APPEAL_COPY_MODE_NORMAL,
+    deepseek_api_key="",
 ):
     """按店铺执行 AI 申诉；整个店铺期间独占该浏览器窗口。"""
     # 单次申诉内部会在检测到未登录时执行共享自动登录流程；如果自动登录已经
@@ -1442,6 +1471,8 @@ def appeal_one_shop(
             rate_limit_retries=rate_limit_retries,
             rate_limit_retry_seconds=rate_limit_retry_seconds,
             stop_event=stop_event,
+            appeal_copy_mode=appeal_copy_mode,
+            deepseek_api_key=deepseek_api_key,
         )
     finally:
         # shensu 会关闭当前标签页，但不会关闭比特浏览器窗口。bit_main 会连续
@@ -1489,6 +1520,8 @@ def _appeal_one_shop_worker_for_type(
     stop_event=None,
     task_id="",
     owned_window_ids=None,
+    appeal_copy_mode=APPEAL_COPY_MODE_NORMAL,
+    deepseek_api_key="",
 ):
     if log_path:
         with open(log_path, "a", encoding="utf-8", buffering=1) as log_file:
@@ -1502,6 +1535,8 @@ def _appeal_one_shop_worker_for_type(
                     stop_event=stop_event,
                     task_id=task_id,
                     owned_window_ids=owned_window_ids,
+                    appeal_copy_mode=appeal_copy_mode,
+                    deepseek_api_key=deepseek_api_key,
                 )
     if start_delay > 0:
         print(f"{get_now_time()} {shop.get('name', '')} 启动错峰等待 {start_delay:.1f} 秒<br>")
@@ -1523,6 +1558,8 @@ def _appeal_one_shop_worker_for_type(
         stop_event=stop_event,
         task_id=task_id,
         owned_window_ids=owned_window_ids,
+        appeal_copy_mode=appeal_copy_mode,
+        deepseek_api_key=deepseek_api_key,
     )
 
 
@@ -1660,9 +1697,15 @@ def _run_ai_appeal_once_locked(
     log_path=None,
     task_id="",
     owned_window_ids=None,
+    appeal_copy_mode=APPEAL_COPY_MODE_NORMAL,
+    deepseek_api_key="",
 ):
     """用多进程并发处理已开启的任务；店铺内部按站点指标降序串行处理。"""
     selected_types = normalize_appeal_types(appeal_type)
+    appeal_copy_mode = normalize_appeal_copy_mode(appeal_copy_mode)
+    deepseek_api_key = str(deepseek_api_key or "").strip()
+    if appeal_copy_mode == APPEAL_COPY_MODE_AI and not deepseek_api_key:
+        raise ValueError("AI话术模式必须手动填写 DeepSeek Token")
     sequence = appeal_type_sequence(selected_types)
     if stop_event is not None and stop_event.is_set():
         print(f"{get_now_time()} 已收到停止请求，本轮任务不再启动<br>")
@@ -1703,6 +1746,8 @@ def _run_ai_appeal_once_locked(
                     log_path=log_path,
                     task_id=task_id,
                     owned_window_ids=owned_window_ids,
+                    appeal_copy_mode=appeal_copy_mode,
+                    deepseek_api_key=deepseek_api_key,
                 ),
             })
         print(f"{get_now_time()} 多任务一轮执行完成<br>")
@@ -1782,8 +1827,7 @@ def _run_ai_appeal_once_locked(
     try:
         executor = ProcessPoolExecutor(max_workers=worker_count)
         for index, shop in enumerate(plan):
-            future = executor.submit(
-                _appeal_one_shop_worker_for_type,
+            worker_args = [
                 shop,
                 normalized_type,
                 site_pause,
@@ -1793,6 +1837,12 @@ def _run_ai_appeal_once_locked(
                 stop_event,
                 task_id,
                 owned_window_ids,
+            ]
+            if appeal_copy_mode == APPEAL_COPY_MODE_AI:
+                worker_args.extend((appeal_copy_mode, deepseek_api_key))
+            future = executor.submit(
+                _appeal_one_shop_worker_for_type,
+                *worker_args,
             )
             future_map[future] = shop
             pending.add(future)
@@ -1894,6 +1944,8 @@ def run_ai_appeal_once(
     _task_lock=None,
     task_id="",
     owned_window_ids=None,
+    appeal_copy_mode=APPEAL_COPY_MODE_NORMAL,
+    deepseek_api_key="",
 ):
     selected_types = normalize_appeal_types(appeal_type)
     appeal_label = "、".join(_appeal_type_label(item) for item in selected_types)
@@ -1928,6 +1980,8 @@ def run_ai_appeal_once(
             log_path=log_path,
             task_id=task_id,
             owned_window_ids=owned_window_ids,
+            appeal_copy_mode=appeal_copy_mode,
+            deepseek_api_key=deepseek_api_key,
         )
     finally:
         if owned_lock is not None:
@@ -2035,9 +2089,15 @@ def _loop_ai_appeal_locked(
     log_path=None,
     task_id="",
     owned_window_ids=None,
+    appeal_copy_mode=APPEAL_COPY_MODE_NORMAL,
+    deepseek_api_key="",
 ):
     """循环执行已开启的店铺 AI 客服申诉任务。"""
     selected_types = normalize_appeal_types(appeal_type)
+    appeal_copy_mode = normalize_appeal_copy_mode(appeal_copy_mode)
+    deepseek_api_key = str(deepseek_api_key or "").strip()
+    if appeal_copy_mode == APPEAL_COPY_MODE_AI and not deepseek_api_key:
+        raise ValueError("AI话术模式必须手动填写 DeepSeek Token")
     appeal_label = "、".join(_appeal_type_label(item) for item in selected_types)
     plan_limit = _normalize_appeal_plan_limit(top_n)
     plan_scope = (
@@ -2104,6 +2164,8 @@ def _loop_ai_appeal_locked(
                 _task_lock=task_lock,
                 task_id=task_id,
                 owned_window_ids=owned_window_ids,
+                appeal_copy_mode=appeal_copy_mode,
+                deepseek_api_key=deepseek_api_key,
             )
             for key, count in task_execution_counts(round_result).items():
                 execution_counts[key] = execution_counts.get(key, 0) + count
@@ -2214,6 +2276,8 @@ def loop_ai_appeal(
     _task_lock=None,
     task_id="",
     owned_window_ids=None,
+    appeal_copy_mode=APPEAL_COPY_MODE_NORMAL,
+    deepseek_api_key="",
 ):
     selected_types = normalize_appeal_types(appeal_type)
     appeal_label = "、".join(_appeal_type_label(item) for item in selected_types)
@@ -2252,6 +2316,8 @@ def loop_ai_appeal(
             log_path=log_path,
             task_id=task_id,
             owned_window_ids=owned_window_ids,
+            appeal_copy_mode=appeal_copy_mode,
+            deepseek_api_key=deepseek_api_key,
         )
     finally:
         if owned_lock is not None:

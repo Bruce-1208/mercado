@@ -1,10 +1,11 @@
-"""仅根据 zying_product 商品标题审核侵权风险。
+"""根据工作台中的多种商品来源审核侵权风险。
 
 风险级别会写入“疑似侵权”字段：
 0 = 未发现可疑性，1 = 有侵权风险/需人工复核，2 = 有明确侵权特征。
 对于 1/2 级结果，同时把品牌或 IP 关键词写入“侵权关键词”字段。
 
-主图链接和 Logo OCR 暂不参与判断。
+主图链接和 Logo OCR 暂不参与判断。侵权知识库中的黑名单优先判侵权，
+白名单会作为“该品牌本身不构成侵权”的明确约束传给 DeepSeek。
 """
 
 import argparse
@@ -49,6 +50,13 @@ RISK_LABELS = {
     0: "无可疑",
     1: "疑似/需复核",
     2: "明确侵权特征",
+}
+
+SOURCE_LABELS = {
+    "product_list": "产品列表",
+    "collection_list": "采集列表",
+    "pulled": "店铺拉取产品",
+    "zying": "智赢采集产品",
 }
 
 
@@ -116,20 +124,25 @@ def _coerce_risk_level(value):
     return aliases[text]
 
 
+def _record_key(record):
+    return str(record.get("record_key") or record.get("row_id") or "").strip()
+
+
 def _normalize_ai_results(payload, records):
     if isinstance(payload, dict):
         payload = payload.get("results") or payload.get("data") or []
     if not isinstance(payload, list):
         raise ValueError("DeepSeek 返回结果不是数组")
 
-    wanted_ids = {int(record["row_id"]) for record in records}
+    records_by_key = {_record_key(record): record for record in records}
+    wanted_ids = set(records_by_key)
     normalized = {}
     for item in payload:
         if not isinstance(item, dict):
             continue
         try:
-            row_id = int(item.get("row_id"))
-        except (TypeError, ValueError):
+            row_id = str(item.get("row_id") or "").strip()
+        except (TypeError, ValueError, AttributeError):
             continue
         if row_id not in wanted_ids:
             continue
@@ -149,8 +162,22 @@ def _normalize_ai_results(payload, records):
         elif not keywords:
             raise ValueError(f"数据行 {row_id} 风险级别为 {risk_level}，但 AI 未返回品牌/IP 关键词")
 
+        record = records_by_key[row_id]
         normalized[row_id] = {
-            "row_id": row_id,
+            "row_id": record.get("row_id"),
+            "source_type": str(record.get("source_type") or "zying"),
+            "source_row_id": record.get("source_row_id", record.get("row_id")),
+            "record_key": row_id,
+            "product_id": str(record.get("product_id") or ""),
+            "title": str(record.get("title") or ""),
+            "main_image_url": str(record.get("main_image_url") or ""),
+            "product_category": str(record.get("product_category") or ""),
+            "zying_category_id": str(record.get("zying_category_id") or ""),
+            "zying_category": str(record.get("zying_category") or ""),
+            "salesperson": str(record.get("salesperson") or ""),
+            "group_name": str(record.get("group_name") or ""),
+            "token_id": record.get("token_id"),
+            "account_name": str(record.get("account_name") or ""),
             "risk_level": risk_level,
             "keywords": keywords,
             "reason": str(item.get("reason") or "").strip()[:500],
@@ -162,25 +189,69 @@ def _normalize_ai_results(payload, records):
             "AI 未返回以下数据行，本批次不会写库："
             + ", ".join(str(row_id) for row_id in sorted(missing_ids))
         )
-    return [normalized[int(record["row_id"])] for record in records]
+    return [normalized[_record_key(record)] for record in records]
 
 
-def _build_products_payload(records):
+def _knowledge_lists(records):
+    lists = {"blacklist": [], "whitelist": []}
+    for row in records or ():
+        if not isinstance(row, dict):
+            continue
+        list_type = str(row.get("list_type") or "").strip().lower()
+        brand = " ".join(str(row.get("brand_name") or "").split())
+        if list_type in lists and brand:
+            lists[list_type].append(brand)
+    for key in lists:
+        lists[key] = list(dict.fromkeys(lists[key]))
+    return lists
+
+
+def _title_matches_brand(title, brand):
+    title_text = str(title or "").casefold()
+    brand_text = str(brand or "").casefold().strip()
+    if not brand_text:
+        return False
+    if re.search(r"[\u3400-\u9fff]", brand_text):
+        return brand_text in title_text
+    return re.search(
+        rf"(?<![\w]){re.escape(brand_text)}(?![\w])",
+        title_text,
+        flags=re.IGNORECASE,
+    ) is not None
+
+
+def _matched_knowledge(record, knowledge):
+    title = record.get("title") or ""
+    return {
+        key: [brand for brand in knowledge.get(key, ()) if _title_matches_brand(title, brand)]
+        for key in ("blacklist", "whitelist")
+    }
+
+
+def _build_products_payload(records, knowledge=None):
+    knowledge = knowledge or {"blacklist": [], "whitelist": []}
     return [
         {
-            "row_id": int(record["row_id"]),
+            "row_id": _record_key(record),
             "product_id": str(record.get("product_id") or ""),
             "title": str(record.get("title") or "")[:1000],
             "product_category": str(record.get("product_category") or "")[:500],
             "zying_category": str(record.get("zying_category") or "")[:500],
+            "knowledge": _matched_knowledge(record, knowledge),
         }
         for record in records
     ]
 
 
-def classify_risk_records(records, model=None, retries=DEFAULT_AI_RETRIES):
+def classify_risk_records(
+    records,
+    model=None,
+    retries=DEFAULT_AI_RETRIES,
+    knowledge_records=None,
+):
     """让 AI 仅根据商品标题返回 0/1/2 级风险。"""
-    products = _build_products_payload(records)
+    knowledge = _knowledge_lists(knowledge_records)
+    products = _build_products_payload(records, knowledge)
     system_prompt = """你是跨境电商知识产权风险审核员。请只根据商品标题做筛查。
 
 风险级别定义：
@@ -192,7 +263,8 @@ def classify_risk_records(records, model=None, retries=DEFAULT_AI_RETRIES):
 1. “适用于/兼容/for/compatible with”后的品牌通常先判 1，除非标题同时包含仿冒或受保护图案的直接证据。
 2. 主图链接、图片内容和 Logo 不在本次检测范围内，禁止根据图片或常识补充判断。
 3. risk_level 为 1 或 2 时，keywords 必须列出标题中命中的品牌、人物或 IP；为 0 时 keywords 必须是空数组。
-4. 每个 row_id 必须返回且只返回一次。只返回 JSON 数组，不要 Markdown 或其他文字。
+4. knowledge.blacklist 中命中的品牌必须判 2；knowledge.whitelist 中命中的品牌本身不构成侵权，但标题中其他品牌/IP 仍需独立判断。若同一名称同时出现于黑白名单，以黑名单为准。
+5. 每个 row_id 必须返回且只返回一次。只返回 JSON 数组，不要 Markdown 或其他文字。
 
 返回格式：
 [{"row_id":123,"risk_level":0,"keywords":[],"reason":"未发现品牌或 IP"}]
@@ -244,17 +316,33 @@ def scan_products(
     candidate_reader=None,
     risk_writer=None,
     log_callback=None,
+    sources=None,
+    salesperson=None,
+    group_name=None,
+    token_ids=None,
+    knowledge_records=None,
 ):
     candidate_reader = candidate_reader or get_zying_risk_candidates
     risk_writer = risk_writer or update_zying_product_risks
-    records = candidate_reader(
-        hours=hours,
-        limit=limit,
-        zying_category=zying_category,
-        include_checked=recheck,
-    )
+    candidate_kwargs = {
+        "hours": hours,
+        "limit": limit,
+        "zying_category": zying_category,
+        "include_checked": recheck,
+    }
+    if sources is not None:
+        candidate_kwargs.update(
+            sources=sources,
+            salesperson=salesperson,
+            group_name=group_name,
+            token_ids=token_ids,
+        )
+    records = candidate_reader(**candidate_kwargs)
     records = [record for record in records if record.get("row_id") is not None]
-    scope = f"智赢分类 {zying_category!r}" if zying_category else "全部智赢分类"
+    selected_sources = list(sources or ("zying",))
+    scope = "、".join(SOURCE_LABELS.get(value, value) for value in selected_sources)
+    if zying_category:
+        scope += f"（智赢分类 {zying_category!r}）"
     time_scope = f"最近 {hours} 小时" if hours else "不限入库时间"
     _emit_log(
         f"读取 {scope}、{time_scope}的候选商品 {len(records)} 条",
@@ -280,7 +368,53 @@ def scan_products(
             log_callback,
         )
         title_records = [dict(record) for record in batch]
-        results = classify_risk_records(title_records, model=model, retries=retries)
+        knowledge = _knowledge_lists(knowledge_records)
+        blacklisted = []
+        ai_records = []
+        for record in title_records:
+            matches = _matched_knowledge(record, knowledge)
+            if matches["blacklist"]:
+                blacklisted.append({
+                    "row_id": record.get("row_id"),
+                    "source_type": str(record.get("source_type") or "zying"),
+                    "source_row_id": record.get("source_row_id", record.get("row_id")),
+                    "record_key": _record_key(record),
+                    "product_id": str(record.get("product_id") or ""),
+                    "title": str(record.get("title") or ""),
+                    "main_image_url": str(record.get("main_image_url") or ""),
+                    "product_category": str(record.get("product_category") or ""),
+                    "zying_category_id": str(record.get("zying_category_id") or ""),
+                    "zying_category": str(record.get("zying_category") or ""),
+                    "salesperson": str(record.get("salesperson") or ""),
+                    "group_name": str(record.get("group_name") or ""),
+                    "token_id": record.get("token_id"),
+                    "account_name": str(record.get("account_name") or ""),
+                    "risk_level": 2,
+                    "keywords": matches["blacklist"],
+                    "reason": "命中侵权知识库黑名单",
+                })
+            else:
+                ai_records.append(record)
+        if not ai_records:
+            ai_results = []
+        elif knowledge_records:
+            ai_results = classify_risk_records(
+                ai_records,
+                model=model,
+                retries=retries,
+                knowledge_records=knowledge_records,
+            )
+        else:
+            ai_results = classify_risk_records(
+                ai_records,
+                model=model,
+                retries=retries,
+            )
+        results_by_key = {
+            str(item.get("record_key") or item.get("row_id")): item
+            for item in blacklisted + ai_results
+        }
+        results = [results_by_key[_record_key(record)] for record in title_records]
         if not dry_run:
             updated += risk_writer(results)
 

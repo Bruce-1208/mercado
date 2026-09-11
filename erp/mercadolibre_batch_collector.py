@@ -314,6 +314,11 @@ def merge_listing_candidates(
         row = dict(source_row)
         if collection_scope == "cross_border" and not bool(row.get("is_cross_border")):
             continue
+        if (
+            collection_scope == "cross_border"
+            and str(row.get("shipping_origin_country") or "").strip().upper() == "US"
+        ):
+            continue
         href = str(row.get("source_url") or row.get("href") or "").strip()
         try:
             item_id = extract_listing_item_id(str(row.get("source_item_id") or href))
@@ -332,6 +337,9 @@ def merge_listing_candidates(
                 "price": _number(row.get("price")),
                 "currency_id": str(row.get("currency_id") or "MXN"),
                 "is_cross_border": bool(row.get("is_cross_border")),
+                "shipping_origin_country": str(
+                    row.get("shipping_origin_country") or ""
+                ).strip().upper(),
             }
         )
         if len(existing) >= limit:
@@ -376,13 +384,16 @@ for (const root of roots) {
   let price = fraction ? clean(fraction.textContent).replace(/\D/g, '') : '';
   if (price && cents) price += '.' + clean(cents.textContent).replace(/\D/g, '');
   const cardText = clean((root.innerText || root.textContent || ''));
+  const isUsOrigin = /(?:internacional.{0,24}(?:usa|eua|estados unidos|united states))|(?:(?:usa|eua|estados unidos|united states).{0,24}internacional)/i.test(cardText);
+  const isChinaOrigin = /(?:internacional.{0,24}china)|(?:china.{0,24}internacional)/i.test(cardText);
   rows.push({
     href: link.href,
     title: clean((titleNode && titleNode.textContent) || link.textContent),
     main_image_url: imageUrl(img),
     price,
     currency_id: 'MXN',
-    is_cross_border: /(^|\s)internacional(\s|$)/i.test(cardText)
+    is_cross_border: /(^|\s)internacional(\s|$)/i.test(cardText),
+    shipping_origin_country: isUsOrigin ? 'US' : (isChinaOrigin ? 'CN' : '')
   });
 }
 const next = document.querySelector(
@@ -953,6 +964,18 @@ def parse_listing_html(html_text: str, page_url: str) -> dict[str, Any]:
             )
             if " " in image_url:
                 image_url = image_url.split()[0]
+        card_text = card.get_text(" ", strip=True)
+        is_us_origin = bool(re.search(
+            r"(?:internacional.{0,24}(?:usa|eua|estados unidos|united states))"
+            r"|(?:(?:usa|eua|estados unidos|united states).{0,24}internacional)",
+            card_text,
+            re.I,
+        ))
+        is_china_origin = bool(re.search(
+            r"(?:internacional.{0,24}china)|(?:china.{0,24}internacional)",
+            card_text,
+            re.I,
+        ))
         rows.append(
             {
                 "href": href,
@@ -961,7 +984,10 @@ def parse_listing_html(html_text: str, page_url: str) -> dict[str, Any]:
                 "price": price_text,
                 "currency_id": "MXN",
                 "is_cross_border": bool(
-                    re.search(r"(^|\s)internacional(\s|$)", card.get_text(" ", strip=True), re.I)
+                    re.search(r"(^|\s)internacional(\s|$)", card_text, re.I)
+                ),
+                "shipping_origin_country": (
+                    "US" if is_us_origin else "CN" if is_china_origin else ""
                 ),
             }
         )
@@ -1621,6 +1647,7 @@ def collect_marketplace_listing(
     browser_mode: str = DEFAULT_BROWSER_MODE,
     max_workers: int = DEFAULT_COLLECTION_WORKERS,
     collection_scope: str = "all",
+    keyword: str = "",
     plugin_timeout: float = 15.0,
     on_page: Callable[[dict[str, Any]], None] | None = None,
     on_item: Callable[[dict[str, Any]], None] | None = None,
@@ -1647,6 +1674,7 @@ def collect_marketplace_listing(
             max_workers=max_workers,
             window_id=window_id if mode in ("bitbrowser", "bit") else "",
             collection_scope=collection_scope,
+            keyword=keyword,
             plugin_timeout=plugin_timeout,
             on_page=on_page,
             on_item=on_item,

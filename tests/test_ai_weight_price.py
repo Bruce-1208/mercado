@@ -90,7 +90,8 @@ def test_strict_matching_and_review_same_sku(monkeypatch):
     model = Models(validate({}), lambda *a: None)
     approved = {"same_product":True,"specs_confirmed":True,"sku_id":"s1","confidence":.96}
     assert model.accepted(approved)
-    for confidence in (.95,1.1,float("nan"),True,".99"):
+    assert model.accepted({**approved, "confidence": .95})
+    for confidence in (.9499,1.1,float("nan"),True,".99"):
         assert not model.accepted({**approved,"confidence":confidence})
     replies = iter([approved,{**approved,"sku_id":"s2"}])
     monkeypatch.setattr(model,"call",lambda *a:next(replies))
@@ -159,6 +160,21 @@ def test_circuit_persists_and_uncertain_actions_recover(service):
     service.circuit(CircuitOpen("验证码"))
     row=task(s,"g3","m3")
     assert Store(s.root).reserve(row,c,"msg","url",[],2000)=="circuit"
+
+
+def test_legacy_unknown_domain_false_pause_is_cleared_without_losing_current_item(tmp_path):
+    store = Store(tmp_path)
+    store.set_state("pipeline_current", {"scope": "selected-scope", "task_id": "848332340"})
+    store.set_state("circuit", {"kind": "browser_attention",
+                    "reason": "1688搜图进入登录或人机审核页面（未知域名）；请处理后返回控制台继续执行"})
+    store.set_state("run", {"mode": "pipeline", "outcome": "blocked", "current_task_id": "848332340"})
+
+    service = Service(tmp_path)
+
+    assert service.store.state("circuit") is None
+    assert service.store.state("pipeline_current")["task_id"] == "848332340"
+    assert service.store.state("run")["outcome"] == "stopped"
+    assert "开始按钮已恢复" in service.store.logs()[-1]["message"]
 
 
 class FakeBrowser:
@@ -305,8 +321,7 @@ def test_supplier_adaptation_switch_requires_boolean():
         validate({"supplier_auto_adapt": "true"})
 
 
-def test_supplier_adaptation_failure_stops_item_and_preserves_report_reason(service):
-    from erp.ai_weight_price.service import ItemBlocked
+def test_supplier_adaptation_failure_skips_item_and_preserves_report_reason(service):
     from erp.ai_weight_price.supplier_adapter import SupplierAdaptationError
     class UnreadableSupplier:
         def candidates(self, row):
@@ -315,11 +330,11 @@ def test_supplier_adaptation_failure_stops_item_and_preserves_report_reason(serv
     config = validate({})
     config["run_id"] = "adapt-failure"
     service.store.save_run({"run_id": config["run_id"]})
-    with pytest.raises(ItemBlocked):
-        service.complete_one("g1", UnreadableSupplier(), None, config)
+    service.complete_one("g1", UnreadableSupplier(), None, config)
     _, rows = service.store.run_report(config["run_id"])
-    assert rows[0]["status"] == "exception"
-    assert rows[0]["execution_reason"].endswith("SKU缺少稳定ID")
+    assert rows[0]["status"] == "skipped"
+    assert rows[0]["execution_reason"].startswith("自动跳过异常：")
+    assert rows[0]["exception_reason"].endswith("SKU缺少稳定ID")
     assert any("SKU缺少稳定ID" in log["message"] for log in service.store.logs())
 
 
@@ -397,6 +412,59 @@ def test_retry_endpoint_starts_only_selected_task(service,client,monkeypatch):
     assert started==[("process","g1")]
 
 
+def test_retry_endpoint_can_start_an_interrupted_pending_task(service, client, monkeypatch):
+    task(service.store, "pending-one")
+    started = []
+    monkeypatch.setattr(service, "require_login", lambda *args: None)
+    monkeypatch.setattr(service, "preflight", lambda *args: None)
+    monkeypatch.setattr(service, "start", lambda *args: started.append(args))
+
+    response = client.post("/api/ai-weight-price/tasks/pending-one/retry", json={},
+                           headers={"X-AWP-Request": "1"})
+
+    assert response.status_code == 200
+    assert response.json["message"] == "已启动此待处理商品"
+    assert started == [("process", "pending-one")]
+
+
+def test_skip_current_exception_preserves_reason_and_resumes_same_batch(service, monkeypatch):
+    task(service.store, "blocked-one")
+    service.store.exception("blocked-one", "ERP回写保存失败", "未找到唯一保存按钮")
+    service.store.set_state("pipeline_current", {"scope": "scope", "task_id": "blocked-one"})
+    service.store.set_state("run", {"run_id": "run-skip", "mode": "pipeline", "selection": {"category": "", "start_page": 1, "end_page": 1},
+                                     "max_items": 10, "processed_items": 2, "current_item_index": 3,
+                                     "current_task_id": "blocked-one", "outcome": "blocked"})
+    started = []
+    monkeypatch.setattr(service, "start", lambda *args, **kwargs: started.append((args, kwargs)))
+
+    service.skip_current_exception()
+
+    saved = service.store.get("blocked-one")
+    assert saved["status"] == "skipped"
+    assert saved["exception_reason"] == "ERP回写保存失败"
+    assert saved["exception_detail"] == "未找到唯一保存按钮"
+    assert saved["skip_reason"].startswith("人工跳过异常：")
+    assert service.store.state("pipeline_current") is None
+    assert started == [(("pipeline", None, {"category": "", "start_page": 1, "end_page": 1}, 10), {"resume": True})]
+
+
+def test_current_run_items_endpoint_shows_only_that_run_with_live_task_status(service, client):
+    task(service.store, "current")
+    task(service.store, "historical")
+    service.store.exception("current", "上传控件异常")
+    service.store.save_run({"run_id": "run-now", "mode": "pipeline", "outcome": "running"})
+    service.store.record_run_item("run-now", "current", execution_result="异常", execution_reason="上传控件异常")
+    service.store.set_state("run", {"run_id": "run-now", "mode": "pipeline", "outcome": "running"})
+
+    response = client.get("/api/ai-weight-price/run-items")
+
+    assert response.status_code == 200
+    assert response.json["total"] == 1
+    assert response.json["rows"][0]["erp_goods_id"] == "current"
+    assert response.json["rows"][0]["execution_result"] == "异常"
+    assert response.json["rows"][0]["run_sequence"] == 1
+
+
 def test_queue_never_skips_deferred_current_product(service,monkeypatch):
     for i in range(101):
         task(service.store,"g"+str(i),next_attempt_at=9999999999 if i<100 else 0)
@@ -456,6 +524,16 @@ def test_no_category_is_valid_and_scope_includes_range():
     assert choice=={"category":"","start_page":3,"end_page":5}
     assert selection_key(choice,config)!=selection_key({**choice,"category":"1/2"},config)
     assert selection_key(choice,config)!=selection_key({**choice,"end_page":6},config)
+
+
+def test_page_item_start_is_one_based_and_part_of_scope():
+    from erp.ai_weight_price.config import selection_params,selection_key
+    config=validate({})
+    choice=selection_params({"start_page":3,"end_page":5,"start_item":4},config)
+    assert choice=={"category":"","start_page":3,"end_page":5,"start_item":4}
+    assert selection_key(choice,config)!=selection_key({**choice,"start_item":1},config)
+    with pytest.raises(ValueError,match="本页起始商品序号"):
+        selection_params({"start_page":1,"end_page":1,"start_item":0},config)
 
 
 def test_no_login_or_no_selection_cannot_start(service,client,monkeypatch):

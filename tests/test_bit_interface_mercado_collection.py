@@ -261,11 +261,14 @@ def test_workbench_splits_collection_and_product_list_into_separate_modules():
     assert b'function goToMercadoListPage(page)' in response.data
     assert b'id="mercado-review-filter"' in response.data
     assert b'id="mercado-publish-filter"' in response.data
-    assert b'id="mercado-collection-filter-note"' in response.data
+    assert b'id="mercado-collection-filter-note"' not in response.data
     assert b'class="market-product-filters visible"' in response.data
     assert b'.market-list-panel.collection-mode .market-product-filters' not in response.data
-    assert "采集列表支持重量、售价、收益和采集时间组合筛选".encode("utf-8") in response.data
-    assert b'onclick="switchTab(\'mercado-products\')"' in response.data
+    assert "采集列表支持审核、上架状态、重量、售价、收益和采集时间组合筛选".encode("utf-8") in response.data
+    review_filter_markup = response.data.split(b'id="mercado-review-filter"', 1)[0].rsplit(b'<div', 1)[-1]
+    publish_filter_markup = response.data.split(b'id="mercado-publish-filter"', 1)[0].rsplit(b'<div', 1)[-1]
+    assert b'market-product-only-filter' not in review_filter_markup
+    assert b'market-product-only-filter' not in publish_filter_markup
     assert b'id="mercado-weight-min"' in response.data
     assert b'id="mercado-price-min"' in response.data
     assert b'id="mercado-net-min"' in response.data
@@ -586,6 +589,7 @@ def test_collection_list_and_batch_add_endpoints():
     ) as list_collection:
         response = client.get(
             "/api/mercado-collection/items?search=Lonchera"
+            "&review_status=risk&publish_status=failed"
             "&weight_min=100&weight_max=500&price_min=20&price_max=80"
             "&net_proceeds_min=1&net_proceeds_max=40"
             "&date_from=2026-08-25&date_to=2026-08-30"
@@ -597,6 +601,8 @@ def test_collection_list_and_batch_add_endpoints():
         limit=500,
         offset=0,
         task_id=None,
+        review_status="risk",
+        publish_status="failed",
         weight_min="100",
         weight_max="500",
         price_min="20",
@@ -830,7 +836,7 @@ def test_start_collection_builds_country_url_from_keyword_and_scope():
     client = _client()
     with patch.object(
         workbench, "db_create_mercado_collection_task", return_value=43
-    ) as create_task, patch.object(workbench.threading.Thread, "start"):
+    ) as create_task, patch.object(workbench.threading, "Thread") as thread_class:
         response = client.post(
             "/api/mercado-collection/start",
             json={
@@ -858,6 +864,8 @@ def test_start_collection_builds_country_url_from_keyword_and_scope():
         "测试用户",
         worker_count=4,
     )
+    assert thread_class.call_args.kwargs["kwargs"] == {"keyword": "bolsa feminina"}
+    thread_class.return_value.start.assert_called_once()
     _reset_state()
 
 

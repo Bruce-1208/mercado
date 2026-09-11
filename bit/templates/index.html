@@ -3573,6 +3573,358 @@
             background: var(--log-bg);
         }
 
+        #tab-risk-check .infractions-panel {
+            border: 1px solid #dfe7f1;
+            background: #f7f9fc;
+            box-shadow: 0 10px 28px rgba(30, 50, 80, .07);
+        }
+
+        #tab-risk-check > .tab-heading p {
+            max-width: 920px;
+            line-height: 1.55;
+        }
+
+        #tab-risk-check .infractions-header {
+            border-color: #e4eaf2;
+            background: #fff;
+            padding: 14px 16px;
+        }
+
+        #tab-risk-check .risk-check-task-layout {
+            grid-template-columns: minmax(620px, 1.75fr) minmax(310px, .8fr);
+            gap: 14px;
+            border-top: 0;
+            padding: 14px;
+        }
+
+        #tab-risk-check .risk-check-task-main {
+            overflow: hidden;
+            border: 1px solid #e1e8f0;
+            border-radius: 12px;
+            background: #fff;
+        }
+
+        .risk-task-builder {
+            display: grid;
+        }
+
+        .risk-builder-section {
+            padding: 15px 16px;
+        }
+
+        .risk-builder-section + .risk-builder-section {
+            border-top: 1px solid #edf1f6;
+        }
+
+        .risk-section-heading,
+        .risk-scope-title {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+        }
+
+        .risk-section-heading {
+            margin-bottom: 11px;
+        }
+
+        .risk-section-heading > div {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .risk-section-heading strong {
+            color: #172033;
+            font-size: 14px;
+        }
+
+        .risk-section-heading > span,
+        .risk-scope-title small,
+        .risk-field-hint {
+            color: #8a94a6;
+            font-size: 11px;
+            font-weight: 600;
+        }
+
+        .risk-step {
+            display: inline-grid;
+            width: 22px;
+            height: 22px;
+            place-items: center;
+            border-radius: 7px;
+            background: #eaf2ff;
+            color: #175cd3;
+            font-size: 11px;
+            font-weight: 800;
+        }
+
+        .risk-source-grid {
+            display: grid;
+            grid-template-columns: repeat(4, minmax(0, 1fr));
+            gap: 9px;
+        }
+
+        .risk-source-card {
+            position: relative;
+            display: grid;
+            min-width: 0;
+            grid-template-columns: 36px minmax(0, 1fr) 18px;
+            align-items: center;
+            gap: 9px;
+            min-height: 72px;
+            margin: 0;
+            padding: 11px;
+            overflow: hidden;
+            border: 1px solid #dfe6ef;
+            border-radius: 10px;
+            background: #fbfcfe;
+            cursor: pointer;
+            transition: border-color .16s ease, background .16s ease, box-shadow .16s ease, transform .16s ease;
+        }
+
+        .risk-source-card:hover {
+            border-color: #a9c7f7;
+            background: #fff;
+            transform: translateY(-1px);
+        }
+
+        .risk-source-card:has(input:checked) {
+            border-color: #79a9f3;
+            background: #f4f8ff;
+            box-shadow: inset 0 0 0 1px rgba(42, 112, 219, .08), 0 3px 10px rgba(34, 91, 178, .08);
+        }
+
+        .risk-source-card > input {
+            position: absolute;
+            width: 1px;
+            height: 1px;
+            opacity: 0;
+            pointer-events: none;
+        }
+
+        .risk-source-icon {
+            display: grid;
+            width: 36px;
+            height: 36px;
+            place-items: center;
+            border-radius: 10px;
+            color: #fff;
+            font-size: 14px;
+            font-weight: 800;
+        }
+
+        .risk-source-icon.blue { background: linear-gradient(145deg, #3985eb, #2262c5); }
+        .risk-source-icon.violet { background: linear-gradient(145deg, #8b6be8, #6545c5); }
+        .risk-source-icon.amber { background: linear-gradient(145deg, #f2a33b, #d57816); }
+        .risk-source-icon.green { background: linear-gradient(145deg, #2fb47c, #13865a); }
+
+        .risk-source-copy {
+            min-width: 0;
+        }
+
+        .risk-source-copy strong,
+        .risk-source-copy small,
+        .risk-check-checkbox strong,
+        .risk-check-checkbox small {
+            display: block;
+        }
+
+        .risk-source-copy strong {
+            overflow: hidden;
+            color: #273449;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            font-size: 13px;
+        }
+
+        .risk-source-copy small {
+            margin-top: 3px;
+            overflow: hidden;
+            color: #8490a3;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            font-size: 10px;
+            font-weight: 500;
+        }
+
+        .risk-source-check {
+            display: grid;
+            width: 18px;
+            height: 18px;
+            place-items: center;
+            border: 1px solid #cbd5e1;
+            border-radius: 6px;
+            background: #fff;
+            color: transparent;
+            font-size: 11px;
+            transition: all .16s ease;
+        }
+
+        .risk-source-card:has(input:checked) .risk-source-check {
+            border-color: #2f72d7;
+            background: #2f72d7;
+            color: #fff;
+        }
+
+        .risk-scope-columns {
+            display: grid;
+            grid-template-columns: minmax(0, 2fr) minmax(210px, 1fr);
+            gap: 10px;
+        }
+
+        .risk-scope-columns.single { grid-template-columns: 1fr; }
+        .risk-builder-section[hidden] { display: none; }
+
+        .risk-scope-card {
+            min-width: 0;
+            padding: 11px 12px 12px;
+            border: 1px solid #e2e8f0;
+            border-radius: 10px;
+            background: #f9fbfd;
+        }
+
+        .risk-scope-card.pulled { border-left: 3px solid #e59a33; }
+        .risk-scope-card.zying { border-left: 3px solid #25a46f; }
+        .risk-scope-card[hidden] { display: none; }
+
+        .risk-scope-title {
+            margin-bottom: 9px;
+        }
+
+        .risk-scope-title span {
+            color: #3a4658;
+            font-size: 12px;
+            font-weight: 750;
+        }
+
+        .risk-scope-fields,
+        .risk-runtime-grid {
+            display: grid;
+            align-items: end;
+            gap: 8px;
+        }
+
+        .risk-scope-fields {
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+        }
+
+        .risk-scope-fields .field,
+        .risk-scope-card > .field,
+        .risk-runtime-grid .field {
+            margin: 0;
+        }
+
+        .risk-scope-fields label,
+        .risk-scope-card > .field label,
+        .risk-runtime-grid label {
+            font-size: 11px;
+        }
+
+        .risk-scope-fields select,
+        .risk-scope-card > .field select,
+        .risk-runtime-grid input,
+        .risk-runtime-grid select {
+            height: 34px;
+            border-color: #dce4ee;
+            background: #fff;
+            font-size: 12px;
+        }
+
+        .risk-runtime-section {
+            background: #fbfcfe;
+        }
+
+        .risk-runtime-grid {
+            grid-template-columns: repeat(3, minmax(0, 1fr)) minmax(150px, .85fr);
+        }
+
+        .risk-runtime-grid .risk-check-checkbox {
+            min-height: 51px;
+            padding: 7px 10px;
+            border-color: #dce4ee;
+            border-radius: 9px;
+            background: #fff;
+        }
+
+        .risk-check-checkbox small {
+            margin-top: 1px;
+            color: #98a2b3;
+            font-size: 10px;
+            font-weight: 500;
+        }
+
+        .risk-field-hint {
+            display: block;
+            margin-top: 3px;
+        }
+
+        .risk-status-strip {
+            display: grid;
+            grid-template-columns: minmax(140px, 1.35fr) repeat(4, minmax(90px, 1fr));
+            gap: 1px;
+            border-top: 1px solid #e8edf3;
+            background: #e8edf3;
+        }
+
+        .risk-status-item {
+            position: relative;
+            min-width: 0;
+            background: #fff;
+            padding: 10px 13px;
+        }
+
+        .risk-status-item::before {
+            position: absolute;
+            top: 0;
+            right: 0;
+            left: 0;
+            height: 2px;
+            background: #b8c2d0;
+            content: "";
+        }
+
+        .risk-status-item.primary::before { background: #3979d6; }
+        .risk-status-item.safe::before { background: #2ea36f; }
+        .risk-status-item.warning::before { background: #e9a029; }
+        .risk-status-item.danger::before { background: #dc5a5a; }
+
+        .risk-status-item span,
+        .risk-status-item strong {
+            display: block;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .risk-status-item span {
+            color: #8792a4;
+            font-size: 10px;
+            font-weight: 650;
+        }
+
+        .risk-status-item strong {
+            margin-top: 2px;
+            color: #263348;
+            font-size: 16px;
+        }
+
+        #tab-risk-check .risk-check-log-card {
+            min-height: 100%;
+            max-height: none;
+            margin: 0;
+            border-color: #223047;
+            border-radius: 12px;
+            box-shadow: 0 8px 22px rgba(20, 34, 54, .13);
+        }
+
+        #tab-risk-check .risk-check-filter-bar {
+            grid-template-columns: 150px 170px 130px minmax(230px, 1fr) 90px auto;
+            gap: 10px;
+            background: #fbfcfe;
+            padding: 12px 14px;
+        }
+
         .access-grid {
             display: grid;
             grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.3fr);
@@ -3816,21 +4168,23 @@
         }
 
         .risk-check-table th:nth-child(1),
-        .risk-check-table td:nth-child(1) { width: 76px; }
+        .risk-check-table td:nth-child(1) { width: 130px; }
         .risk-check-table th:nth-child(2),
-        .risk-check-table td:nth-child(2) { width: 118px; }
+        .risk-check-table td:nth-child(2) { width: 76px; }
         .risk-check-table th:nth-child(3),
-        .risk-check-table td:nth-child(3) { width: 26%; }
+        .risk-check-table td:nth-child(3) { width: 118px; }
         .risk-check-table th:nth-child(4),
-        .risk-check-table td:nth-child(4) { width: 15%; }
+        .risk-check-table td:nth-child(4) { width: 26%; }
         .risk-check-table th:nth-child(5),
-        .risk-check-table td:nth-child(5) { width: 108px; }
+        .risk-check-table td:nth-child(5) { width: 15%; }
         .risk-check-table th:nth-child(6),
-        .risk-check-table td:nth-child(6) { width: 15%; }
+        .risk-check-table td:nth-child(6) { width: 108px; }
         .risk-check-table th:nth-child(7),
-        .risk-check-table td:nth-child(7) { width: 66px; }
+        .risk-check-table td:nth-child(7) { width: 15%; }
         .risk-check-table th:nth-child(8),
-        .risk-check-table td:nth-child(8) { width: 150px; }
+        .risk-check-table td:nth-child(8) { width: 66px; }
+        .risk-check-table th:nth-child(9),
+        .risk-check-table td:nth-child(9) { width: 150px; }
 
         .traffic-chart {
             width: 260px;
@@ -5131,6 +5485,13 @@
         .market-status-tag.failed {
             background: #fee2e2;
             color: #991b1b;
+        }
+
+        .market-workflow-tags {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 4px;
+            margin-bottom: 4px;
         }
 
         .market-review-select {
@@ -7283,6 +7644,36 @@
                 grid-template-columns: 1fr 1fr;
             }
 
+            #tab-risk-check .risk-check-task-layout {
+                grid-template-columns: 1fr;
+            }
+
+            #tab-risk-check .risk-source-grid {
+                grid-template-columns: repeat(2, minmax(0, 1fr));
+            }
+
+            #tab-risk-check .risk-scope-columns {
+                grid-template-columns: 1fr;
+            }
+
+            #tab-risk-check .risk-runtime-grid {
+                grid-template-columns: repeat(2, minmax(0, 1fr));
+            }
+
+            #tab-risk-check .risk-status-strip {
+                grid-template-columns: repeat(5, minmax(90px, 1fr));
+                overflow-x: auto;
+            }
+
+            #tab-risk-check .risk-check-log-card {
+                min-height: 250px;
+                margin: 0;
+            }
+
+            #tab-risk-check .risk-check-filter-bar {
+                grid-template-columns: repeat(2, minmax(0, 1fr));
+            }
+
             .order-print-settings {
                 grid-template-columns: 1fr 1fr;
             }
@@ -7382,6 +7773,40 @@
         }
 
         @media (max-width: 560px) {
+            #tab-risk-check .risk-check-task-layout {
+                gap: 10px;
+                padding: 10px;
+            }
+
+            #tab-risk-check .risk-builder-section {
+                padding: 13px 12px;
+            }
+
+            #tab-risk-check .risk-source-grid,
+            #tab-risk-check .risk-scope-fields,
+            #tab-risk-check .risk-runtime-grid,
+            #tab-risk-check .risk-check-filter-bar {
+                grid-template-columns: 1fr;
+            }
+
+            #tab-risk-check .risk-status-strip {
+                grid-template-columns: repeat(5, 104px);
+            }
+
+            #tab-risk-check .infractions-header {
+                align-items: stretch;
+                flex-direction: column;
+            }
+
+            #tab-risk-check .header-actions,
+            #tab-risk-check .header-actions button {
+                width: 100%;
+            }
+
+            #tab-risk-check .risk-section-heading {
+                align-items: flex-start;
+            }
+
             .daily-task-filter-bar {
                 grid-template-columns: 1fr;
             }
@@ -9101,7 +9526,7 @@
                         <details class="market-collector-help">
                             <summary>采集规则与浏览器说明</summary>
                             <div class="market-collector-help-copy">
-                                <p class="market-collector-hint">跨境专区只保留带 Internacional 标识的商品，同时兼容直接粘贴列表或详情链接。<a class="market-collector-front-link" id="mercado-collection-front-link" href="#" target="_blank" rel="noopener" hidden>打开对应前台</a></p>
+                                <p class="market-collector-hint">关键词任务会先进入所选国家前台执行搜索，再点击左侧 Origen del envío → Internacional；找不到该选项会记失败并停止。智赢插件显示 US.svg 的美国自发货商品会跳过。也兼容直接粘贴列表或详情链接。<a class="market-collector-front-link" id="mercado-collection-front-link" href="#" target="_blank" rel="noopener" hidden>打开对应前台</a></p>
                                 <p class="market-collector-hint">详情通过 Playwright 和智赢插件 DOM 读取，不使用键鼠 RPA、截图或 OCR；可选择本地 Edge 或任一比特窗口，默认使用“采集专用（墨西哥）”，重量与尺寸不读取智赢产品库。</p>
                             </div>
                         </details>
@@ -9155,12 +9580,8 @@
                     <p class="market-list-message" id="mercado-list-message" role="status" hidden></p>
                     <div class="market-product-filters visible" id="mercado-product-filters">
                         <div class="market-filter-heading">
-                            <span>产品筛选条件</span>
-                            <span id="mercado-filter-hint">采集列表支持重量、售价、收益和时间组合筛选</span>
-                        </div>
-                        <div class="market-collection-filter-note" id="mercado-collection-filter-note">
-                            <span><strong>当前：采集列表</strong> 可直接筛选重量、售价、净收益和采集时间</span>
-                            <button class="secondary" type="button" onclick="switchTab('mercado-products')">筛选审核 / 上架状态 →</button>
+                            <span>商品筛选条件</span>
+                            <span id="mercado-filter-hint">采集列表支持审核、上架状态、重量、售价、收益和采集时间组合筛选</span>
                         </div>
                         <div class="market-filter-field">
                             <label for="mercado-management-category-filter">产品分类</label>
@@ -9197,7 +9618,7 @@
                                 </button>
                             </div>
                         </div>
-                        <div class="market-filter-field market-product-only-filter" hidden>
+                        <div class="market-filter-field">
                             <label for="mercado-review-filter">审核状态</label>
                             <select id="mercado-review-filter" onchange="applyMercadoProductFilters()">
                                 <option value="">全部审核状态</option>
@@ -9208,7 +9629,7 @@
                                 <option value="risk">风险</option>
                             </select>
                         </div>
-                        <div class="market-filter-field market-product-only-filter" hidden>
+                        <div class="market-filter-field">
                             <label for="mercado-publish-filter">上架状态</label>
                             <select id="mercado-publish-filter" onchange="applyMercadoProductFilters()">
                                 <option value="">全部上架状态</option>
@@ -9819,10 +10240,17 @@
 
                         <div class="field">
                             <label for="mode">客服模式</label>
-                            <select id="mode" onchange="updateAppealModeFields()">
+                            <select id="mode" onchange="updateAppealCopyModeFields()">
                                 <option value="AI客服">找 AI 客服</option>
-                                <option value="AI话术模式">AI 话术模式</option>
                                 <option value="人工客服">人工客服申诉</option>
+                            </select>
+                        </div>
+
+                        <div class="field">
+                            <label for="appeal-copy-mode">话术模式</label>
+                            <select id="appeal-copy-mode" onchange="updateAppealCopyModeFields()">
+                                <option value="普通模式" selected>普通模式</option>
+                                <option value="AI话术模式">AI 话术模式</option>
                             </select>
                         </div>
 
@@ -9968,6 +10396,20 @@
                                 <option value="once">单轮执行</option>
                                 <option value="loop" selected>循环执行</option>
                             </select>
+                        </div>
+
+                        <div class="field">
+                            <label for="daily-task-copy-mode">话术模式</label>
+                            <select id="daily-task-copy-mode" onchange="updateDailyTaskCopyModeFields()">
+                                <option value="普通模式" selected>普通模式</option>
+                                <option value="AI话术模式">AI 话术模式</option>
+                            </select>
+                        </div>
+
+                        <div class="field" id="daily-task-deepseek-token-field" hidden>
+                            <label for="daily-task-deepseek-api-key">DeepSeek Token</label>
+                            <input id="daily-task-deepseek-api-key" type="password" autocomplete="off" placeholder="手动填写本次任务使用的 DeepSeek Token">
+                            <small class="shop-search-hint">仅用于侵权和禁限售；每次最多 3 个产品，理由不超过 50 个字。</small>
                         </div>
 
                         <div class="field">
@@ -11316,14 +11758,14 @@
             <div class="tab-page" id="tab-risk-check">
                 <div class="tab-heading">
                     <h2>侵权检测</h2>
-                    <p>当前仅根据智赢商品标题识别；主图链接和 Logo 暂不参与判断</p>
+                    <p>从产品列表、采集列表、店铺拉取产品或智赢采集产品中选择范围，调用 DeepSeek 按标题检测；黑名单优先，白名单参与判定。主图链接和 Logo 暂不参与判断</p>
                 </div>
 
                 <section class="panel infractions-panel">
                     <div class="infractions-header">
                         <div>
                             <h2 class="panel-title" style="margin: 0;">检测任务</h2>
-                            <div class="risk-check-mode-note">标题识别模式 · 图片 Logo 检测已暂时关闭</div>
+                            <div class="risk-check-mode-note">DeepSeek 标题识别模式 · 已启用侵权黑白名单 · 图片 Logo 检测暂未启用</div>
                         </div>
                         <div class="header-actions">
                             <button class="primary" id="start-risk-check-btn" type="button" onclick="startRiskCheck()">启动侵权检测</button>
@@ -11332,55 +11774,107 @@
                     </div>
                     <div class="risk-check-task-layout">
                         <div class="risk-check-task-main">
-                            <div class="risk-check-task-grid">
-                                <div class="field">
-                                    <label for="risk-check-task-category">智赢产品分类</label>
-                                    <select id="risk-check-task-category">
-                                        <option value="">全部分类</option>
-                                    </select>
-                                </div>
-                                <div class="field">
-                                    <label for="risk-check-hours">入库时间范围</label>
-                                    <select id="risk-check-hours">
-                                        <option value="0" selected>不限时间</option>
-                                        <option value="24">最近 24 小时</option>
-                                        <option value="168">最近 7 天</option>
-                                        <option value="720">最近 30 天</option>
-                                    </select>
-                                </div>
-                                <div class="field">
-                                    <label for="risk-check-limit">最多检测条数</label>
-                                    <input id="risk-check-limit" type="number" min="0" max="50000" value="0" title="0 表示不限">
-                                </div>
-                                <div class="field">
-                                    <label for="risk-check-batch-size">AI 每批条数</label>
-                                    <input id="risk-check-batch-size" type="number" min="1" max="50" value="20">
-                                </div>
-                                <label class="risk-check-checkbox" for="risk-check-recheck">
-                                    <input id="risk-check-recheck" type="checkbox">
-                                    <span>重新检测已有结果</span>
-                                </label>
-                            </div>
-                            <div class="summary-row risk-check-summary-row">
-                                <div class="metric">
-                                    <div class="metric-label">任务状态</div>
-                                    <div class="metric-value" id="risk-check-status-text">等待启动</div>
-                                </div>
-                                <div class="metric">
-                                    <div class="metric-label">本次已检测</div>
-                                    <div class="metric-value" id="risk-check-checked">0</div>
-                                </div>
-                                <div class="metric">
-                                    <div class="metric-label">0 · 无可疑</div>
-                                    <div class="metric-value" id="risk-check-zero">0</div>
-                                </div>
-                                <div class="metric">
-                                    <div class="metric-label">1 · 疑似</div>
-                                    <div class="metric-value" id="risk-check-one">0</div>
-                                </div>
-                                <div class="metric">
-                                    <div class="metric-label">2 · 侵权</div>
-                                    <div class="metric-value" id="risk-check-two">0</div>
+                            <div class="risk-task-builder">
+                                <section class="risk-builder-section risk-source-section">
+                                    <div class="risk-section-heading">
+                                        <div><span class="risk-step">1</span><strong>选择产品来源</strong></div>
+                                        <span>支持组合检测</span>
+                                    </div>
+                                    <div class="risk-source-grid">
+                                        <label class="risk-source-card">
+                                            <input class="risk-check-source" type="checkbox" value="product_list" checked onchange="updateRiskCheckSourceFields()">
+                                            <span class="risk-source-icon blue">产</span>
+                                            <span class="risk-source-copy"><strong>产品列表</strong><small>已进入选品流程的商品</small></span>
+                                            <span class="risk-source-check">✓</span>
+                                        </label>
+                                        <label class="risk-source-card">
+                                            <input class="risk-check-source" type="checkbox" value="collection_list" checked onchange="updateRiskCheckSourceFields()">
+                                            <span class="risk-source-icon violet">采</span>
+                                            <span class="risk-source-copy"><strong>采集列表</strong><small>尚未转入产品列表</small></span>
+                                            <span class="risk-source-check">✓</span>
+                                        </label>
+                                        <label class="risk-source-card">
+                                            <input class="risk-check-source" type="checkbox" value="pulled" checked onchange="updateRiskCheckSourceFields()">
+                                            <span class="risk-source-icon amber">店</span>
+                                            <span class="risk-source-copy"><strong>店铺拉取</strong><small>按人员、组或账户筛选</small></span>
+                                            <span class="risk-source-check">✓</span>
+                                        </label>
+                                        <label class="risk-source-card">
+                                            <input class="risk-check-source" type="checkbox" value="zying" checked onchange="updateRiskCheckSourceFields()">
+                                            <span class="risk-source-icon green">智</span>
+                                            <span class="risk-source-copy"><strong>智赢采集</strong><small>支持智赢分类筛选</small></span>
+                                            <span class="risk-source-check">✓</span>
+                                        </label>
+                                    </div>
+                                </section>
+
+                                <section class="risk-builder-section">
+                                    <div class="risk-section-heading">
+                                        <div><span class="risk-step">2</span><strong>缩小检测范围</strong></div>
+                                        <span>留空表示全部</span>
+                                    </div>
+                                    <div class="risk-scope-columns">
+                                        <div class="risk-scope-card pulled" id="risk-check-pulled-scope">
+                                            <div class="risk-scope-title"><span>店铺拉取范围</span><small>筛选条件同时生效</small></div>
+                                            <div class="risk-scope-fields">
+                                                <div class="field" id="risk-check-salesperson-field">
+                                                    <label for="risk-check-salesperson">业务员</label>
+                                                    <select id="risk-check-salesperson"><option value="">全部业务员</option></select>
+                                                </div>
+                                                <div class="field" id="risk-check-group-field">
+                                                    <label for="risk-check-group">账户组</label>
+                                                    <select id="risk-check-group"><option value="">全部账户组</option></select>
+                                                </div>
+                                                <div class="field" id="risk-check-account-field">
+                                                    <label for="risk-check-account">单独账户</label>
+                                                    <select id="risk-check-account"><option value="">全部账户</option></select>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <div class="risk-scope-card zying" id="risk-check-zying-scope">
+                                            <div class="risk-scope-title"><span>智赢采集范围</span><small>按产品分类筛选</small></div>
+                                            <div class="field">
+                                                <label for="risk-check-task-category">智赢产品分类</label>
+                                                <select id="risk-check-task-category"><option value="">全部分类</option></select>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </section>
+
+                                <section class="risk-builder-section risk-runtime-section">
+                                    <div class="risk-section-heading">
+                                        <div><span class="risk-step">3</span><strong>检测设置</strong></div>
+                                        <span>DeepSeek 批量处理</span>
+                                    </div>
+                                    <div class="risk-runtime-grid">
+                                        <div class="field">
+                                            <label for="risk-check-hours">入库时间范围</label>
+                                            <select id="risk-check-hours">
+                                                <option value="0" selected>不限时间</option><option value="24">最近 24 小时</option><option value="168">最近 7 天</option><option value="720">最近 30 天</option>
+                                            </select>
+                                        </div>
+                                        <div class="field">
+                                            <label for="risk-check-limit">最多检测条数</label>
+                                            <input id="risk-check-limit" type="number" min="0" max="50000" value="0" title="0 表示不限">
+                                            <small class="risk-field-hint">0 表示不限</small>
+                                        </div>
+                                        <div class="field">
+                                            <label for="risk-check-batch-size">AI 每批条数</label>
+                                            <input id="risk-check-batch-size" type="number" min="1" max="50" value="20">
+                                        </div>
+                                        <label class="risk-check-checkbox" for="risk-check-recheck">
+                                            <input id="risk-check-recheck" type="checkbox">
+                                            <span><strong>重新检测</strong><small>覆盖已有结果</small></span>
+                                        </label>
+                                    </div>
+                                </section>
+
+                                <div class="risk-status-strip">
+                                    <div class="risk-status-item primary"><span>任务状态</span><strong id="risk-check-status-text">等待启动</strong></div>
+                                    <div class="risk-status-item"><span>本次已检测</span><strong id="risk-check-checked">0</strong></div>
+                                    <div class="risk-status-item safe"><span>无可疑</span><strong id="risk-check-zero">0</strong></div>
+                                    <div class="risk-status-item warning"><span>疑似</span><strong id="risk-check-one">0</strong></div>
+                                    <div class="risk-status-item danger"><span>侵权</span><strong id="risk-check-two">0</strong></div>
                                 </div>
                             </div>
                         </div>
@@ -11404,6 +11898,16 @@
                         </div>
                     </div>
                     <div class="risk-check-filter-bar">
+                        <div class="field">
+                            <label for="risk-result-source">产品来源</label>
+                            <select id="risk-result-source" onchange="loadRiskResults()">
+                                <option value="product_list,collection_list,pulled,zying">全部来源</option>
+                                <option value="product_list">产品列表</option>
+                                <option value="collection_list">采集列表</option>
+                                <option value="pulled">店铺拉取产品</option>
+                                <option value="zying">智赢采集产品</option>
+                            </select>
+                        </div>
                         <div class="field">
                             <label for="risk-result-category">智赢分类筛选</label>
                             <select id="risk-result-category" onchange="loadRiskResults()">
@@ -11439,6 +11943,7 @@
                         <table class="risk-check-table">
                             <thead>
                                 <tr>
+                                    <th>产品来源</th>
                                     <th><button class="risk-sort-button" type="button" data-risk-sort="row_id" onclick="sortRiskResults('row_id')">数据行 <span class="risk-sort-indicator"></span></button></th>
                                     <th><button class="risk-sort-button" type="button" data-risk-sort="product_id" onclick="sortRiskResults('product_id')">产品编号 <span class="risk-sort-indicator"></span></button></th>
                                     <th><button class="risk-sort-button" type="button" data-risk-sort="title" onclick="sortRiskResults('title')">标题 <span class="risk-sort-indicator"></span></button></th>
@@ -11450,7 +11955,7 @@
                                 </tr>
                             </thead>
                             <tbody id="risk-result-body">
-                                <tr><td class="empty-state" colspan="8">请查询侵权检测结果</td></tr>
+                                <tr><td class="empty-state" colspan="9">请查询侵权检测结果</td></tr>
                             </tbody>
                         </table>
                     </div>
@@ -12158,6 +12663,9 @@
         const zyingCollectionLog = document.getElementById("zying-collection-log");
         const startRiskCheckBtn = document.getElementById("start-risk-check-btn");
         const riskCheckTaskCategory = document.getElementById("risk-check-task-category");
+        const riskCheckSalesperson = document.getElementById("risk-check-salesperson");
+        const riskCheckGroup = document.getElementById("risk-check-group");
+        const riskCheckAccount = document.getElementById("risk-check-account");
         const riskCheckStatusText = document.getElementById("risk-check-status-text");
         const riskCheckChecked = document.getElementById("risk-check-checked");
         const riskCheckZero = document.getElementById("risk-check-zero");
@@ -12165,6 +12673,7 @@
         const riskCheckTwo = document.getElementById("risk-check-two");
         const riskCheckLog = document.getElementById("risk-check-log");
         const riskResultCategory = document.getElementById("risk-result-category");
+        const riskResultSource = document.getElementById("risk-result-source");
         const riskResultLevel = document.getElementById("risk-result-level");
         const riskResultSearch = document.getElementById("risk-result-search");
         const riskResultLimit = document.getElementById("risk-result-limit");
@@ -12474,7 +12983,6 @@
         const mercadoProductReviewActions = document.getElementById("mercado-product-review-actions");
         const mercadoProductFilters = document.getElementById("mercado-product-filters");
         const mercadoFilterHint = document.getElementById("mercado-filter-hint");
-        const mercadoCollectionFilterNote = document.getElementById("mercado-collection-filter-note");
         const mercadoSourceAll = document.getElementById("mercado-source-all");
         const mercadoSourceCollected = document.getElementById("mercado-source-collected");
         const mercadoSourcePulled = document.getElementById("mercado-source-pulled");
@@ -12611,6 +13119,7 @@
         let infractionsLoaded = false;
         let riskCheckLoaded = false;
         let riskCategoriesLoaded = false;
+        let riskScopeOptionsLoaded = false;
         let riskCheckRunning = false;
         let riskCheckPollTimer = null;
         let riskResultSortBy = "risk_level";
@@ -13010,6 +13519,7 @@
             }
             if (tabName === "risk-check") {
                 loadRiskCategories();
+                loadRiskScopeOptions();
                 loadRiskCheckStatus();
                 if (!riskCheckLoaded) loadRiskResults();
             }
@@ -15932,6 +16442,20 @@
                     ["unreviewed", "未审核"], ["approved", "通过"], ["suspected", "疑似"],
                     ["infringing", "侵权"], ["risk", "风险"],
                 ];
+                const reviewDefinition = {
+                    unreviewed: ["未审核", ""], approved: ["审核通过", "ok"],
+                    suspected: ["疑似", ""], infringing: ["侵权", "failed"],
+                    risk: ["风险", "failed"],
+                }[reviewStatus] || [reviewStatus, ""];
+                const publishStatus = String(row.last_publish_status || "unpublished");
+                const publishDefinition = {
+                    unpublished: ["未上架", ""], pending: ["等待上架", ""],
+                    publishing: ["上架中", ""], published: ["上架成功", "ok"],
+                    failed: ["上架失败", "failed"],
+                }[publishStatus] || [publishStatus, ""];
+                const collectionWorkflowTags = mercadoListMode === "collection"
+                    ? `<span class="market-workflow-tags"><span class="market-status-tag ${reviewDefinition[1]}">${escapeHtml(reviewDefinition[0])}</span><span class="market-status-tag ${publishDefinition[1]}">${escapeHtml(publishDefinition[0])}</span></span>`
+                    : "";
                 const reviewControl = mercadoListMode === "products"
                     ? `<select class="market-review-select" aria-label="修改 ${escapeHtml(row.source_item_id || "产品")} 的审核状态" onchange="updateMercadoProductReviewStatus([${rowId}], this.value)">${reviewOptions.map(([value, label]) => `<option value="${value}" ${reviewStatus === value ? "selected" : ""}>${label}</option>`).join("")}</select>`
                     : "";
@@ -15956,7 +16480,7 @@
                     <td title="${profitTitle}"><span class="market-metric-main">${mercadoMetric(row.commission_amount_usd, " USD")}</span><span class="market-metric-note">${escapeHtml(commissionNote)}</span></td>
                     <td title="${profitTitle}"><span class="market-metric-main">${mercadoMetric(row.shipping_fee_usd, " USD")}</span><span class="market-metric-note">${escapeHtml(shippingNote)}</span></td>
                     <td title="${profitTitle}"><span class="market-metric-main ${netClass}">${mercadoMetric(netProceeds, " USD")}</span><span class="market-metric-note">${netProceedsNote}</span></td>
-                    <td title="${statusTitle}">${reviewControl}<span class="market-status-tag ${statusClass}">${status}</span>${publishNote}</td>
+                    <td title="${statusTitle}">${collectionWorkflowTags}${reviewControl}<span class="market-status-tag ${statusClass}">${status}</span>${publishNote}</td>
                     <td>${escapeHtml(timeText)}</td>
                 </tr>`;
             }).join("");
@@ -16021,10 +16545,10 @@
                 limit: String(mercadoListPageSize),
                 offset: String((mercadoListPage - 1) * mercadoListPageSize),
             });
+            if (mercadoReviewFilter.value) query.set("review_status", mercadoReviewFilter.value);
+            if (mercadoPublishFilter.value) query.set("publish_status", mercadoPublishFilter.value);
             if (mercadoListMode === "products") {
                 if (mercadoProductSource) query.set("source_type", mercadoProductSource);
-                if (mercadoReviewFilter.value) query.set("review_status", mercadoReviewFilter.value);
-                if (mercadoPublishFilter.value) query.set("publish_status", mercadoPublishFilter.value);
                 if (mercadoPlatformCategoryFilter.value.trim()) {
                     query.set("mercado_category", mercadoPlatformCategoryFilter.value.trim());
                 }
@@ -16101,10 +16625,9 @@
             mercadoProductActions.style.display = productMode ? "flex" : "none";
             mercadoProductReviewActions.style.display = productMode ? "inline-flex" : "none";
             mercadoProductFilters.classList.add("visible");
-            mercadoCollectionFilterNote.hidden = productMode;
             mercadoFilterHint.textContent = productMode
                 ? "支持产品分类、美客多分类、审核、上架状态和收益组合筛选"
-                : "采集列表支持重量、售价、收益和采集时间组合筛选";
+                : "采集列表支持审核、上架状态、重量、售价、收益和采集时间组合筛选";
             mercadoProductFilters.querySelectorAll(".market-product-only-filter").forEach(element => {
                 element.hidden = !productMode;
             });
@@ -21417,6 +21940,55 @@
             }
         }
 
+        function selectedRiskCheckSources() {
+            return Array.from(document.querySelectorAll(".risk-check-source:checked")).map(input => input.value);
+        }
+
+        function updateRiskCheckSourceFields() {
+            const sources = selectedRiskCheckSources();
+            const pulledEnabled = sources.includes("pulled");
+            const zyingEnabled = sources.includes("zying");
+            const pulledScope = document.getElementById("risk-check-pulled-scope");
+            const zyingScope = document.getElementById("risk-check-zying-scope");
+            const scopeColumns = pulledScope?.parentElement;
+            const scopeSection = scopeColumns?.closest(".risk-builder-section");
+            if (pulledScope) pulledScope.hidden = !pulledEnabled;
+            if (zyingScope) zyingScope.hidden = !zyingEnabled;
+            scopeColumns?.classList.toggle("single", pulledEnabled !== zyingEnabled);
+            if (scopeSection) scopeSection.hidden = !pulledEnabled && !zyingEnabled;
+            [riskCheckSalesperson, riskCheckGroup, riskCheckAccount].forEach(select => {
+                if (select) select.disabled = !pulledEnabled;
+            });
+            if (riskCheckTaskCategory) riskCheckTaskCategory.disabled = !zyingEnabled;
+        }
+
+        async function loadRiskScopeOptions(force = false) {
+            if (riskScopeOptionsLoaded && !force) return;
+            try {
+                const response = await fetch("/api/risk-check/options", {cache: "no-store"});
+                const payload = await response.json();
+                if (!response.ok || payload.status !== "success") {
+                    throw new Error(payload.message || `接口请求失败：${response.status}`);
+                }
+                const data = payload.data || {};
+                const fill = (select, firstLabel, rows, valueOf, labelOf) => {
+                    if (!select) return;
+                    const previous = select.value;
+                    select.innerHTML = `<option value="">${escapeHtml(firstLabel)}</option>` + (rows || []).map(row => (
+                        `<option value="${escapeHtml(valueOf(row))}">${escapeHtml(labelOf(row))}</option>`
+                    )).join("");
+                    if (Array.from(select.options).some(option => option.value === previous)) select.value = previous;
+                };
+                fill(riskCheckSalesperson, "全部业务员", data.salespeople, row => row, row => row);
+                fill(riskCheckGroup, "全部账户组", data.groups, row => row, row => row);
+                fill(riskCheckAccount, "全部账户", data.accounts, row => row.id, row => row.display_name || `账户 ${row.id}`);
+                riskScopeOptionsLoaded = true;
+                updateRiskCheckSourceFields();
+            } catch (error) {
+                console.error("加载侵权检测店铺范围失败", error);
+            }
+        }
+
         function riskCategoryValue(row) {
             return String(row.category_id || row.category_name || "").trim();
         }
@@ -21458,6 +22030,7 @@
 
         function riskResultQueryParams(includeLimit = true) {
             const params = new URLSearchParams({
+                sources: riskResultSource?.value || "product_list,collection_list,pulled,zying",
                 category: riskResultCategory?.value || "",
                 risk_level: riskResultLevel?.value || "",
                 search: riskResultSearch?.value.trim() || "",
@@ -21507,7 +22080,7 @@
 
         async function loadRiskResults() {
             if (!riskResultBody) return;
-            riskResultBody.innerHTML = '<tr><td class="empty-state" colspan="8">正在加载侵权检测结果...</td></tr>';
+            riskResultBody.innerHTML = '<tr><td class="empty-state" colspan="9">正在加载侵权检测结果...</td></tr>';
             updateRiskSortIndicators();
             try {
                 const response = await fetch(`/api/risk-check/results?${riskResultQueryParams().toString()}`, {cache: "no-store"});
@@ -21523,7 +22096,7 @@
                     + `0 级 ${Number(data.risk_0 || 0)} · 1 级 ${Number(data.risk_1 || 0)} · 2 级 ${Number(data.risk_2 || 0)}`
                 );
                 if (!rows.length) {
-                    riskResultBody.innerHTML = '<tr><td class="empty-state" colspan="8">当前筛选条件下暂无结果</td></tr>';
+                    riskResultBody.innerHTML = '<tr><td class="empty-state" colspan="9">当前筛选条件下暂无结果</td></tr>';
                     return;
                 }
                 riskResultBody.innerHTML = rows.map(row => {
@@ -21532,8 +22105,18 @@
                         ? `<a href="${escapeHtml(imageUrl)}" target="_blank" rel="noopener noreferrer"><img class="risk-product-image" src="${escapeHtml(imageUrl)}" alt="产品主图" loading="lazy" onerror="this.style.display='none'"></a>`
                         : "-";
                     const category = row.zying_category || row.zying_category_id || "-";
+                    const sourceLabels = {
+                        product_list: "产品列表",
+                        collection_list: "采集列表",
+                        pulled: "店铺拉取",
+                        zying: "智赢采集",
+                    };
+                    const scope = row.source_type === "pulled"
+                        ? [row.account_name, row.salesperson, row.group_name].filter(Boolean).join(" · ")
+                        : category;
                     return `
                         <tr>
+                            <td title="${escapeHtml(scope)}"><strong>${escapeHtml(sourceLabels[row.source_type] || "智赢采集")}</strong>${scope && scope !== "-" ? `<br><span class="muted">${escapeHtml(scope)}</span>` : ""}</td>
                             <td title="${escapeHtml(row.row_id)}">${escapeHtml(row.row_id)}</td>
                             <td title="${escapeHtml(row.product_id)}">${escapeHtml(row.product_id || "-")}</td>
                             <td title="${escapeHtml(row.title)}"><span class="risk-product-title">${escapeHtml(row.title || "-")}</span></td>
@@ -21546,7 +22129,7 @@
                     `;
                 }).join("");
             } catch (err) {
-                riskResultBody.innerHTML = `<tr><td class="empty-state" colspan="8">加载失败：${escapeHtml(err.message || err)}</td></tr>`;
+                riskResultBody.innerHTML = `<tr><td class="empty-state" colspan="9">加载失败：${escapeHtml(err.message || err)}</td></tr>`;
             }
         }
 
@@ -21608,9 +22191,18 @@
 
         async function startRiskCheck() {
             if (!startRiskCheckBtn || riskCheckRunning) return;
+            const sources = selectedRiskCheckSources();
+            if (!sources.length) {
+                alert("请至少选择一种产品来源");
+                return;
+            }
             const recheck = Boolean(document.getElementById("risk-check-recheck")?.checked);
             if (recheck && !window.confirm("重新检测会覆盖已有 0/1/2 结果，确定继续吗？")) return;
             const payload = {
+                sources,
+                salespeople: riskCheckSalesperson?.value ? [riskCheckSalesperson.value] : [],
+                group_names: riskCheckGroup?.value ? [riskCheckGroup.value] : [],
+                token_ids: riskCheckAccount?.value ? [Number(riskCheckAccount.value)] : [],
                 category: riskCheckTaskCategory?.value || "",
                 hours: Number(document.getElementById("risk-check-hours")?.value || 0),
                 limit: Number(document.getElementById("risk-check-limit")?.value || 0),
@@ -23613,9 +24205,24 @@
             if (mixedMode) mixedMode.checked = false;
         }
 
+        function updateDailyTaskCopyModeFields() {
+            const enabled = document.getElementById("daily-task-copy-mode")?.value === "AI话术模式";
+            const field = document.getElementById("daily-task-deepseek-token-field");
+            const input = document.getElementById("daily-task-deepseek-api-key");
+            if (field) field.hidden = !enabled;
+            if (input) input.required = enabled;
+        }
+        updateDailyTaskCopyModeFields();
+
         function getDailyTaskPayload() {
             const salespeople = mercadoSelectedValues(dailyTaskSalesperson);
             const groupNames = mercadoSelectedValues(dailyTaskGroup);
+            const appealCopyMode = String(
+                document.getElementById("daily-task-copy-mode")?.value || "普通模式"
+            );
+            const deepseekApiKey = String(
+                document.getElementById("daily-task-deepseek-api-key")?.value || ""
+            ).trim();
             const appealTypes = Array.from(
                 document.querySelectorAll('input[name="daily-task-appeal-type"]:checked'),
                 input => input.value,
@@ -23623,10 +24230,16 @@
             if (!appealTypes.length) {
                 throw new Error("请至少开启一个任务");
             }
+            if (appealCopyMode === "AI话术模式" && !deepseekApiKey) {
+                document.getElementById("daily-task-deepseek-api-key")?.focus();
+                throw new Error("AI话术模式必须手动填写 DeepSeek Token");
+            }
             return {
                 execution_target: String(dailyTaskExecutionTarget?.value || "agent"),
                 agent_id: String(dailyTaskAgentId?.value || ""),
                 mode: document.getElementById("daily-task-mode").value,
+                appeal_copy_mode: appealCopyMode,
+                deepseek_api_key: deepseekApiKey,
                 appeal_types: appealTypes,
                 max_workers: Number(document.getElementById("daily-task-max-workers").value || 10),
                 recent_days: Number(document.getElementById("daily-task-recent-days").value || 100),
@@ -24711,14 +25324,15 @@
             if (prohibitedInput) prohibitedInput.checked = true;
         }
 
-        function updateAppealModeFields() {
-            const aiScriptMode = document.getElementById("mode")?.value === "AI话术模式";
+        function updateAppealCopyModeFields() {
+            const aiScriptMode = document.getElementById("appeal-copy-mode")?.value === "AI话术模式";
+            const aiCustomerMode = document.getElementById("mode")?.value === "AI客服";
             const tokenField = document.getElementById("deepseek-token-field");
             const tokenInput = document.getElementById("deepseek-api-key");
-            if (tokenField) tokenField.hidden = !aiScriptMode;
-            if (tokenInput) tokenInput.required = aiScriptMode;
+            if (tokenField) tokenField.hidden = !(aiScriptMode && aiCustomerMode);
+            if (tokenInput) tokenInput.required = aiScriptMode && aiCustomerMode;
         }
-        updateAppealModeFields();
+        updateAppealCopyModeFields();
 
         async function startTask() {
             const shopName = String(appealShopInput?.value || "").trim();
@@ -24754,10 +25368,15 @@
                 return;
             }
             const appealMode = document.getElementById("mode").value;
+            const appealCopyMode = document.getElementById("appeal-copy-mode").value;
             const deepseekApiKey = String(
                 document.getElementById("deepseek-api-key")?.value || ""
             ).trim();
-            if (appealMode === "AI话术模式" && !deepseekApiKey) {
+            if (appealCopyMode === "AI话术模式" && appealMode !== "AI客服") {
+                alert("AI话术模式只能配合 AI 客服使用");
+                return;
+            }
+            if (appealCopyMode === "AI话术模式" && !deepseekApiKey) {
                 alert("AI话术模式必须手动填写 DeepSeek Token");
                 document.getElementById("deepseek-api-key")?.focus();
                 return;
@@ -24786,6 +25405,7 @@
             const requestPayload = {
                 name: shopName,
                 mode: appealMode,
+                appeal_copy_mode: appealCopyMode,
                 loop_count: document.getElementById("loop-count").value,
                 message: document.getElementById("message").value,
                 task_id: activeAppealTaskId,

@@ -6920,6 +6920,403 @@ def list_mercado_account_groups():
         connection.close()
 
 
+INFRINGEMENT_RISK_SOURCE_TYPES = (
+    "product_list",
+    "collection_list",
+    "pulled",
+    "zying",
+)
+
+
+def _ensure_infringement_risk_checks_table(cursor):
+    cursor.execute(
+        """
+        CREATE TABLE IF NOT EXISTS `infringement_risk_checks` (
+            `id` BIGINT NOT NULL AUTO_INCREMENT,
+            `source_type` VARCHAR(32) NOT NULL,
+            `source_row_id` BIGINT NOT NULL,
+            `product_id` VARCHAR(128) NULL,
+            `title` VARCHAR(1024) NULL,
+            `main_image_url` TEXT NULL,
+            `product_category` VARCHAR(1024) NULL,
+            `zying_category_id` VARCHAR(64) NULL,
+            `zying_category` VARCHAR(1024) NULL,
+            `salesperson` VARCHAR(100) NULL,
+            `group_name` VARCHAR(100) NULL,
+            `token_id` BIGINT NULL,
+            `account_name` VARCHAR(255) NULL,
+            `risk_level` TINYINT NOT NULL,
+            `keywords` VARCHAR(1024) NULL,
+            `reason` VARCHAR(1000) NULL,
+            `checked_at` DATETIME NOT NULL,
+            PRIMARY KEY (`id`),
+            UNIQUE KEY `uniq_infringement_risk_source` (`source_type`, `source_row_id`),
+            KEY `idx_infringement_risk_level` (`risk_level`, `checked_at`),
+            KEY `idx_infringement_risk_product` (`product_id`)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+        """
+    )
+
+
+def _backfill_legacy_zying_risk_checks(cursor):
+    """Make legacy Zying 0/1/2 decisions visible in the unified result list once."""
+    cursor.execute(
+        """
+        INSERT IGNORE INTO `infringement_risk_checks` (
+            `source_type`, `source_row_id`, `product_id`, `title`, `main_image_url`,
+            `product_category`, `zying_category_id`, `zying_category`, `risk_level`,
+            `keywords`, `reason`, `checked_at`
+        )
+        SELECT 'zying', `id`, `产品编号`, `标题`, `主图链接`, `产品分类`,
+               `智赢分类编号`, `智赢产品分类`, CAST(`疑似侵权` AS UNSIGNED),
+               `侵权关键词`, '旧版智赢侵权检测结果', COALESCE(`提交时间`, NOW())
+        FROM `zying_product`
+        WHERE `疑似侵权` IN ('0', '1', '2')
+        """
+    )
+
+
+def _normalize_risk_sources(sources):
+    if isinstance(sources, str):
+        sources = [value.strip() for value in sources.split(",")]
+    result = []
+    for value in sources or ():
+        source = str(value or "").strip().lower()
+        if source in INFRINGEMENT_RISK_SOURCE_TYPES and source not in result:
+            result.append(source)
+    if not result:
+        raise ValueError("请至少选择一种产品来源")
+    return result
+
+
+def _normalize_positive_ids(values):
+    result = []
+    for value in values or ():
+        try:
+            item_id = int(value)
+        except (TypeError, ValueError):
+            continue
+        if item_id > 0 and item_id not in result:
+            result.append(item_id)
+    return result
+
+
+def get_infringement_risk_candidates(
+    hours=0,
+    limit=0,
+    zying_category=None,
+    include_checked=False,
+    sources=None,
+    salesperson=None,
+    group_name=None,
+    token_ids=None,
+):
+    """Read a unified candidate stream from the four workbench product sources."""
+    from erp.mercadolibre_collection_store import ensure_collection_tables
+    from erp.mercadolibre_store_link_store import ensure_store_link_table
+
+    selected_sources = _normalize_risk_sources(sources)
+    hours = max(0, int(hours or 0))
+    limit = max(0, int(limit or 0))
+    category = str(zying_category or "").strip()
+    salespeople = (
+        [str(value).strip() for value in salesperson if str(value).strip()]
+        if isinstance(salesperson, (list, tuple, set))
+        else ([str(salesperson).strip()] if str(salesperson or "").strip() else [])
+    )
+    groups = (
+        [str(value).strip() for value in group_name if str(value).strip()]
+        if isinstance(group_name, (list, tuple, set))
+        else ([str(group_name).strip()] if str(group_name or "").strip() else [])
+    )
+    account_ids = _normalize_positive_ids(token_ids)
+    since = (
+        (datetime.now() - timedelta(hours=hours)).strftime("%Y-%m-%d %H:%M:%S")
+        if hours else None
+    )
+    connection = pymysql.connect(**config)
+    rows = []
+    try:
+        with connection.cursor() as cursor:
+            _ensure_infringement_risk_checks_table(cursor)
+            if any(value in selected_sources for value in ("product_list", "collection_list")):
+                ensure_collection_tables(cursor)
+            if "pulled" in selected_sources:
+                ensure_store_link_table(cursor)
+                _ensure_mercado_store_site_settings_table(cursor)
+            if "zying" in selected_sources:
+                _ensure_zying_product_table(cursor)
+                _backfill_legacy_zying_risk_checks(cursor)
+
+            def fetch(source_type, select_sql, where, params):
+                checked_clause = "" if include_checked else " AND checked.`id` IS NULL"
+                sql = f"""
+                    SELECT {select_sql}, checked.`risk_level`, checked.`keywords`,
+                           checked.`reason`, checked.`checked_at`
+                    FROM {where[0]}
+                    LEFT JOIN `infringement_risk_checks` AS checked
+                      ON checked.`source_type` = %s
+                     AND checked.`source_row_id` = {where[1]}
+                    WHERE {where[2]}{checked_clause}
+                    ORDER BY {where[1]} ASC
+                """
+                query_params = [source_type, *params]
+                if limit:
+                    sql += " LIMIT %s"
+                    query_params.append(limit)
+                cursor.execute(sql, tuple(query_params))
+                source_rows = [dict(row) for row in (cursor.fetchall() or [])]
+                for row in source_rows:
+                    row["source_type"] = source_type
+                    row["source_row_id"] = int(row.get("source_row_id") or 0)
+                    row["row_id"] = row["source_row_id"]
+                    row["record_key"] = f"{source_type}:{row['source_row_id']}"
+                rows.extend(source_rows)
+
+            if "product_list" in selected_sources:
+                conditions = ["products.`source_type` = 'collected'"]
+                params = []
+                if since:
+                    conditions.append("products.`added_at` >= %s")
+                    params.append(since)
+                fetch(
+                    "product_list",
+                    "products.`id` AS `source_row_id`, products.`source_item_id` AS `product_id`, "
+                    "products.`main_image_url`, products.`title`, products.`category_name` AS `product_category`, "
+                    "'' AS `zying_category_id`, '' AS `zying_category`, '' AS `salesperson`, "
+                    "'' AS `group_name`, NULL AS `token_id`, '' AS `account_name`, products.`added_at` AS `submitted_at`",
+                    ("`erp_mercadolibre_products` AS products", "products.`id`", " AND ".join(conditions)),
+                    params,
+                )
+            if "collection_list" in selected_sources:
+                conditions = ["collection_items.`added_to_products` = 0"]
+                params = []
+                if since:
+                    conditions.append("collection_items.`collected_at` >= %s")
+                    params.append(since)
+                fetch(
+                    "collection_list",
+                    "collection_items.`id` AS `source_row_id`, collection_items.`source_item_id` AS `product_id`, "
+                    "collection_items.`main_image_url`, collection_items.`title`, collection_items.`category_name` AS `product_category`, "
+                    "'' AS `zying_category_id`, '' AS `zying_category`, '' AS `salesperson`, "
+                    "'' AS `group_name`, NULL AS `token_id`, '' AS `account_name`, collection_items.`collected_at` AS `submitted_at`",
+                    ("`erp_mercadolibre_collection_items` AS collection_items", "collection_items.`id`", " AND ".join(conditions)),
+                    params,
+                )
+            if "pulled" in selected_sources:
+                conditions = ["links.`is_current` = 1"]
+                params = []
+                if since:
+                    conditions.append("links.`last_synced_at` >= %s")
+                    params.append(since)
+                if account_ids:
+                    conditions.append(f"links.`token_id` IN ({', '.join(['%s'] * len(account_ids))})")
+                    params.extend(account_ids)
+                if salespeople:
+                    conditions.append(f"settings.`salesperson` IN ({', '.join(['%s'] * len(salespeople))})")
+                    params.extend(salespeople)
+                if groups:
+                    conditions.append(f"settings.`group_name` IN ({', '.join(['%s'] * len(groups))})")
+                    params.extend(groups)
+                fetch(
+                    "pulled",
+                    "links.`id` AS `source_row_id`, links.`item_id` AS `product_id`, "
+                    "links.`thumbnail_url` AS `main_image_url`, links.`title`, links.`category_id` AS `product_category`, "
+                    "'' AS `zying_category_id`, '' AS `zying_category`, COALESCE(settings.`salesperson`, '') AS `salesperson`, "
+                    "COALESCE(settings.`group_name`, '') AS `group_name`, links.`token_id`, links.`store_name` AS `account_name`, "
+                    "links.`last_synced_at` AS `submitted_at`",
+                    ("`erp_mercadolibre_store_links` AS links LEFT JOIN `mercado_store_site_settings` AS settings "
+                     "ON settings.`token_id` = links.`token_id` AND settings.`site_id` = links.`site_id`",
+                     "links.`id`", " AND ".join(conditions)),
+                    params,
+                )
+            if "zying" in selected_sources:
+                conditions = ["1 = 1"]
+                params = []
+                if since:
+                    conditions.append("zying.`提交时间` >= %s")
+                    params.append(since)
+                if category:
+                    conditions.append("(zying.`智赢分类编号` = %s OR zying.`智赢产品分类` = %s OR zying.`智赢产品分类` LIKE %s)")
+                    params.extend((category, category, f"%/{category}"))
+                fetch(
+                    "zying",
+                    "zying.`id` AS `source_row_id`, zying.`产品编号` AS `product_id`, "
+                    "zying.`主图链接` AS `main_image_url`, zying.`标题` AS `title`, zying.`产品分类` AS `product_category`, "
+                    "zying.`智赢分类编号` AS `zying_category_id`, zying.`智赢产品分类` AS `zying_category`, "
+                    "'' AS `salesperson`, '' AS `group_name`, NULL AS `token_id`, '' AS `account_name`, "
+                    "zying.`提交时间` AS `submitted_at`",
+                    ("`zying_product` AS zying", "zying.`id`", " AND ".join(conditions)),
+                    params,
+                )
+        connection.commit()
+        return rows[:limit] if limit else rows
+    finally:
+        connection.close()
+
+
+def update_infringement_product_risks(results):
+    """Persist multi-source DeepSeek decisions and mirror Zying decisions to legacy fields."""
+    normalized = []
+    zying_results = []
+    checked_at = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    for result in results or ():
+        if not isinstance(result, dict):
+            continue
+        source_type = str(result.get("source_type") or "").strip().lower()
+        try:
+            source_row_id = int(result.get("source_row_id", result.get("row_id")))
+            risk_level = int(result.get("risk_level"))
+        except (TypeError, ValueError):
+            continue
+        if source_type not in INFRINGEMENT_RISK_SOURCE_TYPES or source_row_id <= 0 or risk_level not in {0, 1, 2}:
+            continue
+        keywords = result.get("keywords") or []
+        if not isinstance(keywords, str):
+            keywords = ", ".join(str(value).strip() for value in keywords if str(value or "").strip())
+        normalized.append((
+            source_type, source_row_id, str(result.get("product_id") or "")[:128],
+            str(result.get("title") or "")[:1024], str(result.get("main_image_url") or ""),
+            str(result.get("product_category") or "")[:1024],
+            str(result.get("zying_category_id") or "")[:64], str(result.get("zying_category") or "")[:1024],
+            str(result.get("salesperson") or "")[:100], str(result.get("group_name") or "")[:100],
+            int(result.get("token_id")) if str(result.get("token_id") or "").isdigit() else None,
+            str(result.get("account_name") or "")[:255], risk_level, str(keywords)[:1024] or None,
+            str(result.get("reason") or "")[:1000], checked_at,
+        ))
+        if source_type == "zying":
+            zying_results.append({"row_id": source_row_id, "risk_level": risk_level, "keywords": keywords})
+    if not normalized:
+        return 0
+    connection = pymysql.connect(**config)
+    try:
+        with connection.cursor() as cursor:
+            _ensure_infringement_risk_checks_table(cursor)
+            cursor.executemany(
+                """
+                INSERT INTO `infringement_risk_checks` (
+                    `source_type`, `source_row_id`, `product_id`, `title`, `main_image_url`,
+                    `product_category`, `zying_category_id`, `zying_category`, `salesperson`,
+                    `group_name`, `token_id`, `account_name`, `risk_level`, `keywords`,
+                    `reason`, `checked_at`
+                ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                ON DUPLICATE KEY UPDATE
+                    `product_id` = VALUES(`product_id`), `title` = VALUES(`title`),
+                    `main_image_url` = VALUES(`main_image_url`),
+                    `product_category` = VALUES(`product_category`),
+                    `zying_category_id` = VALUES(`zying_category_id`),
+                    `zying_category` = VALUES(`zying_category`),
+                    `salesperson` = VALUES(`salesperson`), `group_name` = VALUES(`group_name`),
+                    `token_id` = VALUES(`token_id`), `account_name` = VALUES(`account_name`),
+                    `risk_level` = VALUES(`risk_level`), `keywords` = VALUES(`keywords`),
+                    `reason` = VALUES(`reason`), `checked_at` = VALUES(`checked_at`)
+                """,
+                normalized,
+            )
+        connection.commit()
+    except Exception:
+        connection.rollback()
+        raise
+    finally:
+        connection.close()
+    if zying_results:
+        update_zying_product_risks(zying_results)
+    return len(normalized)
+
+
+def get_infringement_risk_results(
+    zying_category=None, risk_level=None, search="", sort_by="risk_level",
+    sort_dir="desc", limit=1000, sources=None,
+):
+    selected_sources = _normalize_risk_sources(sources or INFRINGEMENT_RISK_SOURCE_TYPES)
+    risk = str(risk_level if risk_level is not None else "").strip().lower()
+    keyword = str(search or "").strip()[:200]
+    limit = max(0, int(limit or 0))
+    sort_columns = {
+        "row_id": "`source_row_id`", "product_id": "`product_id`", "title": "`title`",
+        "zying_category": "`zying_category`", "risk_level": "`risk_level`",
+        "keywords": "`keywords`", "submitted_at": "`checked_at`",
+    }
+    order_column = sort_columns.get(str(sort_by or "").strip(), "`risk_level`")
+    order_direction = "ASC" if str(sort_dir or "").strip().lower() == "asc" else "DESC"
+    where = [f"`source_type` IN ({', '.join(['%s'] * len(selected_sources))})"]
+    params = list(selected_sources)
+    if risk in {"0", "1", "2"}:
+        where.append("`risk_level` = %s")
+        params.append(int(risk))
+    elif risk == "unchecked":
+        where.append("1 = 0")
+    category = str(zying_category or "").strip()
+    if category:
+        where.append("(`zying_category_id` = %s OR `zying_category` = %s OR `zying_category` LIKE %s)")
+        params.extend((category, category, f"%/{category}"))
+    if keyword:
+        pattern = f"%{keyword}%"
+        where.append("(`product_id` LIKE %s OR `title` LIKE %s OR `keywords` LIKE %s OR `account_name` LIKE %s)")
+        params.extend((pattern, pattern, pattern, pattern))
+    where_sql = " AND ".join(where)
+    connection = pymysql.connect(**config)
+    try:
+        with connection.cursor() as cursor:
+            _ensure_infringement_risk_checks_table(cursor)
+            if "zying" in selected_sources:
+                _ensure_zying_product_table(cursor)
+                _backfill_legacy_zying_risk_checks(cursor)
+            cursor.execute(
+                f"""SELECT COUNT(*) AS `total`,
+                    SUM(`risk_level` = 0) AS `risk_0`, SUM(`risk_level` = 1) AS `risk_1`,
+                    SUM(`risk_level` = 2) AS `risk_2` FROM `infringement_risk_checks`
+                    WHERE {where_sql}""",
+                tuple(params),
+            )
+            counts = cursor.fetchone() or {}
+            sql = f"""SELECT `source_type`, `source_row_id` AS `row_id`, `product_id`, `title`,
+                `main_image_url`, `product_category`, `zying_category_id`, `zying_category`,
+                `salesperson`, `group_name`, `token_id`, `account_name`,
+                CAST(`risk_level` AS CHAR) AS `risk_level`, `keywords`, `reason`,
+                `checked_at` AS `submitted_at`, `checked_at` AS `collected_at`
+                FROM `infringement_risk_checks` WHERE {where_sql}
+                ORDER BY {order_column} {order_direction}, `id` DESC"""
+            row_params = list(params)
+            if limit:
+                sql += " LIMIT %s"
+                row_params.append(limit)
+            cursor.execute(sql, tuple(row_params))
+            result = {
+                "total": int(counts.get("total") or 0), "risk_0": int(counts.get("risk_0") or 0),
+                "risk_1": int(counts.get("risk_1") or 0), "risk_2": int(counts.get("risk_2") or 0),
+                "unchecked": 0, "rows": cursor.fetchall(),
+                "sort_by": str(sort_by or "risk_level"), "sort_dir": order_direction.lower(),
+            }
+        connection.commit()
+        return result
+    finally:
+        connection.close()
+
+
+def list_infringement_risk_scope_options():
+    token_data = list_mercado_store_tokens() or {}
+    rows = token_data.get("rows") or []
+    salespeople = sorted({
+        str(setting.get("salesperson") or "").strip()
+        for token in rows for setting in (token.get("site_settings") or ())
+        if str(setting.get("salesperson") or "").strip()
+    }, key=str.casefold)
+    groups = sorted({
+        str(setting.get("group_name") or "").strip()
+        for token in rows for setting in (token.get("site_settings") or ())
+        if str(setting.get("group_name") or "").strip()
+    }, key=str.casefold)
+    return {
+        "salespeople": salespeople,
+        "groups": groups,
+        "accounts": [
+            {"id": int(row.get("id") or 0), "display_name": str(row.get("display_name") or row.get("nickname") or "")}
+            for row in rows if int(row.get("id") or 0) > 0
+        ],
+    }
+
+
 def create_mercado_account_group(name, description="", token_ids=None):
     name, description = _normalize_mercado_account_group(name, description)
     token_ids = _normalize_mercado_group_token_ids(token_ids)

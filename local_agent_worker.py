@@ -58,8 +58,10 @@ def run_appeal(payload, stop_event):
     loop_count = bit_interface.normalize_appeal_loop_count(payload.get("loop_count"))
     _write_log(f"本机 Agent 开始执行申诉：{name} / {'、'.join(sites)} / {'、'.join(forms)}\n")
     mode = str(payload.get("mode") or "人工客服")
+    appeal_copy_mode = str(payload.get("appeal_copy_mode") or "普通模式")
     shensu_kwargs = {"loop_count": loop_count, "stop_event": stop_event}
-    if mode == "AI话术模式":
+    if appeal_copy_mode == "AI话术模式":
+        shensu_kwargs["appeal_copy_mode"] = appeal_copy_mode
         shensu_kwargs["deepseek_api_key"] = str(
             payload.get("deepseek_api_key") or ""
         )
