@@ -24,6 +24,7 @@ RECENT_ORDER_WINDOW_HOURS = 72
 WORKBENCH_LOCAL_TIMEZONE = timezone(timedelta(hours=8))
 DAILY_STATUS_MODE = "daily_status"
 DAILY_STATUS_STATE_KEY = "last_daily_old_order_status_refresh"
+DEFAULT_DAILY_STATUS_HOUR = 2
 AUTO_PRINT_OPERATOR_NAME = "系统自动打印"
 AUTO_PRINT_STATE_KEY_PREFIX = "order_auto_print_started_at"
 AUTO_PRINT_DISABLED_ENV = "MERCADO_ORDER_AUTO_PRINT_DISABLED"
@@ -43,13 +44,14 @@ STATUS_LABELS = {
     "partially_paid": "待付款",
     "confirmed": "审核",
     "paid": "找货",
-    "ready_to_ship": "待发",
+    "ready_to_ship": "待打印",
     "shipped": "已发",
     "delivered": "交付",
     "cancelled": "取消",
     "invalid": "问题",
     "partially_refunded": "退货",
     "refunded": "退货",
+    "not_delivered": "问题",
 }
 
 _state_guard = threading.RLock()
@@ -79,6 +81,7 @@ _sync_state = {
     "daily_status_last_run_date": "",
     "daily_status_run_date": "",
     "next_daily_status_at": "",
+    "daily_status_hour": DEFAULT_DAILY_STATUS_HOUR,
     "auto_print": {},
 }
 _scheduler_guard = threading.Lock()
@@ -347,6 +350,38 @@ def _daily_status_bootstrap_from(now_utc):
     return now_utc - timedelta(days=1)
 
 
+def _daily_status_run_hour():
+    try:
+        value = int(os.environ.get(
+            "MERCADO_ORDER_DAILY_STATUS_HOUR",
+            DEFAULT_DAILY_STATUS_HOUR,
+        ))
+    except (TypeError, ValueError):
+        value = DEFAULT_DAILY_STATUS_HOUR
+    return max(0, min(23, value))
+
+
+def _daily_status_schedule(now_local, last_daily_date, *, state_available=True):
+    """Return whether the daily job is due and its next Beijing-time run."""
+
+    today = now_local.date().isoformat()
+    run_today = datetime.combine(
+        now_local.date(),
+        datetime.min.time(),
+        tzinfo=WORKBENCH_LOCAL_TIMEZONE,
+    ).replace(hour=_daily_status_run_hour())
+    due = bool(
+        state_available
+        and str(last_daily_date or "") != today
+        and now_local >= run_today
+    )
+    if due:
+        return True, now_local
+    if str(last_daily_date or "") == today or now_local >= run_today:
+        run_today += timedelta(days=1)
+    return False, run_today
+
+
 def _sync_mode(value):
     value = str(value or "").strip().lower()
     if value == DAILY_STATUS_MODE:
@@ -521,6 +556,107 @@ def _fetch_orders(client, seller_id, filters):
         if error is not None:
             raise error
         yield order
+
+
+def _enrich_order_shipment_statuses(client, orders):
+    """Attach the authoritative shipment lifecycle to order payloads."""
+
+    shipping_ids = list(dict.fromkeys(
+        str(((order or {}).get("shipping") or {}).get("id") or "").strip()
+        for order in orders or ()
+        if str(((order or {}).get("shipping") or {}).get("id") or "").strip()
+    ))
+    if not shipping_ids:
+        return {"shipments": 0, "failed": 0}
+    fetched = _parallel_api_results(
+        client,
+        shipping_ids,
+        lambda worker, shipping_id: worker.get_shipment(shipping_id),
+        workers_env="MERCADO_ORDER_STATUS_WORKERS",
+        default_workers=8,
+    )
+    details = {}
+    failed = 0
+    for shipping_id in shipping_ids:
+        detail, error = fetched.get(
+            shipping_id,
+            (None, RuntimeError("运单详情接口未返回结果")),
+        )
+        if error is not None:
+            message = str(error)
+            if isinstance(error, MercadoAPIError) and (
+                "401" in message or "access token" in message.lower()
+            ):
+                raise error
+            failed += 1
+            _append_log(f"Shipment {shipping_id} 状态读取失败：{error}")
+            continue
+        details[shipping_id] = detail or {}
+    for order in orders or ():
+        shipping_id = str(
+            ((order or {}).get("shipping") or {}).get("id") or ""
+        ).strip()
+        detail = details.get(shipping_id)
+        if not detail:
+            continue
+        order["_shipment_status"] = str(detail.get("status") or "").strip().lower()
+        order["_shipment_substatus"] = str(
+            detail.get("substatus") or ""
+        ).strip().lower()
+        order["_shipment_last_updated"] = str(
+            detail.get("last_updated") or ""
+        ).strip()
+    return {"shipments": len(details), "failed": failed}
+
+
+def _refresh_old_store_shipment_statuses(client, record, cutoff):
+    """Refresh every non-final old shipment, independent of order updates."""
+
+    token_id = int(record["id"])
+    display_name = str(record.get("display_name") or record.get("nickname") or token_id)
+    shipping_ids = bit_mysql.list_mercado_shipment_status_candidates(token_id, cutoff)
+    totals = {"shipments": 0, "orders": 0, "failed": 0}
+    for start in range(0, len(shipping_ids), 50):
+        if _recent_sync_due_event.is_set():
+            return {**totals, "yielded": True}
+        batch_ids = shipping_ids[start:start + 50]
+        fetched = _parallel_api_results(
+            client,
+            batch_ids,
+            lambda worker, shipping_id: worker.get_shipment(shipping_id),
+            workers_env="MERCADO_ORDER_STATUS_WORKERS",
+            default_workers=8,
+        )
+        entries = []
+        for shipping_id in batch_ids:
+            detail, error = fetched.get(
+                shipping_id,
+                (None, RuntimeError("运单详情接口未返回结果")),
+            )
+            if error is not None:
+                message = str(error)
+                if isinstance(error, MercadoAPIError) and (
+                    "401" in message or "access token" in message.lower()
+                ):
+                    raise error
+                totals["failed"] += 1
+                _append_log(f"{display_name} Shipment {shipping_id} 状态读取失败：{error}")
+                entries.append({
+                    "shipping_id": shipping_id,
+                    "status": "",
+                    "error": message,
+                })
+                continue
+            entries.append({
+                "shipping_id": shipping_id,
+                "status": (detail or {}).get("status"),
+                "substatus": (detail or {}).get("substatus"),
+                "last_updated": (detail or {}).get("last_updated"),
+            })
+        saved = bit_mysql.save_mercado_shipment_statuses(token_id, entries)
+        totals["shipments"] += int(saved.get("shipments") or 0)
+        totals["orders"] += int(saved.get("orders") or 0)
+    return totals
 
 
 def _item_image(item):
@@ -1043,6 +1179,7 @@ def _sync_store(record, filters, *, enrich_images=True):
                 batch.append(order)
                 totals["fetched"] += 1
                 if len(batch) >= 50:
+                    _enrich_order_shipment_statuses(client, batch)
                     if enrich_images:
                         _enrich_order_images(client, batch)
                     result = bit_mysql.upsert_mercado_synced_orders(record, batch)
@@ -1056,6 +1193,7 @@ def _sync_store(record, filters, *, enrich_images=True):
                         updated_count=int(_sync_state.get("updated_count") or 0) + int(result.get("updated") or 0),
                     )
             if batch:
+                _enrich_order_shipment_statuses(client, batch)
                 if enrich_images:
                     _enrich_order_images(client, batch)
                 result = bit_mysql.upsert_mercado_synced_orders(record, batch)
@@ -1156,6 +1294,10 @@ def _sync_old_store_statuses(
                 continue
             orders.append(order)
 
+        if orders:
+            shipment_result = _enrich_order_shipment_statuses(client, orders)
+            page_failed += int(shipment_result.get("failed") or 0)
+
         result = (
             bit_mysql.upsert_mercado_synced_orders(record, orders)
             if orders else {"inserted": 0, "updated": 0}
@@ -1185,6 +1327,21 @@ def _sync_old_store_statuses(
         )
 
         if not int(page.get("result_count") or 0) or offset >= int(page.get("total") or 0):
+            shipment_refresh = _refresh_old_store_shipment_statuses(
+                client,
+                record,
+                cutoff,
+            )
+            totals["fetched"] += int(shipment_refresh.get("shipments") or 0)
+            totals["updated"] += int(shipment_refresh.get("orders") or 0)
+            totals["failed"] += int(shipment_refresh.get("failed") or 0)
+            if shipment_refresh.get("yielded"):
+                return {
+                    "store": display_name,
+                    "status": "paused",
+                    "yielded": True,
+                    **totals,
+                }
             bit_mysql.complete_mercado_order_status_window(token_id)
             return {
                 "store": display_name,
@@ -1207,8 +1364,8 @@ def run_order_sync(start_date="", end_date="", token_ids=None, mode="manual"):
         start_text, end_text, start_at, end_at = _date_range(start_date, end_date)
         manual_filters = {
             "sort": "date_asc",
-            "order.date_created.from": _iso_millis(start_at),
-            "order.date_created.to": _iso_millis(end_at),
+            "date_created.from": _iso_millis(start_at),
+            "date_created.to": _iso_millis(end_at),
         }
     elif mode == "automatic":
         recent_start = now_utc - timedelta(hours=RECENT_ORDER_WINDOW_HOURS)
@@ -1220,8 +1377,8 @@ def run_order_sync(start_date="", end_date="", token_ids=None, mode="manual"):
         )
         scheduled_filters = {
             "sort": "date_asc",
-            "order.date_created.from": _iso_millis(recent_start),
-            "order.date_created.to": _iso_millis(now_utc),
+            "date_created.from": _iso_millis(recent_start),
+            "date_created.to": _iso_millis(now_utc),
         }
     else:
         old_order_cutoff = now_utc - timedelta(hours=RECENT_ORDER_WINDOW_HOURS)
@@ -1449,7 +1606,11 @@ def _scheduler_loop(interval_seconds):
         except Exception:
             schedule_state_available = False
             last_daily_date = str(_sync_state.get("daily_status_last_run_date") or "")
-        daily_due = schedule_state_available and last_daily_date != today
+        daily_due, next_daily_at = _daily_status_schedule(
+            now_local,
+            last_daily_date,
+            state_available=schedule_state_available,
+        )
         lock_owner = get_lock_owner(ORDER_SYNC_LOCK_KEY)
         task_busy = bool(_sync_state.get("running") or lock_owner)
         recent_due = time.monotonic() >= next_recent_run
@@ -1472,21 +1633,13 @@ def _scheduler_loop(interval_seconds):
 
         seconds_to_recent = max(0, int(next_recent_run - time.monotonic()))
         next_recent_at = datetime.now() + timedelta(seconds=seconds_to_recent)
-        next_daily_at = (
-            now_local
-            if daily_due
-            else datetime.combine(
-                now_local.date() + timedelta(days=1),
-                datetime.min.time(),
-                tzinfo=WORKBENCH_LOCAL_TIMEZONE,
-            )
-        )
         _state_update(
             scheduler_enabled=True,
             sync_interval_seconds=interval_seconds,
             recent_window_hours=RECENT_ORDER_WINDOW_HOURS,
             next_run_at=next_recent_at.strftime("%Y-%m-%d %H:%M:%S"),
             daily_status_last_run_date=last_daily_date,
+            daily_status_hour=_daily_status_run_hour(),
             next_daily_status_at=next_daily_at.strftime("%Y-%m-%d %H:%M:%S"),
         )
         if _scheduler_stop_event.wait(min(30, max(1, seconds_to_recent))):

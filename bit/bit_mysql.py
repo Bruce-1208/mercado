@@ -2072,6 +2072,8 @@ def _ensure_mercado_synced_orders_table(cursor):
             `image_source` VARCHAR(32) NULL,
             `image_checked_at` DATETIME NULL,
             `image_last_error` TEXT NULL,
+            `shipment_status_checked_at` DATETIME NULL,
+            `shipment_status_last_error` TEXT NULL,
             `quantity` INT NULL,
             `sale_fee` DECIMAL(20, 4) NULL,
             `sale_fee_source` VARCHAR(32) NULL,
@@ -2124,6 +2126,8 @@ def _ensure_mercado_synced_orders_table(cursor):
     _ensure_column(cursor, "mercado_synced_orders", "image_source", "VARCHAR(32) NULL")
     _ensure_column(cursor, "mercado_synced_orders", "image_checked_at", "DATETIME NULL")
     _ensure_column(cursor, "mercado_synced_orders", "image_last_error", "TEXT NULL")
+    _ensure_column(cursor, "mercado_synced_orders", "shipment_status_checked_at", "DATETIME NULL")
+    _ensure_column(cursor, "mercado_synced_orders", "shipment_status_last_error", "TEXT NULL")
     _ensure_mercado_shipment_costs_table(cursor)
     _ensure_mercado_order_logs_table(cursor)
 
@@ -2174,13 +2178,20 @@ _MERCADO_ORDER_STATUS_LABELS = {
     "partially_paid": "待付款",
     "confirmed": "审核",
     "paid": "找货",
-    "ready_to_ship": "待发",
+    "ready_to_ship": "待打印",
     "shipped": "已发",
     "delivered": "交付",
     "cancelled": "取消",
     "invalid": "问题",
     "partially_refunded": "退货",
     "refunded": "退货",
+    "not_delivered": "问题",
+}
+_MERCADO_FINAL_ORDER_STATUSES = {
+    "cancelled", "invalid", "partially_refunded", "refunded",
+}
+_MERCADO_FINAL_EFFECTIVE_STATUSES = {
+    *_MERCADO_FINAL_ORDER_STATUSES, "delivered", "not_delivered",
 }
 _MERCADO_SITE_COUNTRIES = {
     "MLM": "墨西哥", "MLB": "巴西", "MLC": "智利",
@@ -2205,6 +2216,43 @@ def _mercado_order_datetime(value):
     if parsed.tzinfo is not None:
         parsed = parsed.astimezone(timezone.utc).replace(tzinfo=None)
     return parsed.strftime("%Y-%m-%d %H:%M:%S")
+
+
+def _mercado_effective_order_status(order):
+    """Combine the order status with the authoritative shipment lifecycle."""
+
+    order_status = str((order or {}).get("status") or "").strip().lower()
+    shipment_status = str(
+        (order or {}).get("_shipment_status") or ""
+    ).strip().lower()
+    if order_status in _MERCADO_FINAL_ORDER_STATUSES:
+        return order_status
+    if shipment_status in {"pending", "handling"}:
+        return "paid" if order_status == "paid" else order_status
+    if shipment_status in {
+        "ready_to_ship", "shipped", "delivered", "not_delivered", "cancelled",
+    }:
+        return shipment_status
+    return order_status
+
+
+def _mercado_effective_status_detail(order):
+    shipment_status = str(
+        (order or {}).get("_shipment_status") or ""
+    ).strip().lower()
+    if not shipment_status:
+        return (order or {}).get("status_detail")
+    return {
+        "order_status": str((order or {}).get("status") or "").strip().lower(),
+        "order_status_detail": (order or {}).get("status_detail"),
+        "shipment_status": shipment_status,
+        "shipment_substatus": str(
+            (order or {}).get("_shipment_substatus") or ""
+        ).strip().lower(),
+        "shipment_last_updated": str(
+            (order or {}).get("_shipment_last_updated") or ""
+        ).strip(),
+    }
 
 
 def _mercado_https_url(value):
@@ -2333,7 +2381,7 @@ def upsert_mercado_synced_orders(token_record, orders):
                     or (item_site_id if item_site_id in _MERCADO_SITE_COUNTRIES else "")
                     or default_site_id
                 )
-                raw_status = str(order.get("status") or "")
+                raw_status = _mercado_effective_order_status(order)
                 amount_currency_id = _MERCADO_SITE_CURRENCIES.get(
                     site_id,
                     str(order.get("currency_id") or first_item.get("currency_id") or "").upper(),
@@ -2359,7 +2407,10 @@ def upsert_mercado_synced_orders(token_record, orders):
                         str(order["id"]), token_id, shop_name, seller_id, site_id,
                         _MERCADO_SITE_COUNTRIES.get(site_id, site_id), raw_status,
                         _MERCADO_ORDER_STATUS_LABELS.get(raw_status, raw_status or "未分类"),
-                        json.dumps(order.get("status_detail"), ensure_ascii=False),
+                        json.dumps(
+                            _mercado_effective_status_detail(order),
+                            ensure_ascii=False,
+                        ),
                         _mercado_order_datetime(order.get("date_created")),
                         _mercado_order_datetime(order.get("date_closed")),
                         _mercado_order_datetime(order.get("last_updated")),
@@ -2378,6 +2429,8 @@ def upsert_mercado_synced_orders(token_record, orders):
                         "marketplace_item" if order_image_url else "",
                         now if order_image_url else None,
                         "",
+                        now if str(order.get("_shipment_status") or "").strip() else None,
+                        "",
                     )
                 )
             cursor.executemany(
@@ -2390,16 +2443,23 @@ def upsert_mercado_synced_orders(token_record, orders):
                     `sale_fee`, `sale_fee_source`, `freight`, `freight_currency_id`,
                     `freight_source`, `freight_checked_at`, `raw_json`, `first_synced_at`,
                     `synced_at`, `amount_currency_id`, `image_source`, `image_checked_at`,
-                    `image_last_error`
+                    `image_last_error`, `shipment_status_checked_at`,
+                    `shipment_status_last_error`
                 ) VALUES (
                     %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
                     %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
-                    %s, %s, %s, %s, %s, %s, %s
+                    %s, %s, %s, %s, %s, %s, %s, %s, %s
                 ) ON DUPLICATE KEY UPDATE
                     `token_id` = VALUES(`token_id`), `shop_name` = VALUES(`shop_name`),
                     `seller_id` = VALUES(`seller_id`), `site_id` = VALUES(`site_id`),
                     `country` = VALUES(`country`), `status` = VALUES(`status`),
                     `status_label` = VALUES(`status_label`), `status_detail` = VALUES(`status_detail`),
+                    `workflow_status` = CASE
+                        WHEN VALUES(`status`) IN (
+                            'shipped', 'delivered', 'not_delivered', 'cancelled',
+                            'invalid', 'partially_refunded', 'refunded'
+                        ) AND `workflow_status` = '待发' THEN NULL
+                        ELSE `workflow_status` END,
                     `date_created` = VALUES(`date_created`), `date_closed` = VALUES(`date_closed`),
                     `last_updated` = VALUES(`last_updated`), `currency_id` = VALUES(`currency_id`),
                     `amount_currency_id` = VALUES(`amount_currency_id`),
@@ -2414,6 +2474,12 @@ def upsert_mercado_synced_orders(token_record, orders):
                         THEN VALUES(`image_checked_at`) ELSE `image_checked_at` END,
                     `image_last_error` = CASE WHEN COALESCE(VALUES(`image_url`), '') <> ''
                         THEN '' ELSE `image_last_error` END,
+                    `shipment_status_checked_at` = COALESCE(
+                        VALUES(`shipment_status_checked_at`), `shipment_status_checked_at`
+                    ),
+                    `shipment_status_last_error` = CASE
+                        WHEN VALUES(`shipment_status_checked_at`) IS NOT NULL THEN ''
+                        ELSE `shipment_status_last_error` END,
                     `quantity` = VALUES(`quantity`), `sale_fee` = VALUES(`sale_fee`),
                     `sale_fee_source` = VALUES(`sale_fee_source`),
                     `freight` = CASE
@@ -2993,6 +3059,18 @@ def list_orders(
                 "WHEN 'MLC' THEN 'CLP' WHEN 'MCO' THEN 'COP' WHEN 'MLU' THEN 'UYU' "
                 "ELSE NULLIF(synced.`currency_id`, '') END, 'USD'))"
             )
+            platform_status_sql = (
+                "CASE WHEN LOWER(COALESCE(synced.`status`, '')) = 'ready_to_ship' "
+                "THEN '待打印' ELSE synced.`status_label` END"
+            )
+            display_status_sql = (
+                "CASE WHEN synced.`workflow_status` = '待发' "
+                "AND LOWER(COALESCE(synced.`status`, '')) IN ("
+                "'shipped', 'delivered', 'not_delivered', 'cancelled', "
+                "'invalid', 'partially_refunded', 'refunded') "
+                f"THEN {platform_status_sql} "
+                f"ELSE COALESCE(NULLIF(synced.`workflow_status`, ''), {platform_status_sql}) END"
+            )
             # Resolve historical rates per distinct currency/day instead of once per
             # order.  A full order set contains tens of thousands of rows but only a
             # small number of currency/day pairs, so this removes most correlated
@@ -3089,8 +3167,8 @@ def list_orders(
                            synced.`shop_name`, '美客多 Token' AS `source`, 'token' AS `data_origin`,
                            COALESCE(NULLIF(JSON_UNQUOTE(JSON_EXTRACT(synced.`raw_json`, '$.pack_id')), 'null'), '')
                                AS `pack_id`,
-                           COALESCE(NULLIF(synced.`workflow_status`, ''), synced.`status_label`) AS `status`,
-                           synced.`status_label` AS `platform_status`, synced.`workflow_status`,
+                           {display_status_sql} AS `status`,
+                           {platform_status_sql} AS `platform_status`, synced.`workflow_status`,
                            ROUND({usd_amount_sql}, 2) AS `amount`,
                            synced.`total_amount` AS `amount_local`,
                            ROUND({fee_usd_sql}, 2) AS `fee`, synced.`sale_fee_source`,
@@ -3205,7 +3283,7 @@ def list_orders(
                            DATE_ADD(synced.`date_created`, INTERVAL 8 HOUR) AS `ordered_at`,
                            site_settings.`salesperson`, site_settings.`group_name`,
                            synced.`shop_name`, 'token' AS `data_origin`,
-                           COALESCE(NULLIF(synced.`workflow_status`, ''), synced.`status_label`)
+                           {display_status_sql}
                                AS `status`,
                            synced.`purchase_order`, synced.`purchase_tracking`,
                            synced.`product_id`, synced.`title`,
@@ -4210,6 +4288,125 @@ def get_mercado_order_label_contexts(order_ids):
                 [*normalized_ids, *normalized_ids],
             )
             return list(cursor.fetchall() or [])
+    finally:
+        connection.close()
+
+
+def list_mercado_shipment_status_candidates(token_id, cutoff):
+    """List non-final historical shipments that require a live status check."""
+
+    cutoff_value = _mercado_order_datetime(cutoff)
+    if not cutoff_value:
+        raise ValueError("运单状态刷新缺少截止时间")
+    terminal = sorted(_MERCADO_FINAL_EFFECTIVE_STATUSES)
+    placeholders = ",".join(["%s"] * len(terminal))
+    connection = pymysql.connect(**config)
+    try:
+        with connection.cursor() as cursor:
+            _ensure_mercado_synced_orders_table(cursor)
+            cursor.execute(
+                f"""
+                SELECT `shipping_id`, MAX(`date_created`) AS `latest_order_at`
+                FROM `mercado_synced_orders`
+                WHERE `token_id` = %s
+                  AND `date_created` < %s
+                  AND COALESCE(`shipping_id`, '') <> ''
+                  AND LOWER(COALESCE(`status`, '')) NOT IN ({placeholders})
+                  AND (
+                      `shipment_status_checked_at` IS NULL
+                      OR `shipment_status_checked_at` < CURDATE()
+                  )
+                GROUP BY `shipping_id`
+                ORDER BY MIN(`shipment_status_checked_at`) ASC,
+                         `latest_order_at` DESC, `shipping_id` ASC
+                """,
+                [int(token_id), cutoff_value, *terminal],
+            )
+            return [
+                str(row.get("shipping_id") or "")
+                for row in (cursor.fetchall() or [])
+                if str(row.get("shipping_id") or "").strip()
+            ]
+    finally:
+        connection.close()
+
+
+def save_mercado_shipment_statuses(token_id, entries):
+    """Apply authoritative shipment states to every order in each shipment."""
+
+    normalized = []
+    for entry in entries or ():
+        shipping_id = str((entry or {}).get("shipping_id") or "").strip()
+        shipment_status = str((entry or {}).get("status") or "").strip().lower()
+        if not shipping_id:
+            continue
+        effective_status = (
+            "paid" if shipment_status in {"pending", "handling"}
+            else shipment_status
+        )
+        error = str((entry or {}).get("error") or "").strip()[:2000]
+        if shipment_status and effective_status not in _MERCADO_ORDER_STATUS_LABELS:
+            error = error or f"不支持的运单状态：{shipment_status}"
+            effective_status = ""
+        detail = {
+            "shipment_status": shipment_status,
+            "shipment_substatus": str(
+                (entry or {}).get("substatus") or ""
+            ).strip().lower(),
+            "shipment_last_updated": str(
+                (entry or {}).get("last_updated") or ""
+            ).strip(),
+        }
+        normalized.append((
+            effective_status,
+            _MERCADO_ORDER_STATUS_LABELS.get(effective_status, ""),
+            json.dumps(detail, ensure_ascii=False, separators=(",", ":")),
+            error,
+            shipping_id,
+            int(token_id),
+        ))
+    if not normalized:
+        return {"shipments": 0, "orders": 0}
+
+    final_order_statuses = sorted(_MERCADO_FINAL_ORDER_STATUSES)
+    terminal_placeholders = ",".join(["%s"] * len(final_order_statuses))
+    now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    connection = pymysql.connect(**config)
+    try:
+        with connection.cursor() as cursor:
+            _ensure_mercado_synced_orders_table(cursor)
+            updated = 0
+            for status, label, detail, error, shipping_id, normalized_token_id in normalized:
+                cursor.execute(
+                    f"""
+                    UPDATE `mercado_synced_orders`
+                    SET `status` = CASE WHEN %s <> '' THEN %s ELSE `status` END,
+                        `status_label` = CASE WHEN %s <> '' THEN %s ELSE `status_label` END,
+                        `status_detail` = CASE WHEN %s <> '' THEN %s ELSE `status_detail` END,
+                        `workflow_status` = CASE
+                            WHEN %s IN (
+                                'shipped', 'delivered', 'not_delivered', 'cancelled',
+                                'invalid', 'partially_refunded', 'refunded'
+                            ) AND `workflow_status` = '待发' THEN NULL
+                            ELSE `workflow_status` END,
+                        `shipment_status_checked_at` = %s,
+                        `shipment_status_last_error` = %s,
+                        `synced_at` = %s
+                    WHERE `shipping_id` = %s AND `token_id` = %s
+                      AND LOWER(COALESCE(`status`, '')) NOT IN ({terminal_placeholders})
+                    """,
+                    [
+                        status, status, label, label, status, detail, status,
+                        now, error, now, shipping_id, normalized_token_id,
+                        *final_order_statuses,
+                    ],
+                )
+                updated += max(0, int(getattr(cursor, "rowcount", 0) or 0))
+        connection.commit()
+        return {"shipments": len(normalized), "orders": updated}
+    except Exception:
+        connection.rollback()
+        raise
     finally:
         connection.close()
 

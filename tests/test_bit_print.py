@@ -114,7 +114,7 @@ def test_first_scan_falls_back_to_last_72_hours_and_saves_tracking_state(monkeyp
 
     assert result["first_run"] is True
     assert calls["seller_id"] == "seller-7"
-    assert "order.date_created.from" in calls["filters"]
+    assert "date_created.from" in calls["filters"]
     assert "last_updated.from" not in calls["filters"]
     assert 71.9 <= (
         datetime.now(timezone.utc) - calls["tracking_since"]
@@ -280,7 +280,7 @@ def test_subsequent_scan_uses_incremental_api_window(monkeypatch):
 
     assert result["first_run"] is False
     assert "last_updated.from" in calls["filters"]
-    assert "order.date_created.from" not in calls["filters"]
+    assert "date_created.from" not in calls["filters"]
 
 
 def test_selected_time_range_uses_created_window_and_upper_bound(monkeypatch):
@@ -327,8 +327,8 @@ def test_selected_time_range_uses_created_window_and_upper_bound(monkeypatch):
         logger=lambda _message: None,
     )
 
-    assert calls["filters"]["order.date_created.from"] == bit_print._iso_millis(start_at)
-    assert calls["filters"]["order.date_created.to"] == bit_print._iso_millis(end_at)
+    assert calls["filters"]["date_created.from"] == bit_print._iso_millis(start_at)
+    assert calls["filters"]["date_created.to"] == bit_print._iso_millis(end_at)
     assert "last_updated.from" not in calls["filters"]
     assert result["tracking_since"] == start_at
     assert result["end_at"] == end_at

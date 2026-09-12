@@ -370,12 +370,8 @@
     const specs = extractSpecs(doc);
     const plugin = readPluginMetrics(doc);
     const metrics = plugin.metrics;
-    if (plugin.self_ship_origin === "US") {
-      throw new Error("智赢插件检测到 US.svg：美国自发货商品不采集");
-    }
-    if (plugin.self_ship_origin !== "CN") {
-      throw new Error("智赢插件未检测到 CN.svg：无法确认中国自发货，商品不采集");
-    }
+    // Origin is retained for diagnostics; US filtering happens on the listing
+    // card before this detail page is opened.
     const actualWeightComplete = Number.isFinite(Number(metrics.weight_g)) && Number(metrics.weight_g) > 0;
     const weightBasis = actualWeightComplete ? "plugin_actual" : "";
     const price = pagePrice(doc, product);
@@ -459,14 +455,37 @@
         "a[href*='wid='], a[href*='/p/ML'], a[href*='/MLM-'], " +
         "a[href*='/MLB-'], a[href*='/MLA-'], a[href*='/MLC-'], a[href*='/MCO-'], a[href*='/MLU-']"
       );
-      return link && isSupportedUrl(link.href) ? {card, link, url: link.href} : null;
+      return link && isSupportedUrl(link.href) ? {
+        card,
+        link,
+        url: link.href,
+        isUsOrigin: cardHasUsFlag(card)
+      } : null;
     }).filter(Boolean);
   }
 
+  function cardHasUsFlag(card) {
+    if (!card || !card.querySelectorAll) return false;
+    const isUsFlag = value => /(?:^|[\\/])US\.svg(?:[?#"')]|$)/i.test(String(value || ''));
+    const nodes = [card, ...Array.from(card.querySelectorAll('img, source, use, [style]'))];
+    return nodes.some(node => [
+      node.getAttribute && node.getAttribute('src'),
+      node.getAttribute && node.getAttribute('data-src'),
+      node.getAttribute && node.getAttribute('srcset'),
+      node.getAttribute && node.getAttribute('href'),
+      node.getAttribute && node.getAttribute('xlink:href'),
+      node.getAttribute && node.getAttribute('data'),
+      node.getAttribute && node.getAttribute('alt'),
+      node.getAttribute && node.getAttribute('title'),
+      node.style && node.style.backgroundImage
+    ].some(isUsFlag));
+  }
+
   function extractCardProduct(card, pageUrl) {
-    throw new Error("列表页无法确认 CN.svg，请打开商品详情页并等待智赢插件显示中国发货后采集");
-    /* istanbul ignore next -- retained only as a reference for old queued payloads */
     if (!card || !isSupportedUrl(pageUrl)) throw new Error("未识别到可采集的商品卡片");
+    if (cardHasUsFlag(card)) {
+      throw new Error("商品列表检测到 US.svg：美国自发货商品不采集");
+    }
     let decodedUrl = String(pageUrl || "");
     try { decodedUrl = decodeURIComponent(decodedUrl); } catch (_) {}
     const explicit = /(?:item_id|itemId|wid)\s*[:=]\s*((?:ML[A-Z]|CBT)-?\d{5,})/i.exec(decodedUrl);
@@ -549,6 +568,7 @@
     isSupportedUrl,
     extractProduct,
     cardCandidates,
-    extractCardProduct
+    extractCardProduct,
+    cardHasUsFlag
   };
 });

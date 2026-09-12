@@ -5704,7 +5704,7 @@
 
         .publish-record-filters {
             display: grid;
-            grid-template-columns: minmax(240px, 1fr) 150px 150px minmax(180px, .7fr) auto;
+            grid-template-columns: minmax(240px, 1.4fr) repeat(6, minmax(130px, .7fr)) auto;
             align-items: end;
             gap: 10px;
         }
@@ -9028,7 +9028,7 @@
                     </div>
                     <div class="notice-list">
                         <div class="notice-row"><span class="notice-tag">系统公告</span><strong>泽顺运营服务台界面升级，业务入口与任务状态已统一整合</strong><time>今天</time></div>
-                        <div class="notice-row"><span class="notice-tag">运营提醒</span><strong>每 15 分钟更新最近 72 小时订单；订单状态与实际运费每天更新</strong><time>持续运行</time></div>
+                        <div class="notice-row"><span class="notice-tag">运营提醒</span><strong>每 15 分钟更新最近 72 小时订单；订单状态与实际运费每天更新，仓库人员打印后进入待发</strong><time>持续运行</time></div>
                         <div class="notice-row"><span class="notice-tag">功能更新</span><strong>商品采集、产品上架记录与侵权检测已加入快捷工作流</strong><time>已上线</time></div>
                     </div>
                 </section>
@@ -9118,7 +9118,7 @@
                                 <option value="待付款">待付款</option><option value="审核">审核</option>
                                 <option value="找货">找货</option><option value="缺货">缺货</option>
                                 <option value="配货">配货</option><option value="转运">转运</option>
-                                <option value="待发">待发</option><option value="已发">已发</option>
+                                <option value="待打印">待打印</option><option value="已发">已发</option>
                                 <option value="交付">交付</option><option value="补发">补发</option>
                                 <option value="退货">退货</option><option value="取消">取消</option>
                                 <option value="备查">备查</option><option value="问题">问题</option>
@@ -9145,6 +9145,7 @@
                                 <option value="缺货">缺货</option>
                                 <option value="配货">配货</option>
                                 <option value="转运">转运</option>
+                                <option value="待打印">待打印</option>
                                 <option value="待发">待发</option>
                                 <option value="已发">已发</option>
                                 <option value="交付">交付</option>
@@ -9337,7 +9338,7 @@
                         <button class="order-detail-close" id="order-sync-close-x" type="button" aria-label="关闭拉取订单" onclick="closeOrderSyncDialog()">×</button>
                     </div>
                     <div class="order-sync-body">
-                        <p class="order-sync-note">后台每 15 分钟重新拉取全部授权店铺最近 72 小时内的订单；每天刷新老订单状态，并重新读取美客多 Shipment Costs 实际运费。这里的手动任务用于按日期回填历史订单。</p>
+                        <p class="order-sync-note">后台每 15 分钟重新拉取全部授权店铺最近 72 小时内的订单；每天刷新老订单状态，并重新读取美客多 Shipment Costs 实际运费。官方 ready_to_ship 显示为待打印，仓库人员成功打印后进入待发。这里的手动任务用于按日期回填历史订单。</p>
                         <div class="order-sync-range-toolbar">
                             <strong>自定义拉取时间段（北京时间）</strong>
                             <div class="order-sync-range-presets" aria-label="常用拉取时间段">
@@ -9655,7 +9656,7 @@
                         <details class="market-collector-help">
                             <summary>采集规则与浏览器说明</summary>
                             <div class="market-collector-help-copy">
-                                <p class="market-collector-hint">关键词任务会先进入所选国家前台执行搜索，再点击左侧 Origen del envío → Internacional；找不到该选项会记失败并停止。智赢插件显示 US.svg 的美国自发货商品会跳过。也兼容直接粘贴列表或详情链接。<a class="market-collector-front-link" id="mercado-collection-front-link" href="#" target="_blank" rel="noopener" hidden>打开对应前台</a></p>
+                                <p class="market-collector-hint">关键词任务会先进入所选国家前台执行搜索，再点击左侧 Origen del envío → Internacional；找不到该选项会记失败并停止。商品列表先识别卡片上的 US.svg，美国自发货商品直接跳过；只要不是美国来源就继续采集。也兼容直接粘贴列表或详情链接。<a class="market-collector-front-link" id="mercado-collection-front-link" href="#" target="_blank" rel="noopener" hidden>打开对应前台</a></p>
                                 <p class="market-collector-hint">详情通过 Playwright 和智赢插件 DOM 读取，不使用键鼠 RPA、截图或 OCR；可选择本地 Edge 或任一比特窗口，默认使用“采集专用（墨西哥）”，重量与尺寸不读取智赢产品库。</p>
                             </div>
                         </details>
@@ -9910,7 +9911,7 @@
                                     </div>
                                     <select class="market-publish-native" id="mercado-publish-site" multiple onchange="updateMercadoSelection()">
                                         <option value="MLM" data-label="墨西哥" data-meta="Mexico" selected>墨西哥</option>
-                                        <option value="MLB" data-label="巴西" data-meta="Brasil · 自动葡语翻译">巴西</option>
+                                        <option value="MLB" data-label="巴西" data-meta="Brasil · 本地规则匹配">巴西</option>
                                         <option value="MLA" data-label="阿根廷" data-meta="Argentina">阿根廷</option>
                                         <option value="MLC" data-label="智利" data-meta="Chile">智利</option>
                                         <option value="MCO" data-label="哥伦比亚" data-meta="Colombia">哥伦比亚</option>
@@ -10142,6 +10143,21 @@
                         <div class="field">
                             <label for="publish-record-store">上架店铺</label>
                             <input id="publish-record-store" type="search" placeholder="输入店铺名称" onkeydown="if(event.key === 'Enter') loadMercadoPublishRecords()">
+                        </div>
+                        <div class="field">
+                            <label for="publish-record-start-date">开始时间</label>
+                            <input id="publish-record-start-date" type="datetime-local" step="60" onchange="loadMercadoPublishRecords()">
+                        </div>
+                        <div class="field">
+                            <label for="publish-record-end-date">结束时间</label>
+                            <input id="publish-record-end-date" type="datetime-local" step="60" onchange="loadMercadoPublishRecords()">
+                        </div>
+                        <div class="field">
+                            <label for="publish-record-group">店铺组</label>
+                            <select id="publish-record-group" onchange="loadMercadoPublishRecords()">
+                                <option value="">全部店铺组</option>
+                                <option value="__ungrouped__">未分组</option>
+                            </select>
                         </div>
                         <button class="primary" type="button" onclick="loadMercadoPublishRecords()">搜索 / 刷新</button>
                     </div>
@@ -13188,6 +13204,9 @@
         const publishRecordStatus = document.getElementById("publish-record-status");
         const publishRecordSite = document.getElementById("publish-record-site");
         const publishRecordStore = document.getElementById("publish-record-store");
+        const publishRecordStartDate = document.getElementById("publish-record-start-date");
+        const publishRecordEndDate = document.getElementById("publish-record-end-date");
+        const publishRecordGroup = document.getElementById("publish-record-group");
         const publishRecordSummary = document.getElementById("publish-record-summary");
         const publishRecordMessage = document.getElementById("publish-record-message");
         const publishRecordSelectAll = document.getElementById("publish-record-select-all");
@@ -13460,7 +13479,7 @@
         let orderPurchaseSaving = false;
         let orderPurchaseTargetIds = [];
         const orderStatusFlow = [
-            "待付款", "取消", "审核", "找货", "缺货", "配货", "转运", "待发",
+            "待付款", "取消", "审核", "找货", "缺货", "配货", "转运", "待打印", "待发",
             "已发", "交付", "补发", "退货", "备查", "问题", "FBA",
         ];
         let orderSyncStoresLoaded = false;
@@ -13539,7 +13558,10 @@
                 "appeal.execute": ["#start-btn", "#stop-btn", "#appeal-execution-target", "#appeal-agent-id", "#refresh-execution-agents", "#download-local-agent", "#add-appeal-phrase-btn", "#save-appeal-phrase-btn"],
                 "tasks.execute": ["#start-daily-task-btn", "#daily-task-execution-target", "#daily-task-agent-id", "#download-daily-task-agent"],
                 "order_print.execute": ["#start-order-print-btn", "#stop-order-print-btn", "#rerun-selected-order-print-btn"],
-                "order_analysis.execute": ["#order-analysis-folder", "#import-order-analysis-btn"],
+                "order_analysis.execute": [
+                    "#order-analysis-folder", "#import-order-analysis-btn",
+                    "#order-bulk-status", "#order-bulk-status-button", "#order-bulk-purchase-button",
+                ],
                 "shop_status.execute": ["#start-selected-mercado-login-btn", "#start-mercado-login-btn", "#stop-mercado-login-btn", ".header-worker-control"],
                 "funds.execute": ["#collect-funds-btn", "#stop-funds-btn"],
                 "zying_collection.execute": ["#start-zying-collection-btn", "#stop-zying-collection-btn"],
@@ -13765,7 +13787,12 @@
                 loadMercadoShippingRates();
             }
             if (tabName === "mercado-publish-records") {
-                loadMercadoPublishRecords();
+                const loadRecordPage = () => {
+                    renderMercadoPublishRecordGroups();
+                    loadMercadoPublishRecords();
+                };
+                if (mercadoPublishStoresLoaded) loadRecordPage();
+                else loadMercadoPublishStores().then(loadRecordPage);
             }
         }
 
@@ -15092,6 +15119,7 @@
                 const skippedOrderCount = Number(response.headers.get("X-Mercado-Skipped-Order-Count") || 0);
                 const failedOrderCount = Number(response.headers.get("X-Mercado-Failed-Order-Count") || 0);
                 const printLogFailed = response.headers.get("X-Mercado-Print-Log") === "failed";
+                const workflowStatusFailed = response.headers.get("X-Mercado-Workflow-Status") === "failed";
                 const blob = await response.blob();
                 const pdfUrl = URL.createObjectURL(blob);
                 if (previewWindow) {
@@ -15108,9 +15136,14 @@
                 if (skippedOrderCount) issueParts.push(`跳过 ${skippedOrderCount} 个不可打印订单`);
                 if (failedOrderCount) issueParts.push(`${failedOrderCount} 个订单下载失败`);
                 if (printLogFailed) issueParts.push("打印记录保存失败，请勿立即重复打印");
-                const resultMessage = `美客多面单已打开：${printedOrderCount} 个订单，${shipmentCount} 个面单${issueParts.length ? `；${issueParts.join("，")}` : ""}`;
+                if (workflowStatusFailed) issueParts.push("待发状态保存失败，请刷新后重试");
+                const warehouseStatusSaved = currentWorkbenchUser.role_key === "warehouse"
+                    && printedOrderCount > 0 && !workflowStatusFailed;
+                const statusSuffix = warehouseStatusSaved ? "；成功打印订单已进入待发" : "";
+                const resultMessage = `美客多面单已打开：${printedOrderCount} 个订单，${shipmentCount} 个面单${statusSuffix}${issueParts.length ? `；${issueParts.join("，")}` : ""}`;
                 orderBulkMessage.textContent = resultMessage;
                 if (orderDetailActionMessage) orderDetailActionMessage.textContent = resultMessage;
+                await loadOrders(orderPage);
                 if (orderDetailDialog?.open && orderDetailOrderId) {
                     await loadOrderOperationLogs(orderDetailOrderId);
                 }
@@ -15725,13 +15758,14 @@
                 const productLink = sourceUrl
                     ? `<a class="market-item-link" href="${escapeHtml(sourceUrl)}" target="_blank" rel="noopener noreferrer">打开源商品</a>`
                     : "";
-                const [statusLabel, statusClass] = statusDefinitions[recordStatus] || [recordStatus || "未知", "partial"];
-                const resultText = publishRecordResultText(row.result_json);
-                const failureReason = String(row.failure_reason || "");
+            const [statusLabel, statusClass] = statusDefinitions[recordStatus] || [recordStatus || "未知", "partial"];
+            const resultText = publishRecordResultText(row.result_json);
+            const failureReason = String(row.failure_reason || "");
                 const details = resultText
                     ? `<details class="publish-record-details"><summary>查看接口返回明细</summary><pre>${escapeHtml(resultText)}</pre></details>`
                     : "";
-                const target = `${escapeHtml(row.store_name || "-")}<span class="market-metric-note">${escapeHtml(row.site_name || row.site_id || "-")} · ${escapeHtml(row.site_id || "-")}</span>`;
+                const groupName = String(row.group_name || "").trim() || "未分组";
+                const target = `${escapeHtml(row.store_name || "-")}<span class="market-metric-note">${escapeHtml(row.site_name || row.site_id || "-")} · ${escapeHtml(row.site_id || "-")} · ${escapeHtml(groupName)}</span>`;
                 const resultItem = row.published_item_id
                     ? `<strong>${escapeHtml(row.published_item_id)}</strong>`
                     : '<span class="market-list-summary">-</span>';
@@ -15750,6 +15784,28 @@
                 </tr>`;
             }).join("");
             updateMercadoPublishRecordSelection();
+        }
+
+        function renderMercadoPublishRecordGroups() {
+            if (!publishRecordGroup) return;
+            const previous = String(publishRecordGroup.value || "");
+            const groups = new Set();
+            for (const account of mercadoStoreTokenRows || []) {
+                for (const setting of account.site_settings || []) {
+                    const groupName = String(setting.group_name || "").trim();
+                    if (groupName) groups.add(groupName);
+                }
+            }
+            const options = [
+                '<option value="">全部店铺组</option>',
+                '<option value="__ungrouped__">未分组</option>',
+                ...Array.from(groups).sort((left, right) => left.localeCompare(right, "zh-CN"))
+                    .map(groupName => `<option value="${escapeHtml(groupName)}">${escapeHtml(groupName)}</option>`),
+            ];
+            publishRecordGroup.innerHTML = options.join("");
+            if (Array.from(publishRecordGroup.options).some(option => option.value === previous)) {
+                publishRecordGroup.value = previous;
+            }
         }
 
         function updateMercadoPublishRecordSelection() {
@@ -15827,6 +15883,9 @@
                 status: String(publishRecordStatus.value || ""),
                 site_id: String(publishRecordSite.value || ""),
                 store_name: String(publishRecordStore.value || "").trim(),
+                group_name: String(publishRecordGroup?.value || ""),
+                start_date: String(publishRecordStartDate?.value || ""),
+                end_date: String(publishRecordEndDate?.value || ""),
                 limit: "500",
             });
             try {
@@ -17284,7 +17343,7 @@
             const stageLabels = {
                 account: "账号校验",
                 source: "读取快照",
-                translation: "翻译",
+                translation: "本地规则准备",
                 payload: "构建参数",
                 pictures: "图片处理",
                 publish: "平台发布",
@@ -17395,7 +17454,7 @@
                 ? `；另有 ${blockedRows.length} 件不可上架，将忽略并自动移回采集列表`
                 : "";
             const attemptCount = publishableRows.length * targetPreview.length;
-            if (!window.confirm(`确定用 ${workerCount} 个线程把 ${publishableRows.length} 件有效产品上架到 ${targetSummary}、${siteIds.length} 个站点吗？共 ${targetPreview.length} 个兼容组合、${attemptCount} 次上架尝试，每件库存 ${quantity}；最终上架净收益 = 产品净收益 × 对应站点折扣比例，跨西语/葡语站点将自动翻译${blockedNote}。`)) return;
+            if (!window.confirm(`确定用 ${workerCount} 个线程把 ${publishableRows.length} 件有效产品上架到 ${targetSummary}、${siteIds.length} 个站点吗？共 ${targetPreview.length} 个兼容组合、${attemptCount} 次上架尝试，每件库存 ${quantity}；最终上架净收益 = 产品净收益 × 对应站点折扣比例，跨站点属性将使用本地规则匹配，不调用翻译模型${blockedNote}。`)) return;
             mercadoPublishSelected.disabled = true;
             mercadoPublishStatus.textContent = "正在创建批量上架任务...";
             try {

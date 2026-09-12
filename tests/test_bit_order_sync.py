@@ -1,4 +1,5 @@
 from datetime import datetime, timedelta, timezone
+import json
 import threading
 
 import pytest
@@ -88,8 +89,8 @@ def test_manual_sync_passes_selected_datetime_range_to_mercado(monkeypatch):
 
     assert filters_seen == {
         "sort": "date_asc",
-        "order.date_created.from": "2026-08-29T00:30:00.000Z",
-        "order.date_created.to": "2026-08-29T01:46:00.000Z",
+        "date_created.from": "2026-08-29T00:30:00.000Z",
+        "date_created.to": "2026-08-29T01:46:00.000Z",
     }
     assert state["start_date"] == "2026-08-29T08:30"
     assert state["end_date"] == "2026-08-29T09:45"
@@ -129,7 +130,7 @@ def test_sync_store_fetches_every_order_and_upserts(monkeypatch):
         },
     )
 
-    result = bit_order_sync._sync_store(token, {"order.date_created.from": "from"})
+    result = bit_order_sync._sync_store(token, {"date_created.from": "from"})
 
     assert result == {
         "store": "泽顺墨西哥",
@@ -138,7 +139,7 @@ def test_sync_store_fetches_every_order_and_upserts(monkeypatch):
         "inserted": 2,
         "updated": 0,
     }
-    assert filters_seen["order.date_created.from"] == "from"
+    assert filters_seen["date_created.from"] == "from"
     assert [order["id"] for order in batches[0][1]] == ["101", "102"]
 
 
@@ -401,10 +402,10 @@ def test_automatic_sync_refreshes_recent_72_hours(monkeypatch):
     assert state["status"] == "completed"
     assert filters_seen["sort"] == "date_asc"
     start_at = datetime.fromisoformat(
-        filters_seen["order.date_created.from"].replace("Z", "+00:00")
+        filters_seen["date_created.from"].replace("Z", "+00:00")
     )
     end_at = datetime.fromisoformat(
-        filters_seen["order.date_created.to"].replace("Z", "+00:00")
+        filters_seen["date_created.to"].replace("Z", "+00:00")
     )
     assert end_at - start_at == timedelta(hours=72)
     assert "last_updated.from" not in filters_seen
@@ -453,6 +454,49 @@ def test_daily_status_sync_uses_incremental_window(monkeypatch):
     assert cutoff_seen["context"]["default_from"] == bootstrap_from
     assert cutoff_seen["context"]["window_to"].tzinfo == timezone.utc
     assert cutoff_seen["context"]["run_date"]
+
+
+def test_daily_status_schedule_runs_at_2am_beijing(monkeypatch):
+    monkeypatch.delenv("MERCADO_ORDER_DAILY_STATUS_HOUR", raising=False)
+    before = datetime(
+        2026, 9, 13, 1, 59,
+        tzinfo=bit_order_sync.WORKBENCH_LOCAL_TIMEZONE,
+    )
+    due, next_run = bit_order_sync._daily_status_schedule(
+        before,
+        "2026-09-12",
+    )
+
+    assert due is False
+    assert next_run == datetime(
+        2026, 9, 13, 2, 0,
+        tzinfo=bit_order_sync.WORKBENCH_LOCAL_TIMEZONE,
+    )
+
+    at_two = before.replace(hour=2, minute=0)
+    due, next_run = bit_order_sync._daily_status_schedule(
+        at_two,
+        "2026-09-12",
+    )
+
+    assert due is True
+    assert next_run == at_two
+
+
+def test_daily_status_schedule_runs_only_once_per_day(monkeypatch):
+    monkeypatch.delenv("MERCADO_ORDER_DAILY_STATUS_HOUR", raising=False)
+    now = datetime(
+        2026, 9, 13, 8, 30,
+        tzinfo=bit_order_sync.WORKBENCH_LOCAL_TIMEZONE,
+    )
+
+    due, next_run = bit_order_sync._daily_status_schedule(now, "2026-09-13")
+
+    assert due is False
+    assert next_run == datetime(
+        2026, 9, 14, 2, 0,
+        tzinfo=bit_order_sync.WORKBENCH_LOCAL_TIMEZONE,
+    )
 
 
 def test_daily_status_yields_before_store_when_recent_sync_is_due(monkeypatch):
@@ -715,6 +759,11 @@ def test_old_status_sync_uses_last_updated_checkpoint_and_parallel_details(monke
         lambda token_id: completed.append(token_id),
     )
     monkeypatch.setattr(
+        bit_order_sync.bit_mysql,
+        "list_mercado_shipment_status_candidates",
+        lambda _token_id, _cutoff: [],
+    )
+    monkeypatch.setattr(
         bit_order_sync,
         "_client_and_token",
         lambda record: (FakeClient(), record),
@@ -759,6 +808,92 @@ def test_old_status_sync_uses_last_updated_checkpoint_and_parallel_details(monke
         "updated": 2,
         "failed": 0,
     }
+
+
+def test_shipment_status_overrides_paid_order_status():
+    order = {
+        "id": "101",
+        "status": "paid",
+        "_shipment_status": "delivered",
+        "_shipment_substatus": "",
+        "_shipment_last_updated": "2026-09-13T01:02:03.000Z",
+    }
+
+    assert bit_mysql._mercado_effective_order_status(order) == "delivered"
+    assert bit_mysql._mercado_effective_status_detail(order) == {
+        "order_status": "paid",
+        "order_status_detail": None,
+        "shipment_status": "delivered",
+        "shipment_substatus": "",
+        "shipment_last_updated": "2026-09-13T01:02:03.000Z",
+    }
+
+
+def test_cancelled_order_wins_over_shipment_status():
+    assert bit_mysql._mercado_effective_order_status({
+        "status": "cancelled",
+        "_shipment_status": "ready_to_ship",
+    }) == "cancelled"
+
+
+def test_order_sync_reads_official_shipment_status_in_parallel():
+    orders = [
+        {"id": "101", "status": "paid", "shipping": {"id": "501"}},
+        {"id": "102", "status": "paid", "shipping": {"id": "502"}},
+    ]
+    barrier = threading.Barrier(2)
+
+    class Client:
+        def get_shipment(self, shipping_id):
+            barrier.wait(timeout=2)
+            return {
+                "id": shipping_id,
+                "status": "shipped" if shipping_id == "501" else "delivered",
+                "substatus": "",
+                "last_updated": "2026-09-13T01:02:03.000Z",
+            }
+
+    result = bit_order_sync._enrich_order_shipment_statuses(Client(), orders)
+
+    assert result == {"shipments": 2, "failed": 0}
+    assert orders[0]["_shipment_status"] == "shipped"
+    assert orders[1]["_shipment_status"] == "delivered"
+
+
+def test_daily_refresh_reads_every_non_final_old_shipment(monkeypatch):
+    saved = []
+    monkeypatch.setattr(
+        bit_order_sync.bit_mysql,
+        "list_mercado_shipment_status_candidates",
+        lambda token_id, cutoff: ["501", "502"],
+    )
+    monkeypatch.setattr(
+        bit_order_sync.bit_mysql,
+        "save_mercado_shipment_statuses",
+        lambda token_id, entries: saved.extend(entries)
+        or {"shipments": len(entries), "orders": len(entries)},
+    )
+
+    class Client:
+        def get_shipment(self, shipping_id):
+            return {
+                "id": shipping_id,
+                "status": "shipped" if shipping_id == "501" else "delivered",
+                "substatus": "",
+                "last_updated": "2026-09-13T01:02:03.000Z",
+            }
+
+    result = bit_order_sync._refresh_old_store_shipment_statuses(
+        Client(),
+        {"id": 8, "display_name": "泽顺墨西哥"},
+        datetime(2026, 9, 10, tzinfo=timezone.utc),
+    )
+
+    assert result == {"shipments": 2, "orders": 2, "failed": 0}
+    assert [(row["shipping_id"], row["status"]) for row in saved] == [
+        ("501", "shipped"),
+        ("502", "delivered"),
+    ]
 
 
 def test_mysql_upsert_maps_token_order_origin_fields(monkeypatch):
@@ -810,7 +945,10 @@ def test_mysql_upsert_maps_token_order_origin_fields(monkeypatch):
     }
     order = {
         "id": 200001,
-        "status": "delivered",
+        "status": "paid",
+        "_shipment_status": "delivered",
+        "_shipment_substatus": "",
+        "_shipment_last_updated": "2026-08-23T05:10:00.000Z",
         "date_created": "2026-08-23T01:02:03.000Z",
         "last_updated": "2026-08-23T05:06:07.000Z",
         "currency_id": "USD",
@@ -834,14 +972,22 @@ def test_mysql_upsert_maps_token_order_origin_fields(monkeypatch):
     row = captured_rows[0]
     assert row[0] == "200001"
     assert row[5] == "墨西哥"
+    assert row[6] == "delivered"
     assert row[7] == "交付"
+    assert json.loads(row[8])["order_status"] == "paid"
+    assert json.loads(row[8])["shipment_status"] == "delivered"
     assert row[19] == "商品一"
     assert str(row[22]) == "2.4"
     assert row[31] == "MXN"
     assert row[32] == ""
     assert "status_label" in upsert_sql[0]
     assert "amount_currency_id" in upsert_sql[0]
-    assert "workflow_status" not in upsert_sql[0]
+    assert "workflow_status" in upsert_sql[0]
+
+
+def test_ready_to_ship_platform_status_is_waiting_for_warehouse_print():
+    assert bit_mysql._MERCADO_ORDER_STATUS_LABELS["ready_to_ship"] == "待打印"
+    assert bit_order_sync.STATUS_LABELS["ready_to_ship"] == "待打印"
 
 
 def test_mysql_upsert_uses_top_level_shipping_cost(monkeypatch):

@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import re
 import threading
+import time
 from datetime import datetime, timedelta
 from decimal import Decimal
 from typing import Any, Callable, Iterable, Mapping
@@ -69,6 +70,8 @@ PRODUCT_WORKFLOW_COLUMN_DEFINITIONS = (
 
 _schema_lock = threading.Lock()
 _schema_ready = False
+PROFITABILITY_INVALIDATION_BATCH_SIZE = 1000
+RETRYABLE_TRANSACTION_ERROR_CODES = {1205, 1213}
 
 
 def _connect() -> Any:
@@ -95,6 +98,16 @@ def _loads(value: Any, default: Any) -> Any:
         return json.loads(str(value))
     except (TypeError, ValueError):
         return default
+
+
+def _is_retryable_transaction_error(exc: BaseException) -> bool:
+    """Return whether MySQL rolled back/waited out a transient transaction."""
+
+    code = exc.args[0] if getattr(exc, "args", ()) else None
+    try:
+        return int(code) in RETRYABLE_TRANSACTION_ERROR_CODES
+    except (TypeError, ValueError):
+        return False
 
 
 def _decimal_from_text(value: Any) -> Decimal | None:
@@ -1540,6 +1553,9 @@ def list_product_publish_records(
     status: str = "",
     store_name: str = "",
     site_id: str = "",
+    group_name: str = "",
+    start_date: str = "",
+    end_date: str = "",
     limit: int = 500,
     offset: int = 0,
     connection_factory: Callable[[], Any] | None = None,
@@ -1552,36 +1568,81 @@ def list_product_publish_records(
     if search:
         pattern = f"%{search}%"
         base_where.append(
-            "(`source_item_id` LIKE %s OR `title` LIKE %s OR "
-            "`published_item_id` LIKE %s OR `batch_id` LIKE %s)"
+            "(records.`source_item_id` LIKE %s OR records.`title` LIKE %s OR "
+            "records.`published_item_id` LIKE %s OR records.`batch_id` LIKE %s)"
         )
         base_params.extend((pattern, pattern, pattern, pattern))
     store_name = str(store_name or "").strip()
     if store_name:
-        base_where.append("`store_name` LIKE %s")
+        base_where.append("records.`store_name` LIKE %s")
         base_params.append(f"%{store_name}%")
     site_id = str(site_id or "").strip().upper()
     if site_id:
-        base_where.append("`site_id` = %s")
+        base_where.append("records.`site_id` = %s")
         base_params.append(site_id)
+    group_name = str(group_name or "").strip()
+    if len(group_name) > 100:
+        raise ValueError("店铺组名称不能超过 100 个字符")
+    if group_name == "__ungrouped__":
+        base_where.append("COALESCE(settings.`group_name`, '') = ''")
+    elif group_name:
+        base_where.append("settings.`group_name` = %s")
+        base_params.append(group_name)
+
+    def parsed_datetime(value: Any, name: str) -> tuple[datetime | None, str]:
+        text = str(value or "").strip()
+        if not text:
+            return None, ""
+        normalized = text.replace("T", " ")
+        for date_format, precision in (
+            ("%Y-%m-%d", "day"),
+            ("%Y-%m-%d %H:%M", "minute"),
+            ("%Y-%m-%d %H:%M:%S", "minute"),
+        ):
+            try:
+                return datetime.strptime(normalized, date_format), precision
+            except ValueError:
+                continue
+        raise ValueError(f"{name}格式必须为 YYYY-MM-DD HH:MM")
+
+    start_at, _ = parsed_datetime(start_date, "开始时间")
+    end_at, end_precision = parsed_datetime(end_date, "结束时间")
+    if start_at and end_at and start_at > end_at:
+        raise ValueError("开始时间不能晚于结束时间")
+    if start_at:
+        base_where.append("records.`created_at` >= %s")
+        base_params.append(start_at.strftime("%Y-%m-%d %H:%M:%S"))
+    if end_at:
+        end_exclusive = end_at + (
+            timedelta(days=1) if end_precision == "day" else timedelta(minutes=1)
+        )
+        base_where.append("records.`created_at` < %s")
+        base_params.append(end_exclusive.strftime("%Y-%m-%d %H:%M:%S"))
+
     where = list(base_where)
     params = list(base_params)
     status = str(status or "").strip().lower()
     if status:
         if status not in PRODUCT_PUBLISH_RECORD_STATUSES:
             raise ValueError(f"不支持的上架记录状态: {status}")
-        where.append("`status` = %s")
+        where.append("records.`status` = %s")
         params.append(status)
     base_where_sql = f"WHERE {' AND '.join(base_where)}" if base_where else ""
     where_sql = f"WHERE {' AND '.join(where)}" if where else ""
+    from_sql = (
+        f"`{PUBLISH_RECORD_TABLE}` AS records "
+        "LEFT JOIN `mercado_store_site_settings` AS settings "
+        "ON settings.`token_id` = records.`token_id` "
+        "AND settings.`site_id` = records.`site_id`"
+    )
 
     connection = (connection_factory or _connect)()
     try:
         with connection.cursor() as cursor:
             ensure_collection_tables(cursor)
             cursor.execute(
-                f"SELECT `status`, COUNT(*) AS total FROM `{PUBLISH_RECORD_TABLE}` "
-                f"{base_where_sql} GROUP BY `status`",
+                f"SELECT records.`status`, COUNT(*) AS total FROM {from_sql} "
+                f"{base_where_sql} GROUP BY records.`status`",
                 tuple(base_params),
             )
             counts = {key: 0 for key in PRODUCT_PUBLISH_RECORD_STATUSES}
@@ -1591,13 +1652,14 @@ def list_product_publish_records(
                     counts[count_status] = int(count_row.get("total") or 0)
             counts["all"] = sum(counts.values())
             cursor.execute(
-                f"SELECT COUNT(*) AS total FROM `{PUBLISH_RECORD_TABLE}` {where_sql}",
+                f"SELECT COUNT(*) AS total FROM {from_sql} {where_sql}",
                 tuple(params),
             )
             total = int((cursor.fetchone() or {}).get("total") or 0)
             cursor.execute(
-                f"SELECT * FROM `{PUBLISH_RECORD_TABLE}` {where_sql} "
-                "ORDER BY `id` DESC LIMIT %s OFFSET %s",
+                f"SELECT records.*, COALESCE(settings.`group_name`, '') AS `group_name` "
+                f"FROM {from_sql} {where_sql} "
+                "ORDER BY records.`id` DESC LIMIT %s OFFSET %s",
                 tuple(params + [limit, offset]),
             )
             rows = [_json_safe_row(row) for row in cursor.fetchall()]
@@ -1932,6 +1994,49 @@ def update_product_items(
     except BaseException:
         connection.rollback()
         raise
+    finally:
+        connection.close()
+
+
+def get_existing_user_product_ids(
+    product_item_ids: Iterable[int],
+    *,
+    token_id: int,
+    connection_factory: Callable[[], Any] | None = None,
+) -> dict[int, str]:
+    """Return the latest reusable UP Siteless ID for each product/account."""
+    item_ids = list(dict.fromkeys(
+        int(value) for value in product_item_ids or [] if int(value) > 0
+    ))
+    if not item_ids:
+        return {}
+    normalized_token_id = int(token_id)
+    if normalized_token_id <= 0:
+        raise ValueError("查询历史 User Product 时账号无效")
+    placeholders = ", ".join(["%s"] * len(item_ids))
+    connection = (connection_factory or _connect)()
+    try:
+        with connection.cursor() as cursor:
+            ensure_collection_tables(cursor)
+            cursor.execute(
+                f"SELECT `product_item_id`, `published_item_id`, `id` "
+                f"FROM `{PUBLISH_RECORD_TABLE}` "
+                f"WHERE `product_item_id` IN ({placeholders}) "
+                "AND `token_id` = %s AND `status` = 'published' "
+                "AND (`published_item_id` LIKE 'CBTU%' "
+                "OR `published_item_id` LIKE 'U%') "
+                "ORDER BY `id` DESC",
+                tuple(item_ids + [normalized_token_id]),
+            )
+            rows = cursor.fetchall()
+        connection.commit()
+        result: dict[int, str] = {}
+        for row in rows:
+            product_item_id = int(row.get("product_item_id") or 0)
+            published_item_id = str(row.get("published_item_id") or "").strip().upper()
+            if product_item_id > 0 and product_item_id not in result:
+                result[product_item_id] = published_item_id
+        return result
     finally:
         connection.close()
 
@@ -2863,10 +2968,22 @@ def mark_all_profitability_stale(
     *,
     reason: str = "official_shipping_rate_card_refresh_pending",
     site_ids: Iterable[str] | None = None,
+    batch_size: int = PROFITABILITY_INVALIDATION_BATCH_SIZE,
     connection_factory: Callable[[], Any] | None = None,
 ) -> int:
-    """Invalidate freight/net for refreshed sites while preserving commission."""
+    """Invalidate freight/net in short batches while preserving commission.
 
+    A single UPDATE over the product and collection tables can hold hundreds of
+    thousands of row locks until commit. Select primary keys in bounded batches
+    and commit every batch so foreground writes can proceed.
+    """
+
+    try:
+        normalized_batch_size = int(batch_size)
+    except (TypeError, ValueError) as exc:
+        raise ValueError("利润失效批次大小必须是整数") from exc
+    if normalized_batch_size <= 0:
+        raise ValueError("利润失效批次大小必须大于 0")
     connection = (connection_factory or _connect)()
     changed = 0
     normalized_sites = sorted({
@@ -2883,30 +3000,66 @@ def mark_all_profitability_stale(
             + ")"
         )
         site_values.extend(normalized_sites)
+    stale_filter = """
+        AND (
+            `shipping_fee_local` IS NOT NULL
+            OR `shipping_currency_id` IS NOT NULL
+            OR `shipping_fee_usd` IS NOT NULL
+            OR `billable_weight_g` IS NOT NULL
+            OR `shipping_api_billable_weight_g` IS NOT NULL
+            OR `shipping_weight_rule` IS NOT NULL
+            OR `net_proceeds_usd` IS NOT NULL
+            OR `profitability_updated_at` IS NOT NULL
+            OR COALESCE(`profitability_error`, '') <> ''
+        )
+    """
+    reason_text = str(reason or "")[:128]
     try:
         with connection.cursor() as cursor:
             ensure_collection_tables(cursor)
             for table in (COLLECTION_TABLE, PRODUCT_TABLE):
-                cursor.execute(
-                    f"""
-                    UPDATE `{table}`
-                    SET `shipping_fee_local` = NULL,
-                        `shipping_currency_id` = NULL,
-                        `shipping_fee_usd` = NULL,
-                        `billable_weight_g` = NULL,
-                        `shipping_api_billable_weight_g` = NULL,
-                        `shipping_weight_rule` = NULL,
-                        `net_proceeds_usd` = NULL,
-                        `profitability_updated_at` = NULL,
-                        `profitability_source` = %s,
-                        `profitability_error` = ''
-                    WHERE `price` IS NOT NULL AND `price` > 0
-                    {site_filter}
-                    """,
-                    tuple([str(reason or "")[:128]] + site_values),
-                )
-                changed += max(0, int(cursor.rowcount or 0))
-        connection.commit()
+                last_id = 0
+                while True:
+                    cursor.execute(
+                        f"""
+                        SELECT `id`
+                        FROM `{table}`
+                        WHERE `id` > %s
+                          AND `price` IS NOT NULL AND `price` > 0
+                          {site_filter}
+                          {stale_filter}
+                        ORDER BY `id` ASC
+                        LIMIT %s
+                        """,
+                        tuple([last_id] + site_values + [normalized_batch_size]),
+                    )
+                    batch_ids = sorted({
+                        int(row.get("id") if isinstance(row, Mapping) else row[0])
+                        for row in (cursor.fetchall() or [])
+                    })
+                    if not batch_ids:
+                        break
+                    last_id = batch_ids[-1]
+                    placeholders = ", ".join(["%s"] * len(batch_ids))
+                    cursor.execute(
+                        f"""
+                        UPDATE `{table}`
+                        SET `shipping_fee_local` = NULL,
+                            `shipping_currency_id` = NULL,
+                            `shipping_fee_usd` = NULL,
+                            `billable_weight_g` = NULL,
+                            `shipping_api_billable_weight_g` = NULL,
+                            `shipping_weight_rule` = NULL,
+                            `net_proceeds_usd` = NULL,
+                            `profitability_updated_at` = NULL,
+                            `profitability_source` = %s,
+                            `profitability_error` = ''
+                        WHERE `id` IN ({placeholders})
+                        """,
+                        tuple([reason_text] + batch_ids),
+                    )
+                    changed += max(0, int(cursor.rowcount or 0))
+                    connection.commit()
         return changed
     except BaseException:
         connection.rollback()
@@ -2981,7 +3134,7 @@ def backfill_item_exchange_prices(
         connection.close()
 
 
-def add_collection_items_to_products(
+def _add_collection_items_to_products_once(
     collection_item_ids: Iterable[int],
     *,
     connection_factory: Callable[[], Any] | None = None,
@@ -3173,3 +3326,24 @@ def add_collection_items_to_products(
         "mirrored": mirrored,
         "mirror_errors": mirror_errors[:10],
     }
+
+
+def add_collection_items_to_products(
+    collection_item_ids: Iterable[int],
+    *,
+    connection_factory: Callable[[], Any] | None = None,
+) -> dict[str, Any]:
+    """Move collection rows to products, retrying transient MySQL lock races."""
+
+    attempts = 3
+    for attempt in range(attempts):
+        try:
+            return _add_collection_items_to_products_once(
+                collection_item_ids,
+                connection_factory=connection_factory,
+            )
+        except Exception as exc:
+            if not _is_retryable_transaction_error(exc) or attempt >= attempts - 1:
+                raise
+            time.sleep(0.15 * (2**attempt))
+    raise RuntimeError("加入产品列表重试结束但没有返回结果")

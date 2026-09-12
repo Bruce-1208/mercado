@@ -2025,6 +2025,35 @@ def get_published_mercado_product_item_ids(product_item_ids, *, token_id, site_i
         )
 
 
+def get_existing_mercado_user_product_ids(product_item_ids, *, token_id):
+    item_ids = [int(value) for value in product_item_ids or []]
+    payload = {
+        "product_item_ids": item_ids,
+        "token_id": int(token_id),
+    }
+    if DB_MODE == "mysql":
+        return _collection_store_call(
+            "get_existing_user_product_ids",
+            item_ids,
+            token_id=payload["token_id"],
+        )
+    path = "/api/db/mercado-publish-records/existing-user-products"
+    try:
+        data = _request("POST", path, json=payload)
+        return {
+            int(product_id): str(user_product_id)
+            for product_id, user_product_id in (
+                data.get("user_product_ids") or {}
+            ).items()
+        }
+    except RuntimeError as exc:
+        if not _collection_route_missing(exc, path):
+            raise
+        return _collection_store_call(
+            "get_existing_user_product_ids",
+            item_ids,
+            token_id=payload["token_id"],
+        )
 def update_mercado_product_publish_record(record_id, **changes):
     if DB_MODE == "mysql":
         return _collection_store_call(
@@ -2042,13 +2071,17 @@ def update_mercado_product_publish_record(record_id, **changes):
 
 
 def list_mercado_product_publish_records(
-    search="", status="", store_name="", site_id="", limit=500, offset=0,
+    search="", status="", store_name="", site_id="", group_name="",
+    start_date="", end_date="", limit=500, offset=0,
 ):
     params = {
         "search": str(search or ""),
         "status": str(status or "").strip().lower(),
         "store_name": str(store_name or "").strip(),
         "site_id": str(site_id or "").strip().upper(),
+        "group_name": str(group_name or "").strip(),
+        "start_date": str(start_date or "").strip(),
+        "end_date": str(end_date or "").strip(),
         "limit": int(limit),
         "offset": int(offset),
     }

@@ -290,6 +290,35 @@ def test_embedded_product_snapshot_avoids_publish_write_read_round_trip():
     assert result["elapsed_seconds"] >= 0
 
 
+def test_batch_publish_passes_reusable_user_product_to_follow_sell():
+    captured = {}
+
+    def fake_follow_sell(_client, _source_url, **kwargs):
+        captured.update(kwargs)
+        return {
+            "result": {"parent_user_product_id": "CBTU123"},
+            "publication_action": "add_marketplace",
+        }
+
+    with patch.object(
+        batch_publish,
+        "_token_record",
+        return_value={"display_name": "跨境店", "access_token": "secret", "site_id": "CBT"},
+    ), patch.object(batch_publish, "follow_sell", side_effect=fake_follow_sell):
+        result = batch_publish.publish_product_batch(
+            [_rows()[0]],
+            token_id=7,
+            site_id="MLB",
+            update_state=lambda *_args, **_kwargs: None,
+            client=object(),
+            existing_user_product_ids={11: "CBTU123"},
+        )
+
+    assert captured["existing_user_product_id"] == "CBTU123"
+    assert result["results"][0]["published_item_id"] == "CBTU123"
+    assert "复用现有 User Product" in result["results"][0]["message"]
+
+
 def test_successful_upload_is_not_reported_failed_when_latest_state_save_fails():
     row = _rows()[0]
     record_updates = []

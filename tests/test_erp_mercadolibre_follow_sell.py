@@ -16,6 +16,7 @@ from erp.mercadolibre_follow_sell import (
     extract_authorization_code,
     extract_item_id,
     follow_sell,
+    infer_cbt_category,
 )
 
 
@@ -63,6 +64,15 @@ class CategoryClient:
         assert method == "GET"
         if path == "/categories/CBT301":
             return {"id": "CBT301"}
+        if path == "/categories/MLM301/attributes":
+            return [
+                {"id": "BRAND", "name": "Marca"},
+                {"id": "GENDER", "name": "Género"},
+                {"id": "COLOR", "name": "Color"},
+                {"id": "ITEM_CONDITION", "name": "Condición del ítem"},
+                {"id": "EMPTY_GTIN_REASON", "name": "Motivo de GTIN vacío"},
+                {"id": "SELLER_SKU", "name": "SKU"},
+            ]
         if path == "/categories/CBT301/attributes":
             return [
                 {"id": attribute_id}
@@ -108,6 +118,23 @@ class RequiredUnknownCategoryClient(CategoryClient):
         return super().request(method, path, **kwargs)
 
 
+class RequiredFactoryKitCategoryClient(CategoryClient):
+    def request(self, method, path, **kwargs):
+        if path == "/categories/CBT301/attributes":
+            return [
+                {"id": "BRAND"},
+                {
+                    "id": "IS_FACTORY_KIT",
+                    "tags": {"required": True},
+                    "values": [
+                        {"id": "242085", "name": "Yes"},
+                        {"id": "242084", "name": "No"},
+                    ],
+                },
+            ]
+        return super().request(method, path, **kwargs)
+
+
 class LocalizedRequiredCategoryClient(CategoryClient):
     def request(self, method, path, **kwargs):
         if path == "/categories/CBT301/attributes":
@@ -146,6 +173,117 @@ class GenderCategoryClient(CategoryClient):
                 {"id": "ITEM_CONDITION"},
                 {"id": "EMPTY_GTIN_REASON"},
                 {"id": "SELLER_SKU"},
+            ]
+        return super().request(method, path, **kwargs)
+
+
+class RequiredColorCategoryClient(CategoryClient):
+    def request(self, method, path, **kwargs):
+        if path == "/categories/CBT301/attributes":
+            return [
+                {"id": "BRAND"},
+                {
+                    "id": "COLOR",
+                    "value_type": "list",
+                    "tags": {"required": True},
+                    "values": [
+                        {"id": "black-id", "name": "Black"},
+                        {"id": "white-id", "name": "White"},
+                    ],
+                },
+            ]
+        return super().request(method, path, **kwargs)
+
+
+class SourceSchemaValueIdClient(CategoryClient):
+    def request(self, method, path, **kwargs):
+        if path == "/categories/MLM301/attributes":
+            return [{
+                "id": "IS_FACTORY_KIT",
+                "name": "Champ localisé inconnu",
+                "value_type": "boolean",
+                "values": [
+                    {"id": "242085", "name": "Valeur positive inconnue"},
+                    {"id": "242084", "name": "Valeur négative inconnue"},
+                ],
+            }]
+        if path == "/categories/CBT301/attributes":
+            return [{
+                "id": "IS_FACTORY_KIT",
+                "name": "Factory kit",
+                "value_type": "boolean",
+                "tags": {"required": True},
+                "values": [
+                    {"id": "242085", "name": "Yes"},
+                    {"id": "242084", "name": "No"},
+                ],
+            }]
+        return super().request(method, path, **kwargs)
+
+
+class VariationSchemaClient(CategoryClient):
+    def request(self, method, path, **kwargs):
+        if path == "/categories/MLM301/attributes":
+            return [{
+                "id": "SIZE",
+                "name": "Talla",
+                "value_type": "list",
+                "values": [{"id": "large-id", "name": "Grande"}],
+            }]
+        if path == "/categories/CBT301/attributes":
+            return [{
+                "id": "SIZE",
+                "name": "Size",
+                "value_type": "list",
+                "tags": {"required": True, "allow_variations": True},
+                "values": [{"id": "large-id", "name": "Large"}],
+            }]
+        return super().request(method, path, **kwargs)
+
+
+class MissingSchemaClient(CategoryClient):
+    def request(self, method, path, **kwargs):
+        if path == "/categories/CBT301/attributes":
+            return None
+        return super().request(method, path, **kwargs)
+
+
+class PowerSupplyCategoryClient(CategoryClient):
+    def request(self, method, path, **kwargs):
+        if path == "/categories/MLM301/attributes":
+            return [
+                {
+                    "id": "CON_USB",
+                    "name": "Con USB",
+                    "value_type": "boolean",
+                    "values": [
+                        {"id": "242085", "name": "Sí"},
+                        {"id": "242084", "name": "No"},
+                    ],
+                },
+                {"id": "VOLTAJE_DE_LA_BATERIA", "name": "Voltaje de la batería"},
+            ]
+        if path == "/categories/CBT301/attributes":
+            return [
+                {
+                    "id": "WITH_USB",
+                    "name": "With USB",
+                    "value_type": "boolean",
+                    "tags": {"required": True},
+                    "values": [
+                        {"id": "242085", "name": "Yes"},
+                        {"id": "242084", "name": "No"},
+                    ],
+                },
+                {
+                    "id": "POWER_SUPPLY_TYPE",
+                    "name": "Power supply type",
+                    "tags": {"required": True},
+                    "values": [
+                        {"id": "domestic", "name": "Domestic current"},
+                        {"id": "hybrid", "name": "Battery/Domestic current"},
+                    ],
+                },
             ]
         return super().request(method, path, **kwargs)
 
@@ -295,6 +433,32 @@ def test_payload_maps_localized_gender_to_target_category_value(
     assert gender["value_name"] == expected_name
 
 
+def test_payload_maps_portuguese_color_to_target_enum_without_translation():
+    source = sample_source()
+    source["attributes"].append({"name": "Cor", "value_name": "Preto"})
+
+    payload = build_user_product_payload(
+        RequiredColorCategoryClient(), source, {}, quantity=1, net_proceeds=20
+    )
+
+    color = next(attribute for attribute in payload["attributes"] if attribute["id"] == "COLOR")
+    assert color["value_id"] == "black-id"
+    assert color["value_name"] == "Black"
+
+
+def test_unknown_required_closed_enum_reports_actionable_mapping_error():
+    source = sample_source()
+    source["attributes"].append({"name": "Cor", "value_name": "Azul petróleo"})
+
+    with pytest.raises(
+        MercadoLibreError,
+        match=r"必填属性 COLOR.*Azul petróleo.*Black, White",
+    ):
+        build_user_product_payload(
+            RequiredColorCategoryClient(), source, {}, quantity=1, net_proceeds=20
+        )
+
+
 def test_payload_overrides_source_brand_with_generic_without_adding_a_duplicate():
     payload = build_global_payload(
         CategoryClient(), sample_source(), {}, quantity=1, net_proceeds=20
@@ -335,6 +499,92 @@ def test_payload_still_reports_unknown_required_category_attributes():
         )
 
 
+@pytest.mark.parametrize(
+    ("source_name", "source_value", "expected_id", "expected_name"),
+    [
+        ("Es un kit de fábrica", "No", "242084", "No"),
+        ("Es un kit de fábrica", "Sí", "242085", "Yes"),
+        ("É um kit de fábrica", "Sim", "242085", "Yes"),
+    ],
+)
+def test_payload_maps_factory_kit_name_and_boolean_value(
+    source_name, source_value, expected_id, expected_name
+):
+    source = sample_source()
+    source["attributes"] = [
+        {"name": source_name, "value_name": source_value},
+    ]
+
+    payload = build_user_product_payload(
+        RequiredFactoryKitCategoryClient(),
+        source,
+        {},
+        quantity=1,
+        net_proceeds=20,
+    )
+
+    factory_kit = next(
+        attribute
+        for attribute in payload["attributes"]
+        if attribute["id"] == "IS_FACTORY_KIT"
+    )
+    assert factory_kit["value_id"] == expected_id
+    assert factory_kit["value_name"] == expected_name
+
+
+def test_source_category_api_recovers_ids_without_a_language_alias():
+    source = sample_source()
+    source["attributes"] = [{
+        "name": "Champ localisé inconnu",
+        "value_name": "Valeur négative inconnue",
+    }]
+
+    payload = build_user_product_payload(
+        SourceSchemaValueIdClient(), source, {}, quantity=1, net_proceeds=20
+    )
+
+    mapped = next(
+        row for row in payload["attributes"] if row["id"] == "IS_FACTORY_KIT"
+    )
+    assert mapped == {
+        "name": "Champ localisé inconnu",
+        "value_name": "No",
+        "id": "IS_FACTORY_KIT",
+        "value_id": "242084",
+    }
+
+
+def test_required_variation_attribute_is_mapped_and_checked_in_every_variation():
+    source = sample_source()
+    source["attributes"] = []
+    source["variations"] = [{
+        "attribute_combinations": [{"name": "Talla", "value_name": "Grande"}],
+        "attributes": [],
+        "picture_ids": ["123-MLM"],
+    }]
+
+    payload = build_global_payload(
+        VariationSchemaClient(), source, {}, quantity=2, net_proceeds=20
+    )
+
+    assert payload["sites_to_sell"][0]["variations"][0]["attribute_combinations"] == [{
+        "name": "Talla",
+        "value_name": "Large",
+        "id": "SIZE",
+        "value_id": "large-id",
+    }]
+
+
+def test_target_category_schema_failure_stops_publication_validation():
+    with pytest.raises(
+        MercadoLibreError,
+        match=r"无法从 Mercado Libre API 获取类目 CBT301 的属性规则.*上架已停止",
+    ):
+        build_user_product_payload(
+            MissingSchemaClient(), sample_source(), {}, quantity=1, net_proceeds=20
+        )
+
+
 def test_payload_maps_collected_spanish_attribute_ids_to_cbt_schema():
     source = sample_source()
     source["attributes"] = [
@@ -363,6 +613,60 @@ def test_payload_maps_collected_spanish_attribute_ids_to_cbt_schema():
     assert by_id["SURVEILLANCE_CAMERA_TYPE"]["value_name"] == "IP"
     assert by_id["CAMERA_LOCATIONS"]["value_name"] == "Exterior"
     assert by_id["IS_WIRELESS"]["value_name"] == "Sí"
+
+
+def test_payload_maps_spanish_usb_and_infers_required_power_supply_from_evidence():
+    source = sample_source()
+    source["title"] = "Proyector USB con batería"
+    source["attributes"] = [
+        {"id": "CON_USB", "name": "Con USB", "value_name": "Sí"},
+        {
+            "id": "VOLTAJE_DE_LA_BATERIA",
+            "name": "Voltaje de la batería",
+            "value_name": "5 V",
+        },
+    ]
+
+    payload = build_user_product_payload(
+        PowerSupplyCategoryClient(), source, {}, quantity=1, net_proceeds=20
+    )
+
+    by_id = {attribute["id"]: attribute for attribute in payload["attributes"]}
+    assert by_id["WITH_USB"]["value_id"] == "242085"
+    assert by_id["WITH_USB"]["value_name"] == "Yes"
+    assert by_id["POWER_SUPPLY_TYPE"]["value_id"] == "hybrid"
+    assert by_id["POWER_SUPPLY_TYPE"]["value_name"] == "Battery/Domestic current"
+
+
+def test_category_discovery_retries_with_deterministic_english_keywords():
+    class Client:
+        def __init__(self):
+            self.queries = []
+
+        def request(self, method, path, **kwargs):
+            assert method == "GET"
+            if path == "/categories/CBT18022":
+                raise MercadoLibreError("not found", status_code=404)
+            if path == "/sites/CBT/domain_discovery/search":
+                query = kwargs["params"]["q"]
+                self.queries.append(query)
+                if query == "Lámpara proyector de onda de agua efecto aurora boreal":
+                    return []
+                assert "lamp" in query
+                assert "projector" in query
+                assert "water ripple" in query
+                assert "northern lights" in query
+                return [{"category_id": "CBT11889"}]
+            raise AssertionError(path)
+
+    client = Client()
+    category_id = infer_cbt_category(client, {
+        "category_id": "MLM18022",
+        "title": "Lámpara proyector de onda de agua efecto aurora boreal",
+    })
+
+    assert category_id == "CBT11889"
+    assert len(client.queries) == 2
 
 
 def test_user_product_payload_uses_uploaded_picture_ids():
@@ -722,7 +1026,78 @@ def test_user_products_endpoint_falls_back_only_on_explicit_not_found():
     assert ("POST", "/global/items") in client.paths
 
 
-def test_follow_sell_translates_mexico_listing_for_brazil_destination():
+def test_existing_user_product_adds_marketplace_without_recreating_or_uploading():
+    class ReuseClient(CategoryClient):
+        def __init__(self):
+            self.paths = []
+            self.add_payload = None
+
+        def request(self, method, path, **kwargs):
+            self.paths.append((method, path))
+            if path == "/users/me":
+                return {"id": 77, "site_id": "CBT", "tags": ["user_product_seller"]}
+            if path == "/marketplace/user-products/CBTU123/mapping":
+                return [{"site_items": [{"site_id": "MLM", "item_id": "MLM1"}]}]
+            if method == "POST" and path == "/global/user-products/CBTU123":
+                self.add_payload = kwargs["json_body"]
+                return {
+                    "parent_user_product_id": "CBTU123",
+                    "site_items": [{"site_id": "MLB", "item_id": "MLB2"}],
+                }
+            return super().request(method, path, **kwargs)
+
+        def upload_picture_from_url(self, _source_url):
+            raise AssertionError("existing UP must reuse its pictures")
+
+    client = ReuseClient()
+    result = follow_sell(
+        client,
+        "MLM3016972321",
+        destination_site_id="MLB",
+        prepared_listing=(sample_source(), {}),
+        existing_user_product_id="CBTU123",
+        publish=True,
+        net_proceeds=20,
+    )
+
+    assert result["publication_action"] == "add_marketplace"
+    assert result["endpoint"] == "/global/user-products/CBTU123"
+    assert client.add_payload == {
+        "sites_to_sell": [{
+            "site_id": "MLB",
+            "logistic_type": "remote",
+            "net_proceeds": 20,
+        }]
+    }
+    assert ("POST", "/global/user-products") not in client.paths
+
+
+def test_existing_user_product_skips_add_when_marketplace_mapping_already_exists():
+    class AlreadyMappedClient(CategoryClient):
+        def request(self, method, path, **kwargs):
+            if path == "/users/me":
+                return {"id": 77, "site_id": "CBT", "tags": ["user_product_seller"]}
+            if path == "/marketplace/user-products/CBTU123/mapping":
+                return [{"site_items": [{"site_id": "MLB", "item_id": "MLB2"}]}]
+            if method == "POST":
+                raise AssertionError("mapped site must not be created again")
+            return super().request(method, path, **kwargs)
+
+    result = follow_sell(
+        AlreadyMappedClient(),
+        "MLM3016972321",
+        destination_site_id="MLB",
+        prepared_listing=(sample_source(), {}),
+        existing_user_product_id="CBTU123",
+        publish=True,
+        net_proceeds=20,
+    )
+
+    assert result["publication_action"] == "already_available"
+    assert result["result"]["site_items"][0]["item_id"] == "MLB2"
+
+
+def test_follow_sell_uses_rules_without_calling_translator_for_brazil_destination():
     class GlobalUserProductClient(DiscoveryClient):
         def request(self, method, path, **kwargs):
             if path == "/users/me":
@@ -740,10 +1115,7 @@ def test_follow_sell_translates_mexico_listing_for_brazil_destination():
             client,
             "MLM3016972321",
             destination_site_id="MLB",
-            translator=lambda texts, source_language, target_language: [
-                "Produto de teste",
-                "Descrição",
-            ],
+            translator=lambda *_args: pytest.fail("listing must not call a translator"),
             source_from_database=True,
             publish=False,
             net_proceeds=20,
@@ -751,7 +1123,8 @@ def test_follow_sell_translates_mexico_listing_for_brazil_destination():
 
     assert result["destination_site_id"] == "MLB"
     assert result["payload"]["sites_to_sell"][0]["site_id"] == "MLB"
-    assert result["payload"]["family_name"] == "Produto de teste"
-    assert result["payload"]["description"]["plain_text"] == "Descrição"
-    assert result["translation"]["translated"] is True
+    assert result["payload"]["family_name"] == "Producto de prueba"
+    assert result["payload"]["description"]["plain_text"] == "Descripción"
+    assert result["translation"]["translated"] is False
+    assert result["translation"]["strategy"] == "deterministic_attribute_rules"
     assert client.discovery_query == "Producto de prueba"

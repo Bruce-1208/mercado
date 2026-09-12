@@ -47,6 +47,18 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_PROFILE_DIR = PROJECT_ROOT / "cache" / "mercado_playwright_profile"
 DEFAULT_SETUP_URL = "https://www.mercadolibre.com/"
 
+# The workbench opens a temporary page for an operator to complete the first
+# ZYing login.  Keep cancellation out-of-band so the public helper signature
+# remains backwards compatible with older callers while the API can still
+# release the browser lease before collection starts.
+_LOGIN_SETUP_STOP_EVENT: threading.Event | None = None
+
+
+def set_playwright_login_setup_stop_event(stop_event: threading.Event | None) -> None:
+    """Attach the workbench cancellation event to the login setup session."""
+    global _LOGIN_SETUP_STOP_EVENT
+    _LOGIN_SETUP_STOP_EVENT = stop_event
+
 MARKETPLACE_FRONT_URLS_BY_LIST_HOST = {
     "listado.mercadolibre.com.mx": "https://www.mercadolibre.com.mx/",
     "lista.mercadolivre.com.br": "https://www.mercadolivre.com.br/",
@@ -67,6 +79,7 @@ LISTING_DOM_SCRIPT = r"""() => {
       img.getAttribute('src') || '';
   };
   const itemPattern = /(?:ML[A-Z]|CBT)-?\d+/i;
+  const assetIsUsFlag = value => /(?:^|[\\/])US\.svg(?:[?#"')]|$)/i.test(String(value || ''));
   const cards = Array.from(document.querySelectorAll(
     'li.ui-search-layout__item, .ui-search-result, .poly-card, [data-testid="result"]'
   ));
@@ -101,7 +114,20 @@ LISTING_DOM_SCRIPT = r"""() => {
     if (price && cents) price += '.' + clean(cents.textContent).replace(/\D/g, '');
     const cardText = clean(root.innerText || root.textContent || '');
     const hasFreeShipping = /env[ií]o\s+gratis|frete\s+gr[aá]tis|env[ií]o\s+sin\s+cargo/i.test(cardText);
-    const isUsOrigin = /(?:internacional.{0,24}(?:usa|eua|estados unidos|united states))|(?:(?:usa|eua|estados unidos|united states).{0,24}internacional)/i.test(cardText);
+    const isUsOriginText = /(?:internacional.{0,24}(?:usa|eua|estados unidos|united states))|(?:(?:usa|eua|estados unidos|united states).{0,24}internacional)/i.test(cardText);
+    const isUsOriginFlag = Array.from(root.querySelectorAll ? root.querySelectorAll('img, source, use, [style]') : [])
+      .some(node => [
+        node.getAttribute && node.getAttribute('src'),
+        node.getAttribute && node.getAttribute('data-src'),
+        node.getAttribute && node.getAttribute('srcset'),
+        node.getAttribute && node.getAttribute('href'),
+        node.getAttribute && node.getAttribute('xlink:href'),
+        node.getAttribute && node.getAttribute('data'),
+        node.getAttribute && node.getAttribute('alt'),
+        node.getAttribute && node.getAttribute('title'),
+        node.style && node.style.backgroundImage
+      ].some(assetIsUsFlag));
+    const isUsOrigin = isUsOriginText || isUsOriginFlag;
     const isChinaOrigin = /(?:internacional.{0,24}china)|(?:china.{0,24}internacional)/i.test(cardText);
     rows.push({
       href: link.href,
@@ -304,15 +330,15 @@ class _DetailPageSlot:
 
 
 class NonChinaSelfShipSkipped(RuntimeError):
-    """Raised when ZYing does not positively identify China self-shipping."""
+    """Legacy skip marker retained for callers that provide custom collectors."""
 
 
 class USSelfShipSkipped(NonChinaSelfShipSkipped):
-    """Raised when ZYing identifies an Internacional item as US self-ship."""
+    """Legacy US skip marker; normal listing collection filters US cards earlier."""
 
 
 class UnverifiedChinaSelfShipSkipped(NonChinaSelfShipSkipped):
-    """Raised when ZYing exposes weight but no trustworthy CN.svg marker."""
+    """Legacy origin-verification marker retained for backward compatibility."""
 
 
 PLUGIN_REACT_METRICS_SCRIPT = r"""(() => {
@@ -1371,7 +1397,10 @@ async def _listing_candidates(
             requested_count,
             collection_scope=collection_scope,
         )
-        if len(candidates) == before:
+        # Only use the detail fallback for a page with no listing rows.  A page
+        # whose rows were filtered (notably US.svg cards) must not be converted
+        # back into a detail candidate from an item-like URL.
+        if len(candidates) == before and not page_rows:
             try:
                 item_id = direct_source_item_id or extract_listing_item_id(actual_url)
             except ValueError:
@@ -1591,7 +1620,6 @@ async def _wait_for_plugin_metrics(
     last_metrics = parse_plugin_metrics("")
     poll_number = 0
     actual_weight_first_seen_poll: int | None = None
-    self_ship_origin = ""
 
     def merge_metrics(incoming: Mapping[str, Any]) -> None:
         for key, value in incoming.items():
@@ -1612,39 +1640,25 @@ async def _wait_for_plugin_metrics(
             react_metrics, react_lines = _metrics_from_react_payload(react_payload)
             merge_lines(react_lines)
             merge_metrics(react_metrics)
-            react_origin = _plugin_self_ship_origin(react_lines)
-            if react_origin:
-                self_ship_origin = react_origin
-            if self_ship_origin == "US":
-                return last_metrics, last_lines
         # React props are the fast path.  A full shadow-DOM/frame scan is much
-        # heavier, so scan periodically. While origin is still unknown, scan
-        # every poll after weight appears so a delayed US.svg cannot be missed.
-        actual_weight = _number(last_metrics.get("weight_g"))
+        # heavier, so scan periodically. Origin metadata is informational only
+        # and is never used to decide whether a detail is collected.
         if (
             not last_lines
             or poll_number % 3 == 0
-            or (actual_weight is not None and actual_weight > 0 and not self_ship_origin)
         ):
             dom_lines = await _plugin_dom_lines(page)
             merge_lines(dom_lines)
             merge_metrics(parse_plugin_metrics(" ".join(dom_lines)))
-            dom_origin = _plugin_self_ship_origin(dom_lines)
-            if dom_origin:
-                self_ship_origin = dom_origin
-            if self_ship_origin == "US":
-                return last_metrics, last_lines
 
         actual_weight = _number(last_metrics.get("weight_g"))
         actual_weight_complete = actual_weight is not None and actual_weight > 0
-        if actual_weight_complete and self_ship_origin == "CN":
-            return last_metrics, last_lines
         if actual_weight_complete:
             if actual_weight_first_seen_poll is None:
                 actual_weight_first_seen_poll = poll_number
             elif poll_number - actual_weight_first_seen_poll >= 3:
-                # Shipping needs only actual weight. Keep a short origin grace
-                # window (up to 750 ms) to catch a late-rendered US.svg.
+                # Shipping needs only actual weight. Keep a short grace window
+                # for late-rendered plugin values before returning.
                 return last_metrics, last_lines
         if (
             react_reader is None
@@ -1770,15 +1784,9 @@ async def _collect_detail(
             stop_event,
             react_reader=react_reader,
         )
+        # Keep the plugin origin as diagnostic metadata only.  US filtering is
+        # authoritative on the listing card, before this detail page opens.
         self_ship_origin = _plugin_self_ship_origin(plugin_lines)
-        if self_ship_origin == "US":
-            raise USSelfShipSkipped(
-                "智赢插件检测到 US.svg：美国自发货商品已跳过，不写入采集列表"
-            )
-        if self_ship_origin != "CN":
-            raise UnverifiedChinaSelfShipSkipped(
-                "智赢插件未检测到 CN.svg：无法确认中国自发货，已跳过且不写入采集列表"
-            )
         ocr_snapshot: dict[str, Any] = {}
         metric_keys = (
             "weight_g",
@@ -2578,9 +2586,11 @@ def repair_marketplace_items_playwright(
 
 
 async def _open_login_setup_async(start_url: str, window_id: str = "") -> None:
+    global _LOGIN_SETUP_STOP_EVENT
     window_id = str(window_id or "").strip()
     runtime = await (_open_runtime(window_id) if window_id else _open_runtime())
     page = await _new_page(runtime)
+    stop_event = _LOGIN_SETUP_STOP_EVENT
     try:
         try:
             await _goto(page, start_url)
@@ -2593,9 +2603,21 @@ async def _open_login_setup_async(start_url: str, window_id: str = "") -> None:
         except Exception:
             pass
         while not page.is_closed():
+            if stop_event is not None and stop_event.is_set():
+                # Closing from the workbench is used when the operator has
+                # already logged in and clicks Start without manually closing
+                # the temporary tab.  Do not close the BitBrowser profile;
+                # _close_runtime only disconnects and releases its lease.
+                try:
+                    await page.close()
+                except Exception:
+                    pass
+                break
             await asyncio.sleep(0.5)
     finally:
         await _close_runtime(runtime)
+        if _LOGIN_SETUP_STOP_EVENT is stop_event:
+            _LOGIN_SETUP_STOP_EVENT = None
 
 
 def open_playwright_login_setup(
@@ -2618,4 +2640,5 @@ __all__ = [
     "discover_zying_extension_dir",
     "open_playwright_login_setup",
     "repair_marketplace_items_playwright",
+    "set_playwright_login_setup_stop_event",
 ]

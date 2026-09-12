@@ -382,21 +382,72 @@ def test_profitability_queue_includes_all_sources_and_retries_incomplete_rows():
 
 
 def test_reference_refresh_clears_only_shipping_and_net_for_safe_recalculation():
-    connection = _FakeConnection(update_rowcount=2)
+    class Cursor(_FakeCursor):
+        def __init__(self):
+            super().__init__(update_rowcount=2)
+            self.select_calls = 0
+
+        def fetchall(self):
+            query = self.queries[-1][0] if self.queries else ""
+            if query.startswith("SELECT `id` FROM"):
+                self.select_calls += 1
+                return [{"id": self.select_calls}] if self.select_calls in (1, 3) else []
+            return []
+
+    class Connection(_FakeConnection):
+        def __init__(self):
+            super().__init__(update_rowcount=2)
+            self.fake_cursor = Cursor()
+            self.commit_count = 0
+
+        def commit(self):
+            self.committed = True
+            self.commit_count += 1
+
+    connection = Connection()
     with patch.object(store, "ensure_collection_tables"):
         assert store.mark_all_profitability_stale(
             site_ids=["MLM", "MLB"],
+            batch_size=100,
             connection_factory=lambda: connection,
         ) == 4
-    for sql, params in connection.fake_cursor.queries:
+    update_queries = [
+        (sql, params)
+        for sql, params in connection.fake_cursor.queries
+        if sql.startswith("UPDATE")
+    ]
+    assert connection.commit_count == 2
+    for sql, params in update_queries:
         assert "`source_type` =" not in sql
         assert "`profitability_updated_at` = NULL" in sql
         assert "`commission_amount_usd` = NULL" not in sql
         assert "`shipping_fee_usd` = NULL" in sql
         assert "`shipping_weight_rule` = NULL" in sql
         assert "`net_proceeds_usd` = NULL" in sql
-        assert "LEFT(`source_item_id`, 3) IN (%s, %s)" in sql
-        assert params[-2:] == ("MLB", "MLM")
+        assert "WHERE `id` IN (%s)" in sql
+    select_queries = [
+        (sql, params)
+        for sql, params in connection.fake_cursor.queries
+        if sql.startswith("SELECT `id` FROM")
+    ]
+    assert all("LEFT(`source_item_id`, 3) IN (%s, %s)" in sql for sql, _ in select_queries)
+    assert all(params[-3:-1] == ("MLB", "MLM") for _, params in select_queries)
+
+
+def test_add_products_retries_transient_lock_timeout(monkeypatch):
+    calls = []
+
+    def add_once(*args, **kwargs):
+        calls.append((args, kwargs))
+        if len(calls) < 3:
+            raise RuntimeError(1205, "Lock wait timeout exceeded")
+        return {"count": 1}
+
+    monkeypatch.setattr(store, "_add_collection_items_to_products_once", add_once)
+    monkeypatch.setattr(store.time, "sleep", lambda _seconds: None)
+
+    assert store.add_collection_items_to_products([7]) == {"count": 1}
+    assert len(calls) == 3
 
 
 def test_existing_schema_still_installs_refresh_indexes_once(monkeypatch):
@@ -1243,6 +1294,27 @@ def test_published_product_ids_are_scoped_to_account_and_site():
     assert params == (11, 12, 13, 7, "MLM")
 
 
+def test_existing_user_product_ids_are_reused_across_sites_for_same_account():
+    connection = _FakeConnection()
+    connection.fake_cursor.fetchall = lambda: [
+        {"id": 9, "product_item_id": 11, "published_item_id": "CBTU123"},
+        {"id": 8, "product_item_id": 11, "published_item_id": "CBTU122"},
+        {"id": 7, "product_item_id": 13, "published_item_id": "U456"},
+    ]
+
+    with patch.object(store, "ensure_collection_tables"):
+        result = store.get_existing_user_product_ids(
+            [11, 12, 13], token_id=7, connection_factory=lambda: connection
+        )
+
+    query, params = connection.fake_cursor.queries[-1]
+    assert result == {11: "CBTU123", 13: "U456"}
+    assert "`site_id`" not in query
+    assert "`status` = 'published'" in query
+    assert "LIKE 'CBTU%'" in query
+    assert params == (11, 12, 13, 7)
+
+
 def test_publish_records_can_be_loaded_by_selected_ids_for_retry():
     connection = _FakeConnection()
     connection.fake_cursor.fetchall = lambda: [
@@ -1267,3 +1339,37 @@ def test_publish_records_can_be_loaded_by_selected_ids_for_retry():
         store.get_product_publish_records_by_ids(
             [], connection_factory=lambda: None
         )
+
+
+def test_publish_record_list_supports_time_and_store_group_filters():
+    connection = _FakeConnection()
+
+    with patch.object(store, "ensure_collection_tables"):
+        result = store.list_product_publish_records(
+            group_name="精品组",
+            start_date="2026-09-12T00:00",
+            end_date="2026-09-12T23:59",
+            connection_factory=lambda: connection,
+        )
+
+    assert result == {
+        "total": 0,
+        "counts": {
+            **{status: 0 for status in store.PRODUCT_PUBLISH_RECORD_STATUSES},
+            "all": 0,
+        },
+        "rows": [],
+    }
+    count_query, count_params = connection.fake_cursor.queries[-3]
+    total_query, total_params = connection.fake_cursor.queries[-2]
+    rows_query, rows_params = connection.fake_cursor.queries[-1]
+    for query in (count_query, total_query, rows_query):
+        assert "mercado_store_site_settings" in query
+        assert "settings.`group_name` = %s" in query
+        assert "records.`created_at` >= %s" in query
+        assert "records.`created_at` < %s" in query
+    assert count_params == (
+        "精品组", "2026-09-12 00:00:00", "2026-09-13 00:00:00"
+    )
+    assert total_params == count_params
+    assert rows_params == count_params + (500, 0)

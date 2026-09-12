@@ -99,13 +99,17 @@
         event.preventDefault();
         event.stopPropagation();
         const original = button.textContent;
+        if (candidate.isUsOrigin || core.cardHasUsFlag(candidate.card)) {
+          showToast("商品列表检测到 US.svg，已跳过美国自发货商品", "info");
+          return;
+        }
         button.disabled = true;
         button.textContent = "采集中…";
         try {
           const detailTab = window.open(candidate.url, "_blank", "noopener");
           if (!detailTab) throw new Error("浏览器拦截了详情页，请允许弹出窗口后重试");
           button.textContent = "已打开";
-          showToast("已打开详情页；请等待智赢显示 CN.svg 后再采集", "info");
+          showToast("已打开详情页；只要不是美国自发货即可采集", "info");
         } catch (error) {
           button.textContent = "重试";
           showToast(error.message || String(error), "error");

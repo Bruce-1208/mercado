@@ -19,16 +19,19 @@ import threading
 import time
 import unicodedata
 from pathlib import Path
-from typing import Any, Iterable, Mapping
+from typing import Any, Callable, Iterable, Mapping
 from urllib.parse import parse_qs, urlparse
 
 import requests
 
-from erp.mercadolibre_translation import (
-    BatchTranslator,
-    normalize_marketplace_site,
-    translate_listing_content,
+from erp.mercadolibre_attribute_rules import (
+    is_read_only_attribute,
+    is_required_attribute,
+    match_enumerated_value,
+    resolve_schema_attribute_id,
+    semantic_value_key,
 )
+from erp.mercadolibre_translation import normalize_marketplace_site
 
 
 API_BASE_URL = "https://api.mercadolibre.com"
@@ -357,65 +360,6 @@ DEFAULT_SALE_TERMS = [
         "value_name": "No warranty",
     }
 ]
-GENDER_VALUE_IDS = {
-    "WOMAN": "339665",
-    "WOMEN": "339665",
-    "MUJER": "339665",
-    "MUJERES": "339665",
-    "FEMENINO": "339665",
-    "FEMININO": "339665",
-    "MAN": "339666",
-    "MEN": "339666",
-    "HOMBRE": "339666",
-    "HOMBRES": "339666",
-    "MASCULINO": "339666",
-    "GIRL": "339668",
-    "GIRLS": "339668",
-    "NINA": "339668",
-    "NINAS": "339668",
-    "MENINA": "339668",
-    "MENINAS": "339668",
-    "BOY": "339667",
-    "BOYS": "339667",
-    "NINO": "339667",
-    "NINOS": "339667",
-    "MENINO": "339667",
-    "MENINOS": "339667",
-    "BABY": "371795",
-    "BABIES": "371795",
-    "BEBE": "371795",
-    "BEBES": "371795",
-    "GENDER_NEUTRAL": "110461",
-    "SIN_GENERO": "110461",
-    "SEM_GENERO": "110461",
-    "UNISEX": "110461",
-}
-ATTRIBUTE_ID_ALIASES = {
-    "MARCA": "BRAND",
-    "MODELO": "MODEL",
-    "GENERO": "GENDER",
-    "PERSONAJE": "CHARACTER",
-    "NOMBRE_DEL_JUEGO_DE_MESA": "BOARD_GAME_NAME",
-    "TIPO_DE_PRODUCTO": "PRODUCT_TYPE",
-    "TIPO_DE_CARTAS": "PLAYING_CARDS_TYPE",
-    "ES_SET": "IS_SET",
-    "TIPO_DE_CAMARA_DE_VIGILANCIA": "SURVEILLANCE_CAMERA_TYPE",
-    "LOCACIONES_DE_LA_CAMARA": "CAMERA_LOCATIONS",
-    "ES_INALAMBRICO": "IS_WIRELESS",
-    "TALLA": "SIZE",
-    "MATERIAL_PRINCIPAL": "MAIN_MATERIAL",
-    "COMPOSICION": "COMPOSITION",
-    "CANTIDAD_DE_DISFRACES": "COSTUMES_NUMBER",
-    "INCLUYE_ACCESORIOS": "INCLUDES_ACCESSORIES",
-    "ACCESORIOS_INCLUIDOS": "ACCESSORIES_INCLUDED",
-    "ES_KIT": "IS_KIT",
-    "TALLA_DEL_DISFRAZ": "COSTUME_SIZE",
-    "CONTORNO_DEL_PECHO": "CHEST_CIRCUMFERENCE",
-    "CONTORNO_DE_LA_CINTURA": "WAIST_CIRCUMFERENCE",
-    "CONTORNO_DE_LA_CADERA": "HIP_CIRCUMFERENCE",
-    "ESTILOS": "NECKLACE_STYLES",
-    "MATERIAL_DEL_COLLAR": "NECKLACE_MATERIAL",
-}
 MAX_PICTURES_PER_LISTING = 12
 
 
@@ -428,37 +372,35 @@ def _clean_attribute(attribute: Mapping[str, Any]) -> dict[str, Any]:
     }
 
 
-def _normalized_attribute_key(value: Any) -> str:
-    text = unicodedata.normalize("NFKD", str(value or ""))
-    ascii_text = "".join(
-        character for character in text if not unicodedata.combining(character)
-    )
-    return re.sub(r"[^A-Z0-9]+", "_", ascii_text.upper()).strip("_")
-
-
-def _canonical_attribute_id(attribute: Mapping[str, Any]) -> str:
-    raw_id = _normalized_attribute_key(attribute.get("id"))
-    name_id = _normalized_attribute_key(attribute.get("name"))
-    return ATTRIBUTE_ID_ALIASES.get(raw_id) or ATTRIBUTE_ID_ALIASES.get(name_id) or raw_id
-
-
 def _copy_attributes(
     attributes: Iterable[Mapping[str, Any]],
     *,
     seller_sku: str | None = None,
     allowed_ids: set[str] | None = None,
+    schema: Iterable[Mapping[str, Any]] | None = None,
+    source_schema: Iterable[Mapping[str, Any]] | None = None,
+    ensure_brand: bool = True,
 ) -> list[dict[str, Any]]:
+    source_definitions = {
+        str(definition.get("id") or "").upper(): definition
+        for definition in source_schema or []
+        if definition.get("id")
+    }
     copied: list[dict[str, Any]] = []
     positions: dict[str, int] = {}
     for source_attribute in attributes:
-        attribute_id = _canonical_attribute_id(source_attribute)
+        source_attribute_id = resolve_schema_attribute_id(source_attribute, source_schema)
+        source_definition = source_definitions.get(source_attribute_id) or {}
+        attribute = _clean_attribute(source_attribute)
+        attribute["id"] = source_attribute_id
+        _restore_source_enumerated_value_id(attribute, source_definition)
+        attribute_id = resolve_schema_attribute_id(attribute, schema)
         if (
             not attribute_id
             or attribute_id in SELLER_SPECIFIC_ATTRIBUTES
             or (allowed_ids is not None and attribute_id not in allowed_ids)
         ):
             continue
-        attribute = _clean_attribute(source_attribute)
         attribute["id"] = attribute_id
         existing_position = positions.get(attribute_id)
         if existing_position is None:
@@ -466,17 +408,56 @@ def _copy_attributes(
             copied.append(attribute)
         elif not copied[existing_position].get("value_name") and attribute.get("value_name"):
             copied[existing_position] = attribute
-    brand_position = positions.get("BRAND")
-    if brand_position is None:
-        copied.append({"id": "BRAND", "value_name": DEFAULT_BRAND})
-    else:
-        # Follow-sell products intentionally publish under the generic brand;
-        # source-page brand text is often seller-entered or malformed.
-        copied[brand_position].pop("value_id", None)
-        copied[brand_position]["value_name"] = DEFAULT_BRAND
+    if ensure_brand:
+        brand_position = positions.get("BRAND")
+        if brand_position is None:
+            copied.append({"id": "BRAND", "value_name": DEFAULT_BRAND})
+        else:
+            # Follow-sell products intentionally publish under the generic brand;
+            # source-page brand text is often seller-entered or malformed.
+            copied[brand_position].pop("value_id", None)
+            copied[brand_position]["value_name"] = DEFAULT_BRAND
     if seller_sku:
         copied.append({"id": "SELLER_SKU", "value_name": seller_sku})
     return copied
+
+
+def _restore_source_enumerated_value_id(
+    attribute: dict[str, Any], definition: Mapping[str, Any]
+) -> None:
+    """Recover stable value IDs from the source category's localized schema."""
+    attribute_id = str(definition.get("id") or attribute.get("id") or "").upper()
+    allowed_values = [
+        value
+        for value in definition.get("values") or []
+        if isinstance(value, Mapping) and value.get("id")
+    ]
+    if not allowed_values:
+        return
+    source_values = attribute.get("values")
+    if isinstance(source_values, list) and source_values:
+        restored: list[dict[str, Any]] = []
+        for source_value in source_values:
+            if not isinstance(source_value, Mapping):
+                continue
+            matched = match_enumerated_value(
+                attribute_id,
+                source_value.get("id"),
+                source_value.get("name"),
+                allowed_values,
+            )
+            restored.append(dict(matched or source_value))
+        if restored:
+            attribute["values"] = restored
+        return
+    matched = match_enumerated_value(
+        attribute_id,
+        attribute.get("value_id"),
+        attribute.get("value_name"),
+        allowed_values,
+    )
+    if matched is not None:
+        attribute["value_id"] = str(matched["id"])
 
 
 def _ensure_item_condition(
@@ -616,6 +597,69 @@ _PICTURE_KEY_LOCKS: dict[tuple[int, str], threading.Lock] = {}
 _CACHE_TTL_SECONDS = 24 * 60 * 60
 _PICTURE_CACHE_TTL_SECONDS = 7 * 24 * 60 * 60
 
+_CATEGORY_QUERY_PHRASES = {
+    "aurora boreal": "northern lights",
+    "cielo estrellado": "starry sky",
+    "ceu estrelado": "starry sky",
+    "luz nocturna": "night light",
+    "luz noturna": "night light",
+    "onda de agua": "water ripple",
+    "onda d agua": "water ripple",
+}
+_CATEGORY_QUERY_WORDS = {
+    "agua": "water",
+    "bateria": "battery",
+    "decoracion": "decoration",
+    "decoracao": "decoration",
+    "efecto": "effect",
+    "efeito": "effect",
+    "estrella": "star",
+    "estrellas": "stars",
+    "estrela": "star",
+    "estrelas": "stars",
+    "galactico": "galaxy",
+    "galaxia": "galaxy",
+    "habitacion": "room",
+    "lampada": "lamp",
+    "lampara": "lamp",
+    "luz": "light",
+    "nocturna": "night",
+    "noturna": "night",
+    "proyector": "projector",
+    "projetor": "projector",
+}
+_CATEGORY_QUERY_STOPWORDS = {
+    "a", "as", "con", "da", "das", "de", "del", "do", "dos", "el", "en",
+    "la", "las", "o", "os", "para", "por", "um", "uma", "un", "una", "y",
+}
+
+
+def _english_category_prediction_query(value: Any) -> str:
+    """Build an English CBT discovery fallback without an external translator."""
+    normalized = unicodedata.normalize("NFKD", str(value or "").lower())
+    normalized = "".join(
+        character for character in normalized if not unicodedata.combining(character)
+    )
+    normalized = re.sub(r"[^a-z0-9]+", " ", normalized).strip()
+    for source_phrase, target_phrase in _CATEGORY_QUERY_PHRASES.items():
+        normalized = re.sub(
+            rf"\b{re.escape(source_phrase)}\b", target_phrase, normalized
+        )
+    words = [
+        _CATEGORY_QUERY_WORDS.get(word, word)
+        for word in normalized.split()
+        if word not in _CATEGORY_QUERY_STOPWORDS
+    ]
+    return " ".join(words)
+
+
+def _category_prediction_queries(source: Mapping[str, Any]) -> list[str]:
+    original = str(
+        source.get("_category_prediction_title") or source.get("title") or ""
+    ).strip()
+    translated = _english_category_prediction_query(original)
+    return list(dict.fromkeys(query for query in (original, translated) if query))
+
 
 def _cached_user_profile(client: MercadoLibreClient) -> Mapping[str, Any]:
     instance_profile = getattr(client, "_cached_user_profile_value", None)
@@ -720,18 +764,17 @@ def infer_cbt_category(client: MercadoLibreClient, source: Mapping[str, Any]) ->
     candidate = f"CBT{numeric}" if numeric else ""
     if candidate and _direct_cbt_category_exists(client, candidate):
         return candidate
-    suggestions = client.request(
-        "GET",
-        "/sites/CBT/domain_discovery/search",
-        params={
-            "q": source.get("_category_prediction_title") or source.get("title") or ""
-        },
-    )
-    if isinstance(suggestions, list):
-        for suggestion in suggestions:
-            suggested = str(suggestion.get("category_id") or "")
-            if suggested.startswith("CBT"):
-                return suggested
+    for query in _category_prediction_queries(source):
+        suggestions = client.request(
+            "GET",
+            "/sites/CBT/domain_discovery/search",
+            params={"q": query},
+        )
+        if isinstance(suggestions, list):
+            for suggestion in suggestions:
+                suggested = str(suggestion.get("category_id") or "")
+                if suggested.startswith("CBT"):
+                    return suggested
     raise MercadoLibreError(f"无法把源类目 {category_id or '(empty)'} 映射为 CBT 类目")
 
 
@@ -779,6 +822,35 @@ def _category_attribute_schema(
     return normalized
 
 
+def _required_category_attribute_schema(
+    client: MercadoLibreClient, category_id: str
+) -> list[Mapping[str, Any]]:
+    schema = _category_attribute_schema(client, category_id)
+    if schema is None:
+        raise MercadoLibreError(
+            f"无法从 Mercado Libre API 获取类目 {category_id} 的属性规则；"
+            "为避免漏传必填属性，本次上架已停止"
+        )
+    return schema
+
+
+def _source_category_attribute_schema(
+    client: MercadoLibreClient,
+    source: Mapping[str, Any],
+    target_category_id: str,
+    target_schema: list[Mapping[str, Any]],
+) -> list[Mapping[str, Any]] | None:
+    source_category_id = str(source.get("category_id") or "").strip().upper()
+    if not source_category_id:
+        return None
+    if source_category_id == target_category_id:
+        return target_schema
+    # Source schemas are used to turn localized browser labels and values back
+    # into Mercado's stable IDs. If the source endpoint is temporarily
+    # unavailable we can still use explicit source IDs and the target schema.
+    return _category_attribute_schema(client, source_category_id)
+
+
 def _category_attribute_ids(
     schema: Iterable[Mapping[str, Any]] | None,
 ) -> set[str] | None:
@@ -794,6 +866,7 @@ def _category_attribute_ids(
 def _validate_required_attributes(
     attributes: Iterable[Mapping[str, Any]],
     schema: Iterable[Mapping[str, Any]] | None,
+    variations: Iterable[Mapping[str, Any]] | None = None,
 ) -> None:
     if schema is None:
         return
@@ -807,28 +880,55 @@ def _validate_required_attributes(
             or attribute.get("values")
         )
     }
-    required = {
-        str(attribute.get("id") or "").upper()
+    variation_rows = list(variations or [])
+    if variation_rows:
+        per_variation = []
+        for variation in variation_rows:
+            per_variation.append({
+                str(attribute.get("id") or "").upper()
+                for key in ("attribute_combinations", "attributes")
+                for attribute in variation.get(key) or []
+                if attribute.get("id") and _attribute_has_value(attribute)
+            })
+        if per_variation:
+            present.update(set.intersection(*per_variation))
+    required_definitions = {
+        str(attribute.get("id") or "").upper(): attribute
         for attribute in schema
         if attribute.get("id")
-        and (
-            bool((attribute.get("tags") or {}).get("required"))
-            or bool((attribute.get("tags") or {}).get("catalog_required"))
-        )
-        and not bool((attribute.get("tags") or {}).get("read_only"))
+        and is_required_attribute(attribute)
+        and not is_read_only_attribute(attribute)
     }
+    required = set(required_definitions)
     missing = sorted(required - present)
     if missing:
+        details = []
+        for attribute_id in missing:
+            definition = required_definitions[attribute_id]
+            name = str(definition.get("name") or "").strip()
+            value_type = str(definition.get("value_type") or "").strip()
+            suffix = ", ".join(value for value in (name, value_type) if value)
+            details.append(f"{attribute_id} ({suffix})" if suffix else attribute_id)
         raise MercadoLibreError(
             "源商品缺少目标类目必填属性: "
-            + ", ".join(missing)
+            + ", ".join(details)
             + "；请补全采集数据后再上架"
         )
+
+
+def _attribute_has_value(attribute: Mapping[str, Any]) -> bool:
+    return bool(
+        attribute.get("value_id") not in (None, "")
+        or str(attribute.get("value_name") or "").strip()
+        or attribute.get("value_struct")
+        or attribute.get("values")
+    )
 
 
 def _ensure_required_attribute_defaults(
     attributes: list[dict[str, Any]],
     schema: Iterable[Mapping[str, Any]] | None,
+    variations: Iterable[Mapping[str, Any]] | None = None,
 ) -> None:
     """Fill safe publication fallbacks for common required catalog fields."""
     if schema is None:
@@ -843,20 +943,98 @@ def _ensure_required_attribute_defaults(
             or attribute.get("values")
         )
     }
+    variation_rows = list(variations or [])
+    if variation_rows:
+        per_variation = [
+            {
+                str(attribute.get("id") or "").upper()
+                for key in ("attribute_combinations", "attributes")
+                for attribute in variation.get(key) or []
+                if attribute.get("id") and _attribute_has_value(attribute)
+            }
+            for variation in variation_rows
+        ]
+        if per_variation:
+            present.update(set.intersection(*per_variation))
     for definition in schema:
         attribute_id = str(definition.get("id") or "").upper()
-        tags = definition.get("tags") or {}
         if (
             not attribute_id
             or attribute_id in present
-            or bool(tags.get("read_only"))
-            or not (bool(tags.get("required")) or bool(tags.get("catalog_required")))
+            or is_read_only_attribute(definition)
+            or not is_required_attribute(definition)
         ):
             continue
         default = DEFAULT_REQUIRED_ATTRIBUTES.get(attribute_id)
         if default:
             attributes.append(dict(default))
             present.add(attribute_id)
+
+
+def _ensure_contextual_required_attribute_defaults(
+    attributes: list[dict[str, Any]],
+    schema: Iterable[Mapping[str, Any]] | None,
+    source: Mapping[str, Any],
+) -> None:
+    """Fill required values only when source evidence supports the inference."""
+    if schema is None or any(
+        str(attribute.get("id") or "").upper() == "POWER_SUPPLY_TYPE"
+        and _attribute_has_value(attribute)
+        for attribute in attributes
+    ):
+        return
+    definition = next(
+        (
+            row for row in schema
+            if str(row.get("id") or "").upper() == "POWER_SUPPLY_TYPE"
+            and is_required_attribute(row)
+            and not is_read_only_attribute(row)
+        ),
+        None,
+    )
+    if definition is None:
+        return
+
+    usb_value = None
+    for attribute in attributes:
+        if str(attribute.get("id") or "").upper() != "WITH_USB":
+            continue
+        usb_value = semantic_value_key(
+            "WITH_USB", attribute.get("value_name") or attribute.get("value_id")
+        )
+        break
+    title = str(source.get("title") or "")
+    usb_powered = usb_value == "BOOLEAN_TRUE" or (
+        not usb_value and bool(re.search(r"\bUSB\b", title, re.IGNORECASE))
+    )
+    if not usb_powered:
+        return
+
+    source_attributes = list(source.get("attributes") or [])
+    battery_hint = bool(re.search(r"\b(?:battery|bater[ií]a)\b", title, re.IGNORECASE))
+    if not battery_hint:
+        battery_hint = any(
+            "BATTER" in str(attribute.get("id") or "").upper()
+            or "BATERIA" in unicodedata.normalize(
+                "NFKD", str(attribute.get("id") or attribute.get("name") or "").upper()
+            )
+            for attribute in source_attributes
+        )
+    desired_name = (
+        "Battery/Domestic current" if battery_hint else "Domestic current"
+    )
+    allowed_values = [
+        value for value in definition.get("values") or []
+        if isinstance(value, Mapping) and value.get("id")
+    ]
+    matched = match_enumerated_value(
+        "POWER_SUPPLY_TYPE", None, desired_name, allowed_values
+    )
+    inferred = {"id": "POWER_SUPPLY_TYPE", "value_name": desired_name}
+    if matched is not None:
+        inferred["value_id"] = str(matched["id"])
+        inferred["value_name"] = str(matched.get("name") or desired_name)
+    attributes.append(inferred)
 
 
 def _normalize_enumerated_attributes(
@@ -871,33 +1049,70 @@ def _normalize_enumerated_attributes(
         for definition in schema
         if definition.get("id")
     }
-    for attribute in attributes:
-        if str(attribute.get("id") or "").upper() != "GENDER":
-            continue
-        definition = definitions.get("GENDER") or {}
-        allowed_values = {
-            str(value.get("id") or ""): value
+    discarded: list[dict[str, Any]] = []
+    for attribute in list(attributes):
+        attribute_id = str(attribute.get("id") or "").upper()
+        definition = definitions.get(attribute_id) or {}
+        allowed_values = [
+            value
             for value in definition.get("values") or []
             if isinstance(value, Mapping) and value.get("id")
-        }
+        ]
         if not allowed_values:
             continue
-        existing_value_id = str(attribute.get("value_id") or "")
-        target_value_id = (
-            existing_value_id
-            if existing_value_id in allowed_values
-            else GENDER_VALUE_IDS.get(
-                _normalized_attribute_key(attribute.get("value_name"))
+        if isinstance(attribute.get("values"), list) and attribute.get("values"):
+            mapped_values = []
+            for source_value in attribute["values"]:
+                if not isinstance(source_value, Mapping):
+                    continue
+                target_value = match_enumerated_value(
+                    attribute_id,
+                    source_value.get("id"),
+                    source_value.get("name"),
+                    allowed_values,
+                )
+                if target_value is None:
+                    mapped_values = []
+                    break
+                mapped_values.append({
+                    "id": str(target_value["id"]),
+                    "name": str(target_value.get("name") or ""),
+                })
+            if mapped_values:
+                attribute["values"] = mapped_values
+                continue
+            target_value = None
+        else:
+            target_value = match_enumerated_value(
+                attribute_id,
+                attribute.get("value_id"),
+                attribute.get("value_name"),
+                allowed_values,
             )
-        )
-        target_value = allowed_values.get(str(target_value_id or ""))
-        if not target_value:
+        controlled = str(definition.get("value_type") or "").lower() in {
+            "boolean", "list"
+        }
+        if target_value is None and controlled and is_required_attribute(definition):
+            choices = ", ".join(
+                str(value.get("name") or value.get("id") or "")
+                for value in allowed_values[:8]
+            )
             raise MercadoLibreError(
-                "无法把源商品 GENDER 值映射到目标类目: "
+                f"无法用本地规则映射目标类目必填属性 {attribute_id}: "
                 f"{attribute.get('value_name') or attribute.get('value_id') or '(empty)'}"
+                + (f"；目标可选值: {choices}" if choices else "")
             )
+        if target_value is None and controlled:
+            # Optional controlled attributes are safer to omit than to send an
+            # invalid localized value or guess the nearest enum value.
+            discarded.append(attribute)
+            continue
+        if target_value is None:
+            continue
         attribute["value_id"] = str(target_value["id"])
         attribute["value_name"] = str(target_value.get("name") or "")
+    for attribute in discarded:
+        attributes.remove(attribute)
 
 
 def _converted_usd_amount(
@@ -994,20 +1209,32 @@ def _copy_variations(
     *,
     quantity: int,
     sku_prefix: str,
+    allowed_ids: set[str] | None = None,
+    schema: Iterable[Mapping[str, Any]] | None = None,
+    source_schema: Iterable[Mapping[str, Any]] | None = None,
 ) -> list[dict[str, Any]]:
     variations: list[dict[str, Any]] = []
     for index, variation in enumerate(source.get("variations") or [], start=1):
         copied: dict[str, Any] = {
-            "attribute_combinations": [
-                _clean_attribute(attribute)
-                for attribute in variation.get("attribute_combinations") or []
-            ],
+            "attribute_combinations": _copy_attributes(
+                variation.get("attribute_combinations") or [],
+                allowed_ids=allowed_ids,
+                schema=schema,
+                source_schema=source_schema,
+                ensure_brand=False,
+            ),
             "available_quantity": quantity,
             "attributes": _copy_attributes(
                 variation.get("attributes") or [],
                 seller_sku=f"{sku_prefix}-V{index}",
+                allowed_ids=allowed_ids,
+                schema=schema,
+                source_schema=source_schema,
+                ensure_brand=False,
             ),
         }
+        _normalize_enumerated_attributes(copied["attribute_combinations"], schema)
+        _normalize_enumerated_attributes(copied["attributes"], schema)
         urls = [
             ids_to_urls[str(picture_id)]
             for picture_id in variation.get("picture_ids") or []
@@ -1034,17 +1261,33 @@ def build_global_payload(
     item_id = extract_item_id(str(source.get("id") or ""))
     pictures, ids_to_urls = _picture_sources(source)
     category_id = infer_cbt_category(client, source)
-    attribute_schema = _category_attribute_schema(client, category_id)
+    attribute_schema = _required_category_attribute_schema(client, category_id)
+    source_attribute_schema = _source_category_attribute_schema(
+        client, source, category_id, attribute_schema
+    )
+    allowed_attribute_ids = _category_attribute_ids(attribute_schema)
     attributes = _copy_attributes(
         source.get("attributes") or [],
         seller_sku=f"FOLLOW-{item_id}",
-        allowed_ids=_category_attribute_ids(attribute_schema),
+        allowed_ids=allowed_attribute_ids,
+        schema=attribute_schema,
+        source_schema=source_attribute_schema,
     )
     _ensure_item_condition(attributes, str(source.get("condition") or "new"))
     _ensure_gtin_or_empty_reason(attributes)
+    variations = _copy_variations(
+        source,
+        ids_to_urls,
+        quantity=quantity,
+        sku_prefix=f"FOLLOW-{item_id}",
+        allowed_ids=allowed_attribute_ids,
+        schema=attribute_schema,
+        source_schema=source_attribute_schema,
+    )
+    _ensure_required_attribute_defaults(attributes, attribute_schema, variations)
+    _ensure_contextual_required_attribute_defaults(attributes, attribute_schema, source)
     _normalize_enumerated_attributes(attributes, attribute_schema)
-    _ensure_required_attribute_defaults(attributes, attribute_schema)
-    _validate_required_attributes(attributes, attribute_schema)
+    _validate_required_attributes(attributes, attribute_schema, variations)
     site: dict[str, Any] = {
         "site_id": site_id,
         "logistic_type": "remote",
@@ -1054,9 +1297,6 @@ def build_global_payload(
         # each sites_to_sell entry for traditional CBT publications.
         "pictures": pictures,
     }
-    variations = _copy_variations(
-        source, ids_to_urls, quantity=quantity, sku_prefix=f"FOLLOW-{item_id}"
-    )
     if variations:
         site["variations"] = variations
     payload: dict[str, Any] = {
@@ -1098,16 +1338,22 @@ def build_user_product_payload(
         raise ValueError("quantity 必须大于 0")
     item_id = extract_item_id(str(source.get("id") or ""))
     category_id = infer_cbt_category(client, source)
-    attribute_schema = _category_attribute_schema(client, category_id)
+    attribute_schema = _required_category_attribute_schema(client, category_id)
+    source_attribute_schema = _source_category_attribute_schema(
+        client, source, category_id, attribute_schema
+    )
     attributes = _copy_attributes(
         source.get("attributes") or [],
         seller_sku=f"FOLLOW-{item_id}",
         allowed_ids=_category_attribute_ids(attribute_schema),
+        schema=attribute_schema,
+        source_schema=source_attribute_schema,
     )
     _ensure_item_condition(attributes, str(source.get("condition") or "new"))
     _ensure_gtin_or_empty_reason(attributes)
-    _normalize_enumerated_attributes(attributes, attribute_schema)
     _ensure_required_attribute_defaults(attributes, attribute_schema)
+    _ensure_contextual_required_attribute_defaults(attributes, attribute_schema, source)
+    _normalize_enumerated_attributes(attributes, attribute_schema)
     _validate_required_attributes(attributes, attribute_schema)
     pictures: list[dict[str, str]]
     if picture_ids is None:
@@ -1178,6 +1424,25 @@ def build_local_payload(
     return payload
 
 
+def _normalized_existing_user_product_id(value: Any) -> str:
+    candidate = str(value or "").strip().upper()
+    return candidate if re.fullmatch(r"(?:CBT)?U\d+", candidate) else ""
+
+
+def _mapped_user_product_site_item(mapping: Any, site_id: str) -> Mapping[str, Any] | None:
+    rows = mapping if isinstance(mapping, list) else [mapping]
+    for row in rows:
+        if not isinstance(row, Mapping):
+            continue
+        for site_item in row.get("site_items") or []:
+            if (
+                isinstance(site_item, Mapping)
+                and str(site_item.get("site_id") or "").upper() == site_id
+            ):
+                return site_item
+    return None
+
+
 def follow_sell(
     client: MercadoLibreClient,
     source_url: str,
@@ -1186,9 +1451,10 @@ def follow_sell(
     net_proceeds: float | None = None,
     local_price: float | None = None,
     destination_site_id: str = "MLM",
-    translator: BatchTranslator | None = None,
+    translator: Callable[..., Any] | None = None,
     source_from_database: bool = False,
     prepared_listing: tuple[Mapping[str, Any], Mapping[str, Any]] | None = None,
+    existing_user_product_id: str | None = None,
     publish: bool = False,
 ) -> dict[str, Any]:
     """Build, and optionally publish, a copied listing."""
@@ -1222,6 +1488,11 @@ def follow_sell(
     target_site = str(user.get("site_id") or "")
     is_global = target_site == "CBT"
     is_user_product = is_global and "user_product_seller" in set(user.get("tags") or [])
+    reusable_user_product_id = (
+        _normalized_existing_user_product_id(existing_user_product_id)
+        if is_user_product
+        else ""
+    )
     translation = {
         "source_site_id": str(source.get("site_id") or source.get("id") or "")[:3],
         "destination_site_id": destination_site_id,
@@ -1229,18 +1500,15 @@ def follow_sell(
         "target_language": "",
         "translated": False,
         "translated_field_count": 0,
+        "strategy": "deterministic_attribute_rules",
     }
     picture_upload_errors: list[str] = []
     stage_started = time.perf_counter()
     if is_global:
-        category_prediction_title = str(source.get("title") or "")
-        source, description, translation = translate_listing_content(
-            source,
-            description,
-            destination_site_id=destination_site_id,
-            translator=translator,
-        )
-        source["_category_prediction_title"] = category_prediction_title
+        # Publication deliberately avoids translation/model calls. Stable
+        # attribute IDs and target-schema enums are localized by deterministic
+        # in-memory rules in the payload builders.
+        source["_category_prediction_title"] = str(source.get("title") or "")
     elif target_site != destination_site_id:
         raise MercadoLibreError(
             f"目标店铺只能在 {target_site or '(unknown)'} 站点上架，"
@@ -1248,7 +1516,20 @@ def follow_sell(
         )
     timings["translation"] = time.perf_counter() - stage_started
     stage_started = time.perf_counter()
-    if is_user_product:
+    publication_action = "create"
+    if is_user_product and reusable_user_product_id:
+        payload = {
+            "sites_to_sell": [{
+                "site_id": destination_site_id,
+                "logistic_type": "remote",
+                "net_proceeds": resolve_net_proceeds(client, source, net_proceeds),
+            }]
+        }
+        timings["payload"] = time.perf_counter() - stage_started
+        timings["pictures"] = 0.0
+        endpoint = f"/global/user-products/{reusable_user_product_id}"
+        publication_action = "add_marketplace"
+    elif is_user_product:
         if source.get("variations"):
             raise MercadoLibreError(
                 "源商品包含变体，而目标店铺使用 User Products 模式；"
@@ -1316,7 +1597,27 @@ def follow_sell(
     result = None
     if publish:
         try:
-            result = client.request("POST", endpoint, json_body=payload)
+            if reusable_user_product_id:
+                mapping = _try_request(
+                    client,
+                    "GET",
+                    f"/marketplace/user-products/{reusable_user_product_id}/mapping",
+                )
+                existing_site_item = _mapped_user_product_site_item(
+                    mapping, destination_site_id
+                )
+                if existing_site_item is not None:
+                    publication_action = "already_available"
+                    result = {
+                        "parent_user_product_id": reusable_user_product_id,
+                        "siteless_user_product_id": reusable_user_product_id,
+                        "site_items": [dict(existing_site_item)],
+                        "already_available": True,
+                    }
+                else:
+                    result = client.request("POST", endpoint, json_body=payload)
+            else:
+                result = client.request("POST", endpoint, json_body=payload)
         except MercadoLibreError as exc:
             if (
                 is_user_product
@@ -1355,6 +1656,7 @@ def follow_sell(
         "destination_site_id": destination_site_id,
         "source_item_id": source.get("id"),
         "endpoint": endpoint,
+        "publication_action": publication_action,
         "listing_model": (
             "user_products" if is_user_product else "global" if is_global else "local"
         ),

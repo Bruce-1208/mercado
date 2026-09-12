@@ -21,19 +21,25 @@ python -m pip install -r bit/requirements-server.txt
 `BIT_WSGI_THREADS`、`BIT_WSGI_CONNECTION_LIMIT` 和 `BIT_WSGI_BACKLOG`
 调整；自动化任务仍由独立的后台并发限制控制。
 
-### macOS 上架翻译
+### 跨站点上架属性匹配
 
-跨站点上架的西班牙语/葡萄牙语翻译使用 Argos Translate 在服务器本地离线执行，
-不需要 API Key，也不会调用 DeepSeek。macOS 服务器首次部署或重建 Python 环境后，
-用运行工作台的同一个 Python 解释器安装依赖和两个直连模型：
+跨站点上架不调用大模型或机器翻译。采集到的西班牙语、葡萄牙语和中文属性名会先通过
+源站点的 `/categories/{category_id}/attributes` API 恢复为官方属性和值 ID，再和目标 CBT
+类目的合法属性及枚举值匹配；本地别名只作为源接口无法识别页面文案时的后备规则。
+标题和描述保留采集原文；无法确定的必填属性会直接停止该商品上架并在上架记录中显示属性 ID，
+属性名称、类型和部分合法选项，避免猜测错误。变体组合也执行相同映射，必填变体属性必须在
+每个变体中都有值；目标类目属性接口不可用时会停止上架，不会绕过校验。
 
-```bash
-python3 -m pip install -r bit/requirements-server.txt
-python3 scripts/install_argos_translation_models.py
+需要离线核查全部 Global Selling 分类时，可从官方带属性的 CBT 分类 dump 生成压缩 JSONL
+目录。目录包含每个分类（包括没有必填项的分类）、全部必填属性定义及 API 返回的合法值 ID：
+
+```powershell
+python -m erp.mercadolibre_category_attribute_sync --site CBT
 ```
 
-模型安装成功后会执行双向翻译自检。模型文件会保存在服务器当前用户的 Argos 数据目录，
-后续启动及上架过程均可离线使用；若模型缺失，上架记录会给出上述安装命令，而不会回退到付费接口。
+默认输出到 `.data/mercadolibre_required_attributes_CBT.jsonl.gz`，写入过程使用临时文件并在
+成功后原子替换，下载或解析失败不会破坏上一版。发布时仍会读取并缓存当前目标类目 API，
+因此不会依赖可能过期的离线文件。
 
 同一套工作台可以在每台电脑上灵活指定运行角色：
 
@@ -175,6 +181,8 @@ print(result.database_path)
 每个店铺首次执行时，如果没有可靠的逐单打印状态，只读取最近 72 小时内可取得 Shipment ID 的订单；API 同步成功后建立追踪起点，后续仅处理没有成功打印记录的已付款订单。成功生成面单后会写入订单操作日志；已取消、已完成等永久不可打印运单会记录为跳过，网络或临时接口失败的订单会保留到下一次重试。
 
 服务端每 15 分钟同步最近订单后，会自动为启用自动打印以来的新订单生成面单；暂时尚未就绪的面单会在后续同步中继续重试。自动生成成功的订单会在操作日志中显示操作人为“系统自动打印”，订单打印页的最近记录和运行日志也会标出“系统自动打印”。首次启用默认只回看最近 15 分钟，避免重打历史订单；可通过 `MERCADO_ORDER_AUTO_PRINT_DISABLED=1` 关闭，或用 `MERCADO_ORDER_AUTO_PRINT_BOOTSTRAP_LOOKBACK_SECONDS` 调整首次回看秒数。
+
+订单付款状态读取官方 Orders API；“已发、交付、未交付”等物流状态读取官方 Shipment API。官方 `ready_to_ship` 只显示为“待打印”，“待发”仅在仓库人员通过订单列表成功手动打印美客多面单后写入。权限初始化会自动创建“仓库人员”系统角色（订单查看、面单打印），可在人员与权限中分配给账号。最近 72 小时订单每 15 分钟刷新一次，72 小时以前尚未终态的运单每天北京时间凌晨 2 点执行全量刷新；已交付、未交付、已取消等终态不会在后续每日任务中重复请求。可通过 `MERCADO_ORDER_DAILY_STATUS_HOUR` 调整每日执行小时（0–23，北京时间）。
 
 ## 美客多售后处理 API
 

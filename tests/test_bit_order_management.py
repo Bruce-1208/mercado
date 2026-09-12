@@ -517,6 +517,58 @@ def test_order_print_route_keeps_valid_pdf_when_print_log_write_fails():
     assert response.headers["X-Mercado-Print-Log"] == "failed"
 
 
+def test_warehouse_manual_print_marks_only_successful_orders_as_waiting_to_ship():
+    client = _client()
+    with client.session_transaction() as flask_session:
+        flask_session["workbench_user"] = {
+            **flask_session["workbench_user"],
+            "role_key": "warehouse",
+        }
+    with (
+        patch.object(
+            workbench.bit_db_api,
+            "download_order_labels",
+            return_value={
+                "content": b"%PDF-1.4\n%%EOF",
+                "filename": "mercado-label-30001.pdf",
+                "order_ids": ["20001"],
+                "shipment_count": 1,
+                "skipped_order_ids": ["20002"],
+            },
+        ),
+        patch.object(workbench.bit_db_api, "record_order_print_logs", return_value=1),
+        patch.object(
+            workbench.bit_db_api,
+            "bulk_update_orders",
+            return_value={"matched": 1, "changed": 1},
+        ) as bulk_update,
+    ):
+        response = client.post(
+            "/api/orders/print",
+            json={"order_ids": ["20001", "20002"]},
+        )
+
+    assert response.status_code == 200
+    bulk_update.assert_called_once_with(
+        ["20001"],
+        workflow_status="待发",
+        operator_id=1,
+        operator_name="测试用户",
+    )
+
+
+def test_non_warehouse_cannot_manually_set_waiting_to_ship_status():
+    with patch.object(workbench.bit_db_api, "bulk_update_orders") as bulk_update:
+        response = _client().post(
+            "/api/orders/bulk-update",
+            json={"order_ids": ["20001"], "workflow_status": "待发"},
+        )
+
+    assert response.status_code == 403
+    assert "仓库人员" in response.get_json()["message"]
+    bulk_update.assert_not_called()
+
+
 def test_order_operation_logs_route_returns_audit_rows():
     logs = [{
         "id": 1,

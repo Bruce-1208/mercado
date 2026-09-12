@@ -314,6 +314,7 @@ def publish_product_batch(
     created_by: str = "",
     create_records: Callable[..., Mapping[int, int]] | None = None,
     update_record: Callable[..., Any] | None = None,
+    existing_user_product_ids: Mapping[int, str] | None = None,
 ) -> dict[str, Any]:
     rows = [dict(row) for row in product_rows or []]
     validate_publishable_products(rows)
@@ -336,6 +337,13 @@ def publish_product_batch(
     store_name = str(token.get("display_name") or token.get("nickname") or token_id)
     worker_count = min(workers, len(rows))
     record_ids: dict[int, int] = {}
+    reusable_user_product_ids = {
+        int(product_id): str(user_product_id)
+        for product_id, user_product_id in dict(
+            existing_user_product_ids or {}
+        ).items()
+        if str(user_product_id or "").strip()
+    }
     if create_records is not None:
         created_record_ids = create_records(
             rows,
@@ -450,6 +458,7 @@ def publish_product_batch(
                 destination_site_id=site_id,
                 source_from_database=True,
                 prepared_listing=prepared_listing,
+                existing_user_product_id=reusable_user_product_ids.get(product_id),
                 publish=True,
             )
             published_item_id = _published_item_id(publication)
@@ -489,7 +498,14 @@ def publish_product_batch(
                 "publish_net_proceeds_usd": publish_net_proceeds,
                 "timings": dict(publication.get("timings") or {}),
                 "message": (
-                    f"上架成功；净收益 USD {source_net_proceeds:.2f} × "
+                    (
+                        "已复用现有 User Product 并开通目标站点；"
+                        if publication.get("publication_action") in {
+                            "add_marketplace", "already_available"
+                        }
+                        else "上架成功；"
+                    )
+                    + f"净收益 USD {source_net_proceeds:.2f} × "
                     f"{float(resolved_discount_rate):g}% = USD {publish_net_proceeds:.2f}"
                     f"{state_warning}"
                 ),

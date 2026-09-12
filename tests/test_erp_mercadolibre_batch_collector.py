@@ -36,10 +36,16 @@ def test_collected_spanish_attribute_names_use_mercado_ids():
             {"name": "Marca", "value": "Generic"},
             {"name": "Género", "value": "Mujer"},
             {"name": "Composición", "value": "Poliéster"},
+            {"name": "Es un kit de fábrica", "value": "No"},
         ]
     )
 
-    assert [row["id"] for row in rows] == ["BRAND", "GENDER", "COMPOSITION"]
+    assert [row["id"] for row in rows] == [
+        "BRAND",
+        "GENDER",
+        "COMPOSITION",
+        "IS_FACTORY_KIT",
+    ]
 
 
 def test_parse_zying_plugin_converts_kg_to_grams():
@@ -167,6 +173,51 @@ def test_cross_border_scope_only_keeps_international_cards():
     assert rows[0]["is_cross_border"] is True
     assert rows[0]["shipping_origin_country"] == "CN"
     assert rows[0]["listing_url"].endswith("/MLM-3016972321")
+
+
+def test_all_scope_skips_us_cards_but_keeps_every_other_origin():
+    rows = merge_listing_candidates(
+        [],
+        [
+            {
+                "href": "https://articulo.mercadolibre.com.mx/MLM-3016972331",
+                "title": "Producto USA",
+                "shipping_origin_country": "US",
+            },
+            {
+                "href": "https://articulo.mercadolibre.com.mx/MLM-3016972332",
+                "title": "Producto sin país confirmado",
+                "shipping_origin_country": "",
+            },
+            {
+                "href": "https://articulo.mercadolibre.com.mx/MLM-3016972333",
+                "title": "Producto China",
+                "shipping_origin_country": "CN",
+            },
+        ],
+        20,
+        collection_scope="all",
+    )
+
+    assert [row["source_item_id"] for row in rows] == [
+        "MLM3016972332",
+        "MLM3016972333",
+    ]
+
+
+def test_listing_html_detects_us_flag_asset_without_origin_text():
+    listing = parse_listing_html(
+        """
+        <li class="ui-search-layout__item">
+          <a class="ui-search-link" href="/MLM-3016972341">USA flag only</a>
+          <h2>USA flag only</h2>
+          <img src="https://http2.mlstatic.com/flags/US.svg?v=1" />
+        </li>
+        """,
+        "https://listado.mercadolibre.com.mx/bolsas",
+    )
+
+    assert listing["rows"][0]["shipping_origin_country"] == "US"
 
 
 def test_listing_html_marks_international_seller_cards():
@@ -427,6 +478,7 @@ def test_listing_dom_scripts_prefer_original_price_over_current_price():
     ):
         assert ".andes-money-amount--previous" in script
         assert "const collectedPrice = originalPrice || currentPrice" in script
+        assert "assetIsUsFlag" in script
 
 
 def test_listing_and_detail_html_prefer_original_price():
@@ -688,7 +740,7 @@ def test_plugin_metric_wait_releases_slot_after_actual_weight_arrives(monkeypatc
     assert metrics["package_length_cm"] is None
 
 
-def test_plugin_metric_wait_does_not_miss_delayed_us_origin(monkeypatch):
+def test_plugin_metric_wait_keeps_reading_after_delayed_us_metadata(monkeypatch):
     class Reader:
         def __init__(self):
             self.calls = 0
@@ -716,7 +768,7 @@ def test_plugin_metric_wait_does_not_miss_delayed_us_origin(monkeypatch):
         )
     )
 
-    assert reader.calls == 3
+    assert reader.calls == 4
     assert metrics["weight_g"] == 196
     assert playwright_collector._plugin_self_ship_origin(lines) == "US"
 
@@ -1374,6 +1426,38 @@ def test_listing_pagination_continues_after_page_with_no_new_items(monkeypatch):
 
     assert [page["page"] for page in pages] == [1, 2]
     assert rows[0]["source_item_id"] == "MLM3016972321"
+
+
+def test_listing_us_rows_are_not_reintroduced_by_detail_fallback(monkeypatch):
+    class FakeDriver:
+        current_url = ""
+
+        def get(self, url):
+            self.current_url = url
+
+        def execute_script(self, script):
+            if script == "return document.readyState":
+                return "complete"
+            if "const h1" in script:
+                return {"title": "USA detail", "main_image_url": "image"}
+            return {
+                "rows": [{
+                    "href": "https://articulo.mercadolibre.com.mx/MLM-3016972342",
+                    "title": "USA flag",
+                    "shipping_origin_country": "US",
+                }],
+                "next_url": "",
+                "body": "lista",
+            }
+
+    monkeypatch.setattr(collector.time, "sleep", lambda _seconds: None)
+    rows = collector._collect_listing_pages(
+        FakeDriver(),
+        "https://listado.mercadolibre.com.mx/search?item_id=MLM3016972342",
+        1,
+    )
+
+    assert rows == []
 
 
 def test_parse_edge_page_source_for_cards_and_detail_fields():

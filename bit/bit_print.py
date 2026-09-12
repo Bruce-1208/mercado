@@ -316,8 +316,8 @@ def _scan_store_orders(
     if explicit_range:
         filters = {
             "sort": "date_asc",
-            "order.date_created.from": _iso_millis(tracking_since),
-            "order.date_created.to": _iso_millis(scan_end),
+            "date_created.from": _iso_millis(tracking_since),
+            "date_created.to": _iso_millis(scan_end),
         }
         scope_message = (
             "按所选时间检查订单："
@@ -336,8 +336,8 @@ def _scan_store_orders(
     else:
         filters = {
             "sort": "date_asc",
-            "order.date_created.from": _iso_millis(tracking_since),
-            "order.date_created.to": _iso_millis(now_utc),
+            "date_created.from": _iso_millis(tracking_since),
+            "date_created.to": _iso_millis(now_utc),
         }
         scope_message = f"首次检查，按安全规则读取最近 {fallback_hours} 小时订单"
     _emit(logger, f"{job['shop_name']}：{scope_message}")
@@ -858,6 +858,7 @@ def print_orders_all(
             "task_id": task_id,
             "download_path": str(output_path) if output_path else "",
             "download_name": output_name or "",
+            "printed_order_ids": sorted({str(order_id) for order_id in printed_order_ids}),
             "printed_order_count": len(set(printed_order_ids)),
             "shipment_count": len(documents),
             "store_worker_count": worker_count,

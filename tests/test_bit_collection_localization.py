@@ -208,6 +208,44 @@ class ReputationLocalizationTests(unittest.TestCase):
             )
         )
 
+    def test_country_list_selection_wins_over_language_selector_state(self):
+        # The real header can report the language option (en_US) as the first
+        # selected node while the marketplace country is selected separately.
+        state = {
+            "available": [
+                {"selected": False, "text": "Mexico", "value": "MLM-fulfillment"},
+                {"selected": True, "text": "Mexico", "value": "MLM-remote"},
+                {"selected": False, "text": "Brazil", "value": "MLB-remote"},
+            ],
+            "selectedRemote": "en_US",
+            "selectedText": "English",
+        }
+        self.assertTrue(reputation._country_selection_state_matches(state, "墨西哥"))
+
+    def test_country_list_rejects_the_other_mexico_logistic_mode(self):
+        state = {
+            "available": [
+                {"selected": True, "text": "Mexico", "value": "MLM-fulfillment"},
+                {"selected": False, "text": "Mexico", "value": "MLM-remote"},
+            ],
+            "selectedRemote": "en_US",
+        }
+        self.assertFalse(reputation._country_selection_state_matches(state, "墨西哥"))
+
+    def test_collection_parent_check_is_noop_for_in_process_calls(self):
+        with mock.patch.object(reputation.multiprocessing, "parent_process", return_value=None):
+            self.assertTrue(reputation._collection_parent_is_alive())
+
+    def test_collection_parent_check_detects_orphaned_worker(self):
+        parent = mock.Mock()
+        parent.is_alive.return_value = False
+        with mock.patch.object(
+            reputation.multiprocessing, "parent_process", return_value=parent
+        ):
+            self.assertFalse(reputation._collection_parent_is_alive())
+            with self.assertRaises(reputation._CollectionWorkerOrphaned):
+                reputation._ensure_collection_parent_alive()
+
     def test_country_switch_uses_header_state_instead_of_removed_page_title(self):
         driver = mock.Mock()
         with (

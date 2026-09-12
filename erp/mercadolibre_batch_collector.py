@@ -12,12 +12,12 @@ import os
 import re
 import threading
 import time
-import unicodedata
 from datetime import datetime
 from decimal import Decimal, InvalidOperation
 from typing import Any, Callable, Iterable, Mapping
 from urllib.parse import quote, unquote, urljoin, urlparse
 
+from erp.mercadolibre_attribute_rules import canonical_attribute_id
 from erp.mercadolibre_follow_sell import extract_item_id
 
 
@@ -214,6 +214,24 @@ def _normalize_image_url(value: Any) -> str:
     return url
 
 
+_US_FLAG_ASSET_PATTERN = re.compile(
+    r"(?:^|[\\/])US\.svg(?:[?#\s\"')]|$)", re.IGNORECASE
+)
+
+
+def _listing_card_has_us_flag(card: Any) -> bool:
+    """Return whether a marketplace result card exposes the US flag asset."""
+
+    # Keep this deliberately scoped to the card.  Searching the whole page can
+    # match a footer, navigation icon, or another result and reject the wrong
+    # product.
+    try:
+        markup = str(card)
+    except Exception:
+        markup = ""
+    return bool(_US_FLAG_ASSET_PATTERN.search(markup))
+
+
 def calculate_volumetric_weight_kg(
     length_cm: Any, width_cm: Any, height_cm: Any
 ) -> float | None:
@@ -312,12 +330,9 @@ def merge_listing_candidates(
     seen = {str(row.get("source_item_id") or "") for row in existing}
     for source_row in rows or []:
         row = dict(source_row)
-        if collection_scope == "cross_border" and not bool(row.get("is_cross_border")):
+        if str(row.get("shipping_origin_country") or "").strip().upper() == "US":
             continue
-        if (
-            collection_scope == "cross_border"
-            and str(row.get("shipping_origin_country") or "").strip().upper() == "US"
-        ):
+        if collection_scope == "cross_border" and not bool(row.get("is_cross_border")):
             continue
         href = str(row.get("source_url") or row.get("href") or "").strip()
         try:
@@ -356,6 +371,7 @@ const imageUrl = img => {
     (srcset ? srcset.trim().split(/\s+/)[0] : '') || img.getAttribute('src') || '';
 };
 const itemPattern = /(?:ML[A-Z]|CBT)-?\d+/i;
+const assetIsUsFlag = value => /(?:^|[\\/])US\.svg(?:[?#"')]|$)/i.test(String(value || ''));
 const cards = Array.from(document.querySelectorAll(
   'li.ui-search-layout__item, .ui-search-result, .poly-card, [data-testid="result"]'
 ));
@@ -384,7 +400,20 @@ for (const root of roots) {
   let price = fraction ? clean(fraction.textContent).replace(/\D/g, '') : '';
   if (price && cents) price += '.' + clean(cents.textContent).replace(/\D/g, '');
   const cardText = clean((root.innerText || root.textContent || ''));
-  const isUsOrigin = /(?:internacional.{0,24}(?:usa|eua|estados unidos|united states))|(?:(?:usa|eua|estados unidos|united states).{0,24}internacional)/i.test(cardText);
+  const isUsOriginText = /(?:internacional.{0,24}(?:usa|eua|estados unidos|united states))|(?:(?:usa|eua|estados unidos|united states).{0,24}internacional)/i.test(cardText);
+  const isUsOriginFlag = Array.from(root.querySelectorAll ? root.querySelectorAll('img, source, use, [style]') : [])
+    .some(node => [
+      node.getAttribute && node.getAttribute('src'),
+      node.getAttribute && node.getAttribute('data-src'),
+      node.getAttribute && node.getAttribute('srcset'),
+      node.getAttribute && node.getAttribute('href'),
+      node.getAttribute && node.getAttribute('xlink:href'),
+      node.getAttribute && node.getAttribute('data'),
+      node.getAttribute && node.getAttribute('alt'),
+      node.getAttribute && node.getAttribute('title'),
+      node.style && node.style.backgroundImage
+    ].some(assetIsUsFlag));
+  const isUsOrigin = isUsOriginText || isUsOriginFlag;
   const isChinaOrigin = /(?:internacional.{0,24}china)|(?:china.{0,24}internacional)/i.test(cardText);
   rows.push({
     href: link.href,
@@ -556,15 +585,19 @@ def _collect_listing_pages(
         if blocked:
             raise RuntimeError(blocked)
         before = len(candidates)
+        page_rows = snapshot.get("rows") or []
         merge_listing_candidates(
             candidates,
-            snapshot.get("rows") or [],
+            page_rows,
             requested_count,
             collection_scope=collection_scope,
         )
         # A detail URL is also accepted for one-off collection.  This keeps the
         # same workbench form useful when the operator pastes an individual item.
-        if len(candidates) == before:
+        # Do not use the detail fallback when the listing returned rows that were
+        # filtered (for example, US.svg cards); otherwise a list URL containing
+        # an item-like query could bypass the list-level origin filter.
+        if len(candidates) == before and not page_rows:
             try:
                 current_item_id = extract_listing_item_id(driver.current_url)
             except ValueError:
@@ -624,37 +657,13 @@ def _wait_for_plugin(driver: Any, timeout: float) -> Any | None:
 
 
 def _attribute_rows(specs: Iterable[Mapping[str, Any]]) -> list[dict[str, str]]:
-    aliases = {
-        "MARCA": "BRAND",
-        "MODELO": "MODEL",
-        "GENERO": "GENDER",
-        "PERSONAJE": "CHARACTER",
-        "TALLA": "SIZE",
-        "MATERIAL_PRINCIPAL": "MAIN_MATERIAL",
-        "COMPOSICION": "COMPOSITION",
-        "CANTIDAD_DE_DISFRACES": "COSTUMES_NUMBER",
-        "INCLUYE_ACCESORIOS": "INCLUDES_ACCESSORIES",
-        "ACCESORIOS_INCLUIDOS": "ACCESSORIES_INCLUDED",
-        "ES_KIT": "IS_KIT",
-        "TALLA_DEL_DISFRAZ": "COSTUME_SIZE",
-        "CONTORNO_DEL_PECHO": "CHEST_CIRCUMFERENCE",
-        "CONTORNO_DE_LA_CINTURA": "WAIST_CIRCUMFERENCE",
-        "CONTORNO_DE_LA_CADERA": "HIP_CIRCUMFERENCE",
-        "ESTILOS": "NECKLACE_STYLES",
-        "MATERIAL_DEL_COLLAR": "NECKLACE_MATERIAL",
-    }
     attributes: list[dict[str, str]] = []
     for index, spec in enumerate(specs or []):
         name = str(spec.get("name") or "").strip()
         value = str(spec.get("value") or "").strip()
         if not name or not value:
             continue
-        decomposed = unicodedata.normalize("NFKD", name)
-        ascii_name = "".join(
-            character for character in decomposed if not unicodedata.combining(character)
-        )
-        normalized_id = re.sub(r"[^A-Z0-9]+", "_", ascii_name.upper()).strip("_")
-        normalized_id = aliases.get(normalized_id, normalized_id)
+        normalized_id = canonical_attribute_id({"name": name})
         attributes.append({"id": normalized_id or f"SPEC_{index + 1}", "name": name, "value_name": value})
     return attributes
 
@@ -971,6 +980,7 @@ def parse_listing_html(html_text: str, page_url: str) -> dict[str, Any]:
             card_text,
             re.I,
         ))
+        is_us_origin = is_us_origin or _listing_card_has_us_flag(card)
         is_china_origin = bool(re.search(
             r"(?:internacional.{0,24}china)|(?:china.{0,24}internacional)",
             card_text,

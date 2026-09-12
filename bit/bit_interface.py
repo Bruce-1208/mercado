@@ -357,6 +357,13 @@ WORKBENCH_DEFAULT_ROLES = (
         ),
         "is_system": True,
     },
+    {
+        "role_key": "warehouse",
+        "role_name": "仓库人员",
+        "description": "可查看订单并手动打印美客多面单",
+        "permissions": ("order_print.view", "order_print.execute"),
+        "is_system": True,
+    },
 )
 
 try:
@@ -621,6 +628,7 @@ if USE_DB_API:
     db_create_mercado_product_publish_records = bit_db_api.create_mercado_product_publish_records
     db_get_mercado_product_publish_records_by_ids = bit_db_api.get_mercado_product_publish_records_by_ids
     db_get_published_mercado_product_item_ids = bit_db_api.get_published_mercado_product_item_ids
+    db_get_existing_mercado_user_product_ids = bit_db_api.get_existing_mercado_user_product_ids
     db_update_mercado_product_publish_record = bit_db_api.update_mercado_product_publish_record
     db_list_mercado_product_publish_records = bit_db_api.list_mercado_product_publish_records
     db_update_mercado_product_review_status = bit_db_api.update_mercado_product_review_status
@@ -733,6 +741,7 @@ else:
         create_product_publish_records as db_create_mercado_product_publish_records,
         get_product_publish_records_by_ids as db_get_mercado_product_publish_records_by_ids,
         get_published_product_item_ids as db_get_published_mercado_product_item_ids,
+        get_existing_user_product_ids as db_get_existing_mercado_user_product_ids,
         list_product_publish_records as db_list_mercado_product_publish_records,
         list_collection_items as db_list_mercado_collection_items,
         list_product_items as db_list_mercado_product_items,
@@ -899,7 +908,7 @@ def _workbench_default_roles_are_current(cursor):
         """
         SELECT `role_key`, `role_name`, `description`, `permissions_json`, `is_system`
         FROM `workbench_roles`
-        WHERE `role_key` IN ('super_admin', 'operator', 'viewer')
+        WHERE `role_key` IN ('super_admin', 'operator', 'viewer', 'warehouse')
         """
     )
     current_roles = {
@@ -1160,7 +1169,7 @@ def list_workbench_roles_local():
                 GROUP BY r.`role_key`, r.`role_name`, r.`description`,
                          r.`permissions_json`, r.`is_system`, r.`created_at`,
                          r.`updated_at`
-                ORDER BY FIELD(r.`role_key`, 'super_admin', 'operator', 'viewer'),
+                ORDER BY FIELD(r.`role_key`, 'super_admin', 'operator', 'viewer', 'warehouse'),
                          r.`role_name`
                 """
             )
@@ -1872,6 +1881,23 @@ def internal_api_required(view_func):
 
 def _required_workbench_permissions(path, method):
     method = str(method or "GET").upper()
+    if path == "/api/orders":
+        return ("order_print.view",)
+    if path == "/api/orders/print":
+        return (
+            ("order_print.execute",)
+            if method == "POST"
+            else ("order_print.view",)
+        )
+    if path.startswith("/api/orders/") and method == "GET":
+        return ("order_print.view",)
+    if path in {
+        "/api/orders/bulk-update",
+        "/api/orders/weight-quote",
+        "/api/orders/split/preview",
+        "/api/orders/split",
+    }:
+        return ("order_analysis.execute",) if method != "GET" else ("order_analysis.view",)
     if path.startswith("/api/ai-weight-price/"):
         return ("ai_weight_price.view",) if method == "GET" else ("ai_weight_price.execute",)
     if path.startswith("/api/access/"):
@@ -2241,6 +2267,8 @@ _mercado_playwright_setup_state = {
     "window_id": "",
     "window_name": "采集专用（墨西哥）",
 }
+_mercado_playwright_setup_stop_event = threading.Event()
+_mercado_playwright_setup_thread = None
 _mercado_profit_refresh_lock = threading.Lock()
 _mercado_profit_refresh_started = False
 _mercado_profit_refresh_stop_event = threading.Event()
@@ -4637,6 +4665,7 @@ def build_order_print_params(data):
 
 def run_order_print_job(params, task_lock, stop_event):
     global _order_print_stop_event
+    workflow_status_error = ""
     try:
         with _order_print_lock:
             _order_print_state["message"] = "正在通过美客多 API 生成面单"
@@ -4655,7 +4684,22 @@ def run_order_print_job(params, task_lock, stop_event):
             stop_event=stop_event,
             logger=_append_order_print_log,
             task_id=params.get("task_id"),
+            operator_name=params.get("operator_name") or "订单打印/API",
         )
+        if (
+            params.get("operator_role_key") == "warehouse"
+            and summary.get("printed_order_ids")
+        ):
+            try:
+                bit_db_api.bulk_update_orders(
+                    summary["printed_order_ids"],
+                    workflow_status="待发",
+                    operator_id=params.get("operator_id"),
+                    operator_name=params.get("operator_name") or "",
+                )
+            except Exception as exc:
+                workflow_status_error = str(exc) or exc.__class__.__name__
+                logging.exception("仓库人员 API 面单已生成，但待发状态写入失败")
         site_last_runs = _load_order_print_site_last_runs(summary.get("results", []))
         with _order_print_lock:
             _order_print_state.update(
@@ -4672,6 +4716,7 @@ def run_order_print_job(params, task_lock, stop_event):
                     "download_name": summary.get("download_name", ""),
                     "results": summary.get("results", []),
                     "site_last_runs": site_last_runs,
+                    "workflow_status_error": workflow_status_error,
                 }
             )
 
@@ -4698,6 +4743,8 @@ def run_order_print_job(params, task_lock, stop_event):
                 if has_output
                 else "没有需要打印的订单"
             )
+        if workflow_status_error:
+            final_message += "；待发状态写入失败，请刷新后重试"
         with _order_print_lock:
             _order_print_state.update(
                 {
@@ -6679,6 +6726,12 @@ def api_start_order_print():
     except Exception as exc:
         logging.error("读取订单打印范围失败：%s", exc)
         return jsonify({"status": "error", "message": f"读取店铺配置失败：{exc}"}), 500
+    user = session.get("workbench_user") or {}
+    params.update({
+        "operator_id": user.get("id"),
+        "operator_name": user.get("display_name") or user.get("username") or "",
+        "operator_role_key": user.get("role_key") or "",
+    })
 
     with _order_print_lock:
         if _order_print_state.get("running"):
@@ -7084,6 +7137,11 @@ def api_bulk_update_orders():
         if field in data:
             changes[field] = data.get(field)
     user = session.get("workbench_user") or {}
+    if str(changes.get("workflow_status") or "").strip() == "待发":
+        return jsonify({
+            "status": "error",
+            "message": "待发状态只能由仓库人员打印美客多面单后自动设置",
+        }), 403
     try:
         result = bit_db_api.bulk_update_orders(
             order_ids,
@@ -7118,11 +7176,12 @@ def api_print_orders_pdf():
         logging.exception("美客多面单 PDF 下载失败")
         return jsonify({"status": "error", "message": f"美客多面单下载失败：{exc}"}), 502
 
+    user = session.get("workbench_user") or {}
+    successful_order_ids = [str(value) for value in result.get("order_ids") or []]
     print_log_error = ""
     try:
-        user = session.get("workbench_user") or {}
         bit_db_api.record_order_print_logs(
-            result.get("order_ids") or [],
+            successful_order_ids,
             operator_id=user.get("id"),
             operator_name=user.get("display_name") or user.get("username") or "",
         )
@@ -7132,6 +7191,20 @@ def api_print_orders_pdf():
         # operators can avoid immediately printing the same orders again.
         print_log_error = str(exc) or exc.__class__.__name__
         logging.exception("美客多面单已生成，但打印记录写入失败")
+    workflow_status_error = ""
+    if user.get("role_key") == "warehouse" and successful_order_ids:
+        try:
+            bit_db_api.bulk_update_orders(
+                successful_order_ids,
+                workflow_status="待发",
+                operator_id=user.get("id"),
+                operator_name=user.get("display_name") or user.get("username") or "",
+            )
+        except Exception as exc:
+            # Keep the valid PDF available even when the status audit write is
+            # temporarily unavailable; the response header lets the UI retry.
+            workflow_status_error = str(exc) or exc.__class__.__name__
+            logging.exception("仓库人员面单已生成，但待发状态写入失败")
     response = send_file(
         BytesIO(result["content"]),
         mimetype="application/pdf",
@@ -7139,7 +7212,6 @@ def api_print_orders_pdf():
         download_name=result.get("filename") or "mercado-labels.pdf",
         max_age=0,
     )
-    successful_order_ids = [str(value) for value in result.get("order_ids") or []]
     skipped_order_count = int(
         result.get("skipped_order_count")
         or len(result.get("skipped_order_ids") or [])
@@ -7158,6 +7230,8 @@ def api_print_orders_pdf():
     )
     if print_log_error:
         response.headers["X-Mercado-Print-Log"] = "failed"
+    if workflow_status_error:
+        response.headers["X-Mercado-Workflow-Status"] = "failed"
     response.headers["Cache-Control"] = "no-store"
     return response
 
@@ -9669,12 +9743,42 @@ def api_start_mercado_collection():
     except Exception as exc:
         return jsonify({"status": "error", "message": str(exc)}), 400
 
+    # The setup page is only a temporary login tab.  Operators often finish
+    # logging in but forget to close that tab; the old guard then rejected a
+    # valid, already-authenticated collection.  Ask the setup worker to close
+    # its tab and wait for the BitBrowser lease to be released before opening
+    # the collection runtime.  This keeps the profile serialized without
+    # requiring a second manual action.
+    setup_thread = None
     with _mercado_collection_lock:
         if _mercado_playwright_setup_state.get("running"):
-            return jsonify({
-                "status": "error",
-                "message": "Playwright 登录窗口仍开着，请登录智赢后关闭该窗口，再开始采集",
-            }), 409
+            _mercado_playwright_setup_stop_event.set()
+            setup_thread = _mercado_playwright_setup_thread
+    if setup_thread is not None and setup_thread is not threading.current_thread():
+        try:
+            setup_thread.join(timeout=10.0)
+        except Exception:
+            logging.exception("等待 Playwright 登录窗口关闭失败")
+
+    with _mercado_collection_lock:
+        if _mercado_playwright_setup_state.get("running"):
+            try:
+                setup_alive = bool(setup_thread and setup_thread.is_alive())
+            except Exception:
+                setup_alive = True
+            if not setup_alive:
+                _mercado_playwright_setup_state.update(
+                    {
+                        "running": False,
+                        "status": "error",
+                        "message": "登录窗口状态已过期，已自动释放，可以开始采集",
+                    }
+                )
+            else:
+                return jsonify({
+                    "status": "error",
+                    "message": "登录窗口正在关闭，请稍后再开始采集",
+                }), 409
         if _mercado_collection_state.get("running"):
             return jsonify({
                 "status": "error",
@@ -9751,11 +9855,13 @@ def api_start_mercado_collection():
 
 
 def _run_mercado_playwright_setup(browser_type, window_id, window_name):
+    global _mercado_playwright_setup_thread
     try:
         from erp.mercadolibre_playwright_collector import (
             DEFAULT_CDP_URL,
             DEFAULT_SETUP_URL,
             open_playwright_login_setup,
+            set_playwright_login_setup_stop_event,
         )
 
         if browser_type == "edge":
@@ -9763,6 +9869,7 @@ def _run_mercado_playwright_setup(browser_type, window_id, window_name):
                 DEFAULT_CDP_URL,
                 start_url=DEFAULT_SETUP_URL,
             )
+        set_playwright_login_setup_stop_event(_mercado_playwright_setup_stop_event)
         open_playwright_login_setup(
             window_id=window_id if browser_type == "bitbrowser" else ""
         )
@@ -9780,6 +9887,10 @@ def _run_mercado_playwright_setup(browser_type, window_id, window_name):
                 "status": "error",
                 "message": f"打开采集浏览器失败：{exc}",
             })
+    finally:
+        with _mercado_collection_lock:
+            if _mercado_playwright_setup_thread is threading.current_thread():
+                _mercado_playwright_setup_thread = None
 
 
 @app.route('/api/mercado-collection/browser-windows', methods=['GET'])
@@ -9823,6 +9934,7 @@ def api_mercado_collection_browser_windows():
 @app.route('/api/mercado-collection/playwright-setup', methods=['POST'])
 @login_required
 def api_open_mercado_playwright_setup():
+    global _mercado_playwright_setup_thread
     try:
         browser = build_mercado_collection_browser_params(
             request.get_json(silent=True) or {}
@@ -9850,6 +9962,7 @@ def api_open_mercado_playwright_setup():
             ),
             **browser,
         })
+        _mercado_playwright_setup_stop_event.clear()
         worker = threading.Thread(
             target=_run_mercado_playwright_setup,
             args=(
@@ -9860,7 +9973,17 @@ def api_open_mercado_playwright_setup():
             name="mercado-playwright-login-setup",
             daemon=True,
         )
-        worker.start()
+        _mercado_playwright_setup_thread = worker
+        try:
+            worker.start()
+        except Exception:
+            _mercado_playwright_setup_thread = None
+            _mercado_playwright_setup_state.update({
+                "running": False,
+                "status": "error",
+                "message": "启动登录窗口任务失败",
+            })
+            raise
         return jsonify({
             "status": "success",
             "data": dict(_mercado_playwright_setup_state),
@@ -10285,6 +10408,19 @@ def _run_mercado_product_publish_targets(
         base_published = published
         base_failed = failed
 
+        try:
+            existing_user_product_ids = db_get_existing_mercado_user_product_ids(
+                [int(row.get("id") or 0) for row in target_rows_to_publish],
+                token_id=token_id,
+            )
+        except Exception:
+            logging.exception(
+                "读取历史 User Product 失败，将按新商品发布: token_id=%s site_id=%s",
+                token_id,
+                site_id,
+            )
+            existing_user_product_ids = {}
+
         def on_progress(info, *, _target_index=target_index):
             current = int(info.get("current") or 0)
             current_published = int(info.get("published_count") or 0)
@@ -10323,6 +10459,7 @@ def _run_mercado_product_publish_targets(
                     created_by=str(created_by),
                     create_records=db_create_mercado_product_publish_records,
                     update_record=db_update_mercado_product_publish_record,
+                    existing_user_product_ids=existing_user_product_ids,
                 )
                 target_requested = int(
                     result.get("requested_count") or len(target_rows_to_publish)
@@ -10811,6 +10948,9 @@ def api_mercado_product_publish_records():
             status=str(request.args.get("status") or "").strip(),
             store_name=str(request.args.get("store_name") or "").strip(),
             site_id=str(request.args.get("site_id") or "").strip(),
+            group_name=str(request.args.get("group_name") or "").strip(),
+            start_date=str(request.args.get("start_date") or "").strip(),
+            end_date=str(request.args.get("end_date") or "").strip(),
             limit=_parse_int_param(request.args, "limit", 500, 1, 1000),
             offset=_parse_int_param(request.args, "offset", 0, 0, 1000000),
         )
@@ -11159,6 +11299,9 @@ def api_db_mercado_product_publish_records():
         status=str(request.args.get("status") or "").strip(),
         store_name=str(request.args.get("store_name") or "").strip(),
         site_id=str(request.args.get("site_id") or "").strip(),
+        group_name=str(request.args.get("group_name") or "").strip(),
+        start_date=str(request.args.get("start_date") or "").strip(),
+        end_date=str(request.args.get("end_date") or "").strip(),
         limit=_parse_int_param(request.args, "limit", 500, 1, 1000),
         offset=_parse_int_param(request.args, "offset", 0, 0, 1000000),
     )
@@ -11204,6 +11347,34 @@ def api_db_mercado_product_publish_records_by_ids():
     except ValueError as exc:
         return jsonify({"status": "error", "message": str(exc)}), 400
     return jsonify({"status": "success", "data": {"rows": rows}})
+
+
+@app.route('/api/db/mercado-publish-records/existing-user-products', methods=['POST'])
+@internal_api_required
+def api_db_existing_mercado_user_product_ids():
+    blocked = reject_db_api_client_mode()
+    if blocked:
+        return blocked
+    data = request.get_json(silent=True) or {}
+    item_ids = data.get("product_item_ids") or []
+    if not isinstance(item_ids, list):
+        return jsonify({"status": "error", "message": "product_item_ids 必须是数组"}), 422
+    try:
+        user_product_ids = db_get_existing_mercado_user_product_ids(
+            item_ids,
+            token_id=int(data.get("token_id") or 0),
+        )
+    except (TypeError, ValueError) as exc:
+        return jsonify({"status": "error", "message": str(exc)}), 400
+    return jsonify({
+        "status": "success",
+        "data": {
+            "user_product_ids": {
+                str(product_id): user_product_id
+                for product_id, user_product_id in user_product_ids.items()
+            }
+        },
+    })
 
 
 @app.route('/api/db/mercado-publish-records/bulk', methods=['POST'])

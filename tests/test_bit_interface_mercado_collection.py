@@ -1,4 +1,5 @@
 from datetime import datetime
+import asyncio
 from pathlib import Path
 from unittest.mock import patch
 
@@ -290,6 +291,9 @@ def test_workbench_splits_collection_and_product_list_into_separate_modules():
     assert b'id="publish-record-body"' in response.data
     assert b'id="publish-record-select-all"' in response.data
     assert b'id="publish-record-retry"' in response.data
+    assert b'id="publish-record-start-date"' in response.data
+    assert b'id="publish-record-end-date"' in response.data
+    assert b'id="publish-record-group"' in response.data
     assert "重新上架所选".encode("utf-8") in response.data
     assert "失败原因 / 接口明细".encode("utf-8") in response.data
     assert b"mercadoPublishRecordPollTimer" not in response.data
@@ -586,6 +590,131 @@ def test_start_collection_creates_background_task():
     _reset_state()
 
 
+def test_start_collection_requests_login_setup_cleanup_before_running(monkeypatch):
+    _reset_state()
+
+    class SetupThread:
+        def __init__(self):
+            self.alive = True
+            self.join_calls = []
+
+        def join(self, timeout=None):
+            self.join_calls.append(timeout)
+            self.alive = False
+            workbench._mercado_playwright_setup_state.update(running=False)
+
+        def is_alive(self):
+            return self.alive
+
+    setup_thread = SetupThread()
+    workbench._mercado_playwright_setup_thread = setup_thread
+    workbench._mercado_playwright_setup_state.update(running=True, status="starting")
+
+    collection_thread = type(
+        "CollectionThread",
+        (),
+        {"start": lambda self: setattr(self, "started", True)},
+    )()
+    monkeypatch.setattr(
+        workbench.threading,
+        "Thread",
+        lambda **_kwargs: collection_thread,
+    )
+    monkeypatch.setattr(workbench, "db_create_mercado_collection_task", lambda *args, **kwargs: 43)
+
+    response = _client().post(
+        "/api/mercado-collection/start",
+        json={
+            "source_url": "https://listado.mercadolibre.com.mx/bolsas",
+            "requested_count": 1,
+            "worker_count": 1,
+        },
+    )
+
+    assert response.status_code == 200
+    assert setup_thread.join_calls == [10.0]
+    assert workbench._mercado_playwright_setup_stop_event.is_set()
+    assert collection_thread.started is True
+    _reset_state()
+    workbench._mercado_playwright_setup_thread = None
+    workbench._mercado_playwright_setup_stop_event.clear()
+
+
+def test_start_collection_reports_when_login_setup_cannot_close(monkeypatch):
+    _reset_state()
+
+    class SetupThread:
+        def join(self, timeout=None):
+            self.join_timeout = timeout
+
+        def is_alive(self):
+            return True
+
+    setup_thread = SetupThread()
+    workbench._mercado_playwright_setup_thread = setup_thread
+    workbench._mercado_playwright_setup_state.update(running=True, status="starting")
+
+    response = _client().post(
+        "/api/mercado-collection/start",
+        json={
+            "source_url": "https://listado.mercadolibre.com.mx/bolsas",
+            "requested_count": 1,
+            "worker_count": 1,
+        },
+    )
+
+    assert response.status_code == 409
+    assert response.get_json()["message"] == "登录窗口正在关闭，请稍后再开始采集"
+    _reset_state()
+    workbench._mercado_playwright_setup_thread = None
+    workbench._mercado_playwright_setup_stop_event.clear()
+
+
+def test_playwright_login_setup_stop_event_closes_temporary_tab(monkeypatch):
+    from erp import mercadolibre_playwright_collector as collector
+
+    class Page:
+        def __init__(self):
+            self.closed = False
+
+        def is_closed(self):
+            return self.closed
+
+        async def bring_to_front(self):
+            return None
+
+        async def close(self):
+            self.closed = True
+
+    page = Page()
+    closed_runtimes = []
+    stop_event = workbench.threading.Event()
+    stop_event.set()
+
+    async def fake_open_runtime():
+        return object()
+
+    async def fake_new_page(_runtime):
+        return page
+
+    async def fake_goto(_page, _url):
+        return None
+
+    async def fake_close_runtime(runtime):
+        closed_runtimes.append(runtime)
+
+    monkeypatch.setattr(collector, "_open_runtime", fake_open_runtime)
+    monkeypatch.setattr(collector, "_new_page", fake_new_page)
+    monkeypatch.setattr(collector, "_goto", fake_goto)
+    monkeypatch.setattr(collector, "_close_runtime", fake_close_runtime)
+    collector.set_playwright_login_setup_stop_event(stop_event)
+
+    asyncio.run(collector._open_login_setup_async("https://www.mercadolibre.com/"))
+
+    assert page.closed is True
+    assert len(closed_runtimes) == 1
+
+
 def test_playwright_login_setup_starts_background_window():
     _reset_state()
     client = _client()
@@ -864,7 +993,9 @@ def test_product_publish_record_list_endpoint_supports_filters():
     ) as list_records:
         response = client.get(
             "/api/mercado-publish-records"
-            "?search=MLM301&status=failed&store_name=泽顺&site_id=MLB&limit=100"
+            "?search=MLM301&status=failed&store_name=泽顺&site_id=MLB"
+            "&group_name=精品组&start_date=2026-09-12T00:00"
+            "&end_date=2026-09-12T23:59&limit=100"
         )
 
     assert response.status_code == 200
@@ -875,6 +1006,9 @@ def test_product_publish_record_list_endpoint_supports_filters():
         status="failed",
         store_name="泽顺",
         site_id="MLB",
+        group_name="精品组",
+        start_date="2026-09-12T00:00",
+        end_date="2026-09-12T23:59",
         limit=100,
         offset=0,
     )
@@ -1441,6 +1575,8 @@ def test_multi_target_publish_runner_aggregates_progress_and_results():
     with patch.object(
         workbench, "db_get_published_mercado_product_item_ids", return_value=[]
     ), patch.object(
+        workbench, "db_get_existing_mercado_user_product_ids", return_value={}
+    ), patch.object(
         workbench.time, "monotonic", side_effect=[100, 104, 110, 110]
     ), patch(
         "erp.mercadolibre_batch_publish.publish_product_batch",
@@ -1496,6 +1632,8 @@ def test_multi_target_publish_runner_uses_retry_rows_and_original_quantities():
     ]
     with patch.object(
         workbench, "db_get_published_mercado_product_item_ids", return_value=[]
+    ), patch.object(
+        workbench, "db_get_existing_mercado_user_product_ids", return_value={}
     ), patch(
         "erp.mercadolibre_batch_publish.publish_product_batch",
         side_effect=[
@@ -1527,6 +1665,8 @@ def test_multi_target_publish_runner_skips_historical_success_for_same_target():
     }]
     with patch.object(
         workbench, "db_get_published_mercado_product_item_ids", return_value=[9]
+    ), patch.object(
+        workbench, "db_get_existing_mercado_user_product_ids", return_value={}
     ), patch(
         "erp.mercadolibre_batch_publish.publish_product_batch"
     ) as publish_batch:

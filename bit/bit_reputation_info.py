@@ -1,3 +1,5 @@
+import multiprocessing
+import os
 import time
 import re
 from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor, as_completed
@@ -144,6 +146,41 @@ SITE_LABEL_ALIASES = {
     "MLA": ("argentina",),
     "MLU": ("uruguay",),
 }
+
+
+class _CollectionWorkerOrphaned(RuntimeError):
+    """Internal signal used when a browser worker outlives its service."""
+
+
+def _collection_parent_is_alive():
+    """Return whether a process-pool worker still has a live service parent.
+
+    ``multiprocessing.parent_process()`` is ``None`` for normal in-process
+    calls (including the command-line compatibility entry point), so this is
+    deliberately a no-op outside a spawned worker.  A server killed during a
+    browser collection cannot run its normal executor shutdown; workers must
+    therefore notice the dead parent and stop using BitBrowser themselves.
+    """
+
+    try:
+        parent = multiprocessing.parent_process()
+    except Exception:
+        return True
+    if parent is None:
+        return True
+    try:
+        return bool(parent.is_alive())
+    except Exception:
+        # A transient inspection failure is not enough evidence to kill a
+        # legitimate collection worker.
+        return True
+
+
+def _ensure_collection_parent_alive():
+    if not _collection_parent_is_alive():
+        raise _CollectionWorkerOrphaned("采集服务进程已退出")
+
+
 METRIC_LABEL_ALIASES = {
     "complaints": (
         "complaints",
@@ -526,6 +563,28 @@ def _country_selection_state_matches(state, site):
 
     target_remote = f"{site_code}-remote"
     target_short = SITE_SHORT_CODE_MAP.get(site_code, "")
+
+    # The header can contain more than one selected element (for example the
+    # language selector may expose ``en_US``).  When the country list exposes
+    # explicit ``data-value`` entries, its selected flag is the authoritative
+    # source for the requested marketplace site.
+    available = state.get("available")
+    if isinstance(available, (list, tuple)):
+        target_entries = [
+            item for item in available
+            if isinstance(item, dict)
+            and str(item.get("value") or "").strip() == target_remote
+        ]
+        if target_entries and any(bool(item.get("selected")) for item in target_entries):
+            return True
+        if target_entries and any(
+            bool(item.get("selected"))
+            for item in available
+            if isinstance(item, dict)
+            and str(item.get("value") or "").strip()
+        ):
+            return False
+
     selected_remote = str(state.get("selectedRemote") or "").strip()
     if selected_remote:
         # 墨西哥 Full 与 Remote 共用 MX/国旗，存在显式 data-value 时必须严格区分。
@@ -1974,6 +2033,12 @@ def _deduplicate_config_rows(rows):
 
 
 def _run_reputation_for_browser(row, lease_wait_seconds=0):
+    # A force-stopped server cannot run the executor's normal shutdown.  Do
+    # not let a spawned worker continue opening browsers after its parent is
+    # gone; this also prevents stale workers from consuming later tasks.
+    if not _collection_parent_is_alive():
+        os._exit(0)
+
     id = row[0]
     name = row[1]
     remark = row[2]
@@ -2003,6 +2068,7 @@ def _run_reputation_for_browser(row, lease_wait_seconds=0):
     reputation_info_sum = []
     result = []
     sites = _split_sites(row[3])
+    orphaned = False
 
     try:
         try:
@@ -2019,6 +2085,7 @@ def _run_reputation_for_browser(row, lease_wait_seconds=0):
 
         fatal_profile_error = None
         for site in sites:
+            _ensure_collection_parent_alive()
             wait_for_batch_resume(f"声誉采集:{name}")
             if fatal_profile_error is not None:
                 status = _failure_status(fatal_profile_error)
@@ -2031,6 +2098,7 @@ def _run_reputation_for_browser(row, lease_wait_seconds=0):
             succeeded = False
             last_error = None
             for attempt in range(1, 4):
+                _ensure_collection_parent_alive()
                 wait_for_batch_resume(f"声誉采集:{name}")
                 try:
                     reputation_info = get_reputation_info(
@@ -2045,6 +2113,9 @@ def _run_reputation_for_browser(row, lease_wait_seconds=0):
                     result.append(("获取声誉信息", name, site, "成功", get_now_time()))
                     succeeded = True
                     break
+                except _CollectionWorkerOrphaned:
+                    orphaned = True
+                    raise
                 except Exception as e:
                     last_error = e
                     print(get_now_time() + name + site + "执行失败", e)
@@ -2067,6 +2138,8 @@ def _run_reputation_for_browser(row, lease_wait_seconds=0):
                     _build_reputation_failure_row(name, site, status)
                 )
             time.sleep(10)
+    except _CollectionWorkerOrphaned:
+        orphaned = True
     finally:
         print(get_now_time() + "结束，正在关闭窗口")
         try:
@@ -2075,12 +2148,19 @@ def _run_reputation_for_browser(row, lease_wait_seconds=0):
             print(get_now_time() + name + "关闭窗口失败", e)
         lease.release()
         print(get_now_time() + "已经关闭窗口")
+        if orphaned:
+            # The parent is already gone, so there is no future to report this
+            # task to.  Exit the pool worker after browser/lease cleanup.
+            os._exit(0)
 
     return reputation_info_sum, result
 
 
 def _run_reputation_auxiliary_for_browser(row, lease_wait_seconds=0):
     """每家店共用一个浏览器，只采集七天流量。"""
+    if not _collection_parent_is_alive():
+        os._exit(0)
+
     window_id = row[0]
     name = row[1]
     remark = row[2]
@@ -2114,6 +2194,7 @@ def _run_reputation_auxiliary_for_browser(row, lease_wait_seconds=0):
 
     auxiliary_rows = []
     result = []
+    orphaned = False
     try:
         try:
             driver = _connect_browser(
@@ -2134,6 +2215,7 @@ def _run_reputation_auxiliary_for_browser(row, lease_wait_seconds=0):
 
         fatal_profile_error = None
         for site in sites:
+            _ensure_collection_parent_alive()
             wait_for_batch_resume(f"声誉辅助采集:{name}")
             if fatal_profile_error is not None:
                 status = _failure_status(fatal_profile_error)
@@ -2147,6 +2229,7 @@ def _run_reputation_auxiliary_for_browser(row, lease_wait_seconds=0):
 
             last_error = None
             for attempt in range(1, 4):
+                _ensure_collection_parent_alive()
                 try:
                     auxiliary = get_reputation_traffic_info(
                         window_id,
@@ -2173,6 +2256,9 @@ def _run_reputation_auxiliary_for_browser(row, lease_wait_seconds=0):
                         + ("部分失败" if auxiliary.get("error") else "采集成功")
                     )
                     break
+                except _CollectionWorkerOrphaned:
+                    orphaned = True
+                    raise
                 except Exception as exc:
                     last_error = exc
                     print(f"{get_now_time()}{name}{site}辅助数据执行失败", exc)
@@ -2201,12 +2287,16 @@ def _run_reputation_auxiliary_for_browser(row, lease_wait_seconds=0):
                     ("获取声誉辅助信息", name, site, status, get_now_time())
                 )
             time.sleep(2)
+    except _CollectionWorkerOrphaned:
+        orphaned = True
     finally:
         try:
             closeBrowser(window_id, lease=lease)
         except Exception as exc:
             print(f"{get_now_time()}{name}关闭窗口失败", exc)
         lease.release()
+        if orphaned:
+            os._exit(0)
     return auxiliary_rows, result
 
 

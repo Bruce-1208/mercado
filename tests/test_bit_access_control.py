@@ -219,6 +219,14 @@ def test_workbench_schema_migrates_roles_and_existing_users():
     assert "`role_key` VARCHAR(64)" in source
     assert "SET `role_key` = 'super_admin'" in source
     assert "WORKBENCH_DEFAULT_ROLES" in source
+    warehouse_role = next(
+        role for role in bit_interface.WORKBENCH_DEFAULT_ROLES
+        if role["role_key"] == "warehouse"
+    )
+    assert warehouse_role["role_name"] == "仓库人员"
+    assert set(warehouse_role["permissions"]) == {
+        "order_print.view", "order_print.execute",
+    }
 
 
 def test_workbench_schema_ready_fast_path_avoids_startup_writes(monkeypatch):
