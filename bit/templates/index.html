@@ -10198,9 +10198,10 @@
                             <select id="appeal-agent-id">
                                 <option value="">正在读取在线电脑...</option>
                             </select>
-                            <div class="actions" style="margin-top: 8px;">
+                            <div class="actions" style="margin-top: 8px; flex-wrap: wrap;">
                                 <button class="secondary" type="button" id="refresh-execution-agents">刷新电脑</button>
-                                <button class="secondary" type="button" id="download-local-agent">下载本机 Agent</button>
+                                <button class="secondary" type="button" id="download-local-agent">下载 Windows Agent</button>
+                                <button class="secondary" type="button" id="download-local-agent-macos">下载 macOS Agent</button>
                             </div>
                             <small class="shop-search-hint" id="appeal-agent-hint">Agent 安装一次后会自动同步最新业务代码。</small>
                         </div>
@@ -10383,9 +10384,10 @@
                         <div class="field" id="daily-task-agent-field">
                             <label for="daily-task-agent-id">执行电脑</label>
                             <select id="daily-task-agent-id"><option value="">正在读取在线电脑...</option></select>
-                            <div class="actions" style="margin-top: 8px;">
+                            <div class="actions" style="margin-top: 8px; flex-wrap: wrap;">
                                 <button class="secondary" type="button" id="refresh-daily-task-agents">刷新电脑</button>
-                                <button class="secondary" type="button" id="download-daily-task-agent">下载本机 Agent</button>
+                                <button class="secondary" type="button" id="download-daily-task-agent">下载 Windows Agent</button>
+                                <button class="secondary" type="button" id="download-daily-task-agent-macos">下载 macOS Agent</button>
                             </div>
                             <small class="shop-search-hint" id="daily-task-agent-hint">请在执行电脑启动 Agent 1.1.0 或更高版本。</small>
                         </div>
@@ -12608,6 +12610,7 @@
         const appealAgentHint = document.getElementById("appeal-agent-hint");
         const refreshExecutionAgentsBtn = document.getElementById("refresh-execution-agents");
         const downloadLocalAgentBtn = document.getElementById("download-local-agent");
+        const downloadLocalAgentMacosBtn = document.getElementById("download-local-agent-macos");
         const appealShopInput = document.getElementById("name");
         const appealShopOptions = document.getElementById("appeal-shop-options");
         const statusBox = document.getElementById("status");
@@ -13391,8 +13394,8 @@
                 button.hidden = !hasWorkbenchPermission(button.dataset.permission);
             });
             const actionSelectors = {
-                "appeal.execute": ["#start-btn", "#stop-btn", "#appeal-execution-target", "#appeal-agent-id", "#refresh-execution-agents", "#download-local-agent", "#add-appeal-phrase-btn", "#save-appeal-phrase-btn"],
-                "tasks.execute": ["#start-daily-task-btn", "#daily-task-execution-target", "#daily-task-agent-id", "#download-daily-task-agent"],
+                "appeal.execute": ["#start-btn", "#stop-btn", "#appeal-execution-target", "#appeal-agent-id", "#refresh-execution-agents", "#download-local-agent", "#download-local-agent-macos", "#add-appeal-phrase-btn", "#save-appeal-phrase-btn"],
+                "tasks.execute": ["#start-daily-task-btn", "#daily-task-execution-target", "#daily-task-agent-id", "#download-daily-task-agent", "#download-daily-task-agent-macos"],
                 "order_print.execute": ["#start-order-print-btn", "#stop-order-print-btn", "#rerun-selected-order-print-btn"],
                 "order_analysis.execute": ["#order-analysis-folder", "#import-order-analysis-btn"],
                 "shop_status.execute": ["#start-selected-mercado-login-btn", "#start-mercado-login-btn", "#stop-mercado-login-btn", ".header-worker-control"],
@@ -26124,7 +26127,10 @@
         });
         refreshExecutionAgentsBtn?.addEventListener("click", loadExecutionAgents);
         downloadLocalAgentBtn?.addEventListener("click", () => {
-            window.location.assign("/api/local-agents/download");
+            window.location.assign("/api/local-agents/download?platform=windows");
+        });
+        downloadLocalAgentMacosBtn?.addEventListener("click", () => {
+            window.location.assign("/api/local-agents/download?platform=macos");
         });
         dailyTaskExecutionTarget?.addEventListener("change", () => {
             syncExecutionTargetHint(
@@ -26139,7 +26145,10 @@
             window.localStorage.setItem("zeshun-daily-task-agent-id", dailyTaskAgentId.value);
         });
         document.getElementById("download-daily-task-agent")?.addEventListener("click", () => {
-            window.location.assign("/api/local-agents/download");
+            window.location.assign("/api/local-agents/download?platform=windows");
+        });
+        document.getElementById("download-daily-task-agent-macos")?.addEventListener("click", () => {
+            window.location.assign("/api/local-agents/download?platform=macos");
         });
         restoreApiReputationViewState();
         initializeMinuteDateTimeInputs();

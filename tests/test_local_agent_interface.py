@@ -253,6 +253,31 @@ def test_task_operator_can_enroll_and_list_daily_agents(daily_agent_interface, m
     assert client.post("/api/tasks/daily/start", json={"execution_target": "agent", "agent_id": "agent-daily-pc"}).status_code == 403
 
 
+def test_console_downloads_macos_agent_package(agent_interface, monkeypatch, tmp_path):
+    _user, _store, client = agent_interface
+    (tmp_path / "local_agent.py").write_text("# test source", encoding="utf-8")
+    monkeypatch.setattr(bit_interface, "PROJECT_ROOT", tmp_path)
+    monkeypatch.delenv("BIT_LOCAL_AGENT_MACOS_EXECUTABLE", raising=False)
+
+    response = client.get("/api/local-agents/download?platform=macos")
+
+    assert response.status_code == 200
+    assert response.headers["X-Agent-Package-Platform"] == "macos"
+    assert "Zeshun-MercadoLocalAgent-macOS.zip" in response.headers["Content-Disposition"]
+    with zipfile.ZipFile(io.BytesIO(response.data)) as archive:
+        assert "start-agent.command" in archive.namelist()
+        assert "start-agent.bat" not in archive.namelist()
+
+
+def test_console_rejects_unknown_agent_download_platform(agent_interface):
+    _user, _store, client = agent_interface
+
+    response = client.get("/api/local-agents/download?platform=linux")
+
+    assert response.status_code == 400
+    assert "windows 或 macos" in response.get_json()["message"]
+
+
 def test_daily_agent_endpoints_do_not_control_appeal_jobs(daily_agent_interface):
     _user, store, client = daily_agent_interface
     store.enqueue_job("appeal-other-job", "agent-daily-pc", "appeal", {})

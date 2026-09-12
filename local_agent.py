@@ -113,6 +113,8 @@ def _default_data_dir():
         root = os.environ.get("LOCALAPPDATA") or os.environ.get("APPDATA")
         if root:
             return Path(root) / "Zeshun" / "MercadoLocalAgent"
+    if sys.platform == "darwin":
+        return Path.home() / "Library" / "Application Support" / "Zeshun" / "MercadoLocalAgent"
     if getattr(sys, "frozen", False):
         return Path(sys.executable).resolve().parent / ".local-agent-data"
     return Path(__file__).resolve().parent / ".data" / "local-agent"

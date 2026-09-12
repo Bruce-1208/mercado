@@ -60,14 +60,14 @@ Copy-Item .\workbench-client.example.json .\workbench-runtime.json
 
 首次使用只需：
 
-1. 登录 `https://zeshun.cc.cd/`，打开“自动化 AI 申诉”，点击“下载本机 Agent”；
-2. 在需要运行比特浏览器的 Windows 电脑解压下载包；
-3. 双击 `start-agent.bat` 启动，或运行 `install-agent.ps1` 安装为登录后自动启动；
+1. 登录 `https://zeshun.cc.cd/`，打开“自动化 AI 申诉”，按电脑系统点击“下载 Windows Agent”或“下载 macOS Agent”；
+2. 在需要运行比特浏览器的电脑上解压下载包；
+3. Windows 双击 `start-agent.bat` 启动，或运行 `install-agent.ps1` 安装登录启动任务；macOS 双击 `start-agent.command` 启动，或运行 `install-agent.command` 安装 LaunchAgent；
 4. 保持比特浏览器客户端运行，回到控制台刷新“执行电脑”并选择该电脑。
 
 Agent 只主动通过 HTTPS 连接公网控制台，不监听本机端口。服务器磁盘上的业务源码变化后会生成新的业务版本；Agent 在下一次心跳时下载 ZIP、校验 SHA-256、原子切换版本并保留上一版，因此普通业务逻辑更新无需重新安装 Agent。Agent 协议或新增 Python 依赖发生变化时，才需要重新构建并下载 Agent。
 
-Agent 1.1.0 起同时承接“自动化 AI 申诉”和“任务模块”的 daily_task。在任务模块选择“本机 Agent”、刷新电脑并选中在线终端即可启动，状态、日志和停止请求都通过公网工作台传递。同一终端的 Agent 依次执行队列任务；循环任务结束或停止后才会执行下一项。服务端部署、Windows EXE 构建和故障排查见 [本机 Agent 部署说明](docs/local_agent.md)。
+Agent 1.1.0 起同时承接“自动化 AI 申诉”和“任务模块”的 daily_task。在任务模块选择“本机 Agent”、刷新电脑并选中在线终端即可启动，状态、日志和停止请求都通过公网工作台传递。同一终端的 Agent 依次执行队列任务；循环任务结束或停止后才会执行下一项。服务端部署、Windows/macOS 可执行文件构建和故障排查见 [本机 Agent 部署说明](docs/local_agent.md)。
 
 ### 旧版 client 工作台（兼容）
 

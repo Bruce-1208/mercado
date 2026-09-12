@@ -5,6 +5,8 @@ import time
 import zipfile
 from pathlib import Path
 
+import pytest
+
 from bit.local_agent_bundle import build_business_bundle
 from bit.local_agent_distribution import build_agent_distribution
 from bit.local_agent_hub import LocalAgentStore
@@ -167,3 +169,61 @@ def test_download_package_uses_configured_windows_executable(monkeypatch, tmp_pa
     with zipfile.ZipFile(io.BytesIO(package["content"])) as archive:
         assert archive.read("MercadoLocalAgent.exe") == b"windows-agent"
         assert "local_agent.py" not in archive.namelist()
+
+
+def test_download_package_supports_macos_source_install(monkeypatch, tmp_path):
+    monkeypatch.delenv("BIT_LOCAL_AGENT_MACOS_EXECUTABLE", raising=False)
+    source = Path(__file__).resolve().parents[1] / "local_agent.py"
+    (tmp_path / "local_agent.py").write_bytes(source.read_bytes())
+
+    package = build_agent_distribution(
+        tmp_path,
+        server_url="https://workbench.example",
+        enrollment_token="mac-enrollment",
+        target_platform="macos",
+    )
+
+    assert package["platform"] == "macos"
+    assert package["format"] == "python-source"
+    with zipfile.ZipFile(io.BytesIO(package["content"])) as archive:
+        names = set(archive.namelist())
+        assert {
+            "local_agent.py",
+            "run-agent.sh",
+            "start-agent.command",
+            "install-agent.command",
+            "uninstall-agent.command",
+        }.issubset(names)
+        assert "start-agent.bat" not in names
+        assert "LaunchAgents" in archive.read("install-agent.command").decode("utf-8")
+        for name in ("run-agent.sh", "start-agent.command", "install-agent.command"):
+            assert archive.getinfo(name).external_attr >> 16 & 0o111
+
+
+def test_download_package_uses_configured_macos_executable(monkeypatch, tmp_path):
+    executable = tmp_path / "artifacts" / "MercadoLocalAgent"
+    executable.parent.mkdir()
+    executable.write_bytes(b"macos-agent")
+    monkeypatch.setenv("BIT_LOCAL_AGENT_MACOS_EXECUTABLE", str(executable))
+
+    package = build_agent_distribution(
+        tmp_path,
+        server_url="https://workbench.example",
+        enrollment_token="enrollment",
+        target_platform="darwin",
+    )
+
+    assert package["format"] == "macos-executable"
+    with zipfile.ZipFile(io.BytesIO(package["content"])) as archive:
+        assert archive.read("MercadoLocalAgent") == b"macos-agent"
+        assert "local_agent.py" not in archive.namelist()
+
+
+def test_download_package_rejects_unknown_platform(tmp_path):
+    with pytest.raises(ValueError, match="windows 或 macos"):
+        build_agent_distribution(
+            tmp_path,
+            server_url="https://workbench.example",
+            enrollment_token="enrollment",
+            target_platform="linux",
+        )

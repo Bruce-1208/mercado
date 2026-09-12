@@ -83,7 +83,10 @@ import bit.mercado_infraction_sync as mercado_infraction_sync
 import bit.mercado_reputation as mercado_reputation
 import bit.mercado_tokens as mercado_tokens
 from bit.local_agent_bundle import build_business_bundle
-from bit.local_agent_distribution import build_agent_distribution
+from bit.local_agent_distribution import (
+    build_agent_distribution,
+    normalize_agent_platform,
+)
 from bit.local_agent_hub import (
     LocalAgentStore,
     TERMINAL_JOB_STATUSES,
@@ -8080,6 +8083,10 @@ def api_download_local_agent():
     if not any(workbench_user_has_permission(user, permission)
                for permission in ("appeal.execute", "tasks.execute")):
         return jsonify({"status": "error", "message": "当前账号没有 Agent 任务执行权限"}), 403
+    try:
+        target_platform = normalize_agent_platform(request.args.get("platform"))
+    except ValueError as exc:
+        return jsonify({"status": "error", "message": str(exc)}), 400
     enrollment_token = create_local_agent_enrollment_token(user)
     public_url = str(
         os.environ.get("BIT_PUBLIC_WORKBENCH_URL")
@@ -8090,15 +8097,21 @@ def api_download_local_agent():
         PROJECT_ROOT,
         server_url=public_url,
         enrollment_token=enrollment_token,
+        target_platform=target_platform,
     )
     response = send_file(
         BytesIO(package["content"]),
         mimetype="application/zip",
         as_attachment=True,
-        download_name="Zeshun-MercadoLocalAgent.zip",
+        download_name=(
+            "Zeshun-MercadoLocalAgent-macOS.zip"
+            if target_platform == "macos"
+            else "Zeshun-MercadoLocalAgent.zip"
+        ),
         max_age=0,
     )
     response.headers["X-Agent-Package-Format"] = package["format"]
+    response.headers["X-Agent-Package-Platform"] = target_platform
     response.headers["Cache-Control"] = "no-store"
     return response
 
