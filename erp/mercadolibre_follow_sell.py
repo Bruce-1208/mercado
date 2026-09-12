@@ -626,6 +626,16 @@ def _cached_user_profile(client: MercadoLibreClient) -> Mapping[str, Any]:
         profile = client.request("GET", "/users/me")
         client._cached_user_profile_value = profile
         return profile
+    now = time.monotonic()
+    with _USER_PROFILE_CACHE_LOCK:
+        cached = _USER_PROFILE_CACHE.get(token_id)
+        if cached and now - cached[0] < _CACHE_TTL_SECONDS:
+            client._cached_user_profile_value = cached[1]
+            return cached[1]
+        profile = client.request("GET", "/users/me")
+        _USER_PROFILE_CACHE[token_id] = (time.monotonic(), profile)
+        client._cached_user_profile_value = profile
+        return profile
 
 
 def _upload_validated_picture(client: MercadoLibreClient, source_url: str) -> str:
@@ -660,16 +670,6 @@ def _upload_validated_picture(client: MercadoLibreClient, source_url: str) -> st
                 _PICTURE_ID_CACHE.pop(oldest, None)
                 _PICTURE_KEY_LOCKS.pop(oldest, None)
         return picture_id
-    now = time.monotonic()
-    with _USER_PROFILE_CACHE_LOCK:
-        cached = _USER_PROFILE_CACHE.get(token_id)
-        if cached and now - cached[0] < _CACHE_TTL_SECONDS:
-            client._cached_user_profile_value = cached[1]
-            return cached[1]
-        profile = client.request("GET", "/users/me")
-        _USER_PROFILE_CACHE[token_id] = (time.monotonic(), profile)
-        client._cached_user_profile_value = profile
-        return profile
 
 
 def _direct_cbt_category_exists(

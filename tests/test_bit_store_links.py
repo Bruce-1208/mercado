@@ -103,6 +103,65 @@ def test_listing_record_extracts_link_weight_dimensions_and_sku():
     assert record["permalink"].startswith("https://")
 
 
+def test_listing_record_extracts_package_values_from_variations():
+    record = store.listing_record(
+        {"id": 7, "display_name": "泽顺墨西哥", "meli_user_id": "seller-7"},
+        {
+            "id": "MLM456",
+            "attributes": [],
+            "shipping": {"dimensions": ""},
+            "variations": [
+                {
+                    "id": 101,
+                    "attributes": [
+                        {"id": "PACKAGE_WEIGHT", "value_name": "100 g"},
+                        {"id": "PACKAGE_LENGTH", "value_name": "16 cm"},
+                        {"id": "PACKAGE_WIDTH", "value_name": "15 cm"},
+                        {"id": "PACKAGE_HEIGHT", "value_name": "17 cm"},
+                    ],
+                }
+            ],
+        },
+        "2026-09-12 01:00:00",
+    )
+
+    assert record["weight_g"] == Decimal("100")
+    assert record["package_length_cm"] == Decimal("16")
+    assert record["package_width_cm"] == Decimal("15")
+    assert record["package_height_cm"] == Decimal("17")
+    assert record["volumetric_weight_kg"] == Decimal("0.6800")
+
+
+def test_listing_record_uses_highest_actual_weight_complete_variation():
+    def package(weight, length, width, height):
+        return {
+            "attributes": [
+                {"id": "PACKAGE_WEIGHT", "value_name": f"{weight} g"},
+                {"id": "PACKAGE_LENGTH", "value_name": f"{length} cm"},
+                {"id": "PACKAGE_WIDTH", "value_name": f"{width} cm"},
+                {"id": "PACKAGE_HEIGHT", "value_name": f"{height} cm"},
+            ]
+        }
+
+    record = store.listing_record(
+        {"id": 7, "display_name": "泽顺墨西哥", "meli_user_id": "seller-7"},
+        {
+            "id": "MLM789",
+            "variations": [
+                package(900, 10, 10, 10),
+                package(300, 30, 20, 20),
+            ],
+        },
+        "2026-09-12 01:00:00",
+    )
+
+    assert record["weight_g"] == Decimal("900")
+    assert record["package_length_cm"] == Decimal("10")
+    assert record["package_width_cm"] == Decimal("10")
+    assert record["package_height_cm"] == Decimal("10")
+    assert record["volumetric_weight_kg"] == Decimal("0.1667")
+
+
 def test_remote_update_pushes_price_package_and_net_proceeds_then_updates_local(monkeypatch):
     api_calls = []
     local_calls = []
@@ -611,6 +670,7 @@ def test_sync_store_writes_listing_batches_incrementally(monkeypatch):
             assert "title" in attributes
             assert "pictures" in attributes
             assert "attributes" in attributes
+            assert "variations" in attributes
             number = int(str(item_id).removeprefix("MLM"))
             return {
                 "id": item_id,

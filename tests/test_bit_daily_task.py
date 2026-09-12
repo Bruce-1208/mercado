@@ -56,8 +56,18 @@ def test_task_switches_can_run_multiple_tasks_without_infraction():
     )
 
 
-def test_task_switches_do_not_repeat_prohibited_after_infraction_split():
+def test_task_switches_run_infraction_and_prohibited_independently():
     assert bit_daily_task.appeal_type_sequence(["侵权", "禁限售"]) == (
+        bit_daily_task.APPEAL_TYPE_INFRACTION,
+        bit_daily_task.APPEAL_TYPE_PROHIBITED,
+    )
+
+
+def test_task_switches_refresh_infraction_after_reputation_tasks():
+    assert bit_daily_task.appeal_type_sequence(["侵权", "投诉", "禁限售"]) == (
+        bit_daily_task.APPEAL_TYPE_INFRACTION,
+        bit_daily_task.APPEAL_TYPE_PROHIBITED,
+        bit_daily_task.APPEAL_TYPE_COMPLAINT,
         bit_daily_task.APPEAL_TYPE_INFRACTION,
     )
 
@@ -254,7 +264,7 @@ def test_default_infraction_plan_uses_authorization_switches_not_browser_sites(m
     assert collection_calls[0][1]["recent_days"] == 100
 
 
-def test_infraction_plan_splits_prohibited_into_independent_appeal(monkeypatch):
+def test_infraction_plan_excludes_prohibited_records(monkeypatch):
     today = datetime.now().strftime("%Y-%m-%d")
     monkeypatch.setattr(
         bit_daily_task.mercado_infraction_sync,
@@ -272,10 +282,10 @@ def test_infraction_plan_splits_prohibited_into_independent_appeal(monkeypatch):
                 {
                     "店铺名": "授权店铺",
                     "站点": "MLM",
-                    "编号": "MLM-GENERIC",
+                    "编号": "MLM-INFRACTION",
                     "侵权时间": today,
                     "类型": "侵权",
-                    "侵权原因": "The product's brand is not generic.",
+                    "侵权原因": "The product could be counterfeit.",
                 },
             ]
         },
@@ -303,10 +313,41 @@ def test_infraction_plan_splits_prohibited_into_independent_appeal(monkeypatch):
             "site": "墨西哥",
             "site_code": "MX",
             "count": 1,
-            "appeal_type": bit_daily_task.APPEAL_TYPE_PROHIBITED,
-            "prohibited_ids": ["MLM-PROHIBITED"],
+            "appeal_type": bit_daily_task.APPEAL_TYPE_INFRACTION,
+            "infraction_ids": ["MLM-INFRACTION"],
         }
     ]
+
+
+def test_infraction_plan_does_not_create_plan_for_prohibited_only(monkeypatch):
+    today = datetime.now().strftime("%Y-%m-%d")
+    monkeypatch.setattr(
+        bit_daily_task.mercado_infraction_sync,
+        "collect_live_detection_infractions",
+        lambda _targets, **_kwargs: {
+            "data": [{
+                "店铺名": "授权店铺",
+                "站点": "MLM",
+                "编号": "MLM-PROHIBITED",
+                "侵权时间": today,
+                "类型": "侵权",
+                "侵权原因": "The product is prohibited.",
+            }]
+        },
+    )
+    monkeypatch.setattr(
+        bit_daily_task,
+        "list_mercado_store_tokens",
+        lambda: {
+            "rows": [{
+                "id": 7,
+                "display_name": "授权店铺",
+                "site_settings": [{"site_id": "MLM", "appeal_enabled": True}],
+            }]
+        },
+    )
+
+    assert bit_daily_task.build_latest_infraction_appeal_plan(top_n=10) == []
 
 
 def test_prohibited_plan_reads_current_list_and_filters_authorized_sites(monkeypatch):

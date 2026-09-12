@@ -2993,6 +2993,117 @@
             background: #edf2f8;
         }
 
+        #tab-prohibited-listings {
+            min-height: calc(100vh - var(--topbar-height) - 92px);
+            border: 1px solid #dce3ee;
+            border-radius: 10px;
+            background:
+                radial-gradient(circle at 92% -8%, rgba(89, 110, 217, .17), transparent 30rem),
+                #edf2f8;
+            padding: 18px;
+            box-shadow: 0 10px 26px rgba(30, 47, 76, .08);
+        }
+
+        #tab-prohibited-listings > .tab-heading {
+            min-height: 0;
+            align-items: flex-end;
+            border: 0;
+            background: transparent;
+            padding: 0;
+            margin-bottom: 20px;
+            box-shadow: none;
+        }
+
+        #tab-prohibited-listings > .tab-heading h2 {
+            color: #152b4c;
+            font-size: clamp(25px, 3vw, 36px);
+            line-height: 1.2;
+            letter-spacing: -.02em;
+        }
+
+        #tab-prohibited-listings > .tab-heading p {
+            margin-top: 7px;
+            color: #637089;
+            font-size: 16px;
+            line-height: 1.55;
+        }
+
+        #tab-prohibited-listings .header-actions {
+            justify-content: flex-end;
+        }
+
+        #tab-prohibited-listings .header-actions button,
+        #tab-prohibited-listings .inventory-switch {
+            min-height: 42px;
+            border-radius: 10px;
+        }
+
+        #tab-prohibited-listings .store-link-board {
+            border-color: #dce3ee;
+            border-radius: 12px;
+            background: #fff;
+            box-shadow: 0 12px 34px rgba(30, 47, 76, .08);
+        }
+
+        #tab-prohibited-listings .store-link-sync-strip {
+            grid-template-columns: minmax(220px, 1.5fr) repeat(6, minmax(100px, .55fr));
+        }
+
+        #tab-prohibited-listings .store-link-sync-main,
+        #tab-prohibited-listings .store-link-sync-metric {
+            min-height: 82px;
+            background: #f7f9fc;
+            padding: 14px 16px;
+        }
+
+        #tab-prohibited-listings .store-link-sync-main strong,
+        #tab-prohibited-listings .store-link-sync-metric strong {
+            font-size: 21px;
+        }
+
+        #tab-prohibited-listings .store-link-sync-main span,
+        #tab-prohibited-listings .store-link-sync-metric span,
+        #tab-prohibited-listings .store-link-filters label {
+            color: #637089;
+            font-size: 14px;
+        }
+
+        #tab-prohibited-listings .store-link-filters {
+            gap: 12px;
+            padding: 16px;
+        }
+
+        #tab-prohibited-listings .risk-site-breakdown {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            flex-wrap: wrap;
+            padding: 12px 16px 0;
+        }
+
+        #tab-prohibited-listings .risk-site-breakdown-label {
+            color: #637089;
+            font-size: 14px;
+            font-weight: 700;
+        }
+
+        #tab-prohibited-listings .risk-site-count {
+            display: inline-flex;
+            align-items: baseline;
+            gap: 6px;
+            padding: 5px 9px;
+            border: 1px solid #dce3ee;
+            border-radius: 999px;
+            background: #f7f9fc;
+            color: #314158;
+            font-size: 13px;
+        }
+
+        #tab-prohibited-listings .risk-site-count strong {
+            color: #152b4c;
+            font-variant-numeric: tabular-nums;
+        }
+
         .legacy-infractions-module[hidden] { display: none !important; }
 
         .infractions-header {
@@ -7426,6 +7537,15 @@
         }
 
         @media (max-width: 900px) {
+            #tab-prohibited-listings {
+                padding: 14px;
+            }
+
+            #tab-prohibited-listings .store-link-sync-strip,
+            #tab-prohibited-listings .store-link-filters {
+                grid-template-columns: 1fr 1fr;
+            }
+
             .mercado-workbench-heading {
                 align-items: flex-start;
                 flex-direction: column;
@@ -7773,6 +7893,15 @@
         }
 
         @media (max-width: 560px) {
+            #tab-prohibited-listings {
+                padding: 10px;
+            }
+
+            #tab-prohibited-listings .store-link-sync-strip,
+            #tab-prohibited-listings .store-link-filters {
+                grid-template-columns: 1fr;
+            }
+
             #tab-risk-check .risk-check-task-layout {
                 gap: 10px;
                 padding: 10px;
@@ -8852,7 +8981,6 @@
                 <button class="tab-button" type="button" data-tab="window-anomalies" data-icon="◉" data-permission="shop_status.view" onclick="switchTab('window-anomalies')"><span class="nav-label">店铺状态</span></button>
                 <button class="tab-button" type="button" data-tab="store-tokens" data-icon="⌘" onclick="switchTab('store-tokens')"><span class="nav-label">店铺授权</span></button>
                 <button class="tab-button" type="button" data-tab="store-links" data-icon="↗" onclick="switchTab('store-links')"><span class="nav-label">店铺链接</span></button>
-                <button class="tab-button" type="button" data-tab="prohibited-listings" data-icon="!" onclick="switchTab('prohibited-listings')"><span class="nav-label">禁限售列表</span></button>
                 <button class="tab-button" type="button" data-tab="pre-sale" data-icon="?" data-permission="customer_service.view" onclick="switchTab('pre-sale')"><span class="nav-label">售前问答</span></button>
                 <button class="tab-button" type="button" data-tab="customer-service" data-icon="✉" data-permission="customer_service.view" onclick="switchTab('customer-service')"><span class="nav-label">售后处理</span></button>
                 <button class="tab-button" type="button" data-tab="funds" data-icon="$" data-permission="funds.view" onclick="switchTab('funds')"><span class="nav-label">资金管理</span></button>
@@ -8860,10 +8988,11 @@
                 <p class="nav-title">自动化与风控</p>
                 <button class="tab-button" type="button" data-tab="appeal" data-icon="✦" data-permission="appeal.view" onclick="switchTab('appeal')"><span class="nav-label">自动化 AI 申诉</span></button>
                 <button class="tab-button" type="button" data-tab="tasks" data-icon="✓" data-permission="tasks.view" onclick="switchTab('tasks')"><span class="nav-label">任务模块</span></button>
+                <button class="tab-button" type="button" data-tab="ip-rights" data-icon="盾" data-permission="infractions.view" onclick="switchTab('ip-rights')"><span class="nav-label">侵权和权利人总览</span></button>
+                <button class="tab-button" type="button" data-tab="prohibited-listings" data-icon="禁" onclick="switchTab('prohibited-listings')"><span class="nav-label">禁限售列表</span></button>
+                <button class="tab-button" type="button" data-tab="infractions" data-icon="规" data-permission="infractions.view" onclick="switchTab('infractions')"><span class="nav-label">违规商品总览</span></button>
                 <button class="tab-button" type="button" data-tab="risk-check" data-icon="◎" data-permission="risk_check.view" onclick="switchTab('risk-check')"><span class="nav-label">侵权检测</span></button>
                 <button class="tab-button" type="button" data-tab="infringement-knowledge" data-icon="◆" data-permission="infringement_knowledge.view" onclick="switchTab('infringement-knowledge')"><span class="nav-label">侵权知识库</span></button>
-                <button class="tab-button" type="button" data-tab="infractions" data-icon="!" data-permission="infractions.view" onclick="switchTab('infractions')"><span class="nav-label">违规商品总览</span></button>
-                <button class="tab-button" type="button" data-tab="ip-rights" data-icon="盾" data-permission="infractions.view" onclick="switchTab('ip-rights')"><span class="nav-label">侵权和权利人总览</span></button>
                 <button class="tab-button" type="button" data-tab="reputation" data-icon="☆" data-permission="reputation.view" onclick="switchTab('reputation')"><span class="nav-label">声誉数据</span></button>
                 <button class="tab-button" type="button" data-tab="api-reputation" data-icon="◎" data-permission="reputation.view" onclick="switchTab('api-reputation')"><span class="nav-label">API 声誉</span></button>
                 <button class="tab-button" type="button" data-tab="ai-appeals" data-icon="◫" data-permission="ai_appeals.view" onclick="switchTab('ai-appeals')"><span class="nav-label">AI 申诉记录</span></button>
@@ -9581,7 +9710,7 @@
                     <div class="market-product-filters visible" id="mercado-product-filters">
                         <div class="market-filter-heading">
                             <span>商品筛选条件</span>
-                            <span id="mercado-filter-hint">采集列表支持审核、上架状态、重量、售价、收益和采集时间组合筛选</span>
+                            <span id="mercado-filter-hint">采集列表支持实重可用、未审核、未上架及重量、售价、收益和采集时间组合筛选</span>
                         </div>
                         <div class="market-filter-field">
                             <label for="mercado-management-category-filter">产品分类</label>
@@ -9638,6 +9767,14 @@
                                 <option value="publishing">上架中</option>
                                 <option value="published">上架成功</option>
                                 <option value="failed">上架失败</option>
+                            </select>
+                        </div>
+                        <div class="market-filter-field">
+                            <label for="mercado-weight-status-filter">实重状态</label>
+                            <select id="mercado-weight-status-filter" onchange="applyMercadoProductFilters()">
+                                <option value="">全部实重状态</option>
+                                <option value="available">实重可用</option>
+                                <option value="missing">待补实际重量</option>
                             </select>
                         </div>
                         <div class="market-filter-field">
@@ -9708,8 +9845,8 @@
                                     <button class="secondary" id="mercado-review-selected" type="button" onclick="updateSelectedMercadoReviewStatus()" disabled>更新审核状态</button>
                                     <span class="market-review-note">仅“通过”状态可上架</span>
                                 </div>
-                                <button class="secondary market-bulk-edit-trigger" id="mercado-bulk-edit-selected" type="button" onclick="openMercadoBulkEditor()" disabled>批量修改所选</button>
                             </div>
+                            <button class="secondary market-bulk-edit-trigger" id="mercado-bulk-edit-selected" type="button" onclick="openMercadoBulkEditor()" disabled>批量修改尺寸/重量</button>
                             <button class="danger" id="mercado-delete-selected" type="button" onclick="deleteSelectedMercadoItems()" disabled>删除所选</button>
                         </div>
                     </div>
@@ -10099,7 +10236,7 @@
                 <dialog class="order-detail-dialog mercado-bulk-edit-dialog" id="mercado-bulk-edit-dialog" onclick="if(event.target === this && !mercadoBulkEditSaving) closeMercadoBulkEditor()">
                     <div class="order-detail-header">
                         <div>
-                            <h3>批量修改产品</h3>
+                            <h3 id="mercado-bulk-edit-heading">批量修改产品</h3>
                             <p id="mercado-bulk-edit-subtitle" style="margin:3px 0 0;color:#667085;font-size:12px">已选择 0 件产品</p>
                         </div>
                         <button class="order-detail-close" type="button" aria-label="关闭批量产品编辑" onclick="closeMercadoBulkEditor()">×</button>
@@ -10107,22 +10244,22 @@
                     <form id="mercado-bulk-edit-form" onsubmit="saveMercadoBulkEditor(event)">
                         <div class="mercado-bulk-edit-notice">
                             <strong>只覆盖已勾选的字段</strong>
-                            <span>未勾选字段保持每个产品原值；标题、主图和描述会统一替换，请谨慎选择。</span>
+                            <span id="mercado-bulk-edit-notice">未勾选字段保持每个产品原值；标题、主图和描述会统一替换，请谨慎选择。</span>
                         </div>
                         <div class="mercado-bulk-edit-grid">
-                            <div class="mercado-bulk-edit-row wide">
+                            <div class="mercado-bulk-edit-row wide" data-bulk-modes="products">
                                 <label class="mercado-bulk-field-toggle"><input type="checkbox" data-bulk-field="title" data-controls="mercado-bulk-edit-title" onchange="toggleMercadoBulkField(this)"> 统一产品标题</label>
                                 <textarea id="mercado-bulk-edit-title" maxlength="255" rows="3" disabled placeholder="勾选后填写，将覆盖所有选中产品的标题"></textarea>
                             </div>
-                            <div class="mercado-bulk-edit-row wide">
+                            <div class="mercado-bulk-edit-row wide" data-bulk-modes="products">
                                 <label class="mercado-bulk-field-toggle"><input type="checkbox" data-bulk-field="main_image_url" data-controls="mercado-bulk-edit-image" onchange="toggleMercadoBulkField(this)"> 统一主图链接</label>
                                 <input id="mercado-bulk-edit-image" type="url" maxlength="1500" disabled placeholder="https://...">
                             </div>
-                            <div class="mercado-bulk-edit-row">
+                            <div class="mercado-bulk-edit-row" data-bulk-modes="products">
                                 <label class="mercado-bulk-field-toggle"><input type="checkbox" data-bulk-field="price" data-controls="mercado-bulk-edit-price" onchange="toggleMercadoBulkField(this)"> 统一采集原价</label>
                                 <input id="mercado-bulk-edit-price" type="number" min="0.0001" step="any" disabled placeholder="必须大于 0">
                             </div>
-                            <div class="mercado-bulk-edit-row">
+                            <div class="mercado-bulk-edit-row" data-bulk-modes="products">
                                 <label class="mercado-bulk-field-toggle"><input type="checkbox" data-bulk-field="category_id" data-controls="mercado-bulk-edit-category" onchange="toggleMercadoBulkField(this)"> 统一分类编号</label>
                                 <input id="mercado-bulk-edit-category" type="text" maxlength="64" disabled placeholder="可留空以清除分类">
                             </div>
@@ -10138,14 +10275,14 @@
                                     <input id="mercado-bulk-edit-height" type="number" min="0.0001" step="any" aria-label="批量包装高度" disabled placeholder="高">
                                 </div>
                             </div>
-                            <div class="mercado-bulk-edit-row wide">
+                            <div class="mercado-bulk-edit-row wide" data-bulk-modes="products">
                                 <label class="mercado-bulk-field-toggle"><input type="checkbox" data-bulk-field="description_text" data-controls="mercado-bulk-edit-description" onchange="toggleMercadoBulkField(this)"> 统一产品描述</label>
                                 <textarea id="mercado-bulk-edit-description" maxlength="60000" rows="6" disabled placeholder="勾选后填写；留空表示清除所有选中产品的描述"></textarea>
                             </div>
                             <p class="mercado-product-edit-message wide" id="mercado-bulk-edit-message" role="status"></p>
                         </div>
                         <div class="order-detail-footer">
-                            <span>修改价格、重量、尺寸或分类后，将自动重新计算佣金、运费和净收益</span>
+                            <span id="mercado-bulk-edit-footer-note">修改价格、重量、尺寸或分类后，将自动重新计算佣金、运费和净收益</span>
                             <div>
                                 <button class="secondary" type="button" onclick="closeMercadoBulkEditor()">取消</button>
                                 <button class="primary" id="mercado-bulk-edit-save" type="submit" disabled>保存到所选产品</button>
@@ -10230,12 +10367,12 @@
                             <label id="form-label">任务类型（点击选择，可多选）</label>
                             <div class="site-picker" id="form-picker" role="group" aria-labelledby="form-label">
                                 <label class="site-option"><input type="checkbox" name="form" value="延误" checked><span>延误</span></label>
-                                <label class="site-option"><input type="checkbox" name="form" value="侵权" onchange="syncProhibitedAppealSelection(this)"><span>侵权</span></label>
+                                <label class="site-option"><input type="checkbox" name="form" value="侵权"><span>侵权</span></label>
                                 <label class="site-option"><input type="checkbox" name="form" value="禁限售"><span>禁限售</span></label>
                                 <label class="site-option"><input type="checkbox" name="form" value="取消率"><span>取消率</span></label>
                                 <label class="site-option"><input type="checkbox" name="form" value="投诉"><span>投诉</span></label>
                             </div>
-                            <small class="shop-search-hint">选择侵权时，禁限售产品会自动使用禁限售话术独立开启申诉。</small>
+                            <small class="shop-search-hint">侵权和禁限售是独立任务，请按需分别选择。</small>
                         </div>
 
                         <div class="field">
@@ -10422,7 +10559,7 @@
                                 <label class="site-option"><input type="checkbox" role="switch" name="daily-task-appeal-type" value="取消率" onchange="updateDailyTaskAppealSwitch(this)"><span>取消率</span></label>
                                 <label class="site-option"><input id="daily-task-mixed-mode" type="checkbox" role="switch" name="daily-task-appeal-type" value="混合模式" onchange="updateDailyTaskAppealSwitch(this)"><span>混合模式</span></label>
                             </div>
-                            <small class="shop-search-hint">混合模式一轮：侵权 → 延误率 → 侵权 → 投诉 → 侵权 → 取消率；混合模式与自定义任务互斥。侵权任务不限制 Top N；每轮先实时遍历店铺授权中勾选的全部站点，再只执行本站点侵权数超过标准的站点。识别出的禁限售产品会使用禁限售话术独立开启申诉；也可单独开启禁限售任务并读取当前禁限售列表。</small>
+                            <small class="shop-search-hint">混合模式一轮：侵权 → 延误率 → 侵权 → 投诉 → 侵权 → 取消率；混合模式与自定义任务互斥。侵权任务不限制 Top N；每轮先实时遍历店铺授权中勾选的全部站点，再只执行本站点普通侵权数超过标准的站点。禁限售是独立任务，需单独开启后读取当前禁限售列表。</small>
                         </div>
 
                         <div class="field">
@@ -11135,7 +11272,7 @@
                 </section>
             </div>
 
-            <div class="tab-page" id="tab-prohibited-listings">
+            <div class="tab-page risk-overview-page" id="tab-prohibited-listings">
                 <div class="tab-heading">
                     <div>
                         <h2>禁限售列表</h2>
@@ -11149,12 +11286,13 @@
                         <button class="primary" id="prohibited-sync-all-button" type="button" onclick="startProhibitedListingSync(true)">同步所有店铺</button>
                         <button class="secondary" id="prohibited-sync-store-button" type="button" onclick="startProhibitedListingSync(false)">同步当前店铺</button>
                         <button class="secondary" id="prohibited-sync-salesperson-button" type="button" onclick="startProhibitedSalespersonSync()">同步当前业务员</button>
+                        <button class="secondary" id="prohibited-export-button" type="button" onclick="exportProhibitedListings()">导出当前筛选 Excel</button>
                         <button class="secondary" type="button" onclick="loadProhibitedListings(prohibitedPage)">刷新数据</button>
                     </div>
                 </div>
 
                 <section class="panel store-link-board">
-                    <div class="store-link-sync-strip" style="grid-template-columns:minmax(220px,1.5fr) repeat(6,minmax(100px,.55fr))">
+                    <div class="store-link-sync-strip">
                         <div class="store-link-sync-main">
                             <span>同步状态</span>
                             <strong id="prohibited-sync-state">每 12 小时自动全量更新</strong>
@@ -11196,10 +11334,11 @@
                     </div>
 
                     <p class="store-link-bulk-note" id="prohibited-message">待回复案件按截止时间优先，其余按店铺站点风险数量从高到低排序</p>
+                    <div class="risk-site-breakdown" id="prohibited-site-breakdown" aria-label="各站点风险数量"></div>
 
                     <div class="store-link-table-wrap" style="max-height:280px">
                         <table class="store-link-table" style="min-width:980px">
-                            <thead><tr><th>业务员</th><th>组别</th><th>店铺</th><th>站点</th><th>风险合计</th><th>当前禁售</th><th>待回复权利人</th><th>最近同步</th></tr></thead>
+                            <thead><tr><th>业务员</th><th>组别</th><th>店铺</th><th>站点</th><th>站点风险数量</th><th>当前禁售</th><th>待回复权利人</th><th>最近同步</th></tr></thead>
                             <tbody id="prohibited-group-body">
                                 <tr><td class="empty-state" colspan="8">同步后显示店铺站点汇总</td></tr>
                             </tbody>
@@ -12901,6 +13040,7 @@
         const prohibitedSyncAllButton = document.getElementById("prohibited-sync-all-button");
         const prohibitedSyncStoreButton = document.getElementById("prohibited-sync-store-button");
         const prohibitedSyncSalespersonButton = document.getElementById("prohibited-sync-salesperson-button");
+        const prohibitedExportButton = document.getElementById("prohibited-export-button");
         const prohibitedAutoSyncEnabled = document.getElementById("prohibited-auto-sync-enabled");
         const prohibitedAutoSyncLabel = document.getElementById("prohibited-auto-sync-label");
         const prohibitedSyncState = document.getElementById("prohibited-sync-state");
@@ -12916,6 +13056,7 @@
         const prohibitedSiteFilter = document.getElementById("prohibited-site-filter");
         const prohibitedSearch = document.getElementById("prohibited-search");
         const prohibitedMessage = document.getElementById("prohibited-message");
+        const prohibitedSiteBreakdown = document.getElementById("prohibited-site-breakdown");
         const prohibitedGroupBody = document.getElementById("prohibited-group-body");
         const prohibitedListingBody = document.getElementById("prohibited-listing-body");
         const prohibitedSyncLog = document.getElementById("prohibited-sync-log");
@@ -12989,6 +13130,7 @@
         const mercadoSourceZying = document.getElementById("mercado-source-zying");
         const mercadoReviewFilter = document.getElementById("mercado-review-filter");
         const mercadoPublishFilter = document.getElementById("mercado-publish-filter");
+        const mercadoWeightStatusFilter = document.getElementById("mercado-weight-status-filter");
         const mercadoManagementCategoryFilter = document.getElementById("mercado-management-category-filter");
         const mercadoPlatformCategoryFilter = document.getElementById("mercado-platform-category-filter");
         const mercadoManagementCategoryBulk = document.getElementById("mercado-management-category-bulk");
@@ -13030,7 +13172,10 @@
         const mercadoProductEditSave = document.getElementById("mercado-product-edit-save");
         const mercadoBulkEditDialog = document.getElementById("mercado-bulk-edit-dialog");
         const mercadoBulkEditForm = document.getElementById("mercado-bulk-edit-form");
+        const mercadoBulkEditHeading = document.getElementById("mercado-bulk-edit-heading");
         const mercadoBulkEditSubtitle = document.getElementById("mercado-bulk-edit-subtitle");
+        const mercadoBulkEditNotice = document.getElementById("mercado-bulk-edit-notice");
+        const mercadoBulkEditFooterNote = document.getElementById("mercado-bulk-edit-footer-note");
         const mercadoBulkEditMessage = document.getElementById("mercado-bulk-edit-message");
         const mercadoBulkEditSave = document.getElementById("mercado-bulk-edit-save");
         const mercadoCategoryDialog = document.getElementById("mercado-category-dialog");
@@ -15818,13 +15963,25 @@
         }
 
         function openMercadoBulkEditor() {
-            if (mercadoListMode !== "products" || !selectedMercadoCollectionIds.size || mercadoBulkEditSaving) return;
+            if (!selectedMercadoCollectionIds.size || mercadoBulkEditSaving) return;
             if (selectedMercadoCollectionIds.size > 500) {
-                setMercadoListFeedback("每次最多批量修改 500 件产品，请减少选择数量后重试", "error");
+                setMercadoListFeedback("每次最多批量修改 500 件商品，请减少选择数量后重试", "error");
                 return;
             }
             resetMercadoBulkEditor();
-            mercadoBulkEditSubtitle.textContent = `已选择 ${selectedMercadoCollectionIds.size} 件产品 · 可跨页选择，每次最多 500 件`;
+            const collectionMode = mercadoListMode === "collection";
+            mercadoBulkEditForm.querySelectorAll("[data-bulk-modes]").forEach(row => {
+                row.hidden = collectionMode && row.dataset.bulkModes === "products";
+            });
+            mercadoBulkEditHeading.textContent = collectionMode ? "批量修改采集商品" : "批量修改产品";
+            mercadoBulkEditSubtitle.textContent = `已选择 ${selectedMercadoCollectionIds.size} 件${collectionMode ? "采集商品" : "产品"} · 可跨页选择，每次最多 500 件`;
+            mercadoBulkEditNotice.textContent = collectionMode
+                ? "采集列表可统一修改实际重量和包装长、宽、高；未勾选字段保持原值。"
+                : "未勾选字段保持每个产品原值；标题、主图和描述会统一替换，请谨慎选择。";
+            mercadoBulkEditFooterNote.textContent = collectionMode
+                ? "重量变更后，将自动重新计算佣金、运费和净收益"
+                : "修改价格、重量、尺寸或分类后，将自动重新计算佣金、运费和净收益";
+            mercadoBulkEditSave.textContent = collectionMode ? "保存到所选采集商品" : "保存到所选产品";
             mercadoBulkEditDialog.showModal();
         }
 
@@ -15895,23 +16052,31 @@
                 mercadoBulkEditMessage.textContent = error.message || String(error);
                 return;
             }
-            const productIds = Array.from(selectedMercadoCollectionIds);
+            const itemIds = Array.from(selectedMercadoCollectionIds);
+            const collectionMode = mercadoListMode === "collection";
+            const itemLabel = collectionMode ? "采集商品" : "产品";
             mercadoBulkEditSaving = true;
             mercadoBulkEditSave.disabled = true;
             mercadoBulkEditSave.textContent = "正在批量保存...";
-            mercadoBulkEditMessage.textContent = `正在修改 ${productIds.length} 件产品`;
+            mercadoBulkEditMessage.textContent = `正在修改 ${itemIds.length} 件${itemLabel}`;
             updateMercadoSelection();
             try {
-                const response = await fetch("/api/mercado-products/bulk-edit", {
-                    method: "PATCH",
-                    headers: {"Content-Type": "application/json"},
-                    body: JSON.stringify({product_item_ids: productIds, changes}),
-                });
+                const response = await fetch(
+                    collectionMode ? "/api/mercado-collection/bulk-edit" : "/api/mercado-products/bulk-edit",
+                    {
+                        method: "PATCH",
+                        headers: {"Content-Type": "application/json"},
+                        body: JSON.stringify({
+                            [collectionMode ? "collection_item_ids" : "product_item_ids"]: itemIds,
+                            changes,
+                        }),
+                    },
+                );
                 const result = await response.json();
                 if (!response.ok || result.status !== "success") {
                     throw new Error(result.message || `接口请求失败：${response.status}`);
                 }
-                const requested = Number(result.data?.requested || productIds.length);
+                const requested = Number(result.data?.requested || itemIds.length);
                 const changed = Number(result.data?.changed || 0);
                 const refreshNote = result.data?.profitability_refresh_pending
                     ? "；佣金、运费和净收益将在后台自动重算"
@@ -15925,7 +16090,8 @@
                 mercadoBulkEditMessage.textContent = `批量保存失败：${error.message || error}`;
             } finally {
                 mercadoBulkEditSaving = false;
-                mercadoBulkEditSave.textContent = "保存到所选产品";
+                mercadoBulkEditSave.textContent = mercadoListMode === "collection"
+                    ? "保存到所选采集商品" : "保存到所选产品";
                 mercadoBulkEditSave.disabled = !mercadoBulkFieldToggles().some(item => item.checked);
                 updateMercadoSelection();
             }
@@ -15971,7 +16137,7 @@
                 <div class="market-shipping-table-wrap">
                     <table class="market-shipping-table">
                         <thead><tr>
-                            <th><span>计费重量</span><small>毛重 / 体积重取较大值</small></th>
+                            <th><span>计费重量</span><small>只按智赢实际重量</small></th>
                             <th title="${escapeHtml(aboveSample?.price_label || "")}"><span>售价达到门槛</span><small>${escapeHtml(aboveSample?.price_label || "官方售价区间")}</small></th>
                             <th title="${escapeHtml(belowSample?.price_label || "")}"><span>售价低于门槛</span><small>${escapeHtml(belowSample?.price_label || "官方售价区间")}</small></th>
                         </tr></thead>
@@ -15980,7 +16146,7 @@
                 </div>
                 <div class="market-shipping-official-note">
                     <span><i>始</i><span><strong>发货地</strong><br>中国 / 香港，经 Cainiao 发货</span></span>
-                    <span><i>重</i><span><strong>计费规则</strong><br>毛重与体积重（长×宽×高÷6000）取较大值</span></span>
+                    <span><i>重</i><span><strong>计费规则</strong><br>只按智赢实际重量，不使用体积重或计泡重</span></span>
                     <span><i>限</i><span><strong>订单限制</strong><br>官方公告要求每个订单最多 5 件商品</span></span>
                 </div>
             </section>`;
@@ -16348,6 +16514,13 @@
                 const sourceDefinition = sourceDefinitions[sourceType] || {
                     icon: "其", label: "其他来源", note: sourceType || "未标记", className: "",
                 };
+                const invalidWeightBasis = [
+                    "calculated_volumetric", "legacy_unknown", "plugin_volumetric_fallback",
+                ].includes(String(row.weight_basis || "").toLowerCase());
+                const actualWeight = invalidWeightBasis ? null : row.weight_g;
+                const hasUsableActualWeight = actualWeight !== null
+                    && actualWeight !== undefined
+                    && Number(actualWeight) > 0;
                 const sourceTag = mercadoListMode === "products"
                     ? `<span class="market-source-tag ${sourceDefinition.className}"><span class="market-source-tag-icon">${escapeHtml(sourceDefinition.icon)}</span><span class="market-source-tag-copy"><strong>${escapeHtml(sourceDefinition.label)}</strong><small>${escapeHtml(sourceDefinition.note)}</small></span></span>`
                     : '<span class="market-source-tag"><span class="market-source-tag-icon">候</span><span class="market-source-tag-copy"><strong>采集候选</strong><small>尚未加入产品列表</small></span></span>';
@@ -16357,14 +16530,14 @@
                     if (alreadyAdded) {
                         status = "已加入产品列表";
                         statusClass = "added";
-                    } else if (row.weight_dimensions_complete || row.scrape_status === "ok") {
-                        status = "数据完整";
+                    } else if (hasUsableActualWeight && row.title && row.main_image_url) {
+                        status = "实重可用";
                         statusClass = "ok";
                     } else if (row.scrape_status === "failed") {
                         status = "采集失败";
                         statusClass = "failed";
                     } else {
-                        status = "待补重量尺寸";
+                        status = "待补实际重量";
                         statusClass = "partial";
                     }
                 } else if (row.last_publish_status === "published") {
@@ -16388,27 +16561,21 @@
                     ? null
                     : Number(row.package_length_cm) * Number(row.package_width_cm) * Number(row.package_height_cm) / 6000;
                 const volumetricWeight = row.volumetric_weight_kg ?? calculatedVolumetricWeight;
-                const actualWeight = row.weight_basis === "calculated_volumetric"
-                    || row.weight_basis === "legacy_unknown"
-                    ? null
-                    : row.weight_g;
                 const actualWeightNote = actualWeight === null || actualWeight === undefined || Number(actualWeight) <= 0
                     ? "未填实际重量，不可上架"
                     : "智赢实际重量";
-                const calculatedBillableWeight = actualWeight === null || actualWeight === undefined
-                    ? null
-                    : Math.max(Number(actualWeight), Number(volumetricWeight || 0) * 1000);
-                const billableWeight = mercadoListMode === "collection"
-                    ? actualWeight
-                    : (row.billable_weight_g ?? calculatedBillableWeight);
-                const billableRule = mercadoListMode === "collection"
-                    ? "采集列表：只按实际重量"
-                    : "Global Selling：毛重/体积重取较大";
+                const billableWeight = actualWeight;
+                const billableRule = "只按智赢实际重量，不使用计泡重";
                 const hasCommission = row.commission_amount_usd != null || row.commission_amount_local != null;
                 const commissionNote = hasCommission
                     ? ["Classic", row.commission_rate != null ? mercadoMetric(row.commission_rate, "%") : "", row.category_name || row.category_id || ""].filter(Boolean).join(" · ")
-                    : `Classic · ${row.profitability_error ? "佣金补算异常" : "佣金待后台补算"}`;
+                    : `Classic · ${row.profitability_error ? "佣金计算异常" : "佣金正在计算"}`;
                 const shippingRule = String(row.shipping_weight_rule || "");
+                const profitabilitySource = String(row.profitability_source || "").toLowerCase();
+                const profitabilityPending = profitabilitySource.endsWith("_pending");
+                const usesActualWeightShipping = (
+                    !profitabilityPending && shippingRule.includes("actual_weight_only")
+                );
                 const shippingModeNote = shippingRule.startsWith("free_shipping:")
                     ? "包邮"
                     : shippingRule.startsWith("buyer_pays_shipping:")
@@ -16417,12 +16584,19 @@
                 const shippingSourceNote = shippingRule.includes("official_global_selling_cainiao_rate_card")
                     ? "Global Selling 官方表"
                     : "官方接口";
-                const shippingAmount = row.shipping_fee_local ?? row.shipping_fee_usd;
+                const shippingAmount = usesActualWeightShipping
+                    ? (row.shipping_fee_local ?? row.shipping_fee_usd)
+                    : null;
                 const shippingCurrency = row.shipping_fee_local != null
                     ? (row.shipping_currency_id || row.currency_id || "") : "USD";
                 const shippingNote = shippingAmount == null
-                    ? (actualWeight == null || Number(actualWeight) <= 0 ? "缺少实际重量" : row.profitability_error ? "运费补算异常" : "运费待后台补算")
+                    ? (!hasUsableActualWeight
+                        ? "缺少实际重量"
+                        : !usesActualWeightShipping && row.shipping_fee_usd != null
+                            ? "旧计泡运费已停用，待按实际重量重算"
+                            : row.profitability_error ? "运费匹配异常" : "正在匹配固定运费表")
                     : `${shippingModeNote ? `${shippingModeNote} · ` : ""}${shippingSourceNote} · ${mercadoMetric(shippingAmount)} ${shippingCurrency}`;
+                // 上架资格只看已保存的净收益，不因运费快照的新旧规则隐藏它。
                 const netProceeds = row.net_proceeds_usd;
                 const netClass = Number(netProceeds) < 0 ? "market-net-negative" : "";
                 const netProceedsNote = netProceeds === null || netProceeds === undefined || netProceeds === ""
@@ -16478,7 +16652,7 @@
                     <td><span class="market-metric-main">${mercadoMetric(volumetricWeight, " kg")}</span><span class="market-metric-note">长×宽×高 ÷ 6000</span></td>
                     <td><span class="market-metric-main">${mercadoMetric(billableWeight, " g")}</span><span class="market-metric-note">${billableRule}</span></td>
                     <td title="${profitTitle}"><span class="market-metric-main">${mercadoMetric(row.commission_amount_usd, " USD")}</span><span class="market-metric-note">${escapeHtml(commissionNote)}</span></td>
-                    <td title="${profitTitle}"><span class="market-metric-main">${mercadoMetric(row.shipping_fee_usd, " USD")}</span><span class="market-metric-note">${escapeHtml(shippingNote)}</span></td>
+                    <td title="${profitTitle}"><span class="market-metric-main">${mercadoMetric(usesActualWeightShipping ? row.shipping_fee_usd : null, " USD")}</span><span class="market-metric-note">${escapeHtml(shippingNote)}</span></td>
                     <td title="${profitTitle}"><span class="market-metric-main ${netClass}">${mercadoMetric(netProceeds, " USD")}</span><span class="market-metric-note">${netProceedsNote}</span></td>
                     <td title="${statusTitle}">${collectionWorkflowTags}${reviewControl}<span class="market-status-tag ${statusClass}">${status}</span>${publishNote}</td>
                     <td>${escapeHtml(timeText)}</td>
@@ -16547,6 +16721,7 @@
             });
             if (mercadoReviewFilter.value) query.set("review_status", mercadoReviewFilter.value);
             if (mercadoPublishFilter.value) query.set("publish_status", mercadoPublishFilter.value);
+            if (mercadoWeightStatusFilter.value) query.set("weight_status", mercadoWeightStatusFilter.value);
             if (mercadoListMode === "products") {
                 if (mercadoProductSource) query.set("source_type", mercadoProductSource);
                 if (mercadoPlatformCategoryFilter.value.trim()) {
@@ -16626,8 +16801,8 @@
             mercadoProductReviewActions.style.display = productMode ? "inline-flex" : "none";
             mercadoProductFilters.classList.add("visible");
             mercadoFilterHint.textContent = productMode
-                ? "支持产品分类、美客多分类、审核、上架状态和收益组合筛选"
-                : "采集列表支持审核、上架状态、重量、售价、收益和采集时间组合筛选";
+                ? "支持产品分类、美客多分类、审核、上架状态、实重状态和收益组合筛选"
+                : "采集列表支持实重可用、未审核、未上架及重量、售价、收益和采集时间组合筛选";
             mercadoProductFilters.querySelectorAll(".market-product-only-filter").forEach(element => {
                 element.hidden = !productMode;
             });
@@ -16658,7 +16833,8 @@
 
         function resetMercadoProductFilters() {
             [
-                mercadoReviewFilter, mercadoPublishFilter, mercadoManagementCategoryFilter,
+                mercadoReviewFilter, mercadoPublishFilter, mercadoWeightStatusFilter,
+                mercadoManagementCategoryFilter,
                 mercadoPlatformCategoryFilter,
                 mercadoWeightMin, mercadoWeightMax,
                 mercadoPriceMin, mercadoPriceMax,
@@ -16719,10 +16895,14 @@
             updateMercadoSelection();
         }
 
+        function mercadoCurrentPageSelectableIds() {
+            return mercadoListRows
+                .map(row => Number(row.id || 0))
+                .filter(rowId => rowId > 0);
+        }
+
         function toggleAllMercadoItems(checked) {
-            document.querySelectorAll(".mercado-item-select:not(:disabled)").forEach(input => {
-                input.checked = Boolean(checked);
-                const rowId = Number(input.value);
+            mercadoCurrentPageSelectableIds().forEach(rowId => {
                 if (checked) selectedMercadoCollectionIds.add(rowId);
                 else selectedMercadoCollectionIds.delete(rowId);
             });
@@ -16896,10 +17076,17 @@
         }
 
         function updateMercadoSelection() {
-            const selectable = Array.from(document.querySelectorAll(".mercado-item-select:not(:disabled)"));
-            const selectedVisible = selectable.filter(input => input.checked);
-            mercadoSelectAll.checked = Boolean(selectable.length && selectedVisible.length === selectable.length);
-            mercadoSelectAll.indeterminate = selectedVisible.length > 0 && selectedVisible.length < selectable.length;
+            const currentPageIds = mercadoCurrentPageSelectableIds();
+            const selectedCurrentPageIds = currentPageIds.filter(rowId => selectedMercadoCollectionIds.has(rowId));
+            mercadoListBody.querySelectorAll(".mercado-item-select:not(:disabled)").forEach(input => {
+                input.checked = selectedMercadoCollectionIds.has(Number(input.value));
+            });
+            mercadoSelectAll.checked = Boolean(
+                currentPageIds.length && selectedCurrentPageIds.length === currentPageIds.length
+            );
+            mercadoSelectAll.indeterminate = (
+                selectedCurrentPageIds.length > 0 && selectedCurrentPageIds.length < currentPageIds.length
+            );
             mercadoSelectionSummary.textContent = `已选择 ${selectedMercadoCollectionIds.size} 件`;
             const hasSelection = selectedMercadoCollectionIds.size > 0;
             const selectedRows = mercadoListRows.filter(row => selectedMercadoCollectionIds.has(Number(row.id)));
@@ -16912,8 +17099,10 @@
             mercadoReviewSelected.disabled = !hasSelection || mercadoListMode !== "products" || mercadoPublishRunning;
             mercadoManagementCategoryAssign.disabled = !hasSelection || !mercadoManagementCategoryBulk.value;
             const exceedsBulkEditLimit = selectedMercadoCollectionIds.size > 500;
-            mercadoBulkEditSelected.disabled = !hasSelection || mercadoListMode !== "products" || mercadoPublishRunning || mercadoBulkEditSaving || exceedsBulkEditLimit;
-            mercadoBulkEditSelected.title = exceedsBulkEditLimit ? "每次最多批量修改 500 件产品" : "";
+            mercadoBulkEditSelected.disabled = !hasSelection || mercadoPublishRunning || mercadoBulkEditSaving || exceedsBulkEditLimit;
+            mercadoBulkEditSelected.textContent = mercadoListMode === "collection"
+                ? "批量修改尺寸/重量" : "批量修改所选";
+            mercadoBulkEditSelected.title = exceedsBulkEditLimit ? "每次最多批量修改 500 件商品" : "";
             const selectionMode = mercadoPublishMode.value === "groups" ? "groups" : "accounts";
             const hasPublishTarget = selectionMode === "groups"
                 ? mercadoSelectedValues(mercadoPublishGroup).length > 0
@@ -20987,6 +21176,25 @@
 
         function renderProhibitedGroups(groups) {
             if (!prohibitedGroupBody) return;
+            if (prohibitedSiteBreakdown) {
+                const siteTotals = new Map();
+                groups.forEach(row => {
+                    const siteId = String(row?.site_id || "").trim().toUpperCase() || "未知站点";
+                    const item = siteTotals.get(siteId) || {risk: 0, prohibited: 0, rights: 0};
+                    item.risk += Number(row?.risk_count || 0);
+                    item.prohibited += Number(row?.prohibited_count || 0);
+                    item.rights += Number(row?.rights_holder_reply_count || 0);
+                    siteTotals.set(siteId, item);
+                });
+                const siteRows = [...siteTotals.entries()].sort((a, b) => b[1].risk - a[1].risk || a[0].localeCompare(b[0]));
+                prohibitedSiteBreakdown.innerHTML = siteRows.length
+                    ? '<span class="risk-site-breakdown-label">各站点数量</span>' + siteRows.map(([siteId, counts]) =>
+                        `<span class="risk-site-count" title="禁限售 ${counts.prohibited} · 待回复权利人 ${counts.rights}">
+                            <span>${escapeHtml((mercadoSiteDefinitions.find(item => item[0] === siteId) || [siteId, siteId])[1])} · ${escapeHtml(siteId)}</span><strong>${counts.risk.toLocaleString()} 条</strong>
+                        </span>`
+                    ).join("")
+                    : "";
+            }
             if (!groups.length) {
                 prohibitedGroupBody.innerHTML = '<tr><td class="empty-state" colspan="8">当前筛选条件下暂无风险商品</td></tr>';
                 return;
@@ -20997,7 +21205,7 @@
                     <td>${escapeHtml(row.group_name || "未分组")}</td>
                     <td><strong>${escapeHtml(row.store_name || "-")}</strong></td>
                     <td><span class="tag">${escapeHtml(row.site_id || "-")}</span></td>
-                    <td><strong>${Number(row.risk_count || 0).toLocaleString()}</strong></td>
+                    <td><strong>${Number(row.risk_count || 0).toLocaleString()} 条</strong></td>
                     <td><strong style="color:#dc2626">${Number(row.prohibited_count || 0).toLocaleString()}</strong></td>
                     <td><strong style="color:#b45309">${Number(row.rights_holder_reply_count || 0).toLocaleString()}</strong></td>
                     <td>${escapeHtml(row.last_synced_at || "-")}</td>
@@ -21680,6 +21888,63 @@
                 zyingCollectionCategoriesLoaded = true;
             } catch (err) {
                 console.error("加载智赢产品采集分类失败", err);
+            }
+        }
+
+        function prohibitedExportFilename(response) {
+            const disposition = response.headers.get("Content-Disposition") || "";
+            const utf8Match = disposition.match(/filename\*=UTF-8''([^;]+)/i);
+            if (utf8Match) {
+                try { return decodeURIComponent(utf8Match[1].trim()); } catch (_) { /* 使用默认文件名 */ }
+            }
+            const plainMatch = disposition.match(/filename="?([^";]+)"?/i);
+            return plainMatch?.[1]?.trim() || `禁限售明细_${new Date().toISOString().slice(0, 10)}.xlsx`;
+        }
+
+        async function exportProhibitedListings() {
+            if (!prohibitedExportButton || prohibitedExportButton.disabled) return;
+            const originalLabel = prohibitedExportButton.textContent;
+            prohibitedExportButton.disabled = true;
+            prohibitedExportButton.textContent = "正在导出…";
+            prohibitedMessage.textContent = "正在生成当前筛选范围内的 Excel，请稍候…";
+            const query = new URLSearchParams();
+            if (prohibitedRiskTypeFilter.value) query.set("risk_type", prohibitedRiskTypeFilter.value);
+            if (prohibitedSalespersonFilter.value) query.set("salesperson", prohibitedSalespersonFilter.value);
+            if (prohibitedStoreFilter.value) query.set("token_id", prohibitedStoreFilter.value);
+            if (prohibitedSiteFilter.value) query.set("site_id", prohibitedSiteFilter.value);
+            if (prohibitedSearch.value.trim()) query.set("search", prohibitedSearch.value.trim());
+            try {
+                const response = await fetch(`/api/prohibited-listings/export?${query.toString()}`, {
+                    cache: "no-store",
+                    credentials: "same-origin",
+                });
+                const contentType = (response.headers.get("Content-Type") || "").toLowerCase();
+                if (!response.ok || !contentType.includes("spreadsheetml")) {
+                    let message = "导出失败，请稍后重试";
+                    try {
+                        const payload = await response.json();
+                        message = payload.message || message;
+                    } catch (_) {
+                        if (response.status === 401 || response.redirected) message = "登录已失效，请重新登录后再导出";
+                    }
+                    throw new Error(message);
+                }
+                const blob = await response.blob();
+                const url = URL.createObjectURL(blob);
+                const link = document.createElement("a");
+                link.href = url;
+                link.download = prohibitedExportFilename(response);
+                link.hidden = true;
+                document.body.appendChild(link);
+                link.click();
+                link.remove();
+                setTimeout(() => URL.revokeObjectURL(url), 1000);
+                prohibitedMessage.textContent = `导出完成：${link.download}`;
+            } catch (error) {
+                prohibitedMessage.textContent = `导出失败：${error.message || error}`;
+            } finally {
+                prohibitedExportButton.disabled = false;
+                prohibitedExportButton.textContent = originalLabel;
             }
         }
 
@@ -25314,14 +25579,6 @@
             } catch (err) {
                 alert(`更新店铺状态失败：${err.message || err}`);
             }
-        }
-
-        function syncProhibitedAppealSelection(changedInput) {
-            if (!changedInput?.checked || changedInput.value !== "侵权") return;
-            const prohibitedInput = document.querySelector(
-                '#form-picker input[name="form"][value="禁限售"]'
-            );
-            if (prohibitedInput) prohibitedInput.checked = true;
         }
 
         function updateAppealCopyModeFields() {

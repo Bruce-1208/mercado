@@ -404,6 +404,7 @@ def test_group_tree_nests_account_group_salesperson_and_store():
                 "salesperson": "张三",
                 "detection_count": 3,
                 "rights_holder_count": 1,
+                "last_read_at": "2026-09-04 08:00:00",
             },
             {
                 "token_id": 2,
@@ -414,6 +415,7 @@ def test_group_tree_nests_account_group_salesperson_and_store():
                 "detection_count": 2,
                 "rights_holder_count": 0,
                 "latest_infraction_at": "2026-09-02 10:00:00",
+                "last_read_at": "2026-09-04 09:00:00",
             },
             {
                 "token_id": 1,
@@ -424,6 +426,7 @@ def test_group_tree_nests_account_group_salesperson_and_store():
                 "detection_count": 1,
                 "rights_holder_count": 0,
                 "latest_infraction_at": "2026-09-03 10:00:00",
+                "last_read_at": "2026-09-04 09:00:00",
             },
             {
                 "token_id": 3,
@@ -446,8 +449,90 @@ def test_group_tree_nests_account_group_salesperson_and_store():
     assert tree[0]["salespeople"][0]["stores"][0]["site_count"] == 2
     assert tree[0]["salespeople"][0]["stores"][0]["total"] == 5
     assert tree[0]["salespeople"][0]["stores"][0]["site_names"] == ["墨西哥", "智利"]
+    site_counts = {
+        site["site_id"]: site["total"]
+        for site in tree[0]["salespeople"][0]["stores"][0]["sites"]
+    }
+    assert site_counts == {"MLC": 1, "MLM": 4}
+    assert tree[0]["salespeople"][0]["stores"][0]["last_read_at"] == "2026-09-04 09:00:00"
     assert [store["total"] for store in tree[0]["salespeople"][0]["stores"]] == [5, 2]
     assert tree[1]["salespeople"][0]["salesperson"] == "未分配"
+
+
+def test_page_limit_is_a_completed_read_instead_of_retryable_failure(monkeypatch):
+    monkeypatch.setattr(sync, "get_infraction_sync_context", lambda _token_id: {})
+    monkeypatch.setattr(
+        sync,
+        "_marketplace_accounts",
+        lambda _client, _seller_id: [{"user_id": "seller-mx", "site_id": "MLM"}],
+    )
+    monkeypatch.setattr(
+        sync,
+        "_collect_detection_records",
+        lambda *_args, **_kwargs: ([], 2000, True),
+    )
+    monkeypatch.setattr(
+        sync,
+        "_collect_rights_holder_records",
+        lambda *_args, **_kwargs: ([], False),
+    )
+    monkeypatch.setattr(sync, "upsert_infraction_records", lambda *_args: 0)
+    monkeypatch.setattr(sync, "reconcile_infraction_snapshot", lambda *_args: 0)
+
+    result = sync._sync_store_once(
+        object(),
+        {"id": 7, "display_name": "测试店铺", "meli_user_id": "root-seller"},
+    )
+
+    assert result["status"] == "limited"
+    assert "已读取最新 2000 条" in result["message"]
+
+
+def test_limited_read_records_completion_time_and_warning(monkeypatch):
+    executed = []
+
+    class Cursor:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args):
+            return False
+
+        def execute(self, sql, params):
+            executed.append((sql, params))
+
+    class Connection:
+        def cursor(self):
+            return Cursor()
+
+        def commit(self):
+            return None
+
+        def rollback(self):
+            return None
+
+        def close(self):
+            return None
+
+    monkeypatch.setattr(infraction_store, "ensure_infraction_tables", lambda _cursor: None)
+    monkeypatch.setattr(infraction_store, "_now", lambda: "2026-09-12 12:34:56")
+
+    infraction_store.mark_infraction_sync_finished(
+        7,
+        "limited",
+        detection_scanned_count=2000,
+        error="达到安全分页上限",
+        connection_factory=Connection,
+    )
+
+    sql, params = executed[0]
+    assert "`last_completed_at`" in sql
+    assert params[1:5] == (
+        "2026-09-12 12:34:56",
+        "2026-09-12 12:34:56",
+        "limited",
+        "达到安全分页上限",
+    )
 
 
 def test_store_rankings_ignore_group_boundaries_and_sort_all_stores():
@@ -730,6 +815,53 @@ def test_ip_rights_export_keeps_filters_and_exports_all_pages(monkeypatch):
     assert sheet.auto_filter.ref == "A1:N3"
 
 
+def test_infraction_export_keeps_group_filter_and_store_drilldown(monkeypatch):
+    received = []
+
+    def fake_dashboard(**kwargs):
+        received.append(kwargs)
+        return {
+            "rows": [{
+                "occurred_at": "2026-09-08 10:20:30",
+                "store_name": "店铺一",
+                "site_id": "MLM",
+                "salesperson": "张三",
+                "source_type": "detection",
+                "item_id": "MLM8",
+                "title": "测试商品",
+                "reason": "The product is prohibited.",
+                "status": "under_review",
+                "resolution_status": "current",
+            }],
+            "page": 1,
+            "pages": 1,
+        }
+
+    monkeypatch.setattr(bit_interface, "list_infraction_dashboard", fake_dashboard)
+    response = _client(monkeypatch).get(
+        "/api/official-infractions/export",
+        query_string={
+            "days": 30,
+            "view_mode": "current",
+            "group_name": "精品组",
+            "salesperson": "张三",
+            "category": "prohibited",
+            "detail_token_id": 8,
+        },
+    )
+
+    assert response.status_code == 200
+    assert received[0]["group_name"] == "精品组"
+    assert received[0]["detail_token_id"] == "8"
+    assert received[0]["rows_only"] is True
+    assert "scope" not in received[0]
+    workbook = load_workbook(BytesIO(response.data))
+    sheet = workbook["违规商品明细"]
+    assert sheet.max_row == 2
+    assert sheet["E2"].value == "平台检测"
+    assert sheet.freeze_panes == "A2"
+
+
 def test_console_template_links_to_independent_dashboard():
     source = (
         Path(bit_interface.resolve_template_dir()) / "index.html"
@@ -742,6 +874,17 @@ def test_console_template_links_to_independent_dashboard():
     assert '<span class="nav-label">侵权和权利人总览</span>' in source
     assert 'data-src="/ip-rights-dashboard?embedded=1"' in source
     assert 'id="ip-rights-dashboard-frame"' in source
+    nav_labels = [
+        '<span class="nav-label">侵权和权利人总览</span>',
+        '<span class="nav-label">禁限售列表</span>',
+        '<span class="nav-label">违规商品总览</span>',
+    ]
+    nav_positions = [source.index(label) for label in nav_labels]
+    assert nav_positions == sorted(nav_positions)
+    adjacent_nav = source[
+        nav_positions[0]:nav_positions[2] + len(nav_labels[2])
+    ]
+    assert adjacent_nav.count('class="nav-label"') == 3
     assert 'window.location.assign("/infringement-dashboard")' not in source
 
 
@@ -762,9 +905,23 @@ def test_dashboard_template_supports_store_detail_drilldown():
     assert "category-select" in source
     assert "导出当前筛选明细 Excel" in source
     assert "/api/official-ip-rights/export" in source
+    assert "/api/official-infractions/export" in source
+    assert "renderSiteCounts" in source
+    assert "站点 / 数量" in source
+    index_source = (
+        Path(bit_interface.resolve_template_dir()) / "index.html"
+    ).read_text(encoding="utf-8")
+    assert "各站点数量" in index_source
+    assert "站点风险数量" in index_source
     assert 'elements.exportButton.textContent = "正在导出…"' in source
     assert "await response.blob()" in source
     assert "导出失败，请稍后重试" in source
     assert 'id="auto-sync-enabled"' in source
-    assert "最新更新时间" in source
+    assert "最近读取时间" in source
+    assert "读取状态 / 最近读取" in source
+    assert 'status === "limited"' in source
+    assert "单店重试" in source
+    assert "data-retry-token-id" in source
+    assert "async function retryStore" in source
+    assert "JSON.stringify({token_ids: [tokenId]})" in source
     assert 'scope: "official_infractions"' in source

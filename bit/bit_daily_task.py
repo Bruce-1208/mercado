@@ -292,17 +292,6 @@ def appeal_type_sequence(appeal_types):
     selected = normalize_appeal_types(appeal_types)
     if selected == (APPEAL_TYPE_MIXED,):
         return MIXED_APPEAL_SEQUENCE
-    if (
-        APPEAL_TYPE_INFRACTION in selected
-        and APPEAL_TYPE_PROHIBITED in selected
-    ):
-        # 侵权计划已把其中的禁限售编号拆成独立会话；同时勾选时不再
-        # 额外重跑一次完整禁限售列表。
-        selected = tuple(
-            appeal_type
-            for appeal_type in selected
-            if appeal_type != APPEAL_TYPE_PROHIBITED
-        )
     if len(selected) == 1:
         return selected
     if APPEAL_TYPE_INFRACTION not in selected:
@@ -310,7 +299,12 @@ def appeal_type_sequence(appeal_types):
     sequence = [APPEAL_TYPE_INFRACTION]
     for appeal_type in selected:
         if appeal_type != APPEAL_TYPE_INFRACTION:
-            sequence.extend((appeal_type, APPEAL_TYPE_INFRACTION))
+            # 禁限售有自己的数据源和申诉话术，只执行一次；声誉类任务
+            # 之后仍保留重新执行侵权任务的历史行为。
+            if appeal_type == APPEAL_TYPE_PROHIBITED:
+                sequence.append(appeal_type)
+            else:
+                sequence.extend((appeal_type, APPEAL_TYPE_INFRACTION))
     return tuple(sequence)
 
 
@@ -744,10 +738,15 @@ def build_latest_infraction_appeal_plan(
     }
     counts = {}
     item_ids = {}
-    prohibited_ids = {}
     seen_rows = set()
     for row_index, row in enumerate(live_rows):
         if not mercado_infraction_sync.is_auto_appeal_eligible_detection(row):
+            continue
+        # collect_live_detection_infractions also returns the official
+        # prohibited snapshot for callers that need both categories.  An
+        # infringement plan must never turn those rows into prohibited
+        # sub-tasks; prohibited appeals have their own plan and entry point.
+        if mercado_infraction_sync.is_prohibited_detection(row):
             continue
         raw_name, raw_site, row_id, infraction_date, infraction_type = (
             _live_infraction_row_values(row)
@@ -782,12 +781,7 @@ def build_latest_infraction_appeal_plan(
         counts[target_key] = counts.get(target_key, 0) + 1
         normalized_item_id = str(row_id or "").strip().upper()
         if normalized_item_id:
-            target_ids = (
-                prohibited_ids
-                if mercado_infraction_sync.is_prohibited_detection(row)
-                else item_ids
-            )
-            target_ids.setdefault(target_key, []).append(normalized_item_id)
+            item_ids.setdefault(target_key, []).append(normalized_item_id)
 
     plan = []
     for name, authorized_sites in collection_targets.items():
@@ -806,10 +800,9 @@ def build_latest_infraction_appeal_plan(
             reverse=True,
         )
         sites = []
-        for site_code, _combined_count in ranked_sites:
+        for site_code, _count in ranked_sites:
             target_key = (name_key, site_code)
             current_infraction_ids = list(item_ids.get(target_key, ()))
-            current_prohibited_ids = list(prohibited_ids.get(target_key, ()))
             if current_infraction_ids:
                 sites.append({
                     "site": bit_appeal_ai.normalize_site_name(site_code),
@@ -817,14 +810,6 @@ def build_latest_infraction_appeal_plan(
                     "count": len(current_infraction_ids),
                     "appeal_type": APPEAL_TYPE_INFRACTION,
                     "infraction_ids": current_infraction_ids,
-                })
-            if current_prohibited_ids:
-                sites.append({
-                    "site": bit_appeal_ai.normalize_site_name(site_code),
-                    "site_code": site_code,
-                    "count": len(current_prohibited_ids),
-                    "appeal_type": APPEAL_TYPE_PROHIBITED,
-                    "prohibited_ids": current_prohibited_ids,
                 })
         if sites:
             plan.append({
@@ -846,8 +831,8 @@ def build_latest_infraction_appeal_plan(
     scope_label = "全部" if limit <= 0 else f"Top {limit}"
     print(
         f"{get_now_time()} 官方 API 遍历完成，{scope_label}侵权店铺计划"
-        f"（各站点最近 {recent_days} 天侵权及禁限售合计 > {threshold}；"
-        f"禁限售将独立开启申诉）：{selected}<br>"
+        f"（各站点最近 {recent_days} 天普通侵权数 > {threshold}；"
+        f"禁限售需单独开启申诉）：{selected}<br>"
     )
     return selected
 

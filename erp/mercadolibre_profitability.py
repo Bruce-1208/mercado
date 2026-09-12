@@ -14,12 +14,15 @@ import unicodedata
 import threading
 import time
 from datetime import datetime, timedelta
-from typing import Any, Mapping
+from typing import Any, Callable, Mapping
 
 import requests
 
 from erp.mercadolibre_profitability_cache import DatabaseProfitabilityCache
-from erp.mercadolibre_shipping_rate_cards import OfficialShippingRateCardStore
+from erp.mercadolibre_shipping_rate_cards import (
+    SITE_METADATA,
+    OfficialShippingRateCardStore,
+)
 
 
 API_BASE_URL = "https://api.mercadolibre.com"
@@ -46,6 +49,49 @@ class MercadoProfitabilityError(RuntimeError):
 
 _cache_lock = threading.RLock()
 _cache: dict[str, tuple[float, Any]] = {}
+
+
+class _InFlightCall:
+    def __init__(self) -> None:
+        self.event = threading.Event()
+        self.result: Any = None
+        self.error: BaseException | None = None
+
+
+_singleflight_lock = threading.Lock()
+_singleflight_calls: dict[tuple[Any, ...], _InFlightCall] = {}
+
+
+def _run_singleflight(key: tuple[Any, ...], callback: Callable[[], Any]) -> Any:
+    """Run one concurrent call per key and forget it immediately afterwards."""
+
+    with _singleflight_lock:
+        flight = _singleflight_calls.get(key)
+        leader = flight is None
+        if flight is None:
+            flight = _InFlightCall()
+            _singleflight_calls[key] = flight
+
+    if not leader:
+        flight.event.wait()
+        if flight.error is not None:
+            raise flight.error
+        return flight.result
+
+    try:
+        result = callback()
+    except BaseException as exc:
+        with _singleflight_lock:
+            flight.error = exc
+            _singleflight_calls.pop(key, None)
+            flight.event.set()
+        raise
+    else:
+        with _singleflight_lock:
+            flight.result = result
+            _singleflight_calls.pop(key, None)
+            flight.event.set()
+        return result
 
 
 def _now_text() -> str:
@@ -126,35 +172,154 @@ def calculate_billable_weight_g(
     actual_weight_g: Any,
     volumetric_weight_kg: Any = None,
 ) -> float | None:
-    """Use the Global Selling rule: greater of gross and volumetric weight."""
+    """Use only ZYing's actual product weight for the shipping quote.
+
+    ``volumetric_weight_kg`` remains in the signature for callers and stored
+    snapshots that still carry dimensions, but it must not affect freight.
+    """
 
     actual = _positive(actual_weight_g)
     if actual is None:
         return None
-    volumetric_kg = _positive(volumetric_weight_kg)
-    volumetric_g = volumetric_kg * 1000 if volumetric_kg is not None else 0.0
-    return round(max(actual, volumetric_g), 4)
+    return round(actual, 4)
+
+
+def actual_weight_from_row(row: Mapping[str, Any]) -> float | None:
+    """Return a genuine actual weight, never a legacy volumetric substitute."""
+
+    basis = str(row.get("weight_basis") or "").strip().lower()
+    if basis in {
+        "calculated_volumetric",
+        "legacy_unknown",
+        "plugin_volumetric_fallback",
+    }:
+        return None
+    return _positive(row.get("weight_g"))
 
 
 def shipping_dimensions_parameter(row: Mapping[str, Any]) -> str:
-    """Build the official quote parameter from declared package dimensions."""
+    """Build an actual-weight-only quote parameter for the API fallback."""
 
-    actual = _positive(row.get("weight_g"))
+    actual = actual_weight_from_row(row)
     if actual is None:
         raise MercadoProfitabilityError("缺少智赢实际重量，暂时无法计算运费")
     billable = calculate_billable_weight_g(actual, row.get("volumetric_weight_kg"))
     assert billable is not None
-
-    height = _positive(row.get("package_height_cm")) or 1.0
-    width = _positive(row.get("package_width_cm")) or 1.0
-    length = _positive(row.get("package_length_cm")) or 1.0
 
     def text(value: float) -> str:
         # The shipping-options endpoint accepts integer centimetres/grams.
         # Always round upward so formatting is valid without underquoting.
         return str(max(1, math.ceil(value)))
 
-    return f"{text(height)}x{text(width)}x{text(length)},{text(billable)}"
+    # The API fallback can derive volumetric weight from the dimensions string.
+    # Send neutral 1 cm dimensions so this workflow remains actual-weight-only.
+    return f"1x1x1,{text(billable)}"
+
+
+def estimate_rate_card_shipping(
+    row: Mapping[str, Any],
+    *,
+    rate_rows: list[Mapping[str, Any]] | tuple[Mapping[str, Any], ...] | None = None,
+    shipping_rate_store: Any = None,
+) -> dict[str, Any]:
+    """Match the fixed Cainiao table immediately, without an API request.
+
+    ``rate_rows`` lets a collection task load the small fixed table once and
+    perform every per-item lookup in memory.  Supplying ``shipping_rate_store``
+    is useful to callers that prefer one database lookup.
+    """
+
+    price = _positive(row.get("price"))
+    actual_weight_g = actual_weight_from_row(row)
+    if price is None or actual_weight_g is None:
+        return {}
+    try:
+        site_id = _site_id(row)
+    except MercadoProfitabilityError:
+        return {}
+    local_currency = SUPPORTED_SITE_CURRENCIES.get(site_id)
+    currency_id = str(row.get("currency_id") or "").strip().upper()
+    # The fixed table's price boundary is in the marketplace's local currency.
+    # International listings may display USD; every stored rate row carries
+    # the daily local→USD ratio, so convert in memory without an API request.
+    price_local = price
+    if not local_currency:
+        return {}
+    if currency_id == "USD" and local_currency != "USD":
+        stored_exchange_rate = next(
+            (
+                _positive(candidate.get("exchange_rate_to_usd"))
+                for candidate in (rate_rows or ())
+                if str(candidate.get("site_id") or "").upper() == site_id
+                and _positive(candidate.get("exchange_rate_to_usd")) is not None
+            ),
+            None,
+        )
+        if stored_exchange_rate is None:
+            return {}
+        price_local = price / stored_exchange_rate
+    elif currency_id != local_currency:
+        return {}
+
+    free_shipping = source_free_shipping(row)
+    if free_shipping is None:
+        free_shipping = True
+    matched: Mapping[str, Any] | None = None
+    if rate_rows is not None:
+        metadata = SITE_METADATA.get(site_id) or {}
+        threshold = _positive(metadata.get("price_threshold_local"))
+        if threshold is None:
+            return {}
+        rate_kind = (
+            "above_threshold" if price_local >= threshold else "below_threshold"
+        )
+        matches = []
+        for candidate in rate_rows:
+            if str(candidate.get("site_id") or "").upper() != site_id:
+                continue
+            if str(candidate.get("rate_kind") or "") != rate_kind:
+                continue
+            minimum = _number(candidate.get("weight_min_g"))
+            maximum = _number(candidate.get("weight_max_g"))
+            if minimum is not None and actual_weight_g < minimum:
+                continue
+            if maximum is not None and actual_weight_g > maximum:
+                continue
+            matches.append(candidate)
+        if matches:
+            matched = min(
+                matches,
+                key=lambda candidate: (
+                    _number(candidate.get("weight_max_g")) is None,
+                    _number(candidate.get("weight_max_g")) or float("inf"),
+                ),
+            )
+    else:
+        store = shipping_rate_store or OfficialShippingRateCardStore()
+        matched = store.match(
+            site_id=site_id,
+            price_local=price_local,
+            billable_weight_g=actual_weight_g,
+            free_shipping=free_shipping,
+        )
+    amount_usd = _positive((matched or {}).get("shipping_amount_usd"))
+    if amount_usd is None:
+        return {}
+    return {
+        "shipping_fee_local": round(amount_usd, 4),
+        "shipping_currency_id": "USD",
+        "shipping_fee_usd": round(amount_usd, 2),
+        "billable_weight_g": actual_weight_g,
+        "shipping_api_billable_weight_g": actual_weight_g,
+        "shipping_weight_rule": (
+            f"{'free_shipping' if free_shipping else 'buyer_pays_shipping'}:"
+            "actual_weight_only:official_global_selling_cainiao_rate_card"
+        ),
+        "source_free_shipping": free_shipping,
+        "profitability_source": (
+            "mercadolibre_global_selling_cainiao_rate_card_immediate_database_cache"
+        ),
+    }
 
 
 def calculate_net_proceeds_usd(
@@ -350,26 +515,38 @@ class MercadoProfitabilityClient:
         )):
             candidates.append("figura de accion anime")
 
-        payload: Any = []
-        for query in dict.fromkeys(candidate for candidate in candidates if candidate):
-            payload = self._get(
-                f"/sites/{site_id}/domain_discovery/search",
-                params={"q": query},
-            )
-            if isinstance(payload, list) and payload:
-                break
-        if not isinstance(payload, list) or not payload:
-            raise MercadoProfitabilityError("官网没有预测出对应商品分类")
-        category = payload[0]
-        category_id = str(category.get("category_id") or "")
-        if not category_id:
-            raise MercadoProfitabilityError("官网分类预测结果缺少分类编号")
-        return {
-            "category_id": category_id,
-            "category_name": str(category.get("category_name") or ""),
-        }
+        queries = tuple(dict.fromkeys(candidate for candidate in candidates if candidate))
 
-    def conversion_to_usd(self, currency_id: str) -> dict[str, Any]:
+        def predict() -> dict[str, str]:
+            payload: Any = []
+            for query in queries:
+                payload = self._get(
+                    f"/sites/{site_id}/domain_discovery/search",
+                    params={"q": query},
+                )
+                if isinstance(payload, list) and payload:
+                    break
+            if not isinstance(payload, list) or not payload:
+                raise MercadoProfitabilityError("官网没有预测出对应商品分类")
+            category = payload[0]
+            category_id = str(category.get("category_id") or "")
+            if not category_id:
+                raise MercadoProfitabilityError("官网分类预测结果缺少分类编号")
+            return {
+                "category_id": category_id,
+                "category_name": str(category.get("category_name") or ""),
+            }
+
+        return _run_singleflight(("category", site_id, queries), predict)
+
+    def conversion_to_usd(
+        self,
+        currency_id: str,
+        *,
+        refresh_if_stale: bool = False,
+    ) -> dict[str, Any]:
+        """Read the fixed database rate, refreshing it only in daily maintenance."""
+
         currency_id = str(currency_id or "USD").upper()
         if currency_id == "USD":
             return {
@@ -378,30 +555,61 @@ class MercadoProfitabilityClient:
                 "valid_until": None,
             }
         cache_key = f"currency:{currency_id}:USD"
-        payload = _cache_get(cache_key) if self.cache_store is not None else None
+        # A daily refresh must inspect the database deadline instead of being
+        # hidden by the process cache. Normal product calculations use the
+        # process cache and then the latest database value, even if its daily
+        # refresh is temporarily late.
+        payload = (
+            _cache_get(cache_key)
+            if self.cache_store is not None and not refresh_if_stale
+            else None
+        )
         if payload is None:
-            persisted = (
-                self.cache_store.get_exchange_rate(currency_id, "USD")
-                if self.cache_store is not None
-                else None
-            )
-            if persisted:
-                payload = {
-                    "ratio": persisted.get("rate"),
-                    "creation_date": persisted.get("source_created_at")
-                    or persisted.get("refreshed_at"),
-                    "valid_until": persisted.get("source_valid_until"),
-                    "cache_source": "database_daily_cache",
-                }
-            else:
-                payload = self._get(
-                    "/currency_conversions/search",
-                    params={"from": currency_id, "to": "USD"},
-                )
+            def resolve_rate() -> Any:
+                persisted = None
                 if self.cache_store is not None:
-                    self.cache_store.put_exchange_rate(currency_id, "USD", payload)
-            if self.cache_store is not None:
-                _cache_set(cache_key, payload, 60 * 60)
+                    try:
+                        persisted = self.cache_store.get_exchange_rate(
+                            currency_id,
+                            "USD",
+                            fresh_only=refresh_if_stale,
+                        )
+                    except TypeError:
+                        # Keep lightweight/custom cache implementations compatible.
+                        persisted = self.cache_store.get_exchange_rate(
+                            currency_id, "USD"
+                        )
+                if persisted:
+                    resolved = {
+                        "ratio": persisted.get("rate"),
+                        "creation_date": persisted.get("source_created_at")
+                        or persisted.get("refreshed_at"),
+                        "valid_until": persisted.get("source_valid_until"),
+                        "cache_source": "database_daily_cache",
+                    }
+                else:
+                    resolved = self._get(
+                        "/currency_conversions/search",
+                        params={"from": currency_id, "to": "USD"},
+                    )
+                    if self.cache_store is not None:
+                        self.cache_store.put_exchange_rate(
+                            currency_id, "USD", resolved
+                        )
+                if self.cache_store is not None:
+                    _cache_set(cache_key, resolved, 24 * 60 * 60)
+                return resolved
+
+            payload = _run_singleflight(
+                (
+                    "exchange-rate-daily-refresh"
+                    if refresh_if_stale
+                    else "exchange-rate-database-read",
+                    currency_id,
+                    "USD",
+                ),
+                resolve_rate,
+            )
         ratio = _positive(payload.get("ratio") if isinstance(payload, Mapping) else None)
         if ratio is None:
             raise MercadoProfitabilityError(f"官网未返回 {currency_id} 到 USD 的汇率")
@@ -427,7 +635,7 @@ class MercadoProfitabilityClient:
         logistic_type = str(marketplace.get("logistic_type") or "remote")
         shipping_mode = "me2"
         billable_weight_g = calculate_billable_weight_g(
-            row.get("weight_g"), row.get("volumetric_weight_kg")
+            actual_weight_from_row(row), row.get("volumetric_weight_kg")
         )
         quote = {
             "site_id": site_id,
@@ -439,54 +647,69 @@ class MercadoProfitabilityClient:
             "shipping_mode": shipping_mode,
             "billable_weight_g": billable_weight_g,
         }
-        cached = self.cache_store.get_commission(**quote) if self.cache_store else None
-        if cached:
-            return cached
-        params: dict[str, Any] = {
-            "price": price,
-            "category_id": category_id,
-            "listing_type_id": listing_type_id,
-            "logistic_type": logistic_type,
-            "shipping_modes": shipping_mode,
-        }
-        if currency_id:
-            params["currency_id"] = str(currency_id).upper()
-        if billable_weight_g is not None:
-            params["billable_weight"] = billable_weight_g
-        payload = self._get(
-            f"/sites/{site_id}/listing_prices",
-            params=params,
+        def fetch_quote() -> dict[str, Any]:
+            # The flight leader performs the cache lookup as well as the API
+            # fallback, so concurrent callers share both the miss and result.
+            cached = (
+                self.cache_store.get_commission(**quote)
+                if self.cache_store is not None
+                else None
+            )
+            if cached:
+                return cached
+            params: dict[str, Any] = {
+                "price": price,
+                "category_id": category_id,
+                "listing_type_id": listing_type_id,
+                "logistic_type": logistic_type,
+                "shipping_modes": shipping_mode,
+            }
+            if currency_id:
+                params["currency_id"] = str(currency_id).upper()
+            if billable_weight_g is not None:
+                params["billable_weight"] = billable_weight_g
+            payload = self._get(
+                f"/sites/{site_id}/listing_prices",
+                params=params,
+            )
+            choices = (
+                payload
+                if isinstance(payload, list)
+                else ([payload] if isinstance(payload, Mapping) else [])
+            )
+            selected = next(
+                (
+                    choice for choice in choices
+                    if str(choice.get("listing_type_id") or "") == listing_type_id
+                ),
+                None,
+            )
+            if not selected:
+                raise MercadoProfitabilityError(
+                    f"官网未返回刊登类型 {listing_type_id} 的分类佣金"
+                )
+            details = selected.get("sale_fee_details") or {}
+            amount = _number(selected.get("sale_fee_amount"))
+            if amount is None:
+                raise MercadoProfitabilityError("官网分类佣金缺少金额")
+            value = {
+                "amount": amount,
+                "currency_id": str(selected.get("currency_id") or ""),
+                "rate": _number(details.get("percentage_fee")),
+                "fixed_fee": _number(details.get("fixed_fee")),
+                "financing_add_on_fee": _number(details.get("financing_add_on_fee")),
+                "listing_type_name": str(selected.get("listing_type_name") or ""),
+                "payload": selected,
+            }
+            if self.cache_store is not None:
+                self.cache_store.put_commission(quote, value)
+            return value
+
+        flight_key = (
+            "commission",
+            tuple((key, quote[key]) for key in sorted(quote)),
         )
-        choices = (
-            payload
-            if isinstance(payload, list)
-            else ([payload] if isinstance(payload, Mapping) else [])
-        )
-        selected = next(
-            (
-                choice for choice in choices
-                if str(choice.get("listing_type_id") or "") == listing_type_id
-            ),
-            None,
-        )
-        if not selected:
-            raise MercadoProfitabilityError(f"官网未返回刊登类型 {listing_type_id} 的分类佣金")
-        details = selected.get("sale_fee_details") or {}
-        amount = _number(selected.get("sale_fee_amount"))
-        if amount is None:
-            raise MercadoProfitabilityError("官网分类佣金缺少金额")
-        value = {
-            "amount": amount,
-            "currency_id": str(selected.get("currency_id") or ""),
-            "rate": _number(details.get("percentage_fee")),
-            "fixed_fee": _number(details.get("fixed_fee")),
-            "financing_add_on_fee": _number(details.get("financing_add_on_fee")),
-            "listing_type_name": str(selected.get("listing_type_name") or ""),
-            "payload": selected,
-        }
-        if self.cache_store is not None:
-            self.cache_store.put_commission(quote, value)
-        return value
+        return _run_singleflight(flight_key, fetch_quote)
 
     def shipping_from_rate_card(
         self, row: Mapping[str, Any], price: float, *, free_shipping: bool,
@@ -496,7 +719,7 @@ class MercadoProfitabilityClient:
         if self.shipping_rate_store is None:
             return None
         billable_weight_g = calculate_billable_weight_g(
-            row.get("weight_g"), row.get("volumetric_weight_kg")
+            actual_weight_from_row(row), row.get("volumetric_weight_kg")
         )
         if billable_weight_g is None:
             raise MercadoProfitabilityError("缺少智赢实际重量，暂时无法计算运费")
@@ -540,6 +763,14 @@ class MercadoProfitabilityClient:
         matched = self.shipping_from_rate_card(row, price, free_shipping=free_shipping)
         if matched:
             return matched
+        if self.shipping_rate_store is not None:
+            # Production quotes are sourced from the maintained Global Selling
+            # table. Falling back to the dimensions-based endpoint would make
+            # Mercado recalculate volumetric weight and violate this workflow's
+            # actual-weight-only rule.
+            raise MercadoProfitabilityError(
+                "固定运费表未命中该站点、售价或实际重量区间"
+            )
         dimensions = shipping_dimensions_parameter(row)
         # Only the API fallback needs an authorized marketplace and category.
         if not category_id:
@@ -588,7 +819,10 @@ class MercadoProfitabilityClient:
         value = {
             "amount": amount,
             "currency_id": str(country.get("currency_id") or ""),
-            "api_billable_weight_g": _number(country.get("billable_weight")),
+            # The endpoint may echo a volumetric billable weight.  This
+            # workflow deliberately records the actual weight used in our
+            # quote instead, while retaining the raw response in ``payload``.
+            "api_billable_weight_g": actual_weight_from_row(row),
             "rate_source": "official_shipping_options_api",
             "free_shipping": free_shipping,
             "payload": payload,
@@ -646,7 +880,7 @@ class MercadoProfitabilityClient:
             "listing_type_id": listing_type_id,
             "listing_type_name": "Classic",
             "billable_weight_g": calculate_billable_weight_g(
-                row.get("weight_g"), row.get("volumetric_weight_kg")
+                actual_weight_from_row(row), row.get("volumetric_weight_kg")
             ),
             "net_proceeds_usd": None,
             "profitability_updated_at": _now_text(),
@@ -709,7 +943,7 @@ class MercadoProfitabilityClient:
                 shipping_api_billable_weight_g=shipping.get("api_billable_weight_g"),
                 shipping_weight_rule=(
                     f"{'free_shipping' if free_shipping else 'buyer_pays_shipping'}:"
-                    "global_selling_max_gross_or_volumetric:"
+                    "actual_weight_only:"
                     f"{shipping.get('rate_source') or 'official_shipping_options_api'}"
                 ),
                 source_free_shipping=free_shipping,
@@ -764,9 +998,9 @@ def enrich_profitability(
 def refresh_supported_exchange_rates(
     client: MercadoProfitabilityClient,
 ) -> dict[str, dict[str, Any]]:
-    """Ensure every selectable marketplace currency has a fresh daily row."""
+    """Refresh stale daily rows; fresh database values cause no API request."""
     return {
-        site_id: client.conversion_to_usd(currency_id)
+        site_id: client.conversion_to_usd(currency_id, refresh_if_stale=True)
         for site_id, currency_id in SUPPORTED_SITE_CURRENCIES.items()
     }
 
@@ -778,9 +1012,11 @@ __all__ = [
     "MercadoProfitabilityError",
     "SUPPORTED_SITE_CURRENCIES",
     "active_store_token",
+    "actual_weight_from_row",
     "calculate_billable_weight_g",
     "calculate_net_proceeds_usd",
     "enrich_profitability",
+    "estimate_rate_card_shipping",
     "refresh_supported_exchange_rates",
     "shipping_dimensions_parameter",
     "source_free_shipping",

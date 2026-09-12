@@ -987,6 +987,7 @@ def _sync_store_once(client: MercadoLibreClient, record: dict) -> dict:
     detection_since, rights_since = _sync_start_dates(context)
     accounts = _marketplace_accounts(client, root_seller_id)
     errors = []
+    warnings = []
     detection_records: list[dict] = []
     rights_records: list[dict] = []
     scanned = 0
@@ -1000,7 +1001,9 @@ def _sync_store_once(client: MercadoLibreClient, record: dict) -> dict:
             date_created_since=detection_since,
         )
         if capped:
-            errors.append("平台检测记录超过本轮安全分页上限")
+            warnings.append(
+                f"平台检测已读取最新 {scanned} 条，达到本轮安全分页上限"
+            )
         upsert_infraction_records(record, detection_records)
         if not capped:
             reconcile_infraction_snapshot(token_id, "detection", detection_records)
@@ -1026,7 +1029,7 @@ def _sync_store_once(client: MercadoLibreClient, record: dict) -> dict:
             raise
         errors.append(f"权利人举报：{exc}")
 
-    status = "success" if not errors else "partial"
+    status = "partial" if errors else ("limited" if warnings else "success")
     return {
         "store": store_name,
         "token_id": token_id,
@@ -1034,7 +1037,7 @@ def _sync_store_once(client: MercadoLibreClient, record: dict) -> dict:
         "detection_scanned": scanned,
         "detection_matched": len(detection_records),
         "rights_holder": len(rights_records),
-        "message": "；".join(errors),
+        "message": "；".join([*errors, *warnings]),
     }
 
 

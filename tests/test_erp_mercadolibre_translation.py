@@ -108,7 +108,7 @@ def test_default_translation_reuses_identical_result_across_accounts(monkeypatch
         translation_module._TRANSLATION_CACHE.clear()
         translation_module._TRANSLATION_KEY_LOCKS.clear()
     monkeypatch.setattr(
-        translation_module, "_deepseek_batch_translate", fake_translate
+        translation_module, "_argos_batch_translate", fake_translate
     )
 
     first = translate_listing_content(
@@ -126,31 +126,55 @@ def test_default_translation_reuses_identical_result_across_accounts(monkeypatch
     assert len(calls) == 1
 
 
-def test_deepseek_translation_uses_json_mode_and_retries_invalid_content(monkeypatch):
-    responses = iter([
-        "translation without json",
-        '{"translations":["你好，有库存。"]}',
-    ])
+def test_argos_translation_maps_brazilian_portuguese_to_direct_pt_model(monkeypatch):
     calls = []
 
-    def fake_chat(messages, **kwargs):
-        calls.append((messages, kwargs))
-        return next(responses)
+    class FakeTranslation:
+        def translate(self, text):
+            return f"pt:{text}"
 
-    monkeypatch.setattr("AI_Agent.deepseek.chat_deepseek", fake_chat)
+    def fake_get_translation(source_code, target_code):
+        calls.append((source_code, target_code))
+        return FakeTranslation()
 
-    translated = translation_module._deepseek_batch_translate(
-        ["Hola, tenemos stock."], "es", "zh-CN"
+    monkeypatch.setattr(
+        translation_module, "_get_argos_translation", fake_get_translation
+    )
+    translated = translation_module._argos_batch_translate(
+        ["Hola, tenemos stock."], "es", "pt-BR"
     )
 
-    assert translated == ["你好，有库存。"]
-    assert len(calls) == 2
-    assert all(call[1]["response_format"] == {"type": "json_object"} for call in calls)
+    assert translated == ["pt:Hola, tenemos stock."]
+    assert calls == [("es", "pt")]
 
 
-def test_translation_json_parser_skips_non_json_reasoning_prefix():
-    decoded = translation_module._extract_json_object(
-        'analysis with {invalid json}\n```json\n{"translations":["中文"]}\n```'
+def test_argos_missing_model_has_actionable_error(monkeypatch):
+    class FakeLanguage:
+        code = "es"
+
+        def get_translation(self, _target):
+            return None
+
+    class FakeArgos:
+        @staticmethod
+        def get_installed_languages():
+            return [FakeLanguage()]
+
+    monkeypatch.setattr(
+        translation_module, "_load_argos_translate_module", lambda: FakeArgos
     )
 
-    assert decoded == {"translations": ["中文"]}
+    with pytest.raises(translation_module.ListingTranslationError, match="安装本地翻译模型"):
+        translation_module._get_argos_translation("es", "pt")
+
+
+def test_long_description_is_allowed_for_offline_translation():
+    long_text = "Descripción extensa. " * 150
+    translated = translation_module.translate_texts(
+        [long_text],
+        "es",
+        "pt-BR",
+        translator=lambda texts, _source, _target: [f"pt:{texts[0]}"],
+    )
+
+    assert translated == [f"pt:{long_text.strip()}"]

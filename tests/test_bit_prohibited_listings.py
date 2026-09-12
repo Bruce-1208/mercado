@@ -1,6 +1,8 @@
+from io import BytesIO
 from unittest.mock import patch
 
 import pytest
+from openpyxl import load_workbook
 
 from bit import bit_prohibited_listing_sync as sync
 import bit.bit_interface as workbench
@@ -173,6 +175,80 @@ def test_prohibited_listing_ui_and_list_route():
     assert listing.call_args.kwargs["site_id"] == "MLM"
     assert listing.call_args.kwargs["salesperson"] == "业务员甲"
     assert listing.call_args.kwargs["risk_type"] == "rights_holder_reply"
+
+
+def test_prohibited_listing_export_keeps_filters_and_exports_all_pages():
+    received = []
+
+    def fake_list(**kwargs):
+        received.append(kwargs)
+        page = int(kwargs["page"])
+        return {
+            "rows": [{
+                "risk_type": "prohibited" if page == 1 else "rights_holder_reply",
+                "salesperson": "业务员甲",
+                "group_name": "墨西哥组",
+                "store_name": "测试店铺",
+                "site_id": "MLM",
+                "risk_count": 3,
+                "prohibited_count": 2,
+                "rights_holder_reply_count": 1,
+                "item_id": f"MLM{page}",
+                "global_item_id": "UP-1",
+                "title": '=HYPERLINK("bad")' if page == 1 else "普通商品",
+                "status": "under_review",
+                "sub_status": ["forbidden"],
+                "infraction_reason": "The product is prohibited.",
+                "remedy": "请检查商品资质",
+                "rights_holder": "权利人甲" if page == 2 else "",
+                "due_at": "2026-09-20 00:00:00" if page == 2 else None,
+                "infraction_date": "2026-09-08 10:20:30",
+                "last_checked_at": "2026-09-08 10:30:30",
+                "permalink": "https://example.test/item/MLM1",
+                "thumbnail_url": "https://example.test/image/MLM1.jpg",
+            }],
+            "page": page,
+            "pages": 2,
+        }
+
+    client = _client()
+    with patch.object(workbench.bit_db_api, "list_mercado_prohibited_listings", side_effect=fake_list):
+        response = client.get(
+            "/api/prohibited-listings/export",
+            query_string={
+                "token_id": 7,
+                "site_id": "MLM",
+                "salesperson": "业务员甲",
+                "risk_type": "prohibited",
+                "search": "MLM",
+            },
+        )
+
+    assert response.status_code == 200
+    assert response.mimetype == "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    assert len(received) == 2
+    assert received[0]["token_id"] == 7
+    assert received[0]["site_id"] == "MLM"
+    assert received[0]["salesperson"] == "业务员甲"
+    assert received[0]["risk_type"] == "prohibited"
+    assert received[0]["page_size"] == 500
+    assert received[1]["page"] == 2
+    workbook = load_workbook(BytesIO(response.data))
+    sheet = workbook["禁限售明细"]
+    assert sheet.max_row == 3
+    assert sheet["A2"].value == "当前禁售"
+    assert sheet["A3"].value == "待回复权利人"
+    assert sheet["K2"].value.startswith("'=HYPERLINK")
+    assert sheet.freeze_panes == "A2"
+    assert sheet.auto_filter.ref == "A1:U3"
+
+
+def test_prohibited_listing_ui_exposes_excel_export_button():
+    source = workbench.resolve_template_dir() / "index.html"
+    html = source.read_text(encoding="utf-8")
+    assert 'id="prohibited-export-button"' in html
+    assert "exportProhibitedListings" in html
+    assert "/api/prohibited-listings/export" in html
 
 
 def test_manual_prohibited_sync_route_can_target_one_store():

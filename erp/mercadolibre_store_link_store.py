@@ -498,10 +498,16 @@ def _value_struct_number(value: Any, *, weight: bool = False) -> Decimal | None:
             result /= 1000
         elif "lb" in unit:
             result *= Decimal("453.59237")
+        elif re.search(r"(^|\W)oz($|\W)", unit):
+            result *= Decimal("28.349523125")
     elif "mm" in unit:
         result /= 10
     elif re.search(r"(^|\W)m($|\W)", unit) and "cm" not in unit:
         result *= 100
+    elif re.search(r"(^|\W)(?:in|inch|inches)($|\W)", unit):
+        result *= Decimal("2.54")
+    elif re.search(r"(^|\W)(?:ft|foot|feet)($|\W)", unit):
+        result *= Decimal("30.48")
     return result
 
 
@@ -512,6 +518,15 @@ def _attribute_number(item: Mapping[str, Any], ids: set[str], *, weight: bool = 
         value = _value_struct_number(attribute.get("value_struct"), weight=weight)
         if value is None:
             value = _value_struct_number(attribute.get("value_name"), weight=weight)
+        if value is None:
+            for entry in attribute.get("values") or []:
+                if not isinstance(entry, Mapping):
+                    continue
+                value = _value_struct_number(entry.get("struct"), weight=weight)
+                if value is None:
+                    value = _value_struct_number(entry.get("name"), weight=weight)
+                if value is not None:
+                    break
         if value is not None:
             return value
     return None
@@ -528,6 +543,62 @@ def _shipping_dimensions(item: Mapping[str, Any]) -> dict[str, Decimal | None]:
         return {"height": None, "width": None, "length": None, "weight": None}
     height, width, length, weight = (Decimal(value) for value in match.groups())
     return {"height": height, "width": width, "length": length, "weight": weight}
+
+
+def _direct_package_measurements(item: Mapping[str, Any]) -> dict[str, Decimal | None]:
+    """Read package values stored directly on one item or variation."""
+
+    shipping = _shipping_dimensions(item)
+    values = {
+        "weight": _attribute_number(
+            item, {"PACKAGE_WEIGHT", "WEIGHT", "NET_WEIGHT"}, weight=True
+        ),
+        "length": _attribute_number(item, {"PACKAGE_LENGTH", "LENGTH"}),
+        "width": _attribute_number(item, {"PACKAGE_WIDTH", "WIDTH"}),
+        "height": _attribute_number(item, {"PACKAGE_HEIGHT", "HEIGHT"}),
+    }
+    for field in values:
+        if values[field] is None:
+            values[field] = shipping[field]
+    return values
+
+
+def _package_measurement_score(values: Mapping[str, Decimal | None]) -> tuple[int, int, Decimal]:
+    """Prefer complete packages, then the variant with the highest actual weight."""
+
+    populated = sum(values.get(field) is not None for field in ("weight", "length", "width", "height"))
+    actual_g = values.get("weight") or Decimal("0")
+    return (int(populated == 4), populated, actual_g)
+
+
+def _package_measurements(item: Mapping[str, Any]) -> dict[str, Decimal | None]:
+    """Resolve package values from root attributes or nested variation attributes.
+
+    Mercado's local marketplace response commonly leaves package data out of the
+    root item and returns it under ``variations[].attributes`` instead.  A product
+    list row represents the whole listing, so when variants differ we retain the
+    complete package with the highest actual weight because this workflow does
+    not use volumetric weight to select a shipping band.
+    """
+
+    root = _direct_package_measurements(item)
+    if all(root.get(field) is not None for field in ("weight", "length", "width", "height")):
+        return root
+
+    candidates = [
+        _direct_package_measurements(variation)
+        for variation in item.get("variations") or []
+        if isinstance(variation, Mapping)
+    ]
+    if not candidates:
+        return root
+    best = max(candidates, key=_package_measurement_score)
+    if all(best.get(field) is not None for field in ("weight", "length", "width", "height")):
+        return best
+    return {
+        field: root.get(field) if root.get(field) is not None else best.get(field)
+        for field in ("weight", "length", "width", "height")
+    }
 
 
 def _seller_sku(item: Mapping[str, Any]) -> str:
@@ -568,15 +639,11 @@ def _net_proceeds_usd(item: Mapping[str, Any]) -> Any:
 def listing_record(token: Mapping[str, Any], item: Mapping[str, Any], synced_at: str) -> dict[str, Any]:
     """Normalize one official API listing while keeping package values editable."""
 
-    shipping = _shipping_dimensions(item)
-    weight = _attribute_number(item, {"PACKAGE_WEIGHT", "WEIGHT", "NET_WEIGHT"}, weight=True)
-    length = _attribute_number(item, {"PACKAGE_LENGTH", "LENGTH"})
-    width = _attribute_number(item, {"PACKAGE_WIDTH", "WIDTH"})
-    height = _attribute_number(item, {"PACKAGE_HEIGHT", "HEIGHT"})
-    weight = weight if weight is not None else shipping["weight"]
-    length = length if length is not None else shipping["length"]
-    width = width if width is not None else shipping["width"]
-    height = height if height is not None else shipping["height"]
+    package = _package_measurements(item)
+    weight = package["weight"]
+    length = package["length"]
+    width = package["width"]
+    height = package["height"]
     volumetric = None
     if all(value is not None for value in (length, width, height)):
         volumetric = (length * width * height / Decimal("6000")).quantize(Decimal("0.0001"))

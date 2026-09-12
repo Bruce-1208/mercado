@@ -44,7 +44,8 @@ STORE_LINK_DETAIL_ATTRIBUTES = (
     "id", "site_id", "title", "permalink", "secure_thumbnail", "thumbnail",
     "pictures", "status", "price", "currency_id", "available_quantity",
     "sold_quantity", "seller_custom_field", "category_id", "listing_type_id",
-    "shipping", "attributes", "seller_id", "cbt_item_id", "net_proceeds",
+    "shipping", "attributes", "variations", "seller_id", "cbt_item_id",
+    "net_proceeds",
 )
 STORE_LINK_STATUSES = ("active", "paused", "closed", "under_review")
 SITE_ITEM_URLS = {

@@ -742,6 +742,7 @@ else:
         delete_management_category as db_delete_mercado_management_category,
         assign_management_category as db_assign_mercado_management_category,
         update_collection_task as db_update_mercado_collection_task,
+        update_collection_items as db_update_mercado_collection_items,
         update_product_publish_state as db_update_mercado_product_publish_state,
         update_product_publish_record as db_update_mercado_product_publish_record,
         update_product_item as db_update_mercado_product_item,
@@ -2243,6 +2244,7 @@ _mercado_playwright_setup_state = {
 _mercado_profit_refresh_lock = threading.Lock()
 _mercado_profit_refresh_started = False
 _mercado_profit_refresh_stop_event = threading.Event()
+_mercado_profit_refresh_wakeup_event = threading.Event()
 _mercado_shipping_rate_refresh_lock = threading.RLock()
 _mercado_shipping_rate_refresh_state = {
     "running": False,
@@ -5932,7 +5934,7 @@ def _excel_datetime(value):
         return _excel_safe_text(text)
 
 
-def _ip_rights_export_rows(filters):
+def _official_infraction_export_rows(filters):
     rows = []
     page = 1
     pages = 1
@@ -5957,6 +5959,130 @@ def _ip_rights_export_rows(filters):
     return rows
 
 
+def _official_infraction_export_response(
+    filters,
+    *,
+    worksheet_title,
+    filename_prefix,
+    detection_label,
+):
+    rows = _official_infraction_export_rows(filters)
+
+    workbook = Workbook()
+    worksheet = workbook.active
+    worksheet.title = worksheet_title
+    columns = [
+        ("违规时间", "occurred_at"),
+        ("店铺", "store_name"),
+        ("站点", "site_id"),
+        ("业务员", "salesperson"),
+        ("来源", "source_type"),
+        ("商品编号", "item_id"),
+        ("商品标题", "title"),
+        ("违规原因", "reason"),
+        ("权利人", "rights_holder"),
+        ("平台状态", "status"),
+        ("处理状态", "resolution_status"),
+        ("处理截止时间", "due_at"),
+        ("商品链接", "permalink"),
+        ("图片链接", "thumbnail_url"),
+    ]
+    worksheet.append([label for label, _key in columns])
+    source_labels = {"detection": detection_label, "rights_holder": "权利人举报"}
+    resolution_labels = {
+        "current": "当前违规商品",
+        "appeal_success": "申诉成功",
+        "appeal_failed": "申诉失败",
+        "historical": "历史记录",
+    }
+    date_keys = {"occurred_at", "due_at"}
+    for row in rows:
+        values = []
+        for _label, key in columns:
+            value = row.get(key)
+            if key in date_keys:
+                value = _excel_datetime(value)
+            elif key == "source_type":
+                value = source_labels.get(str(value or ""), str(value or ""))
+            elif key == "resolution_status":
+                value = resolution_labels.get(str(value or ""), str(value or ""))
+            else:
+                value = _excel_safe_text(value)
+            values.append(value)
+        worksheet.append(values)
+
+    header_fill = PatternFill("solid", fgColor="DCE5FF")
+    header_font = Font(bold=True, color="172033")
+    for cell in worksheet[1]:
+        cell.fill = header_fill
+        cell.font = header_font
+        cell.alignment = Alignment(horizontal="center", vertical="center")
+    worksheet.row_dimensions[1].height = 26
+    worksheet.freeze_panes = "A2"
+    worksheet.auto_filter.ref = (
+        f"A1:{get_column_letter(len(columns))}{max(1, worksheet.max_row)}"
+    )
+    worksheet.sheet_view.showGridLines = False
+    widths = [20, 20, 10, 14, 14, 18, 42, 48, 24, 20, 16, 20, 42, 42]
+    for index, width in enumerate(widths, start=1):
+        worksheet.column_dimensions[get_column_letter(index)].width = width
+    for row_cells in worksheet.iter_rows(min_row=2):
+        for cell in row_cells:
+            cell.alignment = Alignment(vertical="top", wrap_text=True)
+    for row_index in range(2, worksheet.max_row + 1):
+        for column_index in (1, 12):
+            cell = worksheet.cell(row=row_index, column=column_index)
+            if isinstance(cell.value, datetime):
+                cell.number_format = "yyyy-mm-dd hh:mm:ss"
+
+    output = BytesIO()
+    workbook.save(output)
+    output.seek(0)
+    timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
+    filename = f"{filename_prefix}_{timestamp}.xlsx"
+    response = send_file(
+        output,
+        mimetype=(
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        ),
+        as_attachment=True,
+        download_name=filename,
+    )
+    response.headers["Content-Disposition"] = (
+        f"attachment; filename*=UTF-8''{quote(filename)}"
+    )
+    return response
+
+
+@app.route('/api/official-infractions/export', methods=['GET'])
+@login_required
+def api_export_official_infractions():
+    """Export every dashboard row matching the current violation filters."""
+
+    try:
+        filters = {
+            "days": request.args.get("days", 30),
+            "view_mode": request.args.get("view_mode", "current"),
+            "group_name": request.args.get("group_name", ""),
+            "salesperson": request.args.get("salesperson", ""),
+            "source_type": request.args.get("source_type", ""),
+            "category": request.args.get("category", ""),
+            "search": request.args.get("search", ""),
+            "detail_token_id": request.args.get("detail_token_id", 0),
+        }
+        return _official_infraction_export_response(
+            filters,
+            worksheet_title="违规商品明细",
+            filename_prefix="违规商品明细",
+            detection_label="平台检测",
+        )
+    except (TypeError, ValueError) as exc:
+        return jsonify({"status": "error", "message": str(exc)}), 400
+    except Exception as exc:
+        logging.exception("导出违规商品明细失败")
+        return jsonify({"status": "error", "message": f"导出失败：{exc}"}), 500
+
+
 @app.route('/api/official-ip-rights/export', methods=['GET'])
 @login_required
 def api_export_official_ip_rights():
@@ -5973,88 +6099,12 @@ def api_export_official_ip_rights():
             "search": request.args.get("search", ""),
             "detail_token_id": request.args.get("detail_token_id", 0),
         }
-        rows = _ip_rights_export_rows(filters)
-
-        workbook = Workbook()
-        worksheet = workbook.active
-        worksheet.title = "侵权和权利人明细"
-        columns = [
-            ("违规时间", "occurred_at"),
-            ("店铺", "store_name"),
-            ("站点", "site_id"),
-            ("业务员", "salesperson"),
-            ("来源", "source_type"),
-            ("商品编号", "item_id"),
-            ("商品标题", "title"),
-            ("侵权原因", "reason"),
-            ("权利人", "rights_holder"),
-            ("平台状态", "status"),
-            ("处理状态", "resolution_status"),
-            ("处理截止时间", "due_at"),
-            ("商品链接", "permalink"),
-            ("图片链接", "thumbnail_url"),
-        ]
-        worksheet.append([label for label, _key in columns])
-        source_labels = {"detection": "平台侵权", "rights_holder": "权利人举报"}
-        resolution_labels = {
-            "current": "当前违规商品",
-            "appeal_success": "申诉成功",
-            "appeal_failed": "申诉失败",
-            "historical": "历史记录",
-        }
-        date_keys = {"occurred_at", "due_at"}
-        for row in rows:
-            values = []
-            for _label, key in columns:
-                value = row.get(key)
-                if key in date_keys:
-                    value = _excel_datetime(value)
-                elif key == "source_type":
-                    value = source_labels.get(str(value or ""), str(value or ""))
-                elif key == "resolution_status":
-                    value = resolution_labels.get(str(value or ""), str(value or ""))
-                else:
-                    value = _excel_safe_text(value)
-                values.append(value)
-            worksheet.append(values)
-
-        header_fill = PatternFill("solid", fgColor="DCE5FF")
-        header_font = Font(bold=True, color="172033")
-        for cell in worksheet[1]:
-            cell.fill = header_fill
-            cell.font = header_font
-            cell.alignment = Alignment(horizontal="center", vertical="center")
-        worksheet.row_dimensions[1].height = 26
-        worksheet.freeze_panes = "A2"
-        worksheet.auto_filter.ref = f"A1:{get_column_letter(len(columns))}{max(1, worksheet.max_row)}"
-        worksheet.sheet_view.showGridLines = False
-        widths = [20, 20, 10, 14, 14, 18, 42, 48, 24, 20, 16, 20, 42, 42]
-        for index, width in enumerate(widths, start=1):
-            worksheet.column_dimensions[get_column_letter(index)].width = width
-        for row_cells in worksheet.iter_rows(min_row=2):
-            for cell in row_cells:
-                cell.alignment = Alignment(vertical="top", wrap_text=True)
-        for row_index in range(2, worksheet.max_row + 1):
-            for column_index in (1, 12):
-                cell = worksheet.cell(row=row_index, column=column_index)
-                if isinstance(cell.value, datetime):
-                    cell.number_format = "yyyy-mm-dd hh:mm:ss"
-
-        output = BytesIO()
-        workbook.save(output)
-        output.seek(0)
-        timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
-        filename = f"侵权和权利人明细_{timestamp}.xlsx"
-        response = send_file(
-            output,
-            mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-            as_attachment=True,
-            download_name=filename,
+        return _official_infraction_export_response(
+            filters,
+            worksheet_title="侵权和权利人明细",
+            filename_prefix="侵权和权利人明细",
+            detection_label="平台侵权",
         )
-        response.headers["Content-Disposition"] = (
-            f"attachment; filename*=UTF-8''{quote(filename)}"
-        )
-        return response
     except (TypeError, ValueError) as exc:
         return jsonify({"status": "error", "message": str(exc)}), 400
     except Exception as exc:
@@ -7446,6 +7496,140 @@ def api_prohibited_listings():
     return response
 
 
+def _prohibited_export_rows(filters):
+    """Read every page of the filtered prohibited-listings result for export."""
+
+    rows = []
+    page = 1
+    pages = 1
+    while page <= pages:
+        data = bit_db_api.list_mercado_prohibited_listings(
+            **filters,
+            page=page,
+            page_size=500,
+        ) or {}
+        rows.extend(data.get("rows") or [])
+        pages = max(1, int(data.get("pages") or 1))
+        page += 1
+    return rows
+
+
+def _prohibited_export_response(filters):
+    rows = _prohibited_export_rows(filters)
+    workbook = Workbook()
+    worksheet = workbook.active
+    worksheet.title = "禁限售明细"
+    columns = [
+        ("风险类型", "risk_type"),
+        ("业务员", "salesperson"),
+        ("组别", "group_name"),
+        ("店铺", "store_name"),
+        ("站点", "site_id"),
+        ("站点风险数量", "risk_count"),
+        ("当前禁售数量", "prohibited_count"),
+        ("待回复权利人数量", "rights_holder_reply_count"),
+        ("商品编号", "item_id"),
+        ("Global Item", "global_item_id"),
+        ("商品标题", "title"),
+        ("状态", "status"),
+        ("子状态", "sub_status"),
+        ("风险原因", "infraction_reason"),
+        ("处理建议", "remedy"),
+        ("权利人", "rights_holder"),
+        ("回复截止时间", "due_at"),
+        ("发生时间", "infraction_date"),
+        ("核验时间", "last_checked_at"),
+        ("商品链接", "permalink"),
+        ("图片链接", "thumbnail_url"),
+    ]
+    worksheet.append([label for label, _key in columns])
+    risk_labels = {
+        "prohibited": "当前禁售",
+        "rights_holder_reply": "待回复权利人",
+    }
+    date_keys = {"due_at", "infraction_date", "last_checked_at"}
+    numeric_keys = {"risk_count", "prohibited_count", "rights_holder_reply_count"}
+    for row in rows:
+        values = []
+        for _label, key in columns:
+            value = row.get(key)
+            if key == "risk_type":
+                value = risk_labels.get(str(value or ""), str(value or ""))
+            elif key in date_keys:
+                value = _excel_datetime(value)
+            elif key in numeric_keys:
+                value = int(value or 0)
+            else:
+                value = _excel_safe_text(value)
+            values.append(value)
+        worksheet.append(values)
+
+    header_fill = PatternFill("solid", fgColor="DCE5FF")
+    header_font = Font(bold=True, color="172033")
+    for cell in worksheet[1]:
+        cell.fill = header_fill
+        cell.font = header_font
+        cell.alignment = Alignment(horizontal="center", vertical="center")
+    worksheet.row_dimensions[1].height = 26
+    worksheet.freeze_panes = "A2"
+    worksheet.auto_filter.ref = (
+        f"A1:{get_column_letter(len(columns))}{max(1, worksheet.max_row)}"
+    )
+    worksheet.sheet_view.showGridLines = False
+    widths = [18, 14, 16, 20, 10, 16, 16, 20, 18, 18, 42, 16, 18, 48, 36, 24, 20, 20, 20, 42, 42]
+    for index, width in enumerate(widths, start=1):
+        worksheet.column_dimensions[get_column_letter(index)].width = width
+    for row_cells in worksheet.iter_rows(min_row=2):
+        for cell in row_cells:
+            cell.alignment = Alignment(vertical="top", wrap_text=True)
+    for row_index in range(2, worksheet.max_row + 1):
+        for column_index, (_label, key) in enumerate(columns, start=1):
+            if key in date_keys:
+                cell = worksheet.cell(row=row_index, column=column_index)
+                if isinstance(cell.value, datetime):
+                    cell.number_format = "yyyy-mm-dd hh:mm:ss"
+
+    output = BytesIO()
+    workbook.save(output)
+    output.seek(0)
+    timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
+    filename = f"禁限售明细_{timestamp}.xlsx"
+    response = send_file(
+        output,
+        mimetype=(
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        ),
+        as_attachment=True,
+        download_name=filename,
+    )
+    response.headers["Content-Disposition"] = (
+        f"attachment; filename*=UTF-8''{quote(filename)}"
+    )
+    return response
+
+
+@app.route('/api/prohibited-listings/export', methods=['GET'])
+@login_required
+def api_export_prohibited_listings():
+    """Export all prohibited-listings rows matching the current filters."""
+
+    try:
+        token_text = str(request.args.get("token_id") or "").strip()
+        filters = {
+            "search": str(request.args.get("search") or "").strip(),
+            "token_id": int(token_text) if token_text else None,
+            "site_id": str(request.args.get("site_id") or "").strip(),
+            "salesperson": str(request.args.get("salesperson") or "").strip(),
+            "risk_type": str(request.args.get("risk_type") or "").strip(),
+        }
+        return _prohibited_export_response(filters)
+    except ValueError as exc:
+        return jsonify({"status": "error", "message": str(exc)}), 400
+    except Exception as exc:
+        logging.exception("导出禁限售明细失败")
+        return jsonify({"status": "error", "message": f"导出失败：{exc}"}), 500
+
+
 @app.route('/api/prohibited-listings/sync/start', methods=['POST'])
 @login_required
 def api_start_prohibited_listing_sync():
@@ -8689,7 +8873,7 @@ def _mercado_collection_finish_status(processed, completed, failed, requested=No
         prefix = "采集完成"
     message = (
         f"{prefix}：入库 {processed} 件，"
-        f"重量尺寸完整 {completed} 件，待补充 {failed} 件"
+        f"实际重量可用 {completed} 件，待补充 {failed} 件"
     )
     if shortfall:
         message += f"，距离目标还差 {shortfall} 件"
@@ -8781,7 +8965,18 @@ def _run_mercado_shipping_rate_refresh():
         result = refresh_official_shipping_rate_cards(
             MercadoProfitabilityClient(active_store_token())
         )
-        recalculation_count = mark_all_profitability_stale()
+        successful_site_ids = [
+            str(site.get("site_id") or "").strip().upper()
+            for site in result.get("sites") or []
+            if str(site.get("site_id") or "").strip()
+        ]
+        recalculation_count = (
+            mark_all_profitability_stale(site_ids=successful_site_ids)
+            if successful_site_ids
+            else 0
+        )
+        if recalculation_count:
+            _mercado_profit_refresh_wakeup_event.set()
         success_sites = int(result.get("success_sites") or 0)
         failed_sites = int(result.get("failed_sites") or 0)
         unavailable_site_count = int(result.get("unavailable_site_count") or 0)
@@ -8872,6 +9067,9 @@ def _mercado_profit_refresh_loop():
 
     next_reference_check = 0.0
     while not _mercado_profit_refresh_stop_event.is_set():
+        # Clear before querying. A write that arrives during the query remains
+        # set and therefore cannot be lost between ``wait`` and ``clear``.
+        _mercado_profit_refresh_wakeup_event.clear()
         processed_rows = False
         try:
             stale_before = (datetime.now() - timedelta(hours=stale_hours)).strftime(
@@ -8881,12 +9079,68 @@ def _mercado_profit_refresh_loop():
                 stale_before=stale_before,
                 limit=batch_size,
             )
-            client = None
+            if rows:
+                processed_rows = True
+                from concurrent.futures import ThreadPoolExecutor, as_completed
+
+                try:
+                    token = active_store_token()
+                except Exception:
+                    # Already persisted rates and quotes remain usable even if
+                    # OAuth is unavailable; individual cache misses record errors.
+                    logging.exception("获取授权失败，继续读取数据库中的商品费用")
+                    token = {}
+                worker_state = threading.local()
+
+                def refresh_row(row):
+                    row_client = getattr(worker_state, "client", None)
+                    if row_client is None:
+                        row_client = MercadoProfitabilityClient(token)
+                        worker_state.client = row_client
+                    enriched = enrich_profitability(row, client=row_client)
+                    enriched["_expected_profitability_inputs"] = {
+                        column: row.get(column)
+                        for column in (
+                            "updated_at",
+                            "price",
+                            "currency_id",
+                            "weight_g",
+                            "weight_basis",
+                            "category_id",
+                            "title",
+                            "source_json",
+                            "description_json",
+                            "page_snapshot_json",
+                            "source_snapshot_json",
+                            "description_text",
+                        )
+                    }
+                    update_item_profitability(
+                        str(row.get("source_item_id") or ""), enriched
+                    )
+                    return str(row.get("source_item_id") or "")
+
+                worker_count = min(10, len(rows))
+                with ThreadPoolExecutor(
+                    max_workers=worker_count,
+                    thread_name_prefix="mercado-profit",
+                ) as executor:
+                    futures = [executor.submit(refresh_row, row) for row in rows]
+                    for future in as_completed(futures):
+                        if _mercado_profit_refresh_stop_event.is_set():
+                            break
+                        try:
+                            future.result()
+                        except Exception:
+                            logging.exception("Mercado 商品成本重算失败")
+            # Product rows are latency-sensitive. Run daily reference
+            # maintenance only after one queued batch has been processed so a
+            # fresh collection never waits on six exchange-rate requests.
             if time.monotonic() >= next_reference_check:
                 reference_failed = False
                 try:
-                    client = MercadoProfitabilityClient(active_store_token())
-                    site_rates = refresh_supported_exchange_rates(client)
+                    reference_client = MercadoProfitabilityClient(active_store_token())
+                    site_rates = refresh_supported_exchange_rates(reference_client)
                     backfill_item_exchange_prices({
                         SUPPORTED_SITE_CURRENCIES[site_id]: snapshot
                         for site_id, snapshot in site_rates.items()
@@ -8911,48 +9165,21 @@ def _mercado_profit_refresh_loop():
                 next_reference_check = time.monotonic() + (
                     interval if reference_failed else 24 * 60 * 60
                 )
-            if rows:
-                processed_rows = True
-                from concurrent.futures import ThreadPoolExecutor, as_completed
-
-                try:
-                    token = client.token if client is not None else active_store_token()
-                except Exception:
-                    # Already persisted rates and quotes remain usable even if
-                    # OAuth is unavailable; individual cache misses record errors.
-                    logging.exception("获取授权失败，继续读取数据库中的商品费用")
-                    token = {}
-                worker_state = threading.local()
-
-                def refresh_row(row):
-                    row_client = getattr(worker_state, "client", None)
-                    if row_client is None:
-                        row_client = MercadoProfitabilityClient(token)
-                        worker_state.client = row_client
-                    enriched = enrich_profitability(row, client=row_client)
-                    update_item_profitability(
-                        str(row.get("source_item_id") or ""), enriched
-                    )
-                    return str(row.get("source_item_id") or "")
-
-                worker_count = min(10, len(rows))
-                with ThreadPoolExecutor(
-                    max_workers=worker_count,
-                    thread_name_prefix="mercado-profit",
-                ) as executor:
-                    futures = [executor.submit(refresh_row, row) for row in rows]
-                    for future in as_completed(futures):
-                        if _mercado_profit_refresh_stop_event.is_set():
-                            break
-                        try:
-                            future.result()
-                        except Exception:
-                            logging.exception("Mercado 商品成本重算失败")
         except Exception:
             logging.exception("自动更新 Mercado 官网佣金、汇率和运费失败")
         # Drain a recalculation backlog continuously in 50-row/10-thread
-        # batches. The long interval is only for the idle daily poll.
-        _mercado_profit_refresh_stop_event.wait(0.5 if processed_rows else interval)
+        # batches. New collection writes wake an idle worker immediately;
+        # the long interval remains only as a fallback maintenance poll.
+        if processed_rows:
+            _mercado_profit_refresh_stop_event.wait(0.5)
+        else:
+            idle_deadline = time.monotonic() + interval
+            while not _mercado_profit_refresh_stop_event.is_set():
+                remaining = idle_deadline - time.monotonic()
+                if remaining <= 0 or _mercado_profit_refresh_wakeup_event.wait(
+                    min(1.0, remaining)
+                ):
+                    break
 
 
 def ensure_mercado_profit_refresh_worker():
@@ -8989,10 +9216,15 @@ def _start_order_sync_scheduler():
 
 
 def _mercado_collection_rows_needing_repair(rows):
-    """Retry only rows whose current weight/dimensions are actually incomplete."""
-    from erp.mercadolibre_collection_store import has_complete_weight_dimensions
+    """Retry rows missing actual weight or either core product identity field."""
+    from erp.mercadolibre_profitability import actual_weight_from_row
 
-    return [row for row in rows or [] if not has_complete_weight_dimensions(row)]
+    return [
+        row for row in rows or []
+        if actual_weight_from_row(row) is None
+        or not str(row.get("title") or "").strip()
+        or not str(row.get("main_image_url") or "").strip()
+    ]
 
 
 def _mercado_collection_db_call(operation, *args, attempts=6, **kwargs):
@@ -9071,14 +9303,30 @@ def _run_mercado_collection_task(
         "completed": 0,
         "failed": 0,
         "skipped_us": 0,
+        "skipped_unverified_origin": 0,
     }
     counters_lock = threading.Lock()
     item_statuses = {}
     pending_rows = []
     pending_rows_lock = threading.Lock()
-    collection_write_batch_size = 25
+    try:
+        collection_write_batch_size = max(
+            1,
+            min(int(os.environ.get("MERCADO_COLLECTION_WRITE_BATCH_SIZE", "5")), 25),
+        )
+    except ValueError:
+        collection_write_batch_size = 5
+    try:
+        collection_write_flush_seconds = max(
+            0.1,
+            min(float(os.environ.get("MERCADO_COLLECTION_WRITE_FLUSH_SECONDS", "1")), 5.0),
+        )
+    except ValueError:
+        collection_write_flush_seconds = 1.0
     started_monotonic = time.monotonic()
+    last_collection_flush = 0.0
     last_task_status_write = 0.0
+    immediate_shipping_rate_rows = ()
 
     def elapsed_seconds():
         return max(0, int(time.monotonic() - started_monotonic))
@@ -9088,6 +9336,7 @@ def _run_mercado_collection_task(
             f"{message} · 成功 {counters['completed']} 件 · "
             f"失败 {counters['failed']} 件 · 并发 {worker_count} · "
             f"跳过美国自发货 {counters['skipped_us']} 件 · "
+            f"来源未确认 {counters['skipped_unverified_origin']} 件 · "
             f"耗时 {_format_mercado_elapsed(elapsed_seconds())}"
         )
 
@@ -9121,33 +9370,77 @@ def _run_mercado_collection_task(
         )
 
     def buffer_collection_row(row, *, force=False):
+        nonlocal last_collection_flush
         batch = []
+        now_monotonic = time.monotonic()
         with pending_rows_lock:
             if row is not None:
                 pending_rows.append(dict(row))
-            if force or len(pending_rows) >= collection_write_batch_size:
+            if (
+                force
+                or len(pending_rows) >= collection_write_batch_size
+                or (
+                    pending_rows
+                    and now_monotonic - last_collection_flush
+                    >= collection_write_flush_seconds
+                )
+            ):
                 batch.extend(pending_rows)
                 pending_rows.clear()
+                last_collection_flush = now_monotonic
         if batch:
-            _mercado_collection_db_call(
-                db_upsert_mercado_collection_items, task_id, batch
-            )
+            try:
+                _mercado_collection_db_call(
+                    db_upsert_mercado_collection_items, task_id, batch
+                )
+            except BaseException:
+                # The caller may retry or surface the task error. Keep the
+                # rows buffered so a final forced flush cannot silently lose
+                # already collected products after a transient DB failure.
+                with pending_rows_lock:
+                    pending_rows[0:0] = batch
+                    last_collection_flush = 0.0
+                raise
+            _mercado_profit_refresh_wakeup_event.set()
 
     def on_item(row):
         nonlocal last_task_status_write
-        # Persist collection results immediately.  Official commission,
-        # exchange-rate and shipping estimates are filled by the existing
-        # background profitability worker and must not block browser slots.
+        # Persist collection results immediately. Fixed-table freight is
+        # already available here; category commission continues concurrently.
         row = {
             **row,
             "profitability_updated_at": None,
             "profitability_source": "mercadolibre_official_api_pending",
             "profitability_error": "",
+            # A new scrape is authoritative for price/weight-derived values.
+            # This lets NULL invalidate a racing old profitability snapshot.
+            "_replace_profitability_snapshot": True,
         }
+        if immediate_shipping_rate_rows:
+            from erp.mercadolibre_profitability import estimate_rate_card_shipping
+
+            row.update(
+                estimate_rate_card_shipping(
+                    row,
+                    rate_rows=immediate_shipping_rate_rows,
+                )
+            )
+        from erp.mercadolibre_profitability import actual_weight_from_row
+
+        has_actual_weight = actual_weight_from_row(row) is not None
+        fixed_shipping_matched = bool(
+            has_actual_weight
+            and row.get("shipping_fee_usd") is not None
+            and "actual_weight_only" in str(row.get("shipping_weight_rule") or "")
+        )
         buffer_collection_row(row)
         with counters_lock:
             item_id = str(row.get("source_item_id") or "")
-            incoming_status = "ok" if row.get("scrape_status") == "ok" else "partial"
+            incoming_status = "ok" if (
+                has_actual_weight
+                and str(row.get("title") or "").strip()
+                and str(row.get("main_image_url") or "").strip()
+            ) else "partial"
             previous_status = item_statuses.get(item_id)
             effective_status = (
                 "ok" if previous_status == "ok" or incoming_status == "ok" else "partial"
@@ -9159,10 +9452,19 @@ def _run_mercado_collection_task(
                 counters["completed" if previous_status == "ok" else "failed"] -= 1
                 counters["completed" if effective_status == "ok" else "failed"] += 1
             item_statuses[item_id] = effective_status
+            shipping_message = (
+                "固定运费已按实际重量匹配"
+                if fixed_shipping_matched
+                else "缺少实际重量，暂不计算运费"
+                if not has_actual_weight
+                else "固定运费表未命中，已交给后台核验"
+                if immediate_shipping_rate_rows
+                else "固定运费表暂未加载，已交给后台核验"
+            )
             message = (
                 f"已完成 {counters['processed']}/{counters['candidate']}，"
-                f"完整 {counters['completed']}，待补充 {counters['failed']}；"
-                "佣金和运费在后台计算"
+                f"实重可用 {counters['completed']}，待补充 {counters['failed']}；"
+                f"{shipping_message}，分类佣金正在并行计算"
             )
             _mercado_collection_state_update(
                 processed_count=counters["processed"],
@@ -9203,6 +9505,16 @@ def _run_mercado_collection_task(
             worker_count=worker_count,
             started=True,
         )
+        # Load the compact fixed table once. Per-product freight lookup is then
+        # an in-memory operation and never waits for Mercado's API.
+        try:
+            from erp.mercadolibre_shipping_rate_cards import OfficialShippingRateCardStore
+
+            immediate_shipping_rate_rows = tuple(
+                OfficialShippingRateCardStore().list_rates().get("rows") or []
+            )
+        except Exception:
+            logging.exception("读取 Mercado 固定运费表失败，改由后台费用任务补算")
         result = collect_marketplace_listing(
             source_url,
             requested_count,
@@ -9217,6 +9529,9 @@ def _run_mercado_collection_task(
             stop_event=_mercado_collection_stop_event,
         )
         counters["skipped_us"] = int(result.get("skipped_us_count") or 0)
+        counters["skipped_unverified_origin"] = int(
+            result.get("skipped_unverified_origin_count") or 0
+        )
         buffer_collection_row(None, force=True)
         incomplete_rows = _mercado_collection_rows_needing_repair(result.get("rows"))
         if incomplete_rows and not _mercado_collection_stop_event.is_set():
@@ -9225,12 +9540,12 @@ def _run_mercado_collection_task(
             )
 
             _mercado_collection_state_update(
-                message=f"开始低并发补采 {len(incomplete_rows)} 件缺少重量尺寸的商品"
+                message=f"开始低并发补采 {len(incomplete_rows)} 件缺少实际重量的商品"
             )
             repair_marketplace_items_playwright(
                 incomplete_rows,
                 window_id=window_id if browser_type == "bitbrowser" else "",
-                plugin_timeout=15.0,
+                plugin_timeout=6.0,
                 attempts=1,
                 on_item=on_item,
                 on_progress=on_progress,
@@ -9439,11 +9754,15 @@ def _run_mercado_playwright_setup(browser_type, window_id, window_name):
     try:
         from erp.mercadolibre_playwright_collector import (
             DEFAULT_CDP_URL,
+            DEFAULT_SETUP_URL,
             open_playwright_login_setup,
         )
 
         if browser_type == "edge":
-            bit_zying_caiji.ensure_visible_zying_edge_login_window(DEFAULT_CDP_URL)
+            bit_zying_caiji.ensure_visible_zying_edge_login_window(
+                DEFAULT_CDP_URL,
+                start_url=DEFAULT_SETUP_URL,
+            )
         open_playwright_login_setup(
             window_id=window_id if browser_type == "bitbrowser" else ""
         )
@@ -9599,6 +9918,7 @@ def api_mercado_collection_items():
             task_id=int(task_id) if str(task_id or "").strip() else None,
             review_status=str(request.args.get("review_status") or "").strip(),
             publish_status=str(request.args.get("publish_status") or "").strip(),
+            weight_status=str(request.args.get("weight_status") or "").strip(),
             weight_min=str(request.args.get("weight_min") or "").strip(),
             weight_max=str(request.args.get("weight_max") or "").strip(),
             price_min=str(request.args.get("price_min") or "").strip(),
@@ -9644,6 +9964,7 @@ def api_mercado_products():
             source_type=str(request.args.get("source_type") or "").strip(),
             review_status=str(request.args.get("review_status") or "").strip(),
             publish_status=str(request.args.get("publish_status") or "").strip(),
+            weight_status=str(request.args.get("weight_status") or "").strip(),
             weight_min=str(request.args.get("weight_min") or "").strip(),
             weight_max=str(request.args.get("weight_max") or "").strip(),
             price_min=str(request.args.get("price_min") or "").strip(),
@@ -9764,6 +10085,8 @@ def api_update_mercado_product(product_item_id):
             product_item_id,
             {key: value for key, value in data.items() if key in allowed},
         )
+        if result.get("profitability_refresh_pending"):
+            _mercado_profit_refresh_wakeup_event.set()
         return jsonify({"status": "success", "data": result})
     except ValueError as exc:
         return jsonify({"status": "error", "message": str(exc)}), 400
@@ -9801,12 +10124,50 @@ def api_bulk_update_mercado_products():
             item_ids,
             {key: value for key, value in changes.items() if key in allowed},
         )
+        if result.get("profitability_refresh_pending"):
+            _mercado_profit_refresh_wakeup_event.set()
         return jsonify({"status": "success", "data": result})
     except ValueError as exc:
         return jsonify({"status": "error", "message": str(exc)}), 400
     except Exception as exc:
         logging.exception("批量修改 Mercado 产品内容失败")
         return jsonify({"status": "error", "message": f"批量修改产品失败：{exc}"}), 500
+
+
+@app.route('/api/mercado-collection/bulk-edit', methods=['PATCH'])
+@login_required
+def api_bulk_update_mercado_collection_items():
+    with _mercado_publish_lock:
+        if _mercado_publish_state.get("running"):
+            return jsonify({
+                "status": "error",
+                "message": "批量上架正在运行，完成后再修改采集商品",
+            }), 409
+    data = request.get_json(silent=True)
+    if not isinstance(data, dict):
+        return jsonify({"status": "error", "message": "批量修改内容必须是对象"}), 422
+    item_ids = data.get("collection_item_ids") or []
+    changes = data.get("changes")
+    if not isinstance(item_ids, list):
+        return jsonify({"status": "error", "message": "collection_item_ids 必须是数组"}), 422
+    if not isinstance(changes, dict):
+        return jsonify({"status": "error", "message": "changes 必须是对象"}), 422
+    allowed = {
+        "weight_g", "package_length_cm", "package_width_cm", "package_height_cm",
+    }
+    try:
+        result = db_update_mercado_collection_items(
+            item_ids,
+            {key: value for key, value in changes.items() if key in allowed},
+        )
+        if result.get("profitability_refresh_pending"):
+            _mercado_profit_refresh_wakeup_event.set()
+        return jsonify({"status": "success", "data": result})
+    except ValueError as exc:
+        return jsonify({"status": "error", "message": str(exc)}), 400
+    except Exception as exc:
+        logging.exception("批量修改 Mercado 采集商品尺寸重量失败")
+        return jsonify({"status": "error", "message": f"批量修改采集商品失败：{exc}"}), 500
 
 
 @app.route('/api/mercado-products/review-status', methods=['POST'])
@@ -10710,6 +11071,7 @@ def api_db_mercado_collection_items():
             task_id=int(task_id) if str(task_id or "").strip() else None,
             review_status=str(request.args.get("review_status") or "").strip(),
             publish_status=str(request.args.get("publish_status") or "").strip(),
+            weight_status=str(request.args.get("weight_status") or "").strip(),
             weight_min=str(request.args.get("weight_min") or "").strip(),
             weight_max=str(request.args.get("weight_max") or "").strip(),
             price_min=str(request.args.get("price_min") or "").strip(),
@@ -10730,6 +11092,8 @@ def api_db_mercado_collection_items():
     if not isinstance(rows, list):
         return jsonify({"status": "error", "message": "rows 必须是数组"}), 422
     count = db_upsert_mercado_collection_items(int(data.get("task_id")), rows)
+    if count:
+        _mercado_profit_refresh_wakeup_event.set()
     return jsonify({"status": "success", "data": {"count": count}})
 
 
@@ -10779,6 +11143,8 @@ def api_db_update_mercado_product(product_item_id):
         return jsonify({"status": "error", "message": str(exc)}), 400
     except KeyError as exc:
         return jsonify({"status": "error", "message": str(exc)}), 404
+    if result.get("profitability_refresh_pending"):
+        _mercado_profit_refresh_wakeup_event.set()
     return jsonify({"status": "success", "data": result})
 
 

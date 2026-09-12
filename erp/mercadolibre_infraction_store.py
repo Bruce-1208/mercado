@@ -205,6 +205,16 @@ def ensure_infraction_tables(cursor: Any) -> None:
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
             """
         )
+        cursor.execute(
+            f"""
+            UPDATE `{INFRACTION_SYNC_STATE_TABLE}`
+            SET `last_status` = 'limited',
+                `last_completed_at` = COALESCE(`last_completed_at`, `last_started_at`),
+                `requested_at` = NULL
+            WHERE `last_status` = 'partial'
+              AND `last_error` = '平台检测记录超过本轮安全分页上限'
+            """
+        )
         _schema_ready = True
 
 
@@ -291,23 +301,29 @@ def mark_infraction_sync_finished(
     connection_factory: Callable[[], Any] | None = None,
 ) -> None:
     status = str(status or "error").strip().lower()[:32]
-    completed = status in {"success", "completed"}
+    # Reaching the defensive page limit is a completed read, not a transient
+    # failure. Retrying the same unbounded snapshot cannot move that limit.
+    completed = status in {"success", "completed", "limited"}
     finished_at = _now()
     connection = (connection_factory or _connect)()
     try:
         with connection.cursor() as cursor:
             ensure_infraction_tables(cursor)
             if completed:
+                stored_message = (
+                    str(error or "")[:4000] if status == "limited" else None
+                )
                 cursor.execute(
                     f"""
                     INSERT INTO `{INFRACTION_SYNC_STATE_TABLE}` (
                         `token_id`, `last_started_at`, `last_completed_at`, `last_status`,
                         `last_error`, `detection_scanned_count`,
                         `detection_matched_count`, `rights_holder_count`
-                    ) VALUES (%s, %s, %s, %s, NULL, %s, %s, %s)
+                    ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
                     ON DUPLICATE KEY UPDATE
                         `last_completed_at` = VALUES(`last_completed_at`),
-                        `last_status` = VALUES(`last_status`), `last_error` = NULL,
+                        `last_status` = VALUES(`last_status`),
+                        `last_error` = VALUES(`last_error`),
                         `detection_scanned_count` = VALUES(`detection_scanned_count`),
                         `detection_matched_count` = VALUES(`detection_matched_count`),
                         `rights_holder_count` = VALUES(`rights_holder_count`),
@@ -318,6 +334,7 @@ def mark_infraction_sync_finished(
                     """,
                     (
                         int(token_id), finished_at, finished_at, status,
+                        stored_message,
                         int(detection_scanned_count or 0),
                         int(detection_matched_count or 0),
                         int(rights_holder_count or 0),
@@ -704,6 +721,7 @@ def _build_group_tree(account_rows: Iterable[Mapping[str, Any]]) -> list[dict[st
                 "sites": [],
                 "latest_infraction_at": None,
                 "last_synced_at": None,
+                "last_read_at": None,
             }
             person["stores"][store_key] = store
             group["store_count"] += 1
@@ -727,7 +745,11 @@ def _build_group_tree(account_rows: Iterable[Mapping[str, Any]]) -> list[dict[st
                     "latest_infraction_at": row.get("latest_infraction_at"),
                 }
             )
-        for timestamp_key in ("latest_infraction_at", "last_synced_at"):
+        for timestamp_key in (
+            "latest_infraction_at",
+            "last_synced_at",
+            "last_read_at",
+        ):
             candidate = row.get(timestamp_key)
             if candidate and (
                 not store.get(timestamp_key)
@@ -936,7 +958,7 @@ def list_infraction_dashboard(
          AND links.`item_id` = items.`item_id`
     """
 
-    pppi_store_counts: dict[int, dict[str, Any]] = {}
+    pppi_store_counts: dict[tuple[int, str], dict[str, Any]] = {}
     connection = (connection_factory or _connect)()
     try:
         with connection.cursor() as cursor:
@@ -1085,6 +1107,7 @@ def list_infraction_dashboard(
                        COALESCE(counts.`detection_count`, 0) AS `detection_count`,
                        COALESCE(counts.`rights_holder_count`, 0) AS `rights_holder_count`,
                        counts.`latest_infraction_at`, state.`last_completed_at` AS `last_synced_at`,
+                       state.`last_started_at` AS `last_read_at`,
                        state.`last_status`, state.`last_error`
                 FROM `mercado_store_tokens` AS tokens
                 {settings_account_join} `mercado_store_site_settings` AS settings
@@ -1113,12 +1136,12 @@ def list_infraction_dashboard(
             if pppi_current:
                 cursor.execute(
                     f"""
-                    SELECT ranked.`token_id`,
+                    SELECT ranked.`token_id`, ranked.`site_id`,
                            SUM(ranked.`source_type` = 'detection') AS `detection_count`,
                            SUM(ranked.`source_type` = 'rights_holder') AS `rights_holder_count`,
                            MAX(ranked.`occurred_at`) AS `latest_infraction_at`
                     FROM (
-                        SELECT items.`token_id`, items.`source_type`, items.`occurred_at`,
+                        SELECT items.`token_id`, items.`site_id`, items.`source_type`, items.`occurred_at`,
                                ROW_NUMBER() OVER (
                                    PARTITION BY items.`token_id`, {_pppi_product_key()}
                                    ORDER BY items.`occurred_at` DESC, items.`id` DESC
@@ -1128,12 +1151,15 @@ def list_infraction_dashboard(
                         {where_sql}
                     ) AS ranked
                     WHERE ranked.`_pppi_rank` = 1
-                    GROUP BY ranked.`token_id`
+                    GROUP BY ranked.`token_id`, ranked.`site_id`
                     """,
                     tuple(values),
                 )
                 pppi_store_counts = {
-                    int(row.get("token_id") or 0): _json_safe_row(row)
+                    (
+                        int(row.get("token_id") or 0),
+                        str(row.get("site_id") or "").strip().upper(),
+                    ): _json_safe_row(row)
                     for row in cursor.fetchall()
                 }
 
@@ -1208,6 +1234,7 @@ def list_infraction_dashboard(
             cursor.execute(
                 f"""
                 SELECT MAX(`last_completed_at`) AS `last_synced_at`,
+                       MAX(`last_started_at`) AS `last_read_at`,
                        SUM(CASE WHEN `last_status` = 'running' THEN 1 ELSE 0 END) AS `running_stores`,
                        SUM(CASE WHEN `last_status` IN ('error', 'partial') THEN 1 ELSE 0 END)
                            AS `problem_stores`
@@ -1220,15 +1247,30 @@ def list_infraction_dashboard(
         store_rankings = _build_store_rankings(tree)
         if pppi_current:
             for store in store_rankings:
-                counts = pppi_store_counts.get(int(store.get("token_id") or 0), {})
-                store["detection_count"] = int(counts.get("detection_count") or 0)
-                store["rights_holder_count"] = int(
-                    counts.get("rights_holder_count") or 0
-                )
-                store["total"] = (
-                    store["detection_count"] + store["rights_holder_count"]
-                )
-                store["latest_infraction_at"] = counts.get("latest_infraction_at")
+                token_id = int(store.get("token_id") or 0)
+                detection_count = 0
+                rights_holder_count = 0
+                latest_infraction_at = None
+                for site in store.get("sites") or []:
+                    site_id = str(site.get("site_id") or "").strip().upper()
+                    counts = pppi_store_counts.get((token_id, site_id), {})
+                    site["detection_count"] = int(counts.get("detection_count") or 0)
+                    site["rights_holder_count"] = int(
+                        counts.get("rights_holder_count") or 0
+                    )
+                    site["total"] = site["detection_count"] + site["rights_holder_count"]
+                    site["latest_infraction_at"] = counts.get("latest_infraction_at")
+                    detection_count += site["detection_count"]
+                    rights_holder_count += site["rights_holder_count"]
+                    candidate = site.get("latest_infraction_at")
+                    if candidate and (
+                        not latest_infraction_at or str(candidate) > str(latest_infraction_at)
+                    ):
+                        latest_infraction_at = candidate
+                store["detection_count"] = detection_count
+                store["rights_holder_count"] = rights_holder_count
+                store["total"] = detection_count + rights_holder_count
+                store["latest_infraction_at"] = latest_infraction_at
             store_rankings.sort(key=lambda item: str(item.get("store_name") or ""))
             store_rankings.sort(
                 key=lambda item: (

@@ -273,7 +273,10 @@ def test_profitability_updates_exact_collection_duplicate_and_only_newest_produc
     assert "WHERE `id` = %s AND `source_item_id` = %s" in collection_sql
     assert collection_params[-2:] == (1880, "MLM2990352733")
     assert "newer.`id` > %s" in product_sql
-    assert product_params[-3:] == ("MLM2990352733", "MLM2990352733", 1880)
+    assert product_params[-4:] == (
+        "MLM2990352733", 1880, "MLM2990352733", 1880,
+    )
+    assert "`collection_item_id` = %s" in product_sql
     assert "`source_type` = 'collected'" in product_sql
 
 
@@ -292,11 +295,56 @@ def test_product_profitability_updates_do_not_overwrite_collection_history(sourc
     assert params[-2:] == (15, "MLM1")
 
 
+def test_profitability_update_uses_input_cas_and_stops_mirror_on_conflict():
+    connection = _FakeConnection(update_rowcount=0)
+    expected = {
+        "updated_at": "2026-09-12 12:00:00",
+        "price": 299,
+        "currency_id": "MXN",
+        "weight_g": 420,
+        "weight_basis": "plugin_actual",
+        "category_id": None,
+        "title": "Producto",
+        "source_json": "{}",
+        "description_json": "{}",
+        "page_snapshot_json": "{}",
+    }
+
+    applied = store.update_item_profitability(
+        "MLM1",
+        {
+            "id": 88,
+            "task_id": 7,
+            "shipping_fee_usd": 6.4,
+            "_expected_profitability_inputs": expected,
+        },
+        connection_factory=lambda: connection,
+    )
+
+    updates = [
+        (sql, params) for sql, params in connection.fake_cursor.queries
+        if sql.startswith("UPDATE")
+    ]
+    assert applied is False
+    assert len(updates) == 1
+    sql, params = updates[0]
+    assert sql.startswith(f"UPDATE `{store.COLLECTION_TABLE}`")
+    for column in (
+        "updated_at", "price", "currency_id", "weight_g", "weight_basis",
+        "category_id", "title", "source_json", "description_json",
+        "page_snapshot_json",
+    ):
+        assert f"`{column}` <=> %s" in sql
+    assert params[-10:] == tuple(expected.values())
+
+
 def test_profitability_queue_includes_all_sources_and_retries_incomplete_rows():
     connection = _FakeConnection()
     batches = iter([
         [{"id": 1, "source_type": "pulled"}, {"id": 2, "source_type": "zying"}],
+        [],
         [{"id": 3, "task_id": 10}],
+        [],
     ])
     connection.fake_cursor.fetchall = lambda: next(batches)
     with patch.object(store, "ensure_collection_tables"):
@@ -305,29 +353,50 @@ def test_profitability_queue_includes_all_sources_and_retries_incomplete_rows():
             limit=10, connection_factory=lambda: connection,
         )
     assert [row["id"] for row in rows] == [1, 2, 3]
-    product_sql, product_params = connection.fake_cursor.queries[0]
-    collection_sql, collection_params = connection.fake_cursor.queries[1]
-    assert store.PRODUCT_TABLE in product_sql
-    assert store.COLLECTION_TABLE in collection_sql
-    assert product_params == ("2026-09-06 12:00:00", "2026-09-07 11:55:00", 5)
-    assert collection_params[-1] == 8
-    for sql in (product_sql, collection_sql):
+    product_pending_sql, product_pending_params = connection.fake_cursor.queries[0]
+    product_stale_sql, product_stale_params = connection.fake_cursor.queries[1]
+    collection_pending_sql, collection_pending_params = connection.fake_cursor.queries[2]
+    collection_stale_sql, collection_stale_params = connection.fake_cursor.queries[3]
+    assert store.PRODUCT_TABLE in product_pending_sql
+    assert store.COLLECTION_TABLE in collection_pending_sql
+    assert product_pending_params == (5,)
+    assert collection_pending_params == (8,)
+    assert product_stale_params == (
+        "2026-09-06 12:00:00", "2026-09-07 11:55:00", 3,
+    )
+    assert collection_stale_params == (
+        "2026-09-06 12:00:00", "2026-09-07 11:55:00", 7,
+    )
+    for sql in (product_pending_sql, collection_pending_sql):
+        assert "ORDER BY `id` DESC" in sql
+        assert "`profitability_updated_at` IS NULL" in sql
+    for sql in (product_stale_sql, collection_stale_sql):
         assert "`source_type` =" not in sql
-        assert "`weight_g` > 0" not in sql
+        assert "`weight_g` > 0" in sql
         assert "`commission_amount_usd` IS NULL" in sql
         assert "`shipping_fee_usd` IS NULL" in sql
         assert "`net_proceeds_usd` IS NULL" in sql
+        assert "max_gross_or_volumetric" not in sql
+        assert "plugin_volumetric_fallback" in sql
+        assert "CASE WHEN `profitability_updated_at`" not in sql
 
 
-def test_reference_refresh_queues_all_sources_without_erasing_existing_costs():
+def test_reference_refresh_clears_only_shipping_and_net_for_safe_recalculation():
     connection = _FakeConnection(update_rowcount=2)
     with patch.object(store, "ensure_collection_tables"):
-        assert store.mark_all_profitability_stale(connection_factory=lambda: connection) == 4
-    for sql, _ in connection.fake_cursor.queries:
+        assert store.mark_all_profitability_stale(
+            site_ids=["MLM", "MLB"],
+            connection_factory=lambda: connection,
+        ) == 4
+    for sql, params in connection.fake_cursor.queries:
         assert "`source_type` =" not in sql
         assert "`profitability_updated_at` = NULL" in sql
         assert "`commission_amount_usd` = NULL" not in sql
-        assert "`shipping_fee_usd` = NULL" not in sql
+        assert "`shipping_fee_usd` = NULL" in sql
+        assert "`shipping_weight_rule` = NULL" in sql
+        assert "`net_proceeds_usd` = NULL" in sql
+        assert "LEFT(`source_item_id`, 3) IN (%s, %s)" in sql
+        assert params[-2:] == ("MLB", "MLM")
 
 
 def test_existing_schema_still_installs_refresh_indexes_once(monkeypatch):
@@ -344,7 +413,13 @@ def test_existing_schema_still_installs_refresh_indexes_once(monkeypatch):
     ]
 
 
-def test_move_pulled_product_creates_collection_row_before_deleting_product():
+@pytest.mark.parametrize(("weight_basis", "expected_scrape_status"), [
+    ("official_api", "ok"),
+    ("plugin_volumetric_fallback", "partial"),
+])
+def test_move_pulled_product_preserves_weight_basis_before_deleting_product(
+    weight_basis, expected_scrape_status,
+):
     product_row = {
         "id": 21,
         "collection_item_id": 0,
@@ -359,6 +434,7 @@ def test_move_pulled_product_creates_collection_row_before_deleting_product():
         "package_length_cm": 10,
         "package_width_cm": 20,
         "package_height_cm": 5,
+        "weight_basis": weight_basis,
         "review_status": "risk",
         "last_publish_status": "failed",
         "source_snapshot_json": json.dumps({
@@ -413,9 +489,45 @@ def test_move_pulled_product_creates_collection_row_before_deleting_product():
     assert "`review_status`, `last_publish_status`" in insert_sql
     assert "risk" in insert_params
     assert "failed" in insert_params
-    assert "ok" in insert_params
+    assert weight_basis in insert_params
+    assert expected_scrape_status in insert_params
     assert "产品列表自动移回：审核状态未通过 1 件" in insert_params
     assert connection.committed is True
+
+
+def test_dimension_only_store_link_sync_does_not_relabel_weight_as_actual():
+    dimensions_connection = _FakeConnection(update_rowcount=1)
+
+    changed = store.sync_pulled_product_fields_from_store_links(
+        [18],
+        ["package_length_cm"],
+        connection_factory=lambda: dimensions_connection,
+    )
+
+    dimensions_sql = next(
+        query for query, _params in dimensions_connection.fake_cursor.queries
+        if query.startswith(f"UPDATE `{store.PRODUCT_TABLE}` AS products")
+    )
+    assert changed == 1
+    assert "products.`package_length_cm` = links.`package_length_cm`" in dimensions_sql
+    assert "products.`volumetric_weight_kg` = links.`volumetric_weight_kg`" in dimensions_sql
+    assert "products.`weight_basis`" not in dimensions_sql
+    assert "products.`profitability_updated_at` = NULL" not in dimensions_sql
+
+    weight_connection = _FakeConnection(update_rowcount=1)
+    store.sync_pulled_product_fields_from_store_links(
+        [18],
+        ["weight_g"],
+        connection_factory=lambda: weight_connection,
+    )
+    weight_sql = next(
+        query for query, _params in weight_connection.fake_cursor.queries
+        if query.startswith(f"UPDATE `{store.PRODUCT_TABLE}` AS products")
+    )
+    assert "products.`weight_basis` = 'mercado_remote_update'" in weight_sql
+    assert "products.`shipping_fee_usd` = NULL" in weight_sql
+    assert "products.`net_proceeds_usd` = NULL" in weight_sql
+    assert "products.`profitability_source` = 'mercado_remote_edit_pending'" in weight_sql
 
 
 def test_product_review_status_validates_and_updates_selected_rows():
@@ -492,6 +604,29 @@ def test_product_content_update_validates_persists_and_invalidates_profitability
         )
 
 
+def test_dimension_only_product_edit_keeps_profitability_snapshot_current():
+    connection = _FakeConnection(update_rowcount=1)
+
+    result = store.update_product_item(
+        9,
+        {
+            "package_length_cm": 30,
+            "package_width_cm": 20,
+            "package_height_cm": 10,
+        },
+        connection_factory=lambda: connection,
+    )
+
+    updates = [
+        sql for sql, _params in connection.fake_cursor.queries
+        if sql.startswith("UPDATE")
+    ]
+    assert result["profitability_refresh_pending"] is False
+    assert any("`volumetric_weight_kg` = CASE" in sql for sql in updates)
+    assert all("`shipping_fee_usd` = NULL" not in sql for sql in updates)
+    assert all("`profitability_updated_at` = NULL" not in sql for sql in updates)
+
+
 def test_bulk_product_content_update_uses_one_transaction_and_selected_fields_only():
     connection = _FakeConnection(update_rowcount=3)
 
@@ -525,6 +660,55 @@ def test_bulk_product_content_update_uses_one_transaction_and_selected_fields_on
     assert "c.`category_id` = p.`category_id`" in collection_sql
     assert collection_params == (7, 9, 12)
     assert connection.committed is True
+
+
+def test_bulk_collection_measurement_update_mirrors_products_atomically():
+    connection = _FakeConnection(update_rowcount=2)
+
+    result = store.update_collection_items(
+        [8, 7, 8],
+        {
+            "weight_g": 480,
+            "package_length_cm": 30,
+            "package_width_cm": 20,
+            "package_height_cm": 10,
+        },
+        connection_factory=lambda: connection,
+    )
+
+    collection_sql, params = next(
+        (query, params)
+        for query, params in connection.fake_cursor.queries
+        if query.startswith(f"UPDATE `{store.COLLECTION_TABLE}` SET")
+    )
+    product_sql, product_params = next(
+        (query, params)
+        for query, params in connection.fake_cursor.queries
+        if query.startswith(f"UPDATE `{store.PRODUCT_TABLE}` AS p")
+    )
+    assert result == {
+        "requested": 2,
+        "changed": 2,
+        "updated_fields": [
+            "weight_g", "package_length_cm", "package_width_cm",
+            "package_height_cm",
+        ],
+        "profitability_refresh_pending": True,
+    }
+    assert "`weight_basis` = 'manual_edit'" in collection_sql
+    assert "`volumetric_weight_kg` = CASE" in collection_sql
+    assert "`profitability_updated_at` = NULL" in collection_sql
+    assert params[-2:] == (7, 8)
+    assert "p.`weight_g` = c.`weight_g`" in product_sql
+    assert "p.`volumetric_weight_kg` = c.`volumetric_weight_kg`" in product_sql
+    assert "p.`profitability_updated_at` = NULL" in product_sql
+    assert product_params == (7, 8)
+    assert connection.committed is True
+
+    with pytest.raises(ValueError, match="只支持批量修改"):
+        store.update_collection_items(
+            [7], {"title": "not allowed"}, connection_factory=lambda: None
+        )
 
 
 def test_pulled_store_link_is_mirrored_as_publish_ready_unreviewed_product():
@@ -597,11 +781,97 @@ def test_failed_refresh_cannot_overwrite_an_existing_complete_item():
         if "ON DUPLICATE KEY UPDATE" in query
     )
     assert "`scrape_status` = 'ok' AND VALUES(`scrape_status`) <> 'ok'" in upsert_sql
-    assert "`weight_g` = COALESCE(VALUES(`weight_g`), `weight_g`)" in upsert_sql
+    assert "`weight_g` = IF(" in upsert_sql
+    assert "`weight_g`, CASE" in upsert_sql
+    assert "ELSE `weight_g` END" in upsert_sql
     assert "`scrape_status` = IF(" in upsert_sql
     assert connection.committed is True
     assert connection.rolled_back is False
     assert connection.closed is True
+
+
+def test_collection_save_calculates_usd_price_from_fixed_database_rate():
+    connection = _FakeConnection()
+    original_fetchall = connection.fake_cursor.fetchall
+
+    def fetchall():
+        last_query = connection.fake_cursor.queries[-1][0]
+        if f"FROM `{store.EXCHANGE_RATE_TABLE}`" in last_query:
+            return [{
+                "from_currency_id": "MXN",
+                "rate": Decimal("0.05000000"),
+                "source_created_at": "2026-09-12T00:00:00.000+00:00",
+                "refreshed_at": "2026-09-12 08:00:00",
+            }]
+        return original_fetchall()
+
+    connection.fake_cursor.fetchall = fetchall
+    store.upsert_collection_items(
+        12,
+        [{
+            "source_item_id": "MLM3016972321",
+            "price": 350,
+            "currency_id": "MXN",
+            "_replace_profitability_snapshot": True,
+        }],
+        connection_factory=lambda: connection,
+    )
+
+    _sql, params = next(
+        (query, params)
+        for query, params in connection.fake_cursor.queries
+        if "ON DUPLICATE KEY UPDATE" in query
+    )
+    assert params[14] == Decimal("17.50")
+    assert params[15] == Decimal("0.05000000")
+    assert params[16] == "2026-09-12T00:00:00.000+00:00"
+
+
+def test_recollection_replaces_stale_profitability_and_weight_basis_atomically():
+    connection = _FakeConnection()
+    store.upsert_collection_items(
+        12,
+        [{
+            "source_item_id": "MLM3016972321",
+            "source_url": "https://articulo.mercadolibre.com.mx/MLM-3016972321",
+            "weight_g": 600,
+            "weight_basis": "plugin_actual",
+            "scrape_status": "ok",
+            "_replace_profitability_snapshot": True,
+            "profitability_updated_at": None,
+        }],
+        connection_factory=lambda: connection,
+    )
+
+    upsert_sql = next(
+        query for query, _params in connection.fake_cursor.queries
+        if "ON DUPLICATE KEY UPDATE" in query
+    )
+    assert "`profitability_updated_at` = IF(" in upsert_sql
+    assert "`profitability_updated_at`, VALUES(`profitability_updated_at`))" in upsert_sql
+    assert "WHEN VALUES(`weight_g`) IS NOT NULL AND VALUES(`weight_g`) > 0" in upsert_sql
+    assert "THEN COALESCE(NULLIF(VALUES(`weight_basis`), ''), `weight_basis`)" in upsert_sql
+
+
+def test_volumetric_fallback_upsert_clears_fake_actual_weight():
+    connection = _FakeConnection()
+    store.upsert_collection_items(
+        12,
+        [{
+            "source_item_id": "MLM3016972321",
+            "weight_g": 1900,
+            "weight_basis": "plugin_volumetric_fallback",
+            "scrape_status": "ok",
+        }],
+        connection_factory=lambda: connection,
+    )
+
+    upsert_sql, params = next(
+        (query, params) for query, params in connection.fake_cursor.queries
+        if "ON DUPLICATE KEY UPDATE" in query
+    )
+    assert "'plugin_volumetric_fallback' ) THEN NULL" in upsert_sql
+    assert params[-7] == "partial"
 
 
 def test_collection_unique_index_is_scoped_to_each_task():
@@ -741,6 +1011,32 @@ def test_collection_list_applies_weight_profit_and_collection_time_filters():
     assert params[-2:] == ("2026-08-25 00:00:00", "2026-08-31 00:00:00")
 
 
+@pytest.mark.parametrize(
+    ("weight_status", "expected_clause"),
+    [
+        ("available", "(`weight_g` IS NOT NULL AND `weight_g` > 0"),
+        ("missing", "NOT (`weight_g` IS NOT NULL AND `weight_g` > 0"),
+    ],
+)
+def test_collection_list_filters_by_actual_weight_status(
+    weight_status, expected_clause
+):
+    connection = _FakeConnection()
+    store.list_collection_items(
+        weight_status=weight_status,
+        connection_factory=lambda: connection,
+    )
+
+    count_sql, params = next(
+        (query, params)
+        for query, params in connection.fake_cursor.queries
+        if query.startswith(f"SELECT COUNT(*) AS total FROM `{store.COLLECTION_TABLE}`")
+    )
+    assert expected_clause in count_sql
+    assert "'calculated_volumetric', 'legacy_unknown', 'plugin_volumetric_fallback'" in count_sql
+    assert params == ()
+
+
 def test_product_list_applies_status_range_and_date_filters_in_database():
     connection = _FakeConnection()
     store.list_product_items(
@@ -816,6 +1112,11 @@ def test_product_list_rejects_invalid_filter_ranges_before_connecting():
     with pytest.raises(ValueError, match="不支持的上架状态"):
         store.list_product_items(
             publish_status="unknown",
+            connection_factory=lambda: None,
+        )
+    with pytest.raises(ValueError, match="不支持的实重状态"):
+        store.list_product_items(
+            weight_status="unknown",
             connection_factory=lambda: None,
         )
     with pytest.raises(ValueError, match="开始时间不能晚于结束时间"):

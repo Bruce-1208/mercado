@@ -102,14 +102,10 @@
         button.disabled = true;
         button.textContent = "采集中…";
         try {
-          const product = core.extractCardProduct(candidate.card, candidate.url);
-          const response = await sendMessage({type: "SUBMIT_PRODUCT", product});
-          if (!response.ok) throw new Error(response.error || "采集失败");
-          button.textContent = response.queued ? "已待传" : "已采集";
-          showToast(
-            response.queued ? "控制台暂不可用，商品已加入待传队列" : "商品已采集到泽顺控制台",
-            response.queued ? "warning" : "success"
-          );
+          const detailTab = window.open(candidate.url, "_blank", "noopener");
+          if (!detailTab) throw new Error("浏览器拦截了详情页，请允许弹出窗口后重试");
+          button.textContent = "已打开";
+          showToast("已打开详情页；请等待智赢显示 CN.svg 后再采集", "info");
         } catch (error) {
           button.textContent = "重试";
           showToast(error.message || String(error), "error");
