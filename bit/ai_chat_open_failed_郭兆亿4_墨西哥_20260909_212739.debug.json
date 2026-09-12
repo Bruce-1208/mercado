@@ -1,0 +1,65 @@
+{
+  "captured_at": "2026-09-09T21:27:39",
+  "current_url": "https://global-selling.mercadolibre.com/help/v2",
+  "chat_state": {
+    "ai_frame_count": 0,
+    "inline_aria_expanded": "",
+    "inline_has_input": false,
+    "inline_open": false,
+    "inline_root_class": "",
+    "inline_shell": false,
+    "legacy_frame_count": 0,
+    "shadow_ai_frame_count": 0,
+    "visible_ai_frame_count": 0
+  },
+  "dom_snapshot": {
+    "aiShells": [],
+    "frames": [
+      {
+        "className": "",
+        "height": 0,
+        "id": "_hjSafeContext_32108361",
+        "shadowHost": "",
+        "src": "about:blank",
+        "title": "_hjSafeContext",
+        "visible": false,
+        "width": 0
+      }
+    ],
+    "readyState": "complete",
+    "shadowHosts": [],
+    "title": "Help"
+  },
+  "browser_logs": [
+    {
+      "level": "SEVERE",
+      "message": "https://undefined/v3/security.js - Failed to load resource: net::ERR_CONNECTION_CLOSED",
+      "source": "network",
+      "timestamp": 1788960318254
+    },
+    {
+      "level": "SEVERE",
+      "message": "https://console.bitbrowser.net/?id=78e071e3a4c64ebab6cd9c55e9ddce31&locale=zh&port=54345 - Unchecked runtime.lastError: Could not establish connection. Receiving end does not exist.",
+      "source": "other",
+      "timestamp": 1788960318256
+    },
+    {
+      "level": "SEVERE",
+      "message": "https://www.mercadolibre.com/jms/cbt/lgz/msl/login?navigation=H4sIAAAAAAAEAz2QWXOrOBCF_4ufr3NZvOYtGAdjg3BsFsPUlEsgGYTFYiSHJZX_PiKpmgdVSd19zvnUXxNapaS88r7Gk9cJ7mpKEsInfyY1hfxWNcWVINEoqCgxwvHvM4l_RmADC8xxwyavX6NRipGGhWi04s0TCw188ux6o1UrSj9RokbYFXdCVkJ6bXH8SfDYvUHK_lc0-PHETMyIBik_ISXoWo9xQp5WophxXrPXv39TWsWQThmmlJTpS4GbBKKKkrjBL0lV_GWQYjZlz6KATS_EDU7J6IvFr0bE7z8imPErb2Byn7z-QAjqetwD5KQqfz-8UFaStFSWS3GZz5WVcEI4EZGjzz__it0wQfU14SS5Yy74cL_PYiMhDtmfvcGUATGZWfA62pgLk2rgtM3o2eBKsEXHSNkXwTu4RIpf2vppwFvfjQy59yUguyU6JO9UBio1vDxdm6QlaEdbM6_ImSLPLKWXMUvM1zFdf6LdG3GKKIt3gFqbfYYup-qiRCxWf1iyUAE0UW0iehSPs_l25uh257hJb-t3wUgzJBhtNxF1r7XztHXOLYEXMIyZ6LJ_OsW7jIyUJ4rfo8LvnXL0BHWszIeRD5anepyNcm-wg1C1FZPbediHRJIc15StYJ-FwxsHLsiiIKJREcogP91HbaJQKfLXv3sqABEszCzBAM9ib3moCgrhFyqWa6sg8DjQTcnZSDNgfPSWG0rA8DrbzUjkmn14_tHKIRHa0u_jvJZH5mSoBpB_dPaQyLZ7l8cd-jNtOg9hahVvj6f5GZ1w-u7Xer9M6GJvLjTezKbdgPrdRmVvDoqbzUHdnhm8WFkev22SaXuIy9IyG_nmyP1Qk3a3U5W0PoJldNAflZIe2BGjzDfJs1E32jqcXn23beVwPZ8F8XSrXcPt3UlbryN7ebeecZ3B-8nl9PNySCT1cbQOsnU_dDI8Lnbp7FitilV8C9r3x0eKHWgq4VDN5XZj2vpt3hR7eEGHqW97zbNabZhml9vQMnBQrrcLMmdF5znwMI8fdGqsdjRKASjtj-7DOFuruVurknHeWLLngjtfHjv1FjhbWZwC6bm20rV2e9Y1HUlT29gnhhFhQG8PrZbsVZCzZW0_EMiPRt1Ovr__AxlUJqFiBAAA&dps=armor.ba26a91531fa52459a79141537ff648619fbfaa1972adb92976b1be5b796994a6f0d0ea53d44837936d995fe7a51a5d7b9a0b9a61936c1f7a53760c5afc6c6bff806e389c9b3b5298ee46ff3ead3d660e11b278271bc4a4296358da795b770c5.4fbb216f7b740f62898926d4247caa16 0 Loading the script 'https://www.recaptcha.net/recaptcha/enterprise.js?onload=onloadCallback&render=6LeetcMeAAAAAHBLMG_uCF4A7QLR8ZHg8u4ulR5z&hl=en' violates the following Content Security Policy directive: \"script-src 'nonce-lHecMjzyJT6uqzNb2pVVaQ==' 'strict-dynamic' 'unsafe-inline' https: 'report-sample'\". Note that 'strict-dynamic' is present, so host-based allowlisting is disabled. Note that 'script-src-elem' was not explicitly set, so 'script-src' is used as a fallback. The action has been blocked.",
+      "source": "security",
+      "timestamp": 1788960331521
+    },
+    {
+      "level": "SEVERE",
+      "message": "https://undefined/v3/security.js - Failed to load resource: net::ERR_CONNECTION_CLOSED",
+      "source": "network",
+      "timestamp": 1788960331521
+    },
+    {
+      "level": "SEVERE",
+      "message": "https://global-selling.mercadolibre.com/help/v2 - Unchecked runtime.lastError: Could not establish connection. Receiving end does not exist.",
+      "source": "other",
+      "timestamp": 1788960398546
+    }
+  ]
+}

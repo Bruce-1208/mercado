@@ -1,6 +1,6 @@
 # 泽顺本机 Agent 部署说明
 
-本机 Agent 用于让公网泽顺控制台把申诉任务派发到指定 Windows 电脑。它是一个常驻的出站客户端：只访问 `https://zeshun.cc.cd`，不开放本机 HTTP 端口，也不依赖浏览器的“本地网络访问”权限。
+本机 Agent 用于让公网泽顺控制台把申诉任务派发到指定 Windows 或 macOS 电脑。它是一个常驻的出站客户端：只访问 `https://zeshun.cc.cd`，不开放本机 HTTP 端口，也不依赖浏览器的“本地网络访问”权限。
 
 ## 工作方式
 
@@ -8,7 +8,7 @@
 2. Agent 首次启动时注册电脑，长期凭证只保存在该电脑的本地应用数据目录。
 3. Agent 每 10 秒心跳并领取分配给自己的任务。
 4. 服务端根据业务 Python 源码计算版本和 SHA-256。版本变化时，Agent 下载完整业务 ZIP、校验哈希、解压到新版本目录，再原子切换当前版本。
-5. 申诉和 daily_task 在独立子进程中运行，日志实时上传到公网控制台；网页停止按钮会通过下一次心跳传给本机进程。Agent 1.1.0 支持 daily_task 的 Windows 多进程执行，任务模块只列出具备该能力的在线电脑。
+5. 申诉和 daily_task 在独立子进程中运行，日志实时上传到公网控制台；网页停止按钮会通过下一次心跳传给本机进程。Agent 1.1.0 起支持 daily_task 的多进程执行，任务模块只列出具备该能力的在线电脑。
 
 “任务模块”默认选择本机 Agent，选择执行电脑后即可启动单轮或循环 daily_task。每台电脑的 Agent 依次领取任务；前一个循环任务结束或停止后，后续任务才会开始。排队中的任务也可以在页面取消。任务状态与日志保存在服务端队列中。
 
@@ -20,7 +20,7 @@ Agent 1.1.2 修复连接异常后反而加快重试的问题。HTTP 429 或隧�
 
 Agent 1.1.3 为 Agent 自身的启动、业务更新、任务领取、上传重试、连接异常和停止消息统一增加本机时间，并同时写入数据目录下的 `agent.log`。日志达到 5 MiB 后自动轮转，保留 3 份历史文件；任务业务日志仍按事件时间上传并显示在公网控制台。升级需要重新构建并替换 Agent EXE。
 
-Agent 默认数据目录为 `%LOCALAPPDATA%\Zeshun\MercadoLocalAgent`，其中包含电脑身份、业务版本、`agent.log` 和运行日志所需的临时任务数据。Agent 保留最近两个业务版本。
+Agent 默认数据目录在 Windows 为 `%LOCALAPPDATA%\Zeshun\MercadoLocalAgent`，在 macOS 为 `~/Library/Application Support/Zeshun/MercadoLocalAgent`。其中包含电脑身份、业务版本、`agent.log` 和运行日志所需的临时任务数据。Agent 保留最近两个业务版本。
 
 ## 服务端部署
 
@@ -51,12 +51,31 @@ py -3 -m pip install pyinstaller
 
 构建会一次性收集当前申诉业务所需的第三方 Python 运行库。普通 `.py` 逻辑变化由业务包自动更新；只有 Agent 通信协议改变或业务引入新的第三方依赖时，才需要重新构建 EXE。
 
-## 客户端安装
+## 构建一次 macOS Agent
+
+在一台已经能正常运行本项目申诉功能的 Mac 构建机上安装 PyInstaller，然后执行：
+
+```bash
+python3 -m pip install pyinstaller
+./build_local_agent_macos.sh
+```
+
+构建结果为 `dist/macos/MercadoLocalAgent`，适用于构建机对应的 CPU 架构。将该文件连同服务器代码部署到公网服务器的相同路径，控制台“下载 macOS Agent”会自动把它放入 ZIP。也可以用 `BIT_LOCAL_AGENT_MACOS_EXECUTABLE` 指定持久化目录中的绝对路径。生产下载建议对可执行文件进行 Apple Developer ID 签名和公证；未签名版本首次打开时需要用户在 macOS“隐私与安全性”中确认允许。
+
+## Windows 客户端安装
 
 1. 在控制台下载 `Zeshun-MercadoLocalAgent.zip`，解压到固定目录。
 2. 先双击 `start-agent.bat` 验证。控制台出现电脑名且状态为在线即表示成功。
 3. 右键 `install-agent.ps1` 并选择“使用 PowerShell 运行”，安装名为 `ZeshunMercadoLocalAgent` 的登录启动任务。
 4. 保持比特浏览器客户端启动；无需启动 `bit_interface` 或完整 client 工作台。
+
+## macOS 客户端安装
+
+1. 在控制台点击“下载 macOS Agent”，解压 ZIP 到固定目录。
+2. 双击 `start-agent.command` 验证；如果系统拦截，在“系统设置 → 隐私与安全性”中允许打开。
+3. 控制台出现电脑名后，先关闭手动启动的 Agent，再双击 `install-agent.command` 安装登录启动项。
+4. 如需取消登录启动，双击 `uninstall-agent.command`。LaunchAgent 输出位于 `~/Library/Logs/Zeshun/MercadoLocalAgent.log`。
+5. 保持 macOS 版比特浏览器客户端启动；无需启动 `bit_interface` 或完整 client 工作台。
 
 同一电脑重复启动 Agent 会由进程锁拦截。需要更改显示名称时，编辑安装目录的 `local-agent.json` 中 `name` 字段并重启任务。
 
@@ -67,5 +86,5 @@ py -3 -m pip install pyinstaller
 - 电脑显示离线：确认目标电脑能访问公网域名，且系统时间准确；默认超过 45 秒未心跳即离线。
 - Agent 出现 HTTP 429：服务端或公网代理触发了限流；仅凭状态码不能确定是哪一层。若 HTTP 502/503 同时包含 `Connections Exceed`，则是隧道连接数超限。请升级到 1.1.2，按日志显示的时间等待自动恢复，避免反复重启。冷却期间控制台可能暂时显示离线，成功心跳后会恢复；任务进程继续运行，待上传日志保留在 Agent 内存中。若持续限流，应检查隧道连接额度、在线 Agent 数量及其他流量；普通 HTTP 502 还应检查代理和上游服务状态。
 - 任务无法打开比特浏览器：确认比特浏览器客户端已启动，店铺窗口配置存在，且该电脑可以访问比特浏览器本地 API。
-- 更新后业务报缺少模块：说明新增了第三方依赖，需要在 Windows 构建机重新运行 `build_local_agent.bat` 并替换服务器上的 EXE。
-- 重新注册电脑：停止 Agent，删除 `%LOCALAPPDATA%\Zeshun\MercadoLocalAgent\identity.json`，然后使用新下载的安装包启动。
+- 更新后业务报缺少模块：说明新增了第三方依赖，需要在对应系统的构建机重新构建 Agent，并替换服务器上的可执行文件。
+- 重新注册电脑：停止 Agent，删除 Windows 的 `%LOCALAPPDATA%\Zeshun\MercadoLocalAgent\identity.json` 或 macOS 的 `~/Library/Application Support/Zeshun/MercadoLocalAgent/identity.json`，然后使用新下载的安装包启动。

@@ -91,6 +91,8 @@ def open_ai_contact_window(session, name, site):
     access = open_mercado_backend_page(
         session,
         "https://global-selling.mercadolibre.com/help/hub/30928?source",
+        max_login_retries=1,
+        close_on_login_failure=True,
     )
     if not access.get("ok"):
         raise RuntimeError(access.get("message") or access.get("status"))

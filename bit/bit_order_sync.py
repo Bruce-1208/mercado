@@ -466,7 +466,7 @@ def _parallel_api_results(
     callback,
     *,
     workers_env="MERCADO_API_BACKFILL_WORKERS",
-    default_workers=6,
+    default_workers=16,
 ):
     """Run independent read-only Mercado API calls with one session per worker."""
     values = list(dict.fromkeys(values or ()))
@@ -477,7 +477,7 @@ def _parallel_api_results(
         configured_workers = int(os.environ.get(workers_env, str(default_workers)))
     except (TypeError, ValueError):
         configured_workers = default_workers
-    max_workers = max(1, min(12, configured_workers, len(values)))
+    max_workers = max(1, min(32, configured_workers, len(values)))
     worker_local = threading.local()
 
     def call(value):
@@ -546,7 +546,7 @@ def _fetch_orders(client, seller_id, filters):
         order_ids,
         lambda worker, order_id: worker.get_order(order_id),
         workers_env="MERCADO_ORDER_STATUS_WORKERS",
-        default_workers=8,
+        default_workers=16,
     )
     for order_id in order_ids:
         order, error = fetched.get(
@@ -901,7 +901,7 @@ def backfill_order_sku_images(limit=50):
         grouped.setdefault(int(row["token_id"]), []).append(row)
     checked = updated = failed = 0
     for token_id, rows in grouped.items():
-        record = bit_mysql.get_mercado_store_token(token_id)
+        record = bit_mysql.get_mercado_store_token(token_id, include_disabled=True)
         results = []
         if not record:
             results = [
@@ -909,6 +909,15 @@ def backfill_order_sku_images(limit=50):
                     "order_id": row.get("order_id"),
                     "token_id": token_id,
                     "error": "店铺授权不存在",
+                }
+                for row in rows
+            ]
+        elif not bool(record.get("enabled", 1)):
+            results = [
+                {
+                    "order_id": row.get("order_id"),
+                    "token_id": token_id,
+                    "error": "店铺已关闭，跳过历史订单 SKU 图补全",
                 }
                 for row in rows
             ]
@@ -1056,8 +1065,8 @@ def backfill_order_financials(limit=200):
         grouped.setdefault(int(row["token_id"]), []).append(str(row["shipping_id"]))
     processed = failed = updated_orders = 0
     for token_id, shipping_ids in grouped.items():
-        record = bit_mysql.get_mercado_store_token(token_id)
-        if not record:
+        record = bit_mysql.get_mercado_store_token(token_id, include_disabled=True)
+        if not record or not bool(record.get("enabled", 1)):
             failed += len(shipping_ids)
             continue
         try:
@@ -1187,11 +1196,12 @@ def _sync_store(record, filters, *, enrich_images=True):
                     totals["inserted"] += int(result.get("inserted") or 0)
                     totals["updated"] += int(result.get("updated") or 0)
                     batch = []
-                    _state_update(
-                        fetched_count=int(_sync_state.get("fetched_count") or 0) + 50,
-                        inserted_count=int(_sync_state.get("inserted_count") or 0) + int(result.get("inserted") or 0),
-                        updated_count=int(_sync_state.get("updated_count") or 0) + int(result.get("updated") or 0),
-                    )
+                    with _state_guard:
+                        _state_update(
+                            fetched_count=int(_sync_state.get("fetched_count") or 0) + 50,
+                            inserted_count=int(_sync_state.get("inserted_count") or 0) + int(result.get("inserted") or 0),
+                            updated_count=int(_sync_state.get("updated_count") or 0) + int(result.get("updated") or 0),
+                        )
             if batch:
                 _enrich_order_shipment_statuses(client, batch)
                 if enrich_images:
@@ -1200,11 +1210,12 @@ def _sync_store(record, filters, *, enrich_images=True):
                 _sync_order_financials(client, record, batch, shipment_cost_cache)
                 totals["inserted"] += int(result.get("inserted") or 0)
                 totals["updated"] += int(result.get("updated") or 0)
-                _state_update(
-                    fetched_count=int(_sync_state.get("fetched_count") or 0) + len(batch),
-                    inserted_count=int(_sync_state.get("inserted_count") or 0) + int(result.get("inserted") or 0),
-                    updated_count=int(_sync_state.get("updated_count") or 0) + int(result.get("updated") or 0),
-                )
+                with _state_guard:
+                    _state_update(
+                        fetched_count=int(_sync_state.get("fetched_count") or 0) + len(batch),
+                        inserted_count=int(_sync_state.get("inserted_count") or 0) + int(result.get("inserted") or 0),
+                        updated_count=int(_sync_state.get("updated_count") or 0) + int(result.get("updated") or 0),
+                    )
             return {"store": display_name, "status": "success", **totals}
         except MercadoAPIError as exc:
             message = str(exc)
@@ -1279,7 +1290,7 @@ def _sync_old_store_statuses(
             order_ids,
             lambda worker, order_id: worker.get_order(order_id),
             workers_env="MERCADO_ORDER_STATUS_WORKERS",
-            default_workers=8,
+            default_workers=16,
         )
         orders = []
         page_failed = 0
@@ -1320,11 +1331,12 @@ def _sync_old_store_statuses(
             saved_count,
             failed_count,
         )
-        _state_update(
-            fetched_count=int(_sync_state.get("fetched_count") or 0) + batch_size,
-            inserted_count=int(_sync_state.get("inserted_count") or 0) + batch_inserted,
-            updated_count=int(_sync_state.get("updated_count") or 0) + batch_updated,
-        )
+        with _state_guard:
+            _state_update(
+                fetched_count=int(_sync_state.get("fetched_count") or 0) + batch_size,
+                inserted_count=int(_sync_state.get("inserted_count") or 0) + batch_inserted,
+                updated_count=int(_sync_state.get("updated_count") or 0) + batch_updated,
+            )
 
         if not int(page.get("result_count") or 0) or offset >= int(page.get("total") or 0):
             shipment_refresh = _refresh_old_store_shipment_statuses(
@@ -1431,44 +1443,56 @@ def run_order_sync(start_date="", end_date="", token_ids=None, mode="manual"):
         )
     results = []
     paused_for_recent = False
-    for index, record in enumerate(records, start=1):
+    try:
+        store_workers = max(1, min(24, int(os.getenv("MERCADO_ORDER_STORE_WORKERS", "8")), len(records) or 1))
+    except ValueError:
+        store_workers = min(8, len(records) or 1)
+    _state_update(store_workers=store_workers)
+    _append_log(f"订单同步并发：{store_workers} 家店铺")
+
+    def sync_record(record):
+        _raise_if_interpreter_shutting_down()
         if mode == DAILY_STATUS_MODE and _recent_sync_due_event.is_set():
-            paused_for_recent = True
-            break
+            return None
         store_name = str(record.get("display_name") or record.get("nickname") or record.get("id"))
-        _state_update(current_store=store_name, processed_stores=index - 1)
+        _state_update(current_store=store_name)
         _append_log(f"开始同步 {store_name}")
         try:
             filters = dict(manual_filters or scheduled_filters or {})
             if mode == DAILY_STATUS_MODE:
                 result = _sync_old_store_statuses(
-                    record,
-                    filters["old_order_cutoff"],
-                    **daily_context,
+                    record, filters["old_order_cutoff"], **daily_context,
                 )
             else:
                 result = _sync_store(record, filters, enrich_images=True)
-            results.append(result)
             if result.get("yielded"):
-                paused_for_recent = True
                 _append_log(f"{store_name} 已保存增量断点，让出执行权给最近 72 小时任务")
-                _state_update(processed_stores=index - 1, results=list(results))
-                break
-            _append_log(
-                f"{store_name} 完成：读取 {result['fetched']}，新增 {result['inserted']}，"
-                f"更新 {result['updated']}，失败 {result.get('failed', 0)}"
-            )
+            else:
+                _append_log(
+                    f"{store_name} 完成：读取 {result['fetched']}，新增 {result['inserted']}，"
+                    f"更新 {result['updated']}，失败 {result.get('failed', 0)}"
+                )
+            return result
         except _InterpreterShutdownRequested:
             raise
         except Exception as exc:
-            result = {"store": store_name, "status": "error", "message": str(exc)}
-            results.append(result)
             _append_log(f"{store_name} 失败：{exc}")
-        _state_update(
-            processed_stores=index,
-            failed_stores=sum(1 for row in results if row.get("status") == "error"),
-            results=list(results),
-        )
+            return {"store": store_name, "status": "error", "message": str(exc)}
+
+    with ThreadPoolExecutor(max_workers=store_workers, thread_name_prefix="meli-orders") as executor:
+        futures = [executor.submit(sync_record, record) for record in records]
+        for future in as_completed(futures):
+            result = future.result()
+            if result is None:
+                paused_for_recent = True
+                continue
+            results.append(result)
+            paused_for_recent = paused_for_recent or bool(result.get("yielded"))
+            _state_update(
+                processed_stores=sum(not row.get("yielded") for row in results),
+                failed_stores=sum(row.get("status") == "error" for row in results),
+                results=list(results),
+            )
 
     if paused_for_recent:
         message = "每日老订单增量刷新已保存断点，正在让出执行权给十五分钟任务"

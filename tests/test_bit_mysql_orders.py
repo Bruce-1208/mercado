@@ -2,6 +2,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
+from bit import bit_mysql
 from bit.bit_mysql import insert_orders
 
 
@@ -40,3 +41,27 @@ def test_insert_orders_rolls_back_and_reraises_database_errors():
 
     connection.rollback.assert_called_once_with()
     connection.close.assert_called_once_with()
+
+
+@pytest.mark.parametrize(
+    "query_function",
+    [
+        bit_mysql.list_mercado_pending_shipment_cost_rows,
+        bit_mysql.list_mercado_pending_order_image_rows,
+    ],
+)
+def test_historical_backfill_queries_exclude_disabled_stores(query_function):
+    connection = MagicMock()
+    cursor = connection.cursor.return_value.__enter__.return_value
+    cursor.fetchall.return_value = []
+
+    with (
+        patch("bit.bit_mysql.pymysql.connect", return_value=connection),
+        patch("bit.bit_mysql._ensure_mercado_synced_orders_table"),
+        patch("bit.bit_mysql._ensure_mercado_store_tokens_table"),
+    ):
+        query_function()
+
+    sql = cursor.execute.call_args.args[0]
+    assert "mercado_store_tokens" in sql
+    assert "token.`enabled` = 1" in sql

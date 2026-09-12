@@ -2781,6 +2781,7 @@ def list_mercado_pending_shipment_cost_rows(limit=200):
     try:
         with connection.cursor() as cursor:
             _ensure_mercado_synced_orders_table(cursor)
+            _ensure_mercado_store_tokens_table(cursor)
             cursor.execute(
                 """
                 SELECT synced.`token_id`, synced.`shipping_id`,
@@ -2789,6 +2790,12 @@ def list_mercado_pending_shipment_cost_rows(limit=200):
                 LEFT JOIN `mercado_shipment_costs` AS costs
                   ON costs.`shipping_id` = synced.`shipping_id`
                 WHERE COALESCE(synced.`shipping_id`, '') <> ''
+                  AND EXISTS (
+                      SELECT 1
+                      FROM `mercado_store_tokens` AS token
+                      WHERE token.`id` = synced.`token_id`
+                        AND token.`enabled` = 1
+                  )
                   AND (
                       costs.`shipping_id` IS NULL
                       OR (
@@ -5374,6 +5381,16 @@ def list_mercado_pending_order_image_rows(limit=100):
     try:
         with connection.cursor() as cursor:
             _ensure_mercado_synced_orders_table(cursor)
+            _ensure_mercado_store_tokens_table(cursor)
+            pending_sql = f"""
+                {pending_sql}
+                AND EXISTS (
+                    SELECT 1
+                    FROM `mercado_store_tokens` AS token
+                    WHERE token.`id` = `mercado_synced_orders`.`token_id`
+                      AND token.`enabled` = 1
+                )
+            """
             cursor.execute(
                 f"""
                 SELECT `token_id`, `product_id`, MAX(`date_created`) AS `latest_order_at`

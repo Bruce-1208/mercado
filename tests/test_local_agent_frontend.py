@@ -5,6 +5,17 @@ from pathlib import Path
 import pytest
 
 
+def test_console_offers_windows_and_macos_agent_downloads():
+    template = (Path(__file__).resolve().parents[1] / "bit/templates/index.html").read_text(
+        encoding="utf-8"
+    )
+
+    assert "下载 Windows Agent" in template
+    assert "下载 macOS Agent" in template
+    assert "/api/local-agents/download?platform=windows" in template
+    assert "/api/local-agents/download?platform=macos" in template
+
+
 def test_agent_requests_use_public_routes_instead_of_loopback():
     node = shutil.which("node")
     if not node:

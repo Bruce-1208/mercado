@@ -70,6 +70,7 @@ from bit.bit_config import (
 from bit.bit_mercado_login import (
     is_mercado_login_page as _is_mercado_login_page,
     open_mercado_backend_page,
+    try_record_login_anomaly,
 )
 from bit.bit_mercado_limit import MERCADO_RATE_LIMIT_TEXT
 from bit.bit_download import download_relay_mail
@@ -154,6 +155,32 @@ def appeal_controls(stop_event):
         yield
     finally:
         _APPEAL_STOP_EVENT.reset(token)
+
+
+def _close_browser_after_login_failure(window_id, name="", site=""):
+    """关闭登录失效的完整 BitBrowser 窗口，并返回是否关闭成功。"""
+    window_id = str(window_id or "").strip()
+    if not window_id:
+        return False
+    try:
+        close_result = closeBrowser(window_id)
+        closed = not (
+            isinstance(close_result, dict)
+            and close_result.get("success") is False
+        )
+        print(
+            f"{get_now_time()} {name} {site} 登录失效，已关闭浏览器窗口："
+            f"{close_result}<br>",
+            flush=True,
+        )
+        return closed
+    except Exception as exc:
+        print(
+            f"{get_now_time()} {name} {site} 登录失效，关闭浏览器窗口失败："
+            f"{exc}<br>",
+            flush=True,
+        )
+        return False
 
 AI_HELP_URLS = (
     HELP_URL,
@@ -405,7 +432,9 @@ def open_help_page_with_daily_validation(
         # 参数名保留用于兼容旧调用；核心限频处理已禁止换节点。
         max_rate_limit_retries=max_hongkong_switches,
         rate_limit_retry_wait_seconds=switch_wait_seconds,
-        max_login_retries=0 if stop_on_logout else 1,
+        # 申诉遇到登录失效时只执行一轮自动登录；不把 stop_on_logout
+        # 解释成“禁止自动登录”。
+        max_login_retries=1,
         anomaly_site=site,
         anomaly_source="AI申诉",
     )
@@ -2678,9 +2707,9 @@ def open_ai_contact_window(driver, name, site, window_id=""):
             name,
             window_id,
             settle_seconds=AI_BACKEND_SETTLE_SECONDS,
-            max_login_retries=(
-                0 if getattr(driver, "_bit_stop_on_logout", False) else 1
-            ),
+            # 每次进入 AI 客服入口最多执行一轮自动登录；登录失败交给
+            # 申诉任务熔断和关闭浏览器，不再重复登录。
+            max_login_retries=1,
             anomaly_site=site,
             anomaly_source="AI申诉",
         )
@@ -2964,6 +2993,15 @@ def run_top_infraction_shop_once(shop_plan, site_pause=30):
                 f"{get_now_time()} {name} {site_code} {appeal_type}处理完成："
                 f"{result}<br>"
             )
+            if (
+                isinstance(result, dict)
+                and result.get("execution_status") == "login_required"
+            ):
+                print(
+                    f"{get_now_time()} {name} {site_code} 登录失效，"
+                    "已停止本轮该店铺后续站点申诉<br>"
+                )
+                break
         except Exception as e:
             results.append({
                 "site": site_code,
@@ -3417,6 +3455,10 @@ def shensu(
                 raise AppealExecutionError("窗口正在被其他任务占用", "window_busy")
         driver, res = connect_bit_browser(window_id)
         name = res.get("data", {}).get("name") or name
+        # 登录恢复预算属于整次申诉，而不是某一次页面打开；后续重新打开
+        # Help/客服入口不能把同一轮自动登录再次提交。
+        driver._bit_appeal_login_attempts = 0
+        driver._bit_appeal_login_max_attempts = 1
         driver._bit_appeal_stop_event = stop_event if stop_event is not None else _APPEAL_STOP_EVENT.get()
         driver._bit_appeal_deadline = started + AI_SITE_BUDGET_SECONDS
         driver._bit_abort_ai_after_rate_limit_recovery = bool(validate_open)
@@ -3470,6 +3512,40 @@ def shensu(
             records = get_appeal_log_records()
             outcome.update(result_from_logs(records, error=appeal_error, status=failure_status))
             outcome["elapsed_seconds"] = round(time.monotonic() - started, 2)
+            if failure_status == "login_required":
+                # open_mercado_backend_page 已经会记录登录异常；这里再以申诉结果
+                # 为边界补写一次，覆盖业务处理中途发现登录页的兼容调用点。
+                login_record = {
+                    "status": "logged_out",
+                    "message": (
+                        f"{name} {site_name} 申诉期间检测到登录态失效："
+                        f"{appeal_error or '自动登录未成功'}"
+                    ),
+                }
+                try:
+                    outcome["login_anomaly_recorded"] = bool(
+                        try_record_login_anomaly(
+                            login_record,
+                            window_id,
+                            name,
+                            site_name,
+                            "AI申诉",
+                            driver=driver,
+                        )
+                    )
+                except Exception as exc:
+                    outcome["login_anomaly_recorded"] = False
+                    print(
+                        f"{get_now_time()} {name} {site_name} 登录失效记录补写失败："
+                        f"{exc}<br>",
+                        flush=True,
+                    )
+                outcome["login_attempts"] = 1
+                skip_close_tab = True
+                outcome["browser_close_attempted"] = True
+                outcome["browser_closed_after_login_failure"] = (
+                    _close_browser_after_login_failure(window_id, name, site_name)
+                )
             # Retry only before any message might have been submitted.
             outcome["retryable"] = bool(appeal_error and not outcome["sent"]
                                         and failure_status in {"failed", "rate_limited"})

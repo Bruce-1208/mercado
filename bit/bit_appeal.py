@@ -22,7 +22,11 @@ from bit.bit_utils import get_latest_modified_file, get_bit_path, parser_delay_d
 from bit.bit_api import *
 from bit.bit_config import get_window_id_by_shop_name
 from bit.bit_mercado_limit import is_mercado_rate_limited_page
-from bit.bit_mercado_login import is_login_blocking_result, open_mercado_backend_page
+from bit.bit_mercado_login import (
+    is_login_blocking_result,
+    open_mercado_backend_page,
+    try_record_login_anomaly,
+)
 from bit.bit_appeal_phrases import render_appeal_phrase, select_appeal_phrase
 from bit.bit_reputation_info import get_cancellation_orders
 import pandas as pd
@@ -148,6 +152,53 @@ def insert_chat_info_by_api(name, site, message, chat, response, time):
     return res.json()
 
 
+def _is_login_failure_result(value):
+    """判断人工申诉入口返回的结果是否属于登录失效。"""
+    if isinstance(value, dict):
+        status = str(
+            value.get("status") or value.get("execution_status") or ""
+        ).strip()
+        if status in {
+            "logged_out",
+            "login_required",
+            "未登录",
+            "美客多账号退出登录",
+        }:
+            return True
+        value = value.get("message") or value.get("reason") or value
+    text = str(value or "")
+    return (
+        is_login_blocking_result(text)
+        or "登录失效" in text
+        or "登录态失效" in text
+        or "退出登录" in text
+    )
+
+
+def _close_browser_after_login_failure(driver, window_id, name, site):
+    """登录自动恢复失败时关闭完整窗口和临时 WebDriver。"""
+    try:
+        close_result = closeBrowser(window_id)
+        print(
+            f"{get_now_time()} {name} {site} 登录失效，已关闭浏览器窗口："
+            f"{close_result}<br>",
+            flush=True,
+        )
+    except Exception as exc:
+        print(
+            f"{get_now_time()} {name} {site} 登录失效，关闭浏览器窗口失败："
+            f"{exc}<br>",
+            flush=True,
+        )
+    finally:
+        service = getattr(driver, "service", None)
+        if service is not None:
+            try:
+                service.stop()
+            except Exception:
+                pass
+
+
 def fast_navigate(driver, url, stop_after=4):
     """快速跳转页面：不等待所有资源加载，避免 Mercado help 页面长时间卡住。"""
     driver.switch_to.default_content()
@@ -183,11 +234,22 @@ def open_human_service_hub_with_ip_retry(
         # 参数名保留用于兼容旧调用；核心限频处理已禁止换节点。
         max_rate_limit_retries=max_hongkong_switches,
         rate_limit_retry_wait_seconds=0,
+        max_login_retries=1,
         navigate=lambda url: fast_navigate(driver, url, stop_after=3),
         anomaly_site=site,
         anomaly_source="人工申诉",
     )
     if not result.get("ok"):
+        if _is_login_failure_result(result):
+            try_record_login_anomaly(
+                result,
+                window_id,
+                name,
+                site,
+                "人工申诉",
+                driver=driver,
+            )
+            _close_browser_after_login_failure(driver, window_id, name, site)
         raise RuntimeError(f"{name} {site} {result.get('message') or result.get('status')}")
     return True
 
@@ -284,10 +346,23 @@ def open_hub_new_tab_with_retry(driver, name, site, retries=3, window_id=""):
             window_id,
             settle_seconds=0,
             rate_limit_retry_wait_seconds=0,
+            max_login_retries=1,
             navigate=lambda url: fast_navigate(driver, url, stop_after=3),
             anomaly_site=site,
             anomaly_source="人工申诉",
         )
+
+        if _is_login_failure_result(open_result):
+            try_record_login_anomaly(
+                open_result,
+                window_id,
+                name,
+                site,
+                "人工申诉",
+                driver=driver,
+            )
+            _close_browser_after_login_failure(driver, window_id, name, site)
+            return False
 
         if open_result.get("ok") and (
             page_contains_all_texts(driver, expected_texts, timeout=6)
@@ -638,14 +713,19 @@ def use_one_browser_run_task(info):
                 except Exception as e:
                     traceback.print_exc()
                     print("申诉执行异常", e)
+                    if _is_login_failure_result(e):
+                        login_circuit_open = True
+                        print(
+                            f"{get_now_time()} {name}{site} 登录异常熔断已打开，"
+                            "停止该店铺循环，等待人工登录复检<br>"
+                        )
                 finally:
-                    window_id = getWindowidByName(name)
-                    try:
-                        closeBrowser(window_id)
-                    except Exception as e:
-                        if not login_circuit_open:
-                            continue
                     if not login_circuit_open:
+                        window_id = getWindowidByName(name)
+                        try:
+                            closeBrowser(window_id)
+                        except Exception:
+                            continue
                         time.sleep(1800)
                 if login_circuit_open:
                     break
@@ -688,6 +768,9 @@ def shensu(name, site, form, message, mode="人工客服"):
     driver = webdriver.Chrome(service=chrome_service, options=chrome_options)
 
     driver.implicitly_wait(10)
+    # 登录恢复预算属于整次申诉，避免后续回退到 chat/v2 时再次自动登录。
+    driver._bit_appeal_login_attempts = 0
+    driver._bit_appeal_login_max_attempts = 1
     try:
         driver.set_page_load_timeout(12)
     except Exception:
@@ -924,11 +1007,22 @@ def shensu(name, site, form, message, mode="人工客服"):
             window_id,
             settle_seconds=0,
             rate_limit_retry_wait_seconds=0,
+            max_login_retries=1,
             navigate=lambda url: fast_navigate(driver, url, stop_after=3),
             anomaly_site=site,
             anomaly_source="人工申诉",
         )
         if not chat_result.get("ok"):
+            if _is_login_failure_result(chat_result):
+                try_record_login_anomaly(
+                    chat_result,
+                    window_id,
+                    name,
+                    site,
+                    "人工申诉",
+                    driver=driver,
+                )
+                _close_browser_after_login_failure(driver, window_id, name, site)
             raise RuntimeError(chat_result.get("message") or str(e)) from e
         print(get_now_time() + name + site + "继续与客服对话")
         # 全部聊天记录

@@ -68,6 +68,27 @@ def test_legacy_human_shop_loop_stops_without_waiting_for_next_round(monkeypatch
     assert len(calls) == 1
 
 
+def test_legacy_human_shop_loop_stops_after_login_exception(monkeypatch):
+    from bit import bit_appeal
+
+    calls = []
+
+    def fail_login(*args, **kwargs):
+        calls.append((args, kwargs))
+        raise RuntimeError("美客多登录态失效，自动登录未成功")
+
+    monkeypatch.setattr(bit_appeal, "shensu", fail_login)
+    monkeypatch.setattr(
+        bit_appeal.time,
+        "sleep",
+        lambda _seconds: pytest.fail("login exception must not sleep and retry"),
+    )
+
+    bit_appeal.use_one_browser_run_task(("熔断店铺", "MX", "侵权", ""))
+
+    assert len(calls) == 1
+
+
 def test_yuema_continuous_loop_does_not_reconnect_after_logged_out(monkeypatch):
     from bit import yuema_ai_stable_loop as stable_loop
 

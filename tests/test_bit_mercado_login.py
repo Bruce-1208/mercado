@@ -1,3 +1,5 @@
+from types import SimpleNamespace
+
 import pytest
 from openpyxl import load_workbook
 
@@ -597,6 +599,63 @@ def test_backend_page_relogs_and_reopens_original_url(monkeypatch):
     assert status_events[0][0] == "recorded"
     assert status_events[0][2]["anomaly_type"] == mercado_login.LOGIN_LOGGED_OUT
     assert status_events[1] == ("resolved", "window-1")
+
+
+def test_appeal_login_budget_is_shared_across_backend_page_opens(monkeypatch):
+    target_url = "https://global-selling.mercadolibre.com/help"
+    states = iter(
+        [
+            {
+                "current_url": "https://www.mercadolibre.com/jms/cbt/lgz/login",
+                "title": "Log in",
+                "page_text": "Fill out your e-mail address to log in",
+            },
+            {
+                "current_url": target_url,
+                "title": "Help",
+                "page_text": "Seller help",
+            },
+            {
+                "current_url": "https://www.mercadolibre.com/jms/cbt/lgz/login",
+                "title": "Log in",
+                "page_text": "Fill out your e-mail address to log in",
+            },
+        ]
+    )
+    driver = SimpleNamespace(
+        _bit_appeal_login_attempts=0,
+        _bit_appeal_login_max_attempts=1,
+    )
+    login_calls = []
+    monkeypatch.setattr(mercado_login, "get_mercado_page_state", lambda _driver: next(states))
+    monkeypatch.setattr(mercado_login, "is_mercado_login_page", lambda _driver: False)
+    monkeypatch.setattr(mercado_login, "try_record_login_anomaly", lambda *args, **kwargs: True)
+
+    first = mercado_login.open_mercado_backend_page(
+        driver,
+        target_url,
+        "申诉店铺",
+        "window-appeal",
+        settle_seconds=0,
+        navigate=lambda _url: None,
+        login_handler=lambda *args: login_calls.append(args) or {"ok": True},
+        sleep=lambda _seconds: None,
+    )
+    second = mercado_login.open_mercado_backend_page(
+        driver,
+        target_url,
+        "申诉店铺",
+        "window-appeal",
+        settle_seconds=0,
+        navigate=lambda _url: None,
+        login_handler=lambda *args: login_calls.append(args) or {"ok": True},
+        sleep=lambda _seconds: None,
+    )
+
+    assert first["ok"] is True
+    assert second["status"] == "logged_out"
+    assert second["login_retry_count"] == 1
+    assert len(login_calls) == 1
 
 
 def test_backend_page_records_logged_out_when_auto_login_fails(monkeypatch):
