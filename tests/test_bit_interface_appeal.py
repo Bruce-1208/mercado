@@ -764,7 +764,7 @@ def test_daily_task_console_exposes_all_task_switches_and_shop_group():
     assert "cancellation_min_rate:" in template
     assert "侵权 → 延误率 → 侵权 → 投诉 → 侵权 → 取消率" in template
     assert "每轮先实时遍历店铺授权中勾选的全部站点" in template
-    assert "只执行本站点侵权数超过标准的站点" in template
+    assert "只执行本站点普通侵权数超过标准的站点" in template
     assert 'id="daily-task-list"' in template
     assert 'id="daily-task-status-filter"' in template
     assert '<option value="active" selected>运行中</option>' in template
@@ -2036,7 +2036,8 @@ def test_appeal_page_contains_stop_button_and_handler():
     assert '<div class="site-picker" id="form-picker"' in template
     assert 'input type="checkbox" name="form" value="延误" checked' in template
     assert 'input type="checkbox" name="form" value="禁限售"' in template
-    assert "syncProhibitedAppealSelection" in template
+    assert "侵权和禁限售是独立任务" in template
+    assert "syncProhibitedAppealSelection" not in template
     assert 'input[name="form"]:checked' in template
     assert "forms: selectedForms" in template
     assert '<select id="loop-count">' in template

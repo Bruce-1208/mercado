@@ -295,12 +295,12 @@ def test_playwright_keyword_flow_searches_selected_frontend_and_enters_internati
             assert self.kind == "search"
             self.page.searched_keyword = value
 
-        async def press(self, key):
+        async def press(self, key, **_kwargs):
             assert self.kind == "search"
             assert key == "Enter"
             self.page.url = "https://listado.mercadolibre.com.mx/cosplay"
 
-        async def click(self):
+        async def click(self, **_kwargs):
             assert self.kind == "international"
             self.page.url = (
                 "https://listado.mercadolibre.com.mx/"
@@ -344,7 +344,13 @@ def test_playwright_keyword_flow_searches_selected_frontend_and_enters_internati
         )
     )
 
-    assert page.visited == ["https://www.mercadolibre.com.mx/"]
+    assert page.visited == [
+        "https://www.mercadolibre.com.mx/",
+        (
+            "https://listado.mercadolibre.com.mx/"
+            "cosplay_NoIndex_True_SHIPPING*ORIGIN_10215069"
+        ),
+    ]
     assert page.searched_keyword == "cosplay"
     assert marketplace_url_has_cross_border_filter(result)
     assert [event["stage"] for event in events] == [
@@ -379,7 +385,7 @@ def test_playwright_keyword_flow_stops_when_international_facet_is_missing():
         async def fill(self, value):
             self.page.keyword = value
 
-        async def press(self, _key):
+        async def press(self, _key, **_kwargs):
             self.page.url = "https://listado.mercadolibre.com.mx/cosplay"
 
     class Page:
@@ -533,7 +539,7 @@ def test_plugin_reader_waits_past_protected_placeholder_for_loaded_api_data(
         )
     )
 
-    assert reader.calls == 2
+    assert reader.calls == 5
     assert metrics["weight_g"] == 196
     assert metrics["package_length_cm"] == 12
 
@@ -608,6 +614,113 @@ def test_playwright_plugin_reader_skips_empty_extension_world():
     assert result["metrics"]["weight"]["value"] == "509g"
 
 
+def test_playwright_plugin_reader_discards_destroyed_contexts():
+    class FakeSession:
+        def __init__(self):
+            self.handlers = {}
+
+        def on(self, name, callback):
+            self.handlers[name] = callback
+
+        async def send(self, method, _payload=None):
+            assert method == "Runtime.enable"
+            return {}
+
+        async def detach(self):
+            return None
+
+    class Context:
+        def __init__(self, session):
+            self.session = session
+
+        async def new_cdp_session(self, _page):
+            return self.session
+
+    session = FakeSession()
+    page = type("Page", (), {"context": Context(session)})()
+    reader = asyncio.run(playwright_collector._PluginMetricReader.open(page))
+
+    session.handlers["Runtime.executionContextCreated"]({
+        "context": {"id": 11, "origin": "chrome-extension://zying"}
+    })
+    session.handlers["Runtime.executionContextCreated"]({
+        "context": {"id": 12, "origin": "https://www.mercadolibre.com.mx"}
+    })
+    assert reader.context_ids == [11]
+    session.handlers["Runtime.executionContextDestroyed"]({"executionContextId": 11})
+    assert reader.context_ids == []
+    reader.context_ids.extend([21, 22])
+    session.handlers["Runtime.executionContextsCleared"]({})
+    assert reader.context_ids == []
+
+
+def test_plugin_metric_wait_releases_slot_after_actual_weight_arrives(monkeypatch):
+    class Reader:
+        def __init__(self):
+            self.calls = 0
+
+        async def read(self):
+            self.calls += 1
+            return {
+                "found": True,
+                "data": {"weight_g": 196},
+                "metrics": {},
+            }
+
+    async def no_dom_lines(_page):
+        return []
+
+    async def no_sleep(_seconds):
+        return None
+
+    reader = Reader()
+    monkeypatch.setattr(playwright_collector, "_plugin_dom_lines", no_dom_lines)
+    monkeypatch.setattr(playwright_collector.asyncio, "sleep", no_sleep)
+
+    metrics, _ = asyncio.run(
+        playwright_collector._wait_for_plugin_metrics(
+            object(), 1, None, react_reader=reader
+        )
+    )
+
+    assert reader.calls == 4
+    assert metrics["weight_g"] == 196
+    assert metrics["package_length_cm"] is None
+
+
+def test_plugin_metric_wait_does_not_miss_delayed_us_origin(monkeypatch):
+    class Reader:
+        def __init__(self):
+            self.calls = 0
+
+        async def read(self):
+            self.calls += 1
+            data = {"weight_g": 196}
+            if self.calls >= 3:
+                data["self_ship_origin"] = "US"
+            return {"found": True, "data": data, "metrics": {}}
+
+    async def no_dom_lines(_page):
+        return []
+
+    async def no_sleep(_seconds):
+        return None
+
+    reader = Reader()
+    monkeypatch.setattr(playwright_collector, "_plugin_dom_lines", no_dom_lines)
+    monkeypatch.setattr(playwright_collector.asyncio, "sleep", no_sleep)
+
+    metrics, lines = asyncio.run(
+        playwright_collector._wait_for_plugin_metrics(
+            object(), 1, None, react_reader=reader
+        )
+    )
+
+    assert reader.calls == 3
+    assert metrics["weight_g"] == 196
+    assert playwright_collector._plugin_self_ship_origin(lines) == "US"
+
+
 def test_playwright_detects_visually_protected_plugin_text():
     assert playwright_collector._plugin_text_is_visually_protected(
         ["lp3lp3lp435s97l97l97kdztxutxutxut"]
@@ -663,6 +776,19 @@ def test_playwright_decodes_plugin_metrics_from_extension_react_props():
     assert playwright_collector._plugin_self_ship_origin(
         ["chrome-extension://example/assets/US.svg"]
     ) == "US"
+    assert playwright_collector._plugin_self_ship_origin([
+        "__ZYING_SELF_SHIP_ORIGIN__:CN",
+        "__ZYING_SELF_SHIP_ORIGIN__:US",
+    ]) == "US"
+
+
+def test_keyword_containing_item_like_text_is_not_treated_as_detail_url():
+    assert playwright_collector._detail_item_id_from_url(
+        "https://listado.mercadolibre.com.mx/MLM3016972321-cosplay"
+    ) == ""
+    assert playwright_collector._detail_item_id_from_url(
+        "https://www.mercadolibre.com.mx/producto/p/MLM3016972321"
+    ) == "MLM3016972321"
 
 
 def test_playwright_skips_us_self_ship_without_persisting_or_retrying(monkeypatch):
@@ -676,6 +802,11 @@ def test_playwright_skips_us_self_ship_without_persisting_or_retrying(monkeypatc
         },
         {
             "source_item_id": "MLM3016972322",
+            "source_url": "https://example.test/unknown",
+            "title": "Unknown item",
+        },
+        {
+            "source_item_id": "MLM3016972323",
             "source_url": "https://example.test/cn",
             "title": "CN item",
         },
@@ -697,6 +828,8 @@ def test_playwright_skips_us_self_ship_without_persisting_or_retrying(monkeypatc
         attempts.append(candidate["source_item_id"])
         if candidate["source_item_id"].endswith("321"):
             raise playwright_collector.USSelfShipSkipped("US.svg")
+        if candidate["source_item_id"].endswith("322"):
+            raise playwright_collector.UnverifiedChinaSelfShipSkipped("missing CN.svg")
         return {**candidate, "scrape_status": "ok", "main_image_url": "image"}
 
     monkeypatch.setattr(playwright_collector, "_open_runtime", fake_open)
@@ -707,7 +840,7 @@ def test_playwright_skips_us_self_ship_without_persisting_or_retrying(monkeypatc
     result = asyncio.run(
         playwright_collector._collect_async(
             "https://example.test/list",
-            2,
+            3,
             max_workers=2,
             plugin_timeout=1,
             on_page=None,
@@ -721,8 +854,9 @@ def test_playwright_skips_us_self_ship_without_persisting_or_retrying(monkeypatc
     assert result["completed_count"] == 1
     assert result["failed_count"] == 0
     assert result["skipped_us_count"] == 1
-    assert [row["source_item_id"] for row in result["rows"]] == ["MLM3016972322"]
-    assert [row["source_item_id"] for row in saved] == ["MLM3016972322"]
+    assert result["skipped_unverified_origin_count"] == 1
+    assert [row["source_item_id"] for row in result["rows"]] == ["MLM3016972323"]
+    assert [row["source_item_id"] for row in saved] == ["MLM3016972323"]
 
 
 def test_playwright_retries_one_transient_detail_failure(monkeypatch):
@@ -1117,7 +1251,7 @@ def test_playwright_retries_evaluate_when_navigation_destroys_context():
 
     assert result == {"rows": [1]}
     assert page.evaluate_calls == 2
-    assert page.load_calls == 2
+    assert page.load_calls == 1
 
 
 def test_playwright_does_not_hide_non_navigation_evaluate_errors():
@@ -1137,11 +1271,40 @@ def test_playwright_does_not_hide_non_navigation_evaluate_errors():
         )
 
 
-def test_playwright_goto_continues_after_timeout_on_loaded_http_page():
+def test_playwright_goto_rejects_timeout_when_same_document_is_still_loaded():
     class FakePage:
         url = "https://www.mercadolibre.com.mx/producto"
+        marker = ""
+
+        async def evaluate(self, _script, marker=None):
+            if marker is not None:
+                self.marker = marker
+                return None
+            return self.marker
 
         async def goto(self, *args, **kwargs):
+            raise RuntimeError("Page.goto: Timeout 15000ms exceeded")
+
+        async def wait_for_load_state(self, *args, **kwargs):
+            raise RuntimeError("still navigating")
+
+    with pytest.raises(RuntimeError, match="Timeout"):
+        asyncio.run(
+            playwright_collector._goto(
+                FakePage(), "https://www.mercadolibre.com.mx/producto"
+            )
+        )
+
+
+def test_playwright_goto_accepts_timeout_after_reaching_matching_new_url():
+    class FakePage:
+        url = "https://www.mercadolibre.com.mx/old"
+
+        async def evaluate(self, *_args):
+            return None
+
+        async def goto(self, url, **_kwargs):
+            self.url = url
             raise RuntimeError("Page.goto: Timeout 15000ms exceeded")
 
         async def wait_for_load_state(self, *args, **kwargs):

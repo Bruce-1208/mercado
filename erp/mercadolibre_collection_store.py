@@ -15,6 +15,7 @@ COLLECTION_TABLE = "erp_mercadolibre_collection_items"
 PRODUCT_TABLE = "erp_mercadolibre_products"
 PUBLISH_RECORD_TABLE = "erp_mercadolibre_publish_records"
 MANAGEMENT_CATEGORY_TABLE = "erp_mercadolibre_management_categories"
+EXCHANGE_RATE_TABLE = "erp_mercadolibre_exchange_rates"
 
 PROFITABILITY_COLUMN_DEFINITIONS = (
     ("sale_price_usd", "DECIMAL(20,4) NULL"),
@@ -122,6 +123,12 @@ def has_complete_weight_dimensions(row: Mapping[str, Any]) -> bool:
     be derived from the current values instead of that status flag.
     """
 
+    if str(row.get("weight_basis") or "").strip().lower() in {
+        "calculated_volumetric",
+        "legacy_unknown",
+        "plugin_volumetric_fallback",
+    }:
+        return False
     for key in (
         "weight_g",
         "package_length_cm",
@@ -134,6 +141,19 @@ def has_complete_weight_dimensions(row: Mapping[str, Any]) -> bool:
     return True
 
 
+def has_valid_actual_weight(row: Mapping[str, Any]) -> bool:
+    """Return whether ``weight_g`` is a positive, genuine actual weight."""
+
+    if str(row.get("weight_basis") or "").strip().lower() in {
+        "calculated_volumetric",
+        "legacy_unknown",
+        "plugin_volumetric_fallback",
+    }:
+        return False
+    value = _decimal_from_text(row.get("weight_g"))
+    return value is not None and value > 0
+
+
 def _json_safe_row(row: Mapping[str, Any]) -> dict[str, Any]:
     result = dict(row)
     for key, value in tuple(result.items()):
@@ -144,6 +164,7 @@ def _json_safe_row(row: Mapping[str, Any]) -> dict[str, Any]:
         elif isinstance(value, bytes):
             result[key] = value.decode("utf-8", errors="replace")
     result["added_to_products"] = bool(result.get("added_to_products"))
+    result["actual_weight_complete"] = has_valid_actual_weight(result)
     result["weight_dimensions_complete"] = has_complete_weight_dimensions(result)
     return result
 
@@ -710,22 +731,99 @@ def upsert_collection_items(
     try:
         with connection.cursor() as cursor:
             ensure_collection_tables(cursor)
+            # USD display price is cheap reference-data work. Resolve it from
+            # the one stored rate per currency while the batch is being saved,
+            # instead of leaving it behind slower category/commission API work.
+            fixed_exchange_rates: dict[str, Mapping[str, Any]] = {}
+            try:
+                cursor.execute(
+                    f"""
+                    SELECT `from_currency_id`, `rate`, `source_created_at`,
+                           `refreshed_at`
+                    FROM `{EXCHANGE_RATE_TABLE}`
+                    WHERE `to_currency_id` = 'USD'
+                    """
+                )
+                fixed_exchange_rates = {
+                    str(rate_row.get("from_currency_id") or "").upper(): rate_row
+                    for rate_row in (cursor.fetchall() or [])
+                    if isinstance(rate_row, Mapping)
+                }
+            except Exception:
+                # A brand-new installation can receive its first collection
+                # before the background worker creates the rate table. Keep
+                # collection available; that worker will bootstrap and backfill.
+                fixed_exchange_rates = {}
+
+            for row in records:
+                currency_id = str(row.get("currency_id") or "").strip().upper()
+                rate_row: Mapping[str, Any]
+                if currency_id == "USD":
+                    rate_row = {
+                        "rate": Decimal("1"),
+                        "source_created_at": _now(),
+                    }
+                else:
+                    rate_row = fixed_exchange_rates.get(currency_id) or {}
+                try:
+                    price = Decimal(str(row.get("price")))
+                    rate = Decimal(str(rate_row.get("rate")))
+                except Exception:
+                    continue
+                if not price.is_finite() or price <= 0 or not rate.is_finite() or rate <= 0:
+                    continue
+                row["sale_price_usd"] = (price * rate).quantize(Decimal("0.01"))
+                row["exchange_rate_to_usd"] = rate
+                row["exchange_rate_updated_at"] = str(
+                    rate_row.get("source_created_at")
+                    or rate_row.get("refreshed_at")
+                    or _now()
+                )[:64]
+
             profitability_columns_sql = ", ".join(
                 f"`{column}`" for column in PROFITABILITY_COLUMNS
             )
-            profitability_updates_sql = ",\n                        ".join(
-                (
-                    f"`{column}` = IF("
-                    "`scrape_status` = 'ok' AND VALUES(`scrape_status`) <> 'ok', "
-                    f"`{column}`, COALESCE(VALUES(`{column}`), `{column}`))"
-                )
-                for column in PROFITABILITY_COLUMNS
+            protect_existing_complete_sql = (
+                "`scrape_status` = 'ok' "
+                "AND VALUES(`scrape_status`) <> 'ok' "
+                "AND (VALUES(`weight_g`) IS NULL OR VALUES(`weight_g`) <= 0 "
+                "OR LOWER(COALESCE(VALUES(`weight_basis`), '')) IN ("
+                "'calculated_volumetric', 'legacy_unknown', "
+                "'plugin_volumetric_fallback'))"
             )
             for row in records:
+                replace_profitability = bool(
+                    row.pop("_replace_profitability_snapshot", False)
+                )
+                profitability_updates_sql = ",\n                        ".join(
+                    (
+                        f"`{column}` = IF("
+                        f"{protect_existing_complete_sql}, "
+                        f"`{column}`, "
+                        + (
+                            f"VALUES(`{column}`)"
+                            if replace_profitability and column not in {
+                                "category_id",
+                                "category_name",
+                                "listing_type_id",
+                                "listing_type_name",
+                            }
+                            else f"COALESCE(VALUES(`{column}`), `{column}`)"
+                        )
+                        + ")"
+                    )
+                    for column in PROFITABILITY_COLUMNS
+                )
                 if has_complete_weight_dimensions(row):
                     # A previous failed/partial pass must not keep a complete
                     # item permanently labelled as waiting for measurements.
                     row["scrape_status"] = "ok"
+                elif not has_valid_actual_weight(row) and str(
+                    row.get("scrape_status") or ""
+                ).lower() == "ok":
+                    # Never let a stale workflow flag turn volumetric fallback
+                    # data (or zero/missing weight) into a publishable weight.
+                    row["scrape_status"] = "partial"
                 values = (
                     int(task_id),
                     str(row.get("source_item_id") or row.get("item_id") or ""),
@@ -764,7 +862,7 @@ def upsert_collection_items(
                     ) VALUES ({", ".join(["%s"] * len(values))})
                     ON DUPLICATE KEY UPDATE
                         `task_id` = IF(
-                            `scrape_status` = 'ok' AND VALUES(`scrape_status`) <> 'ok',
+                            {protect_existing_complete_sql},
                             `task_id`, VALUES(`task_id`)
                         ),
                         `source_url` = COALESCE(NULLIF(VALUES(`source_url`), ''), `source_url`),
@@ -773,7 +871,17 @@ def upsert_collection_items(
                         `title` = COALESCE(NULLIF(VALUES(`title`), ''), `title`),
                         `price` = COALESCE(VALUES(`price`), `price`),
                         `currency_id` = COALESCE(NULLIF(VALUES(`currency_id`), ''), `currency_id`),
-                        `weight_g` = COALESCE(VALUES(`weight_g`), `weight_g`),
+                        `weight_g` = IF(
+                            {protect_existing_complete_sql}, `weight_g`, CASE
+                            WHEN LOWER(COALESCE(VALUES(`weight_basis`), '')) IN (
+                                'calculated_volumetric', 'legacy_unknown',
+                                'plugin_volumetric_fallback'
+                            ) THEN NULL
+                            WHEN VALUES(`weight_g`) IS NOT NULL
+                                 AND VALUES(`weight_g`) > 0
+                            THEN VALUES(`weight_g`)
+                            ELSE `weight_g`
+                        END),
                         `volumetric_weight_kg` = COALESCE(
                             VALUES(`volumetric_weight_kg`), `volumetric_weight_kg`
                         ),
@@ -786,36 +894,44 @@ def upsert_collection_items(
                         `package_height_cm` = COALESCE(
                             VALUES(`package_height_cm`), `package_height_cm`
                         ),
-                        `weight_basis` = COALESCE(
-                            NULLIF(VALUES(`weight_basis`), ''), `weight_basis`
-                        ),
+                        `weight_basis` = IF(
+                            {protect_existing_complete_sql}, `weight_basis`, CASE
+                            WHEN LOWER(COALESCE(VALUES(`weight_basis`), '')) IN (
+                                'calculated_volumetric', 'legacy_unknown',
+                                'plugin_volumetric_fallback'
+                            ) THEN VALUES(`weight_basis`)
+                            WHEN VALUES(`weight_g`) IS NOT NULL
+                                 AND VALUES(`weight_g`) > 0
+                            THEN COALESCE(NULLIF(VALUES(`weight_basis`), ''), `weight_basis`)
+                            ELSE `weight_basis`
+                        END),
                         {profitability_updates_sql},
                         `error_message` = IF(
-                            `scrape_status` = 'ok' AND VALUES(`scrape_status`) <> 'ok',
+                            {protect_existing_complete_sql},
                             `error_message`, VALUES(`error_message`)
                         ),
                         `source_json` = IF(
-                            `scrape_status` = 'ok' AND VALUES(`scrape_status`) <> 'ok',
+                            {protect_existing_complete_sql},
                             `source_json`, VALUES(`source_json`)
                         ),
                         `description_json` = IF(
-                            `scrape_status` = 'ok' AND VALUES(`scrape_status`) <> 'ok',
+                            {protect_existing_complete_sql},
                             `description_json`, VALUES(`description_json`)
                         ),
                         `page_snapshot_json` = IF(
-                            `scrape_status` = 'ok' AND VALUES(`scrape_status`) <> 'ok',
+                            {protect_existing_complete_sql},
                             `page_snapshot_json`, VALUES(`page_snapshot_json`)
                         ),
                         `plugin_snapshot_json` = IF(
-                            `scrape_status` = 'ok' AND VALUES(`scrape_status`) <> 'ok',
+                            {protect_existing_complete_sql},
                             `plugin_snapshot_json`, VALUES(`plugin_snapshot_json`)
                         ),
                         `collected_at` = IF(
-                            `scrape_status` = 'ok' AND VALUES(`scrape_status`) <> 'ok',
+                            {protect_existing_complete_sql},
                             `collected_at`, VALUES(`collected_at`)
                         ),
                         `scrape_status` = IF(
-                            `scrape_status` = 'ok' AND VALUES(`scrape_status`) <> 'ok',
+                            {protect_existing_complete_sql},
                             'ok', VALUES(`scrape_status`)
                         )
                     """,
@@ -840,6 +956,7 @@ def _list_rows(
     source_type: str = "",
     review_status: str = "",
     publish_status: str = "",
+    weight_status: str = "",
     management_category_id: Any = None,
     mercado_category: str = "",
     weight_min: Any = None,
@@ -905,6 +1022,21 @@ def _list_rows(
         else:
             where.append("`last_publish_status` = %s")
             params.append(publish_status)
+    weight_status = str(weight_status or "").strip().lower()
+    if weight_status:
+        if weight_status not in {"available", "missing"}:
+            raise ValueError(f"不支持的实重状态: {weight_status}")
+        usable_weight_sql = (
+            "`weight_g` IS NOT NULL AND `weight_g` > 0 "
+            "AND LOWER(COALESCE(`weight_basis`, '')) NOT IN ("
+            "'calculated_volumetric', 'legacy_unknown', "
+            "'plugin_volumetric_fallback')"
+        )
+        where.append(
+            f"({usable_weight_sql})"
+            if weight_status == "available"
+            else f"NOT ({usable_weight_sql})"
+        )
 
     def optional_decimal(value: Any, name: str, *, nonnegative: bool) -> Decimal | None:
         if value in (None, ""):
@@ -1587,15 +1719,12 @@ def _normalize_product_content_changes(changes: Mapping[str, Any]) -> dict[str, 
 def _product_content_update_plan(
     normalized: Mapping[str, Any],
 ) -> tuple[list[str], list[Any], bool]:
-    numeric_fields = {
-        "price", "weight_g", "package_length_cm", "package_width_cm",
-        "package_height_cm",
-    }
-
     assignments = [f"`{field}` = %s" for field in normalized]
     values = list(normalized.values())
-    metric_fields = numeric_fields | {"category_id"}
-    profitability_stale = bool(metric_fields.intersection(normalized))
+    # Dimensions remain useful display/reference data, but shipping now uses
+    # actual weight only. Editing length/width/height must not erase or queue a
+    # perfectly valid commission/freight snapshot.
+    profitability_stale = bool({"price", "weight_g", "category_id"}.intersection(normalized))
     if "weight_g" in normalized:
         assignments.append("`weight_basis` = 'manual_edit'")
     if set(normalized).intersection({
@@ -1793,6 +1922,84 @@ def update_product_items(
                     f"WHERE p.`id` IN ({placeholders})",
                     tuple(ids),
                 )
+        connection.commit()
+        return {
+            "requested": len(ids),
+            "changed": changed,
+            "updated_fields": list(normalized),
+            "profitability_refresh_pending": profitability_stale,
+        }
+    except BaseException:
+        connection.rollback()
+        raise
+    finally:
+        connection.close()
+
+
+def update_collection_items(
+    collection_item_ids: Iterable[int],
+    changes: Mapping[str, Any],
+    *,
+    connection_factory: Callable[[], Any] | None = None,
+) -> dict[str, Any]:
+    """Update weight/dimensions for selected collection candidates atomically."""
+
+    ids = _normalize_row_ids(
+        collection_item_ids, empty_message="请至少勾选一个采集商品"
+    )
+    allowed = {
+        "weight_g", "package_length_cm", "package_width_cm", "package_height_cm",
+    }
+    unsupported = set(changes or {}).difference(allowed)
+    if unsupported:
+        raise ValueError("采集列表只支持批量修改实际重量和包装尺寸")
+    normalized = _normalize_product_content_changes(changes)
+    assignments, values, profitability_stale = _product_content_update_plan(normalized)
+    placeholders = ", ".join(["%s"] * len(ids))
+    connection = (connection_factory or _connect)()
+    try:
+        with connection.cursor() as cursor:
+            ensure_collection_tables(cursor)
+            cursor.execute(
+                f"UPDATE `{COLLECTION_TABLE}` SET {', '.join(assignments)} "
+                f"WHERE `id` IN ({placeholders})",
+                tuple(values + ids),
+            )
+            changed = int(cursor.rowcount or 0)
+
+            product_assignments = [
+                f"p.`{field}` = c.`{field}`" for field in normalized
+            ]
+            if "weight_g" in normalized:
+                product_assignments.append("p.`weight_basis` = 'manual_edit'")
+            if set(normalized).intersection({
+                "package_length_cm", "package_width_cm", "package_height_cm",
+            }):
+                product_assignments.append(
+                    "p.`volumetric_weight_kg` = c.`volumetric_weight_kg`"
+                )
+            if profitability_stale:
+                product_assignments.extend((
+                    "p.`sale_price_usd` = NULL",
+                    "p.`commission_amount_local` = NULL",
+                    "p.`commission_amount_usd` = NULL",
+                    "p.`shipping_fee_local` = NULL",
+                    "p.`shipping_fee_usd` = NULL",
+                    "p.`billable_weight_g` = NULL",
+                    "p.`shipping_api_billable_weight_g` = NULL",
+                    "p.`net_proceeds_usd` = NULL",
+                    "p.`profitability_updated_at` = NULL",
+                    "p.`profitability_source` = 'manual_edit_pending'",
+                    "p.`profitability_error` = ''",
+                ))
+            cursor.execute(
+                f"UPDATE `{PRODUCT_TABLE}` AS p "
+                f"INNER JOIN `{COLLECTION_TABLE}` AS c "
+                "ON c.`source_item_id` = p.`source_item_id` "
+                f"SET {', '.join(product_assignments)} "
+                f"WHERE c.`id` IN ({placeholders})",
+                tuple(ids),
+            )
         connection.commit()
         return {
             "requested": len(ids),
@@ -2061,13 +2268,10 @@ def sync_pulled_product_fields_from_store_links(
     selected = [field for field in fields or [] if field in allowed]
     if not selected:
         return 0
+    profitability_stale = bool({"price", "weight_g"}.intersection(selected))
     assignments: list[str] = []
     if "price" in selected:
-        assignments.extend([
-            "products.`price` = links.`price`",
-            "products.`sale_price_usd` = CASE WHEN links.`currency_id` = 'USD' "
-            "THEN links.`price` ELSE products.`sale_price_usd` END",
-        ])
+        assignments.append("products.`price` = links.`price`")
     if "weight_g" in selected:
         assignments.append("products.`weight_g` = links.`weight_g`")
     for field in ("package_length_cm", "package_width_cm", "package_height_cm"):
@@ -2075,9 +2279,24 @@ def sync_pulled_product_fields_from_store_links(
             assignments.append(f"products.`{field}` = links.`{field}`")
     if {"package_length_cm", "package_width_cm", "package_height_cm"}.intersection(selected):
         assignments.append("products.`volumetric_weight_kg` = links.`volumetric_weight_kg`")
-    if {"weight_g", "package_length_cm", "package_width_cm", "package_height_cm"}.intersection(selected):
+    if "weight_g" in selected:
         assignments.append("products.`weight_basis` = 'mercado_remote_update'")
-    if "net_proceeds_usd" in selected:
+    if profitability_stale:
+        assignments.extend([
+            "products.`sale_price_usd` = NULL",
+            "products.`commission_amount_local` = NULL",
+            "products.`commission_amount_usd` = NULL",
+            "products.`shipping_fee_local` = NULL",
+            "products.`shipping_fee_usd` = NULL",
+            "products.`billable_weight_g` = NULL",
+            "products.`shipping_api_billable_weight_g` = NULL",
+            "products.`shipping_weight_rule` = NULL",
+            "products.`net_proceeds_usd` = NULL",
+            "products.`profitability_updated_at` = NULL",
+            "products.`profitability_source` = 'mercado_remote_edit_pending'",
+            "products.`profitability_error` = ''",
+        ])
+    elif "net_proceeds_usd" in selected:
         assignments.extend([
             "products.`net_proceeds_usd` = links.`net_proceeds_usd`",
             "products.`profitability_source` = 'mercado_remote_update'",
@@ -2264,6 +2483,7 @@ def move_product_items_to_collection(
                         "package_length_cm",
                         "package_width_cm",
                         "package_height_cm",
+                        "weight_basis",
                     )
                 }
                 scrape_status = "ok" if has_complete_weight_dimensions(merged_metrics) else "partial"
@@ -2456,8 +2676,9 @@ def list_stale_profitability_items(
         rows = []
         with connection.cursor() as cursor:
             ensure_collection_tables(cursor)
-            # Reserve space for both lists so a large import cannot starve new
-            # collections, and old collection tasks cannot starve products.
+            # Reserve space for both lists. Pending rows are read separately in
+            # newest-first order so a rate-card refresh or legacy NULL backlog
+            # cannot hide a just-collected high-id item for hours.
             for table, batch_limit in (
                 (PRODUCT_TABLE, max(1, limit // 2)),
                 (COLLECTION_TABLE, None),
@@ -2465,22 +2686,51 @@ def list_stale_profitability_items(
                 batch_limit = batch_limit or (limit - len(rows))
                 if batch_limit <= 0:
                     continue
+                eligibility_sql = f"""
+                    `price` IS NOT NULL AND `price` > 0
+                    AND `weight_g` IS NOT NULL AND `weight_g` > 0
+                    AND LOWER(COALESCE(`weight_basis`, '')) NOT IN (
+                        'calculated_volumetric', 'legacy_unknown',
+                        'plugin_volumetric_fallback'
+                    )
+                    AND (
+                        NULLIF(TRIM(COALESCE(`category_id`, '')), '') IS NOT NULL
+                        OR NULLIF(TRIM(COALESCE(`title`, '')), '') IS NOT NULL
+                    )
+                """
                 cursor.execute(
                     f"""
                     SELECT * FROM `{table}`
-                    WHERE `price` IS NOT NULL AND `price` > 0
-                      AND (`profitability_updated_at` IS NULL
-                           OR `profitability_updated_at` < %s
-                           OR (`profitability_updated_at` < %s AND (
-                               `commission_amount_usd` IS NULL
-                               OR `shipping_fee_usd` IS NULL
-                               OR `net_proceeds_usd` IS NULL
-                               OR COALESCE(`profitability_error`, '') <> ''
-                           )))
+                    WHERE {eligibility_sql}
+                      AND `profitability_updated_at` IS NULL
+                    ORDER BY `id` DESC
+                    LIMIT %s
+                    """,
+                    (batch_limit,),
+                )
+                pending_rows = list(cursor.fetchall())
+                rows.extend(_json_safe_row(row) for row in pending_rows)
+                remaining = batch_limit - len(pending_rows)
+                if remaining <= 0:
+                    continue
+                cursor.execute(
+                    f"""
+                    SELECT * FROM `{table}`
+                    WHERE {eligibility_sql}
+                      AND `profitability_updated_at` IS NOT NULL
+                      AND (
+                          `profitability_updated_at` < %s
+                          OR (`profitability_updated_at` < %s AND (
+                              `commission_amount_usd` IS NULL
+                              OR `shipping_fee_usd` IS NULL
+                              OR `net_proceeds_usd` IS NULL
+                              OR COALESCE(`profitability_error`, '') <> ''
+                          ))
+                      )
                     ORDER BY `profitability_updated_at` ASC, `id` ASC
                     LIMIT %s
                     """,
-                    (stale_before, retry_before, batch_limit),
+                    (stale_before, retry_before, remaining),
                 )
                 rows.extend(_json_safe_row(row) for row in cursor.fetchall())
         connection.commit()
@@ -2494,14 +2744,43 @@ def update_item_profitability(
     snapshot: Mapping[str, Any],
     *,
     connection_factory: Callable[[], Any] | None = None,
-) -> None:
-    """Update the official cost snapshot in collection and product lists."""
+) -> bool:
+    """Update a cost snapshot only while its calculation inputs are unchanged."""
 
     item_id = str(source_item_id or "").strip().upper()
     if not item_id:
         raise ValueError("商品编号不能为空")
     values = [snapshot.get(column) for column in PROFITABILITY_COLUMNS]
     assignments = ", ".join(f"`{column}` = %s" for column in PROFITABILITY_COLUMNS)
+    expected_inputs = snapshot.get("_expected_profitability_inputs")
+    expected_inputs = (
+        dict(expected_inputs) if isinstance(expected_inputs, Mapping) else None
+    )
+
+    def cas(
+        table: str,
+        *,
+        include_updated_at: bool = True,
+        include_snapshots: bool = True,
+    ) -> tuple[str, list[Any]]:
+        if expected_inputs is None:
+            return "", []
+        columns = [
+            "price", "currency_id", "weight_g", "weight_basis",
+            "category_id", "title",
+        ]
+        if include_updated_at:
+            columns.insert(0, "updated_at")
+        if include_snapshots:
+            columns.extend(
+                ["source_json", "description_json", "page_snapshot_json"]
+                if table == COLLECTION_TABLE
+                else ["source_snapshot_json", "description_text"]
+            )
+        return (
+            "".join(f" AND `{column}` <=> %s" for column in columns),
+            [expected_inputs.get(column) for column in columns],
+        )
     collection_item_id = None
     if snapshot.get("task_id") is not None:
         try:
@@ -2509,45 +2788,70 @@ def update_item_profitability(
         except (TypeError, ValueError):
             collection_item_id = None
     connection = (connection_factory or _connect)()
+    applied = False
     try:
         with connection.cursor() as cursor:
             ensure_collection_tables(cursor)
             if snapshot.get("source_type") and snapshot.get("id") and collection_item_id is None:
                 # A product may have a different price/category from historical
                 # captures of the same listing. Persist its own quote only.
+                cas_sql, cas_values = cas(PRODUCT_TABLE)
                 cursor.execute(
                     f"UPDATE `{PRODUCT_TABLE}` SET {assignments} "
-                    "WHERE `id` = %s AND `source_item_id` = %s",
-                    tuple(values + [int(snapshot["id"]), item_id]),
+                    f"WHERE `id` = %s AND `source_item_id` = %s{cas_sql}",
+                    tuple(values + [int(snapshot["id"]), item_id] + cas_values),
                 )
+                applied = int(cursor.rowcount or 0) > 0
             elif collection_item_id is not None:
+                collection_cas_sql, collection_cas_values = cas(COLLECTION_TABLE)
                 cursor.execute(
                     f"UPDATE `{COLLECTION_TABLE}` SET {assignments} "
-                    "WHERE `id` = %s AND `source_item_id` = %s",
-                    tuple(values + [collection_item_id, item_id]),
+                    f"WHERE `id` = %s AND `source_item_id` = %s"
+                    f"{collection_cas_sql}",
+                    tuple(
+                        values
+                        + [collection_item_id, item_id]
+                        + collection_cas_values
+                    ),
                 )
+                applied = int(cursor.rowcount or 0) > 0
                 # The product list mirrors the newest captured snapshot only;
                 # an older duplicate task must never overwrite a newer price.
-                cursor.execute(
-                    f"""
-                    UPDATE `{PRODUCT_TABLE}`
-                    SET {assignments}
-                    WHERE `source_item_id` = %s
-                      AND `source_type` = 'collected'
-                      AND NOT EXISTS (
-                          SELECT 1 FROM `{COLLECTION_TABLE}` AS newer
-                          WHERE newer.`source_item_id` = %s AND newer.`id` > %s
-                      )
-                    """,
-                    tuple(values + [item_id, item_id, collection_item_id]),
-                )
+                if applied:
+                    product_cas_sql, product_cas_values = cas(
+                        PRODUCT_TABLE,
+                        include_updated_at=False,
+                        include_snapshots=False,
+                    )
+                    cursor.execute(
+                        f"""
+                        UPDATE `{PRODUCT_TABLE}`
+                        SET {assignments}
+                        WHERE `source_item_id` = %s
+                          AND `collection_item_id` = %s
+                          AND `source_type` = 'collected'
+                          {product_cas_sql}
+                          AND NOT EXISTS (
+                              SELECT 1 FROM `{COLLECTION_TABLE}` AS newer
+                              WHERE newer.`source_item_id` = %s AND newer.`id` > %s
+                          )
+                        """,
+                        tuple(
+                            values
+                            + [item_id, collection_item_id]
+                            + product_cas_values
+                            + [item_id, collection_item_id]
+                        ),
+                    )
             else:
                 for table in (COLLECTION_TABLE, PRODUCT_TABLE):
                     cursor.execute(
                         f"UPDATE `{table}` SET {assignments} WHERE `source_item_id` = %s",
                         tuple(values + [item_id]),
                     )
+                    applied = applied or int(cursor.rowcount or 0) > 0
         connection.commit()
+        return applied
     except BaseException:
         connection.rollback()
         raise
@@ -2558,12 +2862,27 @@ def update_item_profitability(
 def mark_all_profitability_stale(
     *,
     reason: str = "official_shipping_rate_card_refresh_pending",
+    site_ids: Iterable[str] | None = None,
     connection_factory: Callable[[], Any] | None = None,
 ) -> int:
-    """Queue every product source after reference data changes, keeping old costs."""
+    """Invalidate freight/net for refreshed sites while preserving commission."""
 
     connection = (connection_factory or _connect)()
     changed = 0
+    normalized_sites = sorted({
+        str(site_id or "").strip().upper()
+        for site_id in (site_ids or [])
+        if str(site_id or "").strip()
+    })
+    site_filter = ""
+    site_values: list[Any] = []
+    if normalized_sites:
+        site_filter = (
+            " AND LEFT(`source_item_id`, 3) IN ("
+            + ", ".join(["%s"] * len(normalized_sites))
+            + ")"
+        )
+        site_values.extend(normalized_sites)
     try:
         with connection.cursor() as cursor:
             ensure_collection_tables(cursor)
@@ -2571,12 +2890,20 @@ def mark_all_profitability_stale(
                 cursor.execute(
                     f"""
                     UPDATE `{table}`
-                    SET `profitability_updated_at` = NULL,
+                    SET `shipping_fee_local` = NULL,
+                        `shipping_currency_id` = NULL,
+                        `shipping_fee_usd` = NULL,
+                        `billable_weight_g` = NULL,
+                        `shipping_api_billable_weight_g` = NULL,
+                        `shipping_weight_rule` = NULL,
+                        `net_proceeds_usd` = NULL,
+                        `profitability_updated_at` = NULL,
                         `profitability_source` = %s,
                         `profitability_error` = ''
                     WHERE `price` IS NOT NULL AND `price` > 0
+                    {site_filter}
                     """,
-                    (str(reason or "")[:128],),
+                    tuple([str(reason or "")[:128]] + site_values),
                 )
                 changed += max(0, int(cursor.rowcount or 0))
         connection.commit()
@@ -2688,7 +3015,17 @@ def add_collection_items_to_products(
                     weight = Decimal(str(row.get("weight_g")))
                 except Exception:
                     weight = None
-                if weight is None or not weight.is_finite() or weight <= 0:
+                weight_basis = str(row.get("weight_basis") or "").strip().lower()
+                if (
+                    weight is None
+                    or not weight.is_finite()
+                    or weight <= 0
+                    or weight_basis in {
+                        "calculated_volumetric",
+                        "legacy_unknown",
+                        "plugin_volumetric_fallback",
+                    }
+                ):
                     incomplete_rows.append(row)
                 else:
                     complete_rows.append(row)

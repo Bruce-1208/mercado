@@ -24,6 +24,52 @@ def test_cache_schema_has_separate_daily_reference_tables():
     assert "`dimensions`" in sql
 
 
+def test_existing_daily_rate_date_column_satisfies_schema_check(monkeypatch):
+    rows = [
+        {"TABLE_NAME": cache.EXCHANGE_RATE_TABLE, "COLUMN_NAME": "rate"},
+        {"TABLE_NAME": cache.DAILY_EXCHANGE_RATE_TABLE, "COLUMN_NAME": "rate_date"},
+        {"TABLE_NAME": cache.COMMISSION_TABLE, "COLUMN_NAME": "listing_type_id"},
+        {"TABLE_NAME": cache.SHIPPING_RATE_TABLE, "COLUMN_NAME": "dimensions"},
+    ]
+
+    class Cursor:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args):
+            return None
+
+        def execute(self, _query, _params=None):
+            return None
+
+        def fetchall(self):
+            return rows
+
+    class Connection:
+        def __init__(self):
+            self.commits = 0
+
+        def cursor(self):
+            return Cursor()
+
+        def commit(self):
+            self.commits += 1
+
+    created = []
+    monkeypatch.setattr(cache, "_schema_ready", False)
+    monkeypatch.setattr(
+        cache,
+        "ensure_profitability_cache_tables",
+        lambda _cursor: created.append(True),
+    )
+    connection = Connection()
+
+    cache._ensure_schema(connection)
+
+    assert created == []
+    assert connection.commits == 1
+
+
 def test_exchange_rate_snapshot_uses_official_creation_date():
     assert cache._exchange_rate_date(
         {"creation_date": "2026-08-26T06:10:48.000+00:00"},
@@ -33,6 +79,41 @@ def test_exchange_rate_snapshot_uses_official_creation_date():
 
 def test_exchange_rate_snapshot_falls_back_to_refresh_date():
     assert cache._exchange_rate_date({}, "2026-08-27 09:30:00") == "2026-08-27"
+
+
+def test_exchange_rate_is_fixed_for_products_and_freshness_is_daily_only(monkeypatch):
+    executed = []
+
+    class Cursor:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args):
+            return None
+
+        def execute(self, query, params=None):
+            executed.append((" ".join(str(query).split()), params))
+
+        def fetchone(self):
+            return {"rate": 0.05, "expires_at": "2026-09-11 00:00:00"}
+
+    class Connection:
+        def cursor(self):
+            return Cursor()
+
+        def close(self):
+            return None
+
+    store = cache.DatabaseProfitabilityCache(connection_factory=Connection)
+    monkeypatch.setattr(cache, "_ensure_schema", lambda _connection: None)
+
+    assert store.get_exchange_rate("mxn", "usd")["rate"] == 0.05
+    assert "expires_at` >" not in executed[-1][0]
+    assert executed[-1][1] == ("MXN", "USD")
+
+    assert store.get_exchange_rate("mxn", "usd", fresh_only=True)["rate"] == 0.05
+    assert "expires_at` > %s" in executed[-1][0]
+    assert len(executed[-1][1]) == 3
 
 
 def test_quote_cache_keys_include_every_price_affecting_field():

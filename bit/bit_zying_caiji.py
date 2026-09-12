@@ -2295,6 +2295,8 @@ def _find_edge_executable():
 
 def ensure_visible_zying_edge_login_window(
     debugger_address=DEFAULT_ZYING_EDGE_DEBUGGER_ADDRESS,
+    *,
+    start_url=ZYING_PRODUCT_URL,
 ):
     """启动独立的可视 Edge 登录窗口，不要求关闭用户日常使用的 Edge。"""
     debugger_address = _edge_debugger_address(debugger_address)
@@ -2311,7 +2313,7 @@ def ensure_visible_zying_edge_login_window(
         f"--user-data-dir={ZYING_EDGE_PROFILE_DIR}",
         "--no-first-run",
         "--new-window",
-        ZYING_PRODUCT_URL,
+        str(start_url or ZYING_PRODUCT_URL),
     ]
     subprocess.Popen(
         command,

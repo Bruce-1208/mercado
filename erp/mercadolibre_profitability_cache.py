@@ -193,7 +193,7 @@ def _ensure_schema(connection: Any) -> None:
         with connection.cursor() as cursor:
             required = {
                 (EXCHANGE_RATE_TABLE, "rate"),
-                (DAILY_EXCHANGE_RATE_TABLE, "snapshot_date"),
+                (DAILY_EXCHANGE_RATE_TABLE, "rate_date"),
                 (COMMISSION_TABLE, "listing_type_id"),
                 (SHIPPING_RATE_TABLE, "dimensions"),
             }
@@ -245,22 +245,40 @@ class DatabaseProfitabilityCache:
             raise
         return connection
 
-    def get_exchange_rate(self, from_currency_id: str, to_currency_id: str) -> dict[str, Any] | None:
+    def get_exchange_rate(
+        self,
+        from_currency_id: str,
+        to_currency_id: str,
+        *,
+        fresh_only: bool = False,
+    ) -> dict[str, Any] | None:
+        """Return the one current database value for a currency pair.
+
+        Product calculations deliberately keep using the stored value after its
+        refresh deadline.  Only the daily maintenance job asks for
+        ``fresh_only=True`` and is therefore allowed to fall through to the
+        official API.
+        """
+
         connection = self._connection()
         try:
             with connection.cursor() as cursor:
+                freshness_sql = " AND `expires_at` > %s" if fresh_only else ""
+                params = [
+                    str(from_currency_id or "").upper(),
+                    str(to_currency_id or "").upper(),
+                ]
+                if fresh_only:
+                    params.append(_text_time(_now()))
                 cursor.execute(
                     f"""
                     SELECT * FROM `{EXCHANGE_RATE_TABLE}`
                     WHERE `from_currency_id` = %s AND `to_currency_id` = %s
-                      AND `expires_at` > %s
+                      {freshness_sql}
+                    ORDER BY `id` DESC
                     LIMIT 1
                     """,
-                    (
-                        str(from_currency_id or "").upper(),
-                        str(to_currency_id or "").upper(),
-                        _text_time(_now()),
-                    ),
+                    tuple(params),
                 )
                 row = cursor.fetchone()
             return dict(row) if row else None

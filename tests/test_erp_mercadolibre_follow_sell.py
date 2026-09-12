@@ -663,6 +663,29 @@ def test_validated_picture_upload_is_shared_across_workers_for_same_account():
     assert client.upload_calls == 1
 
 
+def test_database_client_user_profile_is_loaded_and_cached():
+    class Client:
+        token_id = 99124
+
+        def __init__(self):
+            self.request_calls = 0
+
+        def request(self, method, path):
+            assert (method, path) == ("GET", "/users/me")
+            self.request_calls += 1
+            return {"id": 77, "site_id": "CBT", "tags": []}
+
+    client = Client()
+    with follow_sell_module._USER_PROFILE_CACHE_LOCK:
+        follow_sell_module._USER_PROFILE_CACHE.clear()
+
+    first = follow_sell_module._cached_user_profile(client)
+    second = follow_sell_module._cached_user_profile(client)
+
+    assert first == second == {"id": 77, "site_id": "CBT", "tags": []}
+    assert client.request_calls == 1
+
+
 def test_user_products_endpoint_falls_back_only_on_explicit_not_found():
     class FallbackClient(CategoryClient):
         def __init__(self):

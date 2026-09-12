@@ -9,8 +9,8 @@ from erp import mercadolibre_batch_publish as batch_publish
 
 def _rows():
     return [
-        {"id": 11, "source_item_id": "MLM111", "source_url": "https://example/MLM111", "review_status": "approved", "weight_g": 350, "net_proceeds_usd": 10},
-        {"id": 12, "source_item_id": "MLM222", "source_url": "https://example/MLM222", "review_status": "approved", "weight_g": 420, "net_proceeds_usd": 20},
+        {"id": 11, "source_item_id": "MLM111", "source_url": "https://example/MLM111", "review_status": "approved", "weight_g": 350, "weight_basis": "plugin_actual", "billable_weight_g": 350, "shipping_weight_rule": "free_shipping:actual_weight_only:official_global_selling_cainiao_rate_card", "profitability_updated_at": "2026-09-12 12:00:00", "profitability_source": "mercadolibre_official_api", "net_proceeds_usd": 10},
+        {"id": 12, "source_item_id": "MLM222", "source_url": "https://example/MLM222", "review_status": "approved", "weight_g": 420, "weight_basis": "plugin_actual", "billable_weight_g": 420, "shipping_weight_rule": "free_shipping:actual_weight_only:official_global_selling_cainiao_rate_card", "profitability_updated_at": "2026-09-12 12:00:00", "profitability_source": "mercadolibre_official_api", "net_proceeds_usd": 20},
     ]
 
 
@@ -117,6 +117,32 @@ def test_product_publish_issues_reports_all_local_blockers():
     assert batch_publish.product_publish_issues({
         "review_status": "approved",
         "weight_g": 350,
+        "billable_weight_g": 350,
+        "shipping_weight_rule": "free_shipping:actual_weight_only:rate_card",
+        "profitability_updated_at": "2026-09-12 12:00:00",
+        "profitability_source": "mercadolibre_official_api",
+        "net_proceeds_usd": 8,
+    }) == []
+    assert batch_publish.product_publish_issues({
+        "review_status": "approved",
+        "weight_g": 350,
+        "billable_weight_g": 350,
+        "shipping_weight_rule": "free_shipping:actual_weight_only:rate_card",
+        "profitability_updated_at": None,
+        "profitability_source": "official_shipping_rate_card_refresh_pending",
+        "net_proceeds_usd": 8,
+    }) == []
+    assert batch_publish.product_publish_issues({
+        "review_status": "approved",
+        "weight_g": 350,
+        "weight_basis": "plugin_volumetric_fallback",
+        "net_proceeds_usd": 8,
+    }) == ["未填写有效重量"]
+    assert batch_publish.product_publish_issues({
+        "review_status": "approved",
+        "weight_g": 350,
+        "billable_weight_g": 900,
+        "shipping_weight_rule": "free_shipping:max_gross_or_volumetric:legacy",
         "net_proceeds_usd": 8,
     }) == []
 
@@ -317,9 +343,14 @@ def test_500_item_publish_orchestration_has_low_local_overhead():
             "id": index,
             "source_item_id": f"MLM{100000 + index}",
             "source_url": f"https://example/MLM{100000 + index}",
-            "review_status": "approved",
-            "weight_g": 300,
-            "net_proceeds_usd": 10,
+                "review_status": "approved",
+                "weight_g": 300,
+                "weight_basis": "plugin_actual",
+                    "billable_weight_g": 300,
+                    "shipping_weight_rule": "free_shipping:actual_weight_only:rate_card",
+                    "profitability_updated_at": "2026-09-12 12:00:00",
+                    "profitability_source": "mercadolibre_official_api",
+                    "net_proceeds_usd": 10,
             "source_snapshot_json": snapshot,
         }
         for index in range(1, 501)

@@ -84,14 +84,30 @@ def test_background_requires_console_login_and_keeps_offline_queue():
     assert "periodInMinutes: 1" in source
 
 
-def test_list_card_collection_never_opens_a_detail_tab():
+def test_list_card_collection_requires_detail_page_origin_verification():
     content = (EXTENSION / "content.js").read_text(encoding="utf-8")
     background = (EXTENSION / "background.js").read_text(encoding="utf-8")
 
-    assert "extractCardProduct(candidate.card, candidate.url)" in content
+    assert 'window.open(candidate.url, "_blank", "noopener")' in content
+    assert "extractCardProduct(candidate.card, candidate.url)" not in content
+    assert "等待智赢显示 CN.svg 后再采集" in content
+    assert "列表页无法确认 CN.svg" in (
+        EXTENSION / "collector-core.js"
+    ).read_text(encoding="utf-8")
     assert "COLLECT_URL" not in content
     assert "COLLECT_URL" not in background
     assert "active: false" not in background
+
+
+def test_detail_collection_rejects_zying_us_self_ship_and_requires_actual_weight():
+    core = (EXTENSION / "collector-core.js").read_text(encoding="utf-8")
+
+    assert "plugin.self_ship_origin === \"US\"" in core
+    assert "美国自发货商品不采集" in core
+    assert 'plugin.self_ship_origin !== "CN"' in core
+    assert "无法确认中国自发货" in core
+    assert "actualWeightComplete" in core
+    assert 'const weightBasis = actualWeightComplete ? "plugin_actual" : ""' in core
 
 
 def _browser_extension_user():

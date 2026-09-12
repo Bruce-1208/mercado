@@ -347,7 +347,24 @@
         .count { font-variant-numeric: tabular-nums; font-weight: 750; }
         .muted { color: var(--muted); }
         .store-name { font-weight: 750; color: var(--navy); }
-        .site-list { max-width: 250px; line-height: 1.45; }
+        .site-list { min-width: 190px; max-width: 300px; line-height: 1.45; }
+        .site-count-list { display: grid; gap: 5px; margin-top: 6px; }
+        .site-count-chip {
+            display: flex;
+            align-items: baseline;
+            justify-content: space-between;
+            gap: 8px;
+            padding: 5px 8px;
+            border: 1px solid #dce3ee;
+            border-radius: 8px;
+            background: #f7f9fc;
+            color: #314158;
+            white-space: nowrap;
+        }
+        .site-count-chip > span { overflow: hidden; text-overflow: ellipsis; }
+        .site-count-chip strong { color: var(--navy); font-variant-numeric: tabular-nums; }
+        .site-count-chip small { color: var(--muted); font-size: .75rem; }
+        .site-count-chip em { color: var(--muted); font-size: .72rem; font-style: normal; font-weight: 600; }
         .item-id { font-family: Consolas, "SFMono-Regular", monospace; font-size: .84rem; color: #314158; }
         .title-cell { max-width: 330px; }
         .reason-cell { min-width: 260px; max-width: 440px; color: #354157; }
@@ -398,7 +415,14 @@
         .pill.appeal_failed { color: var(--red); background: var(--red-soft); }
         .pill.historical { color: #526078; background: #edf1f6; }
 
-        .detail-button {
+        .row-actions {
+            display: flex;
+            align-items: center;
+            gap: 7px;
+            flex-wrap: wrap;
+        }
+
+        .detail-button, .retry-store-button {
             min-height: 34px;
             padding: 6px 11px;
             border: 1px solid #bcc7ee;
@@ -410,6 +434,12 @@
             white-space: nowrap;
         }
         .detail-button:hover { background: #e7ebff; border-color: #8999d8; }
+        .retry-store-button {
+            border-color: #e0bb7a;
+            background: #fff7e8;
+            color: #8a4b00;
+        }
+        .retry-store-button:hover { background: #ffedcb; border-color: #cc9440; }
         .store-filter-chip {
             display: none;
             padding: 6px 10px;
@@ -509,7 +539,7 @@
             <div class="sync-cluster">
                 <div class="sync-copy">
                     <div class="sync-title" id="sync-title">正在读取同步状态</div>
-                    <div class="sync-detail" id="sync-detail">最新更新时间：正在读取 · 每 12 小时</div>
+                    <div class="sync-detail" id="sync-detail">最近读取时间：正在读取 · 每 12 小时</div>
                 </div>
                 <label class="auto-sync-switch" id="auto-sync-switch">
                     <input id="auto-sync-enabled" type="checkbox">
@@ -613,7 +643,7 @@
                 <div class="section-heading-actions">
                     <span class="store-filter-chip" id="store-filter-chip"></span>
                     <button class="ghost-button clear-detail-button" id="clear-detail-button" type="button">查看全部明细</button>
-                    {% if ip_rights_mode %}<button class="ghost-button" id="export-button" type="button">导出当前筛选明细 Excel</button>{% endif %}
+                    <button class="ghost-button" id="export-button" type="button">导出当前筛选明细 Excel</button>
                 </div>
             </div>
             <div class="table-wrap">
@@ -653,7 +683,7 @@
             wasSyncing: false,
             detailTokenId: "",
             detailStoreName: "",
-            latestUpdatedAt: "",
+            latestReadAt: "",
         };
         const elements = {
             search: document.getElementById("search-input"),
@@ -741,6 +771,56 @@
             document.getElementById("metric-problems").textContent = problems ? `${problems} 个账户需重试` : "同步状态正常";
         }
 
+        function syncCell(store) {
+            const status = String(store.last_status || "");
+            const readAt = escapeHtml(store.last_read_at || "尚未读取");
+            let badge;
+            if (status === "error" || status === "partial") {
+                badge = '<span class="pill problem">需重试</span>';
+            } else if (status === "limited") {
+                badge = '<span class="pill ok">已读取（达上限）</span>';
+            } else {
+                badge = `<span class="pill ok">${escapeHtml(store.last_read_at ? "已读取" : "待读取")}</span>`;
+            }
+            return `${badge}<div class="muted">${readAt}</div>`;
+        }
+
+        function storeActions(store) {
+            const tokenId = escapeHtml(store.token_id);
+            const storeName = escapeHtml(store.store_name || "未命名店铺");
+            const retryAction = ipRightsMode
+                ? `<button class="retry-store-button" type="button" data-retry-token-id="${tokenId}" data-retry-store-name="${storeName}" ${state.wasSyncing ? "disabled" : ""}>单店重试</button>`
+                : "";
+            return `<div class="row-actions">
+                <button class="detail-button" type="button" data-detail-token-id="${tokenId}" data-detail-store-name="${storeName}">查看明细</button>
+                ${retryAction}
+            </div>`;
+        }
+
+        function renderSiteCounts(store) {
+            const sites = Array.isArray(store?.sites) ? store.sites : [];
+            if (!sites.length) return '<div class="muted">暂无站点数据</div>';
+            return `<div class="site-count-list">${sites.map(site => {
+                const siteId = String(site?.site_id || "").trim().toUpperCase();
+                const siteName = String(site?.site_name || siteId || "未知站点");
+                const detection = Number(site?.detection_count || 0);
+                const rights = Number(site?.rights_holder_count || 0);
+                const total = Number(site?.total ?? detection + rights);
+                const label = siteId && siteName !== siteId ? `${siteName} · ${siteId}` : (siteName || siteId);
+                return `<span class="site-count-chip" title="${escapeHtml(`${label}：${total} 条`)}">
+                    <span>${escapeHtml(label)}</span>
+                    <strong>${number(total)}</strong><small>条</small>
+                    <em>平台 ${number(detection)} · 权利人 ${number(rights)}</em>
+                </span>`;
+            }).join("")}</div>`;
+        }
+
+        function setRetryButtonsDisabled(disabled) {
+            elements.groups.querySelectorAll("[data-retry-token-id]").forEach(button => {
+                button.disabled = Boolean(disabled);
+            });
+        }
+
         function renderGroups(groups) {
             if (!groups || !groups.length) {
                 elements.groups.innerHTML = '<div class="empty-state">当前筛选范围内没有已配置的账户组。</div>';
@@ -751,15 +831,13 @@
                     const stores = (person.stores || []).map(store => `
                         <tr>
                             <td><span class="store-name">${escapeHtml(store.store_name)}</span></td>
-                            <td class="site-list"><strong>${number(store.site_count)} 个站点</strong><div class="muted">${escapeHtml((store.site_names || []).join("、") || "—")}</div></td>
+                            <td class="site-list"><strong>${number(store.site_count)} 个站点</strong>${renderSiteCounts(store)}</td>
                             <td class="count">${number(store.detection_count)}</td>
                             <td class="count">${number(store.rights_holder_count)}</td>
                             <td class="count">${number(store.total)}</td>
                             <td class="muted">${escapeHtml(store.latest_infraction_at || "—")}</td>
-                            <td>${store.last_status === "error" || store.last_status === "partial"
-                                ? `<span class="pill problem">需重试</span>`
-                                : `<span class="pill ok">${escapeHtml(store.last_synced_at ? "已同步" : "待同步")}</span>`}</td>
-                            <td><button class="detail-button" type="button" data-detail-token-id="${escapeHtml(store.token_id)}" data-detail-store-name="${escapeHtml(store.store_name)}">查看明细</button></td>
+                            <td>${syncCell(store)}</td>
+                            <td>${storeActions(store)}</td>
                         </tr>`).join("");
                     return `
                         <div class="person-block">
@@ -769,7 +847,7 @@
                             </div>
                             <div class="table-wrap">
                                 <table>
-                                    <thead><tr><th>店铺</th><th>站点</th><th>平台检测</th><th>权利人</th><th>合计</th><th>最近违规</th><th>同步</th><th>操作</th></tr></thead>
+                                    <thead><tr><th>店铺</th><th>站点 / 数量</th><th>平台检测</th><th>权利人</th><th>合计</th><th>最近违规</th><th>读取状态 / 最近读取</th><th>操作</th></tr></thead>
                                     <tbody>${stores}</tbody>
                                 </table>
                             </div>
@@ -798,20 +876,18 @@
                 <tr>
                     <td class="count">${number(store.rank)}</td>
                     <td><span class="store-name">${escapeHtml(store.store_name)}</span><div class="muted">${escapeHtml(store.salesperson || "未分配")}</div></td>
-                    <td class="site-list"><strong>${number(store.site_count)} 个站点</strong><div class="muted">${escapeHtml((store.site_names || []).join("、") || "—")}</div></td>
+                    <td class="site-list"><strong>${number(store.site_count)} 个站点</strong>${renderSiteCounts(store)}</td>
                     <td class="count">${number(store.detection_count)}</td>
                     <td class="count">${number(store.rights_holder_count)}</td>
                     <td class="count">${number(store.total)}</td>
                     <td class="muted">${escapeHtml(store.latest_infraction_at || "—")}</td>
-                    <td>${store.last_status === "error" || store.last_status === "partial"
-                        ? '<span class="pill problem">需重试</span>'
-                        : `<span class="pill ok">${escapeHtml(store.last_synced_at ? "已同步" : "待同步")}</span>`}</td>
-                    <td><button class="detail-button" type="button" data-detail-token-id="${escapeHtml(store.token_id)}" data-detail-store-name="${escapeHtml(store.store_name)}">查看明细</button></td>
+                    <td>${syncCell(store)}</td>
+                    <td>${storeActions(store)}</td>
                 </tr>`).join("");
             elements.groups.innerHTML = `
                 <div class="table-wrap">
                     <table aria-label="全部店铺侵权和权利人排名">
-                        <thead><tr><th>排名</th><th>店铺 / 业务员</th><th>站点</th><th>平台侵权</th><th>权利人</th><th>合计</th><th>最近违规</th><th>同步</th><th>操作</th></tr></thead>
+                        <thead><tr><th>排名</th><th>店铺 / 业务员</th><th>站点 / 数量</th><th>平台侵权</th><th>权利人</th><th>合计</th><th>最近违规</th><th>读取状态 / 最近读取</th><th>操作</th></tr></thead>
                         <tbody>${rows}</tbody>
                     </table>
                 </div>`;
@@ -931,12 +1007,12 @@
                 elements.pageLabel.textContent = `第 ${state.page} / ${state.pages} 页`;
                 elements.prev.disabled = state.page <= 1;
                 elements.next.disabled = state.page >= state.pages;
-                const lastSync = data.summary?.last_synced_at;
-                state.latestUpdatedAt = String(lastSync || "");
-                if (lastSync && !state.wasSyncing) {
-                    elements.syncTitle.textContent = `最新更新时间：${lastSync}`;
-                } else if (!lastSync && !state.wasSyncing) {
-                    elements.syncTitle.textContent = "最新更新时间：尚未完成全量更新";
+                const lastRead = data.summary?.last_read_at;
+                state.latestReadAt = String(lastRead || "");
+                if (lastRead && !state.wasSyncing) {
+                    elements.syncTitle.textContent = `最近读取时间：${lastRead}`;
+                } else if (!lastRead && !state.wasSyncing) {
+                    elements.syncTitle.textContent = "最近读取时间：尚未读取";
                 }
                 showStatus("");
             } catch (error) {
@@ -960,6 +1036,7 @@
                 elements.autoSyncLabel.textContent = autoEnabled ? "全量更新已开启" : "全量更新已关闭";
                 elements.syncButton.disabled = running;
                 elements.syncButton.textContent = running ? "同步进行中…" : "立即刷新官方数据";
+                setRetryButtonsDisabled(running);
                 if (running) {
                     const active = (sync.active_stores || []).slice(0, 3).join("、");
                     elements.syncTitle.textContent = `正在同步 ${sync.processed_stores || 0} / ${sync.total_stores || 0} 个账户`;
@@ -968,7 +1045,7 @@
                     elements.syncDetail.textContent = autoEnabled
                         ? `每 ${sync.auto_sync_hours || 12} 小时自动全量更新 · ${sync.store_workers || 0} 个店铺线程`
                         : "自动全量更新已关闭，可继续手动刷新";
-                    if (!state.latestUpdatedAt && sync.finished_at) {
+                    if (!state.latestReadAt && sync.finished_at) {
                         elements.syncTitle.textContent = `最近任务结束：${sync.finished_at}`;
                     }
                 }
@@ -993,6 +1070,42 @@
             } catch (error) {
                 showStatus(error.message || String(error), true);
                 elements.syncButton.disabled = false;
+            }
+        }
+
+        async function retryStore(button) {
+            const tokenId = Number(button?.dataset.retryTokenId || 0);
+            const storeName = button?.dataset.retryStoreName || "该店铺";
+            if (!Number.isInteger(tokenId) || tokenId <= 0) {
+                showStatus("店铺编号无效，无法启动单店重试", true);
+                return;
+            }
+            setRetryButtonsDisabled(true);
+            const originalLabel = button.textContent;
+            button.textContent = "正在启动…";
+            showStatus(`正在启动“${storeName}”的单店重试…`);
+            try {
+                const response = await fetch("/api/official-infractions/sync", {
+                    method: "POST",
+                    headers: {"Content-Type": "application/json"},
+                    body: JSON.stringify({token_ids: [tokenId]}),
+                });
+                const payload = await response.json();
+                if (!response.ok || payload.status !== "success") {
+                    if (response.status === 409) {
+                        state.wasSyncing = true;
+                        await loadSyncStatus();
+                    }
+                    throw new Error(payload.message || "单店重试启动失败");
+                }
+                showStatus(`“${storeName}”的单店重试已启动`);
+                state.wasSyncing = true;
+                await loadSyncStatus();
+            } catch (error) {
+                showStatus(error.message || String(error), true);
+                setRetryButtonsDisabled(state.wasSyncing);
+            } finally {
+                button.textContent = originalLabel;
             }
         }
 
@@ -1032,7 +1145,8 @@
                 try { return decodeURIComponent(utf8Match[1].trim()); } catch (_) { /* 使用默认文件名 */ }
             }
             const plainMatch = disposition.match(/filename="?([^";]+)"?/i);
-            return plainMatch?.[1]?.trim() || `侵权和权利人明细_${new Date().toISOString().slice(0, 10)}.xlsx`;
+            const prefix = ipRightsMode ? "侵权和权利人明细" : "违规商品明细";
+            return plainMatch?.[1]?.trim() || `${prefix}_${new Date().toISOString().slice(0, 10)}.xlsx`;
         }
 
         async function exportCurrentRows() {
@@ -1042,8 +1156,11 @@
             elements.exportButton.textContent = "正在导出…";
             showStatus("正在生成当前筛选范围内的 Excel，请稍候…");
             try {
+                const exportEndpoint = ipRightsMode
+                    ? "/api/official-ip-rights/export"
+                    : "/api/official-infractions/export";
                 const response = await fetch(
-                    `/api/official-ip-rights/export?${dashboardParams(false).toString()}`,
+                    `${exportEndpoint}?${dashboardParams(false).toString()}`,
                     {credentials: "same-origin"},
                 );
                 const contentType = (response.headers.get("Content-Type") || "").toLowerCase();
@@ -1094,6 +1211,11 @@
         elements.autoSyncEnabled.addEventListener("change", updateAutoSync);
         elements.exportButton?.addEventListener("click", exportCurrentRows);
         elements.groups.addEventListener("click", event => {
+            const retryButton = event.target.closest("[data-retry-token-id]");
+            if (retryButton) {
+                retryStore(retryButton);
+                return;
+            }
             const button = event.target.closest("[data-detail-token-id]");
             if (!button) return;
             state.detailTokenId = button.dataset.detailTokenId || "";

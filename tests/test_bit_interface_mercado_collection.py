@@ -5,6 +5,16 @@ from unittest.mock import patch
 import bit.bit_interface as workbench
 
 
+def _actual_shipping(weight):
+    return {
+        "weight_basis": "plugin_actual",
+        "billable_weight_g": weight,
+        "shipping_weight_rule": "free_shipping:actual_weight_only:rate_card",
+        "profitability_updated_at": "2026-09-12 12:00:00",
+        "profitability_source": "mercadolibre_official_api",
+    }
+
+
 def test_startup_maintenance_runs_in_daemon_threads(monkeypatch):
     created_threads = []
 
@@ -32,6 +42,31 @@ def test_startup_maintenance_runs_in_daemon_threads(monkeypatch):
         "mercado-store-link-scheduler-bootstrap",
     ]
     assert all(thread.daemon and thread.started for thread in created_threads)
+
+
+def test_collection_login_edge_starts_at_mercado_home_only(monkeypatch):
+    from erp import mercadolibre_playwright_collector as collector
+
+    launches = []
+    opened = []
+    monkeypatch.setattr(
+        workbench.bit_zying_caiji,
+        "ensure_visible_zying_edge_login_window",
+        lambda debugger, **kwargs: launches.append((debugger, kwargs)),
+    )
+    monkeypatch.setattr(
+        collector,
+        "open_playwright_login_setup",
+        lambda **kwargs: opened.append(kwargs),
+    )
+
+    workbench._run_mercado_playwright_setup("edge", "", "Edge")
+
+    assert launches == [(
+        collector.DEFAULT_CDP_URL,
+        {"start_url": "https://www.mercadolibre.com/"},
+    )]
+    assert opened == [{"window_id": ""}]
 
 
 def test_profitability_worker_continues_when_reference_refresh_fails(monkeypatch):
@@ -66,7 +101,14 @@ def test_profitability_worker_continues_when_reference_refresh_fails(monkeypatch
     monkeypatch.setattr(ecb_exchange_rates, "refresh_usd_cny_daily_rates", unavailable)
     monkeypatch.setattr(cards.OfficialShippingRateCardStore, "needs_refresh", lambda *a, **k: False)
     monkeypatch.setattr(store, "list_stale_profitability_items", lambda **kwargs: [
-        {"id": 1, "source_type": "pulled", "source_item_id": "MLM1"},
+        {
+            "id": 1,
+            "source_type": "pulled",
+            "source_item_id": "MLM1",
+            "updated_at": "2026-09-12 12:00:00",
+            "price": 299,
+            "weight_g": 420,
+        },
     ])
     monkeypatch.setattr(store, "update_item_profitability", lambda item_id, row: saved.append(row))
 
@@ -75,6 +117,86 @@ def test_profitability_worker_continues_when_reference_refresh_fails(monkeypatch
     assert len(saved) == 1
     assert saved[0]["source_type"] == "pulled"
     assert saved[0]["shipping_fee_usd"] == 6.4
+    assert saved[0]["_expected_profitability_inputs"]["updated_at"] == (
+        "2026-09-12 12:00:00"
+    )
+    assert saved[0]["_expected_profitability_inputs"]["weight_g"] == 420
+
+
+def test_collection_matches_fixed_shipping_before_write_and_wakes_profit_worker(
+    monkeypatch,
+):
+    from erp import mercadolibre_batch_collector as collector
+    from erp import mercadolibre_shipping_rate_cards as cards
+
+    saved_batches = []
+    task_updates = []
+    wakeup = workbench.threading.Event()
+    monkeypatch.setattr(workbench, "_mercado_profit_refresh_wakeup_event", wakeup)
+    monkeypatch.setattr(
+        cards.OfficialShippingRateCardStore,
+        "list_rates",
+        lambda self: {
+            "rows": [{
+                "site_id": "MLM",
+                "rate_kind": "above_threshold",
+                "weight_min_g": 500,
+                "weight_max_g": 600,
+                "shipping_amount_usd": 7.16,
+            }]
+        },
+    )
+    monkeypatch.setattr(
+        workbench,
+        "db_upsert_mercado_collection_items",
+        lambda task_id, rows: saved_batches.append((task_id, list(rows))),
+    )
+    monkeypatch.setattr(
+        workbench,
+        "db_update_mercado_collection_task",
+        lambda task_id, **changes: task_updates.append((task_id, changes)),
+    )
+    monkeypatch.setattr(workbench, "_mercado_collection_state_update", lambda **_changes: None)
+
+    def collect(_source_url, _requested_count, **kwargs):
+        row = {
+            "source_item_id": "MLM3016972321",
+            "source_url": "https://articulo.mercadolibre.com.mx/MLM-3016972321",
+            "title": "Producto",
+            "main_image_url": "https://example.test/product.webp",
+            "price": 350,
+            "currency_id": "MXN",
+            "weight_g": 600,
+            "volumetric_weight_kg": 9,
+            "weight_basis": "plugin_actual",
+            "scrape_status": "ok",
+        }
+        kwargs["on_item"](row)
+        return {
+            "candidate_count": 1,
+            "skipped_us_count": 0,
+            "rows": [row],
+        }
+
+    monkeypatch.setattr(collector, "collect_marketplace_listing", collect)
+    workbench._mercado_collection_stop_event.clear()
+
+    workbench._run_mercado_collection_task(
+        77,
+        "https://listado.mercadolibre.com.mx/cosplay",
+        1,
+        4,
+        "cross_border",
+    )
+
+    assert len(saved_batches) == 1
+    saved = saved_batches[0][1][0]
+    assert saved["shipping_fee_usd"] == 7.16
+    assert saved["billable_weight_g"] == 600
+    assert saved["volumetric_weight_kg"] == 9
+    assert "actual_weight_only" in saved["shipping_weight_rule"]
+    assert wakeup.is_set()
+    assert task_updates[-1][1]["status"] == "completed"
 
 
 def _client():
@@ -220,8 +342,7 @@ def test_workbench_splits_collection_and_product_list_into_separate_modules():
     assert "不混用本地卖家信誉表".encode("utf-8") in response.data
     assert b"loadMercadoShippingRates" in response.data
     assert "净收益".encode("utf-8") in response.data
-    assert "采集列表：只按实际重量".encode("utf-8") in response.data
-    assert "Global Selling：毛重/体积重取较大".encode("utf-8") in response.data
+    assert "只按智赢实际重量，不使用计泡重".encode("utf-8") in response.data
     assert b'mercadoListMode === "collection"' in response.data
     assert b'id="mercado-delete-selected"' in response.data
     assert b'id="mercado-publish-store"' in response.data
@@ -264,12 +385,13 @@ def test_workbench_splits_collection_and_product_list_into_separate_modules():
     assert b'id="mercado-collection-filter-note"' not in response.data
     assert b'class="market-product-filters visible"' in response.data
     assert b'.market-list-panel.collection-mode .market-product-filters' not in response.data
-    assert "采集列表支持审核、上架状态、重量、售价、收益和采集时间组合筛选".encode("utf-8") in response.data
+    assert "采集列表支持实重可用、未审核、未上架及重量、售价、收益和采集时间组合筛选".encode("utf-8") in response.data
     review_filter_markup = response.data.split(b'id="mercado-review-filter"', 1)[0].rsplit(b'<div', 1)[-1]
     publish_filter_markup = response.data.split(b'id="mercado-publish-filter"', 1)[0].rsplit(b'<div', 1)[-1]
     assert b'market-product-only-filter' not in review_filter_markup
     assert b'market-product-only-filter' not in publish_filter_markup
     assert b'id="mercado-weight-min"' in response.data
+    assert b'id="mercado-weight-status-filter"' in response.data
     assert b'id="mercado-price-min"' in response.data
     assert b'id="mercado-net-min"' in response.data
     assert b'id="mercado-date-from"' in response.data
@@ -284,6 +406,7 @@ def test_workbench_splits_collection_and_product_list_into_separate_modules():
     assert "只覆盖已勾选的字段".encode("utf-8") in response.data
     assert "批量修改所选".encode("utf-8") in response.data
     assert b'/api/mercado-products/bulk-edit' in response.data
+    assert b'/api/mercado-collection/bulk-edit' in response.data
     assert "修改产品".encode("utf-8") in response.data
     assert "采集原价".encode("utf-8") in response.data
     assert b".market-product-table th:nth-child(5)" in response.data
@@ -349,19 +472,19 @@ def test_collection_api_requires_login():
 def test_collection_finish_status_does_not_label_all_failures_completed():
     assert workbench._mercado_collection_finish_status(20, 0, 20) == (
         "error",
-        "采集失败：入库 20 件，重量尺寸完整 0 件，待补充 20 件",
+        "采集失败：入库 20 件，实际重量可用 0 件，待补充 20 件",
     )
     assert workbench._mercado_collection_finish_status(20, 18, 2) == (
         "partial",
-        "采集部分完成：入库 20 件，重量尺寸完整 18 件，待补充 2 件",
+        "采集部分完成：入库 20 件，实际重量可用 18 件，待补充 2 件",
     )
     assert workbench._mercado_collection_finish_status(20, 20, 0) == (
         "completed",
-        "采集完成：入库 20 件，重量尺寸完整 20 件，待补充 0 件",
+        "采集完成：入库 20 件，实际重量可用 20 件，待补充 0 件",
     )
     assert workbench._mercado_collection_finish_status(1, 1, 0, 100) == (
         "partial",
-        "采集部分完成：入库 1 件，重量尺寸完整 1 件，待补充 0 件，距离目标还差 99 件",
+        "采集部分完成：入库 1 件，实际重量可用 1 件，待补充 0 件，距离目标还差 99 件",
     )
 
 
@@ -382,10 +505,12 @@ def test_collection_duration_is_live_then_stable_after_finish():
     assert workbench._format_mercado_elapsed(3723) == "1小时2分3秒"
 
 
-def test_collection_quality_pass_retries_all_incomplete_plugin_rows():
+def test_collection_quality_pass_retries_only_rows_missing_actual_weight():
     rows = [
         {
             "source_item_id": "MLM1",
+            "title": "Product 1",
+            "main_image_url": "https://example.test/1.webp",
             "scrape_status": "partial",
             "error_message": "旧状态未刷新",
             "weight_g": 300,
@@ -395,13 +520,25 @@ def test_collection_quality_pass_retries_all_incomplete_plugin_rows():
         },
         {
             "source_item_id": "MLM2",
+            "title": "Product 2",
+            "main_image_url": "https://example.test/2.webp",
             "scrape_status": "partial",
             "error_message": "智赢插件已显示，但 DOM 中没有完整的重量/尺寸",
         },
         {
             "source_item_id": "MLM3",
+            "title": "Product 3",
+            "main_image_url": "https://example.test/3.webp",
             "scrape_status": "partial",
             "error_message": "详情页未检测到智赢插件重量尺寸",
+        },
+        {
+            "source_item_id": "MLM4",
+            "title": "Product 4",
+            "main_image_url": "https://example.test/4.webp",
+            "scrape_status": "partial",
+            "weight_g": 300,
+            "error_message": "尺寸未完整",
         },
     ]
 
@@ -413,7 +550,19 @@ def test_collection_quality_pass_retries_all_incomplete_plugin_rows():
     template = Path(workbench.app.template_folder, "index.html").read_text(
         encoding="utf-8"
     )
-    assert "row.weight_dimensions_complete || row.scrape_status" in template
+    assert "hasUsableActualWeight && row.title && row.main_image_url" in template
+    assert "旧计泡运费已停用，待按实际重量重算" in template
+
+
+def test_product_list_select_all_uses_current_page_rows_as_source_of_truth():
+    template = Path(workbench.app.template_folder, "index.html").read_text(
+        encoding="utf-8"
+    )
+
+    assert "function mercadoCurrentPageSelectableIds()" in template
+    assert "mercadoCurrentPageSelectableIds().forEach(rowId =>" in template
+    assert 'mercadoListBody.querySelectorAll(".mercado-item-select:not(:disabled)")' in template
+    assert 'document.querySelectorAll(".mercado-item-select:not(:disabled)")' not in template
 
 
 def test_collection_database_write_retries_transient_network_failure(monkeypatch):
@@ -589,7 +738,7 @@ def test_collection_list_and_batch_add_endpoints():
     ) as list_collection:
         response = client.get(
             "/api/mercado-collection/items?search=Lonchera"
-            "&review_status=risk&publish_status=failed"
+            "&review_status=risk&publish_status=failed&weight_status=available"
             "&weight_min=100&weight_max=500&price_min=20&price_max=80"
             "&net_proceeds_min=1&net_proceeds_max=40"
             "&date_from=2026-08-25&date_to=2026-08-30"
@@ -603,6 +752,7 @@ def test_collection_list_and_batch_add_endpoints():
         task_id=None,
         review_status="risk",
         publish_status="failed",
+        weight_status="available",
         weight_min="100",
         weight_max="500",
         price_min="20",
@@ -761,6 +911,7 @@ def test_retry_publish_records_starts_grouped_background_task():
             "source_item_id": "MLM111",
             "review_status": "approved",
             "weight_g": 350,
+            **_actual_shipping(350),
             "net_proceeds_usd": 8,
         },
         {
@@ -768,6 +919,7 @@ def test_retry_publish_records_starts_grouped_background_task():
             "source_item_id": "MLM222",
             "review_status": "approved",
             "weight_g": 420,
+            **_actual_shipping(420),
             "net_proceeds_usd": 9,
         },
     ]
@@ -877,7 +1029,7 @@ def test_product_list_filters_and_review_status_endpoint():
     ) as list_products:
         response = client.get(
             "/api/mercado-products?search=bag&source_type=pulled&review_status=risk"
-            "&publish_status=failed&weight_min=100&weight_max=500"
+            "&publish_status=failed&weight_status=missing&weight_min=100&weight_max=500"
             "&price_min=200&price_max=900&net_proceeds_min=-5&net_proceeds_max=40"
             "&date_from=2026-08-01&date_to=2026-08-25&mercado_category=MLM123"
             "&limit=500&offset=500"
@@ -892,6 +1044,7 @@ def test_product_list_filters_and_review_status_endpoint():
         source_type="pulled",
         review_status="risk",
         publish_status="failed",
+        weight_status="missing",
         weight_min="100",
         weight_max="500",
         price_min="200",
@@ -987,6 +1140,47 @@ def test_bulk_product_content_update_endpoint():
     assert response.status_code == 422
 
 
+def test_bulk_collection_measurement_update_endpoint():
+    _reset_publish_state()
+    client = _client()
+    changes = {
+        "weight_g": 480,
+        "package_length_cm": 30,
+        "package_width_cm": 20,
+        "package_height_cm": 10,
+        "title": "ignored for collection rows",
+    }
+    with patch.object(
+        workbench,
+        "db_update_mercado_collection_items",
+        return_value={
+            "requested": 2,
+            "changed": 2,
+            "updated_fields": [
+                "weight_g", "package_length_cm", "package_width_cm",
+                "package_height_cm",
+            ],
+            "profitability_refresh_pending": True,
+        },
+    ) as update_collection:
+        response = client.patch(
+            "/api/mercado-collection/bulk-edit",
+            json={"collection_item_ids": [3, 4], "changes": changes},
+        )
+
+    assert response.status_code == 200
+    assert response.get_json()["data"]["changed"] == 2
+    update_collection.assert_called_once_with(
+        [3, 4],
+        {
+            "weight_g": 480,
+            "package_length_cm": 30,
+            "package_width_cm": 20,
+            "package_height_cm": 10,
+        },
+    )
+
+
 def test_collection_and_product_delete_endpoints():
     _reset_publish_state()
     client = _client()
@@ -1019,7 +1213,19 @@ def test_collection_and_product_delete_endpoints():
 def test_batch_publish_endpoint_starts_background_task_for_selected_store():
     _reset_publish_state()
     client = _client()
-    rows = [{"id": 9, "source_item_id": "MLM3016972321", "source_url": "source", "review_status": "approved", "weight_g": 350, "net_proceeds_usd": 8}]
+    rows = [{
+        "id": 9,
+        "source_item_id": "MLM3016972321",
+        "source_url": "source",
+        "review_status": "approved",
+        "weight_g": 350,
+        "weight_basis": "plugin_actual",
+        "billable_weight_g": 900,
+        "shipping_weight_rule": "free_shipping:max_gross_or_volumetric:legacy",
+        "profitability_updated_at": "2026-09-12 12:00:00",
+        "profitability_source": "mercadolibre_global_selling_cainiao_rate_card_daily_database_cache",
+        "net_proceeds_usd": 8,
+    }]
     tokens = {
         "total": 1,
         "rows": [{"id": 5, "display_name": "泽顺墨西哥", "nickname": "SHOP", "site_settings": [{"site_id": "MLB", "discount_rate": 95}]}],
@@ -1062,6 +1268,7 @@ def test_batch_publish_endpoint_builds_all_compatible_account_site_targets():
         "source_url": "source",
         "review_status": "approved",
         "weight_g": 350,
+        **_actual_shipping(350),
         "net_proceeds_usd": 8,
     }]
     tokens = {
@@ -1131,6 +1338,7 @@ def test_batch_publish_endpoint_can_select_targets_by_site_group():
         "source_url": "source",
         "review_status": "approved",
         "weight_g": 350,
+        **_actual_shipping(350),
         "net_proceeds_usd": 8,
     }]
     tokens = {
@@ -1363,6 +1571,7 @@ def test_batch_publish_endpoint_moves_unapproved_product_to_collection():
             "source_url": "source",
             "review_status": "unreviewed",
             "weight_g": 350,
+            **_actual_shipping(350),
             "net_proceeds_usd": 8,
         }
     ]
@@ -1437,6 +1646,7 @@ def test_batch_publish_endpoint_ignores_missing_weight_and_starts_valid_rows():
             "source_item_id": "MLM3016972323",
             "review_status": "unreviewed",
             "weight_g": 350,
+            **_actual_shipping(350),
             "net_proceeds_usd": 8,
         },
         {
@@ -1444,6 +1654,7 @@ def test_batch_publish_endpoint_ignores_missing_weight_and_starts_valid_rows():
             "source_item_id": "MLM3016972324",
             "review_status": "approved",
             "weight_g": 350,
+            **_actual_shipping(350),
             "net_proceeds_usd": 0,
         },
         {
@@ -1452,6 +1663,7 @@ def test_batch_publish_endpoint_ignores_missing_weight_and_starts_valid_rows():
             "source_url": "source",
             "review_status": "approved",
             "weight_g": 350,
+            **_actual_shipping(350),
             "net_proceeds_usd": 8,
         },
     ]
@@ -1506,6 +1718,7 @@ def test_batch_publish_endpoint_moves_nonpositive_net_to_collection():
         "source_item_id": "MLM3016972321",
         "review_status": "approved",
         "weight_g": 350,
+        **_actual_shipping(350),
         "net_proceeds_usd": -0.01,
     }]
     with patch.object(
@@ -1547,7 +1760,7 @@ def test_batch_publish_endpoint_rejects_nonpositive_worker_count():
 
 def test_batch_publish_endpoint_rejects_cross_site_for_local_store():
     _reset_publish_state()
-    rows = [{"id": 9, "source_item_id": "MLM3016972321", "source_url": "source", "review_status": "approved", "weight_g": 350, "net_proceeds_usd": 8}]
+    rows = [{"id": 9, "source_item_id": "MLM3016972321", "source_url": "source", "review_status": "approved", "weight_g": 350, **_actual_shipping(350), "net_proceeds_usd": 8}]
     tokens = {
         "total": 1,
         "rows": [{"id": 5, "display_name": "本地墨西哥店", "site_id": "MLM"}],

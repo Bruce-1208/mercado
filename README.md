@@ -21,6 +21,20 @@ python -m pip install -r bit/requirements-server.txt
 `BIT_WSGI_THREADS`、`BIT_WSGI_CONNECTION_LIMIT` 和 `BIT_WSGI_BACKLOG`
 调整；自动化任务仍由独立的后台并发限制控制。
 
+### macOS 上架翻译
+
+跨站点上架的西班牙语/葡萄牙语翻译使用 Argos Translate 在服务器本地离线执行，
+不需要 API Key，也不会调用 DeepSeek。macOS 服务器首次部署或重建 Python 环境后，
+用运行工作台的同一个 Python 解释器安装依赖和两个直连模型：
+
+```bash
+python3 -m pip install -r bit/requirements-server.txt
+python3 scripts/install_argos_translation_models.py
+```
+
+模型安装成功后会执行双向翻译自检。模型文件会保存在服务器当前用户的 Argos 数据目录，
+后续启动及上架过程均可离线使用；若模型缺失，上架记录会给出上述安装命令，而不会回退到付费接口。
+
 同一套工作台可以在每台电脑上灵活指定运行角色：
 
 - `server`：直接连接 `192.168.1.11:3306`，同时提供受令牌保护的 `/api/db/*` 数据库接口；

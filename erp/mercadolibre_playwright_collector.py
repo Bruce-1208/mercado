@@ -235,14 +235,26 @@ SHADOW_PLUGIN_TEXT_SCRIPT = r"""() => {
   };
   const walk = root => {
     if (!root || !root.querySelectorAll) return;
-    const pluginRoot = !!root.querySelector(
-      '.zying-meli-detail-metric-line, .zying-meli-detail-metric-column'
-    );
-    for (const node of root.querySelectorAll('*')) {
-      if (node.matches && node.matches(
-        '.zying-meli-detail-metric-line, .zying-meli-detail-metric-column'
-      )) add(node.innerText || node.textContent);
-      if (pluginRoot) {
+    const allNodes = Array.from(root.querySelectorAll('*'));
+    const metricSelector =
+      '.zying-meli-detail-metric-line, .zying-meli-detail-metric-column';
+    const pluginScopes = [];
+    const seenScopes = new Set();
+    for (const metricNode of root.querySelectorAll(metricSelector)) {
+      add(metricNode.innerText || metricNode.textContent);
+      let scope = metricNode;
+      for (let node = metricNode; node; node = node.parentElement) {
+        const marker = `${node.id || ''} ${node.className || ''}`;
+        if (/zying/i.test(marker)) scope = node;
+      }
+      if (!seenScopes.has(scope)) {
+        seenScopes.add(scope);
+        pluginScopes.push(scope);
+      }
+    }
+    for (const scope of pluginScopes) {
+      const scopedNodes = [scope, ...Array.from(scope.querySelectorAll('*'))];
+      for (const node of scopedNodes) {
         const assetValues = [
           node.getAttribute && node.getAttribute('src'),
           node.getAttribute && node.getAttribute('data-src'),
@@ -260,6 +272,8 @@ SHADOW_PLUGIN_TEXT_SCRIPT = r"""() => {
           }
         }
       }
+    }
+    for (const node of allNodes) {
       if (node.shadowRoot) walk(node.shadowRoot);
     }
   };
@@ -289,8 +303,16 @@ class _DetailPageSlot:
     react_reader: Any
 
 
-class USSelfShipSkipped(RuntimeError):
+class NonChinaSelfShipSkipped(RuntimeError):
+    """Raised when ZYing does not positively identify China self-shipping."""
+
+
+class USSelfShipSkipped(NonChinaSelfShipSkipped):
     """Raised when ZYing identifies an Internacional item as US self-ship."""
+
+
+class UnverifiedChinaSelfShipSkipped(NonChinaSelfShipSkipped):
+    """Raised when ZYing exposes weight but no trustworthy CN.svg marker."""
 
 
 PLUGIN_REACT_METRICS_SCRIPT = r"""(() => {
@@ -308,14 +330,28 @@ PLUGIN_REACT_METRICS_SCRIPT = r"""(() => {
   };
   walkRoots(document);
   const metricSelector = '.zying-meli-detail-metric-line, .zying-meli-detail-metric-column';
-  const pluginRoots = roots.filter(root => {
-    try { return !!root.querySelector(metricSelector); } catch (_) { return false; }
-  });
+  const pluginScopes = [];
+  const seenScopes = new Set();
+  for (const root of roots) {
+    let metricNodes = [];
+    try { metricNodes = root.querySelectorAll(metricSelector); } catch (_) {}
+    for (const metricNode of metricNodes) {
+      let scope = metricNode;
+      for (let node = metricNode; node; node = node.parentElement) {
+        const marker = `${node.id || ''} ${node.className || ''}`;
+        if (/zying/i.test(marker)) scope = node;
+      }
+      if (!seenScopes.has(scope)) {
+        seenScopes.add(scope);
+        pluginScopes.push(scope);
+      }
+    }
+  }
   const reactNodes = [];
   const visitedNodes = new Set();
-  for (const root of pluginRoots) {
-    let nodes = [];
-    try { nodes = root.querySelectorAll('*'); } catch (_) {}
+  for (const scope of pluginScopes) {
+    let nodes = [scope];
+    try { nodes.push(...scope.querySelectorAll('*')); } catch (_) {}
     for (const node of nodes) {
       if (visitedNodes.has(node)) continue;
       const keys = Object.keys(node);
@@ -328,9 +364,9 @@ PLUGIN_REACT_METRICS_SCRIPT = r"""(() => {
     }
   }
   const result = {found: reactNodes.length > 0, metrics: {}, data: {}};
-  for (const root of pluginRoots) {
-    let nodes = [];
-    try { nodes = root.querySelectorAll('*'); } catch (_) {}
+  for (const scope of pluginScopes) {
+    let nodes = [scope];
+    try { nodes.push(...scope.querySelectorAll('*')); } catch (_) {}
     for (const node of nodes) {
       const assetValues = [
         node.getAttribute && node.getAttribute('src'),
@@ -448,7 +484,22 @@ class _PluginMetricReader:
                 if context_id not in reader.context_ids:
                     reader.context_ids.append(context_id)
 
+            def forget_context(event: Mapping[str, Any]) -> None:
+                try:
+                    context_id = int(event.get("executionContextId"))
+                except (TypeError, ValueError):
+                    return
+                try:
+                    reader.context_ids.remove(context_id)
+                except ValueError:
+                    pass
+
+            def clear_contexts(_event: Mapping[str, Any] | None = None) -> None:
+                reader.context_ids.clear()
+
             session.on("Runtime.executionContextCreated", remember_context)
+            session.on("Runtime.executionContextDestroyed", forget_context)
+            session.on("Runtime.executionContextsCleared", clear_contexts)
             await session.send("Runtime.enable")
         except Exception:
             await reader.close()
@@ -753,12 +804,48 @@ async def _open_detail_page_pool(
     if not callable(getattr(getattr(runtime, "context", None), "new_page", None)):
         return None
     queue: asyncio.Queue[_DetailPageSlot] = asyncio.Queue()
-    try:
-        for _ in range(max(1, int(size))):
+
+    async def open_slot() -> _DetailPageSlot:
+        page = None
+        reader = None
+        try:
             page = await _new_page(runtime)
             reader = await _PluginMetricReader.open(page)
-            await queue.put(_DetailPageSlot(page=page, react_reader=reader))
-    except Exception:
+            return _DetailPageSlot(page=page, react_reader=reader)
+        except BaseException:
+            if reader is not None:
+                try:
+                    await reader.close()
+                except Exception:
+                    pass
+            if page is not None:
+                try:
+                    runtime.pages.remove(page)
+                except (AttributeError, ValueError):
+                    pass
+                try:
+                    if not page.is_closed():
+                        await page.close()
+                except Exception:
+                    pass
+            raise
+
+    try:
+        opened = await asyncio.gather(
+            *(open_slot() for _ in range(max(1, int(size)))),
+            return_exceptions=True,
+        )
+        first_error: BaseException | None = None
+        for value in opened:
+            if isinstance(value, BaseException):
+                first_error = first_error or value
+            else:
+                await queue.put(value)
+        # A single tab/CDP failure should only reduce concurrency. Existing
+        # healthy slots can continue serving queued detail work.
+        if queue.empty() and first_error is not None:
+            raise first_error
+    except BaseException:
         await _close_detail_page_pool(runtime, queue)
         raise
     return queue
@@ -794,6 +881,19 @@ async def _goto(
     wait_until: str = "commit",
 ) -> None:
     timeout = float(os.environ.get("MERCADO_PLAYWRIGHT_NAVIGATION_TIMEOUT_MS", "20000"))
+    previous_url = str(page.url or "")
+    marker = f"zeshun:{id(page)}:{datetime.now().timestamp()}"
+    marker_installed = False
+    try:
+        await page.evaluate(
+            "marker => { window.__zeshunCollectorNavigationMarker = marker; }",
+            marker,
+        )
+        marker_installed = True
+    except Exception:
+        # about:blank and a page mid-navigation may not have an executable
+        # context. URL validation below still protects cross-page navigation.
+        pass
     try:
         # Detail pages use ``commit`` to avoid waiting on tracking requests.
         # Listing pages opt into ``domcontentloaded`` so Mercado can leave its
@@ -810,14 +910,70 @@ async def _goto(
             await page.wait_for_load_state("domcontentloaded", timeout=3000)
         except Exception:
             pass
-        # Mercado can keep redirecting/tracking after useful HTML is already
-        # visible.  Continue into the navigation-safe DOM evaluator when the
-        # page has at least left about:blank; an actually failed navigation is
-        # still rejected below.
         current_url = str(page.url or "")
-        if current_url.startswith(("http://", "https://")):
-            return
-        raise
+        if not _navigation_target_matches(url, current_url):
+            raise
+        if current_url == previous_url:
+            # A same-URL reload is used to replace Mercado's stale SPA result
+            # tree after selecting Internacional. Merely seeing the expected
+            # URL is insufficient: prove that a new document replaced the old
+            # one by checking that its marker disappeared.
+            if not marker_installed:
+                raise
+            try:
+                current_marker = await page.evaluate(
+                    "() => window.__zeshunCollectorNavigationMarker || ''"
+                )
+            except Exception:
+                current_marker = ""
+            if current_marker == marker:
+                raise
+
+
+def _url_item_ids(value: str) -> set[str]:
+    """Return every Mercado item/catalog id encoded in a URL."""
+
+    return {
+        re.sub(r"-", "", match).upper()
+        for match in re.findall(r"(?:ML[A-Z]|CBT)-?\d+", str(value or ""), re.I)
+    }
+
+
+def _marketplace_country_root(value: str) -> str:
+    host = (urlsplit(str(value or "")).hostname or "").lower()
+    for prefix in ("www.", "listado.", "lista.", "articulo."):
+        if host.startswith(prefix):
+            return host[len(prefix):]
+    return host
+
+
+def _navigation_target_matches(target_url: str, current_url: str) -> bool:
+    """Reject a timed-out navigation that is still showing the previous page."""
+
+    if not str(current_url or "").startswith(("http://", "https://")):
+        return False
+    target_ids = _url_item_ids(target_url)
+    current_ids = _url_item_ids(current_url)
+    if target_ids:
+        return bool(target_ids.intersection(current_ids))
+    return bool(
+        _marketplace_country_root(target_url)
+        and _marketplace_country_root(target_url) == _marketplace_country_root(current_url)
+    )
+
+
+def _detail_item_id_from_url(value: str) -> str:
+    """Recognize a real detail path without treating a keyword as an item."""
+
+    parsed = urlsplit(str(value or ""))
+    host = (parsed.hostname or "").lower()
+    path = parsed.path or ""
+    if host.startswith(("listado.", "lista.")):
+        return ""
+    match = re.search(r"/(?:p/)?((?:ML[A-Z]|CBT)-?\d+)(?:[-/]|$)", path, re.I)
+    if not match and host.startswith("articulo."):
+        match = re.search(r"((?:ML[A-Z]|CBT)-?\d+)", path, re.I)
+    return re.sub(r"-", "", match.group(1)).upper() if match else ""
 
 
 _NAVIGATION_CONTEXT_MARKERS = (
@@ -856,13 +1012,11 @@ async def _evaluate_after_navigation(
     for attempt in range(max(1, int(attempts))):
         if page.is_closed():
             raise RuntimeError("Playwright 商品页面已关闭")
-        try:
-            await page.wait_for_load_state("domcontentloaded", timeout=5000)
-        except Exception:
-            # The next evaluate call gives a more useful error.  A slow
-            # resource must not block extraction after DOMContentLoaded.
-            pass
         if attempt:
+            try:
+                await page.wait_for_load_state("domcontentloaded", timeout=3000)
+            except Exception:
+                pass
             await asyncio.sleep(min(0.2 * attempt, 0.6))
         try:
             return await page.evaluate(script)
@@ -873,6 +1027,31 @@ async def _evaluate_after_navigation(
     if last_error is not None:
         raise last_error
     raise RuntimeError("Playwright 页面 DOM 读取失败")
+
+
+async def _wait_for_url_change(
+    page: Any,
+    previous_url: str,
+    *,
+    timeout: float = 10.0,
+    predicate: Callable[[str], bool] | None = None,
+    stop_event: threading.Event | None = None,
+) -> str:
+    """Wait for an SPA or regular navigation without a 20-second nav waiter."""
+
+    loop = asyncio.get_running_loop()
+    deadline = loop.time() + max(0.5, float(timeout))
+    while loop.time() < deadline:
+        _check_stop(stop_event)
+        current_url = str(page.url or "")
+        if (
+            current_url
+            and current_url != previous_url
+            and (predicate is None or predicate(current_url))
+        ):
+            return current_url
+        await asyncio.sleep(0.1)
+    raise TimeoutError("Mercado 页面地址未发生变化")
 
 
 async def _wait_for_product_detail(page: Any, timeout: float = 10000) -> bool:
@@ -950,6 +1129,8 @@ async def _run_keyword_search_flow(
             "message": f"正在指定国家的 Mercado 前台搜索：{normalized_keyword}",
         })
     await _goto(page, front_url, wait_until="domcontentloaded")
+    if _marketplace_country_root(page.url) != _marketplace_country_root(front_url):
+        raise RuntimeError("Mercado 没有进入所选国家前台，采集任务已停止")
     search_input = page.locator(
         'input[name="as_word"], input.nav-search-input'
     ).first
@@ -957,26 +1138,16 @@ async def _run_keyword_search_flow(
         await search_input.wait_for(state="visible", timeout=10000)
         await search_input.fill(normalized_keyword)
         previous_url = str(page.url or "")
-        try:
-            async with page.expect_navigation(
-                wait_until="domcontentloaded", timeout=20000
-            ):
-                await search_input.press("Enter")
-        except Exception:
-            # Mercado sometimes completes the navigation before Playwright can
-            # attach its waiter. Only accept that timeout when the URL moved.
-            if str(page.url or "") == previous_url:
-                raise
+        await search_input.press("Enter", no_wait_after=True)
+        await _wait_for_url_change(page, previous_url, stop_event=stop_event)
     except Exception as exc:
         raise RuntimeError(
             f"未能在所选国家的 Mercado 前台搜索关键词：{normalized_keyword}"
         ) from exc
 
-    try:
-        await page.wait_for_load_state("domcontentloaded", timeout=5000)
-    except Exception:
-        pass
     searched_url = str(page.url or "")
+    if _marketplace_country_root(searched_url) != _marketplace_country_root(front_url):
+        raise RuntimeError("Mercado 搜索跳转到了其他国家站点，采集任务已停止")
     if on_page:
         on_page({
             "stage": "keyword_search_complete",
@@ -1008,25 +1179,33 @@ async def _run_keyword_search_flow(
     try:
         await international_link.wait_for(state="visible", timeout=10000)
         previous_url = str(page.url or "")
-        try:
-            async with page.expect_navigation(
-                wait_until="domcontentloaded", timeout=20000
-            ):
-                await international_link.click()
-        except Exception:
-            if str(page.url or "") == previous_url:
-                raise
+        await international_link.click(no_wait_after=True)
+        await _wait_for_url_change(
+            page,
+            previous_url,
+            predicate=marketplace_url_has_cross_border_filter,
+            stop_event=stop_event,
+        )
     except Exception as exc:
         raise RuntimeError(
             "搜索结果左侧没有 Internacional 选项，采集任务已停止"
         ) from exc
 
-    try:
-        await page.wait_for_load_state("domcontentloaded", timeout=5000)
-    except Exception:
-        pass
     filtered_url = str(page.url or source_url)
-    if not marketplace_url_has_cross_border_filter(filtered_url):
+    if (
+        _marketplace_country_root(filtered_url) != _marketplace_country_root(front_url)
+        or not marketplace_url_has_cross_border_filter(filtered_url)
+    ):
+        raise RuntimeError("Mercado 未成功进入 Internacional，采集任务已停止")
+    # Mercado changes the URL before its SPA result tree is always replaced.
+    # Reload the confirmed filtered URL once so listing extraction cannot read
+    # the pre-filter domestic cards and relabel them as Internacional.
+    await _goto(page, filtered_url, wait_until="domcontentloaded")
+    filtered_url = str(page.url or filtered_url)
+    if (
+        _marketplace_country_root(filtered_url) != _marketplace_country_root(front_url)
+        or not marketplace_url_has_cross_border_filter(filtered_url)
+    ):
         raise RuntimeError("Mercado 未成功进入 Internacional，采集任务已停止")
     if on_page:
         on_page({
@@ -1073,10 +1252,7 @@ async def _listing_candidates(
     page_url = source_url
     page_number = 0
     first_page_prepared = False
-    try:
-        direct_source_item_id = extract_listing_item_id(source_url)
-    except ValueError:
-        direct_source_item_id = ""
+    direct_source_item_id = _detail_item_id_from_url(source_url)
 
     if keyword and not direct_source_item_id:
         page_url = await _run_keyword_search_flow(
@@ -1183,7 +1359,7 @@ async def _listing_candidates(
         page_rows = [] if page_number == 1 and direct_source_item_id else snapshot.get("rows") or []
         if (
             collection_scope == "cross_border"
-            and marketplace_url_has_cross_border_filter(source_url)
+            and marketplace_url_has_cross_border_filter(actual_url)
         ):
             # The filtered Mercado result page does not consistently render
             # the "Internacional" badge on every card layout.  Its explicit
@@ -1261,7 +1437,7 @@ async def _listing_candidates(
             if page_number > 1 and len(candidates) == before:
                 break
             next_url = _synthesized_listing_page_url(
-                source_url, page_number + 1
+                actual_url, page_number + 1
             )
         if not next_url:
             break
@@ -1381,9 +1557,12 @@ def _metrics_from_react_payload(
 def _plugin_self_ship_origin(lines: Iterable[Any]) -> str:
     """Return the country encoded by ZYing's CN.svg/US.svg origin icon."""
     combined = " ".join(str(value or "") for value in lines)
-    match = re.search(r"__ZYING_SELF_SHIP_ORIGIN__:(CN|US)\b", combined, re.I)
-    if match:
-        return match.group(1).upper()
+    # If a stale CN asset and the current US icon coexist briefly, skipping is
+    # safer than accepting the item based on whichever DOM node appeared first.
+    if re.search(r"__ZYING_SELF_SHIP_ORIGIN__:US\b", combined, re.I):
+        return "US"
+    if re.search(r"__ZYING_SELF_SHIP_ORIGIN__:CN\b", combined, re.I):
+        return "CN"
     if re.search(r"(?:^|[\\/])US\.svg(?:[?#\s\"')]|$)", combined, re.I):
         return "US"
     if re.search(r"(?:^|[\\/])CN\.svg(?:[?#\s\"')]|$)", combined, re.I):
@@ -1411,42 +1590,62 @@ async def _wait_for_plugin_metrics(
     last_lines: list[str] = []
     last_metrics = parse_plugin_metrics("")
     poll_number = 0
+    actual_weight_first_seen_poll: int | None = None
+    self_ship_origin = ""
+
+    def merge_metrics(incoming: Mapping[str, Any]) -> None:
+        for key, value in incoming.items():
+            if value not in (None, ""):
+                last_metrics[key] = value
+
+    def merge_lines(incoming: Iterable[Any]) -> None:
+        for value in incoming:
+            text = str(value or "").strip()
+            if text and text not in last_lines:
+                last_lines.append(text)
+
     while asyncio.get_running_loop().time() < deadline:
         poll_number += 1
         _check_stop(stop_event)
         if react_reader is not None:
             react_payload = await react_reader.read()
             react_metrics, react_lines = _metrics_from_react_payload(react_payload)
-            if react_lines:
-                last_lines = react_lines
-                last_metrics = react_metrics
-            if _plugin_self_ship_origin(react_lines) == "US":
-                return react_metrics, react_lines
-            if (
-                react_metrics.get("weight_g") is not None
-                and react_metrics.get("package_length_cm") is not None
-                and react_metrics.get("package_width_cm") is not None
-                and react_metrics.get("package_height_cm") is not None
-            ):
-                return react_metrics, react_lines
+            merge_lines(react_lines)
+            merge_metrics(react_metrics)
+            react_origin = _plugin_self_ship_origin(react_lines)
+            if react_origin:
+                self_ship_origin = react_origin
+            if self_ship_origin == "US":
+                return last_metrics, last_lines
         # React props are the fast path.  A full shadow-DOM/frame scan is much
-        # heavier, so use it only initially and then every third poll.
-        if not last_lines or poll_number % 3 == 0:
-            last_lines = await _plugin_dom_lines(page)
-            dom_metrics = parse_plugin_metrics(" ".join(last_lines))
-            if _plugin_self_ship_origin(last_lines) == "US":
-                return dom_metrics, last_lines
-            if any(dom_metrics.get(key) is not None for key in (
-                "weight_g", "package_length_cm", "package_width_cm", "package_height_cm"
-            )):
-                last_metrics = dom_metrics
+        # heavier, so scan periodically. While origin is still unknown, scan
+        # every poll after weight appears so a delayed US.svg cannot be missed.
+        actual_weight = _number(last_metrics.get("weight_g"))
         if (
-            last_metrics.get("weight_g") is not None
-            and last_metrics.get("package_length_cm") is not None
-            and last_metrics.get("package_width_cm") is not None
-            and last_metrics.get("package_height_cm") is not None
+            not last_lines
+            or poll_number % 3 == 0
+            or (actual_weight is not None and actual_weight > 0 and not self_ship_origin)
         ):
+            dom_lines = await _plugin_dom_lines(page)
+            merge_lines(dom_lines)
+            merge_metrics(parse_plugin_metrics(" ".join(dom_lines)))
+            dom_origin = _plugin_self_ship_origin(dom_lines)
+            if dom_origin:
+                self_ship_origin = dom_origin
+            if self_ship_origin == "US":
+                return last_metrics, last_lines
+
+        actual_weight = _number(last_metrics.get("weight_g"))
+        actual_weight_complete = actual_weight is not None and actual_weight > 0
+        if actual_weight_complete and self_ship_origin == "CN":
             return last_metrics, last_lines
+        if actual_weight_complete:
+            if actual_weight_first_seen_poll is None:
+                actual_weight_first_seen_poll = poll_number
+            elif poll_number - actual_weight_first_seen_poll >= 3:
+                # Shipping needs only actual weight. Keep a short origin grace
+                # window (up to 750 ms) to catch a late-rendered US.svg.
+                return last_metrics, last_lines
         if (
             react_reader is None
             and last_lines
@@ -1497,7 +1696,7 @@ def _failure_row(candidate: Mapping[str, Any], exc: Exception) -> dict[str, Any]
         **dict(candidate),
         "scrape_status": "failed",
         "error_message": str(exc),
-        "weight_basis": "plugin_actual",
+        "weight_basis": "",
         "source": {
             "id": candidate.get("source_item_id"),
             "title": candidate.get("title"),
@@ -1536,11 +1735,13 @@ async def _collect_detail(
     try:
         primary_url = str(candidate["source_url"])
         fallback_url = str(candidate.get("listing_url") or "").strip()
+        loaded_target_url = primary_url
         try:
             await _goto(page, primary_url)
         except Exception:
             if not fallback_url or fallback_url == primary_url:
                 raise
+            loaded_target_url = fallback_url
             await _goto(page, fallback_url)
         detail_ready = await _wait_for_product_detail(page, timeout=10000)
         if (
@@ -1548,9 +1749,17 @@ async def _collect_detail(
             and fallback_url
             and fallback_url != primary_url
         ):
+            loaded_target_url = fallback_url
             await _goto(page, fallback_url)
             await _wait_for_product_detail(page, timeout=10000)
         details = await _evaluate_after_navigation(page, DETAIL_DOM_SCRIPT)
+        final_url = str(details.get("final_url") or page.url or "")
+        target_ids = _url_item_ids(loaded_target_url)
+        final_ids = _url_item_ids(final_url)
+        if target_ids and not target_ids.intersection(final_ids):
+            raise RuntimeError(
+                "详情页商品编号与待采商品不一致，已丢弃旧页面数据"
+            )
         blocked = _blocked_page_message(page.url, str(details.get("body") or ""))
         if blocked:
             raise RuntimeError(blocked)
@@ -1566,6 +1775,10 @@ async def _collect_detail(
             raise USSelfShipSkipped(
                 "智赢插件检测到 US.svg：美国自发货商品已跳过，不写入采集列表"
             )
+        if self_ship_origin != "CN":
+            raise UnverifiedChinaSelfShipSkipped(
+                "智赢插件未检测到 CN.svg：无法确认中国自发货，已跳过且不写入采集列表"
+            )
         ocr_snapshot: dict[str, Any] = {}
         metric_keys = (
             "weight_g",
@@ -1577,15 +1790,7 @@ async def _collect_detail(
             "weight_display",
             "plugin_volumetric_display",
         )
-        if not all(
-            metrics.get(key) is not None
-            for key in (
-                "weight_g",
-                "package_length_cm",
-                "package_width_cm",
-                "package_height_cm",
-            )
-        ):
+        if metrics.get("weight_g") is None:
             try:
                 ocr_metrics, ocr_snapshot = await _ocr_visible_plugin_metrics(page)
                 for key in metric_keys:
@@ -1594,24 +1799,9 @@ async def _collect_detail(
             except Exception as exc:
                 ocr_snapshot = {"error": str(exc)}
 
-        weight_basis = "plugin_actual"
-        if (
-            metrics.get("weight_g") is None
-            and metrics.get("volumetric_weight_kg") is not None
-            and all(
-                metrics.get(key) is not None
-                for key in (
-                    "package_length_cm",
-                    "package_width_cm",
-                    "package_height_cm",
-                )
-            )
-        ):
-            # Some ZYing layouts expose dimensions and chargeable volumetric
-            # weight but omit actual weight.  Using the larger chargeable value
-            # is conservative for shipping and is explicitly labelled.
-            metrics["weight_g"] = float(metrics["volumetric_weight_kg"]) * 1000.0
-            weight_basis = "plugin_volumetric_fallback"
+        actual_weight = _number(metrics.get("weight_g"))
+        actual_weight_complete = actual_weight is not None and actual_weight > 0
+        weight_basis = "plugin_actual" if actual_weight_complete else ""
         pictures = [
             url
             for url in (
@@ -1630,13 +1820,7 @@ async def _collect_detail(
         item_id = extract_item_id(
             str(candidate.get("source_item_id") or page.url)
         )
-        plugin_complete = bool(
-            metrics.get("weight_g") is not None
-            and metrics.get("package_length_cm") is not None
-            and metrics.get("package_width_cm") is not None
-            and metrics.get("package_height_cm") is not None
-        )
-        complete = bool(title and main_image and plugin_complete)
+        complete = bool(title and main_image and actual_weight_complete)
         errors: list[str] = []
         if not main_image:
             errors.append("未识别到商品主图")
@@ -1653,8 +1837,8 @@ async def _collect_detail(
             errors.append(
                 "Playwright 采集浏览器中的智赢插件尚未登录，请先点击“登录智赢采集浏览器”"
             )
-        elif not plugin_complete:
-            errors.append("智赢插件已显示，但 DOM 中没有完整的重量/尺寸")
+        elif not actual_weight_complete:
+            errors.append("智赢插件已显示，但 DOM 中没有读取到实际重量")
 
         currency_id = str(
             details.get("currency_id") or candidate.get("currency_id") or "MXN"
@@ -1721,7 +1905,7 @@ async def _collect_detail(
                 "plugin_volumetric_display": metrics.get("plugin_volumetric_display"),
                 "volumetric_formula": "length_cm * width_cm * height_cm / 6000",
                 "volumetric_weight_kg": metrics.get("volumetric_weight_kg"),
-                "self_ship_origin": self_ship_origin or "non_us",
+                "self_ship_origin": self_ship_origin or "unknown",
             },
             "collected_at": datetime.now().replace(microsecond=0).strftime("%Y-%m-%d %H:%M:%S"),
         }
@@ -1750,7 +1934,7 @@ async def _repair_items_async(
     on_progress: Callable[[dict[str, Any]], None] | None,
     stop_event: threading.Event | None,
 ) -> dict[str, Any]:
-    """Re-read incomplete details sequentially in one reusable browser context."""
+    """Re-read items missing actual weight in one reusable browser context."""
     candidates = [
         {
             "source_item_id": str(row.get("source_item_id") or ""),
@@ -1762,7 +1946,17 @@ async def _repair_items_async(
             "currency_id": str(row.get("currency_id") or "MXN"),
         }
         for row in rows
-        if str(row.get("scrape_status") or "").lower() != "ok"
+        if (
+            str(row.get("scrape_status") or "").lower() != "ok"
+            or not str(row.get("title") or "").strip()
+            or not str(row.get("main_image_url") or "").strip()
+            or (_number(row.get("weight_g")) or 0) <= 0
+            or str(row.get("weight_basis") or "").strip().lower() in {
+                "calculated_volumetric",
+                "legacy_unknown",
+                "plugin_volumetric_fallback",
+            }
+        )
         and str(row.get("source_item_id") or "").strip()
         and str(row.get("source_url") or row.get("final_url") or "").strip()
     ]
@@ -1776,18 +1970,18 @@ async def _repair_items_async(
         await detail_page_pool.get() if detail_page_pool is not None else None
     )
     repaired: list[dict[str, Any]] = []
-    completed = failed = skipped_us = 0
+    completed = failed = skipped_us = skipped_unverified_origin = 0
     consecutive_failures = 0
     try:
         failure_limit = max(
             1,
             min(
-                int(os.environ.get("MERCADO_PLAYWRIGHT_REPAIR_FAILURE_LIMIT", "6")),
+                int(os.environ.get("MERCADO_PLAYWRIGHT_REPAIR_FAILURE_LIMIT", "3")),
                 20,
             ),
         )
     except ValueError:
-        failure_limit = 6
+        failure_limit = 3
     try:
         for index, candidate in enumerate(candidates, start=1):
             _check_stop(stop_event)
@@ -1808,24 +2002,26 @@ async def _repair_items_async(
                     raise
                 except Exception as exc:
                     value = exc
-                if isinstance(value, USSelfShipSkipped):
+                if isinstance(value, NonChinaSelfShipSkipped):
                     break
                 if isinstance(value, Mapping) and value.get("scrape_status") == "ok":
                     break
                 if attempt + 1 < attempts:
                     await asyncio.sleep(1.0)
-            if isinstance(value, USSelfShipSkipped):
-                skipped_us += 1
+            if isinstance(value, NonChinaSelfShipSkipped):
+                if isinstance(value, USSelfShipSkipped):
+                    skipped_us += 1
+                    stage = "us_self_ship_skipped"
+                else:
+                    skipped_unverified_origin += 1
+                    stage = "unverified_china_origin_skipped"
                 if on_progress:
                     on_progress({
-                        "stage": "us_self_ship_skipped",
+                        "stage": stage,
                         "current": index,
                         "total": len(candidates),
                         "item_id": candidate["source_item_id"],
-                        "message": (
-                            f"已跳过 {candidate['source_item_id']}："
-                            "智赢插件显示 US.svg（美国自发货）"
-                        ),
+                        "message": f"已跳过 {candidate['source_item_id']}：{value}",
                     })
                 continue
             row = _failure_row(candidate, value) if isinstance(value, Exception) else dict(value)
@@ -1845,7 +2041,7 @@ async def _repair_items_async(
                     "total": len(candidates),
                     "item_id": candidate["source_item_id"],
                     "message": (
-                        f"正在低并发补采重量尺寸（{index}/{len(candidates)}），"
+                        f"正在低并发补采实际重量（{index}/{len(candidates)}），"
                         f"已修复 {completed} 件"
                     ),
                 })
@@ -1857,7 +2053,7 @@ async def _repair_items_async(
                         "total": len(candidates),
                         "item_id": candidate["source_item_id"],
                         "message": (
-                            f"低并发补采连续 {consecutive_failures} 件没有恢复重量尺寸，"
+                            f"低并发补采连续 {consecutive_failures} 件没有恢复实际重量，"
                             "已停止无效重试"
                         ),
                     })
@@ -1865,7 +2061,7 @@ async def _repair_items_async(
             # ZYing injects metrics asynchronously and becomes unreliable when
             # incomplete items immediately trigger another navigation.
             if index < len(candidates):
-                await asyncio.sleep(0.4)
+                await asyncio.sleep(0.15)
         return {
             "requested_count": len(candidates),
             "attempted_count": len(repaired),
@@ -1873,6 +2069,7 @@ async def _repair_items_async(
             "completed_count": completed,
             "failed_count": failed,
             "skipped_us_count": skipped_us,
+            "skipped_unverified_origin_count": skipped_unverified_origin,
             "browser_connection": runtime.connection_mode,
             "rows": repaired,
         }
@@ -1902,7 +2099,7 @@ async def _collect_async(
 
     runtime = await open_runtime()
     results: list[dict[str, Any]] = []
-    completed = failed = skipped_us = 0
+    completed = failed = skipped_us = skipped_unverified_origin = 0
     detail_page_pool: asyncio.Queue[_DetailPageSlot] | None = None
     try:
         try:
@@ -1955,14 +2152,14 @@ async def _collect_async(
                 min(
                     float(
                         os.environ.get(
-                            "MERCADO_PLAYWRIGHT_NAVIGATION_STAGGER_SECONDS", "0.30"
+                            "MERCADO_PLAYWRIGHT_NAVIGATION_STAGGER_SECONDS", "0.15"
                         )
                     ),
                     3.0,
                 ),
             )
         except ValueError:
-            navigation_stagger = 0.30
+            navigation_stagger = 0.15
         try:
             fast_plugin_timeout = max(
                 1.0,
@@ -2173,16 +2370,16 @@ async def _collect_async(
                         value = await collect_detail_with_verification_gate(
                             active_runtime, candidate, slot
                         )
-                        incomplete = (
+                        missing_core_identity = (
                             isinstance(value, dict)
                             and (
-                                (not value.get("title") and not value.get("main_image_url"))
-                                or value.get("scrape_status") in {"partial", "failed"}
+                                not value.get("title")
+                                or not value.get("main_image_url")
                             )
                         )
-                        if not isinstance(value, Exception) and not incomplete:
+                        if not isinstance(value, Exception) and not missing_core_identity:
                             break
-                        if isinstance(value, USSelfShipSkipped):
+                        if isinstance(value, NonChinaSelfShipSkipped):
                             break
                         if isinstance(value, Exception) and _is_browser_closed_error(value):
                             break
@@ -2212,21 +2409,23 @@ async def _collect_async(
         async def save_result(
             candidate: Mapping[str, Any], value: Any, current: int
         ) -> None:
-            nonlocal completed, failed, skipped_us
+            nonlocal completed, failed, skipped_us, skipped_unverified_origin
             if isinstance(value, CollectionStopped):
                 raise value
-            if isinstance(value, USSelfShipSkipped):
-                skipped_us += 1
+            if isinstance(value, NonChinaSelfShipSkipped):
+                if isinstance(value, USSelfShipSkipped):
+                    skipped_us += 1
+                    stage = "us_self_ship_skipped"
+                else:
+                    skipped_unverified_origin += 1
+                    stage = "unverified_china_origin_skipped"
                 if on_progress:
                     on_progress({
-                        "stage": "us_self_ship_skipped",
+                        "stage": stage,
                         "current": current,
                         "total": len(candidates),
                         "item_id": candidate["source_item_id"],
-                        "message": (
-                            f"已跳过 {candidate['source_item_id']}："
-                            "智赢插件显示 US.svg（美国自发货）"
-                        ),
+                        "message": f"已跳过 {candidate['source_item_id']}：{value}",
                     })
                 return
             row = _failure_row(candidate, value) if isinstance(value, Exception) else value
@@ -2308,6 +2507,7 @@ async def _collect_async(
             "completed_count": completed,
             "failed_count": failed,
             "skipped_us_count": skipped_us,
+            "skipped_unverified_origin_count": skipped_unverified_origin,
             "browser_mode": "playwright",
             "browser_connection": runtime.connection_mode,
             "collection_scope": collection_scope,
@@ -2387,6 +2587,10 @@ async def _open_login_setup_async(start_url: str, window_id: str = "") -> None:
         except Exception:
             # Keep the browser available even if Mercado is temporarily slow;
             # the operator can navigate or retry in the visible window.
+            pass
+        try:
+            await page.bring_to_front()
+        except Exception:
             pass
         while not page.is_closed():
             await asyncio.sleep(0.5)

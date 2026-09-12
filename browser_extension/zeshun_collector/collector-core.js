@@ -247,6 +247,8 @@
   function readPluginMetrics(doc) {
     const lines = [];
     const seen = new Set();
+    let selfShipOrigin = "";
+    let originIconUrl = "";
     const add = value => {
       const text = clean(value);
       if (text && text.length <= 1200 && !seen.has(text)) {
@@ -255,13 +257,52 @@
       }
     };
     for (const root of shadowRoots(doc)) {
-      root.querySelectorAll(
+      const containers = Array.from(root.querySelectorAll(
         ".zying-meli-detail-metric-line, .zying-meli-detail-metric-column, [class*='zying-meli-detail']"
-      ).forEach(node => add(node.innerText || node.textContent));
+      ));
+      containers.forEach(node => add(node.innerText || node.textContent));
+      containers.forEach(container => {
+        let scope = container;
+        for (let node = container; node && node !== root; node = node.parentElement) {
+          const marker = `${node.id || ""} ${node.className || ""}`;
+          if (/zying/i.test(marker)) scope = node;
+        }
+        // The origin icon can be a sibling of the weight column. Scan the
+        // nearest ZYing wrapper, never the whole marketplace document.
+        const nodes = [scope, ...Array.from(scope.querySelectorAll("*"))];
+        nodes.forEach(node => {
+          const assets = [
+            node.getAttribute && node.getAttribute("src"),
+            node.getAttribute && node.getAttribute("data-src"),
+            node.getAttribute && node.getAttribute("href"),
+            node.getAttribute && node.getAttribute("xlink:href"),
+            node.getAttribute && node.getAttribute("data"),
+            node.style && node.style.backgroundImage
+          ];
+          assets.forEach(asset => {
+            const value = String(asset || "");
+            if (/(?:^|[\\/])US\.svg(?:[?#"')]|$)/i.test(value)) {
+              selfShipOrigin = "US";
+              originIconUrl = value;
+            } else if (
+              !selfShipOrigin && /(?:^|[\\/])CN\.svg(?:[?#"')]|$)/i.test(value)
+            ) {
+              selfShipOrigin = "CN";
+              originIconUrl = value;
+            }
+          });
+        });
+      });
     }
     const text = lines.join(" ");
     const metrics = parsePluginMetrics(text);
-    return {lines: lines.slice(0, 50), text: text.slice(0, 12000), metrics};
+    return {
+      lines: lines.slice(0, 50),
+      text: text.slice(0, 12000),
+      metrics,
+      self_ship_origin: selfShipOrigin,
+      origin_icon_url: originIconUrl
+    };
   }
 
   function currencyForUrl(pageUrl) {
@@ -329,13 +370,14 @@
     const specs = extractSpecs(doc);
     const plugin = readPluginMetrics(doc);
     const metrics = plugin.metrics;
-    let weightBasis = "plugin_actual";
-    if (metrics.weight_g === null && metrics.volumetric_weight_kg !== null && [
-      metrics.package_length_cm, metrics.package_width_cm, metrics.package_height_cm
-    ].every(value => value !== null)) {
-      metrics.weight_g = metrics.volumetric_weight_kg * 1000;
-      weightBasis = "plugin_volumetric_fallback";
+    if (plugin.self_ship_origin === "US") {
+      throw new Error("智赢插件检测到 US.svg：美国自发货商品不采集");
     }
+    if (plugin.self_ship_origin !== "CN") {
+      throw new Error("智赢插件未检测到 CN.svg：无法确认中国自发货，商品不采集");
+    }
+    const actualWeightComplete = Number.isFinite(Number(metrics.weight_g)) && Number(metrics.weight_g) > 0;
+    const weightBasis = actualWeightComplete ? "plugin_actual" : "";
     const price = pagePrice(doc, product);
     const offer = Array.isArray(product.offers) ? product.offers[0] : (product.offers || {});
     const currencyId = clean(
@@ -344,14 +386,11 @@
     ).toUpperCase();
     const canonical = doc.querySelector('link[rel="canonical"]');
     const finalUrl = clean((canonical && canonical.href) || meta(doc, 'meta[property="og:url"]') || pageUrl);
-    const completeMeasurements = [
-      metrics.weight_g, metrics.package_length_cm, metrics.package_width_cm, metrics.package_height_cm
-    ].every(value => value !== null && value > 0);
     const errors = [];
     if (!pictures.length) errors.push("未识别到商品主图");
     if (!plugin.lines.length) errors.push("未读取到智赢重量尺寸，可在泽顺控制台后续补充");
-    else if (!completeMeasurements) errors.push("已检测到智赢浮层，但重量尺寸不完整");
-    const complete = Boolean(title && pictures.length && completeMeasurements);
+    else if (!actualWeightComplete) errors.push("已检测到智赢浮层，但没有读取到实际重量");
+    const complete = Boolean(title && pictures.length && actualWeightComplete);
     const source = {
       id: itemId,
       site_id: itemId.slice(0, 3),
@@ -400,7 +439,9 @@
         weight_display: metrics.weight_display,
         plugin_volumetric_display: metrics.volumetric_display,
         volumetric_formula: "length_cm * width_cm * height_cm / 6000",
-        volumetric_weight_kg: metrics.volumetric_weight_kg
+        volumetric_weight_kg: metrics.volumetric_weight_kg,
+        self_ship_origin: plugin.self_ship_origin || "unknown",
+        origin_icon_url: plugin.origin_icon_url
       },
       collected_at: nowSql()
     };
@@ -423,6 +464,8 @@
   }
 
   function extractCardProduct(card, pageUrl) {
+    throw new Error("列表页无法确认 CN.svg，请打开商品详情页并等待智赢插件显示中国发货后采集");
+    /* istanbul ignore next -- retained only as a reference for old queued payloads */
     if (!card || !isSupportedUrl(pageUrl)) throw new Error("未识别到可采集的商品卡片");
     let decodedUrl = String(pageUrl || "");
     try { decodedUrl = decodeURIComponent(decodedUrl); } catch (_) {}

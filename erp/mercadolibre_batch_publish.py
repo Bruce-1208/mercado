@@ -102,6 +102,16 @@ def _decimal_value(value: Any) -> Decimal | None:
     return number if number.is_finite() else None
 
 
+def _actual_weight_value(row: Mapping[str, Any]) -> Decimal | None:
+    if str(row.get("weight_basis") or "").strip().lower() in {
+        "calculated_volumetric",
+        "legacy_unknown",
+        "plugin_volumetric_fallback",
+    }:
+        return None
+    return _decimal_value(row.get("weight_g"))
+
+
 def _row_references(rows: Iterable[Mapping[str, Any]]) -> str:
     references = [
         str(row.get("source_item_id") or row.get("id") or "未知商品")
@@ -119,7 +129,8 @@ def product_publish_issues(product_row: Mapping[str, Any]) -> list[str]:
     issues: list[str] = []
     if row.get("review_status") != "approved":
         issues.append("审核状态未通过")
-    if (_decimal_value(row.get("weight_g")) or Decimal("0")) <= 0:
+    actual_weight = _actual_weight_value(row)
+    if (actual_weight or Decimal("0")) <= 0:
         issues.append("未填写有效重量")
     net_proceeds = _decimal_value(row.get("net_proceeds_usd"))
     if net_proceeds is None:
@@ -144,7 +155,7 @@ def validate_publishable_products(product_rows: Iterable[Mapping[str, Any]]) -> 
         )
     missing_weight = [
         row for row in rows
-        if (_decimal_value(row.get("weight_g")) or Decimal("0")) <= 0
+        if (_actual_weight_value(row) or Decimal("0")) <= 0
     ]
     if missing_weight:
         issues.append(f"未填写有效重量 {_row_references(missing_weight)}")
