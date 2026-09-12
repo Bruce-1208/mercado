@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 import threading
 import uuid
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -27,7 +28,9 @@ from erp.mercadolibre_store_link_store import (
 from mercado_api.client import MercadoLibreClient
 
 
-STORE_LINK_REMOTE_UPDATE_WORKERS = 6
+STORE_LINK_REMOTE_UPDATE_WORKERS = max(
+    1, min(32, int(os.getenv("MERCADO_STORE_LINK_REMOTE_UPDATE_WORKERS", "16")))
+)
 STORE_LINK_REMOTE_UPDATE_FIELDS = (
     "price",
     "weight_g",

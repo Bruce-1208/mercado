@@ -2092,7 +2092,8 @@ API_REPUTATION_STATE_PATH = Path(
     os.environ.get("BIT_API_REPUTATION_STATE_PATH")
     or (RUNTIME_LOCK_DIR / "api_reputation_last_snapshot.json")
 )
-API_REPUTATION_AUTO_REFRESH_HOURS = (0, 12)
+API_REPUTATION_AUTO_REFRESH_HOURS = (14,)
+API_REPUTATION_TIMEZONE = timezone(timedelta(hours=8), name="Asia/Shanghai")
 API_REPUTATION_MAX_WORKERS = 10
 
 
@@ -9078,6 +9079,11 @@ def _mercado_profit_refresh_loop():
     except ValueError:
         interval = 300
 
+    try:
+        refresh_workers = max(1, min(32, int(os.environ.get("MERCADO_PROFIT_REFRESH_WORKERS", "20"))))
+    except ValueError:
+        refresh_workers = 20
+
     next_reference_check = 0.0
     while not _mercado_profit_refresh_stop_event.is_set():
         # Clear before querying. A write that arrives during the query remains
@@ -9133,7 +9139,7 @@ def _mercado_profit_refresh_loop():
                     )
                     return str(row.get("source_item_id") or "")
 
-                worker_count = min(10, len(rows))
+                worker_count = min(refresh_workers, len(rows))
                 with ThreadPoolExecutor(
                     max_workers=worker_count,
                     thread_name_prefix="mercado-profit",
@@ -13623,9 +13629,11 @@ def _append_api_reputation_log(message):
 
 
 def _next_api_reputation_run(now=None):
-    """Return the next local 00:00/12:00 reputation refresh boundary."""
+    """Return the next daily 14:00 Beijing reputation refresh boundary."""
 
-    current = now or datetime.now()
+    current = now or datetime.now(API_REPUTATION_TIMEZONE)
+    if current.tzinfo is not None:
+        current = current.astimezone(API_REPUTATION_TIMEZONE)
     candidates = []
     for hour in API_REPUTATION_AUTO_REFRESH_HOURS:
         candidate = current.replace(hour=hour, minute=0, second=0, microsecond=0)
@@ -13655,6 +13663,7 @@ def _api_reputation_snapshot():
     data.update({
         "auto_refresh_enabled": not USE_DB_API,
         "auto_refresh_hours": list(API_REPUTATION_AUTO_REFRESH_HOURS),
+        "auto_refresh_timezone": "Asia/Shanghai",
         "max_workers": API_REPUTATION_MAX_WORKERS,
         "next_auto_refresh_at": _next_api_reputation_run().strftime(
             "%Y-%m-%d %H:%M:%S"
@@ -13765,8 +13774,22 @@ def _persist_api_reputation_snapshot(state_path=None):
             pass
 
 
-def _run_all_api_reputation_refresh():
+def _merge_api_reputation_rows(previous_rows, updated_rows):
+    # Replace only successfully returned shop/site pairs; retain other cached data.
+    def key(row):
+        return (
+            str(row.get("store_name") or "").strip().casefold(),
+            bit_reputation_info._normalize_api_site_code(
+                row.get("site_id") or row.get("site_name")
+            ),
+        )
+    updated_keys = {key(row) for row in updated_rows}
+    return [dict(row) for row in previous_rows if key(row) not in updated_keys] + updated_rows
+
+
+def _run_all_api_reputation_refresh(selected_shops=None, previous_rows=None):
     started_monotonic = time.monotonic()
+    action_label = "所选店铺更新" if selected_shops else "全量更新"
 
     def update_progress(progress):
         event = str((progress or {}).get("event") or "")
@@ -13784,7 +13807,9 @@ def _run_all_api_reputation_refresh():
                 _api_reputation_state["completed_stores"] += 1
                 _api_reputation_state["success_stores"] += 1
                 _api_reputation_state["total_sites"] += len(rows)
-                _api_reputation_state["rows"].extend(rows)
+                _api_reputation_state["rows"] = _merge_api_reputation_rows(
+                    _api_reputation_state["rows"], rows
+                )
             elif event == "store_failure":
                 _api_reputation_state["completed_stores"] += 1
                 _api_reputation_state["failed_stores"] += 1
@@ -13797,6 +13822,7 @@ def _run_all_api_reputation_refresh():
     try:
         result = bit_reputation_info.main(
             max_workers=API_REPUTATION_MAX_WORKERS,
+            selected_shops=selected_shops,
             retry_failed=True,
             send_email=False,
             export_excel=False,
@@ -13814,6 +13840,8 @@ def _run_all_api_reputation_refresh():
         success_count = int(result.get("success_stores") or 0)
         failed_count = int(result.get("failed_stores") or len(failures))
         total_sites = int(result.get("total_sites") or len(rows))
+        if selected_shops:
+            rows = _merge_api_reputation_rows(previous_rows or [], rows)
         with _api_reputation_lock:
             _api_reputation_state.update({
                 "running": False,
@@ -13822,7 +13850,7 @@ def _run_all_api_reputation_refresh():
                     else "partial" if success_count else "error"
                 ),
                 "message": (
-                    f"全量更新完成：成功 {success_count} 家，失败 {failed_count} 家"
+                    f"{action_label}完成：成功 {success_count} 家，失败 {failed_count} 家"
                     if total_stores
                     else "没有开启声誉更新的店铺"
                 ),
@@ -13843,17 +13871,19 @@ def _run_all_api_reputation_refresh():
             _api_reputation_state.update({
                 "running": False,
                 "status": "error",
-                "message": f"全量更新失败：{exc}",
+                "message": f"{action_label}失败：{exc}",
                 "finished_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
                 "elapsed_seconds": max(0, int(time.monotonic() - started_monotonic)),
             })
         _append_api_reputation_log(f"任务异常终止：{exc}")
 
 
-def _start_api_reputation_refresh(*, automatic=False):
+def _start_api_reputation_refresh(*, automatic=False, selected_shops=None):
+    _hydrate_api_reputation_from_database()
     with _api_reputation_lock:
         if _api_reputation_state.get("running"):
             return False
+        previous_rows = [dict(row) for row in _api_reputation_state.get("rows", [])]
         _api_reputation_logs.clear()
         _api_reputation_state.update({
             "running": True,
@@ -13871,11 +13901,12 @@ def _start_api_reputation_refresh(*, automatic=False):
             "success_stores": 0,
             "failed_stores": 0,
             "total_sites": 0,
-            "rows": [],
+            "rows": previous_rows if selected_shops else [],
             "failures": [],
         })
     threading.Thread(
         target=_run_all_api_reputation_refresh,
+        kwargs={"selected_shops": selected_shops, "previous_rows": previous_rows},
         name=(
             "api-reputation-auto-refresh"
             if automatic
@@ -13894,7 +13925,7 @@ def _start_api_reputation_refresh(*, automatic=False):
 def _api_reputation_auto_refresh_loop(stop_event=None):
     stop_event = stop_event or _api_reputation_scheduler_stop_event
     while not stop_event.is_set():
-        now = datetime.now()
+        now = datetime.now(API_REPUTATION_TIMEZONE)
         next_run = _next_api_reputation_run(now)
         wait_seconds = max(0.0, (next_run - now).total_seconds())
         if stop_event.wait(wait_seconds):
@@ -13904,7 +13935,7 @@ def _api_reputation_auto_refresh_loop(stop_event=None):
 
 
 def start_api_reputation_scheduler_bootstrap():
-    """Start the central 00:00/12:00 mixed reputation refresh scheduler."""
+    """Start the central daily 14:00 Beijing mixed reputation refresh scheduler."""
 
     global _api_reputation_scheduler_thread
     with _api_reputation_scheduler_guard:
@@ -13921,7 +13952,7 @@ def start_api_reputation_scheduler_bootstrap():
         )
         _api_reputation_scheduler_thread.start()
         logging.info(
-            "API 声誉自动刷新调度已启动：每天 00:00、12:00，流量并发 %s，"
+            "API 声誉自动刷新调度已启动：每天北京时间 14:00，流量并发 %s，"
             "其余数据使用官方 API",
             API_REPUTATION_MAX_WORKERS,
         )
@@ -13931,7 +13962,20 @@ def start_api_reputation_scheduler_bootstrap():
 @app.route('/api/mercado-reputation/refresh', methods=['POST'])
 @login_required
 def api_refresh_all_mercado_reputation():
-    if not _start_api_reputation_refresh():
+    data = request.get_json(silent=True)
+    if (data is None and request.get_data()) or (data is not None and not isinstance(data, dict)):
+        return jsonify({"status": "error", "message": "请求参数必须是 JSON 对象"}), 400
+    data = data or {}
+    selected_shops = data.get("selected_shops")
+    if "selected_shops" in data:
+        if (
+            not isinstance(selected_shops, list)
+            or not selected_shops
+            or any(not isinstance(shop, str) or not shop.strip() for shop in selected_shops)
+        ):
+            return jsonify({"status": "error", "message": "请至少选择一家店铺"}), 400
+        selected_shops = list(dict.fromkeys(shop.strip() for shop in selected_shops))
+    if not _start_api_reputation_refresh(selected_shops=selected_shops):
         return jsonify({
             "status": "running",
             "data": _api_reputation_snapshot(),
@@ -13940,7 +13984,7 @@ def api_refresh_all_mercado_reputation():
     return jsonify({
         "status": "success",
         "data": _api_reputation_snapshot(),
-        "message": "API 声誉全量更新已启动",
+        "message": "API 声誉所选店铺更新已启动" if selected_shops else "API 声誉全量更新已启动",
     })
 
 

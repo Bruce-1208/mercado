@@ -48,8 +48,10 @@ DEFAULT_DAILY_MAX_WORKERS = 15
 MAX_DAILY_TASK_WORKERS = 30
 DEFAULT_DAILY_BROWSER_WORKER_LIMIT = MAX_DAILY_TASK_WORKERS
 DEFAULT_DAILY_RECENT_DAYS = 100
-DEFAULT_LOGIN_RETRY_ATTEMPTS = 3
-DEFAULT_LOGIN_RETRY_SECONDS = 180
+# 申诉任务遇到登录失效只允许触发一轮自动登录；失败后由店铺熔断，
+# 不在任务层重复提交登录。
+DEFAULT_LOGIN_RETRY_ATTEMPTS = 1
+DEFAULT_LOGIN_RETRY_SECONDS = 0
 DEFAULT_SITE_RETRY_ATTEMPTS = int(os.getenv("BIT_DAILY_SITE_RETRY_ATTEMPTS", "2"))
 DEFAULT_SITE_RETRY_SECONDS = int(os.getenv("BIT_DAILY_SITE_RETRY_SECONDS", "25"))
 DEFAULT_RATE_LIMIT_RETRIES = int(os.getenv("BIT_DAILY_RATE_LIMIT_RETRIES", "3"))
@@ -1048,9 +1050,14 @@ def build_appeal_plan(
 
 def _save_login_anomaly(window_id, name, site_code, reason):
     """兼容旧调用：退出登录或人机验证进入店铺状态。"""
-    if not is_shop_status_anomaly(reason):
+    if not (is_shop_status_anomaly(reason) or _is_login_required_result(reason)):
         return False
     try:
+        if _is_login_required_result(reason) and not is_shop_status_anomaly(reason):
+            reason = {
+                "status": LOGIN_LOGGED_OUT,
+                "message": str(reason or "申诉期间检测到登录态失效"),
+            }
         return record_login_anomaly(
             reason,
             window_id,
@@ -1214,22 +1221,32 @@ def _appeal_one_shop_locked(
                 traceback.print_exc()
 
             if _is_login_required_result(result):
+                if not (
+                    isinstance(result, dict)
+                    and result.get("login_anomaly_recorded")
+                ):
+                    _save_login_anomaly(window_id, name, site_code, result)
                 results.append({
                     "site": site_code,
                     "appeal_type": site_appeal_label,
                     "count": count,
                     "result": result,
+                    "login_attempts": 1,
                 })
                 print(
                     f"{get_now_time()} {name} {site_code} 自动登录未成功，"
                     f"立即终止该店铺任务；其他店铺继续运行<br>"
                 )
-                _close_ai_appeal_browser(
-                    window_id,
-                    window_lease,
-                    name,
-                    "登录失效或触发自动登录",
-                )
+                if not (
+                    isinstance(result, dict)
+                    and result.get("browser_closed_after_login_failure")
+                ):
+                    _close_ai_appeal_browser(
+                        window_id,
+                        window_lease,
+                        name,
+                        "登录失效或触发自动登录",
+                    )
                 exit_shop = True
                 break
 

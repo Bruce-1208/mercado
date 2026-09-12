@@ -358,7 +358,7 @@ def test_console_template_keeps_old_reputation_and_adds_api_panel():
     assert "function showReputationWarningDetail(cell, event)" in template
     assert "reputation-warning-preview" in template
     assert "七天变化率由官方订单 API 自算" in template
-    assert "每天 00:00（24 点）和 12:00 自动刷新，并发 10" in template
+    assert "每天北京时间 14:00 自动刷新，并发 10" in template
     assert "下次自动刷新 ${data.next_auto_refresh_at}" in template
     assert "站点状态" in reputation_table.group(1)
     assert "openReputationBrowser(this)" in template
@@ -570,16 +570,56 @@ def test_full_refresh_keeps_successes_and_logs_failed_stores(monkeypatch):
     assert collection_options["collect_browser_auxiliary"] is True
 
 
-def test_api_reputation_auto_refresh_boundaries_are_noon_and_midnight():
-    assert bit_interface._next_api_reputation_run(
-        datetime(2026, 9, 7, 11, 59, 59)
-    ) == datetime(2026, 9, 7, 12, 0, 0)
-    assert bit_interface._next_api_reputation_run(
-        datetime(2026, 9, 7, 12, 0, 0)
-    ) == datetime(2026, 9, 8, 0, 0, 0)
-    assert bit_interface._next_api_reputation_run(
-        datetime(2026, 9, 7, 23, 59, 59)
-    ) == datetime(2026, 9, 8, 0, 0, 0)
+def test_api_reputation_auto_refresh_is_daily_at_14_beijing():
+    for current, expected in [
+        (datetime(2026, 9, 7, 0), datetime(2026, 9, 7, 14)),
+        (datetime(2026, 9, 7, 13, 59, 59), datetime(2026, 9, 7, 14)),
+        (datetime(2026, 9, 7, 14), datetime(2026, 9, 8, 14)),
+        (datetime(2026, 9, 7, 23, 59, 59), datetime(2026, 9, 8, 14)),
+        (datetime(2026, 9, 7, 5, tzinfo=timezone.utc),
+         datetime(2026, 9, 7, 6, tzinfo=timezone.utc)),
+        (datetime(2026, 9, 7, 6, tzinfo=timezone.utc),
+         datetime(2026, 9, 8, 6, tzinfo=timezone.utc)),
+    ]:
+        assert bit_interface._next_api_reputation_run(current) == expected
+
+
+def test_api_reputation_selected_refresh_validates_scope(monkeypatch):
+    calls = []
+    monkeypatch.setattr(bit_interface, "_start_api_reputation_refresh",
+                        lambda **kwargs: calls.append(kwargs) or True)
+    monkeypatch.setattr(bit_interface, "_api_reputation_snapshot", lambda: {})
+    client = bit_interface.app.test_client()
+    with client.session_transaction() as session:
+        session["workbench_user"] = {"id": 1, "username": "tester"}
+    for scope in ([], None, "店铺A", [""], [123]):
+        response = client.post("/api/mercado-reputation/refresh", json={"selected_shops": scope})
+        assert response.status_code == 400
+    assert client.post("/api/mercado-reputation/refresh", data="{", content_type="application/json").status_code == 400
+    assert not calls
+    response = client.post("/api/mercado-reputation/refresh",
+                           json={"selected_shops": [" 店铺A ", "店铺B", "店铺A"]})
+    assert response.status_code == 200
+    assert calls == [{"selected_shops": ["店铺A", "店铺B"]}]
+
+
+def test_api_reputation_selected_refresh_keeps_other_and_failed_sites(monkeypatch):
+    previous = [
+        {"store_name": "店铺A", "site_id": "MLM", "sales_completed": 1},
+        {"store_name": "店铺A", "site_id": "MLB", "sales_completed": 2},
+        {"store_name": "店铺B", "site_id": "MLM", "sales_completed": 3},
+    ]
+    updated = {"store_name": "店铺A", "site_id": "MLM", "sales_completed": 10}
+    def collect(**kwargs):
+        assert kwargs["selected_shops"] == ["店铺A"]
+        assert kwargs["collect_browser_auxiliary"] is True
+        return {"api_rows": [updated], "total_stores": 1, "success_stores": 1}
+    monkeypatch.setattr(bit_interface.bit_reputation_info, "main", collect)
+    monkeypatch.setattr(bit_interface, "_persist_api_reputation_snapshot", lambda: True)
+    monkeypatch.setattr(bit_interface, "_api_reputation_state", bit_interface._api_reputation_default_state())
+    bit_interface._run_all_api_reputation_refresh(["店铺A"], previous)
+    rows = bit_interface._api_reputation_snapshot()["rows"]
+    assert rows == [previous[1], previous[2], updated]
 
 
 def test_api_reputation_last_snapshot_survives_service_restart(tmp_path):

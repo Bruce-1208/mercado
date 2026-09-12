@@ -2433,6 +2433,14 @@ def open_mercado_backend_page(
     max_login_retries = max(0, int(max_login_retries))
     rate_retry_count = 0
     login_retry_count = 0
+    appeal_login_budget = hasattr(driver, "_bit_appeal_login_attempts")
+    appeal_login_attempts = int(
+        getattr(driver, "_bit_appeal_login_attempts", 0) or 0
+    )
+    appeal_login_max_attempts = max(
+        1,
+        int(getattr(driver, "_bit_appeal_login_max_attempts", 1) or 1),
+    )
     node_switch_results = []
     last_login_result = {}
     first_logged_out_state = {}
@@ -2549,18 +2557,22 @@ def open_mercado_backend_page(
             node_switch_results.append(limit_result["node_switch_result"])
             continue
 
-        if login_retry_count >= max_login_retries:
+        if login_retry_count >= max_login_retries or (
+            appeal_login_budget
+            and appeal_login_attempts >= appeal_login_max_attempts
+        ):
+            login_attempts = max(login_retry_count, appeal_login_attempts)
             result = {
                 "ok": False,
                 "status": "logged_out",
                 "message": (
                     f"{shop_name} 美客多登录态失效，自动登录 "
-                    f"{login_retry_count} 次后仍未恢复"
+                    f"{login_attempts} 次后仍未恢复"
                 ),
                 "state": state,
                 "target_url": target_url,
                 "rate_limit_retry_count": rate_retry_count,
-                "login_retry_count": login_retry_count,
+                "login_retry_count": login_attempts,
                 "node_switch_results": node_switch_results,
                 "login_result": last_login_result,
             }
@@ -2575,6 +2587,9 @@ def open_mercado_backend_page(
             return result
 
         login_retry_count += 1
+        if appeal_login_budget:
+            appeal_login_attempts += 1
+            setattr(driver, "_bit_appeal_login_attempts", appeal_login_attempts)
         print(
             f"{get_now_time()} {shop_name} 检测到退出登录，"
             f"正在进行第 {login_retry_count}/{max_login_retries} 次自动登录",

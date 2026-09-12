@@ -1358,3 +1358,55 @@ def test_mysql_bulk_update_changes_only_authorized_store_orders(monkeypatch):
     assert len(log_params) == 2
     assert log_params[0][1:5] == ("purchase_created", "新增采购单", 7, "采购员甲")
     assert log_params[1][1:5] == ("purchase_updated", "修改采购单", 7, "采购员甲")
+
+
+@pytest.mark.parametrize("mode", ["automatic", bit_order_sync.DAILY_STATUS_MODE])
+def test_order_sync_runs_stores_concurrently_and_isolates_failures(monkeypatch, mode):
+    records = [{"id": i, "display_name": f"store-{i}"} for i in range(4)]
+    monkeypatch.setenv("MERCADO_ORDER_STORE_WORKERS", "2")
+    monkeypatch.setattr(bit_order_sync, "_token_records", lambda _ids: records)
+    monkeypatch.setattr(bit_order_sync, "_daily_status_bootstrap_from", lambda now: now - timedelta(days=1))
+    barrier = threading.Barrier(2)
+    guard = threading.Lock()
+    active = peak = 0
+
+    def sync(record, *_args, **_kwargs):
+        nonlocal active, peak
+        with guard:
+            active += 1
+            peak = max(peak, active)
+        try:
+            barrier.wait(timeout=5)
+            if record["id"] == 1:
+                raise RuntimeError("store failed")
+            return {"store": record["display_name"], "status": "success", "fetched": 1, "inserted": 0, "updated": 1}
+        finally:
+            with guard:
+                active -= 1
+
+    monkeypatch.setattr(bit_order_sync, "_sync_store", sync)
+    monkeypatch.setattr(bit_order_sync, "_sync_old_store_statuses", sync)
+    state = bit_order_sync.run_order_sync(mode=mode)
+    assert peak == 2
+    assert state["processed_stores"] == 4
+    assert state["failed_stores"] == 1
+    assert state["status"] == "partial"
+    assert {row["store"] for row in state["results"]} == {row["display_name"] for row in records}
+
+
+def test_daily_status_skips_queued_stores_when_recent_sync_becomes_due(monkeypatch):
+    monkeypatch.setenv("MERCADO_ORDER_STORE_WORKERS", "1")
+    monkeypatch.setattr(bit_order_sync, "_token_records", lambda _ids: [{"id": 1}, {"id": 2}, {"id": 3}])
+    monkeypatch.setattr(bit_order_sync, "_daily_status_bootstrap_from", lambda now: now - timedelta(days=1))
+    seen = []
+
+    def sync(record, *_args, **_kwargs):
+        seen.append(record["id"])
+        bit_order_sync._recent_sync_due_event.set()
+        return {"store": "1", "status": "paused", "yielded": True}
+
+    monkeypatch.setattr(bit_order_sync, "_sync_old_store_statuses", sync)
+    state = bit_order_sync.run_order_sync(mode=bit_order_sync.DAILY_STATUS_MODE)
+    assert seen == [1]
+    assert state["status"] == "paused"
+    assert state["processed_stores"] == 0

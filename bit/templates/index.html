@@ -12352,7 +12352,7 @@
             <div class="tab-page" id="tab-reputation">
                 <div class="tab-heading">
                     <h2>声誉数据</h2>
-                    <p>七天变化率由官方订单 API 自算；数值可能因取消单、退款、时区和平台内部统计口径而与后台略有差异。</p>
+                    <p>每天北京时间 14:00 自动更新一次；仅七天流量通过浏览器采集，其余数据使用官方 API。勾选表格中的多家店铺后可点击“更新所选店铺”。七天变化率由官方订单 API 自算；数值可能因取消单、退款、时区和平台内部统计口径而与后台略有差异。</p>
                 </div>
 
                 <section class="panel infractions-panel">
@@ -12462,7 +12462,7 @@
             <div class="tab-page" id="tab-api-reputation">
                 <div class="tab-heading">
                     <h2>API 声誉</h2>
-                    <p>每天 00:00（24 点）和 12:00 自动刷新，并发 10；仅七天流量趋势通过浏览器采集，其余声誉数据通过官方 API 获取</p>
+                    <p>每天北京时间 14:00 自动刷新，并发 10；仅七天流量趋势通过浏览器采集，其余声誉数据通过官方 API 获取</p>
                 </div>
 
                 <section class="panel infractions-panel">
@@ -12472,6 +12472,7 @@
                             <p id="api-reputation-message" style="margin: 3px 0 0; color: var(--muted); font-size: 13px;">等待更新已开启声誉更新的店铺</p>
                         </div>
                         <div class="header-actions">
+                            <button class="secondary" id="api-reputation-update-selected" type="button" onclick="startApiReputationRefresh(true)" disabled>更新所选店铺（0 家）</button>
                             <button class="primary" id="api-reputation-fetch" type="button" onclick="startApiReputationRefresh()">更新已开启店铺</button>
                         </div>
                     </div>
@@ -12494,6 +12495,7 @@
                         </div>
                     </div>
                     <div class="api-reputation-table-toolbar">
+                        <label><input id="api-reputation-select-visible" type="checkbox" onchange="toggleVisibleApiReputationShops(this.checked)"> 全选筛选结果中的店铺</label>
                         <span id="api-reputation-visible-count">显示 0 / 0 条；可在每列表头筛选，点击字段名排序</span>
                         <button class="secondary" id="api-reputation-reset-view" type="button" onclick="resetApiReputationView()">重置筛选与排序</button>
                     </div>
@@ -13279,6 +13281,9 @@
         let apiReputationSortKey = "store";
         let apiReputationSortDirection = "asc";
         let apiReputationFilters = {};
+        const selectedApiReputationShops = new Set();
+        let apiReputationRunning = false;
+        let apiReputationVisibleShops = [];
         let apiReputationEmptyText = "暂无上一次 API 声誉数据";
         let apiReputationPollTimer = null;
         let aiAppealsLoaded = false;
@@ -18610,6 +18615,22 @@
             renderApiReputationTable();
         }
 
+        function toggleApiReputationShop(shop, checked) {
+            if (apiReputationRunning) return;
+            if (checked) selectedApiReputationShops.add(shop);
+            else selectedApiReputationShops.delete(shop);
+            renderApiReputationTable();
+        }
+
+        function toggleVisibleApiReputationShops(checked) {
+            if (apiReputationRunning) return;
+            apiReputationVisibleShops.forEach(shop => {
+                if (checked) selectedApiReputationShops.add(shop);
+                else selectedApiReputationShops.delete(shop);
+            });
+            renderApiReputationTable();
+        }
+
         function renderApiReputationTable() {
             const rows = apiReputationRows.filter(row => API_REPUTATION_FILTER_KEYS.every(
                 key => apiReputationMatchesFilter(row, key, apiReputationFilters[key]),
@@ -18636,6 +18657,15 @@
                 }
                 return apiReputationSortDirection === "desc" ? -comparison : comparison;
             });
+            apiReputationVisibleShops = [...new Set(rows.map(row => row.store_name).filter(Boolean))];
+            const selectedButton = document.getElementById("api-reputation-update-selected");
+            selectedButton.disabled = apiReputationRunning || !selectedApiReputationShops.size;
+            selectedButton.textContent = `更新所选店铺（${selectedApiReputationShops.size} 家）`;
+            const selectVisible = document.getElementById("api-reputation-select-visible");
+            const checkedCount = apiReputationVisibleShops.filter(shop => selectedApiReputationShops.has(shop)).length;
+            selectVisible.disabled = apiReputationRunning || !apiReputationVisibleShops.length;
+            selectVisible.checked = checkedCount > 0 && checkedCount === apiReputationVisibleShops.length;
+            selectVisible.indeterminate = checkedCount > 0 && checkedCount < apiReputationVisibleShops.length;
             apiReputationVisibleCount.textContent = `显示 ${rows.length.toLocaleString("zh-CN")} / ${apiReputationRows.length.toLocaleString("zh-CN")} 条；可在每列表头筛选，点击字段名排序`;
             updateApiReputationSortIndicators();
             if (!rows.length) {
@@ -18659,7 +18689,7 @@
                     : "";
                 return `
                     <tr>
-                        <td><div class="order-cell-stack"><strong>${escapeHtml(row.store_name || "-")}</strong><span>${escapeHtml(row.store_nickname || `Token ${row.token_id || "-"}`)}</span></div></td>
+                        <td><label><input type="checkbox" value="${escapeHtml(row.store_name || "")}" aria-label="选择店铺 ${escapeHtml(row.store_name || "")}" ${selectedApiReputationShops.has(row.store_name) ? "checked" : ""} ${apiReputationRunning || !row.store_name ? "disabled" : ""} onchange="toggleApiReputationShop(this.value, this.checked)"> ${escapeHtml(row.store_name || "-")}</label><div class="order-cell-stack"><span>${escapeHtml(row.store_nickname || `Token ${row.token_id || "-"}`)}</span></div></td>
                         <td><div class="order-cell-stack"><strong>${escapeHtml(row.site_name || row.site_id || "-")}</strong><span>${escapeHtml(row.site_id || "-")} · ID ${escapeHtml(row.user_id || "-")}</span></div></td>
                         <td>${escapeHtml(apiReputationOfficialCount(row.infraction_count))}</td>
                         <td>${escapeHtml(apiReputationOfficialCount(row.rights_holder_count))}</td>
@@ -18678,6 +18708,7 @@
         }
 
         function renderApiReputation(data) {
+            apiReputationRunning = Boolean(data?.running);
             const incomingRows = Array.isArray(data?.rows) ? data.rows : [];
             const totalStores = Number(data?.total_stores || 0);
             const completedStores = Number(data?.completed_stores || 0);
@@ -18693,11 +18724,11 @@
             apiReputationFailed.textContent = failedStores.toLocaleString("zh-CN");
             const timing = [data?.started_at ? `开始 ${data.started_at}` : "", data?.finished_at ? `结束 ${data.finished_at}` : ""].filter(Boolean).join(" · ");
             const nextAutoRefresh = data?.auto_refresh_enabled && data?.next_auto_refresh_at
-                ? `下次自动刷新 ${data.next_auto_refresh_at}`
+                ? `下次自动刷新 ${data.next_auto_refresh_at}（北京时间）`
                 : "";
             apiReputationMessage.textContent = [data?.message || "等待全量更新", timing, nextAutoRefresh].filter(Boolean).join(" · ");
             apiReputationFetch.disabled = Boolean(data?.running);
-            apiReputationFetch.textContent = data?.running ? "全量更新中..." : "更新已开启店铺";
+            apiReputationFetch.textContent = data?.running ? "更新中..." : "更新已开启店铺";
             apiReputationStatusText.textContent = data?.running
                 ? "运行中"
                 : data?.status === "success" ? "已完成"
@@ -18756,15 +18787,20 @@
             }
         }
 
-        async function startApiReputationRefresh() {
+        async function startApiReputationRefresh(selectedOnly = false) {
+            if (apiReputationRunning) return;
+            const shops = [...selectedApiReputationShops];
+            if (selectedOnly && !shops.length) return;
+            apiReputationRunning = true;
+            renderApiReputationTable();
             apiReputationFetch.disabled = true;
             apiReputationFetch.textContent = "正在启动...";
-            apiReputationMessage.textContent = "正在启动全部授权店铺声誉更新任务...";
+            apiReputationMessage.textContent = selectedOnly ? `正在启动所选 ${shops.length} 家店铺更新...` : "正在启动已开启店铺声誉更新任务...";
             try {
                 const response = await fetch("/api/mercado-reputation/refresh", {
                     method: "POST",
                     headers: {"Content-Type": "application/json"},
-                    body: "{}",
+                    body: JSON.stringify(selectedOnly ? {selected_shops: shops} : {}),
                 });
                 const payload = await parseApiReputationResponse(response);
                 if ((!response.ok && response.status !== 409) || !["success", "running"].includes(payload.status)) {
@@ -18773,6 +18809,8 @@
                 renderApiReputation(payload.data || {});
                 scheduleApiReputationPoll(true);
             } catch (error) {
+                apiReputationRunning = false;
+                renderApiReputationTable();
                 apiReputationFetch.disabled = false;
                 apiReputationFetch.textContent = "更新已开启店铺";
                 apiReputationMessage.textContent = `启动失败：${error.message || error}`;

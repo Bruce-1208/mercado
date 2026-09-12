@@ -77,6 +77,31 @@ def test_automatic_ai_round_sends_every_site_with_api_ids(monkeypatch):
     assert len(result["results"]) == 2
 
 
+def test_automatic_ai_round_stops_remaining_sites_after_login_failure(monkeypatch):
+    calls = []
+    monkeypatch.setattr(
+        bit_appeal_ai,
+        "shensu",
+        lambda *args, **kwargs: calls.append((args, kwargs))
+        or {"execution_status": "login_required", "status": "logged_out"},
+    )
+
+    result = bit_appeal_ai.run_top_infraction_shop_once(
+        {
+            "name": "店铺",
+            "total": 2,
+            "sites": [
+                {"site_code": "MX", "count": 1},
+                {"site_code": "BR", "count": 1},
+            ],
+        },
+        site_pause=0,
+    )
+
+    assert len(calls) == 1
+    assert len(result["results"]) == 1
+
+
 def test_each_automatic_ai_round_rebuilds_api_plan(monkeypatch):
     builds = []
 

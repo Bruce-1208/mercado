@@ -21,6 +21,23 @@ python -m pip install -r bit/requirements-server.txt
 `BIT_WSGI_THREADS`、`BIT_WSGI_CONNECTION_LIMIT` 和 `BIT_WSGI_BACKLOG`
 调整；自动化任务仍由独立的后台并发限制控制。
 
+服务端更新任务的默认并发如下，自动更新与手动更新共用对应配置：
+
+| 更新任务 | 默认并发 | 环境变量 |
+| --- | --- | --- |
+| 店铺链接同步 | 12 家店铺 × 每家 16 个详情线程 | `MERCADO_STORE_LINK_STORE_WORKERS` / `MERCADO_STORE_LINK_DETAIL_WORKERS` |
+| 链接批量回写 | 16 线程 | `MERCADO_STORE_LINK_REMOTE_UPDATE_WORKERS` |
+| 订单同步、每日老订单刷新 | 8 家店铺 × 每家 16 个详情线程 | `MERCADO_ORDER_STORE_WORKERS` / `MERCADO_ORDER_STATUS_WORKERS` |
+| 订单图片、费用回填 | 16 线程 | `MERCADO_API_BACKFILL_WORKERS` |
+| 侵权、禁限售同步 | 各 12 家店铺 × 每家 16 个详情线程 | `MERCADO_INFRACTION_STORE_WORKERS` / `MERCADO_INFRACTION_DETAIL_WORKERS`、`MERCADO_PROHIBITED_STORE_WORKERS` / `MERCADO_PROHIBITED_DETAIL_WORKERS` |
+| 商品费用自动更新 | 20 线程 | `MERCADO_PROFIT_REFRESH_WORKERS` |
+
+实际线程数不会超过待处理数量。订单、侵权和禁限售店铺并发可调至 24，
+订单详情、回填、风险详情、链接回写和商品费用线程可调至 32。
+环境变量会覆盖代码默认值；已有部署若设置过旧值，需要同步调整并重启服务。
+订单每日刷新仍会保存断点并让出执行权给到期的十五分钟同步任务。
+
+
 ### macOS 上架翻译
 
 跨站点上架的西班牙语/葡萄牙语翻译使用 Argos Translate 在服务器本地离线执行，
@@ -204,7 +221,9 @@ py -3.12 -m bit.bit_config --import-excel "bit\比特配置文件.xlsx"
 
 ## 美客多声誉自动刷新
 
-工作台服务端会按本机时间在每天 `00:00`（24 点）和 `12:00` 自动执行一轮 API 声誉更新，并发固定为 10。已开启“七天流量”的站点会通过本机 BitBrowser 读取流量；声誉、站点状态、订单变化等其余字段走 Mercado Libre 官方 API。定时采集所在电脑需保持工作台服务端和 BitBrowser 客户端运行。
+工作台服务端会按北京时间（Asia/Shanghai）在每天 `14:00` 自动执行一轮 API 声誉更新，并发固定为 10。已开启“七天流量”的站点会通过本机 BitBrowser 读取流量；声誉、站点状态、订单变化等其余字段走 Mercado Libre 官方 API。定时采集所在电脑需保持工作台服务端和 BitBrowser 客户端运行。
+
+需要临时更新时，可在“声誉数据”或“API 声誉”表格勾选多家店铺，点击“更新所选店铺”。API 声誉支持全选筛选结果，局部更新保留未选店铺和本次未成功返回站点的已有数据。
 
 ## 批量检查并登录美客多店铺
 

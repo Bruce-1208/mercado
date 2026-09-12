@@ -1514,6 +1514,55 @@ def test_shop_executor_closes_browser_when_auto_login_fails(monkeypatch):
     assert result["exit_reason"] == "未登录"
 
 
+def test_shop_executor_records_login_failure_and_skips_remaining_sites(monkeypatch):
+    appeal_calls = []
+    close_calls = []
+    anomaly_calls = []
+    monkeypatch.setattr(
+        bit_daily_task.bit_appeal_ai,
+        "shensu",
+        lambda *args, **kwargs: appeal_calls.append((args, kwargs))
+        or {
+            "execution_status": "login_required",
+            "status": "login_required",
+            "message": "自动登录未成功",
+        },
+    )
+    monkeypatch.setattr(
+        bit_daily_task,
+        "closeBrowser",
+        lambda window_id, lease=None: close_calls.append((window_id, lease))
+        or {"success": True},
+    )
+    monkeypatch.setattr(
+        bit_daily_task,
+        "_save_login_anomaly",
+        lambda *args: anomaly_calls.append(args) or True,
+    )
+
+    lease = object()
+    result = bit_daily_task._appeal_one_shop_locked(
+        {
+            "name": "测试店铺",
+            "total": 2,
+            "sites": [
+                {"site_code": "MX", "count": 1},
+                {"site_code": "BR", "count": 1},
+            ],
+        },
+        "window-id",
+        lease,
+        site_pause=0,
+    )
+
+    assert len(appeal_calls) == 1
+    assert len(anomaly_calls) == 1
+    assert close_calls == [("window-id", lease)]
+    assert len(result["results"]) == 1
+    assert result["results"][0]["login_attempts"] == 1
+    assert result["exit_reason"] == "未登录"
+
+
 def test_login_anomaly_circuit_breaker_skips_shop_before_browser_worker(monkeypatch):
     monkeypatch.setattr(
         bit_daily_task,
@@ -1544,7 +1593,7 @@ def test_login_anomaly_circuit_breaker_skips_shop_before_browser_worker(monkeypa
     assert paused[0]["results"][0]["status"] == "login_circuit_open"
 
 
-def test_daily_appeal_validation_stops_on_logout_without_auto_login(monkeypatch):
+def test_daily_appeal_validation_allows_one_auto_login_attempt(monkeypatch):
     captured = {}
 
     def fake_open_backend(*_args, **kwargs):
@@ -1570,7 +1619,7 @@ def test_daily_appeal_validation_stops_on_logout_without_auto_login(monkeypatch)
             stop_on_logout=True,
         )
 
-    assert captured["max_login_retries"] == 0
+    assert captured["max_login_retries"] == 1
 
 
 def test_shop_executor_closes_browser_before_rate_limit_retry(monkeypatch):

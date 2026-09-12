@@ -176,6 +176,7 @@ def open_mercado_backend_page(
     max_login_retries=1,
     site="",
     source="Playwright业务任务",
+    close_on_login_failure=False,
 ):
     """Playwright 业务页入口：限频换节点，退出登录后自动重登。"""
     page = session.page
@@ -271,6 +272,11 @@ def open_mercado_backend_page(
                 site,
                 source,
             )
+            if close_on_login_failure:
+                try:
+                    closeBrowser(window_id)
+                except Exception as exc:
+                    print(f"{shop_name} 登录失效，关闭浏览器失败：{exc}")
             return result
         login_retry_count += 1
         login_result = session.auto_login_mercado()
@@ -292,6 +298,11 @@ def open_mercado_backend_page(
                 site,
                 source,
             )
+            if close_on_login_failure:
+                try:
+                    closeBrowser(window_id)
+                except Exception as exc:
+                    print(f"{shop_name} 登录失效，关闭浏览器失败：{exc}")
             return result
 
 

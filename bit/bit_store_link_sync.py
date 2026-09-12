@@ -26,10 +26,10 @@ from mercado_api.client import MercadoAPIError, MercadoLibreClient
 STORE_LINK_SYNC_LOCK_KEY = "mercado_store_link_sync_task"
 STORE_LINK_WRITE_BATCH_SIZE = 100
 STORE_LINK_STORE_WORKERS = max(
-    1, int(os.getenv("MERCADO_STORE_LINK_STORE_WORKERS", "4"))
+    1, int(os.getenv("MERCADO_STORE_LINK_STORE_WORKERS", "12"))
 )
 STORE_LINK_DETAIL_WORKERS = max(
-    1, int(os.getenv("MERCADO_STORE_LINK_DETAIL_WORKERS", "6"))
+    1, int(os.getenv("MERCADO_STORE_LINK_DETAIL_WORKERS", "16"))
 )
 STORE_LINK_AUTO_SYNC_DAYS = max(
     1, int(os.getenv("MERCADO_STORE_LINK_AUTO_SYNC_DAYS", "3"))
