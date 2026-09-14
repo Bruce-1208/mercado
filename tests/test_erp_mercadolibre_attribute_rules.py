@@ -1,9 +1,32 @@
 from erp.mercadolibre_attribute_rules import (
     canonical_attribute_id,
+    extract_listing_attributes_from_detail,
     match_enumerated_value,
     normalize_rule_key,
     resolve_schema_attribute_id,
 )
+
+
+def test_real_zying_nameid_valueid_shape_is_normalized():
+    detail = {
+        "sale_siteid": 8,
+        "sale_attrs": '{"8":{"site":"CBT","attrs":['
+        '{"name":"Diseño","value":"Día de muertos",'
+        '"nameid":"DESIGN","valueid":18462205},'
+        '{"name":"ISBN","nameid":"GTIN","valueid":-1}]}}',
+    }
+
+    attributes = extract_listing_attributes_from_detail(detail)
+
+    assert attributes == [
+        {
+            "id": "DESIGN",
+            "name": "Diseño",
+            "value_id": "18462205",
+            "value_name": "Día de muertos",
+        },
+        {"id": "GTIN", "name": "ISBN"},
+    ]
 
 
 def test_attribute_aliases_cover_spanish_portuguese_and_chinese():

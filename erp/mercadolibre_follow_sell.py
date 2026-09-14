@@ -477,9 +477,19 @@ def _ensure_item_condition(
 
 def _ensure_gtin_or_empty_reason(attributes: list[dict[str, Any]]) -> None:
     """Declare the documented no-GTIN reason when the source exposes no code."""
-    ids = {str(attribute.get("id") or "").upper() for attribute in attributes}
-    if "GTIN" in ids or "EMPTY_GTIN_REASON" in ids:
+    if any(
+        str(attribute.get("id") or "").upper() in {"GTIN", "EMPTY_GTIN_REASON"}
+        and _attribute_has_value(attribute)
+        for attribute in attributes
+    ):
         return
+    # Do not let a collected placeholder such as valueid=-1 block the valid
+    # EMPTY_GTIN_REASON alternative or leak into the publication request.
+    attributes[:] = [
+        attribute
+        for attribute in attributes
+        if str(attribute.get("id") or "").upper() != "GTIN"
+    ]
     attributes.append(
         {
             "id": "EMPTY_GTIN_REASON",
@@ -900,6 +910,11 @@ def _validate_required_attributes(
         and not is_read_only_attribute(attribute)
     }
     required = set(required_definitions)
+    # Mercado accepts EMPTY_GTIN_REASON as the documented alternative when a
+    # product genuinely has no registered GTIN. Do not reject that valid pair
+    # locally merely because the category schema also marks GTIN as required.
+    if "EMPTY_GTIN_REASON" in present:
+        required.discard("GTIN")
     missing = sorted(required - present)
     if missing:
         details = []
@@ -1003,6 +1018,16 @@ def _ensure_contextual_required_attribute_defaults(
             "WITH_USB", attribute.get("value_name") or attribute.get("value_id")
         )
         break
+    source_attributes = list(source.get("attributes") or [])
+    if not usb_value:
+        for source_attribute in source_attributes:
+            if resolve_schema_attribute_id(source_attribute, None) != "WITH_USB":
+                continue
+            usb_value = semantic_value_key(
+                "WITH_USB",
+                source_attribute.get("value_name") or source_attribute.get("value_id"),
+            )
+            break
     title = str(source.get("title") or "")
     usb_powered = usb_value == "BOOLEAN_TRUE" or (
         not usb_value and bool(re.search(r"\bUSB\b", title, re.IGNORECASE))
@@ -1010,16 +1035,23 @@ def _ensure_contextual_required_attribute_defaults(
     if not usb_powered:
         return
 
-    source_attributes = list(source.get("attributes") or [])
     battery_hint = bool(re.search(r"\b(?:battery|bater[ií]a)\b", title, re.IGNORECASE))
     if not battery_hint:
-        battery_hint = any(
-            "BATTER" in str(attribute.get("id") or "").upper()
-            or "BATERIA" in unicodedata.normalize(
-                "NFKD", str(attribute.get("id") or attribute.get("name") or "").upper()
-            )
+        source_evidence = " ".join(
+            str(attribute.get(key) or "")
             for attribute in source_attributes
+            for key in ("id", "name", "value_name")
         )
+        normalized_evidence = unicodedata.normalize("NFKD", source_evidence)
+        normalized_evidence = "".join(
+            character for character in normalized_evidence
+            if not unicodedata.combining(character)
+        )
+        battery_hint = bool(re.search(
+            r"(?:BATTER|BATERIA|RECHARG|RECARG|RECARREG)",
+            normalized_evidence,
+            re.IGNORECASE,
+        ))
     desired_name = (
         "Battery/Domestic current" if battery_hint else "Domestic current"
     )
@@ -1426,7 +1458,10 @@ def build_local_payload(
 
 def _normalized_existing_user_product_id(value: Any) -> str:
     candidate = str(value or "").strip().upper()
-    return candidate if re.fullmatch(r"(?:CBT)?U\d+", candidate) else ""
+    match = re.fullmatch(r"(?:CBT)?U(\d+)", candidate)
+    # The mapping resource accepts either CBTU{id} or U{id}, but the
+    # add-marketplace resource only accepts the siteless U{id} form.
+    return f"U{match.group(1)}" if match else ""
 
 
 def _mapped_user_product_site_item(mapping: Any, site_id: str) -> Mapping[str, Any] | None:

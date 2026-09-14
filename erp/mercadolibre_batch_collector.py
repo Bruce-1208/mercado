@@ -355,6 +355,11 @@ def merge_listing_candidates(
                 "shipping_origin_country": str(
                     row.get("shipping_origin_country") or ""
                 ).strip().upper(),
+                "free_shipping": (
+                    row.get("free_shipping")
+                    if isinstance(row.get("free_shipping"), bool)
+                    else None
+                ),
             }
         )
         if len(existing) >= limit:

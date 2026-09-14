@@ -157,7 +157,9 @@ def test_zying_detail_snapshot_is_upserted_as_third_product_source():
     assert row[3] == "795184904"
     assert row[10] == Decimal("1000")
     assert row[19] == Decimal("22")
-    assert json.loads(row[22])["source"]["attributes"][0]["id"] == "BRAND"
+    stored_snapshot = json.loads(row[22])
+    assert stored_snapshot["source"]["attributes"][0]["id"] == "BRAND"
+    assert stored_snapshot["zying_net_proceeds_usd"] == "22"
     assert "IF(`source_type` = 'zying'" in upsert_sql
     assert "zying" in store.PRODUCT_SOURCE_TYPES
 
@@ -280,7 +282,7 @@ def test_profitability_updates_exact_collection_duplicate_and_only_newest_produc
     assert "`source_type` = 'collected'" in product_sql
 
 
-@pytest.mark.parametrize("source_type", ["collected", "pulled", "zying"])
+@pytest.mark.parametrize("source_type", ["collected", "pulled"])
 def test_product_profitability_updates_do_not_overwrite_collection_history(source_type):
     connection = _FakeConnection(update_rowcount=1)
     store.update_item_profitability("MLM1", {
@@ -293,6 +295,21 @@ def test_product_profitability_updates_do_not_overwrite_collection_history(sourc
     assert sql.startswith(f"UPDATE `{store.PRODUCT_TABLE}`")
     assert "WHERE `id` = %s AND `source_item_id` = %s" in sql
     assert params[-2:] == (15, "MLM1")
+
+
+def test_profitability_estimator_never_overwrites_direct_zying_net_proceeds():
+    connection = _FakeConnection(update_rowcount=1)
+
+    applied = store.update_item_profitability("860217541", {
+        "id": 15,
+        "source_type": "zying",
+        "net_proceeds_usd": None,
+        "profitability_error": "无法识别商品所属国家站点",
+    }, connection_factory=lambda: connection)
+
+    assert applied is False
+    assert not [sql for sql, _params in connection.fake_cursor.queries
+                if sql.startswith("UPDATE")]
 
 
 def test_profitability_update_uses_input_cas_and_stops_mirror_on_conflict():
@@ -338,10 +355,10 @@ def test_profitability_update_uses_input_cas_and_stops_mirror_on_conflict():
     assert params[-10:] == tuple(expected.values())
 
 
-def test_profitability_queue_includes_all_sources_and_retries_incomplete_rows():
+def test_profitability_queue_excludes_direct_zying_rows_and_retries_incomplete_rows():
     connection = _FakeConnection()
     batches = iter([
-        [{"id": 1, "source_type": "pulled"}, {"id": 2, "source_type": "zying"}],
+        [{"id": 1, "source_type": "pulled"}],
         [],
         [{"id": 3, "task_id": 10}],
         [],
@@ -352,7 +369,7 @@ def test_profitability_queue_includes_all_sources_and_retries_incomplete_rows():
             stale_before="2026-09-06 12:00:00", retry_before="2026-09-07 11:55:00",
             limit=10, connection_factory=lambda: connection,
         )
-    assert [row["id"] for row in rows] == [1, 2, 3]
+    assert [row["id"] for row in rows] == [1, 3]
     product_pending_sql, product_pending_params = connection.fake_cursor.queries[0]
     product_stale_sql, product_stale_params = connection.fake_cursor.queries[1]
     collection_pending_sql, collection_pending_params = connection.fake_cursor.queries[2]
@@ -360,18 +377,21 @@ def test_profitability_queue_includes_all_sources_and_retries_incomplete_rows():
     assert store.PRODUCT_TABLE in product_pending_sql
     assert store.COLLECTION_TABLE in collection_pending_sql
     assert product_pending_params == (5,)
-    assert collection_pending_params == (8,)
+    assert collection_pending_params == (9,)
     assert product_stale_params == (
-        "2026-09-06 12:00:00", "2026-09-07 11:55:00", 3,
+        "2026-09-06 12:00:00", "2026-09-07 11:55:00", 4,
     )
     assert collection_stale_params == (
-        "2026-09-06 12:00:00", "2026-09-07 11:55:00", 7,
+        "2026-09-06 12:00:00", "2026-09-07 11:55:00", 8,
     )
     for sql in (product_pending_sql, collection_pending_sql):
         assert "ORDER BY `id` DESC" in sql
         assert "`profitability_updated_at` IS NULL" in sql
+    assert "`source_type` <> 'zying'" in product_pending_sql
+    assert "`source_type` <> 'zying'" in product_stale_sql
+    assert "`source_type`" not in collection_pending_sql
+    assert "`source_type`" not in collection_stale_sql
     for sql in (product_stale_sql, collection_stale_sql):
-        assert "`source_type` =" not in sql
         assert "`weight_g` > 0" in sql
         assert "`commission_amount_usd` IS NULL" in sql
         assert "`shipping_fee_usd` IS NULL" in sql
@@ -418,7 +438,6 @@ def test_reference_refresh_clears_only_shipping_and_net_for_safe_recalculation()
     ]
     assert connection.commit_count == 2
     for sql, params in update_queries:
-        assert "`source_type` =" not in sql
         assert "`profitability_updated_at` = NULL" in sql
         assert "`commission_amount_usd` = NULL" not in sql
         assert "`shipping_fee_usd` = NULL" in sql
@@ -432,6 +451,9 @@ def test_reference_refresh_clears_only_shipping_and_net_for_safe_recalculation()
     ]
     assert all("LEFT(`source_item_id`, 3) IN (%s, %s)" in sql for sql, _ in select_queries)
     assert all(params[-3:-1] == ("MLB", "MLM") for _, params in select_queries)
+    collection_select, product_select = select_queries[0], select_queries[2]
+    assert "`source_type`" not in collection_select[0]
+    assert "`source_type` <> 'zying'" in product_select[0]
 
 
 def test_add_products_retries_transient_lock_timeout(monkeypatch):
@@ -640,7 +662,7 @@ def test_product_content_update_validates_persists_and_invalidates_profitability
     }
     assert "`description_text` = %s" in product_sql
     assert "`volumetric_weight_kg` = CASE" in product_sql
-    assert "`net_proceeds_usd` = NULL" in product_sql
+    assert "`net_proceeds_usd` = IF(`source_type` = 'zying'" in product_sql
     assert params[-1] == 9
     assert "c.`price` = p.`price`" in collection_sql
     assert "c.`profitability_updated_at` = NULL" in collection_sql
@@ -1294,6 +1316,26 @@ def test_published_product_ids_are_scoped_to_account_and_site():
     assert params == (11, 12, 13, 7, "MLM")
 
 
+def test_published_product_account_ids_keep_latest_successful_owner():
+    connection = _FakeConnection()
+    connection.fake_cursor.fetchall = lambda: [
+        {"id": 12, "product_item_id": 11, "token_id": 8},
+        {"id": 10, "product_item_id": 11, "token_id": 7},
+        {"id": 9, "product_item_id": 13, "token_id": 7},
+    ]
+
+    with patch.object(store, "ensure_collection_tables"):
+        result = store.get_published_product_account_ids(
+            [11, 12, 13], connection_factory=lambda: connection
+        )
+
+    query, params = connection.fake_cursor.queries[-1]
+    assert result == {11: 8, 13: 7}
+    assert "`status` = 'published'" in query
+    assert "ORDER BY `id` DESC" in query
+    assert params == (11, 12, 13)
+
+
 def test_existing_user_product_ids_are_reused_across_sites_for_same_account():
     connection = _FakeConnection()
     connection.fake_cursor.fetchall = lambda: [
@@ -1311,7 +1353,7 @@ def test_existing_user_product_ids_are_reused_across_sites_for_same_account():
     assert result == {11: "CBTU123", 13: "U456"}
     assert "`site_id`" not in query
     assert "`status` = 'published'" in query
-    assert "LIKE 'CBTU%'" in query
+    assert "LIKE 'CBTU%%'" in query
     assert params == (11, 12, 13, 7)
 
 

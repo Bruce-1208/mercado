@@ -396,6 +396,10 @@ def test_playwright_keyword_flow_searches_selected_frontend_and_enters_internati
     )
 
     assert page.visited == [
+        (
+            "https://listado.mercadolibre.com.mx/"
+            "cosplay_NoIndex_True_SHIPPING*ORIGIN_10215069"
+        ),
         "https://www.mercadolibre.com.mx/",
         (
             "https://listado.mercadolibre.com.mx/"
@@ -406,9 +410,106 @@ def test_playwright_keyword_flow_searches_selected_frontend_and_enters_internati
     assert marketplace_url_has_cross_border_filter(result)
     assert [event["stage"] for event in events] == [
         "keyword_search",
+        "keyword_search_fallback",
         "keyword_search_complete",
         "cross_border_filter",
         "cross_border_filter_complete",
+    ]
+
+
+def test_playwright_keyword_flow_uses_direct_search_url_when_results_load():
+    events = []
+    source_url = "https://listado.mercadolibre.com.mx/cosplay-sexy"
+
+    class Page:
+        def __init__(self):
+            self.url = "about:blank"
+            self.visited = []
+
+        async def goto(self, url, **_kwargs):
+            self.visited.append(url)
+            self.url = url
+
+        async def wait_for_selector(self, *_args, **_kwargs):
+            return None
+
+        def is_closed(self):
+            return False
+
+        async def evaluate(self, script, *_args):
+            if script == playwright_collector.LISTING_DOM_SCRIPT:
+                return {"rows": [{"href": "https://example.test/MLM-123456789"}]}
+            return None
+
+    page = Page()
+    result = asyncio.run(
+        playwright_collector._run_keyword_search_flow(
+            page,
+            source_url,
+            "cosplay sexy",
+            collection_scope="all",
+            on_page=events.append,
+            stop_event=None,
+        )
+    )
+
+    assert result == source_url
+    assert page.visited == [source_url]
+    assert events[-1]["stage"] == "keyword_search_complete"
+    assert "直接进入" in events[-1]["message"]
+
+
+def test_playwright_keyword_flow_waits_for_initial_buyer_verification(monkeypatch):
+    events = []
+    source_url = "https://listado.mercadolibre.com.mx/cosplay-sexy"
+
+    class Page:
+        def __init__(self):
+            self.url = "about:blank"
+            self.listing_reads = 0
+            self.brought_to_front = False
+
+        async def goto(self, _url, **_kwargs):
+            self.url = "https://www.mercadolibre.com.mx/gz/account-verification"
+
+        def is_closed(self):
+            return False
+
+        async def evaluate(self, script, *_args):
+            if script != playwright_collector.LISTING_DOM_SCRIPT:
+                return None
+            self.listing_reads += 1
+            if self.listing_reads == 1:
+                return {"rows": [], "body": "Por seguridad, completa este paso"}
+            self.url = source_url
+            return {"rows": [{"href": "https://example.test/MLM-123456789"}]}
+
+        async def bring_to_front(self):
+            self.brought_to_front = True
+
+    async def no_sleep(_seconds):
+        return None
+
+    monkeypatch.setattr(playwright_collector.asyncio, "sleep", no_sleep)
+    page = Page()
+    result = asyncio.run(
+        playwright_collector._run_keyword_search_flow(
+            page,
+            source_url,
+            "cosplay sexy",
+            collection_scope="all",
+            on_page=events.append,
+            stop_event=None,
+        )
+    )
+
+    assert result == source_url
+    assert page.brought_to_front is True
+    assert [event["stage"] for event in events] == [
+        "keyword_search",
+        "waiting_verification",
+        "verification_resolved",
+        "keyword_search_complete",
     ]
 
 
@@ -1079,6 +1180,56 @@ def test_playwright_dynamic_pool_does_not_wait_for_slowest_batch_member(monkeypa
     )
 
     assert result["completed_count"] == 3
+
+
+def test_playwright_listing_direct_mode_opens_no_detail_pages(monkeypatch):
+    candidate = {
+        "source_item_id": "MLM9000000001",
+        "source_url": "https://articulo.mercadolibre.com.mx/MLM-9000000001",
+        "listing_url": "https://www.mercadolibre.com.mx/producto/p/MLMU1?pdp_filters=item_id:MLM9000000001",
+        "title": "Producto directo",
+        "main_image_url": "https://http2.mlstatic.com/image.jpg",
+        "price": 1299,
+        "currency_id": "MXN",
+        "_plugin_data": {"id": "MLM9000000001", "weight_g": 196, "size_cm": [10, 20, 30]},
+        "_direct_detail_ready": True,
+    }
+    runtime = type("Runtime", (), {"connection_mode": "test", "pages": []})()
+
+    async def fake_open():
+        return runtime
+
+    async def fake_close(_runtime):
+        return None
+
+    async def fake_candidates(*_args, **_kwargs):
+        return [candidate]
+
+    async def fail_open_pool(*_args, **_kwargs):
+        raise AssertionError("列表直读模式不应创建详情页池")
+
+    monkeypatch.setattr(playwright_collector, "_open_runtime", fake_open)
+    monkeypatch.setattr(playwright_collector, "_close_runtime", fake_close)
+    monkeypatch.setattr(playwright_collector, "_listing_candidates", fake_candidates)
+    monkeypatch.setattr(playwright_collector, "_open_detail_page_pool", fail_open_pool)
+
+    result = asyncio.run(
+        playwright_collector._collect_async(
+            "https://listado.mercadolibre.com.mx/cosplay",
+            1,
+            max_workers=6,
+            plugin_timeout=4,
+            on_page=None,
+            on_item=None,
+            on_progress=None,
+            stop_event=None,
+        )
+    )
+
+    assert result["detail_mode"] == "listing_page_batch"
+    assert result["completed_count"] == 1
+    assert result["rows"][0]["weight_g"] == 196
+    assert result["rows"][0]["page_snapshot"]["detail_acquisition"] == "listing_page_batch"
 
 
 def test_playwright_reuses_preheated_detail_pages_across_items(monkeypatch):

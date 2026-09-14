@@ -58,6 +58,7 @@ PRODUCT_REVIEW_STATUSES = {
 PRODUCT_PUBLISH_RECORD_STATUSES = {"pending", "publishing", "published", "failed"}
 PRODUCT_PUBLISH_RETRYABLE_STATUSES = {"pending", "publishing", "failed"}
 PRODUCT_PUBLISH_FILTER_STATUSES = PRODUCT_PUBLISH_RECORD_STATUSES | {"unpublished"}
+ZYING_PROFITABILITY_SOURCE = "zying_collection"
 COLLECTION_WORKFLOW_COLUMN_DEFINITIONS = (
     ("review_status", "VARCHAR(32) NOT NULL DEFAULT 'unreviewed' AFTER `added_to_products`"),
     ("last_publish_status", "VARCHAR(32) NULL AFTER `review_status`"),
@@ -1486,6 +1487,47 @@ def get_published_product_item_ids(
         connection.close()
 
 
+def get_published_product_account_ids(
+    product_item_ids: Iterable[int],
+    *,
+    connection_factory: Callable[[], Any] | None = None,
+) -> dict[int, int]:
+    """Return the latest successful account owner for each product.
+
+    A product may be published to several sites under one account, but assigning
+    it to another account would create a duplicate seller product.
+    """
+
+    item_ids = list(dict.fromkeys(
+        int(value) for value in product_item_ids or [] if int(value) > 0
+    ))
+    if not item_ids:
+        return {}
+    placeholders = ", ".join(["%s"] * len(item_ids))
+    connection = (connection_factory or _connect)()
+    try:
+        with connection.cursor() as cursor:
+            ensure_collection_tables(cursor)
+            cursor.execute(
+                f"SELECT `product_item_id`, `token_id`, `id` "
+                f"FROM `{PUBLISH_RECORD_TABLE}` "
+                f"WHERE `product_item_id` IN ({placeholders}) "
+                "AND `status` = 'published' ORDER BY `id` DESC",
+                tuple(item_ids),
+            )
+            rows = cursor.fetchall()
+        connection.commit()
+        result: dict[int, int] = {}
+        for row in rows:
+            product_item_id = int(row.get("product_item_id") or 0)
+            token_id = int(row.get("token_id") or 0)
+            if product_item_id > 0 and token_id > 0 and product_item_id not in result:
+                result[product_item_id] = token_id
+        return result
+    finally:
+        connection.close()
+
+
 def update_product_publish_record(
     record_id: int,
     *,
@@ -1780,6 +1822,8 @@ def _normalize_product_content_changes(changes: Mapping[str, Any]) -> dict[str, 
 
 def _product_content_update_plan(
     normalized: Mapping[str, Any],
+    *,
+    preserve_zying_net_proceeds: bool = False,
 ) -> tuple[list[str], list[Any], bool]:
     assignments = [f"`{field}` = %s" for field in normalized]
     values = list(normalized.values())
@@ -1800,6 +1844,25 @@ def _product_content_update_plan(
             "ELSE NULL END"
         )
     if profitability_stale:
+        net_proceeds_assignment = "`net_proceeds_usd` = NULL"
+        updated_at_assignment = "`profitability_updated_at` = NULL"
+        source_assignment = "`profitability_source` = 'manual_edit_pending'"
+        if preserve_zying_net_proceeds:
+            # ZYing's net proceeds come directly from its product detail page.
+            # Editing a derived-cost input must not turn that source value into
+            # a pending Mercado profitability calculation.
+            net_proceeds_assignment = (
+                "`net_proceeds_usd` = IF(`source_type` = 'zying', "
+                "`net_proceeds_usd`, NULL)"
+            )
+            updated_at_assignment = (
+                "`profitability_updated_at` = IF(`source_type` = 'zying', "
+                "`profitability_updated_at`, NULL)"
+            )
+            source_assignment = (
+                "`profitability_source` = IF(`source_type` = 'zying', "
+                f"'{ZYING_PROFITABILITY_SOURCE}', 'manual_edit_pending')"
+            )
         assignments.extend((
             "`sale_price_usd` = NULL",
             "`commission_amount_local` = NULL",
@@ -1808,9 +1871,9 @@ def _product_content_update_plan(
             "`shipping_fee_usd` = NULL",
             "`billable_weight_g` = NULL",
             "`shipping_api_billable_weight_g` = NULL",
-            "`net_proceeds_usd` = NULL",
-            "`profitability_updated_at` = NULL",
-            "`profitability_source` = 'manual_edit_pending'",
+            net_proceeds_assignment,
+            updated_at_assignment,
+            source_assignment,
             "`profitability_error` = ''",
         ))
         if "category_id" in normalized:
@@ -1836,7 +1899,9 @@ def update_product_item(
     if row_id <= 0:
         raise ValueError("产品记录编号无效")
     normalized = _normalize_product_content_changes(changes)
-    assignments, values, profitability_stale = _product_content_update_plan(normalized)
+    assignments, values, profitability_stale = _product_content_update_plan(
+        normalized, preserve_zying_net_proceeds=True
+    )
 
     connection = (connection_factory or _connect)()
     try:
@@ -1925,7 +1990,9 @@ def update_product_items(
 
     ids = _normalize_row_ids(product_item_ids, empty_message="请至少勾选一个产品")
     normalized = _normalize_product_content_changes(changes)
-    assignments, values, profitability_stale = _product_content_update_plan(normalized)
+    assignments, values, profitability_stale = _product_content_update_plan(
+        normalized, preserve_zying_net_proceeds=True
+    )
     placeholders = ", ".join(["%s"] * len(ids))
     connection = (connection_factory or _connect)()
     try:
@@ -2023,8 +2090,8 @@ def get_existing_user_product_ids(
                 f"FROM `{PUBLISH_RECORD_TABLE}` "
                 f"WHERE `product_item_id` IN ({placeholders}) "
                 "AND `token_id` = %s AND `status` = 'published' "
-                "AND (`published_item_id` LIKE 'CBTU%' "
-                "OR `published_item_id` LIKE 'U%') "
+                "AND (`published_item_id` LIKE 'CBTU%%' "
+                "OR `published_item_id` LIKE 'U%%') "
                 "ORDER BY `id` DESC",
                 tuple(item_ids + [normalized_token_id]),
             )
@@ -2200,6 +2267,9 @@ def upsert_zying_products_to_products(
         net_proceeds = _decimal_from_text(record.get("net_income"))
         if currency_id != "USD":
             net_proceeds = None
+        # Preserve the direct ZYing value inside the source snapshot as an
+        # auditable recovery source; it must never be derived from our fees.
+        snapshot["zying_net_proceeds_usd"] = net_proceeds
         description_text = str(
             description.get("plain_text")
             or description.get("text")
@@ -2211,7 +2281,7 @@ def upsert_zying_products_to_products(
             main_image_url, title, description_text, price, currency_id,
             weight_g, volumetric_weight, dimensions[0], dimensions[1], dimensions[2],
             "zying_detail", sale_price_usd, category_id, category_name,
-            net_proceeds, now, "zying_collection", _dumps(snapshot), now,
+            net_proceeds, now, ZYING_PROFITABILITY_SOURCE, _dumps(snapshot), now,
         ))
     if not values:
         return {"count": 0, "skipped": skipped}
@@ -2802,6 +2872,7 @@ def list_stale_profitability_items(
                         NULLIF(TRIM(COALESCE(`category_id`, '')), '') IS NOT NULL
                         OR NULLIF(TRIM(COALESCE(`title`, '')), '') IS NOT NULL
                     )
+                    {"AND `source_type` <> 'zying'" if table == PRODUCT_TABLE else ""}
                 """
                 cursor.execute(
                     f"""
@@ -2855,6 +2926,10 @@ def update_item_profitability(
     item_id = str(source_item_id or "").strip().upper()
     if not item_id:
         raise ValueError("商品编号不能为空")
+    if str(snapshot.get("source_type") or "").strip().lower() == "zying":
+        # Protect direct ZYing proceeds even when a row was already fetched by
+        # an estimator worker before the queue exclusion took effect.
+        return False
     values = [snapshot.get(column) for column in PROFITABILITY_COLUMNS]
     assignments = ", ".join(f"`{column}` = %s" for column in PROFITABILITY_COLUMNS)
     expected_inputs = snapshot.get("_expected_profitability_inputs")
@@ -3018,6 +3093,10 @@ def mark_all_profitability_stale(
         with connection.cursor() as cursor:
             ensure_collection_tables(cursor)
             for table in (COLLECTION_TABLE, PRODUCT_TABLE):
+                source_filter = (
+                    "AND `source_type` <> 'zying'"
+                    if table == PRODUCT_TABLE else ""
+                )
                 last_id = 0
                 while True:
                     cursor.execute(
@@ -3026,6 +3105,7 @@ def mark_all_profitability_stale(
                         FROM `{table}`
                         WHERE `id` > %s
                           AND `price` IS NOT NULL AND `price` > 0
+                          {source_filter}
                           {site_filter}
                           {stale_filter}
                         ORDER BY `id` ASC

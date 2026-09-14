@@ -118,6 +118,17 @@ class RequiredUnknownCategoryClient(CategoryClient):
         return super().request(method, path, **kwargs)
 
 
+class RequiredGtinCategoryClient(CategoryClient):
+    def request(self, method, path, **kwargs):
+        if path == "/categories/CBT301/attributes":
+            return [
+                {"id": "BRAND"},
+                {"id": "GTIN", "tags": {"required": True}},
+                {"id": "EMPTY_GTIN_REASON"},
+            ]
+        return super().request(method, path, **kwargs)
+
+
 class RequiredFactoryKitCategoryClient(CategoryClient):
     def request(self, method, path, **kwargs):
         if path == "/categories/CBT301/attributes":
@@ -695,6 +706,43 @@ def test_user_product_payload_uses_uploaded_picture_ids():
     ]
 
 
+def test_required_gtin_accepts_documented_empty_reason():
+    source = sample_source()
+    source["attributes"] = []
+
+    payload = build_user_product_payload(
+        RequiredGtinCategoryClient(),
+        source,
+        {},
+        quantity=1,
+        net_proceeds=22,
+        picture_ids=["uploaded-CBT-picture"],
+    )
+
+    assert any(
+        attribute["id"] == "EMPTY_GTIN_REASON"
+        for attribute in payload["attributes"]
+    )
+
+
+def test_empty_gtin_placeholder_is_replaced_by_documented_reason():
+    source = sample_source()
+    source["attributes"] = [{"id": "GTIN"}]
+
+    payload = build_user_product_payload(
+        RequiredGtinCategoryClient(),
+        source,
+        {},
+        quantity=1,
+        net_proceeds=22,
+        picture_ids=["uploaded-CBT-picture"],
+    )
+
+    by_id = {attribute["id"]: attribute for attribute in payload["attributes"]}
+    assert "GTIN" not in by_id
+    assert by_id["EMPTY_GTIN_REASON"]["value_id"] == "17055160"
+
+
 def test_user_product_payload_limits_family_name_to_platform_maximum():
     source = sample_source()
     source["title"] = "A" * 80
@@ -1036,9 +1084,9 @@ def test_existing_user_product_adds_marketplace_without_recreating_or_uploading(
             self.paths.append((method, path))
             if path == "/users/me":
                 return {"id": 77, "site_id": "CBT", "tags": ["user_product_seller"]}
-            if path == "/marketplace/user-products/CBTU123/mapping":
+            if path == "/marketplace/user-products/U123/mapping":
                 return [{"site_items": [{"site_id": "MLM", "item_id": "MLM1"}]}]
-            if method == "POST" and path == "/global/user-products/CBTU123":
+            if method == "POST" and path == "/global/user-products/U123":
                 self.add_payload = kwargs["json_body"]
                 return {
                     "parent_user_product_id": "CBTU123",
@@ -1061,7 +1109,7 @@ def test_existing_user_product_adds_marketplace_without_recreating_or_uploading(
     )
 
     assert result["publication_action"] == "add_marketplace"
-    assert result["endpoint"] == "/global/user-products/CBTU123"
+    assert result["endpoint"] == "/global/user-products/U123"
     assert client.add_payload == {
         "sites_to_sell": [{
             "site_id": "MLB",
@@ -1077,7 +1125,7 @@ def test_existing_user_product_skips_add_when_marketplace_mapping_already_exists
         def request(self, method, path, **kwargs):
             if path == "/users/me":
                 return {"id": 77, "site_id": "CBT", "tags": ["user_product_seller"]}
-            if path == "/marketplace/user-products/CBTU123/mapping":
+            if path == "/marketplace/user-products/U123/mapping":
                 return [{"site_items": [{"site_id": "MLB", "item_id": "MLB2"}]}]
             if method == "POST":
                 raise AssertionError("mapped site must not be created again")

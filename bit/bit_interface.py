@@ -2,6 +2,7 @@
 import queue
 import json
 import ipaddress
+import random
 import re
 from collections import deque
 import functools
@@ -631,6 +632,7 @@ if USE_DB_API:
     db_create_mercado_product_publish_records = bit_db_api.create_mercado_product_publish_records
     db_get_mercado_product_publish_records_by_ids = bit_db_api.get_mercado_product_publish_records_by_ids
     db_get_published_mercado_product_item_ids = bit_db_api.get_published_mercado_product_item_ids
+    db_get_published_mercado_product_account_ids = bit_db_api.get_published_mercado_product_account_ids
     db_get_existing_mercado_user_product_ids = bit_db_api.get_existing_mercado_user_product_ids
     db_update_mercado_product_publish_record = bit_db_api.update_mercado_product_publish_record
     db_list_mercado_product_publish_records = bit_db_api.list_mercado_product_publish_records
@@ -744,6 +746,7 @@ else:
         create_product_publish_records as db_create_mercado_product_publish_records,
         get_product_publish_records_by_ids as db_get_mercado_product_publish_records_by_ids,
         get_published_product_item_ids as db_get_published_mercado_product_item_ids,
+        get_published_product_account_ids as db_get_published_mercado_product_account_ids,
         get_existing_user_product_ids as db_get_existing_mercado_user_product_ids,
         list_product_publish_records as db_list_mercado_product_publish_records,
         list_collection_items as db_list_mercado_collection_items,
@@ -2300,6 +2303,7 @@ _mercado_publish_state = {
     "status": "idle",
     "message": "等待选择产品上架",
     "selection_mode": "accounts",
+    "group_publish_mode": "",
     "token_id": None,
     "token_ids": [],
     "group_names": [],
@@ -2311,12 +2315,13 @@ _mercado_publish_state = {
     "completed_target_count": 0,
     "skipped_target_count": 0,
     "quantity": 500,
-    "worker_count": 10,
+    "worker_count": 16,
     "requested_count": 0,
     "processed_count": 0,
     "published_count": 0,
     "failed_count": 0,
     "moved_to_collection_count": 0,
+    "skipped_other_account_count": 0,
     "skipped_published_count": 0,
     "elapsed_seconds": 0,
     "average_seconds_per_item": 0,
@@ -9309,14 +9314,20 @@ def _start_order_sync_scheduler():
 
 
 def _mercado_collection_rows_needing_repair(rows):
-    """Retry rows missing actual weight or either core product identity field."""
+    """Retry legacy detail rows, but never reopen tabs for list-direct rows."""
     from erp.mercadolibre_profitability import actual_weight_from_row
 
     return [
         row for row in rows or []
-        if actual_weight_from_row(row) is None
-        or not str(row.get("title") or "").strip()
-        or not str(row.get("main_image_url") or "").strip()
+        if not (
+            isinstance(row.get("page_snapshot"), dict)
+            and row["page_snapshot"].get("detail_acquisition") == "listing_page_batch"
+        )
+        and (
+            actual_weight_from_row(row) is None
+            or not str(row.get("title") or "").strip()
+            or not str(row.get("main_image_url") or "").strip()
+        )
     ]
 
 
@@ -10336,6 +10347,65 @@ def _mercado_publish_state_update(**changes):
         _mercado_publish_state.update(changes)
 
 
+def _assign_mercado_group_publish_rows(
+    product_rows, targets, publish_mode, published_account_ids=None,
+):
+    """Assign each product to one account while retaining all sites for it."""
+
+    mode = str(publish_mode or "").strip().lower()
+    if mode not in {"random", "polling"}:
+        raise ValueError("账号组上架模式必须是随机上架或轮询上架")
+
+    target_rows = [dict(target) for target in targets or []]
+    account_ids = list(dict.fromkeys(
+        int(target.get("token_id") or 0)
+        for target in target_rows
+        if int(target.get("token_id") or 0) > 0
+    ))
+    if not account_ids:
+        return [], 0
+
+    assignments = {token_id: [] for token_id in account_ids}
+    owners = {
+        int(product_id): int(token_id)
+        for product_id, token_id in (published_account_ids or {}).items()
+        if int(product_id) > 0 and int(token_id) > 0
+    }
+    unassigned_rows = []
+    skipped_other_account_count = 0
+    for raw_row in product_rows or []:
+        row = dict(raw_row)
+        product_id = int(row.get("id") or 0)
+        owner_token_id = owners.get(product_id)
+        if owner_token_id is None:
+            unassigned_rows.append(row)
+        elif owner_token_id in assignments:
+            assignments[owner_token_id].append(row)
+        else:
+            skipped_other_account_count += 1
+
+    if mode == "random":
+        random.shuffle(unassigned_rows)
+        allocation_order = list(account_ids)
+        random.shuffle(allocation_order)
+        for index, row in enumerate(unassigned_rows):
+            assignments[allocation_order[index % len(allocation_order)]].append(row)
+    else:
+        for index, row in enumerate(unassigned_rows):
+            account_index = (index // 10) % len(account_ids)
+            assignments[account_ids[account_index]].append(row)
+
+    assigned_targets = []
+    for target in target_rows:
+        token_id = int(target.get("token_id") or 0)
+        account_rows = assignments.get(token_id) or []
+        if not account_rows:
+            continue
+        target["product_rows"] = [dict(row) for row in account_rows]
+        assigned_targets.append(target)
+    return assigned_targets, skipped_other_account_count
+
+
 def _run_mercado_product_publish(
     product_rows, token_id, site_id, site_name, quantity, worker_count, store_name,
     batch_id, created_by, discount_rate, moved_to_collection_count=0,
@@ -10360,7 +10430,7 @@ def _run_mercado_product_publish(
 
 def _run_mercado_product_publish_targets(
     product_rows, targets, quantity, worker_count, batch_id, created_by,
-    moved_to_collection_count=0,
+    moved_to_collection_count=0, skipped_other_account_count=0,
 ):
     from erp.mercadolibre_batch_publish import publish_product_batch
 
@@ -10561,6 +10631,8 @@ def _run_mercado_product_publish_targets(
     message = f"批量上架完成：{target_count} 个账号-站点组合"
     if moved_to_collection_count:
         message += f"；已忽略并移回采集列表 {moved_to_collection_count} 件不可上架商品"
+    if skipped_other_account_count:
+        message += f"；跳过 {skipped_other_account_count} 件已归属其他账号的产品"
     _mercado_publish_state_update(
         running=False,
         status=status,
@@ -10570,6 +10642,7 @@ def _run_mercado_product_publish_targets(
         published_count=published,
         failed_count=failed,
         moved_to_collection_count=int(moved_to_collection_count or 0),
+        skipped_other_account_count=int(skipped_other_account_count or 0),
         skipped_published_count=skipped_published,
         current_item_id="",
         completed_target_count=target_count,
@@ -10611,6 +10684,11 @@ def api_publish_mercado_products():
         selection_mode = str(data.get("selection_mode") or "accounts").strip().lower()
         if selection_mode not in {"accounts", "groups"}:
             raise ValueError("上架选择方式必须是账号或分组")
+        group_publish_mode = str(data.get("group_publish_mode") or "").strip().lower()
+        if selection_mode == "groups" and group_publish_mode not in {"", "random", "polling"}:
+            raise ValueError("账号组上架模式必须是随机上架或轮询上架")
+        if selection_mode != "groups":
+            group_publish_mode = ""
 
         raw_token_ids = data.get("token_ids")
         if raw_token_ids is None:
@@ -10655,7 +10733,7 @@ def api_publish_mercado_products():
         raw_quantity = data.get("quantity")
         raw_worker_count = data.get("worker_count")
         quantity = int(500 if raw_quantity in (None, "") else raw_quantity)
-        worker_count = int(10 if raw_worker_count in (None, "") else raw_worker_count)
+        worker_count = int(16 if raw_worker_count in (None, "") else raw_worker_count)
         if quantity < 1 or quantity > 9999:
             raise ValueError("上架库存必须在 1-9999 之间")
         if worker_count < 1:
@@ -10700,6 +10778,7 @@ def api_publish_mercado_products():
                     "status": "completed",
                     "message": message,
                     "selection_mode": selection_mode,
+                    "group_publish_mode": group_publish_mode,
                     "token_id": token_id,
                     "token_ids": token_ids,
                     "group_names": group_names,
@@ -10716,6 +10795,7 @@ def api_publish_mercado_products():
                     "published_count": 0,
                     "failed_count": 0,
                     "moved_to_collection_count": moved_to_collection_count,
+                    "skipped_other_account_count": 0,
                     "skipped_published_count": 0,
                     "elapsed_seconds": 0,
                     "average_seconds_per_item": 0,
@@ -10806,6 +10886,19 @@ def api_publish_mercado_products():
                 raise ValueError("所选分组和站点没有可用的账号-站点组合")
             raise ValueError("所选账号和站点没有兼容的上架组合")
 
+        skipped_other_account_count = 0
+        if selection_mode == "groups" and group_publish_mode:
+            product_ids = [int(row.get("id") or 0) for row in rows]
+            published_account_ids = db_get_published_mercado_product_account_ids(
+                product_ids
+            )
+            targets, skipped_other_account_count = _assign_mercado_group_publish_rows(
+                rows,
+                targets,
+                group_publish_mode,
+                published_account_ids,
+            )
+
         target_token_ids = list(dict.fromkeys(
             int(target["token_id"]) for target in targets
         ))
@@ -10832,6 +10925,13 @@ def api_publish_mercado_products():
             float(targets[0]["discount_rate"])
             if len(targets) == 1 else None
         )
+        requested_count = sum(
+            len(target.get("product_rows") or rows) for target in targets
+        )
+        largest_target_batch = max(
+            (len(target.get("product_rows") or rows) for target in targets),
+            default=0,
+        )
         current_user = get_current_workbench_user() or {}
         created_by = str(
             current_user.get("display_name") or current_user.get("username") or ""
@@ -10854,15 +10954,27 @@ def api_publish_mercado_products():
             "batch_id": batch_id,
             "status": "running",
             "message": (
-                f"准备使用 {min(worker_count, len(rows))} 个线程上架 "
+                f"准备使用 {min(worker_count, largest_target_batch)} 个线程上架 "
                 f"{len(rows)} 件产品到 {len(targets)} 个账号-站点组合 · "
-                "各组合按对应站点折扣计算净收益"
+                + (
+                    "随机分配，产品不跨账号重复 · "
+                    if group_publish_mode == "random"
+                    else "每账号 10 件轮询，产品不跨账号重复 · "
+                    if group_publish_mode == "polling"
+                    else ""
+                )
+                + "各组合按对应站点折扣计算净收益"
                 + (
                     f"；已忽略并移回采集列表 {moved_to_collection_count} 件不可上架商品"
                     if moved_to_collection_count else ""
                 )
+                + (
+                    f"；已跳过 {skipped_other_account_count} 件归属其他账号的产品"
+                    if skipped_other_account_count else ""
+                )
             ),
             "selection_mode": selection_mode,
+            "group_publish_mode": group_publish_mode,
             "token_id": token_id,
             "token_ids": target_token_ids,
             "group_names": group_names,
@@ -10874,13 +10986,14 @@ def api_publish_mercado_products():
             "completed_target_count": 0,
             "skipped_target_count": skipped_target_count,
             "quantity": quantity,
-            "worker_count": min(worker_count, len(rows)),
+            "worker_count": min(worker_count, largest_target_batch),
             "discount_rate": discount_rate,
-            "requested_count": len(rows) * len(targets),
+            "requested_count": requested_count,
             "processed_count": 0,
             "published_count": 0,
             "failed_count": 0,
             "moved_to_collection_count": moved_to_collection_count,
+            "skipped_other_account_count": skipped_other_account_count,
             "skipped_published_count": 0,
             "elapsed_seconds": 0,
             "average_seconds_per_item": 0,
@@ -10902,6 +11015,7 @@ def api_publish_mercado_products():
                 batch_id,
                 created_by,
                 moved_to_collection_count,
+                skipped_other_account_count,
             ),
             name=f"mercado-publish-{batch_id}",
             daemon=True,
@@ -11092,7 +11206,7 @@ def api_retry_mercado_product_publish_records():
 
         targets = list(grouped_targets.values())
         requested_count = sum(len(target["product_rows"]) for target in targets)
-        worker_count = int(data.get("worker_count") or 10)
+        worker_count = int(data.get("worker_count") or 16)
         if worker_count < 1:
             raise ValueError("重新上架并发必须是大于 0 的整数")
         current_user = get_current_workbench_user() or {}
@@ -11121,6 +11235,7 @@ def api_retry_mercado_product_publish_records():
             "status": "running",
             "message": f"正在重新上架 {requested_count} 件产品",
             "selection_mode": "retry",
+            "group_publish_mode": "",
             "token_id": token_ids[0] if len(token_ids) == 1 else None,
             "token_ids": token_ids,
             "group_names": [],
@@ -11145,6 +11260,7 @@ def api_retry_mercado_product_publish_records():
             "published_count": 0,
             "failed_count": 0,
             "moved_to_collection_count": 0,
+            "skipped_other_account_count": 0,
             "skipped_published_count": 0,
             "duplicate_selection_count": duplicate_selection_count,
             "elapsed_seconds": 0,
@@ -11348,6 +11464,31 @@ def api_db_published_mercado_product_item_ids():
     return jsonify({
         "status": "success",
         "data": {"product_item_ids": published_ids},
+    })
+
+
+@app.route('/api/db/mercado-publish-records/published-account-ids', methods=['POST'])
+@internal_api_required
+def api_db_published_mercado_product_account_ids():
+    blocked = reject_db_api_client_mode()
+    if blocked:
+        return blocked
+    data = request.get_json(silent=True) or {}
+    item_ids = data.get("product_item_ids") or []
+    if not isinstance(item_ids, list):
+        return jsonify({"status": "error", "message": "product_item_ids 必须是数组"}), 422
+    try:
+        account_ids = db_get_published_mercado_product_account_ids(item_ids)
+    except (TypeError, ValueError) as exc:
+        return jsonify({"status": "error", "message": str(exc)}), 400
+    return jsonify({
+        "status": "success",
+        "data": {
+            "account_ids": {
+                str(product_id): token_id
+                for product_id, token_id in account_ids.items()
+            }
+        },
     })
 
 
@@ -11878,8 +12019,63 @@ def api_db_mercado_token_authorization():
         return blocked
     return jsonify({
         "status": "success",
-        "data": bit_db_api.get_mercado_token_authorization_info(),
+        "data": bit_db_api.get_mercado_token_authorization_info(
+            request.args.get("application_id")
+        ),
     })
+
+
+@app.route('/api/db/mercado-applications', methods=['GET', 'POST'])
+@internal_api_required
+def api_db_mercado_applications():
+    blocked = reject_db_api_client_mode()
+    if blocked:
+        return blocked
+    try:
+        result = (
+            bit_db_api.list_mercado_applications()
+            if request.method == "GET"
+            else bit_db_api.create_mercado_application(request.get_json(silent=True) or {})
+        )
+        return jsonify({"status": "success", "data": result})
+    except Exception as exc:
+        return _mercado_token_error_response(exc)
+
+
+@app.route('/api/db/mercado-applications/<int:application_id>', methods=['PATCH', 'DELETE'])
+@internal_api_required
+def api_db_mercado_application(application_id):
+    blocked = reject_db_api_client_mode()
+    if blocked:
+        return blocked
+    try:
+        if request.method == "DELETE":
+            affected = bit_db_api.delete_mercado_application(application_id)
+            if not affected:
+                raise KeyError("开发者应用不存在")
+            result = {"deleted": affected}
+        else:
+            result = bit_db_api.update_mercado_application(
+                application_id, request.get_json(silent=True) or {}
+            )
+        return jsonify({"status": "success", "data": result})
+    except Exception as exc:
+        return _mercado_token_error_response(exc)
+
+
+@app.route('/api/db/mercado-applications/<int:application_id>/authorization', methods=['GET'])
+@internal_api_required
+def api_db_mercado_application_authorization(application_id):
+    blocked = reject_db_api_client_mode()
+    if blocked:
+        return blocked
+    try:
+        return jsonify({
+            "status": "success",
+            "data": bit_db_api.get_mercado_token_authorization_info(application_id),
+        })
+    except Exception as exc:
+        return _mercado_token_error_response(exc)
 
 
 @app.route('/api/db/mercado-tokens', methods=['GET'])
@@ -11961,9 +12157,10 @@ def api_db_exchange_mercado_token():
         return blocked
     data = request.get_json(silent=True) or {}
     try:
-        result = bit_db_api.exchange_mercado_store_token(
-            data.get("display_name", ""), data.get("code", "")
-        )
+        args = [data.get("display_name", ""), data.get("code", "")]
+        if data.get("application_id") not in (None, ""):
+            args.append(data.get("application_id"))
+        result = bit_db_api.exchange_mercado_store_token(*args)
         return jsonify({"status": "success", "data": result})
     except Exception as exc:
         return _mercado_token_error_response(exc)
@@ -11977,6 +12174,22 @@ def api_db_refresh_mercado_token(token_id):
         return blocked
     try:
         result = bit_db_api.refresh_mercado_store_token(token_id)
+        return jsonify({"status": "success", "data": result})
+    except Exception as exc:
+        return _mercado_token_error_response(exc)
+
+
+@app.route('/api/db/mercado-tokens/<int:token_id>/application', methods=['POST'])
+@internal_api_required
+def api_db_reauthorize_mercado_token_application(token_id):
+    blocked = reject_db_api_client_mode()
+    if blocked:
+        return blocked
+    data = request.get_json(silent=True) or {}
+    try:
+        result = bit_db_api.reauthorize_mercado_store_application(
+            token_id, data.get("application_id"), data.get("code", "")
+        )
         return jsonify({"status": "success", "data": result})
     except Exception as exc:
         return _mercado_token_error_response(exc)
@@ -13665,8 +13878,47 @@ def api_db_workbench_login():
 @login_required
 def api_mercado_token_authorization():
     try:
-        data = bit_db_api.get_mercado_token_authorization_info()
+        data = bit_db_api.get_mercado_token_authorization_info(
+            request.args.get("application_id")
+        )
         return jsonify({"status": "success", "data": data})
+    except Exception as exc:
+        return _mercado_token_error_response(exc)
+
+
+@app.route('/api/mercado-applications', methods=['GET', 'POST'])
+@login_required
+def api_mercado_applications():
+    try:
+        if request.method == "GET":
+            result = bit_db_api.list_mercado_applications()
+            message = ""
+        else:
+            result = bit_db_api.create_mercado_application(
+                request.get_json(silent=True) or {}
+            )
+            message = "开发者应用已新增"
+        return jsonify({"status": "success", "data": result, "message": message})
+    except Exception as exc:
+        return _mercado_token_error_response(exc)
+
+
+@app.route('/api/mercado-applications/<int:application_id>', methods=['PATCH', 'DELETE'])
+@login_required
+def api_mercado_application(application_id):
+    try:
+        if request.method == "DELETE":
+            affected = bit_db_api.delete_mercado_application(application_id)
+            if not affected:
+                raise KeyError("开发者应用不存在")
+            result = {"deleted": affected}
+            message = "开发者应用已删除"
+        else:
+            result = bit_db_api.update_mercado_application(
+                application_id, request.get_json(silent=True) or {}
+            )
+            message = "开发者应用已保存"
+        return jsonify({"status": "success", "data": result, "message": message})
     except Exception as exc:
         return _mercado_token_error_response(exc)
 
@@ -13745,9 +13997,10 @@ def api_mercado_token_site_settings(token_id):
 def api_exchange_mercado_token():
     data = request.get_json(silent=True) or {}
     try:
-        result = bit_db_api.exchange_mercado_store_token(
-            data.get("display_name", ""), data.get("code", "")
-        )
+        args = [data.get("display_name", ""), data.get("code", "")]
+        if data.get("application_id") not in (None, ""):
+            args.append(data.get("application_id"))
+        result = bit_db_api.exchange_mercado_store_token(*args)
         response_data = dict(result or {})
         token_id = int(response_data.get("id") or 0)
         auto_sync = {"started": False, "queued": False}
@@ -13788,6 +14041,23 @@ def api_refresh_mercado_token(token_id):
             "status": "success",
             "data": result,
             "message": "Token 已刷新并保存",
+        })
+    except Exception as exc:
+        return _mercado_token_error_response(exc)
+
+
+@app.route('/api/mercado-tokens/<int:token_id>/application', methods=['POST'])
+@login_required
+def api_reauthorize_mercado_token_application(token_id):
+    data = request.get_json(silent=True) or {}
+    try:
+        result = bit_db_api.reauthorize_mercado_store_application(
+            token_id, data.get("application_id"), data.get("code", "")
+        )
+        return jsonify({
+            "status": "success",
+            "data": result,
+            "message": "店铺应用已修改，后续刊登将使用新应用",
         })
     except Exception as exc:
         return _mercado_token_error_response(exc)

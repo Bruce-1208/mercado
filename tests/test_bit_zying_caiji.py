@@ -285,9 +285,14 @@ def test_zying_detail_builds_publish_ready_snapshot_with_all_common_fields():
                 "8": {
                     "site": "CBT",
                     "kindid": "430974",
-                    "attributes": [
-                        {"id": "BRAND", "value_name": "Generic"},
-                        {"id": "MODEL", "value_name": "M-9"},
+                    "attrs": [
+                        {
+                            "name": "Marca",
+                            "value": "Generic",
+                            "nameid": "BRAND",
+                            "valueid": 35977846,
+                        },
+                        {"name": "Modelo", "value": "M-9", "nameid": "MODEL"},
                     ],
                 }
             }
@@ -314,10 +319,39 @@ def test_zying_detail_builds_publish_ready_snapshot_with_all_common_fields():
         "BRAND",
         "MODEL",
     ]
+    assert snapshot["source"]["attributes"][0]["value_id"] == "35977846"
     assert len(snapshot["source"]["pictures"]) == 2
     assert snapshot["source"]["variations"] == detail["sale_variations"]
     assert snapshot["source"]["sale_terms"] == detail["sale_terms"]
     assert snapshot["page_snapshot"]["zying_detail"]["sale_id"] == 795184904
+    assert snapshot["zying_net_proceeds_usd"] == "USD 22"
+
+
+def test_zying_detail_accepts_production_nameid_valueid_attributes():
+    detail = {
+        "sale_siteid": 8,
+        "sale_attrs": json.dumps({
+            "8": {
+                "site": "CBT",
+                "attrs": [
+                    {
+                        "name": "Es un kit de fábrica",
+                        "value": "No",
+                        "nameid": "IS_FACTORY_KIT",
+                        "valueid": 242084,
+                    },
+                    {"name": "Sin valor", "nameid": "UNSET_FIELD", "valueid": -1},
+                ],
+            }
+        }),
+    }
+
+    attributes = bit_zying_caiji._detail_listing_attributes(detail)
+
+    assert attributes[0]["id"] == "IS_FACTORY_KIT"
+    assert attributes[0]["value_id"] == "242084"
+    assert attributes[0]["value_name"] == "No"
+    assert attributes[1] == {"id": "UNSET_FIELD", "name": "Sin valor"}
 
 
 def test_merge_detail_record_keeps_values_read_from_clicked_product():

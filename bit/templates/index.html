@@ -1632,8 +1632,10 @@
             gap: 6px;
         }
 
-        .token-auth-link input {
+        .token-auth-link input,
+        .token-auth-link select {
             min-width: 0;
+            flex: 1 1 auto;
             background: #f8fafc;
             color: #475467;
             font-size: 12px;
@@ -5027,6 +5029,28 @@
         .market-publish-workers {
             width: 100%;
             height: 38px;
+            border-color: #cbd5e1;
+            border-radius: 9px;
+            background: #fff;
+        }
+
+        .market-group-publish-options {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 0 14px 13px;
+            color: #64748b;
+            font-size: 12px;
+        }
+
+        .market-group-publish-options label {
+            color: #475569;
+            font-weight: 700;
+        }
+
+        .market-group-publish-options select {
+            min-width: 210px;
+            height: 36px;
             border-color: #cbd5e1;
             border-radius: 9px;
             background: #fff;
@@ -9857,14 +9881,14 @@
                                 <span class="market-publish-step">03</span>
                                 <span class="market-publish-card-title">批量发布设置</span>
                             </div>
-                            <span class="market-publish-card-hint">账号、分组和站点均支持勾选多项</span>
+                            <span class="market-publish-card-hint">账号、分组和站点均支持勾选多项；分组即账号组</span>
                         </div>
                         <div class="market-publish-controls">
                             <div class="market-publish-field market-publish-field-mode">
                                 <label for="mercado-publish-mode">发布方式</label>
                                 <select class="market-publish-mode" id="mercado-publish-mode" onchange="updateMercadoPublishMode()">
                                     <option value="accounts" selected>按账号</option>
-                                    <option value="groups">按分组</option>
+                                    <option value="groups">按分组（账号组）</option>
                                 </select>
                             </div>
                             <div class="market-publish-field market-publish-field-account" id="mercado-publish-store-field">
@@ -9883,7 +9907,7 @@
                                 </div>
                             </div>
                             <div class="market-publish-field market-publish-field-account" id="mercado-publish-group-field" style="display:none">
-                                <label for="mercado-publish-group-trigger">账号分组</label>
+                                <label for="mercado-publish-group-trigger">账号组</label>
                                 <div class="market-multi-picker" id="mercado-publish-group-picker" data-placeholder="请选择账号分组">
                                     <button class="market-multi-trigger" id="mercado-publish-group-trigger" type="button" aria-haspopup="listbox" aria-expanded="false" onclick="toggleMercadoPublishPicker('mercado-publish-group-picker', event)">
                                         <span class="market-multi-summary placeholder">请选择账号分组</span>
@@ -9891,7 +9915,7 @@
                                         <span class="market-multi-chevron">⌄</span>
                                     </button>
                                     <div class="market-multi-panel">
-                                        <div class="market-multi-panel-head"><span>勾选站点分组</span><div class="market-multi-panel-actions"><button type="button" onclick="selectAllMercadoPublishOptions('mercado-publish-group', true, event)">全选</button><button type="button" onclick="selectAllMercadoPublishOptions('mercado-publish-group', false, event)">清空</button></div></div>
+                                        <div class="market-multi-panel-head"><span>勾选账号组</span><div class="market-multi-panel-actions"><button type="button" onclick="selectAllMercadoPublishOptions('mercado-publish-group', true, event)">全选</button><button type="button" onclick="selectAllMercadoPublishOptions('mercado-publish-group', false, event)">清空</button></div></div>
                                         <div class="market-multi-options" data-select-id="mercado-publish-group"></div>
                                     </div>
                                     <select class="market-publish-native" id="mercado-publish-group" multiple onchange="updateMercadoSelection()" disabled><option value="">正在加载账号分组...</option></select>
@@ -9925,8 +9949,16 @@
                             </div>
                             <div class="market-publish-field market-publish-field-number">
                                 <label for="mercado-publish-workers">并发</label>
-                                <input class="market-publish-workers" id="mercado-publish-workers" type="number" min="1" value="10">
+                                <input class="market-publish-workers" id="mercado-publish-workers" type="number" min="1" value="16">
                             </div>
+                        </div>
+                        <div class="market-group-publish-options" id="mercado-group-publish-mode-field" style="display:none">
+                            <label for="mercado-group-publish-mode">账号组上架模式</label>
+                            <select id="mercado-group-publish-mode" onchange="updateMercadoGroupPublishModeHint()">
+                                <option value="random" selected>随机上架</option>
+                                <option value="polling">轮询上架（每账号 10 个）</option>
+                            </select>
+                            <span id="mercado-group-publish-mode-hint">产品随机均匀分配给组内账号；同一产品不跨账号重复，同账号可上架多个站点。</span>
                         </div>
                         <div class="market-publish-footer">
                             <span id="mercado-publish-status" role="status">选择商品后配置发布账号与目标站点</span>
@@ -11247,7 +11279,7 @@
                         <div class="field"><label for="store-link-bulk-height">高(cm)</label><input id="store-link-bulk-height" type="number" min="0" step="0.01" placeholder="不修改"></div>
                         <div class="field"><label for="store-link-bulk-net">净收益(USD)</label><input id="store-link-bulk-net" type="number" step="0.01" placeholder="不修改"></div>
                         <button class="primary" id="store-link-bulk-button" type="button" onclick="bulkUpdateStoreLinks()" disabled>修改美客多后台</button>
-                        <span class="store-link-bulk-note" id="store-link-message">填写后将直接修改 Mercado Libre 后台链接</span>
+                        <span class="store-link-bulk-note" id="store-link-message">先勾选链接并填写修改项；同步进行中也可提交，任务会自动排队</span>
                     </div>
 
                     <details class="store-link-sync-log-panel" id="store-link-remote-update-panel">
@@ -11403,10 +11435,21 @@
                     <section class="panel token-form-panel">
                         <h2 class="panel-title">新增店铺授权</h2>
                         <ol class="token-steps">
+                            <li>选择用于本次授权和后续刊登的官方开发者应用。</li>
                             <li>打开授权链接，登录并同意店铺授权。</li>
                             <li>复制回调页显示的 TG Code。</li>
                             <li>填写自定义名称和 TG Code 后保存。</li>
                         </ol>
+
+                        <div class="field">
+                            <label for="mercado-token-application">开发者应用</label>
+                            <div class="token-auth-link">
+                                <select id="mercado-token-application" onchange="loadMercadoTokenAuthorization()">
+                                    <option value="">兼容旧版默认应用</option>
+                                </select>
+                                <button class="secondary" type="button" onclick="openMercadoApplicationManager()">管理应用</button>
+                            </div>
+                        </div>
 
                         <div class="field">
                             <label for="mercado-authorization-url">授权链接</label>
@@ -11477,6 +11520,7 @@
                                         <th>授权账号</th>
                                         <th>邮箱</th>
                                         <th>店铺开关</th>
+                                        <th>刊登应用</th>
                                         <th>站点</th>
                                         <th>Token 状态</th>
                                         <th>有效期至</th>
@@ -11485,12 +11529,41 @@
                                     </tr>
                                 </thead>
                                 <tbody id="mercado-token-body">
-                                    <tr><td class="empty-state" colspan="11">正在加载店铺授权...</td></tr>
+                                    <tr><td class="empty-state" colspan="12">正在加载店铺授权...</td></tr>
                                 </tbody>
                             </table>
                         </div>
                     </section>
                 </div>
+
+                <dialog class="order-detail-dialog mercado-site-settings-dialog" id="mercado-application-dialog" onclick="if(event.target === this) this.close()">
+                    <div class="order-detail-header">
+                        <div>
+                            <h3>美客多官方开发者应用</h3>
+                            <p style="margin:3px 0 0;color:#667085;font-size:12px">Secret 仅保存在数据库服务端，不会返回到页面</p>
+                        </div>
+                        <button class="order-detail-close" type="button" aria-label="关闭应用管理" onclick="document.getElementById('mercado-application-dialog').close()">×</button>
+                    </div>
+                    <input id="mercado-application-edit-id" type="hidden">
+                    <div class="mercado-account-settings-grid">
+                        <div class="field"><label for="mercado-application-name">应用名称</label><input id="mercado-application-name" maxlength="100" placeholder="例如：泽顺刊登应用"></div>
+                        <div class="field"><label for="mercado-application-client-id">App ID</label><input id="mercado-application-client-id" maxlength="64" autocomplete="off"></div>
+                        <div class="field"><label for="mercado-application-secret">Client Secret</label><input id="mercado-application-secret" type="password" autocomplete="new-password" placeholder="编辑时留空表示不修改"></div>
+                        <div class="field"><label for="mercado-application-redirect-uri">回调地址</label><input id="mercado-application-redirect-uri" maxlength="500" value="https://zeshun.cc.cd/zs"></div>
+                        <div class="field"><label for="mercado-application-auth-url">授权地址</label><input id="mercado-application-auth-url" maxlength="500" value="https://global-selling.mercadolibre.com/authorization"></div>
+                    </div>
+                    <div class="actions">
+                        <button class="primary" id="mercado-application-save" type="button" onclick="saveMercadoApplication()">新增应用</button>
+                        <button class="secondary" type="button" onclick="resetMercadoApplicationForm()">清空</button>
+                    </div>
+                    <div class="token-form-message" id="mercado-application-message" role="status"></div>
+                    <div class="table-wrap reputation-table-wrap" style="margin-top:14px">
+                        <table class="reputation-table">
+                            <thead><tr><th>名称</th><th>App ID</th><th>回调地址</th><th>状态</th><th>操作</th></tr></thead>
+                            <tbody id="mercado-application-body"><tr><td class="empty-state" colspan="5">正在加载应用...</td></tr></tbody>
+                        </table>
+                    </div>
+                </dialog>
 
                 <dialog class="order-detail-dialog mercado-site-settings-dialog" id="mercado-site-settings-dialog" onclick="if(event.target === this) this.close()">
                     <div class="order-detail-header">
@@ -12964,6 +13037,17 @@
         const accessUserForm = document.getElementById("access-user-form");
         const accessPermissionGrid = document.getElementById("access-permission-grid");
         const mercadoAuthorizationUrl = document.getElementById("mercado-authorization-url");
+        const mercadoTokenApplication = document.getElementById("mercado-token-application");
+        const mercadoApplicationDialog = document.getElementById("mercado-application-dialog");
+        const mercadoApplicationBody = document.getElementById("mercado-application-body");
+        const mercadoApplicationMessage = document.getElementById("mercado-application-message");
+        const mercadoApplicationEditId = document.getElementById("mercado-application-edit-id");
+        const mercadoApplicationName = document.getElementById("mercado-application-name");
+        const mercadoApplicationClientId = document.getElementById("mercado-application-client-id");
+        const mercadoApplicationSecret = document.getElementById("mercado-application-secret");
+        const mercadoApplicationRedirectUri = document.getElementById("mercado-application-redirect-uri");
+        const mercadoApplicationAuthUrl = document.getElementById("mercado-application-auth-url");
+        const mercadoApplicationSave = document.getElementById("mercado-application-save");
         const copyMercadoAuthBtn = document.getElementById("copy-mercado-auth-btn");
         const openMercadoAuthBtn = document.getElementById("open-mercado-auth-btn");
         const mercadoTokenShopName = document.getElementById("mercado-token-shop-name");
@@ -13172,6 +13256,9 @@
         const mercadoPublishStore = document.getElementById("mercado-publish-store");
         const mercadoPublishGroupField = document.getElementById("mercado-publish-group-field");
         const mercadoPublishGroup = document.getElementById("mercado-publish-group");
+        const mercadoGroupPublishModeField = document.getElementById("mercado-group-publish-mode-field");
+        const mercadoGroupPublishMode = document.getElementById("mercado-group-publish-mode");
+        const mercadoGroupPublishModeHint = document.getElementById("mercado-group-publish-mode-hint");
         const mercadoPublishSite = document.getElementById("mercado-publish-site");
         const mercadoPublishQuantity = document.getElementById("mercado-publish-quantity");
         const mercadoPublishWorkers = document.getElementById("mercado-publish-workers");
@@ -13349,6 +13436,7 @@
         let zyingCollectionCategoryNames = new Map();
         let fundStatusPollTimer = null;
         let mercadoTokenAuthorizationLoaded = Boolean(mercadoAuthorizationUrl?.value);
+        let mercadoApplicationRows = [];
         let mercadoStoreTokensLoaded = false;
         let preSaleLoaded = false;
         let preSaleRows = [];
@@ -13749,7 +13837,10 @@
                 loadMercadoLoginStatus();
             }
             if (tabName === "store-tokens") {
-                if (!mercadoTokenAuthorizationLoaded) loadMercadoTokenAuthorization();
+                loadMercadoApplications(true).catch(error => {
+                    showMercadoTokenMessage(`应用读取失败：${error.message || error}`, true);
+                    if (!mercadoTokenAuthorizationLoaded) loadMercadoTokenAuthorization();
+                });
                 loadMercadoStoreTokens(mercadoStoreTokensLoaded, mercadoStoreTokensLoaded);
                 startMercadoTokenStatusPolling();
             }
@@ -17137,9 +17228,19 @@
             mercadoPublishStore.disabled = byGroup;
             mercadoPublishGroupField.style.display = byGroup ? "flex" : "none";
             mercadoPublishGroup.disabled = !byGroup;
+            mercadoGroupPublishModeField.style.display = byGroup ? "flex" : "none";
+            mercadoGroupPublishMode.disabled = !byGroup;
+            updateMercadoGroupPublishModeHint();
             renderMercadoPublishPicker(mercadoPublishSite);
             syncMercadoPublishPicker(byGroup ? mercadoPublishGroup : mercadoPublishStore);
             updateMercadoSelection();
+        }
+
+        function updateMercadoGroupPublishModeHint() {
+            if (!mercadoGroupPublishModeHint) return;
+            mercadoGroupPublishModeHint.textContent = mercadoGroupPublishMode.value === "polling"
+                ? "按账号顺序每个分配 10 件，再切换到下一个账号；同一产品不跨账号重复，同账号可上架多个站点。"
+                : "产品随机均匀分配给组内账号；同一产品不跨账号重复，同账号可上架多个站点。";
         }
 
         function updateMercadoSelection() {
@@ -17347,6 +17448,7 @@
             const itemsPerMinute = Number(data?.items_per_minute || 0);
             const remainingSeconds = Number(data?.estimated_remaining_seconds || 0);
             const skippedPublished = Number(data?.skipped_published_count || 0);
+            const skippedOtherAccount = Number(data?.skipped_other_account_count || 0);
             const stageTimings = data?.average_stage_seconds || {};
             const stageLabels = {
                 account: "账号校验",
@@ -17375,10 +17477,11 @@
                             : "")
                     : "";
                 const skippedSuffix = skippedPublished ? ` · 跳过历史成功 ${skippedPublished}` : "";
+                const skippedOtherAccountSuffix = skippedOtherAccount ? ` · 跳过其他账号已上架 ${skippedOtherAccount}` : "";
                 const stageSuffix = slowestStage
                     ? ` · 当前瓶颈 ${stageLabels[slowestStage[0]] || slowestStage[0]} ${Number(slowestStage[1]).toFixed(1)} 秒/件`
                     : "";
-                mercadoPublishStatus.textContent = `${message}${siteSuffix}${targetSuffix}${workerSuffix} · ${processed}/${requested} · 成功 ${published} · 失败 ${failed}${skippedSuffix}${timingSuffix}${stageSuffix}`;
+                mercadoPublishStatus.textContent = `${message}${siteSuffix}${targetSuffix}${workerSuffix} · ${processed}/${requested} · 成功 ${published} · 失败 ${failed}${skippedSuffix}${skippedOtherAccountSuffix}${timingSuffix}${stageSuffix}`;
             }
             mercadoPublishSelected.textContent = mercadoPublishRunning ? "正在上架..." : "批量上架";
             updateMercadoSelection();
@@ -17413,6 +17516,7 @@
         async function publishSelectedMercadoProducts() {
             const itemIds = Array.from(selectedMercadoCollectionIds);
             const selectionMode = mercadoPublishMode.value === "groups" ? "groups" : "accounts";
+            const groupPublishMode = mercadoGroupPublishMode.value === "polling" ? "polling" : "random";
             const tokenIds = mercadoSelectedValues(mercadoPublishStore).map(value => Number(value));
             const groupNames = mercadoSelectedValues(mercadoPublishGroup);
             const siteIds = mercadoSelectedValues(mercadoPublishSite);
@@ -17461,8 +17565,12 @@
             const blockedNote = blockedRows.length
                 ? `；另有 ${blockedRows.length} 件不可上架，将忽略并自动移回采集列表`
                 : "";
-            const attemptCount = publishableRows.length * targetPreview.length;
-            if (!window.confirm(`确定用 ${workerCount} 个线程把 ${publishableRows.length} 件有效产品上架到 ${targetSummary}、${siteIds.length} 个站点吗？共 ${targetPreview.length} 个兼容组合、${attemptCount} 次上架尝试，每件库存 ${quantity}；最终上架净收益 = 产品净收益 × 对应站点折扣比例，跨站点属性将使用本地规则匹配，不调用翻译模型${blockedNote}。`)) return;
+            const publishPlan = selectionMode === "groups"
+                ? (groupPublishMode === "polling"
+                    ? "按账号顺序每个分配 10 件后切换；产品不跨账号重复，同账号的不同站点允许重复上架"
+                    : "随机均匀分配产品；产品不跨账号重复，同账号的不同站点允许重复上架")
+                : `共 ${targetPreview.length} 个兼容组合、${publishableRows.length * targetPreview.length} 次上架尝试`;
+            if (!window.confirm(`确定用 ${workerCount} 个线程把 ${publishableRows.length} 件有效产品上架到 ${targetSummary}、${siteIds.length} 个站点吗？${publishPlan}，每件库存 ${quantity}；最终上架净收益 = 产品净收益 × 对应站点折扣比例，跨站点属性将使用本地规则匹配，不调用翻译模型${blockedNote}。`)) return;
             mercadoPublishSelected.disabled = true;
             mercadoPublishStatus.textContent = "正在创建批量上架任务...";
             try {
@@ -17474,6 +17582,7 @@
                         selection_mode: selectionMode,
                         token_ids: tokenIds,
                         group_names: groupNames,
+                        group_publish_mode: groupPublishMode,
                         site_ids: siteIds,
                         quantity,
                         worker_count: workerCount,
@@ -17771,11 +17880,137 @@
             mercadoTokenFormMessage.className = `token-form-message visible${isError ? " error" : ""}`;
         }
 
+        function showMercadoApplicationMessage(message, isError = false) {
+            if (!mercadoApplicationMessage) return;
+            mercadoApplicationMessage.textContent = String(message || "");
+            mercadoApplicationMessage.className = `token-form-message visible${isError ? " error" : ""}`;
+        }
+
+        function renderMercadoApplications() {
+            if (mercadoTokenApplication) {
+                const selected = String(mercadoTokenApplication.value || "");
+                const enabled = mercadoApplicationRows.filter(row => row.enabled);
+                mercadoTokenApplication.innerHTML = [
+                    '<option value="">兼容旧版默认应用</option>',
+                    ...enabled.map(row => `<option value="${Number(row.id)}">${escapeHtml(row.name)} · ${escapeHtml(row.client_id)}</option>`),
+                ].join("");
+                if ([...mercadoTokenApplication.options].some(option => option.value === selected)) {
+                    mercadoTokenApplication.value = selected;
+                } else if (enabled.length) {
+                    mercadoTokenApplication.value = String(enabled[0].id);
+                }
+            }
+            if (!mercadoApplicationBody) return;
+            mercadoApplicationBody.innerHTML = mercadoApplicationRows.length
+                ? mercadoApplicationRows.map(row => `
+                    <tr>
+                        <td>${escapeHtml(row.name)}</td>
+                        <td>${escapeHtml(row.client_id)}</td>
+                        <td title="${escapeHtml(row.redirect_uri)}">${escapeHtml(row.redirect_uri)}</td>
+                        <td>${row.enabled ? "已启用" : "已停用"}</td>
+                        <td><div class="token-actions">
+                            <button class="secondary" type="button" onclick="editMercadoApplication(${Number(row.id)})">编辑</button>
+                            <button class="danger" type="button" data-name="${escapeHtml(row.name)}" onclick="deleteMercadoApplication(${Number(row.id)}, this.dataset.name)">删除</button>
+                        </div></td>
+                    </tr>`).join("")
+                : '<tr><td class="empty-state" colspan="5">暂无开发者应用</td></tr>';
+            if (Array.isArray(mercadoStoreTokenRows) && mercadoStoreTokenRows.length) {
+                renderMercadoStoreTokenTable();
+            }
+        }
+
+        async function loadMercadoApplications(refreshAuthorization = false) {
+            const response = await fetch("/api/mercado-applications", {cache: "no-store"});
+            const payload = await response.json();
+            if (!response.ok || payload.status !== "success") {
+                throw new Error(payload.message || `接口请求失败：${response.status}`);
+            }
+            mercadoApplicationRows = Array.isArray(payload.data?.rows) ? payload.data.rows : [];
+            renderMercadoApplications();
+            if (refreshAuthorization) await loadMercadoTokenAuthorization();
+            return mercadoApplicationRows;
+        }
+
+        function openMercadoApplicationManager() {
+            resetMercadoApplicationForm();
+            mercadoApplicationDialog?.showModal();
+            loadMercadoApplications(false).catch(error => showMercadoApplicationMessage(error.message || error, true));
+        }
+
+        function resetMercadoApplicationForm() {
+            if (mercadoApplicationEditId) mercadoApplicationEditId.value = "";
+            if (mercadoApplicationName) mercadoApplicationName.value = "";
+            if (mercadoApplicationClientId) mercadoApplicationClientId.value = "";
+            if (mercadoApplicationSecret) mercadoApplicationSecret.value = "";
+            if (mercadoApplicationRedirectUri) mercadoApplicationRedirectUri.value = "https://zeshun.cc.cd/zs";
+            if (mercadoApplicationAuthUrl) mercadoApplicationAuthUrl.value = "https://global-selling.mercadolibre.com/authorization";
+            if (mercadoApplicationSave) mercadoApplicationSave.textContent = "新增应用";
+            showMercadoApplicationMessage("");
+        }
+
+        function editMercadoApplication(applicationId) {
+            const row = mercadoApplicationRows.find(item => Number(item.id) === Number(applicationId));
+            if (!row) return;
+            mercadoApplicationEditId.value = String(row.id);
+            mercadoApplicationName.value = row.name || "";
+            mercadoApplicationClientId.value = row.client_id || "";
+            mercadoApplicationSecret.value = "";
+            mercadoApplicationRedirectUri.value = row.redirect_uri || "";
+            mercadoApplicationAuthUrl.value = row.authorization_base_url || "";
+            mercadoApplicationSave.textContent = "保存应用";
+            showMercadoApplicationMessage("编辑应用时 Secret 留空表示保持原值");
+        }
+
+        async function saveMercadoApplication() {
+            const applicationId = Number(mercadoApplicationEditId?.value || 0);
+            const data = {
+                name: String(mercadoApplicationName?.value || "").trim(),
+                client_id: String(mercadoApplicationClientId?.value || "").trim(),
+                redirect_uri: String(mercadoApplicationRedirectUri?.value || "").trim(),
+                authorization_base_url: String(mercadoApplicationAuthUrl?.value || "").trim(),
+            };
+            const secret = String(mercadoApplicationSecret?.value || "").trim();
+            if (secret || !applicationId) data.client_secret = secret;
+            mercadoApplicationSave.disabled = true;
+            try {
+                const response = await fetch(applicationId ? `/api/mercado-applications/${applicationId}` : "/api/mercado-applications", {
+                    method: applicationId ? "PATCH" : "POST",
+                    headers: {"Content-Type": "application/json"},
+                    body: JSON.stringify(data),
+                });
+                const payload = await response.json();
+                if (!response.ok || payload.status !== "success") throw new Error(payload.message || `接口请求失败：${response.status}`);
+                resetMercadoApplicationForm();
+                showMercadoApplicationMessage(payload.message || "应用已保存");
+                await loadMercadoApplications(true);
+                await loadMercadoStoreTokens(true, true);
+            } catch (error) {
+                showMercadoApplicationMessage(`保存失败：${error.message || error}`, true);
+            } finally {
+                mercadoApplicationSave.disabled = false;
+            }
+        }
+
+        async function deleteMercadoApplication(applicationId, name) {
+            if (!window.confirm(`确定删除开发者应用“${name}”吗？`)) return;
+            try {
+                const response = await fetch(`/api/mercado-applications/${applicationId}`, {method: "DELETE"});
+                const payload = await response.json();
+                if (!response.ok || payload.status !== "success") throw new Error(payload.message || `接口请求失败：${response.status}`);
+                showMercadoApplicationMessage(payload.message || "应用已删除");
+                await loadMercadoApplications(true);
+            } catch (error) {
+                showMercadoApplicationMessage(`删除失败：${error.message || error}`, true);
+            }
+        }
+
         async function loadMercadoTokenAuthorization() {
             if (!mercadoAuthorizationUrl) return;
             mercadoAuthorizationUrl.placeholder = "正在读取服务端授权配置...";
             try {
-                const response = await fetch("/api/mercado-tokens/authorization", {cache: "no-store"});
+                const applicationId = String(mercadoTokenApplication?.value || "");
+                const query = applicationId ? `?application_id=${encodeURIComponent(applicationId)}` : "";
+                const response = await fetch(`/api/mercado-tokens/authorization${query}`, {cache: "no-store"});
                 const payload = await response.json();
                 if (!response.ok || payload.status !== "success") {
                     throw new Error(payload.message || `接口请求失败：${response.status}`);
@@ -19007,8 +19242,8 @@
                 : `共 ${total} 家 · 当前显示 ${records.length} 家`;
             if (!records.length) {
                 mercadoTokenBody.innerHTML = total
-                    ? '<tr><td class="empty-state" colspan="11">当前筛选条件下暂无授权店铺</td></tr>'
-                    : '<tr><td class="empty-state" colspan="11">暂无已授权店铺，请先添加</td></tr>';
+                    ? '<tr><td class="empty-state" colspan="12">当前筛选条件下暂无授权店铺</td></tr>'
+                    : '<tr><td class="empty-state" colspan="12">暂无已授权店铺，请先添加</td></tr>';
                 updateMercadoStoreTokenSelection();
                 return;
             }
@@ -19028,6 +19263,10 @@
                 const groupName = mercadoAccountGroup(row) || "未分组";
                 const enabled = mercadoStoreEnabled(row);
                 const selected = selectedMercadoStoreTokenIds.has(tokenId);
+                const applicationOptions = mercadoApplicationRows.map(application => `
+                    <option value="${Number(application.id)}" ${Number(row.application_id) === Number(application.id) ? "selected" : ""} ${application.enabled ? "" : "disabled"}>
+                        ${escapeHtml(application.name)}
+                    </option>`).join("");
                 return `
                     <tr>
                         <td class="mercado-token-select-column"><input class="market-row-select mercado-token-row-select" type="checkbox" value="${tokenId}" aria-label="选择 ${escapeHtml(row.display_name || accountName)}" onchange="toggleMercadoStoreToken(${tokenId}, this.checked)" ${selected ? "checked" : ""} ${enabled ? "" : "disabled"}></td>
@@ -19040,6 +19279,10 @@
                         <td class="token-account-cell"><strong>${escapeHtml(accountName)}</strong><span>${escapeHtml(accountId)}</span></td>
                         <td title="${escapeHtml(row.email || "")}">${escapeHtml(row.email || "待读取")}</td>
                         <td><label class="inventory-switch" title="关闭后自动登录、同步、采集、刊登等业务操作均不执行"><input type="checkbox" ${enabled ? "checked" : ""} onchange="setMercadoStoreEnabled(${tokenId}, this.checked, this)"><i></i><em>${enabled ? "已启用" : "已关闭"}</em></label></td>
+                        <td><select aria-label="${escapeHtml(row.display_name || accountName)}的刊登应用" onchange="changeMercadoStoreApplication(${tokenId}, this.value, this)" ${enabled ? "" : "disabled"}>
+                            <option value="" ${row.application_id ? "" : "selected"} disabled>${row.application_name ? escapeHtml(row.application_name) : "旧版默认应用"}</option>
+                            ${applicationOptions}
+                        </select></td>
                         <td>${escapeHtml(row.site_id || "-")}</td>
                         <td>${mercadoTokenStatusTag(row)}</td>
                         <td>${escapeHtml(row.expires_at || "-")}</td>
@@ -19083,7 +19326,7 @@
             mercadoStoreTokensLoading = true;
             if (force && !silent) storeLinksLoaded = false;
             if (!silent) {
-                mercadoTokenBody.innerHTML = '<tr><td class="empty-state" colspan="11">正在加载店铺授权...</td></tr>';
+                mercadoTokenBody.innerHTML = '<tr><td class="empty-state" colspan="12">正在加载店铺授权...</td></tr>';
             }
             try {
                 const response = await fetch("/api/mercado-tokens", {cache: "no-store"});
@@ -19097,7 +19340,7 @@
             } catch (err) {
                 mercadoStoreTokensLoaded = false;
                 if (!silent) {
-                    mercadoTokenBody.innerHTML = `<tr><td class="empty-state" colspan="11">加载失败：${escapeHtml(err.message || err)}</td></tr>`;
+                    mercadoTokenBody.innerHTML = `<tr><td class="empty-state" colspan="12">加载失败：${escapeHtml(err.message || err)}</td></tr>`;
                 }
             } finally {
                 mercadoStoreTokensLoading = false;
@@ -20743,6 +20986,7 @@
         async function saveMercadoStoreToken() {
             const displayName = String(mercadoTokenShopName?.value || "").trim();
             const code = String(mercadoTokenCode?.value || "").trim();
+            const applicationId = Number(mercadoTokenApplication?.value || 0);
             if (!displayName) {
                 showMercadoTokenMessage("请输入自定义店铺名称", true);
                 mercadoTokenShopName?.focus();
@@ -20760,7 +21004,11 @@
                 const response = await fetch("/api/mercado-tokens/exchange", {
                     method: "POST",
                     headers: {"Content-Type": "application/json"},
-                    body: JSON.stringify({display_name: displayName, code}),
+                    body: JSON.stringify({
+                        display_name: displayName,
+                        code,
+                        ...(applicationId ? {application_id: applicationId} : {}),
+                    }),
                 });
                 const payload = await response.json();
                 if (!response.ok || payload.status !== "success") {
@@ -20776,6 +21024,54 @@
             } finally {
                 saveMercadoTokenBtn.disabled = false;
                 saveMercadoTokenBtn.textContent = "兑换并保存";
+            }
+        }
+
+        async function changeMercadoStoreApplication(tokenId, applicationId, select) {
+            const previous = mercadoStoreTokenRows.find(row => Number(row.id) === Number(tokenId));
+            const previousId = String(previous?.application_id || "");
+            if (!applicationId || applicationId === previousId) return;
+            const application = mercadoApplicationRows.find(row => Number(row.id) === Number(applicationId));
+            if (!window.confirm(`修改为“${application?.name || applicationId}”需要用新应用重新授权当前店铺。现在开始吗？`)) {
+                if (select) select.value = previousId;
+                return;
+            }
+            if (select) select.disabled = true;
+            const authorizationWindow = window.open("about:blank", "_blank");
+            if (authorizationWindow) authorizationWindow.opener = null;
+            try {
+                const authResponse = await fetch(`/api/mercado-tokens/authorization?application_id=${encodeURIComponent(applicationId)}`, {cache: "no-store"});
+                const authPayload = await authResponse.json();
+                if (!authResponse.ok || authPayload.status !== "success" || !authPayload.data?.authorization_url) {
+                    throw new Error(authPayload.message || "无法生成新应用授权链接");
+                }
+                if (authorizationWindow) authorizationWindow.location.href = authPayload.data.authorization_url;
+                const code = window.prompt("已打开新应用授权页。请完成当前店铺授权，然后粘贴 TG Code 或完整回调链接：", "");
+                if (code === null || !code.trim()) {
+                    if (select) {
+                        select.value = previousId;
+                        select.disabled = false;
+                    }
+                    return;
+                }
+                const response = await fetch(`/api/mercado-tokens/${tokenId}/application`, {
+                    method: "POST",
+                    headers: {"Content-Type": "application/json"},
+                    body: JSON.stringify({
+                        application_id: Number(applicationId),
+                        code: code.trim(),
+                    }),
+                });
+                const payload = await response.json();
+                if (!response.ok || payload.status !== "success") throw new Error(payload.message || `接口请求失败：${response.status}`);
+                showMercadoTokenMessage(payload.message || "店铺应用已修改，后续刊登将使用新应用");
+                await loadMercadoStoreTokens(true);
+            } catch (error) {
+                if (select) {
+                    select.value = previousId;
+                    select.disabled = false;
+                }
+                showMercadoTokenMessage(`修改应用失败：${error.message || error}`, true);
             }
         }
 
@@ -21057,7 +21353,6 @@
             storeLinkSelectionCount.textContent = `已选 ${selectedStoreLinkIds.size} 条`;
             storeLinkBulkButton.disabled = (
                 selectedStoreLinkIds.size === 0
-                || storeLinkSyncRunning
                 || storeLinkRemoteUpdateRunning
             );
         }

@@ -46,6 +46,10 @@ from bit.bit_mysql import (
     get_existing_zying_product_ids,
     insert_zying_product_info,
 )
+from erp.mercadolibre_attribute_rules import (
+    extract_listing_attributes_from_detail,
+    normalize_collected_attribute,
+)
 
 
 DEFAULT_ZYING_WINDOW_ID = os.environ.get(
@@ -1100,90 +1104,12 @@ def _detail_site_attributes(detail):
 
 
 def _normalize_listing_attribute(attribute, fallback_id=""):
-    if isinstance(attribute, dict):
-        attribute_id = _clean_text(
-            attribute.get("id")
-            or attribute.get("attribute_id")
-            or attribute.get("attr_id")
-            or attribute.get("code")
-            or fallback_id
-        )
-        name = _clean_text(attribute.get("name") or attribute.get("label"))
-        value_name = attribute.get("value_name")
-        if value_name in (None, ""):
-            value_name = attribute.get("value")
-        if value_name in (None, ""):
-            value_name = attribute.get("text")
-        normalized = {
-            key: attribute.get(key)
-            for key in ("value_id", "value_struct", "values")
-            if attribute.get(key) not in (None, "")
-        }
-        if attribute_id:
-            normalized["id"] = attribute_id
-        if name:
-            normalized["name"] = name
-        if value_name not in (None, ""):
-            normalized["value_name"] = _clean_text(value_name)
-        return normalized if normalized.get("id") else None
-    if fallback_id and attribute not in (None, ""):
-        return {"id": _clean_text(fallback_id), "value_name": _clean_text(attribute)}
-    return None
+    return normalize_collected_attribute(attribute, fallback_id)
 
 
 def _detail_listing_attributes(detail):
     """尽量从 sale.detail 的不同版本中还原 Mercado attributes 数组。"""
-    site_attributes = _detail_site_attributes(detail)
-    candidates = []
-    for container in (detail, site_attributes):
-        if not isinstance(container, dict):
-            continue
-        for key in (
-            "attributes", "attrs", "attribute", "item_attributes",
-            "sale_attributes", "specifications", "specs",
-        ):
-            value = _json_value(container.get(key), container.get(key))
-            if isinstance(value, list):
-                candidates.extend(value)
-            elif isinstance(value, dict):
-                candidates.extend(
-                    {"id": item_id, "value": item_value}
-                    if not isinstance(item_value, dict)
-                    else {"id": item_id, **item_value}
-                    for item_id, item_value in value.items()
-                )
-
-    common_fields = {
-        "sale_brand": "BRAND",
-        "brand": "BRAND",
-        "sale_model": "MODEL",
-        "model": "MODEL",
-        "sale_gtin": "GTIN",
-        "gtin": "GTIN",
-        "ean": "GTIN",
-        "upc": "GTIN",
-        "sale_sku": "SELLER_SKU",
-    }
-    for field_name, attribute_id in common_fields.items():
-        if detail.get(field_name) not in (None, ""):
-            candidates.append({"id": attribute_id, "value": detail[field_name]})
-
-    normalized = []
-    positions = {}
-    for candidate in candidates:
-        attribute = _normalize_listing_attribute(candidate)
-        if not attribute:
-            continue
-        attribute_id = attribute["id"].upper()
-        attribute["id"] = attribute_id
-        if attribute_id in positions:
-            existing = normalized[positions[attribute_id]]
-            if not existing.get("value_name") and attribute.get("value_name"):
-                normalized[positions[attribute_id]] = attribute
-            continue
-        positions[attribute_id] = len(normalized)
-        normalized.append(attribute)
-    return normalized
+    return extract_listing_attributes_from_detail(detail)
 
 
 def _detail_list(detail, *keys):
@@ -1281,6 +1207,11 @@ def _finalize_zying_listing_snapshot(record):
         "package_length_cm": package_size[0],
         "package_width_cm": package_size[1],
         "package_height_cm": package_size[2],
+        # This is supplied by ZYing itself. Keep it in the raw snapshot so the
+        # product list can restore/audit it without estimating fees or freight.
+        "zying_net_proceeds_usd": _clean_text(record.get("net_income")) or _format_money(
+            detail.get("sale_netproceed"), source["currency_id"]
+        ),
         "scrape_status": "ok",
         "scraped_at": record.get("collected_at"),
     }

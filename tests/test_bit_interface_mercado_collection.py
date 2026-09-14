@@ -240,6 +240,7 @@ def _reset_publish_state():
             status="idle",
             message="等待选择产品上架",
             selection_mode="accounts",
+            group_publish_mode="",
             token_id=None,
             token_ids=[],
             group_names=[],
@@ -255,6 +256,7 @@ def _reset_publish_state():
             published_count=0,
             failed_count=0,
             moved_to_collection_count=0,
+            skipped_other_account_count=0,
             skipped_published_count=0,
             elapsed_seconds=0,
             average_seconds_per_item=0,
@@ -353,13 +355,16 @@ def test_workbench_splits_collection_and_product_list_into_separate_modules():
     assert b'id="mercado-publish-site"' in response.data
     assert b'id="mercado-publish-mode"' in response.data
     assert b'id="mercado-publish-group"' in response.data
+    assert b'id="mercado-group-publish-mode"' in response.data
+    assert b'value="random" selected' in response.data
+    assert b'value="polling"' in response.data
     assert b'id="mercado-publish-store" multiple' in response.data
     assert b'id="mercado-publish-site" multiple' in response.data
     assert "按分组".encode("utf-8") in response.data
     assert "账号、分组和站点均支持勾选多项".encode("utf-8") in response.data
     assert b'id="mercado-publish-workers"' in response.data
     assert b'id="mercado-publish-quantity" type="number" min="1" max="9999" value="500"' in response.data
-    assert b'id="mercado-publish-workers" type="number" min="1" value="10"' in response.data
+    assert b'id="mercado-publish-workers" type="number" min="1" value="16"' in response.data
     assert b'market-multi-picker' in response.data
     assert b'class="market-selection-meta"' in response.data
     assert b'class="market-selection-tools"' in response.data
@@ -543,6 +548,14 @@ def test_collection_quality_pass_retries_only_rows_missing_actual_weight():
             "scrape_status": "partial",
             "weight_g": 300,
             "error_message": "尺寸未完整",
+        },
+        {
+            "source_item_id": "MLM5",
+            "title": "Product 5",
+            "main_image_url": "https://example.test/5.webp",
+            "scrape_status": "partial",
+            "error_message": "列表页未读取到智赢批量重量数据",
+            "page_snapshot": {"detail_acquisition": "listing_page_batch"},
         },
     ]
 
@@ -1530,13 +1543,119 @@ def test_batch_publish_endpoint_can_select_targets_by_site_group():
     assert payload["quantity"] == 500
     targets = thread_class.call_args.kwargs["args"][1]
     assert thread_class.call_args.kwargs["args"][2] == 500
-    assert thread_class.call_args.kwargs["args"][3] == 10
+    assert thread_class.call_args.kwargs["args"][3] == 16
     assert [(target["token_id"], target["site_id"]) for target in targets] == [
         (5, "MLM"),
         (6, "MLM"),
         (7, "MLB"),
     ]
     assert all(target["group_name"] == "精品组" for target in targets)
+    _reset_publish_state()
+
+
+def test_group_random_publish_assigns_each_product_to_one_account_and_all_its_sites():
+    targets = [
+        {"token_id": 5, "site_id": "MLM"},
+        {"token_id": 5, "site_id": "MLB"},
+        {"token_id": 6, "site_id": "MLM"},
+    ]
+    rows = [{"id": value} for value in range(1, 7)]
+
+    with patch.object(workbench.random, "shuffle", side_effect=lambda values: None):
+        assigned, skipped = workbench._assign_mercado_group_publish_rows(
+            rows, targets, "random", {1: 5, 2: 99}
+        )
+
+    assert skipped == 1
+    rows_by_target = {
+        (target["token_id"], target["site_id"]): [row["id"] for row in target["product_rows"]]
+        for target in assigned
+    }
+    assert rows_by_target[(5, "MLM")] == rows_by_target[(5, "MLB")]
+    assert 1 in rows_by_target[(5, "MLM")]
+    account_5 = set(rows_by_target[(5, "MLM")])
+    account_6 = set(rows_by_target[(6, "MLM")])
+    assert account_5.isdisjoint(account_6)
+    assert account_5 | account_6 == {1, 3, 4, 5, 6}
+
+
+def test_group_polling_publish_moves_to_next_account_every_ten_products():
+    targets = [
+        {"token_id": 5, "site_id": "MLM"},
+        {"token_id": 6, "site_id": "MLM"},
+    ]
+    rows = [{"id": value} for value in range(1, 26)]
+
+    assigned, skipped = workbench._assign_mercado_group_publish_rows(
+        rows, targets, "polling"
+    )
+
+    assert skipped == 0
+    rows_by_account = {
+        target["token_id"]: [row["id"] for row in target["product_rows"]]
+        for target in assigned
+    }
+    assert rows_by_account[5] == list(range(1, 11)) + list(range(21, 26))
+    assert rows_by_account[6] == list(range(11, 21))
+
+
+def test_group_publish_endpoint_applies_strategy_and_historical_account_ownership():
+    _reset_publish_state()
+    rows = [{
+        "id": value,
+        "source_item_id": f"MLM{value}",
+        "review_status": "approved",
+        "weight_g": 350,
+        **_actual_shipping(350),
+        "net_proceeds_usd": 8,
+    } for value in range(1, 24)]
+    tokens = {"rows": [
+        {
+            "id": 5,
+            "display_name": "跨境店",
+            "site_id": "CBT",
+            "site_settings": [
+                {"site_id": "MLM", "group_name": "精品组", "discount_rate": 90},
+                {"site_id": "MLB", "group_name": "精品组", "discount_rate": 95},
+            ],
+        },
+        {
+            "id": 6,
+            "display_name": "墨西哥店",
+            "site_id": "MLM",
+            "site_settings": [
+                {"site_id": "MLM", "group_name": "精品组", "discount_rate": 88},
+            ],
+        },
+    ]}
+    with patch.object(
+        workbench, "db_get_mercado_product_items_by_ids", return_value=rows
+    ), patch.object(
+        workbench, "db_get_published_mercado_product_account_ids", return_value={1: 5, 2: 99}
+    ), patch.object(
+        workbench.bit_db_api, "list_mercado_store_tokens", return_value=tokens
+    ), patch.object(workbench.threading, "Thread") as thread_class:
+        response = _client().post("/api/mercado-products/publish", json={
+            "product_item_ids": list(range(1, 24)),
+            "selection_mode": "groups",
+            "group_names": ["精品组"],
+            "group_publish_mode": "polling",
+            "site_ids": ["MLM", "MLB"],
+        })
+
+    payload = response.get_json()["data"]
+    targets = thread_class.call_args.kwargs["args"][1]
+    rows_by_target = {
+        (target["token_id"], target["site_id"]): [row["id"] for row in target["product_rows"]]
+        for target in targets
+    }
+    assert response.status_code == 200
+    assert payload["group_publish_mode"] == "polling"
+    assert payload["skipped_other_account_count"] == 1
+    assert rows_by_target[(5, "MLM")] == rows_by_target[(5, "MLB")]
+    assert rows_by_target[(5, "MLM")] == [1] + list(range(3, 13)) + [23]
+    assert rows_by_target[(6, "MLM")] == list(range(13, 23))
+    assert payload["requested_count"] == 34
     _reset_publish_state()
 
 

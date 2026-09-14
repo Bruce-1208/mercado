@@ -6845,7 +6845,29 @@ def get_ai_appeal_records(limit=100):
         connection.close()
 
 
+def _ensure_mercado_applications_table(cursor):
+    cursor.execute(
+        """
+        CREATE TABLE IF NOT EXISTS `mercado_applications` (
+            `id` BIGINT NOT NULL AUTO_INCREMENT,
+            `name` VARCHAR(100) NOT NULL,
+            `client_id` VARCHAR(64) NOT NULL,
+            `client_secret` TEXT NOT NULL,
+            `redirect_uri` VARCHAR(500) NOT NULL,
+            `authorization_base_url` VARCHAR(500) NOT NULL,
+            `enabled` TINYINT(1) NOT NULL DEFAULT 1,
+            `created_at` DATETIME NOT NULL,
+            `updated_at` DATETIME NOT NULL,
+            PRIMARY KEY (`id`),
+            UNIQUE KEY `uniq_mercado_application_name` (`name`),
+            UNIQUE KEY `uniq_mercado_application_client_id` (`client_id`)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+        """
+    )
+
+
 def _ensure_mercado_store_tokens_table(cursor):
+    _ensure_mercado_applications_table(cursor)
     cursor.execute(
         """
         CREATE TABLE IF NOT EXISTS `mercado_store_tokens` (
@@ -6856,6 +6878,7 @@ def _ensure_mercado_store_tokens_table(cursor):
             `nickname` VARCHAR(255) NULL,
             `site_id` VARCHAR(32) NULL,
             `email` VARCHAR(255) NULL,
+            `application_id` BIGINT NULL,
             `client_id` VARCHAR(64) NULL,
             `access_token` LONGTEXT NOT NULL,
             `refresh_token` LONGTEXT NULL,
@@ -6870,6 +6893,7 @@ def _ensure_mercado_store_tokens_table(cursor):
             PRIMARY KEY (`id`),
             UNIQUE KEY `uniq_mercado_store_display_name` (`display_name`),
             UNIQUE KEY `uniq_mercado_store_user_id` (`meli_user_id`),
+            KEY `idx_mercado_store_application_id` (`application_id`),
             KEY `idx_mercado_store_expires_at` (`expires_at`)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
         """
@@ -6885,6 +6909,12 @@ def _ensure_mercado_store_tokens_table(cursor):
         "mercado_store_tokens",
         "email",
         "VARCHAR(255) NULL AFTER `site_id`",
+    )
+    _ensure_column(
+        cursor,
+        "mercado_store_tokens",
+        "application_id",
+        "BIGINT NULL AFTER `email`",
     )
 
 
@@ -7856,6 +7886,179 @@ def _mercado_token_datetime(value):
     return str(value)
 
 
+def _normalize_mercado_application(record, *, partial=False):
+    source = dict(record or {})
+    normalized = {}
+    fields = {
+        "name": (100, "应用名称"),
+        "client_id": (64, "App ID"),
+        "client_secret": (None, "Client Secret"),
+        "redirect_uri": (500, "回调地址"),
+        "authorization_base_url": (500, "授权地址"),
+    }
+    for field, (maximum, label) in fields.items():
+        if partial and field not in source:
+            continue
+        value = str(source.get(field) or "").strip()
+        if not value:
+            raise ValueError(f"请输入{label}")
+        if maximum and len(value) > maximum:
+            raise ValueError(f"{label}不能超过 {maximum} 个字符")
+        if field in ("redirect_uri", "authorization_base_url") and not value.lower().startswith(
+            ("http://", "https://")
+        ):
+            raise ValueError(f"{label}必须是完整的 HTTP(S) 地址")
+        normalized[field] = value
+    if not partial or "enabled" in source:
+        enabled = source.get("enabled", True)
+        if not isinstance(enabled, bool):
+            raise ValueError("应用启用状态必须是布尔值")
+        normalized["enabled"] = 1 if enabled else 0
+    return normalized
+
+
+def _mercado_application_summary(row):
+    result = dict(row or {})
+    secret = str(result.pop("client_secret", "") or "")
+    result["has_client_secret"] = bool(secret)
+    result["enabled"] = bool(result.get("enabled", True))
+    for key in ("created_at", "updated_at"):
+        if result.get(key) is not None:
+            result[key] = str(result[key])
+    return result
+
+
+def create_mercado_application(record):
+    application = _normalize_mercado_application(record)
+    now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    connection = pymysql.connect(**config)
+    try:
+        with connection.cursor() as cursor:
+            _ensure_mercado_applications_table(cursor)
+            cursor.execute(
+                """
+                INSERT INTO `mercado_applications` (
+                    `name`, `client_id`, `client_secret`, `redirect_uri`,
+                    `authorization_base_url`, `enabled`, `created_at`, `updated_at`
+                ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+                """,
+                (
+                    application["name"], application["client_id"],
+                    application["client_secret"], application["redirect_uri"],
+                    application["authorization_base_url"], application["enabled"],
+                    now, now,
+                ),
+            )
+            application_id = cursor.lastrowid
+        connection.commit()
+        return get_mercado_application_summary(application_id)
+    except pymysql.err.IntegrityError as exc:
+        connection.rollback()
+        raise ValueError("应用名称或 App ID 已存在") from exc
+    except Exception:
+        connection.rollback()
+        raise
+    finally:
+        connection.close()
+
+
+def list_mercado_applications():
+    connection = pymysql.connect(**config)
+    try:
+        with connection.cursor() as cursor:
+            _ensure_mercado_applications_table(cursor)
+            cursor.execute(
+                """
+                SELECT `id`, `name`, `client_id`, `client_secret`, `redirect_uri`,
+                       `authorization_base_url`, `enabled`, `created_at`, `updated_at`
+                FROM `mercado_applications`
+                ORDER BY `enabled` DESC, `name` ASC, `id` ASC
+                """
+            )
+            rows = [_mercado_application_summary(row) for row in (cursor.fetchall() or [])]
+            return {"total": len(rows), "rows": rows}
+    finally:
+        connection.close()
+
+
+def get_mercado_application(application_id, include_disabled=False):
+    connection = pymysql.connect(**config)
+    try:
+        with connection.cursor() as cursor:
+            _ensure_mercado_applications_table(cursor)
+            cursor.execute(
+                "SELECT * FROM `mercado_applications` WHERE `id` = %s LIMIT 1",
+                (int(application_id),),
+            )
+            row = cursor.fetchone()
+            if row and not include_disabled and not bool(row.get("enabled", 1)):
+                raise ValueError("该开发者应用已停用")
+            return row
+    finally:
+        connection.close()
+
+
+def get_mercado_application_summary(application_id):
+    row = get_mercado_application(application_id, include_disabled=True)
+    return _mercado_application_summary(row) if row else None
+
+
+def update_mercado_application(application_id, changes):
+    application_id = int(application_id)
+    values = _normalize_mercado_application(changes, partial=True)
+    if not values:
+        raise ValueError("没有需要修改的应用信息")
+    assignments = [f"`{field}` = %s" for field in values]
+    params = list(values.values())
+    assignments.append("`updated_at` = %s")
+    params.extend([datetime.now().strftime("%Y-%m-%d %H:%M:%S"), application_id])
+    connection = pymysql.connect(**config)
+    try:
+        with connection.cursor() as cursor:
+            _ensure_mercado_applications_table(cursor)
+            cursor.execute(
+                f"UPDATE `mercado_applications` SET {', '.join(assignments)} WHERE `id` = %s",
+                tuple(params),
+            )
+            if cursor.rowcount == 0:
+                cursor.execute("SELECT 1 FROM `mercado_applications` WHERE `id` = %s", (application_id,))
+                if not cursor.fetchone():
+                    raise KeyError("开发者应用不存在")
+        connection.commit()
+        return get_mercado_application_summary(application_id)
+    except pymysql.err.IntegrityError as exc:
+        connection.rollback()
+        raise ValueError("应用名称或 App ID 已存在") from exc
+    except Exception:
+        connection.rollback()
+        raise
+    finally:
+        connection.close()
+
+
+def delete_mercado_application(application_id):
+    application_id = int(application_id)
+    connection = pymysql.connect(**config)
+    try:
+        with connection.cursor() as cursor:
+            _ensure_mercado_store_tokens_table(cursor)
+            cursor.execute(
+                "SELECT COUNT(*) AS `count` FROM `mercado_store_tokens` WHERE `application_id` = %s",
+                (application_id,),
+            )
+            if int((cursor.fetchone() or {}).get("count") or 0):
+                raise ValueError("该应用仍被店铺使用，请先修改店铺应用")
+            cursor.execute("DELETE FROM `mercado_applications` WHERE `id` = %s", (application_id,))
+            affected = cursor.rowcount
+        connection.commit()
+        return affected
+    except Exception:
+        connection.rollback()
+        raise
+    finally:
+        connection.close()
+
+
 def _mercado_token_record(record):
     normalized = {
         "display_name": str(record.get("display_name") or "").strip(),
@@ -7863,6 +8066,10 @@ def _mercado_token_record(record):
         "nickname": str(record.get("nickname") or "").strip(),
         "site_id": str(record.get("site_id") or "").strip(),
         "email": str(record.get("email") or "").strip(),
+        "application_id": (
+            int(record.get("application_id"))
+            if record.get("application_id") not in (None, "") else None
+        ),
         "client_id": str(record.get("client_id") or "").strip(),
         "access_token": str(record.get("access_token") or "").strip(),
         "refresh_token": str(record.get("refresh_token") or "").strip(),
@@ -7952,6 +8159,7 @@ def upsert_mercado_store_token(record):
                 token["nickname"],
                 token["site_id"],
                 token["email"],
+                token["application_id"],
                 token["client_id"],
                 token["access_token"],
                 token["refresh_token"],
@@ -7969,7 +8177,8 @@ def upsert_mercado_store_token(record):
                     """
                     UPDATE `mercado_store_tokens`
                     SET `display_name` = %s, `meli_user_id` = %s, `nickname` = %s,
-                        `site_id` = %s, `email` = %s, `client_id` = %s, `access_token` = %s,
+                        `site_id` = %s, `email` = %s, `application_id` = %s,
+                        `client_id` = %s, `access_token` = %s,
                         `refresh_token` = %s, `token_type` = %s, `scope` = %s,
                         `expires_at` = %s, `last_verified_at` = %s,
                         `last_refreshed_at` = %s, `last_error` = %s, `updated_at` = %s
@@ -7981,11 +8190,12 @@ def upsert_mercado_store_token(record):
                 cursor.execute(
                     """
                     INSERT INTO `mercado_store_tokens` (
-                        `display_name`, `meli_user_id`, `nickname`, `site_id`, `email`, `client_id`,
+                        `display_name`, `meli_user_id`, `nickname`, `site_id`, `email`,
+                        `application_id`, `client_id`,
                         `access_token`, `refresh_token`, `token_type`, `scope`, `expires_at`,
                         `last_verified_at`, `last_refreshed_at`, `last_error`, `created_at`,
                         `updated_at`
-                    ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                    ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                     """,
                     values + (now,),
                 )
@@ -8007,13 +8217,15 @@ def list_mercado_store_tokens():
             _ensure_mercado_store_site_settings_table(cursor)
             cursor.execute(
                 """
-                SELECT `id`, `display_name`, `enabled`, `meli_user_id`, `nickname`, `site_id`, `email`,
-                       `client_id`, `token_type`, `scope`, `expires_at`,
-                       `last_verified_at`, `last_refreshed_at`, `last_error`,
-                       `created_at`, `updated_at`,
-                       (`refresh_token` IS NOT NULL AND `refresh_token` <> '') AS `has_refresh_token`
-                FROM `mercado_store_tokens`
-                ORDER BY `display_name` ASC, `id` ASC
+                SELECT tokens.`id`, tokens.`display_name`, tokens.`enabled`, tokens.`meli_user_id`,
+                       tokens.`nickname`, tokens.`site_id`, tokens.`email`, tokens.`application_id`,
+                       tokens.`client_id`, tokens.`token_type`, tokens.`scope`, tokens.`expires_at`,
+                       tokens.`last_verified_at`, tokens.`last_refreshed_at`, tokens.`last_error`,
+                       tokens.`created_at`, tokens.`updated_at`, apps.`name` AS `application_name`,
+                       (tokens.`refresh_token` IS NOT NULL AND tokens.`refresh_token` <> '') AS `has_refresh_token`
+                FROM `mercado_store_tokens` AS tokens
+                LEFT JOIN `mercado_applications` AS apps ON apps.`id` = tokens.`application_id`
+                ORDER BY tokens.`display_name` ASC, tokens.`id` ASC
                 """
             )
             rows = [_mercado_token_summary(row) for row in (cursor.fetchall() or [])]
@@ -8032,12 +8244,15 @@ def get_mercado_store_token_summary(token_id):
             _ensure_mercado_store_site_settings_table(cursor)
             cursor.execute(
                 """
-                SELECT `id`, `display_name`, `enabled`, `meli_user_id`, `nickname`, `site_id`, `email`,
-                       `client_id`, `token_type`, `scope`, `expires_at`,
-                       `last_verified_at`, `last_refreshed_at`, `last_error`,
-                       `created_at`, `updated_at`,
-                       (`refresh_token` IS NOT NULL AND `refresh_token` <> '') AS `has_refresh_token`
-                FROM `mercado_store_tokens` WHERE `id` = %s LIMIT 1
+                SELECT tokens.`id`, tokens.`display_name`, tokens.`enabled`, tokens.`meli_user_id`,
+                       tokens.`nickname`, tokens.`site_id`, tokens.`email`, tokens.`application_id`,
+                       tokens.`client_id`, tokens.`token_type`, tokens.`scope`, tokens.`expires_at`,
+                       tokens.`last_verified_at`, tokens.`last_refreshed_at`, tokens.`last_error`,
+                       tokens.`created_at`, tokens.`updated_at`, apps.`name` AS `application_name`,
+                       (tokens.`refresh_token` IS NOT NULL AND tokens.`refresh_token` <> '') AS `has_refresh_token`
+                FROM `mercado_store_tokens` AS tokens
+                LEFT JOIN `mercado_applications` AS apps ON apps.`id` = tokens.`application_id`
+                WHERE tokens.`id` = %s LIMIT 1
                 """,
                 (int(token_id),),
             )
@@ -8082,7 +8297,7 @@ def update_mercado_store_token(token_id, record):
                 """
                 UPDATE `mercado_store_tokens`
                 SET `meli_user_id` = %s, `nickname` = %s, `site_id` = %s, `email` = %s,
-                    `client_id` = %s, `access_token` = %s, `refresh_token` = %s,
+                    `application_id` = %s, `client_id` = %s, `access_token` = %s, `refresh_token` = %s,
                     `token_type` = %s, `scope` = %s, `expires_at` = %s,
                     `last_verified_at` = %s, `last_refreshed_at` = %s,
                     `last_error` = %s, `updated_at` = %s
@@ -8090,7 +8305,7 @@ def update_mercado_store_token(token_id, record):
                 """,
                 (
                     token["meli_user_id"], token["nickname"], token["site_id"], token["email"],
-                    token["client_id"], token["access_token"], token["refresh_token"],
+                    token["application_id"], token["client_id"], token["access_token"], token["refresh_token"],
                     token["token_type"], token["scope"], token["expires_at"],
                     token["last_verified_at"], token["last_refreshed_at"],
                     token["last_error"], now, token_id,

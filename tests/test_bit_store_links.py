@@ -613,6 +613,7 @@ def test_list_store_links_filters_site_and_defaults_to_sales_descending():
             pass
 
     result = store.list_store_links(
+        search="Bluetooth Headset",
         site_id="mlm",
         group_name="运营一组",
         management_category_id="12",
@@ -627,6 +628,11 @@ def test_list_store_links_filters_site_and_defaults_to_sales_descending():
         if f"FROM `{store.STORE_LINK_TABLE}`" in sql and "LIMIT %s OFFSET %s" in sql
     )
     assert "`site_id` = %s" in list_sql
+    assert (
+        "MATCH(links.`title`, links.`item_id`, links.`seller_sku`, "
+        "links.`store_name`) AGAINST (%s IN BOOLEAN MODE)"
+    ) in list_sql
+    assert "links.`title` LIKE %s" not in list_sql
     assert "`remote_json`" not in list_sql
     assert "INNER JOIN (" in list_sql
     assert "links.`token_id` = %s AND links.`site_id` = %s" in list_sql
@@ -636,7 +642,8 @@ def test_list_store_links_filters_site_and_defaults_to_sales_descending():
     assert "ORDER BY links.`sold_quantity` DESC" in list_sql
     assert params[0] == "MLM"
     assert params[1:5] == (12, "Toys", "Toys", "%Toys%")
-    assert params[5:7] == (1, "MLM")
+    assert params[5] == "+Bluetooth* +Headset*"
+    assert params[6:8] == (1, "MLM")
     assert params[-2:] == (1000, 0)
     assert result["page_size"] == 1000
     assert result["rows"][0]["group_name"] == "运营一组"
@@ -774,6 +781,12 @@ def test_workbench_store_link_ui_and_routes():
     assert "净收益(USD)".encode("utf-8") in response.data
     assert "任务执行日志".encode("utf-8") in response.data
     assert "修改美客多后台".encode("utf-8") in response.data
+    assert "同步进行中也可提交".encode("utf-8") in response.data
+    selection_logic = response.get_data(as_text=True).split(
+        "function updateStoreLinkSelection()", 1
+    )[1].split("async function bulkUpdateStoreLinks()", 1)[0]
+    assert "storeLinkRemoteUpdateRunning" in selection_logic
+    assert "storeLinkSyncRunning" not in selection_logic
     assert "美客多后台修改日志".encode("utf-8") in response.data
     assert "每 3 天自动同步链接状态".encode("utf-8") in response.data
     assert "每页 1,000 条".encode("utf-8") in response.data

@@ -1,9 +1,8 @@
 """Fast Mercado Libre collector backed by Playwright and DOM extraction.
 
-The collector never drives the mouse or keyboard and never screenshots/OCRs
-the page.  Product fields come from Mercado Libre's DOM; package weight and
-dimensions come from the DOM injected into the detail page by the ZYing
-browser extension.
+Normal collection keeps one listing page and reads ZYing's already-batched
+React data directly, so product detail tabs are not created.  The older detail
+reader remains available only for explicit compatibility/repair callers.
 """
 
 from __future__ import annotations
@@ -480,6 +479,102 @@ PLUGIN_REACT_METRICS_SCRIPT = r"""(() => {
 })()"""
 
 
+LISTING_PLUGIN_ITEMS_SCRIPT = r"""(() => {
+  const roots = [];
+  const visitedRoots = new Set();
+  const walkRoots = root => {
+    if (!root || visitedRoots.has(root)) return;
+    visitedRoots.add(root);
+    roots.push(root);
+    let nodes = [];
+    try { nodes = root.querySelectorAll('*'); } catch (_) { return; }
+    for (const node of nodes) {
+      if (node.shadowRoot) walkRoots(node.shadowRoot);
+    }
+  };
+  walkRoots(document);
+
+  const normalizeId = value => {
+    const match = String(value || '').replace(/-/g, '').toUpperCase()
+      .match(/\bML[A-Z]\d{6,}\b/);
+    return match ? match[0] : '';
+  };
+  const finite = value => {
+    const number = Number(value);
+    return Number.isFinite(number) ? number : null;
+  };
+  const compact = value => value == null ? '' : String(value);
+  const items = {};
+  const captureData = data => {
+    if (!data || typeof data !== 'object' || Array.isArray(data)) return;
+    const id = normalizeId(
+      data.id || data.itemId || data.ItemId || data.sku || data.Sku || data.url
+    );
+    if (!id) return;
+    const previous = items[id] || {id};
+    const weight = finite(data.weight !== undefined ? data.weight : data.Weight);
+    const rawSize = Array.isArray(data.size) ? data.size : data.Size;
+    const size = Array.isArray(rawSize) ? rawSize.slice(0, 3).map(finite) : [];
+    const packet = data.renderPacket && typeof data.renderPacket === 'object'
+      ? data.renderPacket : {};
+    const seller = data.seller && typeof data.seller === 'object' ? data.seller : {};
+    const origin = compact(
+      seller.countryCode || data.SellerAddressCountry || data.SellerCountry
+    ).trim().toUpperCase();
+    const volumeWeight = finite(
+      data.volumeWeightG !== undefined ? data.volumeWeightG : data.VolumeWeightG
+    );
+    items[id] = {
+      ...previous,
+      ...(weight !== null ? {weight_g: weight} : {}),
+      ...(size.length === 3 && size.every(value => value !== null)
+        ? {size_cm: size} : {}),
+      ...(volumeWeight !== null ? {volume_weight_g: volumeWeight} : {}),
+      ...(packet.weightValue ? {weight_display: compact(packet.weightValue)} : {}),
+      ...(packet.sizeValue ? {size_display: compact(packet.sizeValue)} : {}),
+      ...(packet.volumeWeightValue
+        ? {volume_display: compact(packet.volumeWeightValue)} : {}),
+      ...(origin ? {self_ship_origin: origin} : {})
+    };
+  };
+  const captureValue = (value, seen, depth) => {
+    if (!value || typeof value !== 'object' || seen.has(value) || depth > 8) return;
+    seen.add(value);
+    if (Array.isArray(value)) {
+      value.forEach(child => captureValue(child, seen, depth + 1));
+      return;
+    }
+    captureData(value);
+    const props = value.props && typeof value.props === 'object' ? value.props : null;
+    if (props) {
+      captureData(props);
+      captureData(props.data);
+      if (props.children !== undefined) captureValue(props.children, seen, depth + 1);
+    }
+    if (value.data && value.data !== value) captureData(value.data);
+  };
+
+  let reactNodeCount = 0;
+  for (const root of roots) {
+    let nodes = [];
+    try { nodes = [root, ...root.querySelectorAll('*')]; } catch (_) { continue; }
+    for (const node of nodes) {
+      const keys = Object.keys(node);
+      const fiberKey = keys.find(key => key.startsWith('__reactFiber$'));
+      const propsKey = keys.find(key => key.startsWith('__reactProps$'));
+      if (!fiberKey && !propsKey) continue;
+      reactNodeCount += 1;
+      const fiber = fiberKey ? node[fiberKey] : null;
+      const fiberProps = fiber && fiber.memoizedProps ? fiber.memoizedProps : null;
+      const directProps = propsKey ? node[propsKey] : null;
+      captureValue(fiberProps, new Set(), 0);
+      if (directProps !== fiberProps) captureValue(directProps, new Set(), 0);
+    }
+  }
+  return {found: reactNodeCount > 0, items};
+})()"""
+
+
 class _PluginMetricReader:
     """Read ZYing React props from the extension's isolated JS context."""
 
@@ -554,6 +649,32 @@ class _PluginMetricReader:
             except Exception:
                 # Redirects replace the extension execution context.  The
                 # Runtime event handler will append the new context ID.
+                continue
+        return {}
+
+    async def read_listing_items(self) -> dict[str, dict[str, Any]]:
+        """Return all ZYing item metrics already batch-loaded on a listing page."""
+        if self.session is None:
+            return {}
+        for context_id in reversed(tuple(self.context_ids)):
+            try:
+                response = await self.session.send(
+                    "Runtime.evaluate",
+                    {
+                        "expression": LISTING_PLUGIN_ITEMS_SCRIPT,
+                        "contextId": context_id,
+                        "returnByValue": True,
+                    },
+                )
+                value = (response.get("result") or {}).get("value")
+                items = value.get("items") if isinstance(value, dict) else None
+                if isinstance(items, dict) and items:
+                    return {
+                        str(item_id).replace("-", "").upper(): dict(payload)
+                        for item_id, payload in items.items()
+                        if isinstance(payload, dict)
+                    }
+            except Exception:
                 continue
         return {}
 
@@ -1119,6 +1240,97 @@ async def _wait_for_listing_dom(page: Any, timeout: float = 4.0) -> None:
         await asyncio.sleep(0.35)
 
 
+async def _wait_for_listing_verification(
+    page: Any,
+    snapshot: Mapping[str, Any],
+    *,
+    on_page: Callable[[dict[str, Any]], None] | None,
+    stop_event: threading.Event | None,
+    page_number: int = 0,
+    candidate_count: int = 0,
+    browser: str = "",
+) -> tuple[str, dict[str, Any]]:
+    """Keep the listing tab alive while an operator completes buyer verification."""
+
+    actual_url = str(page.url or "")
+    current_snapshot = dict(snapshot or {})
+    blocked = _blocked_page_message(
+        actual_url, str(current_snapshot.get("body") or "")
+    )
+    if not blocked:
+        return actual_url, current_snapshot
+
+    if on_page:
+        on_page({
+            "stage": "waiting_verification",
+            "page": page_number,
+            "page_url": actual_url,
+            "page_items": 0,
+            "candidate_count": candidate_count,
+            "browser": browser,
+            "message": (
+                "Mercado 要求安全验证：采集浏览器已保留，请在窗口中完成一次验证，"
+                "完成后任务会自动继续"
+            ),
+        })
+    try:
+        await page.bring_to_front()
+    except Exception:
+        pass
+    try:
+        verification_timeout = max(
+            30.0,
+            min(
+                float(
+                    os.environ.get(
+                        "MERCADO_PLAYWRIGHT_VERIFICATION_TIMEOUT_SECONDS", "300"
+                    )
+                ),
+                900.0,
+            ),
+        )
+    except ValueError:
+        verification_timeout = 300.0
+
+    deadline = asyncio.get_running_loop().time() + verification_timeout
+    while asyncio.get_running_loop().time() < deadline:
+        _check_stop(stop_event)
+        await asyncio.sleep(1.0)
+        try:
+            await _wait_for_listing_dom(page, timeout=1.5)
+            current_snapshot = dict(
+                await _evaluate_after_navigation(page, LISTING_DOM_SCRIPT) or {}
+            )
+        except Exception as exc:
+            if _is_navigation_context_error(exc):
+                continue
+            raise
+        actual_url = str(page.url or "")
+        blocked = _blocked_page_message(
+            actual_url, str(current_snapshot.get("body") or "")
+        )
+        try:
+            resolved_item_id = extract_listing_item_id(actual_url)
+        except ValueError:
+            resolved_item_id = ""
+        if not blocked and (current_snapshot.get("rows") or resolved_item_id):
+            if on_page:
+                on_page({
+                    "stage": "verification_resolved",
+                    "page": page_number,
+                    "page_url": actual_url,
+                    "page_items": 0,
+                    "candidate_count": candidate_count,
+                    "browser": browser,
+                    "message": "安全验证已完成，正在继续扫描商品列表",
+                })
+            return actual_url, current_snapshot
+
+    raise RuntimeError(
+        f"{blocked}；等待 {int(verification_timeout)} 秒仍未完成验证"
+    )
+
+
 async def _run_keyword_search_flow(
     page: Any,
     source_url: str,
@@ -1128,13 +1340,7 @@ async def _run_keyword_search_flow(
     on_page: Callable[[dict[str, Any]], None] | None,
     stop_event: threading.Event | None,
 ) -> str:
-    """Search on the selected country frontend, then enter Internacional.
-
-    Keyword collection used to jump directly to a synthesized result URL. A
-    Mercado redirect could discard that path, leaving the browser on an
-    unrelated page. Drive the site's own search form and shipping-origin facet
-    so the visible browser and the collected DOM share the same query.
-    """
+    """Open the country search URL directly, with the search form as fallback."""
     normalized_keyword = re.sub(r"\s+", " ", str(keyword or "")).strip()
     if not normalized_keyword:
         return source_url
@@ -1152,7 +1358,78 @@ async def _run_keyword_search_flow(
             "page_url": front_url,
             "page_items": 0,
             "candidate_count": 0,
-            "message": f"正在指定国家的 Mercado 前台搜索：{normalized_keyword}",
+            "message": f"正在直接打开 Mercado 搜索结果：{normalized_keyword}",
+        })
+    # The workbench already generated a country-correct search URL.  Opening
+    # it directly avoids loading the home page, locating the search box and
+    # waiting for a second SPA navigation.  Retain the form flow below only as
+    # a compatibility fallback for Mercado redirects that discard the path.
+    direct_url = ""
+    direct_snapshot: dict[str, Any] = {}
+    try:
+        await _goto(page, source_url, wait_until="domcontentloaded")
+        direct_url = str(page.url or "")
+        direct_snapshot = dict(
+            await _evaluate_after_navigation(page, LISTING_DOM_SCRIPT) or {}
+        )
+        if not direct_snapshot.get("rows") and not _blocked_page_message(
+            direct_url, str(direct_snapshot.get("body") or "")
+        ):
+            await page.wait_for_selector(
+                "li.ui-search-layout__item, .ui-search-result, .poly-card, "
+                '[data-testid="result"]',
+                timeout=10000,
+            )
+            direct_url = str(page.url or "")
+            direct_snapshot = dict(
+                await _evaluate_after_navigation(page, LISTING_DOM_SCRIPT) or {}
+            )
+    except Exception:
+        direct_url = str(page.url or "")
+        if _blocked_page_message(direct_url, ""):
+            direct_url, direct_snapshot = await _wait_for_listing_verification(
+                page,
+                direct_snapshot,
+                on_page=on_page,
+                stop_event=stop_event,
+            )
+    else:
+        direct_url, direct_snapshot = await _wait_for_listing_verification(
+            page,
+            direct_snapshot,
+            on_page=on_page,
+            stop_event=stop_event,
+        )
+
+    direct_scope_ok = (
+        collection_scope != "cross_border"
+        or marketplace_url_has_cross_border_filter(direct_url)
+    )
+    if (
+        direct_snapshot.get("rows")
+        and direct_scope_ok
+        and _marketplace_country_root(direct_url)
+        == _marketplace_country_root(front_url)
+    ):
+        if on_page:
+            on_page({
+                "stage": "keyword_search_complete",
+                "page": 0,
+                "page_url": direct_url,
+                "page_items": 0,
+                "candidate_count": 0,
+                "message": f"已直接进入 Mercado 搜索结果：{normalized_keyword}",
+            })
+        return direct_url
+
+    if on_page:
+        on_page({
+            "stage": "keyword_search_fallback",
+            "page": 0,
+            "page_url": front_url,
+            "page_items": 0,
+            "candidate_count": 0,
+            "message": "直接搜索链接未返回商品，正在改用前台搜索框",
         })
     await _goto(page, front_url, wait_until="domcontentloaded")
     if _marketplace_country_root(page.url) != _marketplace_country_root(front_url):
@@ -1259,6 +1536,40 @@ def _synthesized_listing_page_url(source_url: str, page_number: int) -> str:
     return urlunsplit((parts.scheme, parts.netloc, path, parts.query, ""))
 
 
+async def _wait_for_listing_plugin_items(
+    reader: _PluginMetricReader,
+    item_ids: Iterable[str],
+    *,
+    timeout: float,
+    stop_event: threading.Event | None,
+) -> dict[str, dict[str, Any]]:
+    """Wait once for ZYing's listing-page batch request instead of opening details."""
+    wanted = {
+        str(item_id or "").replace("-", "").upper()
+        for item_id in item_ids
+        if str(item_id or "").strip()
+    }
+    if not wanted or reader.session is None:
+        return {}
+    deadline = asyncio.get_running_loop().time() + max(1.0, float(timeout))
+    collected: dict[str, dict[str, Any]] = {}
+    stable_rounds = 0
+    while asyncio.get_running_loop().time() < deadline:
+        _check_stop(stop_event)
+        current = await reader.read_listing_items()
+        before = len(collected)
+        for item_id, payload in current.items():
+            if item_id in wanted:
+                collected[item_id] = dict(payload)
+        if wanted.issubset(collected):
+            return collected
+        stable_rounds = stable_rounds + 1 if len(collected) == before else 0
+        if collected and stable_rounds >= 3:
+            return collected
+        await asyncio.sleep(0.25)
+    return collected
+
+
 async def _listing_candidates(
     runtime: _PlaywrightRuntime,
     source_url: str,
@@ -1273,6 +1584,7 @@ async def _listing_candidates(
     # lazy picture requests are aborted.  Detail pages still use the lighter
     # default route policy, so this does not multiply detail-tab bandwidth.
     page = await _new_page(runtime, optimize_resources=False)
+    plugin_reader = await _PluginMetricReader.open(page)
     candidates: list[dict[str, Any]] = []
     visited_pages: set[str] = set()
     page_url = source_url
@@ -1312,75 +1624,15 @@ async def _listing_candidates(
         await _wait_for_listing_dom(page)
         snapshot = await _evaluate_after_navigation(page, LISTING_DOM_SCRIPT)
         actual_url = page.url
-        blocked = _blocked_page_message(actual_url, str(snapshot.get("body") or ""))
-        if blocked:
-            if on_page:
-                on_page({
-                    "stage": "waiting_verification",
-                    "page": page_number,
-                    "page_url": actual_url,
-                    "page_items": 0,
-                    "candidate_count": len(candidates),
-                    "browser": runtime.connection_mode,
-                    "message": (
-                        "Mercado 要求安全验证：采集浏览器已保留，请在窗口中完成一次验证，"
-                        "完成后任务会自动继续"
-                    ),
-                })
-            try:
-                await page.bring_to_front()
-            except Exception:
-                pass
-            try:
-                verification_timeout = max(
-                    30.0,
-                    min(
-                        float(
-                            os.environ.get(
-                                "MERCADO_PLAYWRIGHT_VERIFICATION_TIMEOUT_SECONDS",
-                                "300",
-                            )
-                        ),
-                        900.0,
-                    ),
-                )
-            except ValueError:
-                verification_timeout = 300.0
-            deadline = asyncio.get_running_loop().time() + verification_timeout
-            while asyncio.get_running_loop().time() < deadline:
-                _check_stop(stop_event)
-                await asyncio.sleep(1.0)
-                try:
-                    await _wait_for_listing_dom(page, timeout=1.5)
-                    snapshot = await _evaluate_after_navigation(page, LISTING_DOM_SCRIPT)
-                except Exception as exc:
-                    if _is_navigation_context_error(exc):
-                        continue
-                    raise
-                actual_url = page.url
-                blocked = _blocked_page_message(
-                    actual_url, str(snapshot.get("body") or "")
-                )
-                try:
-                    resolved_item_id = extract_listing_item_id(actual_url)
-                except ValueError:
-                    resolved_item_id = ""
-                if not blocked and (snapshot.get("rows") or resolved_item_id):
-                    if on_page:
-                        on_page({
-                            "stage": "verification_resolved",
-                            "page": page_number,
-                            "page_url": actual_url,
-                            "page_items": 0,
-                            "candidate_count": len(candidates),
-                            "browser": runtime.connection_mode,
-                            "message": "安全验证已完成，正在继续扫描商品列表",
-                        })
-                    break
-            if blocked:
-                raise RuntimeError(
-                    f"{blocked}；等待 {int(verification_timeout)} 秒仍未完成验证"
-                )
+        actual_url, snapshot = await _wait_for_listing_verification(
+            page,
+            snapshot,
+            on_page=on_page,
+            stop_event=stop_event,
+            page_number=page_number,
+            candidate_count=len(candidates),
+            browser=runtime.connection_mode,
+        )
         before = len(candidates)
         page_rows = [] if page_number == 1 and direct_source_item_id else snapshot.get("rows") or []
         if (
@@ -1430,6 +1682,33 @@ async def _listing_candidates(
                     }],
                     requested_count,
                 )
+        new_candidates = candidates[before:]
+        if new_candidates:
+            try:
+                plugin_wait = max(
+                    1.0,
+                    min(
+                        float(
+                            os.environ.get(
+                                "MERCADO_PLAYWRIGHT_LISTING_PLUGIN_TIMEOUT_SECONDS",
+                                "6",
+                            )
+                        ),
+                        20.0,
+                    ),
+                )
+            except ValueError:
+                plugin_wait = 6.0
+            plugin_items = await _wait_for_listing_plugin_items(
+                plugin_reader,
+                (row["source_item_id"] for row in new_candidates),
+                timeout=plugin_wait,
+                stop_event=stop_event,
+            )
+            for candidate in new_candidates:
+                item_id = str(candidate.get("source_item_id") or "").upper()
+                candidate["_plugin_data"] = dict(plugin_items.get(item_id) or {})
+                candidate["_direct_detail_ready"] = True
         if on_page:
             on_page({
                 "page": page_number,
@@ -1471,6 +1750,10 @@ async def _listing_candidates(
         if not next_url:
             break
         page_url = next_url
+    try:
+        await plugin_reader.close()
+    except Exception:
+        pass
     try:
         runtime.pages.remove(page)
     except ValueError:
@@ -1726,6 +2009,100 @@ def _failure_row(candidate: Mapping[str, Any], exc: Exception) -> dict[str, Any]
     }
 
 
+def _collect_listing_direct(candidate: Mapping[str, Any], runtime: _PlaywrightRuntime) -> dict[str, Any]:
+    """Build a complete collection row from list-card and ZYing batch data."""
+    item_id = extract_item_id(
+        str(candidate.get("source_item_id") or candidate.get("source_url") or "")
+    )
+    plugin_data = (
+        dict(candidate.get("_plugin_data") or {})
+        if isinstance(candidate.get("_plugin_data"), Mapping)
+        else {}
+    )
+    metrics, plugin_lines = _metrics_from_react_payload({"data": plugin_data})
+    actual_weight = _number(metrics.get("weight_g"))
+    actual_weight_complete = actual_weight is not None and actual_weight > 0
+    weight_basis = "plugin_actual" if actual_weight_complete else ""
+    title = str(candidate.get("title") or "").strip()
+    main_image = _normalize_image_url(candidate.get("main_image_url"))
+    pictures = [main_image] if main_image else []
+    price = _number(candidate.get("price"))
+    currency_id = str(candidate.get("currency_id") or "MXN")
+    free_shipping = candidate.get("free_shipping")
+    final_url = str(candidate.get("listing_url") or candidate.get("source_url") or "")
+
+    errors: list[str] = []
+    if not title:
+        errors.append("列表页未识别到商品标题")
+    if not main_image:
+        errors.append("列表页未识别到商品主图")
+    if not actual_weight_complete:
+        errors.append("列表页未读取到智赢批量重量数据")
+    complete = bool(title and main_image and actual_weight_complete)
+    self_ship_origin = (
+        str(plugin_data.get("self_ship_origin") or "").strip().upper()
+        or str(candidate.get("shipping_origin_country") or "").strip().upper()
+        or "unknown"
+    )
+    source = {
+        "id": item_id,
+        "site_id": item_id[:3],
+        "title": title,
+        "price": price,
+        "currency_id": currency_id,
+        "condition": "new",
+        "available_quantity": 1,
+        "permalink": final_url,
+        "pictures": [{"source": url} for url in pictures],
+        "attributes": [],
+        "variations": [],
+        "sale_terms": [],
+    }
+    if isinstance(free_shipping, bool):
+        source["shipping"] = {"free_shipping": free_shipping}
+    return {
+        "source_item_id": item_id,
+        "source_url": str(candidate.get("source_url") or final_url),
+        "final_url": final_url,
+        "main_image_url": main_image,
+        "title": title,
+        "price": price,
+        "currency_id": currency_id,
+        "weight_g": metrics.get("weight_g"),
+        "volumetric_weight_kg": metrics.get("volumetric_weight_kg"),
+        "package_length_cm": metrics.get("package_length_cm"),
+        "package_width_cm": metrics.get("package_width_cm"),
+        "package_height_cm": metrics.get("package_height_cm"),
+        "weight_basis": weight_basis,
+        "source_free_shipping": free_shipping if isinstance(free_shipping, bool) else None,
+        "scrape_status": "ok" if complete else "partial",
+        "error_message": "；".join(errors),
+        "source": source,
+        "description": {"plain_text": ""},
+        "page_snapshot": {
+            "page_title": title,
+            "specs": [],
+            "pictures": pictures,
+            "browser": runtime.connection_mode,
+            "detail_acquisition": "listing_page_batch",
+        },
+        "plugin_snapshot": {
+            "source": "智赢浏览器插件列表页批量数据",
+            "read_method": "playwright_listing_react_data",
+            "dom_lines": plugin_lines,
+            "dom_text": " ".join(plugin_lines),
+            "weight_basis": weight_basis,
+            "dimensions_display": metrics.get("dimensions_display"),
+            "weight_display": metrics.get("weight_display"),
+            "plugin_volumetric_display": metrics.get("plugin_volumetric_display"),
+            "volumetric_formula": "length_cm * width_cm * height_cm / 6000",
+            "volumetric_weight_kg": metrics.get("volumetric_weight_kg"),
+            "self_ship_origin": self_ship_origin,
+        },
+        "collected_at": datetime.now().replace(microsecond=0).strftime("%Y-%m-%d %H:%M:%S"),
+    }
+
+
 async def _collect_detail(
     runtime: _PlaywrightRuntime,
     candidate: Mapping[str, Any],
@@ -1736,6 +2113,8 @@ async def _collect_detail(
     react_reader: _PluginMetricReader | None = None,
 ) -> dict[str, Any]:
     _check_stop(stop_event)
+    if candidate.get("_direct_detail_ready"):
+        return _collect_listing_direct(candidate, runtime)
     owns_page = page is None
     if page is None:
         page = await _new_page(runtime)
@@ -2142,11 +2521,15 @@ async def _collect_async(
                     else "Playwright 在列表页没有识别到商品，请确认链接是 Mercado 商品列表或详情页"
                 )
             )
+        direct_mode = all(
+            bool(candidate.get("_direct_detail_ready")) for candidate in candidates
+        )
         workers = normalize_collection_workers(max_workers)
         semaphore = asyncio.Semaphore(workers)
-        detail_page_pool = await _open_detail_page_pool(
-            runtime, min(workers, len(candidates))
-        )
+        if not direct_mode:
+            detail_page_pool = await _open_detail_page_pool(
+                runtime, min(workers, len(candidates))
+            )
         navigation_lock = asyncio.Lock()
         verification_probe_lock = asyncio.Lock()
         next_navigation_at = 0.0
@@ -2155,7 +2538,7 @@ async def _collect_async(
         verification_incidents = 0
         verification_recovery_successes = 0
         try:
-            navigation_stagger = max(
+            navigation_stagger = 0.0 if direct_mode else max(
                 0.0,
                 min(
                     float(
@@ -2451,8 +2834,12 @@ async def _collect_async(
                     "total": len(candidates),
                     "item_id": candidate["source_item_id"],
                     "message": (
-                        f"已读取 {candidate['source_item_id']} 的页面和智赢 DOM 数据"
-                        f"（{current}/{len(candidates)}）"
+                        (
+                            f"已直接读取 {candidate['source_item_id']} 的列表和智赢批量数据"
+                            if direct_mode
+                            else f"已读取 {candidate['source_item_id']} 的页面和智赢 DOM 数据"
+                        )
+                        + f"（{current}/{len(candidates)}）"
                     ),
                 })
 
@@ -2463,8 +2850,13 @@ async def _collect_async(
                 "total": len(candidates),
                 "item_id": "",
                 "message": (
-                    f"正在用 {workers} 个常驻详情页采集 {len(candidates)} 个商品，"
-                    f"插件快速等待 {fast_plugin_timeout:g} 秒"
+                    f"正在直接读取 {len(candidates)} 个商品的列表和智赢批量数据，"
+                    "不打开商品详情页"
+                    if direct_mode
+                    else (
+                        f"正在用 {workers} 个常驻详情页采集 {len(candidates)} 个商品，"
+                        f"插件快速等待 {fast_plugin_timeout:g} 秒"
+                    )
                 ),
             })
 
@@ -2487,9 +2879,10 @@ async def _collect_async(
             detail_page_pool = None
             await _close_runtime(runtime)
             runtime = await open_runtime()
-            detail_page_pool = await _open_detail_page_pool(
-                runtime, min(workers, len(closed_context_rows))
-            )
+            if not direct_mode:
+                detail_page_pool = await _open_detail_page_pool(
+                    runtime, min(workers, len(closed_context_rows))
+                )
             if on_progress:
                 on_progress({
                     "stage": "detail_retry",
@@ -2519,6 +2912,7 @@ async def _collect_async(
             "browser_mode": "playwright",
             "browser_connection": runtime.connection_mode,
             "collection_scope": collection_scope,
+            "detail_mode": "listing_page_batch" if direct_mode else "detail_pages",
             "rows": results,
         }
     finally:

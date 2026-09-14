@@ -13,6 +13,10 @@ from typing import Any, Callable, Iterable, Mapping
 
 import requests
 
+from erp.mercadolibre_attribute_rules import (
+    extract_listing_attributes_from_detail,
+    normalize_collected_attribute,
+)
 from erp.mercadolibre_follow_sell import MercadoLibreClient, follow_sell
 from erp.mercadolibre_translation import marketplace_site_name, normalize_marketplace_site
 
@@ -48,11 +52,21 @@ class DatabaseMercadoLibreClient(MercadoLibreClient):
         timeout: int = 45,
     ) -> None:
         record = _token_record(token_id)
+        application: Mapping[str, Any] = {}
+        application_id = record.get("application_id")
+        if application_id not in (None, ""):
+            from bit import bit_mysql
+
+            application = dict(
+                bit_mysql.get_mercado_application(int(application_id)) or {}
+            )
+            if not application:
+                raise RuntimeError("店铺绑定的开发者应用不存在，请重新选择应用")
         self.token_id = int(token_id)
         self.token_file = None
         self.tokens = record
-        self.client_id = str(record.get("client_id") or "")
-        self.client_secret = ""
+        self.client_id = str(application.get("client_id") or record.get("client_id") or "")
+        self.client_secret = str(application.get("client_secret") or "")
         self.session = session or requests.Session()
         self.timeout = timeout
 
@@ -80,7 +94,16 @@ def _published_item_id(publication: Mapping[str, Any]) -> str:
     result = publication.get("result")
     if not isinstance(result, Mapping):
         return ""
-    for key in ("id", "global_item_id", "user_product_id", "parent_user_product_id"):
+    # Keep the reusable siteless User Product id whenever Mercado returns it.
+    # A parent_user_product_id uses the CBTU{id} representation, which is valid
+    # for mapping reads but fails on POST /global/user-products/{id}.
+    for key in (
+        "siteless_user_product_id",
+        "id",
+        "global_item_id",
+        "user_product_id",
+        "parent_user_product_id",
+    ):
         value = result.get(key)
         if value not in (None, ""):
             return str(value)
@@ -215,6 +238,23 @@ def discounted_net_proceeds_usd(row: Mapping[str, Any], discount_rate: Any) -> f
     return float(amount)
 
 
+def _zying_snapshot_attributes(snapshot: Mapping[str, Any]) -> list[dict[str, Any]]:
+    """Recover Mercado attributes from the raw ZYing sale.detail snapshot.
+
+    Older product rows may have an empty normalized ``source.attributes`` even
+    though ``page_snapshot.zying_detail.sale_attrs`` still contains the full
+    data under ZYing's ``nameid``/``valueid`` field names.
+    """
+
+    page_snapshot = snapshot.get("page_snapshot") or {}
+    if not isinstance(page_snapshot, Mapping):
+        return []
+    detail = page_snapshot.get("zying_detail") or {}
+    if not isinstance(detail, Mapping):
+        return []
+    return extract_listing_attributes_from_detail(detail)
+
+
 def _product_source_snapshot(row: Mapping[str, Any]) -> dict[str, Any] | None:
     """Build the edited publication snapshot without a database round trip."""
     raw_snapshot = row.get("source_snapshot_json")
@@ -231,6 +271,33 @@ def _product_source_snapshot(row: Mapping[str, Any]) -> dict[str, Any] | None:
             raise ValueError("产品源快照格式无效，请重新加入产品列表")
         snapshot = dict(decoded)
     source = dict(snapshot.get("source") or {})
+    plugin_snapshot = snapshot.get("plugin_snapshot") or {}
+    is_zying = str(row.get("source_type") or "").strip().lower() == "zying" or (
+        isinstance(plugin_snapshot, Mapping)
+        and str(plugin_snapshot.get("source_type") or "").strip().lower() == "zying"
+    )
+    if is_zying:
+        existing_attributes = [
+            normalized
+            for attribute in source.get("attributes") or []
+            if (normalized := normalize_collected_attribute(attribute)) is not None
+        ]
+        positions = {
+            str(attribute.get("id") or "").strip().upper(): index
+            for index, attribute in enumerate(existing_attributes)
+            if str(attribute.get("id") or "").strip()
+        }
+        for recovered in _zying_snapshot_attributes(snapshot):
+            attribute_id = str(recovered.get("id") or "").strip().upper()
+            position = positions.get(attribute_id)
+            if position is None:
+                positions[attribute_id] = len(existing_attributes)
+                existing_attributes.append(recovered)
+            elif not existing_attributes[position].get("value_name") and recovered.get(
+                "value_name"
+            ):
+                existing_attributes[position] = recovered
+        source["attributes"] = existing_attributes
     source.update({
         "title": row.get("title") or source.get("title"),
         "price": row.get("price") if row.get("price") is not None else source.get("price"),
@@ -263,7 +330,7 @@ def _product_source_snapshot(row: Mapping[str, Any]) -> dict[str, Any] | None:
         "source": source,
         "description": description,
         "page_snapshot": snapshot.get("page_snapshot") or {},
-        "plugin_snapshot": snapshot.get("plugin_snapshot") or {},
+        "plugin_snapshot": plugin_snapshot,
         "weight_g": row.get("weight_g"),
         "package_length_cm": row.get("package_length_cm"),
         "package_width_cm": row.get("package_width_cm"),
@@ -305,7 +372,7 @@ def publish_product_batch(
     token_id: int,
     site_id: str = "MLM",
     quantity: int = 1,
-    workers: int = 10,
+    workers: int = 16,
     discount_rate: Any = None,
     update_state: Callable[..., Any],
     on_progress: Callable[[dict[str, Any]], None] | None = None,

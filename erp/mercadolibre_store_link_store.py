@@ -16,6 +16,7 @@ PRODUCT_TABLE = "erp_mercadolibre_products"
 MANAGEMENT_CATEGORY_TABLE = "erp_mercadolibre_management_categories"
 STORE_LINK_SALES_PAGE_INDEX = "idx_erp_meli_store_link_sales_page"
 STORE_LINK_SITE_PAGE_INDEX = "idx_erp_meli_store_link_site_page"
+STORE_LINK_SEARCH_INDEX = "idx_erp_meli_store_link_search"
 
 _schema_lock = threading.RLock()
 _store_link_schema_ready = False
@@ -103,7 +104,9 @@ def _migrate_store_link_table(cursor: Any) -> None:
             KEY `idx_erp_meli_store_link_store` (`token_id`, `is_current`, `item_id`),
             KEY `idx_erp_meli_store_link_sales_page`
                 (`is_current`, `sold_quantity`, `last_synced_at`, `id`),
-            KEY `idx_erp_meli_store_link_site_page` (`is_current`, `site_id`)
+            KEY `idx_erp_meli_store_link_site_page` (`is_current`, `site_id`),
+            FULLTEXT KEY `idx_erp_meli_store_link_search`
+                (`title`, `item_id`, `seller_sku`, `store_name`)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
         """
     )
@@ -160,11 +163,17 @@ def ensure_store_link_table(cursor: Any) -> None:
         if not {"sync_marker", "net_proceeds_manual", "remote_json"}.issubset(columns):
             _migrate_store_link_table(cursor)
         required_indexes = {
-            STORE_LINK_SALES_PAGE_INDEX:
+            STORE_LINK_SALES_PAGE_INDEX: (
+                "INDEX",
                 "(`is_current`, `sold_quantity`, `last_synced_at`, `id`)",
-            STORE_LINK_SITE_PAGE_INDEX: "(`is_current`, `site_id`)",
+            ),
+            STORE_LINK_SITE_PAGE_INDEX: ("INDEX", "(`is_current`, `site_id`)"),
+            STORE_LINK_SEARCH_INDEX: (
+                "FULLTEXT INDEX",
+                "(`title`, `item_id`, `seller_sku`, `store_name`)",
+            ),
         }
-        for index_name, columns_sql in required_indexes.items():
+        for index_name, (index_type, columns_sql) in required_indexes.items():
             cursor.execute(
                 """
                 SELECT 1
@@ -176,15 +185,43 @@ def ensure_store_link_table(cursor: Any) -> None:
                 (STORE_LINK_TABLE, index_name),
             )
             if not cursor.fetchone():
+                lock_name = f"mercado:{STORE_LINK_TABLE}:{index_name}"[:64]
+                cursor.execute("SELECT GET_LOCK(%s, 300) AS `acquired`", (lock_name,))
+                lock_row = cursor.fetchone() or {}
+                acquired = (
+                    lock_row.get("acquired")
+                    if isinstance(lock_row, Mapping)
+                    else lock_row[0] if lock_row else None
+                )
+                if acquired is not None and int(acquired) != 1:
+                    raise RuntimeError(f"等待店铺链接索引 {index_name} 初始化超时")
                 try:
+                    # Another service process may have built the index while
+                    # this connection waited for the cross-process lock.
                     cursor.execute(
-                        f"ALTER TABLE `{STORE_LINK_TABLE}` ADD INDEX "
-                        f"`{index_name}` {columns_sql}"
+                        """
+                        SELECT 1
+                        FROM `information_schema`.`STATISTICS`
+                        WHERE `TABLE_SCHEMA` = DATABASE() AND `TABLE_NAME` = %s
+                          AND `INDEX_NAME` = %s
+                        LIMIT 1
+                        """,
+                        (STORE_LINK_TABLE, index_name),
                     )
-                except Exception as exc:
-                    # Another hot-reload process may finish the same online index first.
-                    if not exc.args or exc.args[0] != 1061:
-                        raise
+                    if not cursor.fetchone():
+                        try:
+                            cursor.execute(
+                                f"ALTER TABLE `{STORE_LINK_TABLE}` ADD {index_type} "
+                                f"`{index_name}` {columns_sql}"
+                            )
+                        except Exception as exc:
+                            # Be compatible with an older process that started
+                            # the same migration before advisory locking existed.
+                            if not exc.args or exc.args[0] != 1061:
+                                raise
+                finally:
+                    if acquired is not None:
+                        cursor.execute("SELECT RELEASE_LOCK(%s)", (lock_name,))
         _store_link_schema_ready = True
 
 
@@ -884,12 +921,21 @@ def list_store_links(
         values.extend((mercado_category, mercado_category, f"%{mercado_category}%"))
     search = str(search or "").strip()
     if search:
-        pattern = f"%{search}%"
-        conditions.append(
-            "(links.`item_id` LIKE %s OR links.`title` LIKE %s OR "
-            "links.`seller_sku` LIKE %s OR links.`store_name` LIKE %s)"
+        # The listing table has more than one million rows. A leading-wildcard
+        # LIKE on four text columns forces two full scans (COUNT + page query).
+        # Boolean full-text prefix terms retain product-name/item/SKU/store
+        # lookup while allowing MySQL to resolve matches from the FTS index.
+        search_terms = re.findall(r"[^\W_]+", search, flags=re.UNICODE)
+        boolean_query = " ".join(
+            f"+{term[:84]}*" for term in search_terms if len(term) >= 3
         )
-        values.extend([pattern] * 4)
+        if not boolean_query:
+            raise ValueError("搜索内容至少需要一个 3 个字符以上的关键词")
+        conditions.append(
+            "MATCH(links.`title`, links.`item_id`, links.`seller_sku`, "
+            "links.`store_name`) AGAINST (%s IN BOOLEAN MODE)"
+        )
+        values.append(boolean_query)
     links_from_sql = f" FROM `{STORE_LINK_TABLE}` AS links"
     sales_direction = "ASC" if str(sales_sort or "").strip().lower() == "asc" else "DESC"
     connection = (connection_factory or _connect)()

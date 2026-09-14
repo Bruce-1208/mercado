@@ -1,3 +1,4 @@
+import json
 import threading
 import time
 from unittest.mock import patch
@@ -290,13 +291,84 @@ def test_embedded_product_snapshot_avoids_publish_write_read_round_trip():
     assert result["elapsed_seconds"] >= 0
 
 
+def test_embedded_zying_snapshot_recovers_legacy_nameid_attributes():
+    row = {
+        **_rows()[0],
+        "source_type": "zying",
+        "source_snapshot_json": json.dumps({
+            "source": {
+                "id": "CBT846456655",
+                "site_id": "CBT",
+                "title": "Producto ZYing",
+                "attributes": [],
+            },
+            "page_snapshot": {
+                "zying_detail": {
+                    "sale_siteid": 8,
+                    "sale_attrs": json.dumps({
+                        "8": {
+                            "site": "CBT",
+                            "attrs": [{
+                                "name": "Es un kit de fábrica",
+                                "value": "No",
+                                "nameid": "IS_FACTORY_KIT",
+                                "valueid": 242084,
+                            }],
+                        }
+                    }),
+                }
+            },
+            "plugin_snapshot": {"source_type": "zying"},
+        }),
+    }
+
+    source, _description = batch_publish._prepared_listing_from_product_row(row)
+
+    factory_kit = next(
+        attribute
+        for attribute in source["attributes"]
+        if attribute["id"] == "IS_FACTORY_KIT"
+    )
+    assert factory_kit["value_id"] == "242084"
+    assert factory_kit["value_name"] == "No"
+
+
+def test_embedded_zying_snapshot_does_not_publish_minus_one_value_id():
+    row = {
+        **_rows()[0],
+        "source_type": "zying",
+        "source_snapshot_json": json.dumps({
+            "source": {"id": "CBT846456655", "attributes": []},
+            "page_snapshot": {"zying_detail": {
+                "sale_siteid": 8,
+                "sale_attrs": json.dumps({
+                    "8": {"attrs": [{
+                        "name": "ISBN", "nameid": "GTIN", "valueid": -1,
+                    }]}
+                }),
+            }},
+            "plugin_snapshot": {"source_type": "zying"},
+        }),
+    }
+
+    source, _description = batch_publish._prepared_listing_from_product_row(row)
+
+    gtin = next(
+        attribute for attribute in source["attributes"] if attribute["id"] == "GTIN"
+    )
+    assert "value_id" not in gtin
+
+
 def test_batch_publish_passes_reusable_user_product_to_follow_sell():
     captured = {}
 
     def fake_follow_sell(_client, _source_url, **kwargs):
         captured.update(kwargs)
         return {
-            "result": {"parent_user_product_id": "CBTU123"},
+            "result": {
+                "parent_user_product_id": "CBTU123",
+                "siteless_user_product_id": "U123",
+            },
             "publication_action": "add_marketplace",
         }
 
@@ -315,7 +387,7 @@ def test_batch_publish_passes_reusable_user_product_to_follow_sell():
         )
 
     assert captured["existing_user_product_id"] == "CBTU123"
-    assert result["results"][0]["published_item_id"] == "CBTU123"
+    assert result["results"][0]["published_item_id"] == "U123"
     assert "复用现有 User Product" in result["results"][0]["message"]
 
 

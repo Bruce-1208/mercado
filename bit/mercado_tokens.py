@@ -71,29 +71,39 @@ def _legacy_oauth_credentials() -> dict[str, str]:
     }
 
 
-def _oauth_settings(require_secret: bool = False) -> dict[str, str]:
+def _oauth_settings(
+    require_secret: bool = False,
+    application: Mapping[str, Any] | None = None,
+) -> dict[str, str]:
     legacy = _legacy_oauth_credentials()
+    application = dict(application or {})
+    if application and not _store_enabled(application):
+        raise MercadoTokenError("该开发者应用已停用")
     settings = {
         "client_id": (
-            os.environ.get("MELI_CLIENT_ID")
+            application.get("client_id")
+            or os.environ.get("MELI_CLIENT_ID")
             or os.environ.get("MERCADO_CLIENT_ID")
             or legacy.get("client_id")
             or ""
         ).strip(),
         "client_secret": (
-            os.environ.get("MELI_CLIENT_SECRET")
+            application.get("client_secret")
+            or os.environ.get("MELI_CLIENT_SECRET")
             or os.environ.get("MERCADO_CLIENT_SECRET")
             or legacy.get("client_secret")
             or ""
         ).strip(),
         "redirect_uri": (
-            os.environ.get("MELI_REDIRECT_URI")
+            application.get("redirect_uri")
+            or os.environ.get("MELI_REDIRECT_URI")
             or os.environ.get("MERCADO_REDIRECT_URI")
             or legacy.get("redirect_uri")
             or DEFAULT_REDIRECT_URI
         ).strip(),
         "authorization_base_url": (
-            os.environ.get("MELI_AUTHORIZATION_URL")
+            application.get("authorization_base_url")
+            or os.environ.get("MELI_AUTHORIZATION_URL")
             or DEFAULT_AUTHORIZATION_URL
         ).strip(),
     }
@@ -107,10 +117,10 @@ def _oauth_settings(require_secret: bool = False) -> dict[str, str]:
     return settings
 
 
-def authorization_info() -> dict[str, Any]:
+def authorization_info(application: Mapping[str, Any] | None = None) -> dict[str, Any]:
     """Return a safe authorization link without exposing the client secret."""
     try:
-        settings = _oauth_settings(require_secret=False)
+        settings = _oauth_settings(require_secret=False, application=application)
     except MercadoTokenError as exc:
         return {
             "configured": False,
@@ -131,6 +141,10 @@ def authorization_info() -> dict[str, Any]:
         "configured": True,
         "authorization_url": f"{settings['authorization_base_url']}{separator}{query}",
         "redirect_uri": settings["redirect_uri"],
+        "application_id": (
+            int(application.get("id"))
+            if application and application.get("id") not in (None, "") else None
+        ),
         "message": "",
     }
 
@@ -244,6 +258,7 @@ def _token_record(
     profile: Mapping[str, Any] | None,
     *,
     client_id: str,
+    application_id: int | None = None,
 ) -> dict[str, Any]:
     profile = dict(profile or {})
     issued_at = datetime.now()
@@ -258,6 +273,7 @@ def _token_record(
         "nickname": str(profile.get("nickname") or "").strip(),
         "site_id": str(profile.get("site_id") or "").strip(),
         "email": str(profile.get("email") or "").strip(),
+        "application_id": application_id,
         "client_id": client_id,
         "access_token": str(token_data["access_token"]),
         "refresh_token": str(token_data.get("refresh_token") or ""),
@@ -275,13 +291,24 @@ def exchange_and_save(
     callback_or_code: str,
     *,
     upsert,
+    application_id: int | None = None,
+    get_application=None,
     http: requests.Session | None = None,
     timeout: int = 30,
 ) -> dict[str, Any]:
     """Exchange a TG code, identify its seller, and save the rotating tokens."""
     name = _normalize_display_name(display_name)
     code = extract_authorization_code(callback_or_code)
-    settings = _oauth_settings(require_secret=True)
+    application = None
+    if application_id not in (None, ""):
+        if get_application is None:
+            from bit import bit_mysql
+
+            get_application = bit_mysql.get_mercado_application
+        application = get_application(int(application_id))
+        if not application:
+            raise KeyError("开发者应用不存在")
+    settings = _oauth_settings(require_secret=True, application=application)
     token_data = _request_token(
         {
             "grant_type": "authorization_code",
@@ -310,6 +337,7 @@ def exchange_and_save(
         token_data,
         profile,
         client_id=settings["client_id"],
+        application_id=int(application_id) if application_id not in (None, "") else None,
     )
     if profile_error:
         record["last_error"] = profile_error
@@ -320,11 +348,63 @@ def exchange_and_save(
     }
 
 
+def reauthorize_with_application(
+    token_id: int,
+    callback_or_code: str,
+    application_id: int,
+    *,
+    get_token,
+    get_application,
+    update_token,
+    http: requests.Session | None = None,
+    timeout: int = 30,
+) -> dict[str, Any]:
+    """Reauthorize the same seller before changing its developer application."""
+    existing = dict(get_token(int(token_id), include_disabled=True) or {})
+    if not existing:
+        raise KeyError("店铺授权不存在")
+    application = get_application(int(application_id))
+    if not application:
+        raise KeyError("开发者应用不存在")
+    settings = _oauth_settings(require_secret=True, application=application)
+    token_data = _request_token(
+        {
+            "grant_type": "authorization_code",
+            "client_id": settings["client_id"],
+            "client_secret": settings["client_secret"],
+            "code": extract_authorization_code(callback_or_code),
+            "redirect_uri": settings["redirect_uri"],
+        },
+        http=http,
+        timeout=timeout,
+    )
+    profile = _seller_profile(str(token_data["access_token"]), http=http, timeout=timeout)
+    expected_user_id = str(existing.get("meli_user_id") or "").strip()
+    actual_user_id = str(token_data.get("user_id") or profile.get("id") or "").strip()
+    if expected_user_id and actual_user_id != expected_user_id:
+        raise MercadoTokenError("新应用授权的不是当前店铺，已拒绝修改应用")
+    profile = {
+        "id": actual_user_id or existing.get("meli_user_id"),
+        "nickname": profile.get("nickname") or existing.get("nickname"),
+        "site_id": profile.get("site_id") or existing.get("site_id"),
+        "email": profile.get("email") or existing.get("email"),
+    }
+    record = _token_record(
+        str(existing.get("display_name") or ""),
+        token_data,
+        profile,
+        client_id=settings["client_id"],
+        application_id=int(application_id),
+    )
+    return dict(update_token(int(token_id), record) or {})
+
+
 def _refresh_and_save_unlocked(
     token_id: int,
     *,
     get_token,
     update_token,
+    get_application=None,
     record_error=None,
     http: requests.Session | None = None,
     timeout: int = 30,
@@ -336,7 +416,17 @@ def _refresh_and_save_unlocked(
     refresh_token = str(existing.get("refresh_token") or "").strip()
     if not refresh_token:
         raise MercadoTokenError("该店铺没有 Refresh Token，请重新授权")
-    settings = _oauth_settings(require_secret=True)
+    application_id = existing.get("application_id")
+    application = None
+    if application_id not in (None, ""):
+        if get_application is None:
+            from bit import bit_mysql
+
+            get_application = bit_mysql.get_mercado_application
+        application = get_application(int(application_id))
+        if not application:
+            raise MercadoTokenError("店铺绑定的开发者应用不存在")
+    settings = _oauth_settings(require_secret=True, application=application)
     try:
         token_data = _request_token(
             {
@@ -381,6 +471,7 @@ def _refresh_and_save_unlocked(
         token_data,
         profile,
         client_id=settings["client_id"],
+        application_id=int(application_id) if application_id not in (None, "") else None,
     )
     if profile_error:
         record["last_error"] = profile_error
@@ -408,6 +499,7 @@ def refresh_and_save(
     *,
     get_token,
     update_token,
+    get_application=None,
     record_error=None,
     http: requests.Session | None = None,
     timeout: int = 30,
@@ -428,6 +520,7 @@ def refresh_and_save(
                 token_id,
                 get_token=get_token,
                 update_token=update_token,
+                get_application=get_application,
                 record_error=record_error,
                 http=http,
                 timeout=timeout,

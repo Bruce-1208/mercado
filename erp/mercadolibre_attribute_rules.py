@@ -7,6 +7,7 @@ the enumerated values returned by the target category schema.
 
 from __future__ import annotations
 
+import json
 import re
 import unicodedata
 from typing import Any, Iterable, Mapping
@@ -117,6 +118,157 @@ SIZE_VALUE_ALIASES = {
     "ONE_SIZE": "SIZE_ONE_SIZE", "TALLA_UNICA": "SIZE_ONE_SIZE",
     "TAMANHO_UNICO": "SIZE_ONE_SIZE", "UNICO": "SIZE_ONE_SIZE", "均码": "SIZE_ONE_SIZE",
 }
+
+
+COLLECTED_ATTRIBUTE_CONTAINER_KEYS = (
+    "attributes", "attrs", "attribute", "item_attributes",
+    "sale_attributes", "specifications", "specs",
+)
+
+COLLECTED_ATTRIBUTE_ID_KEYS = (
+    "id", "nameid", "attribute_id", "attr_id", "code",
+)
+
+COLLECTED_ATTRIBUTE_VALUE_ID_KEYS = ("value_id", "valueid")
+COLLECTED_ATTRIBUTE_VALUE_NAME_KEYS = ("value_name", "value", "text")
+
+
+def _json_value(value: Any, default: Any = None) -> Any:
+    if isinstance(value, (dict, list)):
+        return value
+    if value in (None, ""):
+        return default
+    try:
+        return json.loads(str(value))
+    except (TypeError, ValueError):
+        return default
+
+
+def _first_present(mapping: Mapping[str, Any], keys: Iterable[str]) -> Any:
+    for key in keys:
+        value = mapping.get(key)
+        if value not in (None, ""):
+            return value
+    return None
+
+
+def normalize_collected_attribute(
+    attribute: Any,
+    fallback_id: str = "",
+) -> dict[str, Any] | None:
+    """Normalize attribute shapes emitted by APIs, browsers and ERP systems.
+
+    ZYing's production response uses ``nameid``/``valueid`` while Mercado's
+    public API uses ``id``/``value_id``. Keeping this adapter in the shared
+    attribute layer prevents collectors and publishers from drifting apart.
+    """
+    if not isinstance(attribute, Mapping):
+        if fallback_id and attribute not in (None, ""):
+            return {
+                "id": str(fallback_id).strip().upper(),
+                "value_name": str(attribute).strip(),
+            }
+        return None
+
+    attribute_id = str(
+        _first_present(attribute, COLLECTED_ATTRIBUTE_ID_KEYS) or fallback_id
+    ).strip().upper()
+    if not attribute_id:
+        return None
+
+    normalized: dict[str, Any] = {"id": attribute_id}
+    name = _first_present(attribute, ("name", "label"))
+    if name not in (None, ""):
+        normalized["name"] = str(name).strip()
+
+    value_id = _first_present(attribute, COLLECTED_ATTRIBUTE_VALUE_ID_KEYS)
+    # ZYing uses -1 as a missing-value sentinel. Sending it to Mercado creates
+    # an invalid enum value instead of representing an empty attribute.
+    if value_id not in (None, "", -1, "-1"):
+        normalized["value_id"] = str(value_id).strip()
+    value_name = _first_present(attribute, COLLECTED_ATTRIBUTE_VALUE_NAME_KEYS)
+    if value_name not in (None, ""):
+        normalized["value_name"] = str(value_name).strip()
+    for key in ("value_struct", "values"):
+        if attribute.get(key) not in (None, ""):
+            normalized[key] = attribute.get(key)
+    return normalized
+
+
+def extract_listing_attributes_from_detail(
+    detail: Mapping[str, Any] | None,
+) -> list[dict[str, Any]]:
+    """Extract normalized attributes from a collected product-detail record."""
+    if not isinstance(detail, Mapping):
+        return []
+    raw_site_map = _json_value(detail.get("sale_attrs"), {})
+    site_attributes: Mapping[str, Any] = {}
+    if isinstance(raw_site_map, Mapping):
+        site_key = str(detail.get("sale_siteid") or "").strip()
+        selected = raw_site_map.get(site_key) if site_key else None
+        if not isinstance(selected, Mapping):
+            selected = next(
+                (value for value in raw_site_map.values() if isinstance(value, Mapping)),
+                {},
+            )
+        site_attributes = selected
+
+    candidates: list[Any] = []
+    for container in (detail, site_attributes):
+        for key in COLLECTED_ATTRIBUTE_CONTAINER_KEYS:
+            value = _json_value(container.get(key), container.get(key))
+            if isinstance(value, list):
+                candidates.extend(value)
+            elif isinstance(value, Mapping):
+                candidates.extend(
+                    {"id": item_id, **dict(item_value)}
+                    if isinstance(item_value, Mapping)
+                    else {"id": item_id, "value_name": item_value}
+                    for item_id, item_value in value.items()
+                )
+
+    for field_name, attribute_id in {
+        "sale_brand": "BRAND",
+        "brand": "BRAND",
+        "sale_model": "MODEL",
+        "model": "MODEL",
+        "sale_gtin": "GTIN",
+        "gtin": "GTIN",
+        "ean": "GTIN",
+        "upc": "GTIN",
+        "sale_sku": "SELLER_SKU",
+    }.items():
+        if detail.get(field_name) not in (None, ""):
+            candidates.append({"id": attribute_id, "value_name": detail[field_name]})
+
+    normalized: list[dict[str, Any]] = []
+    positions: dict[str, int] = {}
+    for candidate in candidates:
+        row = normalize_collected_attribute(candidate)
+        if row is None:
+            continue
+        attribute_id = row["id"]
+        position = positions.get(attribute_id)
+        if position is None:
+            positions[attribute_id] = len(normalized)
+            normalized.append(row)
+            continue
+        existing = normalized[position]
+        existing_has_value = bool(
+            existing.get("value_id") not in (None, "")
+            or str(existing.get("value_name") or "").strip()
+            or existing.get("value_struct")
+            or existing.get("values")
+        )
+        row_has_value = bool(
+            row.get("value_id") not in (None, "")
+            or str(row.get("value_name") or "").strip()
+            or row.get("value_struct")
+            or row.get("values")
+        )
+        if not existing_has_value and row_has_value:
+            normalized[position] = row
+    return normalized
 
 
 def normalize_rule_key(value: Any) -> str:
@@ -231,8 +383,10 @@ def match_enumerated_value(
 
 
 __all__ = [
-    "ATTRIBUTE_ID_ALIASES", "REQUIRED_ATTRIBUTE_TAGS", "attribute_tag_enabled",
-    "canonical_attribute_id", "is_read_only_attribute", "is_required_attribute",
-    "match_enumerated_value", "normalize_rule_key", "resolve_schema_attribute_id",
-    "semantic_value_key",
+    "ATTRIBUTE_ID_ALIASES", "COLLECTED_ATTRIBUTE_CONTAINER_KEYS",
+    "REQUIRED_ATTRIBUTE_TAGS", "attribute_tag_enabled", "canonical_attribute_id",
+    "extract_listing_attributes_from_detail", "is_read_only_attribute",
+    "is_required_attribute", "match_enumerated_value",
+    "normalize_collected_attribute", "normalize_rule_key",
+    "resolve_schema_attribute_id", "semantic_value_key",
 ]
