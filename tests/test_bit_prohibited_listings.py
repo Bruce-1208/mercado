@@ -6,6 +6,8 @@ from openpyxl import load_workbook
 
 from bit import bit_prohibited_listing_sync as sync
 import bit.bit_interface as workbench
+from erp import mercadolibre_infraction_store as infraction_store
+from erp import mercadolibre_prohibited_store as prohibited_store
 
 
 def _client():
@@ -137,6 +139,9 @@ def test_prohibited_listing_ui_and_list_route():
     assert "禁限售列表".encode("utf-8") in response.data
     assert b"The product is prohibited." in response.data
     assert b'id="prohibited-risk-type-filter"' in response.data
+    assert b'id="prohibited-group-filter"' in response.data
+    assert b'id="prohibited-occurred-from"' in response.data
+    assert b'id="prohibited-occurred-to"' in response.data
     assert b'id="prohibited-reply-count"' in response.data
     assert b'id="prohibited-auto-sync-enabled"' in response.data
     assert "最新更新时间".encode("utf-8") in response.data
@@ -167,6 +172,8 @@ def test_prohibited_listing_ui_and_list_route():
         response = client.get(
             "/api/prohibited-listings?token_id=7&site_id=MLM&salesperson="
             "%E4%B8%9A%E5%8A%A1%E5%91%98%E7%94%B2&risk_type=rights_holder_reply"
+            "&group_name=%E5%A2%A8%E8%A5%BF%E5%93%A5%E7%BB%84"
+            "&occurred_from=2026-09-01T08:30&occurred_to=2026-09-15T18:45"
             "&search=MLM1&page=1&page_size=100"
         )
     assert response.status_code == 200
@@ -174,7 +181,10 @@ def test_prohibited_listing_ui_and_list_route():
     assert listing.call_args.kwargs["token_id"] == 7
     assert listing.call_args.kwargs["site_id"] == "MLM"
     assert listing.call_args.kwargs["salesperson"] == "业务员甲"
+    assert listing.call_args.kwargs["group_name"] == "墨西哥组"
     assert listing.call_args.kwargs["risk_type"] == "rights_holder_reply"
+    assert listing.call_args.kwargs["occurred_from"] == "2026-09-01T08:30"
+    assert listing.call_args.kwargs["occurred_to"] == "2026-09-15T18:45"
 
 
 def test_prohibited_listing_export_keeps_filters_and_exports_all_pages():
@@ -219,7 +229,10 @@ def test_prohibited_listing_export_keeps_filters_and_exports_all_pages():
                 "token_id": 7,
                 "site_id": "MLM",
                 "salesperson": "业务员甲",
+                "group_name": "墨西哥组",
                 "risk_type": "prohibited",
+                "occurred_from": "2026-09-01T08:30",
+                "occurred_to": "2026-09-15T18:45",
                 "search": "MLM",
             },
         )
@@ -230,7 +243,10 @@ def test_prohibited_listing_export_keeps_filters_and_exports_all_pages():
     assert received[0]["token_id"] == 7
     assert received[0]["site_id"] == "MLM"
     assert received[0]["salesperson"] == "业务员甲"
+    assert received[0]["group_name"] == "墨西哥组"
     assert received[0]["risk_type"] == "prohibited"
+    assert received[0]["occurred_from"] == "2026-09-01T08:30"
+    assert received[0]["occurred_to"] == "2026-09-15T18:45"
     assert received[0]["page_size"] == 500
     assert received[1]["page"] == 2
     workbook = load_workbook(BytesIO(response.data))
@@ -249,6 +265,74 @@ def test_prohibited_listing_ui_exposes_excel_export_button():
     assert 'id="prohibited-export-button"' in html
     assert "exportProhibitedListings" in html
     assert "/api/prohibited-listings/export" in html
+
+
+def test_prohibited_listing_query_filters_group_and_inclusive_occurred_dates(monkeypatch):
+    class FakeCursor:
+        def __init__(self):
+            self.queries = []
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args):
+            return False
+
+        def execute(self, query, params=None):
+            self.queries.append((query, tuple(params or ())))
+
+        def fetchone(self):
+            return {"total": 0}
+
+        def fetchall(self):
+            return []
+
+    class FakeConnection:
+        def __init__(self):
+            self.fake_cursor = FakeCursor()
+
+        def cursor(self):
+            return self.fake_cursor
+
+        def close(self):
+            pass
+
+    connection = FakeConnection()
+    monkeypatch.setattr(prohibited_store, "ensure_prohibited_tables", lambda _cursor: None)
+    monkeypatch.setattr(infraction_store, "ensure_infraction_tables", lambda _cursor: None)
+
+    result = prohibited_store.list_prohibited_listings(
+        group_name="墨西哥组",
+        occurred_from="2026-09-01T08:30",
+        occurred_to="2026-09-15T18:45",
+        connection_factory=lambda: connection,
+    )
+
+    assert result["group_names"] == []
+    detail_query, params = next(
+        (query, params)
+        for query, params in connection.fake_cursor.queries
+        if "SELECT items.`record_id` AS `id`" in query
+    )
+    assert "COALESCE(settings.`group_name`, items.`group_name`, '') = %s" in detail_query
+    assert "items.`infraction_date` >= %s" in detail_query
+    assert "items.`infraction_date` < %s" in detail_query
+    assert params[:3] == (
+        "墨西哥组",
+        "2026-09-01 08:30:00",
+        "2026-09-15 18:46:00",
+    )
+    order_clause = detail_query.split("ORDER BY", 1)[1].split("LIMIT", 1)[0]
+    assert "items.`infraction_date` DESC" in order_clause
+    assert "counts.`risk_count` DESC" not in order_clause
+
+
+def test_prohibited_listing_rejects_reversed_occurred_range():
+    with pytest.raises(ValueError, match="开始日期不能晚于结束日期"):
+        prohibited_store.list_prohibited_listings(
+            occurred_from="2026-09-16T08:00",
+            occurred_to="2026-09-15T18:00",
+        )
 
 
 def test_manual_prohibited_sync_route_can_target_one_store():

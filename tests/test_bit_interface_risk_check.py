@@ -1,6 +1,7 @@
 from io import BytesIO
 from pathlib import Path
 
+import pytest
 from openpyxl import load_workbook
 
 from bit import bit_db_api, bit_interface
@@ -71,6 +72,42 @@ def test_build_risk_check_params_accepts_multisource_store_scope():
     assert params["salesperson"] == ["业务员甲"]
     assert params["group_name"] == ["账户组 A"]
     assert params["token_ids"] == [7, 8]
+
+
+def test_build_risk_check_params_supports_qianwen_and_one_time_token():
+    params = bit_interface.build_risk_check_params({
+        "ai_provider": "qianwen",
+        "api_key": "sk-qianwen-secret",
+        "sources": ["product_list", "collection_list"],
+    })
+
+    assert params["ai_provider"] == "qianwen"
+    assert params["api_key"] == "sk-qianwen-secret"
+    assert params["base_url"] == "https://dashscope.aliyuncs.com/compatible-mode/v1"
+    assert params["model"] == "qwen-plus"
+    assert params["sources"] == ["product_list", "collection_list"]
+    assert bit_interface._public_risk_check_params(params)["token_configured"] is True
+    assert "api_key" not in bit_interface._public_risk_check_params(params)
+
+
+def test_build_risk_check_params_requires_explicit_token_and_local_connection():
+    with pytest.raises(ValueError, match="Token"):
+        bit_interface.build_risk_check_params({"ai_provider": "deepseek"})
+    with pytest.raises(ValueError, match="模型名称"):
+        bit_interface.build_risk_check_params({
+            "ai_provider": "local",
+            "api_key": "local-token",
+            "base_url": "http://127.0.0.1:11434/v1",
+        })
+
+    params = bit_interface.build_risk_check_params({
+        "ai_provider": "local",
+        "api_key": "local-token",
+        "base_url": "http://127.0.0.1:11434/v1/",
+        "model": "qwen3:8b",
+    })
+    assert params["base_url"] == "http://127.0.0.1:11434/v1"
+    assert params["model"] == "qwen3:8b"
 
 
 def test_risk_check_results_api_passes_filters_and_sort(monkeypatch):
@@ -205,6 +242,50 @@ def test_risk_check_start_runs_in_background_and_updates_status(monkeypatch):
     assert status["status"] == "success"
     assert status["summary"]["risk_2"] == 1
     assert any("开始标题审核批次 1/1" in line for line in status["logs"])
+
+
+def test_risk_check_start_never_returns_one_time_token(monkeypatch):
+    secret = "sk-never-return-this-token"
+    captured = {}
+
+    class ImmediateThread:
+        def __init__(self, target, args=(), **kwargs):
+            self.target = target
+            self.args = args
+
+        def start(self):
+            self.target(*self.args)
+
+    def scan_products(**kwargs):
+        captured.update(kwargs)
+        return {
+            "checked": 0, "risk_0": 0, "risk_1": 0, "risk_2": 0,
+            "updated": 0, "results": [],
+        }
+
+    monkeypatch.setattr(bit_interface.threading, "Thread", ImmediateThread)
+    monkeypatch.setattr(bit_interface.bit_check_risk, "scan_products", scan_products)
+    with bit_interface._risk_check_state_lock:
+        previous = dict(bit_interface._risk_check_state)
+        previous_logs = list(bit_interface._risk_check_logs)
+    try:
+        response = _logged_in_client().post("/api/risk-check/start", json={
+            "ai_provider": "deepseek",
+            "api_key": secret,
+        })
+        status_response = _logged_in_client().get("/api/risk-check/status")
+    finally:
+        with bit_interface._risk_check_state_lock:
+            bit_interface._risk_check_state.clear()
+            bit_interface._risk_check_state.update(previous)
+            bit_interface._risk_check_logs.clear()
+            bit_interface._risk_check_logs.extend(previous_logs)
+
+    assert response.status_code == 200
+    assert captured["api_key"] == secret
+    assert secret not in response.get_data(as_text=True)
+    assert secret not in status_response.get_data(as_text=True)
+    assert response.get_json()["data"]["params"]["token_configured"] is True
 
 
 def test_multisource_job_uses_unified_store_and_knowledge(monkeypatch):

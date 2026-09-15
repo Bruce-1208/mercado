@@ -81,6 +81,34 @@ def test_classify_risk_records_sends_only_title_to_ai(monkeypatch):
     assert captured["kwargs"]["temperature"] == 0
 
 
+def test_classify_risk_records_forwards_openai_compatible_connection(monkeypatch):
+    captured = {}
+
+    def fake_chat(messages, **kwargs):
+        captured.update(kwargs)
+        return json.dumps([{
+            "row_id": 6,
+            "risk_level": 0,
+            "keywords": [],
+            "reason": "普通商品",
+        }], ensure_ascii=False)
+
+    monkeypatch.setattr(bit_check_risk, "chat_deepseek", fake_chat)
+    result = bit_check_risk.classify_risk_records(
+        [{"row_id": 6, "title": "generic storage box"}],
+        model="qwen3:8b",
+        retries=0,
+        ai_provider="local",
+        api_key="one-time-token",
+        base_url="http://127.0.0.1:11434/v1",
+    )
+
+    assert result[0]["risk_level"] == 0
+    assert captured["model"] == "qwen3:8b"
+    assert captured["api_key"] == "one-time-token"
+    assert captured["base_url"] == "http://127.0.0.1:11434/v1"
+
+
 def test_scan_products_filters_category_and_writes_all_risk_levels(monkeypatch):
     candidates = [
         {"row_id": 101, "product_id": "A", "title": "Generic backpack"},
@@ -252,6 +280,82 @@ def test_update_zying_product_risks_clears_keywords_for_level_zero(monkeypatch):
     assert updated == 2
     assert calls[0][1] == [("0", None, 7), ("2", "Nike, Swoosh", 8)]
     assert "commit" in calls
+
+
+def test_multisource_risk_writer_mirrors_result_to_product_list(monkeypatch):
+    calls = []
+
+    class Cursor:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            return None
+
+        def executemany(self, sql, params):
+            calls.append((" ".join(sql.split()), list(params)))
+
+    class Connection:
+        def cursor(self):
+            return Cursor()
+
+        def commit(self):
+            calls.append("commit")
+
+        def rollback(self):
+            calls.append("rollback")
+
+        def close(self):
+            calls.append("close")
+
+    monkeypatch.setattr(bit_mysql.pymysql, "connect", lambda **kwargs: Connection())
+    monkeypatch.setattr(bit_mysql, "_ensure_infringement_risk_checks_table", lambda cursor: None)
+    monkeypatch.setattr(
+        "erp.mercadolibre_collection_store.ensure_collection_tables",
+        lambda cursor: None,
+    )
+
+    updated = bit_mysql.update_infringement_product_risks([
+        {
+            "source_type": "product_list",
+            "source_row_id": 19,
+            "product_id": "MLM19",
+            "title": "Pokemon toy",
+            "risk_level": 2,
+            "keywords": ["Pokemon"],
+            "reason": "标题命中 IP",
+        },
+        {
+            "source_type": "pulled",
+            "source_row_id": 29,
+            "product_id": "MLM29",
+            "title": "Generic item",
+            "risk_level": 0,
+            "keywords": [],
+            "reason": "普通商品",
+        },
+    ])
+
+    assert updated == 2
+    product_update = next(
+        (sql, params) for sql, params in calls
+        if sql.startswith("UPDATE `erp_mercadolibre_products`")
+    )
+    assert "`infringement_risk_level` = %s" in product_update[0]
+    assert product_update[1][0][0:3] == (2, "Pokemon", "标题命中 IP")
+    assert product_update[1][0][-1] == 19
+    pulled_update = next(
+        (sql, params) for sql, params in calls
+        if sql.startswith("UPDATE `erp_mercadolibre_products`")
+        and "`source_type` = 'pulled'" in sql
+    )
+    assert pulled_update[1][0][0] == 0
+    assert pulled_update[1][0][-1] == "MLM29"
+    assert any(
+        isinstance(call, tuple)
+        and call[0].startswith("INSERT INTO `infringement_risk_checks`")
+        for call in calls
+    )
 
 
 def test_get_zying_risk_candidates_filters_zying_category(monkeypatch):

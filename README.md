@@ -25,15 +25,15 @@ python -m pip install -r bit/requirements-server.txt
 
 | 更新任务 | 默认并发 | 环境变量 |
 | --- | --- | --- |
-| 店铺链接同步 | 12 家店铺 × 每家 16 个详情线程 | `MERCADO_STORE_LINK_STORE_WORKERS` / `MERCADO_STORE_LINK_DETAIL_WORKERS` |
+| 店铺链接同步 | 16 家店铺 × 每家 32 个详情线程 | `MERCADO_STORE_LINK_STORE_WORKERS` / `MERCADO_STORE_LINK_DETAIL_WORKERS` |
 | 链接批量回写 | 16 线程 | `MERCADO_STORE_LINK_REMOTE_UPDATE_WORKERS` |
 | 订单同步、每日老订单刷新 | 8 家店铺 × 每家 16 个详情线程 | `MERCADO_ORDER_STORE_WORKERS` / `MERCADO_ORDER_STATUS_WORKERS` |
 | 订单图片、费用回填 | 16 线程 | `MERCADO_API_BACKFILL_WORKERS` |
 | 侵权、禁限售同步 | 各 12 家店铺 × 每家 16 个详情线程 | `MERCADO_INFRACTION_STORE_WORKERS` / `MERCADO_INFRACTION_DETAIL_WORKERS`、`MERCADO_PROHIBITED_STORE_WORKERS` / `MERCADO_PROHIBITED_DETAIL_WORKERS` |
 | 商品费用自动更新 | 20 线程 | `MERCADO_PROFIT_REFRESH_WORKERS` |
 
-实际线程数不会超过待处理数量。订单、侵权和禁限售店铺并发可调至 24，
-订单详情、回填、风险详情、链接回写和商品费用线程可调至 32。
+实际线程数不会超过待处理数量。店铺链接、订单、侵权和禁限售店铺并发可调至 24，
+店铺链接详情可调至 64，订单详情、回填、风险详情、链接回写和商品费用线程可调至 32。
 环境变量会覆盖代码默认值；已有部署若设置过旧值，需要同步调整并重启服务。
 订单每日刷新仍会保存断点并让出执行权给到期的十五分钟同步任务。
 
@@ -98,7 +98,7 @@ Copy-Item .\workbench-client.example.json .\workbench-runtime.json
 
 Agent 只主动通过 HTTPS 连接公网控制台，不监听本机端口。服务器磁盘上的业务源码变化后会生成新的业务版本；Agent 在下一次心跳时下载 ZIP、校验 SHA-256、原子切换版本并保留上一版，因此普通业务逻辑更新无需重新安装 Agent。Agent 协议或新增 Python 依赖发生变化时，才需要重新构建并下载 Agent。
 
-Agent 1.1.0 起同时承接“自动化 AI 申诉”和“任务模块”的 daily_task。在任务模块选择“本机 Agent”、刷新电脑并选中在线终端即可启动，状态、日志和停止请求都通过公网工作台传递。同一终端的 Agent 依次执行队列任务；循环任务结束或停止后才会执行下一项。服务端部署、Windows/macOS 可执行文件构建和故障排查见 [本机 Agent 部署说明](docs/local_agent.md)。
+Agent 1.1.0 起同时承接“自动化 AI 申诉”和“任务模块”的 daily_task。在任务模块选择“本机 Agent”、刷新电脑并选中在线终端即可启动，状态、日志和停止请求都通过公网工作台传递。同一终端的 Agent 依次执行队列任务；循环任务结束或停止后才会执行下一项。任务模块会把侵权、禁限售编号拆成小批次，并按各店铺站点的待申诉数量设置 1–5 级权重进行平滑轮转，任务越多的站点获得越高执行频率，低量站点仍会执行；每轮重新读取数据并更新计划。任务页同时汇总各已注册 Agent 检测到且尚未解除的店铺退出登录情况。服务端部署、Windows/macOS 可执行文件构建和故障排查见 [本机 Agent 部署说明](docs/local_agent.md)。
 
 ### 旧版 client 工作台（兼容）
 

@@ -108,6 +108,9 @@ REPUTATION_RATE_FIELDS = {
     APPEAL_TYPE_CANCELLATION: "取消率",
     APPEAL_TYPE_COMPLAINT: "投诉率",
 }
+APPEAL_FREQUENCY_MAX_WEIGHT = 5
+APPEAL_NORMAL_BATCH_SIZE = 10
+APPEAL_AI_BATCH_SIZE = 3
 
 
 def normalize_appeal_copy_mode(value):
@@ -134,6 +137,99 @@ def _select_appeal_plan(plan, top_n):
     """按数量限制申诉计划；top_n <= 0 表示执行全部符合条件的店铺。"""
     limit = _normalize_appeal_plan_limit(top_n)
     return list(plan) if limit <= 0 else list(plan)[:limit]
+
+
+def appeal_site_frequency_weight(pending_count):
+    """把待申诉数量映射为 1-5 的站点执行权重。"""
+    try:
+        count = max(0, int(pending_count or 0))
+    except (TypeError, ValueError):
+        count = 0
+    if count <= 0:
+        return 0
+    if count <= 5:
+        return 1
+    if count <= 15:
+        return 2
+    if count <= 30:
+        return 3
+    if count <= 60:
+        return 4
+    return APPEAL_FREQUENCY_MAX_WEIGHT
+
+
+def _appeal_site_batches(site, appeal_type, appeal_copy_mode):
+    """把数量型申诉站点拆为小批次；声誉型任务仍保持一次执行。"""
+    site = dict(site or {})
+    normalized_type = normalize_appeal_type(
+        site.get("appeal_type") or appeal_type
+    )
+    id_field = {
+        APPEAL_TYPE_INFRACTION: "infraction_ids",
+        APPEAL_TYPE_PROHIBITED: "prohibited_ids",
+    }.get(normalized_type)
+    source_ids = list(site.get(id_field) or ()) if id_field else []
+    if not id_field or not source_ids:
+        site["frequency_weight"] = 1
+        return [site]
+
+    batch_size = (
+        APPEAL_AI_BATCH_SIZE
+        if normalize_appeal_copy_mode(appeal_copy_mode) == APPEAL_COPY_MODE_AI
+        else APPEAL_NORMAL_BATCH_SIZE
+    )
+    weight = appeal_site_frequency_weight(site.get("count", len(source_ids))) or 1
+    batches = []
+    total_batches = (len(source_ids) + batch_size - 1) // batch_size
+    for offset in range(0, len(source_ids), batch_size):
+        batch = dict(site)
+        batch_ids = source_ids[offset:offset + batch_size]
+        batch[id_field] = batch_ids
+        batch["count"] = len(batch_ids)
+        batch["pending_count"] = len(source_ids)
+        batch["frequency_weight"] = weight
+        batch["batch_index"] = len(batches) + 1
+        batch["batch_total"] = total_batches
+        batches.append(batch)
+    return batches
+
+
+def build_weighted_site_schedule(
+    sites,
+    appeal_type=APPEAL_TYPE_INFRACTION,
+    appeal_copy_mode=APPEAL_COPY_MODE_NORMAL,
+):
+    """按站点权重平滑轮转小批次，任务多的站点获得更多执行槽位。"""
+    queues = []
+    for order, site in enumerate(sites or ()):
+        batches = _appeal_site_batches(site, appeal_type, appeal_copy_mode)
+        if not batches:
+            continue
+        queues.append({
+            "order": order,
+            "weight": int(batches[0].get("frequency_weight") or 1),
+            "current": 0,
+            "batches": batches,
+        })
+
+    schedule = []
+    while queues:
+        total_weight = sum(queue["weight"] for queue in queues)
+        for queue in queues:
+            queue["current"] += queue["weight"]
+        selected = max(
+            queues,
+            key=lambda queue: (
+                queue["current"],
+                queue["weight"],
+                -queue["order"],
+            ),
+        )
+        selected["current"] -= total_weight
+        schedule.append(selected["batches"].pop(0))
+        if not selected["batches"]:
+            queues.remove(selected)
+    return schedule
 
 
 def _daily_browser_worker_limit():
@@ -1199,8 +1295,27 @@ def _appeal_one_shop_locked(
     results = []
     exit_shop = False
     stopped = False
+    scheduled_sites = build_weighted_site_schedule(
+        shop_plan["sites"],
+        normalized_type,
+        appeal_copy_mode,
+    )
+    weighted_sites = [
+        site
+        for site in shop_plan["sites"]
+        if appeal_site_frequency_weight(site.get("count")) > 1
+    ]
+    if weighted_sites:
+        distribution = "、".join(
+            f"{site.get('site_code')}×{appeal_site_frequency_weight(site.get('count'))}"
+            for site in weighted_sites
+        )
+        print(
+            f"{get_now_time()} {name} 已按待申诉量生成加权批次："
+            f"{distribution}；共 {len(scheduled_sites)} 个执行批次<br>"
+        )
 
-    for site in shop_plan["sites"]:
+    for site in scheduled_sites:
         if exit_shop or _stop_requested(stop_event):
             stopped = _stop_requested(stop_event)
             break
@@ -1211,7 +1326,12 @@ def _appeal_one_shop_locked(
         )
         site_appeal_label = _appeal_type_label(site_appeal_type)
         count = site["count"]
-        metric_text = site.get("rate_text") or count
+        metric_text = site.get("rate_text") or site.get("pending_count") or count
+        batch_text = (
+            f"，站点批次 {site['batch_index']}/{site['batch_total']}"
+            if site.get("batch_total", 1) > 1
+            else ""
+        )
         general_attempt = 1
         rate_retry_count = 0
         result = ""
@@ -1224,7 +1344,9 @@ def _appeal_one_shop_locked(
             try:
                 print(
                     f"{get_now_time()} {name} {site_code} 开始 AI 客服{site_appeal_label}申诉，"
-                    f"站点指标 {metric_text}，普通尝试 {general_attempt}/{site_retry_attempts}，"
+                    f"站点指标 {metric_text}{batch_text}，"
+                    f"权重 {site.get('frequency_weight', 1)}，"
+                    f"普通尝试 {general_attempt}/{site_retry_attempts}，"
                     f"限频重试 {rate_retry_count}/{rate_limit_retries}<br>"
                 )
                 appeal_kwargs = {"validate_open": True}

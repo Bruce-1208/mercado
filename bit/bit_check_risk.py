@@ -5,7 +5,7 @@
 对于 1/2 级结果，同时把品牌或 IP 关键词写入“侵权关键词”字段。
 
 主图链接和 Logo OCR 暂不参与判断。侵权知识库中的黑名单优先判侵权，
-白名单会作为“该品牌本身不构成侵权”的明确约束传给 DeepSeek。
+白名单会作为“该品牌本身不构成侵权”的明确约束传给所选 AI 模型。
 """
 
 import argparse
@@ -57,6 +57,12 @@ SOURCE_LABELS = {
     "collection_list": "采集列表",
     "pulled": "店铺拉取产品",
     "zying": "智赢采集产品",
+}
+
+AI_PROVIDER_LABELS = {
+    "deepseek": "DeepSeek",
+    "qianwen": "千问",
+    "local": "本地模型",
 }
 
 
@@ -248,6 +254,9 @@ def classify_risk_records(
     model=None,
     retries=DEFAULT_AI_RETRIES,
     knowledge_records=None,
+    ai_provider=None,
+    api_key=None,
+    base_url=None,
 ):
     """让 AI 仅根据商品标题返回 0/1/2 级风险。"""
     knowledge = _knowledge_lists(knowledge_records)
@@ -277,12 +286,19 @@ def classify_risk_records(
 
     last_error = None
     for attempt in range(max(0, int(retries)) + 1):
-        response = chat_deepseek(
-            messages,
-            model=model,
-            temperature=0,
-            max_tokens=max(1600, len(records) * 140),
-        )
+        request_kwargs = {
+            "model": model,
+            "temperature": 0,
+            "max_tokens": max(1600, len(records) * 140),
+        }
+        # Keep the legacy environment-based DeepSeek path working for CLI use,
+        # while allowing the workbench to supply one-time credentials for any
+        # OpenAI-compatible provider.
+        if api_key is not None:
+            request_kwargs["api_key"] = api_key
+        if base_url:
+            request_kwargs["base_url"] = base_url
+        response = chat_deepseek(messages, **request_kwargs)
         try:
             return _normalize_ai_results(_extract_json_payload(response), records)
         except (TypeError, ValueError, json.JSONDecodeError) as exc:
@@ -301,7 +317,8 @@ def classify_risk_records(
                     },
                 ]
             )
-    raise ValueError(f"AI 结果解析失败：{last_error}")
+    provider_label = AI_PROVIDER_LABELS.get(str(ai_provider or ""), "AI")
+    raise ValueError(f"{provider_label} 结果解析失败：{last_error}")
 
 
 def scan_products(
@@ -321,6 +338,9 @@ def scan_products(
     group_name=None,
     token_ids=None,
     knowledge_records=None,
+    ai_provider=None,
+    api_key=None,
+    base_url=None,
 ):
     candidate_reader = candidate_reader or get_zying_risk_candidates
     risk_writer = risk_writer or update_zying_product_risks
@@ -345,7 +365,8 @@ def scan_products(
         scope += f"（智赢分类 {zying_category!r}）"
     time_scope = f"最近 {hours} 小时" if hours else "不限入库时间"
     _emit_log(
-        f"读取 {scope}、{time_scope}的候选商品 {len(records)} 条",
+        f"读取 {scope}、{time_scope}的候选商品 {len(records)} 条；"
+        f"检测模型：{AI_PROVIDER_LABELS.get(str(ai_provider or ''), 'DeepSeek')}",
         log_callback,
     )
     if not records:
@@ -395,6 +416,13 @@ def scan_products(
                 })
             else:
                 ai_records.append(record)
+        ai_connection_kwargs = {}
+        if ai_provider is not None:
+            ai_connection_kwargs["ai_provider"] = ai_provider
+        if api_key is not None:
+            ai_connection_kwargs["api_key"] = api_key
+        if base_url:
+            ai_connection_kwargs["base_url"] = base_url
         if not ai_records:
             ai_results = []
         elif knowledge_records:
@@ -403,12 +431,14 @@ def scan_products(
                 model=model,
                 retries=retries,
                 knowledge_records=knowledge_records,
+                **ai_connection_kwargs,
             )
         else:
             ai_results = classify_risk_records(
                 ai_records,
                 model=model,
                 retries=retries,
+                **ai_connection_kwargs,
             )
         results_by_key = {
             str(item.get("record_key") or item.get("row_id")): item

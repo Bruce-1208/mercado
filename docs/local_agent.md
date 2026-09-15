@@ -60,7 +60,7 @@ python3 -m pip install pyinstaller
 ./build_local_agent_macos.sh
 ```
 
-构建结果为 `dist/macos/MercadoLocalAgent`，适用于构建机对应的 CPU 架构。将该文件连同服务器代码部署到公网服务器的相同路径，控制台“下载 macOS Agent”会自动把它放入 ZIP。也可以用 `BIT_LOCAL_AGENT_MACOS_EXECUTABLE` 指定持久化目录中的绝对路径。生产下载建议对可执行文件进行 Apple Developer ID 签名和公证；未签名版本首次打开时需要用户在 macOS“隐私与安全性”中确认允许。
+构建结果为 `dist/macos/MercadoLocalAgent`，适用于构建机对应的 CPU 架构。将该文件连同服务器代码部署到公网服务器的相同路径，控制台“下载 macOS Agent”会自动把它放入 ZIP。也可以用 `BIT_LOCAL_AGENT_MACOS_EXECUTABLE` 指定持久化目录中的绝对路径。macOS 版默认显示与 Windows 版相同的运行状态窗口，实时展示本机时间、连接状态和日志；关闭窗口只会最小化，使用 `--no-window` 可切换为纯日志模式。生产下载建议对可执行文件进行 Apple Developer ID 签名和公证；未签名版本首次打开时需要用户在 macOS“隐私与安全性”中确认允许。
 
 ## Windows 客户端安装
 
@@ -72,7 +72,7 @@ python3 -m pip install pyinstaller
 ## macOS 客户端安装
 
 1. 在控制台点击“下载 macOS Agent”，解压 ZIP 到固定目录。
-2. 双击 `start-agent.command` 验证；如果系统拦截，在“系统设置 → 隐私与安全性”中允许打开。
+2. 双击 `start-agent.command` 验证，确认运行状态窗口中的时间和日志正常显示；如果系统拦截，在“系统设置 → 隐私与安全性”中允许打开。
 3. 控制台出现电脑名后，先关闭手动启动的 Agent，再双击 `install-agent.command` 安装登录启动项。
 4. 如需取消登录启动，双击 `uninstall-agent.command`。LaunchAgent 输出位于 `~/Library/Logs/Zeshun/MercadoLocalAgent.log`。
 5. 保持 macOS 版比特浏览器客户端启动；无需启动 `bit_interface` 或完整 client 工作台。

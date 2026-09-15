@@ -5,6 +5,8 @@ from __future__ import annotations
 import json
 import re
 import threading
+import time
+from copy import deepcopy
 from datetime import datetime, timedelta
 from decimal import Decimal, InvalidOperation
 from typing import Any, Callable, Iterable, Mapping
@@ -18,10 +20,15 @@ STORE_LINK_SALES_PAGE_INDEX = "idx_erp_meli_store_link_sales_page"
 STORE_LINK_SITE_PAGE_INDEX = "idx_erp_meli_store_link_site_page"
 STORE_LINK_CATEGORY_PAGE_INDEX = "idx_erp_meli_store_link_category_page"
 STORE_LINK_SEARCH_INDEX = "idx_erp_meli_store_link_search"
+STORE_LINK_DEFAULT_PAGE_SIZE = 500
+STORE_LINK_MAX_PAGE_SIZE = 1000
+STORE_LINK_METADATA_CACHE_SECONDS = 60
 
 _schema_lock = threading.RLock()
 _store_link_schema_ready = False
 _sync_state_schema_ready = False
+_metadata_cache_lock = threading.RLock()
+_metadata_cache: dict[str, Any] = {"expires_at": 0.0, "data": None}
 
 
 def _connect() -> Any:
@@ -863,6 +870,120 @@ def finalize_store_snapshot(
         connection.close()
 
 
+def invalidate_store_link_metadata_cache() -> None:
+    """Discard low-frequency filters and totals after synchronized data changes."""
+
+    with _metadata_cache_lock:
+        _metadata_cache.update({"expires_at": 0.0, "data": None})
+
+
+def _query_store_link_metadata(cursor: Any) -> dict[str, Any]:
+    cursor.execute(
+        """
+        SELECT `token_id`, `site_id`, COALESCE(`group_name`, '') AS `group_name`
+        FROM `mercado_store_site_settings`
+        """
+    )
+    site_settings = [dict(row) for row in cursor.fetchall()]
+    group_map = {
+        (int(row.get("token_id") or 0), str(row.get("site_id") or "").upper()):
+        str(row.get("group_name") or "")
+        for row in site_settings
+    }
+    groups = [
+        {"group_name": value}
+        for value in sorted(
+            {name for name in group_map.values() if name},
+            key=lambda name: name.casefold(),
+        )
+    ]
+    groups.append({"group_name": "__ungrouped__"})
+
+    cursor.execute(
+        """
+        SELECT tokens.`id` AS `token_id`,
+               tokens.`display_name` AS `store_name`,
+               NULL AS `link_count`, NULL AS `last_synced_at`
+        FROM `mercado_store_tokens` AS tokens
+        ORDER BY tokens.`display_name`, tokens.`id`
+        """
+    )
+    stores = [_json_safe_row(row) for row in cursor.fetchall()]
+    cursor.execute(
+        f"""
+        SELECT links.`site_id`, COUNT(*) AS `link_count`
+        FROM `{STORE_LINK_TABLE}` AS links
+        WHERE links.`is_current` = 1
+          AND links.`site_id` IS NOT NULL AND links.`site_id` <> ''
+        GROUP BY links.`site_id` ORDER BY links.`site_id`
+        """
+    )
+    sites = [_json_safe_row(row) for row in cursor.fetchall()]
+    cursor.execute(
+        f"""
+        SELECT category_counts.`category_id`,
+               COALESCE(NULLIF(product.`category_name`, ''), '') AS `category_name`,
+               category_counts.`link_count`
+        FROM (
+            SELECT links.`category_id`, MIN(links.`id`) AS `sample_link_id`,
+                   COUNT(*) AS `link_count`
+            FROM `{STORE_LINK_TABLE}` AS links
+            FORCE INDEX (`{STORE_LINK_CATEGORY_PAGE_INDEX}`)
+            WHERE links.`is_current` = 1
+              AND links.`category_id` IS NOT NULL AND links.`category_id` <> ''
+            GROUP BY links.`category_id`
+        ) AS category_counts
+        LEFT JOIN `{STORE_LINK_TABLE}` AS sample_link
+          ON sample_link.`id` = category_counts.`sample_link_id`
+        LEFT JOIN `{PRODUCT_TABLE}` AS product
+          ON product.`source_item_id` = sample_link.`item_id`
+        ORDER BY `category_name`, category_counts.`category_id`
+        """
+    )
+    mercado_categories = [_json_safe_row(row) for row in cursor.fetchall()]
+    cursor.execute(f"SELECT COUNT(*) AS `all_count` FROM `{STORE_LINK_TABLE}`")
+    summary = dict(cursor.fetchone() or {})
+    cursor.execute(
+        f"SELECT COUNT(*) AS `current_count` FROM `{STORE_LINK_TABLE}` "
+        "WHERE `is_current` = 1"
+    )
+    summary.update(cursor.fetchone() or {})
+    cursor.execute(
+        f"SELECT COUNT(DISTINCT `token_id`) AS `store_count` "
+        f"FROM `{STORE_LINK_TABLE}` WHERE `is_current` = 1"
+    )
+    summary.update(cursor.fetchone() or {})
+    cursor.execute(
+        f"SELECT MAX(`last_synced_at`) AS `last_synced_at` "
+        f"FROM `{STORE_LINK_TABLE}` WHERE `is_current` = 1"
+    )
+    summary.update(cursor.fetchone() or {})
+    return {
+        "group_map": group_map,
+        "groups": groups,
+        "stores": stores,
+        "sites": sites,
+        "mercado_categories": mercado_categories,
+        "summary": _json_safe_row(summary),
+    }
+
+
+def _store_link_metadata(cursor: Any, *, use_cache: bool) -> dict[str, Any]:
+    if not use_cache:
+        return _query_store_link_metadata(cursor)
+    now = time.monotonic()
+    with _metadata_cache_lock:
+        cached = _metadata_cache.get("data")
+        if cached is not None and float(_metadata_cache.get("expires_at") or 0) > now:
+            return deepcopy(cached)
+        metadata = _query_store_link_metadata(cursor)
+        _metadata_cache.update({
+            "expires_at": time.monotonic() + STORE_LINK_METADATA_CACHE_SECONDS,
+            "data": deepcopy(metadata),
+        })
+        return metadata
+
+
 def list_store_links(
     *,
     search: str = "",
@@ -875,11 +996,14 @@ def list_store_links(
     sales_sort: str = "desc",
     current_only: bool = True,
     page: int = 1,
-    page_size: int = 1000,
+    page_size: int = STORE_LINK_DEFAULT_PAGE_SIZE,
     connection_factory: Callable[[], Any] | None = None,
 ) -> dict[str, Any]:
     page = max(1, int(page or 1))
-    page_size = 1000
+    page_size = max(
+        1,
+        min(int(page_size or STORE_LINK_DEFAULT_PAGE_SIZE), STORE_LINK_MAX_PAGE_SIZE),
+    )
     conditions: list[str] = []
     values: list[Any] = []
     if current_only:
@@ -943,26 +1067,15 @@ def list_store_links(
     try:
         with connection.cursor() as cursor:
             ensure_store_link_table(cursor)
-            cursor.execute(
-                """
-                SELECT `token_id`, `site_id`, COALESCE(`group_name`, '') AS `group_name`
-                FROM `mercado_store_site_settings`
-                """
+            metadata = _store_link_metadata(
+                cursor, use_cache=connection_factory is None
             )
-            site_settings = [dict(row) for row in cursor.fetchall()]
-            group_map = {
-                (int(row.get("token_id") or 0), str(row.get("site_id") or "").upper()):
-                str(row.get("group_name") or "")
-                for row in site_settings
-            }
-            groups = [
-                {"group_name": value}
-                for value in sorted(
-                    {name for name in group_map.values() if name},
-                    key=lambda name: name.casefold(),
-                )
-            ]
-            groups.append({"group_name": "__ungrouped__"})
+            group_map = metadata["group_map"]
+            groups = metadata["groups"]
+            stores = metadata["stores"]
+            sites = metadata["sites"]
+            mercado_categories = metadata["mercado_categories"]
+            summary = metadata["summary"]
 
             filtered_conditions = list(conditions)
             filtered_values = list(values)
@@ -995,11 +1108,16 @@ def list_store_links(
                 " WHERE " + " AND ".join(filtered_conditions)
                 if filtered_conditions else ""
             )
-            cursor.execute(
-                f"SELECT COUNT(*) AS `total`{links_from_sql}{where_sql}",
-                tuple(filtered_values),
-            )
-            total = int((cursor.fetchone() or {}).get("total") or 0)
+            if not filtered_conditions:
+                total = int(summary.get("all_count") or 0)
+            elif filtered_conditions == ["links.`is_current` = 1"]:
+                total = int(summary.get("current_count") or 0)
+            else:
+                cursor.execute(
+                    f"SELECT COUNT(*) AS `total`{links_from_sql}{where_sql}",
+                    tuple(filtered_values),
+                )
+                total = int((cursor.fetchone() or {}).get("total") or 0)
             pages = max(1, (total + page_size - 1) // page_size)
             page = min(page, pages)
             page_order_sql = (
@@ -1048,63 +1166,6 @@ def list_store_links(
                     (int(row.get("token_id") or 0), str(row.get("site_id") or "").upper()),
                     "",
                 )
-            cursor.execute(
-                """
-                SELECT tokens.`id` AS `token_id`,
-                       tokens.`display_name` AS `store_name`,
-                       NULL AS `link_count`, NULL AS `last_synced_at`
-                FROM `mercado_store_tokens` AS tokens
-                ORDER BY tokens.`display_name`, tokens.`id`
-                """
-            )
-            stores = [_json_safe_row(row) for row in cursor.fetchall()]
-            cursor.execute(
-                f"""
-                SELECT links.`site_id`, COUNT(*) AS `link_count`
-                FROM `{STORE_LINK_TABLE}` AS links
-                WHERE links.`is_current` = 1
-                  AND links.`site_id` IS NOT NULL AND links.`site_id` <> ''
-                GROUP BY links.`site_id` ORDER BY links.`site_id`
-                """
-            )
-            sites = [_json_safe_row(row) for row in cursor.fetchall()]
-            cursor.execute(
-                f"""
-                SELECT links.`category_id`,
-                       COALESCE(MAX(NULLIF(product.`category_name`, '')), '') AS `category_name`,
-                       COUNT(DISTINCT links.`id`) AS `link_count`
-                FROM `{STORE_LINK_TABLE}` AS links
-                LEFT JOIN `{PRODUCT_TABLE}` AS product
-                  ON product.`source_item_id` = links.`item_id`
-                WHERE links.`is_current` = 1
-                  AND links.`category_id` IS NOT NULL AND links.`category_id` <> ''
-                GROUP BY links.`category_id`
-                ORDER BY `category_name`, links.`category_id`
-                """
-            )
-            mercado_categories = [
-                _json_safe_row(row) for row in cursor.fetchall()
-            ]
-            cursor.execute(
-                f"SELECT COUNT(*) AS `all_count` FROM `{STORE_LINK_TABLE}`"
-            )
-            summary = dict(cursor.fetchone() or {})
-            cursor.execute(
-                f"SELECT COUNT(*) AS `current_count` FROM `{STORE_LINK_TABLE}` "
-                "WHERE `is_current` = 1"
-            )
-            summary.update(cursor.fetchone() or {})
-            cursor.execute(
-                f"SELECT COUNT(DISTINCT `token_id`) AS `store_count` "
-                f"FROM `{STORE_LINK_TABLE}` WHERE `is_current` = 1"
-            )
-            summary.update(cursor.fetchone() or {})
-            cursor.execute(
-                f"SELECT MAX(`last_synced_at`) AS `last_synced_at` "
-                f"FROM `{STORE_LINK_TABLE}` WHERE `is_current` = 1"
-            )
-            summary.update(cursor.fetchone() or {})
-            summary = _json_safe_row(summary)
         connection.commit()
         return {
             "rows": rows,
@@ -1278,6 +1339,8 @@ def delete_store_links(
             )
             deleted = int(cursor.rowcount or 0)
         connection.commit()
+        if connection_factory is None:
+            invalidate_store_link_metadata_cache()
         return {"requested": len(ids), "deleted": deleted}
     except BaseException:
         connection.rollback()
@@ -1295,6 +1358,7 @@ __all__ = [
     "ensure_store_link_sync_state_table",
     "finalize_store_snapshot",
     "get_store_links_by_ids",
+    "invalidate_store_link_metadata_cache",
     "list_store_links",
     "list_due_store_link_token_ids",
     "listing_record",

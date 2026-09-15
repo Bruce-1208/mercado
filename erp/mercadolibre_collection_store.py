@@ -68,6 +68,12 @@ PRODUCT_WORKFLOW_COLUMN_DEFINITIONS = (
     ("review_status", "VARCHAR(32) NOT NULL DEFAULT 'unreviewed' AFTER `source_type`"),
     ("description_text", "LONGTEXT NULL AFTER `title`"),
 )
+INFRINGEMENT_RESULT_COLUMN_DEFINITIONS = (
+    ("infringement_risk_level", "TINYINT NULL"),
+    ("infringement_keywords", "VARCHAR(1024) NULL"),
+    ("infringement_reason", "VARCHAR(1000) NULL"),
+    ("infringement_checked_at", "DATETIME NULL"),
+)
 
 _schema_lock = threading.Lock()
 _schema_ready = False
@@ -444,11 +450,84 @@ def _migrate_collection_tables(cursor: Any) -> None:
     for column, definition in PRODUCT_WORKFLOW_COLUMN_DEFINITIONS:
         _ensure_column(cursor, PRODUCT_TABLE, column, definition)
     for table in (COLLECTION_TABLE, PRODUCT_TABLE):
+        for column, definition in INFRINGEMENT_RESULT_COLUMN_DEFINITIONS:
+            _ensure_column(cursor, table, column, definition)
         _ensure_column(
             cursor,
             table,
             "management_category_id",
             "BIGINT NULL AFTER `category_name`",
+        )
+    cursor.execute("SHOW TABLES LIKE 'infringement_risk_checks'")
+    if cursor.fetchone():
+        risk_assignments = (
+            "target.`infringement_risk_level` = risks.`risk_level`, "
+            "target.`infringement_keywords` = risks.`keywords`, "
+            "target.`infringement_reason` = risks.`reason`, "
+            "target.`infringement_checked_at` = risks.`checked_at`"
+        )
+        cursor.execute(
+            f"UPDATE `{COLLECTION_TABLE}` AS target "
+            "INNER JOIN `infringement_risk_checks` AS risks "
+            "ON risks.`source_type` = 'collection_list' "
+            "AND risks.`source_row_id` = target.`id` "
+            f"SET {risk_assignments}"
+        )
+        cursor.execute(
+            f"UPDATE `{PRODUCT_TABLE}` AS target "
+            "INNER JOIN `infringement_risk_checks` AS risks "
+            "ON risks.`source_type` = 'product_list' "
+            "AND risks.`source_row_id` = target.`id` "
+            f"SET {risk_assignments}"
+        )
+        for source_type in ("pulled", "zying"):
+            cursor.execute(
+                f"UPDATE `{PRODUCT_TABLE}` AS target "
+                "INNER JOIN `infringement_risk_checks` AS risks "
+                f"ON risks.`source_type` = '{source_type}' "
+                "AND risks.`product_id` = target.`source_item_id` "
+                f"SET {risk_assignments} "
+                "WHERE target.`source_type` = %s",
+                (source_type,),
+            )
+        # Older deployments may already have moved a checked collection item
+        # into products. Backfill and re-key those decisions during migration.
+        cursor.execute(
+            f"UPDATE `{PRODUCT_TABLE}` AS target "
+            "INNER JOIN `infringement_risk_checks` AS risks "
+            "ON risks.`source_type` = 'collection_list' "
+            "AND risks.`source_row_id` = target.`collection_item_id` "
+            f"SET {risk_assignments} "
+            "WHERE target.`source_type` = 'collected'"
+        )
+        cursor.execute(
+            f"""
+            INSERT INTO `infringement_risk_checks` (
+                `source_type`, `source_row_id`, `product_id`, `title`,
+                `main_image_url`, `product_category`, `zying_category_id`,
+                `zying_category`, `salesperson`, `group_name`, `token_id`,
+                `account_name`, `risk_level`, `keywords`, `reason`, `checked_at`
+            )
+            SELECT 'product_list', products.`id`, products.`source_item_id`,
+                   products.`title`, products.`main_image_url`, products.`category_name`,
+                   '', '', '', '', NULL, '', risks.`risk_level`, risks.`keywords`,
+                   risks.`reason`, risks.`checked_at`
+            FROM `{PRODUCT_TABLE}` AS products
+            INNER JOIN `infringement_risk_checks` AS risks
+              ON risks.`source_type` = 'collection_list'
+             AND risks.`source_row_id` = products.`collection_item_id`
+            WHERE products.`source_type` = 'collected'
+            ON DUPLICATE KEY UPDATE
+                `risk_level` = VALUES(`risk_level`), `keywords` = VALUES(`keywords`),
+                `reason` = VALUES(`reason`), `checked_at` = VALUES(`checked_at`)
+            """
+        )
+        cursor.execute(
+            f"DELETE risks FROM `infringement_risk_checks` AS risks "
+            f"INNER JOIN `{PRODUCT_TABLE}` AS products "
+            "ON products.`collection_item_id` = risks.`source_row_id` "
+            "WHERE risks.`source_type` = 'collection_list' "
+            "AND products.`source_type` = 'collected'"
         )
     _ensure_collection_task_unique_index(cursor)
     _ensure_index(
@@ -531,12 +610,20 @@ def _collection_schema_is_current(cursor: Any) -> bool:
         (COLLECTION_TABLE, "review_status"),
         (COLLECTION_TABLE, "last_publish_status"),
         (COLLECTION_TABLE, "management_category_id"),
+        (COLLECTION_TABLE, "infringement_risk_level"),
+        (COLLECTION_TABLE, "infringement_keywords"),
+        (COLLECTION_TABLE, "infringement_reason"),
+        (COLLECTION_TABLE, "infringement_checked_at"),
         (PRODUCT_TABLE, "source_type"),
         (PRODUCT_TABLE, "review_status"),
         (PRODUCT_TABLE, "description_text"),
         (PRODUCT_TABLE, "profitability_error"),
         (PRODUCT_TABLE, "last_published_at"),
         (PRODUCT_TABLE, "management_category_id"),
+        (PRODUCT_TABLE, "infringement_risk_level"),
+        (PRODUCT_TABLE, "infringement_keywords"),
+        (PRODUCT_TABLE, "infringement_reason"),
+        (PRODUCT_TABLE, "infringement_checked_at"),
         (MANAGEMENT_CATEGORY_TABLE, "name"),
         (PUBLISH_RECORD_TABLE, "failure_reason"),
         (PUBLISH_RECORD_TABLE, "result_json"),
@@ -2555,6 +2642,14 @@ def delete_collection_items(
     try:
         with connection.cursor() as cursor:
             ensure_collection_tables(cursor)
+            cursor.execute("SHOW TABLES LIKE 'infringement_risk_checks'")
+            if cursor.fetchone():
+                cursor.execute(
+                    f"DELETE FROM `infringement_risk_checks` "
+                    f"WHERE `source_type` = 'collection_list' "
+                    f"AND `source_row_id` IN ({placeholders})",
+                    tuple(ids),
+                )
             cursor.execute(
                 f"DELETE FROM `{COLLECTION_TABLE}` WHERE `id` IN ({placeholders})",
                 tuple(ids),
@@ -2581,13 +2676,53 @@ def delete_product_items(
         with connection.cursor() as cursor:
             ensure_collection_tables(cursor)
             cursor.execute(
-                f"SELECT `source_item_id`, `review_status`, `last_publish_status` "
+                f"SELECT `id`, `source_item_id`, `review_status`, `last_publish_status`, "
+                "`infringement_risk_level`, `infringement_keywords`, "
+                "`infringement_reason`, `infringement_checked_at` "
                 f"FROM `{PRODUCT_TABLE}` WHERE `id` IN ({placeholders})",
                 tuple(ids),
             )
             product_states = [
                 dict(row) for row in cursor.fetchall() if row.get("source_item_id")
             ]
+            cursor.execute("SHOW TABLES LIKE 'infringement_risk_checks'")
+            if product_states and cursor.fetchone():
+                cursor.execute(
+                    f"""
+                    INSERT INTO `infringement_risk_checks` (
+                        `source_type`, `source_row_id`, `product_id`, `title`,
+                        `main_image_url`, `product_category`, `zying_category_id`,
+                        `zying_category`, `salesperson`, `group_name`, `token_id`,
+                        `account_name`, `risk_level`, `keywords`, `reason`, `checked_at`
+                    )
+                    SELECT 'collection_list', collection_items.`id`,
+                           collection_items.`source_item_id`, collection_items.`title`,
+                           collection_items.`main_image_url`, collection_items.`category_name`,
+                           '', '', '', '', NULL, '', risks.`risk_level`, risks.`keywords`,
+                           risks.`reason`, risks.`checked_at`
+                    FROM `infringement_risk_checks` AS risks
+                    INNER JOIN `{PRODUCT_TABLE}` AS products
+                      ON products.`id` = risks.`source_row_id`
+                    INNER JOIN `{COLLECTION_TABLE}` AS collection_items
+                      ON collection_items.`source_item_id` = products.`source_item_id`
+                    WHERE risks.`source_type` = 'product_list'
+                      AND risks.`source_row_id` IN ({placeholders})
+                    ON DUPLICATE KEY UPDATE
+                        `product_id` = VALUES(`product_id`), `title` = VALUES(`title`),
+                        `main_image_url` = VALUES(`main_image_url`),
+                        `product_category` = VALUES(`product_category`),
+                        `risk_level` = VALUES(`risk_level`),
+                        `keywords` = VALUES(`keywords`), `reason` = VALUES(`reason`),
+                        `checked_at` = VALUES(`checked_at`)
+                    """,
+                    tuple(ids),
+                )
+                cursor.execute(
+                    f"DELETE FROM `infringement_risk_checks` "
+                    f"WHERE `source_type` = 'product_list' "
+                    f"AND `source_row_id` IN ({placeholders})",
+                    tuple(ids),
+                )
             cursor.execute(
                 f"DELETE FROM `{PRODUCT_TABLE}` WHERE `id` IN ({placeholders})",
                 tuple(ids),
@@ -2596,11 +2731,17 @@ def delete_product_items(
             for row in product_states:
                 cursor.execute(
                     f"UPDATE `{COLLECTION_TABLE}` SET `added_to_products` = 0, "
-                    "`review_status` = %s, `last_publish_status` = %s "
+                    "`review_status` = %s, `last_publish_status` = %s, "
+                    "`infringement_risk_level` = %s, `infringement_keywords` = %s, "
+                    "`infringement_reason` = %s, `infringement_checked_at` = %s "
                     "WHERE `source_item_id` = %s",
                     (
                         str(row.get("review_status") or "unreviewed"),
                         row.get("last_publish_status"),
+                        row.get("infringement_risk_level"),
+                        row.get("infringement_keywords"),
+                        row.get("infringement_reason"),
+                        row.get("infringement_checked_at"),
                         str(row.get("source_item_id") or ""),
                     ),
                 )
@@ -2628,6 +2769,7 @@ def move_product_items_to_collection(
     moved = 0
     created = 0
     deleted = 0
+    moved_pairs: list[tuple[int, int]] = []
     try:
         with connection.cursor() as cursor:
             ensure_collection_tables(cursor)
@@ -2677,6 +2819,10 @@ def move_product_items_to_collection(
                             `package_height_cm` = COALESCE(%s, `package_height_cm`),
                             `weight_basis` = COALESCE(NULLIF(%s, ''), `weight_basis`),
                             `management_category_id` = COALESCE(%s, `management_category_id`),
+                            `infringement_risk_level` = %s,
+                            `infringement_keywords` = %s,
+                            `infringement_reason` = %s,
+                            `infringement_checked_at` = %s,
                             `added_to_products` = 0,
                             `review_status` = %s,
                             `last_publish_status` = %s,
@@ -2696,6 +2842,10 @@ def move_product_items_to_collection(
                             row.get("package_height_cm"),
                             str(row.get("weight_basis") or ""),
                             row.get("management_category_id"),
+                            row.get("infringement_risk_level"),
+                            row.get("infringement_keywords"),
+                            row.get("infringement_reason"),
+                            row.get("infringement_checked_at"),
                             str(row.get("review_status") or "unreviewed"),
                             row.get("last_publish_status"),
                             scrape_status,
@@ -2703,6 +2853,7 @@ def move_product_items_to_collection(
                             int(existing["id"]),
                         ),
                     )
+                    collection_row_id = int(existing["id"])
                 else:
                     snapshot = _loads(row.get("source_snapshot_json"), {})
                     values = (
@@ -2721,6 +2872,10 @@ def move_product_items_to_collection(
                         row.get("package_height_cm"),
                         str(row.get("weight_basis") or ""),
                         row.get("management_category_id"),
+                        row.get("infringement_risk_level"),
+                        row.get("infringement_keywords"),
+                        row.get("infringement_reason"),
+                        row.get("infringement_checked_at"),
                         *(row.get(column) for column in PROFITABILITY_COLUMNS),
                         str(row.get("review_status") or "unreviewed"),
                         row.get("last_publish_status"),
@@ -2739,7 +2894,9 @@ def move_product_items_to_collection(
                             `main_image_url`, `title`, `price`, `currency_id`,
                             `weight_g`, `volumetric_weight_kg`, `package_length_cm`,
                             `package_width_cm`, `package_height_cm`, `weight_basis`,
-                            `management_category_id`, {profitability_columns_sql},
+                            `management_category_id`, `infringement_risk_level`,
+                            `infringement_keywords`, `infringement_reason`,
+                            `infringement_checked_at`, {profitability_columns_sql},
                             `review_status`, `last_publish_status`,
                             `scrape_status`, `error_message`,
                             `source_json`, `description_json`, `page_snapshot_json`,
@@ -2749,13 +2906,65 @@ def move_product_items_to_collection(
                             `added_to_products` = 0,
                             `review_status` = VALUES(`review_status`),
                             `last_publish_status` = VALUES(`last_publish_status`),
+                            `infringement_risk_level` = VALUES(`infringement_risk_level`),
+                            `infringement_keywords` = VALUES(`infringement_keywords`),
+                            `infringement_reason` = VALUES(`infringement_reason`),
+                            `infringement_checked_at` = VALUES(`infringement_checked_at`),
                             `error_message` = VALUES(`error_message`),
                             `updated_at` = CURRENT_TIMESTAMP
                         """,
                         values,
                     )
+                    collection_row_id = int(cursor.lastrowid or 0)
+                    if not collection_row_id:
+                        cursor.execute(
+                            f"SELECT `id` FROM `{COLLECTION_TABLE}` "
+                            "WHERE `source_item_id` = %s ORDER BY `id` DESC LIMIT 1",
+                            (str(row.get("source_item_id") or ""),),
+                        )
+                        collection_row_id = int((cursor.fetchone() or {}).get("id") or 0)
                     created += 1
+                if collection_row_id:
+                    moved_pairs.append((int(row["id"]), collection_row_id))
                 moved += 1
+            if moved_pairs:
+                cursor.execute("SHOW TABLES LIKE 'infringement_risk_checks'")
+                if cursor.fetchone():
+                    for product_row_id, collection_row_id in moved_pairs:
+                        cursor.execute(
+                            f"""
+                            INSERT INTO `infringement_risk_checks` (
+                                `source_type`, `source_row_id`, `product_id`, `title`,
+                                `main_image_url`, `product_category`, `zying_category_id`,
+                                `zying_category`, `salesperson`, `group_name`, `token_id`,
+                                `account_name`, `risk_level`, `keywords`, `reason`, `checked_at`
+                            )
+                            SELECT 'collection_list', collection_items.`id`,
+                                   collection_items.`source_item_id`, collection_items.`title`,
+                                   collection_items.`main_image_url`, collection_items.`category_name`,
+                                   '', '', '', '', NULL, '', risks.`risk_level`, risks.`keywords`,
+                                   risks.`reason`, risks.`checked_at`
+                            FROM `infringement_risk_checks` AS risks
+                            INNER JOIN `{COLLECTION_TABLE}` AS collection_items
+                              ON collection_items.`id` = %s
+                            WHERE risks.`source_type` = 'product_list'
+                              AND risks.`source_row_id` = %s
+                            ON DUPLICATE KEY UPDATE
+                                `product_id` = VALUES(`product_id`), `title` = VALUES(`title`),
+                                `main_image_url` = VALUES(`main_image_url`),
+                                `product_category` = VALUES(`product_category`),
+                                `risk_level` = VALUES(`risk_level`),
+                                `keywords` = VALUES(`keywords`), `reason` = VALUES(`reason`),
+                                `checked_at` = VALUES(`checked_at`)
+                            """,
+                            (collection_row_id, product_row_id),
+                        )
+                    cursor.execute(
+                        f"DELETE FROM `infringement_risk_checks` "
+                        f"WHERE `source_type` = 'product_list' "
+                        f"AND `source_row_id` IN ({placeholders})",
+                        tuple(ids),
+                    )
             cursor.execute(
                 f"DELETE FROM `{PRODUCT_TABLE}` WHERE `id` IN ({placeholders})",
                 tuple(ids),
@@ -3296,6 +3505,10 @@ def _add_collection_items_to_products_once(
                     row.get("package_length_cm"), row.get("package_width_cm"),
                     row.get("package_height_cm"), row.get("weight_basis"),
                     row.get("management_category_id"),
+                    row.get("infringement_risk_level"),
+                    row.get("infringement_keywords"),
+                    row.get("infringement_reason"),
+                    row.get("infringement_checked_at"),
                     *(row.get(column) for column in PROFITABILITY_COLUMNS),
                     _dumps(snapshot), _now(),
                 )
@@ -3308,7 +3521,10 @@ def _add_collection_items_to_products_once(
                         `currency_id`, `weight_g`,
                         `volumetric_weight_kg`,
                         `package_length_cm`, `package_width_cm`, `package_height_cm`,
-                        `weight_basis`, `management_category_id`, {profitability_columns_sql},
+                        `weight_basis`, `management_category_id`,
+                        `infringement_risk_level`, `infringement_keywords`,
+                        `infringement_reason`, `infringement_checked_at`,
+                        {profitability_columns_sql},
                         `source_snapshot_json`, `added_at`
                     ) VALUES ({", ".join(["%s"] * len(values))})
                     ON DUPLICATE KEY UPDATE
@@ -3329,6 +3545,10 @@ def _add_collection_items_to_products_once(
                         `management_category_id` = COALESCE(
                             VALUES(`management_category_id`), `management_category_id`
                         ),
+                        `infringement_risk_level` = VALUES(`infringement_risk_level`),
+                        `infringement_keywords` = VALUES(`infringement_keywords`),
+                        `infringement_reason` = VALUES(`infringement_reason`),
+                        `infringement_checked_at` = VALUES(`infringement_checked_at`),
                         {profitability_updates_sql},
                         `source_snapshot_json` = VALUES(`source_snapshot_json`),
                         `updated_at` = CURRENT_TIMESTAMP
@@ -3343,6 +3563,48 @@ def _add_collection_items_to_products_once(
                     f"WHERE `id` IN ({complete_placeholders})",
                     tuple(complete_ids),
                 )
+                # The risk result follows the same logical item when it moves
+                # from the collection queue into the product library. Keeping
+                # only the product-list key avoids a duplicate result and also
+                # prevents an unnecessary second AI call.
+                cursor.execute("SHOW TABLES LIKE 'infringement_risk_checks'")
+                if cursor.fetchone():
+                    cursor.execute(
+                        f"""
+                        INSERT INTO `infringement_risk_checks` (
+                            `source_type`, `source_row_id`, `product_id`, `title`,
+                            `main_image_url`, `product_category`, `zying_category_id`,
+                            `zying_category`, `salesperson`, `group_name`, `token_id`,
+                            `account_name`, `risk_level`, `keywords`, `reason`, `checked_at`
+                        )
+                        SELECT 'product_list', products.`id`, products.`source_item_id`,
+                               products.`title`, products.`main_image_url`,
+                               products.`category_name`, '', '', '', '', NULL, '',
+                               risks.`risk_level`, risks.`keywords`, risks.`reason`,
+                               risks.`checked_at`
+                        FROM `infringement_risk_checks` AS risks
+                        INNER JOIN `{PRODUCT_TABLE}` AS products
+                          ON products.`collection_item_id` = risks.`source_row_id`
+                        WHERE risks.`source_type` = 'collection_list'
+                          AND risks.`source_row_id` IN ({complete_placeholders})
+                        ON DUPLICATE KEY UPDATE
+                            `product_id` = VALUES(`product_id`),
+                            `title` = VALUES(`title`),
+                            `main_image_url` = VALUES(`main_image_url`),
+                            `product_category` = VALUES(`product_category`),
+                            `risk_level` = VALUES(`risk_level`),
+                            `keywords` = VALUES(`keywords`),
+                            `reason` = VALUES(`reason`),
+                            `checked_at` = VALUES(`checked_at`)
+                        """,
+                        tuple(complete_ids),
+                    )
+                    cursor.execute(
+                        f"DELETE FROM `infringement_risk_checks` "
+                        f"WHERE `source_type` = 'collection_list' "
+                        f"AND `source_row_id` IN ({complete_placeholders})",
+                        tuple(complete_ids),
+                    )
             incomplete_ids = [int(row["id"]) for row in incomplete_rows]
             if incomplete_ids:
                 incomplete_placeholders = ", ".join(["%s"] * len(incomplete_ids))

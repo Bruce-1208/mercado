@@ -7403,6 +7403,8 @@ def update_infringement_product_risks(results):
     """Persist multi-source DeepSeek decisions and mirror Zying decisions to legacy fields."""
     normalized = []
     zying_results = []
+    linked_list_results = {"product_list": [], "collection_list": []}
+    linked_product_sources = {"pulled": [], "zying": []}
     checked_at = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     for result in results or ():
         if not isinstance(result, dict):
@@ -7428,6 +7430,26 @@ def update_infringement_product_risks(results):
             str(result.get("account_name") or "")[:255], risk_level, str(keywords)[:1024] or None,
             str(result.get("reason") or "")[:1000], checked_at,
         ))
+        if source_type in linked_list_results:
+            linked_list_results[source_type].append(
+                (
+                    risk_level,
+                    str(keywords)[:1024] or None,
+                    str(result.get("reason") or "")[:1000] or None,
+                    checked_at,
+                    source_row_id,
+                )
+            )
+        if source_type in linked_product_sources:
+            linked_product_sources[source_type].append(
+                (
+                    risk_level,
+                    str(keywords)[:1024] or None,
+                    str(result.get("reason") or "")[:1000] or None,
+                    checked_at,
+                    str(result.get("product_id") or "")[:32],
+                )
+            )
         if source_type == "zying":
             zying_results.append({"row_id": source_row_id, "risk_level": risk_level, "keywords": keywords})
     if not normalized:
@@ -7436,6 +7458,45 @@ def update_infringement_product_risks(results):
     try:
         with connection.cursor() as cursor:
             _ensure_infringement_risk_checks_table(cursor)
+            if any(linked_list_results.values()) or any(linked_product_sources.values()):
+                from erp.mercadolibre_collection_store import (
+                    COLLECTION_TABLE,
+                    PRODUCT_TABLE,
+                    ensure_collection_tables,
+                )
+
+                ensure_collection_tables(cursor)
+                for source_type, table in (
+                    ("collection_list", COLLECTION_TABLE),
+                    ("product_list", PRODUCT_TABLE),
+                ):
+                    rows = linked_list_results[source_type]
+                    if rows:
+                        cursor.executemany(
+                            f"""
+                            UPDATE `{table}`
+                            SET `infringement_risk_level` = %s,
+                                `infringement_keywords` = %s,
+                                `infringement_reason` = %s,
+                                `infringement_checked_at` = %s
+                            WHERE `id` = %s
+                            """,
+                            rows,
+                        )
+                for source_type, rows in linked_product_sources.items():
+                    if rows:
+                        cursor.executemany(
+                            f"""
+                            UPDATE `{PRODUCT_TABLE}`
+                            SET `infringement_risk_level` = %s,
+                                `infringement_keywords` = %s,
+                                `infringement_reason` = %s,
+                                `infringement_checked_at` = %s
+                            WHERE `source_type` = '{source_type}'
+                              AND `source_item_id` = %s
+                            """,
+                            rows,
+                        )
             cursor.executemany(
                 """
                 INSERT INTO `infringement_risk_checks` (

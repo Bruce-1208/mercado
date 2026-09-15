@@ -113,6 +113,53 @@ def test_console_renders_agent_as_default_appeal_execution_target(agent_interfac
     assert b'id="download-local-agent"' in response.data
 
 
+def test_agents_are_enriched_with_their_logged_out_shops():
+    agents, unassigned = bit_interface.enrich_agents_with_logout_status(
+        [
+            {
+                "agent_id": "agent-office-pc",
+                "name": "办公室电脑",
+                "hostname": "OFFICE-PC",
+            },
+            {
+                "agent_id": "agent-warehouse-pc",
+                "name": "仓库电脑",
+                "hostname": "WAREHOUSE-PC",
+            },
+        ],
+        {
+            "rows": [
+                {
+                    "window_id": "window-1",
+                    "window_name": "退出店铺",
+                    "site": "MX",
+                    "anomaly_type": "美客多账号退出登录",
+                    "reason": "检测到登录页；执行端：Agent：办公室电脑；ID agent-office-pc；主机 OFFICE-PC",
+                    "source": "AI申诉｜Agent:办公室电脑",
+                    "last_detected_at": "2026-09-15 12:00:00",
+                },
+                {
+                    "window_id": "window-2",
+                    "window_name": "验证店铺",
+                    "anomaly_type": "需要人机验证",
+                    "reason": "检测到 captcha；执行端：Agent：办公室电脑；ID agent-office-pc",
+                },
+                {
+                    "window_id": "window-old",
+                    "window_name": "旧记录店铺",
+                    "anomaly_type": "美客多账号退出登录",
+                    "reason": "旧版本未记录执行端",
+                },
+            ]
+        },
+    )
+
+    assert agents[0]["logged_out_count"] == 1
+    assert agents[0]["logged_out_shops"][0]["window_name"] == "退出店铺"
+    assert agents[1]["logged_out_count"] == 0
+    assert [shop["window_name"] for shop in unassigned] == ["旧记录店铺"]
+
+
 def test_public_appeal_is_queued_for_selected_agent_and_streamed(agent_interface):
     _user, store, client = agent_interface
     store.heartbeat(

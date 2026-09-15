@@ -261,13 +261,13 @@ def _readme(target_platform, has_executable):
     )
     if target_platform == "windows":
         steps = """1. 解压本安装包到固定目录，不要直接在压缩包内运行。
-2. 双击 start-agent.bat 可立即启动。
+2. 双击 start-agent.bat 可立即启动；运行状态窗口会实时显示本机时间和日志，关闭按钮仅将窗口最小化。
 3. 右键 install-agent.ps1，选择“使用 PowerShell 运行”，可安装为登录后自动启动任务。"""
         remaining_steps = """4. 第一次联网会自动注册，并从泽顺控制台下载经过哈希校验的最新业务代码。
 5. 控制台出现这台电脑的名称后，即可选择它执行本机任务。"""
     else:
         steps = """1. 解压本安装包到固定目录，不要直接在压缩包内运行。
-2. 双击 start-agent.command 可立即启动；如果 macOS 拦截，请在“系统设置 → 隐私与安全性”中允许打开。
+2. 双击 start-agent.command 可立即启动；运行状态窗口会实时显示本机时间和日志，关闭按钮仅将窗口最小化。如果 macOS 拦截，请在“系统设置 → 隐私与安全性”中允许打开。
 3. 关闭手动启动的 Agent 后，双击 install-agent.command，可安装为登录后自动启动的 LaunchAgent。
 4. 如需取消登录启动，双击 uninstall-agent.command。"""
         remaining_steps = """5. 第一次联网会自动注册，并从泽顺控制台下载经过哈希校验的最新业务代码。
