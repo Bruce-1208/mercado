@@ -172,6 +172,10 @@ def test_add_products_keeps_missing_weight_rows_in_collection_list():
             "source_url": "https://example/MLM1",
             "title": "Complete",
             "weight_g": 200,
+            "infringement_risk_level": 1,
+            "infringement_keywords": "BrandX",
+            "infringement_reason": "需要人工复核",
+            "infringement_checked_at": "2026-09-15 10:00:00",
         },
         {
             "id": 2,
@@ -216,6 +220,17 @@ def test_add_products_keeps_missing_weight_rows_in_collection_list():
     assert result["skipped_incomplete"] == 1
     assert result["skipped_incomplete_item_ids"] == ["MLM2"]
     assert len(product_inserts) == 1
+    assert "`infringement_risk_level`" in product_inserts[0][0]
+    assert any(
+        query.startswith("INSERT INTO `infringement_risk_checks`")
+        and "SELECT 'product_list'" in query
+        for query, _params in connection.fake_cursor.queries
+    )
+    assert any(
+        query.startswith("DELETE FROM `infringement_risk_checks`")
+        and "`source_type` = 'collection_list'" in query
+        for query, _params in connection.fake_cursor.queries
+    )
     assert collection_updates[-2][1] == (1,)
     assert collection_updates[-1][1] == (2,)
     upsert_source_snapshot.assert_called_once()

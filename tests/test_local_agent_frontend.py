@@ -16,6 +16,17 @@ def test_console_offers_windows_and_macos_agent_downloads():
     assert "/api/local-agents/download?platform=macos" in template
 
 
+def test_daily_task_shows_each_agent_logged_out_shop_status():
+    template = (Path(__file__).resolve().parents[1] / "bit/templates/index.html").read_text(
+        encoding="utf-8"
+    )
+
+    assert 'id="daily-task-agent-login-status"' in template
+    assert "各终端店铺登录状态" in template
+    assert "logged_out_shops" in template
+    assert "退出登录 ${shops.length} 家" in template
+
+
 def test_agent_requests_use_public_routes_instead_of_loopback():
     node = shutil.which("node")
     if not node:

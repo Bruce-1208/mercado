@@ -102,7 +102,9 @@ from bit.bit_runtime_lock import (
 )
 from bit.bit_mercado_login import (
     MERCADO_LOGIN_JOB_LOCK_KEY,
+    is_human_verification_result,
     is_login_blocking_result,
+    is_logged_out_result,
     is_shop_status_anomaly,
 )
 from bit.bit_utils import *
@@ -4053,7 +4055,56 @@ def build_risk_check_params(data):
     """校验泽顺控制台提交的侵权检测参数。"""
     data = data if isinstance(data, dict) else {}
     category = str(data.get("category") or "").strip()[:1024]
-    model = str(data.get("model") or "").strip()[:128] or None
+    provider_was_supplied = "ai_provider" in data or "provider" in data
+    raw_provider = str(
+        data.get("ai_provider") or data.get("provider") or "deepseek"
+    ).strip().lower()
+    provider_aliases = {
+        "deepseek": "deepseek",
+        "qianwen": "qianwen",
+        "qwen": "qianwen",
+        "千问": "qianwen",
+        "local": "local",
+        "本地": "local",
+    }
+    ai_provider = provider_aliases.get(raw_provider)
+    if not ai_provider:
+        raise ValueError("AI 服务仅支持 DeepSeek、千问或本地模型")
+    api_key = str(data.get("api_key") or data.get("token") or "").strip()
+    if len(api_key) > 8192:
+        raise ValueError("AI Token 长度不能超过 8192 个字符")
+    base_url = str(data.get("base_url") or "").strip()
+    default_base_urls = {
+        "deepseek": "https://api.deepseek.com",
+        "qianwen": "https://dashscope.aliyuncs.com/compatible-mode/v1",
+    }
+    if not base_url:
+        base_url = default_base_urls.get(ai_provider, "")
+    if provider_was_supplied and not api_key:
+        raise ValueError("请输入本次 AI 侵权检测使用的 Token")
+    if ai_provider == "local" and not base_url:
+        raise ValueError("本地模型必须填写 OpenAI 兼容接口地址")
+    if base_url:
+        parsed_url = urlsplit(base_url)
+        if (
+            parsed_url.scheme not in {"http", "https"}
+            or not parsed_url.netloc
+            or parsed_url.username
+            or parsed_url.password
+        ):
+            raise ValueError("AI 模型链接必须是有效的 http(s) 地址，且不能包含账号密码")
+        if len(base_url) > 2000:
+            raise ValueError("AI 模型链接不能超过 2000 个字符")
+        base_url = base_url.rstrip("/")
+    default_models = {
+        "deepseek": "deepseek-chat",
+        "qianwen": "qwen-plus",
+    }
+    model = str(data.get("model") or "").strip()[:128] or (
+        default_models.get(ai_provider) if provider_was_supplied else None
+    )
+    if ai_provider == "local" and provider_was_supplied and not model:
+        raise ValueError("本地模型必须填写模型名称")
     params = {
         "zying_category": category or None,
         "hours": _parse_int_param(data, "hours", 0, min_value=0, max_value=87600),
@@ -4076,6 +4127,12 @@ def build_risk_check_params(data):
         "recheck": _parse_bool_param(data, "recheck", False),
         "dry_run": _parse_bool_param(data, "dry_run", False),
     }
+    if provider_was_supplied or api_key or data.get("base_url"):
+        params.update(
+            ai_provider=ai_provider,
+            api_key=api_key,
+            base_url=base_url,
+        )
     if "sources" in data:
         raw_sources = data.get("sources")
         if not isinstance(raw_sources, list):
@@ -4107,6 +4164,17 @@ def build_risk_check_params(data):
             if str(value or "").strip().isdigit() and int(value) > 0
         ))
     return params
+
+
+def _public_risk_check_params(params):
+    """Return task settings without exposing the one-time model credential."""
+    public = {
+        key: value
+        for key, value in dict(params or {}).items()
+        if key != "api_key"
+    }
+    public["token_configured"] = bool((params or {}).get("api_key"))
+    return public
 
 
 def _append_risk_check_log(message):
@@ -6813,7 +6881,7 @@ def api_store_links():
             current_only=str(request.args.get("current_only") or "1").strip().lower()
             not in ("0", "false", "no", "off"),
             page=_parse_int_param(request.args, "page", 1, 1, 1000000),
-            page_size=1000,
+            page_size=_parse_int_param(request.args, "page_size", 500, 1, 1000),
         )
     except ValueError as exc:
         return jsonify({"status": "error", "message": str(exc)}), 400
@@ -7021,7 +7089,10 @@ def api_prohibited_listings():
             token_id=int(token_text) if token_text else None,
             site_id=str(request.args.get("site_id") or "").strip(),
             salesperson=str(request.args.get("salesperson") or "").strip(),
+            group_name=str(request.args.get("group_name") or "").strip(),
             risk_type=str(request.args.get("risk_type") or "").strip(),
+            occurred_from=str(request.args.get("occurred_from") or "").strip(),
+            occurred_to=str(request.args.get("occurred_to") or "").strip(),
             page=_parse_int_param(request.args, "page", 1, 1, 1000000),
             page_size=_parse_int_param(request.args, "page_size", 100, 20, 500),
         )
@@ -7159,7 +7230,10 @@ def api_export_prohibited_listings():
             "token_id": int(token_text) if token_text else None,
             "site_id": str(request.args.get("site_id") or "").strip(),
             "salesperson": str(request.args.get("salesperson") or "").strip(),
+            "group_name": str(request.args.get("group_name") or "").strip(),
             "risk_type": str(request.args.get("risk_type") or "").strip(),
+            "occurred_from": str(request.args.get("occurred_from") or "").strip(),
+            "occurred_to": str(request.args.get("occurred_to") or "").strip(),
         }
         return _prohibited_export_response(filters)
     except ValueError as exc:
@@ -7790,14 +7864,126 @@ def api_local_agent_business_bundle():
     return response
 
 
+def _window_anomaly_agent_identity(row):
+    """从兼容旧表结构的异常来源/原因中还原 Agent 身份。"""
+    row = dict(row or {})
+    reason = str(row.get("reason") or "")
+    source = str(row.get("source") or "")
+    agent_id_match = re.search(
+        r"(?:^|[；;])ID\s+([A-Za-z0-9][A-Za-z0-9_.-]{2,95})(?=$|[；;])",
+        reason,
+    )
+    agent_name_match = re.search(
+        r"Agent[:：]([^｜|；;]+)",
+        f"{source}；{reason}",
+        re.IGNORECASE,
+    )
+    return (
+        agent_id_match.group(1) if agent_id_match else "",
+        agent_name_match.group(1).strip() if agent_name_match else "",
+    )
+
+
+def enrich_agents_with_logout_status(agents, anomaly_data):
+    """给每个执行终端附加当前退出登录店铺，并保留无法归属的旧记录。"""
+    enriched = [dict(agent or {}) for agent in (agents or ())]
+    by_id = {
+        str(agent.get("agent_id") or ""): agent
+        for agent in enriched
+        if str(agent.get("agent_id") or "")
+    }
+    by_name = {}
+    for agent in enriched:
+        identity_names = {
+            str(value or "").strip().casefold()
+            for value in (agent.get("name"), agent.get("hostname"))
+            if str(value or "").strip()
+        }
+        for key in identity_names:
+            by_name.setdefault(key, []).append(agent)
+        agent["logged_out_count"] = 0
+        agent["logged_out_shops"] = []
+
+    rows = (
+        (anomaly_data or {}).get("rows")
+        if isinstance(anomaly_data, dict)
+        else anomaly_data
+    ) or []
+    unassigned = []
+    seen_windows = set()
+    for raw_row in rows:
+        row = dict(raw_row or {})
+        if is_human_verification_result(row) or not is_logged_out_result(row):
+            continue
+        window_id = str(row.get("window_id") or "").strip()
+        if window_id and window_id in seen_windows:
+            continue
+        if window_id:
+            seen_windows.add(window_id)
+        shop = {
+            "window_id": window_id,
+            "window_name": str(row.get("window_name") or window_id or "未知店铺"),
+            "site": str(row.get("site") or ""),
+            "last_detected_at": str(row.get("last_detected_at") or ""),
+        }
+        agent_id, agent_name = _window_anomaly_agent_identity(row)
+        target = by_id.get(agent_id)
+        if target is None and agent_name:
+            matches = by_name.get(agent_name.casefold(), [])
+            target = matches[0] if len(matches) == 1 else None
+        if target is None:
+            shop["agent_id"] = agent_id
+            shop["agent_name"] = agent_name
+            unassigned.append(shop)
+            continue
+        target["logged_out_shops"].append(shop)
+
+    for agent in enriched:
+        agent["logged_out_shops"].sort(
+            key=lambda shop: (shop.get("last_detected_at", ""), shop.get("window_name", "")),
+            reverse=True,
+        )
+        agent["logged_out_count"] = len(agent["logged_out_shops"])
+    unassigned.sort(
+        key=lambda shop: (shop.get("last_detected_at", ""), shop.get("window_name", "")),
+        reverse=True,
+    )
+    return enriched, unassigned
+
+
 @app.route("/api/execution-agents", methods=["GET"])
 @login_required
 def api_execution_agents():
+    requested_capability = str(request.args.get("capability") or "appeal").strip()
     agents = get_local_agent_store().list_agents(
         online_seconds=LOCAL_AGENT_ONLINE_SECONDS,
-        capability=str(request.args.get("capability") or "appeal"),
+        capability=(
+            ""
+            if requested_capability.casefold() in {"all", "*"}
+            else requested_capability
+        ),
     )
-    response = jsonify({"status": "success", "data": {"agents": agents}})
+    login_status_error = ""
+    try:
+        agents, unassigned_logout_shops = enrich_agents_with_logout_status(
+            agents,
+            db_get_window_anomalies(active_only=True, limit=1000),
+        )
+    except Exception as exc:
+        logging.warning("读取各 Agent 店铺退出登录情况失败：%s", exc)
+        unassigned_logout_shops = []
+        login_status_error = str(exc)
+        for agent in agents:
+            agent["logged_out_count"] = 0
+            agent["logged_out_shops"] = []
+    response = jsonify({
+        "status": "success",
+        "data": {
+            "agents": agents,
+            "unassigned_logout_shops": unassigned_logout_shops,
+            "login_status_error": login_status_error,
+        },
+    })
     response.headers["Cache-Control"] = "no-store"
     return response
 
@@ -8349,7 +8535,10 @@ def api_stop_zying_collection():
 @app.route('/api/risk-check/start', methods=['POST'])
 @login_required
 def api_start_risk_check():
-    params = build_risk_check_params(request.get_json(silent=True) or {})
+    try:
+        params = build_risk_check_params(request.get_json(silent=True) or {})
+    except ValueError as exc:
+        return jsonify({"status": "error", "message": str(exc)}), 400
     if not _risk_check_lock.acquire(blocking=False):
         with _risk_check_state_lock:
             data = dict(_risk_check_state)
@@ -8368,11 +8557,18 @@ def api_start_risk_check():
                 "finished_at": "",
                 "status": "running",
                 "message": "正在读取商品并进行 AI 侵权检测",
-                "params": dict(params),
+                "params": _public_risk_check_params(params),
                 "summary": {},
             }
         )
-        _append_risk_check_log("侵权检测任务已启动：当前仅识别商品标题，主图 Logo 暂不检测")
+        provider_label = bit_check_risk.AI_PROVIDER_LABELS.get(
+            str(params.get("ai_provider") or "deepseek"),
+            "AI",
+        )
+        _append_risk_check_log(
+            f"侵权检测任务已启动：使用 {provider_label}，"
+            "当前仅识别商品标题，主图 Logo 暂不检测"
+        )
         data = {**dict(_risk_check_state), "logs": list(_risk_check_logs)}
     try:
         threading.Thread(
@@ -12231,7 +12427,7 @@ def api_db_store_links():
             current_only=str(request.args.get("current_only") or "1").strip().lower()
             not in ("0", "false", "no", "off"),
             page=_parse_int_param(request.args, "page", 1, 1, 1000000),
-            page_size=1000,
+            page_size=_parse_int_param(request.args, "page_size", 500, 1, 1000),
         )
     except ValueError as exc:
         return jsonify({"status": "error", "message": str(exc)}), 400
@@ -12329,7 +12525,10 @@ def api_db_prohibited_listings():
             token_id=int(token_text) if token_text else None,
             site_id=str(request.args.get("site_id") or "").strip(),
             salesperson=str(request.args.get("salesperson") or "").strip(),
+            group_name=str(request.args.get("group_name") or "").strip(),
             risk_type=str(request.args.get("risk_type") or "").strip(),
+            occurred_from=str(request.args.get("occurred_from") or "").strip(),
+            occurred_to=str(request.args.get("occurred_to") or "").strip(),
             page=_parse_int_param(request.args, "page", 1, 1, 1000000),
             page_size=_parse_int_param(request.args, "page_size", 100, 20, 500),
         )

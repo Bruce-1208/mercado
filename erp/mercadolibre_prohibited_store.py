@@ -401,7 +401,10 @@ def list_prohibited_listings(
     token_id: int | None = None,
     site_id: str = "",
     salesperson: str = "",
+    group_name: str = "",
     risk_type: str = "",
+    occurred_from: str = "",
+    occurred_to: str = "",
     page: int = 1,
     page_size: int = 100,
     connection_factory: Callable[[], Any] | None = None,
@@ -424,9 +427,43 @@ def list_prohibited_listings(
     if salesperson:
         conditions.append("COALESCE(settings.`salesperson`, items.`salesperson`, '') = %s")
         values.append(salesperson)
+    group_name = str(group_name or "").strip()[:100]
+    if group_name:
+        conditions.append("COALESCE(settings.`group_name`, items.`group_name`, '') = %s")
+        values.append(group_name)
     if risk_type:
         conditions.append("items.`risk_type` = %s")
         values.append(risk_type)
+    def parsed_occurred_at(value: str) -> tuple[datetime | None, str]:
+        text = str(value or "").strip().replace("T", " ")
+        if not text:
+            return None, ""
+        for date_format, precision in (
+            ("%Y-%m-%d", "day"),
+            ("%Y-%m-%d %H:%M", "minute"),
+            ("%Y-%m-%d %H:%M:%S", "second"),
+        ):
+            try:
+                return datetime.strptime(text, date_format), precision
+            except ValueError:
+                continue
+        raise ValueError("发生时间必须是 YYYY-MM-DD HH:MM 格式")
+
+    occurred_from_date, _ = parsed_occurred_at(occurred_from)
+    occurred_to_date, occurred_to_precision = parsed_occurred_at(occurred_to)
+    if occurred_from_date and occurred_to_date and occurred_from_date > occurred_to_date:
+        raise ValueError("发生时间的开始日期不能晚于结束日期")
+    if occurred_from_date:
+        conditions.append("items.`infraction_date` >= %s")
+        values.append(occurred_from_date.strftime("%Y-%m-%d %H:%M:%S"))
+    if occurred_to_date:
+        conditions.append("items.`infraction_date` < %s")
+        end_exclusive = occurred_to_date + {
+            "day": timedelta(days=1),
+            "minute": timedelta(minutes=1),
+            "second": timedelta(seconds=1),
+        }[occurred_to_precision]
+        values.append(end_exclusive.strftime("%Y-%m-%d %H:%M:%S"))
     search = str(search or "").strip()
     if search:
         pattern = f"%{search}%"
@@ -522,7 +559,6 @@ def list_prohibited_listings(
                 {where_sql}
                 ORDER BY CASE WHEN items.`risk_type` = 'rights_holder_reply' THEN 0 ELSE 1 END,
                          COALESCE(items.`due_at`, '9999-12-31 23:59:59') ASC,
-                         counts.`risk_count` DESC,
                          items.`infraction_date` DESC, items.`last_checked_at` DESC,
                          items.`record_id` DESC
                 LIMIT %s OFFSET %s
@@ -575,6 +611,14 @@ def list_prohibited_listings(
             )
             salespersons = [_json_safe_row(row) for row in cursor.fetchall()]
             cursor.execute(
+                """
+                SELECT DISTINCT COALESCE(`group_name`, '') AS `group_name`
+                FROM `mercado_store_site_settings`
+                WHERE COALESCE(`group_name`, '') <> '' ORDER BY `group_name`
+                """
+            )
+            group_names = [_json_safe_row(row) for row in cursor.fetchall()]
+            cursor.execute(
                 f"""
                 SELECT COUNT(*) AS `current_count`,
                        SUM(CASE WHEN items.`risk_type` = 'prohibited' THEN 1 ELSE 0 END)
@@ -598,7 +642,7 @@ def list_prohibited_listings(
             summary["last_updated_at"] = latest_sync.get("last_updated_at")
         return {
             "rows": rows, "groups": groups, "stores": stores,
-            "salespersons": salespersons, "summary": summary,
+            "salespersons": salespersons, "group_names": group_names, "summary": summary,
             "total": total, "page": page, "page_size": page_size, "pages": pages,
         }
     finally:

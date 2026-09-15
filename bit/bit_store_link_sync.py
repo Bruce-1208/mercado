@@ -12,6 +12,7 @@ from bit import bit_mysql, mercado_tokens
 from bit.bit_runtime_lock import InterProcessLock, get_lock_owner
 from erp.mercadolibre_store_link_store import (
     finalize_store_snapshot,
+    invalidate_store_link_metadata_cache,
     list_due_store_link_token_ids,
     mark_store_link_sync_finished,
     mark_store_link_sync_started,
@@ -24,12 +25,14 @@ from mercado_api.client import MercadoAPIError, MercadoLibreClient
 
 
 STORE_LINK_SYNC_LOCK_KEY = "mercado_store_link_sync_task"
-STORE_LINK_WRITE_BATCH_SIZE = 100
+STORE_LINK_WRITE_BATCH_SIZE = max(
+    100, min(int(os.getenv("MERCADO_STORE_LINK_WRITE_BATCH_SIZE", "200")), 1000)
+)
 STORE_LINK_STORE_WORKERS = max(
-    1, int(os.getenv("MERCADO_STORE_LINK_STORE_WORKERS", "12"))
+    1, min(int(os.getenv("MERCADO_STORE_LINK_STORE_WORKERS", "16")), 24)
 )
 STORE_LINK_DETAIL_WORKERS = max(
-    1, int(os.getenv("MERCADO_STORE_LINK_DETAIL_WORKERS", "16"))
+    1, min(int(os.getenv("MERCADO_STORE_LINK_DETAIL_WORKERS", "32")), 64)
 )
 STORE_LINK_AUTO_SYNC_DAYS = max(
     1, int(os.getenv("MERCADO_STORE_LINK_AUTO_SYNC_DAYS", "3"))
@@ -515,6 +518,7 @@ def run_store_link_sync(token_ids=None) -> dict:
             )
 
     failed = sum(1 for row in results if row.get("status") == "error")
+    invalidate_store_link_metadata_cache()
     message = (
         f"同步完成：新增 {_sync_state.get('inserted_count', 0)}，更新 {_sync_state.get('updated_count', 0)}"
         if failed == 0

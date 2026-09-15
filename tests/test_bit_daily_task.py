@@ -49,6 +49,66 @@ def test_mixed_mode_runs_the_fixed_six_task_round():
     )
 
 
+@pytest.mark.parametrize(
+    ("pending_count", "expected_weight"),
+    [(0, 0), (1, 1), (5, 1), (6, 2), (15, 2), (16, 3),
+     (30, 3), (31, 4), (60, 4), (61, 5)],
+)
+def test_appeal_site_frequency_weight_uses_business_bands(
+    pending_count, expected_weight
+):
+    assert bit_daily_task.appeal_site_frequency_weight(pending_count) == expected_weight
+
+
+def test_weighted_site_schedule_prioritizes_busy_sites_and_keeps_all_batches():
+    sites = [
+        {
+            "site_code": "MX",
+            "count": 40,
+            "infraction_ids": [f"MX-{index}" for index in range(40)],
+        },
+        {
+            "site_code": "BR",
+            "count": 18,
+            "infraction_ids": [f"BR-{index}" for index in range(18)],
+        },
+        {
+            "site_code": "AR",
+            "count": 4,
+            "infraction_ids": [f"AR-{index}" for index in range(4)],
+        },
+    ]
+
+    schedule = bit_daily_task.build_weighted_site_schedule(
+        sites,
+        appeal_copy_mode=bit_daily_task.APPEAL_COPY_MODE_AI,
+    )
+
+    first_eight = [batch["site_code"] for batch in schedule[:8]]
+    assert first_eight.count("MX") == 4
+    assert first_eight.count("BR") == 3
+    assert first_eight.count("AR") == 1
+    assert all(len(batch["infraction_ids"]) <= 3 for batch in schedule)
+    assert sorted(
+        item_id for batch in schedule for item_id in batch["infraction_ids"]
+    ) == sorted(
+        item_id for site in sites for item_id in site["infraction_ids"]
+    )
+
+
+def test_weighted_site_schedule_uses_ten_item_batches_in_normal_mode():
+    schedule = bit_daily_task.build_weighted_site_schedule(
+        [{
+            "site_code": "MX",
+            "count": 21,
+            "infraction_ids": [f"MX-{index}" for index in range(21)],
+        }]
+    )
+
+    assert [len(batch["infraction_ids"]) for batch in schedule] == [10, 10, 1]
+    assert {batch["frequency_weight"] for batch in schedule} == {3}
+
+
 def test_task_switches_can_run_multiple_tasks_without_infraction():
     assert bit_daily_task.appeal_type_sequence(["投诉", "延误率"]) == (
         bit_daily_task.APPEAL_TYPE_DELAY,

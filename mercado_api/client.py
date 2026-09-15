@@ -10,8 +10,17 @@ from pathlib import Path
 from typing import Any, Iterable, Iterator
 
 import requests
+from requests.adapters import HTTPAdapter
 
 LOGGER = logging.getLogger(__name__)
+
+
+def _http_pool_size() -> int:
+    try:
+        configured = int(os.getenv("MERCADO_API_HTTP_POOL_SIZE", "64"))
+    except ValueError:
+        configured = 64
+    return max(16, min(configured, 256))
 
 
 class MercadoAPIError(RuntimeError):
@@ -68,6 +77,14 @@ class MercadoLibreClient:
             # Scheduled/local-agent jobs must not depend on a desktop proxy
             # process that may be stopped or restarted independently.
             self.session.trust_env = False
+            pool_size = _http_pool_size()
+            adapter = HTTPAdapter(
+                pool_connections=min(pool_size, 32),
+                pool_maxsize=pool_size,
+                pool_block=True,
+            )
+            self.session.mount("https://", adapter)
+            self.session.mount("http://", adapter)
         else:
             self.session = session
         if token_store:

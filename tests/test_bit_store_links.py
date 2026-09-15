@@ -24,6 +24,7 @@ def _client():
 
 @pytest.fixture(autouse=True)
 def reset_sync_state():
+    store.invalidate_store_link_metadata_cache()
     with bit_store_link_sync._state_guard:
         bit_store_link_sync._sync_state.update(
             running=False,
@@ -58,6 +59,7 @@ def reset_sync_state():
             logs=[],
         )
     yield
+    store.invalidate_store_link_metadata_cache()
 
 
 def test_listing_record_extracts_link_weight_dimensions_and_sku():
@@ -696,8 +698,14 @@ def test_list_store_links_filters_site_and_defaults_to_sales_descending():
     assert params[1:3] == (12, "Toys")
     assert params[3] == "+Bluetooth* +Headset*"
     assert params[4:6] == (1, "MLM")
-    assert params[-2:] == (1000, 0)
-    assert result["page_size"] == 1000
+    assert params[-2:] == (25, 0)
+    assert result["page_size"] == 25
+    category_sql = next(sql for sql, _params in calls if "AS category_counts" in sql)
+    assert "COUNT(*) AS `link_count`" in category_sql
+    assert f"FORCE INDEX (`{store.STORE_LINK_CATEGORY_PAGE_INDEX}`)" in category_sql
+    assert "category_counts.`sample_link_id`" in category_sql
+    assert "sample_link.`item_id`" in category_sql
+    assert "COUNT(DISTINCT links.`id`)" not in category_sql
     assert result["rows"][0]["group_name"] == "运营一组"
     assert result["stores"][1] == {
         "token_id": 2,
@@ -718,6 +726,29 @@ def test_list_store_links_filters_site_and_defaults_to_sales_descending():
         {"group_name": "运营一组"},
         {"group_name": "__ungrouped__"},
     ]
+
+    calls.clear()
+    unfiltered = store.list_store_links(page_size=25, connection_factory=Connection)
+    assert unfiltered["total"] == 2
+    assert not any(
+        sql.lstrip().startswith("SELECT COUNT(*) AS `total`") for sql, _params in calls
+    )
+
+
+def test_store_link_metadata_is_cached_and_returned_as_an_independent_copy(monkeypatch):
+    calls = []
+
+    def query(_cursor):
+        calls.append(True)
+        return {"groups": [{"group_name": "运营一组"}]}
+
+    monkeypatch.setattr(store, "_query_store_link_metadata", query)
+    first = store._store_link_metadata(object(), use_cache=True)
+    first["groups"][0]["group_name"] = "已修改"
+    second = store._store_link_metadata(object(), use_cache=True)
+
+    assert len(calls) == 1
+    assert second == {"groups": [{"group_name": "运营一组"}]}
 
 
 def test_sync_store_writes_listing_batches_incrementally(monkeypatch):
@@ -853,7 +884,11 @@ def test_workbench_store_link_ui_and_routes():
     assert "storeLinkSyncRunning" not in selection_logic
     assert "美客多后台修改日志".encode("utf-8") in response.data
     assert "每 3 天自动同步链接状态".encode("utf-8") in response.data
-    assert "每页 1,000 条".encode("utf-8") in response.data
+    assert b'id="store-link-page-size"' in response.data
+    assert b'<option value="500" selected>500' in response.data
+    assert b'<option value="1000">1,000' in response.data
+    assert 'page_size: String(storeLinkPageSize.value || "500")'.encode("utf-8") in response.data
+    assert "new AbortController()".encode("utf-8") in response.data
 
     listing_data = {
         "rows": [{"id": 1, "item_id": "MLM1"}],
@@ -867,7 +902,7 @@ def test_workbench_store_link_ui_and_routes():
         "total": 1,
         "page": 1,
         "pages": 1,
-        "page_size": 1000,
+        "page_size": 500,
     }
     with patch.object(workbench.bit_db_api, "list_mercado_store_links", return_value=listing_data) as listing:
         response = client.get(
@@ -884,7 +919,14 @@ def test_workbench_store_link_ui_and_routes():
     assert listing.call_args.kwargs["management_category_id"] == "12"
     assert listing.call_args.kwargs["mercado_category"] == "MLM123"
     assert listing.call_args.kwargs["sales_sort"] == "asc"
-    assert listing.call_args.kwargs["page_size"] == 1000
+    assert listing.call_args.kwargs["page_size"] == 10
+
+    with patch.object(
+        workbench.bit_db_api, "list_mercado_store_links", return_value=listing_data
+    ) as capped_listing:
+        response = client.get("/api/store-links?page_size=9999")
+    assert response.status_code == 200
+    assert capped_listing.call_args.kwargs["page_size"] == 1000
 
     with patch.object(
         workbench.bit_db_api,

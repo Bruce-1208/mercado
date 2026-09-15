@@ -34,7 +34,7 @@ from urllib.parse import urlsplit
 import requests
 
 
-AGENT_VERSION = "1.1.4"
+AGENT_VERSION = "1.2.0"
 DEFAULT_SERVER_URL = "https://zeshun.cc.cd"
 DEFAULT_POLL_SECONDS = 10.0
 DEFAULT_HEARTBEAT_SECONDS = 10.0
@@ -44,6 +44,7 @@ RATE_LIMIT_MIN_SECONDS = 60.0
 RETRY_MAX_SECONDS = 300.0
 AGENT_LOG_MAX_BYTES = 5 * 1024 * 1024
 AGENT_LOG_BACKUP_COUNT = 3
+STATUS_WINDOW_PLATFORMS = frozenset(("win32", "darwin"))
 
 
 def terminate_worker_tree(pid):
@@ -67,6 +68,12 @@ class AgentRuntimeLog:
     def __init__(self, path):
         self.path = Path(path)
         self._lock = threading.Lock()
+        self._listeners = []
+
+    def add_listener(self, listener):
+        """Receive complete rendered log records without coupling logging to a UI."""
+        with self._lock:
+            self._listeners.append(listener)
 
     @staticmethod
     def _render(message):
@@ -104,6 +111,222 @@ class AgentRuntimeLog:
                 # A read-only/full disk must not stop task polling; the timestamped
                 # console copy remains available to the operator.
                 pass
+            listeners = tuple(self._listeners)
+        for listener in listeners:
+            try:
+                listener(rendered)
+            except Exception:
+                # A status display must never be able to stop Agent logging.
+                pass
+
+
+def _tail_text(path, max_bytes=256 * 1024):
+    """Read a bounded UTF-8 tail for the status window's initial history."""
+    path = Path(path)
+    try:
+        with path.open("rb") as stream:
+            stream.seek(0, os.SEEK_END)
+            size = stream.tell()
+            stream.seek(max(0, size - int(max_bytes)), os.SEEK_SET)
+            content = stream.read()
+    except OSError:
+        return ""
+    text = content.decode("utf-8", errors="replace")
+    if size > max_bytes and "\n" in text:
+        text = text.split("\n", 1)[1]
+    return text.rstrip("\r\n")
+
+
+def _hide_windows_console():
+    """Hide the packaging console after the graphical status window is ready."""
+    if os.name != "nt":
+        return
+    try:
+        import ctypes
+
+        window = ctypes.windll.kernel32.GetConsoleWindow()
+        if window:
+            ctypes.windll.user32.ShowWindow(window, 0)
+    except (AttributeError, OSError):
+        pass
+
+
+class AgentStatusWindow:
+    """Small desktop dashboard showing wall-clock time and live Agent logs."""
+
+    def __init__(self, agent):
+        import tkinter as tk
+        from tkinter import messagebox
+        from tkinter.scrolledtext import ScrolledText
+
+        self.agent = agent
+        self.tk = tk
+        self.messagebox = messagebox
+        self.root = tk.Tk()
+        self.root.title(f"泽顺 Mercado Local Agent {AGENT_VERSION}")
+        self.root.geometry("960x620")
+        self.root.minsize(720, 420)
+        self.root.configure(background="#f4f6f8")
+        self.log_queue = queue.Queue()
+        self.status_text = tk.StringVar(value="正在连接服务端…")
+        self.clock_text = tk.StringVar(value="")
+
+        header = tk.Frame(self.root, background="#17324d", padx=18, pady=14)
+        header.pack(fill="x")
+        tk.Label(
+            header,
+            text="Mercado Local Agent",
+            font=("Microsoft YaHei UI", 16, "bold"),
+            foreground="white",
+            background="#17324d",
+        ).pack(side="left")
+        tk.Label(
+            header,
+            textvariable=self.clock_text,
+            font=("Consolas", 15, "bold"),
+            foreground="#d9ecff",
+            background="#17324d",
+        ).pack(side="right")
+
+        details = tk.Frame(self.root, background="#f4f6f8", padx=18, pady=10)
+        details.pack(fill="x")
+        tk.Label(
+            details,
+            textvariable=self.status_text,
+            font=("Microsoft YaHei UI", 10, "bold"),
+            foreground="#157347",
+            background="#f4f6f8",
+        ).pack(side="left")
+        tk.Label(
+            details,
+            text=f"Agent：{agent.config.name}    版本：{AGENT_VERSION}",
+            font=("Microsoft YaHei UI", 9),
+            foreground="#52606d",
+            background="#f4f6f8",
+        ).pack(side="right")
+
+        body = tk.Frame(self.root, background="#f4f6f8", padx=18)
+        body.pack(fill="both", expand=True)
+        self.log_view = ScrolledText(
+            body,
+            wrap="word",
+            state="disabled",
+            font=("Consolas", 9),
+            foreground="#d9e2ec",
+            background="#102a43",
+            insertbackground="white",
+            padx=10,
+            pady=10,
+            relief="flat",
+        )
+        self.log_view.pack(fill="both", expand=True)
+
+        footer = tk.Frame(self.root, background="#f4f6f8", padx=18, pady=12)
+        footer.pack(fill="x")
+        tk.Label(
+            footer,
+            text="关闭窗口只会最小化，Agent 会继续运行。",
+            font=("Microsoft YaHei UI", 9),
+            foreground="#6b7280",
+            background="#f4f6f8",
+        ).pack(side="left")
+        for label, command in (
+            ("打开日志目录", self._open_log_directory),
+            ("复制全部", self._copy_all),
+            ("清空显示", self._clear_view),
+        ):
+            tk.Button(
+                footer,
+                text=label,
+                command=command,
+                font=("Microsoft YaHei UI", 9),
+                padx=10,
+                pady=4,
+            ).pack(side="right", padx=(8, 0))
+
+        history = _tail_text(agent.runtime_log.path)
+        if history:
+            self._append_log(history)
+        agent.runtime_log.add_listener(self.log_queue.put)
+        self.root.protocol("WM_DELETE_WINDOW", self.root.iconify)
+        self.root.after(0, self._tick_clock)
+        self.root.after(100, self._drain_logs)
+
+    def _append_log(self, content):
+        self.log_view.configure(state="normal")
+        self.log_view.insert("end", str(content).rstrip("\r\n") + "\n")
+        # Bound the on-screen buffer; complete history remains in agent.log.
+        if int(self.log_view.index("end-1c").split(".")[0]) > 6000:
+            self.log_view.delete("1.0", "1001.0")
+        self.log_view.see("end")
+        self.log_view.configure(state="disabled")
+
+    def _set_status_from_log(self, content):
+        if "Agent 已停止" in content:
+            self.status_text.set("Agent 已停止")
+        elif "Agent 连接异常" in content:
+            self.status_text.set("连接异常，正在自动重试")
+        elif "收到任务" in content:
+            self.status_text.set("任务执行中")
+        elif "已结束" in content:
+            self.status_text.set("在线，等待任务")
+        elif "已启动" in content or "业务代码已更新" in content:
+            self.status_text.set("在线，等待任务")
+
+    def _drain_logs(self):
+        for _index in range(200):
+            try:
+                content = self.log_queue.get_nowait()
+            except queue.Empty:
+                break
+            self._append_log(content)
+            self._set_status_from_log(content)
+        self.root.after(100, self._drain_logs)
+
+    def _tick_clock(self):
+        self.clock_text.set(time.strftime("%Y-%m-%d  %H:%M:%S", time.localtime()))
+        self.root.after(1000, self._tick_clock)
+
+    def _open_log_directory(self):
+        try:
+            log_directory = str(self.agent.runtime_log.path.parent)
+            if sys.platform == "darwin":
+                subprocess.Popen(
+                    ["open", log_directory],
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL,
+                )
+            else:
+                os.startfile(log_directory)
+        except (AttributeError, OSError, subprocess.SubprocessError) as exc:
+            self.messagebox.showerror("无法打开日志目录", str(exc), parent=self.root)
+
+    def _copy_all(self):
+        content = self.log_view.get("1.0", "end-1c")
+        self.root.clipboard_clear()
+        self.root.clipboard_append(content)
+
+    def _clear_view(self):
+        self.log_view.configure(state="normal")
+        self.log_view.delete("1.0", "end")
+        self.log_view.configure(state="disabled")
+
+    def run(self):
+        result = {"code": 1}
+
+        def run_agent():
+            try:
+                result["code"] = self.agent.run()
+            except BaseException as exc:
+                self.agent.log(f"Agent 主进程异常退出：{exc}")
+                result["code"] = 1
+            finally:
+                self.log_queue.put("[状态] Agent 已停止")
+
+        threading.Thread(target=run_agent, name="agent-main", daemon=True).start()
+        _hide_windows_console()
+        self.root.mainloop()
+        return int(result["code"])
 
 
 class AgentRateLimitError(RuntimeError):
@@ -813,11 +1036,25 @@ def build_argument_parser():
     parser.add_argument("--data-dir", default="")
     parser.add_argument("--allow-http", action="store_true")
     parser.add_argument("--once", action="store_true")
+    parser.add_argument(
+        "--no-window",
+        action="store_true",
+        help="不显示图形运行状态窗口，仅写控制台和本地日志",
+    )
     parser.add_argument("--worker", action="store_true", help=argparse.SUPPRESS)
     parser.add_argument("--release-dir", default="", help=argparse.SUPPRESS)
     parser.add_argument("--job-file", default="", help=argparse.SUPPRESS)
     parser.add_argument("--cancel-file", default="", help=argparse.SUPPRESS)
     return parser
+
+
+def _status_window_enabled(args):
+    return (
+        sys.platform in STATUS_WINDOW_PLATFORMS
+        and not args.no_window
+        and not args.once
+        and not args.worker
+    )
 
 
 def main(argv=None):
@@ -831,6 +1068,11 @@ def main(argv=None):
         agent.log("泽顺本机 Agent 已在运行，本次重复启动退出。")
         return 2
     try:
+        if _status_window_enabled(args):
+            try:
+                return AgentStatusWindow(agent).run()
+            except Exception as exc:
+                agent.log(f"状态窗口启动失败，已切换到控制台模式：{exc}")
         return agent.run()
     finally:
         process_lock.release()

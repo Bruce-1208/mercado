@@ -815,7 +815,7 @@ def list_mercado_store_links(
     sales_sort="desc",
     current_only=True,
     page=1,
-    page_size=1000,
+    page_size=500,
 ):
     params = {
         "search": search or "",
@@ -827,7 +827,7 @@ def list_mercado_store_links(
         "sales_sort": "asc" if str(sales_sort or "").strip().lower() == "asc" else "desc",
         "current_only": "1" if current_only else "0",
         "page": int(page or 1),
-        "page_size": 1000,
+        "page_size": max(1, min(int(page_size or 500), 1000)),
     }
     if token_id not in (None, ""):
         params["token_id"] = int(token_id)
@@ -897,7 +897,10 @@ def list_mercado_prohibited_listings(
     token_id=None,
     site_id="",
     salesperson="",
+    group_name="",
     risk_type="",
+    occurred_from="",
+    occurred_to="",
     page=1,
     page_size=100,
 ):
@@ -905,7 +908,10 @@ def list_mercado_prohibited_listings(
         "search": str(search or "").strip(),
         "site_id": str(site_id or "").strip().upper(),
         "salesperson": str(salesperson or "").strip(),
+        "group_name": str(group_name or "").strip(),
         "risk_type": str(risk_type or "").strip().lower(),
+        "occurred_from": str(occurred_from or "").strip(),
+        "occurred_to": str(occurred_to or "").strip(),
         "page": int(page or 1),
         "page_size": max(20, min(int(page_size or 100), 500)),
     }

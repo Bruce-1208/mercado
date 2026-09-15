@@ -8,7 +8,14 @@ from types import SimpleNamespace
 
 import pytest
 
-from local_agent import LocalAgent
+import local_agent
+from local_agent import (
+    STATUS_WINDOW_PLATFORMS,
+    AgentRuntimeLog,
+    LocalAgent,
+    _status_window_enabled,
+    _tail_text,
+)
 
 
 class BundleResponse:
@@ -62,6 +69,69 @@ def test_agent_runtime_messages_have_local_time_and_persist(tmp_path, capsys):
     output = capsys.readouterr().out.strip()
     assert re.fullmatch(r"\[\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\] Agent 测试日志", output)
     assert (tmp_path / "agent.log").read_text(encoding="utf-8").strip() == output
+
+
+def test_agent_runtime_messages_are_forwarded_to_status_listeners(tmp_path):
+    runtime_log = AgentRuntimeLog(tmp_path / "agent.log")
+    received = []
+    runtime_log.add_listener(received.append)
+
+    runtime_log.write("实时日志")
+
+    assert len(received) == 1
+    assert received[0].endswith("实时日志")
+
+
+def test_status_history_reads_a_bounded_utf8_tail(tmp_path):
+    path = tmp_path / "agent.log"
+    path.write_text("第一行\n第二行\n第三行\n", encoding="utf-8")
+
+    assert _tail_text(path, max_bytes=18).endswith("第三行")
+    assert not _tail_text(tmp_path / "missing.log")
+
+
+def test_status_window_supports_windows_and_macos():
+    assert STATUS_WINDOW_PLATFORMS == {"win32", "darwin"}
+
+
+def test_status_window_is_disabled_for_noninteractive_modes(monkeypatch):
+    monkeypatch.setattr("local_agent.sys.platform", "darwin")
+    args = SimpleNamespace(no_window=False, once=False, worker=False)
+    assert _status_window_enabled(args)
+
+    args.once = True
+    assert not _status_window_enabled(args)
+    args.once = False
+    args.no_window = True
+    assert not _status_window_enabled(args)
+    args.no_window = False
+    args.worker = True
+    assert not _status_window_enabled(args)
+
+
+def test_status_window_opens_macos_log_directory_with_finder(monkeypatch, tmp_path):
+    window = object.__new__(local_agent.AgentStatusWindow)
+    window.agent = SimpleNamespace(
+        runtime_log=SimpleNamespace(path=tmp_path / "agent.log")
+    )
+    opened = []
+    monkeypatch.setattr("local_agent.sys.platform", "darwin")
+    monkeypatch.setattr(
+        "local_agent.subprocess.Popen",
+        lambda *args, **kwargs: opened.append((args, kwargs)),
+    )
+
+    window._open_log_directory()
+
+    assert opened == [
+        (
+            (["open", str(tmp_path)],),
+            {
+                "stdout": local_agent.subprocess.DEVNULL,
+                "stderr": local_agent.subprocess.DEVNULL,
+            },
+        )
+    ]
 
 
 def test_agent_downloads_verifies_and_atomically_activates_release(tmp_path):

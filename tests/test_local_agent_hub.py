@@ -196,6 +196,8 @@ def test_download_package_supports_macos_source_install(monkeypatch, tmp_path):
         }.issubset(names)
         assert "start-agent.bat" not in names
         assert "LaunchAgents" in archive.read("install-agent.command").decode("utf-8")
+        readme = archive.read("README.txt").decode("utf-8")
+        assert "运行状态窗口会实时显示本机时间和日志" in readme
         for name in ("run-agent.sh", "start-agent.command", "install-agent.command"):
             assert archive.getinfo(name).external_attr >> 16 & 0o111
 

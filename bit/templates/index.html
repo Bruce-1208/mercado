@@ -2804,6 +2804,44 @@
             padding: 10px;
         }
 
+        .daily-task-agent-login-status {
+            display: grid;
+            gap: 8px;
+            margin-top: 10px;
+        }
+
+        .daily-task-agent-login-card {
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            background: #f8fafc;
+            padding: 9px 10px;
+        }
+
+        .daily-task-agent-login-head {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 8px;
+            color: #27364a;
+            font-size: 12px;
+            font-weight: 750;
+        }
+
+        .daily-task-agent-login-count {
+            color: #b42318;
+            white-space: nowrap;
+        }
+
+        .daily-task-agent-login-count.ok { color: #027a48; }
+
+        .daily-task-agent-login-shops {
+            margin-top: 5px;
+            color: #667085;
+            font-size: 11px;
+            line-height: 1.55;
+            overflow-wrap: anywhere;
+        }
+
         .daily-task-filter-bar {
             display: grid;
             grid-template-columns: repeat(2, minmax(0, 1fr)) auto;
@@ -10462,6 +10500,14 @@
                         </div>
 
                         <div class="field">
+                            <label>各终端店铺登录状态</label>
+                            <div class="daily-task-agent-login-status" id="daily-task-agent-login-status">
+                                <div class="daily-task-agent-login-card">正在读取各终端店铺退出登录情况...</div>
+                            </div>
+                            <small class="shop-search-hint">显示所有已注册 Agent 最近检测到且尚未解除的美客多退出登录店铺。</small>
+                        </div>
+
+                        <div class="field">
                             <label for="daily-task-mode">执行模式</label>
                             <select id="daily-task-mode">
                                 <option value="once">单轮执行</option>
@@ -10493,7 +10539,7 @@
                                 <label class="site-option"><input type="checkbox" role="switch" name="daily-task-appeal-type" value="取消率" onchange="updateDailyTaskAppealSwitch(this)"><span>取消率</span></label>
                                 <label class="site-option"><input id="daily-task-mixed-mode" type="checkbox" role="switch" name="daily-task-appeal-type" value="混合模式" onchange="updateDailyTaskAppealSwitch(this)"><span>混合模式</span></label>
                             </div>
-                            <small class="shop-search-hint">混合模式一轮：侵权 → 延误率 → 侵权 → 投诉 → 侵权 → 取消率；混合模式与自定义任务互斥。侵权任务不限制 Top N；每轮先实时遍历店铺授权中勾选的全部站点，再只执行本站点普通侵权数超过标准的站点。禁限售是独立任务，需单独开启后读取当前禁限售列表。</small>
+                            <small class="shop-search-hint">混合模式一轮：侵权 → 延误率 → 侵权 → 投诉 → 侵权 → 取消率；混合模式与自定义任务互斥。侵权任务不限制 Top N；每轮先实时遍历店铺授权中勾选的全部站点，再只执行本站点普通侵权数超过标准的站点。侵权和禁限售会拆成小批次，并按待申诉数量设置 1–5 级权重平滑轮转；数量越多，执行频率越高，低量站点也不会跳过。禁限售是独立任务，需单独开启后读取当前禁限售列表。</small>
                         </div>
 
                         <div class="field">
@@ -11011,6 +11057,15 @@
                             </select>
                         </div>
                         <div class="order-filter-field">
+                            <label for="store-link-page-size">每页条数</label>
+                            <select id="store-link-page-size" onchange="loadStoreLinks(1)">
+                                <option value="50">50 条</option>
+                                <option value="200">200 条</option>
+                                <option value="500" selected>500 条</option>
+                                <option value="1000">1,000 条</option>
+                            </select>
+                        </div>
+                        <div class="order-filter-field">
                             <label for="store-link-search">搜索</label>
                             <input id="store-link-search" type="search" placeholder="商品标题、商品编号、SKU 或店铺" onkeydown="if(event.key === 'Enter') loadStoreLinks(1)">
                         </div>
@@ -11120,6 +11175,10 @@
                             <select id="prohibited-salesperson-filter" onchange="loadProhibitedListings(1)"><option value="">全部业务员</option></select>
                         </div>
                         <div class="order-filter-field">
+                            <label for="prohibited-group-filter">店铺组</label>
+                            <select id="prohibited-group-filter" onchange="loadProhibitedListings(1)"><option value="">全部店铺组</option></select>
+                        </div>
+                        <div class="order-filter-field">
                             <label for="prohibited-store-filter">店铺</label>
                             <select id="prohibited-store-filter" onchange="loadProhibitedListings(1)"><option value="">全部店铺</option></select>
                         </div>
@@ -11128,13 +11187,21 @@
                             <select id="prohibited-site-filter" onchange="loadProhibitedListings(1)"><option value="">全部站点</option></select>
                         </div>
                         <div class="order-filter-field">
+                            <label for="prohibited-occurred-from">发生时间（开始）</label>
+                            <input class="minute-datetime" id="prohibited-occurred-from" type="datetime-local" step="60" onchange="loadProhibitedListings(1)">
+                        </div>
+                        <div class="order-filter-field">
+                            <label for="prohibited-occurred-to">发生时间（结束）</label>
+                            <input class="minute-datetime" id="prohibited-occurred-to" type="datetime-local" step="60" onchange="loadProhibitedListings(1)">
+                        </div>
+                        <div class="order-filter-field">
                             <label for="prohibited-search">搜索</label>
                             <input id="prohibited-search" type="search" placeholder="商品编号、Global Item、标题或店铺" onkeydown="if(event.key === 'Enter') loadProhibitedListings(1)">
                         </div>
                         <button class="secondary" type="button" onclick="loadProhibitedListings(1)">搜索 / 筛选</button>
                     </div>
 
-                    <p class="store-link-bulk-note" id="prohibited-message">待回复案件按截止时间优先，其余按店铺站点风险数量从高到低排序</p>
+                    <p class="store-link-bulk-note" id="prohibited-message">待回复权利人案件置顶，其余按发生时间从近到远排序</p>
                     <div class="risk-site-breakdown" id="prohibited-site-breakdown" aria-label="各站点风险数量"></div>
 
                     <div class="store-link-table-wrap" style="max-height:280px">
@@ -11739,14 +11806,14 @@
             <div class="tab-page" id="tab-risk-check">
                 <div class="tab-heading">
                     <h2>侵权检测</h2>
-                    <p>从产品列表、采集列表、店铺拉取产品或智赢采集产品中选择范围，调用 DeepSeek 按标题检测；黑名单优先，白名单参与判定。主图链接和 Logo 暂不参与判断</p>
+                    <p>从产品列表、采集列表、店铺拉取产品或智赢采集产品中选择范围，调用所选 AI 按标题检测；结果会同步回产品与采集列表。黑名单优先，白名单参与判定</p>
                 </div>
 
                 <section class="panel infractions-panel">
                     <div class="infractions-header">
                         <div>
                             <h2 class="panel-title" style="margin: 0;">检测任务</h2>
-                            <div class="risk-check-mode-note">DeepSeek 标题识别模式 · 已启用侵权黑白名单 · 图片 Logo 检测暂未启用</div>
+                            <div class="risk-check-mode-note">DeepSeek / 千问 / 本地 OpenAI 兼容模型 · Token 仅用于本次任务 · 主图链接和 Logo 暂不参与判断</div>
                         </div>
                         <div class="header-actions">
                             <button class="primary" id="start-risk-check-btn" type="button" onclick="startRiskCheck()">启动侵权检测</button>
@@ -11825,9 +11892,31 @@
                                 <section class="risk-builder-section risk-runtime-section">
                                     <div class="risk-section-heading">
                                         <div><span class="risk-step">3</span><strong>检测设置</strong></div>
-                                        <span>DeepSeek 批量处理</span>
+                                        <span>Token 不保存、不回传</span>
                                     </div>
                                     <div class="risk-runtime-grid">
+                                        <div class="field">
+                                            <label for="risk-check-ai-provider">AI 服务</label>
+                                            <select id="risk-check-ai-provider" onchange="updateRiskAiProvider()">
+                                                <option value="deepseek" selected>DeepSeek</option>
+                                                <option value="qianwen">千问（阿里云百炼）</option>
+                                                <option value="local">本地模型</option>
+                                            </select>
+                                        </div>
+                                        <div class="field">
+                                            <label for="risk-check-api-key">Token</label>
+                                            <input id="risk-check-api-key" type="password" autocomplete="new-password" placeholder="仅用于本次检测" spellcheck="false">
+                                            <small class="risk-field-hint">不会写入任务状态或日志</small>
+                                        </div>
+                                        <div class="field">
+                                            <label for="risk-check-model">模型名称</label>
+                                            <input id="risk-check-model" type="text" value="deepseek-chat" maxlength="128" placeholder="例如 qwen-plus">
+                                        </div>
+                                        <div class="field">
+                                            <label for="risk-check-base-url">OpenAI 兼容接口地址</label>
+                                            <input id="risk-check-base-url" type="url" value="https://api.deepseek.com" maxlength="2000" placeholder="http://127.0.0.1:11434/v1">
+                                            <small class="risk-field-hint">本地模型请填写服务的 /v1 地址</small>
+                                        </div>
                                         <div class="field">
                                             <label for="risk-check-hours">入库时间范围</label>
                                             <select id="risk-check-hours">
@@ -12725,6 +12814,7 @@
         const dailyTaskAgentId = document.getElementById("daily-task-agent-id");
         const dailyTaskAgentField = document.getElementById("daily-task-agent-field");
         const dailyTaskAgentHint = document.getElementById("daily-task-agent-hint");
+        const dailyTaskAgentLoginStatus = document.getElementById("daily-task-agent-login-status");
         const refreshDailyTaskAgentsBtn = document.getElementById("refresh-daily-task-agents");
         const dailyTaskLocalExecutorHint = document.getElementById("daily-task-local-executor-hint");
         const dailyTaskSalesperson = document.getElementById("daily-task-salesperson");
@@ -12894,6 +12984,7 @@
         const storeLinkProductCategoryFilter = document.getElementById("store-link-product-category-filter");
         const storeLinkMercadoCategoryFilter = document.getElementById("store-link-mercado-category-filter");
         const storeLinkSalesSort = document.getElementById("store-link-sales-sort");
+        const storeLinkPageSize = document.getElementById("store-link-page-size");
         const storeLinkSearch = document.getElementById("store-link-search");
         const storeLinkSelectAll = document.getElementById("store-link-select-all");
         const storeLinkSelectionCount = document.getElementById("store-link-selection-count");
@@ -12923,8 +13014,11 @@
         const prohibitedLastSync = document.getElementById("prohibited-last-sync");
         const prohibitedRiskTypeFilter = document.getElementById("prohibited-risk-type-filter");
         const prohibitedSalespersonFilter = document.getElementById("prohibited-salesperson-filter");
+        const prohibitedGroupFilter = document.getElementById("prohibited-group-filter");
         const prohibitedStoreFilter = document.getElementById("prohibited-store-filter");
         const prohibitedSiteFilter = document.getElementById("prohibited-site-filter");
+        const prohibitedOccurredFrom = document.getElementById("prohibited-occurred-from");
+        const prohibitedOccurredTo = document.getElementById("prohibited-occurred-to");
         const prohibitedSearch = document.getElementById("prohibited-search");
         const prohibitedMessage = document.getElementById("prohibited-message");
         const prohibitedSiteBreakdown = document.getElementById("prohibited-site-breakdown");
@@ -13241,6 +13335,8 @@
         let storeLinkRows = [];
         let storeLinkPage = 1;
         let storeLinkPages = 1;
+        let storeLinkLoadRequestId = 0;
+        let storeLinkLoadController = null;
         let storeLinkSyncRunning = false;
         let storeLinkSyncPollTimer = null;
         let storeLinkRemoteUpdateRunning = false;
@@ -13571,6 +13667,7 @@
             }
             if (tabName === "tasks") {
                 syncExecutionTargetHint(dailyTaskExecutionTarget, dailyTaskLocalExecutorHint, "tasks.view");
+                if (dailyTaskExecutionTarget?.value !== "agent") loadDailyTaskAgents();
                 loadDailyTaskStatus();
                 if (!tasksLoaded) loadDailyTaskOptions();
             }
@@ -16545,6 +16642,22 @@
                 const collectionWorkflowTags = mercadoListMode === "collection"
                     ? `<span class="market-workflow-tags"><span class="market-status-tag ${reviewDefinition[1]}">${escapeHtml(reviewDefinition[0])}</span><span class="market-status-tag ${publishDefinition[1]}">${escapeHtml(publishDefinition[0])}</span></span>`
                     : "";
+                const aiRiskLevel = String(row.infringement_risk_level ?? "").trim();
+                const aiRiskDefinitions = {
+                    "0": ["AI 无可疑", "ok"],
+                    "1": ["AI 疑似", "partial"],
+                    "2": ["AI 侵权", "failed"],
+                };
+                const aiRiskDefinition = aiRiskDefinitions[aiRiskLevel] || ["AI 未检测", ""];
+                const aiRiskTitle = [
+                    row.infringement_keywords,
+                    row.infringement_reason,
+                    row.infringement_checked_at,
+                ].filter(Boolean).join(" · ");
+                const aiRiskTag = `<span class="market-status-tag ${aiRiskDefinition[1]}" title="${escapeHtml(aiRiskTitle)}">${escapeHtml(aiRiskDefinition[0])}</span>`;
+                const aiRiskNote = aiRiskLevel && row.infringement_keywords
+                    ? `<span class="market-metric-note" title="${escapeHtml(aiRiskTitle)}">关键词：${escapeHtml(row.infringement_keywords)}</span>`
+                    : "";
                 const reviewControl = mercadoListMode === "products"
                     ? `<select class="market-review-select" aria-label="修改 ${escapeHtml(row.source_item_id || "产品")} 的审核状态" onchange="updateMercadoProductReviewStatus([${rowId}], this.value)">${reviewOptions.map(([value, label]) => `<option value="${value}" ${reviewStatus === value ? "selected" : ""}>${label}</option>`).join("")}</select>`
                     : "";
@@ -16569,7 +16682,7 @@
                     <td title="${profitTitle}"><span class="market-metric-main">${mercadoMetric(row.commission_amount_usd, " USD")}</span><span class="market-metric-note">${escapeHtml(commissionNote)}</span></td>
                     <td title="${profitTitle}"><span class="market-metric-main">${mercadoMetric(usesActualWeightShipping ? row.shipping_fee_usd : null, " USD")}</span><span class="market-metric-note">${escapeHtml(shippingNote)}</span></td>
                     <td title="${profitTitle}"><span class="market-metric-main ${netClass}">${mercadoMetric(netProceeds, " USD")}</span><span class="market-metric-note">${netProceedsNote}</span></td>
-                    <td title="${statusTitle}">${collectionWorkflowTags}${reviewControl}<span class="market-status-tag ${statusClass}">${status}</span>${publishNote}</td>
+                    <td title="${statusTitle}">${collectionWorkflowTags}${reviewControl}${aiRiskTag}${aiRiskNote}<span class="market-status-tag ${statusClass}">${status}</span>${publishNote}</td>
                     <td>${escapeHtml(timeText)}</td>
                 </tr>`;
             }).join("");
@@ -21319,6 +21432,9 @@
         async function loadStoreLinks(page = 1) {
             if (!storeLinkBody) return;
             const requestedPage = Math.max(1, Number(page || 1));
+            const requestId = ++storeLinkLoadRequestId;
+            if (storeLinkLoadController) storeLinkLoadController.abort();
+            storeLinkLoadController = new AbortController();
             storeLinkRefreshButton.disabled = true;
             storeLinkBody.innerHTML = '<tr><td class="empty-state" colspan="12">正在加载店铺链接...</td></tr>';
             const query = new URLSearchParams({
@@ -21330,13 +21446,17 @@
                 mercado_category: storeLinkMercadoCategoryFilter.value,
                 sales_sort: storeLinkSalesSort.value || "desc",
                 page: String(requestedPage),
-                page_size: "1000",
+                page_size: String(storeLinkPageSize.value || "500"),
                 current_only: "1",
             });
             if (storeLinkStoreFilter.value) query.set("token_id", storeLinkStoreFilter.value);
             try {
-                const response = await fetch(`/api/store-links?${query.toString()}`, {cache: "no-store"});
+                const response = await fetch(`/api/store-links?${query.toString()}`, {
+                    cache: "no-store",
+                    signal: storeLinkLoadController.signal,
+                });
                 const payload = await response.json();
+                if (requestId !== storeLinkLoadRequestId) return;
                 if (!response.ok || payload.status !== "success") {
                     throw new Error(payload.message || `接口请求失败：${response.status}`);
                 }
@@ -21353,14 +21473,18 @@
                 storeLinkCurrentCount.textContent = Number(summary.current_count || 0).toLocaleString("zh-CN");
                 storeLinkStoreCount.textContent = Number(summary.store_count || 0).toLocaleString("zh-CN");
                 storeLinkLastSync.textContent = summary.last_synced_at || "-";
-                storeLinkPaginationSummary.textContent = `筛选结果共 ${Number(data.total || 0).toLocaleString("zh-CN")} 条；当前第 ${storeLinkPage}/${storeLinkPages} 页，本页显示 ${storeLinkRows.length} 条（每页 1,000 条）`;
+                storeLinkPaginationSummary.textContent = `筛选结果共 ${Number(data.total || 0).toLocaleString("zh-CN")} 条；当前第 ${storeLinkPage}/${storeLinkPages} 页，本页显示 ${storeLinkRows.length} 条（每页 ${Number(data.page_size || storeLinkPageSize.value || 500).toLocaleString("zh-CN")} 条）`;
                 renderStoreLinkPagination();
                 storeLinksLoaded = true;
             } catch (error) {
+                if (error?.name === "AbortError" || requestId !== storeLinkLoadRequestId) return;
                 storeLinkBody.innerHTML = `<tr><td class="empty-state" colspan="12">加载失败：${escapeHtml(error.message || error)}</td></tr>`;
                 storeLinkMessage.textContent = `加载失败：${error.message || error}`;
             } finally {
-                storeLinkRefreshButton.disabled = false;
+                if (requestId === storeLinkLoadRequestId) {
+                    storeLinkLoadController = null;
+                    storeLinkRefreshButton.disabled = false;
+                }
             }
         }
 
@@ -21718,8 +21842,11 @@
             const query = new URLSearchParams({page: String(prohibitedPage), page_size: "100"});
             if (prohibitedRiskTypeFilter.value) query.set("risk_type", prohibitedRiskTypeFilter.value);
             if (prohibitedSalespersonFilter.value) query.set("salesperson", prohibitedSalespersonFilter.value);
+            if (prohibitedGroupFilter.value) query.set("group_name", prohibitedGroupFilter.value);
             if (prohibitedStoreFilter.value) query.set("token_id", prohibitedStoreFilter.value);
             if (prohibitedSiteFilter.value) query.set("site_id", prohibitedSiteFilter.value);
+            if (prohibitedOccurredFrom.value) query.set("occurred_from", prohibitedOccurredFrom.value);
+            if (prohibitedOccurredTo.value) query.set("occurred_to", prohibitedOccurredTo.value);
             if (prohibitedSearch.value.trim()) query.set("search", prohibitedSearch.value.trim());
             try {
                 const response = await fetch(`/api/prohibited-listings?${query.toString()}`, {cache: "no-store"});
@@ -21749,14 +21876,19 @@
                     Array.isArray(data.salespersons) ? data.salespersons : [],
                     "salesperson", "salesperson", "全部业务员"
                 );
+                updateProhibitedSelect(
+                    prohibitedGroupFilter,
+                    Array.isArray(data.group_names) ? data.group_names : [],
+                    "group_name", "group_name", "全部店铺组"
+                );
                 const sites = [...new Set(groups.map(row => String(row.site_id || "")).filter(Boolean))]
                     .sort().map(site_id => ({site_id}));
                 updateProhibitedSelect(prohibitedSiteFilter, sites, "site_id", "site_id", "全部站点");
                 renderProhibitedGroups(groups);
                 renderProhibitedRows(rows);
                 prohibitedMessage.textContent = summary.next_due_at
-                    ? `待回复案件按截止时间优先；最近回复截止：${summary.next_due_at}`
-                    : "待回复案件按截止时间优先，其余按店铺站点风险数量从高到低排序";
+                    ? `待回复权利人案件置顶；最近回复截止：${summary.next_due_at}；其余按发生时间从近到远排序`
+                    : "待回复权利人案件置顶，其余按发生时间从近到远排序";
                 prohibitedPaginationSummary.textContent = `共 ${Number(data.total || 0).toLocaleString()} 条；当前页显示 ${rows.length} 条；待回复案件优先`;
                 prohibitedPageIndicator.textContent = `${prohibitedPage} / ${prohibitedPages}`;
                 prohibitedPrev.disabled = prohibitedPage <= 1;
@@ -22369,8 +22501,11 @@
             const query = new URLSearchParams();
             if (prohibitedRiskTypeFilter.value) query.set("risk_type", prohibitedRiskTypeFilter.value);
             if (prohibitedSalespersonFilter.value) query.set("salesperson", prohibitedSalespersonFilter.value);
+            if (prohibitedGroupFilter.value) query.set("group_name", prohibitedGroupFilter.value);
             if (prohibitedStoreFilter.value) query.set("token_id", prohibitedStoreFilter.value);
             if (prohibitedSiteFilter.value) query.set("site_id", prohibitedSiteFilter.value);
+            if (prohibitedOccurredFrom.value) query.set("occurred_from", prohibitedOccurredFrom.value);
+            if (prohibitedOccurredTo.value) query.set("occurred_to", prohibitedOccurredTo.value);
             if (prohibitedSearch.value.trim()) query.set("search", prohibitedSearch.value.trim());
             try {
                 const response = await fetch(`/api/prohibited-listings/export?${query.toString()}`, {
@@ -22668,6 +22803,23 @@
             return Array.from(document.querySelectorAll(".risk-check-source:checked")).map(input => input.value);
         }
 
+        function updateRiskAiProvider() {
+            const provider = document.getElementById("risk-check-ai-provider")?.value || "deepseek";
+            const baseUrl = document.getElementById("risk-check-base-url");
+            const model = document.getElementById("risk-check-model");
+            const defaults = {
+                deepseek: {baseUrl: "https://api.deepseek.com", model: "deepseek-chat"},
+                qianwen: {baseUrl: "https://dashscope.aliyuncs.com/compatible-mode/v1", model: "qwen-plus"},
+                local: {baseUrl: "http://127.0.0.1:11434/v1", model: ""},
+            };
+            const selected = defaults[provider] || defaults.deepseek;
+            if (baseUrl) baseUrl.value = selected.baseUrl;
+            if (model) {
+                model.value = selected.model;
+                model.placeholder = provider === "local" ? "填写本地服务中的模型名称" : selected.model;
+            }
+        }
+
         function updateRiskCheckSourceFields() {
             const sources = selectedRiskCheckSources();
             const pulledEnabled = sources.includes("pulled");
@@ -22920,9 +23072,33 @@
                 alert("请至少选择一种产品来源");
                 return;
             }
+            const aiProvider = document.getElementById("risk-check-ai-provider")?.value || "deepseek";
+            const apiKeyInput = document.getElementById("risk-check-api-key");
+            const apiKey = String(apiKeyInput?.value || "").trim();
+            const model = String(document.getElementById("risk-check-model")?.value || "").trim();
+            const baseUrl = String(document.getElementById("risk-check-base-url")?.value || "").trim();
+            if (!apiKey) {
+                alert("请输入本次 AI 侵权检测使用的 Token");
+                apiKeyInput?.focus();
+                return;
+            }
+            if (!model) {
+                alert("请输入模型名称");
+                document.getElementById("risk-check-model")?.focus();
+                return;
+            }
+            if (!baseUrl) {
+                alert("请输入 OpenAI 兼容接口地址");
+                document.getElementById("risk-check-base-url")?.focus();
+                return;
+            }
             const recheck = Boolean(document.getElementById("risk-check-recheck")?.checked);
             if (recheck && !window.confirm("重新检测会覆盖已有 0/1/2 结果，确定继续吗？")) return;
             const payload = {
+                ai_provider: aiProvider,
+                api_key: apiKey,
+                model,
+                base_url: baseUrl,
                 sources,
                 salespeople: riskCheckSalesperson?.value ? [riskCheckSalesperson.value] : [],
                 group_names: riskCheckGroup?.value ? [riskCheckGroup.value] : [],
@@ -22947,6 +23123,7 @@
                     throw new Error(result.message || `接口请求失败：${response.status}`);
                 }
                 riskCheckRunning = true;
+                if (apiKeyInput) apiKeyInput.value = "";
                 riskCheckStatusText.textContent = result.data?.message || "侵权检测已启动";
                 renderRiskCheckLogs(result.data?.logs);
                 scheduleRiskCheckStatusPoll();
@@ -24388,18 +24565,71 @@
         let executionAgents = [];
         let dailyTaskAgents = [];
 
+        function renderDailyTaskAgentLoginStatus(agents, unassigned = [], errorMessage = "") {
+            if (!dailyTaskAgentLoginStatus) return;
+            if (errorMessage) {
+                dailyTaskAgentLoginStatus.innerHTML = `<div class="daily-task-agent-login-card">退出登录状态读取失败：${escapeHtml(errorMessage)}</div>`;
+                return;
+            }
+            const rows = (Array.isArray(agents) ? agents : []).map(agent => {
+                const shops = Array.isArray(agent.logged_out_shops) ? agent.logged_out_shops : [];
+                const shopText = shops.length
+                    ? shops.map(shop => {
+                        const site = shop.site ? `（${escapeHtml(shop.site)}）` : "";
+                        const detected = shop.last_detected_at ? ` · ${escapeHtml(shop.last_detected_at)}` : "";
+                        return `${escapeHtml(shop.window_name || shop.window_id || "未知店铺")}${site}${detected}`;
+                    }).join("<br>")
+                    : "未发现退出登录店铺";
+                const name = escapeHtml(agent.name || agent.hostname || agent.agent_id || "未知终端");
+                const online = agent.online ? "在线" : "离线";
+                return `
+                    <div class="daily-task-agent-login-card">
+                        <div class="daily-task-agent-login-head">
+                            <span>${name} · ${online}</span>
+                            <span class="daily-task-agent-login-count ${shops.length ? "" : "ok"}">${shops.length ? `退出登录 ${shops.length} 家` : "未发现退出登录"}</span>
+                        </div>
+                        <div class="daily-task-agent-login-shops">${shopText}</div>
+                    </div>`;
+            });
+            if (Array.isArray(unassigned) && unassigned.length) {
+                const shopText = unassigned.map(shop => {
+                    const terminal = shop.agent_name || shop.agent_id || "旧版本未上报终端";
+                    return `${escapeHtml(shop.window_name || shop.window_id || "未知店铺")} · ${escapeHtml(terminal)}`;
+                }).join("<br>");
+                rows.push(`
+                    <div class="daily-task-agent-login-card">
+                        <div class="daily-task-agent-login-head">
+                            <span>未归属终端</span>
+                            <span class="daily-task-agent-login-count">退出登录 ${unassigned.length} 家</span>
+                        </div>
+                        <div class="daily-task-agent-login-shops">${shopText}</div>
+                    </div>`);
+            }
+            dailyTaskAgentLoginStatus.innerHTML = rows.length
+                ? rows.join("")
+                : '<div class="daily-task-agent-login-card">暂无已注册终端。</div>';
+        }
+
         async function loadDailyTaskAgents() {
             if (!dailyTaskAgentId) return;
             refreshDailyTaskAgentsBtn.disabled = true;
             dailyTaskAgentHint.textContent = "正在读取在线电脑...";
             const previous = dailyTaskAgentId.value || window.localStorage.getItem("zeshun-daily-task-agent-id") || "";
             try {
-                const response = await fetch("/api/execution-agents?capability=daily_task", {cache: "no-store"});
+                const response = await fetch("/api/execution-agents?capability=all", {cache: "no-store"});
                 const payload = await response.json();
                 if (!response.ok || payload.status !== "success") throw new Error(payload.message || "读取电脑失败");
-                dailyTaskAgents = (payload.data?.agents || []).filter(agent => agent.online);
+                const allAgents = payload.data?.agents || [];
+                dailyTaskAgents = allAgents.filter(
+                    agent => agent.online && (agent.capabilities || []).includes("daily_task")
+                );
+                renderDailyTaskAgentLoginStatus(
+                    allAgents,
+                    payload.data?.unassigned_logout_shops || [],
+                    payload.data?.login_status_error || "",
+                );
                 dailyTaskAgentId.innerHTML = dailyTaskAgents.length
-                    ? dailyTaskAgents.map(agent => `<option value="${escapeHtml(agent.agent_id)}">${escapeHtml(agent.name || agent.hostname || agent.agent_id)}${agent.active_jobs ? `（${Number(agent.active_jobs)} 个任务）` : ""}</option>`).join("")
+                    ? dailyTaskAgents.map(agent => `<option value="${escapeHtml(agent.agent_id)}">${escapeHtml(agent.name || agent.hostname || agent.agent_id)}${agent.active_jobs ? `（${Number(agent.active_jobs)} 个任务）` : ""}${agent.logged_out_count ? ` · 退出登录 ${Number(agent.logged_out_count)} 家` : ""}</option>`).join("")
                     : '<option value="">没有支持 daily_task 的在线 Agent</option>';
                 if (dailyTaskAgents.some(agent => agent.agent_id === previous)) dailyTaskAgentId.value = previous;
                 dailyTaskAgentHint.textContent = dailyTaskAgents.length
@@ -24409,6 +24639,7 @@
                 dailyTaskAgents = [];
                 dailyTaskAgentId.innerHTML = '<option value="">读取电脑失败</option>';
                 dailyTaskAgentHint.textContent = String(error.message || error);
+                renderDailyTaskAgentLoginStatus([], [], String(error.message || error));
             } finally {
                 refreshDailyTaskAgentsBtn.disabled = false;
             }
@@ -26554,6 +26785,7 @@
                 dailyTaskLocalExecutorHint,
                 "tasks.view",
             );
+            if (dailyTaskExecutionTarget?.value !== "agent") loadDailyTaskAgents();
             loadDailyTaskStatus();
         });
         refreshDailyTaskAgentsBtn?.addEventListener("click", loadDailyTaskAgents);
