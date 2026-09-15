@@ -2,6 +2,8 @@ import multiprocessing
 import os
 import time
 import re
+import json
+import unicodedata
 from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor, as_completed
 
 from selenium import webdriver
@@ -66,6 +68,7 @@ from bit.bit_config import list_config_rows
 REPUTATION_URL = "https://global-selling.mercadolibre.com/reputation"
 SALES_SUMMARY_URL = "https://global-selling.mercadolibre.com/sales-summary"
 METRICS_URL = "https://global-selling.mercadolibre.com/metrics#sc-menu"
+METRICS_PERFORMANCE_DATA_URL = "/api/sc-business-metrics/performance-data"
 ACCOUNT_RISK_URLS = {
     "restrictions": "https://global-selling.mercadolibre.com/account-risk?filter=restrictions",
     "warnings": "https://global-selling.mercadolibre.com/account-risk?filter=warnings",
@@ -216,7 +219,15 @@ METRIC_LABEL_ALIASES = {
         "卖家取消",
     ),
 }
-VISITS_LABEL_ALIASES = ("visits", "visit", "访问量", "访问次数", "访问", "访客量")
+VISITS_LABEL_ALIASES = (
+    "visits",
+    "visit",
+    "visitas",
+    "访问量",
+    "访问次数",
+    "访问",
+    "访客量",
+)
 CANCELLATION_REVIEW_LABELS = (
     "review in metrics",
     "review metrics",
@@ -244,6 +255,10 @@ class MercadoAuthenticationError(RuntimeError):
 
 class MercadoPageStructureError(RuntimeError):
     """Mercado Libre 页面已打开，但预期的业务结构不存在。"""
+
+
+class TrafficCollectionError(MercadoPageStructureError):
+    """流量页面可访问，但没有取得完整且可信的逐日数据。"""
 
 
 class BitBrowserWindowError(RuntimeError):
@@ -440,6 +455,24 @@ def _get_country_name(site):
         "乌拉圭": "Uruguay",
     }
     return country_map.get(site, site)
+
+
+def _country_name_matches(actual, site):
+    """兼容新版页头中英语、西语和葡语的国家名称。"""
+    site_key = str(site or "").strip()
+    site_code = SITE_CODE_MAP.get(site_key) or SITE_CODE_MAP.get(site_key.upper())
+    aliases = list(SITE_LABEL_ALIASES.get(site_code, ()))
+    aliases.extend((site_key, _get_country_name(site_key)))
+
+    def normalize(value):
+        decomposed = unicodedata.normalize("NFKD", str(value or "").casefold())
+        return "".join(char for char in decomposed if char.isalnum())
+
+    actual_key = normalize(actual)
+    return bool(actual_key) and any(
+        expected and (actual_key == expected or expected in actual_key)
+        for expected in (normalize(value) for value in aliases)
+    )
 
 
 def _deep_shadow_click(driver, selectors):
@@ -862,15 +895,236 @@ def _parse_visit_records_from_json(data, days):
     return cleaned[-days:]
 
 
-def _extract_visits_from_network(driver, days):
-    entries = driver.execute_script(
-        """
-        return performance.getEntriesByType('resource')
-            .map((entry) => entry.name)
-            .filter((url) => /metric|visit|traffic|analytics|sales-summary/i.test(url))
-            .slice(-30);
-        """
+def _visit_metric_key(value):
+    normalized = unicodedata.normalize("NFKD", str(value or "").casefold())
+    return re.sub(r"[^0-9a-z\u4e00-\u9fff]+", "", normalized)
+
+
+def _is_visit_metric(value):
+    key = _visit_metric_key(value)
+    return any(
+        alias in key
+        for alias in ("visit", "visita", "访问", "访客")
     )
+
+
+def _visit_value_text(value):
+    if isinstance(value, bool) or not isinstance(value, (int, float, str)):
+        return ""
+    text = str(value).strip().replace(" ", "")
+    if not re.fullmatch(r"-?\d+(?:[,.]\d+)*", text):
+        return ""
+    return text
+
+
+def _extract_visit_chart_records(data, days):
+    """从旧版或 A/B 新版指标响应中提取逐日访问量。"""
+    candidates = []
+
+    def add_candidate(records, score):
+        cleaned = []
+        for item in records or ():
+            if not isinstance(item, dict):
+                continue
+            value = _visit_value_text(item.get("visits"))
+            if not value:
+                continue
+            cleaned.append(
+                {
+                    "date": str(item.get("date") or ""),
+                    "visits": value,
+                    "raw": item.get("raw", item),
+                }
+            )
+        if cleaned:
+            dated = sum(bool(item["date"]) for item in cleaned)
+            candidates.append((score + dated, cleaned[-days:]))
+
+    def date_from(item):
+        if not isinstance(item, dict):
+            return ""
+        for key in ("date", "day", "period", "label", "x", "timestamp"):
+            if item.get(key) not in (None, ""):
+                return item.get(key)
+        return ""
+
+    def records_from_values(values, dates=()):
+        records = []
+        for index, value in enumerate(values or ()):
+            if isinstance(value, dict):
+                raw_value = next(
+                    (
+                        value.get(key)
+                        for key in ("visits", "value", "y", "count", "total")
+                        if value.get(key) is not None
+                    ),
+                    None,
+                )
+                date = date_from(value)
+            else:
+                raw_value = value
+                date = dates[index] if index < len(dates) else ""
+            records.append({"date": date, "visits": raw_value, "raw": value})
+        return records
+
+    def walk(node):
+        if isinstance(node, dict):
+            # 旧版 performance-data：dataset 每一项都包含 date + visits。
+            dataset = node.get("dataset")
+            if isinstance(dataset, list):
+                exact_records = []
+                for item in dataset:
+                    if not isinstance(item, dict):
+                        continue
+                    visit_key = next(
+                        (
+                            key
+                            for key in item
+                            if _visit_metric_key(key)
+                            in ("visits", "visit", "visitas", "visitcount")
+                        ),
+                        None,
+                    )
+                    if visit_key is not None:
+                        exact_records.append(
+                            {
+                                "date": date_from(item),
+                                "visits": item.get(visit_key),
+                                "raw": item,
+                            }
+                        )
+                line_config = node.get("line_config") or node.get("lineConfig")
+                declares_visits = isinstance(line_config, list) and any(
+                    isinstance(config, dict)
+                    and _is_visit_metric(
+                        config.get("data_key")
+                        or config.get("dataKey")
+                        or config.get("key")
+                        or config.get("name")
+                    )
+                    for config in line_config
+                )
+                add_candidate(exact_records, 1000 if declares_visits else 700)
+
+            # 新版常见结构：categories/labels + series[{name: Visits, data: [...]}]。
+            dates = node.get("categories") or node.get("labels") or ()
+            if not isinstance(dates, list):
+                dates = ()
+            for container_key in ("series", "datasets", "lines", "metrics"):
+                series_list = node.get(container_key)
+                if not isinstance(series_list, list):
+                    continue
+                for series in series_list:
+                    if not isinstance(series, dict):
+                        continue
+                    identity = " ".join(
+                        str(series.get(key) or "")
+                        for key in ("id", "key", "name", "label", "title", "metric")
+                    )
+                    if not _is_visit_metric(identity):
+                        continue
+                    values = (
+                        series.get("data")
+                        or series.get("values")
+                        or series.get("points")
+                    )
+                    if isinstance(values, list):
+                        add_candidate(records_from_values(values, dates), 900)
+
+            # 另一新版结构：{metric: visits, values/data: [...]}。
+            identity = " ".join(
+                str(node.get(key) or "")
+                for key in ("id", "key", "name", "label", "title", "metric")
+            )
+            if _is_visit_metric(identity):
+                values = node.get("values") or node.get("points")
+                if not isinstance(values, list):
+                    values = node.get("data") if isinstance(node.get("data"), list) else None
+                if isinstance(values, list):
+                    add_candidate(records_from_values(values, dates), 850)
+
+            for value in node.values():
+                walk(value)
+        elif isinstance(node, list):
+            for item in node:
+                walk(item)
+
+    walk(data)
+    if not candidates:
+        return []
+    _score, records = max(candidates, key=lambda item: (item[0], len(item[1])))
+    return records[-days:]
+
+
+def _extract_visits_from_metrics_api(driver, days, diagnostics=None):
+    """优先调用指标页自身接口，规避不同前台组件和遮挡层。"""
+    diagnostics = diagnostics if diagnostics is not None else []
+    try:
+        response = driver.execute_async_script(
+            """
+            const url = arguments[0];
+            const done = arguments[arguments.length - 1];
+            let completed = false;
+            const finish = (result) => {
+                if (completed) return;
+                completed = true;
+                done(result);
+            };
+            const timer = setTimeout(
+                () => finish({ok: false, status: 0, error: '接口读取超时'}),
+                15000
+            );
+            fetch(url, {
+                credentials: 'include',
+                headers: {Accept: 'application/json'}
+            })
+                .then(async (response) => {
+                    const text = await response.text();
+                    clearTimeout(timer);
+                    finish({ok: response.ok, status: response.status, text});
+                })
+                .catch((error) => {
+                    clearTimeout(timer);
+                    finish({ok: false, status: 0, error: String(error)});
+                });
+            """,
+            METRICS_PERFORMANCE_DATA_URL,
+        )
+    except Exception as exc:
+        diagnostics.append(f"业务指标接口调用失败：{exc}")
+        return []
+
+    if not isinstance(response, dict) or not response.get("ok"):
+        if isinstance(response, dict):
+            status = response.get("status") or 0
+            error = response.get("error") or ""
+            diagnostics.append(f"业务指标接口 HTTP {status}：{error}".rstrip("："))
+        else:
+            diagnostics.append(f"业务指标接口返回格式异常：{response}")
+        return []
+    try:
+        payload = json.loads(response.get("text") or "{}")
+    except (TypeError, ValueError) as exc:
+        diagnostics.append(f"业务指标接口 JSON 无效：{exc}")
+        return []
+    records = _extract_visit_chart_records(payload, days)
+    if len(records) < days:
+        diagnostics.append(f"业务指标接口仅返回 {len(records)}/{days} 天")
+    return records
+
+
+def _extract_visits_from_network(driver, days):
+    try:
+        entries = driver.execute_script(
+            """
+            return performance.getEntriesByType('resource')
+                .map((entry) => entry.name)
+                .filter((url) => /metric|visit|traffic|analytics|performance|sales-summary/i.test(url))
+                .slice(-50);
+            """
+        )
+    except Exception:
+        return []
 
     for url in reversed(entries):
         try:
@@ -893,7 +1147,9 @@ def _extract_visits_from_network(driver, days):
             )
             if not data:
                 continue
-            visits = _parse_visit_records_from_json(data, days)
+            visits = _extract_visit_chart_records(data, days)
+            if not visits:
+                visits = _parse_visit_records_from_json(data, days)
             if visits:
                 return visits
         except Exception:
@@ -902,20 +1158,39 @@ def _extract_visits_from_network(driver, days):
 
 
 def _get_tooltip_text(driver):
-    tooltip_selectors = [
-        ".andes-tooltip",
-        ".recharts-tooltip-wrapper",
-        ".highcharts-tooltip",
-        "[role='tooltip']",
-        "[class*='tooltip']",
-    ]
-    for selector in tooltip_selectors:
-        elements = driver.find_elements(By.CSS_SELECTOR, selector)
-        for element in elements:
-            text = element.text.strip()
-            if text:
-                return text
-    return ""
+    # find_elements 会受全局隐式等待影响；未出现 tooltip 时一次悬停可能
+    # 阻塞几十秒。单次脚本同时兼容 light DOM 和 Shadow DOM。
+    return (
+        driver.execute_script(
+            """
+            function allRoots(root, roots = [root]) {
+                for (const element of root.querySelectorAll('*')) {
+                    if (element.shadowRoot) allRoots(element.shadowRoot, roots);
+                }
+                return roots;
+            }
+            const selectors = [
+                '.andes-tooltip',
+                '.recharts-tooltip-wrapper',
+                '.highcharts-tooltip',
+                '[role="tooltip"]',
+                '[class*="tooltip"]'
+            ];
+            for (const root of allRoots(document)) {
+                for (const selector of selectors) {
+                    for (const element of root.querySelectorAll(selector)) {
+                        const rect = element.getBoundingClientRect();
+                        if (rect.width <= 0 && rect.height <= 0) continue;
+                        const text = (element.innerText || element.textContent || '').trim();
+                        if (text) return text;
+                    }
+                }
+            }
+            return '';
+            """
+        )
+        or ""
+    ).strip()
 
 
 def _get_chart_rect(driver):
@@ -1037,15 +1312,74 @@ def _to_visit_number_list(visits, days):
     numbers = []
     for item in visits[-days:]:
         value = item.get("visits", item) if isinstance(item, dict) else item
-        match = re.search(r"\d+(?:[,.]\d+)*", str(value))
+        match = re.search(r"-?\d+(?:[,.]\d+)*", str(value).replace(" ", ""))
         if not match:
             continue
-        numbers.append(int(match.group(0).replace(",", "").replace(".", "")))
+        raw = match.group(0)
+        if re.fullmatch(r"-?\d+[,.]0+", raw):
+            raw = re.split(r"[,.]", raw, maxsplit=1)[0]
+        else:
+            raw = raw.replace(",", "").replace(".", "")
+        numbers.append(int(raw))
     return numbers[-days:]
 
 
+def _visit_date_key(value):
+    """生成跨来源可比较的日期键；无日期记录不参与跨来源拼接。"""
+    text = unicodedata.normalize("NFKD", str(value or "").casefold())
+    return re.sub(r"[^0-9a-z]+", "", text)
+
+
+def _merge_visit_candidates(candidates, days):
+    """按日期合并多种页面结构的结果，不凭位置拼出虚假天数。"""
+    valid_candidates = []
+    for candidate in candidates or ():
+        cleaned = []
+        seen_dates = set()
+        for item in candidate or ():
+            if not isinstance(item, dict):
+                continue
+            value = _visit_value_text(item.get("visits"))
+            if not value:
+                continue
+            date_key = _visit_date_key(item.get("date"))
+            if date_key and date_key in seen_dates:
+                continue
+            if date_key:
+                seen_dates.add(date_key)
+            cleaned.append({**item, "visits": value})
+        if cleaned:
+            valid_candidates.append(cleaned[-days:])
+
+    if not valid_candidates:
+        return []
+    for candidate in valid_candidates:
+        if len(candidate) >= days:
+            return candidate[-days:]
+
+    dated_candidates = [
+        candidate
+        for candidate in valid_candidates
+        if all(_visit_date_key(item.get("date")) for item in candidate)
+    ]
+    if not dated_candidates:
+        return max(valid_candidates, key=len)
+
+    merged = {}
+    order = []
+    for candidate in dated_candidates:
+        for item in candidate:
+            key = _visit_date_key(item.get("date"))
+            if key not in merged:
+                order.append(key)
+                merged[key] = item
+    combined = [merged[key] for key in order]
+    if len(combined) >= days:
+        return combined[-days:]
+    return max(valid_candidates + [combined], key=len)
+
+
 def get_recent_visits_info(driver,window_id, name, site, days=8):
-    # driver = _connect_browser(window_id)
     _open_collection_backend_page(
         driver,
         METRICS_URL,
@@ -1056,23 +1390,82 @@ def get_recent_visits_info(driver,window_id, name, site, days=8):
         settle_seconds=5,
     )
 
-    # _select_country(driver, site, name)
-    _click_visits_metric(driver)
-    time.sleep(3)
+    # 部分改版店铺进入指标页后会回到默认国家，必须在指标页再次确认。
+    _select_country(
+        driver,
+        site,
+        name,
+        recovery_url=METRICS_URL,
+        structure_context="流量页面",
+    )
 
-    visits = _extract_visits_from_network(driver, days)
-    if len(visits) < days:
-        visits = _extract_visits_from_dom(driver, days)
-    if len(visits) < days:
-        visits = _extract_visits_by_hover(driver, days)
+    diagnostics = []
+    candidates = []
+    visits = []
+    # 新旧前台都由业务接口提供图表数据；接口优先可绕开横向滚动、助手浮层、
+    # Shadow DOM 和多语言文案差异。
+    for api_attempt in range(1, 4):
+        try:
+            api_visits = _extract_visits_from_metrics_api(driver, days, diagnostics)
+        except TypeError:
+            # 保持兼容旧测试/调用方注入的两参数读取器。
+            api_visits = _extract_visits_from_metrics_api(driver, days)
+        candidates.append(api_visits)
+        visits = _merge_visit_candidates(candidates, days)
+        if len(visits) >= days:
+            break
+        if api_attempt < 3:
+            time.sleep(1.5)
 
-    if not visits:
-        print("没有读取到Visits/访问量流量数据，请确认页面已加载并且折线图可见")
-        debug_path = Path(__file__).resolve().parent / "visits_debug.png"
-        driver.save_screenshot(str(debug_path))
-        print("已保存调试截图:", debug_path)
+    if len(visits) < days:
+        try:
+            _click_visits_metric(driver)
+            time.sleep(2)
+        except Exception as exc:
+            diagnostics.append(f"Visits 入口点击失败：{exc}")
+
+        for source_name, extractor in (
+            ("网络响应", _extract_visits_from_network),
+            ("页面 DOM", _extract_visits_from_dom),
+        ):
+            try:
+                records = extractor(driver, days)
+                candidates.append(records)
+                if len(records) < days:
+                    diagnostics.append(f"{source_name}仅返回 {len(records)}/{days} 天")
+            except Exception as exc:
+                diagnostics.append(f"{source_name}读取失败：{exc}")
+        visits = _merge_visit_candidates(candidates, days)
+
+        if len(visits) < days:
+            try:
+                hover_records = _extract_visits_by_hover(driver, days)
+                candidates.append(hover_records)
+                if len(hover_records) < days:
+                    diagnostics.append(
+                        f"图表悬停仅返回 {len(hover_records)}/{days} 天"
+                    )
+            except Exception as exc:
+                diagnostics.append(f"图表悬停读取失败：{exc}")
+            visits = _merge_visit_candidates(candidates, days)
 
     result = _to_visit_number_list(visits, days)
+    if len(result) < days:
+        _raise_if_mercado_unavailable(driver=driver, context=f"{name}{site}流量页面")
+        safe_label = re.sub(r"[^0-9A-Za-z\u4e00-\u9fff_-]+", "_", f"{name}_{site}")
+        debug_path = (
+            Path(__file__).resolve().parent
+            / "采集失败记录"
+            / f"流量读取失败-{safe_label}-{datetime.now():%Y%m%d-%H%M%S}.png"
+        )
+        debug_path.parent.mkdir(parents=True, exist_ok=True)
+        driver.save_screenshot(str(debug_path))
+        detail = "；".join(dict.fromkeys(diagnostics))
+        raise TrafficCollectionError(
+            f"{name}{site} Visits/访问量数据不完整：{len(result)}/{days}天"
+            + (f"；{detail}" if detail else "")
+        )
+
     print(f"最近{days}天Visits/访问量流量数据:", result)
     return result
 
@@ -1651,12 +2044,118 @@ def _normalize_account_risk_details(raw_details):
             if title:
                 dated_details.append(f"{title} {time_match.group(0).strip()}")
 
+        # Keep the sentence that contains the actual sanction duration or a
+        # definitive permanent closure. The title/date alone cannot
+        # distinguish a temporary suspension from a permanent shutdown.
+        sanction_lines = [
+            line
+            for line in lines
+            if re.search(
+                r"\bsuspend(?:ed|ida|ido|ensa|enso)?\b.{0,100}\buntil\b|"
+                r"\b(?:permanent(?:ly)?|permanente(?:mente)?)\b.{0,100}"
+                r"\b(?:shut\s*down|clos(?:ed|ure)|suspend(?:ed|sion)?|"
+                r"ban(?:ned)?|cerrad[ao]|suspendid[ao]|encerrad[ao]|suspens[ao])\b|"
+                r"\b(?:shut\s*down|clos(?:ed|ure)|suspend(?:ed|sion)?|"
+                r"ban(?:ned)?|cerrad[ao]|suspendid[ao]|encerrad[ao]|suspens[ao])\b"
+                r".{0,100}\b(?:permanent(?:ly)?|permanente(?:mente)?)\b|"
+                r"永久(?:封禁|关闭|停用|停售)|"
+                r"\b(?:disabled?\s+your\s+selling|can\s+no\s+longer\s+sell)\b",
+                line,
+                re.IGNORECASE,
+            )
+            and not re.search(
+                r"\b(?:could|may|might)\b.{0,140}\bpermanent|"
+                r"\bif\b.{0,140}\b(?:further|again|another)\b",
+                line,
+                re.IGNORECASE,
+            )
+        ]
         candidates = dated_details or lines[:1]
+        candidates.extend(line for line in sanction_lines if line not in candidates)
         for detail in candidates:
             if detail and detail not in cleaned:
                 cleaned.append(detail)
 
     return cleaned
+
+
+def _classify_account_restriction(value):
+    """Classify a current account restriction without treating warnings as facts."""
+    text = re.sub(r"[ \t]+", " ", str(value or "")).strip()
+    if not text or text.casefold() in ("正常", "normal", "ok"):
+        return {
+            "account_status": "normal",
+            "site_status_display": "正常",
+            "suspension_until": "",
+        }
+
+    # A temporary notice often warns that a future infringement "could"
+    # permanently shut the account down. Ignore that hypothetical sentence.
+    factual_lines = [
+        line.strip()
+        for line in re.split(r"(?<=[.!?。！？])\s+|\r?\n", text)
+        if line.strip()
+        and not re.search(
+            r"\b(?:could|may|might)\b.{0,180}\bpermanent|"
+            r"\bif\b.{0,180}\b(?:further|again|another)\b.{0,180}"
+            r"\b(?:permanent|关闭|封禁)\b",
+            line,
+            re.IGNORECASE,
+        )
+    ]
+    factual_text = "\n".join(factual_lines)
+    permanent_pattern = re.compile(
+        r"\b(?:permanent(?:ly)?|permanente(?:mente)?)\b.{0,100}"
+        r"\b(?:shut\s*down|clos(?:ed|ure)|suspend(?:ed|sion)?|ban(?:ned)?|"
+        r"cerrad[ao]|suspendid[ao]|encerrad[ao]|suspens[ao])\b|"
+        r"\b(?:shut\s*down|clos(?:ed|ure)|suspend(?:ed|sion)?|ban(?:ned)?|"
+        r"cerrad[ao]|suspendid[ao]|encerrad[ao]|suspens[ao])\b.{0,100}"
+        r"\b(?:permanent(?:ly)?|permanente(?:mente)?)\b|"
+        r"永久(?:封禁|关闭|停用|停售)|"
+        r"\b(?:disabled?\s+your\s+selling|can\s+no\s+longer\s+sell)\b",
+        re.IGNORECASE,
+    )
+    if permanent_pattern.search(factual_text):
+        return {
+            "account_status": "permanently_suspended",
+            "site_status_display": "永久封禁",
+            "suspension_until": "",
+        }
+
+    until_match = re.search(
+        r"\buntil\s+([^\n.。]{3,100})",
+        factual_text,
+        re.IGNORECASE,
+    )
+    suspended = bool(re.search(
+        r"\b(?:account\s+has\s+been\s+)?suspend(?:ed|ida|ido|ensa|enso)?\b|"
+        r"暂停(?:销售|停售)|暂时封禁|限制销售",
+        factual_text,
+        re.IGNORECASE,
+    ))
+    if suspended:
+        suspension_until = until_match.group(1).strip(" ,;；") if until_match else ""
+        trailing_history_time = ACCOUNT_RISK_TIME_PATTERN.search(suspension_until)
+        if trailing_history_time and trailing_history_time.start() > 0:
+            suspension_until = suspension_until[:trailing_history_time.start()].strip(
+                " ,;；"
+            )
+        display = (
+            f"暂时停售（至 {suspension_until}）"
+            if suspension_until
+            else "暂停销售（期限未确认）"
+        )
+        return {
+            "account_status": "temporarily_suspended",
+            "site_status_display": display,
+            "suspension_until": suspension_until,
+        }
+
+    return {
+        "account_status": "unknown",
+        "site_status_display": "",
+        "suspension_until": "",
+    }
 
 
 def _extract_account_risk_details(driver):
@@ -1761,6 +2260,7 @@ def get_reputation_auxiliary_info(
     site,
     driver=None,
     select_site=True,
+    collect_visits=True,
 ):
     """从非声誉页面采集近七天变化、系统告警和流量趋势。"""
     if driver is None:
@@ -1827,31 +2327,64 @@ def get_reputation_auxiliary_info(
                 raise MercadoPageStructureError(f"{name}{site}账户风险详情为空")
     except Exception as exc:
         if select_site:
-            raise
-        auxiliary_errors.append(f"销售汇总{_failure_status(exc).removeprefix('失败：')}")
+            # A permanently suspended account may no longer render the site
+            # selector. Read the account-level restriction before deciding the
+            # collection failed, otherwise the most important status is lost.
+            try:
+                fallback_warning = _collect_account_risk_detail_text(
+                    driver,
+                    ["restrictions"],
+                    window_id=window_id,
+                    name=name,
+                    site=site,
+                )
+                fallback_status = _classify_account_restriction(fallback_warning)
+            except Exception:
+                fallback_warning = ""
+                fallback_status = {"account_status": "unknown"}
+            if fallback_status.get("account_status") not in (
+                "temporarily_suspended",
+                "permanently_suspended",
+            ):
+                raise
+            data_warn = fallback_warning
+            if fallback_status.get("account_status") != "permanently_suspended":
+                auxiliary_errors.append(
+                    f"销售汇总{_failure_status(exc).removeprefix('失败：')}"
+                )
+        else:
+            auxiliary_errors.append(
+                f"销售汇总{_failure_status(exc).removeprefix('失败：')}"
+            )
 
     print("系统提示为:", data_warn)
 
-    try:
-        visits = str(get_visits_info(driver, window_id, name, site, 8))
-    except Exception as exc:
+    account_status = _classify_account_restriction(data_warn)["account_status"]
+    if collect_visits and account_status == "permanently_suspended":
         visits = "[]"
-        auxiliary_errors.append(f"流量{_failure_status(exc).removeprefix('失败：')}")
+    elif collect_visits:
+        try:
+            visits = str(get_visits_info(driver, window_id, name, site, 8))
+        except Exception as exc:
+            visits = "[]"
+            auxiliary_errors.append(f"流量{_failure_status(exc).removeprefix('失败：')}")
 
     if auxiliary_errors:
         auxiliary_message = "辅助采集失败：" + "；".join(auxiliary_errors)
         data_warn = auxiliary_message if data_warn == "正常" else f"{data_warn}\n{auxiliary_message}"
 
-    return {
+    result = {
         "store_name": name,
         "site": site,
         "direction": direction,
         "gradient_rate": gradient_rate,
         "system_warning": data_warn,
         "updated_at": get_now_time(),
-        "visits": visits,
         "error": "；".join(auxiliary_errors),
     }
+    if collect_visits:
+        result["visits"] = visits
+    return result
 
 
 def get_reputation_traffic_info(
@@ -1968,10 +2501,17 @@ def _failure_status(exc):
         reason = "窗口ID不存在"
     elif isinstance(exc, BitBrowserWindowError) and "timeout" in lower:
         reason = "窗口打开超时"
+    elif isinstance(exc, BitBrowserWindowError) and "浏览器正在打开中" in text:
+        reason = "比特浏览器窗口一直处于启动中"
     elif "窗口正在被其他任务占用" in text:
         reason = "窗口被其他任务占用"
     elif "站点切换失败" in text or "没有找到站点" in text:
         reason = "站点切换失败"
+    elif "业务指标接口 HTTP 401" in text or "业务指标接口 HTTP 403" in text:
+        reason = "流量接口无权限或登录失效"
+    elif isinstance(exc, TrafficCollectionError) or "访问量数据不完整" in text:
+        detail = text.split("Visits/访问量", 1)[-1].strip(" ：;")
+        reason = f"流量数据读取失败：{detail or text}"
     elif isinstance(exc, MercadoPageStructureError):
         reason = "页面结构不匹配"
     elif isinstance(exc, TimeoutException) or "timeout" in lower:
@@ -2157,7 +2697,7 @@ def _run_reputation_for_browser(row, lease_wait_seconds=0):
 
 
 def _run_reputation_auxiliary_for_browser(row, lease_wait_seconds=0):
-    """每家店共用一个浏览器，只采集七天流量。"""
+    """每家店共用一个浏览器，采集账户处罚详情和七天流量。"""
     if not _collection_parent_is_alive():
         os._exit(0)
 
@@ -2167,6 +2707,12 @@ def _run_reputation_auxiliary_for_browser(row, lease_wait_seconds=0):
     if _is_ignored_config_value(remark):
         return [], []
     sites = _split_sites(row[3])
+    metadata = row[7] if len(row) > 7 and isinstance(row[7], dict) else {}
+    visit_site_codes = {
+        _normalize_api_site_code(value)
+        for value in (metadata.get("visit_site_codes") or ())
+        if _normalize_api_site_code(value)
+    }
     if not sites:
         return [], [
             ("获取声誉辅助信息", name, "", "失败：未配置站点", get_now_time())
@@ -2231,12 +2777,16 @@ def _run_reputation_auxiliary_for_browser(row, lease_wait_seconds=0):
             for attempt in range(1, 4):
                 _ensure_collection_parent_alive()
                 try:
-                    auxiliary = get_reputation_traffic_info(
+                    auxiliary = get_reputation_auxiliary_info(
                         window_id,
                         name,
                         site,
                         driver=driver,
                         select_site=True,
+                        collect_visits=(
+                            not metadata
+                            or _normalize_api_site_code(site) in visit_site_codes
+                        ),
                     )
                     auxiliary_rows.append(auxiliary)
                     auxiliary_status = (
@@ -2760,8 +3310,9 @@ def _deduplicate_api_site_rows(rows):
 
 
 def _api_auxiliary_config_rows(tokens, api_rows):
-    """按授权店铺名称实时定位窗口，并仅保留已开启访问统计的站点。"""
+    """定位声誉店铺窗口；所有站点查处罚，仅按开关采集访问统计。"""
     canonical_by_alias = {}
+    visit_sites_by_store = {}
     for token in tokens:
         canonical_name = str(
             token.get("display_name") or token.get("nickname") or token.get("id") or ""
@@ -2770,6 +3321,9 @@ def _api_auxiliary_config_rows(tokens, api_rows):
             alias_key = str(alias or "").strip().casefold()
             if alias_key:
                 canonical_by_alias[alias_key] = canonical_name
+        visit_sites_by_store[canonical_name.casefold()] = _token_enabled_site_codes(
+            token, "visit_stats_enabled"
+        )
 
     api_sites_by_store = {}
     for row in api_rows:
@@ -2783,7 +3337,7 @@ def _api_auxiliary_config_rows(tokens, api_rows):
     claimed_sites = set()
     for raw_row in list_config_rows(
         include_ignored=False,
-        authorization_flag="visit_stats_enabled",
+        authorization_flag="reputation_update_enabled",
         token_data={"rows": tokens},
     ) or ():
         if not raw_row or len(raw_row) < 4 or not str(raw_row[0] or "").strip():
@@ -2793,7 +3347,7 @@ def _api_auxiliary_config_rows(tokens, api_rows):
         if not canonical_name:
             continue
         canonical_key = canonical_name.casefold()
-        visit_site_codes = {
+        reputation_site_codes = {
             _normalize_api_site_code(value)
             for value in _split_sites(raw_row[3])
             if _normalize_api_site_code(value)
@@ -2801,13 +3355,18 @@ def _api_auxiliary_config_rows(tokens, api_rows):
         sites = []
         for site_code, site_label in api_sites_by_store.get(canonical_key, {}).items():
             claimed_key = (canonical_key, site_code)
-            if site_code in visit_site_codes and claimed_key not in claimed_sites:
+            if site_code in reputation_site_codes and claimed_key not in claimed_sites:
                 sites.append(site_label)
         if not sites:
             continue
         row = list(raw_row)
         row[1] = canonical_name
         row[3] = "，".join(sites)
+        row.append({
+            "visit_site_codes": sorted(
+                visit_sites_by_store.get(canonical_key, set())
+            ),
+        })
         row = tuple(row)
         claimed_sites.update(
             (canonical_name.casefold(), _normalize_api_site_code(site))
@@ -2858,13 +3417,31 @@ def _merge_api_auxiliary_rows(api_rows, database_rows, auxiliary_rows):
         auxiliary = auxiliary_by_key.get(key)
         if auxiliary is None:
             continue
-        api_row.update({
-            "visits": auxiliary.get("visits") or "[]",
-            "traffic_error": auxiliary.get("error") or "",
-        })
+        api_row["traffic_error"] = auxiliary.get("error") or ""
+        if "visits" in auxiliary:
+            api_row["visits"] = auxiliary.get("visits") or "[]"
+        system_warning = str(auxiliary.get("system_warning") or "").strip()
+        restriction = _classify_account_restriction(system_warning)
+        api_row["account_status"] = restriction["account_status"]
+        api_row["suspension_until"] = restriction["suspension_until"]
+        if system_warning and system_warning != "正常":
+            api_row["system_warning"] = system_warning
+        if restriction["site_status_display"] and restriction["account_status"] != "normal":
+            # Seller Center is stronger evidence than /users/{id}, which may
+            # still report active for a suspended Global Selling account.
+            api_row["site_status_display"] = restriction["site_status_display"]
         database_row = database_by_key.get(key)
         if database_row is not None:
-            database_row[11] = api_row["visits"]
+            if "visits" in auxiliary:
+                database_row[11] = api_row["visits"]
+            if system_warning and system_warning != "正常":
+                database_row[9] = system_warning
+            if (
+                len(database_row) >= 13
+                and restriction["site_status_display"]
+                and restriction["account_status"] != "normal"
+            ):
+                database_row[12] = restriction["site_status_display"]
     return auxiliary_by_key
 
 
@@ -3010,6 +3587,11 @@ def get_reputation_info_all(
         store_name = str(
             token.get("display_name") or token.get("nickname") or token_id
         ).strip()
+        settings_by_site = {
+            _normalize_api_site_code(setting.get("site_id")): dict(setting)
+            for setting in (token.get("site_settings") or ())
+            if _normalize_api_site_code(setting.get("site_id"))
+        }
         _emit_api_collection_log(f"{store_name}：开始读取官方声誉接口", log_callback)
         _emit_api_collection_progress(
             progress_callback,
@@ -3048,10 +3630,21 @@ def get_reputation_info_all(
                 updated_at = get_now_time()
                 for api_row in api_rows:
                     enriched = dict(api_row)
+                    site_setting = settings_by_site.get(
+                        _normalize_api_site_code(
+                            api_row.get("site_id") or api_row.get("site_name")
+                        )
+                    ) or {}
                     enriched.update({
                         "token_id": token_id,
                         "store_name": store_name,
                         "store_nickname": str(token.get("nickname") or ""),
+                        "salesperson": str(
+                            site_setting.get("salesperson") or ""
+                        ).strip(),
+                        "group_name": str(
+                            site_setting.get("group_name") or ""
+                        ).strip(),
                     })
                     enriched_rows.append(enriched)
                     official_errors = [
@@ -3177,7 +3770,7 @@ def get_reputation_info_all(
 
         _emit_api_collection_log(
             f"开始七天流量采集：{len(auxiliary_configs)} 家店铺，"
-            "只访问流量页面；其余声誉字段全部来自官方 API",
+            "读取账户处罚详情和七天流量；声誉指标来自官方 API",
             log_callback,
         )
         if auxiliary_configs:

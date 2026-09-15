@@ -697,15 +697,12 @@ def test_order_print_source_has_no_browser_automation_dependency():
     assert "BitBrowser" in source  # only the migration explanation remains
 
 
-def test_order_print_page_describes_api_unprinted_and_72_hour_fallback():
+def test_standalone_order_print_page_is_removed():
     template = (
         Path(bit_print.__file__).resolve().parent / "templates" / "index.html"
     ).read_text(encoding="utf-8")
 
-    assert "/api/order-print/options" in template
-    assert "/api/order-print/download" in template
-    assert "只处理未打印订单" in template
-    assert "最近 72 小时" in template
-    assert "API 授权店铺（可多选）" in template
-    assert 'id="order-print-date-from" type="datetime-local"' in template
-    assert 'id="order-print-date-to" type="datetime-local"' in template
+    assert 'data-tab="order-print"' not in template
+    assert 'id="tab-order-print"' not in template
+    assert "/api/order-print/" not in template
+    assert 'id="tab-orders"' in template

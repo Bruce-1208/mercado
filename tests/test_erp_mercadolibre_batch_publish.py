@@ -84,6 +84,35 @@ def test_batch_publish_continues_after_an_item_failure_and_records_each_state():
     )
 
 
+def test_account_listing_restriction_stops_remaining_items():
+    calls = []
+
+    def blocked_follow_sell(*_args, **_kwargs):
+        calls.append(True)
+        raise RuntimeError(
+            '目标站点刊登失败: seller.unable_to_list; restrictions_coliving'
+        )
+
+    with patch.object(
+        batch_publish,
+        "_token_record",
+        return_value={"display_name": "测试店铺", "access_token": "secret"},
+    ), patch.object(batch_publish, "follow_sell", side_effect=blocked_follow_sell):
+        result = batch_publish.publish_product_batch(
+            _rows(),
+            token_id=7,
+            site_id="MLB",
+            workers=1,
+            update_state=lambda *_args, **_kwargs: None,
+            client=object(),
+        )
+
+    assert len(calls) == 1
+    assert result["published_count"] == 0
+    assert result["failed_count"] == 2
+    assert "账号刊登已暂停" in result["results"][1]["message"]
+
+
 def test_batch_publish_validates_quantity_before_contacting_store():
     try:
         batch_publish.publish_product_batch(
@@ -124,6 +153,17 @@ def test_product_publish_issues_reports_all_local_blockers():
         "profitability_source": "mercadolibre_official_api",
         "net_proceeds_usd": 8,
     }) == []
+    assert batch_publish.product_publish_issues({
+        "review_status": "approved",
+        "weight_g": 350,
+        "net_proceeds_usd": 8,
+        "source_snapshot_json": json.dumps({
+            "page_snapshot": {
+                "detail_supplement": "failed",
+                "detail_error": "详情补充超过 15 秒，已跳过",
+            }
+        }),
+    }) == ["详情资料未完整：详情补充超过 15 秒，已跳过"]
     assert batch_publish.product_publish_issues({
         "review_status": "approved",
         "weight_g": 350,

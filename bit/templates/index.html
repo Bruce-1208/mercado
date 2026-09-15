@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="zh-CN" data-ui-version="2026-09-01-mercado-filters-v2">
+<html lang="zh-CN" data-ui-version="2026-09-15-console-ui-v3">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -1470,56 +1470,6 @@
             gap: 8px;
         }
 
-        .order-print-grid {
-            display: grid;
-            grid-template-columns: minmax(0, 3fr) minmax(360px, 2fr);
-            gap: 8px;
-            align-items: stretch;
-        }
-
-        .order-print-data-panel,
-        .order-print-log-panel {
-            min-height: calc(100vh - 128px);
-        }
-
-        .order-print-data-panel {
-            display: flex;
-            min-width: 0;
-            flex-direction: column;
-        }
-
-        .order-print-log-panel {
-            min-width: 0;
-        }
-
-        .order-print-settings {
-            display: grid;
-            grid-template-columns: repeat(2, minmax(150px, 1fr));
-            gap: 8px;
-            margin-bottom: 8px;
-        }
-
-        .order-print-settings .field {
-            margin-bottom: 0;
-        }
-
-        .order-print-scope-grid {
-            grid-template-columns: minmax(300px, 1.4fr) minmax(180px, 0.8fr);
-        }
-
-        .order-print-scope-actions {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            gap: 8px;
-            margin-top: 8px;
-        }
-
-        .order-print-scope-actions .collection-scope-summary {
-            flex: 1;
-            margin: 0;
-        }
-
         .order-analysis-panel {
             padding-bottom: 10px;
         }
@@ -1598,10 +1548,6 @@
         .profit-rate-high {
             color: #067647;
             font-weight: 800;
-        }
-
-        .order-print-scope-actions .primary {
-            flex: 0 0 auto;
         }
 
         .form-panel {
@@ -2833,7 +2779,6 @@
         }
 
         #log-container,
-        #order-print-log,
         #api-reputation-log {
             flex: 1;
             margin: 0;
@@ -4577,6 +4522,12 @@
 
         .api-reputation-data-table th:nth-child(1),
         .api-reputation-data-table td:nth-child(1) { width: 160px; }
+        .api-reputation-data-table .reputation-shop-select-label {
+            max-width: 100%;
+            color: var(--text);
+            white-space: normal;
+            overflow-wrap: anywhere;
+        }
         .api-reputation-data-table th:nth-child(2),
         .api-reputation-data-table td:nth-child(2) { width: 170px; }
         .api-reputation-data-table th:nth-child(3),
@@ -4673,52 +4624,6 @@
         .api-reputation-column-filter:not(:placeholder-shown) {
             border-color: #2563eb;
             background: #eff6ff;
-        }
-
-        .order-print-table-wrap {
-            flex: 1;
-            max-height: none;
-            min-height: 260px;
-        }
-
-        .order-print-table {
-            min-width: 720px;
-        }
-
-        .order-print-table th:first-child,
-        .order-print-table td:first-child {
-            width: 44px;
-            text-align: center;
-        }
-
-        .order-print-table th:nth-child(2),
-        .order-print-table td:nth-child(2) {
-            width: 180px;
-        }
-
-        .order-print-table th:nth-child(3),
-        .order-print-table td:nth-child(3) {
-            width: 90px;
-        }
-
-        .order-print-table th:nth-child(4),
-        .order-print-table td:nth-child(4) {
-            width: 110px;
-        }
-
-        .order-print-table th:nth-child(5),
-        .order-print-table td:nth-child(5) {
-            width: 170px;
-        }
-
-        .order-print-table tbody tr,
-        .order-print-table tbody td {
-            height: 46px;
-        }
-
-        .order-print-table tbody td {
-            vertical-align: middle;
-            white-space: nowrap;
         }
 
         .window-anomaly-table {
@@ -7747,15 +7652,6 @@
                 grid-template-columns: 1fr;
             }
 
-            .order-print-grid {
-                grid-template-columns: 1fr;
-            }
-
-            .order-print-data-panel,
-            .order-print-log-panel {
-                min-height: 520px;
-            }
-
             .log-panel {
                 min-height: 520px;
             }
@@ -7818,10 +7714,6 @@
                 grid-template-columns: repeat(2, minmax(0, 1fr));
             }
 
-            .order-print-settings {
-                grid-template-columns: 1fr 1fr;
-            }
-
             .access-grid,
             .access-form-grid,
             .access-permission-grid {
@@ -7830,15 +7722,6 @@
 
             .token-layout {
                 grid-template-columns: 1fr;
-            }
-
-            .order-print-scope-actions {
-                align-items: stretch;
-                flex-direction: column;
-            }
-
-            .order-print-scope-actions .primary {
-                width: 100%;
             }
 
             .order-analysis-actions {
@@ -8948,8 +8831,10 @@
             .inventory-selected-product button { grid-column: 1 / -1; }
         }
     </style>
+    <link rel="stylesheet" href="{{ url_for('static', filename='console-ui.css') }}?v=20260915">
+    <script src="{{ url_for('static', filename='console-ui.js') }}?v=20260915"></script>
 </head>
-<body>
+<body class="zs-console">
     <header class="topbar">
         <div class="brand">
             <div class="brand-mark"><img src="{{ url_for('static', filename='images/zeshun-monogram-gold.png') }}" alt="武汉泽顺 Logo"></div>
@@ -8990,7 +8875,6 @@
                 <p class="nav-title">订单运营</p>
                 <button class="tab-button" type="button" data-tab="orders" data-icon="▤" onclick="switchTab('orders')"><span class="nav-label">订单管理</span></button>
                 <button class="tab-button" type="button" data-tab="inventory" data-icon="▥" data-permission="inventory.view" onclick="switchTab('inventory')"><span class="nav-label">库存管理</span></button>
-                <button class="tab-button" type="button" data-tab="order-print" data-icon="▣" data-permission="order_print.view" onclick="switchTab('order-print')"><span class="nav-label">订单打印</span></button>
                 <button class="tab-button" type="button" data-tab="order-analysis" data-icon="⌁" data-permission="order_analysis.view" onclick="switchTab('order-analysis')"><span class="nav-label">订单分析</span></button>
 
                 <p class="nav-title">商品中心</p>
@@ -9157,7 +9041,7 @@
                         <span class="order-bulk-message" id="order-bulk-message">勾选订单后可批量操作</span>
                     </div>
 
-                    <form class="order-filters" onsubmit="event.preventDefault(); loadOrders(1)">
+                    <form class="order-filters zs-filter-panel" onsubmit="event.preventDefault(); loadOrders(1)">
                         <div class="order-filter-field">
                             <label for="order-status-filter">订单状态</label>
                             <select id="order-status-filter" onchange="setOrderStatus(this.value)">
@@ -9510,7 +9394,7 @@
                             <article><span>在库批次</span><strong id="inventory-metric-lots">—</strong><small>订单 · 产品 · 货架</small></article>
                             <article><span>占用货架</span><strong id="inventory-metric-shelves">—</strong><small>当前有库存的货架</small></article>
                         </div>
-                        <form class="inventory-toolbar" onsubmit="event.preventDefault(); loadInventoryStock(1)">
+                        <form class="inventory-toolbar zs-filter-panel" onsubmit="event.preventDefault(); loadInventoryStock(1)">
                             <label class="inventory-search-field"><span>搜索库存</span><input id="inventory-stock-search" type="search" placeholder="订单号、产品编号、产品名或货架"></label>
                             <label><span>货架</span><select id="inventory-stock-shelf" onchange="loadInventoryStock(1)"><option value="">全部货架</option></select></label>
                             <label><span>库存状态</span><select id="inventory-stock-status" onchange="loadInventoryStock(1)"><option value="positive">仅在库</option><option value="empty">已清空</option><option value="all">全部记录</option></select></label>
@@ -9526,7 +9410,7 @@
                     </div>
 
                     <div class="inventory-view" id="inventory-view-logs">
-                        <form class="inventory-toolbar inventory-log-toolbar" onsubmit="event.preventDefault(); loadInventoryLogs(1)">
+                        <form class="inventory-toolbar inventory-log-toolbar zs-filter-panel" onsubmit="event.preventDefault(); loadInventoryLogs(1)">
                             <label class="inventory-search-field"><span>搜索日志</span><input id="inventory-log-search" type="search" placeholder="订单、产品、单据号、操作人或货架"></label>
                             <label><span>类型</span><select id="inventory-log-type" onchange="loadInventoryLogs(1)"><option value="">全部类型</option><option value="inbound">入库</option><option value="outbound">出库</option></select></label>
                             <label><span>货架</span><select id="inventory-log-shelf" onchange="loadInventoryLogs(1)"><option value="">全部货架</option></select></label>
@@ -9732,7 +9616,7 @@
                         </div>
                     </div>
                     <p class="market-list-message" id="mercado-list-message" role="status" hidden></p>
-                    <div class="market-product-filters visible" id="mercado-product-filters">
+                    <div class="market-product-filters visible zs-filter-panel" id="mercado-product-filters">
                         <div class="market-filter-heading">
                             <span>商品筛选条件</span>
                             <span id="mercado-filter-hint">采集列表支持实重可用、未审核、未上架及重量、售价、收益和采集时间组合筛选</span>
@@ -10145,7 +10029,7 @@
                 </section>
 
                 <section class="panel market-list-panel">
-                    <div class="publish-record-filters">
+                    <div class="publish-record-filters zs-filter-panel">
                         <div class="field">
                             <label for="publish-record-search">产品 / 批次搜索</label>
                             <input id="publish-record-search" type="search" placeholder="商品编号、标题、结果编号或批次" onkeydown="if(event.key === 'Enter') loadMercadoPublishRecords()">
@@ -10716,7 +10600,7 @@
                                 <span id="daily-task-status-text">等待启动</span>
                             </span>
                         </div>
-                        <div class="daily-task-filter-bar">
+                        <div class="daily-task-filter-bar zs-filter-panel">
                             <div class="field">
                                 <label for="daily-task-status-filter">任务状态</label>
                                 <select id="daily-task-status-filter" onchange="applyDailyTaskFilters()">
@@ -10738,7 +10622,7 @@
                             </div>
                             <div class="daily-task-filter-summary" id="daily-task-filter-summary">显示 0 项</div>
                         </div>
-                        <small class="shop-search-hint">默认仅显示运行中的任务；切换状态可查看最近 3 天历史任务及其服务器日志。</small>
+                        <small class="shop-search-hint">活跃任务与历史任务分开显示；历史任务保留最近 3 天及其服务器日志。</small>
                         <div class="summary-row">
                             <div class="metric">
                                 <div class="metric-label">本机运行中</div>
@@ -10753,152 +10637,16 @@
                                 <div class="metric-value" id="daily-task-total-count">0</div>
                             </div>
                         </div>
+                        <h3 class="panel-subtitle">活跃任务</h3>
                         <div class="daily-task-list" id="daily-task-list">
-                            <div class="empty-state">等待任务启动...</div>
+                            <div class="empty-state">暂无活跃任务。</div>
                         </div>
-                    </section>
-                </div>
-            </div>
-
-            <div class="tab-page" id="tab-order-print">
-                <div class="tab-heading">
-                    <h2>订单打印</h2>
-                    <p>直接调用美客多官方 API 获取面单；只处理未打印订单，无法判断时仅回退最近 72 小时</p>
-                </div>
-
-                <div class="order-print-grid">
-                    <section class="panel infractions-panel order-print-data-panel">
-                        <div class="infractions-header">
-                            <h2 class="panel-title" style="margin: 0;">API 订单打印 · 授权店铺可多选</h2>
-                            <div class="header-actions">
-                                <button class="secondary" type="button" onclick="loadOrderPrintStatus()">刷新数据</button>
+                        <details class="daily-task-history-panel" style="margin-top: 20px;">
+                            <summary class="panel-subtitle">历史任务</summary>
+                            <div class="daily-task-list" id="daily-task-history-list">
+                                <div class="empty-state">暂无历史任务。</div>
                             </div>
-                        </div>
-
-                        <div class="collection-scope-panel">
-                            <div class="order-print-settings">
-                                <div class="field">
-                                    <label for="order-print-date-from">订单开始时间</label>
-                                    <input class="minute-datetime" id="order-print-date-from" type="datetime-local" step="60">
-                                </div>
-                                <div class="field">
-                                    <label for="order-print-date-to">订单结束时间</label>
-                                    <input class="minute-datetime" id="order-print-date-to" type="datetime-local" step="60">
-                                </div>
-                                <div class="field">
-                                    <label for="order-print-retries">单面单最大尝试次数</label>
-                                    <select id="order-print-retries">
-                                        <option value="1">1 次</option>
-                                        <option value="2">2 次</option>
-                                        <option value="3" selected>3 次</option>
-                                    </select>
-                                </div>
-                                <div class="field">
-                                    <label for="order-print-retry-delay">失败重试等待（秒）</label>
-                                    <input id="order-print-retry-delay" type="number" min="0" max="60" value="3">
-                                </div>
-                            </div>
-
-                            <div class="collection-scope-grid order-print-scope-grid">
-                                <div class="collection-scope-field">
-                                    <label>美客多 API 授权店铺（可多选）</label>
-                                    <div class="collection-checkbox-table-wrap">
-                                        <table class="collection-checkbox-table collection-shop-table">
-                                            <thead>
-                                                <tr>
-                                                    <th><input class="collection-checkbox" id="order-print-collection-shops-all" type="checkbox" aria-label="选择全部打印店铺" onchange="toggleAllCollectionOptions('order-print', 'shops', this.checked)"></th>
-                                                    <th>店铺</th>
-                                                    <th>归属人</th>
-                                                    <th>配置站点</th>
-                                                </tr>
-                                            </thead>
-                                            <tbody id="order-print-collection-shops">
-                                                <tr><td class="empty-state" colspan="4">正在加载店铺...</td></tr>
-                                            </tbody>
-                                        </table>
-                                    </div>
-                                </div>
-
-                                <div class="collection-scope-field">
-                                    <label>站点（按店铺配置联动）</label>
-                                    <div class="collection-checkbox-table-wrap">
-                                        <table class="collection-checkbox-table collection-site-table">
-                                            <thead>
-                                                <tr>
-                                                    <th><input class="collection-checkbox" id="order-print-collection-sites-all" type="checkbox" aria-label="选择全部打印站点" onchange="toggleAllCollectionOptions('order-print', 'sites', this.checked)"></th>
-                                                    <th>站点</th>
-                                                </tr>
-                                            </thead>
-                                            <tbody id="order-print-collection-sites">
-                                                <tr><td class="empty-state" colspan="2">正在加载站点...</td></tr>
-                                            </tbody>
-                                        </table>
-                                    </div>
-                                </div>
-                            </div>
-                            <input id="order-print-collection-workers" type="hidden" value="1">
-                            <div class="order-print-scope-actions">
-                                <p class="collection-scope-summary" id="order-print-collection-summary">正在加载打印范围...</p>
-                                <button class="primary" id="start-order-print-btn" type="button" onclick="startOrderPrint()">打印所选店铺未打印订单</button>
-                            </div>
-                        </div>
-
-                        <div class="summary-row">
-                            <div class="metric">
-                                <div class="metric-label">开始时间</div>
-                                <div class="metric-value" id="order-print-started-at">-</div>
-                            </div>
-                            <div class="metric">
-                                <div class="metric-label">完成时间</div>
-                                <div class="metric-value" id="order-print-completed-at">-</div>
-                            </div>
-                            <div class="metric">
-                                <div class="metric-label">已生成站点 / 无订单站点</div>
-                                <div class="metric-value" id="order-print-success-count">0 / 0</div>
-                            </div>
-                            <div class="metric">
-                                <div class="metric-label">订单数 / 面单数</div>
-                                <div class="metric-value" id="order-print-failure-count">0 / 0</div>
-                            </div>
-                        </div>
-
-                        <div class="reputation-update-bar">
-                            <span class="reputation-selection-summary" id="order-print-target-selection-summary">已选择 0 个店铺站点</span>
-                            <button class="primary" id="rerun-selected-order-print-btn" type="button" onclick="rerunSelectedOrderPrintTargets()" disabled>执行所选店铺站点</button>
-                        </div>
-
-                        <div class="table-wrap order-print-table-wrap">
-                            <table class="order-print-table">
-                                <thead>
-                                    <tr>
-                                        <th><input class="collection-checkbox" id="order-print-site-run-all" type="checkbox" aria-label="选择全部店铺站点" onchange="toggleAllOrderPrintSiteTargets(this.checked)" disabled></th>
-                                        <th>店铺名</th>
-                                        <th>站点</th>
-                                        <th>执行状态</th>
-                                        <th>最后执行时间</th>
-                                    </tr>
-                                </thead>
-                                <tbody id="order-print-site-run-body">
-                                    <tr><td class="empty-state" colspan="5">正在加载店铺站点...</td></tr>
-                                </tbody>
-                            </table>
-                        </div>
-                    </section>
-
-                    <section class="panel log-panel order-print-log-panel">
-                        <div class="log-header">
-                            <h2 class="panel-title" style="margin: 0;">订单打印运行日志</h2>
-                            <div class="header-actions">
-                                <span class="status" id="order-print-status-badge">
-                                    <span class="status-dot"></span>
-                                    <span id="order-print-status-text">等待启动</span>
-                                </span>
-                                <button class="secondary" type="button" onclick="loadOrderPrintStatus()">刷新状态</button>
-                                <button class="primary" id="download-order-print-btn" type="button" onclick="downloadOrderPrintPdf()" hidden>下载合并面单 PDF</button>
-                                <button class="danger" id="stop-order-print-btn" type="button" onclick="stopOrderPrint()" disabled>停止任务</button>
-                            </div>
-                        </div>
-                        <pre id="order-print-log">等待任务启动...</pre>
+                        </details>
                     </section>
                 </div>
             </div>
@@ -10960,7 +10708,7 @@
                         </div>
                     </div>
 
-                    <div class="after-sale-filter-bar">
+                    <div class="after-sale-filter-bar zs-filter-panel">
                         <div class="field">
                             <label for="after-sale-date-from">开始时间</label>
                             <div class="datetime-control">
@@ -11039,7 +10787,7 @@
                         </div>
                     </div>
 
-                    <div class="after-sale-filter-bar">
+                    <div class="after-sale-filter-bar zs-filter-panel">
                         <div class="field">
                             <label for="profit-date-from">开始时间</label>
                             <div class="datetime-control">
@@ -11219,7 +10967,7 @@
                         <pre id="store-link-sync-log">等待自动或手动同步任务启动...</pre>
                     </details>
 
-                    <div class="store-link-filters">
+                    <div class="store-link-filters zs-filter-panel">
                         <div class="order-filter-field">
                             <label for="store-link-store-filter">店铺</label>
                             <select id="store-link-store-filter" onchange="loadStoreLinks(1)"><option value="">全部店铺</option></select>
@@ -11251,7 +10999,9 @@
                         </div>
                         <div class="order-filter-field">
                             <label for="store-link-mercado-category-filter">美客多分类</label>
-                            <input id="store-link-mercado-category-filter" type="search" placeholder="分类名称或编号" onkeydown="if(event.key === 'Enter') loadStoreLinks(1)">
+                            <select id="store-link-mercado-category-filter" onchange="loadStoreLinks(1)">
+                                <option value="">全部美客多分类</option>
+                            </select>
                         </div>
                         <div class="order-filter-field">
                             <label for="store-link-sales-sort">销量排序</label>
@@ -11264,7 +11014,7 @@
                             <label for="store-link-search">搜索</label>
                             <input id="store-link-search" type="search" placeholder="商品标题、商品编号、SKU 或店铺" onkeydown="if(event.key === 'Enter') loadStoreLinks(1)">
                         </div>
-                        <button class="secondary" type="button" onclick="loadStoreLinks(1)">搜索 / 筛选</button>
+                        <button class="primary" type="button" onclick="loadStoreLinks(1)">搜索</button>
                     </div>
 
                     <div class="store-link-bulk">
@@ -11279,6 +11029,7 @@
                         <div class="field"><label for="store-link-bulk-height">高(cm)</label><input id="store-link-bulk-height" type="number" min="0" step="0.01" placeholder="不修改"></div>
                         <div class="field"><label for="store-link-bulk-net">净收益(USD)</label><input id="store-link-bulk-net" type="number" step="0.01" placeholder="不修改"></div>
                         <button class="primary" id="store-link-bulk-button" type="button" onclick="bulkUpdateStoreLinks()" disabled>修改美客多后台</button>
+                        <button class="danger" id="store-link-delete-button" type="button" onclick="deleteSelectedStoreLinks()" disabled>删除所选</button>
                         <span class="store-link-bulk-note" id="store-link-message">先勾选链接并填写修改项；同步进行中也可提交，任务会自动排队</span>
                     </div>
 
@@ -11355,7 +11106,7 @@
                         <div class="store-link-sync-metric"><span>最新更新时间</span><strong id="prohibited-last-sync" style="font-size:13px">-</strong></div>
                     </div>
 
-                    <div class="store-link-filters">
+                    <div class="store-link-filters zs-filter-panel">
                         <div class="order-filter-field">
                             <label for="prohibited-risk-type-filter">风险类型</label>
                             <select id="prohibited-risk-type-filter" onchange="loadProhibitedListings(1)">
@@ -11491,7 +11242,7 @@
                                 <button class="secondary" type="button" onclick="loadMercadoStoreTokens(true)">刷新列表</button>
                             </div>
                         </div>
-                        <div class="mercado-token-filter-bar">
+                        <div class="mercado-token-filter-bar zs-filter-panel">
                             <div class="field">
                                 <label for="mercado-token-name-search">店铺名</label>
                                 <input id="mercado-token-name-search" type="search" placeholder="输入部分店铺名" oninput="applyMercadoStoreTokenFilters()">
@@ -12127,7 +11878,7 @@
                             <button class="secondary" type="button" onclick="loadRiskResults()">刷新结果</button>
                         </div>
                     </div>
-                    <div class="risk-check-filter-bar">
+                    <div class="risk-check-filter-bar zs-filter-panel">
                         <div class="field">
                             <label for="risk-result-source">产品来源</label>
                             <select id="risk-result-source" onchange="loadRiskResults()">
@@ -12243,7 +11994,7 @@
                         <div class="metric"><div class="metric-label">白名单 · 不侵权</div><div class="metric-value" id="infringement-knowledge-whitelist">0</div></div>
                         <div class="metric"><div class="metric-label">黑名单 · 侵权</div><div class="metric-value" id="infringement-knowledge-blacklist">0</div></div>
                     </div>
-                    <div class="risk-check-filter-bar knowledge-filter-bar">
+                    <div class="risk-check-filter-bar knowledge-filter-bar zs-filter-panel">
                         <div class="field">
                             <label for="infringement-knowledge-type-filter">名单类型</label>
                             <select id="infringement-knowledge-type-filter" onchange="loadInfringementKnowledge(true)">
@@ -12499,7 +12250,7 @@
                         </div>
                     </div>
                     <div class="reputation-update-bar">
-                        <div class="reputation-filter-controls">
+                        <div class="reputation-filter-controls zs-filter-panel">
                             <label>业务员
                                 <select id="reputation-salesperson-filter" onchange="applyReputationFilters()">
                                     <option value="">全部业务员</option>
@@ -12536,7 +12287,7 @@
                                     <th>流量趋势</th>
                                     <th>系统告警</th>
                                     <th>更新时间</th>
-                                    <th>站点状态</th>
+                                    <th>账号状态</th>
                                     <th>操作</th>
                                 </tr>
                             </thead>
@@ -12551,7 +12302,7 @@
             <div class="tab-page" id="tab-api-reputation">
                 <div class="tab-heading">
                     <h2>API 声誉</h2>
-                    <p>每天北京时间 14:00 自动刷新，并发 10；仅七天流量趋势通过浏览器采集，其余声誉数据通过官方 API 获取</p>
+                    <p>每天北京时间 14:00 自动刷新，并发 30；仅七天流量趋势通过浏览器采集，其余声誉数据通过官方 API 获取</p>
                 </div>
 
                 <section class="panel infractions-panel">
@@ -12583,8 +12334,30 @@
                             <div class="metric-value" id="api-reputation-failed">0</div>
                         </div>
                     </div>
+                    <div class="reputation-update-bar">
+                        <div class="reputation-filter-controls zs-filter-panel">
+                            <label>店铺
+                                <select id="api-reputation-store-filter" onchange="setApiReputationScopeFilter('store', this.value)">
+                                    <option value="">全部店铺</option>
+                                </select>
+                            </label>
+                            <label>业务员
+                                <select id="api-reputation-salesperson-filter" onchange="setApiReputationScopeFilter('salesperson', this.value)">
+                                    <option value="">全部业务员</option>
+                                </select>
+                            </label>
+                            <label>账号组
+                                <select id="api-reputation-group-filter" onchange="setApiReputationScopeFilter('group', this.value)">
+                                    <option value="">全部账号组</option>
+                                </select>
+                            </label>
+                            <label>模糊查询
+                                <input id="api-reputation-search" type="search" placeholder="店铺、昵称、业务员、账号组或站点" oninput="setApiReputationScopeFilter('search', this.value)">
+                            </label>
+                        </div>
+                    </div>
                     <div class="api-reputation-table-toolbar">
-                        <label><input id="api-reputation-select-visible" type="checkbox" onchange="toggleVisibleApiReputationShops(this.checked)"> 全选筛选结果中的店铺</label>
+                        <label class="reputation-shop-select-label"><input class="reputation-shop-select" id="api-reputation-select-visible" type="checkbox" onchange="toggleVisibleApiReputationShops(this.checked)"> 全选筛选结果中的店铺</label>
                         <span id="api-reputation-visible-count">显示 0 / 0 条；可在每列表头筛选，点击字段名排序</span>
                         <button class="secondary" id="api-reputation-reset-view" type="button" onclick="resetApiReputationView()">重置筛选与排序</button>
                     </div>
@@ -12933,6 +12706,10 @@
         const apiReputationFailed = document.getElementById("api-reputation-failed");
         const apiReputationBody = document.getElementById("api-reputation-body");
         const apiReputationVisibleCount = document.getElementById("api-reputation-visible-count");
+        const apiReputationStoreFilter = document.getElementById("api-reputation-store-filter");
+        const apiReputationSalespersonFilter = document.getElementById("api-reputation-salesperson-filter");
+        const apiReputationGroupFilter = document.getElementById("api-reputation-group-filter");
+        const apiReputationSearch = document.getElementById("api-reputation-search");
         const apiReputationStatusBadge = document.getElementById("api-reputation-status-badge");
         const apiReputationStatusText = document.getElementById("api-reputation-status-text");
         const apiReputationLog = document.getElementById("api-reputation-log");
@@ -12961,20 +12738,8 @@
         const dailyTaskComputerFilter = document.getElementById("daily-task-computer-filter");
         const dailyTaskFilterSummary = document.getElementById("daily-task-filter-summary");
         const dailyTaskList = document.getElementById("daily-task-list");
-        const startOrderPrintBtn = document.getElementById("start-order-print-btn");
-        const stopOrderPrintBtn = document.getElementById("stop-order-print-btn");
-        const downloadOrderPrintBtn = document.getElementById("download-order-print-btn");
-        const orderPrintStatusBadge = document.getElementById("order-print-status-badge");
-        const orderPrintStatusText = document.getElementById("order-print-status-text");
-        const orderPrintStartedAt = document.getElementById("order-print-started-at");
-        const orderPrintCompletedAt = document.getElementById("order-print-completed-at");
-        const orderPrintSuccessCount = document.getElementById("order-print-success-count");
-        const orderPrintFailureCount = document.getElementById("order-print-failure-count");
-        const orderPrintLog = document.getElementById("order-print-log");
-        const orderPrintSiteRunBody = document.getElementById("order-print-site-run-body");
-        const orderPrintSiteRunAll = document.getElementById("order-print-site-run-all");
-        const orderPrintTargetSelectionSummary = document.getElementById("order-print-target-selection-summary");
-        const rerunSelectedOrderPrintBtn = document.getElementById("rerun-selected-order-print-btn");
+        const dailyTaskHistoryList = document.getElementById("daily-task-history-list");
+        const dailyTaskHistoryPanel = document.querySelector(".daily-task-history-panel");
         const orderAnalysisFolder = document.getElementById("order-analysis-folder");
         const orderAnalysisFolderSummary = document.getElementById("order-analysis-folder-summary");
         const importOrderAnalysisBtn = document.getElementById("import-order-analysis-btn");
@@ -13134,6 +12899,7 @@
         const storeLinkSelectionCount = document.getElementById("store-link-selection-count");
         const storeLinkBody = document.getElementById("store-link-body");
         const storeLinkBulkButton = document.getElementById("store-link-bulk-button");
+        const storeLinkDeleteButton = document.getElementById("store-link-delete-button");
         const storeLinkMessage = document.getElementById("store-link-message");
         const storeLinkRemoteUpdateLog = document.getElementById("store-link-remote-update-log");
         const storeLinkPaginationSummary = document.getElementById("store-link-pagination-summary");
@@ -13387,11 +13153,13 @@
         let apiReputationSortKey = "store";
         let apiReputationSortDirection = "asc";
         let apiReputationFilters = {};
+        let apiReputationScopeFilters = {};
         const selectedApiReputationShops = new Set();
         let apiReputationRunning = false;
         let apiReputationVisibleShops = [];
         let apiReputationEmptyText = "暂无上一次 API 声誉数据";
         let apiReputationPollTimer = null;
+        let apiReputationSyncedSnapshot = "";
         let aiAppealsLoaded = false;
         let tasksLoaded = false;
         let dailyTaskStatusPollTimer = null;
@@ -13403,12 +13171,6 @@
         const dailyTaskLogLastFetchedAt = new Map();
         const DAILY_TASK_AUTO_LOG_BATCH_SIZE = 2;
         const DAILY_TASK_LOG_MIN_INTERVAL_MS = 3500;
-        let orderPrintLoaded = false;
-        let orderPrintRunning = false;
-        let orderPrintStopping = false;
-        let orderPrintStatusPollTimer = null;
-        let orderPrintSiteRows = [];
-        let selectedOrderPrintTargetKeys = new Set();
         let orderAnalysisFiles = [];
         let orderAnalysisImporting = false;
         let highAfterSaleLoaded = false;
@@ -13494,7 +13256,6 @@
         let collectionOptionsLoading = null;
         let collectionShopOptions = [];
         let authorizedAppealShopOptions = [];
-        let orderPrintShopOptions = [];
         let collectionFailedShopOptions = {infraction: [], reputation: []};
         let appealShopMatches = [];
         let appealShopActiveIndex = -1;
@@ -13653,7 +13414,6 @@
             const actionSelectors = {
                 "appeal.execute": ["#start-btn", "#stop-btn", "#appeal-execution-target", "#appeal-agent-id", "#refresh-execution-agents", "#download-local-agent", "#download-local-agent-macos", "#add-appeal-phrase-btn", "#save-appeal-phrase-btn"],
                 "tasks.execute": ["#start-daily-task-btn", "#daily-task-execution-target", "#daily-task-agent-id", "#download-daily-task-agent", "#download-daily-task-agent-macos"],
-                "order_print.execute": ["#start-order-print-btn", "#stop-order-print-btn", "#rerun-selected-order-print-btn"],
                 "order_analysis.execute": [
                     "#order-analysis-folder", "#import-order-analysis-btn",
                     "#order-bulk-status", "#order-bulk-status-button", "#order-bulk-purchase-button",
@@ -13797,7 +13557,7 @@
                 loadZyingCollectionBrowserWindows();
                 loadZyingCollectionStatus();
             }
-            if (tabName === "reputation" || tabName === "order-print") {
+            if (tabName === "reputation") {
                 loadCollectionOptions();
             }
             if (tabName === "reputation" && !reputationLoaded) {
@@ -13813,9 +13573,6 @@
                 syncExecutionTargetHint(dailyTaskExecutionTarget, dailyTaskLocalExecutorHint, "tasks.view");
                 loadDailyTaskStatus();
                 if (!tasksLoaded) loadDailyTaskOptions();
-            }
-            if (tabName === "order-print") {
-                loadOrderPrintStatus();
             }
             if (tabName === "order-analysis") {
                 if (!highAfterSaleLoaded) setHighAfterSalePeriod(30);
@@ -17106,6 +16863,7 @@
             closeMercadoPublishPickers(pickerId);
             picker.classList.toggle("open", shouldOpen);
             picker.querySelector(".market-multi-trigger")?.setAttribute("aria-expanded", shouldOpen ? "true" : "false");
+            if (shouldOpen) window.ZeshunUI?.openPicker(picker);
         }
 
         function syncMercadoPublishPicker(select) {
@@ -17134,6 +16892,7 @@
                 if (checkbox) checkbox.checked = checked;
                 row.classList.toggle("selected", checked);
             });
+            window.ZeshunUI?.preparePicker(picker);
         }
 
         function renderMercadoPublishPicker(select) {
@@ -18726,6 +18485,7 @@
             "claims", "delayed", "cancellations", "rating",
         ]);
         const API_REPUTATION_LOGISTIC_NAMES = {remote: "自发货", fulfillment: "全托管"};
+        const API_REPUTATION_SCOPE_FILTER_KEYS = ["store", "salesperson", "group", "search"];
 
         function apiReputationNumericValue(value) {
             if (value === null || value === undefined || value === "") return null;
@@ -18829,10 +18589,77 @@
             return query.toLocaleLowerCase("zh-CN").split(/\s+/).every(term => searchable.includes(term));
         }
 
+        function apiReputationSalesperson(row) {
+            return String(row.salesperson || "").trim() || "未分配";
+        }
+
+        function apiReputationGroup(row) {
+            return String(row.group_name || "").trim() || "未分组";
+        }
+
+        function apiReputationMatchesScope(row) {
+            const store = String(apiReputationScopeFilters.store || "");
+            const salesperson = String(apiReputationScopeFilters.salesperson || "");
+            const group = String(apiReputationScopeFilters.group || "");
+            const search = String(apiReputationScopeFilters.search || "").trim().toLocaleLowerCase("zh-CN");
+            if (store && String(row.store_name || "") !== store) return false;
+            if (salesperson && apiReputationSalesperson(row) !== salesperson) return false;
+            if (group && apiReputationGroup(row) !== group) return false;
+            if (!search) return true;
+            const searchable = [
+                row.store_name, row.store_nickname, row.token_id,
+                apiReputationSalesperson(row), apiReputationGroup(row),
+                row.site_name, row.site_id, row.user_id,
+            ].filter(value => value !== null && value !== undefined).join(" ").toLocaleLowerCase("zh-CN");
+            return search.split(/\s+/).every(term => searchable.includes(term));
+        }
+
+        function renderApiReputationScopeSelect(select, values, allLabel, filterKey) {
+            if (!select) return;
+            const selected = String(apiReputationScopeFilters[filterKey] || "");
+            const options = [...new Set([...values.filter(Boolean), selected].filter(Boolean))].sort((left, right) => (
+                left.localeCompare(right, "zh-CN", {numeric: true, sensitivity: "base"})
+            ));
+            select.innerHTML = `<option value="">${escapeHtml(allLabel)}</option>` + options.map(value => (
+                `<option value="${escapeHtml(value)}">${escapeHtml(value)}</option>`
+            )).join("");
+            select.value = selected;
+        }
+
+        function renderApiReputationScopeOptions() {
+            renderApiReputationScopeSelect(
+                apiReputationStoreFilter,
+                apiReputationRows.map(row => String(row.store_name || "").trim()),
+                "全部店铺",
+                "store",
+            );
+            renderApiReputationScopeSelect(
+                apiReputationSalespersonFilter,
+                apiReputationRows.map(apiReputationSalesperson),
+                "全部业务员",
+                "salesperson",
+            );
+            renderApiReputationScopeSelect(
+                apiReputationGroupFilter,
+                apiReputationRows.map(apiReputationGroup),
+                "全部账号组",
+                "group",
+            );
+            if (apiReputationSearch) apiReputationSearch.value = apiReputationScopeFilters.search || "";
+        }
+
+        function setApiReputationScopeFilter(key, value) {
+            if (!API_REPUTATION_SCOPE_FILTER_KEYS.includes(key)) return;
+            apiReputationScopeFilters[key] = String(value || "");
+            saveApiReputationViewState();
+            renderApiReputationTable();
+        }
+
         function saveApiReputationViewState() {
             try {
                 window.localStorage.setItem(API_REPUTATION_VIEW_STORAGE_KEY, JSON.stringify({
                     filters: apiReputationFilters,
+                    scope_filters: apiReputationScopeFilters,
                     sort_key: apiReputationSortKey,
                     sort_direction: apiReputationSortDirection,
                 }));
@@ -18849,6 +18676,11 @@
                         API_REPUTATION_FILTER_KEYS.map(key => [key, String(saved.filters[key] || "")]),
                     );
                 }
+                if (saved.scope_filters && typeof saved.scope_filters === "object") {
+                    apiReputationScopeFilters = Object.fromEntries(
+                        API_REPUTATION_SCOPE_FILTER_KEYS.map(key => [key, String(saved.scope_filters[key] || "")]),
+                    );
+                }
                 if (API_REPUTATION_FILTER_KEYS.includes(saved.sort_key)) {
                     apiReputationSortKey = saved.sort_key;
                 }
@@ -18857,10 +18689,12 @@
                 }
             } catch (_error) {
                 apiReputationFilters = {};
+                apiReputationScopeFilters = {};
             }
             document.querySelectorAll(".api-reputation-column-filter").forEach(input => {
                 input.value = apiReputationFilters[input.dataset.filterKey] || "";
             });
+            renderApiReputationScopeOptions();
             updateApiReputationSortIndicators();
         }
 
@@ -18899,11 +18733,13 @@
 
         function resetApiReputationView() {
             apiReputationFilters = {};
+            apiReputationScopeFilters = {};
             apiReputationSortKey = "store";
             apiReputationSortDirection = "asc";
             document.querySelectorAll(".api-reputation-column-filter").forEach(input => {
                 input.value = "";
             });
+            renderApiReputationScopeOptions();
             saveApiReputationViewState();
             updateApiReputationSortIndicators();
             renderApiReputationTable();
@@ -18926,8 +18762,11 @@
         }
 
         function renderApiReputationTable() {
-            const rows = apiReputationRows.filter(row => API_REPUTATION_FILTER_KEYS.every(
-                key => apiReputationMatchesFilter(row, key, apiReputationFilters[key]),
+            const rows = apiReputationRows.filter(row => (
+                apiReputationMatchesScope(row)
+                && API_REPUTATION_FILTER_KEYS.every(
+                    key => apiReputationMatchesFilter(row, key, apiReputationFilters[key]),
+                )
             ));
             rows.sort((left, right) => {
                 const leftValue = apiReputationColumnValue(left, apiReputationSortKey);
@@ -18963,7 +18802,8 @@
             apiReputationVisibleCount.textContent = `显示 ${rows.length.toLocaleString("zh-CN")} / ${apiReputationRows.length.toLocaleString("zh-CN")} 条；可在每列表头筛选，点击字段名排序`;
             updateApiReputationSortIndicators();
             if (!rows.length) {
-                const hasFilters = Object.values(apiReputationFilters).some(value => String(value || "").trim());
+                const hasFilters = [...Object.values(apiReputationFilters), ...Object.values(apiReputationScopeFilters)]
+                    .some(value => String(value || "").trim());
                 const emptyText = apiReputationRows.length && hasFilters
                     ? "没有符合当前筛选条件的数据"
                     : apiReputationEmptyText;
@@ -18978,12 +18818,14 @@
                 const salesCompleted = apiReputationNumber(row.sales_completed);
                 const logistics = API_REPUTATION_LOGISTIC_NAMES[String(row.logistic_type || "").toLowerCase()] || row.logistic_type || "-";
                 const sellerLevel = row.power_seller_status || "-";
+                const salesperson = apiReputationSalesperson(row);
+                const groupName = apiReputationGroup(row);
                 const protection = row.real_level
                     ? `保护期实际 ${row.real_level}${row.protection_end_date ? ` · 至 ${row.protection_end_date}` : ""}`
                     : "";
                 return `
                     <tr>
-                        <td><label><input type="checkbox" value="${escapeHtml(row.store_name || "")}" aria-label="选择店铺 ${escapeHtml(row.store_name || "")}" ${selectedApiReputationShops.has(row.store_name) ? "checked" : ""} ${apiReputationRunning || !row.store_name ? "disabled" : ""} onchange="toggleApiReputationShop(this.value, this.checked)"> ${escapeHtml(row.store_name || "-")}</label><div class="order-cell-stack"><span>${escapeHtml(row.store_nickname || `Token ${row.token_id || "-"}`)}</span></div></td>
+                        <td><label class="reputation-shop-select-label"><input class="reputation-shop-select" type="checkbox" value="${escapeHtml(row.store_name || "")}" aria-label="选择店铺 ${escapeHtml(row.store_name || "")}" ${selectedApiReputationShops.has(row.store_name) ? "checked" : ""} ${apiReputationRunning || !row.store_name ? "disabled" : ""} onchange="toggleApiReputationShop(this.value, this.checked)"><strong>${escapeHtml(row.store_name || "-")}</strong></label><div class="order-cell-stack"><span>${escapeHtml(row.store_nickname || `Token ${row.token_id || "-"}`)}</span><span>${escapeHtml(salesperson)} · ${escapeHtml(groupName)}</span></div></td>
                         <td><div class="order-cell-stack"><strong>${escapeHtml(row.site_name || row.site_id || "-")}</strong><span>${escapeHtml(row.site_id || "-")} · ID ${escapeHtml(row.user_id || "-")}</span></div></td>
                         <td>${escapeHtml(apiReputationOfficialCount(row.infraction_count))}</td>
                         <td>${escapeHtml(apiReputationOfficialCount(row.rights_holder_count))}</td>
@@ -19007,8 +18849,16 @@
             const totalStores = Number(data?.total_stores || 0);
             const completedStores = Number(data?.completed_stores || 0);
             const failedStores = Number(data?.failed_stores || 0);
-            if (!data?.running && ["success", "partial"].includes(data?.status)) {
+            const snapshotKey = !data?.running && ["success", "partial"].includes(data?.status)
+                ? String(data?.finished_at || "") : "";
+            if (snapshotKey && snapshotKey !== apiReputationSyncedSnapshot) {
+                apiReputationSyncedSnapshot = snapshotKey;
                 reputationLoaded = false;
+                loadLatestReputation().then(() => {
+                    if (!reputationLoaded && apiReputationSyncedSnapshot === snapshotKey) {
+                        apiReputationSyncedSnapshot = "";
+                    }
+                });
             }
             apiReputationTime.textContent = formatMercadoCollectionElapsed(data?.elapsed_seconds || 0);
             apiReputationShop.textContent = `${completedStores.toLocaleString("zh-CN")} / ${totalStores.toLocaleString("zh-CN")}`;
@@ -19035,6 +18885,7 @@
             if (incomingRows.length || (!data?.running && data?.status !== "error")) {
                 apiReputationRows = incomingRows.map(row => ({...row}));
             }
+            renderApiReputationScopeOptions();
             apiReputationEmptyText = data?.running
                 ? "正在获取各店铺官方声誉数据..."
                 : failedStores ? "全部店铺获取失败，请查看任务日志" : "暂无上一次 API 声誉数据";
@@ -21209,7 +21060,10 @@
                     <td><input class="market-row-select store-link-row-select" type="checkbox" value="${linkId}" aria-label="选择 ${escapeHtml(row.item_id || "店铺链接")}" onchange="toggleStoreLink(${linkId}, this.checked)"></td>
                     <td><strong>${escapeHtml(row.store_name || "-")}</strong><span class="market-metric-note">${escapeHtml(row.site_id || "-")} · ${escapeHtml(row.group_name || "未分组")}</span></td>
                     <td>${product}</td>
-                    <td>${permalink ? `<a class="store-link-url" href="${escapeHtml(permalink)}" target="_blank" rel="noopener noreferrer" title="${escapeHtml(permalink)}">打开商品链接</a>` : "-"}</td>
+                    <td>${permalink ? `<a class="store-link-url" href="${escapeHtml(permalink)}" target="_blank" rel="noopener noreferrer" title="${escapeHtml(permalink)}">打开商品链接</a>` : "-"}
+                        <button type="button" class="store-link-page-button" onclick="openStoreLinkVideo(${linkId})" ${row.status !== "active" ? 'disabled title="只有在售商品可以上传视频"' : ""}>上传视频</button>
+                        <button type="button" class="store-link-page-button" onclick="openStoreLinkAdvertise(${linkId})" ${row.status !== "active" ? 'disabled title="只有在售商品可以投放广告"' : ""}>投放广告</button>
+                    </td>
                     <td>${storeLinkStatus(row.status, row.is_current)}</td>
                     <td><strong>${price}</strong></td>
                     <td><strong>${row.weight_g == null ? "未提供" : `${storeLinkNumber(row.weight_g, 2)} g`}</strong><span class="market-metric-note">计泡 ${row.volumetric_weight_kg == null ? "-" : `${storeLinkNumber(row.volumetric_weight_kg, 4)} kg`}</span></td>
@@ -21221,6 +21075,170 @@
                 </tr>`;
             }).join("");
             updateStoreLinkSelection();
+        }
+
+        let storeLinkVideoBusy = false;
+
+        let storeLinkAdvertiseBusy = false;
+        function openStoreLinkAdvertise(linkId) {
+            if (storeLinkAdvertiseBusy) {
+                alert("广告正在提交，请等待完成");
+                return;
+            }
+            const row = storeLinkRows.find(item => Number(item.id) === linkId);
+            if (!row) return;
+            let dialog = document.getElementById("store-link-advertise-dialog");
+            if (!dialog) {
+                dialog = document.createElement("dialog");
+                dialog.id = "store-link-advertise-dialog";
+                dialog.style.cssText = "width:min(560px,92vw);border:1px solid #dbe2ea;border-radius:14px;padding:24px;";
+                dialog.innerHTML = `<h3 style="margin-top:0">投放 Product Ads</h3>
+                    <p id="store-link-advertise-target"></p>
+                    <label style="display:block;margin:12px 0 5px">广告活动名称</label>
+                    <input id="store-link-advertise-name" type="text" maxlength="100" style="width:100%" aria-label="广告活动名称">
+                    <label style="display:block;margin:12px 0 5px">每日预算</label>
+                    <input id="store-link-advertise-budget" type="number" min="0.01" step="0.01" value="10" style="width:100%" aria-label="每日预算">
+                    <label style="display:block;margin:12px 0 5px">目标 ROAS（1–35）</label>
+                    <input id="store-link-advertise-roas" type="number" min="1" max="35" step="0.1" value="5" style="width:100%" aria-label="目标 ROAS">
+                    <p class="market-metric-note">预算属于广告活动。默认按商品创建独立活动；目录商品或多变体商品会以美客多广告组为单位一起投放。</p>
+                    <p id="store-link-advertise-message" role="status" aria-live="polite"></p>
+                    <button class="primary" id="store-link-advertise-submit" type="button">确认投放</button>
+                    <button class="secondary" id="store-link-advertise-close" type="button">关闭</button>`;
+                document.body.appendChild(dialog);
+                dialog.addEventListener("cancel", event => { if (storeLinkAdvertiseBusy) event.preventDefault(); });
+                document.getElementById("store-link-advertise-close").onclick = () => dialog.close();
+            }
+            document.getElementById("store-link-advertise-target").textContent = `${row.store_name || ""} · ${row.item_id} · ${row.site_id} · ${row.title || ""}`;
+            document.getElementById("store-link-advertise-name").value = `链接广告-${row.item_id}`;
+            document.getElementById("store-link-advertise-message").textContent = "提交后会立即创建或更新广告活动，并启用该商品广告。";
+            document.getElementById("store-link-advertise-submit").disabled = false;
+            document.getElementById("store-link-advertise-submit").onclick = () => submitStoreLinkAdvertise(linkId);
+            dialog.showModal();
+        }
+
+        async function submitStoreLinkAdvertise(linkId) {
+            if (storeLinkAdvertiseBusy) return;
+            const budget = Number(document.getElementById("store-link-advertise-budget").value);
+            const roasTarget = Number(document.getElementById("store-link-advertise-roas").value);
+            const campaignName = document.getElementById("store-link-advertise-name").value.trim();
+            const message = document.getElementById("store-link-advertise-message");
+            if (!Number.isFinite(budget) || budget <= 0) {
+                message.textContent = "请输入大于 0 的每日预算。";
+                return;
+            }
+            if (!Number.isFinite(roasTarget) || roasTarget < 1 || roasTarget > 35) {
+                message.textContent = "目标 ROAS 必须在 1–35 之间。";
+                return;
+            }
+            if (!campaignName) {
+                message.textContent = "请输入广告活动名称。";
+                return;
+            }
+            const submit = document.getElementById("store-link-advertise-submit");
+            const close = document.getElementById("store-link-advertise-close");
+            storeLinkAdvertiseBusy = true;
+            submit.disabled = close.disabled = true;
+            message.textContent = "正在创建广告活动并启用商品广告…";
+            try {
+                const response = await fetch(`/api/store-links/${linkId}/advertise`, {
+                    method: "POST",
+                    headers: {"Content-Type": "application/json"},
+                    body: JSON.stringify({
+                        budget,
+                        roas_target: roasTarget,
+                        campaign_name: campaignName,
+                    }),
+                });
+                const payload = await response.json().catch(() => ({}));
+                if (!response.ok || payload.status !== "success") {
+                    throw new Error(payload.message || `投放失败（${response.status}）`);
+                }
+                const data = payload.data || {};
+                message.textContent = `投放成功：活动 ${data.campaign_name || campaignName}（ID ${data.campaign_id || "-"}），每日预算 ${data.currency_id || ""} ${storeLinkNumber(data.budget, 2)}，目标 ROAS ${storeLinkNumber(data.roas_target, 1)}。`;
+                submit.disabled = true;
+            } catch (error) {
+                message.textContent = `投放失败：${error.message || error}`;
+                submit.disabled = false;
+            } finally {
+                storeLinkAdvertiseBusy = false;
+                close.disabled = false;
+            }
+        }
+
+        function openStoreLinkVideo(linkId) {
+            if (storeLinkVideoBusy) {
+                alert("视频正在上传，请等待完成");
+                return;
+            }
+            const row = storeLinkRows.find(item => Number(item.id) === linkId);
+            if (!row) return;
+            let dialog = document.getElementById("store-link-video-dialog");
+            if (!dialog) {
+                dialog = document.createElement("dialog");
+                dialog.id = "store-link-video-dialog";
+                dialog.style.cssText = "width:min(520px,90vw);border:1px solid #dbe2ea;border-radius:14px;padding:24px;";
+                dialog.innerHTML = `<h3>上传商品视频</h3><p id="store-link-video-target"></p>
+                    <p>支持 MP4、MOV、MPEG、AVI，最大 280 MB。请使用 10–61 秒竖屏视频，分辨率至少 360×640。提交后需等待美客多审核。</p>
+                    <input id="store-link-video-file" type="file" accept=".mp4,.mov,.mpeg,.avi" aria-label="选择商品视频">
+                    <p id="store-link-video-message" role="status" aria-live="polite"></p>
+                    <button id="store-link-video-submit" type="button">上传到美客多</button>
+                    <button id="store-link-video-close" type="button">关闭</button>`;
+                document.body.appendChild(dialog);
+                dialog.addEventListener("cancel", event => { if (storeLinkVideoBusy) event.preventDefault(); });
+                document.getElementById("store-link-video-close").onclick = () => dialog.close();
+            }
+            document.getElementById("store-link-video-target").textContent = `${row.store_name || ""} · ${row.item_id} · ${row.site_id} · ${row.title || ""}`;
+            document.getElementById("store-link-video-file").value = "";
+            document.getElementById("store-link-video-message").textContent = "仅上传到这条链接对应的站点。";
+            document.getElementById("store-link-video-submit").disabled = false;
+            document.getElementById("store-link-video-submit").onclick = () => uploadStoreLinkVideo(linkId);
+            dialog.showModal();
+        }
+
+        function uploadStoreLinkVideo(linkId) {
+            if (storeLinkVideoBusy) return;
+            const input = document.getElementById("store-link-video-file");
+            const file = input.files[0];
+            const message = document.getElementById("store-link-video-message");
+            if (!file || !/\.(mp4|mov|mpeg|avi)$/i.test(file.name) || file.size === 0 || file.size > 280 * 1024 * 1024) {
+                message.textContent = "请选择非空的 MP4、MOV、MPEG 或 AVI 视频，大小不能超过 280 MB。";
+                return;
+            }
+            const submit = document.getElementById("store-link-video-submit");
+            const close = document.getElementById("store-link-video-close");
+            storeLinkVideoBusy = true;
+            input.disabled = submit.disabled = close.disabled = true;
+            message.textContent = "正在上传视频…";
+            const form = new FormData();
+            form.append("file", file);
+            const xhr = new XMLHttpRequest();
+            xhr.open("POST", `/api/store-links/${linkId}/video`);
+            xhr.timeout = 420000;
+            xhr.upload.onprogress = event => {
+                if (event.lengthComputable) {
+                    const percent = Math.round(event.loaded / event.total * 100);
+                    message.textContent = percent < 100 ? `正在上传视频：${percent}%` : "视频已传输，正在等待美客多处理…";
+                }
+            };
+            let succeeded = false;
+            xhr.onload = () => {
+                try {
+                    const payload = JSON.parse(xhr.responseText);
+                    succeeded = xhr.status >= 200 && xhr.status < 300 && payload.status === "success";
+                    message.textContent = payload.message || `上传失败（${xhr.status}）`;
+                } catch (_) {
+                    message.textContent = `服务器返回异常（${xhr.status}），请到美客多后台确认上传结果后再重试。`;
+                }
+            };
+            xhr.onerror = xhr.ontimeout = () => {
+                message.textContent = "网络中断或上传超时，结果未知。请先在美客多后台确认视频是否已提交，再决定是否重试。";
+            };
+            xhr.onloadend = () => {
+                storeLinkVideoBusy = false;
+                input.disabled = close.disabled = false;
+                submit.disabled = succeeded;
+            };
+            xhr.send(form);
         }
 
         function renderStoreLinkStores(stores) {
@@ -21260,6 +21278,21 @@
             }
         }
 
+        function renderStoreLinkMercadoCategories(categories) {
+            const previous = String(storeLinkMercadoCategoryFilter.value || "");
+            const rows = Array.isArray(categories) ? categories : [];
+            storeLinkMercadoCategoryFilter.innerHTML = '<option value="">全部美客多分类</option>' + rows.map(row => {
+                const categoryId = String(row.category_id || "");
+                const categoryName = String(row.category_name || "").trim();
+                const label = categoryName ? `${categoryName} (${categoryId})` : categoryId;
+                const count = Number(row.link_count || 0).toLocaleString("zh-CN");
+                return `<option value="${escapeHtml(categoryId)}">${escapeHtml(label)} · ${count} 条</option>`;
+            }).join("");
+            if (rows.some(row => String(row.category_id || "") === previous)) {
+                storeLinkMercadoCategoryFilter.value = previous;
+            }
+        }
+
         function renderStoreLinkPagination() {
             if (!storeLinkPageButtons) return;
             const start = Math.max(1, Math.min(storeLinkPage - 3, storeLinkPages - 6));
@@ -21294,7 +21327,7 @@
                 group_name: storeLinkGroupFilter.value,
                 status: storeLinkStatusFilter.value,
                 management_category_id: storeLinkProductCategoryFilter.value,
-                mercado_category: storeLinkMercadoCategoryFilter.value.trim(),
+                mercado_category: storeLinkMercadoCategoryFilter.value,
                 sales_sort: storeLinkSalesSort.value || "desc",
                 page: String(requestedPage),
                 page_size: "1000",
@@ -21314,6 +21347,7 @@
                 renderStoreLinkStores(data.stores || []);
                 renderStoreLinkSites(data.sites || []);
                 renderStoreLinkGroups(data.groups || []);
+                renderStoreLinkMercadoCategories(data.mercado_categories || []);
                 const summary = data.summary || {};
                 storeLinkAllCount.textContent = Number(summary.all_count || 0).toLocaleString("zh-CN");
                 storeLinkCurrentCount.textContent = Number(summary.current_count || 0).toLocaleString("zh-CN");
@@ -21355,6 +21389,36 @@
                 selectedStoreLinkIds.size === 0
                 || storeLinkRemoteUpdateRunning
             );
+            storeLinkDeleteButton.disabled = (
+                selectedStoreLinkIds.size === 0
+                || storeLinkRemoteUpdateRunning
+            );
+        }
+
+        async function deleteSelectedStoreLinks() {
+            const linkIds = Array.from(selectedStoreLinkIds);
+            if (!linkIds.length) return;
+            if (!window.confirm(`确定删除选中的 ${linkIds.length} 条店铺链接吗？下次同步对应店铺时，这些链接会重新拉取。`)) return;
+            storeLinkDeleteButton.disabled = true;
+            storeLinkMessage.textContent = `正在删除 ${linkIds.length} 条店铺链接...`;
+            try {
+                const response = await fetch("/api/store-links/delete", {
+                    method: "POST",
+                    headers: {"Content-Type": "application/json"},
+                    body: JSON.stringify({link_ids: linkIds}),
+                });
+                const payload = await response.json();
+                if (!response.ok || payload.status !== "success") {
+                    throw new Error(payload.message || `接口请求失败：${response.status}`);
+                }
+                selectedStoreLinkIds.clear();
+                storeLinkMessage.textContent = payload.message || `已删除 ${Number(payload.data?.deleted || 0)} 条店铺链接`;
+                await loadStoreLinks(storeLinkPage);
+            } catch (error) {
+                storeLinkMessage.textContent = `删除失败：${error.message || error}`;
+            } finally {
+                updateStoreLinkSelection();
+            }
         }
 
         async function bulkUpdateStoreLinks() {
@@ -23535,25 +23599,12 @@
             selectAll.indeterminate = selectedCount > 0 && selectedCount < selectable.length;
         }
 
-        function syncCollectionDisabledState(prefix) {
-            if (prefix !== "order-print" || !orderPrintRunning) return;
-            const elements = collectionElements(prefix);
-            ["shops", "sites"].forEach(field => {
-                collectionOptionCheckboxes(elements[field]).forEach(checkbox => {
-                    checkbox.disabled = true;
-                });
-                const selectAll = elements[`${field}All`];
-                if (selectAll) selectAll.disabled = true;
-            });
-        }
-
         function collectionOptionsForPrefix(prefix) {
             if (prefix === "infraction" || prefix === "reputation") {
                 return Array.isArray(collectionFailedShopOptions[prefix])
                     ? collectionFailedShopOptions[prefix]
                     : [];
             }
-            if (prefix === "order-print") return orderPrintShopOptions;
             return collectionShopOptions;
         }
 
@@ -23627,7 +23678,6 @@
             } else {
                 updateCollectionSiteOptions(prefix, true);
             }
-            syncCollectionDisabledState(prefix);
         }
 
         function updateCollectionSiteOptions(prefix, selectAll = false) {
@@ -23664,7 +23714,6 @@
             updateCollectionSelectAll(prefix, "shops");
             updateCollectionSelectAll(prefix, "sites");
             updateCollectionScopeSummary(prefix);
-            syncCollectionDisabledState(prefix);
         }
 
         function handleCollectionOptionChange(prefix, field) {
@@ -23726,29 +23775,14 @@
             if (collectionOptionsLoaded && !force) return;
             if (collectionOptionsLoading) return collectionOptionsLoading;
             collectionOptionsLoading = (async () => {
-                const orderPrintOptionsRequest = hasWorkbenchPermission("order_print.view")
-                    ? fetch("/api/order-print/options", {cache: "no-store"})
-                    : Promise.resolve(null);
-                const [response, orderPrintResponse] = await Promise.all([
-                    fetch("/api/collections/options", {cache: "no-store"}),
-                    orderPrintOptionsRequest,
-                ]);
+                const response = await fetch("/api/collections/options", {cache: "no-store"});
                 const payload = await response.json();
                 if (!response.ok || payload.status !== "success") {
                     throw new Error(payload.message || `接口请求失败：${response.status}`);
                 }
-                const orderPrintPayload = orderPrintResponse
-                    ? await orderPrintResponse.json()
-                    : {status: "success", data: {shops: []}};
-                if (orderPrintResponse && (!orderPrintResponse.ok || orderPrintPayload.status !== "success")) {
-                    throw new Error(orderPrintPayload.message || `API 打印店铺读取失败：${orderPrintResponse.status}`);
-                }
                 collectionShopOptions = Array.isArray(payload.data?.shops) ? payload.data.shops : [];
                 authorizedAppealShopOptions = Array.isArray(payload.data?.appeal_shops)
                     ? payload.data.appeal_shops
-                    : [];
-                orderPrintShopOptions = Array.isArray(orderPrintPayload.data?.shops)
-                    ? orderPrintPayload.data.shops
                     : [];
                 const failedShops = payload.data?.failed_shops || {};
                 collectionFailedShopOptions = {
@@ -23757,7 +23791,6 @@
                 };
                 renderCollectionShopOptions("infraction");
                 renderCollectionShopOptions("reputation");
-                renderCollectionShopOptions("order-print");
                 collectionOptionsLoaded = true;
                 const currentAppealShop = authorizedAppealShopOptions.find(shop => (
                     String(shop.shop_name || "").trim() === String(appealShopInput?.value || "").trim()
@@ -23774,7 +23807,7 @@
                     appealShopOptions.hidden = false;
                     appealShopOptions.innerHTML = `<div class="shop-suggestion-empty">店铺加载失败：${escapeHtml(err.message || err)}</div>`;
                 }
-                ["infraction", "reputation", "order-print"].forEach(prefix => {
+                ["infraction", "reputation"].forEach(prefix => {
                     const summary = collectionElements(prefix).summary;
                     if (summary) summary.textContent = `加载采集范围失败：${err.message || err}`;
                 });
@@ -24048,289 +24081,6 @@
             } finally {
                 if (!launched) resetCollectionRerunButton("infraction");
             }
-        }
-
-        function orderPrintPayload() {
-            const selection = collectionRequestPayload("order-print");
-            return {
-                shops: selection.shops,
-                sites: selection.sites,
-                date_from: document.getElementById("order-print-date-from")?.value || "",
-                date_to: document.getElementById("order-print-date-to")?.value || "",
-                max_retries: Number(document.getElementById("order-print-retries").value || 3),
-                retry_delay_seconds: Number(document.getElementById("order-print-retry-delay").value || 3),
-            };
-        }
-
-        function orderPrintLocalDatetimeValue(value) {
-            const pad = number => String(number).padStart(2, "0");
-            return `${value.getFullYear()}-${pad(value.getMonth() + 1)}-${pad(value.getDate())}`
-                + `T${pad(value.getHours())}:${pad(value.getMinutes())}`;
-        }
-
-        function initializeOrderPrintRange() {
-            const startInput = document.getElementById("order-print-date-from");
-            const endInput = document.getElementById("order-print-date-to");
-            if (!startInput || !endInput || startInput.value || endInput.value) return;
-            const end = new Date();
-            end.setSeconds(0, 0);
-            const start = new Date(end.getTime() - 72 * 60 * 60 * 1000);
-            startInput.value = orderPrintLocalDatetimeValue(start);
-            endInput.value = orderPrintLocalDatetimeValue(end);
-        }
-
-        initializeOrderPrintRange();
-
-        function orderPrintTargetKey(row) {
-            return JSON.stringify([
-                String(row?.shop_name || "").trim(),
-                String(row?.site || "").trim(),
-            ]);
-        }
-
-        function renderOrderPrintRunStatus(status) {
-            const statusMap = {
-                printed: ["API 面单已生成", ""],
-                partial: ["部分成功", "partial"],
-                no_orders: ["无待打印订单", "empty"],
-                failed: ["失败", "fail"],
-                skipped: ["跳过", "empty"],
-                not_run: ["尚未执行", "empty"],
-                unknown: ["状态未知", "empty"],
-            };
-            const [label, className] = statusMap[String(status || "unknown")]
-                || statusMap.unknown;
-            return `<span class="status-tag ${className}">${label}</span>`;
-        }
-
-        function updateOrderPrintTargetSelection() {
-            const availableKeys = new Set(orderPrintSiteRows.map(orderPrintTargetKey));
-            selectedOrderPrintTargetKeys.forEach(key => {
-                if (!availableKeys.has(key)) selectedOrderPrintTargetKeys.delete(key);
-            });
-            document.querySelectorAll(".order-print-target-select").forEach(checkbox => {
-                const row = orderPrintSiteRows[Number(checkbox.dataset.targetIndex)];
-                checkbox.checked = Boolean(row && selectedOrderPrintTargetKeys.has(orderPrintTargetKey(row)));
-                checkbox.disabled = orderPrintRunning;
-            });
-            if (orderPrintSiteRunAll) {
-                orderPrintSiteRunAll.disabled = orderPrintRunning || availableKeys.size === 0;
-                orderPrintSiteRunAll.checked = availableKeys.size > 0
-                    && selectedOrderPrintTargetKeys.size === availableKeys.size;
-                orderPrintSiteRunAll.indeterminate = selectedOrderPrintTargetKeys.size > 0
-                    && selectedOrderPrintTargetKeys.size < availableKeys.size;
-            }
-            if (orderPrintTargetSelectionSummary) {
-                orderPrintTargetSelectionSummary.textContent = orderPrintRunning
-                    ? `正在执行，已选择 ${selectedOrderPrintTargetKeys.size} 个店铺站点`
-                    : `已选择 ${selectedOrderPrintTargetKeys.size} 个店铺站点`;
-            }
-            if (rerunSelectedOrderPrintBtn) {
-                rerunSelectedOrderPrintBtn.disabled = orderPrintRunning
-                    || selectedOrderPrintTargetKeys.size === 0;
-                rerunSelectedOrderPrintBtn.textContent = orderPrintRunning
-                    ? "API 订单打印运行中"
-                    : `执行所选站点${selectedOrderPrintTargetKeys.size ? `（${selectedOrderPrintTargetKeys.size} 个）` : ""}`;
-            }
-        }
-
-        function toggleOrderPrintSiteTarget(index, checked) {
-            if (orderPrintRunning) return;
-            const row = orderPrintSiteRows[Number(index)];
-            if (!row) return;
-            const key = orderPrintTargetKey(row);
-            if (checked) selectedOrderPrintTargetKeys.add(key);
-            else selectedOrderPrintTargetKeys.delete(key);
-            updateOrderPrintTargetSelection();
-        }
-
-        function toggleAllOrderPrintSiteTargets(checked) {
-            if (orderPrintRunning) return;
-            orderPrintSiteRows.forEach(row => {
-                const key = orderPrintTargetKey(row);
-                if (checked) selectedOrderPrintTargetKeys.add(key);
-                else selectedOrderPrintTargetKeys.delete(key);
-            });
-            updateOrderPrintTargetSelection();
-        }
-
-        function renderOrderPrintSiteLastRuns(rows) {
-            if (!orderPrintSiteRunBody) return;
-            orderPrintSiteRows = Array.isArray(rows) ? rows : [];
-            if (!orderPrintSiteRows.length) {
-                orderPrintSiteRunBody.innerHTML = '<tr><td class="empty-state" colspan="5">暂无已配置店铺站点</td></tr>';
-                updateOrderPrintTargetSelection();
-                return;
-            }
-            orderPrintSiteRunBody.innerHTML = orderPrintSiteRows.map((row, index) => {
-                return `
-                    <tr>
-                        <td><input class="collection-checkbox order-print-target-select" type="checkbox" data-target-index="${index}" aria-label="选择 ${escapeHtml(row.shop_name || "")} ${escapeHtml(row.site || "")}" onchange="toggleOrderPrintSiteTarget(${index}, this.checked)"></td>
-                        <td>${escapeHtml(row.shop_name || "-")}</td>
-                        <td>${escapeHtml(row.site || "-")}</td>
-                        <td>${renderOrderPrintRunStatus(row.status)}${row.source ? `<div class="inventory-cell-meta">${escapeHtml(row.source)}</div>` : ""}</td>
-                        <td>${escapeHtml(row.finished_at || "尚未执行")}</td>
-                    </tr>`;
-            }).join("");
-            updateOrderPrintTargetSelection();
-        }
-
-        function renderOrderPrintStatus(state) {
-            const data = state || {};
-            orderPrintRunning = Boolean(data.running);
-            orderPrintStopping = String(data.status || "") === "stopping";
-            const statusClass = orderPrintStopping ? "stopping" : (orderPrintRunning ? "running" : (data.status === "error" ? "error" : ""));
-            orderPrintStatusBadge.className = `status ${statusClass}`.trim();
-            orderPrintStatusText.textContent = data.message || (orderPrintRunning ? "运行中" : "等待启动");
-            orderPrintStartedAt.textContent = data.started_at || "-";
-            orderPrintCompletedAt.textContent = data.finished_at || "-";
-            orderPrintSuccessCount.textContent = `${(data.printed || 0) + (data.partial || 0)} / ${data.no_orders || 0}`;
-            orderPrintFailureCount.textContent = `${data.printed_order_count || 0} / ${data.shipment_count || 0}`;
-            orderPrintLog.textContent = data.log || data.message || "等待任务启动...";
-            orderPrintLog.scrollTop = orderPrintLog.scrollHeight;
-            renderOrderPrintSiteLastRuns(data.site_last_runs);
-            startOrderPrintBtn.disabled = orderPrintRunning;
-            startOrderPrintBtn.textContent = orderPrintRunning
-                ? "API 打印任务运行中"
-                : "打印所选店铺未打印订单";
-            if (downloadOrderPrintBtn) {
-                downloadOrderPrintBtn.hidden = !data.download_url;
-                downloadOrderPrintBtn.disabled = orderPrintRunning || !data.download_url;
-                downloadOrderPrintBtn.dataset.downloadUrl = data.download_url || "";
-                downloadOrderPrintBtn.textContent = data.shipment_count
-                    ? `下载合并面单 PDF（${data.shipment_count} 个）`
-                    : "下载合并面单 PDF";
-            }
-            stopOrderPrintBtn.disabled = !data.can_stop || orderPrintStopping;
-            stopOrderPrintBtn.textContent = orderPrintStopping ? "正在停止" : "停止任务";
-            document.querySelectorAll("#tab-order-print select, #tab-order-print input").forEach(element => {
-                element.disabled = orderPrintRunning;
-            });
-            updateOrderPrintTargetSelection();
-        }
-
-        async function loadOrderPrintStatus() {
-            if (!orderPrintStatusBadge) return;
-            if (orderPrintStatusPollTimer) {
-                window.clearTimeout(orderPrintStatusPollTimer);
-                orderPrintStatusPollTimer = null;
-            }
-            try {
-                let response = null;
-                let networkError = null;
-                for (let attempt = 1; attempt <= 3; attempt += 1) {
-                    try {
-                        response = await fetch("/api/order-print/status", {cache: "no-store"});
-                        networkError = null;
-                        break;
-                    } catch (err) {
-                        networkError = err;
-                        if (attempt >= 3) break;
-                        orderPrintStatusBadge.className = "status running";
-                        orderPrintStatusText.textContent = `服务连接中断，正在重试（${attempt}/3）`;
-                        await new Promise(resolve => window.setTimeout(resolve, attempt * 1000));
-                    }
-                }
-                if (!response) throw networkError || new Error("工作台服务暂时不可达");
-                const payload = await response.json();
-                if (!response.ok || payload.status !== "success") {
-                    throw new Error(payload.message || `接口请求失败：${response.status}`);
-                }
-                orderPrintLoaded = true;
-                renderOrderPrintStatus(payload.data || {});
-                if (orderPrintRunning) {
-                    orderPrintStatusPollTimer = window.setTimeout(loadOrderPrintStatus, 2000);
-                }
-            } catch (err) {
-                orderPrintRunning = false;
-                orderPrintStatusBadge.className = "status error";
-                orderPrintStatusText.textContent = "状态读取失败";
-                const message = String(err?.message || err || "工作台服务暂时不可达");
-                orderPrintLog.textContent = `读取订单打印状态失败：${message}。请刷新页面；若服务刚重启，稍后会自动恢复。`;
-                startOrderPrintBtn.disabled = false;
-                stopOrderPrintBtn.disabled = true;
-            }
-        }
-
-        async function startOrderPrint() {
-            if (!startOrderPrintBtn || orderPrintRunning) return;
-            let requestPayload;
-            try {
-                await loadCollectionOptions();
-                requestPayload = orderPrintPayload();
-            } catch (err) {
-                alert(`无法启动：${err.message || err}`);
-                return;
-            }
-            await submitOrderPrint(requestPayload);
-        }
-
-        async function rerunSelectedOrderPrintTargets() {
-            if (!rerunSelectedOrderPrintBtn || orderPrintRunning) return;
-            const targets = orderPrintSiteRows
-                .filter(row => selectedOrderPrintTargetKeys.has(orderPrintTargetKey(row)))
-                .map(row => ({shop_name: row.shop_name, site: row.site}));
-            if (!targets.length) {
-                alert("请先勾选需要补跑的店铺站点");
-                return;
-            }
-            const requestPayload = {
-                targets,
-                date_from: document.getElementById("order-print-date-from")?.value || "",
-                date_to: document.getElementById("order-print-date-to")?.value || "",
-                max_retries: Number(document.getElementById("order-print-retries").value || 3),
-                retry_delay_seconds: Number(document.getElementById("order-print-retry-delay").value || 3),
-            };
-            await submitOrderPrint(requestPayload);
-        }
-
-        async function submitOrderPrint(requestPayload) {
-            startOrderPrintBtn.disabled = true;
-            startOrderPrintBtn.textContent = "正在启动...";
-            if (rerunSelectedOrderPrintBtn) rerunSelectedOrderPrintBtn.disabled = true;
-            try {
-                const response = await fetch("/api/order-print/start", {
-                    method: "POST",
-                    headers: {"Content-Type": "application/json"},
-                    body: JSON.stringify(requestPayload),
-                });
-                const payload = await response.json();
-                if (!response.ok || payload.status !== "success") {
-                    throw new Error(payload.message || `接口请求失败：${response.status}`);
-                }
-                renderOrderPrintStatus(payload.data || {});
-                await loadOrderPrintStatus();
-            } catch (err) {
-                alert(`启动订单打印失败：${err.message || err}`);
-                await loadOrderPrintStatus();
-            }
-        }
-
-        async function stopOrderPrint() {
-            if (!orderPrintRunning || orderPrintStopping) return;
-            if (!window.confirm("确定停止订单打印吗？当前正在执行的 API 请求会安全收尾。")) return;
-            orderPrintStopping = true;
-            stopOrderPrintBtn.disabled = true;
-            stopOrderPrintBtn.textContent = "正在停止";
-            try {
-                const response = await fetch("/api/order-print/stop", {method: "POST"});
-                const payload = await response.json();
-                if (!response.ok || payload.status !== "success") {
-                    throw new Error(payload.message || `接口请求失败：${response.status}`);
-                }
-                renderOrderPrintStatus(payload.data || {});
-                await loadOrderPrintStatus();
-            } catch (err) {
-                orderPrintStopping = false;
-                alert(`停止订单打印失败：${err.message || err}`);
-                await loadOrderPrintStatus();
-            }
-        }
-
-        function downloadOrderPrintPdf() {
-            if (!downloadOrderPrintBtn?.dataset.downloadUrl || orderPrintRunning) return;
-            const downloadUrl = downloadOrderPrintBtn.dataset.downloadUrl || "/api/order-print/download";
-            window.open(downloadUrl, "_blank", "noopener");
         }
 
         function selectOrderAnalysisFolder(fileList) {
@@ -25182,8 +24932,53 @@
             return hadRunningState && wasRunning && !running && !task.is_external_task;
         }
 
+        function renderDailyTaskList(listElement, visibleTasks, allTasks, emptyText) {
+            if (!listElement) return;
+            const visibleKeys = new Set(visibleTasks.map(task => dailyTaskRuntimeKey(task)));
+            const allKeys = new Set(allTasks.map(task => dailyTaskRuntimeKey(task)));
+            listElement.querySelectorAll(".daily-task-card").forEach(card => {
+                const taskKey = String(card.dataset.taskKey || "");
+                if (!visibleKeys.has(taskKey)) {
+                    card.remove();
+                    if (!allKeys.has(taskKey)) {
+                        dailyTaskPendingStopIds.delete(taskKey);
+                        dailyTaskLogLastFetchedAt.delete(taskKey);
+                    }
+                }
+            });
+            listElement.querySelectorAll(".empty-state").forEach(node => node.remove());
+            if (!visibleTasks.length) {
+                const empty = document.createElement("div");
+                empty.className = "empty-state";
+                empty.textContent = emptyText;
+                listElement.appendChild(empty);
+                return;
+            }
+            const existingCards = new Map(
+                Array.from(listElement.querySelectorAll(".daily-task-card"), card => [
+                    String(card.dataset.taskKey || ""), card,
+                ]),
+            );
+            visibleTasks.forEach((task, index) => {
+                const taskKey = dailyTaskRuntimeKey(task);
+                let card = existingCards.get(taskKey);
+                if (!card) card = createDailyTaskCard(taskKey);
+                const cardAtPosition = listElement.children[index] || null;
+                if (cardAtPosition !== card) listElement.insertBefore(card, cardAtPosition);
+                const needsFinalLog = updateDailyTaskCard(card, task);
+                if (needsFinalLog) {
+                    const logDetails = card.querySelector('[data-role="log-details"]');
+                    const logElement = card.querySelector('[data-role="log"]');
+                    if (logDetails?.open || logElement?.dataset.loaded === "true") {
+                        loadDailyTaskLog(taskKey, {force: true});
+                    }
+                }
+            });
+        }
+
         function renderDailyTaskStatuses(data) {
             if (!dailyTaskList) return;
+            const filteredEmptyText = "没有符合当前筛选条件的任务。";
             const tasks = Array.isArray(data)
                 ? data.slice()
                 : normalizeDailyTaskCollection(data);
@@ -25191,9 +24986,18 @@
             syncDailyTaskComputerFilter(tasks);
             const statusFilter = String(dailyTaskStatusFilter?.value || "");
             const computerFilter = String(dailyTaskComputerFilter?.value || "");
-            const visibleTasks = tasks.filter(task => (
-                dailyTaskMatchesStatusFilter(task, statusFilter)
-                && (!computerFilter || dailyTaskComputerKey(task) === computerFilter)
+            if (dailyTaskHistoryPanel && statusFilter && statusFilter !== "active") {
+                dailyTaskHistoryPanel.open = true;
+            }
+            const computerMatches = task => (
+                !computerFilter || dailyTaskComputerKey(task) === computerFilter
+            );
+            const activeTasks = tasks.filter(task => (
+                task.running && (!statusFilter || statusFilter === "active") && computerMatches(task)
+            ));
+            const historyTasks = tasks.filter(task => (
+                !task.running && computerMatches(task)
+                && (statusFilter === "active" || !statusFilter || dailyTaskMatchesStatusFilter(task, statusFilter))
             ));
             const runningCount = tasks.filter(task => task.running).length;
             const localRunningCount = tasks.filter(task => (
@@ -25206,67 +25010,25 @@
             dailyTaskServerRunningCount.textContent = String(serverRunningCount);
             dailyTaskTotalCount.textContent = String(tasks.length);
             if (dailyTaskFilterSummary) {
-                dailyTaskFilterSummary.textContent = (statusFilter || computerFilter)
-                    ? `显示 ${visibleTasks.length} / ${tasks.length} 项`
-                    : `显示 ${tasks.length} 项`;
+                dailyTaskFilterSummary.textContent = `活跃 ${activeTasks.length} 项，历史 ${historyTasks.length} 项`;
             }
             dailyTaskStatusBadge.className = `status ${runningCount ? "running" : ""}`.trim();
             dailyTaskStatusText.textContent = runningCount
                 ? `${runningCount} 项任务运行中`
                 : tasks.length ? "暂无运行任务" : "等待启动";
 
-            const taskKeys = new Set(visibleTasks.map(task => dailyTaskRuntimeKey(task)));
-            const allTaskKeys = new Set(tasks.map(task => dailyTaskRuntimeKey(task)));
-            dailyTaskList.querySelectorAll(".daily-task-card").forEach(card => {
-                const taskKey = String(card.dataset.taskKey || "");
-                if (!taskKeys.has(taskKey)) {
-                    card.remove();
-                    if (!allTaskKeys.has(taskKey)) {
-                        dailyTaskPendingStopIds.delete(taskKey);
-                        dailyTaskLogLastFetchedAt.delete(taskKey);
-                    }
-                }
-            });
-            dailyTaskList.querySelectorAll(".empty-state").forEach(node => node.remove());
-
-            if (!visibleTasks.length) {
-                const empty = document.createElement("div");
-                empty.className = "empty-state";
-                empty.textContent = tasks.length
-                    ? "没有符合当前筛选条件的任务。"
-                    : "暂无任务，可在左侧配置后启动。";
-                dailyTaskList.appendChild(empty);
-                return;
-            }
-
-            const existingCards = new Map(
-                Array.from(dailyTaskList.querySelectorAll(".daily-task-card"), card => [
-                    String(card.dataset.taskKey || ""),
-                    card,
-                ]),
+            renderDailyTaskList(dailyTaskList, activeTasks, tasks, "暂无活跃任务。");
+            renderDailyTaskList(
+                dailyTaskHistoryList,
+                historyTasks,
+                tasks,
+                statusFilter && statusFilter !== "active" ? filteredEmptyText : "暂无历史任务。",
             );
-            visibleTasks.forEach((task, index) => {
-                const taskKey = dailyTaskRuntimeKey(task);
-                let card = existingCards.get(taskKey);
-                if (!card) card = createDailyTaskCard(taskKey);
-                const cardAtPosition = dailyTaskList.children[index] || null;
-                if (cardAtPosition !== card) {
-                    dailyTaskList.insertBefore(card, cardAtPosition);
-                }
-                const needsFinalLog = updateDailyTaskCard(card, task);
-                if (needsFinalLog) {
-                    const logDetails = card.querySelector('[data-role="log-details"]');
-                    const logElement = card.querySelector('[data-role="log"]');
-                    if (logDetails?.open || logElement?.dataset.loaded === "true") {
-                        loadDailyTaskLog(taskKey, {force: true});
-                    }
-                }
-            });
-            scheduleDailyTaskAutoLogRefresh(visibleTasks);
+            scheduleDailyTaskAutoLogRefresh(activeTasks);
         }
 
         function findDailyTaskCard(taskKey) {
-            return Array.from(dailyTaskList?.querySelectorAll(".daily-task-card") || [])
+            return Array.from(document.querySelectorAll("#daily-task-list .daily-task-card, #daily-task-history-list .daily-task-card"))
                 .find(card => String(card.dataset.taskKey || "") === String(taskKey || "")) || null;
         }
 
@@ -25678,10 +25440,11 @@
         }
 
         async function loadLatestReputation() {
+            reputationLoaded = false;
             reputationBody.innerHTML = '<tr><td class="empty-state" colspan="16">正在加载最新声誉数据...</td></tr>';
             if (reputationSelectAll) reputationSelectAll.disabled = true;
             try {
-                const response = await fetch("/api/reputation/latest");
+                const response = await fetch("/api/reputation/latest", {cache: "no-store"});
                 const payload = await response.json();
                 if (!response.ok || payload.status !== "success") {
                     throw new Error(payload.message || `接口请求失败：${response.status}`);
@@ -25756,7 +25519,11 @@
 
         function renderLatestReputationRows() {
             const rows = filteredReputationRows();
-            const greenCount = rows.filter(row => String(row["声誉颜色"] || "").includes("绿")).length;
+            const normalStatuses = new Set(["正常", "active", "enabled", "ok"]);
+            const greenCount = rows.filter(row => (
+                String(row["声誉颜色"] || "").includes("绿")
+                && normalStatuses.has(String(row["站点状态"] || "").trim().toLocaleLowerCase("zh-CN"))
+            )).length;
             reputationTotal.textContent = rows.length.toLocaleString("zh-CN");
             reputationGreen.textContent = greenCount.toLocaleString("zh-CN");
             reputationRisk.textContent = (rows.length - greenCount).toLocaleString("zh-CN");

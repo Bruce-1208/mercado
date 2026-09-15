@@ -27,6 +27,7 @@ from erp.mercadolibre_batch_collector import (
     _check_stop,
     _normalize_image_url,
     _number,
+    canonical_marketplace_item_url,
     extract_listing_item_id,
     marketplace_url_has_cross_border_filter,
     merge_listing_candidates,
@@ -575,6 +576,60 @@ LISTING_PLUGIN_ITEMS_SCRIPT = r"""(() => {
 })()"""
 
 
+LISTING_PLUGIN_CACHE_FUNCTION = r"""function() {
+  const manager = Reflect.apply(this, globalThis, []);
+  if (!manager || typeof manager.getAllData !== 'function') {
+    return {found: false, items: {}};
+  }
+  const finite = value => {
+    if (value == null || value === '') return null;
+    const number = Number(value);
+    return Number.isFinite(number) ? number : null;
+  };
+  const normalizeId = value => {
+    const match = String(value || '').replace(/-/g, '').toUpperCase()
+      .match(/\bML[A-Z]\d{6,}\b/);
+    return match ? match[0] : '';
+  };
+  const compact = value => value == null ? '' : String(value);
+  const items = {};
+  for (const data of manager.getAllData()) {
+    if (!data || typeof data !== 'object') continue;
+    const id = normalizeId(
+      data.id || data.itemId || data.ItemId || data.sku || data.Sku || data.url
+    );
+    if (!id) continue;
+    const packet = data.renderPacket && typeof data.renderPacket === 'object'
+      ? data.renderPacket : {};
+    const seller = data.seller && typeof data.seller === 'object' ? data.seller : {};
+    const weight = finite(data.weight !== undefined ? data.weight : data.Weight);
+    const rawSize = Array.isArray(data.size) ? data.size : data.Size;
+    const size = Array.isArray(rawSize) ? rawSize.slice(0, 3).map(finite) : [];
+    const volumeWeight = finite(
+      data.volumeWeightG !== undefined ? data.volumeWeightG : data.VolumeWeightG
+    );
+    const origin = compact(
+      seller.countryCode || data.SellerAddressCountry || data.SellerCountry
+    ).trim().toUpperCase();
+    items[id] = {
+      id,
+      ...(typeof packet.isApiLoaded === 'boolean'
+        ? {api_loaded: packet.isApiLoaded} : {}),
+      ...(weight !== null ? {weight_g: weight} : {}),
+      ...(size.length === 3 && size.every(value => value !== null)
+        ? {size_cm: size} : {}),
+      ...(volumeWeight !== null ? {volume_weight_g: volumeWeight} : {}),
+      ...(packet.weightValue ? {weight_display: compact(packet.weightValue)} : {}),
+      ...(packet.sizeValue ? {size_display: compact(packet.sizeValue)} : {}),
+      ...(packet.volumeWeightValue
+        ? {volume_display: compact(packet.volumeWeightValue)} : {}),
+      ...(origin ? {self_ship_origin: origin} : {}),
+      read_method: 'zying_frontend_cache'
+    };
+  }
+  return {found: true, items};
+}"""
+
 class _PluginMetricReader:
     """Read ZYing React props from the extension's isolated JS context."""
 
@@ -657,6 +712,9 @@ class _PluginMetricReader:
         if self.session is None:
             return {}
         for context_id in reversed(tuple(self.context_ids)):
+            cached = await self._read_listing_cache(context_id)
+            if cached:
+                return cached
             try:
                 response = await self.session.send(
                     "Runtime.evaluate",
@@ -677,6 +735,123 @@ class _PluginMetricReader:
             except Exception:
                 continue
         return {}
+
+    async def _read_listing_cache(
+        self, context_id: int
+    ) -> dict[str, dict[str, Any]]:
+        """Read ZYing's structured card cache from its closed-over manager."""
+        if self.session is None:
+            return {}
+        object_group = f"zying-list-cache-{context_id}"
+        try:
+            handler_response = await self.session.send(
+                "Runtime.evaluate",
+                {
+                    "expression": """(() => {
+                      const handlers = globalThis.zyevent?.handles?.GETMELIDETAIL;
+                      if (!Array.isArray(handlers)) return null;
+                      return handlers.find(handler =>
+                        typeof handler === 'function' &&
+                        String(handler).includes('.batchUpdateData(')
+                      ) || null;
+                    })()""",
+                    "contextId": context_id,
+                    "objectGroup": object_group,
+                    "returnByValue": False,
+                },
+            )
+            handler = handler_response.get("result") or {}
+            handler_id = str(handler.get("objectId") or "")
+            handler_source = str(handler.get("description") or "")
+            accessor_match = re.search(
+                r"([A-Za-z_$][\w$]*)\(\)\.batchUpdateData\(", handler_source
+            )
+            if not handler_id or not accessor_match:
+                return {}
+            accessor_name = accessor_match.group(1)
+
+            handler_properties = await self.session.send(
+                "Runtime.getProperties",
+                {
+                    "objectId": handler_id,
+                    "ownProperties": False,
+                    "accessorPropertiesOnly": False,
+                },
+            )
+            scopes = next(
+                (
+                    item.get("value") or {}
+                    for item in handler_properties.get("internalProperties") or []
+                    if item.get("name") == "[[Scopes]]"
+                ),
+                {},
+            )
+            scopes_id = str(scopes.get("objectId") or "")
+            if not scopes_id:
+                return {}
+            scope_properties = await self.session.send(
+                "Runtime.getProperties",
+                {
+                    "objectId": scopes_id,
+                    "ownProperties": True,
+                    "accessorPropertiesOnly": False,
+                },
+            )
+            accessor_id = ""
+            for scope_entry in scope_properties.get("result") or []:
+                scope = scope_entry.get("value") or {}
+                scope_id = str(scope.get("objectId") or "")
+                if not scope_id:
+                    continue
+                variables = await self.session.send(
+                    "Runtime.getProperties",
+                    {
+                        "objectId": scope_id,
+                        "ownProperties": True,
+                        "accessorPropertiesOnly": False,
+                    },
+                )
+                accessor = next(
+                    (
+                        variable.get("value") or {}
+                        for variable in variables.get("result") or []
+                        if variable.get("name") == accessor_name
+                    ),
+                    {},
+                )
+                accessor_id = str(accessor.get("objectId") or "")
+                if accessor_id:
+                    break
+            if not accessor_id:
+                return {}
+            cache_response = await self.session.send(
+                "Runtime.callFunctionOn",
+                {
+                    "objectId": accessor_id,
+                    "functionDeclaration": LISTING_PLUGIN_CACHE_FUNCTION,
+                    "objectGroup": object_group,
+                    "returnByValue": True,
+                    "awaitPromise": True,
+                },
+            )
+            value = (cache_response.get("result") or {}).get("value")
+            items = value.get("items") if isinstance(value, dict) else None
+            if not isinstance(items, dict):
+                return {}
+            return {
+                str(item_id).replace("-", "").upper(): dict(payload)
+                for item_id, payload in items.items()
+                if isinstance(payload, dict)
+            }
+        except Exception:
+            return {}
+        finally:
+            try:
+                await self.session.send(
+                    "Runtime.releaseObjectGroup", {"objectGroup": object_group}
+                )
+            except Exception:
+                pass
 
     async def close(self) -> None:
         session, self.session = self.session, None
@@ -1543,28 +1718,34 @@ async def _wait_for_listing_plugin_items(
     timeout: float,
     stop_event: threading.Event | None,
 ) -> dict[str, dict[str, Any]]:
-    """Wait once for ZYing's listing-page batch request instead of opening details."""
+    """Wait for metric responses, not the initial ID-only cache placeholders."""
     wanted = {
         str(item_id or "").replace("-", "").upper()
         for item_id in item_ids
         if str(item_id or "").strip()
     }
-    if not wanted or reader.session is None:
+    if not wanted:
         return {}
     deadline = asyncio.get_running_loop().time() + max(1.0, float(timeout))
     collected: dict[str, dict[str, Any]] = {}
-    stable_rounds = 0
+    ready: set[str] = set()
     while asyncio.get_running_loop().time() < deadline:
         _check_stop(stop_event)
-        current = await reader.read_listing_items()
-        before = len(collected)
+        current = await reader.read_listing_items() if reader.session is not None else {}
         for item_id, payload in current.items():
             if item_id in wanted:
                 collected[item_id] = dict(payload)
-        if wanted.issubset(collected):
-            return collected
-        stable_rounds = stable_rounds + 1 if len(collected) == before else 0
-        if collected and stable_rounds >= 3:
+                # ZYing inserts all IDs before its batched API returns. Even
+                # a weight-only interim record must wait for the response so
+                # dimensions are not lost when navigating to the next page.
+                api_loaded = payload.get("api_loaded")
+                if api_loaded is True or (
+                    api_loaded is None and (_number(payload.get("weight_g")) or 0) > 0
+                ):
+                    ready.add(item_id)
+                else:
+                    ready.discard(item_id)
+        if wanted.issubset(ready):
             return collected
         await asyncio.sleep(0.25)
     return collected
@@ -1691,14 +1872,27 @@ async def _listing_candidates(
                         float(
                             os.environ.get(
                                 "MERCADO_PLAYWRIGHT_LISTING_PLUGIN_TIMEOUT_SECONDS",
-                                "6",
+                                "60",
                             )
                         ),
-                        20.0,
+                        180.0,
                     ),
                 )
             except ValueError:
-                plugin_wait = 6.0
+                plugin_wait = 60.0
+            if on_page:
+                on_page({
+                    "stage": "listing_plugin_wait",
+                    "page": page_number,
+                    "page_url": actual_url,
+                    "page_items": len(new_candidates),
+                    "candidate_count": len(candidates),
+                    "browser": runtime.connection_mode,
+                    "message": (
+                        f"正在等待第 {page_number} 页智赢重量尺寸加载完成"
+                    ),
+                })
+            plugin_started = asyncio.get_running_loop().time()
             plugin_items = await _wait_for_listing_plugin_items(
                 plugin_reader,
                 (row["source_item_id"] for row in new_candidates),
@@ -1709,6 +1903,24 @@ async def _listing_candidates(
                 item_id = str(candidate.get("source_item_id") or "").upper()
                 candidate["_plugin_data"] = dict(plugin_items.get(item_id) or {})
                 candidate["_direct_detail_ready"] = True
+            if on_page:
+                weight_count = sum(
+                    (_number(row["_plugin_data"].get("weight_g")) or 0) > 0
+                    for row in new_candidates
+                )
+                on_page({
+                    "stage": "listing_plugin_ready",
+                    "page": page_number,
+                    "candidate_count": len(candidates),
+                    "plugin_weight_count": weight_count,
+                    "plugin_wait_seconds": round(
+                        asyncio.get_running_loop().time() - plugin_started, 2
+                    ),
+                    "message": (
+                        f"第 {page_number} 页智赢实际重量已读取 "
+                        f"{weight_count}/{len(new_candidates)} 件"
+                    ),
+                })
         if on_page:
             on_page({
                 "page": page_number,
@@ -2088,9 +2300,14 @@ def _collect_listing_direct(candidate: Mapping[str, Any], runtime: _PlaywrightRu
         },
         "plugin_snapshot": {
             "source": "智赢浏览器插件列表页批量数据",
-            "read_method": "playwright_listing_react_data",
+            "api_loaded": plugin_data.get("api_loaded"),
+            "read_method": str(
+                plugin_data.get("read_method") or "playwright_listing_react_data"
+            ),
             "dom_lines": plugin_lines,
             "dom_text": " ".join(plugin_lines),
+            "ocr_text": str(plugin_data.get("ocr_text") or ""),
+            "ocr_confidence": plugin_data.get("ocr_confidence"),
             "weight_basis": weight_basis,
             "dimensions_display": metrics.get("dimensions_display"),
             "weight_display": metrics.get("weight_display"),
@@ -2111,10 +2328,19 @@ async def _collect_detail(
     stop_event: threading.Event | None,
     page: Any | None = None,
     react_reader: _PluginMetricReader | None = None,
+    supplement_detail: bool = False,
 ) -> dict[str, Any]:
     _check_stop(stop_event)
-    if candidate.get("_direct_detail_ready"):
+    if candidate.get("_direct_detail_ready") and not supplement_detail:
         return _collect_listing_direct(candidate, runtime)
+    listing_plugin_data = (
+        dict(candidate.get("_plugin_data") or {})
+        if isinstance(candidate.get("_plugin_data"), Mapping)
+        else {}
+    )
+    listing_metrics, listing_plugin_lines = _metrics_from_react_payload(
+        {"data": listing_plugin_data}
+    )
     owns_page = page is None
     if page is None:
         page = await _new_page(runtime)
@@ -2157,12 +2383,16 @@ async def _collect_detail(
         if blocked:
             raise RuntimeError(blocked)
 
-        metrics, plugin_lines = await _wait_for_plugin_metrics(
-            page,
-            plugin_timeout,
-            stop_event,
-            react_reader=react_reader,
-        )
+        if _number(listing_metrics.get("weight_g")) is not None:
+            metrics = dict(listing_metrics)
+            plugin_lines = list(listing_plugin_lines)
+        else:
+            metrics, plugin_lines = await _wait_for_plugin_metrics(
+                page,
+                plugin_timeout,
+                stop_event,
+                react_reader=react_reader,
+            )
         # Keep the plugin origin as diagnostic metadata only.  US filtering is
         # authoritative on the listing card, before this detail page opens.
         self_ship_origin = _plugin_self_ship_origin(plugin_lines)
@@ -2207,6 +2437,10 @@ async def _collect_detail(
         item_id = extract_item_id(
             str(candidate.get("source_item_id") or page.url)
         )
+        # Mercado appends long tracking/query fragments to detail URLs. Keep
+        # the canonical product permalink so one oversized URL cannot abort a
+        # whole batch insert (the DB column is VARCHAR(1500)).
+        final_url = canonical_marketplace_item_url(item_id, final_url)
         complete = bool(title and main_image and actual_weight_complete)
         errors: list[str] = []
         if not main_image:
@@ -2275,16 +2509,31 @@ async def _collect_detail(
                 "browser": runtime.connection_mode,
             },
             "plugin_snapshot": {
-                "source": "智赢浏览器插件商品详情浮层",
+                "source": (
+                    "智赢浏览器插件列表页批量数据"
+                    if listing_plugin_lines
+                    else "智赢浏览器插件商品详情浮层"
+                ),
                 "read_method": (
-                    "playwright_shadow_dom_ocr_fallback"
+                    str(
+                        listing_plugin_data.get("read_method")
+                        or "playwright_listing_react_data"
+                    )
+                    if listing_plugin_lines
+                    else "playwright_shadow_dom_ocr_fallback"
                     if ocr_snapshot
                     else "playwright_shadow_dom"
                 ),
                 "dom_lines": plugin_lines,
                 "dom_text": plugin_text,
-                "ocr_text": ocr_text,
-                "ocr_confidence": ocr_snapshot.get("confidence"),
+                "ocr_text": str(
+                    listing_plugin_data.get("ocr_text") or ocr_text
+                ),
+                "ocr_confidence": (
+                    listing_plugin_data.get("ocr_confidence")
+                    if listing_plugin_lines
+                    else ocr_snapshot.get("confidence")
+                ),
                 "ocr_error": ocr_snapshot.get("error"),
                 "weight_basis": weight_basis,
                 "dimensions_display": metrics.get("dimensions_display"),
@@ -2526,10 +2775,9 @@ async def _collect_async(
         )
         workers = normalize_collection_workers(max_workers)
         semaphore = asyncio.Semaphore(workers)
-        if not direct_mode:
-            detail_page_pool = await _open_detail_page_pool(
-                runtime, min(workers, len(candidates))
-            )
+        detail_page_pool = await _open_detail_page_pool(
+            runtime, min(workers, len(candidates))
+        )
         navigation_lock = asyncio.Lock()
         verification_probe_lock = asyncio.Lock()
         next_navigation_at = 0.0
@@ -2538,12 +2786,18 @@ async def _collect_async(
         verification_incidents = 0
         verification_recovery_successes = 0
         try:
-            navigation_stagger = 0.0 if direct_mode else max(
+            # Listing data is already loaded before detail work starts.  A
+            # small stagger keeps Mercado from seeing one burst while letting
+            # the reusable detail-page pool stay saturated.  Non-direct
+            # callers retain the more conservative legacy default.
+            default_navigation_stagger = "0.05" if direct_mode else "0.15"
+            navigation_stagger = max(
                 0.0,
                 min(
                     float(
                         os.environ.get(
-                            "MERCADO_PLAYWRIGHT_NAVIGATION_STAGGER_SECONDS", "0.15"
+                            "MERCADO_PLAYWRIGHT_NAVIGATION_STAGGER_SECONDS",
+                            default_navigation_stagger,
                         )
                     ),
                     3.0,
@@ -2561,6 +2815,20 @@ async def _collect_async(
             )
         except ValueError:
             fast_plugin_timeout = min(float(plugin_timeout), 4.0)
+        try:
+            detail_timeout_seconds = max(
+                1.0,
+                min(
+                    float(
+                        os.environ.get(
+                            "MERCADO_PLAYWRIGHT_DETAIL_TIMEOUT_SECONDS", "15"
+                        )
+                    ),
+                    120.0,
+                ),
+            )
+        except ValueError:
+            detail_timeout_seconds = 15.0
 
         try:
             verification_cooldown = max(
@@ -2688,6 +2956,7 @@ async def _collect_async(
                                 candidate,
                                 plugin_timeout=fast_plugin_timeout,
                                 stop_event=stop_event,
+                                supplement_detail=direct_mode,
                                 **({
                                     "page": slot.page,
                                     "react_reader": slot.react_reader,
@@ -2722,6 +2991,7 @@ async def _collect_async(
                     candidate,
                     plugin_timeout=fast_plugin_timeout,
                     stop_event=stop_event,
+                    supplement_detail=direct_mode,
                     **({
                         "page": slot.page,
                         "react_reader": slot.react_reader,
@@ -2754,13 +3024,29 @@ async def _collect_async(
                 slot = await detail_page_pool.get() if detail_page_pool is not None else None
                 value: Any = None
                 blocked_seen = False
+                detail_timed_out = False
+                listing_row = (
+                    _collect_listing_direct(candidate, active_runtime)
+                    if direct_mode
+                    else None
+                )
                 try:
                     for attempt in range(verification_attempts):
                         _check_stop(stop_event)
                         await wait_for_navigation_slot()
-                        value = await collect_detail_with_verification_gate(
-                            active_runtime, candidate, slot
-                        )
+                        try:
+                            value = await asyncio.wait_for(
+                                collect_detail_with_verification_gate(
+                                    active_runtime, candidate, slot
+                                ),
+                                timeout=detail_timeout_seconds,
+                            )
+                        except asyncio.TimeoutError:
+                            detail_timed_out = True
+                            value = RuntimeError(
+                                f"详情补充超过 {detail_timeout_seconds:g} 秒，已跳过"
+                            )
+                            break
                         missing_core_identity = (
                             isinstance(value, dict)
                             and (
@@ -2792,9 +3078,40 @@ async def _collect_async(
                             await asyncio.sleep(
                                 retry_delay + (index % workers) * 0.05
                             )
+                    if isinstance(value, Exception) and listing_row is not None:
+                        detail_error = f"详情补充失败：{value}"
+                        listing_row["error_message"] = "；".join(
+                            part for part in (
+                                str(listing_row.get("error_message") or ""),
+                                detail_error,
+                            ) if part
+                        )
+                        page_snapshot = dict(listing_row.get("page_snapshot") or {})
+                        page_snapshot["detail_supplement"] = "failed"
+                        page_snapshot["detail_error"] = str(value)
+                        listing_row["page_snapshot"] = page_snapshot
+                        if detail_timed_out:
+                            listing_row["scrape_status"] = "partial"
+                        value = listing_row
                     return index, candidate, value
                 finally:
                     if slot is not None and detail_page_pool is not None:
+                        if detail_timed_out and callable(
+                            getattr(slot.page, "goto", None)
+                        ):
+                            # A cancelled navigation can leave a page mid-load;
+                            # clear it before returning the reusable slot.
+                            try:
+                                await asyncio.wait_for(
+                                    slot.page.goto(
+                                        "about:blank",
+                                        wait_until="commit",
+                                        timeout=1000,
+                                    ),
+                                    timeout=1.5,
+                                )
+                            except Exception:
+                                pass
                         await detail_page_pool.put(slot)
 
         async def save_result(
@@ -2835,7 +3152,7 @@ async def _collect_async(
                     "item_id": candidate["source_item_id"],
                     "message": (
                         (
-                            f"已直接读取 {candidate['source_item_id']} 的列表和智赢批量数据"
+                            f"已读取 {candidate['source_item_id']} 的列表数据并补充详情"
                             if direct_mode
                             else f"已读取 {candidate['source_item_id']} 的页面和智赢 DOM 数据"
                         )
@@ -2850,8 +3167,8 @@ async def _collect_async(
                 "total": len(candidates),
                 "item_id": "",
                 "message": (
-                    f"正在直接读取 {len(candidates)} 个商品的列表和智赢批量数据，"
-                    "不打开商品详情页"
+                    f"列表页数据读取完成，正在用 {workers} 个常驻页面并发补充 "
+                    f"{len(candidates)} 个商品详情"
                     if direct_mode
                     else (
                         f"正在用 {workers} 个常驻详情页采集 {len(candidates)} 个商品，"
@@ -2879,10 +3196,9 @@ async def _collect_async(
             detail_page_pool = None
             await _close_runtime(runtime)
             runtime = await open_runtime()
-            if not direct_mode:
-                detail_page_pool = await _open_detail_page_pool(
-                    runtime, min(workers, len(closed_context_rows))
-                )
+            detail_page_pool = await _open_detail_page_pool(
+                runtime, min(workers, len(closed_context_rows))
+            )
             if on_progress:
                 on_progress({
                     "stage": "detail_retry",
@@ -2912,7 +3228,9 @@ async def _collect_async(
             "browser_mode": "playwright",
             "browser_connection": runtime.connection_mode,
             "collection_scope": collection_scope,
-            "detail_mode": "listing_page_batch" if direct_mode else "detail_pages",
+            "detail_mode": (
+                "listing_then_parallel_detail" if direct_mode else "detail_pages"
+            ),
             "rows": results,
         }
     finally:

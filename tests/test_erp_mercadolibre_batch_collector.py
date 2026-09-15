@@ -897,6 +897,101 @@ def test_playwright_synthesizes_noindex_pagination_url():
     )
 
 
+def test_listing_plugin_waits_for_api_response_before_leaving_page(monkeypatch):
+    class Reader:
+        session = object()
+        calls = 0
+
+        async def read_listing_items(self):
+            self.calls += 1
+            # Real ZYing behavior: first every ID exists, then actual metrics
+            # arrive. A partial weight must not hide late dimensions.
+            first = {"id": "MLM9000000001", "api_loaded": self.calls >= 4}
+            second = {"id": "MLM9000000002", "api_loaded": self.calls >= 5}
+            if self.calls >= 2:
+                first["weight_g"] = 350
+            if self.calls >= 4:
+                first["size_cm"] = [20, 20, 9]
+            # Item 2 legitimately has no measurements after the API finishes.
+            return {first["id"]: first, second["id"]: second}
+
+    async def fast_poll(_seconds):
+        pass
+
+    monkeypatch.setattr(playwright_collector.asyncio, "sleep", fast_poll)
+    reader = Reader()
+    result = asyncio.run(playwright_collector._wait_for_listing_plugin_items(
+        reader, ["MLM9000000001", "MLM9000000002"], timeout=1, stop_event=None
+    ))
+    assert reader.calls == 5
+    assert result["MLM9000000001"]["size_cm"] == [20, 20, 9]
+    assert result["MLM9000000002"]["api_loaded"] is True
+    assert "weight_g" not in result["MLM9000000002"]
+
+
+def test_listing_plugin_reader_reads_zying_frontend_cache():
+    class Session:
+        async def send(self, method, params):
+            if method == "Runtime.evaluate":
+                return {
+                    "result": {
+                        "objectId": "handler",
+                        "description": "async e=>{li().batchUpdateData(e)}",
+                    }
+                }
+            if method == "Runtime.getProperties":
+                if params["objectId"] == "handler":
+                    return {
+                        "internalProperties": [
+                            {
+                                "name": "[[Scopes]]",
+                                "value": {"objectId": "scopes"},
+                            }
+                        ]
+                    }
+                if params["objectId"] == "scopes":
+                    return {
+                        "result": [
+                            {"name": "0", "value": {"objectId": "closure"}}
+                        ]
+                    }
+                if params["objectId"] == "closure":
+                    return {
+                        "result": [
+                            {"name": "li", "value": {"objectId": "accessor"}}
+                        ]
+                    }
+            if method == "Runtime.callFunctionOn":
+                assert params["objectId"] == "accessor"
+                return {
+                    "result": {
+                        "value": {
+                            "items": {
+                                "MLM3016972321": {
+                                    "id": "MLM3016972321",
+                                    "weight_g": 350,
+                                    "size_cm": [20, 20, 9],
+                                    "volume_weight_g": 600,
+                                    "read_method": "zying_frontend_cache",
+                                }
+                            }
+                        }
+                    }
+                }
+            if method == "Runtime.releaseObjectGroup":
+                return {}
+            raise AssertionError((method, params))
+
+    reader = playwright_collector._PluginMetricReader(Session())
+    reader.context_ids.append(27)
+    result = asyncio.run(reader.read_listing_items())
+
+    assert result["MLM3016972321"]["weight_g"] == 350
+    assert result["MLM3016972321"]["size_cm"] == [20, 20, 9]
+    assert result["MLM3016972321"]["volume_weight_g"] == 600
+    assert result["MLM3016972321"]["read_method"] == "zying_frontend_cache"
+
+
 def test_playwright_decodes_plugin_metrics_from_extension_react_props():
     metrics, lines = playwright_collector._metrics_from_react_payload(
         {
@@ -1182,7 +1277,7 @@ def test_playwright_dynamic_pool_does_not_wait_for_slowest_batch_member(monkeypa
     assert result["completed_count"] == 3
 
 
-def test_playwright_listing_direct_mode_opens_no_detail_pages(monkeypatch):
+def test_playwright_listing_data_is_kept_while_parallel_detail_is_supplemented(monkeypatch):
     candidate = {
         "source_item_id": "MLM9000000001",
         "source_url": "https://articulo.mercadolibre.com.mx/MLM-9000000001",
@@ -1205,13 +1300,24 @@ def test_playwright_listing_direct_mode_opens_no_detail_pages(monkeypatch):
     async def fake_candidates(*_args, **_kwargs):
         return [candidate]
 
-    async def fail_open_pool(*_args, **_kwargs):
-        raise AssertionError("列表直读模式不应创建详情页池")
+    opened_pool_sizes = []
+
+    async def fake_open_pool(_runtime, size):
+        opened_pool_sizes.append(size)
+        return None
+
+    async def fake_detail(_runtime, active_candidate, **kwargs):
+        assert kwargs["supplement_detail"] is True
+        row = playwright_collector._collect_listing_direct(active_candidate, runtime)
+        row["description"] = {"plain_text": "Detalle completo"}
+        row["page_snapshot"] = {"detail_supplement": "ok"}
+        return row
 
     monkeypatch.setattr(playwright_collector, "_open_runtime", fake_open)
     monkeypatch.setattr(playwright_collector, "_close_runtime", fake_close)
     monkeypatch.setattr(playwright_collector, "_listing_candidates", fake_candidates)
-    monkeypatch.setattr(playwright_collector, "_open_detail_page_pool", fail_open_pool)
+    monkeypatch.setattr(playwright_collector, "_open_detail_page_pool", fake_open_pool)
+    monkeypatch.setattr(playwright_collector, "_collect_detail", fake_detail)
 
     result = asyncio.run(
         playwright_collector._collect_async(
@@ -1226,10 +1332,128 @@ def test_playwright_listing_direct_mode_opens_no_detail_pages(monkeypatch):
         )
     )
 
-    assert result["detail_mode"] == "listing_page_batch"
+    assert result["detail_mode"] == "listing_then_parallel_detail"
+    assert opened_pool_sizes == [1]
     assert result["completed_count"] == 1
     assert result["rows"][0]["weight_g"] == 196
-    assert result["rows"][0]["page_snapshot"]["detail_acquisition"] == "listing_page_batch"
+    assert result["rows"][0]["description"]["plain_text"] == "Detalle completo"
+
+
+def test_playwright_detail_failure_does_not_discard_complete_listing_data(monkeypatch):
+    monkeypatch.setenv("MERCADO_PLAYWRIGHT_NAVIGATION_STAGGER_SECONDS", "0")
+    monkeypatch.setenv("MERCADO_PLAYWRIGHT_RETRY_SECONDS", "0")
+    candidate = {
+        "source_item_id": "MLM9000000001",
+        "source_url": "https://articulo.mercadolibre.com.mx/MLM-9000000001",
+        "title": "Producto directo",
+        "main_image_url": "https://http2.mlstatic.com/image.jpg",
+        "_plugin_data": {"weight_g": 196, "size_cm": [10, 20, 30]},
+        "_direct_detail_ready": True,
+    }
+    runtime = type("Runtime", (), {"connection_mode": "test", "pages": []})()
+
+    async def fake_open():
+        return runtime
+
+    async def fake_close(_runtime):
+        return None
+
+    async def fake_candidates(*_args, **_kwargs):
+        return [candidate]
+
+    async def fake_open_pool(*_args, **_kwargs):
+        return None
+
+    async def fail_detail(*_args, **_kwargs):
+        raise RuntimeError("detail unavailable")
+
+    monkeypatch.setattr(playwright_collector, "_open_runtime", fake_open)
+    monkeypatch.setattr(playwright_collector, "_close_runtime", fake_close)
+    monkeypatch.setattr(playwright_collector, "_listing_candidates", fake_candidates)
+    monkeypatch.setattr(playwright_collector, "_open_detail_page_pool", fake_open_pool)
+    monkeypatch.setattr(playwright_collector, "_collect_detail", fail_detail)
+
+    result = asyncio.run(
+        playwright_collector._collect_async(
+            "https://listado.mercadolibre.com.mx/cosplay",
+            1,
+            max_workers=2,
+            plugin_timeout=1,
+            on_page=None,
+            on_item=None,
+            on_progress=None,
+            stop_event=None,
+        )
+    )
+
+    assert result["completed_count"] == 1
+    assert result["failed_count"] == 0
+    assert result["rows"][0]["weight_g"] == 196
+    assert result["rows"][0]["page_snapshot"]["detail_supplement"] == "failed"
+
+
+def test_playwright_detail_timeout_marks_item_failed_and_continues(monkeypatch):
+    monkeypatch.setenv("MERCADO_PLAYWRIGHT_DETAIL_TIMEOUT_SECONDS", "1")
+    monkeypatch.setenv("MERCADO_PLAYWRIGHT_NAVIGATION_STAGGER_SECONDS", "0")
+    candidate = {
+        "source_item_id": "MLM9000000001",
+        "source_url": "https://articulo.mercadolibre.com.mx/MLM-9000000001",
+        "title": "Producto directo",
+        "main_image_url": "https://http2.mlstatic.com/image.jpg",
+        "_plugin_data": {"weight_g": 196, "size_cm": [10, 20, 30]},
+        "_direct_detail_ready": True,
+    }
+    candidate2 = {
+        **candidate,
+        "source_item_id": "MLM9000000002",
+        "source_url": "https://articulo.mercadolibre.com.mx/MLM-9000000002",
+    }
+    candidates = [candidate, candidate2]
+    runtime = type("Runtime", (), {"connection_mode": "test", "pages": []})()
+
+    async def fake_open():
+        return runtime
+
+    async def fake_close(_runtime):
+        return None
+
+    async def fake_candidates(*_args, **_kwargs):
+        return candidates
+
+    async def fake_open_pool(*_args, **_kwargs):
+        return None
+
+    async def slow_detail(_runtime, active_candidate, **_kwargs):
+        if active_candidate["source_item_id"] == candidate["source_item_id"]:
+            await asyncio.sleep(2)
+        return playwright_collector._collect_listing_direct(active_candidate, runtime)
+
+    monkeypatch.setattr(playwright_collector, "_open_runtime", fake_open)
+    monkeypatch.setattr(playwright_collector, "_close_runtime", fake_close)
+    monkeypatch.setattr(playwright_collector, "_listing_candidates", fake_candidates)
+    monkeypatch.setattr(playwright_collector, "_open_detail_page_pool", fake_open_pool)
+    monkeypatch.setattr(playwright_collector, "_collect_detail", slow_detail)
+
+    result = asyncio.run(
+        playwright_collector._collect_async(
+            "https://listado.mercadolibre.com.mx/cosplay",
+            2,
+            max_workers=2,
+            plugin_timeout=1,
+            on_page=None,
+            on_item=None,
+            on_progress=None,
+            stop_event=None,
+        )
+    )
+
+    assert result["completed_count"] == 1
+    assert result["failed_count"] == 1
+    timed_out = next(row for row in result["rows"] if row["source_item_id"] == candidate["source_item_id"])
+    completed = next(row for row in result["rows"] if row["source_item_id"] == candidate2["source_item_id"])
+    assert "超过 1 秒" in timed_out["error_message"]
+    assert timed_out["scrape_status"] == "partial"
+    assert completed["scrape_status"] == "ok"
 
 
 def test_playwright_reuses_preheated_detail_pages_across_items(monkeypatch):

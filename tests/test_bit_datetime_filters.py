@@ -16,8 +16,6 @@ def test_workbench_uses_minute_datetime_inputs_with_friendly_placeholders():
         "order-sync-end-date",
         "mercado-date-from",
         "mercado-date-to",
-        "order-print-date-from",
-        "order-print-date-to",
         "after-sale-date-from",
         "after-sale-date-to",
         "profit-date-from",

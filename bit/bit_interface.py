@@ -66,12 +66,6 @@ import bit.bit_infractions_info as bit_infractions_info
 import bit.bit_infringement_knowledge_analysis as bit_infringement_knowledge_analysis
 import bit.bit_inventory as bit_inventory
 import bit.bit_pago_info as bit_pago_info
-try:
-    import bit.bit_print as bit_print
-except ModuleNotFoundError as exc:
-    if exc.name != "bit.bit_print":
-        raise
-    import bit_playwright.bit_print as bit_print
 import bit.bit_reputation_info as bit_reputation_info
 import bit.bit_order_sync as bit_order_sync
 import bit.bit_prohibited_listing_sync as bit_prohibited_listing_sync
@@ -315,7 +309,7 @@ PASSWORD_ITERATIONS = 260000
 WORKBENCH_PERMISSION_GROUPS = (
     ("appeal", "自动化 AI 申诉", (("appeal.view", "查看"), ("appeal.execute", "执行/终止"))),
     ("tasks", "任务模块", (("tasks.view", "查看"), ("tasks.execute", "启动任务"))),
-    ("order_print", "订单打印", (("order_print.view", "查看"), ("order_print.execute", "执行/终止"))),
+    ("order_print", "订单管理与面单", (("order_print.view", "查看"), ("order_print.execute", "打印面单"))),
     ("order_analysis", "订单分析", (("order_analysis.view", "查看"), ("order_analysis.execute", "导入订单"))),
     ("inventory", "库存管理", (("inventory.view", "查看"), ("inventory.execute", "出入库"), ("inventory.manage", "管理货架"))),
     ("shop_status", "店铺状态", (("shop_status.view", "查看"), ("shop_status.execute", "检测/处理"))),
@@ -645,6 +639,7 @@ if USE_DB_API:
     db_assign_mercado_management_category = bit_db_api.assign_mercado_management_category
     db_list_mercado_store_links = bit_db_api.list_mercado_store_links
     db_bulk_update_mercado_store_links = bit_db_api.bulk_update_mercado_store_links
+    db_delete_mercado_store_links = bit_db_api.delete_mercado_store_links
 else:
     import pymysql
     from bit.bit_mysql import config as mysql_config
@@ -768,6 +763,7 @@ else:
     )
     from erp.mercadolibre_store_link_store import (
         bulk_update_store_links as db_bulk_update_mercado_store_links,
+        delete_store_links as db_delete_mercado_store_links,
         list_store_links as db_list_mercado_store_links,
     )
 
@@ -1890,11 +1886,7 @@ def _required_workbench_permissions(path, method):
     if path == "/api/orders":
         return ("order_print.view",)
     if path == "/api/orders/print":
-        return (
-            ("order_print.execute",)
-            if method == "POST"
-            else ("order_print.view",)
-        )
+        return ("order_print.execute",) if method == "POST" else ("order_print.view",)
     if path.startswith("/api/orders/") and method == "GET":
         return ("order_print.view",)
     if path in {
@@ -1925,7 +1917,6 @@ def _required_workbench_permissions(path, method):
     if path == "/api/collections/options":
         return (
             "appeal.view",
-            "order_print.view",
             "infractions.view",
             "reputation.view",
         )
@@ -1960,12 +1951,6 @@ def _required_workbench_permissions(path, method):
             ("funds.execute",)
             if method == "POST"
             else ("funds.view",)
-        )
-    if path.startswith("/api/order-print/"):
-        return (
-            ("order_print.execute",)
-            if method == "POST"
-            else ("order_print.view",)
         )
     if path.startswith("/api/order-analysis/"):
         return (
@@ -2123,7 +2108,7 @@ API_REPUTATION_STATE_PATH = Path(
 )
 API_REPUTATION_AUTO_REFRESH_HOURS = (14,)
 API_REPUTATION_TIMEZONE = timezone(timedelta(hours=8), name="Asia/Shanghai")
-API_REPUTATION_MAX_WORKERS = 10
+API_REPUTATION_MAX_WORKERS = 30
 
 
 def _api_reputation_default_state():
@@ -2334,33 +2319,9 @@ _mercado_publish_state = {
     "results": [],
 }
 _fund_collect_stop_event = None
-_order_print_lock = threading.RLock()
-_order_print_stop_event = None
-_order_print_logs = deque(maxlen=1000)
-_order_print_state = {
-    "running": False,
-    "started_at": "",
-    "finished_at": "",
-    "status": "idle",
-    "message": "等待启动",
-    "params": {},
-    "printed": 0,
-    "partial": 0,
-    "no_orders": 0,
-    "failed": 0,
-    "skipped": 0,
-    "printed_order_count": 0,
-    "shipment_count": 0,
-    "fallback_store_count": 0,
-    "task_id": "",
-    "download_path": "",
-    "download_name": "",
-    "results": [],
-    "site_last_runs": [],
-}
 _order_analysis_import_lock = threading.Lock()
-# 每次点击“启动”都会创建独立任务实例。RLock 允许状态辅助函数在 API
-# 已持锁时安全复用；真正的同一店铺窗口冲突仍由 window lease 控制。
+# 每次点击“启动”都会创建任务实例；同一执行主机的互斥由 daily_task
+# 的实例锁和主机锁共同保证。RLock 允许状态辅助函数在 API 已持锁时安全复用。
 _daily_task_lock = threading.RLock()
 _daily_task_stop_event = None
 _daily_task_stop_manager = None
@@ -2381,7 +2342,7 @@ _daily_task_state = {
 _daily_tasks = {}
 _daily_task_controls = {}
 DEFAULT_DAILY_TASK_LOG_RETENTION_DAYS = 3
-DEFAULT_DAILY_TASK_MAX_CONCURRENT = 8
+DEFAULT_DAILY_TASK_MAX_CONCURRENT = 1
 
 
 def _daily_task_max_concurrent():
@@ -4347,443 +4308,6 @@ def _risk_result_query_params(args, export=False):
     return params
 
 
-def _append_order_print_log(message):
-    text = format_log_text(message).rstrip()
-    if not text:
-        return
-    with _order_print_lock:
-        _order_print_logs.append(text + "\n")
-
-
-def _order_print_snapshot():
-    with _order_print_lock:
-        runtime_log = "".join(_order_print_logs).rstrip()
-        automatic_history = [
-            row
-            for row in (_order_print_state.get("site_last_runs") or [])
-            if str(row.get("source") or "") == "系统自动打印"
-        ]
-        history_log = "\n".join(
-            f"{row.get('finished_at') or '-'} "
-            f"{row.get('shop_name') or '-'} / {row.get('site') or '-'}："
-            f"{row.get('outcome') or '系统自动打印'}"
-            for row in automatic_history
-        )
-        combined_log = runtime_log
-        if history_log:
-            automatic_section = "===== 系统自动打印最近记录 =====\n" + history_log
-            combined_log = "\n\n".join(
-                value for value in (runtime_log, automatic_section) if value
-            )
-        snapshot = {
-            **dict(_order_print_state),
-            "params": dict(_order_print_state.get("params") or {}),
-            "results": [dict(row) for row in (_order_print_state.get("results") or [])],
-            "site_last_runs": [
-                dict(row) for row in (_order_print_state.get("site_last_runs") or [])
-            ],
-            "log": combined_log,
-            "can_stop": bool(
-                _order_print_state.get("running")
-                and _order_print_stop_event is not None
-            ),
-        }
-        snapshot.pop("download_path", None)
-        snapshot["download_url"] = (
-            "/api/order-print/download"
-            if _order_print_state.get("download_path")
-            else ""
-        )
-        return snapshot
-
-
-def _order_print_history_status(outcome):
-    text = str(outcome or "").strip()
-    if "无待打印订单" in text:
-        return "no_orders"
-    if text.startswith("成功"):
-        return "printed"
-    if text.startswith("部分成功"):
-        return "partial"
-    if text.startswith("跳过"):
-        return "skipped"
-    if text.startswith("失败"):
-        return "failed"
-    return "unknown"
-
-
-def _load_order_print_site_last_runs(current_results=None):
-    """汇总全部 API 授权店铺站点及其最近一次订单打印时间。"""
-
-    current_results = [dict(row) for row in (current_results or [])]
-    configs_loaded = True
-    try:
-        configs = _order_print_config_options()["shops"]
-    except Exception as exc:
-        logging.warning("读取订单打印站点配置失败：%s", exc)
-        configs = []
-        configs_loaded = False
-    try:
-        history = db_get_latest_order_print_records() or []
-    except Exception as exc:
-        logging.warning("读取订单打印历史失败：%s", exc)
-        history = []
-
-    latest_by_key = {}
-    for record in history:
-        shop_name = str(record.get("shop_name") or "").strip()
-        site = str(record.get("site") or "").strip()
-        if not shop_name or not site:
-            continue
-        outcome = str(record.get("outcome") or "")
-        latest_by_key[(shop_name, site)] = {
-            "shop_name": shop_name,
-            "site": site,
-            "status": _order_print_history_status(outcome),
-            "finished_at": str(record.get("finished_at") or ""),
-            "outcome": outcome,
-            "source": "系统自动打印" if "系统自动打印" in outcome else "",
-        }
-    for result in current_results:
-        shop_name = str(result.get("shop_name") or "").strip()
-        site = str(result.get("site") or "").strip()
-        if not shop_name or not site:
-            continue
-        key = (shop_name, site)
-        finished_at = str(result.get("finished_at") or "")
-        existing = latest_by_key.get(key)
-        if existing and str(existing.get("finished_at") or "") > finished_at:
-            continue
-        latest_by_key[key] = {
-            "shop_name": shop_name,
-            "site": site,
-            "status": str(result.get("status") or "unknown"),
-            "finished_at": finished_at,
-            "outcome": str(result.get("message") or ""),
-            "source": str(result.get("source") or ""),
-        }
-
-    rows = []
-    seen = set()
-    for config in configs:
-        shop_name = str(config.get("shop_name") or "").strip()
-        if not shop_name:
-            continue
-        for site in config.get("sites") or []:
-            key = (shop_name, site)
-            if key in seen:
-                continue
-            seen.add(key)
-            rows.append(
-                latest_by_key.get(
-                    key,
-                    {
-                        "shop_name": shop_name,
-                        "site": site,
-                        "status": "not_run",
-                        "finished_at": "",
-                        "outcome": "",
-                        "source": "",
-                    },
-                )
-            )
-    if not configs_loaded:
-        for key, record in latest_by_key.items():
-            if key not in seen:
-                rows.append(record)
-    return rows
-
-
-def _order_print_config_options():
-    """Return selectable stores from Mercado API authorizations only."""
-
-    token_rows = list((bit_db_api.list_mercado_store_tokens() or {}).get("rows") or [])
-    shops = []
-    site_order = []
-    for token in token_rows:
-        token_id = int(token.get("id") or 0)
-        shop_name = str(
-            token.get("display_name") or token.get("nickname") or token_id or ""
-        ).strip()
-        if not token_id or not shop_name:
-            continue
-        sites = []
-        salespeople = []
-        for setting in token.get("site_settings") or []:
-            site_id = str(setting.get("site_id") or "").strip().upper()
-            site_name = str(
-                setting.get("site_name")
-                or bit_print.SITE_NAMES.get(site_id)
-                or ""
-            ).strip()
-            if site_name and site_name not in sites:
-                sites.append(site_name)
-            salesperson = str(setting.get("salesperson") or "").strip()
-            if salesperson and salesperson not in salespeople:
-                salespeople.append(salesperson)
-        default_site = bit_print.SITE_NAMES.get(
-            str(token.get("site_id") or "").strip().upper()
-        )
-        if default_site and default_site not in sites:
-            sites.append(default_site)
-        if not sites:
-            sites = list(bit_print.SITE_IDS)
-        for site in sites:
-            if site not in site_order:
-                site_order.append(site)
-        shops.append(
-            {
-                "token_id": token_id,
-                "shop_name": shop_name,
-                "salesperson": "、".join(salespeople),
-                "sites": sites,
-                "token_status": str(token.get("status") or "unknown"),
-                "token_status_text": str(token.get("status_text") or ""),
-            }
-        )
-    return {"shops": shops, "sites": site_order}
-
-
-def _refresh_order_print_site_last_runs(current_results=None):
-    if current_results is None:
-        with _order_print_lock:
-            current_results = [
-                dict(row) for row in (_order_print_state.get("results") or [])
-            ]
-    rows = _load_order_print_site_last_runs(current_results)
-    with _order_print_lock:
-        _order_print_state["site_last_runs"] = rows
-    return rows
-
-
-def build_order_print_params(data):
-    data = data if isinstance(data, dict) else {}
-    local_tz = datetime.now().astimezone().tzinfo
-    local_now = datetime.now(local_tz)
-
-    def parse_range_value(name, label, default):
-        raw = str(data.get(name) or "").strip()
-        if not raw:
-            return default
-        try:
-            parsed = datetime.fromisoformat(raw.replace("Z", "+00:00"))
-        except ValueError as exc:
-            raise ValueError(f"{label}格式无效，请重新选择") from exc
-        if parsed.tzinfo is None:
-            parsed = parsed.replace(tzinfo=local_tz)
-        return parsed.astimezone(local_tz)
-
-    range_end = parse_range_value("date_to", "结束时间", local_now)
-    range_start = parse_range_value(
-        "date_from",
-        "开始时间",
-        range_end - timedelta(hours=bit_print.DEFAULT_FALLBACK_HOURS),
-    )
-    if range_end > local_now + timedelta(minutes=5):
-        range_end = local_now
-    if range_start >= range_end:
-        raise ValueError("订单打印开始时间必须早于结束时间")
-    if range_end - range_start > timedelta(days=31):
-        raise ValueError("单次订单打印时间段不能超过 31 天")
-
-    raw_targets = data.get("targets")
-    selected_targets = []
-    if raw_targets is not None:
-        if not isinstance(raw_targets, list):
-            raise ValueError("targets 必须是数组")
-        if not raw_targets:
-            raise ValueError("请至少选择一个店铺站点")
-        if len(raw_targets) > 1000:
-            raise ValueError("单次最多选择 1000 个店铺站点")
-
-        options = _order_print_config_options()
-        configured_pairs = {
-            (shop["shop_name"], site)
-            for shop in options["shops"]
-            for site in shop["sites"]
-        }
-        seen_targets = set()
-        for raw_target in raw_targets:
-            if not isinstance(raw_target, dict):
-                raise ValueError("每个店铺站点必须包含 shop_name 和 site")
-            shop_name = str(raw_target.get("shop_name") or "").strip()
-            site = str(raw_target.get("site") or "").strip()
-            if not shop_name or not site:
-                raise ValueError("每个店铺站点必须包含 shop_name 和 site")
-            pair = (shop_name, site)
-            if pair not in configured_pairs:
-                raise ValueError(f"店铺站点不存在或已被忽略：{shop_name} / {site}")
-            if pair in seen_targets:
-                continue
-            seen_targets.add(pair)
-            selected_targets.append({"shop_name": shop_name, "site": site})
-
-        selected_shops = tuple(
-            dict.fromkeys(target["shop_name"] for target in selected_targets)
-        )
-        selected_sites = tuple(
-            dict.fromkeys(target["site"] for target in selected_targets)
-        )
-        target_label = (
-            f"{len(selected_shops)} 家店铺 / "
-            f"{len(selected_targets)} 个店铺站点"
-        )
-    else:
-        selected_shops = _normalized_collection_list(data, "shops")
-        selected_sites = _normalized_collection_list(data, "sites")
-        options = _order_print_config_options()
-        configured = {shop["shop_name"]: shop for shop in options["shops"]}
-        unknown_shops = [shop for shop in selected_shops if shop not in configured]
-        if unknown_shops:
-            raise ValueError("API 授权店铺不存在：" + "、".join(unknown_shops))
-        unknown_sites = [site for site in selected_sites if site not in options["sites"]]
-        if unknown_sites:
-            raise ValueError("站点不存在：" + "、".join(unknown_sites))
-        matching_shops = [
-            shop
-            for shop in selected_shops
-            if any(site in selected_sites for site in configured[shop]["sites"])
-        ]
-        if not matching_shops:
-            raise ValueError("所选 API 授权店铺没有匹配站点")
-        target_label = f"{len(matching_shops)} 家 API 授权店铺 / {len(selected_sites)} 个站点"
-    return {
-        "task_id": secrets.token_hex(16),
-        "mode": "once",
-        "max_retries": _parse_int_param(
-            data, "max_retries", 3, min_value=1, max_value=3
-        ),
-        "retry_delay_seconds": _parse_int_param(
-            data, "retry_delay_seconds", 3, min_value=0, max_value=60
-        ),
-        "fallback_hours": bit_print.DEFAULT_FALLBACK_HOURS,
-        "start_at": range_start.astimezone(timezone.utc).isoformat(),
-        "end_at": range_end.astimezone(timezone.utc).isoformat(),
-        "date_from": range_start.strftime("%Y-%m-%dT%H:%M"),
-        "date_to": range_end.strftime("%Y-%m-%dT%H:%M"),
-        "range_label": (
-            f"{range_start.strftime('%Y-%m-%d %H:%M')} 至 "
-            f"{range_end.strftime('%Y-%m-%d %H:%M')}"
-        ),
-        "selected_shops": selected_shops,
-        "selected_sites": selected_sites,
-        "selected_targets": selected_targets,
-        "target": target_label,
-    }
-
-
-def run_order_print_job(params, task_lock, stop_event):
-    global _order_print_stop_event
-    workflow_status_error = ""
-    try:
-        with _order_print_lock:
-            _order_print_state["message"] = "正在通过美客多 API 生成面单"
-        _append_order_print_log(f"{get_now_time()} ===== 美客多 API 订单打印开始 =====")
-        summary = bit_print.print_orders_all(
-            selected_shops=params["selected_shops"],
-            selected_sites=params["selected_sites"],
-            selected_targets=params.get("selected_targets"),
-            max_retries=params["max_retries"],
-            retry_delay_seconds=params["retry_delay_seconds"],
-            fallback_hours=params.get(
-                "fallback_hours", bit_print.DEFAULT_FALLBACK_HOURS
-            ),
-            start_at=params.get("start_at"),
-            end_at=params.get("end_at"),
-            stop_event=stop_event,
-            logger=_append_order_print_log,
-            task_id=params.get("task_id"),
-            operator_name=params.get("operator_name") or "订单打印/API",
-        )
-        if (
-            params.get("operator_role_key") == "warehouse"
-            and summary.get("printed_order_ids")
-        ):
-            try:
-                bit_db_api.bulk_update_orders(
-                    summary["printed_order_ids"],
-                    workflow_status="待发",
-                    operator_id=params.get("operator_id"),
-                    operator_name=params.get("operator_name") or "",
-                )
-            except Exception as exc:
-                workflow_status_error = str(exc) or exc.__class__.__name__
-                logging.exception("仓库人员 API 面单已生成，但待发状态写入失败")
-        site_last_runs = _load_order_print_site_last_runs(summary.get("results", []))
-        with _order_print_lock:
-            _order_print_state.update(
-                {
-                    "printed": summary.get("printed", 0),
-                    "partial": summary.get("partial", 0),
-                    "no_orders": summary.get("no_orders", 0),
-                    "failed": summary.get("failed", 0),
-                    "skipped": summary.get("skipped", 0),
-                    "printed_order_count": summary.get("printed_order_count", 0),
-                    "shipment_count": summary.get("shipment_count", 0),
-                    "fallback_store_count": summary.get("fallback_store_count", 0),
-                    "download_path": summary.get("download_path", ""),
-                    "download_name": summary.get("download_name", ""),
-                    "results": summary.get("results", []),
-                    "site_last_runs": site_last_runs,
-                    "workflow_status_error": workflow_status_error,
-                }
-            )
-
-        stopped = stop_event.is_set()
-        failed_sites = int(summary.get("failed") or 0)
-        partial_sites = int(summary.get("partial") or 0)
-        has_output = bool(summary.get("download_path"))
-        if stopped:
-            final_status = "stopped"
-            final_message = "API 订单打印已停止"
-        elif failed_sites and not has_output:
-            final_status = "error"
-            final_message = f"没有生成面单，{failed_sites} 个站点执行失败"
-        elif failed_sites or partial_sites:
-            final_status = "partial"
-            final_message = (
-                f"已生成 {summary.get('shipment_count', 0)} 个面单；"
-                f"{partial_sites} 个站点部分成功，{failed_sites} 个站点失败"
-            )
-        else:
-            final_status = "success"
-            final_message = (
-                f"API 面单已生成：{summary.get('shipment_count', 0)} 个"
-                if has_output
-                else "没有需要打印的订单"
-            )
-        if workflow_status_error:
-            final_message += "；待发状态写入失败，请刷新后重试"
-        with _order_print_lock:
-            _order_print_state.update(
-                {
-                    "running": False,
-                    "finished_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-                    "status": final_status,
-                    "message": final_message,
-                }
-            )
-    except Exception as exc:
-        logging.error("Order print task failed: %s", exc)
-        traceback.print_exc()
-        _append_order_print_log(f"{get_now_time()} 订单打印异常：{exc}")
-        with _order_print_lock:
-            _order_print_state.update(
-                {
-                    "running": False,
-                    "finished_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-                    "status": "error",
-                    "message": str(exc),
-                }
-            )
-    finally:
-        if task_lock is not None:
-            task_lock.release()
-        with _order_print_lock:
-            if _order_print_stop_event is stop_event:
-                _order_print_stop_event = None
-
-
 def _parse_rate_param(data, name="min_rate", default=0):
     value = data.get(name, default)
     text = str(value if value is not None else default).strip().replace("％", "%")
@@ -6708,181 +6232,6 @@ def api_collect_funds_status():
     return response
 
 
-@app.route('/api/order-print/options', methods=['GET'])
-@login_required
-def api_order_print_options():
-    try:
-        response = jsonify({"status": "success", "data": _order_print_config_options()})
-        response.headers["Cache-Control"] = "no-store"
-        return response
-    except Exception as exc:
-        logging.error("读取 API 打印店铺失败：%s", exc)
-        return jsonify({
-            "status": "error",
-            "message": f"读取美客多授权店铺失败：{exc}",
-        }), 500
-
-
-@app.route('/api/order-print/start', methods=['POST'])
-@login_required
-def api_start_order_print():
-    global _order_print_stop_event
-    data = request.get_json(silent=True) or {}
-    try:
-        params = build_order_print_params(data)
-    except ValueError as exc:
-        return jsonify({"status": "error", "message": str(exc)}), 400
-    except Exception as exc:
-        logging.error("读取订单打印范围失败：%s", exc)
-        return jsonify({"status": "error", "message": f"读取店铺配置失败：{exc}"}), 500
-    user = session.get("workbench_user") or {}
-    params.update({
-        "operator_id": user.get("id"),
-        "operator_name": user.get("display_name") or user.get("username") or "",
-        "operator_role_key": user.get("role_key") or "",
-    })
-
-    with _order_print_lock:
-        if _order_print_state.get("running"):
-            return jsonify({
-                "status": "running",
-                "data": _order_print_snapshot(),
-                "message": "订单打印任务正在运行",
-            }), 409
-        task_lock = bit_print.acquire_order_print_lock(
-            owner="bit_interface.py",
-            mode="once",
-        )
-        if task_lock is None:
-            owner = bit_print.get_order_print_lock_owner()
-            return jsonify({
-                "status": "running",
-                "data": {**_order_print_snapshot(), "lock_owner": owner},
-                "message": "订单打印已在其他进程中运行",
-            }), 409
-
-        stop_event = threading.Event()
-        _order_print_stop_event = stop_event
-        _order_print_logs.clear()
-        _order_print_state.update({
-            "running": True,
-            "started_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-            "finished_at": "",
-            "status": "running",
-            "message": f"{params['target']} API 订单打印已启动",
-            "params": params,
-            "task_id": params["task_id"],
-            "printed": 0,
-            "partial": 0,
-            "no_orders": 0,
-            "failed": 0,
-            "skipped": 0,
-            "printed_order_count": 0,
-            "shipment_count": 0,
-            "fallback_store_count": 0,
-            "download_path": "",
-            "download_name": "",
-            "results": [],
-        })
-        task_state = _order_print_snapshot()
-
-    task_thread = threading.Thread(
-        target=run_order_print_job,
-        args=(params, task_lock, stop_event),
-        daemon=True,
-    )
-    try:
-        task_thread.start()
-    except Exception:
-        task_lock.release()
-        with _order_print_lock:
-            if _order_print_stop_event is stop_event:
-                _order_print_stop_event = None
-            _order_print_state.update({
-                "running": False,
-                "finished_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-                "status": "error",
-                "message": "订单打印任务启动失败",
-            })
-        raise
-    return jsonify({
-        "status": "success",
-        "data": task_state,
-        "message": "美客多 API 订单打印已在后台启动",
-    })
-
-
-@app.route('/api/order-print/stop', methods=['POST'])
-@login_required
-def api_stop_order_print():
-    with _order_print_lock:
-        if not _order_print_state.get("running") or _order_print_stop_event is None:
-            return jsonify({
-                "status": "error",
-                "data": _order_print_snapshot(),
-                "message": "当前没有正在运行的订单打印任务",
-            }), 409
-        _order_print_stop_event.set()
-        _order_print_state.update({
-            "status": "stopping",
-            "message": "正在停止，当前 API 请求完成后会安全结束",
-        })
-        state = _order_print_snapshot()
-    _append_order_print_log(f"{get_now_time()} 已收到停止 API 订单打印请求")
-    return jsonify({
-        "status": "success",
-        "data": state,
-        "message": "已发送停止指令",
-    })
-
-
-@app.route('/api/order-print/status', methods=['GET'])
-@login_required
-def api_order_print_status():
-    state = _order_print_snapshot()
-    # Polling happens every two seconds while a task runs.  Re-querying token
-    # and history tables on every poll can make the status endpoint itself
-    # unavailable when the database or Mercado sync is busy.
-    if not state.get("site_last_runs") or not state.get("running"):
-        _refresh_order_print_site_last_runs()
-        state = _order_print_snapshot()
-    external_owner = bit_print.get_order_print_lock_owner()
-    if external_owner and not state.get("running"):
-        state.update({
-            "running": True,
-            "status": "running",
-            "message": "订单打印正在其他进程中运行",
-            "started_at": external_owner.get("acquired_at", ""),
-            "lock_owner": external_owner,
-        })
-    response = jsonify({"status": "success", "data": state})
-    response.headers["Cache-Control"] = "no-store"
-    return response
-
-
-@app.route('/api/order-print/download', methods=['GET'])
-@login_required
-def api_order_print_download():
-    with _order_print_lock:
-        raw_path = str(_order_print_state.get("download_path") or "")
-        download_name = str(_order_print_state.get("download_name") or "")
-    if not raw_path:
-        return jsonify({"status": "error", "message": "当前没有可下载的 API 面单"}), 404
-    path = Path(raw_path).resolve()
-    output_root = bit_print.ORDER_PRINT_OUTPUT_DIR.resolve()
-    if not path.is_relative_to(output_root) or not path.is_file():
-        return jsonify({"status": "error", "message": "面单文件不存在或已失效"}), 404
-    response = send_file(
-        path,
-        mimetype="application/pdf",
-        as_attachment=False,
-        download_name=download_name or path.name,
-        max_age=0,
-    )
-    response.headers["Cache-Control"] = "no-store"
-    return response
-
-
 @app.route('/api/order-analysis/import', methods=['POST'])
 @login_required
 def api_import_order_analysis():
@@ -7476,6 +6825,92 @@ def api_store_links():
     return response
 
 
+def _store_link_video_response(link_id, *, internal=False):
+    from bit.bit_store_link_video import MAX_VIDEO_BYTES, upload_store_link_video
+    from werkzeug.exceptions import RequestEntityTooLarge
+
+    try:
+        request.max_content_length = MAX_VIDEO_BYTES + 1024 * 1024
+        uploads = request.files.getlist("file")
+        if len(uploads) != 1:
+            raise ValueError("请选择一个视频文件")
+        if internal:
+            result = upload_store_link_video(link_id, uploads[0])
+        else:
+            result = bit_db_api.upload_mercado_store_link_video(link_id, uploads[0])
+        return jsonify({
+            "status": "success", "data": result,
+            "message": "视频已提交美客多，等待平台审核；审核通过后展示在商品页面",
+        })
+    except RequestEntityTooLarge:
+        return jsonify({"status": "error", "message": "视频不能超过 280 MB"}), 413
+    except ValueError as exc:
+        return jsonify({"status": "error", "message": str(exc)}), 400
+    except Exception as exc:
+        logging.exception("店铺链接视频上传失败")
+        return jsonify({"status": "error", "message": str(exc)}), 502
+
+
+@app.route('/api/store-links/<int:link_id>/video', methods=['POST'])
+@login_required
+def api_store_link_video(link_id):
+    return _store_link_video_response(link_id)
+
+
+@app.route('/api/db/store-links/<int:link_id>/video', methods=['POST'])
+@internal_api_required
+def api_db_store_link_video(link_id):
+    blocked = reject_db_api_client_mode()
+    if blocked:
+        return blocked
+    return _store_link_video_response(link_id, internal=True)
+
+
+def _store_link_advertise_response(link_id, *, internal=False):
+    data = request.get_json(silent=True) or {}
+    try:
+        if internal:
+            from bit.bit_store_link_ads import advertise_store_link
+            result = advertise_store_link(
+                link_id,
+                budget=data.get("budget"),
+                roas_target=data.get("roas_target"),
+                campaign_name=data.get("campaign_name") or "",
+            )
+        else:
+            result = bit_db_api.advertise_mercado_store_link(
+                link_id,
+                budget=data.get("budget"),
+                roas_target=data.get("roas_target"),
+                campaign_name=data.get("campaign_name") or "",
+            )
+        return jsonify({
+            "status": "success",
+            "data": result,
+            "message": "商品广告已启用",
+        })
+    except ValueError as exc:
+        return jsonify({"status": "error", "message": str(exc)}), 400
+    except Exception as exc:
+        logging.exception("店铺链接广告投放失败")
+        return jsonify({"status": "error", "message": str(exc)}), 502
+
+
+@app.route('/api/store-links/<int:link_id>/advertise', methods=['POST'])
+@login_required
+def api_store_link_advertise(link_id):
+    return _store_link_advertise_response(link_id)
+
+
+@app.route('/api/db/store-links/<int:link_id>/advertise', methods=['POST'])
+@internal_api_required
+def api_db_store_link_advertise(link_id):
+    blocked = reject_db_api_client_mode()
+    if blocked:
+        return blocked
+    return _store_link_advertise_response(link_id, internal=True)
+
+
 @app.route('/api/store-links/bulk-update', methods=['POST'])
 @login_required
 def api_bulk_update_store_links():
@@ -7504,6 +6939,27 @@ def api_bulk_update_store_links():
         ),
         "data": result.get("state") or {},
     }), 202 if started else 409
+
+
+@app.route('/api/store-links/delete', methods=['POST'])
+@login_required
+def api_delete_store_links():
+    data = request.get_json(silent=True) or {}
+    link_ids = data.get("link_ids") or []
+    if not isinstance(link_ids, list):
+        return jsonify({"status": "error", "message": "link_ids 必须是数组"}), 422
+    try:
+        result = bit_db_api.delete_mercado_store_links(link_ids)
+    except ValueError as exc:
+        return jsonify({"status": "error", "message": str(exc)}), 400
+    except Exception as exc:
+        logging.exception("批量删除店铺链接失败")
+        return jsonify({"status": "error", "message": f"批量删除店铺链接失败：{exc}"}), 502
+    return jsonify({
+        "status": "success",
+        "message": f"已删除 {int(result.get('deleted') or 0)} 条店铺链接",
+        "data": result,
+    })
 
 
 @app.route('/api/store-links/bulk-update/status', methods=['GET'])
@@ -7777,6 +7233,12 @@ def api_start_daily_task():
         return enqueue_local_agent_daily_task(data.get("agent_id"), params)
 
     max_concurrent = _daily_task_max_concurrent()
+    if bit_daily_task.get_daily_task_lock_owner():
+        return jsonify({
+            "status": "running",
+            "data": _daily_tasks_snapshot(),
+            "message": "当前执行主机已有 daily_task 正在运行，请先结束现有任务",
+        }), 409
     with _daily_task_lock:
         running_count = sum(
             1 for state in _daily_tasks.values() if state.get("running")
@@ -8128,7 +7590,7 @@ def api_daily_task_status():
         data = task
     else:
         data = _daily_tasks_snapshot()
-        # 保留独立脚本/bit_main 的全局锁提示，但它不阻止页面新建独立任务。
+        # 保留独立脚本/bit_main 的全局锁提示；主机锁会阻止页面并行新建任务。
         external_owner = bit_daily_task.get_daily_task_lock_owner()
         if external_owner:
             external_task = {
@@ -8445,12 +7907,15 @@ def enqueue_local_agent_daily_task(agent_id, params):
         "agent_name": agent["name"],
     }
     user = get_current_workbench_user() or {}
-    job = store.enqueue_job(
-        secrets.token_hex(16), agent_id, "daily_task", params,
-        required_version=current_local_agent_bundle()["version"],
-        created_by_id=user.get("id"),
-        created_by_name=user.get("display_name") or user.get("username") or "",
-    )
+    try:
+        job = store.enqueue_job(
+            secrets.token_hex(16), agent_id, "daily_task", params,
+            required_version=current_local_agent_bundle()["version"],
+            created_by_id=user.get("id"),
+            created_by_name=user.get("display_name") or user.get("username") or "",
+        )
+    except ValueError as exc:
+        return jsonify({"status": "error", "message": str(exc)}), 409
     return jsonify({"status": "success", "data": daily_agent_task_snapshot(job),
                     "message": f"任务已提交到 {agent['name']}，等待 Agent 执行"})
 
@@ -9416,17 +8881,17 @@ def _run_mercado_collection_task(
     try:
         collection_write_batch_size = max(
             1,
-            min(int(os.environ.get("MERCADO_COLLECTION_WRITE_BATCH_SIZE", "5")), 25),
+            min(int(os.environ.get("MERCADO_COLLECTION_WRITE_BATCH_SIZE", "20")), 25),
         )
     except ValueError:
-        collection_write_batch_size = 5
+        collection_write_batch_size = 20
     try:
         collection_write_flush_seconds = max(
             0.1,
-            min(float(os.environ.get("MERCADO_COLLECTION_WRITE_FLUSH_SECONDS", "1")), 5.0),
+            min(float(os.environ.get("MERCADO_COLLECTION_WRITE_FLUSH_SECONDS", "0.5")), 5.0),
         )
     except ValueError:
-        collection_write_flush_seconds = 1.0
+        collection_write_flush_seconds = 0.5
     started_monotonic = time.monotonic()
     last_collection_flush = 0.0
     last_task_status_write = 0.0
@@ -12793,6 +12258,23 @@ def api_db_bulk_update_store_links():
     return jsonify({"status": "success", "data": {"started": started, "state": state}})
 
 
+@app.route('/api/db/store-links/delete', methods=['POST'])
+@internal_api_required
+def api_db_delete_store_links():
+    blocked = reject_db_api_client_mode()
+    if blocked:
+        return blocked
+    data = request.get_json(silent=True) or {}
+    link_ids = data.get("link_ids") or []
+    if not isinstance(link_ids, list):
+        return jsonify({"status": "error", "message": "link_ids 必须是数组"}), 422
+    try:
+        result = db_delete_mercado_store_links(link_ids)
+    except ValueError as exc:
+        return jsonify({"status": "error", "message": str(exc)}), 400
+    return jsonify({"status": "success", "data": result})
+
+
 @app.route('/api/db/store-links/bulk-update/status', methods=['GET'])
 @internal_api_required
 def api_db_store_link_remote_update_status():
@@ -14145,6 +13627,8 @@ def _hydrate_api_reputation_from_database():
         hydrated_row = {
             "store_name": source.get("店铺名") or "",
             "site_name": source.get("站点") or "",
+            "salesperson": source.get("业务员") or "",
+            "group_name": source.get("账户组") or source.get("店铺组") or "",
             "level_name": source.get("声誉颜色") or "",
             "sales_completed": source.get("总单量"),
             "claims_rate_percent": _legacy_reputation_percentage(source.get("投诉率")),

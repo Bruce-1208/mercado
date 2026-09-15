@@ -1,7 +1,7 @@
 """Image-first workflow: block unmatched products; retain weight when missing."""
 import time
 
-from .browser import CircuitOpen, NoExactMatch, SearchTimeout, Stopped
+from .browser import CircuitOpen, NoExactMatch, SearchTimeout, Stopped, WritebackMismatch
 from .models import number, erp_value_equal
 from .pricing import usd_cost
 
@@ -101,7 +101,16 @@ def save_result(service, task, browser, config, result, reason, changes):
         service.record_visual(key, result, reason + "；未修改智赢商品状态，继续下一件")
         return
     if not config["writeback_enabled"]:
-        store.exception(key, "尚未启用ERP回写，未同步智赢重量或净收益", reason)
+        # A dry run still has a business result. Keep it reviewable as a risk
+        # because the calculated values were not synchronized to ERP; do not
+        # turn an intentional no-write test into an exception that the batch
+        # silently auto-skips.
+        dry_reason = reason + "；测试模式未启用ERP回写，仅保留本地核重核价结论"
+        store.update(key, status="risk", stage="done", saved_at=time.time(),
+                     write_verified=False, write_intent={}, exception_reason="",
+                     exception_detail="", decision_status="risk", decision_reason=dry_reason)
+        store.log(dry_reason + "；智赢商品状态及原数值保持不变，继续下一件", key)
+        service.record_visual(key, "risk", dry_reason + "；未修改智赢商品")
         return
     attempt = None
     try:
@@ -135,4 +144,7 @@ def save_result(service, task, browser, config, result, reason, changes):
         if attempt is not None and history:
             history[-1].update(after=actual, error=str(exc))
             store.update(key, erp_after=actual, write_verified=False, write_history=history)
-        store.exception(key, "ERP重量或净收益回写失败", exc)
+        detail = str(exc)
+        if isinstance(exc, WritebackMismatch):
+            detail += "；外部写入结果不确定，请人工回读确认后再继续"
+        store.exception(key, "ERP重量或净收益回写失败", detail)

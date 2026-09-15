@@ -506,13 +506,36 @@ def _wait_or_stop(seconds, stop_event=None):
 
 
 def daily_task_lock_key(task_id=""):
-    """返回任务锁键；带 task_id 时允许多个独立任务并行。"""
+    """返回任务实例锁键；主机级并发由任务入口和 Agent 队列控制。"""
     task_id = re.sub(r"[^0-9A-Za-z_.-]+", "_", str(task_id or "").strip())
     return f"{DAILY_TASK_LOCK_KEY}_{task_id}" if task_id else DAILY_TASK_LOCK_KEY
 
 
+class _DailyTaskLockHandle:
+    """Hold the per-instance lock and the host-wide execution lock together."""
+
+    def __init__(self, instance_lock, host_lock):
+        self._instance_lock = instance_lock
+        self._host_lock = host_lock
+
+    @property
+    def acquired(self):
+        return bool(
+            self._instance_lock.acquired
+            and (self._host_lock is None or self._host_lock.acquired)
+        )
+
+    def release(self):
+        if self._host_lock is not None:
+            self._host_lock.release()
+        self._instance_lock.release()
+
+    def __getattr__(self, name):
+        return getattr(self._instance_lock, name)
+
+
 def acquire_daily_task_lock(owner="bit_daily_task", mode="once", task_id=""):
-    lock = InterProcessLock(
+    instance_lock = InterProcessLock(
         daily_task_lock_key(task_id),
         owner=owner,
         metadata={
@@ -521,13 +544,32 @@ def acquire_daily_task_lock(owner="bit_daily_task", mode="once", task_id=""):
             "task_id": str(task_id or ""),
         },
     )
-    if not lock.acquire(timeout=0):
+    if not instance_lock.acquire(timeout=0):
         return None
-    return lock
+    # A task id keeps its own lock file for diagnostics, while this second
+    # lock prevents two task instances from executing on the same host.
+    if task_id:
+        host_lock = InterProcessLock(
+            DAILY_TASK_LOCK_KEY,
+            owner=owner,
+            metadata={
+                "task_type": "bit_daily_task",
+                "mode": mode,
+                "task_id": str(task_id),
+            },
+        )
+        if not host_lock.acquire(timeout=0):
+            instance_lock.release()
+            return None
+        return _DailyTaskLockHandle(instance_lock, host_lock)
+    return instance_lock
 
 
 def get_daily_task_lock_owner(task_id=""):
-    return get_lock_owner(daily_task_lock_key(task_id))
+    owner = get_lock_owner(daily_task_lock_key(task_id))
+    if owner:
+        return owner
+    return get_lock_owner(DAILY_TASK_LOCK_KEY) if task_id else owner
 
 
 def _is_login_required_result(value):

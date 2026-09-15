@@ -266,6 +266,12 @@ class LocalAgentStore:
         connection = self._connect()
         try:
             connection.execute("BEGIN IMMEDIATE")
+            if connection.execute(
+                "SELECT 1 FROM local_agent_jobs WHERE agent_id = ? "
+                "AND status IN ('running', 'stopping') LIMIT 1", (agent_id,),
+            ).fetchone():
+                connection.commit()
+                return None
             row = connection.execute(
                 """
                 SELECT * FROM local_agent_jobs
@@ -329,6 +335,7 @@ class LocalAgentStore:
         if len(content.encode("utf-8")) > 512 * 1024:
             raise ValueError("单次日志内容过大")
         with self._connect() as connection:
+            connection.execute("BEGIN IMMEDIATE")
             row = connection.execute(
                 "SELECT * FROM local_agent_jobs WHERE job_id = ? AND agent_id = ?",
                 (job_id, agent_id),
@@ -341,6 +348,10 @@ class LocalAgentStore:
                     (job_id, str(event_type or "log")[:32], content, now),
                 )
             if status:
+                if row["status"] in TERMINAL_JOB_STATUSES:
+                    status = row["status"]
+                elif row["cancel_requested"]:
+                    status = "stopped" if status in TERMINAL_JOB_STATUSES else "stopping"
                 finished_at = now if status in TERMINAL_JOB_STATUSES else None
                 connection.execute(
                     """
@@ -368,6 +379,7 @@ class LocalAgentStore:
         job_id = normalize_job_id(job_id)
         now = time.time() if now is None else float(now)
         with self._connect() as connection:
+            connection.execute("BEGIN IMMEDIATE")
             row = connection.execute(
                 "SELECT status FROM local_agent_jobs WHERE job_id = ?", (job_id,)
             ).fetchone()

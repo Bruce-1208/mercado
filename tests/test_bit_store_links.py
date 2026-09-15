@@ -561,6 +561,51 @@ def test_bulk_update_store_links_updates_only_allowed_numeric_fields():
     assert params[-2:] == (4, 5)
 
 
+def test_delete_store_links_deletes_unique_selected_ids(monkeypatch):
+    calls = []
+    monkeypatch.setattr(store, "ensure_store_link_table", lambda _cursor: None)
+
+    class Cursor:
+        rowcount = 2
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args):
+            return False
+
+        def execute(self, sql, params=None):
+            calls.append((sql, params))
+
+    class Connection:
+        committed = False
+
+        def cursor(self):
+            return Cursor()
+
+        def commit(self):
+            self.committed = True
+
+        def rollback(self):
+            pass
+
+        def close(self):
+            pass
+
+    connection = Connection()
+    result = store.delete_store_links(
+        [5, "4", 5], connection_factory=lambda: connection
+    )
+
+    assert result == {"requested": 2, "deleted": 2}
+    delete_sql, params = next(
+        (sql, params) for sql, params in calls if sql.lstrip().startswith("DELETE")
+    )
+    assert f"DELETE FROM `{store.STORE_LINK_TABLE}`" in delete_sql
+    assert params == (4, 5)
+    assert connection.committed is True
+
+
 def test_list_store_links_filters_site_and_defaults_to_sales_descending():
     calls = []
 
@@ -600,6 +645,14 @@ def test_list_store_links_filters_site_and_defaults_to_sales_descending():
                 ]
             if "GROUP BY links.`site_id`" in self.sql:
                 return [{"site_id": "MLM", "link_count": 2}]
+            if "GROUP BY links.`category_id`" in self.sql:
+                return [
+                    {
+                        "category_id": "MLM123",
+                        "category_name": "玩具",
+                        "link_count": 2,
+                    }
+                ]
             return []
 
     class Connection:
@@ -638,12 +691,11 @@ def test_list_store_links_filters_site_and_defaults_to_sales_descending():
     assert "links.`token_id` = %s AND links.`site_id` = %s" in list_sql
     assert "categorized_product.`management_category_id` = %s" in list_sql
     assert "links.`category_id` = %s" in list_sql
-    assert "mercado_product.`category_name` LIKE %s" in list_sql
     assert "ORDER BY links.`sold_quantity` DESC" in list_sql
     assert params[0] == "MLM"
-    assert params[1:5] == (12, "Toys", "Toys", "%Toys%")
-    assert params[5] == "+Bluetooth* +Headset*"
-    assert params[6:8] == (1, "MLM")
+    assert params[1:3] == (12, "Toys")
+    assert params[3] == "+Bluetooth* +Headset*"
+    assert params[4:6] == (1, "MLM")
     assert params[-2:] == (1000, 0)
     assert result["page_size"] == 1000
     assert result["rows"][0]["group_name"] == "运营一组"
@@ -654,6 +706,14 @@ def test_list_store_links_filters_site_and_defaults_to_sales_descending():
         "is_current": False,
     }
     assert result["sites"] == [{"site_id": "MLM", "link_count": 2, "is_current": False}]
+    assert result["mercado_categories"] == [
+        {
+            "category_id": "MLM123",
+            "category_name": "玩具",
+            "link_count": 2,
+            "is_current": False,
+        }
+    ]
     assert result["groups"] == [
         {"group_name": "运营一组"},
         {"group_name": "__ungrouped__"},
@@ -770,6 +830,8 @@ def test_workbench_store_link_ui_and_routes():
     assert b'id="store-link-site-filter"' in response.data
     assert b'id="store-link-product-category-filter"' in response.data
     assert b'id="store-link-mercado-category-filter"' in response.data
+    assert b'<select id="store-link-mercado-category-filter"' in response.data
+    assert b'id="store-link-delete-button"' in response.data
     assert b'id="store-link-page-buttons"' in response.data
     assert b'id="store-link-sales-sort"' in response.data
     assert b'id="store-link-sync-log"' in response.data
@@ -781,6 +843,8 @@ def test_workbench_store_link_ui_and_routes():
     assert "净收益(USD)".encode("utf-8") in response.data
     assert "任务执行日志".encode("utf-8") in response.data
     assert "修改美客多后台".encode("utf-8") in response.data
+    assert "投放广告".encode("utf-8") in response.data
+    assert b"openStoreLinkAdvertise" in response.data
     assert "同步进行中也可提交".encode("utf-8") in response.data
     selection_logic = response.get_data(as_text=True).split(
         "function updateStoreLinkSelection()", 1
@@ -796,6 +860,9 @@ def test_workbench_store_link_ui_and_routes():
         "stores": [],
         "sites": [{"site_id": "MLM", "link_count": 1}],
         "groups": [{"group_name": "运营一组", "link_count": 1}],
+        "mercado_categories": [
+            {"category_id": "MLM123", "category_name": "玩具", "link_count": 1}
+        ],
         "summary": {},
         "total": 1,
         "page": 1,
@@ -811,6 +878,7 @@ def test_workbench_store_link_ui_and_routes():
     assert response.status_code == 200
     assert response.get_json()["data"]["rows"][0]["item_id"] == "MLM1"
     assert response.get_json()["data"]["sites"][0]["site_id"] == "MLM"
+    assert response.get_json()["data"]["mercado_categories"][0]["category_id"] == "MLM123"
     assert listing.call_args.kwargs["site_id"] == "MLM"
     assert listing.call_args.kwargs["group_name"] == "运营一组"
     assert listing.call_args.kwargs["management_category_id"] == "12"
@@ -836,12 +904,40 @@ def test_workbench_store_link_ui_and_routes():
 
     with patch.object(
         workbench.bit_db_api,
+        "delete_mercado_store_links",
+        return_value={"requested": 2, "deleted": 2},
+    ) as delete:
+        response = client.post(
+            "/api/store-links/delete",
+            json={"link_ids": [1, 2]},
+        )
+    assert response.status_code == 200
+    assert response.get_json()["data"] == {"requested": 2, "deleted": 2}
+    delete.assert_called_once_with([1, 2])
+
+    with patch.object(
+        workbench.bit_db_api,
         "get_mercado_store_link_remote_update_status",
         return_value={"running": False, "status": "completed", "success_count": 2},
     ):
         response = client.get("/api/store-links/bulk-update/status")
     assert response.status_code == 200
     assert response.get_json()["data"]["success_count"] == 2
+
+    with patch.object(
+        workbench.bit_db_api,
+        "advertise_mercado_store_link",
+        return_value={"campaign_id": 88, "ad_group_id": 99, "budget": 10},
+    ) as advertise:
+        response = client.post(
+            "/api/store-links/1/advertise",
+            json={"budget": 10, "roas_target": 5, "campaign_name": "链接广告-MLM1"},
+        )
+    assert response.status_code == 200
+    assert response.get_json()["data"]["campaign_id"] == 88
+    advertise.assert_called_once_with(
+        1, budget=10, roas_target=5, campaign_name="链接广告-MLM1"
+    )
 
 
 def test_start_store_link_sync_route_starts_background_task():

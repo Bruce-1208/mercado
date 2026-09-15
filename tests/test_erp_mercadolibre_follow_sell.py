@@ -1074,6 +1074,78 @@ def test_user_products_endpoint_falls_back_only_on_explicit_not_found():
     assert ("POST", "/global/items") in client.paths
 
 
+def test_embedded_target_site_error_is_not_reported_as_success():
+    class EmbeddedErrorClient(CategoryClient):
+        def request(self, method, path, **kwargs):
+            if path == "/users/me":
+                return {"id": 77, "site_id": "CBT", "tags": []}
+            if method == "POST" and path == "/global/items":
+                return {
+                    "site_id": "CBT",
+                    "site_items": [{
+                        "site_id": "MLM",
+                        "error": {
+                            "status": 403,
+                            "error": "seller.unable_to_list",
+                            "cause": ["restrictions_coliving"],
+                        },
+                    }],
+                }
+            return super().request(method, path, **kwargs)
+
+    with pytest.raises(MercadoLibreError, match="restrictions_coliving") as caught:
+        follow_sell(
+            EmbeddedErrorClient(),
+            "MLM3016972321",
+            destination_site_id="MLM",
+            prepared_listing=(sample_source(), {}),
+            publish=True,
+            net_proceeds=20,
+        )
+    assert caught.value.status_code == 403
+
+
+def test_repeated_user_product_conflict_is_reconciled_with_existing_resource():
+    class ConflictClient(CategoryClient):
+        def request(self, method, path, **kwargs):
+            if path == "/users/me":
+                return {
+                    "id": 77,
+                    "site_id": "CBT",
+                    "tags": ["user_product_seller"],
+                }
+            if method == "POST" and path == "/global/user-products":
+                raise MercadoLibreError(
+                    'Validation error; cause=[{"code":"user_product.repeated.conflict",'
+                    '"message":"user product already exists. Conflict id: MLMU123"}]',
+                    status_code=400,
+                )
+            if method == "GET" and path == "/marketplace/user-products/U123/mapping":
+                return []
+            if method == "POST" and path == "/global/user-products/U123":
+                return {
+                    "parent_user_product_id": "CBTU123",
+                    "site_items": [{"site_id": "MLM", "item_id": "MLM123"}],
+                }
+            return super().request(method, path, **kwargs)
+
+    with patch.object(
+        follow_sell_module, "_upload_validated_picture", return_value="picture-1"
+    ):
+        result = follow_sell(
+            ConflictClient(),
+            "MLM3016972321",
+            destination_site_id="MLM",
+            prepared_listing=(sample_source(), {}),
+            publish=True,
+            net_proceeds=20,
+        )
+
+    assert result["publication_action"] == "add_marketplace"
+    assert result["endpoint"] == "/global/user-products/U123"
+    assert result["result"]["site_items"][0]["item_id"] == "MLM123"
+
+
 def test_existing_user_product_adds_marketplace_without_recreating_or_uploading():
     class ReuseClient(CategoryClient):
         def __init__(self):

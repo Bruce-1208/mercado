@@ -228,6 +228,113 @@ def test_official_gradient_is_not_overwritten_by_browser_auxiliary():
     assert database_rows[0][11] == "[1,2,3]"
 
 
+def test_browser_restriction_overrides_false_active_api_status():
+    notice = (
+        "Your account has been suspended for selling\n"
+        "(Today, at 02:10)\n"
+        "It has been suspended for selling until 21 of September, 06h10.\n"
+        "If you commit any further infringement, your account could be "
+        "permanently shut down."
+    )
+    api_rows = [{
+        "store_name": "遥遥领先1号店",
+        "site_id": "MLM",
+        "site_status_display": "正常",
+    }]
+    database_rows = [[
+        "遥遥领先1号店", "墨西哥", "绿色", 1, "0%", "0%", "0%", "", "",
+        "正常", "", "[]", "正常", 0, 0,
+    ]]
+    auxiliary_rows = [{
+        "store_name": "遥遥领先1号店",
+        "site": "墨西哥",
+        "system_warning": notice,
+        "visits": "[]",
+        "error": "",
+    }]
+
+    bit_reputation_info._merge_api_auxiliary_rows(
+        api_rows, database_rows, auxiliary_rows
+    )
+
+    assert api_rows[0]["account_status"] == "temporarily_suspended"
+    assert api_rows[0]["suspension_until"] == "21 of September, 06h10"
+    assert api_rows[0]["site_status_display"] == (
+        "暂时停售（至 21 of September, 06h10）"
+    )
+    assert database_rows[0][9] == notice
+    assert database_rows[0][12] == "暂时停售（至 21 of September, 06h10）"
+
+
+def test_future_permanent_warning_is_not_current_permanent_suspension():
+    result = bit_reputation_info._classify_account_restriction(
+        "Your account has been suspended for selling until 21 of September, 06h10. "
+        "If you commit any further infringement, your account could be "
+        "permanently shut down."
+    )
+
+    assert result["account_status"] == "temporarily_suspended"
+
+
+def test_definitive_permanent_shutdown_is_classified_as_permanent():
+    result = bit_reputation_info._classify_account_restriction(
+        "Your account has been permanently shut down for repeated policy violations."
+    )
+
+    assert result["account_status"] == "permanently_suspended"
+    assert result["site_status_display"] == "永久封禁"
+
+
+def test_indefinite_disabled_selling_notice_is_classified_as_permanent():
+    result = bit_reputation_info._classify_account_restriction(
+        "We found that your account has severely violated our intellectual "
+        "property policies, which is why we have disabled your selling. "
+        "While you can no longer sell, your account is still available to "
+        "withdraw money."
+    )
+
+    assert result["account_status"] == "permanently_suspended"
+    assert result["site_status_display"] == "永久封禁"
+
+
+def test_permanent_account_is_detected_when_site_selector_is_gone(monkeypatch):
+    monkeypatch.setattr(
+        bit_reputation_info,
+        "_open_collection_backend_page",
+        lambda *_args, **_kwargs: {},
+    )
+    monkeypatch.setattr(
+        bit_reputation_info,
+        "_select_country",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(
+            RuntimeError("没有找到站点选择器")
+        ),
+    )
+    monkeypatch.setattr(
+        bit_reputation_info,
+        "_collect_account_risk_detail_text",
+        lambda *_args, **_kwargs: (
+            "Your account has been permanently shut down for repeated violations."
+        ),
+    )
+    monkeypatch.setattr(
+        bit_reputation_info,
+        "get_visits_info",
+        lambda *_args, **_kwargs: pytest.fail("永久封禁账号不应继续等待流量"),
+    )
+
+    result = bit_reputation_info.get_reputation_auxiliary_info(
+        "window-id",
+        "跃马扬鞭fti",
+        "墨西哥",
+        driver=object(),
+    )
+
+    assert "permanently shut down" in result["system_warning"]
+    assert result["visits"] == "[]"
+    assert result["error"] == ""
+
+
 def test_reputation_counts_follow_latest_api_infraction_dashboard(monkeypatch):
     monkeypatch.setattr(
         bit_reputation_info,
@@ -358,14 +465,20 @@ def test_console_template_keeps_old_reputation_and_adds_api_panel():
     assert "function showReputationWarningDetail(cell, event)" in template
     assert "reputation-warning-preview" in template
     assert "七天变化率由官方订单 API 自算" in template
-    assert "每天北京时间 14:00 自动刷新，并发 10" in template
+    assert "每天北京时间 14:00 自动刷新，并发 30" in template
     assert "下次自动刷新 ${data.next_auto_refresh_at}" in template
-    assert "站点状态" in reputation_table.group(1)
+    assert "账号状态" in reputation_table.group(1)
     assert "openReputationBrowser(this)" in template
     assert "/api/reputation/${tokenId}/open-browser" in template
     assert 'id="reputation-salesperson-filter"' in template
     assert 'id="reputation-group-filter"' in template
     assert 'id="reputation-name-search"' in template
+    assert 'id="api-reputation-store-filter"' in template
+    assert 'id="api-reputation-salesperson-filter"' in template
+    assert 'id="api-reputation-group-filter"' in template
+    assert 'id="api-reputation-search"' in template
+    assert "function setApiReputationScopeFilter(key, value)" in template
+    assert "function apiReputationMatchesScope(row)" in template
     assert "function applyReputationFilters()" in template
     assert "暂无符合业务员、账号组和名字筛选条件的声誉数据" in template
     assert 'data-field="reputation_update_enabled"' in template
@@ -566,7 +679,7 @@ def test_full_refresh_keeps_successes_and_logs_failed_stores(monkeypatch):
     assert any("成功店铺：成功" in line for line in result["logs"])
     assert any("失败店铺：失败" in line for line in result["logs"])
     assert result["elapsed_seconds"] >= 0
-    assert collection_options["max_workers"] == 10
+    assert collection_options["max_workers"] == 30
     assert collection_options["collect_browser_auxiliary"] is True
 
 
@@ -704,6 +817,8 @@ def test_api_reputation_uses_latest_database_rows_before_first_manual_refresh(mo
     assert loaded["rows"][0] == {
         "store_name": "默认店铺",
         "site_name": "墨西哥",
+        "salesperson": "未分配",
+        "group_name": "未分组",
         "level_name": "绿色",
         "sales_completed": 321,
         "claims_rate_percent": 1.25,
@@ -732,6 +847,8 @@ def test_default_reputation_collection_uses_api_and_writes_legacy_table(monkeypa
                         "site_settings": [
                             {
                                 "site_id": "MLM",
+                                "salesperson": "业务员甲",
+                                "group_name": "账号组一",
                                 "reputation_update_enabled": True,
                                 "visit_stats_enabled": True,
                             },
@@ -814,6 +931,8 @@ def test_default_reputation_collection_uses_api_and_writes_legacy_table(monkeypa
     assert result["failed_stores"] == 0
     assert result["total_sites"] == 1
     assert result["api_rows"][0]["store_name"] == "泽顺店铺"
+    assert result["api_rows"][0]["salesperson"] == "业务员甲"
+    assert result["api_rows"][0]["group_name"] == "账号组一"
     assert result["api_rows"][0]["infraction_count"] == 3
     assert result["api_rows"][0]["rights_holder_count"] == 2
     assert result["api_rows"][0]["infraction_recent_days"] == 100
@@ -1148,7 +1267,10 @@ def test_hybrid_collection_merges_browser_traffic_without_reputation_page(monkey
     )
 
     assert captured_browser_rows == [
-        ("window-31", "混合店铺", "", "墨西哥", "", "", ""),
+        (
+            "window-31", "混合店铺", "", "墨西哥", "", "", "",
+            {"visit_site_codes": ["MLM"]},
+        ),
     ]
     legacy_row = next(
         row for row in database_calls[0][0] if row[1] == "墨西哥"
@@ -1165,7 +1287,7 @@ def test_hybrid_collection_merges_browser_traffic_without_reputation_page(monkey
     assert legacy_row[7:10] == [
         "增长",
         "12%",
-        "正常",
+        "浏览器告警不应使用",
     ]
     assert legacy_row[10] != "2026-08-27 23:10:00"
     assert legacy_row[11] == "[11, 22, 33]"

@@ -17,7 +17,7 @@ from erp.mercadolibre_attribute_rules import (
     extract_listing_attributes_from_detail,
     normalize_collected_attribute,
 )
-from erp.mercadolibre_follow_sell import MercadoLibreClient, follow_sell
+from erp.mercadolibre_follow_sell import MercadoLibreClient, MercadoLibreError, follow_sell
 from erp.mercadolibre_translation import marketplace_site_name, normalize_marketplace_site
 
 
@@ -160,6 +160,31 @@ def product_publish_issues(product_row: Mapping[str, Any]) -> list[str]:
         issues.append("净收益尚未计算")
     elif net_proceeds <= 0:
         issues.append("净收益小于等于 0")
+    # A product can have a valid weight and profitability snapshot while its
+    # detail supplement is still a timeout placeholder.  Such a row is not
+    # publish-ready: allowing it into the worker pool only guarantees a
+    # remote schema failure (and wastes image/API work).  Keep the check here
+    # so the UI moves it back to collection before creating publish records.
+    raw_snapshot = row.get("source_snapshot_json")
+    if raw_snapshot:
+        try:
+            snapshot = (
+                dict(raw_snapshot)
+                if isinstance(raw_snapshot, Mapping)
+                else json.loads(str(raw_snapshot))
+            )
+        except (TypeError, ValueError):
+            snapshot = {}
+        if isinstance(snapshot, Mapping):
+            page_snapshot = snapshot.get("page_snapshot") or {}
+            if isinstance(page_snapshot, Mapping):
+                detail_error = str(page_snapshot.get("detail_error") or "").strip()
+                detail_supplement = str(
+                    page_snapshot.get("detail_supplement") or ""
+                ).strip().lower()
+                if detail_error or detail_supplement in {"failed", "timeout"}:
+                    reason = detail_error or "详情补充未完成"
+                    issues.append(f"详情资料未完整：{reason[:180]}")
     return issues
 
 
@@ -303,6 +328,7 @@ def _product_source_snapshot(row: Mapping[str, Any]) -> dict[str, Any] | None:
         "price": row.get("price") if row.get("price") is not None else source.get("price"),
         "currency_id": row.get("currency_id") or source.get("currency_id"),
         "category_id": row.get("category_id") or source.get("category_id"),
+        "category_name": row.get("category_name") or source.get("category_name"),
         "permalink": row.get("source_url") or source.get("permalink"),
     })
     main_image_url = str(row.get("main_image_url") or "").strip()
@@ -437,6 +463,8 @@ def publish_product_batch(
     result_lock = threading.Lock()
     result_slots: list[dict[str, Any] | None] = [None] * len(rows)
     published = failed = completed = 0
+    account_listing_blocked = threading.Event()
+    account_listing_block_reason = ""
     batch_started = time.perf_counter()
     stage_totals: dict[str, float] = {}
 
@@ -495,6 +523,7 @@ def publish_product_batch(
             on_progress(progress)
 
     def publish_one(index: int, row: Mapping[str, Any]) -> None:
+        nonlocal account_listing_block_reason
         item_started = time.perf_counter()
         product_id = int(row.get("id") or 0)
         record_id = int(record_ids.get(product_id) or 0)
@@ -505,6 +534,11 @@ def publish_product_batch(
             row, resolved_discount_rate
         )
         try:
+            if account_listing_blocked.is_set():
+                raise MercadoLibreError(
+                    "账号刊登已暂停："
+                    + (account_listing_block_reason or "平台拒绝该账号刊登")
+                )
             save_record(record_id, status="publishing", started=True)
             update_state(
                 product_id,
@@ -579,6 +613,21 @@ def publish_product_batch(
             }
         except Exception as exc:
             message = str(exc)[:2000]
+            lower_message = message.lower()
+            if any(
+                marker in lower_message
+                for marker in (
+                    "restrictions_coliving",
+                    "seller.unable_to_list",
+                    "phone_pending",
+                    "address_pending",
+                    "identification_pending",
+                )
+            ):
+                with result_lock:
+                    if not account_listing_blocked.is_set():
+                        account_listing_block_reason = message
+                        account_listing_blocked.set()
             try:
                 update_state(
                     product_id,

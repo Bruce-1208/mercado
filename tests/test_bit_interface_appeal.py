@@ -2071,13 +2071,10 @@ def test_collection_page_uses_shop_status_style_checkbox_multiselect():
         Path(bit_interface.__file__).resolve().parent / "templates" / "index.html"
     ).read_text(encoding="utf-8")
 
-    for prefix in ("order-print", "infraction", "reputation"):
+    for prefix in ("infraction", "reputation"):
         assert f'id="{prefix}-collection-shops-all" type="checkbox"' in template
         assert f'id="{prefix}-collection-shops"' in template
         assert f"toggleAllCollectionOptions('{prefix}', 'shops', this.checked)" in template
-    assert 'id="order-print-collection-sites-all" type="checkbox"' in template
-    assert 'id="order-print-collection-sites"' in template
-    assert "toggleAllCollectionOptions('order-print', 'sites', this.checked)" in template
     for prefix in ("infraction", "reputation"):
         assert f'id="{prefix}-collection-workers" type="number" min="1" max="10" value="3"' in template
         assert f'id="{prefix}-collection-sites-all"' not in template

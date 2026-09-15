@@ -147,6 +147,28 @@ class MercadoLibreClient:
             return response.json()
         raise MercadoAPIError(f"{method} {path} 多次重试后仍失败")
 
+    def upload_item_clip(self, item_id: str, stream, filename: str, sites: list[dict]) -> dict[str, Any]:
+        """Submit once: an ambiguous timeout must not create duplicate clips."""
+        if not sites:
+            raise ValueError("必须明确指定视频发布站点")
+        stream.seek(0)
+        try:
+            response = self.session.post(
+                f"{self.BASE_URL}/marketplace/items/{item_id}/clips/upload",
+                headers={"Authorization": f"Bearer {self.access_token}"},
+                data={"sites": json.dumps(sites)},
+                files={"file": (filename, stream, "application/octet-stream")},
+                timeout=(30, 300),
+            )
+        except requests.RequestException as exc:
+            raise MercadoAPIError("视频上传连接中断，结果未知，请先在美客多后台确认后再重试") from exc
+        if not response.ok:
+            raise MercadoAPIError(f"美客多视频上传失败 ({response.status_code}): {response.text[:1000]}")
+        result = response.json()
+        if not isinstance(result, dict) or result.get("status") != "accepted" or not result.get("clip_uuid"):
+            raise MercadoAPIError("美客多返回了未确认的上传结果，请到后台核实")
+        return result
+
     def update_global_item(self, item_id: str, changes: dict[str, Any]) -> dict[str, Any]:
         """Update a Global Selling marketplace listing through /global/items."""
 
@@ -338,6 +360,69 @@ class MercadoLibreClient:
         if attributes:
             params = {"attributes": ",".join(str(value) for value in attributes if value)}
         return self.request("GET", f"/marketplace/items/{item_id}", params=params)
+
+    def get_product_ads_advertisers(self) -> list[dict[str, Any]]:
+        """Return the Product Ads advertisers available to this seller token."""
+        result = self.request(
+            "GET",
+            "/advertising/advertisers",
+            params={"product_id": "PADS"},
+            headers={"Api-Version": "1", "Content-Type": "application/json"},
+        )
+        return list((result or {}).get("advertisers") or [])
+
+    def search_product_ads_campaigns(
+        self, site_id: str, advertiser_id: int, *, limit: int = 50, offset: int = 0
+    ) -> dict[str, Any]:
+        return dict(self.request(
+            "GET",
+            f"/marketplace/advertising/{site_id}/advertisers/{advertiser_id}/product_ads/campaigns/search",
+            params={"limit": int(limit), "offset": int(offset)},
+            headers={"api-version": "2"},
+        ) or {})
+
+    def create_product_ads_campaign(
+        self, site_id: str, advertiser_id: int, payload: dict[str, Any]
+    ) -> dict[str, Any]:
+        return dict(self.request(
+            "POST",
+            f"/marketplace/advertising/{site_id}/advertisers/{advertiser_id}/product_ads/campaigns",
+            headers={"api-version": "2", "Content-Type": "application/json"},
+            json_body=payload,
+            max_attempts=1,
+        ) or {})
+
+    def update_product_ads_campaign(
+        self, site_id: str, campaign_id: int, payload: dict[str, Any]
+    ) -> dict[str, Any]:
+        return dict(self.request(
+            "PUT",
+            f"/marketplace/advertising/{site_id}/product_ads/campaigns/{campaign_id}",
+            headers={"api-version": "2", "Content-Type": "application/json"},
+            json_body=payload,
+            max_attempts=1,
+        ) or {})
+
+    def search_product_ads_ad_groups(
+        self, site_id: str, advertiser_id: int, item_id: str
+    ) -> dict[str, Any]:
+        return dict(self.request(
+            "GET",
+            f"/marketplace/advertising/{site_id}/advertisers/{advertiser_id}/product_ads/ad_groups/search",
+            params={"filters[item_ids]": item_id},
+            headers={"api-version": "2"},
+        ) or {})
+
+    def activate_product_ads_ad_group(
+        self, site_id: str, ad_group_id: int, campaign_id: int
+    ) -> dict[str, Any]:
+        return dict(self.request(
+            "PUT",
+            f"/marketplace/advertising/{site_id}/product_ads/ad_groups/{ad_group_id}",
+            headers={"api-version": "2", "Content-Type": "application/json"},
+            json_body={"status": "active", "campaign_id": int(campaign_id)},
+            max_attempts=1,
+        ) or {})
 
     def get_shipment_label(self, shipment_id: str, *, max_attempts: int = 4) -> bytes:
         """调用 Mercado 官方接口下载 shipment 发货面单 PDF。"""
