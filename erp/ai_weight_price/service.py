@@ -9,7 +9,7 @@ from datetime import datetime, timedelta
 from urllib.parse import urlsplit
 
 from bit.bit_runtime_lock import InterProcessLock
-from .browser import Browser, CircuitOpen, Stopped, NoExactMatch
+from .browser import Browser, CircuitOpen, Stopped, NoExactMatch, WritebackMismatch
 from .config import Config, selection_key, selection_params
 from .credentials import api_key
 from .edge import debugger_identity, open_edge
@@ -535,13 +535,13 @@ class Service:
     def _needs_human_attention(reason):
         """Return whether an item error needs the operator's browser attention.
 
-        Browser challenge/login errors are the only item failures that must
-        retain the current item and pause the serial pipeline.  Other DOM,
-        model, parsing, timeout, and ERP write errors are isolated to the
-        current item and can be marked skipped without blocking later items.
+        Browser challenge/login errors and an uncertain ERP write must retain
+        the current item and pause the serial pipeline. A save followed by a
+        mismatched read-back means the external side effect is unknown; it is
+        unsafe to mark that item skipped and continue writing later products.
         """
         return bool(re.search(
-            r"登录|未登录|登录页|登录状态|人机|验证码|安全验证|风控|人工|待复核|请核对|不确定|passport|login(?:\.taobao)?",
+            r"登录|未登录|登录页|登录状态|人机|验证码|安全验证|风控|人工|待复核|请核对|不确定|外部写入结果不确定|passport|login(?:\.taobao)?",
             str(reason or ""), re.I))
 
     def _auto_skip_exception(self, key, reason):
@@ -875,7 +875,13 @@ class Service:
                 self.store.update(key, erp_after=actual, write_verified=False, write_history=history)
                 if actual:
                     self.store.log("保存后回读不一致：" + str(actual), key, "ERROR")
-            self.store.exception(key, "ERP回写保存失败", exc)
+            detail = str(exc)
+            # A structured mismatch means the browser may have committed the
+            # form before the verification failed. Keep the item paused for a
+            # manual read-back instead of auto-skipping it.
+            if isinstance(exc, WritebackMismatch) or actual:
+                detail += "；外部写入结果不确定，请人工回读确认后再继续"
+            self.store.exception(key, "ERP回写保存失败", detail)
 
     def exchange_rate(self, config):
         return exchange_rate(config, self.store)

@@ -16,6 +16,7 @@ PRODUCT_TABLE = "erp_mercadolibre_products"
 MANAGEMENT_CATEGORY_TABLE = "erp_mercadolibre_management_categories"
 STORE_LINK_SALES_PAGE_INDEX = "idx_erp_meli_store_link_sales_page"
 STORE_LINK_SITE_PAGE_INDEX = "idx_erp_meli_store_link_site_page"
+STORE_LINK_CATEGORY_PAGE_INDEX = "idx_erp_meli_store_link_category_page"
 STORE_LINK_SEARCH_INDEX = "idx_erp_meli_store_link_search"
 
 _schema_lock = threading.RLock()
@@ -105,6 +106,8 @@ def _migrate_store_link_table(cursor: Any) -> None:
             KEY `idx_erp_meli_store_link_sales_page`
                 (`is_current`, `sold_quantity`, `last_synced_at`, `id`),
             KEY `idx_erp_meli_store_link_site_page` (`is_current`, `site_id`),
+            KEY `idx_erp_meli_store_link_category_page`
+                (`is_current`, `category_id`, `sold_quantity`, `last_synced_at`, `id`),
             FULLTEXT KEY `idx_erp_meli_store_link_search`
                 (`title`, `item_id`, `seller_sku`, `store_name`)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
@@ -168,6 +171,10 @@ def ensure_store_link_table(cursor: Any) -> None:
                 "(`is_current`, `sold_quantity`, `last_synced_at`, `id`)",
             ),
             STORE_LINK_SITE_PAGE_INDEX: ("INDEX", "(`is_current`, `site_id`)"),
+            STORE_LINK_CATEGORY_PAGE_INDEX: (
+                "INDEX",
+                "(`is_current`, `category_id`, `sold_quantity`, `last_synced_at`, `id`)",
+            ),
             STORE_LINK_SEARCH_INDEX: (
                 "FULLTEXT INDEX",
                 "(`title`, `item_id`, `seller_sku`, `store_name`)",
@@ -911,14 +918,8 @@ def list_store_links(
         values.append(normalized_category_id)
     mercado_category = str(mercado_category or "").strip()[:255]
     if mercado_category:
-        conditions.append(
-            f"(links.`category_id` = %s OR EXISTS ("
-            f"SELECT 1 FROM `{PRODUCT_TABLE}` AS mercado_product "
-            "WHERE mercado_product.`source_item_id` = links.`item_id` "
-            "AND (mercado_product.`category_id` = %s "
-            "OR mercado_product.`category_name` LIKE %s)))"
-        )
-        values.extend((mercado_category, mercado_category, f"%{mercado_category}%"))
+        conditions.append("links.`category_id` = %s")
+        values.append(mercado_category)
     search = str(search or "").strip()
     if search:
         # The listing table has more than one million rows. A leading-wildcard
@@ -1068,6 +1069,23 @@ def list_store_links(
             )
             sites = [_json_safe_row(row) for row in cursor.fetchall()]
             cursor.execute(
+                f"""
+                SELECT links.`category_id`,
+                       COALESCE(MAX(NULLIF(product.`category_name`, '')), '') AS `category_name`,
+                       COUNT(DISTINCT links.`id`) AS `link_count`
+                FROM `{STORE_LINK_TABLE}` AS links
+                LEFT JOIN `{PRODUCT_TABLE}` AS product
+                  ON product.`source_item_id` = links.`item_id`
+                WHERE links.`is_current` = 1
+                  AND links.`category_id` IS NOT NULL AND links.`category_id` <> ''
+                GROUP BY links.`category_id`
+                ORDER BY `category_name`, links.`category_id`
+                """
+            )
+            mercado_categories = [
+                _json_safe_row(row) for row in cursor.fetchall()
+            ]
+            cursor.execute(
                 f"SELECT COUNT(*) AS `all_count` FROM `{STORE_LINK_TABLE}`"
             )
             summary = dict(cursor.fetchone() or {})
@@ -1093,6 +1111,7 @@ def list_store_links(
             "stores": stores,
             "sites": sites,
             "groups": groups,
+            "mercado_categories": mercado_categories,
             "summary": summary,
             "total": total,
             "page": page,
@@ -1142,7 +1161,7 @@ def get_store_links_by_ids(
             ensure_store_link_table(cursor)
             cursor.execute(
                 f"""
-                SELECT `id`, `token_id`, `store_name`, `item_id`, `site_id`, `status`,
+                SELECT `id`, `token_id`, `store_name`, `item_id`, `site_id`, `status`, `is_current`,
                        `currency_id`, `price`, `weight_g`, `package_length_cm`,
                        `package_width_cm`, `package_height_cm`, `net_proceeds_usd`
                 FROM `{STORE_LINK_TABLE}`
@@ -1229,10 +1248,49 @@ def bulk_update_store_links(
         connection.close()
 
 
+def delete_store_links(
+    link_ids: Iterable[int],
+    *,
+    connection_factory: Callable[[], Any] | None = None,
+) -> dict[str, int]:
+    ids: list[int] = []
+    for value in link_ids or []:
+        try:
+            link_id = int(value)
+        except (TypeError, ValueError) as exc:
+            raise ValueError(f"店铺链接编号无效：{value!r}") from exc
+        if link_id > 0 and link_id not in ids:
+            ids.append(link_id)
+    ids.sort()
+    if not ids:
+        raise ValueError("请至少勾选一条店铺链接")
+    if len(ids) > 1000:
+        raise ValueError("每次最多删除 1000 条店铺链接")
+
+    placeholders = ", ".join(["%s"] * len(ids))
+    connection = (connection_factory or _connect)()
+    try:
+        with connection.cursor() as cursor:
+            ensure_store_link_table(cursor)
+            cursor.execute(
+                f"DELETE FROM `{STORE_LINK_TABLE}` WHERE `id` IN ({placeholders})",
+                tuple(ids),
+            )
+            deleted = int(cursor.rowcount or 0)
+        connection.commit()
+        return {"requested": len(ids), "deleted": deleted}
+    except BaseException:
+        connection.rollback()
+        raise
+    finally:
+        connection.close()
+
+
 __all__ = [
     "STORE_LINK_TABLE",
     "STORE_LINK_SYNC_STATE_TABLE",
     "bulk_update_store_links",
+    "delete_store_links",
     "ensure_store_link_table",
     "ensure_store_link_sync_state_table",
     "finalize_store_snapshot",

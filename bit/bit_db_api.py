@@ -52,8 +52,11 @@ def _headers():
 def _request(method, path, **kwargs):
     url = f"{DB_API_BASE_URL}{path}"
     timeout = kwargs.pop("timeout", 60)
+    headers = _headers()
+    if "files" in kwargs:
+        headers.pop("Content-Type", None)
     try:
-        response = DB_API_SESSION.request(method, url, headers=_headers(), timeout=timeout, **kwargs)
+        response = DB_API_SESSION.request(method, url, headers=headers, timeout=timeout, **kwargs)
     except requests.RequestException as e:
         raise RuntimeError(f"数据库接口请求失败：{url}，请确认 bit_interface.py 已启动。原因：{e}") from e
 
@@ -70,6 +73,34 @@ def _request(method, path, **kwargs):
     if not response.ok or payload.get("status") not in ("success", None):
         raise RuntimeError(payload.get("message") or f"数据库接口请求失败：{url}，状态码：{response.status_code}")
     return payload.get("data")
+
+
+def upload_mercado_store_link_video(link_id, upload):
+    from bit.bit_store_link_video import validate_video, upload_store_link_video
+
+    filename = validate_video(upload)
+    if DB_MODE == "mysql":
+        return upload_store_link_video(link_id, upload)
+    return _request(
+        "POST", f"/api/db/store-links/{int(link_id)}/video",
+        files={"file": (filename, upload.stream, "application/octet-stream")},
+        timeout=(30, 360),
+    )
+
+
+def advertise_mercado_store_link(link_id, *, budget, roas_target, campaign_name=""):
+    payload = {
+        "budget": budget,
+        "roas_target": roas_target,
+        "campaign_name": str(campaign_name or "").strip(),
+    }
+    if DB_MODE == "mysql":
+        from bit.bit_store_link_ads import advertise_store_link
+
+        return advertise_store_link(int(link_id), **payload)
+    return _request(
+        "POST", f"/api/db/store-links/{int(link_id)}/advertise", json=payload, timeout=120
+    )
 
 
 def insert_task_record(record_list):
@@ -826,6 +857,13 @@ def bulk_update_mercado_store_links(link_ids, **changes):
         started, state = start_store_link_remote_update(payload["link_ids"], changes)
         return {"started": bool(started), "state": state}
     return _request("POST", "/api/db/store-links/bulk-update", json=payload)
+
+
+def delete_mercado_store_links(link_ids):
+    payload = {"link_ids": [int(value) for value in link_ids or []]}
+    if DB_MODE == "mysql":
+        return _store_link_store_call("delete_store_links", payload["link_ids"])
+    return _request("POST", "/api/db/store-links/delete", json=payload)
 
 
 def get_mercado_store_link_remote_update_status():

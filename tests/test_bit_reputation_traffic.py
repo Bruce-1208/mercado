@@ -72,6 +72,50 @@ def test_extract_visit_chart_records_selects_daily_line_chart_only():
     ]
 
 
+def test_extract_visit_chart_records_supports_new_series_layout():
+    payload = {
+        "data": {
+            "categories": [f"2026-09-{day:02d}" for day in range(1, 9)],
+            "series": [
+                {"name": "Ventas", "data": [99] * 8},
+                {"name": "Visitas", "data": [1, 0, 3, 4, 5, 6, 7, 8]},
+            ],
+        }
+    }
+
+    records = reputation._extract_visit_chart_records(payload, days=8)
+
+    assert [record["date"] for record in records] == payload["data"]["categories"]
+    assert reputation._to_visit_number_list(records, 8) == [1, 0, 3, 4, 5, 6, 7, 8]
+
+
+def test_extract_visit_chart_records_supports_metric_points_layout():
+    payload = {
+        "widgets": [
+            {
+                "metric": "visits_count",
+                "points": [
+                    {"x": f"2026-09-{day:02d}", "y": day * 10}
+                    for day in range(1, 9)
+                ],
+            }
+        ]
+    }
+
+    records = reputation._extract_visit_chart_records(payload, days=8)
+
+    assert reputation._to_visit_number_list(records, 8) == [
+        10,
+        20,
+        30,
+        40,
+        50,
+        60,
+        70,
+        80,
+    ]
+
+
 def test_metrics_api_reads_known_endpoint_and_keeps_zero_days():
     driver = FakeApiDriver(_performance_payload([0, 1, 0, 2, 0, 3, 0, 4]))
 

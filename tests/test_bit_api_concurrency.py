@@ -140,6 +140,15 @@ def test_get_browser_id_by_name_accepts_internal_space_difference():
     assert bit_api.getBrowserIdByName("蒋学斌2", browsers=browsers) == "window-2"
 
 
+def test_get_browser_id_by_name_matches_parentheses_without_matching_new_window():
+    browsers = [
+        {"id": "old", "name": "跃马扬鞭（fti）"},
+        {"id": "new", "name": "跃马扬鞭（fti）新"},
+    ]
+
+    assert bit_api.getBrowserIdByName("跃马扬鞭fti", browsers=browsers) == "old"
+
+
 def test_get_browser_id_by_name_rejects_duplicate_compact_names():
     browsers = [
         {"id": "one", "name": "蒋学斌 2"},

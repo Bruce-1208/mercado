@@ -28,6 +28,46 @@ def parse_price(text):
     return str(number(match[1]))
 
 
+def parse_weight_evidence(text):
+    """Parse one explicit packaging-weight claim from quoted text.
+
+    The model may locate evidence, but code performs the unit conversion. A
+    range, conflicting values, or a missing unit is rejected before a value
+    can reach the ERP writeback path.
+    """
+    if not isinstance(text, str) or not text.strip():
+        return None
+    matches = re.findall(r"(?<![\d.])([0-9]+(?:\.[0-9]+)?)\s*(kg|公斤|千克|g|克|斤)(?![A-Za-z0-9])",
+                         text, re.I)
+    if not matches:
+        return None
+    converted = []
+    for raw, unit in matches:
+        value = Decimal(raw)
+        converted.append(value * (Decimal("1000") if unit.lower() in ("kg", "公斤", "千克")
+                                  else Decimal("500") if unit == "斤" else Decimal("1")))
+    # Equivalent bilingual forms such as “1kg（1000克）” are acceptable;
+    # different values in the same quote are not.
+    if any(value != converted[0] for value in converted[1:]):
+        return None
+    if converted[0] <= 0 or converted[0] > 1000000:
+        return None
+    return str(converted[0])
+
+
+def parse_price_evidence(text):
+    """Return a single explicit RMB price from quoted evidence."""
+    if not isinstance(text, str) or not text.strip():
+        return None
+    matches = re.findall(r"(?:[¥￥]\s*([0-9]+(?:\.[0-9]{1,2})?)|"
+                         r"([0-9]+(?:\.[0-9]{1,2})?)\s*(?:元|人民币))",
+                         text, re.I)
+    values = [Decimal(a or b) for a, b in matches]
+    if not values or any(value != values[0] for value in values[1:]):
+        return None
+    return parse_price(str(values[0]))
+
+
 def erp_value_equal(field, actual, expected):
     if ("" if actual is None else str(actual)) == ("" if expected is None else str(expected)):
         return True
@@ -205,6 +245,7 @@ class Models:
         prompt = ("从供货资料提取目标SKU单件含包装总重量和含全部变体加价的最终人民币单价。"
                   "不要把其他SKU、净重、整箱重量、起价、区间价、促销价或不含加价的基础价当结果。"
                   "缺失、无单位、无法确认属于目标SKU时输出null，不得估算。kg/公斤乘1000，斤乘500。"
+                  "weight_g字段必须填写换算后的克数，不是原始kg/斤数；程序会根据引用原文再次核对。"
                   "price只能是已确认包含变体加价的最终单件人民币价格。"
                   "只输出JSON：{\"weight_g\":数字字符串或null,\"weight_evidence\":\"逐字引用重量原文\","
                   "\"cost_price\":数字字符串或null,\"cost_evidence\":\"逐字引用最终单价原文\"}。\n"
@@ -220,11 +261,16 @@ class Models:
                 continue
             try:
                 raw = answer.get(field)
-                parsed = number(raw)
-                if field == "weight_g" and parsed <= 1000000:
-                    result[field] = str(parsed)
+                if field == "weight_g":
+                    parsed = number(raw)
+                    evidence_weight = parse_weight_evidence(evidence)
+                    if evidence_weight is not None and parsed == number(evidence_weight):
+                        result[field] = str(parsed)
                 elif field == "cost_price":
-                    result[field] = parse_price(str(raw))
+                    parsed = parse_price(str(raw))
+                    evidence_price = parse_price_evidence(evidence)
+                    if evidence_price is not None and parsed == evidence_price:
+                        result[field] = parsed
             except ValueError:
                 pass
         return result

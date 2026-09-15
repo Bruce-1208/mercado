@@ -840,10 +840,10 @@ def upsert_collection_items(
                     row["scrape_status"] = "partial"
                 values = (
                     int(task_id),
-                    str(row.get("source_item_id") or row.get("item_id") or ""),
-                    str(row.get("source_url") or ""),
-                    str(row.get("final_url") or ""),
-                    str(row.get("main_image_url") or ""),
+                    str(row.get("source_item_id") or row.get("item_id") or "")[:64],
+                    str(row.get("source_url") or "")[:1500],
+                    str(row.get("final_url") or "")[:1500],
+                    str(row.get("main_image_url") or "")[:1500],
                     str(row.get("title") or "")[:255],
                     row.get("price"),
                     str(row.get("currency_id") or ""),

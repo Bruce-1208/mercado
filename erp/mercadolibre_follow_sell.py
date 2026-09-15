@@ -664,11 +664,23 @@ def _english_category_prediction_query(value: Any) -> str:
 
 
 def _category_prediction_queries(source: Mapping[str, Any]) -> list[str]:
-    original = str(
-        source.get("_category_prediction_title") or source.get("title") or ""
-    ).strip()
-    translated = _english_category_prediction_query(original)
-    return list(dict.fromkeys(query for query in (original, translated) if query))
+    # Category names are much less noisy than long listing titles.  Include
+    # both as independent discovery candidates so a translated title cannot
+    # hide a valid category match (especially for short costume/accessory
+    # listings).
+    values = [
+        source.get("_category_prediction_title"),
+        source.get("category_name"),
+        source.get("title"),
+    ]
+    queries: list[str] = []
+    for value in values:
+        original = str(value or "").strip()
+        translated = _english_category_prediction_query(original)
+        for query in (original, translated):
+            if query and query not in queries:
+                queries.append(query)
+    return queries
 
 
 def _cached_user_profile(client: MercadoLibreClient) -> Mapping[str, Any]:
@@ -1464,6 +1476,13 @@ def _normalized_existing_user_product_id(value: Any) -> str:
     return f"U{match.group(1)}" if match else ""
 
 
+def _conflict_user_product_id(message: str) -> str:
+    """Extract a reusable siteless User Product id from a conflict response."""
+
+    match = re.search(r"\b(?:(?:MLM|MLB|CBT))?U(\d+)\b", str(message or ""), re.I)
+    return f"U{match.group(1)}" if match else ""
+
+
 def _mapped_user_product_site_item(mapping: Any, site_id: str) -> Mapping[str, Any] | None:
     rows = mapping if isinstance(mapping, list) else [mapping]
     for row in rows:
@@ -1475,6 +1494,30 @@ def _mapped_user_product_site_item(mapping: Any, site_id: str) -> Mapping[str, A
                 and str(site_item.get("site_id") or "").upper() == site_id
             ):
                 return site_item
+    return None
+
+
+def _site_item_error(result: Any, site_id: str) -> Mapping[str, Any] | None:
+    """Return a target-site error embedded in an otherwise HTTP-2xx result.
+
+    Global Selling APIs may respond with HTTP 200 while putting the actual
+    marketplace rejection inside ``site_items[].error``.  Treating that
+    response as a successful publication creates false successes and causes
+    the next site/account pass to create duplicate products.
+    """
+
+    if not isinstance(result, Mapping):
+        return None
+    target = str(site_id or "").strip().upper()
+    rows = result.get("site_items")
+    if not isinstance(rows, list):
+        return None
+    for row in rows:
+        if not isinstance(row, Mapping):
+            continue
+        row_site = str(row.get("site_id") or "").strip().upper()
+        if row_site == target and isinstance(row.get("error"), Mapping):
+            return row["error"]
     return None
 
 
@@ -1663,8 +1706,68 @@ def follow_sell(
                 # fall back because Mercado confirms no product was created.
                 endpoint = "/global/items"
                 result = client.request("POST", endpoint, json_body=payload)
+            elif (
+                is_user_product
+                and endpoint == "/global/user-products"
+                and exc.status_code == 400
+                and (
+                    "user_product.repeated.conflict" in str(exc)
+                    or "user product already exists" in str(exc).lower()
+                )
+            ):
+                # A prior request may have created the siteless product before
+                # the worker lost its response.  Reconcile that resource and
+                # add/check the target site instead of creating a duplicate.
+                conflict_id = _conflict_user_product_id(str(exc))
+                if not conflict_id:
+                    raise
+                mapping = _try_request(
+                    client,
+                    "GET",
+                    f"/marketplace/user-products/{conflict_id}/mapping",
+                )
+                existing_site_item = _mapped_user_product_site_item(
+                    mapping, destination_site_id
+                )
+                if existing_site_item is not None:
+                    publication_action = "already_available"
+                    result = {
+                        "parent_user_product_id": f"CBT{conflict_id}",
+                        "siteless_user_product_id": conflict_id,
+                        "site_items": [dict(existing_site_item)],
+                        "already_available": True,
+                        "reconciled_conflict": True,
+                    }
+                else:
+                    endpoint = f"/global/user-products/{conflict_id}"
+                    publication_action = "add_marketplace"
+                    result = client.request(
+                        "POST",
+                        endpoint,
+                        json_body={
+                            "sites_to_sell": [{
+                                "site_id": destination_site_id,
+                                "logistic_type": "remote",
+                                "net_proceeds": resolve_net_proceeds(
+                                    client, source, net_proceeds
+                                ),
+                            }]
+                        },
+                    )
             else:
                 raise
+        embedded_error = _site_item_error(result, destination_site_id)
+        if embedded_error is not None:
+            status = embedded_error.get("status")
+            try:
+                status_code = int(status) if status not in (None, "") else None
+            except (TypeError, ValueError):
+                status_code = None
+            raise MercadoLibreError(
+                f"目标站点 {destination_site_id} 刊登失败："
+                f"{json.dumps(dict(embedded_error), ensure_ascii=False)}",
+                status_code=status_code,
+            )
     timings["publish"] = time.perf_counter() - stage_started
     database_publish_recorded = False
     database_publish_error = None

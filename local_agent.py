@@ -18,6 +18,7 @@ import queue
 import random
 import runpy
 import shutil
+import signal
 import socket
 import subprocess
 import sys
@@ -33,7 +34,7 @@ from urllib.parse import urlsplit
 import requests
 
 
-AGENT_VERSION = "1.1.3"
+AGENT_VERSION = "1.1.4"
 DEFAULT_SERVER_URL = "https://zeshun.cc.cd"
 DEFAULT_POLL_SECONDS = 10.0
 DEFAULT_HEARTBEAT_SECONDS = 10.0
@@ -43,6 +44,21 @@ RATE_LIMIT_MIN_SECONDS = 60.0
 RETRY_MAX_SECONDS = 300.0
 AGENT_LOG_MAX_BYTES = 5 * 1024 * 1024
 AGENT_LOG_BACKUP_COUNT = 3
+
+
+def terminate_worker_tree(pid):
+    """Stop only the isolated worker and its descendants, including pipe owners."""
+    if os.name == "nt":
+        subprocess.run(
+            ["taskkill", "/PID", str(int(pid)), "/T", "/F"],
+            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+            creationflags=subprocess.CREATE_NO_WINDOW, timeout=5,
+        )
+    else:
+        try:
+            os.killpg(int(pid), signal.SIGKILL)
+        except ProcessLookupError:
+            pass
 
 
 class AgentRuntimeLog:
@@ -608,6 +624,7 @@ class LocalAgent:
             encoding="utf-8",
             errors="replace",
             bufsize=1,
+            start_new_session=os.name != "nt",
         )
         output_queue = queue.Queue()
 
@@ -679,21 +696,23 @@ class LocalAgent:
                     self.log(f"任务运行中，心跳暂时失败：{exc}；{delay:.0f} 秒后重试")
                 else:
                     heartbeat_failures = 0
-                    next_heartbeat_at = time.monotonic() + self.config.heartbeat_seconds
+                    next_heartbeat_at = time.monotonic() + min(
+                        1.0, self.config.heartbeat_seconds
+                    )
                     if not pending_logs:
                         self._rate_limit_failures = 0
                     cancel_ids = set(heartbeat.get("cancel_job_ids") or ())
                     if job_id in cancel_ids and not cancel_file.exists():
                         cancel_file.write_text("stop", encoding="utf-8")
                         cancel_started = now
-            if cancel_started and process.poll() is None and now - cancel_started > 45:
-                process.terminate()
+            if cancel_started and process.poll() is None:
+                terminate_worker_tree(process.pid)
+                try:
+                    process.wait(timeout=5)
+                except subprocess.TimeoutExpired:
+                    pass
             if process.poll() is not None and reader_done:
                 break
-        while pending_logs:
-            chunk = pending_logs[: 64 * 1024]
-            self.send_event_until_success(job_id, content=chunk)
-            pending_logs = pending_logs[len(chunk) :]
         return_code = int(process.wait())
         result = _load_json(result_file)
         stopped = cancel_file.exists() or return_code == 2
@@ -706,6 +725,10 @@ class LocalAgent:
             else f"本机业务进程异常退出：{return_code}"
         )
         final_message = message if stopped or return_code else result.get("message") or message
+        while pending_logs:
+            chunk = pending_logs[: 64 * 1024]
+            self.send_event_until_success(job_id, content=chunk)
+            pending_logs = pending_logs[len(chunk) :]
         self.log(f"任务 {job_id} 已结束：{final_message}")
         self.send_event_until_success(
             job_id,

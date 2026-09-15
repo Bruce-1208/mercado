@@ -185,13 +185,9 @@ print(result.database_path)
 
 默认生成 `mercado_api_listings.db`，主要数据表为 `mercado_listings`；变体位于 `mercado_listing_variations`，每次同步记录位于 `mercado_sync_runs`。重复运行会更新已有商品，最新一次已不存在的商品会保留并标记为 `is_current = 0`。
 
-## 美客多订单 API 打印
+## 美客多订单面单
 
-工作台“订单打印”已改为使用美客多官方 Orders 与 Shipment Labels API，不再打开 BitBrowser 或操作订单网页。页面支持选择订单开始/结束时间、多选已授权店铺和站点，任务完成后可下载一份合并 PDF。单次时间范围最多 31 天，页面默认最近 72 小时。
-
-每个店铺首次执行时，如果没有可靠的逐单打印状态，只读取最近 72 小时内可取得 Shipment ID 的订单；API 同步成功后建立追踪起点，后续仅处理没有成功打印记录的已付款订单。成功生成面单后会写入订单操作日志；已取消、已完成等永久不可打印运单会记录为跳过，网络或临时接口失败的订单会保留到下一次重试。
-
-服务端每 15 分钟同步最近订单后，会自动为启用自动打印以来的新订单生成面单；暂时尚未就绪的面单会在后续同步中继续重试。自动生成成功的订单会在操作日志中显示操作人为“系统自动打印”，订单打印页的最近记录和运行日志也会标出“系统自动打印”。首次启用默认只回看最近 15 分钟，避免重打历史订单；可通过 `MERCADO_ORDER_AUTO_PRINT_DISABLED=1` 关闭，或用 `MERCADO_ORDER_AUTO_PRINT_BOOTSTRAP_LOOKBACK_SECONDS` 调整首次回看秒数。
+独立的“订单打印”模块已移除。订单管理中的面单打印与订单同步后的自动生成面单继续可用，历史打印记录保留。可通过 `MERCADO_ORDER_AUTO_PRINT_DISABLED=1` 关闭自动生成面单。
 
 ## 美客多售后处理 API
 
