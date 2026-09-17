@@ -106,7 +106,7 @@ except Exception:
     )
 
 # 聊天记录入库接口；AI 与人工客服回复都会通过这个接口记录。
-CHAT_INFO_API_URL = "https://zeshun.cc.cd/api/v1/chat"
+CHAT_INFO_API_URL = "https://wuhanzeshun.com/api/v1/chat"
 
 # 美客多帮助中心入口，AI 客服悬浮窗通常挂在这些页面中。
 HELP_URL = "https://global-selling.mercadolibre.com/help"

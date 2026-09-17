@@ -35,7 +35,7 @@ import requests
 
 
 AGENT_VERSION = "1.2.0"
-DEFAULT_SERVER_URL = "https://zeshun.cc.cd"
+DEFAULT_SERVER_URL = "https://wuhanzeshun.com"
 DEFAULT_POLL_SECONDS = 10.0
 DEFAULT_HEARTBEAT_SECONDS = 10.0
 LOG_FLUSH_SECONDS = 2.0

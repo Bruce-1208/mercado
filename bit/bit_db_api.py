@@ -7,7 +7,7 @@ from bit.workbench_runtime import bootstrap_runtime
 
 RUNTIME_SETTINGS = bootstrap_runtime()
 
-DB_API_BASE_URL = os.environ.get("BIT_DB_API_BASE_URL", "https://zeshun.cc.cd").rstrip("/")
+DB_API_BASE_URL = os.environ.get("BIT_DB_API_BASE_URL", "https://wuhanzeshun.com").rstrip("/")
 DB_API_TOKEN = os.environ.get("BIT_DB_API_TOKEN", "")
 DB_API_SESSION = requests.Session()
 DB_API_SESSION.trust_env = False

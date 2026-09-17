@@ -91,7 +91,7 @@ Copy-Item .\workbench-client.example.json .\workbench-runtime.json
 
 首次使用只需：
 
-1. 登录 `https://zeshun.cc.cd/`，打开“自动化 AI 申诉”，按电脑系统点击“下载 Windows Agent”或“下载 macOS Agent”；
+1. 登录 `https://wuhanzeshun.com/`，打开“自动化 AI 申诉”，按电脑系统点击“下载 Windows Agent”或“下载 macOS Agent”；
 2. 在需要运行比特浏览器的电脑上解压下载包；
 3. Windows 双击 `start-agent.bat` 启动，或运行 `install-agent.ps1` 安装登录启动任务；macOS 双击 `start-agent.command` 启动，或运行 `install-agent.command` 安装 LaunchAgent；
 4. 保持比特浏览器客户端运行，回到控制台刷新“执行电脑”并选择该电脑。
@@ -106,7 +106,7 @@ Agent 1.1.0 起同时承接“自动化 AI 申诉”和“任务模块”的 dai
 
 ```powershell
 $env:BIT_RUNTIME_ROLE="client"
-$env:BIT_DB_API_BASE_URL="https://zeshun.cc.cd"
+$env:BIT_DB_API_BASE_URL="https://wuhanzeshun.com"
 python -m bit.bit_interface
 ```
 

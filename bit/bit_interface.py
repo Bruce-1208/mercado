@@ -250,6 +250,11 @@ def _configured_local_executor_origins():
         os.environ.get("BIT_LOCAL_EXECUTOR_ALLOWED_ORIGINS") or ""
     ).strip()
     origins = {
+        "https://wuhanzeshun.com",
+        "http://wuhanzeshun.com",
+        "https://www.wuhanzeshun.com",
+        "http://www.wuhanzeshun.com",
+        # Keep the previous console origin during the staged migration.
         "https://zeshun.cc.cd",
         "http://zeshun.cc.cd",
     }
@@ -1652,7 +1657,11 @@ def _verify_local_executor_token_with_server(token):
             or parsed.fragment
         ):
             raise ValueError("invalid server address")
-        if parsed.scheme == "http" and parsed.netloc == "zeshun.cc.cd":
+        if parsed.scheme == "http" and parsed.netloc in {
+            "wuhanzeshun.com",
+            "www.wuhanzeshun.com",
+            "zeshun.cc.cd",
+        }:
             base_url = "https://" + base_url[len("http://") :]
         elif parsed.scheme != "https" and not (
             parsed.scheme == "http" and parsed.hostname in ("127.0.0.1", "::1", "localhost")
