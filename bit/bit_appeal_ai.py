@@ -477,10 +477,14 @@ def close_current_tab_keep_browser(driver, name="", site=""):
         handles = list(driver.window_handles)
         current = driver.current_window_handle
         if len(handles) <= 1:
-            driver.execute_script("window.open('about:blank', '_blank');")
-            time.sleep(0.5)
-            handles = list(driver.window_handles)
-            driver.switch_to.window(current)
+            # Chromium 关闭最后一个标签页时会连同整个窗口退出。旧实现会先
+            # window.open 一个空白页再关闭当前页；一旦 renderer 卡死导致
+            # driver.close() 超时，新建的空白页就会遗留并在后续轮次恢复。
+            # 直接把唯一标签导航为空白页即可释放业务页资源，而且不会增加
+            # window handle。
+            driver.get("about:blank")
+            print(f"{get_now_time()} {name}{site} 已清空当前唯一标签页<br>")
+            return True
 
         driver.close()
         remaining = [handle for handle in driver.window_handles if handle != current]
@@ -490,6 +494,18 @@ def close_current_tab_keep_browser(driver, name="", site=""):
         return True
     except Exception as e:
         print(f"{get_now_time()} {name}{site} 关闭当前标签页失败：{e}<br>")
+        # 即使关闭动作失败，也尽量卸载占用大量内存的业务页。这里绝不再
+        # 创建新标签，避免失败路径本身继续制造标签页。
+        try:
+            driver.switch_to.default_content()
+            driver.get("about:blank")
+            print(f"{get_now_time()} {name}{site} 关闭失败后已清空当前标签页<br>")
+            return True
+        except Exception as fallback_error:
+            print(
+                f"{get_now_time()} {name}{site} 关闭失败后清空标签页仍失败："
+                f"{fallback_error}<br>"
+            )
         return False
 
 

@@ -34,7 +34,7 @@ def _windows_start_script(has_executable):
         else 'py -3 -c "import requests" 2>nul || py -3 -m pip install -r "%~dp0requirements-agent.txt"\n'
     )
     command = (
-        '"%~dp0MercadoLocalAgent.exe" --config "%~dp0local-agent.json"'
+        'start "" "%~dp0MercadoLocalAgent.exe" --config "%~dp0local-agent.json"'
         if has_executable
         else 'py -3 "%~dp0local_agent.py" --config "%~dp0local-agent.json"'
     )
@@ -47,28 +47,46 @@ if errorlevel 1 pause
 
 
 def _windows_install_script(has_executable):
-    executable = (
-        'Join-Path $agentDir "MercadoLocalAgent.exe"'
+    executable_setup = (
+        '$executable = Join-Path $agentDir "MercadoLocalAgent.exe"'
         if has_executable
-        else '(Get-Command py.exe -ErrorAction Stop).Source'
+        else '''$python = (& py.exe -3 -c "import sys; print(sys.executable)").Trim()
+$executable = Join-Path (Split-Path -Parent $python) "pythonw.exe"
+if (-not (Test-Path -LiteralPath $executable)) {
+    throw "未找到 pythonw.exe：$executable"
+}'''
     )
     argument_setup = (
         '$arguments = "--config ```"$agentDir\\local-agent.json```""'
         if has_executable
-        else '$arguments = "-3 ```"$agentDir\\local_agent.py```" --config ```"$agentDir\\local-agent.json```""'
+        else '$arguments = "```"$agentDir\\local_agent.py```" --config ```"$agentDir\\local-agent.json```""'
     ).replace("```", "`")
     return f"""$ErrorActionPreference = "Stop"
 $agentDir = Split-Path -Parent $MyInvocation.MyCommand.Path
-$executable = {executable}
-{"" if has_executable else "& $executable -3 -m pip install -r (Join-Path $agentDir 'requirements-agent.txt')"}
+{executable_setup}
+{"" if has_executable else "& py.exe -3 -m pip install -r (Join-Path $agentDir 'requirements-agent.txt')"}
 {argument_setup}
-$action = New-ScheduledTaskAction -Execute $executable -Argument $arguments
-$trigger = New-ScheduledTaskTrigger -AtLogOn
+$currentUser = [System.Security.Principal.WindowsIdentity]::GetCurrent().Name
+$action = New-ScheduledTaskAction -Execute $executable -Argument $arguments -WorkingDirectory $agentDir
+$trigger = New-ScheduledTaskTrigger -AtLogOn -User $currentUser
+$principal = New-ScheduledTaskPrincipal -UserId $currentUser -LogonType Interactive -RunLevel Limited
 $settings = New-ScheduledTaskSettingsSet -RestartCount 5 -RestartInterval (New-TimeSpan -Minutes 1) -ExecutionTimeLimit (New-TimeSpan -Days 3650)
-Register-ScheduledTask -TaskName "ZeshunMercadoLocalAgent" -Action $action -Trigger $trigger -Settings $settings -Description "泽顺本机比特浏览器自动化 Agent" -Force | Out-Null
+Register-ScheduledTask -TaskName "ZeshunMercadoLocalAgent" -Action $action -Trigger $trigger -Principal $principal -Settings $settings -Description "泽顺本机比特浏览器自动化 Agent" -Force | Out-Null
 Start-ScheduledTask -TaskName "ZeshunMercadoLocalAgent"
 Write-Host "泽顺本机 Agent 已安装并启动。" -ForegroundColor Green
 """
+
+
+def _windows_uninstall_script():
+    return '''$ErrorActionPreference = "Stop"
+$taskName = "ZeshunMercadoLocalAgent"
+$task = Get-ScheduledTask -TaskName $taskName -ErrorAction SilentlyContinue
+if ($null -ne $task) {
+    Stop-ScheduledTask -TaskName $taskName -ErrorAction SilentlyContinue
+    Unregister-ScheduledTask -TaskName $taskName -Confirm:$false
+}
+Write-Host "泽顺本机 Agent 登录启动任务已移除。" -ForegroundColor Green
+'''
 
 
 def _macos_run_script(has_executable):
@@ -228,6 +246,7 @@ def _build_windows_archive(archive, project_root, executable_path):
         _writestr(archive, "requirements-agent.txt", "requests>=2.31,<3\n")
     _writestr(archive, "start-agent.bat", _windows_start_script(has_executable))
     _writestr(archive, "install-agent.ps1", _windows_install_script(has_executable))
+    _writestr(archive, "uninstall-agent.ps1", _windows_uninstall_script())
 
 
 def _build_macos_archive(archive, project_root, executable_path):
@@ -261,13 +280,14 @@ def _readme(target_platform, has_executable):
     )
     if target_platform == "windows":
         steps = """1. 解压本安装包到固定目录，不要直接在压缩包内运行。
-2. 双击 start-agent.bat 可立即启动；运行状态窗口会实时显示本机时间和日志，关闭按钮仅将窗口最小化。
-3. 右键 install-agent.ps1，选择“使用 PowerShell 运行”，可安装为登录后自动启动任务。"""
-        remaining_steps = """4. 第一次联网会自动注册，并从泽顺控制台下载经过哈希校验的最新业务代码。
-5. 控制台出现这台电脑的名称后，即可选择它执行本机任务。"""
+2. 双击 start-agent.bat 可立即启动；正式 EXE 只显示运行状态窗口，不会常驻 CMD 窗口；关闭窗口并确认后会停止当前任务并退出 Agent。
+3. 右键 install-agent.ps1，选择“使用 PowerShell 运行”，可安装为当前用户登录后自动启动任务。
+4. 如需取消登录启动，运行 uninstall-agent.ps1。"""
+        remaining_steps = """5. 第一次联网会自动注册，并从泽顺控制台下载经过哈希校验的最新业务代码。
+6. 控制台出现这台电脑的名称后，即可选择它执行本机任务。"""
     else:
         steps = """1. 解压本安装包到固定目录，不要直接在压缩包内运行。
-2. 双击 start-agent.command 可立即启动；运行状态窗口会实时显示本机时间和日志，关闭按钮仅将窗口最小化。如果 macOS 拦截，请在“系统设置 → 隐私与安全性”中允许打开。
+2. 双击 start-agent.command 可立即启动；运行状态窗口会实时显示本机时间和日志，关闭窗口并确认后会停止当前任务并退出 Agent。如果 macOS 拦截，请在“系统设置 → 隐私与安全性”中允许打开。
 3. 关闭手动启动的 Agent 后，双击 install-agent.command，可安装为登录后自动启动的 LaunchAgent。
 4. 如需取消登录启动，双击 uninstall-agent.command。"""
         remaining_steps = """5. 第一次联网会自动注册，并从泽顺控制台下载经过哈希校验的最新业务代码。

@@ -73,6 +73,65 @@ def test_agent_cancel_is_reported_to_claimed_agent(tmp_path):
     assert store.get_job("appeal-cancel-job")["status"] == "stopping"
 
 
+def test_new_agent_session_releases_crashed_job_and_claims_next(tmp_path):
+    store = LocalAgentStore(tmp_path / "hub.sqlite3")
+    store.heartbeat(
+        "agent-restart-pc", name="重启测试", session_id="session-old", now=100
+    )
+    store.enqueue_job(
+        "daily-crashed-job", "agent-restart-pc", "daily_task", {}, now=101
+    )
+    store.claim_job(
+        "agent-restart-pc", session_id="session-old", now=102
+    )
+    store.enqueue_job(
+        "daily-next-job", "agent-restart-pc", "daily_task", {}, now=103
+    )
+
+    store.heartbeat(
+        "agent-restart-pc", name="重启测试", session_id="session-new", now=104
+    )
+    claimed = store.claim_job(
+        "agent-restart-pc", session_id="session-new", now=105
+    )
+
+    crashed = store.get_job("daily-crashed-job")
+    assert crashed["status"] == "error"
+    assert crashed["finished_at"] == 104
+    assert claimed["job_id"] == "daily-next-job"
+
+
+def test_expired_legacy_job_lease_does_not_block_queue_forever(tmp_path):
+    store = LocalAgentStore(tmp_path / "hub.sqlite3")
+    store.heartbeat("agent-lease-pc", name="租约测试", now=100)
+    store.enqueue_job("daily-old-job", "agent-lease-pc", "daily_task", {}, now=101)
+    store.claim_job("agent-lease-pc", lease_seconds=60, now=102)
+    store.enqueue_job("daily-new-job", "agent-lease-pc", "daily_task", {}, now=103)
+
+    claimed = store.claim_job("agent-lease-pc", lease_seconds=60, now=163)
+
+    assert store.get_job("daily-old-job")["status"] == "error"
+    assert claimed["job_id"] == "daily-new-job"
+
+
+def test_reaper_keeps_legacy_job_while_old_agent_is_still_online(tmp_path):
+    store = LocalAgentStore(tmp_path / "hub.sqlite3")
+    store.heartbeat("agent-legacy-pc", name="旧版 Agent", now=100)
+    store.enqueue_job("daily-legacy-job", "agent-legacy-pc", "daily_task", {}, now=101)
+    store.claim_job("agent-legacy-pc", now=102)
+    with store._connect() as connection:
+        connection.execute(
+            "UPDATE local_agent_jobs SET lease_expires_at = NULL WHERE job_id = ?",
+            ("daily-legacy-job",),
+        )
+    store.heartbeat("agent-legacy-pc", name="旧版 Agent", now=1000)
+
+    assert store.reap_expired_jobs(now=1001, lease_seconds=60) == 0
+    assert store.get_job("daily-legacy-job")["status"] == "running"
+    assert store.reap_expired_jobs(now=1061, lease_seconds=60) == 1
+    assert store.get_job("daily-legacy-job")["status"] == "error"
+
+
 def test_claimed_deepseek_token_is_delivered_once_then_redacted(tmp_path):
     store = LocalAgentStore(tmp_path / "hub.sqlite3")
     store.heartbeat("agent-secret-pc", name="密钥测试", now=100)
@@ -151,6 +210,7 @@ def test_download_package_embeds_server_and_enrollment_token(monkeypatch, tmp_pa
         assert config["enrollment_token"] == "one-time-enrollment"
         assert config["poll_seconds"] == 10
         assert "install-agent.ps1" in archive.namelist()
+        assert "uninstall-agent.ps1" in archive.namelist()
 
 
 def test_download_package_uses_configured_windows_executable(monkeypatch, tmp_path):
@@ -169,6 +229,11 @@ def test_download_package_uses_configured_windows_executable(monkeypatch, tmp_pa
     with zipfile.ZipFile(io.BytesIO(package["content"])) as archive:
         assert archive.read("MercadoLocalAgent.exe") == b"windows-agent"
         assert "local_agent.py" not in archive.namelist()
+        start_script = archive.read("start-agent.bat").decode("utf-8")
+        assert 'start "" "%~dp0MercadoLocalAgent.exe"' in start_script
+        install_script = archive.read("install-agent.ps1").decode("utf-8")
+        assert "-LogonType Interactive" in install_script
+        assert "-AtLogOn -User $currentUser" in install_script
 
 
 def test_download_package_supports_macos_source_install(monkeypatch, tmp_path):

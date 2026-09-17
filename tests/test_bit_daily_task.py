@@ -157,6 +157,33 @@ def test_loop_task_stops_before_starting_next_round(monkeypatch):
     assert result == {"execution_counts": {}}
 
 
+def test_loop_waits_full_interval_after_round_finishes(monkeypatch):
+    waits = []
+
+    class StopAfterFirstWait:
+        def is_set(self):
+            return False
+
+        def wait(self, seconds):
+            waits.append(seconds)
+            return True
+
+    monkeypatch.setattr(
+        bit_daily_task,
+        "run_ai_appeal_once",
+        lambda *_args, **_kwargs: [],
+    )
+
+    result = bit_daily_task._loop_ai_appeal_locked(
+        "侵权",
+        round_interval=180,
+        stop_event=StopAfterFirstWait(),
+    )
+
+    assert result == {"execution_counts": {}}
+    assert waits == [180]
+
+
 def test_daily_task_worker_writes_output_to_shared_log(monkeypatch, tmp_path):
     log_path = tmp_path / "daily-task.log"
 
@@ -1026,6 +1053,97 @@ def test_appeal_one_shop_always_closes_browser_window(monkeypatch):
     lease.release.assert_called_once_with()
 
 
+def test_appeal_one_shop_closes_browser_when_shop_executor_crashes(monkeypatch):
+    lease = mock.Mock()
+    lease.acquire.return_value = True
+    monkeypatch.setattr(
+        bit_daily_task.bit_appeal_ai,
+        "get_window_id_by_shop_name",
+        lambda _name: "window-id",
+    )
+    monkeypatch.setattr(bit_daily_task, "create_window_lease", lambda *args, **kwargs: lease)
+
+    def crash_shop_executor(*_args, **_kwargs):
+        raise RuntimeError("shop executor crashed")
+
+    monkeypatch.setattr(
+        bit_daily_task,
+        "_appeal_one_shop_locked",
+        crash_shop_executor,
+    )
+    close_browser = mock.Mock(return_value={"success": True})
+    monkeypatch.setattr(bit_daily_task, "closeBrowser", close_browser)
+
+    with pytest.raises(RuntimeError, match="shop executor crashed"):
+        bit_daily_task.appeal_one_shop(_single_site_shop_plan())
+
+    close_browser.assert_called_once_with("window-id", lease=lease)
+    lease.release.assert_called_once_with()
+
+
+def test_browser_close_retries_api_level_failure(monkeypatch):
+    results = [
+        {"success": False, "msg": "浏览器正在打开中"},
+        {"success": False, "msg": "浏览器正在打开中"},
+        {"success": True, "data": "操作成功"},
+    ]
+    calls = []
+    waits = []
+
+    monkeypatch.setattr(
+        bit_daily_task,
+        "closeBrowser",
+        lambda window_id, **kwargs: calls.append((window_id, kwargs))
+        or results.pop(0),
+    )
+    monkeypatch.setattr(
+        bit_daily_task.time,
+        "sleep",
+        lambda seconds: waits.append(seconds),
+    )
+
+    result = bit_daily_task._close_browser_with_retry(
+        "window-id",
+        "lease",
+        attempts=4,
+        retry_seconds=5,
+    )
+
+    assert result["success"] is True
+    assert len(calls) == 3
+    assert waits == [5, 5]
+
+
+def test_failed_final_browser_close_keeps_window_registered(monkeypatch):
+    lease = mock.Mock()
+    lease.acquire.return_value = True
+    owned_window_ids = {}
+    monkeypatch.setattr(
+        bit_daily_task.bit_appeal_ai,
+        "get_window_id_by_shop_name",
+        lambda _name: "window-id",
+    )
+    monkeypatch.setattr(bit_daily_task, "create_window_lease", lambda *a, **k: lease)
+    monkeypatch.setattr(
+        bit_daily_task,
+        "_appeal_one_shop_locked",
+        lambda *args, **kwargs: {"name": "测试店铺", "results": []},
+    )
+    monkeypatch.setattr(
+        bit_daily_task,
+        "_close_ai_appeal_browser",
+        lambda *_args, **_kwargs: {"success": False, "msg": "浏览器正在打开中"},
+    )
+
+    bit_daily_task.appeal_one_shop(
+        _single_site_shop_plan(),
+        owned_window_ids=owned_window_ids,
+    )
+
+    assert owned_window_ids == {"window-id": "测试店铺"}
+    lease.release.assert_called_once_with()
+
+
 def test_appeal_one_shop_tracks_owned_window_and_task_id(monkeypatch):
     lease = mock.Mock()
     lease.acquire.return_value = True
@@ -1278,6 +1396,66 @@ def test_parallel_appeal_shop_failure_does_not_stop_other_shops(monkeypatch):
     ]
 
 
+def test_normal_round_retries_windows_left_registered_by_workers(monkeypatch):
+    cleanup_calls = []
+
+    class FakeFuture:
+        def result(self):
+            return {"name": "测试店铺", "results": []}
+
+        def cancel(self):
+            return False
+
+    class FakeExecutor:
+        def __init__(self, max_workers):
+            self.max_workers = max_workers
+
+        def submit(self, *_args):
+            return FakeFuture()
+
+        def shutdown(self, **_kwargs):
+            return None
+
+    plan = [{"name": "测试店铺", "total": 1, "sites": []}]
+    owned_window_ids = {"window-1": "测试店铺"}
+    monkeypatch.setattr(bit_daily_task, "build_appeal_plan", lambda *a, **k: plan)
+    monkeypatch.setattr(
+        bit_daily_task,
+        "_resolve_appeal_plan_window_ids",
+        lambda value, **_kwargs: value,
+    )
+    monkeypatch.setattr(bit_daily_task, "ProcessPoolExecutor", FakeExecutor)
+    monkeypatch.setattr(
+        bit_daily_task,
+        "wait",
+        lambda pending, **_kwargs: (set(pending), set()),
+    )
+    monkeypatch.setattr(
+        bit_daily_task,
+        "_force_close_appeal_plan_windows",
+        lambda value, **kwargs: cleanup_calls.append((value, kwargs)),
+    )
+
+    bit_daily_task._run_ai_appeal_once_locked(
+        "侵权",
+        max_workers=1,
+        task_id="task-a",
+        owned_window_ids=owned_window_ids,
+    )
+
+    assert cleanup_calls == [
+        (
+            plan,
+            {
+                "log_path": None,
+                "task_id": "task-a",
+                "owned_window_ids": owned_window_ids,
+                "background": False,
+            },
+        )
+    ]
+
+
 def test_stop_request_terminates_appeal_pool_without_waiting(monkeypatch):
     stop_event = threading.Event()
     terminated = []
@@ -1464,7 +1642,8 @@ def test_stop_cleanup_never_closes_window_owned_by_another_task(monkeypatch, tmp
     monkeypatch.setattr(
         bit_daily_task,
         "closeBrowser",
-        lambda window_id, **kwargs: close_calls.append((window_id, kwargs)),
+        lambda window_id, **kwargs: close_calls.append((window_id, kwargs))
+        or {"success": True},
     )
     monkeypatch.setattr(bit_daily_task.threading, "Thread", ImmediateThread)
     monkeypatch.setattr(
@@ -1717,6 +1896,33 @@ def test_shop_executor_closes_browser_before_rate_limit_retry(monkeypatch):
     assert close_calls == [("window-id", lease)]
     assert result["results"][0]["result"] == "完成"
     assert result["results"][0]["rate_limit_retries"] == 1
+
+
+def test_shop_executor_stops_retrying_when_browser_cannot_close(monkeypatch):
+    appeal_calls = []
+    monkeypatch.setattr(
+        bit_daily_task.bit_appeal_ai,
+        "shensu",
+        lambda *args, **kwargs: appeal_calls.append((args, kwargs))
+        or {"execution_status": "failed", "retryable": True, "sent": False},
+    )
+    monkeypatch.setattr(
+        bit_daily_task,
+        "_close_ai_appeal_browser",
+        lambda *_args, **_kwargs: {"success": False, "msg": "浏览器正在打开中"},
+    )
+
+    result = bit_daily_task._appeal_one_shop_locked(
+        _single_site_shop_plan(),
+        "window-id",
+        object(),
+        site_pause=0,
+        site_retry_attempts=2,
+        site_retry_seconds=0,
+    )
+
+    assert len(appeal_calls) == 1
+    assert result["results"][0]["cleanup_failed"] is True
 
 
 def test_shop_executor_closes_browser_on_unexpected_appeal_error(monkeypatch):

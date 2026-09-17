@@ -1,0 +1,172 @@
+from pathlib import Path
+
+import pytest
+
+from bit import bit_ad_analysis as analysis
+from mercado_api.client import MercadoLibreClient
+
+
+class FakeAdsClient:
+    def get_product_ads_advertisers(self):
+        return [{
+            "advertiser_id": 17,
+            "site_id": "MLM",
+            "advertiser_name": "Seller Ads",
+            "account_name": "MLM - Seller",
+        }]
+
+    def search_product_ads_campaigns(self, site, advertiser, *, limit, offset):
+        assert (site, advertiser) == ("MLM", 17)
+        rows = [{
+            "id": 41,
+            "name": "主推活动",
+            "status": "active",
+            "budget": 500,
+            "currency_id": "MXN",
+        }] if offset == 0 else []
+        return {"results": rows, "paging": {"total": 1}}
+
+    def search_product_ads_ad_groups_metrics(self, site, advertiser, **params):
+        assert (site, advertiser) == ("MLM", 17)
+        assert params["campaign_id"] == 41
+        assert params["date_from"] == "2026-09-01"
+        assert params["date_to"] == "2026-09-17"
+        if params["offset"]:
+            return {"results": [], "paging": {"total": 2}}
+        return {
+            "results": [
+                {
+                    "id": 31,
+                    "campaign_id": 41,
+                    "ad_group_type": "ITEM",
+                    "ad_group_external_id": "MLM123",
+                    "title": "传统商品",
+                    "status": "ACTIVE",
+                    "metrics": {"cost": 20, "total_amount": 100, "clicks": 10, "prints": 1000, "units_quantity": 2},
+                },
+                {
+                    "id": 32,
+                    "campaign_id": 41,
+                    "ad_group_type": "FAMILY",
+                    "ad_group_external_id": "family-1",
+                    "title": "多变体商品",
+                    "status": "ACTIVE",
+                    "metrics": {"cost": 30, "total_amount": 90, "clicks": 15, "prints": 500, "units_quantity": 3},
+                },
+            ],
+            "paging": {"total": 2},
+            "metrics_summary": {"cost": 50, "total_amount": 190, "clicks": 25, "prints": 1500, "units_quantity": 5},
+        }
+
+    def list_product_ads_ad_group_ads(self, site, group, **params):
+        assert (site, group) == ("MLM", 32)
+        return {
+            "results": [{
+                "item_id": "MLM456",
+                "title": "蓝色变体",
+                "status": "active",
+                "metrics": {"cost": 30, "total_amount": 90, "clicks": 15, "prints": 500, "units_quantity": 3},
+            }],
+            "paging": {"total": 1},
+        }
+
+
+def _install_token_fakes(monkeypatch):
+    monkeypatch.setattr(
+        "bit.bit_mysql.list_mercado_store_tokens",
+        lambda: {"rows": [{"id": 7, "enabled": True}]},
+    )
+    monkeypatch.setattr(
+        "bit.bit_mysql.get_mercado_store_token",
+        lambda token_id: {"id": token_id, "display_name": "测试店铺", "access_token": "token"},
+    )
+    monkeypatch.setattr(
+        "bit.bit_store_link_sync._client_and_token",
+        lambda token: (FakeAdsClient(), token),
+    )
+    analysis._cache.clear()
+
+
+def test_collect_ad_analysis_includes_accounts_item_and_family_links(monkeypatch):
+    _install_token_fakes(monkeypatch)
+
+    result = analysis.collect_ad_analysis(
+        date_from="2026-09-01", date_to="2026-09-17", force=True
+    )
+
+    assert result["summary"]["account_count"] == 1
+    assert result["summary"]["link_count"] == 2
+    assert result["accounts"][0]["metrics"]["cost"] == 50
+    assert result["accounts"][0]["metrics"]["roas"] == pytest.approx(3.8)
+    assert {row["item_id"] for row in result["links"]} == {"MLM123", "MLM456"}
+    family = next(row for row in result["links"] if row["item_id"] == "MLM456")
+    assert family["ad_group_type"] == "FAMILY"
+    assert family["campaign_name"] == "主推活动"
+    assert family["permalink"].endswith("/MLM-456-_JM")
+    assert result["summary"]["currencies"][0]["currency_id"] == "MXN"
+
+
+def test_collect_ad_analysis_respects_explicit_empty_token_scope(monkeypatch):
+    _install_token_fakes(monkeypatch)
+
+    result = analysis.collect_ad_analysis(
+        date_from="2026-09-01", date_to="2026-09-17", token_ids=[], force=True
+    )
+
+    assert result["accounts"] == []
+    assert result["links"] == []
+
+
+def test_ad_analysis_rejects_more_than_ninety_days():
+    with pytest.raises(ValueError, match="90 天"):
+        analysis.collect_ad_analysis(date_from="2026-01-01", date_to="2026-04-01")
+
+
+def test_product_ads_metric_client_uses_current_ad_group_endpoints(monkeypatch):
+    calls = []
+    client = MercadoLibreClient("token")
+    monkeypatch.setattr(
+        client,
+        "request",
+        lambda method, path, **kwargs: calls.append((method, path, kwargs)) or {"results": []},
+    )
+
+    client.search_product_ads_ad_groups_metrics(
+        "MLM", 17, date_from="2026-09-01", date_to="2026-09-17",
+        metrics=("clicks", "cost"), limit=800, offset=0,
+    )
+    client.list_product_ads_ad_group_ads(
+        "MLM", 31, date_from="2026-09-01", date_to="2026-09-17",
+        metrics=("clicks", "cost"), limit=50, offset=0,
+    )
+
+    assert calls[0][1].endswith("/advertisers/17/product_ads/ad_groups/search")
+    assert calls[0][2]["params"]["metrics_summary"] == "true"
+    assert calls[1][1].endswith("/product_ads/ad_groups/31/ads")
+    assert calls[1][2]["params"]["metrics"] == "clicks,cost"
+
+
+def test_ad_group_metric_client_can_filter_one_campaign(monkeypatch):
+    calls = []
+    client = MercadoLibreClient("token")
+    monkeypatch.setattr(
+        client,
+        "request",
+        lambda method, path, **kwargs: calls.append(kwargs) or {"results": []},
+    )
+
+    client.search_product_ads_ad_groups_metrics(
+        "MLM", 17, date_from="2026-09-01", date_to="2026-09-17",
+        metrics=("clicks",), campaign_id=41,
+    )
+
+    assert calls[0]["params"]["filters[campaign_id]"] == 41
+
+
+def test_ad_analysis_module_is_present_in_workbench_template():
+    source = Path("bit/templates/index.html").read_text(encoding="utf-8")
+    assert 'data-tab="ad-analysis" data-icon="◎" data-permission="ad_analysis.view"' in source
+    assert 'id="tab-ad-analysis"' in source
+    assert 'id="ad-analysis-account-body"' in source
+    assert 'id="ad-analysis-link-body"' in source
+    assert "loadAdAnalysis" in source

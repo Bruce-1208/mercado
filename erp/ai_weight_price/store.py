@@ -82,6 +82,22 @@ class Store:
             db.execute("INSERT OR REPLACE INTO runs VALUES(?,?)", (run["run_id"], json.dumps(run, ensure_ascii=False)))
         self.set_state("latest_run_id", run["run_id"])
 
+    def clear_run(self, run_id):
+        """Remove one execution batch without erasing reusable product history.
+
+        Product rows, merchant de-duplication records and the Edge login binding
+        deliberately survive.  They can belong to older batches or represent
+        external actions that must not be forgotten merely because the current
+        batch is dismissed from the UI.
+        """
+        if not run_id:
+            return {"run_items": 0}
+        with self.connect() as db:
+            removed = db.execute("DELETE FROM run_items WHERE run_id=?", (run_id,)).rowcount
+            db.execute("DELETE FROM runs WHERE run_id=?", (run_id,))
+        self.dirty = True
+        return {"run_items": removed}
+
     def record_run_item(self, run_id, key, **details):
         if not run_id:
             return
@@ -210,6 +226,21 @@ class Store:
             where = " WHERE erp_goods_id IN (SELECT erp_goods_id FROM collection_items WHERE scope=?)" if scope is not None else ""
             rows = db.execute("SELECT status,COUNT(*) n FROM tasks" + where + " GROUP BY status", (scope,) if scope is not None else ()).fetchall()
         return {**dict.fromkeys(STATUSES, 0), **{r["status"]: r["n"] for r in rows}}
+
+    def run_counts(self, run_id):
+        if not run_id:
+            return dict.fromkeys(STATUSES, 0)
+        with self.connect() as db:
+            has_items = db.execute("SELECT 1 FROM run_items WHERE run_id=? LIMIT 1", (run_id,)).fetchone()
+            if not has_items:
+                # A probe or a restored legacy run may not have batch rows yet;
+                # let the UI fall back to the historical totals until the
+                # first item is recorded.
+                return None
+            rows = db.execute("SELECT t.status,COUNT(*) n FROM tasks t JOIN run_items ri "
+                              "ON ri.erp_goods_id=t.erp_goods_id WHERE ri.run_id=? GROUP BY t.status",
+                              (run_id,)).fetchall()
+        return {**dict.fromkeys(STATUSES, 0), **{row["status"]: row["n"] for row in rows}}
 
     def reset_scope(self, scope):
         with self.connect() as db:

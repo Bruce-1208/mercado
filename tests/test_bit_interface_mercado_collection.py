@@ -418,7 +418,7 @@ def test_workbench_splits_collection_and_product_list_into_separate_modules():
     assert b'/api/mercado-collection/bulk-edit' in response.data
     assert "修改产品".encode("utf-8") in response.data
     assert "采集原价".encode("utf-8") in response.data
-    assert b".market-product-table th:nth-child(5)" in response.data
+    assert b".market-product-table th:nth-child(7)" in response.data
     assert b"min-width: 520px" in response.data
     assert b"-webkit-line-clamp: unset" in response.data
     assert b"openMercadoProductEditor" in response.data
@@ -1217,6 +1217,22 @@ def test_product_list_filters_and_review_status_endpoint():
     assert response.status_code == 200
     assert response.get_json()["data"]["changed"] == 2
     update_review.assert_called_once_with([9, 10], "approved")
+
+
+def test_product_list_supports_zying_category_and_developer_filters():
+    client = _client()
+    rows = {"total": 0, "rows": []}
+    with patch.object(
+        workbench, "db_list_mercado_product_items", return_value=rows
+    ) as list_products:
+        response = client.get(
+            "/api/mercado-products?zying_category=圆佑同步%2F家电类"
+            "&product_developer_id=121658"
+        )
+
+    assert response.status_code == 200
+    assert list_products.call_args.kwargs["zying_category"] == "圆佑同步/家电类"
+    assert list_products.call_args.kwargs["product_developer_id"] == "121658"
 
 
 def test_product_content_update_endpoint():

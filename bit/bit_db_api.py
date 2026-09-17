@@ -103,6 +103,32 @@ def advertise_mercado_store_link(link_id, *, budget, roas_target, campaign_name=
     )
 
 
+def get_mercado_ad_analysis(*, date_from="", date_to="", token_ids=None, force=False):
+    params = {
+        "date_from": str(date_from or "").strip(),
+        "date_to": str(date_to or "").strip(),
+        "force": "1" if force else "0",
+    }
+    if token_ids is not None:
+        params["token_ids"] = [
+            int(value) for value in token_ids or [] if int(value or 0) > 0
+        ]
+    if DB_MODE == "mysql":
+        from bit.bit_ad_analysis import collect_ad_analysis
+
+        return collect_ad_analysis(
+            date_from=params["date_from"],
+            date_to=params["date_to"],
+            token_ids=params.get("token_ids"),
+            force=bool(force),
+        )
+    remote_params = dict(params)
+    if token_ids is not None and not remote_params.get("token_ids"):
+        # Preserve an explicitly empty member scope through query serialization.
+        remote_params["token_ids"] = [""]
+    return _request("GET", "/api/db/ad-analysis", params=remote_params, timeout=240)
+
+
 def insert_task_record(record_list):
     if DB_MODE == "mysql":
         return _local_call("insert_task_record", record_list)
@@ -384,6 +410,24 @@ def upsert_zying_products_to_products(product_list):
     )
 
 
+def sync_zying_product_developers(developers):
+    rows = [dict(row or {}) for row in developers or () if isinstance(row, dict)]
+    if DB_MODE == "mysql":
+        from erp.mercadolibre_collection_store import (
+            sync_zying_product_developers as sync_product_list,
+        )
+
+        return {
+            "zying_products": int(_local_call("sync_zying_product_developers", rows) or 0),
+            "product_list": int(sync_product_list(rows) or 0),
+        }
+    return _request(
+        "POST",
+        "/api/db/zying-products/developers/sync",
+        json={"rows": rows},
+    )
+
+
 def get_existing_zying_product_ids(product_ids):
     normalized_ids = list(
         dict.fromkeys(
@@ -548,6 +592,7 @@ def get_high_after_sale_alerts(
     date_from="",
     date_to="",
     limit=100,
+    salesperson="",
 ):
     if DB_MODE == "mysql":
         return _local_call(
@@ -558,6 +603,7 @@ def get_high_after_sale_alerts(
             date_from,
             date_to,
             limit,
+            salesperson,
         )
     return _request(
         "GET",
@@ -569,6 +615,7 @@ def get_high_after_sale_alerts(
             "date_from": date_from,
             "date_to": date_to,
             "limit": limit,
+            "salesperson": str(salesperson or "").strip(),
         },
     )
 
@@ -580,6 +627,7 @@ def get_high_profit_products(
     date_from="",
     date_to="",
     limit=100,
+    salesperson="",
 ):
     if DB_MODE == "mysql":
         return _local_call(
@@ -590,6 +638,7 @@ def get_high_profit_products(
             date_from,
             date_to,
             limit,
+            salesperson,
         )
     return _request(
         "GET",
@@ -601,6 +650,7 @@ def get_high_profit_products(
             "date_from": date_from,
             "date_to": date_to,
             "limit": limit,
+            "salesperson": str(salesperson or "").strip(),
         },
     )
 
@@ -807,12 +857,16 @@ def _store_link_store_call(function_name, *args, **kwargs):
 def list_mercado_store_links(
     search="",
     token_id=None,
+    token_ids=None,
+    filter_token_ids=None,
     site_id="",
     group_name="",
     status="",
     management_category_id=None,
     mercado_category="",
     sales_sort="desc",
+    sort_by="sold_quantity",
+    sort_order="",
     current_only=True,
     page=1,
     page_size=500,
@@ -825,23 +879,41 @@ def list_mercado_store_links(
         "management_category_id": management_category_id,
         "mercado_category": str(mercado_category or "").strip(),
         "sales_sort": "asc" if str(sales_sort or "").strip().lower() == "asc" else "desc",
+        "sort_by": str(sort_by or "sold_quantity").strip().lower(),
+        "sort_order": (
+            "asc" if str(sort_order or "").strip().lower() == "asc"
+            else "desc" if str(sort_order or "").strip()
+            else ""
+        ),
         "current_only": "1" if current_only else "0",
         "page": int(page or 1),
         "page_size": max(1, min(int(page_size or 500), 1000)),
     }
     if token_id not in (None, ""):
         params["token_id"] = int(token_id)
+    if token_ids is not None:
+        params["token_ids"] = [
+            int(value) for value in token_ids or [] if int(value or 0) > 0
+        ]
+    if filter_token_ids:
+        params["filter_token_ids"] = [
+            int(value) for value in filter_token_ids if int(value or 0) > 0
+        ]
     if DB_MODE == "mysql":
         return _store_link_store_call(
             "list_store_links",
             search=params["search"],
             token_id=params.get("token_id"),
+            token_ids=params.get("token_ids"),
+            filter_token_ids=params.get("filter_token_ids"),
             site_id=params["site_id"],
             group_name=params["group_name"],
             status=params["status"],
             management_category_id=params["management_category_id"],
             mercado_category=params["mercado_category"],
             sales_sort=params["sales_sort"],
+            sort_by=params["sort_by"],
+            sort_order=params["sort_order"],
             current_only=bool(current_only),
             page=params["page"],
             page_size=params["page_size"],
@@ -895,6 +967,7 @@ def get_store_link_sync_status():
 def list_mercado_prohibited_listings(
     search="",
     token_id=None,
+    token_ids=None,
     site_id="",
     salesperson="",
     group_name="",
@@ -917,6 +990,10 @@ def list_mercado_prohibited_listings(
     }
     if token_id not in (None, ""):
         params["token_id"] = int(token_id)
+    if token_ids:
+        params["token_ids"] = [
+            int(value) for value in token_ids if int(value or 0) > 0
+        ]
     if DB_MODE == "mysql":
         from erp.mercadolibre_prohibited_store import list_prohibited_listings
 
@@ -973,6 +1050,13 @@ def bulk_update_orders(order_ids, operator_id=None, operator_name="", **changes)
             **payload,
         )
     return _request("POST", "/api/db/orders/bulk-update", json=payload)
+
+
+def get_purchase_tracking_orders(order_ids):
+    payload = {"order_ids": [str(value) for value in order_ids or []]}
+    if DB_MODE == "mysql":
+        return _local_call("get_mercado_purchase_tracking_orders", payload["order_ids"])
+    return _request("POST", "/api/db/orders/purchase-tracking", json=payload)
 
 
 def download_order_labels(order_ids):
@@ -1813,7 +1897,7 @@ def list_mercado_product_items(
     publish_status="", weight_min=None, weight_max=None, price_min=None,
     price_max=None, net_proceeds_min=None, net_proceeds_max=None,
     date_from="", date_to="", management_category_id=None,
-    mercado_category="",
+    mercado_category="", zying_category="", product_developer_id="", token_ids=None,
 ):
     params = {
         "search": search,
@@ -1832,7 +1916,13 @@ def list_mercado_product_items(
         "date_to": str(date_to or "").strip(),
         "management_category_id": management_category_id,
         "mercado_category": str(mercado_category or "").strip(),
+        "zying_category": str(zying_category or "").strip(),
+        "product_developer_id": str(product_developer_id or "").strip(),
     }
+    if token_ids is not None:
+        params["token_ids"] = [
+            int(value) for value in token_ids or [] if int(value or 0) > 0
+        ]
     if DB_MODE == "mysql":
         return _collection_store_call(
             "list_product_items", **params
@@ -2207,7 +2297,8 @@ def update_mercado_product_publish_record(record_id, **changes):
 
 def list_mercado_product_publish_records(
     search="", status="", store_name="", site_id="", group_name="",
-    start_date="", end_date="", limit=500, offset=0,
+    start_date="", end_date="", limit=500, offset=0, token_ids=None,
+    filter_token_ids=None,
 ):
     params = {
         "search": str(search or ""),
@@ -2220,6 +2311,14 @@ def list_mercado_product_publish_records(
         "limit": int(limit),
         "offset": int(offset),
     }
+    if token_ids is not None:
+        params["token_ids"] = [
+            int(value) for value in token_ids or [] if int(value or 0) > 0
+        ]
+    if filter_token_ids:
+        params["filter_token_ids"] = [
+            int(value) for value in filter_token_ids if int(value or 0) > 0
+        ]
     if DB_MODE == "mysql":
         return _collection_store_call("list_product_publish_records", **params)
     path = "/api/db/mercado-publish-records"

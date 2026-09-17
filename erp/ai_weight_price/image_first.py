@@ -2,7 +2,7 @@
 import time
 
 from .browser import CircuitOpen, NoExactMatch, SearchTimeout, Stopped, WritebackMismatch
-from .models import number, erp_value_equal
+from .models import number, erp_value_equal, parse_weight_evidence
 from .pricing import usd_cost
 
 
@@ -11,8 +11,23 @@ def process(service, task, browser, models, config):
     store = service.store
     try:
         service.progress(key, f"商品 {key}：主图搜货，比对前{config['max_candidates']}张图片，同款匹配分数须大于等于{config['match_threshold']:.0%}")
-        candidates = browser.search_images(task)
-        approved, evidence = models.match_images(task, candidates)
+        cached = cached_candidate(task, config)
+        if cached:
+            # A manual ERP SKU correction after an ambiguous result can reuse
+            # the already-approved image lead. Reopen its detail directly;
+            # image search and the first vision call are unnecessary work.
+            candidates = [cached]
+            approved = [cached]
+            evidence = [{"candidate": cached, "review": {
+                "index": 1, "same_product": True,
+                "confidence": cached["image_confidence"],
+                "reason": "复用上次已通过图片匹配的最佳候选",
+                "cached_candidate": True,
+            }}]
+            service.progress(key, f"商品 {key}：复用上次最佳匹配，直接核对1688变体")
+        else:
+            candidates = browser.search_images(task)
+            approved, evidence = models.match_images(task, candidates)
         # Keep the strongest score even when the model rejects the candidate as
         # a non-match.  The UI should show why a product was rejected instead
         # of displaying a blank score for every below-threshold result.
@@ -23,11 +38,36 @@ def process(service, task, browser, models, config):
             review = item["review"]
             verdict = "同款" if review.get("same_product") is True else "非同款"
             store.log(f"候选图 {review['index']}：{verdict}，匹配分数 {review['confidence']:.2%}；{review.get('reason', '')}", key)
+        # Preserve the top detail URL even when every image score is below the
+        # approval threshold, so the operator can inspect the best lead from
+        # the task list and retry after supplementing the ERP SKU.
+        ranked = sorted(
+            (item for item in evidence if item.get("candidate", {}).get("url")),
+            key=lambda item: item["review"].get("confidence", 0), reverse=True,
+        )
+        if ranked:
+            lead = ranked[0]["candidate"]
+            lead_review = ranked[0]["review"]
+            lead_approved = (lead_review.get("same_product") is True
+                             and lead_review.get("confidence", 0) >= config["match_threshold"])
+            store.update(key, best_match_url=lead.get("url", ""),
+                         best_match_title=lead.get("title", ""),
+                         best_match_image_url=lead.get("main_image_url", ""),
+                         best_match_confidence=lead_review.get("confidence"),
+                         best_match_approved=lead_approved)
         if not approved:
             raise NoExactMatch(f"前{len(candidates)}张候选图没有匹配分数大于等于{config['match_threshold']:.0%}的同款")
         # approved is sorted by score descending; equal scores preserve the
         # original 1688 result order. Open exactly the highest-scoring match.
         candidate = approved[0]
+        # Keep the best detail URL even when the SKU review remains ambiguous.
+        # The operator can open it from the task list, copy the exact variant
+        # into ERP data, and retry without running image search again blindly.
+        task = store.update(key, best_match_url=candidate.get("url", ""),
+                            best_match_title=candidate.get("title", ""),
+                            best_match_image_url=candidate.get("main_image_url", ""),
+                            best_match_confidence=candidate.get("image_confidence"),
+                            best_match_approved=True)
         service.record_visual(key, "image_matched",
                               f"已从前{len(candidates)}张中选择同款分数最高的候选（{candidate['image_confidence']:.2%}）；进入1688明细读取变体价格和重量",
                               page_url=candidate["url"])
@@ -53,10 +93,18 @@ def process(service, task, browser, models, config):
                             cost_price=sku.get("price"), supplier_price_evidence=sku,
                             image_match_confidence=candidate["image_confidence"], weight_g=None,
                             net_income_usd=None, pricing=None, page_info_checked=False)
+        # The official SKU module already provides a final price and often an
+        # explicit package weight. Avoid sending those same facts through a
+        # second model call; extract from the row locally and ask the model
+        # only when one of the fields is genuinely missing.
+        cost = sku.get("price")
+        weight = parse_weight_evidence(sku.get("raw_weight", ""))
+        info = {}
         text = service.page_text(match)
-        info = models.supplier_info(task, text) if text.strip() else {}
-        cost = sku.get("price") or info.get("cost_price")
-        weight = info.get("weight_g")
+        if not cost or not weight:
+            info = models.supplier_info(task, text) if text.strip() else {}
+            cost = cost or info.get("cost_price")
+            weight = weight or info.get("weight_g")
         if weight and number(weight) > 1000000:
             weight = None
         task = store.update(key, cost_price=cost, weight_g=weight, page_info=info,
@@ -88,6 +136,29 @@ def process(service, task, browser, models, config):
     finally:
         if hasattr(browser, "release_search"):
             browser.release_search(task)
+
+
+def cached_candidate(task, config):
+    """Build a reusable candidate from a previously approved image lead."""
+    url = task.get("best_match_url")
+    try:
+        confidence = float(task.get("best_match_confidence"))
+    except (TypeError, ValueError):
+        return None
+    approved = task.get("best_match_approved") is True
+    if not approved:
+        for item in task.get("image_match_evidence") or []:
+            candidate = item.get("candidate") or {}
+            review = item.get("review") or {}
+            if (candidate.get("url") == url and review.get("same_product") is True
+                    and review.get("confidence", 0) >= config["match_threshold"]):
+                approved = True
+                break
+    if not url or confidence < config["match_threshold"] or not task.get("erp_sku") or not approved:
+        return None
+    return {"url": url, "title": task.get("best_match_title", ""),
+            "main_image_url": task.get("best_match_image_url", ""),
+            "image_confidence": confidence}
 
 
 def save_result(service, task, browser, config, result, reason, changes):

@@ -77,13 +77,13 @@ def create_blueprint(service, authorize=None):
     @bp.post("/api/ai-weight-price/login/open")
     def open_login():
         service.open_login()
-        return jsonify(message="已打开 Edge，请人工登录后回到控制台点击“我已成功登录”")
+        return jsonify(message="已在 Edge 打开智赢和1688，请分别登录后回到控制台确认")
 
     @bp.post("/api/ai-weight-price/login/confirm")
     def confirm_login():
         if request.get_json().get("acknowledged") is not True:
             raise ValueError("请先人工完成登录，再点击“我已成功登录”")
-        return jsonify(message="登录已确认，请选择分类（可留空）和页码范围", login=service.confirm_login())
+        return jsonify(message="已确认智赢和1688登录，请选择分类（可留空）和页码范围", login=service.confirm_login())
 
     @bp.post("/api/ai-weight-price/supplier/login/open")
     def open_supplier_login():
@@ -171,6 +171,13 @@ def create_blueprint(service, authorize=None):
     def stop():
         service.stop()
         return jsonify(message="停止请求已记录，当前操作结束后保留进度退出")
+
+    @bp.post("/api/ai-weight-price/terminate")
+    def terminate():
+        result = service.terminate_current()
+        message = ("本次任务已终止并清空；历史商品与登录状态已保留" if result["cleared"]
+                   else "终止请求已记录；当前操作退出后将自动清空本次任务数据")
+        return jsonify(message=message, **result)
 
     @bp.post("/api/ai-weight-price/continue")
     def continue_after_human():

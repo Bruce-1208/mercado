@@ -34,7 +34,7 @@ from urllib.parse import urlsplit
 import requests
 
 
-AGENT_VERSION = "1.2.0"
+AGENT_VERSION = "1.2.1"
 DEFAULT_SERVER_URL = "https://zeshun.cc.cd"
 DEFAULT_POLL_SECONDS = 10.0
 DEFAULT_HEARTBEAT_SECONDS = 10.0
@@ -42,6 +42,7 @@ LOG_FLUSH_SECONDS = 2.0
 LOG_UPLOAD_MIN_INTERVAL_SECONDS = 5.0
 RATE_LIMIT_MIN_SECONDS = 60.0
 RETRY_MAX_SECONDS = 300.0
+JOB_CONTROL_LOSS_STOP_SECONDS = 12 * 60.0
 AGENT_LOG_MAX_BYTES = 5 * 1024 * 1024
 AGENT_LOG_BACKUP_COUNT = 3
 STATUS_WINDOW_PLATFORMS = frozenset(("win32", "darwin"))
@@ -50,16 +51,123 @@ STATUS_WINDOW_PLATFORMS = frozenset(("win32", "darwin"))
 def terminate_worker_tree(pid):
     """Stop only the isolated worker and its descendants, including pipe owners."""
     if os.name == "nt":
-        subprocess.run(
-            ["taskkill", "/PID", str(int(pid)), "/T", "/F"],
-            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
-            creationflags=subprocess.CREATE_NO_WINDOW, timeout=5,
-        )
+        try:
+            subprocess.run(
+                ["taskkill", "/PID", str(int(pid)), "/T", "/F"],
+                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                creationflags=subprocess.CREATE_NO_WINDOW, timeout=5,
+            )
+        except (OSError, subprocess.SubprocessError, ValueError):
+            pass
     else:
         try:
             os.killpg(int(pid), signal.SIGKILL)
         except ProcessLookupError:
             pass
+
+
+class WorkerProcessGuard:
+    """Tie a worker tree to the Agent lifetime on Windows.
+
+    Windows normally leaves child processes alive when their parent exits.  A
+    kill-on-close Job Object makes an Agent crash or real window exit close the
+    complete business-process tree as well.
+    """
+
+    def __init__(self, process):
+        self.process = process
+        self.handle = None
+        if os.name == "nt":
+            self.handle = self._assign_windows_job(process)
+
+    @staticmethod
+    def _assign_windows_job(process):
+        try:
+            import ctypes
+            from ctypes import wintypes
+
+            class BasicLimitInformation(ctypes.Structure):
+                _fields_ = [
+                    ("PerProcessUserTimeLimit", ctypes.c_longlong),
+                    ("PerJobUserTimeLimit", ctypes.c_longlong),
+                    ("LimitFlags", wintypes.DWORD),
+                    ("MinimumWorkingSetSize", ctypes.c_size_t),
+                    ("MaximumWorkingSetSize", ctypes.c_size_t),
+                    ("ActiveProcessLimit", wintypes.DWORD),
+                    ("Affinity", ctypes.c_size_t),
+                    ("PriorityClass", wintypes.DWORD),
+                    ("SchedulingClass", wintypes.DWORD),
+                ]
+
+            class IoCounters(ctypes.Structure):
+                _fields_ = [
+                    ("ReadOperationCount", ctypes.c_ulonglong),
+                    ("WriteOperationCount", ctypes.c_ulonglong),
+                    ("OtherOperationCount", ctypes.c_ulonglong),
+                    ("ReadTransferCount", ctypes.c_ulonglong),
+                    ("WriteTransferCount", ctypes.c_ulonglong),
+                    ("OtherTransferCount", ctypes.c_ulonglong),
+                ]
+
+            class ExtendedLimitInformation(ctypes.Structure):
+                _fields_ = [
+                    ("BasicLimitInformation", BasicLimitInformation),
+                    ("IoInfo", IoCounters),
+                    ("ProcessMemoryLimit", ctypes.c_size_t),
+                    ("JobMemoryLimit", ctypes.c_size_t),
+                    ("PeakProcessMemoryUsed", ctypes.c_size_t),
+                    ("PeakJobMemoryUsed", ctypes.c_size_t),
+                ]
+
+            kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+            kernel32.CreateJobObjectW.argtypes = [ctypes.c_void_p, wintypes.LPCWSTR]
+            kernel32.CreateJobObjectW.restype = wintypes.HANDLE
+            kernel32.SetInformationJobObject.argtypes = [
+                wintypes.HANDLE,
+                ctypes.c_int,
+                ctypes.c_void_p,
+                wintypes.DWORD,
+            ]
+            kernel32.SetInformationJobObject.restype = wintypes.BOOL
+            kernel32.AssignProcessToJobObject.argtypes = [
+                wintypes.HANDLE,
+                wintypes.HANDLE,
+            ]
+            kernel32.AssignProcessToJobObject.restype = wintypes.BOOL
+            kernel32.CloseHandle.argtypes = [wintypes.HANDLE]
+            kernel32.CloseHandle.restype = wintypes.BOOL
+
+            handle = kernel32.CreateJobObjectW(None, None)
+            if not handle:
+                return None
+            limits = ExtendedLimitInformation()
+            limits.BasicLimitInformation.LimitFlags = 0x00002000
+            configured = kernel32.SetInformationJobObject(
+                handle, 9, ctypes.byref(limits), ctypes.sizeof(limits)
+            )
+            assigned = configured and kernel32.AssignProcessToJobObject(
+                handle, wintypes.HANDLE(int(process._handle))
+            )
+            if not assigned:
+                kernel32.CloseHandle(handle)
+                return None
+            return handle
+        except (AttributeError, OSError, TypeError, ValueError):
+            return None
+
+    def terminate(self):
+        if self.process.poll() is None:
+            terminate_worker_tree(self.process.pid)
+
+    def close(self):
+        if self.handle is None:
+            return
+        try:
+            import ctypes
+
+            ctypes.WinDLL("kernel32", use_last_error=True).CloseHandle(self.handle)
+        finally:
+            self.handle = None
 
 
 class AgentRuntimeLog:
@@ -100,7 +208,11 @@ class AgentRuntimeLog:
         rendered = self._render(message)
         encoded = (rendered + "\n").encode("utf-8")
         with self._lock:
-            print(rendered, flush=True)
+            # PyInstaller's windowed bootloader intentionally leaves stdout
+            # unset.  The status window and agent.log remain the authoritative
+            # outputs in that mode.
+            if sys.stdout is not None:
+                print(rendered, flush=True)
             try:
                 self.path.parent.mkdir(parents=True, exist_ok=True)
                 self._rotate(len(encoded))
@@ -151,6 +263,30 @@ def _hide_windows_console():
         pass
 
 
+def _attach_worker_output_streams():
+    """Restore redirected output for a worker launched by a windowed EXE.
+
+    A PyInstaller ``console=False`` process has no normal Python stdout/stderr.
+    Worker children are launched with OS pipes, however, so reopening file
+    descriptors 1 and 2 keeps the existing live job-log capture working.
+    """
+    for name, descriptor in (("stdout", 1), ("stderr", 2)):
+        if getattr(sys, name, None) is not None:
+            continue
+        try:
+            stream = open(
+                descriptor,
+                "w",
+                encoding="utf-8",
+                errors="replace",
+                buffering=1,
+                closefd=False,
+            )
+        except OSError:
+            continue
+        setattr(sys, name, stream)
+
+
 class AgentStatusWindow:
     """Small desktop dashboard showing wall-clock time and live Agent logs."""
 
@@ -168,6 +304,8 @@ class AgentStatusWindow:
         self.root.minsize(720, 420)
         self.root.configure(background="#f4f6f8")
         self.log_queue = queue.Queue()
+        self.closing = False
+        self.agent_thread = None
         self.status_text = tk.StringVar(value="正在连接服务端…")
         self.clock_text = tk.StringVar(value="")
 
@@ -225,7 +363,7 @@ class AgentStatusWindow:
         footer.pack(fill="x")
         tk.Label(
             footer,
-            text="关闭窗口只会最小化，Agent 会继续运行。",
+            text="关闭窗口会停止当前任务并退出 Agent。",
             font=("Microsoft YaHei UI", 9),
             foreground="#6b7280",
             background="#f4f6f8",
@@ -248,7 +386,7 @@ class AgentStatusWindow:
         if history:
             self._append_log(history)
         agent.runtime_log.add_listener(self.log_queue.put)
-        self.root.protocol("WM_DELETE_WINDOW", self.root.iconify)
+        self.root.protocol("WM_DELETE_WINDOW", self._on_close)
         self.root.after(0, self._tick_clock)
         self.root.after(100, self._drain_logs)
 
@@ -311,6 +449,26 @@ class AgentStatusWindow:
         self.log_view.delete("1.0", "end")
         self.log_view.configure(state="disabled")
 
+    def _on_close(self):
+        if self.closing:
+            return
+        if not self.messagebox.askyesno(
+            "退出 Agent",
+            "确定退出 Agent 吗？正在执行的任务会被停止。",
+            parent=self.root,
+        ):
+            return
+        self.closing = True
+        self.status_text.set("正在停止任务并退出…")
+        self.agent.request_shutdown("用户关闭 Agent 窗口")
+        self.root.after(100, self._wait_for_shutdown)
+
+    def _wait_for_shutdown(self):
+        if self.agent_thread is not None and self.agent_thread.is_alive():
+            self.root.after(100, self._wait_for_shutdown)
+            return
+        self.root.destroy()
+
     def run(self):
         result = {"code": 1}
 
@@ -323,7 +481,12 @@ class AgentStatusWindow:
             finally:
                 self.log_queue.put("[状态] Agent 已停止")
 
-        threading.Thread(target=run_agent, name="agent-main", daemon=True).start()
+        self.agent_thread = threading.Thread(
+            target=run_agent,
+            name="agent-main",
+            daemon=False,
+        )
+        self.agent_thread.start()
         _hide_windows_console()
         self.root.mainloop()
         return int(result["code"])
@@ -570,9 +733,39 @@ class LocalAgent:
         self._rate_limit_until = 0.0
         self._rate_limit_failures = 0
         self._rate_limit_message = ""
+        self.session_id = uuid.uuid4().hex
+        self.shutdown_event = threading.Event()
+        self._worker_lock = threading.Lock()
+        self._current_worker = None
+        self._current_job_id = ""
 
     def log(self, message):
         self.runtime_log.write(message)
+
+    def request_shutdown(self, reason=""):
+        if self.shutdown_event.is_set():
+            return
+        self.log(f"Agent 收到退出请求：{reason or '正在退出'}")
+        self.shutdown_event.set()
+        self._stop_current_worker()
+
+    def _set_current_worker(self, job_id, guard):
+        with self._worker_lock:
+            self._current_job_id = str(job_id or "")
+            self._current_worker = guard
+
+    def _stop_current_worker(self):
+        with self._worker_lock:
+            guard = self._current_worker
+        if guard is not None:
+            guard.terminate()
+
+    def _clear_current_worker(self, guard):
+        with self._worker_lock:
+            if self._current_worker is guard:
+                self._current_worker = None
+                self._current_job_id = ""
+        guard.close()
 
     def ensure_enrolled(self):
         if self.config.agent_token:
@@ -588,6 +781,7 @@ class LocalAgent:
                 "platform": platform.platform(),
                 "agent_version": AGENT_VERSION,
                 "capabilities": list(self.capabilities),
+                "session_id": self.session_id,
             },
             timeout=30,
         )
@@ -659,7 +853,7 @@ class LocalAgent:
         release_dir = self.config.data_dir / "releases" / version
         return version if version and (release_dir / "local_agent_worker.py").is_file() else ""
 
-    def heartbeat(self):
+    def heartbeat(self, current_job_id=""):
         data = self._request(
             "POST",
             "/api/local-agents/heartbeat",
@@ -671,6 +865,8 @@ class LocalAgent:
                 "agent_version": AGENT_VERSION,
                 "business_version": self.current_release,
                 "capabilities": list(self.capabilities),
+                "session_id": self.session_id,
+                "current_job_id": str(current_job_id or ""),
             },
             timeout=20,
         )
@@ -761,7 +957,10 @@ class LocalAgent:
         return self._request(
             "POST",
             "/api/local-agents/jobs/claim",
-            json={"agent_id": self.config.agent_id},
+            json={
+                "agent_id": self.config.agent_id,
+                "session_id": self.session_id,
+            },
             timeout=20,
         ).get("job")
 
@@ -784,7 +983,9 @@ class LocalAgent:
                 failures += 1
                 delay = self._retry_delay_with_cooldown(failures)
                 self.log(f"任务 {job_id} 的结果暂时无法上传：{exc}；{delay:.0f} 秒后重试")
-                time.sleep(delay)
+                if self.shutdown_event.wait(delay):
+                    self.log(f"Agent 正在退出，任务 {job_id} 的结果留待服务端租约回收")
+                    return None
 
     @staticmethod
     def _retry_delay(failures):
@@ -849,6 +1050,8 @@ class LocalAgent:
             bufsize=1,
             start_new_session=os.name != "nt",
         )
+        worker_guard = WorkerProcessGuard(process)
+        self._set_current_worker(job_id, worker_guard)
         output_queue = queue.Queue()
 
         def read_output():
@@ -873,6 +1076,8 @@ class LocalAgent:
         last_log_flush = time.monotonic()
         next_log_upload_at = last_log_flush
         log_upload_failures = 0
+        worker_exited_at = 0.0
+        last_heartbeat_success = time.monotonic()
         while process.poll() is None or not reader_done:
             try:
                 item = output_queue.get(timeout=0.25)
@@ -883,6 +1088,9 @@ class LocalAgent:
             except queue.Empty:
                 pass
             now = time.monotonic()
+            if self.shutdown_event.is_set() and not cancel_file.exists():
+                cancel_file.write_text("agent shutdown", encoding="utf-8")
+                cancel_started = now
             if (
                 pending_logs
                 and now >= next_log_upload_at
@@ -911,14 +1119,22 @@ class LocalAgent:
                     log_upload_failures = 0
             if now >= next_heartbeat_at:
                 try:
-                    heartbeat = self.heartbeat()
+                    heartbeat = self.heartbeat(current_job_id=job_id)
                 except Exception as exc:
                     heartbeat_failures += 1
                     delay = self._retry_delay_with_cooldown(heartbeat_failures)
                     next_heartbeat_at = time.monotonic() + delay
                     self.log(f"任务运行中，心跳暂时失败：{exc}；{delay:.0f} 秒后重试")
+                    if (
+                        now - last_heartbeat_success >= JOB_CONTROL_LOSS_STOP_SECONDS
+                        and not cancel_file.exists()
+                    ):
+                        self.log("任务控制连接长时间中断，为避免失控执行，正在停止本机任务")
+                        cancel_file.write_text("control lease expired", encoding="utf-8")
+                        cancel_started = now
                 else:
                     heartbeat_failures = 0
+                    last_heartbeat_success = now
                     next_heartbeat_at = time.monotonic() + min(
                         1.0, self.config.heartbeat_seconds
                     )
@@ -929,11 +1145,27 @@ class LocalAgent:
                         cancel_file.write_text("stop", encoding="utf-8")
                         cancel_started = now
             if cancel_started and process.poll() is None:
-                terminate_worker_tree(process.pid)
+                worker_guard.terminate()
                 try:
                     process.wait(timeout=5)
                 except subprocess.TimeoutExpired:
                     pass
+            if process.poll() is not None and not worker_exited_at:
+                worker_exited_at = now
+                # Closing the Job Object also removes any descendants that
+                # inherited the output pipe after the main worker returned.
+                worker_guard.close()
+                if os.name != "nt" and not reader_done:
+                    terminate_worker_tree(process.pid)
+            if worker_exited_at and not reader_done and now - worker_exited_at >= 5:
+                # A badly behaved descendant must not hold the Agent's stdout
+                # pipe and block all subsequently queued jobs forever.
+                try:
+                    if process.stdout is not None:
+                        process.stdout.close()
+                except OSError:
+                    pass
+                reader_done = True
             if process.poll() is not None and reader_done:
                 break
         return_code = int(process.wait())
@@ -959,6 +1191,7 @@ class LocalAgent:
             message=final_message,
             result={**result, "return_code": return_code},
         )
+        self._clear_current_worker(worker_guard)
 
     def run(self):
         self.log(
@@ -967,6 +1200,9 @@ class LocalAgent:
         )
         failures = 0
         while True:
+            if self.shutdown_event.is_set():
+                self.log("Agent 已停止")
+                return 0
             try:
                 self.ensure_enrolled()
                 heartbeat = self.heartbeat()
@@ -990,11 +1226,19 @@ class LocalAgent:
                             message=f"本机 Agent 启动或监控任务失败：{exc}",
                             result={"agent_error": str(exc)},
                         )
+                    finally:
+                        with self._worker_lock:
+                            active_guard = self._current_worker
+                        if active_guard is not None:
+                            active_guard.terminate()
+                            self._clear_current_worker(active_guard)
                 failures = 0
                 self._rate_limit_failures = 0
                 if self.config.once:
                     return 0
-                time.sleep(self.config.poll_seconds)
+                if self.shutdown_event.wait(self.config.poll_seconds):
+                    self.log("Agent 已停止")
+                    return 0
             except KeyboardInterrupt:
                 self.log("Agent 已停止")
                 return 0
@@ -1005,7 +1249,9 @@ class LocalAgent:
                     return 1
                 delay = self._retry_delay_with_cooldown(failures)
                 self.log(f"Agent 连接异常：{exc}；{delay:.0f} 秒后重试")
-                time.sleep(delay)
+                if self.shutdown_event.wait(delay):
+                    self.log("Agent 已停止")
+                    return 0
 
 
 def _run_external_worker(args):
@@ -1057,12 +1303,28 @@ def _status_window_enabled(args):
     )
 
 
+def _install_shutdown_handlers(agent):
+    if threading.current_thread() is not threading.main_thread():
+        return
+
+    def handle_signal(signum, _frame):
+        agent.request_shutdown(f"收到系统信号 {signum}")
+
+    for signum in (signal.SIGINT, signal.SIGTERM):
+        try:
+            signal.signal(signum, handle_signal)
+        except (OSError, ValueError):
+            pass
+
+
 def main(argv=None):
     args = build_argument_parser().parse_args(argv)
     if args.worker:
+        _attach_worker_output_streams()
         return _run_external_worker(args)
     config = AgentConfig(args)
     agent = LocalAgent(config)
+    _install_shutdown_handlers(agent)
     process_lock = AgentProcessLock(config.data_dir / "agent.lock")
     if not process_lock.acquire():
         agent.log("泽顺本机 Agent 已在运行，本次重复启动退出。")
