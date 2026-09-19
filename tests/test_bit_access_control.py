@@ -43,6 +43,7 @@ def test_permission_catalog_and_role_dependencies():
     assert "order_analysis.view" in permission_keys
     assert "order_analysis.execute" in permission_keys
     assert "ad_analysis.view" in permission_keys
+    assert "ad_analysis.execute" in permission_keys
     assert "access.manage" in permission_keys
     assert bit_interface._validate_workbench_permissions(["appeal.execute"]) == [
         "appeal.execute",
@@ -166,6 +167,43 @@ def test_ad_analysis_requires_permission_and_scopes_member_tokens(monkeypatch):
     )
     assert allowed.status_code == 200
     assert allowed.get_json()["data"]["received"]["token_ids"] == [7]
+
+
+def test_ad_analysis_actions_require_execute_and_scope_member_tokens(monkeypatch):
+    client = bit_interface.app.test_client()
+    monkeypatch.setattr(
+        bit_interface,
+        "get_current_workbench_user",
+        lambda: _member_user("ad_analysis.view"),
+    )
+    denied = client.post(
+        "/api/ad-analysis/actions",
+        json={"status": "paused", "rows": [{"token_id": 7}]},
+    )
+    assert denied.status_code == 403
+    assert denied.get_json()["required_permissions"] == ["ad_analysis.execute"]
+
+    monkeypatch.setattr(
+        bit_interface,
+        "get_current_workbench_user",
+        lambda: _member_user("ad_analysis.execute"),
+    )
+    monkeypatch.setattr(bit_interface, "_authorized_token_ids_for_user", lambda: {7})
+    calls = []
+    monkeypatch.setattr(
+        bit_interface.bit_db_api,
+        "update_mercado_ad_groups",
+        lambda rows, *, status: calls.append((rows, status)) or {"success_count": 1},
+    )
+    allowed = client.post(
+        "/api/ad-analysis/actions",
+        json={
+            "status": "paused",
+            "rows": [{"token_id": 7, "site_id": "MLM", "ad_group_id": 31, "campaign_id": 41}],
+        },
+    )
+    assert allowed.status_code == 200
+    assert calls[0][1] == "paused"
 
 
 def test_order_analysis_import_uses_update_orders_module(monkeypatch):

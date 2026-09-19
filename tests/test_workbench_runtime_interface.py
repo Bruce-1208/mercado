@@ -177,8 +177,80 @@ def test_client_mode_skips_all_central_background_services(monkeypatch):
     assert called == []
 
 
+def test_test_server_mode_skips_all_central_background_services(monkeypatch):
+    monkeypatch.setattr(bit_interface, "USE_DB_API", False)
+    monkeypatch.setenv("BIT_BACKGROUND_SERVICES_DISABLED", "1")
+    called = []
+    service_names = (
+        "start_interrupted_collection_recovery",
+        "start_store_link_scheduler_bootstrap",
+        "start_prohibited_listing_scheduler_bootstrap",
+        "start_official_infraction_scheduler_bootstrap",
+        "start_api_reputation_scheduler_bootstrap",
+        "start_token_refresh_scheduler_bootstrap",
+        "start_store_email_sync_scheduler_bootstrap",
+        "start_yandex_console_bootstrap",
+        "ensure_mercado_profit_refresh_worker",
+    )
+    for name in service_names:
+        monkeypatch.setattr(
+            bit_interface,
+            name,
+            lambda current=name: called.append(current),
+        )
+    monkeypatch.setattr(
+        bit_interface.bit_order_sync,
+        "ensure_order_sync_scheduler",
+        lambda: called.append("order_sync"),
+    )
+
+    bit_interface.start_interface_background_services()
+
+    assert called == []
+
+
+def test_test_server_mode_does_not_start_schedulers_on_first_request(monkeypatch):
+    monkeypatch.setattr(bit_interface, "USE_DB_API", False)
+    monkeypatch.setattr(bit_interface.app, "testing", False)
+    monkeypatch.setenv("BIT_BACKGROUND_SERVICES_DISABLED", "1")
+    called = []
+    monkeypatch.setattr(
+        bit_interface.bit_order_sync,
+        "ensure_order_sync_scheduler",
+        lambda: called.append("order_sync"),
+    )
+    monkeypatch.setattr(
+        bit_interface.bit_order_sync,
+        "ensure_order_financial_backfill_worker",
+        lambda: called.append("financial_backfill"),
+    )
+    monkeypatch.setattr(
+        bit_interface.bit_order_sync,
+        "ensure_order_image_backfill_worker",
+        lambda: called.append("image_backfill"),
+    )
+
+    bit_interface._start_order_sync_scheduler()
+
+    assert called == []
+
+
+def test_test_server_mode_does_not_start_profitability_worker(monkeypatch):
+    monkeypatch.setattr(bit_interface, "USE_DB_API", False)
+    monkeypatch.setattr(bit_interface.app, "testing", False)
+    monkeypatch.setenv("BIT_BACKGROUND_SERVICES_DISABLED", "1")
+
+    def unexpected_thread(*_args, **_kwargs):
+        raise AssertionError("profitability worker must not start")
+
+    monkeypatch.setattr(bit_interface.threading, "Thread", unexpected_thread)
+
+    bit_interface.ensure_mercado_profit_refresh_worker()
+
+
 def test_server_mode_starts_reputation_and_order_sync_schedulers(monkeypatch):
     monkeypatch.setattr(bit_interface, "USE_DB_API", False)
+    monkeypatch.delenv("BIT_BACKGROUND_SERVICES_DISABLED", raising=False)
     for name in (
         "start_interrupted_collection_recovery",
         "start_store_link_scheduler_bootstrap",

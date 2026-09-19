@@ -911,6 +911,10 @@ def test_workbench_store_link_ui_and_routes():
     assert "净收益(USD)".encode("utf-8") in response.data
     assert "任务执行日志".encode("utf-8") in response.data
     assert "修改美客多后台".encode("utf-8") in response.data
+    assert b'id="store-link-advertise-button"' in response.data
+    assert "创建广告组".encode("utf-8") in response.data
+    assert b"openSelectedStoreLinkAdvertise" in response.data
+    assert b'fetch(multiple ? "/api/store-links/bulk-advertise"' in response.data
     assert "投放广告".encode("utf-8") in response.data
     assert b"openStoreLinkAdvertise" in response.data
     assert "同步进行中也可提交".encode("utf-8") in response.data
@@ -1032,6 +1036,27 @@ def test_workbench_store_link_ui_and_routes():
     assert response.get_json()["data"]["campaign_id"] == 88
     advertise.assert_called_once_with(
         1, budget=10, roas_target=5, campaign_name="链接广告-MLM1"
+    )
+
+    with patch.object(
+        workbench.bit_db_api,
+        "advertise_mercado_store_links",
+        return_value={
+            "requested_count": 2,
+            "success_count": 2,
+            "failure_count": 0,
+            "campaign_count": 1,
+            "activated_ad_group_count": 2,
+        },
+    ) as bulk_advertise:
+        response = client.post(
+            "/api/store-links/bulk-advertise",
+            json={"link_ids": [1, 2], "budget": 20, "roas_target": 6, "campaign_name": "批量主推"},
+        )
+    assert response.status_code == 200
+    assert response.get_json()["data"]["success_count"] == 2
+    bulk_advertise.assert_called_once_with(
+        [1, 2], budget=20, roas_target=6, campaign_name="批量主推"
     )
 
 

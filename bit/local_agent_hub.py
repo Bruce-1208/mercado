@@ -3,10 +3,13 @@
 from __future__ import annotations
 
 import json
+import os
 import re
 import sqlite3
+import sys
 import threading
 import time
+import uuid
 from pathlib import Path
 
 
@@ -14,6 +17,66 @@ TERMINAL_JOB_STATUSES = frozenset(("success", "error", "stopped"))
 ACTIVE_JOB_STATUSES = frozenset(("queued", "running", "stopping"))
 DEFAULT_JOB_LEASE_SECONDS = 15 * 60
 _IDENTIFIER_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.-]{2,95}$")
+
+
+def default_local_agent_hub_path():
+    """Return a deploy-directory-independent queue database path.
+
+    Keeping the control-plane database below the source checkout makes a
+    rolling/copy deployment silently create a second queue.  The Agent can
+    then be online on one checkout while the browser enqueues work on another.
+    """
+    if os.name == "nt" and os.environ.get("LOCALAPPDATA"):
+        root = Path(os.environ["LOCALAPPDATA"])
+    elif sys.platform == "darwin":
+        root = Path.home() / "Library" / "Application Support"
+    else:
+        root = Path(
+            os.environ.get("XDG_STATE_HOME")
+            or os.environ.get("XDG_DATA_HOME")
+            or (Path.home() / ".local" / "share")
+        )
+    return root / "Zeshun" / "MercadoWorkbench" / "local-agent-hub.sqlite3"
+
+
+def migrate_local_agent_hub(source, destination):
+    """Copy a legacy SQLite queue to its stable path using SQLite backup.
+
+    The backup API includes committed WAL contents.  Existing destinations
+    always win so a restart can never overwrite a newer live queue.
+    """
+    source = Path(source).expanduser().resolve()
+    destination = Path(destination).expanduser().resolve()
+    if source == destination or destination.exists() or not source.is_file():
+        return False
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    lock_path = destination.with_name(destination.name + ".migration.lock")
+    try:
+        lock_fd = os.open(str(lock_path), os.O_CREAT | os.O_EXCL | os.O_WRONLY)
+    except FileExistsError:
+        # Another starting worker owns the migration. It will either publish
+        # the destination atomically or leave the legacy database untouched.
+        return False
+    temporary = destination.with_name(
+        destination.name + f".migration-{os.getpid()}-{uuid.uuid4().hex}.tmp"
+    )
+    try:
+        os.close(lock_fd)
+        old_connection = sqlite3.connect(str(source), timeout=30)
+        new_connection = sqlite3.connect(str(temporary), timeout=30)
+        try:
+            old_connection.backup(new_connection)
+        finally:
+            new_connection.close()
+            old_connection.close()
+        if destination.exists():
+            temporary.unlink(missing_ok=True)
+            return False
+        os.replace(temporary, destination)
+        return True
+    finally:
+        temporary.unlink(missing_ok=True)
+        lock_path.unlink(missing_ok=True)
 
 
 def normalize_agent_id(value):
@@ -38,6 +101,7 @@ class LocalAgentStore:
         self.path.parent.mkdir(parents=True, exist_ok=True)
         self._schema_lock = threading.Lock()
         self._schema_ready = False
+        self._queue_id = ""
 
     def _connect(self):
         connection = sqlite3.connect(str(self.path), timeout=15)
@@ -105,6 +169,11 @@ class LocalAgentStore:
                 );
                 CREATE INDEX IF NOT EXISTS idx_local_agent_events_job
                     ON local_agent_events(job_id, event_id);
+
+                CREATE TABLE IF NOT EXISTS local_agent_metadata (
+                    key TEXT PRIMARY KEY,
+                    value TEXT NOT NULL
+                );
                 """
             )
             agent_columns = {
@@ -126,8 +195,23 @@ class LocalAgentStore:
                 connection.execute(
                     "ALTER TABLE local_agent_jobs ADD COLUMN lease_expires_at REAL"
                 )
+            connection.execute(
+                "INSERT OR IGNORE INTO local_agent_metadata (key, value) VALUES ('queue_id', ?)",
+                (uuid.uuid4().hex,),
+            )
+            queue_row = connection.execute(
+                "SELECT value FROM local_agent_metadata WHERE key = 'queue_id'"
+            ).fetchone()
+            self._queue_id = str(queue_row[0] or "") if queue_row else ""
             connection.commit()
             self._schema_ready = True
+
+    @property
+    def queue_id(self):
+        if not self._schema_ready:
+            connection = self._connect()
+            connection.close()
+        return self._queue_id
 
     @staticmethod
     def _agent_row(row, now=None, online_seconds=45):

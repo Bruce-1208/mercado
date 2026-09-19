@@ -9,7 +9,7 @@ import pytest
 
 from bit.local_agent_bundle import build_business_bundle
 from bit.local_agent_distribution import build_agent_distribution
-from bit.local_agent_hub import LocalAgentStore
+from bit.local_agent_hub import LocalAgentStore, migrate_local_agent_hub
 
 
 def test_agent_heartbeat_queue_claim_log_and_completion(tmp_path):
@@ -58,6 +58,24 @@ def test_agent_heartbeat_queue_claim_log_and_completion(tmp_path):
     )
     event_time = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(103))
     assert f"[{event_time}] 申诉日志" in store.recent_log("appeal-test-job")
+
+
+def test_queue_has_stable_identity_and_legacy_database_is_migrated(tmp_path):
+    legacy_path = tmp_path / "old-checkout" / ".data" / "local-agent-hub.sqlite3"
+    stable_path = tmp_path / "stable-data" / "local-agent-hub.sqlite3"
+    legacy = LocalAgentStore(legacy_path)
+    legacy.heartbeat("agent-migrated-pc", name="迁移电脑", now=100)
+    legacy.enqueue_job(
+        "migrated-job", "agent-migrated-pc", "daily_task", {}, now=101
+    )
+    legacy_queue_id = legacy.queue_id
+
+    assert migrate_local_agent_hub(legacy_path, stable_path) is True
+    migrated = LocalAgentStore(stable_path)
+    assert migrated.queue_id == legacy_queue_id
+    assert migrated.get_agent("agent-migrated-pc")["name"] == "迁移电脑"
+    assert migrated.get_job("migrated-job")["status"] == "queued"
+    assert migrate_local_agent_hub(legacy_path, stable_path) is False
 
 
 def test_agent_cancel_is_reported_to_claimed_agent(tmp_path):

@@ -190,8 +190,7 @@ def ensure_source_table(cursor: Any, table_name: str = DEFAULT_TABLE) -> None:
 
 
 def _default_connection_factory() -> Any:
-    import pymysql
-    from bit.bit_mysql import config as mysql_config
+    from bit.bit_mysql import config as mysql_config, pymysql
 
     return pymysql.connect(**mysql_config)
 

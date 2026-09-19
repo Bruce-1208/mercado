@@ -64,12 +64,6 @@ INFRACTION_INITIAL_DETECTION_DAYS = _env_int(
 INFRACTION_INITIAL_RIGHTS_HOLDER_DAYS = _env_int(
     "MERCADO_INFRACTION_INITIAL_RIGHTS_HOLDER_DAYS", 365, 30, 3650
 )
-INFRACTION_MAX_DETECTION_PAGES = _env_int(
-    "MERCADO_INFRACTION_MAX_DETECTION_PAGES", 100, 1, 1000
-)
-INFRACTION_MAX_CASE_PAGES = _env_int(
-    "MERCADO_INFRACTION_MAX_CASE_PAGES", 100, 1, 1000
-)
 LIVE_INFRACTION_REQUEST_TIMEOUT_SECONDS = _env_int(
     "MERCADO_DAILY_INFRACTION_REQUEST_TIMEOUT_SECONDS", 10, 5, 60
 )
@@ -433,7 +427,12 @@ def _fetch_detection_pages(
     scanned = 0
     matches: list[dict] = []
     seen: set[str] = set()
-    while pages < INFRACTION_MAX_DETECTION_PAGES:
+    # Read until the API says the snapshot is complete.  The previous fixed
+    # 100-page ceiling silently omitted records after the newest 2,000.
+    # ``seen_page_signatures`` still gives us a safe escape hatch if the API
+    # ignores ``offset`` and starts returning the same page repeatedly.
+    seen_page_signatures: set[tuple[str, ...]] = set()
+    while True:
         if _stop_requested(stop_event):
             raise RuntimeError("已停止")
         if deadline is not None and time.monotonic() >= deadline:
@@ -456,14 +455,21 @@ def _fetch_detection_pages(
         if not isinstance(page, Mapping):
             break
         rows = _infraction_page_rows(page)
-        scanned += len(rows)
-        for row in rows:
-            source_id = str(row.get("id") or "").strip()
-            key = source_id or hashlib.sha1(
+        page_signature = tuple(
+            str(row.get("id") or "").strip()
+            or hashlib.sha1(
                 f"{row.get('related_item_id')}|{row.get('date_created')}|{row.get('reason')}".encode(
                     "utf-8", errors="replace"
                 )
             ).hexdigest()
+            for row in rows
+        )
+        if rows and page_signature in seen_page_signatures:
+            return matches, scanned, True
+        if rows:
+            seen_page_signatures.add(page_signature)
+        scanned += len(rows)
+        for row, key in zip(rows, page_signature):
             if key in seen:
                 continue
             seen.add(key)
@@ -476,7 +482,7 @@ def _fetch_detection_pages(
         total = _page_total(page, offset)
         if not rows or offset >= total or len(rows) < DETECTION_PAGE_SIZE:
             return matches, scanned, False
-    return matches, scanned, True
+    return matches, scanned, False
 
 
 def _collect_live_detection_records(
@@ -836,7 +842,8 @@ def _fetch_case_pages(
     pages = 0
     records: list[dict] = []
     seen: set[str] = set()
-    while pages < INFRACTION_MAX_CASE_PAGES:
+    seen_page_signatures: set[tuple[str, ...]] = set()
+    while True:
         payload = client.request(
             "GET",
             "/moderations/pppi/cases",
@@ -847,6 +854,14 @@ def _fetch_case_pages(
             },
         )
         rows, paging = _case_rows(payload)
+        page_signature = tuple(
+            str(row.get("case_id") or row.get("item_id") or "").strip()
+            for row in rows
+        )
+        if rows and page_signature in seen_page_signatures:
+            return records, True
+        if rows:
+            seen_page_signatures.add(page_signature)
         for row in rows:
             case_id = str(row.get("case_id") or "").strip()
             if case_id and case_id not in seen:
@@ -858,7 +873,6 @@ def _fetch_case_pages(
         if not rows or offset + len(rows) >= total or len(rows) < limit:
             return records, False
         offset += limit
-    return records, True
 
 
 def _case_details(client: MercadoLibreClient, cases: Iterable[Mapping[str, Any]]) -> dict[str, dict]:
@@ -1002,7 +1016,7 @@ def _sync_store_once(client: MercadoLibreClient, record: dict) -> dict:
         )
         if capped:
             warnings.append(
-                f"平台检测已读取最新 {scanned} 条，达到本轮安全分页上限"
+                f"平台检测分页无进展，读取在 {scanned} 条后中止，数据可能不完整"
             )
         upsert_infraction_records(record, detection_records)
         if not capped:
@@ -1020,7 +1034,7 @@ def _sync_store_once(client: MercadoLibreClient, record: dict) -> dict:
             date_created_since=rights_since,
         )
         if capped:
-            errors.append("权利人举报超过本轮安全分页上限")
+            errors.append("权利人举报分页无进展，读取未完成")
         upsert_infraction_records(record, rights_records)
         if not capped:
             reconcile_infraction_snapshot(token_id, "rights_holder", rights_records)

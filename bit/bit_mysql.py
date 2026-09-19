@@ -7,7 +7,7 @@ import random
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal, InvalidOperation
 
-import pymysql
+import pymysql as _pymysql_driver
 
 from bit.workbench_runtime import bootstrap_runtime
 
@@ -24,7 +24,26 @@ def _blocked_client_mysql_connect(*args, **kwargs):
 # 一些旧业务模块仍会导入 bit_mysql。客户端进程允许导入这些模块以保持
 # 界面可启动，但任何遗漏的直连路径都会在真正连接前被明确拦截。
 if RUNTIME_SETTINGS.is_client and os.environ.get("BIT_DB_DIRECT_DISABLED") == "1":
-    pymysql.connect = _blocked_client_mysql_connect
+    _pymysql_driver.connect = _blocked_client_mysql_connect
+
+
+class _PooledPyMySQL:
+    """Keep the PyMySQL API while routing project connections through the pool."""
+
+    def connect(self, *args, **kwargs):
+        if args:
+            # Project code uses keyword options. Preserve raw-driver behavior
+            # for any legacy positional call instead of guessing its mapping.
+            return _pymysql_driver.connect(*args, **kwargs)
+        from bit.db_pool import get_db_connection
+
+        return get_db_connection(kwargs)
+
+    def __getattr__(self, name):
+        return getattr(_pymysql_driver, name)
+
+
+pymysql = _PooledPyMySQL()
 
 # 1. 配置数据库连接信息
 config = {
@@ -34,6 +53,9 @@ config = {
     'database': os.environ.get('MYSQL_DATABASE', os.environ.get('DB_NAME', 'mercado')),
     'charset': os.environ.get('MYSQL_CHARSET', 'utf8mb4'),
     'port': int(os.environ.get('MYSQL_PORT', os.environ.get('DB_PORT', '3306'))),
+    'connect_timeout': int(os.environ.get('MYSQL_CONNECT_TIMEOUT', '5')),
+    'read_timeout': int(os.environ.get('MYSQL_READ_TIMEOUT', '120')),
+    'write_timeout': int(os.environ.get('MYSQL_WRITE_TIMEOUT', '120')),
     'cursorclass': pymysql.cursors.DictCursor  # 让查询结果以字典形式返回
 }
 
@@ -132,9 +154,7 @@ _APPEAL_SCHEMA_GUARD = threading.Lock()
 
 
 def _appeal_connection():
-    options = dict(config)
-    options.update(connect_timeout=5, read_timeout=10, write_timeout=10)
-    return pymysql.connect(**options)
+    return pymysql.connect(**config)
 
 
 def initialize_appeal_storage():

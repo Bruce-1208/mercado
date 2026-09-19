@@ -1,4 +1,5 @@
 import multiprocessing
+import math
 import os
 import time
 import re
@@ -52,7 +53,7 @@ from bit.bit_switch_country import *
 from bit.bit_send_mail import *
 import pandas as pd
 
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 from bit.bit_db_api import (
     get_current_infraction_counts_by_token_site as current_infraction_counts_by_token_site,
@@ -69,11 +70,14 @@ REPUTATION_URL = "https://global-selling.mercadolibre.com/reputation"
 SALES_SUMMARY_URL = "https://global-selling.mercadolibre.com/sales-summary"
 METRICS_URL = "https://global-selling.mercadolibre.com/metrics#sc-menu"
 METRICS_PERFORMANCE_DATA_URL = "/api/sc-business-metrics/performance-data"
+ACCOUNT_RISK_URL = "https://sellers.mercadolibre.com/account-risk"
 ACCOUNT_RISK_URLS = {
-    "restrictions": "https://global-selling.mercadolibre.com/account-risk?filter=restrictions",
-    "warnings": "https://global-selling.mercadolibre.com/account-risk?filter=warnings",
+    "restrictions": "https://sellers.mercadolibre.com/account-risk?filter=restrictions",
+    "warnings": "https://sellers.mercadolibre.com/account-risk?filter=warnings",
 }
 ACCOUNT_RISK_TIME_PATTERN = re.compile(
+    r"\b(?:today|yesterday|hoy|ayer|hoje|ontem)"
+    r"(?:\s*,?\s*(?:at|a\s+las|à?s)?\s*\d{1,2}[:h]\d{2})?\b|"
     r"\b(?:"
     r"Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|"
     r"Jul(?:y)?|Aug(?:ust)?|Sep(?:t(?:ember)?)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?|"
@@ -228,6 +232,21 @@ VISITS_LABEL_ALIASES = (
     "访问",
     "访客量",
 )
+ACCOUNT_RISK_MONTHS = {
+    "jan": 1, "january": 1, "enero": 1, "janeiro": 1,
+    "feb": 2, "february": 2, "febrero": 2, "fevereiro": 2,
+    "mar": 3, "march": 3, "marzo": 3, "marco": 3,
+    "apr": 4, "april": 4, "abril": 4,
+    "may": 5, "mayo": 5, "maio": 5,
+    "jun": 6, "june": 6, "junio": 6, "junho": 6,
+    "jul": 7, "july": 7, "julio": 7, "julho": 7,
+    "aug": 8, "august": 8, "agosto": 8,
+    "sep": 9, "sept": 9, "september": 9, "septiembre": 9,
+    "setiembre": 9, "setembro": 9,
+    "oct": 10, "october": 10, "octubre": 10, "outubro": 10,
+    "nov": 11, "november": 11, "noviembre": 11, "novembro": 11,
+    "dec": 12, "december": 12, "diciembre": 12, "dezembro": 12,
+}
 CANCELLATION_REVIEW_LABELS = (
     "review in metrics",
     "review metrics",
@@ -1957,30 +1976,153 @@ def _account_risk_kinds_from_summary(summary_text, links=None):
     sources = [str(summary_text or ""), *(str(link or "") for link in (links or []))]
     text = "\n".join(sources)
     kinds = []
-
-    def summary_kind_is_active(kind):
-        patterns = (
-            rf"\b{kind}s?\b[^\d]{{0,24}}(\d+)",
-            rf"(\d+)[^\n\d]{{0,24}}(?:go\s+to\s+)?{kind}s?\b",
+    restriction_count = _account_risk_summary_count(summary_text, "restriction")
+    warning_count = _account_risk_summary_count(summary_text, "warning")
+    restriction_fallback = restriction_count is None and (
+        re.search(r"filter=restrictions?\b", text, re.IGNORECASE)
+        or re.search(
+            r"\b(?:requires?\s+attention|active\s+restrictions?)\b",
+            str(summary_text or ""),
+            re.IGNORECASE,
         )
-        counts = [
-            int(match.group(1))
-            for pattern in patterns
-            for match in re.finditer(pattern, text, re.IGNORECASE)
-        ]
-        if counts:
-            return any(count > 0 for count in counts)
-        return bool(re.search(rf"\b{kind}s?\b", str(summary_text or ""), re.IGNORECASE))
-
-    if summary_kind_is_active("restriction") or re.search(
-        r"filter=restrictions?\b", text, re.IGNORECASE
-    ):
-        kinds.append("restrictions")
-    if summary_kind_is_active("warning") or re.search(
+    )
+    warning_fallback = warning_count is None and re.search(
         r"filter=warnings?\b", text, re.IGNORECASE
-    ):
+    )
+    if (restriction_count is not None and restriction_count > 0) or restriction_fallback:
+        kinds.append("restrictions")
+    if (warning_count is not None and warning_count > 0) or warning_fallback:
         kinds.append("warnings")
     return kinds
+
+
+def _account_risk_summary_count(summary_text, kind):
+    singular = str(kind or "").strip().casefold().rstrip("s")
+    if singular not in ("restriction", "warning"):
+        return None
+    text = str(summary_text or "")
+    matches = []
+    for pattern in (
+        rf"\b{singular}s?\b[^\d\n]{{0,24}}(?:\n[^\d\n]{{0,24}})?(\d+)",
+        rf"(\d+)[^\n\d]{{0,24}}(?:go\s+to\s+)?{singular}s?\b",
+    ):
+        matches.extend(
+            int(match.group(1))
+            for match in re.finditer(pattern, text, re.IGNORECASE)
+        )
+    return max(matches) if matches else None
+
+
+def _ascii_account_risk_text(value):
+    return "".join(
+        character
+        for character in unicodedata.normalize("NFKD", str(value or ""))
+        if not unicodedata.combining(character)
+    ).casefold()
+
+
+def _parse_account_risk_datetime(value, *, now=None, future=False):
+    """Parse the date formats rendered by the EN/ES/PT account-risk page."""
+    reference = now or datetime.now()
+    text = _ascii_account_risk_text(value)
+    relative_match = re.search(
+        r"\b(?P<relative>today|hoy|hoje|yesterday|ayer|ontem)\b"
+        r"(?:\s*,?\s*(?:at|a\s+las|as)?\s*(?P<hour>\d{1,2})[:h](?P<minute>\d{2}))?",
+        text,
+    )
+    if relative_match:
+        parsed = reference.replace(
+            hour=int(relative_match.group("hour") or 0),
+            minute=int(relative_match.group("minute") or 0),
+            second=0,
+            microsecond=0,
+        )
+        if relative_match.group("relative") in ("yesterday", "ayer", "ontem"):
+            parsed -= timedelta(days=1)
+        return parsed
+    month_names = "|".join(
+        sorted((re.escape(name) for name in ACCOUNT_RISK_MONTHS), key=len, reverse=True)
+    )
+    patterns = (
+        rf"(?P<month>{month_names})\.?\s+(?P<day>\d{{1,2}})"
+        rf"(?:\s*,?\s*(?P<year>20\d{{2}}))?"
+        rf"(?:\s*,?\s*(?:at|a\s+las|as)?\s*(?P<hour>\d{{1,2}})[:h](?P<minute>\d{{2}}))?",
+        rf"(?P<day>\d{{1,2}})\s+(?:of|de)\s+(?P<month>{month_names})\.?,?"
+        rf"(?:\s+(?P<year>20\d{{2}}))?"
+        rf"(?:\s*,?\s*(?:at|a\s+las|as)?\s*(?P<hour>\d{{1,2}})[:h](?P<minute>\d{{2}}))?",
+        r"(?P<day>\d{1,2})[/-](?P<month_number>\d{1,2})"
+        r"(?:[/-](?P<year>\d{2,4}))?"
+        r"(?:\s+(?:at\s+)?(?P<hour>\d{1,2}):(?P<minute>\d{2}))?",
+    )
+    match = next((candidate for pattern in patterns if (candidate := re.search(pattern, text))), None)
+    if match is None:
+        return None
+    values = match.groupdict()
+    month = (
+        int(values["month_number"])
+        if values.get("month_number")
+        else ACCOUNT_RISK_MONTHS.get(str(values.get("month") or "").rstrip("."))
+    )
+    year_text = values.get("year")
+    year = int(year_text) if year_text else reference.year
+    if year < 100:
+        year += 2000
+    try:
+        parsed = datetime(
+            year,
+            int(month),
+            int(values["day"]),
+            int(values.get("hour") or 0),
+            int(values.get("minute") or 0),
+        )
+    except (TypeError, ValueError):
+        return None
+    if not year_text:
+        if future and parsed < reference - timedelta(days=180):
+            parsed = parsed.replace(year=parsed.year + 1)
+        elif not future and parsed > reference + timedelta(days=1):
+            parsed = parsed.replace(year=parsed.year - 1)
+    return parsed
+
+
+def _restriction_duration(text, *, now=None):
+    reference = now or datetime.now()
+    until_match = re.search(
+        r"\buntil\s+([^\n.。]{3,120})",
+        str(text or ""),
+        re.IGNORECASE,
+    )
+    until_text = until_match.group(1).strip(" ,;；") if until_match else ""
+    until_at = _parse_account_risk_datetime(until_text, now=reference, future=True)
+    without_until = (
+        f"{str(text or '')[:until_match.start()]} {str(text or '')[until_match.end():]}"
+        if until_match
+        else str(text or "")
+    )
+    started_at = _parse_account_risk_datetime(without_until, now=reference)
+    elapsed_days = (
+        max(0, (reference.date() - started_at.date()).days)
+        if started_at
+        else None
+    )
+    remaining_days = (
+        max(0, math.ceil((until_at - reference).total_seconds() / 86400))
+        if until_at
+        else None
+    )
+    total_days = (
+        max(0, math.ceil((until_at - started_at).total_seconds() / 86400))
+        if until_at and started_at
+        else None
+    )
+    return {
+        "suspension_started_at": started_at,
+        "suspension_until_at": until_at,
+        "suspension_days": elapsed_days,
+        "suspension_remaining_days": remaining_days,
+        "suspension_total_days": total_days,
+        "suspension_until": until_text,
+    }
 
 
 def _normalize_account_risk_details(raw_details):
@@ -2079,7 +2221,7 @@ def _normalize_account_risk_details(raw_details):
     return cleaned
 
 
-def _classify_account_restriction(value):
+def _classify_account_restriction(value, *, now=None):
     """Classify a current account restriction without treating warnings as facts."""
     text = re.sub(r"[ \t]+", " ", str(value or "")).strip()
     if not text or text.casefold() in ("正常", "normal", "ok"):
@@ -2087,6 +2229,9 @@ def _classify_account_restriction(value):
             "account_status": "normal",
             "site_status_display": "正常",
             "suspension_until": "",
+            "suspension_days": None,
+            "suspension_remaining_days": None,
+            "suspension_total_days": None,
         }
 
     # A temporary notice often warns that a future infringement "could"
@@ -2116,17 +2261,19 @@ def _classify_account_restriction(value):
         re.IGNORECASE,
     )
     if permanent_pattern.search(factual_text):
+        duration = _restriction_duration(factual_text, now=now)
+        elapsed_days = duration["suspension_days"]
+        display = (
+            f"永久封禁（已 {elapsed_days} 天）"
+            if elapsed_days is not None
+            else "永久封禁"
+        )
         return {
             "account_status": "permanently_suspended",
-            "site_status_display": "永久封禁",
-            "suspension_until": "",
+            "site_status_display": display,
+            **duration,
         }
 
-    until_match = re.search(
-        r"\buntil\s+([^\n.。]{3,100})",
-        factual_text,
-        re.IGNORECASE,
-    )
     suspended = bool(re.search(
         r"\b(?:account\s+has\s+been\s+)?suspend(?:ed|ida|ido|ensa|enso)?\b|"
         r"暂停(?:销售|停售)|暂时封禁|限制销售",
@@ -2134,28 +2281,92 @@ def _classify_account_restriction(value):
         re.IGNORECASE,
     ))
     if suspended:
-        suspension_until = until_match.group(1).strip(" ,;；") if until_match else ""
+        duration = _restriction_duration(factual_text, now=now)
+        suspension_until = duration["suspension_until"]
         trailing_history_time = ACCOUNT_RISK_TIME_PATTERN.search(suspension_until)
         if trailing_history_time and trailing_history_time.start() > 0:
             suspension_until = suspension_until[:trailing_history_time.start()].strip(
                 " ,;；"
             )
-        display = (
-            f"暂时停售（至 {suspension_until}）"
-            if suspension_until
-            else "暂停销售（期限未确认）"
-        )
+        duration["suspension_until"] = suspension_until
+        remaining_days = duration["suspension_remaining_days"]
+        elapsed_days = duration["suspension_days"]
+        total_days = duration["suspension_total_days"]
+        if suspension_until and remaining_days is not None:
+            duration_parts = []
+            if total_days is not None:
+                duration_parts.append(f"共 {total_days} 天")
+            duration_parts.append(
+                f"剩余 {remaining_days} 天" if remaining_days else "期限已到，待页面解除"
+            )
+            duration_parts.append(f"至 {suspension_until}")
+            display = f"暂时停售（{'，'.join(duration_parts)}）"
+        elif elapsed_days is not None:
+            display = f"暂停销售（已 {elapsed_days} 天）"
+        else:
+            display = "暂停销售（封禁天数未确认）"
         return {
             "account_status": "temporarily_suspended",
             "site_status_display": display,
-            "suspension_until": suspension_until,
+            **duration,
         }
 
     return {
         "account_status": "unknown",
-        "site_status_display": "",
+        "site_status_display": "账户状态未确认",
         "suspension_until": "",
+        "suspension_days": None,
+        "suspension_remaining_days": None,
+        "suspension_total_days": None,
     }
+
+
+def _assess_account_risk(summary_text, restriction_text="", *, now=None):
+    """Use the current restriction count before looking at historical entries."""
+    restriction_count = _account_risk_summary_count(summary_text, "restrictions")
+    explicit_normal = bool(re.search(
+        r"\b(?:no\s+active\s+restrictions?|you\s+(?:do\s+not|don't)\s+have\s+restrictions?|"
+        r"everything\s+(?:is\s+)?(?:ok|okay)|account\s+(?:is\s+)?active)\b|"
+        r"\bno\s+tienes\s+restricciones?\b|\bsem\s+restri(?:c|ç)(?:ao|oes|ão|ões)\b|"
+        r"(?:没有|无)当前限制|账号正常|账户正常",
+        str(summary_text or ""),
+        re.IGNORECASE,
+    ))
+    classified = _classify_account_restriction(
+        "\n".join(
+            value for value in (str(restriction_text or ""), str(summary_text or ""))
+            if value.strip()
+        ),
+        now=now,
+    )
+    if restriction_count == 0 or (restriction_count is None and explicit_normal):
+        return {
+            "account_status": "normal",
+            "site_status_display": "正常",
+            "suspension_until": "",
+            "suspension_days": None,
+            "suspension_remaining_days": None,
+            "suspension_total_days": None,
+            "active_restriction_count": 0,
+        }
+    if classified["account_status"] in (
+        "temporarily_suspended",
+        "permanently_suspended",
+    ):
+        classified["active_restriction_count"] = restriction_count
+        return classified
+    if restriction_count and restriction_count > 0:
+        return {
+            "account_status": "restriction_present",
+            "site_status_display": f"封禁状态未确认（{restriction_count} 条限制）",
+            "suspension_until": "",
+            "suspension_days": None,
+            "suspension_remaining_days": None,
+            "suspension_total_days": None,
+            "active_restriction_count": restriction_count,
+        }
+    classified["active_restriction_count"] = restriction_count
+    return classified
 
 
 def _extract_account_risk_details(driver):
@@ -2214,6 +2425,40 @@ def _extract_account_risk_details(driver):
         return []
 
 
+def _extract_account_risk_page_text(driver):
+    try:
+        return str(driver.execute_script(
+            """
+            const root = document.querySelector('main') || document.body;
+            return String(root?.innerText || root?.textContent || '')
+                .replace(/\u00a0/g, ' ')
+                .replace(/[ \t]+/g, ' ')
+                .replace(/\n{3,}/g, '\n\n')
+                .trim();
+            """
+        ) or "").strip()
+    except Exception:
+        return ""
+
+
+def _wait_account_risk_summary(driver, timeout=12, poll_seconds=1):
+    deadline = time.monotonic() + max(0, float(timeout or 0))
+    while True:
+        text = _extract_account_risk_page_text(driver)
+        if text and re.search(
+            r"\b(?:account\s+risk|restrictions?|warnings?|account\s+status)\b|"
+            r"riesgo\s+de\s+la\s+cuenta|risco\s+da\s+conta|"
+            r"限制|警告|账户状态",
+            text,
+            re.IGNORECASE,
+        ):
+            return text
+        _raise_if_mercado_unavailable(driver=driver, context="账户风险页面")
+        if time.monotonic() >= deadline:
+            return ""
+        time.sleep(max(0.05, float(poll_seconds or 0)))
+
+
 def _wait_account_risk_details(driver, timeout=12, poll_seconds=1):
     deadline = time.monotonic() + max(0, float(timeout or 0))
     while True:
@@ -2254,6 +2499,63 @@ def _collect_account_risk_detail_text(driver, kinds, window_id="", name="", site
     return "\n".join(details).strip()
 
 
+def _collect_account_risk_status(driver, window_id="", name="", site=""):
+    """Read current account state directly from the account-risk dashboard."""
+    _open_collection_backend_page(
+        driver,
+        ACCOUNT_RISK_URL,
+        window_id=window_id,
+        name=name,
+        site=site,
+        context="账户风险页面",
+        settle_seconds=3,
+    )
+    summary_text = _wait_account_risk_summary(driver)
+    if not summary_text:
+        raise MercadoPageStructureError(f"{name}{site}账户风险页面结构不匹配：{ACCOUNT_RISK_URL}")
+    kinds = _account_risk_kinds_from_summary(
+        summary_text,
+        _get_account_risk_links(driver),
+    )
+    restriction_text = (
+        _collect_account_risk_detail_text(
+            driver,
+            ["restrictions"],
+            window_id=window_id,
+            name=name,
+            site=site,
+        )
+        if "restrictions" in kinds
+        else ""
+    )
+    warning_text = (
+        _collect_account_risk_detail_text(
+            driver,
+            ["warnings"],
+            window_id=window_id,
+            name=name,
+            site=site,
+        )
+        if "warnings" in kinds
+        else ""
+    )
+    assessment = _assess_account_risk(summary_text, restriction_text)
+    if assessment["account_status"] == "unknown":
+        raise MercadoPageStructureError(
+            f"{name}{site}账户风险页未找到明确的当前限制数量或账号状态"
+        )
+    messages = []
+    if restriction_text:
+        messages.append(restriction_text)
+    if warning_text:
+        messages.append(warning_text)
+    assessment.update({
+        "system_warning": "\n".join(messages).strip() or "正常",
+        "account_risk_summary": summary_text,
+    })
+    return assessment
+
+
 def get_reputation_auxiliary_info(
     window_id,
     name,
@@ -2266,7 +2568,15 @@ def get_reputation_auxiliary_info(
     if driver is None:
         driver = _connect_browser(window_id)
 
-    data_warn = "正常"
+    risk_status = {
+        "account_status": "unknown",
+        "site_status_display": "账户状态未确认",
+        "suspension_until": "",
+        "suspension_days": None,
+        "suspension_remaining_days": None,
+        "suspension_total_days": None,
+        "system_warning": "正常",
+    }
     direction = ""
     gradient_rate = ""
     auxiliary_errors = []
@@ -2289,23 +2599,6 @@ def get_reputation_auxiliary_info(
                 structure_context="销售汇总页面",
             )
         try:
-            data_warn = (
-                WebDriverWait(driver, 10)
-                .until(
-                    EC.visibility_of_element_located(
-                        (By.CLASS_NAME, "andes-message__content")
-                    )
-                )
-                .text
-            )
-        except Exception:
-            data_warn = "正常"
-        account_risk_kinds = _account_risk_kinds_from_summary(
-            data_warn,
-            _get_account_risk_links(driver),
-        )
-
-        try:
             data_gradient = WebDriverWait(driver, 10).until(
                 EC.presence_of_element_located(
                     (By.CSS_SELECTOR, ".andes-badge .andes-visually-hidden")
@@ -2315,39 +2608,34 @@ def get_reputation_auxiliary_info(
             data_gradient = "持平"
         print("近七天变化情况为:", data_gradient)
         direction, gradient_rate = _parse_gradient(data_gradient)
-        if account_risk_kinds:
-            data_warn = _collect_account_risk_detail_text(
-                driver,
-                account_risk_kinds,
-                window_id=window_id,
-                name=name,
-                site=site,
-            )
-            if not data_warn:
-                raise MercadoPageStructureError(f"{name}{site}账户风险详情为空")
+        # The /users profile may still say active while Global Selling has
+        # stopped the account. The account-risk page is the source of truth.
+        risk_status = _collect_account_risk_status(
+            driver,
+            window_id=window_id,
+            name=name,
+            site=site,
+        )
     except Exception as exc:
         if select_site:
             # A permanently suspended account may no longer render the site
             # selector. Read the account-level restriction before deciding the
             # collection failed, otherwise the most important status is lost.
             try:
-                fallback_warning = _collect_account_risk_detail_text(
+                fallback_status = _collect_account_risk_status(
                     driver,
-                    ["restrictions"],
                     window_id=window_id,
                     name=name,
                     site=site,
                 )
-                fallback_status = _classify_account_restriction(fallback_warning)
             except Exception:
-                fallback_warning = ""
                 fallback_status = {"account_status": "unknown"}
             if fallback_status.get("account_status") not in (
                 "temporarily_suspended",
                 "permanently_suspended",
             ):
                 raise
-            data_warn = fallback_warning
+            risk_status = fallback_status
             if fallback_status.get("account_status") != "permanently_suspended":
                 auxiliary_errors.append(
                     f"销售汇总{_failure_status(exc).removeprefix('失败：')}"
@@ -2357,9 +2645,10 @@ def get_reputation_auxiliary_info(
                 f"销售汇总{_failure_status(exc).removeprefix('失败：')}"
             )
 
+    data_warn = str(risk_status.get("system_warning") or "正常").strip()
     print("系统提示为:", data_warn)
 
-    account_status = _classify_account_restriction(data_warn)["account_status"]
+    account_status = risk_status.get("account_status") or "unknown"
     if collect_visits and account_status == "permanently_suspended":
         visits = "[]"
     elif collect_visits:
@@ -2379,6 +2668,13 @@ def get_reputation_auxiliary_info(
         "direction": direction,
         "gradient_rate": gradient_rate,
         "system_warning": data_warn,
+        "account_status": account_status,
+        "site_status_display": risk_status.get("site_status_display") or "账户状态未确认",
+        "suspension_until": risk_status.get("suspension_until") or "",
+        "suspension_days": risk_status.get("suspension_days"),
+        "suspension_remaining_days": risk_status.get("suspension_remaining_days"),
+        "suspension_total_days": risk_status.get("suspension_total_days"),
+        "active_restriction_count": risk_status.get("active_restriction_count"),
         "updated_at": get_now_time(),
         "error": "；".join(auxiliary_errors),
     }
@@ -3421,14 +3717,31 @@ def _merge_api_auxiliary_rows(api_rows, database_rows, auxiliary_rows):
         if "visits" in auxiliary:
             api_row["visits"] = auxiliary.get("visits") or "[]"
         system_warning = str(auxiliary.get("system_warning") or "").strip()
-        restriction = _classify_account_restriction(system_warning)
+        restriction = {
+            "account_status": auxiliary.get("account_status"),
+            "site_status_display": auxiliary.get("site_status_display"),
+            "suspension_until": auxiliary.get("suspension_until") or "",
+            "suspension_days": auxiliary.get("suspension_days"),
+            "suspension_remaining_days": auxiliary.get("suspension_remaining_days"),
+            "suspension_total_days": auxiliary.get("suspension_total_days"),
+        }
+        if not restriction["account_status"]:
+            restriction = _classify_account_restriction(system_warning)
         api_row["account_status"] = restriction["account_status"]
         api_row["suspension_until"] = restriction["suspension_until"]
+        api_row["suspension_days"] = restriction.get("suspension_days")
+        api_row["suspension_remaining_days"] = restriction.get(
+            "suspension_remaining_days"
+        )
+        api_row["suspension_total_days"] = restriction.get("suspension_total_days")
+        api_row["active_restriction_count"] = auxiliary.get(
+            "active_restriction_count"
+        )
         if system_warning and system_warning != "正常":
             api_row["system_warning"] = system_warning
-        if restriction["site_status_display"] and restriction["account_status"] != "normal":
-            # Seller Center is stronger evidence than /users/{id}, which may
-            # still report active for a suspended Global Selling account.
+        if restriction["site_status_display"]:
+            # account-risk is stronger evidence than /users/{id}, including
+            # when a former suspension has already been lifted.
             api_row["site_status_display"] = restriction["site_status_display"]
         database_row = database_by_key.get(key)
         if database_row is not None:
@@ -3439,7 +3752,6 @@ def _merge_api_auxiliary_rows(api_rows, database_rows, auxiliary_rows):
             if (
                 len(database_row) >= 13
                 and restriction["site_status_display"]
-                and restriction["account_status"] != "normal"
             ):
                 database_row[12] = restriction["site_status_display"]
     return auxiliary_by_key

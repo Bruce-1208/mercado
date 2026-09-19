@@ -16,7 +16,7 @@
     @media(max-width:650px){.login-row{grid-template-columns:1fr}.run-grid{grid-template-columns:1fr 1fr}.category-field{grid-column:1/-1}}
     .stats{grid-template-columns:repeat(5,minmax(0,1fr))}.badge.skipped{background:#fff6e3;color:#926318}.dot.skipped{background:#c89432}.badge.blocked{background:#fff0f1;color:#a83b49}.dot.blocked{background:#bc5364}.badge.risk{background:#fff5d9;color:#936300}.dot.risk{background:#d9a127}
     .resume-switch{display:inline-flex;align-items:center;gap:10px;font-weight:600;cursor:pointer}.resume-switch input{appearance:none;width:42px;height:23px;border:0;border-radius:999px;background:#c5ceda;position:relative;transition:.2s}.resume-switch input:before{content:"";position:absolute;width:17px;height:17px;left:3px;top:3px;border-radius:50%;background:white;box-shadow:0 1px 4px #0003;transition:.2s}.resume-switch input:checked{background:#1976d2}.resume-switch input:checked:before{transform:translateX(19px)}
-    .live-console{position:sticky;top:10px;z-index:8;background:#101c2b;color:#dce9f4;border:1px solid #2a4058;border-radius:12px;padding:16px 18px;margin:18px 0;box-shadow:0 8px 28px #1b2d4220}.live-console-head{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;margin-bottom:10px}.live-console h2{font-size:15px;color:#fff;margin:0 0 5px}.live-counter{background:#173c60;color:#a9d7ff;border-color:#285c88}.live-task{color:#9eb6ca;font-size:12px;line-height:1.6;overflow-wrap:anywhere}.live-log-list{display:grid;gap:2px;max-height:420px;overflow:auto;border-top:1px solid #263b50;padding-top:8px}.live-log-row{display:grid;grid-template-columns:76px 48px minmax(0,1fr);gap:8px;padding:4px 2px;font:12px/1.55 ui-monospace,Consolas,monospace}.live-log-time{color:#7892a8}.live-log-level{color:#7fc1ff}.live-log-row.warning .live-log-level{color:#ffd36e}.live-log-row.error .live-log-level{color:#ff8c96}.live-log-message{color:#dce9f4;overflow-wrap:anywhere;white-space:pre-wrap}.live-empty{color:#7892a8;padding:7px 2px;font-size:12px}.row-actions{display:flex;gap:6px;flex-wrap:wrap}.product-thumb{display:block;width:72px;height:72px;object-fit:contain;border:1px solid #e2e8f0;border-radius:8px;background:#fff}.product-thumb-empty{width:72px;height:72px;display:grid;place-items:center;border:1px dashed #d7dfeb;border-radius:8px;color:#9aa8b8;font-size:11px}
+    .live-console{position:sticky;top:10px;z-index:8;background:#101c2b;color:#dce9f4;border:1px solid #2a4058;border-radius:12px;padding:16px 18px;margin:18px 0;box-shadow:0 8px 28px #1b2d4220}.live-console-head{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;margin-bottom:10px}.live-console h2{font-size:15px;color:#fff;margin:0 0 5px}.live-counter{background:#173c60;color:#a9d7ff;border-color:#285c88}.live-task{color:#9eb6ca;font-size:12px;line-height:1.6;overflow-wrap:anywhere}.live-log-list{display:grid;gap:2px;max-height:420px;overflow:auto;border-top:1px solid #263b50;padding-top:8px}.live-log-row{display:grid;grid-template-columns:76px 48px minmax(0,1fr);gap:8px;padding:4px 2px;font:12px/1.55 ui-monospace,Consolas,monospace}.live-log-time{color:#7892a8}.live-log-level{color:#7fc1ff}.live-log-row.warning .live-log-level{color:#ffd36e}.live-log-row.error .live-log-level{color:#ff8c96}.live-log-message{color:#dce9f4;overflow-wrap:anywhere;white-space:pre-wrap}.live-empty{color:#7892a8;padding:7px 2px;font-size:12px}.row-actions{display:flex;gap:6px;flex-wrap:wrap}.supplier-link{display:block;margin-top:6px}.supplier-link::before{content:"1688 · "}.product-thumb{display:block;width:72px;height:72px;object-fit:contain;border:1px solid #e2e8f0;border-radius:8px;background:#fff}.product-thumb-empty{width:72px;height:72px;display:grid;place-items:center;border:1px dashed #d7dfeb;border-radius:8px;color:#9aa8b8;font-size:11px}
     @media(max-width:750px){.stats{grid-template-columns:repeat(2,minmax(0,1fr))}}
     @media(max-width:650px){.live-console{position:static}.live-console-head{flex-direction:column}.live-log-row{grid-template-columns:68px 42px minmax(0,1fr)}}
   </style>
@@ -57,7 +57,7 @@
   </div>
   <div class="toolbar"><div class="filters"><select id="task-scope" aria-label="任务范围" onchange="page=1;refresh()"><option value="current">本次任务商品</option><option value="all">全部历史商品</option></select><select id="filter" aria-label="任务状态" onchange="page=1;refresh()"><option value="">全部状态</option><option value="pending">待处理</option><option value="waiting_merchant_reply">等待回复</option><option value="success">处理成功</option><option value="skipped">已跳过（未完全匹配）</option><option value="blocked">屏蔽</option><option value="risk">风险</option><option value="exception">异常任务</option></select><input id="search" placeholder="搜索商品 ID 或标题" aria-label="搜索商品" oninput="clearTimeout(searchTimer);searchTimer=setTimeout(()=>{page=1;refresh()},350)"></div><div class="actions"><button onclick="exportExcel(true)">导出本次 Excel</button><button onclick="exportExcel(false)">导出全部 Excel</button><button onclick="exportCSV('')">全部 CSV</button><button onclick="exportCSV('success')">成功清单</button><button onclick="exportCSV('exception')">异常清单</button></div></div>
   <div class="toolbar"><span class="muted" id="quota">今日咨询 0 / 25 · 同一商家永久去重</span><span class="muted" id="storage"></span></div>
-  <div class="table-wrap"><table><thead><tr><th>产品主图</th><th>ERP 商品</th><th>目标 SKU</th><th>供货成本 / 净收益</th><th>包装重量</th><th>匹配分数</th><th>程序执行时间</th><th>状态 / 原因</th><th>操作</th></tr></thead><tbody id="rows"><tr><td class="empty" colspan="9"><strong>还没有待核验商品</strong>先完成参数设置，再从已登录的智赢页面采集商品。</td></tr></tbody></table></div>
+  <div class="table-wrap"><table><thead><tr><th>产品主图</th><th>ERP 商品</th><th>目标 SKU</th><th>当前 ERP（重量 / 净收益）</th><th>1688 识别（重量 / 净收益）</th><th>匹配分数</th><th>程序执行时间</th><th>状态 / 原因</th><th>操作</th></tr></thead><tbody id="rows"><tr><td class="empty" colspan="9"><strong>还没有待核验商品</strong>先完成参数设置，再从已登录的智赢页面采集商品。</td></tr></tbody></table></div>
   <div class="pagination"><span id="total">0 条记录</span><button class="small" id="prev" onclick="page--;refresh()">上一页</button><span id="page">1</span><button class="small" id="next" onclick="page++;refresh()">下一页</button></div>
 </section>
 <section id="view-settings" hidden>
@@ -65,7 +65,7 @@
 <div class="grid" id="basic-fields"></div>
 <div class="notice">净收益（美元）＝所选变体人民币供货成本 ÷ 美元兑人民币汇率，再向上取整到整数美元。例如成本 ¥22、汇率 7.2，回填净收益 $4。</div>
 <div class="grid"><div class="field"><label for="sku-price-mode">1688 变体价格来源</label><select id="sku-price-mode"><option value="final">变体最终单价（已经包含加价）</option><option value="base_plus_surcharge">基础价 + 变体加价</option></select><small>按匹配到的目标 SKU 计算；加价单独展示时，需要配置 sku_surcharge。</small></div><div class="field"><label for="usd-cny-rate">美元兑人民币汇率（1 USD = 多少 CNY）</label><input id="usd-cny-rate" type="number" min="0.000001" step="any" placeholder="留空自动获取参考汇率"><small>可填写业务汇率；留空使用 <a href="https://www.ecb.europa.eu/stats/policy_and_exchange_rates/euro_reference_exchange_rates/html/index.en.html" target="_blank" rel="noopener">ECB 参考汇率</a>。每条任务保留实际使用的汇率及日期。</small></div></div>
-<div class="notice warning">固定比对1688搜索结果前5张图，只在模型明确判定同款的图片中选择匹配分数最高的一张；分数大于等于95%即进入该商品明细读取变体价格和重量。单商品遇到非人机技术异常会保留原数据并自动跳过，继续下一件；登录、人机审核和安全验证仍会暂停等待人工处理。</div>
+<div class="notice warning">默认比对1688搜索结果前10张图，可在「参数设置」中调整数量；只在模型明确判定同款的图片中选择匹配分数最高的一张。分数大于等于95%即进入该商品明细读取变体价格和重量。单商品遇到非人机技术异常会保留原数据并自动跳过，继续下一件；登录、人机审核和安全验证仍会暂停等待人工处理。</div>
 <div class="grid"><div class="field"><label for="reference-mode">旧版咨询流程的重量对照</label><select id="reference-mode"><option value="erp">ERP 原有参考重量</option><option value="manual">人工实测包装重量</option><option value="disabled">暂不比较，交人工审核</option></select></div><div class="field"><label for="writeback">ERP 自动回写</label><select id="writeback"><option value="false">关闭 · 审核后转人工处理</option><option value="true">开启 · 仅同步重量和净收益（不改状态）</option></select></div><div class="field"><label for="phrases">咨询话术池（每行一条，至少两条）</label><textarea id="phrases"></textarea></div></div></div>
 <div class="panel"><h2>Edge 与模型连接</h2><p class="muted">使用本机安装的 Edge 和保留登录状态的专用窗口，账号密码由人工输入。密钥填写环境变量名，密钥内容不在网页保存。</p><div class="grid" id="connection-fields"></div></div>
 <div class="panel"><h2>页面字段适配</h2><div class="field"><label for="supplier-auto-adapt">1688 详情页适配方式</label><select id="supplier-auto-adapt"><option value="true">自动识别并校验缺失字段</option><option value="false">仅使用手工配置</option></select></div><p class="muted">开启自动适配时，标题、主图、商家、SKU 行及规格标签可留空。程序在打开商品详情后读取实际页面，由模型识别，再核验商家和 SKU 的稳定 ID；结果保存在商品详情及日志中。非人机技术异常会自动跳过当前商品，登录或人机审核才暂停等待人工。其他字段仍使用下方配置。</p><details><summary>展开 ERP、SKU 与聊天 DOM 字段</summary><div class="notice warning">chat_messages 必须只选择商家发来的消息；消息需要稳定 ID 和 Unix 时间戳。SKU 价格字段必须是明确的人民币单件单价，价格区间、起批量和促销价不会自动取最低值。ERP 重量输入框必须以克为单位。</div><div class="grid" id="selector-fields"></div></details></div>
@@ -74,7 +74,7 @@
 <section id="view-guide" class="panel guide" hidden>
 <h2>先用低成本 API 跑通，再评估本地模型</h2><p>当前默认用 Qwen3-VL-Flash 比较图片和规格，候选通过后再交 Qwen3-VL-Plus 复核；重量提取用 Flash。两次核对必须选择同一个真实 SKU，且分数都大于等于 95%。这是筛选门槛，不能当作实测准确率；正式大批量回写前，应先标注一批真实商品对照验证。</p>
 <table><thead><tr><th>模型 / 设备</th><th>建议</th><th>限制</th></tr></thead><tbody><tr><td>Qwen3-VL-Flash API</td><td>同款初筛与重量提取，优先方案</td><td>需 API 密钥；按实际图像与文本 Token 计费</td></tr><tr><td>Qwen3-VL-Plus API</td><td>仅复核通过初筛的候选</td><td>仍可能误判，SKU 与尺寸信息不能缺失</td></tr><tr><td>M5 Air / M4 mini · 16GB</td><td>先试 Qwen3-VL 4B 量化；8B 小上下文评测</td><td>16GB 是系统共享内存；8B 需为浏览器和图像预留空间</td></tr><tr><td>RTX 4060 Ti · 32GB 系统内存</td><td>8GB 显存先用 4B；16GB 显存优先评测 8B</td><td>32GB 系统内存不等于显存；不保证本地模型达到业务精度</td></tr></tbody></table>
-<p>官方北京地域、单请求输入 ≤32K 的 Qwen3-VL-Flash 价格为输入 ¥0.15 / 百万 Token、输出 ¥1.5 / 百万 Token；Plus 为 ¥1 / ¥10。以每候选输入 6,000、输出 400 Token 估算，Flash 约 ¥0.0015，Plus 约 ¥0.01。每件商品初筛 5 个候选并复核 1 个，1,000 件模型费用约 ¥17.5；实际取决于图片 Token、候选数及失败重试。价格核查日期：2026-09-06。<a href="https://help.aliyun.com/zh/model-studio/model-pricing" target="_blank" rel="noopener">官方价格</a></p>
+<p>官方北京地域、单请求输入 ≤32K 的 Qwen3-VL-Flash 价格为输入 ¥0.15 / 百万 Token、输出 ¥1.5 / 百万 Token；Plus 为 ¥1 / ¥10。以每候选输入 6,000、输出 400 Token 估算，Flash 约 ¥0.0015，Plus 约 ¥0.01。每件商品默认初筛10个候选，实际费用取决于图片 Token、候选数及失败重试。价格核查日期：2026-09-06。<a href="https://help.aliyun.com/zh/model-studio/model-pricing" target="_blank" rel="noopener">官方价格</a></p>
 <p>本地运行可使用 Ollama 的 <code>qwen3-vl:4b</code>（模型包约 3.3GB）或 <code>qwen3-vl:8b</code>（约 6.1GB），接口地址 <code>http://127.0.0.1:11434/v1</code>，三个模型字段改成已安装的模型名。这些包大小不是完整运行内存；先用 4K–8K 上下文、小批量图片测试。<a href="https://ollama.com/library/qwen3-vl" target="_blank" rel="noopener">官方模型库</a> · <a href="https://docs.ollama.com/api/openai-compatibility" target="_blank" rel="noopener">接口说明</a></p>
 <h3>本机启动与登录</h3><ol><li>点击「打开 Edge 登录智赢」，在打开的窗口人工输入账号密码，登录地址为 <code>https://meli.zying.net/#/login</code>。</li><li>登录成功后返回控制台，点击「我已成功登录」。分类、采集、筛选和回填均使用美客多版 <code>https://meli.zying.net/#/product</code>。</li><li>选择分类，或保留「全部分类 · 不筛选」；填写起始页和结束页。两端页码都包含在本次范围内，并可设置首个选中页从第几件开始（默认第 1 件）。</li><li>点击「开始 / 继续逐件核重核价」。程序按智赢页面从上到下逐件执行：首个选中页从设置的序号开始，后续页从第 1 件开始；当前商品只有成功、风险、屏蔽或人工跳过后，才会读取下一件。搜索、读取或保存异常会停在当前商品，处理后可重试，或点击「跳过当前异常」继续。</li><li>异常任务可打开详情修正并单条重试。重试保留商家去重名单，已有会话只重新读取回复。</li><li>SQLite、上次运行参数和 CSV 保存在本机。关闭服务后重启可继续；关闭或更换 Edge 会话后需要重新确认登录。</li></ol>
 <p>按钮使用本机安装的 Edge，并为此模块保留一个持久化浏览器配置目录，后续复用登录会话。无需手动填写调试启动命令；账号密码只在智赢页面由人工输入。</p>
@@ -88,10 +88,10 @@ const names={pending:'待处理',waiting_merchant_reply:'等待回复',success:'
 const $=id=>document.getElementById(id);let page=1,searchTimer,config=null,currentTask=null,toastTimer,refreshing=false,seq=0;
 let runStatus={running:false,login:{confirmed:false}},loginBusy=false,rangeBusy=false,skipBusy=false,terminateBusy=false,selectionRestored=false;
 let categoryOptions=[],categoryBusy=false;
-const fields=[['daily_limit','每日咨询上限',1,1000],['consult_interval_seconds','商家咨询最小间隔（秒）',60,86400],['max_waiting','同时等待的会话数',1,2],['poll_minutes','回复轮询间隔（分钟）',1,1440],['timeout_minutes','商家回复超时（分钟）',1,10080],['match_threshold','同款匹配分数门槛（大于等于）',.95,.999],['small_tolerance_g','≤500g 允许误差（克）',0,50],['large_tolerance_g','>500g 允许误差（克）',0,30],['max_pages','每次最多采集页数',1,10000],['api_timeout_seconds','模型请求超时（秒）',5,300]];
+const fields=[['daily_limit','每日咨询上限',1,1000],['consult_interval_seconds','商家咨询最小间隔（秒）',60,86400],['max_waiting','同时等待的会话数',1,2],['poll_minutes','回复轮询间隔（分钟）',1,1440],['timeout_minutes','商家回复超时（分钟）',1,10080],['match_threshold','同款匹配分数门槛（大于等于）',.95,.999],['small_tolerance_g','≤500g 允许误差（克）',0,50],['large_tolerance_g','>500g 允许误差（克）',0,30],['max_candidates','1688以图搜货识别图片数量',1,20],['max_pages','每次最多采集页数',1,10000],['api_timeout_seconds','模型请求超时（秒）',5,300]];
 const connections=[['cdp_url','本机 Edge CDP 地址'],['erp_list_url','智赢商品列表页'],['supplier_home_url','1688 搜索首页'],['api_base_url','模型 API 基础地址'],['api_key_env','API 密钥环境变量名'],['model','同款初筛模型'],['review_model','同款复核模型'],['weight_model','重量提取模型']];
 function esc(v){const d=document.createElement('span');d.textContent=v??'';return d.innerHTML.replaceAll('"','&quot;').replaceAll("'",'&#39;');}
-function bestSupplierUrl(row){
+function candidateSupplierUrl(row){
  const valid=value=>{try{const u=new URL(value||'');return u.protocol==='https:'&&u.hostname==='detail.1688.com'&&/^\/offer\/\d+\.html$/.test(u.pathname)?u.href:'';}catch(e){return '';}};
  const direct=valid(row.supplier_url)||valid(row.best_match_url);if(direct)return direct;
  const image=(row.image_match_evidence||[]).filter(item=>item?.candidate?.url).sort((a,b)=>(Number(b.review?.confidence)||0)-(Number(a.review?.confidence)||0));
@@ -100,6 +100,12 @@ function bestSupplierUrl(row){
  const detail=(row.match_evidence||[]).filter(item=>item?.candidate?.url).sort((a,b)=>score(b)-score(a));
  for(const item of detail){const url=valid(item.candidate.url);if(url)return url;}
  return '';
+}
+function bestSupplierUrl(row){
+ const url=candidateSupplierUrl(row);if(!url)return '';
+ const threshold=Number(config?.match_threshold??.95);
+ const confidence=Number(row.best_match_confidence??row.image_match_confidence??row.match_confidence);
+ return row.best_match_approved===true||(Number.isFinite(confidence)&&confidence>=threshold)?url:'';
 }
 function renderCandidateSummary(task){const box=$('candidate-summary'),entries=(task.match_evidence||[]).flatMap(item=>item.candidate?.skus||[]);const unique=[],seen=new Set();for(const sku of entries){const id=String(sku.id||'');if(id&&!seen.has(id)){seen.add(id);unique.push(sku);}}const url=bestSupplierUrl(task);if(!unique.length&&!url){box.hidden=true;box.replaceChildren();return;}const shown=unique.slice(0,80);box.hidden=false;box.innerHTML=`<strong>最佳匹配变体（${unique.length} 个${unique.length>shown.length?'，仅显示前80个':''}）</strong><p class="muted">先打开1688详情核对款式；确认后可点击“填入SKU”，保存本地资料再重试。</p>${url?`<p><a href="${esc(url)}" target="_blank" rel="noopener">打开最佳匹配详情</a></p>`:''}<div class="row-actions">${shown.map((sku,index)=>`<button class="small" data-fill-sku="${index}">${esc(sku.label||sku.id)}${sku.price?` · ¥${esc(sku.price)}`:''}${sku.raw_weight?` · ${esc(sku.raw_weight)}`:''}</button>`).join('')}</div>`;box.querySelectorAll('[data-fill-sku]').forEach(button=>button.onclick=()=>{$('cfg-edit-erp_sku').value=shown[Number(button.dataset.fillSku)].label||shown[Number(button.dataset.fillSku)].id;notify('已填入候选SKU，请保存修改后重试');});}
 function notify(message,error=false){$('toast').textContent=message;$('toast').classList.toggle('error',error);$('toast').hidden=false;clearTimeout(toastTimer);toastTimer=setTimeout(()=>$('toast').hidden=true,error?12000:4500);}
@@ -150,6 +156,57 @@ function renderLiveLogs(logs){const root=$('live-log-list');root.replaceChildren
 async function refreshLogs(){if(logsBusy)return;logsBusy=true;try{const fresh=await api('logs?'+new URLSearchParams({limit:lastLogId?2000:10000,...(lastLogId?{after:lastLogId}:{})}));if(!lastLogId)logCache=fresh;else if(fresh.length)logCache.push(...fresh);if(fresh.length||!lastLogId){lastLogId=logCache.at(-1)?.id||0;$('logs').textContent=logCache.length?logCache.map(l=>`${new Date(l.at*1000).toLocaleString('zh-CN')}  [${l.level}] ${l.task_id?'['+l.task_id+'] ':''}${l.message}`).join('\n'):'暂无运行日志。';renderLiveLogs(logCache);}const last=logCache.at(-1);$('latest-event').textContent=last?`最近日志 ${new Date(last.at*1000).toLocaleTimeString('zh-CN')} [${last.level}] ${last.message}`:'暂无运行日志，启动操作后将在这里显示。';}catch(e){$('logs').textContent='日志读取失败：'+e.message;$('latest-event').textContent='日志读取失败：'+e.message;renderLiveLogs([{at:Date.now()/1000,level:'ERROR',message:'日志读取失败：'+e.message}]);}finally{logsBusy=false;}}
 document.querySelectorAll('[data-write]').forEach(e=>e.hidden=!canExecute);
 (async()=>{await loadConfig();try{const saved=await api('categories');renderCategories(saved.options);categoryStatus(saved.meta);}catch(e){notify(e.message,true);}await refresh();})();setInterval(()=>{if(document.visibilityState==='visible')refresh();},2000);
+</script>
+{% endif %}
+{% if not local_only %}
+<script>
+// Add an explicit ERP-vs-1688 view without hiding the audit fields below. The
+// main table is rendered by the existing refresh path; this small decorator
+// reuses the same API snapshot so values cannot drift from the row order.
+function awpDisplayValue(value, suffix=''){
+  return value===null||value===undefined||value===''?'未读取':esc(value)+suffix;
+}
+function awpCurrentErp(row){
+  if(row.erp_after&&typeof row.erp_after==='object'&&Object.keys(row.erp_after).length)return row.erp_after;
+  if(row.erp_before&&typeof row.erp_before==='object'&&Object.keys(row.erp_before).length)return row.erp_before;
+  return {weight_g:row.reference_weight_g};
+}
+function awpDecorateRows(rows){
+  const table=$('rows')?.closest('table');if(!table)return;
+  const heads=table.querySelectorAll('thead th');
+  if(heads[3])heads[3].textContent='当前 ERP（重量 / 净收益）';
+  if(heads[4])heads[4].textContent='1688 识别（重量 / 净收益）';
+  const trs=[...$('rows').querySelectorAll('tr')];
+  rows.forEach((row,index)=>{
+    const cells=trs[index]?.cells;if(!cells||cells.length<9)return;
+    const erp=awpCurrentErp(row);
+    cells[3].className='nowrap';
+    cells[3].innerHTML=`重量 ${awpDisplayValue(erp.weight_g,' g')}<span class="sub">净收益 ${awpDisplayValue(erp.net_income_usd,' $')}</span>`;
+    cells[4].className='nowrap';
+    cells[4].innerHTML=`重量 ${awpDisplayValue(row.weight_g,' g')}<span class="sub">净收益 ${awpDisplayValue(row.net_income_usd,' $')} · 成本 ${awpDisplayValue(row.cost_price,' ¥')}</span>`;
+    const evidence=(row.image_match_evidence||[]).map(item=>Number(item?.review?.confidence)).filter(Number.isFinite);
+    const displayScore=evidence.length?Math.max(...evidence):row.image_match_confidence??row.match_confidence;
+    if(cells[5])cells[5].textContent=displayScore===null||displayScore===undefined?'—':(displayScore*100).toFixed(1)+'%';
+  });
+}
+const awpOriginalRefresh=refresh;
+refresh=async function(){
+  await awpOriginalRefresh();
+  try{
+    const current=$('task-scope').value==='current';
+    const endpoint=(current?'run-items':'tasks')+'?'+new URLSearchParams({status:$('filter').value,search:$('search').value,page});
+    const data=await api(endpoint);
+    awpDecorateRows(data.rows||[]);
+  }catch(_){/* the original refresh already reports API errors */}
+};
+const awpOriginalRenderPricing=renderPricing;
+renderPricing=function(){
+  awpOriginalRenderPricing();
+  const body=$('write-audit')?.querySelector('tbody');if(!body||!currentTask)return;
+  body.querySelectorAll('[data-awp-display]').forEach(row=>row.remove());
+  const erp=awpCurrentErp(currentTask);
+  body.insertAdjacentHTML('afterbegin',`<tr data-awp-display><td>当前 ERP</td><td>${awpDisplayValue(erp.weight_g)}</td><td>${awpDisplayValue(erp.net_income_usd)}</td><td>${awpDisplayValue(erp.review_status)}</td></tr><tr data-awp-display><td>1688 识别 / 计算</td><td>${awpDisplayValue(currentTask.weight_g)}</td><td>${awpDisplayValue(currentTask.net_income_usd)}</td><td>不修改状态</td></tr>`);
+};
 </script>
 {% endif %}
 </body>

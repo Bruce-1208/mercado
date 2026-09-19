@@ -182,6 +182,67 @@ def test_full_detection_snapshot_omits_empty_date_filter():
     assert capped is False
 
 
+def test_detection_pages_continue_past_the_old_2000_record_limit():
+    class Client:
+        def __init__(self):
+            self.offsets = []
+
+        def request(self, _method, _path, *, params):
+            offset = params["offset"]
+            self.offsets.append(offset)
+            if offset >= 2020:
+                return {"infractions": [], "paging": {"total": 2020}}
+            return {
+                "infractions": [
+                    {
+                        "id": str(index),
+                        "related_item_id": f"MLM{index}",
+                        "reason": "The product could be counterfeit.",
+                    }
+                    for index in range(offset, min(offset + 20, 2020))
+                ],
+                "paging": {"offset": offset, "limit": 20, "total": 2020},
+            }
+
+    client = Client()
+    rows, scanned, capped = sync._fetch_detection_pages(
+        client,
+        "123",
+        date_created_since="",
+    )
+
+    assert client.offsets[-1] == 2000
+    assert len(rows) == 2020
+    assert scanned == 2020
+    assert capped is False
+
+
+def test_detection_pages_stop_when_api_repeats_a_page():
+    class Client:
+        def request(self, _method, _path, *, params):
+            return {
+                "infractions": [
+                    {
+                        "id": str(index),
+                        "related_item_id": f"MLM{index}",
+                        "reason": "The product could be counterfeit.",
+                    }
+                    for index in range(20)
+                ],
+                "paging": {"offset": params["offset"], "limit": 20, "total": 100},
+            }
+
+    rows, scanned, capped = sync._fetch_detection_pages(
+        Client(),
+        "123",
+        date_created_since="",
+    )
+
+    assert len(rows) == 20
+    assert scanned == 20
+    assert capped is True
+
+
 def test_live_appeal_collection_excludes_non_generic_brand_reason(monkeypatch):
     monkeypatch.setattr(
         sync,
@@ -361,8 +422,6 @@ def test_live_api_collection_filters_authorized_sites_and_isolates_failures(
 
 
 def test_case_pages_follow_metadata_pagination(monkeypatch):
-    monkeypatch.setattr(sync, "INFRACTION_MAX_CASE_PAGES", 5)
-
     class Client:
         def __init__(self):
             self.offsets = []
@@ -459,7 +518,7 @@ def test_group_tree_nests_account_group_salesperson_and_store():
     assert tree[1]["salespeople"][0]["salesperson"] == "未分配"
 
 
-def test_page_limit_is_a_completed_read_instead_of_retryable_failure(monkeypatch):
+def test_stalled_pagination_is_reported_as_incomplete(monkeypatch):
     monkeypatch.setattr(sync, "get_infraction_sync_context", lambda _token_id: {})
     monkeypatch.setattr(
         sync,
@@ -485,10 +544,11 @@ def test_page_limit_is_a_completed_read_instead_of_retryable_failure(monkeypatch
     )
 
     assert result["status"] == "limited"
-    assert "已读取最新 2000 条" in result["message"]
+    assert "分页无进展" in result["message"]
+    assert "数据可能不完整" in result["message"]
 
 
-def test_limited_read_records_completion_time_and_warning(monkeypatch):
+def test_incomplete_read_remains_retryable_without_advancing_completion(monkeypatch):
     executed = []
 
     class Cursor:
@@ -526,9 +586,8 @@ def test_limited_read_records_completion_time_and_warning(monkeypatch):
     )
 
     sql, params = executed[0]
-    assert "`last_completed_at`" in sql
-    assert params[1:5] == (
-        "2026-09-12 12:34:56",
+    assert "`last_completed_at`" not in sql
+    assert params[1:4] == (
         "2026-09-12 12:34:56",
         "limited",
         "达到安全分页上限",

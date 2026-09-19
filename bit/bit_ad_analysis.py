@@ -48,6 +48,24 @@ def _api_call(function, *args, **kwargs):
         return function(*args, **kwargs)
 
 
+def _normalize_ad_group_status(value: Any) -> str:
+    status = str(value or "").strip().lower()
+    aliases = {
+        "start": "active",
+        "started": "active",
+        "enable": "active",
+        "enabled": "active",
+        "activate": "active",
+        "pause": "paused",
+        "paused": "paused",
+        "active": "active",
+    }
+    normalized = aliases.get(status)
+    if normalized not in {"active", "paused"}:
+        raise ValueError("广告操作状态只能是 active（启动）或 paused（暂停）")
+    return normalized
+
+
 def _float(value: Any) -> float:
     try:
         return float(value or 0)
@@ -362,6 +380,98 @@ def _summary(accounts: list[dict], links: list[dict], errors: list[dict]) -> dic
     return additive
 
 
+def update_product_ads_ad_groups(
+    rows: Iterable[dict[str, Any]], *, status: str
+) -> dict[str, Any]:
+    """Update the status of selected Product Ads groups.
+
+    The analysis response can contain several link rows for one catalog/family
+    group.  Collapse those rows before calling Mercado so a batch action changes
+    each ad group once and reports failures at the same level as the API call.
+    """
+    from bit import bit_mysql
+    from bit.bit_store_link_sync import _client_and_token
+
+    target_status = _normalize_ad_group_status(status)
+    requested_rows = list(rows or [])
+    if not requested_rows:
+        raise ValueError("请至少选择一个广告组")
+    if len(requested_rows) > 500:
+        raise ValueError("单次最多操作 500 条广告链接")
+
+    groups: dict[tuple[int, str, int], dict[str, Any]] = {}
+    for index, row in enumerate(requested_rows, start=1):
+        if not isinstance(row, dict):
+            raise ValueError(f"第 {index} 条广告选择无效")
+        token_id = _integer(row.get("token_id"))
+        site_id = str(row.get("site_id") or "").strip().upper()
+        ad_group_id = _integer(row.get("ad_group_id"))
+        campaign_id = _integer(row.get("campaign_id"))
+        if token_id <= 0 or not site_id or ad_group_id <= 0 or campaign_id <= 0:
+            raise ValueError(f"第 {index} 条广告缺少店铺、站点、活动或广告组编号")
+        key = (token_id, site_id, ad_group_id)
+        group = groups.setdefault(
+            key,
+            {
+                "token_id": token_id,
+                "site_id": site_id,
+                "ad_group_id": ad_group_id,
+                "campaign_id": campaign_id,
+                "item_ids": [],
+            },
+        )
+        item_id = str(row.get("item_id") or "").strip().upper()
+        if item_id and item_id not in group["item_ids"]:
+            group["item_ids"].append(item_id)
+
+    client_cache: dict[int, Any] = {}
+    results: list[dict[str, Any]] = []
+    errors: list[dict[str, Any]] = []
+    for group in groups.values():
+        token_id = int(group["token_id"])
+        site_id = str(group["site_id"])
+        try:
+            cached_client = client_cache.get(token_id)
+            if cached_client is None:
+                token = dict(bit_mysql.get_mercado_store_token(token_id) or {})
+                if not token:
+                    raise ValueError("店铺授权不存在，请重新授权")
+                cached_client = _client_and_token(token)[0]
+                client_cache[token_id] = cached_client
+            _api_call(
+                cached_client.update_product_ads_ad_group,
+                site_id,
+                int(group["ad_group_id"]),
+                int(group["campaign_id"]),
+                target_status,
+            )
+            results.append({
+                **group,
+                "status": target_status,
+                "result": "succeeded",
+            })
+        except Exception as exc:
+            errors.append({
+                **group,
+                "status": target_status,
+                "result": "failed",
+                "message": str(exc),
+            })
+
+    # Do not serve a pre-action status snapshot after a successful write.
+    with _cache_lock:
+        _cache.clear()
+    return {
+        "status": target_status,
+        "requested_count": len(requested_rows),
+        "ad_group_count": len(groups),
+        "success_count": len(results),
+        "failure_count": len(errors),
+        "results": results,
+        "errors": errors,
+    }
+
+
 def collect_ad_analysis(
     *, date_from: str = "", date_to: str = "", token_ids: Iterable[int] | None = None,
     force: bool = False,
@@ -476,4 +586,8 @@ def collect_ad_analysis(
     return dict(result)
 
 
-__all__ = ["AD_METRICS", "collect_ad_analysis"]
+__all__ = [
+    "AD_METRICS",
+    "collect_ad_analysis",
+    "update_product_ads_ad_groups",
+]

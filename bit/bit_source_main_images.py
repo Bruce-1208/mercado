@@ -30,11 +30,10 @@ try:
 except (AttributeError, ValueError):
     pass
 
-import pymysql
 import requests
 from bs4 import BeautifulSoup
 
-from bit.bit_mysql import config as mysql_config
+from bit.bit_mysql import config as mysql_config, pymysql
 
 
 DEFAULT_TABLE = "zying_desktop_products"

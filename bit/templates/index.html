@@ -299,6 +299,15 @@
             scrollbar-width: thin;
         }
 
+        .order-market-source {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            margin-left: auto;
+            padding-left: 12px;
+            white-space: nowrap;
+        }
+
         .order-market-label {
             margin-right: 4px;
             color: #667085;
@@ -362,6 +371,10 @@
             font-weight: 800;
         }
 
+        .order-market-source .order-origin-label {
+            margin-left: 4px;
+        }
+
         .order-origin-button {
             border: 1px solid #e1e8f1;
             border-radius: 7px;
@@ -391,6 +404,14 @@
             padding: 8px 10px;
             border-bottom: 1px solid #e7edf5;
             background: #f8fafc;
+        }
+
+        .order-bulk-bar:not(.active) .order-bulk-group {
+            display: none;
+        }
+
+        .order-bulk-bar:not(.active) .order-bulk-message {
+            color: #98a2b3;
         }
 
         .order-bulk-selection,
@@ -488,12 +509,21 @@
 
         .order-status-strip {
             display: flex;
+            min-width: 0;
+            flex: 1 1 auto;
             gap: 6px;
             overflow-x: auto;
             padding: 9px 10px;
-            border-bottom: 1px solid #e7edf5;
+            border-right: 1px solid #e7edf5;
             background: #fbfcfe;
             scrollbar-width: thin;
+        }
+
+        .order-status-overview {
+            display: flex;
+            min-width: 0;
+            border-bottom: 1px solid #e7edf5;
+            background: #fff;
         }
 
         .order-status-button {
@@ -535,16 +565,17 @@
 
         .order-metrics {
             display: grid;
+            min-width: 530px;
+            flex: 0 0 42%;
             grid-template-columns: repeat(5, minmax(120px, 1fr));
             gap: 1px;
-            border-bottom: 1px solid #e7edf5;
             background: #e7edf5;
         }
 
         .order-metric {
             min-width: 0;
             background: #fff;
-            padding: 9px 12px;
+            padding: 7px 10px;
         }
 
         .order-metric span {
@@ -559,7 +590,7 @@
             display: block;
             overflow: hidden;
             color: #172033;
-            font-size: 18px;
+            font-size: 16px;
             text-overflow: ellipsis;
             white-space: nowrap;
         }
@@ -569,8 +600,8 @@
         }
 
         .order-table-wrap {
-            max-height: calc(100vh - 392px);
-            min-height: 330px;
+            max-height: calc(100vh - 300px);
+            min-height: 420px;
             overflow: auto;
         }
 
@@ -597,6 +628,80 @@
             color: #344054;
             font-size: 12px;
             vertical-align: middle;
+        }
+
+        .order-board.order-density-compact .order-table td {
+            height: 54px;
+            padding: 4px 7px;
+        }
+
+        .order-board.order-density-compact .order-cell-stack {
+            gap: 1px;
+        }
+
+        .order-board.order-density-compact .order-cell-stack strong,
+        .order-board.order-density-compact .order-copy-link {
+            font-size: 12px;
+        }
+
+        .order-board.order-density-compact .order-product {
+            grid-template-columns: 36px minmax(0, 1fr);
+            gap: 6px;
+        }
+
+        .order-board.order-density-compact .order-product-media,
+        .order-board.order-density-compact .order-product-image,
+        .order-board.order-density-compact .order-product-placeholder {
+            width: 36px;
+            height: 36px;
+        }
+
+        .order-row-number {
+            display: flex;
+            min-width: 0;
+            align-items: center;
+            gap: 5px;
+        }
+
+        .order-row-actions {
+            display: flex;
+            align-items: center;
+            gap: 7px;
+        }
+
+        .order-density-switch {
+            display: inline-flex;
+            align-items: center;
+            gap: 2px;
+            padding: 2px;
+            border: 1px solid #dce3ed;
+            border-radius: 7px;
+            background: #f5f7fa;
+        }
+
+        .order-density-switch > span {
+            padding: 0 5px;
+            color: #667085;
+            font-size: 11px;
+            font-weight: 700;
+        }
+
+        .order-density-button {
+            min-width: 0 !important;
+            height: 24px !important;
+            border: 0;
+            border-radius: 5px;
+            background: transparent;
+            color: #667085;
+            padding: 2px 7px !important;
+            font-size: 11px;
+            font-weight: 700;
+        }
+
+        .order-density-button.active {
+            background: #fff;
+            color: #175cd3;
+            box-shadow: 0 1px 3px rgba(16, 24, 40, .12);
         }
 
         .order-table tbody tr {
@@ -4569,7 +4674,7 @@
         .reputation-data-table th:nth-child(14),
         .reputation-data-table td:nth-child(14) { width: 140px; }
         .reputation-data-table th:nth-child(15),
-        .reputation-data-table td:nth-child(15) { width: 90px; }
+        .reputation-data-table td:nth-child(15) { width: 210px; }
         .reputation-data-table th:nth-child(16),
         .reputation-data-table td:nth-child(16) { width: 100px; }
 
@@ -5873,6 +5978,85 @@
             font-size: 14px;
         }
 
+        .ad-analysis-metric-guide {
+            margin: 10px 0 0;
+            border: 1px solid #d9e2ef;
+            border-radius: 8px;
+            background: #f8fbff;
+        }
+
+        .ad-analysis-metric-guide summary {
+            padding: 9px 12px;
+            color: #334155;
+            cursor: pointer;
+            font-size: 13px;
+            font-weight: 800;
+            list-style: none;
+        }
+
+        .ad-analysis-metric-guide summary::-webkit-details-marker {
+            display: none;
+        }
+
+        .ad-analysis-metric-guide summary::after {
+            float: right;
+            color: #64748b;
+            content: "收起";
+            font-size: 12px;
+            font-weight: 600;
+        }
+
+        .ad-analysis-metric-guide:not([open]) summary::after {
+            content: "展开";
+        }
+
+        .ad-analysis-metric-grid {
+            display: grid;
+            grid-template-columns: repeat(5, minmax(0, 1fr));
+            gap: 8px;
+            padding: 0 10px 10px;
+        }
+
+        .ad-analysis-metric-card {
+            min-width: 0;
+            padding: 9px 10px;
+            border: 1px solid #e1e8f1;
+            border-radius: 7px;
+            background: #fff;
+        }
+
+        .ad-analysis-metric-card strong {
+            color: var(--primary-dark);
+            font-size: 13px;
+        }
+
+        .ad-analysis-metric-card p {
+            margin: 4px 0 0;
+            color: #52657d;
+            font-size: 11px;
+            line-height: 1.5;
+        }
+
+        .ad-analysis-metric-card small {
+            display: block;
+            margin-top: 5px;
+            color: #7b8ba0;
+            font-size: 10px;
+            line-height: 1.45;
+        }
+
+        @media (max-width: 900px) {
+            .ad-analysis-metric-grid {
+                grid-template-columns: repeat(2, minmax(0, 1fr));
+            }
+        }
+
+        @media (max-width: 560px) {
+            .ad-analysis-metric-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+
         .store-link-sync-log-panel {
             margin: 10px;
             border: 1px solid #d9e2ef;
@@ -5972,6 +6156,20 @@
             color: var(--muted);
             font-size: 12px;
             text-align: right;
+        }
+
+        .ad-analysis-bulk-actions {
+            align-items: center;
+            flex-wrap: wrap;
+        }
+
+        .ad-analysis-bulk-actions .store-link-bulk-note {
+            padding-bottom: 0;
+            text-align: left;
+        }
+
+        .ad-analysis-bulk-actions button {
+            white-space: nowrap;
         }
 
         .store-link-table-wrap {
@@ -7888,6 +8086,21 @@
                 grid-template-columns: 1fr 1fr;
             }
 
+            .order-status-overview {
+                display: block;
+            }
+
+            .order-status-strip {
+                border-right: 0;
+                border-bottom: 1px solid #e7edf5;
+            }
+
+            .order-metrics {
+                min-width: 0;
+                grid-template-columns: repeat(5, minmax(110px, 1fr));
+                overflow-x: auto;
+            }
+
             .order-filter-field.search {
                 grid-column: 1 / -1;
             }
@@ -7906,6 +8119,7 @@
 
             .order-table-wrap {
                 max-height: none;
+                min-height: 330px;
             }
 
             .order-heading-tools {
@@ -8157,6 +8371,10 @@
 
             .order-filters {
                 grid-template-columns: 1fr;
+            }
+
+            .order-market-source {
+                margin-left: 8px;
             }
 
             .datetime-range-field .market-filter-range {
@@ -8709,6 +8927,9 @@
             .quick-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
             .overview-metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
             .overview-bottom-grid { grid-template-columns: 1fr; }
+            .order-status-overview { display: block; }
+            .order-status-strip { border-right: 0; border-bottom: 1px solid #e7edf5; }
+            .order-metrics { min-width: 0; grid-template-columns: repeat(5, minmax(110px, 1fr)); overflow-x: auto; }
         }
 
         @media (max-width: 900px) {
@@ -9008,6 +9229,7 @@
                 <button class="tab-button" type="button" data-tab="window-anomalies" data-icon="◉" data-permission="shop_status.view" onclick="switchTab('window-anomalies')"><span class="nav-label">店铺状态</span></button>
                 <button class="tab-button" type="button" data-tab="store-tokens" data-icon="⌘" onclick="switchTab('store-tokens')"><span class="nav-label">店铺授权</span></button>
                 <button class="tab-button" type="button" data-tab="store-links" data-icon="↗" onclick="switchTab('store-links')"><span class="nav-label">店铺链接</span></button>
+                <button class="tab-button" type="button" data-tab="promotions" data-icon="％" data-permission="promotions.view" onclick="switchTab('promotions')"><span class="nav-label">活动管理</span></button>
                 <button class="tab-button" type="button" data-tab="ad-analysis" data-icon="◎" data-permission="ad_analysis.view" onclick="switchTab('ad-analysis')"><span class="nav-label">广告分析</span></button>
                 <button class="tab-button" type="button" data-tab="pre-sale" data-icon="?" data-permission="customer_service.view" onclick="switchTab('pre-sale')"><span class="nav-label">售前问答</span></button>
                 <button class="tab-button" type="button" data-tab="customer-service" data-icon="✉" data-permission="customer_service.view" onclick="switchTab('customer-service')"><span class="nav-label">售后处理</span></button>
@@ -9117,7 +9339,7 @@
                     </div>
                 </div>
 
-                <section class="panel order-board">
+                <section class="panel order-board order-density-compact" id="order-board">
                     <div class="order-market-bar" aria-label="国家地区">
                         <span class="order-market-label">国家地区</span>
                         <button class="order-market-button active" type="button" data-country="" data-code="ALL" onclick="setOrderCountry('')">全部</button>
@@ -9127,11 +9349,10 @@
                         <button class="order-market-button" type="button" data-country="哥伦比亚" data-code="CO" onclick="setOrderCountry('哥伦比亚')">哥伦比亚</button>
                         <button class="order-market-button" type="button" data-country="阿根廷" data-code="AR" onclick="setOrderCountry('阿根廷')">阿根廷</button>
                         <button class="order-market-button" type="button" data-country="乌拉圭" data-code="UY" onclick="setOrderCountry('乌拉圭')">乌拉圭</button>
-                    </div>
-
-                    <div class="order-origin-bar" aria-label="订单数据来源">
-                        <span class="order-origin-label">数据来源</span>
-                        <button class="order-origin-button active" type="button" data-origin="token">已添加店铺 · Token 自动拉取<strong id="order-origin-token-count">0</strong></button>
+                        <div class="order-market-source" aria-label="订单数据来源">
+                            <span class="order-origin-label">来源</span>
+                            <button class="order-origin-button active" type="button" data-origin="token">Token 自动拉取<strong id="order-origin-token-count">0</strong></button>
+                        </div>
                     </div>
 
                     <div class="order-bulk-bar" id="order-bulk-bar">
@@ -9256,14 +9477,15 @@
                         </div>
                     </form>
 
-                    <div class="order-status-strip" id="order-status-strip" aria-label="订单状态流水"></div>
-
-                    <div class="order-metrics">
-                        <div class="order-metric"><span>筛选订单</span><strong id="order-metric-total">—</strong></div>
-                        <div class="order-metric"><span>订单金额（美元）</span><strong id="order-metric-amount">—</strong></div>
-                        <div class="order-metric"><span>人民币收入</span><strong id="order-metric-income">—</strong></div>
-                        <div class="order-metric"><span>采购成本</span><strong id="order-metric-cost">—</strong></div>
-                        <div class="order-metric profit"><span>预计利润 / 利润率</span><strong id="order-metric-profit">—</strong></div>
+                    <div class="order-status-overview">
+                        <div class="order-status-strip" id="order-status-strip" aria-label="订单状态流水"></div>
+                        <div class="order-metrics">
+                            <div class="order-metric"><span>筛选订单</span><strong id="order-metric-total">—</strong></div>
+                            <div class="order-metric"><span>订单金额（美元）</span><strong id="order-metric-amount">—</strong></div>
+                            <div class="order-metric"><span>人民币收入</span><strong id="order-metric-income">—</strong></div>
+                            <div class="order-metric"><span>采购成本</span><strong id="order-metric-cost">—</strong></div>
+                            <div class="order-metric profit"><span>预计利润 / 利润率</span><strong id="order-metric-profit">—</strong></div>
+                        </div>
                     </div>
 
                     <div class="order-table-wrap">
@@ -9292,6 +9514,11 @@
                     <div class="order-pagination">
                         <div class="order-pagination-summary" id="order-pagination-summary">共 0 条</div>
                         <div class="order-pagination-actions">
+                            <div class="order-density-switch" aria-label="订单表格行密度">
+                                <span>行高</span>
+                                <button class="order-density-button active" type="button" data-density="compact" aria-pressed="true" onclick="setOrderDensity('compact')">紧凑</button>
+                                <button class="order-density-button" type="button" data-density="comfortable" aria-pressed="false" onclick="setOrderDensity('comfortable')">舒适</button>
+                            </div>
                             <select id="order-page-size" aria-label="每页数量" onchange="changeOrderPageSize(this.value)">
                                 <option value="25">25 条/页</option>
                                 <option value="50">50 条/页</option>
@@ -11229,6 +11456,7 @@
                         <div class="field"><label for="store-link-bulk-width">宽(cm)</label><input id="store-link-bulk-width" type="number" min="0" step="0.01" placeholder="不修改"></div>
                         <div class="field"><label for="store-link-bulk-height">高(cm)</label><input id="store-link-bulk-height" type="number" min="0" step="0.01" placeholder="不修改"></div>
                         <div class="field"><label for="store-link-bulk-net">净收益(USD)</label><input id="store-link-bulk-net" type="number" step="0.01" placeholder="不修改"></div>
+                        <button class="primary" id="store-link-advertise-button" type="button" onclick="openSelectedStoreLinkAdvertise()" disabled>创建广告组</button>
                         <button class="primary" id="store-link-bulk-button" type="button" onclick="bulkUpdateStoreLinks()" disabled>修改美客多后台</button>
                         <button class="danger" id="store-link-delete-button" type="button" onclick="deleteSelectedStoreLinks()" disabled>删除所选</button>
                         <span class="store-link-bulk-note" id="store-link-message">先勾选链接并填写修改项；同步进行中也可提交，任务会自动排队</span>
@@ -11276,6 +11504,18 @@
                 </section>
             </div>
 
+            <div class="tab-page" id="tab-promotions">
+                <div class="tab-heading">
+                    <div>
+                        <h2>活动管理</h2>
+                        <p>集中管理店群活动、候选商品、批量报名与执行记录</p>
+                    </div>
+                </div>
+                <section class="panel" style="height:calc(100vh - 150px);min-height:760px;overflow:hidden;padding:0">
+                    <iframe id="promotions-frame" title="美客多活动管理" data-src="/promotions?embedded=1" style="display:block;width:100%;height:100%;border:0;background:#fff"></iframe>
+                </section>
+            </div>
+
             <div class="tab-page" id="tab-ad-analysis">
                 <div class="tab-heading">
                     <div>
@@ -11300,6 +11540,48 @@
 
                     <p class="store-link-bulk-note" id="ad-analysis-message">默认查询近 30 天；官方指标每日更新，日期跨度最多 90 天。</p>
 
+                    <div class="store-link-bulk ad-analysis-bulk-actions">
+                        <div class="store-link-selection">
+                            <input id="ad-analysis-select-page" type="checkbox" onchange="toggleAdAnalysisPageSelection(this.checked)" aria-label="选择本页广告">
+                            <label for="ad-analysis-select-page">全选本页</label>
+                        </div>
+                        <span class="store-link-bulk-note" id="ad-analysis-selection-note">已选择 0 个广告组</span>
+                        <button class="primary ad-analysis-execute-action" id="ad-analysis-activate-selected" type="button" onclick="updateSelectedAdAnalysisGroups('active')" disabled>启动所选广告</button>
+                        <button class="secondary ad-analysis-execute-action" id="ad-analysis-pause-selected" type="button" onclick="updateSelectedAdAnalysisGroups('paused')" disabled>暂停所选广告</button>
+                        <button class="secondary" id="ad-analysis-clear-selection" type="button" onclick="clearAdAnalysisSelection()" disabled>清空选择</button>
+                    </div>
+
+                    <details class="ad-analysis-metric-guide" open>
+                        <summary>广告指标说明</summary>
+                        <div class="ad-analysis-metric-grid">
+                            <div class="ad-analysis-metric-card">
+                                <strong>ROAS｜广告投入产出比</strong>
+                                <p>广告归因成交额 ÷ 广告开销。表示每投入 1 元广告费带来多少广告成交额，通常越高越好。</p>
+                                <small>单位：×；不等同于利润率</small>
+                            </div>
+                            <div class="ad-analysis-metric-card">
+                                <strong>ACOS｜广告销售成本比</strong>
+                                <p>广告开销 ÷ 广告归因成交额 × 100%。表示广告费占广告成交额的比例，通常越低越好。</p>
+                                <small>单位：%；无成交额时参考意义有限</small>
+                            </div>
+                            <div class="ad-analysis-metric-card">
+                                <strong>CTR｜点击率</strong>
+                                <p>点击次数 ÷ 曝光次数 × 100%。衡量广告被看到后产生点击的吸引力，通常越高越好。</p>
+                                <small>单位：%</small>
+                            </div>
+                            <div class="ad-analysis-metric-card">
+                                <strong>CPC｜平均点击成本</strong>
+                                <p>广告开销 ÷ 点击次数。表示每次点击平均花费多少，需结合 CTR、CVR 和利润判断。</p>
+                                <small>单位：当地货币 / 次点击</small>
+                            </div>
+                            <div class="ad-analysis-metric-card">
+                                <strong>CVR｜转化率</strong>
+                                <p>广告归因成交件数 ÷ 点击次数 × 100%。衡量点击后形成成交的能力，通常越高越好。</p>
+                                <small>单位：%；这里按广告归因成交件数计算</small>
+                            </div>
+                        </div>
+                    </details>
+
                     <div class="store-link-sync-strip" aria-label="广告汇总指标">
                         <div class="store-link-sync-main"><span>数据期间</span><strong id="ad-analysis-period">-</strong></div>
                         <div class="store-link-sync-metric"><span>广告账户</span><strong id="ad-analysis-account-count">0</strong></div>
@@ -11321,8 +11603,8 @@
                     <h3 class="panel-title" style="margin-top:22px">链接效果</h3>
                     <div class="store-link-table-wrap">
                         <table class="store-link-table" style="min-width:1850px">
-                            <thead><tr><th>店铺 / 站点</th><th>商品链接</th><th>广告活动</th><th>广告组</th><th>状态</th><th>开销</th><th>广告成交额</th><th>ROAS / ACOS</th><th>曝光 / 点击</th><th>CTR / CPC</th><th>成交件数 / CVR</th><th>直接 / 间接成交额</th></tr></thead>
-                            <tbody id="ad-analysis-link-body"><tr><td class="empty-state" colspan="12">打开模块后读取所有广告链接</td></tr></tbody>
+                            <thead><tr><th><input id="ad-analysis-select-all" type="checkbox" onchange="toggleAdAnalysisPageSelection(this.checked)" aria-label="选择本页广告"></th><th>店铺 / 站点</th><th>商品链接</th><th>广告活动</th><th>广告组</th><th>状态</th><th>开销</th><th>广告成交额</th><th>ROAS / ACOS</th><th>曝光 / 点击</th><th>CTR / CPC</th><th>成交件数 / CVR</th><th>直接 / 间接成交额</th></tr></thead>
+                            <tbody id="ad-analysis-link-body"><tr><td class="empty-state" colspan="13">打开模块后读取所有广告链接</td></tr></tbody>
                         </table>
                     </div>
                     <div class="store-link-pagination">
@@ -11605,7 +11887,7 @@
                         </div>
                         <button class="order-detail-close" type="button" aria-label="关闭店铺配置" onclick="document.getElementById('mercado-site-settings-dialog').close()">×</button>
                     </div>
-                    <p class="mercado-site-settings-intro">“更新声誉”通过官方 API 更新声誉和站点状态；“七天流量”才会启动浏览器。业务员和分组对全部站点统一生效。</p>
+                    <p class="mercado-site-settings-intro">“更新声誉”通过官方 API 更新声誉，并通过 account-risk 页面核对账号状态；“七天流量”控制是否额外采集流量。业务员和分组对全部站点统一生效。</p>
                     <div class="mercado-account-settings-grid">
                         <div class="field">
                             <label for="mercado-site-salesperson">业务员</label>
@@ -12612,7 +12894,7 @@
                                     <th>流量趋势</th>
                                     <th>系统告警</th>
                                     <th>更新时间</th>
-                                    <th>账号状态</th>
+                                    <th>账号状态 / 封禁天数</th>
                                     <th>操作</th>
                                 </tr>
                             </thead>
@@ -12627,7 +12909,7 @@
             <div class="tab-page" id="tab-api-reputation">
                 <div class="tab-heading">
                     <h2>API 声誉</h2>
-                    <p>每天北京时间 14:00 自动刷新，并发 30；仅七天流量趋势通过浏览器采集，其余声誉数据通过官方 API 获取</p>
+                    <p>每天北京时间 14:00 自动刷新，并发 30；账号状态与七天流量通过浏览器核对，其余声誉数据通过官方 API 获取</p>
                 </div>
 
                 <section class="panel infractions-panel">
@@ -12905,7 +13187,7 @@
                         <h2 class="panel-title" style="margin: 0;">店铺任务范围</h2>
                         <p class="panel-subtitle">
                             店铺、业务员、店铺组和站点任务范围已统一迁移到“店铺授权”。
-                            “更新声誉”控制官方 API 声誉读取，“七天流量”控制浏览器流量读取，“进行申诉”控制申诉任务；
+                            “更新声誉”控制官方 API 声誉读取及 account-risk 账号状态核对，“七天流量”控制浏览器流量读取，“进行申诉”控制申诉任务；
                             BitBrowser 窗口按授权显示名称或 Mercado 昵称实时匹配。
                         </p>
                     </section>
@@ -13234,6 +13516,7 @@
         const storeLinkSelectAll = document.getElementById("store-link-select-all");
         const storeLinkSelectionCount = document.getElementById("store-link-selection-count");
         const storeLinkBody = document.getElementById("store-link-body");
+        const storeLinkAdvertiseButton = document.getElementById("store-link-advertise-button");
         const storeLinkBulkButton = document.getElementById("store-link-bulk-button");
         const storeLinkDeleteButton = document.getElementById("store-link-delete-button");
         const storeLinkMessage = document.getElementById("store-link-message");
@@ -13254,6 +13537,12 @@
         const adAnalysisMessage = document.getElementById("ad-analysis-message");
         const adAnalysisAccountBody = document.getElementById("ad-analysis-account-body");
         const adAnalysisLinkBody = document.getElementById("ad-analysis-link-body");
+        const adAnalysisSelectPage = document.getElementById("ad-analysis-select-page");
+        const adAnalysisSelectAll = document.getElementById("ad-analysis-select-all");
+        const adAnalysisSelectionNote = document.getElementById("ad-analysis-selection-note");
+        const adAnalysisActivateSelected = document.getElementById("ad-analysis-activate-selected");
+        const adAnalysisPauseSelected = document.getElementById("ad-analysis-pause-selected");
+        const adAnalysisClearSelection = document.getElementById("ad-analysis-clear-selection");
         const prohibitedSyncAllButton = document.getElementById("prohibited-sync-all-button");
         const prohibitedSyncStoreButton = document.getElementById("prohibited-sync-store-button");
         const prohibitedSyncSalespersonButton = document.getElementById("prohibited-sync-salesperson-button");
@@ -13421,6 +13710,7 @@
         const publishRecordSelectAll = document.getElementById("publish-record-select-all");
         const publishRecordRetry = document.getElementById("publish-record-retry");
         const publishRecordSelectionSummary = document.getElementById("publish-record-selection-summary");
+        const orderBoard = document.getElementById("order-board");
         const orderTableBody = document.getElementById("order-table-body");
         const orderStatusStrip = document.getElementById("order-status-strip");
         const orderStatusFilter = document.getElementById("order-status-filter");
@@ -13440,6 +13730,7 @@
         const orderDetailTitle = document.getElementById("order-detail-title");
         const orderDetailContent = document.getElementById("order-detail-content");
         const orderAutoState = document.getElementById("order-auto-state");
+        const orderBulkBar = document.getElementById("order-bulk-bar");
         const orderSelectAll = document.getElementById("order-select-all");
         const orderSelectionCount = document.getElementById("order-selection-count");
         const orderBulkStatus = document.getElementById("order-bulk-status");
@@ -13621,6 +13912,8 @@
         let adAnalysisData = {summary: {}, accounts: [], links: [], errors: []};
         let adAnalysisPage = 1;
         const adAnalysisPageSize = 100;
+        const adAnalysisSelectedRows = new Map();
+        let adAnalysisActionBusy = false;
         let prohibitedListingsLoaded = false;
         let prohibitedStoreOptions = [];
         let prohibitedPage = 1;
@@ -13805,6 +14098,7 @@
                 "infractions.execute": ["#collect-infractions-btn"],
                 "reputation.execute": ["#collect-reputation-btn", "#update-selected-reputation-btn"],
                 "customer_service.manage": [".customer-service-manage-action"],
+                "ad_analysis.execute": ["#ad-analysis-activate-selected", "#ad-analysis-pause-selected"],
             };
             Object.entries(actionSelectors).forEach(([permission, selectors]) => {
                 if (hasWorkbenchPermission(permission)) return;
@@ -13987,6 +14281,13 @@
                 if (!storeLinksLoaded) loadStoreLinks(1);
                 loadStoreLinkSyncStatus();
                 loadStoreLinkRemoteUpdateStatus();
+            }
+            if (tabName === "promotions") {
+                const frame = document.getElementById("promotions-frame");
+                if (frame && !frame.dataset.loaded) {
+                    frame.src = frame.dataset.src;
+                    frame.dataset.loaded = "1";
+                }
             }
             if (tabName === "ad-analysis" && !adAnalysisLoaded) {
                 loadAdAnalysis(false);
@@ -14780,6 +15081,7 @@
                 checkbox.indeterminate = selectedVisible.length > 0 && !allChecked;
             });
             orderSelectionCount.textContent = `已选 ${selectedOrderIds.size} 单`;
+            orderBulkBar?.classList.toggle("active", selectedOrderIds.size > 0);
             orderBulkStatusButton.disabled = orderBulkRunning || selectedOrderIds.size === 0;
             orderBulkPurchaseButton.disabled = orderBulkRunning || selectedOrderIds.size === 0;
             orderPurchaseTrackingSyncButton.disabled = orderBulkRunning || selectedOrderIds.size === 0;
@@ -14982,14 +15284,12 @@
                     <tr class="${allSelected ? "selected" : ""}" onclick="showOrderDetail(${index})" tabindex="0" onkeydown="if(event.key === 'Enter') showOrderDetail(${index})">
                         <td onclick="event.stopPropagation()"><input class="order-row-checkbox" type="checkbox" value="${escapeHtml(orderId)}" data-order-ids="${escapeHtml(mergedOrderIds.join(','))}" aria-label="选择打包单 ${escapeHtml(displayLabel)}" onchange="toggleOrderGroupSelection(this.dataset.orderIds, this.checked, this.closest('tr'))" ${allSelected ? "checked" : ""}></td>
                         <td><div class="order-cell-stack">
-                            <button class="order-copy-link" type="button" title="${displayNumber ? "复制打包单号" : "尚未生成打包单号"}" onclick="event.stopPropagation(); copyOrderNumber('${encodedDisplayNumber}', this)" ${displayNumber ? "" : "disabled"}>
+                            <div class="order-row-number"><button class="order-copy-link" type="button" title="${displayNumber ? "复制打包单号" : "尚未生成打包单号"}" onclick="event.stopPropagation(); copyOrderNumber('${encodedDisplayNumber}', this)" ${displayNumber ? "" : "disabled"}>
                                 ${escapeHtml(displayLabel)} ${displayNumber ? '<span aria-hidden="true">⧉</span>' : ""}
-                            </button>
+                            </button><span class="order-country-tag">${escapeHtml(row.country || "未分类")}</span></div>
                             ${row.is_merged ? `<span>${mergedOrderIds.length} 个子订单</span>` : ""}
-                            <button class="order-copy-link" type="button" title="调用美客多接口打印发货面单" onclick="event.stopPropagation(); printOrders(JSON.parse(decodeURIComponent('${encodedOrderIds}')))">打印面单</button>
-                            ${row.platform_shipping_id ? `<button class="order-copy-link" type="button" title="拆成两个美客多包裹" onclick="event.stopPropagation(); openOrderSplitDialog(JSON.parse(decodeURIComponent('${encodedOrderIds}')))">拆分发货</button>` : ""}
-                            <span class="order-country-tag">${escapeHtml(row.country || "未分类")}</span>
-                            <span class="order-origin-tag token">Token 拉取</span>
+                            <div class="order-row-actions"><button class="order-copy-link" type="button" title="调用美客多接口打印发货面单" onclick="event.stopPropagation(); printOrders(JSON.parse(decodeURIComponent('${encodedOrderIds}')))">打印</button>
+                            ${row.platform_shipping_id ? `<button class="order-copy-link" type="button" title="拆成两个美客多包裹" onclick="event.stopPropagation(); openOrderSplitDialog(JSON.parse(decodeURIComponent('${encodedOrderIds}')))">拆分</button>` : ""}</div>
                         </div></td>
                         <td>${orderProductMarkup(row)}</td>
                         <td><div class="order-cell-stack"><strong>${escapeHtml(row.shop_name || row.source || "美客多")}</strong><span>Token 拉取</span></div></td>
@@ -15434,6 +15734,17 @@
             orderPageSize = Math.max(10, Math.min(200, Number(value || 200)));
             orderPages = 1;
             loadOrders(1);
+        }
+
+        function setOrderDensity(density, persist = true) {
+            const normalized = density === "comfortable" ? "comfortable" : "compact";
+            orderBoard?.classList.toggle("order-density-compact", normalized === "compact");
+            document.querySelectorAll(".order-density-button").forEach(button => {
+                const active = button.dataset.density === normalized;
+                button.classList.toggle("active", active);
+                button.setAttribute("aria-pressed", active ? "true" : "false");
+            });
+            if (persist) window.localStorage.setItem("zeshun-order-density", normalized);
         }
 
         async function copyOrderNumber(encodedValue, button) {
@@ -21760,21 +22071,82 @@
             });
         }
 
+        function adAnalysisRowKey(row) {
+            return [
+                Number(row?.token_id || 0),
+                String(row?.site_id || ""),
+                Number(row?.ad_group_id || 0),
+            ].join(":");
+        }
+
+        function currentAdAnalysisPageRows() {
+            const rows = filteredAdAnalysisLinks();
+            const pages = Math.max(1, Math.ceil(rows.length / adAnalysisPageSize));
+            adAnalysisPage = Math.max(1, Math.min(adAnalysisPage, pages));
+            return rows.slice(
+                (adAnalysisPage - 1) * adAnalysisPageSize,
+                adAnalysisPage * adAnalysisPageSize,
+            );
+        }
+
+        function updateAdAnalysisSelection() {
+            const pageRows = currentAdAnalysisPageRows();
+            const pageKeys = pageRows.map(adAnalysisRowKey);
+            const selectedOnPage = pageKeys.filter(key => adAnalysisSelectedRows.has(key)).length;
+            const allSelected = pageRows.length > 0 && selectedOnPage === pageRows.length;
+            const partiallySelected = selectedOnPage > 0 && !allSelected;
+            [adAnalysisSelectPage, adAnalysisSelectAll].forEach(element => {
+                if (!element) return;
+                element.checked = allSelected;
+                element.indeterminate = partiallySelected;
+            });
+            if (adAnalysisSelectionNote) {
+                adAnalysisSelectionNote.textContent = `已选择 ${adAnalysisSelectedRows.size.toLocaleString("zh-CN")} 个广告组`;
+            }
+            const disabled = adAnalysisActionBusy || adAnalysisSelectedRows.size === 0;
+            if (adAnalysisActivateSelected) adAnalysisActivateSelected.disabled = disabled;
+            if (adAnalysisPauseSelected) adAnalysisPauseSelected.disabled = disabled;
+            if (adAnalysisClearSelection) adAnalysisClearSelection.disabled = disabled;
+        }
+
+        function toggleAdAnalysisRowSelection(key, checked) {
+            const row = (adAnalysisData.links || []).find(item => adAnalysisRowKey(item) === String(key));
+            if (checked && row) adAnalysisSelectedRows.set(String(key), row);
+            else adAnalysisSelectedRows.delete(String(key));
+            updateAdAnalysisSelection();
+        }
+
+        function toggleAdAnalysisPageSelection(checked) {
+            currentAdAnalysisPageRows().forEach(row => {
+                const key = adAnalysisRowKey(row);
+                if (checked) adAnalysisSelectedRows.set(key, row);
+                else adAnalysisSelectedRows.delete(key);
+            });
+            renderAdAnalysisLinks();
+        }
+
+        function clearAdAnalysisSelection() {
+            adAnalysisSelectedRows.clear();
+            renderAdAnalysisLinks();
+        }
+
         function renderAdAnalysisLinks() {
             const rows = filteredAdAnalysisLinks();
             const pages = Math.max(1, Math.ceil(rows.length / adAnalysisPageSize));
             adAnalysisPage = Math.max(1, Math.min(adAnalysisPage, pages));
-            const pageRows = rows.slice((adAnalysisPage - 1) * adAnalysisPageSize, adAnalysisPage * adAnalysisPageSize);
+            const pageRows = currentAdAnalysisPageRows();
             if (!pageRows.length) {
-                adAnalysisLinkBody.innerHTML = '<tr><td class="empty-state" colspan="12">当前筛选没有广告链接数据</td></tr>';
+                adAnalysisLinkBody.innerHTML = '<tr><td class="empty-state" colspan="13">当前筛选没有广告链接数据</td></tr>';
             } else {
                 adAnalysisLinkBody.innerHTML = pageRows.map(row => {
                     const metrics = row.metrics || {};
+                    const rowKey = adAnalysisRowKey(row);
                     const title = escapeHtml(row.title || "未命名商品");
                     const product = row.permalink
                         ? `<a class="store-link-url" href="${escapeHtml(row.permalink)}" target="_blank" rel="noopener noreferrer"><strong>${title}</strong></a>`
                         : `<strong>${title}</strong>`;
                     return `<tr>
+                        <td><input type="checkbox" data-ad-analysis-key="${escapeHtml(rowKey)}" onchange="toggleAdAnalysisRowSelection(this.dataset.adAnalysisKey, this.checked)" ${adAnalysisSelectedRows.has(rowKey) ? "checked" : ""} aria-label="选择 ${escapeHtml(row.item_id || "广告")}"></td>
                         <td><strong>${escapeHtml(row.store_name || "-")}</strong><span class="market-metric-note">${escapeHtml(row.site_id || "-")} · ${escapeHtml(row.account_name || row.advertiser_name || "-")}</span></td>
                         <td>${product}<span class="market-metric-note">${escapeHtml(row.item_id || "-")}</span></td>
                         <td><strong>${escapeHtml(row.campaign_name || `活动 ${row.campaign_id || "-"}`)}</strong><span class="market-metric-note">日预算 ${adAnalysisMoney(row.currency_id, row.campaign_budget)}</span></td>
@@ -21794,6 +22166,7 @@
             document.getElementById("ad-analysis-page-indicator").textContent = `${adAnalysisPage} / ${pages}`;
             document.getElementById("ad-analysis-prev").disabled = adAnalysisPage <= 1;
             document.getElementById("ad-analysis-next").disabled = adAnalysisPage >= pages;
+            updateAdAnalysisSelection();
         }
 
         function renderAdAnalysis() {
@@ -21815,6 +22188,50 @@
             document.getElementById("ad-analysis-link-body")?.closest(".store-link-table-wrap")?.scrollIntoView({behavior: "smooth", block: "start"});
         }
 
+        async function updateSelectedAdAnalysisGroups(status) {
+            if (adAnalysisActionBusy || !adAnalysisSelectedRows.size) return;
+            const targetStatus = String(status || "").toLowerCase();
+            const actionLabel = targetStatus === "active" ? "启动" : "暂停";
+            const rows = Array.from(adAnalysisSelectedRows.values());
+            if (!window.confirm(`确定${actionLabel}所选 ${rows.length} 个广告组吗？`)) return;
+            adAnalysisActionBusy = true;
+            updateAdAnalysisSelection();
+            adAnalysisMessage.textContent = `正在${actionLabel} ${rows.length} 个广告组，请稍候…`;
+            try {
+                const response = await fetch("/api/ad-analysis/actions", {
+                    method: "POST",
+                    headers: {"Content-Type": "application/json"},
+                    body: JSON.stringify({status: targetStatus, rows}),
+                });
+                const payload = await response.json().catch(() => ({}));
+                if (!response.ok || payload.status !== "success") {
+                    throw new Error(payload.message || `接口请求失败：${response.status}`);
+                }
+                const result = payload.data || {};
+                const succeeded = Array.isArray(result.results) ? result.results : [];
+                const failed = Array.isArray(result.errors) ? result.errors : [];
+                const nextStatus = targetStatus.toUpperCase();
+                const changedKeys = new Set(succeeded.map(adAnalysisRowKey));
+                (adAnalysisData.links || []).forEach(row => {
+                    if (changedKeys.has(adAnalysisRowKey(row))) {
+                        row.ad_group_status = nextStatus;
+                        row.status = nextStatus;
+                    }
+                });
+                succeeded.forEach(row => adAnalysisSelectedRows.delete(adAnalysisRowKey(row)));
+                renderAdAnalysisLinks();
+                const failureText = failed.length
+                    ? `；失败 ${failed.length} 个：${failed.slice(0, 3).map(row => `${row.item_ids?.[0] || row.ad_group_id || "广告组"}（${row.message || "未知错误"}）`).join("、")}`
+                    : "";
+                adAnalysisMessage.textContent = `${actionLabel}完成：成功 ${succeeded.length} 个广告组${failureText}`;
+            } catch (error) {
+                adAnalysisMessage.textContent = `${actionLabel}失败：${error.message || error}`;
+            } finally {
+                adAnalysisActionBusy = false;
+                updateAdAnalysisSelection();
+            }
+        }
+
         async function loadAdAnalysis(force = false) {
             if (adAnalysisLoading) return;
             initializeAdAnalysisDates();
@@ -21833,6 +22250,10 @@
                     throw new Error(payload.message || `接口请求失败：${response.status}`);
                 }
                 adAnalysisData = payload.data || {summary: {}, accounts: [], links: [], errors: []};
+                const availableKeys = new Set((adAnalysisData.links || []).map(adAnalysisRowKey));
+                Array.from(adAnalysisSelectedRows.keys()).forEach(key => {
+                    if (!availableKeys.has(key)) adAnalysisSelectedRows.delete(key);
+                });
                 adAnalysisLoaded = true;
                 adAnalysisPage = 1;
                 populateAdAnalysisFilters();
@@ -21921,18 +22342,28 @@
 
         let storeLinkAdvertiseBusy = false;
         function openStoreLinkAdvertise(linkId) {
+            openStoreLinkAdvertiseDialog([Number(linkId)]);
+        }
+
+        function openSelectedStoreLinkAdvertise() {
+            openStoreLinkAdvertiseDialog(Array.from(selectedStoreLinkIds));
+        }
+
+        function openStoreLinkAdvertiseDialog(linkIds) {
             if (storeLinkAdvertiseBusy) {
                 alert("广告正在提交，请等待完成");
                 return;
             }
-            const row = storeLinkRows.find(item => Number(item.id) === linkId);
-            if (!row) return;
+            const ids = Array.from(new Set((linkIds || []).map(Number).filter(Number.isInteger)));
+            const rows = ids.map(id => storeLinkRows.find(item => Number(item.id) === id)).filter(Boolean);
+            if (!rows.length) return;
+            const multiple = ids.length > 1;
             let dialog = document.getElementById("store-link-advertise-dialog");
             if (!dialog) {
                 dialog = document.createElement("dialog");
                 dialog.id = "store-link-advertise-dialog";
                 dialog.style.cssText = "width:min(560px,92vw);border:1px solid #dbe2ea;border-radius:14px;padding:24px;";
-                dialog.innerHTML = `<h3 style="margin-top:0">投放 Product Ads</h3>
+                dialog.innerHTML = `<h3 id="store-link-advertise-title" style="margin-top:0">投放 Product Ads</h3>
                     <p id="store-link-advertise-target"></p>
                     <label style="display:block;margin:12px 0 5px">广告活动名称</label>
                     <input id="store-link-advertise-name" type="text" maxlength="100" style="width:100%" aria-label="广告活动名称">
@@ -21948,16 +22379,27 @@
                 dialog.addEventListener("cancel", event => { if (storeLinkAdvertiseBusy) event.preventDefault(); });
                 document.getElementById("store-link-advertise-close").onclick = () => dialog.close();
             }
-            document.getElementById("store-link-advertise-target").textContent = `${row.store_name || ""} · ${row.item_id} · ${row.site_id} · ${row.title || ""}`;
-            document.getElementById("store-link-advertise-name").value = `链接广告-${row.item_id}`;
-            document.getElementById("store-link-advertise-message").textContent = "提交后会立即创建或更新广告活动，并启用该商品广告。";
+            const row = rows[0];
+            document.getElementById("store-link-advertise-title").textContent = multiple ? "批量创建广告组" : "投放 Product Ads";
+            document.getElementById("store-link-advertise-target").textContent = multiple
+                ? `已选择 ${ids.length} 条链接，系统会按店铺和站点分别创建活动，并把对应广告组加入活动。`
+                : `${row.store_name || ""} · ${row.item_id} · ${row.site_id} · ${row.title || ""}`;
+            const now = new Date();
+            const dateLabel = [now.getFullYear(), String(now.getMonth() + 1).padStart(2, "0"), String(now.getDate()).padStart(2, "0")].join("");
+            document.getElementById("store-link-advertise-name").value = multiple ? `批量链接广告-${dateLabel}` : `链接广告-${row.item_id}`;
+            document.getElementById("store-link-advertise-message").textContent = multiple
+                ? "同一广告账户和站点的链接会进入同一个活动；不符合投放条件的链接会单独列出失败原因。"
+                : "提交后会立即创建或更新广告活动，并启用该商品广告。";
             document.getElementById("store-link-advertise-submit").disabled = false;
-            document.getElementById("store-link-advertise-submit").onclick = () => submitStoreLinkAdvertise(linkId);
+            document.getElementById("store-link-advertise-submit").onclick = () => submitStoreLinkAdvertise(ids);
             dialog.showModal();
         }
 
-        async function submitStoreLinkAdvertise(linkId) {
+        async function submitStoreLinkAdvertise(linkIds) {
             if (storeLinkAdvertiseBusy) return;
+            const ids = Array.from(new Set((Array.isArray(linkIds) ? linkIds : [linkIds]).map(Number).filter(Number.isInteger)));
+            if (!ids.length) return;
+            const multiple = ids.length > 1;
             const budget = Number(document.getElementById("store-link-advertise-budget").value);
             const roasTarget = Number(document.getElementById("store-link-advertise-roas").value);
             const campaignName = document.getElementById("store-link-advertise-name").value.trim();
@@ -21978,12 +22420,14 @@
             const close = document.getElementById("store-link-advertise-close");
             storeLinkAdvertiseBusy = true;
             submit.disabled = close.disabled = true;
-            message.textContent = "正在创建广告活动并启用商品广告…";
+            updateStoreLinkSelection();
+            message.textContent = multiple ? `正在为 ${ids.length} 条链接创建广告组…` : "正在创建广告活动并启用商品广告…";
             try {
-                const response = await fetch(`/api/store-links/${linkId}/advertise`, {
+                const response = await fetch(multiple ? "/api/store-links/bulk-advertise" : `/api/store-links/${ids[0]}/advertise`, {
                     method: "POST",
                     headers: {"Content-Type": "application/json"},
                     body: JSON.stringify({
+                        ...(multiple ? {link_ids: ids} : {}),
                         budget,
                         roas_target: roasTarget,
                         campaign_name: campaignName,
@@ -21994,7 +22438,15 @@
                     throw new Error(payload.message || `投放失败（${response.status}）`);
                 }
                 const data = payload.data || {};
-                message.textContent = `投放成功：活动 ${data.campaign_name || campaignName}（ID ${data.campaign_id || "-"}），每日预算 ${data.currency_id || ""} ${storeLinkNumber(data.budget, 2)}，目标 ROAS ${storeLinkNumber(data.roas_target, 1)}。`;
+                if (multiple) {
+                    const errors = Array.isArray(data.errors) ? data.errors : [];
+                    const errorSummary = errors.length
+                        ? ` 失败示例：${errors.slice(0, 3).map(row => `${row.item_id || row.link_id}（${row.message || "未知错误"}）`).join("；")}${errors.length > 3 ? "…" : ""}`
+                        : "";
+                    message.textContent = `批量创建完成：成功 ${Number(data.success_count || 0)} 条，创建或复用 ${Number(data.campaign_count || 0)} 个活动，启用 ${Number(data.activated_ad_group_count || 0)} 个广告组，失败 ${Number(data.failure_count || 0)} 条。${errorSummary}`;
+                } else {
+                    message.textContent = `投放成功：活动 ${data.campaign_name || campaignName}（ID ${data.campaign_id || "-"}），每日预算 ${data.currency_id || ""} ${storeLinkNumber(data.budget, 2)}，目标 ROAS ${storeLinkNumber(data.roas_target, 1)}。`;
+                }
                 submit.disabled = true;
             } catch (error) {
                 message.textContent = `投放失败：${error.message || error}`;
@@ -22002,6 +22454,7 @@
             } finally {
                 storeLinkAdvertiseBusy = false;
                 close.disabled = false;
+                updateStoreLinkSelection();
             }
         }
 
@@ -22253,6 +22706,10 @@
             storeLinkSelectAll.checked = Boolean(inputs.length && selected.length === inputs.length);
             storeLinkSelectAll.indeterminate = selected.length > 0 && selected.length < inputs.length;
             storeLinkSelectionCount.textContent = `已选 ${selectedStoreLinkIds.size} 条`;
+            storeLinkAdvertiseButton.disabled = (
+                selectedStoreLinkIds.size === 0
+                || storeLinkAdvertiseBusy
+            );
             storeLinkBulkButton.disabled = (
                 selectedStoreLinkIds.size === 0
                 || storeLinkRemoteUpdateRunning
@@ -27707,6 +28164,7 @@
             window.location.assign("/api/local-agents/download?platform=macos");
         });
         restoreApiReputationViewState();
+        setOrderDensity(window.localStorage.getItem("zeshun-order-density") || "compact", false);
         initializeMinuteDateTimeInputs();
         refreshOverviewClock();
         applyWorkbenchPermissions();

@@ -85,7 +85,10 @@ def test_console_download_enroll_heartbeat_and_list(agent_interface, monkeypatch
         },
     )
     assert heartbeat.status_code == 200
-    assert heartbeat.get_json()["data"]["bundle"]["version"] == "bundle-test"
+    heartbeat_data = heartbeat.get_json()["data"]
+    assert heartbeat_data["bundle"]["version"] == "bundle-test"
+    assert heartbeat_data["queue_id"] == store.queue_id
+    assert heartbeat_data["job"] is None
     assert store.get_agent("agent-office-pc")["session_id"] == "session-interface-test"
 
     database_health = client.get(
@@ -100,6 +103,63 @@ def test_console_download_enroll_heartbeat_and_list(agent_interface, monkeypatch
     assert [(row["agent_id"], row["online"]) for row in agents] == [
         ("agent-office-pc", True)
     ]
+
+
+def test_heartbeat_claims_atomically_for_capable_agent(agent_interface):
+    _user, store, client = agent_interface
+    agent_id = "agent-heartbeat-claim"
+    store.heartbeat(
+        agent_id,
+        name="原子领取电脑",
+        capabilities=["appeal", "daily_task", "heartbeat_claim"],
+        session_id="session-old",
+    )
+    store.enqueue_job("heartbeat-claim-job", agent_id, "daily_task", {})
+    token = bit_interface.create_local_agent_credential(agent_id, 7)
+
+    response = client.post(
+        "/api/local-agents/heartbeat",
+        headers={"X-Local-Agent-Token": token},
+        json={
+            "agent_id": agent_id,
+            "name": "原子领取电脑",
+            "capabilities": ["appeal", "daily_task", "heartbeat_claim"],
+            "session_id": "session-new",
+        },
+    )
+
+    assert response.status_code == 200
+    data = response.get_json()["data"]
+    assert data["queue_id"] == store.queue_id
+    assert data["job"]["job_id"] == "heartbeat-claim-job"
+    assert data["job"]["status"] == "running"
+
+
+def test_legacy_agent_heartbeat_does_not_consume_job(agent_interface):
+    _user, store, client = agent_interface
+    agent_id = "agent-legacy-claim"
+    store.heartbeat(agent_id, name="旧版电脑", capabilities=["appeal"])
+    store.enqueue_job("legacy-claim-job", agent_id, "appeal", {})
+    token = bit_interface.create_local_agent_credential(agent_id, 7)
+
+    heartbeat = client.post(
+        "/api/local-agents/heartbeat",
+        headers={"X-Local-Agent-Token": token},
+        json={
+            "agent_id": agent_id,
+            "name": "旧版电脑",
+            "capabilities": ["appeal"],
+        },
+    )
+    claimed = client.post(
+        "/api/local-agents/jobs/claim",
+        headers={"X-Local-Agent-Token": token},
+        json={"agent_id": agent_id},
+    )
+
+    assert heartbeat.get_json()["data"]["job"] is None
+    assert claimed.get_json()["data"]["job"]["job_id"] == "legacy-claim-job"
+    assert claimed.get_json()["data"]["queue_id"] == store.queue_id
 
 
 def test_console_renders_agent_as_default_appeal_execution_target(agent_interface):

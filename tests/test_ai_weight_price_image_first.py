@@ -86,19 +86,19 @@ def test_ten_image_first_products_keep_status_and_only_write_weight_or_profit(tm
     service.run(config, 'pipeline', None, lock)
     store = Store(tmp_path)
     assert store.counts()['blocked'] == 0
-    assert store.counts()['risk'] == 7
-    assert store.counts()['success'] == 3
+    assert store.counts()['risk'] == 10
+    assert store.counts()['success'] == 0
     assert not browser.messages
     assert len(browser.records) == 10 and store.state('pipeline_current') is None
     assert browser.operations[:8] == [('collect', '1'), ('image', '1'), ('detail', '1'), ('save', '1'),
                                      ('collect', '2'), ('image', '2'), ('detail', '2'), ('save', '2')]
     assert browser.records['1'] == {'weight_g': '430', 'net_income_usd': '4', 'review_status': '待审核'}
     assert browser.records['2'] == {'weight_g': '430', 'net_income_usd': '4', 'review_status': '待审核'}
-    assert browser.records['3'] == {'weight_g': '450', 'net_income_usd': '4', 'review_status': '待审核'}
+    assert browser.records['3'] == {'weight_g': '430', 'net_income_usd': '4', 'review_status': '待审核'}
     run, rows = store.run_report('image-ten')
     assert run['outcome'] == 'completed' and run['processed_items'] == 10
     assert all(row.get('execution_duration_seconds') is not None for row in rows)
-    assert (run.get('blocked_items', 0), run['risk_items'], run['success_items']) == (0, 7, 3)
+    assert (run.get('blocked_items', 0), run['risk_items'], run.get('success_items', 0)) == (0, 10, 0)
     written = [row for row in rows if row.get('write_intent')]
     assert len(written) == 10
     assert all(row['write_verified'] and row['write_history'][-1]['verified'] for row in written)
@@ -112,6 +112,27 @@ def test_ten_image_first_products_keep_status_and_only_write_weight_or_profit(tm
     assert sheet['C6'].value == sheet['C7'].value == '风险'
     assert sheet['K7'].value is None and sheet['M7'].value == 430
     assert (sheet['V7'].value, sheet['W7'].value, sheet['X7'].value) == ('待审核', None, '待审核')
+
+
+def test_new_batch_reprocesses_historical_first_product_before_reading_second(tmp_path, monkeypatch):
+    service, browser, config = make_service(tmp_path, monkeypatch)
+    config['reprocess_historical'] = True
+    service.store.add({
+        'erp_goods_id': '1', 'title': '上次已处理的首件商品',
+        'main_image_url': 'https://img.example/1.jpg',
+    })
+    service.store.update('1', status='blocked', stage='done',
+                         decision_status='blocked', decision_reason='上次未匹配')
+
+    lock = service.lock(); assert lock.acquire()
+    service.run(config, 'pipeline', None, lock)
+
+    assert browser.operations[:4] == [
+        ('collect', '1'), ('image', '1'), ('detail', '1'), ('save', '1'),
+    ]
+    assert service.store.get('1')['retry_history'][-1]['reason'] == '上次未匹配'
+    assert any('历史结论' in event['message'] for event in service.store.logs(limit=2000)
+               if event['task_id'] == '1')
 
 
 def test_official_sku_weight_skips_redundant_supplier_model_call(tmp_path, monkeypatch):
@@ -230,7 +251,60 @@ def test_low_image_match_score_is_retained_for_task_display(tmp_path, monkeypatc
     assert task['image_match_confidence'] == .72
 
 
-def test_ambiguous_supplier_variants_are_recorded_as_explicit_risk_not_system_error(tmp_path, monkeypatch):
+def test_fresh_image_retry_clears_stale_score_and_supplier_link(tmp_path, monkeypatch):
+    service, browser, config = make_service(tmp_path, monkeypatch)
+    service.store.add({
+        'erp_goods_id': '1', 'title': '重跑商品',
+        'main_image_url': 'https://img.example/target.jpg',
+        'supplier_url': 'https://detail.1688.com/offer/old.html',
+        'best_match_url': 'https://detail.1688.com/offer/old.html',
+        'best_match_confidence': .98, 'best_match_approved': True,
+        'match_confidence': .98, 'image_match_confidence': .98,
+        'cost_price': '22', 'weight_g': '450', 'net_income_usd': '4',
+    })
+
+    class NoMatchModel(ImageModel):
+        def match_images(self, task, candidates):
+            return [], [{'candidate': candidates[0], 'review': {
+                'index': 1, 'same_product': False, 'confidence': 0,
+                'reason': '本次搜索返回了不同品类',
+            }}]
+
+    service.process(service.store.get('1'), browser, NoMatchModel(), config)
+    task = service.store.get('1')
+    assert task['status'] == 'blocked'
+    assert task['image_match_confidence'] == 0
+    assert task['match_confidence'] is None
+    assert task['supplier_url'] is None
+    assert task['best_match_approved'] is False
+    assert task['best_match_confidence'] == 0
+
+
+def test_detail_url_is_saved_when_sku_price_is_incomplete(tmp_path, monkeypatch):
+    service, browser, config = make_service(tmp_path, monkeypatch)
+    config['max_items'] = 1
+
+    class IncompleteBrowser(ImageBrowser):
+        def read_offer(self, task, candidate):
+            return {
+                **candidate,
+                'url': 'https://detail.1688.com/offer/998877.html',
+                'skus': [{'id': 'missing-price', 'label': '白色', 'price': ''}],
+            }
+
+    browser = IncompleteBrowser(config)
+    service.browser_factory = lambda *args: browser
+    lock = service.lock(); assert lock.acquire()
+    service.run(config, 'pipeline', None, lock)
+
+    task = service.store.get('1')
+    assert task['status'] == 'risk'
+    assert task['supplier_url'] == 'https://detail.1688.com/offer/998877.html'
+    assert task['best_match_url'] == 'https://detail.1688.com/offer/998877.html'
+    assert task['best_match_approved'] is True
+
+
+def test_same_price_variants_use_highest_price_policy_without_model_variant_match(tmp_path, monkeypatch):
     service, browser, config = make_service(tmp_path, monkeypatch)
     config['max_items'] = 1
 
@@ -243,8 +317,7 @@ def test_ambiguous_supplier_variants_are_recorded_as_explicit_risk_not_system_er
 
     class AmbiguousModel(ImageModel):
         def match(self, task, candidate):
-            return None, [{'same_product': False, 'confidence': .3,
-                           'specs_confirmed': False, 'reason': 'ERP未提供唯一变体规格'}]
+            raise AssertionError('最高价策略不应调用变体匹配模型')
 
     browser = AmbiguousBrowser(config)
     service.browser_factory = lambda *args: browser
@@ -254,10 +327,158 @@ def test_ambiguous_supplier_variants_are_recorded_as_explicit_risk_not_system_er
 
     task = service.store.get('1')
     assert task['status'] == 'risk'
-    assert task['decision_reason'].startswith('图片匹配成功，但1688详情有2个变体')
-    assert '图片已匹配，但无法确认目标SKU及其最终售价' not in task['decision_reason']
-    assert not any('图片已匹配，但无法确认目标SKU及其最终售价' in event['message']
-                   for event in service.store.logs(limit=2000))
+    assert task['supplier_sku_ambiguous'] is True
+    assert task['supplier_sku_id'] == 'flamingo'
+    assert task['supplier_price_evidence']['pricing_policy'] == 'highest_variant_price'
+    assert task['decision_reason'].startswith('图片匹配成功；未匹配具体变体，已按2个变体中的最高价')
+    assert browser.records['1'] == {
+        'weight_g': '430', 'net_income_usd': '2', 'review_status': '待审核',
+    }
+
+
+def test_different_price_variants_write_back_highest_price(tmp_path, monkeypatch):
+    service, browser, config = make_service(tmp_path, monkeypatch)
+    config['max_items'] = 1
+
+    class AmbiguousBrowser(ImageBrowser):
+        def read_offer(self, task, candidate):
+            return {**candidate, 'skus': [
+                {'id': 'frog', 'label': '绿色青蛙', 'price': '119'},
+                {'id': 'bear', 'label': '棕色小熊', 'price': '129'},
+            ]}
+
+    class AmbiguousModel(ImageModel):
+        def match(self, task, candidate):
+            raise AssertionError('最高价策略不应调用变体匹配模型')
+
+    browser = AmbiguousBrowser(config)
+    service.browser_factory = lambda *args: browser
+    service.models_factory = lambda *args: AmbiguousModel()
+    lock = service.lock(); assert lock.acquire()
+    service.run(config, 'pipeline', None, lock)
+
+    task = service.store.get('1')
+    assert task['status'] == 'risk'
+    assert task['supplier_sku_id'] == 'bear'
+    assert task['cost_price'] == '129'
+    assert browser.records['1'] == {
+        'weight_g': '430', 'net_income_usd': '18', 'review_status': '待审核',
+    }
+
+
+def test_highest_price_variant_reads_weight_from_label_when_official_weight_is_empty(tmp_path, monkeypatch):
+    service, browser, config = make_service(tmp_path, monkeypatch)
+    config['max_items'] = 1
+
+    class LabelWeightBrowser(ImageBrowser):
+        def read_offer(self, task, candidate):
+            return {**candidate, 'skus': [
+                {'id': 'low', 'label': '火烈鸟冲浪板117*54cm(0.29kg / 看产品介绍',
+                 'price': '11.80', 'raw_weight': ''},
+                {'id': 'high', 'label': '菠萝冲浪板84*56cm(0.45kg / 看产品介绍',
+                 'price': '17.85', 'raw_weight': ''},
+            ]}
+
+    browser = LabelWeightBrowser(config)
+    service.browser_factory = lambda *args: browser
+    lock = service.lock(); assert lock.acquire()
+    service.run(config, 'pipeline', None, lock)
+
+    task = service.store.get('1')
+    assert task['supplier_sku_id'] == 'high'
+    assert float(task['weight_g']) == 450
+    assert task['supplier_price_evidence']['raw_weight'] == '菠萝冲浪板84*56cm(0.45kg / 看产品介绍'
+    assert browser.records['1']['weight_g'] == '450.00'
+
+
+def test_ambiguous_variants_write_weight_only_when_all_explicit_weights_agree(tmp_path, monkeypatch):
+    service, browser, config = make_service(tmp_path, monkeypatch)
+    config['max_items'] = 1
+
+    class AmbiguousBrowser(ImageBrowser):
+        def read_offer(self, task, candidate):
+            return {**candidate, 'skus': [
+                {'id': 'frog', 'label': '绿色青蛙', 'price': '119', 'raw_weight': '包装重量 300g'},
+                {'id': 'bear', 'label': '棕色小熊', 'price': '119', 'raw_weight': '包装重量 300克'},
+            ]}
+
+    class AmbiguousModel(ImageModel):
+        def match(self, task, candidate):
+            raise AssertionError('最高价策略不应调用变体匹配模型')
+
+    browser = AmbiguousBrowser(config)
+    service.browser_factory = lambda *args: browser
+    service.models_factory = lambda *args: AmbiguousModel()
+    lock = service.lock(); assert lock.acquire()
+    service.run(config, 'pipeline', None, lock)
+
+    task = service.store.get('1')
+    assert task['status'] == 'success'
+    assert browser.records['1'] == {
+        'weight_g': '300', 'net_income_usd': '17', 'review_status': '待审核',
+    }
+
+
+def test_highest_price_policy_uses_only_strongest_image_candidate(tmp_path, monkeypatch):
+    service, browser, config = make_service(tmp_path, monkeypatch)
+    config['max_items'] = 1
+
+    class CandidateBrowser(ImageBrowser):
+        def search_images(self, task):
+            return [
+                {'url': 'https://search.example/results', 'title': '旧款候选',
+                 'main_image_url': 'https://img.example/old.jpg'},
+                {'url': 'https://search.example/results', 'title': '龙宝宝候选',
+                 'main_image_url': 'https://img.example/dragon.jpg'},
+            ]
+
+        def read_offer(self, task, candidate):
+            self.operations.append(('detail-title', candidate['title']))
+            if candidate['title'] == '旧款候选':
+                return {**candidate, 'url': 'https://detail.1688.com/offer/old.html', 'skus': [
+                    {'id': 'frog', 'label': '绿色青蛙', 'price': '109'},
+                    {'id': 'bear', 'label': '棕色小熊', 'price': '119'},
+                ]}
+            return {**candidate, 'url': 'https://detail.1688.com/offer/dragon.html', 'skus': [
+                {'id': 'dragon', 'label': '青蓝色龙宝宝', 'price': '129'},
+                {'id': 'unicorn', 'label': '粉色独角兽', 'price': '139'},
+            ]}
+
+    class CandidateModel(ImageModel):
+        def match_images(self, task, candidates):
+            approved = [{**candidate, 'image_confidence': score}
+                        for candidate, score in zip(candidates, (.99, .98))]
+            evidence = [{'candidate': candidate, 'review': {
+                'index': index, 'same_product': True, 'confidence': score, 'reason': '图片同款',
+            }} for index, (candidate, score) in enumerate(zip(candidates, (.99, .98)), 1)]
+            return approved, evidence
+
+        def match(self, task, candidate):
+            if candidate['url'].endswith('/old.html'):
+                return None, [{'same_product': False, 'confidence': .2,
+                               'specs_confirmed': False, 'reason': '目标龙宝宝不在SKU列表'}]
+            sku = candidate['skus'][0]
+            return {**candidate, 'selected_sku': sku, 'confidence': .98}, [
+                {'same_product': True, 'confidence': .98, 'specs_confirmed': True,
+                 'sku_id': sku['id'], 'reason': '主图唯一对应青蓝色龙宝宝'},
+            ]
+
+    browser = CandidateBrowser(config)
+    service.browser_factory = lambda *args: browser
+    service.models_factory = lambda *args: CandidateModel()
+    lock = service.lock(); assert lock.acquire()
+    service.run(config, 'pipeline', None, lock)
+
+    task = service.store.get('1')
+    assert task['supplier_sku_id'] == 'bear'
+    assert task['cost_price'] == '119'
+    assert task['best_match_url'] == 'https://detail.1688.com/offer/old.html'
+    assert [op for op in browser.operations if op[0] == 'detail-title'] == [
+        ('detail-title', '旧款候选'),
+    ]
+    assert browser.records['1'] == {
+        'weight_g': '430', 'net_income_usd': '17', 'review_status': '待审核',
+    }
 
 
 def test_visible_search_timeout_is_retried_before_later_rows(tmp_path, monkeypatch):

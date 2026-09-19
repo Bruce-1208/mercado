@@ -84,8 +84,7 @@ RETRYABLE_TRANSACTION_ERROR_CODES = {1205, 1213}
 
 
 def _connect() -> Any:
-    import pymysql
-    from bit.bit_mysql import config
+    from bit.bit_mysql import config, pymysql
 
     return pymysql.connect(**config)
 

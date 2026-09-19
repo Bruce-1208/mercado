@@ -259,11 +259,11 @@ def test_browser_restriction_overrides_false_active_api_status():
 
     assert api_rows[0]["account_status"] == "temporarily_suspended"
     assert api_rows[0]["suspension_until"] == "21 of September, 06h10"
-    assert api_rows[0]["site_status_display"] == (
-        "暂时停售（至 21 of September, 06h10）"
-    )
+    assert api_rows[0]["site_status_display"].startswith("暂时停售（")
+    assert "剩余" in api_rows[0]["site_status_display"]
+    assert "至 21 of September, 06h10" in api_rows[0]["site_status_display"]
     assert database_rows[0][9] == notice
-    assert database_rows[0][12] == "暂时停售（至 21 of September, 06h10）"
+    assert database_rows[0][12] == api_rows[0]["site_status_display"]
 
 
 def test_future_permanent_warning_is_not_current_permanent_suspension():
@@ -312,10 +312,18 @@ def test_permanent_account_is_detected_when_site_selector_is_gone(monkeypatch):
     )
     monkeypatch.setattr(
         bit_reputation_info,
-        "_collect_account_risk_detail_text",
-        lambda *_args, **_kwargs: (
-            "Your account has been permanently shut down for repeated violations."
-        ),
+        "_collect_account_risk_status",
+        lambda *_args, **_kwargs: {
+            "account_status": "permanently_suspended",
+            "site_status_display": "永久封禁",
+            "system_warning": (
+                "Your account has been permanently shut down for repeated violations."
+            ),
+            "suspension_until": "",
+            "suspension_days": None,
+            "suspension_remaining_days": None,
+            "suspension_total_days": None,
+        },
     )
     monkeypatch.setattr(
         bit_reputation_info,
@@ -1304,7 +1312,7 @@ def test_hybrid_collection_merges_browser_traffic_without_reputation_page(monkey
 def test_auxiliary_browser_collector_opens_summary_not_reputation(monkeypatch):
     opened_urls = []
     selected = []
-    wait_values = iter(["库存提醒", "Increased 6%"])
+    wait_values = iter(["Increased 6%"])
 
     class WaitResult:
         def __init__(self, text):
@@ -1330,6 +1338,11 @@ def test_auxiliary_browser_collector_opens_summary_not_reputation(monkeypatch):
     monkeypatch.setattr(bit_reputation_info, "WebDriverWait", FakeWait)
     monkeypatch.setattr(
         bit_reputation_info,
+        "_wait_account_risk_summary",
+        lambda _driver: "Restrictions 0\nWarnings 0",
+    )
+    monkeypatch.setattr(
+        bit_reputation_info,
         "get_visits_info",
         lambda *_args, **_kwargs: [101, 202, 303],
     )
@@ -1341,7 +1354,10 @@ def test_auxiliary_browser_collector_opens_summary_not_reputation(monkeypatch):
         driver=object(),
     )
 
-    assert opened_urls == [bit_reputation_info.SALES_SUMMARY_URL]
+    assert opened_urls == [
+        bit_reputation_info.SALES_SUMMARY_URL,
+        bit_reputation_info.ACCOUNT_RISK_URL,
+    ]
     assert bit_reputation_info.REPUTATION_URL not in opened_urls
     assert selected == [
         (
@@ -1355,7 +1371,8 @@ def test_auxiliary_browser_collector_opens_summary_not_reputation(monkeypatch):
     ]
     assert result["direction"] == "增长"
     assert result["gradient_rate"] == "6%"
-    assert result["system_warning"] == "库存提醒"
+    assert result["system_warning"] == "正常"
+    assert result["account_status"] == "normal"
     assert result["visits"] == "[101, 202, 303]"
 
 
@@ -1418,11 +1435,63 @@ def test_account_risk_summary_detects_restrictions_and_warnings():
         "Active restrictions\nRestrictions 0\nWarnings 2"
     ) == ["warnings"]
     assert bit_reputation_info._account_risk_kinds_from_summary(
+        "Restrictions\n0\nGo to Restrictions\nWarnings\n2\nGo to Warnings"
+    ) == ["warnings"]
+    assert bit_reputation_info._account_risk_kinds_from_summary(
         "Account status\nRequires attention\nAvoid future restrictions."
     ) == ["restrictions"]
     assert bit_reputation_info._account_risk_kinds_from_summary(
         "Restrictions 0\nWarnings 0"
     ) == []
+
+
+def test_account_risk_zero_counts_override_navigation_links_and_history():
+    links = list(bit_reputation_info.ACCOUNT_RISK_URLS.values())
+    summary = "Account risk\nRestrictions 0\nWarnings 0"
+
+    assert bit_reputation_info._account_risk_kinds_from_summary(summary, links) == []
+    assert bit_reputation_info._assess_account_risk(
+        summary,
+        "Your account has been suspended from selling August 11, at 00:30",
+        now=datetime(2026, 9, 19, 12, 0),
+    )["account_status"] == "normal"
+
+
+def test_account_risk_suspension_start_date_displays_elapsed_days():
+    result = bit_reputation_info._assess_account_risk(
+        "Account risk\nRestrictions 1\nWarnings 0",
+        "Your account has been suspended from selling\nAugust 11, at 00:30",
+        now=datetime(2026, 9, 19, 12, 0),
+    )
+
+    assert result["account_status"] == "temporarily_suspended"
+    assert result["suspension_days"] == 39
+    assert result["site_status_display"] == "暂停销售（已 39 天）"
+
+
+def test_account_risk_temporary_end_date_displays_remaining_days():
+    result = bit_reputation_info._assess_account_risk(
+        "Account risk\nRestrictions 1\nWarnings 0",
+        "Your account has been suspended for selling until 21 of September, 06h10.",
+        now=datetime(2026, 9, 19, 12, 0),
+    )
+
+    assert result["account_status"] == "temporarily_suspended"
+    assert result["suspension_remaining_days"] == 2
+    assert result["site_status_display"] == (
+        "暂时停售（剩余 2 天，至 21 of September, 06h10）"
+    )
+
+
+def test_non_account_restriction_is_not_reported_as_an_account_ban():
+    result = bit_reputation_info._assess_account_risk(
+        "Account risk\nRestrictions 1\nWarnings 0",
+        "Listing paused because the brand is restricted",
+        now=datetime(2026, 9, 19, 12, 0),
+    )
+
+    assert result["account_status"] == "restriction_present"
+    assert result["site_status_display"] == "封禁状态未确认（1 条限制）"
 
 
 def test_account_risk_details_remove_summary_and_parent_duplicates():
@@ -1482,7 +1551,7 @@ def test_collect_account_risk_details_opens_each_filter_and_keeps_details_only(m
 
 
 def test_auxiliary_replaces_account_risk_count_with_details(monkeypatch):
-    wait_values = iter(["1 Go to Restrictions", "Decreased 4%"])
+    wait_values = iter(["Decreased 4%"])
 
     class WaitResult:
         def __init__(self, text):
@@ -1502,6 +1571,11 @@ def test_auxiliary_replaces_account_risk_count_with_details(monkeypatch):
     )
     monkeypatch.setattr(bit_reputation_info, "_select_country", lambda *_args, **_kwargs: True)
     monkeypatch.setattr(bit_reputation_info, "WebDriverWait", FakeWait)
+    monkeypatch.setattr(
+        bit_reputation_info,
+        "_wait_account_risk_summary",
+        lambda _driver: "Restrictions 1\nWarnings 0",
+    )
     monkeypatch.setattr(
         bit_reputation_info,
         "_get_account_risk_links",
