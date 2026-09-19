@@ -48,6 +48,7 @@ DEFAULT_DAILY_MAX_WORKERS = 15
 MAX_DAILY_TASK_WORKERS = 30
 DEFAULT_DAILY_BROWSER_WORKER_LIMIT = MAX_DAILY_TASK_WORKERS
 DEFAULT_DAILY_RECENT_DAYS = 100
+DEFAULT_DAILY_ROUND_INTERVAL = 180
 # 申诉任务遇到登录失效只允许触发一轮自动登录；失败后由店铺熔断，
 # 不在任务层重复提交登录。
 DEFAULT_LOGIN_RETRY_ATTEMPTS = 1
@@ -64,6 +65,14 @@ DEFAULT_BROWSER_LIST_RETRY_ATTEMPTS = max(
 DEFAULT_BROWSER_LIST_RETRY_SECONDS = max(
     0.1,
     float(os.getenv("BIT_DAILY_BROWSER_LIST_RETRY_SECONDS", "1")),
+)
+DEFAULT_BROWSER_CLOSE_ATTEMPTS = max(
+    1,
+    int(os.getenv("BIT_DAILY_BROWSER_CLOSE_ATTEMPTS", "4")),
+)
+DEFAULT_BROWSER_CLOSE_RETRY_SECONDS = max(
+    0.0,
+    float(os.getenv("BIT_DAILY_BROWSER_CLOSE_RETRY_SECONDS", "5")),
 )
 DAILY_TASK_LOCK_KEY = "bit_daily_task_singleton"
 
@@ -743,14 +752,59 @@ def _is_failed_appeal_result(value):
     )
 
 
+def _browser_close_succeeded(result):
+    """确认 BitBrowser 关闭接口确实接受了本次关闭操作。"""
+    return result is not None and (
+        not isinstance(result, dict)
+        or (result.get("success") is not False and not result.get("skipped"))
+    )
+
+
+def _close_browser_with_retry(
+    window_id,
+    window_lease,
+    *,
+    attempts=DEFAULT_BROWSER_CLOSE_ATTEMPTS,
+    retry_seconds=DEFAULT_BROWSER_CLOSE_RETRY_SECONDS,
+    **close_kwargs,
+):
+    """等待仍在启动的 BitBrowser 窗口稳定后再次关闭。"""
+    attempts = max(1, int(attempts or 1))
+    last_result = None
+    last_error = None
+    for attempt in range(1, attempts + 1):
+        try:
+            last_result = closeBrowser(
+                window_id,
+                lease=window_lease,
+                **close_kwargs,
+            )
+            last_error = None
+            if _browser_close_succeeded(last_result):
+                return last_result
+        except Exception as exc:
+            last_error = exc
+        if attempt < attempts and retry_seconds > 0:
+            time.sleep(float(retry_seconds))
+    if last_error is not None:
+        raise last_error
+    return last_result
+
+
 def _close_ai_appeal_browser(window_id, window_lease, name, reason):
-    """在异常等待或退出前关闭完整浏览器窗口，避免并发任务积累内存。"""
+    """在异常等待或退出前可靠关闭完整窗口，避免跨站点、跨轮积累内存。"""
     try:
-        close_result = closeBrowser(window_id, lease=window_lease)
-        print(
-            f"{get_now_time()} {name} 因{reason}关闭浏览器窗口："
-            f"{close_result}<br>"
-        )
+        close_result = _close_browser_with_retry(window_id, window_lease)
+        if _browser_close_succeeded(close_result):
+            print(
+                f"{get_now_time()} {name} 因{reason}关闭浏览器窗口："
+                f"{close_result}<br>"
+            )
+        else:
+            print(
+                f"{get_now_time()} {name} 因{reason}多次关闭浏览器窗口仍失败："
+                f"{close_result}<br>"
+            )
         return close_result
     except Exception as exc:
         print(f"{get_now_time()} {name} 因{reason}关闭浏览器窗口失败：{exc}<br>")
@@ -1216,11 +1270,11 @@ def _resolve_login_anomaly(window_id, name):
 
 
 def _split_login_paused_shops(plan, appeal_label):
-    """把已有待处理登录异常的店铺从执行计划中移除。
+    """预检店铺状态，并仅对历史退出登录记录放行本轮复检。
 
-    退出登录会由 worker 写入持久化窗口异常。循环的下一轮、多任务的
-    下一项都会在打开浏览器前执行本检查，直到人工登录复检成功或在
-    店铺状态页人工解除。
+    历史退出登录记录不等于本轮仍未登录。它只用于提示，店铺仍需进入
+    worker 并打开浏览器复检；如果本轮实际检测到仍未登录，worker 再按
+    当前运行时结果终止该店铺任务。人机验证等其他状态异常继续熔断。
     """
     plan = list(plan or [])
     if not plan:
@@ -1253,6 +1307,13 @@ def _split_login_paused_shops(plan, appeal_label):
         name = str(shop.get("name") or anomaly.get("window_name") or window_id)
         anomaly_type = str(anomaly.get("anomaly_type") or LOGIN_LOGGED_OUT)
         reason = str(anomaly.get("reason") or anomaly_type)
+        if anomaly_type == LOGIN_LOGGED_OUT:
+            print(
+                f"{get_now_time()} {name} 存在历史待处理的{anomaly_type}，"
+                "本轮继续打开窗口复检登录状态；如仍未登录再终止本店铺任务<br>"
+            )
+            runnable.append(shop)
+            continue
         print(
             f"{get_now_time()} {name} 存在待处理的{anomaly_type}，"
             "已熔断跳过本店铺；请人工登录并复检后再恢复任务<br>"
@@ -1415,12 +1476,26 @@ def _appeal_one_shop_locked(
                 break
 
             if _is_rate_limited_result(result):
-                _close_ai_appeal_browser(
+                close_result = _close_ai_appeal_browser(
                     window_id,
                     window_lease,
                     name,
                     "访问限频",
                 )
+                if not _browser_close_succeeded(close_result):
+                    results.append({
+                        "site": site_code,
+                        "appeal_type": site_appeal_label,
+                        "count": count,
+                        "result": result,
+                        "cleanup_failed": True,
+                    })
+                    print(
+                        f"{get_now_time()} {name} {site_code} 浏览器未能关闭，"
+                        "停止该店铺后续重试，避免重复打开窗口<br>"
+                    )
+                    exit_shop = True
+                    break
                 if rate_retry_count < max(0, int(rate_limit_retries)):
                     rate_retry_count += 1
                     print(
@@ -1447,12 +1522,26 @@ def _appeal_one_shop_locked(
                 break
 
             if _is_retryable_site_result(result) and general_attempt < max(1, int(site_retry_attempts)):
-                _close_ai_appeal_browser(
+                close_result = _close_ai_appeal_browser(
                     window_id,
                     window_lease,
                     name,
                     "自动找客服报错",
                 )
+                if not _browser_close_succeeded(close_result):
+                    results.append({
+                        "site": site_code,
+                        "appeal_type": site_appeal_label,
+                        "count": count,
+                        "result": result,
+                        "cleanup_failed": True,
+                    })
+                    print(
+                        f"{get_now_time()} {name} {site_code} 浏览器未能关闭，"
+                        "停止该店铺后续重试，避免重复打开窗口<br>"
+                    )
+                    exit_shop = True
+                    break
                 general_attempt += 1
                 print(
                     f"{get_now_time()} {name} {site_code} 遇到瞬时失败，"
@@ -1475,12 +1564,19 @@ def _appeal_one_shop_locked(
             retryable_failure = _is_retryable_site_result(result)
             appeal_failure = retryable_failure or _is_failed_appeal_result(result)
             if appeal_failure:
-                _close_ai_appeal_browser(
+                close_result = _close_ai_appeal_browser(
                     window_id,
                     window_lease,
                     name,
                     "自动找客服报错",
                 )
+                if not _browser_close_succeeded(close_result):
+                    exit_shop = True
+                    results[-1]["cleanup_failed"] = True
+                    print(
+                        f"{get_now_time()} {name} {site_code} 浏览器未能关闭，"
+                        "停止该店铺后续站点，避免重复打开窗口<br>"
+                    )
             if retryable_failure:
                 print(f"{get_now_time()} {name} {site_code} 多次重试后仍失败：{result}<br>")
             elif appeal_failure:
@@ -1643,13 +1739,13 @@ def appeal_one_shop(
     finally:
         # shensu 会关闭当前标签页，但不会关闭比特浏览器窗口。bit_main 会连续
         # 跑多轮申诉，如果这里不关窗口，Chromium 主进程和渲染进程会跨轮累积。
-        _close_ai_appeal_browser(
+        close_result = _close_ai_appeal_browser(
             window_id,
             lease,
             name,
             "店铺 AI 申诉任务结束",
         )
-        if owned_window_ids is not None:
+        if owned_window_ids is not None and _browser_close_succeeded(close_result):
             try:
                 owned_window_ids.pop(str(window_id), None)
             except Exception:
@@ -1746,6 +1842,7 @@ def _force_close_appeal_plan_windows(
     task_id="",
     owned_window_ids=None,
     retry_seconds=3.0,
+    background=True,
 ):
     # plan 仅保留旧调用签名。多任务模式绝不能扫描整份计划，否则会关闭
     # 本任务从未打开的空闲/手工窗口；只清理由 worker 实际登记的窗口。
@@ -1822,21 +1919,31 @@ def _force_close_appeal_plan_windows(
 
                 if cleanup_lease is None:
                     continue
-                close_result = closeBrowser(
+                close_result = _close_browser_with_retry(
                     window_id,
-                    lease=cleanup_lease,
+                    cleanup_lease,
+                    attempts=3,
+                    retry_seconds=1,
                     request_timeout=3,
                     api_lock_timeout=5,
                 )
                 write_cleanup_log(
                     f"{name} 停止任务并关闭对应浏览器窗口：{close_result}"
                 )
+                if _browser_close_succeeded(close_result) and owned_window_ids is not None:
+                    try:
+                        owned_window_ids.pop(str(window_id), None)
+                    except Exception:
+                        pass
             except Exception as exc:
                 write_cleanup_log(f"{name} 停止时关闭浏览器窗口失败：{exc}")
             finally:
                 if cleanup_lease is not None:
                     cleanup_lease.release()
 
+    if not background:
+        close_windows()
+        return
     threading.Thread(
         target=close_windows,
         name="daily-task-window-cleanup",
@@ -2059,6 +2166,21 @@ def _run_ai_appeal_once_locked(
                 )
             else:
                 executor.shutdown(wait=True, cancel_futures=True)
+                # worker 的最终关闭如果连续被 BitBrowser 以“正在
+                # 打开中”拒绝，会把窗口保留在登记表。进程池完全退出
+                # 后再同步补关一次，确保下一轮开始前不留下窗口。
+                try:
+                    cleanup_needed = bool(dict(owned_window_ids or {}))
+                except Exception:
+                    cleanup_needed = False
+                if cleanup_needed:
+                    _force_close_appeal_plan_windows(
+                        plan,
+                        log_path=log_path,
+                        task_id=task_id,
+                        owned_window_ids=owned_window_ids,
+                        background=False,
+                    )
 
     if normalized_type == APPEAL_TYPE_INFRACTION:
         print(
@@ -2237,7 +2359,7 @@ def _loop_ai_appeal_locked(
     top_n=DEFAULT_DAILY_TOP_N,
     max_workers=DEFAULT_DAILY_MAX_WORKERS,
     recent_days=DEFAULT_DAILY_RECENT_DAYS,
-    round_interval=600,
+    round_interval=DEFAULT_DAILY_ROUND_INTERVAL,
     site_pause=30,
     message="",
     only_active=None,
@@ -2299,7 +2421,6 @@ def _loop_ai_appeal_locked(
             )
             return {"execution_counts": execution_counts}
 
-        started = time.time()
         try:
             api_refresh_text = (
                 "，先重新读取官方 API 侵权列表"
@@ -2356,7 +2477,9 @@ def _loop_ai_appeal_locked(
             )
             return {"execution_counts": execution_counts}
 
-        sleep_seconds = max(0, int(round_interval) - (time.time() - started))
+        # 轮次间隔从“全部店铺执行完”开始计算。不能扣除本轮执行耗时，
+        # 否则一轮超过 round_interval 后会零等待立即进入下一轮。
+        sleep_seconds = max(0, int(round_interval))
         remaining = _seconds_until_stop(stop_at)
         if remaining is not None:
             if remaining <= 0:
@@ -2391,7 +2514,7 @@ def _loop_top_infraction_ai_appeal_locked(
     top_n=DEFAULT_DAILY_TOP_N,
     max_workers=DEFAULT_DAILY_MAX_WORKERS,
     recent_days=DEFAULT_DAILY_RECENT_DAYS,
-    round_interval=600,
+    round_interval=DEFAULT_DAILY_ROUND_INTERVAL,
     site_pause=30,
     message="",
     only_active=None,
@@ -2424,7 +2547,7 @@ def loop_ai_appeal(
     top_n=DEFAULT_DAILY_TOP_N,
     max_workers=DEFAULT_DAILY_MAX_WORKERS,
     recent_days=DEFAULT_DAILY_RECENT_DAYS,
-    round_interval=600,
+    round_interval=DEFAULT_DAILY_ROUND_INTERVAL,
     site_pause=30,
     message="",
     only_active=None,
@@ -2494,7 +2617,7 @@ def loop_top_infraction_ai_appeal(
     top_n=DEFAULT_DAILY_TOP_N,
     max_workers=DEFAULT_DAILY_MAX_WORKERS,
     recent_days=DEFAULT_DAILY_RECENT_DAYS,
-    round_interval=600,
+    round_interval=DEFAULT_DAILY_ROUND_INTERVAL,
     site_pause=30,
     message="",
     only_active=None,

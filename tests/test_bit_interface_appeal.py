@@ -753,6 +753,9 @@ def test_daily_task_console_exposes_all_task_switches_and_shop_group():
     assert 'id="daily-task-complaint-min-rate"' in template
     assert 'id="daily-task-cancellation-min-rate"' in template
     assert 'id="daily-task-max-workers" value="10" min="1" max="30"' in template
+    assert 'id="daily-task-round-interval" value="180"' in template
+    assert 'id="daily-task-stop-after"' not in template
+    assert "stop_after_minutes:" not in template
     assert "appeal_types: appealTypes" in template
     assert "const salespeople = mercadoSelectedValues(dailyTaskSalesperson)" in template
     assert "const groupNames = mercadoSelectedValues(dailyTaskGroup)" in template
@@ -785,6 +788,15 @@ def test_daily_task_console_exposes_all_task_switches_and_shop_group():
     assert "scheduleDailyTaskStatusPoll(2000)" in template
     assert "startDailyTaskBtn.disabled = running" not in template
 
+    task_markup = template.split('<div class="tab-page" id="tab-tasks">', 1)[1]
+    assert task_markup.index('id="daily-task-agent-login-status"') > task_markup.index(
+        '<section class="panel log-panel">'
+    )
+    assert task_markup.index('id="daily-task-agent-login-status"') < task_markup.index(
+        'id="daily-task-list"'
+    )
+    assert '<option value="stopping">' not in task_markup
+
 
 @pytest.mark.parametrize("appeal_type", ["侵权", "禁限售", "延误率", "取消率", "投诉", "混合模式"])
 def test_build_daily_task_params_accepts_all_appeal_modes(appeal_type):
@@ -804,6 +816,13 @@ def test_build_daily_task_params_accepts_all_appeal_modes(appeal_type):
     assert params["cancellation_min_rate"] == pytest.approx(0.075)
     assert params["top_n"] == 0
     assert params["mode"] == "loop"
+
+
+def test_daily_task_defaults_to_three_minute_loop_without_time_limit():
+    params = bit_interface.build_daily_task_params({})
+
+    assert params["round_interval"] == 180
+    assert "stop_after_minutes" not in params
 
 
 def test_build_daily_task_params_supports_one_or_all_salespeople():
@@ -1222,6 +1241,11 @@ def test_daily_task_history_pruning_removes_log_and_stale_control(
 
 def test_daily_task_history_restores_log_index_after_server_restart(monkeypatch, tmp_path):
     monkeypatch.setattr(bit_interface, "_daily_task_log_path", tmp_path / "daily.log")
+    monkeypatch.setattr(
+        bit_interface.bit_daily_task,
+        "get_daily_task_lock_owner",
+        lambda _task_id="": {},
+    )
     log_path = bit_interface._daily_task_log_file("restored-task")
     log_path.write_text("可追溯日志\n", encoding="utf-8")
     monkeypatch.setattr(
@@ -1248,6 +1272,44 @@ def test_daily_task_history_restores_log_index_after_server_restart(monkeypatch,
     assert restored["running"] is False
     assert restored["status"] == "error"
     assert restored["log"] == "可追溯日志"
+
+
+def test_daily_task_history_does_not_interrupt_task_owned_by_live_process(
+    monkeypatch,
+    tmp_path,
+):
+    monkeypatch.setattr(bit_interface, "_daily_task_log_path", tmp_path / "daily.log")
+    monkeypatch.setattr(
+        bit_interface.bit_daily_task,
+        "get_daily_task_lock_owner",
+        lambda task_id="": {"pid": 1234, "metadata": {"task_id": task_id}},
+    )
+    log_path = bit_interface._daily_task_log_file("live-task")
+    log_path.write_text("仍在执行\n", encoding="utf-8")
+    monkeypatch.setattr(
+        bit_interface,
+        "_daily_tasks",
+        {
+            "live-task": {
+                "task_id": "live-task",
+                "running": True,
+                "status": "running",
+                "started_at": "2026-01-01 00:00:00",
+                "finished_at": "",
+                "log_path": str(log_path),
+                "params": {},
+            }
+        },
+    )
+    bit_interface._persist_daily_task_history()
+
+    bit_interface._daily_tasks.clear()
+    bit_interface._restore_daily_task_history()
+
+    restored = bit_interface._daily_task_snapshot("live-task")
+    assert restored["running"] is True
+    assert restored["status"] == "running"
+    assert restored["finished_at"] == ""
 
 
 def test_daily_task_status_keeps_instance_logs_separate(monkeypatch, tmp_path):
@@ -1531,7 +1593,7 @@ def test_daily_task_console_dispatches_selected_appeal_type(
             "mode": mode,
             "appeal_type": "延误率",
             "min_rate": "7%",
-            "stop_after_minutes": 0,
+            "stop_after_minutes": 1,
             "appeal_copy_mode": "AI话术模式",
             "deepseek_api_key": "manual-secret",
         }
@@ -1544,6 +1606,8 @@ def test_daily_task_console_dispatches_selected_appeal_type(
     assert calls[0][1]["min_rate"] == pytest.approx(0.07)
     assert calls[0][1]["appeal_copy_mode"] == "AI话术模式"
     assert calls[0][1]["deepseek_api_key"] == "manual-secret"
+    assert "stop_after_minutes" not in params
+    assert "stop_at" not in calls[0][1]
     assert task_lock.released is True
     assert bit_interface._daily_task_state["status"] == "success"
 

@@ -2,6 +2,7 @@ import hashlib
 import io
 import json
 import re
+import threading
 import time
 import zipfile
 from types import SimpleNamespace
@@ -82,6 +83,17 @@ def test_agent_runtime_messages_are_forwarded_to_status_listeners(tmp_path):
     assert received[0].endswith("实时日志")
 
 
+def test_agent_runtime_log_works_without_windowed_stdout(monkeypatch, tmp_path):
+    runtime_log = AgentRuntimeLog(tmp_path / "agent.log")
+    monkeypatch.setattr("local_agent.sys.stdout", None)
+
+    runtime_log.write("无控制台日志")
+
+    assert (tmp_path / "agent.log").read_text(encoding="utf-8").endswith(
+        "无控制台日志\n"
+    )
+
+
 def test_status_history_reads_a_bounded_utf8_tail(tmp_path):
     path = tmp_path / "agent.log"
     path.write_text("第一行\n第二行\n第三行\n", encoding="utf-8")
@@ -132,6 +144,26 @@ def test_status_window_opens_macos_log_directory_with_finder(monkeypatch, tmp_pa
             },
         )
     ]
+
+
+def test_status_window_close_requests_real_agent_shutdown():
+    window = object.__new__(local_agent.AgentStatusWindow)
+    requested = []
+    destroyed = []
+    window.closing = False
+    window.agent_thread = None
+    window.agent = SimpleNamespace(request_shutdown=requested.append)
+    window.status_text = SimpleNamespace(set=lambda _value: None)
+    window.messagebox = SimpleNamespace(askyesno=lambda *_args, **_kwargs: True)
+    window.root = SimpleNamespace(
+        after=lambda _delay, callback: callback(),
+        destroy=lambda: destroyed.append(True),
+    )
+
+    window._on_close()
+
+    assert requested == ["用户关闭 Agent 窗口"]
+    assert destroyed == [True]
 
 
 def test_agent_downloads_verifies_and_atomically_activates_release(tmp_path):
@@ -219,7 +251,7 @@ Path(args.job_file).with_name('result.json').write_text(json.dumps({
         events.append(data)
         if data.get("content"):
             assert not (tmp_path / "jobs" / job_id / "result.json").exists(), "Small logs must arrive before the worker exits"
-    monkeypatch.setattr(agent, "heartbeat", lambda: {})
+    monkeypatch.setattr(agent, "heartbeat", lambda **_kwargs: {})
     monkeypatch.setattr(agent, "send_event", event)
     agent.run_job({"job_id": "daily-runtime-job", "job_type": "daily_task", "payload": {}})
     assert "live daily progress" in events[0]["content"]
@@ -271,7 +303,7 @@ Path(args.job_file).with_name('result.json').write_text(json.dumps({}), encoding
             if len(content_attempts) == 1:
                 raise RuntimeError("temporary 502")
 
-    monkeypatch.setattr(agent, "heartbeat", lambda: {})
+    monkeypatch.setattr(agent, "heartbeat", lambda **_kwargs: {})
     monkeypatch.setattr(agent, "send_event", event)
     monkeypatch.setattr(agent, "_retry_delay", lambda _failures: 0.3)
 
@@ -280,3 +312,77 @@ Path(args.job_file).with_name('result.json').write_text(json.dumps({}), encoding
     assert len(content_attempts) == 2
     assert content_attempts[1][0] - content_attempts[0][0] >= 0.25
     assert content_attempts[1][1] == content_attempts[0][1]
+
+
+def test_agent_shutdown_terminates_active_worker_tree(tmp_path, monkeypatch):
+    config = SimpleNamespace(
+        data_dir=tmp_path,
+        server_url="https://workbench.example",
+        agent_token="",
+        db_api_token="test-only",
+        heartbeat_seconds=0.1,
+        agent_id="agent-shutdown-test",
+        name="关闭测试",
+    )
+    agent = LocalAgent(config)
+    agent.current_release = "runtime-shutdown-test"
+    release = tmp_path / "releases" / agent.current_release
+    release.mkdir(parents=True)
+    (release / "local_agent_worker.py").write_text(
+        "import time\nprint('worker started', flush=True)\ntime.sleep(60)\n",
+        encoding="utf-8",
+    )
+    events = []
+    monkeypatch.setattr(agent, "heartbeat", lambda **_kwargs: {})
+    monkeypatch.setattr(agent, "send_event", lambda _job_id, **data: events.append(data))
+
+    runner = threading.Thread(
+        target=agent.run_job,
+        args=({"job_id": "shutdown-job", "job_type": "daily_task", "payload": {}},),
+    )
+    runner.start()
+    deadline = time.monotonic() + 5
+    while agent._current_worker is None and time.monotonic() < deadline:
+        time.sleep(0.02)
+
+    agent.request_shutdown("test")
+    runner.join(timeout=10)
+
+    assert not runner.is_alive()
+    assert any(event.get("status") == "stopped" for event in events)
+
+
+def test_agent_stops_worker_when_control_lease_cannot_be_renewed(tmp_path, monkeypatch):
+    config = SimpleNamespace(
+        data_dir=tmp_path,
+        server_url="https://workbench.example",
+        agent_token="",
+        db_api_token="test-only",
+        heartbeat_seconds=0.1,
+        agent_id="agent-lease-loss-test",
+        name="租约中断测试",
+    )
+    agent = LocalAgent(config)
+    agent.current_release = "runtime-lease-loss-test"
+    release = tmp_path / "releases" / agent.current_release
+    release.mkdir(parents=True)
+    (release / "local_agent_worker.py").write_text(
+        "import time\nprint('worker started', flush=True)\ntime.sleep(60)\n",
+        encoding="utf-8",
+    )
+    events = []
+
+    def failed_heartbeat(**_kwargs):
+        raise RuntimeError("control plane offline")
+
+    monkeypatch.setattr(agent, "heartbeat", failed_heartbeat)
+    monkeypatch.setattr(agent, "send_event", lambda _job_id, **data: events.append(data))
+    monkeypatch.setattr(agent, "_retry_delay", lambda _failures: 0.05)
+    monkeypatch.setattr(local_agent, "JOB_CONTROL_LOSS_STOP_SECONDS", 0.2)
+
+    agent.run_job(
+        {"job_id": "lease-loss-job", "job_type": "daily_task", "payload": {}}
+    )
+
+    assert any(event.get("status") == "stopped" for event in events)
+    assert (tmp_path / "jobs" / "lease-loss-job" / "cancel.requested").exists()

@@ -19,6 +19,17 @@ def _access_user(*permissions):
     }
 
 
+def _member_user(*permissions):
+    user = _access_user(*permissions)
+    user.update({
+        "display_name": "张三",
+        "role_key": "member",
+        "role_name": "成员",
+        "own_store_only": True,
+    })
+    return user
+
+
 def test_permission_catalog_and_role_dependencies():
     catalog = bit_interface.workbench_permission_catalog()
     permission_keys = {
@@ -31,6 +42,7 @@ def test_permission_catalog_and_role_dependencies():
     assert "appeal.execute" in permission_keys
     assert "order_analysis.view" in permission_keys
     assert "order_analysis.execute" in permission_keys
+    assert "ad_analysis.view" in permission_keys
     assert "access.manage" in permission_keys
     assert bit_interface._validate_workbench_permissions(["appeal.execute"]) == [
         "appeal.execute",
@@ -77,6 +89,23 @@ def test_super_admin_session_always_gets_all_permissions():
     assert bit_interface.workbench_user_has_permission(user, "access.manage") is True
 
 
+def test_session_user_contains_role_data_scope():
+    user = bit_interface.build_workbench_session_user(
+        {
+            "id": 2,
+            "username": "zhangsan",
+            "display_name": "张三",
+            "role_key": "member",
+            "role_name": "成员",
+            "permissions_json": '["order_print.view"]',
+            "own_store_only": 1,
+        }
+    )
+
+    assert user["own_store_only"] is True
+    assert bit_interface.workbench_user_salesperson(user) == "张三"
+
+
 def test_business_write_api_is_denied_for_view_only_role(monkeypatch):
     monkeypatch.setattr(
         bit_interface,
@@ -108,6 +137,35 @@ def test_order_analysis_import_requires_execute_permission(monkeypatch):
 
     assert response.status_code == 403
     assert response.get_json()["required_permissions"] == ["order_analysis.execute"]
+
+
+def test_ad_analysis_requires_permission_and_scopes_member_tokens(monkeypatch):
+    client = bit_interface.app.test_client()
+    monkeypatch.setattr(
+        bit_interface,
+        "get_current_workbench_user",
+        lambda: _member_user("order_analysis.view"),
+    )
+    denied = client.get("/api/ad-analysis?date_from=2026-09-01&date_to=2026-09-17")
+    assert denied.status_code == 403
+    assert denied.get_json()["required_permissions"] == ["ad_analysis.view"]
+
+    monkeypatch.setattr(
+        bit_interface,
+        "get_current_workbench_user",
+        lambda: _member_user("ad_analysis.view"),
+    )
+    monkeypatch.setattr(bit_interface, "_authorized_token_ids_for_user", lambda: {7, 9})
+    monkeypatch.setattr(
+        bit_interface.bit_db_api,
+        "get_mercado_ad_analysis",
+        lambda **kwargs: {"received": kwargs},
+    )
+    allowed = client.get(
+        "/api/ad-analysis?date_from=2026-09-01&date_to=2026-09-17&token_ids=7&token_ids=99"
+    )
+    assert allowed.status_code == 200
+    assert allowed.get_json()["data"]["received"]["token_ids"] == [7]
 
 
 def test_order_analysis_import_uses_update_orders_module(monkeypatch):
@@ -227,6 +285,13 @@ def test_workbench_schema_migrates_roles_and_existing_users():
     assert set(warehouse_role["permissions"]) == {
         "order_print.view", "order_print.execute",
     }
+    member_role = next(
+        role for role in bit_interface.WORKBENCH_DEFAULT_ROLES
+        if role["role_key"] == "member"
+    )
+    assert member_role["role_name"] == "成员"
+    assert member_role["own_store_only"] is True
+    assert "`own_store_only` TINYINT(1)" in source
 
 
 def test_workbench_schema_ready_fast_path_avoids_startup_writes(monkeypatch):
@@ -330,6 +395,8 @@ def test_access_management_page_contains_role_user_and_permission_controls():
     assert 'id="access-role-form"' in template
     assert 'id="access-user-form"' in template
     assert 'id="access-permission-grid"' in template
+    assert 'id="access-role-own-store-only"' in template
+    assert "仅可查看和操作本人店铺及产品数据" in template
     assert 'id="access-shop-form"' not in template
     assert 'id="access-shop-body"' not in template
     assert 'requestAccessApi("/api/access/browser-configs")' not in template
@@ -356,3 +423,42 @@ def test_db_api_proxies_access_management_requests(monkeypatch):
     assert calls[0][:2] == ("GET", "/api/db/workbench/roles")
     assert calls[1][:2] == ("PUT", "/api/db/workbench/users/12")
     assert calls[1][2]["json"] == {"role_key": "viewer"}
+
+
+def test_member_scope_filters_tokens_and_forces_order_salesperson(monkeypatch):
+    user = _member_user("order_print.view")
+    monkeypatch.setattr(bit_interface, "get_current_workbench_user", lambda: user)
+    token_data = {
+        "total": 2,
+        "rows": [
+            {"id": 1, "site_settings": [{"salesperson": "张三"}]},
+            {"id": 2, "site_settings": [{"salesperson": "李四"}]},
+        ],
+    }
+
+    filtered = bit_interface._filter_mercado_tokens_for_user(token_data, user)
+    assert [row["id"] for row in filtered["rows"]] == [1]
+    assert filtered["total"] == 1
+
+    with bit_interface.app.test_request_context("/api/orders?salesperson=李四"):
+        params = bit_interface._order_list_query_params(bit_interface.request.args)
+    assert params["salesperson"] == "张三"
+
+
+def test_member_cannot_address_another_store_token(monkeypatch):
+    monkeypatch.setattr(
+        bit_interface,
+        "get_current_workbench_user",
+        lambda: _member_user("access.view"),
+    )
+    monkeypatch.setattr(
+        bit_interface,
+        "_authorized_token_ids_for_user",
+        lambda user=None: {1},
+    )
+    client = bit_interface.app.test_client()
+
+    response = client.get("/api/mercado-tokens/2/site-settings")
+
+    assert response.status_code == 403
+    assert "其他成员" in response.get_json()["message"]

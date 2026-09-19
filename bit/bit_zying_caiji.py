@@ -45,6 +45,7 @@ from bit.bit_api import getBrowserIdByName, openBrowser, releaseBrowserLease
 from bit.bit_mysql import (
     get_existing_zying_product_ids,
     insert_zying_product_info,
+    list_zying_risk_categories,
 )
 from erp.mercadolibre_attribute_rules import (
     extract_listing_attributes_from_detail,
@@ -75,6 +76,10 @@ ZYING_PRODUCT_URL = os.environ.get(
 ZYING_API_ORIGIN = os.environ.get(
     "BIT_ZYING_API_ORIGIN",
     "https://meli.zying.net",
+).rstrip("/")
+ZYING_SELLER_ORIGIN = os.environ.get(
+    "BIT_ZYING_SELLER_ORIGIN",
+    "https://seller.zying.net",
 ).rstrip("/")
 DEFAULT_ZYING_PAGE_COUNT = max(1, int(os.environ.get("BIT_ZYING_PAGES", "1")))
 DEFAULT_ZYING_START_PAGE = max(
@@ -126,6 +131,8 @@ class ZyingCollectionStopped(RuntimeError):
 
 _ZYING_STOP_STATE_LOCK = threading.RLock()
 _ZYING_ACTIVE_STOP_EVENT = None
+_ZYING_CATEGORY_CACHE_LOCK = threading.RLock()
+_ZYING_CATEGORY_CACHE = []
 
 
 def _raise_if_zying_collection_stopped(stop_event=None):
@@ -187,6 +194,26 @@ const payload = arguments[2];
 const done = arguments[arguments.length - 1];
 (async () => {
   try {
+    const callFreeStyleApi = async () => {
+      const chunks = window.webpackChunkzying;
+      if (!chunks || typeof chunks.push !== 'function') {
+        throw new Error('智赢 webpack runtime 尚未加载');
+      }
+      if (!window.__mercadoZyingRequire) {
+        const runtimeId = 910000000 + Math.floor(Math.random() * 89999999);
+        chunks.push([
+          [runtimeId],
+          {},
+          function(require) { window.__mercadoZyingRequire = require; }
+        ]);
+      }
+      const requestModule = window.__mercadoZyingRequire(60730);
+      const requestApi = requestModule && (requestModule.Z || requestModule.default);
+      if (!requestApi || typeof requestApi.getFreeStyleApi !== 'function') {
+        throw new Error('智赢通用接口模块尚未加载');
+      }
+      return requestApi.getFreeStyleApi(`${prefix}.${action}`, payload);
+    };
     const findApi = async () => {
       if (
         window.__mercadoZyingProductApi &&
@@ -224,8 +251,9 @@ const done = arguments[arguments.length - 1];
       }
       throw new Error('没有找到智赢前端产品接口模块');
     };
-    const api = await findApi();
-    const response = await api.handleProduct(prefix, action, payload);
+    const response = prefix === 'logins'
+      ? await callFreeStyleApi()
+      : await (await findApi()).handleProduct(prefix, action, payload);
     done({ok: true, response});
   } catch (error) {
     const responseData = error?.response?.data || error?.data || null;
@@ -336,6 +364,35 @@ const done = arguments[arguments.length - 1];
             )
         self._credential = credential
 
+    def _prepare_seller_api_locked(self, credential):
+        auth_mode, auth_value = _split_zying_auth_credential(credential)
+        if not auth_value:
+            raise ZyingAuthenticationError("智赢登录凭证为空，请重新登录")
+        self.driver.get(f"{ZYING_SELLER_ORIGIN}/")
+        if auth_mode == "cookie":
+            self.driver.execute_script("localStorage.removeItem('token');")
+            self.driver.add_cookie(
+                {
+                    "name": "token",
+                    "value": auth_value,
+                    "domain": ".zying.net",
+                    "path": "/",
+                }
+            )
+        else:
+            self.driver.execute_script(
+                "localStorage.setItem('token', JSON.stringify(arguments[0]));",
+                auth_value,
+            )
+        self.driver.get(f"{ZYING_SELLER_ORIGIN}/#/product/myproduct/productlist")
+        WebDriverWait(self.driver, 45).until(
+            lambda driver: bool(
+                driver.execute_script(
+                    "return Boolean(window.webpackChunkzying && document.body);"
+                )
+            )
+        )
+
     def call_api(self, credential, command, payload):
         if "." not in str(command or ""):
             raise ValueError(f"智赢接口命令格式错误：{command!r}")
@@ -344,6 +401,9 @@ const done = arguments[arguments.length - 1];
         with self._lock:
             _raise_if_zying_collection_stopped()
             self._configure_credential_locked(credential)
+            use_seller_api = prefix == "logins"
+            if use_seller_api:
+                self._prepare_seller_api_locked(credential)
             try:
                 result = self.driver.execute_async_script(
                     self.API_CALL_SCRIPT,
@@ -353,6 +413,10 @@ const done = arguments[arguments.length - 1];
                 )
             except Exception as exc:
                 raise RuntimeError(f"智赢接口 {command} 后台调用失败") from exc
+            finally:
+                if use_seller_api:
+                    # 下一次产品接口调用必须重新回到美客多产品应用。
+                    self._credential = ""
         _raise_if_zying_collection_stopped()
         if not isinstance(result, dict):
             raise RuntimeError(f"智赢接口 {command} 没有返回可识别结果")
@@ -364,7 +428,9 @@ const done = arguments[arguments.length - 1];
             raise RuntimeError(f"智赢接口 {command} 请求失败：{message}")
         response = result.get("response")
         if not isinstance(response, dict):
-            raise RuntimeError(f"智赢接口 {command} 响应格式错误")
+            raise RuntimeError(
+                f"智赢接口 {command} 响应格式错误：{type(response).__name__}"
+            )
         return response
 
     def close(self):
@@ -567,6 +633,15 @@ return {
   ].every(Boolean),
 };
 """
+
+
+def _zying_status_name(value):
+    """Return the human-readable status reported by ZYing."""
+    try:
+        status_code = (int(float(value or 0)) // 1000) * 1000
+    except (TypeError, ValueError):
+        status_code = 0
+    return REVIEW_STATUS_NAMES.get(status_code, _format_number(value))
 
 FIELD_DEFINITIONS = {
     "sale_price": {
@@ -771,6 +846,69 @@ def _iter_zying_category_paths(options, parents=()):
         )
         yield current
         yield from _iter_zying_category_paths(option.get("children"), current)
+
+
+def _zying_category_rows(options):
+    """Flatten the current product-page category tree for selectors and lookups."""
+    rows = []
+    seen = set()
+    for path in _iter_zying_category_paths(options):
+        category_id = _format_number(path[-1].get("value"))
+        labels = [_clean_text(item.get("label")) for item in path]
+        labels = [label for label in labels if label]
+        if not category_id or category_id in seen or not labels:
+            continue
+        seen.add(category_id)
+        rows.append(
+            {
+                "category_id": category_id,
+                "category_name": "/".join(labels),
+                "category_leaf_name": labels[-1],
+            }
+        )
+    return rows
+
+
+def _remember_zying_categories(rows):
+    normalized = []
+    for row in rows or ():
+        if not isinstance(row, dict):
+            continue
+        category_id = _format_number(row.get("category_id"))
+        category_name = _clean_text(row.get("category_name"))
+        if category_id and category_name:
+            normalized.append(
+                {
+                    "category_id": category_id,
+                    "category_name": category_name,
+                    "category_leaf_name": _clean_text(
+                        row.get("category_leaf_name")
+                    )
+                    or category_name.rsplit("/", 1)[-1],
+                }
+            )
+    with _ZYING_CATEGORY_CACHE_LOCK:
+        _ZYING_CATEGORY_CACHE[:] = normalized
+    return [dict(row) for row in normalized]
+
+
+def list_cached_zying_categories():
+    with _ZYING_CATEGORY_CACHE_LOCK:
+        return [dict(row) for row in _ZYING_CATEGORY_CACHE]
+
+
+def _read_current_zying_categories(driver, timeout=15):
+    deadline = time.monotonic() + max(1, float(timeout))
+    previous = None
+    while time.monotonic() < deadline:
+        options = driver.execute_script(ZYING_CATEGORY_OPTIONS_SCRIPT) or []
+        if options and options == previous:
+            return _zying_category_rows(options)
+        previous = options
+        time.sleep(0.25)
+    raise RuntimeError(
+        "当前智赢网页未读取到产品分类；请先打开智赢产品列表页，等待页面加载完成后重试"
+    )
 
 
 def _resolve_zying_category(options, requested_category):
@@ -1025,6 +1163,47 @@ def validate_zying_auth_token(token):
     return True
 
 
+def list_zying_product_developers(auth_token=None):
+    """返回智赢可用的产品开发人员，供采集筛选和姓名映射使用。"""
+    token = _clean_text(auth_token) or load_zying_auth_token()
+    if not token:
+        raise ZyingAuthenticationError("智赢登录凭证为空，请重新登录")
+    with requests.Session() as session:
+        session.trust_env = False
+        data = _zying_api_post(session, token, "logins.select", {})
+    rows = data.get("logins") if isinstance(data, dict) else None
+    if not isinstance(rows, list):
+        raise RuntimeError("智赢产品开发人员接口返回格式异常")
+    developers = []
+    seen = set()
+    for row in rows:
+        if not isinstance(row, dict):
+            continue
+        developer_id = _format_number(row.get("id"))
+        developer_name = _clean_text(row.get("name"))
+        if not developer_id or developer_id in seen:
+            continue
+        seen.add(developer_id)
+        developers.append({"id": developer_id, "name": developer_name or developer_id})
+    return developers
+
+
+def _attach_product_developer(record, developer_names=None):
+    detail = record.get("detail_data") or {}
+    developer_id = _format_number(
+        detail.get("sale_loginid")
+        or record.get("product_developer_id")
+    )
+    developer_names = developer_names or {}
+    developer_name = _clean_text(
+        developer_names.get(developer_id)
+        or record.get("product_developer_name")
+    )
+    record["product_developer_id"] = developer_id
+    record["product_developer_name"] = developer_name
+    return record
+
+
 def _plain_search_title(value):
     return _clean_text(html.unescape(re.sub(r"<[^>]+>", "", str(value or ""))))
 
@@ -1202,6 +1381,9 @@ def _finalize_zying_listing_snapshot(record):
             "source_type": "zying",
             "zying_category_id": record.get("zying_category_id") or "",
             "zying_category": record.get("zying_category") or "",
+            "product_developer_id": record.get("product_developer_id") or "",
+            "product_developer_name": record.get("product_developer_name") or "",
+            "zying_status": record.get("zying_status") or "",
         },
         "weight_g": detail.get("sale_weight"),
         "package_length_cm": package_size[0],
@@ -1266,16 +1448,9 @@ def _merge_detail_record(record, search_row, detail):
         record.get("package_dimensions")
     ) or api_dimensions
 
-    try:
-        review_code = (int(detail.get("sale_stat") or 0) // 1000) * 1000
-    except (TypeError, ValueError):
-        review_code = 0
-    record["review_status"] = _clean_text(record.get("review_status")) or (
-        REVIEW_STATUS_NAMES.get(
-            review_code,
-            _format_number(detail.get("sale_stat")),
-        )
-    )
+    zying_status = _zying_status_name(detail.get("sale_stat"))
+    record["zying_status"] = zying_status
+    record["review_status"] = _clean_text(record.get("review_status")) or zying_status
 
     images = detail.get("sale_pic") or []
     if images:
@@ -1283,6 +1458,22 @@ def _merge_detail_record(record, search_row, detail):
     category_site, category_id = _detail_category_reference(detail)
     record["_category_site"] = category_site
     record["_category_id"] = category_id
+    record["_zying_category_id"] = _format_number(
+        detail.get("sale_localid")
+        or detail.get("localid")
+        or detail.get("category_local_id")
+        or search_row.get("localid")
+        or search_row.get("sale_localid")
+    )
+    record["_zying_category_name"] = _clean_text(
+        detail.get("sale_localname")
+        or detail.get("sale_local_name")
+        or detail.get("localname")
+        or detail.get("local_name")
+        or detail.get("category_local_name")
+        or search_row.get("localname")
+        or search_row.get("category_name")
+    )
     return record
 
 
@@ -1390,7 +1581,8 @@ def _merge_ui_detail_record(record, details):
         f"{_clean_text(details.get('size_width'))} X "
         f"{_clean_text(details.get('size_height'))} 厘米"
     )
-    record["review_status"] = _clean_text(details.get("review_status"))
+    record["zying_status"] = _clean_text(details.get("review_status"))
+    record["review_status"] = record["zying_status"]
     record["detail_form_fields"] = dict(details.get("form_fields") or {})
     record["detail_text"] = str(details.get("detail_text") or "").strip()
     detail_images = [
@@ -1784,21 +1976,63 @@ def _enrich_product_records(driver, records, token=None):
     return records
 
 
-def _attach_zying_category(record, selection):
-    if not selection:
-        record.setdefault("zying_category_id", "")
-        record.setdefault("zying_category", "")
+def _zying_category_name_lookup(rows):
+    """将已知智赢分类整理为 ``分类编号 -> 完整分类路径``。"""
+    lookup = {}
+    for row in rows or []:
+        if not isinstance(row, dict):
+            continue
+        category_id = _format_number(row.get("category_id") or row.get("value"))
+        category_name = _clean_text(
+            row.get("category_name")
+            or row.get("category_path")
+            or row.get("label")
+        )
+        if category_id and category_name:
+            lookup[category_id] = category_name
+    return lookup
+
+
+def _load_zying_category_name_lookup(category_reader=None):
+    """合并数据库分类和刚从智赢页面读取的分类，页面名称优先。"""
+    lookup = {}
+    reader = category_reader or list_zying_risk_categories
+    try:
+        lookup.update(_zying_category_name_lookup(reader()))
+    except Exception as exc:
+        print(f"读取已有智赢分类路径失败：{exc}", flush=True)
+    # “从当前智赢网页更新分类”得到的是最新名称，应覆盖数据库里的旧名称
+    # 或历史上仅保存了分类编号的记录。
+    lookup.update(_zying_category_name_lookup(list_cached_zying_categories()))
+    return lookup
+
+
+def _attach_zying_category(record, selection=None, category_lookup=None):
+    """保存商品自己的智赢分类；未筛选分类时也不再留空。"""
+    actual_id = _format_number(record.pop("_zying_category_id", ""))
+    actual_name = _clean_text(record.pop("_zying_category_name", ""))
+    selected_id = _format_number((selection or {}).get("category_id"))
+    selected_path = _clean_text((selection or {}).get("category_path"))
+    category_id = actual_id or selected_id
+    lookup = category_lookup or {}
+    category_path = (
+        (selected_path if selected_id and selected_id == category_id else "")
+        or _clean_text(lookup.get(category_id))
+        or actual_name
+        or category_id
+    )
+    record["zying_category_id"] = category_id
+    record["zying_category"] = category_path
+    if not category_id:
         return record
-    record["zying_category_id"] = selection["category_id"]
-    record["zying_category"] = selection["category_path"]
     raw_text = str(record.get("raw_text") or "").rstrip()
     record["raw_text"] = "\n".join(
         filter(
             None,
             (
                 raw_text,
-                f"智赢分类编号: {selection['category_id']}",
-                f"智赢产品分类: {selection['category_path']}",
+                f"智赢分类编号: {category_id}",
+                f"智赢产品分类: {category_path}",
             ),
         )
     )
@@ -2469,6 +2703,52 @@ def capture_zying_login_from_browser(
         _release_zying_browser_connection(browser_service, leased_window_id)
 
 
+def refresh_zying_collection_options_from_browser(
+    *,
+    browser_type=DEFAULT_ZYING_BROWSER_TYPE,
+    window_id=DEFAULT_ZYING_WINDOW_ID,
+    window_name=DEFAULT_ZYING_WINDOW_NAME,
+    edge_debugger_address=DEFAULT_ZYING_EDGE_DEBUGGER_ADDRESS,
+    auth_file=None,
+):
+    """Read categories and the auth token from the currently selected ZYing page."""
+    driver = browser_service = None
+    leased_window_id = ""
+    try:
+        driver, browser_service, leased_window_id = _open_zying_collection_browser(
+            browser_type,
+            window_id,
+            window_name=window_name,
+            edge_debugger_address=edge_debugger_address,
+        )
+        _activate_zying_page(driver)
+        try:
+            WebDriverWait(driver, 10).until(_browser_has_auth_token)
+        except Exception as exc:
+            raise ZyingAuthenticationError(
+                "当前智赢网页尚未登录；请在所选浏览器完成登录后重试"
+            ) from exc
+        token = _browser_auth_token(driver)
+        categories = _remember_zying_categories(
+            _read_current_zying_categories(driver)
+        )
+        auth = save_zying_auth_token(
+            token,
+            browser_type=browser_type,
+            window_name=window_name,
+            window_id=leased_window_id or window_id,
+            auth_file=auth_file,
+        )
+        developers = list_zying_product_developers(token)
+        return {
+            "categories": categories,
+            "developers": developers,
+            "auth": auth,
+        }
+    finally:
+        _release_zying_browser_connection(browser_service, leased_window_id)
+
+
 def _zying_api_category_selection(category, category_name=""):
     category_id = _clean_text(category)
     category_path = _clean_text(category_name) or category_id
@@ -2523,9 +2803,12 @@ def collect_zying_products_api(
     start_page=DEFAULT_ZYING_START_PAGE,
     category=None,
     category_name="",
+    product_developer_id="",
+    product_developer_name="",
     product_writer=None,
     existing_product_id_reader=None,
     product_mirror_writer=None,
+    category_reader=None,
     return_summary=False,
     stop_event=None,
 ):
@@ -2536,6 +2819,22 @@ def collect_zying_products_api(
         raise ValueError(f"起始页 {start_page} 不能大于结束页 {page_count}。")
     token = _clean_text(auth_token) or load_zying_auth_token()
     category_selection = _zying_api_category_selection(category, category_name)
+    category_lookup = _load_zying_category_name_lookup(category_reader)
+    if category_selection:
+        category_lookup[category_selection["category_id"]] = category_selection["category_path"]
+    requested_developer_id = _format_number(product_developer_id)
+    developers = list_zying_product_developers(token)
+    developer_names = {
+        _format_number(row.get("id")): _clean_text(row.get("name"))
+        for row in developers
+        if _format_number(row.get("id"))
+    }
+    if requested_developer_id and requested_developer_id not in developer_names:
+        raise ValueError("所选产品开发不在当前智赢账号的可用员工中")
+    requested_developer_name = (
+        developer_names.get(requested_developer_id)
+        or _clean_text(product_developer_name)
+    )
     product_writer = product_writer or insert_zying_product_info
     existing_product_id_reader = (
         existing_product_id_reader or get_existing_zying_product_ids
@@ -2557,7 +2856,8 @@ def collect_zying_products_api(
     last_committed_page = start_page - 1
     print(
         f"智赢 API 后台采集直接启动：第 {start_page}-{page_count} 页，"
-        f"分类 {category_selection['category_path'] if category_selection else '全部'}",
+        f"分类 {category_selection['category_path'] if category_selection else '全部'}，"
+        f"产品开发 {requested_developer_name or '全部'}",
         flush=True,
     )
 
@@ -2574,6 +2874,12 @@ def collect_zying_products_api(
             if category_selection:
                 # 智赢产品分类的 Cascader 末级值对应 sale_localid。
                 payload["localid"] = category_selection["category_id"]
+            if requested_developer_id:
+                payload["loginid"] = (
+                    int(requested_developer_id)
+                    if requested_developer_id.isdigit()
+                    else requested_developer_id
+                )
             data = _zying_api_post(session, token, "sale.stat", payload)
             _raise_if_zying_collection_stopped(stop_event)
             listing = data.get("list") if isinstance(data, dict) else None
@@ -2632,7 +2938,8 @@ def collect_zying_products_api(
             )
             skipped_existing_count += skipped_after_detail
             for record in page_records:
-                _attach_zying_category(record, category_selection)
+                _attach_zying_category(record, category_selection, category_lookup)
+                _attach_product_developer(record, developer_names)
                 _finalize_zying_listing_snapshot(record)
             _raise_if_zying_collection_stopped(stop_event)
             inserted_count += _persist_zying_page(
@@ -2661,6 +2968,8 @@ def collect_zying_products_api(
         "last_committed_page": last_committed_page,
         "elapsed_seconds": round(time.time() - started_at, 2),
         "collection_mode": "api",
+        "product_developer_id": requested_developer_id,
+        "product_developer_name": requested_developer_name,
     }
     print(
         f"智赢 API 后台采集完成：入库 {inserted_count} 条，"
@@ -2678,11 +2987,14 @@ def collect_zying_products(
     product_writer=None,
     existing_product_id_reader=None,
     product_mirror_writer=None,
+    category_reader=None,
     return_summary=False,
     browser_type=DEFAULT_ZYING_BROWSER_TYPE,
     window_name=DEFAULT_ZYING_WINDOW_NAME,
     edge_debugger_address=DEFAULT_ZYING_EDGE_DEBUGGER_ADDRESS,
     category_name="",
+    product_developer_id="",
+    product_developer_name="",
     auth_token=None,
     api_mode=True,
     stop_event=None,
@@ -2709,9 +3021,12 @@ def collect_zying_products(
             start_page=start_page,
             category=DEFAULT_ZYING_CATEGORY if category is None else category,
             category_name=category_name,
+            product_developer_id=product_developer_id,
+            product_developer_name=product_developer_name,
             product_writer=product_writer,
             existing_product_id_reader=existing_product_id_reader,
             product_mirror_writer=product_mirror_writer,
+            category_reader=category_reader,
             return_summary=return_summary,
             stop_event=stop_event,
         )

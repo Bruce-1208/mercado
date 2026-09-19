@@ -140,6 +140,8 @@ def test_zying_detail_snapshot_is_upserted_as_third_product_source():
                 "net_income": "USD 22",
                 "product_category_id": "CBT430974",
                 "product_category": "Home / Test",
+                "product_developer_id": "121658",
+                "product_developer_name": "张三",
                 "listing_snapshot": snapshot,
             }
         ],
@@ -162,6 +164,8 @@ def test_zying_detail_snapshot_is_upserted_as_third_product_source():
     assert stored_snapshot["zying_net_proceeds_usd"] == "22"
     assert "IF(`source_type` = 'zying'" in upsert_sql
     assert "zying" in store.PRODUCT_SOURCE_TYPES
+    assert row[24:] == ("121658", "张三")
+    assert "`product_developer_name`" in upsert_sql
 
 
 def test_add_products_keeps_missing_weight_rows_in_collection_list():
@@ -1169,6 +1173,28 @@ def test_product_list_applies_status_range_and_date_filters_in_database():
         Decimal("100"), Decimal("500"), Decimal("200"), Decimal("900"),
         Decimal("-5"), Decimal("40"),
         "2026-08-01 00:00:00", "2026-08-26 00:00:00",
+    )
+
+
+def test_product_list_filters_zying_category_and_product_developer():
+    connection = _FakeConnection()
+    store.list_product_items(
+        zying_category="圆佑同步/家电类",
+        product_developer_id="121658",
+        connection_factory=lambda: connection,
+    )
+
+    count_sql, params = next(
+        (query, params)
+        for query, params in connection.fake_cursor.queries
+        if query.startswith(f"SELECT COUNT(*) AS total FROM `{store.PRODUCT_TABLE}`")
+    )
+    assert "plugin_snapshot.zying_category" in count_sql
+    assert "plugin_snapshot.zying_category_id" in count_sql
+    assert "`product_developer_id` = %s" in count_sql
+    assert params == (
+        "圆佑同步/家电类", "%圆佑同步/家电类%", "圆佑同步/家电类",
+        "121658", "121658",
     )
 
 

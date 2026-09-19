@@ -80,5 +80,7 @@ exe = EXE(
     bootloader_ignore_signals=False,
     strip=False,
     upx=True,
-    console=True,
+    # The Agent owns a Tk status window.  Building it as a Windows GUI
+    # executable prevents a second console window from being created.
+    console=False,
 )

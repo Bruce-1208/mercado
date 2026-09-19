@@ -225,7 +225,9 @@ def _run_ai_appeal_loop(started_at):
         bit_daily_task.DEFAULT_DAILY_RECENT_DAYS,
     )
     site_pause = _get_int_env("BIT_DAILY_SITE_PAUSE", 30)
-    round_interval = _get_int_env("BIT_DAILY_ROUND_INTERVAL", 600)
+    round_interval = _get_int_env(
+        "BIT_DAILY_ROUND_INTERVAL", bit_daily_task.DEFAULT_DAILY_ROUND_INTERVAL
+    )
     appeal_rounds = max(
         1,
         _get_int_env("BIT_DAILY_APPEAL_ROUNDS", DEFAULT_MAIN_APPEAL_ROUNDS),

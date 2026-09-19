@@ -114,6 +114,57 @@ def test_ten_image_first_products_keep_status_and_only_write_weight_or_profit(tm
     assert (sheet['V7'].value, sheet['W7'].value, sheet['X7'].value) == ('待审核', None, '待审核')
 
 
+def test_official_sku_weight_skips_redundant_supplier_model_call(tmp_path, monkeypatch):
+    service, browser, config = make_service(tmp_path, monkeypatch)
+    config['max_items'] = 1
+
+    class FastBrowser(ImageBrowser):
+        def read_offer(self, task, candidate):
+            return {**candidate, 'skus': [{'id': 'blue', 'label': '蓝色一只', 'price': '22',
+                                           'raw_weight': '450g', 'raw_text': '蓝色一只；包装重量450g'}]}
+
+    class FastModel(ImageModel):
+        def supplier_info(self, task, text):
+            raise AssertionError('官方SKU已有价格和包装重量时不应再次调用模型')
+
+    browser = FastBrowser(config)
+    service.browser_factory = lambda *args: browser
+    service.models_factory = lambda *args: FastModel()
+    lock = service.lock(); assert lock.acquire()
+    service.run(config, 'pipeline', None, lock)
+
+    assert service.store.get('1')['status'] == 'success'
+    assert service.store.get('1')['weight_g'] == '450'
+
+
+def test_manual_sku_retry_reuses_approved_image_lead(tmp_path, monkeypatch):
+    service, browser, config = make_service(tmp_path, monkeypatch)
+    config['writeback_enabled'] = False
+
+    class CachedBrowser(ImageBrowser):
+        def search_images(self, task):
+            raise AssertionError('已有通过图片匹配的最佳候选时，重试不应再次搜索图片')
+
+    browser = CachedBrowser(config)
+    service.browser_factory = lambda *a: browser
+    service.models_factory = lambda *a: ImageModel()
+    service.store.add({
+        'erp_goods_id': '1', 'title': '蓝色测试杯',
+        'main_image_url': 'https://img.example/target.jpg', 'erp_sku': '蓝色一只',
+        'best_match_url': 'https://detail.1688.com/offer/1.html',
+        'best_match_title': '蓝色杯',
+        'best_match_image_url': 'https://img.example/cup.jpg',
+        'best_match_confidence': .98,
+        'best_match_approved': True,
+    })
+    task = service.store.get('1')
+
+    service.process(task, browser, ImageModel(), config)
+
+    assert ('detail', '1') in browser.operations
+    assert not any(step == 'image' for step, _ in browser.operations)
+
+
 def test_missing_weight_must_retain_original_after_save_and_skip_on_mismatch(tmp_path, monkeypatch):
     service, browser, config = make_service(tmp_path, monkeypatch)
     browser.corrupt_weight = True
@@ -289,6 +340,29 @@ def test_image_matching_threshold_is_inclusive_and_precedes_sku_read(monkeypatch
                                          [{'title': '杯', 'main_image_url': 'https://img.example/candidate.jpg', 'url': 'https://detail.1688.com/offer/1.html'}])
     assert bool(matches) is approved and len(evidence) == 1
     assert calls == [['https://img.example/target.jpg', 'https://img.example/candidate.jpg']]
+
+
+def test_variant_matrix_is_narrowed_by_a_distinctive_erp_label(monkeypatch):
+    model = Models(validate({}), lambda *a: None)
+    calls = []
+    candidate = {'title': '泳圈', 'main_image_url': 'https://img.example/candidate.jpg',
+                 'skus': [
+                     {'id': 'pump', 'label': '手动充气泵 / 请自配', 'price': '10'},
+                     {'id': 'diamond', 'label': '钻石泳圈 / 请自配', 'price': '20'},
+                     {'id': 'unicorn', 'label': '独角兽浮排 / 请自配', 'price': '30'},
+                 ]}
+    def call(*args, **kwargs):
+        calls.append(args[2] if len(args) > 2 else kwargs.get('images'))
+        return {'same_product': True, 'specs_confirmed': True, 'sku_id': 'diamond',
+                'confidence': .96, 'reason': '图片与款式一致'}
+    monkeypatch.setattr(model, 'call', call)
+
+    match, reviews = model.match({'title': '钻石泳圈', 'description': '',
+                                  'main_image_url': 'https://img.example/target.jpg'}, candidate)
+
+    assert match['selected_sku']['id'] == 'diamond'
+    assert len(calls) == 1
+    assert reviews[-1]['deterministic_variant'] is True
 
 
 def test_first_five_images_choose_highest_true_match_and_ignore_high_confidence_rejection(monkeypatch):

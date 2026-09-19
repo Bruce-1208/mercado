@@ -360,7 +360,13 @@ def client(service):
 
 def test_api_visual_config_reports_and_invalid_requests(client,service):
     headers={"X-AWP-Request":"1"}
-    assert client.get("/ai-weight-price").status_code==200
+    page = client.get("/ai-weight-price")
+    assert page.status_code==200
+    assert page.text.count('class="login-box"') == 2
+    assert 'id="open-supplier-login"' not in page.text
+    assert 'id="terminate"' in page.text
+    assert 'bestSupplierUrl' in page.text
+    assert '打开最佳匹配' in page.text
     assert client.get("/api/ai-weight-price/status").json["counts"]["pending"]==0
     result=client.put("/api/ai-weight-price/config",json={"daily_limit":12},headers=headers)
     assert result.status_code==200 and result.json["daily_limit"]==12
@@ -574,6 +580,62 @@ def test_login_confirm_requires_real_logged_in_browser(service,client,monkeypatc
     with pytest.raises(ValueError,match="会话"):
         service.require_login(service.config.load())
     assert not service.store.state("login")["confirmed"]
+
+
+def test_open_login_opens_zying_and_1688_in_same_edge_session(service, monkeypatch):
+    import erp.ai_weight_price.service as module
+    calls = []
+
+    class LoginPagesBrowser:
+        def __init__(self, *args):
+            pass
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            pass
+
+        def open_login(self):
+            calls.append("zying")
+
+        def open_supplier_login(self):
+            calls.append("1688")
+
+    service.browser_factory = LoginPagesBrowser
+    monkeypatch.setattr(module, "open_edge", lambda *args: "edge1")
+
+    service.open_login()
+
+    assert calls == ["zying", "1688"]
+    assert service.store.state("login")["confirmed"] is False
+
+
+def test_terminate_current_clears_only_current_batch_and_keeps_login_and_history(service, client):
+    task(service.store, "current")
+    task(service.store, "historical")
+    service.store.save_run({"run_id": "old-run", "mode": "pipeline", "started_at": 1})
+    service.store.record_run_item("old-run", "historical")
+    service.store.save_run({"run_id": "current-run", "mode": "pipeline", "started_at": 2})
+    service.store.record_run_item("current-run", "current")
+    service.store.set_state("run", {"run_id": "current-run", "mode": "pipeline", "outcome": "completed"})
+    service.store.set_state("login", {"confirmed": True, "confirmed_at": 123})
+
+    response = client.post("/api/ai-weight-price/terminate", json={}, headers={"X-AWP-Request": "1"})
+
+    assert response.status_code == 200
+    assert response.json["cleared"] is True
+    assert service.store.state("run") == {}
+    assert service.store.state("latest_run_id") is None
+    assert service.status()["current_counts"] == dict.fromkeys(service.status()["current_counts"], 0)
+    assert service.store.state("login")["confirmed"] is True
+    assert service.store.get("current")["erp_goods_id"] == "current"
+    assert service.store.get("historical")["erp_goods_id"] == "historical"
+    with pytest.raises(ValueError, match="不存在"):
+        service.store.run_report("current-run")
+    old_batch, old_rows = service.store.run_report("old-run")
+    assert old_batch["run_id"] == "old-run"
+    assert [row["erp_goods_id"] for row in old_rows] == ["historical"]
 
 
 def test_open_edge_launches_visible_installed_app_with_exact_login_url(tmp_path,monkeypatch):

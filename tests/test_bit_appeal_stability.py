@@ -359,6 +359,59 @@ def test_driver_cleanup_failure_preserves_outcome_and_releases_lease(monkeypatch
     assert calls == ["close", "release"]
 
 
+def test_single_task_tab_is_cleared_without_opening_another_tab():
+    calls = []
+
+    class SwitchTo:
+        def default_content(self):
+            calls.append("default_content")
+
+        def window(self, handle):
+            calls.append(("window", handle))
+
+    class Driver:
+        window_handles = ["task-tab"]
+        current_window_handle = "task-tab"
+        switch_to = SwitchTo()
+
+        def get(self, url):
+            calls.append(("get", url))
+
+        def execute_script(self, *_args):
+            pytest.fail("清理唯一标签页时不应再调用 window.open")
+
+        def close(self):
+            pytest.fail("清理唯一标签页时不应关闭整个浏览器窗口")
+
+    assert ai.close_current_tab_keep_browser(Driver(), "店铺", "MX") is True
+    assert ("get", "about:blank") in calls
+
+
+def test_failed_tab_close_falls_back_to_clearing_same_tab():
+    calls = []
+
+    class SwitchTo:
+        def default_content(self):
+            calls.append("default_content")
+
+        def window(self, handle):
+            calls.append(("window", handle))
+
+    class Driver:
+        window_handles = ["task-tab", "preserved-tab"]
+        current_window_handle = "task-tab"
+        switch_to = SwitchTo()
+
+        def close(self):
+            raise RuntimeError("renderer timeout")
+
+        def get(self, url):
+            calls.append(("get", url))
+
+    assert ai.close_current_tab_keep_browser(Driver(), "店铺", "MX") is True
+    assert ("get", "about:blank") in calls
+
+
 def test_stop_during_reply_keeps_confirmed_send_success(monkeypatch):
     sent, records = group_setup(monkeypatch, [])
     def stop(*args, **kwargs):

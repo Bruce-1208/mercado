@@ -88,7 +88,9 @@ class Service:
         lock = self.lock()
         owner = lock.read_owner()
         running = bool(owner and not lock._is_stale())
-        return {"running": running, "counts": self.store.counts(), "quota": self.store.quota(),
+        run = self.store.state("run", {}) or {}
+        return {"running": running, "counts": self.store.counts(),
+                "current_counts": self.store.run_counts(run.get("run_id")), "quota": self.store.quota(),
                 "circuit": self.store.state("circuit"), "run": self.store.state("run", {}),
                 "run_error": self.store.state("run_error"), "action_error": self.store.state("action_error"),
                 "storage": str(self.store.root), "collection": self.store.state("collection"),
@@ -133,9 +135,10 @@ class Service:
             try:
                 with self.browser_factory(config, threading.Event(), self.store.log) as browser:
                     browser.open_login()
+                    browser.open_supplier_login()
             except Exception as exc:
                 raise ValueError(f"无法打开 Edge 登录页面：{exc}") from exc
-            self.store.log("已打开 Edge 智赢登录窗口，等待人工输入账号密码并在控制台确认")
+            self.store.log("已在同一 Edge 窗口打开智赢和1688，等待人工完成登录并在控制台确认")
 
     def confirm_login(self):
         with self.idle():
@@ -151,7 +154,7 @@ class Service:
                 raise ValueError(str(exc)) from exc
             self.store.set_state("login", {"confirmed": True, "confirmed_at": detail["confirmed_at"]})
             self.store.set_state("login_browser", {"identity": identity, "cdp_url": config["cdp_url"], "erp_list_url": config["erp_list_url"]})
-            self.store.log("操作者确认已登录，Edge中的智赢后台登录状态检查通过")
+            self.store.log("操作者确认智赢和1688均已登录；智赢后台登录状态检查通过，1688将在执行首件商品时复核")
         return self.store.state("login")
 
     def open_supplier_login(self):
@@ -287,6 +290,35 @@ class Service:
         self.stop_event.set()
         self.store.set_state("stop_requested", True)
         self.store.log("已请求停止；保留进度及商家去重记录")
+
+    def terminate_current(self):
+        """Stop the active batch and discard its batch-local UI data.
+
+        A running browser operation performs the cleanup from ``run``'s
+        ``finally`` block, after it has stopped writing progress.  An idle
+        batch can be cleared immediately.
+        """
+        run = self.store.state("run", {}) or {}
+        run_id = run.get("run_id")
+        self.stop_event.set()
+        self.store.set_state("stop_requested", True)
+        self.store.set_state("discard_run_id", run_id or True)
+        self.store.log("已请求终止本次任务；当前操作退出后清空本次批次列表与进度")
+        if not self.status()["running"]:
+            self._clear_terminated_run(run_id)
+            return {"cleared": True}
+        return {"cleared": False}
+
+    def _clear_terminated_run(self, run_id):
+        result = self.store.clear_run(run_id)
+        for key, value in (("run", {}), ("pipeline_current", None), ("visual_progress", {}),
+                           ("circuit", None), ("run_error", None), ("action_error", None),
+                           ("run_selection", None), ("collection", None),
+                           ("latest_run_id", None), ("discard_run_id", None),
+                           ("stop_requested", False)):
+            self.store.set_state(key, value)
+        self.store.log(f"本次任务已终止并清空；移除本次批次商品 {result['run_items']} 条，历史商品与登录状态保留")
+        return result
 
     def circuit(self, error):
         self.store.set_state("circuit", {"kind": "browser_attention", "reason": str(error), "at": time.time()})
@@ -483,9 +515,14 @@ class Service:
                 self.store.set_state("run", {**self.store.state("run", {}), "mode": mode,
                                             "finished_at": time.time(), "outcome": outcome, "message": message})
                 self.store.log(message, task_id, "ERROR" if outcome == "failed" else "WARNING" if outcome == "blocked" else "INFO")
-                if config.get("run_id"):
+                discard = self.store.state("discard_run_id")
+                should_discard = bool(discard) and (discard is True or discard == config.get("run_id"))
+                if config.get("run_id") and not should_discard:
                     self.store.save_run(self.store.state("run"))
-                self.store.export()
+                if should_discard:
+                    self._clear_terminated_run(config.get("run_id"))
+                else:
+                    self.store.export()
             finally:
                 lock.release()
 
@@ -905,6 +942,38 @@ class Service:
             history = task.get("manual_history", [])
             history.append({"actor": actor, "at": time.time(), "before": {k: task.get(k) for k in values}, "after": dict(values)})
             if "erp_sku" in values and values["erp_sku"] != task.get("erp_sku"):
+                # Keep a previously approved detail lead when the operator
+                # only adds the missing ERP variant. This lets the retry open
+                # the saved 1688 detail directly instead of repeating image
+                # search; low-confidence or non-detail leads are never reused.
+                if not task.get("best_match_url"):
+                    confidence = task.get("image_match_confidence")
+                    try:
+                        confidence = float(confidence)
+                    except (TypeError, ValueError):
+                        confidence = 0
+                    if confidence >= self.config.load()["match_threshold"]:
+                        evidence_sets = [task.get("match_evidence") or [], task.get("image_match_evidence") or []]
+                        for item in [entry for evidence in evidence_sets for entry in evidence]:
+                            candidate = item.get("candidate") or {}
+                            review = item.get("review") or {}
+                            if "review" in item and review.get("same_product") is not True:
+                                continue
+                            try:
+                                candidate_confidence = float(review.get("confidence", confidence))
+                            except (TypeError, ValueError):
+                                candidate_confidence = confidence
+                            if candidate_confidence < self.config.load()["match_threshold"]:
+                                continue
+                            parsed = urlsplit(candidate.get("url", ""))
+                            if (parsed.scheme == "https" and parsed.hostname == "detail.1688.com"
+                                    and re.fullmatch(r"/offer/\d+\.html", parsed.path or "")):
+                                values.update(best_match_url=candidate["url"],
+                                              best_match_title=candidate.get("title", ""),
+                                              best_match_image_url=candidate.get("main_image_url", ""),
+                                              best_match_confidence=candidate_confidence,
+                                              best_match_approved=True)
+                                break
                 values.update(supplier_sku_id=None, match_confidence=None, match_evidence=[], weight_g=None,
                               conversation_id=None, conversation_url=None, cost_price=None, supplier_page_text=None,
                               page_info_checked=False, page_info=None, info_sources={}, consult_missing=None)

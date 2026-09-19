@@ -1084,7 +1084,10 @@ class Browser:
     def read_offer(self, task, candidate):
         detail = self.open_offer(task, candidate)
         try:
-            self.delay()
+            # The detail page has already passed its navigation/readiness
+            # checks; an additional random 1–3 second sleep only serialized
+            # every product without adding evidence.
+            self.delay(.1, .3)
             self.visual(task, "candidate", "图片匹配后，正在读取1688商品详情和变体售价", detail)
             current = self.current_supplier_offer(detail, candidate)
             if current is not None:

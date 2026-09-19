@@ -2,16 +2,20 @@
 chcp 65001 >nul
 cd /d "%~dp0"
 
-py -3 -m PyInstaller --version >nul 2>&1
+set "PYTHON_COMMAND=py -3"
+py -3 -c "import sys" >nul 2>&1
+if errorlevel 1 set "PYTHON_COMMAND=python"
+
+%PYTHON_COMMAND% -m PyInstaller --version >nul 2>&1
 if errorlevel 1 (
     echo PyInstaller is not installed. Run:
-    echo py -3 -m pip install pyinstaller
+    echo %PYTHON_COMMAND% -m pip install pyinstaller
     pause
     exit /b 1
 )
 
 echo Building MercadoLocalAgent.exe ...
-py -3 -m PyInstaller --noconfirm --clean MercadoLocalAgent.spec
+%PYTHON_COMMAND% -m PyInstaller --noconfirm --clean MercadoLocalAgent.spec
 
 if errorlevel 1 (
     echo.

@@ -253,9 +253,11 @@ def test_merge_detail_record_populates_all_database_fields():
     assert result["package_gross_weight"] == "1650 克"
     assert result["package_dimensions"] == "66 X 33 X 11 厘米"
     assert result["review_status"] == "通过"
+    assert result["zying_status"] == "通过"
     assert result["main_image_url"] == "https://example.test/new-image.jpg"
     assert result["_category_site"] == "CBT"
     assert result["_category_id"] == "430974"
+    assert result["_zying_category_id"] == ""
 
 
 def test_zying_detail_builds_publish_ready_snapshot_with_all_common_fields():
@@ -443,6 +445,21 @@ def _zying_category_options():
     ]
 
 
+def test_zying_category_rows_flattens_current_page_tree_with_full_paths():
+    rows = bit_zying_caiji._zying_category_rows(_zying_category_options())
+
+    assert {
+        "category_id": "202170568",
+        "category_name": "圆佑同步/家电类",
+        "category_leaf_name": "家电类",
+    } in rows
+    assert {
+        "category_id": "202170501",
+        "category_name": "圆佑同步",
+        "category_leaf_name": "圆佑同步",
+    } in rows
+
+
 def test_zying_category_resolver_accepts_id_unique_name_and_full_path():
     options = _zying_category_options()
 
@@ -492,6 +509,59 @@ def test_attach_zying_category_keeps_it_separate_from_mercado_category():
     assert result["product_category_id"] == "CBT430974"
     assert result["product_category"] == "Patio Heaters | 露台加热器"
     assert "智赢产品分类: 圆佑同步/家电类" in result["raw_text"]
+
+
+def test_attach_zying_category_reads_each_products_local_category_without_filter():
+    record = {
+        "product_id": "801623017",
+        "raw_text": "列表数据",
+        "_zying_category_id": "202170568",
+        "_zying_category_name": "",
+    }
+
+    result = bit_zying_caiji._attach_zying_category(
+        record,
+        category_lookup={"202170568": "圆佑同步/家电类"},
+    )
+
+    assert result["zying_category_id"] == "202170568"
+    assert result["zying_category"] == "圆佑同步/家电类"
+    assert "智赢分类编号: 202170568" in result["raw_text"]
+    assert "智赢产品分类: 圆佑同步/家电类" in result["raw_text"]
+    assert "_zying_category_id" not in result
+
+
+def test_category_name_lookup_prefers_latest_names_read_from_zying(monkeypatch):
+    monkeypatch.setattr(
+        bit_zying_caiji,
+        "list_cached_zying_categories",
+        lambda: [
+            {
+                "category_id": "202170568",
+                "category_name": "圆佑同步/家电类",
+            }
+        ],
+    )
+
+    lookup = bit_zying_caiji._load_zying_category_name_lookup(
+        lambda: [
+            {
+                "category_id": "202170568",
+                "category_name": "202170568",
+            }
+        ]
+    )
+
+    assert lookup["202170568"] == "圆佑同步/家电类"
+
+
+def test_attach_zying_category_displays_unknown_local_category_id():
+    result = bit_zying_caiji._attach_zying_category(
+        {"_zying_category_id": "202170999", "_zying_category_name": ""}
+    )
+
+    assert result["zying_category_id"] == "202170999"
+    assert result["zying_category"] == "202170999"
 
 
 def test_apply_zying_category_sets_cascader_and_clicks_search(monkeypatch):
@@ -596,13 +666,15 @@ def test_mysql_writer_stores_zying_and_mercado_categories_separately(monkeypatch
                 "product_category_id": "CBT430974",
                 "product_category": "Appliances | 家用电器",
                 "title": "测试商品",
+                "product_developer_id": "121658",
+                "product_developer_name": "张三",
             }
         ]
     )
 
     row = captured["rows"][0]
     assert count == 1
-    assert len(row) == 17
+    assert len(row) == 19
     assert row[:5] == (
         "795184904",
         "202170568",
@@ -613,6 +685,9 @@ def test_mysql_writer_stores_zying_and_mercado_categories_separately(monkeypatch
     assert "`智赢分类编号`" in captured["sql"]
     assert "`智赢产品分类`" in captured["sql"]
     assert "`上架快照`" in captured["sql"]
+    assert row[-2:] == ("121658", "张三")
+    assert "`产品开发编号`" in captured["sql"]
+    assert "`产品开发`" in captured["sql"]
 
 
 def test_open_collection_browser_can_attach_local_edge_without_bitbrowser(monkeypatch):
@@ -791,6 +866,7 @@ def test_merge_ui_detail_record_overwrites_api_values_with_clicked_form():
     assert result["package_gross_weight"] == "1000 克"
     assert result["package_dimensions"] == "23 X 23 X 13 厘米"
     assert result["review_status"] == "通过"
+    assert result["zying_status"] == "通过"
     assert "详情产品编号: 795184904" in result["raw_text"]
 
 
@@ -1195,11 +1271,11 @@ def test_api_collection_reads_list_and_details_without_opening_browser(monkeypat
             AssertionError("采集启动前不应再单独检测登录状态")
         ),
     )
-    monkeypatch.setattr(
-        bit_zying_caiji,
-        "_zying_api_post",
-        lambda session, token, command, payload: api_calls.append((command, payload))
-        or {
+    def api_post(session, token, command, payload):
+        api_calls.append((command, payload))
+        if command == "logins.select":
+            return {"logins": [{"id": 121658, "name": "张三"}]}
+        return {
             "list": {
                 "data": [
                     {
@@ -1211,8 +1287,9 @@ def test_api_collection_reads_list_and_details_without_opening_browser(monkeypat
                     }
                 ]
             }
-        },
-    )
+        }
+
+    monkeypatch.setattr(bit_zying_caiji, "_zying_api_post", api_post)
 
     def enrich(driver, records, token=None):
         assert driver is None
@@ -1226,6 +1303,7 @@ def test_api_collection_reads_list_and_details_without_opening_browser(monkeypat
             "sale_size": [10, 20, 30],
             "sale_weight": 500,
             "sale_localid": 202170568,
+            "sale_loginid": 121658,
         }
         return records
 
@@ -1237,6 +1315,8 @@ def test_api_collection_reads_list_and_details_without_opening_browser(monkeypat
         number=2,
         category="202170568",
         category_name="圆佑同步/家电类",
+        product_developer_id="121658",
+        product_developer_name="张三",
         existing_product_id_reader=lambda product_ids: set(),
         product_writer=lambda rows: written.extend(rows) or len(rows),
         product_mirror_writer=lambda rows: mirrored.extend(rows) or {"count": len(rows)},
@@ -1244,6 +1324,7 @@ def test_api_collection_reads_list_and_details_without_opening_browser(monkeypat
     )
 
     assert api_calls == [
+        ("logins.select", {}),
         (
             "sale.stat",
             {
@@ -1252,12 +1333,15 @@ def test_api_collection_reads_list_and_details_without_opening_browser(monkeypat
                 "word": "",
                 "from": bit_zying_caiji.ZYING_MELI_PLATFORM_ID,
                 "localid": "202170568",
+                "loginid": 121658,
             },
         )
     ]
     assert result["collection_mode"] == "api"
     assert result["inserted_count"] == 1
     assert written[0]["zying_category"] == "圆佑同步/家电类"
+    assert written[0]["product_developer_id"] == "121658"
+    assert written[0]["product_developer_name"] == "张三"
     assert written[0]["listing_snapshot"]["source"]["title"] == "API product"
     assert mirrored == written
 

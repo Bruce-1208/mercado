@@ -20,6 +20,8 @@ Agent 1.1.2 修复连接异常后反而加快重试的问题。HTTP 429 或隧�
 
 Agent 1.1.3 为 Agent 自身的启动、业务更新、任务领取、上传重试、连接异常和停止消息统一增加本机时间，并同时写入数据目录下的 `agent.log`。日志达到 5 MiB 后自动轮转，保留 3 份历史文件；任务业务日志仍按事件时间上传并显示在公网控制台。升级需要重新构建并替换 Agent EXE。
 
+Agent 1.2.1 修复任务队列被异常退出留下的 `running/stopping` 记录永久阻塞、停止中被误显示成已停止，以及关闭 Agent 后业务子进程继续运行的问题。运行中的任务使用进程会话和租约续期；Agent 重启会结束旧会话任务，Windows 子进程树由 Job Object 托管。控制连接连续中断 12 分钟时，Agent 会在服务端租约到期前主动停止业务进程，避免失控执行。关闭状态窗口并确认后会停止当前任务并真正退出 Agent。
+
 Agent 默认数据目录在 Windows 为 `%LOCALAPPDATA%\Zeshun\MercadoLocalAgent`，在 macOS 为 `~/Library/Application Support/Zeshun/MercadoLocalAgent`。其中包含电脑身份、业务版本、`agent.log` 和运行日志所需的临时任务数据。Agent 保留最近两个业务版本。
 
 ## 服务端部署
@@ -47,7 +49,7 @@ py -3 -m pip install pyinstaller
 .\build_local_agent.bat
 ```
 
-构建结果为 `dist\MercadoLocalAgent.exe`。将该文件连同服务器代码部署到公网服务器的同一路径后，控制台“下载本机 Agent”会自动把 EXE 放入 ZIP。也可以把 EXE 放在服务器其他持久化目录，并用 `BIT_LOCAL_AGENT_EXECUTABLE` 配置它的绝对路径。若服务器上没有该 EXE，控制台仍会生成 Python 源码版安装包，但目标电脑需要 Python 3 和完整项目运行依赖；源码版只适合测试。
+构建结果为 `dist\MercadoLocalAgent.exe`。Windows 版以 GUI 子系统构建，运行时只显示状态窗口，不创建常驻 CMD 窗口；任务日志仍会显示在状态窗口并写入 `agent.log`。将该文件连同服务器代码部署到公网服务器的同一路径后，控制台“下载本机 Agent”会自动把 EXE 放入 ZIP。也可以把 EXE 放在服务器其他持久化目录，并用 `BIT_LOCAL_AGENT_EXECUTABLE` 配置它的绝对路径。若服务器上没有该 EXE，控制台仍会生成 Python 源码版安装包，但目标电脑需要 Python 3 和完整项目运行依赖；源码版只适合测试。
 
 构建会一次性收集当前申诉业务所需的第三方 Python 运行库。普通 `.py` 逻辑变化由业务包自动更新；只有 Agent 通信协议改变或业务引入新的第三方依赖时，才需要重新构建 EXE。
 
@@ -60,14 +62,15 @@ python3 -m pip install pyinstaller
 ./build_local_agent_macos.sh
 ```
 
-构建结果为 `dist/macos/MercadoLocalAgent`，适用于构建机对应的 CPU 架构。将该文件连同服务器代码部署到公网服务器的相同路径，控制台“下载 macOS Agent”会自动把它放入 ZIP。也可以用 `BIT_LOCAL_AGENT_MACOS_EXECUTABLE` 指定持久化目录中的绝对路径。macOS 版默认显示与 Windows 版相同的运行状态窗口，实时展示本机时间、连接状态和日志；关闭窗口只会最小化，使用 `--no-window` 可切换为纯日志模式。生产下载建议对可执行文件进行 Apple Developer ID 签名和公证；未签名版本首次打开时需要用户在 macOS“隐私与安全性”中确认允许。
+构建结果为 `dist/macos/MercadoLocalAgent`，适用于构建机对应的 CPU 架构。将该文件连同服务器代码部署到公网服务器的相同路径，控制台“下载 macOS Agent”会自动把它放入 ZIP。也可以用 `BIT_LOCAL_AGENT_MACOS_EXECUTABLE` 指定持久化目录中的绝对路径。macOS 版默认显示与 Windows 版相同的运行状态窗口，实时展示本机时间、连接状态和日志；关闭窗口并确认后会停止当前任务并退出，使用 `--no-window` 可切换为纯日志模式。生产下载建议对可执行文件进行 Apple Developer ID 签名和公证；未签名版本首次打开时需要用户在 macOS“隐私与安全性”中确认允许。
 
 ## Windows 客户端安装
 
 1. 在控制台下载 `Zeshun-MercadoLocalAgent.zip`，解压到固定目录。
-2. 先双击 `start-agent.bat` 验证。控制台出现电脑名且状态为在线即表示成功。
-3. 右键 `install-agent.ps1` 并选择“使用 PowerShell 运行”，安装名为 `ZeshunMercadoLocalAgent` 的登录启动任务。
-4. 保持比特浏览器客户端启动；无需启动 `bit_interface` 或完整 client 工作台。
+2. 先双击 `start-agent.bat` 验证。正式 EXE 启动后只保留可视化状态窗口；网页控制台出现电脑名且状态为在线即表示成功。
+3. 右键 `install-agent.ps1` 并选择“使用 PowerShell 运行”，安装名为 `ZeshunMercadoLocalAgent` 的当前用户登录启动任务。可视化程序必须等用户登录桌面后才能显示，所以这里采用“登录时”而不是“系统启动时”触发。
+4. 如需取消自启动，运行同目录的 `uninstall-agent.ps1`。
+5. 保持比特浏览器客户端启动；无需启动 `bit_interface` 或完整 client 工作台。
 
 ## macOS 客户端安装
 

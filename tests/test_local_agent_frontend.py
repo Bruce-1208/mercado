@@ -27,6 +27,16 @@ def test_daily_task_shows_each_agent_logged_out_shop_status():
     assert "退出登录 ${shops.length} 家" in template
 
 
+def test_daily_task_stop_request_stays_stopping_until_worker_acknowledges():
+    template = (Path(__file__).resolve().parents[1] / "bit/templates/index.html").read_text(
+        encoding="utf-8"
+    )
+
+    assert '? "停止中"' in template
+    assert 'stopButton.textContent = "停止中"' in template
+    assert 'stoppingOrPending ? "已停止"' not in template
+
+
 def test_agent_requests_use_public_routes_instead_of_loopback():
     node = shutil.which("node")
     if not node:
@@ -74,7 +84,7 @@ const assert = require('node:assert/strict');
 """ + helpers + """
 assert.equal(dailyTaskStatusCategory({status: 'queued', running: true}), 'queued');
 assert.equal(dailyTaskStatusCategory({status: 'starting', running: true}), 'running');
-assert.equal(dailyTaskStatusCategory({status: 'running', running: true, stop_requested: true}), 'stopping');
+assert.equal(dailyTaskStatusCategory({status: 'running', running: true, stop_requested: true}), 'running');
 assert.equal(dailyTaskStatusCategory({status: 'success', running: false}), 'completed');
 assert.equal(dailyTaskStatusCategory({status: 'completed', running: false}), 'completed');
 assert.equal(dailyTaskStatusCategory({status: 'partial', running: false}), 'partial');
@@ -82,6 +92,7 @@ assert.equal(dailyTaskStatusCategory({status: 'stopped', running: false}), 'stop
 assert.equal(dailyTaskStatusCategory({status: 'error', running: false}), 'error');
 assert.equal(dailyTaskMatchesStatusFilter({status: 'queued', running: true}, 'active'), true);
 assert.equal(dailyTaskMatchesStatusFilter({status: 'stopping', running: true}, 'active'), true);
+assert.equal(dailyTaskMatchesStatusFilter({status: 'stopping', running: true}, 'stopped'), false);
 assert.equal(dailyTaskMatchesStatusFilter({status: 'success', running: false}, 'active'), false);
 assert.equal(dailyTaskComputerKey({execution_target: 'server'}), 'server');
 assert.equal(dailyTaskComputerKey({execution_target: 'local'}), 'local');

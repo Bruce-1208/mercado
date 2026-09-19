@@ -4074,6 +4074,49 @@ def refresh_mercado_order_quoted_freight(limit=200):
     }
 
 
+def get_mercado_purchase_tracking_orders(order_ids):
+    """一次读取所选订单的采购单号，供本机浏览器同步物流号。"""
+    normalized_ids = []
+    for value in order_ids or ():
+        order_id = str(value or "").strip()
+        if order_id and order_id not in normalized_ids:
+            normalized_ids.append(order_id)
+    if not normalized_ids:
+        raise ValueError("请至少选择一个订单")
+    if len(normalized_ids) > 100:
+        raise ValueError("单次最多同步 100 个订单")
+
+    connection = pymysql.connect(**config)
+    try:
+        with connection.cursor() as cursor:
+            _ensure_mercado_synced_orders_table(cursor)
+            _ensure_mercado_store_tokens_table(cursor)
+            connection.commit()
+            placeholders = ",".join(["%s"] * len(normalized_ids))
+            cursor.execute(
+                f"""
+                SELECT synced.`order_id`, synced.`purchase_order`
+                FROM `mercado_synced_orders` AS synced
+                INNER JOIN `mercado_store_tokens` AS stores
+                  ON stores.`id` = synced.`token_id`
+                WHERE synced.`order_id` IN ({placeholders})
+                """,
+                normalized_ids,
+            )
+            rows = [dict(row or {}) for row in (cursor.fetchall() or [])]
+    finally:
+        connection.close()
+    by_id = {str(row.get("order_id") or ""): row for row in rows}
+    return [
+        {
+            "order_id": order_id,
+            "purchase_order": str((by_id.get(order_id) or {}).get("purchase_order") or "").strip(),
+        }
+        for order_id in normalized_ids
+        if order_id in by_id
+    ]
+
+
 def bulk_update_mercado_orders(
     order_ids,
     workflow_status=None,
@@ -5111,6 +5154,7 @@ def get_high_after_sale_alerts(
     date_from="",
     date_to="",
     limit=100,
+    salesperson="",
 ):
     """按产品汇总“取消-发货后”订单数量及其占全部销量的比例。"""
 
@@ -5132,6 +5176,10 @@ def get_high_after_sale_alerts(
     limit = max(1, min(int(limit or 100), 500))
     order_conditions = ["`id` IS NOT NULL", "TRIM(`id`) <> ''"]
     params = []
+    salesperson = str(salesperson or "").strip()
+    if salesperson:
+        order_conditions.append("COALESCE(`业务员`, '') = %s")
+        params.append(salesperson)
     if start_date:
         order_conditions.append("`时间` >= %s")
         params.append(start_date.strftime("%Y-%m-%d %H:%M:%S"))
@@ -5486,6 +5534,7 @@ def get_high_profit_products(
     date_from="",
     date_to="",
     limit=100,
+    salesperson="",
 ):
     """按产品汇总利润，并按总利润或利润率排序。"""
 
@@ -5507,6 +5556,10 @@ def get_high_profit_products(
     limit = max(1, min(int(limit or 100), 500))
     order_conditions = ["`id` IS NOT NULL", "TRIM(`id`) <> ''"]
     params = []
+    salesperson = str(salesperson or "").strip()
+    if salesperson:
+        order_conditions.append("COALESCE(`业务员`, '') = %s")
+        params.append(salesperson)
     if start_date:
         order_conditions.append("`时间` >= %s")
         params.append(start_date.strftime("%Y-%m-%d %H:%M:%S"))
@@ -5883,6 +5936,8 @@ def _ensure_zying_product_table(cursor):
             `产品编号` VARCHAR(128) NULL,
             `智赢分类编号` VARCHAR(64) NULL,
             `智赢产品分类` VARCHAR(1024) NULL,
+            `产品开发编号` VARCHAR(64) NULL,
+            `产品开发` VARCHAR(255) NULL,
             `分类编号` VARCHAR(64) NULL,
             `产品分类` VARCHAR(2048) NULL,
             `主图链接` TEXT NULL,
@@ -5907,6 +5962,8 @@ def _ensure_zying_product_table(cursor):
     )
     _ensure_column(cursor, "zying_product", "智赢分类编号", "VARCHAR(64) NULL")
     _ensure_column(cursor, "zying_product", "智赢产品分类", "VARCHAR(1024) NULL")
+    _ensure_column(cursor, "zying_product", "产品开发编号", "VARCHAR(64) NULL")
+    _ensure_column(cursor, "zying_product", "产品开发", "VARCHAR(255) NULL")
     _ensure_column(cursor, "zying_product", "分类编号", "VARCHAR(64) NULL")
     _ensure_column(cursor, "zying_product", "产品分类", "VARCHAR(2048) NULL")
     _ensure_column(cursor, "zying_product", "上架快照", "LONGTEXT NULL")
@@ -5960,26 +6017,34 @@ def insert_zying_product_info(product_list):
                                 default=str,
                             ),
                             submit_time,
+                            record.get(
+                                "product_developer_id",
+                                record.get("产品开发编号", ""),
+                            ),
+                            record.get(
+                                "product_developer_name",
+                                record.get("产品开发", ""),
+                            ),
                         )
                     )
                     continue
 
                 row = list(record)
                 if len(row) >= 16:
-                    normalized_list.append(tuple(row[:16] + [submit_time]))
+                    normalized_list.append(tuple(row[:16] + [submit_time, "", ""]))
                     continue
                 if len(row) >= 15:
-                    normalized_list.append(tuple(row[:15] + [""] + [submit_time]))
+                    normalized_list.append(tuple(row[:15] + [""] + [submit_time, "", ""]))
                     continue
                 if len(row) >= 13:
                     normalized_list.append(
-                        tuple([row[0], "", ""] + row[1:13] + [""] + [submit_time])
+                        tuple([row[0], "", ""] + row[1:13] + [""] + [submit_time, "", ""])
                     )
                     continue
                 if len(row) < 11:
                     row.extend([""] * (11 - len(row)))
                 normalized_list.append(
-                    tuple([row[0], "", "", "", ""] + row[1:11] + [""] + [submit_time])
+                    tuple([row[0], "", "", "", ""] + row[1:11] + [""] + [submit_time, "", ""])
                 )
 
             if normalized_list:
@@ -5989,8 +6054,9 @@ def insert_zying_product_info(product_list):
                         `产品编号`, `智赢分类编号`, `智赢产品分类`,
                         `分类编号`, `产品分类`, `主图链接`, `标题`, `售价`, `净收益`,
                         `包装毛重`, `包装尺寸`, `审核状态`, `采集页码`,
-                        `采集时间`, `页面原始信息`, `上架快照`, `提交时间`
-                    ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                        `采集时间`, `页面原始信息`, `上架快照`, `提交时间`,
+                    `产品开发编号`, `产品开发`
+                ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                     """,
                     normalized_list,
                 )
@@ -7616,7 +7682,15 @@ def list_infringement_risk_scope_options():
         "salespeople": salespeople,
         "groups": groups,
         "accounts": [
-            {"id": int(row.get("id") or 0), "display_name": str(row.get("display_name") or row.get("nickname") or "")}
+            {
+                "id": int(row.get("id") or 0),
+                "display_name": str(row.get("display_name") or row.get("nickname") or ""),
+                "group_names": sorted({
+                    str(setting.get("group_name") or "").strip()
+                    for setting in (row.get("site_settings") or ())
+                    if str(setting.get("group_name") or "").strip()
+                }, key=str.casefold),
+            }
             for row in rows if int(row.get("id") or 0) > 0
         ],
     }
@@ -8016,6 +8090,48 @@ def create_mercado_application(record):
     except pymysql.err.IntegrityError as exc:
         connection.rollback()
         raise ValueError("应用名称或 App ID 已存在") from exc
+    except Exception:
+        connection.rollback()
+        raise
+    finally:
+        connection.close()
+
+
+def sync_zying_product_developers(developers):
+    """用智赢员工目录补全历史采集快照中的产品开发姓名。"""
+    rows = []
+    for developer in developers or ():
+        if not isinstance(developer, dict):
+            continue
+        developer_id = str(developer.get("id") or "").strip()[:64]
+        developer_name = str(developer.get("name") or "").strip()[:255]
+        if developer_id and developer_name:
+            rows.append((developer_id, developer_name, developer_id, developer_id, developer_id))
+    if not rows:
+        return 0
+    connection = pymysql.connect(**config)
+    try:
+        with connection.cursor() as cursor:
+            _ensure_zying_product_table(cursor)
+            cursor.executemany(
+                """
+                UPDATE `zying_product`
+                SET `产品开发编号` = %s, `产品开发` = %s
+                WHERE `产品开发编号` = %s
+                   OR JSON_UNQUOTE(JSON_EXTRACT(
+                        IF(JSON_VALID(`上架快照`), `上架快照`, '{}'),
+                        '$.plugin_snapshot.product_developer_id'
+                   )) = %s
+                   OR JSON_UNQUOTE(JSON_EXTRACT(
+                        IF(JSON_VALID(`上架快照`), `上架快照`, '{}'),
+                        '$.page_snapshot.zying_detail.sale_loginid'
+                   )) = %s
+                """,
+                rows,
+            )
+            changed = int(cursor.rowcount or 0)
+        connection.commit()
+        return changed
     except Exception:
         connection.rollback()
         raise

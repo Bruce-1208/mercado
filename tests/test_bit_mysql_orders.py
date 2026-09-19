@@ -65,3 +65,30 @@ def test_historical_backfill_queries_exclude_disabled_stores(query_function):
     sql = cursor.execute.call_args.args[0]
     assert "mercado_store_tokens" in sql
     assert "token.`enabled` = 1" in sql
+
+
+def test_purchase_tracking_order_lookup_reads_selected_orders_in_one_query():
+    connection = MagicMock()
+    cursor = connection.cursor.return_value.__enter__.return_value
+    cursor.fetchall.return_value = [
+        {"order_id": "20002", "purchase_order": "TB-2"},
+        {"order_id": "20001", "purchase_order": "1688-1"},
+    ]
+
+    with (
+        patch("bit.bit_mysql.pymysql.connect", return_value=connection),
+        patch("bit.bit_mysql._ensure_mercado_synced_orders_table"),
+        patch("bit.bit_mysql._ensure_mercado_store_tokens_table"),
+    ):
+        result = bit_mysql.get_mercado_purchase_tracking_orders(
+            ["20001", "20002", "missing"]
+        )
+
+    assert result == [
+        {"order_id": "20001", "purchase_order": "1688-1"},
+        {"order_id": "20002", "purchase_order": "TB-2"},
+    ]
+    sql, params = cursor.execute.call_args.args
+    assert "mercado_store_tokens" in sql
+    assert params == ["20001", "20002", "missing"]
+    connection.close.assert_called_once_with()

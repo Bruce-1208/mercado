@@ -430,6 +430,62 @@ class MercadoLibreClient:
             headers={"api-version": "2"},
         ) or {})
 
+    def search_product_ads_ad_groups_metrics(
+        self,
+        site_id: str,
+        advertiser_id: int,
+        *,
+        date_from: str,
+        date_to: str,
+        metrics: Iterable[str],
+        limit: int = 800,
+        offset: int = 0,
+        metrics_summary: bool = True,
+        campaign_id: int | None = None,
+    ) -> dict[str, Any]:
+        """Return advertiser Ad Groups with current Product Ads metrics."""
+        params = {
+            "date_from": str(date_from),
+            "date_to": str(date_to),
+            "metrics": ",".join(str(value) for value in metrics if value),
+            "metrics_summary": "true" if metrics_summary else "false",
+            "limit": max(1, min(int(limit), 800)),
+            "offset": max(0, int(offset)),
+        }
+        if campaign_id not in (None, ""):
+            params["filters[campaign_id]"] = int(campaign_id)
+        return dict(self.request(
+            "GET",
+            f"/marketplace/advertising/{site_id}/advertisers/{advertiser_id}/product_ads/ad_groups/search",
+            params=params,
+            headers={"api-version": "2"},
+        ) or {})
+
+    def list_product_ads_ad_group_ads(
+        self,
+        site_id: str,
+        ad_group_id: int,
+        *,
+        date_from: str,
+        date_to: str,
+        metrics: Iterable[str],
+        limit: int = 50,
+        offset: int = 0,
+    ) -> dict[str, Any]:
+        """Expand a Catalog/Family Ad Group to its individual advertised items."""
+        return dict(self.request(
+            "GET",
+            f"/marketplace/advertising/{site_id}/product_ads/ad_groups/{int(ad_group_id)}/ads",
+            params={
+                "date_from": str(date_from),
+                "date_to": str(date_to),
+                "metrics": ",".join(str(value) for value in metrics if value),
+                "limit": max(1, min(int(limit), 50)),
+                "offset": max(0, int(offset)),
+            },
+            headers={"api-version": "2"},
+        ) or {})
+
     def activate_product_ads_ad_group(
         self, site_id: str, ad_group_id: int, campaign_id: int
     ) -> dict[str, Any]:

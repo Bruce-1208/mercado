@@ -22,6 +22,17 @@ def test_zying_collection_console_exposes_page_category_and_dedup_controls():
     assert 'id="zying-collection-start-page"' in template
     assert 'id="zying-collection-end-page"' in template
     assert 'id="zying-collection-category"' in template
+    assert '<label for="zying-collection-category">产品分类（可选）</label>' in template
+    assert '<select id="zying-collection-category">' in template
+    assert 'id="zying-collection-category-options"' not in template
+    assert "<th>智赢分类</th>" in template
+    assert "function mercadoProductZyingCategory(row)" in template
+    assert "const categoryName = zyingCollectionCategoryNames.get(categoryId) || savedName;" in template
+    assert "return `${categoryName}${categoryId ? `（${categoryId}）` : \"\"}`;" not in template
+    assert 'id="zying-collection-developer"' in template
+    assert 'id="refresh-zying-options-btn"' in template
+    assert "function refreshZyingCollectionOptions()" in template
+    assert "/api/zying-collection/options/refresh" in template
     assert 'id="zying-collection-browser-type"' in template
     assert 'id="zying-collection-window-name"' in template
     assert 'id="zying-collection-window-options"' in template
@@ -66,6 +77,20 @@ def test_build_zying_collection_params_rejects_end_before_start():
         )
 
 
+def test_build_zying_collection_params_accepts_product_developer():
+    params = bit_interface.build_zying_collection_params(
+        {
+            "start_page": 1,
+            "end_page": 2,
+            "product_developer_id": "121658",
+            "product_developer_name": " 张三 ",
+        }
+    )
+
+    assert params["product_developer_id"] == "121658"
+    assert params["product_developer_name"] == "张三"
+
+
 def test_build_zying_collection_params_accepts_edge_or_bitbrowser_name():
     edge = bit_interface.build_zying_collection_params(
         {"start_page": 1, "end_page": 2, "browser_type": "edge"}
@@ -91,6 +116,105 @@ def test_zying_login_defaults_to_mexico_collection_window():
     assert params["browser_type"] == "bitbrowser"
     assert params["window_id"] == bit_interface.bit_zying_caiji.DEFAULT_ZYING_WINDOW_ID
     assert params["window_name"] == bit_interface.bit_zying_caiji.DEFAULT_ZYING_WINDOW_NAME
+
+
+def test_zying_product_developers_refresh_auth_and_backfill_database(monkeypatch):
+    captured = []
+    developers = [{"id": "121658", "name": "张三"}]
+    monkeypatch.setattr(
+        bit_interface.bit_zying_caiji,
+        "capture_zying_login_from_browser",
+        lambda **params: captured.append(params) or {"configured": True},
+    )
+    monkeypatch.setattr(
+        bit_interface.bit_zying_caiji,
+        "list_zying_product_developers",
+        lambda: developers,
+    )
+    monkeypatch.setattr(
+        bit_interface,
+        "db_sync_zying_product_developers",
+        lambda rows: {"zying_products": 4, "product_list": 4},
+    )
+
+    response = _logged_in_client().post(
+        "/api/zying-collection/developers",
+        json={"browser_type": "edge"},
+    )
+
+    assert response.status_code == 200
+    assert response.get_json()["data"] == {
+        "rows": developers,
+        "synced": {"zying_products": 4, "product_list": 4},
+    }
+    assert captured[0]["browser_type"] == "edge"
+    assert captured[0]["validate"] is False
+
+
+def test_zying_collection_options_refreshes_categories_and_developers_together(
+    monkeypatch,
+):
+    captured = []
+    refreshed = {
+        "categories": [
+            {"category_id": "202170568", "category_name": "圆佑同步/家电类"}
+        ],
+        "developers": [{"id": "121658", "name": "张三"}],
+        "auth": {"configured": True},
+    }
+    monkeypatch.setattr(
+        bit_interface.bit_zying_caiji,
+        "refresh_zying_collection_options_from_browser",
+        lambda **params: captured.append(params) or refreshed,
+    )
+    monkeypatch.setattr(
+        bit_interface,
+        "db_sync_zying_product_developers",
+        lambda rows: {"zying_products": 2, "product_list": 3},
+    )
+
+    response = _logged_in_client().post(
+        "/api/zying-collection/options/refresh",
+        json={"browser_type": "edge"},
+    )
+
+    assert response.status_code == 200
+    assert response.get_json()["data"] == {
+        **refreshed,
+        "synced": {"zying_products": 2, "product_list": 3},
+    }
+    assert captured == [
+        {
+            "browser_type": "edge",
+            "window_id": bit_interface.bit_zying_caiji.DEFAULT_ZYING_WINDOW_ID,
+            "window_name": "",
+        }
+    ]
+
+
+def test_zying_collection_categories_prefers_latest_current_page_snapshot(monkeypatch):
+    monkeypatch.setattr(
+        bit_interface,
+        "db_list_zying_risk_categories",
+        lambda: [
+            {"category_id": "202170568", "category_name": "历史分类名"},
+            {"category_id": "202170531", "category_name": "历史/游戏类"},
+        ],
+    )
+    monkeypatch.setattr(
+        bit_interface.bit_zying_caiji,
+        "list_cached_zying_categories",
+        lambda: [
+            {"category_id": "202170568", "category_name": "圆佑同步/家电类"}
+        ],
+    )
+
+    rows = bit_interface.list_zying_collection_categories()
+
+    assert {row["category_id"]: row["category_name"] for row in rows} == {
+        "202170531": "历史/游戏类",
+        "202170568": "圆佑同步/家电类",
+    }
 
 
 def test_zying_collection_start_runs_script_with_database_dedup(monkeypatch):

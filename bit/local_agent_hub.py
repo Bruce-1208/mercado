@@ -12,6 +12,7 @@ from pathlib import Path
 
 TERMINAL_JOB_STATUSES = frozenset(("success", "error", "stopped"))
 ACTIVE_JOB_STATUSES = frozenset(("queued", "running", "stopping"))
+DEFAULT_JOB_LEASE_SECONDS = 15 * 60
 _IDENTIFIER_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.-]{2,95}$")
 
 
@@ -62,6 +63,7 @@ class LocalAgentStore:
                     agent_version TEXT NOT NULL,
                     business_version TEXT NOT NULL,
                     capabilities_json TEXT NOT NULL,
+                    session_id TEXT NOT NULL DEFAULT '',
                     last_seen REAL NOT NULL,
                     created_at REAL NOT NULL,
                     updated_at REAL NOT NULL
@@ -78,6 +80,8 @@ class LocalAgentStore:
                     created_by_id INTEGER,
                     created_by_name TEXT NOT NULL,
                     cancel_requested INTEGER NOT NULL DEFAULT 0,
+                    claimed_session_id TEXT NOT NULL DEFAULT '',
+                    lease_expires_at REAL,
                     result_json TEXT NOT NULL DEFAULT '{}',
                     created_at REAL NOT NULL,
                     claimed_at REAL,
@@ -103,6 +107,25 @@ class LocalAgentStore:
                     ON local_agent_events(job_id, event_id);
                 """
             )
+            agent_columns = {
+                row[1] for row in connection.execute("PRAGMA table_info(local_agents)")
+            }
+            if "session_id" not in agent_columns:
+                connection.execute(
+                    "ALTER TABLE local_agents ADD COLUMN session_id TEXT NOT NULL DEFAULT ''"
+                )
+            job_columns = {
+                row[1] for row in connection.execute("PRAGMA table_info(local_agent_jobs)")
+            }
+            if "claimed_session_id" not in job_columns:
+                connection.execute(
+                    "ALTER TABLE local_agent_jobs ADD COLUMN claimed_session_id "
+                    "TEXT NOT NULL DEFAULT ''"
+                )
+            if "lease_expires_at" not in job_columns:
+                connection.execute(
+                    "ALTER TABLE local_agent_jobs ADD COLUMN lease_expires_at REAL"
+                )
             connection.commit()
             self._schema_ready = True
 
@@ -145,20 +168,46 @@ class LocalAgentStore:
         agent_version="",
         business_version="",
         capabilities=(),
+        session_id="",
+        current_job_id="",
+        lease_seconds=DEFAULT_JOB_LEASE_SECONDS,
         now=None,
     ):
         agent_id = normalize_agent_id(agent_id)
         now = time.time() if now is None else float(now)
         capabilities = sorted({str(item).strip() for item in capabilities if str(item).strip()})
         name = str(name or hostname or agent_id).strip()[:120] or agent_id
+        session_id = str(session_id or "").strip()[:96]
+        current_job_id = str(current_job_id or "").strip()
+        lease_seconds = max(60.0, float(lease_seconds or DEFAULT_JOB_LEASE_SECONDS))
         with self._connect() as connection:
+            connection.execute("BEGIN IMMEDIATE")
+            previous = connection.execute(
+                "SELECT session_id FROM local_agents WHERE agent_id = ?", (agent_id,)
+            ).fetchone()
+            previous_session = str(previous["session_id"] or "") if previous else ""
+            if session_id and previous_session and session_id != previous_session:
+                connection.execute(
+                    """
+                    UPDATE local_agent_jobs
+                    SET status = CASE WHEN cancel_requested = 1 THEN 'stopped' ELSE 'error' END,
+                        message = CASE
+                            WHEN cancel_requested = 1 THEN 'Agent 已重启，原任务已停止'
+                            ELSE 'Agent 已重启，原任务执行进程已丢失'
+                        END,
+                        finished_at = ?, updated_at = ?, lease_expires_at = NULL
+                    WHERE agent_id = ? AND status IN ('running', 'stopping')
+                      AND claimed_session_id <> ?
+                    """,
+                    (now, now, agent_id, session_id),
+                )
             connection.execute(
                 """
                 INSERT INTO local_agents (
                     agent_id, name, hostname, platform, agent_version,
-                    business_version, capabilities_json, last_seen,
+                    business_version, capabilities_json, session_id, last_seen,
                     created_at, updated_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ON CONFLICT(agent_id) DO UPDATE SET
                     name = excluded.name,
                     hostname = excluded.hostname,
@@ -166,6 +215,10 @@ class LocalAgentStore:
                     agent_version = excluded.agent_version,
                     business_version = excluded.business_version,
                     capabilities_json = excluded.capabilities_json,
+                    session_id = CASE
+                        WHEN excluded.session_id <> '' THEN excluded.session_id
+                        ELSE local_agents.session_id
+                    END,
                     last_seen = excluded.last_seen,
                     updated_at = excluded.updated_at
                 """,
@@ -177,11 +230,29 @@ class LocalAgentStore:
                     str(agent_version or "")[:64],
                     str(business_version or "")[:128],
                     json.dumps(capabilities, ensure_ascii=False),
+                    session_id,
                     now,
                     now,
                     now,
                 ),
             )
+            if current_job_id and session_id:
+                connection.execute(
+                    """
+                    UPDATE local_agent_jobs
+                    SET lease_expires_at = ?, updated_at = ?
+                    WHERE job_id = ? AND agent_id = ?
+                      AND claimed_session_id = ?
+                      AND status IN ('running', 'stopping')
+                    """,
+                    (
+                        now + lease_seconds,
+                        now,
+                        normalize_job_id(current_job_id),
+                        agent_id,
+                        session_id,
+                    ),
+                )
             row = connection.execute(
                 "SELECT * FROM local_agents WHERE agent_id = ?", (agent_id,)
             ).fetchone()
@@ -260,12 +331,38 @@ class LocalAgentStore:
             ).fetchone()
         return self._job_row(row)
 
-    def claim_job(self, agent_id, *, now=None):
+    def claim_job(
+        self,
+        agent_id,
+        *,
+        session_id="",
+        lease_seconds=DEFAULT_JOB_LEASE_SECONDS,
+        now=None,
+    ):
         agent_id = normalize_agent_id(agent_id)
         now = time.time() if now is None else float(now)
+        session_id = str(session_id or "").strip()[:96]
+        lease_seconds = max(60.0, float(lease_seconds or DEFAULT_JOB_LEASE_SECONDS))
         connection = self._connect()
         try:
             connection.execute("BEGIN IMMEDIATE")
+            connection.execute(
+                """
+                UPDATE local_agent_jobs
+                SET status = CASE WHEN cancel_requested = 1 THEN 'stopped' ELSE 'error' END,
+                    message = CASE
+                        WHEN cancel_requested = 1 THEN 'Agent 任务租约已过期，任务已停止'
+                        ELSE 'Agent 任务租约已过期，执行状态已丢失'
+                    END,
+                    finished_at = ?, updated_at = ?, lease_expires_at = NULL
+                WHERE agent_id = ? AND status IN ('running', 'stopping')
+                  AND (
+                    (lease_expires_at IS NOT NULL AND lease_expires_at < ?)
+                    OR (lease_expires_at IS NULL AND updated_at < ?)
+                  )
+                """,
+                (now, now, agent_id, now, now - lease_seconds),
+            )
             if connection.execute(
                 "SELECT 1 FROM local_agent_jobs WHERE agent_id = ? "
                 "AND status IN ('running', 'stopping') LIMIT 1", (agent_id,),
@@ -289,10 +386,11 @@ class LocalAgentStore:
                 """
                 UPDATE local_agent_jobs
                 SET status = 'running', message = '本机 Agent 已接收任务',
-                    claimed_at = ?, started_at = ?, updated_at = ?
+                    claimed_at = ?, started_at = ?, updated_at = ?,
+                    claimed_session_id = ?, lease_expires_at = ?
                 WHERE job_id = ? AND status = 'queued'
                 """,
-                (now, now, now, job_id),
+                (now, now, now, session_id, now + lease_seconds, job_id),
             )
             connection.execute(
                 "INSERT INTO local_agent_events (job_id, event_type, content, created_at) VALUES (?, 'status', ?, ?)",
@@ -357,7 +455,8 @@ class LocalAgentStore:
                     """
                     UPDATE local_agent_jobs
                     SET status = ?, message = ?, result_json = ?,
-                        finished_at = COALESCE(?, finished_at), updated_at = ?
+                        finished_at = COALESCE(?, finished_at), updated_at = ?,
+                        lease_expires_at = CASE WHEN ? IS NOT NULL THEN NULL ELSE lease_expires_at END
                     WHERE job_id = ? AND agent_id = ?
                     """,
                     (
@@ -366,6 +465,7 @@ class LocalAgentStore:
                         json.dumps(result or {}, ensure_ascii=False),
                         finished_at,
                         now,
+                        finished_at,
                         job_id,
                         agent_id,
                     ),
@@ -415,6 +515,48 @@ class LocalAgentStore:
                 (agent_id,),
             ).fetchall()
         return [row["job_id"] for row in rows]
+
+    def reap_expired_jobs(
+        self,
+        *,
+        agent_id="",
+        lease_seconds=DEFAULT_JOB_LEASE_SECONDS,
+        now=None,
+    ):
+        """Finish tasks whose owning Agent has stopped renewing its lease."""
+        now = time.time() if now is None else float(now)
+        lease_seconds = max(60.0, float(lease_seconds or DEFAULT_JOB_LEASE_SECONDS))
+        params = [now, now]
+        agent_clause = ""
+        if agent_id:
+            agent_clause = " AND j.agent_id = ?"
+            params.append(normalize_agent_id(agent_id))
+        params.extend((now, now - lease_seconds, now - lease_seconds))
+        with self._connect() as connection:
+            cursor = connection.execute(
+                f"""
+                UPDATE local_agent_jobs AS j
+                SET status = CASE WHEN cancel_requested = 1 THEN 'stopped' ELSE 'error' END,
+                    message = CASE
+                        WHEN cancel_requested = 1 THEN 'Agent 任务租约已过期，任务已停止'
+                        ELSE 'Agent 任务租约已过期，执行状态已丢失'
+                    END,
+                    finished_at = ?, updated_at = ?, lease_expires_at = NULL
+                WHERE status IN ('running', 'stopping'){agent_clause}
+                  AND (
+                    (lease_expires_at IS NOT NULL AND lease_expires_at < ?)
+                    OR (
+                        lease_expires_at IS NULL AND updated_at < ?
+                        AND NOT EXISTS (
+                            SELECT 1 FROM local_agents AS a
+                            WHERE a.agent_id = j.agent_id AND a.last_seen >= ?
+                        )
+                    )
+                  )
+                """,
+                params,
+            )
+        return int(cursor.rowcount or 0)
 
     def get_job(self, job_id):
         job_id = normalize_job_id(job_id)

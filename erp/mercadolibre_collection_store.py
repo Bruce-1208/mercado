@@ -67,6 +67,8 @@ PRODUCT_WORKFLOW_COLUMN_DEFINITIONS = (
     ("source_type", "VARCHAR(32) NOT NULL DEFAULT 'collected' AFTER `collection_item_id`"),
     ("review_status", "VARCHAR(32) NOT NULL DEFAULT 'unreviewed' AFTER `source_type`"),
     ("description_text", "LONGTEXT NULL AFTER `title`"),
+    ("product_developer_id", "VARCHAR(64) NULL AFTER `source_type`"),
+    ("product_developer_name", "VARCHAR(255) NULL AFTER `product_developer_id`"),
 )
 INFRINGEMENT_RESULT_COLUMN_DEFINITIONS = (
     ("infringement_risk_level", "TINYINT NULL"),
@@ -186,6 +188,32 @@ def _json_safe_row(row: Mapping[str, Any]) -> dict[str, Any]:
     result["added_to_products"] = bool(result.get("added_to_products"))
     result["actual_weight_complete"] = has_valid_actual_weight(result)
     result["weight_dimensions_complete"] = has_complete_weight_dimensions(result)
+    return result
+
+
+def _mirror_zying_snapshot_fields(row: Mapping[str, Any]) -> dict[str, Any]:
+    """Expose ZYing metadata stored in the source snapshot as list fields."""
+    result = dict(row)
+    if str(result.get("source_type") or "").strip().lower() != "zying":
+        return result
+    snapshot = _loads(result.get("source_snapshot_json"), {})
+    plugin_snapshot = (
+        snapshot.get("plugin_snapshot") if isinstance(snapshot, dict) else {}
+    )
+    if not isinstance(plugin_snapshot, dict):
+        plugin_snapshot = {}
+    for field in (
+        "zying_category_id",
+        "zying_category",
+        "product_developer_id",
+        "product_developer_name",
+        "zying_status",
+    ):
+        if (
+            result.get(field) in (None, "")
+            and plugin_snapshot.get(field) not in (None, "")
+        ):
+            result[field] = plugin_snapshot.get(field)
     return result
 
 
@@ -327,6 +355,8 @@ def _migrate_collection_tables(cursor: Any) -> None:
             `id` BIGINT NOT NULL AUTO_INCREMENT,
             `collection_item_id` BIGINT NOT NULL,
             `source_type` VARCHAR(32) NOT NULL DEFAULT 'collected',
+            `product_developer_id` VARCHAR(64) NULL,
+            `product_developer_name` VARCHAR(255) NULL,
             `review_status` VARCHAR(32) NOT NULL DEFAULT 'unreviewed',
             `source_item_id` VARCHAR(32) NOT NULL,
             `source_url` VARCHAR(1500) NOT NULL,
@@ -617,6 +647,8 @@ def _collection_schema_is_current(cursor: Any) -> bool:
         (PRODUCT_TABLE, "source_type"),
         (PRODUCT_TABLE, "review_status"),
         (PRODUCT_TABLE, "description_text"),
+        (PRODUCT_TABLE, "product_developer_id"),
+        (PRODUCT_TABLE, "product_developer_name"),
         (PRODUCT_TABLE, "profitability_error"),
         (PRODUCT_TABLE, "last_published_at"),
         (PRODUCT_TABLE, "management_category_id"),
@@ -1060,6 +1092,8 @@ def _list_rows(
     weight_status: str = "",
     management_category_id: Any = None,
     mercado_category: str = "",
+    zying_category: str = "",
+    product_developer_id: str = "",
     weight_min: Any = None,
     weight_max: Any = None,
     price_min: Any = None,
@@ -1069,6 +1103,7 @@ def _list_rows(
     date_from: str = "",
     date_to: str = "",
     exclude_added: bool = False,
+    token_ids: Iterable[int] | None = None,
     connection_factory: Callable[[], Any] | None = None,
 ) -> dict[str, Any]:
     limit = max(1, min(int(limit), 1000))
@@ -1102,12 +1137,55 @@ def _list_rows(
         where.append("(`category_id` = %s OR `category_name` LIKE %s)")
         params.extend((mercado_category, f"%{mercado_category}%"))
     if table == PRODUCT_TABLE:
+        if token_ids is not None:
+            scoped_token_ids = sorted({
+                int(value) for value in token_ids or () if int(value or 0) > 0
+            })
+            if not scoped_token_ids:
+                where.append("1 = 0")
+            else:
+                placeholders = ", ".join(["%s"] * len(scoped_token_ids))
+                where.append(
+                    f"(`last_publish_token_id` IN ({placeholders}) OR EXISTS ("
+                    f"SELECT 1 FROM `{PUBLISH_RECORD_TABLE}` AS own_records "
+                    f"WHERE own_records.`product_item_id` = `{PRODUCT_TABLE}`.`id` "
+                    f"AND own_records.`token_id` IN ({placeholders})) OR EXISTS ("
+                    "SELECT 1 FROM `erp_mercadolibre_store_links` AS own_links "
+                    f"WHERE own_links.`item_id` = `{PRODUCT_TABLE}`.`source_item_id` "
+                    f"AND own_links.`token_id` IN ({placeholders})))"
+                )
+                params.extend(scoped_token_ids)
+                params.extend(scoped_token_ids)
+                params.extend(scoped_token_ids)
         source_type = str(source_type or "").strip().lower()
         if source_type:
             if source_type not in PRODUCT_SOURCE_TYPES:
                 raise ValueError(f"不支持的产品来源: {source_type}")
             where.append("`source_type` = %s")
             params.append(source_type)
+        zying_category = str(zying_category or "").strip()[:255]
+        if zying_category:
+            zying_name_expr = (
+                "JSON_UNQUOTE(JSON_EXTRACT(IF(JSON_VALID(`source_snapshot_json`), "
+                "`source_snapshot_json`, '{}'), "
+                "'$.plugin_snapshot.zying_category'))"
+            )
+            zying_id_expr = (
+                "JSON_UNQUOTE(JSON_EXTRACT(IF(JSON_VALID(`source_snapshot_json`), "
+                "`source_snapshot_json`, '{}'), "
+                "'$.plugin_snapshot.zying_category_id'))"
+            )
+            where.append(
+                f"({zying_name_expr} = %s OR {zying_name_expr} LIKE %s "
+                f"OR {zying_id_expr} = %s)"
+            )
+            params.extend((zying_category, f"%{zying_category}%", zying_category))
+        product_developer_id = str(product_developer_id or "").strip()[:64]
+        if product_developer_id:
+            where.append(
+                "(`product_developer_id` = %s OR `product_developer_name` = %s)"
+            )
+            params.extend((product_developer_id, product_developer_id))
     review_status = str(review_status or "").strip().lower()
     if review_status:
         if review_status not in PRODUCT_REVIEW_STATUSES:
@@ -1214,7 +1292,10 @@ def _list_rows(
                 f"{where_sql} ORDER BY `{table}`.`id` DESC LIMIT %s OFFSET %s",
                 tuple(params + [limit, offset]),
             )
-            rows = [_json_safe_row(row) for row in cursor.fetchall()]
+            rows = [
+                _mirror_zying_snapshot_fields(_json_safe_row(row))
+                for row in cursor.fetchall()
+            ]
         connection.commit()
         return {"total": total, "rows": rows}
     finally:
@@ -1687,12 +1768,31 @@ def list_product_publish_records(
     end_date: str = "",
     limit: int = 500,
     offset: int = 0,
+    token_ids: Iterable[int] | None = None,
+    filter_token_ids: Iterable[int] | None = None,
     connection_factory: Callable[[], Any] | None = None,
 ) -> dict[str, Any]:
     limit = max(1, min(int(limit), 1000))
     offset = max(0, int(offset))
     base_where: list[str] = []
     base_params: list[Any] = []
+    if token_ids is not None:
+        scoped_token_ids = sorted({
+            int(value) for value in token_ids or () if int(value or 0) > 0
+        })
+        if not scoped_token_ids:
+            base_where.append("1 = 0")
+        else:
+            placeholders = ", ".join(["%s"] * len(scoped_token_ids))
+            base_where.append(f"records.`token_id` IN ({placeholders})")
+            base_params.extend(scoped_token_ids)
+    selected_token_ids = sorted({
+        int(value) for value in (filter_token_ids or ()) if int(value or 0) > 0
+    })
+    if selected_token_ids:
+        placeholders = ", ".join(["%s"] * len(selected_token_ids))
+        base_where.append(f"records.`token_id` IN ({placeholders})")
+        base_params.extend(selected_token_ids)
     search = str(search or "").strip()
     if search:
         pattern = f"%{search}%"
@@ -2302,6 +2402,9 @@ def upsert_zying_products_to_products(
                 "zying_product_id": product_id,
                 "zying_category_id": record.get("zying_category_id") or "",
                 "zying_category": record.get("zying_category") or "",
+                "product_developer_id": record.get("product_developer_id") or "",
+                "product_developer_name": record.get("product_developer_name") or "",
+                "zying_status": record.get("zying_status") or "",
             }
         )
         snapshot["plugin_snapshot"] = plugin_snapshot
@@ -2369,6 +2472,8 @@ def upsert_zying_products_to_products(
             weight_g, volumetric_weight, dimensions[0], dimensions[1], dimensions[2],
             "zying_detail", sale_price_usd, category_id, category_name,
             net_proceeds, now, ZYING_PROFITABILITY_SOURCE, _dumps(snapshot), now,
+            str(record.get("product_developer_id") or "").strip()[:64],
+            str(record.get("product_developer_name") or "").strip()[:255],
         ))
     if not values:
         return {"count": 0, "skipped": skipped}
@@ -2379,6 +2484,7 @@ def upsert_zying_products_to_products(
         "package_width_cm", "package_height_cm", "weight_basis", "sale_price_usd",
         "category_id", "category_name", "net_proceeds_usd",
         "profitability_updated_at", "profitability_source", "source_snapshot_json",
+        "product_developer_id", "product_developer_name",
     )
     updates = ",\n                    ".join(
         f"`{field}` = IF(`source_type` = 'zying', VALUES(`{field}`), `{field}`)"
@@ -2397,8 +2503,9 @@ def upsert_zying_products_to_products(
                     `package_length_cm`, `package_width_cm`, `package_height_cm`,
                     `weight_basis`, `sale_price_usd`, `category_id`, `category_name`,
                     `net_proceeds_usd`, `profitability_updated_at`, `profitability_source`,
-                    `source_snapshot_json`, `added_at`
-                ) VALUES ({", ".join(["%s"] * 24)})
+                    `source_snapshot_json`, `added_at`, `product_developer_id`,
+                    `product_developer_name`
+                ) VALUES ({", ".join(["%s"] * 26)})
                 ON DUPLICATE KEY UPDATE
                     {updates},
                     `updated_at` = CURRENT_TIMESTAMP
@@ -2407,6 +2514,53 @@ def upsert_zying_products_to_products(
             )
         connection.commit()
         return {"count": len(values), "skipped": skipped}
+    except BaseException:
+        connection.rollback()
+        raise
+    finally:
+        connection.close()
+
+
+def sync_zying_product_developers(
+    developers: Iterable[Mapping[str, Any]],
+    *,
+    connection_factory: Callable[[], Any] | None = None,
+) -> int:
+    """补全统一产品列表中历史智赢快照的产品开发姓名。"""
+    values = []
+    for developer in developers or ():
+        developer_id = str(developer.get("id") or "").strip()[:64]
+        developer_name = str(developer.get("name") or "").strip()[:255]
+        if developer_id and developer_name:
+            values.append((developer_id, developer_name, developer_id, developer_id, developer_id))
+    if not values:
+        return 0
+    connection = (connection_factory or _connect)()
+    try:
+        with connection.cursor() as cursor:
+            ensure_collection_tables(cursor)
+            cursor.executemany(
+                f"""
+                UPDATE `{PRODUCT_TABLE}`
+                SET `product_developer_id` = %s, `product_developer_name` = %s
+                WHERE `source_type` = 'zying'
+                  AND (
+                    `product_developer_id` = %s
+                    OR JSON_UNQUOTE(JSON_EXTRACT(
+                        IF(JSON_VALID(`source_snapshot_json`), `source_snapshot_json`, '{{}}'),
+                        '$.plugin_snapshot.product_developer_id'
+                    )) = %s
+                    OR JSON_UNQUOTE(JSON_EXTRACT(
+                        IF(JSON_VALID(`source_snapshot_json`), `source_snapshot_json`, '{{}}'),
+                        '$.page_snapshot.zying_detail.sale_loginid'
+                    )) = %s
+                  )
+                """,
+                values,
+            )
+            changed = int(cursor.rowcount or 0)
+        connection.commit()
+        return changed
     except BaseException:
         connection.rollback()
         raise

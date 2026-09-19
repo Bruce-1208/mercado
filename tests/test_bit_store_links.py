@@ -625,6 +625,8 @@ def test_list_store_links_filters_site_and_defaults_to_sales_descending():
         def fetchone(self):
             if "SHOW COLUMNS" in self.sql:
                 return {"Field": "sync_marker"}
+            if "AS `table_exists`" in self.sql:
+                return {"table_exists": 1}
             if "AS `all_count`" in self.sql:
                 return {"all_count": 2, "current_count": 2, "store_count": 1}
             return {"total": 2}
@@ -637,9 +639,12 @@ def test_list_store_links_filters_site_and_defaults_to_sales_descending():
                     "id": 1,
                     "token_id": 1,
                     "site_id": "MLM",
+                    "item_id": "MLM1",
                     "sold_quantity": 20,
                     "is_current": 1,
                 }]
+            if f"FROM `{store.SYNCED_ORDER_TABLE}` AS recent_orders" in self.sql:
+                return [{"token_id": 1, "item_id": "MLM1", "sales_14d": 7}]
             if "FROM `mercado_store_tokens` AS tokens" in self.sql:
                 return [
                     {"token_id": 1, "store_name": "店铺一", "link_count": 2},
@@ -694,6 +699,7 @@ def test_list_store_links_filters_site_and_defaults_to_sales_descending():
     assert "categorized_product.`management_category_id` = %s" in list_sql
     assert "links.`category_id` = %s" in list_sql
     assert "ORDER BY links.`sold_quantity` DESC" in list_sql
+    assert result["rows"][0]["sales_14d"] == 7
     assert params[0] == "MLM"
     assert params[1:3] == (12, "Toys")
     assert params[3] == "+Bluetooth* +Headset*"
@@ -726,6 +732,34 @@ def test_list_store_links_filters_site_and_defaults_to_sales_descending():
         {"group_name": "运营一组"},
         {"group_name": "__ungrouped__"},
     ]
+
+    calls.clear()
+    store.list_store_links(
+        sort_by="available_quantity",
+        sort_order="asc",
+        page_size=25,
+        connection_factory=Connection,
+    )
+    inventory_sql = next(
+        sql for sql, _params in calls
+        if f"FROM `{store.STORE_LINK_TABLE}`" in sql and "LIMIT %s OFFSET %s" in sql
+    )
+    assert "ORDER BY links.`available_quantity` ASC" in inventory_sql
+
+    calls.clear()
+    store.list_store_links(
+        sort_by="sales_14d",
+        sort_order="desc",
+        page_size=25,
+        connection_factory=Connection,
+    )
+    recent_sql = next(
+        sql for sql, _params in calls
+        if f"FROM `{store.STORE_LINK_TABLE}`" in sql and "LIMIT %s OFFSET %s" in sql
+    )
+    assert "CROSS JOIN JSON_TABLE" in recent_sql
+    assert "UTC_TIMESTAMP() - INTERVAL 14 DAY" in recent_sql
+    assert "ORDER BY `sales_14d` DESC" in recent_sql
 
     calls.clear()
     unfiltered = store.list_store_links(page_size=25, connection_factory=Connection)
@@ -868,6 +902,9 @@ def test_workbench_store_link_ui_and_routes():
     assert b'id="store-link-sync-log"' in response.data
     assert "同步所有店铺链接".encode("utf-8") in response.data
     assert "同步当前店铺".encode("utf-8") in response.data
+    assert "优先同步当前勾选的店铺；未勾选店铺时同步当前店铺组".encode("utf-8") in response.data
+    assert "请先选择店铺或店铺组".encode("utf-8") in response.data
+    assert "storeLinkStoreGroups[String(row.token_id || \"\")]".encode("utf-8") in response.data
     assert "销量从高到低".encode("utf-8") in response.data
     assert "产品分类".encode("utf-8") in response.data
     assert "美客多分类".encode("utf-8") in response.data
@@ -885,6 +922,12 @@ def test_workbench_store_link_ui_and_routes():
     assert "美客多后台修改日志".encode("utf-8") in response.data
     assert "每 3 天自动同步链接状态".encode("utf-8") in response.data
     assert b'id="store-link-page-size"' in response.data
+    assert "<th>库存</th>".encode("utf-8") in response.data
+    assert "<th>总销量</th>".encode("utf-8") in response.data
+    assert "<th>14天销量</th>".encode("utf-8") in response.data
+    assert b'value="sold_quantity:desc" selected' in response.data
+    assert b'value="sales_14d:desc"' in response.data
+    assert b'value="available_quantity:desc"' in response.data
     assert b'<option value="500" selected>500' in response.data
     assert b'<option value="1000">1,000' in response.data
     assert 'page_size: String(storeLinkPageSize.value || "500")'.encode("utf-8") in response.data
@@ -920,6 +963,16 @@ def test_workbench_store_link_ui_and_routes():
     assert listing.call_args.kwargs["mercado_category"] == "MLM123"
     assert listing.call_args.kwargs["sales_sort"] == "asc"
     assert listing.call_args.kwargs["page_size"] == 10
+
+    with patch.object(
+        workbench.bit_db_api, "list_mercado_store_links", return_value=listing_data
+    ) as recent_listing:
+        response = client.get(
+            "/api/store-links?sort_by=sales_14d&sort_order=asc"
+        )
+    assert response.status_code == 200
+    assert recent_listing.call_args.kwargs["sort_by"] == "sales_14d"
+    assert recent_listing.call_args.kwargs["sort_order"] == "asc"
 
     with patch.object(
         workbench.bit_db_api, "list_mercado_store_links", return_value=listing_data

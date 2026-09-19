@@ -399,6 +399,7 @@ def list_prohibited_listings(
     *,
     search: str = "",
     token_id: int | None = None,
+    token_ids: Iterable[int] | None = None,
     site_id: str = "",
     salesperson: str = "",
     group_name: str = "",
@@ -416,7 +417,14 @@ def list_prohibited_listings(
         risk_type = ""
     conditions = ["1 = 1"]
     values: list[Any] = []
-    if token_id not in (None, ""):
+    selected_token_ids = sorted({
+        int(value) for value in (token_ids or ()) if int(value or 0) > 0
+    })
+    if selected_token_ids:
+        placeholders = ", ".join(["%s"] * len(selected_token_ids))
+        conditions.append(f"items.`token_id` IN ({placeholders})")
+        values.extend(selected_token_ids)
+    elif token_id not in (None, ""):
         conditions.append("items.`token_id` = %s")
         values.append(int(token_id))
     site_id = str(site_id or "").strip().upper()[:16]
@@ -593,15 +601,26 @@ def list_prohibited_listings(
             cursor.execute(
                 """
                 SELECT tokens.`id` AS `token_id`, tokens.`display_name` AS `store_name`,
+                       GROUP_CONCAT(DISTINCT NULLIF(settings.`group_name`, '')
+                                    ORDER BY settings.`group_name` SEPARATOR '\x1f') AS `group_names`,
                        state.`last_completed_at` AS `last_synced_at`, state.`last_status`,
                        state.`last_error`
                 FROM `mercado_store_tokens` AS tokens
                 LEFT JOIN `erp_mercadolibre_prohibited_sync_state` AS state
                   ON state.`token_id` = tokens.`id`
+                LEFT JOIN `mercado_store_site_settings` AS settings
+                  ON settings.`token_id` = tokens.`id`
+                GROUP BY tokens.`id`, tokens.`display_name`, state.`last_completed_at`,
+                         state.`last_status`, state.`last_error`
                 ORDER BY tokens.`display_name`, tokens.`id`
                 """
             )
             stores = [_json_safe_row(row) for row in cursor.fetchall()]
+            for store in stores:
+                store["group_names"] = [
+                    value for value in str(store.get("group_names") or "").split("\x1f")
+                    if value
+                ] or ["__ungrouped__"]
             cursor.execute(
                 """
                 SELECT DISTINCT COALESCE(`salesperson`, '') AS `salesperson`

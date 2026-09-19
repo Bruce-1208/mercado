@@ -55,6 +55,10 @@ def test_workbench_contains_order_management_ui():
     assert "添加采购单".encode("utf-8") in response.data
     assert b'id="order-purchase-dialog"' in response.data
     assert b'id="order-purchase-tracking"' in response.data
+    assert b'id="order-purchase-tracking-sync-button"' in response.data
+    assert b'id="purchase-tracking-sync-dialog"' in response.data
+    assert "/api/orders/purchase-tracking/start".encode("utf-8") in response.data
+    assert "账号密码只用于本次本机浏览器登录".encode("utf-8") in response.data
     assert b'id="order-purchase-cost"' in response.data
     assert b'id="order-purchase-remark"' in response.data
     assert b'id="order-tracking-dialog"' in response.data
@@ -429,6 +433,93 @@ def test_order_tracking_route_returns_inline_timeline_data():
     assert response.status_code == 200
     assert response.headers["Cache-Control"] == "no-store"
     assert response.get_json()["data"]["events"][0]["description"] == "已揽收"
+
+
+def test_purchase_tracking_sync_start_validates_purchase_orders_and_starts_local_browser():
+    state = {
+        "running": True,
+        "phase": "starting",
+        "platform": "1688",
+        "total": 1,
+    }
+    with (
+        patch.object(
+            workbench.bit_db_api,
+            "get_purchase_tracking_orders",
+            return_value=[{"order_id": "20001", "purchase_order": "PO-1688-1"}],
+        ),
+        patch.object(
+            workbench.purchase_tracking_sync_manager,
+            "start",
+            return_value=state,
+        ) as start_sync,
+    ):
+        response = _client().post(
+            "/api/orders/purchase-tracking/start",
+            json={
+                "order_ids": ["20001"],
+                "platform": "1688",
+                "account": "buyer@example.com",
+                "password": "one-time-secret",
+            },
+        )
+
+    assert response.status_code == 202
+    assert response.get_json()["data"]["total"] == 1
+    assert start_sync.call_args.kwargs["orders"] == [
+        {"order_id": "20001", "purchase_order": "PO-1688-1"},
+    ]
+    assert start_sync.call_args.kwargs["platform"] == "1688"
+    assert start_sync.call_args.kwargs["account"] == "buyer@example.com"
+    assert start_sync.call_args.kwargs["password"] == "one-time-secret"
+
+
+def test_purchase_tracking_sync_rejects_selected_order_without_purchase_number():
+    with patch.object(
+        workbench.bit_db_api,
+        "get_purchase_tracking_orders",
+        return_value=[{"order_id": "20001", "purchase_order": ""}],
+    ):
+        response = _client().post(
+            "/api/orders/purchase-tracking/start",
+            json={"order_ids": ["20001"], "platform": "taobao", "account": "buyer"},
+        )
+
+    assert response.status_code == 400
+    assert "尚未填写采购订单号" in response.get_json()["message"]
+
+
+def test_purchase_tracking_sync_status_is_not_cached():
+    with patch.object(
+        workbench.purchase_tracking_sync_manager,
+        "status",
+        return_value={"running": False, "phase": "completed", "synced": 2},
+    ):
+        response = _client().get("/api/orders/purchase-tracking/status")
+
+    assert response.status_code == 200
+    assert response.headers["Cache-Control"] == "no-store"
+    assert response.get_json()["data"]["synced"] == 2
+
+
+def test_purchase_tracking_order_lookup_uses_database_service_in_client_mode(monkeypatch):
+    captured = {}
+
+    def fake_request(method, path, **kwargs):
+        captured.update(method=method, path=path, **kwargs)
+        return [{"order_id": "20001", "purchase_order": "PO-1"}]
+
+    monkeypatch.setattr(bit_db_api, "DB_MODE", "api")
+    monkeypatch.setattr(bit_db_api, "_request", fake_request)
+
+    result = bit_db_api.get_purchase_tracking_orders(["20001"])
+
+    assert result[0]["purchase_order"] == "PO-1"
+    assert captured == {
+        "method": "POST",
+        "path": "/api/db/orders/purchase-tracking",
+        "json": {"order_ids": ["20001"]},
+    }
 
 
 def test_order_print_route_returns_pdf_and_records_operator_log():

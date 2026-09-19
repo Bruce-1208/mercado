@@ -68,6 +68,10 @@ import bit.bit_inventory as bit_inventory
 import bit.bit_pago_info as bit_pago_info
 import bit.bit_reputation_info as bit_reputation_info
 import bit.bit_order_sync as bit_order_sync
+from bit.purchase_tracking_sync import (
+    purchase_tracking_sync_manager,
+    supported_platforms as purchase_tracking_platforms,
+)
 import bit.bit_prohibited_listing_sync as bit_prohibited_listing_sync
 import bit.bit_store_link_remote_update as bit_store_link_remote_update
 import bit.bit_store_link_sync as bit_store_link_sync
@@ -318,6 +322,7 @@ WORKBENCH_PERMISSION_GROUPS = (
     ("tasks", "任务模块", (("tasks.view", "查看"), ("tasks.execute", "启动任务"))),
     ("order_print", "订单管理与面单", (("order_print.view", "查看"), ("order_print.execute", "打印面单"))),
     ("order_analysis", "订单分析", (("order_analysis.view", "查看"), ("order_analysis.execute", "导入订单"))),
+    ("ad_analysis", "广告分析", (("ad_analysis.view", "查看"),)),
     ("inventory", "库存管理", (("inventory.view", "查看"), ("inventory.execute", "出入库"), ("inventory.manage", "管理货架"))),
     ("shop_status", "店铺状态", (("shop_status.view", "查看"), ("shop_status.execute", "检测/处理"))),
     ("funds", "资金管理", (("funds.view", "查看"), ("funds.execute", "采集/终止"))),
@@ -342,6 +347,7 @@ WORKBENCH_DEFAULT_ROLES = (
         "role_name": "超级管理员",
         "description": "拥有控制台全部权限",
         "permissions": ("*",),
+        "own_store_only": False,
         "is_system": True,
     },
     {
@@ -351,6 +357,7 @@ WORKBENCH_DEFAULT_ROLES = (
         "permissions": tuple(
             key for key in WORKBENCH_PERMISSION_KEYS if not key.startswith("access.")
         ),
+        "own_store_only": False,
         "is_system": True,
     },
     {
@@ -360,6 +367,7 @@ WORKBENCH_DEFAULT_ROLES = (
         "permissions": tuple(
             key for key in WORKBENCH_PERMISSION_KEYS if key.endswith(".view")
         ),
+        "own_store_only": False,
         "is_system": True,
     },
     {
@@ -367,6 +375,17 @@ WORKBENCH_DEFAULT_ROLES = (
         "role_name": "仓库人员",
         "description": "可查看订单并手动打印美客多面单",
         "permissions": ("order_print.view", "order_print.execute"),
+        "own_store_only": False,
+        "is_system": True,
+    },
+    {
+        "role_key": "member",
+        "role_name": "成员",
+        "description": "只能查看和操作本人名下店铺及产品数据",
+        "permissions": tuple(
+            key for key in WORKBENCH_PERMISSION_KEYS if not key.startswith("access.")
+        ),
+        "own_store_only": True,
         "is_system": True,
     },
 )
@@ -603,6 +622,7 @@ if USE_DB_API:
     db_insert_task_record = bit_db_api.insert_task_record
     db_insert_zying_product_info = bit_db_api.insert_zying_product_info
     db_upsert_zying_products_to_products = bit_db_api.upsert_zying_products_to_products
+    db_sync_zying_product_developers = bit_db_api.sync_zying_product_developers
     db_get_existing_zying_product_ids = bit_db_api.get_existing_zying_product_ids
     db_get_zying_risk_candidates = bit_db_api.get_zying_risk_candidates
     db_update_zying_product_risks = bit_db_api.update_zying_product_risks
@@ -678,6 +698,7 @@ else:
         list_orders,
         insert_task_record,
         insert_zying_product_info,
+        sync_zying_product_developers,
         get_existing_zying_product_ids,
         get_zying_risk_candidates,
         update_zying_product_risks,
@@ -766,6 +787,7 @@ else:
         update_product_items as db_update_mercado_product_items,
         update_product_review_status as db_update_mercado_product_review_status,
         upsert_zying_products_to_products as db_upsert_zying_products_to_products,
+        sync_zying_product_developers as db_sync_zying_product_list_developers,
         upsert_collection_items as db_upsert_mercado_collection_items,
     )
     from erp.mercadolibre_store_link_store import (
@@ -773,6 +795,12 @@ else:
         delete_store_links as db_delete_mercado_store_links,
         list_store_links as db_list_mercado_store_links,
     )
+
+    def db_sync_zying_product_developers(rows):
+        return {
+            "zying_products": int(sync_zying_product_developers(rows) or 0),
+            "product_list": int(db_sync_zying_product_list_developers(rows) or 0),
+        }
 
 
 def make_password_hash(password):
@@ -880,6 +908,16 @@ _WORKBENCH_USER_REQUIRED_COLUMNS = {
     "created_at",
     "updated_at",
 }
+_WORKBENCH_ROLE_REQUIRED_COLUMNS = {
+    "role_key",
+    "role_name",
+    "description",
+    "permissions_json",
+    "own_store_only",
+    "is_system",
+    "created_at",
+    "updated_at",
+}
 
 
 def _workbench_schema_state(cursor):
@@ -895,29 +933,33 @@ def _workbench_schema_state(cursor):
         str((row or {}).get("table_name") or "")
         for row in (cursor.fetchall() or [])
     }
-    user_columns = set()
-    if "workbench_users" in table_names:
+    columns_by_table = {"workbench_roles": set(), "workbench_users": set()}
+    for table_name in columns_by_table:
+        if table_name not in table_names:
+            continue
         cursor.execute(
             """
             SELECT `COLUMN_NAME` AS `column_name`
             FROM `information_schema`.`COLUMNS`
             WHERE `TABLE_SCHEMA` = DATABASE()
-              AND `TABLE_NAME` = 'workbench_users'
-            """
+              AND `TABLE_NAME` = %s
+            """,
+            (table_name,),
         )
-        user_columns = {
+        columns_by_table[table_name] = {
             str((row or {}).get("column_name") or "")
             for row in (cursor.fetchall() or [])
         }
-    return table_names, user_columns
+    return table_names, columns_by_table["workbench_roles"], columns_by_table["workbench_users"]
 
 
 def _workbench_default_roles_are_current(cursor):
     cursor.execute(
         """
-        SELECT `role_key`, `role_name`, `description`, `permissions_json`, `is_system`
+        SELECT `role_key`, `role_name`, `description`, `permissions_json`,
+               `own_store_only`, `is_system`
         FROM `workbench_roles`
-        WHERE `role_key` IN ('super_admin', 'operator', 'viewer', 'warehouse')
+        WHERE `role_key` IN ('super_admin', 'operator', 'viewer', 'warehouse', 'member')
         """
     )
     current_roles = {
@@ -978,15 +1020,24 @@ def ensure_workbench_user_table():
     connection = pymysql.connect(**connection_config)
     try:
         with connection.cursor() as cursor:
-            table_names, user_columns = _workbench_schema_state(cursor)
+            schema_state = _workbench_schema_state(cursor)
+            if len(schema_state) == 2:  # 兼容测试桩和升级前的内部调用约定
+                table_names, user_columns = schema_state
+                role_columns = set(_WORKBENCH_ROLE_REQUIRED_COLUMNS)
+            else:
+                table_names, role_columns, user_columns = schema_state
             roles_exist = "workbench_roles" in table_names
             users_exist = "workbench_users" in table_names
             user_schema_ready = (
                 users_exist
                 and _WORKBENCH_USER_REQUIRED_COLUMNS.issubset(user_columns)
             )
-            if (
+            role_schema_ready = (
                 roles_exist
+                and _WORKBENCH_ROLE_REQUIRED_COLUMNS.issubset(role_columns)
+            )
+            if (
+                role_schema_ready
                 and user_schema_ready
                 and _workbench_default_roles_are_current(cursor)
                 and _workbench_users_are_current(cursor)
@@ -1001,6 +1052,7 @@ def ensure_workbench_user_table():
                         `role_name` VARCHAR(64) NOT NULL,
                         `description` VARCHAR(255) NULL,
                         `permissions_json` TEXT NOT NULL,
+                        `own_store_only` TINYINT(1) NOT NULL DEFAULT 0,
                         `is_system` TINYINT(1) NOT NULL DEFAULT 0,
                         `created_at` DATETIME NOT NULL,
                         `updated_at` DATETIME NOT NULL,
@@ -1009,14 +1061,19 @@ def ensure_workbench_user_table():
                     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
                     """
                 )
+            elif "own_store_only" not in role_columns:
+                cursor.execute(
+                    "ALTER TABLE `workbench_roles` ADD COLUMN `own_store_only` "
+                    "TINYINT(1) NOT NULL DEFAULT 0 AFTER `permissions_json`"
+                )
             now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
             for role in WORKBENCH_DEFAULT_ROLES:
                 cursor.execute(
                     """
                     INSERT INTO `workbench_roles`
                         (`role_key`, `role_name`, `description`, `permissions_json`,
-                         `is_system`, `created_at`, `updated_at`)
-                    VALUES (%s, %s, %s, %s, %s, %s, %s)
+                         `own_store_only`, `is_system`, `created_at`, `updated_at`)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
                     ON DUPLICATE KEY UPDATE
                         `role_name` = VALUES(`role_name`),
                         `description` = VALUES(`description`),
@@ -1029,6 +1086,7 @@ def ensure_workbench_user_table():
                         role["role_name"],
                         role["description"],
                         json.dumps(role["permissions"], ensure_ascii=False),
+                        1 if role["own_store_only"] else 0,
                         1 if role["is_system"] else 0,
                         now,
                         now,
@@ -1111,7 +1169,7 @@ def get_workbench_user(username="", user_id=None):
                 f"""
                 SELECT u.`id`, u.`username`, u.`password_hash`, u.`display_name`,
                        u.`email`, u.`department`, u.`role_key`, u.`is_active`,
-                       r.`role_name`, r.`permissions_json`
+                       r.`role_name`, r.`permissions_json`, r.`own_store_only`
                 FROM `workbench_users` AS u
                 LEFT JOIN `workbench_roles` AS r ON r.`role_key` = u.`role_key`
                 WHERE {where_clause}
@@ -1140,6 +1198,7 @@ def build_workbench_session_user(user):
         "role_key": role_key,
         "role_name": user.get("role_name") or role_key,
         "permissions": permissions,
+        "own_store_only": bool(user.get("own_store_only")) and role_key != "super_admin",
         "access_version": 1,
     }
 
@@ -1160,6 +1219,7 @@ def _role_row_to_dict(row):
         row.pop("permissions_json", [])
     )
     row["is_system"] = bool(row.get("is_system"))
+    row["own_store_only"] = bool(row.get("own_store_only"))
     row["user_count"] = int(row.get("user_count") or 0)
     return row
 
@@ -1171,14 +1231,14 @@ def list_workbench_roles_local():
             cursor.execute(
                 """
                 SELECT r.`role_key`, r.`role_name`, r.`description`,
-                       r.`permissions_json`, r.`is_system`, r.`created_at`,
+                       r.`permissions_json`, r.`own_store_only`, r.`is_system`, r.`created_at`,
                        r.`updated_at`, COUNT(u.`id`) AS `user_count`
                 FROM `workbench_roles` AS r
                 LEFT JOIN `workbench_users` AS u ON u.`role_key` = r.`role_key`
                 GROUP BY r.`role_key`, r.`role_name`, r.`description`,
-                         r.`permissions_json`, r.`is_system`, r.`created_at`,
+                         r.`permissions_json`, r.`own_store_only`, r.`is_system`, r.`created_at`,
                          r.`updated_at`
-                ORDER BY FIELD(r.`role_key`, 'super_admin', 'operator', 'viewer', 'warehouse'),
+                ORDER BY FIELD(r.`role_key`, 'super_admin', 'operator', 'viewer', 'warehouse', 'member'),
                          r.`role_name`
                 """
             )
@@ -1193,6 +1253,7 @@ def create_workbench_role_local(data):
         raise ValueError("角色名称不能为空且最多 64 个字符")
     description = str((data or {}).get("description") or "").strip()[:255]
     permissions = _validate_workbench_permissions((data or {}).get("permissions"))
+    own_store_only = bool((data or {}).get("own_store_only"))
     role_key = "role_" + secrets.token_hex(8)
     now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     connection = pymysql.connect(**mysql_config)
@@ -1202,14 +1263,15 @@ def create_workbench_role_local(data):
                 """
                 INSERT INTO `workbench_roles`
                     (`role_key`, `role_name`, `description`, `permissions_json`,
-                     `is_system`, `created_at`, `updated_at`)
-                VALUES (%s, %s, %s, %s, 0, %s, %s)
+                     `own_store_only`, `is_system`, `created_at`, `updated_at`)
+                VALUES (%s, %s, %s, %s, %s, 0, %s, %s)
                 """,
                 (
                     role_key,
                     role_name,
                     description,
                     json.dumps(permissions, ensure_ascii=False),
+                    1 if own_store_only else 0,
                     now,
                     now,
                 ),
@@ -1233,8 +1295,10 @@ def update_workbench_role_local(role_key, data):
         raise ValueError("角色名称不能为空且最多 64 个字符")
     description = str((data or {}).get("description") or "").strip()[:255]
     permissions = _validate_workbench_permissions((data or {}).get("permissions"))
+    own_store_only = bool((data or {}).get("own_store_only"))
     if role_key == "super_admin":
         permissions = ["*"]
+        own_store_only = False
     now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     connection = pymysql.connect(**mysql_config)
     try:
@@ -1249,13 +1313,14 @@ def update_workbench_role_local(role_key, data):
                 """
                 UPDATE `workbench_roles`
                 SET `role_name` = %s, `description` = %s,
-                    `permissions_json` = %s, `updated_at` = %s
+                    `permissions_json` = %s, `own_store_only` = %s, `updated_at` = %s
                 WHERE `role_key` = %s
                 """,
                 (
                     role_name,
                     description,
                     json.dumps(permissions, ensure_ascii=False),
+                    1 if own_store_only else 0,
                     now,
                     role_key,
                 ),
@@ -1508,6 +1573,97 @@ def workbench_user_has_permission(user, permission):
         return True
     permissions = set(_normalize_workbench_permissions(user.get("permissions")))
     return "*" in permissions or permission in permissions
+
+
+def workbench_user_own_store_only(user=None):
+    user = user if user is not None else get_current_workbench_user()
+    return bool(user and user.get("own_store_only"))
+
+
+def workbench_user_salesperson(user=None):
+    user = user if user is not None else (get_current_workbench_user() or {})
+    return str(user.get("display_name") or user.get("username") or "").strip()
+
+
+def _scoped_salesperson(requested="", user=None):
+    user = user if user is not None else get_current_workbench_user()
+    if workbench_user_own_store_only(user):
+        return workbench_user_salesperson(user)
+    return str(requested or "").strip()
+
+
+def _token_belongs_to_salesperson(token, salesperson):
+    owner = str(salesperson or "").strip().casefold()
+    return bool(owner) and any(
+        str(setting.get("salesperson") or "").strip().casefold() == owner
+        for setting in (token or {}).get("site_settings") or ()
+    )
+
+
+def _filter_mercado_tokens_for_user(data, user=None):
+    user = user if user is not None else get_current_workbench_user()
+    result = dict(data or {})
+    if not workbench_user_own_store_only(user):
+        return result
+    salesperson = workbench_user_salesperson(user)
+    rows = [
+        dict(row) for row in result.get("rows") or ()
+        if _token_belongs_to_salesperson(row, salesperson)
+    ]
+    result["rows"] = rows
+    result["total"] = len(rows)
+    return result
+
+
+def _authorized_token_ids_for_user(user=None):
+    user = user if user is not None else get_current_workbench_user()
+    if not workbench_user_own_store_only(user):
+        return None
+    data = _filter_mercado_tokens_for_user(
+        bit_db_api.list_mercado_store_tokens() or {}, user
+    )
+    return {
+        int(row.get("id") or 0)
+        for row in data.get("rows") or ()
+        if int(row.get("id") or 0) > 0
+    }
+
+
+def _scoped_token_ids(token_ids, user=None):
+    allowed = _authorized_token_ids_for_user(user)
+    if allowed is None:
+        return list(token_ids or [])
+    requested = [int(value) for value in token_ids or [] if int(value or 0) > 0]
+    return [token_id for token_id in (requested or sorted(allowed)) if token_id in allowed]
+
+
+def _filter_store_rows_for_user(data, user=None, store_keys=("店铺名", "store_name")):
+    user = user if user is not None else get_current_workbench_user()
+    result = dict(data or {})
+    if not workbench_user_own_store_only(user):
+        return result
+    token_data = _filter_mercado_tokens_for_user(
+        bit_db_api.list_mercado_store_tokens() or {}, user
+    )
+    aliases = {
+        str(value or "").strip().casefold()
+        for token in token_data.get("rows") or ()
+        for value in (token.get("display_name"), token.get("nickname"))
+        if str(value or "").strip()
+    }
+
+    def belongs(row):
+        return any(
+            str((row or {}).get(key) or "").strip().casefold() in aliases
+            for key in store_keys
+        )
+
+    for key in ("rows", "summary"):
+        if isinstance(result.get(key), list):
+            result[key] = [row for row in result[key] if belongs(row)]
+    if "rows" in result:
+        result["total"] = len(result.get("rows") or [])
+    return result
 
 
 def login_required(view_func):
@@ -1969,6 +2125,8 @@ def _required_workbench_permissions(path, method):
             if method == "POST"
             else ("order_analysis.view",)
         )
+    if path.startswith("/api/ad-analysis"):
+        return ("ad_analysis.view",)
     if path.startswith("/api/inventory/"):
         if path.startswith("/api/inventory/shelves") and method != "GET":
             return ("inventory.manage",)
@@ -2042,6 +2200,61 @@ def enforce_workbench_permissions():
                 "required_permissions": list(required_permissions),
             }
         ), 403
+    return None
+
+
+@app.before_request
+def enforce_own_store_scope():
+    """Reject attempts to address another member's store by identifier."""
+    path = request.path
+    if not path.startswith("/api/") or path.startswith("/api/db/") or path == "/api/login":
+        return None
+    user = get_current_workbench_user()
+    if not workbench_user_own_store_only(user):
+        return None
+
+    token_ids = []
+    view_token_id = (request.view_args or {}).get("token_id")
+    if view_token_id not in (None, ""):
+        token_ids.append(view_token_id)
+    token_ids.extend(
+        value for value in request.args.getlist("token_id")
+        if value not in (None, "")
+    )
+    data = request.get_json(silent=True) if request.method != "GET" else None
+    if isinstance(data, dict):
+        if data.get("sync_all") is True:
+            return jsonify({
+                "status": "error",
+                "message": "当前角色只能操作本人店铺，不能执行全部店铺操作",
+            }), 403
+        raw_token_ids = data.get("token_ids")
+        if isinstance(raw_token_ids, list):
+            token_ids.extend(raw_token_ids)
+        if data.get("token_id") not in (None, ""):
+            token_ids.append(data.get("token_id"))
+        requested_salesperson = str(data.get("salesperson") or "").strip()
+        if requested_salesperson and requested_salesperson.casefold() != workbench_user_salesperson(user).casefold():
+            return jsonify({
+                "status": "error",
+                "message": "当前角色不能操作其他成员的店铺数据",
+            }), 403
+
+    normalized_ids = set()
+    for value in token_ids:
+        try:
+            token_id = int(value or 0)
+        except (TypeError, ValueError):
+            continue
+        if token_id > 0:
+            normalized_ids.add(token_id)
+    if normalized_ids:
+        allowed_ids = _authorized_token_ids_for_user(user) or set()
+        if not normalized_ids.issubset(allowed_ids):
+            return jsonify({
+                "status": "error",
+                "message": "当前角色不能访问其他成员的店铺数据",
+            }), 403
     return None
 
 
@@ -2579,14 +2792,19 @@ def _restore_daily_task_history():
             # 日志路径由任务编号重新计算，不信任磁盘索引中的任意路径。
             state["log_path"] = str(_daily_task_log_file(task_id))
             if state.get("running"):
-                state.update({
-                    "running": False,
-                    "status": "error",
-                    "message": "服务进程已重启，任务运行状态已中断",
-                    "finished_at": state.get("finished_at") or restored_at,
-                    "can_stop": False,
-                })
-                changed = True
+                # 模块会在服务单例锁校验前导入。若只是误启了第二个
+                # 服务进程，原任务仍持有跨进程锁并在正常执行，不能把共享
+                # 历史误写成“服务已重启”。
+                active_owner = bit_daily_task.get_daily_task_lock_owner(task_id)
+                if not active_owner:
+                    state.update({
+                        "running": False,
+                        "status": "error",
+                        "message": "服务进程已重启，任务运行状态已中断",
+                        "finished_at": state.get("finished_at") or restored_at,
+                        "can_stop": False,
+                    })
+                    changed = True
             _daily_tasks[task_id] = state
     if changed:
         _persist_daily_task_history()
@@ -3587,6 +3805,8 @@ def _authorized_task_shop_options(flag_name, token_data=None):
 
 def _collection_config_options(include_failures=False):
     token_data = bit_db_api.list_mercado_store_tokens() or {}
+    if has_request_context():
+        token_data = _filter_mercado_tokens_for_user(token_data)
     infraction_shop_options = _authorized_task_shop_options(
         "visit_stats_enabled",
         token_data=token_data,
@@ -3911,6 +4131,12 @@ def build_zying_collection_params(data):
     }
     if "category_name" in data:
         params["category_name"] = str(data.get("category_name") or "").strip()[:1024]
+    product_developer_id = str(data.get("product_developer_id") or "").strip()[:64]
+    if product_developer_id:
+        params["product_developer_id"] = product_developer_id
+        params["product_developer_name"] = str(
+            data.get("product_developer_name") or ""
+        ).strip()[:255]
     # browser_type/window_name 是工作台的新参数；未提交时维持旧接口返回结构，
     # 兼容仍按 BitBrowser 窗口 ID 调用的脚本和客户端。
     if "browser_type" in data or "window_name" in data:
@@ -3984,6 +4210,30 @@ class _ZyingCollectionLogSink:
         self.buffer = ""
 
 
+def list_zying_collection_categories():
+    """Combine persisted product categories with the latest current-page snapshot."""
+    combined = {}
+    for rows in (
+        db_list_zying_risk_categories() or (),
+        bit_zying_caiji.list_cached_zying_categories(),
+    ):
+        for row in rows:
+            if not isinstance(row, dict):
+                continue
+            category_id = str(row.get("category_id") or "").strip()
+            category_name = str(row.get("category_name") or "").strip()
+            key = category_id or category_name
+            if key:
+                combined[key] = dict(row)
+    return sorted(
+        combined.values(),
+        key=lambda row: (
+            str(row.get("category_name") or "").casefold(),
+            str(row.get("category_id") or ""),
+        ),
+    )
+
+
 def run_zying_collection_job(params, task_lock):
     """在后台执行智赢产品采集，并保留控制台实时日志。"""
     log_sink = _ZyingCollectionLogSink()
@@ -3995,6 +4245,7 @@ def run_zying_collection_job(params, task_lock):
             product_writer=db_insert_zying_product_info,
             existing_product_id_reader=db_get_existing_zying_product_ids,
             product_mirror_writer=db_upsert_zying_products_to_products,
+            category_reader=list_zying_collection_categories,
             return_summary=True,
         )
         summary = {
@@ -4478,9 +4729,14 @@ def build_daily_task_params(data):
             1,
             365,
         ),
-        "round_interval": _parse_int_param(data, "round_interval", 600, 10, 86400),
+        "round_interval": _parse_int_param(
+            data,
+            "round_interval",
+            bit_daily_task.DEFAULT_DAILY_ROUND_INTERVAL,
+            10,
+            86400,
+        ),
         "site_pause": _parse_int_param(data, "site_pause", 30, 0, 3600),
-        "stop_after_minutes": _parse_int_param(data, "stop_after_minutes", 360, 0, 24 * 60),
         "salespeople": salespeople,
         "group_names": group_names,
         "min_rate": legacy_min_rate,
@@ -4515,9 +4771,6 @@ def execute_daily_task(params, task_lock, stop_event, task_id, effective_log_pat
         "min_complaint_rate": params.get("complaint_min_rate", min_rate),
     }
     if params["mode"] == "loop":
-        stop_at = None
-        if params["stop_after_minutes"] > 0:
-            stop_at = datetime.now() + timedelta(minutes=params["stop_after_minutes"])
         execution_result = bit_daily_task.loop_ai_appeal(
             appeal_task,
             top_n=params["top_n"],
@@ -4530,7 +4783,6 @@ def execute_daily_task(params, task_lock, stop_event, task_id, effective_log_pat
             **execution_standards,
             salespeople=params["salespeople"],
             group_names=params.get("group_names", []),
-            stop_at=stop_at,
             stop_event=stop_event,
             log_path=str(effective_log_path),
             _task_lock=task_lock,
@@ -5338,7 +5590,9 @@ def api_latest_infractions():
         recent_days = request.args.get("days", 30)
         return jsonify({
             "status": "success",
-            "data": db_get_latest_infraction_info(recent_days)
+            "data": _filter_store_rows_for_user(
+                db_get_latest_infraction_info(recent_days)
+            )
         })
     except Exception as e:
         logging.error(f"Latest infraction query failed: {str(e)}")
@@ -5353,7 +5607,9 @@ def api_latest_infractions():
 def api_export_latest_infractions():
     try:
         recent_days = request.args.get("days", 30)
-        data = db_get_latest_infraction_info(recent_days)
+        data = _filter_store_rows_for_user(
+            db_get_latest_infraction_info(recent_days)
+        )
         rows = data.get("rows") or []
         recent_days = data.get("recent_days") or 30
 
@@ -5515,7 +5771,7 @@ def api_official_infraction_dashboard():
             "days": request.args.get("days", 30),
             "view_mode": request.args.get("view_mode", "current"),
             "group_name": request.args.get("group_name", ""),
-            "salesperson": request.args.get("salesperson", ""),
+            "salesperson": _scoped_salesperson(request.args.get("salesperson", "")),
             "source_type": request.args.get("source_type", ""),
             "category": request.args.get("category", ""),
             "search": request.args.get("search", ""),
@@ -5545,7 +5801,7 @@ def api_official_ip_rights_dashboard():
         filters = {
             "days": request.args.get("days", 30),
             "view_mode": request.args.get("view_mode", "current"),
-            "salesperson": request.args.get("salesperson", ""),
+            "salesperson": _scoped_salesperson(request.args.get("salesperson", "")),
             "source_type": request.args.get("source_type", ""),
             "category": request.args.get("category", ""),
             "scope": "pppi",
@@ -5721,7 +5977,7 @@ def api_export_official_infractions():
             "days": request.args.get("days", 30),
             "view_mode": request.args.get("view_mode", "current"),
             "group_name": request.args.get("group_name", ""),
-            "salesperson": request.args.get("salesperson", ""),
+            "salesperson": _scoped_salesperson(request.args.get("salesperson", "")),
             "source_type": request.args.get("source_type", ""),
             "category": request.args.get("category", ""),
             "search": request.args.get("search", ""),
@@ -5749,7 +6005,7 @@ def api_export_official_ip_rights():
         filters = {
             "days": request.args.get("days", 30),
             "view_mode": request.args.get("view_mode", "current"),
-            "salesperson": request.args.get("salesperson", ""),
+            "salesperson": _scoped_salesperson(request.args.get("salesperson", "")),
             "source_type": request.args.get("source_type", ""),
             "category": request.args.get("category", ""),
             "scope": "pppi",
@@ -5850,6 +6106,13 @@ def api_latest_reputation():
     try:
         data = db_get_latest_reputation_info()
         _attach_reputation_token_ids(data)
+        if workbench_user_own_store_only():
+            owner = workbench_user_salesperson().casefold()
+            data["rows"] = [
+                row for row in data.get("rows") or []
+                if str(row.get("业务员") or "").strip().casefold() == owner
+            ]
+            data["total"] = len(data["rows"])
         _attach_latest_reputation_infraction_counts(data)
         return jsonify({
             "status": "success",
@@ -5939,6 +6202,12 @@ def api_export_latest_reputation():
     try:
         data = db_get_latest_reputation_info()
         _attach_reputation_token_ids(data)
+        if workbench_user_own_store_only():
+            owner = workbench_user_salesperson().casefold()
+            data["rows"] = [
+                row for row in data.get("rows") or []
+                if str(row.get("业务员") or "").strip().casefold() == owner
+            ]
         _attach_latest_reputation_infraction_counts(data)
         rows = data.get("rows") or []
         wb = Workbook()
@@ -6110,7 +6379,7 @@ def api_collection_options():
 @login_required
 def api_latest_funds():
     try:
-        salesperson = str(request.args.get("salesperson") or "").strip()
+        salesperson = _scoped_salesperson(request.args.get("salesperson"))
         response = jsonify({
             "status": "success",
             "data": db_get_latest_pago_info(salesperson),
@@ -6131,7 +6400,7 @@ def api_collect_funds():
     global _fund_collect_stop_event
     data = request.get_json(silent=True) or {}
     all_shops = _parse_bool_param(data, "all_shops", False)
-    salesperson = str(data.get("salesperson") or "").strip()
+    salesperson = _scoped_salesperson(data.get("salesperson"))
     max_workers = _parse_int_param(
         data,
         "max_workers",
@@ -6366,6 +6635,9 @@ def _high_after_sale_query_params(values):
         "date_from": str(values.get("date_from") or "").strip(),
         "date_to": str(values.get("date_to") or "").strip(),
         "limit": max(1, min(limit, 500)),
+        **({"salesperson": _scoped_salesperson(values.get("salesperson"))}
+           if has_request_context() and _scoped_salesperson(values.get("salesperson"))
+           else {}),
     }
 
 
@@ -6396,6 +6668,9 @@ def _high_profit_query_params(values):
         "date_from": str(values.get("date_from") or "").strip(),
         "date_to": str(values.get("date_to") or "").strip(),
         "limit": max(1, min(limit, 500)),
+        **({"salesperson": _scoped_salesperson(values.get("salesperson"))}
+           if has_request_context() and _scoped_salesperson(values.get("salesperson"))
+           else {}),
     }
 
 
@@ -6420,6 +6695,8 @@ def _order_list_query_params(args):
         name = str(value or "").strip()
         if name and name not in salespeople:
             salespeople.append(name)
+    if has_request_context() and workbench_user_own_store_only():
+        salespeople = [workbench_user_salesperson()]
     store_ids = []
     for value in args.getlist("store_id"):
         text = str(value or "").strip()
@@ -6594,6 +6871,92 @@ def api_bulk_update_orders():
         "message": f"已更新 {int(result.get('matched') or 0)} 个订单",
         "data": result,
     })
+
+
+def _selected_purchase_tracking_rows(order_ids):
+    """从当前授权订单中核验前端选择并读取采购单号。"""
+    normalized_ids = []
+    for value in order_ids or ():
+        order_id = str(value or "").strip()
+        if order_id and order_id not in normalized_ids:
+            normalized_ids.append(order_id)
+    if not normalized_ids:
+        raise ValueError("请至少选择一个订单")
+    if len(normalized_ids) > 100:
+        raise ValueError("单次最多同步 100 个订单")
+
+    rows = bit_db_api.get_purchase_tracking_orders(normalized_ids) or []
+    by_id = {str(row.get("order_id") or ""): row for row in rows}
+    result = []
+    missing = []
+    for order_id in normalized_ids:
+        purchase_order = str((by_id.get(order_id) or {}).get("purchase_order") or "").strip()
+        if not purchase_order:
+            missing.append(order_id)
+        else:
+            result.append({"order_id": order_id, "purchase_order": purchase_order})
+    if missing:
+        preview = "、".join(missing[:5])
+        suffix = " 等" if len(missing) > 5 else ""
+        raise ValueError(f"订单 {preview}{suffix} 尚未填写采购订单号")
+    return result
+
+
+@app.route('/api/orders/purchase-tracking/platforms', methods=['GET'])
+@login_required
+def api_purchase_tracking_platforms():
+    response = jsonify({"status": "success", "data": {"rows": purchase_tracking_platforms()}})
+    response.headers["Cache-Control"] = "no-store"
+    return response
+
+
+@app.route('/api/orders/purchase-tracking/start', methods=['POST'])
+@login_required
+def api_start_purchase_tracking_sync():
+    data = request.get_json(silent=True) or {}
+    order_ids = data.get("order_ids") or []
+    if not isinstance(order_ids, list):
+        return jsonify({"status": "error", "message": "order_ids 必须是数组"}), 422
+    try:
+        orders = _selected_purchase_tracking_rows(order_ids)
+        user = dict(session.get("workbench_user") or {})
+
+        def update_order(order_id, tracking_number, logistics_company):
+            changes = {"purchase_tracking": tracking_number}
+            if str(logistics_company or "").strip():
+                changes["logistics_company"] = logistics_company
+            return bit_db_api.bulk_update_orders(
+                [order_id],
+                operator_id=user.get("id"),
+                operator_name=user.get("display_name") or user.get("username") or "",
+                **changes,
+            )
+
+        state = purchase_tracking_sync_manager.start(
+            platform=str(data.get("platform") or "").strip().lower(),
+            account=str(data.get("account") or "").strip(),
+            password=str(data.get("password") or ""),
+            orders=orders,
+            update_order=update_order,
+        )
+    except (ValueError, RuntimeError) as exc:
+        return jsonify({"status": "error", "message": str(exc)}), 400
+    return jsonify({
+        "status": "success",
+        "message": "已打开采购平台，正在准备同步",
+        "data": state,
+    }), 202
+
+
+@app.route('/api/orders/purchase-tracking/status', methods=['GET'])
+@login_required
+def api_purchase_tracking_status():
+    response = jsonify({
+        "status": "success",
+        "data": purchase_tracking_sync_manager.status(),
+    })
+    response.headers["Cache-Control"] = "no-store"
+    return response
 
 
 @app.route('/api/orders/print', methods=['POST'])
@@ -6837,6 +7200,7 @@ def api_start_order_sync():
     if not isinstance(token_ids, list):
         return jsonify({"status": "error", "message": "token_ids 必须是数组"}), 422
     try:
+        token_ids = _scoped_token_ids(token_ids)
         result = bit_db_api.start_order_sync(
             start_date=str(data.get("start_date") or "").strip(),
             end_date=str(data.get("end_date") or "").strip(),
@@ -6873,10 +7237,21 @@ def api_order_sync_status():
 @login_required
 def api_store_links():
     try:
-        token_text = str(request.args.get("token_id") or "").strip()
+        requested_token_ids = [
+            int(value) for value in request.args.getlist("token_id")
+            if str(value or "").isdigit() and int(value) > 0
+        ]
+        scoped_token_ids = _authorized_token_ids_for_user()
+        if scoped_token_ids is not None:
+            requested_token_ids = [
+                value for value in requested_token_ids if value in scoped_token_ids
+            ]
         data = bit_db_api.list_mercado_store_links(
             search=str(request.args.get("search") or "").strip(),
-            token_id=int(token_text) if token_text else None,
+            token_id=requested_token_ids[0] if len(requested_token_ids) == 1 else None,
+            filter_token_ids=requested_token_ids if len(requested_token_ids) > 1 else None,
+            **({"token_ids": sorted(scoped_token_ids)}
+               if scoped_token_ids is not None else {}),
             site_id=str(request.args.get("site_id") or "").strip(),
             group_name=str(request.args.get("group_name") or "").strip(),
             status=str(request.args.get("status") or "").strip(),
@@ -6887,6 +7262,8 @@ def api_store_links():
                 request.args.get("mercado_category") or ""
             ).strip(),
             sales_sort=str(request.args.get("sales_sort") or "desc").strip(),
+            sort_by=str(request.args.get("sort_by") or "sold_quantity").strip(),
+            sort_order=str(request.args.get("sort_order") or "").strip(),
             current_only=str(request.args.get("current_only") or "1").strip().lower()
             not in ("0", "false", "no", "off"),
             page=_parse_int_param(request.args, "page", 1, 1, 1000000),
@@ -7061,6 +7438,7 @@ def api_start_store_link_sync():
     if not isinstance(token_ids, list):
         return jsonify({"status": "error", "message": "token_ids 必须是数组"}), 422
     try:
+        token_ids = _scoped_token_ids(token_ids)
         result = bit_db_api.start_store_link_sync(token_ids)
     except ValueError as exc:
         return jsonify({"status": "error", "message": str(exc)}), 400
@@ -7092,12 +7470,16 @@ def api_store_link_sync_status():
 @login_required
 def api_prohibited_listings():
     try:
-        token_text = str(request.args.get("token_id") or "").strip()
+        token_ids = [
+            int(value) for value in request.args.getlist("token_id")
+            if str(value or "").isdigit() and int(value) > 0
+        ]
         data = bit_db_api.list_mercado_prohibited_listings(
             search=str(request.args.get("search") or "").strip(),
-            token_id=int(token_text) if token_text else None,
+            token_id=token_ids[0] if len(token_ids) == 1 else None,
+            token_ids=token_ids if len(token_ids) > 1 else None,
             site_id=str(request.args.get("site_id") or "").strip(),
-            salesperson=str(request.args.get("salesperson") or "").strip(),
+            salesperson=_scoped_salesperson(request.args.get("salesperson")),
             group_name=str(request.args.get("group_name") or "").strip(),
             risk_type=str(request.args.get("risk_type") or "").strip(),
             occurred_from=str(request.args.get("occurred_from") or "").strip(),
@@ -7233,12 +7615,16 @@ def api_export_prohibited_listings():
     """Export all prohibited-listings rows matching the current filters."""
 
     try:
-        token_text = str(request.args.get("token_id") or "").strip()
+        token_ids = [
+            int(value) for value in request.args.getlist("token_id")
+            if str(value or "").isdigit() and int(value) > 0
+        ]
         filters = {
             "search": str(request.args.get("search") or "").strip(),
-            "token_id": int(token_text) if token_text else None,
+            "token_id": token_ids[0] if len(token_ids) == 1 else None,
+            "token_ids": token_ids if len(token_ids) > 1 else None,
             "site_id": str(request.args.get("site_id") or "").strip(),
-            "salesperson": str(request.args.get("salesperson") or "").strip(),
+            "salesperson": _scoped_salesperson(request.args.get("salesperson")),
             "group_name": str(request.args.get("group_name") or "").strip(),
             "risk_type": str(request.args.get("risk_type") or "").strip(),
             "occurred_from": str(request.args.get("occurred_from") or "").strip(),
@@ -7261,7 +7647,7 @@ def api_start_prohibited_listing_sync():
     if not isinstance(token_ids, list):
         return jsonify({"status": "error", "message": "token_ids 必须是数组"}), 422
     try:
-        salesperson = str(data.get("salesperson") or "").strip()
+        salesperson = _scoped_salesperson(data.get("salesperson"))
         if not sync_all and not token_ids and salesperson:
             token_rows = (bit_db_api.list_mercado_store_tokens() or {}).get("rows") or []
             token_ids = [
@@ -7622,6 +8008,8 @@ def api_daily_task_options():
                 groups.append(str(setting.get("group_name") or "").strip())
     except Exception:
         logging.exception("从店铺授权读取任务模块业务员和店铺组失败")
+    if workbench_user_own_store_only():
+        salespeople = [workbench_user_salesperson()]
     unique_salespeople = sorted(
         {name for name in salespeople if name},
         key=lambda value: value.casefold(),
@@ -7644,6 +8032,7 @@ def api_daily_task_options():
 def api_daily_task_status():
     requested_task_id = str(request.args.get("task_id") or "").strip()
     if request.args.get("execution_target") == "agent":
+        get_local_agent_store().reap_expired_jobs()
         get_local_agent_store().prune_job_history(
             retention_seconds=_daily_task_log_retention_days() * 24 * 60 * 60,
             job_type="daily_task",
@@ -7767,6 +8156,7 @@ def api_local_agent_enroll():
             agent_version=data.get("agent_version"),
             business_version="",
             capabilities=data.get("capabilities") or ("appeal",),
+            session_id=data.get("session_id"),
         )
     except ValueError as exc:
         return jsonify({"status": "error", "message": str(exc)}), 400
@@ -7791,6 +8181,8 @@ def api_local_agent_heartbeat():
             agent_version=data.get("agent_version"),
             business_version=data.get("business_version"),
             capabilities=data.get("capabilities") or ("appeal",),
+            session_id=data.get("session_id"),
+            current_job_id=data.get("current_job_id"),
         )
         bundle = current_local_agent_bundle()
         claims = getattr(g, "local_agent_claims", {}) or {}
@@ -7824,7 +8216,10 @@ def api_local_agent_claim_job():
     data = request.get_json(silent=True) or {}
     try:
         agent_id = _agent_request_identity(data)
-        job = get_local_agent_store().claim_job(agent_id)
+        job = get_local_agent_store().claim_job(
+            agent_id,
+            session_id=data.get("session_id"),
+        )
         return jsonify({"status": "success", "data": {"job": job}})
     except PermissionError as exc:
         return jsonify({"status": "error", "message": str(exc)}), 403
@@ -7964,6 +8359,7 @@ def enrich_agents_with_logout_status(agents, anomaly_data):
 @login_required
 def api_execution_agents():
     requested_capability = str(request.args.get("capability") or "appeal").strip()
+    get_local_agent_store().reap_expired_jobs()
     agents = get_local_agent_store().list_agents(
         online_seconds=LOCAL_AGENT_ONLINE_SECONDS,
         capability=(
@@ -7993,6 +8389,40 @@ def api_execution_agents():
             "login_status_error": login_status_error,
         },
     })
+    response.headers["Cache-Control"] = "no-store"
+    return response
+
+
+@app.route('/api/ad-analysis', methods=['GET'])
+@login_required
+def api_ad_analysis():
+    try:
+        requested_token_ids = [
+            int(value) for value in request.args.getlist("token_ids")
+            if str(value or "").isdigit() and int(value) > 0
+        ]
+        allowed_token_ids = _authorized_token_ids_for_user()
+        token_ids = (
+            (requested_token_ids or None)
+            if allowed_token_ids is None
+            else [
+                token_id for token_id in (requested_token_ids or sorted(allowed_token_ids))
+                if token_id in allowed_token_ids
+            ]
+        )
+        data = bit_db_api.get_mercado_ad_analysis(
+            date_from=str(request.args.get("date_from") or "").strip(),
+            date_to=str(request.args.get("date_to") or "").strip(),
+            token_ids=token_ids,
+            force=str(request.args.get("force") or "").strip().lower()
+            in {"1", "true", "yes", "on"},
+        )
+    except ValueError as exc:
+        return jsonify({"status": "error", "message": str(exc)}), 400
+    except Exception as exc:
+        logging.exception("广告分析加载失败")
+        return jsonify({"status": "error", "message": f"广告分析加载失败：{exc}"}), 502
+    response = jsonify({"status": "success", "data": data})
     response.headers["Cache-Control"] = "no-store"
     return response
 
@@ -8040,12 +8470,17 @@ def api_download_local_agent():
 def stream_local_agent_job(job_id):
     event_id = 0
     last_heartbeat = time.monotonic()
+    last_lease_reap = 0.0
     while True:
         events = get_local_agent_store().events_after(job_id, event_id)
         for event in events:
             event_id = max(event_id, int(event["event_id"]))
             if event.get("content"):
                 yield get_local_agent_store().render_event_content(event)
+        now = time.monotonic()
+        if now - last_lease_reap >= 10:
+            get_local_agent_store().reap_expired_jobs()
+            last_lease_reap = now
         job = get_local_agent_store().get_job(job_id)
         if not job:
             yield "Agent 任务记录不存在\n"
@@ -8054,7 +8489,6 @@ def stream_local_agent_job(job_id):
             if job.get("status") == "error" and job.get("message"):
                 yield f"任务失败：{job['message']}\n"
             return
-        now = time.monotonic()
         if not events and now - last_heartbeat >= APPEAL_STREAM_HEARTBEAT_SECONDS:
             yield "\n"
             last_heartbeat = now
@@ -8368,11 +8802,57 @@ def api_zying_collection_categories():
     try:
         return jsonify({
             "status": "success",
-            "data": db_list_zying_risk_categories(),
+            "data": list_zying_collection_categories(),
         })
     except Exception as exc:
         logging.error("读取智赢产品采集分类失败：%s", exc)
         return jsonify({"status": "error", "message": str(exc)}), 500
+
+
+@app.route('/api/zying-collection/developers', methods=['GET', 'POST'])
+@login_required
+def api_zying_collection_developers():
+    try:
+        if request.method == "POST":
+            params = build_zying_login_params(request.get_json(silent=True) or {})
+            bit_zying_caiji.capture_zying_login_from_browser(
+                **params,
+                validate=False,
+            )
+        rows = bit_zying_caiji.list_zying_product_developers()
+        synced = db_sync_zying_product_developers(rows)
+        return jsonify({
+            "status": "success",
+            "data": {"rows": rows, "synced": synced},
+        })
+    except Exception as exc:
+        logging.error("读取智赢产品开发人员失败：%s", exc)
+        return jsonify({"status": "error", "message": str(exc)}), 400
+
+
+@app.route('/api/zying-collection/options/refresh', methods=['POST'])
+@login_required
+def api_refresh_zying_collection_options():
+    """Refresh categories and developers together from the selected live page."""
+    try:
+        params = build_zying_login_params(request.get_json(silent=True) or {})
+        data = bit_zying_caiji.refresh_zying_collection_options_from_browser(
+            **params
+        )
+        developers = data.get("developers") or []
+        synced = db_sync_zying_product_developers(developers)
+        return jsonify({
+            "status": "success",
+            "data": {
+                "categories": data.get("categories") or [],
+                "developers": developers,
+                "auth": data.get("auth") or {},
+                "synced": synced,
+            },
+        })
+    except Exception as exc:
+        logging.error("从当前智赢网页更新产品分类和产品开发失败：%s", exc)
+        return jsonify({"status": "error", "message": str(exc)}), 400
 
 
 @app.route('/api/zying-collection/auth/open', methods=['POST'])
@@ -9780,6 +10260,7 @@ def api_mercado_products():
                 return jsonify({"status": "error", "message": "product_item_ids 必须是数组"}), 422
             result = db_delete_mercado_product_items(item_ids)
             return jsonify({"status": "success", "data": result})
+        scoped_token_ids = _authorized_token_ids_for_user()
         result = db_list_mercado_product_items(
             search=str(request.args.get("search") or "").strip(),
             limit=_parse_int_param(request.args, "limit", 500, 1, 1000),
@@ -9802,6 +10283,12 @@ def api_mercado_products():
             mercado_category=str(
                 request.args.get("mercado_category") or ""
             ).strip(),
+            **({"zying_category": str(request.args.get("zying_category") or "").strip()}
+               if str(request.args.get("zying_category") or "").strip() else {}),
+            **({"product_developer_id": str(request.args.get("product_developer_id") or "").strip()}
+               if str(request.args.get("product_developer_id") or "").strip() else {}),
+            **({"token_ids": sorted(scoped_token_ids)}
+               if scoped_token_ids is not None else {}),
         )
         return jsonify({"status": "success", "data": result})
     except ValueError as exc:
@@ -10746,6 +11233,11 @@ def api_refresh_mercado_shipping_rates():
 @login_required
 def api_mercado_product_publish_records():
     try:
+        scoped_token_ids = _authorized_token_ids_for_user()
+        selected_token_ids = [
+            int(value) for value in request.args.getlist("token_id")
+            if str(value or "").isdigit() and int(value) > 0
+        ]
         result = db_list_mercado_product_publish_records(
             search=str(request.args.get("search") or "").strip(),
             status=str(request.args.get("status") or "").strip(),
@@ -10756,6 +11248,9 @@ def api_mercado_product_publish_records():
             end_date=str(request.args.get("end_date") or "").strip(),
             limit=_parse_int_param(request.args, "limit", 500, 1, 1000),
             offset=_parse_int_param(request.args, "offset", 0, 0, 1000000),
+            **({"filter_token_ids": selected_token_ids} if selected_token_ids else {}),
+            **({"token_ids": sorted(scoped_token_ids)}
+               if scoped_token_ids is not None else {}),
         )
         with _mercado_publish_lock:
             result["publish_running"] = bool(_mercado_publish_state.get("running"))
@@ -11069,6 +11564,18 @@ def api_db_mercado_products():
         mercado_category=str(
             request.args.get("mercado_category") or ""
         ).strip(),
+        **({"zying_category": str(request.args.get("zying_category") or "").strip()}
+           if str(request.args.get("zying_category") or "").strip() else {}),
+        **({"product_developer_id": str(request.args.get("product_developer_id") or "").strip()}
+           if str(request.args.get("product_developer_id") or "").strip() else {}),
+        token_ids=[
+            int(value) for value in request.args.getlist("token_ids")
+            if str(value or "").isdigit() and int(value) > 0
+        ] if "token_ids" in request.args else None,
+        filter_token_ids=[
+            int(value) for value in request.args.getlist("filter_token_ids")
+            if str(value or "").isdigit() and int(value) > 0
+        ],
     )
     return jsonify({"status": "success", "data": result})
 
@@ -11109,6 +11616,10 @@ def api_db_mercado_product_publish_records():
         end_date=str(request.args.get("end_date") or "").strip(),
         limit=_parse_int_param(request.args, "limit", 500, 1, 1000),
         offset=_parse_int_param(request.args, "offset", 0, 0, 1000000),
+        token_ids=[
+            int(value) for value in request.args.getlist("token_ids")
+            if str(value or "").isdigit() and int(value) > 0
+        ] if "token_ids" in request.args else None,
     )
     return jsonify({"status": "success", "data": result})
 
@@ -12028,6 +12539,20 @@ def api_db_upsert_zying_product_list():
     return jsonify({"status": "success", "data": result})
 
 
+@app.route('/api/db/zying-products/developers/sync', methods=['POST'])
+@internal_api_required
+def api_db_sync_zying_product_developers():
+    blocked = reject_db_api_client_mode()
+    if blocked:
+        return blocked
+    data = request.get_json(silent=True) or {}
+    rows = data.get("rows") or []
+    if not isinstance(rows, list):
+        return jsonify({"status": "error", "message": "rows 必须是数组"}), 400
+    result = db_sync_zying_product_developers(rows)
+    return jsonify({"status": "success", "data": result})
+
+
 @app.route('/api/db/zying-risk/candidates', methods=['GET'])
 @internal_api_required
 def api_db_zying_risk_candidates():
@@ -12419,10 +12944,19 @@ def api_db_store_links():
     if blocked:
         return blocked
     try:
+        filter_token_ids = [
+            int(value) for value in request.args.getlist("filter_token_ids")
+            if str(value or "").isdigit() and int(value) > 0
+        ]
         token_text = str(request.args.get("token_id") or "").strip()
         data = db_list_mercado_store_links(
             search=str(request.args.get("search") or "").strip(),
             token_id=int(token_text) if token_text else None,
+            filter_token_ids=filter_token_ids,
+            token_ids=[
+                int(value) for value in request.args.getlist("token_ids")
+                if str(value or "").isdigit() and int(value) > 0
+            ] if "token_ids" in request.args else None,
             site_id=str(request.args.get("site_id") or "").strip(),
             group_name=str(request.args.get("group_name") or "").strip(),
             status=str(request.args.get("status") or "").strip(),
@@ -12433,10 +12967,36 @@ def api_db_store_links():
                 request.args.get("mercado_category") or ""
             ).strip(),
             sales_sort=str(request.args.get("sales_sort") or "desc").strip(),
+            sort_by=str(request.args.get("sort_by") or "sold_quantity").strip(),
+            sort_order=str(request.args.get("sort_order") or "").strip(),
             current_only=str(request.args.get("current_only") or "1").strip().lower()
             not in ("0", "false", "no", "off"),
             page=_parse_int_param(request.args, "page", 1, 1, 1000000),
             page_size=_parse_int_param(request.args, "page_size", 500, 1, 1000),
+        )
+    except ValueError as exc:
+        return jsonify({"status": "error", "message": str(exc)}), 400
+    return jsonify({"status": "success", "data": data})
+
+
+@app.route('/api/db/ad-analysis', methods=['GET'])
+@internal_api_required
+def api_db_ad_analysis():
+    blocked = reject_db_api_client_mode()
+    if blocked:
+        return blocked
+    try:
+        from bit.bit_ad_analysis import collect_ad_analysis
+
+        data = collect_ad_analysis(
+            date_from=str(request.args.get("date_from") or "").strip(),
+            date_to=str(request.args.get("date_to") or "").strip(),
+            token_ids=[
+                int(value) for value in request.args.getlist("token_ids")
+                if str(value or "").isdigit() and int(value) > 0
+            ] if "token_ids" in request.args else None,
+            force=str(request.args.get("force") or "").strip().lower()
+            in {"1", "true", "yes", "on"},
         )
     except ValueError as exc:
         return jsonify({"status": "error", "message": str(exc)}), 400
@@ -12528,10 +13088,15 @@ def api_db_prohibited_listings():
     from erp.mercadolibre_prohibited_store import list_prohibited_listings
 
     try:
+        token_ids = [
+            int(value) for value in request.args.getlist("token_ids")
+            if str(value or "").isdigit() and int(value) > 0
+        ]
         token_text = str(request.args.get("token_id") or "").strip()
         data = list_prohibited_listings(
             search=str(request.args.get("search") or "").strip(),
             token_id=int(token_text) if token_text else None,
+            token_ids=token_ids,
             site_id=str(request.args.get("site_id") or "").strip(),
             salesperson=str(request.args.get("salesperson") or "").strip(),
             group_name=str(request.args.get("group_name") or "").strip(),
@@ -12615,6 +13180,23 @@ def api_db_bulk_update_orders():
     except ValueError as exc:
         return jsonify({"status": "error", "message": str(exc)}), 400
     return jsonify({"status": "success", "data": result})
+
+
+@app.route('/api/db/orders/purchase-tracking', methods=['POST'])
+@internal_api_required
+def api_db_purchase_tracking_orders():
+    blocked = reject_db_api_client_mode()
+    if blocked:
+        return blocked
+    data = request.get_json(silent=True) or {}
+    order_ids = data.get("order_ids") or []
+    if not isinstance(order_ids, list):
+        return jsonify({"status": "error", "message": "order_ids must be an array"}), 422
+    try:
+        rows = bit_order_sync.bit_mysql.get_mercado_purchase_tracking_orders(order_ids)
+    except ValueError as exc:
+        return jsonify({"status": "error", "message": str(exc)}), 400
+    return jsonify({"status": "success", "data": rows})
 
 
 @app.route('/api/db/orders/labels', methods=['POST'])
@@ -13030,9 +13612,17 @@ def api_window_anomalies():
         anomaly_data = filter_shop_status_anomalies(
             db_get_window_anomalies(active_only, limit)
         )
+        anomaly_data = enrich_window_anomaly_salespersons(anomaly_data)
+        if workbench_user_own_store_only():
+            owner = workbench_user_salesperson().casefold()
+            anomaly_data["rows"] = [
+                row for row in anomaly_data.get("rows") or []
+                if str(row.get("salesperson") or "").strip().casefold() == owner
+            ]
+            anomaly_data["total"] = len(anomaly_data["rows"])
         response = jsonify({
             "status": "success",
-            "data": enrich_window_anomaly_salespersons(anomaly_data),
+            "data": anomaly_data,
         })
         response.headers["Cache-Control"] = "no-store"
         return response
@@ -13617,7 +14207,9 @@ def api_mercado_application(application_id):
 @login_required
 def api_list_mercado_tokens():
     try:
-        data = bit_db_api.list_mercado_store_tokens()
+        data = _filter_mercado_tokens_for_user(
+            bit_db_api.list_mercado_store_tokens() or {}
+        )
         return jsonify({"status": "success", "data": data})
     except Exception as exc:
         return _mercado_token_error_response(exc)
@@ -14108,6 +14700,28 @@ def api_refresh_all_mercado_reputation():
         ):
             return jsonify({"status": "error", "message": "请至少选择一家店铺"}), 400
         selected_shops = list(dict.fromkeys(shop.strip() for shop in selected_shops))
+    if workbench_user_own_store_only():
+        token_rows = _filter_mercado_tokens_for_user(
+            bit_db_api.list_mercado_store_tokens() or {}
+        ).get("rows") or []
+        allowed_names = {
+            str(value or "").strip()
+            for token in token_rows
+            for value in (token.get("display_name"), token.get("nickname"))
+            if str(value or "").strip()
+        }
+        if selected_shops and not set(selected_shops).issubset(allowed_names):
+            return jsonify({
+                "status": "error",
+                "message": "当前角色不能更新其他成员的店铺数据",
+            }), 403
+        if not selected_shops:
+            selected_shops = sorted(allowed_names)
+        if not selected_shops:
+            return jsonify({
+                "status": "error",
+                "message": "当前账号暂无本人名下店铺",
+            }), 400
     if not _start_api_reputation_refresh(selected_shops=selected_shops):
         return jsonify({
             "status": "running",

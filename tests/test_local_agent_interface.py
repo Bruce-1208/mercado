@@ -81,10 +81,12 @@ def test_console_download_enroll_heartbeat_and_list(agent_interface, monkeypatch
             "name": "办公室电脑",
             "business_version": "bundle-test",
             "capabilities": ["appeal"],
+            "session_id": "session-interface-test",
         },
     )
     assert heartbeat.status_code == 200
     assert heartbeat.get_json()["data"]["bundle"]["version"] == "bundle-test"
+    assert store.get_agent("agent-office-pc")["session_id"] == "session-interface-test"
 
     database_health = client.get(
         "/api/db/health",
