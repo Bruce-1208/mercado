@@ -1,17 +1,29 @@
 {
   "manifest_version": 3,
-  "name": "泽顺商品采集助手",
-  "version": "1.1.1",
-  "description": "在 Mercado Libre 商品页一键采集商品到武汉泽顺综合服务台。",
+  "name": "泽顺插件",
+  "version": "1.3.0",
+  "description": "在 Mercado Libre、1688 与智赢产品页采集商品，并同步采购订单物流号到泽顺控制台。",
   "permissions": [
     "alarms",
     "contextMenus",
+    "cookies",
+    "scripting",
     "storage",
     "tabs"
   ],
   "host_permissions": [
     "http://127.0.0.1/*",
     "http://localhost/*",
+    "https://*.1688.com/*",
+    "https://*.alicdn.com/*",
+    "https://*.taobao.com/*",
+    "https://*.tmall.com/*",
+    "https://*.yangkeduo.com/*",
+    "https://*.pinduoduo.com/*",
+    "https://*.goofish.com/*",
+    "https://*.xianyu.com/*",
+    "https://meli.zying.net/*",
+    "https://seller.zying.net/*",
     "https://*.mercadolibre.com.mx/*",
     "https://*.mercadolibre.com.br/*",
     "https://*.mercadolivre.com.br/*",
@@ -28,7 +40,7 @@
     "service_worker": "background.js"
   },
   "action": {
-    "default_title": "采集到泽顺控制台",
+    "default_title": "泽顺商品采集助手",
     "default_popup": "popup.html"
   },
   "options_page": "options.html",
@@ -49,6 +61,42 @@
       ],
       "css": [
         "content.css"
+      ],
+      "run_at": "document_idle"
+    },
+    {
+      "matches": [
+        "https://*.1688.com/*"
+      ],
+      "js": [
+        "content-1688.js"
+      ],
+      "css": [
+        "content.css"
+      ],
+      "run_at": "document_idle"
+    },
+    {
+      "matches": [
+        "https://meli.zying.net/*"
+      ],
+      "js": [
+        "content-zying.js"
+      ],
+      "run_at": "document_idle"
+    },
+    {
+      "matches": [
+        "https://*.1688.com/*",
+        "https://*.taobao.com/*",
+        "https://*.tmall.com/*",
+        "https://*.yangkeduo.com/*",
+        "https://*.pinduoduo.com/*",
+        "https://*.goofish.com/*",
+        "https://*.xianyu.com/*"
+      ],
+      "js": [
+        "purchase-tracking-content.js"
       ],
       "run_at": "document_idle"
     }

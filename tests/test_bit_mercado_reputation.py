@@ -13,10 +13,66 @@ from bit.mercado_reputation import (
     REPUTATION_PATH,
     RIGHTS_HOLDER_CASES_PATH,
     SEVEN_DAY_RATE_DISCLAIMER,
+    _merge_site_status,
+    _site_status,
     enrich_reputation_with_official_data,
     fetch_reputation_payload,
     fetch_store_reputation,
 )
+
+
+def test_official_user_status_reports_restriction_without_inventing_ban_days():
+    status = _site_status({
+        "status": {
+            "site_status": "active",
+            "sell": {"allow": False, "codes": ["policy_suspension"]},
+            "list": {"allow": False, "codes": []},
+        },
+    })
+
+    assert status["account_status"] == "restricted"
+    assert status["site_status_display"] == "暂停销售（官方 API 未提供封禁期限）"
+    assert status["status_codes"] == ["policy_suspension"]
+    assert status["suspension_days"] is None
+    assert status["site_status_source"] == "official_users_api"
+
+
+def test_public_active_marketplace_status_is_not_treated_as_confirmed_normal():
+    status = _site_status({"status": {"site_status": "active"}})
+
+    assert status["account_status"] == "unknown"
+    assert status["site_status_display"] == "状态未确认（官方 API 仅返回公开 active）"
+    assert status["sell_allowed"] is None
+    assert status["list_allowed"] is None
+
+
+def test_private_active_status_with_sell_and_list_permissions_is_normal():
+    status = _site_status({
+        "status": {
+            "site_status": "active",
+            "sell": {"allow": True},
+            "list": {"allow": True},
+        },
+    })
+
+    assert status["account_status"] == "normal"
+    assert status["site_status_display"] == "正常"
+
+
+def test_global_user_restriction_overrides_public_active_marketplace_status():
+    local_status = _site_status({"status": {"site_status": "active"}})
+    global_status = _site_status({
+        "status": {
+            "site_status": "active",
+            "sell": {"allow": False, "codes": ["global_restriction"]},
+        },
+    })
+
+    merged = _merge_site_status(local_status, global_status)
+
+    assert merged["account_status"] == "restricted"
+    assert merged["site_status_display"] == "暂停销售（官方 API 未提供封禁期限）"
+    assert merged["status_codes"] == ["global_restriction"]
 
 
 class FakeResponse:
@@ -196,7 +252,50 @@ def test_official_supplement_uses_orders_status_infractions_and_rights_holder_ap
         "/marketplace/moderations/infractions/seller-mlm"
     )
     assert http.gets[2][1]["params"]["seller"] == "seller-mlm"
+    assert http.gets[2][1]["params"]["site"] == "MLM"
+    assert http.gets[3][1]["params"]["site"] == "MLM"
     assert http.gets[4][1]["params"]["date_created_since"] == "2026-05-27"
+
+
+def test_official_gradient_filters_each_marketplace_site_independently():
+    http = FakeSession([
+        FakeResponse({"cases": [], "paging": {"total": 0, "limit": 50}}),
+        FakeResponse({"site_status": "active"}),
+        FakeResponse({"paging": {"total": 20}}),
+        FakeResponse({"paging": {"total": 10}}),
+        FakeResponse({"paging": {"total": 0}}),
+        FakeResponse({"site_status": "active"}),
+        FakeResponse({"paging": {"total": 5}}),
+        FakeResponse({"paging": {"total": 15}}),
+        FakeResponse({"paging": {"total": 0}}),
+    ])
+    rows = [
+        {"user_id": "seller-mx", "site_id": "MLM"},
+        {"user_id": "seller-br", "site_id": "MLB"},
+    ]
+
+    enrich_reputation_with_official_data(
+        rows,
+        "official-token",
+        now=datetime(2026, 9, 4, 0, 0, tzinfo=timezone.utc),
+        http=http,
+    )
+
+    assert [(row["site_id"], row["gradient_rate"]) for row in rows] == [
+        ("MLM", "-50%"),
+        ("MLB", "200%"),
+    ]
+    order_params = [
+        kwargs["params"]
+        for url, kwargs in http.gets
+        if url.endswith(ORDERS_SEARCH_PATH)
+    ]
+    assert [(params["seller"], params["site"]) for params in order_params] == [
+        ("seller-mx", "MLM"),
+        ("seller-mx", "MLM"),
+        ("seller-br", "MLB"),
+        ("seller-br", "MLB"),
+    ]
 
 
 def test_official_gradient_is_not_overwritten_by_browser_auxiliary():
@@ -228,7 +327,7 @@ def test_official_gradient_is_not_overwritten_by_browser_auxiliary():
     assert database_rows[0][11] == "[1,2,3]"
 
 
-def test_browser_restriction_overrides_false_active_api_status():
+def test_traffic_auxiliary_does_not_override_official_api_account_status():
     notice = (
         "Your account has been suspended for selling\n"
         "(Today, at 02:10)\n"
@@ -257,13 +356,10 @@ def test_browser_restriction_overrides_false_active_api_status():
         api_rows, database_rows, auxiliary_rows
     )
 
-    assert api_rows[0]["account_status"] == "temporarily_suspended"
-    assert api_rows[0]["suspension_until"] == "21 of September, 06h10"
-    assert api_rows[0]["site_status_display"].startswith("暂时停售（")
-    assert "剩余" in api_rows[0]["site_status_display"]
-    assert "至 21 of September, 06h10" in api_rows[0]["site_status_display"]
-    assert database_rows[0][9] == notice
-    assert database_rows[0][12] == api_rows[0]["site_status_display"]
+    assert "account_status" not in api_rows[0]
+    assert api_rows[0]["site_status_display"] == "正常"
+    assert database_rows[0][9] == "正常"
+    assert database_rows[0][12] == "正常"
 
 
 def test_future_permanent_warning_is_not_current_permanent_suspension():
@@ -944,7 +1040,7 @@ def test_default_reputation_collection_uses_api_and_writes_legacy_table(monkeypa
     assert result["api_rows"][0]["infraction_count"] == 3
     assert result["api_rows"][0]["rights_holder_count"] == 2
     assert result["api_rows"][0]["infraction_recent_days"] == 100
-    assert database_calls[0][1] == {}
+    assert database_calls[0][1] == {"preserve_account_status": True}
     legacy_row = next(
         row for row in database_calls[0][0] if row[1] == "墨西哥"
     )
@@ -1048,6 +1144,7 @@ def test_selected_api_reputation_update_merges_only_returned_site(monkeypatch):
     assert kwargs == {
         "merge_latest": True,
         "replace_targets": [("选定店铺", "巴西")],
+        "preserve_account_status": True,
     }
 
 
@@ -1133,6 +1230,33 @@ def test_collection_options_keep_reputation_and_traffic_switches_independent(mon
     )
     assert parsed["selected_shops"] == ("仅声誉店铺",)
     assert parsed["selected_sites"] == ("墨西哥",)
+
+
+def test_account_status_update_does_not_open_browser_when_traffic_is_disabled(monkeypatch):
+    monkeypatch.setattr(
+        bit_reputation_info,
+        "list_config_rows",
+        lambda **_kwargs: (_ for _ in ()).throw(
+            AssertionError("未开启七天流量时不应读取或启动 BitBrowser")
+        ),
+    )
+    tokens = [{
+        "id": 1,
+        "display_name": "API 状态店铺",
+        "nickname": "API_ONLY",
+        "site_settings": [{
+            "site_id": "MLM",
+            "reputation_update_enabled": True,
+            "visit_stats_enabled": False,
+        }],
+    }]
+    api_rows = [{
+        "store_name": "API 状态店铺",
+        "site_id": "MLM",
+        "site_name": "墨西哥",
+    }]
+
+    assert bit_reputation_info._api_auxiliary_config_rows(tokens, api_rows) == []
 
 
 def test_hybrid_collection_merges_browser_traffic_without_reputation_page(monkeypatch):
@@ -1280,6 +1404,7 @@ def test_hybrid_collection_merges_browser_traffic_without_reputation_page(monkey
             {"visit_site_codes": ["MLM"]},
         ),
     ]
+    assert database_calls[0][1] == {"preserve_account_status": True}
     legacy_row = next(
         row for row in database_calls[0][0] if row[1] == "墨西哥"
     )
@@ -1295,7 +1420,7 @@ def test_hybrid_collection_merges_browser_traffic_without_reputation_page(monkey
     assert legacy_row[7:10] == [
         "增长",
         "12%",
-        "浏览器告警不应使用",
+        "正常",
     ]
     assert legacy_row[10] != "2026-08-27 23:10:00"
     assert legacy_row[11] == "[11, 22, 33]"

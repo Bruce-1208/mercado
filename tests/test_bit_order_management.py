@@ -96,6 +96,18 @@ def test_order_detail_contains_weight_quote_ui():
     assert b"function loadOrderWeightQuote(orderIds)" in response.data
 
 
+def test_order_detail_can_start_inventory_inbound_with_order_context():
+    response = _client().get("/")
+
+    assert response.status_code == 200
+    assert b'id="order-detail-inbound-button"' in response.data
+    assert b"function openOrderInboundFromDetail()" in response.data
+    assert b"function orderInboundMatches(row)" in response.data
+    assert b'openInventoryMovementDialog("inbound", 0, matches)' in response.data
+    assert "业务员 ${row.salesperson}".encode("utf-8") in response.data
+    assert b"inventory-movement-quantity" in response.data
+
+
 def test_order_management_displays_pack_number_without_exposing_child_number():
     response = _client().get("/")
 

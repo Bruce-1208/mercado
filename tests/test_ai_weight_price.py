@@ -246,8 +246,8 @@ def test_flow_matched_send_poll_validate_save(service):
     saved=service.store.get("g1")
     assert saved["status"]=="success" and saved["weight_g"]=="450"
     assert len(browser.written)==1 and saved["erp_before"]["net_income_usd"]=="10"
-    assert saved["cost_price"] == "12.50" and saved["net_income_usd"] == "2"
-    assert saved["write_intent"]["net_income_usd"] == "2"
+    assert saved["cost_price"] == "12.50" and saved["net_income_usd"] == "10"
+    assert "net_income_usd" not in saved["write_intent"]
 
 
 def test_selected_variant_final_price_is_used_instead_of_minimum(service):
@@ -262,9 +262,25 @@ def test_selected_variant_final_price_is_used_instead_of_minimum(service):
     service.process(row, browser, model, validate({"writeback_enabled": True}))
     saved = service.store.get("g1")
     assert saved["status"] == "success"
-    assert saved["cost_price"] == "22" and saved["net_income_usd"] == "4"
+    assert saved["cost_price"] == "22" and saved["net_income_usd"] == "10"
     assert saved["supplier_price_evidence"]["variant_surcharge_cny"] == "2"
     assert len(browser.written) == 1
+
+
+def test_lower_calculated_net_income_keeps_original_and_only_writes_weight(service):
+    row = task(service.store, matched=True, weight_g="450")
+    browser = FakeBrowser()
+    service.finish(row, browser, validate({"writeback_enabled": True, "usd_cny_rate": "7.2"}))
+    saved = service.store.get("g1")
+    assert saved["status"] == "success"
+    assert saved["net_income_usd"] == "10"
+    assert saved["weight_g"] == "450"
+    assert saved["pricing"]["calculated_net_income_usd"] == "2"
+    assert saved["pricing"]["net_income_writeback_usd"] == "10"
+    assert saved["pricing"]["net_income_retained_original"] is True
+    assert "net_income_usd" not in saved["write_intent"]
+    assert "仅修改重量" in saved["pricing"]["net_income_adjustment"]
+    assert saved["decision_reason"] == saved["pricing"]["net_income_adjustment"]
 
 
 def test_exchange_failure_never_writes_and_edit_clears_old_conversion(service, monkeypatch):

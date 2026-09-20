@@ -63,3 +63,33 @@ def usd_cost(cost_price, rate):
             "unrounded_usd": str(Decimal(quotient.numerator) / Decimal(quotient.denominator)), "net_income_usd": str(rounded),
             "exchange_rate": rate,
             "rounding": "ceiling_to_integer_usd", "target_field": "netproceed"}
+
+
+def protect_net_income(original, pricing):
+    """Keep the existing ERP net income when the new calculation is lower.
+
+    ``pricing.net_income_usd`` remains the calculated value for audit/display;
+    ``net_income_writeback_usd`` is the value that may be written to ERP.
+    Keeping both values makes the protective decision explicit in the UI and
+    exported execution report.
+    """
+    result = dict(pricing)
+    calculated = number(result["net_income_usd"], allow_zero=True)
+    result["calculated_net_income_usd"] = str(calculated)
+    result["net_income_writeback_usd"] = str(calculated)
+    result["net_income_retained_original"] = False
+    result["net_income_policy"] = "use_calculated"
+    try:
+        previous = number(original, allow_zero=True)
+    except ValueError:
+        return result
+    result["original_net_income_usd"] = str(previous)
+    if calculated < previous:
+        result["net_income_writeback_usd"] = str(previous)
+        result["net_income_retained_original"] = True
+        result["net_income_policy"] = "keep_original_if_calculated_lower"
+        result["net_income_adjustment"] = (
+            f"计算净收益 ${calculated} 低于原净收益 ${previous}，"
+            f"保留原净收益 ${previous}，仅修改重量"
+        )
+    return result

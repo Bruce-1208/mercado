@@ -14,7 +14,7 @@ from .config import Config, selection_key, selection_params
 from .credentials import api_key
 from .edge import debugger_identity, open_edge
 from .models import Models, number, validate_weight
-from .pricing import exchange_rate, usd_cost
+from .pricing import exchange_rate, protect_net_income, usd_cost
 from .store import CHINA, Store, COMPLETED
 from .supplier_adapter import SupplierAdaptationError
 
@@ -234,7 +234,14 @@ class Service:
                     config["run_scope"] = selection_key(selection, config)
                     if mode == "process" and not self.store.list(scope=config["run_scope"])["total"]:
                         raise ValueError("所选分类及页码范围尚无采集任务，请先点击“采集所选范围”")
-                config["max_items"] = 1 if task_id else max_items
+                # A resumed batch receives only its remaining work as
+                # ``max_items`` from the continue endpoint. Keep the original
+                # batch ceiling so processed_items can still reach the user's
+                # requested total (for example 100), rather than stopping at
+                # the remaining count (for example 92).
+                resuming_run = bool(resume and previous_run.get("run_id"))
+                config["max_items"] = (int(previous_run.get("max_items") or max_items)
+                                        if resuming_run else (1 if task_id else max_items))
                 config["run_id"] = previous_run.get("run_id") if resume and previous_run.get("run_id") else uuid.uuid4().hex
                 # A new range run must execute retained historical products
                 # again from the first selected card. A resume keeps completed
@@ -669,6 +676,17 @@ class Service:
                 return
             if task["status"] == "exception":
                 reason = "：".join(str(task.get(field) or "") for field in ("exception_reason", "exception_detail") if task.get(field))
+                # 1688 may expose the detail shell before its React SKU matrix
+                # is populated. Retry this readiness race in-place twice so a
+                # transient load does not consume a valid-result slot.
+                if re.search(r"1688新版详情.*(?:尚未|未完整).*加载", reason):
+                    retry_count = int(task.get("supplier_readiness_retries") or 0)
+                    if retry_count < 2:
+                        self.store.update(key, status="pending", stage="matched",
+                                          supplier_readiness_retries=retry_count + 1,
+                                          exception_reason="", exception_detail="")
+                        self.store.log(f"1688详情数据尚未就绪，已在当前商品内第 {retry_count + 1} 次重试", key, "WARNING")
+                        continue
                 if self.store.state("circuit") or self._needs_human_attention(reason):
                     if not self.store.state("circuit"):
                         self.circuit(f"商品 {key} 需要人工处理：{reason}")
@@ -892,8 +910,17 @@ class Service:
             if not task.get("erp_edit_url"):
                 raise ValueError("缺少从ERP页面采集的商品编辑地址")
             def before_save(old):
-                intent = {"net_income_usd": task["net_income_usd"], "pricing": pricing,
-                          "weight_g": task["weight_g"], "at": time.time()}
+                nonlocal task, pricing
+                pricing = protect_net_income(old.get("net_income_usd"), pricing)
+                if pricing.get("net_income_retained_original"):
+                    task["net_income_usd"] = pricing["net_income_writeback_usd"]
+                    task["pricing"] = pricing
+                    task = self.store.update(key, net_income_usd=task["net_income_usd"], pricing=pricing,
+                                             decision_status="success", decision_reason=pricing["net_income_adjustment"])
+                    self.store.log(pricing["net_income_adjustment"] + "；重量仍按新核验结果回填", key)
+                intent = {"pricing": pricing, "weight_g": task["weight_g"], "at": time.time()}
+                if not pricing.get("net_income_retained_original"):
+                    intent["net_income_usd"] = task["net_income_usd"]
                 history = self.store.get(key).get("write_history", [])
                 history.append({"before": old, "intent": intent, "after": None, "verified": False, "at": intent["at"]})
                 self.store.update(key, stage="writing", erp_before=old,

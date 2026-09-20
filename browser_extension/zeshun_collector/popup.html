@@ -3,26 +3,88 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>泽顺商品采集助手</title>
+  <title>泽顺插件</title>
   <link rel="stylesheet" href="popup.css">
 </head>
 <body>
   <header>
     <div class="logo">泽</div>
-    <div>
-      <h1>泽顺商品采集助手</h1>
-      <p>Chrome / Edge 通用</p>
+    <div class="brand-copy">
+      <h1>泽顺插件</h1>
+      <p>商品采集工作台</p>
     </div>
+    <span class="version">v1.3.0</span>
   </header>
   <main>
-    <div id="auth-status" class="auth-line">泽顺账号：正在检查…</div>
-    <div id="page-status" class="status">正在检查当前页面…</div>
-    <button id="collect" class="primary" type="button" disabled>采集当前商品</button>
-    <div class="queue-row">
-      <span>待传队列：<strong id="queue-count">0</strong></span>
-      <button id="retry" class="link-button" type="button">立即重试</button>
+    <div class="account-card">
+      <span class="account-dot"></span>
+      <div id="auth-status" class="auth-line">泽顺账号：正在检查…</div>
+    </div>
+    <nav class="mode-tabs" aria-label="插件功能">
+      <button id="product-mode" class="mode-tab active" type="button">商品采集</button>
+      <button id="zying-mode" class="mode-tab" type="button">智赢产品采集</button>
+      <button id="purchase-mode" class="mode-tab" type="button">订单物流</button>
+    </nav>
+    <div id="product-panel" class="mode-panel">
+      <section class="page-card">
+        <div class="page-card-heading">
+          <span>当前页面</span>
+          <span id="platform-badge" class="platform-badge" hidden>商品页</span>
+        </div>
+        <div id="page-status" class="status">正在检查当前页面…</div>
+        <button id="collect" class="primary" type="button" disabled><span>＋</span>采集当前商品</button>
+      </section>
+      <div class="queue-row">
+        <span>离线待传 <strong id="queue-count">0</strong> 件</span>
+        <button id="retry" class="link-button" type="button">立即重试</button>
+      </div>
+    </div>
+    <div id="zying-panel" class="mode-panel" hidden>
+      <section class="page-card zying-card">
+        <div class="page-card-heading">
+          <span>本地智赢网页</span>
+          <span class="platform-badge zying">智赢</span>
+        </div>
+        <div id="zying-page-status" class="status">请打开并登录智赢产品列表页。</div>
+        <button id="zying-refresh" class="secondary inline-action" type="button">读取当前网页分类与开发</button>
+        <div class="zying-grid">
+          <label>起始页<input id="zying-start-page" type="number" min="1" max="10000" value="1"></label>
+          <label>结束页<input id="zying-end-page" type="number" min="1" max="10000" value="1"></label>
+        </div>
+        <label class="zying-field">产品分类
+          <select id="zying-category"><option value="">全部分类</option></select>
+        </label>
+        <label class="zying-field">产品开发
+          <select id="zying-developer"><option value="">全部产品开发</option></select>
+        </label>
+        <div class="zying-actions">
+          <button id="zying-start" class="primary" type="button" disabled>启动产品采集</button>
+          <button id="zying-stop" class="danger" type="button" disabled>结束</button>
+        </div>
+        <div id="zying-task-status" class="zying-task-status">等待启动</div>
+        <div id="zying-summary" class="zying-summary">入库 0 · 已有跳过 0 · 重复 0</div>
+        <pre id="zying-log" class="zying-log">等待任务启动…</pre>
+      </section>
+    </div>
+    <div id="purchase-panel" class="mode-panel" hidden>
+      <section class="page-card purchase-card">
+        <div class="page-card-heading">
+          <span>采购订单物流同步</span>
+          <span class="platform-badge purchase">插件登录态</span>
+        </div>
+        <div id="purchase-page-status" class="status">正在检查控制台同步任务…</div>
+        <div id="purchase-task-meta" class="purchase-task-meta" hidden></div>
+        <div class="purchase-actions">
+          <button id="purchase-open-login" class="secondary inline-action" type="button" disabled>打开采购平台登录</button>
+          <button id="purchase-confirm-login" class="primary" type="button" disabled>确定登录并开始同步</button>
+        </div>
+        <div id="purchase-task-status" class="purchase-task-status">等待同步任务</div>
+        <div id="purchase-summary" class="purchase-summary">成功 0 · 待发货 0 · 未同步 0</div>
+        <div id="purchase-results" class="purchase-results"></div>
+      </section>
     </div>
     <div id="result" class="result" hidden></div>
+    <div class="support-line"><span>支持</span><b>Mercado Libre</b><i>·</i><b>1688</b><i>·</i><b>智赢</b></div>
   </main>
   <footer>
     <button id="open-console" class="secondary" type="button">打开泽顺控制台</button>

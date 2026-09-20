@@ -2,11 +2,17 @@
 
 from __future__ import annotations
 
+import copy
+import json
+import logging
 import os
 import threading
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import date, datetime, timedelta
+from pathlib import Path
 from typing import Any, Iterable
+
+from bit.bit_runtime_lock import RUNTIME_LOCK_DIR
 
 
 AD_METRICS = (
@@ -18,7 +24,10 @@ AD_METRICS = (
 )
 AD_GROUP_PAGE_SIZE = 800
 AD_ITEM_PAGE_SIZE = 50
-CACHE_SECONDS = 300
+AD_ANALYSIS_STATE_PATH = Path(
+    os.environ.get("BIT_AD_ANALYSIS_STATE_PATH")
+    or (RUNTIME_LOCK_DIR / "ad_analysis_last_snapshot.json")
+)
 
 
 def _worker_count(name: str, default: int, maximum: int) -> int:
@@ -39,7 +48,67 @@ API_CONCURRENCY = _worker_count(
 )
 _api_slots = threading.BoundedSemaphore(API_CONCURRENCY)
 _cache_lock = threading.Lock()
+_snapshot_lock = threading.Lock()
 _cache: dict[tuple[Any, ...], tuple[datetime, dict[str, Any]]] = {}
+
+
+def _empty_snapshot() -> dict[str, Any]:
+    return {
+        "date_from": "",
+        "date_to": "",
+        "generated_at": "",
+        "summary": {},
+        "accounts": [],
+        "links": [],
+        "errors": [],
+        "cached": True,
+        "snapshot_available": False,
+    }
+
+
+def _load_snapshot(state_path=None) -> dict[str, Any]:
+    path = Path(state_path or AD_ANALYSIS_STATE_PATH)
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, TypeError, ValueError, json.JSONDecodeError):
+        return _empty_snapshot()
+    if not isinstance(payload, dict):
+        return _empty_snapshot()
+    result = _empty_snapshot()
+    result.update(payload)
+    for name in ("accounts", "links", "errors"):
+        result[name] = [
+            dict(row) for row in (result.get(name) or []) if isinstance(row, dict)
+        ]
+    result["snapshot_available"] = bool(result.get("generated_at"))
+    result["cached"] = True
+    return result
+
+
+def _persist_snapshot(snapshot: dict[str, Any], state_path=None) -> bool:
+    path = Path(state_path or AD_ANALYSIS_STATE_PATH)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temporary_path = path.with_suffix(
+        f"{path.suffix}.{os.getpid()}.{threading.get_ident()}.tmp"
+    )
+    payload = copy.deepcopy(snapshot)
+    payload["cached"] = True
+    payload["snapshot_available"] = True
+    try:
+        temporary_path.write_text(
+            json.dumps(payload, ensure_ascii=False, separators=(",", ":"), default=str),
+            encoding="utf-8",
+        )
+        os.replace(temporary_path, path)
+        return True
+    except OSError as exc:
+        logging.warning("无法保存广告分析上次结果：%s", exc)
+        return False
+    finally:
+        try:
+            temporary_path.unlink()
+        except OSError:
+            pass
 
 
 def _api_call(function, *args, **kwargs):
@@ -236,9 +305,24 @@ def _group_items(client, site_id: str, group: dict, date_from: str, date_to: str
     return rows
 
 
+def _store_assignment(token: dict, site_id: str) -> tuple[str, str]:
+    settings = [
+        row for row in (token.get("site_settings") or [])
+        if str(row.get("site_id") or "").strip().upper() == site_id
+    ]
+    if not settings:
+        settings = list(token.get("site_settings") or [])
+    setting = settings[0] if settings else {}
+    return (
+        str(setting.get("salesperson") or "").strip(),
+        str(setting.get("group_name") or "").strip(),
+    )
+
+
 def _advertiser_analysis(client, token: dict, advertiser: dict, date_from: str, date_to: str) -> dict:
     site_id = str(advertiser.get("site_id") or "").strip().upper()
     advertiser_id = _integer(advertiser.get("advertiser_id"))
+    salesperson, group_name = _store_assignment(token, site_id)
     campaigns = _campaigns(client, site_id, advertiser_id)
     campaign_results: list[tuple[list[dict], dict]] = []
     if campaigns:
@@ -316,6 +400,8 @@ def _advertiser_analysis(client, token: dict, advertiser: dict, date_from: str, 
             links.append({
                 "token_id": _integer(token.get("id")),
                 "store_name": str(token.get("display_name") or token.get("nickname") or token.get("id") or ""),
+                "salesperson": salesperson,
+                "group_name": group_name,
                 "site_id": site_id,
                 "advertiser_id": advertiser_id,
                 "advertiser_name": str(advertiser.get("advertiser_name") or ""),
@@ -347,6 +433,8 @@ def _advertiser_analysis(client, token: dict, advertiser: dict, date_from: str, 
     account = {
         "token_id": _integer(token.get("id")),
         "store_name": str(token.get("display_name") or token.get("nickname") or token.get("id") or ""),
+        "salesperson": salesperson,
+        "group_name": group_name,
         "site_id": site_id,
         "advertiser_id": advertiser_id,
         "advertiser_name": str(advertiser.get("advertiser_name") or ""),
@@ -378,6 +466,96 @@ def _summary(accounts: list[dict], links: list[dict], errors: list[dict]) -> dic
         "currencies": money,
     })
     return additive
+
+
+def _filtered_snapshot(
+    snapshot: dict[str, Any], token_ids: Iterable[int] | None
+) -> dict[str, Any]:
+    result = copy.deepcopy(snapshot)
+    if token_ids is None:
+        result["summary"] = _summary(
+            result.get("accounts") or [],
+            result.get("links") or [],
+            result.get("errors") or [],
+        )
+        return result
+    selected = {int(value) for value in token_ids or () if int(value or 0) > 0}
+    for name in ("accounts", "links", "errors"):
+        result[name] = [
+            row for row in (result.get(name) or [])
+            if _integer(row.get("token_id")) in selected
+        ]
+    result["summary"] = _summary(result["accounts"], result["links"], result["errors"])
+    return result
+
+
+def _merge_snapshot(
+    previous: dict[str, Any], fresh: dict[str, Any], refreshed_token_ids: Iterable[int]
+) -> dict[str, Any]:
+    selected = {
+        int(value) for value in refreshed_token_ids or () if int(value or 0) > 0
+    }
+    if not previous.get("snapshot_available") or (
+        previous.get("date_from"), previous.get("date_to")
+    ) != (fresh.get("date_from"), fresh.get("date_to")):
+        result = copy.deepcopy(fresh)
+        result["partial_snapshot"] = True
+        return result
+    result = copy.deepcopy(previous)
+    for name in ("accounts", "links", "errors"):
+        result[name] = [
+            row for row in (result.get(name) or [])
+            if _integer(row.get("token_id")) not in selected
+        ] + copy.deepcopy(fresh.get(name) or [])
+    result.update({
+        "date_from": fresh.get("date_from") or previous.get("date_from") or "",
+        "date_to": fresh.get("date_to") or previous.get("date_to") or "",
+        "generated_at": fresh.get("generated_at") or previous.get("generated_at") or "",
+        "cached": False,
+        "snapshot_available": True,
+        "partial_snapshot": False,
+        "refreshed_token_ids": sorted(selected),
+    })
+    result["accounts"].sort(
+        key=lambda row: (_float((row.get("metrics") or {}).get("cost")), row.get("store_name", "")),
+        reverse=True,
+    )
+    result["links"].sort(
+        key=lambda row: (_float((row.get("metrics") or {}).get("cost")), row.get("item_id", "")),
+        reverse=True,
+    )
+    result["summary"] = _summary(result["accounts"], result["links"], result["errors"])
+    return result
+
+
+def _update_snapshot_group_status(rows: Iterable[dict[str, Any]], status: str) -> None:
+    keys = {
+        (
+            _integer(row.get("token_id")),
+            str(row.get("site_id") or "").strip().upper(),
+            _integer(row.get("ad_group_id")),
+        )
+        for row in rows or ()
+    }
+    if not keys:
+        return
+    with _snapshot_lock:
+        snapshot = _load_snapshot()
+        if not snapshot.get("snapshot_available"):
+            return
+        changed = False
+        for row in snapshot.get("links") or []:
+            key = (
+                _integer(row.get("token_id")),
+                str(row.get("site_id") or "").strip().upper(),
+                _integer(row.get("ad_group_id")),
+            )
+            if key in keys:
+                row["ad_group_status"] = status.upper()
+                row["status"] = status.upper()
+                changed = True
+        if changed:
+            _persist_snapshot(snapshot)
 
 
 def update_product_ads_ad_groups(
@@ -461,6 +639,7 @@ def update_product_ads_ad_groups(
     # Do not serve a pre-action status snapshot after a successful write.
     with _cache_lock:
         _cache.clear()
+    _update_snapshot_group_status(results, target_status)
     return {
         "status": target_status,
         "requested_count": len(requested_rows),
@@ -474,32 +653,41 @@ def update_product_ads_ad_groups(
 
 def collect_ad_analysis(
     *, date_from: str = "", date_to: str = "", token_ids: Iterable[int] | None = None,
-    force: bool = False,
+    refresh_token_ids: Iterable[int] | None = None, force: bool = False,
 ) -> dict[str, Any]:
-    """Collect a read-only live snapshot for every enabled, selected Mercado token."""
+    """Return the last snapshot, optionally refreshing all or selected stores."""
     from bit import bit_mysql
     from bit.bit_store_link_sync import _client_and_token
 
-    start, end = _date_range(date_from, date_to)
-    selected = (
+    visible = (
         None if token_ids is None else
         tuple(sorted({int(value) for value in token_ids or () if int(value or 0) > 0}))
     )
-    cache_key = (start, end, selected)
+    if not force:
+        return _filtered_snapshot(_load_snapshot(), visible)
+
+    start, end = _date_range(date_from, date_to)
+    refresh_scope = (
+        tuple(sorted({
+            int(value) for value in refresh_token_ids or () if int(value or 0) > 0
+        }))
+        if refresh_token_ids is not None
+        else visible
+    )
+    if refresh_scope is not None and not refresh_scope:
+        return _filtered_snapshot(_load_snapshot(), visible)
+    cache_key = (start, end, refresh_scope)
     now = datetime.now()
-    with _cache_lock:
-        cached = _cache.get(cache_key)
-        if not force and cached and (now - cached[0]).total_seconds() < CACHE_SECONDS:
-            result = dict(cached[1])
-            result["cached"] = True
-            return result
 
     summaries = (bit_mysql.list_mercado_store_tokens() or {}).get("rows") or []
     tokens = [
-        dict(bit_mysql.get_mercado_store_token(int(row["id"])) or {})
+        {
+            **dict(bit_mysql.get_mercado_store_token(int(row["id"])) or {}),
+            "site_settings": copy.deepcopy(row.get("site_settings") or []),
+        }
         for row in summaries
         if bool(row.get("enabled", True))
-        and (selected is None or int(row.get("id") or 0) in selected)
+        and (refresh_scope is None or int(row.get("id") or 0) in refresh_scope)
     ]
     accounts: list[dict] = []
     links: list[dict] = []
@@ -580,10 +768,18 @@ def collect_ad_analysis(
         "links": links,
         "errors": errors,
         "cached": False,
+        "snapshot_available": True,
+        "partial_snapshot": False,
     }
+    with _snapshot_lock:
+        previous = _load_snapshot()
+        if refresh_scope is not None:
+            result = _merge_snapshot(previous, result, refresh_scope)
+        if not (result.get("partial_snapshot") and previous.get("snapshot_available")):
+            _persist_snapshot(result)
     with _cache_lock:
         _cache[cache_key] = (now, result)
-    return dict(result)
+    return _filtered_snapshot(result, visible)
 
 
 __all__ = [

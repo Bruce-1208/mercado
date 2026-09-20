@@ -26,6 +26,22 @@ def snapshot(*messages, epoch="one", busy=False):
             "messages": [{"role": role, "id": key, "text": text} for role, key, text in messages]}
 
 
+def test_appeal_executor_metadata_records_selected_agent(monkeypatch):
+    monkeypatch.setenv("BIT_RUNTIME_ROLE", "client")
+    monkeypatch.setenv("BIT_EXECUTION_TARGET", "agent")
+    monkeypatch.setenv("BIT_EXECUTION_AGENT_ID", "agent-office")
+    monkeypatch.setenv("BIT_EXECUTION_AGENT_NAME", "办公室电脑")
+    monkeypatch.setenv("BIT_EXECUTION_HOSTNAME", "OFFICE-PC")
+
+    assert ai.appeal_executor_metadata() == {
+        "runtime_role": "client",
+        "execution_target": "agent",
+        "agent_id": "agent-office",
+        "agent_name": "办公室电脑",
+        "hostname": "OFFICE-PC",
+    }
+
+
 def test_legacy_ai_shop_loop_stops_immediately_when_login_circuit_opens(monkeypatch):
     calls = []
     monkeypatch.setattr(

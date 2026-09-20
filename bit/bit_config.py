@@ -152,6 +152,7 @@ def list_shop_configs(
 
         sites = []
         salespeople = []
+        group_names = []
         for setting in settings:
             site_name = AUTHORIZATION_SITE_NAMES[_text(setting.get("site_id")).upper()]
             if site_name not in sites:
@@ -159,19 +160,23 @@ def list_shop_configs(
             salesperson = _text(setting.get("salesperson"))
             if salesperson and salesperson not in salespeople:
                 salespeople.append(salesperson)
-        records.append(
-            normalize_config_record(
-                {
-                    "window_id": window_id,
-                    "shop_name": shop_name,
-                    "status": status,
-                    "sites": "，".join(sites),
-                    "sequence_no": "",
-                    "salesperson": "、".join(salespeople),
-                    "email": _text(token.get("email")),
-                }
-            )
+            group_name = _text(setting.get("group_name"))
+            if group_name and group_name not in group_names:
+                group_names.append(group_name)
+        record = normalize_config_record(
+            {
+                "window_id": window_id,
+                "shop_name": shop_name,
+                "status": status,
+                "sites": "，".join(sites),
+                "sequence_no": "",
+                "salesperson": "、".join(salespeople),
+                "email": _text(token.get("email")),
+            }
         )
+        # 保持旧的七字段调用契约，同时给需要店铺归属信息的页面补充店铺组。
+        record["group_name"] = "、".join(group_names)
+        records.append(record)
     return records
 
 

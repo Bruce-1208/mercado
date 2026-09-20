@@ -30,6 +30,23 @@ def test_variant_surcharge_is_added_once():
     assert pricing.usd_cost(added["price"], {"cny_per_usd": "7.2", "date": "2026-09-07", "source": "manual"})["net_income_usd"] == "4"
 
 
+def test_lower_calculated_net_income_keeps_original_for_writeback_and_exposes_both_values():
+    calculated = pricing.usd_cost("22", {"cny_per_usd": "7.2", "date": "2026-09-07", "source": "manual"})
+    protected = pricing.protect_net_income("10", calculated)
+    assert protected["net_income_usd"] == "4"
+    assert protected["calculated_net_income_usd"] == "4"
+    assert protected["net_income_writeback_usd"] == "10"
+    assert protected["net_income_retained_original"] is True
+    assert "仅修改重量" in protected["net_income_adjustment"]
+
+
+def test_higher_calculated_net_income_is_written_normally():
+    calculated = pricing.usd_cost("72", {"cny_per_usd": "7.2", "date": "2026-09-07", "source": "manual"})
+    protected = pricing.protect_net_income("4", calculated)
+    assert protected["net_income_writeback_usd"] == "10"
+    assert protected["net_income_retained_original"] is False
+
+
 @pytest.mark.parametrize("surcharge", ["", "1-2元", "2起", "-2", "优惠2元", "NaN", True])
 def test_unclear_surcharge_is_not_silently_zero(surcharge):
     with pytest.raises(ValueError):

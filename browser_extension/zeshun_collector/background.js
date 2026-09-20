@@ -6,9 +6,35 @@ const DEFAULT_SETTINGS = {
 };
 const AUTH_KEY = "browserExtensionAuth";
 const QUEUE_KEY = "pendingProducts";
+const PURCHASE_TRACKING_SESSION_KEY = "purchaseTrackingSession";
 const RETRY_ALARM = "zeshun-collector-retry";
+const PURCHASE_TRACKING_RESUME_ALARM = "zeshun-purchase-tracking-resume";
 const MAX_QUEUE_SIZE = 100;
 let queueFlushPromise = null;
+let purchaseTrackingRunPromise = null;
+
+const PURCHASE_TRACKING_PLATFORMS = {
+  "1688": {
+    label: "1688",
+    loginUrl: "https://login.1688.com/member/signin.htm",
+    ordersUrl: "https://trade.1688.com/order/buyer_order_list.htm"
+  },
+  taobao: {
+    label: "淘宝 / 天猫",
+    loginUrl: "https://login.taobao.com/member/login.jhtml",
+    ordersUrl: "https://buyertrade.taobao.com/trade/itemlist/list_bought_items.htm"
+  },
+  pdd: {
+    label: "拼多多",
+    loginUrl: "https://mobile.yangkeduo.com/login.html",
+    ordersUrl: "https://mobile.yangkeduo.com/orders.html"
+  },
+  xianyu: {
+    label: "闲鱼",
+    loginUrl: "https://login.taobao.com/member/login.jhtml?redirectURL=https%3A%2F%2Fwww.goofish.com%2F",
+    ordersUrl: "https://www.goofish.com/personal"
+  }
+};
 
 class ApiError extends Error {
   constructor(message, {authRequired = false, status = 0} = {}) {
@@ -56,6 +82,155 @@ async function authSession() {
 
 async function clearAuth() {
   await storageRemove("session", [AUTH_KEY]);
+}
+
+async function purchaseTrackingSession() {
+  const stored = await storageGet("local", [PURCHASE_TRACKING_SESSION_KEY]);
+  return stored[PURCHASE_TRACKING_SESSION_KEY] || null;
+}
+
+async function clearPurchaseTrackingSession() {
+  await storageRemove("local", [PURCHASE_TRACKING_SESSION_KEY]);
+}
+
+async function purchaseTrackingRequest() {
+  if (!await authSession()) return null;
+  return apiRequest("/api/browser-extension/purchase-tracking/request", {method: "GET"});
+}
+
+async function openPurchaseTrackingLogin(request) {
+  const platform = PURCHASE_TRACKING_PLATFORMS[String(request?.platform || "")];
+  if (!platform) throw new Error("同步任务的采购平台无效");
+  const prepared = await apiRequest("/api/browser-extension/purchase-tracking/prepare", {
+    method: "POST",
+    body: JSON.stringify({request_id: request.request_id})
+  });
+  const current = await purchaseTrackingSession();
+  let tab = null;
+  if (current && String(current.requestId) === String(request.request_id) && current.tabId) {
+    try { tab = await chrome.tabs.get(Number(current.tabId)); } catch (_) {}
+  }
+  if (!tab) {
+    tab = await chrome.tabs.create({url: platform.ordersUrl, active: true});
+  } else {
+    tab = await chrome.tabs.update(tab.id, {url: platform.ordersUrl, active: true});
+  }
+  await storageSet("local", {
+    [PURCHASE_TRACKING_SESSION_KEY]: {
+      requestId: String(request.request_id),
+      tabId: Number(tab.id),
+      platform: String(request.platform),
+    }
+  });
+  return {
+    ok: true,
+    state: prepared,
+    tabId: tab.id,
+    platform: platform.label,
+    message: "已打开采购平台，请手动登录后回到泽顺插件点击确定登录"
+  };
+}
+
+async function checkPurchaseTrackingLogin(tabId, platform) {
+  let response;
+  try {
+    response = await sendTabMessage(Number(tabId), {type: "CHECK_PURCHASE_LOGIN"});
+  } catch (_) {
+    throw new Error("采购平台页面尚未准备好，请等待页面加载完成后重试");
+  }
+  if (!response.ok || response.platform !== platform || !response.loggedIn) {
+    throw new Error("尚未检测到采购平台登录状态，请先在打开的页面完成手动登录");
+  }
+  return response;
+}
+
+async function runPurchaseTracking(request, tabId) {
+  const requestId = String(request.request_id || "");
+  const completedOrderIds = new Set(
+    (Array.isArray(request.results) ? request.results : [])
+      .map(item => String(item.order_id || ""))
+      .filter(Boolean)
+  );
+  try {
+    for (const row of Array.isArray(request.orders) ? request.orders : []) {
+      if (completedOrderIds.has(String(row.order_id || ""))) continue;
+      const result = await sendTabMessage(Number(tabId), {
+        type: "FETCH_PURCHASE_TRACKING",
+        purchaseOrder: row.purchase_order
+      });
+      if (!result?.ok) throw new Error(result?.error || "采购平台未返回物流信息");
+      if (result.status === "not_logged_in") {
+        throw new Error("采购平台登录已失效，请重新手动登录后再同步");
+      }
+      await apiRequest("/api/browser-extension/purchase-tracking/result", {
+        method: "POST",
+        body: JSON.stringify({
+          request_id: requestId,
+          order_id: row.order_id,
+          status: result.status,
+          tracking_number: result.tracking_number || "",
+          logistics_company: result.logistics_company || "",
+          message: result.message || ""
+        })
+      });
+    }
+  } catch (error) {
+    try {
+      await apiRequest("/api/browser-extension/purchase-tracking/fail", {
+        method: "POST",
+        body: JSON.stringify({request_id: requestId, message: error.message || String(error)})
+      });
+    } catch (_) {}
+  } finally {
+    await clearPurchaseTrackingSession();
+  }
+}
+
+function startPurchaseTrackingRun(request, tabId) {
+  purchaseTrackingRunPromise = runPurchaseTracking(request, tabId).finally(() => {
+    purchaseTrackingRunPromise = null;
+  });
+  return purchaseTrackingRunPromise;
+}
+
+async function resumePurchaseTracking() {
+  if (purchaseTrackingRunPromise) return;
+  const request = await purchaseTrackingRequest();
+  if (!request || !request.request_id || !request.running || request.phase !== "syncing") return;
+  const session = await purchaseTrackingSession();
+  if (!session || String(session.requestId) !== String(request.request_id) || !session.tabId) return;
+  try {
+    await chrome.tabs.get(Number(session.tabId));
+    await checkPurchaseTrackingLogin(session.tabId, request.platform);
+    startPurchaseTrackingRun(request, session.tabId);
+  } catch (error) {
+    try {
+      await apiRequest("/api/browser-extension/purchase-tracking/fail", {
+        method: "POST",
+        body: JSON.stringify({request_id: request.request_id, message: error.message || String(error)})
+      });
+    } catch (_) {}
+    await clearPurchaseTrackingSession();
+  }
+}
+
+async function confirmPurchaseTrackingLogin() {
+  if (purchaseTrackingRunPromise) {
+    return {ok: false, error: "物流号同步正在进行中"};
+  }
+  const request = await purchaseTrackingRequest();
+  if (!request || !request.request_id) throw new Error("当前没有待处理的订单物流同步任务");
+  const session = await purchaseTrackingSession();
+  if (!session || String(session.requestId) !== String(request.request_id) || !session.tabId) {
+    throw new Error("请先点击打开采购平台并完成手动登录");
+  }
+  await checkPurchaseTrackingLogin(session.tabId, request.platform);
+  const claimed = await apiRequest("/api/browser-extension/purchase-tracking/claim", {
+    method: "POST",
+    body: JSON.stringify({request_id: request.request_id})
+  });
+  startPurchaseTrackingRun(claimed, session.tabId);
+  return {ok: true, state: claimed, message: "已确认登录，正在自动同步物流号"};
 }
 
 async function queueItems() {
@@ -215,7 +390,8 @@ async function uploadProduct(product, {openConsole = true} = {}) {
     throw new Error("商品数据不完整，缺少商品编号或标题");
   }
   const auth = await authSession();
-  const result = auth && auth.mode === "legacy"
+  const is1688 = product.source_platform === "1688" || String(product.source_url || "").includes("1688.com");
+  const result = auth && auth.mode === "legacy" && !is1688
     ? await uploadLegacyProduct(product)
     : await apiRequest("/api/browser-extension/collect", {
         method: "POST",
@@ -223,9 +399,15 @@ async function uploadProduct(product, {openConsole = true} = {}) {
       });
   const config = await settings();
   if (openConsole && config.openConsoleAfterCollect) {
-    await chrome.tabs.create({url: normalizeConsoleUrl(config.consoleUrl), active: true});
+    const destination = is1688 ? "/?tab=ai-original-products" : "";
+    await chrome.tabs.create({url: `${normalizeConsoleUrl(config.consoleUrl)}${destination}`, active: true});
   }
-  return {taskId: Number(result.task_id), scrapeStatus: result.scrape_status || product.scrape_status};
+  return {
+    taskId: Number(result.task_id || 0),
+    productId: Number(result.product_id || 0),
+    sourcePlatform: result.source_platform || (is1688 ? "1688" : "mercado"),
+    scrapeStatus: result.scrape_status || product.scrape_status
+  };
 }
 
 async function submitProduct(product) {
@@ -306,10 +488,134 @@ async function extractFromTab(tabId) {
   return response.product;
 }
 
+function normalizeZyingToken(value) {
+  if (!value) return "";
+  let token = value;
+  try { token = JSON.parse(value); } catch (_) {}
+  if (token && typeof token === "object") {
+    token = token.token || token.access_token || token.accessToken || "";
+  }
+  return String(token || "").trim();
+}
+
+async function readZyingContext(tabId) {
+  let page = {};
+  try {
+    const results = await chrome.scripting.executeScript({
+      target: {tabId},
+      world: "MAIN",
+      func: () => {
+        const normalizeToken = value => {
+          if (!value) return "";
+          let token = value;
+          try { token = JSON.parse(value); } catch (_) {}
+          if (token && typeof token === "object") {
+            token = token.token || token.access_token || token.accessToken || "";
+          }
+          return String(token || "").trim();
+        };
+        let credential = normalizeToken(localStorage.getItem("token"));
+        if (!credential) {
+          const item = document.cookie.split(";").map(value => value.trim())
+            .find(value => value.startsWith("token="));
+          const token = item ? normalizeToken(decodeURIComponent(item.slice(6))) : "";
+          if (token) credential = `cookie://${token}`;
+        }
+        const cascader = document.querySelector(".ant-cascader");
+        const fiberKey = cascader && Object.keys(cascader).find(key => key.startsWith("__reactFiber$"));
+        let fiber = fiberKey ? cascader[fiberKey] : null;
+        let options = [];
+        while (fiber) {
+          if (Array.isArray(fiber.memoizedProps?.options)) {
+            options = fiber.memoizedProps.options;
+            break;
+          }
+          fiber = fiber.return;
+        }
+        const categories = [];
+        const seen = new Set();
+        const visit = (items, parents = []) => {
+          for (const option of items || []) {
+            const value = String(option.value ?? "").trim();
+            const label = String(option.label || "").trim();
+            const labels = [...parents, label].filter(Boolean);
+            if (value && labels.length && !seen.has(value)) {
+              seen.add(value);
+              categories.push({
+                category_id: value,
+                category_name: labels.join("/"),
+                category_leaf_name: labels[labels.length - 1]
+              });
+            }
+            visit(option.children, labels);
+          }
+        };
+        visit(options);
+        return {credential, categories, url: location.href};
+      }
+    });
+    page = results?.[0]?.result || {};
+  } catch (_) {
+    try { page = await sendTabMessage(tabId, {type: "READ_ZYING_CONTEXT"}); } catch (_) {}
+  }
+  let credential = String(page.credential || "").trim();
+  if (!credential) {
+    const cookie = await chrome.cookies.get({url: "https://meli.zying.net/", name: "token"});
+    const token = normalizeZyingToken(cookie && cookie.value);
+    if (token) credential = `cookie://${token}`;
+  }
+  if (!credential) {
+    throw new Error("当前智赢页面尚未登录，请登录后再刷新采集选项");
+  }
+  return {
+    credential,
+    categories: Array.isArray(page.categories) ? page.categories : [],
+    url: page.url || "https://meli.zying.net/#/product"
+  };
+}
+
+async function loadZyingOptions(context) {
+  return apiRequest("/api/browser-extension/zying/options", {
+    method: "POST",
+    body: JSON.stringify({
+      credential: context.credential,
+      categories: context.categories || []
+    })
+  });
+}
+
+async function startZyingCollection(context, params) {
+  return apiRequest("/api/browser-extension/zying/start", {
+    method: "POST",
+    body: JSON.stringify({
+      ...params,
+      credential: context.credential,
+      categories: context.categories || []
+    })
+  });
+}
+
+async function zyingCollectionStatus() {
+  return apiRequest("/api/browser-extension/zying/status", {method: "GET"});
+}
+
+async function stopZyingCollection() {
+  return apiRequest("/api/browser-extension/zying/stop", {
+    method: "POST",
+    body: "{}"
+  });
+}
+
 async function state() {
   const config = await settings();
   const auth = await authSession();
   const queue = await queueItems();
+  let purchaseTracking = null;
+  if (auth) {
+    try { purchaseTracking = await purchaseTrackingRequest(); } catch (error) {
+      purchaseTracking = {phase: "error", message: error.message || String(error)};
+    }
+  }
   return {
     ok: true,
     settings: config,
@@ -318,7 +624,8 @@ async function state() {
     compatibilityMode: Boolean(auth && auth.mode === "legacy"),
     expiresAt: auth && auth.expiresAt || null,
     queueLength: queue.length,
-    lastQueueError: queue.length ? queue[0].reason : ""
+    lastQueueError: queue.length ? queue[0].reason : "",
+    purchaseTracking,
   };
 }
 
@@ -329,12 +636,14 @@ chrome.runtime.onInstalled.addListener(async () => {
     openConsoleAfterCollect: Boolean(current.openConsoleAfterCollect)
   });
   chrome.alarms.create(RETRY_ALARM, {periodInMinutes: 1});
+  chrome.alarms.create(PURCHASE_TRACKING_RESUME_ALARM, {periodInMinutes: 0.5});
   chrome.contextMenus.removeAll(() => {
     chrome.contextMenus.create({
       id: "zeshun-collect-page",
-      title: "采集当前商品到泽顺控制台",
+      title: "采集当前商品到泽顺控制台 / AI原创产品",
       contexts: ["page"],
       documentUrlPatterns: [
+        "https://*.1688.com/*",
         "https://*.mercadolibre.com.mx/*", "https://*.mercadolibre.com.br/*",
         "https://*.mercadolivre.com.br/*", "https://*.mercadolibre.com.ar/*",
         "https://*.mercadolibre.cl/*", "https://*.mercadolibre.com.co/*",
@@ -347,12 +656,15 @@ chrome.runtime.onInstalled.addListener(async () => {
 
 chrome.runtime.onStartup.addListener(async () => {
   chrome.alarms.create(RETRY_ALARM, {periodInMinutes: 1});
+  chrome.alarms.create(PURCHASE_TRACKING_RESUME_ALARM, {periodInMinutes: 0.5});
   await setBadge((await queueItems()).length);
   await flushQueue();
+  try { await resumePurchaseTracking(); } catch (_) {}
 });
 
 chrome.alarms.onAlarm.addListener(alarm => {
   if (alarm.name === RETRY_ALARM) flushQueue();
+  if (alarm.name === PURCHASE_TRACKING_RESUME_ALARM) resumePurchaseTracking().catch(() => {});
 });
 
 chrome.contextMenus.onClicked.addListener(async (info, tab) => {
@@ -366,7 +678,22 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
       case "LOGIN": return login(String(message.username || "").trim(), String(message.password || ""));
       case "LOGOUT": return logout();
       case "SUBMIT_PRODUCT": return submitProduct(message.product);
+      case "READ_ZYING_CONTEXT": return {ok: true, ...(await readZyingContext(Number(message.tabId)))};
+      case "GET_ZYING_OPTIONS": return {ok: true, ...(await loadZyingOptions(message.context || {}))};
+      case "START_ZYING_COLLECTION": return {
+        ok: true,
+        ...(await startZyingCollection(message.context || {}, message.params || {}))
+      };
+      case "GET_ZYING_STATUS": return {ok: true, ...(await zyingCollectionStatus())};
+      case "STOP_ZYING_COLLECTION": return {ok: true, ...(await stopZyingCollection())};
       case "GET_STATE": return state();
+      case "GET_PURCHASE_TRACKING_REQUEST": return {
+        ok: true,
+        ...(await purchaseTrackingRequest() || {phase: "idle", message: "暂无订单物流同步任务"})
+      };
+      case "OPEN_PURCHASE_TRACKING_LOGIN":
+        return openPurchaseTrackingLogin(message.request || await purchaseTrackingRequest());
+      case "CONFIRM_PURCHASE_TRACKING_LOGIN": return confirmPurchaseTrackingLogin();
       case "RETRY_QUEUE": return flushQueue();
       case "TEST_CONNECTION": {
         const auth = await authSession();

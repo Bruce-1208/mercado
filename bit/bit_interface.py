@@ -18,6 +18,7 @@ import sys
 import threading
 import time
 import traceback
+import zipfile
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from io import BytesIO
 from pathlib import Path
@@ -70,10 +71,12 @@ import bit.bit_pago_info as bit_pago_info
 import bit.bit_reputation_info as bit_reputation_info
 import bit.bit_order_sync as bit_order_sync
 from bit.purchase_tracking_sync import (
+    plugin_purchase_tracking_manager,
     purchase_tracking_sync_manager,
     supported_platforms as purchase_tracking_platforms,
 )
 import bit.bit_prohibited_listing_sync as bit_prohibited_listing_sync
+import bit.bit_ai_video as bit_ai_video
 import bit.bit_store_link_remote_update as bit_store_link_remote_update
 import bit.bit_store_link_sync as bit_store_link_sync
 import bit.bit_update_orders as bit_update_orders
@@ -100,7 +103,7 @@ from erp.mercadolibre_infraction_store import (
 )
 from bit.bit_appeal import *
 from bit.bit_collection_control import DEFAULT_COLLECTION_MAX_WORKERS
-from bit.bit_config import list_shop_configs, split_config_sites
+from bit.bit_config import AUTHORIZATION_SITE_NAMES, list_shop_configs, split_config_sites
 from bit.bit_runtime_lock import (
     InterProcessLock,
     RUNTIME_LOCK_DIR,
@@ -666,6 +669,8 @@ if USE_DB_API:
     db_insert_task_record = bit_db_api.insert_task_record
     db_insert_zying_product_info = bit_db_api.insert_zying_product_info
     db_upsert_zying_products_to_products = bit_db_api.upsert_zying_products_to_products
+    db_upsert_ai_original_product = bit_db_api.upsert_ai_original_product
+    db_update_ai_original_product = bit_db_api.update_ai_original_product
     db_sync_zying_product_developers = bit_db_api.sync_zying_product_developers
     db_get_existing_zying_product_ids = bit_db_api.get_existing_zying_product_ids
     db_get_zying_risk_candidates = bit_db_api.get_zying_risk_candidates
@@ -830,6 +835,8 @@ else:
         update_product_items as db_update_mercado_product_items,
         update_product_review_status as db_update_mercado_product_review_status,
         upsert_zying_products_to_products as db_upsert_zying_products_to_products,
+        upsert_ai_original_product as db_upsert_ai_original_product,
+        update_ai_original_product as db_update_ai_original_product,
         sync_zying_product_developers as db_sync_zying_product_list_developers,
         upsert_collection_items as db_upsert_mercado_collection_items,
     )
@@ -1724,6 +1731,53 @@ def login_required(view_func):
 BROWSER_EXTENSION_TOKEN_SALT = "zeshun-browser-extension-v1"
 
 
+def resolve_browser_extension_dir():
+    bundle_root = Path(getattr(sys, "_MEIPASS", PROJECT_ROOT))
+    candidates = (
+        PROJECT_ROOT / "browser_extension" / "zeshun_collector",
+        bundle_root / "browser_extension" / "zeshun_collector",
+        CURRENT_DIR / "browser_extension" / "zeshun_collector",
+    )
+    for candidate in candidates:
+        if (candidate / "manifest.json").is_file():
+            return candidate
+    return candidates[0]
+
+
+BROWSER_EXTENSION_DIR = resolve_browser_extension_dir()
+BROWSER_EXTENSION_PACKAGE_FILES = (
+    "manifest.json",
+    "background.js",
+    "collector-core.js",
+    "content.js",
+    "content-1688.js",
+    "content-zying.js",
+    "purchase-tracking-content.js",
+    "content.css",
+    "popup.html",
+    "popup.css",
+    "popup.js",
+    "options.html",
+    "options.css",
+    "options.js",
+    "README.md",
+)
+
+
+def build_browser_extension_package(extension_dir=None):
+    """Build a clean Chrome/Edge unpacked-extension package in memory."""
+    source_dir = Path(extension_dir or BROWSER_EXTENSION_DIR)
+    buffer = BytesIO()
+    with zipfile.ZipFile(buffer, "w", compression=zipfile.ZIP_DEFLATED) as archive:
+        for filename in BROWSER_EXTENSION_PACKAGE_FILES:
+            path = source_dir / filename
+            if not path.is_file():
+                raise FileNotFoundError(f"泽顺插件缺少文件：{filename}")
+            archive.writestr(f"zeshun_collector/{filename}", path.read_bytes())
+    buffer.seek(0)
+    return buffer
+
+
 def create_browser_extension_token(user):
     """Create a signed, short-lived token for the Chrome/Edge collector."""
     payload = {
@@ -1780,6 +1834,27 @@ def browser_extension_login_required(view_func):
         return view_func(*args, **kwargs)
 
     return wrapper
+
+
+def browser_extension_permission_required(permission):
+    """Apply workbench permissions to bearer-authenticated extension routes."""
+    def decorator(view_func):
+        @functools.wraps(view_func)
+        def wrapper(*args, **kwargs):
+            user = getattr(g, "browser_extension_user", None)
+            if not user:
+                return jsonify({"status": "error", "message": "插件登录已失效，请重新登录"}), 401
+            if not workbench_user_has_permission(user, permission):
+                return jsonify({
+                    "status": "error",
+                    "message": "当前账号没有执行该操作的权限",
+                    "required_permissions": [permission],
+                }), 403
+            return view_func(*args, **kwargs)
+
+        return wrapper
+
+    return decorator
 
 
 def create_local_executor_token(user, permission):
@@ -2093,6 +2168,8 @@ def _required_workbench_permissions(path, method):
         return ("order_print.view",)
     if path == "/api/orders/print":
         return ("order_print.execute",) if method == "POST" else ("order_print.view",)
+    if path.startswith("/api/orders/purchase-tracking/"):
+        return ("order_analysis.execute",) if method != "GET" else ("order_analysis.view",)
     if path.startswith("/api/orders/") and method == "GET":
         return ("order_print.view",)
     if path in {
@@ -4284,7 +4361,11 @@ def list_zying_collection_categories():
             category_name = str(row.get("category_name") or "").strip()
             key = category_id or category_name
             if key:
-                combined[key] = dict(row)
+                previous = combined.get(key, {})
+                merged = {**previous, **dict(row)}
+                if not category_name and previous.get("category_name"):
+                    merged["category_name"] = previous["category_name"]
+                combined[key] = merged
     return sorted(
         combined.values(),
         key=lambda row: (
@@ -6189,6 +6270,11 @@ def api_latest_reputation():
 def _attach_reputation_token_ids(data):
     """按授权显示名/昵称给旧声誉表补充打开浏览器所需的 token_id。"""
     rows = (data or {}).get("rows") or []
+    if rows and all(
+        "token_id" in row and "业务员" in row and "账户组" in row
+        for row in rows
+    ):
+        return data
     try:
         tokens = (bit_db_api.list_mercado_store_tokens() or {}).get("rows") or []
     except Exception as exc:
@@ -6981,29 +7067,45 @@ def api_start_purchase_tracking_sync():
         orders = _selected_purchase_tracking_rows(order_ids)
         user = dict(session.get("workbench_user") or {})
 
-        def update_order(order_id, tracking_number, logistics_company):
-            changes = {"purchase_tracking": tracking_number}
-            if str(logistics_company or "").strip():
-                changes["logistics_company"] = logistics_company
-            return bit_db_api.bulk_update_orders(
-                [order_id],
-                operator_id=user.get("id"),
-                operator_name=user.get("display_name") or user.get("username") or "",
-                **changes,
-            )
+        # Keep already-open/older workbench tabs functional during rollout.
+        # The current UI never sends these fields; all new tasks use the
+        # extension flow below and therefore never collect procurement
+        # credentials in the new interface.
+        if "account" in data or "password" in data:
+            def update_order(order_id, tracking_number, logistics_company):
+                changes = {"purchase_tracking": tracking_number}
+                if str(logistics_company or "").strip():
+                    changes["logistics_company"] = logistics_company
+                return bit_db_api.bulk_update_orders(
+                    [order_id],
+                    operator_id=user.get("id"),
+                    operator_name=user.get("display_name") or user.get("username") or "",
+                    **changes,
+                )
 
-        state = purchase_tracking_sync_manager.start(
+            state = purchase_tracking_sync_manager.start(
+                platform=str(data.get("platform") or "").strip().lower(),
+                account=str(data.get("account") or "").strip(),
+                password=str(data.get("password") or ""),
+                orders=orders,
+                update_order=update_order,
+            )
+            return jsonify({
+                "status": "success",
+                "message": "已打开采购平台，正在准备同步",
+                "data": state,
+            }), 202
+
+        state = plugin_purchase_tracking_manager.create(
+            user.get("id"),
             platform=str(data.get("platform") or "").strip().lower(),
-            account=str(data.get("account") or "").strip(),
-            password=str(data.get("password") or ""),
             orders=orders,
-            update_order=update_order,
         )
     except (ValueError, RuntimeError) as exc:
         return jsonify({"status": "error", "message": str(exc)}), 400
     return jsonify({
         "status": "success",
-        "message": "已打开采购平台，正在准备同步",
+        "message": "同步任务已创建，请打开泽顺插件并完成采购平台登录",
         "data": state,
     }), 202
 
@@ -7011,9 +7113,15 @@ def api_start_purchase_tracking_sync():
 @app.route('/api/orders/purchase-tracking/status', methods=['GET'])
 @login_required
 def api_purchase_tracking_status():
+    user = dict(session.get("workbench_user") or {})
+    state = plugin_purchase_tracking_manager.status(user.get("id"))
+    if state.get("phase") == "idle":
+        legacy_state = purchase_tracking_sync_manager.status()
+        if legacy_state.get("phase") != "idle":
+            state = legacy_state
     response = jsonify({
         "status": "success",
-        "data": purchase_tracking_sync_manager.status(),
+        "data": state,
     })
     response.headers["Cache-Control"] = "no-store"
     return response
@@ -7378,6 +7486,275 @@ def api_db_store_link_video(link_id):
     if blocked:
         return blocked
     return _store_link_video_response(link_id, internal=True)
+
+
+def _ai_video_create_response(*, internal=False):
+    uploads = request.files.getlist("files")
+    try:
+        if internal:
+            result = bit_ai_video.create_job(uploads, request.form.to_dict())
+        else:
+            result = bit_db_api.create_ai_video_job(uploads, request.form.to_dict())
+    except ValueError as exc:
+        return jsonify({"status": "error", "message": str(exc)}), 400
+    except RuntimeError as exc:
+        return jsonify({"status": "error", "message": str(exc)}), 503
+    except Exception as exc:
+        logging.exception("创建 AI 视频任务失败")
+        return jsonify({"status": "error", "message": f"创建 AI 视频任务失败：{exc}"}), 500
+    return jsonify({
+        "status": "success",
+        "message": "已复用相同任务，未重复消耗生成额度" if result.get("reused") else "AI 视频任务已创建",
+        "data": result,
+    })
+
+
+@app.route('/api/ai-videos/jobs', methods=['GET', 'POST'])
+@login_required
+def api_ai_video_jobs():
+    if request.method == "POST":
+        return _ai_video_create_response()
+    try:
+        data = bit_db_api.list_ai_video_jobs(
+            _parse_int_param(request.args, "limit", 30, 1, 100)
+        )
+    except Exception as exc:
+        logging.exception("读取 AI 视频任务失败")
+        return jsonify({"status": "error", "message": f"读取 AI 视频任务失败：{exc}"}), 502
+    return jsonify({"status": "success", "data": data})
+
+
+@app.route('/api/ai-videos/settings', methods=['GET', 'PATCH'])
+@login_required
+def api_ai_video_settings():
+    try:
+        data = (
+            bit_db_api.update_ai_video_settings(request.get_json(silent=True) or {})
+            if request.method == "PATCH"
+            else bit_db_api.get_ai_video_settings()
+        )
+    except ValueError as exc:
+        return jsonify({"status": "error", "message": str(exc)}), 400
+    except Exception as exc:
+        logging.exception("AI 视频配置保存失败")
+        return jsonify({"status": "error", "message": str(exc)}), 502
+    return jsonify({"status": "success", "data": data})
+
+
+@app.route('/api/ai-videos/jobs/<job_id>', methods=['GET', 'PATCH'])
+@login_required
+def api_ai_video_job(job_id):
+    try:
+        data = (
+            bit_db_api.update_ai_video_job(job_id, request.get_json(silent=True) or {})
+            if request.method == "PATCH"
+            else bit_db_api.get_ai_video_job(job_id)
+        )
+    except ValueError as exc:
+        return jsonify({"status": "error", "message": str(exc)}), 404
+    except Exception as exc:
+        return jsonify({"status": "error", "message": str(exc)}), 502
+    return jsonify({"status": "success", "data": data})
+
+
+@app.route('/api/ai-videos/jobs/<job_id>/publish', methods=['POST'])
+@login_required
+def api_ai_video_publish(job_id):
+    payload = request.get_json(silent=True) or {}
+    try:
+        link_id = int(payload.get("link_id") or 0)
+        if link_id <= 0:
+            raise ValueError("请先关联一条在售的店铺链接")
+        data = bit_db_api.publish_ai_video_job(job_id, link_id)
+    except ValueError as exc:
+        return jsonify({"status": "error", "message": str(exc)}), 400
+    except Exception as exc:
+        logging.exception("AI 视频上传美客多失败")
+        return jsonify({"status": "error", "message": f"上传美客多失败：{exc}"}), 502
+    return jsonify({
+        "status": "success",
+        "message": "视频已提交美客多，等待平台审核；通常在 48 小时内完成",
+        "data": data,
+    })
+
+
+@app.route('/api/ai-videos/jobs/<job_id>/content', methods=['GET'])
+@login_required
+def api_ai_video_content(job_id):
+    if not USE_DB_API:
+        try:
+            path = bit_ai_video.output_path(job_id)
+        except ValueError as exc:
+            return jsonify({"status": "error", "message": str(exc)}), 404
+        return send_file(path, mimetype="video/mp4", conditional=True, download_name=path.name)
+    try:
+        remote = bit_db_api.DB_API_SESSION.get(
+            f"{bit_db_api.DB_API_BASE_URL}/api/db/ai-videos/jobs/{job_id}/content",
+            headers=bit_db_api._headers(),
+            timeout=(30, 360),
+            stream=True,
+        )
+    except bit_db_api.requests.RequestException as exc:
+        return jsonify({"status": "error", "message": f"读取成品视频失败：{exc}"}), 502
+    if not remote.ok:
+        remote.close()
+        return jsonify({"status": "error", "message": "读取成品视频失败"}), remote.status_code
+
+    def generate():
+        try:
+            yield from remote.iter_content(1024 * 1024)
+        finally:
+            remote.close()
+
+    response = Response(generate(), mimetype="video/mp4")
+    if remote.headers.get("Content-Length"):
+        response.headers["Content-Length"] = remote.headers["Content-Length"]
+    response.headers["Cache-Control"] = "private, no-store"
+    return response
+
+
+@app.route('/api/ai-videos/jobs/<job_id>/cover', methods=['GET'])
+@login_required
+def api_ai_video_cover(job_id):
+    if not USE_DB_API:
+        try:
+            path = bit_ai_video.cover_path(job_id)
+        except ValueError as exc:
+            return jsonify({"status": "error", "message": str(exc)}), 404
+        return send_file(path, conditional=True)
+    try:
+        remote = bit_db_api.DB_API_SESSION.get(
+            f"{bit_db_api.DB_API_BASE_URL}/api/db/ai-videos/jobs/{job_id}/cover",
+            headers=bit_db_api._headers(), timeout=(20, 120), stream=True,
+        )
+    except bit_db_api.requests.RequestException as exc:
+        return jsonify({"status": "error", "message": f"读取视频封面失败：{exc}"}), 502
+    if not remote.ok:
+        remote.close()
+        return jsonify({"status": "error", "message": "读取视频封面失败"}), remote.status_code
+
+    def generate_cover():
+        try:
+            yield from remote.iter_content(256 * 1024)
+        finally:
+            remote.close()
+
+    response = Response(generate_cover(), content_type=remote.headers.get("Content-Type") or "image/jpeg")
+    response.headers["Cache-Control"] = "private, max-age=300"
+    return response
+
+
+@app.route('/api/ai-videos/assets/<job_id>/<asset_id>', methods=['GET'])
+def api_ai_video_signed_asset(job_id, asset_id):
+    if USE_DB_API:
+        return jsonify({"status": "error", "message": "素材只存储在服务端"}), 404
+    try:
+        path = bit_ai_video.resolve_signed_asset(
+            job_id,
+            asset_id,
+            request.args.get("expires"),
+            str(request.args.get("signature") or ""),
+        )
+    except ValueError as exc:
+        return jsonify({"status": "error", "message": str(exc)}), 403
+    return send_file(path, conditional=True)
+
+
+@app.route('/api/db/ai-videos/jobs', methods=['GET', 'POST'])
+@internal_api_required
+def api_db_ai_video_jobs():
+    blocked = reject_db_api_client_mode()
+    if blocked:
+        return blocked
+    if request.method == "POST":
+        return _ai_video_create_response(internal=True)
+    try:
+        data = bit_ai_video.list_jobs(
+            _parse_int_param(request.args, "limit", 30, 1, 100)
+        )
+    except Exception as exc:
+        return jsonify({"status": "error", "message": str(exc)}), 500
+    return jsonify({"status": "success", "data": data})
+
+
+@app.route('/api/db/ai-videos/settings', methods=['GET', 'PATCH'])
+@internal_api_required
+def api_db_ai_video_settings():
+    blocked = reject_db_api_client_mode()
+    if blocked:
+        return blocked
+    try:
+        data = (
+            bit_ai_video.save_provider_settings(request.get_json(silent=True) or {})
+            if request.method == "PATCH"
+            else bit_ai_video.provider_settings()
+        )
+    except ValueError as exc:
+        return jsonify({"status": "error", "message": str(exc)}), 400
+    return jsonify({"status": "success", "data": data})
+
+
+@app.route('/api/db/ai-videos/jobs/<job_id>', methods=['GET', 'PATCH'])
+@internal_api_required
+def api_db_ai_video_job(job_id):
+    blocked = reject_db_api_client_mode()
+    if blocked:
+        return blocked
+    try:
+        data = (
+            bit_ai_video.update_job(job_id, request.get_json(silent=True) or {})
+            if request.method == "PATCH"
+            else bit_ai_video.public_job(job_id)
+        )
+    except ValueError as exc:
+        return jsonify({"status": "error", "message": str(exc)}), 404
+    return jsonify({"status": "success", "data": data})
+
+
+@app.route('/api/db/ai-videos/jobs/<job_id>/publish', methods=['POST'])
+@internal_api_required
+def api_db_ai_video_publish(job_id):
+    blocked = reject_db_api_client_mode()
+    if blocked:
+        return blocked
+    payload = request.get_json(silent=True) or {}
+    try:
+        link_id = int(payload.get("link_id") or 0)
+        if link_id <= 0:
+            raise ValueError("请先关联一条在售的店铺链接")
+        data = bit_ai_video.publish_job(job_id, link_id)
+    except ValueError as exc:
+        return jsonify({"status": "error", "message": str(exc)}), 400
+    except Exception as exc:
+        logging.exception("服务端 AI 视频上传失败")
+        return jsonify({"status": "error", "message": str(exc)}), 502
+    return jsonify({"status": "success", "data": data})
+
+
+@app.route('/api/db/ai-videos/jobs/<job_id>/content', methods=['GET'])
+@internal_api_required
+def api_db_ai_video_content(job_id):
+    blocked = reject_db_api_client_mode()
+    if blocked:
+        return blocked
+    try:
+        path = bit_ai_video.output_path(job_id)
+    except ValueError as exc:
+        return jsonify({"status": "error", "message": str(exc)}), 404
+    return send_file(path, mimetype="video/mp4", conditional=True, download_name=path.name)
+
+
+@app.route('/api/db/ai-videos/jobs/<job_id>/cover', methods=['GET'])
+@internal_api_required
+def api_db_ai_video_cover(job_id):
+    blocked = reject_db_api_client_mode()
+    if blocked:
+        return blocked
+    try:
+        path = bit_ai_video.cover_path(job_id)
+    except ValueError as exc:
+        return jsonify({"status": "error", "message": str(exc)}), 404
+    return send_file(path, conditional=True)
 
 
 def _store_link_advertise_response(link_id, *, internal=False):
@@ -8416,6 +8793,50 @@ def _window_anomaly_agent_identity(row):
     )
 
 
+def _window_anomaly_execution_identity(row):
+    """从异常记录中还原执行端，供任务卡按电脑展示退出登录店铺。"""
+    row = dict(row or {})
+    reason = str(row.get("reason") or "")
+    source = str(row.get("source") or "")
+    text = f"{source}；{reason}"
+    agent_id, agent_name = _window_anomaly_agent_identity(row)
+    hostname_match = re.search(r"(?:^|[；;])主机\s+([^；;]+)", reason)
+    hostname = hostname_match.group(1).strip() if hostname_match else ""
+    if agent_id or agent_name or re.search(r"Agent[:：]", text, re.IGNORECASE):
+        return {
+            "execution_target": "agent",
+            "agent_id": agent_id,
+            "agent_name": agent_name,
+            "hostname": hostname,
+        }
+
+    local_match = re.search(r"本机执行端[:：]([^；;｜|]+)", text)
+    if not local_match:
+        local_match = re.search(r"(?:^|[｜|])本机[:：]([^；;｜|]+)", text)
+    if local_match:
+        return {
+            "execution_target": "local",
+            "agent_id": "",
+            "agent_name": "",
+            "hostname": local_match.group(1).strip(),
+        }
+
+    server_match = re.search(r"服务器[:：]([^；;｜|]+)", text)
+    if server_match:
+        return {
+            "execution_target": "server",
+            "agent_id": "",
+            "agent_name": "",
+            "hostname": server_match.group(1).strip(),
+        }
+    return {
+        "execution_target": "",
+        "agent_id": "",
+        "agent_name": "",
+        "hostname": "",
+    }
+
+
 def enrich_agents_with_logout_status(agents, anomaly_data):
     """给每个执行终端附加当前退出登录店铺，并保留无法归属的旧记录。"""
     enriched = [dict(agent or {}) for agent in (agents or ())]
@@ -8452,13 +8873,16 @@ def enrich_agents_with_logout_status(agents, anomaly_data):
             continue
         if window_id:
             seen_windows.add(window_id)
+        identity = _window_anomaly_execution_identity(row)
         shop = {
             "window_id": window_id,
             "window_name": str(row.get("window_name") or window_id or "未知店铺"),
             "site": str(row.get("site") or ""),
             "last_detected_at": str(row.get("last_detected_at") or ""),
+            **identity,
         }
-        agent_id, agent_name = _window_anomaly_agent_identity(row)
+        agent_id = identity["agent_id"]
+        agent_name = identity["agent_name"]
         target = by_id.get(agent_id)
         if target is None and agent_name:
             matches = by_name.get(agent_name.casefold(), [])
@@ -8531,19 +8955,35 @@ def api_ad_analysis():
             int(value) for value in request.args.getlist("token_ids")
             if str(value or "").isdigit() and int(value) > 0
         ]
+        requested_refresh_token_ids = [
+            int(value) for value in request.args.getlist("refresh_token_ids")
+            if str(value or "").isdigit() and int(value) > 0
+        ]
         allowed_token_ids = _authorized_token_ids_for_user()
         token_ids = (
-            (requested_token_ids or None)
+            (requested_token_ids if "token_ids" in request.args else None)
             if allowed_token_ids is None
             else [
                 token_id for token_id in (requested_token_ids or sorted(allowed_token_ids))
                 if token_id in allowed_token_ids
             ]
         )
+        refresh_token_ids = None
+        if "refresh_token_ids" in request.args:
+            refresh_token_ids = requested_refresh_token_ids
+        elif "token_ids" in request.args:
+            refresh_token_ids = requested_token_ids
+        if allowed_token_ids is not None:
+            refresh_token_ids = [
+                token_id
+                for token_id in (refresh_token_ids or sorted(allowed_token_ids))
+                if token_id in allowed_token_ids
+            ]
         data = bit_db_api.get_mercado_ad_analysis(
             date_from=str(request.args.get("date_from") or "").strip(),
             date_to=str(request.args.get("date_to") or "").strip(),
             token_ids=token_ids,
+            refresh_token_ids=refresh_token_ids,
             force=str(request.args.get("force") or "").strip().lower()
             in {"1", "true", "yes", "on"},
         )
@@ -8847,7 +9287,7 @@ def api_risk_check_categories():
     try:
         return jsonify({
             "status": "success",
-            "data": db_list_zying_risk_categories(),
+            "data": list_zying_collection_categories(),
         })
     except Exception as exc:
         logging.error("读取智赢侵权检测分类失败：%s", exc)
@@ -8906,7 +9346,6 @@ def api_export_risk_check_results():
             ("数据行", "row_id"),
             ("产品编号", "product_id"),
             ("标题", "title"),
-            ("智赢分类编号", "zying_category_id"),
             ("智赢产品分类", "zying_category"),
             ("产品分类", "product_category"),
             ("风险级别", "risk_level"),
@@ -8923,8 +9362,24 @@ def api_export_risk_check_results():
             "1": "1 - 疑似/需复核",
             "2": "2 - 侵权",
         }
+        category_names = {
+            str(item.get("category_id") or "").strip(): str(
+                item.get("category_name") or ""
+            ).strip()
+            for item in list_zying_collection_categories()
+            if str(item.get("category_id") or "").strip()
+            and str(item.get("category_name") or "").strip()
+            and str(item.get("category_name") or "").strip()
+            != str(item.get("category_id") or "").strip()
+        }
         for row in rows:
             row = dict(row)
+            category_id = str(row.get("zying_category_id") or "").strip()
+            category_name = str(row.get("zying_category") or "").strip()
+            if not category_name or category_name == category_id:
+                row["zying_category"] = category_names.get(
+                    category_id, "分类名称待同步" if category_id else ""
+                )
             row["source_type_label"] = bit_check_risk.SOURCE_LABELS.get(
                 str(row.get("source_type") or "zying"), "智赢采集产品"
             )
@@ -9078,25 +9533,20 @@ def api_capture_zying_collection_login():
         return jsonify({"status": "error", "message": str(exc)}), 400
 
 
-@app.route('/api/zying-collection/start', methods=['POST'])
-@login_required
-def api_start_zying_collection():
-    try:
-        params = build_zying_collection_params(request.get_json(silent=True) or {})
-    except ValueError as exc:
-        return jsonify({"status": "error", "message": str(exc)}), 400
+def _start_zying_collection_task(params, source_label="后台 API"):
+    """Start one shared Zying task without exposing credentials in task state."""
     if not _zying_collection_lock.acquire(blocking=False):
         with _zying_collection_state_lock:
             data = {
                 **dict(_zying_collection_state),
                 "logs": list(_zying_collection_logs),
             }
-        return jsonify({
-            "status": "error",
-            "message": "智赢产品采集任务正在运行",
-            "data": data,
-        }), 409
+        return data, "智赢产品采集任务正在运行", 409
 
+    public_params = {
+        key: value for key, value in dict(params).items()
+        if key != "auth_token"
+    }
     with _zying_collection_state_lock:
         _zying_collection_stop_event.clear()
         _zying_collection_logs.clear()
@@ -9107,7 +9557,7 @@ def api_start_zying_collection():
                 "finished_at": "",
                 "status": "running",
                 "message": "正在启动智赢产品采集",
-                "params": dict(params),
+                "params": public_params,
                 "summary": {},
                 "requires_login": False,
             }
@@ -9115,7 +9565,7 @@ def api_start_zying_collection():
         _append_zying_collection_log(
             f"智赢采集任务已启动：第 {params['start_page']}-{params['number']} 页，"
             f"分类 {params.get('category_name') or params.get('category') or '全部'}，"
-            "模式 后台 API；"
+            f"模式 {source_label}；"
             "数据库已有产品将直接跳过"
         )
         data = {
@@ -9141,6 +9591,23 @@ def api_start_zying_collection():
                 }
             )
         raise
+    return data, "", 200
+
+
+@app.route('/api/zying-collection/start', methods=['POST'])
+@login_required
+def api_start_zying_collection():
+    try:
+        params = build_zying_collection_params(request.get_json(silent=True) or {})
+    except ValueError as exc:
+        return jsonify({"status": "error", "message": str(exc)}), 400
+    data, message, status_code = _start_zying_collection_task(params)
+    if status_code != 200:
+        return jsonify({
+            "status": "error",
+            "message": message,
+            "data": data,
+        }), status_code
     return jsonify({"status": "success", "data": data})
 
 
@@ -11084,6 +11551,19 @@ def api_publish_mercado_products():
                 blocked_rows.append((row, issues))
             else:
                 publish_rows.append(row)
+        ai_blocked_rows = [
+            (row, issues) for row, issues in blocked_rows
+            if str(row.get("source_type") or "").strip().lower() == "ai_original"
+        ]
+        if ai_blocked_rows:
+            samples = [
+                f"{row.get('source_item_id') or row.get('id')}：{'、'.join(issues)}"
+                for row, issues in ai_blocked_rows[:5]
+            ]
+            raise ValueError(
+                "AI 原创产品尚未达到上架条件，请在当前页面补齐后重试："
+                + "；".join(samples)
+            )
         moved_to_collection_count = 0
         if blocked_rows:
             reason_counts: dict[str, int] = {}
@@ -12626,6 +13106,7 @@ def api_db_insert_reputation():
         rows,
         merge_latest=bool(data.get("merge_latest", False)),
         replace_targets=replace_targets,
+        preserve_account_status=bool(data.get("preserve_account_status", False)),
     )
     return jsonify({"status": "success", "data": {"count": count}})
 
@@ -12869,6 +13350,39 @@ def api_db_inventory_stocks():
     except ValueError as exc:
         return jsonify({"status": "error", "message": str(exc)}), 400
     return jsonify({"status": "success", "data": result})
+
+
+@app.route('/api/db/ai-original-products', methods=['POST'])
+@internal_api_required
+def api_db_upsert_ai_original_product():
+    blocked = reject_db_api_client_mode()
+    if blocked:
+        return blocked
+    data = request.get_json(silent=True) or {}
+    try:
+        row = db_upsert_ai_original_product(
+            data.get("product") or {}, created_by=data.get("created_by") or ""
+        )
+        return jsonify({"status": "success", "data": row}), 201
+    except ValueError as exc:
+        return jsonify({"status": "error", "message": str(exc)}), 400
+
+
+@app.route('/api/db/ai-original-products/<int:product_item_id>', methods=['PATCH'])
+@internal_api_required
+def api_db_update_ai_original_product(product_item_id):
+    blocked = reject_db_api_client_mode()
+    if blocked:
+        return blocked
+    try:
+        row = db_update_ai_original_product(
+            product_item_id, request.get_json(silent=True) or {}
+        )
+        return jsonify({"status": "success", "data": row})
+    except ValueError as exc:
+        return jsonify({"status": "error", "message": str(exc)}), 400
+    except KeyError as exc:
+        return jsonify({"status": "error", "message": str(exc)}), 404
 
 
 @app.route('/api/db/mercado-management-categories', methods=['GET', 'POST'])
@@ -13173,6 +13687,10 @@ def api_db_ad_analysis():
                 int(value) for value in request.args.getlist("token_ids")
                 if str(value or "").isdigit() and int(value) > 0
             ] if "token_ids" in request.args else None,
+            refresh_token_ids=[
+                int(value) for value in request.args.getlist("refresh_token_ids")
+                if str(value or "").isdigit() and int(value) > 0
+            ] if "refresh_token_ids" in request.args else None,
             force=str(request.args.get("force") or "").strip().lower()
             in {"1", "true", "yes", "on"},
         )
@@ -13784,10 +14302,86 @@ def api_db_resolve_window_anomaly():
 def api_ai_appeal_records():
     try:
         limit = request.args.get("limit", 100)
-        return jsonify({"status": "success", "data": db_get_ai_appeal_records(limit)})
+        data = enrich_ai_appeal_records(db_get_ai_appeal_records(limit))
+        return jsonify({"status": "success", "data": data})
     except Exception as e:
         logging.error("AI appeal records query failed: %s", e)
         return jsonify({"status": "error", "message": f"Database error: {str(e)}"}), 500
+
+
+def _ai_appeal_executor_label(executor):
+    executor = dict(executor or {})
+    agent_name = str(executor.get("agent_name") or "").strip()
+    hostname = str(executor.get("hostname") or "").strip()
+    target = str(executor.get("execution_target") or "").strip().lower()
+    if agent_name:
+        return agent_name
+    if target == "server":
+        return f"服务器（{hostname}）" if hostname else "服务器"
+    if target in {"agent", "local"}:
+        return hostname or ("Agent" if target == "agent" else "本机")
+    return hostname or "未知"
+
+
+def enrich_ai_appeal_records(appeal_data):
+    """Attach current store ownership and a stable executor label to appeal logs."""
+    data = dict(appeal_data or {})
+    rows = [dict(row or {}) for row in (data.get("rows") or [])]
+    data["rows"] = rows
+
+    exact_store_settings = {}
+    fallback_store_settings = {}
+    try:
+        tokens = (bit_db_api.list_mercado_store_tokens() or {}).get("rows") or []
+    except Exception as exc:
+        logging.warning("读取 AI 申诉记录的店铺归属信息失败：%s", exc)
+        tokens = []
+
+    for raw_token in tokens:
+        token = dict(raw_token or {})
+        aliases = {
+            str(value or "").strip().casefold()
+            for value in (token.get("display_name"), token.get("nickname"))
+            if str(value or "").strip()
+        }
+        for raw_setting in token.get("site_settings") or ():
+            setting = dict(raw_setting or {})
+            site_id = str(setting.get("site_id") or "").strip().upper()
+            site_name = AUTHORIZATION_SITE_NAMES.get(site_id, "")
+            site_code = bit_appeal_ai.normalize_site_code(site_id) if site_id else ""
+            metadata = {
+                "salesperson": str(setting.get("salesperson") or "").strip(),
+                "group_name": str(setting.get("group_name") or "").strip(),
+            }
+            for alias in aliases:
+                fallback_store_settings.setdefault(alias, metadata)
+                for site_value in (site_id, site_name, site_code):
+                    if site_value:
+                        exact_store_settings[(alias, site_value.casefold())] = metadata
+
+    for row in rows:
+        shop_key = str(row.get("shop_name") or "").strip().casefold()
+        site_key = str(row.get("site") or "").strip().casefold()
+        metadata = (
+            exact_store_settings.get((shop_key, site_key))
+            or fallback_store_settings.get(shop_key)
+            or {}
+        )
+        row["salesperson"] = str(
+            row.get("salesperson") or metadata.get("salesperson") or ""
+        ).strip() or "未分配"
+        row["group_name"] = str(
+            row.get("group_name") or metadata.get("group_name") or ""
+        ).strip() or "未分组"
+        row["executor_label"] = _ai_appeal_executor_label(row.get("executor"))
+
+    data["total"] = len(rows)
+    data["filter_options"] = {
+        "salespeople": sorted({row["salesperson"] for row in rows if row["salesperson"]}),
+        "group_names": sorted({row["group_name"] for row in rows if row["group_name"]}),
+        "executors": sorted({row["executor_label"] for row in rows if row["executor_label"]}),
+    }
+    return data
 
 
 @app.route('/api/window-anomalies', methods=['GET'])
@@ -13854,6 +14448,8 @@ def enrich_window_anomaly_salespersons(anomaly_data):
     window_owners = {}
     exact_emails = {}
     window_emails = {}
+    exact_groups = {}
+    window_groups = {}
 
     for config in configs:
         window_id = str(config.get("window_id") or "").strip()
@@ -13862,6 +14458,12 @@ def enrich_window_anomaly_salespersons(anomaly_data):
             config.get("salesperson") or config.get("业务员") or ""
         ).strip()
         email = str(config.get("email") or config.get("邮箱") or "").strip()
+        group_name = str(
+            config.get("group_name")
+            or config.get("店铺组")
+            or config.get("账户组")
+            or ""
+        ).strip()
         if not window_id:
             continue
         if salesperson:
@@ -13870,6 +14472,9 @@ def enrich_window_anomaly_salespersons(anomaly_data):
         if email:
             exact_emails.setdefault((window_id, shop_name), email)
             window_emails.setdefault(window_id, email)
+        if group_name:
+            exact_groups.setdefault((window_id, shop_name), group_name)
+            window_groups.setdefault(window_id, group_name)
 
     for row in rows:
         window_id = str(row.get("window_id") or "").strip()
@@ -13886,6 +14491,14 @@ def enrich_window_anomaly_salespersons(anomaly_data):
             or row.get("邮箱")
             or exact_emails.get((window_id, shop_name))
             or window_emails.get(window_id)
+            or ""
+        ).strip()
+        row["group_name"] = str(
+            row.get("group_name")
+            or row.get("店铺组")
+            or row.get("账户组")
+            or exact_groups.get((window_id, shop_name))
+            or window_groups.get(window_id)
             or ""
         ).strip()
     return data
@@ -15720,22 +16333,495 @@ def api_browser_extension_login():
     })
 
 
+@app.route("/api/browser-extension/download", methods=["GET"])
+@login_required
+def api_browser_extension_download():
+    try:
+        package = build_browser_extension_package()
+    except (OSError, FileNotFoundError) as exc:
+        logging.exception("生成泽顺插件安装包失败")
+        return jsonify({"status": "error", "message": str(exc)}), 500
+    response = send_file(
+        package,
+        mimetype="application/zip",
+        as_attachment=True,
+        download_name="zeshun-collector-extension.zip",
+        max_age=0,
+    )
+    response.headers["Cache-Control"] = "no-store"
+    response.headers["X-Zeshun-Extension-Version"] = "1.3.0"
+    return response
+
+
 @app.route("/api/browser-extension/session", methods=["GET"])
 @browser_extension_login_required
 def api_browser_extension_session():
     return jsonify({"status": "success", "data": {"user": g.browser_extension_user}})
 
 
+@app.route("/api/browser-extension/purchase-tracking/request", methods=["GET"])
+@browser_extension_login_required
+@browser_extension_permission_required("order_analysis.view")
+def api_browser_extension_purchase_tracking_request():
+    state = plugin_purchase_tracking_manager.status(
+        (g.browser_extension_user or {}).get("id")
+    )
+    response = jsonify({"status": "success", "data": state})
+    response.headers["Cache-Control"] = "no-store"
+    return response
+
+
+@app.route("/api/browser-extension/purchase-tracking/prepare", methods=["POST"])
+@browser_extension_login_required
+@browser_extension_permission_required("order_analysis.execute")
+def api_browser_extension_purchase_tracking_prepare():
+    data = request.get_json(silent=True) or {}
+    try:
+        state = plugin_purchase_tracking_manager.mark_waiting_login(
+            (g.browser_extension_user or {}).get("id"),
+            data.get("request_id"),
+        )
+    except (TypeError, ValueError) as exc:
+        return jsonify({"status": "error", "message": str(exc)}), 400
+    return jsonify({"status": "success", "data": state})
+
+
+@app.route("/api/browser-extension/purchase-tracking/claim", methods=["POST"])
+@browser_extension_login_required
+@browser_extension_permission_required("order_analysis.execute")
+def api_browser_extension_purchase_tracking_claim():
+    data = request.get_json(silent=True) or {}
+    try:
+        state = plugin_purchase_tracking_manager.claim(
+            (g.browser_extension_user or {}).get("id"),
+            data.get("request_id"),
+        )
+    except (TypeError, ValueError) as exc:
+        return jsonify({"status": "error", "message": str(exc)}), 400
+    return jsonify({"status": "success", "data": state})
+
+
+@app.route("/api/browser-extension/purchase-tracking/result", methods=["POST"])
+@browser_extension_login_required
+@browser_extension_permission_required("order_analysis.execute")
+def api_browser_extension_purchase_tracking_result():
+    data = request.get_json(silent=True) or {}
+    user = dict(g.browser_extension_user or {})
+    status = str(data.get("status") or "failed").strip().lower()
+    try:
+        current = plugin_purchase_tracking_manager.status(user.get("id"))
+        request_id = str(data.get("request_id") or "").strip()
+        order_id = str(data.get("order_id") or "").strip()
+        if current.get("request_id") != request_id:
+            raise ValueError("物流号同步任务不存在或已过期")
+        if not current.get("running") or current.get("phase") != "syncing":
+            raise ValueError("物流号同步任务当前不在同步状态")
+        if not any(str(row.get("order_id") or "") == order_id for row in current.get("orders") or []):
+            raise ValueError("物流号同步结果包含未选择的订单")
+        if status == "synced":
+            tracking_number = str(data.get("tracking_number") or "").strip()
+            if not tracking_number:
+                raise ValueError("同步成功的结果缺少物流号")
+            changes = {"purchase_tracking": tracking_number}
+            logistics_company = str(data.get("logistics_company") or "").strip()
+            if logistics_company:
+                changes["logistics_company"] = logistics_company
+            bit_db_api.bulk_update_orders(
+                [order_id],
+                operator_id=user.get("id"),
+                operator_name=user.get("display_name") or user.get("username") or "",
+                **changes,
+            )
+        state = plugin_purchase_tracking_manager.record_result(
+            user.get("id"),
+            request_id,
+            order_id=order_id,
+            status=status,
+            tracking_number=data.get("tracking_number"),
+            logistics_company=data.get("logistics_company"),
+            message=data.get("message"),
+        )
+    except (TypeError, ValueError) as exc:
+        return jsonify({"status": "error", "message": str(exc)}), 400
+    except Exception as exc:
+        logging.exception("泽顺插件回传采购物流号失败")
+        return jsonify({"status": "error", "message": f"写入物流号失败：{exc}"}), 502
+    return jsonify({"status": "success", "data": state})
+
+
+@app.route("/api/browser-extension/purchase-tracking/fail", methods=["POST"])
+@browser_extension_login_required
+@browser_extension_permission_required("order_analysis.execute")
+def api_browser_extension_purchase_tracking_fail():
+    data = request.get_json(silent=True) or {}
+    try:
+        state = plugin_purchase_tracking_manager.fail(
+            (g.browser_extension_user or {}).get("id"),
+            data.get("request_id"),
+            data.get("message"),
+        )
+    except (TypeError, ValueError) as exc:
+        return jsonify({"status": "error", "message": str(exc)}), 400
+    return jsonify({"status": "success", "data": state})
+
+
+def _browser_extension_zying_credential(data):
+    credential = str((data or {}).get("credential") or "").strip()
+    if not credential:
+        raise bit_zying_caiji.ZyingAuthenticationError(
+            "未从当前本地智赢网页读取到登录状态，请登录后重试"
+        )
+    if len(credential) > 16384:
+        raise ValueError("智赢登录凭证格式异常")
+    return credential
+
+
+def _remember_browser_extension_zying_categories(data):
+    rows = (data or {}).get("categories") or []
+    if not isinstance(rows, list):
+        raise ValueError("智赢分类必须是数组")
+    if not rows:
+        return list_zying_collection_categories()
+    return bit_zying_caiji._remember_zying_categories(rows[:5000])
+
+
+@app.route("/api/browser-extension/zying/options", methods=["POST"])
+@browser_extension_login_required
+@browser_extension_permission_required("zying_collection.view")
+def api_browser_extension_zying_options():
+    data = request.get_json(silent=True) or {}
+    try:
+        credential = _browser_extension_zying_credential(data)
+        categories = _remember_browser_extension_zying_categories(data)
+        developers = bit_zying_caiji.list_zying_product_developers(credential)
+        synced = db_sync_zying_product_developers(developers)
+        return jsonify({
+            "status": "success",
+            "data": {
+                "categories": categories,
+                "developers": developers,
+                "synced": synced,
+            },
+        })
+    except bit_zying_caiji.ZyingAuthenticationError as exc:
+        return jsonify({"status": "error", "message": str(exc)}), 409
+    except (TypeError, ValueError) as exc:
+        return jsonify({"status": "error", "message": str(exc)}), 400
+    except Exception as exc:
+        logging.exception("泽顺插件读取智赢采集选项失败")
+        return jsonify({"status": "error", "message": str(exc)}), 500
+
+
+@app.route("/api/browser-extension/zying/start", methods=["POST"])
+@browser_extension_login_required
+@browser_extension_permission_required("zying_collection.execute")
+def api_browser_extension_start_zying_collection():
+    data = request.get_json(silent=True) or {}
+    try:
+        credential = _browser_extension_zying_credential(data)
+        _remember_browser_extension_zying_categories(data)
+        params = build_zying_collection_params(data)
+        params["auth_token"] = credential
+    except bit_zying_caiji.ZyingAuthenticationError as exc:
+        return jsonify({"status": "error", "message": str(exc)}), 409
+    except (TypeError, ValueError) as exc:
+        return jsonify({"status": "error", "message": str(exc)}), 400
+    task, message, status_code = _start_zying_collection_task(
+        params,
+        source_label="泽顺插件（本地浏览器登录）",
+    )
+    if status_code != 200:
+        return jsonify({"status": "error", "message": message, "data": task}), status_code
+    return jsonify({"status": "success", "data": task})
+
+
+@app.route("/api/browser-extension/zying/status", methods=["GET"])
+@browser_extension_login_required
+@browser_extension_permission_required("zying_collection.view")
+def api_browser_extension_zying_collection_status():
+    with _zying_collection_state_lock:
+        data = {
+            **dict(_zying_collection_state),
+            "params": dict(_zying_collection_state.get("params") or {}),
+            "summary": dict(_zying_collection_state.get("summary") or {}),
+            "logs": list(_zying_collection_logs),
+            "defaults": {
+                "start_page": bit_zying_caiji.DEFAULT_ZYING_START_PAGE,
+                "end_page": bit_zying_caiji.DEFAULT_ZYING_PAGE_COUNT,
+            },
+        }
+    return jsonify({"status": "success", "data": data})
+
+
+@app.route("/api/browser-extension/zying/stop", methods=["POST"])
+@browser_extension_login_required
+@browser_extension_permission_required("zying_collection.execute")
+def api_browser_extension_stop_zying_collection():
+    with _zying_collection_state_lock:
+        if not _zying_collection_state.get("running"):
+            return jsonify({
+                "status": "error",
+                "message": "当前没有正在运行的智赢产品采集任务",
+                "data": {
+                    **dict(_zying_collection_state),
+                    "logs": list(_zying_collection_logs),
+                },
+            }), 409
+        _zying_collection_stop_event.set()
+        _zying_collection_state.update({
+            "status": "stopping",
+            "message": "正在安全结束智赢产品采集，请等待当前接口或入库节点完成",
+        })
+        _append_zying_collection_log("泽顺插件已发送结束指令，正在安全停止采集")
+        data = {
+            **dict(_zying_collection_state),
+            "logs": list(_zying_collection_logs),
+        }
+    return jsonify({"status": "success", "message": "已发送结束指令", "data": data})
+
+
+_ai_original_task_lock = threading.Lock()
+_ai_original_task_state = {
+    "running": False,
+    "status": "idle",
+    "message": "等待执行 AI 原创任务",
+    "requested_count": 0,
+    "processed_count": 0,
+    "completed_count": 0,
+    "failed_count": 0,
+    "current_product_id": 0,
+    "results": [],
+}
+
+
+def _ai_original_task_snapshot():
+    with _ai_original_task_lock:
+        return {
+            **_ai_original_task_state,
+            "results": list(_ai_original_task_state.get("results") or []),
+        }
+
+
+def _run_ai_original_task(product_rows, api_key="", model="", base_url="", workers=3):
+    from erp.ai_original_products import prepare_ai_original_product
+
+    rows = [dict(row) for row in product_rows or []]
+    results = []
+    completed = failed = 0
+
+    def process(row):
+        product_id = int(row.get("id") or 0)
+        snapshot = row.get("source_snapshot_json") or {}
+        if not isinstance(snapshot, dict):
+            try:
+                snapshot = json.loads(str(snapshot))
+            except (TypeError, ValueError):
+                snapshot = {}
+        snapshot = dict(snapshot)
+        ai_state = dict(snapshot.get("ai_original") or {})
+        ai_state.update(status="processing", error="")
+        snapshot["ai_original"] = ai_state
+        db_update_ai_original_product(product_id, {"source_snapshot_json": snapshot})
+        try:
+            prepared = prepare_ai_original_product(
+                row, api_key=api_key, model=model, base_url=base_url
+            )
+            saved = db_update_ai_original_product(product_id, {
+                "title": prepared["title"],
+                "description_text": prepared["description_text"],
+                "main_image_url": prepared["main_image_url"],
+                "source_snapshot_json": prepared["source_snapshot_json"],
+                "currency_id": "USD",
+            })
+            return {
+                "product_id": product_id,
+                "source_item_id": row.get("source_item_id"),
+                "status": "completed",
+                "title_es": saved.get("title_es") or prepared["ai_original"]["title_es"],
+                "title_pt": saved.get("title_pt") or prepared["ai_original"]["title_pt"],
+            }
+        except Exception as exc:
+            ai_state.update(status="failed", error=str(exc)[:2000])
+            snapshot["ai_original"] = ai_state
+            try:
+                db_update_ai_original_product(product_id, {
+                    "source_snapshot_json": snapshot,
+                    "review_status": "unreviewed",
+                })
+            except Exception:
+                logging.exception("保存 AI 原创产品失败状态失败: %s", product_id)
+            return {
+                "product_id": product_id,
+                "source_item_id": row.get("source_item_id"),
+                "status": "failed",
+                "message": str(exc)[:2000],
+            }
+
+    try:
+        with ThreadPoolExecutor(max_workers=max(1, min(int(workers or 3), 6))) as pool:
+            futures = {pool.submit(process, row): row for row in rows}
+            for future in as_completed(futures):
+                result = future.result()
+                results.append(result)
+                if result["status"] == "completed":
+                    completed += 1
+                else:
+                    failed += 1
+                with _ai_original_task_lock:
+                    _ai_original_task_state.update({
+                        "processed_count": completed + failed,
+                        "completed_count": completed,
+                        "failed_count": failed,
+                        "current_product_id": int(result.get("product_id") or 0),
+                        "message": f"AI 原创处理进度 {completed + failed}/{len(rows)}",
+                        "results": list(results),
+                    })
+        status = "completed" if not failed else ("partial" if completed else "error")
+        message = f"AI 原创任务完成：成功 {completed} 件，失败 {failed} 件"
+    except Exception as exc:
+        logging.exception("AI 原创批量任务异常")
+        status, message = "error", f"AI 原创任务异常：{exc}"
+    with _ai_original_task_lock:
+        _ai_original_task_state.update(
+            running=False, status=status, message=message,
+            processed_count=completed + failed, completed_count=completed,
+            failed_count=failed, current_product_id=0, results=list(results),
+        )
+
+
+@app.route("/api/ai-original-products", methods=["GET"])
+@login_required
+def api_ai_original_products():
+    try:
+        result = db_list_mercado_product_items(
+            search=str(request.args.get("search") or "").strip(),
+            source_type="ai_original",
+            limit=_parse_int_param(request.args, "limit", 500, 1, 1000),
+            offset=_parse_int_param(request.args, "offset", 0, 0, 1000000),
+        )
+        return jsonify({"status": "success", "data": result})
+    except Exception as exc:
+        logging.exception("读取 AI 原创产品失败")
+        return jsonify({"status": "error", "message": f"读取 AI 原创产品失败：{exc}"}), 500
+
+
+@app.route("/api/ai-original-products/<int:product_item_id>", methods=["PATCH"])
+@login_required
+def api_update_ai_original_product(product_item_id):
+    data = request.get_json(silent=True) or {}
+    allowed = {
+        "weight_g", "package_length_cm", "package_width_cm", "package_height_cm",
+        "category_id", "net_proceeds_usd", "review_status",
+    }
+    try:
+        row = db_update_ai_original_product(
+            product_item_id, {key: value for key, value in data.items() if key in allowed}
+        )
+        return jsonify({"status": "success", "data": row})
+    except ValueError as exc:
+        return jsonify({"status": "error", "message": str(exc)}), 400
+    except KeyError as exc:
+        return jsonify({"status": "error", "message": str(exc)}), 404
+
+
+@app.route("/api/ai-original-products/process", methods=["POST"])
+@login_required
+def api_process_ai_original_products():
+    data = request.get_json(silent=True) or {}
+    item_ids = data.get("product_item_ids") or []
+    if not isinstance(item_ids, list):
+        return jsonify({"status": "error", "message": "product_item_ids 必须是数组"}), 422
+    try:
+        ids = list(dict.fromkeys(int(value) for value in item_ids if int(value) > 0))
+        if not ids:
+            raise ValueError("请至少勾选一个 1688 产品")
+        if len(ids) > 50:
+            raise ValueError("每次最多执行 50 件 AI 原创产品")
+        rows = db_get_mercado_product_items_by_ids(ids)
+        if len(rows) != len(ids) or any(row.get("source_type") != "ai_original" for row in rows):
+            raise ValueError("部分勾选记录不是 AI 原创产品，请刷新后重试")
+        api_key = str(data.get("api_key") or "").strip()
+        model = str(data.get("model") or "").strip()[:128]
+        base_url = str(data.get("base_url") or "").strip()[:2000]
+        workers = max(1, min(int(data.get("workers") or 3), 6))
+    except (TypeError, ValueError) as exc:
+        return jsonify({"status": "error", "message": str(exc)}), 400
+    with _ai_original_task_lock:
+        if _ai_original_task_state.get("running"):
+            return jsonify({"status": "error", "message": "已有 AI 原创任务正在运行"}), 409
+        _ai_original_task_state.update({
+            "running": True, "status": "running",
+            "message": f"准备处理 {len(rows)} 件 1688 产品",
+            "requested_count": len(rows), "processed_count": 0,
+            "completed_count": 0, "failed_count": 0,
+            "current_product_id": 0, "results": [],
+        })
+    threading.Thread(
+        target=_run_ai_original_task,
+        args=(rows, api_key, model, base_url, workers),
+        name="ai-original-products",
+        daemon=True,
+    ).start()
+    return jsonify({"status": "success", "data": _ai_original_task_snapshot()}), 202
+
+
+@app.route("/api/ai-original-products/process/status", methods=["GET"])
+@login_required
+def api_ai_original_products_status():
+    response = jsonify({"status": "success", "data": _ai_original_task_snapshot()})
+    response.headers["Cache-Control"] = "no-store"
+    return response
+
+
+@app.route("/api/ai-original-products/images/<path:filename>", methods=["GET"])
+def api_ai_original_product_image(filename):
+    from erp.ai_original_products import IMAGE_DIR
+
+    safe_name = Path(filename).name
+    if safe_name != filename or not re.fullmatch(r"1688-[A-Za-z0-9_-]+-white\.jpg", safe_name):
+        return jsonify({"status": "error", "message": "图片地址无效"}), 404
+    path = (IMAGE_DIR / safe_name).resolve()
+    if path.parent != IMAGE_DIR.resolve() or not path.is_file():
+        return jsonify({"status": "error", "message": "图片不存在"}), 404
+    response = send_file(path, mimetype="image/jpeg", conditional=True)
+    response.headers["Cache-Control"] = "public, max-age=86400"
+    return response
+
+
 @app.route("/api/browser-extension/collect", methods=["POST"])
 @browser_extension_login_required
 def api_browser_extension_collect():
-    from erp.mercadolibre_batch_collector import validate_collection_request
-
     data = request.get_json(silent=True) or {}
     product = data.get("product") if isinstance(data.get("product"), dict) else data
+    source_platform = str(product.get("source_platform") or "").strip().lower()
+    source_url = str(product.get("source_url") or product.get("final_url") or "").strip()
+    if source_platform == "1688" or "1688.com" in source_url.lower():
+        created_by = str(
+            g.browser_extension_user.get("display_name")
+            or g.browser_extension_user.get("username")
+            or "浏览器插件"
+        )
+        try:
+            row = db_upsert_ai_original_product(product, created_by=f"浏览器插件：{created_by}")
+            return jsonify({
+                "status": "success",
+                "data": {
+                    "product_id": int(row.get("id") or 0),
+                    "source_item_id": row.get("source_item_id"),
+                    "source_platform": "1688",
+                    "ai_status": row.get("ai_status") or "pending",
+                },
+            }), 201
+        except ValueError as exc:
+            return jsonify({"status": "error", "message": str(exc)}), 400
+        except Exception as exc:
+            logging.exception("浏览器插件采集 1688 商品入库失败")
+            return jsonify({"status": "error", "message": f"1688 商品入库失败：{exc}"}), 500
+
+    from erp.mercadolibre_batch_collector import validate_collection_request
+
     item_id = str(product.get("source_item_id") or "").strip().upper()
     title = str(product.get("title") or "").strip()
-    source_url = str(product.get("source_url") or product.get("final_url") or "").strip()
     if not re.fullmatch(r"(?:ML[A-Z]|CBT)\d{5,}", item_id):
         return jsonify({"status": "error", "message": "未识别到有效的 Mercado Libre 商品编号"}), 400
     if not title:

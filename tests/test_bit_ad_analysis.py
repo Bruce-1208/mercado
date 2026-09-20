@@ -80,10 +80,21 @@ class FakeAdActionClient:
         return {"id": ad_group_id, "status": status}
 
 
-def _install_token_fakes(monkeypatch):
+def _install_token_fakes(monkeypatch, tmp_path):
+    monkeypatch.setattr(
+        analysis, "AD_ANALYSIS_STATE_PATH", tmp_path / "ad-analysis.json"
+    )
     monkeypatch.setattr(
         "bit.bit_mysql.list_mercado_store_tokens",
-        lambda: {"rows": [{"id": 7, "enabled": True}]},
+        lambda: {"rows": [{
+            "id": 7,
+            "enabled": True,
+            "site_settings": [{
+                "site_id": "MLM",
+                "salesperson": "业务员甲",
+                "group_name": "重点店群",
+            }],
+        }]},
     )
     monkeypatch.setattr(
         "bit.bit_mysql.get_mercado_store_token",
@@ -96,8 +107,8 @@ def _install_token_fakes(monkeypatch):
     analysis._cache.clear()
 
 
-def test_collect_ad_analysis_includes_accounts_item_and_family_links(monkeypatch):
-    _install_token_fakes(monkeypatch)
+def test_collect_ad_analysis_includes_accounts_item_and_family_links(monkeypatch, tmp_path):
+    _install_token_fakes(monkeypatch, tmp_path)
 
     result = analysis.collect_ad_analysis(
         date_from="2026-09-01", date_to="2026-09-17", force=True
@@ -113,10 +124,12 @@ def test_collect_ad_analysis_includes_accounts_item_and_family_links(monkeypatch
     assert family["campaign_name"] == "主推活动"
     assert family["permalink"].endswith("/MLM-456-_JM")
     assert result["summary"]["currencies"][0]["currency_id"] == "MXN"
+    assert result["accounts"][0]["salesperson"] == "业务员甲"
+    assert result["links"][0]["group_name"] == "重点店群"
 
 
-def test_collect_ad_analysis_respects_explicit_empty_token_scope(monkeypatch):
-    _install_token_fakes(monkeypatch)
+def test_collect_ad_analysis_respects_explicit_empty_token_scope(monkeypatch, tmp_path):
+    _install_token_fakes(monkeypatch, tmp_path)
 
     result = analysis.collect_ad_analysis(
         date_from="2026-09-01", date_to="2026-09-17", token_ids=[], force=True
@@ -126,9 +139,52 @@ def test_collect_ad_analysis_respects_explicit_empty_token_scope(monkeypatch):
     assert result["links"] == []
 
 
+def test_default_load_returns_last_persisted_snapshot_without_live_calls(monkeypatch, tmp_path):
+    _install_token_fakes(monkeypatch, tmp_path)
+    refreshed = analysis.collect_ad_analysis(
+        date_from="2026-09-01", date_to="2026-09-17", force=True
+    )
+    monkeypatch.setattr(
+        "bit.bit_mysql.list_mercado_store_tokens",
+        lambda: pytest.fail("default snapshot load must not query stores"),
+    )
+
+    result = analysis.collect_ad_analysis()
+
+    assert result["cached"] is True
+    assert result["snapshot_available"] is True
+    assert result["generated_at"] == refreshed["generated_at"]
+    assert result["summary"]["link_count"] == 2
+
+
+def test_selected_store_refresh_merges_into_existing_full_snapshot(monkeypatch, tmp_path):
+    _install_token_fakes(monkeypatch, tmp_path)
+    analysis._persist_snapshot({
+        "date_from": "2026-09-01",
+        "date_to": "2026-09-17",
+        "generated_at": "2026-09-17 08:00:00",
+        "accounts": [{"token_id": 8, "store_name": "保留店铺", "currency_id": "MXN", "metrics": {"cost": 3}}],
+        "links": [{"token_id": 8, "site_id": "MLM", "item_id": "MLM888", "currency_id": "MXN", "metrics": {"cost": 3}}],
+        "errors": [],
+        "summary": {},
+        "snapshot_available": True,
+    })
+
+    result = analysis.collect_ad_analysis(
+        date_from="2026-09-01",
+        date_to="2026-09-17",
+        refresh_token_ids=[7],
+        force=True,
+    )
+
+    assert {row["token_id"] for row in result["accounts"]} == {7, 8}
+    assert {row["item_id"] for row in result["links"]} == {"MLM123", "MLM456", "MLM888"}
+    assert result["refreshed_token_ids"] == [7]
+
+
 def test_ad_analysis_rejects_more_than_ninety_days():
     with pytest.raises(ValueError, match="90 天"):
-        analysis.collect_ad_analysis(date_from="2026-01-01", date_to="2026-04-01")
+        analysis._date_range(date_from="2026-01-01", date_to="2026-04-01")
 
 
 def test_update_product_ads_ad_groups_deduplicates_catalog_rows(monkeypatch):
@@ -225,4 +281,9 @@ def test_ad_analysis_module_is_present_in_workbench_template():
     assert 'id="ad-analysis-link-body"' in source
     assert 'id="ad-analysis-activate-selected"' in source
     assert 'id="ad-analysis-pause-selected"' in source
+    assert 'id="ad-analysis-salesperson"' in source
+    assert 'id="ad-analysis-group"' in source
+    assert 'id="ad-analysis-store"' in source
+    assert "默认展示上次更新的全部数据" in source
+    assert 'query.append("refresh_token_ids"' in source
     assert "loadAdAnalysis" in source

@@ -1,0 +1,342 @@
+"""1688 -> Mercado Libre AI-original product preparation.
+
+The browser extension only captures facts that are visible on 1688.  This
+module owns the irreversible preparation step: generate new marketplace copy,
+enforce the title policy, and create a white-background first image.
+"""
+
+from __future__ import annotations
+
+import json
+import os
+import re
+from collections import deque
+from io import BytesIO
+from pathlib import Path
+from typing import Any, Callable, Mapping
+from urllib.parse import urlparse
+
+import requests
+
+
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+IMAGE_DIR = Path(
+    os.environ.get("AI_ORIGINAL_IMAGE_DIR")
+    or PROJECT_ROOT / ".data" / "ai-original-images"
+)
+IMAGE_BASE_URL = str(
+    os.environ.get("AI_ORIGINAL_IMAGE_BASE_URL") or "http://127.0.0.1:5000"
+).rstrip("/")
+MAX_TITLE_CHARS = 60
+
+
+def extract_1688_item_id(value: Any) -> str:
+    text = str(value or "").strip()
+    match = re.search(r"/(?:offer/)?(\d{5,})(?:\.html)?(?:[?#/]|$)", text)
+    if not match:
+        match = re.search(r"(?:offerId|offer_id|itemId)=(\d{5,})", text, re.I)
+    if not match and re.fullmatch(r"\d{5,}", text):
+        return text[:28]
+    return match.group(1)[:28] if match else ""
+
+
+def normalize_1688_product(product: Mapping[str, Any]) -> dict[str, Any]:
+    row = dict(product or {})
+    source_url = str(row.get("source_url") or row.get("final_url") or "").strip()
+    host = (urlparse(source_url).hostname or "").lower()
+    item_id = extract_1688_item_id(row.get("source_item_id") or source_url)
+    title = re.sub(r"\s+", " ", str(row.get("title") or "")).strip()
+    if not item_id or not (host == "1688.com" or host.endswith(".1688.com")):
+        raise ValueError("未识别到有效的 1688 商品详情链接")
+    if not title:
+        raise ValueError("1688 商品标题不能为空")
+    images = []
+    for raw in row.get("images") or []:
+        url = str(raw.get("url") if isinstance(raw, Mapping) else raw or "").strip()
+        if url.startswith("//"):
+            url = "https:" + url
+        if url.startswith(("http://", "https://")) and url not in images:
+            images.append(url)
+    main_image = str(row.get("main_image_url") or (images[0] if images else "")).strip()
+    if main_image.startswith("//"):
+        main_image = "https:" + main_image
+    if main_image and main_image not in images:
+        images.insert(0, main_image)
+    properties = row.get("properties") if isinstance(row.get("properties"), list) else []
+    description = str(row.get("description_text") or row.get("description") or "").strip()
+    return {
+        "source_item_id": f"1688{item_id}",
+        "source_1688_item_id": item_id,
+        "source_url": source_url[:1500],
+        "title": title[:255],
+        "price": row.get("price"),
+        "currency_id": "CNY",
+        "main_image_url": main_image[:1500],
+        "images": images[:20],
+        "properties": properties[:100],
+        "description_text": description[:50000],
+        "weight_g": row.get("weight_g"),
+        "package_length_cm": row.get("package_length_cm"),
+        "package_width_cm": row.get("package_width_cm"),
+        "package_height_cm": row.get("package_height_cm"),
+        "collected_at": str(row.get("collected_at") or "")[:64],
+    }
+
+
+def _json_object(text: str) -> dict[str, Any]:
+    value = str(text or "").strip()
+    value = re.sub(r"^```(?:json)?\s*|\s*```$", "", value, flags=re.I)
+    start, end = value.find("{"), value.rfind("}")
+    if start < 0 or end <= start:
+        raise ValueError("AI 未返回 JSON 格式的商品文案")
+    decoded = json.loads(value[start : end + 1])
+    if not isinstance(decoded, dict):
+        raise ValueError("AI 商品文案格式无效")
+    return decoded
+
+
+def _brand_candidates(product: Mapping[str, Any], generated: Mapping[str, Any]) -> list[str]:
+    candidates = []
+    brand_keys = ("品牌", "brand", "marca", "商标")
+    for prop in product.get("properties") or []:
+        if not isinstance(prop, Mapping):
+            continue
+        name = str(prop.get("name") or prop.get("key") or "").strip().lower()
+        if any(key in name for key in brand_keys):
+            candidates.append(str(prop.get("value") or "").strip())
+    raw_terms = generated.get("brand_terms") or []
+    if isinstance(raw_terms, str):
+        raw_terms = re.split(r"[,，;/]", raw_terms)
+    candidates.extend(str(value or "").strip() for value in raw_terms)
+    ignored = {"", "无", "无品牌", "其他", "other", "generic", "oem", "none"}
+    return sorted({value for value in candidates if value.lower() not in ignored}, key=len, reverse=True)
+
+
+def _clean_title(value: Any, brands: list[str]) -> str:
+    title = re.sub(r"\s+", " ", str(value or "")).strip(" -–—,，.;；")
+    for brand in brands:
+        title = re.sub(re.escape(brand), "", title, flags=re.I)
+    title = re.sub(r"\s+", " ", title).strip(" -–—,，.;；")
+    if len(title) > MAX_TITLE_CHARS:
+        clipped = title[:MAX_TITLE_CHARS]
+        if " " in clipped and len(clipped.rsplit(" ", 1)[0]) >= 35:
+            clipped = clipped.rsplit(" ", 1)[0]
+        title = clipped.rstrip(" -–—,，.;；")
+    if not title:
+        raise ValueError("AI 生成的标题为空")
+    if len(title) > MAX_TITLE_CHARS:
+        raise ValueError("AI 生成的标题超过 60 个字符")
+    for brand in brands:
+        if brand and brand.casefold() in title.casefold():
+            raise ValueError(f"AI 标题仍包含品牌词：{brand}")
+    return title
+
+
+def build_copy_prompt(product: Mapping[str, Any]) -> str:
+    facts = {
+        "中文标题": product.get("title"),
+        "商品属性": product.get("properties") or [],
+        "原始详情摘要": str(product.get("description_text") or "")[:6000],
+    }
+    return (
+        "你是 Mercado Libre 拉美电商文案专家。根据 1688 商品事实生成全新、准确、"
+        "不侵权的刊登文案。不要照抄原详情，不要编造规格。标题不得出现任何品牌、商标、"
+        "店铺名、厂家名或 OEM 字样；西班牙语和巴西葡萄牙语标题各不超过 60 个字符。"
+        "详情分别用自然的拉美西班牙语和巴西葡萄牙语重写，包含卖点、规格、包装内容和"
+        "使用提示，但不要使用 HTML。只返回 JSON，字段必须为 title_es、title_pt、"
+        "description_es、description_pt、brand_terms（识别到的品牌词数组）。\n"
+        + json.dumps(facts, ensure_ascii=False)
+    )
+
+
+def generate_marketplace_copy(
+    product: Mapping[str, Any],
+    *,
+    api_key: str = "",
+    model: str = "",
+    base_url: str = "",
+    chat: Callable[..., str] | None = None,
+) -> dict[str, str]:
+    if chat is None:
+        from AI_Agent.deepseek import chat_deepseek
+
+        chat = chat_deepseek
+    response = chat(
+        [{"role": "user", "content": build_copy_prompt(product)}],
+        api_key=str(api_key or "").strip() or None,
+        model=str(model or "").strip() or None,
+        base_url=str(base_url or "").strip() or None,
+        temperature=0.25,
+        max_tokens=2400,
+        response_format={"type": "json_object"},
+    )
+    generated = _json_object(response)
+    brands = _brand_candidates(product, generated)
+    title_es = _clean_title(generated.get("title_es"), brands)
+    title_pt = _clean_title(generated.get("title_pt"), brands)
+    description_es = str(generated.get("description_es") or "").strip()
+    description_pt = str(generated.get("description_pt") or "").strip()
+    if not description_es or not description_pt:
+        raise ValueError("AI 必须同时生成西班牙语和葡萄牙语详情")
+    original_description = re.sub(
+        r"\s+", " ", str(product.get("description_text") or "")
+    ).strip().casefold()
+    if original_description and any(
+        re.sub(r"\s+", " ", value).strip().casefold() == original_description
+        for value in (description_es, description_pt)
+    ):
+        raise ValueError("AI 返回了原始详情，必须重新生成原创描述")
+    return {
+        "title_es": title_es,
+        "title_pt": title_pt,
+        "description_es": description_es[:50000],
+        "description_pt": description_pt[:50000],
+    }
+
+
+def _background_mask(image, threshold: int = 48):
+    """Return edge-connected pixels close to a corner colour."""
+    from PIL import Image
+
+    rgb = image.convert("RGB")
+    width, height = rgb.size
+    corners = [rgb.getpixel((0, 0)), rgb.getpixel((width - 1, 0)),
+               rgb.getpixel((0, height - 1)), rgb.getpixel((width - 1, height - 1))]
+    background = tuple(sum(pixel[channel] for pixel in corners) // 4 for channel in range(3))
+    source = rgb.load()
+    mask = Image.new("L", rgb.size, 0)
+    target = mask.load()
+    pending = deque()
+    for x in range(width):
+        pending.extend(((x, 0), (x, height - 1)))
+    for y in range(height):
+        pending.extend(((0, y), (width - 1, y)))
+    while pending:
+        x, y = pending.popleft()
+        if target[x, y]:
+            continue
+        pixel = source[x, y]
+        distance = sum((pixel[channel] - background[channel]) ** 2 for channel in range(3)) ** 0.5
+        if distance > threshold:
+            continue
+        target[x, y] = 255
+        if x: pending.append((x - 1, y))
+        if x + 1 < width: pending.append((x + 1, y))
+        if y: pending.append((x, y - 1))
+        if y + 1 < height: pending.append((x, y + 1))
+    return mask
+
+
+def create_white_background_image(
+    source_url: str,
+    item_id: str,
+    *,
+    image_dir: Path | None = None,
+    http_get: Callable[..., Any] | None = None,
+) -> tuple[Path, str]:
+    from PIL import Image, ImageFilter, ImageOps
+
+    parsed_source = urlparse(str(source_url or ""))
+    source_host = (parsed_source.hostname or "").lower()
+    if parsed_source.scheme not in {"http", "https"} or not (
+        source_host == "1688.com"
+        or source_host.endswith(".1688.com")
+        or source_host == "alicdn.com"
+        or source_host.endswith(".alicdn.com")
+    ):
+        raise ValueError("1688 商品缺少可用的首图")
+    response = (http_get or requests.get)(
+        source_url,
+        timeout=45,
+        headers={
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+            "Referer": "https://detail.1688.com/",
+        },
+    )
+    response.raise_for_status()
+    if len(response.content) > 15 * 1024 * 1024:
+        raise ValueError("1688 首图超过 15 MB")
+    with Image.open(BytesIO(response.content)) as opened:
+        image = ImageOps.exif_transpose(opened).convert("RGB")
+    max_side = max(image.size)
+    if max_side > 1600:
+        scale = 1600 / max_side
+        image = image.resize((round(image.width * scale), round(image.height * scale)), Image.Resampling.LANCZOS)
+    mask = _background_mask(image).filter(ImageFilter.GaussianBlur(radius=1.2))
+    white = Image.new("RGB", image.size, "white")
+    image = Image.composite(white, image, mask)
+    canvas_size = max(800, round(max(image.size) * 1.12))
+    canvas = Image.new("RGB", (canvas_size, canvas_size), "white")
+    image.thumbnail((round(canvas_size * 0.9), round(canvas_size * 0.9)), Image.Resampling.LANCZOS)
+    canvas.paste(image, ((canvas_size - image.width) // 2, (canvas_size - image.height) // 2))
+    target_dir = Path(image_dir or IMAGE_DIR)
+    target_dir.mkdir(parents=True, exist_ok=True)
+    filename = f"1688-{extract_1688_item_id(item_id) or re.sub(r'\W+', '', item_id)}-white.jpg"
+    path = target_dir / filename
+    canvas.save(path, format="JPEG", quality=94, optimize=True)
+    return path, f"{IMAGE_BASE_URL}/api/ai-original-products/images/{filename}"
+
+
+def prepare_ai_original_product(
+    row: Mapping[str, Any],
+    *,
+    api_key: str = "",
+    model: str = "",
+    base_url: str = "",
+    chat: Callable[..., str] | None = None,
+    image_dir: Path | None = None,
+    http_get: Callable[..., Any] | None = None,
+) -> dict[str, Any]:
+    raw_snapshot = row.get("source_snapshot_json") or {}
+    snapshot = dict(raw_snapshot) if isinstance(raw_snapshot, Mapping) else json.loads(str(raw_snapshot))
+    original = dict(snapshot.get("original_1688") or {})
+    if not original:
+        raise ValueError("产品缺少 1688 原始快照，请重新采集")
+    copy = generate_marketplace_copy(
+        original, api_key=api_key, model=model, base_url=base_url, chat=chat
+    )
+    _path, white_url = create_white_background_image(
+        original.get("main_image_url") or row.get("main_image_url"),
+        original.get("source_1688_item_id") or row.get("source_item_id"),
+        image_dir=image_dir,
+        http_get=http_get,
+    )
+    output = {**copy, "main_image_url": white_url, "status": "completed", "error": ""}
+    snapshot["ai_original"] = output
+    snapshot["source"] = {
+        "id": f"CBT{original.get('source_1688_item_id')}",
+        "site_id": "CBT",
+        "title": copy["title_es"],
+        "price": row.get("price"),
+        "currency_id": row.get("currency_id") or "USD",
+        "category_id": row.get("category_id") or "",
+        "category_name": row.get("category_name") or "",
+        "permalink": row.get("source_url") or original.get("source_url"),
+        "pictures": [{"source": white_url}] + [
+            {"source": url} for url in original.get("images") or []
+            if str(url).strip() and str(url).strip() != original.get("main_image_url")
+        ],
+        "attributes": [
+            {"id": "BRAND", "value_name": "Generic"},
+            {"id": "ITEM_CONDITION", "value_name": "New"},
+        ],
+    }
+    snapshot["description"] = {"plain_text": copy["description_es"]}
+    return {
+        "title": copy["title_es"],
+        "description_text": copy["description_es"],
+        "main_image_url": white_url,
+        "source_snapshot_json": json.dumps(snapshot, ensure_ascii=False),
+        "ai_original": output,
+    }
+
+
+__all__ = [
+    "IMAGE_DIR",
+    "MAX_TITLE_CHARS",
+    "create_white_background_image",
+    "extract_1688_item_id",
+    "generate_marketplace_copy",
+    "normalize_1688_product",
+    "prepare_ai_original_product",
+]

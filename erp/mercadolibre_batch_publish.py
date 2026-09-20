@@ -150,6 +150,27 @@ def product_publish_issues(product_row: Mapping[str, Any]) -> list[str]:
 
     row = dict(product_row or {})
     issues: list[str] = []
+    if str(row.get("source_type") or "").strip().lower() == "ai_original":
+        raw_snapshot = row.get("source_snapshot_json") or {}
+        if not isinstance(raw_snapshot, Mapping):
+            try:
+                raw_snapshot = json.loads(str(raw_snapshot))
+            except (TypeError, ValueError):
+                raw_snapshot = {}
+        prepared = raw_snapshot.get("ai_original") if isinstance(raw_snapshot, Mapping) else {}
+        prepared = prepared if isinstance(prepared, Mapping) else {}
+        if prepared.get("status") != "completed":
+            issues.append("AI 原创任务尚未完成")
+        for field, label in (("title_es", "西班牙语"), ("title_pt", "葡萄牙语")):
+            title = str(prepared.get(field) or "").strip()
+            if not title or len(title) > 60:
+                issues.append(f"{label}标题为空或超过 60 个字符")
+        if not str(prepared.get("description_es") or "").strip() or not str(
+            prepared.get("description_pt") or ""
+        ).strip():
+            issues.append("AI 双语详情不完整")
+        if "-white.jpg" not in str(row.get("main_image_url") or ""):
+            issues.append("首图尚未完成白底处理")
     if row.get("review_status") != "approved":
         issues.append("审核状态未通过")
     actual_weight = _actual_weight_value(row)
@@ -367,11 +388,33 @@ def _product_source_snapshot(row: Mapping[str, Any]) -> dict[str, Any] | None:
 
 def _prepared_listing_from_product_row(
     row: Mapping[str, Any],
+    destination_site_id: str = "",
 ) -> tuple[dict[str, Any], dict[str, Any]] | None:
     snapshot = _product_source_snapshot(row)
     if snapshot is None:
         return None
     source = dict(snapshot["source"])
+    if str(row.get("source_type") or "").strip().lower() == "ai_original":
+        raw_snapshot = row.get("source_snapshot_json") or {}
+        if not isinstance(raw_snapshot, Mapping):
+            try:
+                raw_snapshot = json.loads(str(raw_snapshot))
+            except (TypeError, ValueError):
+                raw_snapshot = {}
+        prepared = raw_snapshot.get("ai_original") if isinstance(raw_snapshot, Mapping) else {}
+        prepared = prepared if isinstance(prepared, Mapping) else {}
+        portuguese = str(destination_site_id or "").strip().upper() == "MLB"
+        title = str(prepared.get("title_pt" if portuguese else "title_es") or "").strip()
+        description_text = str(
+            prepared.get("description_pt" if portuguese else "description_es") or ""
+        ).strip()
+        if not title or len(title) > 60:
+            raise ValueError("AI 原创产品缺少合规的西/葡标题（最多 60 个字符）")
+        if not description_text:
+            raise ValueError("AI 原创产品缺少目标语言的新详情描述")
+        source["title"] = title
+        source["site_id"] = str(destination_site_id or "").strip().upper()
+        snapshot["description"] = {"plain_text": description_text}
     source.setdefault("id", str(row.get("source_item_id") or ""))
     source.setdefault("site_id", str(source.get("id") or "")[:3])
     from erp.mercadolibre_source_store import _merge_package_attributes
@@ -546,7 +589,7 @@ def publish_product_batch(
                 store_name=store_name,
                 token_id=int(token_id),
             )
-            prepared_listing = _prepared_listing_from_product_row(row)
+            prepared_listing = _prepared_listing_from_product_row(row, site_id)
             if prepared_listing is None:
                 # Legacy rows without an embedded snapshot keep the compatible
                 # database path; normal collected rows avoid the write/read pair.

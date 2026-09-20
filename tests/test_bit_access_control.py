@@ -167,6 +167,14 @@ def test_ad_analysis_requires_permission_and_scopes_member_tokens(monkeypatch):
     )
     assert allowed.status_code == 200
     assert allowed.get_json()["data"]["received"]["token_ids"] == [7]
+    assert allowed.get_json()["data"]["received"]["refresh_token_ids"] == [7]
+
+    refreshed = client.get(
+        "/api/ad-analysis?force=1&refresh_token_ids=7&refresh_token_ids=99"
+    )
+    received = refreshed.get_json()["data"]["received"]
+    assert received["token_ids"] == [7, 9]
+    assert received["refresh_token_ids"] == [7]
 
 
 def test_ad_analysis_actions_require_execute_and_scope_member_tokens(monkeypatch):

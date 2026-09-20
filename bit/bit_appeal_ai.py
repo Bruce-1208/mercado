@@ -3266,11 +3266,17 @@ def summarize_ai_appeal_result(appeal_type, identifiers, appeal_content, ai_repl
 def appeal_executor_metadata():
     """Identify the machine that performed an appeal without exposing addresses."""
     runtime_role = str(os.environ.get("BIT_RUNTIME_ROLE") or "server").strip().lower()
-    execution_target = "local" if runtime_role == "client" else "server"
+    execution_target = str(os.environ.get("BIT_EXECUTION_TARGET") or "").strip().lower()
+    if execution_target not in {"agent", "local", "server"}:
+        execution_target = "local" if runtime_role == "client" else "server"
     return {
         "runtime_role": runtime_role,
         "execution_target": execution_target,
-        "hostname": socket.gethostname(),
+        "agent_id": str(os.environ.get("BIT_EXECUTION_AGENT_ID") or "").strip(),
+        "agent_name": str(os.environ.get("BIT_EXECUTION_AGENT_NAME") or "").strip(),
+        "hostname": str(
+            os.environ.get("BIT_EXECUTION_HOSTNAME") or socket.gethostname()
+        ).strip(),
     }
 
 

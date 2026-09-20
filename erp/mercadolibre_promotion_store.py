@@ -224,6 +224,7 @@ class PromotionStore:
         self, *, token_ids: Iterable[int] | None = None, search: str = "",
         status: str = "", promotion_type: str = "", salesperson: str = "",
         group_name: str = "", site_id: str = "",
+        scope_pairs: Iterable[tuple[int, str]] | None = None,
     ) -> list[dict[str, Any]]:
         clauses, params = [], []
         ids = [int(value) for value in token_ids or () if int(value or 0) > 0]
@@ -240,15 +241,41 @@ class PromotionStore:
         if promotion_type:
             clauses.append("promotion_type=?")
             params.append(promotion_type.upper())
-        if salesperson:
-            clauses.append("salesperson=?")
-            params.append(salesperson)
-        if group_name:
-            clauses.append("group_name=?")
-            params.append(group_name)
-        if site_id:
-            clauses.append("site_id=?")
-            params.append(site_id.upper())
+        if scope_pairs is not None:
+            # The salesperson/group assignment can change after an activity was
+            # synced.  The caller can provide the current authorized
+            # token/site pairs so historical activity snapshots remain
+            # searchable without requiring another full sync.
+            normalized_pairs = []
+            seen_pairs = set()
+            for token_id, current_site_id in scope_pairs:
+                try:
+                    pair = (int(token_id), str(current_site_id or "").strip().upper())
+                except (TypeError, ValueError):
+                    continue
+                if pair[0] > 0 and pair[1] and pair not in seen_pairs:
+                    seen_pairs.add(pair)
+                    normalized_pairs.append(pair)
+            if not normalized_pairs:
+                clauses.append("1=0")
+            else:
+                clauses.append(
+                    "(" + " OR ".join(
+                        "(token_id=? AND site_id=?)" for _ in normalized_pairs
+                    ) + ")"
+                )
+                for token_id, current_site_id in normalized_pairs:
+                    params.extend((token_id, current_site_id))
+        else:
+            if salesperson:
+                clauses.append("salesperson=?")
+                params.append(salesperson)
+            if group_name:
+                clauses.append("group_name=?")
+                params.append(group_name)
+            if site_id:
+                clauses.append("site_id=?")
+                params.append(site_id.upper())
         where = f"WHERE {' AND '.join(clauses)}" if clauses else ""
         with self._connect() as db:
             rows = db.execute(

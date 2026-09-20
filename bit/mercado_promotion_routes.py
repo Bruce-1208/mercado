@@ -26,6 +26,34 @@ def create_promotions_blueprint(
         allowed = authorized_token_ids(current_user())
         return None if allowed is None else {int(value) for value in allowed}
 
+    def current_scope_pairs(token_ids, *, salesperson="", group_name="", site_id=""):
+        """Resolve filters against current store settings, not old sync snapshots."""
+        salesperson = str(salesperson or "").strip()
+        group_name = str(group_name or "").strip()
+        site_id = str(site_id or "").strip().upper()
+        if not any((salesperson, group_name, site_id)):
+            return None
+        # An empty token list means "all stores" for the unrestricted view;
+        # keep that behavior while resolving the current settings.
+        selected = {int(value) for value in token_ids or ()} or None
+        pairs = []
+        for store in visible_store_options(selected):
+            token_id = int(store.get("id") or 0)
+            if selected is not None and token_id not in selected:
+                continue
+            for setting in store.get("sites") or ():
+                current_site_id = str(setting.get("site_id") or "").strip().upper()
+                if not current_site_id:
+                    continue
+                if site_id and current_site_id != site_id:
+                    continue
+                if salesperson and str(setting.get("salesperson") or "").strip() != salesperson:
+                    continue
+                if group_name and str(setting.get("group_name") or "").strip() != group_name:
+                    continue
+                pairs.append((token_id, current_site_id))
+        return pairs
+
     def ok(data=None, message=""):
         return jsonify({"status": "success", "message": message, "data": data})
 
@@ -62,14 +90,26 @@ def create_promotions_blueprint(
             token_ids = requested or (sorted(allowed) if allowed is not None else [])
             if allowed is not None and not set(token_ids).issubset(allowed):
                 return fail("当前账号不能查看所选店铺", 403)
+            salesperson = str(request.args.get("salesperson") or "").strip()
+            group_name = str(request.args.get("group_name") or "").strip()
+            site_id = str(request.args.get("site_id") or "").strip()
+            scope_pairs = current_scope_pairs(
+                token_ids,
+                salesperson=salesperson,
+                group_name=group_name,
+                site_id=site_id,
+            )
             rows = PromotionStore().list_promotions(
                 token_ids=token_ids,
                 search=str(request.args.get("search") or "").strip(),
                 status=str(request.args.get("status") or "").strip(),
                 promotion_type=str(request.args.get("type") or "").strip(),
-                salesperson=str(request.args.get("salesperson") or "").strip(),
-                group_name=str(request.args.get("group_name") or "").strip(),
-                site_id=str(request.args.get("site_id") or "").strip(),
+                scope_pairs=scope_pairs,
+                # When current_scope_pairs is active, the local snapshot's
+                # salesperson/group/site values are deliberately ignored.
+                salesperson="" if scope_pairs is not None else salesperson,
+                group_name="" if scope_pairs is not None else group_name,
+                site_id="" if scope_pairs is not None else site_id,
             )
             summary = {
                 "total": len(rows),

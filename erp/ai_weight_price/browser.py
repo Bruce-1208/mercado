@@ -917,8 +917,16 @@ class Browser:
             raise ValueError("1688图片上传后出现多个提交按钮，无法确认当前主图的提交入口")
         return matches[0] if matches else (None, None)
 
-    def current_supplier_offer(self, page, candidate, timeout=25):
-        """Read only current 1688 SKU prices and per-SKU package weights."""
+    def current_supplier_offer(self, page, candidate, timeout=45):
+        """Read only current 1688 SKU prices and per-SKU package weights.
+
+        The new 1688 detail shell can render its title and SKU container before
+        the React SKU data arrives.  A 25-second bound was long enough for
+        cached pages but turned slower first loads into false technical skips.
+        Keep polling the visible page for a bounded 45 seconds so a transient
+        data race is retried in-place instead of being recorded as a matching
+        failure.
+        """
         deadline = time.monotonic() + timeout
         last = None
         while time.monotonic() < deadline:
@@ -1338,6 +1346,12 @@ class Browser:
             root = page.locator(".curd-detail-wrap")
             save = self.erp_save_button(page, root)
             before_save(old)
+            if not changes:
+                # A lower calculated net income may be intentionally retained
+                # at the original value. In that case no ERP field needs a
+                # write; return the verified snapshot for the audit trail.
+                self.visual(task, "erp_saved", "计算净收益低于原值，净收益保持不变；无需重复保存，仅保留重量变更策略", page)
+                return old
             for field, selector in (("weight_g", "erp_weight_input"), ("net_income_usd", "erp_net_income_input")):
                 if field in changes:
                     value = number(changes[field])
@@ -1660,7 +1674,13 @@ class Browser:
             if saved.count() and saved.first.is_visible():
                 raise ValueError("保存成功标识在保存前已可见，无法判断本次保存结果")
             before_save(old)
-            cost.fill(str(net_income))
+            # The save policy may keep the original ERP net income after the
+            # live form value is read. Re-read the task so a lower calculated
+            # value is never written by this legacy workflow.
+            net_income = number(task.get("net_income_usd"))
+            keep_original_net_income = bool((task.get("pricing") or {}).get("net_income_retained_original"))
+            if not keep_original_net_income:
+                cost.fill(str(net_income))
             weight.fill(str(number(task["weight_g"])))
             self.check(page)
             self.unique(page, "erp_save").click()

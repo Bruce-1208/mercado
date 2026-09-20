@@ -3,7 +3,7 @@ import time
 
 from .browser import CircuitOpen, NoExactMatch, SearchTimeout, Stopped, WritebackMismatch
 from .models import number, erp_value_equal, parse_weight_evidence
-from .pricing import usd_cost
+from .pricing import protect_net_income, usd_cost
 
 
 def process(service, task, browser, models, config):
@@ -215,6 +215,7 @@ def highest_priced_variant(skus):
 def save_result(service, task, browser, config, result, reason, changes):
     """Only requested fields are changed; every other form value is retained."""
     key, store = task["erp_goods_id"], service.store
+    changes = dict(changes)
     task = store.update(key, decision_status=result, decision_reason=reason, planned_changes=changes)
     if not changes:
         store.update(key, status=result, stage="done", saved_at=time.time(),
@@ -237,7 +238,15 @@ def save_result(service, task, browser, config, result, reason, changes):
     attempt = None
     try:
         def before_save(old):
-            nonlocal attempt
+            nonlocal attempt, reason, task
+            if "net_income_usd" in changes:
+                protected = protect_net_income(old.get("net_income_usd"), task.get("pricing") or {})
+                if protected.get("net_income_retained_original"):
+                    changes.pop("net_income_usd")
+                    task = store.update(key, net_income_usd=protected["net_income_writeback_usd"],
+                                        pricing=protected, planned_changes=changes,
+                                        decision_reason=(reason + "；" + protected["net_income_adjustment"]))
+                    reason = task["decision_reason"]
             attempt = {"before": old, "intent": {**changes, "at": time.time()}, "after": None, "verified": False}
             history = [*(store.get(key).get("write_history") or []), attempt]
             store.update(key, stage="writing", erp_before=old, erp_after=None, write_verified=False,

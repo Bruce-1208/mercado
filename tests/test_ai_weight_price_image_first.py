@@ -92,9 +92,9 @@ def test_ten_image_first_products_keep_status_and_only_write_weight_or_profit(tm
     assert len(browser.records) == 10 and store.state('pipeline_current') is None
     assert browser.operations[:8] == [('collect', '1'), ('image', '1'), ('detail', '1'), ('save', '1'),
                                      ('collect', '2'), ('image', '2'), ('detail', '2'), ('save', '2')]
-    assert browser.records['1'] == {'weight_g': '430', 'net_income_usd': '4', 'review_status': '待审核'}
-    assert browser.records['2'] == {'weight_g': '430', 'net_income_usd': '4', 'review_status': '待审核'}
-    assert browser.records['3'] == {'weight_g': '430', 'net_income_usd': '4', 'review_status': '待审核'}
+    assert browser.records['1'] == {'weight_g': '430', 'net_income_usd': '9.5', 'review_status': '待审核'}
+    assert browser.records['2'] == {'weight_g': '430', 'net_income_usd': '9.5', 'review_status': '待审核'}
+    assert browser.records['3'] == {'weight_g': '430', 'net_income_usd': '9.5', 'review_status': '待审核'}
     run, rows = store.run_report('image-ten')
     assert run['outcome'] == 'completed' and run['processed_items'] == 10
     assert all(row.get('execution_duration_seconds') is not None for row in rows)
@@ -112,6 +112,32 @@ def test_ten_image_first_products_keep_status_and_only_write_weight_or_profit(tm
     assert sheet['C6'].value == sheet['C7'].value == '风险'
     assert sheet['K7'].value is None and sheet['M7'].value == 430
     assert (sheet['V7'].value, sheet['W7'].value, sheet['X7'].value) == ('待审核', None, '待审核')
+
+
+def test_lower_calculated_net_income_keeps_original_and_only_writes_weight(tmp_path, monkeypatch):
+    service, browser, config = make_service(tmp_path, monkeypatch)
+    config['max_items'] = 1
+
+    class LowerIncomeBrowser(ImageBrowser):
+        def read_offer(self, task, candidate):
+            return {**candidate, 'skus': [{'id': 'blue', 'label': '蓝色一只', 'price': '22',
+                                           'raw_weight': '450g', 'raw_text': '蓝色一只；包装重量450g'}]}
+
+    browser = LowerIncomeBrowser(config)
+    service.browser_factory = lambda *args: browser
+    lock = service.lock(); assert lock.acquire()
+    service.run(config, 'pipeline', None, lock)
+
+    saved = service.store.get('1')
+    assert saved['status'] == 'success'
+    assert browser.records['1']['net_income_usd'] == '9.5'
+    assert browser.records['1']['weight_g'] == '450'
+    assert saved['pricing']['calculated_net_income_usd'] == '4'
+    assert saved['pricing']['net_income_writeback_usd'] == '9.5'
+    assert saved['pricing']['net_income_retained_original'] is True
+    assert 'net_income_usd' not in saved['write_intent']
+    assert '仅修改重量' in saved['pricing']['net_income_adjustment']
+    assert '计算净收益 $4 低于原净收益 $9.5' in saved['decision_reason']
 
 
 def test_new_batch_reprocesses_historical_first_product_before_reading_second(tmp_path, monkeypatch):
@@ -332,7 +358,7 @@ def test_same_price_variants_use_highest_price_policy_without_model_variant_matc
     assert task['supplier_price_evidence']['pricing_policy'] == 'highest_variant_price'
     assert task['decision_reason'].startswith('图片匹配成功；未匹配具体变体，已按2个变体中的最高价')
     assert browser.records['1'] == {
-        'weight_g': '430', 'net_income_usd': '2', 'review_status': '待审核',
+        'weight_g': '430', 'net_income_usd': '9.5', 'review_status': '待审核',
     }
 
 

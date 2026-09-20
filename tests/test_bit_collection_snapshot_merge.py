@@ -59,6 +59,9 @@ def test_reputation_rerun_replaces_selected_shop_and_keeps_other_shops():
             "正常",
             "2026-07-30 11:59:00",
             "[]",
+            "正常",
+            0,
+            0,
             submit_time,
         ]
     ]
@@ -77,7 +80,54 @@ def test_reputation_rerun_replaces_selected_shop_and_keeps_other_shops():
         ("店铺甲", "墨西哥", "黄色"),
         ("店铺乙", "巴西", "绿色"),
     ]
-    assert all(row[12] == submit_time for row in merged)
+    assert all(row[15] == submit_time for row in merged)
+
+
+def test_api_only_reputation_update_preserves_verified_account_status():
+    rows = [[
+        "店铺甲", "墨西哥", "绿色", 10, "0%", "0%", "0%", "持平",
+        "0%", "正常", "2026-09-20 10:00:00", "[]",
+        "暂停销售（官方 API 未提供封禁期限）", 0, 0,
+        "2026-09-20 10:00:01",
+    ]]
+
+    result = bit_mysql._preserve_reputation_account_status(
+        rows,
+        {("店铺甲", "墨西哥"): "暂停销售（已 39 天）"},
+    )
+
+    assert result[0][12] == "暂停销售（已 39 天）"
+
+
+def test_unconfirmed_public_api_status_preserves_last_verified_ban():
+    rows = [[
+        "店铺甲", "墨西哥", "绿色", 10, "0%", "0%", "0%", "持平",
+        "0%", "正常", "2026-09-20 10:00:00", "[]",
+        "状态未确认（官方 API 仅返回公开 active）", 0, 0,
+        "2026-09-20 10:00:01",
+    ]]
+
+    result = bit_mysql._preserve_reputation_account_status(
+        rows,
+        {("店铺甲", "墨西哥"): "永久封禁"},
+    )
+
+    assert result[0][12] == "永久封禁"
+
+
+def test_confirmed_private_api_normal_clears_last_verified_ban():
+    rows = [[
+        "店铺甲", "墨西哥", "绿色", 10, "0%", "0%", "0%", "持平",
+        "0%", "正常", "2026-09-20 10:00:00", "[]", "正常", 0, 0,
+        "2026-09-20 10:00:01",
+    ]]
+
+    result = bit_mysql._preserve_reputation_account_status(
+        rows,
+        {("店铺甲", "墨西哥"): "永久封禁"},
+    )
+
+    assert result[0][12] == "正常"
 
 
 def test_infraction_rerun_replaces_selected_site_and_keeps_other_shops():
@@ -199,7 +249,7 @@ def test_reputation_without_snapshot_marker_uses_latest_rows_per_shop():
         mock.patch.object(
             bit_mysql,
             "_active_collection_snapshot_rows",
-            side_effect=lambda value: value,
+            side_effect=lambda value, **_kwargs: value,
         ),
         mock.patch.object(
             bit_mysql,

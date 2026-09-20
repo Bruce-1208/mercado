@@ -28,10 +28,16 @@ from erp.mercadolibre_attribute_rules import (
     is_read_only_attribute,
     is_required_attribute,
     match_enumerated_value,
+    normalize_rule_key,
     resolve_schema_attribute_id,
     semantic_value_key,
 )
-from erp.mercadolibre_translation import normalize_marketplace_site
+from erp.mercadolibre_translation import (
+    ListingTranslationError,
+    marketplace_language,
+    normalize_marketplace_site,
+    translate_texts,
+)
 
 
 API_BASE_URL = "https://api.mercadolibre.com"
@@ -599,7 +605,7 @@ _USER_PROFILE_CACHE_LOCK = threading.Lock()
 _USER_PROFILE_CACHE: dict[int, tuple[float, Mapping[str, Any]]] = {}
 _CATEGORY_CACHE_LOCK = threading.Lock()
 _CATEGORY_SCHEMA_CACHE: dict[str, tuple[float, list[Mapping[str, Any]]]] = {}
-_DIRECT_CBT_CATEGORY_CACHE: dict[str, float] = {}
+_CATEGORY_PREDICTION_CACHE: dict[str, tuple[float, list[Mapping[str, Any]]]] = {}
 _CATEGORY_KEY_LOCKS: dict[str, threading.Lock] = {}
 _PICTURE_CACHE_LOCK = threading.Lock()
 _PICTURE_ID_CACHE: dict[tuple[int, str], tuple[float, str]] = {}
@@ -663,24 +669,109 @@ def _english_category_prediction_query(value: Any) -> str:
     return " ".join(words)
 
 
-def _category_prediction_queries(source: Mapping[str, Any]) -> list[str]:
-    # Category names are much less noisy than long listing titles.  Include
-    # both as independent discovery candidates so a translated title cannot
-    # hide a valid category match (especially for short costume/accessory
-    # listings).
-    values = [
-        source.get("_category_prediction_title"),
-        source.get("category_name"),
-        source.get("title"),
-    ]
+def _category_prediction_queries(
+    source: Mapping[str, Any],
+    translator: Callable[..., Any] | None = None,
+) -> list[str]:
+    """Return safe predictor queries, preferring the API's required English.
+
+    Mercado explicitly documents that CBT category prediction expects a fully
+    English product title.  A non-English title can return a plausible but
+    unrelated leaf category (for example Spanish ``obsidiana`` has been
+    classified as natural grass).  When the offline model is unavailable we
+    prefer the much less noisy collected category name before the title.
+    """
+    category_name = str(source.get("category_name") or "").strip()
+    title = str(
+        source.get("_category_prediction_title") or source.get("title") or ""
+    ).strip()
+    source_site = str(
+        source.get("site_id") or source.get("id") or source.get("category_id") or ""
+    )[:3].upper()
+    source_language = marketplace_language(source_site)
+    translated_values: list[str] = []
+    originals = [value for value in (title, category_name) if value]
+    if originals and source_language and source_language != "en":
+        try:
+            translated_values = translate_texts(
+                originals,
+                source_language,
+                "en",
+                translator=translator,
+            )
+        except ListingTranslationError:
+            # Existing deployments may not yet have the new es/pt -> en model.
+            # Falling back to the category label is safer than blocking every
+            # listing or trusting a long non-English title.
+            translated_values = []
+
+    values: list[str] = []
+    if translated_values:
+        # The official predictor is trained for a full English product title.
+        values.extend(translated_values)
+    values.extend((category_name, title))
     queries: list[str] = []
     for value in values:
         original = str(value or "").strip()
+        if "\ufffd" in original:
+            continue
         translated = _english_category_prediction_query(original)
         for query in (original, translated):
             if query and query not in queries:
                 queries.append(query)
     return queries
+
+
+def _category_predictions(
+    client: MercadoLibreClient, query: str
+) -> list[Mapping[str, Any]]:
+    """Fetch one predictor response with a process-wide TTL cache."""
+    token_id = int(getattr(client, "token_id", 0) or 0)
+    if token_id <= 0:
+        suggestions = client.request(
+            "GET",
+            "/marketplace/domain_discovery/search",
+            params={"q": query},
+        )
+        return (
+            [row for row in suggestions if isinstance(row, Mapping)]
+            if isinstance(suggestions, list)
+            else []
+        )
+    cache_key = normalize_rule_key(query)
+    now = time.monotonic()
+    with _CATEGORY_CACHE_LOCK:
+        cached = _CATEGORY_PREDICTION_CACHE.get(cache_key)
+        if cached and now - cached[0] < _CACHE_TTL_SECONDS:
+            return cached[1]
+        key_lock = _CATEGORY_KEY_LOCKS.setdefault(
+            f"prediction:{cache_key}", threading.Lock()
+        )
+    with key_lock:
+        with _CATEGORY_CACHE_LOCK:
+            cached = _CATEGORY_PREDICTION_CACHE.get(cache_key)
+            if cached and time.monotonic() - cached[0] < _CACHE_TTL_SECONDS:
+                return cached[1]
+        suggestions = client.request(
+            "GET",
+            "/marketplace/domain_discovery/search",
+            params={"q": query},
+        )
+        normalized = (
+            [row for row in suggestions if isinstance(row, Mapping)]
+            if isinstance(suggestions, list)
+            else []
+        )
+        with _CATEGORY_CACHE_LOCK:
+            _CATEGORY_PREDICTION_CACHE[cache_key] = (time.monotonic(), normalized)
+            if len(_CATEGORY_PREDICTION_CACHE) > 5000:
+                oldest = min(
+                    _CATEGORY_PREDICTION_CACHE,
+                    key=lambda key: _CATEGORY_PREDICTION_CACHE[key][0],
+                )
+                _CATEGORY_PREDICTION_CACHE.pop(oldest, None)
+                _CATEGORY_KEY_LOCKS.pop(f"prediction:{oldest}", None)
+        return normalized
 
 
 def _cached_user_profile(client: MercadoLibreClient) -> Mapping[str, Any]:
@@ -738,30 +829,6 @@ def _upload_validated_picture(client: MercadoLibreClient, source_url: str) -> st
         return picture_id
 
 
-def _direct_cbt_category_exists(
-    client: MercadoLibreClient, candidate: str
-) -> bool:
-    token_id = int(getattr(client, "token_id", 0) or 0)
-    if token_id <= 0:
-        return bool(_try_request(client, "GET", f"/categories/{candidate}"))
-    now = time.monotonic()
-    with _CATEGORY_CACHE_LOCK:
-        cached_at = _DIRECT_CBT_CATEGORY_CACHE.get(candidate)
-        if cached_at is not None and now - cached_at < _CACHE_TTL_SECONDS:
-            return True
-        key_lock = _CATEGORY_KEY_LOCKS.setdefault(f"category:{candidate}", threading.Lock())
-    with key_lock:
-        with _CATEGORY_CACHE_LOCK:
-            cached_at = _DIRECT_CBT_CATEGORY_CACHE.get(candidate)
-            if cached_at is not None and time.monotonic() - cached_at < _CACHE_TTL_SECONDS:
-                return True
-        exists = bool(_try_request(client, "GET", f"/categories/{candidate}"))
-        if exists:
-            with _CATEGORY_CACHE_LOCK:
-                _DIRECT_CBT_CATEGORY_CACHE[candidate] = time.monotonic()
-        return exists
-
-
 def fetch_source_listing(
     client: MercadoLibreClient, source: str
 ) -> tuple[dict[str, Any], dict[str, Any]]:
@@ -777,27 +844,124 @@ def fetch_source_listing(
     return item, description if isinstance(description, dict) else {}
 
 
-def infer_cbt_category(client: MercadoLibreClient, source: Mapping[str, Any]) -> str:
-    """Map a marketplace category to its CBT counterpart and validate it."""
+def _infer_cbt_listing(
+    client: MercadoLibreClient,
+    source: Mapping[str, Any],
+    translator: Callable[..., Any] | None = None,
+) -> tuple[str, list[dict[str, Any]]]:
+    """Predict the CBT category and retain attributes inferred by Mercado."""
     category_id = str(source.get("category_id") or "")
     if category_id.startswith("CBT"):
-        return category_id
-    numeric = re.sub(r"^[A-Z]+", "", category_id)
-    candidate = f"CBT{numeric}" if numeric else ""
-    if candidate and _direct_cbt_category_exists(client, candidate):
-        return candidate
-    for query in _category_prediction_queries(source):
-        suggestions = client.request(
-            "GET",
-            "/sites/CBT/domain_discovery/search",
-            params={"q": query},
-        )
-        if isinstance(suggestions, list):
-            for suggestion in suggestions:
-                suggested = str(suggestion.get("category_id") or "")
-                if suggested.startswith("CBT"):
-                    return suggested
+        return category_id, []
+
+    # Site category trees are independent.  A local category number is not a
+    # CBT mapping, even if a CBT category with the same numeric suffix happens
+    # to exist.  Always use Mercado's supported predictor for cross-site input.
+    candidate_order = 0
+    for query in _category_prediction_queries(source, translator=translator):
+        suggestions = [
+            suggestion
+            for suggestion in _category_predictions(client, query)[:5]
+            if str(suggestion.get("category_id") or "").strip().upper().startswith("CBT")
+        ]
+        query_best: tuple[int, int, str, list[dict[str, Any]]] | None = None
+        for suggestion in suggestions:
+            suggested = str(suggestion.get("category_id") or "").strip().upper()
+            inferred = [
+                dict(attribute)
+                for attribute in suggestion.get("attributes") or []
+                if isinstance(attribute, Mapping) and attribute.get("id")
+            ]
+            schema = _category_attribute_schema(client, suggested)
+            if schema is None:
+                missing_count = 10000
+            else:
+                candidate_source = _source_with_inferred_attributes(source, inferred)
+                present = {
+                    resolve_schema_attribute_id(attribute, schema)
+                    for attribute in candidate_source.get("attributes") or []
+                    if isinstance(attribute, Mapping) and _attribute_has_value(attribute)
+                }
+                for variation in candidate_source.get("variations") or []:
+                    if not isinstance(variation, Mapping):
+                        continue
+                    for key in ("attribute_combinations", "attributes"):
+                        present.update(
+                            resolve_schema_attribute_id(attribute, schema)
+                            for attribute in variation.get(key) or []
+                            if isinstance(attribute, Mapping)
+                            and _attribute_has_value(attribute)
+                        )
+                required = {
+                    str(definition.get("id") or "").strip().upper()
+                    for definition in schema
+                    if definition.get("id")
+                    and is_required_attribute(definition)
+                    and not is_read_only_attribute(definition)
+                }
+                satisfiable = set(DEFAULT_REQUIRED_ATTRIBUTES) | {"BRAND"}
+                if "EMPTY_GTIN_REASON" in {
+                    str(definition.get("id") or "").strip().upper()
+                    for definition in schema
+                }:
+                    satisfiable.add("GTIN")
+                missing_count = len(required - present - satisfiable)
+            ranked = (missing_count, candidate_order, suggested, inferred)
+            candidate_order += 1
+            if query_best is None or ranked[:2] < query_best[:2]:
+                query_best = ranked
+            if missing_count == 0:
+                return suggested, inferred
+        # Do not jump from a recognized collected category label to a noisy
+        # non-English title merely because an unrelated category happens to
+        # need fewer attributes.  With no offline English model, failing with
+        # an actionable missing field is safer than publishing in a wrong leaf.
+        if query_best is not None:
+            return query_best[2], query_best[3]
     raise MercadoLibreError(f"无法把源类目 {category_id or '(empty)'} 映射为 CBT 类目")
+
+
+def infer_cbt_category(
+    client: MercadoLibreClient,
+    source: Mapping[str, Any],
+    translator: Callable[..., Any] | None = None,
+) -> str:
+    """Map a marketplace category to its CBT counterpart."""
+    category_id, _ = _infer_cbt_listing(client, source, translator=translator)
+    return category_id
+
+
+def _source_with_inferred_attributes(
+    source: Mapping[str, Any], inferred: Iterable[Mapping[str, Any]]
+) -> dict[str, Any]:
+    """Merge predictor evidence without overwriting collected source values."""
+    merged_source = dict(source)
+    attributes = [
+        dict(attribute)
+        for attribute in source.get("attributes") or []
+        if isinstance(attribute, Mapping)
+    ]
+    positions = {
+        str(attribute.get("id") or "").strip().upper(): index
+        for index, attribute in enumerate(attributes)
+        if str(attribute.get("id") or "").strip()
+    }
+    for candidate in inferred:
+        attribute = dict(candidate)
+        attribute_id = str(attribute.get("id") or "").strip().upper()
+        if not attribute_id:
+            continue
+        attribute["id"] = attribute_id
+        position = positions.get(attribute_id)
+        if position is None:
+            positions[attribute_id] = len(attributes)
+            attributes.append(attribute)
+        elif not _attribute_has_value(attributes[position]) and _attribute_has_value(
+            attribute
+        ):
+            attributes[position] = attribute
+    merged_source["attributes"] = attributes
+    return merged_source
 
 
 def _category_attribute_schema(
@@ -1298,13 +1462,17 @@ def build_global_payload(
     site_id: str = "MLM",
     quantity: int = 1,
     net_proceeds: float | None = None,
+    translator: Callable[..., Any] | None = None,
 ) -> dict[str, Any]:
     """Build the current Global Selling payload for one destination site."""
     if quantity <= 0:
         raise ValueError("quantity 必须大于 0")
     item_id = extract_item_id(str(source.get("id") or ""))
     pictures, ids_to_urls = _picture_sources(source)
-    category_id = infer_cbt_category(client, source)
+    category_id, inferred_attributes = _infer_cbt_listing(
+        client, source, translator=translator
+    )
+    source = _source_with_inferred_attributes(source, inferred_attributes)
     attribute_schema = _required_category_attribute_schema(client, category_id)
     source_attribute_schema = _source_category_attribute_schema(
         client, source, category_id, attribute_schema
@@ -1371,6 +1539,7 @@ def build_user_product_payload(
     quantity: int = 1,
     net_proceeds: float | None = None,
     picture_ids: Iterable[str] | None = None,
+    translator: Callable[..., Any] | None = None,
 ) -> dict[str, Any]:
     """Build a single-variant CBT User Products payload."""
     if source.get("variations"):
@@ -1381,7 +1550,10 @@ def build_user_product_payload(
     if quantity <= 0:
         raise ValueError("quantity 必须大于 0")
     item_id = extract_item_id(str(source.get("id") or ""))
-    category_id = infer_cbt_category(client, source)
+    category_id, inferred_attributes = _infer_cbt_listing(
+        client, source, translator=translator
+    )
+    source = _source_with_inferred_attributes(source, inferred_attributes)
     attribute_schema = _required_category_attribute_schema(client, category_id)
     source_attribute_schema = _source_category_attribute_schema(
         client, source, category_id, attribute_schema

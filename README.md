@@ -48,14 +48,15 @@ MySQL 默认使用进程内共享连接池：最多 24 条物理连接、预热 
 
 跨站点上架的西班牙语/葡萄牙语翻译使用 Argos Translate 在服务器本地离线执行，
 不需要 API Key，也不会调用 DeepSeek。macOS 服务器首次部署或重建 Python 环境后，
-用运行工作台的同一个 Python 解释器安装依赖和两个直连模型：
+用运行工作台的同一个 Python 解释器安装依赖和四个直连模型（西语/葡语互译，
+以及西语/葡语到英语的 CBT 类目预测模型）：
 
 ```bash
 python3 -m pip install -r bit/requirements-server.txt
 python3 scripts/install_argos_translation_models.py
 ```
 
-模型安装成功后会执行双向翻译自检。模型文件会保存在服务器当前用户的 Argos 数据目录，
+模型安装成功后会执行四个方向的翻译自检。模型文件会保存在服务器当前用户的 Argos 数据目录，
 后续启动及上架过程均可离线使用；若模型缺失，上架记录会给出上述安装命令，而不会回退到付费接口。
 
 同一套工作台可以在每台电脑上灵活指定运行角色：
@@ -196,6 +197,17 @@ print(result.database_path)
 ## 美客多订单面单
 
 独立的“订单打印”模块已移除。订单管理中的面单打印与订单同步后的自动生成面单继续可用，历史打印记录保留。可通过 `MERCADO_ORDER_AUTO_PRINT_DISABLED=1` 关闭自动生成面单。
+
+## AI原创产品（1688）
+
+泽顺浏览器插件 `browser_extension/zeshun_collector` 支持在 1688 商品详情页采集商品。数据会进入工作台“AI原创产品”，可多选执行以下流程：
+
+- 自动生成白底首图；
+- 生成不含品牌且不超过 60 个字符的西班牙语、巴西葡萄牙语标题；
+- 调用 OpenAI 兼容 AI 接口生成全新的西/葡详情；
+- 补齐实重、净收益和类目并审核后，多选上架到 Global Selling 店铺及目标站点。
+
+任务 Token 只在本次任务内存中使用，不写入数据库。可通过 `DEEPSEEK_API_KEY` 配置默认 Token；分布式部署需要把 `AI_ORIGINAL_IMAGE_BASE_URL` 配成刊登进程能够访问的工作台地址。
 
 ## 美客多售后处理 API
 

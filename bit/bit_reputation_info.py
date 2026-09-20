@@ -2993,7 +2993,7 @@ def _run_reputation_for_browser(row, lease_wait_seconds=0):
 
 
 def _run_reputation_auxiliary_for_browser(row, lease_wait_seconds=0):
-    """每家店共用一个浏览器，采集账户处罚详情和七天流量。"""
+    """每家店共用一个浏览器，仅采集官方 API 未提供的七天流量。"""
     if not _collection_parent_is_alive():
         os._exit(0)
 
@@ -3003,12 +3003,6 @@ def _run_reputation_auxiliary_for_browser(row, lease_wait_seconds=0):
     if _is_ignored_config_value(remark):
         return [], []
     sites = _split_sites(row[3])
-    metadata = row[7] if len(row) > 7 and isinstance(row[7], dict) else {}
-    visit_site_codes = {
-        _normalize_api_site_code(value)
-        for value in (metadata.get("visit_site_codes") or ())
-        if _normalize_api_site_code(value)
-    }
     if not sites:
         return [], [
             ("获取声誉辅助信息", name, "", "失败：未配置站点", get_now_time())
@@ -3073,16 +3067,12 @@ def _run_reputation_auxiliary_for_browser(row, lease_wait_seconds=0):
             for attempt in range(1, 4):
                 _ensure_collection_parent_alive()
                 try:
-                    auxiliary = get_reputation_auxiliary_info(
+                    auxiliary = get_reputation_traffic_info(
                         window_id,
                         name,
                         site,
                         driver=driver,
                         select_site=True,
-                        collect_visits=(
-                            not metadata
-                            or _normalize_api_site_code(site) in visit_site_codes
-                        ),
                     )
                     auxiliary_rows.append(auxiliary)
                     auxiliary_status = (
@@ -3098,7 +3088,7 @@ def _run_reputation_auxiliary_for_browser(row, lease_wait_seconds=0):
                         get_now_time(),
                     ))
                     print(
-                        f"{get_now_time()}{name}{site}流量趋势及辅助数据"
+                        f"{get_now_time()}{name}{site}流量趋势"
                         + ("部分失败" if auxiliary.get("error") else "采集成功")
                     )
                     break
@@ -3606,7 +3596,7 @@ def _deduplicate_api_site_rows(rows):
 
 
 def _api_auxiliary_config_rows(tokens, api_rows):
-    """定位声誉店铺窗口；所有站点查处罚，仅按开关采集访问统计。"""
+    """只为已开启七天流量的站点定位浏览器窗口。"""
     canonical_by_alias = {}
     visit_sites_by_store = {}
     for token in tokens:
@@ -3620,6 +3610,8 @@ def _api_auxiliary_config_rows(tokens, api_rows):
         visit_sites_by_store[canonical_name.casefold()] = _token_enabled_site_codes(
             token, "visit_stats_enabled"
         )
+    if not any(visit_sites_by_store.values()):
+        return []
 
     api_sites_by_store = {}
     for row in api_rows:
@@ -3651,7 +3643,11 @@ def _api_auxiliary_config_rows(tokens, api_rows):
         sites = []
         for site_code, site_label in api_sites_by_store.get(canonical_key, {}).items():
             claimed_key = (canonical_key, site_code)
-            if site_code in reputation_site_codes and claimed_key not in claimed_sites:
+            if (
+                site_code in reputation_site_codes
+                and site_code in visit_sites_by_store.get(canonical_key, set())
+                and claimed_key not in claimed_sites
+            ):
                 sites.append(site_label)
         if not sites:
             continue
@@ -3717,6 +3713,20 @@ def _merge_api_auxiliary_rows(api_rows, database_rows, auxiliary_rows):
         if "visits" in auxiliary:
             api_row["visits"] = auxiliary.get("visits") or "[]"
         system_warning = str(auxiliary.get("system_warning") or "").strip()
+        has_account_risk_data = any(
+            key in auxiliary
+            for key in (
+                "account_status",
+                "site_status_display",
+                "suspension_until",
+                "suspension_days",
+            )
+        )
+        database_row = database_by_key.get(key)
+        if database_row is not None and "visits" in auxiliary:
+            database_row[11] = api_row["visits"]
+        if not has_account_risk_data:
+            continue
         restriction = {
             "account_status": auxiliary.get("account_status"),
             "site_status_display": auxiliary.get("site_status_display"),
@@ -3743,10 +3753,7 @@ def _merge_api_auxiliary_rows(api_rows, database_rows, auxiliary_rows):
             # account-risk is stronger evidence than /users/{id}, including
             # when a former suspension has already been lifted.
             api_row["site_status_display"] = restriction["site_status_display"]
-        database_row = database_by_key.get(key)
         if database_row is not None:
-            if "visits" in auxiliary:
-                database_row[11] = api_row["visits"]
             if system_warning and system_warning != "正常":
                 database_row[9] = system_warning
             if (
@@ -4082,7 +4089,7 @@ def get_reputation_info_all(
 
         _emit_api_collection_log(
             f"开始七天流量采集：{len(auxiliary_configs)} 家店铺，"
-            "读取账户处罚详情和七天流量；声誉指标来自官方 API",
+            "仅读取已启用站点的七天流量；账号状态和声誉指标来自官方 API",
             log_callback,
         )
         if auxiliary_configs:
@@ -4241,9 +4248,13 @@ def get_reputation_info_all(
                     reputation_rows,
                     merge_latest=True,
                     replace_targets=replace_targets,
+                    preserve_account_status=True,
                 )
                 if scoped_collection
-                else inset_reputation_info(reputation_rows)
+                else inset_reputation_info(
+                    reputation_rows,
+                    preserve_account_status=True,
+                )
             ),
         ),
         ("写入声誉任务记录", lambda: insert_task_record(task_rows)),

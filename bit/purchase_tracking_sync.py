@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import hashlib
 import re
+import secrets
 import threading
 import time
 from copy import deepcopy
@@ -411,3 +412,204 @@ class PurchaseTrackingSyncManager:
 
 
 purchase_tracking_sync_manager = PurchaseTrackingSyncManager()
+
+
+class PluginPurchaseTrackingManager:
+    """Manage tracking-sync jobs executed by the Zeshun browser extension.
+
+    The workbench only creates a user-scoped job and records results here.  The
+    extension owns the browser tab and its cookies, so this manager never
+    receives or stores a procurement-platform username or password.
+    """
+
+    _PENDING_PHASES = frozenset({"waiting_plugin", "waiting_login"})
+
+    def __init__(self):
+        self._lock = threading.RLock()
+        self._states = {}
+
+    @staticmethod
+    def _idle_state():
+        return {
+            "request_id": "",
+            "user_id": 0,
+            "running": False,
+            "phase": "idle",
+            "message": "等待开始同步",
+            "platform": "",
+            "total": 0,
+            "processed": 0,
+            "synced": 0,
+            "pending": 0,
+            "failed": 0,
+            "results": [],
+            "orders": [],
+            "started_at": "",
+            "finished_at": "",
+        }
+
+    @staticmethod
+    def _public_state(state):
+        # The order list is deliberately returned only to the authenticated
+        # extension that owns the job or to the current workbench user.
+        return deepcopy(state)
+
+    @staticmethod
+    def _normalize_user_id(user_id):
+        try:
+            value = int(user_id or 0)
+        except (TypeError, ValueError):
+            value = 0
+        if value <= 0:
+            raise ValueError("当前登录账号无效，请重新登录")
+        return value
+
+    def status(self, user_id):
+        key = self._normalize_user_id(user_id)
+        with self._lock:
+            return self._public_state(self._states.get(key) or self._idle_state())
+
+    def create(self, user_id, *, platform, orders):
+        key = self._normalize_user_id(user_id)
+        if platform not in PLATFORMS:
+            raise ValueError("请选择 1688、淘宝、拼多多或闲鱼")
+        normalized = PurchaseTrackingSyncManager._normalize_orders(orders)
+        if not normalized:
+            raise ValueError("所选订单还没有填写采购订单号")
+        with self._lock:
+            current = self._states.get(key) or {}
+            if current.get("running") or current.get("phase") in self._PENDING_PHASES:
+                raise RuntimeError("已有物流号同步任务正在等待插件登录或运行")
+            state = {
+                **self._idle_state(),
+                "request_id": secrets.token_urlsafe(18),
+                "user_id": key,
+                "running": True,
+                "phase": "waiting_plugin",
+                "message": "请打开泽顺插件接收同步任务",
+                "platform": platform,
+                "total": len(normalized),
+                "orders": normalized,
+                "started_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            }
+            self._states[key] = state
+            return self._public_state(state)
+
+    def claim(self, user_id, request_id):
+        key = self._normalize_user_id(user_id)
+        request_id = str(request_id or "").strip()
+        with self._lock:
+            state = self._states.get(key)
+            if not state or state.get("request_id") != request_id:
+                raise ValueError("物流号同步任务不存在或已过期")
+            if state.get("phase") not in self._PENDING_PHASES:
+                if state.get("running"):
+                    return self._public_state(state)
+                raise ValueError("物流号同步任务已经结束")
+            state.update({
+                "phase": "syncing",
+                "message": "插件已确认登录，正在同步物流号",
+            })
+            return self._public_state(state)
+
+    def mark_waiting_login(self, user_id, request_id):
+        key = self._normalize_user_id(user_id)
+        with self._lock:
+            state = self._states.get(key)
+            if not state or state.get("request_id") != str(request_id or "").strip():
+                raise ValueError("物流号同步任务不存在或已过期")
+            if state.get("phase") == "waiting_plugin":
+                state.update({
+                    "phase": "waiting_login",
+                    "message": "请在采购平台页面完成手动登录，然后点击确定登录",
+                })
+            return self._public_state(state)
+
+    def record_result(
+        self,
+        user_id,
+        request_id,
+        *,
+        order_id,
+        status,
+        tracking_number="",
+        logistics_company="",
+        message="",
+    ):
+        key = self._normalize_user_id(user_id)
+        request_id = str(request_id or "").strip()
+        order_id = str(order_id or "").strip()
+        status = str(status or "failed").strip().lower()
+        if status not in {"synced", "pending", "not_found", "failed"}:
+            raise ValueError("物流号同步结果状态无效")
+        with self._lock:
+            state = self._states.get(key)
+            if not state or state.get("request_id") != request_id:
+                raise ValueError("物流号同步任务不存在或已过期")
+            if not state.get("running") or state.get("phase") != "syncing":
+                raise ValueError("物流号同步任务当前不在同步状态")
+            order = next(
+                (row for row in state.get("orders") or [] if row.get("order_id") == order_id),
+                None,
+            )
+            if not order:
+                raise ValueError("物流号同步结果包含未选择的订单")
+            results = list(state.get("results") or [])
+            result = {
+                **order,
+                "status": status,
+                "tracking_number": str(tracking_number or "").strip().upper(),
+                "logistics_company": str(logistics_company or "").strip(),
+                "message": str(message or "").strip(),
+            }
+            replaced = False
+            for index, existing in enumerate(results):
+                if str(existing.get("order_id") or "") == order_id:
+                    results[index] = result
+                    replaced = True
+                    break
+            if not replaced:
+                results.append(result)
+            counters = {
+                name: sum(1 for item in results if item.get("status") == name)
+                for name in ("synced", "pending", "failed")
+            }
+            counters["failed"] += sum(
+                1 for item in results if item.get("status") == "not_found"
+            )
+            processed = len(results)
+            state.update({
+                "processed": processed,
+                "results": results,
+                **counters,
+            })
+            if processed >= int(state.get("total") or 0):
+                state.update({
+                    "running": False,
+                    "phase": "completed",
+                    "message": f"同步完成：成功 {counters['synced']} 单",
+                    "finished_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                })
+            else:
+                state.update({
+                    "phase": "syncing",
+                    "message": f"正在同步物流号：{processed} / {state.get('total', 0)}",
+                })
+            return self._public_state(state)
+
+    def fail(self, user_id, request_id, message):
+        key = self._normalize_user_id(user_id)
+        with self._lock:
+            state = self._states.get(key)
+            if not state or state.get("request_id") != str(request_id or "").strip():
+                raise ValueError("物流号同步任务不存在或已过期")
+            state.update({
+                "running": False,
+                "phase": "error",
+                "message": str(message or "物流号同步失败"),
+                "finished_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            })
+            return self._public_state(state)
+
+
+plugin_purchase_tracking_manager = PluginPurchaseTrackingManager()

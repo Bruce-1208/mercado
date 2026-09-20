@@ -271,7 +271,7 @@ def test_workbench_splits_collection_and_product_list_into_separate_modules():
     response = client.get("/")
 
     assert response.status_code == 200
-    assert b'data-ui-version="2026-09-01-mercado-filters-v2"' in response.data
+    assert b'data-ui-version="2026-09-15-console-ui-v3"' in response.data
     assert b'window.location.protocol === "file:"' in response.data
     assert b'window.location.replace("http://127.0.0.1:5000/")' in response.data
     assert b'data-tab="mercado-collection"' in response.data
@@ -303,10 +303,13 @@ def test_workbench_splits_collection_and_product_list_into_separate_modules():
     assert b'class="tab-page mercado-workbench"' in response.data
     assert b'class="tab-heading mercado-workbench-heading"' in response.data
     assert b'class="market-flow-indicator"' in response.data
-    assert "创建任务".encode("utf-8") in response.data
+    assert "安装插件".encode("utf-8") in response.data
+    assert "页面采集".encode("utf-8") in response.data
     assert "审核资料".encode("utf-8") in response.data
-    assert b'class="market-task-dashboard"' in response.data
-    assert b'class="market-collector-help"' in response.data
+    assert b'class="panel collector-plugin-panel"' in response.data
+    assert b'href="/api/browser-extension/download"' in response.data
+    assert "下载泽顺插件".encode("utf-8") in response.data
+    assert "采集操作已迁移到泽顺插件".encode("utf-8") in response.data
     assert b'id="mercado-add-selected"' in response.data
     assert b'id="mercado-management-category-filter"' in response.data
     assert b'id="mercado-platform-category-filter"' in response.data
@@ -315,24 +318,10 @@ def test_workbench_splits_collection_and_product_list_into_separate_modules():
     assert "运营分类管理".encode("utf-8") in response.data
     assert "全部产品分类".encode("utf-8") in response.data
     assert "美客多分类".encode("utf-8") in response.data
-    assert b'id="mercado-collection-workers"' in response.data
-    assert b'id="mercado-collection-success"' in response.data
-    assert b'id="mercado-collection-failed"' in response.data
-    assert "预计剩余".encode("utf-8") in response.data
-    assert b'id="mercado-collection-worker-count"' in response.data
-    assert b'id="mercado-collection-elapsed"' in response.data
-    assert b'id="mercado-collection-workers" type="number" min="1" max="10"' in response.data
-    assert b'id="mercado-collection-site"' in response.data
-    assert b'id="mercado-collection-scope"' in response.data
-    assert b'id="mercado-collection-browser-type"' in response.data
-    assert b'id="mercado-collection-window"' in response.data
-    assert "本地 Edge（9222）".encode("utf-8") in response.data
-    assert "采集专用（墨西哥）".encode("utf-8") in response.data
-    assert b'/api/mercado-collection/browser-windows' in response.data
-    assert b'id="mercado-collection-front-link"' in response.data
-    assert "跨境卖家专区".encode("utf-8") in response.data
-    assert b'id="mercado-playwright-setup"' in response.data
-    assert "不使用键鼠 RPA、截图或 OCR".encode("utf-8") in response.data
+    assert b'id="mercado-collection-workers"' not in response.data
+    assert b'id="mercado-collection-site"' not in response.data
+    assert b'id="mercado-collection-browser-type"' not in response.data
+    assert b'id="mercado-playwright-setup"' not in response.data
     assert "计泡重".encode("utf-8") in response.data
     assert "长×宽×高 ÷ 6000".encode("utf-8") in response.data
     assert "美元售价".encode("utf-8") in response.data
@@ -392,7 +381,7 @@ def test_workbench_splits_collection_and_product_list_into_separate_modules():
     assert b'id="mercado-review-filter"' in response.data
     assert b'id="mercado-publish-filter"' in response.data
     assert b'id="mercado-collection-filter-note"' not in response.data
-    assert b'class="market-product-filters visible"' in response.data
+    assert b'class="market-product-filters visible zs-filter-panel"' in response.data
     assert b'.market-list-panel.collection-mode .market-product-filters' not in response.data
     assert "采集列表支持实重可用、未审核、未上架及重量、售价、收益和采集时间组合筛选".encode("utf-8") in response.data
     review_filter_markup = response.data.split(b'id="mercado-review-filter"', 1)[0].rsplit(b'<div', 1)[-1]
