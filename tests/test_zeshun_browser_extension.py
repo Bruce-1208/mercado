@@ -239,6 +239,36 @@ def test_integrated_ai_weight_price_page_points_launch_to_extension(monkeypatch)
     assert '<div class="launch-block" hidden>' in response.text
 
 
+def test_integrated_ai_weight_price_is_read_only_from_other_terminals(monkeypatch):
+    import bit.bit_interface as workbench
+
+    monkeypatch.setattr(workbench, "get_current_workbench_user", _browser_extension_user)
+    workbench.app.config.update(TESTING=True, SECRET_KEY="extension-test-secret")
+    client = workbench.app.test_client()
+    with client.session_transaction() as login_session:
+        login_session["workbench_user"] = _browser_extension_user()
+    remote = {
+        "base_url": "https://zeshun.example.com",
+        "environ_base": {"REMOTE_ADDR": "192.0.2.20"},
+    }
+
+    page = client.get("/ai-weight-price", **remote)
+    status = client.get("/api/ai-weight-price/status", **remote)
+    write = client.put(
+        "/api/ai-weight-price/config",
+        json={"daily_limit": 13},
+        headers={"X-AWP-Request": "1"},
+        **remote,
+    )
+
+    assert page.status_code == 200
+    assert "当前终端为只读查看" in page.text
+    assert 'id="live-console"' in page.text
+    assert "const canExecute=false" in page.text
+    assert status.status_code == 200
+    assert write.status_code == 403
+
+
 def test_list_card_collection_only_opens_china_or_managed_products():
     content = (EXTENSION / "content.js").read_text(encoding="utf-8")
     background = (EXTENSION / "background.js").read_text(encoding="utf-8")

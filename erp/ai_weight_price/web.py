@@ -16,11 +16,20 @@ def create_blueprint(service, authorize=None):
             denied = authorize("ai_weight_price.view" if request.method == "GET" else "ai_weight_price.execute")
             if denied is not None:
                 return denied
-        # Module operates on the computer running this service. Never silently run on the public console server.
+        # Read-only task data is shared through the server store and must remain
+        # available from every authenticated workbench. Browser automation still
+        # belongs to the workstation that owns Edge, so mutations stay loopback-only.
         host = urlsplit(request.host_url).hostname
-        if host not in ("127.0.0.1", "localhost", "::1") or request.remote_addr not in ("127.0.0.1", "::1"):
+        local_request = (
+            host in ("127.0.0.1", "localhost", "::1")
+            and request.remote_addr in ("127.0.0.1", "::1")
+        )
+        g.awp_local_request = local_request
+        if not local_request and not authorize:
             if request.path == "/ai-weight-price":
                 return render_template("ai_weight_price.html", local_only=True, can_execute=False)
+            return jsonify(message="请打开本机 http://127.0.0.1:5000 控制台使用AI核重核价"), 403
+        if not local_request and request.method != "GET":
             return jsonify(message="请打开本机 http://127.0.0.1:5000 控制台使用AI核重核价"), 403
         if request.method != "GET":
             if not request.is_json or request.headers.get("X-AWP-Request") != "1":
@@ -54,11 +63,13 @@ def create_blueprint(service, authorize=None):
 
     @bp.get("/ai-weight-price")
     def page():
-        can_execute = not authorize or authorize("ai_weight_price.execute") is None
+        local_request = bool(getattr(g, "awp_local_request", False))
+        can_execute = local_request and (not authorize or authorize("ai_weight_price.execute") is None)
         return render_template(
             "ai_weight_price.html",
             local_only=False,
             can_execute=can_execute,
+            remote_read_only=not local_request,
             plugin_launch_only=bool(authorize),
         )
 
