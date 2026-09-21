@@ -12,6 +12,25 @@ def process(service, task, browser, models, config):
     try:
         service.progress(key, f"商品 {key}：主图搜货，比对前{config['max_candidates']}张图片，同款匹配分数须大于等于{config['match_threshold']:.0%}")
         cached = cached_candidate(task, config)
+        # A historical task can be reprocessed after a previous successful or
+        # partial run.  Do not let the old score/link/pricing leak into the new
+        # run when 1688 returns a different result set.  Keep ERP read-back and
+        # write history for audit; only reset the current supplier conclusion.
+        reset = {
+            "image_match_evidence": [], "match_evidence": [], "candidate_count": 0,
+            "image_match_confidence": None, "supplier_url": None,
+            "supplier_sku_id": None, "supplier_sku": "", "merchant_id": None,
+            "match_confidence": None, "supplier_price_evidence": {},
+            "cost_price": None, "weight_g": None, "net_income_usd": None,
+            "pricing": None, "page_info": {}, "page_info_checked": False,
+            "supplier_page_text": "", "info_sources": {},
+            "decision_status": "", "decision_reason": "", "skip_reason": "",
+        }
+        if not cached:
+            reset.update(best_match_url="", best_match_title="", best_match_image_url="",
+                         best_match_confidence=None, best_match_approved=False)
+        store.update(key, **reset)
+        task = store.get(key)
         if cached:
             # A manual ERP SKU correction after an ambiguous result can reuse
             # the already-approved image lead. Reopen its detail directly;
@@ -32,7 +51,8 @@ def process(service, task, browser, models, config):
         # a non-match.  The UI should show why a product was rejected instead
         # of displaying a blank score for every below-threshold result.
         image_scores = [item["review"]["confidence"] for item in evidence]
-        store.update(key, image_match_evidence=evidence, candidate_count=len(candidates),
+        store.update(key, image_match_evidence=evidence, match_evidence=[],
+                     candidate_count=len(candidates),
                      image_match_confidence=max(image_scores, default=None))
         for item in evidence:
             review = item["review"]
@@ -57,40 +77,59 @@ def process(service, task, browser, models, config):
                          best_match_approved=lead_approved)
         if not approved:
             raise NoExactMatch(f"前{len(candidates)}张候选图没有匹配分数大于等于{config['match_threshold']:.0%}的同款")
-        # approved is sorted by score descending; equal scores preserve the
-        # original 1688 result order. Open exactly the highest-scoring match.
+        # The user-selected pricing policy deliberately does not identify an
+        # ERP target variant. Use the strongest image-approved offer and price
+        # conservatively from the most expensive verified SKU in that offer.
         candidate = approved[0]
-        # Keep the best detail URL even when the SKU review remains ambiguous.
-        # The operator can open it from the task list, copy the exact variant
-        # into ERP data, and retry without running image search again blindly.
-        task = store.update(key, best_match_url=candidate.get("url", ""),
-                            best_match_title=candidate.get("title", ""),
-                            best_match_image_url=candidate.get("main_image_url", ""),
-                            best_match_confidence=candidate.get("image_confidence"),
-                            best_match_approved=True)
-        service.record_visual(key, "image_matched",
-                              f"已从前{len(candidates)}张中选择同款分数最高的候选（{candidate['image_confidence']:.2%}）；进入1688明细读取变体价格和重量",
-                              page_url=candidate["url"])
+        store.log(
+            f"同款图片分数 {candidate['image_confidence']:.2%} 已达到门槛 "
+            f"{config['match_threshold']:.2%}；正在读取该1688链接的最高变体价",
+            key,
+        )
+        service.record_visual(
+            key, "image_matched", "图片同款已确认；不匹配具体变体，读取当前1688链接的最高最终单价",
+            page_url=candidate["url"],
+        )
         detail = browser.read_offer(task, candidate)
-        match, reviews = models.match(task, detail)
-        sku_evidence = [{"candidate": detail, "reviews": reviews}]
-        store.update(key, match_evidence=sku_evidence)
-        if not match:
-            task = store.update(key, image_match_confidence=max(c["image_confidence"] for c in approved))
-            variants = len(detail.get("skus") or [])
-            if variants > 1:
-                reason = (f"图片匹配成功，但1688详情有{variants}个变体，ERP资料不足以唯一确认目标SKU；"
-                          "未执行回写，保留智赢原状态")
-            elif variants == 1:
-                reason = "图片匹配成功，但SKU复核证据不足以确认目标规格；未执行回写，保留智赢原状态"
-            else:
-                reason = "图片匹配成功，但1688详情未提供可确认的目标SKU价格；未执行回写，保留智赢原状态"
-            return save_result(service, task, browser, config, "risk", reason, {})
-        sku = match["selected_sku"]
-        task = store.update(key, stage="matched", supplier_url=match["url"],
+        detail_url = detail.get("url") or candidate.get("url", "")
+        # read_offer navigates to the real offer page even when the image-search
+        # card itself only has an air.1688.com shell URL. Persist that resolved
+        # detail URL before any later pricing/weight branch can return a risk.
+        task = store.update(
+            key,
+            best_match_url=detail_url,
+            best_match_title=detail.get("title", candidate.get("title", "")),
+            best_match_image_url=detail.get("main_image_url", candidate.get("main_image_url", "")),
+            best_match_confidence=candidate.get("image_confidence"),
+            best_match_approved=True,
+            supplier_url=detail_url or None,
+        )
+        sku = highest_priced_variant(detail.get("skus") or [])
+        if sku is None:
+            return save_result(service, store.get(key), browser, config, "risk",
+                               "图片匹配成功，但1688详情的变体价格不完整，无法确认最高最终单价；未执行回写",
+                               {})
+        sku_count = len(detail["skus"])
+        # On the current 1688 build packaging weight is often rendered inside
+        # the SKU label (for example "火烈鸟冲浪板117*54cm(0.29kg / 看产品介绍")
+        # rather than in productPackInfo. Keep the selected highest-price
+        # row's explicit label evidence as a defensive fallback.
+        sku = {**sku, "raw_weight": sku.get("raw_weight") or sku.get("label", "")}
+        price_evidence = {**sku, "pricing_policy": "highest_variant_price",
+                          "sku_count": sku_count, "variant_ambiguous": sku_count > 1}
+        store.update(key, match_evidence=[{
+            "candidate": detail,
+            "reviews": [],
+            "image_confidence": candidate["image_confidence"],
+            "pricing_policy": "highest_variant_price",
+            "selected_price": sku["price"],
+        }])
+        store.log(f"1688详情共 {sku_count} 个变体；最高最终单价为 ¥{sku['price']}（{sku['label']}）", key)
+        task = store.update(key, stage="matched", supplier_url=detail_url,
                             supplier_sku_id=sku["id"], supplier_sku=sku["label"],
-                            merchant_id=match.get("merchant_id"), match_confidence=match["confidence"],
-                            cost_price=sku.get("price"), supplier_price_evidence=sku,
+                            merchant_id=detail.get("merchant_id"), match_confidence=candidate["image_confidence"],
+                            cost_price=sku.get("price"), supplier_price_evidence=price_evidence,
+                            supplier_sku_ambiguous=sku_count > 1,
                             image_match_confidence=candidate["image_confidence"], weight_g=None,
                             net_income_usd=None, pricing=None, page_info_checked=False)
         # The official SKU module already provides a final price and often an
@@ -100,11 +139,7 @@ def process(service, task, browser, models, config):
         cost = sku.get("price")
         weight = parse_weight_evidence(sku.get("raw_weight", ""))
         info = {}
-        text = service.page_text(match)
-        if not cost or not weight:
-            info = models.supplier_info(task, text) if text.strip() else {}
-            cost = cost or info.get("cost_price")
-            weight = weight or info.get("weight_g")
+        text = service.page_text({**detail, "selected_sku": sku})
         if weight and number(weight) > 1000000:
             weight = None
         task = store.update(key, cost_price=cost, weight_g=weight, page_info=info,
@@ -119,8 +154,12 @@ def process(service, task, browser, models, config):
         changes = {"net_income_usd": task["net_income_usd"]}
         if weight:
             changes["weight_g"] = str(number(weight))
-            return save_result(service, task, browser, config, "success", "匹配成功，已回填重量和净收益", changes)
-        return save_result(service, task, browser, config, "risk", "匹配成功但未读取到重量：保留原重量和状态，只回填净收益", changes)
+            return save_result(service, task, browser, config, "success",
+                               f"图片匹配成功；未匹配具体变体，已按{sku_count}个变体中的最高价回填净收益，并从最高价变体的页面证据回填重量",
+                               changes)
+        return save_result(service, task, browser, config, "risk",
+                           f"图片匹配成功；未匹配具体变体，已按{sku_count}个变体中的最高价回填净收益；最高价变体未提供可解析重量，保留原重量和状态",
+                           changes)
     except SearchTimeout as exc:
         # A timeout is a technical failure, not a completed matching
         # decision. Store it as an exception; the service converts non-human
@@ -159,6 +198,18 @@ def cached_candidate(task, config):
     return {"url": url, "title": task.get("best_match_title", ""),
             "main_image_url": task.get("best_match_image_url", ""),
             "image_confidence": confidence}
+
+
+def highest_priced_variant(skus):
+    """Return the most expensive SKU only when every final price is valid."""
+    if not skus:
+        return None
+    try:
+        priced = [(number(sku.get("price")), sku) for sku in skus]
+    except ValueError:
+        return None
+    _, selected = max(priced, key=lambda item: item[0])
+    return selected
 
 
 def save_result(service, task, browser, config, result, reason, changes):

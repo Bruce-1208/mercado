@@ -486,16 +486,25 @@ class MercadoLibreClient:
             headers={"api-version": "2"},
         ) or {})
 
-    def activate_product_ads_ad_group(
-        self, site_id: str, ad_group_id: int, campaign_id: int
+    def update_product_ads_ad_group(
+        self, site_id: str, ad_group_id: int, campaign_id: int, status: str
     ) -> dict[str, Any]:
+        normalized_status = str(status or "").strip().lower()
+        if normalized_status not in {"active", "paused"}:
+            raise ValueError("Product Ads 广告组状态只能是 active 或 paused")
         return dict(self.request(
             "PUT",
             f"/marketplace/advertising/{site_id}/product_ads/ad_groups/{ad_group_id}",
             headers={"api-version": "2", "Content-Type": "application/json"},
-            json_body={"status": "active", "campaign_id": int(campaign_id)},
+            json_body={"status": normalized_status, "campaign_id": int(campaign_id)},
             max_attempts=1,
         ) or {})
+
+    def activate_product_ads_ad_group(
+        self, site_id: str, ad_group_id: int, campaign_id: int
+    ) -> dict[str, Any]:
+        """Backward-compatible shorthand for enabling one Product Ads group."""
+        return self.update_product_ads_ad_group(site_id, ad_group_id, campaign_id, "active")
 
     def get_shipment_label(self, shipment_id: str, *, max_attempts: int = 4) -> bytes:
         """调用 Mercado 官方接口下载 shipment 发货面单 PDF。"""

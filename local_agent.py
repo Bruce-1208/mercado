@@ -34,7 +34,7 @@ from urllib.parse import urlsplit
 import requests
 
 
-AGENT_VERSION = "1.2.1"
+AGENT_VERSION = "1.2.2"
 DEFAULT_SERVER_URL = "https://wuhanzeshun.com"
 DEFAULT_POLL_SECONDS = 10.0
 DEFAULT_HEARTBEAT_SECONDS = 10.0
@@ -719,7 +719,7 @@ class AgentProcessLock:
 
 
 class LocalAgent:
-    capabilities = ("appeal", "daily_task")
+    capabilities = ("appeal", "daily_task", "heartbeat_claim")
 
     def __init__(self, config):
         self.config = config
@@ -738,9 +738,23 @@ class LocalAgent:
         self._worker_lock = threading.Lock()
         self._current_worker = None
         self._current_job_id = ""
+        self.queue_id = ""
 
     def log(self, message):
         self.runtime_log.write(message)
+
+    def _observe_queue(self, payload):
+        queue_id = str((payload or {}).get("queue_id") or "").strip()
+        if not queue_id or queue_id == self.queue_id:
+            return
+        if self.queue_id:
+            self.log(
+                "警告：公网请求切换到了不同的 Agent 队列 "
+                f"({self.queue_id[:12]} -> {queue_id[:12]})；请检查反向代理和服务端队列路径"
+            )
+        else:
+            self.log(f"已连接 Agent 队列 {queue_id[:12]}")
+        self.queue_id = queue_id
 
     def request_shutdown(self, reason=""):
         if self.shutdown_event.is_set():
@@ -874,6 +888,7 @@ class LocalAgent:
         if refreshed_token and refreshed_token != self.config.agent_token:
             self.config.save_agent_token(refreshed_token)
             self.session.headers["X-Local-Agent-Token"] = refreshed_token
+        self._observe_queue(data)
         return data
 
     def _safe_extract(self, archive_path, destination):
@@ -954,7 +969,7 @@ class LocalAgent:
             shutil.rmtree(path, ignore_errors=True)
 
     def claim_job(self):
-        return self._request(
+        data = self._request(
             "POST",
             "/api/local-agents/jobs/claim",
             json={
@@ -962,7 +977,9 @@ class LocalAgent:
                 "session_id": self.session_id,
             },
             timeout=20,
-        ).get("job")
+        )
+        self._observe_queue(data)
+        return data.get("job")
 
     def send_event(self, job_id, **payload):
         return self._request(
@@ -1206,11 +1223,18 @@ class LocalAgent:
             try:
                 self.ensure_enrolled()
                 heartbeat = self.heartbeat()
+                heartbeat_claim_supported = "job" in heartbeat
+                job = heartbeat.get("job") if heartbeat_claim_supported else None
                 previous_release = self.current_release
                 self.ensure_release(heartbeat.get("bundle") or {})
                 if self.current_release != previous_release:
-                    self.heartbeat()
-                job = self.claim_job()
+                    refreshed_heartbeat = self.heartbeat()
+                    if not heartbeat_claim_supported and "job" in refreshed_heartbeat:
+                        heartbeat_claim_supported = True
+                    if job is None and "job" in refreshed_heartbeat:
+                        job = refreshed_heartbeat.get("job")
+                if not heartbeat_claim_supported:
+                    job = self.claim_job()
                 if job:
                     self.log(f"收到任务 {job.get('job_id')}：{job.get('job_type')}")
                     try:

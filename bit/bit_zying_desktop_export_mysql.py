@@ -53,10 +53,9 @@ try:
 except (AttributeError, ValueError):
     pass
 
-import pymysql
 from openpyxl import load_workbook
 
-from bit.bit_mysql import config as mysql_config
+from bit.bit_mysql import config as mysql_config, pymysql
 
 
 DEFAULT_CATEGORY = "一马当先"

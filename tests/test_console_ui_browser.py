@@ -172,3 +172,22 @@ def test_filter_layout_and_popup_fit_viewport(console_page, width):
     box = page.locator("#order-store-filter-picker .market-multi-panel").bounding_box()
     assert box and box["x"] >= 0 and box["x"] + box["width"] <= width
     assert box["y"] >= 0 and box["y"] + box["height"] <= 1000
+
+
+def test_order_density_switch_and_compact_bulk_toolbar(console_page):
+    page = console_page
+    board = page.locator("#order-board")
+    bulk_bar = page.locator("#order-bulk-bar")
+
+    assert board.evaluate("el => el.classList.contains('order-density-compact')")
+    assert page.get_by_role("button", name="紧凑").get_attribute("aria-pressed") == "true"
+    assert bulk_bar.locator(".order-bulk-group").first.evaluate("el => getComputedStyle(el).display") == "none"
+
+    page.get_by_role("button", name="舒适").click()
+    assert not board.evaluate("el => el.classList.contains('order-density-compact')")
+    assert page.get_by_role("button", name="舒适").get_attribute("aria-pressed") == "true"
+    assert page.evaluate("localStorage.getItem('zeshun-order-density')") == "comfortable"
+
+    page.evaluate("selectedOrderIds.add('10001'); updateOrderSelectionState()")
+    assert bulk_bar.evaluate("el => el.classList.contains('active')")
+    assert bulk_bar.locator(".order-bulk-group").first.evaluate("el => getComputedStyle(el).display") == "flex"

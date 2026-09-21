@@ -103,6 +103,22 @@ def advertise_mercado_store_link(link_id, *, budget, roas_target, campaign_name=
     )
 
 
+def advertise_mercado_store_links(link_ids, *, budget, roas_target, campaign_name=""):
+    payload = {
+        "link_ids": list(link_ids or []),
+        "budget": budget,
+        "roas_target": roas_target,
+        "campaign_name": str(campaign_name or "").strip(),
+    }
+    if DB_MODE == "mysql":
+        from bit.bit_store_link_ads import advertise_store_links
+
+        return advertise_store_links(**payload)
+    return _request(
+        "POST", "/api/db/store-links/bulk-advertise", json=payload, timeout=600
+    )
+
+
 def get_mercado_ad_analysis(*, date_from="", date_to="", token_ids=None, force=False):
     params = {
         "date_from": str(date_from or "").strip(),
@@ -127,6 +143,17 @@ def get_mercado_ad_analysis(*, date_from="", date_to="", token_ids=None, force=F
         # Preserve an explicitly empty member scope through query serialization.
         remote_params["token_ids"] = [""]
     return _request("GET", "/api/db/ad-analysis", params=remote_params, timeout=240)
+
+
+def update_mercado_ad_groups(rows, *, status):
+    payload = {"rows": list(rows or []), "status": str(status or "").strip()}
+    if DB_MODE == "mysql":
+        from bit.bit_ad_analysis import update_product_ads_ad_groups
+
+        return update_product_ads_ad_groups(payload["rows"], status=payload["status"])
+    return _request(
+        "POST", "/api/db/ad-analysis/actions", json=payload, timeout=600
+    )
 
 
 def insert_task_record(record_list):

@@ -22,6 +22,8 @@ Agent 1.1.3 为 Agent 自身的启动、业务更新、任务领取、上传重�
 
 Agent 1.2.1 修复任务队列被异常退出留下的 `running/stopping` 记录永久阻塞、停止中被误显示成已停止，以及关闭 Agent 后业务子进程继续运行的问题。运行中的任务使用进程会话和租约续期；Agent 重启会结束旧会话任务，Windows 子进程树由 Job Object 托管。控制连接连续中断 12 分钟时，Agent 会在服务端租约到期前主动停止业务进程，避免失控执行。关闭状态窗口并确认后会停止当前任务并真正退出 Agent。
 
+Agent 1.2.2 将任务领取合并到心跳请求，避免反向代理或滚动部署把心跳与领取请求分发到不同后端；旧服务端仍自动回退到独立领取接口。服务端 Agent 队列默认改到与代码目录无关的固定用户数据目录，首次升级会用 SQLite 在线备份自动迁移旧 `.data/local-agent-hub.sqlite3`。心跳、领取和电脑列表会返回同一个 `queue_id`，Agent 日志在发现请求切换到不同队列时会明确报警。升级需要同时部署服务端代码并重新构建、替换 Agent EXE。
+
 Agent 默认数据目录在 Windows 为 `%LOCALAPPDATA%\Zeshun\MercadoLocalAgent`，在 macOS 为 `~/Library/Application Support/Zeshun/MercadoLocalAgent`。其中包含电脑身份、业务版本、`agent.log` 和运行日志所需的临时任务数据。Agent 保留最近两个业务版本。
 
 ## 服务端部署
@@ -36,7 +38,7 @@ export WORKBENCH_SECRET_KEY='replace-with-a-long-stable-random-secret'
 python -m bit.bit_interface --role server
 ```
 
-生产环境还应按现有部署方式设置 MySQL 和数据库接口变量。Agent 队列默认位于 `.data/local-agent-hub.sqlite3`；可用 `BIT_LOCAL_AGENT_HUB_PATH` 放到持久化磁盘。反向代理需要关闭 `/api/run_shensu` 的响应缓冲，项目响应已经发送 `X-Accel-Buffering: no`。
+生产环境还应按现有部署方式设置 MySQL 和数据库接口变量。Agent 队列默认位于固定用户数据目录：Windows 为 `%LOCALAPPDATA%\Zeshun\MercadoWorkbench\local-agent-hub.sqlite3`，macOS 为 `~/Library/Application Support/Zeshun/MercadoWorkbench/local-agent-hub.sqlite3`，Linux 为 `$XDG_STATE_HOME/Zeshun/MercadoWorkbench/local-agent-hub.sqlite3`（未设置 XDG 变量时使用 `~/.local/share`）。可用 `BIT_LOCAL_AGENT_HUB_PATH` 指定其他固定绝对路径；不要配置相对路径，也不要让多个后端实例使用各自独立的文件。反向代理需要关闭 `/api/run_shensu` 的响应缓冲，项目响应已经发送 `X-Accel-Buffering: no`。
 
 业务包从服务器当前源码目录动态生成，运行中的工作台每 10 秒重新检查磁盘源码，因此覆盖部署普通业务 `.py` 文件后无需重启工作台，在线 Agent 会自动更新。生产服务建议关闭 Werkzeug 热重载；只有修改 Agent 控制接口本身时才需要安全重启。不要只部署一个不含源码的工作台 EXE。
 

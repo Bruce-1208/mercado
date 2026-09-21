@@ -19,8 +19,7 @@ _schema_ready = False
 
 
 def _connect() -> Any:
-    import pymysql
-    from bit.bit_mysql import config
+    from bit.bit_mysql import config, pymysql
 
     return pymysql.connect(**config)
 

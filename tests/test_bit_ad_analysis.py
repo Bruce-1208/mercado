@@ -71,6 +71,15 @@ class FakeAdsClient:
         }
 
 
+class FakeAdActionClient:
+    def __init__(self):
+        self.calls = []
+
+    def update_product_ads_ad_group(self, site, ad_group_id, campaign_id, status):
+        self.calls.append((site, ad_group_id, campaign_id, status))
+        return {"id": ad_group_id, "status": status}
+
+
 def _install_token_fakes(monkeypatch):
     monkeypatch.setattr(
         "bit.bit_mysql.list_mercado_store_tokens",
@@ -122,6 +131,35 @@ def test_ad_analysis_rejects_more_than_ninety_days():
         analysis.collect_ad_analysis(date_from="2026-01-01", date_to="2026-04-01")
 
 
+def test_update_product_ads_ad_groups_deduplicates_catalog_rows(monkeypatch):
+    client = FakeAdActionClient()
+    monkeypatch.setattr(
+        "bit.bit_mysql.get_mercado_store_token",
+        lambda token_id: {"id": token_id, "access_token": "token"},
+    )
+    monkeypatch.setattr(
+        "bit.bit_store_link_sync._client_and_token",
+        lambda token: (client, token),
+    )
+
+    result = analysis.update_product_ads_ad_groups(
+        [
+            {"token_id": 7, "site_id": "MLM", "ad_group_id": 31, "campaign_id": 41, "item_id": "MLM123"},
+            {"token_id": 7, "site_id": "MLM", "ad_group_id": 31, "campaign_id": 41, "item_id": "MLM456"},
+            {"token_id": 7, "site_id": "MLM", "ad_group_id": 32, "campaign_id": 41, "item_id": "MLM789"},
+        ],
+        status="paused",
+    )
+
+    assert result["requested_count"] == 3
+    assert result["ad_group_count"] == 2
+    assert result["success_count"] == 2
+    assert client.calls == [
+        ("MLM", 31, 41, "paused"),
+        ("MLM", 32, 41, "paused"),
+    ]
+
+
 def test_product_ads_metric_client_uses_current_ad_group_endpoints(monkeypatch):
     calls = []
     client = MercadoLibreClient("token")
@@ -144,6 +182,22 @@ def test_product_ads_metric_client_uses_current_ad_group_endpoints(monkeypatch):
     assert calls[0][2]["params"]["metrics_summary"] == "true"
     assert calls[1][1].endswith("/product_ads/ad_groups/31/ads")
     assert calls[1][2]["params"]["metrics"] == "clicks,cost"
+
+
+def test_product_ads_ad_group_client_updates_requested_status(monkeypatch):
+    calls = []
+    client = MercadoLibreClient("token")
+    monkeypatch.setattr(
+        client,
+        "request",
+        lambda method, path, **kwargs: calls.append((method, path, kwargs)) or {"status": "paused"},
+    )
+
+    client.update_product_ads_ad_group("MLM", 31, 41, "paused")
+
+    assert calls[0][0] == "PUT"
+    assert calls[0][1].endswith("/product_ads/ad_groups/31")
+    assert calls[0][2]["json_body"] == {"status": "paused", "campaign_id": 41}
 
 
 def test_ad_group_metric_client_can_filter_one_campaign(monkeypatch):
@@ -169,4 +223,6 @@ def test_ad_analysis_module_is_present_in_workbench_template():
     assert 'id="tab-ad-analysis"' in source
     assert 'id="ad-analysis-account-body"' in source
     assert 'id="ad-analysis-link-body"' in source
+    assert 'id="ad-analysis-activate-selected"' in source
+    assert 'id="ad-analysis-pause-selected"' in source
     assert "loadAdAnalysis" in source

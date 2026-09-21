@@ -1,10 +1,12 @@
 """Offline browser regressions; only synthetic HTML and Flask's test client are used."""
+import base64
 import os
 import threading
 from pathlib import Path
 from urllib.parse import urlsplit
 
 import pytest
+import requests
 from flask import Flask
 
 from erp.ai_weight_price.browser import Browser, CircuitOpen, NoExactMatch
@@ -66,6 +68,68 @@ SUPPLIER_HTML = '''<meta charset="utf-8"><main><h1>不锈钢杯</h1><img src="ht
 <article data-sku-id="blue"><span>蓝色500ml一只</span><b>￥12.50</b><p>含包装450克</p></article>
 <article data-sku-id="red"><span>红色500ml一只</span><b>￥15.50</b><p>含包装460克</p></article>
 </section></main>'''
+
+
+def test_image_payload_retries_temporary_cdn_http_error(monkeypatch):
+    """A transient Alibaba CDN 420 must not immediately skip the ERP item."""
+    from erp.ai_weight_price.browser import Browser
+
+    picture = base64.b64decode(
+        "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII="
+    )
+
+    class Stop:
+        def __init__(self):
+            self.delays = []
+
+        def is_set(self):
+            return False
+
+        def wait(self, delay):
+            self.delays.append(delay)
+            return False
+
+    class Response:
+        def __init__(self, status_code, body=b""):
+            self.status_code = status_code
+            self.body = body
+            self.headers = {}
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            return False
+
+        def raise_for_status(self):
+            if self.status_code >= 400:
+                raise requests.HTTPError(
+                    f"{self.status_code} Client Error", response=self
+                )
+
+        def iter_content(self, chunk_size):
+            return [self.body]
+
+    responses = iter([Response(420), Response(200, picture)])
+    calls = []
+
+    def get(url, **kwargs):
+        calls.append((url, kwargs))
+        return next(responses)
+
+    monkeypatch.setattr("erp.ai_weight_price.browser.requests.get", get)
+    stop = Stop()
+    adapter = Browser(validate({}), stop, lambda *args: None)
+    payload = adapter.image_payload({
+        "erp_goods_id": "cdn-retry",
+        "main_image_url": "https://cbu01.alicdn.com/img/retry.jpg",
+    })
+
+    assert payload["mimeType"] == "image/png"
+    assert payload["buffer"] == picture
+    assert len(calls) == 2
+    assert stop.delays == [0.5]
+    assert calls[0][1]["headers"]["Referer"] == "https://www.1688.com/"
 
 
 def test_empty_image_search_keeps_visible_browser_steps_without_screenshots_or_dashboard(page, monkeypatch, tmp_path):
@@ -327,6 +391,32 @@ def test_image_search_keeps_verified_upload_when_page_adds_another_input(page, m
     assert page.locator("#late-upload").evaluate("element => element.files.length") == 0
 
 
+def test_image_result_page_waits_for_real_cards_instead_of_early_offer_links(page, monkeypatch):
+    import base64
+    page.route('https://www.1688.com/', lambda route: route.fulfill(
+        body='''<input type="file" hidden><script>
+        document.querySelector('input').onchange=()=>location.href='https://air.1688.com/kapp/1688-search/pc-image-search/?imageId=test';
+        </script>''', content_type='text/html'))
+    page.route('https://air.1688.com/**', lambda route: route.fulfill(
+        body='''<meta charset="utf-8"><a href="https://detail.1688.com/offer/early.html">页面壳推荐</a>
+        <script>setTimeout(()=>document.body.insertAdjacentHTML('beforeend',
+        '<div>找到以下货源</div><article><img width="120" height="120" src="https://img.example/real.jpg"><p>真实货源 ￥22</p></article>'),120)</script>''',
+        content_type='text/html'))
+    page.goto('https://www.1688.com/')
+    adapter = Browser(validate({}), threading.Event(), lambda *a: None)
+    adapter.context = page.context
+    monkeypatch.setattr(adapter, 'image_payload', lambda task: {
+        'name': 'main.png', 'mimeType': 'image/png',
+        'buffer': base64.b64decode('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aD1kAAAAASUVORK5CYII=')})
+
+    result = adapter.image_search(page, {'erp_goods_id': '1'})
+
+    assert '/pc-image-search/' in result.url
+    assert [card['main_image_url'] for card in adapter.result_image_cards(result)] == [
+        'https://img.example/real.jpg',
+    ]
+
+
 def test_image_search_rejects_ambiguous_uploads_before_upload(page, monkeypatch):
     page.set_content('<input type="file" hidden><input type="file" hidden>')
     adapter = Browser(validate({}), threading.Event(), lambda *args, **kwargs: None)
@@ -423,6 +513,44 @@ def test_current_1688_detail_reads_only_official_sku_prices_and_weights(page):
     ]
 
 
+def test_current_1688_detail_reads_weight_embedded_in_sku_label_when_pack_info_is_empty(page):
+    page.set_content('''<div id="productTitle" data-module="od_title"><div class="title-content"><h1>测试冲浪板</h1></div></div>
+      <div id="shopNavigation"><a class="shop-company-name" href="https://shop123.1688.com">测试工厂</a></div>
+      <div id="gallery"><img class="preview-img" src="https://img.example/O1CNtarget_!!1.jpg"></div>
+      <div id="skuSelection" data-module="od_sku_selection">SKU</div>
+      <div id="productPackInfo" data-module="od_product_pack_info">包装信息</div>''')
+    page.evaluate('''() => {
+      document.querySelector('#skuSelection').__reactFiber$fixture = {memoizedProps: {dataManager: {params: {skuItems: [
+        {skuId: 22, specAttrs: '菠萝冲浪板84*56cm(0.45kg / 看产品介绍', discountPrice: '17.85'},
+        {skuId: 11, specAttrs: '粉色小海豚72*44cm（140g / 看产品介绍', discountPrice: '4.50'}
+      ]}}}, return: null};
+    }''')
+    adapter = Browser(validate({}), threading.Event(), lambda *a: None)
+    offer = adapter.current_supplier_offer(page, {'main_image_url': 'https://img.example/O1CNtarget_!!9.webp'}, timeout=.2)
+    assert [sku['raw_weight'] for sku in offer['skus']] == ['140g', '0.45kg']
+    assert offer['skus'][1]['raw_text'].endswith('包装重量 0.45kg')
+
+
+def test_current_1688_detail_applies_one_explicit_common_package_weight_to_all_skus(page):
+    page.set_content('''<div id="productTitle" data-module="od_title"><div class="title-content"><h1>测试睡衣</h1></div></div>
+      <div id="shopNavigation"><a class="shop-company-name" href="https://shop123.1688.com">测试工厂</a></div>
+      <div id="gallery"><img class="preview-img" src="https://img.example/O1CNtarget_!!1.jpg"></div>
+      <div id="skuSelection" data-module="od_sku_selection">SKU</div>
+      <div id="productPackInfo" data-module="od_product_pack_info">包装信息</div>''')
+    page.evaluate('''() => {
+      document.querySelector('#skuSelection').__reactFiber$fixture = {memoizedProps: {dataManager: {params: {skuItems: [
+        {skuId: 22, specAttrs: '红色&gt;M', discountPrice: '8.00'},
+        {skuId: 11, specAttrs: '黑色&gt;S', discountPrice: '7.50'}
+      ]}}}, return: null};
+      document.querySelector('#productPackInfo').__reactFiber$fixture = {memoizedProps: {packInfoData: {skuInfo: [
+        {volume: 0, length: 0, width: 0, weight: 300, height: 0}
+      ]}}, return: null};
+    }''')
+    adapter = Browser(validate({}), threading.Event(), lambda *a: None)
+    offer = adapter.current_supplier_offer(page, {'main_image_url': 'https://img.example/O1CNtarget_!!9.webp'}, timeout=.2)
+    assert [sku['raw_weight'] for sku in offer['skus']] == ['300g', '300g']
+
+
 def test_clickable_1688_cards_without_offer_hrefs_exclude_preview_and_open_real_detail(page, monkeypatch):
     page.route('https://air.1688.com/**', lambda route: route.fulfill(body='''<meta charset="utf-8"><body>
       <img src="https://img.example/preview.jpg" width="120" height="120"><div>找到以下货源</div>
@@ -440,7 +568,7 @@ def test_clickable_1688_cards_without_offer_hrefs_exclude_preview_and_open_real_
     offer = adapter.read_offer({'erp_goods_id': '1'}, cards[0])
     assert offer['url'] == 'https://detail.1688.com/offer/123.html'
     assert offer['skus'][0]['price'] == '12.50'
-    assert len(page.context.pages) == 1  # supplier detail closed, search retained until this product finishes
+    assert len(page.context.pages) == 0  # both temporary 1688 view tabs are closed after reading
 
 
 def test_partial_erp_write_preserves_weight_and_status_after_reload(page, monkeypatch):
@@ -464,6 +592,44 @@ def test_partial_erp_write_preserves_weight_and_status_after_reload(page, monkey
     assert page.evaluate("localStorage.getItem('weightEdited')") is None
 
 
+def test_locate_erp_detail_prefers_stable_id_when_title_and_image_repeat(page, monkeypatch):
+    page.set_content('''<div class="product-item"><span class="product-id">790301169</span><span class="product-title">重复标题</span><img class="product-pic" src="https://img.example/same.jpg"></div>
+      <div class="product-item"><span class="product-id">817846219</span><span class="product-title">重复标题</span><img class="product-pic" src="https://img.example/same.jpg"></div>
+      <div class="curd-detail-wrap"><div class="crud-detail-header"><div class="h1">产品编号：999</div></div></div>''')
+    adapter = Browser(validate({}), threading.Event(), lambda *a: None)
+    current = {'id': '999'}
+    monkeypatch.setattr(adapter, 'apply_category', lambda *a: None)
+    monkeypatch.setattr(adapter, 'first_page', lambda *a: None)
+
+    def value(root, key, attribute=None, required=False):
+        if key == 'erp_title':
+            return root.locator('.product-title').inner_text()
+        if key == 'erp_image':
+            return root.locator('img.product-pic').get_attribute('src') or ''
+        if key == 'erp_id':
+            return root.locator('.product-id').inner_text()
+        if key == 'erp_edit_id':
+            return current['id']
+        raise AssertionError(key)
+
+    monkeypatch.setattr(adapter, 'value', value)
+    monkeypatch.setattr(adapter, 'erp_goods_id', lambda _page, row, _record: row.locator('.product-id').inner_text())
+
+    def unique(root, key):
+        class Click:
+            def click(self):
+                current['id'] = root.locator('.product-id').inner_text()
+        return Click()
+
+    monkeypatch.setattr(adapter, 'unique', unique)
+    adapter.locate_erp_detail(page, {
+        'erp_goods_id': '817846219', 'title': '重复标题',
+        'main_image_url': 'https://img.example/same.jpg', 'source_page': 1,
+        'source_category': '',
+    })
+    assert current['id'] == '817846219'
+
+
 def test_erp_write_patch_ignores_hidden_save_clones(page, monkeypatch):
     html = '''<meta charset="utf-8"><div class="curd-detail-wrap"><div class="crud-detail-header"><div class="h1">产品编号：101</div></div>
       <input id="netproceed" value="9.5"><input id="weight" value="430">
@@ -478,6 +644,25 @@ def test_erp_write_patch_ignores_hidden_save_clones(page, monkeypatch):
     monkeypatch.setattr(adapter, 'page', lambda *a: page)
     actual = adapter.write_patch({'erp_goods_id': '101', 'erp_edit_url': page.url},
                                  {'net_income_usd': '4'}, lambda _old: None)
+    assert actual == {'weight_g': '430', 'net_income_usd': '4', 'review_status': '待审核'}
+
+
+def test_erp_write_patch_confirms_by_reload_when_save_has_no_success_toast(page, monkeypatch):
+    html = '''<meta charset="utf-8"><div class="curd-detail-wrap"><div class="crud-detail-header"><div class="h1">产品编号：101</div></div>
+      <input id="netproceed" value="9.5"><input id="weight" value="430">
+      <label><input type="radio" name="stat" value="3000" checked>待审核</label>
+      <button id="save">更新</button><script>
+      const old=JSON.parse(localStorage.getItem('saved-no-toast')||'null');
+      if(old)document.querySelector('#netproceed').value=old.net;
+      document.querySelector('#save').onclick=()=>localStorage.setItem('saved-no-toast',JSON.stringify({net:document.querySelector('#netproceed').value}));</script></div>'''
+    page.route('https://meli.zying.net/**', lambda route: route.fulfill(body=html, content_type='text/html'))
+    page.goto('https://meli.zying.net/#/product/101')
+    adapter = Browser(validate({}), threading.Event(), lambda *a: None)
+    monkeypatch.setattr(adapter, 'page', lambda *a: page)
+
+    actual = adapter.write_patch({'erp_goods_id': '101', 'erp_edit_url': page.url},
+                                 {'net_income_usd': '4'}, lambda _old: None)
+
     assert actual == {'weight_g': '430', 'net_income_usd': '4', 'review_status': '待审核'}
 
 
@@ -506,6 +691,16 @@ def test_erp_write_patch_rejects_review_status_changes():
             {'review_status': '风险'},
             lambda _old: None,
         )
+
+
+def test_erp_save_button_accepts_portal_footer_update_action(page):
+    page.set_content('''<div class="curd-detail-wrap"><input id="weight"></div>
+      <footer><button id="portal-update" class="ant-btn-primary">更新</button></footer>''')
+    adapter = Browser(validate({}), threading.Event(), lambda *a: None)
+
+    button = adapter.erp_save_button(page, page.locator('.curd-detail-wrap'))
+
+    assert button.get_attribute('id') == 'portal-update'
 
 
 def test_image_search_timeout_keeps_evidence_and_rejects_stale_home_recommendations(page, monkeypatch, tmp_path):
@@ -573,6 +768,50 @@ def test_console_shows_worker_error_and_logs_on_task_page(page, tmp_path, monkey
     assert service.config.load()["sku_price_mode"] == "base_plus_surcharge"
     assert service.config.load()["usd_cny_rate"] == "7.2"
     assert not errors
+
+
+def test_console_only_shows_1688_link_after_configured_match_threshold(page, tmp_path):
+    service = Service(tmp_path)
+    service.config.save(validate({"match_threshold": .95}))
+    for key, title, score, approved in (
+        ("high", "高分商品", .96, True),
+        ("low", "低分商品", .90, False),
+    ):
+        service.store.add({"erp_goods_id": key, "title": title})
+        service.store.update(
+            key,
+            best_match_url=f"https://detail.1688.com/offer/{1 if key == 'high' else 2}.html",
+            best_match_confidence=score,
+            image_match_confidence=score,
+            best_match_approved=approved,
+        )
+
+    app = Flask(__name__)
+    app.register_blueprint(create_blueprint(service))
+    client = app.test_client()
+
+    def respond(route):
+        request = route.request
+        url = urlsplit(request.url)
+        response = client.open(
+            url.path + ("?" + url.query if url.query else ""),
+            method=request.method,
+            data=request.post_data,
+            headers=request.headers,
+            base_url="http://127.0.0.1:5018",
+        )
+        route.fulfill(status=response.status_code, headers=dict(response.headers), body=response.data)
+
+    page.route("http://127.0.0.1:5018/**", respond)
+    page.goto("http://127.0.0.1:5018/ai-weight-price")
+    page.locator("#task-scope").select_option("all")
+    expect = pytest.importorskip("playwright.sync_api").expect
+    high = page.locator("#rows tr", has_text="高分商品")
+    low = page.locator("#rows tr", has_text="低分商品")
+    expect(high.locator("a.supplier-link")).to_have_attribute(
+        "href", "https://detail.1688.com/offer/1.html"
+    )
+    expect(low.locator("a.supplier-link")).to_have_count(0)
 
 
 def product_detail_fixture(page):

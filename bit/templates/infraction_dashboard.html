@@ -778,7 +778,7 @@
             if (status === "error" || status === "partial") {
                 badge = '<span class="pill problem">需重试</span>';
             } else if (status === "limited") {
-                badge = '<span class="pill ok">已读取（达上限）</span>';
+                badge = '<span class="pill problem">读取不完整</span>';
             } else {
                 badge = `<span class="pill ok">${escapeHtml(store.last_read_at ? "已读取" : "待读取")}</span>`;
             }

@@ -17,9 +17,15 @@ AI 自动申诉的执行状态、故障恢复和配置说明见 [申诉稳定性
 python -m pip install -r bit/requirements-server.txt
 ```
 
-默认使用 16 个请求线程、200 个连接和 1024 个等待连接。可分别通过
+默认使用 32 个请求线程、500 个连接和 1024 个等待连接。可分别通过
 `BIT_WSGI_THREADS`、`BIT_WSGI_CONNECTION_LIMIT` 和 `BIT_WSGI_BACKLOG`
 调整；自动化任务仍由独立的后台并发限制控制。
+
+MySQL 默认使用进程内共享连接池：最多 24 条物理连接、预热 2 条、最多保留
+12 条空闲连接。业务代码调用 `close()` 时连接会安全回池而不是断开 TCP；连接
+取用时会自动检查失效连接。可用 `MYSQL_POOL_MAX_CONNECTIONS`、
+`MYSQL_POOL_MIN_CACHED`、`MYSQL_POOL_MAX_CACHED` 和 `MYSQL_POOL_MAX_USAGE`
+调整。常规单进程部署不要把池上限设得高于 Waitress 请求线程数。
 
 服务端更新任务的默认并发如下，自动更新与手动更新共用对应配置：
 
@@ -30,7 +36,7 @@ python -m pip install -r bit/requirements-server.txt
 | 订单同步、每日老订单刷新 | 8 家店铺 × 每家 16 个详情线程 | `MERCADO_ORDER_STORE_WORKERS` / `MERCADO_ORDER_STATUS_WORKERS` |
 | 订单图片、费用回填 | 16 线程 | `MERCADO_API_BACKFILL_WORKERS` |
 | 侵权、禁限售同步 | 各 12 家店铺 × 每家 16 个详情线程 | `MERCADO_INFRACTION_STORE_WORKERS` / `MERCADO_INFRACTION_DETAIL_WORKERS`、`MERCADO_PROHIBITED_STORE_WORKERS` / `MERCADO_PROHIBITED_DETAIL_WORKERS` |
-| 商品费用自动更新 | 20 线程 | `MERCADO_PROFIT_REFRESH_WORKERS` |
+| 商品费用自动更新 | 8 线程 | `MERCADO_PROFIT_REFRESH_WORKERS` |
 
 实际线程数不会超过待处理数量。店铺链接、订单、侵权和禁限售店铺并发可调至 24，
 店铺链接详情可调至 64，订单详情、回填、风险详情、链接回写和商品费用线程可调至 32。
@@ -82,6 +88,8 @@ Copy-Item .\workbench-client.example.json .\workbench-runtime.json
 ```
 
 服务端和客户端配置中的 `api_token` 必须使用同一个足够长的随机值。也可用 `BIT_RUNTIME_ROLE`、`BIT_DB_API_BASE_URL`、`BIT_DB_API_TOKEN` 和 `MYSQL_HOST` 环境变量部署。控制优先级依次为：启动参数、环境变量、`workbench-runtime.json`、兼容旧版的数据库模式变量。切换角色后需要重启程序。
+
+测试或备用服务器如果只需要提供接口和手动操作、不应运行自动同步及维护任务，请设置 `BIT_BACKGROUND_SERVICES_DISABLED=1` 后重启。该开关会同时阻止启动阶段和首次请求阶段创建成本重算、订单同步、Token 刷新、侵权/禁限售同步等自动后台线程，不影响用户手动发起任务。生产服务器不要设置此项。
 
 客户端可通过服务端的 `GET /api/db/health` 验证接口角色和数据库目标。多台电脑可以同时设为服务端；如果启用后台定时任务，应确认同一任务不会在多台服务端重复调度。
 
@@ -224,6 +232,8 @@ py -3.12 -m bit.bit_config --import-excel "bit\比特配置文件.xlsx"
 ## 批量检查并登录美客多店铺
 
 `bit.bit_mercado_login` 会读取数据库中全部未忽略店铺，默认使用 3 个进程检查登录状态。未登录时输入数据库邮箱、选择密码登录，并只提交 BitBrowser 已保存的默认密码；验证码或人机验证会记录为需要人工处理。所有店铺结束后关闭浏览器，生成 Excel 汇总并发送邮件。
+
+所有使用公共 BitBrowser 接口的自动任务共用窗口容量保护：默认最多 3 个存活或待回收窗口，可用内存低于 15% 时暂停新开窗口。关闭后核验浏览器主进程，失败记录保留并后台重试。升级需重启运行中的任务进程；配置和故障说明见 [比特窗口内存回收](docs/bit_browser_memory.md)。
 
 ```powershell
 py -3.12 -m bit.bit_mercado_login --all-active-login --workers 3 --wait-seconds 60

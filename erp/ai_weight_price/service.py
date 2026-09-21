@@ -222,9 +222,6 @@ class Service:
         with self.guard:
             previous_run = self.store.state("run", {}) or {}
             config = self.config.load()
-            if config["workflow_mode"] == "image_first":
-                # This workflow always judges the first five 1688 result images.
-                config["max_candidates"] = 5
             if mode != "probe":
                 self.require_login(config)
                 if self.store.state("circuit"):
@@ -239,6 +236,10 @@ class Service:
                         raise ValueError("所选分类及页码范围尚无采集任务，请先点击“采集所选范围”")
                 config["max_items"] = 1 if task_id else max_items
                 config["run_id"] = previous_run.get("run_id") if resume and previous_run.get("run_id") else uuid.uuid4().hex
+                # A new range run must execute retained historical products
+                # again from the first selected card. A resume keeps completed
+                # items from the same batch and continues after them.
+                config["reprocess_historical"] = mode == "pipeline" and not resume
                 batch = {"run_id": config["run_id"], "mode": mode, "selection": selection,
                          "max_items": config["max_items"], "started_at": time.time(), "outcome": "preflight"}
                 try:
@@ -324,11 +325,11 @@ class Service:
         self.store.set_state("circuit", {"kind": "browser_attention", "reason": str(error), "at": time.time()})
         self.store.log("等待人工处理1688登录或人机审核，当前商品和批次进度已保留：" + str(error), level="WARNING")
 
-    def _requeue(self, key):
+    def _requeue(self, key, force_pending=False):
         task = self.store.get(key)
         changes = {"status": "pending", "exception_reason": "", "exception_detail": "", "skip_reason": "", "next_attempt_at": 0,
                    "stage": "matched" if task.get("supplier_sku_id") else "collected"}
-        if task.get("conversation_url") and self.missing_info(task):
+        if not force_pending and task.get("conversation_url") and self.missing_info(task):
             changes.update(status="waiting_merchant_reply", stage="waiting", next_poll_at=0,
                            deadline=time.time() + self.config.load()["timeout_minutes"] * 60)
         history = task.get("retry_history", [])
@@ -602,12 +603,23 @@ class Service:
         self.record_visual(key, "exception_skipped", skip_reason + "；继续下一件")
 
     def complete_one(self, key, browser, models, config):
-        if self.store.get(key)["status"] in COMPLETED:
+        run_id = config.get("run_id")
+        task = self.store.get(key)
+        if (task["status"] in COMPLETED and config.get("reprocess_historical") is True
+                and run_id and not self.store.has_run_item(run_id, key)):
+            # Product rows are intentionally retained between batches for
+            # audit/export.  Their old terminal status must not make a new
+            # range run race past the first cards until it finds an unseen ID.
+            # Requeue each historical row only when this new run first reaches
+            # it; an interrupted/resumed run keeps its already-recorded items.
+            self._requeue(key, force_pending=True)
+            self.store.log("检测到上次任务的历史结论；本次已从该商品重新排队并逐件执行", key)
+            task = self.store.get(key)
+        if task["status"] in COMPLETED:
             current = self.store.state("pipeline_current", {}) or {}
             if current.get("task_id") == key:
                 self.store.set_state("pipeline_current", None)
             return
-        run_id = config.get("run_id")
         execution_started_at = time.time()
         run = self.store.state("run", {})
         ordinal = int(run.get("processed_items") or 0) + 1

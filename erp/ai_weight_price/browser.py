@@ -104,7 +104,16 @@ CURRENT_1688_DETAIL = r"""candidateImage => {
     return '';
   };
   const decode=value=>{const box=document.createElement('textarea');box.innerHTML=String(value||'');return clean(box.value.replace(/>/g,' / '));};
-  const normalizeSkus=list=>list.map(item=>({id:String(item.skuId||''),label:decode(item.specAttrs),price:priceOf(item)}))
+  const weightClaims=text=>{
+    const claims=[];
+    const pattern=/(^|[^0-9.])([0-9]+(?:\.[0-9]+)?)\s*(kg|公斤|千克|g|克|斤)(?![A-Za-z0-9])/gi;
+    for(const match of String(text||'').matchAll(pattern))claims.push(match[2]+match[3]);
+    return claims.join('；');
+  };
+  const normalizeSkus=list=>list.map(item=>{
+    const label=decode(item.specAttrs);
+    return {id:String(item.skuId||''),label,price:priceOf(item),labelWeight:weightClaims(label)};
+  })
     .filter(item=>/^\d+$/.test(item.id)&&item.label&&item.price).sort((a,b)=>a.id.localeCompare(b.id));
   const skuSets=arrays(selection,list=>list.length>0&&list.length<=500&&list.every(item=>item&&typeof item==='object'&&item.skuId&&item.specAttrs))
     .map(normalizeSkus).filter(list=>list.length);
@@ -120,12 +129,23 @@ CURRENT_1688_DETAIL = r"""candidateImage => {
     .sort((a,b)=>a.id.localeCompare(b.id));
   const weightSets=pack?arrays(pack,list=>list.length>0&&list.length<=500&&list.every(item=>item&&typeof item==='object'&&item.skuId&&'weight' in item))
     .map(normalizeWeights).filter(list=>list.length):[];
+  // Some current 1688 offers expose one verified package weight for the whole
+  // offer instead of repeating it with every SKU id, for example
+  // packInfoData.skuInfo: [{weight: 300}].  That is still explicit page
+  // evidence: apply it to every priced SKU only when the page exposes exactly
+  // one unambiguous common weight value.  Never merge conflicting values.
+  const commonWeightSets=pack?arrays(pack,list=>list.length===1&&list.every(item=>item&&typeof item==='object'&&!('skuId' in item)&&'weight' in item&&Number.isFinite(Number(item.weight))&&Number(item.weight)>0))
+    .map(list=>String(list[0].weight)).filter(Boolean):[];
   let weights=new Map();
   if(weightSets.length){
     const most=Math.max(...weightSets.map(list=>list.length));
     const choices=new Map(weightSets.filter(list=>list.length===most).map(list=>[JSON.stringify(list),list]));
     if(choices.size!==1)return {recognized:true,ready:false,error:'1688新版详情返回了不一致的SKU包装重量数据'};
     weights=new Map([...choices.values()][0].map(item=>[item.id,String(item.weight)]));
+  }else{
+    const commonValues=[...new Set(commonWeightSets)];
+    if(commonValues.length===1)
+      weights=new Map(skus.map(sku=>[sku.id,commonValues[0]]));
   }
 
   let merchantId='';
@@ -144,9 +164,15 @@ CURRENT_1688_DETAIL = r"""candidateImage => {
   if([...weights.keys()].some(id=>!skuIds.has(id)))
     return {recognized:true,ready:false,error:'1688新版详情的价格与包装SKU标识不一致'};
   const rows=skus.map(sku=>{
-    const weight=weights.get(sku.id)||'';
-    return {...sku,raw_price:'¥'+sku.price,raw_surcharge:'',raw_weight:weight?weight+'g':'',
-      raw_text:sku.label+'；页面单价 ¥'+sku.price+(weight?'；包装重量 '+weight+'g':'')};
+    // Some offers render package weight only in the variant label, e.g.
+    // "冲浪板84*56cm(0.45kg)", without a productPackInfo entry. Prefer the
+    // structured packaging value when present, then retain the label claim as
+    // explicit evidence for the local unit parser.
+    const packaged=weights.get(sku.id)||'';
+    const weight=packaged?packaged+'g':sku.labelWeight;
+    const {labelWeight,...cleanSku}=sku;
+    return {...cleanSku,raw_price:'¥'+sku.price,raw_surcharge:'',raw_weight:weight,
+      raw_text:sku.label+'；页面单价 ¥'+sku.price+(weight?'；包装重量 '+weight:'')};
   });
   // Keep the detail-page read deliberately narrow: pricing, variant labels and
   // package weights only. Title/shop/image are retained solely for ownership
@@ -657,7 +683,9 @@ class Browser:
         scope = selection_key(selection, self.config)
         page = self.page(self.config["erp_list_url"])
         seen = set()
-        checkpoint = store.state("collection", {})
+        # A terminated batch stores this checkpoint as JSON null. Older task
+        # databases therefore still need the local fallback before using .get.
+        checkpoint = store.state("collection", {}) or {}
         resume_after = checkpoint.get("page", 0) if not checkpoint.get("complete") and checkpoint.get("scope") == scope else 0
         if not resume_after:
             store.reset_scope(scope)
@@ -758,17 +786,59 @@ class Browser:
         # Upload the exact main image of this task, never a hardcoded sample or
         # title search. Keep the image in memory and bound downloads.
         maximum = 10 * 1024 * 1024
-        with requests.get(url, stream=True, timeout=(10, 30)) as response:
-            response.raise_for_status()
-            chunks, size = [], 0
-            for chunk in response.iter_content(65536):
-                if self.stop.is_set():
+        data = None
+        retryable_statuses = {408, 420, 429}
+        headers = {
+            # Alibaba's image CDN can temporarily reject a plain requests
+            # client. Keep the request close to the visible 1688 browser
+            # request while still downloading the exact ERP image.
+            "User-Agent": (
+                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                "AppleWebKit/537.36 (KHTML, like Gecko) "
+                "Chrome/131.0.0.0 Safari/537.36"
+            ),
+            "Accept": "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8",
+            "Referer": "https://www.1688.com/",
+        }
+        for attempt in range(1, 4):
+            try:
+                with requests.get(url, headers=headers, stream=True, timeout=(10, 30)) as response:
+                    response.raise_for_status()
+                    chunks, size = [], 0
+                    for chunk in response.iter_content(65536):
+                        if self.stop.is_set():
+                            raise Stopped()
+                        size += len(chunk)
+                        if size > maximum:
+                            raise ValueError("商品主图超过10MB，无法上传以图搜货")
+                        chunks.append(chunk)
+                data = b"".join(chunks)
+                break
+            except (requests.Timeout, requests.ConnectionError) as exc:
+                if attempt == 3:
+                    raise ValueError("商品主图连续3次下载失败") from exc
+                delay = min(0.5 * (2 ** (attempt - 1)), 8.0)
+                self.log(f"商品主图下载第 {attempt} 次失败，{delay:g}秒后重试", task["erp_goods_id"], "WARNING")
+                if self.stop.wait(delay):
                     raise Stopped()
-                size += len(chunk)
-                if size > maximum:
-                    raise ValueError("商品主图超过10MB，无法上传以图搜货")
-                chunks.append(chunk)
-        data = b"".join(chunks)
+            except requests.HTTPError as exc:
+                status = getattr(getattr(exc, "response", None), "status_code", None)
+                if (status not in retryable_statuses and not (500 <= (status or 0) < 600)) or attempt == 3:
+                    raise
+                response = exc.response
+                retry_after = response.headers.get("Retry-After") if response is not None else None
+                try:
+                    delay = float(retry_after) if retry_after else 0
+                except (TypeError, ValueError):
+                    delay = 0
+                delay = max(0.5 * (2 ** (attempt - 1)), delay)
+                delay = min(delay, 30.0)
+                self.log(
+                    f"商品主图HTTP {status}，第 {attempt} 次下载失败，{delay:g}秒后重试",
+                    task["erp_goods_id"], "WARNING",
+                )
+                if self.stop.wait(delay):
+                    raise Stopped()
         with Image.open(io.BytesIO(data)) as picture:
             kind = picture.format
             picture.verify()
@@ -847,7 +917,7 @@ class Browser:
             raise ValueError("1688图片上传后出现多个提交按钮，无法确认当前主图的提交入口")
         return matches[0] if matches else (None, None)
 
-    def current_supplier_offer(self, page, candidate, timeout=12):
+    def current_supplier_offer(self, page, candidate, timeout=25):
         """Read only current 1688 SKU prices and per-SKU package weights."""
         deadline = time.monotonic() + timeout
         last = None
@@ -943,13 +1013,41 @@ class Browser:
                     pass
                 else:
                     links = result.locator(self.s["result_links"]).evaluate_all("els => els.map(e => e.href)")
-                    if links and (result is not page or result.url != previous_url or links != previous_links):
-                        self.visual(task, "search_results", f"1688已返回以图搜货结果，页面含 {len(links)} 个候选链接", result)
-                        return result
-                    if "/1688-search/pc-image-search/" in urlsplit(result.url).path:
+                    image_result_page = "/1688-search/pc-image-search/" in urlsplit(result.url).path
+                    if image_result_page:
+                        # The image-search shell renders a handful of unrelated
+                        # recommendation/detail links before the real "找到以下货源"
+                        # cards arrive. Never treat those early links as results.
                         cards = self.result_image_cards(result)
                         if cards:
                             self.visual(task, "search_results", f"1688已返回以图搜货结果，读取到 {len(cards)} 个商品卡片", result)
+                            return result
+                    elif links and (result is not page or result.url != previous_url or links != previous_links):
+                        # A same-page 1688 homepage can expose unrelated
+                        # recommendation links while the upload is still
+                        # pending.  On the same page require the links to live
+                        # in an explicit result/search container; retain the
+                        # one-link replacement compatibility used by older
+                        # image-search pages.  A batch of plain homepage links
+                        # is not result evidence (and caused false candidates
+                        # such as the six unrelated links for 854631485).
+                        same_page_result_container = False
+                        if result is page:
+                            same_page_result_container = bool(result.locator(self.s["result_links"]).evaluate_all(r"""links => links.some(link => {
+                              for(let node=link, depth=0; node && depth<6; depth++, node=node.parentElement){
+                                const cls=typeof node.className==='string'?node.className:'';
+                                const key=((node.id||'')+' '+cls).toLowerCase();
+                                if(/(^|[-_ ])(?:result|results|image-search|search-result|goods-list|offer-list|product-list)([-_ ]|$)/.test(key)) return true;
+                              }
+                              return false;
+                            })"""))
+                        one_link_replacement = (
+                            result is page and len(links) == len(previous_links) == 1 and links != previous_links
+                        )
+                        if result is page and not same_page_result_container and not one_link_replacement:
+                            links = []
+                        else:
+                            self.visual(task, "search_results", f"1688已返回以图搜货结果，页面含 {len(links)} 个候选链接", result)
                             return result
                     empty = re.findall(empty_pattern, result.locator("body").inner_text())
                     if not links and empty and (result is not page or result.url != previous_url or empty != previous_empty):
@@ -1044,7 +1142,16 @@ class Browser:
     def release_search(self, task):
         page = self.search_results.pop(task["erp_goods_id"], None)
         if page is not None:
-            self.release(page)
+            if page in self.owned:
+                self.release(page)
+            else:
+                # Keep cleanup deterministic even when a caller injects an
+                # existing result page into the navigation registry (as the
+                # live browser can do after a redirect).
+                try:
+                    page.close()
+                except Exception:
+                    pass
 
     def open_offer(self, task, candidate):
         if not candidate.get("result_image_path"):
@@ -1127,6 +1234,10 @@ class Browser:
                     "merchant_id": self.value(detail, "supplier_merchant", self.s["supplier_merchant_attribute"])}
         finally:
             self.release(detail)
+            # The result/search page is only a temporary navigation surface
+            # for opening this offer. Close it with the detail tab so a long
+            # batch does not leave one 1688 view tab per product behind.
+            self.release_search(task)
 
     def locate_erp_detail(self, page, task):
         """Reopen the exact collected product using its category/page/card."""
@@ -1144,9 +1255,51 @@ class Browser:
                 raise ValueError("无法返回目标商品所在的智赢页码")
         rows = page.locator(self.s["erp_rows"])
         rows.first.wait_for(state="visible")
-        matches = [row for row in rows.all() if self.value(row, "erp_title") == task["title"]]
+        # The list shell becomes visible before its virtualized product data is
+        # populated after a category search.  A single empty read used to turn
+        # a recoverable render race into an ERP writeback skip.
+        deadline = time.monotonic() + 10
+        matches = []
+        while time.monotonic() < deadline:
+            self.check(page)
+            matches = [row for row in rows.all() if self.value(row, "erp_title") == task["title"]]
+            if matches:
+                break
+            if self.stop.wait(.35):
+                raise Stopped("操作已停止")
         if len(matches) > 1:
-            matches = [row for row in matches if urljoin(page.url, self.value(row, "erp_image", "src")) == task.get("main_image_url")]
+            # Titles are not unique in the product list (the same listing can
+            # be imported more than once). Prefer the stable ERP product ID
+            # captured during collection before falling back to the image.
+            # The previous code skipped this discriminator and could leave two
+            # same-title/same-image cards, causing an avoidable writeback skip.
+            target_id = self.normalize_erp_id(task["erp_goods_id"])
+            id_matches = []
+            if self.s.get("erp_id"):
+                for row in matches:
+                    try:
+                        row_id = self.normalize_erp_id(self.value(row, "erp_id", required=True))
+                    except (ValueError, TypeError):
+                        continue
+                    if row_id == target_id:
+                        id_matches.append(row)
+            if len(id_matches) == 1:
+                matches = id_matches
+                self.log(f"列表中发现同标题商品，已按ERP商品ID {target_id} 唯一定位回填卡片", task["erp_goods_id"])
+            elif len(id_matches) > 1:
+                matches = id_matches
+            else:
+                expected_image = task.get("main_image_url", "")
+                expected_parts = urlsplit(expected_image)
+                expected_image_key = ((expected_parts.hostname or "").lower(), expected_parts.path.rstrip("/"))
+                filtered = []
+                for row in matches:
+                    image = urljoin(page.url, self.value(row, "erp_image", "src"))
+                    parts = urlsplit(image)
+                    image_key = ((parts.hostname or "").lower(), parts.path.rstrip("/"))
+                    if image == expected_image or image_key == expected_image_key:
+                        filtered.append(row)
+                matches = filtered
         if len(matches) != 1:
             raise ValueError(f"无法唯一定位待回填商品卡片，匹配到{len(matches)}个")
         row = matches[0]
@@ -1194,10 +1347,19 @@ class Browser:
             self.visual(task, "erp_saving", "重量/净收益回填已完成，正在保存；智赢状态保持原值", page)
             self.check(page)
             save.click()
-            if self.s["erp_saved"]:
-                page.locator(self.s["erp_saved"]).first.wait_for(state="visible")
-            else:
-                page.get_by_text(re.compile(r"保存成功|操作成功")).first.wait_for(state="visible", timeout=15000)
+            # Toast copy varies between Zying builds and can be absent even
+            # when the save request succeeds. Use it as an early confirmation,
+            # but let the post-reload field readback be the authoritative check.
+            try:
+                if self.s["erp_saved"]:
+                    page.locator(self.s["erp_saved"]).first.wait_for(state="visible", timeout=5000)
+                else:
+                    page.get_by_text(re.compile(r"保存成功|操作成功|更新成功|提交成功")).first.wait_for(
+                        state="visible", timeout=5000)
+            except Exception as exc:
+                if "Timeout" not in str(exc):
+                    raise
+                self.log("智赢未显示保存成功提示，继续通过保存后回读确认", task["erp_goods_id"], "WARNING")
             self.check(page)
             page.reload(wait_until="domcontentloaded")
             safe_url(page.url, host=host)
@@ -1230,8 +1392,9 @@ class Browser:
                 raise ValueError(f"智赢详情保存按钮选择器必须唯一且可用，实际 {len(usable)} 个")
             return usable[0]
 
-        controls = root.locator("button, [role='button'], a")
-        details = controls.evaluate_all(r"""elements => elements.map((element, index) => {
+        def candidates(scope):
+            controls = scope.locator("button, [role='button'], a, input[type='submit'], input[type='button']")
+            details = controls.evaluate_all(r"""elements => elements.map((element, index) => {
           const style = getComputedStyle(element);
           const box = element.getBoundingClientRect();
           const visible = !!element.getClientRects().length && style.display !== 'none' &&
@@ -1239,19 +1402,29 @@ class Browser:
           const disabled = element.disabled || element.getAttribute('aria-disabled') === 'true' ||
             element.classList.contains('disabled') || element.classList.contains('is-disabled');
           const clean = value => String(value || '').replace(/\s+/g, '').trim();
-          const label = clean(element.innerText || element.getAttribute('aria-label') || element.title ||
+          const label = clean(element.innerText || element.value || element.getAttribute('aria-label') || element.title ||
             element.getAttribute('data-title'));
           const classes = String(element.className || '');
-          const saveLabel = /^(保存|保存并关闭|保存商品|提交保存)$/.test(label);
-          if (!visible || disabled || !saveLabel) return null;
+          const saveLabel = /^(保存(?:并关闭|商品|修改)?|提交(?:保存|修改)?|更新|确认修改|确定)$/;
+          const labelled = saveLabel.test(label);
+          const submit = (element.tagName.toLowerCase()==='button'||element.tagName.toLowerCase()==='input')&&element.type==='submit';
+          if (!visible || disabled || (!labelled && !submit)) return null;
           let score = 0;
           if (label === '保存') score += 10;
-          if (element.tagName.toLowerCase() === 'button' && element.type === 'submit') score += 4;
+          if (labelled) score += 6;
+          if (submit) score += 4;
           if (/primary|primary-btn|main/.test(classes)) score += 3;
           if (/save|submit|保存|提交/.test(classes + label)) score += 2;
           if (element.closest('form')) score += 1;
           return {index, label, score};
         }).filter(Boolean)""");
+            return controls, details
+
+        controls, details = candidates(root)
+        if not details:
+            # Some Zying builds render the sticky footer action as a portal
+            # beside .curd-detail-wrap rather than as its descendant.
+            controls, details = candidates(page)
         if not details:
             raise ValueError("智赢详情页没有可见可用的保存按钮")
         max_score = max(item["score"] for item in details)

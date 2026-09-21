@@ -71,7 +71,12 @@ class Store:
     def state(self, key, default=None):
         with self.connect() as db:
             row = db.execute("SELECT value FROM state WHERE key=?", (key,)).fetchone()
-        return json.loads(row[0]) if row else default
+        if not row:
+            return default
+        value = json.loads(row[0])
+        # A cleared checkpoint is persisted as JSON null. Callers that pass a
+        # concrete default expect that shape for both missing and cleared state.
+        return default if value is None and default is not None else value
 
     def set_state(self, key, value):
         with self.connect() as db:
@@ -106,6 +111,15 @@ class Store:
             db.execute("INSERT INTO run_items VALUES(?,?,(SELECT COUNT(*)+1 FROM run_items WHERE run_id=?),?) "
                        "ON CONFLICT(run_id,erp_goods_id) DO UPDATE SET payload=excluded.payload",
                        (run_id, key, run_id, json.dumps(payload, ensure_ascii=False)))
+
+    def has_run_item(self, run_id, key):
+        if not run_id:
+            return False
+        with self.connect() as db:
+            return db.execute(
+                "SELECT 1 FROM run_items WHERE run_id=? AND erp_goods_id=?",
+                (run_id, key),
+            ).fetchone() is not None
 
     def run_report(self, run_id):
         with self.connect() as db:

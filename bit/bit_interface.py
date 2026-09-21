@@ -59,6 +59,7 @@ def resolve_template_dir():
     return CURRENT_DIR / "templates"
 
 import bit.bit_appeal_ai as bit_appeal_ai
+import bit.bit_appeal_report as bit_appeal_report
 import bit.bit_check_risk as bit_check_risk
 import bit.bit_db_api as bit_db_api
 import bit.bit_daily_task as bit_daily_task
@@ -89,6 +90,8 @@ from bit.local_agent_distribution import (
 from bit.local_agent_hub import (
     LocalAgentStore,
     TERMINAL_JOB_STATUSES,
+    default_local_agent_hub_path,
+    migrate_local_agent_hub,
     normalize_agent_id,
 )
 from erp.mercadolibre_infraction_store import (
@@ -188,10 +191,28 @@ LOCAL_AGENT_ONLINE_SECONDS = max(
     15,
     int(os.environ.get("BIT_LOCAL_AGENT_ONLINE_SECONDS", "45")),
 )
-LOCAL_AGENT_HUB_PATH = Path(
-    os.environ.get("BIT_LOCAL_AGENT_HUB_PATH")
-    or (PROJECT_ROOT / ".data" / "local-agent-hub.sqlite3")
-)
+LOCAL_AGENT_LEGACY_HUB_PATH = PROJECT_ROOT / ".data" / "local-agent-hub.sqlite3"
+_configured_local_agent_hub_path = str(
+    os.environ.get("BIT_LOCAL_AGENT_HUB_PATH") or ""
+).strip()
+_local_agent_hub_migration_source = LOCAL_AGENT_LEGACY_HUB_PATH
+if _configured_local_agent_hub_path:
+    configured_hub_path = Path(_configured_local_agent_hub_path).expanduser()
+    if configured_hub_path.is_absolute():
+        LOCAL_AGENT_HUB_PATH = configured_hub_path
+        _local_agent_hub_migration_source = None
+    else:
+        _local_agent_hub_migration_source = PROJECT_ROOT / configured_hub_path
+        LOCAL_AGENT_HUB_PATH = default_local_agent_hub_path()
+        logging.warning(
+            "BIT_LOCAL_AGENT_HUB_PATH 使用相对路径，代码目录切换时会分裂 Agent 队列；"
+            "本次自动改用固定数据目录 %s，并从 %s 迁移旧队列",
+            LOCAL_AGENT_HUB_PATH.resolve(),
+            _local_agent_hub_migration_source.resolve(),
+        )
+else:
+    LOCAL_AGENT_HUB_PATH = default_local_agent_hub_path()
+LOCAL_AGENT_HUB_PATH = LOCAL_AGENT_HUB_PATH.resolve()
 _local_agent_store_instance = None
 _local_agent_store_lock = threading.Lock()
 _local_agent_bundle_snapshot = None
@@ -204,7 +225,22 @@ def get_local_agent_store():
     if _local_agent_store_instance is None:
         with _local_agent_store_lock:
             if _local_agent_store_instance is None:
+                if _local_agent_hub_migration_source is not None:
+                    migrated = migrate_local_agent_hub(
+                        _local_agent_hub_migration_source,
+                        LOCAL_AGENT_HUB_PATH,
+                    )
+                    if migrated:
+                        logging.info(
+                            "Agent 队列已从部署目录迁移到固定数据目录：%s",
+                            LOCAL_AGENT_HUB_PATH,
+                        )
                 _local_agent_store_instance = LocalAgentStore(LOCAL_AGENT_HUB_PATH)
+                logging.info(
+                    "Agent 队列已打开：queue_id=%s，path=%s",
+                    _local_agent_store_instance.queue_id,
+                    LOCAL_AGENT_HUB_PATH,
+                )
     return _local_agent_store_instance
 
 
@@ -322,7 +358,8 @@ WORKBENCH_PERMISSION_GROUPS = (
     ("tasks", "任务模块", (("tasks.view", "查看"), ("tasks.execute", "启动任务"))),
     ("order_print", "订单管理与面单", (("order_print.view", "查看"), ("order_print.execute", "打印面单"))),
     ("order_analysis", "订单分析", (("order_analysis.view", "查看"), ("order_analysis.execute", "导入订单"))),
-    ("ad_analysis", "广告分析", (("ad_analysis.view", "查看"),)),
+    ("ad_analysis", "广告分析", (("ad_analysis.view", "查看"), ("ad_analysis.execute", "启动/暂停广告"))),
+    ("promotions", "活动管理", (("promotions.view", "查看"), ("promotions.execute", "同步/报名/退出"))),
     ("inventory", "库存管理", (("inventory.view", "查看"), ("inventory.execute", "出入库"), ("inventory.manage", "管理货架"))),
     ("shop_status", "店铺状态", (("shop_status.view", "查看"), ("shop_status.execute", "检测/处理"))),
     ("funds", "资金管理", (("funds.view", "查看"), ("funds.execute", "采集/终止"))),
@@ -593,6 +630,18 @@ def _resolve_use_db_api():
 
 USE_DB_API = _resolve_use_db_api()
 
+
+def interface_background_services_disabled():
+    """Return whether this process must serve requests without auto schedulers.
+
+    A test or standby server can still expose all HTTP/database endpoints while
+    keeping central maintenance jobs on the production server only.
+    """
+
+    return USE_DB_API or _truthy_env(
+        os.environ.get("BIT_BACKGROUND_SERVICES_DISABLED")
+    )
+
 if USE_DB_API:
     db_get_latest_infraction_info = bit_db_api.get_latest_infraction_info
     db_get_latest_order_print_records = bit_db_api.get_latest_order_print_records
@@ -668,8 +717,7 @@ if USE_DB_API:
     db_bulk_update_mercado_store_links = bit_db_api.bulk_update_mercado_store_links
     db_delete_mercado_store_links = bit_db_api.delete_mercado_store_links
 else:
-    import pymysql
-    from bit.bit_mysql import config as mysql_config
+    from bit.bit_mysql import config as mysql_config, pymysql
     from bit.bit_mysql import (
         get_latest_infraction_info,
         get_latest_order_print_records,
@@ -2126,7 +2174,17 @@ def _required_workbench_permissions(path, method):
             else ("order_analysis.view",)
         )
     if path.startswith("/api/ad-analysis"):
-        return ("ad_analysis.view",)
+        return (
+            ("ad_analysis.execute",)
+            if method != "GET"
+            else ("ad_analysis.view",)
+        )
+    if path.startswith("/api/promotions"):
+        return (
+            ("promotions.view",)
+            if method == "GET"
+            else ("promotions.execute",)
+        )
     if path.startswith("/api/inventory/"):
         if path.startswith("/api/inventory/shelves") and method != "GET":
             return ("inventory.manage",)
@@ -2300,6 +2358,17 @@ from erp.ai_weight_price.web import create_blueprint as create_ai_weight_price_b
 
 ai_weight_price_service = AIWeightPriceService(ai_weight_price_data_dir())
 app.register_blueprint(create_ai_weight_price_blueprint(ai_weight_price_service, _authorize_ai_weight_price))
+
+from bit.mercado_promotion_routes import create_promotions_blueprint
+
+app.register_blueprint(
+    create_promotions_blueprint(
+        login_required=login_required,
+        current_user=get_current_workbench_user,
+        authorized_token_ids=_authorized_token_ids_for_user,
+        has_permission=workbench_user_has_permission,
+    )
+)
 
 
 # 1. 核心逻辑方法：改造成生成器
@@ -7365,6 +7434,55 @@ def api_db_store_link_advertise(link_id):
     return _store_link_advertise_response(link_id, internal=True)
 
 
+def _store_links_bulk_advertise_response(*, internal=False):
+    data = request.get_json(silent=True) or {}
+    link_ids = data.get("link_ids") or []
+    if not isinstance(link_ids, list):
+        return jsonify({"status": "error", "message": "link_ids 必须是数组"}), 422
+    try:
+        if internal:
+            from bit.bit_store_link_ads import advertise_store_links
+
+            result = advertise_store_links(
+                link_ids,
+                budget=data.get("budget"),
+                roas_target=data.get("roas_target"),
+                campaign_name=data.get("campaign_name") or "",
+            )
+        else:
+            result = bit_db_api.advertise_mercado_store_links(
+                link_ids,
+                budget=data.get("budget"),
+                roas_target=data.get("roas_target"),
+                campaign_name=data.get("campaign_name") or "",
+            )
+        return jsonify({
+            "status": "success",
+            "data": result,
+            "message": f"已为 {int(result.get('success_count') or 0)} 条链接创建广告组",
+        })
+    except ValueError as exc:
+        return jsonify({"status": "error", "message": str(exc)}), 400
+    except Exception as exc:
+        logging.exception("批量创建店铺链接广告组失败")
+        return jsonify({"status": "error", "message": str(exc)}), 502
+
+
+@app.route('/api/store-links/bulk-advertise', methods=['POST'])
+@login_required
+def api_store_links_bulk_advertise():
+    return _store_links_bulk_advertise_response()
+
+
+@app.route('/api/db/store-links/bulk-advertise', methods=['POST'])
+@internal_api_required
+def api_db_store_links_bulk_advertise():
+    blocked = reject_db_api_client_mode()
+    if blocked:
+        return blocked
+    return _store_links_bulk_advertise_response(internal=True)
+
+
 @app.route('/api/store-links/bulk-update', methods=['POST'])
 @login_required
 def api_bulk_update_store_links():
@@ -8173,16 +8291,29 @@ def api_local_agent_heartbeat():
     data = request.get_json(silent=True) or {}
     try:
         agent_id = _agent_request_identity(data)
-        agent = get_local_agent_store().heartbeat(
+        store = get_local_agent_store()
+        capabilities = data.get("capabilities") or ("appeal",)
+        agent = store.heartbeat(
             agent_id,
             name=data.get("name"),
             hostname=data.get("hostname"),
             platform=data.get("platform"),
             agent_version=data.get("agent_version"),
             business_version=data.get("business_version"),
-            capabilities=data.get("capabilities") or ("appeal",),
+            capabilities=capabilities,
             session_id=data.get("session_id"),
             current_job_id=data.get("current_job_id"),
+        )
+        # Claim in the same request that made this Agent visible.  This keeps
+        # heartbeat and queue reads on one backend even when a reverse proxy
+        # or rolling deployment has more than one workbench origin.
+        job = (
+            store.claim_job(
+                agent_id,
+                session_id=data.get("session_id"),
+            )
+            if "heartbeat_claim" in capabilities
+            else None
         )
         bundle = current_local_agent_bundle()
         claims = getattr(g, "local_agent_claims", {}) or {}
@@ -8196,7 +8327,9 @@ def api_local_agent_heartbeat():
             "data": {
                 "agent": agent,
                 "agent_token": refreshed_credential,
-                "cancel_job_ids": get_local_agent_store().cancellation_job_ids(agent_id),
+                "queue_id": store.queue_id,
+                "job": job,
+                "cancel_job_ids": store.cancellation_job_ids(agent_id),
                 "bundle": {
                     "version": bundle["version"],
                     "sha256": bundle["sha256"],
@@ -8216,11 +8349,15 @@ def api_local_agent_claim_job():
     data = request.get_json(silent=True) or {}
     try:
         agent_id = _agent_request_identity(data)
-        job = get_local_agent_store().claim_job(
+        store = get_local_agent_store()
+        job = store.claim_job(
             agent_id,
             session_id=data.get("session_id"),
         )
-        return jsonify({"status": "success", "data": {"job": job}})
+        return jsonify({
+            "status": "success",
+            "data": {"job": job, "queue_id": store.queue_id},
+        })
     except PermissionError as exc:
         return jsonify({"status": "error", "message": str(exc)}), 403
     except ValueError as exc:
@@ -8359,8 +8496,9 @@ def enrich_agents_with_logout_status(agents, anomaly_data):
 @login_required
 def api_execution_agents():
     requested_capability = str(request.args.get("capability") or "appeal").strip()
-    get_local_agent_store().reap_expired_jobs()
-    agents = get_local_agent_store().list_agents(
+    store = get_local_agent_store()
+    store.reap_expired_jobs()
+    agents = store.list_agents(
         online_seconds=LOCAL_AGENT_ONLINE_SECONDS,
         capability=(
             ""
@@ -8384,6 +8522,7 @@ def api_execution_agents():
     response = jsonify({
         "status": "success",
         "data": {
+            "queue_id": store.queue_id,
             "agents": agents,
             "unassigned_logout_shops": unassigned_logout_shops,
             "login_status_error": login_status_error,
@@ -8425,6 +8564,52 @@ def api_ad_analysis():
     response = jsonify({"status": "success", "data": data})
     response.headers["Cache-Control"] = "no-store"
     return response
+
+
+def _ad_analysis_action_response(*, internal=False):
+    data = request.get_json(silent=True) or {}
+    rows = data.get("rows")
+    status = str(data.get("status") or "").strip().lower()
+    if not isinstance(rows, list):
+        return jsonify({"status": "error", "message": "rows 必须是数组"}), 422
+    if status not in {"active", "paused"}:
+        return jsonify({"status": "error", "message": "广告操作状态只能是 active 或 paused"}), 422
+
+    if not internal:
+        allowed_token_ids = _authorized_token_ids_for_user()
+        if allowed_token_ids is not None:
+            submitted_token_ids = {
+                int(row.get("token_id") or 0)
+                for row in rows
+                if isinstance(row, dict)
+            }
+            if not submitted_token_ids or not submitted_token_ids.issubset(allowed_token_ids):
+                return jsonify({"status": "error", "message": "所选广告包含当前账号无权操作的店铺"}), 403
+
+    try:
+        if internal:
+            from bit.bit_ad_analysis import update_product_ads_ad_groups
+
+            result = update_product_ads_ad_groups(rows, status=status)
+        else:
+            result = bit_db_api.update_mercado_ad_groups(rows, status=status)
+        action_label = "启动" if status == "active" else "暂停"
+        return jsonify({
+            "status": "success",
+            "data": result,
+            "message": f"已{action_label} {int(result.get('success_count') or 0)} 个广告组",
+        })
+    except ValueError as exc:
+        return jsonify({"status": "error", "message": str(exc)}), 400
+    except Exception as exc:
+        logging.exception("批量%s广告失败", "启动" if status == "active" else "暂停")
+        return jsonify({"status": "error", "message": str(exc)}), 502
+
+
+@app.route('/api/ad-analysis/actions', methods=['POST'])
+@login_required
+def api_ad_analysis_actions():
+    return _ad_analysis_action_response()
 
 
 @app.route("/api/local-agents/download", methods=["GET"])
@@ -8503,6 +8688,7 @@ def daily_agent_task_snapshot(job, *, include_log=False):
         return datetime.fromtimestamp(value).strftime("%Y-%m-%d %H:%M:%S") if value else ""
     state = {
         "task_id": job["job_id"], "agent_id": job["agent_id"],
+        "queue_id": get_local_agent_store().queue_id,
         "agent_name": params.get("agent_name") or job["agent_id"],
         "name": _daily_task_display_name(params), "execution_target": "agent",
         "running": running, "can_stop": running,
@@ -8606,6 +8792,7 @@ def enqueue_local_agent_appeal(
     response.headers["X-Appeal-Task-ID"] = task_id
     response.headers["X-Execution-Target"] = "agent"
     response.headers["X-Execution-Agent-ID"] = agent_id
+    response.headers["X-Agent-Queue-ID"] = get_local_agent_store().queue_id
     return response
 
 
@@ -9300,18 +9487,18 @@ def _mercado_profit_refresh_loop():
 
     stale_hours = 24
     try:
-        batch_size = max(1, min(int(os.environ.get("MERCADO_PROFIT_REFRESH_BATCH", "50")), 500))
+        batch_size = max(1, min(int(os.environ.get("MERCADO_PROFIT_REFRESH_BATCH", "20")), 500))
     except ValueError:
-        batch_size = 50
+        batch_size = 20
     try:
         interval = max(60, int(os.environ.get("MERCADO_PROFIT_REFRESH_SECONDS", "300")))
     except ValueError:
         interval = 300
 
     try:
-        refresh_workers = max(1, min(32, int(os.environ.get("MERCADO_PROFIT_REFRESH_WORKERS", "20"))))
+        refresh_workers = max(1, min(32, int(os.environ.get("MERCADO_PROFIT_REFRESH_WORKERS", "8"))))
     except ValueError:
-        refresh_workers = 20
+        refresh_workers = 8
 
     next_reference_check = 0.0
     while not _mercado_profit_refresh_stop_event.is_set():
@@ -9433,7 +9620,7 @@ def _mercado_profit_refresh_loop():
 def ensure_mercado_profit_refresh_worker():
     global _mercado_profit_refresh_started
     if (
-        USE_DB_API
+        interface_background_services_disabled()
         or app.testing
         or _truthy_env(os.environ.get("MERCADO_PROFIT_REFRESH_DISABLED"))
     ):
@@ -9457,7 +9644,7 @@ def _start_mercado_profit_refresh_worker():
 
 @app.before_request
 def _start_order_sync_scheduler():
-    if not USE_DB_API and not app.testing:
+    if not interface_background_services_disabled() and not app.testing:
         bit_order_sync.ensure_order_sync_scheduler()
         bit_order_sync.ensure_order_financial_backfill_worker()
         bit_order_sync.ensure_order_image_backfill_worker()
@@ -13003,6 +13190,15 @@ def api_db_ad_analysis():
     return jsonify({"status": "success", "data": data})
 
 
+@app.route('/api/db/ad-analysis/actions', methods=['POST'])
+@internal_api_required
+def api_db_ad_analysis_actions():
+    blocked = reject_db_api_client_mode()
+    if blocked:
+        return blocked
+    return _ad_analysis_action_response(internal=True)
+
+
 @app.route('/api/db/store-links/bulk-update', methods=['POST'])
 @internal_api_required
 def api_db_bulk_update_store_links():
@@ -15872,6 +16068,35 @@ def start_store_email_sync_scheduler_bootstrap():
     return scheduler_thread
 
 
+def start_appeal_report_scheduler_bootstrap():
+    """Send the six-hour appeal summary at 10:00 and 14:00 China time."""
+
+    if bit_db_api.DB_MODE != "mysql":
+        return None
+
+    def start_safely():
+        try:
+            if bit_appeal_report.start_appeal_report_scheduler():
+                logging.info(
+                    "申诉汇总邮件调度已启动：每天 %s 点发送至 %s",
+                    "、".join(map(str, bit_appeal_report._configured_send_hours())),
+                    os.environ.get(
+                        "BIT_APPEAL_REPORT_RECIPIENT",
+                        bit_appeal_report.DEFAULT_REPORT_RECIPIENT,
+                    ),
+                )
+        except Exception:
+            logging.exception("启动申诉汇总邮件调度失败")
+
+    scheduler_thread = threading.Thread(
+        target=start_safely,
+        name="appeal-summary-email-scheduler-bootstrap",
+        daemon=True,
+    )
+    scheduler_thread.start()
+    return scheduler_thread
+
+
 def start_prohibited_listing_scheduler_bootstrap():
     """Start the daily official-API prohibited-listing scheduler."""
 
@@ -15952,8 +16177,8 @@ def serve_wsgi_application(serve=None):
                 "缺少 Waitress；请运行 python -m pip install -r bit/requirements-server.txt"
             ) from exc
 
-    threads = _wsgi_env_int("BIT_WSGI_THREADS", 16, 4, 64)
-    connection_limit = _wsgi_env_int("BIT_WSGI_CONNECTION_LIMIT", 200, 32, 1000)
+    threads = _wsgi_env_int("BIT_WSGI_THREADS", 32, 4, 64)
+    connection_limit = _wsgi_env_int("BIT_WSGI_CONNECTION_LIMIT", 500, 32, 1000)
     backlog = _wsgi_env_int("BIT_WSGI_BACKLOG", 1024, 64, 4096)
     logging.info(
         "Waitress WSGI 服务启动：线程 %s，连接上限 %s，等待队列 %s",
@@ -15984,10 +16209,17 @@ def serve_wsgi_application(serve=None):
 
 
 def start_interface_background_services():
+    # Local browser recovery is also needed in client mode and after a worker
+    # was killed. It does not access the database or central schedulers.
+    start_browser_cleanup()
     # 客户端只承载本机界面与浏览器自动化。所有会读取数据库、刷新 Token
     # 或维护中心数据的后台线程统一由服务端进程运行。
-    if USE_DB_API:
-        logging.info("客户端模式不启动数据库维护与中心调度线程")
+    if interface_background_services_disabled():
+        if USE_DB_API:
+            reason = "客户端模式"
+        else:
+            reason = "BIT_BACKGROUND_SERVICES_DISABLED=1"
+        logging.info("%s：不启动数据库维护与中心调度线程", reason)
         return
 
     start_interrupted_collection_recovery()
@@ -15997,6 +16229,7 @@ def start_interface_background_services():
     start_api_reputation_scheduler_bootstrap()
     start_token_refresh_scheduler_bootstrap()
     start_store_email_sync_scheduler_bootstrap()
+    start_appeal_report_scheduler_bootstrap()
     start_yandex_console_bootstrap()
     ensure_mercado_profit_refresh_worker()
     bit_order_sync.ensure_order_sync_scheduler()

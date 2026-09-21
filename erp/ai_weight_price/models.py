@@ -148,8 +148,11 @@ class Models:
         visible_skus = narrowed or candidate["skus"]
         source = {k: task.get(k) for k in ("title", "description", "erp_sku", "erp_specs", "erp_detail_text", "note")}
         target = {**{k: candidate.get(k) for k in ("title", "description")}, "skus": visible_skus}
-        prompt = ("比较两件商品是否完全同款且目标SKU一致。第一张为ERP商品，第二张为1688商品。"
-                  "必须核对品类、形状、材质、尺寸、颜色、型号、每包数量及包装规格。无法确认任何关键规格时拒绝，图片相似不等于SKU相同。"
+        prompt = ("比较两件商品是否同款，并从1688的SKU列表中唯一选出ERP图片和标题所指的真实变体。第一张为ERP商品，第二张为1688商品。"
+                  "优先使用ERP主图中可见的颜色、图案、造型、配件以及ERP标题中的功能、尺寸、数量，与各SKU标签的差异项逐一比对。"
+                  "若某个可见或明示特征只对应一个SKU，且没有矛盾证据，应将specs_confirmed设为true；"
+                  "不要仅因ERP没有重复写出1688各SKU共同的材质、包装或尺寸就拒绝。"
+                  "若多个SKU仍同样可能、目标图所示款式不在SKU列表、或存在颜色/尺寸/配件冲突，则必须拒绝，不能按最低价或列表首项猜测。"
                   "只输出JSON：{\"same_product\":true或false,\"sku_id\":\"候选真实ID\",\"confidence\":0到1,"
                   "\"specs_confirmed\":true或false,\"reason\":\"证据与差异\"}。confidence是待校准分数。\n"
                   + json.dumps({"erp": source, "supplier": target}, ensure_ascii=False))
@@ -235,18 +238,58 @@ class Models:
                                 "candidates": [{"index": i, "title": c.get("title", "")} for i, c in enumerate(candidates, 1)]}, ensure_ascii=False))
         answer = self.call(self.config["model"], prompt,
                            [task["main_image_url"], *(c["main_image_url"] for c in candidates)], True)
-        matches = answer.get("matches") if isinstance(answer, dict) else None
-        if not isinstance(matches, list) or not matches or len(matches) > len(candidates):
+        if isinstance(answer, dict):
+            matches = answer.get("matches") or answer.get("results") or answer.get("items")
+        elif isinstance(answer, list):
+            matches = answer
+        else:
+            matches = None
+        if not isinstance(matches, list) or not matches:
             raise ValueError("图片比对评分结果格式错误")
+        # Models sometimes serialize indexes, booleans, or percentages as
+        # strings, and may append one malformed row after otherwise usable
+        # scores. Normalize only unambiguous values; malformed rows become
+        # unconfirmed evidence instead of discarding the whole product.
+        normalized, invalid_rows, seen = [], 0, set()
+        for item in matches:
+            if not isinstance(item, dict):
+                invalid_rows += 1
+                continue
+            index = item.get("index")
+            if isinstance(index, str) and index.strip().isdigit():
+                index = int(index.strip())
+            score = item.get("confidence")
+            if isinstance(score, str):
+                raw_score = score.strip().replace("%", "")
+                try:
+                    score = float(raw_score)
+                except ValueError:
+                    score = None
+                else:
+                    if score > 1 and score <= 100:
+                        score /= 100
+            same_product = item.get("same_product")
+            if isinstance(same_product, str) and same_product.strip().lower() in ("true", "false"):
+                same_product = same_product.strip().lower() == "true"
+            if (type(index) is not int or not 1 <= index <= len(candidates) or index in seen
+                    or type(score) not in (float, int) or not math.isfinite(score) or not 0 <= score <= 1
+                    or not isinstance(same_product, bool)):
+                invalid_rows += 1
+                continue
+            seen.add(index)
+            normalized.append({**item, "index": index, "same_product": same_product, "confidence": score})
+        if not normalized:
+            raise ValueError("图片比对评分结果格式错误")
+        matches = normalized
+        if invalid_rows:
+            self.log(f"图片比对模型有 {invalid_rows} 条评分格式异常，按未确认处理")
         # Vision responses can be cut short even when the JSON itself is
         # valid (for example, a busy model returns the first 4 of 5 rows).
         # Treat only the missing rows as unconfirmed candidates instead of
         # turning a transport/length quirk into a batch-stopping exception.
         # Every candidate still gets explicit evidence and therefore can never
         # be approved without a real model score.
-        returned_indexes = {
-            item.get("index") for item in matches if isinstance(item, dict)
-        }
+        returned_indexes = {item["index"] for item in matches}
         missing_indexes = [index for index in range(1, len(candidates) + 1)
                            if index not in returned_indexes]
         if missing_indexes:

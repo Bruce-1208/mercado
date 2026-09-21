@@ -33,8 +33,7 @@ _metadata_cache: dict[str, Any] = {"expires_at": 0.0, "data": None}
 
 
 def _connect() -> Any:
-    import pymysql
-    from bit.bit_mysql import config
+    from bit.bit_mysql import config, pymysql
 
     return pymysql.connect(**config)
 

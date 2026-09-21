@@ -28,6 +28,13 @@ def test_workbench_contains_order_management_ui():
     assert b'id="order-salesperson-filter"' in response.data
     assert b'id="order-group-filter"' in response.data
     assert b'id="order-table-body"' in response.data
+    assert b'id="order-board"' in response.data
+    assert b'order-density-compact' in response.data
+    assert b'data-density="compact"' in response.data
+    assert b'data-density="comfortable"' in response.data
+    assert b'function setOrderDensity(density, persist = true)' in response.data
+    assert b'zeshun-order-density' in response.data
+    assert b'class="order-status-overview"' in response.data
     assert b'id="order-sync-dialog"' in response.data
     assert b'id="order-sync-start-date" type="datetime-local"' in response.data
     assert b'id="order-sync-end-date" type="datetime-local"' in response.data

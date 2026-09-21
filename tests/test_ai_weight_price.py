@@ -47,6 +47,13 @@ def test_invalid_config_confidence(value):
             validate({"match_threshold": value})
 
 
+def test_image_candidate_count_defaults_to_ten_and_remains_configurable():
+    assert validate({})["max_candidates"] == 10
+    assert validate({"max_candidates": 17})["max_candidates"] == 17
+    with pytest.raises(ValueError):
+        validate({"max_candidates": 21})
+
+
 @pytest.mark.parametrize("setting,value", [("consult_interval_seconds",59),("max_waiting",3),("daily_limit",0),
                                           ("small_tolerance_g",51),("large_tolerance_g",31),
                                           ("poll_minutes",float("nan")),("phrases",["一样","一样"]),
@@ -98,6 +105,27 @@ def test_strict_matching_and_review_same_sku(monkeypatch):
     result, evidence = model.match({"erp_sku":"blue","main_image_url":"https://example.com/a.jpg"},
                                   {"skus":[{"id":"s1","price":"12.50"}],"main_image_url":"https://example.com/b.jpg"})
     assert result is None and len(evidence) == 2
+
+
+def test_image_match_scores_tolerate_common_json_serialization_quirks(monkeypatch):
+    model = Models(validate({}), lambda *a: None)
+    monkeypatch.setattr(model, "call", lambda *a: {
+        "matches": [
+            {"index": "1", "same_product": "true", "confidence": "96%", "reason": "同款"},
+            {"index": "2", "same_product": False, "confidence": "0.2", "reason": "非同款"},
+            {"index": "bad", "same_product": True, "confidence": 0.99},
+        ]
+    })
+    approved, evidence = model.match_images(
+        {"main_image_url": "https://example.com/target.jpg"},
+        [
+            {"url": "https://detail.1688.com/offer/1.html", "main_image_url": "https://example.com/1.jpg"},
+            {"url": "https://detail.1688.com/offer/2.html", "main_image_url": "https://example.com/2.jpg"},
+        ],
+    )
+    assert [item["url"] for item in approved] == ["https://detail.1688.com/offer/1.html"]
+    assert len(evidence) == 2
+    assert evidence[0]["review"]["confidence"] == .96
 
 
 @pytest.mark.parametrize("answer,expected",[("450","450"),("0.5kg",None),("null",None),("450g",None),("400-500",None),("NaN",None)])
@@ -677,6 +705,10 @@ def test_collection_only_reads_selected_pages_and_resumes_matching_scope(service
     scope=selection_key(selection,config)
     if resume:
         service.store.set_state("collection",{"scope":scope if same_scope else "other","page":3,"complete":False})
+    else:
+        # Terminating a previous batch persists JSON null. A fresh collection
+        # must treat it exactly like a missing checkpoint, not call .get on it.
+        service.store.set_state("collection",None)
     browser=Browser(config,threading.Event(),lambda *a:None)
     class Row:
         def __init__(self,n):self.n=n

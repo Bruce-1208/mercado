@@ -45,6 +45,7 @@ def runtime(tmp_path, monkeypatch):
 
     config.save_agent_token = Mock(side_effect=save_token)
     agent = LocalAgent(config)
+    agent.shutdown_event.wait = lambda seconds: (sleep(seconds), False)[1]
     agent.session = SimpleNamespace(request=Mock(), get=Mock(), headers={})
     return agent, clock
 
@@ -146,6 +147,46 @@ def test_registration_is_retried_then_saves_credential(runtime, monkeypatch):
     assert agent.session.headers["X-Local-Agent-Token"] == "new-test-token"
     assert agent.session.request.call_args_list[0].args[1].endswith("/enroll")
     assert agent.session.request.call_args_list[1].args[1].endswith("/enroll")
+
+
+def test_run_uses_job_claimed_by_heartbeat(runtime, monkeypatch):
+    agent, _clock = runtime
+    agent.config.once = True
+    job = {"job_id": "atomic-job", "job_type": "daily_task", "payload": {}}
+    monkeypatch.setattr(agent, "ensure_enrolled", Mock())
+    monkeypatch.setattr(
+        agent,
+        "heartbeat",
+        Mock(return_value={"bundle": {}, "job": job, "queue_id": "queue-one"}),
+    )
+    monkeypatch.setattr(agent, "ensure_release", Mock())
+    monkeypatch.setattr(
+        agent,
+        "claim_job",
+        Mock(side_effect=AssertionError("new server must not need a second claim request")),
+    )
+    executed = Mock()
+    monkeypatch.setattr(agent, "run_job", executed)
+
+    assert agent.run() == 0
+    executed.assert_called_once_with(job)
+
+
+def test_run_falls_back_to_claim_endpoint_for_old_server(runtime, monkeypatch):
+    agent, _clock = runtime
+    agent.config.once = True
+    job = {"job_id": "legacy-job", "job_type": "appeal", "payload": {}}
+    monkeypatch.setattr(agent, "ensure_enrolled", Mock())
+    monkeypatch.setattr(agent, "heartbeat", Mock(return_value={"bundle": {}}))
+    monkeypatch.setattr(agent, "ensure_release", Mock())
+    claim = Mock(return_value=job)
+    monkeypatch.setattr(agent, "claim_job", claim)
+    executed = Mock()
+    monkeypatch.setattr(agent, "run_job", executed)
+
+    assert agent.run() == 0
+    claim.assert_called_once_with()
+    executed.assert_called_once_with(job)
 
 
 def test_final_upload_waits_for_existing_cooldown_without_losing_payload(runtime):

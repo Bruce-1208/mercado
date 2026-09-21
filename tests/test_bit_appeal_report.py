@@ -1,4 +1,4 @@
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 from bit import bit_appeal_ai
 from bit import bit_appeal_report as report
@@ -76,6 +76,7 @@ def test_six_hour_report_groups_executor_site_and_failure_reason():
         "success": 1,
         "failed": 1,
         "no_data": 1,
+        "ai_sent": 1,
         "attempted": 2,
         "success_rate": 50.0,
     }
@@ -152,3 +153,53 @@ def test_appeal_record_captures_executor_hostname(monkeypatch):
         "execution_target": "local",
         "hostname": "appeal-pc",
     }
+
+
+def test_report_ranks_current_infractions_and_confirmed_sends():
+    infractions = report.summarize_current_infractions(
+        {
+            "last_synced_at": "2026-09-18 09:00:00",
+            "counts": {
+                (1, "MLM"): {"infraction_count": 3, "rights_holder_count": 1},
+                (2, "MLM"): {"infraction_count": 2, "rights_holder_count": 0},
+                (3, "MLB"): {"infraction_count": 1, "rights_holder_count": 0},
+            },
+        },
+        {"MLM": "墨西哥", "MLB": "巴西"},
+    )
+
+    assert infractions["total"] == 7
+    assert list(infractions["sites"]) == ["墨西哥（MLM）", "巴西（MLB）"]
+    assert infractions["sites"]["墨西哥（MLM）"]["total"] == 6
+
+
+def test_report_uses_execution_metrics_for_ai_send_count():
+    until = datetime(2026, 9, 18, 14, 0, 0)
+    summary = report.summarize_appeal_records(
+        [{
+            "appeal_time": "2026-09-18 13:00:00",
+            "appeal_type": "侵权",
+            "shop_name": "店铺甲",
+            "site": "墨西哥",
+            "execution": {
+                "execution_status": "sent",
+                "metrics": {"sent_confirmed": 3},
+            },
+        }],
+        since=until - timedelta(hours=6),
+        until=until,
+    )
+
+    assert summary["overall"]["ai_sent"] == 3
+    assert summary["sites"]["墨西哥"]["ai_sent"] == 3
+
+
+def test_next_report_run_uses_china_schedule():
+    china_tz = timezone(timedelta(hours=8))
+
+    assert report.next_report_run(
+        datetime(2026, 9, 18, 9, 30, tzinfo=china_tz), (10, 14)
+    ) == datetime(2026, 9, 18, 10, 0, tzinfo=china_tz)
+    assert report.next_report_run(
+        datetime(2026, 9, 18, 14, 1, tzinfo=china_tz), (10, 14)
+    ) == datetime(2026, 9, 19, 10, 0, tzinfo=china_tz)

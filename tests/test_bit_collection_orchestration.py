@@ -449,6 +449,7 @@ class CollectionOrchestrationTests(unittest.TestCase):
 
     def test_main_loop_waits_two_hours_after_complete_chain(self):
         with (
+            mock.patch("bit.bit_api.start_browser_cleanup"),
             mock.patch.object(
                 bit_main,
                 "run_infraction_reputation_then_appeal",

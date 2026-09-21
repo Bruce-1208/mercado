@@ -14,7 +14,7 @@ DEFAULTS = {
     "poll_minutes": 15, "timeout_minutes": 30,
     "small_tolerance_g": 50, "large_tolerance_g": 30,
     "reference_mode": "erp", "match_threshold": 0.95,
-    "writeback_enabled": False, "max_candidates": 5, "max_pages": 100,
+    "writeback_enabled": False, "max_candidates": 10, "max_pages": 100,
     "supplier_auto_adapt": True,
     "sku_price_mode": "final", "usd_cny_rate": None,
     "phrases": ["您好，请问这款产品包装好之后重量大概多少克呢？",

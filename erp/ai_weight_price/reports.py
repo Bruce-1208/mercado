@@ -34,7 +34,8 @@ def execution_xlsx(rows, batch=None):
                "包装重量（克）", "净收益（美元）", "修改前重量（克）", "修改前净收益（美元）",
                "计划修改重量（克）", "计划修改净收益（美元）", "修改后回读重量（克）", "修改后回读净收益（美元）",
                "保存回读验证", "成本来源", "重量来源", "美元汇率（人民币/美元）", "汇率日期", "1688货源链接", "记录时间（北京时间）",
-               "修改前智赢状态", "计划修改智赢状态", "修改后智赢状态"]
+               "修改前智赢状态", "计划修改智赢状态", "修改后智赢状态",
+               "当前ERP重量（克）", "当前ERP净收益（美元）"]
     sheet["A2"] = "AI核重核价 · 产品执行情况"
     sheet["A2"].font = Font(name="Microsoft YaHei", size=14, bold=True, color="17365D")
     sheet.row_dimensions[2].height = 30
@@ -50,12 +51,13 @@ def execution_xlsx(rows, batch=None):
         cell.font = Font(name="Microsoft YaHei", bold=True, color="FFFFFF")
         cell.alignment = Alignment(wrap_text=True, vertical="center", horizontal="center")
     sheet.row_dimensions[5].height = 42
-    numeric_columns = set(range(6, 15)) | {18}
+    numeric_columns = set(range(6, 15)) | {18, 25, 26}
     for index, row in enumerate(rows, 6):
         before, intent, after = (row.get(field) or {} for field in ("erp_before", "write_intent", "erp_after"))
         source, pricing = row.get("info_sources") or {}, row.get("pricing") or {}
         stamp = row.get("saved_at") or row.get("updated_at")
         failure = "：".join(str(row.get(field) or "") for field in ("exception_reason", "exception_detail") if row.get(field)) if row["status"] == "exception" else ""
+        current = after or before or {"weight_g": row.get("reference_weight_g")}
         values = [str(row["erp_goods_id"]), row.get("title"), row.get("execution_result") or LABELS[row["status"]],
                   failure or row.get("execution_reason") or row.get("decision_reason") or row.get("skip_reason") or row.get("defer_reason"),
                   row.get("erp_sku"), row.get("cost_price"), row.get("weight_g"), row.get("net_income_usd"),
@@ -64,7 +66,8 @@ def execution_xlsx(rows, batch=None):
                   "通过" if row.get("write_verified") is True else "未确认", source.get("cost_price"), source.get("weight_g"),
                   pricing.get("cny_per_usd"), pricing.get("rate_date"), row.get("supplier_url"),
                   datetime.fromtimestamp(stamp, CHINA).replace(tzinfo=None) if stamp else None,
-                  before.get("review_status"), intent.get("review_status"), after.get("review_status")]
+                  before.get("review_status"), intent.get("review_status"), after.get("review_status"),
+                  current.get("weight_g"), current.get("net_income_usd")]
         for column, value in enumerate(values, 1):
             if column in numeric_columns:
                 value = numeric(value)
@@ -84,11 +87,11 @@ def execution_xlsx(rows, batch=None):
                 cell.number_format = "yyyy-mm-dd hh:mm:ss"
         sheet.row_dimensions[index].height = 64
         sheet.cell(index, 3).font = Font(name="Microsoft YaHei", bold=True, color="237344" if values[2] == "处理成功" else "9C3B24")
-    widths = [20, 48, 18, 68, 32] + [18] * 10 + [18, 18, 24, 18, 52, 24, 20, 20, 20]
+    widths = [20, 48, 18, 68, 32] + [18] * 10 + [18, 18, 24, 18, 52, 24, 20, 20, 20, 18, 18]
     for index, width in enumerate(widths, 1):
         sheet.column_dimensions[get_column_letter(index)].width = width
     sheet.freeze_panes = "C6"
-    sheet.auto_filter.ref = f"A5:X{max(5, len(rows) + 5)}"
+    sheet.auto_filter.ref = f"A5:Z{max(5, len(rows) + 5)}"
     sheet.print_title_rows = "1:5"
     sheet.sheet_properties.pageSetUpPr.fitToPage = True
     sheet.page_setup.orientation = "landscape"

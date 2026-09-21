@@ -87,6 +87,60 @@ def test_advertise_store_link_validates_roas_before_external_calls():
         raise AssertionError("expected validation error")
 
 
+def test_advertise_store_links_groups_selection_and_reports_ineligible_rows(monkeypatch):
+    calls = []
+
+    class FakeClient:
+        def get_product_ads_advertisers(self):
+            return [{"advertiser_id": 17, "site_id": "MLM"}]
+
+        def search_product_ads_ad_groups(self, site, advertiser, item):
+            assert (site, advertiser) == ("MLM", 17)
+            return {
+                "results": [{
+                    "id": 31,
+                    "campaign_id": 0,
+                    "ad_group_type": "FAMILY",
+                    "ad_group_external_id": item,
+                }]
+            }
+
+        def search_product_ads_campaigns(self, site, advertiser, **paging):
+            return {"results": [], "paging": {"total": 0}}
+
+        def create_product_ads_campaign(self, site, advertiser, payload):
+            calls.append(("create", site, advertiser, payload))
+            return {"id": 41, "currency_id": "MXN"}
+
+        def activate_product_ads_ad_group(self, site, ad_group, campaign):
+            calls.append(("activate", site, ad_group, campaign))
+            return {"status": "active"}
+
+    monkeypatch.setattr(
+        "erp.mercadolibre_store_link_store.get_store_links_by_ids",
+        lambda _ids: [
+            {"id": 1, "token_id": 2, "store_name": "店铺", "status": "active", "is_current": 1, "site_id": "MLM", "item_id": "MLM123"},
+            {"id": 2, "token_id": 2, "store_name": "店铺", "status": "active", "is_current": 1, "site_id": "MLM", "item_id": "MLM124"},
+            {"id": 3, "token_id": 2, "store_name": "店铺", "status": "paused", "is_current": 1, "site_id": "MLM", "item_id": "MLM125"},
+        ],
+    )
+    monkeypatch.setattr("bit.bit_mysql.get_mercado_store_token", lambda _id: {"id": 2})
+    monkeypatch.setattr("bit.bit_store_link_sync._client_and_token", lambda token: (FakeClient(), token))
+
+    result = ads.advertise_store_links(
+        [1, 2, 3], budget=30, roas_target=6, campaign_name="秋季主推"
+    )
+
+    assert result["requested_count"] == 3
+    assert result["success_count"] == 2
+    assert result["failure_count"] == 1
+    assert result["campaign_count"] == 1
+    assert result["activated_ad_group_count"] == 1
+    assert result["errors"][0]["link_id"] == 3
+    assert calls[0][0:3] == ("create", "MLM", 17)
+    assert calls[1] == ("activate", "MLM", 31, 41)
+
+
 def test_product_ads_client_uses_current_global_selling_endpoints(monkeypatch):
     calls = []
     client = MercadoLibreClient("token")

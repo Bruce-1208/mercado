@@ -31,8 +31,7 @@ _schema_ready = False
 
 
 def _connect() -> Any:
-    import pymysql
-    from bit.bit_mysql import config
+    from bit.bit_mysql import config, pymysql
 
     return pymysql.connect(**config)
 
@@ -301,18 +300,17 @@ def mark_infraction_sync_finished(
     connection_factory: Callable[[], Any] | None = None,
 ) -> None:
     status = str(status or "error").strip().lower()[:32]
-    # Reaching the defensive page limit is a completed read, not a transient
-    # failure. Retrying the same unbounded snapshot cannot move that limit.
-    completed = status in {"success", "completed", "limited"}
+    # A limited result means pagination stalled before the API's advertised
+    # total was reached, so it must remain retryable and must not advance the
+    # timestamp of the last complete snapshot.
+    completed = status in {"success", "completed"}
     finished_at = _now()
     connection = (connection_factory or _connect)()
     try:
         with connection.cursor() as cursor:
             ensure_infraction_tables(cursor)
             if completed:
-                stored_message = (
-                    str(error or "")[:4000] if status == "limited" else None
-                )
+                stored_message = None
                 cursor.execute(
                     f"""
                     INSERT INTO `{INFRACTION_SYNC_STATE_TABLE}` (
@@ -399,7 +397,7 @@ def list_due_infraction_token_ids(
                     state.`requested_at` IS NOT NULL
                     OR state.`last_completed_at` IS NULL
                     OR state.`last_completed_at` <= %s
-                    OR state.`last_status` IN ('error', 'partial')
+                    OR state.`last_status` IN ('error', 'partial', 'limited')
                   )
                   AND (state.`last_started_at` IS NULL OR state.`last_started_at` <= %s)
                 ORDER BY CASE WHEN state.`requested_at` IS NOT NULL THEN 0 ELSE 1 END,
@@ -756,7 +754,7 @@ def _build_group_tree(account_rows: Iterable[Mapping[str, Any]]) -> list[dict[st
                 or str(candidate) > str(store.get(timestamp_key))
             ):
                 store[timestamp_key] = candidate
-        if row.get("last_status") in {"error", "partial"}:
+        if row.get("last_status") in {"error", "partial", "limited"}:
             store["last_status"] = row.get("last_status")
             store["last_error"] = row.get("last_error")
 
@@ -1236,7 +1234,7 @@ def list_infraction_dashboard(
                 SELECT MAX(`last_completed_at`) AS `last_synced_at`,
                        MAX(`last_started_at`) AS `last_read_at`,
                        SUM(CASE WHEN `last_status` = 'running' THEN 1 ELSE 0 END) AS `running_stores`,
-                       SUM(CASE WHEN `last_status` IN ('error', 'partial') THEN 1 ELSE 0 END)
+                       SUM(CASE WHEN `last_status` IN ('error', 'partial', 'limited') THEN 1 ELSE 0 END)
                            AS `problem_stores`
                 FROM `{INFRACTION_SYNC_STATE_TABLE}`
                 """
