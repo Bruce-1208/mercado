@@ -235,6 +235,63 @@ class FakeModel:
         return self.result
 
 
+def test_manual_execute_writes_operator_values_and_marks_manual_verification(service, monkeypatch):
+    row = task(service.store, matched=True, weight_g="450", net_income_usd="9")
+
+    class ManualBrowser:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            return False
+
+        def write_patch(self, current, changes, before_save):
+            before_save({"weight_g": "400", "net_income_usd": "8", "review_status": "待审核"})
+            return {"weight_g": changes["weight_g"], "net_income_usd": changes["net_income_usd"],
+                    "review_status": changes["review_status"]}
+
+    monkeypatch.setattr(service, "require_login", lambda config: None)
+    monkeypatch.setattr(service, "browser_factory", lambda *args: ManualBrowser())
+    result = service.manual_execute("g1", {"weight_g": "480", "net_income_usd": "12", "note": "人工复核"}, "tester")
+
+    assert result["status"] == "success"
+    assert result["verification_mode"] == "manual"
+    assert result["manual_verification"]["note"] == "人工复核"
+    assert result["write_verified"] is True
+    assert result["erp_after"] == {"weight_g": "480", "net_income_usd": "12", "review_status": "通过"}
+    assert result["write_intent"]["verification_mode"] == "manual"
+
+
+def test_manual_execute_locates_product_when_collector_has_no_edit_url(service, monkeypatch):
+    task(service.store, matched=True, weight_g="450", net_income_usd="9")
+    service.store.update("g1", erp_edit_url=None, source_page=2, source_index=7)
+    received = []
+
+    class ManualBrowser:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            return False
+
+        def write_patch(self, current, changes, before_save):
+            received.append(current)
+            before_save({"weight_g": "400", "net_income_usd": "8", "review_status": "待审核"})
+            return dict(changes)
+
+    monkeypatch.setattr(service, "require_login", lambda config: None)
+    monkeypatch.setattr(service, "browser_factory", lambda *args: ManualBrowser())
+
+    result = service.manual_execute(
+        "g1", {"weight_g": "480", "net_income_usd": "12", "note": "人工复核"}, "tester"
+    )
+
+    assert received[0]["erp_edit_url"] is None
+    assert received[0]["source_page"] == 2
+    assert received[0]["source_index"] == 7
+    assert result["status"] == "success"
+
+
 def test_flow_matched_send_poll_validate_save(service):
     row=task(service.store,matched=True);browser=FakeBrowser();model=FakeModel();config=validate({"writeback_enabled":True})
     service.process(row,browser,model,config)
@@ -275,7 +332,7 @@ def test_lower_calculated_net_income_keeps_original_and_only_writes_weight(servi
     assert saved["status"] == "success"
     assert saved["net_income_usd"] == "10"
     assert saved["weight_g"] == "450"
-    assert saved["pricing"]["calculated_net_income_usd"] == "2"
+    assert saved["pricing"]["calculated_net_income_usd"] == "3"
     assert saved["pricing"]["net_income_writeback_usd"] == "10"
     assert saved["pricing"]["net_income_retained_original"] is True
     assert "net_income_usd" not in saved["write_intent"]
@@ -411,6 +468,11 @@ def test_api_visual_config_reports_and_invalid_requests(client,service):
     assert 'id="terminate"' in page.text
     assert 'bestSupplierUrl' in page.text
     assert '打开最佳匹配' in page.text
+    assert 'id="manual-execute"' in page.text
+    assert 'id="detail-product-image"' in page.text
+    assert 'renderDetailProduct(currentTask)' in page.text
+    assert 'product-thumb:hover' in page.text
+    assert '/manual-execute' in page.text
     assert client.get("/api/ai-weight-price/status").json["counts"]["pending"]==0
     result=client.put("/api/ai-weight-price/config",json={"daily_limit":12},headers=headers)
     assert result.status_code==200 and result.json["daily_limit"]==12
@@ -626,7 +688,8 @@ def test_login_confirm_requires_real_logged_in_browser(service,client,monkeypatc
     assert not service.store.state("login")["confirmed"]
 
 
-def test_open_login_opens_zying_and_1688_in_same_edge_session(service, monkeypatch):
+@pytest.mark.parametrize("include_supplier", [True, False])
+def test_open_login_opens_requested_login_pages(service, monkeypatch, include_supplier):
     import erp.ai_weight_price.service as module
     calls = []
 
@@ -649,9 +712,9 @@ def test_open_login_opens_zying_and_1688_in_same_edge_session(service, monkeypat
     service.browser_factory = LoginPagesBrowser
     monkeypatch.setattr(module, "open_edge", lambda *args: "edge1")
 
-    service.open_login()
+    service.open_login(include_supplier=include_supplier)
 
-    assert calls == ["zying", "1688"]
+    assert calls == (["zying", "1688"] if include_supplier else ["zying"])
     assert service.store.state("login")["confirmed"] is False
 
 

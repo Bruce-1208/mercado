@@ -35,7 +35,7 @@ def execution_xlsx(rows, batch=None):
                "计划修改重量（克）", "计划修改净收益（美元）", "修改后回读重量（克）", "修改后回读净收益（美元）",
                "保存回读验证", "成本来源", "重量来源", "美元汇率（人民币/美元）", "汇率日期", "1688货源链接", "记录时间（北京时间）",
                "修改前智赢状态", "计划修改智赢状态", "修改后智赢状态",
-               "当前ERP重量（克）", "当前ERP净收益（美元）"]
+               "当前ERP重量（克）", "当前ERP净收益（美元）", "核验方式", "人工核验备注"]
     sheet["A2"] = "AI核重核价 · 产品执行情况"
     sheet["A2"].font = Font(name="Microsoft YaHei", size=14, bold=True, color="17365D")
     sheet.row_dimensions[2].height = 30
@@ -67,7 +67,9 @@ def execution_xlsx(rows, batch=None):
                   pricing.get("cny_per_usd"), pricing.get("rate_date"), row.get("supplier_url"),
                   datetime.fromtimestamp(stamp, CHINA).replace(tzinfo=None) if stamp else None,
                   before.get("review_status"), intent.get("review_status"), after.get("review_status"),
-                  current.get("weight_g"), current.get("net_income_usd")]
+                  current.get("weight_g"), current.get("net_income_usd"),
+                  "人工核验" if row.get("verification_mode") == "manual" else "自动核验",
+                  (row.get("manual_verification") or {}).get("note")]
         for column, value in enumerate(values, 1):
             if column in numeric_columns:
                 value = numeric(value)
@@ -87,11 +89,11 @@ def execution_xlsx(rows, batch=None):
                 cell.number_format = "yyyy-mm-dd hh:mm:ss"
         sheet.row_dimensions[index].height = 64
         sheet.cell(index, 3).font = Font(name="Microsoft YaHei", bold=True, color="237344" if values[2] == "处理成功" else "9C3B24")
-    widths = [20, 48, 18, 68, 32] + [18] * 10 + [18, 18, 24, 18, 52, 24, 20, 20, 20, 18, 18]
+    widths = [20, 48, 18, 68, 32] + [18] * 10 + [18, 18, 24, 18, 52, 24, 20, 20, 20, 18, 18, 20, 40]
     for index, width in enumerate(widths, 1):
         sheet.column_dimensions[get_column_letter(index)].width = width
     sheet.freeze_panes = "C6"
-    sheet.auto_filter.ref = f"A5:Z{max(5, len(rows) + 5)}"
+    sheet.auto_filter.ref = f"A5:AB{max(5, len(rows) + 5)}"
     sheet.print_title_rows = "1:5"
     sheet.sheet_properties.pageSetUpPr.fitToPage = True
     sheet.page_setup.orientation = "landscape"

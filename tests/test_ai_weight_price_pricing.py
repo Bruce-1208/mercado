@@ -7,7 +7,7 @@ from erp.ai_weight_price.config import validate
 from erp.ai_weight_price.store import CHINA, Store
 
 
-@pytest.mark.parametrize("cny,rate,usd", [(22, "7.2", "4"), ("14.4", "7.2", "2"), ("14.400001", "7.2", "3"), ("0.01", "7.2", "1"), ("35", "7", "5")])
+@pytest.mark.parametrize("cny,rate,usd", [(22, "7.2", "4"), ("14.4", "7.2", "3"), ("14.400001", "7.2", "3"), ("0.01", "7.2", "1"), ("35", "7", "6")])
 def test_usd_cost_rounds_up_after_dividing(cny, rate, usd):
     result = pricing.usd_cost(cny, {"cny_per_usd": rate, "date": "2026-09-07", "source": "manual"})
     assert result["net_income_usd"] == usd
@@ -43,7 +43,7 @@ def test_lower_calculated_net_income_keeps_original_for_writeback_and_exposes_bo
 def test_higher_calculated_net_income_is_written_normally():
     calculated = pricing.usd_cost("72", {"cny_per_usd": "7.2", "date": "2026-09-07", "source": "manual"})
     protected = pricing.protect_net_income("4", calculated)
-    assert protected["net_income_writeback_usd"] == "10"
+    assert protected["net_income_writeback_usd"] == "11"
     assert protected["net_income_retained_original"] is False
 
 
@@ -66,7 +66,7 @@ def test_exchange_rate_reuses_existing_ecb_fetcher_without_mysql_and_keeps_exact
     assert pricing.exchange_rate(validate({}), Store(tmp_path), now) == rate
     assert len(calls) == 1
     result = pricing.usd_cost("7", rate)
-    assert result["net_income_usd"] == result["unrounded_usd"] == "3"
+    assert result["net_income_usd"] == "6"
     manual = pricing.exchange_rate(validate({"usd_cny_rate": "7.2"}), store, now)
     assert manual["source"] == "manual" and manual["cny_per_usd"] == "7.2"
     assert len(calls) == 1

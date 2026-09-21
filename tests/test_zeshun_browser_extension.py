@@ -54,12 +54,14 @@ def test_extension_files_referenced_by_manifest_exist():
 def test_all_extension_javascript_has_valid_syntax():
     for filename in (
         "collector-core.js",
+        "product-batch.js",
         "content.js",
         "background.js",
         "popup.js",
         "options.js",
         "content-1688.js",
         "content-zying.js",
+        "zying-page.js",
     ):
         subprocess.run(
             [shutil.which("node"), "--check", str(EXTENSION / filename)],
@@ -100,6 +102,18 @@ def test_1688_collector_targets_ai_original_products():
     assert "采集到泽顺" in content
 
 
+def test_1688_search_results_expose_per_card_collection_buttons():
+    content = (EXTENSION / "content-1688.js").read_text(encoding="utf-8")
+
+    assert 'location.hostname !== "s.1688.com"' in content
+    assert 'document.querySelectorAll(".search-offer-wrapper")' in content
+    assert 'className = "zeshun-card-collect"' in content
+    assert 'button.textContent = "采集"' in content
+    assert 'source_platform: "1688"' in content
+    assert 'scrape_status: "partial"' in content
+    assert 'chrome.runtime.sendMessage({type: "SUBMIT_PRODUCT", product})' in content
+
+
 def test_console_downloads_complete_zeshun_extension_package():
     import bit.bit_interface as workbench
 
@@ -113,13 +127,15 @@ def test_console_downloads_complete_zeshun_extension_package():
 
     assert response.status_code == 200
     assert response.headers["Content-Type"].startswith("application/zip")
-    assert response.headers["X-Zeshun-Extension-Version"] == "1.3.0"
+    assert response.headers["X-Zeshun-Extension-Version"] == "1.5.5"
     assert "zeshun-collector-extension.zip" in response.headers["Content-Disposition"]
     with zipfile.ZipFile(io.BytesIO(response.data)) as archive:
         names = set(archive.namelist())
         assert "zeshun_collector/manifest.json" in names
+        assert "zeshun_collector/product-batch.js" in names
         assert "zeshun_collector/content-1688.js" in names
         assert "zeshun_collector/content-zying.js" in names
+        assert "zeshun_collector/zying-page.js" in names
         assert "zeshun_collector/README.md" in names
 
 
@@ -148,11 +164,28 @@ def test_background_requires_console_login_and_keeps_offline_queue():
     assert "/api/browser-extension/zying/start" in source
     assert "/api/browser-extension/zying/status" in source
     assert 'world: "MAIN"' in source
+    assert "/api/browser-extension/notifications/settings" in source
+    assert "/api/browser-extension/notifications/send" in source
+    assert "notifyAttention" in source
+
+
+def test_extension_options_expose_encrypted_mail_notification_settings():
+    options = (EXTENSION / "options.html").read_text(encoding="utf-8")
+    script = (EXTENSION / "options.js").read_text(encoding="utf-8")
+
+    for field_id in (
+        "mail-enabled", "sender-email", "receiver-email", "smtp-host",
+        "smtp-port", "smtp-security", "smtp-password", "test-mail",
+    ):
+        assert f'id="{field_id}"' in options
+    assert "SAVE_NOTIFICATION_SETTINGS" in script
+    assert "TEST_NOTIFICATION_EMAIL" in script
+    assert "smtp_password" in script
 
 
 def test_zying_collection_controls_live_in_extension_and_use_current_browser():
     popup = (EXTENSION / "popup.html").read_text(encoding="utf-8")
-    content = (EXTENSION / "content-zying.js").read_text(encoding="utf-8")
+    content = (EXTENSION / "zying-page.js").read_text(encoding="utf-8")
 
     assert 'id="zying-mode"' in popup
     assert 'id="zying-start-page"' in popup
@@ -165,27 +198,64 @@ def test_zying_collection_controls_live_in_extension_and_use_current_browser():
     assert "__reactFiber$" in content
 
 
-def test_list_card_collection_skips_us_flag_before_opening_detail():
+def test_ai_weight_price_launch_controls_live_in_extension():
+    popup = (EXTENSION / "popup.html").read_text(encoding="utf-8")
+    background = (EXTENSION / "background.js").read_text(encoding="utf-8")
+
+    assert 'id="weight-price-mode"' in popup
+    assert 'id="weight-price-start-page"' in popup
+    assert 'id="weight-price-end-page"' in popup
+    assert 'id="weight-price-start-item"' in popup
+    assert 'id="weight-price-limit"' in popup
+    assert 'id="weight-price-category"' in popup
+    assert 'id="weight-price-start"' in popup
+    assert 'id="weight-price-stop"' in popup
+    assert "/api/browser-extension/ai-weight-price/status" in background
+    assert 'aiWeightPriceAction("start"' in background
+    assert 'aiWeightPriceAction("stop"' in background
+
+
+def test_integrated_ai_weight_price_page_points_launch_to_extension(monkeypatch):
+    import bit.bit_interface as workbench
+
+    monkeypatch.setattr(workbench, "get_current_workbench_user", _browser_extension_user)
+    workbench.app.config.update(TESTING=True, SECRET_KEY="extension-test-secret")
+    client = workbench.app.test_client()
+    with client.session_transaction() as login_session:
+        login_session["workbench_user"] = _browser_extension_user()
+
+    response = client.get("/ai-weight-price")
+
+    assert response.status_code == 200
+    assert "任务启动已迁移到泽顺插件" in response.text
+    assert '<div class="launch-block" hidden>' in response.text
+
+
+def test_list_card_collection_only_opens_china_or_managed_products():
     content = (EXTENSION / "content.js").read_text(encoding="utf-8")
     background = (EXTENSION / "background.js").read_text(encoding="utf-8")
 
     assert 'window.open(candidate.url, "_blank", "noopener")' in content
     assert "extractCardProduct(candidate.card, candidate.url)" not in content
-    assert "商品列表检测到 US.svg，已跳过美国自发货商品" in content
+    assert "仅采集自发货和半托管" in content
     core = (EXTENSION / "collector-core.js").read_text(encoding="utf-8")
     assert "cardHasUsFlag" in core
+    assert "cardShippingProfile" in core
     assert "商品列表检测到 US.svg：美国自发货商品不采集" in core
     assert "COLLECT_URL" not in content
     assert "COLLECT_URL" not in background
-    assert "active: false" not in background
+    batch = (EXTENSION / "product-batch.js").read_text(encoding="utf-8")
+    assert 'type === "READ_PRODUCT_LIST" || type === "EXTRACT_BATCH_PRODUCT"' in batch
+    assert "active: false" in batch
+    assert "智赢详情浮层" in batch
 
 
-def test_detail_collection_accepts_non_us_origin_and_requires_actual_weight():
+def test_detail_collection_requires_china_or_managed_origin_and_actual_weight():
     core = (EXTENSION / "collector-core.js").read_text(encoding="utf-8")
 
     assert "plugin.self_ship_origin === \"US\"" not in core
     assert 'plugin.self_ship_origin !== "CN"' not in core
-    assert "只要不是美国自发货即可采集" in (
+    assert "仅采集自发货和半托管" in (
         EXTENSION / "content.js"
     ).read_text(encoding="utf-8")
     assert "actualWeightComplete" in core
@@ -414,3 +484,131 @@ def test_browser_extension_starts_zying_collection_from_current_browser_credenti
     status_data = status.get_json()["data"]
     assert status_data["status"] == "success"
     assert "auth_token" not in status_data["params"]
+
+
+def test_browser_extension_zying_options_uses_developers_from_current_page(monkeypatch):
+    import bit.bit_interface as workbench
+
+    workbench.app.config.update(TESTING=True, SECRET_KEY="extension-test-secret")
+    workbench.app.secret_key = "extension-test-secret"
+    token = workbench.create_browser_extension_token(_browser_extension_user())
+    monkeypatch.setattr(
+        workbench.bit_zying_caiji,
+        "list_zying_product_developers",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(
+            AssertionError("网页已提供开发人员时不应启动后端智赢读取")
+        ),
+    )
+    monkeypatch.setattr(
+        workbench,
+        "db_sync_zying_product_developers",
+        lambda rows: {"zying_products": len(rows), "product_list": len(rows)},
+    )
+    response = workbench.app.test_client().post(
+        "/api/browser-extension/zying/options",
+        json={
+            "credential": "page-credential",
+            "categories": [{"category_id": "17", "category_name": "测试分类"}],
+            "developers": [{"id": 17, "name": "产品开发甲"}],
+        },
+        headers={"Authorization": f"Bearer {token}"},
+    )
+
+    assert response.status_code == 200
+    assert response.get_json()["data"]["developers"] == [
+        {"id": "17", "name": "产品开发甲"}
+    ]
+
+
+def test_browser_extension_starts_ai_weight_price_on_local_workstation(monkeypatch):
+    import bit.bit_interface as workbench
+
+    workbench.app.config.update(TESTING=True, SECRET_KEY="extension-test-secret")
+    workbench.app.secret_key = "extension-test-secret"
+    token = workbench.create_browser_extension_token(_browser_extension_user())
+    headers = {"Authorization": f"Bearer {token}"}
+    captured = {}
+
+    def start(mode="pipeline", task_id=None, selection=None, max_items=10, resume=False):
+        captured.update({
+            "mode": mode,
+            "task_id": task_id,
+            "selection": selection,
+            "max_items": max_items,
+            "resume": resume,
+        })
+
+    monkeypatch.setattr(workbench.ai_weight_price_service, "start", start)
+    client = workbench.app.test_client()
+    response = client.post(
+        "/api/browser-extension/ai-weight-price/start",
+        json={
+            "selection": {
+                "category": "",
+                "start_page": 2,
+                "end_page": 4,
+                "start_item": 3,
+            },
+            "max_items": 12,
+        },
+        headers=headers,
+    )
+    status = client.get(
+        "/api/browser-extension/ai-weight-price/status", headers=headers
+    )
+    remote = client.post(
+        "/api/browser-extension/ai-weight-price/start",
+        json={
+            "selection": {
+                "category": "",
+                "start_page": 1,
+                "end_page": 1,
+                "start_item": 1,
+            },
+            "max_items": 1,
+        },
+        headers=headers,
+        environ_base={"REMOTE_ADDR": "192.0.2.20"},
+    )
+
+    assert response.status_code == 200
+    assert captured == {
+        "mode": "pipeline",
+        "task_id": None,
+        "selection": {
+            "category": "",
+            "start_page": 2,
+            "end_page": 4,
+            "start_item": 3,
+        },
+        "max_items": 12,
+        "resume": False,
+    }
+    assert status.status_code == 200
+    assert "categories" in status.get_json()["data"]
+    assert remote.status_code == 403
+    assert "本机泽顺控制台" in remote.get_json()["message"]
+
+
+def test_weight_price_extension_login_and_resume_routes(monkeypatch):
+    import bit.bit_interface as workbench
+
+    calls = []
+    monkeypatch.setattr(workbench, "_browser_extension_user_from_token", lambda _: _browser_extension_user())
+    monkeypatch.setattr(workbench, "_browser_extension_ai_weight_price_snapshot", lambda: {"running": False})
+    monkeypatch.setattr(workbench.ai_weight_price_service, "open_login", lambda **kw: calls.append(kw))
+    monkeypatch.setattr(workbench.ai_weight_price_service, "continue_after_human", lambda: calls.append("continue"))
+    client = workbench.app.test_client()
+    root = "/api/browser-extension/ai-weight-price/"
+    assert client.post(root + "login/open", json={}).status_code == 200
+    assert calls == [{"include_supplier": False}]
+    assert client.post(root + "continue", json={}).status_code == 400
+    assert client.post(root + "continue", json={"acknowledged": True},
+                       environ_base={"REMOTE_ADDR": "192.0.2.20"}).status_code == 403
+    assert calls == [{"include_supplier": False}]
+    assert client.post(root + "continue", json={"acknowledged": True}).status_code == 200
+    assert calls[-1] == "continue"
+    monkeypatch.setattr(workbench, "_browser_extension_user_from_token", lambda _: {
+        **_browser_extension_user(), "access_version": 1, "permissions": ["ai_weight_price.view"]})
+    assert client.post(root + "continue", json={"acknowledged": True}).status_code == 403
+    assert len(calls) == 2

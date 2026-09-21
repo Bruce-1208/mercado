@@ -266,8 +266,13 @@ def get_latest_order_print_records():
 def get_database_api_health():
     if DB_MODE == "mysql":
         from bit.bit_mysql import config
+        from bit.db_pool import pool_status
 
-        return {"role": "server", "database_host": config.get("host")}
+        return {
+            "role": "server",
+            "database_host": config.get("host"),
+            "connection_pool": pool_status(),
+        }
     return _request("GET", "/api/db/health", timeout=10)
 
 
@@ -1649,7 +1654,9 @@ def delete_mercado_account_group(group_id):
         return _local_call("delete_mercado_account_group", group_id)
 
 
-def exchange_mercado_store_token(display_name, callback_or_code, application_id=None):
+def exchange_mercado_store_token(
+    display_name, callback_or_code, application_id=None, organization_key="default"
+):
     if DB_MODE == "mysql":
         from bit import bit_mysql
         from bit.mercado_tokens import exchange_and_save
@@ -1659,6 +1666,7 @@ def exchange_mercado_store_token(display_name, callback_or_code, application_id=
             callback_or_code,
             upsert=bit_mysql.upsert_mercado_store_token,
             application_id=application_id,
+            organization_key=organization_key,
             get_application=bit_mysql.get_mercado_application,
         )
     try:
@@ -1670,6 +1678,7 @@ def exchange_mercado_store_token(display_name, callback_or_code, application_id=
                 "display_name": display_name,
                 "code": callback_or_code,
                 "application_id": application_id,
+                "organization_key": organization_key,
             },
         )
     except RuntimeError as exc:
@@ -1683,6 +1692,7 @@ def exchange_mercado_store_token(display_name, callback_or_code, application_id=
             callback_or_code,
             upsert=bit_mysql.upsert_mercado_store_token,
             application_id=application_id,
+            organization_key=organization_key,
             get_application=bit_mysql.get_mercado_application,
         )
 

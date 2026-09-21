@@ -7040,6 +7040,7 @@ def _ensure_mercado_store_tokens_table(cursor):
         """
         CREATE TABLE IF NOT EXISTS `mercado_store_tokens` (
             `id` BIGINT NOT NULL AUTO_INCREMENT,
+            `organization_key` VARCHAR(64) NOT NULL DEFAULT 'default',
             `display_name` VARCHAR(100) NOT NULL,
             `enabled` TINYINT(1) NOT NULL DEFAULT 1,
             `meli_user_id` VARCHAR(64) NULL,
@@ -7059,7 +7060,7 @@ def _ensure_mercado_store_tokens_table(cursor):
             `created_at` DATETIME NOT NULL,
             `updated_at` DATETIME NOT NULL,
             PRIMARY KEY (`id`),
-            UNIQUE KEY `uniq_mercado_store_display_name` (`display_name`),
+            UNIQUE KEY `uniq_mercado_store_org_display_name` (`organization_key`, `display_name`),
             UNIQUE KEY `uniq_mercado_store_user_id` (`meli_user_id`),
             KEY `idx_mercado_store_application_id` (`application_id`),
             KEY `idx_mercado_store_expires_at` (`expires_at`)
@@ -7072,6 +7073,29 @@ def _ensure_mercado_store_tokens_table(cursor):
         "enabled",
         "TINYINT(1) NOT NULL DEFAULT 1 AFTER `display_name`",
     )
+    _ensure_column(
+        cursor,
+        "mercado_store_tokens",
+        "organization_key",
+        "VARCHAR(64) NULL AFTER `id`",
+    )
+    cursor.execute(
+        "UPDATE `mercado_store_tokens` SET `organization_key` = 'default' "
+        "WHERE `organization_key` IS NULL OR `organization_key` = ''"
+    )
+    # Store names are only unique inside a customer.  Keep the migration
+    # idempotent so existing single-tenant databases can be upgraded safely.
+    cursor.execute(
+        "SHOW INDEX FROM `mercado_store_tokens` "
+        "WHERE `Key_name` = 'uniq_mercado_store_display_name'"
+    )
+    if cursor.fetchone():
+        cursor.execute(
+            "ALTER TABLE `mercado_store_tokens` "
+            "DROP INDEX `uniq_mercado_store_display_name`, "
+            "ADD UNIQUE KEY `uniq_mercado_store_org_display_name` "
+            "(`organization_key`, `display_name`)"
+        )
     _ensure_column(
         cursor,
         "mercado_store_tokens",
@@ -8369,7 +8393,11 @@ def delete_mercado_application(application_id):
 
 
 def _mercado_token_record(record):
+    organization_key = str(record.get("organization_key") or "default").strip().lower()
+    if not re.fullmatch(r"[a-z0-9][a-z0-9_.-]{1,63}", organization_key):
+        raise ValueError("店铺授权的客户标识格式无效")
     normalized = {
+        "organization_key": organization_key,
         "display_name": str(record.get("display_name") or "").strip(),
         "meli_user_id": str(record.get("meli_user_id") or "").strip() or None,
         "nickname": str(record.get("nickname") or "").strip(),
@@ -8463,6 +8491,7 @@ def upsert_mercado_store_token(record):
                 raise ValueError("自定义名称已被另一个授权店铺使用，请更换名称")
 
             values = (
+                token["organization_key"],
                 token["display_name"],
                 token["meli_user_id"],
                 token["nickname"],
@@ -8485,7 +8514,8 @@ def upsert_mercado_store_token(record):
                 cursor.execute(
                     """
                     UPDATE `mercado_store_tokens`
-                    SET `display_name` = %s, `meli_user_id` = %s, `nickname` = %s,
+                    SET `organization_key` = %s, `display_name` = %s,
+                        `meli_user_id` = %s, `nickname` = %s,
                         `site_id` = %s, `email` = %s, `application_id` = %s,
                         `client_id` = %s, `access_token` = %s,
                         `refresh_token` = %s, `token_type` = %s, `scope` = %s,
@@ -8499,12 +8529,12 @@ def upsert_mercado_store_token(record):
                 cursor.execute(
                     """
                     INSERT INTO `mercado_store_tokens` (
-                        `display_name`, `meli_user_id`, `nickname`, `site_id`, `email`,
+                        `organization_key`, `display_name`, `meli_user_id`, `nickname`, `site_id`, `email`,
                         `application_id`, `client_id`,
                         `access_token`, `refresh_token`, `token_type`, `scope`, `expires_at`,
                         `last_verified_at`, `last_refreshed_at`, `last_error`, `created_at`,
                         `updated_at`
-                    ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                    ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                     """,
                     values + (now,),
                 )
@@ -8527,6 +8557,7 @@ def list_mercado_store_tokens():
             cursor.execute(
                 """
                 SELECT tokens.`id`, tokens.`display_name`, tokens.`enabled`, tokens.`meli_user_id`,
+                       tokens.`organization_key`,
                        tokens.`nickname`, tokens.`site_id`, tokens.`email`, tokens.`application_id`,
                        tokens.`client_id`, tokens.`token_type`, tokens.`scope`, tokens.`expires_at`,
                        tokens.`last_verified_at`, tokens.`last_refreshed_at`, tokens.`last_error`,
@@ -8558,6 +8589,7 @@ def get_mercado_store_token_summary(token_id):
             cursor.execute(
                 """
                 SELECT tokens.`id`, tokens.`display_name`, tokens.`enabled`, tokens.`meli_user_id`,
+                       tokens.`organization_key`,
                        tokens.`nickname`, tokens.`site_id`, tokens.`email`, tokens.`application_id`,
                        tokens.`client_id`, tokens.`token_type`, tokens.`scope`, tokens.`expires_at`,
                        tokens.`last_verified_at`, tokens.`last_refreshed_at`, tokens.`last_error`,
@@ -8594,6 +8626,33 @@ def get_mercado_store_token(token_id, include_disabled=False):
             if row and not include_disabled and not bool(row.get("enabled", 1)):
                 raise ValueError("该店铺已关闭，任何业务操作均不会执行")
             return row
+    finally:
+        connection.close()
+
+
+def get_mercado_store_tokens(token_ids, include_disabled=False):
+    """Return secret store-token records with one query for a refresh batch."""
+    normalized_ids = sorted({int(value) for value in token_ids or () if int(value) > 0})
+    if not normalized_ids:
+        return {}
+    placeholders = ", ".join(["%s"] * len(normalized_ids))
+    connection = pymysql.connect(**config)
+    try:
+        with connection.cursor() as cursor:
+            # The caller normally already loaded the token summaries, which
+            # performs schema initialization. Avoid repeating the expensive
+            # migration checks for every store in an analysis refresh.
+            cursor.execute(
+                f"SELECT * FROM `mercado_store_tokens` "
+                f"WHERE `id` IN ({placeholders})"
+                + ("" if include_disabled else " AND `enabled` = 1"),
+                tuple(normalized_ids),
+            )
+            return {
+                int(row.get("id")): row
+                for row in (cursor.fetchall() or [])
+                if row.get("id") is not None
+            }
     finally:
         connection.close()
 

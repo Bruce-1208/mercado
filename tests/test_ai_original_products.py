@@ -6,6 +6,7 @@ from pathlib import Path
 
 from erp.ai_original_products import (
     generate_marketplace_copy,
+    generate_ai_white_background_image,
     normalize_1688_product,
     create_white_background_image,
 )
@@ -36,6 +37,15 @@ def test_ai_copy_removes_declared_brand_and_limits_both_titles():
         "title_pt": "Acme Organizador portátil para mesa com acessórios e armazenamento",
         "description_es": "Descripción original en español.",
         "description_pt": "Descrição original em português.",
+        "attributes": [
+            {
+                "name_es": "Material",
+                "name_pt": "Material",
+                "value_name_es": "Plástico",
+                "value_name_pt": "Plástico resistente",
+            },
+            {"name": "Tipo de cierre", "value_name": "Tapa a presión"},
+        ],
         "brand_terms": ["Acme"],
     })
 
@@ -48,6 +58,8 @@ def test_ai_copy_removes_declared_brand_and_limits_both_titles():
     assert "acme" not in copy["title_pt"].lower()
     assert len(copy["title_es"]) <= 60
     assert len(copy["title_pt"]) <= 60
+    assert copy["attributes"][0]["name"] == "Material"
+    assert copy["attributes"][0]["value_name"] == "Plástico"
 
 
 def test_ai_copy_rejects_reused_original_description():
@@ -95,6 +107,36 @@ def test_white_background_image_is_square_and_white(tmp_path):
     assert url.endswith("/api/ai-original-products/images/1688-123456789-white.jpg")
 
 
+def test_ai_white_background_image_uses_image_model_callback(tmp_path):
+    Image = pytest.importorskip("PIL.Image")
+    source = Image.new("RGB", (320, 240), (30, 80, 180))
+    source_buffer = BytesIO()
+    source.save(source_buffer, format="PNG")
+    generated = Image.new("RGB", (512, 512), "white")
+    generated_buffer = BytesIO()
+    generated.save(generated_buffer, format="PNG")
+
+    class Response:
+        content = source_buffer.getvalue()
+
+        @staticmethod
+        def raise_for_status():
+            return None
+
+    path, url = generate_ai_white_background_image(
+        "https://cbu01.alicdn.com/source.png",
+        "123456789",
+        image_dir=tmp_path,
+        http_get=lambda *_args, **_kwargs: Response(),
+        image_generate=lambda **_kwargs: generated_buffer.getvalue(),
+    )
+    with Image.open(path) as output:
+        assert output.width == output.height
+        assert output.width >= 1024
+        assert output.getpixel((0, 0)) == (255, 255, 255)
+    assert url.endswith("/api/ai-original-products/images/1688-123456789-ai-white.jpg")
+
+
 def _ai_row():
     prepared = {
         "status": "completed",
@@ -102,7 +144,22 @@ def _ai_row():
         "title_pt": "Organizador portátil para mesa",
         "description_es": "Nueva descripción en español.",
         "description_pt": "Nova descrição em português.",
-        "main_image_url": "http://127.0.0.1:5000/api/ai-original-products/images/1688-123-white.jpg",
+        "image_generation_method": "ai_image_edit",
+        "attributes": [
+            {
+                "id": "MATERIAL",
+                "name": "Material",
+                "name_es": "Material",
+                "name_pt": "Material",
+                "value_name": "Plástico",
+                "value_name_es": "Plástico",
+                "value_name_pt": "Plástico resistente",
+            },
+            {"id": "COLOR", "name": "Color", "value_name": "Azul"},
+            {"id": "BRAND", "value_name": "Generic"},
+            {"id": "ITEM_CONDITION", "value_name": "New"},
+        ],
+        "main_image_url": "http://127.0.0.1:5000/api/ai-original-products/images/1688-123-ai-white.jpg",
     }
     return {
         "id": 8,
@@ -136,6 +193,8 @@ def test_publish_preparation_uses_portuguese_only_for_brazil():
     assert mexico_description["plain_text"].startswith("Nueva")
     assert brazil_source["title"].startswith("Organizador portátil para")
     assert brazil_description["plain_text"].startswith("Nova")
+    assert {item["id"] for item in mexico_source["attributes"]} >= {"MATERIAL", "COLOR", "BRAND", "ITEM_CONDITION"}
+    assert next(item for item in brazil_source["attributes"] if item["id"] == "MATERIAL")["value_name"] == "Plástico resistente"
     assert product_publish_issues(row) == []
 
 
@@ -149,7 +208,19 @@ def test_ai_original_publish_requires_completed_copy_and_white_image():
     issues = product_publish_issues(row)
 
     assert "AI 原创任务尚未完成" in issues
-    assert "首图尚未完成白底处理" in issues
+    assert "首图尚未完成 AI 白底生成" in issues
+
+
+def test_ai_original_publish_requires_generated_listing_attributes():
+    row = _ai_row()
+    snapshot = json.loads(row["source_snapshot_json"])
+    snapshot["ai_original"]["attributes"] = [
+        {"id": "BRAND", "value_name": "Generic"},
+        {"id": "ITEM_CONDITION", "value_name": "New"},
+    ]
+    row["source_snapshot_json"] = json.dumps(snapshot)
+
+    assert "AI 商品属性尚未生成" in product_publish_issues(row)
 
 
 def test_workbench_exposes_ai_original_module_and_batch_actions():
@@ -159,7 +230,25 @@ def test_workbench_exposes_ai_original_module_and_batch_actions():
 
     assert 'data-tab="ai-original-products"' in template
     assert 'id="tab-ai-original-products"' in template
+    assert "1688 原始资料" in script
+    assert "AI 美客多刊登稿" in script
+    assert "renderAiOriginalAttributes" in script
+    assert 'id="ai-original-image-base-url"' in template
+    assert 'id="ai-original-image-model"' in template
+    assert 'id="ai-original-image-api-key"' in template
     assert "执行所选 AI 任务" in template
     assert "上架所选到对应店铺" in template
     assert 'fetch("/api/ai-original-products/process"' in script
     assert 'fetch("/api/mercado-products/publish"' in script
+
+
+def test_workbench_exposes_1688_product_area_for_collector_records():
+    root = Path(__file__).resolve().parents[1]
+    template = (root / "bit" / "templates" / "index.html").read_text(encoding="utf-8")
+    script = (root / "bit" / "static" / "1688-products.js").read_text(encoding="utf-8")
+
+    assert 'data-tab="1688-products"' in template
+    assert 'id="tab-1688-products"' in template
+    assert "1688产品区" in template
+    assert 'fetch(`/api/1688-products?' in script
+    assert "products1688OpenDetail" in script

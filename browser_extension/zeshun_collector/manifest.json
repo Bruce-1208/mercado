@@ -1,15 +1,16 @@
 {
   "manifest_version": 3,
   "name": "泽顺插件",
-  "version": "1.3.0",
-  "description": "在 Mercado Libre、1688 与智赢产品页采集商品，并同步采购订单物流号到泽顺控制台。",
+  "version": "1.5.5",
+  "description": "采集 Mercado Libre Internacional、1688 与智赢商品，启动 AI 核重核价，并同步采购订单物流号。",
   "permissions": [
     "alarms",
     "contextMenus",
     "cookies",
     "scripting",
     "storage",
-    "tabs"
+    "tabs",
+    "windows"
   ],
   "host_permissions": [
     "http://127.0.0.1/*",
@@ -40,8 +41,20 @@
     "service_worker": "background.js"
   },
   "action": {
-    "default_title": "泽顺商品采集助手",
-    "default_popup": "popup.html"
+    "default_title": "泽顺美客多采集助手",
+    "default_popup": "popup.html",
+    "default_icon": {
+      "16": "icons/icon16.png",
+      "32": "icons/icon32.png",
+      "48": "icons/icon48.png",
+      "128": "icons/icon128.png"
+    }
+  },
+  "icons": {
+    "16": "icons/icon16.png",
+    "32": "icons/icon32.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
   },
   "options_page": "options.html",
   "content_scripts": [
@@ -81,6 +94,7 @@
         "https://meli.zying.net/*"
       ],
       "js": [
+        "zying-page.js",
         "content-zying.js"
       ],
       "run_at": "document_idle"

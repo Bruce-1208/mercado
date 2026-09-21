@@ -1313,6 +1313,8 @@ def switch_to_ai_chat_frame(driver, require_input=False, max_depth=2):
     """递归切换到 AI 客服 iframe。
 
     require_input=True 时，会进一步确认 iframe 内存在聊天输入框，避免误进帮助页顶部搜索框。
+    某些店铺的灰度页面会把聊天 iframe 再包进一个没有 AI 特征的外层 iframe，
+    因此每一层都必须保持相对于当前 document 的 Selenium frame 上下文。
     """
     reset_expired_ai_iframe(driver)
     driver.switch_to.default_content()
@@ -1336,7 +1338,6 @@ def switch_to_ai_chat_frame(driver, require_input=False, max_depth=2):
                 continue
 
         for _, frame, info in sorted(frame_infos, key=lambda item: item[0], reverse=True):
-            driver.switch_to.parent_frame() if depth > 0 else driver.switch_to.default_content()
             try:
                 driver.switch_to.frame(frame)
             except Exception:
@@ -1345,15 +1346,19 @@ def switch_to_ai_chat_frame(driver, require_input=False, max_depth=2):
             if is_ai_frame_info(info):
                 if not require_input or find_chat_input(driver, timeout=2, allow_default_content=False):
                     return True
+            elif find_chat_input(driver, timeout=0.5, allow_default_content=False):
+                # 少数账号返回 about:blank、随机 title/id 的聊天 iframe。只有在内部
+                # 找到严格匹配的聊天输入框时才接受，避免把帮助页搜索框当成 AI 客服。
+                return True
 
             if depth < max_depth and search_frames(depth + 1):
                 return True
 
-        if depth > 0:
             try:
                 driver.switch_to.parent_frame()
             except Exception:
                 driver.switch_to.default_content()
+                return False
         return False
 
     try:

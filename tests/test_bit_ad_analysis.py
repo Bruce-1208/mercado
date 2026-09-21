@@ -101,6 +101,17 @@ def _install_token_fakes(monkeypatch, tmp_path):
         lambda token_id: {"id": token_id, "display_name": "测试店铺", "access_token": "token"},
     )
     monkeypatch.setattr(
+        "bit.bit_mysql.get_mercado_store_tokens",
+        lambda token_ids: {
+            int(token_id): {
+                "id": int(token_id),
+                "display_name": "测试店铺",
+                "access_token": "token",
+            }
+            for token_id in token_ids
+        },
+    )
+    monkeypatch.setattr(
         "bit.bit_store_link_sync._client_and_token",
         lambda token: (FakeAdsClient(), token),
     )
@@ -285,5 +296,6 @@ def test_ad_analysis_module_is_present_in_workbench_template():
     assert 'id="ad-analysis-group"' in source
     assert 'id="ad-analysis-store"' in source
     assert "默认展示上次更新的全部数据" in source
+    assert 'id="ad-analysis-load"' in source and ">更新数据</button>" in source
     assert 'query.append("refresh_token_ids"' in source
     assert "loadAdAnalysis" in source

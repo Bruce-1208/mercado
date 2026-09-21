@@ -9300,10 +9300,12 @@
             .inventory-selected-product button { grid-column: 1 / -1; }
         }
     </style>
-    <link rel="stylesheet" href="{{ url_for('static', filename='console-ui.css') }}?v=20260915">
+    <link rel="stylesheet" href="{{ url_for('static', filename='console-ui.css') }}?v=20260921-align1">
     <link rel="stylesheet" href="{{ url_for('static', filename='ai-original-products.css') }}?v=20260920">
+    <link rel="stylesheet" href="{{ url_for('static', filename='1688-products.css') }}?v=20260920">
     <script src="{{ url_for('static', filename='console-ui.js') }}?v=20260915"></script>
     <script defer src="{{ url_for('static', filename='ai-original-products.js') }}?v=20260920"></script>
+    <script defer src="{{ url_for('static', filename='1688-products.js') }}?v=20260920"></script>
     <style>
         .ai-video-layout { display: grid; grid-template-columns: minmax(0, 1.55fr) minmax(300px, .75fr); gap: 18px; align-items: start; }
         .ai-video-panel { padding: 20px; border: 1px solid var(--line); border-radius: 16px; background: #fff; }
@@ -9317,6 +9319,9 @@
         .ai-video-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 12px 0; }
         #tab-ai-video a.secondary { display: inline-flex; align-items: center; justify-content: center; padding: 7px 10px; border-radius: 7px; text-decoration: none; }
         .ai-video-toolbar .hint { margin-left: auto; color: #7a8798; font-size: 12px; }
+        .ai-video-url-row { display: grid; grid-template-columns: 112px minmax(0, 1fr) auto; gap: 8px; margin: 10px 0 12px; }
+        .ai-video-url-row input, .ai-video-url-row select { min-width: 0; box-sizing: border-box; }
+        .ai-video-url-hint { margin: -4px 0 12px; color: #7a8798; font-size: 12px; }
         .ai-video-assets { display: grid; grid-template-columns: repeat(auto-fill, minmax(142px, 1fr)); gap: 10px; min-height: 24px; }
         .ai-video-asset { position: relative; overflow: hidden; border: 1px solid #dde5ef; border-radius: 12px; background: #f7f9fc; cursor: grab; }
         .ai-video-asset.dragging { opacity: .42; }
@@ -9380,6 +9385,9 @@
         .ai-video-picker-copy strong, .ai-video-picker-copy span { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
         .ai-video-picker-copy strong { color: #2c394c; font-size: 13px; }
         .ai-video-picker-copy span { margin-top: 5px; color: #7c8999; font-size: 11px; }
+        .ai-video-publish-log { display: inline-block; margin-top: 5px; font-size: 11px; color: #6f7d90; }
+        .ai-video-publish-log.failed { color: #c53b3b; }
+        .ai-video-publish-log.accepted { color: #128257; }
         @media (max-width: 920px) { .ai-video-layout { grid-template-columns: 1fr; } }
         @media (max-width: 560px) {
             .ai-video-cost { grid-template-columns: 1fr; }
@@ -9421,6 +9429,7 @@
         <button class="workspace-tab" type="button" data-tab="orders" onclick="switchTab('orders')">订单管理</button>
         <button class="workspace-tab" type="button" data-tab="inventory" data-permission="inventory.view" onclick="switchTab('inventory')">库存管理</button>
         <button class="workspace-tab" type="button" data-tab="mercado-collection" onclick="switchTab('mercado-collection')">商品采集</button>
+        <button class="workspace-tab" type="button" data-tab="1688-products" onclick="switchTab('1688-products')">1688产品区</button>
         <button class="workspace-tab" type="button" data-tab="ai-original-products" onclick="switchTab('ai-original-products')">AI原创产品</button>
         <button class="workspace-tab" type="button" data-tab="mercado-products" onclick="switchTab('mercado-products')">产品列表</button>
         <button class="workspace-tab" type="button" data-tab="store-tokens" onclick="switchTab('store-tokens')">店铺授权</button>
@@ -9440,6 +9449,7 @@
 
                 <p class="nav-title">商品中心</p>
                 <button class="tab-button" type="button" data-tab="mercado-collection" data-icon="◇" onclick="switchTab('mercado-collection')"><span class="nav-label">商品采集</span></button>
+                <button class="tab-button" type="button" data-tab="1688-products" data-icon="1688" onclick="switchTab('1688-products')"><span class="nav-label">1688产品区</span></button>
                 <button class="tab-button" type="button" data-tab="ai-original-products" data-icon="AI" onclick="switchTab('ai-original-products')"><span class="nav-label">AI原创产品</span></button>
                 <button class="tab-button" type="button" data-tab="ai-video" data-icon="▶" onclick="switchTab('ai-video')"><span class="nav-label">AI视频生成</span></button>
                 <button class="tab-button" type="button" data-tab="mercado-products" data-icon="▦" onclick="switchTab('mercado-products')"><span class="nav-label">产品列表</span></button>
@@ -10088,12 +10098,75 @@
                 </dialog>
             </div>
 
+            <div class="tab-page products-1688-page" id="tab-1688-products">
+                <div class="tab-heading products-1688-heading">
+                    <div class="products-1688-heading-copy">
+                        <span class="ai-original-eyebrow">1688 PRODUCT CENTER</span>
+                        <h2>1688产品区</h2>
+                        <p>按智赢产品库的结构整理泽顺插件采集的 1688 商品：编号、主图、标题、采购价、规格属性、重量、包装尺寸与采集时间集中查看，点开商品可查看完整原始资料。</p>
+                    </div>
+                    <div class="products-1688-heading-actions">
+                        <a class="primary" href="/api/browser-extension/download" download>下载泽顺插件</a>
+                        <button class="secondary" type="button" onclick="window.open('https://www.1688.com/', '_blank', 'noopener')">打开 1688</button>
+                        <button class="secondary" type="button" onclick="load1688Products()">刷新数据</button>
+                    </div>
+                </div>
+
+                <div class="p1688-summary-grid" aria-label="1688 产品统计">
+                    <div class="p1688-summary-card"><small>全部产品</small><strong id="products-1688-total-value" data-total="0">0</strong><span>泽顺插件采集入库</span></div>
+                    <div class="p1688-summary-card accent"><small>今日采集</small><strong id="products-1688-today">0</strong><span>按采集时间统计</span></div>
+                    <div class="p1688-summary-card"><small>待处理</small><strong id="products-1688-pending">0</strong><span>可转入 AI 原创工作流</span></div>
+                    <div class="p1688-summary-card"><small>AI 已完成</small><strong id="products-1688-completed">0</strong><span>已有 AI 刊登稿</span></div>
+                </div>
+
+                <section class="panel p1688-toolbar">
+                    <div class="p1688-toolbar-row">
+                        <label class="p1688-field search"><span>产品搜索</span><input id="products-1688-search" type="search" placeholder="输入 1688 商品编号或标题"></label>
+                        <label class="p1688-field"><span>AI 状态</span><select id="products-1688-status-filter"><option value="">全部状态</option><option value="pending">待处理</option><option value="processing">AI处理中</option><option value="completed">AI已完成</option><option value="failed">处理失败</option></select></label>
+                        <label class="p1688-field"><span>采购价最低（CNY）</span><input id="products-1688-price-min" type="number" min="0" step="0.01" placeholder="不限"></label>
+                        <label class="p1688-field"><span>采购价最高（CNY）</span><input id="products-1688-price-max" type="number" min="0" step="0.01" placeholder="不限"></label>
+                        <button class="primary" type="button" onclick="load1688Products()">查询</button>
+                        <button class="secondary" type="button" onclick="document.getElementById('products-1688-search').value='';document.getElementById('products-1688-status-filter').value='';document.getElementById('products-1688-price-min').value='';document.getElementById('products-1688-price-max').value='';load1688Products()">重置</button>
+                    </div>
+                    <div class="p1688-toolbar-row">
+                        <label class="p1688-field"><span>采集开始日期</span><input id="products-1688-date-from" type="date"></label>
+                        <label class="p1688-field"><span>采集结束日期</span><input id="products-1688-date-to" type="date"></label>
+                        <span class="p1688-toolbar-note" id="products-1688-status">等待加载 1688 商品</span>
+                    </div>
+                </section>
+
+                <section class="panel" style="padding:0;overflow:hidden">
+                    <div class="p1688-batch-bar">
+                        <label><input id="products-1688-select-all" type="checkbox" onchange="products1688ToggleAll(this.checked)"> 全选当前页</label>
+                        <strong id="products-1688-selection">已选择 0 件</strong>
+                        <button class="secondary" type="button" onclick="products1688SendSelectedToWorkflow()">进入 AI 原创工作流</button>
+                        <span id="products-1688-list-summary">当前 0 件 · 共 0 件</span>
+                    </div>
+                    <div class="p1688-table-wrap">
+                        <table class="p1688-table">
+                            <colgroup><col style="width:40px"><col style="min-width:360px"><col style="width:130px"><col style="width:120px"><col style="width:110px"><col style="width:105px"><col style="width:130px"><col style="width:105px"><col style="width:105px"><col style="width:145px"><col style="width:170px"></colgroup>
+                            <thead><tr><th class="p1688-check-cell">选</th><th>商品</th><th>产品分类</th><th>采购价</th><th>净收益</th><th>包装毛重</th><th>包装尺寸</th><th>审核状态</th><th>AI 状态</th><th>采集时间</th><th>操作</th></tr></thead>
+                            <tbody id="products-1688-body"><tr><td class="p1688-empty" colspan="11">打开模块后加载泽顺插件采集的 1688 商品</td></tr></tbody>
+                        </table>
+                    </div>
+                    <div class="p1688-pagination">
+                        <span>数据以泽顺插件上报的 1688 原始资料为准</span>
+                        <div class="p1688-pagination-actions"><button class="secondary" id="products-1688-prev" type="button" onclick="products1688PageMove(-1)">‹</button><span id="products-1688-page-indicator">1 / 1</span><button class="secondary" id="products-1688-next" type="button" onclick="products1688PageMove(1)">›</button></div>
+                    </div>
+                </section>
+
+                <dialog class="p1688-dialog" id="products-1688-detail-dialog" onclick="if(event.target === this) products1688CloseDetail()">
+                    <div class="p1688-dialog-head"><div><span class="ai-original-eyebrow">1688 SOURCE SNAPSHOT</span><h3 id="products-1688-detail-title">商品详情</h3><p id="products-1688-detail-subtitle">—</p></div><button class="p1688-dialog-close" type="button" aria-label="关闭" onclick="products1688CloseDetail()">×</button></div>
+                    <div class="p1688-dialog-body" id="products-1688-detail-content"></div>
+                </dialog>
+            </div>
+
             <div class="tab-page ai-original-page" id="tab-ai-original-products">
                 <div class="tab-heading ai-original-heading">
                     <div>
                         <span class="ai-original-eyebrow">1688 → MERCADO LIBRE</span>
                         <h2>AI原创产品</h2>
-                        <p>通过泽顺插件采集 1688 商品，批量生成白底首图、无品牌双语标题和全新详情，再上架到对应店铺</p>
+                        <p>分开保存 1688 原始资料和 AI 美客多刊登稿：属性、双语标题、双语详情与白底主图全部生成后，按 Mercado Libre 刊登规则校验再上架</p>
                     </div>
                     <div class="ai-original-heading-actions">
                         <a class="primary ai-original-plugin-download" href="/api/browser-extension/download" download>下载泽顺插件</a>
@@ -10103,7 +10176,7 @@
 
                 <section class="panel ai-original-toolbar">
                     <div class="ai-original-steps">
-                        <span><b>1</b>插件采集 1688</span><i>→</i><span><b>2</b>多选执行 AI</span><i>→</i><span><b>3</b>补齐刊登参数</span><i>→</i><span><b>4</b>多选上架</span>
+                        <span><b>1</b>保存 1688 原始资料</span><i>→</i><span><b>2</b>生成 AI 刊登稿</span><i>→</i><span><b>3</b>补齐重量与类目</span><i>→</i><span><b>4</b>按站点直接上架</span>
                     </div>
                     <div class="ai-original-controls">
                         <label><span>搜索</span><input id="ai-original-search" type="search" placeholder="1688 编号或标题"></label>
@@ -10114,6 +10187,9 @@
                         <label><span>模型地址</span><input id="ai-original-base-url" type="url" value="https://api.deepseek.com" placeholder="OpenAI 兼容 API 地址"></label>
                         <label><span>模型</span><input id="ai-original-model" type="text" value="deepseek-chat" maxlength="128"></label>
                         <label class="wide"><span>本次任务 Token</span><input id="ai-original-api-key" type="password" autocomplete="off" placeholder="不保存；已配置环境变量时可留空"></label>
+                        <label><span>AI 图片地址</span><input id="ai-original-image-base-url" type="url" value="https://api.openai.com/v1" placeholder="支持 /images/edits"></label>
+                        <label><span>AI 图片模型</span><input id="ai-original-image-model" type="text" value="gpt-image-1" maxlength="128"></label>
+                        <label class="wide"><span>AI 图片 Token</span><input id="ai-original-image-api-key" type="password" autocomplete="off" placeholder="用于生成白底主图，不保存"></label>
                         <label><span>并发</span><input id="ai-original-workers" type="number" min="1" max="6" value="3"></label>
                         <button class="primary" id="ai-original-process" type="button" onclick="processSelectedAiOriginalProducts()" disabled>执行所选 AI 任务</button>
                     </div>
@@ -10130,7 +10206,7 @@
                 </section>
 
                 <section class="panel ai-original-publish-panel">
-                    <div><span class="ai-original-eyebrow">PUBLISH</span><h3>上架所选已完成产品</h3><p>标题将按站点自动选择：巴西使用葡萄牙语，其余站点使用西班牙语。</p></div>
+                    <div><span class="ai-original-eyebrow">PUBLISH</span><h3>上架所选 AI 美客多刊登稿</h3><p>只有 AI 属性、双语标题、双语详情、白底主图、重量、类目和净收益均通过校验，才允许直接上架；巴西使用葡萄牙语，其余站点使用西班牙语。</p></div>
                     <label><span>Global Selling 店铺（可多选）</span><select id="ai-original-stores" multiple size="4"></select></label>
                     <fieldset><legend>目标站点（可多选）</legend><label><input type="checkbox" name="ai-original-site" value="MLM" checked> 墨西哥</label><label><input type="checkbox" name="ai-original-site" value="MLB"> 巴西</label><label><input type="checkbox" name="ai-original-site" value="MLA"> 阿根廷</label><label><input type="checkbox" name="ai-original-site" value="MLC"> 智利</label><label><input type="checkbox" name="ai-original-site" value="MCO"> 哥伦比亚</label><label><input type="checkbox" name="ai-original-site" value="MLU"> 乌拉圭</label></fieldset>
                     <label><span>库存</span><input id="ai-original-quantity" type="number" min="1" max="9999" value="500"></label>
@@ -10163,7 +10239,7 @@
                         <div class="collector-plugin-copy">
                             <div class="collector-plugin-title-line">
                                 <span class="market-section-kicker">ZESHUN COLLECTOR</span>
-                                <span class="collector-plugin-version">Chrome / Edge · v1.2.0</span>
+                                <span class="collector-plugin-version">Chrome / Edge · v1.5.2</span>
                             </div>
                             <h3>在商品页面直接完成采集</h3>
                             <p>采集入口已统一到泽顺插件。打开 Mercado Libre、1688 或已登录的智赢产品页，即可完成单品或批量采集。</p>
@@ -10193,7 +10269,7 @@
                         </div>
                         <div class="collector-capability-card source-1688">
                             <span class="collector-capability-icon">1688</span>
-                            <div><strong>1688 货源商品</strong><p>采集主图、属性、详情及页面可识别重量，进入 AI 原创产品工作流。</p><button class="link-button" type="button" onclick="switchTab('ai-original-products')">前往 AI 原创产品 →</button></div>
+                            <div><strong>1688 货源商品</strong><p>采集主图、属性、详情及页面可识别重量，先进入 1688 产品区，再按需进入 AI 原创产品工作流。</p><button class="link-button" type="button" onclick="switchTab('1688-products')">前往 1688 产品区 →</button></div>
                         </div>
                     </div>
                 </section>
@@ -11589,14 +11665,23 @@
                         <div class="ai-video-dropzone" id="ai-video-dropzone" tabindex="0" role="button" aria-label="拖拽、选择或粘贴图片和视频">
                             <span class="ai-video-drop-icon">＋</span>
                             <strong>拖拽图片 / 视频到这里</strong>
-                            <small>或按 Ctrl + V 粘贴剪贴板图片 · 图片 ≤ 20 MB · 视频 MP4/MOV、单段 1–15 秒且 ≤ 100 MB</small>
+                            <small>或按 Ctrl + V 粘贴剪贴板图片 · 图片 ≤ 20 MB · AI 参考视频支持 MP4/MOV · 本地转格式另支持 AVI/MPEG/MKV/WEBM</small>
                         </div>
-                        <input id="ai-video-file-input" type="file" accept="image/jpeg,image/png,image/webp,image/bmp,video/mp4,video/quicktime" multiple hidden>
+                        <input id="ai-video-file-input" type="file" accept="image/jpeg,image/png,image/webp,image/bmp,video/mp4,video/quicktime,video/x-msvideo,video/mpeg,video/x-matroska,video/webm,.mkv" multiple hidden>
                         <div class="ai-video-toolbar">
                             <button class="secondary" type="button" onclick="document.getElementById('ai-video-file-input').click()">选择素材</button>
                             <button class="secondary" type="button" onclick="clearAiVideoAssets()">清空</button>
                             <span class="hint" id="ai-video-asset-summary">尚未添加素材</span>
                         </div>
+                        <div class="ai-video-url-row">
+                            <select id="ai-video-asset-url-kind" aria-label="链接素材类型">
+                                <option value="image">图片链接</option>
+                                <option value="video">视频链接</option>
+                            </select>
+                            <input id="ai-video-asset-url" type="url" inputmode="url" placeholder="粘贴图片或视频链接（http/https）" onkeydown="if(event.key === 'Enter') { event.preventDefault(); addAiVideoAssetUrl(); }">
+                            <button class="secondary" type="button" onclick="addAiVideoAssetUrl()">添加链接</button>
+                        </div>
+                        <p class="ai-video-url-hint">视频链接请先选择“视频链接”；服务端会下载并校验链接内容后再提交。</p>
                         <div class="ai-video-assets" id="ai-video-assets" aria-live="polite"></div>
                     </section>
 
@@ -11623,6 +11708,10 @@
                             <textarea id="ai-video-prompt" rows="3" maxlength="1200" placeholder="例如：重点展示折叠方式和收纳体积；不要改变商品颜色。"></textarea>
                         </div>
                         <div class="ai-video-field">
+                            <label><input id="ai-video-local-transcode" type="checkbox" onchange="updateAiVideoMode()"> 仅转换视频格式，不调用 AI</label>
+                            <small>适合内容已完成、只需转成兼容 MP4 的视频；仅支持单个已符合 9:16、10–60 秒的视频。</small>
+                        </div>
+                        <div class="ai-video-field">
                             <label for="ai-video-duration">视频时长</label>
                             <select id="ai-video-duration">
                                 <option value="10" selected>10 秒 · 最省生成额度</option>
@@ -11641,6 +11730,7 @@
                         <ul class="ai-video-rules">
                             <li>默认关闭提示词二次扩写，减少额外 token 与等待</li>
                             <li>相同素材和参数自动复用，不重复扣生成额度</li>
+                            <li>仅转换格式使用服务器 FFmpeg，不需要模型 Token、不产生模型费用</li>
                             <li>自动禁止价格、促销、联系方式、平台截图和大水印</li>
                             <li>成品固定 MP4、10–30 秒、720P 竖屏且带声音</li>
                         </ul>
@@ -11649,7 +11739,7 @@
 
                 <section class="panel ai-video-library">
                     <div class="ai-video-library-head">
-                        <div><h3>生成任务与成品库</h3><p class="market-metric-note">模型通常需要 1–5 分钟；完成后自动保存，不依赖临时下载链接。</p></div>
+                        <div><h3>生成任务与成品库</h3><p class="market-metric-note">AI 通常需要 1–5 分钟，本地格式转换通常更快；成品完成后自动保存。</p></div>
                         <span class="market-status-tag" id="ai-video-provider-state">检查服务中</span>
                     </div>
                     <div class="ai-video-jobs" id="ai-video-jobs">
@@ -11659,17 +11749,22 @@
 
                 <dialog class="ai-video-dialog" id="ai-video-settings-dialog">
                     <div class="ai-video-dialog-head">
-                        <div><h3>视频模型 Token 配置</h3><p>配置保存在服务端用户数据目录，页面只显示密钥掩码。</p></div>
+                        <div><h3>视频模型 Token 配置</h3><p>配置任意一个模型即可使用；两者都配置时，Seedance 2.5 失败后自动切换 Wan 3.0。</p></div>
                         <button class="secondary" type="button" onclick="document.getElementById('ai-video-settings-dialog').close()">关闭</button>
                     </div>
                     <div class="ai-video-dialog-body">
-                        <div class="ai-video-field"><label for="ai-video-api-key">百炼 API Key</label><input id="ai-video-api-key" type="password" autocomplete="new-password" placeholder="输入新 Token；留空则保留现有 Token"></div>
+                        <div class="ai-video-field"><label for="ai-video-seedance-api-key">主模型 · 火山方舟 API Key</label><input id="ai-video-seedance-api-key" type="password" autocomplete="new-password" placeholder="输入新 Token；留空则保留现有 Token"></div>
                         <div class="ai-video-dialog-grid">
-                            <div class="ai-video-field"><label for="ai-video-workspace-id">业务空间 ID</label><input id="ai-video-workspace-id" type="text" placeholder="例如 ws-xxxxxxxx"></div>
-                            <div class="ai-video-field"><label for="ai-video-region">地域</label><select id="ai-video-region"><option value="cn-beijing">北京</option><option value="ap-southeast-1">新加坡</option><option value="ap-northeast-1">东京</option><option value="eu-central-1">法兰克福</option><option value="us-east-1">弗吉尼亚</option><option value="cn-hongkong">中国香港</option></select></div>
+                            <div class="ai-video-field"><label for="ai-video-seedance-model">主模型</label><input id="ai-video-seedance-model" type="text" value="doubao-seedance-2-5-260628" readonly></div>
+                            <div class="ai-video-field"><label for="ai-video-seedance-region">主模型地域</label><select id="ai-video-seedance-region"><option value="cn-beijing">北京</option></select></div>
+                        </div>
+                        <div class="ai-video-field"><label for="ai-video-wan-api-key">备用模型 · 阿里云百炼 API Key</label><input id="ai-video-wan-api-key" type="password" autocomplete="new-password" placeholder="输入新 Token；留空则保留现有 Token"></div>
+                        <div class="ai-video-dialog-grid">
+                            <div class="ai-video-field"><label for="ai-video-wan-workspace-id">备用业务空间 ID</label><input id="ai-video-wan-workspace-id" type="text" placeholder="例如 ws-xxxxxxxx"></div>
+                            <div class="ai-video-field"><label for="ai-video-wan-region">备用模型地域</label><select id="ai-video-wan-region"><option value="cn-beijing">北京</option><option value="ap-southeast-1">新加坡</option><option value="ap-northeast-1">东京</option><option value="eu-central-1">法兰克福</option><option value="us-east-1">弗吉尼亚</option><option value="cn-hongkong">中国香港</option></select></div>
                         </div>
                         <div class="ai-video-dialog-grid">
-                            <div class="ai-video-field"><label for="ai-video-model">生成模型</label><select id="ai-video-model"><option value="wan3.0-video-prime">万相 3.0 高速版</option><option value="wan3.0-video">万相 3.0 标准版</option></select></div>
+                            <div class="ai-video-field"><label for="ai-video-wan-model">备用模型</label><select id="ai-video-wan-model"><option value="wan3.0-video-prime">万相 3.0 高速版</option><option value="wan3.0-video">万相 3.0 标准版</option></select></div>
                             <div class="ai-video-field"><label for="ai-video-public-base">工作台公网 HTTPS 地址</label><input id="ai-video-public-base" type="url" placeholder="https://zeshun.cc.cd"></div>
                         </div>
                         <p class="ai-video-message" id="ai-video-settings-message"></p>
@@ -11855,7 +11950,7 @@
                         <p>汇总所有已授权广告账户和商品链接的实际开销、流量、成交与回报</p>
                     </div>
                     <div class="header-actions">
-                        <button class="primary" id="ad-analysis-load" type="button" onclick="loadAdAnalysis(true)">刷新筛选数据</button>
+                        <button class="primary" id="ad-analysis-load" type="button" onclick="loadAdAnalysis(true)">更新数据</button>
                     </div>
                 </div>
 
@@ -14697,6 +14792,9 @@
             }
             if (tabName === "mercado-collection") {
                 mountMercadoListModule("collection");
+            }
+            if (tabName === "1688-products") {
+                load1688Products();
             }
             if (tabName === "ai-original-products") {
                 loadAiOriginalProducts();
@@ -22905,7 +23003,7 @@
                     ? `；${errors.length} 个账户读取失败：${errors.slice(0, 3).map(row => `${row.store_name || row.site_id || "账户"}（${row.message || "未知错误"}）`).join("、")}`
                     : "";
                 if (!adAnalysisData.snapshot_available) {
-                    adAnalysisMessage.textContent = "还没有广告分析数据，请选择更新日期和范围后点击“刷新筛选数据”。";
+                    adAnalysisMessage.textContent = "还没有广告分析数据，请选择更新日期和范围后点击“更新数据”。";
                 } else {
                     const sourceLabel = force ? "已刷新" : "已展示上次更新的";
                     const partialLabel = adAnalysisData.partial_snapshot ? "（本次日期与全量快照不同，仅展示本次刷新范围）" : "";
@@ -23137,7 +23235,7 @@
 
         function aiVideoInspectFile(file) {
             return new Promise(resolve => {
-                const isVideo = file.type.startsWith("video/") || /\.(mp4|mov)$/i.test(file.name);
+                const isVideo = file.type.startsWith("video/") || /\.(mp4|mov|avi|mpe?g|mkv|webm)$/i.test(file.name);
                 const url = URL.createObjectURL(file);
                 const element = document.createElement(isVideo ? "video" : "img");
                 const finish = data => { URL.revokeObjectURL(url); resolve(data || {}); };
@@ -23157,6 +23255,7 @@
         async function addAiVideoFiles(fileList) {
             const incoming = Array.from(fileList || []);
             if (!incoming.length) return;
+            const localMode = aiVideoLocalTranscodeEnabled();
             let added = 0;
             const warnings = [];
             for (const file of incoming) {
@@ -23165,16 +23264,24 @@
                     break;
                 }
                 const isImage = file.type.startsWith("image/") || /\.(jpe?g|png|bmp|webp)$/i.test(file.name);
-                const isVideo = file.type.startsWith("video/") || /\.(mp4|mov)$/i.test(file.name);
+                const isVideo = file.type.startsWith("video/") || /\.(mp4|mov|avi|mpe?g|mkv|webm)$/i.test(file.name);
                 if (!isImage && !isVideo) {
                     warnings.push(`${file.name} 格式不支持`);
+                    continue;
+                }
+                if (localMode && (!isVideo || aiVideoAssets.length > 0 || added > 0)) {
+                    warnings.push("仅转换格式模式只能添加一个视频");
+                    continue;
+                }
+                if (!localMode && isVideo && !/\.(mp4|mov)$/i.test(file.name)) {
+                    warnings.push(`${file.name} 仅可用于“仅转换视频格式”模式`);
                     continue;
                 }
                 if ((isImage && file.size > 20 * 1024 * 1024) || (isVideo && file.size > 100 * 1024 * 1024) || file.size <= 0) {
                     warnings.push(`${file.name} 文件大小不符合要求`);
                     continue;
                 }
-                const duplicate = aiVideoAssets.some(item => item.file.name === file.name && item.file.size === file.size && item.file.lastModified === file.lastModified);
+                const duplicate = aiVideoAssets.some(item => item.source !== "url" && item.file && item.file.name === file.name && item.file.size === file.size && item.file.lastModified === file.lastModified);
                 if (duplicate) continue;
                 const imageCount = aiVideoAssets.filter(item => item.kind === "image").length;
                 const videoCount = aiVideoAssets.filter(item => item.kind === "video").length;
@@ -23191,11 +23298,15 @@
                     warnings.push(`${file.name} 单边分辨率需至少 240px`);
                     continue;
                 }
-                if (isVideo && metadata.duration && (metadata.duration < 1 || metadata.duration > 15.05)) {
-                    warnings.push(`${file.name} 时长需为 1–15 秒`);
+                if (isVideo && metadata.duration && localMode && (metadata.duration < 9.5 || metadata.duration > 60.5)) {
+                    warnings.push(`${file.name} 本地转换要求时长为 10–60 秒`);
                     continue;
                 }
-                if (isVideo && metadata.duration) {
+                if (isVideo && metadata.duration && !localMode && (metadata.duration < 1 || metadata.duration > 15.05)) {
+                    warnings.push(`${file.name} AI 参考视频时长需为 1–15 秒`);
+                    continue;
+                }
+                if (isVideo && metadata.duration && !localMode) {
                     const totalDuration = aiVideoAssets.reduce((sum, item) => sum + Number(item.metadata.duration || 0), 0) + metadata.duration;
                     if (totalDuration > 15.05) {
                         warnings.push("参考视频总时长不能超过 15 秒");
@@ -23216,6 +23327,61 @@
             else if (added) aiVideoSetMessage(`已添加 ${added} 个素材，可拖动卡片调整参考顺序。`, "success");
         }
 
+        function addAiVideoAssetUrl(value = "") {
+            const input = document.getElementById("ai-video-asset-url");
+            const kindSelect = document.getElementById("ai-video-asset-url-kind");
+            const raw = String(value || input?.value || "").trim();
+            if (!raw) return;
+            if (aiVideoAssets.length >= 20) {
+                aiVideoSetMessage("每个任务最多 20 个素材。", "error");
+                return;
+            }
+            let parsed;
+            try {
+                parsed = new URL(raw);
+                if (!["http:", "https:"].includes(parsed.protocol) || parsed.username || parsed.password) throw new Error("素材链接必须是公开的 HTTP 或 HTTPS 地址");
+            } catch (error) {
+                aiVideoSetMessage(error.message || "素材链接格式无效。", "error");
+                return;
+            }
+            const url = parsed.href;
+            const kind = kindSelect?.value === "video" ? "video" : "image";
+            const localMode = aiVideoLocalTranscodeEnabled();
+            if (localMode && (kind !== "video" || aiVideoAssets.length > 0)) {
+                aiVideoSetMessage("仅转换格式模式只能添加一个视频链接。", "error");
+                return;
+            }
+            if (aiVideoAssets.some(item => item.source === "url" && item.url === url)) {
+                aiVideoSetMessage("这个链接已经添加过了。", "error");
+                return;
+            }
+            const imageCount = aiVideoAssets.filter(item => item.kind === "image").length;
+            const videoCount = aiVideoAssets.filter(item => item.kind === "video").length;
+            if (kind === "image" && imageCount >= 10) {
+                aiVideoSetMessage("参考图片最多 10 张。", "error");
+                return;
+            }
+            if (kind === "video" && videoCount >= 5) {
+                aiVideoSetMessage("参考视频最多 5 段。", "error");
+                return;
+            }
+            let name = parsed.pathname.split("/").filter(Boolean).pop() || parsed.hostname;
+            try { name = decodeURIComponent(name); } catch (_) { /* keep the URL path as the label */ }
+            aiVideoAssets.push({
+                id: `${Date.now()}-${Math.random().toString(16).slice(2)}`,
+                source: "url",
+                file: null,
+                name: name.slice(0, 120) || "链接素材",
+                kind,
+                size: 0,
+                metadata: {},
+                url,
+            });
+            if (input) input.value = "";
+            renderAiVideoAssets();
+            aiVideoSetMessage(`已添加${kind === "video" ? "视频" : "图片"}链接，可拖动卡片调整参考顺序。`, "success");
+        }
+
         function renderAiVideoAssets() {
             const container = document.getElementById("ai-video-assets");
             const summary = document.getElementById("ai-video-asset-summary");
@@ -23224,14 +23390,17 @@
             const videoCount = aiVideoAssets.filter(item => item.kind === "video").length;
             summary.textContent = aiVideoAssets.length ? `${imageCount} 张图片 · ${videoCount} 段视频 · 拖动可排序` : "尚未添加素材";
             container.innerHTML = aiVideoAssets.map((item, index) => {
-                const duration = item.metadata.duration ? ` · ${item.metadata.duration.toFixed(1)} 秒` : "";
+                const duration = item.metadata?.duration ? ` · ${Number(item.metadata.duration).toFixed(1)} 秒` : "";
+                const name = item.name || item.file?.name || "链接素材";
+                const size = item.source === "url" ? "链接素材" : aiVideoBytes(item.file?.size);
+                const url = escapeHtml(item.url || "");
                 const media = item.kind === "image"
-                    ? `<img src="${item.url}" alt="${escapeHtml(item.file.name)}">`
-                    : `<video src="${item.url}" muted playsinline preload="metadata"></video>`;
+                    ? `<img src="${url}" alt="${escapeHtml(name)}">`
+                    : `<video src="${url}" muted playsinline preload="metadata"></video>`;
                 return `<article class="ai-video-asset" draggable="true" data-index="${index}" ondragstart="startAiVideoAssetDrag(event, ${index})" ondragend="endAiVideoAssetDrag(event)">
                     <div class="ai-video-asset-preview">${media}</div>
                     <button class="ai-video-asset-remove" type="button" aria-label="移除素材" onclick="removeAiVideoAsset(${index})">×</button>
-                    <div class="ai-video-asset-copy"><strong>${index + 1}. ${escapeHtml(item.file.name)}</strong><small>${item.kind === "image" ? "图片" : "视频"} · ${aiVideoBytes(item.file.size)}${duration}</small></div>
+                    <div class="ai-video-asset-copy"><strong title="${escapeHtml(name)}">${index + 1}. ${escapeHtml(name)}</strong><small>${item.kind === "image" ? "图片" : "视频"} · ${size}${duration}</small></div>
                 </article>`;
             }).join("");
             updateAiVideoGenerateState();
@@ -23239,14 +23408,16 @@
 
         function removeAiVideoAsset(index) {
             const [removed] = aiVideoAssets.splice(index, 1);
-            if (removed?.url) URL.revokeObjectURL(removed.url);
+            if (removed?.source !== "url" && removed?.url) URL.revokeObjectURL(removed.url);
             renderAiVideoAssets();
         }
 
         function clearAiVideoAssets() {
-            aiVideoAssets.forEach(item => URL.revokeObjectURL(item.url));
+            aiVideoAssets.forEach(item => { if (item.source !== "url" && item.url) URL.revokeObjectURL(item.url); });
             aiVideoAssets = [];
             document.getElementById("ai-video-file-input").value = "";
+            const urlInput = document.getElementById("ai-video-asset-url");
+            if (urlInput) urlInput.value = "";
             renderAiVideoAssets();
         }
 
@@ -23332,21 +23503,60 @@
             aiVideoSetMessage("已从店铺链接关联商品，请添加原始素材。", "success");
         }
 
+        function aiVideoLocalTranscodeEnabled() {
+            return Boolean(document.getElementById("ai-video-local-transcode")?.checked);
+        }
+
+        function updateAiVideoMode() {
+            const localMode = aiVideoLocalTranscodeEnabled();
+            const prompt = document.getElementById("ai-video-prompt");
+            const duration = document.getElementById("ai-video-duration");
+            if (prompt) prompt.disabled = localMode;
+            if (duration) duration.disabled = localMode;
+            updateAiVideoGenerateState();
+        }
+
         function updateAiVideoGenerateState() {
             const button = document.getElementById("ai-video-generate");
             if (!button) return;
-            const videoNeedsPublicUrl = aiVideoAssets.some(item => item.kind === "video") && !aiVideoPublicBaseConfigured;
-            button.disabled = aiVideoUploadBusy || !aiVideoProviderConfigured || !aiVideoAssets.length || videoNeedsPublicUrl;
-            if (videoNeedsPublicUrl) aiVideoSetMessage("参考视频需要先配置 AI_VIDEO_PUBLIC_BASE_URL 公网 HTTPS 地址。", "error");
+            const localMode = aiVideoLocalTranscodeEnabled();
+            const localAssetsValid = aiVideoAssets.length === 1 && aiVideoAssets[0]?.kind === "video";
+            const localUnavailable = localMode && !aiVideoSettings.local_transcode_available;
+            const videoNeedsPublicUrl = !localMode && aiVideoAssets.some(item => item.kind === "video") && !aiVideoPublicBaseConfigured;
+            const seedanceNeedsPublicUrl = !localMode && Boolean(aiVideoSettings.seedance_configured) && aiVideoAssets.length > 0 && !aiVideoPublicBaseConfigured;
+            const providerMissing = !localMode && !aiVideoProviderConfigured;
+            button.textContent = localMode ? "本地转换为兼容 MP4" : "生成美客多合规视频";
+            button.disabled = aiVideoUploadBusy || !aiVideoAssets.length || providerMissing || videoNeedsPublicUrl || seedanceNeedsPublicUrl || (localMode && !localAssetsValid) || localUnavailable;
+            if (localUnavailable) aiVideoSetMessage("服务器未安装可用的 FFmpeg，暂时不能本地转换视频格式。", "error");
+            else if (localMode && aiVideoAssets.length && !localAssetsValid) aiVideoSetMessage("仅转换格式模式只能添加一个视频，不能包含图片或多个视频。", "error");
+            else if (localMode && localAssetsValid) aiVideoSetMessage("将使用服务器本地转码，不调用 AI，也不消耗模型 Token。", "success");
+            else if (providerMissing) aiVideoSetMessage("请先配置 Seedance 或 Wan 任意一个模型 Token。", "error");
+            else if (seedanceNeedsPublicUrl) aiVideoSetMessage("Seedance 2.5 读取参考素材需要先配置工作台公网 HTTPS 地址。", "error");
+            else if (videoNeedsPublicUrl) aiVideoSetMessage("参考视频需要先配置工作台公网 HTTPS 地址。", "error");
         }
 
         function createAiVideoJob() {
             if (aiVideoUploadBusy || !aiVideoAssets.length) return;
             const form = new FormData();
-            aiVideoAssets.forEach(item => form.append("files", item.file, item.file.name));
+            let fileIndex = 0;
+            let urlIndex = 0;
+            const urlAssets = [];
+            const assetOrder = [];
+            aiVideoAssets.forEach(item => {
+                if (item.source === "url") {
+                    urlAssets.push({url: item.url, kind: item.kind, name: item.name || ""});
+                    assetOrder.push({source: "url", index: urlIndex++});
+                } else if (item.file) {
+                    form.append("files", item.file, item.file.name);
+                    assetOrder.push({source: "file", index: fileIndex++});
+                }
+            });
+            form.append("asset_urls", JSON.stringify(urlAssets));
+            form.append("asset_order", JSON.stringify(assetOrder));
             form.append("name", document.getElementById("ai-video-name").value.trim());
             form.append("duration", document.getElementById("ai-video-duration").value);
             form.append("prompt", document.getElementById("ai-video-prompt").value.trim());
+            form.append("local_transcode", aiVideoLocalTranscodeEnabled() ? "1" : "0");
             if (aiVideoTarget) {
                 form.append("link_id", String(aiVideoTarget.id));
                 ["item_id", "title", "store_name", "site_id", "thumbnail_url"].forEach(key => form.append(key, aiVideoTarget[key] || ""));
@@ -23364,7 +23574,7 @@
                 try {
                     const payload = JSON.parse(xhr.responseText);
                     if (xhr.status < 200 || xhr.status >= 300 || payload.status !== "success") throw new Error(payload.message || `创建失败（${xhr.status}）`);
-                    aiVideoSetMessage(payload.message || "AI 视频任务已创建。", "success");
+                    aiVideoSetMessage(payload.message || (aiVideoLocalTranscodeEnabled() ? "本地视频转换任务已创建。" : "AI 视频任务已创建。"), "success");
                     clearAiVideoAssets();
                     aiVideoJobsLoaded = false;
                     loadAiVideoJobs(true);
@@ -23397,12 +23607,14 @@
                 const linkId = Number(target.link_id || 0);
                 const actions = status === "succeeded" ? `<a class="secondary" href="${escapeHtml(job.content_url)}" download="mercado-video.mp4">下载 MP4</a>
                     <button class="secondary" type="button" onclick="renameAiVideoJob('${escapeHtml(job.id)}')">修改名称</button>
-                    <button class="primary" type="button" onclick="publishAiVideoJob('${escapeHtml(job.id)}', ${linkId})" ${linkId ? "" : "disabled title=\"该任务未关联店铺链接\""}>上传到关联链接</button>` : "";
+                    <button class="primary" type="button" onclick="publishAiVideoJob('${escapeHtml(job.id)}', ${linkId}, this)" ${linkId ? "" : "disabled title=\"该任务未关联店铺链接\""}>上传到关联链接</button>` : "";
+                const latestPublish = Array.isArray(job.publish_attempts) ? job.publish_attempts.at(-1) : null;
+                const publishLog = latestPublish ? `<span class="ai-video-publish-log ${escapeHtml(latestPublish.status || "")}">最近上传：${escapeHtml(latestPublish.message || latestPublish.status || "未知结果")}${latestPublish.clip_uuid ? ` · ${escapeHtml(latestPublish.clip_uuid)}` : ""}</span>` : "";
                 return `<article class="ai-video-job">
                     <div class="ai-video-job-media">${media}</div>
                     <div class="ai-video-job-copy">
                         <div class="ai-video-job-title"><strong title="${escapeHtml(title)}">${escapeHtml(title)}</strong><span class="ai-video-job-state ${escapeHtml(status)}">${escapeHtml(aiVideoJobState(status))}</span></div>
-                        <p>${escapeHtml(target.item_id || "未关联商品")} · ${escapeHtml(job.message || "")}<br>${Number(job.duration || 10)} 秒 · 720P · 9:16 · ${Number(job.assets?.length || 0)} 个素材</p>
+                        <p>${escapeHtml(target.item_id || "未关联商品")} · ${escapeHtml(job.message || "")}<br>${Number(job.duration || 10)} 秒 · 720P · 9:16 · ${Number(job.assets?.length || 0)} 个素材${publishLog ? `<br>${publishLog}` : ""}</p>
                         <div class="ai-video-job-actions">${actions}</div>
                     </div>
                 </article>`;
@@ -23421,10 +23633,11 @@
                 aiVideoProviderConfigured = Boolean(payload.data?.settings?.configured);
                 aiVideoPublicBaseConfigured = Boolean(payload.data?.settings?.public_base_configured);
                 const state = document.getElementById("ai-video-provider-state");
-                state.textContent = aiVideoProviderConfigured ? `${payload.data.settings.provider} · 已连接` : "待配置百炼凭证";
-                state.className = `market-status-tag ${aiVideoProviderConfigured ? "ok" : "failed"}`;
-                if (!aiVideoProviderConfigured) aiVideoSetMessage("服务端尚未配置 AI_VIDEO_API_KEY 与 AI_VIDEO_WORKSPACE_ID。", "error");
-                else if (!aiVideoAssets.length) aiVideoSetMessage("服务已连接，请添加原始素材。", "success");
+                const availableProviders = Array.isArray(payload.data.settings.available_providers) ? payload.data.settings.available_providers : [];
+                state.textContent = availableProviders.length ? `${availableProviders.join(" / ")} · 可用` : (payload.data.settings.local_transcode_available ? "本地格式转换可用 · 模型待配置" : "待配置视频模型凭证");
+                state.className = `market-status-tag ${(aiVideoProviderConfigured || payload.data.settings.local_transcode_available) ? "ok" : "failed"}`;
+                if (!aiVideoProviderConfigured && !aiVideoLocalTranscodeEnabled()) aiVideoSetMessage("配置 Seedance 或 Wan 任意一个模型即可生成；本地格式转换无需 Token。", "error");
+                else if (!aiVideoAssets.length) aiVideoSetMessage("服务已就绪，请添加原始素材。", "success");
                 aiVideoJobsLoaded = true;
                 renderAiVideoJobs();
                 updateAiVideoGenerateState();
@@ -23446,13 +23659,17 @@
                 const payload = await response.json();
                 if (!response.ok || payload.status !== "success") throw new Error(payload.message || "配置读取失败");
                 aiVideoSettings = payload.data || {};
-                document.getElementById("ai-video-api-key").value = "";
-                document.getElementById("ai-video-api-key").placeholder = aiVideoSettings.api_key_masked ? `当前：${aiVideoSettings.api_key_masked}；输入新 Token 可替换` : "请输入百炼 API Key";
-                document.getElementById("ai-video-workspace-id").value = aiVideoSettings.workspace_id || "";
-                document.getElementById("ai-video-region").value = aiVideoSettings.region || "cn-beijing";
-                document.getElementById("ai-video-model").value = aiVideoSettings.model || "wan3.0-video-prime";
+                document.getElementById("ai-video-seedance-api-key").value = "";
+                document.getElementById("ai-video-seedance-api-key").placeholder = aiVideoSettings.seedance_api_key_masked ? `当前：${aiVideoSettings.seedance_api_key_masked}；输入新 Token 可替换` : "请输入火山方舟 API Key";
+                document.getElementById("ai-video-seedance-region").value = aiVideoSettings.seedance_region || "cn-beijing";
+                document.getElementById("ai-video-seedance-model").value = aiVideoSettings.seedance_model || "doubao-seedance-2-5-260628";
+                document.getElementById("ai-video-wan-api-key").value = "";
+                document.getElementById("ai-video-wan-api-key").placeholder = aiVideoSettings.wan_api_key_masked ? `当前：${aiVideoSettings.wan_api_key_masked}；输入新 Token 可替换` : "请输入百炼 API Key";
+                document.getElementById("ai-video-wan-workspace-id").value = aiVideoSettings.wan_workspace_id || "";
+                document.getElementById("ai-video-wan-region").value = aiVideoSettings.wan_region || "cn-beijing";
+                document.getElementById("ai-video-wan-model").value = aiVideoSettings.wan_model || "wan3.0-video-prime";
                 document.getElementById("ai-video-public-base").value = aiVideoSettings.public_base_url || "";
-                document.getElementById("ai-video-settings-message").textContent = aiVideoSettings.configured ? "当前配置可用；留空 Token 不会清除现有密钥。" : "请填写 Token 和业务空间 ID。";
+                document.getElementById("ai-video-settings-message").textContent = aiVideoSettings.configured ? "已有模型可用；任意一个 Token 即可，留空不会清除现有密钥。" : "Seedance 或 Wan 任选一个配置即可使用。";
                 dialog.showModal();
             } catch (error) {
                 aiVideoSetMessage(error.message || String(error), "error");
@@ -23469,10 +23686,13 @@
                     method: "PATCH",
                     headers: {"Content-Type": "application/json"},
                     body: JSON.stringify({
-                        api_key: document.getElementById("ai-video-api-key").value.trim(),
-                        workspace_id: document.getElementById("ai-video-workspace-id").value.trim(),
-                        region: document.getElementById("ai-video-region").value,
-                        model: document.getElementById("ai-video-model").value,
+                        seedance_api_key: document.getElementById("ai-video-seedance-api-key").value.trim(),
+                        seedance_region: document.getElementById("ai-video-seedance-region").value,
+                        seedance_model: document.getElementById("ai-video-seedance-model").value,
+                        wan_api_key: document.getElementById("ai-video-wan-api-key").value.trim(),
+                        wan_workspace_id: document.getElementById("ai-video-wan-workspace-id").value.trim(),
+                        wan_region: document.getElementById("ai-video-wan-region").value,
+                        wan_model: document.getElementById("ai-video-wan-model").value,
                         public_base_url: document.getElementById("ai-video-public-base").value.trim(),
                     }),
                 });
@@ -23531,33 +23751,54 @@
                 return `<article class="ai-video-picker-item">
                     <div class="ai-video-picker-cover">${cover ? `<img src="${escapeHtml(cover)}" alt="${escapeHtml(job.name || "备选视频封面")}">` : "<span>无封面</span>"}</div>
                     <div class="ai-video-picker-copy"><strong>${escapeHtml(job.name || "未命名备选视频")}</strong><span>${escapeHtml(job.target?.item_id || "未关联商品")} · ${Number(job.duration || 10)} 秒 · ${Number(job.assets?.length || 0)} 个素材</span></div>
-                    <button class="primary" type="button" onclick="publishAiVideoJob('${escapeHtml(job.id)}', ${Number(row.id)})">上传到 ${escapeHtml(row.item_id || "当前链接")}</button>
+                    <button class="primary" type="button" onclick="publishAiVideoJob('${escapeHtml(job.id)}', ${Number(row.id)}, this)">上传到 ${escapeHtml(row.item_id || "当前链接")}</button>
                 </article>`;
             }).join("") : '<div class="empty-state">还没有生成完成的备选视频，请先到“AI视频生成”模块创建。</div>';
-            dialog.innerHTML = `<div class="ai-video-dialog-head"><div><h3>选择 AI 备选视频</h3><p>${escapeHtml(row.store_name || "-")} · ${escapeHtml(row.item_id || "-")} · ${escapeHtml(row.title || "")}</p></div><button class="secondary" type="button" onclick="this.closest('dialog').close()">关闭</button></div><div class="ai-video-dialog-body"><div class="ai-video-picker-list">${items}</div></div>`;
+            dialog.innerHTML = `<div class="ai-video-dialog-head"><div><h3>选择 AI 备选视频</h3><p>${escapeHtml(row.store_name || "-")} · ${escapeHtml(row.item_id || "-")} · ${escapeHtml(row.title || "")}</p></div><button class="secondary" type="button" onclick="this.closest('dialog').close()">关闭</button></div><div class="ai-video-dialog-body"><p class="ai-video-message" id="store-link-ai-video-library-message" role="status" aria-live="polite">请选择一条备选视频上传。提交成功后会显示美客多受理编号。</p><div class="ai-video-picker-list">${items}</div></div>`;
             dialog.showModal();
         }
 
-        async function publishAiVideoJob(jobId, linkId) {
-            if (!linkId) return;
+        async function publishAiVideoJob(jobId, linkId, button = null) {
+            const pickerMessage = document.getElementById("store-link-ai-video-library-message");
+            const showResult = (text, state = "") => {
+                if (pickerMessage) {
+                    pickerMessage.textContent = text || "";
+                    pickerMessage.className = `ai-video-message ${state}`.trim();
+                }
+                aiVideoSetMessage(text, state);
+            };
+            if (!linkId) {
+                showResult("该视频没有关联可上传的在售商品。", "error");
+                return;
+            }
             const job = aiVideoJobs.find(item => item.id === jobId);
             const targetRow = storeLinkRows.find(item => Number(item.id) === Number(linkId));
             if (!window.confirm(`确认把“${job?.name || "这条备选视频"}”上传到 ${targetRow?.item_id || job?.target?.item_id || "关联商品"}？提交后将进入美客多审核。`)) return;
-            aiVideoSetMessage("正在上传成品到美客多，请勿重复提交…");
+            const originalText = button?.textContent || "上传到关联链接";
+            if (button) {
+                button.disabled = true;
+                button.textContent = "正在上传…";
+            }
+            showResult("正在上传成品到美客多，请勿关闭页面或重复提交…");
             try {
                 const response = await fetch(`/api/ai-videos/jobs/${encodeURIComponent(jobId)}/publish`, {
                     method: "POST",
                     headers: {"Content-Type": "application/json"},
                     body: JSON.stringify({link_id: linkId}),
                 });
-                const payload = await response.json();
+                const payload = await response.json().catch(() => ({}));
                 if (!response.ok || payload.status !== "success") throw new Error(payload.message || "上传失败");
-                aiVideoSetMessage(payload.message, "success");
-                document.getElementById("store-link-ai-video-library-dialog")?.close();
+                const clipUuid = payload.data?.clip_uuid || "";
+                showResult(`${payload.message || "视频已提交美客多，等待平台审核"}${clipUuid ? `；受理编号：${clipUuid}` : ""}`, "success");
+                if (button) button.textContent = "已提交审核";
                 aiVideoJobsLoaded = false;
-                loadAiVideoJobs(true);
+                await loadAiVideoJobs(true);
             } catch (error) {
-                aiVideoSetMessage(error.message || String(error), "error");
+                showResult(`上传失败：${error.message || String(error)}`, "error");
+                if (button) {
+                    button.disabled = false;
+                    button.textContent = originalText;
+                }
             }
         }
 
@@ -23582,6 +23823,13 @@
             if (!document.getElementById("tab-ai-video")?.classList.contains("active")) return;
             const files = Array.from(event.clipboardData?.files || []);
             if (files.length) { event.preventDefault(); addAiVideoFiles(files); }
+            const text = event.clipboardData?.getData("text/plain")?.trim() || "";
+            const target = document.activeElement;
+            const isTextEntry = target && ["INPUT", "TEXTAREA", "SELECT"].includes(target.tagName);
+            if (!files.length && text && /^https?:\/\//i.test(text) && !isTextEntry) {
+                event.preventDefault();
+                addAiVideoAssetUrl(text);
+            }
         });
 
         function openStoreLinkVideo(linkId) {

@@ -147,10 +147,12 @@ def process(service, task, browser, models, config):
                             info_sources={"cost_price": "1688目标SKU最终单价（含变体加价）" if cost else "未读取",
                                           "weight_g": "1688页面" if weight else "未读取，保留ERP原重量"})
         if not cost:
-            return save_result(service, task, browser, config, "risk", "已匹配，但页面未提供可确认的目标SKU最终成本，保留原价格、重量及状态", {})
+            return save_result(service, task, browser, config, "risk", "已匹配，但页面未提供可确认的目标SKU最终成本；未回填重量或净收益，标记价格异常", {})
         pricing = usd_cost(cost, service.exchange_rate(config))
         task = store.update(key, net_income_usd=pricing["net_income_usd"], pricing=pricing)
-        store.log(f"含变体加价的成本 ¥{cost} ÷ 美元汇率 {pricing['cny_per_usd']}，向上取整为 ${pricing['net_income_usd']}；汇率日期 {pricing['rate_date']}", key)
+        store.log(f"当前最高变体价 ¥{cost} + ¥{pricing['net_income_buffer_cny']}"
+                  f" = 计价基准 ¥{pricing['pricing_basis_cny']} ÷ 美元汇率 {pricing['cny_per_usd']}，"
+                  f"向上取整为 ${pricing['net_income_usd']}；汇率日期 {pricing['rate_date']}", key)
         changes = {"net_income_usd": task["net_income_usd"]}
         if weight:
             changes["weight_g"] = str(number(weight))
@@ -158,20 +160,20 @@ def process(service, task, browser, models, config):
                                f"图片匹配成功；未匹配具体变体，已按{sku_count}个变体中的最高价回填净收益，并从最高价变体的页面证据回填重量",
                                changes)
         return save_result(service, task, browser, config, "risk",
-                           f"图片匹配成功；未匹配具体变体，已按{sku_count}个变体中的最高价回填净收益；最高价变体未提供可解析重量，保留原重量和状态",
+                           f"图片匹配成功；未匹配具体变体，已按{sku_count}个变体中的最高价回填净收益；最高价变体未提供可解析重量，保留原重量并把状态改为通过",
                            changes)
     except SearchTimeout as exc:
-        # A timeout is a technical failure, not a completed matching
-        # decision. Store it as an exception; the service converts non-human
-        # item exceptions into an automatic skip before advancing.
-        store.exception(key, "1688主图搜索超时", str(exc) + "；未获得搜索结果，保留智赢原状态及数值")
-        service.record_visual(key, "search_timeout", "搜索超时，自动跳过当前商品；智赢原数据保留")
+        save_result(service, store.get(key), browser, config, "risk",
+                    str(exc) + "；未获得可回填结果，标记价格异常", {})
     except NoExactMatch as exc:
-        save_result(service, store.get(key), browser, config, "blocked", "匹配失败：" + str(exc) + "；保留智赢原状态", {})
+        save_result(service, store.get(key), browser, config, "blocked",
+                    "匹配失败：" + str(exc) + "；未获得可回填结果，标记价格异常", {})
     except (CircuitOpen, Stopped):
         raise
     except Exception as exc:
-        store.exception(key, "主图核重核价执行异常", exc)
+        store.log("主图核重核价执行异常：" + str(exc), key, "ERROR")
+        save_result(service, store.get(key), browser, config, "risk",
+                    "核重核价未获得可回填结果，标记价格异常：" + str(exc), {})
     finally:
         if hasattr(browser, "release_search"):
             browser.release_search(task)
@@ -213,16 +215,16 @@ def highest_priced_variant(skus):
 
 
 def save_result(service, task, browser, config, result, reason, changes):
-    """Only requested fields are changed; every other form value is retained."""
+    """Save calculated fields and the review status as one verified ERP edit.
+
+    A product with usable weight/price output is approved. A completed review
+    without values is saved as a price anomaly. The browser adapter rechecks
+    that the source status is still ``待审核`` immediately before saving.
+    """
     key, store = task["erp_goods_id"], service.store
     changes = dict(changes)
+    changes["review_status"] = "通过" if changes else "价格异常"
     task = store.update(key, decision_status=result, decision_reason=reason, planned_changes=changes)
-    if not changes:
-        store.update(key, status=result, stage="done", saved_at=time.time(),
-                     write_verified=False, write_intent={}, exception_reason="", exception_detail="")
-        store.log(f"无需回写重量或净收益，智赢商品状态及原数值保持不变；{reason}；继续下一件", key)
-        service.record_visual(key, result, reason + "；未修改智赢商品状态，继续下一件")
-        return
     if not config["writeback_enabled"]:
         # A dry run still has a business result. Keep it reviewable as a risk
         # because the calculated values were not synchronized to ERP; do not
@@ -251,7 +253,7 @@ def save_result(service, task, browser, config, result, reason, changes):
             history = [*(store.get(key).get("write_history") or []), attempt]
             store.update(key, stage="writing", erp_before=old, erp_after=None, write_verified=False,
                          write_intent=attempt["intent"], write_history=history)
-            store.log(f"回填前：重量 {old.get('weight_g')}g，净收益 ${old.get('net_income_usd')}，智赢状态保持 {old.get('review_status')}；计划修改：{changes}", key)
+            store.log(f"回填前：重量 {old.get('weight_g')}g，净收益 ${old.get('net_income_usd')}，智赢状态 {old.get('review_status')}；计划修改：{changes}", key)
         actual = browser.write_patch(task, changes, before_save)
         if attempt is None or not isinstance(actual, dict):
             raise ValueError("ERP未提供修改前后回读记录")

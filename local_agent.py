@@ -867,6 +867,49 @@ class LocalAgent:
         release_dir = self.config.data_dir / "releases" / version
         return version if version and (release_dir / "local_agent_worker.py").is_file() else ""
 
+    def _release_history_path(self):
+        return self.config.data_dir / "release-history.json"
+
+    def rollback_release(self, version=""):
+        """Activate the last known-good local business release atomically."""
+        requested = str(version or "").strip()
+        current = self.current_release
+        releases_dir = self.config.data_dir / "releases"
+        candidates = []
+        if requested:
+            candidates.append(requested)
+        try:
+            history = _load_json(self._release_history_path())
+        except Exception:
+            history = {}
+        for item in history.get("releases") or []:
+            candidate = str((item or {}).get("version") or "").strip()
+            if candidate and candidate not in candidates:
+                candidates.append(candidate)
+        candidates.extend(
+            path.name
+            for path in sorted(
+                releases_dir.glob("*"),
+                key=lambda item: item.stat().st_mtime,
+                reverse=True,
+            )
+            if path.is_dir() and path.name not in candidates
+        )
+        target = next(
+            (
+                candidate
+                for candidate in candidates
+                if candidate != current
+                and (releases_dir / candidate / "local_agent_worker.py").is_file()
+            ),
+            "",
+        )
+        if not target:
+            raise RuntimeError("没有可回退的本地业务版本")
+        self._activate_release(target, reason="manual-rollback")
+        self.log(f"本地业务版本已回退：{current or '无'} -> {target}")
+        return target
+
     def heartbeat(self, current_job_id=""):
         data = self._request(
             "POST",
@@ -947,16 +990,48 @@ class LocalAgent:
         self.log(f"业务代码已更新到版本 {response_version}")
         return releases_dir / response_version
 
-    def _activate_release(self, version):
+    def _activate_release(self, version, reason="activate"):
         current_path = self.config.data_dir / "current-release.json"
         current_path.parent.mkdir(parents=True, exist_ok=True)
+        previous = self.current_release
         temporary = current_path.with_suffix(".tmp")
         temporary.write_text(
-            json.dumps({"version": version}, ensure_ascii=False, indent=2),
+            json.dumps(
+                {
+                    "version": version,
+                    "previous_version": previous,
+                    "reason": reason,
+                    "activated_at": int(time.time()),
+                },
+                ensure_ascii=False,
+                indent=2,
+            ),
             encoding="utf-8",
         )
         os.replace(temporary, current_path)
         self.current_release = version
+        history_path = self._release_history_path()
+        history = _load_json(history_path)
+        entries = [
+            item for item in (history.get("releases") or [])
+            if str((item or {}).get("version") or "") != version
+        ]
+        entries.insert(
+            0,
+            {
+                "version": version,
+                "previous_version": previous,
+                "reason": reason,
+                "activated_at": int(time.time()),
+            },
+        )
+        history_path.parent.mkdir(parents=True, exist_ok=True)
+        history_tmp = history_path.with_suffix(".tmp")
+        history_tmp.write_text(
+            json.dumps({"releases": entries[:10]}, ensure_ascii=False, indent=2),
+            encoding="utf-8",
+        )
+        os.replace(history_tmp, history_path)
 
     def _prune_releases(self, keep=2):
         releases_dir = self.config.data_dir / "releases"
@@ -1307,6 +1382,14 @@ def build_argument_parser():
     parser.add_argument("--allow-http", action="store_true")
     parser.add_argument("--once", action="store_true")
     parser.add_argument(
+        "--rollback",
+        nargs="?",
+        const="",
+        default=None,
+        metavar="VERSION",
+        help="激活上一个本地业务版本，或指定版本后退出",
+    )
+    parser.add_argument(
         "--no-window",
         action="store_true",
         help="不显示图形运行状态窗口，仅写控制台和本地日志",
@@ -1354,6 +1437,14 @@ def main(argv=None):
         agent.log("泽顺本机 Agent 已在运行，本次重复启动退出。")
         return 2
     try:
+        if args.rollback is not None:
+            try:
+                version = agent.rollback_release(args.rollback)
+                agent.log(f"回退完成，当前版本：{version}")
+                return 0
+            except Exception as exc:
+                agent.log(f"回退失败：{exc}")
+                return 1
         if _status_window_enabled(args):
             try:
                 return AgentStatusWindow(agent).run()

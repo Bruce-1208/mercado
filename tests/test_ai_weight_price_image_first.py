@@ -80,7 +80,23 @@ def make_service(tmp_path, monkeypatch):
     return service, browser, config
 
 
-def test_ten_image_first_products_keep_status_and_only_write_weight_or_profit(tmp_path, monkeypatch):
+def test_non_pending_product_is_skipped_before_1688_or_ai(tmp_path, monkeypatch):
+    service, browser, config = make_service(tmp_path, monkeypatch)
+    service.store.add({'erp_goods_id': '1', 'title': '已审核商品',
+                       'main_image_url': 'https://img.example/1.jpg'})
+    browser.read_review_status = lambda _task: '通过'
+    browser.search_images = lambda _task: pytest.fail('非待审核商品不应搜索1688')
+
+    service.process(service.store.get('1'), browser, ImageModel(), config)
+
+    task = service.store.get('1')
+    assert task['status'] == 'skipped'
+    assert task['stage'] == 'review_status_skipped'
+    assert task['erp_review_status'] == '通过'
+    assert not any(step in ('image', 'detail', 'save') for step, *_ in browser.operations)
+
+
+def test_ten_image_first_products_approve_after_verified_writeback(tmp_path, monkeypatch):
     service, browser, config = make_service(tmp_path, monkeypatch)
     lock = service.lock(); assert lock.acquire()
     service.run(config, 'pipeline', None, lock)
@@ -92,9 +108,9 @@ def test_ten_image_first_products_keep_status_and_only_write_weight_or_profit(tm
     assert len(browser.records) == 10 and store.state('pipeline_current') is None
     assert browser.operations[:8] == [('collect', '1'), ('image', '1'), ('detail', '1'), ('save', '1'),
                                      ('collect', '2'), ('image', '2'), ('detail', '2'), ('save', '2')]
-    assert browser.records['1'] == {'weight_g': '430', 'net_income_usd': '9.5', 'review_status': '待审核'}
-    assert browser.records['2'] == {'weight_g': '430', 'net_income_usd': '9.5', 'review_status': '待审核'}
-    assert browser.records['3'] == {'weight_g': '430', 'net_income_usd': '9.5', 'review_status': '待审核'}
+    assert browser.records['1'] == {'weight_g': '430', 'net_income_usd': '9.5', 'review_status': '通过'}
+    assert browser.records['2'] == {'weight_g': '430', 'net_income_usd': '9.5', 'review_status': '通过'}
+    assert browser.records['3'] == {'weight_g': '430', 'net_income_usd': '9.5', 'review_status': '通过'}
     run, rows = store.run_report('image-ten')
     assert run['outcome'] == 'completed' and run['processed_items'] == 10
     assert all(row.get('execution_duration_seconds') is not None for row in rows)
@@ -102,8 +118,8 @@ def test_ten_image_first_products_keep_status_and_only_write_weight_or_profit(tm
     written = [row for row in rows if row.get('write_intent')]
     assert len(written) == 10
     assert all(row['write_verified'] and row['write_history'][-1]['verified'] for row in written)
-    assert all(row['review_status'] == '待审核' for row in browser.records.values())
-    assert all('review_status' not in (row.get('write_intent') or {}) for row in rows)
+    assert all(row['review_status'] == '通过' for row in browser.records.values())
+    assert all((row.get('write_intent') or {}).get('review_status') == '通过' for row in rows)
     assert 'weight_g' not in rows[1]['write_intent']
     assert rows[1]['erp_before']['weight_g'] == rows[1]['erp_after']['weight_g'] == '430'
     assert sum('保存成功并回读确认' in event['message'] for event in store.logs(limit=2000)) == 10
@@ -111,7 +127,7 @@ def test_ten_image_first_products_keep_status_and_only_write_weight_or_profit(tm
     sheet = load_workbook(io.BytesIO(execution_xlsx(rows, run))).active
     assert sheet['C6'].value == sheet['C7'].value == '风险'
     assert sheet['K7'].value is None and sheet['M7'].value == 430
-    assert (sheet['V7'].value, sheet['W7'].value, sheet['X7'].value) == ('待审核', None, '待审核')
+    assert (sheet['V7'].value, sheet['W7'].value, sheet['X7'].value) == ('待审核', '通过', '通过')
 
 
 def test_lower_calculated_net_income_keeps_original_and_only_writes_weight(tmp_path, monkeypatch):
@@ -225,7 +241,7 @@ def test_missing_weight_must_retain_original_after_save_and_skip_on_mismatch(tmp
     assert len(browser.records) == 10
 
 
-def test_search_timeout_is_skipped_before_reading_later_products(tmp_path, monkeypatch):
+def test_search_timeout_marks_price_anomaly_before_reading_later_products(tmp_path, monkeypatch):
     from erp.ai_weight_price.browser import SearchTimeout
     service, browser, config = make_service(tmp_path, monkeypatch)
     def timeout(task):
@@ -233,15 +249,16 @@ def test_search_timeout_is_skipped_before_reading_later_products(tmp_path, monke
     monkeypatch.setattr(browser, 'search_images', timeout)
     lock = service.lock(); assert lock.acquire()
     service.run(config, 'pipeline', None, lock)
-    assert service.store.get('1')['status'] == 'skipped'
+    assert service.store.get('1')['status'] == 'risk'
+    assert browser.records['1']['review_status'] == '价格异常'
     assert service.store.state('run')['outcome'] == 'completed'
     assert service.store.state('run')['processed_items'] == 10
     assert service.store.state('pipeline_current') is None
     assert [key for step, key in browser.operations if step == 'collect'] == list(map(str, range(1, 11)))
-    assert not any(step == 'save' for step, _ in browser.operations)
+    assert len([step for step, _ in browser.operations if step == 'save']) == 10
 
 
-def test_1688_read_exception_is_skipped_before_reading_later_products(tmp_path, monkeypatch):
+def test_1688_read_exception_marks_price_anomaly_before_reading_later_products(tmp_path, monkeypatch):
     service, browser, config = make_service(tmp_path, monkeypatch)
     original = browser.search_images
 
@@ -253,7 +270,8 @@ def test_1688_read_exception_is_skipped_before_reading_later_products(tmp_path, 
     monkeypatch.setattr(browser, 'search_images', fail_first_only)
     lock = service.lock(); assert lock.acquire()
     service.run(config, 'pipeline', None, lock)
-    assert service.store.get('1')['status'] == 'skipped'
+    assert service.store.get('1')['status'] == 'risk'
+    assert browser.records['1']['review_status'] == '价格异常'
     assert service.store.state('run')['processed_items'] == 10
     assert service.store.state('run')['outcome'] == 'completed'
     assert service.store.state('pipeline_current') is None
@@ -296,6 +314,8 @@ def test_fresh_image_retry_clears_stale_score_and_supplier_link(tmp_path, monkey
                 'reason': '本次搜索返回了不同品类',
             }}]
 
+    browser.records['1'] = {'weight_g': '430', 'net_income_usd': '9.5',
+                            'review_status': '待审核'}
     service.process(service.store.get('1'), browser, NoMatchModel(), config)
     task = service.store.get('1')
     assert task['status'] == 'blocked'
@@ -304,6 +324,7 @@ def test_fresh_image_retry_clears_stale_score_and_supplier_link(tmp_path, monkey
     assert task['supplier_url'] is None
     assert task['best_match_approved'] is False
     assert task['best_match_confidence'] == 0
+    assert browser.records['1']['review_status'] == '价格异常'
 
 
 def test_detail_url_is_saved_when_sku_price_is_incomplete(tmp_path, monkeypatch):
@@ -358,7 +379,7 @@ def test_same_price_variants_use_highest_price_policy_without_model_variant_matc
     assert task['supplier_price_evidence']['pricing_policy'] == 'highest_variant_price'
     assert task['decision_reason'].startswith('图片匹配成功；未匹配具体变体，已按2个变体中的最高价')
     assert browser.records['1'] == {
-        'weight_g': '430', 'net_income_usd': '9.5', 'review_status': '待审核',
+        'weight_g': '430', 'net_income_usd': '9.5', 'review_status': '通过',
     }
 
 
@@ -388,7 +409,7 @@ def test_different_price_variants_write_back_highest_price(tmp_path, monkeypatch
     assert task['supplier_sku_id'] == 'bear'
     assert task['cost_price'] == '129'
     assert browser.records['1'] == {
-        'weight_g': '430', 'net_income_usd': '18', 'review_status': '待审核',
+        'weight_g': '430', 'net_income_usd': '19', 'review_status': '通过',
     }
 
 
@@ -441,7 +462,7 @@ def test_ambiguous_variants_write_weight_only_when_all_explicit_weights_agree(tm
     task = service.store.get('1')
     assert task['status'] == 'success'
     assert browser.records['1'] == {
-        'weight_g': '300', 'net_income_usd': '17', 'review_status': '待审核',
+        'weight_g': '300', 'net_income_usd': '18', 'review_status': '通过',
     }
 
 
@@ -503,7 +524,7 @@ def test_highest_price_policy_uses_only_strongest_image_candidate(tmp_path, monk
         ('detail-title', '旧款候选'),
     ]
     assert browser.records['1'] == {
-        'weight_g': '430', 'net_income_usd': '17', 'review_status': '待审核',
+        'weight_g': '430', 'net_income_usd': '18', 'review_status': '通过',
     }
 
 

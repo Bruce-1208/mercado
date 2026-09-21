@@ -1,4 +1,5 @@
 import argparse
+import hashlib
 import html
 import json
 import os
@@ -9,7 +10,7 @@ import sys
 import threading
 import time
 from contextlib import contextmanager
-from concurrent.futures import ThreadPoolExecutor, as_completed
+from concurrent.futures import Future, ThreadPoolExecutor, as_completed
 from datetime import datetime
 from functools import wraps
 from pathlib import Path
@@ -115,6 +116,10 @@ ZYING_DETAIL_CLICK_ATTEMPTS = max(
     1,
     int(os.environ.get("BIT_ZYING_DETAIL_CLICK_ATTEMPTS", "2")),
 )
+ZYING_DEVELOPER_CACHE_SECONDS = max(
+    0,
+    int(os.environ.get("BIT_ZYING_DEVELOPER_CACHE_SECONDS", "300")),
+)
 
 TITLE_SELECTOR = ".f12.product-title, .product-title"
 IMAGE_SELECTOR = "img.product-pic, img[class*='product-pic'], img[class*='product-image']"
@@ -133,6 +138,9 @@ _ZYING_STOP_STATE_LOCK = threading.RLock()
 _ZYING_ACTIVE_STOP_EVENT = None
 _ZYING_CATEGORY_CACHE_LOCK = threading.RLock()
 _ZYING_CATEGORY_CACHE = []
+_ZYING_DEVELOPER_CACHE_LOCK = threading.RLock()
+_ZYING_DEVELOPER_CACHE = {}
+_ZYING_DEVELOPER_INFLIGHT = {}
 
 
 def _raise_if_zying_collection_stopped(stop_event=None):
@@ -1163,20 +1171,11 @@ def validate_zying_auth_token(token):
     return True
 
 
-def list_zying_product_developers(auth_token=None):
-    """返回智赢可用的产品开发人员，供采集筛选和姓名映射使用。"""
-    token = _clean_text(auth_token) or load_zying_auth_token()
-    if not token:
-        raise ZyingAuthenticationError("智赢登录凭证为空，请重新登录")
-    with requests.Session() as session:
-        session.trust_env = False
-        data = _zying_api_post(session, token, "logins.select", {})
-    rows = data.get("logins") if isinstance(data, dict) else None
-    if not isinstance(rows, list):
-        raise RuntimeError("智赢产品开发人员接口返回格式异常")
+def normalize_zying_product_developers(rows):
+    """Normalize developer rows supplied by either the page or the API."""
     developers = []
     seen = set()
-    for row in rows:
+    for row in rows or ():
         if not isinstance(row, dict):
             continue
         developer_id = _format_number(row.get("id"))
@@ -1186,6 +1185,82 @@ def list_zying_product_developers(auth_token=None):
         seen.add(developer_id)
         developers.append({"id": developer_id, "name": developer_name or developer_id})
     return developers
+
+
+def _fetch_zying_product_developers(token):
+    with requests.Session() as session:
+        session.trust_env = False
+        data = _zying_api_post(session, token, "logins.select", {})
+    rows = data.get("logins") if isinstance(data, dict) else None
+    if not isinstance(rows, list):
+        raise RuntimeError("智赢产品开发人员接口返回格式异常")
+    return normalize_zying_product_developers(rows)
+
+
+def _zying_developer_cache_key(token):
+    return hashlib.sha256(str(token).encode("utf-8")).hexdigest()
+
+
+def cache_zying_product_developers(auth_token, rows):
+    """Seed the short-lived cache with rows read from the live ZYing page."""
+    token = _clean_text(auth_token)
+    normalized = normalize_zying_product_developers(rows)
+    if not token or not normalized or not ZYING_DEVELOPER_CACHE_SECONDS:
+        return normalized
+    key = _zying_developer_cache_key(token)
+    with _ZYING_DEVELOPER_CACHE_LOCK:
+        now = time.monotonic()
+        for cached_key, cached in list(_ZYING_DEVELOPER_CACHE.items()):
+            if cached["expires_at"] <= now:
+                _ZYING_DEVELOPER_CACHE.pop(cached_key, None)
+        _ZYING_DEVELOPER_CACHE[key] = {
+            "expires_at": now + ZYING_DEVELOPER_CACHE_SECONDS,
+            "rows": [dict(row) for row in normalized],
+        }
+    return normalized
+
+
+def list_zying_product_developers(auth_token=None):
+    """Return developers without repeating the expensive browser/API bootstrap."""
+    token = _clean_text(auth_token) or load_zying_auth_token()
+    if not token:
+        raise ZyingAuthenticationError("智赢登录凭证为空，请重新登录")
+    if not ZYING_DEVELOPER_CACHE_SECONDS:
+        return _fetch_zying_product_developers(token)
+
+    key = _zying_developer_cache_key(token)
+    with _ZYING_DEVELOPER_CACHE_LOCK:
+        entry = _ZYING_DEVELOPER_CACHE.get(key)
+        if entry and entry["expires_at"] > time.monotonic():
+            return [dict(row) for row in entry["rows"]]
+        future = _ZYING_DEVELOPER_INFLIGHT.get(key)
+        owner = future is None
+        if owner:
+            future = Future()
+            _ZYING_DEVELOPER_INFLIGHT[key] = future
+    if not owner:
+        return [dict(row) for row in future.result()]
+
+    try:
+        rows = _fetch_zying_product_developers(token)
+        with _ZYING_DEVELOPER_CACHE_LOCK:
+            now = time.monotonic()
+            for cached_key, cached in list(_ZYING_DEVELOPER_CACHE.items()):
+                if cached["expires_at"] <= now:
+                    _ZYING_DEVELOPER_CACHE.pop(cached_key, None)
+            _ZYING_DEVELOPER_CACHE[key] = {
+                "expires_at": now + ZYING_DEVELOPER_CACHE_SECONDS,
+                "rows": [dict(row) for row in rows],
+            }
+        future.set_result(rows)
+        return [dict(row) for row in rows]
+    except BaseException as exc:
+        future.set_exception(exc)
+        raise
+    finally:
+        with _ZYING_DEVELOPER_CACHE_LOCK:
+            if _ZYING_DEVELOPER_INFLIGHT.get(key) is future:
+                _ZYING_DEVELOPER_INFLIGHT.pop(key, None)
 
 
 def _attach_product_developer(record, developer_names=None):

@@ -1,6 +1,8 @@
 "use strict";
 
 (function () {
+  let mutationTimer = null;
+
   function text(selector) {
     const node = document.querySelector(selector);
     return String(node?.textContent || node?.getAttribute?.("content") || "").replace(/\s+/g, " ").trim();
@@ -10,6 +12,22 @@
     const match = location.href.match(/\/offer\/(\d{5,})\.html/i)
       || location.href.match(/[?&](?:offerId|offer_id|itemId)=(\d{5,})/i);
     return match ? match[1] : "";
+  }
+
+  function itemIdFromValue(value) {
+    const source = String(value || "");
+    const match = source.match(/\/offer\/(\d{5,})(?:\.html)?/i)
+      || source.match(/[?&](?:offerId|offer_id|itemId)=(\d{5,})/i)
+      || source.match(/(?:object_id@|offer_)(\d{5,})/i)
+      || source.match(/_(\d{5,})$/);
+    return match ? match[1] : "";
+  }
+
+  function absoluteUrl(value) {
+    const source = String(value || "").trim();
+    if (!source) return "";
+    try { return new URL(source, location.href).href; }
+    catch (_) { return ""; }
   }
 
   function absoluteImage(value) {
@@ -75,6 +93,66 @@
     return match ? Math.round(Number(match[1]) * multiplier * 100) / 100 : null;
   }
 
+  function listCardCandidate(card) {
+    const link = card.matches("a[href]")
+      ? card
+      : card.querySelector([
+        "a[href*='/offer/']",
+        "a[href*='offerId=']",
+        "a[data-key-value*='offer_']",
+        "a[href]"
+      ].join(","));
+    const rawUrl = card.getAttribute("href") || link?.getAttribute("href") || "";
+    const dataValues = [
+      rawUrl,
+      card.getAttribute("data-renderkey"),
+      card.getAttribute("data-offer-id"),
+      link?.getAttribute("data-aplus-report"),
+      link?.getAttribute("data-key-value")
+    ];
+    const sourceItemId = dataValues.map(itemIdFromValue).find(Boolean) || "";
+    if (!sourceItemId) return null;
+
+    const sourceUrl = absoluteUrl(rawUrl) || `https://detail.1688.com/offer/${sourceItemId}.html`;
+    const titleNode = card.querySelector(".title-text div, .title-text, [class*='title']");
+    const imageNode = card.querySelector("img.main-img, .main-img, img[src*='alicdn'], img[data-src*='alicdn'], img");
+    const title = String(
+      titleNode?.textContent
+      || link?.getAttribute("title")
+      || link?.getAttribute("aria-label")
+      || imageNode?.getAttribute("alt")
+      || ""
+    ).replace(/\s+/g, " ").trim();
+    if (!title) return null;
+
+    const priceText = String(
+      card.querySelector(".price-item, [class*='price']")?.textContent || ""
+    ).replace(/,/g, "");
+    const priceMatch = priceText.match(/\d+(?:\.\d+)?/);
+    const image = absoluteImage(
+      imageNode?.currentSrc
+      || imageNode?.src
+      || imageNode?.dataset?.src
+      || imageNode?.dataset?.lazyloadSrc
+    );
+    return {
+      source_platform: "1688",
+      source_item_id: sourceItemId,
+      source_url: sourceUrl,
+      final_url: sourceUrl,
+      title,
+      price: priceMatch ? Number(priceMatch[0]) : null,
+      currency_id: "CNY",
+      main_image_url: image,
+      images: image ? [image] : [],
+      properties: [],
+      description_text: "",
+      scrape_status: "partial",
+      error_message: "1688 列表页快速采集：详情、规格和重量尺寸待补充",
+      collected_at: new Date().toISOString()
+    };
+  }
+
   function extractProduct() {
     const sourceItemId = itemId();
     const title = text("h1") || text("meta[property='og:title']") || document.title.replace(/[-_].*1688.*$/i, "").trim();
@@ -134,6 +212,29 @@
     }
   }
 
+  async function collectFromList(button, product) {
+    button.disabled = true;
+    const original = button.textContent;
+    button.textContent = "采集中…";
+    try {
+      const response = await chrome.runtime.sendMessage({type: "SUBMIT_PRODUCT", product});
+      if (!response?.ok) throw new Error(response?.error || "采集失败");
+      showToast(
+        response.queued ? "控制台暂不可用，商品已加入待传队列" : "商品已采集到 AI 原创产品",
+        response.queued ? "warning" : "success"
+      );
+      button.textContent = response.queued ? "已待传" : "已采集 ✓";
+    } catch (error) {
+      showToast(error.message || String(error), "error");
+      button.textContent = "重试";
+    } finally {
+      window.setTimeout(() => {
+        button.disabled = false;
+        button.textContent = original;
+      }, 1800);
+    }
+  }
+
   function mountCollectorButton() {
     if (!itemId() || document.querySelector(".zeshun-collector-floating")) return;
     const host = document.createElement("div");
@@ -147,6 +248,32 @@
     document.documentElement.appendChild(host);
   }
 
+  function mountListButtons() {
+    if (location.hostname !== "s.1688.com") return;
+    document.querySelectorAll(".search-offer-wrapper").forEach(card => {
+      if (card.querySelector(".zeshun-card-collect")) return;
+      const product = listCardCandidate(card);
+      if (!product) return;
+      card.classList.add("zeshun-collector-card-host");
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = "zeshun-card-collect";
+      button.textContent = "采集";
+      button.title = "快速采集到泽顺 AI 原创产品";
+      button.addEventListener("click", event => {
+        event.preventDefault();
+        event.stopPropagation();
+        collectFromList(button, product);
+      });
+      card.appendChild(button);
+    });
+  }
+
+  function refreshUi() {
+    mountCollectorButton();
+    mountListButtons();
+  }
+
   chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     if (message?.type === "PING_PAGE") {
       sendResponse({ok: true, detail: Boolean(itemId()), platform: "1688"});
@@ -158,5 +285,10 @@
     }
   });
 
-  mountCollectorButton();
+  const observer = new MutationObserver(() => {
+    window.clearTimeout(mutationTimer);
+    mutationTimer = window.setTimeout(refreshUi, 180);
+  });
+  observer.observe(document.documentElement, {childList: true, subtree: true});
+  refreshUi();
 })();

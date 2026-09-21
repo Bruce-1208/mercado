@@ -46,6 +46,7 @@ GROUP_EXPANSION_WORKERS = _worker_count(
 API_CONCURRENCY = _worker_count(
     "MERCADO_AD_ANALYSIS_API_CONCURRENCY", 16, 64
 )
+PAGE_WORKERS = _worker_count("MERCADO_AD_ANALYSIS_PAGE_WORKERS", 4, 8)
 _api_slots = threading.BoundedSemaphore(API_CONCURRENCY)
 _cache_lock = threading.Lock()
 _snapshot_lock = threading.Lock()
@@ -205,20 +206,52 @@ def _date_range(date_from: str = "", date_to: str = "") -> tuple[str, str]:
 
 
 def _pages(fetch_page, *, page_size: int) -> tuple[list[dict], dict]:
-    offset = 0
-    rows: list[dict] = []
-    summary: dict = {}
-    while True:
-        page = dict(fetch_page(offset) or {})
-        batch = [dict(row) for row in page.get("results") or []]
-        rows.extend(batch)
-        if not summary and isinstance(page.get("metrics_summary"), dict):
-            summary = dict(page["metrics_summary"])
-        paging = page.get("paging") or {}
-        total = _integer(paging.get("total"))
-        offset += len(batch)
-        if not batch or (total and offset >= total) or len(batch) < page_size:
-            break
+    """Read a paginated API result, fetching known remaining pages in parallel."""
+    first_page = dict(fetch_page(0) or {})
+    first_batch = [dict(row) for row in first_page.get("results") or []]
+    summary = (
+        dict(first_page["metrics_summary"])
+        if isinstance(first_page.get("metrics_summary"), dict)
+        else {}
+    )
+    paging = first_page.get("paging") or {}
+    total = _integer(paging.get("total"))
+    first_offset = len(first_batch)
+
+    if not first_batch or len(first_batch) < page_size:
+        return first_batch, summary
+    if total and first_offset >= total:
+        return first_batch, summary
+
+    # Mercado normally returns a total. When it does not, retain the old
+    # sequential fallback because there is no safe way to know the offsets.
+    if not total:
+        rows = list(first_batch)
+        offset = first_offset
+        while True:
+            page = dict(fetch_page(offset) or {})
+            batch = [dict(row) for row in page.get("results") or []]
+            rows.extend(batch)
+            if not summary and isinstance(page.get("metrics_summary"), dict):
+                summary = dict(page["metrics_summary"])
+            offset += len(batch)
+            if not batch or len(batch) < page_size:
+                break
+        return rows, summary
+
+    offsets = list(range(first_offset, total, page_size))
+    rows_by_offset: dict[int, list[dict]] = {}
+    with ThreadPoolExecutor(max_workers=min(PAGE_WORKERS, len(offsets))) as executor:
+        futures = {offset: executor.submit(fetch_page, offset) for offset in offsets}
+        for offset in offsets:
+            page = dict(futures[offset].result() or {})
+            rows_by_offset[offset] = [dict(row) for row in page.get("results") or []]
+            if not summary and isinstance(page.get("metrics_summary"), dict):
+                summary = dict(page["metrics_summary"])
+
+    rows = list(first_batch)
+    for offset in offsets:
+        rows.extend(rows_by_offset[offset])
     return rows, summary
 
 
@@ -680,14 +713,21 @@ def collect_ad_analysis(
     now = datetime.now()
 
     summaries = (bit_mysql.list_mercado_store_tokens() or {}).get("rows") or []
-    tokens = [
-        {
-            **dict(bit_mysql.get_mercado_store_token(int(row["id"])) or {}),
-            "site_settings": copy.deepcopy(row.get("site_settings") or []),
-        }
-        for row in summaries
+    token_summaries = [
+        row for row in summaries
         if bool(row.get("enabled", True))
         and (refresh_scope is None or int(row.get("id") or 0) in refresh_scope)
+    ]
+    token_details = bit_mysql.get_mercado_store_tokens(
+        [int(row["id"]) for row in token_summaries]
+    ) if token_summaries else {}
+    tokens = [
+        {
+            **dict(token_details.get(int(row["id"])) or {}),
+            "site_settings": copy.deepcopy(row.get("site_settings") or []),
+        }
+        for row in token_summaries
+        if token_details.get(int(row["id"]))
     ]
     accounts: list[dict] = []
     links: list[dict] = []

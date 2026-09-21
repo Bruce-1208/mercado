@@ -225,6 +225,201 @@ def test_switch_to_ai_chat_frame_accepts_shadow_dom_frame(monkeypatch):
     assert driver.switch_to.frames == [shadow_frame]
 
 
+def test_switch_to_ai_chat_frame_keeps_context_for_nested_affected_shop(monkeypatch):
+    outer_frame = object()
+    chat_frame = object()
+
+    class SwitchTo:
+        def __init__(self):
+            self.context = "root"
+            self.frames = []
+
+        def default_content(self):
+            self.context = "root"
+
+        def parent_frame(self):
+            self.context = "root"
+
+        def frame(self, frame):
+            expected_parent = "root" if frame is outer_frame else "outer"
+            if self.context != expected_parent:
+                raise RuntimeError("frame element used outside its parent document")
+            self.frames.append(frame)
+            self.context = "outer" if frame is outer_frame else "chat"
+
+    class FakeDriver:
+        def __init__(self):
+            self.switch_to = SwitchTo()
+
+    driver = FakeDriver()
+    monkeypatch.setattr(bit_appeal_ai, "reset_expired_ai_iframe", lambda *args: False)
+    monkeypatch.setattr(
+        bit_appeal_ai,
+        "find_frames_including_shadow_dom",
+        lambda current: {
+            "root": [outer_frame],
+            "outer": [chat_frame],
+            "chat": [],
+        }[current.switch_to.context],
+    )
+    monkeypatch.setattr(
+        bit_appeal_ai,
+        "get_frame_info",
+        lambda current, frame: {
+            "src": (
+                "https://global-selling.mercadolibre.com/container"
+                if frame is outer_frame
+                else "https://global-selling.mercadolibre.com/maxwell/new-chat"
+            ),
+            "title": "" if frame is outer_frame else "Meli AI Chat",
+            "visible": True,
+            "top": 150,
+            "right": 1200,
+            "bottom": 580,
+        },
+    )
+    monkeypatch.setattr(
+        bit_appeal_ai,
+        "find_chat_input",
+        lambda current, timeout, allow_default_content: (
+            object() if current.switch_to.context == "chat" else None
+        ),
+    )
+
+    assert bit_appeal_ai.switch_to_ai_chat_frame(driver, require_input=True)
+    assert driver.switch_to.frames == [outer_frame, chat_frame]
+    assert driver.switch_to.context == "chat"
+
+
+def test_switch_to_ai_chat_frame_accepts_unmarked_frame_with_strict_chat_input(monkeypatch):
+    unmarked_frame = object()
+
+    class SwitchTo:
+        def __init__(self):
+            self.context = "root"
+
+        def default_content(self):
+            self.context = "root"
+
+        def parent_frame(self):
+            self.context = "root"
+
+        def frame(self, frame):
+            assert frame is unmarked_frame
+            self.context = "chat"
+
+    class FakeDriver:
+        def __init__(self):
+            self.switch_to = SwitchTo()
+
+    driver = FakeDriver()
+    monkeypatch.setattr(bit_appeal_ai, "reset_expired_ai_iframe", lambda *args: False)
+    monkeypatch.setattr(
+        bit_appeal_ai,
+        "find_frames_including_shadow_dom",
+        lambda current: [unmarked_frame] if current.switch_to.context == "root" else [],
+    )
+    monkeypatch.setattr(
+        bit_appeal_ai,
+        "get_frame_info",
+        lambda *args: {
+            "src": "about:blank",
+            "title": "support-widget-42",
+            "visible": True,
+            "top": 150,
+            "right": 1200,
+            "bottom": 580,
+        },
+    )
+    monkeypatch.setattr(
+        bit_appeal_ai,
+        "find_chat_input",
+        lambda current, timeout, allow_default_content: (
+            object() if current.switch_to.context == "chat" else None
+        ),
+    )
+
+    assert bit_appeal_ai.switch_to_ai_chat_frame(driver, require_input=False)
+    assert driver.switch_to.context == "chat"
+
+
+def test_switch_to_ai_chat_frame_restores_parent_before_next_nested_sibling(monkeypatch):
+    outer_frame = object()
+    decoy_frame = object()
+    chat_frame = object()
+
+    class SwitchTo:
+        def __init__(self):
+            self.context = "root"
+
+        def default_content(self):
+            self.context = "root"
+
+        def parent_frame(self):
+            self.context = "root" if self.context == "outer" else "outer"
+
+        def frame(self, frame):
+            if frame is outer_frame and self.context == "root":
+                self.context = "outer"
+                return
+            if frame is decoy_frame and self.context == "outer":
+                self.context = "decoy"
+                return
+            if frame is chat_frame and self.context == "outer":
+                self.context = "chat"
+                return
+            raise RuntimeError("sibling frame used outside its parent document")
+
+    class FakeDriver:
+        def __init__(self):
+            self.switch_to = SwitchTo()
+
+    driver = FakeDriver()
+    monkeypatch.setattr(bit_appeal_ai, "reset_expired_ai_iframe", lambda *args: False)
+    monkeypatch.setattr(
+        bit_appeal_ai,
+        "find_frames_including_shadow_dom",
+        lambda current: {
+            "root": [outer_frame],
+            "outer": [decoy_frame, chat_frame],
+            "decoy": [],
+            "chat": [],
+        }[current.switch_to.context],
+    )
+    monkeypatch.setattr(
+        bit_appeal_ai,
+        "get_frame_info",
+        lambda current, frame: {
+            "src": (
+                "https://example.invalid/decoy"
+                if frame is decoy_frame
+                else "https://global-selling.mercadolibre.com/maxwell/new-chat"
+                if frame is chat_frame
+                else "https://global-selling.mercadolibre.com/container"
+            ),
+            "title": "Meli AI Chat" if frame is chat_frame else "",
+            "visible": True,
+            "top": 150,
+            "right": 1200,
+            "bottom": 580,
+        },
+    )
+    monkeypatch.setattr(
+        bit_appeal_ai,
+        "find_chat_input",
+        lambda current, timeout, allow_default_content: (
+            object() if current.switch_to.context == "chat" else None
+        ),
+    )
+
+    assert bit_appeal_ai.switch_to_ai_chat_frame(
+        driver,
+        require_input=True,
+        max_depth=1,
+    )
+    assert driver.switch_to.context == "chat"
+
+
 def test_click_inline_entry_recognizes_ready_shadow_iframe_without_click(monkeypatch):
     class SwitchTo:
         def default_content(self):

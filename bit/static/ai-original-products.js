@@ -19,6 +19,23 @@ function aiOriginalStateLabel(status) {
   return {pending: "待处理", processing: "处理中", completed: "已完成", failed: "失败"}[status] || status || "待处理";
 }
 
+function aiOriginalAttributes(attributes) {
+  return (Array.isArray(attributes) ? attributes : []).filter(attribute => {
+    return attribute && (attribute.value_name || attribute.value_id || attribute.values);
+  }).slice(0, 30);
+}
+
+function renderAiOriginalAttributes(attributes) {
+  const rows = aiOriginalAttributes(attributes);
+  if (!rows.length) return '<span class="ai-original-muted">等待 AI 生成属性</span>';
+  return `<div class="ai-original-attribute-list">${rows.map(attribute => {
+    const name = attribute.name_es || attribute.name || attribute.id || "属性";
+    const localizedValues = [attribute.value_name_es, attribute.value_name_pt].filter(Boolean);
+    const value = localizedValues.length ? [...new Set(localizedValues)].join(" / ") : (attribute.value_name || attribute.value_id || (Array.isArray(attribute.values) ? attribute.values.map(item => item.name || item.id).join(" / ") : ""));
+    return `<span><b>${aiOriginalEscape(name)}</b>${aiOriginalEscape(value)}</span>`;
+  }).join("")}</div>`;
+}
+
 function renderAiOriginalProducts() {
   const grid = document.getElementById("ai-original-grid");
   if (!grid) return;
@@ -28,14 +45,21 @@ function renderAiOriginalProducts() {
   grid.innerHTML = rows.length ? rows.map(row => {
     const original = row.original_1688 || {};
     const status = String(row.ai_status || "pending");
-    const image = row.main_image_url || original.main_image_url || "";
+    const sourceImage = original.main_image_url || (original.images || [])[0] || "";
+    const aiImage = row.main_image_url || "";
     const titleEs = row.title_es || "等待 AI 生成西班牙语标题";
     const titlePt = row.title_pt || "等待 AI 生成葡萄牙语标题";
+    const aiAttributes = aiOriginalAttributes(row.ai_original?.attributes);
+    const ready = status === "completed" && aiAttributes.some(attribute => !["BRAND", "ITEM_CONDITION"].includes(String(attribute.id || "").toUpperCase()));
+    const aiImageReady = row.ai_original?.image_generation_method === "ai_image_edit" && aiImage.includes("-ai-white.jpg");
     return `<article class="ai-original-card">
       <input type="checkbox" value="${Number(row.id)}" ${aiOriginalSelected.has(Number(row.id)) ? "checked" : ""} onchange="toggleAiOriginalProduct(${Number(row.id)}, this.checked)">
-      <img src="${aiOriginalEscape(image)}" alt="1688 商品首图" loading="lazy">
-      <div class="ai-original-source"><span class="ai-original-badge ${aiOriginalEscape(status)}">${aiOriginalEscape(aiOriginalStateLabel(status))}</span><h4>${aiOriginalEscape(original.title || row.title)}</h4><p>1688：${aiOriginalEscape(original.source_1688_item_id || row.source_item_id)}</p><p>采购价：${aiOriginalEscape(original.price ?? row.price ?? "-")} CNY</p>${row.ai_error ? `<p class="bad">${aiOriginalEscape(row.ai_error)}</p>` : ""}</div>
-      <div class="ai-original-copy"><strong>西语 ${titleEs.length}/60</strong><p class="${titleEs.length > 60 ? "bad" : ""}">${aiOriginalEscape(titleEs)}</p><strong>葡语 ${titlePt.length}/60</strong><p class="${titlePt.length > 60 ? "bad" : ""}">${aiOriginalEscape(titlePt)}</p><p>详情：${row.description_es ? "已生成西语 / 葡语新详情" : "待生成"}</p></div>
+      <div class="ai-original-image-pair">
+        <figure><img src="${aiOriginalEscape(sourceImage)}" alt="1688 原始主图" loading="lazy"><figcaption>1688 原图</figcaption></figure>
+        <figure><img src="${aiOriginalEscape(aiImage)}" alt="AI 美客多白底主图" loading="lazy"><figcaption>AI 白底主图</figcaption></figure>
+      </div>
+      <div class="ai-original-source"><span class="ai-original-section-label source">1688 原始资料</span><h4>${aiOriginalEscape(original.title || row.title)}</h4><p>1688 编号：${aiOriginalEscape(original.source_1688_item_id || row.source_item_id)}</p><p>采购价：${aiOriginalEscape(original.price ?? row.price ?? "-")} CNY</p><a href="${aiOriginalEscape(original.source_url || row.source_url || "#")}" target="_blank" rel="noopener">打开 1688 详情页 ↗</a>${row.ai_error ? `<p class="bad">${aiOriginalEscape(row.ai_error)}</p>` : ""}</div>
+      <div class="ai-original-copy"><span class="ai-original-section-label generated">AI 美客多刊登稿</span><strong>西语标题 ${titleEs.length}/60</strong><p class="${titleEs.length > 60 ? "bad" : ""}">${aiOriginalEscape(titleEs)}</p><strong>葡语标题 ${titlePt.length}/60</strong><p class="${titlePt.length > 60 ? "bad" : ""}">${aiOriginalEscape(titlePt)}</p><strong>AI 商品属性（${aiAttributes.length}）</strong>${renderAiOriginalAttributes(row.ai_original?.attributes)}<details><summary>查看 AI 双语详情</summary><p>${aiOriginalEscape(row.description_es || "待生成西语详情")}</p><p>${aiOriginalEscape(row.description_pt || "待生成葡语详情")}</p></details><div class="ai-original-readiness"><span class="${ready ? "ok" : "pending"}">${ready ? "✓" : "!"} AI 属性</span><span class="${aiImageReady ? "ok" : "pending"}">${aiImageReady ? "✓" : "!"} AI 白底主图</span><span class="${row.category_id ? "ok" : "pending"}">${row.category_id ? "✓" : "!"} CBT 类目</span></div></div>
       <div class="ai-original-fields">
         <label>实重(g)<input id="ai-original-weight-${Number(row.id)}" type="number" min="1" step="1" value="${aiOriginalEscape(row.weight_g || "")}"></label>
         <label>净收益USD<input id="ai-original-net-${Number(row.id)}" type="number" min="0.01" step="0.01" value="${aiOriginalEscape(row.net_proceeds_usd || "")}"></label>
@@ -97,6 +121,9 @@ async function processSelectedAiOriginalProducts() {
       api_key: document.getElementById("ai-original-api-key")?.value || "",
       base_url: document.getElementById("ai-original-base-url")?.value || "",
       model: document.getElementById("ai-original-model")?.value || "",
+      image_api_key: document.getElementById("ai-original-image-api-key")?.value || "",
+      image_base_url: document.getElementById("ai-original-image-base-url")?.value || "",
+      image_model: document.getElementById("ai-original-image-model")?.value || "",
       workers: Number(document.getElementById("ai-original-workers")?.value || 3)
     })});
     const payload = await response.json();

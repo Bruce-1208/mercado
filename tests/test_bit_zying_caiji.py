@@ -1259,6 +1259,44 @@ def test_zying_api_post_uses_frontend_api_bridge(monkeypatch):
     }
 
 
+def test_zying_product_developers_are_cached_by_credential(monkeypatch):
+    calls = []
+
+    def api_post(_session, token, command, payload):
+        calls.append((token, command, payload))
+        return {"logins": [{"id": 17, "name": "产品开发甲"}]}
+
+    monkeypatch.setattr(bit_zying_caiji, "_zying_api_post", api_post)
+    monkeypatch.setattr(bit_zying_caiji, "ZYING_DEVELOPER_CACHE_SECONDS", 60)
+    credential = "cache-test-credential"
+
+    assert bit_zying_caiji.list_zying_product_developers(credential) == [
+        {"id": "17", "name": "产品开发甲"}
+    ]
+    assert bit_zying_caiji.list_zying_product_developers(credential) == [
+        {"id": "17", "name": "产品开发甲"}
+    ]
+    assert calls == [(credential, "logins.select", {})]
+
+
+def test_page_developers_seed_the_cache_for_collection_start(monkeypatch):
+    monkeypatch.setattr(bit_zying_caiji, "ZYING_DEVELOPER_CACHE_SECONDS", 60)
+    bit_zying_caiji.cache_zying_product_developers(
+        "page-cache-credential", [{"id": 18, "name": "网页开发乙"}]
+    )
+    monkeypatch.setattr(
+        bit_zying_caiji,
+        "_zying_api_post",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(
+            AssertionError("应直接使用当前网页已读取的开发人员")
+        ),
+    )
+
+    assert bit_zying_caiji.list_zying_product_developers("page-cache-credential") == [
+        {"id": "18", "name": "网页开发乙"}
+    ]
+
+
 def test_api_collection_reads_list_and_details_without_opening_browser(monkeypatch):
     api_calls = []
     written = []

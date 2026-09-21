@@ -229,6 +229,59 @@
     return result;
   }
 
+  function parsePluginSales(text) {
+    const normalized = clean(text);
+    const labels = "(?:\u603b\s*\u9500\s*\u91cf|\u9500\s*\u91cf|\u5df2\s*\u552e|\u552e\s*\u51fa|sold(?:\s+quantity)?|sales|vendidos?|vendas?)";
+    const number = "([0-9]+(?:[.,][0-9]+)?)\\s*(\u4e07|k|mil)?";
+    const patterns = [
+      new RegExp(`${labels}[^0-9]{0,18}${number}`, "i"),
+      new RegExp(`${number}\\s*(?:\u4ef6|\u5355)?\\s*${labels}`, "i")
+    ];
+    for (const pattern of patterns) {
+      const match = pattern.exec(normalized);
+      if (!match) continue;
+      let value = finiteNumber(match[1]);
+      if (value === null) continue;
+      const suffix = String(match[2] || "").toLowerCase();
+      if (suffix === "\u4e07") value *= 10000;
+      else if (suffix === "k" || suffix === "mil") value *= 1000;
+      return Math.max(0, Math.round(value));
+    }
+    return null;
+  }
+
+  function parsePluginProductInfo(text, originCode = "") {
+    const normalized = clean(text);
+    const origin = clean(originCode).toUpperCase();
+    let fulfillmentType = "unknown";
+    let fulfillmentLabel = "\u672a\u8bc6\u522b";
+    if (/\u6d77\s*\u5916\s*\u4ed3|overseas\s+warehouse/i.test(normalized)) {
+      fulfillmentType = "overseas_warehouse";
+      fulfillmentLabel = "\u6d77\u5916\u4ed3";
+    } else if (/\u672c\s*(?:\u571f|\u5730)\s*\u4ed3|\u5f53\s*\u5730\s*\u4ed3|local\s+warehouse/i.test(normalized)) {
+      fulfillmentType = "local_warehouse";
+      fulfillmentLabel = "\u672c\u571f\u4ed3";
+    } else if (/\u5168\s*\u6258\s*\u7ba1|mercado\s+env[ií]os\s+full|enviado\s+por\s+mercado\s+libre|\bfulfillment\b|\bfull\b/i.test(normalized)) {
+      fulfillmentType = "full_managed";
+      fulfillmentLabel = "\u5168\u6258\u7ba1";
+    } else if (/\u534a\s*\u6258\s*\u7ba1/.test(normalized)) {
+      fulfillmentType = "semi_managed";
+      fulfillmentLabel = "\u534a\u6258\u7ba1";
+    } else if (/\u81ea\s*\u53d1\s*\u8d27|\u81ea\s*\u884c\s*\u53d1\s*\u8d27|seller\s+fulfilled|merchant\s+fulfilled/i.test(normalized) || origin === "CN") {
+      fulfillmentType = "self_ship";
+      fulfillmentLabel = "\u81ea\u53d1\u8d27";
+    } else if (origin) {
+      fulfillmentType = "overseas_warehouse";
+      fulfillmentLabel = `\u975e\u4e2d\u56fd\u4ed3/${origin}`;
+    }
+    return {
+      sales: parsePluginSales(normalized),
+      fulfillment_type: fulfillmentType,
+      fulfillment_label: fulfillmentLabel,
+      fulfillment_eligible: fulfillmentType === "self_ship" || fulfillmentType === "semi_managed"
+    };
+  }
+
   function shadowRoots(doc) {
     const roots = [];
     const visited = new Set();
@@ -258,7 +311,8 @@
     };
     for (const root of shadowRoots(doc)) {
       const containers = Array.from(root.querySelectorAll(
-        ".zying-meli-detail-metric-line, .zying-meli-detail-metric-column, [class*='zying-meli-detail']"
+        ".zying-meli-detail-metric-line, .zying-meli-detail-metric-column, " +
+        ".zying-meli-detail-metrics, [class*='zying-meli-detail'], #zyCardWrap"
       ));
       containers.forEach(node => add(node.innerText || node.textContent));
       containers.forEach(container => {
@@ -281,13 +335,9 @@
           ];
           assets.forEach(asset => {
             const value = String(asset || "");
-            if (/(?:^|[\\/])US\.svg(?:[?#"')]|$)/i.test(value)) {
-              selfShipOrigin = "US";
-              originIconUrl = value;
-            } else if (
-              !selfShipOrigin && /(?:^|[\\/])CN\.svg(?:[?#"')]|$)/i.test(value)
-            ) {
-              selfShipOrigin = "CN";
+            const flag = /(?:^|[\\/])(CN|US|MX|BR|AR|CL|CO|UY|CA|GB|ES|PT|DE|FR|IT|JP|KR|AU)\.svg(?:[?#"')]|$)/i.exec(value);
+            if (flag && (!selfShipOrigin || flag[1].toUpperCase() !== "CN")) {
+              selfShipOrigin = flag[1].toUpperCase();
               originIconUrl = value;
             }
           });
@@ -296,10 +346,12 @@
     }
     const text = lines.join(" ");
     const metrics = parsePluginMetrics(text);
+    const productInfo = parsePluginProductInfo(text, selfShipOrigin);
     return {
       lines: lines.slice(0, 50),
       text: text.slice(0, 12000),
       metrics,
+      ...productInfo,
       self_ship_origin: selfShipOrigin,
       origin_icon_url: originIconUrl
     };
@@ -370,8 +422,6 @@
     const specs = extractSpecs(doc);
     const plugin = readPluginMetrics(doc);
     const metrics = plugin.metrics;
-    // Origin is retained for diagnostics; US filtering happens on the listing
-    // card before this detail page is opened.
     const actualWeightComplete = Number.isFinite(Number(metrics.weight_g)) && Number(metrics.weight_g) > 0;
     const weightBasis = actualWeightComplete ? "plugin_actual" : "";
     const price = pagePrice(doc, product);
@@ -394,6 +444,7 @@
       price,
       currency_id: currencyId,
       condition: "new",
+      sold_quantity: plugin.sales,
       available_quantity: 1,
       permalink: finalUrl,
       pictures: pictures.map(url => ({source: url})),
@@ -436,6 +487,10 @@
         plugin_volumetric_display: metrics.volumetric_display,
         volumetric_formula: "length_cm * width_cm * height_cm / 6000",
         volumetric_weight_kg: metrics.volumetric_weight_kg,
+        sales: plugin.sales,
+        fulfillment_type: plugin.fulfillment_type,
+        fulfillment_label: plugin.fulfillment_label,
+        fulfillment_eligible: plugin.fulfillment_eligible,
         self_ship_origin: plugin.self_ship_origin || "unknown",
         origin_icon_url: plugin.origin_icon_url
       },
@@ -453,7 +508,8 @@
       const link = card.querySelector(
         "a.poly-component__title, a.ui-search-link, a[href*='item_id='], a[href*='itemId='], " +
         "a[href*='wid='], a[href*='/p/ML'], a[href*='/MLM-'], " +
-        "a[href*='/MLB-'], a[href*='/MLA-'], a[href*='/MLC-'], a[href*='/MCO-'], a[href*='/MLU-']"
+        "a[href*='/MLB-'], a[href*='/MLA-'], a[href*='/MLC-'], a[href*='/MCO-'], " +
+        "a[href*='/MLU-'], a[href*='/CBT-']"
       );
       return link && isSupportedUrl(link.href) ? {
         card,
@@ -479,6 +535,63 @@
       node.getAttribute && node.getAttribute('title'),
       node.style && node.style.backgroundImage
     ].some(isUsFlag));
+  }
+
+  function cardShippingProfile(card, url = "") {
+    if (!card) return {origin: "", managed: false, eligible: false};
+    const assets = [card, ...Array.from(card.querySelectorAll("img, source, use, [style]"))]
+      .flatMap(node => [
+        node.getAttribute && node.getAttribute("src"),
+        node.getAttribute && node.getAttribute("data-src"),
+        node.getAttribute && node.getAttribute("srcset"),
+        node.getAttribute && node.getAttribute("href"),
+        node.getAttribute && node.getAttribute("xlink:href"),
+        node.getAttribute && node.getAttribute("data"),
+        node.getAttribute && node.getAttribute("alt"),
+        node.getAttribute && node.getAttribute("title"),
+        node.style && node.style.backgroundImage
+      ]).map(value => String(value || ""));
+    const text = clean(card.innerText || card.textContent);
+    const us = assets.some(value => /(?:^|[\\/])US\.svg(?:[?#"')]|$)/i.test(value)) ||
+      /(?:internacional.{0,24}(?:usa|eua|estados unidos|united states))|(?:(?:usa|eua|estados unidos|united states).{0,24}internacional)/i.test(text);
+    const china = !us && (assets.some(value => /(?:^|[\\/])CN\.svg(?:[?#"')]|$)/i.test(value)) ||
+      /(?:internacional.{0,30}china)|(?:china.{0,30}internacional)|(?:enviado|env[ií]o|origen|desde).{0,18}china/i.test(text));
+    const managed = /^CBT/i.test(normalizeItemId(url)) ||
+      /\b(?:full|fulfillment)\b|mercado\s+env[ií]os\s+full|enviado\s+por\s+mercado\s+libre/i.test(text);
+    const origin = us ? "US" : (china ? "CN" : "");
+    return {origin, managed, eligible: !us && (china || managed)};
+  }
+
+  function pluginLoginStatus(doc) {
+    const markers = [];
+    const runtimeMarkers = [];
+    for (const root of shadowRoots(doc)) {
+      try {
+        markers.push(...root.querySelectorAll(
+          ".zying-meli-detail-metric-line, .zying-meli-detail-metric-column, " +
+          "[class*='zying-meli'], [id*='zying-meli'], #zyCardWrap"
+        ));
+      } catch (_) {}
+    }
+    try {
+      // ZYing 5.x may have inserted its page bridge while the detail card is
+      // still loading. This proves the plugin is present even when its panel
+      // has not rendered any metric rows yet.
+      runtimeMarkers.push(...doc.querySelectorAll(
+        "script[data-zying-inject-bundle], script#zying, [data-zying-inject-bundle], #zyCardWrap"
+      ));
+    } catch (_) {}
+    const visibleText = clean(markers.map(node => node.innerText || node.textContent).join(" "));
+    const metrics = readPluginMetrics(doc);
+    const found = markers.length > 0 || runtimeMarkers.length > 0 || metrics.lines.length > 0;
+    const asksLogin = /(?:请先|立即|点击|尚未|未)\s*登录|登录\s*(?:智赢|账号)/i.test(visibleText);
+    return {
+      found,
+      logged_in: found && !asksLogin,
+      message: !found ? "未检测到智赢插件，请先安装并刷新当前美客多页面"
+        : asksLogin ? "智赢插件尚未登录，请先登录后刷新当前美客多页面"
+          : "智赢插件已检测并处于登录状态"
+    };
   }
 
   function extractCardProduct(card, pageUrl) {
@@ -565,10 +678,14 @@
     finiteNumber,
     normalizeItemId,
     parsePluginMetrics,
+    parsePluginSales,
+    parsePluginProductInfo,
     isSupportedUrl,
     extractProduct,
     cardCandidates,
     extractCardProduct,
-    cardHasUsFlag
+    cardHasUsFlag,
+    cardShippingProfile,
+    pluginLoginStatus
   };
 });

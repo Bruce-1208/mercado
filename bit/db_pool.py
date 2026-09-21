@@ -8,21 +8,27 @@ MySQL during client-mode startup.
 
 from __future__ import annotations
 
+import atexit
+import logging
 import os
 import threading
+import time
 from typing import Any, Mapping
 
 import pymysql
 from dbutils.pooled_db import PooledDB
 
 
-DEFAULT_MAX_CONNECTIONS = 24
-DEFAULT_MIN_CACHED = 2
-DEFAULT_MAX_CACHED = 12
+DEFAULT_MAX_CONNECTIONS = 12
+DEFAULT_MIN_CACHED = 0
+DEFAULT_MAX_CACHED = 4
+DEFAULT_WARN_PERCENT = 75
+DEFAULT_WARN_INTERVAL_SECONDS = 60
 
 _pools: dict[tuple[Any, ...], PooledDB] = {}
 _pools_lock = threading.Lock()
 _pools_pid = os.getpid()
+_last_capacity_warning: dict[int, float] = {}
 
 
 def _env_int(name: str, default: int, minimum: int, maximum: int) -> int:
@@ -109,6 +115,63 @@ def _new_pool(config: Mapping[str, Any]) -> PooledDB:
     )
 
 
+def _pool_numbers(pool: PooledDB) -> dict[str, int | float]:
+    """Return a credential-free snapshot of one DBUtils pool."""
+
+    active = max(0, int(getattr(pool, "_connections", 0) or 0))
+    idle = len(getattr(pool, "_idle_cache", ()) or ())
+    maximum = max(0, int(getattr(pool, "_maxconnections", 0) or 0))
+    utilization = round((active / maximum) * 100, 1) if maximum else 0.0
+    return {
+        "active": active,
+        "idle": idle,
+        "physical": active + idle,
+        "max_connections": maximum,
+        "utilization_percent": utilization,
+    }
+
+
+def pool_status() -> dict[str, Any]:
+    """Expose local pool usage without hosts, usernames, or credentials."""
+
+    with _pools_lock:
+        pools = [_pool_numbers(pool) for pool in _pools.values()]
+    return {
+        "pool_count": len(pools),
+        "active": sum(int(pool["active"]) for pool in pools),
+        "idle": sum(int(pool["idle"]) for pool in pools),
+        "physical": sum(int(pool["physical"]) for pool in pools),
+        "max_connections": sum(int(pool["max_connections"]) for pool in pools),
+        "pools": pools,
+    }
+
+
+def _warn_if_near_capacity(pool: PooledDB) -> None:
+    numbers = _pool_numbers(pool)
+    maximum = int(numbers["max_connections"])
+    if not maximum:
+        return
+    warn_percent = _env_int("MYSQL_POOL_WARN_PERCENT", DEFAULT_WARN_PERCENT, 1, 100)
+    if float(numbers["utilization_percent"]) < warn_percent:
+        return
+
+    now = time.monotonic()
+    pool_id = id(pool)
+    with _pools_lock:
+        last_warning = _last_capacity_warning.get(pool_id, 0.0)
+        if now - last_warning < DEFAULT_WARN_INTERVAL_SECONDS:
+            return
+        _last_capacity_warning[pool_id] = now
+    logging.warning(
+        "MySQL 连接池容量已达 %s%%：活跃 %s，上限 %s，空闲缓存 %s；"
+        "请检查慢查询、未归还连接或过高的后台并发",
+        numbers["utilization_percent"],
+        numbers["active"],
+        maximum,
+        numbers["idle"],
+    )
+
+
 def get_db_connection(connection_config: Mapping[str, Any] | None = None):
     """Return a dedicated logical connection from the current process pool."""
 
@@ -128,7 +191,9 @@ def get_db_connection(connection_config: Mapping[str, Any] | None = None):
         if pool is None:
             pool = _new_pool(config)
             _pools[key] = pool
-    return pool.connection(shareable=False)
+    connection = pool.connection(shareable=False)
+    _warn_if_near_capacity(pool)
+    return connection
 
 
 def close_all_pools() -> None:
@@ -137,15 +202,21 @@ def close_all_pools() -> None:
     with _pools_lock:
         pools = list(_pools.values())
         _pools.clear()
+        _last_capacity_warning.clear()
     for pool in pools:
         pool.close()
+
+
+atexit.register(close_all_pools)
 
 
 __all__ = (
     "DEFAULT_MAX_CONNECTIONS",
     "DEFAULT_MAX_CACHED",
     "DEFAULT_MIN_CACHED",
+    "DEFAULT_WARN_PERCENT",
     "close_all_pools",
     "default_connection_config",
     "get_db_connection",
+    "pool_status",
 )

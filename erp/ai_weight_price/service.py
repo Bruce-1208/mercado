@@ -122,7 +122,7 @@ class Service:
                 self.store.set_state("model_connection", result)
             return result
 
-    def open_login(self):
+    def open_login(self, *, include_supplier=True):
         with self.idle():
             self.store.set_state("login", {"confirmed": False, "opened_at": time.time()})
             config = self.config.load()
@@ -135,10 +135,12 @@ class Service:
             try:
                 with self.browser_factory(config, threading.Event(), self.store.log) as browser:
                     browser.open_login()
-                    browser.open_supplier_login()
+                    if include_supplier:
+                        browser.open_supplier_login()
             except Exception as exc:
                 raise ValueError(f"无法打开 Edge 登录页面：{exc}") from exc
-            self.store.log("已在同一 Edge 窗口打开智赢和1688，等待人工完成登录并在控制台确认")
+            self.store.log("已打开智赢和1688，等待人工完成登录并确认" if include_supplier else
+                           "已打开智赢登录页面，等待人工完成登录并确认")
 
     def confirm_login(self):
         with self.idle():
@@ -730,6 +732,29 @@ class Service:
             match.get("raw_weight", ""), match.get("description", "")) if value)
 
     def process(self, task, browser, models, config):
+        # Eligibility is determined from the live Zying detail immediately
+        # before any 1688 search/model call. Historical local task state is not
+        # authoritative because an operator may have changed the product since
+        # the previous run.
+        if hasattr(browser, "read_review_status"):
+            key = task["erp_goods_id"]
+            try:
+                review_status = browser.read_review_status(task)
+            except (CircuitOpen, Stopped):
+                raise
+            except Exception as exc:
+                self.store.exception(key, "读取智赢审核状态失败", exc)
+                return
+            task = self.store.update(key, erp_review_status=review_status,
+                                     erp_review_status_checked_at=time.time())
+            if review_status != "待审核":
+                reason = f"智赢商品状态为{review_status}，AI核重核价仅处理待审核商品，已跳过"
+                self.store.update(key, status="skipped", stage="review_status_skipped",
+                                  skip_reason=reason, decision_status="skipped",
+                                  decision_reason=reason, saved_at=time.time())
+                self.store.log(reason + "；未调用1688或AI，未修改智赢商品", key)
+                self.record_visual(key, "review_status_skipped", reason)
+                return
         if config["workflow_mode"] == "image_first":
             from .image_first import process
             return process(self, task, browser, models, config)
@@ -896,7 +921,8 @@ class Service:
         try:
             pricing = usd_cost(task["cost_price"], self.exchange_rate(config))
             task = self.store.update(key, net_income_usd=pricing["net_income_usd"], pricing=pricing)
-            self.store.log(f"所选变体供货成本 ¥{task['cost_price']} ÷ 汇率 {pricing['cny_per_usd']}"
+            self.store.log(f"所选变体最高供货成本 ¥{task['cost_price']} + ¥{pricing['net_income_buffer_cny']}"
+                           f" = 计价基准 ¥{pricing['pricing_basis_cny']} ÷ 汇率 {pricing['cny_per_usd']}"
                            f" = ${pricing['unrounded_usd']}，向上取整 ${pricing['net_income_usd']}，将回填智赢净收益"
                            f"（汇率日期 {pricing['rate_date']}，来源 {pricing['rate_source']}）", key)
         except Exception as exc:
@@ -961,6 +987,80 @@ class Service:
 
     def exchange_rate(self, config):
         return exchange_rate(config, self.store)
+
+    def manual_execute(self, key, values, actor):
+        """Write operator-entered weight and net income to the Zying page.
+
+        This is an explicit operator action and therefore intentionally bypasses
+        the automatic writeback switch. It still uses the same guarded browser
+        adapter and post-save readback as automatic execution. A verified save
+        changes the Zying review status from pending to approved and records the
+        task as manual.
+        """
+        allowed = {"weight_g", "net_income_usd", "note"}
+        if not isinstance(values, dict) or set(values) - allowed:
+            raise ValueError("只能人工执行重量、净收益和备注")
+        if values.get("weight_g") in (None, "") or values.get("net_income_usd") in (None, ""):
+            raise ValueError("人工核验必须填写重量和净收益")
+        weight = number(values["weight_g"])
+        net_income = number(values["net_income_usd"])
+        if net_income != net_income.to_integral_value():
+            raise ValueError("净收益必须是整数美元")
+        note = values.get("note", "")
+        if not isinstance(note, str) or len(note) > 2000:
+            raise ValueError("人工核验备注无效")
+        changes = {"weight_g": str(weight), "net_income_usd": str(net_income),
+                   "review_status": "通过"}
+        with self.idle():
+            task = self.store.get(key)
+            config = self.config.load()
+            self.require_login(config)
+            history = task.get("write_history", [])
+            intent = {**changes, "verification_mode": "manual", "actor": actor, "note": note,
+                      "at": time.time()}
+
+            def before_save(old):
+                history.append({"before": old, "intent": intent, "after": None,
+                                "verified": False, "at": intent["at"]})
+                self.store.update(key, stage="writing", erp_before=old, erp_after=None,
+                                  write_verified=False, write_intent=intent,
+                                  write_history=history, verification_mode="manual",
+                                  manual_verification={"actor": actor, "note": note,
+                                                       "requested_at": intent["at"]})
+                self.store.log(f"人工核验回填前：重量 {old.get('weight_g')}g，净收益 ${old.get('net_income_usd')}；"
+                               f"计划修改为：重量 {weight}g，净收益 ${net_income}", key)
+
+            try:
+                with self.browser_factory(config, threading.Event(), self.store.log) as browser:
+                    actual = browser.write_patch(task, changes, before_save)
+                if (not actual or number(actual.get("net_income_usd")) != net_income
+                        or number(actual.get("weight_g")) != weight
+                        or actual.get("review_status") != "通过"):
+                    raise ValueError("智赢未返回一致的人工核验保存后回读数据")
+                saved_at = time.time()
+                history[-1].update(after=actual, saved_at=saved_at, verified=True)
+                result = self.store.update(
+                    key, status="success", stage="done", exception_reason="", exception_detail="",
+                    decision_status="success", decision_reason="人工核验已直接同步智赢",
+                    saved_at=saved_at, erp_after=actual, write_verified=True,
+                    write_history=history, verification_mode="manual",
+                    manual_verification={"actor": actor, "note": note,
+                                         "requested_at": intent["at"], "completed_at": saved_at},
+                    weight_g=changes["weight_g"], net_income_usd=changes["net_income_usd"])
+                self.store.log(f"人工核验保存成功并回读确认：重量 {actual['weight_g']}g，"
+                               f"美元净收益 ${actual['net_income_usd']}；智赢审核状态已改为通过", key)
+                self.store.export()
+                return result
+            except Exception as exc:
+                actual = getattr(exc, "actual", None)
+                if history and not history[-1].get("verified"):
+                    history[-1].update(after=actual, error=str(exc))
+                    self.store.update(key, erp_after=actual, write_verified=False, write_history=history)
+                detail = str(exc)
+                if actual:
+                    detail += "；外部写入结果不确定，请人工回读确认"
+                self.store.exception(key, "人工核验回写失败", detail)
+                raise ValueError("人工核验回写失败：" + detail) from None
 
     def edit(self, key, values, actor):
         allowed = {"cost_price", "weight_g", "reference_weight_g", "measured_weight_g", "erp_sku", "erp_edit_url", "note"}

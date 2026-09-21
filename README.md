@@ -2,12 +2,29 @@
 
 ## AI核重核价
 
+商用上线前的客户隔离、内部接口权限、Agent 回退以及备份恢复操作见
+[商用上线运维基线](docs/commercial_operations.md)。
+
 泽顺控制台「商品管理 → AI核重核价」已接入本地任务管理、参数设置、异常处理、日志与 CSV 导出。
 也可以不依赖 MySQL 单独启动：`python -m erp.ai_weight_price`，访问 `http://127.0.0.1:5018/ai-weight-price`。
-任务页可直接打开 Edge 智赢登录窗口；人工登录后点击「我已成功登录」，选择分类（可留空）和起止页，再采集、处理所选范围。首次使用仍需配置当前页面 DOM 字段与模型密钥；默认关闭真实 ERP 回写。
+集成控制台的任务启动已迁移到泽顺插件「核重核价」页：在插件中打开专用 Edge、确认智赢与 1688 登录，选择分类（可留空）、起止页和商品数后启动。控制台继续显示执行进度、结果、日志与异常处理；独立运行页面仍保留原启动控件。首次使用仍需配置当前页面 DOM 字段与模型密钥；默认关闭真实 ERP 回写。
 部署、页面适配、校验语义及模型/硬件选型见 [AI核重核价说明](docs/ai_weight_price.md)。
 
 AI 自动申诉的执行状态、故障恢复和配置说明见 [申诉稳定性说明](docs/ai_appeal_reliability.md)。
+
+## AI 视频生成
+
+工作台支持火山方舟 Seedance 2.5 和阿里云百炼 Wan 3.0，配置任意一个即可生成。
+两者都配置时，Seedance 2.5 作为主模型、Wan 3.0 作为备用模型。
+新任务在主模型未配置、明确拒绝请求或任务明确失败时自动切换备用模型；提交结果或运行状态不确定时不会切换，以避免重复生成和重复计费。已有 Wan 任务继续按原供应商恢复。
+
+使用 Seedance 时配置 `AI_VIDEO_SEEDANCE_API_KEY`；使用 Wan 时配置
+`AI_VIDEO_WAN_API_KEY` 和 `AI_VIDEO_WAN_WORKSPACE_ID`。模型读取本地素材时还需配置
+可公开访问的 `AI_VIDEO_PUBLIC_BASE_URL`。
+完整变量及兼容旧部署的变量名见 [.env.example](.env.example)。也可在工作台“AI生成视频 → 模型 Token 配置”中保存主备凭证。
+
+对于内容已经完成、只需改变封装和编码格式的视频，可以选择“仅转换视频格式，不调用 AI”。
+该模式要求服务器安装 FFmpeg/FFprobe，源视频已是 9:16 且时长为 10–60 秒；系统只在本地转换成 720×1280、H.264/AAC MP4，不使用模型 Token。
 
 ## 工作台服务端 / 客户端运行角色
 
@@ -21,11 +38,13 @@ python -m pip install -r bit/requirements-server.txt
 `BIT_WSGI_THREADS`、`BIT_WSGI_CONNECTION_LIMIT` 和 `BIT_WSGI_BACKLOG`
 调整；自动化任务仍由独立的后台并发限制控制。
 
-MySQL 默认使用进程内共享连接池：最多 24 条物理连接、预热 2 条、最多保留
-12 条空闲连接。业务代码调用 `close()` 时连接会安全回池而不是断开 TCP；连接
-取用时会自动检查失效连接。可用 `MYSQL_POOL_MAX_CONNECTIONS`、
-`MYSQL_POOL_MIN_CACHED`、`MYSQL_POOL_MAX_CACHED` 和 `MYSQL_POOL_MAX_USAGE`
-调整。常规单进程部署不要把池上限设得高于 Waitress 请求线程数。
+MySQL 默认使用进程内共享连接池：最多 12 条物理连接、不预热、最多保留
+4 条空闲连接。业务代码调用 `close()` 时连接会安全回池而不是断开 TCP；连接
+取用时会自动检查失效连接，达到 75% 容量时会限频记录告警。可用
+`MYSQL_POOL_MAX_CONNECTIONS`、`MYSQL_POOL_MIN_CACHED`、
+`MYSQL_POOL_MAX_CACHED`、`MYSQL_POOL_MAX_USAGE` 和 `MYSQL_POOL_WARN_PERCENT`
+调整。所有员工电脑应使用 client 角色，由唯一的中心 server 进程直连 MySQL；
+否则每个进程都会拥有独立连接池，连接额度会叠加。
 
 服务端更新任务的默认并发如下，自动更新与手动更新共用对应配置：
 

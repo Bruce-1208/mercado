@@ -9,7 +9,7 @@
 <body>
   <main>
     <header>
-      <div class="logo">泽</div>
+      <div class="logo"><img src="icon128.png" alt="武汉泽顺 Logo"></div>
       <div>
         <h1>泽顺商品采集助手设置</h1>
         <p>连接并登录武汉泽顺综合服务台</p>
@@ -33,6 +33,48 @@
         <input id="open-after" type="checkbox">
         <span>采集成功后自动打开泽顺控制台</span>
       </label>
+
+      <div class="settings-divider"></div>
+      <h2>异常邮件通知</h2>
+      <p class="section-help">遇到限频、滑块/验证码、买家或采购账号登录失效，以及核重核价等待人工处理时发送邮件。</p>
+      <label class="check-row">
+        <input id="mail-enabled" type="checkbox">
+        <span>启用异常邮件通知</span>
+      </label>
+
+      <div class="mail-grid">
+        <div>
+          <label for="sender-email">发件邮箱</label>
+          <input id="sender-email" type="email" placeholder="例如 notice@qq.com" autocomplete="email">
+        </div>
+        <div>
+          <label for="receiver-email">收件邮箱</label>
+          <input id="receiver-email" type="email" placeholder="例如 operator@example.com" autocomplete="email">
+        </div>
+        <div>
+          <label for="smtp-host">SMTP 服务器</label>
+          <input id="smtp-host" type="text" placeholder="例如 smtp.qq.com" autocomplete="off">
+        </div>
+        <div>
+          <label for="smtp-port">SMTP 端口</label>
+          <input id="smtp-port" type="number" min="1" max="65535" value="465">
+        </div>
+        <div>
+          <label for="smtp-security">加密方式</label>
+          <select id="smtp-security"><option value="ssl">SSL</option><option value="starttls">STARTTLS</option></select>
+        </div>
+        <div>
+          <label for="smtp-password">邮箱授权码</label>
+          <input id="smtp-password" type="password" placeholder="留空则保留已保存授权码" autocomplete="new-password">
+        </div>
+      </div>
+      <small>QQ、163 等邮箱请填写 SMTP 授权码，不是网页登录密码。授权码只提交到控制台加密保存，不写入浏览器同步存储。</small>
+      <div id="mail-status" class="auth-status">请先登录泽顺控制台账号后配置</div>
+
+      <div class="actions mail-actions">
+        <button id="save-mail" class="primary" type="button">保存邮件设置</button>
+        <button id="test-mail" type="button">发送测试邮件</button>
+      </div>
 
       <div class="actions">
         <button id="login" class="primary" type="button">登录并测试</button>

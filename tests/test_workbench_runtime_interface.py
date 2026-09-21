@@ -13,6 +13,18 @@ def test_database_health_requires_shared_token_for_remote_clients(monkeypatch):
         {"host": "192.168.1.11"},
         raising=False,
     )
+    monkeypatch.setattr(
+        bit_interface,
+        "pool_status",
+        lambda: {
+            "pool_count": 1,
+            "active": 2,
+            "idle": 1,
+            "physical": 3,
+            "max_connections": 12,
+            "pools": [],
+        },
+    )
     monkeypatch.setenv("BIT_DB_API_TOKEN", "shared-secret")
     monkeypatch.setattr(bit_interface.app, "testing", True)
     client = bit_interface.app.test_client()
@@ -32,6 +44,14 @@ def test_database_health_requires_shared_token_for_remote_clients(monkeypatch):
     assert allowed.get_json()["data"] == {
         "role": "server",
         "database_host": "192.168.1.11",
+        "connection_pool": {
+            "pool_count": 1,
+            "active": 2,
+            "idle": 1,
+            "physical": 3,
+            "max_connections": 12,
+            "pools": [],
+        },
     }
 
 

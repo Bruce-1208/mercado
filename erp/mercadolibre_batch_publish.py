@@ -169,8 +169,24 @@ def product_publish_issues(product_row: Mapping[str, Any]) -> list[str]:
             prepared.get("description_pt") or ""
         ).strip():
             issues.append("AI 双语详情不完整")
-        if "-white.jpg" not in str(row.get("main_image_url") or ""):
-            issues.append("首图尚未完成白底处理")
+        ai_attributes = [
+            attribute for attribute in prepared.get("attributes") or []
+            if isinstance(attribute, Mapping)
+            and str(attribute.get("id") or "").upper() not in {"BRAND", "ITEM_CONDITION"}
+            and (
+                attribute.get("value_id") not in (None, "")
+                or str(attribute.get("value_name") or "").strip()
+                or attribute.get("values")
+            )
+        ]
+        if not ai_attributes:
+            issues.append("AI 商品属性尚未生成")
+        image_url = str(row.get("main_image_url") or "")
+        if (
+            prepared.get("image_generation_method") != "ai_image_edit"
+            or "-ai-white.jpg" not in image_url
+        ):
+            issues.append("首图尚未完成 AI 白底生成")
     if row.get("review_status") != "approved":
         issues.append("审核状态未通过")
     actual_weight = _actual_weight_value(row)
@@ -414,6 +430,35 @@ def _prepared_listing_from_product_row(
             raise ValueError("AI 原创产品缺少目标语言的新详情描述")
         source["title"] = title
         source["site_id"] = str(destination_site_id or "").strip().upper()
+        generated_attributes = [
+            normalized
+            for index, attribute in enumerate(prepared.get("attributes") or [], start=1)
+            if (
+                isinstance(attribute, Mapping)
+                and (
+                    normalized := normalize_collected_attribute(
+                        {
+                            **dict(attribute),
+                            "name": (
+                                attribute.get("name_pt")
+                                if str(destination_site_id or "").strip().upper() == "MLB"
+                                else attribute.get("name_es")
+                            ) or attribute.get("name"),
+                            "value_name": (
+                                attribute.get("value_name_pt")
+                                if str(destination_site_id or "").strip().upper() == "MLB"
+                                else attribute.get("value_name_es")
+                            ) or attribute.get("value_name"),
+                        },
+                        fallback_id=f"AI_ATTRIBUTE_{index}",
+                    )
+                )
+            ) is not None
+        ]
+        if generated_attributes:
+            # The AI listing owns the attributes that will be sent to Mercado;
+            # the 1688 attributes remain untouched in ``original_1688``.
+            source["attributes"] = generated_attributes
         snapshot["description"] = {"plain_text": description_text}
     source.setdefault("id", str(row.get("source_item_id") or ""))
     source.setdefault("site_id", str(source.get("id") or "")[:3])
