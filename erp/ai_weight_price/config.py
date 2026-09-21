@@ -174,11 +174,15 @@ def selection_key(selection, config):
 
 
 class Config:
-    def __init__(self, root):
+    def __init__(self, root, storage=None):
         self.path = Path(root) / "config.json"
+        self.storage = storage
 
     def load(self):
-        value = json.loads(self.path.read_text(encoding="utf-8")) if self.path.exists() else {}
+        if self.storage is not None:
+            value = self.storage.state("config", {}) or {}
+        else:
+            value = json.loads(self.path.read_text(encoding="utf-8")) if self.path.exists() else {}
         # Existing installations may still contain the general-console URL.
         # Migrate it before strict validation so no workflow can return there.
         if value.get("erp_list_url") != DEFAULTS["erp_list_url"]:
@@ -187,6 +191,9 @@ class Config:
 
     def save(self, value):
         result = validate(value)
+        if self.storage is not None:
+            self.storage.set_state("config", result)
+            return result
         self.path.parent.mkdir(parents=True, exist_ok=True)
         temporary = self.path.with_suffix(".tmp")
         temporary.write_text(json.dumps(result, ensure_ascii=False, indent=2), encoding="utf-8")

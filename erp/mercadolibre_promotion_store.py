@@ -304,6 +304,65 @@ class PromotionStore:
             ).fetchall()
         return [self._row(row) for row in rows]
 
+    def applied_item_keys(
+        self, keys: Iterable[tuple[int, str, str]]
+    ) -> set[tuple[int, str, str]]:
+        """Return listing identities currently enrolled in a synced activity."""
+        normalized = []
+        for token_id, site_id, item_id in keys or ():
+            try:
+                identity = (
+                    int(token_id),
+                    str(site_id or "").strip().upper(),
+                    str(item_id or "").strip().upper(),
+                )
+            except (TypeError, ValueError):
+                continue
+            if identity[0] > 0 and identity[1] and identity[2]:
+                normalized.append(identity)
+        normalized = list(dict.fromkeys(normalized))
+        if not normalized:
+            return set()
+        clauses = " OR ".join(
+            "(p.token_id=? AND p.site_id=? AND i.item_id=?)" for _ in normalized
+        )
+        params = [value for identity in normalized for value in identity]
+        # Candidate means that the platform is offering the product the chance
+        # to enroll; it is deliberately excluded from the applied marker.
+        applied_statuses = (
+            "pending_approval", "pending", "programmed", "scheduled",
+            "started", "active", "approved",
+        )
+        status_sql = ",".join("?" for _ in applied_statuses)
+        params.extend(applied_statuses)
+        with self._connect() as db:
+            rows = db.execute(
+                f"""
+                SELECT DISTINCT p.token_id, p.site_id, i.item_id
+                FROM promotions AS p
+                INNER JOIN promotion_items AS i ON i.promotion_fk=p.id
+                WHERE ({clauses}) AND LOWER(i.status_raw) IN ({status_sql})
+                """,
+                params,
+            ).fetchall()
+        return {
+            (int(row["token_id"]), str(row["site_id"]), str(row["item_id"]).upper())
+            for row in rows
+        }
+
+    def set_item_status(self, promotion_fk: int, item_id: str, status: str) -> int:
+        """Keep the local marker responsive immediately after a mutation."""
+        with self._connect() as db:
+            result = db.execute(
+                """
+                UPDATE promotion_items
+                SET status_raw=?, last_synced_at=?
+                WHERE promotion_fk=? AND item_id=?
+                """,
+                (str(status or "unknown"), _now(), int(promotion_fk), str(item_id or "")),
+            )
+            return int(result.rowcount or 0)
+
     def create_preview(self, *, actor: str, action: str, promotion_fk: int, payload: dict[str, Any], expires_at: str) -> str:
         preview_id = uuid.uuid4().hex
         with self._connect() as db:

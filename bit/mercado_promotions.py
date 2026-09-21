@@ -263,6 +263,17 @@ def execute_preview(
                     offer_id=str(row.get("offer_id") or ""),
                 )
             result.update(status="succeeded", response=response)
+            try:
+                if hasattr(store, "set_item_status"):
+                    store.set_item_status(
+                        int(promotion.get("id") or 0),
+                        str(row.get("item_id") or ""),
+                        "pending_approval" if action == "enroll" else "withdrawn",
+                    )
+            except Exception:
+                # The remote mutation already succeeded; a stale local snapshot
+                # must not report that operation as a failed enrollment.
+                pass
         except MercadoAPIError as exc:
             message = str(exc)
             result.update(status="unknown" if "结果未知" in message else "failed", message=message)

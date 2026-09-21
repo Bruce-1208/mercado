@@ -18,6 +18,11 @@ from pathlib import Path
 
 from cryptography.fernet import Fernet, InvalidToken
 
+try:
+    import certifi
+except ImportError:  # pragma: no cover - certifi is installed with the server dependencies
+    certifi = None
+
 
 DEFAULT_CONFIG_PATH = Path(__file__).resolve().parent / "runtime_locks" / "browser_extension_mail.json"
 EVENT_LABELS = {
@@ -173,13 +178,32 @@ def _private_settings(user_id, secret_key, path=None) -> dict:
     return {**value, "smtp_password": password}
 
 
+def _smtp_ssl_context() -> ssl.SSLContext:
+    """Build a verified SMTP TLS context with a usable CA bundle.
+
+    Some Windows Python installations do not ship an OpenSSL CA bundle, so
+    ``ssl.create_default_context()`` can otherwise fail against normal public
+    SMTP certificates with ``unable to get local issuer certificate``.
+    ``SSL_CERT_FILE`` remains an explicit override for environments that use a
+    corporate or otherwise private CA.
+    """
+    configured_cafile = str(os.environ.get("SSL_CERT_FILE") or "").strip()
+    if configured_cafile:
+        return ssl.create_default_context(cafile=configured_cafile)
+
+    context = ssl.create_default_context()
+    if context.get_ca_certs() or certifi is None:
+        return context
+    return ssl.create_default_context(cafile=certifi.where())
+
+
 def _send(config: dict, subject: str, body: str, smtp_ssl=smtplib.SMTP_SSL, smtp=smtplib.SMTP) -> None:
     message = EmailMessage()
     message["From"] = config["sender_email"]
     message["To"] = config["receiver_email"]
     message["Subject"] = subject[:180]
     message.set_content(body, charset="utf-8")
-    context = ssl.create_default_context()
+    context = _smtp_ssl_context()
     if config["smtp_security"] == "ssl":
         with smtp_ssl(config["smtp_host"], int(config["smtp_port"]), timeout=25, context=context) as server:
             server.login(config["sender_email"], config["smtp_password"])

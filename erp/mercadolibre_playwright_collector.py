@@ -268,8 +268,11 @@ SHADOW_PLUGIN_TEXT_SCRIPT = r"""() => {
     const seenScopes = new Set();
     for (const metricNode of root.querySelectorAll(metricSelector)) {
       add(metricNode.innerText || metricNode.textContent);
-      let scope = metricNode;
-      for (let node = metricNode; node; node = node.parentElement) {
+      // ZYing may render the origin flag as a sibling of the metric row. If
+      // there is no named wrapper, keep the scan inside the current shadow
+      // root; never widen a light-DOM scan to the whole marketplace page.
+      let scope = root && root.nodeType === 11 ? root : metricNode;
+      for (let node = metricNode.parentElement; node; node = node.parentElement) {
         const marker = `${node.id || ''} ${node.className || ''}`;
         if (/zying/i.test(marker)) scope = node;
       }
@@ -362,8 +365,10 @@ PLUGIN_REACT_METRICS_SCRIPT = r"""(() => {
     let metricNodes = [];
     try { metricNodes = root.querySelectorAll(metricSelector); } catch (_) {}
     for (const metricNode of metricNodes) {
-      let scope = metricNode;
-      for (let node = metricNode; node; node = node.parentElement) {
+      // Keep origin detection inside the current shadow root when ZYing has
+      // no named wrapper around the metric row.
+      let scope = root && root.nodeType === 11 ? root : metricNode;
+      for (let node = metricNode.parentElement; node; node = node.parentElement) {
         const marker = `${node.id || ''} ${node.className || ''}`;
         if (/zying/i.test(marker)) scope = node;
       }

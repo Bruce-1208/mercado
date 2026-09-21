@@ -127,7 +127,7 @@ function products1688RenderRows() {
       <td><span class="p1688-status ${products1688Escape(String(row.review_status || "unreviewed"))}">${products1688Escape(products1688ReviewStatus(row))}</span></td>
       <td>${products1688Status(row) ? `<span class="p1688-status ${products1688Escape(status)}">${products1688Escape(products1688Status(row))}</span>` : "—"}</td>
       <td>${products1688Escape(products1688Date(original.collected_at || row.added_at))}</td>
-      <td><div class="p1688-row-actions"><button class="secondary" type="button" onclick="products1688OpenDetail(${Number(row.id)})">查看详情</button>${original.source_url ? `<a href="${products1688Escape(original.source_url)}" target="_blank" rel="noopener">打开1688</a>` : ""}</div></td>
+      <td><div class="p1688-row-actions"><button class="secondary" type="button" onclick="products1688OpenDetail(${Number(row.id)})">查看详情</button><button class="secondary" type="button" onclick="products1688OpenAiEditor(${Number(row.id)})">编辑刊登内容</button>${original.source_url ? `<a href="${products1688Escape(original.source_url)}" target="_blank" rel="noopener">打开1688</a>` : ""}</div></td>
     </tr>`;
   }).join("") : '<tr><td class="p1688-empty" colspan="11">暂无 1688 商品；请先在 1688 商品页使用泽顺插件采集。</td></tr>';
   const total = Number(document.getElementById("products-1688-total-value")?.dataset.total || products1688Rows.length);
@@ -208,6 +208,15 @@ async function load1688Products(resetPage = true) {
 
 function products1688OpenAiWorkflow() {
   if (typeof switchTab === "function") switchTab("ai-original-products");
+}
+
+async function products1688OpenAiEditor(id) {
+  products1688OpenAiWorkflow();
+  if (typeof loadAiOriginalProducts === "function") await loadAiOriginalProducts();
+  const source = products1688Rows.find(item => Number(item.id) === Number(id));
+  const match = typeof aiOriginalRows !== "undefined" && aiOriginalRows.find(item => Number(item.id) === Number(id))
+    || (typeof aiOriginalRows !== "undefined" && aiOriginalRows.find(item => String(item.source_item_id || "") === String(source?.source_item_id || "")));
+  if (match && typeof openAiOriginalEditor === "function") openAiOriginalEditor(match.id);
 }
 
 function products1688PropertyRows(properties) {

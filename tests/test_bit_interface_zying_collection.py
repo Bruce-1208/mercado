@@ -8,7 +8,13 @@ from bit import bit_db_api, bit_interface
 def _logged_in_client():
     client = bit_interface.app.test_client()
     with client.session_transaction() as flask_session:
-        flask_session["workbench_user"] = {"username": "tester"}
+        # Exercise protected endpoints as an explicitly authorized test user.
+        # Production requests still pass through the permission middleware.
+        flask_session["workbench_user"] = {
+            "username": "tester",
+            "access_version": 0,
+            "permissions": ["*"],
+        }
     return client
 
 

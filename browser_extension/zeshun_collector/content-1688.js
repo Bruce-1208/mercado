@@ -82,6 +82,34 @@
     return rows.slice(0, 100);
   }
 
+  function collectVariations() {
+    const rows = [];
+    const selectors = [
+      ".od-pc-sku-table tbody tr", ".od-pc-sku-table tr",
+      ".sku-table tbody tr", ".sku-table tr", "[class*='sku'] table tbody tr",
+      "[class*='sku'] table tr"
+    ];
+    document.querySelectorAll(selectors.join(",")).forEach(row => {
+      const cells = [...row.querySelectorAll("th,td")]
+        .map(cell => String(cell.textContent || "").replace(/\s+/g, " ").trim())
+        .filter(Boolean);
+      if (cells.length < 2 || rows.length >= 200) return;
+      const text = cells.join(" ");
+      if (!/(?:¥|￥|价格|库存|数量|现货|起批)/i.test(text)) return;
+      const combinations = [];
+      cells.slice(0, -2).forEach((value, index) => {
+        if (value) combinations.push({name: `规格${index + 1}`, value_name: value});
+      });
+      rows.push({
+        label: cells.slice(0, -2).join(" / ") || cells[0],
+        price_text: cells.find(value => /(?:¥|￥|价格)/i.test(value)) || "",
+        stock_text: cells.find(value => /(?:库存|数量|现货)/i.test(value)) || "",
+        attribute_combinations: combinations
+      });
+    });
+    return rows;
+  }
+
   function numericPrice() {
     const raw = text("[class*='price']") || text("meta[property='og:price:amount']");
     const match = raw.replace(/,/g, "").match(/\d+(?:\.\d+)?/);
@@ -159,6 +187,7 @@
     if (!sourceItemId || !title) throw new Error("未识别到 1688 商品编号或标题，请打开商品详情页后重试");
     const images = collectImages();
     const properties = collectProperties();
+    const variations = collectVariations();
     const bodyText = document.body?.innerText || "";
     const descriptionNode = document.querySelector("#desc-lazyload-container, .detail-desc-module, [class*='description']");
     const description = String(descriptionNode?.innerText || "").replace(/\s+/g, " ").trim().slice(0, 30000);
@@ -173,6 +202,7 @@
       main_image_url: images[0] || text("meta[property='og:image']"),
       images,
       properties,
+      variations,
       description_text: description,
       weight_g: metricValue(bodyText, /(?:重量|毛重)[：:\s]*([\d.]+)\s*(kg|千克|公斤)/i, 1000)
         || metricValue(bodyText, /(?:重量|毛重)[：:\s]*([\d.]+)\s*(?:g|克)/i, 1),

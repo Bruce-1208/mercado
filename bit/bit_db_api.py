@@ -2098,6 +2098,34 @@ def update_ai_original_product(product_item_id, changes):
     payload = dict(changes or {})
     if DB_MODE == "mysql":
         return _collection_store_call("update_ai_original_product", row_id, payload)
+
+
+def update_ai_original_listing(product_item_id, listing):
+    row_id = int(product_item_id)
+    payload = dict(listing or {})
+    if DB_MODE == "mysql":
+        return _collection_store_call("update_ai_original_listing", row_id, payload)
+    path = f"/api/db/ai-original-products/{row_id}/listing"
+    try:
+        return _request("PATCH", path, timeout=120, json=payload)
+    except RuntimeError as exc:
+        if not _collection_route_missing(exc, path):
+            raise
+        return _collection_store_call("update_ai_original_listing", row_id, payload)
+
+
+def translate_ai_original_listing(product_item_id, language):
+    row_id = int(product_item_id)
+    payload = {"language": str(language or "")}
+    if DB_MODE == "mysql":
+        return _collection_store_call("translate_ai_original_listing", row_id, payload["language"])
+    path = f"/api/db/ai-original-products/{row_id}/translate"
+    try:
+        return _request("POST", path, timeout=120, json=payload)
+    except RuntimeError as exc:
+        if not _collection_route_missing(exc, path):
+            raise
+        return _collection_store_call("translate_ai_original_listing", row_id, payload["language"])
     path = f"/api/db/ai-original-products/{row_id}"
     try:
         return _request("PATCH", path, timeout=120, json=payload)

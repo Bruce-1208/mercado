@@ -100,6 +100,14 @@ def advertise_store_link(link_id, *, budget, roas_target, campaign_name=""):
         created = True
 
     client.activate_product_ads_ad_group(site_id, ad_group_id, campaign_id)
+    try:
+        from erp.mercadolibre_store_link_marker_store import mark_advertising_enabled
+
+        mark_advertising_enabled(row, campaign_id)
+    except Exception:
+        # Persisting a UI marker must not turn a successful remote operation
+        # into a failed advertisement request.
+        pass
     return {
         "link_id": int(link_id),
         "item_id": item_id,
@@ -227,6 +235,12 @@ def advertise_store_links(link_ids, *, budget, roas_target, campaign_name=""):
                 if ad_group_id not in activated:
                     client.activate_product_ads_ad_group(site_id, ad_group_id, campaign_id)
                     activated[ad_group_id] = True
+                try:
+                    from erp.mercadolibre_store_link_marker_store import mark_advertising_enabled
+
+                    mark_advertising_enabled(row, campaign_id)
+                except Exception:
+                    pass
                 results.append({
                     "link_id": int(row["id"]),
                     "item_id": item_id,

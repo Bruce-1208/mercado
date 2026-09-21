@@ -264,6 +264,24 @@ def test_mercado_collection_requires_logged_in_zying_plugin(browser):
     page.close()
 
 
+def test_mercado_collection_reads_sibling_origin_icon_inside_zying_shadow_root(browser):
+    page = browser.new_page()
+    page.set_content("<h1 class='ui-pdp-title'>测试商品</h1><img src='https://img.test/main.jpg'>")
+    page.evaluate("""() => {
+      const host = document.createElement('div');
+      const root = host.attachShadow({mode: 'open'});
+      root.innerHTML = '<div class="zying-meli-detail-metric-line">重量：509g</div>' +
+        '<img src="/assets/CN.svg">';
+      document.body.append(host);
+    }""")
+    page.add_script_tag(path=str(EXTENSION / "collector-core.js"))
+    product = page.evaluate("""() => ZeshunCollectorCore.extractProduct(
+      document, 'https://articulo.mercadolibre.com.mx/MLM-12345-test'
+    )""")
+    assert product["plugin_snapshot"]["self_ship_origin"] == "CN"
+    page.close()
+
+
 def test_zying_sales_and_fulfillment_are_the_final_collection_filter(browser):
     page = browser.new_page()
     page.set_content("<div id='host'></div>")

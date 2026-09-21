@@ -42,6 +42,25 @@ def extract_1688_item_id(value: Any) -> str:
     return match.group(1)[:28] if match else ""
 
 
+def _normalize_1688_variations(value: Any) -> list[dict[str, Any]]:
+    """Keep the supplier SKU matrix in a stable, editable JSON shape."""
+    if not isinstance(value, list):
+        return []
+    rows: list[dict[str, Any]] = []
+    for raw in value[:200]:
+        if not isinstance(raw, Mapping):
+            continue
+        # Do not discard supplier-specific keys: 1688 has emitted several
+        # different SKU shapes over time and the editor can round-trip them.
+        item = dict(raw)
+        for key in ("attribute_combinations", "attributes", "properties"):
+            if isinstance(item.get(key), list):
+                item[key] = [dict(entry) for entry in item[key][:30]
+                             if isinstance(entry, Mapping)]
+        rows.append(item)
+    return rows
+
+
 def normalize_1688_product(product: Mapping[str, Any]) -> dict[str, Any]:
     row = dict(product or {})
     source_url = str(row.get("source_url") or row.get("final_url") or "").strip()
@@ -65,6 +84,9 @@ def normalize_1688_product(product: Mapping[str, Any]) -> dict[str, Any]:
     if main_image and main_image not in images:
         images.insert(0, main_image)
     properties = row.get("properties") if isinstance(row.get("properties"), list) else []
+    variations = row.get("variations")
+    if not isinstance(variations, list):
+        variations = row.get("skus")
     description = str(row.get("description_text") or row.get("description") or "").strip()
     return {
         "source_item_id": f"1688{item_id}",
@@ -76,6 +98,7 @@ def normalize_1688_product(product: Mapping[str, Any]) -> dict[str, Any]:
         "main_image_url": main_image[:1500],
         "images": images[:20],
         "properties": properties[:100],
+        "variations": _normalize_1688_variations(variations),
         "description_text": description[:50000],
         "category_id": str(row.get("category_id") or "").strip()[:64],
         "category_name": str(row.get("category_name") or row.get("category") or "").strip()[:255],
@@ -518,6 +541,10 @@ def prepare_ai_original_product(
     output = {
         **copy,
         "attributes": generated_attributes,
+        # Keep the collected SKU matrix available to the manual editor and
+        # the final marketplace payload. Translation is applied separately so
+        # prices, stock and stable value IDs are never changed by the model.
+        "variations": list(original.get("variations") or []),
         "main_image_url": white_url,
         "image_generation_method": image_generation_method,
         "status": "completed",
@@ -538,6 +565,7 @@ def prepare_ai_original_product(
             if str(url).strip() and str(url).strip() != original.get("main_image_url")
         ],
         "attributes": generated_attributes,
+        "variations": list(output.get("variations") or []),
     }
     snapshot["description"] = {"plain_text": copy["description_es"]}
     return {
