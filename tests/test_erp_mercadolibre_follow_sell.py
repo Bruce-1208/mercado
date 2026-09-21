@@ -62,6 +62,8 @@ class FakeSession:
 class CategoryClient:
     def request(self, method, path, **kwargs):
         assert method == "GET"
+        if path == "/marketplace/domain_discovery/search":
+            return [{"category_id": "CBT301", "attributes": []}]
         if path == "/categories/CBT301":
             return {"id": "CBT301"}
         if path == "/categories/MLM301/attributes":
@@ -92,7 +94,7 @@ class DiscoveryClient(CategoryClient):
         self.discovery_query = ""
 
     def request(self, method, path, **kwargs):
-        if path == "/sites/CBT/domain_discovery/search":
+        if path == "/marketplace/domain_discovery/search":
             self.discovery_query = kwargs["params"]["q"]
             return [{"category_id": "CBT301"}]
         return super().request(method, path, **kwargs)
@@ -294,6 +296,35 @@ class PowerSupplyCategoryClient(CategoryClient):
                         {"id": "domestic", "name": "Domestic current"},
                         {"id": "hybrid", "name": "Battery/Domestic current"},
                     ],
+                },
+            ]
+        return super().request(method, path, **kwargs)
+
+
+class PredictorAttributeClient(CategoryClient):
+    def __init__(self):
+        self.queries = []
+
+    def request(self, method, path, **kwargs):
+        if path == "/marketplace/domain_discovery/search":
+            query = kwargs["params"]["q"]
+            self.queries.append(query)
+            return [{
+                "category_id": "CBT4559",
+                "attributes": [{
+                    "id": "ACCESSORY_TYPE",
+                    "value_id": "19545565",
+                    "value_name": "Bracelet",
+                }],
+            }]
+        if path == "/categories/CBT4559/attributes":
+            return [
+                {"id": "BRAND", "tags": {"required": True}},
+                {
+                    "id": "ACCESSORY_TYPE",
+                    "value_type": "list",
+                    "tags": {"catalog_required": True},
+                    "values": [{"id": "19545565", "name": "Bracelet"}],
                 },
             ]
         return super().request(method, path, **kwargs)
@@ -656,9 +687,9 @@ def test_category_discovery_retries_with_deterministic_english_keywords():
 
         def request(self, method, path, **kwargs):
             assert method == "GET"
-            if path == "/categories/CBT18022":
-                raise MercadoLibreError("not found", status_code=404)
-            if path == "/sites/CBT/domain_discovery/search":
+            if path == "/categories/CBT11889/attributes":
+                return [{"id": "BRAND", "tags": {"required": True}}]
+            if path == "/marketplace/domain_discovery/search":
                 query = kwargs["params"]["q"]
                 self.queries.append(query)
                 if query == "Lámpara proyector de onda de agua efecto aurora boreal":
@@ -678,6 +709,112 @@ def test_category_discovery_retries_with_deterministic_english_keywords():
 
     assert category_id == "CBT11889"
     assert len(client.queries) == 2
+
+
+def test_category_name_is_safer_fallback_than_a_non_english_title():
+    class Client:
+        def __init__(self):
+            self.queries = []
+
+        def request(self, method, path, **kwargs):
+            if path == "/categories/CBT4559/attributes":
+                return [{"id": "BRAND", "tags": {"required": True}}]
+            assert path == "/marketplace/domain_discovery/search"
+            query = kwargs["params"]["q"]
+            self.queries.append(query)
+            if query == "Pulseras":
+                return [{"category_id": "CBT4559", "attributes": []}]
+            return [{"category_id": "CBT373472", "attributes": []}]
+
+    client = Client()
+    category_id = infer_cbt_category(client, {
+        "id": "MLM123",
+        "category_id": "MLM1434",
+        "category_name": "Pulseras",
+        "title": "Pulseras Obsidian Pixiu En Oro Natural Y Obsidiana",
+    })
+
+    assert category_id == "CBT4559"
+    assert client.queries == ["Pulseras"]
+
+
+def test_category_fallback_does_not_escape_to_an_unrelated_title_prediction():
+    class Client:
+        def __init__(self):
+            self.queries = []
+
+        def request(self, method, path, **kwargs):
+            if path == "/categories/CBT7093/attributes":
+                return [{"id": "TEAM", "tags": {"required": True}}]
+            if path == "/categories/CBT457501/attributes":
+                return [{"id": "BRAND", "tags": {"required": True}}]
+            query = kwargs["params"]["q"]
+            self.queries.append(query)
+            if query == "Chamarras":
+                return [{"category_id": "CBT7093", "attributes": []}]
+            return [{"category_id": "CBT457501", "attributes": []}]
+
+    client = Client()
+    category_id = infer_cbt_category(client, {
+        "id": "MLM123",
+        "category_id": "MLM1234",
+        "category_name": "Chamarras",
+        "title": "Gabardina Spider-man Noir Cosplay",
+    })
+
+    assert category_id == "CBT7093"
+    assert client.queries == ["Chamarras"]
+
+
+def test_english_translation_is_sent_to_official_category_predictor_first():
+    class Client:
+        def __init__(self):
+            self.queries = []
+
+        def request(self, method, path, **kwargs):
+            if path == "/categories/CBT4559/attributes":
+                return [{"id": "BRAND", "tags": {"required": True}}]
+            query = kwargs["params"]["q"]
+            self.queries.append(query)
+            return [{"category_id": "CBT4559", "attributes": []}]
+
+    client = Client()
+    category_id = infer_cbt_category(
+        client,
+        {
+            "id": "MLM123",
+            "category_id": "MLM1434",
+            "category_name": "Pulseras",
+            "title": "Pulsera de cuarzo natural",
+        },
+        translator=lambda texts, source, target: [
+            "Natural quartz bracelet",
+            "Bracelets",
+        ],
+    )
+
+    assert category_id == "CBT4559"
+    assert client.queries == ["Natural quartz bracelet"]
+
+
+def test_predictor_attributes_fill_target_category_requirements():
+    source = sample_source()
+    source["category_name"] = "Pulseras"
+    source["title"] = "Pulsera de cuarzo natural"
+    client = PredictorAttributeClient()
+
+    payload = build_user_product_payload(
+        client, source, {}, quantity=1, net_proceeds=20
+    )
+
+    assert payload["category_id"] == "CBT4559"
+    accessory_type = next(
+        attribute
+        for attribute in payload["attributes"]
+        if attribute["id"] == "ACCESSORY_TYPE"
+    )
+    assert accessory_type["value_id"] == "19545565"
+    assert accessory_type["value_name"] == "Bracelet"
 
 
 def test_user_product_payload_uses_uploaded_picture_ids():

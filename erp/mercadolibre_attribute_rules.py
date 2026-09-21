@@ -13,7 +13,12 @@ import unicodedata
 from typing import Any, Iterable, Mapping
 
 
-REQUIRED_ATTRIBUTE_TAGS = frozenset({"required", "catalog_required", "new_required"})
+REQUIRED_ATTRIBUTE_TAGS = frozenset({
+    "required",
+    "catalog_required",
+    "catalog_child_required",
+    "new_required",
+})
 
 
 ATTRIBUTE_ID_ALIASES = {

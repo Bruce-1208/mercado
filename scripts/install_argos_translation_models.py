@@ -5,7 +5,14 @@ from __future__ import annotations
 import sys
 
 
-REQUIRED_PAIRS = (("es", "pt"), ("pt", "es"))
+REQUIRED_PAIRS = (
+    ("es", "pt"),
+    ("pt", "es"),
+    # Mercado's CBT category predictor explicitly requires an English title.
+    # These models keep category selection deterministic and offline.
+    ("es", "en"),
+    ("pt", "en"),
+)
 
 
 def _pair_label(source: str, target: str) -> str:
@@ -57,6 +64,8 @@ def main() -> int:
     checks = (
         ("Hola, tenemos stock.", "es", "pt"),
         ("Olá, temos estoque.", "pt", "es"),
+        ("Pulsera de cuarzo natural.", "es", "en"),
+        ("Pulseira de quartzo natural.", "pt", "en"),
     )
     for text, source, target in checks:
         result = str(translate.translate(text, source, target) or "").strip()

@@ -630,6 +630,37 @@ def test_locate_erp_detail_prefers_stable_id_when_title_and_image_repeat(page, m
     assert current['id'] == '817846219'
 
 
+def test_locate_erp_detail_uses_source_index_when_duplicate_cards_have_no_ids(page, monkeypatch):
+    page.set_content('''<li class="ant-pagination-item-active">1</li>
+      <div class="product-item"><div class="product-title" data-id="790301169">重复标题</div>
+        <img class="product-pic" src="https://img.example/same.jpg"></div>
+      <div class="product-item"><div class="product-title" data-id="817846219">重复标题</div>
+        <img class="product-pic" src="https://img.example/same.jpg"></div>
+      <div class="curd-detail-wrap"><div class="crud-detail-header"><div class="h1">产品编号：999</div></div>
+        <textarea placeholder="请输入内容"></textarea><img class="ant-image-img" src="https://img.example/stale.jpg"></div>
+      <script>
+        window.clicked=[];
+        document.querySelectorAll('.product-title').forEach(node => node.onclick=()=>{
+          window.clicked.push(node.dataset.id);
+          document.querySelector('.h1').textContent='产品编号：'+node.dataset.id;
+          document.querySelector('textarea').value='重复标题';
+          document.querySelector('.ant-image-img').src='https://img.example/same.jpg';
+        });
+      </script>''')
+    adapter = Browser(validate({}), threading.Event(), lambda *a: None)
+    monkeypatch.setattr(adapter, 'apply_category', lambda *a: None)
+    monkeypatch.setattr(adapter, 'first_page', lambda *a: None)
+
+    adapter.locate_erp_detail(page, {
+        'erp_goods_id': '817846219', 'title': '重复标题',
+        'main_image_url': 'https://img.example/same.jpg', 'source_page': 1,
+        'source_index': 2, 'source_category': '',
+    })
+
+    assert page.evaluate('window.clicked') == ['817846219']
+    assert page.locator('.crud-detail-header .h1').inner_text() == '产品编号：817846219'
+
+
 def test_erp_write_patch_ignores_hidden_save_clones(page, monkeypatch):
     html = '''<meta charset="utf-8"><div class="curd-detail-wrap"><div class="crud-detail-header"><div class="h1">产品编号：101</div></div>
       <input id="netproceed" value="9.5"><input id="weight" value="430">
@@ -683,14 +714,38 @@ def test_erp_write_patch_selects_primary_when_save_buttons_are_duplicated(page, 
     assert actual == {'weight_g': '430', 'net_income_usd': '4', 'review_status': '待审核'}
 
 
-def test_erp_write_patch_rejects_review_status_changes():
+def test_erp_write_patch_rejects_unsupported_review_status():
     adapter = Browser(validate({}), threading.Event(), lambda *a: None)
-    with pytest.raises(ValueError, match='回填字段无效'):
+    with pytest.raises(ValueError, match='审核状态只能回填为通过或价格异常'):
         adapter.write_patch(
             {'erp_goods_id': '101'},
             {'review_status': '风险'},
             lambda _old: None,
         )
+
+
+def test_erp_write_patch_saves_and_verifies_approved_status(page, monkeypatch):
+    html = '''<meta charset="utf-8"><div class="curd-detail-wrap"><div class="crud-detail-header"><div class="h1">产品编号：101</div></div>
+      <input id="netproceed" value="9.5"><input id="weight" value="430">
+      <label><input type="radio" name="stat" value="1000">通过</label>
+      <label><input type="radio" name="stat" value="3000" checked>待审核</label>
+      <label><input type="radio" name="stat" value="4000">价格异常</label>
+      <button id="save">保存</button><p id="saved" hidden>保存成功</p></div><script>
+      const old=JSON.parse(localStorage.getItem('saved-status')||'null');
+      if(old){document.querySelector('#netproceed').value=old.net;document.querySelector(`[value="${old.status}"]`).checked=true;}
+      document.querySelector('#save').onclick=()=>{localStorage.setItem('saved-status',JSON.stringify({net:document.querySelector('#netproceed').value,status:document.querySelector('input[name=stat]:checked').value}));document.querySelector('#saved').hidden=false;};</script>'''
+    page.route('https://meli.zying.net/**', lambda route: route.fulfill(body=html, content_type='text/html'))
+    page.goto('https://meli.zying.net/#/product/101')
+    adapter = Browser(validate({}), threading.Event(), lambda *a: None)
+    monkeypatch.setattr(adapter, 'page', lambda *a: page)
+
+    actual = adapter.write_patch(
+        {'erp_goods_id': '101', 'erp_edit_url': page.url},
+        {'net_income_usd': '4', 'review_status': '通过'},
+        lambda _old: None,
+    )
+
+    assert actual == {'weight_g': '430', 'net_income_usd': '4', 'review_status': '通过'}
 
 
 def test_erp_save_button_accepts_portal_footer_update_action(page):

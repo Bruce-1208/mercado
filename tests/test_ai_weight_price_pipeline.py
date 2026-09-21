@@ -99,7 +99,7 @@ def test_ten_products_strict_order_persistent_database_logs_and_excel(tmp_path, 
     run, rows = persisted.run_report("offline-ten")
     assert run["outcome"] == "completed" and len(rows) == 10
     assert all(row["erp_before"] == {"weight_g": "430", "net_income_usd": "9.5"} for row in rows)
-    assert all(row["erp_after"] == {"weight_g": "450", "net_income_usd": "4"} and row["write_verified"] for row in rows)
+    assert all(row["erp_after"] == {"weight_g": "450", "net_income_usd": "9.5"} and row["write_verified"] for row in rows)
     assert sum("回填前：" in log["message"] for log in persisted.logs(limit=1000)) == 10
     assert sum("保存成功并回读确认" in log["message"] for log in persisted.logs(limit=1000)) == 10
     assert [log["task_id"] for log in persisted.logs(limit=1000)
@@ -107,7 +107,7 @@ def test_ten_products_strict_order_persistent_database_logs_and_excel(tmp_path, 
     sheet = load_workbook(io.BytesIO(execution_xlsx(rows, run))).active
     assert sheet.max_row == 15 and sheet.freeze_panes == "C6"
     assert sheet["I6"].value == 430 and sheet["J6"].value == 9.5
-    assert sheet["M6"].value == 450 and sheet["N6"].value == 4
+    assert sheet["M6"].value == 450 and sheet["N6"].value == 9.5
 
 
 @pytest.mark.parametrize("accept_even", [False, True])
@@ -174,7 +174,7 @@ def test_only_missing_fields_use_chat_and_preserve_page_facts(tmp_path, monkeypa
     assert not any(step == "save" for step, key in browser.operations)
     service.poll(waiting, browser, PageModel(), config, waiting["next_poll_at"])
     saved = service.store.get("1")
-    assert saved["status"] == "success" and saved["net_income_usd"] == "4"
+    assert saved["status"] == "success" and saved["net_income_usd"] == "9.5"
     if page_text:
         assert saved["info_sources"]["weight_g"] == "1688页面"
 

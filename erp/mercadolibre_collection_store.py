@@ -51,7 +51,7 @@ PRODUCT_PUBLISH_COLUMN_DEFINITIONS = (
     ("last_publish_result_json", "LONGTEXT NULL"),
     ("last_published_at", "DATETIME NULL"),
 )
-PRODUCT_SOURCE_TYPES = {"collected", "pulled", "zying"}
+PRODUCT_SOURCE_TYPES = {"collected", "pulled", "zying", "ai_original"}
 PRODUCT_REVIEW_STATUSES = {
     "unreviewed", "approved", "suspected", "infringing", "risk",
 }
@@ -191,9 +191,23 @@ def _json_safe_row(row: Mapping[str, Any]) -> dict[str, Any]:
 
 
 def _mirror_zying_snapshot_fields(row: Mapping[str, Any]) -> dict[str, Any]:
-    """Expose ZYing metadata stored in the source snapshot as list fields."""
+    """Expose workflow metadata stored in the source snapshot as list fields."""
     result = dict(row)
-    if str(result.get("source_type") or "").strip().lower() != "zying":
+    source_type = str(result.get("source_type") or "").strip().lower()
+    if source_type == "ai_original":
+        snapshot = _loads(result.get("source_snapshot_json"), {})
+        original = snapshot.get("original_1688") if isinstance(snapshot, dict) else {}
+        prepared = snapshot.get("ai_original") if isinstance(snapshot, dict) else {}
+        result["original_1688"] = original if isinstance(original, dict) else {}
+        result["ai_original"] = prepared if isinstance(prepared, dict) else {}
+        result["ai_status"] = str(result["ai_original"].get("status") or "pending")
+        result["ai_error"] = str(result["ai_original"].get("error") or "")
+        result["title_es"] = str(result["ai_original"].get("title_es") or "")
+        result["title_pt"] = str(result["ai_original"].get("title_pt") or "")
+        result["description_es"] = str(result["ai_original"].get("description_es") or "")
+        result["description_pt"] = str(result["ai_original"].get("description_pt") or "")
+        return result
+    if source_type != "zying":
         return result
     snapshot = _loads(result.get("source_snapshot_json"), {})
     plugin_snapshot = (
@@ -2365,6 +2379,198 @@ def update_collection_items(
             "updated_fields": list(normalized),
             "profitability_refresh_pending": profitability_stale,
         }
+    except BaseException:
+        connection.rollback()
+        raise
+    finally:
+        connection.close()
+
+
+def upsert_ai_original_product(
+    raw_product: Mapping[str, Any],
+    *,
+    created_by: str = "",
+    connection_factory: Callable[[], Any] | None = None,
+) -> dict[str, Any]:
+    """Insert or refresh one 1688 source snapshot in the unified product list."""
+    from erp.ai_original_products import normalize_1688_product
+
+    product = normalize_1688_product(raw_product)
+    dimensions = (
+        _decimal_from_text(product.get("package_length_cm")),
+        _decimal_from_text(product.get("package_width_cm")),
+        _decimal_from_text(product.get("package_height_cm")),
+    )
+    weight_g = _decimal_from_text(product.get("weight_g"))
+    source_snapshot = {
+        "original_1688": product,
+        "ai_original": {"status": "pending", "error": ""},
+        "source": {
+            "id": f"CBT{product['source_1688_item_id']}",
+            "site_id": "CBT",
+            "title": product["title"],
+            "price": product.get("price"),
+            "currency_id": "CNY",
+            "permalink": product["source_url"],
+            "pictures": [{"source": url} for url in product.get("images") or []],
+            "attributes": [],
+        },
+        "description": {"plain_text": product.get("description_text") or ""},
+        "page_snapshot": {},
+        "plugin_snapshot": {
+            "source_type": "ai_original",
+            "source_platform": "1688",
+            "created_by": str(created_by or "")[:128],
+        },
+    }
+    now = _now()
+    connection = (connection_factory or _connect)()
+    try:
+        with connection.cursor() as cursor:
+            ensure_collection_tables(cursor)
+            cursor.execute(
+                f"""
+                INSERT INTO `{PRODUCT_TABLE}` (
+                    `collection_item_id`, `source_type`, `review_status`,
+                    `source_item_id`, `source_url`, `main_image_url`, `title`,
+                    `description_text`, `price`, `currency_id`, `weight_g`,
+                    `package_length_cm`, `package_width_cm`, `package_height_cm`,
+                    `weight_basis`, `source_snapshot_json`, `added_at`
+                ) VALUES (0, 'ai_original', 'unreviewed', %s, %s, %s, %s, %s,
+                          %s, 'CNY', %s, %s, %s, %s, %s, %s, %s)
+                ON DUPLICATE KEY UPDATE
+                    `source_url` = IF(`source_type` = 'ai_original', VALUES(`source_url`), `source_url`),
+                    `main_image_url` = IF(`source_type` = 'ai_original' AND
+                        JSON_UNQUOTE(JSON_EXTRACT(IF(JSON_VALID(`source_snapshot_json`),
+                        `source_snapshot_json`, '{{}}'), '$.ai_original.status')) <> 'completed',
+                        VALUES(`main_image_url`), `main_image_url`),
+                    `title` = IF(`source_type` = 'ai_original' AND
+                        JSON_UNQUOTE(JSON_EXTRACT(IF(JSON_VALID(`source_snapshot_json`),
+                        `source_snapshot_json`, '{{}}'), '$.ai_original.status')) <> 'completed',
+                        VALUES(`title`), `title`),
+                    `price` = IF(`source_type` = 'ai_original', VALUES(`price`), `price`),
+                    `weight_g` = IF(`source_type` = 'ai_original', COALESCE(VALUES(`weight_g`), `weight_g`), `weight_g`),
+                    `package_length_cm` = IF(`source_type` = 'ai_original', COALESCE(VALUES(`package_length_cm`), `package_length_cm`), `package_length_cm`),
+                    `package_width_cm` = IF(`source_type` = 'ai_original', COALESCE(VALUES(`package_width_cm`), `package_width_cm`), `package_width_cm`),
+                    `package_height_cm` = IF(`source_type` = 'ai_original', COALESCE(VALUES(`package_height_cm`), `package_height_cm`), `package_height_cm`),
+                    `source_snapshot_json` = IF(`source_type` = 'ai_original' AND
+                        JSON_UNQUOTE(JSON_EXTRACT(IF(JSON_VALID(`source_snapshot_json`),
+                        `source_snapshot_json`, '{{}}'), '$.ai_original.status')) <> 'completed',
+                        VALUES(`source_snapshot_json`), `source_snapshot_json`),
+                    `updated_at` = CURRENT_TIMESTAMP
+                """,
+                (
+                    product["source_item_id"], product["source_url"],
+                    product.get("main_image_url") or "", product["title"],
+                    product.get("description_text") or "", _decimal_from_text(product.get("price")),
+                    weight_g, dimensions[0], dimensions[1], dimensions[2],
+                    "1688_source" if weight_g else "", _dumps(source_snapshot), now,
+                ),
+            )
+            cursor.execute(
+                f"SELECT * FROM `{PRODUCT_TABLE}` WHERE `source_item_id` = %s",
+                (product["source_item_id"],),
+            )
+            row = cursor.fetchone()
+        connection.commit()
+        return _mirror_zying_snapshot_fields(_json_safe_row(row))
+    except BaseException:
+        connection.rollback()
+        raise
+    finally:
+        connection.close()
+
+
+def update_ai_original_product(
+    product_item_id: int,
+    changes: Mapping[str, Any],
+    *,
+    connection_factory: Callable[[], Any] | None = None,
+) -> dict[str, Any]:
+    """Persist AI output or explicitly entered listing economics."""
+    row_id = int(product_item_id)
+    allowed = {
+        "title", "description_text", "main_image_url", "source_snapshot_json",
+        "weight_g", "package_length_cm", "package_width_cm", "package_height_cm",
+        "category_id", "net_proceeds_usd", "review_status", "currency_id",
+    }
+    normalized = {key: value for key, value in dict(changes or {}).items() if key in allowed}
+    if not normalized:
+        raise ValueError("没有可保存的 AI 原创产品字段")
+    if "review_status" in normalized and normalized["review_status"] not in {
+        "unreviewed", "approved"
+    }:
+        raise ValueError("AI 原创产品审核状态无效")
+    decimal_fields = {
+        "weight_g", "package_length_cm", "package_width_cm", "package_height_cm",
+        "net_proceeds_usd",
+    }
+    assignments, values = [], []
+    for key, value in normalized.items():
+        if key in decimal_fields:
+            value = _decimal_from_text(value)
+            if value is not None and value <= 0:
+                raise ValueError(f"{key} 必须大于 0")
+        if key == "source_snapshot_json" and isinstance(value, Mapping):
+            value = _dumps(value)
+        assignments.append(f"`{key}` = %s")
+        values.append(value)
+    if "weight_g" in normalized:
+        assignments.append("`weight_basis` = 'ai_original_manual'")
+    if set(normalized).intersection({
+        "package_length_cm", "package_width_cm", "package_height_cm",
+    }):
+        assignments.append(
+            "`volumetric_weight_kg` = CASE WHEN `package_length_cm` > 0 "
+            "AND `package_width_cm` > 0 AND `package_height_cm` > 0 THEN ROUND("
+            "`package_length_cm` * `package_width_cm` * `package_height_cm` / 6000, 4) "
+            "ELSE NULL END"
+        )
+    connection = (connection_factory or _connect)()
+    try:
+        with connection.cursor() as cursor:
+            ensure_collection_tables(cursor)
+            if normalized.get("review_status") == "approved":
+                cursor.execute(
+                    f"SELECT `weight_g`, `net_proceeds_usd`, `source_snapshot_json` "
+                    f"FROM `{PRODUCT_TABLE}` WHERE `id` = %s "
+                    "AND `source_type` = 'ai_original'",
+                    (row_id,),
+                )
+                current = cursor.fetchone()
+                if not current:
+                    raise KeyError("AI 原创产品不存在")
+                snapshot = _loads(current.get("source_snapshot_json"), {})
+                prepared = snapshot.get("ai_original") if isinstance(snapshot, dict) else {}
+                if not isinstance(prepared, dict) or prepared.get("status") != "completed":
+                    raise ValueError("AI 原创任务完成后才能审核通过")
+                approved_weight = _decimal_from_text(
+                    normalized.get("weight_g", current.get("weight_g"))
+                )
+                approved_net = _decimal_from_text(
+                    normalized.get("net_proceeds_usd", current.get("net_proceeds_usd"))
+                )
+                if approved_weight is None or approved_weight <= 0:
+                    raise ValueError("审核通过前必须填写有效实重")
+                if approved_net is None or approved_net <= 0:
+                    raise ValueError("审核通过前必须填写有效净收益 USD")
+            cursor.execute(
+                f"UPDATE `{PRODUCT_TABLE}` SET {', '.join(assignments)} "
+                "WHERE `id` = %s AND `source_type` = 'ai_original'",
+                tuple(values + [row_id]),
+            )
+            if int(cursor.rowcount or 0) == 0:
+                cursor.execute(
+                    f"SELECT 1 FROM `{PRODUCT_TABLE}` WHERE `id` = %s "
+                    "AND `source_type` = 'ai_original'",
+                    (row_id,),
+                )
+                if not cursor.fetchone():
+                    raise KeyError("AI 原创产品不存在")
+            cursor.execute(f"SELECT * FROM `{PRODUCT_TABLE}` WHERE `id` = %s", (row_id,))
+            row = cursor.fetchone()
+        connection.commit()
+        return _mirror_zying_snapshot_fields(_json_safe_row(row))
     except BaseException:
         connection.rollback()
         raise

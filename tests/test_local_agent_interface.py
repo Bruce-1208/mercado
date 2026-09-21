@@ -212,6 +212,18 @@ def test_agents_are_enriched_with_their_logged_out_shops():
                     "anomaly_type": "美客多账号退出登录",
                     "reason": "旧版本未记录执行端",
                 },
+                {
+                    "window_id": "window-server",
+                    "window_name": "服务器店铺",
+                    "anomaly_type": "美客多账号退出登录",
+                    "reason": "检测到登录页；执行端：服务器：SERVER-PC",
+                },
+                {
+                    "window_id": "window-local",
+                    "window_name": "本机店铺",
+                    "anomaly_type": "美客多账号退出登录",
+                    "source": "daily_task｜本机:LOCAL-PC",
+                },
             ]
         },
     )
@@ -219,7 +231,13 @@ def test_agents_are_enriched_with_their_logged_out_shops():
     assert agents[0]["logged_out_count"] == 1
     assert agents[0]["logged_out_shops"][0]["window_name"] == "退出店铺"
     assert agents[1]["logged_out_count"] == 0
-    assert [shop["window_name"] for shop in unassigned] == ["旧记录店铺"]
+    assert {shop["window_name"] for shop in unassigned} == {
+        "旧记录店铺", "服务器店铺", "本机店铺",
+    }
+    targets = {shop["window_name"]: shop["execution_target"] for shop in unassigned}
+    assert targets["旧记录店铺"] == ""
+    assert targets["服务器店铺"] == "server"
+    assert targets["本机店铺"] == "local"
 
 
 def test_public_appeal_is_queued_for_selected_agent_and_streamed(agent_interface):

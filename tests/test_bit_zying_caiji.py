@@ -1259,6 +1259,44 @@ def test_zying_api_post_uses_frontend_api_bridge(monkeypatch):
     }
 
 
+def test_zying_product_developers_are_cached_by_credential(monkeypatch):
+    calls = []
+
+    def api_post(_session, token, command, payload):
+        calls.append((token, command, payload))
+        return {"logins": [{"id": 17, "name": "产品开发甲"}]}
+
+    monkeypatch.setattr(bit_zying_caiji, "_zying_api_post", api_post)
+    monkeypatch.setattr(bit_zying_caiji, "ZYING_DEVELOPER_CACHE_SECONDS", 60)
+    credential = "cache-test-credential"
+
+    assert bit_zying_caiji.list_zying_product_developers(credential) == [
+        {"id": "17", "name": "产品开发甲"}
+    ]
+    assert bit_zying_caiji.list_zying_product_developers(credential) == [
+        {"id": "17", "name": "产品开发甲"}
+    ]
+    assert calls == [(credential, "logins.select", {})]
+
+
+def test_page_developers_seed_the_cache_for_collection_start(monkeypatch):
+    monkeypatch.setattr(bit_zying_caiji, "ZYING_DEVELOPER_CACHE_SECONDS", 60)
+    bit_zying_caiji.cache_zying_product_developers(
+        "page-cache-credential", [{"id": 18, "name": "网页开发乙"}]
+    )
+    monkeypatch.setattr(
+        bit_zying_caiji,
+        "_zying_api_post",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(
+            AssertionError("应直接使用当前网页已读取的开发人员")
+        ),
+    )
+
+    assert bit_zying_caiji.list_zying_product_developers("page-cache-credential") == [
+        {"id": "18", "name": "网页开发乙"}
+    ]
+
+
 def test_api_collection_reads_list_and_details_without_opening_browser(monkeypatch):
     api_calls = []
     written = []
@@ -1344,6 +1382,43 @@ def test_api_collection_reads_list_and_details_without_opening_browser(monkeypat
     assert written[0]["product_developer_name"] == "张三"
     assert written[0]["listing_snapshot"]["source"]["title"] == "API product"
     assert mirrored == written
+
+
+def test_api_collection_product_cursor_is_inclusive_and_limits_across_pages(monkeypatch):
+    written = []
+
+    def api_post(_session, _token, command, payload):
+        if command == "logins.select":
+            return {"logins": []}
+        pages = {
+            1: [{"id": 1, "title": "One"}, {"id": 2, "title": "Two"}],
+            2: [{"id": 3, "title": "Three"}, {"id": 4, "title": "Four"}],
+            3: [{"id": 5, "title": "Five"}, {"id": 6, "title": "Six"}],
+        }
+        return {"list": {"data": pages.get(payload["page"], [])}}
+
+    def enrich(_driver, records, token=None):
+        for record in records:
+            record["detail_data"] = {"sale_id": int(record["product_id"])}
+        return records
+
+    monkeypatch.setattr(bit_zying_caiji, "_zying_api_post", api_post)
+    monkeypatch.setattr(bit_zying_caiji, "_enrich_product_records", enrich)
+
+    result = bit_zying_caiji.collect_zying_products_api(
+        auth_token="saved-token",
+        number=100,
+        start_product_id="3",
+        max_items=3,
+        existing_product_id_reader=lambda _ids: set(),
+        product_writer=lambda rows: written.extend(rows) or len(rows),
+        product_mirror_writer=lambda _rows: {},
+        return_summary=True,
+    )
+
+    assert [row["product_id"] for row in written] == ["3", "4", "5"]
+    assert result["selected_count"] == 3
+    assert result["last_committed_page"] == 3
 
 
 def test_collection_start_auto_reads_selected_browser_without_precheck(monkeypatch):

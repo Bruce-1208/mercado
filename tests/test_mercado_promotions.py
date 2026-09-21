@@ -160,3 +160,20 @@ def test_campaigns_can_be_filtered_by_salesperson_group_and_site(tmp_path):
     assert [row["promotion_id"] for row in rows] == ["P-1"]
     assert rows[0]["salesperson"] == "小王"
     assert rows[0]["group_name"] == "精品组"
+
+
+def test_current_store_scope_finds_activities_with_stale_assignment_snapshot(tmp_path):
+    store = PromotionStore(tmp_path / "promotions.sqlite3")
+    store.upsert_promotion(
+        token_id=1, store_name="A店", application_id="app", seller_id="11", site_id="MLM",
+        # Simulate an activity synced before the store was assigned to 半托管.
+        row={"id": "P-1", "type": "DEAL", "name": "半托管活动", "status": "started"},
+    )
+    store.upsert_promotion(
+        token_id=2, store_name="B店", application_id="app", seller_id="22", site_id="MLB",
+        row={"id": "P-2", "type": "DEAL", "name": "全托管活动", "status": "started"},
+    )
+
+    rows = store.list_promotions(token_ids=[1, 2], scope_pairs=[(1, "MLM")])
+
+    assert [row["promotion_id"] for row in rows] == ["P-1"]

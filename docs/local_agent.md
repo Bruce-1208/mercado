@@ -24,6 +24,8 @@ Agent 1.2.1 修复任务队列被异常退出留下的 `running/stopping` 记录
 
 Agent 1.2.2 将任务领取合并到心跳请求，避免反向代理或滚动部署把心跳与领取请求分发到不同后端；旧服务端仍自动回退到独立领取接口。服务端 Agent 队列默认改到与代码目录无关的固定用户数据目录，首次升级会用 SQLite 在线备份自动迁移旧 `.data/local-agent-hub.sqlite3`。心跳、领取和电脑列表会返回同一个 `queue_id`，Agent 日志在发现请求切换到不同队列时会明确报警。升级需要同时部署服务端代码并重新构建、替换 Agent EXE。
 
+Agent 1.2.3 在状态窗口增加“结束任务”按钮。按钮只结束当前电脑正在运行的任务，Agent 本身会保持在线并继续接收后续任务；没有运行任务时按钮不可用。
+
 Agent 默认数据目录在 Windows 为 `%LOCALAPPDATA%\Zeshun\MercadoLocalAgent`，在 macOS 为 `~/Library/Application Support/Zeshun/MercadoLocalAgent`。其中包含电脑身份、业务版本、`agent.log` 和运行日志所需的临时任务数据。Agent 保留最近两个业务版本。
 
 ## 服务端部署

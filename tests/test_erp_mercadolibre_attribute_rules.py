@@ -1,6 +1,7 @@
 from erp.mercadolibre_attribute_rules import (
     canonical_attribute_id,
     extract_listing_attributes_from_detail,
+    is_required_attribute,
     match_enumerated_value,
     normalize_rule_key,
     resolve_schema_attribute_id,
@@ -70,3 +71,7 @@ def test_unknown_enum_is_not_guessed():
     allowed = [{"id": "black-id", "name": "Black"}]
 
     assert match_enumerated_value("COLOR", "", "Azul petróleo", allowed) is None
+
+
+def test_catalog_child_required_is_treated_as_blocking():
+    assert is_required_attribute({"tags": {"catalog_child_required": True}})

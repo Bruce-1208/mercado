@@ -88,6 +88,92 @@ def upload_mercado_store_link_video(link_id, upload):
     )
 
 
+def create_ai_video_job(uploads, form):
+    """Create a central AI-video job, forwarding media from client workbenches."""
+    if DB_MODE == "mysql":
+        from bit.bit_ai_video import create_job
+
+        return create_job(uploads, form)
+    files = []
+    for upload in uploads or []:
+        if upload is None or not upload.filename:
+            continue
+        files.append((
+            "files",
+            (
+                str(upload.filename),
+                upload.stream,
+                str(upload.mimetype or "application/octet-stream"),
+            ),
+        ))
+    return _request(
+        "POST",
+        "/api/db/ai-videos/jobs",
+        data={key: str(value or "") for key, value in dict(form or {}).items()},
+        files=files,
+        timeout=(30, 360),
+    )
+
+
+def list_ai_video_jobs(limit=30):
+    if DB_MODE == "mysql":
+        from bit.bit_ai_video import list_jobs
+
+        return list_jobs(limit=limit)
+    return _request(
+        "GET", "/api/db/ai-videos/jobs", params={"limit": int(limit or 30)}, timeout=60
+    )
+
+
+def get_ai_video_job(job_id):
+    if DB_MODE == "mysql":
+        from bit.bit_ai_video import public_job
+
+        return public_job(job_id)
+    return _request("GET", f"/api/db/ai-videos/jobs/{job_id}", timeout=60)
+
+
+def update_ai_video_job(job_id, changes):
+    if DB_MODE == "mysql":
+        from bit.bit_ai_video import update_job
+
+        return update_job(job_id, changes)
+    return _request(
+        "PATCH", f"/api/db/ai-videos/jobs/{job_id}", json=dict(changes or {}), timeout=60
+    )
+
+
+def get_ai_video_settings():
+    if DB_MODE == "mysql":
+        from bit.bit_ai_video import provider_settings
+
+        return provider_settings()
+    return _request("GET", "/api/db/ai-videos/settings", timeout=60)
+
+
+def update_ai_video_settings(changes):
+    if DB_MODE == "mysql":
+        from bit.bit_ai_video import save_provider_settings
+
+        return save_provider_settings(changes)
+    return _request(
+        "PATCH", "/api/db/ai-videos/settings", json=dict(changes or {}), timeout=60
+    )
+
+
+def publish_ai_video_job(job_id, link_id):
+    if DB_MODE == "mysql":
+        from bit.bit_ai_video import publish_job
+
+        return publish_job(job_id, int(link_id))
+    return _request(
+        "POST",
+        f"/api/db/ai-videos/jobs/{job_id}/publish",
+        json={"link_id": int(link_id)},
+        timeout=(30, 360),
+    )
+
+
 def advertise_mercado_store_link(link_id, *, budget, roas_target, campaign_name=""):
     payload = {
         "budget": budget,
@@ -119,7 +205,9 @@ def advertise_mercado_store_links(link_ids, *, budget, roas_target, campaign_nam
     )
 
 
-def get_mercado_ad_analysis(*, date_from="", date_to="", token_ids=None, force=False):
+def get_mercado_ad_analysis(
+    *, date_from="", date_to="", token_ids=None, refresh_token_ids=None, force=False
+):
     params = {
         "date_from": str(date_from or "").strip(),
         "date_to": str(date_to or "").strip(),
@@ -129,6 +217,10 @@ def get_mercado_ad_analysis(*, date_from="", date_to="", token_ids=None, force=F
         params["token_ids"] = [
             int(value) for value in token_ids or [] if int(value or 0) > 0
         ]
+    if refresh_token_ids is not None:
+        params["refresh_token_ids"] = [
+            int(value) for value in refresh_token_ids or [] if int(value or 0) > 0
+        ]
     if DB_MODE == "mysql":
         from bit.bit_ad_analysis import collect_ad_analysis
 
@@ -136,12 +228,15 @@ def get_mercado_ad_analysis(*, date_from="", date_to="", token_ids=None, force=F
             date_from=params["date_from"],
             date_to=params["date_to"],
             token_ids=params.get("token_ids"),
+            refresh_token_ids=params.get("refresh_token_ids"),
             force=bool(force),
         )
     remote_params = dict(params)
     if token_ids is not None and not remote_params.get("token_ids"):
         # Preserve an explicitly empty member scope through query serialization.
         remote_params["token_ids"] = [""]
+    if refresh_token_ids is not None and not remote_params.get("refresh_token_ids"):
+        remote_params["refresh_token_ids"] = [""]
     return _request("GET", "/api/db/ad-analysis", params=remote_params, timeout=240)
 
 
@@ -171,8 +266,13 @@ def get_latest_order_print_records():
 def get_database_api_health():
     if DB_MODE == "mysql":
         from bit.bit_mysql import config
+        from bit.db_pool import pool_status
 
-        return {"role": "server", "database_host": config.get("host")}
+        return {
+            "role": "server",
+            "database_host": config.get("host"),
+            "connection_pool": pool_status(),
+        }
     return _request("GET", "/api/db/health", timeout=10)
 
 
@@ -362,6 +462,7 @@ def inset_reputation_info(
     reputation_list,
     merge_latest=False,
     replace_targets=None,
+    preserve_account_status=False,
 ):
     if DB_MODE == "mysql":
         return _local_call(
@@ -369,6 +470,7 @@ def inset_reputation_info(
             reputation_list,
             merge_latest,
             replace_targets,
+            preserve_account_status,
         )
     return _request(
         "POST",
@@ -377,6 +479,7 @@ def inset_reputation_info(
             "rows": reputation_list,
             "merge_latest": bool(merge_latest),
             "replace_targets": list(replace_targets or ()),
+            "preserve_account_status": bool(preserve_account_status),
         },
     )
 
@@ -896,7 +999,7 @@ def list_mercado_store_links(
     sort_order="",
     current_only=True,
     page=1,
-    page_size=500,
+    page_size=200,
 ):
     params = {
         "search": search or "",
@@ -914,7 +1017,7 @@ def list_mercado_store_links(
         ),
         "current_only": "1" if current_only else "0",
         "page": int(page or 1),
-        "page_size": max(1, min(int(page_size or 500), 1000)),
+        "page_size": max(1, min(int(page_size or 200), 1000)),
     }
     if token_id not in (None, ""):
         params["token_id"] = int(token_id)
@@ -1551,7 +1654,9 @@ def delete_mercado_account_group(group_id):
         return _local_call("delete_mercado_account_group", group_id)
 
 
-def exchange_mercado_store_token(display_name, callback_or_code, application_id=None):
+def exchange_mercado_store_token(
+    display_name, callback_or_code, application_id=None, organization_key="default"
+):
     if DB_MODE == "mysql":
         from bit import bit_mysql
         from bit.mercado_tokens import exchange_and_save
@@ -1561,6 +1666,7 @@ def exchange_mercado_store_token(display_name, callback_or_code, application_id=
             callback_or_code,
             upsert=bit_mysql.upsert_mercado_store_token,
             application_id=application_id,
+            organization_key=organization_key,
             get_application=bit_mysql.get_mercado_application,
         )
     try:
@@ -1572,6 +1678,7 @@ def exchange_mercado_store_token(display_name, callback_or_code, application_id=
                 "display_name": display_name,
                 "code": callback_or_code,
                 "application_id": application_id,
+                "organization_key": organization_key,
             },
         )
     except RuntimeError as exc:
@@ -1585,6 +1692,7 @@ def exchange_mercado_store_token(display_name, callback_or_code, application_id=
             callback_or_code,
             upsert=bit_mysql.upsert_mercado_store_token,
             application_id=application_id,
+            organization_key=organization_key,
             get_application=bit_mysql.get_mercado_application,
         )
 
@@ -1966,6 +2074,37 @@ def list_mercado_product_items(
         return _collection_store_call(
             "list_product_items", **params
         )
+
+
+def upsert_ai_original_product(product, created_by=""):
+    payload = {"product": dict(product or {}), "created_by": str(created_by or "")}
+    if DB_MODE == "mysql":
+        return _collection_store_call(
+            "upsert_ai_original_product", payload["product"], created_by=payload["created_by"]
+        )
+    path = "/api/db/ai-original-products"
+    try:
+        return _request("POST", path, timeout=120, json=payload)
+    except RuntimeError as exc:
+        if not _collection_route_missing(exc, path):
+            raise
+        return _collection_store_call(
+            "upsert_ai_original_product", payload["product"], created_by=payload["created_by"]
+        )
+
+
+def update_ai_original_product(product_item_id, changes):
+    row_id = int(product_item_id)
+    payload = dict(changes or {})
+    if DB_MODE == "mysql":
+        return _collection_store_call("update_ai_original_product", row_id, payload)
+    path = f"/api/db/ai-original-products/{row_id}"
+    try:
+        return _request("PATCH", path, timeout=120, json=payload)
+    except RuntimeError as exc:
+        if not _collection_route_missing(exc, path):
+            raise
+        return _collection_store_call("update_ai_original_product", row_id, payload)
 
 
 def list_mercado_management_categories():

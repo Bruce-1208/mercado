@@ -75,6 +75,53 @@ def test_order_cost_is_suggested_only_when_item_allocation_is_unambiguous():
     assert bit_inventory._suggested_unit_cost("50", mixed_products, "MLM1") is None
 
 
+def test_matched_order_product_carries_order_context_into_inventory(monkeypatch):
+    class Cursor:
+        def __init__(self):
+            self.rows = [
+                {
+                    "order_id": "20001",
+                    "title": "订单商品",
+                    "image_url": "https://img.example/item.jpg",
+                    "raw_json": "{}",
+                    "purchase_cost": "24",
+                    "purchase_order": "PO-88",
+                    "purchase_remark": "易碎",
+                    "status_detail": "买家要求加固",
+                    "token_id": 7,
+                    "site_id": "MLM",
+                },
+                {"salesperson": "张三"},
+            ]
+
+        def execute(self, *_args, **_kwargs):
+            return None
+
+        def fetchone(self):
+            return self.rows.pop(0)
+
+    monkeypatch.setattr(bit_inventory, "_table_exists", lambda *_args: True)
+    monkeypatch.setattr(
+        bit_inventory,
+        "_order_items",
+        lambda *_args: [{
+            "product_id": "MLM1",
+            "title": "蓝色水杯",
+            "image_url": "https://img.example/blue.jpg",
+            "quantity": 2,
+        }],
+    )
+
+    context = bit_inventory._matched_order_product(Cursor(), "20001", "MLM1")
+
+    assert context["product_name"] == "蓝色水杯"
+    assert context["image_url"] == "https://img.example/blue.jpg"
+    assert context["suggested_unit_cost"] == Decimal("12.0000")
+    assert context["reference_no"] == "PO-88"
+    assert context["salesperson"] == "张三"
+    assert context["order_remark"] == "采购备注：易碎；订单备注：买家要求加固"
+
+
 def test_inventory_permission_mapping_distinguishes_views_movements_and_shelves():
     assert bit_interface._required_workbench_permissions(
         "/api/inventory/stocks", "GET"

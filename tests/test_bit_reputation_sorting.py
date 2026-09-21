@@ -56,7 +56,7 @@ class ReputationSortingTests(unittest.TestCase):
             mock.patch.object(
                 bit_mysql,
                 "_active_collection_snapshot_rows",
-                side_effect=lambda value: value,
+                side_effect=lambda value, **_kwargs: value,
             ),
         ):
             counts = bit_mysql._latest_infraction_counts_by_shop_site(
@@ -129,7 +129,15 @@ class ReputationSortingTests(unittest.TestCase):
         self.assertTrue(all(row["侵权数量"] == 0 for row in data["rows"]))
         self.assertTrue(all(row["权利人数量"] == 0 for row in data["rows"]))
         self.assertTrue(all(row["侵权统计天数"] == 100 for row in data["rows"]))
-        infraction_counts.assert_called_once_with(mock.ANY, recent_days=100)
+        infraction_counts.assert_called_once_with(
+            mock.ANY,
+            recent_days=100,
+            active_targets={
+                ("多站点店铺", "墨西哥"),
+                ("多站点店铺", "阿根廷"),
+                ("单站点店铺", "巴西"),
+            },
+        )
 
     def test_latest_collection_task_status_keeps_latest_site_result(self):
         class StatusCursor:

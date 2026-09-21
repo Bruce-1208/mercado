@@ -246,11 +246,12 @@ class Models:
             matches = None
         if not isinstance(matches, list) or not matches:
             raise ValueError("图片比对评分结果格式错误")
-        # Models sometimes serialize indexes, booleans, or percentages as
-        # strings, and may append one malformed row after otherwise usable
-        # scores. Normalize only unambiguous values; malformed rows become
-        # unconfirmed evidence instead of discarding the whole product.
+        # Models sometimes append one malformed row after otherwise usable
+        # scores. Keep valid rows, but do not coerce confidence values: a
+        # string, boolean, NaN or out-of-range score is not calibrated numeric
+        # evidence and therefore must never be allowed to approve a match.
         normalized, invalid_rows, seen = [], 0, set()
+        invalid_confidence = False
         for item in matches:
             if not isinstance(item, dict):
                 invalid_rows += 1
@@ -259,26 +260,27 @@ class Models:
             if isinstance(index, str) and index.strip().isdigit():
                 index = int(index.strip())
             score = item.get("confidence")
-            if isinstance(score, str):
-                raw_score = score.strip().replace("%", "")
-                try:
-                    score = float(raw_score)
-                except ValueError:
-                    score = None
-                else:
-                    if score > 1 and score <= 100:
-                        score /= 100
+            # A percentage string is an unambiguous, common JSON formatting
+            # quirk ("96%" -> 0.96).  A bare numeric string remains invalid:
+            # it could mean either a 0-1 score or a 0-100 percentage.
+            if isinstance(score, str) and re.fullmatch(r"\s*\d+(?:\.\d+)?%\s*", score):
+                score = float(score.strip()[:-1]) / 100
             same_product = item.get("same_product")
             if isinstance(same_product, str) and same_product.strip().lower() in ("true", "false"):
                 same_product = same_product.strip().lower() == "true"
+            score_valid = (type(score) in (float, int) and math.isfinite(score)
+                           and 0 <= score <= 1)
             if (type(index) is not int or not 1 <= index <= len(candidates) or index in seen
-                    or type(score) not in (float, int) or not math.isfinite(score) or not 0 <= score <= 1
+                    or not score_valid
                     or not isinstance(same_product, bool)):
+                invalid_confidence = invalid_confidence or not score_valid
                 invalid_rows += 1
                 continue
             seen.add(index)
             normalized.append({**item, "index": index, "same_product": same_product, "confidence": score})
         if not normalized:
+            if invalid_confidence:
+                raise ValueError("图片匹配置信度无效")
             raise ValueError("图片比对评分结果格式错误")
         matches = normalized
         if invalid_rows:

@@ -316,7 +316,7 @@ class Store:
             self.exception(row["erp_goods_id"], "上次操作中断，发送或保存结果不确定，请人工核对", row["stage"])
 
     def csv(self, status=""):
-        fields = ["erp_goods_id", "title", "main_image_url", "description", "erp_sku", "cost_price", "net_income_usd", "pricing", "weight_g",
+        fields = ["erp_goods_id", "title", "main_image_url", "description", "erp_sku", "cost_price", "net_income_usd", "pricing", "weight_g", "verification_mode", "manual_verification",
                   "erp_before", "write_intent", "erp_after", "write_verified", "write_history",
                   "reference_weight_g", "measured_weight_g", "status", "decision_status", "decision_reason", "skip_reason", "skipped_at", "exception_reason", "exception_detail",
                   "supplier_url", "supplier_sku_id", "supplier_sku", "merchant_id", "match_confidence",

@@ -230,6 +230,10 @@ class WritebackMismatch(ValueError):
         self.actual = actual
 
 
+PENDING_REVIEW_STATUS = "待审核"
+WRITEBACK_REVIEW_STATUSES = {"通过", "价格异常"}
+
+
 class Browser:
     def __init__(self, config, stop, log):
         self.config, self.stop, self.log = config, stop, log
@@ -680,6 +684,9 @@ class Browser:
 
     def collect(self, store, on_task=None):
         selection = selection_params(self.config.get("run_selection"), self.config)
+        cursor_mode = "start_product_id" in selection
+        start_product_id = self.normalize_erp_id(selection.get("start_product_id", ""))
+        end_page = int(self.config["max_pages"] if cursor_mode else selection["end_page"])
         scope = selection_key(selection, self.config)
         page = self.page(self.config["erp_list_url"])
         seen = set()
@@ -687,19 +694,32 @@ class Browser:
         # databases therefore still need the local fallback before using .get.
         checkpoint = store.state("collection", {}) or {}
         resume_after = checkpoint.get("page", 0) if not checkpoint.get("complete") and checkpoint.get("scope") == scope else 0
+        cursor_found = not bool(start_product_id) or bool(resume_after)
+        selected_items = 0
+        limit_reached = False
         if not resume_after:
             store.reset_scope(scope)
         if resume_after:
             store.log(f"从已保存的第 {resume_after} 页后续采集，前序页面只翻页、不重复提取")
         try:
-            store.log(f"正在应用分类筛选，准备采集第 {selection['start_page']}–{selection['end_page']} 页")
+            store.log(
+                "正在应用分类筛选，准备按起始产品编号连续读取"
+                if cursor_mode else
+                f"正在应用分类筛选，准备采集第 {selection['start_page']}–{selection['end_page']} 页"
+            )
             category_label = self.apply_category(page, selection["category"])
             self.first_page(page)
-            first = max(selection["start_page"], resume_after + 1)
+            first = max(1 if cursor_mode else selection["start_page"], resume_after + 1)
             start_item = int(selection.get("start_item") or 1)
-            store.log(f"本次采集：{category_label}，第 {selection['start_page']}–{selection['end_page']} 页；"
-                      f"第 {start_item} 件开始（仅首个选中页生效）")
-            for page_number in range(1, selection["end_page"] + 1):
+            if cursor_mode:
+                store.log(
+                    f"本次采集：{category_label}，从产品 {start_product_id or '分类首件'} 开始，"
+                    f"最多 {int(self.config.get('max_items') or 10)} 件"
+                )
+            else:
+                store.log(f"本次采集：{category_label}，第 {selection['start_page']}–{selection['end_page']} 页；"
+                          f"第 {start_item} 件开始（仅首个选中页生效）")
+            for page_number in range(1, end_page + 1):
                 self.check(page)
                 if page_number < first:
                     if not self.next_page(page, page_number):
@@ -714,8 +734,8 @@ class Browser:
                 seen.add(fingerprint)
                 count = 0
                 row_list = rows.all()
-                item_offset = start_item if page_number == selection["start_page"] else 1
-                if page_number == selection["start_page"] and item_offset > len(row_list):
+                item_offset = start_item if not cursor_mode and page_number == selection["start_page"] else 1
+                if not cursor_mode and page_number == selection["start_page"] and item_offset > len(row_list):
                     raise ValueError(f"智赢第 {page_number} 页只有 {len(row_list)} 件商品，"
                                      f"无法从第 {item_offset} 件开始")
                 for item_index, row in enumerate(row_list, 1):
@@ -734,7 +754,8 @@ class Browser:
                               "erp_sku": self.value(row, "erp_sku"), "raw_erp": raw,
                               "source_page": page_number, "source_index": item_index,
                               "source_category": selection["category"],
-                              "source_category_label": category_label}
+                              "source_category_label": category_label,
+                              "zying_category_name": category_label}
                     link = self.value(row, "erp_edit_link", "href")
                     if link:
                         record["erp_edit_url"] = urljoin(page.url, link)
@@ -747,6 +768,11 @@ class Browser:
                     # Snapshot all card fields before a detail click can rerender
                     # the list, so values cannot come from the next card.
                     key = self.erp_goods_id(page, row, record)
+                    if not cursor_found:
+                        if key != start_product_id:
+                            continue
+                        cursor_found = True
+                        store.log(f"已在智赢第 {page_number} 页定位起始产品 {start_product_id}", key)
                     record["erp_goods_id"] = key
                     added = store.add(record)
                     if not added:
@@ -755,8 +781,10 @@ class Browser:
                         # reordered by the original database creation time.
                         store.update(key, source_page=page_number, source_index=item_index,
                                      source_category=selection["category"],
-                                     source_category_label=category_label)
+                                     source_category_label=category_label,
+                                     zying_category_name=category_label)
                     count += added
+                    selected_items += 1
                     store.include_in_scope(scope, key, page_number)
                     store.log(f"已采集商品 {key}：{record['title']}", key)
                     if on_task:
@@ -766,17 +794,24 @@ class Browser:
                                     f"正在逐件核对智赢商品 {key}：{record['title']}", page)
                         on_task(key)
                         self.check(page)
+                    if cursor_mode and not on_task and selected_items >= int(self.config.get("max_items") or 10):
+                        limit_reached = True
+                        break
                 store.log(f"ERP第 {page_number} 页采集完成，新增 {count} 条；已存在记录保留原进度")
                 store.set_state("collection", {"page": page_number, "signature": fingerprint, "at": time.time(),
                                                "url": self.config["erp_list_url"], "scope": scope,
-                                               "selection": selection, "complete": page_number == selection["end_page"]})
+                                               "selection": selection, "complete": page_number == end_page or limit_reached})
                 store.export()
-                if page_number == selection["end_page"]:
+                if limit_reached or page_number == end_page:
                     break
                 if not self.next_page(page, page_number):
                     store.set_state("collection", {**store.state("collection"), "complete": True})
                     store.log(f"列表已到末页 {page_number}，本次采集结束")
                     break
+            if start_product_id and not cursor_found:
+                raise ValueError(
+                    f"所选分类中未找到起始产品编号 {start_product_id}，请确认编号和分类"
+                )
             return len(seen)
         finally:
             self.release(page)
@@ -917,8 +952,16 @@ class Browser:
             raise ValueError("1688图片上传后出现多个提交按钮，无法确认当前主图的提交入口")
         return matches[0] if matches else (None, None)
 
-    def current_supplier_offer(self, page, candidate, timeout=25):
-        """Read only current 1688 SKU prices and per-SKU package weights."""
+    def current_supplier_offer(self, page, candidate, timeout=45):
+        """Read only current 1688 SKU prices and per-SKU package weights.
+
+        The new 1688 detail shell can render its title and SKU container before
+        the React SKU data arrives.  A 25-second bound was long enough for
+        cached pages but turned slower first loads into false technical skips.
+        Keep polling the visible page for a bounded 45 seconds so a transient
+        data race is retried in-place instead of being recorded as a matching
+        failure.
+        """
         deadline = time.monotonic() + timeout
         last = None
         while time.monotonic() < deadline:
@@ -1260,9 +1303,11 @@ class Browser:
         # a recoverable render race into an ERP writeback skip.
         deadline = time.monotonic() + 10
         matches = []
+        row_list = []
         while time.monotonic() < deadline:
             self.check(page)
-            matches = [row for row in rows.all() if self.value(row, "erp_title") == task["title"]]
+            row_list = rows.all()
+            matches = [row for row in row_list if self.value(row, "erp_title") == task["title"]]
             if matches:
                 break
             if self.stop.wait(.35):
@@ -1288,18 +1333,36 @@ class Browser:
                 self.log(f"列表中发现同标题商品，已按ERP商品ID {target_id} 唯一定位回填卡片", task["erp_goods_id"])
             elif len(id_matches) > 1:
                 matches = id_matches
-            else:
-                expected_image = task.get("main_image_url", "")
-                expected_parts = urlsplit(expected_image)
-                expected_image_key = ((expected_parts.hostname or "").lower(), expected_parts.path.rstrip("/"))
-                filtered = []
-                for row in matches:
-                    image = urljoin(page.url, self.value(row, "erp_image", "src"))
-                    parts = urlsplit(image)
-                    image_key = ((parts.hostname or "").lower(), parts.path.rstrip("/"))
-                    if image == expected_image or image_key == expected_image_key:
-                        filtered.append(row)
-                matches = filtered
+            if len(matches) > 1:
+                # Some Zying list builds do not render an ID in the card at all.
+                # Collection already persisted the one-based card position, so
+                # use it before falling back to the image (which is commonly
+                # duplicated too).  The selected card is still opened below and
+                # its detail ID is checked against the task ID before any write.
+                try:
+                    source_index = int(task.get("source_index") or 0)
+                except (TypeError, ValueError):
+                    source_index = 0
+                if 1 <= source_index <= len(row_list):
+                    indexed = row_list[source_index - 1]
+                    if self.value(indexed, "erp_title") == task["title"]:
+                        matches = [indexed]
+                        self.log(
+                            f"列表中发现同标题商品，已按采集时页内序号第{source_index}件定位回填卡片",
+                            task["erp_goods_id"],
+                        )
+                if len(matches) > 1:
+                    expected_image = task.get("main_image_url", "")
+                    expected_parts = urlsplit(expected_image)
+                    expected_image_key = ((expected_parts.hostname or "").lower(), expected_parts.path.rstrip("/"))
+                    filtered = []
+                    for row in matches:
+                        image = urljoin(page.url, self.value(row, "erp_image", "src"))
+                        parts = urlsplit(image)
+                        image_key = ((parts.hostname or "").lower(), parts.path.rstrip("/"))
+                        if image == expected_image or image_key == expected_image_key:
+                            filtered.append(row)
+                    matches = filtered
         if len(matches) != 1:
             raise ValueError(f"无法唯一定位待回填商品卡片，匹配到{len(matches)}个")
         row = matches[0]
@@ -1312,39 +1375,76 @@ class Browser:
         if self.normalize_erp_id(self.value(page, "erp_edit_id", required=True)) != key:
             raise ValueError("打开的智赢详情ID与目标商品不一致")
 
+    @staticmethod
+    def review_status(root):
+        checked = root.locator("input[name='stat']:checked")
+        if checked.count() != 1:
+            raise ValueError("无法确认智赢当前商品审核状态")
+        label = checked.evaluate("e => (e.closest('label')?.innerText||'').replace(/\\s+/g,'').trim()")
+        if not label:
+            raise ValueError("智赢当前商品状态标签为空")
+        return label
+
+    def read_review_status(self, task):
+        """Read the live Zying review status before any supplier/AI work."""
+        host = urlsplit(self.config["erp_list_url"]).hostname
+        page = self.page(task.get("erp_edit_url") or self.config["erp_list_url"], host)
+        try:
+            self.locate_erp_detail(page, task)
+            return self.review_status(page.locator(".curd-detail-wrap"))
+        finally:
+            self.release(page)
+
     def write_patch(self, task, changes, before_save):
         from .models import erp_value_equal
-        if not changes or set(changes) - {"weight_g", "net_income_usd"}:
+        if not changes or set(changes) - {"weight_g", "net_income_usd", "review_status"}:
             raise ValueError("回填字段无效")
+        if "review_status" in changes and changes["review_status"] not in WRITEBACK_REVIEW_STATUSES:
+            raise ValueError("审核状态只能回填为通过或价格异常")
         host = urlsplit(self.config["erp_list_url"]).hostname
         page = self.page(task.get("erp_edit_url") or self.config["erp_list_url"], host)
         def snapshot():
             if self.normalize_erp_id(self.value(page, "erp_edit_id", required=True)) != task["erp_goods_id"]:
                 raise ValueError("智赢详情产品编号变化，已停止保存")
             root = page.locator(".curd-detail-wrap")
-            checked = root.locator("input[name='stat']:checked")
-            if checked.count() != 1:
-                raise ValueError("无法确认智赢当前商品审核状态")
-            label = checked.evaluate("e => (e.closest('label')?.innerText||'').trim()")
-            if not label:
-                raise ValueError("智赢当前商品状态标签为空")
             return {"weight_g": self.unique(page, "erp_weight_input").input_value(),
                     "net_income_usd": self.unique(page, "erp_net_income_input").input_value(),
-                    "review_status": label}
+                    "review_status": self.review_status(root)}
         try:
             self.locate_erp_detail(page, task)
             self.visual(task, "erp_before", "已定位智赢商品，记录修改前重量、净收益和状态", page)
             old = snapshot()
+            if old["review_status"] != PENDING_REVIEW_STATUS:
+                raise ValueError(f"智赢商品状态为{old['review_status']}，仅待审核商品允许核重核价")
             root = page.locator(".curd-detail-wrap")
             save = self.erp_save_button(page, root)
             before_save(old)
+            if not changes:
+                # A lower calculated net income may be intentionally retained
+                # at the original value. In that case no ERP field needs a
+                # write; return the verified snapshot for the audit trail.
+                self.visual(task, "erp_saved", "计算净收益低于原值，净收益保持不变；无需重复保存，仅保留重量变更策略", page)
+                return old
             for field, selector in (("weight_g", "erp_weight_input"), ("net_income_usd", "erp_net_income_input")):
                 if field in changes:
                     value = number(changes[field])
                     if field == "net_income_usd" and value != value.to_integral_value():
                         raise ValueError("净收益必须是整数美元")
                     self.unique(page, selector).fill(str(value))
-            self.visual(task, "erp_saving", "重量/净收益回填已完成，正在保存；智赢状态保持原值", page)
+            if "review_status" in changes:
+                target = changes["review_status"]
+                radios = root.locator("input[name='stat']")
+                matches = []
+                for radio in radios.all():
+                    label = radio.evaluate("e => (e.closest('label')?.innerText||'').replace(/\\s+/g,'').trim()")
+                    if label == target:
+                        matches.append(radio)
+                if len(matches) != 1:
+                    raise ValueError(f"无法唯一定位智赢审核状态：{target}")
+                matches[0].check()
+                if self.review_status(root) != target:
+                    raise ValueError(f"智赢审核状态未切换为{target}")
+            self.visual(task, "erp_saving", "重量、净收益及审核状态已按核重核价结论填写，正在保存", page)
             self.check(page)
             save.click()
             # Toast copy varies between Zying builds and can be absent even
@@ -1369,7 +1469,7 @@ class Browser:
                 expected = changes.get(field, old[field])
                 if not erp_value_equal(field, actual[field], expected):
                     raise WritebackMismatch(actual)
-            self.visual(task, "erp_saved", "保存后重新打开商品，重量、净收益及原状态回读确认一致", page)
+            self.visual(task, "erp_saved", "保存后重新打开商品，重量、净收益及审核状态回读确认一致", page)
             return actual
         finally:
             self.release(page)
@@ -1660,7 +1760,13 @@ class Browser:
             if saved.count() and saved.first.is_visible():
                 raise ValueError("保存成功标识在保存前已可见，无法判断本次保存结果")
             before_save(old)
-            cost.fill(str(net_income))
+            # The save policy may keep the original ERP net income after the
+            # live form value is read. Re-read the task so a lower calculated
+            # value is never written by this legacy workflow.
+            net_income = number(task.get("net_income_usd"))
+            keep_original_net_income = bool((task.get("pricing") or {}).get("net_income_retained_original"))
+            if not keep_original_net_income:
+                cost.fill(str(net_income))
             weight.fill(str(number(task["weight_g"])))
             self.check(page)
             self.unique(page, "erp_save").click()

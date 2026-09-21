@@ -34,7 +34,7 @@ from urllib.parse import urlsplit
 import requests
 
 
-AGENT_VERSION = "1.2.2"
+AGENT_VERSION = "1.2.3"
 DEFAULT_SERVER_URL = "https://wuhanzeshun.com"
 DEFAULT_POLL_SECONDS = 10.0
 DEFAULT_HEARTBEAT_SECONDS = 10.0
@@ -306,6 +306,7 @@ class AgentStatusWindow:
         self.log_queue = queue.Queue()
         self.closing = False
         self.agent_thread = None
+        self.stopping_job_id = ""
         self.status_text = tk.StringVar(value="正在连接服务端…")
         self.clock_text = tk.StringVar(value="")
 
@@ -363,7 +364,7 @@ class AgentStatusWindow:
         footer.pack(fill="x")
         tk.Label(
             footer,
-            text="关闭窗口会停止当前任务并退出 Agent。",
+            text="结束任务后 Agent 会保持在线；关闭窗口会停止任务并退出 Agent。",
             font=("Microsoft YaHei UI", 9),
             foreground="#6b7280",
             background="#f4f6f8",
@@ -381,6 +382,17 @@ class AgentStatusWindow:
                 padx=10,
                 pady=4,
             ).pack(side="right", padx=(8, 0))
+        self.stop_task_button = tk.Button(
+            footer,
+            text="暂无运行任务",
+            command=self._on_stop_current_task,
+            state="disabled",
+            font=("Microsoft YaHei UI", 9, "bold"),
+            foreground="#b42318",
+            padx=10,
+            pady=4,
+        )
+        self.stop_task_button.pack(side="right", padx=(8, 0))
 
         history = _tail_text(agent.runtime_log.path)
         if history:
@@ -419,7 +431,35 @@ class AgentStatusWindow:
                 break
             self._append_log(content)
             self._set_status_from_log(content)
+        self._refresh_task_button()
         self.root.after(100, self._drain_logs)
+
+    def _refresh_task_button(self):
+        job_id = self.agent.current_job_id()
+        if not job_id:
+            self.stopping_job_id = ""
+            self.stop_task_button.configure(text="暂无运行任务", state="disabled")
+        elif self.closing or self.stopping_job_id == job_id:
+            self.stop_task_button.configure(text="正在结束任务", state="disabled")
+        else:
+            self.stop_task_button.configure(text="结束任务", state="normal")
+
+    def _on_stop_current_task(self):
+        job_id = self.agent.current_job_id()
+        if not job_id:
+            self._refresh_task_button()
+            return
+        if not self.messagebox.askyesno(
+            "结束任务",
+            "确定结束当前本地运行的任务吗？Agent 会保持在线并继续接收后续任务。",
+            parent=self.root,
+        ):
+            return
+        stopped_job_id = self.agent.request_stop_current_job("用户点击结束任务")
+        if stopped_job_id:
+            self.stopping_job_id = stopped_job_id
+            self.status_text.set("正在结束当前任务…")
+        self._refresh_task_button()
 
     def _tick_clock(self):
         self.clock_text.set(time.strftime("%Y-%m-%d  %H:%M:%S", time.localtime()))
@@ -738,6 +778,7 @@ class LocalAgent:
         self._worker_lock = threading.Lock()
         self._current_worker = None
         self._current_job_id = ""
+        self._current_cancel_file = None
         self.queue_id = ""
 
     def log(self, message):
@@ -763,10 +804,40 @@ class LocalAgent:
         self.shutdown_event.set()
         self._stop_current_worker()
 
-    def _set_current_worker(self, job_id, guard):
+    def current_job_id(self):
+        """Return the actively running local job without exposing worker internals."""
+        with self._worker_lock:
+            guard = self._current_worker
+            if guard is None or guard.process.poll() is not None:
+                return ""
+            return self._current_job_id
+
+    def request_stop_current_job(self, reason=""):
+        """Request cancellation of the current job while keeping the Agent online."""
+        with self._worker_lock:
+            guard = self._current_worker
+            job_id = self._current_job_id
+            cancel_file = self._current_cancel_file
+            if (
+                guard is None
+                or guard.process.poll() is not None
+                or not job_id
+                or cancel_file is None
+            ):
+                return ""
+            try:
+                cancel_file.write_text(reason or "local stop", encoding="utf-8")
+            except OSError as exc:
+                self.log(f"无法结束本机任务 {job_id}：{exc}")
+                return ""
+        self.log(f"正在结束本机任务 {job_id}：{reason or '本机用户请求'}")
+        return job_id
+
+    def _set_current_worker(self, job_id, guard, cancel_file=None):
         with self._worker_lock:
             self._current_job_id = str(job_id or "")
             self._current_worker = guard
+            self._current_cancel_file = Path(cancel_file) if cancel_file else None
 
     def _stop_current_worker(self):
         with self._worker_lock:
@@ -779,6 +850,7 @@ class LocalAgent:
             if self._current_worker is guard:
                 self._current_worker = None
                 self._current_job_id = ""
+                self._current_cancel_file = None
         guard.close()
 
     def ensure_enrolled(self):
@@ -867,6 +939,49 @@ class LocalAgent:
         release_dir = self.config.data_dir / "releases" / version
         return version if version and (release_dir / "local_agent_worker.py").is_file() else ""
 
+    def _release_history_path(self):
+        return self.config.data_dir / "release-history.json"
+
+    def rollback_release(self, version=""):
+        """Activate the last known-good local business release atomically."""
+        requested = str(version or "").strip()
+        current = self.current_release
+        releases_dir = self.config.data_dir / "releases"
+        candidates = []
+        if requested:
+            candidates.append(requested)
+        try:
+            history = _load_json(self._release_history_path())
+        except Exception:
+            history = {}
+        for item in history.get("releases") or []:
+            candidate = str((item or {}).get("version") or "").strip()
+            if candidate and candidate not in candidates:
+                candidates.append(candidate)
+        candidates.extend(
+            path.name
+            for path in sorted(
+                releases_dir.glob("*"),
+                key=lambda item: item.stat().st_mtime,
+                reverse=True,
+            )
+            if path.is_dir() and path.name not in candidates
+        )
+        target = next(
+            (
+                candidate
+                for candidate in candidates
+                if candidate != current
+                and (releases_dir / candidate / "local_agent_worker.py").is_file()
+            ),
+            "",
+        )
+        if not target:
+            raise RuntimeError("没有可回退的本地业务版本")
+        self._activate_release(target, reason="manual-rollback")
+        self.log(f"本地业务版本已回退：{current or '无'} -> {target}")
+        return target
+
     def heartbeat(self, current_job_id=""):
         data = self._request(
             "POST",
@@ -947,16 +1062,48 @@ class LocalAgent:
         self.log(f"业务代码已更新到版本 {response_version}")
         return releases_dir / response_version
 
-    def _activate_release(self, version):
+    def _activate_release(self, version, reason="activate"):
         current_path = self.config.data_dir / "current-release.json"
         current_path.parent.mkdir(parents=True, exist_ok=True)
+        previous = self.current_release
         temporary = current_path.with_suffix(".tmp")
         temporary.write_text(
-            json.dumps({"version": version}, ensure_ascii=False, indent=2),
+            json.dumps(
+                {
+                    "version": version,
+                    "previous_version": previous,
+                    "reason": reason,
+                    "activated_at": int(time.time()),
+                },
+                ensure_ascii=False,
+                indent=2,
+            ),
             encoding="utf-8",
         )
         os.replace(temporary, current_path)
         self.current_release = version
+        history_path = self._release_history_path()
+        history = _load_json(history_path)
+        entries = [
+            item for item in (history.get("releases") or [])
+            if str((item or {}).get("version") or "") != version
+        ]
+        entries.insert(
+            0,
+            {
+                "version": version,
+                "previous_version": previous,
+                "reason": reason,
+                "activated_at": int(time.time()),
+            },
+        )
+        history_path.parent.mkdir(parents=True, exist_ok=True)
+        history_tmp = history_path.with_suffix(".tmp")
+        history_tmp.write_text(
+            json.dumps({"releases": entries[:10]}, ensure_ascii=False, indent=2),
+            encoding="utf-8",
+        )
+        os.replace(history_tmp, history_path)
 
     def _prune_releases(self, keep=2):
         releases_dir = self.config.data_dir / "releases"
@@ -1068,7 +1215,7 @@ class LocalAgent:
             start_new_session=os.name != "nt",
         )
         worker_guard = WorkerProcessGuard(process)
-        self._set_current_worker(job_id, worker_guard)
+        self._set_current_worker(job_id, worker_guard, cancel_file)
         output_queue = queue.Queue()
 
         def read_output():
@@ -1107,6 +1254,8 @@ class LocalAgent:
             now = time.monotonic()
             if self.shutdown_event.is_set() and not cancel_file.exists():
                 cancel_file.write_text("agent shutdown", encoding="utf-8")
+                cancel_started = now
+            if cancel_file.exists() and not cancel_started:
                 cancel_started = now
             if (
                 pending_logs
@@ -1307,6 +1456,14 @@ def build_argument_parser():
     parser.add_argument("--allow-http", action="store_true")
     parser.add_argument("--once", action="store_true")
     parser.add_argument(
+        "--rollback",
+        nargs="?",
+        const="",
+        default=None,
+        metavar="VERSION",
+        help="激活上一个本地业务版本，或指定版本后退出",
+    )
+    parser.add_argument(
         "--no-window",
         action="store_true",
         help="不显示图形运行状态窗口，仅写控制台和本地日志",
@@ -1354,6 +1511,14 @@ def main(argv=None):
         agent.log("泽顺本机 Agent 已在运行，本次重复启动退出。")
         return 2
     try:
+        if args.rollback is not None:
+            try:
+                version = agent.rollback_release(args.rollback)
+                agent.log(f"回退完成，当前版本：{version}")
+                return 0
+            except Exception as exc:
+                agent.log(f"回退失败：{exc}")
+                return 1
         if _status_window_enabled(args):
             try:
                 return AgentStatusWindow(agent).run()

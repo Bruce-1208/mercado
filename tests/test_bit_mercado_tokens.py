@@ -746,7 +746,7 @@ def test_console_template_contains_store_token_module():
     assert 'data-field="salesperson"' not in body
     assert 'data-field="group_name"' not in body
     assert 'requestAccessApi("/api/access/users")' in body
-    assert "更新声誉”通过官方 API 更新声誉和站点状态" in body
+    assert "更新声誉”通过官方 API 更新声誉和账号状态，不启动浏览器" in body
     assert 'data-field="appeal_enabled"' in body
     assert 'data-field="reputation_update_enabled"' in body
     assert 'data-field="visit_stats_enabled"' in body

@@ -166,6 +166,48 @@ def test_status_window_close_requests_real_agent_shutdown():
     assert destroyed == [True]
 
 
+def test_status_window_stop_button_only_stops_current_job():
+    window = object.__new__(local_agent.AgentStatusWindow)
+    requested = []
+    statuses = []
+    window.closing = False
+    window.stopping_job_id = ""
+    window.agent = SimpleNamespace(
+        current_job_id=lambda: "job-123",
+        request_stop_current_job=lambda reason: requested.append(reason) or "job-123",
+    )
+    window.status_text = SimpleNamespace(set=statuses.append)
+    window.stop_task_button = SimpleNamespace(configure=lambda **_kwargs: None)
+    window.messagebox = SimpleNamespace(askyesno=lambda *_args, **_kwargs: True)
+    window.root = object()
+
+    window._on_stop_current_task()
+
+    assert requested == ["用户点击结束任务"]
+    assert window.stopping_job_id == "job-123"
+    assert statuses == ["正在结束当前任务…"]
+
+
+def test_agent_local_stop_request_writes_cancel_file_without_shutting_down(tmp_path):
+    config = SimpleNamespace(
+        data_dir=tmp_path,
+        server_url="https://workbench.example",
+        agent_token="",
+    )
+    agent = LocalAgent(config)
+    cancel_file = tmp_path / "jobs" / "job-123" / "cancel.requested"
+    cancel_file.parent.mkdir(parents=True)
+    process = SimpleNamespace(poll=lambda: None)
+    guard = SimpleNamespace(process=process)
+    agent._set_current_worker("job-123", guard, cancel_file)
+
+    stopped_job_id = agent.request_stop_current_job("用户点击结束任务")
+
+    assert stopped_job_id == "job-123"
+    assert cancel_file.read_text(encoding="utf-8") == "用户点击结束任务"
+    assert not agent.shutdown_event.is_set()
+
+
 def test_agent_downloads_verifies_and_atomically_activates_release(tmp_path):
     content, sha256 = make_bundle()
     config = SimpleNamespace(
@@ -349,6 +391,45 @@ def test_agent_shutdown_terminates_active_worker_tree(tmp_path, monkeypatch):
     runner.join(timeout=10)
 
     assert not runner.is_alive()
+    assert any(event.get("status") == "stopped" for event in events)
+
+
+def test_agent_local_stop_terminates_worker_but_keeps_agent_running(tmp_path, monkeypatch):
+    config = SimpleNamespace(
+        data_dir=tmp_path,
+        server_url="https://workbench.example",
+        agent_token="",
+        db_api_token="test-only",
+        heartbeat_seconds=0.1,
+        agent_id="agent-local-stop-test",
+        name="本机停止测试",
+    )
+    agent = LocalAgent(config)
+    agent.current_release = "runtime-local-stop-test"
+    release = tmp_path / "releases" / agent.current_release
+    release.mkdir(parents=True)
+    (release / "local_agent_worker.py").write_text(
+        "import time\nprint('worker started', flush=True)\ntime.sleep(60)\n",
+        encoding="utf-8",
+    )
+    events = []
+    monkeypatch.setattr(agent, "heartbeat", lambda **_kwargs: {})
+    monkeypatch.setattr(agent, "send_event", lambda _job_id, **data: events.append(data))
+
+    runner = threading.Thread(
+        target=agent.run_job,
+        args=({"job_id": "local-stop-job", "job_type": "daily_task", "payload": {}},),
+    )
+    runner.start()
+    deadline = time.monotonic() + 5
+    while not agent.current_job_id() and time.monotonic() < deadline:
+        time.sleep(0.02)
+
+    assert agent.request_stop_current_job("test") == "local-stop-job"
+    runner.join(timeout=10)
+
+    assert not runner.is_alive()
+    assert not agent.shutdown_event.is_set()
     assert any(event.get("status") == "stopped" for event in events)
 
 

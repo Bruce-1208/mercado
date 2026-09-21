@@ -1,4 +1,5 @@
 import argparse
+import hashlib
 import html
 import json
 import os
@@ -9,7 +10,7 @@ import sys
 import threading
 import time
 from contextlib import contextmanager
-from concurrent.futures import ThreadPoolExecutor, as_completed
+from concurrent.futures import Future, ThreadPoolExecutor, as_completed
 from datetime import datetime
 from functools import wraps
 from pathlib import Path
@@ -115,6 +116,10 @@ ZYING_DETAIL_CLICK_ATTEMPTS = max(
     1,
     int(os.environ.get("BIT_ZYING_DETAIL_CLICK_ATTEMPTS", "2")),
 )
+ZYING_DEVELOPER_CACHE_SECONDS = max(
+    0,
+    int(os.environ.get("BIT_ZYING_DEVELOPER_CACHE_SECONDS", "300")),
+)
 
 TITLE_SELECTOR = ".f12.product-title, .product-title"
 IMAGE_SELECTOR = "img.product-pic, img[class*='product-pic'], img[class*='product-image']"
@@ -133,6 +138,9 @@ _ZYING_STOP_STATE_LOCK = threading.RLock()
 _ZYING_ACTIVE_STOP_EVENT = None
 _ZYING_CATEGORY_CACHE_LOCK = threading.RLock()
 _ZYING_CATEGORY_CACHE = []
+_ZYING_DEVELOPER_CACHE_LOCK = threading.RLock()
+_ZYING_DEVELOPER_CACHE = {}
+_ZYING_DEVELOPER_INFLIGHT = {}
 
 
 def _raise_if_zying_collection_stopped(stop_event=None):
@@ -1163,20 +1171,11 @@ def validate_zying_auth_token(token):
     return True
 
 
-def list_zying_product_developers(auth_token=None):
-    """返回智赢可用的产品开发人员，供采集筛选和姓名映射使用。"""
-    token = _clean_text(auth_token) or load_zying_auth_token()
-    if not token:
-        raise ZyingAuthenticationError("智赢登录凭证为空，请重新登录")
-    with requests.Session() as session:
-        session.trust_env = False
-        data = _zying_api_post(session, token, "logins.select", {})
-    rows = data.get("logins") if isinstance(data, dict) else None
-    if not isinstance(rows, list):
-        raise RuntimeError("智赢产品开发人员接口返回格式异常")
+def normalize_zying_product_developers(rows):
+    """Normalize developer rows supplied by either the page or the API."""
     developers = []
     seen = set()
-    for row in rows:
+    for row in rows or ():
         if not isinstance(row, dict):
             continue
         developer_id = _format_number(row.get("id"))
@@ -1186,6 +1185,82 @@ def list_zying_product_developers(auth_token=None):
         seen.add(developer_id)
         developers.append({"id": developer_id, "name": developer_name or developer_id})
     return developers
+
+
+def _fetch_zying_product_developers(token):
+    with requests.Session() as session:
+        session.trust_env = False
+        data = _zying_api_post(session, token, "logins.select", {})
+    rows = data.get("logins") if isinstance(data, dict) else None
+    if not isinstance(rows, list):
+        raise RuntimeError("智赢产品开发人员接口返回格式异常")
+    return normalize_zying_product_developers(rows)
+
+
+def _zying_developer_cache_key(token):
+    return hashlib.sha256(str(token).encode("utf-8")).hexdigest()
+
+
+def cache_zying_product_developers(auth_token, rows):
+    """Seed the short-lived cache with rows read from the live ZYing page."""
+    token = _clean_text(auth_token)
+    normalized = normalize_zying_product_developers(rows)
+    if not token or not normalized or not ZYING_DEVELOPER_CACHE_SECONDS:
+        return normalized
+    key = _zying_developer_cache_key(token)
+    with _ZYING_DEVELOPER_CACHE_LOCK:
+        now = time.monotonic()
+        for cached_key, cached in list(_ZYING_DEVELOPER_CACHE.items()):
+            if cached["expires_at"] <= now:
+                _ZYING_DEVELOPER_CACHE.pop(cached_key, None)
+        _ZYING_DEVELOPER_CACHE[key] = {
+            "expires_at": now + ZYING_DEVELOPER_CACHE_SECONDS,
+            "rows": [dict(row) for row in normalized],
+        }
+    return normalized
+
+
+def list_zying_product_developers(auth_token=None):
+    """Return developers without repeating the expensive browser/API bootstrap."""
+    token = _clean_text(auth_token) or load_zying_auth_token()
+    if not token:
+        raise ZyingAuthenticationError("智赢登录凭证为空，请重新登录")
+    if not ZYING_DEVELOPER_CACHE_SECONDS:
+        return _fetch_zying_product_developers(token)
+
+    key = _zying_developer_cache_key(token)
+    with _ZYING_DEVELOPER_CACHE_LOCK:
+        entry = _ZYING_DEVELOPER_CACHE.get(key)
+        if entry and entry["expires_at"] > time.monotonic():
+            return [dict(row) for row in entry["rows"]]
+        future = _ZYING_DEVELOPER_INFLIGHT.get(key)
+        owner = future is None
+        if owner:
+            future = Future()
+            _ZYING_DEVELOPER_INFLIGHT[key] = future
+    if not owner:
+        return [dict(row) for row in future.result()]
+
+    try:
+        rows = _fetch_zying_product_developers(token)
+        with _ZYING_DEVELOPER_CACHE_LOCK:
+            now = time.monotonic()
+            for cached_key, cached in list(_ZYING_DEVELOPER_CACHE.items()):
+                if cached["expires_at"] <= now:
+                    _ZYING_DEVELOPER_CACHE.pop(cached_key, None)
+            _ZYING_DEVELOPER_CACHE[key] = {
+                "expires_at": now + ZYING_DEVELOPER_CACHE_SECONDS,
+                "rows": [dict(row) for row in rows],
+            }
+        future.set_result(rows)
+        return [dict(row) for row in rows]
+    except BaseException as exc:
+        future.set_exception(exc)
+        raise
+    finally:
+        with _ZYING_DEVELOPER_CACHE_LOCK:
+            if _ZYING_DEVELOPER_INFLIGHT.get(key) is future:
+                _ZYING_DEVELOPER_INFLIGHT.pop(key, None)
 
 
 def _attach_product_developer(record, developer_names=None):
@@ -2805,6 +2880,8 @@ def collect_zying_products_api(
     category_name="",
     product_developer_id="",
     product_developer_name="",
+    start_product_id="",
+    max_items=None,
     product_writer=None,
     existing_product_id_reader=None,
     product_mirror_writer=None,
@@ -2835,6 +2912,15 @@ def collect_zying_products_api(
         developer_names.get(requested_developer_id)
         or _clean_text(product_developer_name)
     )
+    requested_start_product_id = _format_number(start_product_id)
+    if _clean_text(start_product_id) and not requested_start_product_id:
+        raise ValueError("起始产品编号格式不正确")
+    item_limit = None if max_items is None else int(max_items)
+    if item_limit is not None and not 1 <= item_limit <= 10000:
+        raise ValueError("最多产品数必须是 1–10000 的整数")
+    cursor_mode = item_limit is not None or bool(requested_start_product_id)
+    cursor_found = not bool(requested_start_product_id)
+    selected_count = 0
     product_writer = product_writer or insert_zying_product_info
     existing_product_id_reader = (
         existing_product_id_reader or get_existing_zying_product_ids
@@ -2857,7 +2943,11 @@ def collect_zying_products_api(
     print(
         f"智赢 API 后台采集直接启动：第 {start_page}-{page_count} 页，"
         f"分类 {category_selection['category_path'] if category_selection else '全部'}，"
-        f"产品开发 {requested_developer_name or '全部'}",
+        f"产品开发 {requested_developer_name or '全部'}"
+        + (
+            f"，从产品 {requested_start_product_id or '分类首件'} 开始，最多 {item_limit} 个"
+            if cursor_mode else ""
+        ),
         flush=True,
     )
 
@@ -2888,14 +2978,36 @@ def collect_zying_products_api(
                 raise RuntimeError(
                     f"智赢接口列表第 {page_number} 页返回格式异常，请刷新登录状态后重试"
                 )
+            selected_rows = [row for row in rows if isinstance(row, dict)]
+            if cursor_mode and not cursor_found:
+                start_index = next(
+                    (
+                        index for index, row in enumerate(selected_rows)
+                        if _format_number(row.get("id")) == requested_start_product_id
+                    ),
+                    None,
+                )
+                if start_index is None:
+                    selected_rows = []
+                else:
+                    cursor_found = True
+                    selected_rows = selected_rows[start_index:]
+                    print(
+                        f"已在智赢列表第 {page_number} 页定位起始产品 {requested_start_product_id}",
+                        flush=True,
+                    )
+            if cursor_mode and cursor_found and item_limit is not None:
+                remaining = max(0, item_limit - selected_count)
+                selected_rows = selected_rows[:remaining]
+            selected_count += len(selected_rows)
             collected_at = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
             page_records = [
                 _zying_api_list_record(row, page_number, collected_at)
-                for row in rows
-                if isinstance(row, dict)
+                for row in selected_rows
             ]
             print(
-                f"智赢 API 列表第 {page_number}/{page_count} 页返回 {len(page_records)} 条",
+                f"智赢 API 列表第 {page_number}/{page_count} 页返回 {len(rows)} 条，"
+                f"本次范围选中 {len(page_records)} 条",
                 flush=True,
             )
             page_records, page_duplicate_count = _deduplicate_zying_records(
@@ -2955,6 +3067,14 @@ def collect_zying_products_api(
             if not rows:
                 print("智赢接口已没有更多产品，提前结束采集", flush=True)
                 break
+            if item_limit is not None and selected_count >= item_limit:
+                print(f"已达到本次最多产品数 {item_limit}，停止继续读取", flush=True)
+                break
+
+    if requested_start_product_id and not cursor_found:
+        raise ValueError(
+            f"所选分类中未找到起始产品编号 {requested_start_product_id}，请确认编号和分类"
+        )
 
     summary = {
         "records": records,
@@ -2970,6 +3090,9 @@ def collect_zying_products_api(
         "collection_mode": "api",
         "product_developer_id": requested_developer_id,
         "product_developer_name": requested_developer_name,
+        "start_product_id": requested_start_product_id,
+        "max_items": item_limit,
+        "selected_count": selected_count,
     }
     print(
         f"智赢 API 后台采集完成：入库 {inserted_count} 条，"
@@ -2995,6 +3118,8 @@ def collect_zying_products(
     category_name="",
     product_developer_id="",
     product_developer_name="",
+    start_product_id="",
+    max_items=None,
     auth_token=None,
     api_mode=True,
     stop_event=None,
@@ -3023,6 +3148,8 @@ def collect_zying_products(
             category_name=category_name,
             product_developer_id=product_developer_id,
             product_developer_name=product_developer_name,
+            start_product_id=start_product_id,
+            max_items=max_items,
             product_writer=product_writer,
             existing_product_id_reader=existing_product_id_reader,
             product_mirror_writer=product_mirror_writer,

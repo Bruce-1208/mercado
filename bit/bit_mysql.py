@@ -1124,17 +1124,29 @@ def _normalize_collection_targets(targets):
     return normalized
 
 
-def _active_collection_snapshot_rows(rows):
+def _active_collection_snapshot_rows(
+    rows,
+    *,
+    active_targets=None,
+    authorization_flag="visit_stats_enabled",
+):
     """只保留当前启用店铺站点，避免把已经停用的历史店铺重新带回页面。"""
     rows = list(rows or ())
-    try:
+    if active_targets is None:
+        try:
+            active_targets = {
+                (item["店铺名"], item["站点"])
+                for item in _load_authorized_shop_sites(authorization_flag)
+            }
+        except Exception as exc:
+            print(f"读取店铺授权任务范围失败，按空范围处理：{exc}")
+            return []
+    else:
         active_targets = {
-            (item["店铺名"], item["站点"])
-            for item in _load_authorized_shop_sites("visit_stats_enabled")
+            (str(shop or "").strip(), str(site or "").strip())
+            for shop, site in active_targets
+            if str(shop or "").strip() and str(site or "").strip()
         }
-    except Exception as exc:
-        print(f"读取店铺授权访问统计范围失败，按空范围处理：{exc}")
-        return []
     if not active_targets:
         return []
     return [
@@ -1325,6 +1337,31 @@ def _merge_reputation_snapshot_rows(
     return list(merged_rows.values())
 
 
+def _preserve_reputation_account_status(rows, previous_status_by_target):
+    """API 未明确确认正常时，保留上次已知的更精确封禁期限。"""
+    confirmed_normal_statuses = {"正常", "active", "enabled", "ok"}
+    for row in rows:
+        if len(row) < 13:
+            continue
+        current_status = str(row[12] or "").strip()
+        previous_status = previous_status_by_target.get((
+            str(row[0] or "").strip(),
+            str(row[1] or "").strip(),
+        ))
+        previous_text = str(previous_status or "").strip()
+        if (
+            current_status.casefold() not in confirmed_normal_statuses
+            and previous_text.casefold() not in confirmed_normal_statuses
+            and (
+                "天" in previous_text
+                or "至 " in previous_text
+                or "永久封禁" in previous_text
+            )
+        ):
+            row[12] = previous_status
+    return rows
+
+
 def _merge_infraction_snapshot_rows(
     latest_rows,
     collected_rows,
@@ -1364,6 +1401,7 @@ def inset_reputation_info(
     reputation_list,
     merge_latest=False,
     replace_targets=None,
+    preserve_account_status=False,
 ):
     if not reputation_list and not merge_latest:
         return 0
@@ -1382,7 +1420,8 @@ def inset_reputation_info(
                 "reputation",
             )
             previous_snapshot_rows = _active_collection_snapshot_rows(
-                _latest_reputation_snapshot_rows(cursor)
+                _latest_reputation_snapshot_rows(cursor),
+                authorization_flag="reputation_update_enabled",
             )
             previous_traffic_by_target = {
                 (
@@ -1392,6 +1431,14 @@ def inset_reputation_info(
                 for row in previous_snapshot_rows
                 if str(row.get("一周流量趋势") or "").strip()
                 not in ("", "[]")
+            }
+            previous_status_by_target = {
+                (
+                    str(row.get("店铺名") or "").strip(),
+                    str(row.get("站点") or "").strip(),
+                ): row.get("站点状态")
+                for row in previous_snapshot_rows
+                if str(row.get("站点状态") or "").strip()
             }
             normalized_list = []
             for row in reputation_list:
@@ -1428,6 +1475,11 @@ def inset_reputation_info(
                 extras = row[12:15] if len(row) >= 15 else ["", None, None]
                 row = row[:12] + extras + [submit_time]
                 normalized_list.append(row)
+            if preserve_account_status:
+                _preserve_reputation_account_status(
+                    normalized_list,
+                    previous_status_by_target,
+                )
             if merge_latest:
                 normalized_list = _merge_reputation_snapshot_rows(
                     previous_snapshot_rows,
@@ -1623,12 +1675,18 @@ def _load_authorized_shop_sites(setting_field="visit_stats_enabled"):
 def _get_latest_collection_task_status(cursor, record_type):
     cursor.execute(
         """
-        SELECT `name`, `site`, `isSuccess`, `datetime`
-        FROM record
-        WHERE `type` = %s
-          AND `name` IS NOT NULL AND `name` <> ''
-          AND `site` IS NOT NULL AND `site` <> ''
-        ORDER BY `datetime` DESC, `id` DESC
+        SELECT current_record.`name`, current_record.`site`,
+               current_record.`isSuccess`, current_record.`datetime`
+        FROM record AS current_record
+        INNER JOIN (
+            SELECT `name`, `site`, MAX(`id`) AS `latest_id`
+            FROM record
+            WHERE `type` = %s
+              AND `name` IS NOT NULL AND `name` <> ''
+              AND `site` IS NOT NULL AND `site` <> ''
+            GROUP BY `name`, `site`
+        ) AS latest_record
+          ON latest_record.`latest_id` = current_record.`id`
         """,
         (str(record_type or "").strip(),),
     )
@@ -1784,12 +1842,18 @@ def get_latest_infraction_info(recent_days=30):
         connection.close()
 
 
-def _latest_infraction_counts_by_shop_site(cursor, recent_days=30):
+def _latest_infraction_counts_by_shop_site(
+    cursor,
+    recent_days=30,
+    *,
+    active_targets=None,
+):
     """按最新侵权快照统计指定周期内每个店铺站点的两类数量。"""
     cutoff = datetime.now() - timedelta(days=max(1, int(recent_days or 30)))
     counts = {}
     rows = _active_collection_snapshot_rows(
-        _latest_infraction_snapshot_rows(cursor)
+        _latest_infraction_snapshot_rows(cursor),
+        active_targets=active_targets,
     )
     for row in rows:
         infraction_date = _parse_infraction_date(row.get("侵权时间"))
@@ -1817,6 +1881,11 @@ def get_latest_reputation_info():
             authorized_sites = _load_authorized_shop_sites(
                 "reputation_update_enabled"
             )
+            authorized_by_target = {
+                (item["店铺名"], item["站点"]): item
+                for item in authorized_sites
+            }
+            active_targets = set(authorized_by_target)
             _ensure_column(cursor, "reputation", "取消率", "VARCHAR(255) NULL")
             _ensure_column(cursor, "reputation", "一周流量趋势", "TEXT NULL")
             _ensure_column(cursor, "reputation", "站点状态", "VARCHAR(255) NULL")
@@ -1863,17 +1932,30 @@ def get_latest_reputation_info():
             # 有完整批次标记时读取该批次；兼容历史数据没有标记的情况时，
             # 按店铺和站点分别取最新记录，让补跑结果与此前成功结果一起展示。
             rows = _active_collection_snapshot_rows(
-                _latest_reputation_snapshot_rows(cursor)
+                _latest_reputation_snapshot_rows(cursor),
+                active_targets=active_targets,
             )
             try:
                 infraction_counts = _latest_infraction_counts_by_shop_site(
                     cursor,
                     recent_days=100,
+                    active_targets=active_targets,
                 )
             except Exception as exc:
                 print(f"读取声誉关联侵权数量失败，将显示为 0: {exc}")
                 infraction_counts = {}
             for row in rows:
+                authorization = authorized_by_target.get((
+                    str(row.get("店铺名") or "").strip(),
+                    str(row.get("站点") or "").strip(),
+                )) or {}
+                row["token_id"] = int(authorization.get("token_id") or 0)
+                row["业务员"] = (
+                    str(authorization.get("业务员") or "").strip() or "未分配"
+                )
+                row["账户组"] = (
+                    str(authorization.get("店铺组") or "").strip() or "未分组"
+                )
                 for key in ("更新时间", "提交时间"):
                     if row.get(key) is not None:
                         row[key] = str(row[key])
@@ -6958,6 +7040,7 @@ def _ensure_mercado_store_tokens_table(cursor):
         """
         CREATE TABLE IF NOT EXISTS `mercado_store_tokens` (
             `id` BIGINT NOT NULL AUTO_INCREMENT,
+            `organization_key` VARCHAR(64) NOT NULL DEFAULT 'default',
             `display_name` VARCHAR(100) NOT NULL,
             `enabled` TINYINT(1) NOT NULL DEFAULT 1,
             `meli_user_id` VARCHAR(64) NULL,
@@ -6977,7 +7060,7 @@ def _ensure_mercado_store_tokens_table(cursor):
             `created_at` DATETIME NOT NULL,
             `updated_at` DATETIME NOT NULL,
             PRIMARY KEY (`id`),
-            UNIQUE KEY `uniq_mercado_store_display_name` (`display_name`),
+            UNIQUE KEY `uniq_mercado_store_org_display_name` (`organization_key`, `display_name`),
             UNIQUE KEY `uniq_mercado_store_user_id` (`meli_user_id`),
             KEY `idx_mercado_store_application_id` (`application_id`),
             KEY `idx_mercado_store_expires_at` (`expires_at`)
@@ -6990,6 +7073,29 @@ def _ensure_mercado_store_tokens_table(cursor):
         "enabled",
         "TINYINT(1) NOT NULL DEFAULT 1 AFTER `display_name`",
     )
+    _ensure_column(
+        cursor,
+        "mercado_store_tokens",
+        "organization_key",
+        "VARCHAR(64) NULL AFTER `id`",
+    )
+    cursor.execute(
+        "UPDATE `mercado_store_tokens` SET `organization_key` = 'default' "
+        "WHERE `organization_key` IS NULL OR `organization_key` = ''"
+    )
+    # Store names are only unique inside a customer.  Keep the migration
+    # idempotent so existing single-tenant databases can be upgraded safely.
+    cursor.execute(
+        "SHOW INDEX FROM `mercado_store_tokens` "
+        "WHERE `Key_name` = 'uniq_mercado_store_display_name'"
+    )
+    if cursor.fetchone():
+        cursor.execute(
+            "ALTER TABLE `mercado_store_tokens` "
+            "DROP INDEX `uniq_mercado_store_display_name`, "
+            "ADD UNIQUE KEY `uniq_mercado_store_org_display_name` "
+            "(`organization_key`, `display_name`)"
+        )
     _ensure_column(
         cursor,
         "mercado_store_tokens",
@@ -7842,19 +7948,11 @@ def delete_mercado_account_group(group_id):
         connection.close()
 
 
-def _mercado_store_site_setting_rows(cursor, token_id):
-    cursor.execute(
-        """
-        SELECT `token_id`, `site_id`, `salesperson`, `discount_rate`, `group_name`,
-               `appeal_enabled`, `reputation_update_enabled`, `visit_stats_enabled`,
-               `created_at`, `updated_at`
-        FROM `mercado_store_site_settings`
-        WHERE `token_id` = %s
-        ORDER BY `site_id` ASC
-        """,
-        (int(token_id),),
-    )
-    configured = {str(row["site_id"]): dict(row) for row in (cursor.fetchall() or [])}
+def _normalized_mercado_store_site_settings(token_id, configured_rows):
+    configured = {
+        str(row["site_id"]): dict(row)
+        for row in (configured_rows or [])
+    }
     result = []
     for site_id, site_name in MERCADO_CONFIGURABLE_SITES.items():
         row = configured.get(site_id, {})
@@ -7879,6 +7977,44 @@ def _mercado_store_site_setting_rows(cursor, token_id):
             }
         )
     return result
+
+
+def _mercado_store_site_settings_by_token(cursor, token_ids):
+    """一次查询全部店铺站点设置，避免授权列表出现 N+1 查询。"""
+    normalized_ids = sorted({int(value) for value in token_ids if int(value) > 0})
+    if not normalized_ids:
+        return {}
+    placeholders = ", ".join(["%s"] * len(normalized_ids))
+    cursor.execute(
+        f"""
+        SELECT `token_id`, `site_id`, `salesperson`, `discount_rate`, `group_name`,
+               `appeal_enabled`, `reputation_update_enabled`, `visit_stats_enabled`,
+               `created_at`, `updated_at`
+        FROM `mercado_store_site_settings`
+        WHERE `token_id` IN ({placeholders})
+        ORDER BY `token_id` ASC, `site_id` ASC
+        """,
+        tuple(normalized_ids),
+    )
+    configured_by_token = {token_id: [] for token_id in normalized_ids}
+    for raw_row in cursor.fetchall() or []:
+        row = dict(raw_row)
+        configured_by_token.setdefault(int(row.get("token_id") or 0), []).append(row)
+    return {
+        token_id: _normalized_mercado_store_site_settings(
+            token_id,
+            configured_by_token.get(token_id),
+        )
+        for token_id in normalized_ids
+    }
+
+
+def _mercado_store_site_setting_rows(cursor, token_id):
+    token_id = int(token_id)
+    return _mercado_store_site_settings_by_token(cursor, [token_id]).get(
+        token_id,
+        [],
+    )
 
 
 def list_mercado_store_site_settings(token_id):
@@ -8257,7 +8393,11 @@ def delete_mercado_application(application_id):
 
 
 def _mercado_token_record(record):
+    organization_key = str(record.get("organization_key") or "default").strip().lower()
+    if not re.fullmatch(r"[a-z0-9][a-z0-9_.-]{1,63}", organization_key):
+        raise ValueError("店铺授权的客户标识格式无效")
     normalized = {
+        "organization_key": organization_key,
         "display_name": str(record.get("display_name") or "").strip(),
         "meli_user_id": str(record.get("meli_user_id") or "").strip() or None,
         "nickname": str(record.get("nickname") or "").strip(),
@@ -8351,6 +8491,7 @@ def upsert_mercado_store_token(record):
                 raise ValueError("自定义名称已被另一个授权店铺使用，请更换名称")
 
             values = (
+                token["organization_key"],
                 token["display_name"],
                 token["meli_user_id"],
                 token["nickname"],
@@ -8373,7 +8514,8 @@ def upsert_mercado_store_token(record):
                 cursor.execute(
                     """
                     UPDATE `mercado_store_tokens`
-                    SET `display_name` = %s, `meli_user_id` = %s, `nickname` = %s,
+                    SET `organization_key` = %s, `display_name` = %s,
+                        `meli_user_id` = %s, `nickname` = %s,
                         `site_id` = %s, `email` = %s, `application_id` = %s,
                         `client_id` = %s, `access_token` = %s,
                         `refresh_token` = %s, `token_type` = %s, `scope` = %s,
@@ -8387,12 +8529,12 @@ def upsert_mercado_store_token(record):
                 cursor.execute(
                     """
                     INSERT INTO `mercado_store_tokens` (
-                        `display_name`, `meli_user_id`, `nickname`, `site_id`, `email`,
+                        `organization_key`, `display_name`, `meli_user_id`, `nickname`, `site_id`, `email`,
                         `application_id`, `client_id`,
                         `access_token`, `refresh_token`, `token_type`, `scope`, `expires_at`,
                         `last_verified_at`, `last_refreshed_at`, `last_error`, `created_at`,
                         `updated_at`
-                    ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                    ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                     """,
                     values + (now,),
                 )
@@ -8415,6 +8557,7 @@ def list_mercado_store_tokens():
             cursor.execute(
                 """
                 SELECT tokens.`id`, tokens.`display_name`, tokens.`enabled`, tokens.`meli_user_id`,
+                       tokens.`organization_key`,
                        tokens.`nickname`, tokens.`site_id`, tokens.`email`, tokens.`application_id`,
                        tokens.`client_id`, tokens.`token_type`, tokens.`scope`, tokens.`expires_at`,
                        tokens.`last_verified_at`, tokens.`last_refreshed_at`, tokens.`last_error`,
@@ -8426,8 +8569,12 @@ def list_mercado_store_tokens():
                 """
             )
             rows = [_mercado_token_summary(row) for row in (cursor.fetchall() or [])]
+            settings_by_token = _mercado_store_site_settings_by_token(
+                cursor,
+                [row["id"] for row in rows],
+            )
             for row in rows:
-                row["site_settings"] = _mercado_store_site_setting_rows(cursor, row["id"])
+                row["site_settings"] = settings_by_token.get(int(row["id"]), [])
             return {"total": len(rows), "rows": rows}
     finally:
         connection.close()
@@ -8442,6 +8589,7 @@ def get_mercado_store_token_summary(token_id):
             cursor.execute(
                 """
                 SELECT tokens.`id`, tokens.`display_name`, tokens.`enabled`, tokens.`meli_user_id`,
+                       tokens.`organization_key`,
                        tokens.`nickname`, tokens.`site_id`, tokens.`email`, tokens.`application_id`,
                        tokens.`client_id`, tokens.`token_type`, tokens.`scope`, tokens.`expires_at`,
                        tokens.`last_verified_at`, tokens.`last_refreshed_at`, tokens.`last_error`,
@@ -8478,6 +8626,33 @@ def get_mercado_store_token(token_id, include_disabled=False):
             if row and not include_disabled and not bool(row.get("enabled", 1)):
                 raise ValueError("该店铺已关闭，任何业务操作均不会执行")
             return row
+    finally:
+        connection.close()
+
+
+def get_mercado_store_tokens(token_ids, include_disabled=False):
+    """Return secret store-token records with one query for a refresh batch."""
+    normalized_ids = sorted({int(value) for value in token_ids or () if int(value) > 0})
+    if not normalized_ids:
+        return {}
+    placeholders = ", ".join(["%s"] * len(normalized_ids))
+    connection = pymysql.connect(**config)
+    try:
+        with connection.cursor() as cursor:
+            # The caller normally already loaded the token summaries, which
+            # performs schema initialization. Avoid repeating the expensive
+            # migration checks for every store in an analysis refresh.
+            cursor.execute(
+                f"SELECT * FROM `mercado_store_tokens` "
+                f"WHERE `id` IN ({placeholders})"
+                + ("" if include_disabled else " AND `enabled` = 1"),
+                tuple(normalized_ids),
+            )
+            return {
+                int(row.get("id")): row
+                for row in (cursor.fetchall() or [])
+                if row.get("id") is not None
+            }
     finally:
         connection.close()
 

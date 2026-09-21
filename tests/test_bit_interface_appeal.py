@@ -6,6 +6,59 @@ import threading
 from bit import bit_interface
 
 
+def test_ai_appeal_records_are_enriched_for_filters(monkeypatch):
+    monkeypatch.setattr(
+        bit_interface.bit_db_api,
+        "list_mercado_store_tokens",
+        lambda: {
+            "rows": [{
+                "display_name": "申诉店铺",
+                "nickname": "appeal-store",
+                "site_settings": [{
+                    "site_id": "MLB",
+                    "salesperson": "业务员甲",
+                    "group_name": "巴西组",
+                }],
+            }],
+        },
+    )
+
+    data = bit_interface.enrich_ai_appeal_records({
+        "rows": [{
+            "shop_name": "appeal-store",
+            "site": "巴西",
+            "executor": {
+                "execution_target": "agent",
+                "agent_name": "办公室电脑",
+                "hostname": "OFFICE-PC",
+            },
+        }],
+    })
+
+    assert data["rows"][0]["salesperson"] == "业务员甲"
+    assert data["rows"][0]["group_name"] == "巴西组"
+    assert data["rows"][0]["executor_label"] == "办公室电脑"
+    assert data["filter_options"] == {
+        "salespeople": ["业务员甲"],
+        "group_names": ["巴西组"],
+        "executors": ["办公室电脑"],
+    }
+
+
+def test_ai_appeal_page_has_ownership_date_and_agent_filters_without_outcome_ids():
+    template = Path(bit_interface.app.template_folder, "index.html").read_text(
+        encoding="utf-8"
+    )
+    assert 'id="ai-appeal-date-from"' in template
+    assert 'id="ai-appeal-date-to"' in template
+    assert 'id="ai-appeal-salesperson-filter"' in template
+    assert 'id="ai-appeal-group-filter"' in template
+    assert 'id="ai-appeal-agent-filter"' in template
+    table = template.split('id="tab-ai-appeals"', 1)[1].split('id="tab-access"', 1)[0]
+    assert "成功编号" not in table
+    assert "失败编号" not in table
+
+
 def test_mercado_login_status_only_returns_latest_task_log(monkeypatch):
     with bit_interface._mercado_login_task_lock:
         previous_state = dict(bit_interface._mercado_login_task_state)
@@ -788,13 +841,9 @@ def test_daily_task_console_exposes_all_task_switches_and_shop_group():
     assert "scheduleDailyTaskStatusPoll(2000)" in template
     assert "startDailyTaskBtn.disabled = running" not in template
 
+    assert 'data-role="login-status"' in template
+    assert "function updateDailyTaskLoginStatus(card, task)" in template
     task_markup = template.split('<div class="tab-page" id="tab-tasks">', 1)[1]
-    assert task_markup.index('id="daily-task-agent-login-status"') > task_markup.index(
-        '<section class="panel log-panel">'
-    )
-    assert task_markup.index('id="daily-task-agent-login-status"') < task_markup.index(
-        'id="daily-task-list"'
-    )
     assert '<option value="stopping">' not in task_markup
 
 

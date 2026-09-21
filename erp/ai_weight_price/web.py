@@ -55,11 +55,18 @@ def create_blueprint(service, authorize=None):
     @bp.get("/ai-weight-price")
     def page():
         can_execute = not authorize or authorize("ai_weight_price.execute") is None
-        return render_template("ai_weight_price.html", local_only=False, can_execute=can_execute)
+        return render_template(
+            "ai_weight_price.html",
+            local_only=False,
+            can_execute=can_execute,
+            plugin_launch_only=bool(authorize),
+        )
 
     @bp.get("/api/ai-weight-price/status")
     def status():
-        return jsonify(**service.status(), computer=socket.gethostname())
+        execution_terminal = socket.gethostname()
+        return jsonify(**service.status(), computer=execution_terminal,
+                       execution_terminal=execution_terminal)
 
     @bp.post("/api/ai-weight-price/model/check")
     def check_model():
@@ -141,6 +148,13 @@ def create_blueprint(service, authorize=None):
             actor = (session.get("workbench_user") or {}).get("username", "本机操作者")
             service.edit(key, request.get_json(), actor)
         return jsonify(service.store.get(key))
+
+    @bp.post("/api/ai-weight-price/tasks/<key>/manual-execute")
+    def manual_execute(key):
+        from flask import session
+        actor = (session.get("workbench_user") or {}).get("username", "本机操作者")
+        result = service.manual_execute(key, request.get_json(), actor)
+        return jsonify(message="人工核验已直接同步智赢，保存后回读确认通过", task=result)
 
     @bp.post("/api/ai-weight-price/tasks/<key>/retry")
     def retry(key):

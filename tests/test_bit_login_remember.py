@@ -112,6 +112,11 @@ def test_wsgi_server_owns_lock_and_starts_services_once(monkeypatch):
         "serve_wsgi_application",
         lambda: events.append("wsgi-served"),
     )
+    monkeypatch.setattr(
+        bit_interface,
+        "close_all_pools",
+        lambda: events.append("pools-closed"),
+    )
 
     assert bit_interface.run_interface_server() is True
     assert events == [
@@ -119,6 +124,7 @@ def test_wsgi_server_owns_lock_and_starts_services_once(monkeypatch):
         "lock-acquired",
         "services-started",
         "wsgi-served",
+        "pools-closed",
         "lock-released",
     ]
 

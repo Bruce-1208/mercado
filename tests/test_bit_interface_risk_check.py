@@ -173,6 +173,7 @@ def test_risk_check_export_keeps_filters_and_creates_workbook(monkeypatch):
         }
 
     monkeypatch.setattr(bit_interface, "db_get_zying_risk_results", get_results)
+    monkeypatch.setattr(bit_interface, "list_zying_collection_categories", lambda: [])
     response = _logged_in_client().get(
         "/api/risk-check/results/export",
         query_string={"risk_level": "2", "sort_by": "title", "sort_dir": "asc"},
@@ -186,9 +187,45 @@ def test_risk_check_export_keeps_filters_and_creates_workbook(monkeypatch):
     workbook = load_workbook(BytesIO(response.data))
     sheet = workbook["侵权检测结果"]
     assert sheet["A2"].value == 9
-    assert sheet["G2"].value == "2 - 侵权"
-    assert sheet["H2"].value == "Pokemon, Pikachu"
+    assert [cell.value for cell in sheet[1]][:5] == [
+        "数据行", "产品编号", "标题", "智赢产品分类", "产品分类",
+    ]
+    assert "智赢分类编号" not in [cell.value for cell in sheet[1]]
+    assert sheet["D2"].value == "玩具/毛绒"
+    assert sheet["F2"].value == "2 - 侵权"
+    assert sheet["G2"].value == "Pokemon, Pikachu"
     assert sheet.auto_filter.ref
+
+
+def test_risk_check_export_resolves_category_code_to_name(monkeypatch):
+    monkeypatch.setattr(
+        bit_interface,
+        "db_get_zying_risk_results",
+        lambda **kwargs: {
+            "rows": [{
+                "row_id": 10,
+                "product_id": "P-10",
+                "title": "Test",
+                "zying_category_id": "202170568",
+                "zying_category": "202170568",
+            }]
+        },
+    )
+    monkeypatch.setattr(
+        bit_interface,
+        "list_zying_collection_categories",
+        lambda: [{
+            "category_id": "202170568",
+            "category_name": "圆佑同步/家电类",
+        }],
+    )
+
+    response = _logged_in_client().get("/api/risk-check/results/export")
+
+    assert response.status_code == 200
+    sheet = load_workbook(BytesIO(response.data))["侵权检测结果"]
+    assert sheet["D2"].value == "圆佑同步/家电类"
+    assert "202170568" not in [cell.value for row in sheet.iter_rows() for cell in row]
 
 
 def test_risk_check_start_runs_in_background_and_updates_status(monkeypatch):

@@ -22,6 +22,7 @@ ORDER_TABLE = "mercado_synced_orders"
 
 MONEY_QUANTUM = Decimal("0.0001")
 MOVEMENT_TYPES = {"inbound", "outbound"}
+STORE_SITE_SETTINGS_TABLE = "mercado_store_site_settings"
 
 
 def _connect():
@@ -162,6 +163,8 @@ def ensure_inventory_tables(cursor: Any) -> None:
             `product_id` VARCHAR(64) NOT NULL,
             `product_name` VARCHAR(255) NOT NULL,
             `image_url` VARCHAR(1500) NULL,
+            `order_remark` VARCHAR(1000) NULL,
+            `salesperson` VARCHAR(128) NULL,
             `quantity` INT NOT NULL DEFAULT 0,
             `unit_cost` DECIMAL(20,4) NOT NULL DEFAULT 0,
             `first_inbound_at` DATETIME NOT NULL,
@@ -187,6 +190,8 @@ def ensure_inventory_tables(cursor: Any) -> None:
             `product_id` VARCHAR(64) NOT NULL,
             `product_name` VARCHAR(255) NOT NULL,
             `image_url` VARCHAR(1500) NULL,
+            `order_remark` VARCHAR(1000) NULL,
+            `salesperson` VARCHAR(128) NULL,
             `quantity` INT NOT NULL,
             `unit_cost` DECIMAL(20,4) NOT NULL DEFAULT 0,
             `total_cost` DECIMAL(20,4) NOT NULL DEFAULT 0,
@@ -206,6 +211,26 @@ def ensure_inventory_tables(cursor: Any) -> None:
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
         """
     )
+    # Existing workbench databases predate the order-context fields above.  Keep
+    # their schema forward-compatible without requiring a separate migration.
+    for table_name, columns in (
+        (STOCK_TABLE, (
+            ("order_remark", "VARCHAR(1000) NULL"),
+            ("salesperson", "VARCHAR(128) NULL"),
+        )),
+        (MOVEMENT_TABLE, (
+            ("order_remark", "VARCHAR(1000) NULL"),
+            ("salesperson", "VARCHAR(128) NULL"),
+        )),
+    ):
+        for column_name, definition in columns:
+            cursor.execute(
+                f"SHOW COLUMNS FROM `{table_name}` LIKE %s", (column_name,)
+            )
+            if not cursor.fetchone():
+                cursor.execute(
+                    f"ALTER TABLE `{table_name}` ADD COLUMN `{column_name}` {definition}"
+                )
 
 
 def _table_exists(cursor: Any, table_name: str) -> bool:
@@ -354,9 +379,10 @@ def list_inventory_stock(
         pattern = f"%{search}%"
         where.append(
             "(stocks.`order_id` LIKE %s OR stocks.`product_id` LIKE %s OR "
-            "stocks.`product_name` LIKE %s OR shelves.`code` LIKE %s OR shelves.`name` LIKE %s)"
+            "stocks.`product_name` LIKE %s OR stocks.`salesperson` LIKE %s OR "
+            "stocks.`order_remark` LIKE %s OR shelves.`code` LIKE %s OR shelves.`name` LIKE %s)"
         )
-        params.extend([pattern] * 5)
+        params.extend([pattern] * 7)
     if shelf_id not in (None, ""):
         where.append("stocks.`shelf_id` = %s")
         params.append(_positive_int(shelf_id, "货架编号"))
@@ -485,7 +511,8 @@ def list_inventory_matches(*, search: str = "", limit: int = 30) -> dict[str, An
                 cursor.execute(
                     f"""
                     SELECT `order_id`, `product_id`, `title`, `image_url`, `raw_json`,
-                           `shop_name`, `purchase_cost`,
+                           `shop_name`, `purchase_cost`, `purchase_order`,
+                           `purchase_remark`, `status_detail`, `token_id`, `site_id`,
                            DATE_ADD(`date_created`, INTERVAL 8 HOUR) AS `ordered_at`
                     FROM `{ORDER_TABLE}`
                     {where}
@@ -494,7 +521,20 @@ def list_inventory_matches(*, search: str = "", limit: int = 30) -> dict[str, An
                     """,
                     tuple(params + [limit]),
                 )
-                for order in cursor.fetchall() or []:
+                orders = cursor.fetchall() or []
+                settings_exists = _table_exists(cursor, STORE_SITE_SETTINGS_TABLE)
+                for order in orders:
+                    salesperson = ""
+                    if settings_exists:
+                        cursor.execute(
+                            f"SELECT `salesperson` FROM `{STORE_SITE_SETTINGS_TABLE}` "
+                            "WHERE `token_id` = %s AND `site_id` = %s LIMIT 1",
+                            (order.get("token_id"), order.get("site_id")),
+                        )
+                        salesperson = str(
+                            (cursor.fetchone() or {}).get("salesperson") or ""
+                        )
+                    order_remark = _combined_order_remark(order)
                     items = _order_items(order.get("raw_json"), order)
                     for item in items:
                         haystack = " ".join((
@@ -514,6 +554,9 @@ def list_inventory_matches(*, search: str = "", limit: int = 30) -> dict[str, An
                             "variation": str(item.get("variation") or ""),
                             "seller_sku": str(item.get("seller_sku") or ""),
                             "shop_name": str(order.get("shop_name") or ""),
+                            "salesperson": salesperson,
+                            "order_remark": order_remark,
+                            "reference_no": str(order.get("purchase_order") or ""),
                             "ordered_at": _json_value(order.get("ordered_at")),
                             "suggested_unit_cost": _json_value(
                                 _suggested_unit_cost(
@@ -566,12 +609,23 @@ def list_inventory_matches(*, search: str = "", limit: int = 30) -> dict[str, An
         connection.close()
 
 
+def _combined_order_remark(order: Mapping[str, Any]) -> str:
+    parts = []
+    for label, key in (("采购备注", "purchase_remark"), ("订单备注", "status_detail")):
+        value = str(order.get(key) or "").strip()
+        if value:
+            parts.append(f"{label}：{value}")
+    return "；".join(parts)[:1000]
+
+
 def _matched_order_product(cursor: Any, order_id: str, product_id: str) -> dict[str, Any]:
     if not _table_exists(cursor, ORDER_TABLE):
         raise ValueError("订单同步表不存在，请先拉取订单")
     cursor.execute(
         f"""
-        SELECT `order_id`, `product_id`, `title`, `image_url`, `raw_json`, `purchase_cost`
+        SELECT `order_id`, `product_id`, `title`, `image_url`, `raw_json`,
+               `purchase_cost`, `purchase_order`, `purchase_remark`, `status_detail`,
+               `token_id`, `site_id`
         FROM `{ORDER_TABLE}` WHERE `order_id` = %s LIMIT 1
         """,
         (order_id,),
@@ -579,6 +633,14 @@ def _matched_order_product(cursor: Any, order_id: str, product_id: str) -> dict[
     order = cursor.fetchone()
     if not order:
         raise ValueError("匹配的订单不存在，请重新搜索选择")
+    salesperson = ""
+    if _table_exists(cursor, STORE_SITE_SETTINGS_TABLE):
+        cursor.execute(
+            f"SELECT `salesperson` FROM `{STORE_SITE_SETTINGS_TABLE}` "
+            "WHERE `token_id` = %s AND `site_id` = %s LIMIT 1",
+            (order.get("token_id"), order.get("site_id")),
+        )
+        salesperson = str((cursor.fetchone() or {}).get("salesperson") or "")[:128]
     items = _order_items(order.get("raw_json"), order)
     for item in items:
         if str(item.get("product_id") or "").strip() == product_id:
@@ -588,6 +650,9 @@ def _matched_order_product(cursor: Any, order_id: str, product_id: str) -> dict[
                 "suggested_unit_cost": _suggested_unit_cost(
                     order.get("purchase_cost"), items, product_id
                 ),
+                "order_remark": _combined_order_remark(order),
+                "salesperson": salesperson,
+                "reference_no": str(order.get("purchase_order") or "")[:128],
             }
     raise ValueError("所选产品不属于该订单，请重新匹配")
 
@@ -618,6 +683,12 @@ def create_inventory_movement(data: Mapping[str, Any]) -> dict[str, Any]:
                 if not product_id:
                     raise ValueError("入库必须匹配产品")
                 context = _matched_order_product(cursor, order_id, product_id)
+                order_remark = str(context.get("order_remark") or "")[:1000]
+                salesperson = str(context.get("salesperson") or "")[:128]
+                if not reference_no:
+                    reference_no = str(context.get("reference_no") or "")[:128]
+                if order_remark and not remark:
+                    remark = order_remark
                 cursor.execute(
                     f"SELECT * FROM `{SHELF_TABLE}` WHERE `id` = %s FOR UPDATE",
                     (shelf_id,),
@@ -663,12 +734,14 @@ def create_inventory_movement(data: Mapping[str, Any]) -> dict[str, Any]:
                     cursor.execute(
                         f"""
                         UPDATE `{STOCK_TABLE}`
-                        SET `product_name` = %s, `image_url` = %s, `quantity` = %s,
+                        SET `product_name` = %s, `image_url` = %s,
+                            `order_remark` = %s, `salesperson` = %s, `quantity` = %s,
                             `unit_cost` = %s, `last_inbound_at` = %s, `updated_at` = %s
                         WHERE `id` = %s
                         """,
                         (
                             context["product_name"], context["image_url"],
+                            order_remark, salesperson,
                             effect["after_quantity"], effect["unit_cost"],
                             occurred_at, now, stock_id,
                         ),
@@ -678,13 +751,15 @@ def create_inventory_movement(data: Mapping[str, Any]) -> dict[str, Any]:
                         f"""
                         INSERT INTO `{STOCK_TABLE}`
                             (`shelf_id`, `order_id`, `product_id`, `product_name`, `image_url`,
+                             `order_remark`, `salesperson`,
                              `quantity`, `unit_cost`, `first_inbound_at`, `last_inbound_at`,
                              `created_at`, `updated_at`)
-                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                         """,
                         (
                             shelf_id, order_id, product_id, context["product_name"],
-                            context["image_url"], effect["after_quantity"], effect["unit_cost"],
+                            context["image_url"], order_remark, salesperson,
+                            effect["after_quantity"], effect["unit_cost"],
                             occurred_at, occurred_at, now, now,
                         ),
                     )
@@ -696,6 +771,8 @@ def create_inventory_movement(data: Mapping[str, Any]) -> dict[str, Any]:
                     "product_id": product_id,
                     "product_name": context["product_name"],
                     "image_url": context["image_url"],
+                    "order_remark": order_remark,
+                    "salesperson": salesperson,
                 }
             else:
                 stock_id = _positive_int(payload.get("stock_id"), "库存记录编号")
@@ -725,15 +802,17 @@ def create_inventory_movement(data: Mapping[str, Any]) -> dict[str, Any]:
                 f"""
                 INSERT INTO `{MOVEMENT_TABLE}`
                     (`stock_id`, `shelf_id`, `movement_type`, `order_id`, `product_id`,
-                     `product_name`, `image_url`, `quantity`, `unit_cost`, `total_cost`,
+                     `product_name`, `image_url`, `order_remark`, `salesperson`,
+                     `quantity`, `unit_cost`, `total_cost`,
                      `before_quantity`, `after_quantity`, `reference_no`, `remark`,
                      `operator_id`, `operator_name`, `occurred_at`, `created_at`)
                 VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
-                        %s, %s, %s, %s, %s, %s)
+                        %s, %s, %s, %s, %s, %s, %s, %s)
                 """,
                 (
                     stock_id, shelf_id, movement_type, order_id, product_id,
                     stock_snapshot.get("product_name"), stock_snapshot.get("image_url"),
+                    stock_snapshot.get("order_remark"), stock_snapshot.get("salesperson"),
                     quantity, effect["movement_unit_cost"], total_cost,
                     effect["before_quantity"], effect["after_quantity"], reference_no,
                     remark, operator_id, operator_name, occurred_at, now,
@@ -778,9 +857,10 @@ def list_inventory_movements(
         where.append(
             "(movements.`order_id` LIKE %s OR movements.`product_id` LIKE %s OR "
             "movements.`product_name` LIKE %s OR movements.`reference_no` LIKE %s OR "
-            "movements.`operator_name` LIKE %s OR shelves.`code` LIKE %s)"
+            "movements.`operator_name` LIKE %s OR movements.`salesperson` LIKE %s OR "
+            "movements.`order_remark` LIKE %s OR shelves.`code` LIKE %s)"
         )
-        params.extend([pattern] * 6)
+        params.extend([pattern] * 8)
     kind = str(movement_type or "").strip().lower()
     if kind:
         if kind not in MOVEMENT_TYPES:

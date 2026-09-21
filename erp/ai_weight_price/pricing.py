@@ -10,6 +10,9 @@ from .models import number, parse_price
 from .store import CHINA
 
 
+NET_INCOME_BUFFER_CNY = Decimal("5")
+
+
 def sku_cost(price_text, surcharge_text=None):
     base = number(parse_price(price_text))
     if surcharge_text is None:
@@ -52,14 +55,49 @@ def exchange_rate(config, store, now=None):
 
 def usd_cost(cost_price, rate):
     cost, cny_per_usd = number(cost_price), number(rate.get("cny_per_usd"))
+    pricing_basis = cost + NET_INCOME_BUFFER_CNY
     # Rational arithmetic avoids a rounded intermediate quotient accidentally
     # crossing an integer-dollar boundary before the ceiling operation.
-    quotient = Fraction(cost) / Fraction(cny_per_usd)
+    quotient = Fraction(pricing_basis) / Fraction(cny_per_usd)
     if rate.get("source") == "ecb_reference_cross_rate":
-        quotient = Fraction(cost) * Fraction(number(rate["usd_per_eur"])) / Fraction(number(rate["cny_per_eur"]))
+        quotient = (Fraction(pricing_basis) * Fraction(number(rate["usd_per_eur"]))
+                    / Fraction(number(rate["cny_per_eur"])))
     rounded = (quotient.numerator + quotient.denominator - 1) // quotient.denominator
     return {"cost_price_cny": str(cost), "cny_per_usd": str(cny_per_usd),
+            "pricing_basis_cny": str(pricing_basis),
+            "net_income_buffer_cny": str(NET_INCOME_BUFFER_CNY),
             "rate_date": rate["date"], "rate_source": rate["source"],
             "unrounded_usd": str(Decimal(quotient.numerator) / Decimal(quotient.denominator)), "net_income_usd": str(rounded),
             "exchange_rate": rate,
-            "rounding": "ceiling_to_integer_usd", "target_field": "netproceed"}
+            "rounding": "(highest_variant_price_plus_5_cny)_ceiling_to_integer_usd",
+            "target_field": "netproceed"}
+
+
+def protect_net_income(original, pricing):
+    """Keep the existing ERP net income when the new calculation is lower.
+
+    ``pricing.net_income_usd`` remains the calculated value for audit/display;
+    ``net_income_writeback_usd`` is the value that may be written to ERP.
+    Keeping both values makes the protective decision explicit in the UI and
+    exported execution report.
+    """
+    result = dict(pricing)
+    calculated = number(result["net_income_usd"], allow_zero=True)
+    result["calculated_net_income_usd"] = str(calculated)
+    result["net_income_writeback_usd"] = str(calculated)
+    result["net_income_retained_original"] = False
+    result["net_income_policy"] = "use_calculated"
+    try:
+        previous = number(original, allow_zero=True)
+    except ValueError:
+        return result
+    result["original_net_income_usd"] = str(previous)
+    if calculated < previous:
+        result["net_income_writeback_usd"] = str(previous)
+        result["net_income_retained_original"] = True
+        result["net_income_policy"] = "keep_original_if_calculated_lower"
+        result["net_income_adjustment"] = (
+            f"计算净收益 ${calculated} 低于原净收益 ${previous}，"
+            f"保留原净收益 ${previous}，仅修改重量"
+        )
+    return result

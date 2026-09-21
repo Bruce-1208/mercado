@@ -12,12 +12,12 @@ def _logged_in_client():
     return client
 
 
-def test_zying_collection_console_exposes_page_category_and_dedup_controls():
+def test_zying_collection_is_removed_from_console_navigation_but_keeps_backend_fallback():
     template = (
         Path(bit_interface.CURRENT_DIR) / "templates" / "index.html"
     ).read_text(encoding="utf-8")
 
-    assert 'data-tab="zying-collection"' in template
+    assert 'data-tab="zying-collection"' not in template
     assert 'id="tab-zying-collection"' in template
     assert 'id="zying-collection-start-page"' in template
     assert 'id="zying-collection-end-page"' in template
@@ -27,7 +27,10 @@ def test_zying_collection_console_exposes_page_category_and_dedup_controls():
     assert 'id="zying-collection-category-options"' not in template
     assert "<th>智赢分类</th>" in template
     assert "function mercadoProductZyingCategory(row)" in template
-    assert "const categoryName = zyingCollectionCategoryNames.get(categoryId) || savedName;" in template
+    assert "function zyingCategoryDisplayName(categoryName, categoryId" in template
+    assert "return id ? \"分类名称待同步\" : emptyLabel;" in template
+    assert 'const category = row.zying_category || row.zying_category_id || "-";' not in template
+    assert "` [${row.category_id}]`" not in template
     assert "return `${categoryName}${categoryId ? `（${categoryId}）` : \"\"}`;" not in template
     assert 'id="zying-collection-developer"' in template
     assert 'id="refresh-zying-options-btn"' in template
@@ -75,6 +78,31 @@ def test_build_zying_collection_params_rejects_end_before_start():
         bit_interface.build_zying_collection_params(
             {"start_page": 9, "end_page": 8}
         )
+
+
+def test_build_zying_collection_params_accepts_product_cursor_and_limit():
+    params = bit_interface.build_zying_collection_params(
+        {
+            "start_product_id": " 801623017 ",
+            "max_items": 25,
+            "category": "202170568",
+        }
+    )
+
+    assert params["start_page"] == 1
+    assert params["number"] == 10000
+    assert params["start_product_id"] == "801623017"
+    assert params["max_items"] == 25
+
+
+@pytest.mark.parametrize("payload", [
+    {"start_product_id": "abc", "max_items": 10},
+    {"start_product_id": "1", "max_items": 0},
+    {"start_product_id": "1", "max_items": 10001},
+])
+def test_build_zying_collection_params_rejects_bad_product_cursor(payload):
+    with pytest.raises(ValueError):
+        bit_interface.build_zying_collection_params(payload)
 
 
 def test_build_zying_collection_params_accepts_product_developer():
@@ -215,6 +243,23 @@ def test_zying_collection_categories_prefers_latest_current_page_snapshot(monkey
         "202170531": "历史/游戏类",
         "202170568": "圆佑同步/家电类",
     }
+
+
+def test_zying_collection_categories_keep_counts_when_snapshot_updates_name(monkeypatch):
+    monkeypatch.setattr(
+        bit_interface,
+        "db_list_zying_risk_categories",
+        lambda: [{"category_id": "202170568", "category_name": "旧名称", "total": 7}],
+    )
+    monkeypatch.setattr(
+        bit_interface.bit_zying_caiji,
+        "list_cached_zying_categories",
+        lambda: [{"category_id": "202170568", "category_name": "家电类"}],
+    )
+
+    assert bit_interface.list_zying_collection_categories() == [
+        {"category_id": "202170568", "category_name": "家电类", "total": 7}
+    ]
 
 
 def test_zying_collection_start_runs_script_with_database_dedup(monkeypatch):

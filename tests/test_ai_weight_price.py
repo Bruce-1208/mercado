@@ -38,6 +38,23 @@ def task(store, key="g1", merchant="m1", matched=False, **extra):
     return store.update(key, **data)
 
 
+def test_status_exposes_current_product_category_name(service):
+    task(service.store, source_category="202170568", source_category_label="202170568")
+    service.store.set_state("categories", [
+        {"value": "202170568", "label": "家居 / 家电类", "name": "家电类"},
+    ])
+    service.store.set_state("run", {"run_id": "run-1", "current_task_id": "g1"})
+
+    current = service.status()["current_product"]
+
+    assert current == {
+        "erp_goods_id": "g1",
+        "title": "水杯",
+        "zying_category_id": "202170568",
+        "zying_category_name": "家居 / 家电类",
+    }
+
+
 @pytest.mark.parametrize("value", [0,.95,.9499,1,True,float("nan"),".96"])
 def test_invalid_config_confidence(value):
     if value == .95 and type(value) is float:
@@ -235,6 +252,63 @@ class FakeModel:
         return self.result
 
 
+def test_manual_execute_writes_operator_values_and_marks_manual_verification(service, monkeypatch):
+    row = task(service.store, matched=True, weight_g="450", net_income_usd="9")
+
+    class ManualBrowser:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            return False
+
+        def write_patch(self, current, changes, before_save):
+            before_save({"weight_g": "400", "net_income_usd": "8", "review_status": "待审核"})
+            return {"weight_g": changes["weight_g"], "net_income_usd": changes["net_income_usd"],
+                    "review_status": changes["review_status"]}
+
+    monkeypatch.setattr(service, "require_login", lambda config: None)
+    monkeypatch.setattr(service, "browser_factory", lambda *args: ManualBrowser())
+    result = service.manual_execute("g1", {"weight_g": "480", "net_income_usd": "12", "note": "人工复核"}, "tester")
+
+    assert result["status"] == "success"
+    assert result["verification_mode"] == "manual"
+    assert result["manual_verification"]["note"] == "人工复核"
+    assert result["write_verified"] is True
+    assert result["erp_after"] == {"weight_g": "480", "net_income_usd": "12", "review_status": "通过"}
+    assert result["write_intent"]["verification_mode"] == "manual"
+
+
+def test_manual_execute_locates_product_when_collector_has_no_edit_url(service, monkeypatch):
+    task(service.store, matched=True, weight_g="450", net_income_usd="9")
+    service.store.update("g1", erp_edit_url=None, source_page=2, source_index=7)
+    received = []
+
+    class ManualBrowser:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            return False
+
+        def write_patch(self, current, changes, before_save):
+            received.append(current)
+            before_save({"weight_g": "400", "net_income_usd": "8", "review_status": "待审核"})
+            return dict(changes)
+
+    monkeypatch.setattr(service, "require_login", lambda config: None)
+    monkeypatch.setattr(service, "browser_factory", lambda *args: ManualBrowser())
+
+    result = service.manual_execute(
+        "g1", {"weight_g": "480", "net_income_usd": "12", "note": "人工复核"}, "tester"
+    )
+
+    assert received[0]["erp_edit_url"] is None
+    assert received[0]["source_page"] == 2
+    assert received[0]["source_index"] == 7
+    assert result["status"] == "success"
+
+
 def test_flow_matched_send_poll_validate_save(service):
     row=task(service.store,matched=True);browser=FakeBrowser();model=FakeModel();config=validate({"writeback_enabled":True})
     service.process(row,browser,model,config)
@@ -246,8 +320,8 @@ def test_flow_matched_send_poll_validate_save(service):
     saved=service.store.get("g1")
     assert saved["status"]=="success" and saved["weight_g"]=="450"
     assert len(browser.written)==1 and saved["erp_before"]["net_income_usd"]=="10"
-    assert saved["cost_price"] == "12.50" and saved["net_income_usd"] == "2"
-    assert saved["write_intent"]["net_income_usd"] == "2"
+    assert saved["cost_price"] == "12.50" and saved["net_income_usd"] == "10"
+    assert "net_income_usd" not in saved["write_intent"]
 
 
 def test_selected_variant_final_price_is_used_instead_of_minimum(service):
@@ -262,9 +336,25 @@ def test_selected_variant_final_price_is_used_instead_of_minimum(service):
     service.process(row, browser, model, validate({"writeback_enabled": True}))
     saved = service.store.get("g1")
     assert saved["status"] == "success"
-    assert saved["cost_price"] == "22" and saved["net_income_usd"] == "4"
+    assert saved["cost_price"] == "22" and saved["net_income_usd"] == "10"
     assert saved["supplier_price_evidence"]["variant_surcharge_cny"] == "2"
     assert len(browser.written) == 1
+
+
+def test_lower_calculated_net_income_keeps_original_and_only_writes_weight(service):
+    row = task(service.store, matched=True, weight_g="450")
+    browser = FakeBrowser()
+    service.finish(row, browser, validate({"writeback_enabled": True, "usd_cny_rate": "7.2"}))
+    saved = service.store.get("g1")
+    assert saved["status"] == "success"
+    assert saved["net_income_usd"] == "10"
+    assert saved["weight_g"] == "450"
+    assert saved["pricing"]["calculated_net_income_usd"] == "3"
+    assert saved["pricing"]["net_income_writeback_usd"] == "10"
+    assert saved["pricing"]["net_income_retained_original"] is True
+    assert "net_income_usd" not in saved["write_intent"]
+    assert "仅修改重量" in saved["pricing"]["net_income_adjustment"]
+    assert saved["decision_reason"] == saved["pricing"]["net_income_adjustment"]
 
 
 def test_exchange_failure_never_writes_and_edit_clears_old_conversion(service, monkeypatch):
@@ -349,8 +439,9 @@ def test_supplier_adaptation_switch_requires_boolean():
         validate({"supplier_auto_adapt": "true"})
 
 
-def test_supplier_adaptation_failure_skips_item_and_preserves_report_reason(service):
+def test_supplier_adaptation_failure_skips_item_and_preserves_report_reason(service, monkeypatch):
     from erp.ai_weight_price.supplier_adapter import SupplierAdaptationError
+    monkeypatch.setattr("erp.ai_weight_price.service.socket.gethostname", lambda: "OPS-PC-01")
     class UnreadableSupplier:
         def candidates(self, row):
             raise SupplierAdaptationError("1688详情页自动适配失败：SKU缺少稳定ID")
@@ -363,6 +454,7 @@ def test_supplier_adaptation_failure_skips_item_and_preserves_report_reason(serv
     assert rows[0]["status"] == "skipped"
     assert rows[0]["execution_reason"].startswith("自动跳过异常：")
     assert rows[0]["exception_reason"].endswith("SKU缺少稳定ID")
+    assert rows[0]["execution_terminal"] == "OPS-PC-01"
     assert any("SKU缺少稳定ID" in log["message"] for log in service.store.logs())
 
 
@@ -395,7 +487,16 @@ def test_api_visual_config_reports_and_invalid_requests(client,service):
     assert 'id="terminate"' in page.text
     assert 'bestSupplierUrl' in page.text
     assert '打开最佳匹配' in page.text
-    assert client.get("/api/ai-weight-price/status").json["counts"]["pending"]==0
+    assert 'id="manual-execute"' in page.text
+    assert 'id="detail-product-image"' in page.text
+    assert '智赢分类 / 执行终端' in page.text
+    assert 'id="detail-product-runtime"' in page.text
+    assert 'renderDetailProduct(currentTask)' in page.text
+    assert 'product-thumb:hover' in page.text
+    assert '/manual-execute' in page.text
+    status = client.get("/api/ai-weight-price/status").json
+    assert status["counts"]["pending"] == 0
+    assert status["execution_terminal"] == status["computer"]
     result=client.put("/api/ai-weight-price/config",json={"daily_limit":12},headers=headers)
     assert result.status_code==200 and result.json["daily_limit"]==12
     assert service.config.load()["daily_limit"]==12
@@ -570,6 +671,17 @@ def test_page_item_start_is_one_based_and_part_of_scope():
         selection_params({"start_page":1,"end_page":1,"start_item":0},config)
 
 
+def test_product_cursor_is_optional_and_part_of_scope():
+    from erp.ai_weight_price.config import selection_params,selection_key
+    config=validate({})
+    choice=selection_params({"category":"17","start_product_id":" 848332340 "},config)
+    assert choice=={"category":"17","start_product_id":"848332340"}
+    assert selection_key(choice,config)!=selection_key({**choice,"start_product_id":"848332341"},config)
+    assert selection_params({"category":"17","start_product_id":""},config)["start_product_id"]==""
+    with pytest.raises(ValueError,match="起始产品编号"):
+        selection_params({"category":"17","start_product_id":"bad-id"},config)
+
+
 def test_no_login_or_no_selection_cannot_start(service,client,monkeypatch):
     headers={"X-AWP-Request":"1"}
     with pytest.raises(ValueError,match="成功登录"):
@@ -610,7 +722,8 @@ def test_login_confirm_requires_real_logged_in_browser(service,client,monkeypatc
     assert not service.store.state("login")["confirmed"]
 
 
-def test_open_login_opens_zying_and_1688_in_same_edge_session(service, monkeypatch):
+@pytest.mark.parametrize("include_supplier", [True, False])
+def test_open_login_opens_requested_login_pages(service, monkeypatch, include_supplier):
     import erp.ai_weight_price.service as module
     calls = []
 
@@ -633,9 +746,9 @@ def test_open_login_opens_zying_and_1688_in_same_edge_session(service, monkeypat
     service.browser_factory = LoginPagesBrowser
     monkeypatch.setattr(module, "open_edge", lambda *args: "edge1")
 
-    service.open_login()
+    service.open_login(include_supplier=include_supplier)
 
-    assert calls == ["zying", "1688"]
+    assert calls == (["zying", "1688"] if include_supplier else ["zying"])
     assert service.store.state("login")["confirmed"] is False
 
 
@@ -740,6 +853,50 @@ def test_collection_only_reads_selected_pages_and_resumes_matching_scope(service
     assert read==expected and categories==["a/b"]
     assert service.store.list(scope=scope)["total"]==len(expected)
     assert service.store.state("collection")["complete"]
+
+
+def test_collection_product_cursor_is_inclusive_and_stops_at_limit(service, monkeypatch):
+    from erp.ai_weight_price.browser import Browser
+    from erp.ai_weight_price.config import selection_key
+    config = validate({"max_pages": 10})
+    selection = {"category": "a/b", "start_product_id": "3"}
+    config.update(run_selection=selection, max_items=2)
+    scope = selection_key(selection, config)
+    browser = Browser(config, threading.Event(), lambda *args: None)
+
+    class Row:
+        def __init__(self, number): self.number = number
+        def inner_text(self): return f"product {self.number}"
+
+    class Rows:
+        @property
+        def first(self): return self
+        def wait_for(self, **_kwargs): pass
+        def all_inner_texts(self): return [f"product {page.number}"]
+        def all(self): return [Row(page.number)]
+
+    class Page:
+        number = 1
+        url = config["erp_list_url"]
+        def locator(self, *_args): return Rows()
+
+    page = Page()
+    monkeypatch.setattr(browser, "page", lambda *_args: page)
+    monkeypatch.setattr(browser, "release", lambda *_args: None)
+    monkeypatch.setattr(browser, "check", lambda *_args: None)
+    monkeypatch.setattr(browser, "focus", lambda *_args: None)
+    monkeypatch.setattr(browser, "apply_category", lambda *_args: "分类B")
+    monkeypatch.setattr(browser, "first_page", lambda *_args: None)
+    monkeypatch.setattr(browser, "next_page", lambda _page, _current: setattr(page, "number", page.number + 1) or True)
+    monkeypatch.setattr(browser, "value", lambda row, key, *_args, **_kwargs: {
+        "erp_title": f"product {row.number}", "erp_image": "https://image.example/1.jpg"
+    }.get(key, ""))
+    monkeypatch.setattr(browser, "erp_goods_id", lambda _page, row, _record: str(row.number))
+
+    browser.collect(service.store)
+
+    assert [row["erp_goods_id"] for row in service.store.list(scope=scope)["rows"]] == ["3", "4"]
+    assert service.store.state("collection")["complete"] is True
 
 
 def test_clear_category_does_not_leave_previous_filter(monkeypatch):

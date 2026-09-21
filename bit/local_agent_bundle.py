@@ -28,6 +28,7 @@ ROOT_SOURCE_FILES = (
 )
 _BUNDLE_LOCK = threading.Lock()
 _BUNDLE_CACHE = {}
+_BUNDLE_HISTORY_LIMIT = 5
 
 
 def iter_business_source_files(project_root):
@@ -91,6 +92,22 @@ def build_business_bundle(project_root):
             "size": len(content),
             "content": content,
         }
-        _BUNDLE_CACHE.clear()
         _BUNDLE_CACHE[version] = result
+        # Keep a small in-process release history so a rolling deployment can
+        # serve a known-good bundle while operators investigate a bad publish.
+        # The Agent also keeps two local releases, so this is a server-side
+        # safety net rather than the only rollback mechanism.
+        for stale_version in list(_BUNDLE_CACHE)[:-_BUNDLE_HISTORY_LIMIT]:
+            _BUNDLE_CACHE.pop(stale_version, None)
         return result
+
+
+def cached_business_bundle(version=""):
+    """Return a previously built release, or ``None`` when it is unavailable."""
+    with _BUNDLE_LOCK:
+        return _BUNDLE_CACHE.get(str(version or "").strip())
+
+
+def cached_business_versions():
+    with _BUNDLE_LOCK:
+        return tuple(_BUNDLE_CACHE)
