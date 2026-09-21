@@ -567,6 +567,84 @@ def _value_struct_number(value: Any, *, weight: bool = False) -> Decimal | None:
     return result
 
 
+def _decorate_store_link_markers(rows: list[dict[str, Any]]) -> None:
+    """Attach workflow markers without changing the large listing table schema."""
+    if not rows:
+        return
+    identities = [
+        (
+            int(row.get("token_id") or 0),
+            str(row.get("site_id") or "").strip().upper(),
+            str(row.get("item_id") or "").strip().upper(),
+        )
+        for row in rows
+        if int(row.get("token_id") or 0) > 0
+        and str(row.get("site_id") or "").strip()
+        and str(row.get("item_id") or "").strip()
+    ]
+    if not identities:
+        return
+    try:
+        from erp.mercadolibre_store_link_marker_store import markers_for_rows
+
+        action_markers = markers_for_rows(rows)
+    except Exception:
+        # A marker database must never make the primary listing table fail.
+        action_markers = {}
+    try:
+        from erp.mercadolibre_promotion_store import PromotionStore
+
+        promotion_markers = PromotionStore().applied_item_keys(identities)
+    except Exception:
+        # Activity synchronization is an optional companion store.
+        promotion_markers = set()
+    # The ad-analysis module already keeps the last successful remote snapshot.
+    # Use it as a read-only fallback so ads created before the marker store was
+    # introduced are still visible when that snapshot is available.
+    snapshot_ad_markers: set[tuple[int, str, str]] = set()
+    try:
+        from bit.bit_ad_analysis import _load_snapshot
+
+        snapshot = _load_snapshot()
+        for ad_row in snapshot.get("links") or []:
+            ad_identity = (
+                int(ad_row.get("token_id") or 0),
+                str(ad_row.get("site_id") or "").strip().upper(),
+                str(ad_row.get("item_id") or "").strip().upper(),
+            )
+            campaign_status = str(ad_row.get("campaign_status") or "").strip().lower()
+            group_status = str(ad_row.get("ad_group_status") or ad_row.get("status") or "").strip().lower()
+            if ad_identity[0] > 0 and ad_identity[1] and ad_identity[2] and group_status == "active" and (
+                not campaign_status or campaign_status == "active"
+            ):
+                snapshot_ad_markers.add(ad_identity)
+    except Exception:
+        snapshot_ad_markers = set()
+    for row in rows:
+        identity = (
+            int(row.get("token_id") or 0),
+            str(row.get("site_id") or "").strip().upper(),
+            str(row.get("item_id") or "").strip().upper(),
+        )
+        action = action_markers.get(identity) or {}
+        promotion_applied = identity in promotion_markers
+        advertising_enabled = bool(action.get("advertising_enabled")) or identity in snapshot_ad_markers
+        video_uploaded = bool(action.get("video_uploaded"))
+        # Keep descriptive names and short aliases so API consumers can use the
+        # response without knowing the UI's terminology.
+        row["promotion_applied"] = promotion_applied
+        row["activity_applied"] = promotion_applied
+        row["advertising_enabled"] = advertising_enabled
+        row["ad_enabled"] = advertising_enabled
+        row["video_uploaded"] = video_uploaded
+        row["has_promotion"] = promotion_applied
+        row["has_activity"] = promotion_applied
+        row["has_ad"] = advertising_enabled
+        row["has_video"] = video_uploaded
+        row["ad_campaign_id"] = action.get("ad_campaign_id") or ""
+        row["video_clip_uuid"] = action.get("video_clip_uuid") or ""
+
+
 def _attribute_number(item: Mapping[str, Any], ids: set[str], *, weight: bool = False) -> Decimal | None:
     for attribute in item.get("attributes") or []:
         if not isinstance(attribute, Mapping) or str(attribute.get("id") or "").upper() not in ids:
@@ -1497,6 +1575,7 @@ def list_store_links(
                     (int(row.get("token_id") or 0), str(row.get("site_id") or "").upper()),
                     "",
                 )
+            _decorate_store_link_markers(rows)
         return {
             "rows": rows,
             "stores": stores,

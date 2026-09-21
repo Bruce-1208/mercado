@@ -1,4 +1,4 @@
-"""Standalone local console, without a MySQL dependency."""
+"""Standalone console backed by the configured server MySQL."""
 import argparse
 from pathlib import Path
 
@@ -10,13 +10,13 @@ from .web import create_blueprint
 
 
 def main():
-    parser = argparse.ArgumentParser(description="泽顺 AI核重核价 本地独立启动")
+    parser = argparse.ArgumentParser(description="泽顺 AI核重核价（数据存储于服务器 MySQL）")
     parser.add_argument("--port", type=int, default=5018)
     parser.add_argument("--data-dir", type=Path, default=data_dir())
     parser.add_argument("--run", action="store_true", help="启动后恢复处理已有任务")
     args = parser.parse_args()
     app = Flask(__name__)
-    service = Service(args.data_dir)
+    service = Service(args.data_dir, storage_backend="mysql")
     app.register_blueprint(create_blueprint(service))
     app.add_url_rule("/", view_func=lambda: __import__("flask").redirect("/ai-weight-price"))
     if args.run:

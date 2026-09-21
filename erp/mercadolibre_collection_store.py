@@ -2414,6 +2414,7 @@ def upsert_ai_original_product(
             "permalink": product["source_url"],
             "pictures": [{"source": url} for url in product.get("images") or []],
             "attributes": [],
+            "variations": list(product.get("variations") or []),
         },
         "description": {"plain_text": product.get("description_text") or ""},
         "page_snapshot": {},
@@ -2567,6 +2568,242 @@ def update_ai_original_product(
                 )
                 if not cursor.fetchone():
                     raise KeyError("AI 原创产品不存在")
+            cursor.execute(f"SELECT * FROM `{PRODUCT_TABLE}` WHERE `id` = %s", (row_id,))
+            row = cursor.fetchone()
+        connection.commit()
+        return _mirror_zying_snapshot_fields(_json_safe_row(row))
+    except BaseException:
+        connection.rollback()
+        raise
+    finally:
+        connection.close()
+
+
+def _editor_text(value: Any, maximum: int) -> str:
+    return str(value or "").strip()[:maximum]
+
+
+def _editor_attributes(value: Any) -> list[dict[str, Any]]:
+    if not isinstance(value, list):
+        return []
+    result = []
+    for raw in value[:200]:
+        if not isinstance(raw, Mapping):
+            continue
+        item: dict[str, Any] = {}
+        for key in (
+            "id", "name", "name_es", "name_pt", "value_id", "value_name",
+            "value_name_es", "value_name_pt", "value_struct", "values",
+        ):
+            if raw.get(key) not in (None, ""):
+                item[key] = raw.get(key)
+        if item.get("id") or item.get("name"):
+            result.append(item)
+    return result
+
+
+def _editor_variations(value: Any) -> list[dict[str, Any]]:
+    """Round-trip a bounded SKU matrix while keeping prices and stock numeric."""
+    if not isinstance(value, list):
+        return []
+    result = []
+    for raw in value[:200]:
+        if not isinstance(raw, Mapping):
+            continue
+        # JSON round-tripping is deliberate: it removes request-only objects
+        # and guarantees the snapshot can be written to LONGTEXT safely.
+        try:
+            item = json.loads(json.dumps(dict(raw), ensure_ascii=False, default=str))
+        except (TypeError, ValueError):
+            continue
+        if isinstance(item, dict):
+            result.append(item)
+    return result
+
+
+def update_ai_original_listing(
+    product_item_id: int,
+    listing: Mapping[str, Any],
+    *,
+    connection_factory: Callable[[], Any] | None = None,
+) -> dict[str, Any]:
+    """Save the editable bilingual listing, category schema values and SKUs."""
+    row_id = int(product_item_id)
+    if row_id <= 0:
+        raise ValueError("产品记录编号无效")
+    data = dict(listing or {})
+    connection = (connection_factory or _connect)()
+    try:
+        with connection.cursor() as cursor:
+            ensure_collection_tables(cursor)
+            cursor.execute(
+                f"SELECT * FROM `{PRODUCT_TABLE}` WHERE `id` = %s "
+                "AND `source_type` = 'ai_original'",
+                (row_id,),
+            )
+            current = cursor.fetchone()
+            if not current:
+                raise KeyError("AI 原创产品不存在")
+            snapshot = _loads(current.get("source_snapshot_json"), {})
+            if not isinstance(snapshot, dict):
+                snapshot = {}
+            original = dict(snapshot.get("original_1688") or {})
+            prepared = dict(snapshot.get("ai_original") or {})
+            source = dict(snapshot.get("source") or {})
+
+            source_title = _editor_text(data.get("source_title"), 255)
+            source_description = _editor_text(data.get("source_description"), 50000)
+            category_id = _editor_text(data.get("category_id"), 64)
+            category_name = _editor_text(data.get("category_name"), 255)
+            title_es = _editor_text(data.get("title_es"), 255)
+            title_pt = _editor_text(data.get("title_pt"), 255)
+            description_es = _editor_text(data.get("description_es"), 50000)
+            description_pt = _editor_text(data.get("description_pt"), 50000)
+            attributes = _editor_attributes(data.get("attributes"))
+            variations = _editor_variations(data.get("variations"))
+
+            if "source_title" in data and source_title:
+                original["title"] = source_title
+            if "source_description" in data:
+                original["description_text"] = source_description
+            if "category_id" in data:
+                original["category_id"] = category_id
+                source["category_id"] = category_id
+            if "category_name" in data:
+                original["category_name"] = category_name
+                source["category_name"] = category_name
+            if "title_es" in data:
+                prepared["title_es"] = title_es
+            if "title_pt" in data:
+                prepared["title_pt"] = title_pt
+            if "description_es" in data:
+                prepared["description_es"] = description_es
+            if "description_pt" in data:
+                prepared["description_pt"] = description_pt
+            if "attributes" in data:
+                prepared["attributes"] = attributes
+                source["attributes"] = attributes
+            if "variations" in data:
+                prepared["variations"] = variations
+                source["variations"] = variations
+            if "source_title" in data or "source_description" in data:
+                snapshot["original_1688"] = original
+            snapshot["ai_original"] = prepared
+            snapshot["source"] = source
+            description_for_row = description_es or source_description
+            if description_for_row:
+                snapshot["description"] = {"plain_text": description_for_row}
+
+            row_title = title_es or title_pt or str(current.get("title") or "")
+            row_description = description_for_row or str(current.get("description_text") or "")
+            cursor.execute(
+                f"UPDATE `{PRODUCT_TABLE}` SET `title` = %s, `description_text` = %s, "
+                "`category_id` = %s, `category_name` = %s, `source_snapshot_json` = %s "
+                "WHERE `id` = %s AND `source_type` = 'ai_original'",
+                (
+                    row_title[:255], row_description[:50000], category_id,
+                    category_name, _dumps(snapshot), row_id,
+                ),
+            )
+            cursor.execute(f"SELECT * FROM `{PRODUCT_TABLE}` WHERE `id` = %s", (row_id,))
+            row = cursor.fetchone()
+        connection.commit()
+        return _mirror_zying_snapshot_fields(_json_safe_row(row))
+    except BaseException:
+        connection.rollback()
+        raise
+    finally:
+        connection.close()
+
+
+def translate_ai_original_listing(
+    product_item_id: int,
+    language: str,
+    *,
+    connection_factory: Callable[[], Any] | None = None,
+) -> dict[str, Any]:
+    """Translate Chinese source content and SKU labels into one target language."""
+    from erp.mercadolibre_translation import translate_texts
+
+    language_key = {"es": "es", "es-419": "es", "pt": "pt-BR", "pt-br": "pt-BR"}.get(
+        str(language or "").strip().lower()
+    )
+    if language_key is None:
+        raise ValueError("翻译语言仅支持 es 或 pt-BR")
+    row_id = int(product_item_id)
+    connection = (connection_factory or _connect)()
+    try:
+        with connection.cursor() as cursor:
+            ensure_collection_tables(cursor)
+            cursor.execute(
+                f"SELECT * FROM `{PRODUCT_TABLE}` WHERE `id` = %s "
+                "AND `source_type` = 'ai_original'",
+                (row_id,),
+            )
+            current = cursor.fetchone()
+            if not current:
+                raise KeyError("AI 原创产品不存在")
+            snapshot = _loads(current.get("source_snapshot_json"), {})
+            if not isinstance(snapshot, dict):
+                snapshot = {}
+            original = dict(snapshot.get("original_1688") or {})
+            prepared = dict(snapshot.get("ai_original") or {})
+            texts: list[str] = []
+            setters: list[Callable[[str], None]] = []
+            suffix = "es" if language_key == "es" else "pt"
+
+            def add(value: Any, setter: Callable[[str], None]) -> None:
+                text = str(value or "").strip()
+                if text and len(texts) < 100:
+                    texts.append(text)
+                    setters.append(setter)
+
+            add(original.get("title"), lambda value: prepared.__setitem__("title_es" if suffix == "es" else "title_pt", value))
+            add(original.get("description_text"), lambda value: prepared.__setitem__("description_es" if suffix == "es" else "description_pt", value))
+
+            attributes = _editor_attributes(prepared.get("attributes"))
+            if not attributes:
+                attributes = _editor_attributes([
+                    {
+                        "name": prop.get("name") or prop.get("key"),
+                        "value_name": prop.get("value") or prop.get("value_name"),
+                    }
+                    for prop in original.get("properties") or []
+                    if isinstance(prop, Mapping)
+                ])
+            for attribute in attributes:
+                add(attribute.get("name"), lambda value, target=attribute: target.__setitem__("name_" + suffix, value))
+                add(attribute.get("value_name"), lambda value, target=attribute: target.__setitem__("value_name_" + suffix, value))
+
+            variations = _editor_variations(prepared.get("variations") or original.get("variations"))
+            translatable_keys = ("name", "label", "value_name", "value", "text", "title", "sku_name")
+            for variation in variations:
+                for container_key in ("attribute_combinations", "attributes", "properties"):
+                    for attribute in variation.get(container_key) or []:
+                        if not isinstance(attribute, dict):
+                            continue
+                        for key in translatable_keys:
+                            if key in attribute:
+                                add(attribute.get(key), lambda value, target=attribute, key=key: target.__setitem__(f"{key}_{suffix}", value))
+                for key in ("name", "label", "sku_name", "title"):
+                    if key in variation:
+                        add(variation.get(key), lambda value, target=variation, key=key: target.__setitem__(f"{key}_{suffix}", value))
+            if not texts:
+                raise ValueError("没有可翻译的标题、描述或变体文本")
+            translated = translate_texts(texts, "zh-CN", language_key)
+            for setter, value in zip(setters, translated):
+                setter(value)
+            prepared["attributes"] = attributes
+            prepared["variations"] = variations
+            snapshot["ai_original"] = prepared
+            source = dict(snapshot.get("source") or {})
+            source["attributes"] = attributes
+            source["variations"] = variations
+            snapshot["source"] = source
+            cursor.execute(
+                f"UPDATE `{PRODUCT_TABLE}` SET `source_snapshot_json` = %s WHERE `id` = %s",
+                (_dumps(snapshot), row_id),
+            )
             cursor.execute(f"SELECT * FROM `{PRODUCT_TABLE}` WHERE `id` = %s", (row_id,))
             row = cursor.fetchone()
         connection.commit()

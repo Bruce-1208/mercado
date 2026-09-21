@@ -16,7 +16,7 @@ from .credentials import api_key
 from .edge import debugger_identity, open_edge
 from .models import Models, number, validate_weight
 from .pricing import exchange_rate, protect_net_income, usd_cost
-from .store import CHINA, Store, COMPLETED
+from .store import CHINA, RemoteStore, Store, COMPLETED
 from .supplier_adapter import SupplierAdaptationError
 
 
@@ -29,9 +29,9 @@ class RunLimitReached(Exception):
 
 
 class Service:
-    def __init__(self, root, browser_factory=Browser, models_factory=Models):
-        self.store = Store(root)
-        self.config = Config(root)
+    def __init__(self, root, browser_factory=Browser, models_factory=Models, storage_backend="sqlite"):
+        self.store = RemoteStore(root) if storage_backend == "api" else Store(root, backend=storage_backend)
+        self.config = Config(root, storage=self.store if storage_backend != "sqlite" else None)
         self.browser_factory, self.models_factory = browser_factory, models_factory
         self.stop_event = threading.Event()
         self.thread = None
@@ -95,7 +95,7 @@ class Service:
                 "circuit": self.store.state("circuit"), "run": self.store.state("run", {}),
                 "current_product": self._current_product_status(run),
                 "run_error": self.store.state("run_error"), "action_error": self.store.state("action_error"),
-                "storage": str(self.store.root), "collection": self.store.state("collection"),
+                "storage": self.store.storage_description, "collection": self.store.state("collection"),
                 "login": self.store.state("login", {"confirmed": False}),
                 "selection": self.store.state("run_selection"),
                 "visual_progress": self.store.state("visual_progress", {}),

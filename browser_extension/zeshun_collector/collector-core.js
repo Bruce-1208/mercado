@@ -316,8 +316,12 @@
       ));
       containers.forEach(node => add(node.innerText || node.textContent));
       containers.forEach(container => {
-        let scope = container;
-        for (let node = container; node && node !== root; node = node.parentElement) {
+        // The origin icon may be a sibling of the metric row. A shadow root
+        // is already isolated to the ZYing widget, so use it as the fallback
+        // scope; for light DOM keep the old narrow scope to avoid marketplace
+        // page flags being mistaken for the plugin's origin.
+        let scope = root && root.nodeType === 11 ? root : container;
+        for (let node = container.parentElement; node && node !== root; node = node.parentElement) {
           const marker = `${node.id || ""} ${node.className || ""}`;
           if (/zying/i.test(marker)) scope = node;
         }

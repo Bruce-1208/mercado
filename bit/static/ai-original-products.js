@@ -4,6 +4,7 @@ let aiOriginalRows = [];
 let aiOriginalSelected = new Set();
 let aiOriginalTaskTimer = null;
 let aiOriginalPublishTimer = null;
+let aiOriginalEditorState = null;
 
 function aiOriginalEscape(value) {
   return String(value ?? "").replaceAll("&", "&amp;").replaceAll("<", "&lt;")
@@ -23,6 +24,114 @@ function aiOriginalAttributes(attributes) {
   return (Array.isArray(attributes) ? attributes : []).filter(attribute => {
     return attribute && (attribute.value_name || attribute.value_id || attribute.values);
   }).slice(0, 30);
+}
+
+function aiOriginalEditorRow(id) {
+  return aiOriginalRows.find(row => Number(row.id) === Number(id)) || null;
+}
+
+function aiOriginalSource(row) {
+  return row?.original_1688 && typeof row.original_1688 === "object" ? row.original_1688 : {};
+}
+
+function aiOriginalEditorTokenId() {
+  const selected = document.getElementById("ai-original-stores")?.selectedOptions?.[0];
+  return selected?.value || "";
+}
+
+function aiOriginalCurrentAttributes() {
+  return Array.isArray(aiOriginalEditorState?.attributes) ? aiOriginalEditorState.attributes : [];
+}
+
+function aiOriginalAttributeValue(attribute) {
+  return String(attribute?.value_name ?? attribute?.value ?? "").trim();
+}
+
+function aiOriginalAttributeById(id) {
+  return aiOriginalCurrentAttributes().find(item => String(item?.id || "").toUpperCase() === String(id || "").toUpperCase()) || {};
+}
+
+function aiOriginalCategoryFieldId(id) {
+  return `ai-original-editor-attr-${String(id || "field").replace(/[^a-zA-Z0-9_-]/g, "_")}`;
+}
+
+function renderAiOriginalCategoryFields() {
+  const requiredNode = document.getElementById("ai-original-editor-required-fields");
+  const optionalNode = document.getElementById("ai-original-editor-optional-fields");
+  if (!requiredNode || !optionalNode) return;
+  const schema = Array.isArray(aiOriginalEditorState?.schema) ? aiOriginalEditorState.schema : [];
+  const render = definitions => definitions.length ? definitions.map(definition => {
+    const id = String(definition.id || "");
+    const current = aiOriginalAttributeById(id);
+    const value = aiOriginalAttributeValue(current);
+    const options = Array.isArray(definition.values) ? definition.values : [];
+    const control = options.length
+      ? `<select id="${aiOriginalCategoryFieldId(id)}" data-attribute-id="${aiOriginalEscape(id)}" data-attribute-name="${aiOriginalEscape(definition.name || id)}"><option value="">请选择</option>${options.map(option => `<option value="${aiOriginalEscape(option.name || option.id)}" data-value-id="${aiOriginalEscape(option.id || "")}" ${String(option.name || option.id) === value ? "selected" : ""}>${aiOriginalEscape(option.name || option.id)}</option>`).join("")}${value && !options.some(option => String(option.name || option.id) === value) ? `<option value="${aiOriginalEscape(value)}" selected>${aiOriginalEscape(value)}（当前值）</option>` : ""}</select>`
+      : `<input id="${aiOriginalCategoryFieldId(id)}" data-attribute-id="${aiOriginalEscape(id)}" data-attribute-name="${aiOriginalEscape(definition.name || id)}" value="${aiOriginalEscape(value)}" placeholder="填写${aiOriginalEscape(definition.name || id)}">`;
+    return `<label class="ai-original-editor-attribute"><span>${aiOriginalEscape(definition.name || id)}${definition.required ? " *" : ""}<small>${aiOriginalEscape(id)}</small></span>${control}</label>`;
+  }).join("") : '<p class="ai-original-editor-empty">请先选择 Mercado 类目以读取字段。</p>';
+  requiredNode.innerHTML = render(schema.filter(item => item.required));
+  optionalNode.innerHTML = render(schema.filter(item => !item.required));
+}
+
+function aiOriginalVariationLabel(variation) {
+  if (!variation || typeof variation !== "object") return "";
+  if (variation.label || variation.name || variation.sku_name) return String(variation.label || variation.name || variation.sku_name);
+  const combinations = variation.attribute_combinations || variation.attributes || variation.properties || [];
+  return combinations.map(item => `${item.name || item.id || "规格"}: ${item.value_name || item.value || item.text || ""}`).filter(Boolean).join(" / ");
+}
+
+function renderAiOriginalEditorVariations() {
+  const node = document.getElementById("ai-original-editor-variations");
+  if (!node) return;
+  const rows = Array.isArray(aiOriginalEditorState?.variations) ? aiOriginalEditorState.variations : [];
+  node.innerHTML = rows.length ? rows.map((variation, index) => `<tr>
+    <td><input data-variant-index="${index}" data-variant-field="label" value="${aiOriginalEscape(aiOriginalVariationLabel(variation))}" placeholder="颜色 / 尺码"></td>
+    <td><input data-variant-index="${index}" data-variant-field="price" value="${aiOriginalEscape(variation.price ?? variation.price_text ?? "")}" placeholder="1688价格"></td>
+    <td><input data-variant-index="${index}" data-variant-field="stock" value="${aiOriginalEscape(variation.available_quantity ?? variation.stock ?? variation.stock_text ?? "")}" placeholder="库存"></td>
+    <td><button type="button" class="text-button" onclick="removeAiOriginalEditorVariation(${index})">删除</button></td>
+  </tr>`).join("") : '<tr><td colspan="4" class="ai-original-editor-empty">采集快照没有变体；可以手动新增。</td></tr>';
+}
+
+function collectAiOriginalEditorVariations() {
+  const rows = Array.isArray(aiOriginalEditorState?.variations) ? aiOriginalEditorState.variations : [];
+  return rows.map((variation, index) => {
+    const next = {...variation};
+    const value = field => document.querySelector(`[data-variant-index="${index}"][data-variant-field="${field}"]`)?.value?.trim() || "";
+    const label = value("label");
+    if (label) next.label = label; else delete next.label;
+    const price = value("price");
+    if (price) { next.price_text = price; if (Object.prototype.hasOwnProperty.call(next, "price")) next.price = Number(price) || price; }
+    else if (next.price_text) delete next.price_text;
+    const stock = value("stock");
+    if (stock) { next.stock_text = stock; if (Object.prototype.hasOwnProperty.call(next, "available_quantity")) next.available_quantity = Number(stock) || stock; }
+    else if (next.stock_text) delete next.stock_text;
+    return next;
+  });
+}
+
+function collectAiOriginalEditorAttributes() {
+  if (!Array.isArray(aiOriginalEditorState?.schema) || !aiOriginalEditorState.schema.length) {
+    return [...aiOriginalCurrentAttributes()];
+  }
+  const attributes = [];
+  document.querySelectorAll("#ai-original-editor-required-fields [data-attribute-id], #ai-original-editor-optional-fields [data-attribute-id]").forEach(control => {
+    const value = String(control.value || "").trim();
+    const id = control.dataset.attributeId || "";
+    if (!id || !value) return;
+    const current = {...aiOriginalAttributeById(id)};
+    current.id = id;
+    current.name = control.dataset.attributeName || current.name || id;
+    if (aiOriginalAttributeValue(current) !== value) {
+      delete current.value_name_es;
+      delete current.value_name_pt;
+    }
+    current.value_name = value;
+    const selected = control.tagName === "SELECT" ? control.selectedOptions?.[0] : null;
+    if (selected?.dataset.valueId) current.value_id = selected.dataset.valueId;
+    attributes.push(current);
+  });
+  return attributes;
 }
 
 function renderAiOriginalAttributes(attributes) {
@@ -59,7 +168,7 @@ function renderAiOriginalProducts() {
         <figure><img src="${aiOriginalEscape(aiImage)}" alt="AI 美客多白底主图" loading="lazy"><figcaption>AI 白底主图</figcaption></figure>
       </div>
       <div class="ai-original-source"><span class="ai-original-section-label source">1688 原始资料</span><h4>${aiOriginalEscape(original.title || row.title)}</h4><p>1688 编号：${aiOriginalEscape(original.source_1688_item_id || row.source_item_id)}</p><p>采购价：${aiOriginalEscape(original.price ?? row.price ?? "-")} CNY</p><a href="${aiOriginalEscape(original.source_url || row.source_url || "#")}" target="_blank" rel="noopener">打开 1688 详情页 ↗</a>${row.ai_error ? `<p class="bad">${aiOriginalEscape(row.ai_error)}</p>` : ""}</div>
-      <div class="ai-original-copy"><span class="ai-original-section-label generated">AI 美客多刊登稿</span><strong>西语标题 ${titleEs.length}/60</strong><p class="${titleEs.length > 60 ? "bad" : ""}">${aiOriginalEscape(titleEs)}</p><strong>葡语标题 ${titlePt.length}/60</strong><p class="${titlePt.length > 60 ? "bad" : ""}">${aiOriginalEscape(titlePt)}</p><strong>AI 商品属性（${aiAttributes.length}）</strong>${renderAiOriginalAttributes(row.ai_original?.attributes)}<details><summary>查看 AI 双语详情</summary><p>${aiOriginalEscape(row.description_es || "待生成西语详情")}</p><p>${aiOriginalEscape(row.description_pt || "待生成葡语详情")}</p></details><div class="ai-original-readiness"><span class="${ready ? "ok" : "pending"}">${ready ? "✓" : "!"} AI 属性</span><span class="${aiImageReady ? "ok" : "pending"}">${aiImageReady ? "✓" : "!"} AI 白底主图</span><span class="${row.category_id ? "ok" : "pending"}">${row.category_id ? "✓" : "!"} CBT 类目</span></div></div>
+      <div class="ai-original-copy"><span class="ai-original-section-label generated">AI 美客多刊登稿</span><strong>西语标题 ${titleEs.length}/60</strong><p class="${titleEs.length > 60 ? "bad" : ""}">${aiOriginalEscape(titleEs)}</p><strong>葡语标题 ${titlePt.length}/60</strong><p class="${titlePt.length > 60 ? "bad" : ""}">${aiOriginalEscape(titlePt)}</p><strong>AI 商品属性（${aiAttributes.length}）</strong>${renderAiOriginalAttributes(row.ai_original?.attributes)}<details><summary>查看 AI 双语详情</summary><p>${aiOriginalEscape(row.description_es || "待生成西语详情")}</p><p>${aiOriginalEscape(row.description_pt || "待生成葡萄牙语详情")}</p></details><div class="ai-original-readiness"><span class="${ready ? "ok" : "pending"}">${ready ? "✓" : "!"} AI 属性</span><span class="${aiImageReady ? "ok" : "pending"}">${aiImageReady ? "✓" : "!"} AI 白底主图</span><span class="${row.category_id ? "ok" : "pending"}">${row.category_id ? "✓" : "!"} CBT 类目</span></div><button class="secondary ai-original-edit-button" type="button" onclick="openAiOriginalEditor(${Number(row.id)})">编辑分类、字段、详情与变体</button></div>
       <div class="ai-original-fields">
         <label>实重(g)<input id="ai-original-weight-${Number(row.id)}" type="number" min="1" step="1" value="${aiOriginalEscape(row.weight_g || "")}"></label>
         <label>净收益USD<input id="ai-original-net-${Number(row.id)}" type="number" min="0.01" step="0.01" value="${aiOriginalEscape(row.net_proceeds_usd || "")}"></label>
@@ -69,6 +178,155 @@ function renderAiOriginalProducts() {
     </article>`;
   }).join("") : '<div class="empty-state">暂无符合条件的 AI 原创产品；请先用泽顺插件采集 1688 商品。</div>';
   updateAiOriginalSelection();
+}
+
+function openAiOriginalEditor(id) {
+  const row = aiOriginalEditorRow(id);
+  const dialog = document.getElementById("ai-original-editor-dialog");
+  if (!row || !dialog) return;
+  const original = aiOriginalSource(row);
+  const prepared = row.ai_original && typeof row.ai_original === "object" ? row.ai_original : {};
+  aiOriginalEditorState = {
+    id: Number(id),
+    row,
+    schema: [],
+    attributes: Array.isArray(prepared.attributes) ? JSON.parse(JSON.stringify(prepared.attributes)) : [],
+    variations: Array.isArray(prepared.variations) ? JSON.parse(JSON.stringify(prepared.variations)) : (Array.isArray(original.variations) ? JSON.parse(JSON.stringify(original.variations)) : [])
+  };
+  document.getElementById("ai-original-editor-title").textContent = original.title || row.title || "编辑 1688 商品";
+  document.getElementById("ai-original-editor-source-title").value = original.title || "";
+  document.getElementById("ai-original-editor-source-description").value = original.description_text || "";
+  document.getElementById("ai-original-editor-category-id").value = row.category_id || original.category_id || "";
+  document.getElementById("ai-original-editor-category-name").value = row.category_name || original.category_name || "";
+  document.getElementById("ai-original-editor-title-es").value = prepared.title_es || "";
+  document.getElementById("ai-original-editor-title-pt").value = prepared.title_pt || "";
+  document.getElementById("ai-original-editor-description-es").value = prepared.description_es || "";
+  document.getElementById("ai-original-editor-description-pt").value = prepared.description_pt || "";
+  document.getElementById("ai-original-editor-category-results").innerHTML = "";
+  document.getElementById("ai-original-editor-category-hint").textContent = row.category_id ? `当前类目：${row.category_id}${row.category_name ? ` · ${row.category_name}` : ""}` : "输入商品关键词搜索 Mercado CBT 类目";
+  renderAiOriginalCategoryFields();
+  renderAiOriginalEditorVariations();
+  dialog.showModal();
+  if (row.category_id) loadAiOriginalCategoryAttributes(row.category_id, false);
+}
+
+function closeAiOriginalEditor() {
+  document.getElementById("ai-original-editor-dialog")?.close();
+  aiOriginalEditorState = null;
+}
+
+async function searchAiOriginalCategories() {
+  const query = document.getElementById("ai-original-editor-category-search")?.value?.trim() || "";
+  const node = document.getElementById("ai-original-editor-category-results");
+  if (query.length < 2) { if (node) node.innerHTML = '<span class="ai-original-editor-empty">请输入至少 2 个字符。</span>'; return; }
+  if (node) node.innerHTML = "正在搜索类目…";
+  try {
+    const tokenId = aiOriginalEditorTokenId();
+    const response = await fetch(`/api/ai-original-products/categories/search?q=${encodeURIComponent(query)}${tokenId ? `&token_id=${encodeURIComponent(tokenId)}` : ""}`, {cache: "no-store"});
+    const payload = await response.json();
+    if (!response.ok || payload.status !== "success") throw new Error(payload.message || `HTTP ${response.status}`);
+    const rows = payload.data?.rows || [];
+    node.innerHTML = rows.length ? rows.map((row, index) => `<button type="button" class="ai-original-category-option" data-category-index="${index}"><strong>${aiOriginalEscape(row.category_name)}</strong><small>${aiOriginalEscape(row.category_id)}</small></button>`).join("") : '<span class="ai-original-editor-empty">没有找到 CBT 类目，请换一个关键词。</span>';
+    node.querySelectorAll("[data-category-index]").forEach(button => button.addEventListener("click", () => {
+      const row = rows[Number(button.dataset.categoryIndex)];
+      selectAiOriginalCategory(row?.category_id, row?.category_name);
+    }));
+  } catch (error) { if (node) node.innerHTML = `<span class="ai-original-editor-error">类目搜索失败：${aiOriginalEscape(error.message || error)}</span>`; }
+}
+
+async function selectAiOriginalCategory(categoryId, categoryName) {
+  document.getElementById("ai-original-editor-category-id").value = categoryId || "";
+  document.getElementById("ai-original-editor-category-name").value = categoryName || "";
+  document.getElementById("ai-original-editor-category-hint").textContent = `已选择：${categoryId}${categoryName ? ` · ${categoryName}` : ""}`;
+  await loadAiOriginalCategoryAttributes(categoryId, true);
+}
+
+async function loadAiOriginalCategoryAttributes(categoryId, showStatus = true) {
+  const normalized = String(categoryId || "").trim().toUpperCase();
+  if (!normalized) { aiOriginalEditorState.schema = []; renderAiOriginalCategoryFields(); return; }
+  if (showStatus) document.getElementById("ai-original-editor-category-hint").textContent = `正在读取 ${normalized} 的必填/选填字段…`;
+  try {
+    const tokenId = aiOriginalEditorTokenId();
+    const response = await fetch(`/api/ai-original-products/categories/${encodeURIComponent(normalized)}/attributes${tokenId ? `?token_id=${encodeURIComponent(tokenId)}` : ""}`, {cache: "no-store"});
+    const payload = await response.json();
+    if (!response.ok || payload.status !== "success") throw new Error(payload.message || `HTTP ${response.status}`);
+    aiOriginalEditorState.schema = [...(payload.data?.required || []), ...(payload.data?.optional || [])];
+    renderAiOriginalCategoryFields();
+    document.getElementById("ai-original-editor-category-hint").textContent = `已读取 ${aiOriginalEditorState.schema.filter(item => item.required).length} 个必填、${aiOriginalEditorState.schema.filter(item => !item.required).length} 个选填字段`;
+  } catch (error) {
+    aiOriginalEditorState.schema = [];
+    renderAiOriginalCategoryFields();
+    document.getElementById("ai-original-editor-category-hint").textContent = `字段读取失败：${error.message || error}`;
+  }
+}
+
+function addAiOriginalEditorVariation() {
+  if (!aiOriginalEditorState) return;
+  aiOriginalEditorState.variations = [...(aiOriginalEditorState.variations || []), {label: "", attribute_combinations: []}];
+  renderAiOriginalEditorVariations();
+}
+
+function removeAiOriginalEditorVariation(index) {
+  if (!aiOriginalEditorState) return;
+  aiOriginalEditorState.variations = (aiOriginalEditorState.variations || []).filter((_, position) => position !== Number(index));
+  renderAiOriginalEditorVariations();
+}
+
+function collectAiOriginalEditorPayload() {
+  const data = {
+    source_title: document.getElementById("ai-original-editor-source-title")?.value?.trim() || "",
+    source_description: document.getElementById("ai-original-editor-source-description")?.value?.trim() || "",
+    category_id: document.getElementById("ai-original-editor-category-id")?.value?.trim() || "",
+    category_name: document.getElementById("ai-original-editor-category-name")?.value?.trim() || "",
+    title_es: document.getElementById("ai-original-editor-title-es")?.value?.trim() || "",
+    title_pt: document.getElementById("ai-original-editor-title-pt")?.value?.trim() || "",
+    description_es: document.getElementById("ai-original-editor-description-es")?.value?.trim() || "",
+    description_pt: document.getElementById("ai-original-editor-description-pt")?.value?.trim() || "",
+    attributes: collectAiOriginalEditorAttributes(),
+    variations: collectAiOriginalEditorVariations()
+  };
+  aiOriginalEditorState.attributes = data.attributes;
+  aiOriginalEditorState.variations = data.variations;
+  return data;
+}
+
+async function saveAiOriginalEditor(close = true) {
+  if (!aiOriginalEditorState?.id) return false;
+  const id = aiOriginalEditorState.id;
+  const payload = collectAiOriginalEditorPayload();
+  try {
+    const response = await fetch(`/api/ai-original-products/${id}/listing`, {method: "PATCH", headers: {"Content-Type": "application/json"}, body: JSON.stringify(payload)});
+    const data = await response.json();
+    if (!response.ok || data.status !== "success") throw new Error(data.message || `HTTP ${response.status}`);
+    aiOriginalStatus(`产品 ${id} 的分类、字段、详情和变体已保存`, "success");
+    if (close) closeAiOriginalEditor();
+    await loadAiOriginalProducts();
+    return true;
+  } catch (error) { document.getElementById("ai-original-editor-status").textContent = `保存失败：${error.message || error}`; return false; }
+}
+
+async function translateAiOriginalEditor(language) {
+  if (!aiOriginalEditorState?.id) return;
+  const saved = await saveAiOriginalEditor(false);
+  if (!saved) return;
+  const label = language === "es" ? "西班牙语" : "葡萄牙语";
+  const status = document.getElementById("ai-original-editor-status");
+  status.textContent = `正在翻译标题、描述、属性和变体为${label}…`;
+  try {
+    const response = await fetch(`/api/ai-original-products/${aiOriginalEditorState.id}/translate`, {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify({language})});
+    const payload = await response.json();
+    if (!response.ok || payload.status !== "success") throw new Error(payload.message || `HTTP ${response.status}`);
+    const row = payload.data || {};
+    const prepared = row.ai_original || {};
+    document.getElementById(`ai-original-editor-title-${language}`).value = prepared[`title_${language}`] || "";
+    document.getElementById(`ai-original-editor-description-${language}`).value = prepared[`description_${language}`] || "";
+    aiOriginalEditorState.attributes = Array.isArray(prepared.attributes) ? prepared.attributes : aiOriginalEditorState.attributes;
+    aiOriginalEditorState.variations = Array.isArray(prepared.variations) ? prepared.variations : aiOriginalEditorState.variations;
+    renderAiOriginalCategoryFields();
+    renderAiOriginalEditorVariations();
+    status.textContent = `${label}翻译完成，请检查内容后点击保存`;
+    await loadAiOriginalProducts();
+  } catch (error) { status.textContent = `翻译失败：${error.message || error}`; }
 }
 
 async function loadAiOriginalProducts() {

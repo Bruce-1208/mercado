@@ -6312,6 +6312,56 @@
             text-align: right;
         }
 
+        .store-link-marker-legend {
+            display: flex;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 6px;
+            padding: 7px 10px;
+            border-bottom: 1px solid var(--border);
+            background: #fff;
+            color: var(--muted);
+            font-size: 11px;
+        }
+
+        .store-link-markers {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 4px;
+            margin-top: 4px;
+        }
+
+        .store-link-marker {
+            display: inline-flex;
+            align-items: center;
+            min-height: 18px;
+            padding: 2px 6px;
+            border: 1px solid transparent;
+            border-radius: 999px;
+            font-size: 10px;
+            font-weight: 800;
+            line-height: 1.25;
+            white-space: nowrap;
+        }
+
+        .store-link-marker.promotion {
+            border-color: #f4d79b;
+            background: #fff8e7;
+            color: #9a6500;
+        }
+
+        .store-link-marker.advertising {
+            border-color: #b9d7fa;
+            background: #edf6ff;
+            color: #1c5fa8;
+        }
+
+        .store-link-marker.video {
+            border-color: #c9c0f3;
+            background: #f3f0ff;
+            color: #6146a5;
+        }
+
         .ad-analysis-bulk-actions {
             align-items: center;
             flex-wrap: wrap;
@@ -9394,10 +9444,12 @@
         }
     </style>
     <link rel="stylesheet" href="{{ url_for('static', filename='console-ui.css') }}?v=20260921-align1">
-    <link rel="stylesheet" href="{{ url_for('static', filename='ai-original-products.css') }}?v=20260920">
+    <link rel="stylesheet" href="{{ url_for('static', filename='ai-original-products.css') }}?v=20260921-editor1">
+    <link rel="stylesheet" href="{{ url_for('static', filename='ai-original-workbench.css') }}?v=20260921">
     <link rel="stylesheet" href="{{ url_for('static', filename='1688-products.css') }}?v=20260920">
     <script src="{{ url_for('static', filename='console-ui.js') }}?v=20260915"></script>
-    <script defer src="{{ url_for('static', filename='ai-original-products.js') }}?v=20260920"></script>
+    <script defer src="{{ url_for('static', filename='ai-original-products.js') }}?v=20260921-editor1"></script>
+    <script defer src="{{ url_for('static', filename='ai-original-workbench.js') }}?v=20260921"></script>
     <script defer src="{{ url_for('static', filename='1688-products.js') }}?v=20260920"></script>
     <style>
         .ai-video-layout { display: grid; grid-template-columns: minmax(0, 1.55fr) minmax(300px, .75fr); gap: 18px; align-items: start; }
@@ -10259,7 +10311,7 @@
                     <div>
                         <span class="ai-original-eyebrow">1688 → MERCADO LIBRE</span>
                         <h2>AI原创产品</h2>
-                        <p>分开保存 1688 原始资料和 AI 美客多刊登稿：属性、双语标题、双语详情与白底主图全部生成后，按 Mercado Libre 刊登规则校验再上架</p>
+                        <p>把 1688 产品区的货源完善为美客多刊登稿：补齐分类属性、上架字段、双语标题与描述，生成白底主图，审核后按站点上架。</p>
                     </div>
                     <div class="ai-original-heading-actions">
                         <a class="primary ai-original-plugin-download" href="/api/browser-extension/download" download>下载泽顺插件</a>
@@ -10267,9 +10319,15 @@
                     </div>
                 </div>
 
+                <div class="ai-original-metrics" aria-label="当前已加载商品概况">
+                    <div class="ai-original-metric"><span>来源商品</span><strong id="ai-original-count-total">0</strong><small>当前加载的 1688 货源</small></div>
+                    <div class="ai-original-metric"><span>待完善 / 审核</span><strong id="ai-original-count-pending">0</strong><small>补齐资料后再提交审核</small></div>
+                    <div class="ai-original-metric"><span>AI 已生成</span><strong id="ai-original-count-generated">0</strong><small>文案与图片任务已完成</small></div>
+                    <div class="ai-original-metric"><span>已完善并审核</span><strong id="ai-original-count-ready">0</strong><small>上架时继续校验平台规则</small></div>
+                </div>
                 <section class="panel ai-original-toolbar">
                     <div class="ai-original-steps">
-                        <span><b>1</b>保存 1688 原始资料</span><i>→</i><span><b>2</b>生成 AI 刊登稿</span><i>→</i><span><b>3</b>补齐重量与类目</span><i>→</i><span><b>4</b>按站点直接上架</span>
+                        <span><b>1</b>选择 1688 货源</span><i>→</i><span><b>2</b>AI 生成文案与主图</span><i>→</i><span><b>3</b>完善分类、属性与字段</span><i>→</i><span><b>4</b>审核并上架</span>
                     </div>
                     <div class="ai-original-controls">
                         <label><span>搜索</span><input id="ai-original-search" type="search" placeholder="1688 编号或标题"></label>
@@ -10298,8 +10356,47 @@
                     <div class="ai-original-grid" id="ai-original-grid"><div class="empty-state">打开模块后加载 1688 商品</div></div>
                 </section>
 
+                <dialog class="ai-original-editor-dialog" id="ai-original-editor-dialog" onclick="if(event.target === this) closeAiOriginalEditor()">
+                    <div class="ai-original-editor-head">
+                        <div><span class="ai-original-eyebrow">LISTING EDITOR</span><h3 id="ai-original-editor-title">编辑刊登内容</h3><p>选择 CBT 类目后会自动显示该类目的必填和选填字段；保存内容会同步到后续上架和变体。</p></div>
+                        <button class="p1688-dialog-close" type="button" aria-label="关闭" onclick="closeAiOriginalEditor()">×</button>
+                    </div>
+                    <div class="ai-original-editor-body">
+                        <section class="ai-original-editor-section">
+                            <div class="ai-original-editor-section-head"><div><b>1</b><span><strong>选择 Mercado CBT 类目</strong><small>需要已授权的 CBT 店铺读取官方类目字段</small></span></div></div>
+                            <div class="ai-original-editor-category-search"><input id="ai-original-editor-category-search" type="search" placeholder="输入商品关键词，例如 organizer / zapatos" onkeydown="if(event.key === 'Enter'){event.preventDefault();searchAiOriginalCategories()}"><button class="secondary" type="button" onclick="searchAiOriginalCategories()">搜索类目</button></div>
+                            <div class="ai-original-editor-category-results" id="ai-original-editor-category-results"></div>
+                            <div class="ai-original-editor-category-selected"><label><span>分类编号</span><input id="ai-original-editor-category-id" type="text" placeholder="例如 CBT1234" onchange="loadAiOriginalCategoryAttributes(this.value, true)"></label><label><span>分类名称</span><input id="ai-original-editor-category-name" type="text" placeholder="可手动补充名称"></label><span id="ai-original-editor-category-hint">输入商品关键词搜索 Mercado CBT 类目</span></div>
+                        </section>
+
+                        <section class="ai-original-editor-section">
+                            <div class="ai-original-editor-section-head"><div><b>2</b><span><strong>中文资料与双语标题</strong><small>中文资料可直接编辑，翻译按钮会写入对应语言栏</small></span></div></div>
+                            <div class="ai-original-editor-form-grid">
+                                <label class="wide"><span>1688 标题（可编辑）</span><input id="ai-original-editor-source-title" type="text" maxlength="255"></label>
+                                <label><span>西班牙语标题 <em>≤60</em></span><input id="ai-original-editor-title-es" type="text" maxlength="60"></label>
+                                <label><span>葡萄牙语标题 <em>≤60</em></span><input id="ai-original-editor-title-pt" type="text" maxlength="60"></label>
+                                <label class="wide"><span>1688 / 中文描述（可编辑）</span><textarea id="ai-original-editor-source-description" rows="6" maxlength="50000"></textarea></label>
+                                <label><span>西班牙语描述</span><textarea id="ai-original-editor-description-es" rows="8" maxlength="50000"></textarea><button class="secondary ai-original-translate-button" type="button" onclick="translateAiOriginalEditor('es')">翻译为西班牙语</button></label>
+                                <label><span>葡萄牙语描述</span><textarea id="ai-original-editor-description-pt" rows="8" maxlength="50000"></textarea><button class="secondary ai-original-translate-button" type="button" onclick="translateAiOriginalEditor('pt')">翻译为葡萄牙语</button></label>
+                            </div>
+                        </section>
+
+                        <section class="ai-original-editor-section">
+                            <div class="ai-original-editor-section-head"><div><b>3</b><span><strong>类目字段</strong><small>必填字段需要全部填写；选填字段按实际商品补充</small></span></div></div>
+                            <h4>必填字段</h4><div class="ai-original-editor-attribute-grid" id="ai-original-editor-required-fields"><p class="ai-original-editor-empty">请先选择 Mercado 类目以读取字段。</p></div>
+                            <h4>选填字段</h4><div class="ai-original-editor-attribute-grid" id="ai-original-editor-optional-fields"><p class="ai-original-editor-empty">请先选择 Mercado 类目以读取字段。</p></div>
+                        </section>
+
+                        <section class="ai-original-editor-section">
+                            <div class="ai-original-editor-section-head"><div><b>4</b><span><strong>变体 / SKU</strong><small>规格、价格和库存会与上架数据同步；翻译也会同步规格文本</small></span></div><button class="secondary" type="button" onclick="addAiOriginalEditorVariation()">＋ 添加变体</button></div>
+                            <div class="ai-original-editor-variant-wrap"><table><thead><tr><th>规格组合</th><th>价格</th><th>库存</th><th>操作</th></tr></thead><tbody id="ai-original-editor-variations"></tbody></table></div>
+                        </section>
+                    </div>
+                    <div class="ai-original-editor-footer"><span class="ai-original-status" id="ai-original-editor-status">修改后点击保存；翻译前会先保存当前中文资料。</span><div><button class="secondary" type="button" onclick="closeAiOriginalEditor()">取消</button><button class="primary" type="button" onclick="saveAiOriginalEditor(true)">保存并同步</button></div></div>
+                </dialog>
+
                 <section class="panel ai-original-publish-panel">
-                    <div><span class="ai-original-eyebrow">PUBLISH</span><h3>上架所选 AI 美客多刊登稿</h3><p>只有 AI 属性、双语标题、双语详情、白底主图、重量、类目和净收益均通过校验，才允许直接上架；巴西使用葡萄牙语，其余站点使用西班牙语。</p></div>
+                    <div><span class="ai-original-eyebrow">PUBLISH</span><h3>上架所选 AI 美客多刊登稿</h3><p>先补齐类目、属性、双语文案、白底主图、重量与净收益并审核。上架时按平台当前类目规则再次校验；巴西使用葡萄牙语，其余站点使用西班牙语。</p></div>
                     <label><span>Global Selling 店铺（可多选）</span><select id="ai-original-stores" multiple size="4"></select></label>
                     <fieldset><legend>目标站点（可多选）</legend><label><input type="checkbox" name="ai-original-site" value="MLM" checked> 墨西哥</label><label><input type="checkbox" name="ai-original-site" value="MLB"> 巴西</label><label><input type="checkbox" name="ai-original-site" value="MLA"> 阿根廷</label><label><input type="checkbox" name="ai-original-site" value="MLC"> 智利</label><label><input type="checkbox" name="ai-original-site" value="MCO"> 哥伦比亚</label><label><input type="checkbox" name="ai-original-site" value="MLU"> 乌拉圭</label></fieldset>
                     <label><span>库存</span><input id="ai-original-quantity" type="number" min="1" max="9999" value="500"></label>
@@ -11988,6 +12085,13 @@
                         <button class="primary" id="store-link-bulk-button" type="button" onclick="bulkUpdateStoreLinks()" disabled>修改美客多后台</button>
                         <button class="danger" id="store-link-delete-button" type="button" onclick="deleteSelectedStoreLinks()" disabled>删除所选</button>
                         <span class="store-link-bulk-note" id="store-link-message">先勾选链接并填写修改项；同步进行中也可提交，任务会自动排队</span>
+                    </div>
+                    <div class="store-link-marker-legend" aria-label="店铺链接操作标志">
+                        <span>链接标志：</span>
+                        <span class="store-link-marker promotion">已报活动</span>
+                        <span class="store-link-marker advertising">已开广告</span>
+                        <span class="store-link-marker video">已上传视频</span>
+                        <span>标志显示在商品信息下方。</span>
                     </div>
 
                     <details class="store-link-sync-log-panel" id="store-link-remote-update-panel">
@@ -23212,6 +23316,21 @@
             return `<span class="market-status-tag ${className}">${escapeHtml(labels[text] || value || "未知")}</span>`;
         }
 
+        function storeLinkMarkers(row) {
+            const markers = [];
+            if (row?.promotion_applied || row?.activity_applied || row?.has_promotion || row?.has_activity) {
+                markers.push('<span class="store-link-marker promotion" title="该商品已报名活动">已报活动</span>');
+            }
+            if (row?.advertising_enabled || row?.ad_enabled || row?.has_ad) {
+                const campaign = row.ad_campaign_id ? `：${escapeHtml(row.ad_campaign_id)}` : "";
+                markers.push(`<span class="store-link-marker advertising" title="该商品已启用 Product Ads">已开广告${campaign}</span>`);
+            }
+            if (row?.video_uploaded || row?.has_video) {
+                markers.push('<span class="store-link-marker video" title="该商品已提交视频">已上传视频</span>');
+            }
+            return markers.length ? `<div class="store-link-markers" aria-label="商品操作标志">${markers.join("")}</div>` : "";
+        }
+
         function renderStoreLinkRows(rows) {
             storeLinkRows = Array.isArray(rows) ? rows : [];
             selectedStoreLinkIds.clear();
@@ -23236,7 +23355,7 @@
                             ${imageUrl ? `<img src="${escapeHtml(imageUrl)}" alt="${escapeHtml(row.title || "商品主图")}" loading="lazy" decoding="async" fetchpriority="low" onerror="this.parentElement.classList.add('missing'); this.remove()">` : ""}
                             <span class="store-link-image-placeholder">暂无主图</span>
                         </span>
-                        <div><strong title="${escapeHtml(row.title || "")}">${escapeHtml(row.title || "未命名商品")}</strong><small>${escapeHtml(row.item_id || "-")}</small></div>
+                        <div><strong title="${escapeHtml(row.title || "")}">${escapeHtml(row.title || "未命名商品")}</strong><small>${escapeHtml(row.item_id || "-")}</small>${storeLinkMarkers(row)}</div>
                     </div>`;
                 return `<tr>
                     <td><input class="market-row-select store-link-row-select" type="checkbox" value="${linkId}" aria-label="选择 ${escapeHtml(row.item_id || "店铺链接")}" onchange="toggleStoreLink(${linkId}, this.checked)"></td>
@@ -23261,6 +23380,14 @@
                 </tr>`;
             }).join("");
             updateStoreLinkSelection();
+        }
+
+        function updateStoreLinkMarkers(linkIds, field, value = true) {
+            const ids = new Set((Array.isArray(linkIds) ? linkIds : [linkIds]).map(Number));
+            storeLinkRows.forEach(row => {
+                if (ids.has(Number(row.id))) row[field] = Boolean(value);
+            });
+            if (ids.size) renderStoreLinkRows(storeLinkRows);
         }
 
         let storeLinkVideoBusy = false;
@@ -23365,11 +23492,16 @@
                 const data = payload.data || {};
                 if (multiple) {
                     const errors = Array.isArray(data.errors) ? data.errors : [];
+                    const successfulIds = (Array.isArray(data.results) ? data.results : [])
+                        .filter(row => row && row.result !== "failed")
+                        .map(row => row.link_id);
+                    updateStoreLinkMarkers(successfulIds, "advertising_enabled");
                     const errorSummary = errors.length
                         ? ` 失败示例：${errors.slice(0, 3).map(row => `${row.item_id || row.link_id}（${row.message || "未知错误"}）`).join("；")}${errors.length > 3 ? "…" : ""}`
                         : "";
                     message.textContent = `批量创建完成：成功 ${Number(data.success_count || 0)} 条，创建或复用 ${Number(data.campaign_count || 0)} 个活动，启用 ${Number(data.activated_ad_group_count || 0)} 个广告组，失败 ${Number(data.failure_count || 0)} 条。${errorSummary}`;
                 } else {
+                    updateStoreLinkMarkers(ids, "advertising_enabled");
                     message.textContent = `投放成功：活动 ${data.campaign_name || campaignName}（ID ${data.campaign_id || "-"}），每日预算 ${data.currency_id || ""} ${storeLinkNumber(data.budget, 2)}，目标 ROAS ${storeLinkNumber(data.roas_target, 1)}。`;
                 }
                 submit.disabled = true;
@@ -23966,6 +24098,7 @@
                 const payload = await response.json().catch(() => ({}));
                 if (!response.ok || payload.status !== "success") throw new Error(payload.message || "上传失败");
                 const clipUuid = payload.data?.clip_uuid || "";
+                updateStoreLinkMarkers(linkId, "video_uploaded");
                 showResult(`${payload.message || "视频已提交美客多，等待平台审核"}${clipUuid ? `；受理编号：${clipUuid}` : ""}`, "success");
                 if (button) button.textContent = "已提交审核";
                 aiVideoJobsLoaded = false;
@@ -24075,6 +24208,7 @@
                     const payload = JSON.parse(xhr.responseText);
                     succeeded = xhr.status >= 200 && xhr.status < 300 && payload.status === "success";
                     message.textContent = payload.message || `上传失败（${xhr.status}）`;
+                    if (succeeded) updateStoreLinkMarkers(linkId, "video_uploaded");
                 } catch (_) {
                     message.textContent = `服务器返回异常（${xhr.status}），请到美客多后台确认上传结果后再重试。`;
                 }

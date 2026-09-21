@@ -46,4 +46,12 @@ def upload_store_link_video(link_id, upload):
         cbt_item_id, upload.stream, filename,
         [{"site_id": site_id, "logistic_type": logistic_type}],
     )
+    try:
+        from erp.mercadolibre_store_link_marker_store import mark_video_uploaded
+
+        mark_video_uploaded(row, result.get("clip_uuid"))
+    except Exception:
+        # The remote upload has already been accepted; a local UI marker is
+        # best-effort and must not make the result look like a failed upload.
+        pass
     return {"link_id": int(link_id), "item_id": row["item_id"], **result}

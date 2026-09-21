@@ -694,6 +694,8 @@ if USE_DB_API:
     db_upsert_zying_products_to_products = bit_db_api.upsert_zying_products_to_products
     db_upsert_ai_original_product = bit_db_api.upsert_ai_original_product
     db_update_ai_original_product = bit_db_api.update_ai_original_product
+    db_update_ai_original_listing = bit_db_api.update_ai_original_listing
+    db_translate_ai_original_listing = bit_db_api.translate_ai_original_listing
     db_sync_zying_product_developers = bit_db_api.sync_zying_product_developers
     db_get_existing_zying_product_ids = bit_db_api.get_existing_zying_product_ids
     db_get_zying_risk_candidates = bit_db_api.get_zying_risk_candidates
@@ -860,6 +862,8 @@ else:
         upsert_zying_products_to_products as db_upsert_zying_products_to_products,
         upsert_ai_original_product as db_upsert_ai_original_product,
         update_ai_original_product as db_update_ai_original_product,
+        update_ai_original_listing as db_update_ai_original_listing,
+        translate_ai_original_listing as db_translate_ai_original_listing,
         sync_zying_product_developers as db_sync_zying_product_list_developers,
         upsert_collection_items as db_upsert_mercado_collection_items,
     )
@@ -1667,6 +1671,13 @@ def get_current_workbench_user():
     session_user = session.get("workbench_user")
     if not session_user:
         return None
+    # A pre-access-control session has no database user id. Keep it in the
+    # compatibility path on later requests instead of converting it once and
+    # then trying to reload user id=None from MySQL, which silently logs the
+    # user out on the next protected request.
+    if session_user.get("_legacy_compat") and not session_user.get("id"):
+        g.workbench_user = session_user
+        return g.workbench_user
     # 兼容升级前的会话和测试注入会话；升级前的会话固定归入 default
     # 客户并重新带上隔离字段，不能因为缺少版本字段而绕过客户边界。
     if session_user.get("access_version") != 1:
@@ -1676,6 +1687,9 @@ def get_current_workbench_user():
         legacy_user.setdefault(
             "is_platform_admin", legacy_user.get("role_key") == "super_admin"
         )
+        legacy_user.setdefault("permissions", ["*"])
+        if not legacy_user.get("id"):
+            legacy_user["_legacy_compat"] = True
         legacy_user["access_version"] = 1
         session["workbench_user"] = legacy_user
         g.workbench_user = legacy_user
@@ -2558,8 +2572,45 @@ from erp.ai_weight_price.config import data_dir as ai_weight_price_data_dir
 from erp.ai_weight_price.service import Service as AIWeightPriceService
 from erp.ai_weight_price.web import create_blueprint as create_ai_weight_price_blueprint
 
-ai_weight_price_service = AIWeightPriceService(ai_weight_price_data_dir())
+ai_weight_price_service = AIWeightPriceService(
+    ai_weight_price_data_dir(),
+    storage_backend="mysql" if RUNTIME_SETTINGS.is_server else "api",
+)
 app.register_blueprint(create_ai_weight_price_blueprint(ai_weight_price_service, _authorize_ai_weight_price))
+
+
+AI_WEIGHT_PRICE_STORE_METHODS = frozenset({
+    "log", "logs", "state", "set_state", "save_run", "clear_run", "record_run_item",
+    "has_run_item", "run_report", "run_items", "get", "add", "update", "exception", "skip",
+    "list", "counts", "run_counts", "reset_scope", "include_in_scope", "quota", "reserve",
+    "sent", "recover", "csv", "export",
+})
+
+
+@app.route("/api/db/ai-weight-price/store", methods=["POST"])
+@internal_api_required
+def api_db_ai_weight_price_store():
+    """Proxy the client execution process to the server-owned AWP MySQL store."""
+    blocked = reject_db_api_client_mode()
+    if blocked:
+        return blocked
+    data = request.get_json(silent=True) or {}
+    method = str(data.get("method") or "").strip()
+    args = data.get("args") or []
+    kwargs = data.get("kwargs") or {}
+    if method not in AI_WEIGHT_PRICE_STORE_METHODS or not isinstance(args, list) or not isinstance(kwargs, dict):
+        return jsonify({"status": "error", "message": "AI核重核价数据库操作无效"}), 400
+    try:
+        result = getattr(ai_weight_price_service.store, method)(*args, **kwargs)
+        if isinstance(result, bytes):
+            import base64
+            result = {"__bytes__": base64.b64encode(result).decode("ascii")}
+        return jsonify({"status": "success", "data": result})
+    except (KeyError, ValueError) as exc:
+        return jsonify({"status": "error", "message": str(exc)}), 400
+    except Exception as exc:
+        logging.exception("AI核重核价 MySQL 数据接口失败：%s", method)
+        return jsonify({"status": "error", "message": f"AI核重核价数据库操作失败：{exc}"}), 500
 
 from bit.mercado_promotion_routes import create_promotions_blueprint
 
@@ -13760,6 +13811,41 @@ def api_db_update_ai_original_product(product_item_id):
         return jsonify({"status": "error", "message": str(exc)}), 404
 
 
+@app.route('/api/db/ai-original-products/<int:product_item_id>/listing', methods=['PATCH'])
+@internal_api_required
+def api_db_update_ai_original_listing(product_item_id):
+    blocked = reject_db_api_client_mode()
+    if blocked:
+        return blocked
+    try:
+        row = db_update_ai_original_listing(
+            product_item_id, request.get_json(silent=True) or {}
+        )
+        return jsonify({"status": "success", "data": row})
+    except ValueError as exc:
+        return jsonify({"status": "error", "message": str(exc)}), 400
+    except KeyError as exc:
+        return jsonify({"status": "error", "message": str(exc)}), 404
+
+
+@app.route('/api/db/ai-original-products/<int:product_item_id>/translate', methods=['POST'])
+@internal_api_required
+def api_db_translate_ai_original_listing(product_item_id):
+    blocked = reject_db_api_client_mode()
+    if blocked:
+        return blocked
+    try:
+        data = request.get_json(silent=True) or {}
+        row = db_translate_ai_original_listing(
+            product_item_id, data.get("language", "")
+        )
+        return jsonify({"status": "success", "data": row})
+    except ValueError as exc:
+        return jsonify({"status": "error", "message": str(exc)}), 400
+    except KeyError as exc:
+        return jsonify({"status": "error", "message": str(exc)}), 404
+
+
 @app.route('/api/db/mercado-management-categories', methods=['GET', 'POST'])
 @internal_api_required
 def api_db_mercado_management_categories():
@@ -17481,6 +17567,148 @@ def api_update_ai_original_product(product_item_id):
         row = db_update_ai_original_product(
             product_item_id, {key: value for key, value in data.items() if key in allowed}
         )
+        return jsonify({"status": "success", "data": row})
+    except ValueError as exc:
+        return jsonify({"status": "error", "message": str(exc)}), 400
+    except KeyError as exc:
+        return jsonify({"status": "error", "message": str(exc)}), 404
+
+
+def _ai_original_category_client(requested_token_id=""):
+    """Build a server-side Mercado client without ever returning its secret."""
+    from erp.mercadolibre_batch_publish import DatabaseMercadoLibreClient
+
+    token_data = _filter_mercado_tokens_for_user(
+        bit_db_api.list_mercado_store_tokens() or {}
+    )
+    allowed = [
+        row for row in token_data.get("rows") or []
+        if bool(row.get("enabled", True))
+        and str(row.get("site_id") or "").strip().upper() in {"", "CBT"}
+    ]
+    requested = int(requested_token_id or 0)
+    if requested:
+        allowed = [row for row in allowed if int(row.get("id") or 0) == requested]
+    if not allowed:
+        raise ValueError("没有可用的 CBT Mercado 店铺授权，请先授权店铺")
+    token_id = int(allowed[0].get("id") or 0)
+    return DatabaseMercadoLibreClient(token_id), token_id
+
+
+def _ai_original_category_definition(definition):
+    from erp.mercadolibre_attribute_rules import is_read_only_attribute, is_required_attribute
+
+    definition = dict(definition or {})
+    values = definition.get("values")
+    if not isinstance(values, list):
+        values = definition.get("allowed_values")
+    values = [
+        {
+            "id": str(value.get("id") or ""),
+            "name": str(value.get("name") or value.get("value_name") or ""),
+        }
+        for value in (values or [])
+        if isinstance(value, dict) and (value.get("id") or value.get("name") or value.get("value_name"))
+    ][:200]
+    return {
+        "id": str(definition.get("id") or ""),
+        "name": str(definition.get("name") or definition.get("id") or ""),
+        "value_type": str(definition.get("value_type") or "string"),
+        "tags": definition.get("tags") or {},
+        "required": bool(is_required_attribute(definition) and not is_read_only_attribute(definition)),
+        "read_only": bool(is_read_only_attribute(definition)),
+        "values": values,
+        "hierarchy": definition.get("hierarchy") or "ITEM",
+    }
+
+
+@app.route("/api/ai-original-products/categories/search", methods=["GET"])
+@login_required
+def api_ai_original_category_search():
+    try:
+        query = str(request.args.get("q") or "").strip()[:160]
+        if len(query) < 2:
+            return jsonify({"status": "success", "data": {"rows": []}})
+        client, token_id = _ai_original_category_client(request.args.get("token_id"))
+        suggestions = client.request(
+            "GET", "/marketplace/domain_discovery/search", params={"q": query}
+        )
+        rows = []
+        for suggestion in suggestions if isinstance(suggestions, list) else []:
+            if not isinstance(suggestion, dict):
+                continue
+            category_id = str(suggestion.get("category_id") or "").strip().upper()
+            if not category_id.startswith("CBT"):
+                continue
+            rows.append({
+                "category_id": category_id,
+                "category_name": str(
+                    suggestion.get("category_name") or suggestion.get("name") or category_id
+                ),
+                "attributes": [
+                    _ai_original_category_definition(value)
+                    for value in suggestion.get("attributes") or []
+                    if isinstance(value, dict)
+                ],
+            })
+        return jsonify({"status": "success", "data": {"rows": rows[:20], "token_id": token_id}})
+    except ValueError as exc:
+        return jsonify({"status": "error", "message": str(exc)}), 400
+    except Exception as exc:
+        logging.exception("搜索 Mercado 分类失败")
+        return jsonify({"status": "error", "message": f"搜索 Mercado 分类失败：{exc}"}), 502
+
+
+@app.route("/api/ai-original-products/categories/<string:category_id>/attributes", methods=["GET"])
+@login_required
+def api_ai_original_category_attributes(category_id):
+    try:
+        normalized_id = str(category_id or "").strip().upper()
+        if not re.fullmatch(r"CBT[A-Z0-9_-]{1,63}", normalized_id):
+            raise ValueError("Mercado 分类编号无效")
+        client, token_id = _ai_original_category_client(request.args.get("token_id"))
+        from erp.mercadolibre_follow_sell import _category_attribute_schema
+
+        schema = _category_attribute_schema(client, normalized_id)
+        if schema is None:
+            raise ValueError(f"无法读取分类 {normalized_id} 的属性规则")
+        rows = [_ai_original_category_definition(value) for value in schema]
+        return jsonify({
+            "status": "success",
+            "data": {
+                "category_id": normalized_id,
+                "token_id": token_id,
+                "required": [row for row in rows if row["required"]],
+                "optional": [row for row in rows if not row["required"]],
+            },
+        })
+    except ValueError as exc:
+        return jsonify({"status": "error", "message": str(exc)}), 400
+    except Exception as exc:
+        logging.exception("读取 Mercado 分类属性失败")
+        return jsonify({"status": "error", "message": f"读取 Mercado 分类属性失败：{exc}"}), 502
+
+
+@app.route("/api/ai-original-products/<int:product_item_id>/listing", methods=["PATCH"])
+@login_required
+def api_update_ai_original_listing(product_item_id):
+    try:
+        row = db_update_ai_original_listing(
+            product_item_id, request.get_json(silent=True) or {}
+        )
+        return jsonify({"status": "success", "data": row})
+    except ValueError as exc:
+        return jsonify({"status": "error", "message": str(exc)}), 400
+    except KeyError as exc:
+        return jsonify({"status": "error", "message": str(exc)}), 404
+
+
+@app.route("/api/ai-original-products/<int:product_item_id>/translate", methods=["POST"])
+@login_required
+def api_translate_ai_original_listing(product_item_id):
+    try:
+        data = request.get_json(silent=True) or {}
+        row = db_translate_ai_original_listing(product_item_id, data.get("language", ""))
         return jsonify({"status": "success", "data": row})
     except ValueError as exc:
         return jsonify({"status": "error", "message": str(exc)}), 400

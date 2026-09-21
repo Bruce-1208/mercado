@@ -459,6 +459,35 @@ def _prepared_listing_from_product_row(
             # The AI listing owns the attributes that will be sent to Mercado;
             # the 1688 attributes remain untouched in ``original_1688``.
             source["attributes"] = generated_attributes
+        generated_variations = []
+        for raw_variation in prepared.get("variations") or []:
+            if not isinstance(raw_variation, Mapping):
+                continue
+            variation = dict(raw_variation)
+            localized_suffix = "pt" if portuguese else "es"
+            for container_key in ("attribute_combinations", "attributes", "properties"):
+                localized_attributes = []
+                for raw_attribute in variation.get(container_key) or []:
+                    if not isinstance(raw_attribute, Mapping):
+                        continue
+                    attribute = dict(raw_attribute)
+                    attribute["name"] = (
+                        attribute.get(f"name_{localized_suffix}") or attribute.get("name")
+                    )
+                    attribute["value_name"] = (
+                        attribute.get(f"value_name_{localized_suffix}")
+                        or attribute.get("value_name")
+                        or attribute.get(f"value_{localized_suffix}")
+                        or attribute.get("value")
+                    )
+                    localized_attributes.append(attribute)
+                if localized_attributes:
+                    variation[container_key] = localized_attributes
+            for key in ("name", "label", "sku_name", "title"):
+                variation[key] = variation.get(f"{key}_{localized_suffix}") or variation.get(key)
+            generated_variations.append(variation)
+        if generated_variations:
+            source["variations"] = generated_variations
         snapshot["description"] = {"plain_text": description_text}
     source.setdefault("id", str(row.get("source_item_id") or ""))
     source.setdefault("site_id", str(source.get("id") or "")[:3])

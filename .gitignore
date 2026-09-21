@@ -41,3 +41,4 @@ bit/runtime_locks/
 cache/mercado_playwright_profile/
 *.log
 bit/logs/*_history.json
+.data/store_link_markers.sqlite3

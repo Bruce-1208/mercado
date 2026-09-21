@@ -991,6 +991,8 @@ def test_product_publish_record_list_endpoint_supports_filters():
         ],
     }
     with patch.object(
+        workbench, "_authorized_token_ids_for_user", return_value=None
+    ), patch.object(
         workbench, "db_list_mercado_product_publish_records", return_value=records
     ) as list_records:
         response = client.get(
@@ -1161,6 +1163,8 @@ def test_product_list_filters_and_review_status_endpoint():
     client = _client()
     rows = {"total": 1, "rows": [{"id": 9, "review_status": "risk"}]}
     with patch.object(
+        workbench, "_authorized_token_ids_for_user", return_value=None
+    ), patch.object(
         workbench, "db_list_mercado_product_items", return_value=rows
     ) as list_products:
         response = client.get(
@@ -1212,6 +1216,8 @@ def test_product_list_supports_zying_category_and_developer_filters():
     client = _client()
     rows = {"total": 0, "rows": []}
     with patch.object(
+        workbench, "_authorized_token_ids_for_user", return_value=None
+    ), patch.object(
         workbench, "db_list_mercado_product_items", return_value=rows
     ) as list_products:
         response = client.get(

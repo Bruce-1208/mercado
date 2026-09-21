@@ -656,6 +656,18 @@ def update_product_ads_ad_groups(
                 int(group["campaign_id"]),
                 target_status,
             )
+            try:
+                from erp.mercadolibre_store_link_marker_store import mark_advertising_status
+
+                mark_advertising_status(
+                    token_id=token_id,
+                    site_id=site_id,
+                    item_ids=group.get("item_ids") or (),
+                    enabled=target_status == "active",
+                    campaign_id=group.get("campaign_id"),
+                )
+            except Exception:
+                pass
             results.append({
                 **group,
                 "status": target_status,

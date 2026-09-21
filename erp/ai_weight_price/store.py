@@ -1,6 +1,9 @@
 import csv
+import base64
 import io
 import json
+import os
+import re
 import sqlite3
 import time
 from contextlib import contextmanager
@@ -11,19 +14,167 @@ STATUSES = ("pending", "waiting_merchant_reply", "success", "exception", "skippe
 COMPLETED = ("success", "skipped", "blocked", "risk")
 CHINA = timezone(timedelta(hours=8))
 
+MYSQL_TABLES = {
+    "tasks": "erp_ai_weight_price_tasks",
+    "collection_items": "erp_ai_weight_price_collection_items",
+    "merchants": "erp_ai_weight_price_merchants",
+    "events": "erp_ai_weight_price_events",
+    "state": "erp_ai_weight_price_state",
+    "runs": "erp_ai_weight_price_runs",
+    "run_items": "erp_ai_weight_price_run_items",
+}
+
+
+class _CompatRow(dict):
+    """DictCursor row with the positional access used by the SQLite store."""
+
+    def __getitem__(self, key):
+        if isinstance(key, int):
+            return list(self.values())[key]
+        return super().__getitem__(key)
+
+
+class _CompatResult:
+    def __init__(self, rows, rowcount):
+        self._rows = rows
+        self.rowcount = rowcount
+
+    def fetchone(self):
+        return self._rows[0] if self._rows else None
+
+    def fetchall(self):
+        return list(self._rows)
+
+
+def _mysql_sql(sql):
+    """Translate the small SQLite SQL dialect used by Store to MySQL."""
+
+    sql = sql.replace("BEGIN IMMEDIATE", "START TRANSACTION")
+    sql = sql.replace("json_extract(payload,'$.title')", "JSON_UNQUOTE(JSON_EXTRACT(payload,'$.title'))")
+    sql = sql.replace("json_extract(t.payload,'$.title')", "JSON_UNQUOTE(JSON_EXTRACT(t.payload,'$.title'))")
+    sql = sql.replace("json_extract(payload,'$.source_page')", "JSON_UNQUOTE(JSON_EXTRACT(payload,'$.source_page'))")
+    sql = sql.replace("json_extract(payload,'$.source_index')", "JSON_UNQUOTE(JSON_EXTRACT(payload,'$.source_index'))")
+    sql = sql.replace("CAST(JSON_UNQUOTE(JSON_EXTRACT(payload,'$.source_page')) AS INTEGER)",
+                      "CAST(JSON_UNQUOTE(JSON_EXTRACT(payload,'$.source_page')) AS UNSIGNED)")
+    sql = sql.replace("CAST(JSON_UNQUOTE(JSON_EXTRACT(payload,'$.source_index')) AS INTEGER)",
+                      "CAST(JSON_UNQUOTE(JSON_EXTRACT(payload,'$.source_index')) AS UNSIGNED)")
+    for source, target in MYSQL_TABLES.items():
+        sql = re.sub(rf"(?<![A-Za-z0-9_]){re.escape(source)}(?![A-Za-z0-9_])",
+                     f"`{target}`", sql)
+    sql = re.sub(r"(?<![`A-Za-z0-9_])key(?![`A-Za-z0-9_])", "`key`", sql)
+    return sql.replace("?", "%s")
+
+
+class _MySQLConnection:
+    def __init__(self, connection):
+        self.connection = connection
+
+    def execute(self, sql, args=()):
+        cursor = self.connection.cursor()
+        try:
+            cursor.execute(_mysql_sql(sql), args)
+            rows = []
+            if cursor.description:
+                names = [item[0] for item in cursor.description]
+                rows = [
+                    _CompatRow(row) if isinstance(row, dict) else _CompatRow(zip(names, row))
+                    for row in cursor.fetchall()
+                ]
+            return _CompatResult(rows, cursor.rowcount)
+        finally:
+            cursor.close()
+
+    def commit(self):
+        self.connection.commit()
+
+    def rollback(self):
+        self.connection.rollback()
+
+    def close(self):
+        self.connection.close()
+
+
+def _create_mysql_schema(db):
+    db.execute("""
+        CREATE TABLE IF NOT EXISTS tasks (
+          erp_goods_id VARCHAR(191) PRIMARY KEY, status VARCHAR(32) NOT NULL,
+          stage VARCHAR(64) NOT NULL, payload LONGTEXT NOT NULL,
+          created_at DOUBLE NOT NULL, updated_at DOUBLE NOT NULL,
+          KEY tasks_status (status, updated_at)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+    """)
+    db.execute("""
+        CREATE TABLE IF NOT EXISTS collection_items (
+          scope VARCHAR(191) NOT NULL, erp_goods_id VARCHAR(191) NOT NULL,
+          page INT NOT NULL, PRIMARY KEY(scope, erp_goods_id),
+          KEY collection_items_product (erp_goods_id)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+    """)
+    db.execute("""
+        CREATE TABLE IF NOT EXISTS merchants (
+          merchant_id VARCHAR(191) PRIMARY KEY, task_id VARCHAR(191) NOT NULL,
+          day VARCHAR(10) NOT NULL, reserved_at DOUBLE NOT NULL,
+          sent_at DOUBLE NULL, conversation_url VARCHAR(2048), message LONGTEXT NOT NULL,
+          KEY merchants_day (day), KEY merchants_task (task_id)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+    """)
+    db.execute("""
+        CREATE TABLE IF NOT EXISTS events (
+          id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY, at DOUBLE NOT NULL,
+          level VARCHAR(16) NOT NULL, task_id VARCHAR(191), message LONGTEXT NOT NULL,
+          KEY events_task (task_id), KEY events_at (at)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+    """)
+    db.execute("""
+        CREATE TABLE IF NOT EXISTS state (
+          `key` VARCHAR(191) PRIMARY KEY, value LONGTEXT NOT NULL
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+    """)
+    db.execute("""
+        CREATE TABLE IF NOT EXISTS runs (
+          run_id VARCHAR(191) PRIMARY KEY, payload LONGTEXT NOT NULL
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+    """)
+    db.execute("""
+        CREATE TABLE IF NOT EXISTS run_items (
+          run_id VARCHAR(191) NOT NULL, erp_goods_id VARCHAR(191) NOT NULL,
+          sequence INT NOT NULL, payload LONGTEXT NOT NULL,
+          PRIMARY KEY(run_id, erp_goods_id), KEY run_items_order(run_id, sequence)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+    """)
+
+
+def _ensure_mysql_schema(db):
+    expected = set(MYSQL_TABLES.values())
+    placeholders = ",".join("?" for _ in expected)
+    rows = db.execute(
+        """SELECT TABLE_NAME FROM information_schema.TABLES
+           WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME IN (""" + placeholders + ")",
+        tuple(expected),
+    ).fetchall()
+    if {str(row["TABLE_NAME"]) for row in rows} >= expected:
+        return
+    _create_mysql_schema(db)
+
 
 def business_day(now):
     return datetime.fromtimestamp(now, CHINA).strftime("%Y-%m-%d")
 
 
 class Store:
-    def __init__(self, root):
+    def __init__(self, root, backend=None, connection_factory=None):
         self.root = Path(root)
         self.root.mkdir(parents=True, exist_ok=True)
-        self.path = self.root / "tasks.sqlite3"
+        self.backend = str(backend or os.environ.get("AI_WEIGHT_PRICE_STORAGE") or "sqlite").strip().lower()
+        if self.backend not in {"sqlite", "mysql"}:
+            raise ValueError("AI核重核价存储后端必须是 sqlite 或 mysql")
+        self.path = self.root / "tasks.sqlite3" if self.backend == "sqlite" else None
+        self.connection_factory = connection_factory
         self.dirty = True
-        with self.connect() as db:
-            db.executescript("""
+        self.read_only = False
+        if self.backend == "sqlite":
+            with self.connect() as db:
+                db.executescript("""
                 PRAGMA journal_mode=WAL;
                 CREATE TABLE IF NOT EXISTS tasks (
                   erp_goods_id TEXT PRIMARY KEY, status TEXT NOT NULL,
@@ -44,16 +195,49 @@ class Store:
                 CREATE TABLE IF NOT EXISTS run_items (run_id TEXT NOT NULL, erp_goods_id TEXT NOT NULL,
                   sequence INTEGER NOT NULL, payload TEXT NOT NULL, PRIMARY KEY(run_id, erp_goods_id));
             """)
+        else:
+            with self.connect() as db:
+                _ensure_mysql_schema(db)
+                flags = db.execute(
+                    "SELECT @@GLOBAL.read_only AS read_only, @@GLOBAL.super_read_only AS super_read_only"
+                ).fetchone()
+                self.read_only = bool(flags and (
+                    str(flags.get("read_only", "")).upper() in {"1", "ON", "TRUE"}
+                    or str(flags.get("super_read_only", "")).upper() in {"1", "ON", "TRUE"}
+                ))
 
     @contextmanager
     def connect(self):
-        db = sqlite3.connect(self.path, timeout=15)
-        db.row_factory = sqlite3.Row
+        if self.backend == "sqlite":
+            db = sqlite3.connect(self.path, timeout=15)
+            db.row_factory = sqlite3.Row
+            try:
+                with db:
+                    yield db
+            finally:
+                db.close()
+            return
+
+        if self.connection_factory is None:
+            from bit.bit_mysql import config, pymysql
+            connection = pymysql.connect(**config)
+        else:
+            connection = self.connection_factory()
+        db = _MySQLConnection(connection)
         try:
-            with db:
-                yield db
+            yield db
+            db.commit()
+        except Exception:
+            db.rollback()
+            raise
         finally:
             db.close()
+
+    @property
+    def storage_description(self):
+        if self.backend == "mysql":
+            return "MySQL（服务器中心库；只读）" if self.read_only else "MySQL（服务器中心库）"
+        return str(self.path)
 
     def log(self, message, task_id=None, level="INFO"):
         with self.connect() as db:
@@ -80,11 +264,20 @@ class Store:
 
     def set_state(self, key, value):
         with self.connect() as db:
-            db.execute("INSERT OR REPLACE INTO state VALUES(?,?)", (key, json.dumps(value, ensure_ascii=False)))
+            payload = json.dumps(value, ensure_ascii=False)
+            if self.backend == "mysql":
+                db.execute("INSERT INTO state VALUES(?,?) ON DUPLICATE KEY UPDATE value=VALUES(value)", (key, payload))
+            else:
+                db.execute("INSERT OR REPLACE INTO state VALUES(?,?)", (key, payload))
 
     def save_run(self, run):
         with self.connect() as db:
-            db.execute("INSERT OR REPLACE INTO runs VALUES(?,?)", (run["run_id"], json.dumps(run, ensure_ascii=False)))
+            payload = json.dumps(run, ensure_ascii=False)
+            if self.backend == "mysql":
+                db.execute("INSERT INTO runs VALUES(?,?) ON DUPLICATE KEY UPDATE payload=VALUES(payload)",
+                           (run["run_id"], payload))
+            else:
+                db.execute("INSERT OR REPLACE INTO runs VALUES(?,?)", (run["run_id"], payload))
         self.set_state("latest_run_id", run["run_id"])
 
     def clear_run(self, run_id):
@@ -108,9 +301,14 @@ class Store:
             return
         payload = {**self.get(key), **details}
         with self.connect() as db:
-            db.execute("INSERT INTO run_items VALUES(?,?,(SELECT COUNT(*)+1 FROM run_items WHERE run_id=?),?) "
-                       "ON CONFLICT(run_id,erp_goods_id) DO UPDATE SET payload=excluded.payload",
-                       (run_id, key, run_id, json.dumps(payload, ensure_ascii=False)))
+            if self.backend == "mysql":
+                db.execute("INSERT INTO run_items VALUES(?,?,(SELECT COUNT(*)+1 FROM run_items ri WHERE ri.run_id=?),?) "
+                           "ON DUPLICATE KEY UPDATE payload=VALUES(payload)",
+                           (run_id, key, run_id, json.dumps(payload, ensure_ascii=False)))
+            else:
+                db.execute("INSERT INTO run_items VALUES(?,?,(SELECT COUNT(*)+1 FROM run_items WHERE run_id=?),?) "
+                           "ON CONFLICT(run_id,erp_goods_id) DO UPDATE SET payload=excluded.payload",
+                           (run_id, key, run_id, json.dumps(payload, ensure_ascii=False)))
 
     def has_run_item(self, run_id, key):
         if not run_id:
@@ -178,8 +376,8 @@ class Store:
             raise ValueError("ERP商品ID和标题不能为空")
         now = time.time()
         with self.connect() as db:
-            changed = db.execute("INSERT OR IGNORE INTO tasks VALUES(?,?,?,?,?,?)",
-                                 (key, "pending", "collected", json.dumps(record, ensure_ascii=False), now, now)).rowcount
+            sql = "INSERT IGNORE INTO tasks VALUES(?,?,?,?,?,?)" if self.backend == "mysql" else "INSERT OR IGNORE INTO tasks VALUES(?,?,?,?,?,?)"
+            changed = db.execute(sql, (key, "pending", "collected", json.dumps(record, ensure_ascii=False), now, now)).rowcount
         self.dirty = self.dirty or bool(changed)
         return changed
 
@@ -262,7 +460,11 @@ class Store:
 
     def include_in_scope(self, scope, key, page):
         with self.connect() as db:
-            db.execute("INSERT OR REPLACE INTO collection_items VALUES(?,?,?)", (scope, key, page))
+            if self.backend == "mysql":
+                db.execute("INSERT INTO collection_items VALUES(?,?,?) ON DUPLICATE KEY UPDATE page=VALUES(page)",
+                           (scope, key, page))
+            else:
+                db.execute("INSERT OR REPLACE INTO collection_items VALUES(?,?,?)", (scope, key, page))
 
     def quota(self, now=None):
         now = time.time() if now is None else now
@@ -356,3 +558,61 @@ class Store:
             except PermissionError:
                 self.log(f"报表 {name}.csv 被 Excel 占用；关闭文件后重新导出", level="WARNING")
         self.dirty = False
+
+
+REMOTE_METHODS = frozenset({
+    "log", "logs", "state", "set_state", "save_run", "clear_run", "record_run_item",
+    "has_run_item", "run_report", "run_items", "get", "add", "update", "exception", "skip",
+    "list", "counts", "run_counts", "reset_scope", "include_in_scope", "quota", "reserve",
+    "sent", "recover", "csv", "export",
+})
+
+
+class RemoteStore:
+    """Client-side proxy for the server-owned MySQL Store.
+
+    The client still needs ``root`` for its local Edge profile and visual
+    frames, but no task database is created there. Every business-data
+    operation goes through the authenticated internal database API.
+    """
+
+    def __init__(self, root):
+        self.root = Path(root)
+        self.root.mkdir(parents=True, exist_ok=True)
+        self.path = None
+        self.backend = "api"
+        self.dirty = True
+
+    @property
+    def storage_description(self):
+        return "服务器 MySQL（API）"
+
+    def _call(self, method, *args, **kwargs):
+        from bit.bit_db_api import _request
+
+        try:
+            value = _request(
+                "POST",
+                "/api/db/ai-weight-price/store",
+                json={"method": method, "args": list(args), "kwargs": kwargs},
+                timeout=120,
+            )
+        except RuntimeError as exc:
+            message = str(exc)
+            if "任务不存在" in message or "执行批次不存在" in message:
+                raise KeyError(message) from exc
+            raise ValueError(message) from exc
+        if isinstance(value, dict) and value.get("__bytes__"):
+            return base64.b64decode(value["__bytes__"])
+        return value
+
+    def __getattr__(self, name):
+        if name not in REMOTE_METHODS:
+            raise AttributeError(name)
+        return lambda *args, **kwargs: self._call(name, *args, **kwargs)
+
+
+__all__ = [
+    "CHINA", "COMPLETED", "REMOTE_METHODS", "RemoteStore", "STATUSES", "Store",
+    "business_day",
+]
