@@ -999,7 +999,7 @@ def list_mercado_store_links(
     sort_order="",
     current_only=True,
     page=1,
-    page_size=500,
+    page_size=200,
 ):
     params = {
         "search": search or "",
@@ -1017,7 +1017,7 @@ def list_mercado_store_links(
         ),
         "current_only": "1" if current_only else "0",
         "page": int(page or 1),
-        "page_size": max(1, min(int(page_size or 500), 1000)),
+        "page_size": max(1, min(int(page_size or 200), 1000)),
     }
     if token_id not in (None, ""):
         params["token_id"] = int(token_id)

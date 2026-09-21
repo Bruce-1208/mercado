@@ -64,7 +64,9 @@ def create_blueprint(service, authorize=None):
 
     @bp.get("/api/ai-weight-price/status")
     def status():
-        return jsonify(**service.status(), computer=socket.gethostname())
+        execution_terminal = socket.gethostname()
+        return jsonify(**service.status(), computer=execution_terminal,
+                       execution_terminal=execution_terminal)
 
     @bp.post("/api/ai-weight-price/model/check")
     def check_model():

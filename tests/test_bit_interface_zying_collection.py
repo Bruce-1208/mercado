@@ -80,6 +80,31 @@ def test_build_zying_collection_params_rejects_end_before_start():
         )
 
 
+def test_build_zying_collection_params_accepts_product_cursor_and_limit():
+    params = bit_interface.build_zying_collection_params(
+        {
+            "start_product_id": " 801623017 ",
+            "max_items": 25,
+            "category": "202170568",
+        }
+    )
+
+    assert params["start_page"] == 1
+    assert params["number"] == 10000
+    assert params["start_product_id"] == "801623017"
+    assert params["max_items"] == 25
+
+
+@pytest.mark.parametrize("payload", [
+    {"start_product_id": "abc", "max_items": 10},
+    {"start_product_id": "1", "max_items": 0},
+    {"start_product_id": "1", "max_items": 10001},
+])
+def test_build_zying_collection_params_rejects_bad_product_cursor(payload):
+    with pytest.raises(ValueError):
+        bit_interface.build_zying_collection_params(payload)
+
+
 def test_build_zying_collection_params_accepts_product_developer():
     params = bit_interface.build_zying_collection_params(
         {

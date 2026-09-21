@@ -13,7 +13,7 @@
       <h1>泽顺插件</h1>
       <p>商品采集工作台</p>
     </div>
-    <span class="version">v1.5.5</span>
+    <span class="version">v1.6.0</span>
   </header>
   <main>
     <div class="account-card">
@@ -23,6 +23,7 @@
     <nav class="mode-tabs" aria-label="插件功能">
       <button id="product-mode" class="mode-tab active" type="button">美客多采集</button>
       <button id="zying-mode" class="mode-tab" type="button">智赢产品采集</button>
+      <button id="zying-infringement-mode" class="mode-tab" type="button">智赢查侵权</button>
       <button id="weight-price-mode" class="mode-tab" type="button">核重核价</button>
       <button id="purchase-mode" class="mode-tab" type="button">订单物流</button>
     </nav>
@@ -84,8 +85,8 @@
         <button id="zying-open-login" class="secondary inline-action" type="button">打开智赢网页版登录页面</button>
         <button id="zying-refresh" class="secondary inline-action" type="button">读取当前网页分类与开发</button>
         <div class="zying-grid">
-          <label>起始页（必填）<input id="zying-start-page" type="number" min="1" max="10000" required value="1"></label>
-          <label>结束页（必填）<input id="zying-end-page" type="number" min="1" max="10000" required value="1"></label>
+          <label>起始产品编号（可选）<input id="zying-start-product-id" type="text" inputmode="numeric" maxlength="64" placeholder="留空则从分类首件开始"></label>
+          <label>最多产品<input id="zying-max-items" type="number" min="1" max="10000" required value="100"></label>
         </div>
         <label class="zying-field">产品分类
           <select id="zying-category"><option value="">全部分类</option></select>
@@ -93,6 +94,7 @@
         <label class="zying-field">产品开发
           <select id="zying-developer"><option value="">全部产品开发</option></select>
         </label>
+        <p class="product-batch-help">在所选分类的当前排序中，从起始产品编号（含）继续，最多读取指定数量；留空则从分类首件开始。数据库已有编号会直接跳过。</p>
         <div class="zying-actions">
           <button id="zying-start" class="primary" type="button" disabled>启动产品采集</button>
           <button id="zying-stop" class="danger" type="button" disabled>结束</button>
@@ -100,6 +102,35 @@
         <div id="zying-task-status" class="zying-task-status">等待启动</div>
         <div id="zying-summary" class="zying-summary">入库 0 · 已有跳过 0 · 重复 0</div>
         <pre id="zying-log" class="zying-log">等待任务启动…</pre>
+      </section>
+    </div>
+    <div id="zying-infringement-panel" class="mode-panel" hidden>
+      <section class="page-card zying-card">
+        <div class="page-card-heading">
+          <span>智赢产品查侵权</span>
+          <span class="platform-badge zying">DeepSeek</span>
+        </div>
+        <div id="zying-infringement-page-status" class="status">请打开并登录智赢产品列表页。</div>
+        <button id="zying-infringement-open-login" class="secondary inline-action" type="button">打开智赢网页版登录页面</button>
+        <button id="zying-infringement-refresh" class="secondary inline-action" type="button">读取当前网页分类与开发</button>
+        <div class="zying-grid">
+          <label>起始产品编号（可选）<input id="zying-infringement-start-product-id" type="text" inputmode="numeric" maxlength="64" placeholder="留空则从分类首件开始"></label>
+          <label>最多产品<input id="zying-infringement-max-items" type="number" min="1" max="10000" required value="100"></label>
+        </div>
+        <label class="zying-field">产品分类
+          <select id="zying-infringement-category"><option value="">全部分类</option></select>
+        </label>
+        <label class="zying-field">产品开发
+          <select id="zying-infringement-developer"><option value="">全部产品开发</option></select>
+        </label>
+        <p class="product-batch-help">在所选分类的待审核列表中，从起始产品编号（含）继续，最多审核指定数量。标题固定每 20 个交给 DeepSeek；写回前会再次确认状态。</p>
+        <div class="zying-actions">
+          <button id="zying-infringement-start" class="primary" type="button" disabled>启动查侵权</button>
+          <button id="zying-infringement-stop" class="danger" type="button" disabled>结束</button>
+        </div>
+        <div id="zying-infringement-task-status" class="zying-task-status">等待启动</div>
+        <div id="zying-infringement-summary" class="zying-summary">审核 0 · 通过 0 · 疑似 0 · 跳过 0 · 失败 0</div>
+        <pre id="zying-infringement-log" class="zying-log">等待任务启动…</pre>
       </section>
     </div>
     <div id="weight-price-panel" class="mode-panel" hidden>
@@ -122,17 +153,17 @@
           <select id="weight-price-category"><option value="">全部分类</option></select>
         </label>
         <div class="zying-grid">
-          <label>起始页<input id="weight-price-start-page" type="number" min="1" max="10000" value="1"></label>
-          <label>结束页<input id="weight-price-end-page" type="number" min="1" max="10000" value="1"></label>
-          <label>首件序号<input id="weight-price-start-item" type="number" min="1" max="10000" value="1"></label>
+          <label>起始产品编号（可选）<input id="weight-price-start-product-id" type="text" inputmode="numeric" maxlength="64" placeholder="留空则从分类首件开始"></label>
           <label>最多商品<input id="weight-price-limit" type="number" min="1" max="10000" value="10"></label>
         </div>
+        <p class="product-batch-help">在所选分类的当前排序中，从起始产品编号（含）开始逐件核重核价，达到最多商品数后停止。</p>
         <div class="zying-actions">
           <button id="weight-price-start" class="primary" type="button" disabled>启动核重核价</button>
           <button id="weight-price-stop" class="danger" type="button" disabled>停止</button>
         </div>
         <div id="weight-price-start-hint" class="status" role="status" aria-live="polite"></div>
         <div id="weight-price-task-status" class="zying-task-status">等待启动</div>
+        <div id="weight-price-current-meta" class="weight-price-current-meta">当前产品 - · 智赢分类 - · 执行终端 -</div>
         <div id="weight-price-summary" class="zying-summary">屏蔽 0 · 风险 0 · 成功 0 · 异常 0</div>
         <pre id="weight-price-log" class="zying-log">任务启动后可在泽顺控制台查看完整逐件日志。</pre>
       </section>

@@ -2880,6 +2880,8 @@ def collect_zying_products_api(
     category_name="",
     product_developer_id="",
     product_developer_name="",
+    start_product_id="",
+    max_items=None,
     product_writer=None,
     existing_product_id_reader=None,
     product_mirror_writer=None,
@@ -2910,6 +2912,15 @@ def collect_zying_products_api(
         developer_names.get(requested_developer_id)
         or _clean_text(product_developer_name)
     )
+    requested_start_product_id = _format_number(start_product_id)
+    if _clean_text(start_product_id) and not requested_start_product_id:
+        raise ValueError("起始产品编号格式不正确")
+    item_limit = None if max_items is None else int(max_items)
+    if item_limit is not None and not 1 <= item_limit <= 10000:
+        raise ValueError("最多产品数必须是 1–10000 的整数")
+    cursor_mode = item_limit is not None or bool(requested_start_product_id)
+    cursor_found = not bool(requested_start_product_id)
+    selected_count = 0
     product_writer = product_writer or insert_zying_product_info
     existing_product_id_reader = (
         existing_product_id_reader or get_existing_zying_product_ids
@@ -2932,7 +2943,11 @@ def collect_zying_products_api(
     print(
         f"智赢 API 后台采集直接启动：第 {start_page}-{page_count} 页，"
         f"分类 {category_selection['category_path'] if category_selection else '全部'}，"
-        f"产品开发 {requested_developer_name or '全部'}",
+        f"产品开发 {requested_developer_name or '全部'}"
+        + (
+            f"，从产品 {requested_start_product_id or '分类首件'} 开始，最多 {item_limit} 个"
+            if cursor_mode else ""
+        ),
         flush=True,
     )
 
@@ -2963,14 +2978,36 @@ def collect_zying_products_api(
                 raise RuntimeError(
                     f"智赢接口列表第 {page_number} 页返回格式异常，请刷新登录状态后重试"
                 )
+            selected_rows = [row for row in rows if isinstance(row, dict)]
+            if cursor_mode and not cursor_found:
+                start_index = next(
+                    (
+                        index for index, row in enumerate(selected_rows)
+                        if _format_number(row.get("id")) == requested_start_product_id
+                    ),
+                    None,
+                )
+                if start_index is None:
+                    selected_rows = []
+                else:
+                    cursor_found = True
+                    selected_rows = selected_rows[start_index:]
+                    print(
+                        f"已在智赢列表第 {page_number} 页定位起始产品 {requested_start_product_id}",
+                        flush=True,
+                    )
+            if cursor_mode and cursor_found and item_limit is not None:
+                remaining = max(0, item_limit - selected_count)
+                selected_rows = selected_rows[:remaining]
+            selected_count += len(selected_rows)
             collected_at = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
             page_records = [
                 _zying_api_list_record(row, page_number, collected_at)
-                for row in rows
-                if isinstance(row, dict)
+                for row in selected_rows
             ]
             print(
-                f"智赢 API 列表第 {page_number}/{page_count} 页返回 {len(page_records)} 条",
+                f"智赢 API 列表第 {page_number}/{page_count} 页返回 {len(rows)} 条，"
+                f"本次范围选中 {len(page_records)} 条",
                 flush=True,
             )
             page_records, page_duplicate_count = _deduplicate_zying_records(
@@ -3030,6 +3067,14 @@ def collect_zying_products_api(
             if not rows:
                 print("智赢接口已没有更多产品，提前结束采集", flush=True)
                 break
+            if item_limit is not None and selected_count >= item_limit:
+                print(f"已达到本次最多产品数 {item_limit}，停止继续读取", flush=True)
+                break
+
+    if requested_start_product_id and not cursor_found:
+        raise ValueError(
+            f"所选分类中未找到起始产品编号 {requested_start_product_id}，请确认编号和分类"
+        )
 
     summary = {
         "records": records,
@@ -3045,6 +3090,9 @@ def collect_zying_products_api(
         "collection_mode": "api",
         "product_developer_id": requested_developer_id,
         "product_developer_name": requested_developer_name,
+        "start_product_id": requested_start_product_id,
+        "max_items": item_limit,
+        "selected_count": selected_count,
     }
     print(
         f"智赢 API 后台采集完成：入库 {inserted_count} 条，"
@@ -3070,6 +3118,8 @@ def collect_zying_products(
     category_name="",
     product_developer_id="",
     product_developer_name="",
+    start_product_id="",
+    max_items=None,
     auth_token=None,
     api_mode=True,
     stop_event=None,
@@ -3098,6 +3148,8 @@ def collect_zying_products(
             category_name=category_name,
             product_developer_id=product_developer_id,
             product_developer_name=product_developer_name,
+            start_product_id=start_product_id,
+            max_items=max_items,
             product_writer=product_writer,
             existing_product_id_reader=existing_product_id_reader,
             product_mirror_writer=product_mirror_writer,

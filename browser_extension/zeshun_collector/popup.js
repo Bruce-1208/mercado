@@ -8,16 +8,18 @@ const resultBox = document.getElementById("result");
 const platformBadge = document.getElementById("platform-badge");
 const productPanel = document.getElementById("product-panel");
 const zyingPanel = document.getElementById("zying-panel");
+const zyingInfringementPanel = document.getElementById("zying-infringement-panel");
 const weightPricePanel = document.getElementById("weight-price-panel");
 const purchasePanel = document.getElementById("purchase-panel");
 const productModeButton = document.getElementById("product-mode");
 const zyingModeButton = document.getElementById("zying-mode");
+const zyingInfringementModeButton = document.getElementById("zying-infringement-mode");
 const weightPriceModeButton = document.getElementById("weight-price-mode");
 const purchaseModeButton = document.getElementById("purchase-mode");
 const zyingPageStatus = document.getElementById("zying-page-status");
 const zyingRefreshButton = document.getElementById("zying-refresh");
-const zyingStartPage = document.getElementById("zying-start-page");
-const zyingEndPage = document.getElementById("zying-end-page");
+const zyingStartProductId = document.getElementById("zying-start-product-id");
+const zyingMaxItems = document.getElementById("zying-max-items");
 const zyingCategory = document.getElementById("zying-category");
 const zyingDeveloper = document.getElementById("zying-developer");
 const zyingStartButton = document.getElementById("zying-start");
@@ -25,14 +27,24 @@ const zyingStopButton = document.getElementById("zying-stop");
 const zyingTaskStatus = document.getElementById("zying-task-status");
 const zyingSummary = document.getElementById("zying-summary");
 const zyingLog = document.getElementById("zying-log");
+const zyingInfringementPageStatus = document.getElementById("zying-infringement-page-status");
+const zyingInfringementRefreshButton = document.getElementById("zying-infringement-refresh");
+const zyingInfringementOpenLoginButton = document.getElementById("zying-infringement-open-login");
+const zyingInfringementStartProductId = document.getElementById("zying-infringement-start-product-id");
+const zyingInfringementMaxItems = document.getElementById("zying-infringement-max-items");
+const zyingInfringementCategory = document.getElementById("zying-infringement-category");
+const zyingInfringementDeveloper = document.getElementById("zying-infringement-developer");
+const zyingInfringementStartButton = document.getElementById("zying-infringement-start");
+const zyingInfringementStopButton = document.getElementById("zying-infringement-stop");
+const zyingInfringementTaskStatus = document.getElementById("zying-infringement-task-status");
+const zyingInfringementSummary = document.getElementById("zying-infringement-summary");
+const zyingInfringementLog = document.getElementById("zying-infringement-log");
 const weightPricePageStatus = document.getElementById("weight-price-page-status");
 const weightPriceOpenLoginButton = document.getElementById("weight-price-open-login");
 const weightPriceConfirmLoginButton = document.getElementById("weight-price-confirm-login");
 const weightPriceRefreshCategoriesButton = document.getElementById("weight-price-refresh-categories");
 const weightPriceCategory = document.getElementById("weight-price-category");
-const weightPriceStartPage = document.getElementById("weight-price-start-page");
-const weightPriceEndPage = document.getElementById("weight-price-end-page");
-const weightPriceStartItem = document.getElementById("weight-price-start-item");
+const weightPriceStartProductId = document.getElementById("weight-price-start-product-id");
 const weightPriceLimit = document.getElementById("weight-price-limit");
 const weightPriceStartButton = document.getElementById("weight-price-start");
 const weightPriceStopButton = document.getElementById("weight-price-stop");
@@ -41,6 +53,7 @@ const weightPriceResume = document.getElementById("weight-price-resume");
 const weightPriceAcknowledged = document.getElementById("weight-price-acknowledged");
 const weightPriceOpenSupplierButton = document.getElementById("weight-price-open-supplier");
 const weightPriceTaskStatus = document.getElementById("weight-price-task-status");
+const weightPriceCurrentMeta = document.getElementById("weight-price-current-meta");
 const weightPriceSummary = document.getElementById("weight-price-summary");
 const weightPriceLog = document.getElementById("weight-price-log");
 const purchasePageStatus = document.getElementById("purchase-page-status");
@@ -59,6 +72,8 @@ let pagePlatform = "mercado";
 let zyingContext = null;
 let zyingRunning = false;
 let zyingPollTimer = null;
+let zyingInfringementRunning = false;
+let zyingInfringementPollTimer = null;
 let weightPriceState = null;
 let weightPriceRunning = false;
 let weightPricePollTimer = null;
@@ -229,17 +244,21 @@ function showResult(message, kind) {
 
 function showMode(mode) {
   const zying = mode === "zying";
+  const zyingInfringement = mode === "zying-infringement";
   const weightPrice = mode === "weight-price";
   const purchase = mode === "purchase";
-  productPanel.hidden = zying || weightPrice || purchase;
+  productPanel.hidden = zying || zyingInfringement || weightPrice || purchase;
   zyingPanel.hidden = !zying;
+  zyingInfringementPanel.hidden = !zyingInfringement;
   weightPricePanel.hidden = !weightPrice;
   purchasePanel.hidden = !purchase;
-  productModeButton.classList.toggle("active", !zying && !weightPrice && !purchase);
+  productModeButton.classList.toggle("active", !zying && !zyingInfringement && !weightPrice && !purchase);
   zyingModeButton.classList.toggle("active", zying);
+  zyingInfringementModeButton.classList.toggle("active", zyingInfringement);
   weightPriceModeButton.classList.toggle("active", weightPrice);
   purchaseModeButton.classList.toggle("active", purchase);
   if (zying) loadZyingStatus();
+  if (zyingInfringement) loadZyingInfringementStatus();
   if (weightPrice) {
     refreshState().catch(error => showResult(error.message || String(error), "error"));
     loadWeightPriceStatus();
@@ -266,6 +285,7 @@ async function refreshState() {
   collectButton.disabled = !detailPage || !authenticated || !productDetailZyingLoggedIn;
   syncProductBatchControls();
   zyingStartButton.disabled = !authenticated || !zyingContext || zyingRunning;
+  zyingInfringementStartButton.disabled = !authenticated || !zyingContext || zyingInfringementRunning;
   syncWeightPriceControls();
   if (response.purchaseTracking) renderPurchaseTrackingStatus(response.purchaseTracking);
 }
@@ -322,18 +342,25 @@ function zyingCategoryDisplayName(row) {
 function renderZyingOptions(data) {
   const categories = Array.isArray(data.categories) ? data.categories : [];
   const developers = Array.isArray(data.developers) ? data.developers : [];
-  const previousCategory = zyingCategory.value;
-  const previousDeveloper = zyingDeveloper.value;
-  zyingCategory.innerHTML = '<option value="">全部分类</option>' + categories.map(row => {
+  const categoryHtml = '<option value="">全部分类</option>' + categories.map(row => {
     const value = String(row.category_id || row.category_name || "");
     const label = zyingCategoryDisplayName(row);
     return `<option value="${escapeHtml(value)}"${label ? "" : " disabled"}>${escapeHtml(label || "分类名称待同步，请刷新智赢产品页")}</option>`;
   }).join("");
-  zyingDeveloper.innerHTML = '<option value="">全部产品开发</option>' + developers.map(row => (
+  const developerHtml = '<option value="">全部产品开发</option>' + developers.map(row => (
     `<option value="${escapeHtml(String(row.id || ""))}">${escapeHtml(String(row.name || row.id || ""))}</option>`
   )).join("");
-  if ([...zyingCategory.options].some(option => option.value === previousCategory && !option.disabled)) zyingCategory.value = previousCategory;
-  if ([...zyingDeveloper.options].some(option => option.value === previousDeveloper)) zyingDeveloper.value = previousDeveloper;
+  for (const [categorySelect, developerSelect] of [
+    [zyingCategory, zyingDeveloper],
+    [zyingInfringementCategory, zyingInfringementDeveloper]
+  ]) {
+    const previousCategory = categorySelect.value;
+    const previousDeveloper = developerSelect.value;
+    categorySelect.innerHTML = categoryHtml;
+    developerSelect.innerHTML = developerHtml;
+    if ([...categorySelect.options].some(option => option.value === previousCategory && !option.disabled)) categorySelect.value = previousCategory;
+    if ([...developerSelect.options].some(option => option.value === previousDeveloper)) developerSelect.value = previousDeveloper;
+  }
 }
 
 function escapeHtml(value) {
@@ -436,12 +463,14 @@ async function refreshZyingOptions() {
   if (!activeTab?.id || !isZyingPage(activeTab)) {
     zyingContext = null;
     zyingPageStatus.textContent = "正在打开智赢网页版登录页面；登录后重新打开插件并点击读取。";
+    zyingInfringementPageStatus.textContent = zyingPageStatus.textContent;
     try { await runtimeMessage({type: "OPEN_ZYING_LOGIN"}); }
     catch (error) { zyingPageStatus.textContent = error.message || String(error); }
     await refreshState();
     return;
   }
   zyingRefreshButton.disabled = true;
+  zyingInfringementRefreshButton.disabled = true;
   zyingRefreshButton.textContent = "正在读取本地智赢网页…";
   try {
     const contextResponse = await runtimeMessage({type: "READ_ZYING_CONTEXT", tabId: activeTab.id});
@@ -457,11 +486,14 @@ async function refreshZyingOptions() {
     if ((options.categories || []).some(row => !zyingCategoryDisplayName(row))) {
       zyingPageStatus.textContent += " 部分分类名称尚未读取，请等待智赢产品页加载完成后重新读取。";
     }
+    zyingInfringementPageStatus.textContent = zyingPageStatus.textContent;
   } catch (error) {
     zyingContext = null;
     zyingPageStatus.textContent = error.message || String(error);
+    zyingInfringementPageStatus.textContent = zyingPageStatus.textContent;
   } finally {
     zyingRefreshButton.disabled = zyingRunning;
+    zyingInfringementRefreshButton.disabled = zyingInfringementRunning;
     zyingRefreshButton.textContent = "读取当前网页分类与开发";
     await refreshState();
   }
@@ -485,8 +517,8 @@ async function loadZyingStatus() {
     zyingLog.scrollTop = zyingLog.scrollHeight;
     zyingStartButton.disabled = !authenticated || !zyingContext || zyingRunning;
     zyingStopButton.disabled = !zyingRunning || response.status === "stopping";
-    zyingStartPage.disabled = zyingRunning;
-    zyingEndPage.disabled = zyingRunning;
+    zyingStartProductId.disabled = zyingRunning;
+    zyingMaxItems.disabled = zyingRunning;
     zyingCategory.disabled = zyingRunning;
     zyingDeveloper.disabled = zyingRunning;
     zyingRefreshButton.disabled = zyingRunning;
@@ -494,6 +526,42 @@ async function loadZyingStatus() {
     zyingTaskStatus.textContent = error.message || String(error);
   } finally {
     scheduleZyingPoll();
+  }
+}
+
+function scheduleZyingInfringementPoll() {
+  clearTimeout(zyingInfringementPollTimer);
+  zyingInfringementPollTimer = setTimeout(
+    loadZyingInfringementStatus,
+    zyingInfringementRunning ? 1200 : 5000
+  );
+}
+
+async function loadZyingInfringementStatus() {
+  try {
+    const response = await runtimeMessage({type: "GET_ZYING_INFRINGEMENT_STATUS"});
+    if (!response.ok) throw new Error(response.error || "读取智赢查侵权状态失败");
+    zyingInfringementRunning = Boolean(response.running);
+    const summary = response.summary || {};
+    zyingInfringementTaskStatus.textContent = response.message || (zyingInfringementRunning ? "审核中" : "等待启动");
+    zyingInfringementSummary.textContent =
+      `审核 ${Number(summary.checked_count || 0)} · 通过 ${Number(summary.approved_count || 0)} · ` +
+      `疑似 ${Number(summary.suspected_count || 0)} · 跳过 ${Number(summary.skipped_changed_count || 0)} · ` +
+      `失败 ${Number(summary.failed_count || 0)}`;
+    const logs = Array.isArray(response.logs) ? response.logs : [];
+    zyingInfringementLog.textContent = logs.length ? logs.slice(-80).join("\n") : "等待任务启动…";
+    zyingInfringementLog.scrollTop = zyingInfringementLog.scrollHeight;
+    zyingInfringementStartButton.disabled = !authenticated || !zyingContext || zyingInfringementRunning;
+    zyingInfringementStopButton.disabled = !zyingInfringementRunning || response.status === "stopping";
+    for (const input of [
+      zyingInfringementStartProductId, zyingInfringementMaxItems,
+      zyingInfringementCategory, zyingInfringementDeveloper
+    ]) input.disabled = zyingInfringementRunning;
+    zyingInfringementRefreshButton.disabled = zyingInfringementRunning;
+  } catch (error) {
+    zyingInfringementTaskStatus.textContent = error.message || String(error);
+  } finally {
+    scheduleZyingInfringementPoll();
   }
 }
 
@@ -509,19 +577,10 @@ function renderWeightPriceCategories(rows) {
 }
 
 function weightPriceParams() {
-  const startPage = Number(weightPriceStartPage.value);
-  const endPage = Number(weightPriceEndPage.value);
-  const startItem = Number(weightPriceStartItem.value);
+  const startProductId = weightPriceStartProductId.value.trim();
   const maxItems = Number(weightPriceLimit.value);
-  if (!Number.isInteger(startPage) || startPage < 1 || startPage > 10000 ||
-      !Number.isInteger(endPage) || endPage < startPage || endPage > 10000) {
-    throw new Error("结束页必须大于或等于起始页，页码范围为 1–10000。");
-  }
-  if (endPage - startPage + 1 > Number(weightPriceState?.max_pages || 100)) {
-    throw new Error(`本次最多可选择 ${Number(weightPriceState?.max_pages || 100)} 页。`);
-  }
-  if (!Number.isInteger(startItem) || startItem < 1 || startItem > 10000) {
-    throw new Error("首件序号必须是 1–10000 的整数。");
+  if (startProductId && !/^[1-9]\d*$/.test(startProductId)) {
+    throw new Error("起始产品编号必须是正整数，或留空从分类首件开始。");
   }
   if (!Number.isInteger(maxItems) || maxItems < 1 || maxItems > 10000) {
     throw new Error("最多商品数必须是 1–10000 的整数。");
@@ -529,9 +588,7 @@ function weightPriceParams() {
   return {
     selection: {
       category: weightPriceCategory.value,
-      start_page: startPage,
-      end_page: endPage,
-      start_item: startItem
+      start_product_id: startProductId
     },
     max_items: maxItems
   };
@@ -569,7 +626,7 @@ function syncWeightPriceControls() {
   weightPriceStopButton.disabled = !authenticated || !canExecute || !weightPriceRunning || weightPriceBusy;
   weightPriceResume.hidden = !blocked;
   weightPriceAcknowledged.disabled = idleDisabled;
-  for (const element of [weightPriceCategory, weightPriceStartPage, weightPriceEndPage, weightPriceStartItem, weightPriceLimit]) {
+  for (const element of [weightPriceCategory, weightPriceStartProductId, weightPriceLimit]) {
     element.disabled = weightPriceRunning || weightPriceBusy || blocked;
   }
 }
@@ -584,9 +641,7 @@ function renderWeightPriceStatus(state = {}) {
   renderWeightPriceCategories(state.categories);
   if (!weightPriceSelectionRestored && state.selection) {
     weightPriceSelectionRestored = true;
-    weightPriceStartPage.value = Number(state.selection.start_page || 1);
-    weightPriceEndPage.value = Number(state.selection.end_page || state.selection.start_page || 1);
-    weightPriceStartItem.value = Number(state.selection.start_item || 1);
+    weightPriceStartProductId.value = String(state.selection.start_product_id || "");
     if ([...weightPriceCategory.options].some(option => option.value === state.selection.category)) {
       weightPriceCategory.value = state.selection.category;
     }
@@ -594,6 +649,10 @@ function renderWeightPriceStatus(state = {}) {
   const confirmed = Boolean(state.login?.confirmed);
   const run = state.run || {};
   const counts = state.current_counts || state.counts || {};
+  const currentProduct = state.current_product || {};
+  const currentProductId = currentProduct.erp_goods_id || run.current_task_id || "-";
+  const categoryName = currentProduct.zying_category_name || "-";
+  const executionTerminal = state.execution_terminal || state.computer || "本机";
   const statusLabel = state.running ? "运行中" : state.circuit ? "已暂停" : ({
     completed: "已完成",
     stopped: "已停止",
@@ -606,6 +665,8 @@ function renderWeightPriceStatus(state = {}) {
       ? `已连接 ${state.computer || "本机"}，智赢登录已确认；1688登录将在执行时检查。`
       : "请先打开智赢登录页面，完成登录后点击确认。";
   weightPriceTaskStatus.textContent = `${statusLabel} · ${run.message || state.run_error || "可设置范围后启动"}`;
+  weightPriceCurrentMeta.textContent = `当前产品 ${currentProductId} · 智赢分类 ${categoryName} · 执行终端 ${executionTerminal}`;
+  weightPriceCurrentMeta.title = currentProduct.title || "";
   weightPriceSummary.textContent = `屏蔽 ${Number(counts.blocked || 0)} · 风险 ${Number(counts.risk || 0)} · 成功 ${Number(counts.success || 0)} · 异常 ${Number(counts.exception || 0)}`;
   weightPriceLog.textContent = state.circuit?.reason || state.run_error ||
     (run.current_task_id ? `当前商品 ${run.current_task_id}\n${run.message || "正在逐件核验"}` :
@@ -709,9 +770,18 @@ zyingModeButton.addEventListener("click", async () => {
     catch (error) { showResult(error.message || String(error), "error"); }
   }
 });
+zyingInfringementModeButton.addEventListener("click", async () => {
+  showMode("zying-infringement");
+  if (!activeTab?.id || !isZyingPage(activeTab)) {
+    zyingInfringementPageStatus.textContent = "正在打开智赢网页版登录页面；登录后重新打开插件并点击读取。";
+    try { await runtimeMessage({type: "OPEN_ZYING_LOGIN"}); }
+    catch (error) { showResult(error.message || String(error), "error"); }
+  }
+});
 weightPriceModeButton.addEventListener("click", () => showMode("weight-price"));
 purchaseModeButton.addEventListener("click", () => showMode("purchase"));
 zyingRefreshButton.addEventListener("click", refreshZyingOptions);
+zyingInfringementRefreshButton.addEventListener("click", refreshZyingOptions);
 zyingOpenLoginButton.addEventListener("click", async () => {
   zyingOpenLoginButton.disabled = true;
   try {
@@ -723,8 +793,19 @@ zyingOpenLoginButton.addEventListener("click", async () => {
     zyingOpenLoginButton.disabled = false;
   }
 });
+zyingInfringementOpenLoginButton.addEventListener("click", async () => {
+  zyingInfringementOpenLoginButton.disabled = true;
+  try {
+    await runtimeMessage({type: "OPEN_ZYING_LOGIN"});
+    zyingInfringementPageStatus.textContent = "已打开智赢网页版；完成登录后重新打开插件，再点击读取。";
+  } catch (error) {
+    showResult(error.message || String(error), "error");
+  } finally {
+    zyingInfringementOpenLoginButton.disabled = false;
+  }
+});
 
-for (const input of [weightPriceCategory, weightPriceStartPage, weightPriceEndPage, weightPriceStartItem, weightPriceLimit]) {
+for (const input of [weightPriceCategory, weightPriceStartProductId, weightPriceLimit]) {
   input.addEventListener("input", syncWeightPriceControls);
   input.addEventListener("change", syncWeightPriceControls);
 }
@@ -821,13 +902,14 @@ weightPriceStopButton.addEventListener("click", async () => {
 });
 
 zyingStartButton.addEventListener("click", async () => {
-  const startRaw = zyingStartPage.value.trim();
-  const endRaw = zyingEndPage.value.trim();
-  const startPage = Number(startRaw);
-  const endPage = Number(endRaw);
-  if (!startRaw || !endRaw || !Number.isInteger(startPage) || startPage < 1 ||
-      !Number.isInteger(endPage) || endPage < startPage || endPage > 10000) {
-    showResult("必须指定有效的起始页和结束页，结束页须大于或等于起始页。", "error");
+  const startProductId = zyingStartProductId.value.trim();
+  const maxItems = Number(zyingMaxItems.value);
+  if (startProductId && !/^[1-9]\d*$/.test(startProductId)) {
+    showResult("起始产品编号必须是正整数，或留空从分类首件开始。", "error");
+    return;
+  }
+  if (!Number.isInteger(maxItems) || maxItems < 1 || maxItems > 10000) {
+    showResult("最多产品数必须是 1–10000 的整数。", "error");
     return;
   }
   if (!zyingContext) {
@@ -841,8 +923,8 @@ zyingStartButton.addEventListener("click", async () => {
       type: "START_ZYING_COLLECTION",
       context: zyingContext,
       params: {
-        start_page: startPage,
-        end_page: endPage,
+        start_product_id: startProductId,
+        max_items: maxItems,
         category: zyingCategory.value,
         category_name: zyingCategory.selectedOptions[0]?.textContent || "",
         product_developer_id: zyingDeveloper.value,
@@ -870,6 +952,60 @@ zyingStopButton.addEventListener("click", async () => {
     showResult(error.message || String(error), "error");
   } finally {
     zyingStopButton.textContent = "结束";
+  }
+});
+
+zyingInfringementStartButton.addEventListener("click", async () => {
+  const startProductId = zyingInfringementStartProductId.value.trim();
+  const maxItems = Number(zyingInfringementMaxItems.value);
+  if (startProductId && !/^[1-9]\d*$/.test(startProductId)) {
+    showResult("起始产品编号必须是正整数，或留空从分类首件开始。", "error");
+    return;
+  }
+  if (!Number.isInteger(maxItems) || maxItems < 1 || maxItems > 10000) {
+    showResult("最多产品数必须是 1–10000 的整数。", "error");
+    return;
+  }
+  if (!zyingContext) {
+    await refreshZyingOptions();
+    if (!zyingContext) return;
+  }
+  zyingInfringementStartButton.disabled = true;
+  zyingInfringementStartButton.textContent = "正在启动…";
+  try {
+    const response = await runtimeMessage({
+      type: "START_ZYING_INFRINGEMENT",
+      context: zyingContext,
+      params: {
+        start_product_id: startProductId,
+        max_items: maxItems,
+        category: zyingInfringementCategory.value,
+        category_name: zyingInfringementCategory.selectedOptions[0]?.textContent || "",
+        product_developer_id: zyingInfringementDeveloper.value,
+        product_developer_name: zyingInfringementDeveloper.selectedOptions[0]?.textContent || ""
+      }
+    });
+    if (!response.ok) throw new Error(response.error || "启动智赢产品查侵权失败");
+    zyingInfringementRunning = true;
+    await loadZyingInfringementStatus();
+  } catch (error) {
+    showResult(error.message || String(error), "error");
+  } finally {
+    zyingInfringementStartButton.textContent = "启动查侵权";
+  }
+});
+
+zyingInfringementStopButton.addEventListener("click", async () => {
+  zyingInfringementStopButton.disabled = true;
+  zyingInfringementStopButton.textContent = "结束中…";
+  try {
+    const response = await runtimeMessage({type: "STOP_ZYING_INFRINGEMENT"});
+    if (!response.ok) throw new Error(response.error || "结束智赢产品查侵权失败");
+    await loadZyingInfringementStatus();
+  } catch (error) {
+    showResult(error.message || String(error), "error");
+  } finally {
+    zyingInfringementStopButton.textContent = "结束";
   }
 });
 

@@ -613,7 +613,7 @@
         }
 
         .order-table {
-            min-width: 1840px;
+            min-width: 2020px;
             table-layout: fixed;
         }
 
@@ -629,8 +629,8 @@
         }
 
         .order-table td {
-            height: 72px;
-            padding: 7px 8px;
+            height: 84px;
+            padding: 9px 10px;
             border-bottom-color: #edf1f6;
             color: #344054;
             font-size: 12px;
@@ -638,8 +638,8 @@
         }
 
         .order-board.order-density-compact .order-table td {
-            height: 54px;
-            padding: 4px 7px;
+            height: 68px;
+            padding: 6px 8px;
         }
 
         .order-board.order-density-compact .order-cell-stack {
@@ -652,15 +652,15 @@
         }
 
         .order-board.order-density-compact .order-product {
-            grid-template-columns: 36px minmax(0, 1fr);
-            gap: 6px;
+            grid-template-columns: 52px minmax(0, 1fr);
+            gap: 8px;
         }
 
         .order-board.order-density-compact .order-product-media,
         .order-board.order-density-compact .order-product-image,
         .order-board.order-density-compact .order-product-placeholder {
-            width: 36px;
-            height: 36px;
+            width: 52px;
+            height: 52px;
         }
 
         .order-row-number {
@@ -816,10 +816,43 @@
             font-size: 10px;
         }
 
+        .order-purchase-status {
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+            width: fit-content;
+            border-radius: 999px;
+            padding: 5px 8px;
+            font-size: 11px;
+            font-weight: 800;
+            white-space: nowrap;
+        }
+
+        .order-purchase-status.purchased {
+            background: #ecfdf3;
+            color: #047857;
+        }
+
+        .order-purchase-status.pending {
+            background: #fff7ed;
+            color: #c2410c;
+        }
+
+        .order-purchase-status-icon {
+            display: grid;
+            width: 15px;
+            height: 15px;
+            place-items: center;
+            border: 1px solid currentColor;
+            border-radius: 50%;
+            font-size: 9px;
+            line-height: 1;
+        }
+
         .order-product {
             display: grid;
-            grid-template-columns: 44px minmax(0, 1fr);
-            gap: 7px;
+            grid-template-columns: 64px minmax(0, 1fr);
+            gap: 10px;
             align-items: center;
         }
 
@@ -859,10 +892,10 @@
 
         .order-product-image,
         .order-product-placeholder {
-            width: 44px;
-            height: 44px;
+            width: 64px;
+            height: 64px;
             border: 1px solid #e4eaf2;
-            border-radius: 7px;
+            border-radius: 9px;
             background: #f5f7fa;
             object-fit: contain;
         }
@@ -876,16 +909,46 @@
         }
 
         .order-product-media {
-            width: 44px;
-            height: 44px;
+            width: 64px;
+            height: 64px;
+            overflow: visible;
+        }
+
+        .order-image-preview {
+            position: fixed;
+            z-index: 10000;
+            display: none;
+            width: 220px;
+            height: 220px;
+            padding: 8px;
+            border: 1px solid #d8e1ee;
+            border-radius: 12px;
+            background: #fff;
+            box-shadow: 0 18px 45px rgba(15, 23, 42, .25);
+            pointer-events: none;
+        }
+
+        .order-image-preview.visible {
+            display: grid;
+            place-items: center;
+        }
+
+        .order-image-preview img {
+            width: 100%;
+            height: 100%;
+            border-radius: 8px;
+            object-fit: contain;
         }
 
         .order-sku-image-link {
+            position: relative;
+            z-index: 1;
             display: grid;
             width: 100%;
             height: 100%;
             place-items: center;
             cursor: zoom-in;
+            transition: z-index 0s linear .18s;
         }
 
         .order-product-media .order-product-image {
@@ -6280,6 +6343,36 @@
             background: #f8fafc;
         }
 
+        .store-link-sort-button {
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+            padding: 2px 0;
+            border: 0;
+            background: transparent;
+            color: inherit;
+            font: inherit;
+            font-weight: inherit;
+            white-space: nowrap;
+            cursor: pointer;
+        }
+
+        .store-link-sort-button:hover,
+        .store-link-sort-button.active {
+            color: var(--primary);
+        }
+
+        .store-link-sort-indicator {
+            min-width: 12px;
+            color: #98a2b3;
+            font-size: 12px;
+            text-align: center;
+        }
+
+        .store-link-sort-button.active .store-link-sort-indicator {
+            color: currentColor;
+        }
+
         .store-link-product {
             display: flex;
             min-width: 330px;
@@ -9723,18 +9816,18 @@
                     <div class="order-table-wrap">
                         <table class="order-table">
                             <colgroup>
-                                <col style="width:42px"><col style="width:110px"><col style="width:250px"><col style="width:150px">
-                                <col style="width:120px"><col style="width:85px"><col style="width:135px"><col style="width:95px">
-                                <col style="width:90px"><col style="width:90px"><col style="width:72px"><col style="width:110px"><col style="width:120px">
-                                <col style="width:100px"><col style="width:145px"><col style="width:165px"><col style="width:155px">
+                                <col style="width:42px"><col style="width:110px"><col style="width:310px"><col style="width:125px">
+                                <col style="width:110px"><col style="width:80px"><col style="width:135px"><col style="width:90px">
+                                <col style="width:82px"><col style="width:90px"><col style="width:72px"><col style="width:105px"><col style="width:92px">
+                                <col style="width:160px"><col style="width:120px"><col style="width:145px"><col style="width:150px">
                             </colgroup>
                             <thead>
                                 <tr>
                                     <th><input class="order-row-checkbox" type="checkbox" aria-label="全选本页订单" onchange="toggleAllVisibleOrders(this.checked)"></th>
                                     <th>打包单号</th><th>商品</th><th>店铺</th><th>金额（美元）</th>
                                     <th>手续费</th><th>标价 / 实际运费</th><th>结余</th><th>成本</th>
-                                    <th>利润</th><th>利润率</th><th>状态</th><th>备货</th><th>签收/发货</th>
-                                    <th>运单</th><th>买家 / 备注</th><th>下单时间（北京时间）</th>
+                                    <th>利润</th><th>利润率</th><th>状态</th><th>已采购</th><th>备货</th><th>签收/发货</th>
+                                    <th>运单</th><th>下单时间（北京时间）</th>
                                 </tr>
                             </thead>
                             <tbody id="order-table-body">
@@ -11846,22 +11939,30 @@
                             </select>
                         </div>
                         <div class="order-filter-field">
-                            <label for="store-link-sales-sort">数量排序</label>
-                            <select id="store-link-sales-sort" onchange="loadStoreLinks(1)">
+                            <label for="store-link-sales-sort">排序</label>
+                            <select id="store-link-sales-sort" onchange="handleStoreLinkSortSelect()">
+                                <option value="price:desc">价格从高到低</option>
+                                <option value="price:asc">价格从低到高</option>
+                                <option value="weight_g:desc">重量从高到低</option>
+                                <option value="weight_g:asc">重量从低到高</option>
                                 <option value="sold_quantity:desc" selected>总销量从高到低</option>
                                 <option value="sold_quantity:asc">总销量从低到高</option>
                                 <option value="sales_14d:desc">14天销量从高到低</option>
                                 <option value="sales_14d:asc">14天销量从低到高</option>
                                 <option value="available_quantity:desc">库存从高到低</option>
                                 <option value="available_quantity:asc">库存从低到高</option>
+                                <option value="last_synced_at:desc">同步时间从新到旧</option>
+                                <option value="last_synced_at:asc">同步时间从旧到新</option>
+                                <option value="net_proceeds_usd:desc">净收益从高到低</option>
+                                <option value="net_proceeds_usd:asc">净收益从低到高</option>
                             </select>
                         </div>
                         <div class="order-filter-field">
                             <label for="store-link-page-size">每页条数</label>
                             <select id="store-link-page-size" onchange="loadStoreLinks(1)">
                                 <option value="50">50 条</option>
-                                <option value="200">200 条</option>
-                                <option value="500" selected>500 条</option>
+                                <option value="200" selected>200 条</option>
+                                <option value="500">500 条</option>
                                 <option value="1000">1,000 条</option>
                             </select>
                         </div>
@@ -11903,15 +12004,15 @@
                                     <th>商品</th>
                                     <th>链接</th>
                                     <th>状态</th>
-                                    <th>价格</th>
-                                    <th>重量</th>
+                                    <th><button class="store-link-sort-button" type="button" data-store-link-sort="price" onclick="sortStoreLinksBy('price')">价格 <span class="store-link-sort-indicator">↕</span></button></th>
+                                    <th><button class="store-link-sort-button" type="button" data-store-link-sort="weight_g" onclick="sortStoreLinksBy('weight_g')">重量 <span class="store-link-sort-indicator">↕</span></button></th>
                                     <th>尺寸（长×宽×高）</th>
-                                    <th>净收益(USD)</th>
-                                    <th>库存</th>
-                                    <th>总销量</th>
-                                    <th>14天销量</th>
+                                    <th><button class="store-link-sort-button" type="button" data-store-link-sort="net_proceeds_usd" onclick="sortStoreLinksBy('net_proceeds_usd')">净收益(USD) <span class="store-link-sort-indicator">↕</span></button></th>
+                                    <th><button class="store-link-sort-button" type="button" data-store-link-sort="available_quantity" onclick="sortStoreLinksBy('available_quantity')">库存 <span class="store-link-sort-indicator">↕</span></button></th>
+                                    <th><button class="store-link-sort-button" type="button" data-store-link-sort="sold_quantity" onclick="sortStoreLinksBy('sold_quantity')">总销量 <span class="store-link-sort-indicator">↓</span></button></th>
+                                    <th><button class="store-link-sort-button" type="button" data-store-link-sort="sales_14d" onclick="sortStoreLinksBy('sales_14d')">14天销量 <span class="store-link-sort-indicator">↕</span></button></th>
                                     <th>SKU</th>
-                                    <th>同步时间</th>
+                                    <th><button class="store-link-sort-button" type="button" data-store-link-sort="last_synced_at" onclick="sortStoreLinksBy('last_synced_at')">同步时间 <span class="store-link-sort-indicator">↕</span></button></th>
                                 </tr>
                             </thead>
                             <tbody id="store-link-body">
@@ -15654,6 +15755,10 @@
             return String(row?.pack_id || row?.order_number || "");
         }
 
+        function orderHasPurchaseOrder(row) {
+            return String(row?.purchase_order || "").trim().length > 0;
+        }
+
         function orderDisplayNumberForOrderIds(orderIds) {
             const identifiers = new Set(
                 (Array.isArray(orderIds) ? orderIds : [])
@@ -15728,6 +15833,78 @@
                 is_merged: row.merged_order_ids.length > 1,
             }));
         }
+
+        let orderImagePreviewElement = null;
+        let orderImagePreviewImage = null;
+
+        function ensureOrderImagePreview() {
+            if (orderImagePreviewElement?.isConnected) {
+                return;
+            }
+            orderImagePreviewElement = document.createElement("div");
+            orderImagePreviewElement.className = "order-image-preview";
+            orderImagePreviewElement.setAttribute("aria-hidden", "true");
+            orderImagePreviewImage = document.createElement("img");
+            orderImagePreviewImage.alt = "商品图片预览";
+            orderImagePreviewElement.appendChild(orderImagePreviewImage);
+            document.body.appendChild(orderImagePreviewElement);
+        }
+
+        function positionOrderImagePreview(event, source) {
+            if (!orderImagePreviewElement?.classList.contains("visible")) return;
+            const rect = source?.getBoundingClientRect?.();
+            const pointerX = Number(event?.clientX) || Number(rect?.right) || 0;
+            const pointerY = Number(event?.clientY) || Number(rect?.bottom) || 0;
+            const width = 238;
+            const height = 238;
+            const gap = 16;
+            const left = pointerX + gap + width <= window.innerWidth
+                ? pointerX + gap
+                : Math.max(8, pointerX - width - gap);
+            const top = pointerY + gap + height <= window.innerHeight
+                ? pointerY + gap
+                : Math.max(8, pointerY - height - gap);
+            orderImagePreviewElement.style.left = `${Math.min(left, Math.max(8, window.innerWidth - width - 8))}px`;
+            orderImagePreviewElement.style.top = `${Math.min(top, Math.max(8, window.innerHeight - height - 8))}px`;
+        }
+
+        function showOrderImagePreview(link, event) {
+            const source = link?.querySelector("img");
+            if (!source?.src) return;
+            ensureOrderImagePreview();
+            orderImagePreviewImage.src = source.currentSrc || source.src;
+            orderImagePreviewImage.alt = source.alt || "商品图片预览";
+            orderImagePreviewElement.classList.add("visible");
+            positionOrderImagePreview(event, link);
+        }
+
+        function hideOrderImagePreview() {
+            orderImagePreviewElement?.classList.remove("visible");
+        }
+
+        document.addEventListener("mouseover", event => {
+            const link = event.target instanceof Element
+                ? event.target.closest(".order-product-media .order-sku-image-link")
+                : null;
+            if (!link || (event.relatedTarget instanceof Node && link.contains(event.relatedTarget))) return;
+            showOrderImagePreview(link, event);
+        });
+
+        document.addEventListener("mousemove", event => {
+            const link = event.target instanceof Element
+                ? event.target.closest(".order-product-media .order-sku-image-link")
+                : null;
+            if (link) positionOrderImagePreview(event, link);
+        });
+
+        document.addEventListener("mouseout", event => {
+            const link = event.target instanceof Element
+                ? event.target.closest(".order-product-media .order-sku-image-link")
+                : null;
+            if (link && !(event.relatedTarget instanceof Node && link.contains(event.relatedTarget))) {
+                hideOrderImagePreview();
+            }
+        });
 
         function orderSkuImageMarkup(item, detail = false) {
             const imageUrl = item?.image_url ? mercadoSafeUrl(item.image_url) : "";
@@ -15825,18 +16002,18 @@
                         <td><span class="order-money">${escapeHtml(orderMoney(row.cost))}</span></td>
                         <td><span class="order-money ${profit < 0 ? "negative" : "positive"}">${escapeHtml(orderMoney(profit))}</span></td>
                         <td><span class="order-money ${margin < 0 ? "negative" : "positive"}">${margin.toFixed(1)}%</span></td>
-                        <td><div class="order-cell-stack"><span class="order-state-tag ${stateClass}">${escapeHtml(row.status || "未分类")}</span><span class="order-subtag">${row.purchase_order ? "已采购" : "待采购"}</span></div></td>
+                        <td><span class="order-state-tag ${stateClass}">${escapeHtml(row.status || "未分类")}</span></td>
+                        <td><span class="order-purchase-status ${orderHasPurchaseOrder(row) ? "purchased" : "pending"}"><span class="order-purchase-status-icon" aria-hidden="true">${orderHasPurchaseOrder(row) ? "✓" : "—"}</span>${orderHasPurchaseOrder(row) ? "已采购" : "待采购"}</span></td>
                         <td><div class="order-cell-stack">
                             <strong>${escapeHtml(row.purchase_order || "待处理")}</strong>
-                            <span>${row.purchase_order ? `成本 ${orderMoney(row.cost || 0)}` : "尚未汇总"}</span>
-                            <button class="order-copy-link" type="button" onclick="event.stopPropagation(); openPurchaseOrderDialog(JSON.parse(decodeURIComponent('${encodedOrderIds}')))">${row.purchase_order ? "修改采购单" : "添加采购单"}</button>
+                            <span>${orderHasPurchaseOrder(row) ? `成本 ${orderMoney(row.cost || 0)}` : "尚未汇总"}</span>
+                            <button class="order-copy-link" type="button" onclick="event.stopPropagation(); openPurchaseOrderDialog(JSON.parse(decodeURIComponent('${encodedOrderIds}')))">${orderHasPurchaseOrder(row) ? "修改采购单" : "添加采购单"}</button>
                         </div></td>
                         <td><span class="order-state-tag ${stateClass}">${orderFulfilmentText(row.status)}</span></td>
                         <td><div class="order-cell-stack">${tracking ? `
                             <button class="order-copy-link" type="button" title="查看物流轨迹" onclick="event.stopPropagation(); openOrderTracking(decodeURIComponent('${encodedId}'))">${escapeHtml(tracking)}</button>
                             <span>${escapeHtml(row.logistics_company || "自动识别")} · 查看轨迹</span>
                         ` : '<strong>暂无物流号</strong><span>添加后可查轨迹</span>'}</div></td>
-                        <td><div class="order-cell-stack"><strong title="${escapeHtml(row.buyer || "")}">${escapeHtml(row.buyer || "-")}</strong><span title="${escapeHtml(row.purchase_remark || row.remark || "")}">${escapeHtml(row.purchase_remark || row.remark || "无备注")}</span></div></td>
                         <td><div class="order-cell-stack"><strong>${escapeHtml(row.ordered_at || "-")}</strong><span title="${escapeHtml(assignment)}">${escapeHtml(assignment)}</span></div></td>
                     </tr>
                 `;
@@ -23056,7 +23233,7 @@
                 const product = `
                     <div class="store-link-product">
                         <span class="store-link-image-shell${imageUrl ? "" : " missing"}">
-                            ${imageUrl ? `<img src="${escapeHtml(imageUrl)}" alt="${escapeHtml(row.title || "商品主图")}" loading="lazy" onerror="this.parentElement.classList.add('missing'); this.remove()">` : ""}
+                            ${imageUrl ? `<img src="${escapeHtml(imageUrl)}" alt="${escapeHtml(row.title || "商品主图")}" loading="lazy" decoding="async" fetchpriority="low" onerror="this.parentElement.classList.add('missing'); this.remove()">` : ""}
                             <span class="store-link-image-placeholder">暂无主图</span>
                         </span>
                         <div><strong title="${escapeHtml(row.title || "")}">${escapeHtml(row.title || "未命名商品")}</strong><small>${escapeHtml(row.item_id || "-")}</small></div>
@@ -24000,8 +24177,44 @@
             storeLinkNext.disabled = storeLinkPage >= storeLinkPages;
         }
 
+        function updateStoreLinkSortButtons() {
+            const [activeSortBy, activeSortOrder] = String(
+                storeLinkSalesSort?.value || "sold_quantity:desc"
+            ).split(":");
+            document.querySelectorAll(".store-link-sort-button").forEach(button => {
+                const active = button.dataset.storeLinkSort === activeSortBy;
+                button.classList.toggle("active", active);
+                button.setAttribute("aria-pressed", active ? "true" : "false");
+                const indicator = button.querySelector(".store-link-sort-indicator");
+                if (indicator) indicator.textContent = active
+                    ? (activeSortOrder === "asc" ? "↑" : "↓")
+                    : "↕";
+                button.title = active
+                    ? `当前${activeSortOrder === "asc" ? "升序" : "降序"}，点击切换`
+                    : "点击按此列降序排列";
+            });
+        }
+
+        function sortStoreLinksBy(sortBy) {
+            const [activeSortBy, activeSortOrder] = String(
+                storeLinkSalesSort?.value || "sold_quantity:desc"
+            ).split(":");
+            const nextOrder = activeSortBy === sortBy && activeSortOrder === "desc"
+                ? "asc"
+                : "desc";
+            storeLinkSalesSort.value = `${sortBy}:${nextOrder}`;
+            updateStoreLinkSortButtons();
+            loadStoreLinks(1);
+        }
+
+        function handleStoreLinkSortSelect() {
+            updateStoreLinkSortButtons();
+            loadStoreLinks(1);
+        }
+
         async function loadStoreLinks(page = 1) {
             if (!storeLinkBody) return;
+            updateStoreLinkSortButtons();
             const requestedPage = Math.max(1, Number(page || 1));
             const requestId = ++storeLinkLoadRequestId;
             if (storeLinkLoadController) storeLinkLoadController.abort();
@@ -24022,7 +24235,7 @@
                 sort_order: storeLinkSortOrder || "desc",
                 sales_sort: storeLinkSortOrder || "desc",
                 page: String(requestedPage),
-                page_size: String(storeLinkPageSize.value || "500"),
+                page_size: String(storeLinkPageSize.value || "200"),
                 current_only: "1",
             });
             mercadoSelectedValues(storeLinkStoreFilter).forEach(value => query.append("token_id", value));
@@ -24049,7 +24262,7 @@
                 storeLinkCurrentCount.textContent = Number(summary.current_count || 0).toLocaleString("zh-CN");
                 storeLinkStoreCount.textContent = Number(summary.store_count || 0).toLocaleString("zh-CN");
                 storeLinkLastSync.textContent = summary.last_synced_at || "-";
-                storeLinkPaginationSummary.textContent = `筛选结果共 ${Number(data.total || 0).toLocaleString("zh-CN")} 条；当前第 ${storeLinkPage}/${storeLinkPages} 页，本页显示 ${storeLinkRows.length} 条（每页 ${Number(data.page_size || storeLinkPageSize.value || 500).toLocaleString("zh-CN")} 条）`;
+                storeLinkPaginationSummary.textContent = `筛选结果共 ${Number(data.total || 0).toLocaleString("zh-CN")} 条；当前第 ${storeLinkPage}/${storeLinkPages} 页，本页显示 ${storeLinkRows.length} 条（每页 ${Number(data.page_size || storeLinkPageSize.value || 200).toLocaleString("zh-CN")} 条）`;
                 renderStoreLinkPagination();
                 storeLinksLoaded = true;
             } catch (error) {

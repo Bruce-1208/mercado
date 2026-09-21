@@ -34,7 +34,7 @@ from urllib.parse import urlsplit
 import requests
 
 
-AGENT_VERSION = "1.2.2"
+AGENT_VERSION = "1.2.3"
 DEFAULT_SERVER_URL = "https://zeshun.cc.cd"
 DEFAULT_POLL_SECONDS = 10.0
 DEFAULT_HEARTBEAT_SECONDS = 10.0
@@ -306,6 +306,7 @@ class AgentStatusWindow:
         self.log_queue = queue.Queue()
         self.closing = False
         self.agent_thread = None
+        self.stopping_job_id = ""
         self.status_text = tk.StringVar(value="正在连接服务端…")
         self.clock_text = tk.StringVar(value="")
 
@@ -363,7 +364,7 @@ class AgentStatusWindow:
         footer.pack(fill="x")
         tk.Label(
             footer,
-            text="关闭窗口会停止当前任务并退出 Agent。",
+            text="结束任务后 Agent 会保持在线；关闭窗口会停止任务并退出 Agent。",
             font=("Microsoft YaHei UI", 9),
             foreground="#6b7280",
             background="#f4f6f8",
@@ -381,6 +382,17 @@ class AgentStatusWindow:
                 padx=10,
                 pady=4,
             ).pack(side="right", padx=(8, 0))
+        self.stop_task_button = tk.Button(
+            footer,
+            text="暂无运行任务",
+            command=self._on_stop_current_task,
+            state="disabled",
+            font=("Microsoft YaHei UI", 9, "bold"),
+            foreground="#b42318",
+            padx=10,
+            pady=4,
+        )
+        self.stop_task_button.pack(side="right", padx=(8, 0))
 
         history = _tail_text(agent.runtime_log.path)
         if history:
@@ -419,7 +431,35 @@ class AgentStatusWindow:
                 break
             self._append_log(content)
             self._set_status_from_log(content)
+        self._refresh_task_button()
         self.root.after(100, self._drain_logs)
+
+    def _refresh_task_button(self):
+        job_id = self.agent.current_job_id()
+        if not job_id:
+            self.stopping_job_id = ""
+            self.stop_task_button.configure(text="暂无运行任务", state="disabled")
+        elif self.closing or self.stopping_job_id == job_id:
+            self.stop_task_button.configure(text="正在结束任务", state="disabled")
+        else:
+            self.stop_task_button.configure(text="结束任务", state="normal")
+
+    def _on_stop_current_task(self):
+        job_id = self.agent.current_job_id()
+        if not job_id:
+            self._refresh_task_button()
+            return
+        if not self.messagebox.askyesno(
+            "结束任务",
+            "确定结束当前本地运行的任务吗？Agent 会保持在线并继续接收后续任务。",
+            parent=self.root,
+        ):
+            return
+        stopped_job_id = self.agent.request_stop_current_job("用户点击结束任务")
+        if stopped_job_id:
+            self.stopping_job_id = stopped_job_id
+            self.status_text.set("正在结束当前任务…")
+        self._refresh_task_button()
 
     def _tick_clock(self):
         self.clock_text.set(time.strftime("%Y-%m-%d  %H:%M:%S", time.localtime()))
@@ -738,6 +778,7 @@ class LocalAgent:
         self._worker_lock = threading.Lock()
         self._current_worker = None
         self._current_job_id = ""
+        self._current_cancel_file = None
         self.queue_id = ""
 
     def log(self, message):
@@ -763,10 +804,40 @@ class LocalAgent:
         self.shutdown_event.set()
         self._stop_current_worker()
 
-    def _set_current_worker(self, job_id, guard):
+    def current_job_id(self):
+        """Return the actively running local job without exposing worker internals."""
+        with self._worker_lock:
+            guard = self._current_worker
+            if guard is None or guard.process.poll() is not None:
+                return ""
+            return self._current_job_id
+
+    def request_stop_current_job(self, reason=""):
+        """Request cancellation of the current job while keeping the Agent online."""
+        with self._worker_lock:
+            guard = self._current_worker
+            job_id = self._current_job_id
+            cancel_file = self._current_cancel_file
+            if (
+                guard is None
+                or guard.process.poll() is not None
+                or not job_id
+                or cancel_file is None
+            ):
+                return ""
+            try:
+                cancel_file.write_text(reason or "local stop", encoding="utf-8")
+            except OSError as exc:
+                self.log(f"无法结束本机任务 {job_id}：{exc}")
+                return ""
+        self.log(f"正在结束本机任务 {job_id}：{reason or '本机用户请求'}")
+        return job_id
+
+    def _set_current_worker(self, job_id, guard, cancel_file=None):
         with self._worker_lock:
             self._current_job_id = str(job_id or "")
             self._current_worker = guard
+            self._current_cancel_file = Path(cancel_file) if cancel_file else None
 
     def _stop_current_worker(self):
         with self._worker_lock:
@@ -779,6 +850,7 @@ class LocalAgent:
             if self._current_worker is guard:
                 self._current_worker = None
                 self._current_job_id = ""
+                self._current_cancel_file = None
         guard.close()
 
     def ensure_enrolled(self):
@@ -1143,7 +1215,7 @@ class LocalAgent:
             start_new_session=os.name != "nt",
         )
         worker_guard = WorkerProcessGuard(process)
-        self._set_current_worker(job_id, worker_guard)
+        self._set_current_worker(job_id, worker_guard, cancel_file)
         output_queue = queue.Queue()
 
         def read_output():
@@ -1182,6 +1254,8 @@ class LocalAgent:
             now = time.monotonic()
             if self.shutdown_event.is_set() and not cancel_file.exists():
                 cancel_file.write_text("agent shutdown", encoding="utf-8")
+                cancel_started = now
+            if cancel_file.exists() and not cancel_started:
                 cancel_started = now
             if (
                 pending_logs

@@ -83,6 +83,7 @@ import bit.bit_store_link_remote_update as bit_store_link_remote_update
 import bit.bit_store_link_sync as bit_store_link_sync
 import bit.bit_update_orders as bit_update_orders
 import bit.bit_zying_caiji as bit_zying_caiji
+import bit.bit_zying_infringement as bit_zying_infringement
 import bit.browser_extension_mail as browser_extension_mail
 import bit.mercado_communications as mercado_communications
 import bit.mercado_infraction_sync as mercado_infraction_sync
@@ -2698,6 +2699,20 @@ _zying_collection_state = {
     "summary": {},
     "requires_login": False,
 }
+_zying_infringement_lock = threading.Lock()
+_zying_infringement_stop_event = threading.Event()
+_zying_infringement_state_lock = threading.RLock()
+_zying_infringement_logs = deque(maxlen=800)
+_zying_infringement_state = {
+    "running": False,
+    "started_at": "",
+    "finished_at": "",
+    "status": "idle",
+    "message": "等待启动",
+    "params": {},
+    "summary": {},
+    "requires_login": False,
+}
 _BROWSER_EXTENSION_ZYING_OPTIONS_CACHE_SECONDS = max(
     0,
     int(os.environ.get("BROWSER_EXTENSION_ZYING_OPTIONS_CACHE_SECONDS", "60")),
@@ -4373,17 +4388,29 @@ def _parse_bool_param(data, name, default=True):
 def build_zying_collection_params(data):
     """校验智赢产品采集页面提交的参数。"""
     data = data if isinstance(data, dict) else {}
+    cursor_mode = "max_items" in data or "start_product_id" in data
+    start_product_id = str(data.get("start_product_id") or "").strip()
+    if start_product_id and not re.fullmatch(r"[1-9]\d*", start_product_id):
+        raise ValueError("起始产品编号必须是正整数，或留空从分类首件开始")
+    if len(start_product_id) > 64:
+        raise ValueError("起始产品编号格式不正确")
+    max_items = None
+    if cursor_mode:
+        raw_max_items = data.get("max_items", 100)
+        if type(raw_max_items) is not int or not 1 <= raw_max_items <= 10000:
+            raise ValueError("最多产品数必须是 1–10000 的整数")
+        max_items = raw_max_items
     start_page = _parse_int_param(
         data,
         "start_page",
-        bit_zying_caiji.DEFAULT_ZYING_START_PAGE,
+        1 if cursor_mode else bit_zying_caiji.DEFAULT_ZYING_START_PAGE,
         min_value=1,
         max_value=10000,
     )
     end_page = _parse_int_param(
         data,
         "end_page",
-        max(start_page, bit_zying_caiji.DEFAULT_ZYING_PAGE_COUNT),
+        10000 if cursor_mode else max(start_page, bit_zying_caiji.DEFAULT_ZYING_PAGE_COUNT),
         min_value=1,
         max_value=10000,
     )
@@ -4396,6 +4423,9 @@ def build_zying_collection_params(data):
         "start_page": start_page,
         "category": str(data.get("category") or "").strip()[:1024] or None,
     }
+    if cursor_mode:
+        params["start_product_id"] = start_product_id
+        params["max_items"] = max_items
     if "category_name" in data:
         params["category_name"] = str(data.get("category_name") or "").strip()[:1024]
     product_developer_id = str(data.get("product_developer_id") or "").strip()[:64]
@@ -4580,6 +4610,154 @@ def run_zying_collection_job(params, task_lock):
         log_sink.flush()
         unregister_thread_log_queue()
         task_lock.release()
+
+
+def build_zying_infringement_params(data):
+    """Validate the plugin's ZYing infringement-review range and filters."""
+    collection = build_zying_collection_params(data)
+    result = {
+        "start_page": collection["start_page"],
+        "end_page": collection["number"],
+        "category": collection.get("category"),
+        "category_name": collection.get("category_name", ""),
+        "product_developer_id": collection.get("product_developer_id", ""),
+        "product_developer_name": collection.get("product_developer_name", ""),
+    }
+    if "max_items" in collection:
+        result["start_product_id"] = collection.get("start_product_id", "")
+        result["max_items"] = collection["max_items"]
+    return result
+
+
+def _append_zying_infringement_log(message):
+    text = format_log_text(message).strip()
+    if not text:
+        return
+    timestamp = datetime.now().strftime("%H:%M:%S")
+    with _zying_infringement_state_lock:
+        for line in text.splitlines():
+            line = line.strip()
+            if not line:
+                continue
+            _zying_infringement_logs.append(f"[{timestamp}] {line}")
+            if _zying_infringement_state.get("running"):
+                _zying_infringement_state["message"] = line
+
+
+def run_zying_infringement_job(params, task_lock):
+    def update_progress(summary):
+        with _zying_infringement_state_lock:
+            _zying_infringement_state["summary"] = dict(summary or {})
+
+    try:
+        summary = bit_zying_infringement.review_pending_products(
+            **params,
+            stop_event=_zying_infringement_stop_event,
+            log_callback=_append_zying_infringement_log,
+            progress_callback=update_progress,
+        )
+        message = (
+            f"智赢产品查侵权完成：审核 {summary['checked_count']} 条，"
+            f"通过 {summary['approved_count']} 条，疑似 {summary['suspected_count']} 条"
+        )
+        with _zying_infringement_state_lock:
+            _zying_infringement_state.update({
+                "running": False,
+                "finished_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                "status": "success",
+                "message": message,
+                "summary": summary,
+                "requires_login": False,
+            })
+    except (bit_zying_infringement.ZyingInfringementStopped,
+            bit_zying_caiji.ZyingCollectionStopped) as exc:
+        message = str(exc) or "智赢产品查侵权已由用户结束"
+        _append_zying_infringement_log(message)
+        with _zying_infringement_state_lock:
+            _zying_infringement_state.update({
+                "running": False,
+                "finished_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                "status": "stopped",
+                "message": message,
+                "requires_login": False,
+            })
+    except Exception as exc:
+        logging.exception("智赢产品查侵权失败")
+        _append_zying_infringement_log(f"查侵权失败：{exc}")
+        with _zying_infringement_state_lock:
+            _zying_infringement_state.update({
+                "running": False,
+                "finished_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                "status": "error",
+                "message": str(exc),
+                "requires_login": isinstance(exc, bit_zying_caiji.ZyingAuthenticationError),
+            })
+    finally:
+        task_lock.release()
+
+
+def _start_zying_infringement_task(params):
+    with _zying_collection_state_lock:
+        if _zying_collection_state.get("running"):
+            return {
+                **dict(_zying_infringement_state),
+                "logs": list(_zying_infringement_logs),
+            }, "智赢产品采集正在运行，请结束采集后再查侵权", 409
+    if not _zying_infringement_lock.acquire(blocking=False):
+        with _zying_infringement_state_lock:
+            data = {
+                **dict(_zying_infringement_state),
+                "logs": list(_zying_infringement_logs),
+            }
+        return data, "智赢产品查侵权任务正在运行", 409
+
+    public_params = {key: value for key, value in dict(params).items() if key != "auth_token"}
+    with _zying_infringement_state_lock:
+        _zying_infringement_stop_event.clear()
+        _zying_infringement_logs.clear()
+        _zying_infringement_state.update({
+            "running": True,
+            "started_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            "finished_at": "",
+            "status": "running",
+            "message": "正在启动智赢产品查侵权",
+            "params": public_params,
+            "summary": {},
+            "requires_login": False,
+        })
+        if params.get("max_items"):
+            _append_zying_infringement_log(
+                f"任务已启动：分类 {params.get('category_name') or params.get('category') or '全部'}，"
+                f"从产品 {params.get('start_product_id') or '分类首件'} 开始，"
+                f"最多 {params['max_items']} 个；固定每 20 个标题交给 DeepSeek，只处理待审核状态"
+            )
+        else:
+            _append_zying_infringement_log(
+                f"任务已启动：第 {params['start_page']}-{params['end_page']} 页；"
+                "固定每 20 个标题交给 DeepSeek，只处理待审核状态"
+            )
+        data = {
+            **dict(_zying_infringement_state),
+            "logs": list(_zying_infringement_logs),
+        }
+    try:
+        threading.Thread(
+            target=run_zying_infringement_job,
+            args=(params, _zying_infringement_lock),
+            daemon=True,
+            name="zying-infringement-review",
+        ).start()
+    except Exception:
+        _zying_infringement_lock.release()
+        with _zying_infringement_state_lock:
+            _zying_infringement_state.update({
+                "running": False,
+                "finished_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                "status": "error",
+                "message": "智赢产品查侵权后台线程启动失败",
+            })
+        raise
+    return data, "", 200
 
 
 def build_risk_check_params(data):
@@ -7565,7 +7743,7 @@ def api_store_links():
             current_only=str(request.args.get("current_only") or "1").strip().lower()
             not in ("0", "false", "no", "off"),
             page=_parse_int_param(request.args, "page", 1, 1, 1000000),
-            page_size=_parse_int_param(request.args, "page_size", 500, 1, 1000),
+            page_size=_parse_int_param(request.args, "page_size", 200, 1, 1000),
         )
     except ValueError as exc:
         return jsonify({"status": "error", "message": str(exc)}), 400
@@ -9705,6 +9883,12 @@ def api_capture_zying_collection_login():
 
 def _start_zying_collection_task(params, source_label="后台 API"):
     """Start one shared Zying task without exposing credentials in task state."""
+    with _zying_infringement_state_lock:
+        if _zying_infringement_state.get("running"):
+            return {
+                **dict(_zying_collection_state),
+                "logs": list(_zying_collection_logs),
+            }, "智赢产品查侵权正在运行，请结束查侵权后再采集", 409
     if not _zying_collection_lock.acquire(blocking=False):
         with _zying_collection_state_lock:
             data = {
@@ -9732,11 +9916,17 @@ def _start_zying_collection_task(params, source_label="后台 API"):
                 "requires_login": False,
             }
         )
+        if params.get("max_items"):
+            range_text = (
+                f"从产品 {params.get('start_product_id') or '分类首件'} 开始，"
+                f"最多 {params['max_items']} 个"
+            )
+        else:
+            range_text = f"第 {params['start_page']}-{params['number']} 页"
         _append_zying_collection_log(
-            f"智赢采集任务已启动：第 {params['start_page']}-{params['number']} 页，"
+            f"智赢采集任务已启动：{range_text}，"
             f"分类 {params.get('category_name') or params.get('category') or '全部'}，"
-            f"模式 {source_label}；"
-            "数据库已有产品将直接跳过"
+            f"模式 {source_label}；数据库已有产品将直接跳过"
         )
         data = {
             **dict(_zying_collection_state),
@@ -16531,7 +16721,7 @@ def api_browser_extension_download():
         max_age=0,
     )
     response.headers["Cache-Control"] = "no-store"
-    response.headers["X-Zeshun-Extension-Version"] = "1.5.5"
+    response.headers["X-Zeshun-Extension-Version"] = "1.6.0"
     return response
 
 
@@ -16847,6 +17037,67 @@ def api_browser_extension_stop_zying_collection():
     return jsonify({"status": "success", "message": "已发送结束指令", "data": data})
 
 
+@app.route("/api/browser-extension/zying-infringement/start", methods=["POST"])
+@browser_extension_login_required
+@browser_extension_permission_required("zying_collection.execute")
+def api_browser_extension_start_zying_infringement():
+    data = request.get_json(silent=True) or {}
+    try:
+        credential = _browser_extension_zying_credential(data)
+        params = build_zying_infringement_params(data)
+        params["auth_token"] = credential
+    except bit_zying_caiji.ZyingAuthenticationError as exc:
+        return jsonify({"status": "error", "message": str(exc)}), 409
+    except (TypeError, ValueError) as exc:
+        return jsonify({"status": "error", "message": str(exc)}), 400
+    task, message, status_code = _start_zying_infringement_task(params)
+    if status_code != 200:
+        return jsonify({"status": "error", "message": message, "data": task}), status_code
+    return jsonify({"status": "success", "data": task})
+
+
+@app.route("/api/browser-extension/zying-infringement/status", methods=["GET"])
+@browser_extension_login_required
+@browser_extension_permission_required("zying_collection.view")
+def api_browser_extension_zying_infringement_status():
+    with _zying_infringement_state_lock:
+        data = {
+            **dict(_zying_infringement_state),
+            "params": dict(_zying_infringement_state.get("params") or {}),
+            "summary": dict(_zying_infringement_state.get("summary") or {}),
+            "logs": list(_zying_infringement_logs),
+            "batch_size": bit_zying_infringement.BATCH_SIZE,
+        }
+    return jsonify({"status": "success", "data": data})
+
+
+@app.route("/api/browser-extension/zying-infringement/stop", methods=["POST"])
+@browser_extension_login_required
+@browser_extension_permission_required("zying_collection.execute")
+def api_browser_extension_stop_zying_infringement():
+    with _zying_infringement_state_lock:
+        if not _zying_infringement_state.get("running"):
+            return jsonify({
+                "status": "error",
+                "message": "当前没有正在运行的智赢产品查侵权任务",
+                "data": {
+                    **dict(_zying_infringement_state),
+                    "logs": list(_zying_infringement_logs),
+                },
+            }), 409
+        _zying_infringement_stop_event.set()
+        _zying_infringement_state.update({
+            "status": "stopping",
+            "message": "正在安全结束智赢产品查侵权，请等待当前接口或 DeepSeek 批次完成",
+        })
+        _append_zying_infringement_log("泽顺插件已发送结束指令，正在安全停止查侵权")
+        data = {
+            **dict(_zying_infringement_state),
+            "logs": list(_zying_infringement_logs),
+        }
+    return jsonify({"status": "success", "message": "已发送结束指令", "data": data})
+
+
 def _browser_extension_ai_weight_price_local_only():
     """Keep browser-driven AI verification on the workstation that owns Edge."""
     if request.remote_addr not in ("127.0.0.1", "::1", "localhost"):
@@ -16861,9 +17112,11 @@ def _browser_extension_ai_weight_price_snapshot():
     data = ai_weight_price_service.status()
     config = ai_weight_price_service.config.load()
     user = getattr(g, "browser_extension_user", None)
+    execution_terminal = socket.gethostname()
     return {
         **data,
-        "computer": socket.gethostname(),
+        "computer": execution_terminal,
+        "execution_terminal": execution_terminal,
         "can_execute": bool(
             user and workbench_user_has_permission(user, "ai_weight_price.execute")
         ),
@@ -16960,12 +17213,7 @@ def api_browser_extension_ai_weight_price_start():
             raise ValueError("本次商品数量必须是1–10000的整数")
         previous = ai_weight_price_service.store.state("run", {}) or {}
         previous_selection = previous.get("selection") or {}
-        same_selection = (
-            str(previous_selection.get("category") or "") == selection["category"]
-            and int(previous_selection.get("start_page") or 0) == selection["start_page"]
-            and int(previous_selection.get("end_page") or 0) == selection["end_page"]
-            and int(previous_selection.get("start_item") or 1) == selection.get("start_item", 1)
-        )
+        same_selection = previous_selection == selection
         resume = bool(
             previous.get("outcome") == "blocked"
             and previous.get("run_id")

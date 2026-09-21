@@ -21,15 +21,20 @@ STORE_LINK_SALES_PAGE_INDEX = "idx_erp_meli_store_link_sales_page"
 STORE_LINK_SITE_PAGE_INDEX = "idx_erp_meli_store_link_site_page"
 STORE_LINK_CATEGORY_PAGE_INDEX = "idx_erp_meli_store_link_category_page"
 STORE_LINK_SEARCH_INDEX = "idx_erp_meli_store_link_search"
-STORE_LINK_DEFAULT_PAGE_SIZE = 500
+STORE_LINK_DEFAULT_PAGE_SIZE = 200
 STORE_LINK_MAX_PAGE_SIZE = 1000
 STORE_LINK_METADATA_CACHE_SECONDS = 60
+STORE_LINK_RECENT_SALES_CACHE_SECONDS = 30
+STORE_LINK_RECENT_SALES_CACHE_MAX_ENTRIES = 20000
 
 _schema_lock = threading.RLock()
 _store_link_schema_ready = False
 _sync_state_schema_ready = False
 _metadata_cache_lock = threading.RLock()
 _metadata_cache: dict[str, Any] = {"expires_at": 0.0, "data": None}
+_scoped_metadata_cache: dict[tuple[int, ...], dict[str, Any]] = {}
+_recent_sales_cache_lock = threading.RLock()
+_recent_sales_cache: dict[tuple[int, str], tuple[float, int]] = {}
 
 
 def _connect() -> Any:
@@ -875,6 +880,109 @@ def invalidate_store_link_metadata_cache() -> None:
 
     with _metadata_cache_lock:
         _metadata_cache.update({"expires_at": 0.0, "data": None})
+        _scoped_metadata_cache.clear()
+
+
+def _recent_sales_for_pairs(
+    cursor: Any,
+    target_pairs: Iterable[tuple[int, str]],
+    *,
+    use_cache: bool,
+) -> dict[tuple[int, str], int]:
+    """Read 14-day sales for the visible links without re-parsing old pages.
+
+    Orders store their item lines in ``raw_json``.  The old query expanded every
+    line from every recent order for each page request, even when only a few
+    visible links were needed.  Keep a short-lived per-link cache and filter the
+    JSON document before expanding it so refreshes do not repeat that work.
+    """
+
+    normalized_pairs = sorted({
+        (int(token_id), str(item_id))
+        for token_id, item_id in target_pairs
+        if int(token_id or 0) > 0 and str(item_id or "")
+    })
+    if not normalized_pairs:
+        return {}
+
+    now = time.monotonic()
+    result: dict[tuple[int, str], int] = {}
+    missing_pairs = normalized_pairs
+    if use_cache:
+        with _recent_sales_cache_lock:
+            missing_pairs = []
+            for pair in normalized_pairs:
+                cached = _recent_sales_cache.get(pair)
+                if cached and cached[0] > now:
+                    result[pair] = int(cached[1])
+                else:
+                    missing_pairs.append(pair)
+
+    if missing_pairs:
+        token_ids = sorted({pair[0] for pair in missing_pairs})
+        item_ids = sorted({pair[1] for pair in missing_pairs})
+        token_sql = ", ".join(["%s"] * len(token_ids))
+        pair_sql = ", ".join(["(%s, %s)"] * len(missing_pairs))
+        item_ids_json = _dumps(item_ids)
+        pair_values = [value for pair in missing_pairs for value in pair]
+        cursor.execute(
+            f"""
+            SELECT recent_orders.`token_id`, order_items.`item_id`,
+                   SUM(COALESCE(order_items.`quantity`, 0)) AS `sales_14d`
+            FROM `{SYNCED_ORDER_TABLE}` AS recent_orders
+            CROSS JOIN JSON_TABLE(
+                IF(
+                    JSON_VALID(recent_orders.`raw_json`),
+                    recent_orders.`raw_json`,
+                    JSON_OBJECT('order_items', JSON_ARRAY())
+                ), '$.order_items[*]'
+                COLUMNS (
+                    `item_id` VARCHAR(64) PATH '$.item.id',
+                    `quantity` INT PATH '$.quantity'
+                )
+            ) AS order_items
+            WHERE recent_orders.`date_created` >= UTC_TIMESTAMP() - INTERVAL 14 DAY
+              AND COALESCE(recent_orders.`status`, '') NOT IN ('cancelled', 'invalid')
+              AND recent_orders.`token_id` IN ({token_sql})
+              AND JSON_OVERLAPS(
+                    JSON_EXTRACT(
+                        IF(
+                            JSON_VALID(recent_orders.`raw_json`),
+                            recent_orders.`raw_json`,
+                            JSON_OBJECT('order_items', JSON_ARRAY())
+                        ),
+                        '$.order_items[*].item.id'
+                    ),
+                    CAST(%s AS JSON)
+                  )
+              AND (recent_orders.`token_id`, order_items.`item_id`) IN ({pair_sql})
+            GROUP BY recent_orders.`token_id`, order_items.`item_id`
+            """,
+            tuple(token_ids + [item_ids_json] + pair_values),
+        )
+        result.update({
+            (int(row.get("token_id") or 0), str(row.get("item_id") or "")):
+            int(row.get("sales_14d") or 0)
+            for row in cursor.fetchall()
+        })
+        for pair in missing_pairs:
+            result.setdefault(pair, 0)
+        if use_cache:
+            expires_at = now + STORE_LINK_RECENT_SALES_CACHE_SECONDS
+            with _recent_sales_cache_lock:
+                for pair in missing_pairs:
+                    _recent_sales_cache[pair] = (expires_at, result[pair])
+                if len(_recent_sales_cache) > STORE_LINK_RECENT_SALES_CACHE_MAX_ENTRIES:
+                    expired = [
+                        pair for pair, cached in _recent_sales_cache.items()
+                        if cached[0] <= now
+                    ]
+                    for pair in expired:
+                        _recent_sales_cache.pop(pair, None)
+                    overflow = len(_recent_sales_cache) - STORE_LINK_RECENT_SALES_CACHE_MAX_ENTRIES
+                    for pair in list(_recent_sales_cache)[:max(0, overflow)]:
+                        _recent_sales_cache.pop(pair, None)
+    return result
 
 
 def _query_store_link_metadata(
@@ -1026,7 +1134,34 @@ def _store_link_metadata(
     token_ids: Iterable[int] | None = None,
 ) -> dict[str, Any]:
     if token_ids is not None:
-        return _query_store_link_metadata(cursor, token_ids=token_ids)
+        scoped_key = tuple(sorted({
+            int(value) for value in token_ids or () if int(value or 0) > 0
+        }))
+        if not use_cache:
+            return _query_store_link_metadata(cursor, token_ids=scoped_key)
+        now = time.monotonic()
+        with _metadata_cache_lock:
+            cached_entry = _scoped_metadata_cache.get(scoped_key)
+            if (
+                cached_entry
+                and float(cached_entry.get("expires_at") or 0) > now
+                and cached_entry.get("data") is not None
+            ):
+                return deepcopy(cached_entry["data"])
+            metadata = _query_store_link_metadata(cursor, token_ids=scoped_key)
+            _scoped_metadata_cache[scoped_key] = {
+                "expires_at": time.monotonic() + STORE_LINK_METADATA_CACHE_SECONDS,
+                "data": deepcopy(metadata),
+            }
+            if len(_scoped_metadata_cache) > 32:
+                oldest_key = min(
+                    _scoped_metadata_cache,
+                    key=lambda key: float(
+                        _scoped_metadata_cache[key].get("expires_at") or 0
+                    ),
+                )
+                _scoped_metadata_cache.pop(oldest_key, None)
+            return metadata
     if not use_cache:
         return _query_store_link_metadata(cursor)
     now = time.monotonic()
@@ -1144,6 +1279,9 @@ def list_store_links(
         values.append(boolean_query)
     links_from_sql = f" FROM `{STORE_LINK_TABLE}` AS links"
     sort_aliases = {
+        "price": "price",
+        "weight_g": "weight_g",
+        "weight": "weight_g",
         "sold_quantity": "sold_quantity",
         "total_sales": "sold_quantity",
         "sales": "sold_quantity",
@@ -1152,6 +1290,11 @@ def list_store_links(
         "available_quantity": "available_quantity",
         "inventory": "available_quantity",
         "stock": "available_quantity",
+        "last_synced_at": "last_synced_at",
+        "sync_time": "last_synced_at",
+        "net_proceeds_usd": "net_proceeds_usd",
+        "net_proceeds": "net_proceeds_usd",
+        "net_income": "net_proceeds_usd",
     }
     normalized_sort_by = sort_aliases.get(
         str(sort_by or "sold_quantity").strip().lower(),
@@ -1225,7 +1368,22 @@ def list_store_links(
                 " WHERE " + " AND ".join(filtered_conditions)
                 if filtered_conditions else ""
             )
-            if not filtered_conditions:
+            scoped_only_filter = (
+                scoped_token_ids is not None
+                and not selected_token_ids
+                and token_id in (None, "")
+                and not site_id
+                and not group_name
+                and not status
+                and not category_filter
+                and not mercado_category
+                and not search
+            )
+            if scoped_only_filter:
+                total = int(summary.get(
+                    "current_count" if current_only else "all_count"
+                ) or 0)
+            elif not filtered_conditions:
                 total = int(summary.get("all_count") or 0)
             elif filtered_conditions == ["links.`is_current` = 1"]:
                 total = int(summary.get("current_count") or 0)
@@ -1323,38 +1481,11 @@ def list_store_links(
                     for row in rows
                     if int(row.get("token_id") or 0) > 0 and str(row.get("item_id") or "")
                 })
-                recent_sales_by_link = {}
-                if target_pairs:
-                    pair_sql = ", ".join(["(%s, %s)"] * len(target_pairs))
-                    pair_values = [value for pair in target_pairs for value in pair]
-                    cursor.execute(
-                        f"""
-                        SELECT recent_orders.`token_id`, order_items.`item_id`,
-                               SUM(COALESCE(order_items.`quantity`, 0)) AS `sales_14d`
-                        FROM `{SYNCED_ORDER_TABLE}` AS recent_orders
-                        CROSS JOIN JSON_TABLE(
-                            IF(
-                                JSON_VALID(recent_orders.`raw_json`),
-                                recent_orders.`raw_json`,
-                                JSON_OBJECT('order_items', JSON_ARRAY())
-                            ), '$.order_items[*]'
-                            COLUMNS (
-                                `item_id` VARCHAR(64) PATH '$.item.id',
-                                `quantity` INT PATH '$.quantity'
-                            )
-                        ) AS order_items
-                        WHERE recent_orders.`date_created` >= UTC_TIMESTAMP() - INTERVAL 14 DAY
-                          AND COALESCE(recent_orders.`status`, '') NOT IN ('cancelled', 'invalid')
-                          AND (recent_orders.`token_id`, order_items.`item_id`) IN ({pair_sql})
-                        GROUP BY recent_orders.`token_id`, order_items.`item_id`
-                        """,
-                        tuple(pair_values),
-                    )
-                    recent_sales_by_link = {
-                        (int(row.get("token_id") or 0), str(row.get("item_id") or "")):
-                            int(row.get("sales_14d") or 0)
-                        for row in cursor.fetchall()
-                    }
+                recent_sales_by_link = _recent_sales_for_pairs(
+                    cursor,
+                    target_pairs,
+                    use_cache=connection_factory is None,
+                )
                 for row in rows:
                     row["sales_14d"] = recent_sales_by_link.get(
                         (int(row.get("token_id") or 0), str(row.get("item_id") or "")),
@@ -1366,7 +1497,6 @@ def list_store_links(
                     (int(row.get("token_id") or 0), str(row.get("site_id") or "").upper()),
                     "",
                 )
-        connection.commit()
         return {
             "rows": rows,
             "stores": stores,

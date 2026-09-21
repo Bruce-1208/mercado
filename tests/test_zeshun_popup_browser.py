@@ -54,8 +54,9 @@ def test_start_and_busy_controls(popup):
     assert popup.locator("#weight-price-start").is_disabled()
     assert popup.locator("#weight-price-open-login").is_disabled()
     message = popup.evaluate("messages.find(m => m.type === 'START_AI_WEIGHT_PRICE')")
-    assert message["params"] == {"selection": {"category": "", "start_page": 1,
-                                                "end_page": 1, "start_item": 1}, "max_items": 10}
+    assert message["params"] == {
+        "selection": {"category": "", "start_product_id": ""}, "max_items": 10
+    }
     popup.evaluate("pendingAction({ok:false,error:'测试启动失败'}); window.holdAction=false")
     popup.wait_for_function("!document.querySelector('#weight-price-start').disabled")
     assert "测试启动失败" in popup.locator("#result").inner_text()
@@ -67,7 +68,7 @@ def test_resume_requires_acknowledgement_and_keeps_range(popup):
     assert popup.locator("#weight-price-start").inner_text() == "继续核重核价"
     popup.locator("#weight-price-acknowledged").check()
     assert popup.locator("#weight-price-start").is_enabled()
-    assert popup.locator("#weight-price-start-page").is_disabled()
+    assert popup.locator("#weight-price-start-product-id").is_disabled()
     popup.locator("#weight-price-start").click()
     message = popup.evaluate("messages.find(m => m.type === 'CONTINUE_AI_WEIGHT_PRICE')")
     assert message["params"] == {"acknowledged": True}
@@ -75,17 +76,31 @@ def test_resume_requires_acknowledgement_and_keeps_range(popup):
     assert not popup.locator("#weight-price-acknowledged").is_checked()
 
 
-def test_start_hint_explains_login_permission_and_range(popup):
+def test_start_hint_explains_login_permission_and_cursor(popup):
     popup.evaluate("testState.login.confirmed=false; renderWeightPriceStatus(testState)")
     assert "确认已登录" in popup.locator("#weight-price-start-hint").inner_text()
     popup.evaluate("testState.login.confirmed=true; testState.can_execute=false; renderWeightPriceStatus(testState)")
     assert "执行权限" in popup.locator("#weight-price-start-hint").inner_text()
     popup.evaluate("testState.can_execute=true; renderWeightPriceStatus(testState)")
-    popup.locator("#weight-price-end-page").fill("0")
+    popup.locator("#weight-price-start-product-id").fill("abc")
     assert popup.locator("#weight-price-start").is_disabled()
-    assert "结束页" in popup.locator("#weight-price-start-hint").inner_text()
-    popup.locator("#weight-price-end-page").fill("2")
+    assert "起始产品编号" in popup.locator("#weight-price-start-hint").inner_text()
+    popup.locator("#weight-price-start-product-id").fill("848332340")
     assert popup.locator("#weight-price-start").is_enabled()
+
+
+def test_weight_price_shows_current_category_and_execution_terminal(popup):
+    popup.evaluate("""renderWeightPriceStatus({
+      ok:true, can_execute:true, running:true, login:{confirmed:true},
+      execution_terminal:'OPS-PC-01',
+      run:{current_task_id:'848332340',message:'正在核验'},
+      current_product:{erp_goods_id:'848332340',title:'不锈钢水杯',
+                       zying_category_name:'家居 / 厨房用品'}
+    })""")
+
+    meta = popup.locator("#weight-price-current-meta")
+    assert meta.inner_text() == "当前产品 848332340 · 智赢分类 家居 / 厨房用品 · 执行终端 OPS-PC-01"
+    assert meta.get_attribute("title") == "不锈钢水杯"
 
 
 def test_categories_use_names_and_keep_ids_in_values(popup):
@@ -266,7 +281,7 @@ def test_zying_sales_and_fulfillment_are_the_final_collection_filter(browser):
     page.close()
 
 
-def test_zying_collection_opens_web_login_and_requires_page_range(popup):
+def test_zying_collection_opens_web_login_and_validates_cursor_limit(popup):
     popup.locator("#zying-mode").click()
     popup.wait_for_function("messages.some(m => m.type === 'OPEN_ZYING_LOGIN')")
     assert "智赢网页版登录页面" in popup.locator("#zying-page-status").inner_text()
@@ -274,8 +289,61 @@ def test_zying_collection_opens_web_login_and_requires_page_range(popup):
       zyingContext={credential:'test',categories:[]};
       authenticated=true; zyingRunning=false; zyingStartButton.disabled=false;
     }""")
-    popup.locator("#zying-start-page").fill("")
-    popup.locator("#zying-end-page").fill("3")
+    popup.locator("#zying-start-product-id").fill("not-an-id")
+    popup.locator("#zying-max-items").fill("3")
     popup.locator("#zying-start").click()
-    assert "必须指定有效的起始页和结束页" in popup.locator("#result").inner_text()
+    assert "起始产品编号必须是正整数" in popup.locator("#result").inner_text()
     assert not popup.evaluate("messages.some(m => m.type === 'START_ZYING_COLLECTION')")
+
+
+def test_background_open_zying_login_navigates_existing_tab_to_login_route(browser):
+    page = browser.new_page()
+    page.evaluate("""() => {
+      const event = {addListener: () => {}};
+      const updates = [];
+      const created = [];
+      const storageArea = {
+        get: (_, callback) => callback({}),
+        set: (_, callback) => callback && callback(),
+        remove: (_, callback) => callback && callback()
+      };
+      window.updates = updates;
+      window.created = created;
+      window.chrome = {
+        storage: {sync: storageArea, session: storageArea, local: storageArea},
+        runtime: {onInstalled:event, onStartup:event, onMessage:{addListener: fn => window.receive = fn}},
+        alarms: {onAlarm:event},
+        contextMenus: {onClicked:event},
+        tabs: {
+          query: async () => [{id: 7, windowId: 3, url: 'https://meli.zying.net/'}],
+          update: async (...args) => { updates.push(args); return {id: 7}; },
+          create: async options => { created.push(options); return {id: 8}; }
+        },
+        windows: {update: async (...args) => { updates.push(args); }}
+      };
+      window.importScripts = () => {};
+    }""")
+    page.add_script_tag(path=str(EXTENSION / "background.js"))
+    result = page.evaluate("new Promise(resolve => receive({type:'OPEN_ZYING_LOGIN'}, {}, resolve))")
+    assert result == {"ok": True, "tab_id": 7, "existing": True}
+    assert page.evaluate("updates[0]") == [7, {"url": "https://meli.zying.net/#/login", "active": True}]
+    assert page.evaluate("created") == []
+    page.close()
+
+
+def test_zying_infringement_starts_with_product_cursor_and_pending_only_copy(popup):
+    popup.locator("#zying-infringement-mode").click()
+    popup.evaluate("""() => {
+      zyingContext = {credential:'page-token', categories:[]};
+      authenticated = true;
+      document.querySelector('#zying-infringement-start').disabled = false;
+    }""")
+    popup.locator("#zying-infringement-start-product-id").fill("848332340")
+    popup.locator("#zying-infringement-max-items").fill("4")
+    popup.locator("#zying-infringement-start").click()
+    popup.wait_for_function("messages.some(m => m.type === 'START_ZYING_INFRINGEMENT')")
+    message = popup.evaluate("messages.find(m => m.type === 'START_ZYING_INFRINGEMENT')")
+    assert message["params"]["start_product_id"] == "848332340"
+    assert message["params"]["max_items"] == 4
+    assert "待审核列表" in popup.locator("#zying-infringement-panel").inner_text()
+    assert "每 20 个" in popup.locator("#zying-infringement-panel").inner_text()

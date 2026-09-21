@@ -1,6 +1,7 @@
 import hashlib
 import random
 import re
+import socket
 import threading
 import time
 import uuid
@@ -92,6 +93,7 @@ class Service:
         return {"running": running, "counts": self.store.counts(),
                 "current_counts": self.store.run_counts(run.get("run_id")), "quota": self.store.quota(),
                 "circuit": self.store.state("circuit"), "run": self.store.state("run", {}),
+                "current_product": self._current_product_status(run),
                 "run_error": self.store.state("run_error"), "action_error": self.store.state("action_error"),
                 "storage": str(self.store.root), "collection": self.store.state("collection"),
                 "login": self.store.state("login", {"confirmed": False}),
@@ -99,6 +101,44 @@ class Service:
                 "visual_progress": self.store.state("visual_progress", {}),
                 "model_connection": {**self.store.state("model_connection", {}),
                                      "configured": bool(api_key(self.config.load()["api_key_env"]))}}
+
+    def _current_product_status(self, run=None):
+        run = run or {}
+        current = self.store.state("pipeline_current", {}) or {}
+        key = str(current.get("task_id") or run.get("current_task_id") or "").strip()
+        if not key:
+            return {}
+        try:
+            task = self.store.get(key)
+        except KeyError:
+            return {"erp_goods_id": key, "title": "", "zying_category_id": "",
+                    "zying_category_name": "未读取"}
+
+        category_id = str(task.get("source_category") or "").strip()
+        category_name = self._zying_category_name(task)
+        return {
+            "erp_goods_id": key,
+            "title": str(task.get("title") or "").strip(),
+            "zying_category_id": category_id,
+            "zying_category_name": category_name,
+        }
+
+    def _zying_category_name(self, task):
+        category_id = str(task.get("source_category") or "").strip()
+        category_name = str(task.get("zying_category_name") or
+                            task.get("source_category_label") or "").strip()
+        if category_id:
+            for category in self.store.state("categories", []) or []:
+                if not isinstance(category, dict):
+                    continue
+                if str(category.get("value") or category.get("category_id") or "").strip() != category_id:
+                    continue
+                cached_name = str(category.get("label") or category.get("category_name") or
+                                  category.get("name") or "").strip()
+                if cached_name:
+                    category_name = cached_name
+                break
+        return category_name or "未读取"
 
     def check_model_connection(self):
         with self.idle():
@@ -635,6 +675,8 @@ class Service:
         maximum = int(config.get("max_items") or run.get("max_items") or ordinal)
         self.store.set_state("run", {**run, "current_task_id": key,
                                      "current_item_index": ordinal, "max_items": maximum})
+        self.store.update(key, execution_terminal=socket.gethostname(),
+                          zying_category_name=self._zying_category_name(task))
         self.store.log(f"开始逐件核对第 {ordinal}/{maximum} 件商品", key)
         self.store.record_run_item(run_id, key, execution_result="执行中")
         try:

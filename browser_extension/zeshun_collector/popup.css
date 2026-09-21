@@ -46,7 +46,7 @@ main { padding: 14px 18px; }
 .account-dot { width: 8px; height: 8px; border-radius: 50%; background: #a5afbc; box-shadow: 0 0 0 3px #edf0f4; }
 .account-card:has(.logged-in) .account-dot { background: #25a36f; box-shadow: 0 0 0 3px #e0f5eb; }
 
-.mode-tabs { display: grid; grid-template-columns: repeat(4, 1fr); gap: 4px; margin-bottom: 12px; padding: 4px; border-radius: 10px; background: #edf2f8; }
+.mode-tabs { display: grid; grid-template-columns: repeat(5, 1fr); gap: 4px; margin-bottom: 12px; padding: 4px; border-radius: 10px; background: #edf2f8; }
 .mode-tab { border: 0; border-radius: 8px; padding: 8px 6px; background: transparent; color: #67768a; cursor: pointer; font-size: 12px; font-weight: 700; }
 .mode-tab.active { background: #fff; color: #145db7; box-shadow: 0 2px 8px rgba(43, 68, 103, .1); }
 .mode-panel[hidden] { display: none; }
@@ -111,6 +111,7 @@ button { font: inherit; }
 .zying-log { max-height: 116px; margin: 9px 0 0; padding: 9px; overflow: auto; border-radius: 8px; background: #172232; color: #d8e4f3; white-space: pre-wrap; font: 10px/1.5 Consolas, monospace; }
 .weight-price-login-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
 .weight-price-login-actions .inline-action { width: 100%; margin: 0 0 8px; }
+.weight-price-current-meta { margin-top: 6px; padding: 7px 8px; border-radius: 7px; background: #eef6ff; color: #28577f; font-size: 11px; line-height: 1.45; overflow-wrap: anywhere; }
 #weight-price-resume { padding: 10px; margin-bottom: 8px; border-radius: 8px; background: #fff3db; }
 #weight-price-resume .zying-field { display: flex; align-items: center; line-height: 1.5; }
 #weight-price-start-hint { margin-top: 8px; font-size: 11px; }

@@ -15,6 +15,8 @@ const PURCHASE_TRACKING_RESUME_ALARM = "zeshun-purchase-tracking-resume";
 const NOTIFICATION_DEDUPE_KEY = "notificationDedupe";
 const NOTIFICATION_DEDUPE_MS = 30 * 60 * 1000;
 const MAX_QUEUE_SIZE = 100;
+const ZYING_HOST = "meli.zying.net";
+const ZYING_LOGIN_URL = `https://${ZYING_HOST}/#/login`;
 let queueFlushPromise = null;
 let purchaseTrackingRunPromise = null;
 
@@ -614,14 +616,22 @@ async function readZyingContext(tabId) {
 }
 
 async function openZyingLoginPage() {
-  const tabs = await chrome.tabs.query({url: "https://meli.zying.net/*"});
-  const existing = tabs.find(tab => tab.id);
+  // Query all tabs instead of relying on a URL match pattern: tabs.query URL
+  // filters are not reliable for SPA hash routes in every Chromium build.
+  const tabs = await chrome.tabs.query({});
+  const existing = tabs.find(tab => {
+    try { return new URL(tab.url || "").hostname === ZYING_HOST && tab.id; }
+    catch (_) { return false; }
+  });
   if (existing) {
-    await chrome.tabs.update(existing.id, {active: true});
+    // An existing tab may be parked at `/` or an old protected route. Merely
+    // activating it makes the login button appear to do nothing, so always
+    // put the tab on the explicit login route first.
+    await chrome.tabs.update(existing.id, {url: ZYING_LOGIN_URL, active: true});
     if (existing.windowId) await chrome.windows?.update?.(existing.windowId, {focused: true});
     return {tab_id: existing.id, existing: true};
   }
-  const tab = await chrome.tabs.create({url: "https://meli.zying.net/#/product", active: true});
+  const tab = await chrome.tabs.create({url: ZYING_LOGIN_URL, active: true});
   return {tab_id: tab.id, existing: false};
 }
 
@@ -667,6 +677,31 @@ async function aiWeightPriceStatus() {
   const reason = data?.circuit?.reason || (data?.run?.outcome === "blocked" ? data?.run?.message : "");
   if (reason) void notifyAttention(reason, {source: "AI核重核价"}).catch(() => {});
   return data;
+}
+
+async function startZyingInfringement(context, params) {
+  return apiRequest("/api/browser-extension/zying-infringement/start", {
+    method: "POST",
+    body: JSON.stringify({
+      ...params,
+      credential: context.credential
+    })
+  });
+}
+
+async function zyingInfringementStatus() {
+  const data = await apiRequest("/api/browser-extension/zying-infringement/status", {method: "GET"});
+  if (["error", "blocked"].includes(String(data?.status || "").toLowerCase())) {
+    void notifyAttention(data.message || data.last_error, {source: "智赢产品查侵权"}).catch(() => {});
+  }
+  return data;
+}
+
+async function stopZyingInfringement() {
+  return apiRequest("/api/browser-extension/zying-infringement/stop", {
+    method: "POST",
+    body: "{}"
+  });
 }
 
 async function monitorAttentionEvents() {
@@ -778,6 +813,12 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
       };
       case "GET_ZYING_STATUS": return {ok: true, ...(await zyingCollectionStatus())};
       case "STOP_ZYING_COLLECTION": return {ok: true, ...(await stopZyingCollection())};
+      case "START_ZYING_INFRINGEMENT": return {
+        ok: true,
+        ...(await startZyingInfringement(message.context || {}, message.params || {}))
+      };
+      case "GET_ZYING_INFRINGEMENT_STATUS": return {ok: true, ...(await zyingInfringementStatus())};
+      case "STOP_ZYING_INFRINGEMENT": return {ok: true, ...(await stopZyingInfringement())};
       case "GET_AI_WEIGHT_PRICE_STATUS": return {ok: true, ...(await aiWeightPriceStatus())};
       case "GET_NOTIFICATION_SETTINGS": return {ok: true, settings: await notificationSettings()};
       case "SAVE_NOTIFICATION_SETTINGS": return {

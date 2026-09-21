@@ -129,13 +129,24 @@ def validate(value):
 
 def selection_params(value, config):
     if not isinstance(value, dict):
-        raise ValueError("请先选择分类（可留空）、起始页、结束页和页内起始商品")
-    if set(value) - {"category", "start_page", "end_page", "start_item"}:
+        raise ValueError("请先选择分类（可留空）、起始产品编号（可留空）和最多商品数")
+    if set(value) - {"category", "start_page", "end_page", "start_item", "start_product_id"}:
         raise ValueError("任务参数字段不正确")
     category = value.get("category", "")
     if not isinstance(category, str) or len(category) > 500:
         raise ValueError("分类格式不正确")
     result = {"category": category.strip()}
+    if "start_product_id" in value:
+        start_product_id = value.get("start_product_id", "")
+        if not isinstance(start_product_id, str) or len(start_product_id) > 64:
+            raise ValueError("起始产品编号格式不正确")
+        start_product_id = start_product_id.strip()
+        if start_product_id and not re.fullmatch(r"[1-9]\d*", start_product_id):
+            raise ValueError("起始产品编号必须是正整数，或留空从分类首件开始")
+        if set(value) & {"start_page", "end_page", "start_item"}:
+            raise ValueError("起始产品编号不能与旧版页码范围同时提交")
+        result["start_product_id"] = start_product_id
+        return result
     for field in ("start_page", "end_page"):
         num = value.get(field)
         if type(num) is not int or not 1 <= num <= 10000:

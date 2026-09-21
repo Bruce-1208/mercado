@@ -684,6 +684,9 @@ class Browser:
 
     def collect(self, store, on_task=None):
         selection = selection_params(self.config.get("run_selection"), self.config)
+        cursor_mode = "start_product_id" in selection
+        start_product_id = self.normalize_erp_id(selection.get("start_product_id", ""))
+        end_page = int(self.config["max_pages"] if cursor_mode else selection["end_page"])
         scope = selection_key(selection, self.config)
         page = self.page(self.config["erp_list_url"])
         seen = set()
@@ -691,19 +694,32 @@ class Browser:
         # databases therefore still need the local fallback before using .get.
         checkpoint = store.state("collection", {}) or {}
         resume_after = checkpoint.get("page", 0) if not checkpoint.get("complete") and checkpoint.get("scope") == scope else 0
+        cursor_found = not bool(start_product_id) or bool(resume_after)
+        selected_items = 0
+        limit_reached = False
         if not resume_after:
             store.reset_scope(scope)
         if resume_after:
             store.log(f"从已保存的第 {resume_after} 页后续采集，前序页面只翻页、不重复提取")
         try:
-            store.log(f"正在应用分类筛选，准备采集第 {selection['start_page']}–{selection['end_page']} 页")
+            store.log(
+                "正在应用分类筛选，准备按起始产品编号连续读取"
+                if cursor_mode else
+                f"正在应用分类筛选，准备采集第 {selection['start_page']}–{selection['end_page']} 页"
+            )
             category_label = self.apply_category(page, selection["category"])
             self.first_page(page)
-            first = max(selection["start_page"], resume_after + 1)
+            first = max(1 if cursor_mode else selection["start_page"], resume_after + 1)
             start_item = int(selection.get("start_item") or 1)
-            store.log(f"本次采集：{category_label}，第 {selection['start_page']}–{selection['end_page']} 页；"
-                      f"第 {start_item} 件开始（仅首个选中页生效）")
-            for page_number in range(1, selection["end_page"] + 1):
+            if cursor_mode:
+                store.log(
+                    f"本次采集：{category_label}，从产品 {start_product_id or '分类首件'} 开始，"
+                    f"最多 {int(self.config.get('max_items') or 10)} 件"
+                )
+            else:
+                store.log(f"本次采集：{category_label}，第 {selection['start_page']}–{selection['end_page']} 页；"
+                          f"第 {start_item} 件开始（仅首个选中页生效）")
+            for page_number in range(1, end_page + 1):
                 self.check(page)
                 if page_number < first:
                     if not self.next_page(page, page_number):
@@ -718,8 +734,8 @@ class Browser:
                 seen.add(fingerprint)
                 count = 0
                 row_list = rows.all()
-                item_offset = start_item if page_number == selection["start_page"] else 1
-                if page_number == selection["start_page"] and item_offset > len(row_list):
+                item_offset = start_item if not cursor_mode and page_number == selection["start_page"] else 1
+                if not cursor_mode and page_number == selection["start_page"] and item_offset > len(row_list):
                     raise ValueError(f"智赢第 {page_number} 页只有 {len(row_list)} 件商品，"
                                      f"无法从第 {item_offset} 件开始")
                 for item_index, row in enumerate(row_list, 1):
@@ -738,7 +754,8 @@ class Browser:
                               "erp_sku": self.value(row, "erp_sku"), "raw_erp": raw,
                               "source_page": page_number, "source_index": item_index,
                               "source_category": selection["category"],
-                              "source_category_label": category_label}
+                              "source_category_label": category_label,
+                              "zying_category_name": category_label}
                     link = self.value(row, "erp_edit_link", "href")
                     if link:
                         record["erp_edit_url"] = urljoin(page.url, link)
@@ -751,6 +768,11 @@ class Browser:
                     # Snapshot all card fields before a detail click can rerender
                     # the list, so values cannot come from the next card.
                     key = self.erp_goods_id(page, row, record)
+                    if not cursor_found:
+                        if key != start_product_id:
+                            continue
+                        cursor_found = True
+                        store.log(f"已在智赢第 {page_number} 页定位起始产品 {start_product_id}", key)
                     record["erp_goods_id"] = key
                     added = store.add(record)
                     if not added:
@@ -759,8 +781,10 @@ class Browser:
                         # reordered by the original database creation time.
                         store.update(key, source_page=page_number, source_index=item_index,
                                      source_category=selection["category"],
-                                     source_category_label=category_label)
+                                     source_category_label=category_label,
+                                     zying_category_name=category_label)
                     count += added
+                    selected_items += 1
                     store.include_in_scope(scope, key, page_number)
                     store.log(f"已采集商品 {key}：{record['title']}", key)
                     if on_task:
@@ -770,17 +794,24 @@ class Browser:
                                     f"正在逐件核对智赢商品 {key}：{record['title']}", page)
                         on_task(key)
                         self.check(page)
+                    if cursor_mode and not on_task and selected_items >= int(self.config.get("max_items") or 10):
+                        limit_reached = True
+                        break
                 store.log(f"ERP第 {page_number} 页采集完成，新增 {count} 条；已存在记录保留原进度")
                 store.set_state("collection", {"page": page_number, "signature": fingerprint, "at": time.time(),
                                                "url": self.config["erp_list_url"], "scope": scope,
-                                               "selection": selection, "complete": page_number == selection["end_page"]})
+                                               "selection": selection, "complete": page_number == end_page or limit_reached})
                 store.export()
-                if page_number == selection["end_page"]:
+                if limit_reached or page_number == end_page:
                     break
                 if not self.next_page(page, page_number):
                     store.set_state("collection", {**store.state("collection"), "complete": True})
                     store.log(f"列表已到末页 {page_number}，本次采集结束")
                     break
+            if start_product_id and not cursor_found:
+                raise ValueError(
+                    f"所选分类中未找到起始产品编号 {start_product_id}，请确认编号和分类"
+                )
             return len(seen)
         finally:
             self.release(page)

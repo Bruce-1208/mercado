@@ -746,6 +746,20 @@ def test_list_store_links_filters_site_and_defaults_to_sales_descending():
     )
     assert "ORDER BY links.`available_quantity` ASC" in inventory_sql
 
+    for sort_by in ("price", "weight_g", "last_synced_at", "net_proceeds_usd"):
+        calls.clear()
+        store.list_store_links(
+            sort_by=sort_by,
+            sort_order="asc",
+            page_size=25,
+            connection_factory=Connection,
+        )
+        sortable_sql = next(
+            sql for sql, _params in calls
+            if f"FROM `{store.STORE_LINK_TABLE}`" in sql and "LIMIT %s OFFSET %s" in sql
+        )
+        assert f"ORDER BY links.`{sort_by}` ASC" in sortable_sql
+
     calls.clear()
     store.list_store_links(
         sort_by="sales_14d",
@@ -926,15 +940,19 @@ def test_workbench_store_link_ui_and_routes():
     assert "美客多后台修改日志".encode("utf-8") in response.data
     assert "每 3 天自动同步链接状态".encode("utf-8") in response.data
     assert b'id="store-link-page-size"' in response.data
-    assert "<th>库存</th>".encode("utf-8") in response.data
-    assert "<th>总销量</th>".encode("utf-8") in response.data
-    assert "<th>14天销量</th>".encode("utf-8") in response.data
+    for sort_by in (
+        "price", "weight_g", "net_proceeds_usd", "available_quantity",
+        "sold_quantity", "sales_14d", "last_synced_at",
+    ):
+        assert f'data-store-link-sort="{sort_by}"'.encode() in response.data
+    assert b"function sortStoreLinksBy(sortBy)" in response.data
     assert b'value="sold_quantity:desc" selected' in response.data
     assert b'value="sales_14d:desc"' in response.data
     assert b'value="available_quantity:desc"' in response.data
-    assert b'<option value="500" selected>500' in response.data
+    assert b'<option value="200" selected>200' in response.data
+    assert b'<option value="500">500' in response.data
     assert b'<option value="1000">1,000' in response.data
-    assert 'page_size: String(storeLinkPageSize.value || "500")'.encode("utf-8") in response.data
+    assert 'page_size: String(storeLinkPageSize.value || "200")'.encode("utf-8") in response.data
     assert "new AbortController()".encode("utf-8") in response.data
 
     listing_data = {
@@ -949,7 +967,7 @@ def test_workbench_store_link_ui_and_routes():
         "total": 1,
         "page": 1,
         "pages": 1,
-        "page_size": 500,
+        "page_size": 200,
     }
     with patch.object(workbench.bit_db_api, "list_mercado_store_links", return_value=listing_data) as listing:
         response = client.get(
@@ -977,6 +995,7 @@ def test_workbench_store_link_ui_and_routes():
     assert response.status_code == 200
     assert recent_listing.call_args.kwargs["sort_by"] == "sales_14d"
     assert recent_listing.call_args.kwargs["sort_order"] == "asc"
+    assert recent_listing.call_args.kwargs["page_size"] == 200
 
     with patch.object(
         workbench.bit_db_api, "list_mercado_store_links", return_value=listing_data

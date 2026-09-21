@@ -127,7 +127,7 @@ def test_console_downloads_complete_zeshun_extension_package():
 
     assert response.status_code == 200
     assert response.headers["Content-Type"].startswith("application/zip")
-    assert response.headers["X-Zeshun-Extension-Version"] == "1.5.5"
+    assert response.headers["X-Zeshun-Extension-Version"] == "1.6.0"
     assert "zeshun-collector-extension.zip" in response.headers["Content-Disposition"]
     with zipfile.ZipFile(io.BytesIO(response.data)) as archive:
         names = set(archive.namelist())
@@ -188,10 +188,17 @@ def test_zying_collection_controls_live_in_extension_and_use_current_browser():
     content = (EXTENSION / "zying-page.js").read_text(encoding="utf-8")
 
     assert 'id="zying-mode"' in popup
-    assert 'id="zying-start-page"' in popup
-    assert 'id="zying-end-page"' in popup
+    assert 'id="zying-start-product-id"' in popup
+    assert 'id="zying-max-items"' in popup
     assert 'id="zying-category"' in popup
     assert 'id="zying-developer"' in popup
+    assert 'id="zying-infringement-mode"' in popup
+    assert 'id="zying-infringement-start-product-id"' in popup
+    assert 'id="zying-infringement-max-items"' in popup
+    assert 'id="zying-infringement-category"' in popup
+    assert 'id="zying-infringement-developer"' in popup
+    assert "每 20 个" in popup
+    assert "待审核列表" in popup
     assert "登录浏览器" not in popup
     assert "比特浏览器" not in popup
     assert 'localStorage.getItem("token")' in content
@@ -203,13 +210,12 @@ def test_ai_weight_price_launch_controls_live_in_extension():
     background = (EXTENSION / "background.js").read_text(encoding="utf-8")
 
     assert 'id="weight-price-mode"' in popup
-    assert 'id="weight-price-start-page"' in popup
-    assert 'id="weight-price-end-page"' in popup
-    assert 'id="weight-price-start-item"' in popup
+    assert 'id="weight-price-start-product-id"' in popup
     assert 'id="weight-price-limit"' in popup
     assert 'id="weight-price-category"' in popup
     assert 'id="weight-price-start"' in popup
     assert 'id="weight-price-stop"' in popup
+    assert 'id="weight-price-current-meta"' in popup
     assert "/api/browser-extension/ai-weight-price/status" in background
     assert 'aiWeightPriceAction("start"' in background
     assert 'aiWeightPriceAction("stop"' in background
@@ -228,6 +234,8 @@ def test_integrated_ai_weight_price_page_points_launch_to_extension(monkeypatch)
 
     assert response.status_code == 200
     assert "任务启动已迁移到泽顺插件" in response.text
+    assert "智赢分类 / 执行终端" in response.text
+    assert "status.execution_terminal" in response.text
     assert '<div class="launch-block" hidden>' in response.text
 
 
@@ -486,6 +494,84 @@ def test_browser_extension_starts_zying_collection_from_current_browser_credenti
     assert "auth_token" not in status_data["params"]
 
 
+def test_browser_extension_starts_zying_infringement_with_fixed_title_batches(monkeypatch):
+    import bit.bit_interface as workbench
+
+    workbench.app.config.update(TESTING=True, SECRET_KEY="extension-test-secret")
+    workbench.app.secret_key = "extension-test-secret"
+    token = workbench.create_browser_extension_token(_browser_extension_user())
+    captured = {}
+
+    class ImmediateThread:
+        def __init__(self, target, args=(), **_kwargs):
+            self.target = target
+            self.args = args
+
+        def start(self):
+            self.target(*self.args)
+
+    def review_products(**kwargs):
+        captured.update(kwargs)
+        return {
+            "pages": 2,
+            "pending_count": 4,
+            "checked_count": 4,
+            "approved_count": 3,
+            "suspected_count": 1,
+            "skipped_changed_count": 0,
+            "failed_count": 0,
+        }
+
+    monkeypatch.setattr(workbench.threading, "Thread", ImmediateThread)
+    monkeypatch.setattr(
+        workbench.bit_zying_infringement,
+        "review_pending_products",
+        review_products,
+    )
+    headers = {"Authorization": f"Bearer {token}"}
+    body = {
+        "credential": "current-page-token",
+        "start_product_id": "801623017",
+        "max_items": 12,
+        "category": "202170568",
+        "category_name": "家电类",
+        "product_developer_id": "17",
+        "product_developer_name": "产品开发甲",
+    }
+    with workbench._zying_infringement_state_lock:
+        previous_state = dict(workbench._zying_infringement_state)
+        previous_logs = list(workbench._zying_infringement_logs)
+    try:
+        client = workbench.app.test_client()
+        response = client.post(
+            "/api/browser-extension/zying-infringement/start",
+            json=body,
+            headers=headers,
+        )
+        status = client.get(
+            "/api/browser-extension/zying-infringement/status",
+            headers=headers,
+        )
+    finally:
+        with workbench._zying_infringement_state_lock:
+            workbench._zying_infringement_state.clear()
+            workbench._zying_infringement_state.update(previous_state)
+            workbench._zying_infringement_logs.clear()
+            workbench._zying_infringement_logs.extend(previous_logs)
+
+    assert response.status_code == 200
+    assert captured["auth_token"] == "current-page-token"
+    assert captured["start_page"] == 1
+    assert captured["end_page"] == 10000
+    assert captured["start_product_id"] == "801623017"
+    assert captured["max_items"] == 12
+    assert captured["category"] == "202170568"
+    status_data = status.get_json()["data"]
+    assert status_data["status"] == "success"
+    assert status_data["batch_size"] == 20
+    assert "auth_token" not in status_data["params"]
+
+
 def test_browser_extension_zying_options_uses_developers_from_current_page(monkeypatch):
     import bit.bit_interface as workbench
 
@@ -545,9 +631,7 @@ def test_browser_extension_starts_ai_weight_price_on_local_workstation(monkeypat
         json={
             "selection": {
                 "category": "",
-                "start_page": 2,
-                "end_page": 4,
-                "start_item": 3,
+                "start_product_id": "848332340",
             },
             "max_items": 12,
         },
@@ -577,9 +661,7 @@ def test_browser_extension_starts_ai_weight_price_on_local_workstation(monkeypat
         "task_id": None,
         "selection": {
             "category": "",
-            "start_page": 2,
-            "end_page": 4,
-            "start_item": 3,
+            "start_product_id": "848332340",
         },
         "max_items": 12,
         "resume": False,
