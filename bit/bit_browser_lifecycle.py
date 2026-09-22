@@ -29,6 +29,11 @@ def _setting(name, default, minimum=1):
         return default
 
 
+def browser_window_limit():
+    """Share the admission limit with schedulers before they start workers."""
+    return _setting("BIT_BROWSER_MAX_OPEN_WINDOWS", 3)
+
+
 @contextmanager
 def _database():
     locks.RUNTIME_LOCK_DIR.mkdir(parents=True, exist_ok=True)
@@ -111,7 +116,7 @@ def reserve_window(window_id, live_windows, timeout=180):
     """
     window_id = str(window_id)
     deadline = time.monotonic() + max(0, float(timeout))
-    limit = _setting("BIT_BROWSER_MAX_OPEN_WINDOWS", 3)
+    limit = browser_window_limit()
     announced = False
     while True:
         with _database() as db:

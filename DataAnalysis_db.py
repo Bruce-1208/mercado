@@ -52,34 +52,34 @@ class DataAnalysis_db(object):
         db = pymysql.connect(
             host="localhost", user="root", password="zzw@951208", database="mercado"
         )
+        try:
+            # 使用 cursor() 方法创建一个游标对象 cursor
+            cursor = db.cursor()
 
-        # 使用 cursor() 方法创建一个游标对象 cursor
-        cursor = db.cursor()
+            # 使用 execute()  方法执行 SQL 查询
+            cursor.execute("select * from mkd_stores where storename=%s", storename)
+            results = cursor.fetchall()
+            list_stores = []
+            for row in results:
+                storename = row[1]
+                refresh_token = row[2]
+                store_id = row[3]
+                dict = {}
+                dict.update({"storename": storename})
+                dict.update({"refresh_token": refresh_token})
+                dict.update({"store_id": store_id})
+                list_stores.append(dict)
 
-        # 使用 execute()  方法执行 SQL 查询
-        cursor.execute("select * from mkd_stores where storename=%s", storename)
-        results = cursor.fetchall()
-        list_stores = []
-        for row in results:
-            storename = row[1]
-            refresh_token = row[2]
-            store_id = row[3]
-            dict = {}
-            dict.update({"storename": storename})
-            dict.update({"refresh_token": refresh_token})
-            dict.update({"store_id": store_id})
-            list_stores.append(dict)
+            print(list_stores)
+            cursor.execute("select cbtid from listings where storename=%s", storename)
+            result_cbtid = cursor.fetchall()
+            list_cbtid = []
+            for row in result_cbtid:
+                list_cbtid.append(row[0])
 
-        print(list_stores)
-        cursor.execute("select cbtid from listings where storename=%s", storename)
-        result_cbtid = cursor.fetchall()
-        list_cbtid = []
-        for row in result_cbtid:
-            list_cbtid.append(row[0])
-
-        # 关闭数据库连接
-        db.close()
-        return list_cbtid, list_stores
+            return list_cbtid, list_stores
+        finally:
+            db.close()
 
     def getAtribute(self, cbtid, dictItem, headers):
         url = (
@@ -156,39 +156,40 @@ class DataAnalysis_db(object):
         db = pymysql.connect(
             host="localhost", user="root", password="zzw@951208", database="mercado"
         )
+        try:
+            # 使用 cursor() 方法创建一个游标对象 cursor
+            cursor = db.cursor()
 
-        # 使用 cursor() 方法创建一个游标对象 cursor
-        cursor = db.cursor()
+            # 获取当前时间
+            now = datetime.now()
 
-        # 获取当前时间
-        now = datetime.now()
+            # 以标准格式输出当前时间
+            # 例如: 2023-03-28 15:45:26
+            current_time = now.strftime("%Y-%m-%d %H:%M:%S")
 
-        # 以标准格式输出当前时间
-        # 例如: 2023-03-28 15:45:26
-        current_time = now.strftime("%Y-%m-%d %H:%M:%S")
+            for dictitem in dictitems:
+                if dictitem is not None:
+                    # 使用 execute()  方法执行 SQL 查询
+                    sql = """insert into listings (storename,item_id,site_id,date_created,price,domain_id,title,cbtid,pictures,create_time) values (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)"""
+                    cursor.execute(
+                        sql,
+                        (
+                            storename,
+                            dictitem["item_id"],
+                            dictitem["site_id"],
+                            dictitem["date_created"],
+                            dictitem["price"],
+                            dictitem["domain_id"],
+                            dictitem["title"],
+                            dictitem["id"],
+                            dictitem["pictures"],
+                            current_time,
+                        ),
+                    )
 
-        for dictitem in dictitems:
-            if dictitem is not None:
-                # 使用 execute()  方法执行 SQL 查询
-                sql = """insert into listings (storename,item_id,site_id,date_created,price,domain_id,title,cbtid,pictures,create_time) values (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)"""
-                cursor.execute(
-                    sql,
-                    (
-                        storename,
-                        dictitem["item_id"],
-                        dictitem["site_id"],
-                        dictitem["date_created"],
-                        dictitem["price"],
-                        dictitem["domain_id"],
-                        dictitem["title"],
-                        dictitem["id"],
-                        dictitem["pictures"],
-                        current_time,
-                    ),
-                )
-
-        db.commit()
-        db.close()
+            db.commit()
+        finally:
+            db.close()
 
     # 获取指定时间流量
     def getVisit(self, item_id, headers, start_date, end_date):
@@ -237,68 +238,69 @@ class DataAnalysis_db(object):
         db = pymysql.connect(
             host="localhost", user="root", password="zzw@951208", database="mercado"
         )
+        try:
+            # 使用 cursor() 方法创建一个游标对象 cursor
+            cursor = db.cursor()
 
-        # 使用 cursor() 方法创建一个游标对象 cursor
-        cursor = db.cursor()
+            # 获取当前时间
+            now = datetime.now()
 
-        # 获取当前时间
-        now = datetime.now()
+            # 以标准格式输出当前时间
+            # 例如: 2023-03-28 15:45:26
+            current_time = now.strftime("%Y-%m-%d %H:%M:%S")
 
-        # 以标准格式输出当前时间
-        # 例如: 2023-03-28 15:45:26
-        current_time = now.strftime("%Y-%m-%d %H:%M:%S")
+            for dictitem in dictitems:
+                if dictitem is not None:
+                    # 使用 execute()  方法执行 SQL 查询
+                    sql = """insert into listings_visit (storename,item_id,site_id,visit,total_visit,visit_date,create_time) values (%s,%s,%s,%s,%s,%s,%s)"""
+                    cursor.execute(
+                        sql,
+                        (
+                            storename,
+                            dictitem["item_id"],
+                            dictitem["site_id"],
+                            dictitem["visit"],
+                            dictitem["total_visit"],
+                            dictitem["visit_date"],
+                            current_time,
+                        ),
+                    )
 
-        for dictitem in dictitems:
-            if dictitem is not None:
-                # 使用 execute()  方法执行 SQL 查询
-                sql = """insert into listings_visit (storename,item_id,site_id,visit,total_visit,visit_date,create_time) values (%s,%s,%s,%s,%s,%s,%s)"""
-                cursor.execute(
-                    sql,
-                    (
-                        storename,
-                        dictitem["item_id"],
-                        dictitem["site_id"],
-                        dictitem["visit"],
-                        dictitem["total_visit"],
-                        dictitem["visit_date"],
-                        current_time,
-                    ),
-                )
-
-        db.commit()
-        db.close()
+            db.commit()
+        finally:
+            db.close()
 
     def get_visit_db(self, storename, start_date, end_date):
         # 打开数据库连接
         db = pymysql.connect(
             host="localhost", user="root", password="zzw@951208", database="mercado"
         )
+        try:
+            # 使用 cursor() 方法创建一个游标对象 cursor
+            cursor = db.cursor()
 
-        # 使用 cursor() 方法创建一个游标对象 cursor
-        cursor = db.cursor()
+            # 使用 execute()  方法执行 SQL 查询
+            cursor.execute(
+                "select item_id from listings_visit where storename=%s and visit_date=%s and visit!=-1",
+                (storename, start_date + "/" + end_date),
+            )
+            result_listing_visit = cursor.fetchall()
+            item_listing_visit = []
+            for row in result_listing_visit:
+                item_listing_visit.append(row[0])
 
-        # 使用 execute()  方法执行 SQL 查询
-        cursor.execute(
-            "select item_id from listings_visit where storename=%s and visit_date=%s and visit!=-1",
-            (storename, start_date + "/" + end_date),
-        )
-        result_listing_visit = cursor.fetchall()
-        item_listing_visit = []
-        for row in result_listing_visit:
-            item_listing_visit.append(row[0])
-
-        cursor.execute("select item_id from listings where storename=%s ", storename)
-        result_listing = cursor.fetchall()
-        item_listing = []
-        for row in result_listing:
-            item_listing.append(row[0])
-        result = []
-        for listing in item_listing:
-            if listing not in item_listing_visit:
-                result.append(listing)
-        return result
-        # 关闭数据库连接
-        db.close()
+            cursor.execute("select item_id from listings where storename=%s ", storename)
+            result_listing = cursor.fetchall()
+            item_listing = []
+            for row in result_listing:
+                item_listing.append(row[0])
+            result = []
+            for listing in item_listing:
+                if listing not in item_listing_visit:
+                    result.append(listing)
+            return result
+        finally:
+            db.close()
 
     def main(self, storename, start_date, end_date):
         id = "8820539028080485"

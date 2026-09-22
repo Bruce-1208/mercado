@@ -4,7 +4,10 @@ from decimal import Decimal
 from datetime import datetime
 from fastapi import FastAPI, HTTPException, status
 from pydantic import BaseModel, Field
-from db_pool import get_db_connection  # 假设你把连接池封装在 db_pool.py 中
+if __package__:
+    from .db_pool import get_db_connection
+else:
+    from db_pool import get_db_connection
 import uvicorn
 
 # 初始化 FastAPI 应用

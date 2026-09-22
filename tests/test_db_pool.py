@@ -142,3 +142,126 @@ def test_pool_can_be_disabled_for_diagnostics(monkeypatch):
     assert captured[0]["host"] == "db"
     assert captured[0]["database"] == "mercado"
     assert captured[0]["connect_timeout"] == 5
+
+
+import threading
+import time
+from concurrent.futures import ThreadPoolExecutor
+
+import pytest
+
+
+@pytest.fixture
+def physical_connections(monkeypatch):
+    """Exercise real DBUtils locking/reset/caching without touching MySQL."""
+    state = {"open": 0, "peak": 0, "created": 0}
+    lock = threading.Lock()
+
+    class Connection:
+        def __init__(self, **kwargs):
+            self.closed = False
+            with lock:
+                state["open"] += 1
+                state["created"] += 1
+                state["peak"] = max(state["peak"], state["open"])
+
+        def close(self):
+            with lock:
+                if not self.closed:
+                    state["open"] -= 1
+                    self.closed = True
+
+        def rollback(self):
+            pass
+
+        def ping(self, *args, **kwargs):
+            assert not self.closed
+
+    db_pool.close_all_pools()
+    monkeypatch.setenv("MYSQL_POOL_FORCE_ENABLED", "1")
+    monkeypatch.setenv("MYSQL_POOL_MAX_CONNECTIONS", "2")
+    monkeypatch.setenv("MYSQL_POOL_MIN_CACHED", "0")
+    monkeypatch.setenv("MYSQL_POOL_MAX_CACHED", "2")
+    monkeypatch.setenv("MYSQL_POOL_ACQUIRE_TIMEOUT", "1")
+    monkeypatch.setattr(db_pool.pymysql, "connect", Connection)
+    yield state
+    db_pool.close_all_pools()
+    assert state["open"] == 0
+
+
+def test_process_budget_includes_different_configs_and_idle_sockets(physical_connections):
+    def query(index):
+        # Different timeout settings previously each received their own budget.
+        connection = db_pool.get_db_connection({"read_timeout": 10 + index % 4})
+        try:
+            time.sleep(0.005)
+        finally:
+            connection.close()
+
+    with ThreadPoolExecutor(max_workers=8) as executor:
+        list(executor.map(query, range(48)))
+    assert physical_connections["peak"] <= 2
+    assert db_pool.pool_status()["active"] == 0
+    assert db_pool.pool_status()["max_connections"] == 2
+
+
+def test_exhaustion_times_out_without_opening_extra_connection(physical_connections):
+    first = db_pool.get_db_connection()
+    second = db_pool.get_db_connection()
+    started = time.monotonic()
+    try:
+        with pytest.raises(db_pool.PoolAcquireTimeout):
+            db_pool.get_db_connection({"read_timeout": 9})
+        assert 0.9 <= time.monotonic() - started < 3
+        assert physical_connections["created"] == 2
+    finally:
+        first.close()
+        second.close()
+    connection = db_pool.get_db_connection({"read_timeout": 9})
+    connection.close()
+    assert physical_connections["peak"] == 2
+
+
+def test_prewarming_respects_remaining_process_budget(monkeypatch, physical_connections):
+    monkeypatch.setenv("MYSQL_POOL_MIN_CACHED", "2")
+    first = db_pool.get_db_connection()
+    second = db_pool.get_db_connection({"read_timeout": 9})
+    try:
+        assert physical_connections["peak"] == 2
+    finally:
+        first.close()
+        second.close()
+
+
+def test_failed_connect_does_not_consume_budget(monkeypatch, physical_connections):
+    connect = db_pool.pymysql.connect
+    monkeypatch.setattr(db_pool.pymysql, "connect", lambda **kwargs: (_ for _ in ()).throw(
+        db_pool.pymysql.OperationalError(1040, "Too many connections")
+    ))
+    with pytest.raises(db_pool.pymysql.OperationalError):
+        db_pool.get_db_connection()
+    monkeypatch.setattr(db_pool.pymysql, "connect", connect)
+    connection = db_pool.get_db_connection()
+    connection.close()
+    assert db_pool.pool_status()["active"] == 0
+
+
+def test_waiting_for_another_checkout_has_a_deadline(physical_connections):
+    # Simulate a slow driver connect holding the registry lock.
+    with ThreadPoolExecutor(max_workers=1) as executor:
+        with db_pool._pools_lock:
+            future = executor.submit(db_pool.get_db_connection)
+            with pytest.raises(db_pool.PoolAcquireTimeout):
+                future.result(timeout=3)
+    assert physical_connections["created"] == 0
+
+
+def test_legacy_interface_import_does_not_connect(monkeypatch):
+    import importlib
+
+    monkeypatch.setattr(db_pool.pymysql, "connect", lambda **kwargs: pytest.fail(
+        "import must not open MySQL connections"
+    ))
+    module = importlib.import_module("mercado_interface.db_pool")
+    importlib.reload(module)
+    assert module.get_db_connection is db_pool.get_db_connection

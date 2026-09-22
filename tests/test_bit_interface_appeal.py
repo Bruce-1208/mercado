@@ -838,7 +838,7 @@ def test_daily_task_console_exposes_all_task_switches_and_shop_group():
     assert "fetchExecutionTarget(" in template
     assert "body: JSON.stringify({task_id: taskId})" in template
     assert "function renderDailyTaskStatuses(data)" in template
-    assert "scheduleDailyTaskStatusPoll(2000)" in template
+    assert "scheduleDailyTaskStatusPoll(4000)" in template
     assert "startDailyTaskBtn.disabled = running" not in template
 
     assert 'data-role="login-status"' in template
@@ -979,6 +979,7 @@ def test_daily_task_api_starts_multiple_instances_and_stops_only_selected(
     monkeypatch,
     tmp_path,
 ):
+    monkeypatch.setenv("BIT_DAILY_TASK_MAX_CONCURRENT", "2")
     class FakeEvent:
         def __init__(self):
             self.value = False

@@ -749,36 +749,21 @@ def select_mercado_site_fast(driver, name, site):
 
         function visible(el) {
             const rect = el.getBoundingClientRect();
-            return rect.width > 0 && rect.height > 0;
-        }
-
-        function textOf(el) {
-            return [
-                el.innerText || '',
-                el.textContent || '',
-                el.getAttribute('aria-label') || '',
-                el.getAttribute('title') || '',
-                el.getAttribute('data-value') || ''
-            ].join(' ').toLowerCase();
+            const style = window.getComputedStyle(el);
+            return rect.width > 0 && rect.height > 0
+                && style.visibility !== 'hidden' && style.display !== 'none'
+                && !el.disabled;
         }
 
         const elements = allElements(document);
         const targetByValue = elements.find(el =>
-            visible(el) && (
-                el.getAttribute('data-value') === remoteValue ||
-                el.querySelector?.(`[data-value="${remoteValue}"]`)
-            )
+            visible(el) && el.getAttribute('data-value') === remoteValue
         );
         if (targetByValue) {
-            const target = targetByValue.getAttribute('data-value') === remoteValue
-                ? targetByValue
-                : targetByValue.querySelector(`[data-value="${remoteValue}"]`);
+            const target = targetByValue;
             const clickable = target.closest('li, button, a, [role="option"], [role="menuitem"], [class*="option-switcher"]') || target;
             clickable.scrollIntoView({block: 'center', inline: 'center'});
             clickable.click();
-            for (const type of ['pointerdown', 'mousedown', 'pointerup', 'mouseup', 'click']) {
-                clickable.dispatchEvent(new MouseEvent(type, {bubbles: true, cancelable: true, view: window}));
-            }
             return `clicked_data_value:${remoteValue}`;
         }
 
@@ -786,27 +771,29 @@ def select_mercado_site_fast(driver, name, site):
             visible(el) && (
                 String(el.className || '').includes('nav-header-cbt__site-switcher') ||
                 String(el.className || '').includes('nav-header-cbt__trigger') ||
-                el.id === 'nav-header-cbt__logged' ||
-                /select\\s+(country|site)|country|site/i.test(textOf(el))
+                el.id === 'nav-header-cbt__logged'
             )
         );
         if (switcher) {
             switcher.click();
         }
 
-        const switcherRoot = document.querySelector('#nav-header-cbt__switcher, #nav-header-cbt__logged-options, [class*="site-switcher"]') || document;
-        const target = allElements(switcherRoot).filter(visible).find(el =>
-            visible(el) && labels.some(label => textOf(el).includes(label))
-        );
+        // Help pages may have no switcher at all. Searching the entire document
+        // for country text can click a help article and lose the chat launcher.
+        const switcherRoot = document.querySelector('#nav-header-cbt__switcher, #nav-header-cbt__logged-options, [class*="site-switcher"]');
+        if (!switcherRoot) return switcher ? 'opened_no_target' : 'no_switcher';
+        const options = allElements(switcherRoot).filter(visible);
+        const target = options.find(el => el.getAttribute('data-value') === remoteValue)
+            || options.find(el =>
+                el.matches('li, button, a, [role="option"], [role="menuitem"]')
+                && labels.some(label => (el.innerText || '').trim().toLowerCase() === label)
+            );
         if (!target) {
             return switcher ? 'opened_no_target' : 'no_switcher';
         }
         const clickable = target.closest('li, button, a, [role="option"], [role="menuitem"], [class*="option-switcher"]') || target;
         clickable.scrollIntoView({block: 'center'});
         clickable.click();
-        for (const type of ['pointerdown', 'mousedown', 'pointerup', 'mouseup', 'click']) {
-            clickable.dispatchEvent(new MouseEvent(type, {bubbles: true, cancelable: true, view: window}));
-        }
         return 'clicked_text_in_switcher';
         """,
         remote_value,

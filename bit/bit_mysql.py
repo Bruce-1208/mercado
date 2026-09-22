@@ -3,6 +3,7 @@ import hashlib
 import os
 import re
 import threading
+import time
 import random
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal, InvalidOperation
@@ -113,12 +114,49 @@ def _filter_datetime_bounds(date_from="", date_to=""):
     return start_at, end_exclusive
 
 
+_column_check_cache = {}
+_column_check_lock = threading.Lock()
+
+
+def _column_check_key(cursor, table_name, column_name, column_definition):
+    connection = getattr(cursor, "connection", None)
+    # Only cache actual MySQL cursors, scoped to the physical database identity.
+    # Test doubles and nonstandard connections retain the uncached contract.
+    if not isinstance(connection, _pymysql_driver.connections.Connection):
+        return None
+    return (
+        os.getpid(), connection.host, connection.port, connection.unix_socket,
+        connection.user, connection.db, table_name, column_name, column_definition,
+    )
+
+
 def _ensure_column(cursor, table_name, column_name, column_definition):
-    cursor.execute(f"SHOW COLUMNS FROM `{table_name}` LIKE %s", (column_name,))
-    if cursor.fetchone():
-        return False
-    cursor.execute(f"ALTER TABLE `{table_name}` ADD COLUMN `{column_name}` {column_definition}")
-    return True
+    try:
+        ttl = max(0, min(3600, int(os.environ.get("MYSQL_SCHEMA_CHECK_TTL", "60"))))
+    except ValueError:
+        ttl = 60
+    key = _column_check_key(cursor, table_name, column_name, column_definition) if ttl else None
+
+    def check_column():
+        cursor.execute(f"SHOW COLUMNS FROM `{table_name}` LIKE %s", (column_name,))
+        if cursor.fetchone():
+            return False
+        cursor.execute(f"ALTER TABLE `{table_name}` ADD COLUMN `{column_name}` {column_definition}")
+        return True
+
+    if key is None:
+        return check_column()
+    # Serialize first checks so concurrent requests cannot race ADD COLUMN.
+    with _column_check_lock:
+        now = time.monotonic()
+        if _column_check_cache.get(key, 0) > now:
+            return False
+        added = check_column()
+        if len(_column_check_cache) >= 1024:
+            _column_check_cache.clear()
+        # DDL commits implicitly; only remember a successful existence check/ADD.
+        _column_check_cache[key] = time.monotonic() + ttl
+        return added
 
 
 def _appeal_phrase_hash(content):
