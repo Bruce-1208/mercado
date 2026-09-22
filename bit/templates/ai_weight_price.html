@@ -26,6 +26,7 @@
 <section class="panel"><span class="eyebrow">ZESHUN / LOCAL AUTOMATION</span><h1>AI核重核价</h1><p>此模块在办公电脑本地运行，需要连接本机已登录的 Edge。</p><div class="notice">当前打开的是远程控制台。请先在办公电脑启动泽顺控制台，再打开 <a href="http://127.0.0.1:5000">本机控制台</a>；也可运行 <code>python -m erp.ai_weight_price</code>，打开 <a href="http://127.0.0.1:5018/ai-weight-price">独立本地页面</a>。</div></section>
 {% else %}
 <header class="header"><div><span class="eyebrow">ZESHUN / PRODUCT VERIFICATION</span><h1>AI核重核价</h1><p class="muted">从智赢商品到供货成本与包装重量，逐条核验，保留每一步证据。</p></div><div class="actions"><span id="runner" class="tag">本机 · 未启动</span>{% if not plugin_launch_only %}<button data-write onclick="action('start',{mode:'probe'})">检查 Edge 连接</button>{% endif %}<button class="danger" data-write id="terminate" onclick="terminateRun()" disabled>终止并清空本次任务</button></div></header>
+{% if remote_read_only|default(false) %}<div class="notice"><strong>当前终端为只读查看</strong><p>可查看任务进度、商品明细、日志并导出结果。启动核重核价、修改参数和同步智赢仍需在连接 Edge 的执行电脑上操作。</p></div>{% endif %}
 <div class="notice" id="setup">首次使用请完成「参数设置」中的页面字段适配。默认仅审核；启用 ERP 回写后，通过全部核验的任务才会保存。</div>
 <div class="notice" id="run-progress" role="status" aria-live="polite"><strong id="run-summary">正在读取运行状态…</strong><p id="run-message"></p><div class="actions"><span id="latest-event" class="muted">正在读取最近日志…</span><button class="small" onclick="tab('logs',document.getElementById('logs-tab'))">查看运行日志</button></div></div>
 <div class="actions" id="skip-current-wrap" hidden><button class="small" data-write id="skip-current" onclick="skipCurrent()">跳过当前异常，继续下一件</button></div>

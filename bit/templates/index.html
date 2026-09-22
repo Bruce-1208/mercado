@@ -12403,7 +12403,7 @@
                         <div class="field">
                             <label for="mercado-authorization-url">授权链接</label>
                             <div class="token-auth-link">
-                                <input id="mercado-authorization-url" type="text" readonly value="{{ (mercado_authorization|default({})).get('authorization_url') or 'https://global-selling.mercadolibre.com/authorization?response_type=code&client_id=2845198883767774&redirect_uri=https%3A%2F%2Fzeshun.cc.cd%2Fzs' }}">
+                                <input id="mercado-authorization-url" type="text" readonly value="{{ (mercado_authorization|default({})).get('authorization_url') or 'https://global-selling.mercadolibre.com/authorization?response_type=code&client_id=2845198883767774&redirect_uri=https%3A%2F%2Fwuhanzeshun.com%2Fzs' }}">
                                 <button class="secondary" id="copy-mercado-auth-btn" type="button" onclick="copyMercadoAuthorizationUrl()">复制</button>
                                 <button class="primary" id="open-mercado-auth-btn" type="button" onclick="openMercadoAuthorizationUrl()">打开</button>
                             </div>
@@ -12498,7 +12498,7 @@
                         <div class="field"><label for="mercado-application-name">应用名称</label><input id="mercado-application-name" maxlength="100" placeholder="例如：泽顺刊登应用"></div>
                         <div class="field"><label for="mercado-application-client-id">App ID</label><input id="mercado-application-client-id" maxlength="64" autocomplete="off"></div>
                         <div class="field"><label for="mercado-application-secret">Client Secret</label><input id="mercado-application-secret" type="password" autocomplete="new-password" placeholder="编辑时留空表示不修改"></div>
-                        <div class="field"><label for="mercado-application-redirect-uri">回调地址</label><input id="mercado-application-redirect-uri" maxlength="500" value="https://zeshun.cc.cd/zs"></div>
+                        <div class="field"><label for="mercado-application-redirect-uri">回调地址</label><input id="mercado-application-redirect-uri" maxlength="500" value="https://wuhanzeshun.com/zs"></div>
                         <div class="field"><label for="mercado-application-auth-url">授权地址</label><input id="mercado-application-auth-url" maxlength="500" value="https://global-selling.mercadolibre.com/authorization"></div>
                     </div>
                     <div class="actions">
@@ -19471,7 +19471,7 @@
             if (mercadoApplicationName) mercadoApplicationName.value = "";
             if (mercadoApplicationClientId) mercadoApplicationClientId.value = "";
             if (mercadoApplicationSecret) mercadoApplicationSecret.value = "";
-            if (mercadoApplicationRedirectUri) mercadoApplicationRedirectUri.value = "https://zeshun.cc.cd/zs";
+            if (mercadoApplicationRedirectUri) mercadoApplicationRedirectUri.value = "https://wuhanzeshun.com/zs";
             if (mercadoApplicationAuthUrl) mercadoApplicationAuthUrl.value = "https://global-selling.mercadolibre.com/authorization";
             if (mercadoApplicationSave) mercadoApplicationSave.textContent = "新增应用";
             showMercadoApplicationMessage("");

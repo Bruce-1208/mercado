@@ -1,0 +1,149 @@
+{
+  "captured_at": "2026-09-15T04:49:22",
+  "current_url": "https://global-selling.mercadolibre.com/help",
+  "chat_state": {
+    "ai_frame_count": 1,
+    "inline_aria_expanded": "false",
+    "inline_has_input": false,
+    "inline_open": true,
+    "inline_root_class": "assistant-chat show expanded relative-height",
+    "inline_shell": true,
+    "legacy_frame_count": 1,
+    "shadow_ai_frame_count": 1,
+    "visible_ai_frame_count": 1
+  },
+  "dom_snapshot": {
+    "aiShells": [
+      {
+        "ariaExpanded": "false",
+        "className": "icon-button__wrapper icon-button__wrapper--closed",
+        "id": "sa-icon-button-wrapper",
+        "tag": "BUTTON",
+        "visible": true
+      },
+      {
+        "ariaExpanded": "",
+        "className": "assistant-chat show expanded relative-height",
+        "id": "sa-assistant-chat",
+        "tag": "DIV",
+        "visible": true
+      }
+    ],
+    "frames": [
+      {
+        "className": "",
+        "height": 369,
+        "id": "",
+        "shadowHost": "sof-seller-assistant-frm-host",
+        "src": "https://global-selling.mercadolibre.com/maxwell/new-chat?flavor=seller-assistant&hideHeader=true&origin=sa&andes_ui=legacy&customLocale=en-US",
+        "title": "Meli AI Chat",
+        "visible": true,
+        "width": 460
+      },
+      {
+        "className": "",
+        "height": 0,
+        "id": "_hjSafeContext_25091747",
+        "shadowHost": "",
+        "src": "about:blank",
+        "title": "_hjSafeContext",
+        "visible": false,
+        "width": 0
+      }
+    ],
+    "readyState": "complete",
+    "shadowHosts": [
+      {
+        "className": "remote-module cx-contents-search-frontend-cx-search-frm",
+        "id": "remote-module-container-cx-contents-search-frontend-cx-search-frm-default",
+        "tag": "SECTION"
+      },
+      {
+        "className": "",
+        "id": "sof-seller-assistant-frm-host",
+        "tag": "DIV"
+      }
+    ],
+    "title": "帮助"
+  },
+  "browser_logs": [
+    {
+      "level": "SEVERE",
+      "message": "https://console.bitbrowser.net/?id=e490af3613f0493abd900faf0fa95516&locale=zh&port=54345 - Unchecked runtime.lastError: Could not establish connection. Receiving end does not exist.",
+      "source": "other",
+      "timestamp": 1789418764840
+    },
+    {
+      "level": "SEVERE",
+      "message": "https://www.global-selling.mercadolibre.com/browser-assessment/s/assessment.js?mo=manual&fi=maxwell_user_message - Failed to load resource: net::ERR_SSL_VERSION_OR_CIPHER_MISMATCH",
+      "source": "network",
+      "timestamp": 1789418779937
+    },
+    {
+      "level": "SEVERE",
+      "message": "https://www.global-selling.mercadolibre.com/browser-assessment/s/assessment.js?mo=manual&fi=maxwell_user_message - Failed to load resource: net::ERR_SSL_VERSION_OR_CIPHER_MISMATCH",
+      "source": "network",
+      "timestamp": 1789418787501
+    },
+    {
+      "level": "SEVERE",
+      "message": "https://www.global-selling.mercadolibre.com/browser-assessment/s/assessment.js?mo=manual&fi=maxwell_user_message - Failed to load resource: net::ERR_SSL_VERSION_OR_CIPHER_MISMATCH",
+      "source": "network",
+      "timestamp": 1789418791399
+    },
+    {
+      "level": "SEVERE",
+      "message": "https://www.global-selling.mercadolibre.com/browser-assessment/s/assessment.js?mo=manual&fi=maxwell_user_message - Failed to load resource: net::ERR_SSL_VERSION_OR_CIPHER_MISMATCH",
+      "source": "network",
+      "timestamp": 1789418805294
+    },
+    {
+      "level": "SEVERE",
+      "message": "https://www.global-selling.mercadolibre.com/browser-assessment/s/assessment.js?mo=manual&fi=maxwell_user_message - Failed to load resource: net::ERR_SSL_VERSION_OR_CIPHER_MISMATCH",
+      "source": "network",
+      "timestamp": 1789418809897
+    },
+    {
+      "level": "SEVERE",
+      "message": "https://global-selling.mercadolibre.com/maxwell/api/sse/long-lived - Failed to load resource: net::ERR_NETWORK_CHANGED",
+      "source": "network",
+      "timestamp": 1789418812063
+    },
+    {
+      "level": "SEVERE",
+      "message": "https://www.mercadolibre.com/jms/lgz/background/automation?dps=armor.d7b7aac53af2e31f2241fcc5746aaeb485c00d4e2c3573d4c93bd2fe62dfb1e90f9e83f1c1a3dee288d0b7428930d98d8b3a548f868d380fd9bb5030d7f8d47faadce7c589eb5a2ff7eed1cdb2a91ce8b5d737e388a99a00266ee65dfb0fa4d0.e4c3090321994c3831a4a5afe72c4dec&section=/maxwell/new-chat - Failed to load resource: net::ERR_CONNECTION_RESET",
+      "source": "network",
+      "timestamp": 1789418822130
+    },
+    {
+      "level": "SEVERE",
+      "message": "https://api.mercadolibre.com/tracks - Failed to load resource: net::ERR_CONNECTION_RESET",
+      "source": "network",
+      "timestamp": 1789418822177
+    },
+    {
+      "level": "SEVERE",
+      "message": "https://o11y-proxy-otel-frontend.meli.com/v1/metrics - Failed to load resource: net::ERR_CONNECTION_RESET",
+      "source": "network",
+      "timestamp": 1789418825225
+    },
+    {
+      "level": "SEVERE",
+      "message": "https://o11y-proxy-otel-frontend.meli.com/v1/metrics - Failed to load resource: net::ERR_CONNECTION_RESET",
+      "source": "network",
+      "timestamp": 1789418827305
+    },
+    {
+      "level": "SEVERE",
+      "message": "https://o11y-proxy-otel-frontend.meli.com/v1/metrics - Failed to load resource: net::ERR_CONNECTION_RESET",
+      "source": "network",
+      "timestamp": 1789418832301
+    },
+    {
+      "level": "SEVERE",
+      "message": "security 122 Not allowed to load local resource: chrome-error://chromewebdata/maxwell/new-chat?flavor=seller-assistant&hideHeader=true&origin=sa&andes_ui=legacy&customLocale=en-US&_new_conversation_ts=1789418915282",
+      "source": "security",
+      "timestamp": 1789418915283
+    }
+  ]
+}

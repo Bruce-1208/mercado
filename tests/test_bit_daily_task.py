@@ -1802,7 +1802,9 @@ def test_shop_executor_records_login_failure_and_skips_remaining_sites(monkeypat
     assert result["exit_reason"] == "未登录"
 
 
-def test_login_anomaly_circuit_breaker_skips_shop_before_browser_worker(monkeypatch):
+def test_existing_logout_anomaly_does_not_skip_shop_before_browser_worker(
+    monkeypatch, capsys
+):
     monkeypatch.setattr(
         bit_daily_task,
         "get_window_anomalies",
@@ -1826,10 +1828,9 @@ def test_login_anomaly_circuit_breaker_skips_shop_before_browser_worker(monkeypa
         "侵权",
     )
 
-    assert [shop["name"] for shop in runnable] == ["正常店铺"]
-    assert paused[0]["name"] == "熔断店铺"
-    assert paused[0]["exit_reason"] == "登录异常熔断"
-    assert paused[0]["results"][0]["status"] == "login_circuit_open"
+    assert [shop["name"] for shop in runnable] == ["熔断店铺", "正常店铺"]
+    assert paused == []
+    assert "本轮继续打开窗口复检登录状态" in capsys.readouterr().out
 
 
 def test_daily_appeal_validation_allows_one_auto_login_attempt(monkeypatch):

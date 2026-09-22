@@ -5,6 +5,8 @@ import os
 import threading
 import time
 
+from bit import bit_browser_lifecycle as lifecycle
+
 from bit.bit_runtime_lock import (
     InterProcessLock,
     create_window_lease,
@@ -99,6 +101,8 @@ def _post_browser_mutation(
         ),
     )
     try:
+        if endpoint == "open":
+            lifecycle.mark_launch_started(browser_id, request_timeout)
         return requests.post(
             f"{url}/browser/{endpoint}",
             data=json.dumps({"id": f"{browser_id}"}),
@@ -238,18 +242,26 @@ def openBrowser(
         with _AUTO_LEASES_GUARD:
             _AUTO_LEASES[(threading.get_ident(), str(id))] = auto_lease
     try:
+        lifecycle.ensure_browser_reaper()
+        lifecycle.reserve_window(
+            id,
+            getAllBrowserPids,
+            timeout=_BROWSER_API_LOCK_TIMEOUT if api_lock_timeout is None else api_lock_timeout,
+        )
         res = _post_browser_mutation(
             "open",
             id,
             _BROWSER_OPEN_TIMEOUT if request_timeout is None else request_timeout,
             api_lock_timeout=api_lock_timeout,
         )
-        if auto_lease is not None and isinstance(res, dict) and res.get("success") is False:
+        if isinstance(res, dict) and res.get("success") is True:
+            lifecycle.mark_open(id)
+        if auto_lease is not None and (not isinstance(res, dict) or res.get("success") is not True):
             with _AUTO_LEASES_GUARD:
                 _AUTO_LEASES.pop((threading.get_ident(), str(id)), None)
             auto_lease.release()
         return res
-    except Exception:
+    except BaseException:
         if auto_lease is not None:
             with _AUTO_LEASES_GUARD:
                 _AUTO_LEASES.pop((threading.get_ident(), str(id)), None)
@@ -259,6 +271,10 @@ def openBrowser(
 
 def releaseBrowserLease(id):
     """释放 openBrowser 自动获取的任务锁，但保持浏览器窗口打开。"""
+    # This is an explicit handoff (manual operations / interactive collectors),
+    # not a failed automation cleanup. Never let the reaper close these windows.
+    if current_thread_window_lease(id) is not None:
+        lifecycle.mark_manual(id)
     auto_lease_key = (threading.get_ident(), str(id))
     with _AUTO_LEASES_GUARD:
         auto_lease = _AUTO_LEASES.pop(auto_lease_key, None)
@@ -279,12 +295,7 @@ def closeBrowser(
         else max(1, int(request_timeout))
     )
     if force:
-        return _post_browser_mutation(
-            "close",
-            id,
-            close_timeout,
-            api_lock_timeout=api_lock_timeout,
-        )
+        return _close_browser_verified(id, close_timeout, api_lock_timeout)
     active_lease = lease or current_thread_window_lease(id)
     auto_lease_key = (threading.get_ident(), str(id))
     with _AUTO_LEASES_GUARD:
@@ -304,12 +315,7 @@ def closeBrowser(
                 "lockOwner": get_lock_owner(window_lock_key(id)),
             }
     try:
-        return _post_browser_mutation(
-            "close",
-            id,
-            close_timeout,
-            api_lock_timeout=api_lock_timeout,
-        )
+        return _close_browser_verified(id, close_timeout, api_lock_timeout)
     finally:
         if temporary_lease is not None:
             temporary_lease.release()
@@ -317,6 +323,68 @@ def closeBrowser(
             with _AUTO_LEASES_GUARD:
                 _AUTO_LEASES.pop(auto_lease_key, None)
             auto_lease.release()
+
+
+def _pid_response(endpoint, payload):
+    result = requests.post(
+        f"{url}/browser/{endpoint}", data=json.dumps(payload), headers=headers, timeout=5,
+    )
+    result.raise_for_status()
+    result = result.json()
+    if not isinstance(result, dict) or result.get("success") is False:
+        raise RuntimeError(f"无法确认比特浏览器进程状态：{result}")
+    if "success" in result:
+        result = result.get("data")
+    if not isinstance(result, dict):
+        raise RuntimeError(f"比特浏览器进程列表格式异常：{result}")
+    # Both the documented bare PID mapping and {success, data} are supported.
+    pids = {}
+    for window_id, pid in result.items():
+        if pid is None:
+            continue
+        try:
+            pid = int(pid)
+        except (TypeError, ValueError) as exc:
+            raise RuntimeError("比特浏览器返回了无效的进程 ID") from exc
+        if pid > 0:
+            pids[str(window_id)] = pid
+    return pids
+
+
+def getBrowserPids(ids):
+    return _pid_response("pids/alive", {"ids": [str(value) for value in ids]})
+
+
+def getAllBrowserPids():
+    return _pid_response("pids/all", {})
+
+
+def _close_browser_verified(window_id, request_timeout, api_lock_timeout):
+    result = _post_browser_mutation(
+        "close", window_id, request_timeout, api_lock_timeout=api_lock_timeout,
+    )
+    for attempt in range(3):
+        if str(window_id) not in getBrowserPids([window_id]):
+            if lifecycle.confirm_closed(window_id):
+                return {**(result if isinstance(result, dict) else {}), "success": True}
+            return {"success": False, "msg": "窗口启动结果未确定，保留登记等待再次回收"}
+        if attempt < 2:
+            time.sleep(0.5)
+    return {"success": False, "msg": "关闭请求后浏览器进程仍存活，保留登记等待再次回收"}
+
+
+def start_browser_cleanup():
+    lifecycle.ensure_browser_reaper()
+
+
+def release_finished_thread_leases():
+    """A forgotten auto lease must not retain dead threads or block recovery."""
+    live_threads = {thread.ident for thread in threading.enumerate()}
+    with _AUTO_LEASES_GUARD:
+        abandoned = [key for key in _AUTO_LEASES if key[0] not in live_threads]
+        leases = [_AUTO_LEASES.pop(key) for key in abandoned]
+    for lease in leases:
+        lease.release()
 
 
 def deleteBrowser(id):  # 删除窗口

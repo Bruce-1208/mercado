@@ -437,6 +437,8 @@ def run_reputation_infraction_then_daily():
 
 def run_main_loop(repeat_interval_seconds=None, max_cycles=None):
     """循环执行完整任务链；每条链结束后再固定休息 2 小时。"""
+    from bit.bit_api import start_browser_cleanup
+    start_browser_cleanup()
     if repeat_interval_seconds is None:
         repeat_interval_seconds = max(
             0,

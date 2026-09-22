@@ -297,6 +297,11 @@ def _configured_local_executor_origins():
         os.environ.get("BIT_LOCAL_EXECUTOR_ALLOWED_ORIGINS") or ""
     ).strip()
     origins = {
+        "https://wuhanzeshun.com",
+        "http://wuhanzeshun.com",
+        "https://www.wuhanzeshun.com",
+        "http://www.wuhanzeshun.com",
+        # Keep the previous console origin during the staged migration.
         "https://zeshun.cc.cd",
         "http://zeshun.cc.cd",
     }
@@ -2040,7 +2045,11 @@ def _verify_local_executor_token_with_server(token):
             or parsed.fragment
         ):
             raise ValueError("invalid server address")
-        if parsed.scheme == "http" and parsed.netloc == "zeshun.cc.cd":
+        if parsed.scheme == "http" and parsed.netloc in {
+            "wuhanzeshun.com",
+            "www.wuhanzeshun.com",
+            "zeshun.cc.cd",
+        }:
             base_url = "https://" + base_url[len("http://") :]
         elif parsed.scheme != "https" and not (
             parsed.scheme == "http" and parsed.hostname in ("127.0.0.1", "::1", "localhost")
@@ -18272,6 +18281,9 @@ def serve_wsgi_application(serve=None):
 
 
 def start_interface_background_services():
+    # Local browser recovery is also needed in client mode and after a worker
+    # was killed. It does not access the database or central schedulers.
+    start_browser_cleanup()
     # 客户端只承载本机界面与浏览器自动化。所有会读取数据库、刷新 Token
     # 或维护中心数据的后台线程统一由服务端进程运行。
     if interface_background_services_disabled():

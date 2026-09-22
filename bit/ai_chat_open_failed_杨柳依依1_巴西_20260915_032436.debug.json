@@ -1,0 +1,59 @@
+{
+  "captured_at": "2026-09-15T03:24:36",
+  "current_url": "https://global-selling.mercadolibre.com/help/v2",
+  "chat_state": {
+    "ai_frame_count": 0,
+    "inline_aria_expanded": "",
+    "inline_has_input": false,
+    "inline_open": false,
+    "inline_root_class": "",
+    "inline_shell": false,
+    "legacy_frame_count": 0,
+    "shadow_ai_frame_count": 0,
+    "visible_ai_frame_count": 0
+  },
+  "dom_snapshot": {
+    "aiShells": [],
+    "frames": [
+      {
+        "className": "",
+        "height": 0,
+        "id": "_hjSafeContext_95451016",
+        "shadowHost": "",
+        "src": "about:blank",
+        "title": "_hjSafeContext",
+        "visible": false,
+        "width": 0
+      }
+    ],
+    "readyState": "complete",
+    "shadowHosts": [],
+    "title": "Help"
+  },
+  "browser_logs": [
+    {
+      "level": "SEVERE",
+      "message": "https://www.mercadolibre.com/jms/cbt/lgz/msl/login/H4sIAAAAAAAEAz1Q25KqOBT9F5-Pfbhoi_2mgogtQZD71BQFJEogXISgSFf_-4TuqnmgKqy9bnt_zUh9w1VEXw2afczQ0BCcYjr7M2tITK91W0YYskFJGNRhin5_0-SHErdxiShqu9nH12R0Q3CLmGiyom2PmCbuaRZdSf1k0E8Uw3AXoYHJqphET5Q8MJqm15h0_ytadO9RxzhsgKtHTDCMmimOyW81AzNKm-7j798OEcIKvJWoTWNYE5y06C2ty78tanoaU1xXs-8_zLyjEW3jtJh9TM1YsWZa9Yfwu9O7IHHcSlit2GO5FCSWBFFKcIXYAf75l63fseCvGcVpgSirgF7HLFFTbODjxRk1HmCt00rahDvtXSNbYCkZuahU8BR4DoVj6e2BHwpupcvWiBTXDlX-5XKAtyv4me4JD0SiOvltreEnhgfy1PIaXwh0tIp7m7IYv0nI-gEPG2yUYZYcADntjhn0rdoXwi4Rf7pkgQBIKuqYzQiauLmyMGR90O2NCOSpI8kg66jbKcPNAeQ6p7PM2AfjlAn9Y2-Uex6qN5oK7guW7suoJk_QJMJynPrFldVM3KB0XiBXRN3WaSBYJMAcZ3hudvK0ZZgHVM-PeWinT0N2eCBvlpM2FQgXuuvfO5UAsy6dVoExvrC75Vmhe-YQeMf85IUElAoFqpuBC58ZsvY62aZo2IUYCC4OhGAEv1o-wExbua8kb_ipczrWo57fBPaJumzy0w3Tm6OcsyHan-fGbmg2WbbPk12ByMJ_SsXa39oL47xY4KNuOBctCdraeJgqqAfx6YzhOaLl1eXXwm6bSLv-eSnDlgCAMg-H_lwykyvZf1rS3IgV1en5ShDM8yWGgygXPs54Xm_XYbJ0taJN1mURH7rVMnA0-mgE5OWNmaP39gTveCkf2rzgiu1ytQfKPXvZOB72y73QeldH3LWlBfhNf4D43X-0_pkLonExF25i75R-z98XUoVkYNmeUqvxp2vAiwAlKX8e66GFkrxyVr1twc-KT7anJPbEWJeVw8NVot5Q5lllrfaSa6rrcl5i9SoGFC5c-fO-zuDdPFBmxEGgWu5mpENmtIgntTn7_v4PdXHGoUUEAAA/legacy-user 0 Refused to load the script 'https://www.recaptcha.net/recaptcha/enterprise.js?onload=onloadCallback&render=6LeetcMeAAAAAHBLMG_uCF4A7QLR8ZHg8u4ulR5z&hl=en' because it violates the following Content Security Policy directive: \"script-src 'nonce-V/mcMOhCMQRyLUxPLk8tNA==' 'strict-dynamic' 'unsafe-inline' https: 'report-sample'\". Note that 'strict-dynamic' is present, so host-based allowlisting is disabled. Note that 'script-src-elem' was not explicitly set, so 'script-src' is used as a fallback.\n",
+      "source": "security",
+      "timestamp": 1789413739359
+    },
+    {
+      "level": "SEVERE",
+      "message": "https://undefined/v3/security.js - Failed to load resource: net::ERR_CONNECTION_CLOSED",
+      "source": "network",
+      "timestamp": 1789413739359
+    },
+    {
+      "level": "SEVERE",
+      "message": "https://console.bitbrowser.net/?id=1449270209804ffda0a7d4e83d22b940&locale=zh&port=54345 - Unchecked runtime.lastError: Could not establish connection. Receiving end does not exist.",
+      "source": "other",
+      "timestamp": 1789413739360
+    },
+    {
+      "level": "SEVERE",
+      "message": "https://global-selling.mercadolibre.com/help/v2 - Unchecked runtime.lastError: Could not establish connection. Receiving end does not exist.",
+      "source": "other",
+      "timestamp": 1789413815883
+    }
+  ]
+}

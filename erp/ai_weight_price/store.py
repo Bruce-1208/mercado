@@ -2,17 +2,55 @@ import csv
 import base64
 import io
 import json
+import logging
 import os
 import re
 import sqlite3
 import time
 from contextlib import contextmanager
 from datetime import datetime, timedelta, timezone
+from functools import wraps
 from pathlib import Path
 
 STATUSES = ("pending", "waiting_merchant_reply", "success", "exception", "skipped", "blocked", "risk")
 COMPLETED = ("success", "skipped", "blocked", "risk")
 CHINA = timezone(timedelta(hours=8))
+logger = logging.getLogger(__name__)
+
+
+def _mysql_disconnected(exc):
+    from pymysql.err import InterfaceError, OperationalError
+    return (isinstance(exc, InterfaceError) and exc.args and exc.args[0] == 0
+            or isinstance(exc, OperationalError) and exc.args
+            and exc.args[0] in {2002, 2003, 2006, 2013, 2055})
+
+
+class _MySQLTransactionInterrupted(RuntimeError):
+    """The transaction has not reached COMMIT; the whole operation may retry."""
+
+
+class MySQLCommitUncertain(RuntimeError):
+    """Never replay a write when the server may already have committed it."""
+
+
+def _retry_mysql_transaction(method):
+    # Decorate storage operations only. Browser saves and merchant messages must
+    # never be replayed because a later database call failed.
+    @wraps(method)
+    def run(self, *args, **kwargs):
+        for attempt in range(3):
+            try:
+                return method(self, *args, **kwargs)
+            except _MySQLTransactionInterrupted as exc:
+                if attempt == 2:
+                    cause = exc.__cause__
+                    raise RuntimeError(
+                        f"MySQL连接中断，重试2次后仍失败：{type(cause).__name__}: {cause}"
+                    ) from cause
+                logger.warning("AI核重核价数据库事务 %s 连接中断，重新连接重试 %s/2",
+                               method.__name__, attempt + 1)
+                time.sleep(.2 * (attempt + 1))
+    return run
 
 MYSQL_TABLES = {
     "tasks": "erp_ai_weight_price_tasks",
@@ -70,6 +108,10 @@ class _MySQLConnection:
         self.connection = connection
 
     def execute(self, sql, args=()):
+        if sql.strip().upper() == "BEGIN IMMEDIATE":
+            # connect() already began the transaction through the driver API,
+            # which also disables DBUtils' mid-transaction statement reconnect.
+            return _CompatResult([], 0)
         cursor = self.connection.cursor()
         try:
             cursor.execute(_mysql_sql(sql), args)
@@ -82,7 +124,11 @@ class _MySQLConnection:
                 ]
             return _CompatResult(rows, cursor.rowcount)
         finally:
-            cursor.close()
+            # Preserve the original query error when cleanup also disconnects.
+            try:
+                cursor.close()
+            except Exception:
+                logger.warning("AI核重核价数据库游标清理失败，保留原始异常", exc_info=True)
 
     def commit(self):
         self.connection.commit()
@@ -218,20 +264,41 @@ class Store:
                 db.close()
             return
 
-        if self.connection_factory is None:
-            from bit.bit_mysql import config, pymysql
-            connection = pymysql.connect(**config)
-        else:
-            connection = self.connection_factory()
-        db = _MySQLConnection(connection)
+        db = None
+        committing = False
         try:
+            if self.connection_factory is None:
+                from bit.bit_mysql import config, pymysql
+                connection = pymysql.connect(**config)
+            else:
+                connection = self.connection_factory()
+            db = _MySQLConnection(connection)
+            # Explicit begin is essential with DBUtils: otherwise a lost
+            # connection can silently reconnect and replay only the last SQL,
+            # discarding earlier writes from the same transaction.
+            connection.begin()
             yield db
+            committing = True
             db.commit()
-        except Exception:
-            db.rollback()
+        except Exception as exc:
+            if db is not None:
+                try:
+                    db.rollback()
+                except Exception:
+                    logger.warning("AI核重核价数据库回滚失败，保留原始异常", exc_info=True)
+            if _mysql_disconnected(exc):
+                if committing:
+                    raise MySQLCommitUncertain(
+                        f"MySQL提交时连接中断，提交结果待核对，未自动重放：{type(exc).__name__}: {exc}"
+                    ) from exc
+                raise _MySQLTransactionInterrupted("MySQL事务提交前连接中断") from exc
             raise
         finally:
-            db.close()
+            if db is not None:
+                try:
+                    db.close()
+                except Exception:
+                    logger.warning("AI核重核价数据库连接清理失败", exc_info=True)
 
     @property
     def storage_description(self):
@@ -239,11 +306,13 @@ class Store:
             return "MySQL（服务器中心库；只读）" if self.read_only else "MySQL（服务器中心库）"
         return str(self.path)
 
+    @_retry_mysql_transaction
     def log(self, message, task_id=None, level="INFO"):
         with self.connect() as db:
             db.execute("INSERT INTO events(at,level,task_id,message) VALUES(?,?,?,?)",
                        (time.time(), level, task_id, str(message)))
 
+    @_retry_mysql_transaction
     def logs(self, after=0, limit=200):
         with self.connect() as db:
             if after:
@@ -252,6 +321,7 @@ class Store:
                 rows = reversed(db.execute("SELECT * FROM events ORDER BY id DESC LIMIT ?", (limit,)).fetchall())
             return [dict(row) for row in rows]
 
+    @_retry_mysql_transaction
     def state(self, key, default=None):
         with self.connect() as db:
             row = db.execute("SELECT value FROM state WHERE key=?", (key,)).fetchone()
@@ -262,6 +332,7 @@ class Store:
         # concrete default expect that shape for both missing and cleared state.
         return default if value is None and default is not None else value
 
+    @_retry_mysql_transaction
     def set_state(self, key, value):
         with self.connect() as db:
             payload = json.dumps(value, ensure_ascii=False)
@@ -270,6 +341,7 @@ class Store:
             else:
                 db.execute("INSERT OR REPLACE INTO state VALUES(?,?)", (key, payload))
 
+    @_retry_mysql_transaction
     def save_run(self, run):
         with self.connect() as db:
             payload = json.dumps(run, ensure_ascii=False)
@@ -280,6 +352,7 @@ class Store:
                 db.execute("INSERT OR REPLACE INTO runs VALUES(?,?)", (run["run_id"], payload))
         self.set_state("latest_run_id", run["run_id"])
 
+    @_retry_mysql_transaction
     def clear_run(self, run_id):
         """Remove one execution batch without erasing reusable product history.
 
@@ -296,6 +369,7 @@ class Store:
         self.dirty = True
         return {"run_items": removed}
 
+    @_retry_mysql_transaction
     def record_run_item(self, run_id, key, **details):
         if not run_id:
             return
@@ -310,6 +384,7 @@ class Store:
                            "ON CONFLICT(run_id,erp_goods_id) DO UPDATE SET payload=excluded.payload",
                            (run_id, key, run_id, json.dumps(payload, ensure_ascii=False)))
 
+    @_retry_mysql_transaction
     def has_run_item(self, run_id, key):
         if not run_id:
             return False
@@ -319,6 +394,7 @@ class Store:
                 (run_id, key),
             ).fetchone() is not None
 
+    @_retry_mysql_transaction
     def run_report(self, run_id):
         with self.connect() as db:
             run = db.execute("SELECT payload FROM runs WHERE run_id=?", (run_id,)).fetchone()
@@ -327,6 +403,7 @@ class Store:
             rows = db.execute("SELECT payload FROM run_items WHERE run_id=? ORDER BY sequence", (run_id,)).fetchall()
         return json.loads(run[0]), [json.loads(row[0]) for row in rows]
 
+    @_retry_mysql_transaction
     def run_items(self, run_id, status="", search="", page=1, page_size=50):
         """Return the latest task state for items belonging to one execution run."""
         if status and status not in STATUSES:
@@ -363,6 +440,7 @@ class Store:
     def decode(row):
         return {**json.loads(row["payload"]), **{k: row[k] for k in ("erp_goods_id", "status", "stage", "created_at", "updated_at")}}
 
+    @_retry_mysql_transaction
     def get(self, key):
         with self.connect() as db:
             row = db.execute("SELECT * FROM tasks WHERE erp_goods_id=?", (key,)).fetchone()
@@ -370,6 +448,7 @@ class Store:
             raise KeyError("任务不存在")
         return self.decode(row)
 
+    @_retry_mysql_transaction
     def add(self, record):
         key = str(record.get("erp_goods_id") or "").strip()
         if not key or not str(record.get("title") or "").strip():
@@ -381,6 +460,7 @@ class Store:
         self.dirty = self.dirty or bool(changed)
         return changed
 
+    @_retry_mysql_transaction
     def update(self, key, **changes):
         with self.connect() as db:
             db.execute("BEGIN IMMEDIATE")
@@ -406,6 +486,7 @@ class Store:
                     skipped_at=time.time(), exception_reason="", exception_detail="")
         self.log("未完全匹配，已跳过：" + str(reason) + "；继续下一件", key, "WARNING")
 
+    @_retry_mysql_transaction
     def list(self, status="", search="", page=1, page_size=50, scope=None):
         if status and status not in STATUSES:
             raise ValueError("状态无效")
@@ -433,12 +514,14 @@ class Store:
                               args + [page_size, (page - 1) * page_size]).fetchall()
         return {"total": total, "rows": [self.decode(row) for row in rows]}
 
+    @_retry_mysql_transaction
     def counts(self, scope=None):
         with self.connect() as db:
             where = " WHERE erp_goods_id IN (SELECT erp_goods_id FROM collection_items WHERE scope=?)" if scope is not None else ""
             rows = db.execute("SELECT status,COUNT(*) n FROM tasks" + where + " GROUP BY status", (scope,) if scope is not None else ()).fetchall()
         return {**dict.fromkeys(STATUSES, 0), **{r["status"]: r["n"] for r in rows}}
 
+    @_retry_mysql_transaction
     def run_counts(self, run_id):
         if not run_id:
             return dict.fromkeys(STATUSES, 0)
@@ -454,10 +537,12 @@ class Store:
                               (run_id,)).fetchall()
         return {**dict.fromkeys(STATUSES, 0), **{row["status"]: row["n"] for row in rows}}
 
+    @_retry_mysql_transaction
     def reset_scope(self, scope):
         with self.connect() as db:
             db.execute("DELETE FROM collection_items WHERE scope=?", (scope,))
 
+    @_retry_mysql_transaction
     def include_in_scope(self, scope, key, page):
         with self.connect() as db:
             if self.backend == "mysql":
@@ -466,6 +551,7 @@ class Store:
             else:
                 db.execute("INSERT OR REPLACE INTO collection_items VALUES(?,?,?)", (scope, key, page))
 
+    @_retry_mysql_transaction
     def quota(self, now=None):
         now = time.time() if now is None else now
         with self.connect() as db:
@@ -473,6 +559,7 @@ class Store:
             last = db.execute("SELECT MAX(COALESCE(sent_at,reserved_at)) FROM merchants").fetchone()[0]
         return {"today": count, "last": last}
 
+    @_retry_mysql_transaction
     def reserve(self, task, config, message, conversation_url, baseline, now=None):
         """Reserve before clicking Send. Never refund an ambiguous delivery."""
         now = time.time() if now is None else now
@@ -504,6 +591,7 @@ class Store:
         self.dirty = True
         return "ok"
 
+    @_retry_mysql_transaction
     def sent(self, task_id, now=None):
         now = time.time() if now is None else now
         with self.connect() as db:
@@ -511,6 +599,7 @@ class Store:
         # Keep the pre-click lower bound: a merchant may answer before the post-click check ends.
         self.update(task_id, stage="waiting")
 
+    @_retry_mysql_transaction
     def recover(self):
         with self.connect() as db:
             rows = db.execute("SELECT erp_goods_id,stage FROM tasks WHERE status!='exception' AND stage IN ('send_reserved','writing')").fetchall()

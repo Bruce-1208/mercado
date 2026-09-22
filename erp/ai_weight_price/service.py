@@ -1,4 +1,5 @@
 import hashlib
+import logging
 import random
 import re
 import socket
@@ -558,6 +559,7 @@ class Service:
         except Stopped:
             outcome, message = "stopped", "运行已停止，进度已保存"
         except Exception as exc:
+            logging.getLogger(__name__).exception("AI核重核价运行失败（完整调用栈）")
             outcome, message = "failed", f"运行失败：{type(exc).__name__}: {exc}"
             self.store.set_state("run_error", str(exc))
         finally:
