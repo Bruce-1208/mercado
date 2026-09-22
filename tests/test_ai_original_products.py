@@ -5,6 +5,7 @@ import pytest
 from pathlib import Path
 
 from erp.ai_original_products import (
+    build_copy_prompt,
     generate_marketplace_copy,
     generate_ai_white_background_image,
     normalize_1688_product,
@@ -78,6 +79,53 @@ def test_ai_copy_rejects_reused_original_description():
         )
 
 
+def test_ai_copy_merges_explicit_1688_properties_when_model_omits_them():
+    response = json.dumps({
+        "title_es": "Capa de disfraz",
+        "title_pt": "Capa para fantasia",
+        "description_es": "Una capa nueva para disfraces.",
+        "description_pt": "Uma capa nova para fantasias.",
+        "attributes": [],
+        "brand_terms": [],
+    })
+    product = {
+        "title": "万圣节披风",
+        "properties": [
+            {"id": "COLOR", "name": "颜色", "value": "橙色", "value_id": "52000"},
+            {"id": "MATERIAL", "name": "材质", "value": "涤纶"},
+        ],
+        "weight_g": 200,
+        "package_length_cm": 30,
+        "package_width_cm": 25,
+        "package_height_cm": 1,
+        "variations": [{"attribute_combinations": [{"name": "长度", "value": "130cm"}]}],
+    }
+
+    copy = generate_marketplace_copy(product, chat=lambda *_args, **_kwargs: response)
+
+    assert {item["id"] for item in copy["attributes"]} >= {"COLOR", "MATERIAL"}
+    assert next(item for item in copy["attributes"] if item["id"] == "COLOR")["value_name"] == "橙色"
+
+
+def test_ai_copy_prompt_contains_all_source_fact_groups():
+    prompt = build_copy_prompt({
+        "title": "测试披风",
+        "properties": [{"name": "材质", "value": "涤纶"}],
+        "description_text": "长度 130cm",
+        "category_name": "Capes",
+        "weight_g": 200,
+        "package_length_cm": 30,
+        "package_width_cm": 25,
+        "package_height_cm": 1,
+        "variations": [{"name": "橙色 / 130cm"}],
+    })
+
+    assert "1688商品属性" in prompt
+    assert "重量和包装尺寸" in prompt
+    assert "1688变体和规格组合" in prompt
+    assert "尽可能填全" in prompt
+
+
 def test_white_background_image_is_square_and_white(tmp_path):
     Image = pytest.importorskip("PIL.Image")
     source = Image.new("RGB", (700, 500), (230, 230, 230))
@@ -144,7 +192,7 @@ def test_ai_white_background_image_uses_image_model_callback(tmp_path):
         assert output.width == output.height
         assert output.width >= 1024
         assert output.getpixel((0, 0)) == (255, 255, 255)
-    assert url.endswith("/api/ai-original-products/images/1688-123456789-ai-white.jpg")
+    assert url == "/api/ai-original-products/images/1688-123456789-ai-white.jpg"
 
 
 def _ai_row():
@@ -185,6 +233,8 @@ def _ai_row():
         "weight_basis": "ai_original_manual",
         "net_proceeds_usd": 20,
         "review_status": "approved",
+        "infringement_risk_level": 0,
+        "infringement_checked_at": "2026-09-22 12:00:00",
         "source_snapshot_json": json.dumps({
             "ai_original": prepared,
             "source": {"id": "CBT123", "site_id": "CBT", "pictures": [{"source": prepared["main_image_url"]}]},
@@ -242,6 +292,17 @@ def test_ai_original_publish_accepts_free_local_white_background():
     assert product_publish_issues(row) == []
 
 
+def test_ai_original_publish_requires_completed_safe_infringement_check():
+    row = _ai_row()
+    row["infringement_risk_level"] = None
+    row["infringement_checked_at"] = None
+    assert "AI 原创商品尚未完成侵权检测" in product_publish_issues(row)
+
+    row["infringement_risk_level"] = 1
+    row["infringement_checked_at"] = "2026-09-22 12:00:00"
+    assert "AI 原创商品侵权检测未通过：疑似侵权" in product_publish_issues(row)
+
+
 def test_workbench_exposes_ai_original_module_and_batch_actions():
     root = Path(__file__).resolve().parents[1]
     template = (root / "bit" / "templates" / "index.html").read_text(encoding="utf-8")
@@ -258,6 +319,9 @@ def test_workbench_exposes_ai_original_module_and_batch_actions():
     assert "上架所选到对应店铺" in template
     assert 'fetch("/api/ai-original-products/process"' in script
     assert 'fetch("/api/mercado-products/publish"' in script
+    assert "aiOriginalDisplayImageUrl" in script
+    assert "/api/ai-original-products/source-image?url=" in script
+    assert 'referrerpolicy="no-referrer"' in script
 
 
 def test_server_requirements_include_free_local_background_removal():
@@ -277,3 +341,10 @@ def test_workbench_exposes_1688_product_area_for_collector_records():
     assert "1688产品区" in template
     assert 'fetch(`/api/1688-products?' in script
     assert "products1688OpenDetail" in script
+    assert "products1688SourceUrl" in script
+    assert 'class="p1688-product-image-link"' in script
+    assert 'class="p1688-product-title-link"' in script
+    assert "1688 商品编号" not in script
+    assert "products1688DisplayImageUrl" in script
+    assert "/api/ai-original-products/source-image?url=" in script
+    assert 'referrerpolicy="no-referrer"' in script

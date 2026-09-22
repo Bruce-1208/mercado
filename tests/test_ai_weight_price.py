@@ -38,6 +38,35 @@ def task(store, key="g1", merchant="m1", matched=False, **extra):
     return store.update(key, **data)
 
 
+def test_store_scopes_products_runs_state_and_logs_to_plugin_account(tmp_path):
+    store = Store(tmp_path)
+    seller_a = {"id": 11, "username": "seller-a", "display_name": "业务员甲"}
+    seller_b = {"id": 12, "username": "seller-b", "display_name": "业务员乙"}
+
+    store.set_actor(seller_a)
+    task(store, "a-product")
+    store.set_state("run", {"run_id": "run-a", "outcome": "running"})
+    store.save_run({"run_id": "run-a", "outcome": "running"})
+    store.record_run_item("run-a", "a-product", execution_result="执行中")
+    store.log("甲账号开始执行", "a-product")
+
+    store.set_actor(seller_b)
+    assert store.list()["total"] == 0
+    assert store.state("run", {}) == {}
+    assert store.logs() == []
+    with pytest.raises(KeyError):
+        store.get("a-product")
+    task(store, "b-product")
+    store.log("乙账号开始执行", "b-product")
+
+    store.set_actor({**seller_a, "view_all": True})
+    rows = store.list()["rows"]
+    assert {row["erp_goods_id"] for row in rows} == {"a-product", "b-product"}
+    assert {row["owner_display_name"] for row in rows} == {"业务员甲", "业务员乙"}
+    assert [row["owner_name"] for row in store.logs()] == ["业务员甲", "业务员乙"]
+    assert store.run_items("run-a")["rows"][0]["erp_goods_id"] == "a-product"
+
+
 def test_status_exposes_current_product_category_name(service):
     task(service.store, source_category="202170568", source_category_label="202170568")
     service.store.set_state("categories", [
@@ -544,6 +573,42 @@ def test_readonly_role_cannot_edit(service):
     client=app.test_client()
     assert client.get("/api/ai-weight-price/tasks").status_code==200
     assert client.put("/api/ai-weight-price/config",json={},headers={"X-AWP-Request":"1"}).status_code==403
+
+
+def test_console_account_sees_own_products_and_admin_sees_all(service):
+    seller_a = {"id": 31, "username": "seller-a", "display_name": "业务员甲"}
+    seller_b = {"id": 32, "username": "seller-b", "display_name": "业务员乙"}
+    service.bind_actor(seller_a)
+    task(service.store, "account-a")
+    service.bind_actor(seller_b)
+    task(service.store, "account-b")
+
+    app = Flask(__name__)
+    app.config.update(TESTING=True, SECRET_KEY="account-scope-test")
+    app.register_blueprint(create_blueprint(service, lambda _permission: None))
+    scoped = app.test_client()
+    with scoped.session_transaction() as session_data:
+        session_data["workbench_user"] = seller_a
+    own = scoped.get("/api/ai-weight-price/tasks").get_json()
+    assert [row["erp_goods_id"] for row in own["rows"]] == ["account-a"]
+
+    admin = app.test_client()
+    with admin.session_transaction() as session_data:
+        session_data["workbench_user"] = {
+            "id": 1,
+            "username": "admin",
+            "display_name": "系统管理员",
+            "role_key": "super_admin",
+            "is_platform_admin": True,
+        }
+    all_products = admin.get("/api/ai-weight-price/tasks").get_json()
+    assert {row["erp_goods_id"] for row in all_products["rows"]} == {
+        "account-a", "account-b"
+    }
+    admin_status = admin.get("/api/ai-weight-price/status").get_json()
+    assert admin_status["current_counts"] is None
+    assert admin_status["counts"]["pending"] == 2
+    assert "所有业务员商品" in admin.get("/ai-weight-price").text
 
 
 def test_malformed_requests_fail_without_internal_error(client):

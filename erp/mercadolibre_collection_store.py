@@ -938,6 +938,9 @@ def upsert_collection_items(
                 "'plugin_volumetric_fallback'))"
             )
             for row in records:
+                # 美客多跟卖采集使用统一的固定 15% 佣金口径；运费仍由当前
+                # 重量对应的固定运费表补算，避免采集列表混入分类佣金报价。
+                row["profitability_source"] = "fixed_commission_15_pct"
                 replace_profitability = bool(
                     row.pop("_replace_profitability_snapshot", False)
                 )
@@ -1100,6 +1103,7 @@ def _list_rows(
     offset: int = 0,
     task_id: int | None = None,
     source_type: str = "",
+    ai_status: str = "",
     review_status: str = "",
     publish_status: str = "",
     weight_status: str = "",
@@ -1176,6 +1180,16 @@ def _list_rows(
                 raise ValueError(f"不支持的产品来源: {source_type}")
             where.append("`source_type` = %s")
             params.append(source_type)
+        ai_status = str(ai_status or "").strip().lower()
+        if ai_status:
+            if ai_status not in {"pending", "processing", "completed", "failed"}:
+                raise ValueError(f"不支持的 AI 状态: {ai_status}")
+            ai_status_expr = (
+                "JSON_UNQUOTE(JSON_EXTRACT(IF(JSON_VALID(`source_snapshot_json`), "
+                "`source_snapshot_json`, '{}'), '$.ai_original.status'))"
+            )
+            where.append(f"COALESCE(NULLIF({ai_status_expr}, ''), 'pending') = %s")
+            params.append(ai_status)
         zying_category = str(zying_category or "").strip()[:255]
         if zying_category:
             zying_name_expr = (
@@ -1298,10 +1312,24 @@ def _list_rows(
             ensure_collection_tables(cursor)
             cursor.execute(f"SELECT COUNT(*) AS total FROM `{table}` {where_sql}", tuple(params))
             total = int((cursor.fetchone() or {}).get("total") or 0)
+            selected_fields = (
+                f"`{table}`.*, category.`name` AS `management_category_name`"
+            )
+            from_sql = (
+                f"`{table}` LEFT JOIN `{MANAGEMENT_CATEGORY_TABLE}` AS category "
+                f"ON category.`id` = `{table}`.`management_category_id`"
+            )
+            if table == COLLECTION_TABLE:
+                selected_fields += (
+                    ", TRIM(REPLACE(COALESCE(NULLIF(collection_task.`created_by`, ''), "
+                    "'未分配'), '浏览器插件：', '')) AS `salesperson`"
+                )
+                from_sql += (
+                    f" LEFT JOIN `{TASK_TABLE}` AS collection_task "
+                    f"ON collection_task.`id` = `{table}`.`task_id`"
+                )
             cursor.execute(
-                f"SELECT `{table}`.*, category.`name` AS `management_category_name` "
-                f"FROM `{table}` LEFT JOIN `{MANAGEMENT_CATEGORY_TABLE}` AS category "
-                f"ON category.`id` = `{table}`.`management_category_id` "
+                f"SELECT {selected_fields} FROM {from_sql} "
                 f"{where_sql} ORDER BY `{table}`.`id` DESC LIMIT %s OFFSET %s",
                 tuple(params + [limit, offset]),
             )
@@ -3677,7 +3705,7 @@ def list_stale_profitability_items(
                         NULLIF(TRIM(COALESCE(`category_id`, '')), '') IS NOT NULL
                         OR NULLIF(TRIM(COALESCE(`title`, '')), '') IS NOT NULL
                     )
-                    {"AND `source_type` <> 'zying'" if table == PRODUCT_TABLE else ""}
+                    {"AND `source_type` NOT IN ('zying', 'ai_original')" if table == PRODUCT_TABLE else ""}
                 """
                 cursor.execute(
                     f"""
@@ -3690,17 +3718,26 @@ def list_stale_profitability_items(
                     (batch_limit,),
                 )
                 pending_rows = list(cursor.fetchall())
-                rows.extend(_json_safe_row(row) for row in pending_rows)
+                for row in pending_rows:
+                    normalized_row = _json_safe_row(row)
+                    if table == COLLECTION_TABLE:
+                        normalized_row["profitability_source"] = "fixed_commission_15_pct"
+                    rows.append(normalized_row)
                 remaining = batch_limit - len(pending_rows)
                 if remaining <= 0:
                     continue
+                legacy_collection_refresh = (
+                    "NOT (LOWER(COALESCE(`profitability_source`, '')) "
+                    "LIKE 'fixed_commission_15_pct%') OR "
+                    if table == COLLECTION_TABLE else ""
+                )
                 cursor.execute(
                     f"""
                     SELECT * FROM `{table}`
                     WHERE {eligibility_sql}
                       AND `profitability_updated_at` IS NOT NULL
                       AND (
-                          `profitability_updated_at` < %s
+                          {legacy_collection_refresh}`profitability_updated_at` < %s
                           OR (`profitability_updated_at` < %s AND (
                               `commission_amount_usd` IS NULL
                               OR `shipping_fee_usd` IS NULL
@@ -3713,7 +3750,11 @@ def list_stale_profitability_items(
                     """,
                     (stale_before, retry_before, remaining),
                 )
-                rows.extend(_json_safe_row(row) for row in cursor.fetchall())
+                for row in cursor.fetchall():
+                    normalized_row = _json_safe_row(row)
+                    if table == COLLECTION_TABLE:
+                        normalized_row["profitability_source"] = "fixed_commission_15_pct"
+                    rows.append(normalized_row)
         connection.commit()
         return rows
     finally:
@@ -3731,9 +3772,13 @@ def update_item_profitability(
     item_id = str(source_item_id or "").strip().upper()
     if not item_id:
         raise ValueError("商品编号不能为空")
-    if str(snapshot.get("source_type") or "").strip().lower() == "zying":
-        # Protect direct ZYing proceeds even when a row was already fetched by
-        # an estimator worker before the queue exclusion took effect.
+    if str(snapshot.get("source_type") or "").strip().lower() in {
+        "zying", "ai_original",
+    }:
+        # Protect source-owned proceeds even when a row was already fetched by
+        # an estimator worker before the queue exclusion took effect. ZYing
+        # supplies the value directly; AI-original rows use the manually
+        # confirmed 1688 cost and must not be reinterpreted as Mercado items.
         return False
     values = [snapshot.get(column) for column in PROFITABILITY_COLUMNS]
     assignments = ", ".join(f"`{column}` = %s" for column in PROFITABILITY_COLUMNS)
@@ -3899,7 +3944,7 @@ def mark_all_profitability_stale(
             ensure_collection_tables(cursor)
             for table in (COLLECTION_TABLE, PRODUCT_TABLE):
                 source_filter = (
-                    "AND `source_type` <> 'zying'"
+                    "AND `source_type` NOT IN ('zying', 'ai_original')"
                     if table == PRODUCT_TABLE else ""
                 )
                 last_id = 0

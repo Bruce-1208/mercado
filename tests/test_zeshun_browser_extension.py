@@ -233,6 +233,22 @@ def test_ai_weight_price_launch_controls_live_in_extension():
     assert 'aiWeightPriceAction("stop"' in background
 
 
+def test_ai_weight_price_console_keeps_product_table_stable_and_shows_owner():
+    template = (ROOT / "bit" / "templates" / "ai_weight_price.html").read_text(
+        encoding="utf-8"
+    )
+    backend = (ROOT / "bit" / "bit_interface.py").read_text(encoding="utf-8")
+
+    assert 'id="refresh-list"' in template
+    assert "refreshStatusOnly();},2000" in template
+    assert "setInterval(()=>{if(document.visibilityState==='visible')refresh();" not in template
+    assert "row.owner_display_name||row.owner_username" in template
+    assert "entry.owner_name" in template
+    assert "所有业务员商品" in template
+    assert "ai_weight_price_service.bind_actor" in backend
+    assert 'actor = data.get("actor")' in backend
+
+
 def test_integrated_ai_weight_price_page_points_launch_to_extension(monkeypatch):
     import bit.bit_interface as workbench
 
@@ -491,6 +507,55 @@ def test_browser_extension_collect_routes_1688_to_ai_original_products(monkeypat
     }
     assert captured[0][0]["source_platform"] == "1688"
     assert "collector" in captured[0][1]
+
+
+def test_ai_original_source_image_proxy_allows_only_1688_cdn(monkeypatch):
+    import bit.bit_interface as workbench
+
+    captured = []
+
+    class Upstream(io.BytesIO):
+        headers = {"Content-Type": "image/webp"}
+
+        def geturl(self):
+            return "https://cbu01.alicdn.com/img/ibank/test.webp"
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args):
+            self.close()
+
+    def fake_urlopen(request, timeout):
+        captured.append((request, timeout))
+        return Upstream(b"webp-image-bytes")
+
+    monkeypatch.setattr(workbench, "urlopen", fake_urlopen)
+    workbench.app.config.update(TESTING=True, SECRET_KEY="extension-test-secret")
+    workbench.app.secret_key = "extension-test-secret"
+    client = workbench.app.test_client()
+    with client.session_transaction() as login_session:
+        login_session["workbench_user"] = _browser_extension_user()
+
+    response = client.get(
+        "/api/ai-original-products/source-image",
+        query_string={
+            "url": "https://cbu01.alicdn.com/img/ibank/test.webp",
+        },
+    )
+    blocked = client.get(
+        "/api/ai-original-products/source-image",
+        query_string={"url": "http://127.0.0.1/private.jpg"},
+    )
+
+    assert response.status_code == 200
+    assert response.data == b"webp-image-bytes"
+    assert response.headers["Content-Type"].startswith("image/webp")
+    assert response.headers["X-Content-Type-Options"] == "nosniff"
+    assert captured[0][1] == 15
+    assert captured[0][0].get_header("Referer") == "https://detail.1688.com/"
+    assert blocked.status_code == 400
+    assert len(captured) == 1
 
 
 def test_browser_extension_starts_zying_collection_from_current_browser_credential(monkeypatch):

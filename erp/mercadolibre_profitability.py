@@ -27,6 +27,8 @@ from erp.mercadolibre_shipping_rate_cards import (
 
 API_BASE_URL = "https://api.mercadolibre.com"
 DEFAULT_LISTING_TYPE_ID = "gold_special"
+FIXED_COLLECTION_COMMISSION_RATE = 0.15
+FIXED_COLLECTION_PROFITABILITY_SOURCE = "fixed_commission_15_pct"
 PROFITABILITY_SOURCE = "mercadolibre_official_api_daily_database_cache"
 LIGHT_PACKAGE_LIMIT_G = 500.0
 SUPPORTED_SITE_CURRENCIES = {
@@ -876,6 +878,9 @@ class MercadoProfitabilityClient:
         site_id = _site_id(row)
         currency_id = str(row.get("currency_id") or "USD").upper()
         listing_type_id = DEFAULT_LISTING_TYPE_ID
+        use_fixed_collection_commission = str(
+            row.get("profitability_source") or ""
+        ).strip().lower().startswith(FIXED_COLLECTION_PROFITABILITY_SOURCE)
         snapshot: dict[str, Any] = {
             "listing_type_id": listing_type_id,
             "listing_type_name": "Classic",
@@ -893,19 +898,47 @@ class MercadoProfitabilityClient:
             errors.append(f"售价换算：{exc}")
 
         category_id = str(row.get("category_id") or "").strip()
-        if category_id:
-            snapshot.update(category_id=category_id, category_name=row.get("category_name") or "")
-        else:
-            try:
-                title = str(row.get("title") or "").strip()
-                if not title:
-                    raise MercadoProfitabilityError("商品缺少标题，无法预测分类")
-                snapshot.update(self.category(site_id, title, row=row))
-                category_id = snapshot["category_id"]
-            except Exception as exc:
-                errors.append(f"分类：{exc}")
+        if not use_fixed_collection_commission:
+            if category_id:
+                snapshot.update(category_id=category_id, category_name=row.get("category_name") or "")
+            else:
+                try:
+                    title = str(row.get("title") or "").strip()
+                    if not title:
+                        raise MercadoProfitabilityError("商品缺少标题，无法预测分类")
+                    snapshot.update(self.category(site_id, title, row=row))
+                    category_id = snapshot["category_id"]
+                except Exception as exc:
+                    errors.append(f"分类：{exc}")
 
-        if category_id:
+        if use_fixed_collection_commission:
+            snapshot.update(
+                category_id=category_id or None,
+                category_name=row.get("category_name") or None,
+            )
+            try:
+                conversion = self.conversion_to_usd(currency_id)
+                exchange_rate = float(conversion["ratio"])
+                commission_local = round(price * FIXED_COLLECTION_COMMISSION_RATE, 2)
+                sale_price_usd = snapshot.get("sale_price_usd")
+                commission_usd = (
+                    round(
+                        float(sale_price_usd) * FIXED_COLLECTION_COMMISSION_RATE + 1e-9,
+                        2,
+                    )
+                    if sale_price_usd is not None
+                    else round(commission_local * exchange_rate, 2)
+                )
+                snapshot.update(
+                    listing_type_name="固定佣金",
+                    commission_rate=FIXED_COLLECTION_COMMISSION_RATE * 100,
+                    commission_amount_local=commission_local,
+                    commission_currency_id=currency_id,
+                    commission_amount_usd=commission_usd,
+                )
+            except Exception as exc:
+                errors.append(f"固定佣金：{exc}")
+        elif category_id:
             try:
                 # The Classic remote quote is shared reference data, so a cached
                 # commission does not need a live marketplace/account lookup.
@@ -962,6 +995,8 @@ class MercadoProfitabilityClient:
                 snapshot.get("sale_price_usd"), snapshot.get("commission_amount_usd"),
                 snapshot.get("shipping_fee_usd"),
             )
+        if use_fixed_collection_commission:
+            snapshot["profitability_source"] = FIXED_COLLECTION_PROFITABILITY_SOURCE
         snapshot["profitability_error"] = "；".join(errors)[:2000]
         if errors:
             raise MercadoProfitabilityError(snapshot["profitability_error"], snapshot=snapshot)

@@ -2052,7 +2052,7 @@ def list_mercado_collection_items(
 
 
 def list_mercado_product_items(
-    search="", limit=500, offset=0, source_type="", review_status="",
+    search="", limit=500, offset=0, source_type="", ai_status="", review_status="",
     publish_status="", weight_min=None, weight_max=None, price_min=None,
     price_max=None, net_proceeds_min=None, net_proceeds_max=None,
     date_from="", date_to="", management_category_id=None,
@@ -2063,6 +2063,7 @@ def list_mercado_product_items(
         "limit": limit,
         "offset": offset,
         "source_type": str(source_type or "").strip().lower(),
+        "ai_status": str(ai_status or "").strip().lower(),
         "review_status": str(review_status or "").strip().lower(),
         "publish_status": str(publish_status or "").strip().lower(),
         "weight_min": weight_min,
