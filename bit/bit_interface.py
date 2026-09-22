@@ -17113,7 +17113,7 @@ def api_browser_extension_download():
         max_age=0,
     )
     response.headers["Cache-Control"] = "no-store"
-    response.headers["X-Zeshun-Extension-Version"] = "1.7.0"
+    response.headers["X-Zeshun-Extension-Version"] = "1.7.1"
     return response
 
 

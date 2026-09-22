@@ -251,6 +251,29 @@ def test_legacy_unknown_domain_false_pause_is_cleared_without_losing_current_ite
     assert "开始按钮已恢复" in service.store.logs()[-1]["message"]
 
 
+def test_legacy_stale_pagination_failure_becomes_resumable_pause(tmp_path):
+    store = Store(tmp_path)
+    store.set_state("collection", {
+        "scope": "selected-scope", "page": 3, "complete": False,
+    })
+    store.set_state("run", {
+        "run_id": "overnight-run", "mode": "pipeline", "outcome": "failed",
+        "selection": {"category": "", "start_product_id": ""},
+        "max_items": 500,
+        "message": "运行失败：ValueError: 翻页后商品未变化，采集已停止",
+    })
+    store.set_state("run_error", "翻页后商品未变化，采集已停止")
+
+    service = Service(tmp_path)
+
+    pause = service.store.state("circuit")
+    assert pause["kind"] == "collection_page_stale"
+    assert service.store.state("run")["outcome"] == "blocked"
+    assert service.store.state("run_error") is None
+    assert service.store.state("collection")["page"] == 3
+    assert "可恢复暂停" in service.store.logs()[-1]["message"]
+
+
 def test_agent_can_construct_api_service_without_remote_database_access(tmp_path, monkeypatch):
     from erp.ai_weight_price.store import RemoteStore
 

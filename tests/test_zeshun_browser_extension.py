@@ -18,7 +18,7 @@ def test_manifest_is_chrome_edge_manifest_v3_and_declares_supported_sites():
     assert manifest["manifest_version"] == 3
     assert manifest["background"]["service_worker"] == "background.js"
     assert "default_popup" not in manifest["action"]
-    assert manifest["version"] == "1.7.0"
+    assert manifest["version"] == "1.7.1"
     matches = manifest["content_scripts"][0]["matches"]
     assert any("mercadolibre.com.mx" in pattern for pattern in matches)
     assert any("mercadolivre.com.br" in pattern for pattern in matches)
@@ -128,7 +128,7 @@ def test_console_downloads_complete_zeshun_extension_package():
 
     assert response.status_code == 200
     assert response.headers["Content-Type"].startswith("application/zip")
-    assert response.headers["X-Zeshun-Extension-Version"] == "1.7.0"
+    assert response.headers["X-Zeshun-Extension-Version"] == "1.7.1"
     assert "zeshun-collector-extension.zip" in response.headers["Content-Disposition"]
     with zipfile.ZipFile(io.BytesIO(response.data)) as archive:
         names = set(archive.namelist())
@@ -171,6 +171,19 @@ def test_background_requires_console_login_and_keeps_offline_queue():
     assert "chrome.action?.onClicked" in source
     assert 'type: "popup"' in source
     assert 'chrome.runtime.getURL("popup.html")' in source
+
+
+def test_weight_price_pause_email_waits_ten_minutes_and_is_one_shot():
+    source = (EXTENSION / "background.js").read_text(encoding="utf-8")
+
+    assert 'AI_WEIGHT_PRICE_PAUSE_NOTICE_MS = 10 * 60 * 1000' in source
+    assert 'AI_WEIGHT_PRICE_PAUSE_KEY = "aiWeightPricePauseNotification"' in source
+    assert 'if (pause.attempted || Date.now()' in source
+    assert 'pause = {...pause, attempted: true, attemptedAt: Date.now()}' in source
+    assert source.index('attempted: true, attemptedAt: Date.now()') < source.index(
+        'await notifyAttention(reason, {source: "AI核重核价"})'
+    )
+    assert 'storageRemove("local", [AI_WEIGHT_PRICE_PAUSE_KEY])' in source
 
 
 def test_extension_options_link_to_account_integration_settings():

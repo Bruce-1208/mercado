@@ -342,6 +342,56 @@ def test_current_page_accepts_missing_pagination_only_for_an_unambiguous_single_
         adapter.current_page(page)
 
 
+def test_next_page_retries_one_dropped_click_without_failing_the_run(page):
+    logs = []
+    adapter = Browser(
+        validate({}), threading.Event(),
+        lambda message, *args, **kwargs: logs.append((message, kwargs.get("level"))),
+    )
+    page.set_content('''
+      <ul class="ant-pagination">
+        <li id="active" class="ant-pagination-item ant-pagination-item-active">1</li>
+        <li class="ant-pagination-next"><button id="next">next</button></li>
+      </ul>
+      <script>
+        let clicks=0;
+        next.onclick=()=>{ clicks+=1; if(clicks===2) active.textContent='2'; };
+      </script>
+    ''')
+
+    assert adapter.next_page(page, 1, timeout=0) is True
+    assert page.evaluate("clicks") == 2
+    assert any("正在重试" in message for message, _level in logs)
+
+
+def test_product_rows_wait_for_delayed_react_refresh(page):
+    logs = []
+    adapter = Browser(
+        validate({}), threading.Event(),
+        lambda message, *args, **kwargs: logs.append((message, kwargs.get("level"))),
+    )
+    page.set_content('''
+      <div class="product-item">old product</div>
+      <script>setTimeout(()=>document.querySelector('.product-item').textContent='new product', 80)</script>
+    ''')
+    old = adapter._rows_fingerprint(["old product"])
+
+    rows, fingerprint = adapter.wait_for_product_rows(page, 2, {old}, timeout=1)
+
+    assert rows.all_inner_texts() == ["new product"]
+    assert fingerprint != old
+    assert any("延迟刷新" in message for message, _level in logs)
+
+
+def test_product_rows_timeout_pauses_instead_of_failing_run(page):
+    adapter = Browser(validate({}), threading.Event(), lambda *args, **kwargs: None)
+    page.set_content('<div class="product-item">unchanged product</div>')
+    old = adapter._rows_fingerprint(["unchanged product"])
+
+    with pytest.raises(CircuitOpen, match="已暂停任务并保留进度"):
+        adapter.wait_for_product_rows(page, 2, {old}, timeout=0)
+
+
 @pytest.mark.parametrize("duplicate_hidden", [False, True])
 def test_image_search_uploads_task_image_and_waits_for_new_results(page, monkeypatch, duplicate_hidden):
     import base64

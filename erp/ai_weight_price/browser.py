@@ -288,22 +288,36 @@ class Browser:
 
     def check(self, page):
         try:
-            if self.stop.is_set():
-                raise Stopped("操作已停止")
-            for frame in page.frames:
+            for attempt in range(1, 4):
                 try:
-                    if frame is not page.main_frame and frame.is_detached():
-                        continue
-                    self.check_frame(frame)
+                    if self.stop.is_set():
+                        raise Stopped("操作已停止")
+                    for frame in page.frames:
+                        try:
+                            if frame is not page.main_frame and frame.is_detached():
+                                continue
+                            self.check_frame(frame)
+                        except (CircuitOpen, Stopped):
+                            raise
+                        except Exception:
+                            # 1688 replaces ad/login frames while the main page loads.
+                            if frame is not page.main_frame and frame.is_detached():
+                                continue
+                            raise
+                    return
                 except (CircuitOpen, Stopped):
                     raise
-                except Exception:
-                    # 1688 replaces ad/login frames while the main page loads.
-                    # Only a removed child frame can be ignored; keep main-frame
-                    # failures and every live captcha/risk signal blocking.
-                    if frame is not page.main_frame and frame.is_detached():
-                        continue
-                    raise
+                except Exception as exc:
+                    message = str(exc).lower()
+                    navigation_transition = (
+                        "execution context was destroyed" in message
+                        or "most likely because of a navigation" in message
+                        or "cannot find context with specified id" in message
+                    )
+                    if not navigation_transition or attempt == 3:
+                        raise
+                    if self.stop.wait(.15):
+                        raise Stopped("操作已停止")
         except CircuitOpen:
             # A real login/captcha page is the user's recovery surface. Detach it
             # from automatic cleanup so it remains visible after this worker exits.
@@ -631,16 +645,100 @@ class Browser:
             if self.current_page(page) != 1:
                 raise ValueError("返回第一页失败，已停止采集")
 
-    def next_page(self, page, current):
-        button = page.locator(self.s["erp_next"])
-        if not button.count() or not button.first.is_visible() or not button.first.is_enabled():
-            return False
-        self.check(page)
-        button.first.click()
-        self.delay(2, 4)
-        if self.current_page(page) != current + 1:
-            raise ValueError("翻页后页码不符，已停止采集")
-        return True
+    def next_page(self, page, current, timeout=15):
+        """Advance one page with one retry for a dropped SPA click."""
+        target = current + 1
+        observed = current
+        for attempt in range(1, 3):
+            button = page.locator(self.s["erp_next"])
+            if not button.count() or not button.first.is_visible() or not button.first.is_enabled():
+                if attempt == 1:
+                    return False
+                break
+            self.check(page)
+            button.first.click()
+            deadline = time.monotonic() + timeout
+            while True:
+                self.check(page)
+                try:
+                    observed = self.current_page(page)
+                except ValueError:
+                    # Ant Design briefly replaces the active pagination node.
+                    observed = 0
+                if observed == target:
+                    return True
+                if observed not in (0, current):
+                    raise CircuitOpen(
+                        f"智赢翻页异常：期望第 {target} 页，实际第 {observed} 页；"
+                        "已暂停任务并保留进度"
+                    )
+                if time.monotonic() >= deadline:
+                    break
+                if self.stop.wait(.25):
+                    raise Stopped("操作已停止")
+            if observed == current and attempt == 1:
+                self.log(
+                    f"智赢第 {current} 页的下一页点击未生效，正在重试",
+                    level="WARNING",
+                )
+                continue
+            break
+        raise CircuitOpen(
+            f"智赢翻页等待超时：期望进入第 {target} 页，"
+            f"当前页码 {observed or '暂时无法读取'}；已暂停任务并保留进度"
+        )
+
+    @staticmethod
+    def _rows_fingerprint(signature):
+        return hashlib.sha256(
+            json.dumps(signature, ensure_ascii=False).encode()
+        ).hexdigest()
+
+    def wait_for_product_rows(self, page, page_number, seen=(), timeout=20):
+        """Wait for the active page's asynchronous product-list refresh."""
+        excluded = set(seen or ())
+        deadline = time.monotonic() + timeout
+        last_fingerprint = ""
+        last_count = 0
+        last_error = ""
+        attempts = 0
+        while True:
+            self.check(page)
+            attempts += 1
+            try:
+                rows = page.locator(self.s["erp_rows"])
+                rows.first.wait_for(state="visible", timeout=1000)
+                signature = rows.all_inner_texts()
+                last_count = len(signature)
+                if signature:
+                    last_fingerprint = self._rows_fingerprint(signature)
+                    if last_fingerprint not in excluded:
+                        if attempts > 1:
+                            self.log(
+                                f"智赢第 {page_number} 页商品列表延迟刷新，"
+                                f"等待 {attempts} 次后恢复",
+                                level="WARNING",
+                            )
+                        return rows, last_fingerprint
+                last_error = ""
+            except Exception as exc:
+                # React can detach the current card nodes while replacing them.
+                last_error = type(exc).__name__
+            if time.monotonic() >= deadline:
+                detail = (
+                    "列表仍与已读页面相同"
+                    if last_fingerprint in excluded
+                    else f"可见商品 {last_count} 件"
+                )
+                if last_error:
+                    detail += f"，最近读取错误 {last_error}"
+                raise CircuitOpen(
+                    f"智赢第 {page_number} 页页码已更新，但商品列表在 "
+                    f"{timeout} 秒内未完成刷新（{detail}）；"
+                    "已暂停任务并保留进度"
+                )
+            if self.stop.wait(.25):
+                raise Stopped("操作已停止")
 
     @staticmethod
     def normalize_erp_id(value):
@@ -766,16 +864,17 @@ class Browser:
                           f"第 {start_item} 件开始（仅首个选中页生效）")
             for page_number in range(1, end_page + 1):
                 self.check(page)
+                # The active page number changes before React replaces the
+                # product cards. Wait for a new card fingerprint so a slow
+                # response cannot be mistaken for a duplicate page.
+                rows, fingerprint = self.wait_for_product_rows(
+                    page, page_number, seen
+                )
                 if page_number < first:
+                    seen.add(fingerprint)
                     if not self.next_page(page, page_number):
                         raise ValueError(f"列表仅有 {page_number} 页，无法到达起始/续跑页 {first}")
                     continue
-                rows = page.locator(self.s["erp_rows"])
-                rows.first.wait_for(state="visible")
-                signature = rows.all_inner_texts()
-                fingerprint = hashlib.sha256(json.dumps(signature).encode()).hexdigest()
-                if fingerprint in seen:
-                    raise ValueError("翻页后商品未变化，采集已停止")
                 seen.add(fingerprint)
                 count = 0
                 row_list = rows.all()
