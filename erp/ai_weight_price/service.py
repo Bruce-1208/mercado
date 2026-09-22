@@ -42,6 +42,10 @@ class Service:
         if migrate_legacy_state:
             self._migrate_browser_attention_pause()
 
+    def bind_actor(self, actor, *, view_all=False):
+        """Bind task/state reads and writes to the signed-in workbench account."""
+        return self.store.set_actor(actor, view_all=view_all)
+
     def _migrate_browser_attention_pause(self):
         """Expose old login-redirect exceptions through the resumable pause UI."""
         pause = self.store.state("circuit")
@@ -93,8 +97,10 @@ class Service:
         owner = lock.read_owner()
         running = bool(owner and not lock._is_stale())
         run = self.store.state("run", {}) or {}
+        actor = self.store.actor() or {}
+        current_counts = None if actor.get("view_all") else self.store.run_counts(run.get("run_id"))
         return {"running": running, "counts": self.store.counts(),
-                "current_counts": self.store.run_counts(run.get("run_id")), "quota": self.store.quota(),
+                "current_counts": current_counts, "quota": self.store.quota(),
                 "circuit": self.store.state("circuit"), "run": self.store.state("run", {}),
                 "current_product": self._current_product_status(run),
                 "run_error": self.store.state("run_error"), "action_error": self.store.state("action_error"),
@@ -267,6 +273,7 @@ class Service:
         with self.guard:
             previous_run = self.store.state("run", {}) or {}
             config = self.config.load()
+            config["_actor"] = self.store.actor()
             if mode != "probe":
                 self.require_login(config)
                 if self.store.state("circuit"):
@@ -483,6 +490,7 @@ class Service:
         return self.status()
 
     def run(self, config, mode, task_id, lock):
+        self.store.set_actor(config.get("_actor"))
         outcome, message = "completed", "运行完成"
         try:
             self.store.recover()

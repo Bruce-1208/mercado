@@ -2648,10 +2648,12 @@ def api_db_ai_weight_price_store():
     method = str(data.get("method") or "").strip()
     args = data.get("args") or []
     kwargs = data.get("kwargs") or {}
+    actor = data.get("actor")
     if method not in AI_WEIGHT_PRICE_STORE_METHODS or not isinstance(args, list) or not isinstance(kwargs, dict):
         return jsonify({"status": "error", "message": "AI核重核价数据库操作无效"}), 400
     try:
-        result = getattr(ai_weight_price_service.store, method)(*args, **kwargs)
+        with ai_weight_price_service.store.actor_scope(actor):
+            result = getattr(ai_weight_price_service.store, method)(*args, **kwargs)
         if isinstance(result, bytes):
             import base64
             result = {"__bytes__": base64.b64encode(result).decode("ascii")}
@@ -12676,6 +12678,7 @@ def api_db_mercado_products():
         limit=_parse_int_param(request.args, "limit", 500, 1, 1000),
         offset=_parse_int_param(request.args, "offset", 0, 0, 1000000),
         source_type=str(request.args.get("source_type") or "").strip(),
+        ai_status=str(request.args.get("ai_status") or "").strip(),
         review_status=str(request.args.get("review_status") or "").strip(),
         publish_status=str(request.args.get("publish_status") or "").strip(),
         weight_min=str(request.args.get("weight_min") or "").strip(),
@@ -17250,6 +17253,11 @@ def _browser_extension_ai_weight_price_local_only():
             "status": "error",
             "message": "AI核重核价只能连接本机泽顺控制台启动，请将插件控制台地址设为 http://127.0.0.1:5000",
         }), 403
+    # The signed extension token is the authoritative task owner. Keep this
+    # scope on every request; the worker thread captures it when a run starts.
+    ai_weight_price_service.bind_actor(
+        getattr(g, "browser_extension_user", None), view_all=False
+    )
     return None
 
 
@@ -17556,6 +17564,7 @@ def api_ai_original_products():
         result = db_list_mercado_product_items(
             search=str(request.args.get("search") or "").strip(),
             source_type="ai_original",
+            ai_status=str(request.args.get("ai_status") or "").strip(),
             limit=_parse_int_param(request.args, "limit", 500, 1, 1000),
             offset=_parse_int_param(request.args, "offset", 0, 0, 1000000),
         )
@@ -17580,23 +17589,15 @@ def api_1688_products():
         result = db_list_mercado_product_items(
             search=str(request.args.get("search") or "").strip(),
             source_type="ai_original",
-            limit=1000 if status_filter else _parse_int_param(request.args, "limit", 24, 1, 1000),
-            offset=0 if status_filter else _parse_int_param(request.args, "offset", 0, 0, 1000000),
+            limit=_parse_int_param(request.args, "limit", 50, 1, 1000),
+            offset=_parse_int_param(request.args, "offset", 0, 0, 1000000),
+            ai_status=ai_status if status_filter else "",
+            review_status=str(request.args.get("review_status") or "").strip(),
             price_min=str(request.args.get("price_min") or "").strip(),
             price_max=str(request.args.get("price_max") or "").strip(),
             date_from=str(request.args.get("date_from") or "").strip(),
             date_to=str(request.args.get("date_to") or "").strip(),
         )
-        if status_filter:
-            rows = [
-                row for row in result.get("rows") or []
-                if str(row.get("ai_status") or "pending").lower() == ai_status
-            ]
-            result["rows"] = rows
-            # Status filtering is applied after the shared product query.  The
-            # count is intentionally bounded to the returned result because
-            # source snapshot status is JSON-backed on older installations.
-            result["total"] = len(rows)
         return jsonify({"status": "success", "data": result})
     except ValueError as exc:
         return jsonify({"status": "error", "message": str(exc)}), 400
@@ -17830,6 +17831,74 @@ def api_ai_original_product_image(filename):
         return jsonify({"status": "error", "message": "图片不存在"}), 404
     response = send_file(path, mimetype="image/jpeg", conditional=True)
     response.headers["Cache-Control"] = "public, max-age=86400"
+    return response
+
+
+def _validated_1688_image_url(value):
+    """Return an allowlisted 1688 CDN image URL or raise ``ValueError``."""
+
+    candidate = str(value or "").strip()
+    try:
+        parsed = urlsplit(candidate)
+    except ValueError as exc:
+        raise ValueError("1688 图片地址无效") from exc
+    hostname = str(parsed.hostname or "").lower()
+    if (
+        parsed.scheme != "https"
+        or not re.fullmatch(r"cbu\d+\.alicdn\.com", hostname)
+        or not parsed.path.startswith("/img/ibank/")
+        or parsed.username
+        or parsed.password
+        or parsed.port not in (None, 443)
+    ):
+        raise ValueError("只允许读取 1688 官方图片地址")
+    return candidate
+
+
+@app.route("/api/ai-original-products/source-image", methods=["GET"])
+@login_required
+def api_ai_original_source_image():
+    """Proxy one strictly allowlisted 1688 image without browser hotlink headers."""
+
+    try:
+        source_url = _validated_1688_image_url(request.args.get("url"))
+        upstream_request = Request(
+            source_url,
+            headers={
+                "User-Agent": (
+                    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                    "AppleWebKit/537.36 Chrome/136 Safari/537.36"
+                ),
+                "Referer": "https://detail.1688.com/",
+                "Accept": "image/avif,image/webp,image/apng,image/*,*/*;q=0.8",
+            },
+        )
+        with urlopen(upstream_request, timeout=15) as upstream:
+            final_url = _validated_1688_image_url(upstream.geturl())
+            if (
+                final_url != source_url
+                and urlsplit(final_url).hostname != urlsplit(source_url).hostname
+            ):
+                raise ValueError("1688 图片跳转到了非预期地址")
+            content_type = str(
+                upstream.headers.get("Content-Type") or ""
+            ).split(";", 1)[0].strip().lower()
+            if content_type not in {
+                "image/jpeg", "image/jpg", "image/png", "image/webp", "image/avif",
+            }:
+                raise ValueError("1688 返回的内容不是受支持的图片")
+            image_bytes = upstream.read(15 * 1024 * 1024 + 1)
+        if not image_bytes or len(image_bytes) > 15 * 1024 * 1024:
+            raise ValueError("1688 图片为空或超过 15 MB")
+    except ValueError as exc:
+        return jsonify({"status": "error", "message": str(exc)}), 400
+    except (HTTPError, URLError, TimeoutError, OSError) as exc:
+        logging.warning("代理读取 1688 图片失败: %s", exc)
+        return jsonify({"status": "error", "message": "1688 图片暂时无法读取"}), 502
+
+    response = Response(image_bytes, mimetype=content_type)
+    response.headers["Cache-Control"] = "public, max-age=86400"
+    response.headers["X-Content-Type-Options"] = "nosniff"
     return response
 
 

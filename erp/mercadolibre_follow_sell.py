@@ -257,15 +257,40 @@ class MercadoLibreClient:
 
     def upload_picture_from_url(self, source_url: str) -> str:
         """Download a source image and upload it for a User Products listing."""
-        source_response = self.session.get(source_url, timeout=self.timeout)
-        if not source_response.ok:
-            raise MercadoLibreError(
-                f"下载源图片失败 (HTTP {source_response.status_code}): {source_url}"
+        parsed_source = urlparse(str(source_url or ""))
+        image_bytes = b""
+        content_type = "image/jpeg"
+        if (
+            (
+                not parsed_source.netloc
+                or parsed_source.hostname in {"127.0.0.1", "localhost"}
             )
-        if len(source_response.content) > 10 * 1024 * 1024:
+            and parsed_source.path.startswith("/api/ai-original-products/images/")
+        ):
+            # AI-original images are owned by this process. Reading the
+            # validated file directly avoids a loopback HTTP deadlock when the
+            # workbench server is running with a single request worker.
+            from erp.ai_original_products import IMAGE_DIR
+
+            filename = Path(parsed_source.path).name
+            if not re.fullmatch(r"1688-[A-Za-z0-9_-]+-(?:ai-)?white\.jpg", filename):
+                raise MercadoLibreError(f"AI 原创图片地址无效: {source_url}")
+            local_path = (IMAGE_DIR / filename).resolve()
+            if local_path.parent != IMAGE_DIR.resolve() or not local_path.is_file():
+                raise MercadoLibreError(f"AI 原创图片不存在: {source_url}")
+            image_bytes = local_path.read_bytes()
+        else:
+            source_response = self.session.get(source_url, timeout=self.timeout)
+            if not source_response.ok:
+                raise MercadoLibreError(
+                    f"下载源图片失败 (HTTP {source_response.status_code}): {source_url}"
+                )
+            image_bytes = source_response.content
+            content_type = source_response.headers.get(
+                "Content-Type", "image/jpeg"
+            ).split(";", 1)[0]
+        if len(image_bytes) > 10 * 1024 * 1024:
             raise MercadoLibreError(f"源图片超过 10 MB: {source_url}")
-        content_type = source_response.headers.get("Content-Type", "image/jpeg").split(";", 1)[0]
-        image_bytes = source_response.content
         if content_type not in {"image/jpeg", "image/jpg", "image/png", "image/webp"}:
             raise MercadoLibreError(f"源图片格式不受支持 ({content_type}): {source_url}")
         try:

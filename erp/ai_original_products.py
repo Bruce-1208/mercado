@@ -12,6 +12,7 @@ import json
 import os
 import re
 import base64
+import unicodedata
 from collections import deque
 from io import BytesIO
 from pathlib import Path
@@ -27,9 +28,28 @@ IMAGE_DIR = Path(
     or PROJECT_ROOT / ".data" / "ai-original-images"
 )
 IMAGE_BASE_URL = str(
-    os.environ.get("AI_ORIGINAL_IMAGE_BASE_URL") or "http://127.0.0.1:5000"
+    os.environ.get("AI_ORIGINAL_IMAGE_BASE_URL") or ""
 ).rstrip("/")
 MAX_TITLE_CHARS = 60
+
+
+# 1688 collectors have emitted several property shapes over time. Keep the
+# extraction permissive here so a missing label key does not make an otherwise
+# explicit source fact disappear from the AI listing.
+_SOURCE_ATTRIBUTE_ID_KEYS = (
+    "id", "attribute_id", "attributeId", "nameid", "name_id", "key_id", "keyId",
+)
+_SOURCE_ATTRIBUTE_NAME_KEYS = (
+    "name", "key", "label", "attribute", "property_name", "propertyName",
+    "name_cn", "name_zh",
+)
+_SOURCE_ATTRIBUTE_VALUE_KEYS = (
+    "value_name", "value", "text", "content", "display_value", "displayValue",
+    "valueName", "val",
+)
+_SOURCE_ATTRIBUTE_VALUE_ID_KEYS = (
+    "value_id", "valueId", "valueid", "option_id", "optionId",
+)
 
 
 def extract_1688_item_id(value: Any) -> str:
@@ -83,7 +103,14 @@ def normalize_1688_product(product: Mapping[str, Any]) -> dict[str, Any]:
         main_image = "https:" + main_image
     if main_image and main_image not in images:
         images.insert(0, main_image)
-    properties = row.get("properties") if isinstance(row.get("properties"), list) else []
+    raw_properties = row.get("properties")
+    if isinstance(raw_properties, Mapping):
+        properties = [
+            {"name": name, "value": value}
+            for name, value in raw_properties.items()
+        ]
+    else:
+        properties = raw_properties if isinstance(raw_properties, list) else []
     variations = row.get("variations")
     if not isinstance(variations, list):
         variations = row.get("skus")
@@ -110,6 +137,151 @@ def normalize_1688_product(product: Mapping[str, Any]) -> dict[str, Any]:
         "package_height_cm": row.get("package_height_cm"),
         "collected_at": str(row.get("collected_at") or "")[:64],
     }
+
+
+def _attribute_text(value: Any) -> str:
+    """Turn collector/API scalar shapes into one readable attribute value."""
+    if value in (None, ""):
+        return ""
+    if isinstance(value, Mapping):
+        for key in _SOURCE_ATTRIBUTE_VALUE_KEYS + ("name", "label", "id"):
+            nested = value.get(key)
+            if nested not in (None, ""):
+                return _attribute_text(nested)
+        return ""
+    if isinstance(value, (list, tuple, set)):
+        parts = [_attribute_text(item) for item in value]
+        return " / ".join(dict.fromkeys(part for part in parts if part))
+    return re.sub(r"\s+", " ", str(value)).strip()
+
+
+def _safe_attribute_id(raw_id: Any, name: str, index: int) -> str:
+    candidate = re.sub(r"[^A-Za-z0-9_]+", "_", str(raw_id or "").upper()).strip("_")
+    if candidate:
+        return candidate[:80]
+    candidate = re.sub(r"[^A-Za-z0-9_]+", "_", str(name or "").upper()).strip("_")
+    return (candidate or f"AI_ATTRIBUTE_{index}")[:80]
+
+
+def _source_attribute_rows(properties: Any) -> list[dict[str, str]]:
+    """Normalize explicit 1688 properties without inventing marketplace data."""
+    if isinstance(properties, Mapping):
+        properties = [
+            {"name": name, "value": value}
+            for name, value in properties.items()
+        ]
+    if not isinstance(properties, list):
+        return []
+    rows: list[dict[str, str]] = []
+    seen: set[str] = set()
+    for index, raw in enumerate(properties, start=1):
+        if not isinstance(raw, Mapping):
+            continue
+        name = _attribute_text(
+            next((raw.get(key) for key in _SOURCE_ATTRIBUTE_NAME_KEYS
+                  if raw.get(key) not in (None, "")), "")
+        )
+        value = _attribute_text(
+            next((raw.get(key) for key in _SOURCE_ATTRIBUTE_VALUE_KEYS
+                  if raw.get(key) not in (None, "")), raw.get("values"))
+        )
+        if not name or not value:
+            continue
+        raw_id = next(
+            (raw.get(key) for key in _SOURCE_ATTRIBUTE_ID_KEYS
+             if raw.get(key) not in (None, "")), ""
+        )
+        value_id = next(
+            (raw.get(key) for key in _SOURCE_ATTRIBUTE_VALUE_ID_KEYS
+             if raw.get(key) not in (None, "")), ""
+        )
+        item = {
+            "id": _safe_attribute_id(raw_id, name, index),
+            "name": name[:120],
+            "value_name": value[:240],
+        }
+        if value_id not in (None, "", "-1", "none", "null"):
+            item["value_id"] = str(value_id)[:80]
+        for key in ("name_es", "name_pt", "value_name_es", "value_name_pt"):
+            translated = _attribute_text(raw.get(key))
+            if translated:
+                item[key] = translated[:240]
+        dedupe_key = "\x00".join((item["id"].casefold(), item["name"].casefold(), item["value_name"].casefold()))
+        if dedupe_key in seen:
+            continue
+        seen.add(dedupe_key)
+        rows.append(item)
+        if len(rows) >= 100:
+            break
+    return rows
+
+
+def _attribute_name_key(value: Any) -> str:
+    compact = re.sub(r"[^\w]+", "", unicodedata.normalize("NFKD", str(value or "").casefold()), flags=re.UNICODE)
+    compact = "".join(char for char in compact if not unicodedata.combining(char))
+    aliases = {
+        "颜色": "color", "色": "color", "color": "color", "colour": "color", "cor": "color",
+        "材质": "material", "材料": "material", "material": "material", "materiais": "material", "materia": "material",
+        "品牌": "brand", "牌子": "brand", "brand": "brand", "marca": "brand",
+        "尺寸": "size", "尺码": "size", "大小": "size", "size": "size", "tamaño": "size", "tamano": "size", "talla": "size", "tamanho": "size",
+        "长度": "length", "length": "length", "longitud": "length", "comprimento": "length",
+        "宽度": "width", "width": "width", "ancho": "width", "largura": "width",
+        "高度": "height", "height": "height", "altura": "height",
+        "重量": "weight", "weight": "weight", "peso": "weight",
+        "图案": "pattern", "pattern": "pattern", "diseño": "pattern", "diseno": "pattern", "estampa": "pattern",
+        "风格": "style", "款式": "style", "style": "style", "estilo": "style",
+        "性别": "gender", "gender": "gender", "genero": "gender", "sexo": "gender",
+        "适用年龄": "age", "年龄": "age", "age": "age", "edad": "age",
+    }
+    return aliases.get(compact, compact)
+
+
+def _merge_explicit_source_attributes(
+    generated: list[dict[str, str]], product: Mapping[str, Any]
+) -> list[dict[str, str]]:
+    """Keep every source property that the model did not explicitly cover.
+
+    The model remains responsible for localized names/values and semantic
+    category choices. This deterministic supplement only carries facts that
+    are already present in the 1688 record, so it is safe when the model
+    returns an incomplete attribute array or omits a collector-specific key.
+    """
+    source_rows = _source_attribute_rows(product.get("properties"))
+    if not source_rows:
+        return generated
+    merged = [dict(item) for item in generated]
+    by_id = {
+        str(item.get("id") or "").strip().upper(): index
+        for index, item in enumerate(merged)
+        if str(item.get("id") or "").strip()
+    }
+    by_name = {
+        _attribute_name_key(item.get("name") or item.get("name_es") or item.get("name_pt")): index
+        for index, item in enumerate(merged)
+        if item.get("name") or item.get("name_es") or item.get("name_pt")
+    }
+    for source in source_rows:
+        source_id = source["id"].upper()
+        source_name = _attribute_name_key(source["name"])
+        position = by_id.get(source_id)
+        # AI_ATTRIBUTE_N is a positional fallback, not a reliable identity.
+        if position is None or source_id.startswith("AI_ATTRIBUTE_"):
+            position = by_name.get(source_name)
+        if position is None:
+            position = len(merged)
+            merged.append(source)
+            by_id[source_id] = position
+            by_name[source_name] = position
+            continue
+        target = merged[position]
+        for key, value in source.items():
+            if key not in target or not str(target.get(key) or "").strip():
+                target[key] = value
+        # Keep the source value as an auditable fallback when an AI row only
+        # contains a translated label but forgot to return its value.
+        if not str(target.get("value_name") or "").strip():
+            target["value_name"] = source["value_name"]
+    return merged[:50]
 
 
 def _json_object(text: str) -> dict[str, Any]:
@@ -232,9 +404,16 @@ def _normalize_ai_attributes(value: Any) -> list[dict[str, str]]:
 def build_copy_prompt(product: Mapping[str, Any]) -> str:
     facts = {
         "中文标题": product.get("title"),
-        "商品属性": product.get("properties") or [],
+        "1688商品属性（必须逐条检查，不能遗漏明确值）": product.get("properties") or [],
         "原始详情摘要": str(product.get("description_text") or "")[:6000],
         "原始类目": product.get("category_name") or product.get("category_id") or "",
+        "重量和包装尺寸": {
+            "重量_g": product.get("weight_g"),
+            "包装长_cm": product.get("package_length_cm"),
+            "包装宽_cm": product.get("package_width_cm"),
+            "包装高_cm": product.get("package_height_cm"),
+        },
+        "1688变体和规格组合": product.get("variations") or [],
     }
     return (
         "你是 Mercado Libre 拉美电商文案专家。根据 1688 商品事实生成全新、准确、"
@@ -242,9 +421,11 @@ def build_copy_prompt(product: Mapping[str, Any]) -> str:
         "店铺名、厂家名或 OEM 字样；西班牙语和巴西葡萄牙语标题各不超过 60 个字符。"
         "详情分别用自然的拉美西班牙语和巴西葡萄牙语重写，包含卖点、规格、包装内容和"
         "使用提示，但不要使用 HTML。还要生成可以用于 Mercado Libre 刊登的商品属性，"
-        "只填写源商品事实明确支持的属性；不确定的属性不要猜。属性使用数组，每项包含"
+        "尽可能填全：先把源商品属性、详情中明确写出的规格、重量尺寸和变体中明确出现的"
+        "规格逐项映射到 attributes，不能因为属性名称是中文就遗漏。只填写源商品事实明确"
+        "支持的属性；不确定的属性不要猜，也不要把同一个属性重复输出。属性使用数组，每项包含"
         "name_es、name_pt、value_name_es、value_name_pt（无法翻译时也要保留 name、value_name），"
-        "可选 id、value_id。必须返回 JSON，字段为 title_es、title_pt、"
+        "可选 id、value_id；如果源属性有稳定 id/value_id 要原样保留。必须返回 JSON，字段为 title_es、title_pt、"
         "description_es、description_pt、attributes、brand_terms（识别到的品牌词数组）。\n"
         + json.dumps(facts, ensure_ascii=False)
     )
@@ -268,7 +449,10 @@ def generate_marketplace_copy(
         model=str(model or "").strip() or None,
         base_url=str(base_url or "").strip() or None,
         temperature=0.25,
-        max_tokens=2400,
+        # Keep enough room for a complete attribute array when the source
+        # carries many explicit specifications; the deterministic source
+        # merge below still protects against any omissions.
+        max_tokens=4000,
         response_format={"type": "json_object"},
     )
     generated = _json_object(response)
@@ -278,6 +462,7 @@ def generate_marketplace_copy(
     description_es = str(generated.get("description_es") or "").strip()
     description_pt = str(generated.get("description_pt") or "").strip()
     attributes = _normalize_ai_attributes(generated.get("attributes"))
+    attributes = _merge_explicit_source_attributes(attributes, product)
     if not description_es or not description_pt:
         raise ValueError("AI 必须同时生成西班牙语和葡萄牙语详情")
     original_description = re.sub(

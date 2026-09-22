@@ -1,0 +1,98 @@
+{
+  "selection": {
+    "keyword": "cosplay",
+    "source": "1688",
+    "destination_store": "遥遥领先1号店",
+    "destination_token_id": 63,
+    "destination_site_id": "MLM",
+    "destination_country": "Mexico",
+    "category_id": "CBT457411",
+    "category_name": "Capes",
+    "inventory_per_listing": 1,
+    "selection_policy": "Only generic costume capes were selected. Listings or variants referencing protected characters, franchises, branded designs, or ambiguous mixed-IP catalogs were rejected."
+  },
+  "products": [
+    {
+      "source_item_id": "1072183184339",
+      "source_url": "https://detail.1688.com/offer/1072183184339.html",
+      "source_title": "新cosplay服装动漫 万圣节黑蜘蛛网纱披肩恐怖吸血鬼披风系带斗篷",
+      "source_price_cny": 33.0,
+      "source_main_image_url": "https://cbu01.alicdn.com/img/ibank/O1CN01mw5RC7ByLwK21stE_!!2214609930847-0-cib.jpg_.webp",
+      "selected_variant": "橙色，130cm",
+      "weight_g": 200,
+      "package_length_cm": 30,
+      "package_width_cm": 25,
+      "package_height_cm": 1,
+      "net_proceeds_usd": 6,
+      "main_image_url": "http://127.0.0.1:5000/api/ai-original-products/images/1688-1072183184339-ai-white.jpg",
+      "title_es": "Capa de Tul con Murciélagos y Capucha para Disfraz",
+      "title_pt": "Capa de Tule com Morcegos e Capuz para Fantasia",
+      "description_es": "Capa ligera de tul naranja con siluetas de murciélagos y capucha. Modelo genérico para fiestas de disfraces y Halloween, sin personajes ni logotipos. Largo seleccionado: 130 cm. Cierre con lazo. Contenido: 1 capa. Lavar a mano con agua fría y secar a la sombra.",
+      "description_pt": "Capa leve de tule laranja com silhuetas de morcegos e capuz. Modelo genérico para festas à fantasia e Halloween, sem personagens ou logotipos. Comprimento selecionado: 130 cm. Fechamento por laço. Conteúdo: 1 capa. Lavar à mão com água fria e secar à sombra.",
+      "attributes": [
+        {"id": "BRAND", "name": "Brand", "name_es": "Marca", "name_pt": "Marca", "value_name": "Generic", "value_name_es": "Genérica", "value_name_pt": "Genérica"},
+        {"id": "CHARACTER", "name": "Character", "name_es": "Personaje", "name_pt": "Personagem", "value_id": "4665950", "value_name": "Vampire", "value_name_es": "Vampiro", "value_name_pt": "Vampiro"},
+        {"id": "COLOR", "name": "Color", "name_es": "Color", "name_pt": "Cor", "value_id": "52000", "value_name": "Orange", "value_name_es": "Naranja", "value_name_pt": "Laranja"},
+        {"id": "MATERIAL", "name": "Material", "name_es": "Material", "name_pt": "Material", "value_id": "466794", "value_name": "Polyester", "value_name_es": "Poliéster", "value_name_pt": "Poliéster"},
+        {"id": "WITH_HOOD", "name": "With hood", "name_es": "Con capucha", "name_pt": "Com capuz", "value_id": "242085", "value_name": "Yes", "value_name_es": "Sí", "value_name_pt": "Sim"},
+        {"id": "ITEM_CONDITION", "name": "Item condition", "name_es": "Condición", "name_pt": "Condição", "value_id": "2230284", "value_name": "New", "value_name_es": "Nuevo", "value_name_pt": "Novo"},
+        {"id": "EMPTY_GTIN_REASON", "name": "Empty GTIN reason", "name_es": "Motivo de GTIN vacío", "name_pt": "Motivo de GTIN vazio", "value_id": "17055160", "value_name": "The product does not have registered code", "value_name_es": "El producto no tiene código registrado", "value_name_pt": "O produto não possui código registrado"}
+      ],
+      "infringement_review": "通用万圣节蝙蝠网纱披风；未使用角色名、影视/动漫名称、品牌、徽标或受保护图案。"
+    },
+    {
+      "source_item_id": "962967646079",
+      "source_url": "https://detail.1688.com/offer/962967646079.html",
+      "source_title": "成人长款万圣节披风连帽多色亮片亮面斗篷角色扮演cosplay动漫服*",
+      "source_price_cny": 24.5,
+      "source_main_image_url": "https://cbu01.alicdn.com/img/ibank/O1CN01zLTHc51cXQsWkaH0K_!!2217117313610-0-cib.jpg_.webp",
+      "selected_variant": "银色，130cm",
+      "weight_g": 150,
+      "package_length_cm": 30,
+      "package_width_cm": 26,
+      "package_height_cm": 3,
+      "net_proceeds_usd": 5,
+      "main_image_url": "http://127.0.0.1:5000/api/ai-original-products/images/1688-962967646079-ai-white.jpg",
+      "title_es": "Capa Holográfica Plateada con Capucha para Disfraz",
+      "title_pt": "Capa Holográfica Prateada com Capuz para Fantasia",
+      "description_es": "Capa plateada de acabado holográfico con capucha y corte largo. Diseño genérico para fiestas, presentaciones y disfraces, sin personajes ni logotipos. Largo seleccionado: 130 cm. Contenido: 1 capa. Limpiar suavemente a mano y no planchar el acabado brillante.",
+      "description_pt": "Capa prateada com acabamento holográfico, capuz e corte longo. Design genérico para festas, apresentações e fantasias, sem personagens ou logotipos. Comprimento selecionado: 130 cm. Conteúdo: 1 capa. Limpar suavemente à mão e não passar o acabamento brilhante.",
+      "attributes": [
+        {"id": "BRAND", "name": "Brand", "name_es": "Marca", "name_pt": "Marca", "value_name": "Generic", "value_name_es": "Genérica", "value_name_pt": "Genérica"},
+        {"id": "CHARACTER", "name": "Character", "name_es": "Personaje", "name_pt": "Personagem", "value_id": "4665950", "value_name": "Vampire", "value_name_es": "Vampiro", "value_name_pt": "Vampiro"},
+        {"id": "COLOR", "name": "Color", "name_es": "Color", "name_pt": "Cor", "value_id": "52053", "value_name": "Silver", "value_name_es": "Plateado", "value_name_pt": "Prateado"},
+        {"id": "WITH_HOOD", "name": "With hood", "name_es": "Con capucha", "name_pt": "Com capuz", "value_id": "242085", "value_name": "Yes", "value_name_es": "Sí", "value_name_pt": "Sim"},
+        {"id": "ITEM_CONDITION", "name": "Item condition", "name_es": "Condición", "name_pt": "Condição", "value_id": "2230284", "value_name": "New", "value_name_es": "Nuevo", "value_name_pt": "Novo"},
+        {"id": "EMPTY_GTIN_REASON", "name": "Empty GTIN reason", "name_es": "Motivo de GTIN vacío", "name_pt": "Motivo de GTIN vazio", "value_id": "17055160", "value_name": "The product does not have registered code", "value_name_es": "El producto no tiene código registrado", "value_name_pt": "O produto não possui código registrado"}
+      ],
+      "infringement_review": "通用纯色亮面连帽披风；未使用角色名、影视/动漫名称、品牌、徽标或受保护图案。"
+    },
+    {
+      "source_item_id": "759431010613",
+      "source_url": "https://detail.1688.com/offer/759431010613.html",
+      "source_title": "中厚万圣节天鹅绒披风欧美代发女士斗篷cos薄款角色扮演服饰配件",
+      "source_price_cny": 9.99,
+      "source_main_image_url": "https://cbu01.alicdn.com/img/ibank/O1CN01N2Ohlr1cXQiBeueCb_!!2217117313610-0-cib.jpg_.webp",
+      "selected_variant": "深绿色，130cm",
+      "weight_g": 220,
+      "package_length_cm": 30,
+      "package_width_cm": 26,
+      "package_height_cm": 3,
+      "net_proceeds_usd": 3,
+      "main_image_url": "http://127.0.0.1:5000/api/ai-original-products/images/1688-759431010613-ai-white.jpg",
+      "title_es": "Capa de Terciopelo Verde con Capucha para Disfraz",
+      "title_pt": "Capa de Veludo Verde com Capuz para Fantasia",
+      "description_es": "Capa de terciopelo verde oscuro con capucha, caída suave y cierre de lazo. Diseño genérico para fiestas y disfraces, sin personajes ni logotipos. Largo seleccionado: 130 cm. Contenido: 1 capa. Lavar a mano con agua fría y secar a la sombra.",
+      "description_pt": "Capa de veludo verde-escuro com capuz, caimento suave e fechamento por laço. Design genérico para festas e fantasias, sem personagens ou logotipos. Comprimento selecionado: 130 cm. Conteúdo: 1 capa. Lavar à mão com água fria e secar à sombra.",
+      "attributes": [
+        {"id": "BRAND", "name": "Brand", "name_es": "Marca", "name_pt": "Marca", "value_name": "Generic", "value_name_es": "Genérica", "value_name_pt": "Genérica"},
+        {"id": "CHARACTER", "name": "Character", "name_es": "Personaje", "name_pt": "Personagem", "value_id": "4665950", "value_name": "Vampire", "value_name_es": "Vampiro", "value_name_pt": "Vampiro"},
+        {"id": "COLOR", "name": "Color", "name_es": "Color", "name_pt": "Cor", "value_id": "52019", "value_name": "Dark green", "value_name_es": "Verde oscuro", "value_name_pt": "Verde-escuro"},
+        {"id": "WITH_HOOD", "name": "With hood", "name_es": "Con capucha", "name_pt": "Com capuz", "value_id": "242085", "value_name": "Yes", "value_name_es": "Sí", "value_name_pt": "Sim"},
+        {"id": "ITEM_CONDITION", "name": "Item condition", "name_es": "Condición", "name_pt": "Condição", "value_id": "2230284", "value_name": "New", "value_name_es": "Nuevo", "value_name_pt": "Novo"},
+        {"id": "EMPTY_GTIN_REASON", "name": "Empty GTIN reason", "name_es": "Motivo de GTIN vacío", "name_pt": "Motivo de GTIN vazio", "value_id": "17055160", "value_name": "The product does not have registered code", "value_name_es": "El producto no tiene código registrado", "value_name_pt": "O produto não possui código registrado"}
+      ],
+      "infringement_review": "通用纯色天鹅绒连帽披风；未使用角色名、影视/动漫名称、品牌、徽标或受保护图案。"
+    }
+  ]
+}

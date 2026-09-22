@@ -187,6 +187,17 @@ def product_publish_issues(product_row: Mapping[str, Any]) -> list[str]:
             or "-ai-white.jpg" not in image_url
         ):
             issues.append("首图尚未完成 AI 白底生成")
+        risk_level = row.get("infringement_risk_level")
+        checked_at = str(row.get("infringement_checked_at") or "").strip()
+        try:
+            normalized_risk_level = int(risk_level)
+        except (TypeError, ValueError):
+            normalized_risk_level = None
+        if normalized_risk_level is None or not checked_at:
+            issues.append("AI 原创商品尚未完成侵权检测")
+        elif normalized_risk_level != 0:
+            risk_label = "疑似侵权" if normalized_risk_level == 1 else "侵权"
+            issues.append(f"AI 原创商品侵权检测未通过：{risk_label}")
     if row.get("review_status") != "approved":
         issues.append("审核状态未通过")
     actual_weight = _actual_weight_value(row)
@@ -256,6 +267,29 @@ def validate_publishable_products(product_rows: Iterable[Mapping[str, Any]]) -> 
     ]
     if nonpositive_net:
         issues.append(f"净收益小于等于 0 {_row_references(nonpositive_net)}")
+    ai_original_unchecked = []
+    ai_original_risky = []
+    for row in rows:
+        if str(row.get("source_type") or "").strip().lower() != "ai_original":
+            continue
+        try:
+            risk_level = int(row.get("infringement_risk_level"))
+        except (TypeError, ValueError):
+            risk_level = None
+        if risk_level is None or not str(row.get("infringement_checked_at") or "").strip():
+            ai_original_unchecked.append(row)
+        elif risk_level != 0:
+            ai_original_risky.append(row)
+    if ai_original_unchecked:
+        issues.append(
+            "AI 原创商品尚未完成侵权检测 "
+            f"{_row_references(ai_original_unchecked)}"
+        )
+    if ai_original_risky:
+        issues.append(
+            "AI 原创商品侵权检测未通过 "
+            f"{_row_references(ai_original_risky)}"
+        )
     if issues:
         raise ValueError("不能上架：" + "；".join(issues))
 

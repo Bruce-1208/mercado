@@ -316,12 +316,13 @@ def test_product_profitability_updates_do_not_overwrite_collection_history(sourc
     assert params[-2:] == (15, "MLM1")
 
 
-def test_profitability_estimator_never_overwrites_direct_zying_net_proceeds():
+@pytest.mark.parametrize("source_type", ["zying", "ai_original"])
+def test_profitability_estimator_never_overwrites_source_owned_net_proceeds(source_type):
     connection = _FakeConnection(update_rowcount=1)
 
     applied = store.update_item_profitability("860217541", {
         "id": 15,
-        "source_type": "zying",
+        "source_type": source_type,
         "net_proceeds_usd": None,
         "profitability_error": "无法识别商品所属国家站点",
     }, connection_factory=lambda: connection)
@@ -374,7 +375,7 @@ def test_profitability_update_uses_input_cas_and_stops_mirror_on_conflict():
     assert params[-10:] == tuple(expected.values())
 
 
-def test_profitability_queue_excludes_direct_zying_rows_and_retries_incomplete_rows():
+def test_profitability_queue_excludes_source_owned_rows_and_retries_incomplete_rows():
     connection = _FakeConnection()
     batches = iter([
         [{"id": 1, "source_type": "pulled"}],
@@ -406,8 +407,8 @@ def test_profitability_queue_excludes_direct_zying_rows_and_retries_incomplete_r
     for sql in (product_pending_sql, collection_pending_sql):
         assert "ORDER BY `id` DESC" in sql
         assert "`profitability_updated_at` IS NULL" in sql
-    assert "`source_type` <> 'zying'" in product_pending_sql
-    assert "`source_type` <> 'zying'" in product_stale_sql
+    assert "`source_type` NOT IN ('zying', 'ai_original')" in product_pending_sql
+    assert "`source_type` NOT IN ('zying', 'ai_original')" in product_stale_sql
     assert "`source_type`" not in collection_pending_sql
     assert "`source_type`" not in collection_stale_sql
     for sql in (product_stale_sql, collection_stale_sql):
@@ -472,7 +473,7 @@ def test_reference_refresh_clears_only_shipping_and_net_for_safe_recalculation()
     assert all(params[-3:-1] == ("MLB", "MLM") for _, params in select_queries)
     collection_select, product_select = select_queries[0], select_queries[2]
     assert "`source_type`" not in collection_select[0]
-    assert "`source_type` <> 'zying'" in product_select[0]
+    assert "`source_type` NOT IN ('zying', 'ai_original')" in product_select[0]
 
 
 def test_add_products_retries_transient_lock_timeout(monkeypatch):

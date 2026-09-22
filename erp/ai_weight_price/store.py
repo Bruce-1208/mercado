@@ -8,6 +8,7 @@ import re
 import sqlite3
 import time
 from contextlib import contextmanager
+from contextvars import ContextVar
 from datetime import datetime, timedelta, timezone
 from functools import wraps
 from pathlib import Path
@@ -90,8 +91,11 @@ def _mysql_sql(sql):
     sql = sql.replace("BEGIN IMMEDIATE", "START TRANSACTION")
     sql = sql.replace("json_extract(payload,'$.title')", "JSON_UNQUOTE(JSON_EXTRACT(payload,'$.title'))")
     sql = sql.replace("json_extract(t.payload,'$.title')", "JSON_UNQUOTE(JSON_EXTRACT(t.payload,'$.title'))")
+    sql = sql.replace("json_extract(ri.payload,'$.title')", "JSON_UNQUOTE(JSON_EXTRACT(ri.payload,'$.title'))")
+    sql = sql.replace("json_extract(ri.payload,'$.status')", "JSON_UNQUOTE(JSON_EXTRACT(ri.payload,'$.status'))")
     sql = sql.replace("json_extract(payload,'$.source_page')", "JSON_UNQUOTE(JSON_EXTRACT(payload,'$.source_page'))")
     sql = sql.replace("json_extract(payload,'$.source_index')", "JSON_UNQUOTE(JSON_EXTRACT(payload,'$.source_index'))")
+    sql = sql.replace("json_extract(payload,'$.owner_user_id')", "JSON_UNQUOTE(JSON_EXTRACT(payload,'$.owner_user_id'))")
     sql = sql.replace("CAST(JSON_UNQUOTE(JSON_EXTRACT(payload,'$.source_page')) AS INTEGER)",
                       "CAST(JSON_UNQUOTE(JSON_EXTRACT(payload,'$.source_page')) AS UNSIGNED)")
     sql = sql.replace("CAST(JSON_UNQUOTE(JSON_EXTRACT(payload,'$.source_index')) AS INTEGER)",
@@ -168,7 +172,8 @@ def _create_mysql_schema(db):
         CREATE TABLE IF NOT EXISTS events (
           id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY, at DOUBLE NOT NULL,
           level VARCHAR(16) NOT NULL, task_id VARCHAR(191), message LONGTEXT NOT NULL,
-          KEY events_task (task_id), KEY events_at (at)
+          owner_user_id BIGINT NULL, owner_name VARCHAR(191) NOT NULL DEFAULT '',
+          KEY events_task (task_id), KEY events_at (at), KEY events_owner (owner_user_id, id)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
     """)
     db.execute("""
@@ -198,9 +203,20 @@ def _ensure_mysql_schema(db):
            WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME IN (""" + placeholders + ")",
         tuple(expected),
     ).fetchall()
-    if {str(row["TABLE_NAME"]) for row in rows} >= expected:
-        return
-    _create_mysql_schema(db)
+    if {str(row["TABLE_NAME"]) for row in rows} < expected:
+        _create_mysql_schema(db)
+    event_columns = {
+        str(row["COLUMN_NAME"])
+        for row in db.execute(
+            """SELECT COLUMN_NAME FROM information_schema.COLUMNS
+               WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME=?""",
+            (MYSQL_TABLES["events"],),
+        ).fetchall()
+    }
+    if "owner_user_id" not in event_columns:
+        db.execute("ALTER TABLE events ADD COLUMN owner_user_id BIGINT NULL, ADD KEY events_owner (owner_user_id, id)")
+    if "owner_name" not in event_columns:
+        db.execute("ALTER TABLE events ADD COLUMN owner_name VARCHAR(191) NOT NULL DEFAULT ''")
 
 
 def business_day(now):
@@ -216,6 +232,7 @@ class Store:
             raise ValueError("AI核重核价存储后端必须是 sqlite 或 mysql")
         self.path = self.root / "tasks.sqlite3" if self.backend == "sqlite" else None
         self.connection_factory = connection_factory
+        self._actor_context = ContextVar(f"ai_weight_price_actor_{id(self)}", default=None)
         self.dirty = True
         self.read_only = False
         if self.backend == "sqlite":
@@ -235,12 +252,19 @@ class Store:
                   reserved_at REAL NOT NULL, sent_at REAL, conversation_url TEXT, message TEXT NOT NULL);
                 CREATE TABLE IF NOT EXISTS events (
                   id INTEGER PRIMARY KEY AUTOINCREMENT, at REAL NOT NULL,
-                  level TEXT NOT NULL, task_id TEXT, message TEXT NOT NULL);
+                  level TEXT NOT NULL, task_id TEXT, message TEXT NOT NULL,
+                  owner_user_id INTEGER, owner_name TEXT NOT NULL DEFAULT '');
                 CREATE TABLE IF NOT EXISTS state (key TEXT PRIMARY KEY, value TEXT NOT NULL);
                 CREATE TABLE IF NOT EXISTS runs (run_id TEXT PRIMARY KEY, payload TEXT NOT NULL);
                 CREATE TABLE IF NOT EXISTS run_items (run_id TEXT NOT NULL, erp_goods_id TEXT NOT NULL,
                   sequence INTEGER NOT NULL, payload TEXT NOT NULL, PRIMARY KEY(run_id, erp_goods_id));
             """)
+                event_columns = {row[1] for row in db.execute("PRAGMA table_info(events)").fetchall()}
+                if "owner_user_id" not in event_columns:
+                    db.execute("ALTER TABLE events ADD COLUMN owner_user_id INTEGER")
+                if "owner_name" not in event_columns:
+                    db.execute("ALTER TABLE events ADD COLUMN owner_name TEXT NOT NULL DEFAULT ''")
+                db.execute("CREATE INDEX IF NOT EXISTS events_owner ON events(owner_user_id,id)")
         else:
             with self.connect() as db:
                 _ensure_mysql_schema(db)
@@ -306,23 +330,97 @@ class Store:
             return "MySQL（服务器中心库；只读）" if self.read_only else "MySQL（服务器中心库）"
         return str(self.path)
 
+    @staticmethod
+    def _normalize_actor(actor, view_all=None):
+        if not actor:
+            return None
+        user_id = actor.get("id") or actor.get("owner_user_id")
+        if user_id in (None, ""):
+            return None
+        return {
+            "id": int(user_id),
+            "username": str(actor.get("username") or actor.get("owner_username") or "").strip(),
+            "display_name": str(
+                actor.get("display_name") or actor.get("owner_display_name")
+                or actor.get("username") or actor.get("owner_username") or user_id
+            ).strip(),
+            "view_all": bool(actor.get("view_all")) if view_all is None else bool(view_all),
+        }
+
+    def set_actor(self, actor, *, view_all=None):
+        normalized = self._normalize_actor(actor, view_all)
+        self._actor_context.set(normalized)
+        return normalized
+
+    def actor(self):
+        return self._actor_context.get()
+
+    @contextmanager
+    def actor_scope(self, actor, *, view_all=None):
+        token = self._actor_context.set(self._normalize_actor(actor, view_all))
+        try:
+            yield
+        finally:
+            self._actor_context.reset(token)
+
+    def _owner_fields(self):
+        actor = self.actor()
+        if not actor:
+            return {}
+        return {
+            "owner_user_id": actor["id"],
+            "owner_username": actor["username"],
+            "owner_display_name": actor["display_name"],
+        }
+
+    def _state_key(self, key):
+        actor = self.actor()
+        return f"user:{actor['id']}:{key}" if actor else key
+
+    def _scope_key(self, scope):
+        actor = self.actor()
+        return f"user:{actor['id']}:{scope}" if actor else scope
+
+    def _may_view(self, payload):
+        actor = self.actor()
+        if not actor or actor.get("view_all"):
+            return True
+        try:
+            return int(payload.get("owner_user_id") or 0) == actor["id"]
+        except (TypeError, ValueError):
+            return False
+
+    def _owner_filter(self, payload_column="payload"):
+        actor = self.actor()
+        if not actor or actor.get("view_all"):
+            return None, []
+        return f"json_extract({payload_column},'$.owner_user_id')=?", [actor["id"]]
+
     @_retry_mysql_transaction
     def log(self, message, task_id=None, level="INFO"):
+        actor = self.actor() or {}
         with self.connect() as db:
-            db.execute("INSERT INTO events(at,level,task_id,message) VALUES(?,?,?,?)",
-                       (time.time(), level, task_id, str(message)))
+            db.execute("INSERT INTO events(at,level,task_id,message,owner_user_id,owner_name) VALUES(?,?,?,?,?,?)",
+                       (time.time(), level, task_id, str(message), actor.get("id"), actor.get("display_name", "")))
 
     @_retry_mysql_transaction
     def logs(self, after=0, limit=200):
+        actor = self.actor()
+        owner_sql = " AND owner_user_id=?" if actor and not actor.get("view_all") else ""
+        owner_args = [actor["id"]] if owner_sql else []
         with self.connect() as db:
             if after:
-                rows = db.execute("SELECT * FROM events WHERE id>? ORDER BY id LIMIT ?", (after, limit)).fetchall()
+                rows = db.execute("SELECT * FROM events WHERE id>?" + owner_sql + " ORDER BY id LIMIT ?",
+                                  [after, *owner_args, limit]).fetchall()
             else:
-                rows = reversed(db.execute("SELECT * FROM events ORDER BY id DESC LIMIT ?", (limit,)).fetchall())
+                where = (" WHERE owner_user_id=?" if owner_sql else "")
+                rows = reversed(db.execute("SELECT * FROM events" + where + " ORDER BY id DESC LIMIT ?",
+                                           [*owner_args, limit]).fetchall())
             return [dict(row) for row in rows]
 
     @_retry_mysql_transaction
     def state(self, key, default=None):
+        key = self._state_key(key)
         with self.connect() as db:
             row = db.execute("SELECT value FROM state WHERE key=?", (key,)).fetchone()
         if not row:
@@ -334,6 +432,7 @@ class Store:
 
     @_retry_mysql_transaction
     def set_state(self, key, value):
+        key = self._state_key(key)
         with self.connect() as db:
             payload = json.dumps(value, ensure_ascii=False)
             if self.backend == "mysql":
@@ -343,6 +442,7 @@ class Store:
 
     @_retry_mysql_transaction
     def save_run(self, run):
+        run = {**run, **self._owner_fields()}
         with self.connect() as db:
             payload = json.dumps(run, ensure_ascii=False)
             if self.backend == "mysql":
@@ -401,7 +501,10 @@ class Store:
             if not run:
                 raise ValueError("执行批次不存在")
             rows = db.execute("SELECT payload FROM run_items WHERE run_id=? ORDER BY sequence", (run_id,)).fetchall()
-        return json.loads(run[0]), [json.loads(row[0]) for row in rows]
+        decoded_run = json.loads(run[0])
+        if not self._may_view(decoded_run):
+            raise ValueError("执行批次不存在")
+        return decoded_run, [json.loads(row[0]) for row in rows]
 
     @_retry_mysql_transaction
     def run_items(self, run_id, status="", search="", page=1, page_size=50):
@@ -410,31 +513,31 @@ class Store:
             raise ValueError("状态无效")
         clauses, args = ["ri.run_id=?"], [run_id]
         if status:
-            clauses.append("t.status=?")
+            clauses.append("json_extract(ri.payload,'$.status')=?")
             args.append(status)
         if search:
-            clauses.append("(t.erp_goods_id LIKE ? OR json_extract(t.payload,'$.title') LIKE ?)")
+            clauses.append("(ri.erp_goods_id LIKE ? OR json_extract(ri.payload,'$.title') LIKE ?)")
             args.extend(["%" + search + "%"] * 2)
         where = " WHERE " + " AND ".join(clauses)
         with self.connect() as db:
             run = db.execute("SELECT payload FROM runs WHERE run_id=?", (run_id,)).fetchone()
             if not run:
                 raise ValueError("执行批次不存在")
-            total = db.execute("SELECT COUNT(*) FROM run_items ri JOIN tasks t ON t.erp_goods_id=ri.erp_goods_id" + where,
-                               args).fetchone()[0]
-            rows = db.execute("SELECT ri.sequence,ri.payload run_payload,t.* FROM run_items ri "
-                              "JOIN tasks t ON t.erp_goods_id=ri.erp_goods_id" + where
+            if not self._may_view(json.loads(run[0])):
+                raise ValueError("执行批次不存在")
+            total = db.execute("SELECT COUNT(*) FROM run_items ri" + where, args).fetchone()[0]
+            rows = db.execute("SELECT ri.sequence,ri.payload run_payload FROM run_items ri" + where
                               + " ORDER BY ri.sequence LIMIT ? OFFSET ?",
                               args + [page_size, (page - 1) * page_size]).fetchall()
         result = []
+        run_payload = json.loads(run[0])
         for row in rows:
             snapshot = json.loads(row["run_payload"])
-            current = self.decode(row)
-            result.append({**snapshot, **current,
+            result.append({**snapshot,
                            "execution_result": snapshot.get("execution_result", ""),
                            "execution_reason": snapshot.get("execution_reason", ""),
                            "run_sequence": row["sequence"]})
-        return {"run": json.loads(run[0]), "total": total, "rows": result}
+        return {"run": run_payload, "total": total, "rows": result}
 
     @staticmethod
     def decode(row):
@@ -446,10 +549,14 @@ class Store:
             row = db.execute("SELECT * FROM tasks WHERE erp_goods_id=?", (key,)).fetchone()
         if not row:
             raise KeyError("任务不存在")
-        return self.decode(row)
+        result = self.decode(row)
+        if not self._may_view(result):
+            raise KeyError("任务不存在")
+        return result
 
     @_retry_mysql_transaction
     def add(self, record):
+        record = {**record, **self._owner_fields()}
         key = str(record.get("erp_goods_id") or "").strip()
         if not key or not str(record.get("title") or "").strip():
             raise ValueError("ERP商品ID和标题不能为空")
@@ -457,6 +564,12 @@ class Store:
         with self.connect() as db:
             sql = "INSERT IGNORE INTO tasks VALUES(?,?,?,?,?,?)" if self.backend == "mysql" else "INSERT OR IGNORE INTO tasks VALUES(?,?,?,?,?,?)"
             changed = db.execute(sql, (key, "pending", "collected", json.dumps(record, ensure_ascii=False), now, now)).rowcount
+            if not changed and self._owner_fields():
+                existing = db.execute("SELECT * FROM tasks WHERE erp_goods_id=?", (key,)).fetchone()
+                if existing:
+                    payload = {**json.loads(existing["payload"]), **self._owner_fields()}
+                    db.execute("UPDATE tasks SET payload=?,updated_at=? WHERE erp_goods_id=?",
+                               (json.dumps(payload, ensure_ascii=False), now, key))
         self.dirty = self.dirty or bool(changed)
         return changed
 
@@ -468,6 +581,8 @@ class Store:
             if row is None:
                 raise KeyError("任务不存在")
             data = self.decode(row)
+            if not self._may_view(data):
+                raise KeyError("任务不存在")
             data.update(changes)
             if data["status"] not in STATUSES:
                 raise ValueError("状态无效")
@@ -491,9 +606,13 @@ class Store:
         if status and status not in STATUSES:
             raise ValueError("状态无效")
         clauses, args = [], []
+        owner_clause, owner_args = self._owner_filter()
+        if owner_clause:
+            clauses.append(owner_clause)
+            args.extend(owner_args)
         if scope is not None:
             clauses.append("erp_goods_id IN (SELECT erp_goods_id FROM collection_items WHERE scope=?)")
-            args.append(scope)
+            args.append(self._scope_key(scope))
         if status:
             clauses.append("status=?")
             args.append(status)
@@ -516,9 +635,17 @@ class Store:
 
     @_retry_mysql_transaction
     def counts(self, scope=None):
+        owner_clause, owner_args = self._owner_filter()
         with self.connect() as db:
-            where = " WHERE erp_goods_id IN (SELECT erp_goods_id FROM collection_items WHERE scope=?)" if scope is not None else ""
-            rows = db.execute("SELECT status,COUNT(*) n FROM tasks" + where + " GROUP BY status", (scope,) if scope is not None else ()).fetchall()
+            clauses, args = [], []
+            if owner_clause:
+                clauses.append(owner_clause)
+                args.extend(owner_args)
+            if scope is not None:
+                clauses.append("erp_goods_id IN (SELECT erp_goods_id FROM collection_items WHERE scope=?)")
+                args.append(self._scope_key(scope))
+            where = " WHERE " + " AND ".join(clauses) if clauses else ""
+            rows = db.execute("SELECT status,COUNT(*) n FROM tasks" + where + " GROUP BY status", args).fetchall()
         return {**dict.fromkeys(STATUSES, 0), **{r["status"]: r["n"] for r in rows}}
 
     @_retry_mysql_transaction
@@ -539,11 +666,13 @@ class Store:
 
     @_retry_mysql_transaction
     def reset_scope(self, scope):
+        scope = self._scope_key(scope)
         with self.connect() as db:
             db.execute("DELETE FROM collection_items WHERE scope=?", (scope,))
 
     @_retry_mysql_transaction
     def include_in_scope(self, scope, key, page):
+        scope = self._scope_key(scope)
         with self.connect() as db:
             if self.backend == "mysql":
                 db.execute("INSERT INTO collection_items VALUES(?,?,?) ON DUPLICATE KEY UPDATE page=VALUES(page)",
@@ -671,6 +800,23 @@ class RemoteStore:
         self.path = None
         self.backend = "api"
         self.dirty = True
+        self._actor_context = ContextVar(f"ai_weight_price_remote_actor_{id(self)}", default=None)
+
+    def set_actor(self, actor, *, view_all=None):
+        normalized = Store._normalize_actor(actor, view_all)
+        self._actor_context.set(normalized)
+        return normalized
+
+    def actor(self):
+        return self._actor_context.get()
+
+    @contextmanager
+    def actor_scope(self, actor, *, view_all=None):
+        token = self._actor_context.set(Store._normalize_actor(actor, view_all))
+        try:
+            yield
+        finally:
+            self._actor_context.reset(token)
 
     @property
     def storage_description(self):
@@ -683,7 +829,8 @@ class RemoteStore:
             value = _request(
                 "POST",
                 "/api/db/ai-weight-price/store",
-                json={"method": method, "args": list(args), "kwargs": kwargs},
+                json={"method": method, "args": list(args), "kwargs": kwargs,
+                      "actor": self.actor()},
                 timeout=120,
             )
         except RuntimeError as exc:

@@ -980,6 +980,52 @@ def test_picture_upload_adds_margin_to_boundary_size_image(tmp_path):
         assert max(uploaded.size) == 520
 
 
+@pytest.mark.parametrize("source_url", [
+    "http://127.0.0.1:5000/api/ai-original-products/images/1688-123456-ai-white.jpg",
+    "/api/ai-original-products/images/1688-123456-ai-white.jpg",
+])
+def test_picture_upload_reads_ai_original_loopback_image_directly(
+    tmp_path, monkeypatch, source_url,
+):
+    from PIL import Image
+
+    image_path = tmp_path / "1688-123456-ai-white.jpg"
+    Image.new("RGB", (800, 800), "white").save(image_path, format="JPEG")
+
+    class Response:
+        status_code = 200
+        ok = True
+
+        def json(self):
+            return {"id": "uploaded-ai-original"}
+
+    class Session:
+        uploaded = b""
+
+        def get(self, *_args, **_kwargs):
+            raise AssertionError("loopback AI image must not be fetched over HTTP")
+
+        def post(self, _url, **kwargs):
+            self.uploaded = kwargs["files"]["file"][1]
+            return Response()
+
+    monkeypatch.setattr("erp.ai_original_products.IMAGE_DIR", tmp_path)
+    token_file = tmp_path / "tokens.json"
+    token_file.write_text(json.dumps({"access_token": "token"}), encoding="utf-8")
+    session = Session()
+    client = MercadoLibreClient(
+        token_file,
+        client_id="client",
+        client_secret="secret",
+        session=session,
+    )
+
+    picture_id = client.upload_picture_from_url(source_url)
+
+    assert picture_id == "uploaded-ai-original"
+    assert session.uploaded == image_path.read_bytes()
+
+
 def test_user_product_payload_derives_seller_warranty_from_description():
     payload = build_user_product_payload(
         CategoryClient(),

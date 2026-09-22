@@ -5572,6 +5572,77 @@
             min-width: 2300px;
         }
 
+        #mercado-list-module.collection-mode .market-table-wrap {
+            overflow-x: hidden;
+            overflow-y: auto;
+        }
+
+        #mercado-list-module.collection-mode .market-product-table {
+            width: 100%;
+            min-width: 0;
+            table-layout: fixed;
+            font-size: 11px;
+        }
+
+        #mercado-list-module.collection-mode .market-product-table th,
+        #mercado-list-module.collection-mode .market-product-table td {
+            min-width: 0 !important;
+            padding: 8px 5px;
+            overflow-wrap: anywhere;
+            word-break: break-word;
+        }
+
+        #mercado-list-module.collection-mode .market-product-table th:nth-child(1),
+        #mercado-list-module.collection-mode .market-product-table td:nth-child(1) { width: 4%; }
+        #mercado-list-module.collection-mode .market-product-table th:nth-child(2),
+        #mercado-list-module.collection-mode .market-product-table td:nth-child(2) { width: 7%; }
+        #mercado-list-module.collection-mode .market-product-table th:nth-child(3),
+        #mercado-list-module.collection-mode .market-product-table td:nth-child(3) { width: 7%; }
+        #mercado-list-module.collection-mode .market-product-table th:nth-child(4),
+        #mercado-list-module.collection-mode .market-product-table td:nth-child(4) { width: 7%; }
+        #mercado-list-module.collection-mode .market-product-table th:nth-child(5),
+        #mercado-list-module.collection-mode .market-product-table td:nth-child(5) { width: 15%; }
+        #mercado-list-module.collection-mode .market-product-table th:nth-child(6),
+        #mercado-list-module.collection-mode .market-product-table td:nth-child(6) { width: 5%; }
+        #mercado-list-module.collection-mode .market-product-table th:nth-child(7),
+        #mercado-list-module.collection-mode .market-product-table td:nth-child(7) { width: 6%; }
+        #mercado-list-module.collection-mode .market-product-table th:nth-child(8),
+        #mercado-list-module.collection-mode .market-product-table td:nth-child(8) { width: 5%; }
+        #mercado-list-module.collection-mode .market-product-table th:nth-child(9),
+        #mercado-list-module.collection-mode .market-product-table td:nth-child(9) { width: 8%; }
+        #mercado-list-module.collection-mode .market-product-table th:nth-child(10),
+        #mercado-list-module.collection-mode .market-product-table td:nth-child(10) { width: 7%; }
+        #mercado-list-module.collection-mode .market-product-table th:nth-child(11),
+        #mercado-list-module.collection-mode .market-product-table td:nth-child(11) { width: 7%; }
+        #mercado-list-module.collection-mode .market-product-table th:nth-child(12),
+        #mercado-list-module.collection-mode .market-product-table td:nth-child(12) { width: 8%; }
+        #mercado-list-module.collection-mode .market-product-table th:nth-child(13),
+        #mercado-list-module.collection-mode .market-product-table td:nth-child(13) { width: 7%; }
+        #mercado-list-module.collection-mode .market-product-table th:nth-child(14),
+        #mercado-list-module.collection-mode .market-product-table td:nth-child(14) { width: 7%; }
+
+        #mercado-list-module.collection-mode .market-product-image {
+            width: 46px;
+            height: 46px;
+        }
+
+        #mercado-list-module.collection-mode .market-product-title {
+            display: -webkit-box;
+            max-width: none;
+            overflow: hidden;
+            -webkit-box-orient: vertical;
+            -webkit-line-clamp: 3;
+        }
+
+        .market-collection-title-link {
+            color: inherit;
+            text-decoration: none;
+        }
+
+        .market-collection-title-link:hover {
+            color: var(--primary);
+        }
+
         .market-product-table thead th {
             position: sticky;
             top: 0;
@@ -9444,14 +9515,14 @@
         }
     </style>
     <link rel="stylesheet" href="{{ url_for('static', filename='console-ui.css') }}?v=20260921-align1">
-    <link rel="stylesheet" href="{{ url_for('static', filename='ai-original-products.css') }}?v=20260921-editor1">
+    <link rel="stylesheet" href="{{ url_for('static', filename='ai-original-products.css') }}?v=20260922-images1">
     <link rel="stylesheet" href="{{ url_for('static', filename='ai-original-workbench.css') }}?v=20260921">
-    <link rel="stylesheet" href="{{ url_for('static', filename='1688-products.css') }}?v=20260920">
+    <link rel="stylesheet" href="{{ url_for('static', filename='1688-products.css') }}?v=20260922-products2">
     <script src="{{ url_for('static', filename='console-ui.js') }}?v=20260915"></script>
     <script src="{{ url_for('static', filename='copy-anywhere.js') }}?v=20260922"></script>
-    <script defer src="{{ url_for('static', filename='ai-original-products.js') }}?v=20260921-editor1"></script>
+    <script defer src="{{ url_for('static', filename='ai-original-products.js') }}?v=20260922-products2"></script>
     <script defer src="{{ url_for('static', filename='ai-original-workbench.js') }}?v=20260921"></script>
-    <script defer src="{{ url_for('static', filename='1688-products.js') }}?v=20260920"></script>
+    <script defer src="{{ url_for('static', filename='1688-products.js') }}?v=20260922-products2"></script>
     <style>
         .ai-video-layout { display: grid; grid-template-columns: minmax(0, 1.55fr) minmax(300px, .75fr); gap: 18px; align-items: start; }
         .ai-video-panel { padding: 20px; border: 1px solid var(--line); border-radius: 16px; background: #fff; }
@@ -9574,7 +9645,7 @@
         <button class="workspace-tab active" type="button" data-tab="overview" onclick="switchTab('overview')">总览 <span>×</span></button>
         <button class="workspace-tab" type="button" data-tab="orders" onclick="switchTab('orders')">订单管理</button>
         <button class="workspace-tab" type="button" data-tab="inventory" data-permission="inventory.view" onclick="switchTab('inventory')">库存管理</button>
-        <button class="workspace-tab" type="button" data-tab="mercado-collection" onclick="switchTab('mercado-collection')">商品采集</button>
+        <button class="workspace-tab" type="button" data-tab="mercado-collection" onclick="switchTab('mercado-collection')">美客多跟卖采集</button>
         <button class="workspace-tab" type="button" data-tab="1688-products" onclick="switchTab('1688-products')">1688产品区</button>
         <button class="workspace-tab" type="button" data-tab="ai-original-products" onclick="switchTab('ai-original-products')">AI原创产品</button>
         <button class="workspace-tab" type="button" data-tab="mercado-products" onclick="switchTab('mercado-products')">产品列表</button>
@@ -9594,40 +9665,46 @@
                 <button class="tab-button" type="button" data-tab="order-analysis" data-icon="⌁" data-permission="order_analysis.view" onclick="switchTab('order-analysis')"><span class="nav-label">订单分析</span></button>
 
                 <p class="nav-title">商品中心</p>
-                <button class="tab-button" type="button" data-tab="mercado-collection" data-icon="◇" onclick="switchTab('mercado-collection')"><span class="nav-label">商品采集</span></button>
                 <button class="tab-button" type="button" data-tab="1688-products" data-icon="1688" onclick="switchTab('1688-products')"><span class="nav-label">1688产品区</span></button>
+                <button class="tab-button" type="button" data-tab="mercado-collection" data-icon="◇" onclick="switchTab('mercado-collection')"><span class="nav-label">美客多跟卖采集</span></button>
                 <button class="tab-button" type="button" data-tab="ai-original-products" data-icon="AI" onclick="switchTab('ai-original-products')"><span class="nav-label">AI原创产品</span></button>
                 <button class="tab-button" type="button" data-tab="ai-video" data-icon="▶" onclick="switchTab('ai-video')"><span class="nav-label">AI视频生成</span></button>
                 <button class="tab-button" type="button" data-tab="mercado-products" data-icon="▦" onclick="switchTab('mercado-products')"><span class="nav-label">产品列表</span></button>
-                <button class="tab-button" type="button" data-tab="mercado-shipping-standards" data-icon="＄" onclick="switchTab('mercado-shipping-standards')"><span class="nav-label">美客多运费标准</span></button>
                 <button class="tab-button" type="button" data-tab="ai-weight-price" data-icon="⚖" data-permission="ai_weight_price.view" onclick="switchTab('ai-weight-price')"><span class="nav-label">AI核重核价</span></button>
+                <button class="tab-button" type="button" data-tab="mercado-shipping-standards" data-icon="＄" onclick="switchTab('mercado-shipping-standards')"><span class="nav-label">美客多运费标准</span></button>
                 <button class="tab-button" type="button" data-tab="mercado-publish-records" data-icon="⇧" onclick="switchTab('mercado-publish-records')"><span class="nav-label">产品上架记录</span></button>
 
                 <p class="nav-title">店铺管理</p>
                 <button class="tab-button" type="button" data-tab="window-anomalies" data-icon="◉" data-permission="shop_status.view" onclick="switchTab('window-anomalies')"><span class="nav-label">店铺状态</span></button>
                 <button class="tab-button" type="button" data-tab="store-tokens" data-icon="⌘" onclick="switchTab('store-tokens')"><span class="nav-label">店铺授权</span></button>
                 <button class="tab-button" type="button" data-tab="store-links" data-icon="↗" onclick="switchTab('store-links')"><span class="nav-label">店铺链接</span></button>
-                <button class="tab-button" type="button" data-tab="promotions" data-icon="％" data-permission="promotions.view" onclick="switchTab('promotions')"><span class="nav-label">活动管理</span></button>
-                <button class="tab-button" type="button" data-tab="ad-analysis" data-icon="◎" data-permission="ad_analysis.view" onclick="switchTab('ad-analysis')"><span class="nav-label">广告分析</span></button>
+                <button class="tab-button" type="button" data-tab="yandex" data-icon="Y" onclick="switchTab('yandex')"><span class="nav-label">Yandex 店铺</span></button>
+
+                <p class="nav-title">客户服务</p>
                 <button class="tab-button" type="button" data-tab="pre-sale" data-icon="?" data-permission="customer_service.view" onclick="switchTab('pre-sale')"><span class="nav-label">售前问答</span></button>
                 <button class="tab-button" type="button" data-tab="customer-service" data-icon="✉" data-permission="customer_service.view" onclick="switchTab('customer-service')"><span class="nav-label">售后处理</span></button>
+
+                <p class="nav-title">营销与资金</p>
+                <button class="tab-button" type="button" data-tab="promotions" data-icon="％" data-permission="promotions.view" onclick="switchTab('promotions')"><span class="nav-label">活动管理</span></button>
+                <button class="tab-button" type="button" data-tab="ad-analysis" data-icon="◎" data-permission="ad_analysis.view" onclick="switchTab('ad-analysis')"><span class="nav-label">广告分析</span></button>
                 <button class="tab-button" type="button" data-tab="funds" data-icon="$" data-permission="funds.view" onclick="switchTab('funds')"><span class="nav-label">资金管理</span></button>
 
-                <p class="nav-title">自动化与风控</p>
-                <button class="tab-button" type="button" data-tab="appeal" data-icon="✦" data-permission="appeal.view" onclick="switchTab('appeal')"><span class="nav-label">自动化 AI 申诉</span></button>
+                <p class="nav-title">自动化工具</p>
                 <button class="tab-button" type="button" data-tab="tasks" data-icon="✓" data-permission="tasks.view" onclick="switchTab('tasks')"><span class="nav-label">任务模块</span></button>
-                <button class="tab-button" type="button" data-tab="ip-rights" data-icon="盾" data-permission="infractions.view" onclick="switchTab('ip-rights')"><span class="nav-label">侵权和权利人总览</span></button>
+                <button class="tab-button" type="button" data-tab="appeal" data-icon="✦" data-permission="appeal.view" onclick="switchTab('appeal')"><span class="nav-label">自动化 AI 申诉</span></button>
+                <button class="tab-button" type="button" data-tab="ai-appeals" data-icon="◫" data-permission="ai_appeals.view" onclick="switchTab('ai-appeals')"><span class="nav-label">AI 申诉记录</span></button>
+
+                <p class="nav-title">风控与合规</p>
                 <button class="tab-button" type="button" data-tab="prohibited-listings" data-icon="禁" onclick="switchTab('prohibited-listings')"><span class="nav-label">禁限售列表</span></button>
+                <button class="tab-button" type="button" data-tab="ip-rights" data-icon="盾" data-permission="infractions.view" onclick="switchTab('ip-rights')"><span class="nav-label">侵权和权利人总览</span></button>
                 <button class="tab-button" type="button" data-tab="infractions" data-icon="规" data-permission="infractions.view" onclick="switchTab('infractions')"><span class="nav-label">违规商品总览</span></button>
                 <button class="tab-button" type="button" data-tab="risk-check" data-icon="◎" data-permission="risk_check.view" onclick="switchTab('risk-check')"><span class="nav-label">侵权检测</span></button>
                 <button class="tab-button" type="button" data-tab="infringement-knowledge" data-icon="◆" data-permission="infringement_knowledge.view" onclick="switchTab('infringement-knowledge')"><span class="nav-label">侵权知识库</span></button>
                 <button class="tab-button" type="button" data-tab="reputation" data-icon="☆" data-permission="reputation.view" onclick="switchTab('reputation')"><span class="nav-label">声誉数据</span></button>
                 <button class="tab-button" type="button" data-tab="api-reputation" data-icon="◎" data-permission="reputation.view" onclick="switchTab('api-reputation')"><span class="nav-label">API 声誉</span></button>
-                <button class="tab-button" type="button" data-tab="ai-appeals" data-icon="◫" data-permission="ai_appeals.view" onclick="switchTab('ai-appeals')"><span class="nav-label">AI 申诉记录</span></button>
 
                 <p class="nav-title">系统</p>
                 <button class="tab-button" type="button" data-tab="access" data-permission="access.view" data-icon="♙" onclick="switchTab('access')"><span class="nav-label">人员与权限</span></button>
-                <button class="tab-button" type="button" data-tab="yandex" data-icon="Y" onclick="switchTab('yandex')"><span class="nav-label">Yandex 店铺</span></button>
             </div>
             <div class="sidebar-footer">
                 <span class="sidebar-footer-icon">ZS</span>
@@ -9657,7 +9734,7 @@
                     <div class="notice-list">
                         <div class="notice-row"><span class="notice-tag">系统公告</span><strong>泽顺运营服务台界面升级，业务入口与任务状态已统一整合</strong><time>今天</time></div>
                         <div class="notice-row"><span class="notice-tag">运营提醒</span><strong>每 15 分钟更新最近 72 小时订单；订单状态与实际运费每天更新，仓库人员打印后进入待发</strong><time>持续运行</time></div>
-                        <div class="notice-row"><span class="notice-tag">功能更新</span><strong>商品采集、产品上架记录与侵权检测已加入快捷工作流</strong><time>已上线</time></div>
+                        <div class="notice-row"><span class="notice-tag">功能更新</span><strong>美客多跟卖采集、产品上架记录与侵权检测已加入快捷工作流</strong><time>已上线</time></div>
                     </div>
                 </section>
 
@@ -9674,7 +9751,7 @@
                         <span class="heading-note">常用流程一键直达</span>
                     </div>
                     <div class="quick-grid">
-                        <button class="quick-card" type="button" onclick="switchTab('mercado-collection')"><span class="quick-icon blue">◇</span><span><strong>商品采集</strong><small>按关键词或列表链接批量采集商品</small></span><b>→</b></button>
+                        <button class="quick-card" type="button" onclick="switchTab('mercado-collection')"><span class="quick-icon blue">◇</span><span><strong>美客多跟卖采集</strong><small>按关键词或列表链接批量采集商品</small></span><b>→</b></button>
                         <button class="quick-card" type="button" onclick="switchTab('orders')"><span class="quick-icon violet">▤</span><span><strong>订单管理</strong><small>统一处理多站点订单与采购进度</small></span><b>→</b></button>
                         <button class="quick-card" type="button" onclick="switchTab('store-tokens')"><span class="quick-icon green">⌘</span><span><strong>店铺授权</strong><small>维护 Mercado Libre 店铺授权状态</small></span><b>→</b></button>
                         <button class="quick-card" type="button" onclick="switchTab('risk-check')"><span class="quick-icon amber">◎</span><span><strong>侵权检测</strong><small>执行商品风险检查并查看检测结果</small></span><b>→</b></button>
@@ -10249,7 +10326,7 @@
                     <div class="products-1688-heading-copy">
                         <span class="ai-original-eyebrow">1688 PRODUCT CENTER</span>
                         <h2>1688产品区</h2>
-                        <p>按智赢产品库的结构整理泽顺插件采集的 1688 商品：编号、主图、标题、采购价、规格属性、重量、包装尺寸与采集时间集中查看，点开商品可查看完整原始资料。</p>
+                        <p>按智赢产品库的结构整理泽顺插件采集的 1688 商品：主图、标题、采购价、规格属性、重量、包装尺寸与采集时间集中查看，点击标题或主图可打开原商品链接。</p>
                     </div>
                     <div class="products-1688-heading-actions">
                         <a class="primary" href="/api/browser-extension/download" download>下载泽顺插件</a>
@@ -10267,16 +10344,18 @@
 
                 <section class="panel p1688-toolbar">
                     <div class="p1688-toolbar-row">
-                        <label class="p1688-field search"><span>产品搜索</span><input id="products-1688-search" type="search" placeholder="输入 1688 商品编号或标题"></label>
+                        <label class="p1688-field search"><span>产品搜索</span><input id="products-1688-search" type="search" placeholder="输入 1688 商品标题"></label>
                         <label class="p1688-field"><span>AI 状态</span><select id="products-1688-status-filter"><option value="">全部状态</option><option value="pending">待处理</option><option value="processing">AI处理中</option><option value="completed">AI已完成</option><option value="failed">处理失败</option></select></label>
+                        <label class="p1688-field"><span>审核状态</span><select id="products-1688-review-filter"><option value="">全部审核状态</option><option value="unreviewed">未审核</option><option value="approved">已审核</option><option value="suspected">疑似风险</option><option value="infringing">侵权</option><option value="risk">待复核</option></select></label>
                         <label class="p1688-field"><span>采购价最低（CNY）</span><input id="products-1688-price-min" type="number" min="0" step="0.01" placeholder="不限"></label>
                         <label class="p1688-field"><span>采购价最高（CNY）</span><input id="products-1688-price-max" type="number" min="0" step="0.01" placeholder="不限"></label>
                         <button class="primary" type="button" onclick="load1688Products()">查询</button>
-                        <button class="secondary" type="button" onclick="document.getElementById('products-1688-search').value='';document.getElementById('products-1688-status-filter').value='';document.getElementById('products-1688-price-min').value='';document.getElementById('products-1688-price-max').value='';load1688Products()">重置</button>
+                        <button class="secondary" type="button" onclick="document.getElementById('products-1688-search').value='';document.getElementById('products-1688-status-filter').value='';document.getElementById('products-1688-review-filter').value='';document.getElementById('products-1688-price-min').value='';document.getElementById('products-1688-price-max').value='';document.getElementById('products-1688-date-from').value='';document.getElementById('products-1688-date-to').value='';load1688Products()">重置</button>
                     </div>
                     <div class="p1688-toolbar-row">
                         <label class="p1688-field"><span>采集开始日期</span><input id="products-1688-date-from" type="date"></label>
                         <label class="p1688-field"><span>采集结束日期</span><input id="products-1688-date-to" type="date"></label>
+                        <label class="p1688-field"><span>每页条数</span><select id="products-1688-page-size"><option value="50">50 条</option><option value="100">100 条</option><option value="200">200 条</option></select></label>
                         <span class="p1688-toolbar-note" id="products-1688-status">等待加载 1688 商品</span>
                     </div>
                 </section>
@@ -10285,7 +10364,9 @@
                     <div class="p1688-batch-bar">
                         <label><input id="products-1688-select-all" type="checkbox" onchange="products1688ToggleAll(this.checked)"> 全选当前页</label>
                         <strong id="products-1688-selection">已选择 0 件</strong>
-                        <button class="secondary" type="button" onclick="products1688SendSelectedToWorkflow()">进入 AI 原创工作流</button>
+                        <label class="p1688-batch-review"><span>批量审核状态</span><select id="products-1688-review-status"><option value="">选择状态</option><option value="unreviewed">未审核</option><option value="approved">已审核</option><option value="suspected">疑似风险</option><option value="infringing">侵权</option><option value="risk">待复核</option></select></label>
+                        <button class="secondary" id="products-1688-review-submit" type="button" onclick="products1688ApplyReviewStatus()" disabled>更新审核状态</button>
+                        <button class="primary" type="button" onclick="products1688SendSelectedToWorkflow()">送入 AI 原创任务</button>
                         <span id="products-1688-list-summary">当前 0 件 · 共 0 件</span>
                     </div>
                     <div class="p1688-table-wrap">
@@ -10411,8 +10492,8 @@
                 <div class="tab-heading mercado-workbench-heading">
                     <div class="mercado-workbench-heading-copy">
                         <span class="mercado-workbench-eyebrow">COLLECTION WORKSPACE</span>
-                        <h2>商品采集</h2>
-                        <p>采集操作已迁移到泽顺插件；这里负责下载安装插件，并整理采集结果</p>
+                        <h2>美客多跟卖采集</h2>
+                        <p>采集操作已迁移到泽顺插件；这里集中查看标题、主图、售价、重量、尺寸和固定 15% 佣金后的净收益</p>
                     </div>
                     <div class="market-flow-indicator" aria-label="商品处理流程">
                         <span class="market-flow-step active"><b>01</b>安装插件</span>
@@ -10456,7 +10537,7 @@
                         </div>
                         <div class="collector-capability-card mercado">
                             <span class="collector-capability-icon">M</span>
-                            <div><strong>Mercado Libre 商品</strong><p>采集标题、价格、图片、规格，并读取智赢插件可见的重量与尺寸。</p><span>结果进入下方采集候选库</span></div>
+                            <div><strong>Mercado Libre 商品</strong><p>采集标题、价格、图片、规格，并读取智赢插件可见的重量与尺寸。</p><span>结果进入下方美客多跟卖采集</span></div>
                         </div>
                         <div class="collector-capability-card source-1688">
                             <span class="collector-capability-icon">1688</span>
@@ -10471,8 +10552,8 @@
                         <div class="market-section-title-group">
                             <span class="market-section-number">03</span>
                             <div>
-                                <span class="market-section-kicker" id="mercado-list-kicker">Candidate Library</span>
-                                <h3 id="mercado-list-title">采集候选库</h3>
+                            <span class="market-section-kicker" id="mercado-list-kicker">MERCADO LIBRE FOLLOW-SELL COLLECTION</span>
+                            <h3 id="mercado-list-title">美客多跟卖采集</h3>
                                 <p id="mercado-list-description">检查采集结果，选择资料完整的候选商品加入产品列表</p>
                             </div>
                         </div>
@@ -10480,7 +10561,7 @@
                     </div>
                     <div class="market-list-toolbar">
                         <div class="market-list-toolbar-left">
-                            <span class="market-module-label" id="mercado-list-module-label"><i></i> 采集列表</span>
+                            <span class="market-module-label" id="mercado-list-module-label"><i></i> 美客多跟卖采集</span>
                             <span class="market-list-summary" id="mercado-list-summary">共 0 件</span>
                         </div>
                         <div class="market-list-toolbar-right">
@@ -10493,7 +10574,7 @@
                     <div class="market-product-filters visible zs-filter-panel" id="mercado-product-filters">
                         <div class="market-filter-heading">
                             <span>商品筛选条件</span>
-                            <span id="mercado-filter-hint">采集列表支持实重可用、未审核、未上架及重量、售价、收益和采集时间组合筛选</span>
+                            <span id="mercado-filter-hint">支持泽顺业务员、标题、主图、售价、重量、尺寸、审核状态和净收益查看</span>
                         </div>
                         <div class="market-filter-field">
                             <label for="mercado-management-category-filter">产品分类</label>
@@ -10737,36 +10818,30 @@
                     </div>
                     <div class="market-table-heading">
                         <strong>商品明细</strong>
-                        <span>可横向滚动查看完整字段，点击“修改”可编辑商品内容</span>
+                        <span>采集列表自动适配页面宽度，产品列表字段较多时可横向查看</span>
                     </div>
                     <div class="market-table-wrap">
                         <table class="market-product-table">
-                            <thead>
+                            <thead id="mercado-list-head">
                                 <tr>
                                     <th>选择</th>
                                     <th>主图</th>
-                                    <th>产品来源</th>
-                                    <th>智赢分类</th>
-                                    <th>产品开发</th>
-                                    <th>智赢状态</th>
+                                    <th>泽顺业务员</th>
                                     <th>商品编号</th>
                                     <th>标题</th>
-                                    <th>运营分类</th>
                                     <th>原价</th>
                                     <th>美元售价</th>
                                     <th>重量</th>
                                     <th>尺寸</th>
-                                    <th>计泡重</th>
-                                    <th>计费重量</th>
-                                    <th>分类佣金（Classic）</th>
-                                    <th>最新运费</th>
-                                    <th>净收益(USD)</th>
+                                    <th>佣金（15%）</th>
+                                    <th>当前运费</th>
+                                    <th>净收益（USD）</th>
                                     <th>审核 / 上架状态</th>
-                                    <th>采集 / 加入时间</th>
+                                    <th>采集时间</th>
                                 </tr>
                             </thead>
                             <tbody id="mercado-list-body">
-                                <tr><td class="empty-state" colspan="20">打开商品采集模块后加载数据</td></tr>
+                                <tr><td class="empty-state" colspan="14">打开美客多跟卖采集模块后加载数据</td></tr>
                             </tbody>
                         </table>
                     </div>
@@ -10828,7 +10903,7 @@
                         <p>统一管理采集、同步和智赢导入的商品，集中完成审核、编辑与批量上架</p>
                     </div>
                     <div class="market-flow-indicator" aria-label="产品处理流程">
-                        <button class="market-module-link muted" type="button" onclick="switchTab('mercado-collection')"><span>←</span> 返回商品采集</button>
+                        <button class="market-module-link muted" type="button" onclick="switchTab('mercado-collection')"><span>←</span> 返回美客多跟卖采集</button>
                         <span class="market-flow-step active"><b>01</b>审核资料</span>
                         <span class="market-flow-arrow">›</span>
                         <span class="market-flow-step"><b>02</b>配置发布</span>
@@ -14286,6 +14361,7 @@
         const mercadoListDescription = document.getElementById("mercado-list-description");
         const mercadoListBadge = document.getElementById("mercado-list-badge");
         const mercadoListModuleLabel = document.getElementById("mercado-list-module-label");
+        const mercadoListHead = document.getElementById("mercado-list-head");
         const mercadoListMessage = document.getElementById("mercado-list-message");
         const mercadoCollectionActions = document.getElementById("mercado-collection-actions");
         const mercadoListBody = document.getElementById("mercado-list-body");
@@ -17504,6 +17580,100 @@
             return String(snapshot?.plugin_snapshot?.zying_status || snapshot?.zying_status || "-").trim() || "-";
         }
 
+        function mercadoListColumnCount() {
+            return mercadoListMode === "collection" ? 14 : 20;
+        }
+
+        function renderMercadoListHeader() {
+            if (!mercadoListHead) return;
+            if (mercadoListMode === "collection") {
+                mercadoListHead.innerHTML = `<tr>
+                    <th>选择</th><th>主图</th><th>泽顺业务员</th><th>商品编号</th><th>标题</th>
+                    <th>原价</th><th>美元售价</th><th>重量</th><th>尺寸</th><th>佣金（15%）</th>
+                    <th>当前运费</th><th>净收益（USD）</th><th>审核 / 上架状态</th><th>采集时间</th>
+                </tr>`;
+                return;
+            }
+            mercadoListHead.innerHTML = `<tr>
+                <th>选择</th><th>主图</th><th>产品来源</th><th>智赢分类</th><th>产品开发</th><th>智赢状态</th>
+                <th>商品编号</th><th>标题</th><th>运营分类</th><th>原价</th><th>美元售价</th><th>重量</th>
+                <th>尺寸</th><th>计泡重</th><th>计费重量</th><th>分类佣金（Classic）</th><th>最新运费</th>
+                <th>净收益(USD)</th><th>审核 / 上架状态</th><th>采集 / 加入时间</th>
+            </tr>`;
+        }
+
+        function mercadoCollectionProfitability(row) {
+            const numericValue = value => (
+                value === null || value === undefined || value === "" ? null : Number(value)
+            );
+            const salePriceUsd = numericValue(row.sale_price_usd);
+            const shippingUsd = numericValue(row.shipping_fee_usd);
+            const hasSalePrice = Number.isFinite(salePriceUsd);
+            const commissionUsd = hasSalePrice ? salePriceUsd * 0.15 : null;
+            const netUsd = hasSalePrice && Number.isFinite(shippingUsd)
+                ? salePriceUsd - commissionUsd - shippingUsd
+                : null;
+            return {salePriceUsd, shippingUsd, commissionUsd, netUsd};
+        }
+
+        function renderMercadoCollectionRow(row) {
+            const rowId = Number(row.id || 0);
+            const selected = selectedMercadoCollectionIds.has(rowId);
+            const sourceUrl = mercadoSafeUrl(row.final_url || row.source_url);
+            const imageUrl = mercadoSafeUrl(row.main_image_url);
+            const image = imageUrl
+                ? `<a href="${escapeHtml(imageUrl)}" target="_blank" rel="noopener noreferrer"><img class="market-product-image" src="${escapeHtml(imageUrl)}" alt="商品主图" loading="lazy" onerror="this.style.visibility='hidden'"></a>`
+                : `<span class="market-product-image"></span>`;
+            const titleText = String(row.title || "未识别标题");
+            const title = sourceUrl
+                ? `<a class="market-collection-title-link" href="${escapeHtml(sourceUrl)}" target="_blank" rel="noopener noreferrer">${escapeHtml(titleText)}</a>`
+                : escapeHtml(titleText);
+            const dimensions = [row.package_length_cm, row.package_width_cm, row.package_height_cm]
+                .map(value => mercadoMetric(value));
+            const dimensionsText = dimensions.includes("-") ? "-" : `${dimensions.join(" × ")} cm`;
+            const actualWeight = row.weight_g;
+            const hasUsableWeight = Number(actualWeight) > 0;
+            const {salePriceUsd, shippingUsd, commissionUsd, netUsd} = mercadoCollectionProfitability(row);
+            const alreadyAdded = Boolean(row.added_to_products);
+            let status = "待补实际重量";
+            let statusClass = "partial";
+            if (alreadyAdded) {
+                status = "已加入产品列表";
+                statusClass = "added";
+            } else if (hasUsableWeight && titleText && row.main_image_url) {
+                status = "实重可用";
+                statusClass = "ok";
+            } else if (row.scrape_status === "failed") {
+                status = "采集失败";
+                statusClass = "failed";
+            }
+            const reviewStatus = String(row.review_status || "unreviewed");
+            const reviewLabel = {unreviewed: "未审核", approved: "通过", suspected: "疑似", infringing: "侵权", risk: "风险"}[reviewStatus] || reviewStatus;
+            const publishStatus = String(row.last_publish_status || "unpublished");
+            const publishLabel = {unpublished: "未上架", pending: "等待上架", publishing: "上架中", published: "上架成功", failed: "上架失败"}[publishStatus] || publishStatus;
+            const netClass = Number(netUsd) < 0 ? "market-net-negative" : "";
+            const netNote = netUsd === null
+                ? (hasUsableWeight ? "等待运费" : "待补重量")
+                : "美元售价 − 15%佣金 − 当前运费";
+            const timeText = row.collected_at || row.added_at || row.updated_at || "-";
+            return `<tr class="market-collection-row">
+                <td><input class="market-row-select mercado-item-select" type="checkbox" value="${rowId}" aria-label="选择 ${escapeHtml(row.source_item_id || "")}" onchange="toggleMercadoItem(${rowId}, this.checked)" ${selected ? "checked" : ""} ${!rowId ? "disabled" : ""}></td>
+                <td>${image}</td>
+                <td><strong>${escapeHtml(row.salesperson || "未分配")}</strong></td>
+                <td><strong>${escapeHtml(row.source_item_id || "-")}</strong></td>
+                <td><span class="market-product-title" title="${escapeHtml(titleText)}">${title}</span></td>
+                <td><span class="market-metric-main">${mercadoMetric(row.price)}</span><span class="market-metric-note">${escapeHtml(row.currency_id || "MXN")}</span></td>
+                <td><span class="market-metric-main">${mercadoMetric(salePriceUsd, " USD")}</span></td>
+                <td><span class="market-metric-main">${mercadoMetric(actualWeight, " g")}</span></td>
+                <td><span class="market-metric-main">${escapeHtml(dimensionsText)}</span></td>
+                <td><span class="market-metric-main">${mercadoMetric(commissionUsd, " USD")}</span><span class="market-metric-note">固定 15%</span></td>
+                <td><span class="market-metric-main">${mercadoMetric(shippingUsd, " USD")}</span><span class="market-metric-note">按当前重量</span></td>
+                <td title="${escapeHtml(netNote)}"><span class="market-metric-main ${netClass}">${mercadoMetric(netUsd, " USD")}</span><span class="market-metric-note">${escapeHtml(netNote)}</span></td>
+                <td><span class="market-workflow-tags"><span class="market-status-tag">${escapeHtml(reviewLabel)}</span><span class="market-status-tag ${publishStatus === "published" ? "ok" : ""}">${escapeHtml(publishLabel)}</span></span><span class="market-status-tag ${statusClass}">${escapeHtml(status)}</span></td>
+                <td>${escapeHtml(timeText)}</td>
+            </tr>`;
+        }
+
         function openMercadoProductEditor(rowId) {
             const row = mercadoListRows.find(item => Number(item.id) === Number(rowId));
             if (!row || mercadoListMode !== "products") return;
@@ -18136,7 +18306,12 @@
             mercadoListRows = Array.isArray(rows) ? rows : [];
             if (!mercadoListRows.length) {
                 const label = mercadoListMode === "collection" ? "采集列表暂无商品" : "产品列表暂无商品";
-                mercadoListBody.innerHTML = `<tr><td class="empty-state" colspan="20">${label}</td></tr>`;
+                mercadoListBody.innerHTML = `<tr><td class="empty-state" colspan="${mercadoListColumnCount()}">${label}</td></tr>`;
+                updateMercadoSelection();
+                return;
+            }
+            if (mercadoListMode === "collection") {
+                mercadoListBody.innerHTML = mercadoListRows.map(renderMercadoCollectionRow).join("");
                 updateMercadoSelection();
                 return;
             }
@@ -18381,7 +18556,7 @@
 
         async function loadMercadoList() {
             if (!mercadoListBody) return;
-            mercadoListBody.innerHTML = `<tr><td class="empty-state" colspan="20">正在读取数据库...</td></tr>`;
+            mercadoListBody.innerHTML = `<tr><td class="empty-state" colspan="${mercadoListColumnCount()}">正在读取数据库...</td></tr>`;
             const endpoint = mercadoListMode === "collection" ? "/api/mercado-collection/items" : "/api/mercado-products";
             const query = new URLSearchParams({
                 search: mercadoListSearch.value.trim(),
@@ -18434,7 +18609,7 @@
                 updateMercadoListPagination();
                 mercadoCollectionLoaded = true;
             } catch (error) {
-                mercadoListBody.innerHTML = `<tr><td class="empty-state" colspan="20">加载失败：${escapeHtml(error.message || error)}</td></tr>`;
+                mercadoListBody.innerHTML = `<tr><td class="empty-state" colspan="${mercadoListColumnCount()}">加载失败：${escapeHtml(error.message || error)}</td></tr>`;
             }
         }
 
@@ -18462,13 +18637,13 @@
             const productMode = mercadoListMode === "products";
             mercadoListModule.classList.toggle("collection-mode", !productMode);
             mercadoListModule.classList.toggle("product-mode", productMode);
-            mercadoListKicker.textContent = productMode ? "Product Library" : "Candidate Library";
-            mercadoListTitle.textContent = productMode ? "产品资料库" : "采集候选库";
+            mercadoListKicker.textContent = productMode ? "Product Library" : "MERCADO LIBRE FOLLOW-SELL COLLECTION";
+            mercadoListTitle.textContent = productMode ? "产品资料库" : "美客多跟卖采集";
             mercadoListDescription.textContent = productMode
                 ? "审核商品资料与收益，选择账号和目标站点完成批量上架"
-                : "检查采集结果，选择资料完整的候选商品加入产品列表";
-            mercadoListBadge.textContent = productMode ? "数据不完整自动退回" : "候选商品不会直接上架";
-            mercadoListModuleLabel.innerHTML = `<i></i> ${productMode ? "产品列表" : "采集列表"}`;
+                : "查看泽顺业务员、商品标题、主图、售价、重量、尺寸及固定 15% 佣金后的净收益";
+            mercadoListBadge.textContent = productMode ? "数据不完整自动退回" : "固定佣金 15% · 运费按当前重量计算";
+            mercadoListModuleLabel.innerHTML = `<i></i> ${productMode ? "产品列表" : "美客多跟卖采集"}`;
             mercadoListSearch.placeholder = productMode ? "搜索产品标题或商品编号" : "搜索采集标题或商品编号";
             mercadoCollectionActions.style.display = "flex";
             mercadoCollectionOnlyActions.style.display = productMode ? "none" : "inline-flex";
@@ -18477,10 +18652,11 @@
             mercadoProductFilters.classList.add("visible");
             mercadoFilterHint.textContent = productMode
                 ? "支持产品分类、美客多分类、智赢分类、产品开发、审核、上架状态、实重状态和收益组合筛选"
-                : "采集列表支持实重可用、未审核、未上架及重量、售价、收益和采集时间组合筛选";
+                : "支持泽顺业务员、标题、主图、售价、重量、尺寸、审核状态和净收益查看";
             mercadoProductFilters.querySelectorAll(".market-product-only-filter").forEach(element => {
                 element.hidden = !productMode;
             });
+            renderMercadoListHeader();
             selectedMercadoCollectionIds.clear();
             mercadoSelectAll.checked = false;
             setMercadoListFeedback("");
