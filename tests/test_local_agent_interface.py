@@ -135,6 +135,26 @@ def test_heartbeat_claims_atomically_for_capable_agent(agent_interface):
     assert data["job"]["status"] == "running"
 
 
+def test_legacy_heartbeat_stops_worker_after_server_reaped_lease(agent_interface):
+    _user, store, client = agent_interface
+    agent_id = "agent-expired-worker"
+    store.heartbeat(agent_id, name="旧版电脑", now=100)
+    store.enqueue_job("expired-worker-job", agent_id, "daily_task", {}, now=101)
+    store.claim_job(agent_id, now=102, lease_seconds=60)
+    store.reap_expired_jobs(now=200, lease_seconds=60)
+    token = bit_interface.create_local_agent_credential(agent_id, 7)
+
+    response = client.post(
+        "/api/local-agents/heartbeat",
+        headers={"X-Local-Agent-Token": token},
+        json={"agent_id": agent_id, "name": "旧版电脑", "capabilities": ["daily_task"]},
+    )
+
+    assert response.status_code == 200
+    assert response.get_json()["data"]["cancel_job_ids"] == ["expired-worker-job"]
+    assert store.get_job("expired-worker-job")["status"] == "error"
+
+
 def test_legacy_agent_heartbeat_does_not_consume_job(agent_interface):
     _user, store, client = agent_interface
     agent_id = "agent-legacy-claim"

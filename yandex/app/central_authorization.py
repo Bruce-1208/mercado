@@ -25,8 +25,7 @@ class CentralAuthorizationStore:
     @staticmethod
     def _connection():
         try:
-            import pymysql
-            from bit.bit_mysql import config as shared_config
+            from bit.bit_mysql import config as shared_config, pymysql
         except Exception as exc:  # pragma: no cover - deployment dependency error
             raise AuthorizationStoreError(
                 "中央授权数据库驱动不可用，请重新运行 yandex/run.ps1 安装依赖"

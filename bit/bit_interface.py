@@ -64,7 +64,6 @@ import bit.bit_appeal_ai as bit_appeal_ai
 import bit.bit_appeal_report as bit_appeal_report
 import bit.bit_check_risk as bit_check_risk
 import bit.bit_db_api as bit_db_api
-from bit.db_pool import close_all_pools, pool_status
 import bit.bit_daily_task as bit_daily_task
 import bit.bit_infractions_info as bit_infractions_info
 import bit.bit_infringement_knowledge_analysis as bit_infringement_knowledge_analysis
@@ -669,6 +668,22 @@ def _resolve_use_db_api():
 
 
 USE_DB_API = _resolve_use_db_api()
+
+
+def pool_status():
+    # DBUtils belongs to the database server, not the packaged Windows Agent.
+    # Importing it at module load breaks client workers before tasks can start.
+    from bit.db_pool import pool_status as server_pool_status
+
+    return server_pool_status()
+
+
+def close_all_pools():
+    if RUNTIME_SETTINGS.is_client:
+        return
+    from bit.db_pool import close_all_pools as close_server_pools
+
+    close_server_pools()
 
 
 def interface_background_services_disabled():
@@ -5924,6 +5939,7 @@ def api_run_shensu():
             loop_count=loop_count,
             deepseek_api_key=deepseek_api_key,
             appeal_copy_mode=appeal_copy_mode,
+            log_transport=str(data.get("log_transport") or request.args.get("log_transport") or "stream"),
         )
     stop_event = register_appeal_task(
         task_id,
@@ -9543,6 +9559,67 @@ def api_download_local_agent():
     return response
 
 
+_appeal_poll_maintenance_lock = threading.Lock()
+_appeal_poll_maintenance_at = 0.0
+
+
+def _maintain_appeal_poll_queue(store):
+    """Reap abandoned jobs at most once per 10 seconds across all viewers."""
+    global _appeal_poll_maintenance_at
+    if not _appeal_poll_maintenance_lock.acquire(blocking=False):
+        return
+    try:
+        now = time.monotonic()
+        if now - _appeal_poll_maintenance_at >= 10:
+            store.reap_expired_jobs()
+            _appeal_poll_maintenance_at = now
+    finally:
+        _appeal_poll_maintenance_lock.release()
+
+
+@app.route('/api/run_shensu/<task_id>/events', methods=['GET'])
+@login_required
+def api_appeal_job_events(task_id):
+    store = get_local_agent_store()
+    try:
+        after_id = int(request.args.get("after", "0"))
+        if not 0 <= after_id <= 9223372036854775807:
+            raise ValueError("日志位置无效")
+        job = store.get_job(task_id)
+    except ValueError:
+        return jsonify({"status": "error", "message": "任务编号或日志位置无效"}), 400
+    user = get_current_workbench_user() or {}
+    if (
+        not job or job.get("job_type") != "appeal"
+        or not (
+            user.get("is_platform_admin")
+            or (user.get("id") is not None and job.get("created_by_id") == user["id"])
+        )
+    ):
+        return jsonify({"status": "error", "message": "没有找到指定申诉任务"}), 404
+    _maintain_appeal_poll_queue(store)
+    # Read status before events: a terminal state must never hide its final logs.
+    job = store.get_job(task_id)
+    if not job:
+        return jsonify({"status": "error", "message": "申诉任务已清理"}), 404
+    events, has_more = store.event_page(task_id, after_id)
+    response = jsonify({
+        "status": "success",
+        "data": {
+            "task_id": task_id,
+            "status": job["status"],
+            "message": job.get("message", ""),
+            "cancel_requested": bool(job.get("cancel_requested")),
+            "log": "".join(store.render_event_content(event) for event in events),
+            "next_after": events[-1]["event_id"] if events else after_id,
+            "has_more": has_more,
+            "done": job["status"] in TERMINAL_JOB_STATUSES and not has_more,
+        },
+    })
+    response.headers["Cache-Control"] = "no-store"
+    return response
+
+
 def stream_local_agent_job(job_id):
     event_id = 0
     last_heartbeat = time.monotonic()
@@ -9629,6 +9706,7 @@ def enqueue_local_agent_daily_task(agent_id, params):
 def enqueue_local_agent_appeal(
     *, task_id, agent_id, name, sites, forms, message, mode, loop_count,
     deepseek_api_key="", appeal_copy_mode=bit_daily_task.APPEAL_COPY_MODE_NORMAL,
+    log_transport="stream",
 ):
     try:
         agent_id = normalize_agent_id(agent_id)
@@ -9677,7 +9755,15 @@ def enqueue_local_agent_appeal(
             "message": f"创建本机 Agent 任务失败：{exc}",
         }), 409
 
-    response = Response(stream_local_agent_job(task_id), mimetype="text/plain; charset=utf-8")
+    if log_transport == "poll":
+        response = jsonify({
+            "status": "success",
+            "data": {"task_id": task_id, "status": "queued", "log_transport": "poll"},
+            "message": "任务已进入本机 Agent 队列",
+        })
+    else:
+        # Existing browser tabs and older clients still consume a text stream.
+        response = Response(stream_local_agent_job(task_id), mimetype="text/plain; charset=utf-8")
     response.headers["Cache-Control"] = "no-cache"
     response.headers["X-Accel-Buffering"] = "no"
     response.headers["X-Appeal-Task-ID"] = task_id

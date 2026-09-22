@@ -9520,6 +9520,7 @@
     <link rel="stylesheet" href="{{ url_for('static', filename='1688-products.css') }}?v=20260922-products2">
     <script src="{{ url_for('static', filename='console-ui.js') }}?v=20260915"></script>
     <script src="{{ url_for('static', filename='copy-anywhere.js') }}?v=20260922"></script>
+    <script src="{{ url_for('static', filename='appeal-polling.js') }}?v=20260922"></script>
     <script defer src="{{ url_for('static', filename='ai-original-products.js') }}?v=20260922-products2"></script>
     <script defer src="{{ url_for('static', filename='ai-original-workbench.js') }}?v=20260921"></script>
     <script defer src="{{ url_for('static', filename='1688-products.js') }}?v=20260922-products2"></script>
@@ -14571,6 +14572,7 @@
         let tasksLoaded = false;
         let dailyTaskStatusPollTimer = null;
         let dailyTaskStatusRequestSequence = 0;
+        let dailyTaskStatusLoading = false;
         let dailyTaskAutoLogCursor = 0;
         let dailyTaskItems = [];
         const dailyTaskPendingStopIds = new Set();
@@ -15108,7 +15110,8 @@
         }
 
         function appendLog(text) {
-            logContainer.textContent += text;
+            // Keep long-running jobs from growing the browser DOM indefinitely.
+            logContainer.textContent = (logContainer.textContent + text).slice(-200000);
             logContainer.scrollTop = logContainer.scrollHeight;
         }
 
@@ -28717,6 +28720,7 @@
         }
 
         function scheduleDailyTaskAutoLogRefresh(tasks) {
+            if (document.hidden) return;
             const runningTaskKeys = (tasks || [])
                 .filter(task => task?.running && !task.is_external_task)
                 .map(task => dailyTaskRuntimeKey(task))
@@ -28733,6 +28737,8 @@
             while (examined < runningTaskKeys.length && queued < DAILY_TASK_AUTO_LOG_BATCH_SIZE) {
                 const taskKey = runningTaskKeys[(startIndex + examined) % runningTaskKeys.length];
                 examined += 1;
+                const card = findDailyTaskCard(taskKey);
+                if (!card?.querySelector('[data-role="log-details"]')?.open) continue;
                 const lastFetchedAt = Number(dailyTaskLogLastFetchedAt.get(taskKey) || 0);
                 if (
                     !dailyTaskLogRequests.has(taskKey)
@@ -28747,17 +28753,20 @@
             ) % runningTaskKeys.length;
         }
 
-        function scheduleDailyTaskStatusPoll(delay = 2000) {
+        function scheduleDailyTaskStatusPoll(delay = 4000) {
             if (dailyTaskStatusPollTimer) window.clearTimeout(dailyTaskStatusPollTimer);
             dailyTaskStatusPollTimer = window.setTimeout(() => {
                 dailyTaskStatusPollTimer = null;
                 const taskPage = document.getElementById("tab-tasks");
-                if (taskPage?.classList.contains("active")) loadDailyTaskStatus();
-            }, delay);
+                if (!taskPage?.classList.contains("active")) return;
+                if (document.hidden) scheduleDailyTaskStatusPoll(30000);
+                else loadDailyTaskStatus();
+            }, delay + Math.random() * 1000);
         }
 
         async function loadDailyTaskStatus() {
-            if (!dailyTaskList) return;
+            if (!dailyTaskList || dailyTaskStatusLoading) return;
+            dailyTaskStatusLoading = true;
             const requestSequence = ++dailyTaskStatusRequestSequence;
             try {
                 const targets = workbenchRuntimeRole === "client"
@@ -28800,7 +28809,7 @@
                 if (Date.now() - dailyTaskAgentStatusLoadedAt >= 30000) {
                     loadDailyTaskAgents();
                 }
-                scheduleDailyTaskStatusPoll(2000);
+                scheduleDailyTaskStatusPoll(4000);
                 return true;
             } catch (err) {
                 if (requestSequence !== dailyTaskStatusRequestSequence) return false;
@@ -28808,6 +28817,8 @@
                 dailyTaskStatusBadge.className = "status error";
                 scheduleDailyTaskStatusPoll(5000);
                 return false;
+            } finally {
+                dailyTaskStatusLoading = false;
             }
         }
 
@@ -29552,6 +29563,7 @@
                 task_id: activeAppealTaskId,
                 execution_target: activeAppealExecutionTarget,
                 agent_id: selectedAgentId,
+                log_transport: "poll",
                 sites: selectedSites,
                 forms: selectedForms,
                 deepseek_api_key: deepseekApiKey,
@@ -29578,20 +29590,43 @@
                     }
                     throw new Error(message);
                 }
-                if (!response.body) {
-                    throw new Error("执行端未返回任务日志流");
+                let finalState = null;
+                if ((response.headers.get("Content-Type") || "").includes("application/json")) {
+                    const payload = await response.json();
+                    if (payload.status !== "success" || payload.data?.log_transport !== "poll") {
+                        throw new Error(payload.message || "执行端返回了无效任务信息");
+                    }
+                    activeAppealTaskId = payload.data.task_id;
+                    appendLog(`${payload.message}\n`);
+                    finalState = await window.ZeshunAppealPolling.follow(activeAppealTaskId, {
+                        onLog: appendLog,
+                        onState: state => {
+                            if (state.status === "stopping" || state.cancel_requested) {
+                                setStatus("正在终结任务", "stopping");
+                            } else if (!state.done) {
+                                setStatus(state.status === "queued" ? "等待 Agent 执行" : "任务运行中", "running");
+                            }
+                        },
+                        onRetry: () => appendLog("\n日志连接中断，正在自动重试；Agent 任务继续运行。\n"),
+                        onRecovered: () => appendLog("日志连接已恢复。\n"),
+                    });
+                } else {
+                    // Local executors and pre-upgrade servers still stream logs.
+                    if (!response.body) throw new Error("执行端未返回任务日志流");
+                    const reader = response.body.getReader();
+                    const decoder = new TextDecoder("utf-8");
+                    while (true) {
+                        const { done, value } = await reader.read();
+                        if (done) break;
+                        appendLog(decoder.decode(value, { stream: true }));
+                    }
+                    appendLog(decoder.decode());
                 }
 
-                const reader = response.body.getReader();
-                const decoder = new TextDecoder("utf-8");
-
-                while (true) {
-                    const { done, value } = await reader.read();
-                    if (done) break;
-                    appendLog(decoder.decode(value, { stream: true }));
-                }
-
-                if (appealStopRequested) {
+                if (finalState?.status === "error") {
+                    appendLog(`\n>>> [任务失败] ${finalState.message || "请查看运行日志"}\n`);
+                    setStatus("任务失败", "error");
+                } else if (finalState ? finalState.status === "stopped" : appealStopRequested) {
                     appendLog("\n>>> [本次任务已终结]\n");
                     setStatus("任务已终结", "");
                 } else {
