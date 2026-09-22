@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "泽顺插件",
-  "version": "1.7.0",
+  "version": "1.8.2",
   "description": "采集 Mercado Libre Internacional、1688 与智赢商品，检查智赢产品侵权风险，启动 AI 核重核价，并同步采购订单物流号。",
   "permissions": [
     "alarms",
@@ -49,6 +49,15 @@
       "128": "icons/icon128.png"
     }
   },
+  "commands": {
+    "open-zeshun": {
+      "suggested_key": {
+        "default": "Ctrl+Shift+Z",
+        "mac": "MacCtrl+Shift+Z"
+      },
+      "description": "打开泽顺插件"
+    }
+  },
   "icons": {
     "16": "icons/icon16.png",
     "32": "icons/icon32.png",
@@ -57,6 +66,32 @@
   },
   "options_page": "options.html",
   "content_scripts": [
+    {
+      "matches": [
+        "http://127.0.0.1/*",
+        "http://localhost/*",
+        "https://*.1688.com/*",
+        "https://*.taobao.com/*",
+        "https://*.tmall.com/*",
+        "https://*.yangkeduo.com/*",
+        "https://*.pinduoduo.com/*",
+        "https://*.goofish.com/*",
+        "https://*.xianyu.com/*",
+        "https://meli.zying.net/*",
+        "https://seller.zying.net/*",
+        "https://*.mercadolibre.com.mx/*",
+        "https://*.mercadolibre.com.br/*",
+        "https://*.mercadolivre.com.br/*",
+        "https://*.mercadolibre.com.ar/*",
+        "https://*.mercadolibre.cl/*",
+        "https://*.mercadolibre.com.co/*",
+        "https://*.mercadolibre.com.uy/*"
+      ],
+      "js": [
+        "launcher.js"
+      ],
+      "run_at": "document_idle"
+    },
     {
       "matches": [
         "https://*.mercadolibre.com.mx/*",
@@ -112,6 +147,33 @@
         "purchase-tracking-content.js"
       ],
       "run_at": "document_idle"
+    }
+  ],
+  "web_accessible_resources": [
+    {
+      "resources": [
+        "icons/icon32.png"
+      ],
+      "matches": [
+        "http://127.0.0.1/*",
+        "http://localhost/*",
+        "https://*.1688.com/*",
+        "https://*.taobao.com/*",
+        "https://*.tmall.com/*",
+        "https://*.yangkeduo.com/*",
+        "https://*.pinduoduo.com/*",
+        "https://*.goofish.com/*",
+        "https://*.xianyu.com/*",
+        "https://meli.zying.net/*",
+        "https://seller.zying.net/*",
+        "https://*.mercadolibre.com.mx/*",
+        "https://*.mercadolibre.com.br/*",
+        "https://*.mercadolivre.com.br/*",
+        "https://*.mercadolibre.com.ar/*",
+        "https://*.mercadolibre.cl/*",
+        "https://*.mercadolibre.com.co/*",
+        "https://*.mercadolibre.com.uy/*"
+      ]
     }
   ]
 }

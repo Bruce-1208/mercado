@@ -12158,6 +12158,8 @@
                         <div class="field"><label for="store-link-bulk-height">高(cm)</label><input id="store-link-bulk-height" type="number" min="0" step="0.01" placeholder="不修改"></div>
                         <div class="field"><label for="store-link-bulk-net">净收益(USD)</label><input id="store-link-bulk-net" type="number" step="0.01" placeholder="不修改"></div>
                         <button class="primary" id="store-link-advertise-button" type="button" onclick="openSelectedStoreLinkAdvertise()" disabled>创建广告组</button>
+                        <button class="secondary" id="store-link-pause-button" type="button" onclick="updateSelectedStoreLinkStatus('paused')" disabled>暂停所选</button>
+                        <button class="secondary" id="store-link-activate-button" type="button" onclick="updateSelectedStoreLinkStatus('active')" disabled>上架所选</button>
                         <button class="primary" id="store-link-bulk-button" type="button" onclick="bulkUpdateStoreLinks()" disabled>修改美客多后台</button>
                         <button class="danger" id="store-link-delete-button" type="button" onclick="deleteSelectedStoreLinks()" disabled>删除所选</button>
                         <span class="store-link-bulk-note" id="store-link-message">先勾选链接并填写修改项；同步进行中也可提交，任务会自动排队</span>
@@ -14260,6 +14262,8 @@
         const storeLinkSelectionCount = document.getElementById("store-link-selection-count");
         const storeLinkBody = document.getElementById("store-link-body");
         const storeLinkAdvertiseButton = document.getElementById("store-link-advertise-button");
+        const storeLinkPauseButton = document.getElementById("store-link-pause-button");
+        const storeLinkActivateButton = document.getElementById("store-link-activate-button");
         const storeLinkBulkButton = document.getElementById("store-link-bulk-button");
         const storeLinkDeleteButton = document.getElementById("store-link-delete-button");
         const storeLinkMessage = document.getElementById("store-link-message");
@@ -23515,6 +23519,8 @@
             }
             storeLinkBody.innerHTML = storeLinkRows.map(row => {
                 const linkId = Number(row.id || 0);
+                const rowStatus = String(row.status || "").toLowerCase();
+                const canChangeStatus = Boolean(row.is_current) && ["active", "paused"].includes(rowStatus);
                 const imageUrl = String(row.thumbnail_url || "");
                 const permalink = String(row.permalink || "");
                 const dimensionValues = [row.package_length_cm, row.package_width_cm, row.package_height_cm];
@@ -23536,10 +23542,12 @@
                     <td><strong>${escapeHtml(row.store_name || "-")}</strong><span class="market-metric-note">${escapeHtml(row.site_id || "-")} · ${escapeHtml(row.group_name || "未分组")}</span></td>
                     <td>${product}</td>
                     <td>${permalink ? `<a class="store-link-url" href="${escapeHtml(permalink)}" target="_blank" rel="noopener noreferrer" title="${escapeHtml(permalink)}">打开商品链接</a>` : "-"}
-                        <button type="button" class="store-link-page-button" onclick="openStoreLinkAIVideo(${linkId})" ${row.status !== "active" ? 'disabled title="只有在售商品可以生成并上传视频"' : ""}>AI生成视频</button>
-                        <button type="button" class="store-link-page-button" onclick="openAiVideoLibraryForLink(${linkId})" ${row.status !== "active" ? 'disabled title="只有在售商品可以上传备选视频"' : ""}>选择AI备选</button>
-                        <button type="button" class="store-link-page-button" onclick="openStoreLinkVideo(${linkId})" ${row.status !== "active" ? 'disabled title="只有在售商品可以上传视频"' : ""}>上传已有视频</button>
-                        <button type="button" class="store-link-page-button" onclick="openStoreLinkAdvertise(${linkId})" ${row.status !== "active" ? 'disabled title="只有在售商品可以投放广告"' : ""}>投放广告</button>
+                        <button type="button" class="store-link-page-button" onclick="openStoreLinkAIVideo(${linkId})" ${rowStatus !== "active" ? 'disabled title="只有在售商品可以生成并上传视频"' : ""}>AI生成视频</button>
+                        <button type="button" class="store-link-page-button" onclick="openAiVideoLibraryForLink(${linkId})" ${rowStatus !== "active" ? 'disabled title="只有在售商品可以上传备选视频"' : ""}>选择AI备选</button>
+                        <button type="button" class="store-link-page-button" onclick="openStoreLinkVideo(${linkId})" ${rowStatus !== "active" ? 'disabled title="只有在售商品可以上传视频"' : ""}>上传已有视频</button>
+                        <button type="button" class="store-link-page-button" onclick="openStoreLinkAdvertise(${linkId})" ${rowStatus !== "active" ? 'disabled title="只有在售商品可以投放广告"' : ""}>投放广告</button>
+                        <button type="button" class="store-link-page-button store-link-status-button" onclick="updateStoreLinkStatus(${linkId}, 'paused')" ${!canChangeStatus || rowStatus !== "active" ? 'disabled title="只有在售商品可以暂停"' : ""}>暂停</button>
+                        <button type="button" class="store-link-page-button store-link-status-button" onclick="updateStoreLinkStatus(${linkId}, 'active')" ${!canChangeStatus || rowStatus !== "paused" ? 'disabled title="只有暂停商品可以上架"' : ""}>上架</button>
                     </td>
                     <td>${storeLinkStatus(row.status, row.is_current)}</td>
                     <td><strong>${price}</strong></td>
@@ -24673,6 +24681,14 @@
                 selectedStoreLinkIds.size === 0
                 || storeLinkAdvertiseBusy
             );
+            storeLinkPauseButton.disabled = (
+                selectedStoreLinkIds.size === 0
+                || storeLinkRemoteUpdateRunning
+            );
+            storeLinkActivateButton.disabled = (
+                selectedStoreLinkIds.size === 0
+                || storeLinkRemoteUpdateRunning
+            );
             storeLinkBulkButton.disabled = (
                 selectedStoreLinkIds.size === 0
                 || storeLinkRemoteUpdateRunning
@@ -24747,6 +24763,58 @@
                 loadStoreLinkRemoteUpdateStatus();
             } catch (error) {
                 storeLinkMessage.textContent = `后台修改启动失败：${error.message || error}`;
+            } finally {
+                updateStoreLinkSelection();
+            }
+        }
+
+        async function updateStoreLinkStatus(linkId, targetStatus) {
+            const id = Number(linkId);
+            const status = String(targetStatus || "").toLowerCase();
+            const row = storeLinkRows.find(item => Number(item.id) === id);
+            if (!row || !["active", "paused"].includes(status)) return;
+            const label = status === "paused" ? "暂停" : "上架";
+            if (storeLinkRemoteUpdateRunning) {
+                storeLinkMessage.textContent = "已有链接后台修改任务正在运行，请等待完成";
+                return;
+            }
+            if (!window.confirm(`确定${label}链接 ${row.item_id || id} 吗？此操作会同步到美客多后台。`)) return;
+            await submitStoreLinkStatus([id], status, false);
+        }
+
+        async function updateSelectedStoreLinkStatus(targetStatus) {
+            const status = String(targetStatus || "").toLowerCase();
+            const linkIds = Array.from(selectedStoreLinkIds);
+            if (!linkIds.length || !["active", "paused"].includes(status)) return;
+            if (storeLinkRemoteUpdateRunning) {
+                storeLinkMessage.textContent = "已有链接后台修改任务正在运行，请等待完成";
+                return;
+            }
+            const label = status === "paused" ? "暂停" : "上架";
+            if (!window.confirm(`确定${label}选中的 ${linkIds.length} 条链接吗？此操作会同步到美客多后台。`)) return;
+            await submitStoreLinkStatus(linkIds, status, true);
+        }
+
+        async function submitStoreLinkStatus(linkIds, status, clearSelection) {
+            const ids = Array.from(new Set((linkIds || []).map(Number).filter(Number.isInteger)));
+            if (!ids.length) return;
+            const label = status === "paused" ? "暂停" : "上架";
+            storeLinkMessage.textContent = `正在启动 ${ids.length} 条链接${label}任务...`;
+            try {
+                const response = await fetch("/api/store-links/bulk-update", {
+                    method: "POST",
+                    headers: {"Content-Type": "application/json"},
+                    body: JSON.stringify({link_ids: ids, status}),
+                });
+                const payload = await response.json().catch(() => ({}));
+                if ((!response.ok && response.status !== 409) || !["success", "running"].includes(payload.status)) {
+                    throw new Error(payload.message || `接口请求失败：${response.status}`);
+                }
+                if (clearSelection) selectedStoreLinkIds.clear();
+                renderStoreLinkRemoteUpdateStatus(payload.data || {});
+                loadStoreLinkRemoteUpdateStatus();
+            } catch (error) {
+                storeLinkMessage.textContent = `${label}任务启动失败：${error.message || error}`;
             } finally {
                 updateStoreLinkSelection();
             }

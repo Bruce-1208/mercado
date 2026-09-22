@@ -38,7 +38,7 @@
         button.disabled = true;
         button.textContent = "正在读取…";
       }
-      const product = extractEligibleProduct();
+      const product = await extractEligibleProduct();
       if (button) button.textContent = "正在上传…";
       const response = await sendMessage({type: "SUBMIT_PRODUCT", product});
       if (!response.ok) throw new Error(response.error || "采集失败");
@@ -72,17 +72,22 @@
     );
   }
 
-  function extractZyingProduct() {
+  async function extractZyingProduct() {
     const plugin = core.pluginLoginStatus(document);
     if (!plugin.logged_in) throw new Error(plugin.message);
-    const product = core.extractProduct(document, location.href);
+    const product = core.extractProductAsync
+      ? await core.extractProductAsync(document, location.href)
+      : core.extractProduct(document, location.href);
     if (!product.plugin_snapshot?.dom_lines?.length) throw new Error("等待智赢插件读取当前商品信息");
     if (product.plugin_snapshot.fulfillment_type === "unknown") throw new Error("智赢插件尚未给出发货方式，为避免误采已停止");
+    if (product.scrape_status !== "ok") {
+      throw new Error(product.error_message || "等待智赢插件读取重量和包装尺寸");
+    }
     return product;
   }
 
-  function extractEligibleProduct() {
-    const product = extractZyingProduct();
+  async function extractEligibleProduct() {
+    const product = await extractZyingProduct();
     if (!product.plugin_snapshot.fulfillment_eligible) {
       throw new Error(`仅采集自发货和半托管；智赢识别为${product.plugin_snapshot.fulfillment_label || "非允许发货方式"}`);
     }
@@ -175,9 +180,15 @@
             /\/(?:login|account-verification|challenge|captcha)(?:[/?]|$)/i.test(location.href)) {
           sendResponse({ok: false, blocked: true, error: "请先在前端页面完成登录或人机验证"});
         } else if (message.type === "EXTRACT_BATCH_PRODUCT") {
-          sendResponse(looksLikeDetailPage()
-            ? {ok: true, product: extractZyingProduct()}
-            : {ok: false, error: "等待商品详情加载"});
+          if (!looksLikeDetailPage()) {
+            sendResponse({ok: false, error: "等待商品详情加载"});
+            return false;
+          }
+          Promise.resolve(extractZyingProduct()).then(
+            product => sendResponse({ok: true, product}),
+            error => sendResponse({ok: false, error: error.message || String(error)})
+          );
+          return true;
         } else {
           sendResponse(readProductList());
         }

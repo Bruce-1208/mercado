@@ -34,7 +34,7 @@ global.chrome = {runtime:{getPlatformInfo:cb => cb({})}, windows:{
   get:async id => { if(!tabs.has(id)) throw Error('Tab closed'); return tabs.get(id); },
   create:async options => {
     const {url} = options;
-    const tab = {id:++sequence,url,status:'complete'}; tabs.set(tab.id,tab);
+    const tab = {id:++sequence,url:'about:blank',pendingUrl:url,status:'loading'}; tabs.set(tab.id,tab);
     tabCreates.push({id:tab.id,...options});
     if(options.active) currentActiveTab=tab.id;
     if(/\/(?:MLM|CBT)-/.test(url)) { active++; peak=Math.max(peak,active); }
@@ -45,7 +45,7 @@ global.chrome = {runtime:{getPlatformInfo:cb => cb({})}, windows:{
     if(changes.active) { currentActiveTab=id; activations.push(id); }
     return tabs.get(id);
   },
-  remove:async id => { if(/\/(?:MLM|CBT)-/.test(tabs.get(id)?.url||'')) active--; tabs.delete(id); }
+  remove:async id => { if(/\/(?:MLM|CBT)-/.test(tabs.get(id)?.pendingUrl || tabs.get(id)?.url || '')) active--; tabs.delete(id); }
 }};
 const item = (id, profile='china') => ({
   url:origin+(profile==='managed'?'CBT-':'MLM-')+id, key:String(id),
@@ -59,7 +59,7 @@ const lists = {
   page4:{ok:true,page:4,international_selected:false,next_url:'',items:[]},
 };
 global.sendTabMessage = async (id, message) => {
-  const url = tabs.get(id).url;
+  const url = tabs.get(id).pendingUrl || tabs.get(id).url;
   if(message.type==='CHECK_ZYING_PLUGIN') return {ok:true,found:true,logged_in:true};
   if(message.type==='READ_PRODUCT_LIST') {
     reads.push(url);

@@ -1896,6 +1896,7 @@ BROWSER_EXTENSION_DIR = resolve_browser_extension_dir()
 BROWSER_EXTENSION_PACKAGE_FILES = (
     "manifest.json",
     "background.js",
+    "launcher.js",
     "icons/icon16.png",
     "icons/icon32.png",
     "icons/icon48.png",
@@ -8348,7 +8349,7 @@ def api_bulk_update_store_links():
         return jsonify({"status": "error", "message": "link_ids 必须是数组"}), 422
     allowed = (
         "price", "weight_g", "package_length_cm", "package_width_cm",
-        "package_height_cm", "net_proceeds_usd",
+        "package_height_cm", "net_proceeds_usd", "status",
     )
     changes = {field: data.get(field) for field in allowed if field in data}
     try:
@@ -17113,7 +17114,7 @@ def api_browser_extension_download():
         max_age=0,
     )
     response.headers["Cache-Control"] = "no-store"
-    response.headers["X-Zeshun-Extension-Version"] = "1.7.0"
+    response.headers["X-Zeshun-Extension-Version"] = "1.8.2"
     return response
 
 
@@ -18198,6 +18199,7 @@ def api_browser_extension_collect():
             source_url, 1, f"浏览器插件：{created_by}"
         )
         db_upsert_mercado_collection_items(task_id, [product])
+        _mercado_profit_refresh_wakeup_event.set()
         complete = str(product.get("scrape_status") or "partial") == "ok"
         status = "completed" if complete else "partial"
         message = (

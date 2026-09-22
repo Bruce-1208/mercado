@@ -229,6 +229,20 @@
     return result;
   }
 
+  function parsePluginProfitability(text) {
+    const normalized = clean(text);
+    const amount = label => {
+      const match = new RegExp(
+        `(?:${label})[^0-9-]{0,36}\\$?\\s*(-?\\d+(?:[.,]\\d+)?)`, "i"
+      ).exec(normalized);
+      return match ? finiteNumber(match[1]) : null;
+    };
+    return {
+      net_proceeds_usd: amount("净\\s*收益|最终\\s*收益|net\\s*(?:profit|proceeds|revenue)|lucro\\s*(?:líquido|liquido)?"),
+      commission_amount_usd: amount("佣\\s*金|commission|comisi[oó]n|comiss[aã]o")
+    };
+  }
+
   function parsePluginSales(text) {
     const normalized = clean(text);
     const labels = "(?:\u603b\s*\u9500\s*\u91cf|\u9500\s*\u91cf|\u5df2\s*\u552e|\u552e\s*\u51fa|sold(?:\s+quantity)?|sales|vendidos?|vendas?)";
@@ -285,12 +299,31 @@
   function shadowRoots(doc) {
     const roots = [];
     const visited = new Set();
+    const hostedRoot = node => {
+      if (!node) return null;
+      try {
+        if (node.shadowRoot) return node.shadowRoot;
+      } catch (_) {}
+      // ZYing 5.1.18 deliberately renders its Mercado detail card in a
+      // closed shadow root.  Content scripts cannot reach that root through
+      // element.shadowRoot, but Chromium exposes a read-only extension API
+      // for exactly this case.  Do not patch Element.attachShadow: ZYing
+      // detects that mutation and stops rendering the card entirely.
+      try {
+        if (typeof chrome !== "undefined" && chrome.dom &&
+            typeof chrome.dom.openOrClosedShadowRoot === "function") {
+          return chrome.dom.openOrClosedShadowRoot(node) || null;
+        }
+      } catch (_) {}
+      return null;
+    };
     const visit = root => {
       if (!root || visited.has(root) || !root.querySelectorAll) return;
       visited.add(root);
       roots.push(root);
       root.querySelectorAll("*").forEach(node => {
-        if (node.shadowRoot) visit(node.shadowRoot);
+        const nested = hostedRoot(node);
+        if (nested) visit(nested);
       });
     };
     visit(doc);
@@ -361,6 +394,96 @@
     };
   }
 
+  function protectedVisualUrl(node) {
+    if (!node) return "";
+    const values = [];
+    try { values.push(node.style && node.style.backgroundImage); } catch (_) {}
+    try {
+      const view = node.ownerDocument && node.ownerDocument.defaultView;
+      if (view && typeof view.getComputedStyle === "function") {
+        values.push(view.getComputedStyle(node).backgroundImage);
+      }
+    } catch (_) {}
+    for (const value of values) {
+      const match = /url\(\s*["']?(blob:[^"')]+)["']?\s*\)/i.exec(String(value || ""));
+      if (match) return match[1];
+    }
+    return "";
+  }
+
+  async function decodeProtectedVisual(url, doc) {
+    if (!url || typeof fetch !== "function") return "";
+    let timer = null;
+    let controller = null;
+    try {
+      if (typeof AbortController === "function") {
+        controller = new AbortController();
+        timer = setTimeout(() => controller.abort(), 1800);
+      }
+      const response = await fetch(url, controller ? {signal: controller.signal} : undefined);
+      if (!response.ok) return "";
+      const svg = await response.text();
+      if (!svg || svg.length > 100000 || !/<(?:svg|text)\b/i.test(svg)) return "";
+      const Parser = (doc && doc.defaultView && doc.defaultView.DOMParser) ||
+        (typeof DOMParser !== "undefined" ? DOMParser : null);
+      if (!Parser) return "";
+      const parsed = new Parser().parseFromString(svg, "image/svg+xml");
+      if (parsed.querySelector("parsererror")) return "";
+      return clean(Array.from(parsed.querySelectorAll("text"))
+        .map(node => node.textContent || "").join(" "));
+    } catch (_) {
+      return "";
+    } finally {
+      if (timer) clearTimeout(timer);
+    }
+  }
+
+  async function decodedProtectedText(scope, doc, cache) {
+    let nodes = [];
+    try { nodes = [scope, ...Array.from(scope.querySelectorAll("*"))]; } catch (_) { return ""; }
+    const urls = unique(nodes.map(protectedVisualUrl));
+    const values = await Promise.all(urls.map(async url => {
+      if (!cache.has(url)) cache.set(url, decodeProtectedVisual(url, doc));
+      return cache.get(url);
+    }));
+    return clean(values.filter(Boolean).join(" "));
+  }
+
+  async function readPluginMetricsAsync(doc) {
+    const fallback = readPluginMetrics(doc);
+    const decoded = [];
+    const seen = new Set();
+    const cache = new Map();
+    for (const root of shadowRoots(doc)) {
+      let scopes = [];
+      try {
+        scopes = Array.from(root.querySelectorAll(
+          "#zyCardWrap, [class*='zying-meli-detail-wrap'], " +
+          ".zying-meli-detail-metric-line, .zying-meli-detail-inline-tag"
+        ));
+      } catch (_) {}
+      for (const scope of scopes) {
+        const value = await decodedProtectedText(scope, doc, cache);
+        if (value && !seen.has(value)) {
+          seen.add(value);
+          decoded.push(value);
+        }
+      }
+    }
+    if (!decoded.length) return fallback;
+    const text = decoded.join(" ").slice(0, 12000);
+    const metrics = parsePluginMetrics(text);
+    const productInfo = parsePluginProductInfo(text, fallback.self_ship_origin);
+    return {
+      ...fallback,
+      lines: decoded.slice(0, 50),
+      text,
+      metrics,
+      ...productInfo,
+      read_method: "browser_extension_protected_svg"
+    };
+  }
+
   function currencyForUrl(pageUrl) {
     try {
       const host = new URL(pageUrl).hostname.toLowerCase().replace(/^www\./, "");
@@ -410,7 +533,7 @@
     }
   }
 
-  function extractProduct(doc, pageUrl) {
+  function extractProduct(doc, pageUrl, pluginOverride = null) {
     if (!isSupportedUrl(pageUrl)) throw new Error("当前页面不是支持的 Mercado Libre 页面");
     const product = structuredProducts(doc)[0] || {};
     const itemId = extractItemId(doc, pageUrl, product);
@@ -424,10 +547,14 @@
     const description = clean((descriptionNode && descriptionNode.textContent) || product.description);
     const pictures = extractImages(doc, product);
     const specs = extractSpecs(doc);
-    const plugin = readPluginMetrics(doc);
+    const plugin = pluginOverride || readPluginMetrics(doc);
     const metrics = plugin.metrics;
     const actualWeightComplete = Number.isFinite(Number(metrics.weight_g)) && Number(metrics.weight_g) > 0;
+    const dimensionsComplete = [
+      metrics.package_length_cm, metrics.package_width_cm, metrics.package_height_cm
+    ].every(value => Number.isFinite(Number(value)) && Number(value) > 0);
     const weightBasis = actualWeightComplete ? "plugin_actual" : "";
+    const profitability = parsePluginProfitability(plugin.text);
     const price = pagePrice(doc, product);
     const offer = Array.isArray(product.offers) ? product.offers[0] : (product.offers || {});
     const currencyId = clean(
@@ -440,7 +567,8 @@
     if (!pictures.length) errors.push("未识别到商品主图");
     if (!plugin.lines.length) errors.push("未读取到智赢重量尺寸，可在泽顺控制台后续补充");
     else if (!actualWeightComplete) errors.push("已检测到智赢浮层，但没有读取到实际重量");
-    const complete = Boolean(title && pictures.length && actualWeightComplete);
+    if (plugin.lines.length && !dimensionsComplete) errors.push("已检测到智赢浮层，但没有读取到包装尺寸");
+    const complete = Boolean(title && pictures.length && actualWeightComplete && dimensionsComplete);
     const source = {
       id: itemId,
       site_id: itemId.slice(0, 3),
@@ -470,6 +598,8 @@
       package_width_cm: metrics.package_width_cm,
       package_height_cm: metrics.package_height_cm,
       weight_basis: weightBasis,
+      net_proceeds_usd: profitability.net_proceeds_usd,
+      commission_amount_usd: profitability.commission_amount_usd,
       scrape_status: complete ? "ok" : "partial",
       error_message: errors.join("；"),
       source,
@@ -482,7 +612,7 @@
       },
       plugin_snapshot: {
         source: "浏览器商品详情页与智赢插件浮层",
-        read_method: "browser_extension_shadow_dom",
+        read_method: plugin.read_method || "browser_extension_shadow_dom",
         dom_lines: plugin.lines,
         dom_text: plugin.text,
         weight_basis: weightBasis,
@@ -491,6 +621,8 @@
         plugin_volumetric_display: metrics.volumetric_display,
         volumetric_formula: "length_cm * width_cm * height_cm / 6000",
         volumetric_weight_kg: metrics.volumetric_weight_kg,
+        net_proceeds_usd: profitability.net_proceeds_usd,
+        commission_amount_usd: profitability.commission_amount_usd,
         sales: plugin.sales,
         fulfillment_type: plugin.fulfillment_type,
         fulfillment_label: plugin.fulfillment_label,
@@ -500,6 +632,11 @@
       },
       collected_at: nowSql()
     };
+  }
+
+  async function extractProductAsync(doc, pageUrl) {
+    const plugin = await readPluginMetricsAsync(doc);
+    return extractProduct(doc, pageUrl, plugin);
   }
 
   function cardCandidates(doc) {
@@ -682,10 +819,12 @@
     finiteNumber,
     normalizeItemId,
     parsePluginMetrics,
+    parsePluginProfitability,
     parsePluginSales,
     parsePluginProductInfo,
     isSupportedUrl,
     extractProduct,
+    extractProductAsync,
     cardCandidates,
     extractCardProduct,
     cardHasUsFlag,
