@@ -30,7 +30,8 @@ class RunLimitReached(Exception):
 
 
 class Service:
-    def __init__(self, root, browser_factory=Browser, models_factory=Models, storage_backend="sqlite"):
+    def __init__(self, root, browser_factory=Browser, models_factory=Models,
+                 storage_backend="sqlite", migrate_legacy_state=True):
         self.store = RemoteStore(root) if storage_backend == "api" else Store(root, backend=storage_backend)
         self.config = Config(root, storage=self.store if storage_backend != "sqlite" else None)
         self.browser_factory, self.models_factory = browser_factory, models_factory
@@ -38,7 +39,8 @@ class Service:
         self.thread = None
         self.guard = threading.RLock()
         self.lock_key = "ai_weight_price_" + hashlib.sha256(str(self.store.root.resolve()).encode()).hexdigest()[:16]
-        self._migrate_browser_attention_pause()
+        if migrate_legacy_state:
+            self._migrate_browser_attention_pause()
 
     def _migrate_browser_attention_pause(self):
         """Expose old login-redirect exceptions through the resumable pause UI."""
