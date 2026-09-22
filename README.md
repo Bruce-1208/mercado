@@ -119,7 +119,7 @@ Copy-Item .\workbench-client.example.json .\workbench-runtime.json
 
 首次使用只需：
 
-1. 登录 `https://zeshun.cc.cd/`，打开“自动化 AI 申诉”，按电脑系统点击“下载 Windows Agent”或“下载 macOS Agent”；
+1. 登录 `https://wuhanzeshun.com/`，打开“自动化 AI 申诉”，按电脑系统点击“下载 Windows Agent”或“下载 macOS Agent”；
 2. 在需要运行比特浏览器的电脑上解压下载包；
 3. Windows 双击 `start-agent.bat` 启动，或运行 `install-agent.ps1` 安装登录启动任务；macOS 双击 `start-agent.command` 启动，或运行 `install-agent.command` 安装 LaunchAgent；
 4. 保持比特浏览器客户端运行，回到控制台刷新“执行电脑”并选择该电脑。
@@ -134,7 +134,7 @@ Agent 1.1.0 起同时承接“自动化 AI 申诉”和“任务模块”的 dai
 
 ```powershell
 $env:BIT_RUNTIME_ROLE="client"
-$env:BIT_DB_API_BASE_URL="https://zeshun.cc.cd"
+$env:BIT_DB_API_BASE_URL="https://wuhanzeshun.com"
 python -m bit.bit_interface
 ```
 
@@ -263,6 +263,8 @@ py -3.12 -m bit.bit_config --import-excel "bit\比特配置文件.xlsx"
 ## 批量检查并登录美客多店铺
 
 `bit.bit_mercado_login` 会读取数据库中全部未忽略店铺，默认使用 3 个进程检查登录状态。未登录时输入数据库邮箱、选择密码登录，并只提交 BitBrowser 已保存的默认密码；验证码或人机验证会记录为需要人工处理。所有店铺结束后关闭浏览器，生成 Excel 汇总并发送邮件。
+
+所有使用公共 BitBrowser 接口的自动任务共用窗口容量保护：默认最多 3 个存活或待回收窗口，可用内存低于 15% 时暂停新开窗口。关闭后核验浏览器主进程，失败记录保留并后台重试。升级需重启运行中的任务进程；配置和故障说明见 [比特窗口内存回收](docs/bit_browser_memory.md)。
 
 ```powershell
 py -3.12 -m bit.bit_mercado_login --all-active-login --workers 3 --wait-seconds 60

@@ -37,7 +37,7 @@ from openpyxl import load_workbook
 import traceback
 
 
-CHAT_INFO_API_URL = "https://zeshun.cc.cd/api/v1/chat"
+CHAT_INFO_API_URL = "https://wuhanzeshun.com/api/v1/chat"
 HUMAN_SERVICE_HUB_URL = "https://global-selling.mercadolibre.com/help/hub/30928?source"
 HUMAN_SERVICE_CHAT_V2_URL = "https://global-selling.mercadolibre.com/help/chat/v2"
 SITE_REMOTE_VALUE_MAP = {
@@ -752,285 +752,313 @@ def shensu(name, site, form, message, mode="人工客服"):
         authorization_flag="appeal_enabled",
     )
 
-    res = openBrowser(window_id)  # 窗口ID从窗口配置界面中复制，或者api创建后返回
-
-    print(res)
-    name = res["data"]["name"]
-
-    driverPath = res["data"]["driver"]
-    debuggerAddress = res["data"]["http"]
-
-    # selenium 连接代码
-    chrome_options = webdriver.ChromeOptions()
-    chrome_options.add_experimental_option("debuggerAddress", debuggerAddress)
-
-    chrome_service = Service(driverPath)
-    driver = webdriver.Chrome(service=chrome_service, options=chrome_options)
-
-    driver.implicitly_wait(10)
-    # 登录恢复预算属于整次申诉，避免后续回退到 chat/v2 时再次自动登录。
-    driver._bit_appeal_login_attempts = 0
-    driver._bit_appeal_login_max_attempts = 1
-    try:
-        driver.set_page_load_timeout(12)
-    except Exception:
-        pass
-    # 设置最长等待时间为 10 秒
-    wait = WebDriverWait(driver, 15)
-    appeal_base_handles = []
-    try:
-        appeal_base_handles = driver.window_handles[:]
-    except Exception:
-        pass
-
-    # driver.switch_to.new_window('tab') 决定是否打开新窗口
-    try:
-        open_human_service_hub_with_ip_retry(
-            driver,
-            name,
-            site,
-            window_id=window_id,
+    owned_lease = None
+    if current_thread_window_lease(window_id) is None:
+        owned_lease = create_window_lease(
+            window_id, owner=f"human_appeal:{name}", shop_name=name, task_type="human_appeal",
         )
-    except Exception as exc:
-        print(f"{get_now_time()} {name} {site} {exc}<br>")
-        return str(exc)
+        if not owned_lease.acquire(timeout=0):
+            return "窗口正在被其他任务占用"
+    driver = chrome_service = None
+    try:
+        res = openBrowser(window_id)  # 窗口ID从窗口配置界面中复制，或者api创建后返回
 
-    words = []
-    nickname_list = ["Bruce", "Jack", "Lucy", "James"]
-    nickname = random.choice(nickname_list)
-    if form == "延误":
-        words = [
-            f"亲爱的客服，我叫{nickname}！这些订单因合作物流车辆临时出现故障，导致未能及时揽收，并非我这边发货延误，麻烦您帮忙处理一下，消除对店铺声誉的影响，非常感谢！",
-            f"亲爱的客服，我叫{nickname}！这些订单因为菜鸟，并非我这边发货延误，麻烦您帮忙处理一下，消除对店铺声誉的影响，非常感谢！",
-        ]
+        print(res)
+        name = res["data"]["name"]
 
-    if form == "侵权":
-        words = [
-            f"亲爱的客服，我叫{nickname}！这些产品是通用品牌产品，他们被系统误检测为侵权产品，你能帮我消除记录吗？",
-            f"亲爱的客服，我叫{nickname}！这些产品是通用品牌产品，他们被系统误检测为侵权产品，你能帮我消除记录吗？",
-        ]
+        driverPath = res["data"]["driver"]
+        debuggerAddress = res["data"]["http"]
 
-    if form == "禁限售":
-        words = [
-            "亲爱客服，这个产品不是禁限售产品，他被系统误判了，麻烦你帮我恢复",
-        ]
+        # selenium 连接代码
+        chrome_options = webdriver.ChromeOptions()
+        chrome_options.add_experimental_option("debuggerAddress", debuggerAddress)
 
-    if form == "取消率":
-        words = [
-            f"亲爱的客服，我叫{nickname}！这些订单并非因卖家责任取消，麻烦您重新核查订单记录，并移除这些订单对店铺取消率和声誉的影响，非常感谢！",
-            f"亲爱的客服，我叫{nickname}！这些订单的取消不应计入卖家责任，麻烦您帮我复核并消除对店铺取消率的影响，谢谢！",
-        ]
+        chrome_service = Service(driverPath)
+        driver = webdriver.Chrome(service=chrome_service, options=chrome_options)
 
-    if form == "投诉":
-        words = [
-            f"亲爱的客服，我叫{nickname}！我的产品没有任何质量问题，客户没有给出确凿的证据证明他出了问题，我认为客户是想免费购物，你能消除对我声誉的影响吗"
-        ]
-
-    words_random = random.choice(words)
-
-    if not select_mercado_site_fast(driver, name, site):
+        driver.implicitly_wait(10)
+        # 登录恢复预算属于整次申诉，避免后续回退到 chat/v2 时再次自动登录。
+        driver._bit_appeal_login_attempts = 0
+        driver._bit_appeal_login_max_attempts = 1
         try:
-            WebDriverWait(driver, 5).until(
-                EC.element_to_be_clickable((By.CLASS_NAME, "nav-header-cbt__site-switcher"))
-            ).click()
-            path = f'div[data-value="{SITE_REMOTE_VALUE_MAP.get(site, "MLM-remote")}"]'
-            WebDriverWait(driver, 8).until(
-                EC.element_to_be_clickable((By.CSS_SELECTOR, path))
-            ).click()
-            driver.refresh()
-            time.sleep(2)
-            print(f"{get_now_time()} {name} {site} '选择站点成功'<br>")
-        except Exception as e:
-            print(f"{get_now_time()} {name} {site} '选择站点失败，继续使用当前页面': {e}<br>")
-    orders_random=""
-    infraction_random=""
-    prohibited_random=""
-    cancellation_random=""
-    initial_huashu = ""
+            driver.set_page_load_timeout(12)
+        except Exception:
+            pass
+        # 设置最长等待时间为 10 秒
+        wait = WebDriverWait(driver, 15)
+        appeal_base_handles = []
+        try:
+            appeal_base_handles = driver.window_handles[:]
+        except Exception:
+            pass
 
-    if(form=="延误" and message == ""):
-        orders_random = get_delay_orders_for_human_service(window_id, name, site, 10)
-        if (orders_random == "" and message == ""):
-            close_appeal_tabs(driver, appeal_base_handles, name, site)
-            return "没有可以申诉的订单"
-    if should_load_infraction_orders(form, message):
-        infraction_random = get_infraction_orders_random(window_id,name, site, 10)
-    if form == "禁限售" and message == "":
-        prohibited_random = get_prohibited_orders_for_human_service(name, site, 10)
-        if not prohibited_random:
-            close_appeal_tabs(driver, appeal_base_handles, name, site)
-            return "禁限售列表没有可以申诉的产品"
-    if form == "取消率" and message == "":
-        cancellation_orders = get_cancellation_orders(driver, name, site)
-        if not cancellation_orders:
-            close_appeal_tabs(driver, appeal_base_handles, name, site)
-            return "没有可以申诉的取消订单"
-        selected_orders = (
-            random.sample(cancellation_orders, 10)
-            if len(cancellation_orders) > 10
-            else cancellation_orders
-        )
-        cancellation_random = "、".join(str(order_id) for order_id in selected_orders)
-        print(
-            f"{get_now_time()} {name} {site} 共获取 {len(cancellation_orders)} 个取消订单，"
-            f"本轮人工客服按侵权规则发送 {len(selected_orders)} 个：{cancellation_random}<br>"
-        )
-        # 获取订单后当前位于 Metrics 页面，重新回到人工客服入口。
-        open_human_service_hub_with_ip_retry(
-            driver,
-            name,
-            site,
-            window_id=window_id,
-        )
-        select_mercado_site_fast(driver, name, site)
-    try:
-        open_human_service_chat(driver, name, site, window_id=window_id)
-
-        # 发消息
-        print(f"{get_now_time()} {name} {site} '进入人工客服'<br>")
-
-        if message == "":
-
-            if form == "延误":
-                initial_huashu = (
-                    render_appeal_phrase(
-                        selected_phrase,
-                        nickname=nickname,
-                        order_ids=orders_random,
-                        appeal_type=form,
-                    )
-                    if selected_phrase
-                    else orders_random + words_random
-                )
-                get_human_chat_input(driver, 30).send_keys(initial_huashu)
-                time.sleep(3)
-                click_human_send_button(driver, 30)
-                print(
-                    f"{get_now_time()} {name}  {site} 发送延误订单：{initial_huashu}<br>"
-                )
-                chat_ai(
-                    driver, name, site, form, initial_huashu, nickname
-                )
-            if form == "侵权":
-                initial_huashu = (
-                    render_appeal_phrase(
-                        selected_phrase,
-                        nickname=nickname,
-                        order_ids=infraction_random,
-                        appeal_type=form,
-                    )
-                    if selected_phrase
-                    else infraction_random + words_random
-                )
-                get_human_chat_input(driver, 30).send_keys(initial_huashu)
-                time.sleep(3)
-                click_human_send_button(driver, 30)
-                print(
-                    f"{get_now_time()} {name} {site} '发送侵权的 id：{initial_huashu}<br>"
-                )
-                chat_ai(
-                    driver, name, site, form, initial_huashu, nickname
-                )
-            if form == "禁限售":
-                initial_huashu = (
-                    render_appeal_phrase(
-                        selected_phrase,
-                        nickname=nickname,
-                        order_ids=prohibited_random,
-                        appeal_type=form,
-                    )
-                    if selected_phrase
-                    else prohibited_random + words_random
-                )
-                get_human_chat_input(driver, 30).send_keys(initial_huashu)
-                time.sleep(3)
-                click_human_send_button(driver, 30)
-                print(
-                    f"{get_now_time()} {name} {site} 发送禁限售产品编号："
-                    f"{initial_huashu}<br>"
-                )
-                chat_ai(
-                    driver, name, site, form, initial_huashu, nickname
-                )
-            if form == "取消率":
-                initial_huashu = (
-                    render_appeal_phrase(
-                        selected_phrase,
-                        nickname=nickname,
-                        order_ids=cancellation_random,
-                        appeal_type=form,
-                    )
-                    if selected_phrase
-                    else cancellation_random + words_random
-                )
-                get_human_chat_input(driver, 30).send_keys(initial_huashu)
-                time.sleep(3)
-                click_human_send_button(driver, 30)
-                print(
-                    f"{get_now_time()} {name} {site} 发送取消订单：{initial_huashu}<br>"
-                )
-                chat_ai(
-                    driver, name, site, form, initial_huashu, nickname
-                )
-            if form == "投诉":
-                initial_huashu = (
-                    render_appeal_phrase(
-                        selected_phrase or words_random,
-                        nickname=nickname,
-                        appeal_type=form,
-                    )
-                )
-                get_human_chat_input(driver, 30).send_keys(initial_huashu)
-                time.sleep(3)
-                click_human_send_button(driver, 30)
-                print(
-                    f"{get_now_time()} {name} {site} 发送投诉申诉：{initial_huashu}<br>"
-                )
-                chat_ai(
-                    driver, name, site, form, initial_huashu, nickname
-                )
-        else:
-            initial_huashu = message
-            get_human_chat_input(driver, 30).send_keys(message)
-            time.sleep(3)
-            click_human_send_button(driver, 30)
-            print(f"{get_now_time()} {name} {site} 自动发送自定义话术：{message}<br>")
-            chat_ai(
-                driver, name, site, form, initial_huashu, nickname
+        # driver.switch_to.new_window('tab') 决定是否打开新窗口
+        try:
+            open_human_service_hub_with_ip_retry(
+                driver,
+                name,
+                site,
+                window_id=window_id,
             )
+        except Exception as exc:
+            print(f"{get_now_time()} {name} {site} {exc}<br>")
+            return str(exc)
 
-    except Exception as e:
-        chat_result = open_mercado_backend_page(
-            driver,
-            HUMAN_SERVICE_CHAT_V2_URL,
-            name,
-            window_id,
-            settle_seconds=0,
-            rate_limit_retry_wait_seconds=0,
-            max_login_retries=1,
-            navigate=lambda url: fast_navigate(driver, url, stop_after=3),
-            anomaly_site=site,
-            anomaly_source="人工申诉",
-        )
-        if not chat_result.get("ok"):
-            if _is_login_failure_result(chat_result):
-                try_record_login_anomaly(
-                    chat_result,
-                    window_id,
-                    name,
-                    site,
-                    "人工申诉",
-                    driver=driver,
+        words = []
+        nickname_list = ["Bruce", "Jack", "Lucy", "James"]
+        nickname = random.choice(nickname_list)
+        if form == "延误":
+            words = [
+                f"亲爱的客服，我叫{nickname}！这些订单因合作物流车辆临时出现故障，导致未能及时揽收，并非我这边发货延误，麻烦您帮忙处理一下，消除对店铺声誉的影响，非常感谢！",
+                f"亲爱的客服，我叫{nickname}！这些订单因为菜鸟，并非我这边发货延误，麻烦您帮忙处理一下，消除对店铺声誉的影响，非常感谢！",
+            ]
+
+        if form == "侵权":
+            words = [
+                f"亲爱的客服，我叫{nickname}！这些产品是通用品牌产品，他们被系统误检测为侵权产品，你能帮我消除记录吗？",
+                f"亲爱的客服，我叫{nickname}！这些产品是通用品牌产品，他们被系统误检测为侵权产品，你能帮我消除记录吗？",
+            ]
+
+        if form == "禁限售":
+            words = [
+                "亲爱客服，这个产品不是禁限售产品，他被系统误判了，麻烦你帮我恢复",
+            ]
+
+        if form == "取消率":
+            words = [
+                f"亲爱的客服，我叫{nickname}！这些订单并非因卖家责任取消，麻烦您重新核查订单记录，并移除这些订单对店铺取消率和声誉的影响，非常感谢！",
+                f"亲爱的客服，我叫{nickname}！这些订单的取消不应计入卖家责任，麻烦您帮我复核并消除对店铺取消率的影响，谢谢！",
+            ]
+
+        if form == "投诉":
+            words = [
+                f"亲爱的客服，我叫{nickname}！我的产品没有任何质量问题，客户没有给出确凿的证据证明他出了问题，我认为客户是想免费购物，你能消除对我声誉的影响吗"
+            ]
+
+        words_random = random.choice(words)
+
+        if not select_mercado_site_fast(driver, name, site):
+            try:
+                WebDriverWait(driver, 5).until(
+                    EC.element_to_be_clickable((By.CLASS_NAME, "nav-header-cbt__site-switcher"))
+                ).click()
+                path = f'div[data-value="{SITE_REMOTE_VALUE_MAP.get(site, "MLM-remote")}"]'
+                WebDriverWait(driver, 8).until(
+                    EC.element_to_be_clickable((By.CSS_SELECTOR, path))
+                ).click()
+                driver.refresh()
+                time.sleep(2)
+                print(f"{get_now_time()} {name} {site} '选择站点成功'<br>")
+            except Exception as e:
+                print(f"{get_now_time()} {name} {site} '选择站点失败，继续使用当前页面': {e}<br>")
+        orders_random=""
+        infraction_random=""
+        prohibited_random=""
+        cancellation_random=""
+        initial_huashu = ""
+
+        if(form=="延误" and message == ""):
+            orders_random = get_delay_orders_for_human_service(window_id, name, site, 10)
+            if (orders_random == "" and message == ""):
+                close_appeal_tabs(driver, appeal_base_handles, name, site)
+                return "没有可以申诉的订单"
+        if should_load_infraction_orders(form, message):
+            infraction_random = get_infraction_orders_random(window_id,name, site, 10)
+        if form == "禁限售" and message == "":
+            prohibited_random = get_prohibited_orders_for_human_service(name, site, 10)
+            if not prohibited_random:
+                close_appeal_tabs(driver, appeal_base_handles, name, site)
+                return "禁限售列表没有可以申诉的产品"
+        if form == "取消率" and message == "":
+            cancellation_orders = get_cancellation_orders(driver, name, site)
+            if not cancellation_orders:
+                close_appeal_tabs(driver, appeal_base_handles, name, site)
+                return "没有可以申诉的取消订单"
+            selected_orders = (
+                random.sample(cancellation_orders, 10)
+                if len(cancellation_orders) > 10
+                else cancellation_orders
+            )
+            cancellation_random = "、".join(str(order_id) for order_id in selected_orders)
+            print(
+                f"{get_now_time()} {name} {site} 共获取 {len(cancellation_orders)} 个取消订单，"
+                f"本轮人工客服按侵权规则发送 {len(selected_orders)} 个：{cancellation_random}<br>"
+            )
+            # 获取订单后当前位于 Metrics 页面，重新回到人工客服入口。
+            open_human_service_hub_with_ip_retry(
+                driver,
+                name,
+                site,
+                window_id=window_id,
+            )
+            select_mercado_site_fast(driver, name, site)
+        try:
+            open_human_service_chat(driver, name, site, window_id=window_id)
+
+            # 发消息
+            print(f"{get_now_time()} {name} {site} '进入人工客服'<br>")
+
+            if message == "":
+
+                if form == "延误":
+                    initial_huashu = (
+                        render_appeal_phrase(
+                            selected_phrase,
+                            nickname=nickname,
+                            order_ids=orders_random,
+                            appeal_type=form,
+                        )
+                        if selected_phrase
+                        else orders_random + words_random
+                    )
+                    get_human_chat_input(driver, 30).send_keys(initial_huashu)
+                    time.sleep(3)
+                    click_human_send_button(driver, 30)
+                    print(
+                        f"{get_now_time()} {name}  {site} 发送延误订单：{initial_huashu}<br>"
+                    )
+                    chat_ai(
+                        driver, name, site, form, initial_huashu, nickname
+                    )
+                if form == "侵权":
+                    initial_huashu = (
+                        render_appeal_phrase(
+                            selected_phrase,
+                            nickname=nickname,
+                            order_ids=infraction_random,
+                            appeal_type=form,
+                        )
+                        if selected_phrase
+                        else infraction_random + words_random
+                    )
+                    get_human_chat_input(driver, 30).send_keys(initial_huashu)
+                    time.sleep(3)
+                    click_human_send_button(driver, 30)
+                    print(
+                        f"{get_now_time()} {name} {site} '发送侵权的 id：{initial_huashu}<br>"
+                    )
+                    chat_ai(
+                        driver, name, site, form, initial_huashu, nickname
+                    )
+                if form == "禁限售":
+                    initial_huashu = (
+                        render_appeal_phrase(
+                            selected_phrase,
+                            nickname=nickname,
+                            order_ids=prohibited_random,
+                            appeal_type=form,
+                        )
+                        if selected_phrase
+                        else prohibited_random + words_random
+                    )
+                    get_human_chat_input(driver, 30).send_keys(initial_huashu)
+                    time.sleep(3)
+                    click_human_send_button(driver, 30)
+                    print(
+                        f"{get_now_time()} {name} {site} 发送禁限售产品编号："
+                        f"{initial_huashu}<br>"
+                    )
+                    chat_ai(
+                        driver, name, site, form, initial_huashu, nickname
+                    )
+                if form == "取消率":
+                    initial_huashu = (
+                        render_appeal_phrase(
+                            selected_phrase,
+                            nickname=nickname,
+                            order_ids=cancellation_random,
+                            appeal_type=form,
+                        )
+                        if selected_phrase
+                        else cancellation_random + words_random
+                    )
+                    get_human_chat_input(driver, 30).send_keys(initial_huashu)
+                    time.sleep(3)
+                    click_human_send_button(driver, 30)
+                    print(
+                        f"{get_now_time()} {name} {site} 发送取消订单：{initial_huashu}<br>"
+                    )
+                    chat_ai(
+                        driver, name, site, form, initial_huashu, nickname
+                    )
+                if form == "投诉":
+                    initial_huashu = (
+                        render_appeal_phrase(
+                            selected_phrase or words_random,
+                            nickname=nickname,
+                            appeal_type=form,
+                        )
+                    )
+                    get_human_chat_input(driver, 30).send_keys(initial_huashu)
+                    time.sleep(3)
+                    click_human_send_button(driver, 30)
+                    print(
+                        f"{get_now_time()} {name} {site} 发送投诉申诉：{initial_huashu}<br>"
+                    )
+                    chat_ai(
+                        driver, name, site, form, initial_huashu, nickname
+                    )
+            else:
+                initial_huashu = message
+                get_human_chat_input(driver, 30).send_keys(message)
+                time.sleep(3)
+                click_human_send_button(driver, 30)
+                print(f"{get_now_time()} {name} {site} 自动发送自定义话术：{message}<br>")
+                chat_ai(
+                    driver, name, site, form, initial_huashu, nickname
                 )
-                _close_browser_after_login_failure(driver, window_id, name, site)
-            raise RuntimeError(chat_result.get("message") or str(e)) from e
-        print(get_now_time() + name + site + "继续与客服对话")
-        # 全部聊天记录
-        chat_ai(driver, name, site, form, initial_huashu, nickname)
+
+        except Exception as e:
+            chat_result = open_mercado_backend_page(
+                driver,
+                HUMAN_SERVICE_CHAT_V2_URL,
+                name,
+                window_id,
+                settle_seconds=0,
+                rate_limit_retry_wait_seconds=0,
+                max_login_retries=1,
+                navigate=lambda url: fast_navigate(driver, url, stop_after=3),
+                anomaly_site=site,
+                anomaly_source="人工申诉",
+            )
+            if not chat_result.get("ok"):
+                if _is_login_failure_result(chat_result):
+                    try_record_login_anomaly(
+                        chat_result,
+                        window_id,
+                        name,
+                        site,
+                        "人工申诉",
+                        driver=driver,
+                    )
+                    _close_browser_after_login_failure(driver, window_id, name, site)
+                raise RuntimeError(chat_result.get("message") or str(e)) from e
+            print(get_now_time() + name + site + "继续与客服对话")
+            # 全部聊天记录
+            chat_ai(driver, name, site, form, initial_huashu, nickname)
+        finally:
+            print(f"{get_now_time()} {name}{site}找客服执行完毕<br>")
+            if not getattr(driver, "_bit_human_needs_manual", False):
+                close_appeal_tabs(driver, appeal_base_handles, name, site)
     finally:
-        print(f"{get_now_time()} {name}{site}找客服执行完毕<br>")
-        if not getattr(driver, "_bit_human_needs_manual", False):
-            close_appeal_tabs(driver, appeal_base_handles, name, site)
+        try:
+            if chrome_service is not None:
+                try:
+                    chrome_service.stop()
+                except Exception as exc:
+                    print(f"{get_now_time()} {name} 驱动服务清理失败：{exc}<br>")
+            if driver is not None and getattr(driver, "_bit_human_needs_manual", False):
+                releaseBrowserLease(window_id)
+            else:
+                try:
+                    close_result = closeBrowser(window_id)
+                    if not isinstance(close_result, dict) or close_result.get("success") is not True:
+                        print(f"{get_now_time()} {name} 窗口关闭未确认，后台将继续回收：{close_result}<br>")
+                except Exception as exc:
+                    print(f"{get_now_time()} {name} 窗口关闭失败，后台将继续回收：{exc}<br>")
+        finally:
+            if owned_lease is not None:
+                owned_lease.release()
 
 
 def get_delay_orders_random(name, site, nums):

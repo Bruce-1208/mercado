@@ -106,7 +106,7 @@ except Exception:
     )
 
 # 聊天记录入库接口；AI 与人工客服回复都会通过这个接口记录。
-CHAT_INFO_API_URL = "https://zeshun.cc.cd/api/v1/chat"
+CHAT_INFO_API_URL = "https://wuhanzeshun.com/api/v1/chat"
 
 # 美客多帮助中心入口，AI 客服悬浮窗通常挂在这些页面中。
 HELP_URL = "https://global-selling.mercadolibre.com/help"
@@ -340,10 +340,14 @@ def connect_bit_browser(window_id):
             chrome_options.add_experimental_option("debuggerAddress", debugger_address)
 
             chrome_service = Service(driver_path)
-            driver = webdriver.Chrome(service=chrome_service, options=chrome_options)
-            driver.implicitly_wait(0)
-            driver.set_page_load_timeout(60)
-            driver.set_script_timeout(30)
+            try:
+                driver = webdriver.Chrome(service=chrome_service, options=chrome_options)
+                driver.implicitly_wait(0)
+                driver.set_page_load_timeout(60)
+                driver.set_script_timeout(30)
+            except BaseException:
+                chrome_service.stop()
+                raise
             return driver, res
 
         print(
@@ -3595,8 +3599,17 @@ def shensu(
                         except Exception as exc:
                             print(f"{get_now_time()} {name} {site} 驱动服务清理失败：{exc}<br>")
             finally:
-                if owned_window_lease is not None:
-                    owned_window_lease.release()
+                if owned_window_lease is not None and owned_window_lease.acquired:
+                    try:
+                        # Standalone appeals own the complete window. Batch
+                        # appeals leave this to their outer shop lease instead.
+                        close_result = closeBrowser(window_id, lease=owned_window_lease)
+                        if not isinstance(close_result, dict) or close_result.get("success") is not True:
+                            print(f"{get_now_time()} {name} 窗口关闭未确认，后台将继续回收：{close_result}<br>")
+                    except Exception as exc:
+                        print(f"{get_now_time()} {name} 窗口关闭失败，后台将继续回收：{exc}<br>")
+                    finally:
+                        owned_window_lease.release()
     return outcome
 
 

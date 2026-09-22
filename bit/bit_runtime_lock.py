@@ -121,7 +121,12 @@ class InterProcessLock:
 
     def _is_stale(self):
         owner = self.read_owner()
-        if owner and _pid_is_running(owner.get("pid")):
+        thread_exited = (
+            owner.get("pid") == os.getpid()
+            and owner.get("thread_id") is not None
+            and not any(thread.ident == owner["thread_id"] for thread in threading.enumerate())
+        )
+        if owner and not thread_exited and _pid_is_running(owner.get("pid")):
             return False
         try:
             age = time.time() - self.lock_path.stat().st_mtime
@@ -135,6 +140,13 @@ class InterProcessLock:
             return False
         try:
             shutil.rmtree(self.lock_path)
+            with _REGISTRY_GUARD:
+                for registry_key, lease in list(_HELD_BY_THREAD.items()):
+                    if lease.lock_path == self.lock_path and not any(
+                        thread.ident == lease.thread_id for thread in threading.enumerate()
+                    ):
+                        _HELD_BY_THREAD.pop(registry_key, None)
+                        lease.acquired = False
             return True
         except OSError:
             return False

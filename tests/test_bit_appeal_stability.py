@@ -355,7 +355,7 @@ def test_country_mentions_are_not_site_questions(reply):
 
 def test_driver_cleanup_failure_preserves_outcome_and_releases_lease(monkeypatch):
     calls = []
-    lease = SimpleNamespace(acquire=lambda **kw: True, release=lambda: calls.append("release"))
+    lease = SimpleNamespace(acquired=True, acquire=lambda **kw: True, release=lambda: calls.append("release"))
     driver = SimpleNamespace(service=SimpleNamespace(
         stop=lambda: (_ for _ in ()).throw(RuntimeError("service already gone"))))
     monkeypatch.setattr(
@@ -370,9 +370,56 @@ def test_driver_cleanup_failure_preserves_outcome_and_releases_lease(monkeypatch
     monkeypatch.setattr(ai, "select_site", lambda *a: None)
     monkeypatch.setattr(ai, "handle_infraction", lambda *a, **kw: None)
     monkeypatch.setattr(ai, "close_current_tab_keep_browser", lambda *a: calls.append("close"))
+    monkeypatch.setattr(ai, "closeBrowser", lambda *a, **kw: calls.append("close_window") or {"success": True})
     result = ai.shensu("店", "BR", "侵权", "请复核", window_id="window")
     assert result["status"] == "no_data"
-    assert calls == ["close", "release"]
+    assert calls == ["close", "close_window", "release"]
+
+
+def test_single_ai_appeal_closes_window_when_driver_connection_fails(monkeypatch):
+    calls = []
+    lease = SimpleNamespace(acquired=True, acquire=lambda **kw: True,
+                            release=lambda: calls.append("release"))
+    monkeypatch.setattr(ai, "current_thread_window_lease", lambda w: None)
+    monkeypatch.setattr(ai, "create_window_lease", lambda *a, **kw: lease)
+
+    def fail(window_id):
+        raise RuntimeError("driver connection failed")
+
+    monkeypatch.setattr(ai, "connect_bit_browser", fail)
+    monkeypatch.setattr(ai, "closeBrowser", lambda *a, **kw: calls.append("close_window") or {"success": True})
+    result = ai.shensu("店", "BR", "侵权", "请复核", window_id="window")
+    assert result["status"] == "failed"
+    assert calls == ["close_window", "release"]
+
+
+def test_single_ai_appeal_does_not_close_a_lease_it_failed_to_acquire(monkeypatch):
+    lease = SimpleNamespace(acquired=False, acquire=lambda **kw: False)
+    monkeypatch.setattr(ai, "current_thread_window_lease", lambda w: None)
+    monkeypatch.setattr(ai, "create_window_lease", lambda *a, **kw: lease)
+    monkeypatch.setattr(ai, "closeBrowser", lambda *a, **kw: pytest.fail("another task owns this window"))
+    result = ai.shensu("店", "BR", "侵权", "请复核", window_id="window")
+    assert result["status"] == "window_busy"
+
+
+def test_human_appeal_startup_failure_closes_window_and_driver(monkeypatch):
+    from bit import bit_appeal as human
+    calls = []
+    lease = SimpleNamespace(acquire=lambda **kw: True, release=lambda: calls.append("release"))
+    monkeypatch.setattr(human, "get_window_id_by_shop_name", lambda *a, **kw: "window")
+    monkeypatch.setattr(human, "current_thread_window_lease", lambda w: None)
+    monkeypatch.setattr(human, "create_window_lease", lambda *a, **kw: lease)
+    monkeypatch.setattr(human, "openBrowser", lambda w: {"data": {"name": "店", "driver": "driver", "http": "localhost"}})
+    monkeypatch.setattr(human, "Service", lambda *a: SimpleNamespace(stop=lambda: calls.append("stop_driver")))
+
+    def fail(**kwargs):
+        raise RuntimeError("driver failed")
+
+    monkeypatch.setattr(human.webdriver, "Chrome", fail)
+    monkeypatch.setattr(human, "closeBrowser", lambda *a, **kw: calls.append("close_window") or {"success": True})
+    with pytest.raises(RuntimeError, match="driver failed"):
+        human.shensu("店", "BR", "侵权", "请复核")
+    assert calls == ["stop_driver", "close_window", "release"]
 
 
 def test_single_task_tab_is_cleared_without_opening_another_tab():

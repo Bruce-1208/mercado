@@ -1,0 +1,389 @@
+{
+  "captured_at": "2026-09-15T05:22:14",
+  "current_url": "https://global-selling.mercadolibre.com/help/v2",
+  "chat_state": {
+    "ai_frame_count": 1,
+    "inline_aria_expanded": "false",
+    "inline_has_input": false,
+    "inline_open": true,
+    "inline_root_class": "assistant-chat show expanded relative-height",
+    "inline_shell": true,
+    "legacy_frame_count": 1,
+    "shadow_ai_frame_count": 1,
+    "visible_ai_frame_count": 1
+  },
+  "dom_snapshot": {
+    "aiShells": [
+      {
+        "ariaExpanded": "false",
+        "className": "icon-button__wrapper icon-button__wrapper--closed",
+        "id": "sa-icon-button-wrapper",
+        "tag": "BUTTON",
+        "visible": true
+      },
+      {
+        "ariaExpanded": "",
+        "className": "assistant-chat show expanded relative-height",
+        "id": "sa-assistant-chat",
+        "tag": "DIV",
+        "visible": true
+      }
+    ],
+    "frames": [
+      {
+        "className": "",
+        "height": 369,
+        "id": "",
+        "shadowHost": "sof-seller-assistant-frm-host",
+        "src": "https://global-selling.mercadolibre.com/maxwell/new-chat?flavor=seller-assistant&hideHeader=true&origin=sa&andes_ui=legacy&customLocale=en-US",
+        "title": "Meli AI Chat",
+        "visible": true,
+        "width": 460
+      },
+      {
+        "className": "",
+        "height": 0,
+        "id": "_hjSafeContext_19919193",
+        "shadowHost": "",
+        "src": "about:blank",
+        "title": "_hjSafeContext",
+        "visible": false,
+        "width": 0
+      }
+    ],
+    "readyState": "complete",
+    "shadowHosts": [
+      {
+        "className": "remote-module cx-contents-search-frontend-cx-search-frm",
+        "id": "remote-module-container-cx-contents-search-frontend-cx-search-frm-default",
+        "tag": "SECTION"
+      },
+      {
+        "className": "",
+        "id": "sof-seller-assistant-frm-host",
+        "tag": "DIV"
+      }
+    ],
+    "title": "Help"
+  },
+  "browser_logs": [
+    {
+      "level": "SEVERE",
+      "message": "https://console.bitbrowser.net/?id=d3b94c89e527423aa7f2c5c8dc0a2190&locale=zh&port=54345 - Unchecked runtime.lastError: Could not establish connection. Receiving end does not exist.",
+      "source": "other",
+      "timestamp": 1789420418477
+    },
+    {
+      "level": "SEVERE",
+      "message": "https://sellers.mercadolibre.com/seller-journey-microfrontend/api/first-steps/flowKey - Failed to load resource: the server responded with a status of 404 ()",
+      "source": "network",
+      "timestamp": 1789420433461
+    },
+    {
+      "level": "SEVERE",
+      "message": "https://www.sellers.mercadolibre.com/browser-assessment/s/assessment.js?mo=manual&fi=maxwell_user_message - Failed to load resource: net::ERR_CONNECTION_CLOSED",
+      "source": "network",
+      "timestamp": 1789420433461
+    },
+    {
+      "level": "SEVERE",
+      "message": "https://www.sellers.mercadolibre.com/browser-assessment/s/assessment.js?mo=manual&fi=maxwell_user_message - Failed to load resource: net::ERR_CONNECTION_CLOSED",
+      "source": "network",
+      "timestamp": 1789420433461
+    },
+    {
+      "level": "SEVERE",
+      "message": "https://www.global-selling.mercadolibre.com/browser-assessment/s/assessment.js?mo=manual&fi=maxwell_user_message - Failed to load resource: net::ERR_SSL_VERSION_OR_CIPHER_MISMATCH",
+      "source": "network",
+      "timestamp": 1789420433462
+    },
+    {
+      "level": "SEVERE",
+      "message": "https://sellers.mercadolibre.com/maxwell/new-chat?flavor=seller-assistant&hideHeader=true&lifecycle=inactivity_expiration&origin=sso-seller-home-frontend&andes_ui=legacy&customLocale=en-US&conversation_id=22343f4d-e687-43a6-9618-d4aef7a9b005 - Access to resource at 'https://rtc-sse-prd.mercadolibre.com/v2/sse/maxwell-notification-center?rtc_ticket=8466d9d5-ef12-4bb5-918a-2ae52089f568&rtc_user_id=2644880951&rtc_flavor_id=seller-assistant' from origin 'https://sellers.mercadolibre.com' has been blocked by CORS policy: No 'Access-Control-Allow-Origin' header is present on the requested resource.",
+      "source": "javascript",
+      "timestamp": 1789420433462
+    },
+    {
+      "level": "SEVERE",
+      "message": "https://rtc-sse-prd.mercadolibre.com/v2/sse/maxwell-notification-center?rtc_ticket=8466d9d5-ef12-4bb5-918a-2ae52089f568&rtc_user_id=2644880951&rtc_flavor_id=seller-assistant - Failed to load resource: net::ERR_FAILED",
+      "source": "network",
+      "timestamp": 1789420433462
+    },
+    {
+      "level": "SEVERE",
+      "message": "https://sellers.mercadolibre.com/maxwell/new-chat?flavor=seller-assistant&hideHeader=true&lifecycle=inactivity_expiration&origin=sc-metrics-business-fe&andes_ui=legacy&customLocale=en-US&conversation_id=22343f4d-e687-43a6-9618-d4aef7a9b005 - Access to resource at 'https://rtc-sse-prd.mercadolibre.com/v2/sse/maxwell-notification-center?rtc_ticket=20c59b8e-f904-43ae-9542-439c242a2d76&rtc_user_id=2644880951&rtc_flavor_id=seller-assistant' from origin 'https://sellers.mercadolibre.com' has been blocked by CORS policy: No 'Access-Control-Allow-Origin' header is present on the requested resource.",
+      "source": "javascript",
+      "timestamp": 1789420433462
+    },
+    {
+      "level": "SEVERE",
+      "message": "https://rtc-sse-prd.mercadolibre.com/v2/sse/maxwell-notification-center?rtc_ticket=20c59b8e-f904-43ae-9542-439c242a2d76&rtc_user_id=2644880951&rtc_flavor_id=seller-assistant - Failed to load resource: net::ERR_FAILED",
+      "source": "network",
+      "timestamp": 1789420433462
+    },
+    {
+      "level": "SEVERE",
+      "message": "https://sellers.mercadolibre.com/maxwell/new-chat?flavor=seller-assistant&hideHeader=true&lifecycle=inactivity_expiration&origin=sc-metrics-business-fe&andes_ui=legacy&customLocale=en-US&conversation_id=22343f4d-e687-43a6-9618-d4aef7a9b005 - Access to resource at 'https://rtc-sse-prd.mercadolibre.com/v2/sse/maxwell-notification-center?rtc_ticket=f0b86116-ebfd-4df6-94ed-fe5824b1f0e6&rtc_user_id=2644880951&rtc_flavor_id=seller-assistant' from origin 'https://sellers.mercadolibre.com' has been blocked by CORS policy: No 'Access-Control-Allow-Origin' header is present on the requested resource.",
+      "source": "javascript",
+      "timestamp": 1789420433462
+    },
+    {
+      "level": "SEVERE",
+      "message": "https://sellers.mercadolibre.com/maxwell/new-chat?flavor=seller-assistant&hideHeader=true&lifecycle=inactivity_expiration&origin=sso-seller-home-frontend&andes_ui=legacy&customLocale=en-US&conversation_id=22343f4d-e687-43a6-9618-d4aef7a9b005 - Access to resource at 'https://rtc-sse-prd.mercadolibre.com/v2/sse/maxwell-notification-center?rtc_ticket=1e725a06-0f1c-4613-83b8-77f13f6a193a&rtc_user_id=2644880951&rtc_flavor_id=seller-assistant' from origin 'https://sellers.mercadolibre.com' has been blocked by CORS policy: No 'Access-Control-Allow-Origin' header is present on the requested resource.",
+      "source": "javascript",
+      "timestamp": 1789420433462
+    },
+    {
+      "level": "SEVERE",
+      "message": "https://rtc-sse-prd.mercadolibre.com/v2/sse/maxwell-notification-center?rtc_ticket=1e725a06-0f1c-4613-83b8-77f13f6a193a&rtc_user_id=2644880951&rtc_flavor_id=seller-assistant - Failed to load resource: net::ERR_FAILED",
+      "source": "network",
+      "timestamp": 1789420433462
+    },
+    {
+      "level": "SEVERE",
+      "message": "https://rtc-sse-prd.mercadolibre.com/v2/sse/maxwell-notification-center?rtc_ticket=f0b86116-ebfd-4df6-94ed-fe5824b1f0e6&rtc_user_id=2644880951&rtc_flavor_id=seller-assistant - Failed to load resource: net::ERR_FAILED",
+      "source": "network",
+      "timestamp": 1789420433462
+    },
+    {
+      "level": "SEVERE",
+      "message": "https://sellers.mercadolibre.com/maxwell/new-chat?flavor=seller-assistant&hideHeader=true&lifecycle=inactivity_expiration&origin=sso-seller-home-frontend&andes_ui=legacy&customLocale=en-US&conversation_id=22343f4d-e687-43a6-9618-d4aef7a9b005 - Access to resource at 'https://rtc-sse-prd.mercadolibre.com/v2/sse/maxwell-notification-center?rtc_ticket=58503861-7437-486a-8ce0-d548169579fb&rtc_user_id=2644880951&rtc_flavor_id=seller-assistant' from origin 'https://sellers.mercadolibre.com' has been blocked by CORS policy: No 'Access-Control-Allow-Origin' header is present on the requested resource.",
+      "source": "javascript",
+      "timestamp": 1789420433462
+    },
+    {
+      "level": "SEVERE",
+      "message": "https://rtc-sse-prd.mercadolibre.com/v2/sse/maxwell-notification-center?rtc_ticket=58503861-7437-486a-8ce0-d548169579fb&rtc_user_id=2644880951&rtc_flavor_id=seller-assistant - Failed to load resource: net::ERR_FAILED",
+      "source": "network",
+      "timestamp": 1789420433462
+    },
+    {
+      "level": "SEVERE",
+      "message": "https://sellers.mercadolibre.com/maxwell/new-chat?flavor=seller-assistant&hideHeader=true&lifecycle=inactivity_expiration&origin=sc-metrics-business-fe&andes_ui=legacy&customLocale=en-US&conversation_id=22343f4d-e687-43a6-9618-d4aef7a9b005 - Access to resource at 'https://rtc-sse-prd.mercadolibre.com/v2/sse/maxwell-notification-center?rtc_ticket=2e369af9-64f9-43b5-a589-5a5e3c335ce9&rtc_user_id=2644880951&rtc_flavor_id=seller-assistant' from origin 'https://sellers.mercadolibre.com' has been blocked by CORS policy: No 'Access-Control-Allow-Origin' header is present on the requested resource.",
+      "source": "javascript",
+      "timestamp": 1789420433462
+    },
+    {
+      "level": "SEVERE",
+      "message": "https://rtc-sse-prd.mercadolibre.com/v2/sse/maxwell-notification-center?rtc_ticket=2e369af9-64f9-43b5-a589-5a5e3c335ce9&rtc_user_id=2644880951&rtc_flavor_id=seller-assistant - Failed to load resource: net::ERR_FAILED",
+      "source": "network",
+      "timestamp": 1789420433462
+    },
+    {
+      "level": "SEVERE",
+      "message": "https://www.global-selling.mercadolibre.com/browser-assessment/s/assessment.js?mo=manual&fi=maxwell_user_message - Failed to load resource: net::ERR_SSL_VERSION_OR_CIPHER_MISMATCH",
+      "source": "network",
+      "timestamp": 1789420449776
+    },
+    {
+      "level": "SEVERE",
+      "message": "https://sellers.mercadolibre.com/maxwell/new-chat?flavor=seller-assistant&hideHeader=true&lifecycle=inactivity_expiration&origin=sso-seller-home-frontend&andes_ui=legacy&customLocale=en-US&conversation_id=22343f4d-e687-43a6-9618-d4aef7a9b005 - Access to resource at 'https://rtc-sse-prd.mercadolibre.com/v2/sse/maxwell-notification-center?rtc_ticket=6bf829a7-da29-47de-8de0-ca7e7cbc83c9&rtc_user_id=2644880951&rtc_flavor_id=seller-assistant' from origin 'https://sellers.mercadolibre.com' has been blocked by CORS policy: No 'Access-Control-Allow-Origin' header is present on the requested resource.",
+      "source": "javascript",
+      "timestamp": 1789420449776
+    },
+    {
+      "level": "SEVERE",
+      "message": "https://rtc-sse-prd.mercadolibre.com/v2/sse/maxwell-notification-center?rtc_ticket=6bf829a7-da29-47de-8de0-ca7e7cbc83c9&rtc_user_id=2644880951&rtc_flavor_id=seller-assistant - Failed to load resource: net::ERR_FAILED",
+      "source": "network",
+      "timestamp": 1789420449776
+    },
+    {
+      "level": "SEVERE",
+      "message": "https://sellers.mercadolibre.com/maxwell/new-chat?flavor=seller-assistant&hideHeader=true&lifecycle=inactivity_expiration&origin=sc-metrics-business-fe&andes_ui=legacy&customLocale=en-US&conversation_id=22343f4d-e687-43a6-9618-d4aef7a9b005 - Access to resource at 'https://rtc-sse-prd.mercadolibre.com/v2/sse/maxwell-notification-center?rtc_ticket=866393b1-aa96-48fc-b5a9-c19d12c90fb5&rtc_user_id=2644880951&rtc_flavor_id=seller-assistant' from origin 'https://sellers.mercadolibre.com' has been blocked by CORS policy: No 'Access-Control-Allow-Origin' header is present on the requested resource.",
+      "source": "javascript",
+      "timestamp": 1789420449776
+    },
+    {
+      "level": "SEVERE",
+      "message": "https://rtc-sse-prd.mercadolibre.com/v2/sse/maxwell-notification-center?rtc_ticket=866393b1-aa96-48fc-b5a9-c19d12c90fb5&rtc_user_id=2644880951&rtc_flavor_id=seller-assistant - Failed to load resource: net::ERR_FAILED",
+      "source": "network",
+      "timestamp": 1789420449776
+    },
+    {
+      "level": "SEVERE",
+      "message": "https://sellers.mercadolibre.com/maxwell/new-chat?flavor=seller-assistant&hideHeader=true&lifecycle=inactivity_expiration&origin=sso-seller-home-frontend&andes_ui=legacy&customLocale=en-US&conversation_id=22343f4d-e687-43a6-9618-d4aef7a9b005 - Access to resource at 'https://rtc-sse-prd.mercadolibre.com/v2/sse/maxwell-notification-center?rtc_ticket=0fe141b7-d7ae-4838-87aa-9e0728ef4e73&rtc_user_id=2644880951&rtc_flavor_id=seller-assistant' from origin 'https://sellers.mercadolibre.com' has been blocked by CORS policy: No 'Access-Control-Allow-Origin' header is present on the requested resource.",
+      "source": "javascript",
+      "timestamp": 1789420449776
+    },
+    {
+      "level": "SEVERE",
+      "message": "https://rtc-sse-prd.mercadolibre.com/v2/sse/maxwell-notification-center?rtc_ticket=0fe141b7-d7ae-4838-87aa-9e0728ef4e73&rtc_user_id=2644880951&rtc_flavor_id=seller-assistant - Failed to load resource: net::ERR_FAILED",
+      "source": "network",
+      "timestamp": 1789420449776
+    },
+    {
+      "level": "SEVERE",
+      "message": "https://sellers.mercadolibre.com/maxwell/new-chat?flavor=seller-assistant&hideHeader=true&lifecycle=inactivity_expiration&origin=sc-metrics-business-fe&andes_ui=legacy&customLocale=en-US&conversation_id=22343f4d-e687-43a6-9618-d4aef7a9b005 - Access to resource at 'https://rtc-sse-prd.mercadolibre.com/v2/sse/maxwell-notification-center?rtc_ticket=2d026240-c0f0-419a-9b46-7fac5d1e4b05&rtc_user_id=2644880951&rtc_flavor_id=seller-assistant' from origin 'https://sellers.mercadolibre.com' has been blocked by CORS policy: No 'Access-Control-Allow-Origin' header is present on the requested resource.",
+      "source": "javascript",
+      "timestamp": 1789420449776
+    },
+    {
+      "level": "SEVERE",
+      "message": "https://rtc-sse-prd.mercadolibre.com/v2/sse/maxwell-notification-center?rtc_ticket=2d026240-c0f0-419a-9b46-7fac5d1e4b05&rtc_user_id=2644880951&rtc_flavor_id=seller-assistant - Failed to load resource: net::ERR_FAILED",
+      "source": "network",
+      "timestamp": 1789420449776
+    },
+    {
+      "level": "SEVERE",
+      "message": "https://www.global-selling.mercadolibre.com/browser-assessment/s/assessment.js?mo=manual&fi=maxwell_user_message - Failed to load resource: net::ERR_SSL_VERSION_OR_CIPHER_MISMATCH",
+      "source": "network",
+      "timestamp": 1789420454182
+    },
+    {
+      "level": "SEVERE",
+      "message": "https://sellers.mercadolibre.com/maxwell/new-chat?flavor=seller-assistant&hideHeader=true&lifecycle=inactivity_expiration&origin=sso-seller-home-frontend&andes_ui=legacy&customLocale=en-US&conversation_id=22343f4d-e687-43a6-9618-d4aef7a9b005 - Access to resource at 'https://rtc-sse-prd.mercadolibre.com/v2/sse/maxwell-notification-center?rtc_ticket=a21fee8f-4801-4436-8013-79d2b32f85b2&rtc_user_id=2644880951&rtc_flavor_id=seller-assistant' from origin 'https://sellers.mercadolibre.com' has been blocked by CORS policy: No 'Access-Control-Allow-Origin' header is present on the requested resource.",
+      "source": "javascript",
+      "timestamp": 1789420458012
+    },
+    {
+      "level": "SEVERE",
+      "message": "https://rtc-sse-prd.mercadolibre.com/v2/sse/maxwell-notification-center?rtc_ticket=a21fee8f-4801-4436-8013-79d2b32f85b2&rtc_user_id=2644880951&rtc_flavor_id=seller-assistant - Failed to load resource: net::ERR_FAILED",
+      "source": "network",
+      "timestamp": 1789420458012
+    },
+    {
+      "level": "SEVERE",
+      "message": "https://sellers.mercadolibre.com/maxwell/new-chat?flavor=seller-assistant&hideHeader=true&lifecycle=inactivity_expiration&origin=sc-metrics-business-fe&andes_ui=legacy&customLocale=en-US&conversation_id=22343f4d-e687-43a6-9618-d4aef7a9b005 - Access to resource at 'https://rtc-sse-prd.mercadolibre.com/v2/sse/maxwell-notification-center?rtc_ticket=2b24d5a8-cd71-494c-b427-c4123ed5cba8&rtc_user_id=2644880951&rtc_flavor_id=seller-assistant' from origin 'https://sellers.mercadolibre.com' has been blocked by CORS policy: No 'Access-Control-Allow-Origin' header is present on the requested resource.",
+      "source": "javascript",
+      "timestamp": 1789420458012
+    },
+    {
+      "level": "SEVERE",
+      "message": "https://rtc-sse-prd.mercadolibre.com/v2/sse/maxwell-notification-center?rtc_ticket=2b24d5a8-cd71-494c-b427-c4123ed5cba8&rtc_user_id=2644880951&rtc_flavor_id=seller-assistant - Failed to load resource: net::ERR_FAILED",
+      "source": "network",
+      "timestamp": 1789420458012
+    },
+    {
+      "level": "SEVERE",
+      "message": "https://sellers.mercadolibre.com/maxwell/new-chat?flavor=seller-assistant&hideHeader=true&lifecycle=inactivity_expiration&origin=sso-seller-home-frontend&andes_ui=legacy&customLocale=en-US&conversation_id=22343f4d-e687-43a6-9618-d4aef7a9b005 - Access to resource at 'https://rtc-sse-prd.mercadolibre.com/v2/sse/maxwell-notification-center?rtc_ticket=cf88567b-4560-4a4e-b50c-f5194ba90305&rtc_user_id=2644880951&rtc_flavor_id=seller-assistant' from origin 'https://sellers.mercadolibre.com' has been blocked by CORS policy: No 'Access-Control-Allow-Origin' header is present on the requested resource.",
+      "source": "javascript",
+      "timestamp": 1789420466970
+    },
+    {
+      "level": "SEVERE",
+      "message": "https://rtc-sse-prd.mercadolibre.com/v2/sse/maxwell-notification-center?rtc_ticket=cf88567b-4560-4a4e-b50c-f5194ba90305&rtc_user_id=2644880951&rtc_flavor_id=seller-assistant - Failed to load resource: net::ERR_FAILED",
+      "source": "network",
+      "timestamp": 1789420466970
+    },
+    {
+      "level": "SEVERE",
+      "message": "https://sellers.mercadolibre.com/maxwell/new-chat?flavor=seller-assistant&hideHeader=true&lifecycle=inactivity_expiration&origin=sc-metrics-business-fe&andes_ui=legacy&customLocale=en-US&conversation_id=22343f4d-e687-43a6-9618-d4aef7a9b005 - Access to resource at 'https://rtc-sse-prd.mercadolibre.com/v2/sse/maxwell-notification-center?rtc_ticket=0609b593-295a-4172-a1f2-33c9af5171c6&rtc_user_id=2644880951&rtc_flavor_id=seller-assistant' from origin 'https://sellers.mercadolibre.com' has been blocked by CORS policy: No 'Access-Control-Allow-Origin' header is present on the requested resource.",
+      "source": "javascript",
+      "timestamp": 1789420466970
+    },
+    {
+      "level": "SEVERE",
+      "message": "https://rtc-sse-prd.mercadolibre.com/v2/sse/maxwell-notification-center?rtc_ticket=0609b593-295a-4172-a1f2-33c9af5171c6&rtc_user_id=2644880951&rtc_flavor_id=seller-assistant - Failed to load resource: net::ERR_FAILED",
+      "source": "network",
+      "timestamp": 1789420466970
+    },
+    {
+      "level": "SEVERE",
+      "message": "https://sellers.mercadolibre.com/maxwell/new-chat?flavor=seller-assistant&hideHeader=true&lifecycle=inactivity_expiration&origin=sso-seller-home-frontend&andes_ui=legacy&customLocale=en-US&conversation_id=22343f4d-e687-43a6-9618-d4aef7a9b005 - Access to resource at 'https://rtc-sse-prd.mercadolibre.com/v2/sse/maxwell-notification-center?rtc_ticket=fc96798b-a758-4bde-85b7-8b98d54e5ac6&rtc_user_id=2644880951&rtc_flavor_id=seller-assistant' from origin 'https://sellers.mercadolibre.com' has been blocked by CORS policy: No 'Access-Control-Allow-Origin' header is present on the requested resource.",
+      "source": "javascript",
+      "timestamp": 1789420476014
+    },
+    {
+      "level": "SEVERE",
+      "message": "https://rtc-sse-prd.mercadolibre.com/v2/sse/maxwell-notification-center?rtc_ticket=fc96798b-a758-4bde-85b7-8b98d54e5ac6&rtc_user_id=2644880951&rtc_flavor_id=seller-assistant - Failed to load resource: net::ERR_FAILED",
+      "source": "network",
+      "timestamp": 1789420476014
+    },
+    {
+      "level": "SEVERE",
+      "message": "https://sellers.mercadolibre.com/maxwell/new-chat?flavor=seller-assistant&hideHeader=true&lifecycle=inactivity_expiration&origin=sc-metrics-business-fe&andes_ui=legacy&customLocale=en-US&conversation_id=22343f4d-e687-43a6-9618-d4aef7a9b005 - Access to resource at 'https://rtc-sse-prd.mercadolibre.com/v2/sse/maxwell-notification-center?rtc_ticket=84d7cf9c-390f-4d23-8108-e7039d69dcef&rtc_user_id=2644880951&rtc_flavor_id=seller-assistant' from origin 'https://sellers.mercadolibre.com' has been blocked by CORS policy: No 'Access-Control-Allow-Origin' header is present on the requested resource.",
+      "source": "javascript",
+      "timestamp": 1789420476268
+    },
+    {
+      "level": "SEVERE",
+      "message": "https://rtc-sse-prd.mercadolibre.com/v2/sse/maxwell-notification-center?rtc_ticket=84d7cf9c-390f-4d23-8108-e7039d69dcef&rtc_user_id=2644880951&rtc_flavor_id=seller-assistant - Failed to load resource: net::ERR_FAILED",
+      "source": "network",
+      "timestamp": 1789420476268
+    },
+    {
+      "level": "SEVERE",
+      "message": "https://sellers.mercadolibre.com/maxwell/new-chat?flavor=seller-assistant&hideHeader=true&lifecycle=inactivity_expiration&origin=sso-seller-home-frontend&andes_ui=legacy&customLocale=en-US&conversation_id=22343f4d-e687-43a6-9618-d4aef7a9b005 - Access to resource at 'https://rtc-sse-prd.mercadolibre.com/v2/sse/maxwell-notification-center?rtc_ticket=45a090fd-63fa-4327-86ce-e23378d70913&rtc_user_id=2644880951&rtc_flavor_id=seller-assistant' from origin 'https://sellers.mercadolibre.com' has been blocked by CORS policy: No 'Access-Control-Allow-Origin' header is present on the requested resource.",
+      "source": "javascript",
+      "timestamp": 1789420485117
+    },
+    {
+      "level": "SEVERE",
+      "message": "https://rtc-sse-prd.mercadolibre.com/v2/sse/maxwell-notification-center?rtc_ticket=45a090fd-63fa-4327-86ce-e23378d70913&rtc_user_id=2644880951&rtc_flavor_id=seller-assistant - Failed to load resource: net::ERR_FAILED",
+      "source": "network",
+      "timestamp": 1789420485117
+    },
+    {
+      "level": "SEVERE",
+      "message": "https://sellers.mercadolibre.com/maxwell/new-chat?flavor=seller-assistant&hideHeader=true&lifecycle=inactivity_expiration&origin=sc-metrics-business-fe&andes_ui=legacy&customLocale=en-US&conversation_id=22343f4d-e687-43a6-9618-d4aef7a9b005 - Access to resource at 'https://rtc-sse-prd.mercadolibre.com/v2/sse/maxwell-notification-center?rtc_ticket=2126216f-80ce-4e9a-a79d-7a4807dbb994&rtc_user_id=2644880951&rtc_flavor_id=seller-assistant' from origin 'https://sellers.mercadolibre.com' has been blocked by CORS policy: No 'Access-Control-Allow-Origin' header is present on the requested resource.",
+      "source": "javascript",
+      "timestamp": 1789420485117
+    },
+    {
+      "level": "SEVERE",
+      "message": "https://rtc-sse-prd.mercadolibre.com/v2/sse/maxwell-notification-center?rtc_ticket=2126216f-80ce-4e9a-a79d-7a4807dbb994&rtc_user_id=2644880951&rtc_flavor_id=seller-assistant - Failed to load resource: net::ERR_FAILED",
+      "source": "network",
+      "timestamp": 1789420485117
+    },
+    {
+      "level": "SEVERE",
+      "message": "https://sellers.mercadolibre.com/maxwell/new-chat?flavor=seller-assistant&hideHeader=true&lifecycle=inactivity_expiration&origin=sso-seller-home-frontend&andes_ui=legacy&customLocale=en-US&conversation_id=22343f4d-e687-43a6-9618-d4aef7a9b005 - Access to resource at 'https://rtc-sse-prd.mercadolibre.com/v2/sse/maxwell-notification-center?rtc_ticket=4cb91664-a0d4-418b-a2af-b926156f48f0&rtc_user_id=2644880951&rtc_flavor_id=seller-assistant' from origin 'https://sellers.mercadolibre.com' has been blocked by CORS policy: No 'Access-Control-Allow-Origin' header is present on the requested resource.",
+      "source": "javascript",
+      "timestamp": 1789420494020
+    },
+    {
+      "level": "SEVERE",
+      "message": "https://rtc-sse-prd.mercadolibre.com/v2/sse/maxwell-notification-center?rtc_ticket=4cb91664-a0d4-418b-a2af-b926156f48f0&rtc_user_id=2644880951&rtc_flavor_id=seller-assistant - Failed to load resource: net::ERR_FAILED",
+      "source": "network",
+      "timestamp": 1789420494020
+    },
+    {
+      "level": "SEVERE",
+      "message": "https://sellers.mercadolibre.com/maxwell/new-chat?flavor=seller-assistant&hideHeader=true&lifecycle=inactivity_expiration&origin=sc-metrics-business-fe&andes_ui=legacy&customLocale=en-US&conversation_id=22343f4d-e687-43a6-9618-d4aef7a9b005 - Access to resource at 'https://rtc-sse-prd.mercadolibre.com/v2/sse/maxwell-notification-center?rtc_ticket=c5bd6b95-d7ec-474d-a2f8-0bb1f8d25d45&rtc_user_id=2644880951&rtc_flavor_id=seller-assistant' from origin 'https://sellers.mercadolibre.com' has been blocked by CORS policy: No 'Access-Control-Allow-Origin' header is present on the requested resource.",
+      "source": "javascript",
+      "timestamp": 1789420494245
+    },
+    {
+      "level": "SEVERE",
+      "message": "https://rtc-sse-prd.mercadolibre.com/v2/sse/maxwell-notification-center?rtc_ticket=c5bd6b95-d7ec-474d-a2f8-0bb1f8d25d45&rtc_user_id=2644880951&rtc_flavor_id=seller-assistant - Failed to load resource: net::ERR_FAILED",
+      "source": "network",
+      "timestamp": 1789420494245
+    },
+    {
+      "level": "SEVERE",
+      "message": "https://sellers.mercadolibre.com/maxwell/new-chat?flavor=seller-assistant&hideHeader=true&lifecycle=inactivity_expiration&origin=sso-seller-home-frontend&andes_ui=legacy&customLocale=en-US&conversation_id=22343f4d-e687-43a6-9618-d4aef7a9b005 - Access to fetch at 'https://rtc-sse-prd.mercadolibre.com/v1/sse/collector' from origin 'https://sellers.mercadolibre.com' has been blocked by CORS policy: No 'Access-Control-Allow-Origin' header is present on the requested resource.",
+      "source": "javascript",
+      "timestamp": 1789420495106
+    },
+    {
+      "level": "SEVERE",
+      "message": "https://rtc-sse-prd.mercadolibre.com/v1/sse/collector - Failed to load resource: net::ERR_FAILED",
+      "source": "network",
+      "timestamp": 1789420495106
+    },
+    {
+      "level": "SEVERE",
+      "message": "https://sellers.mercadolibre.com/maxwell/new-chat?flavor=seller-assistant&hideHeader=true&lifecycle=inactivity_expiration&origin=sc-metrics-business-fe&andes_ui=legacy&customLocale=en-US&conversation_id=22343f4d-e687-43a6-9618-d4aef7a9b005 - Access to fetch at 'https://rtc-sse-prd.mercadolibre.com/v1/sse/collector' from origin 'https://sellers.mercadolibre.com' has been blocked by CORS policy: No 'Access-Control-Allow-Origin' header is present on the requested resource.",
+      "source": "javascript",
+      "timestamp": 1789420495106
+    },
+    {
+      "level": "SEVERE",
+      "message": "https://rtc-sse-prd.mercadolibre.com/v1/sse/collector - Failed to load resource: net::ERR_FAILED",
+      "source": "network",
+      "timestamp": 1789420495106
+    },
+    {
+      "level": "SEVERE",
+      "message": "https://www.global-selling.mercadolibre.com/browser-assessment/s/assessment.js?mo=manual&fi=maxwell_user_message - Failed to load resource: net::ERR_SSL_VERSION_OR_CIPHER_MISMATCH",
+      "source": "network",
+      "timestamp": 1789420701036
+    },
+    {
+      "level": "SEVERE",
+      "message": "https://www.global-selling.mercadolibre.com/browser-assessment/s/assessment.js?mo=manual&fi=maxwell_user_message - Failed to load resource: net::ERR_SSL_VERSION_OR_CIPHER_MISMATCH",
+      "source": "network",
+      "timestamp": 1789420705386
+    }
+  ]
+}

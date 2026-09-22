@@ -1270,11 +1270,11 @@ def _resolve_login_anomaly(window_id, name):
 
 
 def _split_login_paused_shops(plan, appeal_label):
-    """把已有待处理登录异常的店铺从执行计划中移除。
+    """预检店铺状态，并仅对历史退出登录记录放行本轮复检。
 
-    退出登录会由 worker 写入持久化窗口异常。循环的下一轮、多任务的
-    下一项都会在打开浏览器前执行本检查，直到人工登录复检成功或在
-    店铺状态页人工解除。
+    历史退出登录记录不等于本轮仍未登录。它只用于提示，店铺仍需进入
+    worker 并打开浏览器复检；如果本轮实际检测到仍未登录，worker 再按
+    当前运行时结果终止该店铺任务。人机验证等其他状态异常继续熔断。
     """
     plan = list(plan or [])
     if not plan:
@@ -1307,6 +1307,13 @@ def _split_login_paused_shops(plan, appeal_label):
         name = str(shop.get("name") or anomaly.get("window_name") or window_id)
         anomaly_type = str(anomaly.get("anomaly_type") or LOGIN_LOGGED_OUT)
         reason = str(anomaly.get("reason") or anomaly_type)
+        if anomaly_type == LOGIN_LOGGED_OUT:
+            print(
+                f"{get_now_time()} {name} 存在历史待处理的{anomaly_type}，"
+                "本轮继续打开窗口复检登录状态；如仍未登录再终止本店铺任务<br>"
+            )
+            runnable.append(shop)
+            continue
         print(
             f"{get_now_time()} {name} 存在待处理的{anomaly_type}，"
             "已熔断跳过本店铺；请人工登录并复检后再恢复任务<br>"

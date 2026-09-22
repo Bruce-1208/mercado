@@ -1,0 +1,304 @@
+﻿任务类型,店铺名,站点,状态,记录时间
+获取声誉辅助信息,张健6,阿根廷,失败：页面元素等待超时,2026-09-20 14:19:00
+获取声誉辅助信息,张健6,巴西,失败：页面元素等待超时,2026-09-20 14:19:00
+获取声誉辅助信息,张健6,墨西哥,失败：页面元素等待超时,2026-09-20 14:19:00
+获取声誉辅助信息,孙董一郎3,阿根廷,失败：登录失效,2026-09-20 14:18:20
+获取声誉辅助信息,孙董一郎3,巴西,失败：登录失效,2026-09-20 14:18:25
+获取声誉辅助信息,孙董一郎3,墨西哥,失败：登录失效,2026-09-20 14:18:25
+获取声誉辅助信息,yym cs,阿根廷,失败：登录失效,2026-09-20 14:08:45
+获取声誉辅助信息,yym cs,巴西,失败：登录失效,2026-09-20 14:08:47
+获取声誉辅助信息,yym cs,智利,失败：登录失效,2026-09-20 14:08:47
+获取声誉辅助信息,yym cs,墨西哥,失败：登录失效,2026-09-20 14:08:47
+获取声誉辅助信息,张健3,阿根廷,跳过：窗口被其他任务占用,2026-09-20 14:11:22
+获取声誉辅助信息,张健3,巴西,跳过：窗口被其他任务占用,2026-09-20 14:11:22
+获取声誉辅助信息,张健3,墨西哥,跳过：窗口被其他任务占用,2026-09-20 14:11:22
+获取声誉辅助信息,cs,巴西,失败：登录失效,2026-09-20 14:09:48
+获取声誉辅助信息,cs,墨西哥,失败：登录失效,2026-09-20 14:09:50
+获取声誉辅助信息,徐家强3,阿根廷,跳过：窗口被其他任务占用,2026-09-20 14:16:23
+获取声誉辅助信息,徐家强3,巴西,跳过：窗口被其他任务占用,2026-09-20 14:16:23
+获取声誉辅助信息,徐家强3,智利,跳过：窗口被其他任务占用,2026-09-20 14:16:23
+获取声誉辅助信息,徐家强3,墨西哥,跳过：窗口被其他任务占用,2026-09-20 14:16:23
+获取声誉辅助信息,向子立3,阿根廷,"失败：打开比特浏览器窗口失败，已重试 3 次，最后返回：{'success': False, 'msg': '窗口序号121，不允许多个账号同时打开，xiangzili888正在打开，如需同时打开请前往窗口编辑页面，进行多开设置！'}",2026-09-20 14:12:18
+获取声誉辅助信息,向子立3,巴西,"失败：打开比特浏览器窗口失败，已重试 3 次，最后返回：{'success': False, 'msg': '窗口序号121，不允许多个账号同时打开，xiangzili888正在打开，如需同时打开请前往窗口编辑页面，进行多开设置！'}",2026-09-20 14:12:18
+获取声誉辅助信息,向子立3,墨西哥,"失败：打开比特浏览器窗口失败，已重试 3 次，最后返回：{'success': False, 'msg': '窗口序号121，不允许多个账号同时打开，xiangzili888正在打开，如需同时打开请前往窗口编辑页面，进行多开设置！'}",2026-09-20 14:12:18
+获取声誉辅助信息,向华章5,阿根廷,失败：登录失效,2026-09-20 14:11:26
+获取声誉辅助信息,向华章5,巴西,失败：登录失效,2026-09-20 14:16:23
+获取声誉辅助信息,向华章5,墨西哥,失败：登录失效,2026-09-20 14:16:23
+获取声誉辅助信息,孙董一郎2,阿根廷,失败：登录失效,2026-09-20 14:20:00
+获取声誉辅助信息,孙董一郎2,巴西,失败：登录失效,2026-09-20 14:24:18
+获取声誉辅助信息,孙董一郎2,墨西哥,失败：登录失效,2026-09-20 14:24:18
+获取声誉辅助信息,张昕1,阿根廷,失败：登录失效,2026-09-20 14:20:23
+获取声誉辅助信息,张昕1,巴西,失败：登录失效,2026-09-20 14:24:18
+获取声誉辅助信息,张昕1,智利,失败：登录失效,2026-09-20 14:24:18
+获取声誉辅助信息,张昕1,墨西哥,失败：登录失效,2026-09-20 14:24:18
+获取声誉辅助信息,杨柳依依1,阿根廷,跳过：窗口被其他任务占用,2026-09-20 14:24:38
+获取声誉辅助信息,杨柳依依1,巴西,跳过：窗口被其他任务占用,2026-09-20 14:24:38
+获取声誉辅助信息,杨柳依依1,墨西哥,跳过：窗口被其他任务占用,2026-09-20 14:24:38
+获取声誉辅助信息,孙董一郎4,阿根廷,失败：登录失效,2026-09-20 14:20:00
+获取声誉辅助信息,孙董一郎4,巴西,失败：登录失效,2026-09-20 14:24:18
+获取声誉辅助信息,孙董一郎4,墨西哥,失败：登录失效,2026-09-20 14:24:18
+获取声誉辅助信息,徐家强2,阿根廷,失败：登录失效,2026-09-20 14:20:25
+获取声誉辅助信息,徐家强2,巴西,失败：登录失效,2026-09-20 14:24:18
+获取声誉辅助信息,徐家强2,智利,失败：登录失效,2026-09-20 14:24:18
+获取声誉辅助信息,徐家强2,墨西哥,失败：登录失效,2026-09-20 14:24:18
+获取声誉辅助信息,杨雨萌11,阿根廷,跳过：窗口被其他任务占用,2026-09-20 14:24:41
+获取声誉辅助信息,杨雨萌11,巴西,跳过：窗口被其他任务占用,2026-09-20 14:24:41
+获取声誉辅助信息,杨雨萌11,墨西哥,跳过：窗口被其他任务占用,2026-09-20 14:24:41
+获取声誉辅助信息,杨柳依依2,阿根廷,失败：页面元素等待超时,2026-09-20 14:26:03
+获取声誉辅助信息,杨柳依依2,巴西,失败：页面元素等待超时,2026-09-20 14:26:03
+获取声誉辅助信息,杨柳依依2,墨西哥,失败：页面元素等待超时,2026-09-20 14:26:03
+获取声誉辅助信息,健步如飞1,阿根廷,失败：访问限频,2026-09-20 14:11:43
+获取声誉辅助信息,健步如飞1,巴西,失败：访问限频,2026-09-20 14:20:26
+获取声誉辅助信息,健步如飞1,墨西哥,失败：访问限频,2026-09-20 14:26:42
+获取声誉辅助信息,光彩夺目,阿根廷,失败：访问限频,2026-09-20 14:11:40
+获取声誉辅助信息,光彩夺目,巴西,失败：访问限频,2026-09-20 14:20:23
+获取声誉辅助信息,光彩夺目,墨西哥,失败：访问限频,2026-09-20 14:26:45
+获取声誉辅助信息,一跃千里,阿根廷,失败：站点切换失败,2026-09-20 14:12:10
+获取声誉辅助信息,一跃千里,巴西,失败：访问限频,2026-09-20 14:20:26
+获取声誉辅助信息,一跃千里,墨西哥,失败：访问限频,2026-09-20 14:26:45
+获取声誉辅助信息,大展宏图,阿根廷,失败：站点切换失败,2026-09-20 14:19:43
+获取声誉辅助信息,大展宏图,智利,"失败：大展宏图 打开美客多业务页失败：Message: invalid session id; For documentation on this error, please visit: https://www.selenium.dev/documentation/webdriver/troubleshooting/errors#invalidsessio",2026-09-21 01:23:01
+获取声誉辅助信息,流光溢彩,阿根廷,"失败：HTTPConnectionPool(host='127.0.0.1', port=54345): Max retries exceeded with url: /browser/open (Caused by NewConnectionError(""HTTPConnection(host='127.0.0.1', port=54345): Faile",2026-09-21 01:23:05
+获取声誉辅助信息,流光溢彩,巴西,"失败：HTTPConnectionPool(host='127.0.0.1', port=54345): Max retries exceeded with url: /browser/open (Caused by NewConnectionError(""HTTPConnection(host='127.0.0.1', port=54345): Faile",2026-09-21 01:23:05
+获取声誉辅助信息,流光溢彩,墨西哥,"失败：HTTPConnectionPool(host='127.0.0.1', port=54345): Max retries exceeded with url: /browser/open (Caused by NewConnectionError(""HTTPConnection(host='127.0.0.1', port=54345): Faile",2026-09-21 01:23:05
+获取声誉辅助信息,健步如飞2,阿根廷,失败：页面结构不匹配,2026-09-20 14:11:15
+获取声誉辅助信息,健步如飞2,巴西,失败：访问限频,2026-09-20 14:19:19
+获取声誉辅助信息,健步如飞2,墨西哥,失败：站点切换失败,2026-09-21 01:23:04
+获取声誉辅助信息,健步如飞,阿根廷,失败：页面结构不匹配,2026-09-20 14:11:12
+获取声誉辅助信息,健步如飞,巴西,失败：站点切换失败,2026-09-20 14:20:11
+获取声誉辅助信息,健步如飞,墨西哥,失败：站点切换失败,2026-09-21 01:23:04
+获取声誉辅助信息,王碟1,阿根廷,"失败：HTTPConnectionPool(host='127.0.0.1', port=54345): Max retries exceeded with url: /browser/open (Caused by NewConnectionError(""HTTPConnection(host='127.0.0.1', port=54345): Faile",2026-09-21 01:23:07
+获取声誉辅助信息,王碟1,巴西,"失败：HTTPConnectionPool(host='127.0.0.1', port=54345): Max retries exceeded with url: /browser/open (Caused by NewConnectionError(""HTTPConnection(host='127.0.0.1', port=54345): Faile",2026-09-21 01:23:07
+获取声誉辅助信息,王碟1,墨西哥,"失败：HTTPConnectionPool(host='127.0.0.1', port=54345): Max retries exceeded with url: /browser/open (Caused by NewConnectionError(""HTTPConnection(host='127.0.0.1', port=54345): Faile",2026-09-21 01:23:07
+获取声誉辅助信息,王碟2,阿根廷,"失败：HTTPConnectionPool(host='127.0.0.1', port=54345): Max retries exceeded with url: /browser/open (Caused by NewConnectionError(""HTTPConnection(host='127.0.0.1', port=54345): Faile",2026-09-21 01:23:08
+获取声誉辅助信息,王碟2,巴西,"失败：HTTPConnectionPool(host='127.0.0.1', port=54345): Max retries exceeded with url: /browser/open (Caused by NewConnectionError(""HTTPConnection(host='127.0.0.1', port=54345): Faile",2026-09-21 01:23:08
+获取声誉辅助信息,王碟2,墨西哥,"失败：HTTPConnectionPool(host='127.0.0.1', port=54345): Max retries exceeded with url: /browser/open (Caused by NewConnectionError(""HTTPConnection(host='127.0.0.1', port=54345): Faile",2026-09-21 01:23:08
+获取声誉辅助信息,策马奔腾,阿根廷,"失败：HTTPConnectionPool(host='127.0.0.1', port=54345): Max retries exceeded with url: /browser/open (Caused by NewConnectionError(""HTTPConnection(host='127.0.0.1', port=54345): Faile",2026-09-21 01:23:08
+获取声誉辅助信息,策马奔腾,巴西,"失败：HTTPConnectionPool(host='127.0.0.1', port=54345): Max retries exceeded with url: /browser/open (Caused by NewConnectionError(""HTTPConnection(host='127.0.0.1', port=54345): Faile",2026-09-21 01:23:08
+获取声誉辅助信息,策马奔腾,智利,"失败：HTTPConnectionPool(host='127.0.0.1', port=54345): Max retries exceeded with url: /browser/open (Caused by NewConnectionError(""HTTPConnection(host='127.0.0.1', port=54345): Faile",2026-09-21 01:23:08
+获取声誉辅助信息,策马奔腾,墨西哥,"失败：HTTPConnectionPool(host='127.0.0.1', port=54345): Max retries exceeded with url: /browser/open (Caused by NewConnectionError(""HTTPConnection(host='127.0.0.1', port=54345): Faile",2026-09-21 01:23:08
+获取声誉辅助信息,刘威豪2,阿根廷,失败：页面结构不匹配,2026-09-20 14:11:32
+获取声誉辅助信息,刘威豪2,巴西,失败：访问限频,2026-09-20 14:20:24
+获取声誉辅助信息,刘威豪2,墨西哥,失败：站点切换失败,2026-09-21 01:23:04
+获取声誉辅助信息,聚财鼠,阿根廷,"失败：HTTPConnectionPool(host='127.0.0.1', port=54345): Max retries exceeded with url: /browser/open (Caused by NewConnectionError(""HTTPConnection(host='127.0.0.1', port=54345): Faile",2026-09-21 01:23:09
+获取声誉辅助信息,聚财鼠,巴西,"失败：HTTPConnectionPool(host='127.0.0.1', port=54345): Max retries exceeded with url: /browser/open (Caused by NewConnectionError(""HTTPConnection(host='127.0.0.1', port=54345): Faile",2026-09-21 01:23:09
+获取声誉辅助信息,聚财鼠,墨西哥,"失败：HTTPConnectionPool(host='127.0.0.1', port=54345): Max retries exceeded with url: /browser/open (Caused by NewConnectionError(""HTTPConnection(host='127.0.0.1', port=54345): Faile",2026-09-21 01:23:09
+获取声誉辅助信息,腾,阿根廷,"失败：HTTPConnectionPool(host='127.0.0.1', port=54345): Max retries exceeded with url: /browser/open (Caused by NewConnectionError(""HTTPConnection(host='127.0.0.1', port=54345): Faile",2026-09-21 01:23:10
+获取声誉辅助信息,腾,巴西,"失败：HTTPConnectionPool(host='127.0.0.1', port=54345): Max retries exceeded with url: /browser/open (Caused by NewConnectionError(""HTTPConnection(host='127.0.0.1', port=54345): Faile",2026-09-21 01:23:10
+获取声誉辅助信息,腾,墨西哥,"失败：HTTPConnectionPool(host='127.0.0.1', port=54345): Max retries exceeded with url: /browser/open (Caused by NewConnectionError(""HTTPConnection(host='127.0.0.1', port=54345): Faile",2026-09-21 01:23:10
+获取声誉辅助信息,蒋学斌2,巴西,"失败：HTTPConnectionPool(host='127.0.0.1', port=54345): Max retries exceeded with url: /browser/open (Caused by NewConnectionError(""HTTPConnection(host='127.0.0.1', port=54345): Faile",2026-09-21 01:23:10
+获取声誉辅助信息,蒋学斌2,墨西哥,"失败：HTTPConnectionPool(host='127.0.0.1', port=54345): Max retries exceeded with url: /browser/open (Caused by NewConnectionError(""HTTPConnection(host='127.0.0.1', port=54345): Faile",2026-09-21 01:23:10
+获取声誉辅助信息,蒋学斌3,巴西,"失败：HTTPConnectionPool(host='127.0.0.1', port=54345): Max retries exceeded with url: /browser/open (Caused by NewConnectionError(""HTTPConnection(host='127.0.0.1', port=54345): Faile",2026-09-21 01:23:11
+获取声誉辅助信息,蒋学斌3,墨西哥,"失败：HTTPConnectionPool(host='127.0.0.1', port=54345): Max retries exceeded with url: /browser/open (Caused by NewConnectionError(""HTTPConnection(host='127.0.0.1', port=54345): Faile",2026-09-21 01:23:11
+获取声誉辅助信息,蒋学斌4,巴西,"失败：HTTPConnectionPool(host='127.0.0.1', port=54345): Max retries exceeded with url: /browser/open (Caused by NewConnectionError(""HTTPConnection(host='127.0.0.1', port=54345): Faile",2026-09-21 01:23:12
+获取声誉辅助信息,蒋学斌4,墨西哥,"失败：HTTPConnectionPool(host='127.0.0.1', port=54345): Max retries exceeded with url: /browser/open (Caused by NewConnectionError(""HTTPConnection(host='127.0.0.1', port=54345): Faile",2026-09-21 01:23:12
+获取声誉辅助信息,蓝海峰2,阿根廷,"失败：HTTPConnectionPool(host='127.0.0.1', port=54345): Max retries exceeded with url: /browser/open (Caused by NewConnectionError(""HTTPConnection(host='127.0.0.1', port=54345): Faile",2026-09-21 01:23:12
+获取声誉辅助信息,蓝海峰2,巴西,"失败：HTTPConnectionPool(host='127.0.0.1', port=54345): Max retries exceeded with url: /browser/open (Caused by NewConnectionError(""HTTPConnection(host='127.0.0.1', port=54345): Faile",2026-09-21 01:23:12
+获取声誉辅助信息,蓝海峰2,墨西哥,"失败：HTTPConnectionPool(host='127.0.0.1', port=54345): Max retries exceeded with url: /browser/open (Caused by NewConnectionError(""HTTPConnection(host='127.0.0.1', port=54345): Faile",2026-09-21 01:23:12
+获取声誉辅助信息,虎,阿根廷,"失败：HTTPConnectionPool(host='127.0.0.1', port=54345): Max retries exceeded with url: /browser/open (Caused by NewConnectionError(""HTTPConnection(host='127.0.0.1', port=54345): Faile",2026-09-21 01:23:13
+获取声誉辅助信息,虎,巴西,"失败：HTTPConnectionPool(host='127.0.0.1', port=54345): Max retries exceeded with url: /browser/open (Caused by NewConnectionError(""HTTPConnection(host='127.0.0.1', port=54345): Faile",2026-09-21 01:23:13
+获取声誉辅助信息,虎,墨西哥,"失败：HTTPConnectionPool(host='127.0.0.1', port=54345): Max retries exceeded with url: /browser/open (Caused by NewConnectionError(""HTTPConnection(host='127.0.0.1', port=54345): Faile",2026-09-21 01:23:13
+获取声誉辅助信息,虎虎生威fti,阿根廷,"失败：HTTPConnectionPool(host='127.0.0.1', port=54345): Max retries exceeded with url: /browser/open (Caused by NewConnectionError(""HTTPConnection(host='127.0.0.1', port=54345): Faile",2026-09-21 01:23:14
+获取声誉辅助信息,虎虎生威fti,巴西,"失败：HTTPConnectionPool(host='127.0.0.1', port=54345): Max retries exceeded with url: /browser/open (Caused by NewConnectionError(""HTTPConnection(host='127.0.0.1', port=54345): Faile",2026-09-21 01:23:14
+获取声誉辅助信息,虎虎生威fti,墨西哥,"失败：HTTPConnectionPool(host='127.0.0.1', port=54345): Max retries exceeded with url: /browser/open (Caused by NewConnectionError(""HTTPConnection(host='127.0.0.1', port=54345): Faile",2026-09-21 01:23:14
+获取声誉辅助信息,跃马扬鞭fti,阿根廷,"失败：HTTPConnectionPool(host='127.0.0.1', port=54345): Max retries exceeded with url: /browser/open (Caused by NewConnectionError(""HTTPConnection(host='127.0.0.1', port=54345): Faile",2026-09-21 01:23:14
+获取声誉辅助信息,跃马扬鞭fti,巴西,"失败：HTTPConnectionPool(host='127.0.0.1', port=54345): Max retries exceeded with url: /browser/open (Caused by NewConnectionError(""HTTPConnection(host='127.0.0.1', port=54345): Faile",2026-09-21 01:23:14
+获取声誉辅助信息,跃马扬鞭fti,墨西哥,"失败：HTTPConnectionPool(host='127.0.0.1', port=54345): Max retries exceeded with url: /browser/open (Caused by NewConnectionError(""HTTPConnection(host='127.0.0.1', port=54345): Faile",2026-09-21 01:23:14
+获取声誉辅助信息,遥遥领先10号店,巴西,"失败：HTTPConnectionPool(host='127.0.0.1', port=54345): Max retries exceeded with url: /browser/open (Caused by NewConnectionError(""HTTPConnection(host='127.0.0.1', port=54345): Faile",2026-09-21 01:23:15
+获取声誉辅助信息,遥遥领先10号店,墨西哥,"失败：HTTPConnectionPool(host='127.0.0.1', port=54345): Max retries exceeded with url: /browser/open (Caused by NewConnectionError(""HTTPConnection(host='127.0.0.1', port=54345): Faile",2026-09-21 01:23:15
+获取声誉辅助信息,遥遥领先13号店,巴西,跳过：窗口被其他任务占用,2026-09-21 01:23:15
+获取声誉辅助信息,遥遥领先13号店,墨西哥,跳过：窗口被其他任务占用,2026-09-21 01:23:15
+获取声誉辅助信息,遥遥领先11号店,巴西,"失败：HTTPConnectionPool(host='127.0.0.1', port=54345): Max retries exceeded with url: /browser/open (Caused by NewConnectionError(""HTTPConnection(host='127.0.0.1', port=54345): Faile",2026-09-21 01:23:16
+获取声誉辅助信息,遥遥领先11号店,墨西哥,"失败：HTTPConnectionPool(host='127.0.0.1', port=54345): Max retries exceeded with url: /browser/open (Caused by NewConnectionError(""HTTPConnection(host='127.0.0.1', port=54345): Faile",2026-09-21 01:23:16
+获取声誉辅助信息,遥遥领先12号店,巴西,"失败：HTTPConnectionPool(host='127.0.0.1', port=54345): Max retries exceeded with url: /browser/open (Caused by NewConnectionError(""HTTPConnection(host='127.0.0.1', port=54345): Faile",2026-09-21 01:23:16
+获取声誉辅助信息,遥遥领先12号店,墨西哥,"失败：HTTPConnectionPool(host='127.0.0.1', port=54345): Max retries exceeded with url: /browser/open (Caused by NewConnectionError(""HTTPConnection(host='127.0.0.1', port=54345): Faile",2026-09-21 01:23:16
+获取声誉辅助信息,遥遥领先14号店,巴西,"失败：HTTPConnectionPool(host='127.0.0.1', port=54345): Max retries exceeded with url: /browser/open (Caused by NewConnectionError(""HTTPConnection(host='127.0.0.1', port=54345): Faile",2026-09-21 01:23:17
+获取声誉辅助信息,遥遥领先14号店,墨西哥,"失败：HTTPConnectionPool(host='127.0.0.1', port=54345): Max retries exceeded with url: /browser/open (Caused by NewConnectionError(""HTTPConnection(host='127.0.0.1', port=54345): Faile",2026-09-21 01:23:17
+获取声誉辅助信息,遥遥领先1号店,巴西,"失败：HTTPConnectionPool(host='127.0.0.1', port=54345): Max retries exceeded with url: /browser/open (Caused by NewConnectionError(""HTTPConnection(host='127.0.0.1', port=54345): Faile",2026-09-21 01:23:18
+获取声誉辅助信息,遥遥领先1号店,墨西哥,"失败：HTTPConnectionPool(host='127.0.0.1', port=54345): Max retries exceeded with url: /browser/open (Caused by NewConnectionError(""HTTPConnection(host='127.0.0.1', port=54345): Faile",2026-09-21 01:23:18
+获取声誉辅助信息,遥遥领先2号店,巴西,"失败：HTTPConnectionPool(host='127.0.0.1', port=54345): Max retries exceeded with url: /browser/open (Caused by NewConnectionError(""HTTPConnection(host='127.0.0.1', port=54345): Faile",2026-09-21 01:23:18
+获取声誉辅助信息,遥遥领先2号店,墨西哥,"失败：HTTPConnectionPool(host='127.0.0.1', port=54345): Max retries exceeded with url: /browser/open (Caused by NewConnectionError(""HTTPConnection(host='127.0.0.1', port=54345): Faile",2026-09-21 01:23:18
+获取声誉辅助信息,遥遥领先3号店,巴西,"失败：HTTPConnectionPool(host='127.0.0.1', port=54345): Max retries exceeded with url: /browser/open (Caused by NewConnectionError(""HTTPConnection(host='127.0.0.1', port=54345): Faile",2026-09-21 01:23:20
+获取声誉辅助信息,遥遥领先3号店,墨西哥,"失败：HTTPConnectionPool(host='127.0.0.1', port=54345): Max retries exceeded with url: /browser/open (Caused by NewConnectionError(""HTTPConnection(host='127.0.0.1', port=54345): Faile",2026-09-21 01:23:20
+获取声誉辅助信息,遥遥领先4号店,巴西,"失败：HTTPConnectionPool(host='127.0.0.1', port=54345): Max retries exceeded with url: /browser/open (Caused by NewConnectionError(""HTTPConnection(host='127.0.0.1', port=54345): Faile",2026-09-21 01:23:20
+获取声誉辅助信息,遥遥领先4号店,墨西哥,"失败：HTTPConnectionPool(host='127.0.0.1', port=54345): Max retries exceeded with url: /browser/open (Caused by NewConnectionError(""HTTPConnection(host='127.0.0.1', port=54345): Faile",2026-09-21 01:23:20
+获取声誉辅助信息,遥遥领先5号店,巴西,"失败：HTTPConnectionPool(host='127.0.0.1', port=54345): Max retries exceeded with url: /browser/open (Caused by NewConnectionError(""HTTPConnection(host='127.0.0.1', port=54345): Faile",2026-09-21 01:23:21
+获取声誉辅助信息,遥遥领先5号店,墨西哥,"失败：HTTPConnectionPool(host='127.0.0.1', port=54345): Max retries exceeded with url: /browser/open (Caused by NewConnectionError(""HTTPConnection(host='127.0.0.1', port=54345): Faile",2026-09-21 01:23:21
+获取声誉辅助信息,遥遥领先6号店,巴西,"失败：HTTPConnectionPool(host='127.0.0.1', port=54345): Max retries exceeded with url: /browser/open (Caused by NewConnectionError(""HTTPConnection(host='127.0.0.1', port=54345): Faile",2026-09-21 01:23:22
+获取声誉辅助信息,遥遥领先6号店,墨西哥,"失败：HTTPConnectionPool(host='127.0.0.1', port=54345): Max retries exceeded with url: /browser/open (Caused by NewConnectionError(""HTTPConnection(host='127.0.0.1', port=54345): Faile",2026-09-21 01:23:22
+获取声誉辅助信息,遥遥领先7号店,巴西,"失败：HTTPConnectionPool(host='127.0.0.1', port=54345): Max retries exceeded with url: /browser/open (Caused by NewConnectionError(""HTTPConnection(host='127.0.0.1', port=54345): Faile",2026-09-21 01:23:22
+获取声誉辅助信息,遥遥领先7号店,墨西哥,"失败：HTTPConnectionPool(host='127.0.0.1', port=54345): Max retries exceeded with url: /browser/open (Caused by NewConnectionError(""HTTPConnection(host='127.0.0.1', port=54345): Faile",2026-09-21 01:23:22
+获取声誉辅助信息,遥遥领先8号店,巴西,"失败：HTTPConnectionPool(host='127.0.0.1', port=54345): Max retries exceeded with url: /browser/open (Caused by NewConnectionError(""HTTPConnection(host='127.0.0.1', port=54345): Faile",2026-09-21 01:23:23
+获取声誉辅助信息,遥遥领先8号店,墨西哥,"失败：HTTPConnectionPool(host='127.0.0.1', port=54345): Max retries exceeded with url: /browser/open (Caused by NewConnectionError(""HTTPConnection(host='127.0.0.1', port=54345): Faile",2026-09-21 01:23:23
+获取声誉辅助信息,遥遥领先9号店,巴西,"失败：HTTPConnectionPool(host='127.0.0.1', port=54345): Max retries exceeded with url: /browser/open (Caused by NewConnectionError(""HTTPConnection(host='127.0.0.1', port=54345): Faile",2026-09-21 01:23:24
+获取声誉辅助信息,遥遥领先9号店,墨西哥,"失败：HTTPConnectionPool(host='127.0.0.1', port=54345): Max retries exceeded with url: /browser/open (Caused by NewConnectionError(""HTTPConnection(host='127.0.0.1', port=54345): Faile",2026-09-21 01:23:24
+获取声誉辅助信息,郭兆亿4,巴西,"失败：HTTPConnectionPool(host='127.0.0.1', port=54345): Max retries exceeded with url: /browser/open (Caused by NewConnectionError(""HTTPConnection(host='127.0.0.1', port=54345): Faile",2026-09-21 01:23:24
+获取声誉辅助信息,郭兆亿4,墨西哥,"失败：HTTPConnectionPool(host='127.0.0.1', port=54345): Max retries exceeded with url: /browser/open (Caused by NewConnectionError(""HTTPConnection(host='127.0.0.1', port=54345): Faile",2026-09-21 01:23:24
+获取声誉辅助信息,金光闪闪,阿根廷,"失败：HTTPConnectionPool(host='127.0.0.1', port=54345): Max retries exceeded with url: /browser/open (Caused by NewConnectionError(""HTTPConnection(host='127.0.0.1', port=54345): Faile",2026-09-21 01:23:25
+获取声誉辅助信息,金光闪闪,巴西,"失败：HTTPConnectionPool(host='127.0.0.1', port=54345): Max retries exceeded with url: /browser/open (Caused by NewConnectionError(""HTTPConnection(host='127.0.0.1', port=54345): Faile",2026-09-21 01:23:25
+获取声誉辅助信息,金光闪闪,墨西哥,"失败：HTTPConnectionPool(host='127.0.0.1', port=54345): Max retries exceeded with url: /browser/open (Caused by NewConnectionError(""HTTPConnection(host='127.0.0.1', port=54345): Faile",2026-09-21 01:23:25
+获取声誉辅助信息,金满园555,阿根廷,"失败：HTTPConnectionPool(host='127.0.0.1', port=54345): Max retries exceeded with url: /browser/open (Caused by NewConnectionError(""HTTPConnection(host='127.0.0.1', port=54345): Faile",2026-09-21 01:23:26
+获取声誉辅助信息,金满园555,巴西,"失败：HTTPConnectionPool(host='127.0.0.1', port=54345): Max retries exceeded with url: /browser/open (Caused by NewConnectionError(""HTTPConnection(host='127.0.0.1', port=54345): Faile",2026-09-21 01:23:26
+获取声誉辅助信息,金满园555,墨西哥,"失败：HTTPConnectionPool(host='127.0.0.1', port=54345): Max retries exceeded with url: /browser/open (Caused by NewConnectionError(""HTTPConnection(host='127.0.0.1', port=54345): Faile",2026-09-21 01:23:26
+获取声誉辅助信息,钱程似锦2,阿根廷,"失败：HTTPConnectionPool(host='127.0.0.1', port=54345): Max retries exceeded with url: /browser/open (Caused by NewConnectionError(""HTTPConnection(host='127.0.0.1', port=54345): Faile",2026-09-21 01:23:27
+获取声誉辅助信息,钱程似锦2,巴西,"失败：HTTPConnectionPool(host='127.0.0.1', port=54345): Max retries exceeded with url: /browser/open (Caused by NewConnectionError(""HTTPConnection(host='127.0.0.1', port=54345): Faile",2026-09-21 01:23:27
+获取声誉辅助信息,钱程似锦2,墨西哥,"失败：HTTPConnectionPool(host='127.0.0.1', port=54345): Max retries exceeded with url: /browser/open (Caused by NewConnectionError(""HTTPConnection(host='127.0.0.1', port=54345): Faile",2026-09-21 01:23:27
+获取声誉辅助信息,钱程似锦3,阿根廷,"失败：HTTPConnectionPool(host='127.0.0.1', port=54345): Max retries exceeded with url: /browser/open (Caused by NewConnectionError(""HTTPConnection(host='127.0.0.1', port=54345): Faile",2026-09-21 01:23:28
+获取声誉辅助信息,钱程似锦3,巴西,"失败：HTTPConnectionPool(host='127.0.0.1', port=54345): Max retries exceeded with url: /browser/open (Caused by NewConnectionError(""HTTPConnection(host='127.0.0.1', port=54345): Faile",2026-09-21 01:23:28
+获取声誉辅助信息,钱程似锦3,墨西哥,"失败：HTTPConnectionPool(host='127.0.0.1', port=54345): Max retries exceeded with url: /browser/open (Caused by NewConnectionError(""HTTPConnection(host='127.0.0.1', port=54345): Faile",2026-09-21 01:23:28
+获取声誉辅助信息,蒋学斌1,巴西,"失败：HTTPConnectionPool(host='127.0.0.1', port=54345): Max retries exceeded with url: /browser/open (Caused by NewConnectionError(""HTTPConnection(host='127.0.0.1', port=54345): Faile",2026-09-21 01:23:28
+获取声誉辅助信息,蒋学斌1,墨西哥,"失败：HTTPConnectionPool(host='127.0.0.1', port=54345): Max retries exceeded with url: /browser/open (Caused by NewConnectionError(""HTTPConnection(host='127.0.0.1', port=54345): Faile",2026-09-21 01:23:28
+获取声誉辅助信息,刘威豪1,阿根廷,失败：页面结构不匹配,2026-09-20 14:17:32
+获取声誉辅助信息,刘威豪1,巴西,失败：站点切换失败,2026-09-20 14:26:24
+获取声誉辅助信息,刘威豪1,墨西哥,"失败：刘威豪1 打开美客多业务页失败：Message: invalid session id; For documentation on this error, please visit: https://www.selenium.dev/documentation/webdriver/troubleshooting/errors#invalidsessio",2026-09-21 01:23:26
+获取声誉辅助信息,钱程似锦4,阿根廷,"失败：HTTPConnectionPool(host='127.0.0.1', port=54345): Max retries exceeded with url: /browser/open (Caused by NewConnectionError(""HTTPConnection(host='127.0.0.1', port=54345): Faile",2026-09-21 01:23:29
+获取声誉辅助信息,钱程似锦4,巴西,"失败：HTTPConnectionPool(host='127.0.0.1', port=54345): Max retries exceeded with url: /browser/open (Caused by NewConnectionError(""HTTPConnection(host='127.0.0.1', port=54345): Faile",2026-09-21 01:23:29
+获取声誉辅助信息,钱程似锦4,墨西哥,"失败：HTTPConnectionPool(host='127.0.0.1', port=54345): Max retries exceeded with url: /browser/open (Caused by NewConnectionError(""HTTPConnection(host='127.0.0.1', port=54345): Faile",2026-09-21 01:23:29
+获取声誉辅助信息,顺风顺水(fti),哥伦比亚,跳过：窗口被其他任务占用,2026-09-21 01:23:29
+获取声誉辅助信息,顺风顺水(fti),阿根廷,跳过：窗口被其他任务占用,2026-09-21 01:23:29
+获取声誉辅助信息,顺风顺水(fti),巴西,跳过：窗口被其他任务占用,2026-09-21 01:23:29
+获取声誉辅助信息,顺风顺水(fti),智利,跳过：窗口被其他任务占用,2026-09-21 01:23:29
+获取声誉辅助信息,顺风顺水(fti),墨西哥,跳过：窗口被其他任务占用,2026-09-21 01:23:29
+获取声誉辅助信息,钱程似锦5,阿根廷,"失败：HTTPConnectionPool(host='127.0.0.1', port=54345): Max retries exceeded with url: /browser/open (Caused by NewConnectionError(""HTTPConnection(host='127.0.0.1', port=54345): Faile",2026-09-21 01:23:30
+获取声誉辅助信息,钱程似锦5,巴西,"失败：HTTPConnectionPool(host='127.0.0.1', port=54345): Max retries exceeded with url: /browser/open (Caused by NewConnectionError(""HTTPConnection(host='127.0.0.1', port=54345): Faile",2026-09-21 01:23:30
+获取声誉辅助信息,钱程似锦5,墨西哥,"失败：HTTPConnectionPool(host='127.0.0.1', port=54345): Max retries exceeded with url: /browser/open (Caused by NewConnectionError(""HTTPConnection(host='127.0.0.1', port=54345): Faile",2026-09-21 01:23:30
+获取声誉辅助信息,六六大顺,阿根廷,失败：访问限频,2026-09-20 14:12:05
+获取声誉辅助信息,六六大顺,巴西,失败：站点切换失败,2026-09-20 14:26:28
+获取声誉辅助信息,六六大顺,墨西哥,"失败：六六大顺 打开美客多业务页失败：Message: invalid session id; For documentation on this error, please visit: https://www.selenium.dev/documentation/webdriver/troubleshooting/errors#invalidsessio",2026-09-21 01:23:23
+获取声誉辅助信息,顺财羊,阿根廷,"失败：HTTPConnectionPool(host='127.0.0.1', port=54345): Max retries exceeded with url: /browser/open (Caused by NewConnectionError(""HTTPConnection(host='127.0.0.1', port=54345): Faile",2026-09-21 01:23:30
+获取声誉辅助信息,顺财羊,巴西,"失败：HTTPConnectionPool(host='127.0.0.1', port=54345): Max retries exceeded with url: /browser/open (Caused by NewConnectionError(""HTTPConnection(host='127.0.0.1', port=54345): Faile",2026-09-21 01:23:30
+获取声誉辅助信息,顺财羊,墨西哥,"失败：HTTPConnectionPool(host='127.0.0.1', port=54345): Max retries exceeded with url: /browser/open (Caused by NewConnectionError(""HTTPConnection(host='127.0.0.1', port=54345): Faile",2026-09-21 01:23:30
+获取声誉辅助信息,飞黄腾达2,阿根廷,"失败：HTTPConnectionPool(host='127.0.0.1', port=54345): Max retries exceeded with url: /browser/open (Caused by NewConnectionError(""HTTPConnection(host='127.0.0.1', port=54345): Faile",2026-09-21 01:23:31
+获取声誉辅助信息,飞黄腾达2,巴西,"失败：HTTPConnectionPool(host='127.0.0.1', port=54345): Max retries exceeded with url: /browser/open (Caused by NewConnectionError(""HTTPConnection(host='127.0.0.1', port=54345): Faile",2026-09-21 01:23:31
+获取声誉辅助信息,飞黄腾达2,墨西哥,"失败：HTTPConnectionPool(host='127.0.0.1', port=54345): Max retries exceeded with url: /browser/open (Caused by NewConnectionError(""HTTPConnection(host='127.0.0.1', port=54345): Faile",2026-09-21 01:23:31
+获取声誉辅助信息,飞黄腾达5,阿根廷,"失败：HTTPConnectionPool(host='127.0.0.1', port=54345): Max retries exceeded with url: /browser/open (Caused by NewConnectionError(""HTTPConnection(host='127.0.0.1', port=54345): Faile",2026-09-21 01:23:32
+获取声誉辅助信息,飞黄腾达5,巴西,"失败：HTTPConnectionPool(host='127.0.0.1', port=54345): Max retries exceeded with url: /browser/open (Caused by NewConnectionError(""HTTPConnection(host='127.0.0.1', port=54345): Faile",2026-09-21 01:23:32
+获取声誉辅助信息,飞黄腾达5,墨西哥,"失败：HTTPConnectionPool(host='127.0.0.1', port=54345): Max retries exceeded with url: /browser/open (Caused by NewConnectionError(""HTTPConnection(host='127.0.0.1', port=54345): Faile",2026-09-21 01:23:32
+获取声誉辅助信息,马到成功,阿根廷,"失败：HTTPConnectionPool(host='127.0.0.1', port=54345): Max retries exceeded with url: /browser/open (Caused by NewConnectionError(""HTTPConnection(host='127.0.0.1', port=54345): Faile",2026-09-21 01:23:32
+获取声誉辅助信息,马到成功,巴西,"失败：HTTPConnectionPool(host='127.0.0.1', port=54345): Max retries exceeded with url: /browser/open (Caused by NewConnectionError(""HTTPConnection(host='127.0.0.1', port=54345): Faile",2026-09-21 01:23:32
+获取声誉辅助信息,马到成功,墨西哥,"失败：HTTPConnectionPool(host='127.0.0.1', port=54345): Max retries exceeded with url: /browser/open (Caused by NewConnectionError(""HTTPConnection(host='127.0.0.1', port=54345): Faile",2026-09-21 01:23:32
+获取声誉辅助信息,高人一等,墨西哥,"失败：HTTPConnectionPool(host='127.0.0.1', port=54345): Max retries exceeded with url: /browser/open (Caused by NewConnectionError(""HTTPConnection(host='127.0.0.1', port=54345): Faile",2026-09-21 01:23:33
+获取声誉辅助信息,高屋建瓴,阿根廷,"失败：HTTPConnectionPool(host='127.0.0.1', port=54345): Max retries exceeded with url: /browser/open (Caused by NewConnectionError(""HTTPConnection(host='127.0.0.1', port=54345): Faile",2026-09-21 01:23:34
+获取声誉辅助信息,高屋建瓴,巴西,"失败：HTTPConnectionPool(host='127.0.0.1', port=54345): Max retries exceeded with url: /browser/open (Caused by NewConnectionError(""HTTPConnection(host='127.0.0.1', port=54345): Faile",2026-09-21 01:23:34
+获取声誉辅助信息,高屋建瓴,墨西哥,"失败：HTTPConnectionPool(host='127.0.0.1', port=54345): Max retries exceeded with url: /browser/open (Caused by NewConnectionError(""HTTPConnection(host='127.0.0.1', port=54345): Faile",2026-09-21 01:23:34
+获取声誉辅助信息,鸿运当头,阿根廷,"失败：HTTPConnectionPool(host='127.0.0.1', port=54345): Max retries exceeded with url: /browser/open (Caused by NewConnectionError(""HTTPConnection(host='127.0.0.1', port=54345): Faile",2026-09-21 01:23:34
+获取声誉辅助信息,鸿运当头,巴西,"失败：HTTPConnectionPool(host='127.0.0.1', port=54345): Max retries exceeded with url: /browser/open (Caused by NewConnectionError(""HTTPConnection(host='127.0.0.1', port=54345): Faile",2026-09-21 01:23:34
+获取声誉辅助信息,鸿运当头,墨西哥,"失败：HTTPConnectionPool(host='127.0.0.1', port=54345): Max retries exceeded with url: /browser/open (Caused by NewConnectionError(""HTTPConnection(host='127.0.0.1', port=54345): Faile",2026-09-21 01:23:34
+获取声誉辅助信息,向子立4,阿根廷,失败：站点切换失败,2026-09-20 14:18:36
+获取声誉辅助信息,向子立4,巴西,失败：页面结构不匹配,2026-09-20 14:26:29
+获取声誉辅助信息,向子立4,墨西哥,"失败：向子立4 打开美客多业务页失败：Message: invalid session id; For documentation on this error, please visit: https://www.selenium.dev/documentation/webdriver/troubleshooting/errors#invalidsessio",2026-09-21 01:23:26
+获取声誉辅助信息,钱程似锦,阿根廷,"失败：HTTPConnectionPool(host='127.0.0.1', port=54345): Max retries exceeded with url: /browser/open (Caused by NewConnectionError(""HTTPConnection(host='127.0.0.1', port=54345): Faile",2026-09-21 01:23:26
+获取声誉辅助信息,钱程似锦,巴西,"失败：HTTPConnectionPool(host='127.0.0.1', port=54345): Max retries exceeded with url: /browser/open (Caused by NewConnectionError(""HTTPConnection(host='127.0.0.1', port=54345): Faile",2026-09-21 01:23:26
+获取声誉辅助信息,钱程似锦,墨西哥,"失败：HTTPConnectionPool(host='127.0.0.1', port=54345): Max retries exceeded with url: /browser/open (Caused by NewConnectionError(""HTTPConnection(host='127.0.0.1', port=54345): Faile",2026-09-21 01:23:26
+获取声誉辅助信息,向华章2,阿根廷,失败：站点切换失败,2026-09-20 14:18:16
+获取声誉辅助信息,向华章2,巴西,失败：站点切换失败,2026-09-20 14:26:25
+获取声誉辅助信息,向华章2,墨西哥,"失败：向华章2 打开美客多业务页失败：Message: invalid session id; For documentation on this error, please visit: https://www.selenium.dev/documentation/webdriver/troubleshooting/errors#invalidsessio",2026-09-21 01:23:23
+获取声誉辅助信息,龙争虎斗,阿根廷,"失败：HTTPConnectionPool(host='127.0.0.1', port=54345): Max retries exceeded with url: /browser/open (Caused by NewConnectionError(""HTTPConnection(host='127.0.0.1', port=54345): Faile",2026-09-21 01:23:36
+获取声誉辅助信息,龙争虎斗,巴西,"失败：HTTPConnectionPool(host='127.0.0.1', port=54345): Max retries exceeded with url: /browser/open (Caused by NewConnectionError(""HTTPConnection(host='127.0.0.1', port=54345): Faile",2026-09-21 01:23:36
+获取声誉辅助信息,龙争虎斗,墨西哥,"失败：HTTPConnectionPool(host='127.0.0.1', port=54345): Max retries exceeded with url: /browser/open (Caused by NewConnectionError(""HTTPConnection(host='127.0.0.1', port=54345): Faile",2026-09-21 01:23:36
+获取声誉辅助信息,龙,阿根廷,"失败：HTTPConnectionPool(host='127.0.0.1', port=54345): Max retries exceeded with url: /browser/open (Caused by NewConnectionError(""HTTPConnection(host='127.0.0.1', port=54345): Faile",2026-09-21 01:23:35
+获取声誉辅助信息,龙,巴西,"失败：HTTPConnectionPool(host='127.0.0.1', port=54345): Max retries exceeded with url: /browser/open (Caused by NewConnectionError(""HTTPConnection(host='127.0.0.1', port=54345): Faile",2026-09-21 01:23:35
+获取声誉辅助信息,龙,墨西哥,"失败：HTTPConnectionPool(host='127.0.0.1', port=54345): Max retries exceeded with url: /browser/open (Caused by NewConnectionError(""HTTPConnection(host='127.0.0.1', port=54345): Faile",2026-09-21 01:23:35
+获取声誉辅助信息,龙凤呈祥,阿根廷,"失败：HTTPConnectionPool(host='127.0.0.1', port=54345): Max retries exceeded with url: /browser/open (Caused by NewConnectionError(""HTTPConnection(host='127.0.0.1', port=54345): Faile",2026-09-21 01:23:36
+获取声誉辅助信息,龙凤呈祥,巴西,"失败：HTTPConnectionPool(host='127.0.0.1', port=54345): Max retries exceeded with url: /browser/open (Caused by NewConnectionError(""HTTPConnection(host='127.0.0.1', port=54345): Faile",2026-09-21 01:23:36
+获取声誉辅助信息,龙凤呈祥,墨西哥,"失败：HTTPConnectionPool(host='127.0.0.1', port=54345): Max retries exceeded with url: /browser/open (Caused by NewConnectionError(""HTTPConnection(host='127.0.0.1', port=54345): Faile",2026-09-21 01:23:36
+获取声誉辅助信息,杨雨萌7,墨西哥,"失败：杨雨萌7 打开美客多业务页失败：Message: invalid session id; For documentation on this error, please visit: https://www.selenium.dev/documentation/webdriver/troubleshooting/errors#invalidsessio",2026-09-21 01:23:23
+获取声誉辅助信息,梁山好汉222,阿根廷,"失败：HTTPConnectionPool(host='127.0.0.1', port=54345): Max retries exceeded with url: /browser/open (Caused by NewConnectionError(""HTTPConnection(host='127.0.0.1', port=54345): Faile",2026-09-21 01:23:37
+获取声誉辅助信息,梁山好汉222,巴西,"失败：HTTPConnectionPool(host='127.0.0.1', port=54345): Max retries exceeded with url: /browser/open (Caused by NewConnectionError(""HTTPConnection(host='127.0.0.1', port=54345): Faile",2026-09-21 01:23:37
+获取声誉辅助信息,梁山好汉222,墨西哥,"失败：HTTPConnectionPool(host='127.0.0.1', port=54345): Max retries exceeded with url: /browser/open (Caused by NewConnectionError(""HTTPConnection(host='127.0.0.1', port=54345): Faile",2026-09-21 01:23:37
+获取声誉辅助信息,向华章1,阿根廷,失败：页面结构不匹配,2026-09-20 14:19:21
+获取声誉辅助信息,向华章1,巴西,失败：站点切换失败,2026-09-21 01:23:04
+获取声誉辅助信息,向华章1,墨西哥,"失败：向华章1 打开美客多业务页失败：Message: invalid session id; For documentation on this error, please visit: https://www.selenium.dev/documentation/webdriver/troubleshooting/errors#invalidsessio",2026-09-21 01:23:34
+获取声誉辅助信息,向子立5,阿根廷,失败：页面结构不匹配,2026-09-20 14:17:31
+获取声誉辅助信息,向子立5,巴西,失败：站点切换失败,2026-09-20 14:26:25
+获取声誉辅助信息,向子立5,墨西哥,"失败：向子立5 打开美客多业务页失败：Message: invalid session id; For documentation on this error, please visit: https://www.selenium.dev/documentation/webdriver/troubleshooting/errors#invalidsessio",2026-09-21 01:23:26
+获取声誉辅助信息,向华章4,阿根廷,失败：站点切换失败,2026-09-20 14:19:48
+获取声誉辅助信息,向华章4,巴西,失败：站点切换失败,2026-09-21 01:23:04
+获取声誉辅助信息,向华章4,墨西哥,"失败：向华章4 打开美客多业务页失败：Message: invalid session id; For documentation on this error, please visit: https://www.selenium.dev/documentation/webdriver/troubleshooting/errors#invalidsessio",2026-09-21 01:23:34
+获取声誉辅助信息,孙董一郎1,阿根廷,失败：访问限频,2026-09-20 14:20:26
+获取声誉辅助信息,孙董一郎1,巴西,失败：站点切换失败,2026-09-21 01:23:04
+获取声誉辅助信息,孙董一郎1,墨西哥,"失败：孙董一郎1 打开美客多业务页失败：Message: invalid session id; For documentation on this error, please visit: https://www.selenium.dev/documentation/webdriver/troubleshooting/errors#invalidsessi",2026-09-21 01:23:34
+获取声誉辅助信息,钱途无量,阿根廷,"失败：HTTPConnectionPool(host='127.0.0.1', port=54345): Max retries exceeded with url: /browser/open (Caused by NewConnectionError(""HTTPConnection(host='127.0.0.1', port=54345): Faile",2026-09-21 01:23:38
+获取声誉辅助信息,钱途无量,巴西,"失败：HTTPConnectionPool(host='127.0.0.1', port=54345): Max retries exceeded with url: /browser/open (Caused by NewConnectionError(""HTTPConnection(host='127.0.0.1', port=54345): Faile",2026-09-21 01:23:38
+获取声誉辅助信息,钱途无量,墨西哥,"失败：HTTPConnectionPool(host='127.0.0.1', port=54345): Max retries exceeded with url: /browser/open (Caused by NewConnectionError(""HTTPConnection(host='127.0.0.1', port=54345): Faile",2026-09-21 01:23:38
+获取声誉辅助信息,七星高照,阿根廷,失败：访问限频,2026-09-20 14:11:41
+获取声誉辅助信息,七星高照,巴西,失败：站点切换失败,2026-09-20 14:26:28
+获取声誉辅助信息,七星高照,墨西哥,"失败：七星高照 打开美客多业务页失败：Message: invalid session id; For documentation on this error, please visit: https://www.selenium.dev/documentation/webdriver/troubleshooting/errors#invalidsessio",2026-09-21 01:23:23
+获取声誉辅助信息,四季如春,阿根廷,失败：站点切换失败,2026-09-20 14:19:44
+获取声誉辅助信息,四季如春,巴西,"失败：四季如春 打开美客多业务页失败：Message: invalid session id; For documentation on this error, please visit: https://www.selenium.dev/documentation/webdriver/troubleshooting/errors#invalidsessio",2026-09-21 01:23:01
+获取声誉辅助信息,四季如春,墨西哥,"失败：四季如春 打开美客多业务页失败：Message: invalid session id; For documentation on this error, please visit: https://www.selenium.dev/documentation/webdriver/troubleshooting/errors#invalidsessio",2026-09-21 01:23:31
+获取声誉辅助信息,龙吟虎啸,阿根廷,"失败：HTTPConnectionPool(host='127.0.0.1', port=54345): Max retries exceeded with url: /browser/open (Caused by NewConnectionError(""HTTPConnection(host='127.0.0.1', port=54345): Faile",2026-09-21 01:23:39
+获取声誉辅助信息,龙吟虎啸,巴西,"失败：HTTPConnectionPool(host='127.0.0.1', port=54345): Max retries exceeded with url: /browser/open (Caused by NewConnectionError(""HTTPConnection(host='127.0.0.1', port=54345): Faile",2026-09-21 01:23:39
+获取声誉辅助信息,龙吟虎啸,墨西哥,"失败：HTTPConnectionPool(host='127.0.0.1', port=54345): Max retries exceeded with url: /browser/open (Caused by NewConnectionError(""HTTPConnection(host='127.0.0.1', port=54345): Faile",2026-09-21 01:23:39
+获取声誉辅助信息,飞黄腾达3,阿根廷,"失败：HTTPConnectionPool(host='127.0.0.1', port=54345): Max retries exceeded with url: /browser/open (Caused by NewConnectionError(""HTTPConnection(host='127.0.0.1', port=54345): Faile",2026-09-21 01:23:39
+获取声誉辅助信息,飞黄腾达3,巴西,"失败：HTTPConnectionPool(host='127.0.0.1', port=54345): Max retries exceeded with url: /browser/open (Caused by NewConnectionError(""HTTPConnection(host='127.0.0.1', port=54345): Faile",2026-09-21 01:23:39
+获取声誉辅助信息,飞黄腾达3,墨西哥,"失败：HTTPConnectionPool(host='127.0.0.1', port=54345): Max retries exceeded with url: /browser/open (Caused by NewConnectionError(""HTTPConnection(host='127.0.0.1', port=54345): Faile",2026-09-21 01:23:39
+获取声誉辅助信息,梁山好汉333,阿根廷,"失败：Message: session not created: cannot connect to chrome at 127.0.0.1:53531 from chrome not reachable; For documentation on this error, please visit: https://www.selenium.dev/docu",2026-09-21 01:23:55
+获取声誉辅助信息,梁山好汉333,巴西,"失败：Message: session not created: cannot connect to chrome at 127.0.0.1:53531 from chrome not reachable; For documentation on this error, please visit: https://www.selenium.dev/docu",2026-09-21 01:23:55
+获取声誉辅助信息,梁山好汉333,墨西哥,"失败：Message: session not created: cannot connect to chrome at 127.0.0.1:53531 from chrome not reachable; For documentation on this error, please visit: https://www.selenium.dev/docu",2026-09-21 01:23:55
+获取声誉辅助信息,杨雨萌8,阿根廷,"失败：Message: session not created: cannot connect to chrome at 127.0.0.1:54010 from chrome not reachable; For documentation on this error, please visit: https://www.selenium.dev/docu",2026-09-21 01:23:55
+获取声誉辅助信息,杨雨萌8,巴西,"失败：Message: session not created: cannot connect to chrome at 127.0.0.1:54010 from chrome not reachable; For documentation on this error, please visit: https://www.selenium.dev/docu",2026-09-21 01:23:55
+获取声誉辅助信息,杨雨萌8,智利,"失败：Message: session not created: cannot connect to chrome at 127.0.0.1:54010 from chrome not reachable; For documentation on this error, please visit: https://www.selenium.dev/docu",2026-09-21 01:23:55
+获取声誉辅助信息,杨雨萌8,墨西哥,"失败：Message: session not created: cannot connect to chrome at 127.0.0.1:54010 from chrome not reachable; For documentation on this error, please visit: https://www.selenium.dev/docu",2026-09-21 01:23:55
+获取声誉辅助信息,招财猫222,阿根廷,失败：访问限频,2026-09-20 14:26:41
+获取声誉辅助信息,招财猫222,巴西,"失败：招财猫222 打开美客多业务页失败：Message: invalid session id; For documentation on this error, please visit: https://www.selenium.dev/documentation/webdriver/troubleshooting/errors#invalidsess",2026-09-21 01:23:26
+获取声誉辅助信息,招财猫222,墨西哥,"失败：招财猫222 打开美客多业务页失败：Message: invalid session id; For documentation on this error, please visit: https://www.selenium.dev/documentation/webdriver/troubleshooting/errors#invalidsess",2026-09-21 01:23:57
+获取声誉辅助信息,张健5,阿根廷,失败：站点切换失败,2026-09-20 14:26:29
+获取声誉辅助信息,张健5,巴西,"失败：张健5 打开美客多业务页失败：Message: invalid session id; For documentation on this error, please visit: https://www.selenium.dev/documentation/webdriver/troubleshooting/errors#invalidsession",2026-09-21 01:23:26
+获取声誉辅助信息,张健5,墨西哥,"失败：张健5 打开美客多业务页失败：Message: invalid session id; For documentation on this error, please visit: https://www.selenium.dev/documentation/webdriver/troubleshooting/errors#invalidsession",2026-09-21 01:23:57
+获取声誉辅助信息,招财猫,阿根廷,失败：站点切换失败,2026-09-20 14:26:28
+获取声誉辅助信息,招财猫,巴西,"失败：招财猫 打开美客多业务页失败：Message: invalid session id; For documentation on this error, please visit: https://www.selenium.dev/documentation/webdriver/troubleshooting/errors#invalidsession",2026-09-21 01:23:26
+获取声誉辅助信息,招财猫,墨西哥,"失败：招财猫 打开美客多业务页失败：Message: invalid session id; For documentation on this error, please visit: https://www.selenium.dev/documentation/webdriver/troubleshooting/errors#invalidsession",2026-09-21 01:23:57
+获取声誉辅助信息,徐家强1,阿根廷,失败：访问限频,2026-09-20 14:20:27
+获取声誉辅助信息,徐家强1,巴西,失败：访问限频,2026-09-20 14:26:45
+获取声誉辅助信息,徐家强1,智利,"失败：徐家强1 打开美客多业务页失败：Message: invalid session id; For documentation on this error, please visit: https://www.selenium.dev/documentation/webdriver/troubleshooting/errors#invalidsessio",2026-09-21 01:23:26
+获取声誉辅助信息,徐家强1,墨西哥,"失败：徐家强1 打开美客多业务页失败：Message: invalid session id; For documentation on this error, please visit: https://www.selenium.dev/documentation/webdriver/troubleshooting/errors#invalidsessio",2026-09-21 01:23:57
+获取声誉辅助信息,向华章3,阿根廷,失败：站点切换失败,2026-09-20 14:26:30
+获取声誉辅助信息,向华章3,巴西,"失败：向华章3 打开美客多业务页失败：Message: invalid session id; For documentation on this error, please visit: https://www.selenium.dev/documentation/webdriver/troubleshooting/errors#invalidsessio",2026-09-21 01:23:26
+获取声誉辅助信息,向华章3,墨西哥,"失败：向华章3 打开美客多业务页失败：Message: invalid session id; For documentation on this error, please visit: https://www.selenium.dev/documentation/webdriver/troubleshooting/errors#invalidsessio",2026-09-21 01:23:57
+获取声誉辅助信息,功成名就fti,阿根廷,失败：站点切换失败,2026-09-20 14:26:26
+获取声誉辅助信息,功成名就fti,巴西,"失败：功成名就fti 打开美客多业务页失败：Message: invalid session id; For documentation on this error, please visit: https://www.selenium.dev/documentation/webdriver/troubleshooting/errors#invalidses",2026-09-21 01:23:26
+获取声誉辅助信息,功成名就fti,墨西哥,"失败：功成名就fti 打开美客多业务页失败：Message: invalid session id; For documentation on this error, please visit: https://www.selenium.dev/documentation/webdriver/troubleshooting/errors#invalidses",2026-09-21 01:23:57
+获取声誉辅助信息,杨柳依依4,阿根廷,"失败：杨柳依依4 打开美客多业务页失败：Message: invalid session id; For documentation on this error, please visit: https://www.selenium.dev/documentation/webdriver/troubleshooting/errors#invalidsessi",2026-09-21 01:23:01
+获取声誉辅助信息,杨柳依依4,巴西,"失败：杨柳依依4 打开美客多业务页失败：Message: invalid session id; For documentation on this error, please visit: https://www.selenium.dev/documentation/webdriver/troubleshooting/errors#invalidsessi",2026-09-21 01:23:31
+获取声誉辅助信息,杨柳依依4,墨西哥,"失败：杨柳依依4 打开美客多业务页失败：Message: invalid session id; For documentation on this error, please visit: https://www.selenium.dev/documentation/webdriver/troubleshooting/errors#invalidsessi",2026-09-21 01:24:02
+获取声誉辅助信息,旺财狗,阿根廷,"失败：旺财狗 打开美客多业务页失败：Message: invalid session id; For documentation on this error, please visit: https://www.selenium.dev/documentation/webdriver/troubleshooting/errors#invalidsession",2026-09-21 01:23:01
+获取声誉辅助信息,旺财狗,巴西,"失败：旺财狗 打开美客多业务页失败：Message: invalid session id; For documentation on this error, please visit: https://www.selenium.dev/documentation/webdriver/troubleshooting/errors#invalidsession",2026-09-21 01:23:31
+获取声誉辅助信息,旺财狗,墨西哥,"失败：旺财狗 打开美客多业务页失败：Message: invalid session id; For documentation on this error, please visit: https://www.selenium.dev/documentation/webdriver/troubleshooting/errors#invalidsession",2026-09-21 01:24:02
+获取声誉辅助信息,杨雨萌15,阿根廷,"失败：杨雨萌15 打开美客多业务页失败：Message: invalid session id; For documentation on this error, please visit: https://www.selenium.dev/documentation/webdriver/troubleshooting/errors#invalidsessi",2026-09-21 01:23:01
+获取声誉辅助信息,杨雨萌15,巴西,"失败：杨雨萌15 打开美客多业务页失败：Message: invalid session id; For documentation on this error, please visit: https://www.selenium.dev/documentation/webdriver/troubleshooting/errors#invalidsessi",2026-09-21 01:23:31
+获取声誉辅助信息,杨雨萌15,墨西哥,"失败：杨雨萌15 打开美客多业务页失败：Message: invalid session id; For documentation on this error, please visit: https://www.selenium.dev/documentation/webdriver/troubleshooting/errors#invalidsessi",2026-09-21 01:24:02
+获取声誉辅助信息,来财马,阿根廷,失败：站点切换失败,2026-09-21 01:23:04
+获取声誉辅助信息,来财马,巴西,"失败：来财马 打开美客多业务页失败：Message: invalid session id; For documentation on this error, please visit: https://www.selenium.dev/documentation/webdriver/troubleshooting/errors#invalidsession",2026-09-21 01:23:34
+获取声誉辅助信息,来财马,墨西哥,"失败：来财马 打开美客多业务页失败：Message: invalid session id; For documentation on this error, please visit: https://www.selenium.dev/documentation/webdriver/troubleshooting/errors#invalidsession",2026-09-21 01:24:05
+获取声誉辅助信息,招财猫333,阿根廷,失败：站点切换失败,2026-09-21 01:23:04
+获取声誉辅助信息,招财猫333,巴西,"失败：招财猫333 打开美客多业务页失败：Message: invalid session id; For documentation on this error, please visit: https://www.selenium.dev/documentation/webdriver/troubleshooting/errors#invalidsess",2026-09-21 01:23:34
+获取声誉辅助信息,招财猫333,墨西哥,"失败：招财猫333 打开美客多业务页失败：Message: invalid session id; For documentation on this error, please visit: https://www.selenium.dev/documentation/webdriver/troubleshooting/errors#invalidsess",2026-09-21 01:24:05
+获取声誉辅助信息,徐家强4,阿根廷,失败：站点切换失败,2026-09-20 14:26:25
+获取声誉辅助信息,徐家强4,巴西,"失败：徐家强4 打开美客多业务页失败：Message: invalid session id; For documentation on this error, please visit: https://www.selenium.dev/documentation/webdriver/troubleshooting/errors#invalidsessio",2026-09-21 01:23:23
+获取声誉辅助信息,徐家强4,智利,"失败：徐家强4 打开美客多业务页失败：Message: invalid session id; For documentation on this error, please visit: https://www.selenium.dev/documentation/webdriver/troubleshooting/errors#invalidsessio",2026-09-21 01:23:54
+获取声誉辅助信息,徐家强4,墨西哥,"失败：徐家强4 打开美客多业务页失败：Message: invalid session id; For documentation on this error, please visit: https://www.selenium.dev/documentation/webdriver/troubleshooting/errors#invalidsessio",2026-09-21 01:24:24
+获取声誉辅助信息,vngbjkk-pago,阿根廷,失败：未找到匹配的浏览器店铺/站点配置,2026-09-21 01:24:31
+获取声誉辅助信息,vngbjkk-pago,巴西,失败：未找到匹配的浏览器店铺/站点配置,2026-09-21 01:24:32
+获取声誉辅助信息,vngbjkk-pago,墨西哥,失败：未找到匹配的浏览器店铺/站点配置,2026-09-21 01:24:32
+获取声誉辅助信息,招财猫11,阿根廷,失败：未找到匹配的浏览器店铺/站点配置,2026-09-21 01:24:32
+获取声誉辅助信息,招财猫11,巴西,失败：未找到匹配的浏览器店铺/站点配置,2026-09-21 01:24:32
+获取声誉辅助信息,招财猫11,墨西哥,失败：未找到匹配的浏览器店铺/站点配置,2026-09-21 01:24:32
+获取声誉辅助信息,张健2,阿根廷,失败：未找到匹配的浏览器店铺/站点配置,2026-09-21 01:24:32
+获取声誉辅助信息,张健2,巴西,失败：未找到匹配的浏览器店铺/站点配置,2026-09-21 01:24:32
+获取声誉辅助信息,张健2,墨西哥,失败：未找到匹配的浏览器店铺/站点配置,2026-09-21 01:24:32
+获取声誉辅助信息,张建1,阿根廷,失败：未找到匹配的浏览器店铺/站点配置,2026-09-21 01:24:32
+获取声誉辅助信息,张建1,巴西,失败：未找到匹配的浏览器店铺/站点配置,2026-09-21 01:24:32
+获取声誉辅助信息,张建1,墨西哥,失败：未找到匹配的浏览器店铺/站点配置,2026-09-21 01:24:32
+获取声誉辅助信息,遥遥领先17,巴西,失败：未找到匹配的浏览器店铺/站点配置,2026-09-21 01:24:32
+获取声誉辅助信息,遥遥领先17,墨西哥,失败：未找到匹配的浏览器店铺/站点配置,2026-09-21 01:24:32
+获取声誉辅助信息,遥遥领先16,巴西,失败：未找到匹配的浏览器店铺/站点配置,2026-09-21 01:24:32
+获取声誉辅助信息,遥遥领先16,墨西哥,失败：未找到匹配的浏览器店铺/站点配置,2026-09-21 01:24:32
+获取声誉辅助信息,金满园2,阿根廷,失败：未找到匹配的浏览器店铺/站点配置,2026-09-21 01:24:32
+获取声誉辅助信息,金满园2,巴西,失败：未找到匹配的浏览器店铺/站点配置,2026-09-21 01:24:32
+获取声誉辅助信息,金满园2,墨西哥,失败：未找到匹配的浏览器店铺/站点配置,2026-09-21 01:24:32
+获取声誉辅助信息,金满园1,阿根廷,失败：未找到匹配的浏览器店铺/站点配置,2026-09-21 01:24:32
+获取声誉辅助信息,金满园1,巴西,失败：未找到匹配的浏览器店铺/站点配置,2026-09-21 01:24:32
+获取声誉辅助信息,金满园1,墨西哥,失败：未找到匹配的浏览器店铺/站点配置,2026-09-21 01:24:32
+获取声誉辅助信息,遥遥领先15,巴西,失败：未找到匹配的浏览器店铺/站点配置,2026-09-21 01:24:32
+获取声誉辅助信息,遥遥领先15,墨西哥,失败：未找到匹配的浏览器店铺/站点配置,2026-09-21 01:24:32

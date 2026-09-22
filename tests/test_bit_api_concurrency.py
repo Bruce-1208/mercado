@@ -60,7 +60,9 @@ def test_browser_api_slot_order_is_stable_and_covers_every_slot(monkeypatch):
     assert set(first) == {0, 1, 2}
 
 
-def test_close_browser_forwards_short_api_lock_timeout(monkeypatch):
+def test_close_browser_forwards_short_api_lock_timeout(monkeypatch, tmp_path):
+    monkeypatch.setattr(bit_runtime_lock, "RUNTIME_LOCK_DIR", tmp_path)
+    monkeypatch.setattr(bit_api, "getBrowserPids", lambda ids: {})
     calls = []
 
     class Lease:

@@ -222,6 +222,22 @@ def test_legacy_unknown_domain_false_pause_is_cleared_without_losing_current_ite
     assert "开始按钮已恢复" in service.store.logs()[-1]["message"]
 
 
+def test_agent_can_construct_api_service_without_remote_database_access(tmp_path, monkeypatch):
+    from erp.ai_weight_price.store import RemoteStore
+
+    def forbidden(*args, **kwargs):
+        raise AssertionError("Agent import must not access the remote AI weight-price store")
+
+    monkeypatch.setattr(RemoteStore, "_call", forbidden)
+    service = Service(
+        tmp_path,
+        storage_backend="api",
+        migrate_legacy_state=False,
+    )
+
+    assert service.store.backend == "api"
+
+
 class FakeBrowser:
     def __init__(self):
         self.sent=[];self.written=[];self.reply=[];self.fail_write=False;self.risk=False
