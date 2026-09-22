@@ -89,6 +89,14 @@ Write-Host "泽顺本机 Agent 登录启动任务已移除。" -ForegroundColor 
 '''
 
 
+def _windows_unblock_script():
+    return r'''$ErrorActionPreference = "Stop"
+$agentDir = Split-Path -Parent $MyInvocation.MyCommand.Path
+Get-ChildItem -LiteralPath $agentDir -Recurse -File | Unblock-File
+Write-Host "Agent files have been unblocked. You can run start-agent.bat now." -ForegroundColor Green
+'''
+
+
 def _macos_run_script(has_executable):
     if has_executable:
         command = (
@@ -245,6 +253,7 @@ def _build_windows_archive(archive, project_root, executable_path):
         )
         _writestr(archive, "requirements-agent.txt", "requests>=2.31,<3\n")
     _writestr(archive, "start-agent.bat", _windows_start_script(has_executable))
+    _writestr(archive, "unblock-agent.ps1", _windows_unblock_script())
     _writestr(archive, "install-agent.ps1", _windows_install_script(has_executable))
     _writestr(archive, "uninstall-agent.ps1", _windows_uninstall_script())
 
@@ -280,11 +289,15 @@ def _readme(target_platform, has_executable):
     )
     if target_platform == "windows":
         steps = """1. 解压本安装包到固定目录，不要直接在压缩包内运行。
-2. 双击 start-agent.bat 可立即启动；正式 EXE 只显示运行状态窗口，不会常驻 CMD 窗口；关闭窗口并确认后会停止当前任务并退出 Agent。
-3. 右键 install-agent.ps1，选择“使用 PowerShell 运行”，可安装为当前用户登录后自动启动任务。
-4. 如需取消登录启动，运行 uninstall-agent.ps1。"""
-        remaining_steps = """5. 第一次联网会自动注册，并从泽顺控制台下载经过哈希校验的最新业务代码。
-6. 控制台出现这台电脑的名称后，即可选择它执行本机任务。"""
+2. 如果 Windows 提示“应用和浏览器控制已阻止可能不安全的应用”，先右键 ZIP 文件打开“属性”，勾选“解除锁定/Unblock”，应用后重新解压。
+3. 如果已经解压，在当前目录打开 PowerShell，执行 `Unblock-File -Path .\\unblock-agent.ps1`，再双击 start-agent.bat。也可以右键运行 unblock-agent.ps1。
+4. 双击 start-agent.bat 可立即启动；正式 EXE 只显示运行状态窗口，不会常驻 CMD 窗口；关闭窗口并确认后会停止当前任务并退出 Agent。
+5. 右键 install-agent.ps1，选择“使用 PowerShell 运行”，可安装为当前用户登录后自动启动任务。
+6. 如需取消登录启动，运行 uninstall-agent.ps1。"""
+        remaining_steps = """7. 第一次联网会自动注册，并从泽顺控制台下载经过哈希校验的最新业务代码。
+8. 控制台出现这台电脑的名称后，即可选择它执行本机任务。
+
+如果解除文件锁定后仍然被组织的应用控制策略拦截，说明该电脑禁止未签名程序运行；请使用管理员提供的已签名 MercadoLocalAgent.exe，不能通过启动脚本安全地绕过该策略。"""
     else:
         steps = """1. 解压本安装包到固定目录，不要直接在压缩包内运行。
 2. 双击 start-agent.command 可立即启动；运行状态窗口会实时显示本机时间和日志，关闭窗口并确认后会停止当前任务并退出 Agent。如果 macOS 拦截，请在“系统设置 → 隐私与安全性”中允许打开。

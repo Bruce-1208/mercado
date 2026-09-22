@@ -9448,6 +9448,7 @@
     <link rel="stylesheet" href="{{ url_for('static', filename='ai-original-workbench.css') }}?v=20260921">
     <link rel="stylesheet" href="{{ url_for('static', filename='1688-products.css') }}?v=20260920">
     <script src="{{ url_for('static', filename='console-ui.js') }}?v=20260915"></script>
+    <script src="{{ url_for('static', filename='copy-anywhere.js') }}?v=20260922"></script>
     <script defer src="{{ url_for('static', filename='ai-original-products.js') }}?v=20260921-editor1"></script>
     <script defer src="{{ url_for('static', filename='ai-original-workbench.js') }}?v=20260921"></script>
     <script defer src="{{ url_for('static', filename='1688-products.js') }}?v=20260920"></script>
@@ -11852,10 +11853,10 @@
                     <section class="panel ai-video-panel">
                         <h3>1. 添加并排列原始素材</h3>
                         <p>排列顺序会写入 AI 场景提示；建议保留 3–6 个最能说明商品的素材，减少无效生成。</p>
-                        <div class="ai-video-dropzone" id="ai-video-dropzone" tabindex="0" role="button" aria-label="拖拽、选择或粘贴图片和视频">
+                        <div class="ai-video-dropzone" id="ai-video-dropzone" tabindex="0" role="button" aria-label="拖拽本地或网页上的图片和视频">
                             <span class="ai-video-drop-icon">＋</span>
-                            <strong>拖拽图片 / 视频到这里</strong>
-                            <small>或按 Ctrl + V 粘贴剪贴板图片 · 图片 ≤ 20 MB · AI 参考视频支持 MP4/MOV · 本地转格式另支持 AVI/MPEG/MKV/WEBM</small>
+                            <strong>拖拽本地或网页图片 / 视频到这里</strong>
+                            <small>支持本地文件、网页图片/视频直接拖入，或按 Ctrl + V 粘贴剪贴板图片 · 图片 ≤ 20 MB · AI 参考视频支持 MP4/MOV · 本地转格式另支持 AVI/MPEG/MKV/WEBM</small>
                         </div>
                         <input id="ai-video-file-input" type="file" accept="image/jpeg,image/png,image/webp,image/bmp,video/mp4,video/quicktime,video/x-msvideo,video/mpeg,video/x-matroska,video/webm,.mkv" multiple hidden>
                         <div class="ai-video-toolbar">
@@ -11871,7 +11872,7 @@
                             <input id="ai-video-asset-url" type="url" inputmode="url" placeholder="粘贴图片或视频链接（http/https）" onkeydown="if(event.key === 'Enter') { event.preventDefault(); addAiVideoAssetUrl(); }">
                             <button class="secondary" type="button" onclick="addAiVideoAssetUrl()">添加链接</button>
                         </div>
-                        <p class="ai-video-url-hint">视频链接请先选择“视频链接”；服务端会下载并校验链接内容后再提交。</p>
+                        <p class="ai-video-url-hint">网页拖拽会自动识别图片或视频；手动添加链接时请先选择类型，服务端会下载并校验链接内容后再提交。</p>
                         <div class="ai-video-assets" id="ai-video-assets" aria-live="polite"></div>
                     </section>
 
@@ -16544,16 +16545,10 @@
         async function copyOrderNumber(encodedValue, button) {
             const value = decodeURIComponent(encodedValue || "");
             if (!value) return;
-            try {
-                await navigator.clipboard.writeText(value);
-            } catch (_) {
-                const input = document.createElement("textarea");
-                input.value = value;
-                document.body.appendChild(input);
-                input.select();
-                document.execCommand("copy");
-                input.remove();
-            }
+            const copied = typeof window.copyTextReliably === "function"
+                ? await window.copyTextReliably(value, {toast: false})
+                : false;
+            if (!copied) return;
             if (button) {
                 const original = button.innerHTML;
                 button.textContent = "已复制";
@@ -19564,6 +19559,11 @@
         async function copyMercadoAuthorizationUrl() {
             const url = String(mercadoAuthorizationUrl?.value || "");
             if (!url) return;
+            if (typeof window.copyTextReliably === "function") {
+                const copied = await window.copyTextReliably(url, {toast: false});
+                if (copied) showMercadoTokenMessage("授权链接已复制");
+                return;
+            }
             try {
                 await navigator.clipboard.writeText(url);
                 showMercadoTokenMessage("授权链接已复制");
@@ -23636,7 +23636,72 @@
             else if (added) aiVideoSetMessage(`已添加 ${added} 个素材，可拖动卡片调整参考顺序。`, "success");
         }
 
-        function addAiVideoAssetUrl(value = "") {
+        function aiVideoInferUrlKind(value, hint = "") {
+            if (hint === "image" || hint === "video") return hint;
+            try {
+                const pathname = new URL(value, document.baseURI).pathname.toLowerCase();
+                if (/\.(mp4|mov|avi|mpe?g|mkv|webm)$/.test(pathname)) return "video";
+                if (/\.(jpe?g|png|bmp|webp)$/.test(pathname)) return "image";
+            } catch (_) { /* addAiVideoAssetUrl will report the URL error */ }
+            return "";
+        }
+
+        function aiVideoDroppedUrls(event) {
+            const transfer = event?.dataTransfer;
+            if (!transfer) return [];
+            const candidates = [];
+            const addCandidate = (value, kind = "") => {
+                const raw = String(value || "").trim();
+                if (!raw || !/^https?:\/\//i.test(raw)) return;
+                const url = raw;
+                const inferredKind = aiVideoInferUrlKind(url, kind);
+                const existing = candidates.find(item => item.url === url);
+                if (existing) {
+                    if (kind === "image" || kind === "video") existing.kind = kind;
+                    else if (!existing.kind && inferredKind) existing.kind = inferredKind;
+                    return;
+                }
+                candidates.push({url, kind: inferredKind});
+            };
+            const uriList = transfer.getData("text/uri-list") || "";
+            uriList.split(/\r?\n/).forEach(value => {
+                if (!value.trim().startsWith("#")) addCandidate(value);
+            });
+            const html = transfer.getData("text/html") || "";
+            if (html) {
+                try {
+                    const parsed = new DOMParser().parseFromString(html, "text/html");
+                    const mediaCountBefore = candidates.length;
+                    parsed.querySelectorAll("img[src]").forEach(node => addCandidate(node.getAttribute("src"), "image"));
+                    parsed.querySelectorAll("video[src], video source[src]").forEach(node => addCandidate(node.getAttribute("src"), "video"));
+                    if (candidates.length === mediaCountBefore) {
+                        parsed.querySelectorAll("a[href]").forEach(node => addCandidate(node.getAttribute("href")));
+                    }
+                } catch (_) { /* text/uri-list or text/plain may still be usable */ }
+            }
+            const plain = transfer.getData("text/plain") || "";
+            plain.split(/\r?\n/).forEach(value => addCandidate(value));
+            const selectedKind = document.getElementById("ai-video-asset-url-kind")?.value === "video" ? "video" : "image";
+            return candidates.map(item => ({...item, kind: item.kind || selectedKind}));
+        }
+
+        async function handleAiVideoDrop(event) {
+            event.preventDefault();
+            aiVideoDropzone?.classList.remove("dragging");
+            const files = Array.from(event.dataTransfer?.files || []);
+            if (files.length) {
+                await addAiVideoFiles(files);
+                return;
+            }
+            const urls = aiVideoDroppedUrls(event);
+            if (!urls.length) {
+                aiVideoSetMessage("未识别到网页图片或视频地址，请拖动网页中的媒体本身，或复制 URL 后粘贴到链接输入框。", "error");
+                return;
+            }
+            for (const item of urls) addAiVideoAssetUrl(item.url, item.kind);
+        }
+
+        function addAiVideoAssetUrl(value = "", kindOverride = "") {
             const input = document.getElementById("ai-video-asset-url");
             const kindSelect = document.getElementById("ai-video-asset-url-kind");
             const raw = String(value || input?.value || "").trim();
@@ -23654,7 +23719,9 @@
                 return;
             }
             const url = parsed.href;
-            const kind = kindSelect?.value === "video" ? "video" : "image";
+            const kind = kindOverride === "video" || kindOverride === "image"
+                ? kindOverride
+                : (kindSelect?.value === "video" ? "video" : "image");
             const localMode = aiVideoLocalTranscodeEnabled();
             if (localMode && (kind !== "video" || aiVideoAssets.length > 0)) {
                 aiVideoSetMessage("仅转换格式模式只能添加一个视频链接。", "error");
@@ -24121,11 +24188,7 @@
         });
         aiVideoDropzone?.addEventListener("dragover", event => { event.preventDefault(); aiVideoDropzone.classList.add("dragging"); });
         aiVideoDropzone?.addEventListener("dragleave", () => aiVideoDropzone.classList.remove("dragging"));
-        aiVideoDropzone?.addEventListener("drop", event => {
-            event.preventDefault();
-            aiVideoDropzone.classList.remove("dragging");
-            addAiVideoFiles(event.dataTransfer.files);
-        });
+        aiVideoDropzone?.addEventListener("drop", handleAiVideoDrop);
         aiVideoFileInput?.addEventListener("change", event => addAiVideoFiles(event.target.files));
         aiVideoAssetContainer?.addEventListener("dragover", event => { if (aiVideoDraggedIndex >= 0) event.preventDefault(); });
         aiVideoAssetContainer?.addEventListener("drop", event => { event.preventDefault(); reorderAiVideoAsset(event); });
