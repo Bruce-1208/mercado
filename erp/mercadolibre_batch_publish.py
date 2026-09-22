@@ -13,6 +13,7 @@ from typing import Any, Callable, Iterable, Mapping
 
 import requests
 
+from erp.ai_original_products import WHITE_BACKGROUND_METHODS
 from erp.mercadolibre_attribute_rules import (
     extract_listing_attributes_from_detail,
     normalize_collected_attribute,
@@ -183,7 +184,7 @@ def product_publish_issues(product_row: Mapping[str, Any]) -> list[str]:
             issues.append("AI 商品属性尚未生成")
         image_url = str(row.get("main_image_url") or "")
         if (
-            prepared.get("image_generation_method") != "ai_image_edit"
+            prepared.get("image_generation_method") not in WHITE_BACKGROUND_METHODS
             or "-ai-white.jpg" not in image_url
         ):
             issues.append("首图尚未完成 AI 白底生成")

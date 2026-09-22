@@ -160,6 +160,7 @@ def review_pending_products(
     stop_event=None,
     api_call: Callable | None = None,
     classifier: Callable | None = None,
+    deepseek_api_key: str = "",
     log_callback: Callable | None = None,
     progress_callback: Callable | None = None,
 ):
@@ -269,7 +270,11 @@ def review_pending_products(
     for batch_number, batch in enumerate(batches, start=1):
         _check_stopped(stop_event)
         log(f"第 {batch_number}/{len(batches)} 批提交 DeepSeek：{len(batch)} 个标题")
-        results = classifier(batch)
+        results = (
+            classifier(batch, api_key=deepseek_api_key)
+            if deepseek_api_key
+            else classifier(batch)
+        )
         by_id = {str(item.get("record_key") or item.get("row_id")): item for item in results}
         if set(by_id) != {row["product_id"] for row in batch}:
             raise ValueError("DeepSeek 未完整返回本批次全部产品，已停止本批写回")

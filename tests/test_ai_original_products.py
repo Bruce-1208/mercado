@@ -94,17 +94,27 @@ def test_white_background_image_is_square_and_white(tmp_path):
         def raise_for_status():
             return None
 
+    def remove_background(image):
+        cutout = image.convert("RGBA")
+        alpha = Image.new("L", cutout.size, 0)
+        for x in range(220, 480):
+            for y in range(110, 410):
+                alpha.putpixel((x, y), 255)
+        cutout.putalpha(alpha)
+        return cutout
+
     path, url = create_white_background_image(
         "https://cbu01.alicdn.com/source.png",
         "123456789",
         image_dir=tmp_path,
         http_get=lambda *_args, **_kwargs: Response(),
+        background_remove=remove_background,
     )
     with Image.open(path) as output:
-        assert output.width == output.height
-        assert output.width >= 800
+        assert output.size == (1024, 1024)
         assert all(channel >= 245 for channel in output.getpixel((0, 0)))
-    assert url.endswith("/api/ai-original-products/images/1688-123456789-white.jpg")
+        assert output.getpixel((512, 512))[2] >= 170
+    assert url.endswith("/api/ai-original-products/images/1688-123456789-ai-white.jpg")
 
 
 def test_ai_white_background_image_uses_image_model_callback(tmp_path):
@@ -223,6 +233,15 @@ def test_ai_original_publish_requires_generated_listing_attributes():
     assert "AI 商品属性尚未生成" in product_publish_issues(row)
 
 
+def test_ai_original_publish_accepts_free_local_white_background():
+    row = _ai_row()
+    snapshot = json.loads(row["source_snapshot_json"])
+    snapshot["ai_original"]["image_generation_method"] = "local_background_removal"
+    row["source_snapshot_json"] = json.dumps(snapshot)
+
+    assert product_publish_issues(row) == []
+
+
 def test_workbench_exposes_ai_original_module_and_batch_actions():
     root = Path(__file__).resolve().parents[1]
     template = (root / "bit" / "templates" / "index.html").read_text(encoding="utf-8")
@@ -233,13 +252,19 @@ def test_workbench_exposes_ai_original_module_and_batch_actions():
     assert "1688 原始资料" in script
     assert "AI 美客多刊登稿" in script
     assert "renderAiOriginalAttributes" in script
-    assert 'id="ai-original-image-base-url"' in template
-    assert 'id="ai-original-image-model"' in template
-    assert 'id="ai-original-image-api-key"' in template
+    assert "rembg / isnet-general-use" in template
+    assert 'id="ai-original-image-model"' not in template
     assert "执行所选 AI 任务" in template
     assert "上架所选到对应店铺" in template
     assert 'fetch("/api/ai-original-products/process"' in script
     assert 'fetch("/api/mercado-products/publish"' in script
+
+
+def test_server_requirements_include_free_local_background_removal():
+    root = Path(__file__).resolve().parents[1]
+    requirements = (root / "bit" / "requirements-server.txt").read_text(encoding="utf-8")
+
+    assert "rembg[cpu]==2.0.67" in requirements
 
 
 def test_workbench_exposes_1688_product_area_for_collector_records():

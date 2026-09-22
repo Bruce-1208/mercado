@@ -73,9 +73,10 @@ def _get_client(
     if not api_key:
         raise RuntimeError(
             "缺少 DeepSeek API Key。请任选一种方式配置："
-            "1）在项目根目录创建 deepseek_key.txt；"
-            "2）在 AI_Agent/deepseek_key.txt 写入 key；"
-            "3）在 .env 写入 DEEPSEEK_API_KEY=你的key。"
+            "1）在泽顺控制台“集成与凭证设置”中填写 DeepSeek API Key；"
+            "2）在项目根目录创建 deepseek_key.txt；"
+            "3）在 AI_Agent/deepseek_key.txt 写入 key；"
+            "4）在 .env 写入 DEEPSEEK_API_KEY=你的key。"
         )
 
     return OpenAI(

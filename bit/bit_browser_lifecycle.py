@@ -20,18 +20,25 @@ log = logging.getLogger(__name__)
 _reaper_guard = threading.Lock()
 _reaper_pid = None
 _LIVE_SNAPSHOT_TTL = 2.0
+DEFAULT_BROWSER_MAX_OPEN_WINDOWS = 5
+MAX_BROWSER_MAX_OPEN_WINDOWS = 10
 
 
-def _setting(name, default, minimum=1):
+def _setting(name, default, minimum=1, maximum=None):
     try:
-        return max(minimum, int(os.environ.get(name, default)))
+        value = max(minimum, int(os.environ.get(name, default)))
     except (TypeError, ValueError):
-        return default
+        value = default
+    return min(value, maximum) if maximum is not None else value
 
 
 def browser_window_limit():
     """Share the admission limit with schedulers before they start workers."""
-    return _setting("BIT_BROWSER_MAX_OPEN_WINDOWS", 3)
+    return _setting(
+        "BIT_BROWSER_MAX_OPEN_WINDOWS",
+        DEFAULT_BROWSER_MAX_OPEN_WINDOWS,
+        maximum=MAX_BROWSER_MAX_OPEN_WINDOWS,
+    )
 
 
 @contextmanager

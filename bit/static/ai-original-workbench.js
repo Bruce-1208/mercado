@@ -10,7 +10,7 @@ function aiOriginalListingChecks(row) {
     {label: "商品属性", ok: aiOriginalAttributes(prepared.attributes).some(a => !["BRAND", "ITEM_CONDITION"].includes(String(a.id || "").toUpperCase()))},
     {label: "双语标题", ok: [row.title_es, row.title_pt].every(s => s?.trim() && [...s].length <= 60)},
     {label: "双语描述", ok: [row.description_es, row.description_pt].every(s => s?.trim())},
-    {label: "AI 白底主图", ok: prepared.image_generation_method === "ai_image_edit" && String(row.main_image_url || "").includes("-ai-white.jpg")},
+    {label: "AI 白底主图", ok: ["ai_image_edit", "local_background_removal"].includes(prepared.image_generation_method) && String(row.main_image_url || "").includes("-ai-white.jpg")},
     {label: "重量与收益", ok: Number(row.weight_g) > 0 && Number(row.net_proceeds_usd) > 0 && !["calculated_volumetric", "legacy_unknown", "plugin_volumetric_fallback"].includes(row.weight_basis)}
   ];
 }

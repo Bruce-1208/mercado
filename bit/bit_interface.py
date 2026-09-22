@@ -83,7 +83,9 @@ import bit.bit_store_link_sync as bit_store_link_sync
 import bit.bit_update_orders as bit_update_orders
 import bit.bit_zying_caiji as bit_zying_caiji
 import bit.bit_zying_infringement as bit_zying_infringement
+import bit.account_webhook as account_webhook
 import bit.browser_extension_mail as browser_extension_mail
+import bit.browser_extension_models as browser_extension_models
 import bit.mercado_communications as mercado_communications
 import bit.mercado_infraction_sync as mercado_infraction_sync
 import bit.mercado_reputation as mercado_reputation
@@ -177,6 +179,11 @@ app.config.update(
     SESSION_REFRESH_EACH_REQUEST=False,
     TEMPLATES_AUTO_RELOAD=False,
     SEND_FILE_MAX_AGE_DEFAULT=0,
+)
+bit_ai_video.set_account_credential_resolver(
+    lambda user_id: browser_extension_models.get_private_settings(
+        user_id, app.secret_key
+    )
 )
 
 LOCAL_EXECUTOR_TOKEN_SALT = "zeshun-local-executor-v1"
@@ -4836,7 +4843,10 @@ def _start_zying_infringement_task(params):
             }
         return data, "智赢产品查侵权任务正在运行", 409
 
-    public_params = {key: value for key, value in dict(params).items() if key != "auth_token"}
+    private_fields = {"auth_token", "deepseek_api_key"}
+    public_params = {
+        key: value for key, value in dict(params).items() if key not in private_fields
+    }
     with _zying_infringement_state_lock:
         _zying_infringement_stop_event.clear()
         _zying_infringement_logs.clear()
@@ -4915,7 +4925,7 @@ def build_risk_check_params(data):
     if not base_url:
         base_url = default_base_urls.get(ai_provider, "")
     if provider_was_supplied and not api_key:
-        raise ValueError("请输入本次 AI 侵权检测使用的 Token")
+        raise ValueError("请先在“集成与凭证设置”中配置所选 AI 服务的 Token")
     if ai_provider == "local" and not base_url:
         raise ValueError("本地模型必须填写 OpenAI 兼容接口地址")
     if base_url:
@@ -4931,7 +4941,7 @@ def build_risk_check_params(data):
             raise ValueError("AI 模型链接不能超过 2000 个字符")
         base_url = base_url.rstrip("/")
     default_models = {
-        "deepseek": "deepseek-chat",
+        "deepseek": "deepseek-v4-pro",
         "qianwen": "qwen-plus",
     }
     model = str(data.get("model") or "").strip()[:128] or (
@@ -5247,7 +5257,7 @@ def build_daily_task_params(data):
     )
     deepseek_api_key = str(data.get("deepseek_api_key") or "").strip()
     if appeal_copy_mode == bit_daily_task.APPEAL_COPY_MODE_AI and not deepseek_api_key:
-        raise ValueError("AI话术模式必须手动填写 DeepSeek Token")
+        raise ValueError("请先在“集成与凭证设置”中配置 DeepSeek Token")
     if appeal_copy_mode != bit_daily_task.APPEAL_COPY_MODE_AI:
         deepseek_api_key = ""
     raw_appeal_types = (
@@ -5910,6 +5920,11 @@ def api_run_shensu():
         if data
         else request.args.get("deepseek_api_key", "")
     ).strip()
+    if appeal_copy_mode == bit_daily_task.APPEAL_COPY_MODE_AI and not deepseek_api_key:
+        try:
+            deepseek_api_key = _account_api_key("deepseek")
+        except ValueError as exc:
+            return jsonify({"status": "error", "message": str(exc)}), 400
     if appeal_copy_mode == bit_daily_task.APPEAL_COPY_MODE_AI and mode != "AI客服":
         return jsonify({
             "status": "error",
@@ -5918,7 +5933,7 @@ def api_run_shensu():
     if appeal_copy_mode == bit_daily_task.APPEAL_COPY_MODE_AI and not deepseek_api_key:
         return jsonify({
             "status": "error",
-            "message": "AI话术模式必须手动填写 DeepSeek Token",
+            "message": "请先在“集成与凭证设置”中配置 DeepSeek API Key",
         }), 400
     task_id = normalize_appeal_task_id(
         data.get("task_id", "") if data else request.args.get("task_id", "")
@@ -7925,10 +7940,13 @@ def api_db_store_link_video(link_id):
 def _ai_video_create_response(*, internal=False):
     uploads = request.files.getlist("files")
     try:
+        form = request.form.to_dict()
+        if not internal:
+            form["credential_owner_id"] = str(_current_account_user_id())
         if internal:
-            result = bit_ai_video.create_job(uploads, request.form.to_dict())
+            result = bit_ai_video.create_job(uploads, form)
         else:
-            result = bit_db_api.create_ai_video_job(uploads, request.form.to_dict())
+            result = bit_db_api.create_ai_video_job(uploads, form)
     except ValueError as exc:
         return jsonify({"status": "error", "message": str(exc)}), 400
     except RuntimeError as exc:
@@ -7956,7 +7974,8 @@ def api_ai_video_jobs():
         return _ai_video_create_response()
     try:
         data = bit_db_api.list_ai_video_jobs(
-            _parse_int_param(request.args, "limit", 30, 1, 100)
+            _parse_int_param(request.args, "limit", 30, 1, 100),
+            user_id=_current_account_user_id(),
         )
     except Exception as exc:
         logging.exception("读取 AI 视频任务失败")
@@ -7968,11 +7987,13 @@ def api_ai_video_jobs():
 @login_required
 def api_ai_video_settings():
     try:
-        data = (
-            bit_db_api.update_ai_video_settings(request.get_json(silent=True) or {})
-            if request.method == "PATCH"
-            else bit_db_api.get_ai_video_settings()
-        )
+        user_id = _current_account_user_id()
+        if request.method == "PATCH":
+            changes = request.get_json(silent=True) or {}
+            for field in ("seedance_api_key", "wan_api_key", "api_key", "wan_workspace_id", "workspace_id"):
+                changes.pop(field, None)
+            bit_db_api.update_ai_video_settings(changes, user_id=user_id)
+        data = bit_db_api.get_ai_video_settings(user_id=user_id)
     except ValueError as exc:
         return jsonify({"status": "error", "message": str(exc)}), 400
     except Exception as exc:
@@ -8124,7 +8145,8 @@ def api_db_ai_video_jobs():
         return _ai_video_create_response(internal=True)
     try:
         data = bit_ai_video.list_jobs(
-            _parse_int_param(request.args, "limit", 30, 1, 100)
+            _parse_int_param(request.args, "limit", 30, 1, 100),
+            user_id=request.args.get("user_id"),
         )
     except Exception as exc:
         return jsonify({"status": "error", "message": str(exc)}), 500
@@ -8141,7 +8163,7 @@ def api_db_ai_video_settings():
         data = (
             bit_ai_video.save_provider_settings(request.get_json(silent=True) or {})
             if request.method == "PATCH"
-            else bit_ai_video.provider_settings()
+            else bit_ai_video.provider_settings(request.args.get("user_id"))
         )
     except ValueError as exc:
         return jsonify({"status": "error", "message": str(exc)}), 400
@@ -8641,6 +8663,15 @@ def api_prohibited_listing_sync_status():
 @login_required
 def api_start_daily_task():
     data = request.get_json(silent=True) or {}
+    if (
+        str(data.get("appeal_copy_mode") or "").strip()
+        == bit_daily_task.APPEAL_COPY_MODE_AI
+        and not str(data.get("deepseek_api_key") or "").strip()
+    ):
+        try:
+            data["deepseek_api_key"] = _account_api_key("deepseek")
+        except ValueError as exc:
+            return jsonify({"status": "error", "message": str(exc)}), 400
     try:
         params = build_daily_task_params(data)
     except ValueError as exc:
@@ -10225,8 +10256,17 @@ def api_stop_zying_collection():
 @app.route('/api/risk-check/start', methods=['POST'])
 @login_required
 def api_start_risk_check():
+    payload = request.get_json(silent=True) or {}
+    provider_supplied = "ai_provider" in payload or "provider" in payload
+    provider = str(payload.get("ai_provider") or payload.get("provider") or "deepseek").strip().lower()
+    if provider_supplied and provider not in {"local", "本地"} and not str(payload.get("api_key") or payload.get("token") or "").strip():
+        credential_provider = "dashscope" if provider in {"qianwen", "qwen", "千问"} else "deepseek"
+        try:
+            payload["api_key"] = _account_api_key(credential_provider)
+        except ValueError as exc:
+            return jsonify({"status": "error", "message": str(exc)}), 400
     try:
-        params = build_risk_check_params(request.get_json(silent=True) or {})
+        params = build_risk_check_params(payload)
     except ValueError as exc:
         return jsonify({"status": "error", "message": str(exc)}), 400
     if not _risk_check_lock.acquire(blocking=False):
@@ -16820,6 +16860,124 @@ def index():
     )
 
 
+def _current_account_user_id():
+    user = (
+        getattr(g, "browser_extension_user", None)
+        or getattr(g, "local_executor_user", None)
+        or get_current_workbench_user()
+        or {}
+    )
+    user_id = int(user.get("id") or 0)
+    if not user_id:
+        raise ValueError("当前登录账号缺少用户 ID，请退出后重新登录")
+    return user_id
+
+
+def _account_api_key(provider):
+    return browser_extension_models.get_api_key(
+        _current_account_user_id(), provider, app.secret_key
+    )
+
+
+@app.route("/settings/integrations")
+@login_required
+def account_integrations_page():
+    return render_template(
+        "integration_settings.html",
+        current_user=get_current_workbench_user() or {},
+    )
+
+
+@app.route("/api/account-integrations", methods=["GET"])
+@login_required
+def api_account_integrations():
+    try:
+        user_id = _current_account_user_id()
+        data = {
+            "tokens": browser_extension_models.get_public_settings(user_id, app.secret_key),
+            "email": browser_extension_mail.get_public_settings(user_id, app.secret_key),
+            "webhook": account_webhook.get_public_settings(user_id, app.secret_key),
+        }
+    except ValueError as exc:
+        return jsonify({"status": "error", "message": str(exc)}), 400
+    response = jsonify({"status": "success", "data": data})
+    response.headers["Cache-Control"] = "no-store"
+    return response
+
+
+@app.route("/api/account-integrations/tokens", methods=["PUT"])
+@login_required
+def api_account_integration_tokens():
+    try:
+        data = browser_extension_models.save_settings(
+            _current_account_user_id(), request.get_json(silent=True) or {}, app.secret_key
+        )
+    except ValueError as exc:
+        return jsonify({"status": "error", "message": str(exc)}), 400
+    except Exception as exc:
+        logging.exception("账号模型凭证保存失败")
+        return jsonify({"status": "error", "message": f"模型凭证保存失败：{exc}"}), 500
+    response = jsonify({"status": "success", "message": "模型凭证已保存", "data": data})
+    response.headers["Cache-Control"] = "no-store"
+    return response
+
+
+@app.route("/api/account-integrations/email", methods=["PUT"])
+@login_required
+def api_account_integration_email():
+    try:
+        data = browser_extension_mail.save_settings(
+            _current_account_user_id(), request.get_json(silent=True) or {}, app.secret_key
+        )
+    except ValueError as exc:
+        return jsonify({"status": "error", "message": str(exc)}), 400
+    except Exception as exc:
+        logging.exception("账号邮件提醒配置失败")
+        return jsonify({"status": "error", "message": f"邮件配置失败：{exc}"}), 500
+    return jsonify({"status": "success", "message": "邮件提醒已保存", "data": data})
+
+
+@app.route("/api/account-integrations/email/test", methods=["POST"])
+@login_required
+def api_account_integration_email_test():
+    try:
+        data = browser_extension_mail.send_test(_current_account_user_id(), app.secret_key)
+    except ValueError as exc:
+        return jsonify({"status": "error", "message": str(exc)}), 400
+    except Exception as exc:
+        logging.exception("账号测试邮件发送失败")
+        return jsonify({"status": "error", "message": f"测试邮件发送失败：{exc}"}), 502
+    return jsonify({"status": "success", "message": "测试邮件已发送", "data": data})
+
+
+@app.route("/api/account-integrations/webhook", methods=["PUT"])
+@login_required
+def api_account_integration_webhook():
+    try:
+        data = account_webhook.save_settings(
+            _current_account_user_id(), request.get_json(silent=True) or {}, app.secret_key
+        )
+    except ValueError as exc:
+        return jsonify({"status": "error", "message": str(exc)}), 400
+    except Exception as exc:
+        logging.exception("账号 Webhook 保存失败")
+        return jsonify({"status": "error", "message": f"Webhook 保存失败：{exc}"}), 500
+    return jsonify({"status": "success", "message": "Webhook 已保存", "data": data})
+
+
+@app.route("/api/account-integrations/webhook/test", methods=["POST"])
+@login_required
+def api_account_integration_webhook_test():
+    try:
+        data = account_webhook.send_test(_current_account_user_id(), app.secret_key)
+    except ValueError as exc:
+        return jsonify({"status": "error", "message": str(exc)}), 400
+    except Exception as exc:
+        logging.exception("账号 Webhook 测试失败")
+        return jsonify({"status": "error", "message": f"Webhook 测试失败：{exc}"}), 502
+    return jsonify({"status": "success", "message": "Webhook 测试已发送", "data": data})
+
+
 @app.route("/login")
 def login_page():
     if session.get("workbench_user"):
@@ -16952,7 +17110,7 @@ def api_browser_extension_download():
         max_age=0,
     )
     response.headers["Cache-Control"] = "no-store"
-    response.headers["X-Zeshun-Extension-Version"] = "1.6.0"
+    response.headers["X-Zeshun-Extension-Version"] = "1.7.0"
     return response
 
 
@@ -16962,57 +17120,34 @@ def api_browser_extension_session():
     return jsonify({"status": "success", "data": {"user": g.browser_extension_user}})
 
 
-@app.route("/api/browser-extension/notifications/settings", methods=["GET", "PUT"])
-@browser_extension_login_required
-def api_browser_extension_notification_settings():
-    user_id = int((g.browser_extension_user or {}).get("id") or 0)
-    try:
-        data = (
-            browser_extension_mail.save_settings(
-                user_id, request.get_json(silent=True) or {}, app.secret_key
-            )
-            if request.method == "PUT"
-            else browser_extension_mail.get_public_settings(user_id, app.secret_key)
-        )
-    except ValueError as exc:
-        return jsonify({"status": "error", "message": str(exc)}), 400
-    except Exception as exc:
-        logging.exception("泽顺插件邮件通知配置失败")
-        return jsonify({"status": "error", "message": f"邮件通知配置失败：{exc}"}), 500
-    response = jsonify({"status": "success", "data": data})
-    response.headers["Cache-Control"] = "no-store"
-    return response
-
-
-@app.route("/api/browser-extension/notifications/test", methods=["POST"])
-@browser_extension_login_required
-def api_browser_extension_notification_test():
-    user_id = int((g.browser_extension_user or {}).get("id") or 0)
-    try:
-        data = browser_extension_mail.send_test(user_id, app.secret_key)
-    except ValueError as exc:
-        return jsonify({"status": "error", "message": str(exc)}), 400
-    except Exception as exc:
-        logging.exception("泽顺插件测试邮件发送失败")
-        return jsonify({"status": "error", "message": f"测试邮件发送失败：{exc}"}), 502
-    return jsonify({"status": "success", "message": "测试邮件已发送", "data": data})
-
-
 @app.route("/api/browser-extension/notifications/send", methods=["POST"])
 @browser_extension_login_required
 def api_browser_extension_notification_send():
     user_id = int((g.browser_extension_user or {}).get("id") or 0)
+    event = request.get_json(silent=True) or {}
+    if str(event.get("event_type") or "") not in browser_extension_mail.EVENT_LABELS:
+        return jsonify({"status": "error", "message": "通知事件类型无效"}), 400
+    channels = {}
+    errors = {}
     try:
-        data = browser_extension_mail.send_alert(
-            user_id, request.get_json(silent=True) or {}, app.secret_key
+        channels["email"] = browser_extension_mail.send_alert(
+            user_id, event, app.secret_key
         )
-    except ValueError as exc:
-        logging.warning("泽顺插件邮件告警未发送：%s", exc)
-        return jsonify({"status": "error", "message": str(exc)}), 400
     except Exception as exc:
-        logging.exception("泽顺插件邮件告警发送失败")
-        return jsonify({"status": "error", "message": f"邮件告警发送失败：{exc}"}), 502
-    return jsonify({"status": "success", "data": data})
+        logging.warning("泽顺插件邮件告警未发送：%s", exc)
+        errors["email"] = str(exc)
+    try:
+        channels["webhook"] = account_webhook.send_event(
+            user_id, event, app.secret_key
+        )
+    except Exception as exc:
+        logging.warning("泽顺插件 Webhook 告警未发送：%s", exc)
+        errors["webhook"] = str(exc)
+    sent = any(bool(value.get("sent")) for value in channels.values())
+    return jsonify({
+        "status": "success",
+        "data": {"sent": sent, "channels": channels, "errors": errors},
+    })
 
 
 @app.route("/api/browser-extension/purchase-tracking/request", methods=["GET"])
@@ -17277,6 +17412,12 @@ def api_browser_extension_start_zying_infringement():
         credential = _browser_extension_zying_credential(data)
         params = build_zying_infringement_params(data)
         params["auth_token"] = credential
+        user_id = int((g.browser_extension_user or {}).get("id") or 0)
+        deepseek_api_key = browser_extension_models.get_api_key(
+            user_id, "deepseek", app.secret_key
+        )
+        if deepseek_api_key:
+            params["deepseek_api_key"] = deepseek_api_key
     except bit_zying_caiji.ZyingAuthenticationError as exc:
         return jsonify({"status": "error", "message": str(exc)}), 409
     except (TypeError, ValueError) as exc:
@@ -17436,8 +17577,11 @@ def api_browser_extension_ai_weight_price_start():
     data = request.get_json(silent=True) or {}
     try:
         from erp.ai_weight_price.config import selection_params
-
         config = ai_weight_price_service.config.load()
+        user_id = int((g.browser_extension_user or {}).get("id") or 0)
+        dashscope_api_key = browser_extension_models.get_api_key(
+            user_id, "dashscope", app.secret_key
+        )
         selection = selection_params(data.get("selection"), config)
         max_items = data.get("max_items", 10)
         if type(max_items) is not int:
@@ -17452,7 +17596,8 @@ def api_browser_extension_ai_weight_price_start():
             and same_selection
         )
         ai_weight_price_service.start(
-            "pipeline", selection=selection, max_items=max_items, resume=resume
+            "pipeline", selection=selection, max_items=max_items, resume=resume,
+            runtime_api_key=dashscope_api_key,
         )
     except ValueError as exc:
         return jsonify({"status": "error", "message": str(exc)}), 400
@@ -17875,6 +18020,15 @@ def api_process_ai_original_products():
         image_model = str(data.get("image_model") or "").strip()[:128]
         image_base_url = str(data.get("image_base_url") or "").strip()[:2000]
         workers = max(1, min(int(data.get("workers") or 3), 6))
+        if not api_key:
+            provider = (
+                "dashscope" if "aliyuncs.com" in base_url
+                else "openai" if "openai.com" in base_url
+                else "deepseek"
+            )
+            api_key = _account_api_key(provider)
+        if image_model and not image_api_key:
+            image_api_key = _account_api_key("openai")
     except (TypeError, ValueError) as exc:
         return jsonify({"status": "error", "message": str(exc)}), 400
     with _ai_original_task_lock:

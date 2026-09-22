@@ -160,7 +160,7 @@ function renderAiOriginalProducts() {
     const titlePt = row.title_pt || "等待 AI 生成葡萄牙语标题";
     const aiAttributes = aiOriginalAttributes(row.ai_original?.attributes);
     const ready = status === "completed" && aiAttributes.some(attribute => !["BRAND", "ITEM_CONDITION"].includes(String(attribute.id || "").toUpperCase()));
-    const aiImageReady = row.ai_original?.image_generation_method === "ai_image_edit" && aiImage.includes("-ai-white.jpg");
+    const aiImageReady = ["ai_image_edit", "local_background_removal"].includes(row.ai_original?.image_generation_method) && aiImage.includes("-ai-white.jpg");
     return `<article class="ai-original-card">
       <input type="checkbox" value="${Number(row.id)}" ${aiOriginalSelected.has(Number(row.id)) ? "checked" : ""} onchange="toggleAiOriginalProduct(${Number(row.id)}, this.checked)">
       <div class="ai-original-image-pair">

@@ -12,7 +12,7 @@ import json
 import os
 import re
 import base64
-from collections import deque
+import threading
 from io import BytesIO
 from pathlib import Path
 from typing import Any, Callable, Mapping
@@ -30,6 +30,10 @@ IMAGE_BASE_URL = str(
     os.environ.get("AI_ORIGINAL_IMAGE_BASE_URL") or "http://127.0.0.1:5000"
 ).rstrip("/")
 MAX_TITLE_CHARS = 60
+LOCAL_BACKGROUND_MODEL = "isnet-general-use"
+WHITE_BACKGROUND_METHODS = frozenset({"ai_image_edit", "local_background_removal"})
+_background_removal_session = None
+_background_removal_session_lock = threading.Lock()
 
 
 def extract_1688_item_id(value: Any) -> str:
@@ -297,37 +301,40 @@ def generate_marketplace_copy(
     }
 
 
-def _background_mask(image, threshold: int = 48):
-    """Return edge-connected pixels close to a corner colour."""
-    from PIL import Image
+def _local_background_removal_session():
+    """Create one reusable local ONNX session, downloading weights once."""
+    global _background_removal_session
+    if _background_removal_session is not None:
+        return _background_removal_session
+    with _background_removal_session_lock:
+        if _background_removal_session is not None:
+            return _background_removal_session
+        try:
+            from rembg import new_session
+        except ImportError as exc:
+            raise RuntimeError(
+                "缺少本地白底图依赖；请运行 python -m pip install "
+                "-r bit/requirements-server.txt"
+            ) from exc
+        try:
+            _background_removal_session = new_session(LOCAL_BACKGROUND_MODEL)
+        except Exception as exc:
+            raise RuntimeError(
+                f"本地白底图模型 {LOCAL_BACKGROUND_MODEL} 初始化失败：{exc}"
+            ) from exc
+    return _background_removal_session
 
-    rgb = image.convert("RGB")
-    width, height = rgb.size
-    corners = [rgb.getpixel((0, 0)), rgb.getpixel((width - 1, 0)),
-               rgb.getpixel((0, height - 1)), rgb.getpixel((width - 1, height - 1))]
-    background = tuple(sum(pixel[channel] for pixel in corners) // 4 for channel in range(3))
-    source = rgb.load()
-    mask = Image.new("L", rgb.size, 0)
-    target = mask.load()
-    pending = deque()
-    for x in range(width):
-        pending.extend(((x, 0), (x, height - 1)))
-    for y in range(height):
-        pending.extend(((0, y), (width - 1, y)))
-    while pending:
-        x, y = pending.popleft()
-        if target[x, y]:
-            continue
-        pixel = source[x, y]
-        distance = sum((pixel[channel] - background[channel]) ** 2 for channel in range(3)) ** 0.5
-        if distance > threshold:
-            continue
-        target[x, y] = 255
-        if x: pending.append((x - 1, y))
-        if x + 1 < width: pending.append((x + 1, y))
-        if y: pending.append((x, y - 1))
-        if y + 1 < height: pending.append((x, y + 1))
-    return mask
+
+def _remove_background_locally(image):
+    """Return an RGBA cutout without using a paid or remote inference API."""
+    try:
+        from rembg import remove
+    except ImportError as exc:
+        raise RuntimeError(
+            "缺少本地白底图依赖；请运行 python -m pip install "
+            "-r bit/requirements-server.txt"
+        ) from exc
+    return remove(image, session=_local_background_removal_session())
 
 
 def create_white_background_image(
@@ -336,8 +343,10 @@ def create_white_background_image(
     *,
     image_dir: Path | None = None,
     http_get: Callable[..., Any] | None = None,
+    background_remove: Callable[[Any], Any] | None = None,
 ) -> tuple[Path, str]:
-    from PIL import Image, ImageFilter, ImageOps
+    """Remove the background locally and place the product on a white square."""
+    from PIL import Image, ImageOps
 
     parsed_source = urlparse(str(source_url or ""))
     source_host = (parsed_source.hostname or "").lower()
@@ -365,16 +374,32 @@ def create_white_background_image(
     if max_side > 1600:
         scale = 1600 / max_side
         image = image.resize((round(image.width * scale), round(image.height * scale)), Image.Resampling.LANCZOS)
-    mask = _background_mask(image).filter(ImageFilter.GaussianBlur(radius=1.2))
-    white = Image.new("RGB", image.size, "white")
-    image = Image.composite(white, image, mask)
-    canvas_size = max(800, round(max(image.size) * 1.12))
+    removed = (background_remove or _remove_background_locally)(image)
+    if isinstance(removed, (bytes, bytearray)):
+        with Image.open(BytesIO(bytes(removed))) as opened:
+            cutout = ImageOps.exif_transpose(opened).convert("RGBA")
+    elif hasattr(removed, "convert"):
+        cutout = ImageOps.exif_transpose(removed).convert("RGBA")
+    else:
+        raise ValueError("本地白底图模型返回格式无效")
+    bounds = cutout.getchannel("A").getbbox()
+    if not bounds:
+        raise ValueError("本地白底图模型未识别到商品主体")
+    cutout = cutout.crop(bounds)
+    canvas_size = 1024
+    cutout.thumbnail(
+        (round(canvas_size * 0.9), round(canvas_size * 0.9)),
+        Image.Resampling.LANCZOS,
+    )
     canvas = Image.new("RGB", (canvas_size, canvas_size), "white")
-    image.thumbnail((round(canvas_size * 0.9), round(canvas_size * 0.9)), Image.Resampling.LANCZOS)
-    canvas.paste(image, ((canvas_size - image.width) // 2, (canvas_size - image.height) // 2))
+    position = (
+        (canvas_size - cutout.width) // 2,
+        (canvas_size - cutout.height) // 2,
+    )
+    canvas.paste(cutout.convert("RGB"), position, cutout.getchannel("A"))
     target_dir = Path(image_dir or IMAGE_DIR)
     target_dir.mkdir(parents=True, exist_ok=True)
-    filename = f"1688-{extract_1688_item_id(item_id) or re.sub(r'\W+', '', item_id)}-white.jpg"
+    filename = f"1688-{extract_1688_item_id(item_id) or re.sub(r'\W+', '', item_id)}-ai-white.jpg"
     path = target_dir / filename
     canvas.save(path, format="JPEG", quality=94, optimize=True)
     return path, f"{IMAGE_BASE_URL}/api/ai-original-products/images/{filename}"
@@ -529,7 +554,7 @@ def prepare_ai_original_product(
             image_dir=image_dir,
             http_get=http_get,
         )
-        image_generation_method = "local_white_background_fallback"
+        image_generation_method = "local_background_removal"
     generated_attributes = list(copy.get("attributes") or [])
     # These are safe marketplace defaults; category-specific attributes are
     # resolved and validated against Mercado's live schema during publication.

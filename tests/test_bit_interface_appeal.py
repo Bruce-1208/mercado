@@ -909,7 +909,7 @@ def test_build_daily_task_params_supports_independent_ai_copy_mode():
 
     assert params["appeal_copy_mode"] == "AI话术模式"
     assert params["deepseek_api_key"] == "manual-secret"
-    with pytest.raises(ValueError, match="手动填写 DeepSeek Token"):
+    with pytest.raises(ValueError, match="集成与凭证设置"):
         bit_interface.build_daily_task_params({
             "appeal_type": "禁限售",
             "appeal_copy_mode": "AI话术模式",
@@ -1750,7 +1750,7 @@ def test_ai_script_mode_is_independent_from_customer_service_mode():
         bit_interface.normalize_appeal_mode("未知模式")
 
 
-def test_appeal_console_exposes_manual_deepseek_token_without_query_string():
+def test_appeal_console_uses_account_deepseek_token_without_query_string():
     template = (
         Path(bit_interface.CURRENT_DIR) / "templates" / "index.html"
     ).read_text(encoding="utf-8")
@@ -1761,9 +1761,9 @@ def test_appeal_console_exposes_manual_deepseek_token_without_query_string():
     assert "AI话术模式" not in customer_mode_options
     assert 'id="appeal-copy-mode"' in template
     assert 'id="daily-task-copy-mode"' in template
-    assert 'id="deepseek-api-key" type="password"' in template
-    assert 'id="daily-task-deepseek-api-key" type="password"' in template
-    assert "每次最多 3 个产品，理由不超过 50 个字" in template
+    assert 'id="deepseek-api-key" type="hidden"' in template
+    assert 'id="daily-task-deepseek-api-key" type="hidden"' in template
+    assert "/settings/integrations" in template
     assert 'appeal_copy_mode: appealCopyMode' in template
     assert 'deepseek_api_key: deepseekApiKey' in template
     assert 'method: "POST"' in template
@@ -2634,4 +2634,4 @@ def test_run_appeal_api_requires_token_for_ai_script_mode(monkeypatch):
     )
 
     assert response.status_code == 400
-    assert "手动填写 DeepSeek Token" in response.get_json()["message"]
+    assert "登录账号缺少用户 ID" in response.get_json()["message"]

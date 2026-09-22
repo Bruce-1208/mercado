@@ -257,7 +257,7 @@ def _daily_browser_worker_limit():
         )
     except (TypeError, ValueError):
         requested = DEFAULT_DAILY_BROWSER_WORKER_LIMIT
-    # Extra processes otherwise time out after 180s waiting for the same three
+    # Extra processes otherwise time out after 180s waiting for the same finite
     # slots while admitted shops spend minutes opening and using the chat.
     return min(requested, browser_window_limit())
 

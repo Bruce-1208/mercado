@@ -147,7 +147,10 @@ class Service:
         with self.idle():
             config = self.config.load()
             if not api_key(config["api_key_env"]):
-                raise ValueError("请在本机环境变量 " + config["api_key_env"] + " 中设置模型密钥")
+                raise ValueError(
+                    "请在泽顺控制台“集成与凭证设置”中配置 DashScope API Key，或在本机环境变量 "
+                    + config["api_key_env"] + " 中设置模型密钥"
+                )
             result = {"configured": True, "checked_at": time.time(), "ok": False, "model": config["model"]}
             try:
                 answer = self.models_factory(config, self.store.log).call(config["model"], "Reply with exactly OK.")
@@ -254,10 +257,16 @@ class Service:
         missing = [key for key in required if not config["selectors"][key]]
         if missing:
             raise ValueError("首次运行需要完成页面适配，缺少DOM字段：" + "、".join(missing))
-        if mode in ("process", "pipeline") and (config["workflow_mode"] == "image_first" or not task.get("supplier_sku_id") or self.missing_info(task)) and urlsplit(config["api_base_url"]).hostname not in ("localhost", "127.0.0.1", "::1") and not api_key(config["api_key_env"]):
-            raise ValueError("请在本机环境变量 " + config["api_key_env"] + " 中设置模型密钥")
+        if mode in ("process", "pipeline") and (config["workflow_mode"] == "image_first" or not task.get("supplier_sku_id") or self.missing_info(task)) and urlsplit(config["api_base_url"]).hostname not in ("localhost", "127.0.0.1", "::1") and not (str(config.get("_runtime_api_key") or "").strip() or api_key(config["api_key_env"])):
+            raise ValueError(
+                "请在泽顺控制台“集成与凭证设置”中配置 DashScope API Key，或在本机环境变量 "
+                + config["api_key_env"] + " 中设置模型密钥"
+            )
 
-    def start(self, mode="pipeline", task_id=None, selection=None, max_items=10, resume=False):
+    def start(
+        self, mode="pipeline", task_id=None, selection=None, max_items=10,
+        resume=False, runtime_api_key="",
+    ):
         if not isinstance(mode, str) or mode not in ("collect", "process", "pipeline", "probe"):
             raise ValueError("运行模式无效")
         if type(max_items) is not int or not 1 <= max_items <= 10000:
@@ -267,6 +276,11 @@ class Service:
         with self.guard:
             previous_run = self.store.state("run", {}) or {}
             config = self.config.load()
+            runtime_api_key = str(runtime_api_key or "").strip()
+            if runtime_api_key:
+                # Kept only in this run's in-memory config. It is not written
+                # to the service config, task store, state, or logs.
+                config["_runtime_api_key"] = runtime_api_key
             if mode != "probe":
                 self.require_login(config)
                 if self.store.state("circuit"):

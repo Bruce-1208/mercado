@@ -121,7 +121,9 @@ class Models:
             body["enable_thinking"] = False
         if json_output:
             body["response_format"] = {"type": "json_object"}
-        key = api_key(self.config["api_key_env"])
+        key = str(self.config.get("_runtime_api_key") or "").strip() or api_key(
+            self.config["api_key_env"]
+        )
         headers = {"Content-Type": "application/json"}
         if key:
             headers["Authorization"] = "Bearer " + key

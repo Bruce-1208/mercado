@@ -136,13 +136,13 @@ def create_ai_video_job(uploads, form):
     )
 
 
-def list_ai_video_jobs(limit=30):
+def list_ai_video_jobs(limit=30, user_id=None):
     if DB_MODE == "mysql":
         from bit.bit_ai_video import list_jobs
 
-        return list_jobs(limit=limit)
+        return list_jobs(limit=limit, user_id=user_id)
     return _request(
-        "GET", "/api/db/ai-videos/jobs", params={"limit": int(limit or 30)}, timeout=60
+        "GET", "/api/db/ai-videos/jobs", params={"limit": int(limit or 30), "user_id": user_id or ""}, timeout=60
     )
 
 
@@ -164,21 +164,22 @@ def update_ai_video_job(job_id, changes):
     )
 
 
-def get_ai_video_settings():
+def get_ai_video_settings(user_id=None):
     if DB_MODE == "mysql":
         from bit.bit_ai_video import provider_settings
 
-        return provider_settings()
-    return _request("GET", "/api/db/ai-videos/settings", timeout=60)
+        return provider_settings(user_id)
+    return _request("GET", "/api/db/ai-videos/settings", params={"user_id": user_id or ""}, timeout=60)
 
 
-def update_ai_video_settings(changes):
+def update_ai_video_settings(changes, user_id=None):
     if DB_MODE == "mysql":
         from bit.bit_ai_video import save_provider_settings
 
-        return save_provider_settings(changes)
+        save_provider_settings(changes)
+        return provider_settings(user_id)
     return _request(
-        "PATCH", "/api/db/ai-videos/settings", json=dict(changes or {}), timeout=60
+        "PATCH", "/api/db/ai-videos/settings", params={"user_id": user_id or ""}, json=dict(changes or {}), timeout=60
     )
 
 

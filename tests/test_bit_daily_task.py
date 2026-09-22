@@ -1219,7 +1219,13 @@ def test_appeal_one_shop_fails_closed_when_owned_window_registration_fails(
 def test_daily_appeal_worker_limit_matches_browser_capacity(monkeypatch):
     monkeypatch.delenv("BIT_DAILY_BROWSER_WORKER_LIMIT", raising=False)
     monkeypatch.delenv("BIT_BROWSER_MAX_OPEN_WINDOWS", raising=False)
-    assert bit_daily_task._daily_browser_worker_limit() == 3
+    assert bit_daily_task._daily_browser_worker_limit() == 5
+
+
+def test_daily_appeal_worker_limit_never_exceeds_ten(monkeypatch):
+    monkeypatch.setenv("BIT_DAILY_BROWSER_WORKER_LIMIT", "30")
+    monkeypatch.setenv("BIT_BROWSER_MAX_OPEN_WINDOWS", "30")
+    assert bit_daily_task._daily_browser_worker_limit() == 10
 
 
 def test_daily_plan_resolves_thirty_window_ids_from_one_browser_snapshot(monkeypatch):

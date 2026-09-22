@@ -9560,6 +9560,7 @@
         <div class="topbar-tools">
             <span class="service-pill"><i></i> 服务在线</span>
             <button class="icon-button" type="button" aria-label="通知" title="暂无新通知">♢</button>
+            <a class="topbar-plugin-download" href="/settings/integrations" title="模型 Token、邮件提醒与 Webhook"><span>⚙</span>集成设置</a>
             <a class="topbar-plugin-download" href="/api/browser-extension/download" download title="下载泽顺插件（Chrome / Edge）" aria-label="下载泽顺插件"><span>↓</span>下载插件</a>
             <span class="topbar-divider"></span>
             <div class="topbar-user">
@@ -10337,11 +10338,10 @@
                     </div>
                     <div class="ai-original-ai-settings">
                         <label><span>模型地址</span><input id="ai-original-base-url" type="url" value="https://api.deepseek.com" placeholder="OpenAI 兼容 API 地址"></label>
-                        <label><span>模型</span><input id="ai-original-model" type="text" value="deepseek-chat" maxlength="128"></label>
-                        <label class="wide"><span>本次任务 Token</span><input id="ai-original-api-key" type="password" autocomplete="off" placeholder="不保存；已配置环境变量时可留空"></label>
-                        <label><span>AI 图片地址</span><input id="ai-original-image-base-url" type="url" value="https://api.openai.com/v1" placeholder="支持 /images/edits"></label>
-                        <label><span>AI 图片模型</span><input id="ai-original-image-model" type="text" value="gpt-image-1" maxlength="128"></label>
-                        <label class="wide"><span>AI 图片 Token</span><input id="ai-original-image-api-key" type="password" autocomplete="off" placeholder="用于生成白底主图，不保存"></label>
+                        <label><span>模型</span><input id="ai-original-model" type="text" value="deepseek-v4-pro" maxlength="128"></label>
+                        <input id="ai-original-api-key" type="hidden" value="">
+                        <div class="wide"><span>文案 Token</span><small class="shop-search-hint">使用账号已保存的 DeepSeek / 百炼凭证 · <a href="/settings/integrations">前往集成设置</a></small></div>
+                        <div class="wide"><span>白底图</span><small class="shop-search-hint">本机免费使用 rembg / isnet-general-use 抠图，不调用付费图片 API，也不需要 Token。</small></div>
                         <label><span>并发</span><input id="ai-original-workers" type="number" min="1" max="6" value="3"></label>
                         <button class="primary" id="ai-original-process" type="button" onclick="processSelectedAiOriginalProducts()" disabled>执行所选 AI 任务</button>
                     </div>
@@ -11218,9 +11218,8 @@
                         </div>
 
                         <div class="field" id="deepseek-token-field" hidden>
-                            <label for="deepseek-api-key">DeepSeek Token</label>
-                            <input id="deepseek-api-key" type="password" autocomplete="off" placeholder="手动填写本次任务使用的 DeepSeek Token">
-                            <small class="shop-search-hint">仅 AI 话术模式使用；侵权和禁限售每次最多 3 个产品，理由不超过 50 个字。</small>
+                            <input id="deepseek-api-key" type="hidden" value="">
+                            <small class="shop-search-hint">使用账号已保存的 DeepSeek Token。<a href="/settings/integrations">前往集成设置</a>；侵权和禁限售每次最多 3 个产品。</small>
                         </div>
 
                         <div class="field">
@@ -11371,9 +11370,8 @@
                         </div>
 
                         <div class="field" id="daily-task-deepseek-token-field" hidden>
-                            <label for="daily-task-deepseek-api-key">DeepSeek Token</label>
-                            <input id="daily-task-deepseek-api-key" type="password" autocomplete="off" placeholder="手动填写本次任务使用的 DeepSeek Token">
-                            <small class="shop-search-hint">仅用于侵权和禁限售；每次最多 3 个产品，理由不超过 50 个字。</small>
+                            <input id="daily-task-deepseek-api-key" type="hidden" value="">
+                            <small class="shop-search-hint">使用账号已保存的 DeepSeek Token。<a href="/settings/integrations">前往集成设置</a>；每次最多 3 个产品。</small>
                         </div>
 
                         <div class="field">
@@ -11844,7 +11842,7 @@
                     </div>
                     <div class="header-actions">
                         <a class="secondary" href="https://www.mercadolibre.com.mx/ayuda/25505" target="_blank" rel="noopener noreferrer">美客多官方要求</a>
-                        <button class="secondary" type="button" onclick="openAiVideoSettings()">模型 Token 配置</button>
+                        <button class="secondary" type="button" onclick="openAiVideoSettings()">视频模型参数</button>
                         <button class="secondary" type="button" onclick="loadAiVideoJobs(true)">刷新成品库</button>
                     </div>
                 </div>
@@ -11940,18 +11938,18 @@
 
                 <dialog class="ai-video-dialog" id="ai-video-settings-dialog">
                     <div class="ai-video-dialog-head">
-                        <div><h3>视频模型 Token 配置</h3><p>配置任意一个模型即可使用；两者都配置时，Seedance 2.5 失败后自动切换 Wan 3.0。</p></div>
+                        <div><h3>视频模型配置</h3><p>Token 与 Workspace ID 已移到账号“集成与凭证设置”；此处仅保留模型运行参数。</p></div>
                         <button class="secondary" type="button" onclick="document.getElementById('ai-video-settings-dialog').close()">关闭</button>
                     </div>
                     <div class="ai-video-dialog-body">
-                        <div class="ai-video-field"><label for="ai-video-seedance-api-key">主模型 · 火山方舟 API Key</label><input id="ai-video-seedance-api-key" type="password" autocomplete="new-password" placeholder="输入新 Token；留空则保留现有 Token"></div>
+                        <input id="ai-video-seedance-api-key" type="hidden" value="">
                         <div class="ai-video-dialog-grid">
                             <div class="ai-video-field"><label for="ai-video-seedance-model">主模型</label><input id="ai-video-seedance-model" type="text" value="doubao-seedance-2-5-260628" readonly></div>
                             <div class="ai-video-field"><label for="ai-video-seedance-region">主模型地域</label><select id="ai-video-seedance-region"><option value="cn-beijing">北京</option></select></div>
                         </div>
-                        <div class="ai-video-field"><label for="ai-video-wan-api-key">备用模型 · 阿里云百炼 API Key</label><input id="ai-video-wan-api-key" type="password" autocomplete="new-password" placeholder="输入新 Token；留空则保留现有 Token"></div>
+                        <input id="ai-video-wan-api-key" type="hidden" value="">
                         <div class="ai-video-dialog-grid">
-                            <div class="ai-video-field"><label for="ai-video-wan-workspace-id">备用业务空间 ID</label><input id="ai-video-wan-workspace-id" type="text" placeholder="例如 ws-xxxxxxxx"></div>
+                            <input id="ai-video-wan-workspace-id" type="hidden" value="">
                             <div class="ai-video-field"><label for="ai-video-wan-region">备用模型地域</label><select id="ai-video-wan-region"><option value="cn-beijing">北京</option><option value="ap-southeast-1">新加坡</option><option value="ap-northeast-1">东京</option><option value="eu-central-1">法兰克福</option><option value="us-east-1">弗吉尼亚</option><option value="cn-hongkong">中国香港</option></select></div>
                         </div>
                         <div class="ai-video-dialog-grid">
@@ -11959,6 +11957,7 @@
                             <div class="ai-video-field"><label for="ai-video-public-base">工作台公网 HTTPS 地址</label><input id="ai-video-public-base" type="url" placeholder="https://zeshun.cc.cd"></div>
                         </div>
                         <p class="ai-video-message" id="ai-video-settings-message"></p>
+                        <p><a href="/settings/integrations">打开集成与凭证设置 →</a></p>
                     </div>
                     <div class="ai-video-dialog-actions"><button class="primary" id="ai-video-settings-save" type="button" onclick="saveAiVideoSettings()">保存配置</button></div>
                 </dialog>
@@ -12961,7 +12960,7 @@
                     <div class="infractions-header">
                         <div>
                             <h2 class="panel-title" style="margin: 0;">检测任务</h2>
-                            <div class="risk-check-mode-note">DeepSeek / 千问 / 本地 OpenAI 兼容模型 · Token 仅用于本次任务 · 主图链接和 Logo 暂不参与判断</div>
+                            <div class="risk-check-mode-note">DeepSeek / 千问 / 本地 OpenAI 兼容模型 · 云端 Token 按账号从集成设置读取 · 主图链接和 Logo 暂不参与判断</div>
                         </div>
                         <div class="header-actions">
                             <button class="primary" id="start-risk-check-btn" type="button" onclick="startRiskCheck()">启动侵权检测</button>
@@ -13046,7 +13045,7 @@
                                 <section class="risk-builder-section risk-runtime-section">
                                     <div class="risk-section-heading">
                                         <div><span class="risk-step">3</span><strong>检测设置</strong></div>
-                                        <span>Token 不保存、不回传</span>
+                                        <span>Token 按账号从集成设置读取</span>
                                     </div>
                                     <div class="risk-runtime-grid">
                                         <div class="field">
@@ -13057,14 +13056,10 @@
                                                 <option value="local">本地模型</option>
                                             </select>
                                         </div>
-                                        <div class="field">
-                                            <label for="risk-check-api-key">Token</label>
-                                            <input id="risk-check-api-key" type="password" autocomplete="new-password" placeholder="仅用于本次检测" spellcheck="false">
-                                            <small class="risk-field-hint">不会写入任务状态或日志</small>
-                                        </div>
+                                        <div class="field"><input id="risk-check-api-key" type="hidden" value=""><label>Token</label><small class="risk-field-hint">按账号从<a href="/settings/integrations">集成与凭证设置</a>读取</small></div>
                                         <div class="field">
                                             <label for="risk-check-model">模型名称</label>
-                                            <input id="risk-check-model" type="text" value="deepseek-chat" maxlength="128" placeholder="例如 qwen-plus">
+                                            <input id="risk-check-model" type="text" value="deepseek-v4-pro" maxlength="128" placeholder="例如 qwen-plus">
                                         </div>
                                         <div class="field">
                                             <label for="risk-check-base-url">OpenAI 兼容接口地址</label>
@@ -25796,7 +25791,7 @@
             const baseUrl = document.getElementById("risk-check-base-url");
             const model = document.getElementById("risk-check-model");
             const defaults = {
-                deepseek: {baseUrl: "https://api.deepseek.com", model: "deepseek-chat"},
+                deepseek: {baseUrl: "https://api.deepseek.com", model: "deepseek-v4-pro"},
                 qianwen: {baseUrl: "https://dashscope.aliyuncs.com/compatible-mode/v1", model: "qwen-plus"},
                 local: {baseUrl: "http://127.0.0.1:11434/v1", model: ""},
             };
@@ -26164,11 +26159,6 @@
             const apiKey = String(apiKeyInput?.value || "").trim();
             const model = String(document.getElementById("risk-check-model")?.value || "").trim();
             const baseUrl = String(document.getElementById("risk-check-base-url")?.value || "").trim();
-            if (!apiKey) {
-                alert("请输入本次 AI 侵权检测使用的 Token");
-                apiKeyInput?.focus();
-                return;
-            }
             if (!model) {
                 alert("请输入模型名称");
                 document.getElementById("risk-check-model")?.focus();
@@ -27923,10 +27913,6 @@
             if (!appealTypes.length) {
                 throw new Error("请至少开启一个任务");
             }
-            if (appealCopyMode === "AI话术模式" && !deepseekApiKey) {
-                document.getElementById("daily-task-deepseek-api-key")?.focus();
-                throw new Error("AI话术模式必须手动填写 DeepSeek Token");
-            }
             return {
                 execution_target: String(dailyTaskExecutionTarget?.value || "agent"),
                 agent_id: String(dailyTaskAgentId?.value || ""),
@@ -29287,11 +29273,6 @@
             ).trim();
             if (appealCopyMode === "AI话术模式" && appealMode !== "AI客服") {
                 alert("AI话术模式只能配合 AI 客服使用");
-                return;
-            }
-            if (appealCopyMode === "AI话术模式" && !deepseekApiKey) {
-                alert("AI话术模式必须手动填写 DeepSeek Token");
-                document.getElementById("deepseek-api-key")?.focus();
                 return;
             }
 

@@ -316,7 +316,7 @@ def test_worker_falls_back_to_wan_after_seedance_rejection(monkeypatch, tmp_path
     monkeypatch.setattr(
         video,
         "_query_provider",
-        lambda _task_id, provider: {
+        lambda _task_id, provider, _job: {
             "output": {"task_status": "SUCCEEDED", "video_url": "https://example.com/out.mp4"},
             "usage": {"duration": 10, "ratio": "9:16", "SR": 720},
         } if provider == video.WAN_PROVIDER else {},
@@ -431,7 +431,7 @@ def test_ai_video_routes_use_central_api(monkeypatch):
     response = client.get("/api/ai-videos/jobs?limit=12")
     assert response.status_code == 200
     assert response.json["data"]["settings"]["configured"] is True
-    listing.assert_called_once_with(12)
+    listing.assert_called_once_with(12, user_id=1)
 
     response = client.post(
         "/api/ai-videos/jobs",
@@ -444,3 +444,27 @@ def test_ai_video_routes_use_central_api(monkeypatch):
     response = client.get("/api/ai-videos/settings")
     assert response.status_code == 200
     assert response.json["data"]["api_key_masked"].startswith("sk-")
+
+
+def test_video_provider_settings_use_account_bound_credentials(monkeypatch, tmp_path):
+    configure(monkeypatch, tmp_path)
+    monkeypatch.setattr(
+        video,
+        "_account_credential_resolver",
+        lambda user_id: {
+            "seedance_api_key": "account-seedance" if user_id == 7 else "",
+            "wan_api_key": "account-wan" if user_id == 7 else "",
+            "wan_workspace_id": "ws-account" if user_id == 7 else "",
+        },
+    )
+
+    settings = video.provider_settings(7)
+    assert settings["seedance_configured"] is True
+    assert settings["wan_configured"] is True
+
+    created = video.create_job(
+        [upload()], {"duration": "10", "credential_owner_id": "7"}
+    )
+    private = video.get_job(created["id"])
+    assert private["credential_owner_id"] == 7
+    assert "credential_owner_id" not in created

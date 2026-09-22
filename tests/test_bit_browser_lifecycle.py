@@ -103,6 +103,20 @@ def test_pending_and_unmanaged_windows_both_count_toward_limit(monkeypatch):
     assert len(lifecycle._rows()) == 1
 
 
+def test_window_limit_defaults_to_five_and_never_exceeds_ten(monkeypatch):
+    monkeypatch.delenv("BIT_BROWSER_MAX_OPEN_WINDOWS", raising=False)
+    assert lifecycle.browser_window_limit() == 5
+
+    monkeypatch.setenv("BIT_BROWSER_MAX_OPEN_WINDOWS", "10")
+    assert lifecycle.browser_window_limit() == 10
+
+    monkeypatch.setenv("BIT_BROWSER_MAX_OPEN_WINDOWS", "99")
+    assert lifecycle.browser_window_limit() == 10
+
+    monkeypatch.setenv("BIT_BROWSER_MAX_OPEN_WINDOWS", "invalid")
+    assert lifecycle.browser_window_limit() == 5
+
+
 def test_memory_pressure_blocks_new_window_but_allows_existing_connection(monkeypatch):
     monkeypatch.setattr(lifecycle, "available_memory_percent", lambda: 5)
     with pytest.raises(TimeoutError, match="可用内存 5"):

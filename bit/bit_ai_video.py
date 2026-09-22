@@ -57,6 +57,27 @@ _manifest_lock = threading.RLock()
 _worker_lock = threading.Lock()
 _active_workers: set[str] = set()
 _settings_lock = threading.RLock()
+_account_credential_resolver = None
+
+
+def set_account_credential_resolver(resolver) -> None:
+    """Inject account credential lookup without coupling this module to Flask."""
+    global _account_credential_resolver
+    _account_credential_resolver = resolver
+
+
+def _account_credentials(user_id) -> dict:
+    if not user_id or not callable(_account_credential_resolver):
+        return {}
+    value = _account_credential_resolver(int(user_id))
+    return value if isinstance(value, dict) else {}
+
+
+def _job_owner(job: dict | None) -> int:
+    try:
+        return int((job or {}).get("credential_owner_id") or 0)
+    except (TypeError, ValueError):
+        return 0
 
 
 class _ProviderRejectedError(RuntimeError):
@@ -126,12 +147,14 @@ def _common_config() -> dict:
     }
 
 
-def _provider_config(provider: str) -> dict:
+def _provider_config(provider: str, user_id=None) -> dict:
     saved = _load_saved_settings()
+    account = _account_credentials(user_id)
     if provider == SEEDANCE_PROVIDER:
         return {
             "api_key": str(
-                saved.get("seedance_api_key")
+                account.get("seedance_api_key")
+                or saved.get("seedance_api_key")
                 or os.environ.get("AI_VIDEO_SEEDANCE_API_KEY")
                 or os.environ.get("ARK_API_KEY")
                 or ""
@@ -155,7 +178,8 @@ def _provider_config(provider: str) -> dict:
     if provider == WAN_PROVIDER:
         return {
             "api_key": str(
-                saved.get("wan_api_key")
+                account.get("wan_api_key")
+                or saved.get("wan_api_key")
                 or saved.get("api_key")
                 or os.environ.get("AI_VIDEO_WAN_API_KEY")
                 or os.environ.get("AI_VIDEO_API_KEY")
@@ -163,7 +187,8 @@ def _provider_config(provider: str) -> dict:
                 or ""
             ).strip(),
             "workspace_id": str(
-                saved.get("wan_workspace_id")
+                account.get("wan_workspace_id")
+                or saved.get("wan_workspace_id")
                 or saved.get("workspace_id")
                 or os.environ.get("AI_VIDEO_WAN_WORKSPACE_ID")
                 or os.environ.get("AI_VIDEO_WORKSPACE_ID")
@@ -200,8 +225,8 @@ def _mask_key(key: str) -> str:
     return "已配置" if key else ""
 
 
-def _provider_is_configured(provider: str) -> bool:
-    config = _provider_config(provider)
+def _provider_is_configured(provider: str, user_id=None) -> bool:
+    config = _provider_config(provider, user_id)
     if provider == SEEDANCE_PROVIDER:
         return bool(config["api_key"])
     return bool(config["api_key"] and config["workspace_id"])
@@ -350,7 +375,10 @@ def _public_job(job: dict) -> dict:
     result = {
         key: value
         for key, value in job.items()
-        if key not in {"provider_task_id", "output_filename", "fingerprint"}
+        if key not in {
+            "provider_task_id", "output_filename", "fingerprint",
+            "credential_owner_id",
+        }
     }
     result["assets"] = assets
     result["provider_attempts"] = [
@@ -372,12 +400,12 @@ def _public_job(job: dict) -> dict:
     return result
 
 
-def provider_settings() -> dict:
-    seedance = _provider_config(SEEDANCE_PROVIDER)
-    wan = _provider_config(WAN_PROVIDER)
+def provider_settings(user_id=None) -> dict:
+    seedance = _provider_config(SEEDANCE_PROVIDER, user_id)
+    wan = _provider_config(WAN_PROVIDER, user_id)
     public_base = _common_config()["public_base_url"]
-    seedance_configured = _provider_is_configured(SEEDANCE_PROVIDER)
-    wan_configured = _provider_is_configured(WAN_PROVIDER)
+    seedance_configured = _provider_is_configured(SEEDANCE_PROVIDER, user_id)
+    wan_configured = _provider_is_configured(WAN_PROVIDER, user_id)
     public_base_configured = public_base.startswith(("https://", "http://"))
     available_providers = []
     if seedance_configured:
@@ -791,8 +819,12 @@ def create_job(uploads, form: dict) -> dict:
             raise ValueError("AI 视频参考素材仅支持 MP4、MOV；其他格式请勾选“仅转换视频格式”")
         target = _normalize_target(form)
         user_prompt = " ".join(str(form.get("prompt") or "").split())[:1200]
-        seedance = _provider_config(SEEDANCE_PROVIDER)
-        wan = _provider_config(WAN_PROVIDER)
+        try:
+            credential_owner_id = int(form.get("credential_owner_id") or 0)
+        except (TypeError, ValueError):
+            credential_owner_id = 0
+        seedance = _provider_config(SEEDANCE_PROVIDER, credential_owner_id)
+        wan = _provider_config(WAN_PROVIDER, credential_owner_id)
         job = {
             "id": job_id,
             "name": str(form.get("name") or "").strip()[:120]
@@ -821,6 +853,7 @@ def create_job(uploads, form: dict) -> dict:
             "local_transcode": local_transcode,
             "provider_task_id": "",
             "provider_attempts": [],
+            "credential_owner_id": credential_owner_id,
             "output_filename": "",
             "published": [],
             "publish_attempts": [],
@@ -845,8 +878,12 @@ def create_job(uploads, form: dict) -> dict:
     return _public_job(job)
 
 
-def list_jobs(limit: int = 30) -> dict:
+def list_jobs(limit: int = 30, user_id=None) -> dict:
     rows: list[dict] = []
+    try:
+        requested_user_id = int(user_id or 0)
+    except (TypeError, ValueError):
+        requested_user_id = 0
     for path in sorted(
         storage_root().glob("*/job.json"),
         key=lambda item: item.stat().st_mtime if item.exists() else 0,
@@ -858,10 +895,13 @@ def list_jobs(limit: int = 30) -> dict:
             job = json.loads(path.read_text(encoding="utf-8"))
         except (OSError, json.JSONDecodeError):
             continue
+        owner_id = _job_owner(job)
+        if requested_user_id and owner_id not in {0, requested_user_id}:
+            continue
         if job.get("status") in ACTIVE_STATUSES:
             _start_worker(str(job.get("id") or ""))
         rows.append(_public_job(job))
-    return {"rows": rows, "settings": provider_settings()}
+    return {"rows": rows, "settings": provider_settings(user_id)}
 
 
 def public_job(job_id: str) -> dict:
@@ -882,9 +922,10 @@ def update_job(job_id: str, changes: dict) -> dict:
     return _public_job(job)
 
 
-def _signing_secret() -> bytes:
-    seedance = _provider_config(SEEDANCE_PROVIDER)
-    wan = _provider_config(WAN_PROVIDER)
+def _signing_secret(job=None) -> bytes:
+    user_id = _job_owner(job)
+    seedance = _provider_config(SEEDANCE_PROVIDER, user_id)
+    wan = _provider_config(WAN_PROVIDER, user_id)
     secret = str(
         os.environ.get("AI_VIDEO_ASSET_SIGNING_KEY")
         or os.environ.get("BIT_DB_API_TOKEN")
@@ -899,7 +940,9 @@ def _signing_secret() -> bytes:
 
 def _asset_signature(job_id: str, asset_id: str, expires: int) -> str:
     message = f"{job_id}:{asset_id}:{expires}".encode("utf-8")
-    return hmac.new(_signing_secret(), message, hashlib.sha256).hexdigest()
+    return hmac.new(
+        _signing_secret(get_job(job_id)), message, hashlib.sha256
+    ).hexdigest()
 
 
 def signed_asset_url(job_id: str, asset: dict, expires: int | None = None) -> str:
@@ -968,8 +1011,8 @@ def _compact_prompt(job: dict, provider: str = WAN_PROVIDER) -> str:
     return "".join(parts)[:2400]
 
 
-def _wan_endpoint_base() -> str:
-    config = _provider_config(WAN_PROVIDER)
+def _wan_endpoint_base(job=None) -> str:
+    config = _provider_config(WAN_PROVIDER, _job_owner(job))
     custom = config["endpoint"]
     if custom:
         return custom
@@ -991,8 +1034,8 @@ def _wan_endpoint_base() -> str:
     return f"https://{workspace_id}.{host}/api/v1"
 
 
-def _seedance_endpoint_base() -> str:
-    config = _provider_config(SEEDANCE_PROVIDER)
+def _seedance_endpoint_base(job=None) -> str:
+    config = _provider_config(SEEDANCE_PROVIDER, _job_owner(job))
     if config["endpoint"]:
         return config["endpoint"]
     if config["region"] != "cn-beijing":
@@ -1000,8 +1043,8 @@ def _seedance_endpoint_base() -> str:
     return "https://ark.cn-beijing.volces.com/api/v3"
 
 
-def _api_key(provider: str) -> str:
-    key = _provider_config(provider)["api_key"]
+def _api_key(provider: str, job=None) -> str:
+    key = _provider_config(provider, _job_owner(job))["api_key"]
     if not key:
         if provider == SEEDANCE_PROVIDER:
             raise RuntimeError("未配置 AI_VIDEO_SEEDANCE_API_KEY 或 ARK_API_KEY")
@@ -1009,8 +1052,8 @@ def _api_key(provider: str) -> str:
     return key
 
 
-def _provider_headers(provider: str, async_request: bool = False) -> dict:
-    headers = {"Authorization": f"Bearer {_api_key(provider)}"}
+def _provider_headers(provider: str, async_request: bool = False, job=None) -> dict:
+    headers = {"Authorization": f"Bearer {_api_key(provider, job)}"}
     if provider == SEEDANCE_PROVIDER or async_request:
         headers["Content-Type"] = "application/json"
     if provider == WAN_PROVIDER and async_request:
@@ -1036,7 +1079,7 @@ def _build_wan_payload(job: dict) -> dict:
                 "url": _asset_provider_url(job, asset, inline_images=True),
             }
         )
-    model = (job.get("models") or {}).get(WAN_PROVIDER) or _provider_config(WAN_PROVIDER)["model"]
+    model = (job.get("models") or {}).get(WAN_PROVIDER) or _provider_config(WAN_PROVIDER, _job_owner(job))["model"]
     return {
         "model": model,
         "input": {"prompt": _compact_prompt(job, WAN_PROVIDER), "media": media},
@@ -1064,7 +1107,7 @@ def _build_seedance_payload(job: dict) -> dict:
             }
         )
     model = ((job.get("models") or {}).get(SEEDANCE_PROVIDER)
-             or _provider_config(SEEDANCE_PROVIDER)["model"])
+             or _provider_config(SEEDANCE_PROVIDER, _job_owner(job))["model"])
     return {
         "model": model,
         "content": content,
@@ -1116,15 +1159,15 @@ def _provider_error(payload: dict, default: str) -> str:
 
 def _submit_provider(job: dict, provider: str) -> str:
     if provider == SEEDANCE_PROVIDER:
-        url = f"{_seedance_endpoint_base()}/content_generation/tasks"
+        url = f"{_seedance_endpoint_base(job)}/content_generation/tasks"
     elif provider == WAN_PROVIDER:
-        url = f"{_wan_endpoint_base()}/services/aigc/video-generation/video-synthesis"
+        url = f"{_wan_endpoint_base(job)}/services/aigc/video-generation/video-synthesis"
     else:
         raise ValueError("不支持的视频生成供应商")
     try:
         response = requests.post(
             url,
-            headers=_provider_headers(provider, async_request=True),
+            headers=_provider_headers(provider, async_request=True, job=job),
             json=build_provider_payload(job, provider),
             timeout=(30, 180),
         )
@@ -1152,17 +1195,17 @@ def _submit_provider(job: dict, provider: str) -> str:
     return task_id
 
 
-def _query_provider(task_id: str, provider: str) -> dict:
+def _query_provider(task_id: str, provider: str, job=None) -> dict:
     if provider == SEEDANCE_PROVIDER:
-        url = f"{_seedance_endpoint_base()}/content_generation/tasks/{quote(task_id)}"
+        url = f"{_seedance_endpoint_base(job)}/content_generation/tasks/{quote(task_id)}"
     elif provider == WAN_PROVIDER:
-        url = f"{_wan_endpoint_base()}/tasks/{quote(task_id)}"
+        url = f"{_wan_endpoint_base(job)}/tasks/{quote(task_id)}"
     else:
         raise ValueError("不支持的视频生成供应商")
     try:
         response = requests.get(
             url,
-            headers=_provider_headers(provider),
+            headers=_provider_headers(provider, job=job),
             timeout=(20, 60),
         )
     except requests.RequestException as exc:
@@ -1266,7 +1309,7 @@ def _validate_provider_result(result: dict) -> None:
 
 
 def _provider_unavailable_reason(provider: str, job: dict) -> str:
-    if not _provider_is_configured(provider):
+    if not _provider_is_configured(provider, _job_owner(job)):
         return "未配置供应商凭证"
     public_base = _common_config()["public_base_url"]
     if provider == SEEDANCE_PROVIDER and not public_base:
@@ -1560,7 +1603,7 @@ def _run_worker(job_id: str) -> None:
                 provider=provider,
                 provider_index=index,
                 model=(job.get("models") or {}).get(provider)
-                or _provider_config(provider)["model"],
+                or _provider_config(provider, _job_owner(job))["model"],
             )
             task_id = str(job.get("provider_task_id") or "").strip()
             try:
@@ -1584,7 +1627,7 @@ def _run_worker(job_id: str) -> None:
                 consecutive_query_errors = 0
                 while time.monotonic() < deadline:
                     try:
-                        payload = _query_provider(task_id, provider)
+                        payload = _query_provider(task_id, provider, job)
                         consecutive_query_errors = 0
                     except _ProviderStateUncertainError as exc:
                         consecutive_query_errors += 1
