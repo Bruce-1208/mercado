@@ -1,3 +1,4 @@
+import pytest
 import inspect
 from unittest.mock import patch
 
@@ -54,7 +55,8 @@ def test_workbench_contains_order_management_ui():
     assert "每天刷新老订单状态".encode("utf-8") in response.data
     assert "Shipment Costs 实际运费".encode("utf-8") in response.data
     assert "Token 自动拉取".encode("utf-8") in response.data
-    assert "智赢导入".encode("utf-8") not in response.data
+    order_panel = response.get_data(as_text=True).split('id="tab-orders"', 1)[1].split('<div class="tab-page"', 1)[0]
+    assert "智赢导入" not in order_panel
     assert b'id="order-select-all"' in response.data
     assert b'id="order-bulk-status"' in response.data
     assert b'id="order-bulk-purchase-button"' in response.data
@@ -65,7 +67,7 @@ def test_workbench_contains_order_management_ui():
     assert b'id="order-purchase-tracking-sync-button"' in response.data
     assert b'id="purchase-tracking-sync-dialog"' in response.data
     assert "/api/orders/purchase-tracking/start".encode("utf-8") in response.data
-    assert "账号密码只用于本次本机浏览器登录".encode("utf-8") in response.data
+    assert "这里不填写采购平台账号或密码".encode("utf-8") in response.data
     assert b'id="order-purchase-cost"' in response.data
     assert b'id="order-purchase-remark"' in response.data
     assert b'id="order-tracking-dialog"' in response.data
@@ -697,3 +699,7 @@ def test_order_operation_logs_route_returns_audit_rows():
     assert response.headers["Cache-Control"] == "no-store"
     assert response.get_json()["data"]["rows"][0]["action_label"] == "修改采购单"
     list_logs.assert_called_once_with("20001", limit=100)
+
+
+# These route tests mock business data; they must not authenticate against production MySQL.
+pytestmark = pytest.mark.usefixtures("isolated_legacy_console_user")

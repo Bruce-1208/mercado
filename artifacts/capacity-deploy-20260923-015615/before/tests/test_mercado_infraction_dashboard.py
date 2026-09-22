@@ -1,0 +1,986 @@
+from io import BytesIO
+from pathlib import Path
+
+import pytest
+from openpyxl import load_workbook
+
+from bit import bit_interface
+from bit import mercado_infraction_sync as sync
+from erp.mercadolibre_infraction_store import (
+    _build_group_tree,
+    _build_store_rankings,
+    _dashboard_account_conditions,
+    _pppi_current_listing_condition,
+    _pppi_only_condition,
+    _pppi_product_key,
+)
+from erp import mercadolibre_infraction_store as infraction_store
+
+
+@pytest.mark.parametrize(
+    ("payload", "expected"),
+    [
+        ({"filter_subgroup": "BRAND_PROTECTION"}, True),
+        ({"reason": "The product could be counterfeit."}, True),
+        ({"reason": "The product's brand is not generic."}, True),
+        ({"reason": "la publicación usa una marca ilegítimamente"}, True),
+        ({"reason": "O produto pode ser falsificado."}, True),
+        ({"reason": "The cover photo has watermarks."}, False),
+        ({"reason": "Title and photos did not match the category."}, False),
+    ],
+)
+def test_brand_protection_detection_classifier(payload, expected):
+    assert sync.is_brand_protection_detection(payload) is expected
+
+
+@pytest.mark.parametrize(
+    ("reason", "expected"),
+    [
+        ("The product's brand is not generic.", False),
+        ("  THE PRODUCT'S BRAND IS NOT GENERIC.  ", False),
+        ("The product could be counterfeit.", True),
+        ("", True),
+    ],
+)
+def test_auto_appeal_excludes_non_generic_brand_reason(reason, expected):
+    assert sync.is_auto_appeal_eligible_detection({"reason": reason}) is expected
+
+
+def test_prohibited_product_is_classified_for_infringement_appeal():
+    payload = {"reason": " The product is prohibited. "}
+
+    assert sync.is_prohibited_detection(payload) is True
+    assert sync.is_auto_appeal_eligible_detection(payload) is True
+
+
+def test_prohibited_snapshot_is_normalized_and_respects_recent_window(monkeypatch):
+    monkeypatch.setattr(
+        sync,
+        "get_prohibited_sync_context",
+        lambda _token_id: {
+            "rows": [
+                {
+                    "item_id": "MLM123",
+                    "site_id": "MLM",
+                    "seller_id": "seller-mx",
+                    "infraction_id": "prohibited-1",
+                    "infraction_reason": "The product is prohibited.",
+                    "infraction_date": "2026-09-03 10:20:30",
+                    "title": "禁限售商品",
+                    "thumbnail_url": "http://http2.mlstatic.com/test.jpg",
+                    "permalink": "https://articulo.mercadolibre.com.mx/MLM123",
+                    "status": "under_review",
+                    "remedy": "Check our policies.",
+                }
+            ]
+        },
+    )
+    record = {
+        "id": 7,
+        "meli_user_id": "root-seller",
+        "site_settings": [
+            {"site_id": "MLM", "salesperson": "张三", "group_name": "一组"}
+        ],
+    }
+
+    rows = sync._prohibited_snapshot_records(
+        record,
+        date_created_since="2026-09-01",
+    )
+
+    assert len(rows) == 1
+    assert rows[0]["source_id"] == "prohibited-1"
+    assert rows[0]["item_id"] == "MLM123"
+    assert rows[0]["reason_code"] == sync.PROHIBITED_REASON_CODE
+    assert rows[0]["reason"] == sync.PROHIBITED_REASON
+    assert rows[0]["thumbnail_url"].startswith("https://")
+    assert rows[0]["salesperson"] == "张三"
+    assert sync._prohibited_snapshot_records(
+        record,
+        date_created_since="2026-09-04",
+    ) == []
+
+
+def test_case_rows_separates_api_paging_metadata():
+    rows, paging = sync._case_rows(
+        [
+            {"case_id": 371, "item_id": "MLM123", "current_status": "CREATED"},
+            {"case_id": 372, "item_id": "MLB456", "current_status": "WAITING_DOCUMENTATION"},
+            {"total": 62, "offset": 0, "limit": 50},
+        ]
+    )
+
+    assert [row["case_id"] for row in rows] == [371, 372]
+    assert paging == {"total": 62, "offset": 0, "limit": 50}
+
+
+def test_legacy_short_date_is_normalized_for_dashboard_filtering():
+    assert sync._mysql_datetime("9/3/26") == "2026-09-03 00:00:00"
+
+
+def test_thumbnail_url_prefers_official_picture_and_https():
+    assert sync._thumbnail_url(
+        {
+            "pictures": [
+                {"url": "http://http2.mlstatic.com/D_123-O.jpg"},
+            ],
+            "thumbnail": "https://example.com/fallback.jpg",
+        }
+    ) == "https://http2.mlstatic.com/D_123-O.jpg"
+
+
+def test_detection_pages_use_reason_fallback_and_deduplicate():
+    class Client:
+        def request(self, _method, _path, *, params):
+            assert params["date_created_since"] == "2026-09-01"
+            return {
+                "infractions": [
+                    {
+                        "id": "1",
+                        "related_item_id": "MLM1",
+                        "reason": "The product could be counterfeit.",
+                    },
+                    {
+                        "id": "2",
+                        "related_item_id": "MLM2",
+                        "reason": "The cover photo has watermarks.",
+                    },
+                    {
+                        "id": "1",
+                        "related_item_id": "MLM1",
+                        "reason": "The product could be counterfeit.",
+                    },
+                ],
+                "paging": {"offset": 0, "limit": 20, "total": 3},
+            }
+
+    rows, scanned, capped = sync._fetch_detection_pages(
+        Client(),
+        "123",
+        date_created_since="2026-09-01",
+    )
+
+    assert [row["id"] for row in rows] == ["1"]
+    assert scanned == 3
+    assert capped is False
+
+
+def test_full_detection_snapshot_omits_empty_date_filter():
+    class Client:
+        def request(self, _method, _path, *, params):
+            assert "date_created_since" not in params
+            return {"infractions": [], "paging": {"total": 0}}
+
+    rows, scanned, capped = sync._fetch_detection_pages(
+        Client(),
+        "123",
+        date_created_since="",
+    )
+
+    assert rows == []
+    assert scanned == 0
+    assert capped is False
+
+
+def test_detection_pages_continue_past_the_old_2000_record_limit():
+    class Client:
+        def __init__(self):
+            self.offsets = []
+
+        def request(self, _method, _path, *, params):
+            offset = params["offset"]
+            self.offsets.append(offset)
+            if offset >= 2020:
+                return {"infractions": [], "paging": {"total": 2020}}
+            return {
+                "infractions": [
+                    {
+                        "id": str(index),
+                        "related_item_id": f"MLM{index}",
+                        "reason": "The product could be counterfeit.",
+                    }
+                    for index in range(offset, min(offset + 20, 2020))
+                ],
+                "paging": {"offset": offset, "limit": 20, "total": 2020},
+            }
+
+    client = Client()
+    rows, scanned, capped = sync._fetch_detection_pages(
+        client,
+        "123",
+        date_created_since="",
+    )
+
+    assert client.offsets[-1] == 2000
+    assert len(rows) == 2020
+    assert scanned == 2020
+    assert capped is False
+
+
+def test_detection_pages_stop_when_api_repeats_a_page():
+    class Client:
+        def request(self, _method, _path, *, params):
+            return {
+                "infractions": [
+                    {
+                        "id": str(index),
+                        "related_item_id": f"MLM{index}",
+                        "reason": "The product could be counterfeit.",
+                    }
+                    for index in range(20)
+                ],
+                "paging": {"offset": params["offset"], "limit": 20, "total": 100},
+            }
+
+    rows, scanned, capped = sync._fetch_detection_pages(
+        Client(),
+        "123",
+        date_created_since="",
+    )
+
+    assert len(rows) == 20
+    assert scanned == 20
+    assert capped is True
+
+
+def test_live_appeal_collection_excludes_non_generic_brand_reason(monkeypatch):
+    monkeypatch.setattr(
+        sync,
+        "_fetch_detection_pages",
+        lambda *_args, **_kwargs: (
+            [
+                {
+                    "id": "excluded",
+                    "related_item_id": "MLM1",
+                    "date_created": "2026-09-04",
+                    "reason": "The product's brand is not generic.",
+                },
+                {
+                    "id": "eligible",
+                    "related_item_id": "MLM2",
+                    "date_created": "2026-09-04",
+                    "reason": "The product could be counterfeit.",
+                },
+            ],
+            2,
+            False,
+        ),
+    )
+
+    class Client:
+        access_token = "token"
+        timeout = 10
+
+    records, scanned, capped, errors, successful = sync._collect_live_detection_records(
+        Client(),
+        [{"user_id": "seller", "site_id": "MLM"}],
+        date_created_since="2026-09-01",
+        store_name="店铺",
+    )
+
+    assert [row["item_id"] for row in records] == ["MLM2"]
+    assert records[0]["reason"] == "The product could be counterfeit."
+    assert (scanned, capped, errors, successful) == (2, False, [], 1)
+
+
+@pytest.mark.parametrize(
+    ("status", "expected"),
+    [
+        ("DOCUMENTATION_APPROVED", (False, "appeal_success")),
+        ("MEMBER_NOT_RESPOND", (False, "appeal_success")),
+        ("ROLLBACK", (False, "appeal_success")),
+        ("DOCUMENTATION_NOT_APPROVED", (False, "appeal_failed")),
+        ("WAITING_DOCUMENTATION", (True, "current")),
+    ],
+)
+def test_rights_holder_status_maps_to_dashboard_state(status, expected):
+    state = sync._rights_holder_state(status)
+
+    assert (state["is_current"], state["resolution_status"]) == expected
+
+
+def test_live_api_collection_filters_authorized_sites_and_isolates_failures(
+    monkeypatch,
+):
+    monkeypatch.setattr(
+        sync,
+        "_token_records",
+        lambda token_ids: [
+            {
+                "id": 1,
+                "display_name": "正常店铺",
+                "meli_user_id": "root-1",
+                "access_token": "token-1",
+                "site_settings": [],
+            },
+            {
+                "id": 2,
+                "display_name": "异常店铺",
+                "meli_user_id": "root-2",
+                "access_token": "token-2",
+                "site_settings": [],
+            },
+        ],
+    )
+
+    def fake_client(record, **_kwargs):
+        if record["id"] == 2:
+            raise RuntimeError("Token 已失效")
+        return object(), record
+
+    monkeypatch.setattr(sync, "_client_and_token", fake_client)
+    monkeypatch.setattr(
+        sync,
+        "_marketplace_accounts",
+        lambda _client, _root: [
+            {"user_id": "seller-mx", "site_id": "MLM"},
+            {"user_id": "seller-br", "site_id": "MLB"},
+        ],
+    )
+
+    def fake_collect(
+        _client,
+        accounts,
+        *,
+        date_created_since,
+        store_name,
+        stop_event,
+        deadline,
+    ):
+        assert accounts == [{"user_id": "seller-mx", "site_id": "MLM"}]
+        assert date_created_since
+        assert store_name == "正常店铺"
+        assert stop_event is None
+        assert deadline
+        return (
+            [
+                {
+                    "source_id": "infraction-1",
+                    "site_id": "MLM",
+                    "item_id": "MLM123",
+                    "title": "测试商品",
+                    "occurred_at": "2026-09-03 12:00:00",
+                },
+                {
+                    "source_id": "infraction-duplicate",
+                    "site_id": "MLM",
+                    "item_id": "MLM123",
+                    "title": "重复商品",
+                    "occurred_at": "2026-09-03 12:00:00",
+                },
+                {
+                    "source_id": "not-authorized",
+                    "site_id": "MLB",
+                    "item_id": "MLB999",
+                    "title": "未授权站点",
+                    "occurred_at": "2026-09-03 12:00:00",
+                },
+            ],
+            3,
+            False,
+            [],
+            1,
+        )
+
+    monkeypatch.setattr(sync, "_collect_live_detection_records", fake_collect)
+    monkeypatch.setattr(
+        sync,
+        "_prohibited_snapshot_records",
+        lambda record, **_kwargs: (
+            [
+                {
+                    "source_id": "prohibited-1",
+                    "site_id": "MLM",
+                    "item_id": "MLM-PROHIBITED",
+                    "title": "禁限售商品",
+                    "occurred_at": "2026-09-03 13:00:00",
+                    "reason": "The product is prohibited.",
+                }
+            ]
+            if record["id"] == 1
+            else []
+        ),
+    )
+
+    result = sync.collect_live_detection_infractions(
+        [
+            {"token_id": 1, "name": "正常店铺", "site_ids": ["MLM"]},
+            {"token_id": 2, "name": "异常店铺", "site_ids": ["MLM"]},
+        ],
+        recent_days=100,
+        max_workers=2,
+    )
+
+    assert [(row["店铺名"], row["站点"], row["编号"]) for row in result["data"]] == [
+        ("正常店铺", "MLM", "MLM123"),
+        ("正常店铺", "MLM", "MLM-PROHIBITED"),
+    ]
+    assert result["data"][1]["侵权原因"] == "The product is prohibited."
+    assert result["source"] == "mercado_moderations_api"
+    assert result["failed_stores"][0]["store"] == "异常店铺"
+    assert "Token 已失效" in result["failed_stores"][0]["message"]
+
+
+def test_case_pages_follow_metadata_pagination(monkeypatch):
+    class Client:
+        def __init__(self):
+            self.offsets = []
+
+        def request(self, _method, _path, *, params):
+            self.offsets.append(params["offset"])
+            offset = params["offset"]
+            if offset == 0:
+                cases = [
+                    {"case_id": index, "item_id": f"MLM{index}"}
+                    for index in range(1, 51)
+                ]
+                return cases + [{"total": 52, "offset": 0, "limit": 50}]
+            return [
+                {"case_id": 51, "item_id": "MLM51"},
+                {"case_id": 52, "item_id": "MLM52"},
+                {"total": 52, "offset": 50, "limit": 50},
+            ]
+
+    client = Client()
+    rows, capped = sync._fetch_case_pages(
+        client,
+        date_created_since="2026-01-01",
+    )
+
+    assert client.offsets == [0, 50]
+    assert len(rows) == 52
+    assert capped is False
+
+
+def test_group_tree_nests_account_group_salesperson_and_store():
+    tree = _build_group_tree(
+        [
+            {
+                "token_id": 1,
+                "store_name": "店铺一",
+                "site_id": "MLM",
+                "group_name": "精品组",
+                "salesperson": "张三",
+                "detection_count": 3,
+                "rights_holder_count": 1,
+                "last_read_at": "2026-09-04 08:00:00",
+            },
+            {
+                "token_id": 2,
+                "store_name": "店铺二",
+                "site_id": "MLB",
+                "group_name": "精品组",
+                "salesperson": "张三",
+                "detection_count": 2,
+                "rights_holder_count": 0,
+                "latest_infraction_at": "2026-09-02 10:00:00",
+                "last_read_at": "2026-09-04 09:00:00",
+            },
+            {
+                "token_id": 1,
+                "store_name": "店铺一",
+                "site_id": "MLC",
+                "group_name": "精品组",
+                "salesperson": "张三",
+                "detection_count": 1,
+                "rights_holder_count": 0,
+                "latest_infraction_at": "2026-09-03 10:00:00",
+                "last_read_at": "2026-09-04 09:00:00",
+            },
+            {
+                "token_id": 3,
+                "store_name": "店铺三",
+                "site_id": "MLA",
+                "group_name": "",
+                "salesperson": "",
+                "detection_count": 0,
+                "rights_holder_count": 1,
+            },
+        ]
+    )
+
+    assert [group["group_name"] for group in tree] == ["精品组", "未分组"]
+    assert tree[0]["total"] == 7
+    assert tree[0]["store_count"] == 2
+    assert tree[0]["site_count"] == 3
+    assert tree[0]["salespeople"][0]["salesperson"] == "张三"
+    assert tree[0]["salespeople"][0]["stores"][0]["store_name"] == "店铺一"
+    assert tree[0]["salespeople"][0]["stores"][0]["site_count"] == 2
+    assert tree[0]["salespeople"][0]["stores"][0]["total"] == 5
+    assert tree[0]["salespeople"][0]["stores"][0]["site_names"] == ["墨西哥", "智利"]
+    site_counts = {
+        site["site_id"]: site["total"]
+        for site in tree[0]["salespeople"][0]["stores"][0]["sites"]
+    }
+    assert site_counts == {"MLC": 1, "MLM": 4}
+    assert tree[0]["salespeople"][0]["stores"][0]["last_read_at"] == "2026-09-04 09:00:00"
+    assert [store["total"] for store in tree[0]["salespeople"][0]["stores"]] == [5, 2]
+    assert tree[1]["salespeople"][0]["salesperson"] == "未分配"
+
+
+def test_stalled_pagination_is_reported_as_incomplete(monkeypatch):
+    monkeypatch.setattr(sync, "get_infraction_sync_context", lambda _token_id: {})
+    monkeypatch.setattr(
+        sync,
+        "_marketplace_accounts",
+        lambda _client, _seller_id: [{"user_id": "seller-mx", "site_id": "MLM"}],
+    )
+    monkeypatch.setattr(
+        sync,
+        "_collect_detection_records",
+        lambda *_args, **_kwargs: ([], 2000, True),
+    )
+    monkeypatch.setattr(
+        sync,
+        "_collect_rights_holder_records",
+        lambda *_args, **_kwargs: ([], False),
+    )
+    monkeypatch.setattr(sync, "upsert_infraction_records", lambda *_args: 0)
+    monkeypatch.setattr(sync, "reconcile_infraction_snapshot", lambda *_args: 0)
+
+    result = sync._sync_store_once(
+        object(),
+        {"id": 7, "display_name": "测试店铺", "meli_user_id": "root-seller"},
+    )
+
+    assert result["status"] == "limited"
+    assert "分页无进展" in result["message"]
+    assert "数据可能不完整" in result["message"]
+
+
+def test_incomplete_read_remains_retryable_without_advancing_completion(monkeypatch):
+    executed = []
+
+    class Cursor:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args):
+            return False
+
+        def execute(self, sql, params):
+            executed.append((sql, params))
+
+    class Connection:
+        def cursor(self):
+            return Cursor()
+
+        def commit(self):
+            return None
+
+        def rollback(self):
+            return None
+
+        def close(self):
+            return None
+
+    monkeypatch.setattr(infraction_store, "ensure_infraction_tables", lambda _cursor: None)
+    monkeypatch.setattr(infraction_store, "_now", lambda: "2026-09-12 12:34:56")
+
+    infraction_store.mark_infraction_sync_finished(
+        7,
+        "limited",
+        detection_scanned_count=2000,
+        error="达到安全分页上限",
+        connection_factory=Connection,
+    )
+
+    sql, params = executed[0]
+    assert "`last_completed_at`" not in sql
+    assert params[1:4] == (
+        "2026-09-12 12:34:56",
+        "limited",
+        "达到安全分页上限",
+    )
+
+
+def test_store_rankings_ignore_group_boundaries_and_sort_all_stores():
+    tree = _build_group_tree(
+        [
+            {
+                "token_id": 1,
+                "store_name": "店铺一",
+                "site_id": "MLM",
+                "group_name": "一组",
+                "salesperson": "张三",
+                "detection_count": 2,
+                "rights_holder_count": 0,
+            },
+            {
+                "token_id": 2,
+                "store_name": "店铺二",
+                "site_id": "MLB",
+                "group_name": "二组",
+                "salesperson": "李四",
+                "detection_count": 1,
+                "rights_holder_count": 4,
+            },
+        ]
+    )
+
+    rankings = _build_store_rankings(tree)
+
+    assert [(row["rank"], row["store_name"], row["total"]) for row in rankings] == [
+        (1, "店铺二", 5),
+        (2, "店铺一", 2),
+    ]
+
+
+def test_pppi_scope_excludes_prohibited_snapshot_rows():
+    condition = _pppi_only_condition("items")
+
+    assert "items.`reason_code` = 'PROHIBITED_REASON'" in condition
+    assert "The product is prohibited." in condition
+
+
+def test_current_pppi_matches_global_selling_product_identity():
+    condition = _pppi_current_listing_condition()
+    product_key = _pppi_product_key()
+
+    assert "links.`is_current` = 1" in condition
+    assert "'active', 'under_review'" in condition
+    assert "links.`seller_sku`" in product_key
+    assert "rights_holder:" in product_key
+
+
+def test_pppi_store_ranking_keeps_every_enabled_store():
+    conditions = _dashboard_account_conditions("pppi")
+
+    assert conditions == ["tokens.`enabled` = 1"]
+    assert _dashboard_account_conditions("")[1].startswith(
+        "(settings.`appeal_enabled` = 1"
+    )
+
+
+def test_current_count_snapshot_flattens_same_dashboard_tree(monkeypatch):
+    monkeypatch.setattr(
+        infraction_store,
+        "list_infraction_dashboard",
+        lambda **kwargs: {
+            "summary": {"last_synced_at": "2026-09-04 09:00:00"},
+            "account_groups": [{
+                "salespeople": [{
+                    "stores": [{
+                        "token_id": 8,
+                        "sites": [{
+                            "site_id": "MLM",
+                            "detection_count": 5,
+                            "rights_holder_count": 3,
+                        }],
+                    }],
+                }],
+            }],
+        },
+    )
+
+    result = infraction_store.current_infraction_counts_by_token_site(100)
+
+    assert result["counts"][(8, "MLM")] == {
+        "infraction_count": 5,
+        "rights_holder_count": 3,
+        "latest_infraction_at": None,
+    }
+    assert result["last_synced_at"] == "2026-09-04 09:00:00"
+
+
+def _client(monkeypatch):
+    user = {
+        "id": 1,
+        "username": "tester",
+        "display_name": "测试员",
+        "access_version": 0,
+    }
+    monkeypatch.setattr(bit_interface, "get_current_workbench_user", lambda: user)
+    client = bit_interface.app.test_client()
+    with client.session_transaction() as session:
+        session["workbench_user"] = user
+    return client
+
+
+def test_independent_dashboard_page_and_data_api(monkeypatch):
+    dashboard = {
+        "summary": {"total": 4},
+        "account_groups": [],
+        "rows": [],
+        "filters": {"days": 30, "groups": [], "salespeople": []},
+        "total": 0,
+        "page": 1,
+        "page_size": 100,
+        "pages": 1,
+    }
+    received = []
+
+    def fake_dashboard(**kwargs):
+        received.append(kwargs)
+        return dashboard
+
+    monkeypatch.setattr(bit_interface, "list_infraction_dashboard", fake_dashboard)
+    client = _client(monkeypatch)
+
+    page_response = client.get("/infringement-dashboard")
+    embedded_response = client.get("/infringement-dashboard?embedded=1")
+    api_response = client.get(
+        "/api/official-infractions/dashboard?days=30&view_mode=history&category=counterfeit&detail_token_id=7"
+    )
+    ip_page_response = client.get("/ip-rights-dashboard?embedded=1")
+    ip_api_response = client.get(
+        "/api/official-ip-rights/dashboard?days=90&salesperson=张三"
+    )
+
+    assert page_response.status_code == 200
+    assert "按账户组与业务员查看违规商品" in page_response.get_data(as_text=True)
+    assert '<body class="embedded">' in embedded_response.get_data(as_text=True)
+    assert api_response.status_code == 200
+    assert api_response.get_json()["data"] == dashboard
+    assert received[0]["detail_token_id"] == "7"
+    assert received[0]["view_mode"] == "history"
+    assert received[0]["category"] == "counterfeit"
+    assert ip_page_response.status_code == 200
+    assert "全部店铺侵权和权利人排名" in ip_page_response.get_data(as_text=True)
+    assert 'id="group-select"' not in ip_page_response.get_data(as_text=True)
+    assert ip_api_response.status_code == 200
+    assert "account_groups" not in ip_api_response.get_json()["data"]
+    assert "group_count" not in ip_api_response.get_json()["data"]["summary"]
+    assert received[1]["scope"] == "pppi"
+    assert received[1]["salesperson"] == "张三"
+    assert "group_name" not in received[1]
+
+
+def test_dashboard_sync_endpoint_starts_background_job(monkeypatch):
+    monkeypatch.setattr(
+        bit_interface.mercado_infraction_sync,
+        "start_official_infraction_sync",
+        lambda token_ids: (
+            True,
+            {"running": True, "task_id": "task-1", "token_ids": token_ids},
+        ),
+    )
+    response = _client(monkeypatch).post(
+        "/api/official-infractions/sync",
+        json={"token_ids": [2, 3]},
+    )
+
+    assert response.status_code == 202
+    assert response.get_json()["data"]["token_ids"] == [2, 3]
+
+
+def test_overview_auto_sync_switch_is_persisted_through_db_api(monkeypatch):
+    saved = {}
+    monkeypatch.setattr(bit_interface, "USE_DB_API", True)
+    monkeypatch.setattr(
+        bit_interface.bit_db_api,
+        "get_overview_auto_sync_settings",
+        lambda scope: {"scope": scope, "enabled": saved.get(scope, True), "interval_hours": 12},
+    )
+
+    def save(scope, enabled):
+        saved[scope] = enabled
+        return {"scope": scope, "enabled": enabled, "interval_hours": 12}
+
+    monkeypatch.setattr(
+        bit_interface.bit_db_api,
+        "set_overview_auto_sync_enabled",
+        save,
+    )
+    client = _client(monkeypatch)
+
+    response = client.put(
+        "/api/overview-auto-sync",
+        json={"scope": "official_infractions", "enabled": False},
+    )
+    read_response = client.get(
+        "/api/overview-auto-sync?scope=official_infractions"
+    )
+
+    assert response.status_code == 200
+    assert response.get_json()["data"]["enabled"] is False
+    assert read_response.get_json()["data"]["enabled"] is False
+
+
+def test_due_infraction_sync_respects_disabled_full_refresh_switch(monkeypatch):
+    monkeypatch.setattr(
+        sync,
+        "get_overview_sync_settings",
+        lambda _scope: {"enabled": False},
+    )
+    monkeypatch.setattr(
+        sync,
+        "list_due_infraction_token_ids",
+        lambda **_kwargs: pytest.fail("disabled scheduler must not query due stores"),
+    )
+
+    result = sync.start_due_official_infraction_sync()
+
+    assert result["disabled"] is True
+    assert result["started"] is False
+
+
+def test_ip_rights_export_keeps_filters_and_exports_all_pages(monkeypatch):
+    received = []
+
+    def fake_dashboard(**kwargs):
+        received.append(kwargs)
+        page = int(kwargs["page"])
+        return {
+            "rows": [{
+                "occurred_at": f"2026-09-0{page} 10:20:30",
+                "store_name": f"店铺{page}",
+                "site_id": "MLM",
+                "salesperson": "张三",
+                "source_type": "detection" if page == 1 else "rights_holder",
+                "item_id": f"MLM{page}",
+                "title": '=HYPERLINK("bad")' if page == 1 else "普通标题",
+                "reason": "The product could be counterfeit.",
+                "rights_holder": "" if page == 1 else "权利人甲",
+                "status": "CREATED",
+                "resolution_status": "current",
+                "due_at": "2026-09-20 00:00:00",
+                "permalink": f"https://example.test/item/{page}",
+                "thumbnail_url": f"https://example.test/image/{page}.jpg",
+            }],
+            "page": page,
+            "pages": 2,
+        }
+
+    monkeypatch.setattr(bit_interface, "list_infraction_dashboard", fake_dashboard)
+    response = _client(monkeypatch).get(
+        "/api/official-ip-rights/export",
+        query_string={
+            "days": 90,
+            "view_mode": "history",
+            "salesperson": "张三",
+            "source_type": "detection",
+            "category": "counterfeit",
+            "search": "商品",
+            "detail_token_id": 7,
+        },
+    )
+
+    assert response.status_code == 200
+    assert len(received) == 2
+    assert received[0]["scope"] == "pppi"
+    assert received[0]["salesperson"] == "张三"
+    assert received[0]["page_size"] == 50000
+    assert received[0]["rows_only"] is True
+    assert received[1]["page"] == 2
+    workbook = load_workbook(BytesIO(response.data))
+    sheet = workbook["侵权和权利人明细"]
+    assert sheet.max_row == 3
+    assert sheet["E2"].value == "平台侵权"
+    assert sheet["E3"].value == "权利人举报"
+    assert sheet["G2"].value.startswith("'=HYPERLINK")
+    assert sheet["A2"].number_format == "yyyy-mm-dd hh:mm:ss"
+    assert sheet.freeze_panes == "A2"
+    assert sheet.auto_filter.ref == "A1:N3"
+
+
+def test_infraction_export_keeps_group_filter_and_store_drilldown(monkeypatch):
+    received = []
+
+    def fake_dashboard(**kwargs):
+        received.append(kwargs)
+        return {
+            "rows": [{
+                "occurred_at": "2026-09-08 10:20:30",
+                "store_name": "店铺一",
+                "site_id": "MLM",
+                "salesperson": "张三",
+                "source_type": "detection",
+                "item_id": "MLM8",
+                "title": "测试商品",
+                "reason": "The product is prohibited.",
+                "status": "under_review",
+                "resolution_status": "current",
+            }],
+            "page": 1,
+            "pages": 1,
+        }
+
+    monkeypatch.setattr(bit_interface, "list_infraction_dashboard", fake_dashboard)
+    response = _client(monkeypatch).get(
+        "/api/official-infractions/export",
+        query_string={
+            "days": 30,
+            "view_mode": "current",
+            "group_name": "精品组",
+            "salesperson": "张三",
+            "category": "prohibited",
+            "detail_token_id": 8,
+        },
+    )
+
+    assert response.status_code == 200
+    assert received[0]["group_name"] == "精品组"
+    assert received[0]["detail_token_id"] == "8"
+    assert received[0]["rows_only"] is True
+    assert "scope" not in received[0]
+    workbook = load_workbook(BytesIO(response.data))
+    sheet = workbook["违规商品明细"]
+    assert sheet.max_row == 2
+    assert sheet["E2"].value == "平台检测"
+    assert sheet.freeze_panes == "A2"
+
+
+def test_console_template_links_to_independent_dashboard():
+    source = (
+        Path(bit_interface.resolve_template_dir()) / "index.html"
+    ).read_text(encoding="utf-8")
+
+    assert "/infringement-dashboard" in source
+    assert '<span class="nav-label">违规商品总览</span>' in source
+    assert 'data-src="/infringement-dashboard?embedded=1"' in source
+    assert 'id="infraction-dashboard-frame"' in source
+    assert '<span class="nav-label">侵权和权利人总览</span>' in source
+    assert 'data-src="/ip-rights-dashboard?embedded=1"' in source
+    assert 'id="ip-rights-dashboard-frame"' in source
+    nav_labels = [
+        '<span class="nav-label">侵权和权利人总览</span>',
+        '<span class="nav-label">禁限售列表</span>',
+        '<span class="nav-label">违规商品总览</span>',
+    ]
+    nav_positions = [source.index(label) for label in nav_labels]
+    assert nav_positions == sorted(nav_positions)
+    adjacent_nav = source[
+        nav_positions[0]:nav_positions[2] + len(nav_labels[2])
+    ]
+    assert adjacent_nav.count('class="nav-label"') == 3
+    assert 'window.location.assign("/infringement-dashboard")' not in source
+
+
+def test_dashboard_template_supports_store_detail_drilldown():
+    source = (
+        Path(bit_interface.resolve_template_dir()) / "infraction_dashboard.html"
+    ).read_text(encoding="utf-8")
+
+    assert "查看明细" in source
+    assert "detail_token_id" in source
+    assert "查看全部明细" in source
+    assert "产品图" in source
+    assert "thumbnail_url" in source
+    assert "当前违规商品" in source
+    assert "全部历史（去重）" in source
+    assert "申诉成功" in source
+    assert "违规类型" in source
+    assert "category-select" in source
+    assert "导出当前筛选明细 Excel" in source
+    assert "/api/official-ip-rights/export" in source
+    assert "/api/official-infractions/export" in source
+    assert "renderSiteCounts" in source
+    assert "站点 / 数量" in source
+    index_source = (
+        Path(bit_interface.resolve_template_dir()) / "index.html"
+    ).read_text(encoding="utf-8")
+    assert "各站点数量" in index_source
+    assert "站点风险数量" in index_source
+    assert 'elements.exportButton.textContent = "正在导出…"' in source
+    assert "await response.blob()" in source
+    assert "导出失败，请稍后重试" in source
+    assert 'id="auto-sync-enabled"' in source
+    assert "最近读取时间" in source
+    assert "读取状态 / 最近读取" in source
+    assert 'status === "limited"' in source
+    assert "单店重试" in source
+    assert "data-retry-token-id" in source
+    assert "async function retryStore" in source
+    assert "JSON.stringify({token_ids: [tokenId]})" in source
+    assert 'scope: "official_infractions"' in source

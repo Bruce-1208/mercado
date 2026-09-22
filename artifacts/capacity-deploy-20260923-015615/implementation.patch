@@ -1,0 +1,2368 @@
+diff --git a/.env.example b/.env.example
+index 2abadd0d..2243bfe2 100644
+--- a/.env.example
++++ b/.env.example
+@@ -54,6 +54,20 @@ MERCADO_ORDER_AUTO_PRINT_BOOTSTRAP_LOOKBACK_SECONDS=900
+ # 工作台角色：server 直连 192.168.1.11，client 只访问下面的 HTTPS 接口。
+ # 每台电脑都可以独立设置；也可在启动时用 --role server/client 临时覆盖。
+ BIT_RUNTIME_ROLE=server
++# 中心服务可用 python -m bit.workbench_services 启动 Web/worker 双进程。
++# 单进程兼容模式保留 combined；双进程管理器自动设置各子进程模式。
++BIT_SERVICE_MODE=combined
++BIT_WORKER_PORT=5001
++BIT_WEB_DB_CONNECTIONS=6
++BIT_WORKER_DB_CONNECTIONS=8
++BIT_WORKER_WSGI_THREADS=16
++# 所有店铺同步共享预算，预留 2 个位置给近期订单；自动更新分小批调度。
++MERCADO_SYNC_STORE_BUDGET=8
++MERCADO_SYNC_ORDER_RESERVE=2
++MERCADO_SYNC_AUTO_BATCH_STORES=8
++# 所有 Mercado API Client 共享在途请求上限，重试退避期间不占用位置。
++MERCADO_API_INFLIGHT_LIMIT=32
++MERCADO_API_ACCOUNT_INFLIGHT_LIMIT=8
+ BIT_DB_API_BASE_URL=https://wuhanzeshun.com
+ # 测试/备用服务端设为 1：保留接口与手动操作，但不启动任何自动后台调度。
+ BIT_BACKGROUND_SERVICES_DISABLED=0
+@@ -136,22 +150,22 @@ MYSQL_WRITE_TIMEOUT=120
+ BIT_WSGI_THREADS=32
+ BIT_WSGI_CONNECTION_LIMIT=500
+ 
+-# 链接自动/手动同步：店铺并发 × 每家详情并发，默认最多 512 个详情线程。
+-MERCADO_STORE_LINK_STORE_WORKERS=16
+-MERCADO_STORE_LINK_DETAIL_WORKERS=32
++# 链接自动/手动同步：店铺并发 × 每家详情并发，单模块默认最多 32 个详情线程，另受全局店铺与 API 在途预算约束。
++MERCADO_STORE_LINK_STORE_WORKERS=4
++MERCADO_STORE_LINK_DETAIL_WORKERS=8
+ MERCADO_STORE_LINK_WRITE_BATCH_SIZE=200
+ MERCADO_API_HTTP_POOL_SIZE=64
+ MERCADO_STORE_LINK_REMOTE_UPDATE_WORKERS=16
+ # 订单自动/手动同步和每日状态刷新：默认 8 家店铺，每家 16 个详情线程。
+ # 店铺最多 24，详情和图片/费用回填最多 32。
+-MERCADO_ORDER_STORE_WORKERS=8
++MERCADO_ORDER_STORE_WORKERS=4
+ MERCADO_ORDER_STATUS_WORKERS=16
+ MERCADO_API_BACKFILL_WORKERS=16
+ # 三个风险总览固定每 12 小时全量更新；店铺最多 24，详情最多 32。
+-MERCADO_INFRACTION_STORE_WORKERS=12
+-MERCADO_INFRACTION_DETAIL_WORKERS=16
+-MERCADO_PROHIBITED_STORE_WORKERS=12
+-MERCADO_PROHIBITED_DETAIL_WORKERS=16
++MERCADO_INFRACTION_STORE_WORKERS=4
++MERCADO_INFRACTION_DETAIL_WORKERS=8
++MERCADO_PROHIBITED_STORE_WORKERS=4
++MERCADO_PROHIBITED_DETAIL_WORKERS=8
+ 
+ # 快递100企业实时轨迹接口；未配置时仍可跳转快递100官网查询
+ KUAIDI100_CUSTOMER=
+diff --git a/README.md b/README.md
+index 26711744..0638aa62 100644
+--- a/README.md
++++ b/README.md
+@@ -64,13 +64,18 @@ MySQL 默认使用进程内共享连接池：所有配置池合计最多 12 条
+ 
+ | 更新任务 | 默认并发 | 环境变量 |
+ | --- | --- | --- |
+-| 店铺链接同步 | 16 家店铺 × 每家 32 个详情线程 | `MERCADO_STORE_LINK_STORE_WORKERS` / `MERCADO_STORE_LINK_DETAIL_WORKERS` |
++| 店铺链接同步 | 4 家店铺 × 每家 8 个详情线程 | `MERCADO_STORE_LINK_STORE_WORKERS` / `MERCADO_STORE_LINK_DETAIL_WORKERS` |
+ | 链接批量回写 | 16 线程 | `MERCADO_STORE_LINK_REMOTE_UPDATE_WORKERS` |
+-| 订单同步、每日老订单刷新 | 8 家店铺 × 每家 16 个详情线程 | `MERCADO_ORDER_STORE_WORKERS` / `MERCADO_ORDER_STATUS_WORKERS` |
++| 订单同步、每日老订单刷新 | 4 家店铺 × 每家 16 个详情线程 | `MERCADO_ORDER_STORE_WORKERS` / `MERCADO_ORDER_STATUS_WORKERS` |
+ | 订单图片、费用回填 | 16 线程 | `MERCADO_API_BACKFILL_WORKERS` |
+-| 侵权、禁限售同步 | 各 12 家店铺 × 每家 16 个详情线程 | `MERCADO_INFRACTION_STORE_WORKERS` / `MERCADO_INFRACTION_DETAIL_WORKERS`、`MERCADO_PROHIBITED_STORE_WORKERS` / `MERCADO_PROHIBITED_DETAIL_WORKERS` |
++| 侵权、禁限售同步 | 各 4 家店铺 × 每家 8 个详情线程 | `MERCADO_INFRACTION_STORE_WORKERS` / `MERCADO_INFRACTION_DETAIL_WORKERS`、`MERCADO_PROHIBITED_STORE_WORKERS` / `MERCADO_PROHIBITED_DETAIL_WORKERS` |
+ | 商品费用自动更新 | 8 线程 | `MERCADO_PROFIT_REFRESH_WORKERS` |
+ 
++跨模块同时运行的店铺默认最多 8 家，其中为近期订单预留 2 个位置；所有 Mercado API Client
++共享最多 32 个在途请求、同一凭据最多 8 个请求，重试等待期间释放请求位置。自动链接、
++侵权、禁限售调度每轮最多取 8 家到期店铺，剩余店铺继续保留在原有持久化待同步列表。
++配置及 Web/worker 分离部署见 [容量优化与验证](docs/capacity_optimization.md)。
++
+ 实际线程数不会超过待处理数量。店铺链接、订单、侵权和禁限售店铺并发可调至 24，
+ 店铺链接详情可调至 64，订单详情、回填、风险详情、链接回写和商品费用线程可调至 32。
+ 环境变量会覆盖代码默认值；已有部署若设置过旧值，需要同步调整并重启服务。
+diff --git a/bit/background_exports.py b/bit/background_exports.py
+new file mode 100644
+index 00000000..ccea75e5
+--- /dev/null
++++ b/bit/background_exports.py
+@@ -0,0 +1,239 @@
++"""Bounded, durable, read-only exports with owner and current-scope checks."""
++from contextlib import contextmanager
++import hashlib
++import logging
++import json
++import os
++from pathlib import Path
++import sqlite3
++import threading
++import time
++import uuid
++from urllib.parse import urlsplit
++
++from flask import jsonify, request, send_file
++from bit.bit_runtime_lock import InterProcessLock
++from bit.service_split import service_mode, signature, HOP_HEADER
++
++EXPORT_PATHS = frozenset({
++    "/api/infractions/latest/export", "/api/reputation/latest/export",
++    "/api/official-infractions/export", "/api/official-ip-rights/export",
++    "/api/prohibited-listings/export", "/api/risk-check/results/export",
++})
++
++
++class ExportQueue:
++    def __init__(self, root):
++        self.root = Path(root)
++        self.root.mkdir(parents=True, exist_ok=True)
++        self.path = self.root / "exports.sqlite3"
++        with self.connect() as db:
++            db.execute("""CREATE TABLE IF NOT EXISTS exports (
++                id TEXT PRIMARY KEY, owner INTEGER NOT NULL, scope TEXT NOT NULL,
++                user_json TEXT NOT NULL, url TEXT NOT NULL, status TEXT NOT NULL,
++                created REAL NOT NULL, updated REAL NOT NULL, message TEXT NOT NULL DEFAULT '',
++                content_type TEXT NOT NULL DEFAULT '', disposition TEXT NOT NULL DEFAULT '')""")
++            db.execute("CREATE INDEX IF NOT EXISTS exports_status ON exports(status,created)")
++        self.wakeup = threading.Event()
++        self.guard = threading.Lock()
++        self.thread = None
++
++    @contextmanager
++    def connect(self):
++        db = sqlite3.connect(self.path, timeout=5)
++        db.row_factory = sqlite3.Row
++        db.execute("PRAGMA journal_mode=WAL")
++        try:
++            with db:
++                yield db
++        finally:
++            db.close()
++
++    def get(self, job_id):
++        with self.connect() as db:
++            row = db.execute("SELECT * FROM exports WHERE id=?", (job_id,)).fetchone()
++            return dict(row) if row else None
++
++    def enqueue(self, user, scope, url):
++        parts = urlsplit(url)
++        if parts.scheme or parts.netloc or parts.fragment or parts.path not in EXPORT_PATHS or len(url) > 8192:
++            raise ValueError("不支持的导出地址")
++        owner = int(user["id"])
++        with self.connect() as db:
++            db.execute("BEGIN IMMEDIATE")
++            existing = db.execute("SELECT * FROM exports WHERE owner=? AND scope=? AND url=? "
++                "AND status IN ('queued','running')", (owner, scope, url)).fetchone()
++            if existing:
++                return dict(existing)
++            own_pending = db.execute("SELECT COUNT(*) FROM exports WHERE owner=? "
++                "AND status IN ('queued','running')", (owner,)).fetchone()[0]
++            pending = db.execute("SELECT COUNT(*) FROM exports WHERE status IN ('queued','running')").fetchone()[0]
++            if own_pending >= 2 or pending >= 100:
++                raise OverflowError("导出队列繁忙，请等待已有任务完成")
++            job_id = uuid.uuid4().hex
++            now = time.time()
++            db.execute("INSERT INTO exports(id,owner,scope,user_json,url,status,created,updated) "
++                       "VALUES(?,?,?,?,?,'queued',?,?)",
++                       (job_id, owner, scope, json.dumps(user, ensure_ascii=False), url, now, now))
++        self.wakeup.set()
++        return self.get(job_id)
++
++    def process_one(self, render):
++        with self.connect() as db:
++            db.execute("BEGIN IMMEDIATE")
++            row = db.execute("SELECT * FROM exports WHERE status='queued' ORDER BY created,id LIMIT 1").fetchone()
++            if row is None:
++                return False
++            job = dict(row)
++            db.execute("UPDATE exports SET status='running',updated=? WHERE id=?", (time.time(), job['id']))
++        temporary = self.root / (job['id'] + '.tmp')
++        try:
++            content, content_type, disposition = render(job)
++            with temporary.open('wb') as handle:
++                handle.write(content)
++            os.replace(temporary, self.root / (job['id'] + '.bin'))
++            with self.connect() as db:
++                db.execute("UPDATE exports SET status='ready',updated=?,content_type=?,disposition=? WHERE id=?",
++                           (time.time(), content_type, disposition, job['id']))
++        except Exception:
++            logging.exception("后台导出失败：job=%s", job["id"])
++            # Do not persist raw database errors, URLs or account information.
++            with self.connect() as db:
++                db.execute("UPDATE exports SET status='error',updated=?,message=? WHERE id=?",
++                           (time.time(), '生成失败或权限已变化，请重新提交导出', job['id']))
++        finally:
++            temporary.unlink(missing_ok=True)
++        return True
++
++    def cleanup(self):
++        cutoff = time.time() - 86400
++        with self.connect() as db:
++            expired = db.execute("SELECT id FROM exports WHERE updated<? AND status IN ('ready','error')", (cutoff,)).fetchall()
++            for row in expired:
++                (self.root / (row['id'] + '.bin')).unlink(missing_ok=True)
++            db.execute("DELETE FROM exports WHERE updated<? AND status IN ('ready','error')", (cutoff,))
++
++    def start(self, render):
++        with self.guard:
++            if self.thread and self.thread.is_alive():
++                return
++            def work():
++                lock = InterProcessLock('workbench-export-worker', owner='exports')
++                if not lock.acquire(timeout=0):
++                    return
++                try:
++                    with self.connect() as db:
++                        db.execute("UPDATE exports SET status='error',message='服务重启中断导出，请重新提交',updated=? "
++                                   "WHERE status='running'", (time.time(),))
++                    while True:
++                        self.wakeup.clear()
++                        self.cleanup()
++                        if not self.process_one(render):
++                            self.wakeup.wait(5)
++                finally:
++                    lock.release()
++            self.thread = threading.Thread(target=work, name='workbench-exports', daemon=True)
++            self.thread.start()
++
++
++def install_exports(app, root, get_user, get_scope):
++    queue = None
++    guard = threading.Lock()
++    def store():
++        nonlocal queue
++        with guard:
++            if queue is None:
++                queue = ExportQueue(root)
++        return queue
++
++    def fingerprint(user):
++        allowed = get_scope(user)
++        payload = {k: user.get(k) for k in (
++            'id', 'organization_key', 'permissions', 'role_key', 'own_store_only',
++            'is_platform_admin', 'username', 'display_name', 'salesperson')}
++        payload['token_ids'] = None if allowed is None else sorted(allowed)
++        return hashlib.sha256(json.dumps(payload, sort_keys=True, ensure_ascii=False).encode()).hexdigest()
++
++    def render(job):
++        with app.test_client() as client:
++            with client.session_transaction() as session:
++                session['workbench_user'] = json.loads(job['user_json'])
++            # Run live authorization before generating, including scope changes
++            # since enqueue. This signed private request uses the same handlers.
++            timestamp = str(int(time.time()))
++            headers = {"X-Workbench-Original-IP": "127.0.0.1"}
++            headers[HOP_HEADER] = timestamp + ':' + signature(app.secret_key, 'GET', job['url'], b'', timestamp, '127.0.0.1')
++            with app.test_request_context(job['url']):
++                from flask import session
++                session['workbench_user'] = json.loads(job['user_json'])
++                user = get_user()
++                if not user or fingerprint(user) != job['scope']:
++                    raise PermissionError('scope changed')
++            response = client.get(job['url'], headers=headers)
++            try:
++                disposition = response.headers.get('Content-Disposition', '')
++                if response.status_code != 200 or 'attachment' not in disposition.lower():
++                    raise RuntimeError('export failed')
++                return response.get_data(), response.content_type, disposition
++            finally:
++                response.close()
++
++    def start():
++        if service_mode() != 'web' and not app.testing:
++            store().start(render)
++
++    def identity():
++        user = get_user()
++        if not user or not user.get('id'):
++            return None
++        return user
++
++    @app.post('/api/exports')
++    def enqueue_export():
++        user = identity()
++        if not user:
++            return jsonify(status='error', message='请先登录'), 401
++        try:
++            job = store().enqueue(user, fingerprint(user), str((request.get_json(silent=True) or {}).get('url') or ''))
++        except ValueError as exc:
++            return jsonify(status='error', message=str(exc)), 400
++        except OverflowError as exc:
++            return jsonify(status='error', message=str(exc)), 429
++        start()
++        return jsonify(status='success', data={'id': job['id'], 'status': job['status']}), 202
++
++    def authorized_job(job_id):
++        user = identity()
++        if not user:
++            return None, (jsonify(status='error', message='请先登录'), 401)
++        job = store().get(job_id)
++        if not job or job['owner'] != int(user['id']) or job['scope'] != fingerprint(user):
++            return None, (jsonify(status='error', message='导出不存在或当前无权访问'), 404)
++        if job['status'] in ('ready', 'error') and job['updated'] < time.time() - 86400:
++            return None, (jsonify(status='error', message='导出已过期，请重新生成'), 410)
++        return job, None
++
++    @app.get('/api/exports/<job_id>')
++    def export_status(job_id):
++        job, error = authorized_job(job_id)
++        if error:
++            return error
++        response = jsonify(status='success', data={k: job[k] for k in ('id','status','message')})
++        response.headers['Cache-Control'] = 'no-store'
++        return response
++
++    @app.get('/api/exports/<job_id>/download')
++    def export_download(job_id):
++        job, error = authorized_job(job_id)
++        if error:
++            return error
++        if job['status'] != 'ready':
++            return jsonify(status='error', message='导出尚未完成'), 409
++        path = store().root / (job['id'] + '.bin')
++        if not path.is_file():
++            return jsonify(status='error', message='导出文件已不可用，请重新生成'), 410
++        response = send_file(path, mimetype=job['content_type'], as_attachment=True, download_name='export')
++        response.headers['Content-Disposition'] = job['disposition']
++        response.headers['Cache-Control'] = 'private, no-store'
++        return response
++    return start
+diff --git a/bit/bit_interface.py b/bit/bit_interface.py
+index 97e27420..ddad6491 100644
+--- a/bit/bit_interface.py
++++ b/bit/bit_interface.py
+@@ -42,6 +42,7 @@ for path in (str(CURRENT_DIR), str(PROJECT_ROOT)):
+ # 必须在导入 bit_db_api、bit_mysql 及业务模块前确定角色；这些模块会在
+ # 导入时固定本进程使用 MySQL 还是数据库 HTTP 接口。
+ from bit.workbench_runtime import bootstrap_runtime
++from bit.service_split import service_mode, worker_port, install_service_routing
+ 
+ RUNTIME_SETTINGS = bootstrap_runtime()
+ 
+@@ -257,25 +258,36 @@ def get_local_agent_store():
+     return _local_agent_store_instance
+ 
+ 
++def _refresh_local_agent_bundle():
++    global _local_agent_bundle_snapshot, _local_agent_bundle_snapshot_at
++    try:
++        _local_agent_bundle_snapshot = build_business_bundle(PROJECT_ROOT)
++    except Exception:
++        logging.exception("检查 Agent 业务包失败，继续提供上一个已验证版本")
++    finally:
++        _local_agent_bundle_snapshot_at = time.monotonic()
++        _local_agent_bundle_lock.release()
++
++
+ def current_local_agent_bundle(force=False):
+     global _local_agent_bundle_snapshot, _local_agent_bundle_snapshot_at
+-    now = time.monotonic()
+-    if (
+-        not force
+-        and _local_agent_bundle_snapshot is not None
+-        and now - _local_agent_bundle_snapshot_at < 10
+-    ):
+-        return _local_agent_bundle_snapshot
+-    with _local_agent_bundle_lock:
+-        now = time.monotonic()
+-        if (
+-            force
+-            or _local_agent_bundle_snapshot is None
+-            or now - _local_agent_bundle_snapshot_at >= 10
+-        ):
+-            _local_agent_bundle_snapshot = build_business_bundle(PROJECT_ROOT)
+-            _local_agent_bundle_snapshot_at = now
++    if force or _local_agent_bundle_snapshot is None:
++        with _local_agent_bundle_lock:
++            if force or _local_agent_bundle_snapshot is None:
++                _local_agent_bundle_snapshot = build_business_bundle(PROJECT_ROOT)
++                _local_agent_bundle_snapshot_at = time.monotonic()
+         return _local_agent_bundle_snapshot
++    if (time.monotonic() - _local_agent_bundle_snapshot_at >= 10
++            and _local_agent_bundle_lock.acquire(blocking=False)):
++        # Heartbeats keep serving the previous complete release while source
++        # inspection/build happens once in the background.
++        try:
++            threading.Thread(target=_refresh_local_agent_bundle,
++                             name="agent-bundle-refresh", daemon=True).start()
++        except BaseException:
++            _local_agent_bundle_lock.release()
++            raise
++    return _local_agent_bundle_snapshot
+ 
+ 
+ def local_executor_target_address_space(base_url=None):
+@@ -700,7 +712,7 @@ def interface_background_services_disabled():
+     keeping central maintenance jobs on the production server only.
+     """
+ 
+-    return USE_DB_API or _truthy_env(
++    return USE_DB_API or service_mode() == "web" or _truthy_env(
+         os.environ.get("BIT_BACKGROUND_SERVICES_DISABLED")
+     )
+ 
+@@ -2328,7 +2340,7 @@ def internal_api_required(view_func):
+         # routes are denied above; loopback is not accepted as an admin
+         # authentication boundary.
+         if (
+-            request.remote_addr in ("127.0.0.1", "::1", "localhost")
++            getattr(g, "worker_original_remote_addr", request.remote_addr) in ("127.0.0.1", "::1", "localhost")
+             and not request.path.startswith(INTERNAL_LOOPBACK_DENIED_PREFIXES)
+         ):
+             return view_func(*args, **kwargs)
+@@ -18629,8 +18641,8 @@ def serve_wsgi_application(serve=None):
+     )
+     serve(
+         app,
+-        host="0.0.0.0",
+-        port=5000,
++        host="127.0.0.1" if service_mode() == "worker" else "0.0.0.0",
++        port=worker_port() if service_mode() == "worker" else 5000,
+         threads=threads,
+         connection_limit=connection_limit,
+         backlog=backlog,
+@@ -18671,7 +18683,8 @@ def start_interface_background_services():
+     start_token_refresh_scheduler_bootstrap()
+     start_store_email_sync_scheduler_bootstrap()
+     start_appeal_report_scheduler_bootstrap()
+-    start_yandex_console_bootstrap()
++    if service_mode() != "worker":
++        start_yandex_console_bootstrap()
+     ensure_mercado_profit_refresh_worker()
+     bit_order_sync.ensure_order_sync_scheduler()
+     bit_order_sync.ensure_order_financial_backfill_worker()
+@@ -18679,8 +18692,17 @@ def start_interface_background_services():
+ 
+ 
+ def run_interface_server():
++    mode = service_mode()
++    if mode != "combined" and not RUNTIME_SETTINGS.is_server:
++        raise RuntimeError("Web/worker 分离模式必须使用 server 数据库角色")
++    scheduler_lock = None
++    if mode in {"combined", "worker"} and not interface_background_services_disabled():
++        scheduler_lock = InterProcessLock("workbench_scheduler_owner", owner=mode)
++        if not scheduler_lock.acquire(timeout=0):
++            logging.error("中心调度器已在其他进程运行，本进程退出")
++            return False
+     interface_lock = InterProcessLock(
+-        "bit_interface_singleton",
++        "bit_interface_worker_singleton" if mode == "worker" else "bit_interface_singleton",
+         owner="bit_interface.py",
+         metadata={
+             "port": 5000,
+@@ -18691,6 +18713,8 @@ def run_interface_server():
+         },
+     )
+     if not interface_lock.acquire(timeout=0):
++        if scheduler_lock:
++            scheduler_lock.release()
+         owner = interface_lock.read_owner()
+         logging.error(
+             "泽顺工作台服务已经运行，本次重复进程退出：pid=%s",
+@@ -18700,12 +18724,17 @@ def run_interface_server():
+ 
+     try:
+         start_interface_background_services()
++        start_background_exports()
++        if mode == "web":
++            start_yandex_console_bootstrap()
+         logging.info("工作台以 %s 角色启动；Flask 热更新已关闭", RUNTIME_SETTINGS.role)
+         serve_wsgi_application()
+         return True
+     finally:
+         close_all_pools()
+         interface_lock.release()
++        if scheduler_lock:
++            scheduler_lock.release()
+ 
+ 
+ def run_interface_main():
+@@ -18718,5 +18747,13 @@ def run_interface_main():
+     return run_interface_server()
+ 
+ 
++from bit.background_exports import install_exports
++start_background_exports = install_exports(
++    app, LOCAL_AGENT_HUB_PATH.parent / "exports",
++    lambda: get_current_workbench_user(), lambda user: _authorized_token_ids_for_user(user),
++)
++install_service_routing(app)
++
++
+ if __name__ == '__main__':
+     run_interface_main()
+diff --git a/bit/bit_order_sync.py b/bit/bit_order_sync.py
+index a11bb3f0..05a7ad04 100644
+--- a/bit/bit_order_sync.py
++++ b/bit/bit_order_sync.py
+@@ -13,6 +13,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
+ from datetime import datetime, timedelta, timezone
+ from decimal import Decimal, InvalidOperation
+ 
++from bit.sync_capacity import run_store as run_capacity_store, due_batch
+ from bit import bit_mysql, bit_print, mercado_tokens
+ from bit.bit_runtime_lock import InterProcessLock, get_lock_owner
+ from mercado_api.client import MercadoAPIError, MercadoLibreClient
+@@ -1444,7 +1445,7 @@ def run_order_sync(start_date="", end_date="", token_ids=None, mode="manual"):
+     results = []
+     paused_for_recent = False
+     try:
+-        store_workers = max(1, min(24, int(os.getenv("MERCADO_ORDER_STORE_WORKERS", "8")), len(records) or 1))
++        store_workers = max(1, min(24, int(os.getenv("MERCADO_ORDER_STORE_WORKERS", "4")), len(records) or 1))
+     except ValueError:
+         store_workers = min(8, len(records) or 1)
+     _state_update(store_workers=store_workers)
+@@ -1480,7 +1481,7 @@ def run_order_sync(start_date="", end_date="", token_ids=None, mode="manual"):
+             return {"store": store_name, "status": "error", "message": str(exc)}
+ 
+     with ThreadPoolExecutor(max_workers=store_workers, thread_name_prefix="meli-orders") as executor:
+-        futures = [executor.submit(sync_record, record) for record in records]
++        futures = [executor.submit(run_capacity_store, "orders" if mode != DAILY_STATUS_MODE else "order-history", record["id"], sync_record, record) for record in records]
+         for future in as_completed(futures):
+             result = future.result()
+             if result is None:
+diff --git a/bit/bit_prohibited_listing_sync.py b/bit/bit_prohibited_listing_sync.py
+index f9c74932..1495f79e 100644
+--- a/bit/bit_prohibited_listing_sync.py
++++ b/bit/bit_prohibited_listing_sync.py
+@@ -11,6 +11,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
+ from datetime import datetime, timedelta
+ from typing import Any, Iterable, Mapping
+ 
++from bit.sync_capacity import run_store as run_capacity_store, due_batch
+ from bit import bit_mysql, mercado_tokens
+ from bit.bit_runtime_lock import InterProcessLock, get_lock_owner
+ from erp.mercadolibre_prohibited_store import (
+@@ -39,10 +40,10 @@ PROHIBITED_AUTO_CHECK_SECONDS = max(
+     60, int(os.getenv("MERCADO_PROHIBITED_AUTO_CHECK_SECONDS", "300"))
+ )
+ PROHIBITED_STORE_WORKERS = max(
+-    1, min(24, int(os.getenv("MERCADO_PROHIBITED_STORE_WORKERS", "12")))
++    1, min(24, int(os.getenv("MERCADO_PROHIBITED_STORE_WORKERS", "4")))
+ )
+ PROHIBITED_DETAIL_WORKERS = max(
+-    1, min(32, int(os.getenv("MERCADO_PROHIBITED_DETAIL_WORKERS", "16")))
++    1, min(32, int(os.getenv("MERCADO_PROHIBITED_DETAIL_WORKERS", "8")))
+ )
+ PROHIBITED_PAGE_SIZE = 20
+ PROHIBITED_DETAIL_ATTRIBUTES = (
+@@ -552,7 +553,7 @@ def run_prohibited_listing_sync(token_ids: Iterable[Any] | None = None) -> dict[
+             _set_store_active(store_name, False)
+ 
+     with ThreadPoolExecutor(max_workers=worker_count, thread_name_prefix="meli-prohibited") as executor:
+-        futures = [executor.submit(sync_one, record) for record in records]
++        futures = [executor.submit(run_capacity_store, "prohibited", record["id"], sync_one, record) for record in records]
+         for future in as_completed(futures):
+             results.append(future.result())
+             _state_update(
+@@ -604,11 +605,6 @@ def start_prohibited_listing_sync(
+     selected_ids = _token_ids(token_ids or ())
+     if selected_ids:
+         _token_records(selected_ids)
+-    with _state_guard:
+-        if _sync_state.get("running"):
+-            return False, prohibited_listing_sync_status()
+-    if get_lock_owner(PROHIBITED_SYNC_LOCK_KEY):
+-        return False, prohibited_listing_sync_status()
+     queued_ids = selected_ids or _token_ids(
+         row.get("id")
+         for row in ((bit_mysql.list_mercado_store_tokens() or {}).get("rows") or [])
+@@ -617,6 +613,13 @@ def start_prohibited_listing_sync(
+     if queued_ids:
+         request_prohibited_sync(queued_ids)
+     with _state_guard:
++        if _sync_state.get("running"):
++            return False, prohibited_listing_sync_status()
++    if get_lock_owner(PROHIBITED_SYNC_LOCK_KEY):
++        return False, prohibited_listing_sync_status()
++    with _state_guard:
++        if _sync_state.get("running"):
++            return False, prohibited_listing_sync_status()
+         _sync_state.update(
+             running=True, task_id=uuid.uuid4().hex, status="starting",
+             message="正在启动禁限售同步", total_stores=0, processed_stores=0,
+@@ -659,6 +662,7 @@ def start_due_prohibited_listing_sync() -> dict[str, Any]:
+     )
+     if not token_ids:
+         return {"started": False, "due_token_ids": [], "state": prohibited_listing_sync_status()}
++    token_ids = due_batch(token_ids)
+     started, state = start_prohibited_listing_sync(token_ids)
+     return {"started": bool(started), "due_token_ids": token_ids, "state": state}
+ 
+diff --git a/bit/bit_store_link_sync.py b/bit/bit_store_link_sync.py
+index ddd79c0e..672655bb 100644
+--- a/bit/bit_store_link_sync.py
++++ b/bit/bit_store_link_sync.py
+@@ -8,6 +8,7 @@ import uuid
+ from concurrent.futures import ThreadPoolExecutor, as_completed
+ from datetime import datetime, timedelta
+ 
++from bit.sync_capacity import run_store as run_capacity_store, due_batch
+ from bit import bit_mysql, mercado_tokens
+ from bit.bit_runtime_lock import InterProcessLock, get_lock_owner
+ from erp.mercadolibre_store_link_store import (
+@@ -29,10 +30,10 @@ STORE_LINK_WRITE_BATCH_SIZE = max(
+     100, min(int(os.getenv("MERCADO_STORE_LINK_WRITE_BATCH_SIZE", "200")), 1000)
+ )
+ STORE_LINK_STORE_WORKERS = max(
+-    1, min(int(os.getenv("MERCADO_STORE_LINK_STORE_WORKERS", "16")), 24)
++    1, min(int(os.getenv("MERCADO_STORE_LINK_STORE_WORKERS", "4")), 24)
+ )
+ STORE_LINK_DETAIL_WORKERS = max(
+-    1, min(int(os.getenv("MERCADO_STORE_LINK_DETAIL_WORKERS", "32")), 64)
++    1, min(int(os.getenv("MERCADO_STORE_LINK_DETAIL_WORKERS", "8")), 64)
+ )
+ STORE_LINK_AUTO_SYNC_DAYS = max(
+     1, int(os.getenv("MERCADO_STORE_LINK_AUTO_SYNC_DAYS", "3"))
+@@ -507,7 +508,7 @@ def run_store_link_sync(token_ids=None) -> dict:
+         max_workers=worker_count,
+         thread_name_prefix="mercado-store-sync",
+     ) as executor:
+-        futures = [executor.submit(sync_one_store, record) for record in records]
++        futures = [executor.submit(run_capacity_store, "links", record["id"], sync_one_store, record) for record in records]
+         for future in as_completed(futures):
+             result = future.result()
+             results.append(result)
+@@ -624,6 +625,7 @@ def start_due_store_link_sync() -> dict:
+     )
+     if not token_ids:
+         return {"started": False, "due_token_ids": [], "state": store_link_sync_status()}
++    token_ids = due_batch(token_ids)
+     started, state = start_store_link_sync(token_ids)
+     return {"started": bool(started), "due_token_ids": token_ids, "state": state}
+ 
+diff --git a/bit/local_agent_bundle.py b/bit/local_agent_bundle.py
+index ad1985c7..2bebc94f 100644
+--- a/bit/local_agent_bundle.py
++++ b/bit/local_agent_bundle.py
+@@ -29,6 +29,8 @@ ROOT_SOURCE_FILES = (
+ _BUNDLE_LOCK = threading.Lock()
+ _BUNDLE_CACHE = {}
+ _BUNDLE_HISTORY_LIMIT = 5
++_SOURCE_CACHE_LOCK = threading.Lock()
++_SOURCE_CACHE = {}
+ 
+ 
+ def iter_business_source_files(project_root):
+@@ -53,6 +55,16 @@ def business_source_version(project_root):
+     project_root = Path(project_root).resolve()
+     digest = hashlib.sha256()
+     files = iter_business_source_files(project_root)
++    # Metadata reads are cheap; hash file contents only after a source change.
++    # ctime catches replacements even when a deployment preserves mtime/size.
++    signature = tuple(
++        (str(path), stat.st_size, stat.st_mtime_ns, stat.st_ctime_ns)
++        for path in files for stat in (path.stat(),)
++    )
++    with _SOURCE_CACHE_LOCK:
++        cached = _SOURCE_CACHE.get(str(project_root))
++        if cached and cached[0] == signature:
++            return cached[1], files
+     for path in files:
+         relative = path.relative_to(project_root).as_posix().encode("utf-8")
+         content = path.read_bytes()
+@@ -60,7 +72,12 @@ def business_source_version(project_root):
+         digest.update(relative)
+         digest.update(len(content).to_bytes(8, "big"))
+         digest.update(content)
+-    return digest.hexdigest()[:24], files
++    version = digest.hexdigest()[:24]
++    with _SOURCE_CACHE_LOCK:
++        _SOURCE_CACHE[str(project_root)] = (signature, version)
++        if len(_SOURCE_CACHE) > 8:
++            del _SOURCE_CACHE[next(iter(_SOURCE_CACHE))]
++    return version, files
+ 
+ 
+ def build_business_bundle(project_root):
+diff --git a/bit/local_agent_hub.py b/bit/local_agent_hub.py
+index 991cc16e..76fe0a99 100644
+--- a/bit/local_agent_hub.py
++++ b/bit/local_agent_hub.py
+@@ -93,6 +93,14 @@ def normalize_job_id(value):
+     return value
+ 
+ 
++class _ClosingConnection(sqlite3.Connection):
++    def __exit__(self, *args):
++        try:
++            return super().__exit__(*args)
++        finally:
++            self.close()
++
++
+ class LocalAgentStore:
+     """Small SQLite-backed queue shared by Flask workers and agent polls."""
+ 
+@@ -102,13 +110,18 @@ class LocalAgentStore:
+         self._schema_lock = threading.Lock()
+         self._schema_ready = False
+         self._queue_id = ""
++        self._heartbeat_cache = {}
++        self._heartbeat_cache_lock = threading.Lock()
+ 
+     def _connect(self):
+-        connection = sqlite3.connect(str(self.path), timeout=15)
+-        connection.row_factory = sqlite3.Row
+-        connection.execute("PRAGMA busy_timeout = 15000")
+-        connection.execute("PRAGMA journal_mode = WAL")
+-        self._ensure_schema(connection)
++        connection = sqlite3.connect(str(self.path), timeout=15, factory=_ClosingConnection)
++        try:
++            connection.row_factory = sqlite3.Row
++            connection.execute("PRAGMA busy_timeout = 15000")
++            self._ensure_schema(connection)
++        except BaseException:
++            connection.close()
++            raise
+         return connection
+ 
+     def _ensure_schema(self, connection):
+@@ -117,6 +130,18 @@ class LocalAgentStore:
+         with self._schema_lock:
+             if self._schema_ready:
+                 return
++            # WAL is persistent. Set it once under the initialization lock,
++            # not on every heartbeat connection. SQLite may return BUSY here
++            # immediately during a second process's cold start.
++            deadline = time.monotonic() + 15
++            while True:
++                try:
++                    connection.execute("PRAGMA journal_mode = WAL")
++                    break
++                except sqlite3.OperationalError as exc:
++                    if "locked" not in str(exc).lower() or time.monotonic() >= deadline:
++                        raise
++                    time.sleep(0.02)
+             connection.executescript(
+                 """
+                 CREATE TABLE IF NOT EXISTS local_agents (
+@@ -264,6 +289,16 @@ class LocalAgentStore:
+         session_id = str(session_id or "").strip()[:96]
+         current_job_id = str(current_job_id or "").strip()
+         lease_seconds = max(60.0, float(lease_seconds or DEFAULT_JOB_LEASE_SECONDS))
++        heartbeat_key = (name, str(hostname), str(platform), str(agent_version),
++                         str(business_version), tuple(capabilities), session_id,
++                         current_job_id, lease_seconds)
++        # Also protects the server from older agents that poll every second.
++        # Cancellation is read separately on every request. A new session,
++        # job, or version always writes immediately; leases are >=60 seconds.
++        with self._heartbeat_cache_lock:
++            cached = self._heartbeat_cache.get(agent_id)
++            if cached and cached[1] == heartbeat_key and 0 <= now - cached[0] < 5:
++                return self._agent_row(cached[2], now=now)
+         with self._connect() as connection:
+             connection.execute("BEGIN IMMEDIATE")
+             previous = connection.execute(
+@@ -340,6 +375,10 @@ class LocalAgentStore:
+             row = connection.execute(
+                 "SELECT * FROM local_agents WHERE agent_id = ?", (agent_id,)
+             ).fetchone()
++        with self._heartbeat_cache_lock:
++            self._heartbeat_cache[agent_id] = (now, heartbeat_key, dict(row))
++            if len(self._heartbeat_cache) > 4096:
++                del self._heartbeat_cache[next(iter(self._heartbeat_cache))]
+         return self._agent_row(row, now=now)
+ 
+     def list_agents(self, *, online_seconds=45, capability="", now=None):
+@@ -429,6 +468,25 @@ class LocalAgentStore:
+         lease_seconds = max(60.0, float(lease_seconds or DEFAULT_JOB_LEASE_SECONDS))
+         connection = self._connect()
+         try:
++            # The normal running/idle poll needs no write lock. Recheck all
++            # conditions inside the transaction below before claiming a job.
++            # Returning on a racing enqueue is safe: the next poll sees it.
++            active = connection.execute(
++                "SELECT lease_expires_at, updated_at FROM local_agent_jobs "
++                "WHERE agent_id = ? AND status IN ('running', 'stopping')",
++                (agent_id,),
++            ).fetchall()
++            if any(
++                (row["lease_expires_at"] is not None and row["lease_expires_at"] >= now)
++                or (row["lease_expires_at"] is None and row["updated_at"] >= now - lease_seconds)
++                for row in active
++            ):
++                return None
++            if not active and not connection.execute(
++                "SELECT 1 FROM local_agent_jobs WHERE agent_id = ? "
++                "AND status = 'queued' AND cancel_requested = 0 LIMIT 1", (agent_id,),
++            ).fetchone():
++                return None
+             connection.execute("BEGIN IMMEDIATE")
+             connection.execute(
+                 """
+diff --git a/bit/mercado_infraction_sync.py b/bit/mercado_infraction_sync.py
+index 71ddcef6..0fa40440 100644
+--- a/bit/mercado_infraction_sync.py
++++ b/bit/mercado_infraction_sync.py
+@@ -13,6 +13,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
+ from datetime import datetime, timedelta
+ from typing import Any, Iterable, Mapping
+ 
++from bit.sync_capacity import run_store as run_capacity_store, due_batch
+ from bit import bit_mysql, mercado_tokens
+ from bit.bit_runtime_lock import InterProcessLock, get_lock_owner
+ from erp.mercadolibre_infraction_store import (
+@@ -53,10 +54,10 @@ INFRACTION_AUTO_CHECK_SECONDS = _env_int(
+     "MERCADO_INFRACTION_AUTO_CHECK_SECONDS", 300, 60, 3600
+ )
+ INFRACTION_STORE_WORKERS = _env_int(
+-    "MERCADO_INFRACTION_STORE_WORKERS", 12, 1, 24
++    "MERCADO_INFRACTION_STORE_WORKERS", 4, 1, 24
+ )
+ INFRACTION_DETAIL_WORKERS = _env_int(
+-    "MERCADO_INFRACTION_DETAIL_WORKERS", 16, 1, 32
++    "MERCADO_INFRACTION_DETAIL_WORKERS", 8, 1, 32
+ )
+ INFRACTION_INITIAL_DETECTION_DAYS = _env_int(
+     "MERCADO_INFRACTION_INITIAL_DETECTION_DAYS", 2, 1, 30
+@@ -1603,7 +1604,7 @@ def run_official_infraction_sync(
+         max_workers=worker_count,
+         thread_name_prefix="meli-official-infractions",
+     ) as executor:
+-        futures = [executor.submit(sync_one, record) for record in records]
++        futures = [executor.submit(run_capacity_store, "infractions", record["id"], sync_one, record) for record in records]
+         for future in as_completed(futures):
+             results.append(future.result())
+             _state_update(
+@@ -1679,11 +1680,6 @@ def start_official_infraction_sync(
+     selected_ids = _token_ids(token_ids or ())
+     if selected_ids:
+         _token_records(selected_ids)
+-    with _state_guard:
+-        if _sync_state.get("running"):
+-            return False, official_infraction_sync_status()
+-    if get_lock_owner(INFRACTION_SYNC_LOCK_KEY):
+-        return False, official_infraction_sync_status()
+     queued_ids = selected_ids or _token_ids(
+         row.get("id")
+         for row in ((bit_mysql.list_mercado_store_tokens() or {}).get("rows") or [])
+@@ -1692,6 +1688,13 @@ def start_official_infraction_sync(
+     if queued_ids:
+         request_infraction_sync(queued_ids)
+     with _state_guard:
++        if _sync_state.get("running"):
++            return False, official_infraction_sync_status()
++    if get_lock_owner(INFRACTION_SYNC_LOCK_KEY):
++        return False, official_infraction_sync_status()
++    with _state_guard:
++        if _sync_state.get("running"):
++            return False, official_infraction_sync_status()
+         _sync_state.update(
+             running=True,
+             task_id=uuid.uuid4().hex,
+@@ -1748,6 +1751,7 @@ def start_due_official_infraction_sync() -> dict[str, Any]:
+             "due_token_ids": [],
+             "state": official_infraction_sync_status(),
+         }
++    token_ids = due_batch(token_ids)
+     started, state = start_official_infraction_sync(token_ids)
+     return {"started": bool(started), "due_token_ids": token_ids, "state": state}
+ 
+diff --git a/bit/service_split.py b/bit/service_split.py
+new file mode 100644
+index 00000000..abe8287a
+--- /dev/null
++++ b/bit/service_split.py
+@@ -0,0 +1,124 @@
++"""Optional single-owner scheduler service behind the public Web process.
++
++Stateful task endpoints stay on one worker, including manual starts and status
++reads. The private listener binds loopback and requires an authenticated hop.
++No POST is retried: a lost response must not duplicate a business operation.
++"""
++import hashlib
++import hmac
++import os
++import time
++
++import requests
++from flask import Response, g, jsonify, request, stream_with_context
++
++MODES = {"combined", "web", "worker"}
++HOP_HEADER = "X-Workbench-Worker-Auth"
++HOP_BY_HOP = {"connection", "keep-alive", "proxy-authenticate", "proxy-authorization",
++              "te", "trailer", "transfer-encoding", "upgrade", "host", "content-length"}
++STATEFUL_PREFIXES = (
++    "/api/order-sync/", "/api/db/order-sync/", "/api/store-links/sync/",
++    "/api/db/store-links/sync/", "/api/prohibited-listings/sync/",
++    "/api/db/prohibited-listings/sync/", "/api/official-infractions/sync",
++    "/api/db/official-infractions/sync", "/api/mercado-reputation/",
++    "/api/orders/purchase-tracking/", "/api/zying-collection/",
++    "/api/exports/", "/api/tasks/daily/", "/api/run_shensu",
++    "/api/mercado-collection/", "/api/db/mercado-collection/",
++    "/api/mercado-products/", "/api/db/mercado-products/",
++    "/api/browser-extension/zying/", "/api/local-executor/tasks/daily/",
++    "/api/local-executor/run_shensu",
++)
++STATEFUL_PATHS = {
++    "/api/overview-auto-sync", "/api/db/overview-auto-sync",
++    "/api/mercado-collection/start", "/api/mercado-collection/stop",
++    "/api/mercado-collection/status", "/api/mercado-products/publish",
++    "/api/mercado-products/publish/status", "/api/mercado-publish-records/retry",
++    "/api/mercado-shipping-rates", "/api/mercado-shipping-rates/refresh",
++    "/api/exports", "/api/mercado-tokens/exchange",
++    "/api/store-links/bulk-update", "/api/store-links/bulk-update/status",
++    "/api/db/store-links/bulk-update", "/api/db/store-links/bulk-update/status",
++}
++
++
++def service_mode():
++    mode = os.environ.get("BIT_SERVICE_MODE", "combined").strip().lower()
++    if mode not in MODES:
++        raise ValueError("BIT_SERVICE_MODE must be combined, web or worker")
++    return mode
++
++
++def worker_port():
++    port = int(os.environ.get("BIT_WORKER_PORT", "5001"))
++    if not 1024 <= port <= 65535 or port == 5000:
++        raise ValueError("BIT_WORKER_PORT must be 1024..65535 and different from 5000")
++    return port
++
++
++def is_worker_path(path):
++    return path in STATEFUL_PATHS or any(path.startswith(p) for p in STATEFUL_PREFIXES)
++
++
++def signature(secret, method, path, body, timestamp, original_ip=""):
++    path = requests.utils.requote_uri(path)
++    digest = hashlib.sha256(body).hexdigest()
++    message = f"{timestamp}\n{method}\n{path}\n{digest}\n{original_ip}".encode()
++    return hmac.new(str(secret).encode(), message, hashlib.sha256).hexdigest()
++
++
++def install_service_routing(app):
++    def route_request():
++        mode = service_mode()
++        if mode == "combined":
++            return None
++        if mode == "web" and not is_worker_path(request.path):
++            return None
++        path = request.path + ("?" + request.query_string.decode("latin1") if request.query_string else "")
++        body = request.get_data()
++        if mode == "worker":
++            supplied = request.headers.get(HOP_HEADER, "")
++            timestamp, _, digest = supplied.partition(":")
++            original_ip = request.headers.get("X-Workbench-Original-IP", "")
++            try:
++                fresh = abs(time.time() - int(timestamp)) <= 60
++            except ValueError:
++                fresh = False
++            if (request.remote_addr not in {"127.0.0.1", "::1"} or not fresh or
++                    not hmac.compare_digest(digest, signature(app.secret_key, request.method, path, body, timestamp, original_ip))):
++                return jsonify(status="error", message="Private worker request required"), 403
++            g.worker_original_remote_addr = original_ip
++            return None
++        headers = {k: v for k, v in request.headers.items()
++                   if k.lower() not in HOP_BY_HOP and not k.lower().startswith(("x-workbench-", "x-forwarded-"))}
++        timestamp = str(int(time.time()))
++        headers["X-Workbench-Original-IP"] = request.remote_addr or ""
++        headers[HOP_HEADER] = timestamp + ":" + signature(app.secret_key, request.method, path, body, timestamp, request.remote_addr or "")
++        # Use a literal loopback address; proxy environment variables must never
++        # send sessions or internal credentials to a public HTTP proxy.
++        transport = requests.Session()
++        transport.trust_env = False
++        try:
++            upstream = transport.request(request.method,
++                f"http://127.0.0.1:{worker_port()}{path}", data=body, headers=headers,
++                timeout=(2, 120), allow_redirects=False, stream=True)
++        except requests.RequestException:
++            transport.close()
++            return jsonify(status="error", message="后台服务暂时不可用，请稍后检查任务状态；请求未自动重试"), 503
++        excluded = HOP_BY_HOP | {"content-encoding"}
++        response_headers = [(k, v) for k, v in upstream.headers.items()
++                            if k.lower() not in excluded and k.lower() != "set-cookie"]
++        for value in upstream.raw.headers.getlist("Set-Cookie"):
++            response_headers.append(("Set-Cookie", value))
++        def chunks():
++            try:
++                yield from upstream.iter_content(chunk_size=65536)
++            finally:
++                upstream.close()
++                transport.close()
++        response = Response(stream_with_context(chunks()), status=upstream.status_code,
++                            headers=response_headers)
++        response.call_on_close(upstream.close)
++        response.call_on_close(transport.close)
++        return response
++    # Run before public auth hooks; the worker executes the original permission
++    # checks against the same signed session and current database permissions.
++    app.before_request_funcs.setdefault(None, []).insert(0, route_request)
+diff --git a/bit/static/background-exports.js b/bit/static/background-exports.js
+new file mode 100644
+index 00000000..2498d04b
+--- /dev/null
++++ b/bit/static/background-exports.js
+@@ -0,0 +1,72 @@
++/* One bounded server job per export; ordinary page requests stay short. */
++(() => {
++    const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
++    async function payload(response) {
++        const body = await response.json();
++        if (!response.ok) throw new Error(body.message || `导出请求失败 (${response.status})`);
++        if (!body.data || typeof body.data !== 'object' || Array.isArray(body.data)) {
++            throw new Error('导出状态响应格式错误');
++        }
++        return body.data;
++    }
++    window.queueWorkbenchExport = async function (url) {
++        const job = await payload(await fetch('/api/exports', {
++            method: 'POST', credentials: 'same-origin',
++            headers: {'Content-Type': 'application/json'}, body: JSON.stringify({url})
++        }));
++        let failures = 0;
++        for (;;) {
++            await sleep(2000 + Math.random() * 500);
++            let state;
++            try {
++                const response = await fetch(`/api/exports/${encodeURIComponent(job.id)}`, {
++                    credentials: 'same-origin', cache: 'no-store'
++                });
++                if ([401, 403, 404, 410].includes(response.status)) {
++                    const body = await response.json();
++                    throw Object.assign(new Error(body.message || '导出已不可用'), {terminal: true});
++                }
++                state = await payload(response);
++                failures = 0;
++            } catch (error) {
++                if (error.terminal || ++failures >= 6) throw error;
++                await sleep(Math.min(30000, 2000 * 2 ** failures));
++                continue;
++            }
++            if (state.status === 'error') throw new Error(state.message || '导出失败');
++            if (state.status === 'ready') {
++                const response = await fetch(`/api/exports/${encodeURIComponent(job.id)}/download`, {
++                    credentials: 'same-origin', cache: 'no-store'
++                });
++                if (!response.ok) await payload(response);
++                return response;
++            }
++        }
++    };
++    window.downloadWorkbenchExport = async function (url) {
++        const notice = document.createElement('div');
++        notice.setAttribute('role', 'status');
++        notice.textContent = '正在后台生成导出文件，请保留此页面…';
++        Object.assign(notice.style, {position:'fixed',bottom:'24px',right:'24px',padding:'14px 20px',
++            background:'#17324d',color:'#fff',borderRadius:'8px',zIndex:'10000'});
++        document.body.appendChild(notice);
++        try {
++            const response = await window.queueWorkbenchExport(url);
++            const disposition = response.headers.get('Content-Disposition') || '';
++            const encoded = disposition.match(/filename\*=UTF-8''([^;]+)/i);
++            const plain = disposition.match(/filename="?([^";]+)"?/i);
++            let name = plain?.[1] || 'export.xlsx';
++            if (encoded) { try { name = decodeURIComponent(encoded[1]); } catch (_) {} }
++            const objectURL = URL.createObjectURL(await response.blob());
++            const link = document.createElement('a');
++            link.href = objectURL; link.download = name;
++            document.body.appendChild(link); link.click(); link.remove();
++            setTimeout(() => URL.revokeObjectURL(objectURL), 1000);
++            notice.textContent = '导出完成';
++        } catch (error) {
++            notice.textContent = `导出失败：${error.message || error}`;
++        } finally {
++            setTimeout(() => notice.remove(), 8000);
++        }
++    };
++})();
+diff --git a/bit/sync_capacity.py b/bit/sync_capacity.py
+new file mode 100644
+index 00000000..e5607534
+--- /dev/null
++++ b/bit/sync_capacity.py
+@@ -0,0 +1,92 @@
++"""Shared admission budget for store synchronizations in the scheduler process.
++
++Only store coordinators take slots. Their detail workers never take a second
++store slot, avoiding nested-pool deadlocks. Existing per-module durable due
++states and inter-process task locks remain responsible for recovery/deduplication.
++"""
++from contextlib import contextmanager
++import os
++import threading
++import time
++
++
++def _integer(name, default, minimum=1, maximum=64):
++    try:
++        return max(minimum, min(maximum, int(os.environ.get(name, default))))
++    except (TypeError, ValueError):
++        return default
++
++
++class SyncBudget:
++    def __init__(self, limit=8, order_reserve=2):
++        self.limit = max(1, int(limit))
++        self.reserve = min(max(0, int(order_reserve)), self.limit - 1)
++        self.condition = threading.Condition()
++        self.active = 0
++        self.background_active = 0
++        self.keys = set()
++        self.waiters = []
++        self.completed = 0
++        self.wait_seconds = 0.0
++
++    @contextmanager
++    def slot(self, kind, token_id):
++        key = (str(kind), str(token_id))
++        urgent = kind == "orders"
++        ticket = object()
++        started = time.monotonic()
++        with self.condition:
++            self.waiters.append((ticket, key, urgent))
++            try:
++                while True:
++                    eligible = [w for w in self.waiters if w[1] not in self.keys and
++                                (w[2] or self.background_active < self.limit - self.reserve)]
++                    # FIFO within each class; reserved slots keep orders moving
++                    # even when large catalog batches fill background capacity.
++                    first = next((w for w in eligible if w[2]), eligible[0] if eligible else None)
++                    if self.active < self.limit and first and first[0] is ticket:
++                        self.waiters.remove((ticket, key, urgent))
++                        self.keys.add(key)
++                        self.active += 1
++                        self.background_active += not urgent
++                        self.wait_seconds += time.monotonic() - started
++                        self.condition.notify_all()
++                        break
++                    self.condition.wait()
++            except BaseException:
++                self.waiters.remove((ticket, key, urgent))
++                self.condition.notify_all()
++                raise
++        try:
++            yield
++        finally:
++            with self.condition:
++                self.keys.remove(key)
++                self.active -= 1
++                self.background_active -= not urgent
++                self.completed += 1
++                self.condition.notify_all()
++
++    def snapshot(self):
++        with self.condition:
++            return dict(limit=self.limit, order_reserve=self.reserve, active=self.active,
++                        waiting=len(self.waiters), completed=self.completed,
++                        wait_seconds=round(self.wait_seconds, 3))
++
++
++_budget = SyncBudget(_integer("MERCADO_SYNC_STORE_BUDGET", 8),
++                     _integer("MERCADO_SYNC_ORDER_RESERVE", 2, 0))
++
++
++def run_store(kind, token_id, call, *args, **kwargs):
++    with _budget.slot(kind, token_id):
++        return call(*args, **kwargs)
++
++
++def snapshot():
++    return _budget.snapshot()
++
++
++def due_batch(token_ids):
++    """Bound each automatic dispatch; remaining due rows persist for next tick."""
++    return list(token_ids)[:_integer("MERCADO_SYNC_AUTO_BATCH_STORES", 8, maximum=100)]
+diff --git a/bit/templates/index.html b/bit/templates/index.html
+index 5c0917df..0c986dac 100644
+--- a/bit/templates/index.html
++++ b/bit/templates/index.html
+@@ -3,7 +3,8 @@
+ <head>
+     <meta charset="UTF-8">
+     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+-    <script>
++    <script src="{{ url_for('static', filename='background-exports.js') }}"></script>
++<script>
+         // This template must be rendered by Flask. Redirect accidental file://
+         // opens to the live workbench so API calls and the latest UI stay in sync.
+         if (window.location.protocol === "file:") {
+@@ -25734,10 +25735,7 @@
+             if (prohibitedOccurredTo.value) query.set("occurred_to", prohibitedOccurredTo.value);
+             if (prohibitedSearch.value.trim()) query.set("search", prohibitedSearch.value.trim());
+             try {
+-                const response = await fetch(`/api/prohibited-listings/export?${query.toString()}`, {
+-                    cache: "no-store",
+-                    credentials: "same-origin",
+-                });
++                const response = await queueWorkbenchExport(`/api/prohibited-listings/export?${query.toString()}`);
+                 const contentType = (response.headers.get("Content-Type") || "").toLowerCase();
+                 if (!response.ok || !contentType.includes("spreadsheetml")) {
+                     let message = "导出失败，请稍后重试";
+@@ -26339,7 +26337,7 @@
+         }
+ 
+         function exportRiskResults() {
+-            window.location.href = `/api/risk-check/results/export?${riskResultQueryParams(false).toString()}`;
++            downloadWorkbenchExport(`/api/risk-check/results/export?${riskResultQueryParams(false).toString()}`);
+         }
+ 
+         function scheduleRiskCheckStatusPoll() {
+@@ -27060,7 +27058,7 @@
+         }
+ 
+         function exportLatestReputation() {
+-            window.location.href = "/api/reputation/latest/export";
++            downloadWorkbenchExport("/api/reputation/latest/export");
+         }
+ 
+         function selectedCollectionValues(elementId) {
+@@ -27544,7 +27542,7 @@
+         }
+ 
+         function exportLatestInfractions() {
+-            window.location.href = `/api/infractions/latest/export?days=${encodeURIComponent(infractionDays)}`;
++            downloadWorkbenchExport(`/api/infractions/latest/export?days=${encodeURIComponent(infractionDays)}`);
+         }
+ 
+         async function runInfractionCollection() {
+diff --git a/bit/templates/infraction_dashboard.html b/bit/templates/infraction_dashboard.html
+index d1ed21d4..0fd07946 100644
+--- a/bit/templates/infraction_dashboard.html
++++ b/bit/templates/infraction_dashboard.html
+@@ -673,6 +673,7 @@
+         </section>
+     </main>
+ 
++    <script src="{{ url_for('static', filename='background-exports.js') }}"></script>
+     <script>
+         const ipRightsMode = {{ 'true' if ip_rights_mode else 'false' }};
+         const state = {
+@@ -1159,9 +1160,8 @@
+                 const exportEndpoint = ipRightsMode
+                     ? "/api/official-ip-rights/export"
+                     : "/api/official-infractions/export";
+-                const response = await fetch(
+-                    `${exportEndpoint}?${dashboardParams(false).toString()}`,
+-                    {credentials: "same-origin"},
++                const response = await queueWorkbenchExport(
++                    `${exportEndpoint}?${dashboardParams(false).toString()}`
+                 );
+                 const contentType = (response.headers.get("Content-Type") || "").toLowerCase();
+                 if (!response.ok || !contentType.includes("spreadsheetml")) {
+diff --git a/bit/workbench_services.py b/bit/workbench_services.py
+new file mode 100644
+index 00000000..d3b8497c
+--- /dev/null
++++ b/bit/workbench_services.py
+@@ -0,0 +1,80 @@
++"""Supervise a public Web process and one loopback scheduler worker.
++
++Run: python -m bit.workbench_services
++Both children use the same checkout, secret file and persistent data paths.
++"""
++import os
++import signal
++import subprocess
++import sys
++import threading
++import time
++
++from bit.bit_runtime_lock import InterProcessLock
++
++
++def child_environment(mode):
++    env = os.environ.copy()
++    env['BIT_RUNTIME_ROLE'] = 'server'
++    env['BIT_SERVICE_MODE'] = mode
++    env['PYTHONUNBUFFERED'] = '1'
++    pool_name = 'BIT_WEB_DB_CONNECTIONS' if mode == 'web' else 'BIT_WORKER_DB_CONNECTIONS'
++    env['MYSQL_POOL_MAX_CONNECTIONS'] = env.get(pool_name, '6' if mode == 'web' else '8')
++    if mode == 'worker':
++        env['BIT_WSGI_THREADS'] = env.get('BIT_WORKER_WSGI_THREADS', '16')
++    return env
++
++
++def main():
++    lock = InterProcessLock('workbench-services-supervisor', owner='workbench_services')
++    if not lock.acquire(timeout=0):
++        raise SystemExit('服务管理进程已运行')
++    stop = threading.Event()
++    def stopping(signum, frame):
++        stop.set()
++    for sig in (signal.SIGTERM, signal.SIGINT):
++        signal.signal(sig, stopping)
++    children = {}
++    attempts = {'worker':0, 'web':0}
++    started_at = {}
++    retry_at = {'worker':0, 'web':0}
++    try:
++        while not stop.is_set():
++            for mode in ('worker', 'web'):
++                child = children.get(mode)
++                if child is not None and child.poll() is not None:
++                    lifetime = time.monotonic() - started_at[mode]
++                    attempts[mode] = 1 if lifetime > 60 else attempts[mode] + 1
++                    if attempts[mode] >= 5:
++                        raise RuntimeError(f'{mode} 连续启动失败，请检查日志和已有服务')
++                    retry_at[mode] = time.monotonic() + min(30, 2 ** attempts[mode])
++                    del children[mode]
++                if mode not in children and time.monotonic() >= retry_at[mode]:
++                    children[mode] = subprocess.Popen(
++                        [sys.executable, '-m', 'bit.workbench_services', '--child'],
++                        env=child_environment(mode),
++                    )
++                    started_at[mode] = time.monotonic()
++                    print(f'{mode} 服务启动 pid={children[mode].pid}', flush=True)
++            stop.wait(1)
++    finally:
++        for child in children.values():
++            if child.poll() is None:
++                child.terminate()
++        for child in children.values():
++            try:
++                child.wait(timeout=20)
++            except subprocess.TimeoutExpired:
++                child.kill()
++                child.wait(timeout=5)
++        lock.release()
++
++
++if __name__ == '__main__':
++    if sys.argv[1:] == ['--child']:
++        # Canonical import keeps task state shared with bit_db_api callbacks.
++        from bit.bit_interface import run_interface_main
++        raise SystemExit(0 if run_interface_main() else 1)
++    if sys.argv[1:]:
++        raise SystemExit('Usage: python -m bit.workbench_services')
++    main()
+diff --git a/docs/capacity_optimization.md b/docs/capacity_optimization.md
+new file mode 100644
+index 00000000..9b1665db
+--- /dev/null
++++ b/docs/capacity_optimization.md
+@@ -0,0 +1,69 @@
++# 容量优化与验证（2026-09-23）
++
++本次针对中心服务支撑更多用户的前五项建议进行改造。保留旧 HTTP 接口、数据库结构和 Agent 队列；不通过增加 MySQL 最大连接数扩大负载。尚未进行 100 用户、1,000 店铺的生产混合负载验收。
++
++## 行为和边界
++
++1. **Agent 请求与写入**：Agent 1.2.4 运行任务时每 5–5.5 秒心跳，空闲默认 10–11 秒。停止指令可能比旧版晚约数秒收到。旧 Agent 协议兼容，服务端对同一会话/任务/元数据的重复心跳在 5 秒内复用结果；新会话、新任务、新版本立即持久化，取消标记每次请求仍查询。租约默认 15 分钟，未缩短失联保护。Windows/macOS 打包客户端须重新构建并安装才会减少 HTTP 请求；旧版立即受益于服务端减少写入。
++2. **统一同步预算**：订单、历史订单、链接、侵权、禁限售的店铺协调任务共用 8 个位置，普通任务最多占 6 个，近期/手动订单优先。详情线程不嵌套占用店铺位置；API Client 的 JSON/二进制请求另共用 32 个在途位置，同一凭据最多 8 个，异常与重试等待均释放位置。上传视频、其他第三方客户端不在这个 API 预算内。预算属于每个进程，因此中心同步必须由唯一 worker 执行。
++3. **分批及排队**：自动链接/侵权/禁限售每轮最多调度 8 家店铺，其余到期记录继续保留在数据库。手动请求与自动调度沿用同一同步入口和跨进程任务锁。侵权/禁限售忙碌时也持久化其他店铺的更新请求，避免直接丢弃。相同类型/店铺的在途协调任务串行；订单任务沿用现有忙碌返回和每日断点机制。
++4. **查询与导出**：筛选后的链接总数缓存 15 秒，缓存键包括数据库、实际 SQL/参数及授权店铺集合，写入操作使用原有缓存失效入口。总数允许短暂延迟，明细仍查询实时数据。权限范围元数据缓存容量从 32 扩到 256；已存在的显式列、分页索引和翻页方式保留，不做大表在线 DDL。修复费用刷新 SQL 中未转义的 `%`，用真实 PyMySQL 参数绑定覆盖回归。
++5. **后台导出**：六类导出（旧侵权、声誉、违规总览、权利人、禁限售、风险检查）可通过 `/api/exports` 创建持久化任务，每人最多 2 个排队/执行中任务，全局最多 100 个，由一个导出线程生成。相同人员/权限范围/URL 的在途请求合并。执行时重新鉴权，状态和下载核对创建者及当前权限/店铺范围；文件最多保留 24 小时。服务重启时将未完成的 running 导出标为错误，明确要求重新提交，queued 导出继续执行。旧同步导出 URL 保留以兼容旧页面。
++6. **业务包检查**：文件大小、mtime、ctime 均不变时不重复读取源码计算哈希；首次及强制构建同步执行，之后的周期检查在后台完成，心跳继续返回上一个完整版本，构建失败保留旧版本。业务包仍以 SHA-256 校验下载内容。
++
++## 分离部署
++
++兼容的单进程入口仍为：
++
++```sh
++python -m bit.bit_interface --role server
++```
++
++中心服务器的源码部署可改用：
++
++```sh
++python -m bit.workbench_services
++```
++
++管理进程启动并监督两个子进程：
++
++- Web：公网入口仍是 5000，数据库连接池默认 6；不启动中心定时调度。
++- worker：只监听 `127.0.0.1:5001`，请求线程默认 16，数据库连接池默认 8；负责唯一调度器及有进程内状态的任务。
++
++Web 将指定的任务启动、停止、状态和导出请求转发到 worker。使用共享工作台会话密钥对方法、路径、请求体、时间戳和原始访问 IP 签名。worker 验证本机来源与签名，再执行原有登录/权限校验；公网数据库请求不会因转发而获得 loopback 权限。业务 POST 不自动重试；worker 不可用时返回 503，用户应先检查任务状态。
++
++两个子进程必须使用相同工作目录、`WORKBENCH_SECRET_KEY`/密钥文件、`BIT_RUNTIME_LOCK_DIR` 和固定 Agent 队列路径。管理进程以规范模块名导入工作台，避免同一进程重复加载两份任务状态。进程锁限制一个中心调度器；不应同时运行旧 combined 服务和新 worker。当前方案仅为一台主机上的 Web/worker 分离，不是多机多副本部署。
++
++可调配置：
++
++| 变量 | 默认 |
++| --- | --- |
++| `MERCADO_SYNC_STORE_BUDGET` | 8 |
++| `MERCADO_SYNC_ORDER_RESERVE` | 2 |
++| `MERCADO_SYNC_AUTO_BATCH_STORES` | 8 |
++| `MERCADO_API_INFLIGHT_LIMIT` | 32 |
++| `MERCADO_API_ACCOUNT_INFLIGHT_LIMIT` | 8 |
++| `BIT_WORKER_PORT` | 5001 |
++| `BIT_WEB_DB_CONNECTIONS` | 6 |
++| `BIT_WORKER_DB_CONNECTIONS` | 8 |
++| `BIT_WORKER_WSGI_THREADS` | 16 |
++
++Cloudflare Tunnel 继续连接 5000，无需开放 5001。切换前检查中心正在运行的手工任务，等待合适窗口；Agent 的已入队任务保存在原固定 SQLite，不删除或迁移。
++
++## 验证
++
++```sh
++python scripts/test_capacity.py
++python scripts/test_capacity.py -q tests/test_console_ui_browser.py
++node --check bit/static/background-exports.js
++```
++
++测试入口将导入时的核重核价存储替换为临时 SQLite，禁用自动调度，MySQL 指向不可用的本机端口，Agent 队列与运行锁使用临时目录，不向真实店铺、Agent 或生产 MySQL 写入。四组旧页面业务测试使用显式模拟身份，独立的鉴权/权限测试继续执行原鉴权代码。
++
++新增覆盖：并发预算及异常释放、同一店铺串行、并发领取只返回一个任务、旧 Agent 写入合并与取消/重启、业务包变更与缓存、计数缓存隔离和失效竞争、真实 MySQL 参数格式化、导出合并/重启/权限变化、HTTP 转发签名和原始 IP、真实 HTTP Web→worker 会话和 Cookie、100 个 Agent 心跳的临时 HTTP 验证、浏览器排队导出下载和权限失效。
++
++在线验收仍须包含 1,000 店铺的实际数据量、正常查询与全部后台同步周期。以上隔离测试不能作为 100 用户生产容量承诺。
++
++## 本次回归结果
++
++核心回归 377 项通过；浏览器及申诉交叉回归 209 项通过。测试同时覆盖原有申诉功能改动，未覆盖生产 1,000 店铺的完整混合负载。并发测试发现并修复了 SQLite 冷启动时重复设置 WAL 的锁竞争，且连接在事务上下文结束时关闭，减少连接积累。
+diff --git a/erp/mercadolibre_collection_store.py b/erp/mercadolibre_collection_store.py
+index e1fbf4f9..a40c8a0c 100644
+--- a/erp/mercadolibre_collection_store.py
++++ b/erp/mercadolibre_collection_store.py
+@@ -3728,7 +3728,7 @@ def list_stale_profitability_items(
+                     continue
+                 legacy_collection_refresh = (
+                     "NOT (LOWER(COALESCE(`profitability_source`, '')) "
+-                    "LIKE 'fixed_commission_15_pct%') OR "
++                    "LIKE 'fixed_commission_15_pct%%') OR "
+                     if table == COLLECTION_TABLE else ""
+                 )
+                 cursor.execute(
+diff --git a/erp/mercadolibre_store_link_store.py b/erp/mercadolibre_store_link_store.py
+index 60eabfe6..1fc7b5b4 100644
+--- a/erp/mercadolibre_store_link_store.py
++++ b/erp/mercadolibre_store_link_store.py
+@@ -7,6 +7,7 @@ import re
+ import threading
+ import time
+ from copy import deepcopy
++from erp.query_cache import QueryCache
+ from datetime import datetime, timedelta
+ from decimal import Decimal, InvalidOperation
+ from typing import Any, Callable, Iterable, Mapping
+@@ -30,6 +31,7 @@ STORE_LINK_RECENT_SALES_CACHE_MAX_ENTRIES = 20000
+ _schema_lock = threading.RLock()
+ _store_link_schema_ready = False
+ _sync_state_schema_ready = False
++_filtered_count_cache = QueryCache(ttl=15, max_entries=512)
+ _metadata_cache_lock = threading.RLock()
+ _metadata_cache: dict[str, Any] = {"expires_at": 0.0, "data": None}
+ _scoped_metadata_cache: dict[tuple[int, ...], dict[str, Any]] = {}
+@@ -956,6 +958,7 @@ def finalize_store_snapshot(
+ def invalidate_store_link_metadata_cache() -> None:
+     """Discard low-frequency filters and totals after synchronized data changes."""
+ 
++    _filtered_count_cache.clear()
+     with _metadata_cache_lock:
+         _metadata_cache.update({"expires_at": 0.0, "data": None})
+         _scoped_metadata_cache.clear()
+@@ -1231,7 +1234,7 @@ def _store_link_metadata(
+                 "expires_at": time.monotonic() + STORE_LINK_METADATA_CACHE_SECONDS,
+                 "data": deepcopy(metadata),
+             }
+-            if len(_scoped_metadata_cache) > 32:
++            if len(_scoped_metadata_cache) > 256:
+                 oldest_key = min(
+                     _scoped_metadata_cache,
+                     key=lambda key: float(
+@@ -1466,11 +1469,21 @@ def list_store_links(
+             elif filtered_conditions == ["links.`is_current` = 1"]:
+                 total = int(summary.get("current_count") or 0)
+             else:
+-                cursor.execute(
+-                    f"SELECT COUNT(*) AS `total`{links_from_sql}{where_sql}",
+-                    tuple(filtered_values),
+-                )
+-                total = int((cursor.fetchone() or {}).get("total") or 0)
++                count_sql = f"SELECT COUNT(*) AS `total`{links_from_sql}{where_sql}"
++                def load_count():
++                    cursor.execute(count_sql, tuple(filtered_values))
++                    return int((cursor.fetchone() or {}).get("total") or 0)
++                if connection_factory is not None:
++                    total = load_count()
++                else:
++                    from bit.bit_mysql import config
++                    database_key = tuple(str(config.get(k, "")) for k in
++                                         ("host", "port", "database", "db", "user"))
++                    # Include the actual SQL predicates AND permission scope.
++                    # Cached totals never bypass the live row authorization query.
++                    count_key = (database_key, count_sql, tuple(filtered_values),
++                                 None if scoped_token_ids is None else tuple(scoped_token_ids))
++                    total = _filtered_count_cache.get_or_load(count_key, load_count)
+             pages = max(1, (total + page_size - 1) // page_size)
+             page = min(page, pages)
+             recent_sales_join_sql = ""
+diff --git a/erp/query_cache.py b/erp/query_cache.py
+new file mode 100644
+index 00000000..2fa6bc55
+--- /dev/null
++++ b/erp/query_cache.py
+@@ -0,0 +1,35 @@
++"""Small bounded cache for non-authoritative, scoped query totals."""
++from collections import OrderedDict
++from copy import deepcopy
++import threading
++import time
++
++
++class QueryCache:
++    def __init__(self, ttl=15, max_entries=512):
++        self.ttl, self.max_entries = ttl, max_entries
++        self.lock = threading.Lock()
++        self.entries = OrderedDict()
++        self.generation = 0
++
++    def clear(self):
++        with self.lock:
++            self.entries.clear()
++            self.generation += 1
++
++    def get_or_load(self, key, load):
++        with self.lock:
++            entry = self.entries.get(key)
++            if entry is not None and entry[0] > time.monotonic():
++                self.entries.move_to_end(key)
++                return deepcopy(entry[1])
++            generation = self.generation
++        # Do not serialize unrelated users, nor hold a cache lock during SQL.
++        value = load()
++        with self.lock:
++            if generation == self.generation:
++                self.entries[key] = (time.monotonic() + self.ttl, deepcopy(value))
++                self.entries.move_to_end(key)
++                while len(self.entries) > self.max_entries:
++                    self.entries.popitem(last=False)
++        return value
+diff --git a/local_agent.py b/local_agent.py
+index dbed92a3..50c1962d 100644
+--- a/local_agent.py
++++ b/local_agent.py
+@@ -34,10 +34,11 @@ from urllib.parse import urlsplit
+ import requests
+ 
+ 
+-AGENT_VERSION = "1.2.3"
++AGENT_VERSION = "1.2.4"
+ DEFAULT_SERVER_URL = "https://wuhanzeshun.com"
+ DEFAULT_POLL_SECONDS = 10.0
+ DEFAULT_HEARTBEAT_SECONDS = 10.0
++RUNNING_HEARTBEAT_SECONDS = 5.0
+ LOG_FLUSH_SECONDS = 2.0
+ LOG_UPLOAD_MIN_INTERVAL_SECONDS = 5.0
+ RATE_LIMIT_MIN_SECONDS = 60.0
+@@ -1301,9 +1302,8 @@ class LocalAgent:
+                 else:
+                     heartbeat_failures = 0
+                     last_heartbeat_success = now
+-                    next_heartbeat_at = time.monotonic() + min(
+-                        1.0, self.config.heartbeat_seconds
+-                    )
++                    interval = min(RUNNING_HEARTBEAT_SECONDS, self.config.heartbeat_seconds)
++                    next_heartbeat_at = time.monotonic() + interval + random.uniform(0, interval * 0.1)
+                     if not pending_logs:
+                         self._rate_limit_failures = 0
+                     cancel_ids = set(heartbeat.get("cancel_job_ids") or ())
+@@ -1409,7 +1409,7 @@ class LocalAgent:
+                 self._rate_limit_failures = 0
+                 if self.config.once:
+                     return 0
+-                if self.shutdown_event.wait(self.config.poll_seconds):
++                if self.shutdown_event.wait(self.config.poll_seconds + random.uniform(0, self.config.poll_seconds * 0.1)):
+                     self.log("Agent 已停止")
+                     return 0
+             except KeyboardInterrupt:
+diff --git a/mercado_api/client.py b/mercado_api/client.py
+index 33b13074..77ffee76 100644
+--- a/mercado_api/client.py
++++ b/mercado_api/client.py
+@@ -2,6 +2,8 @@
+ 
+ from __future__ import annotations
+ 
++from .request_budget import admission
++
+ import json
+ import logging
+ import os
+@@ -132,14 +134,15 @@ class MercadoLibreClient:
+             try:
+                 request_headers = dict(headers or {})
+                 request_headers["Authorization"] = f"Bearer {self.access_token}"
+-                response = self.session.request(
+-                    method,
+-                    url,
+-                    params=params,
+-                    headers=request_headers,
+-                    json=json_body,
+-                    timeout=self.timeout,
+-                )
++                with admission(self.access_token):
++                    response = self.session.request(
++                        method,
++                        url,
++                        params=params,
++                        headers=request_headers,
++                        json=json_body,
++                        timeout=self.timeout,
++                    )
+             except requests.RequestException as exc:
+                 if attempt < attempts - 1:
+                     delay = min(2**attempt, 8)
+@@ -215,13 +218,14 @@ class MercadoLibreClient:
+         attempts = max(1, min(4, int(max_attempts or 1)))
+         for attempt in range(attempts):
+             try:
+-                response = self.session.request(
+-                    method,
+-                    url,
+-                    params=params,
+-                    headers={"Authorization": f"Bearer {self.access_token}"},
+-                    timeout=self.timeout,
+-                )
++                with admission(self.access_token):
++                    response = self.session.request(
++                        method,
++                        url,
++                        params=params,
++                        headers={"Authorization": f"Bearer {self.access_token}"},
++                        timeout=self.timeout,
++                    )
+             except requests.RequestException as exc:
+                 if attempt < attempts - 1:
+                     delay = min(2**attempt, 8)
+diff --git a/mercado_api/request_budget.py b/mercado_api/request_budget.py
+new file mode 100644
+index 00000000..ce96ad67
+--- /dev/null
++++ b/mercado_api/request_budget.py
+@@ -0,0 +1,45 @@
++"""Bound in-flight API calls across clients without holding slots during retries."""
++from contextlib import contextmanager
++import hashlib
++import os
++import threading
++
++
++def _limit(name, default):
++    try:
++        return max(1, min(128, int(os.environ.get(name, default))))
++    except (TypeError, ValueError):
++        return default
++
++
++class RequestBudget:
++    def __init__(self, total=32, per_account=8):
++        self.total = max(1, total)
++        self.per_account = max(1, min(per_account, self.total))
++        self.condition = threading.Condition()
++        self.active = 0
++        self.accounts = {}
++
++    @contextmanager
++    def slot(self, token):
++        # Never retain OAuth credentials in budget keys or diagnostics.
++        key = hashlib.sha256(str(token).encode()).digest()
++        with self.condition:
++            while self.active >= self.total or self.accounts.get(key, 0) >= self.per_account:
++                self.condition.wait()
++            self.active += 1
++            self.accounts[key] = self.accounts.get(key, 0) + 1
++        try:
++            yield
++        finally:
++            with self.condition:
++                self.active -= 1
++                self.accounts[key] -= 1
++                if not self.accounts[key]:
++                    del self.accounts[key]
++                self.condition.notify_all()
++
++
++_budget = RequestBudget(_limit("MERCADO_API_INFLIGHT_LIMIT", 32),
++                        _limit("MERCADO_API_ACCOUNT_INFLIGHT_LIMIT", 8))
++admission = _budget.slot
+diff --git a/scripts/test_capacity.py b/scripts/test_capacity.py
+new file mode 100644
+index 00000000..b6721cca
+--- /dev/null
++++ b/scripts/test_capacity.py
+@@ -0,0 +1,47 @@
++"""Run capacity regressions without production DB access or automatic jobs.
++
++Usage: python scripts/test_capacity.py [pytest arguments]
++Only the import-time AI store is replaced by a temporary SQLite store. Tests
++retain their own authentication, SQL mocks and assertions.
++"""
++
++def main():
++    import os, sys, tempfile
++    from pathlib import Path
++    from unittest.mock import patch
++    os.environ['BIT_BACKGROUND_SERVICES_DISABLED'] = '1'
++    os.environ['BIT_SERVICE_MODE'] = 'combined'
++    os.environ['MYSQL_HOST'] = '127.0.0.1'
++    os.environ['MYSQL_PORT'] = '1'
++    temporary = tempfile.TemporaryDirectory(prefix='capacity-tests-')
++    os.environ['BIT_LOCAL_AGENT_HUB_PATH'] = str(Path(temporary.name) / 'hub.sqlite3')
++    os.environ['BIT_RUNTIME_LOCK_DIR'] = str(Path(temporary.name) / 'locks')
++    ROOT = Path(__file__).resolve().parents[1]
++    os.chdir(ROOT)
++    sys.path.insert(0, str(ROOT))
++    from erp.ai_weight_price.service import Service
++    original = Service.__init__
++    def isolated(self, root, *args, **kwargs):
++        kwargs['storage_backend'] = 'sqlite'
++        kwargs['migrate_legacy_state'] = False
++        return original(self, str(Path(temporary.name) / 'ai'), *args, **kwargs)
++    with patch.object(Service, '__init__', isolated):
++        from bit import bit_interface
++    bit_interface.app.testing = True
++    import pytest
++    arguments = sys.argv[1:] or ['-q',
++        'tests/test_capacity_optimizations.py', 'tests/test_local_agent_hub.py',
++        'tests/test_local_agent_runtime.py', 'tests/test_local_agent_rate_limit.py',
++        'tests/test_local_agent_interface.py', 'tests/test_local_agent_frontend.py',
++        'tests/test_bit_store_links.py', 'tests/test_bit_prohibited_listings.py',
++        'tests/test_mercado_infraction_dashboard.py', 'tests/test_bit_order_management.py',
++        'tests/test_workbench_runtime_interface.py', 'tests/test_bit_login_remember.py',
++        'tests/test_bit_access_control.py', 'tests/test_commercial_hardening.py',
++        'tests/test_local_executor_auth.py', 'tests/test_db_pool.py',
++        'tests/test_erp_mercadolibre_collection_store.py', 'tests/test_appeal_polling.py',
++        'tests/test_appeal_polling_frontend.py', 'mercado_api/tests']
++    return pytest.main(arguments)
++
++
++if __name__ == '__main__':
++    raise SystemExit(main())
+diff --git a/tests/conftest.py b/tests/conftest.py
+new file mode 100644
+index 00000000..2aa479d3
+--- /dev/null
++++ b/tests/conftest.py
+@@ -0,0 +1,15 @@
++"""Explicit offline identities for legacy route tests; auth tests use real hooks."""
++import pytest
++
++
++@pytest.fixture
++def isolated_legacy_console_user(monkeypatch):
++    from flask import session
++    from bit import bit_interface
++    def current_user():
++        user = session.get('workbench_user')
++        if not user:
++            return None
++        return {'permissions':['*'], 'access_version':1, 'is_platform_admin':True,
++                'organization_key':'default', **user}
++    monkeypatch.setattr(bit_interface, 'get_current_workbench_user', current_user)
+diff --git a/tests/test_bit_access_control.py b/tests/test_bit_access_control.py
+index 4a5b9708..57e5f33c 100644
+--- a/tests/test_bit_access_control.py
++++ b/tests/test_bit_access_control.py
+@@ -446,7 +446,7 @@ def test_access_management_page_contains_role_user_and_permission_controls():
+     assert 'id="access-shop-form"' not in template
+     assert 'id="access-shop-body"' not in template
+     assert 'requestAccessApi("/api/access/browser-configs")' not in template
+-    assert "更新声誉”控制官方 API 声誉读取" in template
++    assert "更新声誉”控制官方 API 声誉及账号状态读取" in template
+     assert "七天流量”控制浏览器流量读取" in template
+     assert "“进行申诉”控制申诉任务" in template
+     assert "currentWorkbenchUser" in template
+diff --git a/tests/test_bit_order_management.py b/tests/test_bit_order_management.py
+index ad1e7531..2969fd77 100644
+--- a/tests/test_bit_order_management.py
++++ b/tests/test_bit_order_management.py
+@@ -1,3 +1,4 @@
++import pytest
+ import inspect
+ from unittest.mock import patch
+ 
+@@ -54,7 +55,8 @@ def test_workbench_contains_order_management_ui():
+     assert "每天刷新老订单状态".encode("utf-8") in response.data
+     assert "Shipment Costs 实际运费".encode("utf-8") in response.data
+     assert "Token 自动拉取".encode("utf-8") in response.data
+-    assert "智赢导入".encode("utf-8") not in response.data
++    order_panel = response.get_data(as_text=True).split('id="tab-orders"', 1)[1].split('<div class="tab-page"', 1)[0]
++    assert "智赢导入" not in order_panel
+     assert b'id="order-select-all"' in response.data
+     assert b'id="order-bulk-status"' in response.data
+     assert b'id="order-bulk-purchase-button"' in response.data
+@@ -65,7 +67,7 @@ def test_workbench_contains_order_management_ui():
+     assert b'id="order-purchase-tracking-sync-button"' in response.data
+     assert b'id="purchase-tracking-sync-dialog"' in response.data
+     assert "/api/orders/purchase-tracking/start".encode("utf-8") in response.data
+-    assert "账号密码只用于本次本机浏览器登录".encode("utf-8") in response.data
++    assert "这里不填写采购平台账号或密码".encode("utf-8") in response.data
+     assert b'id="order-purchase-cost"' in response.data
+     assert b'id="order-purchase-remark"' in response.data
+     assert b'id="order-tracking-dialog"' in response.data
+@@ -697,3 +699,7 @@ def test_order_operation_logs_route_returns_audit_rows():
+     assert response.headers["Cache-Control"] == "no-store"
+     assert response.get_json()["data"]["rows"][0]["action_label"] == "修改采购单"
+     list_logs.assert_called_once_with("20001", limit=100)
++
++
++# These route tests mock business data; they must not authenticate against production MySQL.
++pytestmark = pytest.mark.usefixtures("isolated_legacy_console_user")
+diff --git a/tests/test_bit_prohibited_listings.py b/tests/test_bit_prohibited_listings.py
+index 0bc469f1..60004c2a 100644
+--- a/tests/test_bit_prohibited_listings.py
++++ b/tests/test_bit_prohibited_listings.py
+@@ -407,3 +407,7 @@ def test_salesperson_sync_resolves_authorized_store_ids():
+         )
+     assert response.status_code == 202
+     start.assert_called_once_with([2, 4])
++
++
++# These route tests mock business data; they must not authenticate against production MySQL.
++pytestmark = pytest.mark.usefixtures("isolated_legacy_console_user")
+diff --git a/tests/test_bit_store_links.py b/tests/test_bit_store_links.py
+index 4b12e4c4..85202c99 100644
+--- a/tests/test_bit_store_links.py
++++ b/tests/test_bit_store_links.py
+@@ -1107,3 +1107,7 @@ def test_start_all_store_link_sync_ignores_selected_store_ids():
+ 
+     assert response.status_code == 202
+     start.assert_called_once_with([])
++
++
++# These route tests mock business data; they must not authenticate against production MySQL.
++pytestmark = pytest.mark.usefixtures("isolated_legacy_console_user")
+diff --git a/tests/test_capacity_optimizations.py b/tests/test_capacity_optimizations.py
+new file mode 100644
+index 00000000..0c18d995
+--- /dev/null
++++ b/tests/test_capacity_optimizations.py
+@@ -0,0 +1,473 @@
++import concurrent.futures
++import json
++import threading
++import time
++from pathlib import Path
++from unittest.mock import patch
++
++import pytest
++from flask import Flask, g, jsonify, request
++
++from bit.sync_capacity import SyncBudget, due_batch
++from mercado_api.request_budget import RequestBudget
++from bit.local_agent_hub import LocalAgentStore
++from bit.local_agent_bundle import build_business_bundle
++from bit.background_exports import ExportQueue, install_exports
++from bit import service_split
++from erp.query_cache import QueryCache
++
++
++def test_store_budget_reserves_orders_and_releases_after_failure():
++    budget = SyncBudget(2, 1)
++    acquired = threading.Event()
++    release = threading.Event()
++    def background():
++        with budget.slot('links', 1):
++            acquired.set()
++            assert release.wait(3)
++    with concurrent.futures.ThreadPoolExecutor(2) as pool:
++        future = pool.submit(background)
++        assert acquired.wait(2)
++        with pytest.raises(RuntimeError), budget.slot('orders', 2):
++            assert budget.snapshot()['active'] == 2
++            raise RuntimeError('simulated task failure')
++        release.set()
++        future.result()
++    assert budget.snapshot()['active'] == 0
++    assert budget.snapshot()['completed'] == 2
++
++
++def test_mixed_store_tasks_respect_global_limit_and_same_store_serialization():
++    budget = SyncBudget(4, 1)
++    active, peak, keys = 0, 0, set()
++    lock = threading.Lock()
++    def task(i):
++        nonlocal active, peak
++        kind = 'orders' if i % 4 == 0 else 'links'
++        key = (kind, i % 3)
++        with budget.slot(*key):
++            with lock:
++                assert key not in keys
++                keys.add(key); active += 1; peak = max(peak, active)
++            time.sleep(.002)
++            with lock:
++                keys.remove(key); active -= 1
++    with concurrent.futures.ThreadPoolExecutor(16) as pool:
++        list(pool.map(task, range(100)))
++    assert peak <= 4
++    assert budget.snapshot()['completed'] == 100
++    assert budget.snapshot()['waiting'] == 0
++
++
++def test_network_slots_are_released_on_timeout_and_limit_accounts():
++    budget = RequestBudget(total=3, per_account=1)
++    lock = threading.Lock()
++    active = set()
++    def request_once(i):
++        token = str(i % 5)
++        with budget.slot(token):
++            with lock:
++                assert token not in active
++                active.add(token)
++                assert len(active) <= 3
++            time.sleep(.002)
++            with lock:
++                active.remove(token)
++    with concurrent.futures.ThreadPoolExecutor(16) as pool:
++        list(pool.map(request_once, range(80)))
++    with pytest.raises(TimeoutError), budget.slot('secret'):
++        raise TimeoutError()
++    assert budget.active == 0 and not budget.accounts
++
++
++def test_auto_dispatch_is_bounded_without_discarding_input(monkeypatch):
++    monkeypatch.setenv('MERCADO_SYNC_AUTO_BATCH_STORES', '8')
++    due = list(range(1000))
++    assert due_batch(due) == list(range(8))
++    assert len(due) == 1000
++
++
++def test_idle_and_running_claims_do_not_take_write_transactions(tmp_path, monkeypatch):
++    store = LocalAgentStore(tmp_path / 'hub.sqlite3')
++    store.heartbeat('agent-a', name='A', session_id='session', now=100)
++    traces = []
++    original = store._connect
++    def connection():
++        db = original(); db.set_trace_callback(traces.append); return db
++    monkeypatch.setattr(store, '_connect', connection)
++    assert store.claim_job('agent-a', session_id='session', now=101) is None
++    assert not any('BEGIN IMMEDIATE' in sql for sql in traces)
++    store.enqueue_job('job-a', 'agent-a', 'daily_task', {}, now=102)
++    store.claim_job('agent-a', session_id='session', now=103)
++    traces.clear()
++    assert store.claim_job('agent-a', session_id='session', now=104) is None
++    assert not any('BEGIN IMMEDIATE' in sql for sql in traces)
++
++
++def test_concurrent_claims_deliver_job_once(tmp_path):
++    store = LocalAgentStore(tmp_path / 'hub.sqlite3')
++    store.heartbeat('agent-a', name='A', session_id='session', now=100)
++    store.enqueue_job('job-a', 'agent-a', 'daily_task', {}, now=101)
++    with concurrent.futures.ThreadPoolExecutor(16) as pool:
++        claims = list(pool.map(lambda _: store.claim_job('agent-a', session_id='session', now=102), range(100)))
++    assert sum(job is not None for job in claims) == 1
++
++
++def test_bundle_unchanged_skips_file_content_reads_and_detects_same_size_edit(tmp_path, monkeypatch):
++    (tmp_path / 'bit').mkdir()
++    source = tmp_path / 'bit' / 'one.py'
++    source.write_text('value=1')
++    first = build_business_bundle(tmp_path)
++    original = Path.read_bytes
++    def counted(path):
++        if path == source:
++            raise AssertionError('unchanged source should not be read')
++        return original(path)
++    with monkeypatch.context() as patch:
++        patch.setattr(Path, 'read_bytes', counted)
++        assert build_business_bundle(tmp_path) is first
++    source.write_text('value=2')
++    second = build_business_bundle(tmp_path)
++    assert second['version'] != first['version']
++
++
++def test_scoped_count_cache_invalidation_cannot_resurrect_old_value():
++    cache = QueryCache(ttl=60, max_entries=2)
++    assert cache.get_or_load(('org-a', (1,)), lambda: 10) == 10
++    assert cache.get_or_load(('org-b', (2,)), lambda: 20) == 20
++    assert cache.get_or_load(('org-a', (1,)), lambda: 99) == 10
++    def racing_write():
++        cache.clear()
++        return 30
++    assert cache.get_or_load(('org-c', (3,)), racing_write) == 30
++    assert not cache.entries
++    assert cache.get_or_load(('org-c', (3,)), lambda: 40) == 40
++
++
++def test_export_queue_coalesces_duplicate_requests_and_bounds_user_backlog(tmp_path):
++    queue = ExportQueue(tmp_path)
++    user = {'id': 1}
++    a = queue.enqueue(user, 'scope-a', '/api/reputation/latest/export')
++    assert queue.enqueue(user, 'scope-a', '/api/reputation/latest/export')['id'] == a['id']
++    queue.enqueue(user, 'scope-a', '/api/infractions/latest/export')
++    with pytest.raises(OverflowError):
++        queue.enqueue(user, 'scope-a', '/api/risk-check/results/export')
++    with pytest.raises(ValueError):
++        queue.enqueue(user, 'scope-a', 'https://example.com/api/reputation/latest/export')
++    assert queue.process_one(lambda job: (b'xlsx', 'application/test', 'attachment; filename="a.xlsx"'))
++    reopened = ExportQueue(tmp_path)
++    assert reopened.get(a['id'])['status'] == 'ready'
++    assert (tmp_path / (a['id'] + '.bin')).read_bytes() == b'xlsx'
++
++
++def test_export_status_and_download_require_same_owner_and_current_scope(tmp_path):
++    app = Flask(__name__); app.secret_key = 'test'; app.testing = True
++    current = {'id': 1, 'organization_key': 'one', 'permissions': ['read']}
++    scopes = [1, 2]
++    install_exports(app, tmp_path, lambda: current, lambda user: scopes)
++    client = app.test_client()
++    result = client.post('/api/exports', json={'url': '/api/reputation/latest/export'})
++    assert result.status_code == 202
++    job_id = result.json['data']['id']
++    queue = ExportQueue(tmp_path)
++    queue.process_one(lambda job: (b'xlsx', 'application/test', 'attachment; filename="a.xlsx"'))
++    response = client.get(f'/api/exports/{job_id}/download')
++    assert response.status_code == 200 and response.data == b'xlsx'
++    response.close()
++    current['id'] = 2
++    assert client.get(f'/api/exports/{job_id}').status_code == 404
++    current['id'] = 1
++    scopes[:] = [1]
++    assert client.get(f'/api/exports/{job_id}/download').status_code == 404
++    current.clear()
++    assert client.get(f'/api/exports/{job_id}').status_code == 401
++
++
++def test_worker_requires_signed_request_and_preserves_original_remote_address(monkeypatch):
++    app = Flask(__name__); app.secret_key = 'secret'
++    @app.post('/api/db/order-sync/start')
++    def start():
++        return jsonify(remote=g.worker_original_remote_addr, body=request.json)
++    service_split.install_service_routing(app)
++    monkeypatch.setenv('BIT_SERVICE_MODE', 'worker')
++    client = app.test_client()
++    assert client.post('/api/db/order-sync/start', json={}).status_code == 403
++    body = b'{"token_ids":[1]}'
++    path = '/api/db/order-sync/start'
++    timestamp = str(int(time.time()))
++    original_ip = '198.51.100.1'
++    headers = {'Content-Type':'application/json', 'X-Workbench-Original-IP':original_ip,
++               service_split.HOP_HEADER: timestamp + ':' + service_split.signature(app.secret_key, 'POST', path, body, timestamp, original_ip)}
++    response = client.post(path, data=body, headers=headers)
++    assert response.status_code == 200
++    assert response.json == {'remote': original_ip, 'body':{'token_ids':[1]}}
++    headers['X-Workbench-Original-IP'] = '127.0.0.1'
++    assert client.post(path, data=body, headers=headers).status_code == 403
++    headers['X-Workbench-Original-IP'] = original_ip
++    assert client.post(path, data=b'{}', headers=headers).status_code == 403
++
++
++def test_unavailable_worker_never_retries_post(monkeypatch):
++    import requests
++    app = Flask(__name__); app.secret_key = 'secret'
++    service_split.install_service_routing(app)
++    monkeypatch.setenv('BIT_SERVICE_MODE', 'web')
++    calls = []
++    class Transport:
++        def request(self, *args, **kwargs):
++            calls.append((args, kwargs))
++            assert not self.trust_env
++            raise requests.Timeout()
++        def close(self): pass
++    monkeypatch.setattr(service_split.requests, 'Session', Transport)
++    response = app.test_client().post('/api/order-sync/start', json={'token_ids':[1]})
++    assert response.status_code == 503
++    assert len(calls) == 1
++
++
++def test_shared_browser_extension_and_executor_tasks_follow_same_worker(monkeypatch):
++    # Alternate entry points call the same in-memory task implementations.
++    # Route all of them to the owner so status and cancellation cannot diverge.
++    monkeypatch.setenv('BIT_SERVICE_MODE', 'web')
++    app = Flask(__name__); app.secret_key = 'test'
++    service_split.install_service_routing(app)
++    paths = ['/api/zying-collection/start', '/api/zying-collection/status',
++             '/api/browser-extension/zying/start', '/api/browser-extension/zying/stop',
++             '/api/browser-extension/zying/status', '/api/tasks/daily/start',
++             '/api/local-executor/tasks/daily/status', '/api/local-executor/tasks/daily/stop',
++             '/api/run_shensu', '/api/local-executor/run_shensu/stop']
++    with patch.object(service_split.requests.Session, 'request', side_effect=service_split.requests.ConnectionError) as send:
++        for path in paths:
++            assert app.test_client().get(path).status_code == 503
++        assert send.call_count == len(paths)
++
++
++def test_old_agent_heartbeats_coalesce_writes_but_cancel_and_session_change_are_immediate(tmp_path, monkeypatch):
++    store = LocalAgentStore(tmp_path / 'hub.sqlite3')
++    args = dict(name='A', session_id='old', current_job_id='job-a')
++    store.heartbeat('agent-a', **args, now=100)
++    store.enqueue_job('job-a', 'agent-a', 'daily_task', {}, now=100)
++    store.claim_job('agent-a', session_id='old', now=100)
++    original = store._connect
++    calls = []
++    def connect():
++        calls.append(1)
++        return original()
++    monkeypatch.setattr(store, '_connect', connect)
++    for now in range(101, 105):
++        store.heartbeat('agent-a', **args, now=now)
++    assert calls == []
++    store.request_cancel('job-a', now=104)
++    assert store.cancellation_job_ids('agent-a') == ['job-a']
++    store.heartbeat('agent-a', **{**args, 'session_id':'new'}, now=104)
++    assert store.get_job('job-a')['status'] == 'stopped'
++    store.heartbeat('agent-a', **args, now=110)
++    assert store.get_agent('agent-a')['last_seen'] == 110
++
++
++def test_profit_refresh_sql_can_be_bound_by_real_pymysql(monkeypatch):
++    import pymysql
++    from erp import mercadolibre_collection_store as collection
++    connection = pymysql.connections.Connection(defer_connect=True)
++    connection.server_status = 0
++    formatter = connection.cursor()
++    statements = []
++    class Cursor:
++        def __enter__(self): return self
++        def __exit__(self, *args): pass
++        def execute(self, sql, args=None):
++            statements.append(formatter.mogrify(sql, args))
++        def fetchall(self): return []
++    class Connection:
++        def cursor(self): return Cursor()
++        def commit(self): pass
++        def close(self): pass
++    monkeypatch.setattr(collection, 'ensure_collection_tables', lambda cursor: None)
++    assert collection.list_stale_profitability_items(stale_before='2026-09-20 00:00:00', connection_factory=Connection) == []
++    assert any("LIKE 'fixed_commission_15_pct%'" in sql for sql in statements)
++
++
++def test_split_child_environments_share_role_but_have_separate_pool_budgets(monkeypatch):
++    from bit.workbench_services import child_environment
++    monkeypatch.setenv('MYSQL_POOL_MAX_CONNECTIONS', '12')
++    monkeypatch.setenv('WORKBENCH_SECRET_KEY', 'shared-secret')
++    web, worker = child_environment('web'), child_environment('worker')
++    assert web['BIT_SERVICE_MODE'] == 'web' and worker['BIT_SERVICE_MODE'] == 'worker'
++    assert web['MYSQL_POOL_MAX_CONNECTIONS'] == '6'
++    assert worker['MYSQL_POOL_MAX_CONNECTIONS'] == '8'
++    assert web['WORKBENCH_SECRET_KEY'] == worker['WORKBENCH_SECRET_KEY']
++    assert worker['BIT_RUNTIME_ROLE'] == web['BIT_RUNTIME_ROLE'] == 'server'
++
++
++def test_web_mode_does_not_start_central_background_services(monkeypatch):
++    from bit import bit_interface as interface
++    monkeypatch.setenv('BIT_SERVICE_MODE', 'web')
++    monkeypatch.setattr(interface, 'USE_DB_API', False)
++    monkeypatch.setattr(interface, 'start_browser_cleanup', lambda: None)
++    def unexpected():
++        pytest.fail('Web process must not start a central scheduler')
++    monkeypatch.setattr(interface, 'start_store_link_scheduler_bootstrap', unexpected)
++    interface.start_interface_background_services()
++
++
++def test_background_export_runs_existing_view_with_current_permissions(tmp_path, monkeypatch):
++    app = Flask(__name__); app.secret_key = 'export-test'
++    user = {'id':1, 'permissions':['read'], 'organization_key':'a'}
++    scopes = [1]
++    calls = []
++    @app.get('/api/reputation/latest/export')
++    def existing_export():
++        from flask import Response, session
++        assert session['workbench_user']['id'] == 1
++        calls.append(1)
++        return Response(b'generated-xlsx', content_type='application/test',
++                        headers={'Content-Disposition':'attachment; filename="report.xlsx"'})
++    callbacks = []
++    monkeypatch.setattr(ExportQueue, 'start', lambda self, render: callbacks.append(render))
++    install_exports(app, tmp_path, lambda: user, lambda user: scopes)
++    service_split.install_service_routing(app)
++    monkeypatch.setenv('BIT_SERVICE_MODE', 'combined')
++    client = app.test_client()
++    response = client.post('/api/exports', json={'url':'/api/reputation/latest/export'})
++    job_id = response.json['data']['id']
++    queue = ExportQueue(tmp_path)
++    assert queue.process_one(callbacks[0])
++    assert queue.get(job_id)['status'] == 'ready' and len(calls) == 1
++    second = client.post('/api/exports', json={'url':'/api/reputation/latest/export'}).json['data']['id']
++    scopes[:] = []
++    assert queue.process_one(callbacks[0])
++    assert queue.get(second)['status'] == 'error'
++    assert len(calls) == 1
++
++
++def test_private_forwarding_does_not_grant_public_db_request_loopback_access(monkeypatch):
++    from bit import bit_interface as interface
++    monkeypatch.setenv('BIT_SERVICE_MODE', 'worker')
++    monkeypatch.delenv('BIT_DB_API_TOKEN', raising=False)
++    monkeypatch.setattr(interface, '_verify_local_agent_credential', lambda token: None)
++    path = '/api/db/order-sync/start'
++    body = b'{}'
++    timestamp = str(int(time.time()))
++    ip = '198.51.100.2'
++    headers = {'Content-Type':'application/json', 'X-Workbench-Original-IP':ip,
++        service_split.HOP_HEADER:timestamp + ':' + service_split.signature(interface.app.secret_key, 'POST', path, body, timestamp, ip)}
++    response = interface.app.test_client().post(path, data=body, headers=headers)
++    assert response.status_code == 403
++
++
++def test_hop_signature_survives_normal_url_encoding():
++    assert service_split.signature('s','GET','/api/order-sync/status?q=%41&tail=?',b'','1') == service_split.signature('s','GET','/api/order-sync/status?q=A&tail=?',b'','1')
++
++
++@pytest.mark.parametrize('module_name, start_name, request_name, status_name', [
++    ('bit.bit_prohibited_listing_sync','start_prohibited_listing_sync','request_prohibited_sync','prohibited_listing_sync_status'),
++    ('bit.mercado_infraction_sync','start_official_infraction_sync','request_infraction_sync','official_infraction_sync_status'),
++])
++def test_busy_sync_persists_other_store_request(monkeypatch, module_name, start_name, request_name, status_name):
++    import importlib
++    module = importlib.import_module(module_name)
++    monkeypatch.setattr(module, '_token_records', lambda ids: [{'id':i} for i in ids])
++    monkeypatch.setattr(module, '_sync_state', {'running':True})
++    monkeypatch.setattr(module, status_name, lambda: {'running':True})
++    queued = []
++    monkeypatch.setattr(module, request_name, lambda ids: queued.extend(ids))
++    started, state = getattr(module, start_name)([7])
++    assert not started and state['running']
++    assert queued == [7]
++
++
++def test_web_and_private_worker_roundtrip_over_real_http(monkeypatch):
++    import os
++    import socket
++    import subprocess
++    import sys
++    with socket.socket() as listener:
++        listener.bind(('127.0.0.1', 0))
++        port = listener.getsockname()[1]
++    source = '''
++import os
++from flask import Flask, g, request, session, jsonify
++from werkzeug.serving import make_server
++from bit.service_split import install_service_routing
++app = Flask(__name__); app.secret_key = 'shared-test-secret'
++@app.route('/api/order-sync/start', methods=['POST'])
++def start():
++    if not session.get('user'): return jsonify(error='login'), 401
++    response = jsonify(user=session['user'], data=request.json, query=request.query_string.decode(), remote=g.worker_original_remote_addr)
++    response.set_cookie('one','1'); response.set_cookie('two','2')
++    return response
++install_service_routing(app)
++make_server('127.0.0.1', int(os.environ['BIT_WORKER_PORT']), app).serve_forever()
++'''
++    env = {**os.environ, 'BIT_SERVICE_MODE':'worker', 'BIT_WORKER_PORT':str(port)}
++    process = subprocess.Popen([sys.executable, '-c', source], env=env,
++                               stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
++    try:
++        deadline = time.monotonic() + 10
++        while True:
++            try:
++                with socket.create_connection(('127.0.0.1', port), timeout=.2): break
++            except OSError:
++                if process.poll() is not None or time.monotonic() >= deadline:
++                    pytest.fail('private test worker did not start')
++                time.sleep(.02)
++        monkeypatch.setenv('BIT_SERVICE_MODE','web')
++        monkeypatch.setenv('BIT_WORKER_PORT',str(port))
++        app = Flask(__name__); app.secret_key = 'shared-test-secret'
++        service_split.install_service_routing(app)
++        client = app.test_client()
++        assert client.post('/api/order-sync/start', json={}).status_code == 401
++        with client.session_transaction() as state:
++            state['user'] = 7
++        response = client.post('/api/order-sync/start?search=%41&tail=?', json={'token_ids':[4]},
++            headers={'X-Workbench-Original-IP':'127.0.0.1', 'X-Forwarded-For':'127.0.0.1'},
++            environ_overrides={'REMOTE_ADDR':'198.51.100.10'})
++        assert response.status_code == 200
++        assert response.json == {'user':7, 'data':{'token_ids':[4]}, 'query':'search=A&tail=?', 'remote':'198.51.100.10'}
++        assert len(response.headers.getlist('Set-Cookie')) == 2
++        response.close()
++    finally:
++        process.terminate()
++        process.wait(timeout=5)
++
++
++def test_hundred_agent_heartbeats_over_http_with_four_workers(tmp_path, monkeypatch):
++    import urllib.request
++    from waitress import create_server
++    from bit import bit_interface as interface
++    store = LocalAgentStore(tmp_path / 'agents.sqlite3')
++    monkeypatch.setattr(interface, 'USE_DB_API', False)
++    monkeypatch.setattr(interface, 'get_current_workbench_user', lambda: None)
++    monkeypatch.setattr(interface, 'get_local_agent_store', lambda: store)
++    monkeypatch.setattr(interface, 'current_local_agent_bundle', lambda: {'version':'test','sha256':'test','size':0})
++    monkeypatch.setattr(interface, '_verify_local_agent_credential',
++                        lambda token: {'agent_id':token,'user_id':0} if token.startswith('load-agent-') else None)
++    monkeypatch.setenv('BIT_SERVICE_MODE','combined')
++    server_map = {}
++    server = create_server(interface.app, host='127.0.0.1', port=0, threads=4, map=server_map)
++    stopping = threading.Event()
++    def run():
++        while not stopping.is_set():
++            server.asyncore.loop(timeout=.02, count=1, map=server_map)
++    thread = threading.Thread(target=run, daemon=True); thread.start()
++    base = f'http://127.0.0.1:{server.effective_port}'
++    def heartbeat(index):
++        agent = f'load-agent-{index}'
++        body = json.dumps({'agent_id':agent,'name':agent,'session_id':'load-session',
++                           'capabilities':['heartbeat_claim']}).encode()
++        req = urllib.request.Request(base + '/api/local-agents/heartbeat', data=body,
++              headers={'Content-Type':'application/json','X-Local-Agent-Token':agent})
++        started = time.monotonic()
++        with urllib.request.urlopen(req, timeout=15) as response:
++            data = json.load(response)['data']
++        assert data['job'] is None and data['agent']['agent_id'] == agent
++        return time.monotonic() - started
++    try:
++        with concurrent.futures.ThreadPoolExecutor(32) as pool:
++            timings = sorted(pool.map(heartbeat, range(100)))
++        assert len(store.list_agents()) == 100
++        print(f'Isolated Agent heartbeat: 100 requests, 4 HTTP workers, P95={timings[94]:.3f}s, max={timings[-1]:.3f}s')
++    finally:
++        stopping.set(); thread.join(timeout=2)
++        server.task_dispatcher.shutdown(); server.close()
++        for channel in list(server_map.values()): channel.close()
+diff --git a/tests/test_console_ui_browser.py b/tests/test_console_ui_browser.py
+index 27984f3c..ec54a9e6 100644
+--- a/tests/test_console_ui_browser.py
++++ b/tests/test_console_ui_browser.py
+@@ -267,3 +267,46 @@ def test_order_density_switch_and_compact_bulk_toolbar(console_page):
+     page.evaluate("selectedOrderIds.add('10001'); updateOrderSelectionState()")
+     assert bulk_bar.evaluate("el => el.classList.contains('active')")
+     assert bulk_bar.locator(".order-bulk-group").first.evaluate("el => getComputedStyle(el).display") == "flex"
++
++
++def test_background_export_queues_polls_and_downloads_without_navigation(console_page):
++    page = console_page
++    calls = []
++    def export_route(route):
++        calls.append((route.request.method, urlsplit(route.request.url).path))
++        path = calls[-1][1]
++        if route.request.method == 'POST':
++            assert route.request.post_data_json['url'].startswith('/api/risk-check/results/export?')
++            route.fulfill(status=202, content_type='application/json', body=json.dumps({
++                'status':'success','data':{'id':'test-export','status':'queued'}}))
++        elif path.endswith('/download'):
++            route.fulfill(content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
++                          headers={'Content-Disposition':"attachment; filename*=UTF-8''report.xlsx"}, body=b'test-xlsx')
++        else:
++            route.fulfill(content_type='application/json', body=json.dumps({
++                'status':'success','data':{'id':'test-export','status':'ready'}}))
++    page.route('**/api/exports', export_route)
++    page.route('**/api/exports/**', export_route)
++    previous_url = page.url
++    with page.expect_download(timeout=15000) as pending:
++        page.evaluate('exportRiskResults()')
++    assert pending.value.suggested_filename == 'report.xlsx'
++    assert page.url == previous_url
++    assert calls == [('POST','/api/exports'),('GET','/api/exports/test-export'),('GET','/api/exports/test-export/download')]
++
++
++def test_background_export_stops_after_permission_revoked(console_page):
++    page = console_page
++    calls = []
++    def export_route(route):
++        calls.append(route.request.method)
++        if route.request.method == 'POST':
++            route.fulfill(status=202, content_type='application/json', body=json.dumps({
++                'status':'success','data':{'id':'revoked','status':'queued'}}))
++        else:
++            route.fulfill(status=403, content_type='application/json', body=json.dumps({'message':'导出权限已失效'}))
++    page.route('**/api/exports', export_route)
++    page.route('**/api/exports/**', export_route)
++    page.evaluate('exportRiskResults()')
++    page.get_by_text('导出失败：导出权限已失效', exact=True).wait_for(timeout=10000)
++    assert calls == ['POST','GET']
+diff --git a/tests/test_mercado_infraction_dashboard.py b/tests/test_mercado_infraction_dashboard.py
+index 8e83953c..8f24e8cf 100644
+--- a/tests/test_mercado_infraction_dashboard.py
++++ b/tests/test_mercado_infraction_dashboard.py
+@@ -934,8 +934,8 @@ def test_console_template_links_to_independent_dashboard():
+     assert 'data-src="/ip-rights-dashboard?embedded=1"' in source
+     assert 'id="ip-rights-dashboard-frame"' in source
+     nav_labels = [
+-        '<span class="nav-label">侵权和权利人总览</span>',
+         '<span class="nav-label">禁限售列表</span>',
++        '<span class="nav-label">侵权和权利人总览</span>',
+         '<span class="nav-label">违规商品总览</span>',
+     ]
+     nav_positions = [source.index(label) for label in nav_labels]
+@@ -984,3 +984,7 @@ def test_dashboard_template_supports_store_detail_drilldown():
+     assert "async function retryStore" in source
+     assert "JSON.stringify({token_ids: [tokenId]})" in source
+     assert 'scope: "official_infractions"' in source
++
++
++# These route tests mock business data; they must not authenticate against production MySQL.
++pytestmark = pytest.mark.usefixtures("isolated_legacy_console_user")

@@ -934,8 +934,8 @@ def test_console_template_links_to_independent_dashboard():
     assert 'data-src="/ip-rights-dashboard?embedded=1"' in source
     assert 'id="ip-rights-dashboard-frame"' in source
     nav_labels = [
-        '<span class="nav-label">侵权和权利人总览</span>',
         '<span class="nav-label">禁限售列表</span>',
+        '<span class="nav-label">侵权和权利人总览</span>',
         '<span class="nav-label">违规商品总览</span>',
     ]
     nav_positions = [source.index(label) for label in nav_labels]
@@ -984,3 +984,7 @@ def test_dashboard_template_supports_store_detail_drilldown():
     assert "async function retryStore" in source
     assert "JSON.stringify({token_ids: [tokenId]})" in source
     assert 'scope: "official_infractions"' in source
+
+
+# These route tests mock business data; they must not authenticate against production MySQL.
+pytestmark = pytest.mark.usefixtures("isolated_legacy_console_user")

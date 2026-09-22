@@ -7,6 +7,7 @@ import re
 import threading
 import time
 from copy import deepcopy
+from erp.query_cache import QueryCache
 from datetime import datetime, timedelta
 from decimal import Decimal, InvalidOperation
 from typing import Any, Callable, Iterable, Mapping
@@ -30,6 +31,7 @@ STORE_LINK_RECENT_SALES_CACHE_MAX_ENTRIES = 20000
 _schema_lock = threading.RLock()
 _store_link_schema_ready = False
 _sync_state_schema_ready = False
+_filtered_count_cache = QueryCache(ttl=15, max_entries=512)
 _metadata_cache_lock = threading.RLock()
 _metadata_cache: dict[str, Any] = {"expires_at": 0.0, "data": None}
 _scoped_metadata_cache: dict[tuple[int, ...], dict[str, Any]] = {}
@@ -956,6 +958,7 @@ def finalize_store_snapshot(
 def invalidate_store_link_metadata_cache() -> None:
     """Discard low-frequency filters and totals after synchronized data changes."""
 
+    _filtered_count_cache.clear()
     with _metadata_cache_lock:
         _metadata_cache.update({"expires_at": 0.0, "data": None})
         _scoped_metadata_cache.clear()
@@ -1231,7 +1234,7 @@ def _store_link_metadata(
                 "expires_at": time.monotonic() + STORE_LINK_METADATA_CACHE_SECONDS,
                 "data": deepcopy(metadata),
             }
-            if len(_scoped_metadata_cache) > 32:
+            if len(_scoped_metadata_cache) > 256:
                 oldest_key = min(
                     _scoped_metadata_cache,
                     key=lambda key: float(
@@ -1466,11 +1469,21 @@ def list_store_links(
             elif filtered_conditions == ["links.`is_current` = 1"]:
                 total = int(summary.get("current_count") or 0)
             else:
-                cursor.execute(
-                    f"SELECT COUNT(*) AS `total`{links_from_sql}{where_sql}",
-                    tuple(filtered_values),
-                )
-                total = int((cursor.fetchone() or {}).get("total") or 0)
+                count_sql = f"SELECT COUNT(*) AS `total`{links_from_sql}{where_sql}"
+                def load_count():
+                    cursor.execute(count_sql, tuple(filtered_values))
+                    return int((cursor.fetchone() or {}).get("total") or 0)
+                if connection_factory is not None:
+                    total = load_count()
+                else:
+                    from bit.bit_mysql import config
+                    database_key = tuple(str(config.get(k, "")) for k in
+                                         ("host", "port", "database", "db", "user"))
+                    # Include the actual SQL predicates AND permission scope.
+                    # Cached totals never bypass the live row authorization query.
+                    count_key = (database_key, count_sql, tuple(filtered_values),
+                                 None if scoped_token_ids is None else tuple(scoped_token_ids))
+                    total = _filtered_count_cache.get_or_load(count_key, load_count)
             pages = max(1, (total + page_size - 1) // page_size)
             page = min(page, pages)
             recent_sales_join_sql = ""

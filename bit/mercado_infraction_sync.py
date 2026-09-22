@@ -13,6 +13,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timedelta
 from typing import Any, Iterable, Mapping
 
+from bit.sync_capacity import run_store as run_capacity_store, due_batch
 from bit import bit_mysql, mercado_tokens
 from bit.bit_runtime_lock import InterProcessLock, get_lock_owner
 from erp.mercadolibre_infraction_store import (
@@ -53,10 +54,10 @@ INFRACTION_AUTO_CHECK_SECONDS = _env_int(
     "MERCADO_INFRACTION_AUTO_CHECK_SECONDS", 300, 60, 3600
 )
 INFRACTION_STORE_WORKERS = _env_int(
-    "MERCADO_INFRACTION_STORE_WORKERS", 12, 1, 24
+    "MERCADO_INFRACTION_STORE_WORKERS", 4, 1, 24
 )
 INFRACTION_DETAIL_WORKERS = _env_int(
-    "MERCADO_INFRACTION_DETAIL_WORKERS", 16, 1, 32
+    "MERCADO_INFRACTION_DETAIL_WORKERS", 8, 1, 32
 )
 INFRACTION_INITIAL_DETECTION_DAYS = _env_int(
     "MERCADO_INFRACTION_INITIAL_DETECTION_DAYS", 2, 1, 30
@@ -1603,7 +1604,7 @@ def run_official_infraction_sync(
         max_workers=worker_count,
         thread_name_prefix="meli-official-infractions",
     ) as executor:
-        futures = [executor.submit(sync_one, record) for record in records]
+        futures = [executor.submit(run_capacity_store, "infractions", record["id"], sync_one, record) for record in records]
         for future in as_completed(futures):
             results.append(future.result())
             _state_update(
@@ -1679,11 +1680,6 @@ def start_official_infraction_sync(
     selected_ids = _token_ids(token_ids or ())
     if selected_ids:
         _token_records(selected_ids)
-    with _state_guard:
-        if _sync_state.get("running"):
-            return False, official_infraction_sync_status()
-    if get_lock_owner(INFRACTION_SYNC_LOCK_KEY):
-        return False, official_infraction_sync_status()
     queued_ids = selected_ids or _token_ids(
         row.get("id")
         for row in ((bit_mysql.list_mercado_store_tokens() or {}).get("rows") or [])
@@ -1692,6 +1688,13 @@ def start_official_infraction_sync(
     if queued_ids:
         request_infraction_sync(queued_ids)
     with _state_guard:
+        if _sync_state.get("running"):
+            return False, official_infraction_sync_status()
+    if get_lock_owner(INFRACTION_SYNC_LOCK_KEY):
+        return False, official_infraction_sync_status()
+    with _state_guard:
+        if _sync_state.get("running"):
+            return False, official_infraction_sync_status()
         _sync_state.update(
             running=True,
             task_id=uuid.uuid4().hex,
@@ -1748,6 +1751,7 @@ def start_due_official_infraction_sync() -> dict[str, Any]:
             "due_token_ids": [],
             "state": official_infraction_sync_status(),
         }
+    token_ids = due_batch(token_ids)
     started, state = start_official_infraction_sync(token_ids)
     return {"started": bool(started), "due_token_ids": token_ids, "state": state}
 

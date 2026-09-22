@@ -11,6 +11,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timedelta
 from typing import Any, Iterable, Mapping
 
+from bit.sync_capacity import run_store as run_capacity_store, due_batch
 from bit import bit_mysql, mercado_tokens
 from bit.bit_runtime_lock import InterProcessLock, get_lock_owner
 from erp.mercadolibre_prohibited_store import (
@@ -39,10 +40,10 @@ PROHIBITED_AUTO_CHECK_SECONDS = max(
     60, int(os.getenv("MERCADO_PROHIBITED_AUTO_CHECK_SECONDS", "300"))
 )
 PROHIBITED_STORE_WORKERS = max(
-    1, min(24, int(os.getenv("MERCADO_PROHIBITED_STORE_WORKERS", "12")))
+    1, min(24, int(os.getenv("MERCADO_PROHIBITED_STORE_WORKERS", "4")))
 )
 PROHIBITED_DETAIL_WORKERS = max(
-    1, min(32, int(os.getenv("MERCADO_PROHIBITED_DETAIL_WORKERS", "16")))
+    1, min(32, int(os.getenv("MERCADO_PROHIBITED_DETAIL_WORKERS", "8")))
 )
 PROHIBITED_PAGE_SIZE = 20
 PROHIBITED_DETAIL_ATTRIBUTES = (
@@ -552,7 +553,7 @@ def run_prohibited_listing_sync(token_ids: Iterable[Any] | None = None) -> dict[
             _set_store_active(store_name, False)
 
     with ThreadPoolExecutor(max_workers=worker_count, thread_name_prefix="meli-prohibited") as executor:
-        futures = [executor.submit(sync_one, record) for record in records]
+        futures = [executor.submit(run_capacity_store, "prohibited", record["id"], sync_one, record) for record in records]
         for future in as_completed(futures):
             results.append(future.result())
             _state_update(
@@ -604,11 +605,6 @@ def start_prohibited_listing_sync(
     selected_ids = _token_ids(token_ids or ())
     if selected_ids:
         _token_records(selected_ids)
-    with _state_guard:
-        if _sync_state.get("running"):
-            return False, prohibited_listing_sync_status()
-    if get_lock_owner(PROHIBITED_SYNC_LOCK_KEY):
-        return False, prohibited_listing_sync_status()
     queued_ids = selected_ids or _token_ids(
         row.get("id")
         for row in ((bit_mysql.list_mercado_store_tokens() or {}).get("rows") or [])
@@ -617,6 +613,13 @@ def start_prohibited_listing_sync(
     if queued_ids:
         request_prohibited_sync(queued_ids)
     with _state_guard:
+        if _sync_state.get("running"):
+            return False, prohibited_listing_sync_status()
+    if get_lock_owner(PROHIBITED_SYNC_LOCK_KEY):
+        return False, prohibited_listing_sync_status()
+    with _state_guard:
+        if _sync_state.get("running"):
+            return False, prohibited_listing_sync_status()
         _sync_state.update(
             running=True, task_id=uuid.uuid4().hex, status="starting",
             message="正在启动禁限售同步", total_stores=0, processed_stores=0,
@@ -659,6 +662,7 @@ def start_due_prohibited_listing_sync() -> dict[str, Any]:
     )
     if not token_ids:
         return {"started": False, "due_token_ids": [], "state": prohibited_listing_sync_status()}
+    token_ids = due_batch(token_ids)
     started, state = start_prohibited_listing_sync(token_ids)
     return {"started": bool(started), "due_token_ids": token_ids, "state": state}
 

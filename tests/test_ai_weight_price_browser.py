@@ -132,7 +132,7 @@ def test_image_payload_retries_temporary_cdn_http_error(monkeypatch):
     assert calls[0][1]["headers"]["Referer"] == "https://www.1688.com/"
 
 
-def test_empty_image_search_keeps_visible_browser_steps_without_screenshots_or_dashboard(page, monkeypatch, tmp_path):
+def test_empty_image_search_keeps_browser_steps_in_background_without_screenshots_or_dashboard(page, monkeypatch, tmp_path):
     import base64
     picture = base64.b64decode("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aD1kAAAAASUVORK5CYII=")
     page.route("https://www.1688.com/", lambda route: route.fulfill(body='''<meta charset="utf-8"><body>
@@ -153,7 +153,7 @@ def test_empty_image_search_keeps_visible_browser_steps_without_screenshots_or_d
         adapter.image_search(page, service.store.get("visual-1"))
     events = service.store.get("visual-1")["visual_history"]
     assert [e["step"] for e in events] == ["supplier_home", "uploading", "uploaded", "search_empty"]
-    assert len(focused) == 4
+    assert focused == []
     assert all(not e.get("screenshot_url") for e in events)
     assert page.locator('input').evaluate('e=>e.files[0].name') == 'product-main.png'
     service.store.skip("visual-1", "1688返回空搜索结果")
@@ -177,9 +177,12 @@ def test_empty_image_search_keeps_visible_browser_steps_without_screenshots_or_d
     expect(page.locator('#resume-switch')).to_be_visible()
 
 
-def test_1688_login_and_human_review_are_resumable_pauses(page):
+def test_1688_login_and_human_review_are_resumable_pauses_and_request_attention(page, monkeypatch):
     adapter = Browser(validate({}), threading.Event(), lambda *args: None)
     adapter.owned.append(page)
+    focused = []
+    original_focus = page.bring_to_front
+    monkeypatch.setattr(page, "bring_to_front", lambda: (focused.append(page.url), original_focus())[1])
     page.route('https://login.taobao.com/**', lambda route: route.fulfill(
         body='<body>1688 登录</body>', content_type='text/html'))
     page.goto('https://login.taobao.com/member/login.jhtml')
@@ -187,6 +190,7 @@ def test_1688_login_and_human_review_are_resumable_pauses(page):
         adapter.check(page)
     assert page not in adapter.owned
     assert not page.is_closed()
+    assert focused == ['https://login.taobao.com/member/login.jhtml']
     adapter.owned.append(page)
     page.route('https://www.1688.com/**', lambda route: route.fulfill(
         body='<meta charset="utf-8"><body>请按住滑块完成人机验证</body>', content_type='text/html'))
@@ -195,6 +199,8 @@ def test_1688_login_and_human_review_are_resumable_pauses(page):
         adapter.check(page)
     assert page not in adapter.owned
     assert not page.is_closed()
+    assert focused[-1] == 'https://www.1688.com/'
+    assert len(focused) == 2
 
 
 def test_image_search_foreign_redirect_without_review_evidence_is_not_a_manual_pause(page, monkeypatch):

@@ -42,6 +42,7 @@ for path in (str(CURRENT_DIR), str(PROJECT_ROOT)):
 # 必须在导入 bit_db_api、bit_mysql 及业务模块前确定角色；这些模块会在
 # 导入时固定本进程使用 MySQL 还是数据库 HTTP 接口。
 from bit.workbench_runtime import bootstrap_runtime
+from bit.service_split import service_mode, worker_port, install_service_routing
 
 RUNTIME_SETTINGS = bootstrap_runtime()
 
@@ -257,25 +258,36 @@ def get_local_agent_store():
     return _local_agent_store_instance
 
 
+def _refresh_local_agent_bundle():
+    global _local_agent_bundle_snapshot, _local_agent_bundle_snapshot_at
+    try:
+        _local_agent_bundle_snapshot = build_business_bundle(PROJECT_ROOT)
+    except Exception:
+        logging.exception("检查 Agent 业务包失败，继续提供上一个已验证版本")
+    finally:
+        _local_agent_bundle_snapshot_at = time.monotonic()
+        _local_agent_bundle_lock.release()
+
+
 def current_local_agent_bundle(force=False):
     global _local_agent_bundle_snapshot, _local_agent_bundle_snapshot_at
-    now = time.monotonic()
-    if (
-        not force
-        and _local_agent_bundle_snapshot is not None
-        and now - _local_agent_bundle_snapshot_at < 10
-    ):
+    if force or _local_agent_bundle_snapshot is None:
+        with _local_agent_bundle_lock:
+            if force or _local_agent_bundle_snapshot is None:
+                _local_agent_bundle_snapshot = build_business_bundle(PROJECT_ROOT)
+                _local_agent_bundle_snapshot_at = time.monotonic()
         return _local_agent_bundle_snapshot
-    with _local_agent_bundle_lock:
-        now = time.monotonic()
-        if (
-            force
-            or _local_agent_bundle_snapshot is None
-            or now - _local_agent_bundle_snapshot_at >= 10
-        ):
-            _local_agent_bundle_snapshot = build_business_bundle(PROJECT_ROOT)
-            _local_agent_bundle_snapshot_at = now
-        return _local_agent_bundle_snapshot
+    if (time.monotonic() - _local_agent_bundle_snapshot_at >= 10
+            and _local_agent_bundle_lock.acquire(blocking=False)):
+        # Heartbeats keep serving the previous complete release while source
+        # inspection/build happens once in the background.
+        try:
+            threading.Thread(target=_refresh_local_agent_bundle,
+                             name="agent-bundle-refresh", daemon=True).start()
+        except BaseException:
+            _local_agent_bundle_lock.release()
+            raise
+    return _local_agent_bundle_snapshot
 
 
 def local_executor_target_address_space(base_url=None):
@@ -700,7 +712,7 @@ def interface_background_services_disabled():
     keeping central maintenance jobs on the production server only.
     """
 
-    return USE_DB_API or _truthy_env(
+    return USE_DB_API or service_mode() == "web" or _truthy_env(
         os.environ.get("BIT_BACKGROUND_SERVICES_DISABLED")
     )
 
@@ -2328,7 +2340,7 @@ def internal_api_required(view_func):
         # routes are denied above; loopback is not accepted as an admin
         # authentication boundary.
         if (
-            request.remote_addr in ("127.0.0.1", "::1", "localhost")
+            getattr(g, "worker_original_remote_addr", request.remote_addr) in ("127.0.0.1", "::1", "localhost")
             and not request.path.startswith(INTERNAL_LOOPBACK_DENIED_PREFIXES)
         ):
             return view_func(*args, **kwargs)
@@ -5292,6 +5304,10 @@ def build_daily_task_params(data):
             continue
         if group_name not in group_names:
             group_names.append(group_name)
+    # 业务员和店铺组是两种互斥的任务范围。旧页面可能同时提交二者；
+    # 此时沿用任务标题一直采用的店铺组优先语义，避免无意中取空交集。
+    if group_names:
+        salespeople = []
     legacy_min_rate = _parse_rate_param(data)
     return {
         "execution_target": _request_execution_target(data),
@@ -18625,8 +18641,8 @@ def serve_wsgi_application(serve=None):
     )
     serve(
         app,
-        host="0.0.0.0",
-        port=5000,
+        host="127.0.0.1" if service_mode() == "worker" else "0.0.0.0",
+        port=worker_port() if service_mode() == "worker" else 5000,
         threads=threads,
         connection_limit=connection_limit,
         backlog=backlog,
@@ -18667,7 +18683,8 @@ def start_interface_background_services():
     start_token_refresh_scheduler_bootstrap()
     start_store_email_sync_scheduler_bootstrap()
     start_appeal_report_scheduler_bootstrap()
-    start_yandex_console_bootstrap()
+    if service_mode() != "worker":
+        start_yandex_console_bootstrap()
     ensure_mercado_profit_refresh_worker()
     bit_order_sync.ensure_order_sync_scheduler()
     bit_order_sync.ensure_order_financial_backfill_worker()
@@ -18675,8 +18692,17 @@ def start_interface_background_services():
 
 
 def run_interface_server():
+    mode = service_mode()
+    if mode != "combined" and not RUNTIME_SETTINGS.is_server:
+        raise RuntimeError("Web/worker 分离模式必须使用 server 数据库角色")
+    scheduler_lock = None
+    if mode in {"combined", "worker"} and not interface_background_services_disabled():
+        scheduler_lock = InterProcessLock("workbench_scheduler_owner", owner=mode)
+        if not scheduler_lock.acquire(timeout=0):
+            logging.error("中心调度器已在其他进程运行，本进程退出")
+            return False
     interface_lock = InterProcessLock(
-        "bit_interface_singleton",
+        "bit_interface_worker_singleton" if mode == "worker" else "bit_interface_singleton",
         owner="bit_interface.py",
         metadata={
             "port": 5000,
@@ -18687,6 +18713,8 @@ def run_interface_server():
         },
     )
     if not interface_lock.acquire(timeout=0):
+        if scheduler_lock:
+            scheduler_lock.release()
         owner = interface_lock.read_owner()
         logging.error(
             "泽顺工作台服务已经运行，本次重复进程退出：pid=%s",
@@ -18696,12 +18724,17 @@ def run_interface_server():
 
     try:
         start_interface_background_services()
+        start_background_exports()
+        if mode == "web":
+            start_yandex_console_bootstrap()
         logging.info("工作台以 %s 角色启动；Flask 热更新已关闭", RUNTIME_SETTINGS.role)
         serve_wsgi_application()
         return True
     finally:
         close_all_pools()
         interface_lock.release()
+        if scheduler_lock:
+            scheduler_lock.release()
 
 
 def run_interface_main():
@@ -18712,6 +18745,14 @@ def run_interface_main():
     # entry point.  Calling it is harmless for normal source runs.
     multiprocessing.freeze_support()
     return run_interface_server()
+
+
+from bit.background_exports import install_exports
+start_background_exports = install_exports(
+    app, LOCAL_AGENT_HUB_PATH.parent / "exports",
+    lambda: get_current_workbench_user(), lambda user: _authorized_token_ids_for_user(user),
+)
+install_service_routing(app)
 
 
 if __name__ == '__main__':

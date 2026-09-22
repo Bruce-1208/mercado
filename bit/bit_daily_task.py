@@ -1,4 +1,5 @@
 import contextlib
+import math
 import os
 import re
 import sys
@@ -83,6 +84,7 @@ APPEAL_TYPE_DELAY = "延误"
 APPEAL_TYPE_CANCELLATION = "取消率"
 APPEAL_TYPE_COMPLAINT = "投诉"
 APPEAL_TYPE_MIXED = "混合模式"
+APPEAL_TYPE_ALGORITHM = "算法模式"
 APPEAL_COPY_MODE_NORMAL = "普通模式"
 APPEAL_COPY_MODE_AI = "AI话术模式"
 SUPPORTED_APPEAL_COPY_MODES = (
@@ -103,6 +105,7 @@ SUPPORTED_APPEAL_TYPES = (
     APPEAL_TYPE_CANCELLATION,
     APPEAL_TYPE_COMPLAINT,
     APPEAL_TYPE_MIXED,
+    APPEAL_TYPE_ALGORITHM,
 )
 MIXED_APPEAL_SEQUENCE = (
     APPEAL_TYPE_INFRACTION,
@@ -169,7 +172,7 @@ def appeal_site_frequency_weight(pending_count):
 
 
 def _appeal_site_batches(site, appeal_type, appeal_copy_mode):
-    """把数量型申诉站点拆为小批次；声誉型任务仍保持一次执行。"""
+    """数量型任务拆分唯一商品；算法模式的声誉任务按站点权重轮转。"""
     site = dict(site or {})
     normalized_type = normalize_appeal_type(
         site.get("appeal_type") or appeal_type
@@ -179,6 +182,15 @@ def _appeal_site_batches(site, appeal_type, appeal_copy_mode):
         APPEAL_TYPE_PROHIBITED: "prohibited_ids",
     }.get(normalized_type)
     source_ids = list(site.get(id_field) or ()) if id_field else []
+    algorithm_weight = site.get("algorithm_weight")
+    if algorithm_weight is not None:
+        algorithm_weight = max(1, min(APPEAL_FREQUENCY_MAX_WEIGHT, int(algorithm_weight)))
+        if id_field and not source_ids:
+            return []
+        if normalized_type in REPUTATION_RATE_FIELDS:
+            return [dict(site, frequency_weight=algorithm_weight,
+                         batch_index=index + 1, batch_total=algorithm_weight)
+                    for index in range(algorithm_weight)]
     if not id_field or not source_ids:
         site["frequency_weight"] = 1
         return [site]
@@ -188,7 +200,7 @@ def _appeal_site_batches(site, appeal_type, appeal_copy_mode):
         if normalize_appeal_copy_mode(appeal_copy_mode) == APPEAL_COPY_MODE_AI
         else APPEAL_NORMAL_BATCH_SIZE
     )
-    weight = appeal_site_frequency_weight(site.get("count", len(source_ids))) or 1
+    weight = algorithm_weight or appeal_site_frequency_weight(site.get("count", len(source_ids))) or 1
     batches = []
     total_batches = (len(source_ids) + batch_size - 1) // batch_size
     for offset in range(0, len(source_ids), batch_size):
@@ -366,11 +378,13 @@ def normalize_appeal_type(appeal_type):
         "混合": APPEAL_TYPE_MIXED,
         "混合模式": APPEAL_TYPE_MIXED,
         "mixed": APPEAL_TYPE_MIXED,
+        "算法模式": APPEAL_TYPE_ALGORITHM,
+        "algorithm": APPEAL_TYPE_ALGORITHM,
     }
     normalized = aliases.get(text.casefold())
     if normalized is None:
         raise ValueError(
-            f"不支持的申诉类型：{appeal_type}，仅支持侵权、禁限售、延误率、取消率、投诉、混合模式"
+            f"不支持的申诉类型：{appeal_type}，仅支持侵权、禁限售、延误率、取消率、投诉、混合模式、算法模式"
         )
     return normalized
 
@@ -388,6 +402,8 @@ def normalize_appeal_types(appeal_types):
         else list(appeal_types or ())
     )
     normalized_values = [normalize_appeal_type(value) for value in raw_values]
+    if APPEAL_TYPE_ALGORITHM in normalized_values:
+        return (APPEAL_TYPE_ALGORITHM,)
     if APPEAL_TYPE_MIXED in normalized_values:
         return (APPEAL_TYPE_MIXED,)
     selected = set(normalized_values)
@@ -449,6 +465,21 @@ def _normalize_group_names(group_names):
     return tuple(selected)
 
 
+def _normalize_appeal_scope_filters(salespeople=None, group_names=None):
+    """Normalize the two alternative daily-task scope selectors.
+
+    The task UI presents salesperson and store group as alternative ways to
+    choose a scope.  Store groups take precedence when both values arrive from
+    an older client so a stale salesperson selection cannot silently turn a
+    valid group into an empty intersection.
+    """
+    selected_group_names = _normalize_group_names(group_names)
+    selected_salespeople = (
+        () if selected_group_names else _normalize_salespeople(salespeople)
+    )
+    return set(selected_salespeople), set(selected_group_names)
+
+
 def _setting_flag_enabled(value):
     if isinstance(value, str):
         return value.strip().casefold() not in ("", "0", "false", "no", "off")
@@ -457,8 +488,10 @@ def _setting_flag_enabled(value):
 
 def _load_authorized_appeal_shop_site_data(salespeople=None, group_names=None):
     """返回申诉授权的别名范围及用于浏览器遍历的规范店铺范围。"""
-    selected_salespeople = set(_normalize_salespeople(salespeople))
-    selected_group_names = set(_normalize_group_names(group_names))
+    selected_salespeople, selected_group_names = _normalize_appeal_scope_filters(
+        salespeople,
+        group_names,
+    )
     token_data = list_mercado_store_tokens() or {}
     alias_scope = {}
     collection_targets = {}
@@ -517,8 +550,10 @@ def load_authorized_appeal_collection_targets(salespeople=None, group_names=None
 def load_authorized_appeal_api_targets(salespeople=None, group_names=None):
     """Return token-backed stores/sites selected by the appeal authorization switches."""
 
-    selected_salespeople = set(_normalize_salespeople(salespeople))
-    selected_group_names = set(_normalize_group_names(group_names))
+    selected_salespeople, selected_group_names = _normalize_appeal_scope_filters(
+        salespeople,
+        group_names,
+    )
     token_data = list_mercado_store_tokens() or {}
     targets = []
     for token in token_data.get("rows") or ():
@@ -1124,6 +1159,7 @@ def build_latest_reputation_appeal_plan(
     min_rate=0,
     salespeople=None,
     group_names=None,
+    reputation_data=None,
 ):
     """按最新声誉批次生成延误率、取消率或投诉申诉计划。
 
@@ -1136,7 +1172,7 @@ def build_latest_reputation_appeal_plan(
         raise ValueError("声誉申诉计划仅支持延误率、取消率或投诉")
 
     threshold = max(0, _parse_rate(min_rate))
-    data = get_latest_reputation_info()
+    data = get_latest_reputation_info() if reputation_data is None else reputation_data
     rows = data.get("rows") or []
     enabled_scope = _appeal_scope(only_active, salespeople, group_names)
     shop_map = {}
@@ -1188,6 +1224,91 @@ def build_latest_reputation_appeal_plan(
     return selected
 
 
+def build_algorithm_appeal_plan(
+    top_n=DEFAULT_DAILY_TOP_N,
+    recent_days=DEFAULT_DAILY_RECENT_DAYS,
+    only_active=None,
+    min_rate=0,
+    min_infraction_count=0,
+    min_delay_rate=None,
+    min_cancellation_rate=None,
+    min_complaint_rate=None,
+    salespeople=None,
+    group_names=None,
+    max_workers=DEFAULT_DAILY_MAX_WORKERS,
+    log_path=None,
+    stop_event=None,
+):
+    """合并四类授权计划，以归一化指标总分安排店铺顺序和站点频率。
+
+    各指标除以本轮该指标最大值，避免侵权数量与比率直接相加。
+    最低分权重为 1，最高分为 5，同分同权；全体同分时均为 1。
+    先合并再限制店铺数，确保不同类型之间不会漏掉综合高分店铺。
+    """
+    if _stop_requested(stop_event):
+        return []
+    scope = dict(only_active=only_active, salespeople=salespeople, group_names=group_names)
+    plans = {APPEAL_TYPE_INFRACTION: build_latest_infraction_appeal_plan(
+        top_n=0, recent_days=recent_days, min_infraction_count=min_infraction_count,
+        max_workers=max_workers, log_path=log_path, stop_event=stop_event, **scope,
+    )}
+    if _stop_requested(stop_event):
+        return []
+    reputation_data = get_latest_reputation_info()
+    for appeal_type, threshold in (
+        (APPEAL_TYPE_DELAY, min_delay_rate),
+        (APPEAL_TYPE_COMPLAINT, min_complaint_rate),
+        (APPEAL_TYPE_CANCELLATION, min_cancellation_rate),
+    ):
+        if _stop_requested(stop_event):
+            return []
+        plans[appeal_type] = build_latest_reputation_appeal_plan(
+            appeal_type, top_n=0, min_rate=min_rate if threshold is None else threshold,
+            reputation_data=reputation_data, **scope,
+        )
+
+    sites = {}
+    maxima = {}
+    for appeal_type, plan in plans.items():
+        for shop in plan:
+            for source in shop["sites"]:
+                key = (shop["name"], source["site_code"])
+                entry = sites.setdefault(key, {"metrics": {}, "tasks": {}})
+                value = float(source.get("rate", source.get("count", 0)))
+                if not math.isfinite(value) or value <= 0:
+                    continue
+                entry["metrics"][appeal_type] = value
+                entry["tasks"][appeal_type] = dict(source, appeal_type=appeal_type)
+                maxima[appeal_type] = max(maxima.get(appeal_type, 0), value)
+    sites = {key: entry for key, entry in sites.items() if entry["tasks"]}
+    if not sites:
+        return []
+    for entry in sites.values():
+        entry["score"] = sum(value / maxima[kind] for kind, value in entry["metrics"].items())
+    lowest = min(entry["score"] for entry in sites.values())
+    highest = max(entry["score"] for entry in sites.values())
+    shops = {}
+    for (name, site_code), entry in sites.items():
+        score = entry["score"]
+        weight = 1 if highest == lowest else 1 + math.ceil(
+            (APPEAL_FREQUENCY_MAX_WEIGHT - 1) * (score - lowest) / (highest - lowest)
+        )
+        shop = shops.setdefault(name, {"name": name, "total": 0.0, "priority_score": 0.0, "sites": []})
+        shop["total"] += score
+        shop["priority_score"] = max(shop["priority_score"], score)
+        for task in entry["tasks"].values():
+            shop["sites"].append(dict(task, algorithm_weight=weight, priority_score=score))
+        print(
+            f"{get_now_time()} 算法模式 {name} {site_code}："
+            f"指标 {entry['metrics']}，综合分 {score:.3f}，执行权重 {weight}<br>"
+        )
+    plan = list(shops.values())
+    for shop in plan:
+        shop["sites"].sort(key=lambda site: site["priority_score"], reverse=True)
+    plan.sort(key=lambda shop: (shop["priority_score"], shop["total"]), reverse=True)
+    return _select_appeal_plan(plan, top_n)
+
+
 def build_appeal_plan(
     appeal_type,
     top_n=DEFAULT_DAILY_TOP_N,
@@ -1208,6 +1329,15 @@ def build_appeal_plan(
     normalized_type = normalize_appeal_type(appeal_type)
     if normalized_type == APPEAL_TYPE_MIXED:
         raise ValueError("混合模式必须按任务序列执行，不能生成单一申诉计划")
+    if normalized_type == APPEAL_TYPE_ALGORITHM:
+        return build_algorithm_appeal_plan(
+            top_n=top_n, recent_days=recent_days, only_active=only_active,
+            min_rate=min_rate, min_infraction_count=min_infraction_count,
+            min_delay_rate=min_delay_rate, min_cancellation_rate=min_cancellation_rate,
+            min_complaint_rate=min_complaint_rate, salespeople=salespeople,
+            group_names=group_names, max_workers=max_workers, log_path=log_path,
+            stop_event=stop_event,
+        )
     if normalized_type == APPEAL_TYPE_INFRACTION:
         return build_latest_infraction_appeal_plan(
             top_n=top_n,
@@ -1362,6 +1492,7 @@ def _appeal_one_shop_locked(
     results = []
     exit_shop = False
     stopped = False
+    exhausted_algorithm_tasks = set()
     scheduled_sites = build_weighted_site_schedule(
         shop_plan["sites"],
         normalized_type,
@@ -1372,7 +1503,12 @@ def _appeal_one_shop_locked(
         for site in shop_plan["sites"]
         if appeal_site_frequency_weight(site.get("count")) > 1
     ]
-    if weighted_sites:
+    if normalized_type == APPEAL_TYPE_ALGORITHM:
+        print(
+            f"{get_now_time()} {name} 算法模式已生成 {len(scheduled_sites)} 个加权执行批次；"
+            "无可申诉数据或执行异常的任务将停止本轮追加轮转<br>"
+        )
+    elif weighted_sites:
         distribution = "、".join(
             f"{site.get('site_code')}×{appeal_site_frequency_weight(site.get('count'))}"
             for site in weighted_sites
@@ -1391,6 +1527,9 @@ def _appeal_one_shop_locked(
         site_appeal_type = normalize_appeal_type(
             site.get("appeal_type") or normalized_type
         )
+        task_key = (site_code, site_appeal_type)
+        if task_key in exhausted_algorithm_tasks:
+            continue
         site_appeal_label = _appeal_type_label(site_appeal_type)
         count = site["count"]
         metric_text = site.get("rate_text") or site.get("pending_count") or count
@@ -1595,6 +1734,22 @@ def _appeal_one_shop_locked(
                 )
             break
 
+        if site.get("algorithm_weight") is not None:
+            status = (
+                result.get("execution_status") or result.get("status")
+                if isinstance(result, dict) else ""
+            )
+            if (
+                (status and status not in SUCCESS_STATUSES)
+                or _is_rate_limited_result(result)
+                or _is_retryable_site_result(result)
+                or _is_failed_appeal_result(result)
+            ):
+                exhausted_algorithm_tasks.add(task_key)
+                print(
+                    f"{get_now_time()} {name} {site_code} {site_appeal_label} "
+                    "本轮不再追加执行，其他站点和任务继续轮转<br>"
+                )
         if not exit_shop and site_pause > 0 and _wait_or_stop(site_pause, stop_event):
             stopped = True
             exit_shop = True

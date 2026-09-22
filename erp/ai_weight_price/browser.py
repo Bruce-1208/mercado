@@ -366,8 +366,8 @@ class Browser:
             raise Stopped("操作已停止")
 
     @staticmethod
-    def focus(page):
-        """Select a real Playwright page; tolerate lightweight offline fakes."""
+    def show_for_manual_action(page):
+        """Expose only pages that require the operator's immediate attention."""
         bring_to_front = getattr(page, "bring_to_front", None)
         if bring_to_front:
             bring_to_front()
@@ -376,18 +376,14 @@ class Browser:
         safe_url(url, host=host)
         page = self.context.new_page()
         self.owned.append(page)
-        # Every business step must be observable in the dedicated Edge window.
-        # A CDP-created tab is not guaranteed to become the selected tab when
-        # Edge is already in use, so focus it both before and after navigation.
-        page.bring_to_front()
+        # Playwright can operate a non-selected tab. Keep automatic work in the
+        # background so a long batch does not interrupt the operator's browser.
         page.goto(url, wait_until="domcontentloaded")
-        page.bring_to_front()
         try:
             safe_url(page.url, host=host)
         except ValueError:
             actual = (urlsplit(page.url).hostname or "未知域名").lower()
             if host == "1688.com":
-                page.bring_to_front()
                 self.check(page)
                 if actual in ("login.taobao.com", "login.1688.com", "passport.1688.com"):
                     raise CircuitOpen("1688需要登录；请在可见Edge中完成登录后返回控制台继续执行") from None
@@ -405,7 +401,7 @@ class Browser:
         if page in self.owned:
             self.owned.remove(page)
         try:
-            page.bring_to_front()
+            self.show_for_manual_action(page)
         except Exception:
             pass
 
@@ -447,7 +443,7 @@ class Browser:
             page = self.context.new_page()
             page.goto(LOGIN_URL, wait_until="domcontentloaded")
         # This is a user login tab, intentionally not owned/closed by the worker.
-        page.bring_to_front()
+        self.show_for_manual_action(page)
 
     def open_supplier_login(self):
         pages = [page for page in self.context.pages if urlsplit(page.url).hostname in ("www.1688.com", "login.1688.com")]
@@ -457,7 +453,7 @@ class Browser:
             page = self.context.new_page()
             page.goto(self.config["supplier_home_url"], wait_until="domcontentloaded")
         # Retain this user login tab when the temporary driver disconnects.
-        page.bring_to_front()
+        self.show_for_manual_action(page)
 
     def confirm_login(self):
         for page in reversed(self.context.pages):
@@ -765,7 +761,6 @@ class Browser:
         # read afresh. Merely dropping the previous-ID check accepts stale data.
         for attempt in range(1, 3):
             self.check(page)
-            self.focus(page)
             if "login" in page.url.lower():
                 raise ValueError("智赢登录已失效，请重新登录并确认")
             before = body.evaluate(ERP_DETAIL_ID_READ, record)
@@ -886,10 +881,6 @@ class Browser:
                     if item_index < item_offset:
                         continue
                     self.check(page)
-                    # Supplier matching and writeback open temporary tabs. Bring
-                    # the retained Zying list back before reading the next card,
-                    # keeping the one-product-at-a-time sequence visible.
-                    self.focus(page)
                     raw = row.inner_text()
                     image = self.value(row, "erp_image", "src", required=True)
                     record = {"title": self.value(row, "erp_title", required=True),
@@ -1251,7 +1242,6 @@ class Browser:
     def visual(self, task, step, message, page=None):
         if page is not None:
             self.check(page)
-            page.bring_to_front()
         if self.record_visual:
             self.record_visual(task["erp_goods_id"], step, message, page_url=page.url if page else "")
         else:

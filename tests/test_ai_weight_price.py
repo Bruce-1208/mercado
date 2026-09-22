@@ -988,7 +988,6 @@ def test_collection_product_cursor_is_inclusive_and_stops_at_limit(service, monk
     monkeypatch.setattr(browser, "page", lambda *_args: page)
     monkeypatch.setattr(browser, "release", lambda *_args: None)
     monkeypatch.setattr(browser, "check", lambda *_args: None)
-    monkeypatch.setattr(browser, "focus", lambda *_args: None)
     monkeypatch.setattr(browser, "apply_category", lambda *_args: "分类B")
     monkeypatch.setattr(browser, "first_page", lambda *_args: None)
     monkeypatch.setattr(browser, "next_page", lambda _page, _current: setattr(page, "number", page.number + 1) or True)

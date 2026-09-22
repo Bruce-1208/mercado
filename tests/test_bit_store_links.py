@@ -1107,3 +1107,7 @@ def test_start_all_store_link_sync_ignores_selected_store_ids():
 
     assert response.status_code == 202
     start.assert_called_once_with([])
+
+
+# These route tests mock business data; they must not authenticate against production MySQL.
+pytestmark = pytest.mark.usefixtures("isolated_legacy_console_user")
