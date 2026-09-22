@@ -18,7 +18,7 @@ def test_manifest_is_chrome_edge_manifest_v3_and_declares_supported_sites():
     assert manifest["manifest_version"] == 3
     assert manifest["background"]["service_worker"] == "background.js"
     assert "default_popup" not in manifest["action"]
-    assert manifest["version"] == "1.7.2"
+    assert manifest["version"] == "1.8.2"
     matches = manifest["content_scripts"][0]["matches"]
     assert any("mercadolibre.com.mx" in pattern for pattern in matches)
     assert any("mercadolivre.com.br" in pattern for pattern in matches)
@@ -56,6 +56,7 @@ def test_all_extension_javascript_has_valid_syntax():
     for filename in (
         "collector-core.js",
         "product-batch.js",
+        "launcher.js",
         "content.js",
         "background.js",
         "popup.js",
@@ -128,11 +129,12 @@ def test_console_downloads_complete_zeshun_extension_package():
 
     assert response.status_code == 200
     assert response.headers["Content-Type"].startswith("application/zip")
-    assert response.headers["X-Zeshun-Extension-Version"] == "1.7.1"
+    assert response.headers["X-Zeshun-Extension-Version"] == "1.8.2"
     assert "zeshun-collector-extension.zip" in response.headers["Content-Disposition"]
     with zipfile.ZipFile(io.BytesIO(response.data)) as archive:
         names = set(archive.namelist())
         assert "zeshun_collector/manifest.json" in names
+        assert "zeshun_collector/launcher.js" in names
         assert "zeshun_collector/product-batch.js" in names
         assert "zeshun_collector/content-1688.js" in names
         assert "zeshun_collector/content-zying.js" in names
@@ -338,7 +340,11 @@ def test_detail_collection_requires_china_or_managed_origin_and_actual_weight():
         EXTENSION / "content.js"
     ).read_text(encoding="utf-8")
     assert "actualWeightComplete" in core
+    assert "dimensionsComplete" in core
     assert 'const weightBasis = actualWeightComplete ? "plugin_actual" : ""' in core
+    assert "chrome.dom.openOrClosedShadowRoot" in core
+    assert "browser_extension_protected_svg" in core
+    assert "decodeProtectedVisual" in core
 
 
 def _browser_extension_user():
@@ -427,6 +433,7 @@ def test_browser_extension_collect_requires_login_and_writes_one_quick_item(monk
 
     workbench.app.config.update(TESTING=True, SECRET_KEY="extension-test-secret")
     workbench.app.secret_key = "extension-test-secret"
+    workbench._mercado_profit_refresh_wakeup_event.clear()
     user = _browser_extension_user()
     token = workbench.create_browser_extension_token(user)
     created = []
@@ -476,6 +483,7 @@ def test_browser_extension_collect_requires_login_and_writes_one_quick_item(monk
     assert written[0][0] == 88
     assert written[0][1][0]["source_item_id"] == "MLM3016972321"
     assert updated[0][1]["status"] == "partial"
+    assert workbench._mercado_profit_refresh_wakeup_event.is_set()
 
 
 def test_browser_extension_collect_routes_1688_to_ai_original_products(monkeypatch):

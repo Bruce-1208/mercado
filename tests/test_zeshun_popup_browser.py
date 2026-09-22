@@ -1,4 +1,5 @@
 """Exercise extension UI with mocked Chrome messages; never start business jobs."""
+import json
 import os
 from pathlib import Path
 
@@ -266,7 +267,10 @@ def test_mercado_collection_requires_logged_in_zying_plugin(browser):
 
 def test_mercado_collection_reads_sibling_origin_icon_inside_zying_shadow_root(browser):
     page = browser.new_page()
-    page.set_content("<h1 class='ui-pdp-title'>测试商品</h1><img src='https://img.test/main.jpg'>")
+    page.set_content(
+        "<h1 class='ui-pdp-title'>测试商品</h1>"
+        "<img src='data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw=='>"
+    )
     page.evaluate("""() => {
       const host = document.createElement('div');
       const root = host.attachShadow({mode: 'open'});
@@ -280,6 +284,204 @@ def test_mercado_collection_reads_sibling_origin_icon_inside_zying_shadow_root(b
     )""")
     assert product["plugin_snapshot"]["self_ship_origin"] == "CN"
     page.close()
+
+
+def test_batch_collection_reads_zying_511_closed_shadow_root(browser):
+    page = browser.new_page()
+    detail_url = "https://articulo.mercadolibre.com.mx/MLM-12345-closed-shadow"
+    page.route(detail_url, lambda route: route.fulfill(body="""
+      <h1 class="ui-pdp-title">封闭浮层测试商品</h1>
+      <meta property="og:image" content="https://img.test/main.jpg">
+      <div id="zying-host"></div>
+    """, content_type="text/html"))
+    page.goto(detail_url)
+    page.evaluate("""() => {
+      const closedRoots = new WeakMap();
+      const host = document.querySelector('#zying-host');
+      const root = host.attachShadow({mode: 'closed'});
+      closedRoots.set(host, root);
+      root.innerHTML = '<div id="zyCardWrap">' +
+        '<div class="zying-meli-detail-metric-line">销量 88 半托管</div>' +
+        '<div class="zying-meli-detail-metric-line">重量 509 g 尺寸 11 x 10 x 17 cm</div>' +
+        '<img src="/assets/CN.svg"></div>';
+      window.chrome = {
+        dom: {openOrClosedShadowRoot: node => closedRoots.get(node) || node.shadowRoot || null},
+        runtime: {
+          onMessage: {addListener: listener => { window.receive = listener; }},
+          sendMessage: (_message, callback) => callback && callback({ok: true})
+        }
+      };
+    }""")
+    page.add_script_tag(path=str(EXTENSION / "collector-core.js"))
+    page.add_script_tag(path=str(EXTENSION / "content.js"))
+
+    result = page.evaluate("""new Promise(resolve => receive(
+      {type: 'EXTRACT_BATCH_PRODUCT'}, {}, resolve
+    ))""")
+
+    assert result["ok"] is True, result
+    snapshot = result["product"]["plugin_snapshot"]
+    assert snapshot["sales"] == 88
+    assert snapshot["fulfillment_type"] == "semi_managed"
+    assert snapshot["fulfillment_eligible"] is True
+    assert snapshot["self_ship_origin"] == "CN"
+    assert result["product"]["weight_g"] == 509
+    page.close()
+
+
+def test_real_chromium_extension_api_reads_closed_shadow_root(browser, tmp_path):
+    extension_path = str(EXTENSION.resolve())
+    candidates = [
+        os.environ.get("CONSOLE_TEST_BROWSER", ""),
+        "C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe",
+        browser.browser_type.executable_path,
+    ]
+    executable = next((p for p in candidates if p and Path(p).is_file()), None)
+    if not executable:
+        pytest.skip("Chromium is required")
+    context = browser.browser_type.launch_persistent_context(
+        str(tmp_path / "extension-profile"),
+        executable_path=executable,
+        headless=True,
+        args=[
+            f"--disable-extensions-except={extension_path}",
+            f"--load-extension={extension_path}",
+        ],
+    )
+    try:
+        detail_url = "https://articulo.mercadolibre.com.mx/MLM-54321-real-closed-shadow"
+        page = context.new_page()
+        page.route(detail_url, lambda route: route.fulfill(body="""
+          <meta charset="utf-8">
+          <h1 class="ui-pdp-title">真实扩展封闭浮层测试</h1>
+          <meta property="og:image" content="https://img.test/main.jpg">
+          <div id="zying-host"></div>
+          <script>
+            const root = document.querySelector('#zying-host').attachShadow({mode: 'closed'});
+            root.innerHTML = '<div id="zyCardWrap">' +
+              '<div class="zying-meli-detail-metric-line">销量 126 半托管</div>' +
+              '<div class="zying-meli-detail-metric-line">重量 618 g 尺寸 20 x 15 x 8 cm</div>' +
+              '<img src="/assets/CN.svg"></div>';
+          </script>
+        """, content_type="text/html"))
+        page.goto(detail_url)
+        page.wait_for_function("document.querySelector('#zeshun-plugin-launcher')")
+        workers = context.service_workers
+        worker = workers[0] if workers else context.wait_for_event("serviceworker")
+        result = worker.evaluate("""async url => {
+          const tabs = await chrome.tabs.query({url});
+          if (!tabs.length) return {ok: false, error: 'test tab not found'};
+          return chrome.tabs.sendMessage(tabs[0].id, {type: 'EXTRACT_BATCH_PRODUCT'});
+        }""", detail_url)
+    finally:
+        context.close()
+
+    assert result["ok"] is True, result
+    snapshot = result["product"]["plugin_snapshot"]
+    assert snapshot["sales"] == 126, snapshot
+    assert snapshot["fulfillment_type"] == "semi_managed"
+    assert snapshot["self_ship_origin"] == "CN"
+    assert result["product"]["weight_g"] == 618
+
+
+def test_real_extension_decodes_zying_protected_svg_metrics_across_isolated_worlds(browser, tmp_path):
+    extension_path = str(EXTENSION.resolve())
+    fixture = tmp_path / "zying-fixture"
+    fixture.mkdir()
+    (fixture / "manifest.json").write_text(json.dumps({
+        "manifest_version": 3,
+        "name": "ZYing protected metric fixture",
+        "version": "1.0.0",
+        "content_scripts": [{
+            "matches": ["https://articulo.mercadolibre.com.mx/*"],
+            "js": ["fixture.js"],
+            "run_at": "document_idle",
+        }],
+    }), encoding="utf-8")
+    (fixture / "fixture.js").write_text(r"""
+      (() => {
+        const escapeXml = value => String(value).replace(/[&<>"']/g, character => ({
+          '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&apos;'
+        })[character]);
+        const visual = value => {
+          const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="180" height="20">` +
+            `<text x="0" y="15">${escapeXml(value)}</text></svg>`;
+          const url = URL.createObjectURL(new Blob([svg], {type: 'image/svg+xml'}));
+          const span = document.createElement('span');
+          span.className = 'fixture-protected-visual';
+          span.style.cssText = `display:inline-block;width:180px;height:20px;background-image:url("${url}")`;
+          return span;
+        };
+        const line = (...values) => {
+          const row = document.createElement('div');
+          row.className = 'zying-meli-detail-metric-line';
+          values.forEach(value => row.append(visual(value)));
+          return row;
+        };
+        const host = document.createElement('div');
+        host.id = 'zying-protected-fixture-host';
+        document.body.append(host);
+        const root = host.attachShadow({mode: 'closed'});
+        const card = document.createElement('div');
+        card.id = 'zyCardWrap';
+        card.className = 'zying-meli-detail-wrap';
+        card.append(line('销量：', '88'));
+        card.append(line('重量：', '509g', '| $4.20'));
+        card.append(line('尺寸：', '11 × 10 × 17 cm', '计抛 0.31kg'));
+        card.append(line('净收益：', '$8.60'));
+        card.append(line('半托管'));
+        const flag = document.createElement('img');
+        flag.src = '/assets/CN.svg';
+        card.append(flag);
+        root.append(card);
+      })();
+    """, encoding="utf-8")
+    candidates = [
+        os.environ.get("CONSOLE_TEST_BROWSER", ""),
+        "C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe",
+        browser.browser_type.executable_path,
+    ]
+    executable = next((p for p in candidates if p and Path(p).is_file()), None)
+    if not executable:
+        pytest.skip("Chromium is required")
+    fixture_path = str(fixture.resolve())
+    context = browser.browser_type.launch_persistent_context(
+        str(tmp_path / "protected-svg-profile"),
+        executable_path=executable,
+        headless=True,
+        args=[
+            f"--disable-extensions-except={extension_path},{fixture_path}",
+            f"--load-extension={extension_path},{fixture_path}",
+        ],
+    )
+    try:
+        detail_url = "https://articulo.mercadolibre.com.mx/MLM-98765-protected-svg"
+        page = context.new_page()
+        page.route(detail_url, lambda route: route.fulfill(body="""
+          <meta charset="utf-8">
+          <h1 class="ui-pdp-title">智赢加密指标测试</h1>
+          <meta property="og:image" content="https://img.test/main.jpg">
+        """, content_type="text/html"))
+        page.goto(detail_url)
+        page.wait_for_function("document.querySelector('#zeshun-plugin-launcher')")
+        page.wait_for_function("document.querySelector('#zying-protected-fixture-host')")
+        workers = context.service_workers
+        worker = workers[0] if workers else context.wait_for_event("serviceworker")
+        result = worker.evaluate("""async url => {
+          const tabs = await chrome.tabs.query({url});
+          return chrome.tabs.sendMessage(tabs[0].id, {type: 'EXTRACT_BATCH_PRODUCT'});
+        }""", detail_url)
+    finally:
+        context.close()
+
+    assert result["ok"] is True, result
+    product = result["product"]
+    assert product["weight_g"] == 509
+    assert [product["package_length_cm"], product["package_width_cm"],
+            product["package_height_cm"]] == [11, 10, 17]
+    assert product["net_proceeds_usd"] == 8.6
+    assert product["scrape_status"] == "ok"
+    assert product["plugin_snapshot"]["read_method"] == "browser_extension_protected_svg"
 
 
 def test_zying_sales_and_fulfillment_are_the_final_collection_filter(browser):

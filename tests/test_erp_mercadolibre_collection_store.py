@@ -411,6 +411,10 @@ def test_profitability_queue_excludes_source_owned_rows_and_retries_incomplete_r
     assert "`source_type` NOT IN ('zying', 'ai_original')" in product_stale_sql
     assert "`source_type`" not in collection_pending_sql
     assert "`source_type`" not in collection_stale_sql
+    assert "fixed_commission_15_pct%%" in collection_stale_sql
+    # Mirror PyMySQL's percent formatting so a raw SQL LIKE wildcard cannot
+    # silently break the real profitability worker while fake cursors pass.
+    collection_stale_sql % tuple(map(repr, collection_stale_params))
     for sql in (product_stale_sql, collection_stale_sql):
         assert "`weight_g` > 0" in sql
         assert "`commission_amount_usd` IS NULL" in sql

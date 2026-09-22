@@ -238,6 +238,51 @@ def test_remote_update_pushes_price_package_and_net_proceeds_then_updates_local(
     assert local_calls[1][0] == "products"
 
 
+def test_remote_update_pushes_link_status_and_updates_local(monkeypatch):
+    api_calls = []
+    local_calls = []
+
+    class FakeClient:
+        def __init__(self, token):
+            assert token == "token-value"
+
+        def update_global_item(self, item_id, payload):
+            api_calls.append((item_id, payload))
+            return {}
+
+        def get_marketplace_item(self, item_id, *, attributes=None):
+            assert item_id == "MLM3308393921"
+            return {"id": item_id, "site_id": "MLM", "status": "paused"}
+
+    monkeypatch.setattr(bit_store_link_remote_update, "MercadoLibreClient", FakeClient)
+    monkeypatch.setattr(
+        bit_store_link_remote_update,
+        "bulk_update_store_links",
+        lambda ids, changes: local_calls.append((ids, dict(changes))) or {"changed": 1},
+    )
+    monkeypatch.setattr(
+        bit_store_link_remote_update,
+        "sync_pulled_product_fields_from_store_links",
+        lambda *_args: 0,
+    )
+
+    changes = bit_store_link_remote_update._normalize_changes({"status": "PAUSED"})
+    result = bit_store_link_remote_update._update_one_link(
+        {
+            "id": 18,
+            "token_id": 74,
+            "store_name": "测试店铺",
+            "item_id": "MLM3308393921",
+        },
+        {"id": 74, "access_token": "token-value"},
+        changes,
+    )
+
+    assert result["status"] == "success"
+    assert api_calls == [("MLM3308393921", {"status": "paused"})]
+    assert local_calls == [([18], {"status": "paused"})]
+
+
 def test_sync_run_records_three_day_clock_for_completed_store(monkeypatch):
     events = []
     token = {"id": 8, "display_name": "自动同步店铺"}
@@ -911,6 +956,11 @@ def test_workbench_store_link_ui_and_routes():
     assert b'id="store-link-mercado-category-filter"' in response.data
     assert b'<select id="store-link-mercado-category-filter"' in response.data
     assert b'id="store-link-delete-button"' in response.data
+    assert b'id="store-link-pause-button"' in response.data
+    assert b'id="store-link-activate-button"' in response.data
+    assert b"updateStoreLinkStatus" in response.data
+    assert "暂停所选".encode("utf-8") in response.data
+    assert "上架所选".encode("utf-8") in response.data
     assert b'id="store-link-page-buttons"' in response.data
     assert b'id="store-link-sales-sort"' in response.data
     assert b'id="store-link-sync-log"' in response.data
@@ -1019,6 +1069,21 @@ def test_workbench_store_link_ui_and_routes():
     assert response.status_code == 202
     assert response.get_json()["data"]["running"] is True
     update.assert_called_once_with([1, 2], price=9.9, weight_g=500)
+
+    with patch.object(
+        workbench.bit_db_api,
+        "bulk_update_mercado_store_links",
+        return_value={
+            "started": True,
+            "state": {"running": True, "task_id": "remote-status-1", "total_links": 1},
+        },
+    ) as status_update:
+        response = client.post(
+            "/api/store-links/bulk-update",
+            json={"link_ids": [1], "status": "paused"},
+        )
+    assert response.status_code == 202
+    status_update.assert_called_once_with([1], status="paused")
 
     with patch.object(
         workbench.bit_db_api,

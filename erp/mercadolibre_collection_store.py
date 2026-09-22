@@ -3728,6 +3728,9 @@ def list_stale_profitability_items(
                     continue
                 legacy_collection_refresh = (
                     "NOT (LOWER(COALESCE(`profitability_source`, '')) "
+                    # PyMySQL formats parameterized statements with Python's
+                    # percent operator, so a literal SQL LIKE wildcard must
+                    # be doubled here.
                     "LIKE 'fixed_commission_15_pct%%') OR "
                     if table == COLLECTION_TABLE else ""
                 )

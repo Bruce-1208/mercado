@@ -1680,15 +1680,20 @@ def bulk_update_store_links(
     ids.sort()
     if not ids:
         raise ValueError("请至少勾选一条店铺链接")
-    allowed = (
+    numeric_allowed = (
         "price", "weight_g", "package_length_cm", "package_width_cm",
         "package_height_cm", "net_proceeds_usd",
     )
     clean_changes = {
         field: _decimal_change(field, changes[field])
-        for field in allowed
+        for field in numeric_allowed
         if field in changes and changes[field] not in (None, "")
     }
+    if "status" in changes and changes["status"] not in (None, ""):
+        status = str(changes["status"] or "").strip().lower()
+        if status not in {"active", "paused"}:
+            raise ValueError("店铺链接状态只能是 active 或 paused")
+        clean_changes["status"] = status
     if not clean_changes:
         raise ValueError("请至少填写一个需要批量更新的字段")
     assignments = [f"`{field}` = %s" for field in clean_changes]

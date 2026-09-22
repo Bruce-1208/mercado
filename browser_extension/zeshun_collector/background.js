@@ -831,6 +831,10 @@ chrome.action?.onClicked?.addListener(() => {
   openFloatingWindow().catch(() => {});
 });
 
+chrome.commands?.onCommand?.addListener(command => {
+  if (command === "open-zeshun") openFloatingWindow().catch(() => {});
+});
+
 chrome.windows.onRemoved?.addListener(async windowId => {
   const stored = await storageGet("local", [FLOATING_WINDOW_KEY]);
   if (Number(stored[FLOATING_WINDOW_KEY] || 0) === Number(windowId)) {
@@ -841,6 +845,9 @@ chrome.windows.onRemoved?.addListener(async windowId => {
 chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
   const run = async () => {
     switch (message && message.type) {
+      case "OPEN_FLOATING_WINDOW":
+        await openFloatingWindow();
+        return {ok: true};
       case "OPEN_PRODUCT_SEARCH": {
         const tab = await chrome.tabs.create({url: productSearchUrl(message.country, message.keyword), active: true});
         const saved = await storageGet("local", ["productBatchOptions"]);
