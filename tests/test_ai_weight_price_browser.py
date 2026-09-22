@@ -943,9 +943,93 @@ def test_detail_fallback_never_accepts_wrong_or_stale_id(page, scenario):
         page.evaluate("window.showProduct=()=>{document.querySelector('.h1').textContent='MLM123456';document.querySelector('textarea').value='blue cup'}")
     else:
         page.evaluate("document.body.append(document.querySelector('.curd-detail-wrap').cloneNode(true))")
-    adapter = Browser(validate({}), threading.Event(), lambda *args: None)
+    adapter = Browser(validate({}), threading.Event(), lambda *args, **kwargs: None)
     with pytest.raises(ValueError):
         adapter.erp_goods_id(page, page.locator(".product-item").first, record, timeout=.3)
+
+
+def closable_product_detail_fixture(page):
+    record = product_detail_fixture(page)
+    page.evaluate('''() => {
+      const detail = document.querySelector('.curd-detail-wrap');
+      detail.insertAdjacentHTML('afterbegin', '<button class="crud-detail-close">关闭</button>');
+      detail.querySelector('button').onclick = () => {detail.hidden = true;};
+      const show = window.showProduct;
+      window.showProduct = (id, title) => {detail.hidden = false; show(id, title);};
+    }''')
+    return record
+
+
+def test_detail_fallback_reopens_already_selected_product_with_same_id(page):
+    record = closable_product_detail_fixture(page)
+    page.evaluate("showProduct(101, 'blue cup');window.clicked=0")
+    adapter = Browser(validate({}), threading.Event(), lambda *args, **kwargs: None)
+
+    assert adapter.erp_goods_id(page, page.locator('.product-item').first, record) == '101'
+    assert page.evaluate('window.clicked') == 1
+
+
+def test_detail_fallback_recovers_after_first_click_does_not_load(page):
+    record = closable_product_detail_fixture(page)
+    page.evaluate('''() => {
+      const show = window.showProduct;
+      window.attempts = 0;
+      window.showProduct = (id, title) => {if (++window.attempts === 2) show(id, title);};
+    }''')
+    events = []
+    adapter = Browser(validate({}), threading.Event(), lambda message, **kw: events.append(message))
+
+    assert adapter.erp_goods_id(page, page.locator('.product-item').first, record, timeout=.35) == '101'
+    assert page.evaluate('window.attempts') == 2
+    assert any('重试一次' in event for event in events)
+    assert any('"root_count": 0' in event for event in events)
+
+
+def test_detail_fallback_does_not_accept_old_fields_during_header_transition(page):
+    record = closable_product_detail_fixture(page)
+    page.evaluate('''() => {
+      window.showProduct = () => {
+        document.querySelector('.curd-detail-wrap').hidden = false;
+        document.querySelector('.h1').textContent = '202';
+        document.querySelector('textarea').value = 'blue cup';
+        setTimeout(() => {document.querySelector('textarea').value = 'different product';}, 50);
+      };
+    }''')
+    events = []
+    adapter = Browser(validate({}), threading.Event(), lambda message, **kw: events.append(message))
+
+    with pytest.raises(ValueError, match='重试后仍无法核对'):
+        adapter.erp_goods_id(page, page.locator('.product-item').first, record, timeout=.35)
+    assert sum('智赢详情编号读取超时' in event for event in events) == 2
+    assert any('"id": "202"' in event and '"title_match": false' in event for event in events)
+
+
+def test_detail_fallback_rejects_card_replaced_during_retry(page):
+    record = product_detail_fixture(page)
+    page.evaluate('''() => {
+      window.showProduct = () => {
+        window.clicked++;
+        document.querySelector('.product-title').textContent = 'replacement product';
+      };
+    }''')
+    adapter = Browser(validate({}), threading.Event(), lambda *args, **kwargs: None)
+    with pytest.raises(ValueError, match='列表商品.*发生变化'):
+        adapter.erp_goods_id(page, page.locator('.product-item').first, record, timeout=.3)
+    assert page.evaluate('window.clicked') == 1
+
+
+def test_detail_fallback_does_not_retry_after_stop(page):
+    from erp.ai_weight_price.browser import Stopped
+    record = product_detail_fixture(page)
+    page.evaluate('() => {window.showProduct = () => {window.clicked++;};}')
+    stop = threading.Event()
+    def log(message, **kwargs):
+        if '读取超时' in message:
+            stop.set()
+    adapter = Browser(validate({}), stop, log)
+    with pytest.raises(Stopped):
+        adapter.erp_goods_id(page, page.locator('.product-item').first, record, timeout=.3)
+    assert page.evaluate('window.clicked') == 1
 
 
 def test_explicit_card_id_is_used_and_bad_custom_selector_is_not_ignored(page):

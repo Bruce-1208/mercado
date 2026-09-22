@@ -53,13 +53,14 @@ CATEGORY_SET = """(element,wanted) => {
 ERP_DETAIL_ID_READ = """(page, expected) => {
   const visible=e=>e.getClientRects().length>0&&getComputedStyle(e).visibility!=='hidden';
   const roots=Array.from(page.querySelectorAll('.curd-detail-wrap')).filter(visible);
-  if(roots.length!==1)return {id:'',ambiguous:roots.length>1};
+  if(roots.length!==1)return {id:'',ambiguous:roots.length>1,root_count:roots.length};
   const root=roots[0],headers=Array.from(root.querySelectorAll('.crud-detail-header .h1')).filter(visible);
-  if(headers.length!==1)return {id:'',ambiguous:headers.length>1};
+  if(headers.length!==1)return {id:'',ambiguous:headers.length>1,root_count:1,header_count:headers.length};
   const normalize=value=>String(value||'').replace(/\\s+/g,' ').trim();
   const titles=Array.from(root.querySelectorAll("textarea[placeholder='请输入内容']")).map(e=>normalize(e.value));
   const images=Array.from(root.querySelectorAll('img.ant-image-img')).map(e=>e.currentSrc||e.src);
-  return {id:normalize(headers[0].textContent),
+  return {id:normalize(headers[0].textContent),root_count:1,header_count:1,
+    titles:titles.filter(Boolean).slice(0,4).map(value=>value.slice(0,160)),image_count:images.length,
     title_match:!!expected.title&&titles.includes(normalize(expected.title)),
     image_match:!!expected.main_image_url&&images.includes(expected.main_image_url)};
 }"""
@@ -660,27 +661,71 @@ class Browser:
         before = body.evaluate(ERP_DETAIL_ID_READ, record)
         if before.get("ambiguous"):
             raise ValueError("智赢存在多个商品详情，无法确认产品编号，已停止采集")
-        previous_id = self.normalize_erp_id(before.get("id", ""))
         self.log("商品卡片未展示ID，正在打开智赢详情读取产品编号：" + record["title"])
-        self.check(page)
-        self.unique(row, "erp_title").click()
-        deadline = time.monotonic() + timeout
-        while True:
+        # A selected card may already be open (including on a resumed run).
+        # Close the old panel before clicking so the same legitimate ID can be
+        # read afresh. Merely dropping the previous-ID check accepts stale data.
+        for attempt in range(1, 3):
             self.check(page)
-            current = body.evaluate(ERP_DETAIL_ID_READ, record)
-            if current.get("ambiguous"):
-                raise ValueError("智赢详情产品编号不唯一，已停止采集")
-            raw_id = current.get("id", "")
-            key = self.normalize_erp_id(raw_id)
-            if key and key != previous_id and (current.get("title_match") or current.get("image_match")):
-                if not re.fullmatch(r"[1-9]\d*", key):
-                    raise ValueError("智赢详情未返回有效的ERP产品编号，已停止采集")
-                self.log("已从智赢详情读取产品编号：" + key)
-                return key
-            if time.monotonic() >= deadline:
-                raise ValueError("商品卡片没有ID，打开详情后仍未读到与目标商品匹配的新产品编号；请检查智赢详情是否正常加载")
-            if self.stop.wait(.25):
-                raise Stopped("操作已停止")
+            self.focus(page)
+            if "login" in page.url.lower():
+                raise ValueError("智赢登录已失效，请重新登录并确认")
+            before = body.evaluate(ERP_DETAIL_ID_READ, record)
+            if before.get("ambiguous"):
+                raise ValueError("智赢存在多个商品详情，无法确认产品编号，已停止采集")
+            close = page.locator(".curd-detail-wrap:visible .crud-detail-close:visible")
+            if before.get("root_count") == 1 and close.count() == 1:
+                close.click()
+                close_deadline = time.monotonic() + min(timeout, 3)
+                while True:
+                    self.check(page)
+                    before = body.evaluate(ERP_DETAIL_ID_READ, record)
+                    if before.get("root_count") == 0:
+                        break
+                    if time.monotonic() >= close_deadline:
+                        raise ValueError("智赢旧商品详情未能关闭，已停止采集以避免读取旧编号")
+                    if self.stop.wait(.1):
+                        raise Stopped("操作已停止")
+            previous_id = self.normalize_erp_id(before.get("id", ""))
+            # Playwright locators are resolved again after a rerender. Never
+            # retry a positional locator that now points at a different card.
+            title = self.value(row, "erp_title", required=True)
+            image = urljoin(page.url, self.value(row, "erp_image", "src"))
+            if title != record["title"] or (record.get("main_image_url") and image != record["main_image_url"]):
+                raise ValueError("智赢列表商品在读取详情前发生变化，已停止采集以避免编号错配")
+            self.unique(row, "erp_title").click()
+            deadline = time.monotonic() + timeout
+            stable_id = ""
+            while True:
+                self.check(page)
+                if "login" in page.url.lower():
+                    raise ValueError("智赢登录已失效，请重新登录并确认")
+                current = body.evaluate(ERP_DETAIL_ID_READ, record)
+                if current.get("ambiguous"):
+                    raise ValueError("智赢详情产品编号不唯一，已停止采集")
+                key = self.normalize_erp_id(current.get("id", ""))
+                matched = key and key != previous_id and (current.get("title_match") or current.get("image_match"))
+                if matched:
+                    if not re.fullmatch(r"[1-9]\d*", key):
+                        raise ValueError("智赢详情未返回有效的ERP产品编号，已停止采集")
+                    if key == stable_id:
+                        self.log("已从智赢详情读取产品编号：" + key)
+                        return key
+                stable_id = key if matched else ""
+                if time.monotonic() >= deadline:
+                    diagnostic = {"attempt": attempt, "source_page": record.get("source_page"),
+                                  "source_index": record.get("source_index"), "title": record["title"],
+                                  "previous_id": previous_id, "observed": current}
+                    self.log("智赢详情编号读取超时：" + json.dumps(diagnostic, ensure_ascii=False), level="WARNING")
+                    break
+                if self.stop.wait(.25):
+                    raise Stopped("操作已停止")
+            if attempt == 1:
+                self.log("智赢详情尚未完成商品核对，重新打开当前商品后重试一次", level="WARNING")
+        raise ValueError("商品卡片没有ID，重新打开详情重试后仍无法核对目标商品编号；"
+                         f"原编号={previous_id or '空'}，当前编号={key or '空'}，"
+                         f"标题匹配={bool(current.get('title_match'))}，主图匹配={bool(current.get('image_match'))}；"
+                         "请查看智赢详情编号读取超时日志")
 
     def collect(self, store, on_task=None):
         selection = selection_params(self.config.get("run_selection"), self.config)
