@@ -20,6 +20,7 @@ from bit import bit_appeal_ai, bit_config, mercado_infraction_sync
 from bit.bit_api import closeBrowser
 from bit.bit_collection_control import terminate_process_pool
 from bit.bit_db_api import (
+    DatabaseAPIAuthError,
     get_latest_reputation_info,
     get_window_anomalies,
     list_mercado_prohibited_listings,
@@ -242,8 +243,10 @@ def build_weighted_site_schedule(
 
 
 def _daily_browser_worker_limit():
+    from bit.bit_browser_lifecycle import browser_window_limit
+
     try:
-        return max(
+        requested = max(
             1,
             int(
                 os.getenv(
@@ -253,7 +256,10 @@ def _daily_browser_worker_limit():
             ),
         )
     except (TypeError, ValueError):
-        return DEFAULT_DAILY_BROWSER_WORKER_LIMIT
+        requested = DEFAULT_DAILY_BROWSER_WORKER_LIMIT
+    # Extra processes otherwise time out after 180s waiting for the same finite
+    # slots while admitted shops spend minutes opening and using the chat.
+    return min(requested, browser_window_limit())
 
 
 def _is_bit_browser_list_rate_limited(value):
@@ -2080,7 +2086,8 @@ def _run_ai_appeal_once_locked(
     if int(requested_workers) > worker_count:
         print(
             f"{get_now_time()} AI 申诉并发已从 {requested_workers} 限制为 "
-            f"{worker_count}，可通过 BIT_DAILY_BROWSER_WORKER_LIMIT 调整<br>"
+            f"{worker_count}，同时受 BIT_DAILY_BROWSER_WORKER_LIMIT 和 "
+            f"BIT_BROWSER_MAX_OPEN_WINDOWS 限制<br>"
         )
     results = list(paused_results)
     print(
@@ -2456,6 +2463,10 @@ def _loop_ai_appeal_locked(
             )
             for key, count in task_execution_counts(round_result).items():
                 execution_counts[key] = execution_counts.get(key, 0) + count
+        except DatabaseAPIAuthError:
+            # Repeating the round cannot restore a revoked credential or an
+            # expired task lease. Let the worker report a terminal error.
+            raise
         except Exception as e:
             execution_counts["failed"] = execution_counts.get("failed", 0) + 1
             print(

@@ -20,6 +20,10 @@ def _resolve_db_mode():
 DB_MODE = _resolve_db_mode()
 
 
+class DatabaseAPIAuthError(RuntimeError):
+    """Credentials or the Agent's active-job authorization need operator action."""
+
+
 def _local_call(function_name, *args, **kwargs):
     """延迟导入 MySQL 实现，避免 Windows/API 客户端加载本地数据库依赖。"""
     from bit import bit_mysql
@@ -55,10 +59,27 @@ def _request(method, path, **kwargs):
     headers = _headers()
     if "files" in kwargs:
         headers.pop("Content-Type", None)
-    try:
-        response = DB_API_SESSION.request(method, url, headers=headers, timeout=timeout, **kwargs)
-    except requests.RequestException as e:
-        raise RuntimeError(f"数据库接口请求失败：{url}，请确认 bit_interface.py 已启动。原因：{e}") from e
+    # Only reads can be replayed safely. A timed-out POST may already have
+    # created a task or written a record on the server.
+    attempts = 3 if method.upper() in {"GET", "HEAD"} else 1
+    for attempt in range(attempts):
+        try:
+            response = DB_API_SESSION.request(method, url, headers=headers, timeout=timeout, **kwargs)
+        except requests.RequestException as e:
+            if attempt + 1 < attempts and isinstance(e, (requests.ConnectionError, requests.Timeout)):
+                time.sleep(attempt + 1)
+                continue
+            raise RuntimeError(f"数据库接口请求失败：{url}，请确认 bit_interface.py 已启动。原因：{e}") from e
+        if response.status_code in (401, 403):
+            raise DatabaseAPIAuthError(
+                f"数据库接口鉴权失败：{path}，状态码：{response.status_code}；"
+                "请检查 Agent 凭证和任务是否仍在运行，更新 Agent 后重新启动任务"
+            )
+        if response.status_code in (500, 502, 503, 504) and attempt + 1 < attempts:
+            response.close()
+            time.sleep(attempt + 1)
+            continue
+        break
 
     try:
         payload = response.json()
@@ -115,13 +136,13 @@ def create_ai_video_job(uploads, form):
     )
 
 
-def list_ai_video_jobs(limit=30):
+def list_ai_video_jobs(limit=30, user_id=None):
     if DB_MODE == "mysql":
         from bit.bit_ai_video import list_jobs
 
-        return list_jobs(limit=limit)
+        return list_jobs(limit=limit, user_id=user_id)
     return _request(
-        "GET", "/api/db/ai-videos/jobs", params={"limit": int(limit or 30)}, timeout=60
+        "GET", "/api/db/ai-videos/jobs", params={"limit": int(limit or 30), "user_id": user_id or ""}, timeout=60
     )
 
 
@@ -143,21 +164,22 @@ def update_ai_video_job(job_id, changes):
     )
 
 
-def get_ai_video_settings():
+def get_ai_video_settings(user_id=None):
     if DB_MODE == "mysql":
         from bit.bit_ai_video import provider_settings
 
-        return provider_settings()
-    return _request("GET", "/api/db/ai-videos/settings", timeout=60)
+        return provider_settings(user_id)
+    return _request("GET", "/api/db/ai-videos/settings", params={"user_id": user_id or ""}, timeout=60)
 
 
-def update_ai_video_settings(changes):
+def update_ai_video_settings(changes, user_id=None):
     if DB_MODE == "mysql":
         from bit.bit_ai_video import save_provider_settings
 
-        return save_provider_settings(changes)
+        save_provider_settings(changes)
+        return provider_settings(user_id)
     return _request(
-        "PATCH", "/api/db/ai-videos/settings", json=dict(changes or {}), timeout=60
+        "PATCH", "/api/db/ai-videos/settings", params={"user_id": user_id or ""}, json=dict(changes or {}), timeout=60
     )
 
 
@@ -389,6 +411,8 @@ def collect_live_detection_infractions(
         try:
             state = _request("GET", status_path, timeout=30) or {}
             transient_failures = 0
+        except DatabaseAPIAuthError:
+            raise
         except RuntimeError:
             transient_failures += 1
             if transient_failures >= 3:
@@ -2028,7 +2052,7 @@ def list_mercado_collection_items(
 
 
 def list_mercado_product_items(
-    search="", limit=500, offset=0, source_type="", review_status="",
+    search="", limit=500, offset=0, source_type="", ai_status="", review_status="",
     publish_status="", weight_min=None, weight_max=None, price_min=None,
     price_max=None, net_proceeds_min=None, net_proceeds_max=None,
     date_from="", date_to="", management_category_id=None,
@@ -2039,6 +2063,7 @@ def list_mercado_product_items(
         "limit": limit,
         "offset": offset,
         "source_type": str(source_type or "").strip().lower(),
+        "ai_status": str(ai_status or "").strip().lower(),
         "review_status": str(review_status or "").strip().lower(),
         "publish_status": str(publish_status or "").strip().lower(),
         "weight_min": weight_min,

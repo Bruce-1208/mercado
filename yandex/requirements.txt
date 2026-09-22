@@ -7,3 +7,4 @@ pydantic==2.11.7
 python-multipart==0.0.20
 python-dotenv==1.2.3
 uvicorn[standard]==0.35.0
+DBUtils>=3.1,<4

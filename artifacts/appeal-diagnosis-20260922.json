@@ -1,0 +1,37 @@
+{
+  "window_start": "2026-09-21 21:08:43",
+  "window_end": "2026-09-22 21:08:43",
+  "timezone": "Asia/Shanghai",
+  "agent_event_count": 5920,
+  "agent_job_count": 14,
+  "counts": {
+    "site_validation_attempt": 892,
+    "site_login": 21,
+    "site_no_chat": 199,
+    "round_other": 2,
+    "site_navigation": 16,
+    "round_forbidden": 355,
+    "site_other": 1,
+    "missing_dependency": 1,
+    "round_http_502": 6,
+    "site_browser_capacity": 65,
+    "round_http_500": 12
+  },
+  "example_event_ids": {
+    "site_validation_attempt": 72680,
+    "site_login": 72682,
+    "site_no_chat": 72689,
+    "round_other": 73347,
+    "site_navigation": 73361,
+    "round_forbidden": 73384,
+    "site_other": 73462,
+    "missing_dependency": 73746,
+    "round_http_502": 75296,
+    "site_browser_capacity": 75607,
+    "round_http_500": 78303
+  },
+  "server_log_counts": {
+    "mercado_network_retry": 7646,
+    "mysql_1040": 773
+  }
+}

@@ -8,8 +8,9 @@
 * { box-sizing: border-box; }
 
 body {
-  width: 400px;
-  max-height: 600px;
+  width: 100%;
+  min-width: 400px;
+  height: 100vh;
   margin: 0;
   background: linear-gradient(180deg, #f7faff 0, #fff 160px);
   overflow-y: auto;

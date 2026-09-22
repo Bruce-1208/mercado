@@ -11,6 +11,31 @@ function aiOriginalEscape(value) {
     .replaceAll(">", "&gt;").replaceAll('"', "&quot;").replaceAll("'", "&#039;");
 }
 
+function aiOriginalDisplayImageUrl(value) {
+  const source = String(value || "").trim();
+  if (!source) return "";
+  try {
+    const parsed = new URL(source, window.location.origin);
+    const hostname = parsed.hostname.toLowerCase();
+    if (["127.0.0.1", "localhost"].includes(hostname) && parsed.pathname.startsWith("/api/ai-original-products/images/")) {
+      return `${parsed.pathname}${parsed.search}`;
+    }
+    if (/^cbu\d+\.alicdn\.com$/.test(hostname) && parsed.pathname.startsWith("/img/ibank/")) {
+      return `/api/ai-original-products/source-image?url=${encodeURIComponent(parsed.href)}`;
+    }
+  } catch (_error) {
+    return "";
+  }
+  return source;
+}
+
+function aiOriginalImageError(image) {
+  image.onerror = null;
+  image.removeAttribute("src");
+  image.classList.add("is-missing");
+  image.alt = "主图加载失败";
+}
+
 function aiOriginalStatus(message, kind = "") {
   const node = document.getElementById("ai-original-task-status");
   if (node) { node.textContent = message; node.className = `ai-original-status ${kind}`.trim(); }
@@ -51,6 +76,58 @@ function aiOriginalAttributeById(id) {
   return aiOriginalCurrentAttributes().find(item => String(item?.id || "").toUpperCase() === String(id || "").toUpperCase()) || {};
 }
 
+function aiOriginalAttributeNameKey(value) {
+  const compact = String(value || "").toLocaleLowerCase().normalize("NFKD")
+    .replace(/[\u0300-\u036f]/g, "").replace(/[^\p{L}\p{N}]+/gu, "");
+  const aliases = {
+    "颜色": "color", "色": "color", color: "color", colour: "color", cor: "color",
+    "材质": "material", "材料": "material", material: "material", materiais: "material", materia: "material",
+    "品牌": "brand", "牌子": "brand", brand: "brand", marca: "brand",
+    "尺寸": "size", "尺码": "size", "大小": "size", size: "size", tamano: "size", talla: "size", tamanho: "size",
+    "长度": "length", length: "length", longitud: "length", comprimento: "length",
+    "宽度": "width", width: "width", ancho: "width", largura: "width",
+    "高度": "height", height: "height", altura: "height",
+    "重量": "weight", weight: "weight", peso: "weight",
+    "图案": "pattern", pattern: "pattern", diseno: "pattern", estampa: "pattern",
+    "风格": "style", "款式": "style", style: "style", estilo: "style",
+    "性别": "gender", gender: "gender", genero: "gender", sexo: "gender",
+    "适用年龄": "age", "年龄": "age", age: "age", edad: "age"
+  };
+  return aliases[compact] || compact;
+}
+
+function aiOriginalSourceAttributeRows() {
+  const original = aiOriginalEditorState?.row?.original_1688 || {};
+  const properties = original.properties;
+  const rows = Array.isArray(properties)
+    ? properties
+    : (properties && typeof properties === "object" ? Object.entries(properties).map(([name, value]) => ({name, value})) : []);
+  return rows.map((raw, index) => {
+    if (!raw || typeof raw !== "object") return null;
+    const name = raw.name ?? raw.key ?? raw.label ?? raw.attribute ?? raw.property_name ?? raw.name_cn ?? "";
+    const value = raw.value_name ?? raw.value ?? raw.text ?? raw.content ?? raw.display_value ?? raw.valueName ?? raw.val ?? raw.values ?? "";
+    const id = raw.id ?? raw.attribute_id ?? raw.attributeId ?? raw.nameid ?? raw.name_id ?? raw.key_id ?? raw.keyId ?? "";
+    const valueId = raw.value_id ?? raw.valueId ?? raw.valueid ?? raw.option_id ?? raw.optionId ?? "";
+    if (!String(name).trim() || !String(value).trim()) return null;
+    return {id: String(id || `SOURCE_ATTRIBUTE_${index + 1}`), name: String(name).trim(), value_name: String(value).trim(), value_id: String(valueId || "").trim()};
+  }).filter(Boolean);
+}
+
+function aiOriginalAttributeForDefinition(definition) {
+  const id = String(definition?.id || "").toUpperCase();
+  const nameKey = aiOriginalAttributeNameKey(definition?.name || id);
+  const current = aiOriginalCurrentAttributes();
+  const byId = current.find(item => String(item?.id || "").toUpperCase() === id);
+  if (byId) return byId;
+  const byName = current.find(item => [item?.name, item?.name_es, item?.name_pt].some(value => aiOriginalAttributeNameKey(value) === nameKey));
+  if (byName) return byName;
+  const source = aiOriginalSourceAttributeRows();
+  return source.find(item => {
+    const sourceId = String(item.id || "").toUpperCase();
+    return sourceId === id || aiOriginalAttributeNameKey(item.name) === nameKey;
+  }) || {};
+}
+
 function aiOriginalCategoryFieldId(id) {
   return `ai-original-editor-attr-${String(id || "field").replace(/[^a-zA-Z0-9_-]/g, "_")}`;
 }
@@ -62,7 +139,10 @@ function renderAiOriginalCategoryFields() {
   const schema = Array.isArray(aiOriginalEditorState?.schema) ? aiOriginalEditorState.schema : [];
   const render = definitions => definitions.length ? definitions.map(definition => {
     const id = String(definition.id || "");
-    const current = aiOriginalAttributeById(id);
+    // Match stable IDs first, then localized names, then the raw 1688
+    // properties. This keeps category fields populated even when the model
+    // returned a translated label without Mercado's attribute ID.
+    const current = aiOriginalAttributeForDefinition(definition);
     const value = aiOriginalAttributeValue(current);
     const options = Array.isArray(definition.values) ? definition.values : [];
     const control = options.length
@@ -119,7 +199,7 @@ function collectAiOriginalEditorAttributes() {
     const value = String(control.value || "").trim();
     const id = control.dataset.attributeId || "";
     if (!id || !value) return;
-    const current = {...aiOriginalAttributeById(id)};
+    const current = {...aiOriginalAttributeForDefinition({id, name: control.dataset.attributeName || id})};
     current.id = id;
     current.name = control.dataset.attributeName || current.name || id;
     if (aiOriginalAttributeValue(current) !== value) {
@@ -154,18 +234,18 @@ function renderAiOriginalProducts() {
   grid.innerHTML = rows.length ? rows.map(row => {
     const original = row.original_1688 || {};
     const status = String(row.ai_status || "pending");
-    const sourceImage = original.main_image_url || (original.images || [])[0] || "";
-    const aiImage = row.main_image_url || "";
+    const sourceImage = aiOriginalDisplayImageUrl(original.main_image_url || (original.images || [])[0] || "");
+    const aiImage = aiOriginalDisplayImageUrl(row.main_image_url || "");
     const titleEs = row.title_es || "等待 AI 生成西班牙语标题";
     const titlePt = row.title_pt || "等待 AI 生成葡萄牙语标题";
     const aiAttributes = aiOriginalAttributes(row.ai_original?.attributes);
     const ready = status === "completed" && aiAttributes.some(attribute => !["BRAND", "ITEM_CONDITION"].includes(String(attribute.id || "").toUpperCase()));
-    const aiImageReady = row.ai_original?.image_generation_method === "ai_image_edit" && aiImage.includes("-ai-white.jpg");
+    const aiImageReady = ["ai_image_edit", "local_background_removal"].includes(row.ai_original?.image_generation_method) && aiImage.includes("-ai-white.jpg");
     return `<article class="ai-original-card">
       <input type="checkbox" value="${Number(row.id)}" ${aiOriginalSelected.has(Number(row.id)) ? "checked" : ""} onchange="toggleAiOriginalProduct(${Number(row.id)}, this.checked)">
       <div class="ai-original-image-pair">
-        <figure><img src="${aiOriginalEscape(sourceImage)}" alt="1688 原始主图" loading="lazy"><figcaption>1688 原图</figcaption></figure>
-        <figure><img src="${aiOriginalEscape(aiImage)}" alt="AI 美客多白底主图" loading="lazy"><figcaption>AI 白底主图</figcaption></figure>
+        <figure>${sourceImage ? `<img src="${aiOriginalEscape(sourceImage)}" alt="1688 原始主图" loading="lazy" referrerpolicy="no-referrer" onerror="aiOriginalImageError(this)">` : '<span class="ai-original-image-placeholder">暂无原图</span>'}<figcaption>1688 原图</figcaption></figure>
+        <figure>${aiImage ? `<img src="${aiOriginalEscape(aiImage)}" alt="AI 美客多白底主图" loading="lazy" referrerpolicy="no-referrer" onerror="aiOriginalImageError(this)">` : '<span class="ai-original-image-placeholder">待生成</span>'}<figcaption>AI 白底主图</figcaption></figure>
       </div>
       <div class="ai-original-source"><span class="ai-original-section-label source">1688 原始资料</span><h4>${aiOriginalEscape(original.title || row.title)}</h4><p>1688 编号：${aiOriginalEscape(original.source_1688_item_id || row.source_item_id)}</p><p>采购价：${aiOriginalEscape(original.price ?? row.price ?? "-")} CNY</p><a href="${aiOriginalEscape(original.source_url || row.source_url || "#")}" target="_blank" rel="noopener">打开 1688 详情页 ↗</a>${row.ai_error ? `<p class="bad">${aiOriginalEscape(row.ai_error)}</p>` : ""}</div>
       <div class="ai-original-copy"><span class="ai-original-section-label generated">AI 美客多刊登稿</span><strong>西语标题 ${titleEs.length}/60</strong><p class="${titleEs.length > 60 ? "bad" : ""}">${aiOriginalEscape(titleEs)}</p><strong>葡语标题 ${titlePt.length}/60</strong><p class="${titlePt.length > 60 ? "bad" : ""}">${aiOriginalEscape(titlePt)}</p><strong>AI 商品属性（${aiAttributes.length}）</strong>${renderAiOriginalAttributes(row.ai_original?.attributes)}<details><summary>查看 AI 双语详情</summary><p>${aiOriginalEscape(row.description_es || "待生成西语详情")}</p><p>${aiOriginalEscape(row.description_pt || "待生成葡萄牙语详情")}</p></details><div class="ai-original-readiness"><span class="${ready ? "ok" : "pending"}">${ready ? "✓" : "!"} AI 属性</span><span class="${aiImageReady ? "ok" : "pending"}">${aiImageReady ? "✓" : "!"} AI 白底主图</span><span class="${row.category_id ? "ok" : "pending"}">${row.category_id ? "✓" : "!"} CBT 类目</span></div><button class="secondary ai-original-edit-button" type="button" onclick="openAiOriginalEditor(${Number(row.id)})">编辑分类、字段、详情与变体</button></div>
@@ -337,8 +417,17 @@ async function loadAiOriginalProducts() {
     const payload = await response.json();
     if (!response.ok || payload.status !== "success") throw new Error(payload.message || `HTTP ${response.status}`);
     aiOriginalRows = payload.data?.rows || [];
+    let transferredIds = [];
+    try {
+      const stored = JSON.parse(localStorage.getItem("mercado.aiOriginalSelected") || "[]");
+      transferredIds = Array.isArray(stored) ? stored.map(Number).filter(id => id > 0) : [];
+    } catch (_error) {}
+    transferredIds.forEach(id => aiOriginalSelected.add(id));
     const validIds = new Set(aiOriginalRows.map(row => Number(row.id)));
     aiOriginalSelected = new Set([...aiOriginalSelected].filter(id => validIds.has(id)));
+    if (transferredIds.length) {
+      try { localStorage.removeItem("mercado.aiOriginalSelected"); } catch (_error) {}
+    }
     renderAiOriginalProducts();
     aiOriginalStatus(`已加载 ${aiOriginalRows.length} 件 1688 产品`, "success");
   } catch (error) { aiOriginalStatus(`读取失败：${error.message || error}`, "error"); }

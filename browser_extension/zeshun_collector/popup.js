@@ -291,7 +291,10 @@ async function refreshState() {
 }
 
 async function initialize() {
-  [activeTab] = await chrome.tabs.query({active: true, currentWindow: true});
+  const normalTabs = await chrome.tabs.query({active: true, windowType: "normal"});
+  [activeTab] = normalTabs.sort(
+    (left, right) => Number(right.lastAccessed || 0) - Number(left.lastAccessed || 0)
+  );
   if (!activeTab || !activeTab.id) {
     pageStatus.textContent = "未找到当前标签页。";
     await refreshState();
@@ -1045,7 +1048,7 @@ productBatchStart.addEventListener("click", async () => {
     if (!response.ok) throw new Error(response.error || "启动采集失败");
     renderProductBatch(response.state);
     await loadProductBatchStatus();
-    showResult("批量采集已启动，关闭弹窗后会继续运行。", "");
+    showResult("批量采集已启动，关闭悬浮窗后会继续运行。", "");
   } catch (error) { showResult(error.message || String(error), "error"); }
   finally { productBatchBusy = false; syncProductBatchControls(); }
 });

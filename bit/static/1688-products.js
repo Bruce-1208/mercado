@@ -3,15 +3,60 @@
 let products1688Rows = [];
 let products1688Selected = new Set();
 let products1688Page = 1;
-const PRODUCTS_1688_PAGE_SIZE = 24;
+const PRODUCTS_1688_PAGE_SIZES = [50, 100, 200];
+let products1688PageSize = 50;
+
+function products1688ReviewOptions() {
+  return [
+    ["unreviewed", "未审核"],
+    ["approved", "已审核"],
+    ["suspected", "疑似风险"],
+    ["infringing", "侵权"],
+    ["risk", "待复核"]
+  ];
+}
 
 function products1688Escape(value) {
   return String(value ?? "").replaceAll("&", "&amp;").replaceAll("<", "&lt;")
     .replaceAll(">", "&gt;").replaceAll('"', "&quot;").replaceAll("'", "&#039;");
 }
 
+function products1688DisplayImageUrl(value) {
+  const source = String(value || "").trim();
+  if (!source) return "";
+  try {
+    const parsed = new URL(source, window.location.origin);
+    const hostname = parsed.hostname.toLowerCase();
+    if (/^cbu\d+\.alicdn\.com$/.test(hostname) && parsed.pathname.startsWith("/img/ibank/")) {
+      return `/api/ai-original-products/source-image?url=${encodeURIComponent(parsed.href)}`;
+    }
+  } catch (_error) {
+    return "";
+  }
+  return source;
+}
+
+function products1688ImageError(image) {
+  image.onerror = null;
+  image.removeAttribute("src");
+  image.classList.add("is-missing");
+  image.alt = "主图加载失败";
+}
+
 function products1688Original(row) {
   return row?.original_1688 && typeof row.original_1688 === "object" ? row.original_1688 : {};
+}
+
+function products1688SourceUrl(row) {
+  const original = products1688Original(row);
+  const source = String(original.source_url || row?.source_url || "").trim();
+  if (!source) return "";
+  try {
+    const url = new URL(source, window.location.origin);
+    return /^https?:$/i.test(url.protocol) ? url.href : "";
+  } catch (_error) {
+    return "";
+  }
 }
 
 function products1688Images(row) {
@@ -103,6 +148,8 @@ function products1688UpdateSelection() {
     selectAll.checked = visible > 0 && products1688Rows.every(row => products1688Selected.has(Number(row.id)));
     selectAll.indeterminate = count > 0 && !selectAll.checked;
   }
+  const reviewButton = document.getElementById("products-1688-review-submit");
+  if (reviewButton) reviewButton.disabled = count === 0 || !document.getElementById("products-1688-review-status")?.value;
 }
 
 function products1688RenderRows() {
@@ -112,26 +159,35 @@ function products1688RenderRows() {
   body.innerHTML = rows.length ? rows.map(row => {
     const original = products1688Original(row);
     const images = products1688Images(row);
-    const image = images[0] || "";
-    const sourceId = original.source_1688_item_id || String(original.source_item_id || row.source_item_id || "").replace(/^1688/, "");
+    const image = products1688DisplayImageUrl(images[0] || "");
     const title = original.title || row.title || "未命名商品";
+    const sourceUrl = products1688SourceUrl(row);
+    const imageMarkup = image
+      ? `<img class="p1688-thumb" src="${products1688Escape(image)}" alt="1688 商品主图" loading="lazy" referrerpolicy="no-referrer" onerror="products1688ImageError(this)">`
+      : `<span class="p1688-thumb"></span>`;
+    const linkedImage = sourceUrl
+      ? `<a class="p1688-product-image-link" href="${products1688Escape(sourceUrl)}" target="_blank" rel="noopener noreferrer" title="打开 1688 商品页">${imageMarkup}</a>`
+      : imageMarkup;
+    const linkedTitle = sourceUrl
+      ? `<a class="p1688-product-title-link" href="${products1688Escape(sourceUrl)}" target="_blank" rel="noopener noreferrer" title="打开 1688 商品页"><strong title="${products1688Escape(title)}">${products1688Escape(title)}</strong></a>`
+      : `<strong title="${products1688Escape(title)}">${products1688Escape(title)}</strong>`;
     const status = String(row.ai_status || "pending").toLowerCase();
     return `<tr>
-      <td class="p1688-check-cell"><input type="checkbox" aria-label="选择 ${products1688Escape(sourceId)}" ${products1688Selected.has(Number(row.id)) ? "checked" : ""} onchange="products1688Toggle(${Number(row.id)}, this.checked)"></td>
-      <td><div class="p1688-product-cell">${image ? `<img class="p1688-thumb" src="${products1688Escape(image)}" alt="1688 商品主图" loading="lazy" onerror="this.style.visibility='hidden'">` : `<span class="p1688-thumb"></span>`}<div class="p1688-product-copy"><strong title="${products1688Escape(title)}">${products1688Escape(title)}</strong><small>1688 商品编号 <span class="p1688-product-id">${products1688Escape(sourceId || "—")}</span></small></div></div></td>
+      <td class="p1688-check-cell"><input type="checkbox" aria-label="选择 ${products1688Escape(title)}" ${products1688Selected.has(Number(row.id)) ? "checked" : ""} onchange="products1688Toggle(${Number(row.id)}, this.checked)"></td>
+      <td><div class="p1688-product-cell">${linkedImage}<div class="p1688-product-copy">${linkedTitle}</div></div></td>
       <td title="${products1688Escape(products1688Category(row))}">${products1688Escape(products1688Category(row))}</td>
       <td><span class="p1688-price">${products1688Money(original.price ?? row.price)}</span><small class="p1688-muted"> CNY</small></td>
       <td>${row.net_proceeds_usd === null || row.net_proceeds_usd === undefined || row.net_proceeds_usd === "" ? '<span class="p1688-muted">—</span>' : `<span class="p1688-price">$${products1688Escape(Number(row.net_proceeds_usd).toFixed(2))}</span>`}</td>
       <td>${products1688Escape(products1688Weight(row))}</td>
       <td>${products1688Escape(products1688Dimensions(row))}</td>
-      <td><span class="p1688-status ${products1688Escape(String(row.review_status || "unreviewed"))}">${products1688Escape(products1688ReviewStatus(row))}</span></td>
+      <td><select class="p1688-review-select" aria-label="修改 ${products1688Escape(title)} 的审核状态" onchange="products1688UpdateReviewStatus([${Number(row.id)}], this.value, this)">${products1688ReviewOptions().map(([value, label]) => `<option value="${value}" ${String(row.review_status || "unreviewed") === value ? "selected" : ""}>${label}</option>`).join("")}</select></td>
       <td>${products1688Status(row) ? `<span class="p1688-status ${products1688Escape(status)}">${products1688Escape(products1688Status(row))}</span>` : "—"}</td>
       <td>${products1688Escape(products1688Date(original.collected_at || row.added_at))}</td>
-      <td><div class="p1688-row-actions"><button class="secondary" type="button" onclick="products1688OpenDetail(${Number(row.id)})">查看详情</button><button class="secondary" type="button" onclick="products1688OpenAiEditor(${Number(row.id)})">编辑刊登内容</button>${original.source_url ? `<a href="${products1688Escape(original.source_url)}" target="_blank" rel="noopener">打开1688</a>` : ""}</div></td>
+      <td><div class="p1688-row-actions"><button class="secondary" type="button" onclick="products1688OpenDetail(${Number(row.id)})">查看详情</button><button class="secondary" type="button" onclick="products1688OpenAiEditor(${Number(row.id)})">编辑刊登内容</button>${sourceUrl ? `<a href="${products1688Escape(sourceUrl)}" target="_blank" rel="noopener noreferrer">打开1688</a>` : ""}</div></td>
     </tr>`;
   }).join("") : '<tr><td class="p1688-empty" colspan="11">暂无 1688 商品；请先在 1688 商品页使用泽顺插件采集。</td></tr>';
   const total = Number(document.getElementById("products-1688-total-value")?.dataset.total || products1688Rows.length);
-  const totalPages = Math.max(1, Math.ceil(total / PRODUCTS_1688_PAGE_SIZE));
+  const totalPages = Math.max(1, Math.ceil(total / products1688PageSize));
   const indicator = document.getElementById("products-1688-page-indicator");
   if (indicator) indicator.textContent = `${products1688Page} / ${totalPages}`;
   const summary = document.getElementById("products-1688-list-summary");
@@ -159,17 +215,18 @@ function products1688ToggleAll(checked) {
 
 function products1688PageMove(delta) {
   const total = Number(document.getElementById("products-1688-total-value")?.dataset.total || 0);
-  const totalPages = Math.max(1, Math.ceil(total / PRODUCTS_1688_PAGE_SIZE));
+  const totalPages = Math.max(1, Math.ceil(total / products1688PageSize));
   products1688Page = Math.min(totalPages, Math.max(1, products1688Page + Number(delta || 0)));
   load1688Products(false);
 }
 
 function products1688Query() {
   const status = document.getElementById("products-1688-status-filter")?.value?.trim() || "";
-  const params = new URLSearchParams({limit: status ? "1000" : String(PRODUCTS_1688_PAGE_SIZE), offset: status ? "0" : String((products1688Page - 1) * PRODUCTS_1688_PAGE_SIZE)});
+  const params = new URLSearchParams({limit: String(products1688PageSize), offset: String((products1688Page - 1) * products1688PageSize)});
   const fields = {
     search: "products-1688-search",
     ai_status: "products-1688-status-filter",
+    review_status: "products-1688-review-filter",
     price_min: "products-1688-price-min",
     price_max: "products-1688-price-max",
     date_from: "products-1688-date-from",
@@ -180,6 +237,37 @@ function products1688Query() {
     if (value) params.set(name, value);
   });
   return params;
+}
+
+async function products1688UpdateReviewStatus(itemIds, reviewStatus, control = null) {
+  const ids = [...new Set((itemIds || []).map(Number).filter(value => value > 0))];
+  const status = String(reviewStatus || "").trim().toLowerCase();
+  if (!ids.length || !products1688ReviewOptions().some(([value]) => value === status)) return;
+  if (control) control.disabled = true;
+  products1688SetStatus("正在更新审核状态…");
+  try {
+    const response = await fetch("/api/mercado-products/review-status", {
+      method: "POST",
+      headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({product_item_ids: ids, review_status: status})
+    });
+    const payload = await response.json();
+    if (!response.ok || payload.status !== "success") throw new Error(payload.message || `HTTP ${response.status}`);
+    const changed = Number(payload.data?.changed || 0);
+    products1688SetStatus(`已更新 ${changed} 件产品的审核状态`, "success");
+    await load1688Products(false);
+  } catch (error) {
+    products1688SetStatus(`审核状态更新失败：${error.message || error}`, "error");
+    if (control) await load1688Products(false);
+  } finally {
+    const reviewButton = document.getElementById("products-1688-review-submit");
+    if (reviewButton) reviewButton.disabled = products1688Selected.size === 0 || !document.getElementById("products-1688-review-status")?.value;
+  }
+}
+
+async function products1688ApplyReviewStatus() {
+  const status = document.getElementById("products-1688-review-status")?.value || "";
+  await products1688UpdateReviewStatus([...products1688Selected], status);
 }
 
 async function load1688Products(resetPage = true) {
@@ -231,16 +319,15 @@ function products1688OpenDetail(id) {
   const images = products1688Images(row);
   const dialog = document.getElementById("products-1688-detail-dialog");
   if (!dialog) return;
-  const sourceId = original.source_1688_item_id || String(original.source_item_id || row.source_item_id || "").replace(/^1688/, "");
   const title = original.title || row.title || "未命名商品";
-  const mainImage = images[0] || "";
+  const sourceUrl = products1688SourceUrl(row);
+  const mainImage = products1688DisplayImageUrl(images[0] || "");
   document.getElementById("products-1688-detail-title").textContent = title;
-  document.getElementById("products-1688-detail-subtitle").textContent = `1688 商品编号 ${sourceId || "—"} · 采集于 ${products1688Date(original.collected_at || row.added_at)}`;
+  document.getElementById("products-1688-detail-subtitle").textContent = `采集于 ${products1688Date(original.collected_at || row.added_at)}`;
   document.getElementById("products-1688-detail-content").innerHTML = `<div class="p1688-detail-top">
-    <div class="p1688-gallery">${mainImage ? `<img class="p1688-detail-main-image" src="${products1688Escape(mainImage)}" alt="1688 商品主图">` : '<div class="p1688-empty">暂无商品图片</div>'}${images.slice(1).map(image => `<img src="${products1688Escape(image)}" alt="1688 商品图片" loading="lazy">`).join("")}</div>
+    <div class="p1688-gallery">${mainImage ? `${sourceUrl ? `<a class="p1688-detail-main-image-link" href="${products1688Escape(sourceUrl)}" target="_blank" rel="noopener noreferrer" title="打开 1688 商品页">` : ""}<img class="p1688-detail-main-image" src="${products1688Escape(mainImage)}" alt="1688 商品主图" referrerpolicy="no-referrer" onerror="products1688ImageError(this)">${sourceUrl ? "</a>" : ""}` : '<div class="p1688-empty">暂无商品图片</div>'}${images.slice(1).map(image => `<img src="${products1688Escape(products1688DisplayImageUrl(image))}" alt="1688 商品图片" loading="lazy" referrerpolicy="no-referrer" onerror="products1688ImageError(this)">`).join("")}</div>
     <div class="p1688-detail-facts">
-      <div class="p1688-detail-fact"><label>商品标题</label><span>${products1688Escape(title)}</span></div>
-      <div class="p1688-detail-fact"><label>1688 编号</label><span class="p1688-product-id">${products1688Escape(sourceId || "—")}</span></div>
+      <div class="p1688-detail-fact"><label>商品标题</label><span>${sourceUrl ? `<a href="${products1688Escape(sourceUrl)}" target="_blank" rel="noopener noreferrer">${products1688Escape(title)} ↗</a>` : products1688Escape(title)}</span></div>
       <div class="p1688-detail-fact"><label>产品分类</label><span>${products1688Escape(products1688Category(row))}</span></div>
       <div class="p1688-detail-fact"><label>采购价</label><span class="p1688-price">${products1688Money(original.price ?? row.price)} CNY</span></div>
       <div class="p1688-detail-fact"><label>净收益</label><span>${row.net_proceeds_usd === null || row.net_proceeds_usd === undefined || row.net_proceeds_usd === "" ? "—" : `$${products1688Escape(Number(row.net_proceeds_usd).toFixed(2))} USD`}</span></div>
@@ -248,7 +335,7 @@ function products1688OpenDetail(id) {
       <div class="p1688-detail-fact"><label>包装尺寸</label><span>${products1688Escape(products1688Dimensions(row))}</span></div>
       <div class="p1688-detail-fact"><label>审核状态</label><span><span class="p1688-status ${products1688Escape(String(row.review_status || "unreviewed"))}">${products1688Escape(products1688ReviewStatus(row))}</span></span></div>
       <div class="p1688-detail-fact"><label>AI 状态</label><span><span class="p1688-status ${products1688Escape(String(row.ai_status || "pending"))}">${products1688Escape(products1688Status(row))}</span></span></div>
-      <div class="p1688-detail-fact"><label>来源链接</label><span>${original.source_url ? `<a href="${products1688Escape(original.source_url)}" target="_blank" rel="noopener">打开 1688 商品页 ↗</a>` : "—"}</span></div>
+      <div class="p1688-detail-fact"><label>来源链接</label><span>${sourceUrl ? `<a href="${products1688Escape(sourceUrl)}" target="_blank" rel="noopener noreferrer">打开 1688 商品页 ↗</a>` : "—"}</span></div>
     </div>
   </div>
   <section class="p1688-detail-section"><h4>商品属性（${Array.isArray(original.properties) ? original.properties.length : 0}）</h4><div class="p1688-property-grid">${products1688PropertyRows(original.properties) || '<span class="p1688-muted">页面未采集到规格属性</span>'}</div></section>
@@ -261,15 +348,40 @@ function products1688CloseDetail() {
 }
 
 function products1688SendSelectedToWorkflow() {
-  if (!products1688Selected.size) return;
+  const ids = [...products1688Selected].map(Number).filter(value => value > 0);
+  if (!ids.length) {
+    products1688SetStatus("请先勾选要执行 AI 任务的产品", "error");
+    return;
+  }
+  try { localStorage.setItem("mercado.aiOriginalSelected", JSON.stringify(ids)); } catch (_error) {}
+  if (typeof aiOriginalSelected !== "undefined") ids.forEach(id => aiOriginalSelected.add(id));
   products1688OpenAiWorkflow();
+  if (typeof renderAiOriginalProducts === "function") renderAiOriginalProducts();
 }
 
 document.addEventListener("DOMContentLoaded", () => {
+  try {
+    const saved = Number(localStorage.getItem("mercado.1688PageSize") || 50);
+    if (PRODUCTS_1688_PAGE_SIZES.includes(saved)) products1688PageSize = saved;
+  } catch (_error) {}
+  const pageSize = document.getElementById("products-1688-page-size");
+  if (pageSize) {
+    pageSize.value = String(products1688PageSize);
+    pageSize.addEventListener("change", () => {
+      const next = Number(pageSize.value);
+      if (!PRODUCTS_1688_PAGE_SIZES.includes(next)) return;
+      products1688PageSize = next;
+      products1688Page = 1;
+      try { localStorage.setItem("mercado.1688PageSize", String(next)); } catch (_error) {}
+      load1688Products(false);
+    });
+  }
   ["products-1688-search", "products-1688-price-min", "products-1688-price-max", "products-1688-date-from", "products-1688-date-to"].forEach(id => {
     document.getElementById(id)?.addEventListener("keydown", event => { if (event.key === "Enter") load1688Products(); });
   });
   document.getElementById("products-1688-status-filter")?.addEventListener("change", () => load1688Products());
+  document.getElementById("products-1688-review-filter")?.addEventListener("change", () => load1688Products());
+  document.getElementById("products-1688-review-status")?.addEventListener("change", products1688UpdateSelection);
   document.getElementById("products-1688-detail-dialog")?.addEventListener("click", event => { if (event.target?.id === "products-1688-detail-dialog") products1688CloseDetail(); });
   if (new URLSearchParams(location.search).get("tab") === "1688-products" && typeof switchTab === "function") switchTab("1688-products");
 });

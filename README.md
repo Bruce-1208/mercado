@@ -12,6 +12,10 @@
 
 AI 自动申诉的执行状态、故障恢复和配置说明见 [申诉稳定性说明](docs/ai_appeal_reliability.md)。
 
+AI 原创产品的白底首图使用服务器本地 `rembg` 与 `isnet-general-use` 模型抠图，
+不调用付费图片 API，也不需要图片模型 Token。依赖包含在
+`bit/requirements-server.txt` 中；首次生成时会自动下载模型权重，后续复用本地缓存。
+
 ## AI 视频生成
 
 工作台支持火山方舟 Seedance 2.5 和阿里云百炼 Wan 3.0，配置任意一个即可生成。
@@ -38,13 +42,23 @@ python -m pip install -r bit/requirements-server.txt
 `BIT_WSGI_THREADS`、`BIT_WSGI_CONNECTION_LIMIT` 和 `BIT_WSGI_BACKLOG`
 调整；自动化任务仍由独立的后台并发限制控制。
 
-MySQL 默认使用进程内共享连接池：最多 12 条物理连接、不预热、最多保留
-4 条空闲连接。业务代码调用 `close()` 时连接会安全回池而不是断开 TCP；连接
+MySQL 默认使用进程内共享连接池：所有配置池合计最多 12 条物理连接、不预热、每池最多保留
+4 条空闲连接（仍计入总额度）。不同超时、游标和数据库配置不会各自获得额外额度；
+额度满时会关闭其他池的空闲连接供当前配置使用，绝不关闭正在使用的连接。
+业务代码调用 `close()` 时连接会安全回池而不是断开 TCP；连接
 取用时会自动检查失效连接，达到 75% 容量时会限频记录告警。可用
 `MYSQL_POOL_MAX_CONNECTIONS`、`MYSQL_POOL_MIN_CACHED`、
 `MYSQL_POOL_MAX_CACHED`、`MYSQL_POOL_MAX_USAGE` 和 `MYSQL_POOL_WARN_PERCENT`
 调整。所有员工电脑应使用 client 角色，由唯一的中心 server 进程直连 MySQL；
 否则每个进程都会拥有独立连接池，连接额度会叠加。
+获取连接等待默认最多 10 秒，可用 `MYSQL_POOL_ACQUIRE_TIMEOUT` 调整；
+超时抛出 `PoolAcquireTimeout`，避免请求线程永久卡住。该等待时限不替代驱动的连接、读写超时。
+此错误表示本地额度耗尽，与 MySQL 返回的 `1040 Too many connections` 不同。
+不要在等待 HTTP、浏览器操作或子任务时持有连接，也不要持有连接再嵌套借连接。
+更新后需重启使用旧代码的服务和后台脚本。多进程部署时，应满足
+“各进程额度之和 + 其他应用及运维预留 < MySQL max_connections”。
+可运行 `python -m scripts.mysql_connection_diagnostics` 采集数据库启动时长、连接峰值、
+连接拒绝次数和按来源分组的会话数量；输出不包含 SQL 正文或密码。
 
 服务端更新任务的默认并发如下，自动更新与手动更新共用对应配置：
 
@@ -264,7 +278,7 @@ py -3.12 -m bit.bit_config --import-excel "bit\比特配置文件.xlsx"
 
 `bit.bit_mercado_login` 会读取数据库中全部未忽略店铺，默认使用 3 个进程检查登录状态。未登录时输入数据库邮箱、选择密码登录，并只提交 BitBrowser 已保存的默认密码；验证码或人机验证会记录为需要人工处理。所有店铺结束后关闭浏览器，生成 Excel 汇总并发送邮件。
 
-所有使用公共 BitBrowser 接口的自动任务共用窗口容量保护：默认最多 3 个存活或待回收窗口，可用内存低于 15% 时暂停新开窗口。关闭后核验浏览器主进程，失败记录保留并后台重试。升级需重启运行中的任务进程；配置和故障说明见 [比特窗口内存回收](docs/bit_browser_memory.md)。
+所有使用公共 BitBrowser 接口的自动任务共用窗口容量保护：每台终端默认最多 5 个存活或待回收窗口，可配置上限为 10；可用内存低于 15% 时暂停新开窗口。关闭后核验浏览器主进程，失败记录保留并后台重试。升级需重启运行中的任务进程；配置和故障说明见 [比特窗口内存回收](docs/bit_browser_memory.md)。
 
 ```powershell
 py -3.12 -m bit.bit_mercado_login --all-active-login --workers 3 --wait-seconds 60

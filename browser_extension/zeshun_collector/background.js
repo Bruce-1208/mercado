@@ -15,10 +15,40 @@ const PURCHASE_TRACKING_RESUME_ALARM = "zeshun-purchase-tracking-resume";
 const NOTIFICATION_DEDUPE_KEY = "notificationDedupe";
 const NOTIFICATION_DEDUPE_MS = 30 * 60 * 1000;
 const MAX_QUEUE_SIZE = 100;
+const FLOATING_WINDOW_KEY = "zeshunFloatingWindowId";
 const ZYING_HOST = "meli.zying.net";
 const ZYING_LOGIN_URL = `https://${ZYING_HOST}/#/login`;
 let queueFlushPromise = null;
 let purchaseTrackingRunPromise = null;
+
+async function openFloatingWindow() {
+  const stored = await storageGet("local", [FLOATING_WINDOW_KEY]);
+  const savedWindowId = Number(stored[FLOATING_WINDOW_KEY] || 0);
+  if (savedWindowId) {
+    try {
+      const existing = await chrome.windows.get(savedWindowId, {populate: true});
+      const isOurWindow = existing.type === "popup" && existing.tabs?.some(
+        tab => String(tab.url || "").startsWith(chrome.runtime.getURL("popup.html"))
+      );
+      if (!isOurWindow) throw new Error("stale floating window id");
+      await chrome.windows.update(existing.id, {focused: true});
+      return existing;
+    } catch (_) {
+      await storageRemove("local", [FLOATING_WINDOW_KEY]);
+    }
+  }
+  const created = await chrome.windows.create({
+    url: chrome.runtime.getURL("popup.html"),
+    type: "popup",
+    width: 440,
+    height: 720,
+    focused: true
+  });
+  if (created?.id) {
+    await storageSet("local", {[FLOATING_WINDOW_KEY]: created.id});
+  }
+  return created;
+}
 
 const PURCHASE_TRACKING_PLATFORMS = {
   "1688": {
@@ -356,24 +386,6 @@ async function notifyAttention(message, context = {}) {
     await storageSet("local", {[NOTIFICATION_DEDUPE_KEY]: dedupe});
   }
   return result || {sent: false};
-}
-
-async function notificationSettings() {
-  return apiRequest("/api/browser-extension/notifications/settings", {method: "GET"});
-}
-
-async function saveNotificationSettings(value) {
-  return apiRequest("/api/browser-extension/notifications/settings", {
-    method: "PUT",
-    body: JSON.stringify(value || {})
-  });
-}
-
-async function testNotificationEmail() {
-  return apiRequest("/api/browser-extension/notifications/test", {
-    method: "POST",
-    body: "{}"
-  });
 }
 
 async function login(username, password) {
@@ -783,6 +795,17 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
   try { await submitProduct(await extractFromTab(tab.id)); } catch (_) {}
 });
 
+chrome.action?.onClicked?.addListener(() => {
+  openFloatingWindow().catch(() => {});
+});
+
+chrome.windows.onRemoved?.addListener(async windowId => {
+  const stored = await storageGet("local", [FLOATING_WINDOW_KEY]);
+  if (Number(stored[FLOATING_WINDOW_KEY] || 0) === Number(windowId)) {
+    await storageRemove("local", [FLOATING_WINDOW_KEY]);
+  }
+});
+
 chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
   const run = async () => {
     switch (message && message.type) {
@@ -820,14 +843,6 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
       case "GET_ZYING_INFRINGEMENT_STATUS": return {ok: true, ...(await zyingInfringementStatus())};
       case "STOP_ZYING_INFRINGEMENT": return {ok: true, ...(await stopZyingInfringement())};
       case "GET_AI_WEIGHT_PRICE_STATUS": return {ok: true, ...(await aiWeightPriceStatus())};
-      case "GET_NOTIFICATION_SETTINGS": return {ok: true, settings: await notificationSettings()};
-      case "SAVE_NOTIFICATION_SETTINGS": return {
-        ok: true, settings: await saveNotificationSettings(message.settings || {})
-      };
-      case "TEST_NOTIFICATION_EMAIL": {
-        const result = await testNotificationEmail();
-        return {ok: true, ...result, message: "测试邮件已发送，请检查收件箱"};
-      }
       case "REPORT_ATTENTION": return {
         ok: true,
         ...(await notifyAttention(message.message, {source: message.source || "泽顺插件"}))

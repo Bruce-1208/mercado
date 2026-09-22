@@ -4,7 +4,7 @@ import time
 from pathlib import Path
 from urllib.parse import urlsplit
 
-from flask import Blueprint, Response, g, jsonify, render_template, request, send_file
+from flask import Blueprint, Response, g, jsonify, render_template, request, send_file, session
 
 
 def create_blueprint(service, authorize=None):
@@ -16,6 +16,12 @@ def create_blueprint(service, authorize=None):
             denied = authorize("ai_weight_price.view" if request.method == "GET" else "ai_weight_price.execute")
             if denied is not None:
                 return denied
+        user = session.get("workbench_user") if authorize else None
+        is_admin = bool(user and (
+            user.get("is_platform_admin") or user.get("role_key") == "super_admin"
+        ))
+        service.bind_actor(user, view_all=is_admin)
+        g.awp_is_admin = is_admin
         # Read-only task data is shared through the server store and must remain
         # available from every authenticated workbench. Browser automation still
         # belongs to the workstation that owns Edge, so mutations stay loopback-only.
@@ -71,6 +77,7 @@ def create_blueprint(service, authorize=None):
             can_execute=can_execute,
             remote_read_only=not local_request,
             plugin_launch_only=bool(authorize),
+            is_admin=bool(getattr(g, "awp_is_admin", False)),
         )
 
     @bp.get("/api/ai-weight-price/status")

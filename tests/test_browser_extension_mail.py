@@ -97,19 +97,20 @@ def test_browser_extension_notification_routes(monkeypatch):
     workbench.app.config.update(TESTING=True, SECRET_KEY="extension-test-secret")
     workbench.app.secret_key = "extension-test-secret"
     user = {"id": 7, "username": "collector", "display_name": "采集员", "access_version": 0}
-    token = workbench.create_browser_extension_token(user)
-    headers = {"Authorization": f"Bearer {token}"}
     calls = []
     monkeypatch.setattr(workbench.browser_extension_mail, "get_public_settings", lambda *args: {"configured": True})
     monkeypatch.setattr(workbench.browser_extension_mail, "save_settings", lambda *args: calls.append("save") or {"configured": True})
     monkeypatch.setattr(workbench.browser_extension_mail, "send_test", lambda *args: calls.append("test") or {"sent": True})
     monkeypatch.setattr(workbench.browser_extension_mail, "send_alert", lambda *args: calls.append("alert") or {"sent": True})
+    monkeypatch.setattr(workbench.account_webhook, "send_event", lambda *args: {"sent": False, "disabled": True})
     client = workbench.app.test_client()
+    with client.session_transaction() as flask_session:
+        flask_session["workbench_user"] = user
 
-    assert client.get("/api/browser-extension/notifications/settings").status_code == 401
-    assert client.get("/api/browser-extension/notifications/settings", headers=headers).status_code == 200
-    assert client.put("/api/browser-extension/notifications/settings", headers=headers, json={}).status_code == 200
-    assert client.post("/api/browser-extension/notifications/test", headers=headers).status_code == 200
+    assert client.put("/api/account-integrations/email", json={}).status_code == 200
+    assert client.post("/api/account-integrations/email/test").status_code == 200
+    token = workbench.create_browser_extension_token(user)
+    headers = {"Authorization": f"Bearer {token}"}
     assert client.post(
         "/api/browser-extension/notifications/send", headers=headers,
         json={"event_type": "rate_limit", "message": "HTTP 429"},

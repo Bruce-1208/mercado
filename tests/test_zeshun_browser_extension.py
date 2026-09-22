@@ -17,7 +17,8 @@ def test_manifest_is_chrome_edge_manifest_v3_and_declares_supported_sites():
 
     assert manifest["manifest_version"] == 3
     assert manifest["background"]["service_worker"] == "background.js"
-    assert manifest["action"]["default_popup"] == "popup.html"
+    assert "default_popup" not in manifest["action"]
+    assert manifest["version"] == "1.7.0"
     matches = manifest["content_scripts"][0]["matches"]
     assert any("mercadolibre.com.mx" in pattern for pattern in matches)
     assert any("mercadolivre.com.br" in pattern for pattern in matches)
@@ -41,7 +42,7 @@ def test_extension_files_referenced_by_manifest_exist():
     manifest = json.loads((EXTENSION / "manifest.json").read_text(encoding="utf-8"))
     referenced = [
         manifest["background"]["service_worker"],
-        manifest["action"]["default_popup"],
+        "popup.html",
         manifest["options_page"],
         *(filename for item in manifest["content_scripts"] for filename in item.get("js", [])),
         *(filename for item in manifest["content_scripts"] for filename in item.get("css", [])),
@@ -127,7 +128,7 @@ def test_console_downloads_complete_zeshun_extension_package():
 
     assert response.status_code == 200
     assert response.headers["Content-Type"].startswith("application/zip")
-    assert response.headers["X-Zeshun-Extension-Version"] == "1.6.0"
+    assert response.headers["X-Zeshun-Extension-Version"] == "1.7.0"
     assert "zeshun-collector-extension.zip" in response.headers["Content-Disposition"]
     with zipfile.ZipFile(io.BytesIO(response.data)) as archive:
         names = set(archive.namelist())
@@ -164,23 +165,34 @@ def test_background_requires_console_login_and_keeps_offline_queue():
     assert "/api/browser-extension/zying/start" in source
     assert "/api/browser-extension/zying/status" in source
     assert 'world: "MAIN"' in source
-    assert "/api/browser-extension/notifications/settings" in source
+    assert "/api/browser-extension/notifications/settings" not in source
     assert "/api/browser-extension/notifications/send" in source
     assert "notifyAttention" in source
+    assert "chrome.action?.onClicked" in source
+    assert 'type: "popup"' in source
+    assert 'chrome.runtime.getURL("popup.html")' in source
 
 
-def test_extension_options_expose_encrypted_mail_notification_settings():
+def test_extension_options_link_to_account_integration_settings():
     options = (EXTENSION / "options.html").read_text(encoding="utf-8")
     script = (EXTENSION / "options.js").read_text(encoding="utf-8")
 
-    for field_id in (
-        "mail-enabled", "sender-email", "receiver-email", "smtp-host",
-        "smtp-port", "smtp-security", "smtp-password", "test-mail",
-    ):
-        assert f'id="{field_id}"' in options
-    assert "SAVE_NOTIFICATION_SETTINGS" in script
-    assert "TEST_NOTIFICATION_EMAIL" in script
-    assert "smtp_password" in script
+    assert 'id="open-integrations"' in options
+    assert "/settings/integrations" in script
+    assert "SMTP 授权码" not in options
+    assert "SAVE_NOTIFICATION_SETTINGS" not in script
+
+
+def test_extension_options_do_not_store_model_api_settings():
+    options = (EXTENSION / "options.html").read_text(encoding="utf-8")
+    script = (EXTENSION / "options.js").read_text(encoding="utf-8")
+    background = (EXTENSION / "background.js").read_text(encoding="utf-8")
+
+    assert 'id="deepseek-api-key"' not in options
+    assert 'id="dashscope-api-key"' not in options
+    assert "SAVE_MODEL_SETTINGS" not in script
+    assert "GET_MODEL_SETTINGS" not in script
+    assert "/api/browser-extension/model-settings" not in background
 
 
 def test_zying_collection_controls_live_in_extension_and_use_current_browser():
@@ -219,6 +231,22 @@ def test_ai_weight_price_launch_controls_live_in_extension():
     assert "/api/browser-extension/ai-weight-price/status" in background
     assert 'aiWeightPriceAction("start"' in background
     assert 'aiWeightPriceAction("stop"' in background
+
+
+def test_ai_weight_price_console_keeps_product_table_stable_and_shows_owner():
+    template = (ROOT / "bit" / "templates" / "ai_weight_price.html").read_text(
+        encoding="utf-8"
+    )
+    backend = (ROOT / "bit" / "bit_interface.py").read_text(encoding="utf-8")
+
+    assert 'id="refresh-list"' in template
+    assert "refreshStatusOnly();},2000" in template
+    assert "setInterval(()=>{if(document.visibilityState==='visible')refresh();" not in template
+    assert "row.owner_display_name||row.owner_username" in template
+    assert "entry.owner_name" in template
+    assert "所有业务员商品" in template
+    assert "ai_weight_price_service.bind_actor" in backend
+    assert 'actor = data.get("actor")' in backend
 
 
 def test_integrated_ai_weight_price_page_points_launch_to_extension(monkeypatch):
@@ -342,6 +370,45 @@ def test_browser_extension_login_returns_signed_short_lived_session(monkeypatch)
     assert session_response.get_json()["data"]["user"]["username"] == "collector"
 
 
+def test_account_integration_settings_route_never_returns_api_keys(monkeypatch):
+    import bit.bit_interface as workbench
+
+    workbench.app.config.update(TESTING=True, SECRET_KEY="extension-test-secret")
+    workbench.app.secret_key = "extension-test-secret"
+    captured = {}
+
+    def save_settings(user_id, payload, secret_key):
+        captured.update(user_id=user_id, payload=payload, secret_key=secret_key)
+        return {
+            "deepseek_configured": True,
+            "dashscope_configured": True,
+        }
+
+    monkeypatch.setattr(
+        workbench.browser_extension_models, "save_settings", save_settings
+    )
+    client = workbench.app.test_client()
+    with client.session_transaction() as flask_session:
+        flask_session["workbench_user"] = _browser_extension_user()
+    response = client.put(
+        "/api/account-integrations/tokens",
+        json={
+            "deepseek_api_key": "deepseek-secret",
+            "dashscope_api_key": "dashscope-secret",
+        },
+    )
+
+    assert response.status_code == 200
+    body = response.get_json()["data"]
+    assert body == {
+        "deepseek_configured": True,
+        "dashscope_configured": True,
+    }
+    assert captured["user_id"] == 7
+    assert "deepseek-secret" not in response.get_data(as_text=True)
+    assert "dashscope-secret" not in response.get_data(as_text=True)
+
+
 def test_browser_extension_collect_requires_login_and_writes_one_quick_item(monkeypatch):
     import bit.bit_interface as workbench
 
@@ -442,6 +509,55 @@ def test_browser_extension_collect_routes_1688_to_ai_original_products(monkeypat
     assert "collector" in captured[0][1]
 
 
+def test_ai_original_source_image_proxy_allows_only_1688_cdn(monkeypatch):
+    import bit.bit_interface as workbench
+
+    captured = []
+
+    class Upstream(io.BytesIO):
+        headers = {"Content-Type": "image/webp"}
+
+        def geturl(self):
+            return "https://cbu01.alicdn.com/img/ibank/test.webp"
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args):
+            self.close()
+
+    def fake_urlopen(request, timeout):
+        captured.append((request, timeout))
+        return Upstream(b"webp-image-bytes")
+
+    monkeypatch.setattr(workbench, "urlopen", fake_urlopen)
+    workbench.app.config.update(TESTING=True, SECRET_KEY="extension-test-secret")
+    workbench.app.secret_key = "extension-test-secret"
+    client = workbench.app.test_client()
+    with client.session_transaction() as login_session:
+        login_session["workbench_user"] = _browser_extension_user()
+
+    response = client.get(
+        "/api/ai-original-products/source-image",
+        query_string={
+            "url": "https://cbu01.alicdn.com/img/ibank/test.webp",
+        },
+    )
+    blocked = client.get(
+        "/api/ai-original-products/source-image",
+        query_string={"url": "http://127.0.0.1/private.jpg"},
+    )
+
+    assert response.status_code == 200
+    assert response.data == b"webp-image-bytes"
+    assert response.headers["Content-Type"].startswith("image/webp")
+    assert response.headers["X-Content-Type-Options"] == "nosniff"
+    assert captured[0][1] == 15
+    assert captured[0][0].get_header("Referer") == "https://detail.1688.com/"
+    assert blocked.status_code == 400
+    assert len(captured) == 1
+
+
 def test_browser_extension_starts_zying_collection_from_current_browser_credential(monkeypatch):
     import bit.bit_interface as workbench
 
@@ -531,6 +647,15 @@ def test_browser_extension_starts_zying_infringement_with_fixed_title_batches(mo
     workbench.app.secret_key = "extension-test-secret"
     token = workbench.create_browser_extension_token(_browser_extension_user())
     captured = {}
+    monkeypatch.setattr(
+        workbench.browser_extension_models,
+        "get_api_key",
+        lambda user_id, provider, secret: (
+            "deepseek-from-settings"
+            if (user_id, provider) == (7, "deepseek")
+            else ""
+        ),
+    )
 
     class ImmediateThread:
         def __init__(self, target, args=(), **_kwargs):
@@ -596,10 +721,12 @@ def test_browser_extension_starts_zying_infringement_with_fixed_title_batches(mo
     assert captured["start_product_id"] == "801623017"
     assert captured["max_items"] == 12
     assert captured["category"] == "202170568"
+    assert captured["deepseek_api_key"] == "deepseek-from-settings"
     status_data = status.get_json()["data"]
     assert status_data["status"] == "success"
     assert status_data["batch_size"] == 20
     assert "auth_token" not in status_data["params"]
+    assert "deepseek_api_key" not in status_data["params"]
 
 
 def test_browser_extension_zying_options_uses_developers_from_current_page(monkeypatch):
@@ -644,14 +771,23 @@ def test_browser_extension_starts_ai_weight_price_on_local_workstation(monkeypat
     token = workbench.create_browser_extension_token(_browser_extension_user())
     headers = {"Authorization": f"Bearer {token}"}
     captured = {}
+    monkeypatch.setattr(
+        workbench.browser_extension_models,
+        "get_api_key",
+        lambda *_args: "account-dashscope-key",
+    )
 
-    def start(mode="pipeline", task_id=None, selection=None, max_items=10, resume=False):
+    def start(
+        mode="pipeline", task_id=None, selection=None, max_items=10,
+        resume=False, runtime_api_key="",
+    ):
         captured.update({
             "mode": mode,
             "task_id": task_id,
             "selection": selection,
             "max_items": max_items,
             "resume": resume,
+            "runtime_api_key": runtime_api_key,
         })
 
     monkeypatch.setattr(workbench.ai_weight_price_service, "start", start)
@@ -695,6 +831,7 @@ def test_browser_extension_starts_ai_weight_price_on_local_workstation(monkeypat
         },
         "max_items": 12,
         "resume": False,
+        "runtime_api_key": "account-dashscope-key",
     }
     assert status.status_code == 200
     assert "categories" in status.get_json()["data"]

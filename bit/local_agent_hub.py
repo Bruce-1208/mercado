@@ -588,13 +588,18 @@ class LocalAgentStore:
         return True
 
     def cancellation_job_ids(self, agent_id):
+        # Legacy Agents can keep a worker alive after its lease was reaped.
+        # Keep returning that exact job id until the worker observes the stop;
+        # an error status alone only revokes DB access and causes endless 403s.
         agent_id = normalize_agent_id(agent_id)
         with self._connect() as connection:
             rows = connection.execute(
                 """
                 SELECT job_id FROM local_agent_jobs
-                WHERE agent_id = ? AND cancel_requested = 1
-                  AND status IN ('running', 'stopping')
+                WHERE agent_id = ? AND (
+                    (cancel_requested = 1 AND status IN ('running', 'stopping'))
+                    OR (claimed_at IS NOT NULL AND status IN ('error', 'stopped', 'success'))
+                )
                 """,
                 (agent_id,),
             ).fetchall()
@@ -713,6 +718,29 @@ class LocalAgentStore:
                 (job_id, max(0, int(after_id)), max(1, min(int(limit), 2000))),
             ).fetchall()
         return [dict(row) for row in rows]
+
+    def event_page(self, job_id, after_id=0, *, limit=200, max_bytes=512 * 1024):
+        """Read a bounded log page without materializing a large event backlog."""
+        job_id = normalize_job_id(job_id)
+        limit = max(1, min(int(limit), 200))
+        events, byte_count = [], 0
+        connection = self._connect()
+        try:
+            cursor = connection.execute(
+                "SELECT event_id, event_type, content, created_at FROM local_agent_events "
+                "WHERE job_id = ? AND event_id > ? ORDER BY event_id LIMIT ?",
+                (job_id, max(0, int(after_id)), limit + 1),
+            )
+            for row in cursor:
+                size = len(str(row["content"] or "").encode("utf-8"))
+                # Always deliver one event, even if a legacy event exceeds the budget.
+                if events and (len(events) >= limit or byte_count + size > max_bytes):
+                    return events, True
+                events.append(dict(row))
+                byte_count += size
+            return events, False
+        finally:
+            connection.close()
 
     @staticmethod
     def render_event_content(event):

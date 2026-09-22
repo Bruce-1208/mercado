@@ -1,0 +1,155 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>集成与凭证设置 · 武汉泽顺</title>
+  <style>
+    :root { color-scheme: light; --ink:#17202b; --muted:#697586; --line:#e5e9ef; --blue:#1769e0; --navy:#11243d; --bg:#f4f6f9; --green:#17884b; --amber:#a35a00; }
+    * { box-sizing:border-box; }
+    body { margin:0; color:var(--ink); background:var(--bg); font:14px/1.55 Inter,"PingFang SC","Microsoft YaHei",sans-serif; }
+    .bar { position:sticky; top:0; z-index:4; display:flex; align-items:center; justify-content:space-between; gap:20px; padding:14px max(20px,calc((100vw - 1180px)/2)); background:rgba(17,36,61,.97); color:#fff; box-shadow:0 3px 14px #12233c26; }
+    .brand { display:flex; align-items:center; gap:12px; }
+    .mark { display:grid; place-items:center; width:38px; height:38px; border:1px solid #ffffff33; border-radius:11px; background:#ffffff12; color:#f1c86b; font-weight:800; }
+    .brand strong { display:block; font-size:17px; }
+    .brand small { color:#bdc7d4; }
+    .bar a { color:#fff; text-decoration:none; padding:8px 13px; border:1px solid #ffffff38; border-radius:8px; }
+    main { width:min(1180px,calc(100% - 32px)); margin:28px auto 64px; }
+    .hero { display:flex; justify-content:space-between; gap:28px; padding:25px 28px; border-radius:16px; color:#fff; background:linear-gradient(130deg,#142b49,#1f5696); box-shadow:0 14px 35px #193c6a22; }
+    .hero h1 { margin:0 0 7px; font-size:26px; }
+    .hero p { margin:0; color:#dbe8f8; max-width:760px; }
+    .account { align-self:center; white-space:nowrap; color:#dbe8f8; }
+    .account b { color:#fff; }
+    .tabs { display:flex; gap:8px; margin:22px 0; overflow:auto; }
+    .tabs a { color:#394657; text-decoration:none; padding:9px 14px; border:1px solid var(--line); border-radius:999px; background:#fff; white-space:nowrap; }
+    section { margin-top:18px; padding:24px; border:1px solid var(--line); border-radius:14px; background:#fff; box-shadow:0 6px 18px #172b4710; }
+    .section-head { display:flex; align-items:flex-start; justify-content:space-between; gap:20px; margin-bottom:18px; }
+    h2 { margin:0; font-size:20px; }
+    .section-head p,.hint { margin:5px 0 0; color:var(--muted); }
+    .table-wrap { overflow:auto; border:1px solid var(--line); border-radius:11px; }
+    table { width:100%; border-collapse:collapse; min-width:800px; }
+    th,td { padding:12px 14px; text-align:left; border-bottom:1px solid var(--line); vertical-align:top; }
+    th { background:#f8fafc; color:#4b586a; font-size:12px; letter-spacing:.03em; }
+    tr:last-child td { border-bottom:0; }
+    code { color:#154d94; background:#edf5ff; border-radius:5px; padding:2px 6px; }
+    .grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:14px; }
+    .provider { padding:17px; border:1px solid var(--line); border-radius:12px; background:#fbfcfe; }
+    .provider-head { display:flex; align-items:center; justify-content:space-between; gap:10px; margin-bottom:12px; }
+    .provider h3 { margin:0; font-size:16px; }
+    .badge { padding:3px 9px; border-radius:999px; font-size:12px; background:#eef1f5; color:#687487; }
+    .badge.ok { color:var(--green); background:#e9f8ef; }
+    label { display:block; color:#445063; font-weight:650; margin:12px 0 6px; }
+    input,select { width:100%; padding:10px 11px; border:1px solid #cfd6df; border-radius:8px; background:#fff; color:var(--ink); font:inherit; outline:none; }
+    input:focus,select:focus { border-color:#6ba3ec; box-shadow:0 0 0 3px #1769e018; }
+    details { margin-top:12px; color:var(--muted); }
+    summary { cursor:pointer; color:#285b99; font-weight:650; }
+    details ol { margin-bottom:7px; padding-left:20px; }
+    details a { color:var(--blue); }
+    .form-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:0 16px; }
+    .full { grid-column:1/-1; }
+    .check { display:flex; align-items:center; gap:9px; margin:3px 0 12px; font-weight:650; }
+    .check input { width:auto; }
+    .actions { display:flex; flex-wrap:wrap; align-items:center; gap:10px; margin-top:18px; }
+    button { border:1px solid #cfd6df; border-radius:8px; background:#fff; color:#334154; padding:9px 15px; font:inherit; font-weight:700; cursor:pointer; }
+    button.primary { border-color:var(--blue); background:var(--blue); color:#fff; }
+    button:disabled { opacity:.55; cursor:wait; }
+    .message { min-height:22px; color:var(--green); font-weight:650; }
+    .message.error { color:#bd2634; }
+    .security { padding:12px 15px; border-left:4px solid #5b91d5; border-radius:7px; background:#f2f7fd; color:#46546a; }
+    @media (max-width:760px) { .hero,.section-head { flex-direction:column; } .grid,.form-grid { grid-template-columns:1fr; } .account { align-self:flex-start; } section { padding:18px; } }
+  </style>
+</head>
+<body>
+  <header class="bar">
+    <div class="brand"><span class="mark">ZS</span><span><strong>武汉泽顺</strong><small>集成与凭证设置</small></span></div>
+    <a href="/">← 返回运营服务台</a>
+  </header>
+  <main>
+    <div class="hero">
+      <div><h1>所有外部服务，在这里集中配置</h1><p>模型 Token、邮箱提醒和 Webhook 都与当前泽顺账号绑定。插件及控制台业务只读取这些配置，不再单独保存 Token。</p></div>
+      <div class="account">当前账号：<b>{{ current_user.display_name or current_user.username }}</b></div>
+    </div>
+    <nav class="tabs"><a href="#mapping">功能对照</a><a href="#tokens">模型 Token</a><a href="#email">邮箱提醒</a><a href="#webhook">Webhook</a></nav>
+
+    <section id="mapping">
+      <div class="section-head"><div><h2>功能、模型与凭证对照</h2><p>这里列出当前会实际调用的服务。只配置你要使用的功能即可。</p></div></div>
+      <div class="table-wrap"><table>
+        <thead><tr><th>功能</th><th>模型 / 服务</th><th>需要配置</th><th>说明</th></tr></thead>
+        <tbody>
+          <tr><td>智赢查侵权、侵权检测、AI 申诉话术、日常任务 AI 话术、AI 原创文案</td><td><code>deepseek-v4-pro</code><br><small>api.deepseek.com</small></td><td>DeepSeek API Key</td><td>统一复用同一枚账号 Token</td></tr>
+          <tr><td>AI 核重核价</td><td><code>qwen3-vl-flash</code> + <code>qwen3-vl-plus</code><br><small>dashscope.aliyuncs.com/compatible-mode/v1</small></td><td>阿里云百炼 DashScope API Key</td><td>视觉识别与复核；当前使用北京地域</td></tr>
+          <tr><td>侵权检测（选择“千问”）</td><td><code>qwen-plus</code><br><small>dashscope.aliyuncs.com/compatible-mode/v1</small></td><td>阿里云百炼 DashScope API Key</td><td>与 AI 核重核价共用</td></tr>
+          <tr><td>AI 原创图片</td><td><code>rembg / isnet-general-use</code><br><small>服务器本地 ONNX 推理</small></td><td>无需 Token</td><td>免费抠图并合成纯白背景</td></tr>
+          <tr><td>AI 视频主模型</td><td><code>doubao-seedance-2-5-260628</code><br><small>ark.cn-beijing.volces.com/api/v3</small></td><td>火山方舟 API Key</td><td>Seedance 2.5，北京地域</td></tr>
+          <tr><td>AI 视频备用模型</td><td><code>wan3.0-video-prime</code><br><small>{workspace}.cn-beijing.maas.aliyuncs.com/api/v1</small></td><td>阿里云百炼 API Key + Workspace ID</td><td>Wan 3.0 备用通道</td></tr>
+          <tr><td>插件人工介入提醒</td><td>SMTP 邮件 / Webhook</td><td>邮箱授权码或 Webhook 地址</td><td>登录、滑块、限频、任务阻塞时提醒</td></tr>
+        </tbody>
+      </table></div>
+    </section>
+
+    <section id="tokens">
+      <div class="section-head"><div><h2>模型 Token</h2><p>密码框不会回显已保存内容；留空表示保留原 Token。</p></div><span class="security">凭证加密落盘，接口只返回“已配置”状态。</span></div>
+      <div class="grid">
+        <div class="provider"><div class="provider-head"><h3>DeepSeek</h3><span class="badge" data-status="deepseek">未配置</span></div><label for="deepseek_api_key">API Key</label><input id="deepseek_api_key" type="password" autocomplete="new-password" placeholder="sk-…（留空保留）"><details><summary>简易配置教程</summary><ol><li>登录 DeepSeek 开放平台。</li><li>进入 API Keys，创建并复制 Key。</li><li>粘贴到上方并保存。</li></ol><a href="https://platform.deepseek.com/api_keys" target="_blank" rel="noopener">打开 DeepSeek API Keys</a></details></div>
+        <div class="provider"><div class="provider-head"><h3>阿里云百炼 DashScope</h3><span class="badge" data-status="dashscope">未配置</span></div><label for="dashscope_api_key">API Key</label><input id="dashscope_api_key" type="password" autocomplete="new-password" placeholder="sk-…（留空保留）"><details><summary>简易配置教程</summary><ol><li>登录阿里云百炼控制台并选择北京地域。</li><li>在 API Key 管理中创建 Key。</li><li>复制后粘贴到上方。</li></ol><a href="https://bailian.console.aliyun.com/" target="_blank" rel="noopener">打开阿里云百炼</a></details></div>
+        <div class="provider"><div class="provider-head"><h3>OpenAI</h3><span class="badge" data-status="openai">未配置</span></div><label for="openai_api_key">API Key</label><input id="openai_api_key" type="password" autocomplete="new-password" placeholder="sk-…（留空保留）"><details><summary>简易配置教程</summary><ol><li>登录 OpenAI Platform。</li><li>打开 API keys 并创建 Secret key。</li><li>复制后粘贴到上方。</li></ol><a href="https://platform.openai.com/api-keys" target="_blank" rel="noopener">打开 OpenAI API Keys</a></details></div>
+        <div class="provider"><div class="provider-head"><h3>火山方舟 Seedance</h3><span class="badge" data-status="seedance">未配置</span></div><label for="seedance_api_key">API Key</label><input id="seedance_api_key" type="password" autocomplete="new-password" placeholder="留空保留"><details><summary>简易配置教程</summary><ol><li>在火山方舟开通 Seedance 模型服务。</li><li>进入 API Key 管理创建 Key。</li><li>粘贴到上方并保存。</li></ol><a href="https://www.volcengine.com/docs/82379" target="_blank" rel="noopener">查看火山方舟文档</a></details></div>
+        <div class="provider"><div class="provider-head"><h3>阿里云万相 Wan</h3><span class="badge" data-status="wan">未配置</span></div><label for="wan_api_key">API Key</label><input id="wan_api_key" type="password" autocomplete="new-password" placeholder="留空保留"><label for="wan_workspace_id">Workspace ID</label><input id="wan_workspace_id" type="text" autocomplete="off" placeholder="工作空间 ID"><details><summary>简易配置教程</summary><ol><li>在百炼创建业务空间并开通 Wan 视频模型。</li><li>复制该空间的 API Key 与 Workspace ID。</li><li>分别填写后保存。</li></ol><a href="https://bailian.console.aliyun.com/" target="_blank" rel="noopener">打开阿里云百炼</a></details></div>
+      </div>
+      <div class="actions"><button class="primary" id="save-tokens" type="button">保存模型凭证</button><span class="message" id="token-message"></span></div>
+    </section>
+
+    <section id="email">
+      <div class="section-head"><div><h2>邮箱提醒</h2><p>插件遇到登录失效、滑块验证、限频或任务阻塞时，自动发信提醒。</p></div><span class="badge" id="email-status">未配置</span></div>
+      <div class="form-grid">
+        <label class="check full"><input id="email-enabled" type="checkbox">启用邮件提醒</label>
+        <div><label for="sender-email">发件邮箱</label><input id="sender-email" type="email" autocomplete="email" placeholder="例如 name@qq.com"></div>
+        <div><label for="receiver-email">收件邮箱</label><input id="receiver-email" type="email" autocomplete="email" placeholder="接收提醒的邮箱"></div>
+        <div><label for="smtp-password">SMTP 授权码</label><input id="smtp-password" type="password" autocomplete="new-password" placeholder="留空保留已有授权码"></div>
+        <div><label for="smtp-host">SMTP 服务器</label><input id="smtp-host" type="text" placeholder="smtp.qq.com"></div>
+        <div><label for="smtp-port">端口</label><input id="smtp-port" type="number" min="1" max="65535" value="465"></div>
+        <div><label for="smtp-security">加密</label><select id="smtp-security"><option value="ssl">SSL</option><option value="starttls">STARTTLS</option></select></div>
+      </div>
+      <details><summary>QQ / 163 / Gmail / Outlook 简易配置</summary><ol><li>在邮箱后台开启 SMTP 服务。</li><li>生成“授权码”或“应用专用密码”，不要填写网页登录密码。</li><li>填写发件邮箱、授权码和收件邮箱。QQ/163 通常为 SSL 465；Outlook 通常为 STARTTLS 587。</li><li>先保存，再发送测试邮件。</li></ol></details>
+      <div class="actions"><button class="primary" id="save-email" type="button">保存邮箱设置</button><button id="test-email" type="button">发送测试邮件</button><span class="message" id="email-message"></span></div>
+    </section>
+
+    <section id="webhook">
+      <div class="section-head"><div><h2>Webhook</h2><p>为企业微信机器人、中间服务或未来自动化预留统一事件出口。</p></div><span class="badge" id="webhook-status">未配置</span></div>
+      <label class="check"><input id="webhook-enabled" type="checkbox">启用 Webhook 提醒</label>
+      <label for="webhook-url">Webhook URL</label><input id="webhook-url" type="url" autocomplete="url" placeholder="https://example.com/zeshun/events">
+      <label for="webhook-secret">签名密钥（可选）</label><input id="webhook-secret" type="password" autocomplete="new-password" placeholder="留空保留已有密钥">
+      <details><summary>接收与验签教程</summary><ol><li>准备一个接收 POST JSON 的 HTTPS 地址并填入。</li><li>可设置签名密钥；泽顺会发送 <code>X-Zeshun-Signature: sha256=…</code>。</li><li>签名原文为 <code>时间戳.JSON原始请求体</code>，使用 HMAC-SHA256。</li><li>服务返回 2xx 即视为成功。保存后可发送测试事件。</li></ol></details>
+      <div class="actions"><button class="primary" id="save-webhook" type="button">保存 Webhook</button><button id="test-webhook" type="button">发送测试事件</button><span class="message" id="webhook-message"></span></div>
+    </section>
+  </main>
+  <script>
+    const $ = id => document.getElementById(id);
+    async function api(path, options={}) {
+      const response = await fetch(path, {headers:{"Content-Type":"application/json"}, ...options});
+      const value = await response.json().catch(() => ({}));
+      if (!response.ok || value.status === "error") throw new Error(value.message || `请求失败（${response.status}）`);
+      return value;
+    }
+    function message(id, text, error=false) { const node=$(id); node.textContent=text; node.classList.toggle("error", error); }
+    function badge(node, configured) { node.textContent=configured ? "已配置" : "未配置"; node.classList.toggle("ok", configured); }
+    function render(data) {
+      const tokens=data.tokens || {};
+      ["deepseek","dashscope","openai","seedance","wan"].forEach(name => badge(document.querySelector(`[data-status="${name}"]`), Boolean(tokens[`${name}_configured`])));
+      $("wan_workspace_id").value=tokens.wan_workspace_id || "";
+      const email=data.email || {};
+      badge($("email-status"), Boolean(email.configured));
+      $("email-enabled").checked=Boolean(email.enabled); $("sender-email").value=email.sender_email || ""; $("receiver-email").value=email.receiver_email || ""; $("smtp-host").value=email.smtp_host || ""; $("smtp-port").value=email.smtp_port || 465; $("smtp-security").value=email.smtp_security || "ssl";
+      const webhook=data.webhook || {};
+      badge($("webhook-status"), Boolean(webhook.configured)); $("webhook-enabled").checked=Boolean(webhook.enabled); $("webhook-url").value=webhook.url || "";
+    }
+    async function load() { try { render((await api("/api/account-integrations")).data || {}); } catch(error) { message("token-message", error.message, true); } }
+    $("save-tokens").addEventListener("click", async event => { const button=event.currentTarget; button.disabled=true; try { const body={wan_workspace_id:$("wan_workspace_id").value.trim()}; ["deepseek","dashscope","openai","seedance","wan"].forEach(name => { const value=$(`${name}_api_key`).value.trim(); if(value) body[`${name}_api_key`]=value; }); const result=await api("/api/account-integrations/tokens",{method:"PUT",body:JSON.stringify(body)}); document.querySelectorAll("#tokens input[type=password]").forEach(node => node.value=""); message("token-message",result.message); await load(); } catch(error) { message("token-message",error.message,true); } finally { button.disabled=false; } });
+    $("save-email").addEventListener("click", async event => { const button=event.currentTarget; button.disabled=true; try { const result=await api("/api/account-integrations/email",{method:"PUT",body:JSON.stringify({enabled:$("email-enabled").checked,sender_email:$("sender-email").value.trim(),receiver_email:$("receiver-email").value.trim(),smtp_password:$("smtp-password").value,smtp_host:$("smtp-host").value.trim(),smtp_port:Number($("smtp-port").value),smtp_security:$("smtp-security").value})}); $("smtp-password").value=""; badge($("email-status"),result.data.configured); message("email-message",result.message); } catch(error) { message("email-message",error.message,true); } finally { button.disabled=false; } });
+    $("test-email").addEventListener("click", async event => { const button=event.currentTarget; button.disabled=true; try { const result=await api("/api/account-integrations/email/test",{method:"POST",body:"{}"}); message("email-message",result.message); } catch(error) { message("email-message",error.message,true); } finally { button.disabled=false; } });
+    $("save-webhook").addEventListener("click", async event => { const button=event.currentTarget; button.disabled=true; try { const result=await api("/api/account-integrations/webhook",{method:"PUT",body:JSON.stringify({enabled:$("webhook-enabled").checked,url:$("webhook-url").value.trim(),secret:$("webhook-secret").value})}); $("webhook-secret").value=""; badge($("webhook-status"),result.data.configured); message("webhook-message",result.message); } catch(error) { message("webhook-message",error.message,true); } finally { button.disabled=false; } });
+    $("test-webhook").addEventListener("click", async event => { const button=event.currentTarget; button.disabled=true; try { const result=await api("/api/account-integrations/webhook/test",{method:"POST",body:"{}"}); message("webhook-message",result.message); } catch(error) { message("webhook-message",error.message,true); } finally { button.disabled=false; } });
+    load();
+  </script>
+</body>
+</html>
