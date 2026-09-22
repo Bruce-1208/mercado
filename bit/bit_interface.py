@@ -17641,7 +17641,13 @@ def api_browser_extension_ai_weight_price_continue():
     if data.get("acknowledged") is not True:
         return jsonify(status="error", message="请先完成登录或人机验证，并勾选继续原任务"), 400
     try:
-        ai_weight_price_service.continue_after_human()
+        user_id = int((g.browser_extension_user or {}).get("id") or 0)
+        dashscope_api_key = browser_extension_models.get_api_key(
+            user_id, "dashscope", app.secret_key
+        )
+        ai_weight_price_service.continue_after_human(
+            runtime_api_key=dashscope_api_key
+        )
     except ValueError as exc:
         return jsonify(status="error", message=str(exc)), 400
     return jsonify(status="success", data=_browser_extension_ai_weight_price_snapshot())

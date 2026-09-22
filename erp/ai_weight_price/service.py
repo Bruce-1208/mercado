@@ -424,7 +424,7 @@ class Service:
         self.store.log("检测到上次1688搜索/读取阶段的技术失败，已从当前页面位置自动重新处理", key, "WARNING")
         return True
 
-    def continue_after_human(self):
+    def continue_after_human(self, *, runtime_api_key=""):
         """Clear a browser-attention pause and resume from the retained item."""
         with self.idle():
             pause = self.store.state("circuit")
@@ -452,7 +452,10 @@ class Service:
         try:
             # Keep the original run id so the current-run list and its
             # progress remain intact after a human login/captcha pause.
-            self.start(mode, task_id, selection, remaining, True)
+            self.start(
+                mode, task_id, selection, remaining, True,
+                runtime_api_key=runtime_api_key,
+            )
         except Exception:
             self.store.set_state("circuit", pause)
             raise
