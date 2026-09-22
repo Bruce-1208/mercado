@@ -39,6 +39,8 @@ bit/runtime_locks/
 .data/local-agent-hub.sqlite3*
 .data/local-agent/
 .data/mercadolibre_required_attributes_*.jsonl.gz
+.data/pdd_orders_profile/
+.data/pdd_orders_edge_profile/
 cache/mercado_playwright_profile/
 *.log
 bit/logs/*_history.json
