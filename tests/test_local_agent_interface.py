@@ -338,6 +338,58 @@ def test_daily_task_uses_agent_queue_and_reports_logs(daily_agent_interface, mon
     assert "log" not in summary["tasks"][0]
 
 
+def test_running_daily_agent_gets_only_required_database_routes(
+    daily_agent_interface, monkeypatch
+):
+    _user, store, client = daily_agent_interface
+    agent_id = "agent-daily-pc"
+    token = bit_interface.create_local_agent_credential(agent_id, 7)
+    store.enqueue_job("daily-db-job", agent_id, "daily_task", {})
+    store.claim_job(agent_id)
+    monkeypatch.setattr(
+        bit_interface.bit_db_api,
+        "list_mercado_store_tokens",
+        lambda: {"total": 0, "rows": []},
+    )
+    headers = {"X-Internal-Token": token}
+    remote = {"REMOTE_ADDR": "198.51.100.10"}
+
+    allowed = client.get(
+        "/api/db/mercado-tokens",
+        headers=headers,
+        environ_overrides=remote,
+    )
+    denied = client.get(
+        "/api/db/workbench/users",
+        headers=headers,
+        environ_overrides=remote,
+    )
+
+    assert allowed.status_code == 200
+    assert allowed.get_json()["data"] == {"total": 0, "rows": []}
+    assert denied.status_code == 403
+
+
+def test_idle_agent_cannot_read_daily_task_database_routes(
+    daily_agent_interface, monkeypatch
+):
+    _user, _store, client = daily_agent_interface
+    token = bit_interface.create_local_agent_credential("agent-daily-pc", 7)
+    monkeypatch.setattr(
+        bit_interface.bit_db_api,
+        "list_mercado_store_tokens",
+        lambda: pytest.fail("idle Agent must be rejected before the route runs"),
+    )
+
+    response = client.get(
+        "/api/db/mercado-tokens",
+        headers={"X-Internal-Token": token},
+        environ_overrides={"REMOTE_ADDR": "198.51.100.10"},
+    )
+
+    assert response.status_code == 403
+
+
 @pytest.mark.parametrize("claimed", [False, True])
 def test_daily_agent_stop_reaches_the_selected_job(daily_agent_interface, claimed):
     _user, store, client = daily_agent_interface

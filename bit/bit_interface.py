@@ -367,6 +367,25 @@ PASSWORD_ITERATIONS = 260000
 # be accepted by the general database API: that API also exposes account,
 # role, token and password-management operations.
 INTERNAL_AGENT_ALLOWED_PATHS = frozenset({"/api/db/health"})
+# A running daily-task worker needs a small, explicit slice of the database
+# API.  Agent credentials remain invalid for account/role/application/token
+# management and for every route not listed here.
+DAILY_AGENT_DB_GET_PATHS = frozenset({
+    "/api/db/mercado-tokens",
+    "/api/db/reputation/latest",
+    "/api/db/window-anomalies",
+    "/api/db/prohibited-listings",
+    "/api/db/official-infractions/current-counts",
+    "/api/db/appeal-phrases/random",
+})
+DAILY_AGENT_DB_POST_PATHS = frozenset({
+    "/api/db/official-infractions/live/jobs",
+    "/api/db/official-infractions/live",
+    "/api/db/ai-appeal-records",
+    "/api/db/appeal-chat-records",
+    "/api/db/window-anomalies",
+    "/api/db/window-anomalies/resolve",
+})
 INTERNAL_LOOPBACK_DENIED_PREFIXES = (
     "/api/db/workbench/",
     "/api/db/mercado-tokens",
@@ -2273,14 +2292,15 @@ def internal_api_required(view_func):
             shared_token, request_token
         ):
             return view_func(*args, **kwargs)
-        # An Agent is not a database client.  Keep only the health probe for
-        # backwards compatibility with existing installed Agents.
-        if (
-            request.path in INTERNAL_AGENT_ALLOWED_PATHS
-            and request.method == "GET"
-            and _verify_local_agent_credential(request_token)
-        ):
-            return view_func(*args, **kwargs)
+        agent_claims = _verify_local_agent_credential(request_token)
+        if agent_claims:
+            # Health is available between jobs so the Agent can diagnose its
+            # server connection. Business data is available only while this
+            # exact Agent owns a running daily-task job.
+            if request.path in INTERNAL_AGENT_ALLOWED_PATHS and request.method == "GET":
+                return view_func(*args, **kwargs)
+            if _daily_agent_internal_api_allowed(agent_claims):
+                return view_func(*args, **kwargs)
         # Keep legacy loopback access for operational database routes used by
         # the single-machine server.  Sensitive account, token and role
         # routes are denied above; loopback is not accepted as an admin
@@ -2293,6 +2313,32 @@ def internal_api_required(view_func):
         return jsonify({"status": "error", "message": "Forbidden"}), 403
 
     return wrapper
+
+
+def _daily_agent_internal_api_allowed(claims):
+    method = str(request.method or "GET").upper()
+    path = str(request.path or "")
+    route_allowed = (
+        method == "GET"
+        and (
+            path in DAILY_AGENT_DB_GET_PATHS
+            or re.fullmatch(r"/api/db/official-infractions/live/jobs/[A-Za-z0-9_-]+", path)
+        )
+    ) or (method == "POST" and path in DAILY_AGENT_DB_POST_PATHS)
+    if not route_allowed:
+        return False
+    agent_id = str((claims or {}).get("agent_id") or "").strip()
+    if not agent_id or agent_id == "*":
+        return False
+    try:
+        jobs = get_local_agent_store().list_jobs(
+            agent_id=agent_id,
+            job_type="daily_task",
+            limit=10,
+        )
+    except (KeyError, ValueError):
+        return False
+    return any(job.get("status") in {"running", "stopping"} for job in jobs)
 
 
 def _required_workbench_permissions(path, method):
@@ -2575,6 +2621,10 @@ from erp.ai_weight_price.web import create_blueprint as create_ai_weight_price_b
 ai_weight_price_service = AIWeightPriceService(
     ai_weight_price_data_dir(),
     storage_backend="mysql" if RUNTIME_SETTINGS.is_server else "api",
+    # Local Agent workers import this large module to run appeal/daily tasks.
+    # They deliberately do not carry the unrestricted database API token, so
+    # unrelated imports must not read or migrate AI-weight-price state.
+    migrate_legacy_state=os.environ.get("BIT_EXECUTION_TARGET") != "agent",
 )
 app.register_blueprint(create_ai_weight_price_blueprint(ai_weight_price_service, _authorize_ai_weight_price))
 
