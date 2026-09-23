@@ -14,6 +14,8 @@ const RETRY_ALARM = "zeshun-collector-retry";
 const PURCHASE_TRACKING_RESUME_ALARM = "zeshun-purchase-tracking-resume";
 const NOTIFICATION_DEDUPE_KEY = "notificationDedupe";
 const NOTIFICATION_DEDUPE_MS = 30 * 60 * 1000;
+const AI_WEIGHT_PRICE_PAUSE_KEY = "aiWeightPricePauseNotification";
+const AI_WEIGHT_PRICE_PAUSE_NOTICE_MS = 10 * 60 * 1000;
 const MAX_QUEUE_SIZE = 100;
 const FLOATING_WINDOW_KEY = "zeshunFloatingWindowId";
 const ZYING_HOST = "meli.zying.net";
@@ -686,9 +688,39 @@ async function stopZyingCollection() {
 
 async function aiWeightPriceStatus() {
   const data = await apiRequest("/api/browser-extension/ai-weight-price/status", {method: "GET"});
-  const reason = data?.circuit?.reason || (data?.run?.outcome === "blocked" ? data?.run?.message : "");
-  if (reason) void notifyAttention(reason, {source: "AI核重核价"}).catch(() => {});
+  void handleAiWeightPricePauseNotification(data).catch(() => {});
   return data;
+}
+
+async function handleAiWeightPricePauseNotification(data = {}) {
+  const circuit = data?.circuit;
+  const reason = circuit?.reason || (data?.run?.outcome === "blocked" ? data?.run?.message : "");
+  if (!circuit || !reason) {
+    await storageRemove("local", [AI_WEIGHT_PRICE_PAUSE_KEY]);
+    return {sent: false, active: false};
+  }
+  const pausedAt = Number(circuit.at || 0) * 1000 || Date.now();
+  const signature = [data?.run?.run_id || "", circuit.kind || "", circuit.at || "", reason].join("|");
+  const stored = await storageGet("local", [AI_WEIGHT_PRICE_PAUSE_KEY]);
+  let pause = stored[AI_WEIGHT_PRICE_PAUSE_KEY] || {};
+  if (pause.signature !== signature) {
+    pause = {signature, pausedAt, attempted: false, sent: false};
+    await storageSet("local", {[AI_WEIGHT_PRICE_PAUSE_KEY]: pause});
+  }
+  if (pause.attempted || Date.now() - Number(pause.pausedAt || pausedAt) < AI_WEIGHT_PRICE_PAUSE_NOTICE_MS) {
+    return {sent: false, pending: !pause.attempted};
+  }
+  // Persist the one-shot guard before sending. Even if SMTP succeeds but the
+  // local response is lost, the same overnight pause will never send twice.
+  pause = {...pause, attempted: true, attemptedAt: Date.now()};
+  await storageSet("local", {[AI_WEIGHT_PRICE_PAUSE_KEY]: pause});
+  const result = await notifyAttention(reason, {source: "AI核重核价"});
+  pause = {
+    ...pause,
+    sent: Boolean(result?.channels?.email?.sent || result?.sent),
+  };
+  await storageSet("local", {[AI_WEIGHT_PRICE_PAUSE_KEY]: pause});
+  return result;
 }
 
 async function startZyingInfringement(context, params) {

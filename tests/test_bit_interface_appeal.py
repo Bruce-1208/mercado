@@ -799,6 +799,10 @@ def test_daily_task_console_exposes_all_task_switches_and_shop_group():
     assert "店铺组（可多选）" in template
     assert 'id="daily-task-group" multiple' in template
     assert 'data-select-id="daily-task-group"' in template
+    assert template.count('onchange="syncDailyTaskScopePicker(this)"') == 2
+    assert "function syncDailyTaskScopePicker(changedSelect)" in template
+    assert "选择业务员会清空店铺组" in template
+    assert "选择店铺组会清空业务员" in template
     assert 'id="daily-task-top-n"' not in template
     assert 'id="daily-task-only-active"' not in template
     assert 'id="daily-task-infraction-min-count"' in template
@@ -890,6 +894,7 @@ def test_build_daily_task_params_supports_one_or_all_salespeople():
 def test_build_daily_task_params_supports_multiple_tasks_and_shop_group():
     params = bit_interface.build_daily_task_params({
         "appeal_types": ["投诉", "延误率", "投诉"],
+        "salespeople": ["旧业务员筛选"],
         "group_names": ["精品组", "普通组", "精品组"],
         "top_n": 1,
     })
@@ -897,6 +902,7 @@ def test_build_daily_task_params_supports_multiple_tasks_and_shop_group():
     assert params["appeal_types"] == ["延误率", "投诉"]
     assert params["appeal_type"] == "多任务"
     assert params["group_names"] == ["精品组", "普通组"]
+    assert params["salespeople"] == []
     assert params["top_n"] == 0
 
 

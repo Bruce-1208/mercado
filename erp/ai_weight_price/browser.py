@@ -288,22 +288,36 @@ class Browser:
 
     def check(self, page):
         try:
-            if self.stop.is_set():
-                raise Stopped("操作已停止")
-            for frame in page.frames:
+            for attempt in range(1, 4):
                 try:
-                    if frame is not page.main_frame and frame.is_detached():
-                        continue
-                    self.check_frame(frame)
+                    if self.stop.is_set():
+                        raise Stopped("操作已停止")
+                    for frame in page.frames:
+                        try:
+                            if frame is not page.main_frame and frame.is_detached():
+                                continue
+                            self.check_frame(frame)
+                        except (CircuitOpen, Stopped):
+                            raise
+                        except Exception:
+                            # 1688 replaces ad/login frames while the main page loads.
+                            if frame is not page.main_frame and frame.is_detached():
+                                continue
+                            raise
+                    return
                 except (CircuitOpen, Stopped):
                     raise
-                except Exception:
-                    # 1688 replaces ad/login frames while the main page loads.
-                    # Only a removed child frame can be ignored; keep main-frame
-                    # failures and every live captcha/risk signal blocking.
-                    if frame is not page.main_frame and frame.is_detached():
-                        continue
-                    raise
+                except Exception as exc:
+                    message = str(exc).lower()
+                    navigation_transition = (
+                        "execution context was destroyed" in message
+                        or "most likely because of a navigation" in message
+                        or "cannot find context with specified id" in message
+                    )
+                    if not navigation_transition or attempt == 3:
+                        raise
+                    if self.stop.wait(.15):
+                        raise Stopped("操作已停止")
         except CircuitOpen:
             # A real login/captcha page is the user's recovery surface. Detach it
             # from automatic cleanup so it remains visible after this worker exits.
@@ -352,8 +366,8 @@ class Browser:
             raise Stopped("操作已停止")
 
     @staticmethod
-    def focus(page):
-        """Select a real Playwright page; tolerate lightweight offline fakes."""
+    def show_for_manual_action(page):
+        """Expose only pages that require the operator's immediate attention."""
         bring_to_front = getattr(page, "bring_to_front", None)
         if bring_to_front:
             bring_to_front()
@@ -362,18 +376,14 @@ class Browser:
         safe_url(url, host=host)
         page = self.context.new_page()
         self.owned.append(page)
-        # Every business step must be observable in the dedicated Edge window.
-        # A CDP-created tab is not guaranteed to become the selected tab when
-        # Edge is already in use, so focus it both before and after navigation.
-        page.bring_to_front()
+        # Playwright can operate a non-selected tab. Keep automatic work in the
+        # background so a long batch does not interrupt the operator's browser.
         page.goto(url, wait_until="domcontentloaded")
-        page.bring_to_front()
         try:
             safe_url(page.url, host=host)
         except ValueError:
             actual = (urlsplit(page.url).hostname or "未知域名").lower()
             if host == "1688.com":
-                page.bring_to_front()
                 self.check(page)
                 if actual in ("login.taobao.com", "login.1688.com", "passport.1688.com"):
                     raise CircuitOpen("1688需要登录；请在可见Edge中完成登录后返回控制台继续执行") from None
@@ -391,7 +401,7 @@ class Browser:
         if page in self.owned:
             self.owned.remove(page)
         try:
-            page.bring_to_front()
+            self.show_for_manual_action(page)
         except Exception:
             pass
 
@@ -433,7 +443,7 @@ class Browser:
             page = self.context.new_page()
             page.goto(LOGIN_URL, wait_until="domcontentloaded")
         # This is a user login tab, intentionally not owned/closed by the worker.
-        page.bring_to_front()
+        self.show_for_manual_action(page)
 
     def open_supplier_login(self):
         pages = [page for page in self.context.pages if urlsplit(page.url).hostname in ("www.1688.com", "login.1688.com")]
@@ -443,7 +453,7 @@ class Browser:
             page = self.context.new_page()
             page.goto(self.config["supplier_home_url"], wait_until="domcontentloaded")
         # Retain this user login tab when the temporary driver disconnects.
-        page.bring_to_front()
+        self.show_for_manual_action(page)
 
     def confirm_login(self):
         for page in reversed(self.context.pages):
@@ -631,16 +641,100 @@ class Browser:
             if self.current_page(page) != 1:
                 raise ValueError("返回第一页失败，已停止采集")
 
-    def next_page(self, page, current):
-        button = page.locator(self.s["erp_next"])
-        if not button.count() or not button.first.is_visible() or not button.first.is_enabled():
-            return False
-        self.check(page)
-        button.first.click()
-        self.delay(2, 4)
-        if self.current_page(page) != current + 1:
-            raise ValueError("翻页后页码不符，已停止采集")
-        return True
+    def next_page(self, page, current, timeout=15):
+        """Advance one page with one retry for a dropped SPA click."""
+        target = current + 1
+        observed = current
+        for attempt in range(1, 3):
+            button = page.locator(self.s["erp_next"])
+            if not button.count() or not button.first.is_visible() or not button.first.is_enabled():
+                if attempt == 1:
+                    return False
+                break
+            self.check(page)
+            button.first.click()
+            deadline = time.monotonic() + timeout
+            while True:
+                self.check(page)
+                try:
+                    observed = self.current_page(page)
+                except ValueError:
+                    # Ant Design briefly replaces the active pagination node.
+                    observed = 0
+                if observed == target:
+                    return True
+                if observed not in (0, current):
+                    raise CircuitOpen(
+                        f"智赢翻页异常：期望第 {target} 页，实际第 {observed} 页；"
+                        "已暂停任务并保留进度"
+                    )
+                if time.monotonic() >= deadline:
+                    break
+                if self.stop.wait(.25):
+                    raise Stopped("操作已停止")
+            if observed == current and attempt == 1:
+                self.log(
+                    f"智赢第 {current} 页的下一页点击未生效，正在重试",
+                    level="WARNING",
+                )
+                continue
+            break
+        raise CircuitOpen(
+            f"智赢翻页等待超时：期望进入第 {target} 页，"
+            f"当前页码 {observed or '暂时无法读取'}；已暂停任务并保留进度"
+        )
+
+    @staticmethod
+    def _rows_fingerprint(signature):
+        return hashlib.sha256(
+            json.dumps(signature, ensure_ascii=False).encode()
+        ).hexdigest()
+
+    def wait_for_product_rows(self, page, page_number, seen=(), timeout=20):
+        """Wait for the active page's asynchronous product-list refresh."""
+        excluded = set(seen or ())
+        deadline = time.monotonic() + timeout
+        last_fingerprint = ""
+        last_count = 0
+        last_error = ""
+        attempts = 0
+        while True:
+            self.check(page)
+            attempts += 1
+            try:
+                rows = page.locator(self.s["erp_rows"])
+                rows.first.wait_for(state="visible", timeout=1000)
+                signature = rows.all_inner_texts()
+                last_count = len(signature)
+                if signature:
+                    last_fingerprint = self._rows_fingerprint(signature)
+                    if last_fingerprint not in excluded:
+                        if attempts > 1:
+                            self.log(
+                                f"智赢第 {page_number} 页商品列表延迟刷新，"
+                                f"等待 {attempts} 次后恢复",
+                                level="WARNING",
+                            )
+                        return rows, last_fingerprint
+                last_error = ""
+            except Exception as exc:
+                # React can detach the current card nodes while replacing them.
+                last_error = type(exc).__name__
+            if time.monotonic() >= deadline:
+                detail = (
+                    "列表仍与已读页面相同"
+                    if last_fingerprint in excluded
+                    else f"可见商品 {last_count} 件"
+                )
+                if last_error:
+                    detail += f"，最近读取错误 {last_error}"
+                raise CircuitOpen(
+                    f"智赢第 {page_number} 页页码已更新，但商品列表在 "
+                    f"{timeout} 秒内未完成刷新（{detail}）；"
+                    "已暂停任务并保留进度"
+                )
+            if self.stop.wait(.25):
+                raise Stopped("操作已停止")
 
     @staticmethod
     def normalize_erp_id(value):
@@ -667,7 +761,6 @@ class Browser:
         # read afresh. Merely dropping the previous-ID check accepts stale data.
         for attempt in range(1, 3):
             self.check(page)
-            self.focus(page)
             if "login" in page.url.lower():
                 raise ValueError("智赢登录已失效，请重新登录并确认")
             before = body.evaluate(ERP_DETAIL_ID_READ, record)
@@ -766,16 +859,17 @@ class Browser:
                           f"第 {start_item} 件开始（仅首个选中页生效）")
             for page_number in range(1, end_page + 1):
                 self.check(page)
+                # The active page number changes before React replaces the
+                # product cards. Wait for a new card fingerprint so a slow
+                # response cannot be mistaken for a duplicate page.
+                rows, fingerprint = self.wait_for_product_rows(
+                    page, page_number, seen
+                )
                 if page_number < first:
+                    seen.add(fingerprint)
                     if not self.next_page(page, page_number):
                         raise ValueError(f"列表仅有 {page_number} 页，无法到达起始/续跑页 {first}")
                     continue
-                rows = page.locator(self.s["erp_rows"])
-                rows.first.wait_for(state="visible")
-                signature = rows.all_inner_texts()
-                fingerprint = hashlib.sha256(json.dumps(signature).encode()).hexdigest()
-                if fingerprint in seen:
-                    raise ValueError("翻页后商品未变化，采集已停止")
                 seen.add(fingerprint)
                 count = 0
                 row_list = rows.all()
@@ -787,10 +881,6 @@ class Browser:
                     if item_index < item_offset:
                         continue
                     self.check(page)
-                    # Supplier matching and writeback open temporary tabs. Bring
-                    # the retained Zying list back before reading the next card,
-                    # keeping the one-product-at-a-time sequence visible.
-                    self.focus(page)
                     raw = row.inner_text()
                     image = self.value(row, "erp_image", "src", required=True)
                     record = {"title": self.value(row, "erp_title", required=True),
@@ -1152,7 +1242,6 @@ class Browser:
     def visual(self, task, step, message, page=None):
         if page is not None:
             self.check(page)
-            page.bring_to_front()
         if self.record_visual:
             self.record_visual(task["erp_goods_id"], step, message, page_url=page.url if page else "")
         else:

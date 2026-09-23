@@ -132,7 +132,7 @@ def test_image_payload_retries_temporary_cdn_http_error(monkeypatch):
     assert calls[0][1]["headers"]["Referer"] == "https://www.1688.com/"
 
 
-def test_empty_image_search_keeps_visible_browser_steps_without_screenshots_or_dashboard(page, monkeypatch, tmp_path):
+def test_empty_image_search_keeps_browser_steps_in_background_without_screenshots_or_dashboard(page, monkeypatch, tmp_path):
     import base64
     picture = base64.b64decode("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aD1kAAAAASUVORK5CYII=")
     page.route("https://www.1688.com/", lambda route: route.fulfill(body='''<meta charset="utf-8"><body>
@@ -153,7 +153,7 @@ def test_empty_image_search_keeps_visible_browser_steps_without_screenshots_or_d
         adapter.image_search(page, service.store.get("visual-1"))
     events = service.store.get("visual-1")["visual_history"]
     assert [e["step"] for e in events] == ["supplier_home", "uploading", "uploaded", "search_empty"]
-    assert len(focused) == 4
+    assert focused == []
     assert all(not e.get("screenshot_url") for e in events)
     assert page.locator('input').evaluate('e=>e.files[0].name') == 'product-main.png'
     service.store.skip("visual-1", "1688返回空搜索结果")
@@ -177,9 +177,12 @@ def test_empty_image_search_keeps_visible_browser_steps_without_screenshots_or_d
     expect(page.locator('#resume-switch')).to_be_visible()
 
 
-def test_1688_login_and_human_review_are_resumable_pauses(page):
+def test_1688_login_and_human_review_are_resumable_pauses_and_request_attention(page, monkeypatch):
     adapter = Browser(validate({}), threading.Event(), lambda *args: None)
     adapter.owned.append(page)
+    focused = []
+    original_focus = page.bring_to_front
+    monkeypatch.setattr(page, "bring_to_front", lambda: (focused.append(page.url), original_focus())[1])
     page.route('https://login.taobao.com/**', lambda route: route.fulfill(
         body='<body>1688 登录</body>', content_type='text/html'))
     page.goto('https://login.taobao.com/member/login.jhtml')
@@ -187,6 +190,7 @@ def test_1688_login_and_human_review_are_resumable_pauses(page):
         adapter.check(page)
     assert page not in adapter.owned
     assert not page.is_closed()
+    assert focused == ['https://login.taobao.com/member/login.jhtml']
     adapter.owned.append(page)
     page.route('https://www.1688.com/**', lambda route: route.fulfill(
         body='<meta charset="utf-8"><body>请按住滑块完成人机验证</body>', content_type='text/html'))
@@ -195,6 +199,8 @@ def test_1688_login_and_human_review_are_resumable_pauses(page):
         adapter.check(page)
     assert page not in adapter.owned
     assert not page.is_closed()
+    assert focused[-1] == 'https://www.1688.com/'
+    assert len(focused) == 2
 
 
 def test_image_search_foreign_redirect_without_review_evidence_is_not_a_manual_pause(page, monkeypatch):
@@ -340,6 +346,56 @@ def test_current_page_accepts_missing_pagination_only_for_an_unambiguous_single_
         <li class="ant-pagination-item">2</li><li class="ant-pagination-next"><button>下一页</button></li></ul>''')
     with pytest.raises(ValueError, match="无法唯一确认"):
         adapter.current_page(page)
+
+
+def test_next_page_retries_one_dropped_click_without_failing_the_run(page):
+    logs = []
+    adapter = Browser(
+        validate({}), threading.Event(),
+        lambda message, *args, **kwargs: logs.append((message, kwargs.get("level"))),
+    )
+    page.set_content('''
+      <ul class="ant-pagination">
+        <li id="active" class="ant-pagination-item ant-pagination-item-active">1</li>
+        <li class="ant-pagination-next"><button id="next">next</button></li>
+      </ul>
+      <script>
+        let clicks=0;
+        next.onclick=()=>{ clicks+=1; if(clicks===2) active.textContent='2'; };
+      </script>
+    ''')
+
+    assert adapter.next_page(page, 1, timeout=0) is True
+    assert page.evaluate("clicks") == 2
+    assert any("正在重试" in message for message, _level in logs)
+
+
+def test_product_rows_wait_for_delayed_react_refresh(page):
+    logs = []
+    adapter = Browser(
+        validate({}), threading.Event(),
+        lambda message, *args, **kwargs: logs.append((message, kwargs.get("level"))),
+    )
+    page.set_content('''
+      <div class="product-item">old product</div>
+      <script>setTimeout(()=>document.querySelector('.product-item').textContent='new product', 80)</script>
+    ''')
+    old = adapter._rows_fingerprint(["old product"])
+
+    rows, fingerprint = adapter.wait_for_product_rows(page, 2, {old}, timeout=1)
+
+    assert rows.all_inner_texts() == ["new product"]
+    assert fingerprint != old
+    assert any("延迟刷新" in message for message, _level in logs)
+
+
+def test_product_rows_timeout_pauses_instead_of_failing_run(page):
+    adapter = Browser(validate({}), threading.Event(), lambda *args, **kwargs: None)
+    page.set_content('<div class="product-item">unchanged product</div>')
+    old = adapter._rows_fingerprint(["unchanged product"])
+
+    with pytest.raises(CircuitOpen, match="已暂停任务并保留进度"):
+        adapter.wait_for_product_rows(page, 2, {old}, timeout=0)
 
 
 @pytest.mark.parametrize("duplicate_hidden", [False, True])

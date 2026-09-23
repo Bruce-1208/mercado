@@ -244,13 +244,15 @@ def test_local_transcode_creates_mp4_without_model_call(monkeypatch, tmp_path):
 
     probe_payload = {
         "streams": [
-            {"codec_type": "video", "width": 1080, "height": 1920},
+            {"codec_type": "video", "width": 540, "height": 720},
             {"codec_type": "audio"},
         ],
         "format": {"duration": "12.4"},
     }
+    commands = []
 
     def run(command, **_kwargs):
+        commands.append(command)
         if command[0] == "ffprobe":
             return SimpleNamespace(returncode=0, stdout=json.dumps(probe_payload), stderr="")
         Path(command[-1]).write_bytes(b"\x00\x00\x00\x18ftypisomconverted")
@@ -265,9 +267,27 @@ def test_local_transcode_creates_mp4_without_model_call(monkeypatch, tmp_path):
     job = video.get_job(created["id"])
     assert job["status"] == "succeeded"
     assert job["duration"] == 12
-    assert job["message"] == "本地格式转换完成，未调用 AI 模型"
+    assert job["message"] == "本地格式转换完成，未调用 AI 模型（居中裁剪铺满 9:16）"
+    assert job["provider_usage"]["source_ratio"] == pytest.approx(0.75)
+    ffmpeg_command = commands[-1]
+    assert "crop=720:1280" in ffmpeg_command[ffmpeg_command.index("-vf") + 1]
     assert (tmp_path / created["id"] / "mercado-video.mp4").is_file()
     submitting.assert_not_called()
+
+
+def test_local_transcode_can_preserve_non_916_video_with_padding(monkeypatch, tmp_path):
+    configure(monkeypatch, tmp_path)
+    monkeypatch.setattr(video, "_local_transcode_tools", lambda: ("ffmpeg", "ffprobe"))
+    created = video.create_job(
+        [upload("source.mp4", b"fake-video")],
+        {"local_transcode": "1", "local_fit_mode": "pad"},
+    )
+    job = video.get_job(created["id"])
+    assert job["local_fit_mode"] == "pad"
+    assert video._local_video_filter(job["local_fit_mode"]) == (
+        "scale=720:1280:force_original_aspect_ratio=decrease,"
+        "pad=720:1280:(ow-iw)/2:(oh-ih)/2:color=black,setsar=1"
+    )
 
 
 def test_local_transcode_requires_one_vertical_video(monkeypatch, tmp_path):

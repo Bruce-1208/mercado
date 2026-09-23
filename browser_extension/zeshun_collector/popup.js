@@ -880,7 +880,12 @@ weightPriceStartButton.addEventListener("click", async () => {
     const response = await runtimeMessage({type: resuming ? "CONTINUE_AI_WEIGHT_PRICE" : "START_AI_WEIGHT_PRICE", params});
     if (!response.ok) throw new Error(response.error || "启动AI核重核价失败");
     renderWeightPriceStatus(response);
-    showResult(resuming ? "已从暂停商品继续核重核价，原任务进度保留。" : "AI核重核价已从泽顺插件启动。", "");
+    showResult(
+      resuming
+        ? "已从暂停商品继续核重核价，原任务进度保留；自动步骤将在后台执行。"
+        : "AI核重核价已在后台启动，不会切换你当前使用的窗口。",
+      ""
+    );
   } catch (error) {
     showResult(error.message || String(error), "error");
   } finally {

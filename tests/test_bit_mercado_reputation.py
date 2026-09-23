@@ -584,6 +584,19 @@ def test_console_template_keeps_old_reputation_and_adds_api_panel():
     assert "function setApiReputationScopeFilter(key, value)" in template
     assert "function apiReputationMatchesScope(row)" in template
     assert "function applyReputationFilters()" in template
+    assert "function sortReputationBy(key)" in template
+    assert "function compareReputationRows(left, right)" in template
+    assert len(re.findall(r'class="reputation-sort-button"', reputation_table.group(1))) == 8
+    assert set(re.findall(r'data-sort-key="([^"]+)"', reputation_table.group(1))) == {
+        "infraction_count",
+        "rights_holder_count",
+        "color",
+        "order_total",
+        "complaint_rate",
+        "delay_rate",
+        "cancellation_rate",
+        "change_direction",
+    }
     assert "暂无符合业务员、账号组和名字筛选条件的声誉数据" in template
     assert 'data-field="reputation_update_enabled"' in template
     assert 'data-field="bulk_reputation_update_enabled"' in template

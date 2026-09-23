@@ -175,6 +175,19 @@ def test_background_requires_console_login_and_keeps_offline_queue():
     assert 'chrome.runtime.getURL("popup.html")' in source
 
 
+def test_weight_price_pause_email_waits_ten_minutes_and_is_one_shot():
+    source = (EXTENSION / "background.js").read_text(encoding="utf-8")
+
+    assert 'AI_WEIGHT_PRICE_PAUSE_NOTICE_MS = 10 * 60 * 1000' in source
+    assert 'AI_WEIGHT_PRICE_PAUSE_KEY = "aiWeightPricePauseNotification"' in source
+    assert 'if (pause.attempted || Date.now()' in source
+    assert 'pause = {...pause, attempted: true, attemptedAt: Date.now()}' in source
+    assert source.index('attempted: true, attemptedAt: Date.now()') < source.index(
+        'await notifyAttention(reason, {source: "AI核重核价"})'
+    )
+    assert 'storageRemove("local", [AI_WEIGHT_PRICE_PAUSE_KEY])' in source
+
+
 def test_extension_options_link_to_account_integration_settings():
     options = (EXTENSION / "options.html").read_text(encoding="utf-8")
     script = (EXTENSION / "options.js").read_text(encoding="utf-8")
@@ -853,8 +866,20 @@ def test_weight_price_extension_login_and_resume_routes(monkeypatch):
     calls = []
     monkeypatch.setattr(workbench, "_browser_extension_user_from_token", lambda _: _browser_extension_user())
     monkeypatch.setattr(workbench, "_browser_extension_ai_weight_price_snapshot", lambda: {"running": False})
+    monkeypatch.setattr(
+        workbench.browser_extension_models,
+        "get_api_key",
+        lambda user_id, provider, _secret: (
+            calls.append(("credential", user_id, provider))
+            or "account-dashscope-key"
+        ),
+    )
     monkeypatch.setattr(workbench.ai_weight_price_service, "open_login", lambda **kw: calls.append(kw))
-    monkeypatch.setattr(workbench.ai_weight_price_service, "continue_after_human", lambda: calls.append("continue"))
+    monkeypatch.setattr(
+        workbench.ai_weight_price_service,
+        "continue_after_human",
+        lambda **kw: calls.append(("continue", kw)),
+    )
     client = workbench.app.test_client()
     root = "/api/browser-extension/ai-weight-price/"
     assert client.post(root + "login/open", json={}).status_code == 200
@@ -864,8 +889,11 @@ def test_weight_price_extension_login_and_resume_routes(monkeypatch):
                        environ_base={"REMOTE_ADDR": "192.0.2.20"}).status_code == 403
     assert calls == [{"include_supplier": False}]
     assert client.post(root + "continue", json={"acknowledged": True}).status_code == 200
-    assert calls[-1] == "continue"
+    assert calls[-2:] == [
+        ("credential", 7, "dashscope"),
+        ("continue", {"runtime_api_key": "account-dashscope-key"}),
+    ]
     monkeypatch.setattr(workbench, "_browser_extension_user_from_token", lambda _: {
         **_browser_extension_user(), "access_version": 1, "permissions": ["ai_weight_price.view"]})
     assert client.post(root + "continue", json={"acknowledged": True}).status_code == 403
-    assert len(calls) == 2
+    assert len(calls) == 3

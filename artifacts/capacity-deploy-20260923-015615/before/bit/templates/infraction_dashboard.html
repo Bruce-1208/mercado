@@ -1,0 +1,1241 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>{% if ip_rights_mode %}侵权和权利人总览{% else %}违规商品总览{% endif %} · 武汉泽顺</title>
+    <style>
+        :root {
+            color-scheme: light;
+            --ink: #172033;
+            --muted: #637089;
+            --line: #dce3ee;
+            --line-strong: #c7d1df;
+            --canvas: #edf2f8;
+            --surface: #ffffff;
+            --surface-soft: #f7f9fc;
+            --navy: #152b4c;
+            --indigo: #3f57c5;
+            --indigo-soft: #eef0ff;
+            --amber: #be6a08;
+            --amber-soft: #fff3df;
+            --red: #b42318;
+            --red-soft: #fff0ee;
+            --green: #137a57;
+            --green-soft: #eaf8f2;
+            --shadow: 0 12px 34px rgba(30, 47, 76, .08);
+        }
+
+        * { box-sizing: border-box; }
+
+        body {
+            margin: 0;
+            min-width: 320px;
+            background:
+                radial-gradient(circle at 92% -8%, rgba(89, 110, 217, .17), transparent 30rem),
+                var(--canvas);
+            color: var(--ink);
+            font-family: "Microsoft YaHei", "PingFang SC", system-ui, -apple-system, sans-serif;
+            font-size: 16px;
+            line-height: 1.55;
+        }
+
+        button, input, select { font: inherit; }
+
+        button, select, input, a { outline-offset: 3px; }
+
+        .topbar {
+            background: var(--navy);
+            color: #fff;
+            border-bottom: 1px solid rgba(255,255,255,.13);
+        }
+
+        .topbar-inner {
+            width: min(1500px, calc(100% - 40px));
+            margin: 0 auto;
+            min-height: 68px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 24px;
+        }
+
+        .brand {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            min-width: 0;
+        }
+
+        .brand-mark {
+            width: 34px;
+            height: 34px;
+            border-radius: 10px;
+            display: grid;
+            place-items: center;
+            background: linear-gradient(145deg, #7486ef, #4357bd);
+            box-shadow: inset 0 0 0 1px rgba(255,255,255,.25);
+            font-weight: 800;
+        }
+
+        .brand-title { font-weight: 750; letter-spacing: .02em; }
+        .brand-meta { color: #b9c5d8; font-size: .82rem; }
+
+        .topbar-actions {
+            display: flex;
+            align-items: center;
+            gap: 14px;
+            color: #d7deeb;
+            font-size: .9rem;
+        }
+
+        .back-link {
+            color: #fff;
+            text-decoration: none;
+            border: 1px solid rgba(255,255,255,.24);
+            border-radius: 9px;
+            padding: 8px 12px;
+        }
+
+        .page {
+            width: min(1500px, calc(100% - 40px));
+            margin: 28px auto 48px;
+        }
+
+        body.embedded .topbar { display: none; }
+        body.embedded .page {
+            width: 100%;
+            margin: 0;
+            padding: 18px;
+        }
+
+        .page-heading {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-end;
+            gap: 22px;
+            margin-bottom: 20px;
+        }
+
+        h1 {
+            margin: 0;
+            color: var(--navy);
+            font-size: clamp(1.55rem, 3vw, 2.25rem);
+            line-height: 1.2;
+            letter-spacing: -.02em;
+        }
+
+        .heading-note {
+            margin: 7px 0 0;
+            color: var(--muted);
+        }
+
+        .sync-cluster {
+            display: flex;
+            align-items: center;
+            justify-content: flex-end;
+            gap: 12px;
+            flex-wrap: wrap;
+        }
+
+        .sync-copy { text-align: right; }
+        .sync-title { font-weight: 700; color: var(--navy); }
+        .sync-detail { color: var(--muted); font-size: .85rem; }
+
+        .auto-sync-switch {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            min-height: 42px;
+            padding: 8px 11px;
+            border: 1px solid var(--line-strong);
+            border-radius: 10px;
+            background: var(--surface);
+            color: var(--navy);
+            cursor: pointer;
+            font-size: .86rem;
+            font-weight: 700;
+        }
+
+        .auto-sync-switch input { width: 18px; height: 18px; accent-color: var(--indigo); }
+        .auto-sync-switch.busy { opacity: .6; pointer-events: none; }
+
+        .primary-button, .ghost-button {
+            border: 1px solid transparent;
+            border-radius: 10px;
+            min-height: 42px;
+            padding: 9px 15px;
+            cursor: pointer;
+            font-weight: 700;
+            transition: transform .15s ease, box-shadow .15s ease, background .15s ease;
+        }
+
+        .primary-button {
+            background: var(--indigo);
+            color: #fff;
+            box-shadow: 0 8px 20px rgba(63, 87, 197, .2);
+        }
+
+        .ghost-button {
+            background: var(--surface);
+            color: var(--navy);
+            border-color: var(--line-strong);
+        }
+
+        .primary-button:hover, .ghost-button:hover { transform: translateY(-1px); }
+        button:disabled { opacity: .55; cursor: wait; transform: none !important; }
+
+        .status-strip {
+            display: none;
+            margin: 0 0 18px;
+            padding: 12px 15px;
+            background: var(--indigo-soft);
+            color: #283d9b;
+            border: 1px solid #cfd5ff;
+            border-radius: 11px;
+        }
+
+        .status-strip.visible { display: block; }
+        .status-strip.error { background: var(--red-soft); border-color: #f0c7c1; color: var(--red); }
+
+        .filter-panel {
+            background: rgba(255,255,255,.9);
+            border: 1px solid var(--line);
+            border-radius: 14px;
+            padding: 16px;
+            box-shadow: var(--shadow);
+            display: grid;
+            grid-template-columns: 1.15fr repeat(6, minmax(135px, .7fr));
+            gap: 12px;
+            align-items: end;
+        }
+
+        body.ip-rights .filter-panel {
+            grid-template-columns: 1.15fr repeat(5, minmax(135px, .7fr));
+        }
+
+        .field label {
+            display: block;
+            margin: 0 0 6px;
+            color: #46536a;
+            font-size: .86rem;
+            font-weight: 700;
+        }
+
+        .field input, .field select {
+            width: 100%;
+            height: 42px;
+            border: 1px solid var(--line-strong);
+            border-radius: 9px;
+            padding: 0 11px;
+            background: #fff;
+            color: var(--ink);
+        }
+
+        .metrics {
+            display: grid;
+            grid-template-columns: 1.25fr repeat(4, 1fr);
+            gap: 14px;
+            margin: 18px 0;
+        }
+
+        .metric {
+            background: var(--surface);
+            border: 1px solid var(--line);
+            border-radius: 14px;
+            padding: 17px 18px;
+            min-height: 112px;
+            box-shadow: var(--shadow);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .metric::after {
+            content: "";
+            position: absolute;
+            inset: auto -18px -26px auto;
+            width: 78px;
+            height: 78px;
+            border-radius: 50%;
+            background: var(--metric-accent, #e8ecf5);
+            opacity: .7;
+        }
+
+        .metric-label { color: var(--muted); font-size: .88rem; font-weight: 650; }
+        .metric-value { margin-top: 8px; font-size: 1.8rem; line-height: 1; font-weight: 800; color: var(--navy); }
+        .metric-foot { margin-top: 9px; color: var(--muted); font-size: .8rem; }
+
+        .metric.total { --metric-accent: #cfd6ff; border-top: 3px solid var(--indigo); }
+        .metric.detection { --metric-accent: #ffe0b6; border-top: 3px solid var(--amber); }
+        .metric.rights { --metric-accent: #ffd1cc; border-top: 3px solid var(--red); }
+        .metric.stores { --metric-accent: #ccefe2; border-top: 3px solid var(--green); }
+        .metric.people { --metric-accent: #d8e4f5; border-top: 3px solid #567294; }
+
+        .section {
+            background: var(--surface);
+            border: 1px solid var(--line);
+            border-radius: 14px;
+            box-shadow: var(--shadow);
+            overflow: hidden;
+            margin-top: 18px;
+        }
+
+        .section-heading {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 16px;
+            padding: 17px 20px;
+            border-bottom: 1px solid var(--line);
+            background: var(--surface-soft);
+        }
+
+        .section-heading h2 { margin: 0; color: var(--navy); font-size: 1.08rem; }
+        .section-heading span { color: var(--muted); font-size: .84rem; }
+        .section-heading-main { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; }
+        .section-heading-actions { display: flex; align-items: center; justify-content: flex-end; gap: 10px; flex-wrap: wrap; }
+        .section-body { padding: 14px; }
+
+        .group-card {
+            border: 1px solid var(--line);
+            border-radius: 12px;
+            background: #fff;
+            overflow: hidden;
+        }
+
+        .group-card + .group-card { margin-top: 11px; }
+
+        .group-card summary {
+            list-style: none;
+            cursor: pointer;
+            padding: 15px 17px;
+            display: grid;
+            grid-template-columns: minmax(180px, 1fr) repeat(4, minmax(86px, auto));
+            align-items: center;
+            gap: 18px;
+            background: #fbfcfe;
+        }
+
+        .group-card summary::-webkit-details-marker { display: none; }
+        .group-card[open] summary { border-bottom: 1px solid var(--line); background: #f7f8ff; }
+        .group-name { font-weight: 800; color: var(--navy); }
+        .group-name::before { content: "▸"; display: inline-block; margin-right: 9px; color: var(--indigo); }
+        .group-card[open] .group-name::before { transform: rotate(90deg); }
+        .summary-number { text-align: right; }
+        .summary-number strong { display: block; color: var(--navy); }
+        .summary-number span { display: block; color: var(--muted); font-size: .75rem; }
+
+        .person-block { padding: 15px 16px; }
+        .person-block + .person-block { border-top: 1px dashed var(--line-strong); }
+        .person-heading {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 10px;
+        }
+        .person-title { font-weight: 800; color: #2a3850; }
+        .person-counts { color: var(--muted); font-size: .82rem; }
+
+        .table-wrap { overflow-x: auto; }
+        table { width: 100%; border-collapse: collapse; min-width: 780px; }
+        th, td { padding: 11px 12px; text-align: left; border-bottom: 1px solid #e7ecf3; vertical-align: top; }
+        th { color: #526078; background: #f8fafc; font-size: .8rem; letter-spacing: .02em; white-space: nowrap; }
+        td { font-size: .9rem; }
+        tbody tr:hover td { background: #fafbff; }
+
+        .count { font-variant-numeric: tabular-nums; font-weight: 750; }
+        .muted { color: var(--muted); }
+        .store-name { font-weight: 750; color: var(--navy); }
+        .site-list { min-width: 190px; max-width: 300px; line-height: 1.45; }
+        .site-count-list { display: grid; gap: 5px; margin-top: 6px; }
+        .site-count-chip {
+            display: flex;
+            align-items: baseline;
+            justify-content: space-between;
+            gap: 8px;
+            padding: 5px 8px;
+            border: 1px solid #dce3ee;
+            border-radius: 8px;
+            background: #f7f9fc;
+            color: #314158;
+            white-space: nowrap;
+        }
+        .site-count-chip > span { overflow: hidden; text-overflow: ellipsis; }
+        .site-count-chip strong { color: var(--navy); font-variant-numeric: tabular-nums; }
+        .site-count-chip small { color: var(--muted); font-size: .75rem; }
+        .site-count-chip em { color: var(--muted); font-size: .72rem; font-style: normal; font-weight: 600; }
+        .item-id { font-family: Consolas, "SFMono-Regular", monospace; font-size: .84rem; color: #314158; }
+        .title-cell { max-width: 330px; }
+        .reason-cell { min-width: 260px; max-width: 440px; color: #354157; }
+        .product-image-cell { width: 84px; padding-top: 8px; padding-bottom: 8px; }
+        .product-image-link { display: inline-flex; border-radius: 9px; }
+        .product-image-link:focus-visible { outline: 3px solid #9aa8e8; outline-offset: 2px; }
+        .product-image-shell {
+            display: grid;
+            place-items: center;
+            width: 64px;
+            height: 64px;
+            overflow: hidden;
+            border: 1px solid var(--line);
+            border-radius: 9px;
+            background: #f3f5f9;
+        }
+        .product-image {
+            display: block;
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+        .product-image-fallback {
+            display: grid;
+            place-items: center;
+            width: 100%;
+            height: 100%;
+            color: var(--muted);
+            font-size: .76rem;
+            font-weight: 700;
+        }
+
+        .pill {
+            display: inline-flex;
+            align-items: center;
+            border-radius: 999px;
+            padding: 4px 9px;
+            font-size: .76rem;
+            font-weight: 750;
+            white-space: nowrap;
+        }
+        .pill.detection { color: #8a4b00; background: var(--amber-soft); }
+        .pill.rights_holder { color: #9e241b; background: var(--red-soft); }
+        .pill.ok { color: var(--green); background: var(--green-soft); }
+        .pill.problem { color: var(--red); background: var(--red-soft); }
+        .pill.current { color: #283d9b; background: var(--indigo-soft); }
+        .pill.appeal_success { color: var(--green); background: var(--green-soft); }
+        .pill.appeal_failed { color: var(--red); background: var(--red-soft); }
+        .pill.historical { color: #526078; background: #edf1f6; }
+
+        .row-actions {
+            display: flex;
+            align-items: center;
+            gap: 7px;
+            flex-wrap: wrap;
+        }
+
+        .detail-button, .retry-store-button {
+            min-height: 34px;
+            padding: 6px 11px;
+            border: 1px solid #bcc7ee;
+            border-radius: 8px;
+            background: #f2f4ff;
+            color: #3348a6;
+            font-weight: 750;
+            cursor: pointer;
+            white-space: nowrap;
+        }
+        .detail-button:hover { background: #e7ebff; border-color: #8999d8; }
+        .retry-store-button {
+            border-color: #e0bb7a;
+            background: #fff7e8;
+            color: #8a4b00;
+        }
+        .retry-store-button:hover { background: #ffedcb; border-color: #cc9440; }
+        .store-filter-chip {
+            display: none;
+            padding: 6px 10px;
+            border-radius: 999px;
+            color: #3348a6 !important;
+            background: #e8ecff;
+            font-weight: 750;
+        }
+        .store-filter-chip.visible { display: inline-flex; }
+        .clear-detail-button { display: none; min-height: 34px; padding: 6px 11px; }
+        .clear-detail-button.visible { display: inline-flex; }
+
+        .empty-state, .loading-state {
+            padding: 42px 20px;
+            text-align: center;
+            color: var(--muted);
+            border: 1px dashed var(--line-strong);
+            border-radius: 11px;
+            background: var(--surface-soft);
+        }
+
+        .pagination {
+            display: flex;
+            justify-content: flex-end;
+            align-items: center;
+            gap: 10px;
+            padding: 14px 18px;
+            border-top: 1px solid var(--line);
+            color: var(--muted);
+            font-size: .86rem;
+        }
+
+        @media (max-width: 1100px) {
+            .filter-panel { grid-template-columns: repeat(3, 1fr); }
+            body.ip-rights .filter-panel { grid-template-columns: repeat(3, 1fr); }
+            .metrics { grid-template-columns: repeat(3, 1fr); }
+            .metric.total { grid-column: span 1; }
+        }
+
+        @media (max-width: 760px) {
+            .topbar-inner, .page { width: min(100% - 24px, 1500px); }
+            .topbar-inner { padding: 10px 0; align-items: flex-start; }
+            .brand-meta, .user-name { display: none; }
+            .page { margin-top: 20px; }
+            .page-heading { align-items: flex-start; flex-direction: column; }
+            .sync-cluster { justify-content: flex-start; }
+            .sync-copy { text-align: left; }
+            .filter-panel { grid-template-columns: 1fr 1fr; }
+            body.ip-rights .filter-panel { grid-template-columns: 1fr 1fr; }
+            .field.search { grid-column: 1 / -1; }
+            .metrics { grid-template-columns: 1fr 1fr; }
+            .metric.total { grid-column: 1 / -1; }
+            .group-card summary { grid-template-columns: 1fr 1fr; gap: 10px; }
+            .group-name { grid-column: 1 / -1; }
+            .summary-number { text-align: left; }
+            .section-heading { align-items: flex-start; flex-direction: column; }
+            .section-heading-actions { justify-content: flex-start; }
+        }
+
+        @media (max-width: 460px) {
+            .filter-panel, .metrics { grid-template-columns: 1fr; }
+            body.ip-rights .filter-panel { grid-template-columns: 1fr; }
+            .field.search, .metric.total { grid-column: auto; }
+            .topbar-actions { gap: 8px; }
+            .back-link { padding: 7px 9px; }
+        }
+    </style>
+</head>
+<body{% if embedded or ip_rights_mode %} class="{% if embedded %}embedded{% endif %}{% if embedded and ip_rights_mode %} {% endif %}{% if ip_rights_mode %}ip-rights{% endif %}"{% endif %}>
+    <header class="topbar">
+        <div class="topbar-inner">
+            <div class="brand">
+                <div class="brand-mark" aria-hidden="true">盾</div>
+                <div>
+                    <div class="brand-title">{% if ip_rights_mode %}侵权和权利人总览{% else %}违规商品总览{% endif %}</div>
+                    <div class="brand-meta">Mercado Libre 官方 API</div>
+                </div>
+            </div>
+            <div class="topbar-actions">
+                <span class="user-name">{{ current_user.get('display_name') or current_user.get('username') or '' }}</span>
+                <a class="back-link" href="/">返回综合服务台</a>
+            </div>
+        </div>
+    </header>
+
+    <main class="page">
+        <div class="page-heading">
+            <div>
+                {% if ip_rights_mode %}
+                <h1>全部店铺侵权和权利人排名</h1>
+                <p class="heading-note">仅统计 PPPI 侵权页面中的平台侵权和权利人举报，不包含禁限售商品；后台每 12 小时自动同步一次。</p>
+                {% else %}
+                <h1>按账户组与业务员查看违规商品</h1>
+                <p class="heading-note">平台违规检测、禁限售与权利人举报统一统计；后台每 12 小时自动同步一次。</p>
+                {% endif %}
+            </div>
+            <div class="sync-cluster">
+                <div class="sync-copy">
+                    <div class="sync-title" id="sync-title">正在读取同步状态</div>
+                    <div class="sync-detail" id="sync-detail">最近读取时间：正在读取 · 每 12 小时</div>
+                </div>
+                <label class="auto-sync-switch" id="auto-sync-switch">
+                    <input id="auto-sync-enabled" type="checkbox">
+                    <span id="auto-sync-label">全量更新</span>
+                </label>
+                <button class="primary-button" id="sync-button" type="button">立即刷新官方数据</button>
+            </div>
+        </div>
+
+        <div class="status-strip" id="status-strip" role="status"></div>
+
+        <section class="filter-panel" aria-label="违规商品筛选">
+            <div class="field search">
+                <label for="search-input">搜索商品、店铺、原因或权利人</label>
+                <input id="search-input" type="search" autocomplete="off" placeholder="输入商品编号或关键词">
+            </div>
+            <div class="field">
+                <label for="view-mode-select">展示模式</label>
+                <select id="view-mode-select">
+                    <option value="current" selected>当前违规商品</option>
+                    <option value="history">全部历史（去重）</option>
+                </select>
+            </div>
+            <div class="field">
+                <label for="days-select">统计范围</label>
+                <select id="days-select">
+                    <option value="7">最近 7 天</option>
+                    <option value="30" selected>最近 30 天</option>
+                    <option value="90">最近 90 天</option>
+                    <option value="365">最近 365 天</option>
+                </select>
+            </div>
+            {% if not ip_rights_mode %}<div class="field">
+                <label for="group-select">账户组</label>
+                <select id="group-select"><option value="">全部账户组</option></select>
+            </div>{% endif %}
+            <div class="field">
+                <label for="salesperson-select">业务员</label>
+                <select id="salesperson-select"><option value="">全部业务员</option></select>
+            </div>
+            <div class="field">
+                <label for="source-select">{% if ip_rights_mode %}侵权来源{% else %}违规来源{% endif %}</label>
+                <select id="source-select">
+                    <option value="">全部来源</option>
+                    <option value="detection">{% if ip_rights_mode %}平台侵权{% else %}平台检测{% endif %}</option>
+                    <option value="rights_holder">权利人举报</option>
+                </select>
+            </div>
+            <div class="field">
+                <label for="category-select">违规类型</label>
+                <select id="category-select">
+                    <option value="">全部违规类型</option>
+                </select>
+            </div>
+        </section>
+
+        <section class="metrics" aria-label="{% if ip_rights_mode %}侵权和权利人{% else %}违规商品{% endif %}统计摘要">
+            <article class="metric total">
+                <div class="metric-label">{% if ip_rights_mode %}侵权与权利人总数{% else %}违规商品总数{% endif %}</div>
+                <div class="metric-value" id="metric-total">—</div>
+                <div class="metric-foot" id="metric-range">最近 30 天</div>
+            </article>
+            <article class="metric detection">
+                <div class="metric-label">{% if ip_rights_mode %}平台侵权{% else %}平台检测{% endif %}</div>
+                <div class="metric-value" id="metric-detection">—</div>
+                <div class="metric-foot">官方 Moderations API</div>
+            </article>
+            <article class="metric rights">
+                <div class="metric-label">权利人举报</div>
+                <div class="metric-value" id="metric-rights">—</div>
+                <div class="metric-foot">官方 Brand Protection API</div>
+            </article>
+            <article class="metric stores">
+                <div class="metric-label">店铺</div>
+                <div class="metric-value" id="metric-stores">—</div>
+                <div class="metric-foot" id="metric-groups">— 个账户站点</div>
+            </article>
+            <article class="metric people">
+                <div class="metric-label">业务员</div>
+                <div class="metric-value" id="metric-people">—</div>
+                <div class="metric-foot" id="metric-problems">同步状态正常</div>
+            </article>
+        </section>
+
+        <section class="section">
+            <div class="section-heading">
+                <h2>{% if ip_rights_mode %}全部店铺排名{% else %}账户组概览{% endif %}</h2>
+                <span>{% if ip_rights_mode %}不区分账号组，按侵权和权利人总数从高到低排列{% else %}每个店铺汇总全部站点，点击“查看明细”下钻{% endif %}</span>
+            </div>
+            <div class="section-body" id="group-container">
+                <div class="loading-state">正在加载{% if ip_rights_mode %}店铺排名{% else %}账户分组{% endif %}…</div>
+            </div>
+        </section>
+
+        <section class="section" id="detail-section">
+            <div class="section-heading">
+                <div class="section-heading-main">
+                    <h2>{% if ip_rights_mode %}侵权和权利人明细{% else %}违规商品明细{% endif %}</h2>
+                    <span id="detail-count">正在加载</span>
+                </div>
+                <div class="section-heading-actions">
+                    <span class="store-filter-chip" id="store-filter-chip"></span>
+                    <button class="ghost-button clear-detail-button" id="clear-detail-button" type="button">查看全部明细</button>
+                    <button class="ghost-button" id="export-button" type="button">导出当前筛选明细 Excel</button>
+                </div>
+            </div>
+            <div class="table-wrap">
+                <table aria-label="违规商品明细">
+                    <thead>
+                        <tr>
+                            <th>违规时间</th>
+                            <th>产品图</th>
+                            <th>{% if ip_rights_mode %}业务员{% else %}账户组 / 业务员{% endif %}</th>
+                            <th>店铺 / 站点</th>
+                            <th>来源</th>
+                            <th>商品编号</th>
+                            <th>标题</th>
+                            <th>原因 / 状态</th>
+                        </tr>
+                    </thead>
+                    <tbody id="detail-body">
+                        <tr><td colspan="8" class="loading-state">正在加载违规商品明细…</td></tr>
+                    </tbody>
+                </table>
+            </div>
+            <div class="pagination">
+                <button class="ghost-button" id="prev-button" type="button">上一页</button>
+                <span id="page-label">第 1 页</span>
+                <button class="ghost-button" id="next-button" type="button">下一页</button>
+            </div>
+        </section>
+    </main>
+
+    <script>
+        const ipRightsMode = {{ 'true' if ip_rights_mode else 'false' }};
+        const state = {
+            page: 1,
+            pages: 1,
+            pageSize: 100,
+            loading: false,
+            wasSyncing: false,
+            detailTokenId: "",
+            detailStoreName: "",
+            latestReadAt: "",
+        };
+        const elements = {
+            search: document.getElementById("search-input"),
+            viewMode: document.getElementById("view-mode-select"),
+            days: document.getElementById("days-select"),
+            group: document.getElementById("group-select"),
+            salesperson: document.getElementById("salesperson-select"),
+            source: document.getElementById("source-select"),
+            category: document.getElementById("category-select"),
+            groups: document.getElementById("group-container"),
+            details: document.getElementById("detail-body"),
+            detailCount: document.getElementById("detail-count"),
+            storeFilterChip: document.getElementById("store-filter-chip"),
+            clearDetailButton: document.getElementById("clear-detail-button"),
+            exportButton: document.getElementById("export-button"),
+            detailSection: document.getElementById("detail-section"),
+            pageLabel: document.getElementById("page-label"),
+            prev: document.getElementById("prev-button"),
+            next: document.getElementById("next-button"),
+            syncButton: document.getElementById("sync-button"),
+            autoSyncSwitch: document.getElementById("auto-sync-switch"),
+            autoSyncEnabled: document.getElementById("auto-sync-enabled"),
+            autoSyncLabel: document.getElementById("auto-sync-label"),
+            syncTitle: document.getElementById("sync-title"),
+            syncDetail: document.getElementById("sync-detail"),
+            status: document.getElementById("status-strip"),
+        };
+
+        function escapeHtml(value) {
+            return String(value ?? "")
+                .replaceAll("&", "&amp;")
+                .replaceAll("<", "&lt;")
+                .replaceAll(">", "&gt;")
+                .replaceAll('"', "&quot;")
+                .replaceAll("'", "&#039;");
+        }
+
+        function number(value) {
+            return Number(value || 0).toLocaleString("zh-CN");
+        }
+
+        function showStatus(message, isError = false) {
+            elements.status.textContent = message || "";
+            elements.status.classList.toggle("visible", Boolean(message));
+            elements.status.classList.toggle("error", Boolean(isError));
+        }
+
+        function fillSelect(select, values, allLabel) {
+            const selected = select.value;
+            const options = [`<option value="">${escapeHtml(allLabel)}</option>`]
+                .concat((values || []).map(value => `<option value="${escapeHtml(value)}">${escapeHtml(value)}</option>`));
+            select.innerHTML = options.join("");
+            if ([...select.options].some(option => option.value === selected)) select.value = selected;
+        }
+
+        function fillCategorySelect(categories) {
+            const selected = elements.category.value;
+            const options = ['<option value="">全部违规类型</option>'].concat(
+                (categories || []).map(category => {
+                    const value = String(category?.value || "");
+                    const count = number(category?.count || 0);
+                    return `<option value="${escapeHtml(value)}">${escapeHtml(value)}（${count}）</option>`;
+                })
+            );
+            elements.category.innerHTML = options.join("");
+            if ([...elements.category.options].some(option => option.value === selected)) {
+                elements.category.value = selected;
+            }
+            elements.category.title = elements.category.selectedOptions[0]?.textContent || "全部违规类型";
+        }
+
+        function renderMetrics(summary, days, viewMode) {
+            document.getElementById("metric-total").textContent = number(summary.total);
+            document.getElementById("metric-detection").textContent = number(summary.detection_count);
+            document.getElementById("metric-rights").textContent = number(summary.rights_holder_count);
+            document.getElementById("metric-stores").textContent = number(summary.store_count);
+            document.getElementById("metric-people").textContent = number(summary.salesperson_count);
+            document.getElementById("metric-range").textContent = viewMode === "history"
+                ? "全部历史 · 已去重"
+                : `最近 ${days} 天 · 当前违规商品`;
+            document.getElementById("metric-groups").textContent = ipRightsMode
+                ? `${number(summary.site_count)} 个账户站点 · 全店铺统一排名`
+                : `${number(summary.site_count)} 个账户站点 · ${number(summary.group_count)} 个组`;
+            const problems = Number(summary.problem_stores || 0);
+            document.getElementById("metric-problems").textContent = problems ? `${problems} 个账户需重试` : "同步状态正常";
+        }
+
+        function syncCell(store) {
+            const status = String(store.last_status || "");
+            const readAt = escapeHtml(store.last_read_at || "尚未读取");
+            let badge;
+            if (status === "error" || status === "partial") {
+                badge = '<span class="pill problem">需重试</span>';
+            } else if (status === "limited") {
+                badge = '<span class="pill problem">读取不完整</span>';
+            } else {
+                badge = `<span class="pill ok">${escapeHtml(store.last_read_at ? "已读取" : "待读取")}</span>`;
+            }
+            return `${badge}<div class="muted">${readAt}</div>`;
+        }
+
+        function storeActions(store) {
+            const tokenId = escapeHtml(store.token_id);
+            const storeName = escapeHtml(store.store_name || "未命名店铺");
+            const retryAction = ipRightsMode
+                ? `<button class="retry-store-button" type="button" data-retry-token-id="${tokenId}" data-retry-store-name="${storeName}" ${state.wasSyncing ? "disabled" : ""}>单店重试</button>`
+                : "";
+            return `<div class="row-actions">
+                <button class="detail-button" type="button" data-detail-token-id="${tokenId}" data-detail-store-name="${storeName}">查看明细</button>
+                ${retryAction}
+            </div>`;
+        }
+
+        function renderSiteCounts(store) {
+            const sites = Array.isArray(store?.sites) ? store.sites : [];
+            if (!sites.length) return '<div class="muted">暂无站点数据</div>';
+            return `<div class="site-count-list">${sites.map(site => {
+                const siteId = String(site?.site_id || "").trim().toUpperCase();
+                const siteName = String(site?.site_name || siteId || "未知站点");
+                const detection = Number(site?.detection_count || 0);
+                const rights = Number(site?.rights_holder_count || 0);
+                const total = Number(site?.total ?? detection + rights);
+                const label = siteId && siteName !== siteId ? `${siteName} · ${siteId}` : (siteName || siteId);
+                return `<span class="site-count-chip" title="${escapeHtml(`${label}：${total} 条`)}">
+                    <span>${escapeHtml(label)}</span>
+                    <strong>${number(total)}</strong><small>条</small>
+                    <em>平台 ${number(detection)} · 权利人 ${number(rights)}</em>
+                </span>`;
+            }).join("")}</div>`;
+        }
+
+        function setRetryButtonsDisabled(disabled) {
+            elements.groups.querySelectorAll("[data-retry-token-id]").forEach(button => {
+                button.disabled = Boolean(disabled);
+            });
+        }
+
+        function renderGroups(groups) {
+            if (!groups || !groups.length) {
+                elements.groups.innerHTML = '<div class="empty-state">当前筛选范围内没有已配置的账户组。</div>';
+                return;
+            }
+            elements.groups.innerHTML = groups.map((group, groupIndex) => {
+                const people = (group.salespeople || []).map(person => {
+                    const stores = (person.stores || []).map(store => `
+                        <tr>
+                            <td><span class="store-name">${escapeHtml(store.store_name)}</span></td>
+                            <td class="site-list"><strong>${number(store.site_count)} 个站点</strong>${renderSiteCounts(store)}</td>
+                            <td class="count">${number(store.detection_count)}</td>
+                            <td class="count">${number(store.rights_holder_count)}</td>
+                            <td class="count">${number(store.total)}</td>
+                            <td class="muted">${escapeHtml(store.latest_infraction_at || "—")}</td>
+                            <td>${syncCell(store)}</td>
+                            <td>${storeActions(store)}</td>
+                        </tr>`).join("");
+                    return `
+                        <div class="person-block">
+                            <div class="person-heading">
+                                <div class="person-title">${escapeHtml(person.salesperson)}</div>
+                                <div class="person-counts">${number(person.store_count)} 个店铺 · ${number(person.site_count)} 个站点 · ${number(person.total)} 条违规</div>
+                            </div>
+                            <div class="table-wrap">
+                                <table>
+                                    <thead><tr><th>店铺</th><th>站点 / 数量</th><th>平台检测</th><th>权利人</th><th>合计</th><th>最近违规</th><th>读取状态 / 最近读取</th><th>操作</th></tr></thead>
+                                    <tbody>${stores}</tbody>
+                                </table>
+                            </div>
+                        </div>`;
+                }).join("");
+                return `
+                    <details class="group-card" ${groupIndex === 0 ? "open" : ""}>
+                        <summary>
+                            <div class="group-name">${escapeHtml(group.group_name)}</div>
+                            <div class="summary-number"><strong>${number(group.total)}</strong><span>违规合计</span></div>
+                            <div class="summary-number"><strong>${number(group.detection_count)}</strong><span>平台检测</span></div>
+                            <div class="summary-number"><strong>${number(group.rights_holder_count)}</strong><span>权利人</span></div>
+                            <div class="summary-number"><strong>${number(group.store_count)}</strong><span>${number(group.site_count)} 个站点</span></div>
+                        </summary>
+                        ${people}
+                    </details>`;
+            }).join("");
+        }
+
+        function renderStoreRankings(stores) {
+            if (!stores || !stores.length) {
+                elements.groups.innerHTML = '<div class="empty-state">当前筛选范围内没有店铺侵权或权利人数据。</div>';
+                return;
+            }
+            const rows = stores.map(store => `
+                <tr>
+                    <td class="count">${number(store.rank)}</td>
+                    <td><span class="store-name">${escapeHtml(store.store_name)}</span><div class="muted">${escapeHtml(store.salesperson || "未分配")}</div></td>
+                    <td class="site-list"><strong>${number(store.site_count)} 个站点</strong>${renderSiteCounts(store)}</td>
+                    <td class="count">${number(store.detection_count)}</td>
+                    <td class="count">${number(store.rights_holder_count)}</td>
+                    <td class="count">${number(store.total)}</td>
+                    <td class="muted">${escapeHtml(store.latest_infraction_at || "—")}</td>
+                    <td>${syncCell(store)}</td>
+                    <td>${storeActions(store)}</td>
+                </tr>`).join("");
+            elements.groups.innerHTML = `
+                <div class="table-wrap">
+                    <table aria-label="全部店铺侵权和权利人排名">
+                        <thead><tr><th>排名</th><th>店铺 / 业务员</th><th>站点 / 数量</th><th>平台侵权</th><th>权利人</th><th>合计</th><th>最近违规</th><th>读取状态 / 最近读取</th><th>操作</th></tr></thead>
+                        <tbody>${rows}</tbody>
+                    </table>
+                </div>`;
+        }
+
+        function sourcePill(type) {
+            const label = type === "rights_holder" ? "权利人举报" : (ipRightsMode ? "平台侵权" : "平台检测");
+            return `<span class="pill ${escapeHtml(type)}">${label}</span>`;
+        }
+
+        function resolutionPill(status) {
+            const labels = {
+                current: "当前违规商品",
+                appeal_success: "申诉成功",
+                appeal_failed: "申诉失败",
+                historical: "历史记录",
+            };
+            const key = Object.hasOwn(labels, status) ? status : "historical";
+            return `<span class="pill ${escapeHtml(key)}">${labels[key]}</span>`;
+        }
+
+        function safeHttpUrl(value) {
+            try {
+                const url = new URL(String(value || ""), window.location.origin);
+                return url.protocol === "http:" || url.protocol === "https:" ? url.href : "";
+            } catch (_) {
+                return "";
+            }
+        }
+
+        function productImage(row) {
+            const imageUrl = safeHttpUrl(row.thumbnail_url);
+            const permalink = safeHttpUrl(row.permalink);
+            const label = `查看商品 ${row.item_id || ""}`.trim();
+            const picture = imageUrl
+                ? `<span class="product-image-shell"><img class="product-image" src="${escapeHtml(imageUrl)}" alt="${escapeHtml(row.title || row.item_id || "产品图片")}" loading="lazy" referrerpolicy="no-referrer" onerror="this.style.display='none';this.nextElementSibling.style.display='grid'"><span class="product-image-fallback" style="display:none">无图</span></span>`
+                : '<span class="product-image-shell"><span class="product-image-fallback">无图</span></span>';
+            return permalink
+                ? `<a class="product-image-link" href="${escapeHtml(permalink)}" target="_blank" rel="noopener" aria-label="${escapeHtml(label)}">${picture}</a>`
+                : picture;
+        }
+
+        function renderRows(rows, total) {
+            const hasStoreFilter = Boolean(state.detailTokenId);
+            const modeLabel = elements.viewMode.value === "history" ? "全部历史（已去重）" : "当前违规商品";
+            elements.detailCount.textContent = hasStoreFilter
+                ? `${modeLabel} · 当前店铺共 ${number(total)} 条`
+                : `${modeLabel} · 共 ${number(total)} 条`;
+            elements.storeFilterChip.textContent = hasStoreFilter ? `店铺：${state.detailStoreName}` : "";
+            elements.storeFilterChip.classList.toggle("visible", hasStoreFilter);
+            elements.clearDetailButton.classList.toggle("visible", hasStoreFilter);
+            if (!rows || !rows.length) {
+                elements.details.innerHTML = `<tr><td colspan="8" class="empty-state">${hasStoreFilter ? "该店铺" : "当前筛选范围内"}暂无违规商品明细。</td></tr>`;
+                return;
+            }
+            elements.details.innerHTML = rows.map(row => {
+                const status = row.status ? `<div class="muted">状态：${escapeHtml(row.status)}</div>` : "";
+                const holder = row.rights_holder ? `<div class="muted">权利人：${escapeHtml(row.rights_holder)}</div>` : "";
+                const due = row.due_at ? `<div class="muted">截止：${escapeHtml(row.due_at)}</div>` : "";
+                const owner = ipRightsMode
+                    ? `<strong>${escapeHtml(row.salesperson || "未分配")}</strong>`
+                    : `<strong>${escapeHtml(row.group_name)}</strong><div class="muted">${escapeHtml(row.salesperson)}</div>`;
+                return `
+                    <tr>
+                        <td class="muted">${escapeHtml(row.occurred_at || "—")}</td>
+                        <td class="product-image-cell">${productImage(row)}</td>
+                        <td>${owner}</td>
+                        <td><span class="store-name">${escapeHtml(row.store_name)}</span><div class="muted">${escapeHtml(row.site_id)}</div></td>
+                        <td>${sourcePill(row.source_type)}</td>
+                        <td><span class="item-id">${escapeHtml(row.item_id)}</span></td>
+                        <td class="title-cell">${escapeHtml(row.title || "—")}</td>
+                        <td class="reason-cell"><div>${resolutionPill(row.resolution_status)}</div>${escapeHtml(row.reason || "—")}${holder}${status}${due}</td>
+                    </tr>`;
+            }).join("");
+        }
+
+        function dashboardParams(includePagination = true) {
+            const params = new URLSearchParams({
+                days: elements.days.value,
+                view_mode: elements.viewMode.value,
+                group_name: elements.group?.value || "",
+                salesperson: elements.salesperson.value,
+                source_type: elements.source.value,
+                category: elements.category.value,
+                search: elements.search.value.trim(),
+                detail_token_id: state.detailTokenId,
+            });
+            if (includePagination) {
+                params.set("page", String(state.page));
+                params.set("page_size", String(state.pageSize));
+            }
+            return params;
+        }
+
+        async function loadData() {
+            if (state.loading) return;
+            state.loading = true;
+            const params = dashboardParams();
+            try {
+                const endpoint = ipRightsMode ? "/api/official-ip-rights/dashboard" : "/api/official-infractions/dashboard";
+                const response = await fetch(`${endpoint}?${params.toString()}`);
+                const payload = await response.json();
+                if (!response.ok || payload.status !== "success") throw new Error(payload.message || "读取违规商品数据失败");
+                const data = payload.data || {};
+                state.page = Number(data.page || 1);
+                state.pages = Number(data.pages || 1);
+                const viewMode = data.filters?.view_mode === "history" ? "history" : "current";
+                elements.viewMode.value = viewMode;
+                elements.days.disabled = viewMode === "history";
+                renderMetrics(data.summary || {}, Number(data.filters?.days || elements.days.value), viewMode);
+                if (ipRightsMode) renderStoreRankings(data.store_rankings || []);
+                else renderGroups(data.account_groups || []);
+                renderRows(data.rows || [], data.total || 0);
+                if (elements.group) fillSelect(elements.group, data.filters?.groups || [], "全部账户组");
+                fillSelect(elements.salesperson, data.filters?.salespeople || [], "全部业务员");
+                fillCategorySelect(data.filters?.categories || []);
+                elements.pageLabel.textContent = `第 ${state.page} / ${state.pages} 页`;
+                elements.prev.disabled = state.page <= 1;
+                elements.next.disabled = state.page >= state.pages;
+                const lastRead = data.summary?.last_read_at;
+                state.latestReadAt = String(lastRead || "");
+                if (lastRead && !state.wasSyncing) {
+                    elements.syncTitle.textContent = `最近读取时间：${lastRead}`;
+                } else if (!lastRead && !state.wasSyncing) {
+                    elements.syncTitle.textContent = "最近读取时间：尚未读取";
+                }
+                showStatus("");
+            } catch (error) {
+                showStatus(error.message || String(error), true);
+                elements.groups.innerHTML = `<div class="empty-state">${ipRightsMode ? "店铺排名" : "违规商品分组"}加载失败，请稍后重试。</div>`;
+                elements.details.innerHTML = '<tr><td colspan="8" class="empty-state">违规商品明细加载失败。</td></tr>';
+            } finally {
+                state.loading = false;
+            }
+        }
+
+        async function loadSyncStatus() {
+            try {
+                const response = await fetch("/api/official-infractions/sync/status");
+                const payload = await response.json();
+                if (!response.ok || payload.status !== "success") return;
+                const sync = payload.data || {};
+                const running = Boolean(sync.running);
+                const autoEnabled = sync.auto_sync_enabled !== false;
+                elements.autoSyncEnabled.checked = autoEnabled;
+                elements.autoSyncLabel.textContent = autoEnabled ? "全量更新已开启" : "全量更新已关闭";
+                elements.syncButton.disabled = running;
+                elements.syncButton.textContent = running ? "同步进行中…" : "立即刷新官方数据";
+                setRetryButtonsDisabled(running);
+                if (running) {
+                    const active = (sync.active_stores || []).slice(0, 3).join("、");
+                    elements.syncTitle.textContent = `正在同步 ${sync.processed_stores || 0} / ${sync.total_stores || 0} 个账户`;
+                    elements.syncDetail.textContent = active ? `当前：${active}` : (sync.message || "正在准备账户数据");
+                } else {
+                    elements.syncDetail.textContent = autoEnabled
+                        ? `每 ${sync.auto_sync_hours || 12} 小时自动全量更新 · ${sync.store_workers || 0} 个店铺线程`
+                        : "自动全量更新已关闭，可继续手动刷新";
+                    if (!state.latestReadAt && sync.finished_at) {
+                        elements.syncTitle.textContent = `最近任务结束：${sync.finished_at}`;
+                    }
+                }
+                if (state.wasSyncing && !running) loadData();
+                state.wasSyncing = running;
+            } catch (_) { /* 页面数据仍可独立使用 */ }
+        }
+
+        async function startSync() {
+            elements.syncButton.disabled = true;
+            try {
+                const response = await fetch("/api/official-infractions/sync", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: "{}",
+                });
+                const payload = await response.json();
+                if (!response.ok && response.status !== 409) throw new Error(payload.message || "启动同步失败");
+                showStatus(payload.message || "官方违规商品数据同步已启动");
+                state.wasSyncing = true;
+                await loadSyncStatus();
+            } catch (error) {
+                showStatus(error.message || String(error), true);
+                elements.syncButton.disabled = false;
+            }
+        }
+
+        async function retryStore(button) {
+            const tokenId = Number(button?.dataset.retryTokenId || 0);
+            const storeName = button?.dataset.retryStoreName || "该店铺";
+            if (!Number.isInteger(tokenId) || tokenId <= 0) {
+                showStatus("店铺编号无效，无法启动单店重试", true);
+                return;
+            }
+            setRetryButtonsDisabled(true);
+            const originalLabel = button.textContent;
+            button.textContent = "正在启动…";
+            showStatus(`正在启动“${storeName}”的单店重试…`);
+            try {
+                const response = await fetch("/api/official-infractions/sync", {
+                    method: "POST",
+                    headers: {"Content-Type": "application/json"},
+                    body: JSON.stringify({token_ids: [tokenId]}),
+                });
+                const payload = await response.json();
+                if (!response.ok || payload.status !== "success") {
+                    if (response.status === 409) {
+                        state.wasSyncing = true;
+                        await loadSyncStatus();
+                    }
+                    throw new Error(payload.message || "单店重试启动失败");
+                }
+                showStatus(`“${storeName}”的单店重试已启动`);
+                state.wasSyncing = true;
+                await loadSyncStatus();
+            } catch (error) {
+                showStatus(error.message || String(error), true);
+                setRetryButtonsDisabled(state.wasSyncing);
+            } finally {
+                button.textContent = originalLabel;
+            }
+        }
+
+        async function updateAutoSync() {
+            const enabled = Boolean(elements.autoSyncEnabled.checked);
+            elements.autoSyncSwitch.classList.add("busy");
+            elements.autoSyncEnabled.disabled = true;
+            try {
+                const response = await fetch("/api/overview-auto-sync", {
+                    method: "PUT",
+                    headers: {"Content-Type": "application/json"},
+                    body: JSON.stringify({scope: "official_infractions", enabled}),
+                });
+                const payload = await response.json();
+                if (!response.ok || payload.status !== "success") {
+                    throw new Error(payload.message || "保存全量更新开关失败");
+                }
+                elements.autoSyncEnabled.checked = payload.data?.enabled !== false;
+                elements.autoSyncLabel.textContent = elements.autoSyncEnabled.checked
+                    ? "全量更新已开启" : "全量更新已关闭";
+                showStatus(elements.autoSyncEnabled.checked
+                    ? "已开启每 12 小时自动全量更新" : "已关闭自动全量更新");
+                await loadSyncStatus();
+            } catch (error) {
+                elements.autoSyncEnabled.checked = !enabled;
+                showStatus(error.message || String(error), true);
+            } finally {
+                elements.autoSyncEnabled.disabled = false;
+                elements.autoSyncSwitch.classList.remove("busy");
+            }
+        }
+
+        function exportFilename(response) {
+            const disposition = response.headers.get("Content-Disposition") || "";
+            const utf8Match = disposition.match(/filename\*=UTF-8''([^;]+)/i);
+            if (utf8Match) {
+                try { return decodeURIComponent(utf8Match[1].trim()); } catch (_) { /* 使用默认文件名 */ }
+            }
+            const plainMatch = disposition.match(/filename="?([^";]+)"?/i);
+            const prefix = ipRightsMode ? "侵权和权利人明细" : "违规商品明细";
+            return plainMatch?.[1]?.trim() || `${prefix}_${new Date().toISOString().slice(0, 10)}.xlsx`;
+        }
+
+        async function exportCurrentRows() {
+            if (!elements.exportButton || elements.exportButton.disabled) return;
+            const originalLabel = elements.exportButton.textContent;
+            elements.exportButton.disabled = true;
+            elements.exportButton.textContent = "正在导出…";
+            showStatus("正在生成当前筛选范围内的 Excel，请稍候…");
+            try {
+                const exportEndpoint = ipRightsMode
+                    ? "/api/official-ip-rights/export"
+                    : "/api/official-infractions/export";
+                const response = await fetch(
+                    `${exportEndpoint}?${dashboardParams(false).toString()}`,
+                    {credentials: "same-origin"},
+                );
+                const contentType = (response.headers.get("Content-Type") || "").toLowerCase();
+                if (!response.ok || !contentType.includes("spreadsheetml")) {
+                    let message = "导出失败，请稍后重试";
+                    try {
+                        const payload = await response.json();
+                        message = payload.message || message;
+                    } catch (_) {
+                        if (response.status === 401 || response.redirected) message = "登录已失效，请重新登录后再导出";
+                    }
+                    throw new Error(message);
+                }
+                const blob = await response.blob();
+                const url = URL.createObjectURL(blob);
+                const link = document.createElement("a");
+                link.href = url;
+                link.download = exportFilename(response);
+                link.hidden = true;
+                document.body.appendChild(link);
+                link.click();
+                link.remove();
+                setTimeout(() => URL.revokeObjectURL(url), 1000);
+                showStatus(`导出完成：${link.download}`);
+            } catch (error) {
+                showStatus(error.message || String(error), true);
+            } finally {
+                elements.exportButton.disabled = false;
+                elements.exportButton.textContent = originalLabel;
+            }
+        }
+
+        let searchTimer;
+        elements.search.addEventListener("input", () => {
+            clearTimeout(searchTimer);
+            searchTimer = setTimeout(() => { state.page = 1; loadData(); }, 400);
+        });
+        [elements.viewMode, elements.days, elements.group, elements.salesperson, elements.source, elements.category].filter(Boolean).forEach(select => {
+            select.addEventListener("change", () => {
+                select.title = select.selectedOptions[0]?.textContent || "";
+                state.page = 1;
+                loadData();
+            });
+        });
+        elements.prev.addEventListener("click", () => { if (state.page > 1) { state.page -= 1; loadData(); } });
+        elements.next.addEventListener("click", () => { if (state.page < state.pages) { state.page += 1; loadData(); } });
+        elements.syncButton.addEventListener("click", startSync);
+        elements.autoSyncEnabled.addEventListener("change", updateAutoSync);
+        elements.exportButton?.addEventListener("click", exportCurrentRows);
+        elements.groups.addEventListener("click", event => {
+            const retryButton = event.target.closest("[data-retry-token-id]");
+            if (retryButton) {
+                retryStore(retryButton);
+                return;
+            }
+            const button = event.target.closest("[data-detail-token-id]");
+            if (!button) return;
+            state.detailTokenId = button.dataset.detailTokenId || "";
+            state.detailStoreName = button.dataset.detailStoreName || "未命名店铺";
+            state.page = 1;
+            loadData().then(() => {
+                elements.detailSection.scrollIntoView({ behavior: "smooth", block: "start" });
+            });
+        });
+        elements.clearDetailButton.addEventListener("click", () => {
+            state.detailTokenId = "";
+            state.detailStoreName = "";
+            state.page = 1;
+            loadData();
+        });
+
+        loadData();
+        loadSyncStatus();
+        setInterval(loadSyncStatus, 30000);
+        setInterval(() => { if (!state.wasSyncing) loadData(); }, 300000);
+    </script>
+</body>
+</html>

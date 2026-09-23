@@ -262,11 +262,16 @@ def test_authorized_appeal_scope_uses_site_switches_and_salesperson(monkeypatch)
     group_scope = bit_daily_task.load_authorized_appeal_shop_site_config(
         group_names=["精品组"]
     )
+    group_scope_with_stale_owner = bit_daily_task.load_authorized_appeal_shop_site_config(
+        salespeople=["李四"],
+        group_names=["精品组"],
+    )
 
     assert all_scope["授权店铺"] == {"MX", "CL"}
     assert all_scope["store_alias"] == {"MX", "CL"}
     assert owner_scope["授权店铺"] == {"MX"}
     assert group_scope["授权店铺"] == {"MX"}
+    assert group_scope_with_stale_owner["授权店铺"] == {"MX"}
 
 
 def test_authorized_appeal_scope_requires_explicit_enabled_switch(monkeypatch):

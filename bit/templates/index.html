@@ -3,7 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <script>
+    <script src="{{ url_for('static', filename='background-exports.js') }}"></script>
+<script>
         // This template must be rendered by Flask. Redirect accidental file://
         // opens to the live workbench so API calls and the latest UI stay in sync.
         if (window.location.protocol === "file:") {
@@ -4885,7 +4886,8 @@
             font-size: 12px;
         }
 
-        .api-reputation-sort-button {
+        .api-reputation-sort-button,
+        .reputation-sort-button {
             display: inline-flex;
             width: 100%;
             min-height: 28px;
@@ -4901,18 +4903,21 @@
             text-align: left;
         }
 
-        .api-reputation-sort-button:hover {
+        .api-reputation-sort-button:hover,
+        .reputation-sort-button:hover {
             background: rgba(37, 99, 235, 0.08);
             color: #1d4ed8;
         }
 
-        .api-reputation-sort-indicator {
+        .api-reputation-sort-indicator,
+        .reputation-sort-indicator {
             flex: 0 0 auto;
             color: #98a2b3;
             font-size: 11px;
         }
 
-        .api-reputation-sort-button.active .api-reputation-sort-indicator {
+        .api-reputation-sort-button.active .api-reputation-sort-indicator,
+        .reputation-sort-button.active .reputation-sort-indicator {
             color: #2563eb;
         }
 
@@ -11459,8 +11464,10 @@
                                 <label class="site-option"><input type="checkbox" role="switch" name="daily-task-appeal-type" value="投诉" onchange="updateDailyTaskAppealSwitch(this)"><span>投诉</span></label>
                                 <label class="site-option"><input type="checkbox" role="switch" name="daily-task-appeal-type" value="取消率" onchange="updateDailyTaskAppealSwitch(this)"><span>取消率</span></label>
                                 <label class="site-option"><input id="daily-task-mixed-mode" type="checkbox" role="switch" name="daily-task-appeal-type" value="混合模式" onchange="updateDailyTaskAppealSwitch(this)"><span>混合模式</span></label>
+                                <label class="site-option"><input id="daily-task-algorithm-mode" type="checkbox" role="switch" name="daily-task-appeal-type" value="算法模式" onchange="updateDailyTaskAppealSwitch(this)"><span>算法模式</span></label>
                             </div>
                             <small class="shop-search-hint">混合模式一轮：侵权 → 延误率 → 侵权 → 投诉 → 侵权 → 取消率；混合模式与自定义任务互斥。侵权任务不限制 Top N；每轮先实时遍历店铺授权中勾选的全部站点，再只执行本站点普通侵权数超过标准的站点。侵权和禁限售会拆成小批次，并按待申诉数量设置 1–5 级权重平滑轮转；数量越多，执行频率越高，低量站点也不会跳过。禁限售是独立任务，需单独开启后读取当前禁限售列表。</small>
+                            <small class="shop-search-hint">算法模式：每轮读取实时侵权及最新声誉数据，综合侵权数量、投诉率、延误率和取消率，优先执行高风险店铺和站点。按本轮综合分分配 1–5 级权重：侵权商品分批且不重复，声誉申诉每轮安排 1–5 次，低风险站点也会轮转。仍遵守下方执行标准及间隔；算法模式与混合模式、自定义任务互斥。</small>
                         </div>
 
                         <div class="field">
@@ -11475,9 +11482,9 @@
                                     <div class="market-multi-panel-head"><span>勾选任务业务员</span><div class="market-multi-panel-actions"><button type="button" onclick="selectAllMercadoPublishOptions('daily-task-salesperson', true, event)">全选</button><button type="button" onclick="selectAllMercadoPublishOptions('daily-task-salesperson', false, event)">清空</button></div></div>
                                     <div class="market-multi-options" data-select-id="daily-task-salesperson"></div>
                                 </div>
-                                <select class="market-publish-native" id="daily-task-salesperson" multiple onchange="syncMercadoPublishPicker(this)"></select>
+                                <select class="market-publish-native" id="daily-task-salesperson" multiple onchange="syncDailyTaskScopePicker(this)"></select>
                             </div>
-                            <small class="shop-search-hint">不勾选表示所有业务员。</small>
+                            <small class="shop-search-hint">不勾选表示所有业务员；选择业务员会清空店铺组。</small>
                         </div>
 
                         <div class="field">
@@ -11492,9 +11499,9 @@
                                     <div class="market-multi-panel-head"><span>勾选任务店铺组</span><div class="market-multi-panel-actions"><button type="button" onclick="selectAllMercadoPublishOptions('daily-task-group', true, event)">全选</button><button type="button" onclick="selectAllMercadoPublishOptions('daily-task-group', false, event)">清空</button></div></div>
                                     <div class="market-multi-options" data-select-id="daily-task-group"></div>
                                 </div>
-                                <select class="market-publish-native" id="daily-task-group" multiple onchange="syncMercadoPublishPicker(this)"></select>
+                                <select class="market-publish-native" id="daily-task-group" multiple onchange="syncDailyTaskScopePicker(this)"></select>
                             </div>
-                            <small class="shop-search-hint">不勾选表示所有店铺组。</small>
+                            <small class="shop-search-hint">不勾选表示所有店铺组；选择店铺组会清空业务员。</small>
                         </div>
 
                         <div class="field">
@@ -11974,7 +11981,15 @@
                         </div>
                         <div class="ai-video-field">
                             <label><input id="ai-video-local-transcode" type="checkbox" onchange="updateAiVideoMode()"> 仅转换视频格式，不调用 AI</label>
-                            <small>适合内容已完成、只需转成兼容 MP4 的视频；仅支持单个已符合 9:16、10–60 秒的视频。</small>
+                            <small>适合内容已完成、只需转成兼容 MP4 的视频；支持单个 10–60 秒视频，非 9:16 画面也可由 FFmpeg 自动处理。</small>
+                        </div>
+                        <div class="ai-video-field">
+                            <label for="ai-video-local-fit-mode">非 9:16 画面处理</label>
+                            <select id="ai-video-local-fit-mode" disabled>
+                                <option value="crop" selected>居中裁剪铺满 9:16（推荐）</option>
+                                <option value="pad">完整保留画面并补黑边</option>
+                            </select>
+                            <small>不拉伸人物和商品；裁剪模式可能损失左右边缘，补边模式会保留完整画面。</small>
                         </div>
                         <div class="ai-video-field">
                             <label for="ai-video-duration">视频时长</label>
@@ -13591,14 +13606,14 @@
                                 <tr>
                                     <th><label class="reputation-shop-select-label"><input class="reputation-shop-select" id="reputation-select-all" type="checkbox" aria-label="选择全部声誉数据店铺" onchange="toggleAllReputationShops(this.checked)" disabled><span>店铺名</span></label></th>
                                     <th>站点</th>
-                                    <th>近100天侵权</th>
-                                    <th>近100天权利人</th>
-                                    <th>声誉颜色</th>
-                                    <th>总单量</th>
-                                    <th>投诉率</th>
-                                    <th>延误率</th>
-                                    <th>取消率</th>
-                                    <th>增加或减少</th>
+                                    <th><button class="reputation-sort-button" type="button" data-sort-key="infraction_count" onclick="sortReputationBy('infraction_count')">近100天侵权<span class="reputation-sort-indicator">↕</span></button></th>
+                                    <th><button class="reputation-sort-button" type="button" data-sort-key="rights_holder_count" onclick="sortReputationBy('rights_holder_count')">近100天权利人<span class="reputation-sort-indicator">↕</span></button></th>
+                                    <th><button class="reputation-sort-button" type="button" data-sort-key="color" onclick="sortReputationBy('color')">声誉颜色<span class="reputation-sort-indicator">↕</span></button></th>
+                                    <th><button class="reputation-sort-button" type="button" data-sort-key="order_total" onclick="sortReputationBy('order_total')">总单量<span class="reputation-sort-indicator">↕</span></button></th>
+                                    <th><button class="reputation-sort-button" type="button" data-sort-key="complaint_rate" onclick="sortReputationBy('complaint_rate')">投诉率<span class="reputation-sort-indicator">↕</span></button></th>
+                                    <th><button class="reputation-sort-button" type="button" data-sort-key="delay_rate" onclick="sortReputationBy('delay_rate')">延误率<span class="reputation-sort-indicator">↕</span></button></th>
+                                    <th><button class="reputation-sort-button" type="button" data-sort-key="cancellation_rate" onclick="sortReputationBy('cancellation_rate')">取消率<span class="reputation-sort-indicator">↕</span></button></th>
+                                    <th><button class="reputation-sort-button" type="button" data-sort-key="change_direction" onclick="sortReputationBy('change_direction')">增加或减少<span class="reputation-sort-indicator">↕</span></button></th>
                                     <th>近七天变化率</th>
                                     <th>流量趋势</th>
                                     <th>系统告警</th>
@@ -14554,6 +14569,8 @@
         let riskResultSortDir = "desc";
         let reputationLoaded = false;
         let reputationRows = [];
+        let reputationSortKey = "";
+        let reputationSortDirection = "asc";
         let apiReputationLoaded = false;
         let apiReputationRows = [];
         let apiReputationSortKey = "store";
@@ -24069,8 +24086,10 @@
             const localMode = aiVideoLocalTranscodeEnabled();
             const prompt = document.getElementById("ai-video-prompt");
             const duration = document.getElementById("ai-video-duration");
+            const fitMode = document.getElementById("ai-video-local-fit-mode");
             if (prompt) prompt.disabled = localMode;
             if (duration) duration.disabled = localMode;
+            if (fitMode) fitMode.disabled = !localMode;
             updateAiVideoGenerateState();
         }
 
@@ -24115,6 +24134,7 @@
             form.append("duration", document.getElementById("ai-video-duration").value);
             form.append("prompt", document.getElementById("ai-video-prompt").value.trim());
             form.append("local_transcode", aiVideoLocalTranscodeEnabled() ? "1" : "0");
+            form.append("local_fit_mode", document.getElementById("ai-video-local-fit-mode")?.value || "crop");
             if (aiVideoTarget) {
                 form.append("link_id", String(aiVideoTarget.id));
                 ["item_id", "title", "store_name", "site_id", "thumbnail_url"].forEach(key => form.append(key, aiVideoTarget[key] || ""));
@@ -25814,10 +25834,7 @@
             if (prohibitedOccurredTo.value) query.set("occurred_to", prohibitedOccurredTo.value);
             if (prohibitedSearch.value.trim()) query.set("search", prohibitedSearch.value.trim());
             try {
-                const response = await fetch(`/api/prohibited-listings/export?${query.toString()}`, {
-                    cache: "no-store",
-                    credentials: "same-origin",
-                });
+                const response = await queueWorkbenchExport(`/api/prohibited-listings/export?${query.toString()}`);
                 const contentType = (response.headers.get("Content-Type") || "").toLowerCase();
                 if (!response.ok || !contentType.includes("spreadsheetml")) {
                     let message = "导出失败，请稍后重试";
@@ -26419,7 +26436,7 @@
         }
 
         function exportRiskResults() {
-            window.location.href = `/api/risk-check/results/export?${riskResultQueryParams(false).toString()}`;
+            downloadWorkbenchExport(`/api/risk-check/results/export?${riskResultQueryParams(false).toString()}`);
         }
 
         function scheduleRiskCheckStatusPoll() {
@@ -27140,7 +27157,7 @@
         }
 
         function exportLatestReputation() {
-            window.location.href = "/api/reputation/latest/export";
+            downloadWorkbenchExport("/api/reputation/latest/export");
         }
 
         function selectedCollectionValues(elementId) {
@@ -27624,7 +27641,7 @@
         }
 
         function exportLatestInfractions() {
-            window.location.href = `/api/infractions/latest/export?days=${encodeURIComponent(infractionDays)}`;
+            downloadWorkbenchExport(`/api/infractions/latest/export?days=${encodeURIComponent(infractionDays)}`);
         }
 
         async function runInfractionCollection() {
@@ -28205,7 +28222,7 @@
             const switches = Array.from(
                 document.querySelectorAll('input[name="daily-task-appeal-type"]'),
             );
-            if (changedSwitch.value === "混合模式") {
+            if (["混合模式", "算法模式"].includes(changedSwitch.value)) {
                 switches.forEach(input => {
                     if (input !== changedSwitch) input.checked = false;
                 });
@@ -28213,6 +28230,21 @@
             }
             const mixedMode = document.getElementById("daily-task-mixed-mode");
             if (mixedMode) mixedMode.checked = false;
+            const algorithmMode = document.getElementById("daily-task-algorithm-mode");
+            if (algorithmMode) algorithmMode.checked = false;
+        }
+
+        function syncDailyTaskScopePicker(changedSelect) {
+            syncMercadoPublishPicker(changedSelect);
+            if (!mercadoSelectedValues(changedSelect).length) return;
+            const otherSelect = changedSelect === dailyTaskGroup
+                ? dailyTaskSalesperson
+                : dailyTaskGroup;
+            if (!otherSelect || !mercadoSelectedValues(otherSelect).length) return;
+            Array.from(otherSelect.options).forEach(option => {
+                option.selected = false;
+            });
+            syncMercadoPublishPicker(otherSelect);
         }
 
         function updateDailyTaskCopyModeFields() {
@@ -29246,11 +29278,104 @@
             const salesperson = String(reputationSalespersonFilter?.value || "").trim();
             const groupName = String(reputationGroupFilter?.value || "").trim();
             const nameQuery = String(reputationNameSearch?.value || "").trim().toLocaleLowerCase("zh-CN");
-            return reputationRows.filter(row => (
+            const rows = reputationRows.filter(row => (
                 (!salesperson || String(row["业务员"] || "未分配") === salesperson)
                 && (!groupName || String(row["账户组"] || "未分组") === groupName)
                 && (!nameQuery || String(row["店铺名"] || "").toLocaleLowerCase("zh-CN").includes(nameQuery))
             ));
+            if (!reputationSortKey) return rows;
+            return rows.sort(compareReputationRows);
+        }
+
+        const REPUTATION_SORT_KEYS = new Set([
+            "infraction_count", "rights_holder_count", "color", "order_total",
+            "complaint_rate", "delay_rate", "cancellation_rate", "change_direction",
+        ]);
+
+        function reputationCountSortNumber(value) {
+            if (value === null || value === undefined || value === "") return null;
+            const number = Number(String(value).replace(/[,，\s]/g, ""));
+            if (!Number.isFinite(number) || number < 0) return null;
+            return number;
+        }
+
+        function reputationColorSortRank(value) {
+            const text = String(value ?? "").trim();
+            if (!text || text.includes("失败")) return null;
+            if (text.includes("绿")) return 4;
+            if (text.includes("黄")) return 3;
+            if (text.includes("橘") || text.includes("橙")) return 2;
+            if (text.includes("红")) return 1;
+            if (text.includes("无")) return 0;
+            return null;
+        }
+
+        function reputationDirectionSortRank(value) {
+            const text = String(value ?? "").trim();
+            if (!text) return null;
+            if (/下滑|下降|减少/.test(text)) return -1;
+            if (/增长|上涨|上升|增加/.test(text)) return 1;
+            if (/持平|未变化|不变/.test(text)) return 0;
+            return null;
+        }
+
+        function reputationSortValue(row, key) {
+            const values = {
+                infraction_count: reputationCountSortNumber(row["侵权数量"]),
+                rights_holder_count: reputationCountSortNumber(row["权利人数量"]),
+                color: reputationColorSortRank(row["声誉颜色"]),
+                order_total: reputationCountSortNumber(row["总单量"]),
+                complaint_rate: parseReputationPercentage(row["投诉率"]),
+                delay_rate: parseReputationPercentage(row["延误率"]),
+                cancellation_rate: parseReputationPercentage(row["取消率"]),
+                change_direction: reputationDirectionSortRank(row["增加或减少"]),
+            };
+            const value = values[key];
+            return Number.isFinite(value) ? value : null;
+        }
+
+        function compareReputationRows(left, right) {
+            const leftValue = reputationSortValue(left, reputationSortKey);
+            const rightValue = reputationSortValue(right, reputationSortKey);
+            if ((leftValue === null) !== (rightValue === null)) return leftValue === null ? 1 : -1;
+            if (leftValue !== null && rightValue !== null && leftValue !== rightValue) {
+                const comparison = leftValue - rightValue;
+                return reputationSortDirection === "desc" ? -comparison : comparison;
+            }
+            const shopComparison = String(left["店铺名"] || "").localeCompare(
+                String(right["店铺名"] || ""), "zh-CN", {numeric: true, sensitivity: "base"},
+            );
+            if (shopComparison) return shopComparison;
+            return String(left["站点"] || "").localeCompare(
+                String(right["站点"] || ""), "zh-CN", {numeric: true, sensitivity: "base"},
+            );
+        }
+
+        function updateReputationSortIndicators() {
+            document.querySelectorAll(".reputation-sort-button").forEach(button => {
+                const active = button.dataset.sortKey === reputationSortKey;
+                const nextDirection = active && reputationSortDirection === "asc" ? "降序" : "升序";
+                button.classList.toggle("active", active);
+                button.setAttribute("aria-sort", active
+                    ? (reputationSortDirection === "asc" ? "ascending" : "descending")
+                    : "none");
+                button.setAttribute("aria-label", `${button.textContent.replace(/[↕↑↓]/g, "").trim()}：点击按${nextDirection}排列`);
+                const indicator = button.querySelector(".reputation-sort-indicator");
+                if (indicator) indicator.textContent = active
+                    ? (reputationSortDirection === "asc" ? "↑" : "↓")
+                    : "↕";
+            });
+        }
+
+        function sortReputationBy(key) {
+            if (!REPUTATION_SORT_KEYS.has(key)) return;
+            if (reputationSortKey === key) {
+                reputationSortDirection = reputationSortDirection === "asc" ? "desc" : "asc";
+            } else {
+                reputationSortKey = key;
+                reputationSortDirection = "asc";
+            }
+            renderLatestReputationRows();
         }
 
         function applyReputationFilters() {
@@ -29260,6 +29385,7 @@
 
         function renderLatestReputationRows() {
             const rows = filteredReputationRows();
+            updateReputationSortIndicators();
             const normalStatuses = new Set(["正常", "active", "enabled", "ok"]);
             const greenCount = rows.filter(row => (
                 String(row["声誉颜色"] || "").includes("绿")

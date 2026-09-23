@@ -673,6 +673,7 @@
         </section>
     </main>
 
+    <script src="{{ url_for('static', filename='background-exports.js') }}"></script>
     <script>
         const ipRightsMode = {{ 'true' if ip_rights_mode else 'false' }};
         const state = {
@@ -1159,9 +1160,8 @@
                 const exportEndpoint = ipRightsMode
                     ? "/api/official-ip-rights/export"
                     : "/api/official-infractions/export";
-                const response = await fetch(
-                    `${exportEndpoint}?${dashboardParams(false).toString()}`,
-                    {credentials: "same-origin"},
+                const response = await queueWorkbenchExport(
+                    `${exportEndpoint}?${dashboardParams(false).toString()}`
                 );
                 const contentType = (response.headers.get("Content-Type") || "").toLowerCase();
                 if (!response.ok || !contentType.includes("spreadsheetml")) {

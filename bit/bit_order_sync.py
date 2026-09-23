@@ -13,6 +13,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal, InvalidOperation
 
+from bit.sync_capacity import run_store as run_capacity_store, due_batch
 from bit import bit_mysql, bit_print, mercado_tokens
 from bit.bit_runtime_lock import InterProcessLock, get_lock_owner
 from mercado_api.client import MercadoAPIError, MercadoLibreClient
@@ -1444,7 +1445,7 @@ def run_order_sync(start_date="", end_date="", token_ids=None, mode="manual"):
     results = []
     paused_for_recent = False
     try:
-        store_workers = max(1, min(24, int(os.getenv("MERCADO_ORDER_STORE_WORKERS", "8")), len(records) or 1))
+        store_workers = max(1, min(24, int(os.getenv("MERCADO_ORDER_STORE_WORKERS", "4")), len(records) or 1))
     except ValueError:
         store_workers = min(8, len(records) or 1)
     _state_update(store_workers=store_workers)
@@ -1480,7 +1481,7 @@ def run_order_sync(start_date="", end_date="", token_ids=None, mode="manual"):
             return {"store": store_name, "status": "error", "message": str(exc)}
 
     with ThreadPoolExecutor(max_workers=store_workers, thread_name_prefix="meli-orders") as executor:
-        futures = [executor.submit(sync_record, record) for record in records]
+        futures = [executor.submit(run_capacity_store, "orders" if mode != DAILY_STATUS_MODE else "order-history", record["id"], sync_record, record) for record in records]
         for future in as_completed(futures):
             result = future.result()
             if result is None:

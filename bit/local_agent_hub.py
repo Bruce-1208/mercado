@@ -93,6 +93,14 @@ def normalize_job_id(value):
     return value
 
 
+class _ClosingConnection(sqlite3.Connection):
+    def __exit__(self, *args):
+        try:
+            return super().__exit__(*args)
+        finally:
+            self.close()
+
+
 class LocalAgentStore:
     """Small SQLite-backed queue shared by Flask workers and agent polls."""
 
@@ -102,13 +110,18 @@ class LocalAgentStore:
         self._schema_lock = threading.Lock()
         self._schema_ready = False
         self._queue_id = ""
+        self._heartbeat_cache = {}
+        self._heartbeat_cache_lock = threading.Lock()
 
     def _connect(self):
-        connection = sqlite3.connect(str(self.path), timeout=15)
-        connection.row_factory = sqlite3.Row
-        connection.execute("PRAGMA busy_timeout = 15000")
-        connection.execute("PRAGMA journal_mode = WAL")
-        self._ensure_schema(connection)
+        connection = sqlite3.connect(str(self.path), timeout=15, factory=_ClosingConnection)
+        try:
+            connection.row_factory = sqlite3.Row
+            connection.execute("PRAGMA busy_timeout = 15000")
+            self._ensure_schema(connection)
+        except BaseException:
+            connection.close()
+            raise
         return connection
 
     def _ensure_schema(self, connection):
@@ -117,6 +130,18 @@ class LocalAgentStore:
         with self._schema_lock:
             if self._schema_ready:
                 return
+            # WAL is persistent. Set it once under the initialization lock,
+            # not on every heartbeat connection. SQLite may return BUSY here
+            # immediately during a second process's cold start.
+            deadline = time.monotonic() + 15
+            while True:
+                try:
+                    connection.execute("PRAGMA journal_mode = WAL")
+                    break
+                except sqlite3.OperationalError as exc:
+                    if "locked" not in str(exc).lower() or time.monotonic() >= deadline:
+                        raise
+                    time.sleep(0.02)
             connection.executescript(
                 """
                 CREATE TABLE IF NOT EXISTS local_agents (
@@ -264,6 +289,16 @@ class LocalAgentStore:
         session_id = str(session_id or "").strip()[:96]
         current_job_id = str(current_job_id or "").strip()
         lease_seconds = max(60.0, float(lease_seconds or DEFAULT_JOB_LEASE_SECONDS))
+        heartbeat_key = (name, str(hostname), str(platform), str(agent_version),
+                         str(business_version), tuple(capabilities), session_id,
+                         current_job_id, lease_seconds)
+        # Also protects the server from older agents that poll every second.
+        # Cancellation is read separately on every request. A new session,
+        # job, or version always writes immediately; leases are >=60 seconds.
+        with self._heartbeat_cache_lock:
+            cached = self._heartbeat_cache.get(agent_id)
+            if cached and cached[1] == heartbeat_key and 0 <= now - cached[0] < 5:
+                return self._agent_row(cached[2], now=now)
         with self._connect() as connection:
             connection.execute("BEGIN IMMEDIATE")
             previous = connection.execute(
@@ -340,6 +375,10 @@ class LocalAgentStore:
             row = connection.execute(
                 "SELECT * FROM local_agents WHERE agent_id = ?", (agent_id,)
             ).fetchone()
+        with self._heartbeat_cache_lock:
+            self._heartbeat_cache[agent_id] = (now, heartbeat_key, dict(row))
+            if len(self._heartbeat_cache) > 4096:
+                del self._heartbeat_cache[next(iter(self._heartbeat_cache))]
         return self._agent_row(row, now=now)
 
     def list_agents(self, *, online_seconds=45, capability="", now=None):
@@ -429,6 +468,25 @@ class LocalAgentStore:
         lease_seconds = max(60.0, float(lease_seconds or DEFAULT_JOB_LEASE_SECONDS))
         connection = self._connect()
         try:
+            # The normal running/idle poll needs no write lock. Recheck all
+            # conditions inside the transaction below before claiming a job.
+            # Returning on a racing enqueue is safe: the next poll sees it.
+            active = connection.execute(
+                "SELECT lease_expires_at, updated_at FROM local_agent_jobs "
+                "WHERE agent_id = ? AND status IN ('running', 'stopping')",
+                (agent_id,),
+            ).fetchall()
+            if any(
+                (row["lease_expires_at"] is not None and row["lease_expires_at"] >= now)
+                or (row["lease_expires_at"] is None and row["updated_at"] >= now - lease_seconds)
+                for row in active
+            ):
+                return None
+            if not active and not connection.execute(
+                "SELECT 1 FROM local_agent_jobs WHERE agent_id = ? "
+                "AND status = 'queued' AND cancel_requested = 0 LIMIT 1", (agent_id,),
+            ).fetchone():
+                return None
             connection.execute("BEGIN IMMEDIATE")
             connection.execute(
                 """

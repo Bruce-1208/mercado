@@ -29,6 +29,8 @@ ROOT_SOURCE_FILES = (
 _BUNDLE_LOCK = threading.Lock()
 _BUNDLE_CACHE = {}
 _BUNDLE_HISTORY_LIMIT = 5
+_SOURCE_CACHE_LOCK = threading.Lock()
+_SOURCE_CACHE = {}
 
 
 def iter_business_source_files(project_root):
@@ -53,6 +55,16 @@ def business_source_version(project_root):
     project_root = Path(project_root).resolve()
     digest = hashlib.sha256()
     files = iter_business_source_files(project_root)
+    # Metadata reads are cheap; hash file contents only after a source change.
+    # ctime catches replacements even when a deployment preserves mtime/size.
+    signature = tuple(
+        (str(path), stat.st_size, stat.st_mtime_ns, stat.st_ctime_ns)
+        for path in files for stat in (path.stat(),)
+    )
+    with _SOURCE_CACHE_LOCK:
+        cached = _SOURCE_CACHE.get(str(project_root))
+        if cached and cached[0] == signature:
+            return cached[1], files
     for path in files:
         relative = path.relative_to(project_root).as_posix().encode("utf-8")
         content = path.read_bytes()
@@ -60,7 +72,12 @@ def business_source_version(project_root):
         digest.update(relative)
         digest.update(len(content).to_bytes(8, "big"))
         digest.update(content)
-    return digest.hexdigest()[:24], files
+    version = digest.hexdigest()[:24]
+    with _SOURCE_CACHE_LOCK:
+        _SOURCE_CACHE[str(project_root)] = (signature, version)
+        if len(_SOURCE_CACHE) > 8:
+            del _SOURCE_CACHE[next(iter(_SOURCE_CACHE))]
+    return version, files
 
 
 def build_business_bundle(project_root):
