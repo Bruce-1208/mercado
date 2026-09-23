@@ -13,14 +13,16 @@ from bit import bit_appeal_ai as ai, bit_daily_task as daily, bit_db_api as api
 from bit.local_agent_hub import LocalAgentStore
 
 
-def test_client_worker_import_does_not_require_server_dbutils(tmp_path):
+def test_client_worker_import_does_not_require_server_only_dependencies(tmp_path):
     script = '''
 import importlib.abc, sys
-class NoDBUtils(importlib.abc.MetaPathFinder):
+class NoServerDependencies(importlib.abc.MetaPathFinder):
     def find_spec(self, fullname, path=None, target=None):
         if fullname == "dbutils" or fullname.startswith("dbutils."):
             raise ModuleNotFoundError("Agent does not ship dbutils")
-sys.meta_path.insert(0, NoDBUtils())
+        if fullname == "cryptography" or fullname.startswith("cryptography."):
+            raise ModuleNotFoundError("Agent does not ship cryptography")
+sys.meta_path.insert(0, NoServerDependencies())
 import requests
 def no_network(*args, **kwargs):
     raise AssertionError("Agent import must not access business APIs")
@@ -29,6 +31,7 @@ from bit import bit_interface
 assert bit_interface.RUNTIME_SETTINGS.is_client
 bit_interface.close_all_pools()
 assert "dbutils" not in sys.modules
+assert "cryptography" not in sys.modules
 '''
     env = dict(os.environ, BIT_RUNTIME_ROLE="client", BIT_EXECUTION_TARGET="agent",
                BIT_BACKGROUND_SERVICES_DISABLED="1",

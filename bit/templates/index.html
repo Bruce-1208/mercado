@@ -11981,7 +11981,15 @@
                         </div>
                         <div class="ai-video-field">
                             <label><input id="ai-video-local-transcode" type="checkbox" onchange="updateAiVideoMode()"> 仅转换视频格式，不调用 AI</label>
-                            <small>适合内容已完成、只需转成兼容 MP4 的视频；仅支持单个已符合 9:16、10–60 秒的视频。</small>
+                            <small>适合内容已完成、只需转成兼容 MP4 的视频；支持单个 10–60 秒视频，非 9:16 画面也可由 FFmpeg 自动处理。</small>
+                        </div>
+                        <div class="ai-video-field">
+                            <label for="ai-video-local-fit-mode">非 9:16 画面处理</label>
+                            <select id="ai-video-local-fit-mode" disabled>
+                                <option value="crop" selected>居中裁剪铺满 9:16（推荐）</option>
+                                <option value="pad">完整保留画面并补黑边</option>
+                            </select>
+                            <small>不拉伸人物和商品；裁剪模式可能损失左右边缘，补边模式会保留完整画面。</small>
                         </div>
                         <div class="ai-video-field">
                             <label for="ai-video-duration">视频时长</label>
@@ -24078,8 +24086,10 @@
             const localMode = aiVideoLocalTranscodeEnabled();
             const prompt = document.getElementById("ai-video-prompt");
             const duration = document.getElementById("ai-video-duration");
+            const fitMode = document.getElementById("ai-video-local-fit-mode");
             if (prompt) prompt.disabled = localMode;
             if (duration) duration.disabled = localMode;
+            if (fitMode) fitMode.disabled = !localMode;
             updateAiVideoGenerateState();
         }
 
@@ -24124,6 +24134,7 @@
             form.append("duration", document.getElementById("ai-video-duration").value);
             form.append("prompt", document.getElementById("ai-video-prompt").value.trim());
             form.append("local_transcode", aiVideoLocalTranscodeEnabled() ? "1" : "0");
+            form.append("local_fit_mode", document.getElementById("ai-video-local-fit-mode")?.value || "crop");
             if (aiVideoTarget) {
                 form.append("link_id", String(aiVideoTarget.id));
                 ["item_id", "title", "store_name", "site_id", "thumbnail_url"].forEach(key => form.append(key, aiVideoTarget[key] || ""));

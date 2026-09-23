@@ -46,6 +46,13 @@ SEEDANCE_PROVIDER = "volcengine-seedance"
 WAN_PROVIDER = "dashscope-wan3"
 LOCAL_PROVIDER = "local-ffmpeg"
 PROVIDER_ORDER = (SEEDANCE_PROVIDER, WAN_PROVIDER)
+LOCAL_FIT_MODES = {"crop", "pad"}
+LOCAL_FIT_MODE_LABELS = {
+    "crop": "居中裁剪铺满 9:16",
+    "pad": "完整保留画面并补黑边",
+}
+LOCAL_OUTPUT_WIDTH = 720
+LOCAL_OUTPUT_HEIGHT = 1280
 SEEDANCE_MODEL = "doubao-seedance-2-5-260628"
 WAN_MODELS = {"wan3.0-video-prime", "wan3.0-video"}
 WAN_REGIONS = {
@@ -635,6 +642,11 @@ def _parse_positive_int(value: object, default: int, minimum: int, maximum: int)
     return max(minimum, min(maximum, parsed))
 
 
+def _normalize_local_fit_mode(value: object) -> str:
+    mode = str(value or "crop").strip().lower()
+    return mode if mode in LOCAL_FIT_MODES else "crop"
+
+
 def _save_assets(job_id: str, uploads, *, require_any: bool = True, start_index: int = 1) -> list[dict]:
     uploads = [upload for upload in uploads or [] if upload and upload.filename]
     if not uploads:
@@ -762,6 +774,7 @@ def _fingerprint(job: dict) -> str:
         "provider_order": job.get("provider_order") or list(PROVIDER_ORDER),
         "models": job.get("models") or {},
         "local_transcode": bool(job.get("local_transcode")),
+        "local_fit_mode": _normalize_local_fit_mode(job.get("local_fit_mode")),
     }
     return hashlib.sha256(
         json.dumps(value, ensure_ascii=False, sort_keys=True).encode("utf-8")
@@ -793,6 +806,7 @@ def create_job(uploads, form: dict) -> dict:
         local_transcode = str(form.get("local_transcode") or "").strip().lower() in {
             "1", "true", "yes", "on",
         }
+        local_fit_mode = _normalize_local_fit_mode(form.get("local_fit_mode"))
         file_assets = _save_assets(job_id, uploads, require_any=False)
         url_assets = _save_url_assets(
             job_id,
@@ -851,6 +865,7 @@ def create_job(uploads, form: dict) -> dict:
             },
             "model": "ffmpeg-h264-aac" if local_transcode else seedance["model"],
             "local_transcode": local_transcode,
+            "local_fit_mode": local_fit_mode,
             "provider_task_id": "",
             "provider_attempts": [],
             "credential_owner_id": credential_owner_id,
@@ -1475,11 +1490,6 @@ def _validate_local_video_info(
 ) -> dict:
     if width <= 0 or height <= 0:
         raise RuntimeError("无法识别源视频分辨率")
-    if abs((width / height) - (9 / 16)) > 0.015:
-        raise RuntimeError(
-            f"仅转换格式要求源视频已是 9:16，当前识别为 {width}×{height}；"
-            "如需重构画面请使用 AI 生成模式"
-        )
     if not 9.5 <= duration <= 60.5:
         raise RuntimeError(
             f"仅转换格式要求源视频为 10–60 秒，当前识别为 {duration:g} 秒"
@@ -1488,8 +1498,27 @@ def _validate_local_video_info(
         "duration": duration,
         "width": width,
         "height": height,
+        "source_ratio": width / height,
         "has_audio": bool(has_audio),
     }
+
+
+def _local_video_filter(fit_mode: str) -> str:
+    """Build a non-AI 9:16 conversion filter without distorting the source."""
+    mode = _normalize_local_fit_mode(fit_mode)
+    if mode == "pad":
+        return (
+            f"scale={LOCAL_OUTPUT_WIDTH}:{LOCAL_OUTPUT_HEIGHT}:"
+            "force_original_aspect_ratio=decrease,"
+            f"pad={LOCAL_OUTPUT_WIDTH}:{LOCAL_OUTPUT_HEIGHT}:(ow-iw)/2:(oh-ih)/2:color=black,"
+            "setsar=1"
+        )
+    return (
+        f"scale={LOCAL_OUTPUT_WIDTH}:{LOCAL_OUTPUT_HEIGHT}:"
+        "force_original_aspect_ratio=increase,"
+        f"crop={LOCAL_OUTPUT_WIDTH}:{LOCAL_OUTPUT_HEIGHT},"
+        "setsar=1"
+    )
 
 
 def _run_local_transcode(job: dict) -> None:
@@ -1504,6 +1533,8 @@ def _run_local_transcode(job: dict) -> None:
     if source.parent != (_job_dir(job["id"]) / "assets").resolve() or not source.is_file():
         raise RuntimeError("找不到待转换的源视频")
     info = _probe_local_video(source, ffmpeg, ffprobe)
+    fit_mode = _normalize_local_fit_mode(job.get("local_fit_mode"))
+    fit_label = LOCAL_FIT_MODE_LABELS[fit_mode]
     destination = _job_dir(job["id"]) / "mercado-video.mp4"
     temporary = destination.with_suffix(".part.mp4")
     command = [ffmpeg, "-y", "-i", str(source)]
@@ -1512,7 +1543,7 @@ def _run_local_transcode(job: dict) -> None:
     command.extend(["-map", "0:v:0", "-map", "0:a:0" if info["has_audio"] else "1:a:0"])
     command.extend(
         [
-            "-vf", "scale=720:1280,setsar=1",
+            "-vf", _local_video_filter(fit_mode),
             "-c:v", "libx264",
             "-preset", "medium",
             "-crf", "20",
@@ -1530,7 +1561,10 @@ def _run_local_transcode(job: dict) -> None:
     if not info["has_audio"]:
         command.append("-shortest")
     command.append(str(temporary))
-    job.update(status="generating", message="正在本地转换为美客多兼容 MP4，不调用 AI")
+    job.update(
+        status="generating",
+        message=f"正在本地转换为美客多兼容 MP4（{fit_label}），不调用 AI",
+    )
     _write_manifest(job)
     try:
         completed = subprocess.run(
@@ -1567,12 +1601,18 @@ def _run_local_transcode(job: dict) -> None:
     os.replace(temporary, destination)
     job.update(
         status="succeeded",
-        message="本地格式转换完成，未调用 AI 模型",
+        message=f"本地格式转换完成，未调用 AI 模型（{fit_label}）",
         duration=max(10, min(60, int(round(info["duration"])))),
         output_filename=destination.name,
         output_size=output_size,
         completed_at=_now_iso(),
-        provider_usage={"local_transcode": True, **info},
+        provider_usage={
+            "local_transcode": True,
+            "fit_mode": fit_mode,
+            "output_width": LOCAL_OUTPUT_WIDTH,
+            "output_height": LOCAL_OUTPUT_HEIGHT,
+            **info,
+        },
     )
     _write_manifest(job)
 

@@ -217,6 +217,56 @@ def test_detection_pages_continue_past_the_old_2000_record_limit():
     assert capped is False
 
 
+def test_detection_pages_split_date_range_before_moderations_offset_limit():
+    class Client:
+        def __init__(self):
+            self.params = []
+
+        def request(self, _method, _path, *, params):
+            self.params.append(dict(params))
+            start = params["date_created_since"]
+            end = params.get("date_created_to")
+            if len(self.params) == 1:
+                return {
+                    "infractions": [
+                        {
+                            "id": "probe",
+                            "related_item_id": "MLM0",
+                            "reason": "The product could be counterfeit.",
+                        }
+                    ],
+                    "paging": {"offset": 0, "limit": 20, "total": 10_000},
+                }
+            suffix = start.replace("-", "")
+            return {
+                "infractions": [
+                    {
+                        "id": suffix,
+                        "related_item_id": f"MLM{suffix}",
+                        "reason": "The product could be counterfeit.",
+                    }
+                ],
+                "paging": {"offset": 0, "limit": 20, "total": 1},
+            }
+
+    client = Client()
+    rows, scanned, capped = sync._fetch_detection_pages(
+        client,
+        "123",
+        date_created_since="2026-09-01",
+        date_created_to="2026-09-10",
+    )
+
+    assert [(call["date_created_since"], call.get("date_created_to")) for call in client.params] == [
+        ("2026-09-01", "2026-09-10"),
+        ("2026-09-01", "2026-09-05"),
+        ("2026-09-06", "2026-09-10"),
+    ]
+    assert [row["id"] for row in rows] == ["20260901", "20260906"]
+    assert scanned == 2
+    assert capped is False
+
+
 def test_detection_pages_stop_when_api_repeats_a_page():
     class Client:
         def request(self, _method, _path, *, params):

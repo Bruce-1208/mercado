@@ -10,7 +10,7 @@ import threading
 import time
 import uuid
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 from typing import Any, Iterable, Mapping
 
 from bit.sync_capacity import run_store as run_capacity_store, due_batch
@@ -76,6 +76,7 @@ INFRACTION_IMAGE_BACKFILL_LIMIT = _env_int(
 )
 
 DETECTION_PAGE_SIZE = 20
+DETECTION_OFFSET_LIMIT = 10_000
 CASE_PAGE_SIZE = 50
 BRAND_PROTECTION_SUBGROUP = "BRAND_PROTECTION"
 PROHIBITED_REASON = "The product is prohibited."
@@ -418,6 +419,7 @@ def _fetch_detection_pages(
     seller_id: str,
     *,
     date_created_since: str,
+    date_created_to: str = "",
     filter_subgroup: str = "",
     stop_event: Any = None,
     deadline: float | None = None,
@@ -446,6 +448,8 @@ def _fetch_detection_pages(
         }
         if date_created_since:
             params["date_created_since"] = date_created_since
+        if date_created_to:
+            params["date_created_to"] = date_created_to
         if filter_subgroup:
             params["filter_subgroup"] = filter_subgroup
         page = client.request(
@@ -481,6 +485,52 @@ def _fetch_detection_pages(
             progress(pages, scanned, len(matches))
         offset += len(rows)
         total = _page_total(page, offset)
+        if total >= DETECTION_OFFSET_LIMIT:
+            try:
+                range_start = date.fromisoformat(date_created_since)
+                range_end = (
+                    date.fromisoformat(date_created_to)
+                    if date_created_to
+                    else datetime.now().date()
+                )
+            except (TypeError, ValueError):
+                range_start = range_end = None
+            if range_start is not None and range_end is not None and range_start < range_end:
+                midpoint = range_start + (range_end - range_start) // 2
+                combined: list[dict] = []
+                combined_seen: set[str] = set()
+                combined_scanned = 0
+                combined_capped = False
+                for child_start, child_end in (
+                    (range_start, midpoint),
+                    (midpoint + timedelta(days=1), range_end),
+                ):
+                    child_rows, child_scanned, child_capped = _fetch_detection_pages(
+                        client,
+                        seller_id,
+                        date_created_since=child_start.isoformat(),
+                        date_created_to=child_end.isoformat(),
+                        filter_subgroup=filter_subgroup,
+                        stop_event=stop_event,
+                        deadline=deadline,
+                        progress=progress,
+                    )
+                    combined_scanned += child_scanned
+                    combined_capped = combined_capped or child_capped
+                    for child_row in child_rows:
+                        child_key = str(child_row.get("id") or "").strip()
+                        if not child_key:
+                            child_key = hashlib.sha1(
+                                (
+                                    f"{child_row.get('related_item_id')}|"
+                                    f"{child_row.get('date_created')}|"
+                                    f"{child_row.get('reason')}"
+                                ).encode("utf-8", errors="replace")
+                            ).hexdigest()
+                        if child_key not in combined_seen:
+                            combined_seen.add(child_key)
+                            combined.append(child_row)
+                return combined, combined_scanned, combined_capped
         if not rows or offset >= total or len(rows) < DETECTION_PAGE_SIZE:
             return matches, scanned, False
     return matches, scanned, False
